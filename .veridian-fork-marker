@@ -1,0 +1,13 @@
+Fork Veridian de Notifuse — branche `veridian`
+
+Ce fichier marque la branche `veridian` comme la branche de travail du fork
+`Christ-Roy/notifuse-veridian`. Tous les patches Veridian (HMAC Hub,
+provisioning standard SaaS, paywall, magic link, webhooks sortants) vivent
+ici, jamais sur `main`.
+
+- Upstream : Notifuse/notifuse
+- Branche upstream suivie : tags `vX.Y` stables uniquement
+- Version upstream actuelle : v30.1 (2026-04-27)
+- Procedure rebase upstream : voir veridian-platform/notifuse/MERGING-UPSTREAM.md
+
+NE PAS MERGER `veridian` SUR `main` UPSTREAM.
