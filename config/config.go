@@ -40,6 +40,15 @@ type Config struct {
 	MaxUsers            int  // 0 = unlimited (backward compat for self-hosted)
 	MaxWorkspaces       int  // 0 = unlimited (backward compat for self-hosted)
 
+	// === Veridian patches ===
+	// HUB_API_SECRET vide => endpoints /api/tenants/* renvoient 503 (mode self-hosted, pas de Hub).
+	// HUB_WEBHOOK_URL vide => webhook emitter en noop.
+	// VERIDIAN_DEFAULT_PLAN: plan par defaut sur provision si non precise (defaut "free").
+	HubAPISecret        string
+	HubWebhookURL       string
+	HubWebhookSecret    string
+	VeridianDefaultPlan string
+
 	// Track which values came from actual environment variables (not database, not generated)
 	EnvValues EnvValues
 }
@@ -376,6 +385,9 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("ENVIRONMENT", "production")
 	v.SetDefault("LOG_LEVEL", "info")
 	v.SetDefault("VERSION", VERSION)
+
+	// === Veridian patches ===
+	v.SetDefault("VERIDIAN_DEFAULT_PLAN", "free")
 
 	// SMTP defaults
 	v.SetDefault("SMTP_FROM_NAME", "Notifuse")
@@ -839,6 +851,13 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		IsInstalled:     isInstalled,
 		MaxUsers:        v.GetInt("MAX_USERS"),
 		MaxWorkspaces:   v.GetInt("MAX_WORKSPACES"),
+
+		// === Veridian patches ===
+		HubAPISecret:        v.GetString("HUB_API_SECRET"),
+		HubWebhookURL:       v.GetString("HUB_WEBHOOK_URL"),
+		HubWebhookSecret:    v.GetString("HUB_WEBHOOK_SECRET"),
+		VeridianDefaultPlan: v.GetString("VERIDIAN_DEFAULT_PLAN"),
+
 		EnvValues:       envVals, // Store env values for setup service
 	}
 

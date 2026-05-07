@@ -460,3 +460,76 @@ func (s *UserService) Logout(ctx context.Context, userID string) error {
 	s.logger.WithField("user_id", userID).Info("User logged out - all sessions deleted")
 	return nil
 }
+
+// === Veridian patch ===
+// veridianMagicCodeTTL aligns with the upstream SignIn flow (15 min code
+// validity). Kept as a private const to make the rebase easy if upstream
+// ever changes the duration.
+const veridianMagicCodeTTL = 15 * time.Minute
+
+// GenerateMagicCodeForVeridian implements UserServiceInterface. Mirrors
+// SignIn's session/code creation path but always returns the plaintext
+// code (never via email) so the Hub can build a self-contained magic link.
+//
+// The caller (Hub via HMAC, or tenant API key handler) is responsible for
+// proving authority. Rate limiting is still enforced on the email key to
+// prevent abuse if a tenant's API key leaks.
+func (s *UserService) GenerateMagicCodeForVeridian(ctx context.Context, email, workspaceID string) (string, time.Time, error) {
+	ctx, span := s.tracer.StartServiceSpan(ctx, "UserService", "GenerateMagicCodeForVeridian")
+	defer span.End()
+
+	s.tracer.AddAttribute(ctx, "user.email", email)
+	if workspaceID != "" {
+		s.tracer.AddAttribute(ctx, "workspace.id", workspaceID)
+	}
+
+	if email == "" {
+		err := fmt.Errorf("email required")
+		s.tracer.MarkSpanError(ctx, err)
+		return "", time.Time{}, err
+	}
+
+	if s.rateLimiter != nil && !s.rateLimiter.Allow("signin", email) {
+		s.logger.WithField("email", email).Warn("veridian magic code rate limit exceeded")
+		s.tracer.AddAttribute(ctx, "error", "rate_limit_exceeded")
+		err := fmt.Errorf("too many magic-code requests, please try again in a few minutes")
+		s.tracer.MarkSpanError(ctx, err)
+		return "", time.Time{}, err
+	}
+
+	user, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		if _, ok := err.(*domain.ErrUserNotFound); ok {
+			s.tracer.AddAttribute(ctx, "error", "user_not_found")
+			s.tracer.MarkSpanError(ctx, err)
+			return "", time.Time{}, &domain.ErrUserNotFound{Message: "user does not exist"}
+		}
+		s.tracer.MarkSpanError(ctx, err)
+		return "", time.Time{}, err
+	}
+
+	s.tracer.AddAttribute(ctx, "user.id", user.ID)
+
+	plainCode := s.generateMagicCode()
+	now := time.Now()
+	codeExpiresAt := now.Add(veridianMagicCodeTTL)
+	hashedCode := crypto.HashMagicCode(plainCode, s.secretKey)
+
+	session := &domain.Session{
+		ID:               generateID(),
+		UserID:           user.ID,
+		ExpiresAt:        now.Add(s.sessionExpiry),
+		CreatedAt:        now,
+		MagicCode:        &hashedCode,
+		MagicCodeExpires: &codeExpiresAt,
+	}
+
+	if err := s.repo.CreateSession(ctx, session); err != nil {
+		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("veridian: failed to create session for magic code")
+		s.tracer.MarkSpanError(ctx, err)
+		return "", time.Time{}, err
+	}
+
+	s.tracer.AddAttribute(ctx, "session.id", session.ID)
+	return plainCode, codeExpiresAt, nil
+}

@@ -122,6 +122,11 @@ type App struct {
 	automationRepo                domain.AutomationRepository
 	emailQueueRepo                domain.EmailQueueRepository
 
+	// === Veridian patches ===
+	veridianPlanRepo       domain.VeridianPlanRepository
+	veridianService        domain.VeridianService
+	veridianWebhookEmitter domain.WebhookEmitter
+
 	// Services
 	authService                      *service.AuthService
 	userService                      *service.UserService
@@ -438,6 +443,9 @@ func (a *App) InitRepositories() error {
 
 	// Initialize email queue repository
 	a.emailQueueRepo = repository.NewEmailQueueRepository(a.workspaceRepo)
+
+	// === Veridian patches ===
+	a.veridianPlanRepo = repository.NewVeridianPlanRepository(a.db)
 
 	// Initialize setting service
 	a.settingService = service.NewSettingService(a.settingRepo)
@@ -1034,6 +1042,24 @@ func (a *App) InitServices() error {
 		}).Info("SMTP bridge server initialized successfully")
 	}
 
+	// === Veridian patches ===
+	a.veridianWebhookEmitter = service.NewVeridianWebhookEmitter(
+		a.config.HubWebhookURL,
+		a.config.HubWebhookSecret,
+		a.logger,
+	)
+	a.veridianService = service.NewVeridianService(
+		a.workspaceService,
+		a.userService,
+		a.userRepo,
+		a.veridianPlanRepo,
+		a.veridianWebhookEmitter,
+		a.config.VeridianDefaultPlan,
+		a.config.RootEmail,
+		a.config.APIEndpoint,
+		a.logger,
+	)
+
 	return nil
 }
 
@@ -1200,6 +1226,22 @@ func (a *App) InitHandlers() error {
 	automationHandler.RegisterRoutes(a.mux)
 	llmHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patches ===
+	// 6 endpoints /api/tenants/* proteges par middleware HMAC Hub.
+	// Si HUB_API_SECRET vide, RegisterRoutes attache quand meme les routes
+	// mais le middleware renverra 503 (mode self-hosted, Hub absent).
+	veridianHandler := httpHandler.NewVeridianHandler(a.veridianService, a.logger)
+	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
+
+	// Endpoint generateMagicLink (auth API key tenant Notifuse).
+	veridianMagicHandler := httpHandler.NewVeridianMagicHandler(
+		a.veridianService,
+		a.workspaceRepo,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianMagicHandler.RegisterRoutes(a.mux)
+
 	return nil
 }
 
@@ -1207,6 +1249,13 @@ func (a *App) InitHandlers() error {
 func (a *App) Start() error {
 	// Create server with wrapped handler for CORS and tracing
 	var handler http.Handler = a.mux
+
+	// === Veridian patch ===
+	// Path-filtered paywall : intercepte les envois sur /api/transactional.send
+	// et /api/broadcasts.{create,schedule,sendToIndividual}, laisse passer le
+	// reste sans inspection. Place tot dans la chaine pour rejeter avant le
+	// auth middleware si plan suspended ou quota depasse.
+	handler = middleware.VeridianPaywallPathFilter(a.veridianPlanRepo, a.logger)(handler)
 
 	// Apply graceful shutdown middleware first (outermost)
 	handler = a.gracefulShutdownMiddleware(handler)

@@ -81,6 +81,23 @@ type UserServiceInterface interface {
 	GetUserByID(ctx context.Context, userID string) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	Logout(ctx context.Context, userID string) error
+
+	// === Veridian patch ===
+	// GenerateMagicCodeForVeridian generates a magic auth code returning the
+	// plaintext directly, regardless of production mode. PRIVILEGED — caller
+	// is responsible for proving authority before invoking (HMAC Hub
+	// signature for /api/tenants/* endpoints, or tenant-scoped Notifuse API
+	// key for /api/workspaces.generateMagicLink). Used by VeridianService to
+	// build self-contained magic links of the form
+	// `<API_ENDPOINT>/console/signin?email=X&code=Y`.
+	//
+	// Unlike SignIn, this method does NOT send the code by email — the caller
+	// (the Hub) is responsible for delivering the link to the user.
+	//
+	// workspaceID is purely contextual (logging / rate limiting key) for now;
+	// the magic code is bound to the user, not the workspace, just like the
+	// upstream SignIn flow.
+	GenerateMagicCodeForVeridian(ctx context.Context, email, workspaceID string) (code string, expiresAt time.Time, err error)
 }
 
 type UserRepository interface {

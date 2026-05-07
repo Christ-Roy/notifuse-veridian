@@ -85,6 +85,25 @@ var TableDefinitions = []string{
 	`CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks (created_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_tasks_broadcast_id ON tasks (broadcast_id)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_workspace_broadcast_id ON tasks (workspace_id, broadcast_id) WHERE broadcast_id IS NOT NULL`,
+
+	// === Veridian patches ===
+	// Per-workspace plan/quota/status. Source of truth = Hub Veridian (via /api/tenants/* HMAC endpoints).
+	// Notifuse reads this table on every send to enforce the paywall (see internal/http/middleware/veridian_paywall.go).
+	`CREATE TABLE IF NOT EXISTS veridian_plan (
+		workspace_id VARCHAR(20) PRIMARY KEY,
+		plan VARCHAR(32) NOT NULL DEFAULT 'free',
+		status VARCHAR(20) NOT NULL DEFAULT 'active',
+		monthly_email_quota BIGINT NOT NULL DEFAULT 500,
+		emails_sent_this_month BIGINT NOT NULL DEFAULT 0,
+		last_reset_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		suspended_at TIMESTAMP,
+		suspended_reason VARCHAR(255),
+		deleted_at TIMESTAMP,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_veridian_plan_status ON veridian_plan (status)`,
+	`CREATE INDEX IF NOT EXISTS idx_veridian_plan_deleted_at ON veridian_plan (deleted_at) WHERE deleted_at IS NOT NULL`,
 }
 
 // MigrationStatements contains SQL statements to be run after table creation

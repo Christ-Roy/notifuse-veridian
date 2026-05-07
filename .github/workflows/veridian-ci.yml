@@ -1,0 +1,251 @@
+name: Notifuse Veridian CI/CD
+
+on:
+  push:
+    branches: [veridian]
+    tags:
+      - 'v*-veridian.*'
+  pull_request:
+    branches: [veridian]
+  workflow_dispatch:
+    inputs:
+      deploy_staging:
+        description: 'Deploy to staging after build'
+        required: false
+        default: 'true'
+
+concurrency:
+  group: veridian-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: christ-roy/notifuse-veridian
+  GO_VERSION: '1.25'
+
+jobs:
+  test-go:
+    name: Go tests (unit + Veridian patches)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: notifuse_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Veridian-specific tests
+        run: |
+          go test -v -race -coverprofile=coverage.out \
+            ./internal/domain/... \
+            ./internal/repository/... \
+            ./internal/service/... \
+            ./internal/http/... \
+            -run "Veridian" -timeout 120s
+
+      - name: Upstream tests must still pass
+        run: |
+          go test -race -timeout 300s ./internal/domain/... ./internal/repository/... ./internal/service/... ./internal/http/...
+
+      - name: Coverage report
+        run: |
+          go tool cover -func=coverage.out | grep -E "veridian" || true
+          go tool cover -func=coverage.out | tail -1
+
+  build:
+    name: Build & push image (self-hosted)
+    needs: test-go
+    runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+      upstream_version: ${{ steps.meta.outputs.upstream }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        run: |
+          UPSTREAM=$(grep '^const VERSION' config/config.go | sed -E 's/.*"([^"]+)".*/\1/')
+          SHA="${GITHUB_SHA::8}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="v${UPSTREAM}-veridian.${SHA}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "upstream=${UPSTREAM}" >> $GITHUB_OUTPUT
+          echo "Image tag: ${TAG}"
+
+      - name: Retag previous :latest as :rollback
+        continue-on-error: true
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || exit 0
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.meta.outputs.tag }}
+
+  deploy-staging:
+    name: Deploy staging via Dokploy
+    needs: build
+    if: github.ref == 'refs/heads/veridian'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Dokploy redeploy (staging)
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DOKPLOY_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.DOKPLOY_URL }}/api/compose.redeploy" \
+            -d '{"composeId":"${{ secrets.DOKPLOY_NOTIFUSE_STAGING_COMPOSE_ID }}"}'
+
+      - name: Wait for staging healthy
+        run: |
+          for i in {1..30}; do
+            if curl -sf https://saas-notifuse.staging.veridian.site/api/health > /dev/null 2>&1; then
+              echo "Staging healthy"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Staging unhealthy after 5min"
+          exit 1
+
+  e2e-staging:
+    name: E2E headful Playwright (staging, BLOQUANT)
+    needs: deploy-staging
+    runs-on: [self-hosted, linux, x64]
+    env:
+      NOTIFUSE_URL: https://saas-notifuse.staging.veridian.site
+      HUB_URL: https://saas-hub.staging.veridian.site
+      HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright
+        run: |
+          cd tests/e2e-veridian
+          npm ci
+          npx playwright install chromium --with-deps
+      - name: Run e2e
+        run: |
+          cd tests/e2e-veridian
+          npx playwright test --project=chromium --reporter=line
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: tests/e2e-veridian/test-results/
+
+  deploy-prod:
+    name: Deploy prod (auto)
+    needs: e2e-staging
+    if: github.ref == 'refs/heads/veridian'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Dokploy redeploy (prod)
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DOKPLOY_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.DOKPLOY_URL }}/api/compose.redeploy" \
+            -d '{"composeId":"${{ secrets.DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID }}"}'
+
+      - name: Wait for prod healthy
+        run: |
+          for i in {1..30}; do
+            if curl -sf https://notifuse.app.veridian.site/api/health > /dev/null 2>&1; then
+              echo "Prod healthy"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Prod unhealthy after 5min — triggering rollback"
+          exit 1
+
+  e2e-prod:
+    name: E2E headful Playwright (prod, BLOQUANT)
+    needs: deploy-prod
+    runs-on: [self-hosted, linux, x64]
+    env:
+      NOTIFUSE_URL: https://notifuse.app.veridian.site
+      HUB_URL: https://app.veridian.site
+      HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_PROD }}
+      E2E_PROD_MODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          cd tests/e2e-veridian
+          npm ci
+          npx playwright install chromium --with-deps
+          npx playwright test --project=chromium --grep "@prod-safe" --reporter=line
+
+  rollback:
+    name: Rollback prod si e2e-prod fail
+    needs: [e2e-prod, deploy-prod, build]
+    if: failure() && needs.deploy-prod.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tag broken + restore rollback
+        run: |
+          BROKEN_TAG="${{ needs.build.outputs.image_tag }}"
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${BROKEN_TAG}
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${BROKEN_TAG} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:broken-${GITHUB_SHA::8}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:broken-${GITHUB_SHA::8}
+
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Redeploy prod with rollback image
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DOKPLOY_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.DOKPLOY_URL }}/api/compose.redeploy" \
+            -d '{"composeId":"${{ secrets.DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID }}"}'
+
+      - name: Notify Telegram
+        run: |
+          curl -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            --data-urlencode "text=🚨 Notifuse Veridian PROD rollback — e2e-prod a fail sur ${GITHUB_SHA::8}, image precedente restauree."
