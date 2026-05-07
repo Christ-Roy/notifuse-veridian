@@ -64,7 +64,8 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
 
 	// Tenant inexistant : workspace + plan absents
-	m.workspace.EXPECT().GetWorkspace(ctx, "ws-new").Return(nil, errors.New("not found")).Times(1)
+	// === Veridian patch === GetWorkspace est appele avec ctx root (lookup idempotence)
+	m.workspace.EXPECT().GetWorkspace(gomock.Any(), "ws-new").Return(nil, errors.New("not found")).Times(1)
 	m.planRepo.EXPECT().Get(ctx, "ws-new").Return(nil, sql.ErrNoRows).Times(1)
 
 	// Owner pas trouve par UserService
@@ -74,9 +75,9 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	// Creation owner user
 	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil).Times(1)
 
-	// ctxAsRoot : lookup root user + create session
-	m.userRepo.EXPECT().GetUserByEmail(ctx, "root@veridian.site").Return(rootUser, nil).Times(1)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil).Times(1)
+	// 2 ctxAsRoot : 1 pour le lookup d'idempotence, 1 pour les operations workspace
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	// Workspace creation
 	m.workspace.EXPECT().CreateWorkspace(
@@ -112,8 +113,8 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	// Webhook emit
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantProvisioned, "ws-new", gomock.Any()).Times(1)
 
-	// Cleanup session
-	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil).Times(1)
+	// Cleanup session : 2 (lookup idempotence + ops workspace)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	resp, err := svc.Provision(ctx, domain.ProvisionInput{
 		TenantID:   "ws-new",
@@ -136,8 +137,15 @@ func TestVeridianService_Provision_Idempotent(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	// === Veridian patch === Lookup idempotence : ctxAsRoot + GetWorkspace + DeleteSession
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
 	// Tenant existe deja : workspace + plan presents
-	m.workspace.EXPECT().GetWorkspace(ctx, "ws-existing").
+	m.workspace.EXPECT().GetWorkspace(gomock.Any(), "ws-existing").
 		Return(&domain.Workspace{ID: "ws-existing"}, nil).Times(1)
 	m.planRepo.EXPECT().Get(ctx, "ws-existing").Return(&domain.VeridianPlan{
 		WorkspaceID: "ws-existing",

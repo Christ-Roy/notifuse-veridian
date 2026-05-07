@@ -176,7 +176,15 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	// Idempotence : si workspace + plan existent deja, on retourne les
 	// valeurs existantes sans re-provisionner. L'API key et le magic link
 	// ne sont PAS regeneres ici (le Hub doit avoir conserve la premiere).
-	existingWorkspace, _ := s.workspaceService.GetWorkspace(ctx, input.TenantID)
+	// === Veridian patch === GetWorkspace upstream check les permissions du
+	// caller — il faut donc utiliser un ctx root pour le lookup d'idempotence,
+	// sinon on retourne nil et on retombe sur create workspace -> already exists.
+	idempCtx, idempSessionID, idempErr := s.ctxAsRoot(ctx)
+	var existingWorkspace *domain.Workspace
+	if idempErr == nil {
+		existingWorkspace, _ = s.workspaceService.GetWorkspace(idempCtx, input.TenantID)
+		s.cleanupRootSession(ctx, idempSessionID)
+	}
 	if existingWorkspace != nil && planErr == nil && existingPlan != nil {
 		// Tenant deja provisionne : on retourne sans toucher.
 		owner, _ := s.userService.GetUserByEmail(ctx, input.OwnerEmail)

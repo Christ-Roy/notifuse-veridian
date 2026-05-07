@@ -55,8 +55,9 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
       owner_email: ownerEmail,
       plan: 'pro',
     });
-    expect(res.status, await res.text()).toBe(200);
-    provisioningResponse = await res.json();
+    const body = await res.text();
+    expect(res.status, body).toBe(200);
+    provisioningResponse = JSON.parse(body);
     expect(provisioningResponse.workspace_id).toBe(tenantId);
     expect(provisioningResponse.owner_user_id).toBeTruthy();
     expect(provisioningResponse.api_key).toBeTruthy();
@@ -70,8 +71,9 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
       owner_email: ownerEmail,
       plan: 'pro',
     });
-    expect(res.status).toBe(200);
-    const data = await res.json();
+    const body = await res.text();
+    expect(res.status, body).toBe(200);
+    const data = JSON.parse(body);
     expect(data.workspace_id).toBe(tenantId);
     expect(data.created).toBe(false);
   });
