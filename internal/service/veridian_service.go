@@ -263,8 +263,11 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	}
 
 	// 5. Creer une API key tenant (utilisee par le Hub pour piloter le
-	// workspace, ex generateMagicLink).
-	apiKeyToken, apiKeyEmail, err := s.workspaceService.CreateAPIKey(rootCtx, input.TenantID, "veridian-api")
+	// workspace, ex generateMagicLink). Prefix unique par tenant car Notifuse
+	// stocke l'API key user avec un email base sur le prefix — le meme prefix
+	// pour deux workspaces distincts cree un conflit "user already exists".
+	apiKeyPrefix := "veridian-api-" + input.TenantID
+	apiKeyToken, apiKeyEmail, err := s.workspaceService.CreateAPIKey(rootCtx, input.TenantID, apiKeyPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("create api key: %w", err)
 	}

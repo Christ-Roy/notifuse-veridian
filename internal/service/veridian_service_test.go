@@ -90,9 +90,9 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 		gomock.Any(), "ws-new", gomock.Any(), "owner", gomock.Any(),
 	).Return(nil).Times(1)
 
-	// CreateAPIKey
-	m.workspace.EXPECT().CreateAPIKey(gomock.Any(), "ws-new", "veridian-api").
-		Return("sk_test_apikey", "veridian-api@ws-new.notifuse", nil).Times(1)
+	// CreateAPIKey — prefix unique par tenant (sinon conflit user already exists)
+	m.workspace.EXPECT().CreateAPIKey(gomock.Any(), "ws-new", "veridian-api-ws-new").
+		Return("sk_test_apikey", "veridian-api-ws-new@ws-new.notifuse", nil).Times(1)
 
 	// Upsert plan
 	m.planRepo.EXPECT().Upsert(ctx, gomock.AssignableToTypeOf(&domain.VeridianPlan{})).
@@ -124,7 +124,7 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, "ws-new", resp.WorkspaceID)
 	assert.Equal(t, "sk_test_apikey", resp.APIKey)
-	assert.Equal(t, "veridian-api@ws-new.notifuse", resp.APIKeyEmail)
+	assert.Equal(t, "veridian-api-ws-new@ws-new.notifuse", resp.APIKeyEmail)
 	assert.Equal(t, "pro", resp.Plan)
 	assert.True(t, resp.Created)
 	assert.Contains(t, resp.MagicLink, "https://notifuse.app.veridian.site/console/signin")
