@@ -76,9 +76,10 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	// Creation owner user
 	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil).Times(1)
 
-	// 2 ctxAsRoot : 1 pour le lookup d'idempotence, 1 pour les operations workspace
+	// 2 ctxAsRoot : 1 pour le lookup d'idempotence, 1 pour les operations workspace.
+	// Plus 1 ctxAsUser (tenant owner) pour retirer root du workspace apres transfer.
 	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
-	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(3)
 
 	// Workspace creation
 	m.workspace.EXPECT().CreateWorkspace(
@@ -87,9 +88,18 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 		"UTC", gomock.Any(), "en", gomock.Any(),
 	).Return(&domain.Workspace{ID: "ws-new"}, nil).Times(1)
 
-	// AddUserToWorkspace owner
+	// === Veridian patch === Owner natif via TransferOwnership :
+	// 1) AddUserToWorkspace(role=member) — TransferOwnership exige newOwner=member
+	// 2) TransferOwnership(workspaceID, tenantUserID, rootUserID)
+	// 3) RemoveUserFromWorkspace(rootUserID) depuis ctx tenant user
 	m.workspace.EXPECT().AddUserToWorkspace(
-		gomock.Any(), "ws-new", gomock.Any(), "owner", gomock.Any(),
+		gomock.Any(), "ws-new", gomock.Any(), "member", gomock.Any(),
+	).Return(nil).Times(1)
+	m.workspace.EXPECT().TransferOwnership(
+		gomock.Any(), "ws-new", gomock.Any(), rootUser.ID,
+	).Return(nil).Times(1)
+	m.workspace.EXPECT().RemoveUserFromWorkspace(
+		gomock.Any(), "ws-new", rootUser.ID,
 	).Return(nil).Times(1)
 
 	// CreateAPIKey — prefix unique par tenant (sinon conflit user already exists)
@@ -114,8 +124,9 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	// Webhook emit
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantProvisioned, "ws-new", gomock.Any()).Times(1)
 
-	// Cleanup session : 2 (lookup idempotence + ops workspace)
-	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	// Cleanup session : 3 (lookup idempotence + ops workspace + tenant ctx pour
+	// retirer root via RemoveUserFromWorkspace).
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(3)
 
 	resp, err := svc.Provision(ctx, domain.ProvisionInput{
 		TenantID:   "ws-new",
