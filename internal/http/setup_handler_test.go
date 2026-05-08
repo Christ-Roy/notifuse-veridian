@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,13 +21,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockAppShutdowner implements AppShutdowner for testing
+// mockAppShutdowner implements AppShutdowner for testing.
+// === Veridian patch === sync.Mutex pour eviter les races detectees par
+// `go test -race` quand SettingsHandler.handleUpdate (qui shutdown l'app
+// dans une goroutine fire-and-forget apres 500ms) overlap avec un autre
+// test du meme package qui ecrit aussi sur ce mock partage.
 type mockAppShutdowner struct {
+	mu             sync.Mutex
 	shutdownCalled bool
 	shutdownError  error
 }
 
 func (m *mockAppShutdowner) Shutdown(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.shutdownCalled = true
 	return m.shutdownError
 }
