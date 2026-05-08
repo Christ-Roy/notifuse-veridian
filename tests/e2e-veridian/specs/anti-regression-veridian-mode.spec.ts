@@ -189,22 +189,28 @@ test.describe('Veridian-managed mode — UI guards', () => {
     await page.waitForTimeout(2000);
 
     // Force le POST côté API en bypassant l'UI (simule un user qui hack devtools).
+    // ID alphanum strict (govalidator.IsAlphanumeric refuse les tirets) — sinon
+    // on hit la validation request avant même d'atteindre la guard Veridian.
     const bypassResult = await page.evaluate(async () => {
       const token = localStorage.getItem('auth_token');
       const res = await fetch('/api/workspaces.create', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: 'devtools-hack',
-          name: 'Hack Attempt',
+          id: 'devtoolshack',
+          name: 'HackAttempt',
           settings: { timezone: 'UTC', default_language: 'en', languages: ['en'] },
         }),
       });
       return { status: res.status, body: await res.text() };
     });
 
-    // Ce qu'on garantit : ce n'est pas 200, c'est 403, et le message contient
-    // une référence au mode Veridian-managed.
+    // Ce qu'on garantit STRICTEMENT : la création ne réussit pas (pas 200/201).
+    expect(bypassResult.status).not.toBe(200);
+    expect(bypassResult.status).not.toBe(201);
+    // Idéalement 403 + message Veridian — c'est le contrat de la guard. Si on
+    // tombe sur autre chose (validation 400), c'est qu'un autre filtre intercepte
+    // avant — notre garde-fou tient quand même mais on veut tracer.
     expect(bypassResult.status).toBe(403);
     expect(bypassResult.body.toLowerCase()).toMatch(/veridian|managed|hub/);
   });
