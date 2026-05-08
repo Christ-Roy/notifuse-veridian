@@ -233,13 +233,11 @@ func (h *VeridianAutoLoginHandler) handleAutoLogin(w http.ResponseWriter, r *htt
 	}
 
 	// Page HTML qui stocke le token et redirect.
+	// Notifuse frontend route uniquement /console (single page app), pas
+	// /console/{workspace_id}. On redirect direct vers /console et le
+	// frontend pickera le workspace courant via API GET /api/user.me
+	// (qui retourne la liste des workspaces du user).
 	redirectURL := "/console"
-	if payload.WorkspaceID != "" {
-		// Notifuse frontend lit le workspace courant depuis localStorage aussi
-		// (current_workspace), mais à la racine /console il pick le 1er workspace
-		// du user — qui sera celui qu'on vient de créer.
-		redirectURL = "/console/" + payload.WorkspaceID
-	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
