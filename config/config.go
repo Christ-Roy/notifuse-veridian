@@ -33,6 +33,12 @@ type Config struct {
 	RootEmail           string
 	Environment         string
 	APIEndpoint         string
+	// === Veridian patch ===
+	// InternalAPIEndpoint : URL utilisee pour les appels self-call internes
+	// (scheduler tasks.execute) afin d'eviter un round-trip via le reverse proxy
+	// public. Si vide, on retombe sur APIEndpoint pour preserver le comportement
+	// upstream. Voir Config.SchedulerEndpoint().
+	InternalAPIEndpoint string
 	WebhookEndpoint     string
 	LogLevel            string
 	Version             string
@@ -842,10 +848,11 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			BatchSize: v.GetInt("AUTOMATION_SCHEDULER_BATCH_SIZE"),
 		},
 
-		RootEmail:       rootEmail,
-		Environment:     v.GetString("ENVIRONMENT"),
-		APIEndpoint:     apiEndpoint,
-		WebhookEndpoint: v.GetString("WEBHOOK_ENDPOINT"),
+		RootEmail:           rootEmail,
+		Environment:         v.GetString("ENVIRONMENT"),
+		APIEndpoint:         apiEndpoint,
+		InternalAPIEndpoint: v.GetString("INTERNAL_API_ENDPOINT"),
+		WebhookEndpoint:     v.GetString("WEBHOOK_ENDPOINT"),
 		LogLevel:        v.GetString("LOG_LEVEL"),
 		Version:         v.GetString("VERSION"),
 		IsInstalled:     isInstalled,
@@ -922,6 +929,22 @@ func (c *Config) IsDemo() bool {
 
 func (c *Config) IsProduction() bool {
 	return c.Environment == "production"
+}
+
+// === Veridian patch ===
+// SchedulerEndpoint returns the URL used for HTTP self-calls from the task
+// scheduler (POST /api/tasks.execute). Falls back to APIEndpoint when
+// INTERNAL_API_ENDPOINT is not set, preserving upstream behavior.
+//
+// Set INTERNAL_API_ENDPOINT=http://localhost:8081 (or http://notifuse:8081 in
+// docker compose) so the self-call stays inside the container/host instead of
+// looping out via the public reverse proxy + CDN. Public-facing URLs (email
+// tracking pixels, click redirects, unsubscribe) keep using APIEndpoint.
+func (c *Config) SchedulerEndpoint() string {
+	if c.InternalAPIEndpoint != "" {
+		return c.InternalAPIEndpoint
+	}
+	return c.APIEndpoint
 }
 
 // GetEnvValues returns configuration values that came from actual environment variables

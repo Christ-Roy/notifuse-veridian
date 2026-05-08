@@ -654,7 +654,11 @@ func (a *App) InitServices() error {
 	)
 
 	// Initialize task service
-	a.taskService = service.NewTaskService(a.taskRepo, a.settingRepo, a.logger, a.authService, a.config.APIEndpoint)
+	// === Veridian patch ===
+	// Use SchedulerEndpoint() so the self-call HTTP dispatch hits the local
+	// container (INTERNAL_API_ENDPOINT) instead of looping via Cloudflare.
+	// Falls back to APIEndpoint when INTERNAL_API_ENDPOINT is not set.
+	a.taskService = service.NewTaskService(a.taskRepo, a.settingRepo, a.logger, a.authService, a.config.SchedulerEndpoint())
 
 	// Configure autoExecuteImmediate based on TaskScheduler.Enabled
 	// If task scheduler is disabled (e.g., in tests), also disable background task execution
