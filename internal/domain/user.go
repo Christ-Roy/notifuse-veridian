@@ -98,6 +98,13 @@ type UserServiceInterface interface {
 	// the magic code is bound to the user, not the workspace, just like the
 	// upstream SignIn flow.
 	GenerateMagicCodeForVeridian(ctx context.Context, email, workspaceID string) (code string, expiresAt time.Time, err error)
+
+	// === Veridian patch ===
+	// CreateAutoLoginSession cree une session JWT directe pour un user
+	// existant, sans verification de magic code. Utilise par /veridian/auto-login
+	// pour offrir un flow "click bouton Hub → loggé dans Notifuse" sans saisie.
+	// PRIVILEGED — caller responsable de l'authority (token HMAC Hub).
+	CreateAutoLoginSession(ctx context.Context, email string) (*AuthResponse, error)
 }
 
 type UserRepository interface {

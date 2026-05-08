@@ -533,3 +533,64 @@ func (s *UserService) GenerateMagicCodeForVeridian(ctx context.Context, email, w
 	s.tracer.AddAttribute(ctx, "session.id", session.ID)
 	return plainCode, codeExpiresAt, nil
 }
+
+// === Veridian patch ===
+// CreateAutoLoginSession cree directement une session JWT pour un user (sans
+// verification de magic code), retourne le token utilisable comme `auth_token`
+// par le frontend Notifuse. PRIVILEGED — caller responsable de l'authority
+// (HMAC Hub uniquement). Utilise par /veridian/auto-login pour offrir un flow
+// "click depuis Hub → loggé dans Notifuse" sans saisie manuelle.
+//
+// Le user doit deja exister (cree au moment de Provision). Si absent, retourne
+// ErrUserNotFound — le caller (handler) decide de creer ou rejeter.
+func (s *UserService) CreateAutoLoginSession(ctx context.Context, email string) (*domain.AuthResponse, error) {
+	ctx, span := s.tracer.StartServiceSpan(ctx, "UserService", "CreateAutoLoginSession")
+	defer span.End()
+
+	s.tracer.AddAttribute(ctx, "user.email", email)
+
+	if email == "" {
+		err := fmt.Errorf("email required")
+		s.tracer.MarkSpanError(ctx, err)
+		return nil, err
+	}
+
+	// Find existing user
+	user, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		s.tracer.MarkSpanError(ctx, err)
+		return nil, err
+	}
+
+	// Create session
+	expiresAt := time.Now().Add(s.sessionExpiry)
+	session := &domain.Session{
+		ID:        generateID(),
+		UserID:    user.ID,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.repo.CreateSession(ctx, session); err != nil {
+		s.logger.WithField("user_id", user.ID).WithField("error", err.Error()).Error("veridian: failed to create auto-login session")
+		s.tracer.MarkSpanError(ctx, err)
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+
+	// Generate JWT token via AuthService (same as RootSignin)
+	token := s.authService.GenerateUserAuthToken(user, session.ID, expiresAt)
+	if token == "" {
+		err := fmt.Errorf("failed to generate auth token")
+		s.tracer.MarkSpanError(ctx, err)
+		return nil, err
+	}
+
+	s.tracer.AddAttribute(ctx, "session.id", session.ID)
+	s.tracer.AddAttribute(ctx, "user.id", user.ID)
+
+	return &domain.AuthResponse{
+		Token:     token,
+		User:      *user,
+		ExpiresAt: expiresAt,
+	}, nil
+}

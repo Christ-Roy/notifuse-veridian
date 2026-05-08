@@ -26,7 +26,12 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -66,6 +71,7 @@ type veridianService struct {
 	defaultPlan      string
 	rootEmail        string
 	apiEndpoint      string
+	hubSecret        string // === Veridian patch === pour signer les auto_login_url
 	logger           logger.Logger
 }
 
@@ -82,6 +88,7 @@ func NewVeridianService(
 	defaultPlan string,
 	rootEmail string,
 	apiEndpoint string,
+	hubSecret string,
 	log logger.Logger,
 ) domain.VeridianService {
 	if defaultPlan == "" {
@@ -96,6 +103,7 @@ func NewVeridianService(
 		defaultPlan:      defaultPlan,
 		rootEmail:        rootEmail,
 		apiEndpoint:      apiEndpoint,
+		hubSecret:        hubSecret,
 		logger:           log,
 	}
 }
@@ -296,7 +304,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		return nil, fmt.Errorf("upsert veridian_plan: %w", err)
 	}
 
-	// 7. Generer un magic link pour l'owner (premier login).
+	// 7. Generer un magic link pour l'owner (fallback : signin avec saisie code).
 	magicLink, _, err := s.buildMagicLink(ctx, input.TenantID, input.OwnerEmail)
 	if err != nil && s.logger != nil {
 		s.logger.WithFields(map[string]interface{}{
@@ -304,6 +312,18 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 			"email":     input.OwnerEmail,
 			"error":     err.Error(),
 		}).Warn("veridian: failed to build magic link during provision")
+	}
+
+	// 7b. === Veridian patch === Generer auto_login_url (URL self-contained
+	// signe HMAC qui logge directement le user via /veridian/auto-login).
+	// C'est l'URL qu'utilise le bouton "Open Notifuse" du Hub, sans saisie.
+	autoLoginURL, _, autoErr := httpHandlerBuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.OwnerEmail)
+	if autoErr != nil && s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"tenant_id": input.TenantID,
+			"email":     input.OwnerEmail,
+			"error":     autoErr.Error(),
+		}).Warn("veridian: failed to build auto-login url (HUB_API_SECRET missing?)")
 	}
 
 	// 8. Notifier le Hub.
@@ -316,13 +336,14 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	}
 
 	return &domain.ProvisionResponse{
-		WorkspaceID: input.TenantID,
-		OwnerUserID: owner.ID,
-		APIKey:      apiKeyToken,
-		APIKeyEmail: apiKeyEmail,
-		MagicLink:   magicLink,
-		Plan:        plan,
-		Created:     true,
+		WorkspaceID:  input.TenantID,
+		OwnerUserID:  owner.ID,
+		APIKey:       apiKeyToken,
+		APIKeyEmail:  apiKeyEmail,
+		MagicLink:    magicLink,
+		AutoLoginURL: autoLoginURL,
+		Plan:         plan,
+		Created:      true,
 	}, nil
 }
 
@@ -440,9 +461,20 @@ func (s *veridianService) GenerateMagicLink(ctx context.Context, workspaceID, us
 		return nil, err
 	}
 
+	// === Veridian patch === auto-login URL en plus du magic link.
+	autoLoginURL, _, autoErr := httpHandlerBuildAutoLoginURL(s.apiEndpoint, s.hubSecret, workspaceID, userEmail)
+	if autoErr != nil && s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"email":        userEmail,
+			"error":        autoErr.Error(),
+		}).Warn("veridian: failed to build auto-login url")
+	}
+
 	return &domain.MagicLinkResponse{
-		MagicLink: link,
-		ExpiresAt: expiresAt,
+		MagicLink:    link,
+		AutoLoginURL: autoLoginURL,
+		ExpiresAt:    expiresAt,
 	}, nil
 }
 
@@ -474,3 +506,48 @@ var _ domain.VeridianService = (*veridianService)(nil)
 
 // errPlanNotFound est exporte pour permettre au handler de renvoyer un 404.
 var errPlanNotFound = sql.ErrNoRows
+
+// === Veridian patch ===
+// autoLoginTokenTTL est la fenetre temporelle d'un token auto-login.
+// 60s : court pour limiter replay si l'URL fuit, suffisant pour un click.
+// La valeur DOIT matcher AutoLoginTokenTTL dans internal/http/veridian_autologin_handler.go
+// (les deux sont independants pour eviter les import cycles).
+const autoLoginTokenTTL = 60 * time.Second
+
+// httpHandlerBuildAutoLoginURL genere une URL self-contained vers
+// /veridian/auto-login?token=<base64(payload).<hex(hmac)>.
+//
+// Mirroir de BuildAutoLoginURL dans internal/http/veridian_autologin_handler.go
+// pour eviter un import cycle (le service ne peut pas importer http).
+// Si on modifie ici, il faut aussi modifier la-bas — la verification cote
+// handler doit utiliser exactement le meme schema.
+func httpHandlerBuildAutoLoginURL(apiEndpoint, hubSecret, workspaceID, email string) (string, time.Time, error) {
+	if hubSecret == "" {
+		return "", time.Time{}, fmt.Errorf("HUB_API_SECRET not configured")
+	}
+	now := time.Now()
+	expiresAt := now.Add(autoLoginTokenTTL)
+	payload := struct {
+		WorkspaceID string `json:"w"`
+		Email       string `json:"e"`
+		IssuedAt    int64  `json:"i"`
+		ExpiresAt   int64  `json:"x"`
+	}{
+		WorkspaceID: workspaceID,
+		Email:       email,
+		IssuedAt:    now.UnixMilli(),
+		ExpiresAt:   expiresAt.UnixMilli(),
+	}
+	rawJSON, err := json.Marshal(payload)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	encoded := base64.RawURLEncoding.EncodeToString(rawJSON)
+	mac := hmac.New(sha256.New, []byte(hubSecret))
+	mac.Write([]byte(encoded))
+	sig := hex.EncodeToString(mac.Sum(nil))
+	token := encoded + "." + sig
+
+	url := strings.TrimRight(apiEndpoint, "/") + "/veridian/auto-login?token=" + token
+	return url, expiresAt, nil
+}

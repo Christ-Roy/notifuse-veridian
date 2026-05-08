@@ -116,9 +116,17 @@ type ProvisionResponse struct {
 	OwnerUserID string `json:"owner_user_id"`
 	APIKey      string `json:"api_key"`
 	APIKeyEmail string `json:"api_key_email"`
-	MagicLink   string `json:"magic_link"`
-	Plan        string `json:"plan"`
-	Created     bool   `json:"created"` // false si idempotent (tenant existait deja)
+	// MagicLink : URL avec ?email=X&code=Y, demande saisie code par le user
+	// (fallback si auto-login fail, ou pour les flows email natif).
+	MagicLink string `json:"magic_link"`
+	// AutoLoginURL : URL self-contained signee HMAC qui logge directement
+	// le user owner dans la console Notifuse via localStorage. C'est l'URL
+	// que le Hub utilise pour son bouton "Open Notifuse" — TTL 60s, le Hub
+	// peut en regenerer via /api/workspaces.generateMagicLink quand le user
+	// clique.
+	AutoLoginURL string `json:"auto_login_url"`
+	Plan         string `json:"plan"`
+	Created      bool   `json:"created"` // false si idempotent (tenant existait deja)
 }
 
 // UpdatePlanInput est le body de POST /api/tenants/update-plan.
@@ -157,9 +165,12 @@ type MagicLinkInput struct {
 }
 
 // MagicLinkResponse est la reponse de POST /api/workspaces.generateMagicLink.
+// MagicLink : URL `/console/signin?email=X&code=Y` (fallback, demande saisie).
+// AutoLoginURL : URL `/veridian/auto-login?token=<HMAC>` (auto-connect, TTL 60s).
 type MagicLinkResponse struct {
-	MagicLink string    `json:"magic_link"`
-	ExpiresAt time.Time `json:"expires_at"`
+	MagicLink    string    `json:"magic_link"`
+	AutoLoginURL string    `json:"auto_login_url"`
+	ExpiresAt    time.Time `json:"expires_at"`
 }
 
 // VeridianService est l'interface des operations Hub-driven.

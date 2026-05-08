@@ -78,11 +78,22 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     expect(data.created).toBe(false);
   });
 
-  test('3. Owner can sign in via magic link (headful)', async ({ page }) => {
-    await page.goto(provisioningResponse.magic_link);
-    // Notifuse console redirects to dashboard once code is verified
+  test('3. Owner can sign in via auto-login URL (headful, no manual code)', async ({ page }) => {
+    // Auto-login URL : self-contained HMAC token, set localStorage + redirect.
+    // Pas de saisie de code requise par le user.
+    expect(provisioningResponse.auto_login_url).toContain('/veridian/auto-login?token=');
+
+    await page.goto(provisioningResponse.auto_login_url);
+
+    // Page intermédiaire HTML stocke auth_token dans localStorage puis redirect /console
     await page.waitForURL(/\/console(\/.*)?$/, { timeout: 30_000 });
-    // Sanity check: workspace name visible
+
+    // Vérifier que le token est dans localStorage (le user est authentifié)
+    const authToken = await page.evaluate(() => localStorage.getItem('auth_token'));
+    expect(authToken).toBeTruthy();
+    expect(authToken!.length).toBeGreaterThan(50); // JWT realistic length
+
+    // Sanity : workspace name visible quelque part
     await expect(page.locator('body')).toContainText(tenantId, { timeout: 10_000 });
   });
 
@@ -98,6 +109,8 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.magic_link).toContain('/console/signin');
+    // === Veridian patch === auto_login_url désormais retourné aussi
+    expect(data.auto_login_url).toContain('/veridian/auto-login?token=');
     expect(data.expires_at).toBeTruthy();
   });
 

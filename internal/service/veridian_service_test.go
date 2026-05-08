@@ -45,13 +45,14 @@ func newVeridianService(t *testing.T) (*veridianService, *veridianServiceMocks) 
 		defaultPlan:      "free",
 		rootEmail:        "root@veridian.site",
 		apiEndpoint:      "https://notifuse.app.veridian.site",
+		hubSecret:        "test-hub-secret-32chars-min-len-ok-padding",
 		logger:           logger.NewLogger(),
 	}
 	return svc, m
 }
 
 func TestVeridianService_New_DefaultsPlanToFree(t *testing.T) {
-	svc := NewVeridianService(nil, nil, nil, nil, nil, "", "root@x", "http://x", logger.NewLogger())
+	svc := NewVeridianService(nil, nil, nil, nil, nil, "", "root@x", "http://x", "test-hub-secret", logger.NewLogger())
 	require.NotNil(t, svc)
 	concrete := svc.(*veridianService)
 	assert.Equal(t, "free", concrete.defaultPlan)

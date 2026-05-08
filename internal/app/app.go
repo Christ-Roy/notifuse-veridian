@@ -1057,6 +1057,7 @@ func (a *App) InitServices() error {
 		a.config.VeridianDefaultPlan,
 		a.config.RootEmail,
 		a.config.APIEndpoint,
+		a.config.HubAPISecret,
 		a.logger,
 	)
 
@@ -1241,6 +1242,16 @@ func (a *App) InitHandlers() error {
 		a.logger,
 	)
 	veridianMagicHandler.RegisterRoutes(a.mux)
+
+	// === Veridian patch === Endpoint /veridian/auto-login (token HMAC dans URL).
+	// Page HTML qui stocke le JWT dans localStorage et redirect /console.
+	veridianAutoLoginHandler := httpHandler.NewVeridianAutoLoginHandler(
+		a.userService,
+		a.config.HubAPISecret,
+		a.config.APIEndpoint,
+		a.logger,
+	)
+	veridianAutoLoginHandler.RegisterRoutes(a.mux)
 
 	return nil
 }
