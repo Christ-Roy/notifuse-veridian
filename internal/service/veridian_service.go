@@ -287,21 +287,9 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	}
 
 	// === Veridian patch ===
-	// 4. Owner natif : retirer root du workspace pour que le tenant user soit
-	// owner unique. Compose 3 fonctions natives upstream :
-	//   a) AddUserToWorkspace(role=member) — TransferOwnership exige newOwner=member
-	//   b) TransferOwnership(workspaceID, tenantUserID, rootUserID) — promote
-	//      tenant user en owner et demote root en member, atomiquement
-	//   c) RemoveUserFromWorkspace(rootUserID) depuis ctx tenant user, qui est
-	//      maintenant owner et donc autorise a retirer root
-	//
-	// Resultat final dans user_workspaces : 1 seul row pour ce workspace
-	// (tenant user, role=owner). Root n'est plus co-owner — referme le trou
-	// de securite documente dans todo/apps/notifuse/TODO.md.
-	//
-	// Idempotence : si le tenant user est deja owner (re-provision), les 3
-	// etapes echouent gracieusement (duplicate key sur AddUser, "user is not
-	// a member" sur Transfer, etc.) — on log mais on ne bloque pas.
+	// 4. Ajouter le tenant user comme member du workspace (preparation pour
+	// TransferOwnership en step 6). Owner-natif via composition de 3 fonctions
+	// natives upstream — voir step 6 pour le transfer + step 7 pour le remove.
 	addErr := s.workspaceService.AddUserToWorkspace(
 		rootCtx,
 		input.TenantID,
@@ -313,6 +301,32 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		return nil, fmt.Errorf("add tenant user as member: %w", addErr)
 	}
 
+	// 5. Creer une API key tenant AVANT de retirer root (CreateAPIKey upstream
+	// exige que le caller soit member/owner du workspace — root l'est encore
+	// a ce stade, le transfer n'a pas encore eu lieu).
+	// Prefix unique par tenant car Notifuse stocke l'API key user avec un email
+	// base sur le prefix — le meme prefix pour deux workspaces distincts cree
+	// un conflit "user already exists".
+	apiKeyPrefix := "veridian-api-" + input.TenantID
+	apiKeyToken, apiKeyEmail, err := s.workspaceService.CreateAPIKey(rootCtx, input.TenantID, apiKeyPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("create api key: %w", err)
+	}
+
+	// === Veridian patch ===
+	// 6+7. Owner natif : retirer root du workspace pour que le tenant user soit
+	// owner unique. Compose 2 fonctions natives upstream :
+	//   a) TransferOwnership(workspaceID, tenantUserID, rootUserID) — promote
+	//      tenant user en owner et demote root en member, atomiquement
+	//   b) RemoveUserFromWorkspace(rootUserID) depuis ctx tenant user, qui est
+	//      maintenant owner et donc autorise a retirer root
+	//
+	// Resultat final dans user_workspaces : 1 seul row pour ce workspace
+	// (tenant user, role=owner). Root n'est plus co-owner — referme le trou
+	// de securite documente dans todo/apps/notifuse/TODO.md.
+	//
+	// Idempotence : si le tenant user est deja owner (re-provision), les 2
+	// etapes echouent gracieusement — on log mais on ne bloque pas.
 	if owner.ID != rootUserID {
 		if err := s.workspaceService.TransferOwnership(rootCtx, input.TenantID, owner.ID, rootUserID); err != nil {
 			// Tolerant : si owner est deja owner (re-provision idempotent),
@@ -346,16 +360,6 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 				}
 			}
 		}
-	}
-
-	// 5. Creer une API key tenant (utilisee par le Hub pour piloter le
-	// workspace, ex generateMagicLink). Prefix unique par tenant car Notifuse
-	// stocke l'API key user avec un email base sur le prefix — le meme prefix
-	// pour deux workspaces distincts cree un conflit "user already exists".
-	apiKeyPrefix := "veridian-api-" + input.TenantID
-	apiKeyToken, apiKeyEmail, err := s.workspaceService.CreateAPIKey(rootCtx, input.TenantID, apiKeyPrefix)
-	if err != nil {
-		return nil, fmt.Errorf("create api key: %w", err)
 	}
 
 	// 6. Inserer / mettre a jour la ligne veridian_plan.
