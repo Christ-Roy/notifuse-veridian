@@ -153,6 +153,13 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 			WriteJSONError(w, limitErr.Error(), http.StatusForbidden)
 			return
 		}
+		// === Veridian patch === expose explicit 403 + message for unauthorized
+		// (root-only restriction or Veridian-managed mode) instead of opaque 500.
+		var unauthorizedErr *domain.ErrUnauthorized
+		if errors.As(err, &unauthorizedErr) {
+			WriteJSONError(w, unauthorizedErr.Error(), http.StatusForbidden)
+			return
+		}
 		if err.Error() == "workspace already exists" {
 			WriteJSONError(w, "Workspace already exists", http.StatusConflict)
 		} else {

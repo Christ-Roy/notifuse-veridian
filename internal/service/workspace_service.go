@@ -143,7 +143,19 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
-	// Only allow root user to create workspaces
+	// === Veridian patch ===
+	// In Veridian-managed mode (HUB_API_SECRET set), workspace creation is
+	// the exclusive responsibility of the Veridian Hub via the HMAC-signed
+	// /api/tenants/provision endpoint. Block all interactive creation —
+	// even by the root user — so accidental UI clicks never bypass the Hub
+	// (which tracks billing, plans, lifetime overrides, etc.).
+	if s.config.HubAPISecret != "" {
+		s.logger.WithField("user_email", user.Email).Warn("Veridian-managed mode: interactive workspace creation refused — use Hub /api/tenants/provision")
+		return nil, &domain.ErrUnauthorized{Message: "workspace creation is managed by Veridian Hub"}
+	}
+
+	// Only allow root user to create workspaces (upstream behavior — kept for
+	// self-hosted deployments without HUB_API_SECRET).
 	if user.Email != s.config.RootEmail {
 		s.logger.WithField("user_email", user.Email).WithField("root_email", s.config.RootEmail).Error("Non-root user attempted to create workspace")
 		return nil, &domain.ErrUnauthorized{Message: "only root user can create workspaces"}
