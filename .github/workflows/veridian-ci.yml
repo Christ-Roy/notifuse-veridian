@@ -154,8 +154,12 @@ jobs:
           # de saturer max_connections (300) et le pool Notifuse (250).
           # On garde les workspaces "clients reels" (apicalinfo, robinix,
           # lyon, loyer, veridiansite — voir CLAUDE.md staging clients).
-          # Pas de restart container : DROP DATABASE force Notifuse a invalider
-          # ses pools naturellement au prochain access, sans downtime.
+          #
+          # Étape 1 : terminer les connexions actives sur les DBs a dropper
+          # (sinon DROP DATABASE échoue avec "is being accessed by other users").
+          sudo docker exec compose-bypass-bluetooth-feed-tbayqr-notifuse-postgres-1 \
+            bash -c "psql -U postgres -t -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname LIKE 'notifuse_ws%' AND datname NOT LIKE '%apicalinfo%' AND datname NOT LIKE '%robinix%' AND datname NOT LIKE '%lyon%' AND datname NOT LIKE '%loyer%' AND datname NOT LIKE '%veridiansite%' AND pid <> pg_backend_pid();\"" 2>&1 | tail -3 || true
+          # Étape 2 : DROP DATABASE pour chaque workspace de test
           sudo docker exec compose-bypass-bluetooth-feed-tbayqr-notifuse-postgres-1 \
             bash -c "psql -U postgres -t -c \"SELECT 'DROP DATABASE IF EXISTS \\\"' || datname || '\\\";' FROM pg_database WHERE datname LIKE 'notifuse_ws%' AND datname NOT LIKE '%apicalinfo%' AND datname NOT LIKE '%robinix%' AND datname NOT LIKE '%lyon%' AND datname NOT LIKE '%loyer%' AND datname NOT LIKE '%veridiansite%';\" | psql -U postgres" 2>&1 | tail -3 || true
           # Cleanup tables system (workspaces, users, veridian_plan)
