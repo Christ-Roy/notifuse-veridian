@@ -158,7 +158,13 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     expect(data.suspended_at).toBeTruthy();
   });
 
-  test('8. Send transactional after suspend → 402', async () => {
+  test('8. Send transactional after suspend → 402 (after cache TTL 60s)', async () => {
+    // Le paywall middleware utilise un cache LRU 60s pour éviter un round-trip
+    // DB par envoi. Pour que le suspend prenne effet, on attend 65s.
+    // En prod réelle : window de 60s acceptable où des envois peuvent encore
+    // partir après suspend Stripe webhook. Documenté dans veridian_paywall.go.
+    await new Promise((r) => setTimeout(r, 65_000));
+
     const res = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
       method: 'POST',
       headers: {
@@ -179,7 +185,10 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     expect(res.status).toBe(200);
   });
 
-  test('10. Send transactional after resume → not 402', async () => {
+  test('10. Send transactional after resume → not 402 (after cache TTL)', async () => {
+    // Wait cache TTL again pour que le resume prenne effet
+    await new Promise((r) => setTimeout(r, 65_000));
+
     const res = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
       method: 'POST',
       headers: {
