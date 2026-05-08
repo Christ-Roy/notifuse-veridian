@@ -31,13 +31,21 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
 }
 
 async function provisionTenant(tenantId: string, plan = 'free') {
-  const r = await hmacFetch('/api/tenants/provision', 'POST', {
-    tenant_id: tenantId,
-    owner_email: `${tenantId}@paywall.test`,
-    plan,
-  });
-  expect(r.status).toBe(200);
-  return r.json();
+  // Retry 3x sur 5xx (race CreateDatabase upstream)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await hmacFetch('/api/tenants/provision', 'POST', {
+      tenant_id: tenantId,
+      owner_email: `${tenantId}@paywall.test`,
+      plan,
+    });
+    if (r.status === 200) return r.json();
+    if (r.status >= 500 && attempt < 2) {
+      await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
+      continue;
+    }
+    expect(r.status, await r.text()).toBe(200);
+  }
+  throw new Error('provision retry exhausted');
 }
 
 async function sendTransactional(apiKey: string, workspaceId: string) {
