@@ -134,6 +134,12 @@ func (s *veridianService) ctxAsRoot(ctx context.Context) (context.Context, strin
 	rootCtx := context.WithValue(ctx, domain.UserIDKey, rootUser.ID)
 	rootCtx = context.WithValue(rootCtx, domain.UserTypeKey, string(domain.UserTypeUser))
 	rootCtx = context.WithValue(rootCtx, domain.SessionIDKey, session.ID)
+	// === Veridian patch ===
+	// Mark this as a system-internal call so guards in WorkspaceService
+	// (block interactive workspace creation in Veridian-managed mode) skip
+	// us. Only legitimate HTTP callers — which never have this key — are
+	// refused.
+	rootCtx = context.WithValue(rootCtx, domain.SystemCallKey, true)
 	return rootCtx, session.ID, nil
 }
 

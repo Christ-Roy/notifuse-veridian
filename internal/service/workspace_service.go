@@ -149,7 +149,11 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 	// /api/tenants/provision endpoint. Block all interactive creation —
 	// even by the root user — so accidental UI clicks never bypass the Hub
 	// (which tracks billing, plans, lifetime overrides, etc.).
-	if s.config.HubAPISecret != "" {
+	//
+	// Internal callers (VeridianService.Provision) propagate domain.SystemCallKey
+	// in the ctx so they bypass this guard. Only HTTP callers — which never
+	// have SystemCallKey — get refused.
+	if s.config.HubAPISecret != "" && ctx.Value(domain.SystemCallKey) == nil {
 		s.logger.WithField("user_email", user.Email).Warn("Veridian-managed mode: interactive workspace creation refused — use Hub /api/tenants/provision")
 		return nil, &domain.ErrUnauthorized{Message: "workspace creation is managed by Veridian Hub"}
 	}
