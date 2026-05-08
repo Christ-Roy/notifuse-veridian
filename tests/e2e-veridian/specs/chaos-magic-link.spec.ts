@@ -30,7 +30,7 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
 }
 
 test.describe('Magic link — flow nominal headful', () => {
-  test('user clique magic link → arrive sur console connecte → est owner du workspace', async ({
+  test('user clique auto-login URL → arrive sur console connecte → owner verifie via API', async ({
     page,
   }) => {
     const tid = `magic${Date.now().toString(36).slice(-6)}`;
@@ -43,27 +43,35 @@ test.describe('Magic link — flow nominal headful', () => {
     });
     expect(r.status).toBe(200);
     const provision = await r.json();
-    expect(provision.magic_link).toContain('code='); // Veridian patch must produce self-contained link
+    expect(provision.auto_login_url).toContain('/veridian/auto-login?token=');
 
-    await page.goto(provision.magic_link);
+    // Click auto-login URL
+    await page.goto(provision.auto_login_url);
 
-    // Doit redirect vers /console (login auto via code dans URL)
-    await page.waitForURL(/\/console(\/.*)?$/, { timeout: 30_000 });
+    // Le frontend Notifuse est une SPA qui ne route que /console (root)
+    await page.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page.waitForTimeout(2000); // hydrate
 
-    // Le workspace name visible dans la sidebar
-    await expect(page.locator('body')).toContainText(tid, { timeout: 10_000 });
+    // Token bien stocké en localStorage = preuve auth
+    const authToken = await page.evaluate(() => localStorage.getItem('auth_token'));
+    expect(authToken).toBeTruthy();
 
-    // Naviguer vers settings/members pour verifier role
-    // Note : selecteurs depend de la console UI Notifuse, peuvent changer. On utilise
-    // des selecteurs robustes (text-based) pour limiter le breakage sur upgrade.
-    await page.getByRole('link', { name: /members|members/i }).click().catch(async () => {
-      // Fallback : URL directe
-      await page.goto(`${NOTIFUSE_URL}/console/${tid}/members`);
-    });
+    // Pas redirect vers /signin = preuve auth réussie
+    expect(page.url()).not.toContain('/signin');
 
-    // L'email du user doit apparaitre avec le role "owner"
-    const memberRow = page.locator('tr', { hasText: email }).first();
-    await expect(memberRow).toContainText(/owner/i, { timeout: 10_000 });
+    // Vérification role=owner via API workspaces.members (plus robuste que UI)
+    const membersRes = await page.evaluate(async ({ url, ws, token }) => {
+      const res = await fetch(`${url}/api/workspaces.members?id=${ws}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return { status: res.status, body: await res.json() };
+    }, { url: NOTIFUSE_URL, ws: tid, token: authToken });
+
+    expect(membersRes.status).toBe(200);
+    const members = Array.isArray(membersRes.body) ? membersRes.body : (membersRes.body.members || []);
+    const ownerMember = members.find((m: any) => m.email === email || m.user?.email === email);
+    expect(ownerMember).toBeTruthy();
+    expect(JSON.stringify(ownerMember).toLowerCase()).toContain('owner');
   });
 });
 
