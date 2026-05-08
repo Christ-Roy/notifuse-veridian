@@ -3,35 +3,46 @@ package service
 // === Veridian patch ===
 // VeridianService implemente les operations Hub-driven : provisioning,
 // suspension, reprise, soft-delete, lecture de status, generation de magic
-// link cross-app.
+// link cross-app, hard wipe (test/admin).
 //
 // Le Hub appelle ces operations via les endpoints /api/tenants/* proteges
 // par middleware HMAC (voir veridian_hmac.go). Le service coordonne :
-//   - WorkspaceServiceInterface (creation workspace, API key, ajout owner)
+//   - WorkspaceServiceInterface (CRUD workspace, transfer ownership)
+//   - WorkspaceRepository       (lecture members sans check auth — utilise
+//                                par WipeTestTenants pour resoudre l'owner
+//                                a partir d'un workspace owner-natif)
 //   - UserServiceInterface       (signin pour magic code, lookup user)
 //   - UserRepository             (creation user owner si absent, sessions
-//                                  root pour bypass des guards d'auth)
+//                                  pour bypass des guards d'auth)
 //   - VeridianPlanRepository     (persistance plan + status + quota)
 //   - WebhookEmitter             (events tenant.* pousses vers le Hub)
 //
-// Pourquoi le ctx-as-root :
-//   WorkspaceService.CreateWorkspace exige un user root authentifie dans
-//   le contexte. AddUserToWorkspace + CreateAPIKey exigent un owner
-//   authentifie. Le Hub n'a pas de session humaine — la requete est
-//   signee HMAC. On contourne en creant une session courte (5 min) pour
-//   le user root et en l'injectant dans le ctx pour le temps de l'appel.
-//   La session est ensuite supprimee.
+// Sessions virtuelles (ctxAsRoot / ctxAsUser) :
+//
+//	Plusieurs ops upstream (CreateWorkspace, AddUserToWorkspace, CreateAPIKey,
+//	TransferOwnership, RemoveUserFromWorkspace, DeleteWorkspace) exigent un
+//	user authentifie + permissions specifiques (root, owner, member). Le Hub
+//	signe HMAC mais n'a pas de session humaine. On contourne en creant des
+//	sessions courtes (rootSessionTTL=5min) :
+//	  - ctxAsRoot   : session pour ROOT_EMAIL — utilise pour creer un
+//	                  workspace fraichement (root devient owner par defaut
+//	                  via CreateWorkspace), AddUserToWorkspace, CreateAPIKey,
+//	                  TransferOwnership.
+//	  - ctxAsUser   : session pour un user arbitraire (utilise pour le
+//	                  tenant user owner apres TransferOwnership : appel
+//	                  RemoveUserFromWorkspace pour virer root, et
+//	                  DeleteWorkspace dans WipeTestTenants).
+//	Sessions nettoyees via cleanupSession(sessionID) en defer.
+//
+// Owner-natif : depuis le commit f43ce239, chaque tenant Veridian-managed a
+// un seul owner (le tenant user) — root est retire post-CreateWorkspace via
+// TransferOwnership + RemoveUserFromWorkspace. Voir transferOwnershipToTenant.
 //
 // Voir veridian-platform/notifuse/README.md.
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -114,7 +125,7 @@ func NewVeridianService(
 // ctxAsRoot cree une session courte pour le user root et retourne un ctx
 // portant les claims (UserIDKey, UserTypeKey, SessionIDKey) attendus par
 // AuthService.AuthenticateUserFromContext. La session ID retournee doit
-// etre passee a cleanupRootSession en defer pour supprimer la session.
+// etre passee a cleanupSession en defer pour supprimer la session.
 //
 // Conserve pour compat : etait utilise avant la factorisation ctxAsUser.
 // Returns (ctx, sessionID, rootUserID, error) — rootUserID utile aux callers
@@ -138,7 +149,7 @@ func (s *veridianService) ctxAsRoot(ctx context.Context) (context.Context, strin
 // Le ctx contient SystemCallKey pour bypass les guards Veridian-managed dans
 // les services internes (notamment WorkspaceService.CreateWorkspace).
 //
-// La session ID retournee doit etre passee a cleanupRootSession en defer pour
+// La session ID retournee doit etre passee a cleanupSession en defer pour
 // supprimer la session apres usage.
 func (s *veridianService) ctxAsUser(ctx context.Context, userID string) (context.Context, string, error) {
 	session := &domain.Session{
@@ -163,7 +174,7 @@ func (s *veridianService) ctxAsUser(ctx context.Context, userID string) (context
 	return userCtx, session.ID, nil
 }
 
-func (s *veridianService) cleanupRootSession(ctx context.Context, sessionID string) {
+func (s *veridianService) cleanupSession(ctx context.Context, sessionID string) {
 	if sessionID == "" {
 		return
 	}
@@ -171,7 +182,7 @@ func (s *veridianService) cleanupRootSession(ctx context.Context, sessionID stri
 		s.logger.WithFields(map[string]interface{}{
 			"session_id": sessionID,
 			"error":      err.Error(),
-		}).Warn("veridian: failed to delete root session")
+		}).Warn("veridian: failed to delete session")
 	}
 }
 
@@ -217,7 +228,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	var existingWorkspace *domain.Workspace
 	if idempErr == nil {
 		existingWorkspace, _ = s.workspaceService.GetWorkspace(idempCtx, input.TenantID)
-		s.cleanupRootSession(ctx, idempSessionID)
+		s.cleanupSession(ctx, idempSessionID)
 	}
 	if existingWorkspace != nil && planErr == nil && existingPlan != nil {
 		// Tenant deja provisionne : on retourne sans toucher.
@@ -264,7 +275,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	if err != nil {
 		return nil, err
 	}
-	defer s.cleanupRootSession(ctx, rootSessionID)
+	defer s.cleanupSession(ctx, rootSessionID)
 
 	// 3. Creer le workspace si absent.
 	workspaceName := input.WorkspaceName
@@ -290,9 +301,10 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	}
 
 	// === Veridian patch ===
-	// 4. Ajouter le tenant user comme member du workspace (preparation pour
-	// TransferOwnership en step 6). Owner-natif via composition de 3 fonctions
-	// natives upstream — voir step 6 pour le transfer + step 7 pour le remove.
+	// 4. Ajouter le tenant user comme member du workspace. C'est une etape
+	// intermediaire pour TransferOwnership (step 6), qui exige que newOwner
+	// soit deja membre. role=owner direct etait l'ancien comportement, mais
+	// laissait root co-owner en parallele.
 	addErr := s.workspaceService.AddUserToWorkspace(
 		rootCtx,
 		input.TenantID,
@@ -304,68 +316,24 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		return nil, fmt.Errorf("add tenant user as member: %w", addErr)
 	}
 
-	// 5. Creer une API key tenant AVANT de retirer root (CreateAPIKey upstream
-	// exige que le caller soit member/owner du workspace — root l'est encore
-	// a ce stade, le transfer n'a pas encore eu lieu).
-	// Prefix unique par tenant car Notifuse stocke l'API key user avec un email
-	// base sur le prefix — le meme prefix pour deux workspaces distincts cree
-	// un conflit "user already exists".
+	// 5. Creer une API key tenant AVANT de retirer root (step 6). CreateAPIKey
+	// upstream exige que le caller soit member/owner du workspace — root l'est
+	// encore a ce stade. Prefix unique par tenant pour eviter les collisions
+	// "user already exists" (Notifuse derive un email du prefix).
 	apiKeyPrefix := "veridian-api-" + input.TenantID
 	apiKeyToken, apiKeyEmail, err := s.workspaceService.CreateAPIKey(rootCtx, input.TenantID, apiKeyPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("create api key: %w", err)
 	}
 
-	// === Veridian patch ===
-	// 6+7. Owner natif : retirer root du workspace pour que le tenant user soit
-	// owner unique. Compose 2 fonctions natives upstream :
-	//   a) TransferOwnership(workspaceID, tenantUserID, rootUserID) — promote
-	//      tenant user en owner et demote root en member, atomiquement
-	//   b) RemoveUserFromWorkspace(rootUserID) depuis ctx tenant user, qui est
-	//      maintenant owner et donc autorise a retirer root
-	//
-	// Resultat final dans user_workspaces : 1 seul row pour ce workspace
-	// (tenant user, role=owner). Root n'est plus co-owner — referme le trou
-	// de securite documente dans todo/apps/notifuse/TODO.md.
-	//
-	// Idempotence : si le tenant user est deja owner (re-provision), les 2
-	// etapes echouent gracieusement — on log mais on ne bloque pas.
-	if owner.ID != rootUserID {
-		if err := s.workspaceService.TransferOwnership(rootCtx, input.TenantID, owner.ID, rootUserID); err != nil {
-			// Tolerant : si owner est deja owner (re-provision idempotent),
-			// TransferOwnership echoue car newOwner doit etre member. C'est OK.
-			if s.logger != nil {
-				s.logger.WithFields(map[string]interface{}{
-					"tenant_id": input.TenantID,
-					"new_owner": owner.ID,
-					"error":     err.Error(),
-				}).Warn("veridian: TransferOwnership skipped (likely re-provision idempotent)")
-			}
-		} else {
-			// Transfer reussi : maintenant le tenant user est owner, root est
-			// member. On retire root via un ctx tenant user authentifie.
-			tenantCtx, tenantSessionID, sessErr := s.ctxAsUser(ctx, owner.ID)
-			if sessErr != nil {
-				if s.logger != nil {
-					s.logger.WithFields(map[string]interface{}{
-						"tenant_id": input.TenantID,
-						"error":     sessErr.Error(),
-					}).Warn("veridian: failed to create tenant session for root removal")
-				}
-			} else {
-				defer s.cleanupRootSession(ctx, tenantSessionID)
-				if err := s.workspaceService.RemoveUserFromWorkspace(tenantCtx, input.TenantID, rootUserID); err != nil && s.logger != nil {
-					s.logger.WithFields(map[string]interface{}{
-						"tenant_id": input.TenantID,
-						"root_id":   rootUserID,
-						"error":     err.Error(),
-					}).Warn("veridian: failed to remove root from workspace (non-fatal)")
-				}
-			}
-		}
-	}
+	// 6. Owner natif : transferer l'ownership a `owner.ID` puis retirer root
+	// du workspace, pour que le tenant user soit owner unique. Voir
+	// transferOwnershipToTenant pour les details. Best-effort : si la
+	// sequence echoue (re-provision idempotent, etc.), on log mais on ne
+	// bloque pas le provisioning car l'API key est deja cree.
+	s.transferOwnershipToTenant(ctx, rootCtx, input.TenantID, owner.ID, rootUserID)
 
-	// 6. Inserer / mettre a jour la ligne veridian_plan.
+	// 7. Inserer / mettre a jour la ligne veridian_plan.
 	now := time.Now().UTC()
 	planRow := &domain.VeridianPlan{
 		WorkspaceID:         input.TenantID,
@@ -381,7 +349,8 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		return nil, fmt.Errorf("upsert veridian_plan: %w", err)
 	}
 
-	// 7. Generer un magic link pour l'owner (fallback : signin avec saisie code).
+	// 8. Generer un magic link signin (fallback : saisie code) + auto-login
+	// URL self-contained (preferred : bouton "Open Notifuse" Hub sans saisie).
 	magicLink, _, err := s.buildMagicLink(ctx, input.TenantID, input.OwnerEmail)
 	if err != nil && s.logger != nil {
 		s.logger.WithFields(map[string]interface{}{
@@ -391,10 +360,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		}).Warn("veridian: failed to build magic link during provision")
 	}
 
-	// 7b. === Veridian patch === Generer auto_login_url (URL self-contained
-	// signe HMAC qui logge directement le user via /veridian/auto-login).
-	// C'est l'URL qu'utilise le bouton "Open Notifuse" du Hub, sans saisie.
-	autoLoginURL, _, autoErr := httpHandlerBuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.OwnerEmail)
+	autoLoginURL, _, autoErr := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.OwnerEmail)
 	if autoErr != nil && s.logger != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"tenant_id": input.TenantID,
@@ -403,7 +369,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		}).Warn("veridian: failed to build auto-login url (HUB_API_SECRET missing?)")
 	}
 
-	// 8. Notifier le Hub.
+	// 9. Notifier le Hub via webhook (best-effort).
 	if s.emitter != nil {
 		s.emitter.Emit(ctx, domain.EventTenantProvisioned, input.TenantID, map[string]interface{}{
 			"plan":          plan,
@@ -422,6 +388,70 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		Plan:         plan,
 		Created:      true,
 	}, nil
+}
+
+// transferOwnershipToTenant rend le tenant user owner unique du workspace
+// en composant 2 fonctions natives upstream :
+//
+//	a) TransferOwnership(workspaceID, tenantUserID, rootUserID) — promote le
+//	   tenant user en owner et demote root en member, atomiquement.
+//	b) RemoveUserFromWorkspace(rootUserID) depuis ctx tenant user, qui est
+//	   maintenant owner et donc autorise a retirer root.
+//
+// Resultat final dans user_workspaces : 1 seul row pour ce workspace
+// (tenant user, role=owner). Root n'est plus co-owner — referme le trou
+// de securite documente dans todo/apps/notifuse/TODO.md.
+//
+// Best-effort : si TransferOwnership echoue (re-provision idempotent ou le
+// tenant user est deja owner), on log mais on ne propage pas l'erreur, car
+// le provisioning est deja state-changing (workspace cree, API key emise).
+// Si Remove echoue, idem : root reste member non-owner, c'est l'etat
+// upstream classique sans la garantie owner-natif renforcee.
+//
+// Pre-conditions : le tenant user (owner.ID) doit etre member du workspace
+// (cf. step 4 de Provision : AddUserToWorkspace role=member).
+func (s *veridianService) transferOwnershipToTenant(ctx, rootCtx context.Context, workspaceID, tenantUserID, rootUserID string) {
+	if tenantUserID == rootUserID {
+		// Cas degenere : provisionner Notifuse pour le user root lui-meme.
+		// Pas de transfer a faire.
+		return
+	}
+
+	if err := s.workspaceService.TransferOwnership(rootCtx, workspaceID, tenantUserID, rootUserID); err != nil {
+		// Tolerant : si tenant user est deja owner (re-provision idempotent),
+		// TransferOwnership echoue car newOwner doit etre member. C'est OK.
+		if s.logger != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"new_owner":    tenantUserID,
+				"error":        err.Error(),
+			}).Warn("veridian: TransferOwnership skipped (likely re-provision idempotent)")
+		}
+		return
+	}
+
+	// Transfer reussi : tenant user est owner, root est member.
+	// On retire root via un ctx tenant user authentifie (root n'est plus
+	// owner et ne peut plus appeler RemoveUserFromWorkspace).
+	tenantCtx, tenantSessionID, sessErr := s.ctxAsUser(ctx, tenantUserID)
+	if sessErr != nil {
+		if s.logger != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"error":        sessErr.Error(),
+			}).Warn("veridian: failed to create tenant session for root removal")
+		}
+		return
+	}
+	defer s.cleanupSession(ctx, tenantSessionID)
+
+	if err := s.workspaceService.RemoveUserFromWorkspace(tenantCtx, workspaceID, rootUserID); err != nil && s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"root_id":      rootUserID,
+			"error":        err.Error(),
+		}).Warn("veridian: failed to remove root from workspace (non-fatal)")
+	}
 }
 
 // UpdatePlan change le plan d'un tenant existant. Recalcule le quota
@@ -507,10 +537,13 @@ var defaultSafetyClientPrefixes = []string{
 // un prefix ou une liste explicite. Utilise par la CI / admin platform pour
 // nettoyer les tenants e2e accumules entre les runs.
 //
-// Pour chaque tenant a supprimer :
-//   1. WorkspaceService.DeleteWorkspace via ctx root → DROP DATABASE upstream
-//   2. PlanRepo.HardDelete → DELETE veridian_plan row
-//   3. Emit event tenant.deleted
+// Pour chaque tenant a supprimer (cf wipeOneTenant) :
+//   1. Resoudre l'owner du workspace via workspaceRepo direct (post-feature
+//      owner-natif, root n'est plus member et ne peut pas appeler
+//      DeleteWorkspace).
+//   2. WorkspaceService.DeleteWorkspace depuis ctx owner → DROP DATABASE.
+//   3. PlanRepo.HardDelete → DELETE row veridian_plan.
+//   4. Emit event tenant.deleted (best-effort).
 //
 // Les tenants matchant un safety prefix sont SKIP (jamais effaces).
 func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.WipeTestTenantsInput) (*domain.WipeTestTenantsResponse, error) {
@@ -547,7 +580,7 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 	if err != nil {
 		return nil, fmt.Errorf("ctxAsRoot: %w", err)
 	}
-	defer s.cleanupRootSession(ctx, sessionID)
+	defer s.cleanupSession(ctx, sessionID)
 
 	resp := &domain.WipeTestTenantsResponse{
 		Wiped:   []string{},
@@ -569,61 +602,10 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 			continue
 		}
 
-		// 1. WorkspaceService.DeleteWorkspace upstream → DROP DATABASE
-		// === Veridian patch ===
-		// Le workspace a maintenant le tenant user comme seul owner (root a
-		// ete retire par Provision via TransferOwnership). DeleteWorkspace
-		// exige que le caller soit owner — on doit donc utiliser un ctx du
-		// tenant user, pas du root. Recuperer l'owner via repo direct
-		// (GetWorkspaceUsersWithEmail = pas de check auth member, vs
-		// WorkspaceService.GetWorkspaceMembersWithEmail qui exige le caller
-		// member — root ne l'est plus apres owner-natif).
-		deleteCtx := rootCtx
-		var ownerUserID string
-		if s.workspaceRepo != nil {
-			members, _ := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, tid)
-			for _, m := range members {
-				if m != nil && m.Role == "owner" {
-					ownerUserID = m.UserID
-					break
-				}
-			}
-		}
-		if ownerUserID != "" {
-			ownerCtx, ownerSessionID, sessErr := s.ctxAsUser(ctx, ownerUserID)
-			if sessErr == nil {
-				deleteCtx = ownerCtx
-				defer s.cleanupRootSession(ctx, ownerSessionID)
-			} else if s.logger != nil {
-				s.logger.WithFields(map[string]interface{}{
-					"tenant_id": tid,
-					"owner_id":  ownerUserID,
-					"error":     sessErr.Error(),
-				}).Warn("veridian: failed to create owner session for delete, falling back to root ctx")
-			}
-		}
-
-		if err := s.workspaceService.DeleteWorkspace(deleteCtx, tid); err != nil {
-			// Workspace deja absent = OK (peut arriver si planRepo a une row sans workspace)
-			if !strings.Contains(err.Error(), "not found") {
-				resp.Errors[tid] = "delete workspace: " + err.Error()
-				continue
-			}
-		}
-
-		// 2. PlanRepo.HardDelete → DELETE veridian_plan row
-		if err := s.planRepo.HardDelete(ctx, tid); err != nil {
-			resp.Errors[tid] = "hard delete plan: " + err.Error()
+		if err := s.wipeOneTenant(ctx, rootCtx, tid); err != nil {
+			resp.Errors[tid] = err.Error()
 			continue
 		}
-
-		// 3. Emit event
-		if s.emitter != nil {
-			s.emitter.Emit(ctx, domain.EventTenantDeleted, tid, map[string]interface{}{
-				"hard_wipe": true,
-			})
-		}
-
 		resp.Wiped = append(resp.Wiped, tid)
 	}
 
@@ -635,6 +617,66 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 		}).Info("veridian: WipeTestTenants completed")
 	}
 	return resp, nil
+}
+
+// wipeOneTenant supprime definitivement un tenant : DROP database workspace
+// + DELETE row veridian_plan + emit event tenant.deleted. Rendu helper pour
+// eviter le defer-in-loop (la session tenant ouverte pour DeleteWorkspace
+// est nettoyee a la fin de cette fonction, pas a la fin de WipeTestTenants).
+//
+// rootCtx est le ctx avec session root active, utilise comme fallback si on
+// n'arrive pas a creer une session tenant (pre-feature owner-natif, ou
+// erreur transitoire).
+func (s *veridianService) wipeOneTenant(ctx, rootCtx context.Context, tid string) error {
+	// 1. Resoudre l'owner du workspace via repo direct (pas de check auth).
+	// Le workspace a maintenant le tenant user comme seul owner (root a ete
+	// retire par Provision via TransferOwnership). DeleteWorkspace exige que
+	// le caller soit owner — on doit donc utiliser un ctx du tenant user.
+	deleteCtx := rootCtx
+	if s.workspaceRepo != nil {
+		members, _ := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, tid)
+		var ownerUserID string
+		for _, m := range members {
+			if m != nil && m.Role == "owner" {
+				ownerUserID = m.UserID
+				break
+			}
+		}
+		if ownerUserID != "" {
+			ownerCtx, ownerSessionID, sessErr := s.ctxAsUser(ctx, ownerUserID)
+			if sessErr == nil {
+				deleteCtx = ownerCtx
+				defer s.cleanupSession(ctx, ownerSessionID)
+			} else if s.logger != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"tenant_id": tid,
+					"owner_id":  ownerUserID,
+					"error":     sessErr.Error(),
+				}).Warn("veridian: failed to create owner session for delete, falling back to root ctx")
+			}
+		}
+	}
+
+	// 2. DeleteWorkspace upstream → DROP DATABASE workspace dedie.
+	// Workspace deja absent = OK (peut arriver si planRepo a une row sans workspace).
+	if err := s.workspaceService.DeleteWorkspace(deleteCtx, tid); err != nil {
+		if !strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("delete workspace: %w", err)
+		}
+	}
+
+	// 3. HardDelete → DELETE veridian_plan row.
+	if err := s.planRepo.HardDelete(ctx, tid); err != nil {
+		return fmt.Errorf("hard delete plan: %w", err)
+	}
+
+	// 4. Notifier le Hub (best effort).
+	if s.emitter != nil {
+		s.emitter.Emit(ctx, domain.EventTenantDeleted, tid, map[string]interface{}{
+			"hard_wipe": true,
+		})
+	}
+	return nil
 }
 
 // GetStatus retourne le snapshot complet du tenant (plan + quota + status).
@@ -686,7 +728,7 @@ func (s *veridianService) GenerateMagicLink(ctx context.Context, workspaceID, us
 	}
 
 	// === Veridian patch === auto-login URL en plus du magic link.
-	autoLoginURL, _, autoErr := httpHandlerBuildAutoLoginURL(s.apiEndpoint, s.hubSecret, workspaceID, userEmail)
+	autoLoginURL, _, autoErr := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, workspaceID, userEmail)
 	if autoErr != nil && s.logger != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"workspace_id": workspaceID,
@@ -730,48 +772,3 @@ var _ domain.VeridianService = (*veridianService)(nil)
 
 // errPlanNotFound est exporte pour permettre au handler de renvoyer un 404.
 var errPlanNotFound = sql.ErrNoRows
-
-// === Veridian patch ===
-// autoLoginTokenTTL est la fenetre temporelle d'un token auto-login.
-// 60s : court pour limiter replay si l'URL fuit, suffisant pour un click.
-// La valeur DOIT matcher AutoLoginTokenTTL dans internal/http/veridian_autologin_handler.go
-// (les deux sont independants pour eviter les import cycles).
-const autoLoginTokenTTL = 60 * time.Second
-
-// httpHandlerBuildAutoLoginURL genere une URL self-contained vers
-// /veridian/auto-login?token=<base64(payload).<hex(hmac)>.
-//
-// Mirroir de BuildAutoLoginURL dans internal/http/veridian_autologin_handler.go
-// pour eviter un import cycle (le service ne peut pas importer http).
-// Si on modifie ici, il faut aussi modifier la-bas — la verification cote
-// handler doit utiliser exactement le meme schema.
-func httpHandlerBuildAutoLoginURL(apiEndpoint, hubSecret, workspaceID, email string) (string, time.Time, error) {
-	if hubSecret == "" {
-		return "", time.Time{}, fmt.Errorf("HUB_API_SECRET not configured")
-	}
-	now := time.Now()
-	expiresAt := now.Add(autoLoginTokenTTL)
-	payload := struct {
-		WorkspaceID string `json:"w"`
-		Email       string `json:"e"`
-		IssuedAt    int64  `json:"i"`
-		ExpiresAt   int64  `json:"x"`
-	}{
-		WorkspaceID: workspaceID,
-		Email:       email,
-		IssuedAt:    now.UnixMilli(),
-		ExpiresAt:   expiresAt.UnixMilli(),
-	}
-	rawJSON, err := json.Marshal(payload)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	encoded := base64.RawURLEncoding.EncodeToString(rawJSON)
-	mac := hmac.New(sha256.New, []byte(hubSecret))
-	mac.Write([]byte(encoded))
-	sig := hex.EncodeToString(mac.Sum(nil))
-	token := encoded + "." + sig
-
-	url := strings.TrimRight(apiEndpoint, "/") + "/veridian/auto-login?token=" + token
-	return url, expiresAt, nil
-}

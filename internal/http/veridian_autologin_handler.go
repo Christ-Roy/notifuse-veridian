@@ -23,25 +23,42 @@ package http
 // token EST l'auth (signature dans l'URL, pas dans les headers).
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"html/template"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
-// AutoLoginTokenTTL est la fenetre temporelle pendant laquelle un token
-// auto-login est valide. Court (60s) pour limiter les replays si l'URL
-// avec token fuit (ex: log proxy, history navigateur).
-const AutoLoginTokenTTL = 60 * time.Second
+// === Veridian patch ===
+// Logique HMAC token (BuildAutoLoginURL, VerifyAutoLoginToken,
+// AutoLoginPayload, AutoLoginTokenTTL) extraite dans
+// internal/domain/veridian_token.go pour partage avec le service. Voir la
+// section "extraction" dans le commit f43ce239..718c976d.
+
+// Re-exports pour minimiser le delta avec le code existant qui peut encore
+// references domain.AutoLoginTokenTTL etc.
+const AutoLoginTokenTTL = domain.AutoLoginTokenTTL
+
+// AutoLoginPayload est un alias de type vers domain.AutoLoginPayload pour
+// preserver les references existantes au sein du package http (handlers,
+// tests). Toute nouvelle utilisation devrait directement importer le type
+// domain.AutoLoginPayload.
+type AutoLoginPayload = domain.AutoLoginPayload
+
+// BuildAutoLoginURL est l'API publique exportee historiquement par ce
+// package. Delegue au domain. Conserve pour compat avec d'autres callers
+// qui pourraient l'avoir importe (ex: tests).
+func BuildAutoLoginURL(apiEndpoint, hubSecret, workspaceID, email string) (string, time.Time, error) {
+	return domain.BuildAutoLoginURL(apiEndpoint, hubSecret, workspaceID, email)
+}
+
+// VerifyAutoLoginToken est l'API publique historiquement exportee par
+// ce package. Delegue au domain.
+func VerifyAutoLoginToken(token, hubSecret string) (*AutoLoginPayload, error) {
+	return domain.VerifyAutoLoginToken(token, hubSecret)
+}
 
 // VeridianAutoLoginHandler regroupe les helpers + handler GET /veridian/auto-login.
 type VeridianAutoLoginHandler struct {
@@ -68,90 +85,6 @@ func NewVeridianAutoLoginHandler(
 // RegisterRoutes attache le handler au mux racine.
 func (h *VeridianAutoLoginHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /veridian/auto-login", h.handleAutoLogin)
-}
-
-// AutoLoginPayload est le contenu signe HMAC contenu dans le token URL.
-type AutoLoginPayload struct {
-	WorkspaceID string `json:"w"`
-	Email       string `json:"e"`
-	IssuedAt    int64  `json:"i"` // unix ms
-	ExpiresAt   int64  `json:"x"` // unix ms
-}
-
-// BuildAutoLoginURL genere une URL self-contained `<API_ENDPOINT>/veridian/auto-login?token=<base64(payload).<hex(hmac)>`.
-// Utilise par VeridianService.Provision et GenerateMagicLink.
-func BuildAutoLoginURL(apiEndpoint, hubSecret, workspaceID, email string) (string, time.Time, error) {
-	if hubSecret == "" {
-		return "", time.Time{}, fmt.Errorf("HUB_API_SECRET not configured")
-	}
-	now := time.Now()
-	expiresAt := now.Add(AutoLoginTokenTTL)
-	payload := AutoLoginPayload{
-		WorkspaceID: workspaceID,
-		Email:       email,
-		IssuedAt:    now.UnixMilli(),
-		ExpiresAt:   expiresAt.UnixMilli(),
-	}
-	rawJSON, err := json.Marshal(payload)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	encoded := base64.RawURLEncoding.EncodeToString(rawJSON)
-	mac := hmac.New(sha256.New, []byte(hubSecret))
-	mac.Write([]byte(encoded))
-	sig := hex.EncodeToString(mac.Sum(nil))
-	token := encoded + "." + sig
-
-	url := strings.TrimRight(apiEndpoint, "/") + "/veridian/auto-login?token=" + token
-	return url, expiresAt, nil
-}
-
-// VerifyAutoLoginToken parse + verifie le token. Retourne le payload si valide.
-func VerifyAutoLoginToken(token, hubSecret string) (*AutoLoginPayload, error) {
-	if token == "" {
-		return nil, fmt.Errorf("token required")
-	}
-	parts := strings.SplitN(token, ".", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("malformed token")
-	}
-	encoded, sigHex := parts[0], parts[1]
-
-	// Verify HMAC
-	expectedMAC := hmac.New(sha256.New, []byte(hubSecret))
-	expectedMAC.Write([]byte(encoded))
-	expectedSig := expectedMAC.Sum(nil)
-	providedSig, err := hex.DecodeString(sigHex)
-	if err != nil {
-		return nil, fmt.Errorf("invalid signature encoding")
-	}
-	if !hmac.Equal(expectedSig, providedSig) {
-		return nil, fmt.Errorf("invalid signature")
-	}
-
-	// Decode payload
-	rawJSON, err := base64.RawURLEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("invalid payload encoding")
-	}
-	var payload AutoLoginPayload
-	if err := json.Unmarshal(rawJSON, &payload); err != nil {
-		return nil, fmt.Errorf("invalid payload JSON")
-	}
-
-	// Verify expiration
-	now := time.Now().UnixMilli()
-	if now > payload.ExpiresAt {
-		return nil, fmt.Errorf("token expired")
-	}
-	if now < payload.IssuedAt-int64(AutoLoginTokenTTL.Milliseconds()) {
-		// Defense en profondeur : token avec issued_at dans le futur (clock skew > TTL)
-		return nil, fmt.Errorf("token issued in the future")
-	}
-	if payload.WorkspaceID == "" || payload.Email == "" {
-		return nil, fmt.Errorf("token missing workspace_id or email")
-	}
-	return &payload, nil
 }
 
 // autoLoginPageTemplate est la page HTML inline qui stocke le JWT dans
