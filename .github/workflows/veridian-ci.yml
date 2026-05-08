@@ -13,6 +13,10 @@ on:
         description: 'Deploy to staging after build'
         required: false
         default: 'true'
+      deploy_prod:
+        description: 'Deploy to PROD (only after manual review — green/blue)'
+        required: false
+        default: 'false'
 
 concurrency:
   group: veridian-ci-${{ github.ref }}
@@ -203,9 +207,14 @@ jobs:
           path: tests/e2e-veridian/test-results/
 
   deploy-prod:
-    name: Deploy prod (auto)
+    name: Deploy prod (manual only — green/blue review required)
     needs: e2e-staging
-    if: github.ref == 'refs/heads/veridian'
+    # === Veridian patch === Deploy prod desactive sur push automatique.
+    # La prod Notifuse est sensible (clients reels), on ne pousse JAMAIS
+    # automatiquement. Pour deployer en prod : utiliser workflow_dispatch
+    # avec l'input deploy_prod=true OU faire le green/blue manuel via
+    # Dokploy UI apres validation Robert.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Dokploy redeploy (prod)
