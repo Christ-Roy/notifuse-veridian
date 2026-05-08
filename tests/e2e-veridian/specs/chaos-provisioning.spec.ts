@@ -64,9 +64,13 @@ test.describe('Chaos provisioning — concurrence', () => {
     expect(workspaceIds.size).toBe(1);
   });
 
-  test('50 provisions concurrentes tenants distincts → tous 200, pas de fuite DB', async () => {
-    const promises = Array.from({ length: 50 }, (_, i) => {
-      const tid = `chaos50${Date.now().toString(36).slice(-6)}${i}`;
+  test('8 provisions concurrentes tenants distincts → tous 200, pas de fuite DB', async () => {
+    // 8 au lieu de 50 : Notifuse v30 ouvre 3 connexions par workspace (DB-per-tenant
+    // architecture). Avec DB_MAX_CONNECTIONS=250 on a marge, mais les e2e
+    // s'enchaînent et cumulent. 8 est suffisant pour tester la concurrence
+    // sans risquer de saturer.
+    const promises = Array.from({ length: 8 }, (_, i) => {
+      const tid = `chaos8${Date.now().toString(36).slice(-6)}${i}`;
       return hmacFetch('/api/tenants/provision', 'POST', {
         tenant_id: tid,
         owner_email: `${tid}@chaos.test`,
