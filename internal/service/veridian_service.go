@@ -64,6 +64,7 @@ var ErrTenantSoftDeleted = errors.New("tenant is soft-deleted, awaiting purge �
 // veridianService est l'implementation par defaut de domain.VeridianService.
 type veridianService struct {
 	workspaceService domain.WorkspaceServiceInterface
+	workspaceRepo    domain.WorkspaceRepository // === Veridian patch === acces direct sans check auth (utilise par WipeTestTenants pour resoudre l'owner d'un workspace post-feature owner-natif, ou root n'est plus member)
 	userService      domain.UserServiceInterface
 	userRepo         domain.UserRepository
 	planRepo         domain.VeridianPlanRepository
@@ -81,6 +82,7 @@ type veridianService struct {
 // utilisee pour construire l'URL de magic link.
 func NewVeridianService(
 	workspaceService domain.WorkspaceServiceInterface,
+	workspaceRepo domain.WorkspaceRepository,
 	userService domain.UserServiceInterface,
 	userRepo domain.UserRepository,
 	planRepo domain.VeridianPlanRepository,
@@ -96,6 +98,7 @@ func NewVeridianService(
 	}
 	return &veridianService{
 		workspaceService: workspaceService,
+		workspaceRepo:    workspaceRepo,
 		userService:      userService,
 		userRepo:         userRepo,
 		planRepo:         planRepo,
@@ -571,14 +574,19 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 		// Le workspace a maintenant le tenant user comme seul owner (root a
 		// ete retire par Provision via TransferOwnership). DeleteWorkspace
 		// exige que le caller soit owner — on doit donc utiliser un ctx du
-		// tenant user, pas du root. Recuperer l'owner via members.
+		// tenant user, pas du root. Recuperer l'owner via repo direct
+		// (GetWorkspaceUsersWithEmail = pas de check auth member, vs
+		// WorkspaceService.GetWorkspaceMembersWithEmail qui exige le caller
+		// member — root ne l'est plus apres owner-natif).
 		deleteCtx := rootCtx
-		members, _ := s.workspaceService.GetWorkspaceMembersWithEmail(rootCtx, tid)
 		var ownerUserID string
-		for _, m := range members {
-			if m != nil && m.Role == "owner" {
-				ownerUserID = m.UserID
-				break
+		if s.workspaceRepo != nil {
+			members, _ := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, tid)
+			for _, m := range members {
+				if m != nil && m.Role == "owner" {
+					ownerUserID = m.UserID
+					break
+				}
 			}
 		}
 		if ownerUserID != "" {

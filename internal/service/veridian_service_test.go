@@ -52,7 +52,7 @@ func newVeridianService(t *testing.T) (*veridianService, *veridianServiceMocks) 
 }
 
 func TestVeridianService_New_DefaultsPlanToFree(t *testing.T) {
-	svc := NewVeridianService(nil, nil, nil, nil, nil, "", "root@x", "http://x", "test-hub-secret", logger.NewLogger())
+	svc := NewVeridianService(nil, nil, nil, nil, nil, nil, "", "root@x", "http://x", "test-hub-secret", logger.NewLogger())
 	require.NotNil(t, svc)
 	concrete := svc.(*veridianService)
 	assert.Equal(t, "free", concrete.defaultPlan)

@@ -1054,6 +1054,7 @@ func (a *App) InitServices() error {
 	)
 	a.veridianService = service.NewVeridianService(
 		a.workspaceService,
+		a.workspaceRepo,
 		a.userService,
 		a.userRepo,
 		a.veridianPlanRepo,
