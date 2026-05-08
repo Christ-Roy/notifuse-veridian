@@ -160,7 +160,7 @@ jobs:
           # propre + workspace row) + planRepo.HardDelete sur la veridian_plan.
           # Skip les tenants matchant safety_client_prefixes (clients reels).
           # On wipe par chaque prefix de test connu (3+ chars min, pas de wildcard).
-          for prefix in chaos magic stat paywall pwsus pwdel pwpath pwread autotest idem bump dbg smoke fresh statsus statdel up down unkplan resume sus mag genmag magtam magicre delconf e2e replaytest tampertest wrongsecret huge nofix; do
+          for prefix in chaos magic stat paywall pwsus pwdel pwpath pwread autotest idem bump dbg smoke fresh statsus statdel up down unkplan resume sus mag genmag magtam magicre delconf e2e replaytest tampertest wrongsecret huge nofix wscre wscre2 uiguard direct paywsmoke; do
             BODY="{\"prefix\":\"${prefix}\"}"
             TS=$(date +%s%3N)
             SIG=$(echo -n "${TS}.${BODY}" | openssl dgst -sha256 -hmac "${HUB_SECRET}" -hex | awk '{print $2}')
