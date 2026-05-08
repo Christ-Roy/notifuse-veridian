@@ -413,6 +413,120 @@ func (s *veridianService) SoftDelete(ctx context.Context, tenantID string) error
 	return nil
 }
 
+// === Veridian patch ===
+// defaultSafetyClientPrefixes : prefixes de tenants qui ne sont JAMAIS effaces
+// par WipeTestTenants, meme avec un wildcard. Defense en profondeur si le
+// HUB_API_SECRET fuit ou si un test a un prefix trop large.
+// Ces prefixes correspondent aux clients reels staging documentes dans CLAUDE.md.
+var defaultSafetyClientPrefixes = []string{
+	"apicalinfo",
+	"robinix",
+	"lyon",
+	"loyer",
+	"veridiansite",
+}
+
+// WipeTestTenants supprime DEFINITIVEMENT (hard delete) les tenants matchant
+// un prefix ou une liste explicite. Utilise par la CI / admin platform pour
+// nettoyer les tenants e2e accumules entre les runs.
+//
+// Pour chaque tenant a supprimer :
+//   1. WorkspaceService.DeleteWorkspace via ctx root → DROP DATABASE upstream
+//   2. PlanRepo.HardDelete → DELETE veridian_plan row
+//   3. Emit event tenant.deleted
+//
+// Les tenants matchant un safety prefix sont SKIP (jamais effaces).
+func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.WipeTestTenantsInput) (*domain.WipeTestTenantsResponse, error) {
+	if input.Prefix == "" && len(input.TenantIDs) == 0 {
+		return nil, errors.New("prefix or tenant_ids required")
+	}
+
+	// Resoudre la liste de candidats
+	candidates := input.TenantIDs
+	if input.Prefix != "" {
+		// Bloquer prefix '%' ou '_' raw qui matcherait tout
+		if strings.ContainsAny(input.Prefix, "%_") {
+			return nil, fmt.Errorf("prefix cannot contain SQL wildcards (%% or _)")
+		}
+		// Bloquer prefix vide ou < 3 chars (defense en profondeur)
+		if len(input.Prefix) < 3 {
+			return nil, fmt.Errorf("prefix must be at least 3 chars (got %q)", input.Prefix)
+		}
+		ids, err := s.planRepo.ListByPrefix(ctx, input.Prefix)
+		if err != nil {
+			return nil, fmt.Errorf("list by prefix: %w", err)
+		}
+		candidates = append(candidates, ids...)
+	}
+
+	// Determine safety prefixes
+	safetyPrefixes := input.SafetyClientPrefixes
+	if len(safetyPrefixes) == 0 {
+		safetyPrefixes = defaultSafetyClientPrefixes
+	}
+
+	// Open ctx root pour appeler WorkspaceService.DeleteWorkspace
+	rootCtx, sessionID, err := s.ctxAsRoot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("ctxAsRoot: %w", err)
+	}
+	defer s.cleanupRootSession(ctx, sessionID)
+
+	resp := &domain.WipeTestTenantsResponse{
+		Wiped:   []string{},
+		Skipped: []string{},
+		Errors:  map[string]string{},
+	}
+
+	for _, tid := range candidates {
+		// Safety check
+		isSafe := false
+		for _, sp := range safetyPrefixes {
+			if strings.HasPrefix(tid, sp) {
+				isSafe = true
+				break
+			}
+		}
+		if isSafe {
+			resp.Skipped = append(resp.Skipped, tid)
+			continue
+		}
+
+		// 1. WorkspaceService.DeleteWorkspace upstream → DROP DATABASE
+		if err := s.workspaceService.DeleteWorkspace(rootCtx, tid); err != nil {
+			// Workspace deja absent = OK (peut arriver si planRepo a une row sans workspace)
+			if !strings.Contains(err.Error(), "not found") {
+				resp.Errors[tid] = "delete workspace: " + err.Error()
+				continue
+			}
+		}
+
+		// 2. PlanRepo.HardDelete → DELETE veridian_plan row
+		if err := s.planRepo.HardDelete(ctx, tid); err != nil {
+			resp.Errors[tid] = "hard delete plan: " + err.Error()
+			continue
+		}
+
+		// 3. Emit event
+		if s.emitter != nil {
+			s.emitter.Emit(ctx, domain.EventTenantDeleted, tid, map[string]interface{}{
+				"hard_wipe": true,
+			})
+		}
+
+		resp.Wiped = append(resp.Wiped, tid)
+	}
+
+	if s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"wiped":   len(resp.Wiped),
+			"skipped": len(resp.Skipped),
+			"errors":  len(resp.Errors),
+		}).Info("veridian: WipeTestTenants completed")
+	}
+	return resp, nil
+}
+
 // GetStatus retourne le snapshot complet du tenant (plan + quota + status).
 func (s *veridianService) GetStatus(ctx context.Context, tenantID string) (*domain.StatusResponse, error) {
 	if tenantID == "" {

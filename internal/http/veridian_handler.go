@@ -54,6 +54,10 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	mux.Handle("POST /api/tenants/resume", hmac(http.HandlerFunc(h.handleResume)))
 	mux.Handle("DELETE /api/tenants/{id}", hmac(http.HandlerFunc(h.handleDelete)))
 	mux.Handle("GET /api/tenants/{id}/status", hmac(http.HandlerFunc(h.handleStatus)))
+	// === Veridian patch === Admin endpoint pour cleanup CI / tests.
+	// Supprime DEFINITIVEMENT (hard delete) workspace + DB + plan row.
+	// Refuse les tenants matchant safety_client_prefixes (clients reels).
+	mux.Handle("POST /api/veridian/admin/wipe-test-tenants", hmac(http.HandlerFunc(h.handleWipeTestTenants)))
 }
 
 func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request) {
@@ -265,3 +269,32 @@ func (h *VeridianHandler) logError(op string, err error, fields map[string]inter
 	fields["error"] = err.Error()
 	h.logger.WithFields(fields).Error("veridian handler: operation failed")
 }
+
+// === Veridian patch ===
+// handleWipeTestTenants supprime DEFINITIVEMENT les tenants matchant un prefix
+// ou une liste explicite. Hard delete (DROP DATABASE upstream + DELETE plan row),
+// pas un soft delete. Reserve aux tests CI / admin platform.
+func (h *VeridianHandler) handleWipeTestTenants(w http.ResponseWriter, r *http.Request) {
+	var input domain.WipeTestTenantsInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if input.Prefix == "" && len(input.TenantIDs) == 0 {
+		WriteJSONError(w, "prefix or tenant_ids required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.service.WipeTestTenants(r.Context(), input)
+	if err != nil {
+		h.logError("wipe_test_tenants", err, map[string]interface{}{
+			"prefix":     input.Prefix,
+			"tenant_ids": len(input.TenantIDs),
+		})
+		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+

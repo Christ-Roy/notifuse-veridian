@@ -50,6 +50,20 @@ func (mr *MockVeridianPlanRepositoryMockRecorder) Get(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockVeridianPlanRepository)(nil).Get), arg0, arg1)
 }
 
+// HardDelete mocks base method.
+func (m *MockVeridianPlanRepository) HardDelete(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HardDelete", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HardDelete indicates an expected call of HardDelete.
+func (mr *MockVeridianPlanRepositoryMockRecorder) HardDelete(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HardDelete", reflect.TypeOf((*MockVeridianPlanRepository)(nil).HardDelete), arg0, arg1)
+}
+
 // IncrementEmailsSent mocks base method.
 func (m *MockVeridianPlanRepository) IncrementEmailsSent(arg0 context.Context, arg1 string, arg2 int64) error {
 	m.ctrl.T.Helper()
@@ -62,6 +76,21 @@ func (m *MockVeridianPlanRepository) IncrementEmailsSent(arg0 context.Context, a
 func (mr *MockVeridianPlanRepositoryMockRecorder) IncrementEmailsSent(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementEmailsSent", reflect.TypeOf((*MockVeridianPlanRepository)(nil).IncrementEmailsSent), arg0, arg1, arg2)
+}
+
+// ListByPrefix mocks base method.
+func (m *MockVeridianPlanRepository) ListByPrefix(arg0 context.Context, arg1 string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListByPrefix", arg0, arg1)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListByPrefix indicates an expected call of ListByPrefix.
+func (mr *MockVeridianPlanRepositoryMockRecorder) ListByPrefix(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPrefix", reflect.TypeOf((*MockVeridianPlanRepository)(nil).ListByPrefix), arg0, arg1)
 }
 
 // ResetMonthlyCounters mocks base method.

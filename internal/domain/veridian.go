@@ -98,6 +98,10 @@ type VeridianPlanRepository interface {
 	SoftDelete(ctx context.Context, workspaceID string) error
 	IncrementEmailsSent(ctx context.Context, workspaceID string, delta int64) error
 	ResetMonthlyCounters(ctx context.Context) (int64, error) // appele par cron
+	// === Veridian patch === Hard delete (tests / admin platform).
+	HardDelete(ctx context.Context, workspaceID string) error
+	// ListByPrefix retourne tous les workspace_id matchant un prefix SQL LIKE.
+	ListByPrefix(ctx context.Context, prefix string) ([]string, error)
 }
 
 // === Service ===
@@ -182,6 +186,32 @@ type VeridianService interface {
 	SoftDelete(ctx context.Context, tenantID string) error
 	GetStatus(ctx context.Context, tenantID string) (*StatusResponse, error)
 	GenerateMagicLink(ctx context.Context, workspaceID, userEmail string) (*MagicLinkResponse, error)
+
+	// === Veridian patch === Hard wipe pour cleanup CI / tests.
+	// Detruit completement les tenants matchant un prefix (workspace + DB
+	// postgres dediee + ligne veridian_plan + user owner). Pas de soft delete,
+	// pas de fenetre 30j de purge. Reserve aux tests + admin platform.
+	WipeTestTenants(ctx context.Context, input WipeTestTenantsInput) (*WipeTestTenantsResponse, error)
+}
+
+// WipeTestTenantsInput est le body de POST /api/veridian/admin/wipe-test-tenants.
+// Soit un prefix (`prefix: "e2e-"`) soit une liste explicite (`tenant_ids: [...]`).
+// Le caller doit fournir au moins un des deux.
+type WipeTestTenantsInput struct {
+	Prefix    string   `json:"prefix,omitempty"`     // ex: "e2e-", "chaos5", ...
+	TenantIDs []string `json:"tenant_ids,omitempty"` // exhaustif (alternative au prefix)
+	// SafetyClientPrefixes : prefixes de tenants a NE JAMAIS supprimer
+	// (clients reels staging). Si vide, defaut : apicalinfo, robinix, lyon,
+	// loyer, veridiansite. Necessaire pour proteger les tenants prod en cas
+	// de fuite du HUB_API_SECRET vers un attaquant.
+	SafetyClientPrefixes []string `json:"safety_client_prefixes,omitempty"`
+}
+
+// WipeTestTenantsResponse renvoie la liste des tenants supprimes + erreurs.
+type WipeTestTenantsResponse struct {
+	Wiped   []string          `json:"wiped"`             // tenant_ids supprimes avec succes
+	Skipped []string          `json:"skipped,omitempty"` // tenant_ids matchant safety prefixes
+	Errors  map[string]string `json:"errors,omitempty"`  // tenant_id → message d'erreur
 }
 
 // === Webhook events vers Hub ===

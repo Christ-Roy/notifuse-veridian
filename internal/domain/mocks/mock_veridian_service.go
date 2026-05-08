@@ -135,3 +135,18 @@ func (mr *MockVeridianServiceMockRecorder) UpdatePlan(arg0, arg1 interface{}) *g
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePlan", reflect.TypeOf((*MockVeridianService)(nil).UpdatePlan), arg0, arg1)
 }
+
+// WipeTestTenants mocks base method.
+func (m *MockVeridianService) WipeTestTenants(arg0 context.Context, arg1 domain.WipeTestTenantsInput) (*domain.WipeTestTenantsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WipeTestTenants", arg0, arg1)
+	ret0, _ := ret[0].(*domain.WipeTestTenantsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WipeTestTenants indicates an expected call of WipeTestTenants.
+func (mr *MockVeridianServiceMockRecorder) WipeTestTenants(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WipeTestTenants", reflect.TypeOf((*MockVeridianService)(nil).WipeTestTenants), arg0, arg1)
+}

@@ -176,6 +176,41 @@ func (r *veridianPlanRepository) IncrementEmailsSent(ctx context.Context, worksp
 	return err
 }
 
+// === Veridian patch === HardDelete supprime definitivement la ligne veridian_plan
+// (pas un soft delete). Reserve aux tests / admin platform. La purge des donnees
+// workspace (table workspaces upstream + DB postgres dediee) est faite en amont
+// par WorkspaceService.DeleteWorkspace.
+func (r *veridianPlanRepository) HardDelete(ctx context.Context, workspaceID string) error {
+	const q = `DELETE FROM veridian_plan WHERE workspace_id = $1`
+	_, err := r.systemDB.ExecContext(ctx, q, workspaceID)
+	return err
+}
+
+// ListByPrefix retourne tous les workspace_id matchant un prefix SQL LIKE.
+// Utilise par WipeTestTenants pour trouver les tenants de test a supprimer.
+// Le caller est responsable d'echapper les wildcards SQL ('%', '_') s'ils ne
+// sont pas voulus.
+func (r *veridianPlanRepository) ListByPrefix(ctx context.Context, prefix string) ([]string, error) {
+	if prefix == "" {
+		return nil, nil
+	}
+	const q = `SELECT workspace_id FROM veridian_plan WHERE workspace_id LIKE $1 ORDER BY workspace_id`
+	rows, err := r.systemDB.QueryContext(ctx, q, prefix+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // ResetMonthlyCounters remet a zero emails_sent_this_month pour tous les workspaces
 // dont last_reset_at < debut du mois courant. Appele par cron (1er du mois).
 // Retourne le nombre de lignes mises a jour.
