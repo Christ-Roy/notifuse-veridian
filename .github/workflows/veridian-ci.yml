@@ -154,30 +154,19 @@ jobs:
           # de saturer max_connections (300) et le pool Notifuse (250).
           # On garde les workspaces "clients reels" (apicalinfo, robinix,
           # lyon, loyer, veridiansite — voir CLAUDE.md staging clients).
+          # Pas de restart container : DROP DATABASE force Notifuse a invalider
+          # ses pools naturellement au prochain access, sans downtime.
           sudo docker exec compose-bypass-bluetooth-feed-tbayqr-notifuse-postgres-1 \
             bash -c "psql -U postgres -t -c \"SELECT 'DROP DATABASE IF EXISTS \\\"' || datname || '\\\";' FROM pg_database WHERE datname LIKE 'notifuse_ws%' AND datname NOT LIKE '%apicalinfo%' AND datname NOT LIKE '%robinix%' AND datname NOT LIKE '%lyon%' AND datname NOT LIKE '%loyer%' AND datname NOT LIKE '%veridiansite%';\" | psql -U postgres" 2>&1 | tail -3 || true
-          # Cleanup tables system aussi (workspaces, users, veridian_plan)
+          # Cleanup tables system (workspaces, users, veridian_plan)
           sudo docker exec compose-bypass-bluetooth-feed-tbayqr-notifuse-postgres-1 \
             psql -U postgres -d notifuse_system -c "
               DELETE FROM users WHERE email LIKE '%@chaos.test' OR email LIKE '%@magic.test' OR email LIKE '%@status.test' OR email LIKE '%@paywall.test' OR email LIKE '%@e2e%' OR email LIKE '%@auto.test' OR email LIKE '%@idem.test' OR email LIKE '%@bump.test' OR email LIKE '%@dbg.test' OR email LIKE '%@test.veridian%';
-              DELETE FROM workspaces WHERE id LIKE 'e2e%' OR id LIKE 'chaos%' OR id LIKE 'magic%' OR id LIKE 'stat%' OR id LIKE 'paywall%' OR id LIKE 'pw%' OR id LIKE 'mag%' OR id LIKE 'fresh%' OR id LIKE 'dbg%' OR id LIKE 'smoke%' OR id LIKE 'autotest%' OR id LIKE 'replaytest' OR id LIKE 'tampertest' OR id LIKE 'wrongsecret' OR id LIKE 'huge' OR id LIKE 'noemail' OR id LIKE 'nofix' OR id LIKE 'badts' OR id LIKE 'negts' OR id LIKE 'nosig';
-              DELETE FROM veridian_plan WHERE workspace_id LIKE 'e2e%' OR workspace_id LIKE 'chaos%' OR workspace_id LIKE 'magic%' OR workspace_id LIKE 'stat%' OR workspace_id LIKE 'paywall%' OR workspace_id LIKE 'pw%' OR workspace_id LIKE 'mag%' OR workspace_id LIKE 'fresh%' OR workspace_id LIKE 'dbg%' OR workspace_id LIKE 'smoke%' OR workspace_id LIKE 'autotest%';
+              DELETE FROM workspaces WHERE id LIKE 'e2e%' OR id LIKE 'chaos%' OR id LIKE 'magic%' OR id LIKE 'stat%' OR id LIKE 'paywall%' OR id LIKE 'pw%' OR id LIKE 'mag%' OR id LIKE 'fresh%' OR id LIKE 'dbg%' OR id LIKE 'smoke%' OR id LIKE 'autotest%' OR id LIKE 'replaytest' OR id LIKE 'tampertest' OR id LIKE 'wrongsecret' OR id LIKE 'huge' OR id LIKE 'noemail' OR id LIKE 'nofix' OR id LIKE 'badts' OR id LIKE 'negts' OR id LIKE 'nosig' OR id LIKE 'delconf%';
+              DELETE FROM veridian_plan WHERE workspace_id LIKE 'e2e%' OR workspace_id LIKE 'chaos%' OR workspace_id LIKE 'magic%' OR workspace_id LIKE 'stat%' OR workspace_id LIKE 'paywall%' OR workspace_id LIKE 'pw%' OR workspace_id LIKE 'mag%' OR workspace_id LIKE 'fresh%' OR workspace_id LIKE 'dbg%' OR workspace_id LIKE 'smoke%' OR workspace_id LIKE 'autotest%' OR workspace_id LIKE 'delconf%';
             " 2>&1 | tail -5 || true
-          # Restart container pour clear les pools en mémoire
-          sudo docker restart compose-bypass-bluetooth-feed-tbayqr-notifuse-1
-          sleep 10
-
-      - name: Re-verify staging healthy after cleanup
-        run: |
-          for i in {1..15}; do
-            if curl -sf https://saas-notifuse.staging.veridian.site/api/setup.status > /dev/null 2>&1; then
-              echo "Staging healthy after cleanup"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Staging unhealthy after cleanup restart"
-          exit 1
+          # Verifier que staging repond toujours (no downtime)
+          curl -sf https://saas-notifuse.staging.veridian.site/api/setup.status > /dev/null && echo "Staging still healthy after cleanup" || (echo "Staging UNHEALTHY after cleanup" && exit 1)
 
   e2e-staging:
     name: E2E headful Playwright (staging, BLOQUANT)
