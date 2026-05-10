@@ -173,12 +173,30 @@ jobs:
 
       - name: Wait for staging healthy
         run: |
-          # Notifuse v30 : /api/setup.status existe avant setup wizard, /api/health
-          # demande setup complet. On utilise setup.status qui marche tout de suite.
+          # Healthcheck en 2 étapes pour garantir qu'app+routes Veridian sont
+          # toutes mountées avant les e2e :
+          #   1. /api/setup.status — l'app HTTP répond
+          #   2. /api/transactional.send (POST avec body bidon) — la route
+          #      upstream est enregistrée dans le mux. On accepte 401/400/402 ;
+          #      on refuse 404 (route absente = container pas prêt).
+          #
+          # Sans cette double-check, on a observé des flakies (run 25574039155)
+          # où /api/transactional.send retournait `404 page not found` quelques
+          # secondes après que setup.status soit healthy : le container avait
+          # démarré le HTTP listener mais pas encore fini d'enregistrer toutes
+          # les routes upstream. Les e2e démarraient et tombaient sur des 404.
           for i in {1..30}; do
             if curl -sf https://saas-notifuse.staging.veridian.site/api/setup.status > /dev/null 2>&1; then
-              echo "Staging healthy after ${i} attempts"
-              exit 0
+              CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer health-check-fake-key" \
+                -d '{}' \
+                https://saas-notifuse.staging.veridian.site/api/transactional.send)
+              if [ "$CODE" != "404" ]; then
+                echo "Staging healthy after ${i} attempts (transactional.send → ${CODE})"
+                exit 0
+              fi
+              echo "  attempt ${i}: setup.status OK but transactional.send → 404 (routes pas encore mountées)"
             fi
             sleep 10
           done
