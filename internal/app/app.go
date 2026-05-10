@@ -126,6 +126,7 @@ type App struct {
 	veridianPlanRepo       domain.VeridianPlanRepository
 	veridianService        domain.VeridianService
 	veridianWebhookEmitter domain.WebhookEmitter
+	veridianPaywallCache   *middleware.PaywallCache // partage middleware paywall + handler invalidate
 
 	// Services
 	authService                      *service.AuthService
@@ -1236,7 +1237,14 @@ func (a *App) InitHandlers() error {
 	// 6 endpoints /api/tenants/* proteges par middleware HMAC Hub.
 	// Si HUB_API_SECRET vide, RegisterRoutes attache quand meme les routes
 	// mais le middleware renverra 503 (mode self-hosted, Hub absent).
+	//
+	// PaywallCache partage : injecte ici dans VeridianHandler ET passe au
+	// middleware paywall en Start(). Permet a /api/veridian/admin/cache/invalidate
+	// de purger une entree sans attendre le TTL (60s). Critique pour reduire
+	// le wall-clock e2e CI paywall (gain ~5min/run).
+	a.veridianPaywallCache = middleware.NewPaywallCache()
 	veridianHandler := httpHandler.NewVeridianHandler(a.veridianService, a.logger)
+	veridianHandler.SetPaywallCache(a.veridianPaywallCache)
 	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
 
 	// Endpoint generateMagicLink (auth API key tenant Notifuse).
@@ -1271,7 +1279,7 @@ func (a *App) Start() error {
 	// et /api/broadcasts.{create,schedule,sendToIndividual}, laisse passer le
 	// reste sans inspection. Place tot dans la chaine pour rejeter avant le
 	// auth middleware si plan suspended ou quota depasse.
-	handler = middleware.VeridianPaywallPathFilter(a.veridianPlanRepo, a.logger)(handler)
+	handler = middleware.VeridianPaywallPathFilterWithCache(a.veridianPaywallCache, a.veridianPlanRepo, a.logger)(handler)
 
 	// Apply graceful shutdown middleware first (outermost)
 	handler = a.gracefulShutdownMiddleware(handler)

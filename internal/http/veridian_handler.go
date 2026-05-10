@@ -28,16 +28,25 @@ import (
 
 // VeridianHandler regroupe les handlers Hub-driven.
 type VeridianHandler struct {
-	service domain.VeridianService
-	logger  logger.Logger
+	service      domain.VeridianService
+	logger       logger.Logger
+	paywallCache *middleware.PaywallCache // Peut etre nil (mode self-hosted sans paywall)
 }
 
-// NewVeridianHandler cree un handler.
+// NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
+// est nil, l'endpoint /api/veridian/admin/cache/invalidate retournera 503.
 func NewVeridianHandler(service domain.VeridianService, log logger.Logger) *VeridianHandler {
 	return &VeridianHandler{
 		service: service,
 		logger:  log,
 	}
+}
+
+// SetPaywallCache injecte un cache partage avec le middleware paywall pour
+// que /api/veridian/admin/cache/invalidate puisse le purger sur demande Hub.
+// Optionnel : si jamais set, l'endpoint retournera 503 Service Unavailable.
+func (h *VeridianHandler) SetPaywallCache(cache *middleware.PaywallCache) {
+	h.paywallCache = cache
 }
 
 // RegisterRoutes enregistre les 6 endpoints /api/tenants/* WRAPPES dans
@@ -58,6 +67,11 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Supprime DEFINITIVEMENT (hard delete) workspace + DB + plan row.
 	// Refuse les tenants matchant safety_client_prefixes (clients reels).
 	mux.Handle("POST /api/veridian/admin/wipe-test-tenants", hmac(http.HandlerFunc(h.handleWipeTestTenants)))
+	// === Veridian patch === Cache invalidate pour eliminer le sleep 60s
+	// des tests e2e paywall apres suspend/resume/update-plan/delete. En prod,
+	// peut etre appele par le Hub pour propager rapidement un changement de
+	// plan a Notifuse sans attendre l'expiration TTL.
+	mux.Handle("POST /api/veridian/admin/cache/invalidate", hmac(http.HandlerFunc(h.handleInvalidateCache)))
 }
 
 func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request) {
@@ -296,5 +310,46 @@ func (h *VeridianHandler) handleWipeTestTenants(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleInvalidateCache purge l'entree paywall cache pour un workspace_id
+// donne. Idempotent : pas d'erreur si le workspace n'avait pas d'entree.
+//
+// Auth : middleware HMAC en amont (route enregistree dans hmac wrapper).
+// Le timestamp drift de 5min + signature SHA256 reject les replays.
+//
+// Body :
+//   {"workspace_id": "abc123"}
+//
+// Reponse :
+//   {"workspace_id": "abc123", "invalidated": true}
+//
+// Si le PaywallCache n'a pas ete injecte (mode self-hosted sans paywall),
+// on retourne 503 plutot qu'un 200 silencieusement faux : le caller (Hub)
+// doit savoir que sa demande n'a pas eu d'effet.
+func (h *VeridianHandler) handleInvalidateCache(w http.ResponseWriter, r *http.Request) {
+	if h.paywallCache == nil {
+		WriteJSONError(w, "paywall cache not initialized (self-hosted mode)", http.StatusServiceUnavailable)
+		return
+	}
+
+	var input struct {
+		WorkspaceID string `json:"workspace_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if input.WorkspaceID == "" {
+		WriteJSONError(w, "workspace_id is required", http.StatusBadRequest)
+		return
+	}
+
+	h.paywallCache.Invalidate(input.WorkspaceID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"workspace_id": input.WorkspaceID,
+		"invalidated":  true,
+	})
 }
 
