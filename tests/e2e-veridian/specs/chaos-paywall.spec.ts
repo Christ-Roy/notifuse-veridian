@@ -30,6 +30,22 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
   });
 }
 
+// Force le paywall middleware a refresh son cache pour ce workspace.
+// Evite l'attente du TTL 60s naturel apres suspend/resume/delete/update-plan.
+// Sans ce helper, chaque test paywall coute ~65s de wall-clock pure attente.
+//
+// L'endpoint POST /api/veridian/admin/cache/invalidate est HMAC-signe : meme
+// surface d'attaque que les autres /api/tenants/* (timestamp drift 5min,
+// signature SHA256). Inutilisable sans HUB_API_SECRET.
+async function invalidatePaywallCache(workspaceId: string) {
+  const r = await hmacFetch('/api/veridian/admin/cache/invalidate', 'POST', {
+    workspace_id: workspaceId,
+  });
+  if (r.status !== 200) {
+    throw new Error(`invalidatePaywallCache(${workspaceId}) failed: ${r.status} ${await r.text()}`);
+  }
+}
+
 async function provisionTenant(tenantId: string, plan = 'free') {
   // Retry 3x sur 5xx (race CreateDatabase upstream)
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -61,7 +77,7 @@ async function sendTransactional(apiKey: string, workspaceId: string) {
 }
 
 test.describe('Paywall — suspend / resume / delete', () => {
-  test('suspend → cache TTL respecte 60s puis 402, resume → 200', async () => {
+  test('suspend → invalidate → 402, resume → invalidate → not 402', async () => {
     const tid = `pwsus${Date.now().toString(36).slice(-6)}`;
     const { api_key } = await provisionTenant(tid, 'pro');
 
@@ -73,10 +89,10 @@ test.describe('Paywall — suspend / resume / delete', () => {
     r = await hmacFetch('/api/tenants/suspend', 'POST', { tenant_id: tid, reason: 'paywall test' });
     expect(r.status).toBe(200);
 
-    // 3. Cache 60s : on attend 65s pour etre sur que l'invalidation a eu lieu
-    await new Promise((res) => setTimeout(res, 65_000));
+    // 3. Invalidate cache (vs sleep 65s du TTL naturel) → instant
+    await invalidatePaywallCache(tid);
 
-    // 4. Apres TTL : envoi → 402
+    // 4. Apres invalidation : envoi → 402
     r = await sendTransactional(api_key, tid);
     expect(r.status).toBe(402);
     const body = await r.json();
@@ -86,23 +102,23 @@ test.describe('Paywall — suspend / resume / delete', () => {
     r = await hmacFetch('/api/tenants/resume', 'POST', { tenant_id: tid });
     expect(r.status).toBe(200);
 
-    // 6. Cache 60s avant l'invalidation, mais resume devrait clear → on attend 65s
-    await new Promise((res) => setTimeout(res, 65_000));
+    // 6. Invalidate cache pour propager le resume immediatement
+    await invalidatePaywallCache(tid);
 
     // 7. Apres resume : envoi → 200/4xx (pas 402)
     r = await sendTransactional(api_key, tid);
     expect(r.status).not.toBe(402);
   });
 
-  test('delete → 402 jusqu a la fin des temps', async () => {
+  test('delete → invalidate → 402 jusqu a la fin des temps', async () => {
     const tid = `pwdel${Date.now().toString(36).slice(-6)}`;
     const { api_key } = await provisionTenant(tid, 'pro');
 
     let r = await hmacFetch(`/api/tenants/${tid}`, 'DELETE');
     expect(r.status).toBe(200);
 
-    // Wait cache TTL
-    await new Promise((res) => setTimeout(res, 65_000));
+    // Invalidate cache pour que le paywall lise la nouvelle ligne deleted
+    await invalidatePaywallCache(tid);
 
     r = await sendTransactional(api_key, tid);
     expect(r.status).toBe(402);
@@ -116,7 +132,7 @@ test.describe('Paywall — path filter precision', () => {
     const tid = `pwpath${Date.now().toString(36).slice(-6)}`;
     const { api_key } = await provisionTenant(tid, 'free');
     await hmacFetch('/api/tenants/suspend', 'POST', { tenant_id: tid });
-    await new Promise((res) => setTimeout(res, 65_000));
+    await invalidatePaywallCache(tid);
 
     const r = await sendTransactional(api_key, tid);
     expect(r.status).toBe(402);
@@ -126,7 +142,7 @@ test.describe('Paywall — path filter precision', () => {
     const tid = `pwread${Date.now().toString(36).slice(-6)}`;
     const { api_key } = await provisionTenant(tid, 'free');
     await hmacFetch('/api/tenants/suspend', 'POST', { tenant_id: tid });
-    await new Promise((res) => setTimeout(res, 65_000));
+    await invalidatePaywallCache(tid);
 
     const r = await fetch(`${NOTIFUSE_URL}/api/contacts.list`, {
       method: 'POST',

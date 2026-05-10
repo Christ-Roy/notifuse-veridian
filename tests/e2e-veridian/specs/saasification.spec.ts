@@ -158,12 +158,18 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     expect(data.suspended_at).toBeTruthy();
   });
 
-  test('8. Send transactional after suspend → 402 (after cache TTL 60s)', async () => {
-    // Le paywall middleware utilise un cache LRU 60s pour éviter un round-trip
-    // DB par envoi. Pour que le suspend prenne effet, on attend 65s.
-    // En prod réelle : window de 60s acceptable où des envois peuvent encore
-    // partir après suspend Stripe webhook. Documenté dans veridian_paywall.go.
-    await new Promise((r) => setTimeout(r, 65_000));
+  test('8. Send transactional after suspend → 402 (cache invalidated)', async () => {
+    // Le paywall middleware utilise un cache LRU 60s pour eviter un round-trip
+    // DB par envoi. Plutot que d'attendre 65s, on appelle l'endpoint admin
+    // /api/veridian/admin/cache/invalidate (HMAC-signe) pour purger l'entree
+    // immediatement. Gain ~65s par scenario suspend/resume/delete.
+    //
+    // En prod : le Hub appelle cet endpoint apres chaque suspend/resume
+    // Stripe webhook pour propager le changement de plan instantanement.
+    const inv = await hmacFetch('/api/veridian/admin/cache/invalidate', 'POST', {
+      workspace_id: tenantId,
+    });
+    expect(inv.status).toBe(200);
 
     const res = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
       method: 'POST',
@@ -185,9 +191,12 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     expect(res.status).toBe(200);
   });
 
-  test('10. Send transactional after resume → not 402 (after cache TTL)', async () => {
-    // Wait cache TTL again pour que le resume prenne effet
-    await new Promise((r) => setTimeout(r, 65_000));
+  test('10. Send transactional after resume → not 402 (cache invalidated)', async () => {
+    // Cache invalidate pour propager le resume immediatement (vs sleep 65s).
+    const inv = await hmacFetch('/api/veridian/admin/cache/invalidate', 'POST', {
+      workspace_id: tenantId,
+    });
+    expect(inv.status).toBe(200);
 
     const res = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
       method: 'POST',
