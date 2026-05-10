@@ -165,11 +165,27 @@ test.describe('Generate magic link via API key (tenant-scoped)', () => {
   });
 
   test('generateMagicLink avec mauvaise API key → 401', async () => {
-    const r = await fetch(`${NOTIFUSE_URL}/api/workspaces.generateMagicLink`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer fake-api-key' },
-      body: JSON.stringify({ user_email: 'whatever@chaos.test' }),
-    });
-    expect(r.status).toBe(401);
+    // Retry sur 404 transient (race upstream Notifuse v30, voir task #10).
+    // En CI le pool DB sature parfois et la route renvoie temporairement 404
+    // alors qu'elle est mountee. Sans retry, ce test fail flaky.
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const r = await fetch(`${NOTIFUSE_URL}/api/workspaces.generateMagicLink`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer fake-api-key' },
+        body: JSON.stringify({ user_email: 'whatever@chaos.test' }),
+      });
+      lastStatus = r.status;
+      if (r.status === 401) return; // PASS, fast-path
+      if (r.status === 404 && attempt < 3) {
+        const backoffMs = 500 * Math.pow(2, attempt);
+        // eslint-disable-next-line no-console
+        console.log(`generateMagicLink retry ${attempt + 1}/4: status=${r.status}, backoff=${backoffMs}ms`);
+        await new Promise((res) => setTimeout(res, backoffMs));
+        continue;
+      }
+      break;
+    }
+    expect(lastStatus).toBe(401);
   });
 });

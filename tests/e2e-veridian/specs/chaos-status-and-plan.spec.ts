@@ -29,9 +29,10 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
 }
 
 async function provisionTenant(tid: string, plan = 'free') {
-  // Retry 3x sur 5xx : la creation de workspace Notifuse v30 peut avoir des
-  // races transitoires sur la DB postgres (CreateDatabase upstream).
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Retry 5x sur 5xx + 404 : meme race upstream que chaos-paywall, voir
+  // commentaire detaille la-bas. 404 transient observe en CI quand le pool DB
+  // est sous charge (test #10 territory).
+  for (let attempt = 0; attempt < 5; attempt++) {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@status.test`,
@@ -40,13 +41,16 @@ async function provisionTenant(tid: string, plan = 'free') {
     if (r.status === 200) {
       return r.json();
     }
-    if (r.status >= 500 && attempt < 2) {
-      await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
+    if ((r.status >= 500 || r.status === 404) && attempt < 4) {
+      const backoffMs = 500 * Math.pow(2, attempt);
+      // eslint-disable-next-line no-console
+      console.log(`provision retry ${attempt + 1}/5: status=${r.status}, backoff=${backoffMs}ms`);
+      await new Promise((res) => setTimeout(res, backoffMs));
       continue;
     }
     expect(r.status, await r.text()).toBe(200);
   }
-  throw new Error('provision retry exhausted');
+  throw new Error('provision retry exhausted (5 attempts incl. 404 transient)');
 }
 
 test.describe('Status endpoint', () => {

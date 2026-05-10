@@ -47,21 +47,30 @@ async function invalidatePaywallCache(workspaceId: string) {
 }
 
 async function provisionTenant(tenantId: string, plan = 'free') {
-  // Retry 3x sur 5xx (race CreateDatabase upstream)
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Retry 5x sur 5xx (race CreateDatabase upstream) ET 404 (transient
+  // upstream Notifuse v30 quand le pool DB est sous charge — observé en CI
+  // run 25636883973 : 4 fails consécutifs sur "404 page not found" alors que
+  // les routes sont mountées au startup et que les tests isolés passent en
+  // local 3/3. Tracé suivi dans task #10 / knowledge base. En attendant fix
+  // upstream, on retry sur 404 transient — un vrai 404 (route absente) ferait
+  // exhauster les retries et le test fail.
+  for (let attempt = 0; attempt < 5; attempt++) {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: `${tenantId}@paywall.test`,
       plan,
     });
     if (r.status === 200) return r.json();
-    if (r.status >= 500 && attempt < 2) {
-      await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
+    if ((r.status >= 500 || r.status === 404) && attempt < 4) {
+      const backoffMs = 500 * Math.pow(2, attempt); // 500ms, 1s, 2s, 4s
+      // eslint-disable-next-line no-console
+      console.log(`provision retry ${attempt + 1}/5: status=${r.status}, backoff=${backoffMs}ms`);
+      await new Promise((res) => setTimeout(res, backoffMs));
       continue;
     }
     expect(r.status, await r.text()).toBe(200);
   }
-  throw new Error('provision retry exhausted');
+  throw new Error('provision retry exhausted (5 attempts incl. 404 transient)');
 }
 
 async function sendTransactional(apiKey: string, workspaceId: string) {
