@@ -36,6 +36,65 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  # === Veridian patch === Scan CVE bloquant (regle CLAUDE.md non-negociable
+  # depuis breach 2026-05-07). Detecte high/critical sur deps npm de la suite
+  # e2e + console UI, fail le pipeline avant build.
+  cve-scan:
+    name: CVE scan (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # tests/e2e-veridian : deps Playwright + types/node
+      - name: npm audit (e2e tests)
+        run: |
+          cd tests/e2e-veridian
+          # --audit-level=high : bloque sur high/critical, ignore moderate/low
+          # (sinon CI fail tout le temps sur deps transitives non-actionnables).
+          # On ignore le exit code et on parse le JSON pour avoir un message clair.
+          AUDIT_OUT=$(npm audit --audit-level=high --json 2>/dev/null || true)
+          HIGH=$(echo "$AUDIT_OUT" | jq -r '.metadata.vulnerabilities.high // 0')
+          CRIT=$(echo "$AUDIT_OUT" | jq -r '.metadata.vulnerabilities.critical // 0')
+          if [ "${HIGH}" -gt 0 ] || [ "${CRIT}" -gt 0 ]; then
+            echo "::error::npm audit found ${CRIT} critical + ${HIGH} high CVEs in tests/e2e-veridian"
+            echo "$AUDIT_OUT" | jq -r '.vulnerabilities | to_entries[] | "  - \(.key) (\(.value.severity))"' | head -20
+            exit 1
+          fi
+          echo "npm audit (e2e) OK : 0 high/critical"
+
+      # console : deps frontend (React, Ant, ...) — geré par upstream Notifuse,
+      # pas patche par les Veridian patches. CVE detectees ici = bug upstream
+      # a remonter via PR, pas a "audit fix" aveuglement (risque de breaking
+      # deps majeur pour les fixes high). Donc ce step WARN seulement, ne fail
+      # pas. Doit etre visible dans logs CI pour suivi.
+      #
+      # CRITICAL en console = STILL BLOQUANT (pas tolerable, meme upstream).
+      # HIGH = warning, on tolere temporairement en attendant merge upstream
+      # ou Veridian patch dedie. A revoir trimestriellement.
+      - name: npm audit (console UI)
+        run: |
+          if [ -d console ] && [ -f console/package-lock.json ]; then
+            cd console
+            AUDIT_OUT=$(npm audit --audit-level=critical --json 2>/dev/null || true)
+            HIGH=$(echo "$AUDIT_OUT" | jq -r '.metadata.vulnerabilities.high // 0')
+            CRIT=$(echo "$AUDIT_OUT" | jq -r '.metadata.vulnerabilities.critical // 0')
+            if [ "${CRIT}" -gt 0 ]; then
+              echo "::error::npm audit found ${CRIT} CRITICAL CVEs in console (BLOQUANT, fixer upstream Notifuse)"
+              echo "$AUDIT_OUT" | jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "critical") | "  - \(.key) (\(.value.severity)): \(.value.via | tostring)"' | head -10
+              exit 1
+            fi
+            if [ "${HIGH}" -gt 0 ]; then
+              echo "::warning::npm audit found ${HIGH} HIGH CVEs in console (deps upstream Notifuse, a remonter)"
+              echo "$AUDIT_OUT" | jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "high") | "  - \(.key) (high)"' | head -10
+            fi
+            echo "npm audit (console) OK : 0 critical (${HIGH} high warnings)"
+          else
+            echo "console/ skip (no package-lock.json)"
+          fi
+
   test-go:
     name: Go tests (unit + Veridian patches)
     runs-on: ubuntu-latest
@@ -79,7 +138,7 @@ jobs:
 
   build:
     name: Build & push image (self-hosted)
-    needs: test-go
+    needs: [test-go, cve-scan]
     runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read
@@ -159,6 +218,21 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ steps.meta.outputs.tag }}
+
+      # === Veridian patch === Scan CVE OS + libs systeme + libs upstream
+      # bake dans l'image via Trivy. Bloque sur HIGH/CRITICAL (regle CLAUDE.md
+      # global). `ignore-unfixed: true` evite les fails sur des CVE sans fix
+      # disponible (depend de l'upstream OS).
+      - name: Trivy scan image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+          format: 'table'
+          # Cache base CVE pour eviter rate limits + speed up CI.
+          cache: 'true'
 
   deploy-staging:
     name: Deploy staging via Dokploy + force pull
