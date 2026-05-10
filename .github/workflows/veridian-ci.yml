@@ -258,12 +258,19 @@ jobs:
       - name: Run e2e
         run: |
           cd tests/e2e-veridian
-          npx playwright test --project=chromium --reporter=line
+          # Pas de --reporter=line ici : on utilise la config (line + html + json
+          # en CI) pour qu'on ait artefacts utiles meme sur succes (analyse perfs)
+          # et un rapport HTML drill-down sur fail.
+          npx playwright test --project=chromium
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
-          name: playwright-trace
-          path: tests/e2e-veridian/test-results/
+          name: playwright-report
+          path: |
+            tests/e2e-veridian/playwright-report/
+            tests/e2e-veridian/playwright-results.json
+            tests/e2e-veridian/test-results/
+          retention-days: 14
 
   deploy-prod:
     name: Deploy prod (manual only — green/blue review required)
@@ -314,7 +321,17 @@ jobs:
           cd tests/e2e-veridian
           npm ci
           npx playwright install chromium --with-deps
-          npx playwright test --project=chromium --grep "@prod-safe" --reporter=line
+          # Pas de --reporter=line ici : on utilise la config (line + html + json).
+          npx playwright test --project=chromium --grep "@prod-safe"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-prod
+          path: |
+            tests/e2e-veridian/playwright-report/
+            tests/e2e-veridian/playwright-results.json
+            tests/e2e-veridian/test-results/
+          retention-days: 14
 
   rollback:
     name: Rollback prod si e2e-prod fail
