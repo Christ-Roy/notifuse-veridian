@@ -27,6 +27,13 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: christ-roy/notifuse-veridian
   GO_VERSION: '1.25'
+  # Force Node 24 pour les actions JavaScript (deadline 2026-06-02 GitHub).
+  # Avant : warnings de deprecation Node 20 sur actions/checkout@v4,
+  # setup-node@v4, setup-go@v5, upload-artifact@v4, docker/build-push-action@v6,
+  # docker/login-action@v3, docker/setup-buildx-action@v3.
+  # Apres bascule officielle : on peut retirer cette variable, les versions
+  # major des actions ferveront alors automatiquement Node 24.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   test-go:
