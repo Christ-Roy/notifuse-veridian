@@ -5,6 +5,7 @@ on:
     branches: [veridian]
     tags:
       - 'v*-veridian.*'
+      - 'saas-v*'
   pull_request:
     branches: [veridian]
   workflow_dispatch:
@@ -79,6 +80,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
       upstream_version: ${{ steps.meta.outputs.upstream }}
+      is_saas_release: ${{ steps.meta.outputs.is_saas_release }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -92,21 +94,52 @@ jobs:
         run: |
           UPSTREAM=$(grep '^const VERSION' config/config.go | sed -E 's/.*"([^"]+)".*/\1/')
           SHA="${GITHUB_SHA::8}"
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/saas-v* ]]; then
+            # Release Veridian SemVer (saas-vX.Y.Z) — tag manuel, image
+            # taggée et :latest mis à jour. Le redeploy prod est manuel
+            # (edit du compose Dokploy pour pointer sur ce tag).
             TAG="${GITHUB_REF#refs/tags/}"
+            IS_SAAS_RELEASE=true
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            IS_SAAS_RELEASE=false
           else
             TAG="v${UPSTREAM}-veridian.${SHA}"
+            IS_SAAS_RELEASE=false
           fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "upstream=${UPSTREAM}" >> $GITHUB_OUTPUT
-          echo "Image tag: ${TAG}"
+          echo "is_saas_release=${IS_SAAS_RELEASE}" >> $GITHUB_OUTPUT
+          echo "Image tag: ${TAG} (saas_release=${IS_SAAS_RELEASE})"
 
+      # Skip pour les releases saas-v* : on ne touche pas à :latest ni à :rollback,
+      # on ne fait qu'ajouter un tag SemVer immuable.
       - name: Retag previous :latest as :rollback
+        if: steps.meta.outputs.is_saas_release != 'true'
         continue-on-error: true
         run: |
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || exit 0
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback
+
+      # Tag :latest n'est PAS mis à jour pour les releases saas-v* :
+      # un tag SemVer release peut pointer sur n'importe quel commit
+      # (rollback inclus) et ne doit pas écraser le :latest qui sert
+      # le staging auto-deploy.
+      - name: Compute image tags
+        id: image_tags
+        run: |
+          BASE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          if [[ "${{ steps.meta.outputs.is_saas_release }}" == "true" ]]; then
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "${BASE}:${{ steps.meta.outputs.tag }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "${BASE}:${{ steps.meta.outputs.tag }}" >> $GITHUB_OUTPUT
+            echo "${BASE}:latest" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build & push image
         uses: docker/build-push-action@v6
@@ -114,9 +147,7 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ steps.image_tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -125,6 +156,9 @@ jobs:
   deploy-staging:
     name: Deploy staging via Dokploy + force pull
     needs: build
+    # Staging deploy auto sur push veridian uniquement.
+    # Tags saas-v* sont des releases prod : pas d'auto-deploy, le redeploy
+    # se fait manuellement via Dokploy UI après bump du tag dans le compose.
     if: github.ref == 'refs/heads/veridian'
     runs-on: [self-hosted, linux, x64]
     steps:
