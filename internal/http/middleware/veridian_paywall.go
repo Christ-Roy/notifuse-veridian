@@ -54,12 +54,22 @@ type paywallCacheEntry struct {
 	expiresAt time.Time
 }
 
-// paywallCache implemente un cache thread-safe avec TTL.
-type paywallCache struct {
+// PaywallCache est un cache thread-safe avec TTL pour les decisions paywall.
+// Exporte pour que des appelants externes (handler admin) puissent invalider
+// une entree apres un suspend/resume/update-plan, sans attendre l'expiration
+// naturelle (60s par defaut). Reduit drastiquement le wall-clock e2e des
+// scenarios paywall en CI (gain ~5min par run).
+type PaywallCache struct {
 	m sync.Map // map[string]paywallCacheEntry
 }
 
-func (c *paywallCache) get(workspaceID string) (paywallCacheEntry, bool) {
+// NewPaywallCache cree un cache vide. Utiliser pour le wiring middleware
+// + handler admin invalidate (un seul cache partage).
+func NewPaywallCache() *PaywallCache {
+	return &PaywallCache{}
+}
+
+func (c *PaywallCache) get(workspaceID string) (paywallCacheEntry, bool) {
 	v, ok := c.m.Load(workspaceID)
 	if !ok {
 		return paywallCacheEntry{}, false
@@ -72,16 +82,39 @@ func (c *paywallCache) get(workspaceID string) (paywallCacheEntry, bool) {
 	return entry, true
 }
 
-func (c *paywallCache) set(workspaceID string, entry paywallCacheEntry) {
+func (c *PaywallCache) set(workspaceID string, entry paywallCacheEntry) {
 	c.m.Store(workspaceID, entry)
+}
+
+// Invalidate supprime l'entree pour ce workspace_id. Idempotent : pas
+// d'erreur si le workspace n'avait pas d'entree en cache. Le prochain
+// passage paywall fera un fresh DB lookup.
+func (c *PaywallCache) Invalidate(workspaceID string) {
+	c.m.Delete(workspaceID)
+}
+
+// Clear supprime toutes les entrees du cache. Reserve aux cas exceptionnels
+// (test cleanup, reload config). En prod, prefere Invalidate(workspaceID)
+// sur l'evenement specifique pour eviter les recalculs de tous les tenants.
+func (c *PaywallCache) Clear() {
+	c.m.Range(func(key, _ any) bool {
+		c.m.Delete(key)
+		return true
+	})
 }
 
 // NewVeridianPaywallMiddleware retourne un middleware applicable sur les
 // endpoints d'envoi. Si planRepo est nil, le middleware est un passthrough
-// (mode self-hosted sans veridian_plan).
+// (mode self-hosted sans veridian_plan). Cache local non partage : utiliser
+// NewVeridianPaywallMiddlewareWithCache si on veut invalider depuis l'exterieur.
 func NewVeridianPaywallMiddleware(planRepo domain.VeridianPlanRepository, log logger.Logger) func(http.Handler) http.Handler {
-	cache := &paywallCache{}
+	return NewVeridianPaywallMiddlewareWithCache(NewPaywallCache(), planRepo, log)
+}
 
+// NewVeridianPaywallMiddlewareWithCache permet d'injecter un cache partage
+// pour que le handler admin /api/veridian/admin/cache/invalidate puisse
+// invalider une entree sans attendre l'expiration TTL.
+func NewVeridianPaywallMiddlewareWithCache(cache *PaywallCache, planRepo domain.VeridianPlanRepository, log logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if planRepo == nil {
@@ -203,7 +236,14 @@ var paywallProtectedPaths = map[string]struct{}{
 // (transactional, broadcast) tout en garantissant que tous les envois
 // passent par le paywall, peu importe l'ordre d'enregistrement des routes.
 func VeridianPaywallPathFilter(planRepo domain.VeridianPlanRepository, log logger.Logger) func(http.Handler) http.Handler {
-	paywall := NewVeridianPaywallMiddleware(planRepo, log)
+	return VeridianPaywallPathFilterWithCache(NewPaywallCache(), planRepo, log)
+}
+
+// VeridianPaywallPathFilterWithCache permet d'injecter un cache partage avec
+// le handler admin invalidate. A utiliser dans app.Start() en passant le
+// meme *PaywallCache qui a ete fourni au VeridianHandler.
+func VeridianPaywallPathFilterWithCache(cache *PaywallCache, planRepo domain.VeridianPlanRepository, log logger.Logger) func(http.Handler) http.Handler {
+	paywall := NewVeridianPaywallMiddlewareWithCache(cache, planRepo, log)
 	return func(next http.Handler) http.Handler {
 		protected := paywall(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

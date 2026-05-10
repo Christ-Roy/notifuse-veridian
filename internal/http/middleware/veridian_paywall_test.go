@@ -291,3 +291,216 @@ func TestVeridianPaywall_PathFilter(t *testing.T) {
 	wrap.ServeHTTP(rec2, req2)
 	assert.Equal(t, http.StatusOK, rec2.Code)
 }
+
+// === Veridian patch === Tests pour PaywallCache.Invalidate et Clear,
+// ainsi que NewVeridianPaywallMiddlewareWithCache pour valider que le cache
+// partage entre middleware et handler admin fonctionne sans race.
+
+func TestVeridianPaywallCache_InvalidateForcesFreshLookup(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	// Premier call : plan suspended → 402 attendu
+	repo.EXPECT().Get(gomock.Any(), "ws-inv").Return(&domain.VeridianPlan{
+		WorkspaceID:     "ws-inv",
+		Plan:            "pro",
+		Status:          domain.PlanStatusSuspended,
+		SuspendedReason: "test",
+	}, nil).Times(1)
+	// Apres Invalidate : second call DB obligatoire → on retourne plan active
+	repo.EXPECT().Get(gomock.Any(), "ws-inv").Return(&domain.VeridianPlan{
+		WorkspaceID:       "ws-inv",
+		Plan:              "pro",
+		Status:            domain.PlanStatusActive,
+		MonthlyEmailQuota: 10000,
+	}, nil).Times(1)
+
+	cache := NewPaywallCache()
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	// Premier passage : suspended → 402 + cache hit pour les suivants (TTL 60s)
+	req1 := newPaywallReq(t, `{"workspace_id":"ws-inv"}`)
+	rec1 := httptest.NewRecorder()
+	mw.ServeHTTP(rec1, req1)
+	assert.Equal(t, http.StatusPaymentRequired, rec1.Code)
+
+	// Deuxieme passage SANS Invalidate : cache hit, repo.Get pas re-appele
+	req2 := newPaywallReq(t, `{"workspace_id":"ws-inv"}`)
+	rec2 := httptest.NewRecorder()
+	mw.ServeHTTP(rec2, req2)
+	assert.Equal(t, http.StatusPaymentRequired, rec2.Code)
+
+	// Invalidate → force fresh DB lookup au prochain passage
+	cache.Invalidate("ws-inv")
+
+	// Troisieme passage : repo.Get re-appele, retourne active → 200
+	req3 := newPaywallReq(t, `{"workspace_id":"ws-inv"}`)
+	rec3 := httptest.NewRecorder()
+	mw.ServeHTTP(rec3, req3)
+	assert.Equal(t, http.StatusOK, rec3.Code)
+	assert.True(t, called.Load())
+}
+
+func TestVeridianPaywallCache_InvalidateIdempotentOnEmptyCache(t *testing.T) {
+	cache := NewPaywallCache()
+	// Aucune entree : Invalidate ne doit pas paniquer ni renvoyer d'erreur
+	cache.Invalidate("ws-doesnotexist")
+	cache.Invalidate("")
+}
+
+func TestVeridianPaywallCache_ClearRemovesAllEntries(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	// 4 lookups DB attendus : 2 entrees, populées une fois, refresh apres Clear
+	repo.EXPECT().Get(gomock.Any(), "ws-a").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-a", Plan: "free", Status: domain.PlanStatusActive, MonthlyEmailQuota: 500,
+	}, nil).Times(2)
+	repo.EXPECT().Get(gomock.Any(), "ws-b").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-b", Plan: "pro", Status: domain.PlanStatusActive, MonthlyEmailQuota: 10000,
+	}, nil).Times(2)
+
+	cache := NewPaywallCache()
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	// Populate cache pour ws-a et ws-b
+	for _, ws := range []string{"ws-a", "ws-b"} {
+		req := newPaywallReq(t, `{"workspace_id":"`+ws+`"}`)
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
+
+	// Clear : les deux entrees disparaissent
+	cache.Clear()
+
+	// Re-passage : repo.Get re-appele pour les deux (Times=2 dans expectations)
+	for _, ws := range []string{"ws-a", "ws-b"} {
+		req := newPaywallReq(t, `{"workspace_id":"`+ws+`"}`)
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
+}
+
+func TestVeridianPaywallCache_InvalidateAffectsOnlyOneEntry(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	// ws-a : 2 lookups (initial + apres Invalidate), ws-b : 1 lookup uniquement (cache)
+	repo.EXPECT().Get(gomock.Any(), "ws-a").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-a", Plan: "free", Status: domain.PlanStatusActive, MonthlyEmailQuota: 500,
+	}, nil).Times(2)
+	repo.EXPECT().Get(gomock.Any(), "ws-b").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-b", Plan: "pro", Status: domain.PlanStatusActive, MonthlyEmailQuota: 10000,
+	}, nil).Times(1)
+
+	cache := NewPaywallCache()
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	// Populate les deux
+	for _, ws := range []string{"ws-a", "ws-b"} {
+		req := newPaywallReq(t, `{"workspace_id":"`+ws+`"}`)
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+	}
+
+	// Invalidate uniquement ws-a
+	cache.Invalidate("ws-a")
+
+	// Re-passage des deux : ws-a refresh, ws-b cache hit
+	for _, ws := range []string{"ws-a", "ws-b"} {
+		req := newPaywallReq(t, `{"workspace_id":"`+ws+`"}`)
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
+}
+
+func TestVeridianPaywallCache_InvalidateNotFoundEntry(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	// 2 lookups : initial (ErrNoRows) + apres Invalidate (refresh)
+	repo.EXPECT().Get(gomock.Any(), "ws-nf").Return(nil, sql.ErrNoRows).Times(2)
+
+	cache := NewPaywallCache()
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	// Initial : ErrNoRows mis en cache
+	req1 := newPaywallReq(t, `{"workspace_id":"ws-nf"}`)
+	rec1 := httptest.NewRecorder()
+	mw.ServeHTTP(rec1, req1)
+	assert.Equal(t, http.StatusOK, rec1.Code) // notFound = passthrough
+
+	// Cache hit (pas de DB call) : 2eme passage
+	req2 := newPaywallReq(t, `{"workspace_id":"ws-nf"}`)
+	rec2 := httptest.NewRecorder()
+	mw.ServeHTTP(rec2, req2)
+	assert.Equal(t, http.StatusOK, rec2.Code)
+
+	// Invalidate puis 3eme passage : DB ré-appelé (Times=2 satisfait)
+	cache.Invalidate("ws-nf")
+	req3 := newPaywallReq(t, `{"workspace_id":"ws-nf"}`)
+	rec3 := httptest.NewRecorder()
+	mw.ServeHTTP(rec3, req3)
+	assert.Equal(t, http.StatusOK, rec3.Code)
+}
+
+func TestVeridianNewPaywallCache_ReturnsEmptyCache(t *testing.T) {
+	cache := NewPaywallCache()
+	require.NotNil(t, cache)
+	// Cache vide : get retourne false
+	_, hit := cache.get("ws-x")
+	assert.False(t, hit)
+}
+
+// Concurrence : Invalidate et lookups depuis plusieurs goroutines sans race
+// (sync.Map est thread-safe par contrat — ce test verifie qu'on n'a pas
+// introduit de race autour).
+func TestVeridianPaywallCache_ConcurrentInvalidateAndLookup(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), gomock.Any()).Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-conc", Plan: "pro", Status: domain.PlanStatusActive, MonthlyEmailQuota: 10000,
+	}, nil).AnyTimes()
+
+	cache := NewPaywallCache()
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	done := make(chan struct{})
+	const N = 50
+
+	// Goroutine 1 : invalidate en boucle
+	go func() {
+		for i := 0; i < N; i++ {
+			cache.Invalidate("ws-conc")
+			time.Sleep(time.Microsecond * 100)
+		}
+		done <- struct{}{}
+	}()
+
+	// Goroutine 2 : passage middleware en boucle
+	go func() {
+		for i := 0; i < N; i++ {
+			req := newPaywallReq(t, `{"workspace_id":"ws-conc"}`)
+			rec := httptest.NewRecorder()
+			mw.ServeHTTP(rec, req)
+		}
+		done <- struct{}{}
+	}()
+
+	<-done
+	<-done
+}
