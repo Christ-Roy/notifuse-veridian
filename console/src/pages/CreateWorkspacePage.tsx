@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { Form, Input, Button, Tooltip, App } from 'antd'
+import { useEffect, useState } from 'react'
+import { Form, Input, Button, Tooltip, App, Result, Spin } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
-import { InfoCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { InfoCircleOutlined, ArrowLeftOutlined, LoginOutlined } from '@ant-design/icons'
 import { workspaceService } from '../services/api/workspace'
 import { ApiError } from '../services/api/client'
+import { veridianApi, type VeridianModeResponse } from '../services/api/veridian'
 import { useAuth } from '../contexts/AuthContext'
 import { MainLayout, MainLayoutSidebar } from '../layouts/MainLayout'
 import { getBrowserTimezone } from '../lib/timezoneNormalizer'
@@ -17,6 +18,21 @@ export function CreateWorkspacePage() {
   const [form] = Form.useForm()
   const { refreshWorkspaces } = useAuth()
   const { message } = App.useApp()
+
+  // === Veridian patch === Detection mode managed pour switch UI.
+  // En mode "veridian-managed", l'utilisateur n'a pas le droit de creer un
+  // workspace (provisionne par le Hub). On affiche un ecran qui le renvoie
+  // vers /console/signin (magic link) ou vers app.veridian.site pour souscrire.
+  const [veridianMode, setVeridianMode] = useState<VeridianModeResponse | null>(null)
+  const [modeLoading, setModeLoading] = useState(true)
+
+  useEffect(() => {
+    veridianApi
+      .getMode()
+      .then((res) => setVeridianMode(res))
+      .catch(() => setVeridianMode({ mode: 'self-hosted', signin_url: '/console/signin' }))
+      .finally(() => setModeLoading(false))
+  }, [])
 
   // Generate workspace ID from name (alphanumeric only, max 20 chars)
   const generateWorkspaceId = (name: string) => {
@@ -96,6 +112,68 @@ export function CreateWorkspacePage() {
 
   const handleBackToDashboard = () => {
     navigate({ to: '/console' })
+  }
+
+  // === Veridian patch === Spinner court le temps du fetch /api/veridian/mode.
+  if (modeLoading) {
+    return (
+      <MainLayout>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+          <Spin size="large" />
+        </div>
+      </MainLayout>
+    )
+  }
+
+  // === Veridian patch === Mode "veridian-managed" : workspace creation
+  // pilotee uniquement par le Hub via HMAC. La console UI ne propose plus
+  // de formulaire mais redirige vers /console/signin (magic link) ou vers
+  // le Hub pour souscrire.
+  if (veridianMode?.mode === 'veridian-managed') {
+    return (
+      <MainLayout>
+        <div style={{ maxWidth: 640, margin: '60px auto', padding: '0 24px' }}>
+          <Result
+            icon={<LoginOutlined style={{ color: '#1677ff' }} />}
+            title={t`Workspace creation disabled`}
+            subTitle={
+              <div style={{ marginTop: 12 }}>
+                <p>
+                  {t`Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at`}{' '}
+                  <a href={veridianMode.hub_url} target="_blank" rel="noreferrer">
+                    {veridianMode.hub_url?.replace(/^https?:\/\//, '')}
+                  </a>
+                  .
+                </p>
+                <p>
+                  {t`If you already have a workspace, sign in below with the email you used to subscribe — a secure magic link will be sent to your inbox.`}
+                </p>
+              </div>
+            }
+            extra={[
+              <Button
+                key="signin"
+                type="primary"
+                size="large"
+                icon={<LoginOutlined />}
+                onClick={() => navigate({ to: veridianMode.signin_url })}
+              >
+                {t`Sign in with magic link`}
+              </Button>,
+              veridianMode.hub_url && (
+                <Button
+                  key="hub"
+                  size="large"
+                  onClick={() => window.open(veridianMode.hub_url, '_blank', 'noreferrer')}
+                >
+                  {t`Subscribe at Veridian`}
+                </Button>
+              )
+            ]}
+          />
+        </div>
+      </MainLayout>
+    )
   }
 
   return (

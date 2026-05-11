@@ -57,6 +57,13 @@ func (h *VeridianHandler) SetPaywallCache(cache *middleware.PaywallCache) {
 func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	hmac := middleware.VeridianHMACMiddleware(hubSecret)
 
+	// === Veridian patch === Endpoint public (no HMAC) qui dit a la console UI
+	// si on est en mode "Veridian-managed" (HUB_API_SECRET set) ou self-hosted.
+	// En mode managed, la console doit cacher la page Create Workspace et
+	// rediriger vers /console/signin (magic link). Voir console/src/pages/
+	// CreateWorkspacePage.tsx.
+	mux.HandleFunc("GET /api/veridian/mode", h.handleMode(hubSecret))
+
 	mux.Handle("POST /api/tenants/provision", hmac(http.HandlerFunc(h.handleProvision)))
 	mux.Handle("POST /api/tenants/update-plan", hmac(http.HandlerFunc(h.handleUpdatePlan)))
 	mux.Handle("POST /api/tenants/suspend", hmac(http.HandlerFunc(h.handleSuspend)))
@@ -353,3 +360,30 @@ func (h *VeridianHandler) handleInvalidateCache(w http.ResponseWriter, r *http.R
 	})
 }
 
+
+// handleMode renvoie le mode de deploiement Notifuse (managed vs self-hosted).
+// Endpoint public (pas de HMAC) car consomme par la console UI pour decider si
+// elle doit afficher la page Create Workspace ou rediriger vers /console/signin.
+//
+// Reponse :
+//   { "mode": "veridian-managed" | "self-hosted",
+//     "signin_url": "/console/signin",
+//     "hub_url": "https://app.veridian.site" (uniquement si veridian-managed) }
+//
+// La presence de HUB_API_SECRET dans la config = mode veridian-managed.
+func (h *VeridianHandler) handleMode(hubSecret string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if hubSecret != "" {
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"mode":       "veridian-managed",
+				"signin_url": "/console/signin",
+				"hub_url":    "https://app.veridian.site",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"mode":       "self-hosted",
+			"signin_url": "/console/signin",
+		})
+	}
+}

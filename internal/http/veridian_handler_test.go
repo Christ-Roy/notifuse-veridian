@@ -644,3 +644,54 @@ func TestVeridianHandleSuspend_ReturnsValidTimestamp(t *testing.T) {
 	_, err := time.Parse(time.RFC3339, tsStr)
 	assert.NoError(t, err, "suspended_at must be RFC3339")
 }
+
+// === handleMode (Veridian-managed mode detection for console UI) ===
+
+func TestVeridianHandleMode_VeridianManaged(t *testing.T) {
+	h := newHandlerWithService(nil)
+	handler := h.handleMode("some-hub-secret-set")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/veridian/mode", nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var got map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Equal(t, "veridian-managed", got["mode"])
+	require.Equal(t, "/console/signin", got["signin_url"])
+	require.Equal(t, "https://app.veridian.site", got["hub_url"])
+}
+
+func TestVeridianHandleMode_SelfHosted(t *testing.T) {
+	h := newHandlerWithService(nil)
+	handler := h.handleMode("") // HUB_API_SECRET vide
+
+	req := httptest.NewRequest(http.MethodGet, "/api/veridian/mode", nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var got map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Equal(t, "self-hosted", got["mode"])
+	require.Equal(t, "/console/signin", got["signin_url"])
+	_, hasHubURL := got["hub_url"]
+	require.False(t, hasHubURL, "self-hosted mode should not expose hub_url")
+}
+
+func TestVeridianHandleMode_NoAuthRequired(t *testing.T) {
+	// L'endpoint /api/veridian/mode est public (pas de HMAC, pas de auth).
+	// On verifie qu'aucun header n'est requis.
+	h := newHandlerWithService(nil)
+	handler := h.handleMode("hub-secret")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/veridian/mode", nil)
+	// pas de X-Veridian-Hub-Signature, pas de Authorization
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "endpoint public, no auth required")
+}
