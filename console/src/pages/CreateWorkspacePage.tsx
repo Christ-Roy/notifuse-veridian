@@ -156,7 +156,14 @@ export function CreateWorkspacePage() {
                 type="primary"
                 size="large"
                 icon={<LoginOutlined />}
-                onClick={() => navigate({ to: veridianMode.signin_url })}
+                // window.location au lieu de navigate({to:...}) car TanStack Router
+                // type le `to` selon les routes typées, et un path string dynamique
+                // comme `/console/signin` venant de l'API ne matche pas le type.
+                // Hard navigation est OK ici : on quitte la page Create Workspace
+                // pour Signin (qui doit recharger l'état auth de toute façon).
+                onClick={() => {
+                  window.location.href = veridianMode.signin_url
+                }}
               >
                 {t`Sign in with magic link`}
               </Button>,
