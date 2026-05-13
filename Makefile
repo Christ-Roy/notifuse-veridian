@@ -1,4 +1,4 @@
-.PHONY: build test-unit run clean keygen test-service test-repo test-http test-migrations test-database test-pkg dev coverage coverage-report docker-build docker-run docker-stop docker-clean docker-logs docker-buildx-setup docker-publish docker-compose-up docker-compose-down docker-compose-build openapi-bundle openapi-lint openapi-preview demo-hmac
+.PHONY: build test-unit run clean keygen test-service test-repo test-http test-migrations test-database test-pkg dev coverage coverage-report docker-build docker-run docker-stop docker-clean docker-logs docker-buildx-setup docker-publish docker-compose-up docker-compose-down docker-compose-build openapi-bundle openapi-lint openapi-preview demo-hmac setup-hooks check-test-mapping
 
 build:
 	@echo "Building with CGO enabled (required for V8)..."
@@ -153,5 +153,22 @@ demo-hmac:
 	fi
 	@echo "Generating HMAC for demo reset..."
 	@go run -exec "" cmd/hmac/main.go "$(ROOT_EMAIL)" "$(SECRET_KEY)"
+
+# === Veridian CI hooks ===
+
+# Install pre-push hook (mapping source ↔ test, Constitution CI §2)
+setup-hooks:
+	@if [ ! -f .husky/pre-push ]; then \
+		echo "❌ .husky/pre-push manquant"; exit 1; \
+	fi
+	@chmod +x .husky/pre-push scripts/ci/check-test-mapping.sh
+	@git config core.hooksPath .husky
+	@echo "✓ Hooks installés (core.hooksPath = .husky)"
+	@echo "  → pre-push exécutera scripts/ci/check-test-mapping.sh"
+	@echo "  → Constitution CI §3 : JAMAIS --no-verify"
+
+# Run le check de mapping en local (working tree)
+check-test-mapping:
+	@BASE_REF=$${BASE_REF:-origin/main} scripts/ci/check-test-mapping.sh
 
 .DEFAULT_GOAL := build

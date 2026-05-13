@@ -1,5 +1,158 @@
 # Notifuse Tech Stack Documentation
 
+> **⚠️ Fork Veridian** — la section "Veridian customizations" + "Constitution CI"
+> ci-dessous s'applique à ce repo. Le reste du document est la doc upstream
+> Notifuse (référence Tech Stack, conventions de code, migrations, etc.).
+> Source amont : https://github.com/Notifuse/notifuse — sync régulière via
+> `git pull upstream main` sur la branche `veridian`.
+
+---
+
+## 🛡️ Veridian customizations
+
+### Branche et workflow
+
+- **Branche de travail** : `veridian` (push direct OK, CI obligatoire)
+- **Branche upstream tracking** : `main` (sync depuis `upstream/main`, jamais de
+  commit direct Veridian dessus)
+- **Tags** : `v<upstream>-veridian.<sha8>` générés par CI (cf. `veridian-ci.yml`)
+
+### Convention "veridian-override" — préfixe `veridian_*.go` flat
+
+Tout code custom Veridian dans `internal/{http,service,repository,domain}/` doit
+être préfixé `veridian_*.go` au **même niveau** que les fichiers upstream. Pas
+de sous-dossier `internal/http/veridian/`.
+
+**Raisons** :
+- Idiomatique Go : packages plats par responsabilité technique, pas par origine
+- Pas d'import cycle entre sous-packages et package parent
+- Grep-friendly : `ls internal/http/veridian_*` ou
+  `git diff upstream/main -- internal/http/ ':!internal/http/veridian_*'` montre
+  exactement ce qui est Veridian vs upstream
+- Sync upstream triviale : aucun fichier upstream ne porte ce préfixe
+
+**Exemples existants** :
+- `internal/http/veridian_handler.go`
+- `internal/http/veridian_autologin_handler.go`
+- `internal/http/veridian_magic_handler.go`
+- `internal/domain/veridian.go`, `internal/domain/veridian_token.go`
+
+**Règle stricte** : ne JAMAIS patcher directement un fichier upstream pour les
+besoins Veridian. Si un handler upstream doit être étendu, créer un
+`veridian_<nom>_handler.go` qui wraps ou remplace, et router dessus depuis le
+mux Veridian.
+
+### Sync upstream
+
+```bash
+git checkout main
+git pull upstream main
+git checkout veridian
+git merge main  # ou rebase si l'historique custom est court
+# Résoudre conflits si l'upstream a touché un fichier qu'on a aussi modifié
+# (ne devrait quasi jamais arriver vu la convention veridian_*.go flat)
+```
+
+Les commits upstream conservent leur auteur d'origine. Le pre-push hook
+détecte les commits dont l'auteur correspond à `@notifuse.com` et bypasse le
+mapping 1-pour-1 sur les fichiers **non-veridian_***.
+
+### Dokploy + GHCR
+
+- **Image** : `ghcr.io/christ-roy/notifuse-veridian:<tag>`
+- **Compose staging** (Dokploy) : `compose-bypass-bluetooth-feed-tbayqr`
+- **Compose prod** (Dokploy) : référencé par secret
+  `DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID`
+- **Endpoints** :
+  - Staging : `https://saas-notifuse.staging.veridian.site`
+  - Prod : `https://notifuse.app.veridian.site`
+
+### Tests E2E Veridian
+
+Dossier `tests/e2e-veridian/` (Playwright). Tag `@prod-safe` pour les tests
+qui peuvent tourner sur prod (read-only, pas de pollution data).
+
+---
+
+## 📜 Constitution CI — règles non négociables
+
+Standard de référence : `../CI-ARCHITECTURE.md` (racine `veridian-platform/`).
+Les règles ci-dessous s'appliquent **telles quelles** à ce repo, avec les
+adaptations Go nécessaires.
+
+1. **1 fichier critique = 1 test colocalisé.** Scopes pour Notifuse :
+   `internal/http/**/*.go`, `internal/service/**/*.go`,
+   `internal/repository/**/*.go`, `internal/domain/**/*.go`. Convention Go
+   idiomatique : `foo.go` ↔ `foo_test.go` au même niveau. Zéro annotation,
+   zéro exception.
+2. **Pre-push hook bloquant.** `scripts/ci/check-test-mapping.sh` exécuté via
+   `.husky/pre-push`. Fichier critique modifié sans test colocalisé modifié →
+   push refusé. Setup : `make setup-hooks`.
+3. **JAMAIS `--no-verify`.** Ni commit, ni push. Si hook bloque, fix le test
+   ou ajoute à `tests-pending.txt` (dette tracée).
+4. **Règle 1-pour-1 stricte.** Chaque nouvelle func exportée (majuscule
+   initiale) dans un fichier critique doit s'accompagner d'au moins un nouveau
+   `TestXxx` dans le test colocalisé. Le script compte les diffs.
+5. **Allowlist transitoire `tests-pending.txt`.** Baseline générée au démarrage,
+   cible 0 sous 90 jours. Toute ligne retirée doit s'accompagner du test
+   correspondant.
+6. **Coverage map non-canonique.** Si un fichier est légitimement couvert par
+   un test ailleurs, déclarer dans `test-coverage-map.yaml` avec `reason:`
+   explicite. Hook exige qu'au moins un `covered_by` soit modifié dans la PR.
+7. **Exception upstream sync.** Commits dont l'auteur correspond à l'upstream
+   Notifuse (`@notifuse.com`) bypassent le mapping pour les fichiers
+   **non-veridian_***. Les fichiers `veridian_*.go` restent sous discipline
+   stricte même dans un sync upstream.
+8. **Path-based skip docs.** `paths-ignore: ['**.md', 'docs/**',
+   'runbooks/**', 'plans/**']` dans `veridian-ci.yml`. Pas de CI sur
+   docs-only.
+9. **Path-based staging gate.** Si `Dockerfile`, `go.mod`,
+   `docker-compose.yml`, `internal/migrations/**` modifiés → exiger staging
+   vert + e2e-staging vert avant deploy prod. Deploy prod = `workflow_dispatch`
+   manuel uniquement (clients réels sur Notifuse).
+10. **Deploy via Dokploy API.** `POST /api/compose.redeploy` avec Bearer
+    (`DOKPLOY_API_TOKEN`). Secrets : `DOKPLOY_URL`,
+    `DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID`. Token rotaté tous les 6 mois.
+11. **Rollback prod auto sur e2e-prod fail.** Image `:rollback` retagée avant
+    chaque push `:latest`. Si e2e-prod échoue → retag broken-<sha> + restore
+    `:rollback` → redeploy → Telegram alert.
+12. **Migrations DB Expand & Contract obligatoire.** Le tag Docker précédent
+    doit toujours pouvoir tourner sur le schéma actuel. Pour Notifuse :
+    versions majeures (V6, V7…) doivent être additives ; les contractions
+    (DROP COLUMN, NOT NULL sur table peuplée) exigent 2 PRs séparées sur
+    2 deploys distincts (cf. `internal/migrations/`).
+13. **Findings centralisés GitHub Security tab.** Trivy + gitleaks SARIF
+    uploadés via `upload-sarif@v3`. Pas de `.trivyignore` sans VEX écrit.
+14. **Renovate auto-merge total** (à activer) : patch + minor + CVE
+    auto-mergés si CI verte. Major → review humaine.
+15. **Convention upstream-bypass** : commits upstream (auteur `@notifuse.com`)
+    ne sont **PAS** soumis à la règle 1-pour-1 sur les fichiers non-veridian_*.
+    Le upstream reste tel quel ; notre code custom est sous discipline.
+
+### Setup local (one-time)
+
+```bash
+make setup-hooks            # installe .husky/pre-push + chmod
+```
+
+### Commandes utiles CI
+
+```bash
+# Tester le script de mapping en local (working tree)
+BASE_REF=HEAD scripts/ci/check-test-mapping.sh
+
+# Tester contre origin/main (comme le pre-push)
+BASE_REF=origin/main scripts/ci/check-test-mapping.sh
+
+# Voir la dette
+wc -l tests-pending.txt
+
+# Lister les fichiers Veridian custom
+git ls-files | grep -E 'veridian_|veridian\.go|veridian_token'
+```
+
+---
+
 ## Overview
 
 Notifuse is a modern, self-hosted email marketing platform built with a clean architecture approach. The application follows a microservices-inspired design with clear separation between frontend and backend components.

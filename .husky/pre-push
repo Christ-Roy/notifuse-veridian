@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+if [ -x scripts/ci/check-test-mapping.sh ]; then
+  BASE_REF="${BASE_REF:-origin/$(git rev-parse --abbrev-ref HEAD)}"
+  if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then
+    BASE_REF="origin/main"
+  fi
+  export BASE_REF
+  exec scripts/ci/check-test-mapping.sh
+fi
+exit 0

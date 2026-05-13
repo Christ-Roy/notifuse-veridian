@@ -1,0 +1,63 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommits"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "Europe/Paris",
+  "branchPrefix": "renovate/",
+  "baseBranches": ["veridian"],
+  "labels": ["dependencies", "renovate"],
+  "prConcurrentLimit": 5,
+  "rangeStrategy": "bump",
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "branch",
+      "platformAutomerge": true
+    },
+    {
+      "matchUpdateTypes": ["minor"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "go dependencies (patch+minor)"
+    },
+    {
+      "matchManagers": ["docker-compose"],
+      "matchPackagePatterns": ["notifuse"],
+      "enabled": false
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPaths": ["console/**", "notification_center/**", "tests/e2e-veridian/**"],
+      "groupName": "frontend deps"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "automerge": true,
+    "labels": ["security", "critical"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+    "automerge": true
+  }
+}
