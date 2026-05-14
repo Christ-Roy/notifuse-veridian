@@ -64,7 +64,7 @@ mapping 1-pour-1 sur les fichiers **non-veridian_***.
 - **Compose prod** (Dokploy) : référencé par secret
   `DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID`
 - **Endpoints** :
-  - Staging : `https://saas-notifuse.staging.veridian.site`
+  - Staging : `https://notifuse.staging.veridian.site`
   - Prod : `https://notifuse.app.veridian.site`
 
 ### Tests E2E Veridian

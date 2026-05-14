@@ -1,0 +1,119 @@
+# Override prod — services nommés exactement comme attendu par
+# l'environnement Dokploy existant (notifuse-prod, notifuse-prod-db) pour
+# que les containers existants soient repris, pas créés en parallèle.
+#
+# Usage :
+#   docker compose -f base.yml -f prod.yml --project-name <p> up -d
+#
+# Le project-name est imposé par Dokploy (compose-transmit-open-source-microchip-k9lvap),
+# il ne doit PAS être fixé dans ce fichier.
+
+services:
+  notifuse-prod-db:
+    image: postgres:17-alpine@sha256:${NOTIFUSE_DB_IMAGE_DIGEST:-ff4ccc02b97e0ebb6b328ef9ff92522f95586f83be6801896b615088defc8ad2}
+    restart: unless-stopped
+    networks:
+      - notifuse-internal
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: notifuse_system
+    volumes:
+      - infra_notifuse-db-data:/var/lib/postgresql/data
+    command: postgres -c 'max_wal_size=1GB' -c 'checkpoint_timeout=10min'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 6656M
+          cpus: "3.6"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+
+  notifuse-prod:
+    image: ghcr.io/christ-roy/notifuse-veridian:${NOTIFUSE_IMAGE_TAG:-saas-v1.0.3}@sha256:${NOTIFUSE_IMAGE_DIGEST:-b07226febf9ea3d4f724f120919d18edf95cbe02dc94d7732c01b5ba5d425adc}
+    pull_policy: always
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+      - notifuse-internal
+    depends_on:
+      notifuse-prod-db:
+        condition: service_healthy
+    expose:
+      - "8081"
+    environment:
+      SERVER_PORT: "8081"
+      SERVER_HOST: 0.0.0.0
+      ENVIRONMENT: production
+      DEPLOY_ENV: ${DEPLOY_ENV:-prod}
+      DB_HOST: notifuse-prod-db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_PREFIX: notifuse
+      DB_NAME: notifuse_system
+      DB_SSLMODE: disable
+      SECRET_KEY: ${NOTIFUSE_SECRET_KEY}
+      TASK_SCHEDULER_ENABLED: "true"
+      TASK_SCHEDULER_INTERVAL: 20s
+      TASK_SCHEDULER_MAX_TASKS: "100"
+      ROOT_EMAIL: ${NOTIFUSE_ROOT_EMAIL}
+      TELEMETRY: "false"
+      CHECK_FOR_UPDATES: "false"
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASS}
+      SMTP_FROM_EMAIL: ${SMTP_ADMIN_EMAIL}
+      SMTP_FROM_NAME: ${SMTP_SENDER_NAME}
+      API_ENDPOINT: https://notifuse.${DOMAIN:-app.veridian.site}
+      INTERNAL_API_ENDPOINT: http://localhost:8081
+      HUB_API_SECRET: ${NOTIFUSE_HUB_API_SECRET}
+      HUB_WEBHOOK_URL: ${NOTIFUSE_HUB_WEBHOOK_URL}
+      HUB_WEBHOOK_SECRET: ${NOTIFUSE_HUB_WEBHOOK_SECRET}
+      VERIDIAN_DEFAULT_PLAN: free
+    volumes:
+      - infra_notifuse-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8081/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 6656M
+          cpus: "3.6"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-web.rule=Host(`${NOTIFUSE_HOST:-notifuse.app.veridian.site}`)
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-web.entrypoints=web
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.rule=Host(`${NOTIFUSE_HOST:-notifuse.app.veridian.site}`)
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.entrypoints=websecure
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.tls=true
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.tls.certresolver=letsencrypt
+      - traefik.http.services.notifuse-${DEPLOY_ENV:-prod}.loadbalancer.server.port=8081
+
+volumes:
+  infra_notifuse-db-data:
+    external: true
+  infra_notifuse-data:
+    external: true
+
+networks:
+  dokploy-network:
+    external: true
+  notifuse-internal:
+    driver: bridge

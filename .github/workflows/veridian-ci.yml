@@ -18,6 +18,18 @@ on:
         description: 'Deploy to PROD (only after manual review — green/blue)'
         required: false
         default: 'false'
+      skip_wipe:
+        description: 'Skip wipe-test-tenants step (test manuel staging via Chrome)'
+        required: false
+        default: 'false'
+      skip_e2e:
+        description: 'Skip e2e-staging job (test manuel staging via Chrome)'
+        required: false
+        default: 'false'
+      promote_prod_compose:
+        description: 'PUSH compose prod vers notifuse-deploy → webhook Dokploy → redeploy prod (opt-in)'
+        required: false
+        default: 'false'
 
 concurrency:
   group: veridian-ci-${{ github.ref }}
@@ -36,6 +48,45 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  test-mapping:
+    name: Constitution CI §1 (mapping source↔test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run check-test-mapping.sh
+        run: |
+          chmod +x scripts/ci/check-test-mapping.sh
+          # PR : diff vs base ref. Push : diff vs before SHA. Sinon skip.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export BASE_REF="origin/${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              export BASE_REF="origin/main"
+            else
+              export BASE_REF="$BEFORE"
+            fi
+          else
+            echo "Event ${{ github.event_name }} : skip test-mapping"
+            exit 0
+          fi
+          echo "BASE_REF=$BASE_REF"
+          scripts/ci/check-test-mapping.sh
+
+  compose-validate:
+    name: Compose validate (staging + prod)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose files
+        run: |
+          chmod +x scripts/ci/generate-compose.sh
+          # `docker compose config --quiet` sur prod.yml et staging.yml.
+          # Pas de génération côté repo (compose merge non reproductible cross-version).
+          scripts/ci/generate-compose.sh staging prod
+
   # === Veridian patch === Scan CVE bloquant (regle CLAUDE.md non-negociable
   # depuis breach 2026-05-07). Detecte high/critical sur deps npm de la suite
   # e2e + console UI, fail le pipeline avant build.
@@ -118,6 +169,7 @@ jobs:
 
   test-go:
     name: Go tests (unit + Veridian patches)
+    needs: [test-mapping, compose-validate]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -272,22 +324,41 @@ jobs:
           cache: 'true'
 
   deploy-staging:
-    name: Deploy staging via Dokploy + force pull
+    name: Deploy staging (compose pur sur dev-pub via Traefik staging-edge)
     needs: build
     # Staging deploy auto sur push veridian uniquement.
-    # Tags saas-v* sont des releases prod : pas d'auto-deploy, le redeploy
-    # se fait manuellement via Dokploy UI après bump du tag dans le compose.
+    # Tags saas-v* sont des releases prod : pas d'auto-deploy.
     if: github.ref == 'refs/heads/veridian'
     runs-on: [self-hosted, linux, x64]
+    environment:
+      name: staging
+      url: https://notifuse.staging.veridian.site
+    env:
+      STAGING_DIR: /opt/veridian/staging/notifuse
+      COMPOSE_FILE: infra/compose/staging.yml
+      PROJECT_NAME: notifuse-staging
+      SVC_APP: notifuse-staging
     steps:
-      # Force pull image GHCR : Dokploy redeploy ne pull pas l'image latest,
-      # il restart le container avec l'image deja pullee localement. On doit
-      # donc pull explicitement la nouvelle image avant le redeploy.
-      - name: Force pull GHCR latest + recreate container
+      - uses: actions/checkout@v4
+
+      - name: Sync compose vers ${STAGING_DIR}/infra/compose
         run: |
-          cd /etc/dokploy/compose/compose-bypass-bluetooth-feed-tbayqr/code
-          sudo docker compose -p compose-bypass-bluetooth-feed-tbayqr pull notifuse 2>&1 | tail -3
-          sudo docker compose -p compose-bypass-bluetooth-feed-tbayqr up -d --force-recreate notifuse 2>&1 | tail -5
+          # Le dossier ${STAGING_DIR} est ubuntu:ubuntu (chown one-shot fait
+          # lors de la création du .env). Le runner peut écrire sans sudo.
+          mkdir -p ${STAGING_DIR}/infra/compose
+          cp infra/compose/staging.yml ${STAGING_DIR}/infra/compose/
+          if [ ! -f ${STAGING_DIR}/.env ]; then
+            echo "❌ ${STAGING_DIR}/.env manquant — créer à la main avec les secrets staging"
+            exit 1
+          fi
+
+      - name: Pull image GHCR + up -d via compose pur
+        working-directory: ${{ env.STAGING_DIR }}
+        run: |
+          docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} --env-file .env pull ${SVC_APP} 2>&1 | tail -5
+          docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} --env-file .env up -d 2>&1 | tail -10
+          # Force recreate notifuse au cas où :latest pointe sur même image (rebuild)
+          docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} --env-file .env up -d --force-recreate --no-deps ${SVC_APP} 2>&1 | tail -5
 
       - name: Wait for staging healthy
         run: |
@@ -304,12 +375,12 @@ jobs:
           # démarré le HTTP listener mais pas encore fini d'enregistrer toutes
           # les routes upstream. Les e2e démarraient et tombaient sur des 404.
           for i in {1..30}; do
-            if curl -sf https://saas-notifuse.staging.veridian.site/api/setup.status > /dev/null 2>&1; then
+            if curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null 2>&1; then
               CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
                 -H "Content-Type: application/json" \
                 -H "Authorization: Bearer health-check-fake-key" \
                 -d '{}' \
-                https://saas-notifuse.staging.veridian.site/api/transactional.send)
+                https://notifuse.staging.veridian.site/api/transactional.send)
               if [ "$CODE" != "404" ]; then
                 echo "Staging healthy after ${i} attempts (transactional.send → ${CODE})"
                 exit 0
@@ -322,6 +393,7 @@ jobs:
           exit 1
 
       - name: Cleanup test tenants via admin API (proper, no SQL bricolage)
+        if: github.event.inputs.skip_wipe != 'true'
         env:
           HUB_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
         run: |
@@ -334,7 +406,7 @@ jobs:
             BODY="{\"prefix\":\"${prefix}\"}"
             TS=$(date +%s%3N)
             SIG=$(echo -n "${TS}.${BODY}" | openssl dgst -sha256 -hmac "${HUB_SECRET}" -hex | awk '{print $2}')
-            RESP=$(curl -sS -X POST "https://saas-notifuse.staging.veridian.site/api/veridian/admin/wipe-test-tenants" \
+            RESP=$(curl -sS -X POST "https://notifuse.staging.veridian.site/api/veridian/admin/wipe-test-tenants" \
               -H "Content-Type: application/json" \
               -H "X-Veridian-Hub-Signature: ${SIG}" \
               -H "X-Veridian-Timestamp: ${TS}" \
@@ -346,14 +418,25 @@ jobs:
             fi
           done
           # Verifier que staging repond toujours (les wipes ne doivent pas casser l'app)
-          curl -sf https://saas-notifuse.staging.veridian.site/api/setup.status > /dev/null && echo "Staging still healthy after cleanup" || (echo "Staging UNHEALTHY after cleanup" && exit 1)
+          curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null && echo "Staging still healthy after cleanup" || (echo "Staging UNHEALTHY after cleanup" && exit 1)
+
+      - name: Cleanup runner (always — Constitution §20)
+        if: always()
+        run: |
+          docker container prune -f
+          docker image prune -f --filter "until=1h"
+          docker volume prune -f --filter "label!=keep=true"
+          docker buildx prune -f --keep-storage 10GB --filter "until=168h" || true
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* || true
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "⚠ Disk:", $5, "used"}'
 
   e2e-staging:
     name: E2E headful Playwright (staging, BLOQUANT)
     needs: deploy-staging
+    if: github.event.inputs.skip_e2e != 'true'
     runs-on: [self-hosted, linux, x64]
     env:
-      NOTIFUSE_URL: https://saas-notifuse.staging.veridian.site
+      NOTIFUSE_URL: https://notifuse.staging.veridian.site
       HUB_URL: https://saas-hub.staging.veridian.site
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
     steps:
@@ -475,3 +558,80 @@ jobs:
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
             --data-urlencode "text=🚨 Notifuse Veridian PROD rollback — e2e-prod a fail sur ${GITHUB_SHA::8}, image precedente restauree."
+
+  promote-prod-compose:
+    # Push compose prod (infra/compose/prod.yml) vers notifuse-deploy.
+    # Webhook GitHub → Dokploy → pull + recreate. Opt-in workflow_dispatch.
+    # Pré-requis : secret NOTIFUSE_DEPLOY_PUSH_PAT (PAT scope repo sur notifuse-deploy).
+    name: Promote compose prod vers notifuse-deploy (manuel uniquement)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.promote_prod_compose == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://github.com/Christ-Roy/notifuse-deploy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Valider compose prod
+        run: |
+          chmod +x scripts/ci/generate-compose.sh
+          scripts/ci/generate-compose.sh prod
+
+      - name: Push compose vers notifuse-deploy
+        env:
+          GH_TOKEN: ${{ secrets.NOTIFUSE_DEPLOY_PUSH_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "❌ Secret NOTIFUSE_DEPLOY_PUSH_PAT manquant"
+            exit 1
+          fi
+          TMPDIR=$(mktemp -d)
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/Christ-Roy/notifuse-deploy.git" "$TMPDIR"
+          cd "$TMPDIR"
+
+          # En-tête de traçabilité + contenu copié depuis notre prod.yml
+          cat > docker-compose.yml <<HEADER
+          # ╔══════════════════════════════════════════════════════════════════╗
+          # ║ FICHIER GÉNÉRÉ — NE PAS ÉDITER À LA MAIN                        ║
+          # ║                                                                  ║
+          # ║ Source : Christ-Roy/notifuse-veridian/infra/compose/prod.yml    ║
+          # ║ SHA   : ${GITHUB_SHA::12}                                       ║
+          # ║ Run   : ${GITHUB_RUN_ID}                                        ║
+          # ╚══════════════════════════════════════════════════════════════════╝
+          HEADER
+          cat ${GITHUB_WORKSPACE}/infra/compose/prod.yml >> docker-compose.yml
+
+          echo "─── diff vs HEAD précédent ───"
+          git diff docker-compose.yml | head -80 || true
+
+          if git diff --quiet docker-compose.yml; then
+            echo "✅ Aucun changement à pousser — compose déjà à jour."
+            exit 0
+          fi
+
+          git config user.email "ci-bot@veridian.site"
+          git config user.name "Veridian CI Bot"
+          git add docker-compose.yml
+          COMMIT_MSG=$(cat <<MSG
+          chore: sync compose depuis notifuse-veridian @ ${GITHUB_SHA::8}
+
+          Source SHA: ${GITHUB_SHA}
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          MSG
+          )
+          git commit -m "$COMMIT_MSG"
+          git push origin main
+          echo "✅ Compose poussé vers notifuse-deploy. Dokploy va redéployer."
+
+      - name: Wait for prod healthy after Dokploy redeploy
+        run: |
+          sleep 30
+          for i in {1..30}; do
+            if curl -sf https://notifuse.app.veridian.site/api/setup.status > /dev/null 2>&1; then
+              echo "Prod healthy après ${i} tentatives"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ Prod unhealthy 5min après promotion compose"
+          exit 1

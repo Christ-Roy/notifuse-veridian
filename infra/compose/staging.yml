@@ -1,0 +1,120 @@
+# Override staging — services nommés notifuse-staging / notifuse-staging-db,
+# alignés avec les container_name actuellement présents sur dev-pub.
+#
+# Conventions staging (dev-pub, cf. ~/traefik-staging/README.md) :
+#   - image :latest mutable (pull à chaque deploy CI)
+#   - volumes locaux nommés
+#   - network staging-edge (Traefik standalone géré par traefik-staging.service)
+#   - ressources réduites (dev-pub a 7.6G RAM partagés)
+#   - Host notifuse.staging.veridian.site (wildcard DNS déjà configuré)
+#
+# Usage :
+#   docker compose -f base.yml -f staging.yml -p notifuse-staging up -d
+
+services:
+  notifuse-staging-db:
+    image: postgres:17-alpine
+    container_name: notifuse-staging-db
+    restart: unless-stopped
+    networks:
+      - notifuse-internal
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: notifuse_system
+    volumes:
+      - notifuse-staging-db-data:/var/lib/postgresql/data
+    command: postgres -c 'max_wal_size=1GB' -c 'checkpoint_timeout=10min'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.1"
+
+  notifuse-staging:
+    image: ghcr.io/christ-roy/notifuse-veridian:${NOTIFUSE_IMAGE_TAG:-latest}
+    container_name: notifuse-staging
+    pull_policy: always
+    restart: unless-stopped
+    networks:
+      - notifuse-internal
+      - staging-edge
+    depends_on:
+      notifuse-staging-db:
+        condition: service_healthy
+    expose:
+      - "8081"
+    environment:
+      SERVER_PORT: "8081"
+      SERVER_HOST: 0.0.0.0
+      ENVIRONMENT: staging
+      DEPLOY_ENV: staging
+      DB_HOST: notifuse-staging-db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_PREFIX: notifuse
+      DB_NAME: notifuse_system
+      DB_SSLMODE: disable
+      SECRET_KEY: ${NOTIFUSE_SECRET_KEY}
+      TASK_SCHEDULER_ENABLED: "true"
+      TASK_SCHEDULER_INTERVAL: 20s
+      TASK_SCHEDULER_MAX_TASKS: "100"
+      ROOT_EMAIL: ${NOTIFUSE_ROOT_EMAIL}
+      TELEMETRY: "false"
+      CHECK_FOR_UPDATES: "false"
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASS}
+      SMTP_FROM_EMAIL: ${SMTP_ADMIN_EMAIL}
+      SMTP_FROM_NAME: ${SMTP_SENDER_NAME}
+      API_ENDPOINT: https://notifuse.staging.veridian.site
+      INTERNAL_API_ENDPOINT: http://localhost:8081
+      HUB_API_SECRET: ${NOTIFUSE_HUB_API_SECRET}
+      HUB_WEBHOOK_URL: ${NOTIFUSE_HUB_WEBHOOK_URL}
+      HUB_WEBHOOK_SECRET: ${NOTIFUSE_HUB_WEBHOOK_SECRET}
+      VERIDIAN_DEFAULT_PLAN: free
+    volumes:
+      - notifuse-staging-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8081/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "1.5"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=staging-edge
+      - traefik.http.routers.notifuse.rule=Host(`notifuse.staging.veridian.site`)
+      - traefik.http.routers.notifuse.entrypoints=websecure
+      - traefik.http.routers.notifuse.tls.certresolver=letsencrypt
+      - traefik.http.services.notifuse.loadbalancer.server.port=8081
+
+volumes:
+  notifuse-staging-db-data:
+    name: notifuse-staging-db-data
+  notifuse-staging-data:
+    name: notifuse-staging-data
+
+networks:
+  notifuse-internal:
+    driver: bridge
+  staging-edge:
+    external: true
