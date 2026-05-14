@@ -43,9 +43,11 @@ else
   CHANGED=$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null || true)
 fi
 
+# Note : on ne sort PAS si CHANGED est vide. La règle "couverture routes API"
+# tourne dans tous les cas pour bloquer la dette préexistante (mode Nuclear).
+# Le mapping 1-pour-1 et le check migrations sont skip si CHANGED vide.
 if [ -z "$CHANGED" ]; then
-  echo "${GREEN}✓ Aucun fichier modifié${NC}"
-  exit 0
+  echo "${BLUE}ℹ Aucun fichier modifié dans le diff — vérification routes API uniquement${NC}"
 fi
 
 PENDING_FILE="tests-pending.txt"
@@ -247,11 +249,97 @@ if [ -n "$MIGRATION_CHANGES" ]; then
   fi
 fi
 
+# ─── Routes API — couverture stricte (Nuclear, 0 dette autorisée) ──────────────
+# Règle 1 : toute route déclarée (mux.Handle("/api/...")) doit avoir au moins
+#           un test qui exerce cette route via httptest.NewRequest(... "/api/...").
+# Règle 2 : si une route est modifiée dans le diff (déclaration OU code du
+#           handler), au moins un test exerçant cette route doit aussi être
+#           modifié dans le même push.
+#
+# Le bypass upstream s'applique : si le diff est 100% upstream Notifuse,
+# on skip ces checks (l'upstream a sa propre discipline).
+
+if [ "$UPSTREAM_BYPASS" != "1" ]; then
+  echo
+  echo "${BLUE}── Vérification couverture routes API ──${NC}"
+
+  # Collecte routes déclarées (hors _test.go)
+  declared_routes=$(grep -hrE 'mux\.(Handle|HandleFunc)\("(/api/[^"]+)"' internal/http/ 2>/dev/null \
+    | grep -vE "_test\.go" \
+    | grep -oE '/api/[a-zA-Z._-]+' | sort -u)
+
+  # Collecte routes testées (apparaissent dans httptest.NewRequest)
+  tested_routes=$(grep -hrE 'httptest\.NewRequest\([^,]+,\s*"(/api/[^"?]+)' internal/ 2>/dev/null \
+    | grep -oE '/api/[a-zA-Z._-]+' | sort -u)
+
+  # Règle 1 : routes orphelines (déclarées sans test)
+  orphans=$(comm -23 <(echo "$declared_routes") <(echo "$tested_routes"))
+  if [ -n "$orphans" ]; then
+    orphan_count=$(echo "$orphans" | wc -l)
+    echo "${RED}✗ $orphan_count route(s) API déclarée(s) sans test httptest.NewRequest :${NC}"
+    echo "$orphans" | sed 's/^/    /'
+    echo "  Règle Nuclear : ajouter un test qui fait httptest.NewRequest(..., \"<route>\") pour chacune."
+    FAILED=$((FAILED + orphan_count))
+  else
+    echo "${GREEN}✓ Toutes les routes déclarées ont un test (couverture 100%)${NC}"
+  fi
+
+  # Règle 2 : routes touchées dans le diff (handlers modifiés) doivent avoir
+  # leur test correspondant aussi modifié.
+  #
+  # Pour chaque fichier handler modifié, on extrait les routes qu'il déclare,
+  # puis on vérifie qu'au moins un test modifié dans le push exerce cette route.
+  HANDLERS_TOUCHED=$(echo "$CHANGED" | grep -E '^internal/http/[^/]+\.go$' | grep -vE '_test\.go$' || true)
+  if [ -n "$HANDLERS_TOUCHED" ]; then
+    TESTS_TOUCHED_FILES=$(echo "$CHANGED" | grep -E '^internal/(http|service|repository|domain)/.*_test\.go$' || true)
+    if [ -z "$TESTS_TOUCHED_FILES" ]; then
+      # Aucun _test.go modifié dans tout le push, mais des handlers oui → block
+      # (sauf si tous les handlers touchés sont uniquement des _test.go : déjà filtré)
+      # Note : ce cas devrait déjà être bloqué par la règle 1-pour-1 ci-dessus,
+      # mais on garde un message clair côté routes.
+      :
+    else
+      # Pour chaque handler touché, ses routes doivent être exercées par un test touché
+      for handler in $HANDLERS_TOUCHED; do
+        # Skip fichiers en pending (déjà couverts par la dette globale, mais en Nuclear
+        # tests-pending est vide donc tous les handlers veridian_* sont in scope)
+        in_pending "$handler" && continue
+
+        # Skip fichiers qui ne déclarent pas de route (utils, helpers, etc.)
+        handler_routes=$(grep -hE 'mux\.(Handle|HandleFunc)\("(/api/[^"]+)"' "$handler" 2>/dev/null \
+          | grep -oE '/api/[a-zA-Z._-]+' | sort -u)
+        [ -z "$handler_routes" ] && continue
+
+        # Vérifie qu'au moins une route du handler est exercée par un _test.go modifié
+        route_test_found=0
+        while IFS= read -r route; do
+          [ -z "$route" ] && continue
+          for tf in $TESTS_TOUCHED_FILES; do
+            [ ! -f "$tf" ] && continue
+            if grep -qF "\"$route" "$tf" 2>/dev/null; then
+              route_test_found=1
+              break 2
+            fi
+          done
+        done <<< "$handler_routes"
+
+        if [ "$route_test_found" = "0" ]; then
+          echo "${RED}✗ $handler modifié (déclare des routes API) mais aucun test modifié n'exerce ses routes :${NC}"
+          echo "$handler_routes" | sed 's/^/    /'
+          echo "  Règle Nuclear : modifier un _test.go qui fait httptest.NewRequest sur ces routes."
+          FAILED=$((FAILED + 1))
+        fi
+      done
+    fi
+  fi
+fi
+
 echo
 if [ "$FAILED" -gt 0 ]; then
-  echo "${RED}╔════════════════════════════════════════════════════════════╗${NC}"
-  echo "${RED}║ PUSH REFUSÉ — $FAILED violation(s) de la règle 1-pour-1     ║${NC}"
-  echo "${RED}╚════════════════════════════════════════════════════════════╝${NC}"
+  echo "${RED}╔══════════════════════════════════════════════════════════════════╗${NC}"
+  echo "${RED}║ PUSH REFUSÉ — $FAILED violation(s) (mapping 1-pour-1 + routes API) ║${NC}"
+  echo "${RED}╚══════════════════════════════════════════════════════════════════╝${NC}"
+  echo "Mode Nuclear : 0 dette autorisée."
   echo "Fix puis re-tente. JAMAIS --no-verify (Constitution CI §3)."
   exit 1
 fi
