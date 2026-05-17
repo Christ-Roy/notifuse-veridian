@@ -241,7 +241,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Trivy fs scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.33.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -260,7 +260,7 @@ jobs:
           sarif_file: 'trivy-fs.sarif'
           category: 'trivy-fs'
       - name: Fail on CRITICAL only
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.33.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -383,7 +383,7 @@ jobs:
       # - SARIF upload → GitHub Security tab pour drill-down.
       # - SBOM CycloneDX artifact → traçabilité supply-chain.
       - name: Trivy scan image — CRITICAL bloquant + SARIF
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.33.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'CRITICAL,HIGH'
@@ -400,7 +400,7 @@ jobs:
           category: 'trivy-image'
 
       - name: Trivy fail on CRITICAL + EOL
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.33.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'CRITICAL'
@@ -411,7 +411,7 @@ jobs:
           TRIVY_EXIT_ON_EOL: '1'
 
       - name: Trivy HIGH report (warning only)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.33.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'HIGH'
@@ -420,7 +420,7 @@ jobs:
           exit-code: '0'
 
       - name: Generate CycloneDX SBOM
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.33.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           scan-type: 'image'

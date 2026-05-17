@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -292,12 +293,35 @@ const (
 )
 
 // VeridianEventPayload est le payload signe envoye au Hub.
+//
+// Champs alias `event` et `idempotency_key` : ajoutés pour s'aligner sur le
+// contrat README intégrations Hub (cf. veridian-hub/todo/integrations/README.md
+// §"Format webhook standard") sans casser les consommateurs qui se basent
+// déjà sur `event_type` et `event_id`. MarshalJSON injecte les 4 champs.
 type VeridianEventPayload struct {
-	EventID     string                 `json:"event_id"` // UUID, pour idempotence cote Hub
-	EventType   VeridianEvent          `json:"event_type"`
-	TenantID    string                 `json:"tenant_id"`
-	OccurredAt  time.Time              `json:"occurred_at"`
-	Data        map[string]interface{} `json:"data,omitempty"`
+	EventID    string                 `json:"event_id"` // UUID, pour idempotence cote Hub
+	EventType  VeridianEvent          `json:"event_type"`
+	TenantID   string                 `json:"tenant_id"`
+	OccurredAt time.Time              `json:"occurred_at"`
+	Data       map[string]interface{} `json:"data,omitempty"`
+}
+
+// MarshalJSON ajoute les alias `event` (= event_type) et `idempotency_key`
+// (= event_id) au payload sortant, pour conformité contrat Hub v1.
+// Les anciens champs `event_type` et `event_id` sont conservés afin de ne
+// pas casser les consommateurs existants — additif uniquement.
+func (p VeridianEventPayload) MarshalJSON() ([]byte, error) {
+	type alias VeridianEventPayload
+	envelope := struct {
+		alias
+		Event          VeridianEvent `json:"event"`
+		IdempotencyKey string        `json:"idempotency_key"`
+	}{
+		alias:          alias(p),
+		Event:          p.EventType,
+		IdempotencyKey: p.EventID,
+	}
+	return json.Marshal(envelope)
 }
 
 // WebhookEmitter envoie des events au Hub.

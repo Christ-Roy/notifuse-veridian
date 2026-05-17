@@ -882,10 +882,11 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 	if listErr != nil {
 		return nil, fmt.Errorf("list workspace members: %w", listErr)
 	}
-	var currentOwnerID string
+	var currentOwnerID, currentOwnerEmail string
 	for _, m := range members {
 		if m.Role == "owner" && m.UserID != owner.ID {
 			currentOwnerID = m.UserID
+			currentOwnerEmail = m.Email
 			break
 		}
 	}
@@ -934,6 +935,17 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 				s.cleanupSession(ctx, tenantSessionID)
 			}
 		}
+	}
+
+	// Step 8 : émettre tenant.owner_changed si un transfer a effectivement eu lieu.
+	// Best-effort (best-effort par design dans webhookEmitter — pas bloquant).
+	if transferred && s.emitter != nil {
+		s.emitter.Emit(ctx, domain.EventTenantOwnerChanged, input.TenantID, map[string]interface{}{
+			"new_owner_email":   input.OwnerEmail,
+			"new_owner_user_id": owner.ID,
+			"old_owner_email":   currentOwnerEmail,
+			"old_owner_user_id": currentOwnerID,
+		})
 	}
 
 	return &domain.AttachOwnerResponse{

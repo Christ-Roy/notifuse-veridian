@@ -409,6 +409,9 @@ func TestVeridianService_AttachOwner_NotAttached_TransferFromRoot(t *testing.T) 
 		gomock.Any(), "ws-orphan", "root-id",
 	).Return(nil).Times(1)
 
+	// Step 8 : tenant.owner_changed event émis sur transfer réussi.
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-orphan", gomock.Any()).Times(1)
+
 	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-orphan", OwnerEmail: "alice@x.test"})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -452,6 +455,8 @@ func TestVeridianService_AttachOwner_CreatesUserIfMissing(t *testing.T) {
 	m.workspace.EXPECT().RemoveUserFromWorkspace(
 		gomock.Any(), "ws-x", "root-id",
 	).Return(nil).Times(1)
+
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-x", gomock.Any()).Times(1)
 
 	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-x", OwnerEmail: "newhuman@x.test"})
 	require.NoError(t, err)
@@ -498,6 +503,8 @@ func TestVeridianService_AttachOwner_AttachedButNotOwner_TransferOnly(t *testing
 	m.workspace.EXPECT().RemoveUserFromWorkspace(
 		gomock.Any(), "ws-1", "root-id",
 	).Return(nil).Times(1)
+
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-1", gomock.Any()).Times(1)
 
 	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test"})
 	require.NoError(t, err)
@@ -636,6 +643,15 @@ func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing
 	m.workspace.EXPECT().TransferOwnership(
 		gomock.Any(), "ws-multi", "bob-id", "alice-id",
 	).Return(nil).Times(1)
+
+	// Event émis avec old_owner_email=alice (validation explicite que le
+	// payload contient bien l'ancien owner, pas root).
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-multi",
+		gomock.AssignableToTypeOf(map[string]interface{}{})).
+		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			assert.Equal(t, "alice@x.test", data["old_owner_email"])
+			assert.Equal(t, "bob@x.test", data["new_owner_email"])
+		}).Times(1)
 
 	// ⚠️ CRITICAL : pas de RemoveUserFromWorkspace appelé sur alice (additive only).
 	// Si gomock voit un appel non-attendu il fait fail le test (mode strict).

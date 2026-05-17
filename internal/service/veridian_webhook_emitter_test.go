@@ -93,6 +93,42 @@ func TestVeridianWebhookEmitter_SendsHTTPPost(t *testing.T) {
 	assert.NotEmpty(t, payload.EventID)
 	assert.Equal(t, "pro", payload.Data["plan"])
 	assert.False(t, payload.OccurredAt.IsZero())
+
+	// Conformité contrat README intégrations Hub : alias `event` et
+	// `idempotency_key` doivent être présents dans le JSON sortant pour que
+	// le Hub puisse parser indifféremment l'ancien et le nouveau format.
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(got.body, &raw))
+	_, hasEvent := raw["event"]
+	_, hasIdempotency := raw["idempotency_key"]
+	_, hasEventType := raw["event_type"]
+	_, hasEventID := raw["event_id"]
+	assert.True(t, hasEvent, "payload must include `event` alias for contract Hub v1")
+	assert.True(t, hasIdempotency, "payload must include `idempotency_key` alias for contract Hub v1")
+	assert.True(t, hasEventType, "payload must keep `event_type` for backward compat")
+	assert.True(t, hasEventID, "payload must keep `event_id` for backward compat")
+}
+
+// TestVeridianEventPayload_MarshalJSON_AliasesEvent garantit l'alias direct
+// sans passer par HTTP — test colocalisé veridian.go (l'event payload).
+func TestVeridianEventPayload_MarshalJSON_AliasesEvent(t *testing.T) {
+	payload := domain.VeridianEventPayload{
+		EventID:    "abc-uuid",
+		EventType:  domain.EventTenantOwnerChanged,
+		TenantID:   "ws-1",
+		OccurredAt: time.Now().UTC(),
+		Data:       map[string]interface{}{"new_owner_email": "x@y.z"},
+	}
+	raw, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	var out map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &out))
+	assert.Equal(t, "tenant.owner_changed", out["event"])
+	assert.Equal(t, "tenant.owner_changed", out["event_type"])
+	assert.Equal(t, "abc-uuid", out["idempotency_key"])
+	assert.Equal(t, "abc-uuid", out["event_id"])
+	assert.Equal(t, "ws-1", out["tenant_id"])
 }
 
 func TestVeridianWebhookEmitter_RetriesOn5xx(t *testing.T) {

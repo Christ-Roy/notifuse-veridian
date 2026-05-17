@@ -787,3 +787,88 @@ func TestVeridianHandleAttachOwner_RegisteredInRoutes(t *testing.T) {
 	require.NotNil(t, matched)
 	assert.Contains(t, pattern, "/api/veridian/admin/attach-owner")
 }
+
+// === handleHealth (livrable 3 contrat intégrations Hub) ===
+
+func TestVeridianHandleHealth_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Health(gomock.Any(), "ws-h").Return(&domain.TenantHealthResponse{
+		TenantID: "ws-h", WorkspaceID: "ws-h",
+		Status: domain.PlanStatusActive,
+		OwnerAttached: true, OwnerEmail: "owner@x.test", OwnerUserID: "owner-id",
+		APIKeyValid: true, MagicLinkCapable: true, MembersCount: 2, Plan: "free",
+	}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleHealth, http.MethodGet, "/api/tenants/ws-h/health", "ws-h", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp domain.TenantHealthResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "ws-h", resp.TenantID)
+	assert.True(t, resp.MagicLinkCapable)
+	assert.Equal(t, 2, resp.MembersCount)
+}
+
+func TestVeridianHandleHealth_MissingID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleHealth, http.MethodGet, "/api/tenants//health", "", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestVeridianHandleHealth_NotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Health(gomock.Any(), "ws-x").Return(nil, sql.ErrNoRows)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleHealth, http.MethodGet, "/api/tenants/ws-x/health", "ws-x", "")
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestVeridianHandleHealth_BugDetectionReturnsOK(t *testing.T) {
+	// Health renvoie 200 même si magic_link_capable=false — c'est le rôle du
+	// Hub de scanner le champ et déclencher une alerte. On veut juste vérifier
+	// que le handler n'interprète pas un état "cassé" comme une erreur 5xx.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Health(gomock.Any(), "ws-bug").Return(&domain.TenantHealthResponse{
+		TenantID: "ws-bug", WorkspaceID: "ws-bug",
+		Status: domain.PlanStatusActive,
+		OwnerAttached: false, APIKeyValid: true,
+		MagicLinkCapable: false, MembersCount: 1,
+	}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleHealth, http.MethodGet, "/api/tenants/ws-bug/health", "ws-bug", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp domain.TenantHealthResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.MagicLinkCapable)
+}
+
+func TestVeridianHandleHealth_RegisteredInRoutes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/tenants/ws-1/health", nil)
+	matched, pattern := mux.Handler(req)
+	require.NotNil(t, matched)
+	assert.Contains(t, pattern, "/health")
+}
