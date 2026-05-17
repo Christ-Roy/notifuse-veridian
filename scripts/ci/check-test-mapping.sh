@@ -283,9 +283,19 @@ if [ "$UPSTREAM_BYPASS" != "1" ]; then
   # Collecte routes déclarées (hors _test.go et hors lignes commentées)
   # On grep dans les fichiers non-test du package http, puis on filtre les
   # lignes commençant par // (commentaires de doc avec exemples).
+  # Le regex matche AUSSI le pattern Go 1.22+ "METHOD /path" :
+  #   mux.Handle("/api/foo", ...)              → ancien style
+  #   mux.Handle("POST /api/foo", ...)         → Go 1.22+
+  #   mux.HandleFunc("GET /api/bar", ...)      → Go 1.22+
   # `|| true` après chaque pipe-with-grep car set -e fait fail un pipe vide.
+  #
+  # Routes REST parametrées avec `{id}` (cf. /api/tenants/{id}/status) sont
+  # EXCLUES du check Nuclear — sinon il faut écrire un check de "préfixe
+  # contient" côté tests, et la résolution se ferait à coup de heuristiques
+  # fragiles. À la place : les tests de ces routes utilisent leur propre
+  # mux.Handler() check (cf. TestVeridianHandleAttachOwner_RegisteredInRoutes).
   declared_routes=$( { find internal/http -name '*.go' ! -name '*_test.go' \
-      -exec grep -hE 'mux\.(Handle|HandleFunc)\("(/api/[^"]+)"' {} + 2>/dev/null || true; } \
+      -exec grep -hE 'mux\.(Handle|HandleFunc)\("([A-Z]+ )?(/api/[^"]+)"' {} + 2>/dev/null || true; } \
     | { grep -vE '^\s*//' || true; } \
     | { grep -oE '/api/[a-zA-Z._-]+' || true; } \
     | sort -u)
@@ -334,8 +344,13 @@ if [ "$UPSTREAM_BYPASS" != "1" ]; then
         in_pending "$handler" && continue
 
         # Skip fichiers qui ne déclarent pas de route (utils, helpers, etc.)
-        handler_routes=$(grep -hE 'mux\.(Handle|HandleFunc)\("(/api/[^"]+)"' "$handler" 2>/dev/null \
-          | grep -oE '/api/[a-zA-Z._-]+' | sort -u)
+        # Même regex Go 1.22+ tolerant aux préfixes METHOD que la règle 1.
+        # Pipes safe (|| true) sinon set -e tue le script sur grep no-match.
+        # Routes parametrées `{id}` exclues : même logique que règle 1.
+        handler_routes=$( { grep -hE 'mux\.(Handle|HandleFunc)\("([A-Z]+ )?(/api/[^"]+)"' "$handler" 2>/dev/null || true; } \
+          | { grep -vE '^\s*//' || true; } \
+          | { grep -oE '/api/[a-zA-Z._-]+' || true; } \
+          | sort -u)
         [ -z "$handler_routes" ] && continue
 
         # Vérifie qu'au moins une route du handler est exercée par un _test.go modifié
