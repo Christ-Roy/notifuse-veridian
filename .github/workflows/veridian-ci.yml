@@ -254,7 +254,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Trivy fs scan
-        uses: aquasecurity/trivy-action@0.33.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -273,7 +273,7 @@ jobs:
           sarif_file: 'trivy-fs.sarif'
           category: 'trivy-fs'
       - name: Fail on CRITICAL only
-        uses: aquasecurity/trivy-action@0.33.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -396,7 +396,7 @@ jobs:
       # - SARIF upload → GitHub Security tab pour drill-down.
       # - SBOM CycloneDX artifact → traçabilité supply-chain.
       - name: Trivy scan image — CRITICAL bloquant + SARIF
-        uses: aquasecurity/trivy-action@0.33.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'CRITICAL,HIGH'
@@ -413,7 +413,7 @@ jobs:
           category: 'trivy-image'
 
       - name: Trivy fail on CRITICAL + EOL
-        uses: aquasecurity/trivy-action@0.33.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'CRITICAL'
@@ -424,7 +424,7 @@ jobs:
           TRIVY_EXIT_ON_EOL: '1'
 
       - name: Trivy HIGH report (warning only)
-        uses: aquasecurity/trivy-action@0.33.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'HIGH'
@@ -433,7 +433,7 @@ jobs:
           exit-code: '0'
 
       - name: Generate CycloneDX SBOM
-        uses: aquasecurity/trivy-action@0.33.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           scan-type: 'image'
@@ -592,19 +592,72 @@ jobs:
           retention-days: 14
 
   deploy-prod:
-    name: Deploy prod (manual only — green/blue review required)
+    name: Deploy prod (auto-promote sur push veridian — ship fast & safe)
     needs: e2e-staging
-    # === Veridian patch === Deploy prod desactive sur push automatique.
-    # La prod Notifuse est sensible (clients reels), on ne pousse JAMAIS
-    # automatiquement. Pour deployer en prod : utiliser workflow_dispatch
-    # avec l'input deploy_prod=true OU faire le green/blue manuel via
-    # Dokploy UI apres validation Robert.
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true'
+    # === Veridian patch === Auto-promote prod activé 2026-05-17.
+    #
+    # Conditions d'auto-promote (toutes doivent être vraies) :
+    #   1. Event = push sur branche veridian (pas PR, pas tag, pas dispatch)
+    #   2. e2e-staging vert (implicite via `needs`)
+    #   3. Commit message ne contient PAS [skip-prod] ou [wip]
+    #
+    # Override manuel : workflow_dispatch avec deploy_prod=true reste actif.
+    # Stop-gap : commit avec [skip-prod] dans le message → staging only.
+    #
+    # Defense in depth : e2e-prod reste bloquant après ce step, rollback
+    # auto si fail, auto-revert Git PR. Donc même en cas de bug glissé
+    # à travers e2e-staging, l'impact en prod est < 5 minutes.
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/veridian'
+        && !contains(github.event.head_commit.message, '[skip-prod]')
+        && !contains(github.event.head_commit.message, '[wip]'))
+      || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # pour le gate 24h structurel
+
+      # === Constitution CI §15 — Gate structurel 24h ===
+      # Si le push touche Dockerfile/go.mod/migrations/infra/compose → exiger
+      # commit âgé de > 24h (rodage staging). Sinon promotion auto fast.
+      # Override : [skip-gate] dans commit message.
+      - name: Gate structurel 24h
+        run: |
+          set -euo pipefail
+          STRUCTURAL_PATTERN='^(Dockerfile|go\.mod|go\.sum|internal/migrations/.*\.go|infra/compose/.*\.ya?ml)$'
+
+          if ! git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "$STRUCTURAL_PATTERN"; then
+            echo "✅ Commit non-structurel, ship fast."
+            exit 0
+          fi
+
+          echo "⚠ Commit touche des fichiers structurels :"
+          git diff --name-only HEAD~1 HEAD | grep -E "$STRUCTURAL_PATTERN" | sed 's/^/  /'
+
+          COMMIT_MSG=$(git log -1 --format='%B')
+          if echo "$COMMIT_MSG" | grep -q '\[skip-gate\]'; then
+            echo "ℹ Bypass via [skip-gate] (validation humaine)."
+            exit 0
+          fi
+
+          COMMIT_TS=$(git log -1 --format=%ct)
+          NOW=$(date -u +%s)
+          AGE_HOURS=$(( (NOW - COMMIT_TS) / 3600 ))
+          echo "Commit age : ${AGE_HOURS}h"
+
+          if [ "$AGE_HOURS" -lt 24 ]; then
+            echo "::error::Commit structurel âgé de ${AGE_HOURS}h < 24h."
+            echo "::error::Constitution §15 : structurel doit roder 24h sur staging."
+            echo "::error::Override : recommit avec [skip-gate] si urgent."
+            exit 1
+          fi
+
+          echo "✅ Commit structurel âgé de ${AGE_HOURS}h ≥ 24h — gate OK."
+
       - name: Trigger Dokploy redeploy (prod)
         run: |
-          curl -X POST \
+          curl -fsS -X POST \
             -H "x-api-key: ${{ secrets.DOKPLOY_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             "${{ secrets.DOKPLOY_URL }}/api/compose.redeploy" \
@@ -612,15 +665,26 @@ jobs:
 
       - name: Wait for prod healthy
         run: |
+          # 5 min max d'attente. Si pas healthy → fail le job → rollback auto.
           for i in {1..30}; do
-            if curl -sf https://notifuse.app.veridian.site/api/health > /dev/null 2>&1; then
-              echo "Prod healthy"
+            if curl -sf https://notifuse.app.veridian.site/api/setup.status > /dev/null 2>&1; then
+              echo "Prod healthy after ${i}0s"
               exit 0
             fi
             sleep 10
           done
-          echo "Prod unhealthy after 5min — triggering rollback"
+          echo "::error::Prod unhealthy after 5min — rollback auto va se déclencher"
           exit 1
+
+      - name: Telegram notif deploy prod OK
+        if: success()
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -fsS -X POST \
+              "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+              --data-urlencode "text=🚀 Notifuse Veridian PROD déployé — ${GITHUB_SHA::8} | e2e-prod en cours..."
+          fi
 
   e2e-prod:
     name: E2E headful Playwright (prod, BLOQUANT)
@@ -744,10 +808,24 @@ jobs:
 
   promote-prod-compose:
     # Push compose prod (infra/compose/prod.yml) vers notifuse-deploy.
-    # Webhook GitHub → Dokploy → pull + recreate. Opt-in workflow_dispatch.
+    # Webhook GitHub → Dokploy → pull + recreate.
+    #
+    # Auto-promote 2026-05-17 : déclenché automatiquement si :
+    #   - event = push veridian
+    #   - infra/compose/prod.yml a changé dans le diff
+    #   - e2e-staging vert (via needs)
+    #   - pas de [skip-prod] ou [wip] dans le commit message
+    # OU manuellement via workflow_dispatch avec promote_prod_compose=true.
+    #
     # Pré-requis : secret NOTIFUSE_DEPLOY_PUSH_PAT (PAT scope repo sur notifuse-deploy).
-    name: Promote compose prod vers notifuse-deploy (manuel uniquement)
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.promote_prod_compose == 'true'
+    name: Promote compose prod vers notifuse-deploy
+    needs: e2e-staging
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/veridian'
+        && contains(github.event.head_commit.modified, 'infra/compose/prod.yml')
+        && !contains(github.event.head_commit.message, '[skip-prod]')
+        && !contains(github.event.head_commit.message, '[wip]'))
+      || (github.event_name == 'workflow_dispatch' && github.event.inputs.promote_prod_compose == 'true')
     runs-on: ubuntu-latest
     environment:
       name: production
