@@ -269,6 +269,7 @@ jobs:
       - name: Upload SARIF to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true  # ship fast — SARIF upload non bloquant
         with:
           sarif_file: 'trivy-fs.sarif'
           category: 'trivy-fs'
@@ -309,6 +310,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # upload SARIF Trivy image → GitHub Security tab
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
       upstream_version: ${{ steps.meta.outputs.upstream }}
@@ -408,6 +410,7 @@ jobs:
       - name: Upload Trivy image SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true  # ship fast — SARIF upload non bloquant, dépend du runner self-hosted token scope
         with:
           sarif_file: 'trivy-image.sarif'
           category: 'trivy-image'
