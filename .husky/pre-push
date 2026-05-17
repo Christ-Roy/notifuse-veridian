@@ -1,10 +1,70 @@
 #!/usr/bin/env sh
-if [ -x scripts/ci/check-test-mapping.sh ]; then
-  BASE_REF="${BASE_REF:-origin/$(git rev-parse --abbrev-ref HEAD)}"
+# Husky pre-push — Constitution CI §1 + §3 (Notifuse Veridian)
+#
+# Bloque le push si check-test-mapping.sh sort en erreur.
+# Fail-safe : si le script est introuvable OU non exécutable, le hook
+# BLOQUE le push (pas exit 0 silencieux). Mieux : refuser un push légitime
+# qu'autoriser un push qui contourne involontairement la discipline.
+
+set -eu
+
+RED=$'\033[0;31m'
+YELLOW=$'\033[1;33m'
+GREEN=$'\033[0;32m'
+NC=$'\033[0m'
+
+SCRIPT="scripts/ci/check-test-mapping.sh"
+
+if [ ! -f "$SCRIPT" ]; then
+  echo "${RED}✗ $SCRIPT introuvable — hook pre-push refuse le push.${NC}"
+  echo "  Restaure le script ou commit-le, puis re-tente."
+  echo "  (Constitution CI §1 : 1 fichier critique = 1 test colocalisé bloquant.)"
+  exit 1
+fi
+
+if [ ! -x "$SCRIPT" ]; then
+  echo "${RED}✗ $SCRIPT non exécutable — hook pre-push refuse le push.${NC}"
+  echo "  Run: chmod +x $SCRIPT && make setup-hooks"
+  exit 1
+fi
+
+# ─── Détermine BASE_REF en lisant stdin (refs du push en cours) ─────────────
+# Git passe sur stdin : <local_ref> <local_sha> <remote_ref> <remote_sha>
+# Une ligne par ref poussée. On prend le premier remote_sha non-zéro comme
+# point de comparaison réel (le tip distant actuel de la branche poussée).
+# Si rien sur stdin (push --no-stdin ou hook lancé manuellement) → fallback.
+
+ZERO="0000000000000000000000000000000000000000"
+REMOTE_SHA=""
+while IFS=' ' read -r _local_ref _local_sha remote_ref remote_sha; do
+  [ -z "${remote_sha:-}" ] && continue
+  if [ "$remote_sha" != "$ZERO" ]; then
+    REMOTE_SHA="$remote_sha"
+    break
+  fi
+done || true
+
+if [ -n "$REMOTE_SHA" ]; then
+  BASE_REF="$REMOTE_SHA"
+else
+  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  BASE_REF="origin/${CURRENT_BRANCH}"
   if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then
     BASE_REF="origin/main"
   fi
-  export BASE_REF
-  exec scripts/ci/check-test-mapping.sh
+  if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then
+    BASE_REF="HEAD~1"
+  fi
 fi
-exit 0
+
+export BASE_REF
+echo "${GREEN}── Husky pre-push (Constitution CI §1) ──${NC}"
+echo "  BASE_REF=$BASE_REF"
+
+if ! "$SCRIPT"; then
+  echo
+  echo "${RED}✗ Push refusé par Husky.${NC}"
+  echo "  ${YELLOW}Ne JAMAIS bypasser avec --no-verify (Constitution CI §3).${NC}"
+  echo "  Corrige les violations puis re-tente."
+  exit 1
+fi

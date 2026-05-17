@@ -234,18 +234,31 @@ for f in $CHANGED; do
   echo "${GREEN}✓ $f → $test_file${NC} (exports=$new_exports tests=$new_tests)"
 done
 
-# ─── Migrations SQL (Notifuse a des migrations dans migrations/) ────────────
-MIGRATION_CHANGES=$(echo "$CHANGED" | grep -E '^internal/migrations/.*\.sql$' || true)
+# ─── Migrations Go (Notifuse — internal/migrations/v*.go) ──────────────────
+# 2 checks distincts :
+#   a) Mapping migration ↔ test colocalisé (vXX.go ↔ vXX_test.go)
+#   b) Safety check : Expand & Contract (Constitution §12) via script dédié.
+MIGRATION_CHANGES=$(echo "$CHANGED" | grep -E '^internal/migrations/v[0-9]+\.go$' || true)
 if [ -n "$MIGRATION_CHANGES" ]; then
   echo
-  echo "${BLUE}── Migrations SQL détectées ──${NC}"
-  # Au moins un test integration ou repository test doit être modifié
-  TESTS_TOUCHED=$(echo "$CHANGED" | grep -E '^internal/(repository|service)/.*_test\.go$' || true)
-  if [ -z "$TESTS_TOUCHED" ]; then
-    echo "${RED}✗ Migration SQL sans test repository/service modifié${NC}"
-    FAILED=$((FAILED + 1))
+  echo "${BLUE}── Migrations Go détectées ──${NC}"
+  # a) Test colocalisé : chaque vXX.go doit avoir un vXX_test.go modifié.
+  for mf in $MIGRATION_CHANGES; do
+    expected="${mf%.go}_test.go"
+    if ! echo "$CHANGED" | grep -Fxq "$expected"; then
+      echo "${RED}✗ $mf modifié sans $expected${NC}"
+      FAILED=$((FAILED + 1))
+    fi
+  done
+
+  # b) Safety check Expand & Contract (DROP COLUMN, NOT NULL, RENAME, etc.)
+  SAFETY_SCRIPT="$(dirname "$0")/check-migration-safety.sh"
+  if [ -x "$SAFETY_SCRIPT" ]; then
+    if ! BASE_REF="$BASE_REF" "$SAFETY_SCRIPT"; then
+      FAILED=$((FAILED + 1))
+    fi
   else
-    echo "${GREEN}✓ Migration accompagnée de tests${NC}"
+    echo "${YELLOW}⚠ $SAFETY_SCRIPT manquant ou non exécutable — safety check SKIPPED${NC}"
   fi
 fi
 

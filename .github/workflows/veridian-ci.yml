@@ -209,9 +209,89 @@ jobs:
           go tool cover -func=coverage.out | grep -E "veridian" || true
           go tool cover -func=coverage.out | tail -1
 
+      # Constitution CI §13 — govulncheck (équivalent Go de npm audit).
+      # Détecte les CVE connues sur les deps Go directes et transitives,
+      # mais uniquement les vulnerabilités effectivement appelées par
+      # notre code (filtre les imports inertes).
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: |
+          set -o pipefail
+          govulncheck -show verbose ./... 2>&1 | tee govulncheck.txt
+          # govulncheck exit code 3 = vulns trouvées avec appel détecté.
+          # On veut fail dans ce cas, c'est l'intérêt du check.
+
+  govulncheck-summary:
+    name: govulncheck summary (after Go tests)
+    needs: test-go
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Sentinelle (test-go embedde le scan, ce job sert juste d'ancre)
+        run: echo "govulncheck est exécuté dans test-go (step 'Run govulncheck')."
+
+  trivy-fs:
+    name: Trivy fs scan (CVE + secret + misconfig + license, Constitution §13)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # pour upload SARIF dans GitHub Security tab
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy fs scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          scanners: 'vuln,secret,misconfig,license'
+          severity: 'CRITICAL,HIGH'
+          format: 'sarif'
+          output: 'trivy-fs.sarif'
+          # Ne pas fail le build sur HIGH (sinon dette upstream Notifuse
+          # bloque tout). Critical-only via étape suivante.
+          exit-code: '0'
+          ignore-unfixed: 'true'
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-fs.sarif'
+          category: 'trivy-fs'
+      - name: Fail on CRITICAL only
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          scanners: 'vuln,secret,misconfig'
+          severity: 'CRITICAL'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: 'true'
+
+  gitleaks:
+    name: Gitleaks (secrets dans le diff Git)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks scan tout l'historique court
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Mode redact : ne pas exposer les secrets dans les logs publics
+          GITLEAKS_ENABLE_COMMENTS: false
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
+          GITLEAKS_ENABLE_SUMMARY: true
+
   build:
     name: Build & push image (self-hosted)
-    needs: [test-go, cve-scan]
+    needs: [test-go, cve-scan, trivy-fs, gitleaks]
     runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read
@@ -293,35 +373,67 @@ jobs:
             VERSION=${{ steps.meta.outputs.tag }}
 
       # === Veridian patch === Scan CVE OS + libs systeme + libs upstream
-      # bake dans l'image via Trivy.
+      # bake dans l'image via Trivy. Constitution §13 étage 2.
       #
       # Strategie BLOQUANTE/WARN identique a npm audit console :
       # - CRITICAL → bloque (immediatement actionnable, on ne deploit pas)
-      # - HIGH → WARNING uniquement. Les HIGH OS+lib viennent souvent de
-      #   l'image base alpine ou de deps Go upstream Notifuse, pas
-      #   patchables sans modif Dockerfile upstream (hors scope agent).
-      #   Suivi dans task #18 (et nouvelle task pour Dockerfile a bumper).
-      # - `ignore-unfixed: true` : on ignore les CVE sans fix dispo (pas
-      #   actionnable de toute facon).
-      - name: Trivy scan image (CRITICAL bloquant, HIGH warning)
-        uses: aquasecurity/trivy-action@master
+      # - HIGH → WARNING uniquement (dette upstream alpine/Go).
+      # - `ignore-unfixed: true` : pas actionnable.
+      # - `--exit-on-eol 1` : fail si OS distrib en EOL (alpine < 3.18).
+      # - SARIF upload → GitHub Security tab pour drill-down.
+      # - SBOM CycloneDX artifact → traçabilité supply-chain.
+      - name: Trivy scan image — CRITICAL bloquant + SARIF
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          severity: 'CRITICAL,HIGH'
+          format: 'sarif'
+          output: 'trivy-image.sarif'
+          ignore-unfixed: 'true'
+          exit-code: '0'  # SARIF non bloquant, fail séparé sur CRITICAL
+
+      - name: Upload Trivy image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-image.sarif'
+          category: 'trivy-image'
+
+      - name: Trivy fail on CRITICAL + EOL
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'CRITICAL'
-          exit-code: '1'
-          ignore-unfixed: true
           format: 'table'
-          cache: 'true'
+          ignore-unfixed: 'true'
+          exit-code: '1'
+        env:
+          TRIVY_EXIT_ON_EOL: '1'
 
-      - name: Trivy scan HIGH (warning only)
-        uses: aquasecurity/trivy-action@master
+      - name: Trivy HIGH report (warning only)
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'HIGH'
-          exit-code: '0' # warning only — voir comment ci-dessus
-          ignore-unfixed: true
           format: 'table'
-          cache: 'true'
+          ignore-unfixed: 'true'
+          exit-code: '0'
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          scan-type: 'image'
+          format: 'cyclonedx'
+          output: 'sbom-cyclonedx.json'
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sbom-cyclonedx-${{ steps.meta.outputs.tag }}
+          path: 'sbom-cyclonedx.json'
+          retention-days: 90
 
   deploy-staging:
     name: Deploy staging (compose pur sur dev-pub via Traefik staging-edge)
