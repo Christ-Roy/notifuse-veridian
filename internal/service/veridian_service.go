@@ -767,6 +767,266 @@ func (s *veridianService) buildMagicLink(ctx context.Context, workspaceID, email
 	return fmt.Sprintf("%s/console/signin?%s", endpoint, q.Encode()), expiresAt.UTC(), nil
 }
 
+// === Veridian patch ===
+// AttachOwner répare un workspace existant en y attachant un user humain
+// comme owner. Idempotent : safe à appeler plusieurs fois.
+//
+// Pourquoi ce endpoint existe :
+//
+//	Les workspaces créés avant la feature Hub-Veridian (avril 2026 et
+//	antérieurs) n'ont jamais eu d'appel à Provision. Leur owner enregistré
+//	dans user_workspaces est le user "natif Notifuse" qui les a créés via
+//	l'UI (typiquement le premier user de l'instance, root ou équivalent).
+//
+//	Quand le Hub appelle ensuite /api/workspaces.generateMagicLink avec
+//	user_email = "vrai owner humain", la console Notifuse retourne un JWT
+//	valide pour cet email — mais GetUserWorkspaces(user_id) renvoie [] car
+//	il n'est pas dans user_workspaces. Résultat : la console redirige sur
+//	/console/workspace/create au lieu d'ouvrir le workspace.
+//
+// Algorithme :
+//
+//	1. Trouver/créer le user humain owner_email (type=user).
+//	2. Lire l'état actuel : déjà attaché ? déjà owner ?
+//	3. Si pas attaché → AddUserToWorkspace(role=member, FullPermissions).
+//	4. Si pas owner → TransferOwnership(workspaceID, newOwner=humain, currentOwner=existingOwner).
+//	   On résout currentOwnerID en regardant la row user_workspaces.role=owner.
+//	5. Optionnel : si l'ancien owner est "root" (≠ owner_email) et qu'on l'a
+//	   demoté à member par TransferOwnership, on le retire pour finir l'owner-
+//	   natif comme dans Provision. Best-effort.
+func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOwnerInput) (*domain.AttachOwnerResponse, error) {
+	if input.TenantID == "" {
+		return nil, errors.New("tenant_id required")
+	}
+	if input.OwnerEmail == "" {
+		return nil, errors.New("owner_email required")
+	}
+
+	// Step 1 : trouver/créer le user humain.
+	owner, err := s.userService.GetUserByEmail(ctx, input.OwnerEmail)
+	if err != nil {
+		var notFound *domain.ErrUserNotFound
+		if !errors.As(err, &notFound) {
+			return nil, fmt.Errorf("get owner by email: %w", err)
+		}
+		owner = nil
+	}
+	if owner == nil {
+		owner = &domain.User{
+			ID:        uuid.New().String(),
+			Email:     input.OwnerEmail,
+			Type:      domain.UserTypeUser,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}
+		if err := s.userRepo.CreateUser(ctx, owner); err != nil {
+			return nil, fmt.Errorf("create owner user: %w", err)
+		}
+	}
+
+	// Step 2 : lire l'état actuel pour décider idempotence.
+	// workspaceRepo.GetUserWorkspace renvoie sql.ErrNoRows si pas attaché.
+	alreadyAttached := false
+	alreadyOwner := false
+	existing, lookupErr := s.workspaceRepo.GetUserWorkspace(ctx, owner.ID, input.TenantID)
+	if lookupErr == nil && existing != nil {
+		alreadyAttached = true
+		if existing.Role == "owner" {
+			alreadyOwner = true
+		}
+	} else if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+		// Toute autre erreur (DB down, etc.) → fail. ErrNoRows = pas attaché.
+		// Notifuse upstream peut wrapper ErrNoRows dans un autre format,
+		// on accepte donc également "not found" en sous-chaîne.
+		if !strings.Contains(lookupErr.Error(), "not found") {
+			return nil, fmt.Errorf("lookup current attachment: %w", lookupErr)
+		}
+	}
+
+	// Si déjà owner, rien à faire (idempotence).
+	if alreadyOwner {
+		return &domain.AttachOwnerResponse{
+			TenantID:         input.TenantID,
+			OwnerEmail:       input.OwnerEmail,
+			UserID:           owner.ID,
+			Attached:         true,
+			AlreadyAttached:  true,
+			OwnerTransferred: false,
+		}, nil
+	}
+
+	// Step 3 : bypass auth — toutes les ops upstream exigent un caller authentifié.
+	rootCtx, rootSessionID, _, err := s.ctxAsRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer s.cleanupSession(ctx, rootSessionID)
+
+	// Step 4 : si pas attaché, AddUserToWorkspace(role=member, FullPermissions).
+	if !alreadyAttached {
+		if addErr := s.workspaceService.AddUserToWorkspace(
+			rootCtx,
+			input.TenantID,
+			owner.ID,
+			"member",
+			domain.FullPermissions,
+		); addErr != nil && !strings.Contains(addErr.Error(), "already") {
+			return nil, fmt.Errorf("add user to workspace: %w", addErr)
+		}
+	}
+
+	// Step 5 : résoudre l'owner actuel pour TransferOwnership.
+	// On lit la liste des membres et on prend le premier role=owner. Si aucun
+	// (cas pathologique), on fallback sur root.
+	members, listErr := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, input.TenantID)
+	if listErr != nil {
+		return nil, fmt.Errorf("list workspace members: %w", listErr)
+	}
+	var currentOwnerID string
+	for _, m := range members {
+		if m.Role == "owner" && m.UserID != owner.ID {
+			currentOwnerID = m.UserID
+			break
+		}
+	}
+	if currentOwnerID == "" {
+		// Pas d'owner identifié (workspace orphelin) — on prend root comme
+		// pivot pour TransferOwnership. Si root n'existe pas / n'est pas
+		// member, TransferOwnership va fail et on remontera l'erreur.
+		rootUser, rootErr := s.userRepo.GetUserByEmail(ctx, s.rootEmail)
+		if rootErr != nil {
+			return nil, fmt.Errorf("resolve fallback root owner: %w", rootErr)
+		}
+		currentOwnerID = rootUser.ID
+	}
+
+	// Step 6 : TransferOwnership(workspaceID, newOwner=humain, currentOwner=existingOwner).
+	transferred := false
+	if transferErr := s.workspaceService.TransferOwnership(
+		rootCtx,
+		input.TenantID,
+		owner.ID,
+		currentOwnerID,
+	); transferErr != nil {
+		// Si l'erreur est "déjà owner" (race condition idempotence) on continue,
+		// sinon on fail.
+		if !strings.Contains(strings.ToLower(transferErr.Error()), "already") {
+			return nil, fmt.Errorf("transfer ownership to %s: %w", input.OwnerEmail, transferErr)
+		}
+	} else {
+		transferred = true
+	}
+
+	// Step 7 : si l'ancien owner était le user root, on le retire pour finir
+	// owner-natif (parité avec Provision). Best-effort, non bloquant.
+	if transferred && s.rootEmail != "" {
+		rootUser, rootErr := s.userRepo.GetUserByEmail(ctx, s.rootEmail)
+		if rootErr == nil && rootUser != nil && rootUser.ID == currentOwnerID {
+			tenantCtx, tenantSessionID, sessErr := s.ctxAsUser(ctx, owner.ID)
+			if sessErr == nil {
+				if rmErr := s.workspaceService.RemoveUserFromWorkspace(tenantCtx, input.TenantID, currentOwnerID); rmErr != nil && s.logger != nil {
+					s.logger.WithFields(map[string]interface{}{
+						"workspace_id": input.TenantID,
+						"root_id":      currentOwnerID,
+						"error":        rmErr.Error(),
+					}).Warn("veridian AttachOwner: failed to remove root after transfer (non-fatal)")
+				}
+				s.cleanupSession(ctx, tenantSessionID)
+			}
+		}
+	}
+
+	return &domain.AttachOwnerResponse{
+		TenantID:         input.TenantID,
+		OwnerEmail:       input.OwnerEmail,
+		UserID:           owner.ID,
+		Attached:         true,
+		AlreadyAttached:  alreadyAttached,
+		OwnerTransferred: transferred,
+	}, nil
+}
+
+// === Veridian patch ===
+// Health renvoie l'état réel observable du tenant (livrable 3 contrat
+// intégrations Hub). Composition d'une lecture veridian_plan + workspace +
+// membres. Critère métier `magic_link_capable` :
+//
+//	false si :
+//	  - workspace absent (404)
+//	  - tenant soft-deleted (DeletedAt != nil)
+//	  - status = suspended
+//	  - aucun owner humain (type=user, role=owner) attaché
+//	  - aucune API key valide attachée (type=api_key, role=member)
+//
+//	true sinon.
+//
+// Le Hub appelle ce endpoint en cron 1×/h via HMAC. Si magic_link_capable
+// passe à false sur un tenant prod actif → alerte → repair via AttachOwner.
+func (s *veridianService) Health(ctx context.Context, tenantID string) (*domain.TenantHealthResponse, error) {
+	if tenantID == "" {
+		return nil, errors.New("tenant_id required")
+	}
+	resp := &domain.TenantHealthResponse{
+		TenantID:    tenantID,
+		WorkspaceID: tenantID,
+		CheckedAt:   time.Now().UTC(),
+	}
+
+	// 1. Lire veridian_plan pour status + plan + deleted_at.
+	plan, err := s.planRepo.Get(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("get plan: %w", err)
+	}
+	resp.Plan = plan.Plan
+	resp.Status = plan.Status
+	if plan.DeletedAt != nil {
+		resp.Status = domain.PlanStatusDeleted
+	}
+
+	// 2. Lire les membres du workspace pour identifier owner humain + api_key.
+	// On utilise GetWorkspaceUsersWithEmail (déjà utilisé par AttachOwner).
+	members, listErr := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, tenantID)
+	if listErr != nil {
+		return nil, fmt.Errorf("list workspace members: %w", listErr)
+	}
+	resp.MembersCount = len(members)
+
+	// 3. Chercher l'owner humain et au moins une api_key.
+	for _, m := range members {
+		userType, _ := s.lookupUserType(ctx, m.UserID)
+		if m.Role == "owner" && userType == domain.UserTypeUser {
+			resp.OwnerAttached = true
+			resp.OwnerEmail = m.Email
+			resp.OwnerUserID = m.UserID
+		}
+		if userType == domain.UserTypeAPIKey {
+			resp.APIKeyValid = true
+		}
+	}
+
+	// 4. magic_link_capable = owner humain attaché + api key valide +
+	//    pas suspended ni deleted.
+	resp.MagicLinkCapable = resp.OwnerAttached && resp.APIKeyValid &&
+		resp.Status != domain.PlanStatusSuspended &&
+		resp.Status != domain.PlanStatusDeleted
+
+	return resp, nil
+}
+
+// lookupUserType renvoie le type du user (user, api_key). Wrapper sur
+// userRepo.GetUserByID — best-effort, retourne "" sur erreur (interprété
+// comme "type inconnu" donc ni owner humain ni api_key).
+func (s *veridianService) lookupUserType(ctx context.Context, userID string) (domain.UserType, error) {
+	u, err := s.userRepo.GetUserByID(ctx, userID)
+	if err != nil || u == nil {
+		return "", err
+	}
+	return u.Type, nil
+}
+
 // Compile-time check.
 var _ domain.VeridianService = (*veridianService)(nil)
 

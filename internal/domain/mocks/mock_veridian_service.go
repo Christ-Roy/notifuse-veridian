@@ -35,6 +35,21 @@ func (m *MockVeridianService) EXPECT() *MockVeridianServiceMockRecorder {
 	return m.recorder
 }
 
+// AttachOwner mocks base method.
+func (m *MockVeridianService) AttachOwner(arg0 context.Context, arg1 domain.AttachOwnerInput) (*domain.AttachOwnerResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AttachOwner", arg0, arg1)
+	ret0, _ := ret[0].(*domain.AttachOwnerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AttachOwner indicates an expected call of AttachOwner.
+func (mr *MockVeridianServiceMockRecorder) AttachOwner(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachOwner", reflect.TypeOf((*MockVeridianService)(nil).AttachOwner), arg0, arg1)
+}
+
 // GenerateMagicLink mocks base method.
 func (m *MockVeridianService) GenerateMagicLink(arg0 context.Context, arg1, arg2 string) (*domain.MagicLinkResponse, error) {
 	m.ctrl.T.Helper()
@@ -63,6 +78,21 @@ func (m *MockVeridianService) GetStatus(arg0 context.Context, arg1 string) (*dom
 func (mr *MockVeridianServiceMockRecorder) GetStatus(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStatus", reflect.TypeOf((*MockVeridianService)(nil).GetStatus), arg0, arg1)
+}
+
+// Health mocks base method.
+func (m *MockVeridianService) Health(arg0 context.Context, arg1 string) (*domain.TenantHealthResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Health", arg0, arg1)
+	ret0, _ := ret[0].(*domain.TenantHealthResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Health indicates an expected call of Health.
+func (mr *MockVeridianServiceMockRecorder) Health(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockVeridianService)(nil).Health), arg0, arg1)
 }
 
 // Provision mocks base method.

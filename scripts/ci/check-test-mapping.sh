@@ -120,6 +120,10 @@ expected_test_for() {
     internal/http/*_test.go|internal/service/*_test.go|internal/repository/*_test.go|internal/domain/*_test.go)
       return 1  # C'est un test, pas un source
       ;;
+    # Mocks auto-générés (mockgen) : pas de test colocalisé.
+    internal/domain/mocks/*.go|internal/*/mocks/*.go)
+      return 1
+      ;;
     internal/http/*.go|internal/service/*.go|internal/repository/*.go|internal/domain/*.go)
       # Convention Go : foo.go → foo_test.go au même niveau
       echo "${f%.go}_test.go"

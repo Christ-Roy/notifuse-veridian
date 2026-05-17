@@ -177,6 +177,48 @@ type MagicLinkResponse struct {
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 
+// TenantHealthResponse est la response de GET /api/tenants/{id}/health
+// (livrable 3 du contrat README intégrations Hub Veridian).
+//
+// `magic_link_capable` est l'invariant clé : false si l'app ne peut pas
+// générer un magic link self-contained pour cet owner (pas d'owner humain
+// attaché, API key révoquée, tenant soft-deleted). Le Hub appelle ce
+// endpoint en cron 1×/h pour détecter les régressions silencieuses du
+// type bug 2026-05-17.
+type TenantHealthResponse struct {
+	TenantID         string     `json:"tenant_id"`
+	WorkspaceID      string     `json:"workspace_id"`
+	Status           PlanStatus `json:"status"`
+	OwnerAttached    bool       `json:"owner_attached"`
+	OwnerEmail       string     `json:"owner_email,omitempty"`
+	OwnerUserID      string     `json:"owner_user_id,omitempty"`
+	APIKeyValid      bool       `json:"api_key_valid"`
+	MagicLinkCapable bool       `json:"magic_link_capable"`
+	MembersCount     int        `json:"members_count"`
+	Plan             string     `json:"plan,omitempty"`
+	CheckedAt        time.Time  `json:"checked_at"`
+}
+
+// AttachOwnerInput est le body de POST /api/veridian/admin/attach-owner.
+// Reservé à la reparation des tenants pre-existants (créés avant la feature
+// Hub-Veridian) dont l'owner humain n'est pas attaché au workspace.
+type AttachOwnerInput struct {
+	TenantID   string `json:"tenant_id"`
+	OwnerEmail string `json:"owner_email"`
+}
+
+// AttachOwnerResponse decrit l'état post-attach. Idempotent : `attached` est
+// toujours true en sortie si l'op a réussi ; `already_attached` indique si la
+// row user_workspaces existait déjà avant l'appel.
+type AttachOwnerResponse struct {
+	TenantID        string `json:"tenant_id"`
+	OwnerEmail      string `json:"owner_email"`
+	UserID          string `json:"user_id"`
+	Attached        bool   `json:"attached"`
+	AlreadyAttached bool   `json:"already_attached"`
+	OwnerTransferred bool  `json:"owner_transferred"` // true si TransferOwnership a effectivement promu le user à owner pendant cet appel
+}
+
 // VeridianService est l'interface des operations Hub-driven.
 type VeridianService interface {
 	Provision(ctx context.Context, input ProvisionInput) (*ProvisionResponse, error)
@@ -192,7 +234,25 @@ type VeridianService interface {
 	// postgres dediee + ligne veridian_plan + user owner). Pas de soft delete,
 	// pas de fenetre 30j de purge. Reserve aux tests + admin platform.
 	WipeTestTenants(ctx context.Context, input WipeTestTenantsInput) (*WipeTestTenantsResponse, error)
+
+	// === Veridian patch === Repair endpoint pour tenants existants.
+	// Trouve / crée le user humain owner_email, l'attache au workspace (role
+	// member), puis promote owner (avec demotion de l'ancien owner non-humain).
+	// Idempotent : appelable plusieurs fois sans effet de bord. Necessaire
+	// pour reparer les workspaces créés avant le flow Hub-driven dont l'owner
+	// humain n'a jamais été attaché.
+	AttachOwner(ctx context.Context, input AttachOwnerInput) (*AttachOwnerResponse, error)
+
+	// === Veridian patch === Health observable du tenant (livrable 3 contrat
+	// intégrations Hub). Renvoie l'état réel cote app : owner humain attaché,
+	// API key valide, capacité magic link, count membres. Le Hub poll en cron
+	// 1×/h pour détecter régressions du type bug 2026-05-17 (owner orphelin).
+	Health(ctx context.Context, tenantID string) (*TenantHealthResponse, error)
 }
+
+// EventTenantOwnerChanged event émis quand AttachOwner promote un user humain
+// à owner avec demote/remove de l'ancien owner.
+const EventTenantOwnerChanged VeridianEvent = "tenant.owner_changed"
 
 // WipeTestTenantsInput est le body de POST /api/veridian/admin/wipe-test-tenants.
 // Soit un prefix (`prefix: "e2e-"`) soit une liste explicite (`tenant_ids: [...]`).

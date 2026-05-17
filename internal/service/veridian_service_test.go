@@ -16,11 +16,12 @@ import (
 )
 
 type veridianServiceMocks struct {
-	workspace *mocks.MockWorkspaceServiceInterface
-	user      *mocks.MockUserServiceInterface
-	userRepo  *mocks.MockUserRepository
-	planRepo  *mocks.MockVeridianPlanRepository
-	emitter   *mocks.MockWebhookEmitter
+	workspace     *mocks.MockWorkspaceServiceInterface
+	workspaceRepo *mocks.MockWorkspaceRepository
+	user          *mocks.MockUserServiceInterface
+	userRepo      *mocks.MockUserRepository
+	planRepo      *mocks.MockVeridianPlanRepository
+	emitter       *mocks.MockWebhookEmitter
 }
 
 func newVeridianService(t *testing.T) (*veridianService, *veridianServiceMocks) {
@@ -29,15 +30,17 @@ func newVeridianService(t *testing.T) (*veridianService, *veridianServiceMocks) 
 	t.Cleanup(ctrl.Finish)
 
 	m := &veridianServiceMocks{
-		workspace: mocks.NewMockWorkspaceServiceInterface(ctrl),
-		user:      mocks.NewMockUserServiceInterface(ctrl),
-		userRepo:  mocks.NewMockUserRepository(ctrl),
-		planRepo:  mocks.NewMockVeridianPlanRepository(ctrl),
-		emitter:   mocks.NewMockWebhookEmitter(ctrl),
+		workspace:     mocks.NewMockWorkspaceServiceInterface(ctrl),
+		workspaceRepo: mocks.NewMockWorkspaceRepository(ctrl),
+		user:          mocks.NewMockUserServiceInterface(ctrl),
+		userRepo:      mocks.NewMockUserRepository(ctrl),
+		planRepo:      mocks.NewMockVeridianPlanRepository(ctrl),
+		emitter:       mocks.NewMockWebhookEmitter(ctrl),
 	}
 
 	svc := &veridianService{
 		workspaceService: m.workspace,
+		workspaceRepo:    m.workspaceRepo,
 		userService:      m.user,
 		userRepo:         m.userRepo,
 		planRepo:         m.planRepo,
@@ -321,4 +324,329 @@ func TestVeridianService_Suspend_PropagatesRepoError(t *testing.T) {
 
 	err := svc.Suspend(ctx, domain.SuspendInput{TenantID: "ws-1", Reason: "x"})
 	assert.ErrorContains(t, err, "not found")
+}
+
+// === Veridian patch === AttachOwner tests
+//
+// AttachOwner répare un workspace existant en attachant un user humain comme
+// owner. Les tests couvrent :
+//   1. RejectsEmpty : validation input
+//   2. AlreadyOwner : idempotence si user est déjà owner
+//   3. NotAttached_TransferFromRoot : cas nominal de réparation prod
+//   4. CreatesUserIfMissing : si owner_email pas dans users, on crée le user
+//   5. NotAttached_NoExistingOwner : workspace orphelin → fallback root
+
+func TestVeridianService_AttachOwner_RejectsEmpty(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	_, err := svc.AttachOwner(context.Background(), domain.AttachOwnerInput{TenantID: "", OwnerEmail: "x@y.z"})
+	assert.ErrorContains(t, err, "tenant_id required")
+
+	_, err = svc.AttachOwner(context.Background(), domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: ""})
+	assert.ErrorContains(t, err, "owner_email required")
+}
+
+func TestVeridianService_AttachOwner_AlreadyOwner(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	humanUser := &domain.User{ID: "human-id", Email: "owner@x.test", Type: domain.UserTypeUser}
+
+	// User humain existe déjà.
+	m.user.EXPECT().GetUserByEmail(ctx, "owner@x.test").Return(humanUser, nil).Times(1)
+
+	// État actuel : user est déjà owner du workspace → idempotent, on sort.
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "human-id", "ws-1").Return(&domain.UserWorkspace{
+		UserID:      "human-id",
+		WorkspaceID: "ws-1",
+		Role:        "owner",
+	}, nil).Times(1)
+
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "owner@x.test"})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.Attached)
+	assert.True(t, resp.AlreadyAttached)
+	assert.False(t, resp.OwnerTransferred, "no transfer when already owner")
+	assert.Equal(t, "human-id", resp.UserID)
+}
+
+func TestVeridianService_AttachOwner_NotAttached_TransferFromRoot(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	humanUser := &domain.User{ID: "human-id", Email: "alice@x.test", Type: domain.UserTypeUser}
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@x.test").Return(humanUser, nil).Times(1)
+
+	// État : human pas attaché au workspace.
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "human-id", "ws-orphan").Return(nil, sql.ErrNoRows).Times(1)
+
+	// ctxAsRoot : GetUserByEmail(root) + CreateSession + DeleteSession en defer.
+	// Et 1 lookup root pour Step 7 (remove root after transfer).
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2) // root ctx + tenant ctx pour Step 7
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	// Step 4 : AddUserToWorkspace(role=member).
+	m.workspace.EXPECT().AddUserToWorkspace(
+		gomock.Any(), "ws-orphan", "human-id", "member", gomock.Any(),
+	).Return(nil).Times(1)
+
+	// Step 5 : GetWorkspaceUsersWithEmail → root est owner actuel.
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-orphan").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-orphan", Role: "owner"}, Email: "root@veridian.site"},
+		{UserWorkspace: domain.UserWorkspace{UserID: "human-id", WorkspaceID: "ws-orphan", Role: "member"}, Email: "alice@x.test"},
+	}, nil).Times(1)
+
+	// Step 6 : TransferOwnership(workspaceID, newOwner=human, currentOwner=root).
+	m.workspace.EXPECT().TransferOwnership(
+		gomock.Any(), "ws-orphan", "human-id", "root-id",
+	).Return(nil).Times(1)
+
+	// Step 7 : RemoveUserFromWorkspace(root) depuis ctx tenant user.
+	m.workspace.EXPECT().RemoveUserFromWorkspace(
+		gomock.Any(), "ws-orphan", "root-id",
+	).Return(nil).Times(1)
+
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-orphan", OwnerEmail: "alice@x.test"})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.Attached)
+	assert.False(t, resp.AlreadyAttached, "human was not attached before this call")
+	assert.True(t, resp.OwnerTransferred)
+	assert.Equal(t, "human-id", resp.UserID)
+}
+
+func TestVeridianService_AttachOwner_CreatesUserIfMissing(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	// User humain inconnu → CreateUser.
+	m.user.EXPECT().GetUserByEmail(ctx, "newhuman@x.test").
+		Return(nil, &domain.ErrUserNotFound{Message: "not found"}).Times(1)
+	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil).Times(1)
+
+	// État : pas attaché (utilise un userID généré dynamiquement, on accepte n'importe quoi).
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, gomock.Any(), "ws-x").Return(nil, sql.ErrNoRows).Times(1)
+
+	// ctxAsRoot pour les ops.
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	m.workspace.EXPECT().AddUserToWorkspace(
+		gomock.Any(), "ws-x", gomock.Any(), "member", gomock.Any(),
+	).Return(nil).Times(1)
+
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-x").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-x", Role: "owner"}},
+	}, nil).Times(1)
+
+	m.workspace.EXPECT().TransferOwnership(
+		gomock.Any(), "ws-x", gomock.Any(), "root-id",
+	).Return(nil).Times(1)
+
+	m.workspace.EXPECT().RemoveUserFromWorkspace(
+		gomock.Any(), "ws-x", "root-id",
+	).Return(nil).Times(1)
+
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-x", OwnerEmail: "newhuman@x.test"})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.Attached)
+	assert.False(t, resp.AlreadyAttached)
+	assert.True(t, resp.OwnerTransferred)
+	assert.NotEmpty(t, resp.UserID, "user_id must be set even when user is freshly created")
+}
+
+func TestVeridianService_AttachOwner_AttachedButNotOwner_TransferOnly(t *testing.T) {
+	// Cas : human est déjà member du workspace (peut-être ajouté manuellement
+	// dans le passé) mais role=member, pas owner. AttachOwner doit skipper
+	// le AddUserToWorkspace et juste promote via TransferOwnership.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	humanUser := &domain.User{ID: "human-id", Email: "bob@x.test", Type: domain.UserTypeUser}
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	m.user.EXPECT().GetUserByEmail(ctx, "bob@x.test").Return(humanUser, nil).Times(1)
+
+	// Human est déjà member (mais pas owner).
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "human-id", "ws-1").Return(&domain.UserWorkspace{
+		UserID: "human-id", WorkspaceID: "ws-1", Role: "member",
+	}, nil).Times(1)
+
+	// ctxAsRoot.
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	// PAS de AddUserToWorkspace : human déjà attaché.
+
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-1", Role: "owner"}},
+		{UserWorkspace: domain.UserWorkspace{UserID: "human-id", WorkspaceID: "ws-1", Role: "member"}},
+	}, nil).Times(1)
+
+	m.workspace.EXPECT().TransferOwnership(
+		gomock.Any(), "ws-1", "human-id", "root-id",
+	).Return(nil).Times(1)
+
+	m.workspace.EXPECT().RemoveUserFromWorkspace(
+		gomock.Any(), "ws-1", "root-id",
+	).Return(nil).Times(1)
+
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test"})
+	require.NoError(t, err)
+	assert.True(t, resp.AlreadyAttached, "human was already a member")
+	assert.True(t, resp.OwnerTransferred)
+}
+
+// ----- Health (livrable 3) -----
+
+func TestVeridianService_Health_RejectsEmpty(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	_, err := svc.Health(context.Background(), "")
+	assert.ErrorContains(t, err, "tenant_id required")
+}
+
+func TestVeridianService_Health_TenantNotFound(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ghost").Return(nil, sql.ErrNoRows).Times(1)
+	_, err := svc.Health(ctx, "ghost")
+	assert.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+func TestVeridianService_Health_HealthyTenant(t *testing.T) {
+	// Workspace sain : owner humain + api key + status=active → magic_link_capable=true.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ws-h").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-h", Plan: "free", Status: domain.PlanStatusActive,
+	}, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-h").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "owner-id", WorkspaceID: "ws-h", Role: "owner"}, Email: "owner@x.test"},
+		{UserWorkspace: domain.UserWorkspace{UserID: "key-id", WorkspaceID: "ws-h", Role: "member"}, Email: "key@x.test"},
+	}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "owner-id").Return(&domain.User{ID: "owner-id", Type: domain.UserTypeUser}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "key-id").Return(&domain.User{ID: "key-id", Type: domain.UserTypeAPIKey}, nil).Times(1)
+
+	resp, err := svc.Health(ctx, "ws-h")
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanStatusActive, resp.Status)
+	assert.True(t, resp.OwnerAttached)
+	assert.Equal(t, "owner@x.test", resp.OwnerEmail)
+	assert.True(t, resp.APIKeyValid)
+	assert.True(t, resp.MagicLinkCapable)
+	assert.Equal(t, 2, resp.MembersCount)
+	assert.Equal(t, "free", resp.Plan)
+}
+
+func TestVeridianService_Health_NoHumanOwner_DetectsBug(t *testing.T) {
+	// Exactement le bug 2026-05-17 : workspace avec api_key + owner non-humain
+	// (le user root historique) → owner_attached=false → magic_link_capable=false.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ws-bug").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-bug", Plan: "free", Status: domain.PlanStatusActive,
+	}, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-bug").Return([]*domain.UserWorkspaceWithEmail{
+		// Owner: api_key (cas du bug) — pas un user humain.
+		{UserWorkspace: domain.UserWorkspace{UserID: "key-id", WorkspaceID: "ws-bug", Role: "owner"}, Email: "api@x.test"},
+	}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "key-id").Return(&domain.User{ID: "key-id", Type: domain.UserTypeAPIKey}, nil).Times(1)
+
+	resp, err := svc.Health(ctx, "ws-bug")
+	require.NoError(t, err)
+	assert.False(t, resp.OwnerAttached, "no human owner → bug detected")
+	assert.False(t, resp.MagicLinkCapable, "without human owner the magic link flow is broken")
+}
+
+func TestVeridianService_Health_Suspended_NotCapable(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ws-susp").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-susp", Plan: "free", Status: domain.PlanStatusSuspended,
+	}, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-susp").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "owner-id", WorkspaceID: "ws-susp", Role: "owner"}, Email: "owner@x.test"},
+		{UserWorkspace: domain.UserWorkspace{UserID: "key-id", WorkspaceID: "ws-susp", Role: "member"}, Email: "key@x.test"},
+	}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "owner-id").Return(&domain.User{ID: "owner-id", Type: domain.UserTypeUser}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "key-id").Return(&domain.User{ID: "key-id", Type: domain.UserTypeAPIKey}, nil).Times(1)
+
+	resp, err := svc.Health(ctx, "ws-susp")
+	require.NoError(t, err)
+	assert.True(t, resp.OwnerAttached)
+	assert.False(t, resp.MagicLinkCapable, "suspended tenant must not be magic-link-capable")
+	assert.Equal(t, domain.PlanStatusSuspended, resp.Status)
+}
+
+func TestVeridianService_Health_SoftDeleted(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	deletedAt := time.Now().UTC().Add(-24 * time.Hour)
+	m.planRepo.EXPECT().Get(ctx, "ws-del").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-del", Plan: "free", Status: domain.PlanStatusActive, DeletedAt: &deletedAt,
+	}, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-del").Return([]*domain.UserWorkspaceWithEmail{}, nil).Times(1)
+
+	resp, err := svc.Health(ctx, "ws-del")
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanStatusDeleted, resp.Status, "deleted_at non-nil overrides status")
+	assert.False(t, resp.MagicLinkCapable)
+}
+
+// TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists garantit
+// le comportement "additif uniquement" exigé par le README intégrations Hub :
+// si un user humain est déjà owner du workspace et qu'on attache un 2e owner
+// humain, le 1er ne doit PAS être retiré (cleanup root logic ne s'applique
+// qu'à l'ancien owner == user root). Le 2e devient owner ; le 1er reste
+// member après TransferOwnership.
+func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	newOwner := &domain.User{ID: "bob-id", Email: "bob@x.test", Type: domain.UserTypeUser}
+	existingHumanOwner := &domain.User{ID: "alice-id", Email: "alice@x.test", Type: domain.UserTypeUser}
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	m.user.EXPECT().GetUserByEmail(ctx, "bob@x.test").Return(newOwner, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "bob-id", "ws-multi").Return(nil, sql.ErrNoRows).Times(1)
+
+	// ctxAsRoot (Step 4) — 1 lookup root only. Pas de tenant session attendue
+	// car l'ancien owner == alice (human, pas root) donc le cleanup root est skip.
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+	m.workspace.EXPECT().AddUserToWorkspace(
+		gomock.Any(), "ws-multi", "bob-id", "member", gomock.Any(),
+	).Return(nil).Times(1)
+
+	// alice est l'owner actuel (pas root). On transfere bob → owner, alice → member.
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-multi").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "alice-id", WorkspaceID: "ws-multi", Role: "owner"}, Email: "alice@x.test"},
+	}, nil).Times(1)
+
+	m.workspace.EXPECT().TransferOwnership(
+		gomock.Any(), "ws-multi", "bob-id", "alice-id",
+	).Return(nil).Times(1)
+
+	// ⚠️ CRITICAL : pas de RemoveUserFromWorkspace appelé sur alice (additive only).
+	// Si gomock voit un appel non-attendu il fait fail le test (mode strict).
+
+	// Le cleanup root déclenché par Step 7 vérifie GetUserByEmail(root) une 2e fois
+	// (sans tenant session). On l'utilise ci-dessus dans Times(2).
+	_ = existingHumanOwner
+
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-multi", OwnerEmail: "bob@x.test"})
+	require.NoError(t, err)
+	assert.False(t, resp.AlreadyAttached)
+	assert.True(t, resp.OwnerTransferred)
+	assert.Equal(t, "bob-id", resp.UserID)
 }

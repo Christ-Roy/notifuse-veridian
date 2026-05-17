@@ -695,3 +695,95 @@ func TestVeridianHandleMode_NoAuthRequired(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code, "endpoint public, no auth required")
 }
+
+// === handleAttachOwner ===
+// Cf. todo/2026-05-17-provision-owner-attach.md — endpoint réparateur P0.
+
+func TestVeridianHandleAttachOwner_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{
+		TenantID:   "robertbrunon",
+		OwnerEmail: "robert.brunon@veridian.site",
+	}).Return(&domain.AttachOwnerResponse{
+		TenantID:         "robertbrunon",
+		OwnerEmail:       "robert.brunon@veridian.site",
+		UserID:           "0cb49456-12cc-43f2-9a4e-423d16fcfb44",
+		Attached:         true,
+		AlreadyAttached:  false,
+		OwnerTransferred: true,
+	}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner",
+		`{"tenant_id":"robertbrunon","owner_email":"robert.brunon@veridian.site"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp domain.AttachOwnerResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.True(t, resp.Attached)
+	assert.True(t, resp.OwnerTransferred)
+	assert.Equal(t, "0cb49456-12cc-43f2-9a4e-423d16fcfb44", resp.UserID)
+}
+
+func TestVeridianHandleAttachOwner_MissingFields(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	// tenant_id manquant
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner",
+		`{"owner_email":"x@y.z"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "tenant_id and owner_email are required")
+
+	// owner_email manquant
+	rec = postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner",
+		`{"tenant_id":"ws-1"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestVeridianHandleAttachOwner_InvalidJSON(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `not-json`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestVeridianHandleAttachOwner_ServiceError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().AttachOwner(gomock.Any(), gomock.Any()).Return(nil,
+		errors.New("transfer ownership to alice@x: workspace not found"))
+	h := newHandlerWithService(svc)
+
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner",
+		`{"tenant_id":"ghost","owner_email":"alice@x"}`)
+	// "not found" dans message → 404 via isNotFoundErr
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestVeridianHandleAttachOwner_RegisteredInRoutes(t *testing.T) {
+	// Garantit que la route est bien câblée dans le mux (Constitution §1 :
+	// chaque route déclarée doit être exercée par un test).
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/veridian/admin/attach-owner", nil)
+	matched, pattern := mux.Handler(req)
+	require.NotNil(t, matched)
+	assert.Contains(t, pattern, "/api/veridian/admin/attach-owner")
+}

@@ -79,6 +79,15 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// peut etre appele par le Hub pour propager rapidement un changement de
 	// plan a Notifuse sans attendre l'expiration TTL.
 	mux.Handle("POST /api/veridian/admin/cache/invalidate", hmac(http.HandlerFunc(h.handleInvalidateCache)))
+	// === Veridian patch === Repair endpoint pour les tenants existants dont
+	// l'owner humain n'est pas attaché au workspace (workspaces créés avant
+	// la feature Hub-Veridian). Idempotent : safe à appeler en boucle pour
+	// réparer en batch. Voir todo/2026-05-17-provision-owner-attach.md.
+	mux.Handle("POST /api/veridian/admin/attach-owner", hmac(http.HandlerFunc(h.handleAttachOwner)))
+	// === Veridian patch === Health observable du tenant (livrable 3 contrat
+	// intégrations Hub). Le Hub poll en cron 1×/h pour détecter régression
+	// silencieuse du flow magic link Hub → app (bug 2026-05-17).
+	mux.Handle("GET /api/tenants/{id}/health", hmac(http.HandlerFunc(h.handleHealth)))
 }
 
 func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request) {
@@ -360,6 +369,73 @@ func (h *VeridianHandler) handleInvalidateCache(w http.ResponseWriter, r *http.R
 	})
 }
 
+
+// handleAttachOwner répare un workspace existant en y attachant un user humain
+// comme owner (cf. todo/2026-05-17-provision-owner-attach.md). Idempotent.
+//
+// Body :
+//   {"tenant_id": "robertbrunon", "owner_email": "robert.brunon@veridian.site"}
+//
+// Réponse 200 :
+//   {"tenant_id":"robertbrunon","owner_email":"robert.brunon@veridian.site",
+//    "user_id":"0cb49456-...","attached":true,"already_attached":false,
+//    "owner_transferred":true}
+func (h *VeridianHandler) handleAttachOwner(w http.ResponseWriter, r *http.Request) {
+	var input domain.AttachOwnerInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if input.TenantID == "" || input.OwnerEmail == "" {
+		WriteJSONError(w, "tenant_id and owner_email are required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.service.AttachOwner(r.Context(), input)
+	if err != nil {
+		h.logError("attach_owner", err, map[string]interface{}{
+			"tenant_id":   input.TenantID,
+			"owner_email": input.OwnerEmail,
+		})
+		if isNotFoundErr(err) {
+			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			return
+		}
+		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleHealth renvoie l'état réel observable du tenant (livrable 3 du
+// contrat intégrations Hub). Auth HMAC. Renvoie 404 si tenant inexistant.
+//
+// Réponse 200 :
+//
+//	{"tenant_id":"...","workspace_id":"...","status":"active","owner_attached":true,
+//	 "owner_email":"...","owner_user_id":"...","api_key_valid":true,
+//	 "magic_link_capable":true,"members_count":2,"plan":"free","checked_at":"..."}
+func (h *VeridianHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("id")
+	if tenantID == "" {
+		WriteJSONError(w, "tenant id is required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.service.Health(r.Context(), tenantID)
+	if err != nil {
+		if isNotFoundErr(err) {
+			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			return
+		}
+		h.logError("health", err, map[string]interface{}{"tenant_id": tenantID})
+		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
 
 // handleMode renvoie le mode de deploiement Notifuse (managed vs self-hosted).
 // Endpoint public (pas de HMAC) car consomme par la console UI pour decider si
