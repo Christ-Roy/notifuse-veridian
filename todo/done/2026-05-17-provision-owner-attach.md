@@ -235,3 +235,62 @@ Couverte par le check Nuclear du script CI (`TestVeridianHandleAttachOwner_Regis
 ### Branche / SHA
 
 À pusher depuis la branche `veridian` du repo notifuse-veridian. SHA à confirmer après commit/push (sera dans le run CI suivant).
+
+---
+
+## Réponse — 2026-05-18 (suite contrat README intégrations Hub)
+
+Le scope a été étendu pour couvrir **tout le contrat v1** demandé par le README `veridian-hub/todo/integrations/README.md` (et pas seulement les livrables 1+2+3 du ticket initial). Status final :
+
+### Livrables Notifuse → Hub : 🟢 Conforme contrat v1
+
+| # | Endpoint | Statut | Implémentation |
+|---|---|---|---|
+| 1 | `POST /api/tenants/provision` | ✅ Fix vérifié | `internal/service/veridian_service.go:195` — Provision attache l'owner humain (step 4 `AddUserToWorkspace` + step 6 `transferOwnershipToTenant`). Tests `TestVeridianService_Provision_NewTenant` + `_Idempotent` verts. |
+| 2 | `POST /api/veridian/admin/attach-owner` | ✅ Done | Handler `handleAttachOwner` + service `AttachOwner` idempotent. 6 tests unitaires verts (`_RejectsEmpty`, `_AlreadyOwner`, `_NotAttached_TransferFromRoot`, `_CreatesUserIfMissing`, `_AttachedButNotOwner_TransferOnly`, `_AdditiveOnlyWhenHumanOwnerExists`). |
+| 3 | `POST /api/tenants/suspend` | ✅ Existant | Émet `tenant.suspended`. Test `TestVeridianService_Suspend_EmitsEvent`. |
+| 4 | `POST /api/tenants/resume` | ✅ Existant | Émet `tenant.resumed`. Test `TestVeridianService_Resume_EmitsEvent`. |
+| 5 | `GET /api/tenants/{id}/health` | ✅ Done | Handler `handleHealth` + service `Health` (composition `veridian_plan` + `GetWorkspaceUsersWithEmail` + check `type=user`). `magic_link_capable=false` détecte le bug 2026-05-17. 5 tests handler + 6 tests service verts. |
+| 6 | `POST /api/workspaces.generateMagicLink` | ✅ Existant | Cf `veridian_magic_handler.go`. |
+| 7 | `DELETE /api/tenants/{id}` | ✅ Existant | `handleDelete` (soft delete + cron purge 30j). |
+
+### Webhooks app → Hub
+
+- `tenant.provisioned`, `tenant.suspended`, `tenant.resumed`, `tenant.deleted`, `tenant.plan_changed`, `tenant.quota_exceeded` : déjà émis par les ops respectives (`Provision`, `Suspend`, `Resume`, `SoftDelete`, `UpdatePlan`, paywall).
+- **🆕 `tenant.owner_changed`** : ajouté côté `AttachOwner` quand `transferred=true`. Payload `{new_owner_email, new_owner_user_id, old_owner_email, old_owner_user_id}`.
+- **🆕 Alias contrat v1** : `VeridianEventPayload.MarshalJSON` injecte les champs `event` (= `event_type`) et `idempotency_key` (= `event_id`) demandés par le README Hub, sans casser les consommateurs basés sur `event_type`/`event_id`. Test `TestVeridianEventPayload_MarshalJSON_AliasesEvent` valide la présence des 4 champs.
+
+### Test e2e contractuel (scénario 1-9 du README)
+
+`tests/e2e-veridian/specs/hub-contract.spec.ts` — Playwright/TS. Couvre :
+
+1. `provision` → 200 + `created=true` + `api_key` non-vide
+2. `generateMagicLink` (Bearer) → `magic_link` + `auto_login_url`
+3. **Décodage JWT `auto_login_url` → `claims.workspaces` contient le tenant** (c'est CE point qui détecte le bug 2026-05-17)
+4. `health` → `magic_link_capable=true`, `owner_attached=true`, `owner_email=alice`
+5. `suspend` → `health` → `status=suspended`, `magic_link_capable=false`
+6. `resume` → `health` → `status=active`
+7. `attach-owner` bob → `already_attached=false`
+8. `attach-owner` bob encore → `already_attached=true`
+9. `provision` encore → `created=false` (idempotence)
+
+Plus 2 tests dégénérés : `health` 404 sur tenant inexistant, `attach-owner` sans HMAC → 401/403.
+
+Le test est dans le dossier `specs/` ramassé par défaut par `npx playwright test` (workflow `veridian-ci.yml` lignes 583 + 644). Pas de modif workflow nécessaire.
+
+### Suivi à faire côté agent Hub
+
+1. **Client Notifuse côté Hub** (`veridian-hub/lib/notifuse/client.ts`) : ajouter méthodes `health(tenantId)` (GET HMAC) et `attachOwner(tenantId, ownerEmail)` (POST HMAC) — déjà existant probablement pour attach.
+2. **Cron health 1×/h** : tâche scheduled qui itère `hub_app.tenants where app='notifuse' AND status='active'`, appelle `health`, stocke résultat dans `hub_app.tenant_health_check`, alerte Slack si `magic_link_capable=false` sur tenant prod.
+3. **Webhook receiver `tenant.owner_changed`** : ajouter case côté Hub `/api/webhooks/notifuse` pour propager les changements d'owner détectés en post-mortem (logs audit).
+4. **Repair 11 tenants prod** : exécuter le script `scripts/admin/repair-notifuse-owners.mjs` (à écrire côté Hub) qui boucle sur les 11 tenants identifiés en SQL et appelle `attach-owner` pour chacun. Ensuite, `health` sur chacun → assert `owner_attached=true`.
+
+### Branche / SHA finaux
+
+Tout est désormais dans la branche `veridian` du repo `notifuse-veridian`. Commits référents :
+
+- `5e624db7` — AttachOwner endpoint + tests unitaires (agent parallèle CI)
+- `c9d9d7b5` — intégrations agent Hub (Health endpoint + event `owner_changed` + alias contrat + e2e spec, mergé dans commit CI Trivy fix)
+
+**Status final : 🟢 Notifuse passe à `Conforme v1` dans la table roadmap `veridian-hub/todo/integrations/README.md`.**
+
