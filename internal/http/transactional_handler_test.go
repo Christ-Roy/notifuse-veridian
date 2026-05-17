@@ -1537,7 +1537,7 @@ func TestTransactionalNotificationHandler_HandleTestTemplate(t *testing.T) {
 				}
 			}
 
-			req := httptest.NewRequest(tc.method, "/api/email.testTemplate", bytes.NewReader(reqBody))
+			req := httptest.NewRequest(tc.method, "/api/transactional.testTemplate", bytes.NewReader(reqBody))
 			req.Header.Set("Content-Type", "application/json")
 
 			// Create a response recorder

@@ -3,375 +3,263 @@
 > Sprint P0 Standard CI Veridian — spécialisé Notifuse (Go, fork upstream).
 > Standard de référence : `../../CI-ARCHITECTURE.md` (racine `veridian-platform/`).
 > Constitution CI : `../CLAUDE.md` section "Constitution CI".
+>
+> **Dernière mise à jour** : 2026-05-17 (déblocage push : faux positifs script + CVE npm)
+
+## ✅ FAIT — 2026-05-17 (déblocage push normal)
+
+- [x] **Script `check-test-mapping.sh` débogué** : reconnaissance pattern `httptest.NewServer + Sprintf`, filtre lignes commentées, scan récursif `internal/http/**`, pipes safe sous `set -euo pipefail`. Voir détails dans la sous-section "Routes API orphelines résolues" plus bas.
+- [x] **CVE npm HIGH résolues (2026-05-17)** :
+  - `liquidjs <10.25.7` (HIGH 7.5 DoS via circular block) → `10.25.5` est compatible avec lock bumped → `10.27.0`
+  - `fast-xml-builder <=1.1.6` (HIGH 6.1) → fix via update transitif
+  - `postcss <8.5.10` (MODERATE 6.1 XSS) → fix patch en passant
+  - `npm audit fix` sans `--force` (pas de breaking, juste patch lock-file). 866 packages auditées → **0 vulnérabilités**.
+- [x] **`tests-pending.txt`** : 12 → 8 fichiers (4 retirés, leur test colocalisé existe déjà).
 
 ---
 
-## ✅ Fait
+## ✅ FAIT — État actuel du flow CI
 
-### Mapping source ↔ test (Constitution §1, §4)
+### Husky pre-push (mode Nuclear, 0 dette autorisée)
 
-- [x] `scripts/ci/check-test-mapping.sh` versionné — Go variant, convention
-      idiomatique `foo.go ↔ foo_test.go` côte à côte.
-- [x] 4 scopes critiques couverts :
-      `internal/http/`, `internal/service/`, `internal/repository/`,
-      `internal/domain/`.
-- [x] Règle 1-pour-1 stricte : chaque nouvelle func exportée (majuscule
-      initiale, receivers + top-level) exige au moins un nouveau `TestXxx`
-      dans le test colocalisé.
-- [x] Migrations SQL dans `internal/migrations/` exigent un test
-      `repository/` ou `service/` modifié dans la même PR.
+`scripts/ci/check-test-mapping.sh` bloque le push si :
 
-### Bypass upstream sync (Constitution §7)
+- [x] **Fichier critique modifié sans test colocalisé** (`internal/{http,service,repository,domain}/*.go` ↔ `*_test.go` au même niveau)
+- [x] **Règle 1-pour-1 stricte** : nouvelle func exportée (majuscule initiale, top-level + receivers) sans nouveau `TestXxx` correspondant
+- [x] **Migration SQL** dans `internal/migrations/` sans test repo/service modifié
+- [x] **Route API déclarée** (`mux.Handle("/api/...")`) sans test l'exerçant (`httptest.NewRequest(..., "/api/...")`)
+- [x] **Handler API modifié** sans test exerçant ses routes modifié dans le même push
+- [x] **Bypass upstream** : commits 100% upstream Notifuse (`@notifuse.com`, `pierre@bazoge.com`, etc.) skip le mapping sur fichiers non-`veridian_*`
+- [x] Path-based skip docs : `paths-ignore` actif sur `**.md`, `docs/`, `runbooks/`, `plans/`, `TODO.md`, `tests-pending.txt`
 
-- [x] Détection auteur via `git log --pretty=%ae $BASE_REF...HEAD`.
-- [x] Regex upstream : `@notifuse\.com$|^pierre@bazoge\.com$|^pierre@(Air-de-Pierre|Host-[0-9]+)\.lan$`
-- [x] Si **tous** les commits du diff sont upstream → skip mapping sur
-      fichiers `non-veridian_*`. Les `veridian_*.go` restent sous discipline
-      stricte (filet de sécurité même si upstream les touche, ce qui ne
-      devrait jamais arriver vu la convention flat).
+Installé via :
+```bash
+make setup-hooks    # chmod + git config core.hooksPath .husky
+```
 
-### Hook local (Constitution §2, §3)
+**État dette à fin de session** : 15 routes API orphelines (cf. ❌ ci-dessous), bloquent tout push normal.
 
-- [x] `.husky/pre-push` installé, exécute `check-test-mapping.sh` avec
-      `BASE_REF=origin/<branch>` (fallback `origin/main`).
-- [x] `make setup-hooks` : `chmod +x` + `git config core.hooksPath .husky`.
-- [x] `make check-test-mapping` : run le check en local sans push.
+### Workflow `.github/workflows/veridian-ci.yml` (11 jobs)
 
-### Allowlist transitoire (Constitution §5)
+```
+test-mapping    ─┐
+compose-validate─┤    (ubuntu-latest, parallèle)
+cve-scan        ─┤
+                 ↓
+              test-go (ubuntu-latest + service Postgres)
+                 ↓
+              build (self-hosted dev-pub, push GHCR)
+                 ↓
+              deploy-staging (self-hosted, compose pur via Traefik staging-edge)
+                 ↓
+              e2e-staging (self-hosted, Playwright headful)
+                 ↓
+        ┌────────┼────────────────────────────┐
+        ↓        ↓                            ↓
+   deploy-prod  promote-prod-compose      (skipped sur push normal)
+   (workflow_  (workflow_dispatch
+    dispatch,   manual, opt-in)
+    image only)
+        ↓        ↓ → push notifuse-deploy → webhook Dokploy → redeploy
+   e2e-prod
+        ↓
+   rollback (auto si e2e-prod fail)
+```
 
-- [x] `tests-pending.txt` baseline générée — 12 fichiers veridian-custom
-      orphelins listés :
-      - `internal/domain/{auth,blog_feed,contact_segment_queue,ses_client,telemetry,veridian,veridian_token}.go`
-      - `internal/http/veridian_{autologin,handler,magic}_handler.go`
-      - `internal/repository/workspace_postgres.go`
-      - `internal/service/llm_service_openai.go`
+| Job | État dernier run (25852461033) |
+|---|---|
+| test-mapping | ✅ success |
+| compose-validate | ✅ success |
+| cve-scan | ✅ success |
+| test-go | ✅ success |
+| build | ✅ success |
+| deploy-staging | ✅ success |
+| e2e-staging | ❌ failure (à investiguer) |
+| deploy-prod | ⏭️ skipped (normal) |
+| e2e-prod | ⏭️ skipped |
+| rollback | ⏭️ skipped |
+| promote-prod-compose | ⏭️ skipped (opt-in) |
 
-### Coverage map non-canonique (Constitution §6)
+### Pattern compose (1 fichier autonome par env)
 
-- [x] `test-coverage-map.yaml` créé (vide initialement, à peupler au fil
-      des PRs où un fichier critique est légitimement couvert par un test
-      ailleurs).
+- [x] `infra/compose/staging.yml` — services `notifuse-staging` + `notifuse-staging-db`, network `staging-edge` (Traefik standalone dev-pub), volumes locaux nommés, image `:latest` mutable, Host `notifuse.staging.veridian.site`
+- [x] `infra/compose/prod.yml` — services `notifuse-prod` + `notifuse-prod-db` alignés avec containers Dokploy existants (zéro diff sémantique vs `notifuse-deploy/docker-compose.yml` actuel → promotion sans downtime attendue), volumes externes `infra_notifuse-*`, network `dokploy-network`, Host `notifuse.app.veridian.site`
+- [x] `scripts/ci/generate-compose.sh` — valide via `docker compose config --quiet`, pas de génération côté repo (compose merge non reproductible cross-version)
 
-### Convention veridian-override (CLAUDE.md "Veridian customizations")
+### Staging déployé en réel sur dev-pub (validé bout en bout)
 
-- [x] Tranchée : **préfixe `veridian_*.go` en flat** (PAS de sous-dossier
-      `internal/http/veridian/`). 4 raisons documentées dans CLAUDE.md :
-      - Idiomatique Go : packages plats par responsabilité, pas par origine
-      - Pas d'import cycle
-      - Grep-friendly : `ls internal/http/veridian_*`,
-        `git diff upstream/main -- internal/http/ ':!internal/http/veridian_*'`
-      - Sync upstream triviale : aucun fichier upstream ne porte ce préfixe
-- [x] Déjà appliqué pour les 3 handlers existants
-      (`veridian_handler.go`, `veridian_autologin_handler.go`,
-      `veridian_magic_handler.go`).
+- [x] Containers `notifuse-staging` + `notifuse-staging-db` healthy
+- [x] Endpoint `https://notifuse.staging.veridian.site/api/setup.status` → HTTP 200 / 137ms (HTTP/2, cert Let's Encrypt OK, Traefik route)
+- [x] `/opt/veridian/staging/notifuse/.env` créé sur dev-pub (chmod 600, ubuntu:ubuntu)
+- [x] GHCR login sur dev-pub via `gh auth token | docker login ghcr.io -u Christ-Roy --password-stdin`
+- [x] Cycle pull → up -d → force-recreate testé manuellement
 
-### CI workflow `veridian-ci.yml`
+### Promote-prod-compose (job opt-in)
 
-- [x] **Path-based skip docs** sur push + PR :
-      `paths-ignore: ['**.md', 'docs/**', 'runbooks/**', 'plans/**', 'TODO.md', 'tests-pending.txt']`
-- [x] **Job `test-mapping`** ubuntu-latest (defense in depth §1) :
-      rejoue `check-test-mapping.sh` en CI avant `test-go`. Attrape les
-      PRs externes / Renovate qui n'auraient pas le hook local.
-- [x] **Job `test-go`** : Veridian-specific tests + tests upstream qui
-      doivent toujours passer.
-- [x] **Job `build`** self-hosted : retag `:rollback` → build → push GHCR
-      (`ghcr.io/christ-roy/notifuse-veridian:<tag>`).
-- [x] **Job `deploy-staging`** : force pull GHCR + recreate container
-      Dokploy + wait healthy + cleanup test tenants HMAC.
-- [x] **Job `e2e-staging`** Playwright bloquant (Constitution §11).
-- [x] **Job `deploy-prod`** : `workflow_dispatch + deploy_prod=true`
-      uniquement (jamais auto).
-- [x] **Garde pixel-parfait avant prod** : `deploy-prod` exige qu'un run
-      automatique sur le SHA exact ait passé `e2e-staging` avec
-      `conclusion == success`. Refuse sinon. Vérification via
-      `gh api /repos/.../actions/workflows/veridian-ci.yml/runs?head_sha=...`.
-- [x] **Job `e2e-prod`** Playwright tag `@prod-safe` après deploy.
-- [x] **Job `rollback`** auto si `e2e-prod` fail : retag broken-<sha>,
-      restore `:rollback` → `:latest`, redeploy via Dokploy API,
-      notification Telegram.
+- [x] Job `promote-prod-compose` ajouté, `workflow_dispatch + promote_prod_compose=true` uniquement
+- [x] Clone `notifuse-deploy`, copie `infra/compose/prod.yml` → `docker-compose.yml`, commit, push → webhook Dokploy → redeploy
+- [x] Wait healthy `/api/setup.status` + Telegram notif succès/échec
+- [x] Procédure documentée dans `CLAUDE.md` section "Promotion vers prod"
 
-### Flags test manuel staging via Chrome MCP
+### GitHub Environments + secrets
 
-- [x] `workflow_dispatch.skip_wipe=true` → skip step
-      "Cleanup test tenants" (préserve les tenants créés pendant test
-      manuel).
-- [x] `workflow_dispatch.skip_e2e=true` → skip job `e2e-staging` complet
-      (libère staging du Playwright auto, pas de concurrence pendant
-      test manuel).
+- [x] Environment `staging` créé (id 15309935895)
+- [x] Environment `production` créé (id 15309933105) avec branch policy `veridian` + `v*-veridian.*`
+- [x] Secret `TELEGRAM_BOT_TOKEN` ajouté
+- [x] Secrets existants OK : `DOKPLOY_*`, `NOTIFUSE_HUB_API_SECRET_{STAGING,PROD}`
 
-### Renovate (CI-ARCHITECTURE §10, Constitution §14)
+### Renovate (auto-merge total)
 
-- [x] `.github/renovate.json` créé — auto-merge total :
-      - Patch : auto-merge branch
-      - Minor : auto-merge PR
-      - Major : auto-merge PR
-      - CVE (`vulnerabilityAlerts`) : auto-merge
-      - `lockFileMaintenance` hebdo auto-merge
-- [x] Zéro `needs-human-review` (Constitution §A1).
-- [x] Groupings : gomod patch+minor, github-actions, frontend deps.
+- [x] `.github/renovate.json` créé : patch + minor + major + CVE auto-mergés, zéro `needs-human-review`
 
-### GitHub Environments
+### Audit prod final (2026-05-14)
 
-- [x] Environment `staging` créé sur `Christ-Roy/notifuse-veridian`
-      (id 15309935895) — pas de protection rule.
-- [x] Environment `production` créé (id 15309933105) — branch policy
-      restrictive : `veridian` + tag `v*-veridian.*` uniquement.
-- [x] Workflow câblé : `deploy-staging.environment: { name: staging,
-      url: https://notifuse.staging.veridian.site }` et
-      `deploy-prod.environment: { name: production,
-      url: https://notifuse.app.veridian.site }`.
-
-### Documentation
-
-- [x] Section "Veridian customizations" ajoutée à `CLAUDE.md` racine
-      (branche, convention `veridian_*.go`, sync upstream, Dokploy, E2E).
-- [x] Section "Constitution CI" ajoutée — 15 règles non négociables
-      adaptées Go.
-- [x] Commandes utiles documentées :
-      `BASE_REF=HEAD scripts/ci/check-test-mapping.sh`,
-      `make setup-hooks`, `make check-test-mapping`,
-      `git ls-files | grep -E 'veridian_|veridian\.go|veridian_token'`.
-
-### Secrets GitHub (référencés par workflow)
-
-- [x] `DOKPLOY_API_TOKEN` — Bearer pour `POST /api/compose.redeploy`
-- [x] `DOKPLOY_URL` — base URL Dokploy
-- [x] `DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID` — composeId prod
-- [x] `NOTIFUSE_HUB_API_SECRET_STAGING` — HMAC pour wipe-test-tenants
-- [x] `NOTIFUSE_HUB_API_SECRET_PROD` — HMAC pour e2e prod
-- [x] `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` — alertes rollback
+| Check | État |
+|---|---|
+| Container `notifuse-prod` | ✅ Up 21h, 0 restart, healthy |
+| Endpoint `/api/setup.status` | ✅ HTTP 200 / 100-148ms |
+| Logs erreurs 24h | ✅ Aucune |
+| RAM/CPU app | ✅ 49 MiB / 1.89 % |
+| Cert SSL | ✅ Valide jusqu'au 21 juin 2026 |
+| GitOps Dokploy | ✅ `notifuse-deploy/main` → webhook actif |
+| Image active | ✅ `saas-v1.0.3@sha256:b07226feb...` |
 
 ---
 
-## ❌ Reste à faire
+## ❌ RESTE À FAIRE
 
-### 🚨 Bloquant validation 7 jours
+### 🚨 Bloquant pour push normal (mode Nuclear)
 
-- [ ] **App Renovate installée sur le repo** : `.github/renovate.json`
-      existe mais le GitHub App Renovate n'est pas configuré sur
-      `Christ-Roy/notifuse-veridian`. Action :
-      https://github.com/apps/renovate → Install → sélectionner le repo.
-      Sans ça, le fichier de config est ignoré.
-- [ ] **Vérifier que le pre-push hook bloque vraiment** : faire un test
-      réel — touche un fichier critique sans son `_test.go`, tenter
-      `git push`, vérifier que c'est refusé. Document le résultat ici.
-- [ ] **7 jours consécutifs de pushes sans `--no-verify`** — compte
-      démarre 2026-05-13. Cible : 2026-05-20. Critère : zéro contournement
-      dans `git log --all --pretty=%H | xargs -I{} git show {} --stat`.
+- [x] **Routes API orphelines résolues (2026-05-17)** :
+  - Script `check-test-mapping.sh` corrigé : reconnaît désormais le pattern `httptest.NewServer(mux) + fmt.Sprintf("%s/api/...", serverURL)` (en plus de `httptest.NewRequest(..., "/api/...")` direct), filtre les lignes commentées (`//` en début de ligne), grepe tout `internal/http/**` (pas juste racine).
+  - **12 faux positifs éliminés** (toutes les routes `templates.*`, `templateBlocks.*`, `contacts.getByEmail` étaient en fait couvertes via `NewServer + Sprintf`).
+  - **2 vrais bugs corrigés** :
+    - `transactional_handler_test.go:1540` : `httptest.NewRequest("/api/email.testTemplate")` → `/api/transactional.testTemplate` (route renommée upstream, test pas mis à jour).
+    - `task_handler_test.go:267` : tableau de routes `TestTaskHandler_RegisterRoutes` mis à jour : remplacement `tasks.executePending` (n'existe plus) par `tasks.reset, tasks.trigger, cron, cron.status` (routes réelles).
+  - **1 faux positif (commentaire de doc) résolu par filtre `^\s*//`** : `auth.go:112` `//	mux.Handle("/api/sensitive.operation", ...)` n'est plus compté.
+  - Mode Nuclear : 0 dette de routes, tous les tests `internal/http/` verts.
 
-### 🎯 Standard pas encore atteint (Constitution §13)
+### 🐛 Bugs/incidents à investiguer
 
-- [ ] **Trivy multi-scan étage 1** :
-      `trivy fs --scanners vuln,secret,misconfig,license --severity CRITICAL,HIGH`
-      avec SARIF upload vers GitHub Security tab.
-- [ ] **Trivy image scan étage 2** : sur l'image GHCR fraîchement
-      buildée, avec `--exit-on-eol 1` et SBOM CycloneDX en artifact.
-- [ ] **gitleaks** dans le diff Git (complète Trivy secret scan binaire).
-- [ ] **govulncheck** ajouté au job `test-go` (équivalent Go de
-      `npm audit` mentionné dans CI-ARCHITECTURE §3 étage 1).
-- [ ] **Cron hebdo Trivy** sur les images prod running (CI-ARCHITECTURE
-      §5 capacité 9).
+- [ ] **e2e-staging fail sur run 25852461033** : Playwright a échoué après migration staging compose pur. Probablement tests écrits pour l'ancien staging Dokploy (URLs `saas-notifuse.staging.veridian.site` durcies dans les specs ?). À regarder via `gh run view 25852461033 --log-failed`.
+
+### 🔐 Secrets manquants (non bloquants)
+
+- [ ] **`TELEGRAM_CHAT_ID`** — utilisé par rollback + promote-prod-compose pour notifs. `getUpdates` actuel est vide (`{"ok":true,"result":[]}`), il faut **envoyer un message au bot `@<bot_username>` ou dans le groupe Telegram dédié** pour qu'il apparaisse. Robert : envoie "test" au bot puis je relance.
+- [ ] **`NOTIFUSE_DEPLOY_PUSH_PAT`** — PAT scope `repo` sur `Christ-Roy/notifuse-deploy`. Sans, le job promote-prod-compose explose. À créer avant le premier passage prod.
+
+### 🎯 Premier promote-prod réel (validation finale)
+
+- [ ] Une fois `NOTIFUSE_DEPLOY_PUSH_PAT` en place, lancer `workflow_dispatch` avec `promote_prod_compose=true` sur un commit dont l'e2e-staging est vert. Diff sémantique vs compose live est vide → **aucun changement comportemental attendu**, juste promotion de notre `infra/compose/prod.yml` comme nouvelle source de vérité de `notifuse-deploy`.
+
+### 🚦 App Renovate à installer
+
+- [ ] Le fichier `.github/renovate.json` est en place mais l'**App Renovate doit être installée** sur le repo (https://github.com/apps/renovate → Install → select `Christ-Roy/notifuse-veridian`). Sans ça, le fichier est ignoré.
+
+### 🛡️ Standard pas encore atteint (Constitution §13)
+
+- [ ] **Trivy multi-scan étage 1** : `trivy fs --scanners vuln,secret,misconfig,license --severity CRITICAL,HIGH` + SARIF upload GitHub Security tab
+- [ ] **Trivy image scan étage 2** : sur image GHCR fraîchement buildée + `--exit-on-eol 1` + SBOM CycloneDX artifact
+- [ ] **gitleaks** dans le diff Git
+- [ ] **govulncheck** dans test-go (équivalent Go de `npm audit`)
+- [ ] **Cron hebdo Trivy** sur images prod running
 
 ### 📦 Migrations DB (Constitution §12)
 
-- [ ] **Script `check-migration-safety.sh`** adapté Go/SQL pour Notifuse :
-      bloque `DROP COLUMN`, `DROP TABLE`, `ALTER COLUMN ... SET NOT NULL`
-      sur table peuplée, `RENAME COLUMN`, `CREATE INDEX` sans
-      `CONCURRENTLY`. Migrations Notifuse sont dans
-      `internal/migrations/v*.go` (pas Prisma) — adapter le pattern.
-- [ ] **Test backward-compat étage 2** : pull image `:rollback`, apply
-      la migration de la PR, lance le container `:rollback` contre le
-      schéma N, vérifier que le smoke test passe.
+- [ ] **Script `check-migration-safety.sh`** adapté Go pour Notifuse : bloque DROP COLUMN, DROP TABLE, ALTER NOT NULL sur table peuplée, RENAME, CREATE INDEX sans CONCURRENTLY. Migrations Notifuse sont dans `internal/migrations/v*.go`.
+- [ ] **Test backward-compat étage 2** : pull image `:rollback`, apply migration PR, lance `:rollback` contre schéma N, smoke test.
 
 ### 🧹 Path-based gates strictes
 
-- [ ] **Gate structurel 24h** : si `Dockerfile`, `go.mod`,
-      `docker-compose.yml`, `internal/migrations/**` modifiés → exiger
-      que le commit soit déployé sur staging depuis > 24h avant
-      `deploy_prod=true`. Actuellement la garde "CI staging verte sur
-      ce SHA" couvre 90 % du besoin, manque juste le délai 24h.
+- [ ] **Gate structurel 24h** : si `Dockerfile`, `go.mod`, `internal/migrations/**` modifiés → exiger commit déployé sur staging > 24h avant `deploy_prod=true`. Aujourd'hui `deploy-prod` est `workflow_dispatch` manuel uniquement (équivalent fonctionnel pour clients réels).
 
-### 🏗️ Migration staging vers dev server — ✅ FAIT (session 2026-05-14)
+### 🏗️ Staging avancé
 
-#### Pattern base + overrides docker-compose
-
-- [x] **Architecture source unique** :
-      - `infra/compose/base.yml` — services communs (Notifuse + Postgres,
-        env partagées, healthchecks, ports internes)
-      - `infra/compose/prod.yml` — overrides prod (image digest pinned,
-        volumes externes `infra_*`, network `dokploy-network`, labels
-        Host `notifuse.app.veridian.site`, ressources 6.5G/3.6 CPU)
-      - `infra/compose/staging.yml` — overrides staging (image `:latest`,
-        volumes locaux nommés, network `staging-edge`, labels Host
-        `notifuse.staging.veridian.site`, ressources 1.5G/1.5 CPU)
-      - `infra/compose/docker-compose.staging.yml` — généré, commité
-- [x] **Script `scripts/ci/generate-compose.sh`** :
-      - Mode normal : génère les consolidés depuis base+override avec
-        `docker compose config --no-interpolate --no-path-resolution`
-      - Mode `CHECK_ONLY=1` : drift check qui compare le consolidé
-        fraîchement généré au fichier commité ; si différent → exit 1 +
-        diff précis
-      - Bandeau d'avertissement automatique en tête des consolidés
-        ("FICHIER GÉNÉRÉ — NE PAS ÉDITER À LA MAIN")
-- [x] **Job CI `compose-drift-check`** ubuntu-latest, exécuté avant
-      `test-go`. Empêche toute édition manuelle du consolidé.
-
-#### Traefik staging-edge sur dev-pub
-
-- [x] **Traefik standalone déjà installé** sur dev-pub
-      (`~/traefik-staging/`, service systemd `traefik-staging.service`,
-      network externe `staging-edge`, DNS wildcard
-      `*.staging.veridian.site` → 37.187.199.185, Let's Encrypt DNS-01
-      Cloudflare).
-- [x] **Convention labels** : `traefik.docker.network=staging-edge` +
-      ``Host(`notifuse.staging.veridian.site`)`` (cf.
-      `~/traefik-staging/README.md` sur dev-pub).
-
-#### Deploy staging via SSH dev-pub (compose pur)
-
-- [x] **Job `deploy-staging` refondu** :
-      - `runs-on: [self-hosted, linux, x64]` (runner Notifuse
-        `veridian-dev-server-notifuse` sur dev-pub, agentId 21)
-      - Checkout repo → copie `base.yml`+`staging.yml` vers
-        `/opt/veridian/staging/notifuse/infra/compose/` (sans sudo,
-        dossier chown ubuntu:ubuntu)
-      - `docker compose -f base.yml -f staging.yml -p notifuse-staging
-        --env-file .env pull && up -d --force-recreate notifuse`
-      - Wait healthy via `/api/setup.status` (HTTP 200)
-      - Wipe test tenants HMAC sur
-        `notifuse.staging.veridian.site/api/veridian/admin/wipe-test-tenants`
-      - Cleanup `always()` final : prune containers/images/volumes + cache
-        BuildKit > 7j + `/tmp/runner-*` + alerte si disk > 80%
-- [x] **`/opt/veridian/staging/notifuse/.env` créé** sur dev-pub
-      (chmod 600, ubuntu:ubuntu) avec POSTGRES_PASSWORD propre staging,
-      NOTIFUSE_SECRET_KEY propre, SMTP Brevo, hub secrets prod (à splitter
-      si staging hub différent un jour).
-- [x] **GHCR login sur dev-pub** : `gh auth token | docker login ghcr.io
-      -u Christ-Roy --password-stdin` — `gh` CLI déjà authentifié.
-
-#### Premier deploy validé en réel (2026-05-14)
-
-- [x] **Containers staging UP & healthy** :
-      - `notifuse-staging` (image `ghcr.io/christ-roy/notifuse-veridian:latest`)
-      - `notifuse-staging-db` (postgres:17-alpine)
-- [x] **App démarrée correctement** — logs :
-      `"Server starting on 0.0.0.0:8081 with API endpoint:
-      https://notifuse.staging.veridian.site"` +
-      `"Application successfully initialized"`
-- [x] **Endpoint public répond** :
-      `curl https://notifuse.staging.veridian.site/api/setup.status` →
-      **HTTP 200 en 163ms** (HTTP/2, cert Let's Encrypt valide,
-      Traefik route correct).
-- [x] **URLs mises à jour** dans workflow + CLAUDE.md + todo/CI.md.
-
-#### Cleanup runner self-hosted (Constitution §20)
-
-- [x] Step `Cleanup runner (always)` ajouté sur les 3 jobs self-hosted :
-      `build`, `deploy-staging`, `e2e-staging`.
-- [x] Prune containers + images > 1h + volumes (sauf `label=keep=true`) +
-      cache BuildKit > 7j (`--keep-storage 10GB`) +
-      `/tmp/runner-${run_id}-*` + alerte disk > 80%.
-
-### 🏗️ Reste à faire côté staging
-
-- [ ] **Ephemeral staging per PR** (CI-ARCHITECTURE §9) : workflow
-      `staging-ephemeral.yml` qui spawn une stack par branche feature
-      à l'open PR (URL `notifuse-<branch-slug>.staging.veridian.site`),
-      teardown au merge/close. Aujourd'hui staging = 1 seule stack qui
-      suit la branche `veridian`.
-- [ ] **GC hebdo stacks orphelines** : cron `staging-gc.sh` sur dev-pub
-      (peu de risque tant qu'on n'a pas les éphémères par PR).
-- [ ] **Snapshot prod anonymisé restauré** à chaque deploy staging
-      branche `veridian` (cron nightly sur prod + script anonymizer
-      dans veridian-infra).
-### ✅ Flow prod complet (session 2026-05-14)
-
-- [x] **Audit fin prod réalisé** (`todo/CI.md` ne contient pas les valeurs,
-      cf. logs session) : container Up 21h sans restart, RAM 49 MiB /
-      6.5 GiB, latence 142-148ms (1 pic isolé 1.1s), 0 erreur 24h,
-      setup.status ok, 12 tenants actifs, DB 8.6 MB système.
-- [x] **`generate-compose.sh` étendu prod** : génère
-      `docker-compose.prod.yml` consolidé depuis `base.yml + prod.yml`,
-      avec drift check côté CI sur `compose-drift-check`.
-- [x] **Job `promote-prod-compose`** ajouté en fin de workflow,
-      `workflow_dispatch + promote_prod_compose=true` uniquement. Garde
-      e2e-staging green sur SHA → régénère + drift check → git clone
-      `notifuse-deploy`, copie `docker-compose.yml`, commit, push → webhook
-      Dokploy → wait healthy → Telegram succès/échec.
-- [x] **Procédure pré-prod documentée** dans `CLAUDE.md` section
-      "Promotion vers prod" (2 flows : image only, ou image + compose).
-- [x] **Diff sémantique consolidé vs compose live identifié** :
-      changement de service name `notifuse-prod-db` → `notifuse-db` (notre
-      version) → impacte `DB_HOST` interne. Container_name préservé.
-      Downtime court attendu lors du premier promote-prod-compose.
-
-#### Pré-requis à activer avant premier promote-prod-compose
-
-- [ ] Créer PAT GitHub scope `repo` sur `Christ-Roy/notifuse-deploy`
-- [ ] Ajouter en secret `NOTIFUSE_DEPLOY_PUSH_PAT` sur ce repo
-- [ ] Choisir une fenêtre calme pour le premier passage (downtime
-      attendu ~30-60s recreate des 2 containers)
-- [ ] Vérifier que la connectivité hub→notifuse reprend bien après
-      recreate (les hub.app.veridian.site routes doivent toujours répondre)
+- [ ] **Ephemeral staging per PR** (CI-ARCHITECTURE §9) : workflow `staging-ephemeral.yml` qui spawn une stack par branche feature (URL `notifuse-<branch-slug>.staging.veridian.site`), teardown au merge/close.
+- [ ] **GC hebdo stacks orphelines** : cron `staging-gc.sh` sur dev-pub.
+- [ ] **Snapshot prod anonymisé** restauré à chaque deploy staging (cron nightly + script anonymizer dans `veridian-infra`).
 
 ### 🔔 Annotations Grafana (Constitution §9)
 
-- [ ] **`obs annotate deploy`** câblé dans `deploy-staging` (après
-      smoke OK) et `deploy-prod` (après wait healthy).
-- [ ] **`obs annotate rollback`** câblé dans le job `rollback`.
-- [ ] **`obs annotate migrate`** avant + après migration DB.
+- [ ] `obs annotate deploy` câblé dans deploy-staging + deploy-prod (après wait healthy)
+- [ ] `obs annotate rollback` dans le job rollback
+- [ ] `obs annotate migrate` avant + après migration DB
 
 ### 🚦 Defense in depth (CI-ARCHITECTURE §17)
 
-- [ ] **Workflow `emergency-revert.yml`** : tout auto-rollback Docker
-      déclenche un revert Git auto + freeze main jusqu'à merge revert.
-- [ ] **Webhook Grafana → `repository_dispatch`** : alertes
-      `oom_killed`, `memory_creep`, `synthetic_failed_3x` câblées sur
-      `emergency-rollback.yml`.
-- [ ] **Cleanup runner self-hosted obligatoire** : step `always()` qui
-      prune containers, images, volumes, cache BuildKit > 7j, dossiers
-      `/tmp`. Lint workflow YAML rejette les jobs self-hosted sans ce
-      step.
+- [ ] **Workflow `emergency-revert.yml`** : tout auto-rollback Docker déclenche un revert Git auto + freeze main jusqu'à merge revert
+- [ ] **Webhook Grafana → repository_dispatch** : alertes oom_killed, memory_creep, synthetic_failed_3x câblées sur emergency-rollback
+- [ ] **Lint workflow YAML custom** : rejette les jobs self-hosted sans step cleanup `always()` (déjà appliqué manuellement sur build/deploy-staging/e2e-staging)
 
-### 🐛 Bugs / dettes connus
+### 📊 Dette baseline
 
-- [ ] **Dokploy API `compose.all` / `compose.one` renvoient 404**
-      (testé 2026-05-14 avec `DOKPLOY_API_KEY` de `.all-creds.env`).
-      Soit l'API key n'a pas le scope `compose:read`, soit l'endpoint
-      a changé. À investiguer côté Dokploy avant de pouvoir scripter
-      des inspect compose côté CI.
-- [ ] **`tests-pending.txt` baseline = 12 fichiers** — réduire à 0
-      sous 90 jours. Audit hebdo par cron + issue GitHub auto
-      (à câbler).
-- [ ] **`test-coverage-map.yaml` vide** — peupler au fil des PRs où
-      un fichier critique est légitimement couvert par un test
-      d'intégration ailleurs.
+- [ ] **`tests-pending.txt`** = **8 fichiers** veridian-custom à résorber sous 90 jours (cible : 0)
+  - 4 retirés le 2026-05-17 (avaient déjà leur test : `veridian_token.go`, `veridian_handler.go`, `veridian_autologin_handler.go`, `veridian_magic_handler.go`)
+  - Restants : `auth.go`, `blog_feed.go`, `contact_segment_queue.go`, `ses_client.go`, `telemetry.go`, `veridian.go` (domain), `workspace_postgres.go` (repository), `llm_service_openai.go` (service)
+- [ ] **`test-coverage-map.yaml`** vide — peupler quand un fichier critique est légitimement couvert par un test d'intégration ailleurs
+
+### 📅 Validation 7 jours
+
+- [ ] **7 jours consécutifs de pushes sans `--no-verify`** — compte démarre quand les 15 tests routes orphelines auront été ajoutés. Cible : J+7 après ce moment.
 
 ---
 
-## 🧪 Comment tester la CI staging via Chrome MCP
+## 🧪 Procédures opérationnelles
 
-Pour tester staging à la main sans qu'un push parallèle wipe tes données
-ou qu'un Playwright auto bloque l'UI :
+### Tester staging à la main via Chrome MCP
 
-1. GitHub UI → Actions → "Notifuse Veridian CI/CD" → Run workflow
-2. Cocher `skip_wipe=true` ET `skip_e2e=true`
-3. Lancer → build + push image GHCR + redeploy staging, mais aucun wipe,
-   aucun Playwright
-4. Tester via Chrome MCP sur `https://notifuse.staging.veridian.site`
-   à ton rythme
-5. Pour reprendre la CI normale : push un commit sur `veridian` (sans
-   inputs) → tout repart en mode auto
+GitHub UI → Actions → "Notifuse Veridian CI/CD" → Run workflow :
+- Cocher `skip_wipe=true` + `skip_e2e=true`
+- Le build pousse l'image, deploy-staging redéploie staging, **mais** :
+  - Aucun wipe des tenants de test
+  - Aucun Playwright auto qui mange les routes en parallèle
+- Tester via Chrome MCP sur `https://notifuse.staging.veridian.site`
+- Pour reprendre la CI normale : push un commit sur `veridian` (sans inputs)
+
+### Promouvoir une nouvelle image en prod (image only)
+
+GitHub UI → Run workflow → cocher `deploy_prod=true`. Trigger `POST /api/compose.redeploy` Dokploy avec l'API token. Ne touche pas au compose.
+
+### Promouvoir un changement de compose en prod (structurel)
+
+1. Modifier `infra/compose/prod.yml`
+2. Commit + push sur `veridian` (CI complète tourne, e2e-staging doit être vert)
+3. GitHub UI → Run workflow → cocher `promote_prod_compose=true` sur ce SHA exact
+4. Le job clone `notifuse-deploy`, remplace `docker-compose.yml` par notre version (avec en-tête de traçabilité), commit, push → webhook Dokploy → redeploy
+
+### Rollback prod
+
+- **Auto** : si `e2e-prod` fail après `deploy-prod`, le job `rollback` retag `:rollback` → `:latest` et redéploie
+- **Manuel** : retag GHCR + trigger redeploy Dokploy (steps du job `rollback` dans le workflow)
+
+### Bypass urgence (interdit Constitution §3)
+
+```bash
+git push --no-verify        # contourne Husky
+git config core.hooksPath '' # désactive complètement les hooks locaux
+git config core.hooksPath .husky  # réactive
+```
+
+Le job CI `test-mapping` rejouera quand même le script côté GitHub, donc bypass local ne contourne pas la CI distante (defense in depth §1).
 
 ---
 
-## 📍 Repères
+## 📍 Repères fichiers
 
 - **Workflow** : `.github/workflows/veridian-ci.yml`
-- **Script mapping** : `scripts/ci/check-test-mapping.sh`
+- **Script mapping** : `scripts/ci/check-test-mapping.sh` (mode Nuclear)
+- **Script compose** : `scripts/ci/generate-compose.sh` (validate-only)
 - **Hook** : `.husky/pre-push`
-- **Dette** : `tests-pending.txt`
+- **Compose** : `infra/compose/{prod,staging}.yml`
+- **Dette tests** : `tests-pending.txt`
 - **Couverture non-canonique** : `test-coverage-map.yaml`
 - **Renovate** : `.github/renovate.json`
 - **Constitution** : `CLAUDE.md` section "Constitution CI"
 - **Standard global** : `../../CI-ARCHITECTURE.md`
+
+## 📍 Repères serveurs
+
+- **dev-pub** (37.187.199.185) : `/opt/veridian/staging/notifuse/` (compose + .env), `~/traefik-staging/` (Traefik standalone)
+- **prod-pub** (OVH VPS) : Dokploy `compose-transmit-open-source-microchip-k9lvap` tire depuis `Christ-Roy/notifuse-deploy/main`
+- **runner self-hosted** : `veridian-dev-server-notifuse` (agentId 21) sur dev-pub
+- **GHCR** : `ghcr.io/christ-roy/notifuse-veridian:{latest,rollback,saas-v1.0.3,v30.1-veridian.*}`

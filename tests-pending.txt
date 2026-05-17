@@ -4,9 +4,5 @@ internal/domain/contact_segment_queue.go
 internal/domain/ses_client.go
 internal/domain/telemetry.go
 internal/domain/veridian.go
-internal/domain/veridian_token.go
-internal/http/veridian_autologin_handler.go
-internal/http/veridian_handler.go
-internal/http/veridian_magic_handler.go
 internal/repository/workspace_postgres.go
 internal/service/llm_service_openai.go

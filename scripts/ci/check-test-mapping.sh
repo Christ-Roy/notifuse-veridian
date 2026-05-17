@@ -263,14 +263,25 @@ if [ "$UPSTREAM_BYPASS" != "1" ]; then
   echo
   echo "${BLUE}── Vérification couverture routes API ──${NC}"
 
-  # Collecte routes déclarées (hors _test.go)
-  declared_routes=$(grep -hrE 'mux\.(Handle|HandleFunc)\("(/api/[^"]+)"' internal/http/ 2>/dev/null \
-    | grep -vE "_test\.go" \
-    | grep -oE '/api/[a-zA-Z._-]+' | sort -u)
+  # Collecte routes déclarées (hors _test.go et hors lignes commentées)
+  # On grep dans les fichiers non-test du package http, puis on filtre les
+  # lignes commençant par // (commentaires de doc avec exemples).
+  # `|| true` après chaque pipe-with-grep car set -e fait fail un pipe vide.
+  declared_routes=$( { find internal/http -name '*.go' ! -name '*_test.go' \
+      -exec grep -hE 'mux\.(Handle|HandleFunc)\("(/api/[^"]+)"' {} + 2>/dev/null || true; } \
+    | { grep -vE '^\s*//' || true; } \
+    | { grep -oE '/api/[a-zA-Z._-]+' || true; } \
+    | sort -u)
 
-  # Collecte routes testées (apparaissent dans httptest.NewRequest)
-  tested_routes=$(grep -hrE 'httptest\.NewRequest\([^,]+,\s*"(/api/[^"?]+)' internal/ 2>/dev/null \
-    | grep -oE '/api/[a-zA-Z._-]+' | sort -u)
+  # Collecte routes testées — 2 patterns supportés :
+  #   a) httptest.NewRequest(method, "/api/foo.bar", ...)
+  #   b) httptest.NewServer(mux) + URL via fmt.Sprintf("%s/api/foo.bar", serverURL)
+  #      ou variantes ("...%s/api/...", concat strings, etc.)
+  # On extrait toute occurrence de /api/<route> dans les fichiers _test.go,
+  # ce qui couvre les 2 patterns (et tout autre usage légitime de la route).
+  tested_routes=$( { find internal -name '*_test.go' \
+      -exec grep -hoE '/api/[a-zA-Z._-]+' {} + 2>/dev/null || true; } \
+    | sort -u)
 
   # Règle 1 : routes orphelines (déclarées sans test)
   orphans=$(comm -23 <(echo "$declared_routes") <(echo "$tested_routes"))

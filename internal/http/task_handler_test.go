@@ -269,8 +269,11 @@ func TestTaskHandler_RegisterRoutes(t *testing.T) {
 		"/api/tasks.list",
 		"/api/tasks.get",
 		"/api/tasks.delete",
-		"/api/tasks.executePending",
+		"/api/tasks.reset",
+		"/api/tasks.trigger",
 		"/api/tasks.execute",
+		"/api/cron",
+		"/api/cron.status",
 	}
 
 	for _, route := range routes {
