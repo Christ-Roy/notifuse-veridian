@@ -156,22 +156,22 @@ cve-scan        ─┤
 
 - [ ] Le fichier `.github/renovate.json` est en place mais l'**App Renovate doit être installée** sur le repo (https://github.com/apps/renovate → Install → select `Christ-Roy/notifuse-veridian`). Sans ça, le fichier est ignoré.
 
-### 🛡️ Standard pas encore atteint (Constitution §13)
+### 🛡️ Standard Constitution §13 — FAIT 2026-05-17
 
-- [ ] **Trivy multi-scan étage 1** : `trivy fs --scanners vuln,secret,misconfig,license --severity CRITICAL,HIGH` + SARIF upload GitHub Security tab
-- [ ] **Trivy image scan étage 2** : sur image GHCR fraîchement buildée + `--exit-on-eol 1` + SBOM CycloneDX artifact
-- [ ] **gitleaks** dans le diff Git
-- [ ] **govulncheck** dans test-go (équivalent Go de `npm audit`)
-- [ ] **Cron hebdo Trivy** sur images prod running
+- [x] **Trivy fs scan étage 1** : `trivy fs --scanners vuln,secret,misconfig,license --severity CRITICAL,HIGH` + SARIF upload GitHub Security tab (job `trivy-fs`, fail séparé sur CRITICAL only)
+- [x] **Trivy image scan étage 2** : sur image GHCR fraîchement buildée + `TRIVY_EXIT_ON_EOL=1` + SBOM CycloneDX artifact (rétention 90j) dans le job `build`
+- [x] **gitleaks** dans le diff Git (job `gitleaks`, action officielle, summary + artifact)
+- [x] **govulncheck** dans test-go (step "Run govulncheck" dans `test-go`)
+- [ ] **Cron hebdo Trivy** sur images prod running (reste à faire — workflow séparé scheduled)
 
-### 📦 Migrations DB (Constitution §12)
+### 📦 Migrations DB (Constitution §12) — FAIT 2026-05-17
 
-- [ ] **Script `check-migration-safety.sh`** adapté Go pour Notifuse : bloque DROP COLUMN, DROP TABLE, ALTER NOT NULL sur table peuplée, RENAME, CREATE INDEX sans CONCURRENTLY. Migrations Notifuse sont dans `internal/migrations/v*.go`.
-- [ ] **Test backward-compat étage 2** : pull image `:rollback`, apply migration PR, lance `:rollback` contre schéma N, smoke test.
+- [x] **Script `scripts/ci/check-migration-safety.sh`** adapté Go : bloque DROP COLUMN, DROP TABLE sans IF EXISTS, ALTER SET NOT NULL, RENAME, CREATE INDEX sans CONCURRENTLY, TRUNCATE. Diff analysis sur lignes ajoutées (+) uniquement. Allowlist `migrations-pending.txt`. Intégré dans `check-test-mapping.sh`.
+- [ ] **Test backward-compat étage 2** : pull image `:rollback`, apply migration PR, lance `:rollback` contre schéma N, smoke test. (Reste à faire — workflow CI dédié)
 
-### 🧹 Path-based gates strictes
+### 🧹 Path-based gates strictes — FAIT 2026-05-17
 
-- [ ] **Gate structurel 24h** : si `Dockerfile`, `go.mod`, `internal/migrations/**` modifiés → exiger commit déployé sur staging > 24h avant `deploy_prod=true`. Aujourd'hui `deploy-prod` est `workflow_dispatch` manuel uniquement (équivalent fonctionnel pour clients réels).
+- [x] **Gate structurel 24h** : step ajouté dans `promote-prod-compose`. Bloque si `Dockerfile|go.mod|go.sum|internal/migrations/**|infra/compose/**` modifiés ET commit âgé < 24h. Override via `[skip-gate]` dans commit message (validation humaine).
 
 ### 🏗️ Staging avancé
 
@@ -185,11 +185,11 @@ cve-scan        ─┤
 - [ ] `obs annotate rollback` dans le job rollback
 - [ ] `obs annotate migrate` avant + après migration DB
 
-### 🚦 Defense in depth (CI-ARCHITECTURE §17)
+### 🚦 Defense in depth (CI-ARCHITECTURE §17/§20) — partiellement FAIT 2026-05-17
 
-- [ ] **Workflow `emergency-revert.yml`** : tout auto-rollback Docker déclenche un revert Git auto + freeze main jusqu'à merge revert
-- [ ] **Webhook Grafana → repository_dispatch** : alertes oom_killed, memory_creep, synthetic_failed_3x câblées sur emergency-rollback
-- [ ] **Lint workflow YAML custom** : rejette les jobs self-hosted sans step cleanup `always()` (déjà appliqué manuellement sur build/deploy-staging/e2e-staging)
+- [x] **Emergency-revert** (Constitution §17) : step ajouté dans le job `rollback`. Crée branche `emergency-revert-<sha>`, ouvre PR avec label `emergency-rollback`, le ruleset doit bloquer les merges vers `veridian` tant que cette PR existe (config dépôt manuelle). Nécessite secret `EMERGENCY_REVERT_PAT` — fallback WARN si absent.
+- [ ] **Webhook Grafana → repository_dispatch** : alertes `oom_killed`, `memory_creep`, `synthetic_failed_3x` câblées sur emergency-rollback (reste à faire)
+- [x] **Lint workflow YAML** (Constitution §20) : `scripts/ci/lint-workflows.sh` parse les YAML et fail si job `runs-on: self-hosted` sans step `if: always()`. Job CI `workflow-lint` activé. État actuel : 4/4 self-hosted jobs OK.
 
 ### 📊 Dette baseline
 
