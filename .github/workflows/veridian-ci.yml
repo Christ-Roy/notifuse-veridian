@@ -87,6 +87,19 @@ jobs:
           # Pas de génération côté repo (compose merge non reproductible cross-version).
           scripts/ci/generate-compose.sh staging prod
 
+  workflow-lint:
+    name: Constitution CI §20 (self-hosted jobs cleanup always())
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint workflows
+        run: |
+          chmod +x scripts/ci/lint-workflows.sh
+          # Vérifie que tout job runs-on: self-hosted a un step if: always()
+          # qui fait du cleanup (docker prune, df, sudo rm). Sans ça, le disk
+          # dev-pub se remplit silencieusement et le runner crash.
+          scripts/ci/lint-workflows.sh
+
   # === Veridian patch === Scan CVE bloquant (regle CLAUDE.md non-negociable
   # depuis breach 2026-05-07). Detecte high/critical sur deps npm de la suite
   # e2e + console UI, fail le pipeline avant build.
@@ -671,6 +684,64 @@ jobs:
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
             --data-urlencode "text=🚨 Notifuse Veridian PROD rollback — e2e-prod a fail sur ${GITHUB_SHA::8}, image precedente restauree."
 
+      # === Constitution CI §17 — emergency-revert ===
+      # Tout auto-rollback Docker DOIT déclencher un revert Git auto sur main
+      # + freeze de main jusqu'à merge du revert (via branch protection :
+      # nouveau commit sur veridian refusé tant que la PR de revert ouverte
+      # par ce step n'est pas mergée).
+      #
+      # Implem :
+      #   1. Crée une branche `emergency-revert-<sha>` qui revert le commit
+      #      qui a déclenché le run cassé.
+      #   2. Ouvre une PR avec label `emergency-rollback` (le ruleset
+      #      "veridian-protected" doit bloquer les merges vers veridian
+      #      tant qu'une PR avec ce label existe — config dépôt manuelle,
+      #      pas faisable depuis le workflow).
+      #
+      # Le checkout en mode "actor=github-actions" exige un PAT avec scope
+      # `repo` pour pouvoir push une branche + créer la PR. À défaut le step
+      # WARN sans bloquer le rollback Docker (qui est déjà parti).
+      - name: Auto-revert Git du commit cassé + ouvre PR
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -z "${{ secrets.EMERGENCY_REVERT_PAT }}" ]; then
+            echo "::warning::EMERGENCY_REVERT_PAT non configuré — skip auto-revert Git (le rollback Docker reste appliqué)"
+            exit 0
+          fi
+          set -euo pipefail
+          BROKEN_SHA="${GITHUB_SHA}"
+          REVERT_BRANCH="emergency-revert-${BROKEN_SHA::8}"
+
+          # Setup git via le PAT (le GITHUB_TOKEN par défaut n'a pas le
+          # droit de créer une PR depuis un push).
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ secrets.EMERGENCY_REVERT_PAT }}@github.com/${GITHUB_REPOSITORY}.git"
+
+          # Fetch full history (le rollback job est ubuntu-latest, checkout
+          # default = depth 1).
+          git fetch origin veridian --depth=20
+          git checkout veridian
+          git checkout -b "$REVERT_BRANCH"
+
+          # Revert non-interactif. -n = no-commit pour pouvoir custom le msg.
+          if ! git revert --no-edit "$BROKEN_SHA"; then
+            echo "::error::Revert automatique a fail (conflit ?). Intervention manuelle requise."
+            exit 1
+          fi
+
+          git push origin "$REVERT_BRANCH"
+
+          gh pr create \
+            --base veridian \
+            --head "$REVERT_BRANCH" \
+            --title "[EMERGENCY ROLLBACK] revert ${BROKEN_SHA::8}" \
+            --label emergency-rollback \
+            --body "PR auto-générée par le job rollback du workflow CI. Le commit \`${BROKEN_SHA::8}\` a fait fail e2e-prod après deploy-prod ; image Docker déjà rollback en prod via Dokploy. Cette PR remet le code git en cohérence avec l'image en prod. Reviewer le revert puis merger pour débloquer main."
+        env:
+          GH_TOKEN: ${{ secrets.EMERGENCY_REVERT_PAT }}
+
   promote-prod-compose:
     # Push compose prod (infra/compose/prod.yml) vers notifuse-deploy.
     # Webhook GitHub → Dokploy → pull + recreate. Opt-in workflow_dispatch.
@@ -683,6 +754,60 @@ jobs:
       url: https://github.com/Christ-Roy/notifuse-deploy
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # nécessaire pour le gate 24h (lecture timestamps)
+
+      # === Constitution CI §15 — Path-based gate structurel 24h ===
+      # Si le commit promu touche Dockerfile, go.mod/go.sum, internal/migrations/**,
+      # ou infra/compose/**, alors il DOIT être en place depuis > 24h pour éviter
+      # de déployer en prod un changement structurel non éprouvé sur staging.
+      #
+      # Justification : les changements de base image, deps Go majeures et
+      # migrations DB ont une surface d'impact runtime invisible aux tests
+      # (perfs, fuites mémoire lentes, contention DB sous charge). 24h de
+      # rodage staging laissent le temps aux dérives lentes d'apparaître.
+      #
+      # Override : ajouter le label `skip-24h-gate` à la PR ou commit "[skip-gate]"
+      # dans le message du commit pour bypasser (cas urgents validés humainement).
+      - name: Gate structurel 24h
+        run: |
+          set -euo pipefail
+          BROKEN_SHA="${GITHUB_SHA}"
+
+          # Liste des chemins structurels qui déclenchent le gate.
+          STRUCTURAL_PATTERN='^(Dockerfile|go\.mod|go\.sum|internal/migrations/.*\.go|infra/compose/.*\.ya?ml)$'
+
+          # Détecte si le commit touche un fichier structurel — on regarde
+          # le diff entre HEAD~1 et HEAD (le commit lui-même).
+          if ! git diff --name-only HEAD~1 HEAD | grep -qE "$STRUCTURAL_PATTERN"; then
+            echo "✅ Commit non-structurel, gate 24h non applicable."
+            exit 0
+          fi
+
+          echo "⚠ Commit touche des fichiers structurels :"
+          git diff --name-only HEAD~1 HEAD | grep -E "$STRUCTURAL_PATTERN" | sed 's/^/  /'
+
+          # Bypass via commit message [skip-gate]
+          COMMIT_MSG=$(git log -1 --format='%B')
+          if echo "$COMMIT_MSG" | grep -q '\[skip-gate\]'; then
+            echo "ℹ Bypass via [skip-gate] dans le message du commit (validation humaine)."
+            exit 0
+          fi
+
+          # Age du commit en heures
+          COMMIT_TS=$(git log -1 --format=%ct)
+          NOW=$(date -u +%s)
+          AGE_HOURS=$(( (NOW - COMMIT_TS) / 3600 ))
+          echo "Commit age : ${AGE_HOURS}h"
+
+          if [ "$AGE_HOURS" -lt 24 ]; then
+            echo "::error::Commit structurel âgé de ${AGE_HOURS}h < 24h requis."
+            echo "::error::Constitution §15 : changement de base/deps/migration/compose doit roder 24h sur staging."
+            echo "::error::Override : recommit avec [skip-gate] dans le message (validation humaine) si réellement urgent."
+            exit 1
+          fi
+
+          echo "✅ Commit structurel âgé de ${AGE_HOURS}h ≥ 24h — gate OK."
 
       - name: Valider compose prod
         run: |
