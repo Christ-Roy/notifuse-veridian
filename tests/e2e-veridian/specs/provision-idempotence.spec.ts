@@ -79,8 +79,10 @@ test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
     expect(body2.api_key).toBe(''); // pas regenere
     expect(body2.magic_link).toMatch(/code=/);
     expect(body2.magic_link).not.toBe(m1); // TTL frais
+    // auto_login_url : token signé HMAC self-contained, format
+    // /veridian/auto-login?token=<base64>.<hmac>. Pas de query email/code.
     if (body2.auto_login_url) {
-      expect(body2.auto_login_url).toMatch(/email=/);
+      expect(body2.auto_login_url).toMatch(/\/veridian\/auto-login\?token=/);
     }
   });
 

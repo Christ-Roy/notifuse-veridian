@@ -190,16 +190,32 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     const bobAgain = await attachBobAgain.json();
     expect(bobAgain.already_attached).toBe(true);
 
-    // ─── Step 9 : provision idempotent (alice encore) → created=false
-    const provisionAgain = await hmacFetch('/api/tenants/provision', 'POST', {
+    // ─── Step 9 : provision idempotent ────────────────────────────────
+    // Depuis le fix idempotence 2026-05-18 (b7d3fdcc), provision compare
+    // l'owner_email du body avec l'owner humain réel du workspace.
+    // Apres step 7 (attach-owner bob), bob est devenu owner unique.
+    // Donc :
+    //   - provision(alice) → 409 ErrOwnerMismatch (alice n'est plus owner)
+    //   - provision(bob)   → 200 idempotent, magic_link FRAIS
+    const provisionAliceAgain = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantID,
       owner_email: aliceEmail,
       plan: 'free',
     });
-    expect(provisionAgain.status).toBe(200);
-    const provisionRedo = await provisionAgain.json();
-    expect(provisionRedo.workspace_id).toBe(tenantID);
-    expect(provisionRedo.created).toBe(false);
+    expect(provisionAliceAgain.status).toBe(409);
+    const aliceConflict = await provisionAliceAgain.json();
+    expect(aliceConflict.error).toMatch(/different owner/i);
+
+    const provisionBobAgain = await hmacFetch('/api/tenants/provision', 'POST', {
+      tenant_id: tenantID,
+      owner_email: bobEmail,
+      plan: 'free',
+    });
+    expect(provisionBobAgain.status).toBe(200);
+    const bobRedo = await provisionBobAgain.json();
+    expect(bobRedo.workspace_id).toBe(tenantID);
+    expect(bobRedo.created).toBe(false);
+    expect(bobRedo.magic_link).toMatch(/code=/);
   });
 
   test('regression bug 2026-05-17: auto-login lands on workspace, NOT /workspace/create', async ({ browser }) => {
