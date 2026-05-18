@@ -148,3 +148,55 @@ Aucun — pas de changement de schéma DB, pas de migration, juste de la logique
 
 Ticket reste ouvert dans `todo/` (pas déplacé vers `done/`) jusqu'à ce que la PR du fix soit mergée.
 
+---
+
+## Update — 2026-05-18 (fix mergé)
+
+**Commits fix** :
+- `b7d3fdcc` — `fix(provision): idempotent refresh magic_link + 409 sur owner_email different` (logique service + handler + tests Go + spec E2E)
+- `34426a8a` — `fix(e2e): aligne provision idempotence specs sur la nouvelle semantique 409` (correction des assertions E2E suite au premier passage rouge en staging)
+
+**SHA prod + staging au moment de la cloture** : `445a8ac4` (validé via `/api/version` sur prod et staging).
+
+**Changements livrés** :
+
+1. `internal/service/veridian_service.go` — bloc idempotent (lignes 233 et suivantes) :
+   - Nouveau sentinel `ErrOwnerMismatch`.
+   - Lookup owner réel via `GetWorkspaceUsersWithEmail` + filter `Role == "owner"` ET `Type == UserTypeUser` (via `lookupUserType` qui exclut les api_key users).
+   - Comparaison **case-insensitive** avec `strings.EqualFold` + `TrimSpace` côté input et DB.
+   - Si mismatch → `ErrOwnerMismatch`.
+   - Si match → `buildMagicLink` + `BuildAutoLoginURL` pour renvoyer un magic_link **TTL frais (15 min)** + `auto_login_url` dans la response idempotente.
+   - `APIKey` et `APIKeyEmail` restent vides (le Hub a conservé la première).
+   - **Fallback important** : si aucun owner humain n'est trouvé (cas des 9 tenants legacy pré-Provision réparés via attach-owner), on fallthrough sur le chemin de création nominal qui réattachera proprement le user input via `AddUserToWorkspace` + `TransferOwnership`.
+
+2. `internal/http/veridian_handler.go::handleProvision` — mapping `ErrOwnerMismatch` → `http.StatusConflict` (au pattern existant pour `ErrTenantSoftDeleted`).
+
+3. **Tests colocalisés (Constitution §1)** :
+   - `TestVeridianService_Provision_Idempotent` updated : mocks `GetWorkspaceUsersWithEmail` + `GetUserByID` + `GenerateMagicCodeForVeridian`, asserts `MagicLink != ""` + `AutoLoginURL != ""`, garde `APIKey == ""`.
+   - **Nouveau** `TestVeridianService_Provision_OwnerMismatch_Returns409` : workspace existe, owner réel `alice@x.test`, input demande `mallory@x.test` → `ErrorIs(err, ErrOwnerMismatch)`.
+   - **Nouveau** `TestVeridianService_Provision_Idempotent_OwnerEmailCaseInsensitive` : DB stocke `"Owner@Example.COM"`, input envoie `"owner@example.com"` → idempotent vert (pas de faux 409 sur casing différent).
+   - **Nouveau** `TestVeridianHandleProvision_OwnerMismatchReturns409` côté handler.
+
+4. **E2E Playwright** `tests/e2e-veridian/specs/provision-idempotence.spec.ts` — 3 scénarios du ticket (A: replay magic_link frais, B: owner différent → 409, C: nouveau tenant → created:true). Cleanup défensif via `wipe-test-tenants prefix=idempot` dans `afterAll`. **Non `@prod-safe`** (crée des tenants) → ne tourne qu'en staging.
+
+5. **Effet de bord côté `hub-contract.spec.ts`** — step 9 du `full lifecycle` test re-provisionnait avec alice après avoir fait `attach-owner bob`. Sous l'ancienne sémantique (pas de check owner), ça retournait 200 silencieusement. Maintenant, alice n'est plus l'owner → 409 ErrOwnerMismatch. Test split en 2 : `provision(alice) → 409` + `provision(bob) → 200 idempotent`.
+
+**Pièges rencontrés à savoir pour la prochaine fois** :
+- `auto_login_url` n'est PAS au format `?email=X&code=Y`. C'est un **token signé HMAC self-contained** `/veridian/auto-login?token=<base64-claims>.<hmac-sha256>` (voir `domain.BuildAutoLoginURL`). Une assertion `/email=/` sur `auto_login_url` fail systématiquement. Préférer `/\/veridian\/auto-login\?token=/` ou décoder le token.
+- Quand un test E2E existant fait une séquence `provision A → attach-owner B → provision A`, il faut maintenant adapter à 409 sur le re-provision A. Chercher ces patterns avant de merger.
+
+**Vérifs CI** : staging vert + prod vert + `/api/version` retourne le SHA `b7d3fdcc` post-deploy.
+
+**Côté Hub — ce que tu peux faire maintenant** :
+- Retry safe sur `/api/tenants/provision` : si même tenant + même owner, tu reçois magic_link frais utilisable directement (TTL 15 min).
+- Replay malicieux (owner différent) : tu reçois **409 Conflict** → flow user "Commencer l'essai gratuit" peut s'arrêter proprement (le user voit "ce tenant est déjà pris" plutôt qu'un succès silencieux).
+- Garde le court-circuit `tenant.notifuseWorkspaceSlug` côté Hub : c'est ta première ligne de défense, le fix Notifuse ne le remplace pas.
+
+**Tickets restants à voir plus tard (séparés)** :
+- `#13` `POST /api/console/request-magic-link` self-service (bonus P2, pas urgent).
+- `#14` `Idempotency-Key` header (contrat §5.11) — gros chantier middleware + table + cron, pas bloquant tant que le Hub n'envoie pas le header.
+- `#15` Alignement plans Notifuse (`free/pro/business/enterprise`) vs contrat (8+ plans `freemium/starter/lifetime_*/internal`) — attendre que Robert fige le pricing.
+
+Ticket déplacé vers `todo/done/`.
+
+
