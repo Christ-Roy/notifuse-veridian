@@ -4,7 +4,10 @@ tmp_dir = "tmp"
 
 [build]
   args_bin = []
-  bin = "./tmp/main"
+  # === Veridian patch === 'bin' deprecated en Air v1.65+, use 'entrypoint'.
+  # Sans ça, Air ne re-exécute pas 'cmd' (build) à chaque change → boucle
+  # "main not found".
+  entrypoint = ["./tmp/main"]
   cmd = "go build -o ./tmp/main ./cmd/api"
   delay = 1000
   exclude_dir = ["docs", "console", "notification_center", ".git", ".github", "assets", "tmp", "vendor", "testdata", "node_modules"]
@@ -16,11 +19,17 @@ tmp_dir = "tmp"
   include_dir = []
   include_ext = ["go", "tpl", "tmpl", "html"]
   include_file = []
+  # === Veridian patch dev (2026-05-18) === Le serveur Notifuse a un graceful
+  # shutdown de 65s. Si Air envoie SIGINT, le serveur attend l'arrêt propre
+  # → Air timeout sur kill_delay → boucle "tmp/main not found". Solution :
+  # send_interrupt=false → Air fait kill -9 direct, pas de graceful en dev.
   kill_delay = "0s"
   log = "build-errors.log"
   poll = false
   poll_interval = 0
-  rerun = true
+  # rerun = false : ne pas relancer le binaire automatiquement après crash.
+  # Une rebuild = un restart, point.
+  rerun = false
   rerun_delay = 500
   send_interrupt = false
   stop_on_error = true

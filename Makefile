@@ -58,8 +58,11 @@ run:
 	go run ./cmd/api
 
 dev:
-	@command -v air >/dev/null 2>&1 || { echo "❌ air manquant — installe avec: go install github.com/air-verse/air@latest"; exit 1; }
-	air
+	@# === Veridian patch === Air v1.65+ a des bugs avec notre setup (cmd build
+	@# pas réexec, conflit graceful shutdown 65s). On utilise un watcher bash
+	@# maison plus prévisible. Voir scripts/dev/watch-rebuild.sh.
+	@command -v inotifywait >/dev/null 2>&1 || { echo "❌ inotifywait missing. apt install inotify-tools"; exit 1; }
+	@./scripts/dev/watch-rebuild.sh
 
 # === Veridian dev env (cycle hot-reload 2-3s pour itérer plus vite que la CI)
 # Usage premier setup :
@@ -88,10 +91,18 @@ dev-bootstrap:
 		echo "✓ .env already exists (skip)"; \
 	fi
 
-# Start Postgres test (:5433) + Mailpit SMTP (:1025) + UI (:8025) — background
+# Start Postgres test + Mailpit SMTP + UI — background
+# Lit les variables NOTIFUSE_DB_TEST_PORT / NOTIFUSE_SMTP_TEST_PORT /
+# NOTIFUSE_MAILPIT_UI_PORT depuis .env pour éviter les conflits de ports
+# avec d'autres services locaux (verger-postgres sur 5433, etc.).
 dev-up:
 	@echo "→ Starting Postgres test + Mailpit..."
-	docker compose -f tests/compose.test.yaml up -d
+	@if [ -f .env ]; then \
+		set -a; . ./.env; set +a; \
+		docker compose --env-file .env -f tests/compose.test.yaml up -d; \
+	else \
+		docker compose -f tests/compose.test.yaml up -d; \
+	fi
 	@echo "→ Waiting for healthy..."
 	@for i in $$(seq 1 30); do \
 		if docker compose -f tests/compose.test.yaml ps --format json 2>/dev/null | grep -q '"Health":"healthy"'; then \
