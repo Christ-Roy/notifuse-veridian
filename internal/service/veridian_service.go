@@ -879,29 +879,14 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		}, nil
 	}
 
-	// Step 3 : bypass auth — toutes les ops upstream exigent un caller authentifié.
-	rootCtx, rootSessionID, _, err := s.ctxAsRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer s.cleanupSession(ctx, rootSessionID)
-
-	// Step 4 : si pas attaché, AddUserToWorkspace(role=member, FullPermissions).
-	if !alreadyAttached {
-		if addErr := s.workspaceService.AddUserToWorkspace(
-			rootCtx,
-			input.TenantID,
-			owner.ID,
-			"member",
-			domain.FullPermissions,
-		); addErr != nil && !strings.Contains(addErr.Error(), "already") {
-			return nil, fmt.Errorf("add user to workspace: %w", addErr)
-		}
-	}
-
-	// Step 5 : résoudre l'owner actuel pour TransferOwnership.
-	// On lit la liste des membres et on prend le premier role=owner. Si aucun
-	// (cas pathologique), on fallback sur root.
+	// Step 3 : résoudre l'owner actuel AVANT toute autre op.
+	// Depuis la feature owner-natif (commit f43ce239), root n'est plus
+	// dans les workspaces Veridian-managed. Donc on ne peut PAS utiliser
+	// ctxAsRoot pour AddUserToWorkspace — le caller doit être l'owner
+	// actuel du workspace (qui est lui dans user_workspaces).
+	// Bug détecté en staging 2026-05-18 : "failed to authenticate user:
+	// user is not a member of the workspace" sur attach d'un nouvel owner
+	// alors que root a déjà été virer par Provision.
 	members, listErr := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, input.TenantID)
 	if listErr != nil {
 		return nil, fmt.Errorf("list workspace members: %w", listErr)
@@ -915,20 +900,43 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		}
 	}
 	if currentOwnerID == "" {
-		// Pas d'owner identifié (workspace orphelin) — on prend root comme
-		// pivot pour TransferOwnership. Si root n'existe pas / n'est pas
-		// member, TransferOwnership va fail et on remontera l'erreur.
+		// Pas d'owner identifié (workspace orphelin) — on tombe sur root
+		// comme caller fallback. Si root n'est pas membre non plus,
+		// AddUserToWorkspace va fail et on remontera l'erreur.
 		rootUser, rootErr := s.userRepo.GetUserByEmail(ctx, s.rootEmail)
 		if rootErr != nil {
-			return nil, fmt.Errorf("resolve fallback root owner: %w", rootErr)
+			return nil, fmt.Errorf("resolve fallback caller (root): %w", rootErr)
 		}
 		currentOwnerID = rootUser.ID
 	}
 
+	// Step 4 : créer la session en tant que l'owner actuel (qui est dans
+	// le workspace). C'est lui qui sera le "caller" pour les ops upstream.
+	callerCtx, callerSessionID, err := s.ctxAsUser(ctx, currentOwnerID)
+	if err != nil {
+		return nil, fmt.Errorf("ctxAsUser current owner %s: %w", currentOwnerID, err)
+	}
+	defer s.cleanupSession(ctx, callerSessionID)
+
+	// Step 5 : si pas attaché, AddUserToWorkspace(role=member, FullPermissions).
+	if !alreadyAttached {
+		if addErr := s.workspaceService.AddUserToWorkspace(
+			callerCtx,
+			input.TenantID,
+			owner.ID,
+			"member",
+			domain.FullPermissions,
+		); addErr != nil && !strings.Contains(addErr.Error(), "already") {
+			return nil, fmt.Errorf("add user to workspace: %w", addErr)
+		}
+	}
+
 	// Step 6 : TransferOwnership(workspaceID, newOwner=humain, currentOwner=existingOwner).
+	// callerCtx = ctx authentifié en tant que currentOwner qui peut donc
+	// initier le transfer vers lui-même (no-op) ou vers le new owner.
 	transferred := false
 	if transferErr := s.workspaceService.TransferOwnership(
-		rootCtx,
+		callerCtx,
 		input.TenantID,
 		owner.ID,
 		currentOwnerID,

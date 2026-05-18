@@ -386,27 +386,28 @@ func TestVeridianService_AttachOwner_NotAttached_TransferFromRoot(t *testing.T) 
 	// État : human pas attaché au workspace.
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "human-id", "ws-orphan").Return(nil, sql.ErrNoRows).Times(1)
 
-	// ctxAsRoot : GetUserByEmail(root) + CreateSession + DeleteSession en defer.
-	// Et 1 lookup root pour Step 7 (remove root after transfer).
-	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
-	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2) // root ctx + tenant ctx pour Step 7
+	// Step 3 : list members pour identifier owner courant (root ici).
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-orphan").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-orphan", Role: "owner"}, Email: "root@veridian.site"},
+	}, nil).Times(1)
+
+	// Step 4 : ctxAsUser(currentOwner=root) — 1 CreateSession/DeleteSession.
+	// Step 7 : ctxAsUser(new owner=human) pour remove root — 1 second pair.
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
-	// Step 4 : AddUserToWorkspace(role=member).
+	// Step 5 : AddUserToWorkspace via callerCtx (root, current owner).
 	m.workspace.EXPECT().AddUserToWorkspace(
 		gomock.Any(), "ws-orphan", "human-id", "member", gomock.Any(),
 	).Return(nil).Times(1)
-
-	// Step 5 : GetWorkspaceUsersWithEmail → root est owner actuel.
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-orphan").Return([]*domain.UserWorkspaceWithEmail{
-		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-orphan", Role: "owner"}, Email: "root@veridian.site"},
-		{UserWorkspace: domain.UserWorkspace{UserID: "human-id", WorkspaceID: "ws-orphan", Role: "member"}, Email: "alice@x.test"},
-	}, nil).Times(1)
 
 	// Step 6 : TransferOwnership(workspaceID, newOwner=human, currentOwner=root).
 	m.workspace.EXPECT().TransferOwnership(
 		gomock.Any(), "ws-orphan", "human-id", "root-id",
 	).Return(nil).Times(1)
+
+	// Step 7 : check si currentOwner == root → GetUserByEmail(root) 1×.
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
 
 	// Step 7 : RemoveUserFromWorkspace(root) depuis ctx tenant user.
 	m.workspace.EXPECT().RemoveUserFromWorkspace(
@@ -440,18 +441,21 @@ func TestVeridianService_AttachOwner_CreatesUserIfMissing(t *testing.T) {
 	// État : pas attaché (utilise un userID généré dynamiquement, on accepte n'importe quoi).
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, gomock.Any(), "ws-x").Return(nil, sql.ErrNoRows).Times(1)
 
-	// ctxAsRoot pour les ops.
-	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	// Step 3 : list members → root est owner courant.
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-x").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-x", Role: "owner"}},
+	}, nil).Times(1)
+
+	// Step 4 + Step 7 : 2 paires session (callerCtx=root + tenantCtx=human).
 	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	// Step 7 only : GetUserByEmail(root) pour check si current owner == root.
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
 
 	m.workspace.EXPECT().AddUserToWorkspace(
 		gomock.Any(), "ws-x", gomock.Any(), "member", gomock.Any(),
 	).Return(nil).Times(1)
-
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-x").Return([]*domain.UserWorkspaceWithEmail{
-		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-x", Role: "owner"}},
-	}, nil).Times(1)
 
 	m.workspace.EXPECT().TransferOwnership(
 		gomock.Any(), "ws-x", gomock.Any(), "root-id",
@@ -490,21 +494,24 @@ func TestVeridianService_AttachOwner_AttachedButNotOwner_TransferOnly(t *testing
 		UserID: "human-id", WorkspaceID: "ws-1", Role: "member",
 	}, nil).Times(1)
 
-	// ctxAsRoot.
-	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
-	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
-	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
-
-	// PAS de AddUserToWorkspace : human déjà attaché.
-
+	// Step 3 : list members → root est owner courant.
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return([]*domain.UserWorkspaceWithEmail{
 		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-1", Role: "owner"}},
 		{UserWorkspace: domain.UserWorkspace{UserID: "human-id", WorkspaceID: "ws-1", Role: "member"}},
 	}, nil).Times(1)
 
+	// Step 4 + Step 7 sessions (callerCtx=root + tenantCtx=human).
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	// PAS de AddUserToWorkspace : human déjà attaché.
+
 	m.workspace.EXPECT().TransferOwnership(
 		gomock.Any(), "ws-1", "human-id", "root-id",
 	).Return(nil).Times(1)
+
+	// Step 7 : GetUserByEmail(root) pour check si current owner == root.
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
 
 	m.workspace.EXPECT().RemoveUserFromWorkspace(
 		gomock.Any(), "ws-1", "root-id",
@@ -662,7 +669,11 @@ func TestVeridianService_AttachOwner_NotAttached_UpstreamMembershipError(t *test
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "human-id", "ws-real").
 		Return(nil, errors.New("user is not a member of the workspace")).Times(1)
 
-	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	// Step 3 : list members → root est owner courant.
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-real").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-real", Role: "owner"}, Email: "root@veridian.site"},
+	}, nil).Times(1)
+
 	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
@@ -670,13 +681,12 @@ func TestVeridianService_AttachOwner_NotAttached_UpstreamMembershipError(t *test
 		gomock.Any(), "ws-real", "human-id", "member", gomock.Any(),
 	).Return(nil).Times(1)
 
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-real").Return([]*domain.UserWorkspaceWithEmail{
-		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-real", Role: "owner"}, Email: "root@veridian.site"},
-	}, nil).Times(1)
-
 	m.workspace.EXPECT().TransferOwnership(
 		gomock.Any(), "ws-real", "human-id", "root-id",
 	).Return(nil).Times(1)
+
+	// Step 7 : GetUserByEmail(root) pour check si current owner == root.
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
 	m.workspace.EXPECT().RemoveUserFromWorkspace(gomock.Any(), "ws-real", "root-id").Return(nil).Times(1)
 	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-real", gomock.Any()).Times(1)
 
@@ -704,9 +714,13 @@ func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing
 	m.user.EXPECT().GetUserByEmail(ctx, "bob@x.test").Return(newOwner, nil).Times(1)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "bob-id", "ws-multi").Return(nil, sql.ErrNoRows).Times(1)
 
-	// ctxAsRoot (Step 4) — 1 lookup root only. Pas de tenant session attendue
-	// car l'ancien owner == alice (human, pas root) donc le cleanup root est skip.
-	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	// Step 3 : alice est l'owner actuel (pas root). On transfere bob → owner.
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-multi").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "alice-id", WorkspaceID: "ws-multi", Role: "owner"}, Email: "alice@x.test"},
+	}, nil).Times(1)
+
+	// Step 4 : ctxAsUser(alice) — 1 paire CreateSession/DeleteSession.
+	// Pas de tenant session pour Step 7 car alice est human (pas root).
 	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
@@ -714,14 +728,13 @@ func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing
 		gomock.Any(), "ws-multi", "bob-id", "member", gomock.Any(),
 	).Return(nil).Times(1)
 
-	// alice est l'owner actuel (pas root). On transfere bob → owner, alice → member.
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-multi").Return([]*domain.UserWorkspaceWithEmail{
-		{UserWorkspace: domain.UserWorkspace{UserID: "alice-id", WorkspaceID: "ws-multi", Role: "owner"}, Email: "alice@x.test"},
-	}, nil).Times(1)
-
 	m.workspace.EXPECT().TransferOwnership(
 		gomock.Any(), "ws-multi", "bob-id", "alice-id",
 	).Return(nil).Times(1)
+
+	// Step 7 : GetUserByEmail(root) appelé pour comparer current owner.
+	// alice-id != root-id donc cleanup root skip → pas de RemoveUserFromWorkspace.
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
 
 	// Event émis avec old_owner_email=alice (validation explicite que le
 	// payload contient bien l'ancien owner, pas root).
@@ -733,10 +746,6 @@ func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing
 		}).Times(1)
 
 	// ⚠️ CRITICAL : pas de RemoveUserFromWorkspace appelé sur alice (additive only).
-	// Si gomock voit un appel non-attendu il fait fail le test (mode strict).
-
-	// Le cleanup root déclenché par Step 7 vérifie GetUserByEmail(root) une 2e fois
-	// (sans tenant session). On l'utilise ci-dessus dans Times(2).
 	_ = existingHumanOwner
 
 	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-multi", OwnerEmail: "bob@x.test"})
