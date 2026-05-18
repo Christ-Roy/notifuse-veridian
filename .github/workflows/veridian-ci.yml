@@ -569,9 +569,8 @@ jobs:
             fi
             sleep 5
           done
-          echo "::warning::/api/version mismatch ou absent après 2m30 — peut être normal si image antérieure à V32.x ne contient pas l'endpoint."
-          # Pas exit 1 ici pour rester compat avec les anciennes images.
-          # À durcir une fois que toutes les images prod contiennent /api/version.
+          echo "::error::/api/version mismatch ou absent après 2m30 — staging deploy KO. Investigation requise."
+          exit 1
 
       - name: Wait for staging healthy
         run: |
@@ -785,16 +784,17 @@ jobs:
           fi
 
       # === GitOps step 2/4 — Force Dokploy à pull + redeploy immédiatement,
-      # plutôt que d'attendre son polling (1-2 min). compose.redeploy fait
-      # un git pull côté Dokploy avant de redeploy, donc il verra le bump
-      # qu'on vient de pusher. Si on ne fait pas ce step, Dokploy déploiera
-      # quand même mais avec 1-2 min de latence.
-      - name: Trigger Dokploy redeploy (force pull + recreate)
+      # plutôt que d'attendre son polling (1-2 min). compose.deploy fait un
+      # git pull + rebuild complet. ATTENTION : compose.redeploy NE pull PAS
+      # le repo, il re-up le composeFile cached → ne voit pas notre bump
+      # GitOps fraichement pushé (bug observé run 26044443408, fix manuel via
+      # compose.deploy). Toujours utiliser compose.deploy après un bump.
+      - name: Trigger Dokploy deploy (force pull + recreate)
         run: |
           curl -fsS -X POST \
             -H "x-api-key: ${{ secrets.DOKPLOY_API_TOKEN }}" \
             -H "Content-Type: application/json" \
-            "${{ secrets.DOKPLOY_URL }}/api/compose.redeploy" \
+            "${{ secrets.DOKPLOY_URL }}/api/compose.deploy" \
             -d '{"composeId":"${{ secrets.DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID }}"}'
 
       # === GitOps step 3/4 — Attend que le service répond, healthy à minima.
@@ -836,12 +836,12 @@ jobs:
             fi
             sleep 10
           done
-          # Anciennes images (avant ce ship) ne contiennent pas /api/version.
-          # Warning au lieu de fail pour le tout premier ship qui contient
-          # l'endpoint — après ça doit être bloquant. À durcir dans une
-          # PR de suivi une fois validé.
-          echo "::warning::/api/version mismatch ou absent après 5min — possible que Dokploy n'ait pas swap le container, ou image antérieure à V32.x sans cet endpoint."
-          # TODO durcir : exit 1 une fois que toutes les images prod ont /api/version
+          # Toutes les images prod >= v32.0-veridian.17f98186 contiennent
+          # /api/version (cf internal/buildinfo). Si on n'a pas le bon tag
+          # après 5min, c'est un vrai bug de pipeline (Dokploy n'a pas pull,
+          # bump manqué, etc.) -> fail le job -> rollback auto se declenche.
+          echo "::error::/api/version mismatch ou absent après 5min — Dokploy n'a pas swap le container ou /api/version retourne un autre tag. Rollback auto va se declencher."
+          exit 1
 
       - name: Telegram notif deploy prod OK
         if: success()
