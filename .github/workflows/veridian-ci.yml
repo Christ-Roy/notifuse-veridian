@@ -516,6 +516,10 @@ jobs:
             git commit -m "ci(gitops): bump staging image to ${BUMP_TAG} [skip ci]" \
                        -m "Auto-bump par .github/workflows/veridian-ci.yml job deploy-staging." \
                        -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${DIGEST_HEX}"
+            # Rebase avant push : un autre job (deploy-prod en // ou push humain)
+            # peut avoir avancé la branche entre-temps. Sans ça, push rejected
+            # non-fast-forward (bug observé 2026-05-18 sur deploy-prod).
+            git pull --rebase --autostash origin veridian
             git push origin HEAD:veridian
             echo "✓ staging.yml bumpé et pushé"
           fi
@@ -772,6 +776,10 @@ jobs:
             # Le token doit être un PAT avec scope `contents: write` sur le repo,
             # sinon le push utilise GITHUB_TOKEN qui peut être restrictif sur push.
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            # Rebase obligatoire : deploy-staging vient de push son propre bump
+            # sur veridian, on est forcement derriere. Sans rebase, push rejected
+            # non-fast-forward (bug observe 2026-05-18, run 26043693636).
+            git pull --rebase --autostash origin veridian
             git push origin HEAD:veridian
             echo "✓ prod.yml bumpé et pushé"
           fi
