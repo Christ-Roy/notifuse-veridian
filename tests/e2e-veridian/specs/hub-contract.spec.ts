@@ -98,23 +98,42 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     expect(magic.magic_link).toBeTruthy();
     expect(magic.auto_login_url).toBeTruthy();
 
-    // ─── Step 3 : decode JWT du auto_login_url → workspaces contains tenantID
-    // C'est CE point qui aurait détecté le bug 2026-05-17 : sans owner
-    // humain attaché, le JWT signe correctement mais workspaces est vide.
-    const autoLoginParsed = new URL(magic.auto_login_url);
-    const token = autoLoginParsed.searchParams.get('token');
-    expect(token).toBeTruthy();
-    const claims = decodeJWTPayload(token!);
-    expect(claims.email).toBe(aliceEmail);
-    // workspaces : le format diffère selon impl mais doit contenir le tenant
-    // (soit array de strings, soit array d'objects). On valide les 2 formes.
-    const workspaces = claims.workspaces as unknown[] | undefined;
-    expect(workspaces).toBeDefined();
-    expect(Array.isArray(workspaces)).toBe(true);
-    const wsIds = (workspaces as Array<string | { id: string }>).map((w) =>
+    // ─── Step 3 : suivre le auto_login_url, récupérer le auth_token, et
+    // appeler /api/user.me — c'est l'API qui prouve que le user voit son
+    // workspace côté serveur. Validé en staging 2026-05-18 : le JWT
+    // Notifuse ne contient PAS la liste des workspaces (résolution serveur
+    // via user_workspaces table à chaque request). Donc le check doit
+    // passer par cette API, pas par le JWT.
+    //
+    // Le auto_login_url retourne du HTML qui set le token en localStorage.
+    // Côté Node, on extrait le token directement depuis l'URL (claim w/e/i/x
+    // côté veridian_token, signé HMAC) ET on appelle /api/user.me pour
+    // récupérer le vrai auth_token JWT que la console utilise.
+    //
+    // Stratégie simple : appeler le endpoint d'échange auto-login → JWT
+    // (côté Notifuse, c'est le handler `/veridian/auto-login` qui retourne
+    // un HTML mais le JWT est aussi obtenable via une POST sur /api/user.signin
+    // avec le code one-shot du magic_link). Pour éviter cette complexité,
+    // on utilise directement /api/workspaces.generateMagicLink puis on
+    // sign-in avec le code → JWT → /api/user.me.
+    //
+    // Plus simple encore : `/api/user.me` accepte Bearer api_key (tenant
+    // API key scopée 1 workspace). C'est le contrat Bearer Pattern B du
+    // README Hub — l'api_key voit ses workspaces.
+    const meResp = await bearerFetch('/api/user.me', 'GET', apiKey);
+    expect(meResp.status).toBe(200);
+    const me = await meResp.json();
+    expect(me.workspaces).toBeDefined();
+    expect(Array.isArray(me.workspaces)).toBe(true);
+    const wsIds = (me.workspaces as Array<string | { id: string }>).map((w) =>
       typeof w === 'string' ? w : w.id,
     );
     expect(wsIds).toContain(tenantID);
+
+    // Validation magic link content (sans aller jusqu'au flow signin/JWT).
+    const autoLoginParsed = new URL(magic.auto_login_url);
+    const token = autoLoginParsed.searchParams.get('token');
+    expect(token).toBeTruthy();
 
     // ─── Step 4 : health → magic_link_capable=true ────────────────────
     const healthResp = await hmacFetch(`/api/tenants/${tenantID}/health`, 'GET');
@@ -181,6 +200,68 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     const provisionRedo = await provisionAgain.json();
     expect(provisionRedo.workspace_id).toBe(tenantID);
     expect(provisionRedo.created).toBe(false);
+  });
+
+  test('regression bug 2026-05-17: auto-login lands on workspace, NOT /workspace/create', async ({ browser }) => {
+    // Test décisif : suit le auto_login_url dans un vrai browser et vérifie
+    // que l'user atterrit sur /console/workspace/<id> et pas sur
+    // /console/workspace/create. C'est exactement ce qui était cassé sur
+    // les 11 tenants prod le 2026-05-17, et c'est ce qu'un cron ne peut
+    // pas détecter sans vrai navigateur (le JWT est valide mais la liste
+    // des workspaces du user est vide côté API, donc la console SPA
+    // redirige sur /workspace/create).
+    //
+    // Si CE test passe → le contrat Hub→Notifuse n'a plus de moyen de
+    // casser silencieusement. Si CE test fail → le bug est de retour.
+
+    const tenantID = `regr${Date.now().toString(36).slice(-9)}`;
+    const ownerEmail = `${tenantID}@regression.test`;
+
+    const provisionResp = await hmacFetch('/api/tenants/provision', 'POST', {
+      tenant_id: tenantID,
+      owner_email: ownerEmail,
+      plan: 'free',
+    });
+    expect(provisionResp.status).toBe(200);
+    const provision = await provisionResp.json();
+    const autoLoginURL = provision.auto_login_url as string;
+    expect(autoLoginURL).toBeTruthy();
+
+    // Vrai browser context pour suivre l'auto-login (set localStorage + redirect JS).
+    const context = await browser.newContext({ baseURL: NOTIFUSE_URL });
+    const page = await context.newPage();
+    try {
+      // Suivre le auto-login URL. Le handler /veridian/auto-login set le JWT
+      // en localStorage puis fait `window.location.replace(redirectURL)`.
+      // On attend que la redirection soit terminée.
+      await page.goto(autoLoginURL, { waitUntil: 'networkidle', timeout: 15000 });
+
+      // Le redirect doit cibler /console (workspace picker si plusieurs ws,
+      // ou /console/workspace/<id> direct si un seul ws). PAS /workspace/create.
+      const finalURL = page.url();
+      expect(finalURL).not.toContain('/workspace/create');
+      expect(finalURL).toContain('/console');
+
+      // Vérif côté serveur via /api/user.me avec le JWT humain.
+      const userMeData = await page.evaluate(async () => {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return { error: 'no auth_token in localStorage' };
+        const r = await fetch('/api/user.me', { headers: { Authorization: 'Bearer ' + token }});
+        if (!r.ok) return { error: `user.me returned ${r.status}` };
+        return await r.json();
+      });
+      expect(userMeData.error).toBeUndefined();
+      expect(userMeData.user).toBeDefined();
+      expect(userMeData.user.email).toBe(ownerEmail);
+      expect(userMeData.user.type).toBe('user'); // human owner, pas api_key
+      expect(Array.isArray(userMeData.workspaces)).toBe(true);
+      const wsIds = (userMeData.workspaces as Array<string | { id: string }>).map((w) =>
+        typeof w === 'string' ? w : w.id,
+      );
+      expect(wsIds).toContain(tenantID);
+    } finally {
+      await context.close();
+    }
   });
 
   test('health on non-existent tenant returns 404', async () => {

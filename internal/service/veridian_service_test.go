@@ -351,6 +351,9 @@ func TestVeridianService_AttachOwner_AlreadyOwner(t *testing.T) {
 
 	humanUser := &domain.User{ID: "human-id", Email: "owner@x.test", Type: domain.UserTypeUser}
 
+	// Step 0 : workspace existe (check 404 préliminaire).
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(1)
+
 	// User humain existe déjà.
 	m.user.EXPECT().GetUserByEmail(ctx, "owner@x.test").Return(humanUser, nil).Times(1)
 
@@ -377,6 +380,7 @@ func TestVeridianService_AttachOwner_NotAttached_TransferFromRoot(t *testing.T) 
 	humanUser := &domain.User{ID: "human-id", Email: "alice@x.test", Type: domain.UserTypeUser}
 	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
 
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-orphan").Return(&domain.Workspace{ID: "ws-orphan"}, nil).Times(1)
 	m.user.EXPECT().GetUserByEmail(ctx, "alice@x.test").Return(humanUser, nil).Times(1)
 
 	// État : human pas attaché au workspace.
@@ -427,6 +431,7 @@ func TestVeridianService_AttachOwner_CreatesUserIfMissing(t *testing.T) {
 
 	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
 
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-x").Return(&domain.Workspace{ID: "ws-x"}, nil).Times(1)
 	// User humain inconnu → CreateUser.
 	m.user.EXPECT().GetUserByEmail(ctx, "newhuman@x.test").
 		Return(nil, &domain.ErrUserNotFound{Message: "not found"}).Times(1)
@@ -477,6 +482,7 @@ func TestVeridianService_AttachOwner_AttachedButNotOwner_TransferOnly(t *testing
 	humanUser := &domain.User{ID: "human-id", Email: "bob@x.test", Type: domain.UserTypeUser}
 	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
 
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(1)
 	m.user.EXPECT().GetUserByEmail(ctx, "bob@x.test").Return(humanUser, nil).Times(1)
 
 	// Human est déjà member (mais pas owner).
@@ -608,6 +614,34 @@ func TestVeridianService_Health_SoftDeleted(t *testing.T) {
 	assert.False(t, resp.MagicLinkCapable)
 }
 
+// TestVeridianService_AttachOwner_TenantNotFound vérifie que AttachOwner
+// renvoie sql.ErrNoRows (→ HTTP 404) quand le workspace n'existe pas.
+// Sans le Step 0 (GetByID préliminaire), le code tombait sur
+// GetUserWorkspace qui retourne "is not a member" → HTTP 500.
+// Bug flag par l'agent Hub 2026-05-18, fixé même jour.
+func TestVeridianService_AttachOwner_TenantNotFound(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ghost-tenant").Return(nil, sql.ErrNoRows).Times(1)
+
+	_, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ghost-tenant", OwnerEmail: "anyone@x.test"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, sql.ErrNoRows, "ghost tenant must return sql.ErrNoRows → 404")
+}
+
+// TestVeridianService_AttachOwner_TenantNotFoundUpstreamMessage couvre la
+// variante où GetByID upstream wrap ErrNoRows dans un message ("not found",
+// "no rows"). On doit aussi mapper vers ErrNoRows.
+func TestVeridianService_AttachOwner_TenantNotFoundUpstreamMessage(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ghost-2").Return(nil, errors.New("workspace not found in database")).Times(1)
+
+	_, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ghost-2", OwnerEmail: "anyone@x.test"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, sql.ErrNoRows, "wrapped 'not found' must also map to 404")
+}
+
 // TestVeridianService_AttachOwner_NotAttached_UpstreamMembershipError teste
 // que l'erreur upstream "user is not a member of the workspace" (vue en
 // staging 2026-05-18) est bien interprétée comme "pas attaché" et non
@@ -620,6 +654,7 @@ func TestVeridianService_AttachOwner_NotAttached_UpstreamMembershipError(t *test
 	humanUser := &domain.User{ID: "human-id", Email: "carol@x.test", Type: domain.UserTypeUser}
 	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
 
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-real").Return(&domain.Workspace{ID: "ws-real"}, nil).Times(1)
 	m.user.EXPECT().GetUserByEmail(ctx, "carol@x.test").Return(humanUser, nil).Times(1)
 
 	// Notifuse upstream renvoie cette erreur (au lieu de sql.ErrNoRows) quand
@@ -665,6 +700,7 @@ func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing
 	existingHumanOwner := &domain.User{ID: "alice-id", Email: "alice@x.test", Type: domain.UserTypeUser}
 	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
 
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-multi").Return(&domain.Workspace{ID: "ws-multi"}, nil).Times(1)
 	m.user.EXPECT().GetUserByEmail(ctx, "bob@x.test").Return(newOwner, nil).Times(1)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "bob-id", "ws-multi").Return(nil, sql.ErrNoRows).Times(1)
 

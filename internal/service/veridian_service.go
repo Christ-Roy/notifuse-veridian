@@ -802,6 +802,23 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		return nil, errors.New("owner_email required")
 	}
 
+	// Step 0 : vérifier que le workspace existe AVANT toute autre op.
+	// Sans ce check, un tenant_id inexistant remontait HTTP 500 ("user is
+	// not a member of the workspace") au lieu de 404 — l'agent Hub a flag
+	// ce comportement le 2026-05-18 (ticket from-notifuse). Le check
+	// explicite garantit la sémantique 404 du contrat README.
+	if _, wsErr := s.workspaceRepo.GetByID(ctx, input.TenantID); wsErr != nil {
+		if errors.Is(wsErr, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		// Pas not-found mais erreur DB → propage.
+		msg := strings.ToLower(wsErr.Error())
+		if strings.Contains(msg, "not found") || strings.Contains(msg, "no rows") {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("lookup workspace: %w", wsErr)
+	}
+
 	// Step 1 : trouver/créer le user humain.
 	owner, err := s.userService.GetUserByEmail(ctx, input.OwnerEmail)
 	if err != nil {
