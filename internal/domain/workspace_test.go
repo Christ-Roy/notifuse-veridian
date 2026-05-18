@@ -5036,3 +5036,18 @@ func TestErrWorkspaceLimitReached_Error(t *testing.T) {
 	}
 	assert.Equal(t, "workspace limit reached: 3 workspaces exist (limit: 3)", err.Error())
 }
+
+// === Veridian patch === Smoke test sur le champ VeridianManaged ajoute a
+// UserWorkspaceWithEmail. Le filtre Team Settings (workspace_service.go)
+// inspecte ce flag pour cacher l'api_key veridian-managed du listing UI.
+func TestUserWorkspaceWithEmail_VeridianManagedDefault(t *testing.T) {
+	m := UserWorkspaceWithEmail{Email: "human@x.test", Type: UserTypeUser}
+	assert.False(t, m.VeridianManaged, "default doit etre false")
+
+	managed := UserWorkspaceWithEmail{
+		Email:           "veridian-api-ws@notifuse.test",
+		Type:            UserTypeAPIKey,
+		VeridianManaged: true,
+	}
+	assert.True(t, managed.VeridianManaged)
+}

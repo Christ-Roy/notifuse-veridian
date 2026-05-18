@@ -856,6 +856,21 @@ func (s *WorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id 
 		return nil, err
 	}
 
+	// === Veridian patch === Filtrer les users geres par le Hub Veridian
+	// (typiquement l'api_key veridian-api-<tenant>) pour qu'ils n'apparaissent
+	// pas dans Team Settings. Sans ce filtre, le client peut voir la cle
+	// technique et tenter de la supprimer (cf RemoveMember qui refuse
+	// désormais 403). VeridianService.AttachOwner consume directement
+	// s.workspaceRepo, donc cette restriction UI ne casse pas le repair Hub.
+	filtered := members[:0]
+	for _, m := range members {
+		if m.VeridianManaged {
+			continue
+		}
+		filtered = append(filtered, m)
+	}
+	members = filtered
+
 	// force all permissions to owners
 	for _, member := range members {
 		if member.Role == "owner" {
@@ -1166,6 +1181,16 @@ func (s *WorkspaceService) RemoveMember(ctx context.Context, workspaceID string,
 	if err != nil {
 		s.logger.WithField("user_id", userIDToRemove).WithField("error", err.Error()).Error("Failed to get user details")
 		return err
+	}
+
+	// === Veridian patch === Refuser 403 si la cible est un user gere par le
+	// Hub Veridian (typiquement l'api_key `veridian-api-<tenant>@notifuse.*`).
+	// Supprimer ce user casse silencieux le flow magic-link Hub -> Notifuse :
+	// le bouton "Open Notifuse" cote dashboard Hub renvoie 401 sans aucune
+	// trace cote UI client. Cf. todo/done/2026-05-18-hide-veridian-api-key.md.
+	if userDetails.VeridianManaged {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userIDToRemove).Warn("Refused remove of veridian-managed user")
+		return &domain.ErrUnauthorized{Message: "cannot remove a Veridian-managed integration credential"}
 	}
 
 	// Remove user from workspace

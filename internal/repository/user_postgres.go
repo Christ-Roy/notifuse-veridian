@@ -59,8 +59,10 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
 
 func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
+	// === Veridian patch === SELECT veridian_managed pour que le service
+	// RemoveMember puisse refuser 403 sur les api_key gérées par le Hub.
 	query := `
-		SELECT id, email, name, type, created_at, updated_at
+		SELECT id, email, name, type, created_at, updated_at, veridian_managed
 		FROM users
 		WHERE email = $1
 	`
@@ -71,6 +73,7 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 		&user.Type,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.VeridianManaged,
 	)
 	if err == sql.ErrNoRows {
 		return nil, &domain.ErrUserNotFound{Message: "user not found"}
@@ -88,8 +91,10 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 	span.AddAttributes(trace.StringAttribute("user.id", id))
 
 	var user domain.User
+	// === Veridian patch === SELECT veridian_managed pour que le service
+	// RemoveMember puisse refuser 403 sur les api_key gérées par le Hub.
 	query := `
-		SELECT id, email, name, type, created_at, updated_at
+		SELECT id, email, name, type, created_at, updated_at, veridian_managed
 		FROM users
 		WHERE id = $1
 	`
@@ -101,6 +106,7 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 		&user.Type,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.VeridianManaged,
 	)
 	queryDuration := time.Since(startTime)
 
@@ -334,5 +340,25 @@ func (r *userRepository) Delete(ctx context.Context, id string) error {
 		return &domain.ErrUserNotFound{Message: "user not found"}
 	}
 
+	return nil
+}
+
+// === Veridian patch === MarkVeridianManaged set veridian_managed=TRUE pour le
+// user identifié par email. Idempotent. ErrUserNotFound si l'email n'existe pas.
+// Appelé par VeridianService.Provision après CreateAPIKey pour verrouiller le
+// user api_key contre la suppression UI.
+func (r *userRepository) MarkVeridianManaged(ctx context.Context, email string) error {
+	const q = `UPDATE users SET veridian_managed = TRUE WHERE email = $1`
+	result, err := r.systemDB.ExecContext(ctx, q, email)
+	if err != nil {
+		return fmt.Errorf("mark veridian-managed: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("mark veridian-managed rows: %w", err)
+	}
+	if rows == 0 {
+		return &domain.ErrUserNotFound{Message: "user not found"}
+	}
 	return nil
 }

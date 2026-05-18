@@ -853,6 +853,12 @@ type UserWorkspaceWithEmail struct {
 	Type                UserType   `json:"type" db:"type"`
 	InvitationExpiresAt *time.Time `json:"invitation_expires_at" db:"invitation_expires_at"`
 	InvitationID        string     `json:"invitation_id,omitempty" db:"invitation_id"`
+
+	// === Veridian patch === True si le user est gere par le Hub Veridian.
+	// Permet au service GetWorkspaceMembersWithEmail (UI) de filtrer ces
+	// users, tout en preservant l'usage AttachOwner cote VeridianService
+	// qui a besoin de voir tous les membres y compris managed.
+	VeridianManaged bool `json:"veridian_managed,omitempty" db:"veridian_managed"`
 }
 
 // Validate performs validation on the user workspace fields

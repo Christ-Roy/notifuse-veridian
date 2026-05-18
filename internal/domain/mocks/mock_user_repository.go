@@ -165,6 +165,20 @@ func (mr *MockUserRepositoryMockRecorder) GetUserByID(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByID", reflect.TypeOf((*MockUserRepository)(nil).GetUserByID), arg0, arg1)
 }
 
+// MarkVeridianManaged mocks base method.
+func (m *MockUserRepository) MarkVeridianManaged(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkVeridianManaged", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkVeridianManaged indicates an expected call of MarkVeridianManaged.
+func (mr *MockUserRepositoryMockRecorder) MarkVeridianManaged(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkVeridianManaged", reflect.TypeOf((*MockUserRepository)(nil).MarkVeridianManaged), arg0, arg1)
+}
+
 // UpdateSession mocks base method.
 func (m *MockUserRepository) UpdateSession(arg0 context.Context, arg1 *domain.Session) error {
 	m.ctrl.T.Helper()

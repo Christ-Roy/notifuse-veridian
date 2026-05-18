@@ -109,6 +109,11 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	m.workspace.EXPECT().CreateAPIKey(gomock.Any(), "ws-new", "veridian-api-ws-new").
 		Return("sk_test_apikey", "veridian-api-ws-new@ws-new.notifuse", nil).Times(1)
 
+	// === Veridian patch === Mark le user api_key freshly created comme
+	// veridian-managed pour bloquer Team Settings -> Remove member dessus.
+	m.userRepo.EXPECT().MarkVeridianManaged(ctx, "veridian-api-ws-new@ws-new.notifuse").
+		Return(nil).Times(1)
+
 	// Upsert plan
 	m.planRepo.EXPECT().Upsert(ctx, gomock.AssignableToTypeOf(&domain.VeridianPlan{})).
 		DoAndReturn(func(_ context.Context, p *domain.VeridianPlan) error {

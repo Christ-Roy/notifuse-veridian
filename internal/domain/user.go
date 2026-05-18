@@ -38,6 +38,14 @@ type User struct {
 	Name      string    `json:"name,omitempty" db:"name"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+
+	// === Veridian patch === VeridianManaged true means the user was created
+	// and is owned by the Veridian Hub (typically the per-tenant api_key user
+	// `veridian-api-<tenant>@notifuse.*`). These users must be hidden from
+	// Team Settings and cannot be removed by the workspace owner — removing
+	// them silently breaks the Hub→Notifuse magic-link flow. Backfilled by
+	// migration V32 based on the `veridian-api-*` email prefix.
+	VeridianManaged bool `json:"veridian_managed,omitempty" db:"veridian_managed"`
 }
 
 // Session represents a user session
@@ -137,6 +145,14 @@ type UserRepository interface {
 
 	// Delete removes a user by their ID
 	Delete(ctx context.Context, id string) error
+
+	// === Veridian patch === MarkVeridianManaged flags a user as managed by
+	// the Veridian Hub (anti-sabotage protection: hidden from Team Settings,
+	// 403 on remove). Idempotent UPDATE — no row affected means the user
+	// doesn't exist yet (caller must handle) but a re-call on an already
+	// managed user is a no-op. Called by VeridianService.Provision right
+	// after CreateAPIKey to lock down the freshly-minted api_key user.
+	MarkVeridianManaged(ctx context.Context, email string) error
 }
 
 // ErrUserNotFound is returned when a user is not found

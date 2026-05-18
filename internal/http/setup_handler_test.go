@@ -140,6 +140,12 @@ func (m *mockUserRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// === Veridian patch === Stub pour satisfaire l'interface UserRepository
+// elargie (cf domain/user.go). Pas utilise par les tests setup/settings.
+func (m *mockUserRepository) MarkVeridianManaged(ctx context.Context, email string) error {
+	return nil
+}
+
 func TestSetupHandler_Status(t *testing.T) {
 	tests := []struct {
 		name           string

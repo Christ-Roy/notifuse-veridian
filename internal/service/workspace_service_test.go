@@ -2220,6 +2220,34 @@ func TestWorkspaceService_RemoveMember(t *testing.T) {
 		assert.Contains(t, err.Error(), "user not found")
 	})
 
+	// === Veridian patch === Anti-sabotage : Team Settings ne peut pas
+	// supprimer un user marque VeridianManaged (typiquement l'api_key
+	// `veridian-api-<tenant>` provisionnee par le Hub). Sans ce 403, supprimer
+	// ce user casse silencieux le flow magic-link Hub -> Notifuse pour ce
+	// tenant.
+	t.Run("refuses removal of veridian-managed user (403)", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		veridianAPIKey := &domain.User{
+			ID:              apiKeyID,
+			Type:            domain.UserTypeAPIKey,
+			Email:           "veridian-api-test-workspace@notifuse.test",
+			VeridianManaged: true,
+		}
+		ownerWorkspace := &domain.UserWorkspace{UserID: ownerID, WorkspaceID: workspaceID, Role: "owner"}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, apiKeyID).Return(veridianAPIKey, nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", apiKeyID).Return(mockLogger)
+		mockLogger.EXPECT().Warn("Refused remove of veridian-managed user")
+
+		err := service.RemoveMember(ctx, workspaceID, apiKeyID)
+		require.Error(t, err)
+		assert.IsType(t, &domain.ErrUnauthorized{}, err)
+		assert.Contains(t, err.Error(), "Veridian-managed")
+	})
+
 	t.Run("error removing user from workspace", func(t *testing.T) {
 		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
 		member := &domain.User{ID: memberID, Type: domain.UserTypeUser}

@@ -326,6 +326,20 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		return nil, fmt.Errorf("create api key: %w", err)
 	}
 
+	// 5b. === Veridian patch === Verrouiller le user api_key fraichement cree
+	// contre la suppression UI (Team Settings). Sans ce flag, le client peut
+	// supprimer ce user via Team -> Remove member -> magic-link Hub casse
+	// silencieux. Idempotent (re-provision OK). Non-fatal : si l'UPDATE foire
+	// (race, DB momentanement KO), on log mais on continue le provisioning —
+	// la detection cote Hub via /health api_key_valid prendra le relais.
+	if markErr := s.userRepo.MarkVeridianManaged(ctx, apiKeyEmail); markErr != nil && s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"tenant_id": input.TenantID,
+			"api_email": apiKeyEmail,
+			"error":     markErr.Error(),
+		}).Warn("veridian: failed to mark api_key user as veridian_managed (non-fatal)")
+	}
+
 	// 6. Owner natif : transferer l'ownership a `owner.ID` puis retirer root
 	// du workspace, pour que le tenant user soit owner unique. Voir
 	// transferOwnershipToTenant pour les details. Best-effort : si la

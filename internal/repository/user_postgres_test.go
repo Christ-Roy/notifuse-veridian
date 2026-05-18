@@ -88,10 +88,10 @@ func TestGetUserByEmail(t *testing.T) {
 		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "created_at", "updated_at"}).
-		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.CreatedAt, expectedUser.UpdatedAt)
+	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "created_at", "updated_at", "veridian_managed"}).
+		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.CreatedAt, expectedUser.UpdatedAt, false)
 
-	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at, veridian_managed FROM users WHERE email = \$1`).
 		WithArgs(email).
 		WillReturnRows(rows)
 
@@ -103,7 +103,7 @@ func TestGetUserByEmail(t *testing.T) {
 	assert.Equal(t, expectedUser.Type, user.Type)
 
 	// Test case 2: User not found
-	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at, veridian_managed FROM users WHERE email = \$1`).
 		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
@@ -113,7 +113,7 @@ func TestGetUserByEmail(t *testing.T) {
 	assert.IsType(t, &domain.ErrUserNotFound{}, err)
 
 	// Test case 3: Database error
-	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at, veridian_managed FROM users WHERE email = \$1`).
 		WithArgs("error@example.com").
 		WillReturnError(errors.New("database error"))
 
@@ -140,10 +140,10 @@ func TestGetUserByID(t *testing.T) {
 		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "created_at", "updated_at"}).
-		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.CreatedAt, expectedUser.UpdatedAt)
+	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "created_at", "updated_at", "veridian_managed"}).
+		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.CreatedAt, expectedUser.UpdatedAt, false)
 
-	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at, veridian_managed FROM users WHERE id = \$1`).
 		WithArgs(userID).
 		WillReturnRows(rows)
 
@@ -155,7 +155,7 @@ func TestGetUserByID(t *testing.T) {
 	assert.Equal(t, expectedUser.Type, user.Type)
 
 	// Test case 2: User not found
-	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at FROM users WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, created_at, updated_at, veridian_managed FROM users WHERE id = \$1`).
 		WithArgs("nonexistent-id").
 		WillReturnError(sql.ErrNoRows)
 
@@ -489,4 +489,66 @@ func TestDeleteUser(t *testing.T) {
 	err = repo.Delete(context.Background(), "user-error-id")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to delete user")
+}
+
+// === Veridian patch === Tests pour MarkVeridianManaged (ticket P1
+// hide-veridian-api-key, cf todo/done/2026-05-18-hide-veridian-api-key.md).
+
+func TestMarkVeridianManaged_Success(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	mock.ExpectExec(`UPDATE users SET veridian_managed = TRUE WHERE email = \$1`).
+		WithArgs("veridian-api-ws-1@notifuse.test").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.MarkVeridianManaged(context.Background(), "veridian-api-ws-1@notifuse.test")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMarkVeridianManaged_NotFound(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	mock.ExpectExec(`UPDATE users SET veridian_managed = TRUE WHERE email = \$1`).
+		WithArgs("ghost@example.com").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err := repo.MarkVeridianManaged(context.Background(), "ghost@example.com")
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUserNotFound{}, err)
+}
+
+func TestMarkVeridianManaged_DBError(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	mock.ExpectExec(`UPDATE users SET veridian_managed = TRUE WHERE email = \$1`).
+		WithArgs("err@example.com").
+		WillReturnError(errors.New("connection refused"))
+
+	err := repo.MarkVeridianManaged(context.Background(), "err@example.com")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mark veridian-managed")
+}
+
+// TestMarkVeridianManaged_Idempotent verifie qu'un re-call sur un user deja
+// marque ne renvoie pas d'erreur (UPDATE matche 1 row, valeur identique).
+func TestMarkVeridianManaged_Idempotent(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	// Re-call : 1 row matche, on retourne rows_affected=1 comme PostgreSQL
+	// le fait meme si la valeur ne change pas (UPDATE = match, pas diff).
+	mock.ExpectExec(`UPDATE users SET veridian_managed = TRUE WHERE email = \$1`).
+		WithArgs("api@notifuse.test").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.MarkVeridianManaged(context.Background(), "api@notifuse.test")
+	require.NoError(t, err, "re-call sur user deja marque doit etre no-op silencieux")
 }

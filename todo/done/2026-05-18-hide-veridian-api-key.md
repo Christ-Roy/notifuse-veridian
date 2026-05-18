@@ -181,3 +181,67 @@ Quand ce fix est en prod Notifuse :
 ## Branche & PR
 
 Branche dédiée `feat/veridian-managed-users`. PR séparée du AttachOwner ship. Pas de breaking change → pas de v2 API needed.
+
+---
+
+## Réponse — 2026-05-18
+
+**Implémenté Phase 1 complète.** Ship trunk-based direct sur `veridian` (pas de branche feature, cf CLAUDE.md "trunk-based, zéro PR").
+
+### Migration V32 — `internal/migrations/v32.go`
+
+- `ALTER TABLE users ADD COLUMN IF NOT EXISTS veridian_managed BOOLEAN NOT NULL DEFAULT FALSE`
+- Backfill : `UPDATE users SET veridian_managed = TRUE WHERE type='api_key' AND email LIKE 'veridian-api-%@notifuse.%'`
+- Idempotent, no-op sur re-run, prod-safe.
+- Tests : success / idempotent / 2× error path / noop workspace.
+
+Bump `config/config.go::VERSION` de `30.1` → `32.0` (V31 = backfill plan ticket P2 dans la même session).
+
+Schéma fresh installs aussi mis à jour : `internal/database/schema/system_tables.go` inclut la colonne.
+
+### Domain — `internal/domain/user.go` + `internal/domain/workspace.go`
+
+- Champ `User.VeridianManaged bool` avec marker Veridian + commentaire.
+- Champ `UserWorkspaceWithEmail.VeridianManaged bool` (peuplé via JOIN dans le repo).
+- Interface `UserRepository` étendue avec `MarkVeridianManaged(ctx, email) error`.
+- Smoke tests dans `user_test.go` + `workspace_test.go` (couvre Constitution §1).
+
+### Repository — `internal/repository/user_postgres.go` (upstream patch) + `workspace_postgres.go`
+
+- `GetUserByEmail` + `GetUserByID` : SELECT élargi `veridian_managed` + scan.
+- `MarkVeridianManaged` : `UPDATE users SET veridian_managed = TRUE WHERE email = $1`. Idempotent. `ErrUserNotFound` si rows=0.
+- `GetWorkspaceUsersWithEmail` : SELECT élargi `u.veridian_managed` + scan vers le champ.
+- Tests existants ajustés au nouveau scan. 4 tests `TestMarkVeridianManaged_*` ajoutés (success / notfound / error / idempotent).
+
+### Service — `internal/service/veridian_service.go` (Provision)
+
+Après `CreateAPIKey`, appel non-fatal à `userRepo.MarkVeridianManaged(apiKeyEmail)` avec log warning si échec. Detection layer Hub `/health api_key_valid` prend le relais en cas de race.
+
+### Service — `internal/service/workspace_service.go` (upstream patch avec marker)
+
+- **`RemoveMember`** : si `userDetails.VeridianManaged == true` → return `&ErrUnauthorized{...}` (qui devient 403 dans le handler existant). Test colocalisé `refuses removal of veridian-managed user (403)` ajouté.
+- **`GetWorkspaceMembersWithEmail`** : filter in-place `members[:0]` qui exclut les `VeridianManaged`. **Ne touche pas** au call site `workspaceRepo.GetWorkspaceUsersWithEmail` utilisé par `AttachOwner` (qui voit toujours TOUS les members). 3 tests dans nouveau fichier `internal/service/veridian_team_filter_test.go`.
+
+### Stub mock test — `internal/http/setup_handler_test.go`
+
+`mockUserRepository.MarkVeridianManaged` stub pour satisfaire l'interface élargie.
+
+### Tests régénérés
+
+- mockgen v1.6.0 réinstallé (le projet utilise legacy `github.com/golang/mock`, pas `go.uber.org/mock`).
+- `MockUserRepository.MarkVeridianManaged` généré.
+- `TestVeridianService_Provision_NewTenant` étendu avec expect `MarkVeridianManaged`.
+
+### UI Console — différé Phase 2
+
+L'UI console (Team.tsx) **n'a pas été touchée** dans cette session — le filtre serveur (`GetWorkspaceMembersWithEmail`) cache déjà le user de la réponse API, donc l'UI ne le voit pas et n'a rien à modifier. C'est la défense en profondeur côté serveur recommandée par le ticket.
+
+### Endpoints Phase 2 (`/api/veridian/admin/list-managed-users`, `rotate-api-key`)
+
+Hors-scope de ce ship — pas urgent. Ouvrir un ticket dédié si besoin Hub plus tard.
+
+### Ship
+
+Commit + push direct sur `veridian` (trunk-based). CI auto-promotion → main → deploy prod. Migration V32 tournera au démarrage du container prod et backfille les api_keys existantes en place.
+
+**Coordination Hub** : aucune action côté Hub requise. Le check optionnel `/api/user.me` post-provision peut être ajouté plus tard côté Hub si besoin garantie contractuelle.

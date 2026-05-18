@@ -100,3 +100,19 @@ func TestErrSessionNotFound_Error(t *testing.T) {
 	err := &ErrSessionNotFound{Message: "test error"}
 	assert.Equal(t, "test error", err.Error())
 }
+
+// === Veridian patch === Smoke test sur le champ VeridianManaged ajoute pour
+// le hardening anti-sabotage Team Settings (cf migration V32). Verifie le
+// default false + flag explicite quand le user est gere par le Hub.
+func TestUser_VeridianManagedDefault(t *testing.T) {
+	u := User{ID: "u-1", Email: "human@x.test", Type: UserTypeUser}
+	assert.False(t, u.VeridianManaged, "default doit etre false")
+
+	managed := User{
+		ID:              "u-2",
+		Email:           "veridian-api-ws@notifuse.test",
+		Type:            UserTypeAPIKey,
+		VeridianManaged: true,
+	}
+	assert.True(t, managed.VeridianManaged)
+}

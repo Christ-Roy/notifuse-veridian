@@ -11,7 +11,9 @@ var TableDefinitions = []string{
 		email VARCHAR(255) UNIQUE NOT NULL,
 		name VARCHAR(255),
 		created_at TIMESTAMP NOT NULL,
-		updated_at TIMESTAMP NOT NULL
+		updated_at TIMESTAMP NOT NULL,
+		-- === Veridian patch === voir migration V32 + internal/domain/user.go
+		veridian_managed BOOLEAN NOT NULL DEFAULT FALSE
 	)`,
 	`CREATE TABLE IF NOT EXISTS user_sessions (
 		id UUID PRIMARY KEY,
