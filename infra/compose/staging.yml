@@ -40,7 +40,7 @@ services:
           cpus: "0.1"
 
   notifuse-staging:
-    image: ghcr.io/christ-roy/notifuse-veridian:v32.0-veridian.3009bb50@sha256:35d36e3af1f95bca17ef74f47c51b73b47b946c43111c219509c66e3380c7c47
+    image: ghcr.io/christ-roy/notifuse-veridian:v32.0-veridian.b7d3fdcc@sha256:249f4d1b938e8ee7ec7dc96cdc52d440ebe765b022c42983d213177d11517c1d
     container_name: notifuse-staging
     pull_policy: always
     restart: unless-stopped
