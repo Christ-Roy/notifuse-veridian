@@ -58,7 +58,81 @@ run:
 	go run ./cmd/api
 
 dev:
+	@command -v air >/dev/null 2>&1 || { echo "❌ air manquant — installe avec: go install github.com/air-verse/air@latest"; exit 1; }
 	air
+
+# === Veridian dev env (cycle hot-reload 2-3s pour itérer plus vite que la CI)
+# Usage premier setup :
+#   make dev-bootstrap     # check tools + .env + keygen + compose test
+#   make dev-up            # start Postgres test + Mailpit (background)
+#   make dev               # Air hot-reload
+#   make dev-tailscale     # bonus : tunnel HTTPS public via Tailscale
+#   make dev-stop          # stop tout
+.PHONY: dev-bootstrap dev-up dev-stop dev-tailscale dev-status
+
+# Vérifie pré-requis + crée .env depuis l'example + génère PASETO keys
+dev-bootstrap:
+	@echo "→ Checking tools..."
+	@command -v docker >/dev/null 2>&1 || { echo "❌ docker missing"; exit 1; }
+	@command -v go >/dev/null 2>&1 || { echo "❌ go missing"; exit 1; }
+	@command -v air >/dev/null 2>&1 || { echo "→ Installing air..."; go install github.com/air-verse/air@latest; }
+	@if [ ! -f .env ]; then \
+		echo "→ Copying .env.dev.example to .env..."; \
+		cp .env.dev.example .env; \
+		echo "→ Generating PASETO keys (overwrite empty placeholders)..."; \
+		./scripts/dev/inject-paseto-keys.sh; \
+		echo "→ Injecting secrets from ~/credentials/.all-creds.env..."; \
+		./scripts/dev/inject-secrets.sh; \
+		echo "✓ .env ready. Review it, then run 'make dev-up && make dev'."; \
+	else \
+		echo "✓ .env already exists (skip)"; \
+	fi
+
+# Start Postgres test (:5433) + Mailpit SMTP (:1025) + UI (:8025) — background
+dev-up:
+	@echo "→ Starting Postgres test + Mailpit..."
+	docker compose -f tests/compose.test.yaml up -d
+	@echo "→ Waiting for healthy..."
+	@for i in $$(seq 1 30); do \
+		if docker compose -f tests/compose.test.yaml ps --format json 2>/dev/null | grep -q '"Health":"healthy"'; then \
+			echo "✓ Services healthy"; \
+			docker compose -f tests/compose.test.yaml ps; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "⚠ Services not healthy after 30s, check 'docker compose -f tests/compose.test.yaml logs'"
+
+# Stop tous les services dev
+dev-stop:
+	@docker compose -f tests/compose.test.yaml down
+	@pkill -f "tailscale serve" 2>/dev/null || true
+	@echo "✓ Dev services stopped"
+
+# Expose le serveur local (port 8080) en HTTPS public via Tailscale Funnel.
+# URL stable, valable tant que ta machine est en ligne. Idéal pour tester depuis
+# une autre machine ou contre le Hub local.
+dev-tailscale:
+	@command -v tailscale >/dev/null 2>&1 || { echo "❌ tailscale missing"; exit 1; }
+	@echo "→ Exposing http://localhost:8080 via Tailscale..."
+	@tailscale serve --bg --https=443 http://localhost:8080
+	@tailscale serve status
+	@echo ""
+	@echo "✓ Public URL : https://$$(tailscale status --json | jq -r '.Self.DNSName' | sed 's/\.$$//')"
+
+# Affiche l'état complet du dev env
+dev-status:
+	@echo "=== Docker services ==="
+	@docker compose -f tests/compose.test.yaml ps 2>/dev/null || echo "Not started"
+	@echo ""
+	@echo "=== Air process ==="
+	@pgrep -af "^air" | head -3 || echo "Air not running"
+	@echo ""
+	@echo "=== Tailscale serve ==="
+	@tailscale serve status 2>/dev/null || echo "Not exposed"
+	@echo ""
+	@echo "=== Local health check ==="
+	@curl -s -o /dev/null -w "http://localhost:8080/healthz → HTTP %{http_code}\n" http://localhost:8080/healthz 2>&1 || echo "Server not up"
 
 clean:
 	rm -rf bin/ tmp/ coverage.out coverage.html coverage-internal-pkg.out coverage-report.txt

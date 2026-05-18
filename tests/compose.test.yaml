@@ -12,7 +12,10 @@ services:
       POSTGRES_USER: notifuse_test
       POSTGRES_PASSWORD: test_password
     ports:
-      - '5433:5432'
+      # === Veridian patch === Override le port via NOTIFUSE_DB_TEST_PORT
+      # (défaut 5433). Permet de coexister avec d'autres Postgres locaux
+      # (ex: verger-postgres déjà sur 5433 chez certains devs).
+      - '${NOTIFUSE_DB_TEST_PORT:-5433}:5432'
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,8 +29,11 @@ services:
     environment:
       MP_MAX_MESSAGES: 2000
     ports:
-      - '1025:1025' # SMTP server
-      - '8025:8025' # Web UI
+      # === Veridian patch === Ports override via NOTIFUSE_SMTP_TEST_PORT
+      # et NOTIFUSE_MAILPIT_UI_PORT pour coexister avec d'autres SMTP locaux
+      # (ex: verger-mailhog déjà sur 1025).
+      - '${NOTIFUSE_SMTP_TEST_PORT:-1025}:1025' # SMTP server
+      - '${NOTIFUSE_MAILPIT_UI_PORT:-8025}:8025' # Web UI
     healthcheck:
       test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:8025/']
       interval: 10s

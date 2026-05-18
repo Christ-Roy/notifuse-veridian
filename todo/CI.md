@@ -146,11 +146,13 @@ cve-scan        ─┤
 ### 🔐 Secrets manquants (non bloquants)
 
 - [ ] **`TELEGRAM_CHAT_ID`** — utilisé par rollback + promote-prod-compose pour notifs. `getUpdates` actuel est vide (`{"ok":true,"result":[]}`), il faut **envoyer un message au bot `@<bot_username>` ou dans le groupe Telegram dédié** pour qu'il apparaisse. Robert : envoie "test" au bot puis je relance.
-- [ ] **`NOTIFUSE_DEPLOY_PUSH_PAT`** — PAT scope `repo` sur `Christ-Roy/notifuse-deploy`. Sans, le job promote-prod-compose explose. À créer avant le premier passage prod.
+- [x] ~~**`NOTIFUSE_DEPLOY_PUSH_PAT`**~~ — **OBSOLÈTE 2026-05-18** : repo legacy `Christ-Roy/notifuse-deploy` éliminé. Dokploy pointe maintenant directement vers `Christ-Roy/notifuse-veridian@veridian:infra/compose/prod.yml`. Plus de PAT cross-repo nécessaire. Le job `Promote compose prod vers notifuse-deploy` peut être supprimé du workflow.
 
 ### 🎯 Premier promote-prod réel (validation finale)
 
-- [ ] Une fois `NOTIFUSE_DEPLOY_PUSH_PAT` en place, lancer `workflow_dispatch` avec `promote_prod_compose=true` sur un commit dont l'e2e-staging est vert. Diff sémantique vs compose live est vide → **aucun changement comportemental attendu**, juste promotion de notre `infra/compose/prod.yml` comme nouvelle source de vérité de `notifuse-deploy`.
+- [x] ~~Promote-prod-compose via `notifuse-deploy`~~ — **OBSOLÈTE 2026-05-18** : migration archi propre faite en direct via Dokploy API (cf. `todo/done/2026-05-18-prod-pas-redeployee.md`). Désormais, push sur `veridian` qui touche `infra/compose/prod.yml` déclenche le redeploy auto (Dokploy autoDeploy=true sur watchPaths).
+- [ ] **Remove dead code** : supprimer le job `Promote compose prod vers notifuse-deploy` (~80 lignes) du workflow `veridian-ci.yml`. Plus jamais utilisé.
+- [ ] **Archiver le repo `Christ-Roy/notifuse-deploy`** sur GitHub (settings → archive). Plus utilisé par la prod.
 
 ### 🚦 App Renovate à installer
 
