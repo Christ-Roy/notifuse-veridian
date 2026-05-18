@@ -67,7 +67,10 @@ ENV GOOS=linux
 RUN go build -ldflags="-s -w" -o /tmp/server ./cmd/api
 
 # Stage 4: Create the runtime container (Alpine for smaller image)
-FROM alpine:3.19
+# === Veridian patch === bump 3.19 → 3.21 : alpine 3.19 EOL depuis 2025-11-01,
+# Trivy bloque via Constitution CI §13 (exit-on-eol). Alpine 3.21 supporté
+# jusqu'au 2026-11-01. Pas de pkg apk version-specific dans cette image.
+FROM alpine:3.21
 
 # Add necessary runtime packages
 RUN apk add --no-cache \
