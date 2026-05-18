@@ -36,7 +36,7 @@ services:
           cpus: "0.25"
 
   notifuse-prod:
-    image: ghcr.io/christ-roy/notifuse-veridian:v32.0-veridian.445a8ac4@sha256:9b403df06ae0a4dc03a0c9a9e222c83ae66d92b9210bb09e3a82813c2d1a1ecb
+    image: ghcr.io/christ-roy/notifuse-veridian:v32.0-veridian.7a18b16d@sha256:4f3fa882072b2c6f1d503de721a03376653062ffd3659443b20e25042ac69181
     pull_policy: always
     restart: unless-stopped
     networks:
