@@ -608,6 +608,49 @@ func TestVeridianService_Health_SoftDeleted(t *testing.T) {
 	assert.False(t, resp.MagicLinkCapable)
 }
 
+// TestVeridianService_AttachOwner_NotAttached_UpstreamMembershipError teste
+// que l'erreur upstream "user is not a member of the workspace" (vue en
+// staging 2026-05-18) est bien interprétée comme "pas attaché" et non
+// comme une erreur DB. Sans ce parsing, AttachOwner remontait HTTP 500
+// pour tous les tenants où l'owner humain n'existait pas encore.
+func TestVeridianService_AttachOwner_NotAttached_UpstreamMembershipError(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	humanUser := &domain.User{ID: "human-id", Email: "carol@x.test", Type: domain.UserTypeUser}
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	m.user.EXPECT().GetUserByEmail(ctx, "carol@x.test").Return(humanUser, nil).Times(1)
+
+	// Notifuse upstream renvoie cette erreur (au lieu de sql.ErrNoRows) quand
+	// le user n'est pas dans user_workspaces. On doit l'accepter.
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "human-id", "ws-real").
+		Return(nil, errors.New("user is not a member of the workspace")).Times(1)
+
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	m.workspace.EXPECT().AddUserToWorkspace(
+		gomock.Any(), "ws-real", "human-id", "member", gomock.Any(),
+	).Return(nil).Times(1)
+
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-real").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "root-id", WorkspaceID: "ws-real", Role: "owner"}, Email: "root@veridian.site"},
+	}, nil).Times(1)
+
+	m.workspace.EXPECT().TransferOwnership(
+		gomock.Any(), "ws-real", "human-id", "root-id",
+	).Return(nil).Times(1)
+	m.workspace.EXPECT().RemoveUserFromWorkspace(gomock.Any(), "ws-real", "root-id").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-real", gomock.Any()).Times(1)
+
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-real", OwnerEmail: "carol@x.test"})
+	require.NoError(t, err, "upstream 'is not a member' must be parsed as not-attached, not as a DB error")
+	assert.False(t, resp.AlreadyAttached)
+	assert.True(t, resp.OwnerTransferred)
+}
+
 // TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists garantit
 // le comportement "additif uniquement" exigé par le README intégrations Hub :
 // si un user humain est déjà owner du workspace et qu'on attache un 2e owner

@@ -836,9 +836,16 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		}
 	} else if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
 		// Toute autre erreur (DB down, etc.) → fail. ErrNoRows = pas attaché.
-		// Notifuse upstream peut wrapper ErrNoRows dans un autre format,
-		// on accepte donc également "not found" en sous-chaîne.
-		if !strings.Contains(lookupErr.Error(), "not found") {
+		// Notifuse upstream wrap "not found" dans plusieurs formats selon la
+		// version : "not found", "is not a member" (validation côté repo).
+		// On accepte ces patterns comme équivalents à "pas attaché" — c'est
+		// exactement ce que AttachOwner doit gérer (user existe mais pas
+		// encore dans user_workspaces). Vérifié en staging 2026-05-18.
+		msg := strings.ToLower(lookupErr.Error())
+		notAttached := strings.Contains(msg, "not found") ||
+			strings.Contains(msg, "is not a member") ||
+			strings.Contains(msg, "no rows")
+		if !notAttached {
 			return nil, fmt.Errorf("lookup current attachment: %w", lookupErr)
 		}
 	}
