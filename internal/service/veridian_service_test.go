@@ -534,17 +534,50 @@ func TestVeridianService_Health_RejectsEmpty(t *testing.T) {
 }
 
 func TestVeridianService_Health_TenantNotFound(t *testing.T) {
+	// 404 réservé au cas "workspace absent" depuis 2026-05-18.
+	// Plan absent seul = legacy workspace, pas une 404 (cf TestVeridianService_Health_LegacyWorkspaceWithoutPlan).
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
-	m.planRepo.EXPECT().Get(ctx, "ghost").Return(nil, sql.ErrNoRows).Times(1)
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ghost").Return(nil, sql.ErrNoRows).Times(1)
 	_, err := svc.Health(ctx, "ghost")
 	assert.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+// TestVeridianService_Health_LegacyWorkspaceWithoutPlan couvre le bug 2026-05-18 :
+// 9 workspaces prod existent dans `workspaces` mais n'ont pas de row dans
+// `veridian_plan` (créés avant la table). Avant le fix, Health renvoyait 404
+// alors que le tenant est fonctionnel. Maintenant : 200 avec plan/status vides.
+func TestVeridianService_Health_LegacyWorkspaceWithoutPlan(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-legacy").Return(&domain.Workspace{ID: "ws-legacy"}, nil).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "ws-legacy").Return(nil, sql.ErrNoRows).Times(1)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-legacy").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "owner-id", WorkspaceID: "ws-legacy", Role: "owner"}, Email: "owner@x.test"},
+		{UserWorkspace: domain.UserWorkspace{UserID: "key-id", WorkspaceID: "ws-legacy", Role: "member"}, Email: "key@x.test"},
+	}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "owner-id").Return(&domain.User{ID: "owner-id", Type: domain.UserTypeUser}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "key-id").Return(&domain.User{ID: "key-id", Type: domain.UserTypeAPIKey}, nil).Times(1)
+
+	resp, err := svc.Health(ctx, "ws-legacy")
+	require.NoError(t, err, "legacy workspace must NOT return 404")
+	assert.Equal(t, "", resp.Plan, "plan vide → Hub interprète comme legacy à enroller")
+	assert.Equal(t, domain.PlanStatus(""), resp.Status, "status vide quand plan absent")
+	assert.True(t, resp.OwnerAttached, "owner humain présent → attached")
+	assert.True(t, resp.APIKeyValid, "api key présente → valid")
+	// Legacy workspace : owner humain + api key présents → magic link OK
+	// même sans plan. C'est l'invariant business validé pour les 9 tenants prod
+	// (cf ticket todo/2026-05-18-health-404-sur-workspace-sans-plan.md) :
+	// le flow user marchait DÉJÀ malgré le 404 fantôme, il continue de marcher.
+	assert.True(t, resp.MagicLinkCapable, "legacy workspace avec owner + api key reste magic-link-capable")
+	assert.Equal(t, 2, resp.MembersCount)
 }
 
 func TestVeridianService_Health_HealthyTenant(t *testing.T) {
 	// Workspace sain : owner humain + api key + status=active → magic_link_capable=true.
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-h").Return(&domain.Workspace{ID: "ws-h"}, nil).Times(1)
 	m.planRepo.EXPECT().Get(ctx, "ws-h").Return(&domain.VeridianPlan{
 		WorkspaceID: "ws-h", Plan: "free", Status: domain.PlanStatusActive,
 	}, nil).Times(1)
@@ -571,6 +604,7 @@ func TestVeridianService_Health_NoHumanOwner_DetectsBug(t *testing.T) {
 	// (le user root historique) → owner_attached=false → magic_link_capable=false.
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-bug").Return(&domain.Workspace{ID: "ws-bug"}, nil).Times(1)
 	m.planRepo.EXPECT().Get(ctx, "ws-bug").Return(&domain.VeridianPlan{
 		WorkspaceID: "ws-bug", Plan: "free", Status: domain.PlanStatusActive,
 	}, nil).Times(1)
@@ -589,6 +623,7 @@ func TestVeridianService_Health_NoHumanOwner_DetectsBug(t *testing.T) {
 func TestVeridianService_Health_Suspended_NotCapable(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-susp").Return(&domain.Workspace{ID: "ws-susp"}, nil).Times(1)
 	m.planRepo.EXPECT().Get(ctx, "ws-susp").Return(&domain.VeridianPlan{
 		WorkspaceID: "ws-susp", Plan: "free", Status: domain.PlanStatusSuspended,
 	}, nil).Times(1)
@@ -610,6 +645,7 @@ func TestVeridianService_Health_SoftDeleted(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 	deletedAt := time.Now().UTC().Add(-24 * time.Hour)
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-del").Return(&domain.Workspace{ID: "ws-del"}, nil).Times(1)
 	m.planRepo.EXPECT().Get(ctx, "ws-del").Return(&domain.VeridianPlan{
 		WorkspaceID: "ws-del", Plan: "free", Status: domain.PlanStatusActive, DeletedAt: &deletedAt,
 	}, nil).Times(1)

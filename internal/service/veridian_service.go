@@ -1016,21 +1016,34 @@ func (s *veridianService) Health(ctx context.Context, tenantID string) (*domain.
 		CheckedAt:   time.Now().UTC(),
 	}
 
-	// 1. Lire veridian_plan pour status + plan + deleted_at.
-	plan, err := s.planRepo.Get(ctx, tenantID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	// 1. Workspace doit exister — c'est la source de vérité du 404.
+	// Avant 2026-05-18, on déduisait l'existence du tenant via planRepo.Get.
+	// Bug : les 9 workspaces prod créés avant la table `veridian_plan` n'ont
+	// pas de row plan → 404 fantôme alors que le workspace existe et marche.
+	// Désormais : 404 réservé au cas "workspace absent". Plan absent = legacy.
+	if _, wsErr := s.workspaceRepo.GetByID(ctx, tenantID); wsErr != nil {
+		if errors.Is(wsErr, sql.ErrNoRows) {
 			return nil, sql.ErrNoRows
 		}
-		return nil, fmt.Errorf("get plan: %w", err)
-	}
-	resp.Plan = plan.Plan
-	resp.Status = plan.Status
-	if plan.DeletedAt != nil {
-		resp.Status = domain.PlanStatusDeleted
+		return nil, fmt.Errorf("get workspace: %w", wsErr)
 	}
 
-	// 2. Lire les membres du workspace pour identifier owner humain + api_key.
+	// 2. Lire veridian_plan pour status + plan + deleted_at. Absent OK
+	// (legacy workspace) → resp.Plan + resp.Status restent vides ; le Hub
+	// interprète `plan=""` comme "tenant pre-Hub, à enroller dans un plan".
+	plan, err := s.planRepo.Get(ctx, tenantID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("get plan: %w", err)
+	}
+	if plan != nil {
+		resp.Plan = plan.Plan
+		resp.Status = plan.Status
+		if plan.DeletedAt != nil {
+			resp.Status = domain.PlanStatusDeleted
+		}
+	}
+
+	// 3. Lire les membres du workspace pour identifier owner humain + api_key.
 	// On utilise GetWorkspaceUsersWithEmail (déjà utilisé par AttachOwner).
 	members, listErr := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, tenantID)
 	if listErr != nil {
@@ -1038,7 +1051,7 @@ func (s *veridianService) Health(ctx context.Context, tenantID string) (*domain.
 	}
 	resp.MembersCount = len(members)
 
-	// 3. Chercher l'owner humain et au moins une api_key.
+	// 4. Chercher l'owner humain et au moins une api_key.
 	for _, m := range members {
 		userType, _ := s.lookupUserType(ctx, m.UserID)
 		if m.Role == "owner" && userType == domain.UserTypeUser {
@@ -1051,7 +1064,7 @@ func (s *veridianService) Health(ctx context.Context, tenantID string) (*domain.
 		}
 	}
 
-	// 4. magic_link_capable = owner humain attaché + api key valide +
+	// 5. magic_link_capable = owner humain attaché + api key valide +
 	//    pas suspended ni deleted.
 	resp.MagicLinkCapable = resp.OwnerAttached && resp.APIKeyValid &&
 		resp.Status != domain.PlanStatusSuspended &&
