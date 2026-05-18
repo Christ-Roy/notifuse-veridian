@@ -496,8 +496,13 @@ jobs:
           BUMP_DIGEST: ${{ needs.build.outputs.image_digest }}
         run: |
           set -euo pipefail
+          # docker/build-push-action retourne le digest préfixé "sha256:".
+          # On strip ici pour éviter double-prefix dans les messages de commit
+          # (le script bump-compose-image.sh strip aussi côté yaml).
+          DIGEST_HEX="${BUMP_DIGEST#sha256:}"
+
           chmod +x scripts/ci/bump-compose-image.sh
-          scripts/ci/bump-compose-image.sh staging "$BUMP_TAG" "$BUMP_DIGEST"
+          scripts/ci/bump-compose-image.sh staging "$BUMP_TAG" "$DIGEST_HEX"
 
           # Configure git pour le bot commit
           git config user.name "github-actions[bot]"
@@ -510,7 +515,7 @@ jobs:
             git add infra/compose/staging.yml
             git commit -m "ci(gitops): bump staging image to ${BUMP_TAG} [skip ci]" \
                        -m "Auto-bump par .github/workflows/veridian-ci.yml job deploy-staging." \
-                       -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${BUMP_DIGEST}"
+                       -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${DIGEST_HEX}"
             git push origin HEAD:veridian
             echo "✓ staging.yml bumpé et pushé"
           fi
@@ -672,7 +677,8 @@ jobs:
 
   deploy-prod:
     name: Deploy prod (auto-promote sur push veridian — ship fast & safe)
-    needs: e2e-staging
+    # === Veridian fix 2026-05-18 === build dans needs sinon outputs vide.
+    needs: [build, e2e-staging]
     # === Veridian patch === Auto-promote prod activé 2026-05-17.
     #
     # Conditions d'auto-promote (toutes doivent être vraies) :
@@ -748,8 +754,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITOPS_BUMP_PAT || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          DIGEST_HEX="${BUMP_DIGEST#sha256:}"
+
           chmod +x scripts/ci/bump-compose-image.sh
-          scripts/ci/bump-compose-image.sh prod "$BUMP_TAG" "$BUMP_DIGEST"
+          scripts/ci/bump-compose-image.sh prod "$BUMP_TAG" "$DIGEST_HEX"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -760,7 +768,7 @@ jobs:
             git add infra/compose/prod.yml
             git commit -m "ci(gitops): bump prod image to ${BUMP_TAG} [skip ci]" \
                        -m "Auto-bump par .github/workflows/veridian-ci.yml job deploy-prod après e2e-staging vert." \
-                       -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${BUMP_DIGEST}"
+                       -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${DIGEST_HEX}"
             # Le token doit être un PAT avec scope `contents: write` sur le repo,
             # sinon le push utilise GITHUB_TOKEN qui peut être restrictif sur push.
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
