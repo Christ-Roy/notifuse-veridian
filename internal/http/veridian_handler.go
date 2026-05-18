@@ -123,6 +123,13 @@ func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request
 			WriteJSONError(w, err.Error(), http.StatusConflict)
 			return
 		}
+		// === Veridian patch === Sentinel ErrOwnerMismatch → 409 Conflict
+		// (re-provision avec owner_email different refusee — protection contre
+		// prise de controle d'un tenant existant). Contrat §5.1.
+		if errors.Is(err, service.ErrOwnerMismatch) {
+			WriteJSONError(w, err.Error(), http.StatusConflict)
+			return
+		}
 		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

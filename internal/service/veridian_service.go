@@ -72,6 +72,20 @@ const veridianPurgeDelay = 30 * 24 * time.Hour
 // ce sentinel vers HTTP 409 Conflict.
 var ErrTenantSoftDeleted = errors.New("tenant is soft-deleted, awaiting purge — re-provisioning blocked")
 
+// === Veridian patch ===
+// ErrOwnerMismatch est retourne par Provision quand un workspace existe deja
+// pour le tenant_id donne mais que l'owner humain enregistre dans
+// user_workspaces (role=owner, type=user) a un email different de
+// input.OwnerEmail. Le handler doit mapper ce sentinel vers HTTP 409 Conflict.
+//
+// Pourquoi : contrat §5.1 exige "Conflit owner : si tenant_id existe avec un
+// owner_email different → 409 Conflict, jamais d'ecrasement silencieux".
+// Sans ce check, un attaquant connaissant un tenant_id pourrait re-provisionner
+// avec son propre email et recevoir un magic_link valide vers le workspace
+// (apres regeneration du magic_link cote idempotent, cf. ticket Hub
+// 2026-05-18-confirm-provision-idempotence).
+var ErrOwnerMismatch = errors.New("workspace exists with different owner")
+
 // veridianService est l'implementation par defaut de domain.VeridianService.
 type veridianService struct {
 	workspaceService domain.WorkspaceServiceInterface
@@ -231,21 +245,71 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		s.cleanupSession(ctx, idempSessionID)
 	}
 	if existingWorkspace != nil && planErr == nil && existingPlan != nil {
-		// Tenant deja provisionne : on retourne sans toucher.
-		owner, _ := s.userService.GetUserByEmail(ctx, input.OwnerEmail)
-		ownerID := ""
-		if owner != nil {
-			ownerID = owner.ID
+		// === Veridian patch === Cas idempotent (contrat §5.1) :
+		//   - owner reel != input.OwnerEmail → ErrOwnerMismatch (mappe 409)
+		//     pour eviter qu'un appel re-provision genere un magic_link valide
+		//     vers un workspace que le caller ne controle pas.
+		//   - owner reel == input.OwnerEmail → response idempotente avec
+		//     magic_link + auto_login_url FRAIS (TTL 15 min). APIKey vide :
+		//     le Hub a conserve la premiere lors de la creation.
+		members, listErr := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, input.TenantID)
+		if listErr != nil {
+			return nil, fmt.Errorf("idempotent: list workspace members: %w", listErr)
 		}
-		return &domain.ProvisionResponse{
-			WorkspaceID: input.TenantID,
-			OwnerUserID: ownerID,
-			APIKey:      "",
-			APIKeyEmail: "",
-			MagicLink:   "",
-			Plan:        existingPlan.Plan,
-			Created:     false,
-		}, nil
+		var ownerEmailReal, ownerUserID string
+		for _, m := range members {
+			if m == nil || m.Role != "owner" {
+				continue
+			}
+			// Filtrer api_key (Type via lookupUserType : api_key user a aussi
+			// role=owner sur certains workspaces pre-feature owner-natif).
+			userType, _ := s.lookupUserType(ctx, m.UserID)
+			if userType != domain.UserTypeUser {
+				continue
+			}
+			ownerEmailReal = m.Email
+			ownerUserID = m.UserID
+			break
+		}
+		// Si aucun owner humain identifie (cas legacy : 9 tenants prod repares
+		// via attach-owner ou workspaces pre-Provision), on ne peut pas
+		// trancher → on tombe sur le chemin "creation complete" qui
+		// reattachera proprement le user input via Add+Transfer.
+		if ownerEmailReal != "" {
+			if !strings.EqualFold(strings.TrimSpace(ownerEmailReal), strings.TrimSpace(input.OwnerEmail)) {
+				return nil, ErrOwnerMismatch
+			}
+			// Owner match : regenerer magic_link + auto_login_url frais.
+			magicLink, _, mlErr := s.buildMagicLink(ctx, input.TenantID, input.OwnerEmail)
+			if mlErr != nil && s.logger != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"tenant_id": input.TenantID,
+					"email":     input.OwnerEmail,
+					"error":     mlErr.Error(),
+				}).Warn("veridian: failed to build magic link in idempotent return")
+			}
+			autoLoginURL, _, autoErr := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.OwnerEmail)
+			if autoErr != nil && s.logger != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"tenant_id": input.TenantID,
+					"email":     input.OwnerEmail,
+					"error":     autoErr.Error(),
+				}).Warn("veridian: failed to build auto-login url in idempotent return")
+			}
+			return &domain.ProvisionResponse{
+				WorkspaceID:  input.TenantID,
+				OwnerUserID:  ownerUserID,
+				APIKey:       "",
+				APIKeyEmail:  "",
+				MagicLink:    magicLink,
+				AutoLoginURL: autoLoginURL,
+				Plan:         existingPlan.Plan,
+				Created:      false,
+			}, nil
+		}
+		// Fallthrough : pas d'owner humain identifie → on continue sur le
+		// chemin nominal (create workspace est skip si existant, et le user
+		// input sera attache via AddUserToWorkspace + TransferOwnership).
 	}
 
 	// 1. S'assurer que l'owner user existe.

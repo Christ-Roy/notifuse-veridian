@@ -158,6 +158,7 @@ func TestVeridianService_Provision_Idempotent(t *testing.T) {
 	ctx := context.Background()
 
 	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	humanOwner := &domain.User{ID: "user-1", Email: "owner@example.com", Type: domain.UserTypeUser}
 
 	// === Veridian patch === Lookup idempotence : ctxAsRoot + GetWorkspace + DeleteSession
 	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
@@ -173,8 +174,22 @@ func TestVeridianService_Provision_Idempotent(t *testing.T) {
 		Status:      domain.PlanStatusActive,
 	}, nil).Times(1)
 
-	m.user.EXPECT().GetUserByEmail(ctx, "owner@example.com").
-		Return(&domain.User{ID: "user-1", Email: "owner@example.com"}, nil).Times(1)
+	// === Veridian patch === Owner-check : lookup members + verifie type=user.
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-existing").
+		Return([]*domain.UserWorkspaceWithEmail{
+			{
+				UserWorkspace: domain.UserWorkspace{UserID: "user-1", WorkspaceID: "ws-existing", Role: "owner"},
+				Email:         "owner@example.com",
+				Type:          domain.UserTypeUser,
+			},
+		}, nil).Times(1)
+	// lookupUserType -> userRepo.GetUserByID pour confirmer type=user.
+	m.userRepo.EXPECT().GetUserByID(ctx, "user-1").Return(humanOwner, nil).Times(1)
+
+	// === Veridian patch === Magic link FRAIS regenere dans la response idempotente.
+	expiresAt := time.Now().Add(15 * time.Minute)
+	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, "owner@example.com", "ws-existing").
+		Return("fresh-magic-code", expiresAt, nil).Times(1)
 
 	resp, err := svc.Provision(ctx, domain.ProvisionInput{
 		TenantID:   "ws-existing",
@@ -188,6 +203,101 @@ func TestVeridianService_Provision_Idempotent(t *testing.T) {
 	assert.Equal(t, "user-1", resp.OwnerUserID)
 	assert.Equal(t, "pro", resp.Plan)
 	assert.Empty(t, resp.APIKey, "must NOT regenerate API key on idempotent call")
+	assert.Empty(t, resp.APIKeyEmail, "must NOT regenerate API key email on idempotent call")
+	// === Veridian patch === Contrat §5.1 : magic link DOIT etre regenere.
+	assert.Contains(t, resp.MagicLink, "https://notifuse.app.veridian.site/console/signin")
+	assert.Contains(t, resp.MagicLink, "code=fresh-magic-code")
+	assert.Contains(t, resp.MagicLink, "email=owner%40example.com")
+	assert.NotEmpty(t, resp.AutoLoginURL, "auto_login_url must be regenerated on idempotent call")
+}
+
+// === Veridian patch === Idempotent + owner mismatch : refuse 409 plutot que
+// silencieusement generer un magic link valide vers un workspace que le
+// caller ne controle pas (contrat §5.1, ticket Hub 2026-05-18).
+func TestVeridianService_Provision_OwnerMismatch_Returns409(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	realOwner := &domain.User{ID: "user-real", Email: "alice@x.test", Type: domain.UserTypeUser}
+
+	// Lookup idempotence
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+	// Workspace + plan existent
+	m.workspace.EXPECT().GetWorkspace(gomock.Any(), "ws-shared").
+		Return(&domain.Workspace{ID: "ws-shared"}, nil).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "ws-shared").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-shared",
+		Plan:        "pro",
+		Status:      domain.PlanStatusActive,
+	}, nil).Times(1)
+
+	// Owner REEL = alice@x.test (type=user, role=owner)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-shared").
+		Return([]*domain.UserWorkspaceWithEmail{
+			{
+				UserWorkspace: domain.UserWorkspace{UserID: "user-real", WorkspaceID: "ws-shared", Role: "owner"},
+				Email:         "alice@x.test",
+				Type:          domain.UserTypeUser,
+			},
+		}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "user-real").Return(realOwner, nil).Times(1)
+
+	// Aucun GenerateMagicCodeForVeridian attendu — on doit fail AVANT.
+
+	resp, err := svc.Provision(ctx, domain.ProvisionInput{
+		TenantID:   "ws-shared",
+		OwnerEmail: "mallory@x.test", // <- email different de l'owner reel
+		Plan:       "pro",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrOwnerMismatch)
+	assert.Nil(t, resp)
+}
+
+// === Veridian patch === Case-insensitivity du owner match (defensive : un
+// retry Hub avec un casing different ne doit pas declencher un faux 409).
+func TestVeridianService_Provision_Idempotent_OwnerEmailCaseInsensitive(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	humanOwner := &domain.User{ID: "user-1", Email: "Owner@Example.COM", Type: domain.UserTypeUser}
+
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(1)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.workspace.EXPECT().GetWorkspace(gomock.Any(), "ws-case").
+		Return(&domain.Workspace{ID: "ws-case"}, nil).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "ws-case").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-case",
+		Plan:        "free",
+		Status:      domain.PlanStatusActive,
+	}, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-case").
+		Return([]*domain.UserWorkspaceWithEmail{
+			{
+				UserWorkspace: domain.UserWorkspace{UserID: "user-1", WorkspaceID: "ws-case", Role: "owner"},
+				Email:         "Owner@Example.COM",
+				Type:          domain.UserTypeUser,
+			},
+		}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "user-1").Return(humanOwner, nil).Times(1)
+	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, "owner@example.com", "ws-case").
+		Return("code-ci", time.Now().Add(15*time.Minute), nil).Times(1)
+
+	resp, err := svc.Provision(ctx, domain.ProvisionInput{
+		TenantID:   "ws-case",
+		OwnerEmail: "owner@example.com", // lowercase vs DB "Owner@Example.COM"
+		Plan:       "free",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.False(t, resp.Created)
+	assert.Contains(t, resp.MagicLink, "code=code-ci")
 }
 
 func TestVeridianService_Provision_RejectsEmptyInput(t *testing.T) {

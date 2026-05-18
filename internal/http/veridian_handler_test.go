@@ -202,6 +202,25 @@ func TestVeridianHandleProvision_SoftDeletedReturns409(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "soft-deleted")
 }
 
+// === Veridian patch === Sentinel ErrOwnerMismatch → 409 Conflict.
+// Contrat §5.1 : re-provision avec owner_email different doit etre refusee
+// pour empecher la prise de controle d'un tenant existant via magic_link
+// regenere (ticket Hub 2026-05-18-confirm-provision-idempotence).
+func TestVeridianHandleProvision_OwnerMismatchReturns409(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(nil, service.ErrOwnerMismatch)
+
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
+		`{"tenant_id":"ws-shared","owner_email":"mallory@x.test","plan":"free"}`)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "different owner")
+}
+
 func TestVeridianHandleProvision_GenericServiceError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
