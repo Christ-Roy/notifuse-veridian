@@ -64,7 +64,22 @@ COPY pkg/ pkg/
 # Build the application with CGO disabled (pure Go)
 ENV CGO_ENABLED=0
 ENV GOOS=linux
-RUN go build -ldflags="-s -w" -o /tmp/server ./cmd/api
+
+# === Veridian patch === Build-time metadata injectee dans internal/buildinfo
+# pour /api/version. Permet a la CI de verifier qu'un redeploy a effectivement
+# remplace le container (defense anti-faux-positif documente 2026-05-18).
+# Defaults "dev" quand le build se fait sans ARG (run local docker build sans
+# --build-arg). Le job build du workflow GH Actions passe les 3 ARGs.
+ARG BUILD_TAG=dev
+ARG BUILD_SHA=dev
+ARG BUILD_DATE=dev
+
+RUN go build \
+  -ldflags="-s -w \
+    -X github.com/Notifuse/notifuse/internal/buildinfo.Tag=${BUILD_TAG} \
+    -X github.com/Notifuse/notifuse/internal/buildinfo.GitSHA=${BUILD_SHA} \
+    -X github.com/Notifuse/notifuse/internal/buildinfo.BuildDate=${BUILD_DATE}" \
+  -o /tmp/server ./cmd/api
 
 # Stage 4: Create the runtime container (Alpine for smaller image)
 # === Veridian patch === bump 3.19 → 3.21 : alpine 3.19 EOL depuis 2025-11-01,

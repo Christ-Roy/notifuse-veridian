@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Notifuse/notifuse/internal/buildinfo"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/internal/service"
@@ -88,6 +89,15 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// intégrations Hub). Le Hub poll en cron 1×/h pour détecter régression
 	// silencieuse du flow magic link Hub → app (bug 2026-05-17).
 	mux.Handle("GET /api/tenants/{id}/health", hmac(http.HandlerFunc(h.handleHealth)))
+
+	// === Veridian patch === Endpoint public (no HMAC) qui renvoie le tag
+	// et le SHA git du binaire qui tourne. Permet à la CI de valider qu'un
+	// redeploy a effectivement remplacé le container — défense contre le
+	// faux positif "deploy success" sans changement réel d'image (bug
+	// 2026-05-18 où compose.redeploy redéployait avec le même tag faute
+	// de compose.update préalable). Utilisé par le step Verify prod runs
+	// new code dans .github/workflows/veridian-ci.yml.
+	mux.HandleFunc("GET /api/version", h.handleVersion)
 }
 
 func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request) {
@@ -435,6 +445,22 @@ func (h *VeridianHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleVersion renvoie le tag et le SHA git de l'image qui tourne (injectés
+// au build via -ldflags -X). Endpoint public, pas de HMAC, idempotent.
+// Réponse :
+//
+//	{"tag":"v32.0-veridian.eb7a88e2","git_sha":"eb7a88e2bc...","build_date":"2026-05-18T12:36:00Z"}
+//
+// Les 3 champs sont "dev" si le binaire est compilé sans ldflags
+// (run local via `go run` ou `make dev`).
+func (h *VeridianHandler) handleVersion(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"tag":        buildinfo.Tag,
+		"git_sha":    buildinfo.GitSHA,
+		"build_date": buildinfo.BuildDate,
+	})
 }
 
 // handleMode renvoie le mode de deploiement Notifuse (managed vs self-hosted).

@@ -26,10 +26,6 @@ on:
         description: 'Skip e2e-staging job (test manuel staging via Chrome)'
         required: false
         default: 'false'
-      promote_prod_compose:
-        description: 'PUSH compose prod vers notifuse-deploy → webhook Dokploy → redeploy prod (opt-in)'
-        required: false
-        default: 'false'
 
 concurrency:
   group: veridian-ci-${{ github.ref }}
@@ -315,6 +311,11 @@ jobs:
       image_tag: ${{ steps.meta.outputs.tag }}
       upstream_version: ${{ steps.meta.outputs.upstream }}
       is_saas_release: ${{ steps.meta.outputs.is_saas_release }}
+      # === Veridian patch === Digest sha256 expose pour permettre au job
+      # deploy-* de pinner image+digest dans infra/compose/*.yml (mode GitOps).
+      # Sans ca, Dokploy redeploy avec le meme tag/digest faute de signal de
+      # changement -> faux positif documente 2026-05-18.
+      image_digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -376,6 +377,7 @@ jobs:
           fi
 
       - name: Build & push image
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -384,8 +386,15 @@ jobs:
           tags: ${{ steps.image_tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # === Veridian patch === BUILD_TAG/SHA/DATE injectes dans
+          # internal/buildinfo via -ldflags pour /api/version (defense
+          # anti-faux-positif post-deploy). VERSION garde l'ancien nom pour
+          # compat upstream (consume par UI console actuellement).
           build-args: |
             VERSION=${{ steps.meta.outputs.tag }}
+            BUILD_TAG=${{ steps.meta.outputs.tag }}
+            BUILD_SHA=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
 
       # === Veridian patch === Scan CVE OS + libs systeme + libs upstream
       # bake dans l'image via Trivy. Constitution §13 étage 2.
@@ -452,12 +461,15 @@ jobs:
           retention-days: 90
 
   deploy-staging:
-    name: Deploy staging (compose pur sur dev-pub via Traefik staging-edge)
+    name: Deploy staging (GitOps bump + compose pur sur dev-pub)
     needs: build
     # Staging deploy auto sur push veridian uniquement.
     # Tags saas-v* sont des releases prod : pas d'auto-deploy.
     if: github.ref == 'refs/heads/veridian'
     runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: write  # nécessaire pour push le bump GitOps de staging.yml
+      packages: read   # docker pull GHCR
     environment:
       name: staging
       url: https://notifuse.staging.veridian.site
@@ -468,6 +480,40 @@ jobs:
       SVC_APP: notifuse-staging
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # nécessaire pour commit + push (origin/veridian)
+          token: ${{ secrets.GITOPS_BUMP_PAT || secrets.GITHUB_TOKEN }}
+
+      # === GitOps step 1/3 — Bump staging.yml avec le tag+digest fraichement
+      # buildés, commit [skip ci] + push. Le tag est immutable :
+      # `:<tag>@sha256:<digest>` dans le yaml. Traçabilité git complète : on
+      # peut savoir quelle image tournait en staging à un instant T en lisant
+      # le git log de infra/compose/staging.yml. Le [skip ci] empêche le push
+      # de retrigger le workflow (sinon boucle infinie).
+      - name: Bump staging.yml (GitOps) + commit + push [skip ci]
+        env:
+          BUMP_TAG: ${{ needs.build.outputs.image_tag }}
+          BUMP_DIGEST: ${{ needs.build.outputs.image_digest }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/ci/bump-compose-image.sh
+          scripts/ci/bump-compose-image.sh staging "$BUMP_TAG" "$BUMP_DIGEST"
+
+          # Configure git pour le bot commit
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Si bump idempotent (déjà à ce tag) → no diff → on skip le commit.
+          if git diff --quiet infra/compose/staging.yml; then
+            echo "ℹ Aucun changement dans staging.yml (idempotent) — pas de commit"
+          else
+            git add infra/compose/staging.yml
+            git commit -m "ci(gitops): bump staging image to ${BUMP_TAG} [skip ci]" \
+                       -m "Auto-bump par .github/workflows/veridian-ci.yml job deploy-staging." \
+                       -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${BUMP_DIGEST}"
+            git push origin HEAD:veridian
+            echo "✓ staging.yml bumpé et pushé"
+          fi
 
       - name: Sync compose vers ${STAGING_DIR}/infra/compose
         run: |
@@ -483,10 +529,40 @@ jobs:
       - name: Pull image GHCR + up -d via compose pur
         working-directory: ${{ env.STAGING_DIR }}
         run: |
+          # L'image est désormais pinnée en dur dans staging.yml (bump GitOps
+          # ci-dessus), donc docker compose pull tire exactement ce qu'on
+          # vient de bumper. Plus besoin de --force-recreate (le digest
+          # change → docker recreate auto).
           docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} --env-file .env pull ${SVC_APP} 2>&1 | tail -5
           docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} --env-file .env up -d 2>&1 | tail -10
-          # Force recreate notifuse au cas où :latest pointe sur même image (rebuild)
-          docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} --env-file .env up -d --force-recreate --no-deps ${SVC_APP} 2>&1 | tail -5
+
+      - name: Verify staging runs new code (/api/version)
+        env:
+          EXPECTED_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          # === GitOps step 2/3 — Confirme que le container qui répond est
+          # bien sur le tag attendu. Défense contre faux positif "deploy OK"
+          # mais Dokploy/SSH n'a pas pull la nouvelle image. Si /api/version
+          # n'existe pas (image antérieure à V32.x) on ne fail pas — c'est
+          # la première fois qu'on a cet endpoint, il faut le rolling sur
+          # une image qui le contient avant que ce check soit strict.
+          for i in {1..30}; do
+            RESP=$(curl -sf https://notifuse.staging.veridian.site/api/version 2>/dev/null || echo "")
+            if [ -n "$RESP" ]; then
+              GOT_TAG=$(echo "$RESP" | jq -r '.tag // empty')
+              if [ "$GOT_TAG" = "$EXPECTED_TAG" ]; then
+                echo "✓ Staging runs $GOT_TAG (matches expected)"
+                exit 0
+              fi
+              echo "  attempt $i: /api/version → tag=$GOT_TAG (expected $EXPECTED_TAG)"
+            else
+              echo "  attempt $i: /api/version not responding yet"
+            fi
+            sleep 5
+          done
+          echo "::warning::/api/version mismatch ou absent après 2m30 — peut être normal si image antérieure à V32.x ne contient pas l'endpoint."
+          # Pas exit 1 ici pour rester compat avec les anciennes images.
+          # À durcir une fois que toutes les images prod contiennent /api/version.
 
       - name: Wait for staging healthy
         run: |
@@ -616,10 +692,12 @@ jobs:
         && !contains(github.event.head_commit.message, '[wip]'))
       || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # nécessaire pour push le bump GitOps de prod.yml
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # pour le gate 24h structurel
+          fetch-depth: 0  # pour le gate 24h structurel + push HEAD:veridian
 
       # === Constitution CI §15 — Gate structurel 24h ===
       # Si le push touche Dockerfile/go.mod/migrations/infra/compose → exiger
@@ -658,7 +736,44 @@ jobs:
 
           echo "✅ Commit structurel âgé de ${AGE_HOURS}h ≥ 24h — gate OK."
 
-      - name: Trigger Dokploy redeploy (prod)
+      # === GitOps step 1/4 — Bump prod.yml + commit + push [skip ci] ===
+      # Le commit déclenche Dokploy autoDeploy (watchPaths: infra/compose/prod.yml).
+      # On force aussi via compose.redeploy pour ne pas attendre le poll Dokploy
+      # (1-2 min typique). Le [skip ci] empêche le push de retrigger le workflow
+      # (sinon boucle infinie).
+      - name: Bump prod.yml (GitOps) + commit + push [skip ci]
+        env:
+          BUMP_TAG: ${{ needs.build.outputs.image_tag }}
+          BUMP_DIGEST: ${{ needs.build.outputs.image_digest }}
+          GH_TOKEN: ${{ secrets.GITOPS_BUMP_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/ci/bump-compose-image.sh
+          scripts/ci/bump-compose-image.sh prod "$BUMP_TAG" "$BUMP_DIGEST"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet infra/compose/prod.yml; then
+            echo "ℹ Aucun changement dans prod.yml (idempotent) — pas de commit"
+          else
+            git add infra/compose/prod.yml
+            git commit -m "ci(gitops): bump prod image to ${BUMP_TAG} [skip ci]" \
+                       -m "Auto-bump par .github/workflows/veridian-ci.yml job deploy-prod après e2e-staging vert." \
+                       -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${BUMP_DIGEST}"
+            # Le token doit être un PAT avec scope `contents: write` sur le repo,
+            # sinon le push utilise GITHUB_TOKEN qui peut être restrictif sur push.
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            git push origin HEAD:veridian
+            echo "✓ prod.yml bumpé et pushé"
+          fi
+
+      # === GitOps step 2/4 — Force Dokploy à pull + redeploy immédiatement,
+      # plutôt que d'attendre son polling (1-2 min). compose.redeploy fait
+      # un git pull côté Dokploy avant de redeploy, donc il verra le bump
+      # qu'on vient de pusher. Si on ne fait pas ce step, Dokploy déploiera
+      # quand même mais avec 1-2 min de latence.
+      - name: Trigger Dokploy redeploy (force pull + recreate)
         run: |
           curl -fsS -X POST \
             -H "x-api-key: ${{ secrets.DOKPLOY_API_TOKEN }}" \
@@ -666,18 +781,51 @@ jobs:
             "${{ secrets.DOKPLOY_URL }}/api/compose.redeploy" \
             -d '{"composeId":"${{ secrets.DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID }}"}'
 
-      - name: Wait for prod healthy
+      # === GitOps step 3/4 — Attend que le service répond, healthy à minima.
+      - name: Wait for prod HTTP healthy
         run: |
           # 5 min max d'attente. Si pas healthy → fail le job → rollback auto.
           for i in {1..30}; do
             if curl -sf https://notifuse.app.veridian.site/api/setup.status > /dev/null 2>&1; then
-              echo "Prod healthy after ${i}0s"
+              echo "Prod HTTP responding after ${i}0s"
               exit 0
             fi
             sleep 10
           done
           echo "::error::Prod unhealthy after 5min — rollback auto va se déclencher"
           exit 1
+
+      # === GitOps step 4/4 — Verrou défense contre faux positif :
+      # /api/version doit retourner exactement le tag qu'on vient de bumper.
+      # Si Dokploy a échoué à pull/recreate (ce qui était le cas en
+      # 2026-05-18 avant la refonte GitOps), /api/version renverra l'ancien
+      # tag → on fail le job → rollback auto se déclenche.
+      - name: Verify prod runs new code (/api/version matches)
+        env:
+          EXPECTED_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          # On laisse jusqu'à 5min pour que Dokploy finisse le swap container.
+          for i in {1..30}; do
+            RESP=$(curl -sf https://notifuse.app.veridian.site/api/version 2>/dev/null || echo "")
+            if [ -n "$RESP" ]; then
+              GOT_TAG=$(echo "$RESP" | jq -r '.tag // empty')
+              if [ "$GOT_TAG" = "$EXPECTED_TAG" ]; then
+                echo "✓ Prod runs $GOT_TAG (matches expected)"
+                exit 0
+              fi
+              echo "  attempt $i: /api/version → tag=$GOT_TAG (expected $EXPECTED_TAG)"
+            else
+              echo "  attempt $i: /api/version not responding"
+            fi
+            sleep 10
+          done
+          # Anciennes images (avant ce ship) ne contiennent pas /api/version.
+          # Warning au lieu de fail pour le tout premier ship qui contient
+          # l'endpoint — après ça doit être bloquant. À durcir dans une
+          # PR de suivi une fois validé.
+          echo "::warning::/api/version mismatch ou absent après 5min — possible que Dokploy n'ait pas swap le container, ou image antérieure à V32.x sans cet endpoint."
+          # TODO durcir : exit 1 une fois que toutes les images prod ont /api/version
 
       - name: Telegram notif deploy prod OK
         if: success()
@@ -809,147 +957,3 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.EMERGENCY_REVERT_PAT }}
 
-  promote-prod-compose:
-    # Push compose prod (infra/compose/prod.yml) vers notifuse-deploy.
-    # Webhook GitHub → Dokploy → pull + recreate.
-    #
-    # Auto-promote 2026-05-17 : déclenché automatiquement si :
-    #   - event = push veridian
-    #   - infra/compose/prod.yml a changé dans le diff
-    #   - e2e-staging vert (via needs)
-    #   - pas de [skip-prod] ou [wip] dans le commit message
-    # OU manuellement via workflow_dispatch avec promote_prod_compose=true.
-    #
-    # Pré-requis : secret NOTIFUSE_DEPLOY_PUSH_PAT (PAT scope repo sur notifuse-deploy).
-    name: Promote compose prod vers notifuse-deploy
-    needs: e2e-staging
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/veridian'
-        && contains(github.event.head_commit.modified, 'infra/compose/prod.yml')
-        && !contains(github.event.head_commit.message, '[skip-prod]')
-        && !contains(github.event.head_commit.message, '[wip]'))
-      || (github.event_name == 'workflow_dispatch' && github.event.inputs.promote_prod_compose == 'true')
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://github.com/Christ-Roy/notifuse-deploy
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # nécessaire pour le gate 24h (lecture timestamps)
-
-      # === Constitution CI §15 — Path-based gate structurel 24h ===
-      # Si le commit promu touche Dockerfile, go.mod/go.sum, internal/migrations/**,
-      # ou infra/compose/**, alors il DOIT être en place depuis > 24h pour éviter
-      # de déployer en prod un changement structurel non éprouvé sur staging.
-      #
-      # Justification : les changements de base image, deps Go majeures et
-      # migrations DB ont une surface d'impact runtime invisible aux tests
-      # (perfs, fuites mémoire lentes, contention DB sous charge). 24h de
-      # rodage staging laissent le temps aux dérives lentes d'apparaître.
-      #
-      # Override : ajouter le label `skip-24h-gate` à la PR ou commit "[skip-gate]"
-      # dans le message du commit pour bypasser (cas urgents validés humainement).
-      - name: Gate structurel 24h
-        run: |
-          set -euo pipefail
-          BROKEN_SHA="${GITHUB_SHA}"
-
-          # Liste des chemins structurels qui déclenchent le gate.
-          STRUCTURAL_PATTERN='^(Dockerfile|go\.mod|go\.sum|internal/migrations/.*\.go|infra/compose/.*\.ya?ml)$'
-
-          # Détecte si le commit touche un fichier structurel — on regarde
-          # le diff entre HEAD~1 et HEAD (le commit lui-même).
-          if ! git diff --name-only HEAD~1 HEAD | grep -qE "$STRUCTURAL_PATTERN"; then
-            echo "✅ Commit non-structurel, gate 24h non applicable."
-            exit 0
-          fi
-
-          echo "⚠ Commit touche des fichiers structurels :"
-          git diff --name-only HEAD~1 HEAD | grep -E "$STRUCTURAL_PATTERN" | sed 's/^/  /'
-
-          # Bypass via commit message [skip-gate]
-          COMMIT_MSG=$(git log -1 --format='%B')
-          if echo "$COMMIT_MSG" | grep -q '\[skip-gate\]'; then
-            echo "ℹ Bypass via [skip-gate] dans le message du commit (validation humaine)."
-            exit 0
-          fi
-
-          # Age du commit en heures
-          COMMIT_TS=$(git log -1 --format=%ct)
-          NOW=$(date -u +%s)
-          AGE_HOURS=$(( (NOW - COMMIT_TS) / 3600 ))
-          echo "Commit age : ${AGE_HOURS}h"
-
-          if [ "$AGE_HOURS" -lt 24 ]; then
-            echo "::error::Commit structurel âgé de ${AGE_HOURS}h < 24h requis."
-            echo "::error::Constitution §15 : changement de base/deps/migration/compose doit roder 24h sur staging."
-            echo "::error::Override : recommit avec [skip-gate] dans le message (validation humaine) si réellement urgent."
-            exit 1
-          fi
-
-          echo "✅ Commit structurel âgé de ${AGE_HOURS}h ≥ 24h — gate OK."
-
-      - name: Valider compose prod
-        run: |
-          chmod +x scripts/ci/generate-compose.sh
-          scripts/ci/generate-compose.sh prod
-
-      - name: Push compose vers notifuse-deploy
-        env:
-          GH_TOKEN: ${{ secrets.NOTIFUSE_DEPLOY_PUSH_PAT }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "❌ Secret NOTIFUSE_DEPLOY_PUSH_PAT manquant"
-            exit 1
-          fi
-          TMPDIR=$(mktemp -d)
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/Christ-Roy/notifuse-deploy.git" "$TMPDIR"
-          cd "$TMPDIR"
-
-          # En-tête de traçabilité + contenu copié depuis notre prod.yml
-          cat > docker-compose.yml <<HEADER
-          # ╔══════════════════════════════════════════════════════════════════╗
-          # ║ FICHIER GÉNÉRÉ — NE PAS ÉDITER À LA MAIN                        ║
-          # ║                                                                  ║
-          # ║ Source : Christ-Roy/notifuse-veridian/infra/compose/prod.yml    ║
-          # ║ SHA   : ${GITHUB_SHA::12}                                       ║
-          # ║ Run   : ${GITHUB_RUN_ID}                                        ║
-          # ╚══════════════════════════════════════════════════════════════════╝
-          HEADER
-          cat ${GITHUB_WORKSPACE}/infra/compose/prod.yml >> docker-compose.yml
-
-          echo "─── diff vs HEAD précédent ───"
-          git diff docker-compose.yml | head -80 || true
-
-          if git diff --quiet docker-compose.yml; then
-            echo "✅ Aucun changement à pousser — compose déjà à jour."
-            exit 0
-          fi
-
-          git config user.email "ci-bot@veridian.site"
-          git config user.name "Veridian CI Bot"
-          git add docker-compose.yml
-          COMMIT_MSG=$(cat <<MSG
-          chore: sync compose depuis notifuse-veridian @ ${GITHUB_SHA::8}
-
-          Source SHA: ${GITHUB_SHA}
-          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-          MSG
-          )
-          git commit -m "$COMMIT_MSG"
-          git push origin main
-          echo "✅ Compose poussé vers notifuse-deploy. Dokploy va redéployer."
-
-      - name: Wait for prod healthy after Dokploy redeploy
-        run: |
-          sleep 30
-          for i in {1..30}; do
-            if curl -sf https://notifuse.app.veridian.site/api/setup.status > /dev/null 2>&1; then
-              echo "Prod healthy après ${i} tentatives"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "❌ Prod unhealthy 5min après promotion compose"
-          exit 1

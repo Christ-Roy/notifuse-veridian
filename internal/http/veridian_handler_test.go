@@ -696,6 +696,37 @@ func TestVeridianHandleMode_NoAuthRequired(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "endpoint public, no auth required")
 }
 
+// === handleVersion (build-time injected tag + sha) ===
+// Cf. internal/buildinfo + Dockerfile ARG BUILD_TAG/BUILD_SHA/BUILD_DATE.
+// L'endpoint sert au step "Verify prod runs new code" du workflow CI pour
+// détecter qu'un redeploy a effectivement remplacé le container.
+
+func TestVeridianHandleVersion_DefaultsDev(t *testing.T) {
+	// En test (sans ldflags), les 3 vars buildinfo restent à "dev".
+	h := newHandlerWithService(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
+	rec := httptest.NewRecorder()
+	h.handleVersion(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var got map[string]string
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Equal(t, "dev", got["tag"])
+	require.Equal(t, "dev", got["git_sha"])
+	require.Equal(t, "dev", got["build_date"])
+}
+
+func TestVeridianHandleVersion_PublicNoAuth(t *testing.T) {
+	// Endpoint public — pas de HMAC, pas de header requis.
+	h := newHandlerWithService(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
+	rec := httptest.NewRecorder()
+	h.handleVersion(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "no auth required for /api/version")
+}
+
 // === handleAttachOwner ===
 // Cf. todo/2026-05-17-provision-owner-attach.md — endpoint réparateur P0.
 
