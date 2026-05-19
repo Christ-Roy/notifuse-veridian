@@ -93,6 +93,20 @@ func (mr *MockVeridianPlanRepositoryMockRecorder) ListByPrefix(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPrefix", reflect.TypeOf((*MockVeridianPlanRepository)(nil).ListByPrefix), arg0, arg1)
 }
 
+// Purge mocks base method.
+func (m *MockVeridianPlanRepository) Purge(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Purge", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Purge indicates an expected call of Purge.
+func (mr *MockVeridianPlanRepositoryMockRecorder) Purge(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Purge", reflect.TypeOf((*MockVeridianPlanRepository)(nil).Purge), arg0, arg1, arg2)
+}
+
 // ResetMonthlyCounters mocks base method.
 func (m *MockVeridianPlanRepository) ResetMonthlyCounters(arg0 context.Context) (int64, error) {
 	m.ctrl.T.Helper()
@@ -106,6 +120,20 @@ func (m *MockVeridianPlanRepository) ResetMonthlyCounters(arg0 context.Context) 
 func (mr *MockVeridianPlanRepositoryMockRecorder) ResetMonthlyCounters(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetMonthlyCounters", reflect.TypeOf((*MockVeridianPlanRepository)(nil).ResetMonthlyCounters), arg0)
+}
+
+// Restore mocks base method.
+func (m *MockVeridianPlanRepository) Restore(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Restore", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Restore indicates an expected call of Restore.
+func (mr *MockVeridianPlanRepositoryMockRecorder) Restore(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockVeridianPlanRepository)(nil).Restore), arg0, arg1, arg2)
 }
 
 // Resume mocks base method.
@@ -123,17 +151,17 @@ func (mr *MockVeridianPlanRepositoryMockRecorder) Resume(arg0, arg1 interface{})
 }
 
 // SoftDelete mocks base method.
-func (m *MockVeridianPlanRepository) SoftDelete(arg0 context.Context, arg1 string) error {
+func (m *MockVeridianPlanRepository) SoftDelete(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SoftDelete", arg0, arg1)
+	ret := m.ctrl.Call(m, "SoftDelete", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SoftDelete indicates an expected call of SoftDelete.
-func (mr *MockVeridianPlanRepositoryMockRecorder) SoftDelete(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockVeridianPlanRepositoryMockRecorder) SoftDelete(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SoftDelete", reflect.TypeOf((*MockVeridianPlanRepository)(nil).SoftDelete), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SoftDelete", reflect.TypeOf((*MockVeridianPlanRepository)(nil).SoftDelete), arg0, arg1, arg2)
 }
 
 // Suspend mocks base method.
@@ -148,6 +176,20 @@ func (m *MockVeridianPlanRepository) Suspend(arg0 context.Context, arg1, arg2 st
 func (mr *MockVeridianPlanRepositoryMockRecorder) Suspend(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suspend", reflect.TypeOf((*MockVeridianPlanRepository)(nil).Suspend), arg0, arg1, arg2)
+}
+
+// Touch mocks base method.
+func (m *MockVeridianPlanRepository) Touch(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Touch", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Touch indicates an expected call of Touch.
+func (mr *MockVeridianPlanRepositoryMockRecorder) Touch(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Touch", reflect.TypeOf((*MockVeridianPlanRepository)(nil).Touch), arg0, arg1)
 }
 
 // UpdatePlan mocks base method.

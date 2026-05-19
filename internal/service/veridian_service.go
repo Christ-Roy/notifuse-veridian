@@ -102,6 +102,13 @@ var ErrOwnerMismatch = errors.New("workspace exists with different owner")
 // bloque.
 var ErrPlanImmune = errors.New("plan is immune to automatic downgrades (lifetime/manual/internal)")
 
+// === Veridian patch ===
+// ErrPurgeNotEligible est retourne par Purge quand la condition
+// purge_eligible_at < NOW n'est pas remplie (soit tenant pas soft-deleted,
+// soit fenetre 30j pas encore ecoulee). Le handler mappe ce sentinel vers
+// HTTP 409 Conflict + code purge_not_eligible. CONTRAT-HUB sec. 5.8.
+var ErrPurgeNotEligible = errors.New("tenant not yet eligible for purge")
+
 // veridianService est l'implementation par defaut de domain.VeridianService.
 type veridianService struct {
 	workspaceService domain.WorkspaceServiceInterface
@@ -657,18 +664,228 @@ func (s *veridianService) Resume(ctx context.Context, input domain.ResumeInput) 
 	return nil
 }
 
-// SoftDelete marque le tenant deleted. La purge effective est faite par cron 30j.
-func (s *veridianService) SoftDelete(ctx context.Context, tenantID string) error {
-	if tenantID == "" {
-		return errors.New("tenant_id required")
+// SoftDelete marque le tenant deleted (CONTRAT-HUB sec. 5.7-5.8). Set
+// deleted_at + purge_eligible_at = NOW + 30j + lifecycle_reason. La purge
+// effective est faite par un trigger cote Hub apres ce delai.
+//
+// Emet 2 webhooks pour back-compat : tenant.soft_deleted (nouveau, contractuel)
+// ET tenant.deleted (legacy, conserve tant que d'autres consommateurs Hub
+// n'ont pas migre).
+//
+// reason "" toleree pour back-compat handler DELETE legacy qui n'envoie pas
+// de body. Pour le nouvel endpoint POST /soft-delete, reason est typiquement
+// rempli (audit GDPR).
+func (s *veridianService) SoftDelete(ctx context.Context, input domain.SoftDeleteInput) (*domain.SoftDeleteResponse, error) {
+	if input.TenantID == "" {
+		return nil, errors.New("tenant_id required")
 	}
-	if err := s.planRepo.SoftDelete(ctx, tenantID); err != nil {
-		return err
+	if err := s.planRepo.SoftDelete(ctx, input.TenantID, input.Reason); err != nil {
+		return nil, err
 	}
+	now := time.Now().UTC()
+	purgeEligibleAt := now.Add(veridianPurgeDelay)
+
 	if s.emitter != nil {
-		s.emitter.Emit(ctx, domain.EventTenantDeleted, tenantID, nil)
+		payload := map[string]interface{}{
+			"deleted_at":        now,
+			"purge_eligible_at": purgeEligibleAt,
+		}
+		if input.Reason != "" {
+			payload["reason"] = input.Reason
+		}
+		s.emitter.Emit(ctx, domain.EventTenantSoftDeleted, input.TenantID, payload)
+		// back-compat : continuer a emettre tenant.deleted pour les consommateurs
+		// Hub legacy qui ne connaissent pas encore tenant.soft_deleted.
+		s.emitter.Emit(ctx, domain.EventTenantDeleted, input.TenantID, nil)
 	}
-	return nil
+
+	return &domain.SoftDeleteResponse{
+		TenantID:        input.TenantID,
+		Status:          string(domain.PlanStatusDeleted),
+		DeletedAt:       now,
+		PurgeEligibleAt: purgeEligibleAt,
+	}, nil
+}
+
+// === Veridian patch ===
+// ErrTenantNotSoftDeleted est retourne par Restore quand le tenant n'est pas
+// dans l'etat soft_deleted (rien a restaurer). Le handler mappe → 409.
+var ErrTenantNotSoftDeleted = errors.New("tenant is not soft-deleted, nothing to restore")
+
+// Restore annule un soft-delete (CONTRAT-HUB sec. 5.7-5.8). Le tenant repasse
+// en active. Refuse si le tenant n'est pas soft-deleted (ErrTenantNotSoftDeleted).
+//
+// Emet tenant.restored.
+func (s *veridianService) Restore(ctx context.Context, input domain.RestoreInput) (*domain.RestoreResponse, error) {
+	if input.TenantID == "" {
+		return nil, errors.New("tenant_id required")
+	}
+
+	// Garde : refuser si pas soft-deleted (sinon on ecraserait restored_at
+	// d'une restoration precedente sur un tenant actif — inattendu cote Hub).
+	existing, err := s.planRepo.Get(ctx, input.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if existing.DeletedAt == nil {
+		return nil, ErrTenantNotSoftDeleted
+	}
+
+	if err := s.planRepo.Restore(ctx, input.TenantID, input.Reason); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	if s.emitter != nil {
+		payload := map[string]interface{}{"restored_at": now}
+		if input.Reason != "" {
+			payload["reason"] = input.Reason
+		}
+		s.emitter.Emit(ctx, domain.EventTenantRestored, input.TenantID, payload)
+	}
+
+	return &domain.RestoreResponse{
+		TenantID:   input.TenantID,
+		Status:     string(domain.PlanStatusActive),
+		RestoredAt: now,
+	}, nil
+}
+
+// Purge supprime DEFINITIVEMENT un tenant (hard delete). Refuse si
+// purge_eligible_at > NOW (ErrPurgeNotEligible). Exige confirm == "PURGE"
+// pour proteger contre les appels accidentels (safeguard contrat sec. 5.8).
+//
+// Sequence : (1) hard delete workspace (DB postgres dediee + user owner via
+// WipeTestTenants helper), (2) hard delete veridian_plan row, (3) emit
+// tenant.purged.
+//
+// reason est obligatoire (audit GDPR : on doit savoir pourquoi un tenant a
+// ete supprime definitivement).
+func (s *veridianService) Purge(ctx context.Context, input domain.PurgeInput) (*domain.PurgeResponse, error) {
+	if input.TenantID == "" {
+		return nil, errors.New("tenant_id required")
+	}
+	if input.Reason == "" {
+		return nil, errors.New("reason required for purge (GDPR audit)")
+	}
+	if input.Confirm != "PURGE" {
+		return nil, errors.New("confirm must equal \"PURGE\" to proceed (safeguard)")
+	}
+
+	// Garde : refuser si purge_eligible_at > NOW.
+	existing, err := s.planRepo.Get(ctx, input.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if existing.PurgeEligibleAt == nil {
+		// Tenant pas en soft-delete → pas eligible. Distinct du sentinel
+		// ErrPurgeNotEligible "pas encore eligible" : ici on a un "pas du
+		// tout en process de purge". On reuse le meme sentinel + un
+		// message clair, le handler mappe vers 409 dans les deux cas.
+		return nil, fmt.Errorf("%w: tenant must be soft-deleted first", ErrPurgeNotEligible)
+	}
+	if time.Now().UTC().Before(*existing.PurgeEligibleAt) {
+		return nil, fmt.Errorf("%w: not before %s", ErrPurgeNotEligible, existing.PurgeEligibleAt.Format(time.RFC3339))
+	}
+
+	// Hard delete via le helper WipeTestTenants existant qui sait deja faire
+	// (1) DROP DB workspace, (2) DELETE veridian_plan row, (3) DELETE user
+	// owner si veridian-managed. C'est exactement la sequence Purge contrat.
+	if _, err := s.WipeTestTenants(ctx, domain.WipeTestTenantsInput{
+		TenantIDs: []string{input.TenantID},
+	}); err != nil {
+		return nil, fmt.Errorf("hard delete tenant: %w", err)
+	}
+
+	now := time.Now().UTC()
+	if s.emitter != nil {
+		s.emitter.Emit(ctx, domain.EventTenantPurged, input.TenantID, map[string]interface{}{
+			"purged_at": now,
+			"reason":    input.Reason,
+		})
+	}
+
+	return &domain.PurgeResponse{
+		TenantID: input.TenantID,
+		Status:   "purged",
+		PurgedAt: now,
+	}, nil
+}
+
+// veridianTouchDebounce : duree minimale entre 2 Touch effectifs pour eviter
+// d'ecraser inutilement last_touched_at et generer du trafic webhook.
+const veridianTouchDebounce = 24 * time.Hour
+
+// Touch met a jour le heartbeat anti-soft-delete (last_touched_at). Debounce
+// 24h : si le tenant a deja ete touche dans les dernieres 24h, no-op
+// silencieux (Debounced=true dans la response). CONTRAT-HUB sec. 5.7-5.8.
+//
+// Emet tenant.touched UNIQUEMENT si pas debounced.
+func (s *veridianService) Touch(ctx context.Context, tenantID string) (*domain.TouchResponse, error) {
+	if tenantID == "" {
+		return nil, errors.New("tenant_id required")
+	}
+
+	existing, err := s.planRepo.Get(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	if existing.LastTouchedAt != nil && now.Sub(*existing.LastTouchedAt) < veridianTouchDebounce {
+		return &domain.TouchResponse{
+			TenantID:  tenantID,
+			TouchedAt: *existing.LastTouchedAt,
+			Debounced: true,
+		}, nil
+	}
+
+	if err := s.planRepo.Touch(ctx, tenantID); err != nil {
+		return nil, err
+	}
+
+	if s.emitter != nil {
+		s.emitter.Emit(ctx, domain.EventTenantTouched, tenantID, map[string]interface{}{
+			"touched_at": now,
+		})
+	}
+
+	return &domain.TouchResponse{
+		TenantID:  tenantID,
+		TouchedAt: now,
+		Debounced: false,
+	}, nil
+}
+
+// UsageSummary agrege l'utilisation effective d'un tenant (CONTRAT-HUB
+// sec. 5.8). MVP : retourne les compteurs du plan (messages_sent_this_month
+// utilise comme proxy de messages_sent_30d tant que IncrementEmailsSent
+// n'est pas wired — cf. todo/2026-05-19-webhooks-manquants.md).
+//
+// contacts_count = 0 pour l'instant (necessiterait un appel cross-DB sur
+// la base workspace dediee — pas en MVP).
+func (s *veridianService) UsageSummary(ctx context.Context, tenantID string) (*domain.UsageSummaryResponse, error) {
+	if tenantID == "" {
+		return nil, errors.New("tenant_id required")
+	}
+
+	plan, err := s.planRepo.Get(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &domain.UsageSummaryResponse{
+		TenantID:        tenantID,
+		MessagesSent30d: plan.EmailsSentThisMonth, // proxy MVP, voir doc fonction
+		Plan:            plan.Plan,
+		Status:          plan.Status,
+		ContactsCount:   0, // MVP : non implementé (cross-DB query couteux)
+		GeneratedAt:     time.Now().UTC(),
+	}
+	if plan.LastTouchedAt != nil {
+		resp.LastActivityAt = plan.LastTouchedAt
+	}
+	return resp, nil
 }
 
 // === Veridian patch ===

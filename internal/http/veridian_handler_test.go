@@ -389,7 +389,15 @@ func TestVeridianHandleDelete_OK(t *testing.T) {
 	defer ctrl.Finish()
 
 	svc := mocks.NewMockVeridianService(ctrl)
-	svc.EXPECT().SoftDelete(gomock.Any(), "ws-1").Return(nil)
+	// Le handler DELETE legacy delegue maintenant a service.SoftDelete avec un
+	// SoftDeleteInput{TenantID: id, Reason: ""}.
+	svc.EXPECT().SoftDelete(gomock.Any(), domain.SoftDeleteInput{TenantID: "ws-1"}).
+		Return(&domain.SoftDeleteResponse{
+			TenantID:        "ws-1",
+			Status:          "deleted",
+			DeletedAt:       time.Now().UTC(),
+			PurgeEligibleAt: time.Now().UTC().Add(30 * 24 * time.Hour),
+		}, nil)
 	h := newHandlerWithService(svc)
 
 	rec := postWithPathValue(t, h.handleDelete, http.MethodDelete, "/api/tenants/ws-1", "ws-1", "")
@@ -398,6 +406,7 @@ func TestVeridianHandleDelete_OK(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "ws-1", resp["tenant_id"])
 	assert.NotNil(t, resp["deleted_at"])
+	assert.NotNil(t, resp["purge_eligible_at"], "purge_eligible_at maintenant inclus dans response legacy DELETE")
 }
 
 func TestVeridianHandleDelete_MissingID(t *testing.T) {
@@ -415,7 +424,8 @@ func TestVeridianHandleDelete_NotFound(t *testing.T) {
 	defer ctrl.Finish()
 
 	svc := mocks.NewMockVeridianService(ctrl)
-	svc.EXPECT().SoftDelete(gomock.Any(), "ws-x").Return(sql.ErrNoRows)
+	svc.EXPECT().SoftDelete(gomock.Any(), domain.SoftDeleteInput{TenantID: "ws-x"}).
+		Return(nil, sql.ErrNoRows)
 	h := newHandlerWithService(svc)
 
 	rec := postWithPathValue(t, h.handleDelete, http.MethodDelete, "/api/tenants/ws-x", "ws-x", "")
@@ -1145,4 +1155,244 @@ func TestVeridianErrorCode_BackwardCompat_ErrorFieldStillHumanMessage(t *testing
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.NotEmpty(t, resp.Error, "champ 'error' doit rester non-vide pour retro-compat Hub")
 	assert.NotEqual(t, resp.Error, resp.Code, "le champ 'error' doit etre le message humain, pas le code machine")
+}
+
+// === Lifecycle handlers (CONTRAT-HUB sec. 5.7-5.8) ===
+
+// --- handleSoftDelete ---
+
+func TestVeridianHandleSoftDelete_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	now := time.Now().UTC()
+	svc.EXPECT().SoftDelete(gomock.Any(), domain.SoftDeleteInput{TenantID: "ws-1", Reason: "GDPR"}).
+		Return(&domain.SoftDeleteResponse{
+			TenantID:        "ws-1",
+			Status:          "deleted",
+			DeletedAt:       now,
+			PurgeEligibleAt: now.Add(30 * 24 * time.Hour),
+		}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleSoftDelete, http.MethodPost, "/api/tenants/ws-1/soft-delete", "ws-1", `{"reason":"GDPR"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp domain.SoftDeleteResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "ws-1", resp.TenantID)
+	assert.Equal(t, "deleted", resp.Status)
+}
+
+func TestVeridianHandleSoftDelete_NoBodyAllowed(t *testing.T) {
+	// Body optionnel : pas de body = soft-delete sans reason (back-compat).
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().SoftDelete(gomock.Any(), domain.SoftDeleteInput{TenantID: "ws-1"}).
+		Return(&domain.SoftDeleteResponse{TenantID: "ws-1", Status: "deleted", DeletedAt: time.Now(), PurgeEligibleAt: time.Now().Add(30 * 24 * time.Hour)}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleSoftDelete, http.MethodPost, "/api/tenants/ws-1/soft-delete", "ws-1", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestVeridianHandleSoftDelete_TenantNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().SoftDelete(gomock.Any(), gomock.Any()).Return(nil, sql.ErrNoRows)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleSoftDelete, http.MethodPost, "/api/tenants/ghost/soft-delete", "ghost", `{}`)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, ErrCodeTenantNotFound, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+// --- handleRestore ---
+
+func TestVeridianHandleRestore_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Restore(gomock.Any(), domain.RestoreInput{TenantID: "ws-1", Reason: "ticket #42"}).
+		Return(&domain.RestoreResponse{
+			TenantID:   "ws-1",
+			Status:     "active",
+			RestoredAt: time.Now().UTC(),
+		}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleRestore, http.MethodPost, "/api/tenants/ws-1/restore", "ws-1", `{"reason":"ticket #42"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp domain.RestoreResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "active", resp.Status)
+}
+
+func TestVeridianHandleRestore_NotSoftDeleted_409(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Restore(gomock.Any(), gomock.Any()).Return(nil, service.ErrTenantNotSoftDeleted)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleRestore, http.MethodPost, "/api/tenants/ws-1/restore", "ws-1", `{}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, ErrCodeTenantSoftDeleted, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+// --- handlePurge ---
+
+func TestVeridianHandlePurge_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Purge(gomock.Any(), domain.PurgeInput{
+		TenantID: "ws-1", Reason: "GDPR final", Confirm: "PURGE",
+	}).Return(&domain.PurgeResponse{
+		TenantID: "ws-1",
+		Status:   "purged",
+		PurgedAt: time.Now().UTC(),
+	}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handlePurge, http.MethodPost, "/api/tenants/ws-1/purge", "ws-1",
+		`{"reason":"GDPR final","confirm":"PURGE"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestVeridianHandlePurge_RequiresBody(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handlePurge, http.MethodPost, "/api/tenants/ws-1/purge", "ws-1", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianHandlePurge_RejectsMissingFields(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handlePurge, http.MethodPost, "/api/tenants/ws-1/purge", "ws-1", `{"reason":""}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianHandlePurge_NotEligible_409(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Purge(gomock.Any(), gomock.Any()).Return(nil, service.ErrPurgeNotEligible)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handlePurge, http.MethodPost, "/api/tenants/ws-1/purge", "ws-1",
+		`{"reason":"x","confirm":"PURGE"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, ErrCodePurgeNotEligible, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+// --- handleTouch ---
+
+func TestVeridianHandleTouch_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Touch(gomock.Any(), "ws-1").Return(&domain.TouchResponse{
+		TenantID:  "ws-1",
+		TouchedAt: time.Now().UTC(),
+		Debounced: false,
+	}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleTouch, http.MethodPost, "/api/tenants/ws-1/touch", "ws-1", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp domain.TouchResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Debounced)
+}
+
+func TestVeridianHandleTouch_Debounced(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Touch(gomock.Any(), "ws-1").Return(&domain.TouchResponse{
+		TenantID:  "ws-1",
+		TouchedAt: time.Now().UTC().Add(-1 * time.Hour),
+		Debounced: true,
+	}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleTouch, http.MethodPost, "/api/tenants/ws-1/touch", "ws-1", "")
+	assert.Equal(t, http.StatusOK, rec.Code, "debounce reste un 200 OK (no-op silencieux)")
+	var resp domain.TouchResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.True(t, resp.Debounced)
+}
+
+// --- handleUsageSummary ---
+
+func TestVeridianHandleUsageSummary_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UsageSummary(gomock.Any(), "ws-1").Return(&domain.UsageSummaryResponse{
+		TenantID:        "ws-1",
+		MessagesSent30d: 1234,
+		Plan:            "pro",
+		Status:          domain.PlanStatusActive,
+		ContactsCount:   0,
+		GeneratedAt:     time.Now().UTC(),
+	}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleUsageSummary, http.MethodGet, "/api/tenants/ws-1/usage-summary", "ws-1", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp domain.UsageSummaryResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, int64(1234), resp.MessagesSent30d)
+}
+
+func TestVeridianHandleUsageSummary_NotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UsageSummary(gomock.Any(), "ghost").Return(nil, sql.ErrNoRows)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleUsageSummary, http.MethodGet, "/api/tenants/ghost/usage-summary", "ghost", "")
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, ErrCodeTenantNotFound, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+// --- Routes registration ---
+
+func TestVeridianHandler_LifecycleRoutes_Registered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret")
+
+	for _, path := range []string{
+		"/api/tenants/ws-1/soft-delete",
+		"/api/tenants/ws-1/restore",
+		"/api/tenants/ws-1/purge",
+		"/api/tenants/ws-1/touch",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		_, pattern := mux.Handler(req)
+		assert.NotEmpty(t, pattern, "POST %s should be registered", path)
+	}
+	// usage-summary est GET
+	req := httptest.NewRequest(http.MethodGet, "/api/tenants/ws-1/usage-summary", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "GET /api/tenants/:id/usage-summary should be registered")
 }

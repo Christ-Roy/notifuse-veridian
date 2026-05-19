@@ -24,18 +24,22 @@ func NewVeridianPlanRepository(systemDB *sql.DB) domain.VeridianPlanRepository {
 func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*domain.VeridianPlan, error) {
 	const q = `
 		SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-		       last_reset_at, suspended_at, suspended_reason, deleted_at, created_at, updated_at
+		       last_reset_at, suspended_at, suspended_reason, deleted_at,
+		       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
+		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
 	`
 	var p domain.VeridianPlan
 	var status, planSource string
-	var suspendedAt, deletedAt sql.NullTime
-	var suspendedReason sql.NullString
+	var suspendedAt, deletedAt, restoredAt, purgeEligibleAt, lastTouchedAt sql.NullTime
+	var suspendedReason, lifecycleReason sql.NullString
 
 	err := r.systemDB.QueryRowContext(ctx, q, workspaceID).Scan(
 		&p.WorkspaceID, &p.Plan, &planSource, &status, &p.MonthlyEmailQuota, &p.EmailsSentThisMonth,
-		&p.LastResetAt, &suspendedAt, &suspendedReason, &deletedAt, &p.CreatedAt, &p.UpdatedAt,
+		&p.LastResetAt, &suspendedAt, &suspendedReason, &deletedAt,
+		&restoredAt, &purgeEligibleAt, &lastTouchedAt, &lifecycleReason,
+		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -52,6 +56,21 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 	if deletedAt.Valid {
 		t := deletedAt.Time
 		p.DeletedAt = &t
+	}
+	if restoredAt.Valid {
+		t := restoredAt.Time
+		p.RestoredAt = &t
+	}
+	if purgeEligibleAt.Valid {
+		t := purgeEligibleAt.Time
+		p.PurgeEligibleAt = &t
+	}
+	if lastTouchedAt.Valid {
+		t := lastTouchedAt.Time
+		p.LastTouchedAt = &t
+	}
+	if lifecycleReason.Valid {
+		p.LifecycleReason = lifecycleReason.String
 	}
 	return &p, nil
 }
@@ -178,11 +197,97 @@ func (r *veridianPlanRepository) Resume(ctx context.Context, workspaceID string)
 }
 
 // SoftDelete marque le tenant deleted (purge cron 30j).
-func (r *veridianPlanRepository) SoftDelete(ctx context.Context, workspaceID string) error {
+// CONTRAT-HUB sec. 5.7-5.8 : set deleted_at + purge_eligible_at + lifecycle_reason.
+func (r *veridianPlanRepository) SoftDelete(ctx context.Context, workspaceID, reason string) error {
+	now := time.Now().UTC()
+	purgeEligibleAt := now.Add(veridianPurgeDelayPostgres)
+	// reason "" envoye comme NULL pour distinction audit "pas de raison fournie"
+	// vs "raison fournie vide" (le second cas est en pratique impossible mais
+	// le NULL est plus propre).
+	var reasonArg interface{}
+	if reason != "" {
+		reasonArg = reason
+	}
+	const q = `
+		UPDATE veridian_plan
+		SET status = 'deleted',
+		    deleted_at = $2,
+		    purge_eligible_at = $3,
+		    lifecycle_reason = $4,
+		    updated_at = $2
+		WHERE workspace_id = $1
+	`
+	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, now, purgeEligibleAt, reasonArg)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("veridian_plan: workspace %s not found", workspaceID)
+	}
+	return nil
+}
+
+// Restore annule un soft-delete : clear deleted_at + purge_eligible_at, set
+// restored_at = NOW + lifecycle_reason. Le tenant repasse en active.
+// CONTRAT-HUB sec. 5.7-5.8.
+func (r *veridianPlanRepository) Restore(ctx context.Context, workspaceID, reason string) error {
+	now := time.Now().UTC()
+	var reasonArg interface{}
+	if reason != "" {
+		reasonArg = reason
+	}
+	const q = `
+		UPDATE veridian_plan
+		SET status = 'active',
+		    deleted_at = NULL,
+		    purge_eligible_at = NULL,
+		    restored_at = $2,
+		    lifecycle_reason = $3,
+		    updated_at = $2
+		WHERE workspace_id = $1
+	`
+	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, now, reasonArg)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("veridian_plan: workspace %s not found", workspaceID)
+	}
+	return nil
+}
+
+// Purge supprime DEFINITIVEMENT la ligne veridian_plan (hard delete). Le
+// service applique la garde "purge_eligible_at < NOW" en amont — ce repo
+// l'execute sans condition supplementaire. La raison est passe pour parite
+// de signature avec SoftDelete/Restore mais n'est pas stockee (la ligne
+// est supprimee). L'audit doit etre fait via le webhook emit cote service.
+//
+// NB : la suppression de la DB workspace et du user owner est faite par
+// WorkspaceService.DeleteWorkspace en amont (cf. service.Purge).
+func (r *veridianPlanRepository) Purge(ctx context.Context, workspaceID, reason string) error {
+	_ = reason // reason audit-only emitted via webhook
+	const q = `DELETE FROM veridian_plan WHERE workspace_id = $1`
+	res, err := r.systemDB.ExecContext(ctx, q, workspaceID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("veridian_plan: workspace %s not found", workspaceID)
+	}
+	return nil
+}
+
+// Touch met a jour last_touched_at = NOW. Pas d'autre effet de bord — le
+// service applique le debouncing 24h en amont.
+func (r *veridianPlanRepository) Touch(ctx context.Context, workspaceID string) error {
 	now := time.Now().UTC()
 	const q = `
 		UPDATE veridian_plan
-		SET status = 'deleted', deleted_at = $2, updated_at = $2
+		SET last_touched_at = $2,
+		    updated_at = $2
 		WHERE workspace_id = $1
 	`
 	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, now)
@@ -195,6 +300,12 @@ func (r *veridianPlanRepository) SoftDelete(ctx context.Context, workspaceID str
 	}
 	return nil
 }
+
+// veridianPurgeDelayPostgres : duree entre soft-delete et eligibilite a la
+// purge definitive. Constante locale au repo pour eviter une dependance
+// circulaire avec le service (qui declare le meme via veridianPurgeDelay).
+// Doit rester ALIGNE avec internal/service/veridian_service.go:veridianPurgeDelay.
+const veridianPurgeDelayPostgres = 30 * 24 * time.Hour
 
 // IncrementEmailsSent ajoute delta au compteur de mails envoyes ce mois (atomique).
 // Si la ligne n'existe pas, no-op silencieux (le workspace n'est pas suivi par Veridian).

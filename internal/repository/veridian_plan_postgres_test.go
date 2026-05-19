@@ -31,12 +31,16 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		now := time.Now().UTC()
 		rows := sqlmock.NewRows([]string{
 			"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
-			"last_reset_at", "suspended_at", "suspended_reason", "deleted_at", "created_at", "updated_at",
-		}).AddRow(wsID, "pro", "stripe", "active", int64(10000), int64(42), now, nil, nil, nil, now, now)
+			"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
+			"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
+			"created_at", "updated_at",
+		}).AddRow(wsID, "pro", "stripe", "active", int64(10000), int64(42), now, nil, nil, nil, nil, nil, nil, nil, now, now)
 
 		mock.ExpectQuery(`
 			SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-			       last_reset_at, suspended_at, suspended_reason, deleted_at, created_at, updated_at
+			       last_reset_at, suspended_at, suspended_reason, deleted_at,
+			       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
+			       created_at, updated_at
 			FROM veridian_plan
 			WHERE workspace_id = $1
 		`).WithArgs(wsID).WillReturnRows(rows)
@@ -61,14 +65,20 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		now := time.Now().UTC()
 		susp := now.Add(-1 * time.Hour)
 		del := now.Add(-30 * time.Minute)
+		purgeEligible := del.Add(30 * 24 * time.Hour)
 		rows := sqlmock.NewRows([]string{
 			"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
-			"last_reset_at", "suspended_at", "suspended_reason", "deleted_at", "created_at", "updated_at",
-		}).AddRow(wsID, "free", "lifetime_partner", "suspended", int64(500), int64(0), now, susp, "non-payment", del, now, now)
+			"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
+			"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
+			"created_at", "updated_at",
+		}).AddRow(wsID, "free", "lifetime_partner", "suspended", int64(500), int64(0), now, susp, "non-payment", del,
+			nil, purgeEligible, nil, "GDPR user request", now, now)
 
 		mock.ExpectQuery(`
 			SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-			       last_reset_at, suspended_at, suspended_reason, deleted_at, created_at, updated_at
+			       last_reset_at, suspended_at, suspended_reason, deleted_at,
+			       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
+			       created_at, updated_at
 			FROM veridian_plan
 			WHERE workspace_id = $1
 		`).WithArgs(wsID).WillReturnRows(rows)
@@ -80,6 +90,12 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		require.NotNil(t, p.SuspendedAt)
 		assert.Equal(t, "non-payment", p.SuspendedReason)
 		require.NotNil(t, p.DeletedAt)
+		// Nouveaux champs V34 lifecycle
+		require.NotNil(t, p.PurgeEligibleAt, "purge_eligible_at must be scanned")
+		assert.True(t, p.PurgeEligibleAt.After(*p.DeletedAt), "purge_eligible_at = deleted_at + 30j")
+		assert.Equal(t, "GDPR user request", p.LifecycleReason)
+		assert.Nil(t, p.RestoredAt, "tenant pas restore")
+		assert.Nil(t, p.LastTouchedAt, "tenant pas touche")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -89,7 +105,9 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 
 		mock.ExpectQuery(`
 			SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-			       last_reset_at, suspended_at, suspended_reason, deleted_at, created_at, updated_at
+			       last_reset_at, suspended_at, suspended_reason, deleted_at,
+			       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
+			       created_at, updated_at
 			FROM veridian_plan
 			WHERE workspace_id = $1
 		`).WithArgs("missing").WillReturnError(sql.ErrNoRows)
@@ -329,18 +347,41 @@ func TestVeridianPlanRepository_Resume(t *testing.T) {
 func TestVeridianPlanRepository_SoftDelete(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("soft deletes existing", func(t *testing.T) {
+	// Signature mise a jour V34 : ajout purge_eligible_at + lifecycle_reason.
+	// QueryMatcherEqual exige match exact (espaces compris).
+	const softDeleteSQL = `
+		UPDATE veridian_plan
+		SET status = 'deleted',
+		    deleted_at = $2,
+		    purge_eligible_at = $3,
+		    lifecycle_reason = $4,
+		    updated_at = $2
+		WHERE workspace_id = $1
+	`
+
+	t.Run("soft deletes existing with reason", func(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
-		mock.ExpectExec(`
-			UPDATE veridian_plan
-			SET status = 'deleted', deleted_at = $2, updated_at = $2
-			WHERE workspace_id = $1
-		`).WithArgs("ws-1", sqlmock.AnyArg()).
+		mock.ExpectExec(softDeleteSQL).
+			WithArgs("ws-1", sqlmock.AnyArg(), sqlmock.AnyArg(), "user requested").
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := repo.SoftDelete(ctx, "ws-1")
+		err := repo.SoftDelete(ctx, "ws-1", "user requested")
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("soft deletes with empty reason (passes NULL)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		// Reason vide = NULL en SQL (audit "pas de raison fournie").
+		mock.ExpectExec(softDeleteSQL).
+			WithArgs("ws-1", sqlmock.AnyArg(), sqlmock.AnyArg(), nil).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.SoftDelete(ctx, "ws-1", "")
 		require.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -349,14 +390,189 @@ func TestVeridianPlanRepository_SoftDelete(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
-		mock.ExpectExec(`
-			UPDATE veridian_plan
-			SET status = 'deleted', deleted_at = $2, updated_at = $2
-			WHERE workspace_id = $1
-		`).WithArgs("ws-missing", sqlmock.AnyArg()).
+		mock.ExpectExec(softDeleteSQL).
+			WithArgs("ws-missing", sqlmock.AnyArg(), sqlmock.AnyArg(), nil).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := repo.SoftDelete(ctx, "ws-missing")
+		err := repo.SoftDelete(ctx, "ws-missing", "")
+		assert.ErrorContains(t, err, "not found")
+	})
+}
+
+// TestVeridianPlanRepository_Get_ScansV34LifecycleColumns verifie que les
+// 4 colonnes ajoutees par la migration V34 (restored_at, purge_eligible_at,
+// last_touched_at, lifecycle_reason) sont bien scannees dans la struct
+// VeridianPlan retournee. Garde-fou contre un drift entre le SELECT du repo
+// et la struct domain — si une colonne disparait du SELECT, les valeurs DB
+// seraient silencieusement ignorees.
+func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
+	ctx := context.Background()
+	db, mock := newMockSystemDB(t)
+	repo := NewVeridianPlanRepository(db)
+
+	now := time.Now().UTC()
+	restoredAt := now.Add(-5 * 24 * time.Hour)
+	purgeEligibleAt := now.Add(25 * 24 * time.Hour)
+	lastTouchedAt := now.Add(-12 * time.Hour)
+
+	rows := sqlmock.NewRows([]string{
+		"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
+		"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
+		"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
+		"created_at", "updated_at",
+	}).AddRow("ws-1", "pro", "stripe", "active", int64(10000), int64(0),
+		now, nil, nil, nil,
+		restoredAt, purgeEligibleAt, lastTouchedAt, "audit reason for V34 lifecycle",
+		now, now)
+
+	mock.ExpectQuery(`
+		SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
+		       last_reset_at, suspended_at, suspended_reason, deleted_at,
+		       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
+		       created_at, updated_at
+		FROM veridian_plan
+		WHERE workspace_id = $1
+	`).WithArgs("ws-1").WillReturnRows(rows)
+
+	p, err := repo.Get(ctx, "ws-1")
+	require.NoError(t, err)
+	require.NotNil(t, p.RestoredAt)
+	assert.Equal(t, restoredAt.Unix(), p.RestoredAt.Unix())
+	require.NotNil(t, p.PurgeEligibleAt)
+	assert.Equal(t, purgeEligibleAt.Unix(), p.PurgeEligibleAt.Unix())
+	require.NotNil(t, p.LastTouchedAt)
+	assert.Equal(t, lastTouchedAt.Unix(), p.LastTouchedAt.Unix())
+	assert.Equal(t, "audit reason for V34 lifecycle", p.LifecycleReason)
+}
+
+// === Lifecycle (V34) — Restore/Purge/Touch repo methods ===
+
+func TestVeridianPlanRepository_Restore(t *testing.T) {
+	ctx := context.Background()
+	const restoreSQL = `
+		UPDATE veridian_plan
+		SET status = 'active',
+		    deleted_at = NULL,
+		    purge_eligible_at = NULL,
+		    restored_at = $2,
+		    lifecycle_reason = $3,
+		    updated_at = $2
+		WHERE workspace_id = $1
+	`
+
+	t.Run("restore with reason clears deleted_at + purge_eligible_at", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(restoreSQL).
+			WithArgs("ws-1", sqlmock.AnyArg(), "support ticket").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.Restore(ctx, "ws-1", "support ticket")
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("restore with empty reason passes nil", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(restoreSQL).
+			WithArgs("ws-1", sqlmock.AnyArg(), nil).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.Restore(ctx, "ws-1", "")
+		require.NoError(t, err)
+	})
+
+	t.Run("returns error if not found", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(restoreSQL).
+			WithArgs("ghost", sqlmock.AnyArg(), nil).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := repo.Restore(ctx, "ghost", "")
+		assert.ErrorContains(t, err, "not found")
+	})
+}
+
+func TestVeridianPlanRepository_Purge(t *testing.T) {
+	ctx := context.Background()
+	const purgeSQL = `DELETE FROM veridian_plan WHERE workspace_id = $1`
+
+	t.Run("hard deletes existing row", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(purgeSQL).
+			WithArgs("ws-1").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.Purge(ctx, "ws-1", "GDPR final")
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("reason not persisted (audit via webhook only)", func(t *testing.T) {
+		// La reason est passe en parametre pour parite signature mais
+		// n'apparait pas en SQL — la ligne est DELETE'd, donc rien a stocker.
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(purgeSQL).
+			WithArgs("ws-1").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.Purge(ctx, "ws-1", "any audit reason")
+		require.NoError(t, err)
+	})
+
+	t.Run("returns error if not found", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(purgeSQL).
+			WithArgs("ghost").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := repo.Purge(ctx, "ghost", "test")
+		assert.ErrorContains(t, err, "not found")
+	})
+}
+
+func TestVeridianPlanRepository_Touch(t *testing.T) {
+	ctx := context.Background()
+	const touchSQL = `
+		UPDATE veridian_plan
+		SET last_touched_at = $2,
+		    updated_at = $2
+		WHERE workspace_id = $1
+	`
+
+	t.Run("touch updates last_touched_at", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(touchSQL).
+			WithArgs("ws-1", sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.Touch(ctx, "ws-1")
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("returns error if not found", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(touchSQL).
+			WithArgs("ghost", sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := repo.Touch(ctx, "ghost")
 		assert.ErrorContains(t, err, "not found")
 	})
 }

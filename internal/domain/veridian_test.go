@@ -64,6 +64,37 @@ func TestPlanSource_Constants(t *testing.T) {
 	assert.Equal(t, "internal", string(PlanSourceInternal))
 }
 
+// === Lifecycle (sec. 5.7-5.8) — events + struct fields ===
+
+func TestVeridianEvent_LifecycleConstants(t *testing.T) {
+	// Sanity : les events lifecycle correspondent aux valeurs exactes du
+	// contrat sec. 7.1. Si ces strings changent, les consommateurs Hub cassent.
+	assert.Equal(t, "tenant.soft_deleted", string(EventTenantSoftDeleted))
+	assert.Equal(t, "tenant.restored", string(EventTenantRestored))
+	assert.Equal(t, "tenant.purged", string(EventTenantPurged))
+	assert.Equal(t, "tenant.touched", string(EventTenantTouched))
+	// Back-compat : tenant.deleted reste emis en parallele de tenant.soft_deleted.
+	assert.Equal(t, "tenant.deleted", string(EventTenantDeleted))
+}
+
+func TestVeridianPlan_LifecycleFields(t *testing.T) {
+	// Verifie que les nouveaux champs V34 sont bien des pointeurs (null-safe
+	// pour les tenants pre-V34 qui n'ont jamais ete touche/restore/purge).
+	now := time.Now()
+	purgeEligible := now.Add(30 * 24 * time.Hour)
+	p := &VeridianPlan{
+		WorkspaceID:     "ws-1",
+		DeletedAt:       &now,
+		PurgeEligibleAt: &purgeEligible,
+		LifecycleReason: "GDPR",
+	}
+	require.NotNil(t, p.PurgeEligibleAt)
+	assert.True(t, p.PurgeEligibleAt.After(*p.DeletedAt))
+	assert.Equal(t, "GDPR", p.LifecycleReason)
+	assert.Nil(t, p.RestoredAt, "champ nullable pour tenants jamais restore")
+	assert.Nil(t, p.LastTouchedAt, "champ nullable pour tenants jamais touche")
+}
+
 // === VeridianPlan ===
 
 func TestVeridianPlan_IsBlocked_DeletedFirst(t *testing.T) {

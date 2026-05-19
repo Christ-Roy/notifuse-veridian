@@ -71,6 +71,17 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	mux.Handle("POST /api/tenants/resume", hmac(http.HandlerFunc(h.handleResume)))
 	mux.Handle("DELETE /api/tenants/{id}", hmac(http.HandlerFunc(h.handleDelete)))
 	mux.Handle("GET /api/tenants/{id}/status", hmac(http.HandlerFunc(h.handleStatus)))
+	// === Lifecycle (CONTRAT-HUB sec. 5.7-5.8) ===
+	// POST /soft-delete : pendant explicite (body, audit reason) du DELETE legacy.
+	// POST /restore     : annule un soft-delete dans la fenetre de 30j.
+	// POST /purge       : hard delete definitif (exige confirm="PURGE"+reason).
+	// POST /touch       : heartbeat anti-soft-delete (debounce 24h).
+	// GET  /usage-summary : agrege utilisation effective.
+	mux.Handle("POST /api/tenants/{id}/soft-delete", hmac(http.HandlerFunc(h.handleSoftDelete)))
+	mux.Handle("POST /api/tenants/{id}/restore", hmac(http.HandlerFunc(h.handleRestore)))
+	mux.Handle("POST /api/tenants/{id}/purge", hmac(http.HandlerFunc(h.handlePurge)))
+	mux.Handle("POST /api/tenants/{id}/touch", hmac(http.HandlerFunc(h.handleTouch)))
+	mux.Handle("GET /api/tenants/{id}/usage-summary", hmac(http.HandlerFunc(h.handleUsageSummary)))
 	// === Veridian patch === Admin endpoint pour cleanup CI / tests.
 	// Supprime DEFINITIVEMENT (hard delete) workspace + DB + plan row.
 	// Refuse les tenants matchant safety_client_prefixes (clients reels).
@@ -247,6 +258,10 @@ func (h *VeridianHandler) handleResume(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleDelete : endpoint DELETE legacy. Conserve pour back-compat avec le
+// client Hub actuel (cf. veridian-hub/lib/notifuse/client.ts:92). En interne,
+// delegue au nouveau handleSoftDelete avec un body vide (reason omise).
+// CONTRAT-HUB sec. 5.7-5.8 : equivalent semantique a POST /soft-delete.
 func (h *VeridianHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("id")
 	if tenantID == "" {
@@ -256,7 +271,8 @@ func (h *VeridianHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.SoftDelete(r.Context(), tenantID); err != nil {
+	resp, err := h.service.SoftDelete(r.Context(), domain.SoftDeleteInput{TenantID: tenantID})
+	if err != nil {
 		h.logError("soft_delete", err, map[string]interface{}{"tenant_id": tenantID})
 		if isNotFoundErr(err) {
 			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
@@ -268,10 +284,217 @@ func (h *VeridianHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Format response legacy preserve (champs additionnels purge_eligible_at
+	// passes en plus pour les nouveaux consommateurs Hub qui les attendent).
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"tenant_id":  tenantID,
-		"deleted_at": time.Now().UTC(),
+		"tenant_id":         tenantID,
+		"deleted_at":        resp.DeletedAt,
+		"purge_eligible_at": resp.PurgeEligibleAt,
 	})
+}
+
+// === Lifecycle handlers (CONTRAT-HUB sec. 5.7-5.8) ===
+
+func (h *VeridianHandler) handleSoftDelete(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("id")
+	if tenantID == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
+		return
+	}
+
+	// Body optionnel : juste {reason: "..."}. Si pas de body ou JSON invalide,
+	// reason reste vide (back-compat). On ne fail QUE si le body est present
+	// mais syntaxiquement invalide.
+	var body struct {
+		Reason string `json:"reason,omitempty"`
+	}
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
+			return
+		}
+	}
+
+	resp, err := h.service.SoftDelete(r.Context(), domain.SoftDeleteInput{
+		TenantID: tenantID,
+		Reason:   body.Reason,
+	})
+	if err != nil {
+		h.logError("soft_delete", err, map[string]interface{}{"tenant_id": tenantID})
+		if isNotFoundErr(err) {
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
+			return
+		}
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *VeridianHandler) handleRestore(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("id")
+	if tenantID == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
+		return
+	}
+
+	var body struct {
+		Reason string `json:"reason,omitempty"`
+	}
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
+			return
+		}
+	}
+
+	resp, err := h.service.Restore(r.Context(), domain.RestoreInput{
+		TenantID: tenantID,
+		Reason:   body.Reason,
+	})
+	if err != nil {
+		h.logError("restore", err, map[string]interface{}{"tenant_id": tenantID})
+		// ErrTenantNotSoftDeleted → 409 (tenant pas en etat soft-deleted).
+		if errors.Is(err, service.ErrTenantNotSoftDeleted) {
+			WriteJSONErrorCode(w, ErrCodeTenantSoftDeleted, err.Error(), http.StatusConflict, map[string]interface{}{
+				"tenant_id": tenantID,
+				"hint":      "tenant is not in soft_deleted state — nothing to restore",
+			})
+			return
+		}
+		if isNotFoundErr(err) {
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
+			return
+		}
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *VeridianHandler) handlePurge(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("id")
+	if tenantID == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
+		return
+	}
+
+	var body struct {
+		Reason  string `json:"reason"`
+		Confirm string `json:"confirm"`
+	}
+	if r.Body == nil || r.ContentLength == 0 {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "body required with reason and confirm fields", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"reason", "confirm"},
+		})
+		return
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
+		return
+	}
+	if body.Reason == "" || body.Confirm == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "reason and confirm are required", http.StatusBadRequest, map[string]interface{}{
+			"missing": missingFields(body.Reason == "", "reason", body.Confirm == "", "confirm"),
+		})
+		return
+	}
+
+	resp, err := h.service.Purge(r.Context(), domain.PurgeInput{
+		TenantID: tenantID,
+		Reason:   body.Reason,
+		Confirm:  body.Confirm,
+	})
+	if err != nil {
+		h.logError("purge", err, map[string]interface{}{"tenant_id": tenantID})
+		if errors.Is(err, service.ErrPurgeNotEligible) {
+			WriteJSONErrorCode(w, ErrCodePurgeNotEligible, err.Error(), http.StatusConflict, map[string]interface{}{
+				"tenant_id": tenantID,
+				"hint":      "tenant must be soft-deleted for at least 30 days before purge",
+			})
+			return
+		}
+		// Erreurs validation (confirm != PURGE, reason vide) sont retournees
+		// par le service avec messages "*required*" / "*must equal*". Mapping
+		// vers 400 invalid_payload.
+		msg := err.Error()
+		if containsAny(msg, "confirm must equal", "reason required") {
+			WriteJSONErrorCode(w, ErrCodeInvalidPayload, msg, http.StatusBadRequest, nil)
+			return
+		}
+		if isNotFoundErr(err) {
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
+			return
+		}
+		WriteJSONErrorCode(w, ErrCodeInternalError, msg, http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *VeridianHandler) handleTouch(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("id")
+	if tenantID == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
+		return
+	}
+
+	resp, err := h.service.Touch(r.Context(), tenantID)
+	if err != nil {
+		h.logError("touch", err, map[string]interface{}{"tenant_id": tenantID})
+		if isNotFoundErr(err) {
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
+			return
+		}
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *VeridianHandler) handleUsageSummary(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("id")
+	if tenantID == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
+		return
+	}
+
+	resp, err := h.service.UsageSummary(r.Context(), tenantID)
+	if err != nil {
+		if isNotFoundErr(err) {
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
+			return
+		}
+		h.logError("usage_summary", err, map[string]interface{}{"tenant_id": tenantID})
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *VeridianHandler) handleStatus(w http.ResponseWriter, r *http.Request) {

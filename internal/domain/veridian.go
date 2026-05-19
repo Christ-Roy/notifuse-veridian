@@ -78,8 +78,24 @@ type VeridianPlan struct {
 	SuspendedAt         *time.Time `json:"suspended_at,omitempty"`
 	SuspendedReason     string     `json:"suspended_reason,omitempty"`
 	DeletedAt           *time.Time `json:"deleted_at,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	// === Lifecycle (CONTRAT-HUB sec. 5.7 + 5.8) ===
+	// RestoredAt : timestamp du dernier Restore. Audit trail uniquement, n'a
+	// pas d'effet fonctionnel apres restore (deleted_at est clear, le tenant
+	// est de nouveau actif).
+	RestoredAt *time.Time `json:"restored_at,omitempty"`
+	// PurgeEligibleAt : timestamp a partir duquel le tenant peut etre
+	// hard-deleted. Set a NOW + veridianPurgeDelay au SoftDelete, NULL apres
+	// Restore. Le service.Purge refuse si NOW < PurgeEligibleAt.
+	PurgeEligibleAt *time.Time `json:"purge_eligible_at,omitempty"`
+	// LastTouchedAt : timestamp du dernier Touch (heartbeat anti-soft-delete
+	// par cron). Debounced cote service (24h).
+	LastTouchedAt *time.Time `json:"last_touched_at,omitempty"`
+	// LifecycleReason : derniere raison appliquee au lifecycle (audit GDPR
+	// + traceabilite). Ecrasee a chaque transition (soft-delete, restore,
+	// purge).
+	LifecycleReason string    `json:"lifecycle_reason,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // QuotaRemaining retourne le nombre d'emails encore envoyables ce mois.
@@ -144,7 +160,22 @@ type VeridianPlanRepository interface {
 	UpdatePlan(ctx context.Context, workspaceID, plan string, quota int64, planSource PlanSource) error
 	Suspend(ctx context.Context, workspaceID, reason string) error
 	Resume(ctx context.Context, workspaceID string) error
-	SoftDelete(ctx context.Context, workspaceID string) error
+	// SoftDelete marque le tenant deleted_at = NOW + initialise
+	// purge_eligible_at = NOW + 30j + lifecycle_reason (audit GDPR).
+	// CONTRAT-HUB sec. 5.7-5.8.
+	SoftDelete(ctx context.Context, workspaceID, reason string) error
+	// Restore annule un soft-delete : clear deleted_at + purge_eligible_at,
+	// set restored_at = NOW + lifecycle_reason. Le tenant repasse en active.
+	Restore(ctx context.Context, workspaceID, reason string) error
+	// Purge supprime DEFINITIVEMENT la ligne veridian_plan (hard delete).
+	// Le caller (service) doit avoir verifie purge_eligible_at &lt; NOW avant.
+	// La suppression de la DB workspace et du user owner est faite en amont
+	// par WorkspaceService.DeleteWorkspace.
+	Purge(ctx context.Context, workspaceID, reason string) error
+	// Touch met a jour last_touched_at = NOW (heartbeat anti-soft-delete
+	// par cron Hub). Pas d'autre effet de bord — le service applique le
+	// debouncing 24h en amont.
+	Touch(ctx context.Context, workspaceID string) error
 	IncrementEmailsSent(ctx context.Context, workspaceID string, delta int64) error
 	ResetMonthlyCounters(ctx context.Context) (int64, error) // appele par cron
 	// === Veridian patch === Hard delete (tests / admin platform).
@@ -234,6 +265,70 @@ type ResumeInput struct {
 	TenantID string `json:"tenant_id"`
 }
 
+// === Lifecycle (CONTRAT-HUB sec. 5.7-5.8) ===
+
+// SoftDeleteInput est le body de POST /api/tenants/{id}/soft-delete.
+// reason vide est tolere (back-compat handler DELETE legacy).
+type SoftDeleteInput struct {
+	TenantID string `json:"tenant_id"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+// SoftDeleteResponse — audit trail post-soft-delete.
+type SoftDeleteResponse struct {
+	TenantID        string    `json:"tenant_id"`
+	Status          string    `json:"status"` // "soft_deleted"
+	DeletedAt       time.Time `json:"deleted_at"`
+	PurgeEligibleAt time.Time `json:"purge_eligible_at"`
+}
+
+// RestoreInput est le body de POST /api/tenants/{id}/restore.
+type RestoreInput struct {
+	TenantID string `json:"tenant_id"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+// RestoreResponse — audit trail post-restore.
+type RestoreResponse struct {
+	TenantID   string    `json:"tenant_id"`
+	Status     string    `json:"status"` // "active"
+	RestoredAt time.Time `json:"restored_at"`
+}
+
+// PurgeInput est le body de POST /api/tenants/{id}/purge.
+// confirm doit valoir litteralement "PURGE" pour proceder (safeguard
+// destructif). reason est obligatoire (audit GDPR).
+type PurgeInput struct {
+	TenantID string `json:"tenant_id"`
+	Reason   string `json:"reason"`
+	Confirm  string `json:"confirm"`
+}
+
+// PurgeResponse — audit trail post-purge.
+type PurgeResponse struct {
+	TenantID string    `json:"tenant_id"`
+	Status   string    `json:"status"` // "purged"
+	PurgedAt time.Time `json:"purged_at"`
+}
+
+// TouchResponse — audit trail post-touch (debounced).
+type TouchResponse struct {
+	TenantID  string    `json:"tenant_id"`
+	TouchedAt time.Time `json:"touched_at"`
+	Debounced bool      `json:"debounced"` // true si no-op silencieux (touch < 24h)
+}
+
+// UsageSummaryResponse agrege l'utilisation effective d'un tenant (sec. 5.8).
+type UsageSummaryResponse struct {
+	TenantID         string     `json:"tenant_id"`
+	MessagesSent30d  int64      `json:"messages_sent_30d"`
+	LastActivityAt   *time.Time `json:"last_activity_at,omitempty"`
+	ContactsCount    int64      `json:"contacts_count"`
+	Plan             string     `json:"plan"`
+	Status           PlanStatus `json:"status"`
+	GeneratedAt      time.Time  `json:"generated_at"`
+}
+
 // StatusResponse est la reponse de GET /api/tenants/:id/status.
 type StatusResponse struct {
 	TenantID            string     `json:"tenant_id"`
@@ -312,7 +407,22 @@ type VeridianService interface {
 	UpdatePlan(ctx context.Context, input UpdatePlanInput) (*UpdatePlanResponse, error)
 	Suspend(ctx context.Context, input SuspendInput) error
 	Resume(ctx context.Context, input ResumeInput) error
-	SoftDelete(ctx context.Context, tenantID string) error
+	// SoftDelete marque le tenant comme soft-deleted. CONTRAT-HUB sec. 5.7-5.8.
+	// reason = "" toleree pour back-compat handler DELETE legacy.
+	// Renvoie un audit (purge_eligible_at) — calle a NOW + 30j.
+	SoftDelete(ctx context.Context, input SoftDeleteInput) (*SoftDeleteResponse, error)
+	// Restore annule un soft-delete. Refuse si le tenant n'est pas soft-deleted
+	// (ErrTenantNotSoftDeleted).
+	Restore(ctx context.Context, input RestoreInput) (*RestoreResponse, error)
+	// Purge supprime DEFINITIVEMENT (hard delete) un tenant. Refuse si
+	// purge_eligible_at > NOW (ErrPurgeNotEligible). Exige confirm=="PURGE".
+	Purge(ctx context.Context, input PurgeInput) (*PurgeResponse, error)
+	// Touch met a jour le heartbeat anti-soft-delete (last_touched_at).
+	// Debounced 24h en service : si touche dans les 24h, no-op silencieux.
+	Touch(ctx context.Context, tenantID string) (*TouchResponse, error)
+	// UsageSummary agrege l'utilisation effective du tenant (messages 30j,
+	// contacts, derniere activite). CONTRAT-HUB sec. 5.8.
+	UsageSummary(ctx context.Context, tenantID string) (*UsageSummaryResponse, error)
 	GetStatus(ctx context.Context, tenantID string) (*StatusResponse, error)
 	GenerateMagicLink(ctx context.Context, workspaceID, userEmail string) (*MagicLinkResponse, error)
 
@@ -370,7 +480,17 @@ const (
 	EventTenantProvisioned VeridianEvent = "tenant.provisioned"
 	EventTenantSuspended   VeridianEvent = "tenant.suspended"
 	EventTenantResumed     VeridianEvent = "tenant.resumed"
-	EventTenantDeleted     VeridianEvent = "tenant.deleted"
+	// EventTenantDeleted : conserve pour back-compat avec les consommateurs
+	// Hub existants. Le service emet maintenant EventTenantSoftDeleted en
+	// parallele (les deux events sont push pour eviter de casser le Hub
+	// pendant la transition).
+	EventTenantDeleted VeridianEvent = "tenant.deleted"
+	// === Lifecycle (CONTRAT-HUB sec. 5.7-5.8) ===
+	EventTenantSoftDeleted VeridianEvent = "tenant.soft_deleted"
+	EventTenantRestored    VeridianEvent = "tenant.restored"
+	EventTenantPurged      VeridianEvent = "tenant.purged"
+	EventTenantTouched     VeridianEvent = "tenant.touched"
+
 	EventTenantPlanChanged VeridianEvent = "tenant.plan_changed"
 	EventEmailSent         VeridianEvent = "email.sent"
 	EventEmailBounced      VeridianEvent = "email.bounced"

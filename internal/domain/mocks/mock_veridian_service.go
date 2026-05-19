@@ -110,6 +110,36 @@ func (mr *MockVeridianServiceMockRecorder) Provision(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Provision", reflect.TypeOf((*MockVeridianService)(nil).Provision), arg0, arg1)
 }
 
+// Purge mocks base method.
+func (m *MockVeridianService) Purge(arg0 context.Context, arg1 domain.PurgeInput) (*domain.PurgeResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Purge", arg0, arg1)
+	ret0, _ := ret[0].(*domain.PurgeResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Purge indicates an expected call of Purge.
+func (mr *MockVeridianServiceMockRecorder) Purge(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Purge", reflect.TypeOf((*MockVeridianService)(nil).Purge), arg0, arg1)
+}
+
+// Restore mocks base method.
+func (m *MockVeridianService) Restore(arg0 context.Context, arg1 domain.RestoreInput) (*domain.RestoreResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Restore", arg0, arg1)
+	ret0, _ := ret[0].(*domain.RestoreResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Restore indicates an expected call of Restore.
+func (mr *MockVeridianServiceMockRecorder) Restore(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockVeridianService)(nil).Restore), arg0, arg1)
+}
+
 // Resume mocks base method.
 func (m *MockVeridianService) Resume(arg0 context.Context, arg1 domain.ResumeInput) error {
 	m.ctrl.T.Helper()
@@ -125,11 +155,12 @@ func (mr *MockVeridianServiceMockRecorder) Resume(arg0, arg1 interface{}) *gomoc
 }
 
 // SoftDelete mocks base method.
-func (m *MockVeridianService) SoftDelete(arg0 context.Context, arg1 string) error {
+func (m *MockVeridianService) SoftDelete(arg0 context.Context, arg1 domain.SoftDeleteInput) (*domain.SoftDeleteResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SoftDelete", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*domain.SoftDeleteResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // SoftDelete indicates an expected call of SoftDelete.
@@ -152,6 +183,21 @@ func (mr *MockVeridianServiceMockRecorder) Suspend(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suspend", reflect.TypeOf((*MockVeridianService)(nil).Suspend), arg0, arg1)
 }
 
+// Touch mocks base method.
+func (m *MockVeridianService) Touch(arg0 context.Context, arg1 string) (*domain.TouchResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Touch", arg0, arg1)
+	ret0, _ := ret[0].(*domain.TouchResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Touch indicates an expected call of Touch.
+func (mr *MockVeridianServiceMockRecorder) Touch(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Touch", reflect.TypeOf((*MockVeridianService)(nil).Touch), arg0, arg1)
+}
+
 // UpdatePlan mocks base method.
 func (m *MockVeridianService) UpdatePlan(arg0 context.Context, arg1 domain.UpdatePlanInput) (*domain.UpdatePlanResponse, error) {
 	m.ctrl.T.Helper()
@@ -165,6 +211,21 @@ func (m *MockVeridianService) UpdatePlan(arg0 context.Context, arg1 domain.Updat
 func (mr *MockVeridianServiceMockRecorder) UpdatePlan(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePlan", reflect.TypeOf((*MockVeridianService)(nil).UpdatePlan), arg0, arg1)
+}
+
+// UsageSummary mocks base method.
+func (m *MockVeridianService) UsageSummary(arg0 context.Context, arg1 string) (*domain.UsageSummaryResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UsageSummary", arg0, arg1)
+	ret0, _ := ret[0].(*domain.UsageSummaryResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UsageSummary indicates an expected call of UsageSummary.
+func (mr *MockVeridianServiceMockRecorder) UsageSummary(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UsageSummary", reflect.TypeOf((*MockVeridianService)(nil).UsageSummary), arg0, arg1)
 }
 
 // WipeTestTenants mocks base method.

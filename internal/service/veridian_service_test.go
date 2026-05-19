@@ -398,11 +398,223 @@ func TestVeridianService_SoftDelete_EmitsEvent(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
-	m.planRepo.EXPECT().SoftDelete(ctx, "ws-1").Return(nil).Times(1)
+	m.planRepo.EXPECT().SoftDelete(ctx, "ws-1", "").Return(nil).Times(1)
+	// 2 events emis : nouveau tenant.soft_deleted (sec. 5.7-5.8) + legacy
+	// tenant.deleted (back-compat). Voir service.SoftDelete.
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantSoftDeleted, "ws-1", gomock.Any()).Times(1)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantDeleted, "ws-1", gomock.Nil()).Times(1)
 
-	err := svc.SoftDelete(ctx, "ws-1")
+	resp, err := svc.SoftDelete(ctx, domain.SoftDeleteInput{TenantID: "ws-1"})
 	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "ws-1", resp.TenantID)
+	assert.Equal(t, "deleted", resp.Status)
+	assert.False(t, resp.DeletedAt.IsZero())
+	// purge_eligible_at = deleted_at + 30j
+	assert.True(t, resp.PurgeEligibleAt.After(resp.DeletedAt))
+}
+
+// === Lifecycle (CONTRAT-HUB sec. 5.7-5.8) — Restore/Purge/Touch/UsageSummary ===
+
+func TestVeridianService_SoftDelete_WithReason(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().SoftDelete(ctx, "ws-1", "GDPR request").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantSoftDeleted, "ws-1", gomock.Any()).
+		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			assert.Equal(t, "GDPR request", data["reason"])
+			assert.NotNil(t, data["purge_eligible_at"])
+		}).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantDeleted, "ws-1", gomock.Nil()).Times(1)
+
+	resp, err := svc.SoftDelete(ctx, domain.SoftDeleteInput{TenantID: "ws-1", Reason: "GDPR request"})
+	require.NoError(t, err)
+	assert.Equal(t, "deleted", resp.Status)
+}
+
+func TestVeridianService_SoftDelete_RejectsEmptyTenantID(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	_, err := svc.SoftDelete(context.Background(), domain.SoftDeleteInput{})
+	assert.ErrorContains(t, err, "tenant_id required")
+}
+
+func TestVeridianService_Restore_OK(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	deletedAt := now.Add(-7 * 24 * time.Hour)
+
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-1",
+		DeletedAt:   &deletedAt,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().Restore(ctx, "ws-1", "support ticket #42").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantRestored, "ws-1", gomock.Any()).Times(1)
+
+	resp, err := svc.Restore(ctx, domain.RestoreInput{TenantID: "ws-1", Reason: "support ticket #42"})
+	require.NoError(t, err)
+	assert.Equal(t, "active", resp.Status)
+	assert.False(t, resp.RestoredAt.IsZero())
+}
+
+func TestVeridianService_Restore_RejectsIfNotSoftDeleted(t *testing.T) {
+	// Garde-fou : on ne restore que ce qui est soft-deleted.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-active").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-active",
+		DeletedAt:   nil, // pas soft-delete
+	}, nil).Times(1)
+
+	resp, err := svc.Restore(ctx, domain.RestoreInput{TenantID: "ws-active"})
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrTenantNotSoftDeleted)
+}
+
+func TestVeridianService_Purge_RejectsBeforeEligibleDate(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	tomorrow := time.Now().UTC().Add(24 * time.Hour)
+
+	m.planRepo.EXPECT().Get(ctx, "ws-vip").Return(&domain.VeridianPlan{
+		WorkspaceID:     "ws-vip",
+		PurgeEligibleAt: &tomorrow,
+	}, nil).Times(1)
+
+	resp, err := svc.Purge(ctx, domain.PurgeInput{
+		TenantID: "ws-vip",
+		Reason:   "GDPR",
+		Confirm:  "PURGE",
+	})
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrPurgeNotEligible)
+}
+
+func TestVeridianService_Purge_RejectsIfNotSoftDeleted(t *testing.T) {
+	// Tenant actif (purge_eligible_at == nil) ne peut pas etre purge.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-active").Return(&domain.VeridianPlan{
+		WorkspaceID:     "ws-active",
+		PurgeEligibleAt: nil,
+	}, nil).Times(1)
+
+	resp, err := svc.Purge(ctx, domain.PurgeInput{
+		TenantID: "ws-active",
+		Reason:   "test",
+		Confirm:  "PURGE",
+	})
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrPurgeNotEligible)
+}
+
+func TestVeridianService_Purge_RejectsWithoutConfirm(t *testing.T) {
+	// Safeguard : confirm doit valoir exactement "PURGE".
+	svc, _ := newVeridianService(t)
+	ctx := context.Background()
+
+	_, err := svc.Purge(ctx, domain.PurgeInput{TenantID: "ws-1", Reason: "test", Confirm: "purge"})
+	assert.ErrorContains(t, err, "confirm must equal")
+
+	_, err = svc.Purge(ctx, domain.PurgeInput{TenantID: "ws-1", Reason: "test", Confirm: ""})
+	assert.ErrorContains(t, err, "confirm must equal")
+}
+
+func TestVeridianService_Purge_RejectsWithoutReason(t *testing.T) {
+	// GDPR : reason obligatoire.
+	svc, _ := newVeridianService(t)
+	_, err := svc.Purge(context.Background(), domain.PurgeInput{TenantID: "ws-1", Confirm: "PURGE"})
+	assert.ErrorContains(t, err, "reason required")
+}
+
+func TestVeridianService_Touch_FreshTenantEmitsEvent(t *testing.T) {
+	// Tenant jamais touche : Touch ecrit + emet l'event.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID:   "ws-1",
+		LastTouchedAt: nil,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().Touch(ctx, "ws-1").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantTouched, "ws-1", gomock.Any()).Times(1)
+
+	resp, err := svc.Touch(ctx, "ws-1")
+	require.NoError(t, err)
+	assert.False(t, resp.Debounced)
+	assert.False(t, resp.TouchedAt.IsZero())
+}
+
+func TestVeridianService_Touch_DebouncedWithin24h(t *testing.T) {
+	// Touche il y a 1h : debounce, no-op silencieux, pas d'event.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	recent := time.Now().UTC().Add(-1 * time.Hour)
+
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID:   "ws-1",
+		LastTouchedAt: &recent,
+	}, nil).Times(1)
+	// PAS d'appel Touch ni d'Emit attendu.
+
+	resp, err := svc.Touch(ctx, "ws-1")
+	require.NoError(t, err)
+	assert.True(t, resp.Debounced)
+	assert.Equal(t, recent.Unix(), resp.TouchedAt.Unix(), "TouchedAt = last_touched_at preserve")
+}
+
+func TestVeridianService_Touch_ExpiredDebounceTouchesAgain(t *testing.T) {
+	// Touche il y a 25h : > 24h, on touche a nouveau.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	old := time.Now().UTC().Add(-25 * time.Hour)
+
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID:   "ws-1",
+		LastTouchedAt: &old,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().Touch(ctx, "ws-1").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantTouched, "ws-1", gomock.Any()).Times(1)
+
+	resp, err := svc.Touch(ctx, "ws-1")
+	require.NoError(t, err)
+	assert.False(t, resp.Debounced)
+}
+
+func TestVeridianService_UsageSummary_OK(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	lastTouch := time.Now().UTC().Add(-2 * time.Hour)
+
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID:         "ws-1",
+		Plan:                "pro",
+		Status:              domain.PlanStatusActive,
+		EmailsSentThisMonth: 1234,
+		LastTouchedAt:       &lastTouch,
+	}, nil).Times(1)
+
+	resp, err := svc.UsageSummary(ctx, "ws-1")
+	require.NoError(t, err)
+	assert.Equal(t, "ws-1", resp.TenantID)
+	assert.Equal(t, "pro", resp.Plan)
+	assert.Equal(t, domain.PlanStatusActive, resp.Status)
+	assert.Equal(t, int64(1234), resp.MessagesSent30d)
+	require.NotNil(t, resp.LastActivityAt)
+	assert.Equal(t, lastTouch.Unix(), resp.LastActivityAt.Unix())
+	assert.Equal(t, int64(0), resp.ContactsCount, "MVP : non implemente")
+}
+
+func TestVeridianService_UsageSummary_TenantNotFound(t *testing.T) {
+	svc, m := newVeridianService(t)
+	m.planRepo.EXPECT().Get(gomock.Any(), "ghost").Return(nil, sql.ErrNoRows).Times(1)
+
+	resp, err := svc.UsageSummary(context.Background(), "ghost")
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, sql.ErrNoRows)
 }
 
 func TestVeridianService_UpdatePlan_EmitsEventWithQuota(t *testing.T) {
