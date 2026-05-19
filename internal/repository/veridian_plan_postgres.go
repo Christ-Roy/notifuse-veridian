@@ -237,6 +237,12 @@ func (r *veridianPlanRepository) Restore(ctx context.Context, workspaceID, reaso
 	if reason != "" {
 		reasonArg = reason
 	}
+	// Note : restored_at et updated_at sont passes via deux parametres
+	// distincts ($2 et $4) bien que de meme valeur. Cela evite le bug Postgres
+	// "inconsistent types deduced for parameter $N" quand le meme parametre
+	// est utilise pour deux colonnes de types differents
+	// (restored_at TIMESTAMP WITH TIME ZONE vs updated_at TIMESTAMP WITHOUT
+	// TIME ZONE — drift V34 vs schema legacy upstream Notifuse).
 	const q = `
 		UPDATE veridian_plan
 		SET status = 'active',
@@ -244,10 +250,10 @@ func (r *veridianPlanRepository) Restore(ctx context.Context, workspaceID, reaso
 		    purge_eligible_at = NULL,
 		    restored_at = $2,
 		    lifecycle_reason = $3,
-		    updated_at = $2
+		    updated_at = $4
 		WHERE workspace_id = $1
 	`
-	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, now, reasonArg)
+	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, now, reasonArg, now)
 	if err != nil {
 		return err
 	}
@@ -282,15 +288,22 @@ func (r *veridianPlanRepository) Purge(ctx context.Context, workspaceID, reason 
 
 // Touch met a jour last_touched_at = NOW. Pas d'autre effet de bord — le
 // service applique le debouncing 24h en amont.
+//
+// Note : last_touched_at et updated_at sont passes via deux parametres
+// distincts ($2 et $3) bien que de meme valeur. Cela evite le bug Postgres
+// "inconsistent types deduced for parameter $N" quand le meme parametre
+// est utilise pour deux colonnes de types differents
+// (last_touched_at TIMESTAMP WITH TIME ZONE vs updated_at TIMESTAMP WITHOUT
+// TIME ZONE — drift V34 vs schema legacy upstream Notifuse).
 func (r *veridianPlanRepository) Touch(ctx context.Context, workspaceID string) error {
 	now := time.Now().UTC()
 	const q = `
 		UPDATE veridian_plan
 		SET last_touched_at = $2,
-		    updated_at = $2
+		    updated_at = $3
 		WHERE workspace_id = $1
 	`
-	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, now)
+	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, now, now)
 	if err != nil {
 		return err
 	}
