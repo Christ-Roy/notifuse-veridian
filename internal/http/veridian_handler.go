@@ -29,9 +29,10 @@ import (
 
 // VeridianHandler regroupe les handlers Hub-driven.
 type VeridianHandler struct {
-	service      domain.VeridianService
-	logger       logger.Logger
-	paywallCache *middleware.PaywallCache // Peut etre nil (mode self-hosted sans paywall)
+	service          domain.VeridianService
+	logger           logger.Logger
+	paywallCache     *middleware.PaywallCache              // Peut etre nil (mode self-hosted sans paywall)
+	idempotencyRepo  domain.VeridianIdempotencyRepository // Peut etre nil (passthrough du middleware)
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -50,6 +51,13 @@ func (h *VeridianHandler) SetPaywallCache(cache *middleware.PaywallCache) {
 	h.paywallCache = cache
 }
 
+// SetIdempotencyRepo injecte le repo idempotency_keys pour le middleware
+// Idempotency-Key (CONTRAT-HUB sec. 5.11). Optionnel : si nil, le middleware
+// est passthrough (mode self-hosted, ou avant la migration V35).
+func (h *VeridianHandler) SetIdempotencyRepo(repo domain.VeridianIdempotencyRepository) {
+	h.idempotencyRepo = repo
+}
+
 // RegisterRoutes enregistre les 6 endpoints /api/tenants/* WRAPPES dans
 // le middleware HMAC. hubSecret est la valeur de HUB_API_SECRET.
 //
@@ -57,6 +65,14 @@ func (h *VeridianHandler) SetPaywallCache(cache *middleware.PaywallCache) {
 // et extraire {id} via r.PathValue("id").
 func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	hmac := middleware.VeridianHMACMiddleware(hubSecret)
+	// Idempotency middleware : se chaine APRES HMAC (auth d'abord) et AVANT
+	// le handler. Passthrough si idempotencyRepo nil OU si le client n'envoie
+	// pas le header Idempotency-Key. Voir middleware/veridian_idempotency.go.
+	idem := middleware.VeridianIdempotencyMiddleware(h.idempotencyRepo, h.logger)
+	// Helper pour les routes mutateurs (HMAC + idempotency).
+	writeRoute := func(handler http.HandlerFunc) http.Handler {
+		return hmac(idem(handler))
+	}
 
 	// === Veridian patch === Endpoint public (no HMAC) qui dit a la console UI
 	// si on est en mode "Veridian-managed" (HUB_API_SECRET set) ou self-hosted.
@@ -65,37 +81,39 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// CreateWorkspacePage.tsx.
 	mux.HandleFunc("GET /api/veridian/mode", h.handleMode(hubSecret))
 
-	mux.Handle("POST /api/tenants/provision", hmac(http.HandlerFunc(h.handleProvision)))
-	mux.Handle("POST /api/tenants/update-plan", hmac(http.HandlerFunc(h.handleUpdatePlan)))
-	mux.Handle("POST /api/tenants/suspend", hmac(http.HandlerFunc(h.handleSuspend)))
-	mux.Handle("POST /api/tenants/resume", hmac(http.HandlerFunc(h.handleResume)))
-	mux.Handle("DELETE /api/tenants/{id}", hmac(http.HandlerFunc(h.handleDelete)))
+	// === Mutateurs : HMAC + Idempotency (CONTRAT-HUB sec. 5.11) ===
+	mux.Handle("POST /api/tenants/provision", writeRoute(h.handleProvision))
+	mux.Handle("POST /api/tenants/update-plan", writeRoute(h.handleUpdatePlan))
+	mux.Handle("POST /api/tenants/suspend", writeRoute(h.handleSuspend))
+	mux.Handle("POST /api/tenants/resume", writeRoute(h.handleResume))
+	mux.Handle("DELETE /api/tenants/{id}", writeRoute(h.handleDelete))
+	// === Reads : HMAC seulement (idempotency inutile pour les GET) ===
 	mux.Handle("GET /api/tenants/{id}/status", hmac(http.HandlerFunc(h.handleStatus)))
-	// === Lifecycle (CONTRAT-HUB sec. 5.7-5.8) ===
+	// === Lifecycle mutateurs (CONTRAT-HUB sec. 5.7-5.8) ===
 	// POST /soft-delete : pendant explicite (body, audit reason) du DELETE legacy.
 	// POST /restore     : annule un soft-delete dans la fenetre de 30j.
 	// POST /purge       : hard delete definitif (exige confirm="PURGE"+reason).
 	// POST /touch       : heartbeat anti-soft-delete (debounce 24h).
-	// GET  /usage-summary : agrege utilisation effective.
-	mux.Handle("POST /api/tenants/{id}/soft-delete", hmac(http.HandlerFunc(h.handleSoftDelete)))
-	mux.Handle("POST /api/tenants/{id}/restore", hmac(http.HandlerFunc(h.handleRestore)))
-	mux.Handle("POST /api/tenants/{id}/purge", hmac(http.HandlerFunc(h.handlePurge)))
-	mux.Handle("POST /api/tenants/{id}/touch", hmac(http.HandlerFunc(h.handleTouch)))
+	// GET  /usage-summary : agrege utilisation effective (read).
+	mux.Handle("POST /api/tenants/{id}/soft-delete", writeRoute(h.handleSoftDelete))
+	mux.Handle("POST /api/tenants/{id}/restore", writeRoute(h.handleRestore))
+	mux.Handle("POST /api/tenants/{id}/purge", writeRoute(h.handlePurge))
+	mux.Handle("POST /api/tenants/{id}/touch", writeRoute(h.handleTouch))
 	mux.Handle("GET /api/tenants/{id}/usage-summary", hmac(http.HandlerFunc(h.handleUsageSummary)))
 	// === Veridian patch === Admin endpoint pour cleanup CI / tests.
 	// Supprime DEFINITIVEMENT (hard delete) workspace + DB + plan row.
 	// Refuse les tenants matchant safety_client_prefixes (clients reels).
-	mux.Handle("POST /api/veridian/admin/wipe-test-tenants", hmac(http.HandlerFunc(h.handleWipeTestTenants)))
+	mux.Handle("POST /api/veridian/admin/wipe-test-tenants", writeRoute(h.handleWipeTestTenants))
 	// === Veridian patch === Cache invalidate pour eliminer le sleep 60s
 	// des tests e2e paywall apres suspend/resume/update-plan/delete. En prod,
 	// peut etre appele par le Hub pour propager rapidement un changement de
 	// plan a Notifuse sans attendre l'expiration TTL.
-	mux.Handle("POST /api/veridian/admin/cache/invalidate", hmac(http.HandlerFunc(h.handleInvalidateCache)))
+	mux.Handle("POST /api/veridian/admin/cache/invalidate", writeRoute(h.handleInvalidateCache))
 	// === Veridian patch === Repair endpoint pour les tenants existants dont
 	// l'owner humain n'est pas attaché au workspace (workspaces créés avant
 	// la feature Hub-Veridian). Idempotent : safe à appeler en boucle pour
 	// réparer en batch. Voir todo/2026-05-17-provision-owner-attach.md.
-	mux.Handle("POST /api/veridian/admin/attach-owner", hmac(http.HandlerFunc(h.handleAttachOwner)))
+	mux.Handle("POST /api/veridian/admin/attach-owner", writeRoute(h.handleAttachOwner))
 	// === Veridian patch === Health observable du tenant (livrable 3 contrat
 	// intégrations Hub). Le Hub poll en cron 1×/h pour détecter régression
 	// silencieuse du flow magic link Hub → app (bug 2026-05-17).

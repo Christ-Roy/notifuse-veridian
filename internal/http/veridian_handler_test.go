@@ -1372,6 +1372,24 @@ func TestVeridianHandleUsageSummary_NotFound(t *testing.T) {
 
 // --- Routes registration ---
 
+// TestVeridianHandler_SetIdempotencyRepo verifie le setter d'injection
+// du repo idempotency (CONTRAT-HUB sec. 5.11). Pattern utilise par app.go
+// pour eviter une signature constructor surchargee. Quand le repo n'est
+// pas set, le middleware idempotency reste passthrough (cf. tests
+// middleware/veridian_idempotency_test.go).
+func TestVeridianHandler_SetIdempotencyRepo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := NewVeridianHandler(svc, logger.NewLogger())
+	assert.Nil(t, h.idempotencyRepo, "default nil — middleware passthrough en mode self-hosted")
+
+	repo := mocks.NewMockVeridianIdempotencyRepository(ctrl)
+	h.SetIdempotencyRepo(repo)
+	assert.NotNil(t, h.idempotencyRepo, "set apres injection app.go")
+}
+
 func TestVeridianHandler_LifecycleRoutes_Registered(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

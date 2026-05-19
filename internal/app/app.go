@@ -123,10 +123,11 @@ type App struct {
 	emailQueueRepo                domain.EmailQueueRepository
 
 	// === Veridian patches ===
-	veridianPlanRepo       domain.VeridianPlanRepository
-	veridianService        domain.VeridianService
-	veridianWebhookEmitter domain.WebhookEmitter
-	veridianPaywallCache   *middleware.PaywallCache // partage middleware paywall + handler invalidate
+	veridianPlanRepo         domain.VeridianPlanRepository
+	veridianIdempotencyRepo  domain.VeridianIdempotencyRepository
+	veridianService          domain.VeridianService
+	veridianWebhookEmitter   domain.WebhookEmitter
+	veridianPaywallCache     *middleware.PaywallCache // partage middleware paywall + handler invalidate
 
 	// Services
 	authService                      *service.AuthService
@@ -447,6 +448,7 @@ func (a *App) InitRepositories() error {
 
 	// === Veridian patches ===
 	a.veridianPlanRepo = repository.NewVeridianPlanRepository(a.db)
+	a.veridianIdempotencyRepo = repository.NewVeridianIdempotencyRepository(a.db)
 
 	// Initialize setting service
 	a.settingService = service.NewSettingService(a.settingRepo)
@@ -1245,6 +1247,7 @@ func (a *App) InitHandlers() error {
 	a.veridianPaywallCache = middleware.NewPaywallCache()
 	veridianHandler := httpHandler.NewVeridianHandler(a.veridianService, a.logger)
 	veridianHandler.SetPaywallCache(a.veridianPaywallCache)
+	veridianHandler.SetIdempotencyRepo(a.veridianIdempotencyRepo)
 	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
 
 	// Endpoint generateMagicLink (auth API key tenant Notifuse).
