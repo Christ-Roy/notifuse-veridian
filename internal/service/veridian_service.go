@@ -428,12 +428,20 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	s.transferOwnershipToTenant(ctx, rootCtx, input.TenantID, owner.ID, rootUserID)
 
 	// 7. Inserer / mettre a jour la ligne veridian_plan.
+	// Quota : si input.Quotas.MonthlyEmails est fourni par le Hub, c'est la
+	// source de verite (CONTRAT-HUB sec. 5.17). Sinon fallback hardcoded
+	// domain.QuotaForPlan(plan) pour back-compat des appels Hub legacy.
+	monthlyEmailQuota := domain.QuotaForPlan(plan)
+	if input.Quotas != nil && input.Quotas.MonthlyEmails != nil {
+		monthlyEmailQuota = *input.Quotas.MonthlyEmails
+	}
 	now := time.Now().UTC()
 	planRow := &domain.VeridianPlan{
 		WorkspaceID:         input.TenantID,
 		Plan:                plan,
+		PlanSource:          input.PlanSource, // peut etre "" — repo COALESCE default 'stripe'
 		Status:              domain.PlanStatusActive,
-		MonthlyEmailQuota:   domain.QuotaForPlan(plan),
+		MonthlyEmailQuota:   monthlyEmailQuota,
 		EmailsSentThisMonth: 0,
 		LastResetAt:         now,
 		CreatedAt:           now,
@@ -584,7 +592,12 @@ func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePla
 		return nil, ErrPlanImmune
 	}
 
+	// Quota override §5.17 : si le Hub envoie input.Quotas.MonthlyEmails,
+	// utiliser cette valeur. Sinon fallback hardcoded QuotaForPlan(plan).
 	quota := domain.QuotaForPlan(input.Plan)
+	if input.Quotas != nil && input.Quotas.MonthlyEmails != nil {
+		quota = *input.Quotas.MonthlyEmails
+	}
 	if err := s.planRepo.UpdatePlan(ctx, input.TenantID, input.Plan, quota, input.PlanSource); err != nil {
 		return nil, err
 	}

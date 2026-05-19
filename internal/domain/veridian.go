@@ -155,13 +155,35 @@ type VeridianPlanRepository interface {
 
 // === Service ===
 
+// PlanQuotasInput regroupe les quotas configurables par tenant envoyes par
+// le Hub au moment du provision / update-plan (CONTRAT-HUB sec. 5.17).
+// Permet au Hub de centraliser la source de verite des quotas plutot que
+// de dependre du hardcoded QuotaForPlan(plan) cote Notifuse.
+//
+// Tous les champs sont des pointeurs pour distinguer "non envoye" (nil =
+// utiliser le hardcoded) de "envoye explicitement avec 0" (limite zero). La
+// valeur -1 represente l'illimite (semantique partagee avec
+// VeridianPlan.MonthlyEmailQuota).
+//
+// Pour l'instant un seul quota (monthly_emails). Le struct est extensible
+// pour les futurs quotas contrats sec. 5.17 (contacts, broadcasts, templates,
+// storage_mb, ...).
+//
+// A ne pas confondre avec la variable globale `PlanQuotas` (map plan→quota
+// par defaut hardcoded) qui sert de fallback quand l'appelant n'envoie pas
+// le champ.
+type PlanQuotasInput struct {
+	MonthlyEmails *int64 `json:"monthly_emails,omitempty"`
+}
+
 // ProvisionInput est le body de POST /api/tenants/provision.
 type ProvisionInput struct {
-	TenantID      string     `json:"tenant_id"` // workspace_id Notifuse
-	OwnerEmail    string     `json:"owner_email"`
-	WorkspaceName string     `json:"workspace_name,omitempty"` // optionnel, defaut = tenant_id
-	Plan          string     `json:"plan,omitempty"`           // optionnel, defaut = VERIDIAN_DEFAULT_PLAN
-	PlanSource    PlanSource `json:"plan_source,omitempty"`    // optionnel, defaut = "stripe"
+	TenantID      string      `json:"tenant_id"` // workspace_id Notifuse
+	OwnerEmail    string      `json:"owner_email"`
+	WorkspaceName string      `json:"workspace_name,omitempty"` // optionnel, defaut = tenant_id
+	Plan          string      `json:"plan,omitempty"`           // optionnel, defaut = VERIDIAN_DEFAULT_PLAN
+	PlanSource    PlanSource  `json:"plan_source,omitempty"`    // optionnel, defaut = "stripe"
+	Quotas        *PlanQuotasInput `json:"quotas,omitempty"`    // optionnel, defaut = QuotaForPlan(plan)
 }
 
 // ProvisionResponse est la reponse de POST /api/tenants/provision.
@@ -185,9 +207,10 @@ type ProvisionResponse struct {
 
 // UpdatePlanInput est le body de POST /api/tenants/update-plan.
 type UpdatePlanInput struct {
-	TenantID   string     `json:"tenant_id"`
-	Plan       string     `json:"plan"`
-	PlanSource PlanSource `json:"plan_source,omitempty"` // optionnel, defaut = "stripe"
+	TenantID   string      `json:"tenant_id"`
+	Plan       string      `json:"plan"`
+	PlanSource PlanSource  `json:"plan_source,omitempty"` // optionnel, defaut = "stripe"
+	Quotas     *PlanQuotasInput `json:"quotas,omitempty"` // optionnel, defaut = QuotaForPlan(plan)
 }
 
 // UpdatePlanResponse est la reponse de POST /api/tenants/update-plan

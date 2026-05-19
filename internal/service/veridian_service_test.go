@@ -153,6 +153,64 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	assert.Contains(t, resp.MagicLink, "email=owner%40example.com")
 }
 
+// TestVeridianService_Provision_QuotasOverrideHardcoded verifie que
+// input.Quotas.MonthlyEmails ecrase le hardcoded QuotaForPlan(plan)
+// au moment du Upsert veridian_plan (CONTRAT-HUB sec. 5.17). Le test
+// se base sur la meme machinerie que Provision_NewTenant mais avec
+// un quota custom de 42 au lieu de 10000 pour le plan "pro".
+func TestVeridianService_Provision_QuotasOverrideHardcoded(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	m.workspace.EXPECT().GetWorkspace(gomock.Any(), "ws-quota").Return(nil, errors.New("not found")).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "ws-quota").Return(nil, sql.ErrNoRows).Times(1)
+	m.user.EXPECT().GetUserByEmail(ctx, "owner@example.com").
+		Return(nil, &domain.ErrUserNotFound{Message: "not found"}).Times(1)
+	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil).Times(1)
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(3)
+	m.workspace.EXPECT().CreateWorkspace(
+		gomock.Any(), "ws-quota", "ws-quota",
+		gomock.Any(), gomock.Any(), gomock.Any(),
+		"UTC", gomock.Any(), "en", gomock.Any(),
+	).Return(&domain.Workspace{ID: "ws-quota"}, nil).Times(1)
+	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-quota", gomock.Any(), "member", gomock.Any()).Return(nil).Times(1)
+	m.workspace.EXPECT().TransferOwnership(gomock.Any(), "ws-quota", gomock.Any(), rootUser.ID).Return(nil).Times(1)
+	m.workspace.EXPECT().RemoveUserFromWorkspace(gomock.Any(), "ws-quota", rootUser.ID).Return(nil).Times(1)
+	m.workspace.EXPECT().CreateAPIKey(gomock.Any(), "ws-quota", "veridian-api-ws-quota").
+		Return("sk_test_apikey", "veridian-api-ws-quota@ws-quota.notifuse", nil).Times(1)
+	m.userRepo.EXPECT().MarkVeridianManaged(ctx, "veridian-api-ws-quota@ws-quota.notifuse").Return(nil).Times(1)
+
+	// Cœur du test : Upsert recoit le quota custom (42) ET le plan_source envoye.
+	m.planRepo.EXPECT().Upsert(ctx, gomock.AssignableToTypeOf(&domain.VeridianPlan{})).
+		DoAndReturn(func(_ context.Context, p *domain.VeridianPlan) error {
+			assert.Equal(t, "ws-quota", p.WorkspaceID)
+			assert.Equal(t, "pro", p.Plan)
+			assert.Equal(t, int64(42), p.MonthlyEmailQuota, "quota Hub override doit ecraser le hardcoded 10000")
+			assert.Equal(t, domain.PlanSourceLifetimePartner, p.PlanSource, "plan_source envoye doit etre persiste")
+			return nil
+		}).Times(1)
+
+	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, "owner@example.com", "ws-quota").
+		Return("magic-code", time.Now().Add(15*time.Minute), nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantProvisioned, "ws-quota", gomock.Any()).Times(1)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(3)
+
+	customQuota := int64(42)
+	resp, err := svc.Provision(ctx, domain.ProvisionInput{
+		TenantID:   "ws-quota",
+		OwnerEmail: "owner@example.com",
+		Plan:       "pro",
+		PlanSource: domain.PlanSourceLifetimePartner,
+		Quotas:     &domain.PlanQuotasInput{MonthlyEmails: &customQuota},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "ws-quota", resp.WorkspaceID)
+}
+
 func TestVeridianService_Provision_Idempotent(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
@@ -487,6 +545,93 @@ func TestVeridianService_UpdatePlan_EmptySourcePreservesExisting(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, domain.PlanSourceLifetimePartner, resp.PlanSource, "doit refleter l'existant preserve, pas 'stripe'")
+}
+
+func TestVeridianService_UpdatePlan_QuotasOverrideHardcoded(t *testing.T) {
+	// CONTRAT-HUB sec. 5.17 : si le Hub envoie input.Quotas.MonthlyEmails,
+	// utiliser cette valeur plutot que le hardcoded QuotaForPlan(plan).
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-1",
+		Plan:        "free",
+		PlanSource:  domain.PlanSourceStripe,
+	}, nil).Times(1)
+	// Le quota envoyé (999) doit etre passe au repo, pas le hardcoded 10000 pour "pro".
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "pro", int64(999), domain.PlanSource("")).Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	customQuota := int64(999)
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID: "ws-1",
+		Plan:     "pro",
+		Quotas:   &domain.PlanQuotasInput{MonthlyEmails: &customQuota},
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestVeridianService_UpdatePlan_QuotasNilFallsBackToHardcoded(t *testing.T) {
+	// Si input.Quotas est nil, on utilise QuotaForPlan(plan) = 10000 pour "pro".
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-1",
+		Plan:        "free",
+		PlanSource:  domain.PlanSourceStripe,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "pro", int64(10000), domain.PlanSource("")).Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	_, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "ws-1", Plan: "pro"})
+	require.NoError(t, err)
+}
+
+func TestVeridianService_UpdatePlan_QuotasMonthlyEmailsNilFallsBack(t *testing.T) {
+	// Cas particulier : input.Quotas non-nil mais MonthlyEmails nil (le Hub
+	// envoie une struct vide en preparation de futurs quotas) → fallback hardcoded.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-1",
+		Plan:        "free",
+		PlanSource:  domain.PlanSourceStripe,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "pro", int64(10000), domain.PlanSource("")).Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	_, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID: "ws-1",
+		Plan:     "pro",
+		Quotas:   &domain.PlanQuotasInput{}, // struct vide
+	})
+	require.NoError(t, err)
+}
+
+func TestVeridianService_UpdatePlan_QuotasMonthlyEmailsUnlimited(t *testing.T) {
+	// Cas illimite : Hub envoie -1 explicitement.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-vip").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-vip",
+		Plan:        "business",
+		PlanSource:  domain.PlanSourceLifetimePartner,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-vip", "enterprise", int64(-1), domain.PlanSourceLifetimePartner).Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	unlimited := int64(-1)
+	_, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID:   "ws-vip",
+		Plan:       "enterprise",
+		PlanSource: domain.PlanSourceLifetimePartner,
+		Quotas:     &domain.PlanQuotasInput{MonthlyEmails: &unlimited},
+	})
+	require.NoError(t, err)
 }
 
 func TestVeridianService_UpdatePlan_NotFoundProsRepo(t *testing.T) {

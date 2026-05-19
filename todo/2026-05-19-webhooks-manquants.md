@@ -59,3 +59,25 @@ Conséquences :
 Les autres webhooks listés (`tenant.soft_deleted`, `tenant.restored`, etc.) dépendent du ticket `lifecycle-soft-delete-restore-purge` qui n'est pas implémenté non plus.
 
 **Action pour Robert** : faut-il (a) prioriser le wiring increment + ship `tenant.quota_exceeded` ensemble, ou (b) attendre les autres chantiers et ship en bloc, ou (c) skipper le quota webhook (le Hub peut polling `/api/tenants/{id}/status` à la place — moins efficace mais zéro nouveau code Notifuse) ?
+
+### Investigation suite — pipeline d'envoi
+
+Reconnaissance complète :
+
+- `internal/service/email_service.go:160` `EmailService.SendEmail` est le point central qui dispatch vers les providers (SMTP/SES/Mailgun/...). C'est un fichier **upstream-pur** (pas de préfixe `veridian_`), donc l'augmenter directement viole la convention §veridian-override (CLAUDE.md).
+- `messageHistoryRepo.Create` est appelé 4 fois (= 1 par email envoyé) :
+  - `transactional_service.go:874`
+  - `demo_service.go:1745`
+  - `broadcast_service.go:1079`
+  - `broadcast/message_sender.go:650` (worker async — envois mass)
+- Architecture async : les broadcasts envoient en background, l'increment ne peut donc pas se faire au moment du HTTP response — il faut le faire dans le worker.
+
+**Options d'implémentation propres** :
+
+1. **Décorateur sur `domain.MessageHistoryRepository.Create`** : wrapper Veridian dans `internal/repository/veridian_message_history_decorator.go` qui appelle l'original puis `planRepo.IncrementEmailsSent`. Pas de patch upstream, mais demande de rerouter l'injection dans `internal/app/app.go` (à wrapper avant de le passer aux services).
+2. **Hook explicite dans `EmailService.SendEmail`** : ajouter un callback `OnEmailSent` que le code Veridian peut brancher. Patch upstream MINIMAL (3 lignes) mais quand même une exception.
+3. **Worker dédié** : cron qui scanne `message_history` toutes les 60s et sync le compteur. Découplé mais latence et coût DB.
+
+**Reco** : option 1 (decorator) — strictement Veridian, idiomatique Go, testable en isolation.
+
+**Skip pour cette session** : trop gros pour être pris à la suite des 2 chantiers déjà livrés (~6h+ avec tests). À planifier comme ticket dédié.

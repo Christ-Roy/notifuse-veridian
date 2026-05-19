@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // === PlanSource — CONTRAT-HUB sec. 3.3 ===
@@ -115,6 +116,37 @@ func TestVeridianPlan_QuotaRemaining(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := &VeridianPlan{MonthlyEmailQuota: tc.quota, EmailsSentThisMonth: tc.sent}
 			assert.Equal(t, tc.exp, p.QuotaRemaining())
+		})
+	}
+}
+
+// === PlanQuotasInput (sec. 5.17) ===
+
+func TestPlanQuotasInput_NilMonthlyEmails(t *testing.T) {
+	// Cas par défaut : struct vide ou champ nil = "Hub n'envoie pas de quota".
+	// Le service doit alors fallback sur QuotaForPlan(plan).
+	var q *PlanQuotasInput
+	assert.Nil(t, q, "PlanQuotasInput zero value est nil")
+
+	q2 := &PlanQuotasInput{}
+	assert.Nil(t, q2.MonthlyEmails, "MonthlyEmails non set = nil pointer")
+}
+
+func TestPlanQuotasInput_ExplicitMonthlyEmails(t *testing.T) {
+	cases := []struct {
+		name  string
+		value int64
+	}{
+		{"zero limit", 0},
+		{"normal", 500},
+		{"unlimited", -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := tc.value
+			q := &PlanQuotasInput{MonthlyEmails: &v}
+			require.NotNil(t, q.MonthlyEmails)
+			assert.Equal(t, tc.value, *q.MonthlyEmails)
 		})
 	}
 }
