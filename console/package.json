@@ -65,7 +65,6 @@
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.13",
     "echarts": "^5.6.0",
-    "echarts-for-react": "^3.0.2",
     "emoji-mart": "^5.6.0",
     "fflate": "^0.8.2",
     "filesize": "^10.1.6",

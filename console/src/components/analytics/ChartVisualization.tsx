@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Table, Spin, Alert } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 import * as echarts from 'echarts/core'
@@ -10,8 +10,11 @@ import {
   LegendComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import ReactEChartsCore from 'echarts-for-react/lib/core'
 import { AnalyticsQuery, AnalyticsResponse } from '../../services/api/analytics'
+
+// echarts-for-react retire 2026-05-19 : sa dep size-sensor est marquee
+// malware (GHSA-gx6x-v325-85g4, type=malware, "vulnerable_version_range: >= 0",
+// pas de patch). Wrapper natif echarts via useRef + useEffect ci-dessous.
 
 // Register the required components
 echarts.use([
@@ -407,13 +410,43 @@ export const ChartVisualization: React.FC<ChartVisualizationProps> = ({
     )
   }
 
-  return (
-    <ReactEChartsCore
-      echarts={echarts}
-      option={getChartOption()}
-      style={{ height: `${height}px` }}
-      notMerge={true}
-      lazyUpdate={true}
-    />
-  )
+  return <EChart option={getChartOption()} height={height} />
+}
+
+// EChart : wrapper natif autour de echarts.init, remplace echarts-for-react
+// (retire pour cause de dep size-sensor malware, cf. import block en haut).
+// Comportement equivalent a notMerge:true + lazyUpdate:true (l'API setOption
+// gere le merge ; on appelle setOption avec notMerge=true a chaque render
+// pour preserver le comportement legacy).
+interface EChartProps {
+  option: echarts.EChartsCoreOption
+  height: number
+}
+
+const EChart: React.FC<EChartProps> = ({ option, height }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const instanceRef = useRef<echarts.ECharts | null>(null)
+
+  // Init + cleanup
+  useEffect(() => {
+    if (!containerRef.current) return
+    const inst = echarts.init(containerRef.current)
+    instanceRef.current = inst
+
+    const handleResize = () => inst.resize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      inst.dispose()
+      instanceRef.current = null
+    }
+  }, [])
+
+  // Push option updates
+  useEffect(() => {
+    instanceRef.current?.setOption(option, { notMerge: true, lazyUpdate: true })
+  }, [option])
+
+  return <div ref={containerRef} style={{ height: `${height}px`, width: '100%' }} />
 }
