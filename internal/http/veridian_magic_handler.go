@@ -56,20 +56,20 @@ func (h *VeridianMagicHandler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		WriteJSONErrorCode(w, ErrCodeMethodNotAllowed, "Method not allowed", http.StatusMethodNotAllowed, nil)
 		return
 	}
 
 	// Restreindre aux API keys.
 	userType, _ := r.Context().Value(domain.UserTypeKey).(string)
 	if userType != string(domain.UserTypeAPIKey) {
-		WriteJSONError(w, "this endpoint requires an API key", http.StatusForbidden)
+		WriteJSONErrorCode(w, ErrCodeForbidden, "this endpoint requires an API key", http.StatusForbidden, nil)
 		return
 	}
 
 	apiUserID, _ := r.Context().Value(domain.UserIDKey).(string)
 	if apiUserID == "" {
-		WriteJSONError(w, "missing user id in token", http.StatusUnauthorized)
+		WriteJSONErrorCode(w, ErrCodeUnauthorized, "missing user id in token", http.StatusUnauthorized, nil)
 		return
 	}
 
@@ -83,26 +83,30 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 			"api_user_id": apiUserID,
 			"error":       err.Error(),
 		}).Error("magic link: failed to load workspaces for api key")
-		WriteJSONError(w, "failed to resolve workspace", http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, "failed to resolve workspace", http.StatusInternalServerError, nil)
 		return
 	}
 	if len(uws) == 0 {
-		WriteJSONError(w, "api key not attached to any workspace", http.StatusForbidden)
+		WriteJSONErrorCode(w, ErrCodeApiKeyNoWorkspace, "api key not attached to any workspace", http.StatusForbidden, nil)
 		return
 	}
 	if len(uws) > 1 {
-		WriteJSONError(w, "api key attached to multiple workspaces; ambiguous", http.StatusConflict)
+		WriteJSONErrorCode(w, ErrCodeApiKeyMultiWorkspace, "api key attached to multiple workspaces; ambiguous", http.StatusConflict, map[string]interface{}{
+			"workspaces_count": len(uws),
+		})
 		return
 	}
 	workspaceID := uws[0].WorkspaceID
 
 	var input domain.MagicLinkInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 	if input.UserEmail == "" {
-		WriteJSONError(w, "user_email is required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"user_email"},
+		})
 		return
 	}
 
@@ -110,7 +114,9 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 	if err != nil {
 		var notFound *domain.ErrUserNotFound
 		if errors.As(err, &notFound) {
-			WriteJSONError(w, "user not found", http.StatusNotFound)
+			WriteJSONErrorCode(w, ErrCodeUserNotFound, "user not found", http.StatusNotFound, map[string]interface{}{
+				"user_email": input.UserEmail,
+			})
 			return
 		}
 		h.logger.WithFields(map[string]interface{}{
@@ -118,7 +124,7 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 			"email":        input.UserEmail,
 			"error":        err.Error(),
 		}).Error("magic link: generation failed")
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 

@@ -103,11 +103,13 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request) {
 	var input domain.ProvisionInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 	if input.TenantID == "" || input.OwnerEmail == "" {
-		WriteJSONError(w, "tenant_id and owner_email are required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant_id and owner_email are required", http.StatusBadRequest, map[string]interface{}{
+			"missing": missingFields(input.TenantID == "", "tenant_id", input.OwnerEmail == "", "owner_email"),
+		})
 		return
 	}
 
@@ -120,17 +122,17 @@ func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request
 		// === Veridian patch === Sentinel ErrTenantSoftDeleted → 409 Conflict
 		// (re-provision rejetee tant que purge 30j pas passee).
 		if errors.Is(err, service.ErrTenantSoftDeleted) {
-			WriteJSONError(w, err.Error(), http.StatusConflict)
+			WriteJSONErrorCode(w, ErrCodeTenantSoftDeleted, err.Error(), http.StatusConflict, nil)
 			return
 		}
 		// === Veridian patch === Sentinel ErrOwnerMismatch → 409 Conflict
 		// (re-provision avec owner_email different refusee — protection contre
 		// prise de controle d'un tenant existant). Contrat §5.1.
 		if errors.Is(err, service.ErrOwnerMismatch) {
-			WriteJSONError(w, err.Error(), http.StatusConflict)
+			WriteJSONErrorCode(w, ErrCodeOwnerMismatch, err.Error(), http.StatusConflict, nil)
 			return
 		}
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -140,21 +142,25 @@ func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request
 func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Request) {
 	var input domain.UpdatePlanInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 	if input.TenantID == "" || input.Plan == "" {
-		WriteJSONError(w, "tenant_id and plan are required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant_id and plan are required", http.StatusBadRequest, map[string]interface{}{
+			"missing": missingFields(input.TenantID == "", "tenant_id", input.Plan == "", "plan"),
+		})
 		return
 	}
 
 	if err := h.service.UpdatePlan(r.Context(), input); err != nil {
 		h.logError("update_plan", err, map[string]interface{}{"tenant_id": input.TenantID})
 		if isNotFoundErr(err) {
-			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": input.TenantID,
+			})
 			return
 		}
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -168,21 +174,25 @@ func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Reques
 func (h *VeridianHandler) handleSuspend(w http.ResponseWriter, r *http.Request) {
 	var input domain.SuspendInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 	if input.TenantID == "" {
-		WriteJSONError(w, "tenant_id is required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant_id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
 		return
 	}
 
 	if err := h.service.Suspend(r.Context(), input); err != nil {
 		h.logError("suspend", err, map[string]interface{}{"tenant_id": input.TenantID})
 		if isNotFoundErr(err) {
-			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": input.TenantID,
+			})
 			return
 		}
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -195,21 +205,25 @@ func (h *VeridianHandler) handleSuspend(w http.ResponseWriter, r *http.Request) 
 func (h *VeridianHandler) handleResume(w http.ResponseWriter, r *http.Request) {
 	var input domain.ResumeInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 	if input.TenantID == "" {
-		WriteJSONError(w, "tenant_id is required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant_id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
 		return
 	}
 
 	if err := h.service.Resume(r.Context(), input); err != nil {
 		h.logError("resume", err, map[string]interface{}{"tenant_id": input.TenantID})
 		if isNotFoundErr(err) {
-			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": input.TenantID,
+			})
 			return
 		}
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -222,17 +236,21 @@ func (h *VeridianHandler) handleResume(w http.ResponseWriter, r *http.Request) {
 func (h *VeridianHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("id")
 	if tenantID == "" {
-		WriteJSONError(w, "tenant id is required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
 		return
 	}
 
 	if err := h.service.SoftDelete(r.Context(), tenantID); err != nil {
 		h.logError("soft_delete", err, map[string]interface{}{"tenant_id": tenantID})
 		if isNotFoundErr(err) {
-			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
 			return
 		}
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -245,18 +263,22 @@ func (h *VeridianHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 func (h *VeridianHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("id")
 	if tenantID == "" {
-		WriteJSONError(w, "tenant id is required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
 		return
 	}
 
 	resp, err := h.service.GetStatus(r.Context(), tenantID)
 	if err != nil {
 		if isNotFoundErr(err) {
-			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
 			return
 		}
 		h.logError("get_status", err, map[string]interface{}{"tenant_id": tenantID})
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -324,11 +346,13 @@ func (h *VeridianHandler) logError(op string, err error, fields map[string]inter
 func (h *VeridianHandler) handleWipeTestTenants(w http.ResponseWriter, r *http.Request) {
 	var input domain.WipeTestTenantsInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 	if input.Prefix == "" && len(input.TenantIDs) == 0 {
-		WriteJSONError(w, "prefix or tenant_ids required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "prefix or tenant_ids required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"prefix", "tenant_ids"},
+		})
 		return
 	}
 
@@ -338,7 +362,7 @@ func (h *VeridianHandler) handleWipeTestTenants(w http.ResponseWriter, r *http.R
 			"prefix":     input.Prefix,
 			"tenant_ids": len(input.TenantIDs),
 		})
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -362,7 +386,7 @@ func (h *VeridianHandler) handleWipeTestTenants(w http.ResponseWriter, r *http.R
 // doit savoir que sa demande n'a pas eu d'effet.
 func (h *VeridianHandler) handleInvalidateCache(w http.ResponseWriter, r *http.Request) {
 	if h.paywallCache == nil {
-		WriteJSONError(w, "paywall cache not initialized (self-hosted mode)", http.StatusServiceUnavailable)
+		WriteJSONErrorCode(w, ErrCodePaywallUnavailable, "paywall cache not initialized (self-hosted mode)", http.StatusServiceUnavailable, nil)
 		return
 	}
 
@@ -370,11 +394,13 @@ func (h *VeridianHandler) handleInvalidateCache(w http.ResponseWriter, r *http.R
 		WorkspaceID string `json:"workspace_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 	if input.WorkspaceID == "" {
-		WriteJSONError(w, "workspace_id is required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "workspace_id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"workspace_id"},
+		})
 		return
 	}
 
@@ -400,11 +426,13 @@ func (h *VeridianHandler) handleInvalidateCache(w http.ResponseWriter, r *http.R
 func (h *VeridianHandler) handleAttachOwner(w http.ResponseWriter, r *http.Request) {
 	var input domain.AttachOwnerInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		WriteJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 	if input.TenantID == "" || input.OwnerEmail == "" {
-		WriteJSONError(w, "tenant_id and owner_email are required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant_id and owner_email are required", http.StatusBadRequest, map[string]interface{}{
+			"missing": missingFields(input.TenantID == "", "tenant_id", input.OwnerEmail == "", "owner_email"),
+		})
 		return
 	}
 
@@ -415,10 +443,12 @@ func (h *VeridianHandler) handleAttachOwner(w http.ResponseWriter, r *http.Reque
 			"owner_email": input.OwnerEmail,
 		})
 		if isNotFoundErr(err) {
-			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": input.TenantID,
+			})
 			return
 		}
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -436,18 +466,22 @@ func (h *VeridianHandler) handleAttachOwner(w http.ResponseWriter, r *http.Reque
 func (h *VeridianHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("id")
 	if tenantID == "" {
-		WriteJSONError(w, "tenant id is required", http.StatusBadRequest)
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
 		return
 	}
 
 	resp, err := h.service.Health(r.Context(), tenantID)
 	if err != nil {
 		if isNotFoundErr(err) {
-			WriteJSONError(w, "tenant not found", http.StatusNotFound)
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
 			return
 		}
 		h.logError("health", err, map[string]interface{}{"tenant_id": tenantID})
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 

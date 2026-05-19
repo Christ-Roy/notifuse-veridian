@@ -922,3 +922,183 @@ func TestVeridianHandleHealth_RegisteredInRoutes(t *testing.T) {
 	require.NotNil(t, matched)
 	assert.Contains(t, pattern, "/health")
 }
+
+// === Format d'erreur §5.10 — verification du champ `code` machine ===
+//
+// Couvre tous les chemins d'erreur des handlers Veridian pour s'assurer que
+// le champ `code` machine-readable est emis en parallele de `error` (humain).
+// Le contrat veut a terme un champ `code` strict que le Hub puisse switcher
+// dessus sans parser la chaine humaine.
+
+func decodeErrCode(t *testing.T, body []byte) string {
+	t.Helper()
+	var resp VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(body, &resp))
+	return resp.Code
+}
+
+func TestVeridianErrorCode_handleProvision_InvalidJSON(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newHandlerWithService(mocks.NewMockVeridianService(ctrl))
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision", `{garbage`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleProvision_MissingFields(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newHandlerWithService(mocks.NewMockVeridianService(ctrl))
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision", `{}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+	// Verifie que le champ `details.missing` est rempli avec les champs manquants.
+	var resp VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Details, "details doit etre present quand des champs manquent")
+	missing, ok := resp.Details["missing"].([]interface{})
+	require.True(t, ok, "details.missing doit etre un tableau")
+	assert.ElementsMatch(t, []interface{}{"tenant_id", "owner_email"}, missing)
+}
+
+func TestVeridianErrorCode_handleProvision_OwnerMismatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(nil, service.ErrOwnerMismatch)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
+		`{"tenant_id":"ws-1","owner_email":"intruder@x.test","plan":"free"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, ErrCodeOwnerMismatch, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleProvision_SoftDeleted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(nil, service.ErrTenantSoftDeleted)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
+		`{"tenant_id":"ws-1","owner_email":"o@x.test","plan":"free"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, ErrCodeTenantSoftDeleted, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleProvision_InternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(nil, errors.New("boom"))
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
+		`{"tenant_id":"ws-1","owner_email":"o@x.test","plan":"free"}`)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, ErrCodeInternalError, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleUpdatePlan_TenantNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).Return(sql.ErrNoRows)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ghost","plan":"pro"}`)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, ErrCodeTenantNotFound, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleSuspend_MissingTenantID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newHandlerWithService(mocks.NewMockVeridianService(ctrl))
+	rec := postJSON(t, h.handleSuspend, "/api/tenants/suspend", `{}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleResume_TenantNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Resume(gomock.Any(), gomock.Any()).Return(fmt.Errorf("veridian_plan: workspace ghost not found"))
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleResume, "/api/tenants/resume", `{"tenant_id":"ghost"}`)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, ErrCodeTenantNotFound, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleDelete_MissingID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newHandlerWithService(mocks.NewMockVeridianService(ctrl))
+	rec := postWithPathValue(t, h.handleDelete, http.MethodDelete, "/api/tenants/", "", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleStatus_TenantNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().GetStatus(gomock.Any(), gomock.Any()).Return(nil, sql.ErrNoRows)
+	h := newHandlerWithService(svc)
+	rec := postWithPathValue(t, h.handleStatus, http.MethodGet, "/api/tenants/ghost/status", "ghost", "")
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, ErrCodeTenantNotFound, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleAttachOwner_OwnerMismatch(t *testing.T) {
+	// Sentinel non-typee : on simule un not-found dans le service.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().AttachOwner(gomock.Any(), gomock.Any()).Return(nil, sql.ErrNoRows)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner",
+		`{"tenant_id":"ghost","owner_email":"alice@x.test"}`)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, ErrCodeTenantNotFound, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleHealth_MissingID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newHandlerWithService(mocks.NewMockVeridianService(ctrl))
+	rec := postWithPathValue(t, h.handleHealth, http.MethodGet, "/api/tenants//health", "", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleInvalidateCache_PaywallUnavailable(t *testing.T) {
+	h := newHandlerWithCache(nil)
+	rec := postJSON(t, h.handleInvalidateCache, "/api/veridian/admin/cache/invalidate",
+		`{"workspace_id":"ws-1"}`)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, ErrCodePaywallUnavailable, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleWipeTestTenants_InvalidPayload(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newHandlerWithService(mocks.NewMockVeridianService(ctrl))
+	rec := postJSON(t, h.handleWipeTestTenants, "/api/veridian/admin/wipe-test-tenants", `{}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+// Sanity backward-compat : le champ `error` reste lisible (le Hub le rebalance
+// aux clients comme message humain via NotifuseError, cf. veridian-hub/lib/
+// notifuse/client.ts:243).
+func TestVeridianErrorCode_BackwardCompat_ErrorFieldStillHumanMessage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newHandlerWithService(mocks.NewMockVeridianService(ctrl))
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision", `{}`)
+	var resp VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.NotEmpty(t, resp.Error, "champ 'error' doit rester non-vide pour retro-compat Hub")
+	assert.NotEqual(t, resp.Error, resp.Code, "le champ 'error' doit etre le message humain, pas le code machine")
+}

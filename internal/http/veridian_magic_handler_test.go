@@ -245,6 +245,169 @@ func TestVeridianMagicLink_ServiceGenericError_500(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
+// === Format d'erreur §5.10 — verification du champ `code` machine ===
+//
+// Couvre tous les chemins d'erreur du handler magic link pour s'assurer
+// que le champ `code` machine-readable est emis. Voir aussi
+// veridian_handler_test.go TestVeridianErrorCode_* pour les autres
+// endpoints.
+
+func decodeMagicErrCode(t *testing.T, body []byte) string {
+	t.Helper()
+	var resp VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(body, &resp))
+	return resp.Code
+}
+
+func TestVeridianMagicErrorCode_GETNotAllowed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newMagicHandler(mocks.NewMockVeridianService(ctrl), mocks.NewMockWorkspaceRepository(ctrl))
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.generateMagicLink", nil)
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.Equal(t, ErrCodeMethodNotAllowed, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianMagicErrorCode_NotAPIKey_Forbidden(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newMagicHandler(mocks.NewMockVeridianService(ctrl), mocks.NewMockWorkspaceRepository(ctrl))
+	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeUser), "user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, ErrCodeForbidden, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianMagicErrorCode_MissingUserID_Unauthorized(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newMagicHandler(mocks.NewMockVeridianService(ctrl), mocks.NewMockWorkspaceRepository(ctrl))
+	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Equal(t, ErrCodeUnauthorized, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianMagicErrorCode_NoWorkspace_ApiKeyNoWorkspace(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return(nil, nil)
+	h := newMagicHandler(svc, repo)
+	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, ErrCodeApiKeyNoWorkspace, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianMagicErrorCode_MultipleWorkspaces_ApiKeyMultiWorkspace(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
+		{UserID: "api-user-1", WorkspaceID: "ws-1"},
+		{UserID: "api-user-1", WorkspaceID: "ws-2"},
+	}, nil)
+	h := newMagicHandler(svc, repo)
+	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, ErrCodeApiKeyMultiWorkspace, decodeMagicErrCode(t, rec.Body.Bytes()))
+	// details.workspaces_count est rempli pour aider le debugging cote Hub
+	var resp VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Details)
+	assert.Equal(t, float64(2), resp.Details["workspaces_count"], "JSON Number unmarshal en float64")
+}
+
+func TestVeridianMagicErrorCode_InvalidJSON(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
+		{UserID: "api-user-1", WorkspaceID: "ws-1"},
+	}, nil)
+	h := newMagicHandler(svc, repo)
+	req := reqWithAuthCtx(t, `{garbage`, string(domain.UserTypeAPIKey), "api-user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianMagicErrorCode_MissingUserEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
+		{UserID: "api-user-1", WorkspaceID: "ws-1"},
+	}, nil)
+	h := newMagicHandler(svc, repo)
+	req := reqWithAuthCtx(t, `{}`, string(domain.UserTypeAPIKey), "api-user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianMagicErrorCode_UserNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
+		{UserID: "api-user-1", WorkspaceID: "ws-1"},
+	}, nil)
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{})
+	h := newMagicHandler(svc, repo)
+	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, ErrCodeUserNotFound, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianMagicErrorCode_ServiceError_InternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
+		{UserID: "api-user-1", WorkspaceID: "ws-1"},
+	}, nil)
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("upstream boom"))
+	h := newMagicHandler(svc, repo)
+	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, ErrCodeInternalError, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianMagicErrorCode_WorkspaceLookupFails_InternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return(nil, errors.New("db down"))
+	h := newMagicHandler(svc, repo)
+	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, ErrCodeInternalError, decodeMagicErrCode(t, rec.Body.Bytes()))
+}
+
 func TestVeridianMagicLink_RegisterRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
