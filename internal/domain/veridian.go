@@ -23,19 +23,63 @@ const (
 	PlanStatusDeleted   PlanStatus = "deleted" // soft delete, purge cron 30j
 )
 
+// PlanSource represente l'origine d'un plan tenant (CONTRAT-HUB sec. 3.3).
+// Distingue les plans Stripe (mutables par webhook) des plans offerts
+// (immunes aux downgrades automatiques).
+type PlanSource string
+
+const (
+	// PlanSourceStripe : plan paye, source de verite = Stripe (Hub webhooks).
+	// C'est le defaut pour back-compat des appels Hub legacy.
+	PlanSourceStripe PlanSource = "stripe"
+	// PlanSourceManual : assigne par Robert manuellement, peut etre annule.
+	PlanSourceManual PlanSource = "manual"
+	// PlanSourceLifetimeSiteVitrine : offert via le site vitrine, immune.
+	PlanSourceLifetimeSiteVitrine PlanSource = "lifetime_site_vitrine"
+	// PlanSourceLifetimePartner : offert a un partenaire, immune.
+	PlanSourceLifetimePartner PlanSource = "lifetime_partner"
+	// PlanSourceInternal : usage interne Veridian, immune.
+	PlanSourceInternal PlanSource = "internal"
+)
+
+// IsImmune renvoie true si le plan_source est immunise contre les
+// downgrades automatiques venant du Hub (Stripe webhook). Si l'appelant
+// Hub envoie plan_source=stripe vers un plan IsImmune, on refuse avec
+// ErrPlanImmune → 409 plan_locked.
+func (s PlanSource) IsImmune() bool {
+	switch s {
+	case PlanSourceLifetimeSiteVitrine, PlanSourceLifetimePartner, PlanSourceInternal, PlanSourceManual:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValid renvoie true si la valeur correspond a une des sources connues.
+// Une chaine vide est consideree valide (= default 'stripe' au upsert).
+func (s PlanSource) IsValid() bool {
+	switch s {
+	case "", PlanSourceStripe, PlanSourceManual, PlanSourceLifetimeSiteVitrine, PlanSourceLifetimePartner, PlanSourceInternal:
+		return true
+	default:
+		return false
+	}
+}
+
 // VeridianPlan represente une ligne de la table veridian_plan.
 type VeridianPlan struct {
-	WorkspaceID            string     `json:"workspace_id"`
-	Plan                   string     `json:"plan"` // free, pro, business, ...
-	Status                 PlanStatus `json:"status"`
-	MonthlyEmailQuota      int64      `json:"monthly_email_quota"` // -1 = unlimited
-	EmailsSentThisMonth    int64      `json:"emails_sent_this_month"`
-	LastResetAt            time.Time  `json:"last_reset_at"`
-	SuspendedAt            *time.Time `json:"suspended_at,omitempty"`
-	SuspendedReason        string     `json:"suspended_reason,omitempty"`
-	DeletedAt              *time.Time `json:"deleted_at,omitempty"`
-	CreatedAt              time.Time  `json:"created_at"`
-	UpdatedAt              time.Time  `json:"updated_at"`
+	WorkspaceID         string     `json:"workspace_id"`
+	Plan                string     `json:"plan"`        // free, pro, business, ...
+	PlanSource          PlanSource `json:"plan_source"` // stripe/manual/lifetime_*/internal — cf. CONTRAT-HUB sec. 3.3
+	Status              PlanStatus `json:"status"`
+	MonthlyEmailQuota   int64      `json:"monthly_email_quota"` // -1 = unlimited
+	EmailsSentThisMonth int64      `json:"emails_sent_this_month"`
+	LastResetAt         time.Time  `json:"last_reset_at"`
+	SuspendedAt         *time.Time `json:"suspended_at,omitempty"`
+	SuspendedReason     string     `json:"suspended_reason,omitempty"`
+	DeletedAt           *time.Time `json:"deleted_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 // QuotaRemaining retourne le nombre d'emails encore envoyables ce mois.
@@ -93,7 +137,11 @@ func QuotaForPlan(plan string) int64 {
 type VeridianPlanRepository interface {
 	Get(ctx context.Context, workspaceID string) (*VeridianPlan, error)
 	Upsert(ctx context.Context, plan *VeridianPlan) error
-	UpdatePlan(ctx context.Context, workspaceID, plan string, quota int64) error
+	// UpdatePlan modifie plan + quota + plan_source d'un workspace existant.
+	// Si planSource est vide, la valeur DB existante est preservee (pas
+	// d'ecrasement implicite par "stripe"). Le service appelle cette methode
+	// uniquement apres avoir verifie l'immunite (cf. ErrPlanImmune).
+	UpdatePlan(ctx context.Context, workspaceID, plan string, quota int64, planSource PlanSource) error
 	Suspend(ctx context.Context, workspaceID, reason string) error
 	Resume(ctx context.Context, workspaceID string) error
 	SoftDelete(ctx context.Context, workspaceID string) error
@@ -109,10 +157,11 @@ type VeridianPlanRepository interface {
 
 // ProvisionInput est le body de POST /api/tenants/provision.
 type ProvisionInput struct {
-	TenantID    string `json:"tenant_id"`    // workspace_id Notifuse
-	OwnerEmail  string `json:"owner_email"`
-	WorkspaceName string `json:"workspace_name,omitempty"` // optionnel, defaut = tenant_id
-	Plan        string `json:"plan,omitempty"` // optionnel, defaut = VERIDIAN_DEFAULT_PLAN
+	TenantID      string     `json:"tenant_id"` // workspace_id Notifuse
+	OwnerEmail    string     `json:"owner_email"`
+	WorkspaceName string     `json:"workspace_name,omitempty"` // optionnel, defaut = tenant_id
+	Plan          string     `json:"plan,omitempty"`           // optionnel, defaut = VERIDIAN_DEFAULT_PLAN
+	PlanSource    PlanSource `json:"plan_source,omitempty"`    // optionnel, defaut = "stripe"
 }
 
 // ProvisionResponse est la reponse de POST /api/tenants/provision.
@@ -136,8 +185,19 @@ type ProvisionResponse struct {
 
 // UpdatePlanInput est le body de POST /api/tenants/update-plan.
 type UpdatePlanInput struct {
-	TenantID string `json:"tenant_id"`
-	Plan     string `json:"plan"`
+	TenantID   string     `json:"tenant_id"`
+	Plan       string     `json:"plan"`
+	PlanSource PlanSource `json:"plan_source,omitempty"` // optionnel, defaut = "stripe"
+}
+
+// UpdatePlanResponse est la reponse de POST /api/tenants/update-plan
+// (CONTRAT-HUB sec. 5.2 : audit trail previous_plan).
+type UpdatePlanResponse struct {
+	TenantID     string     `json:"tenant_id"`
+	Plan         string     `json:"plan"`
+	PreviousPlan string     `json:"previous_plan,omitempty"`
+	PlanSource   PlanSource `json:"plan_source"`
+	AppliedAt    time.Time  `json:"applied_at"`
 }
 
 // SuspendInput est le body de POST /api/tenants/suspend.
@@ -223,7 +283,10 @@ type AttachOwnerResponse struct {
 // VeridianService est l'interface des operations Hub-driven.
 type VeridianService interface {
 	Provision(ctx context.Context, input ProvisionInput) (*ProvisionResponse, error)
-	UpdatePlan(ctx context.Context, input UpdatePlanInput) error
+	// UpdatePlan modifie le plan d'un tenant. Renvoie un audit trail
+	// (previous_plan, plan_source applique, applied_at) CONTRAT-HUB sec. 5.2.
+	// Erreurs metier : ErrPlanImmune (lifetime/manual ecrase par stripe).
+	UpdatePlan(ctx context.Context, input UpdatePlanInput) (*UpdatePlanResponse, error)
 	Suspend(ctx context.Context, input SuspendInput) error
 	Resume(ctx context.Context, input ResumeInput) error
 	SoftDelete(ctx context.Context, tenantID string) error

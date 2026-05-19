@@ -153,11 +153,12 @@ func (mr *MockVeridianServiceMockRecorder) Suspend(arg0, arg1 interface{}) *gomo
 }
 
 // UpdatePlan mocks base method.
-func (m *MockVeridianService) UpdatePlan(arg0 context.Context, arg1 domain.UpdatePlanInput) error {
+func (m *MockVeridianService) UpdatePlan(arg0 context.Context, arg1 domain.UpdatePlanInput) (*domain.UpdatePlanResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdatePlan", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*domain.UpdatePlanResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // UpdatePlan indicates an expected call of UpdatePlan.

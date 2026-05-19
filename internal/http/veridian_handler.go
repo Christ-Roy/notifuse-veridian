@@ -151,9 +151,27 @@ func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Reques
 		})
 		return
 	}
+	if !input.PlanSource.IsValid() {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid plan_source", http.StatusBadRequest, map[string]interface{}{
+			"plan_source": string(input.PlanSource),
+			"allowed":     []string{"", "stripe", "manual", "lifetime_site_vitrine", "lifetime_partner", "internal"},
+		})
+		return
+	}
 
-	if err := h.service.UpdatePlan(r.Context(), input); err != nil {
+	resp, err := h.service.UpdatePlan(r.Context(), input)
+	if err != nil {
 		h.logError("update_plan", err, map[string]interface{}{"tenant_id": input.TenantID})
+		// === Veridian patch === Sentinel ErrPlanImmune → 409 plan_locked
+		// (downgrade Stripe webhook bloque sur un plan offert). Contrat sec. 3.3.
+		if errors.Is(err, service.ErrPlanImmune) {
+			WriteJSONErrorCode(w, ErrCodePlanLocked, err.Error(), http.StatusConflict, map[string]interface{}{
+				"tenant_id":      input.TenantID,
+				"requested_plan": input.Plan,
+				"hint":           "plan_source is immune (lifetime_*/manual/internal); use a non-stripe plan_source to override",
+			})
+			return
+		}
 		if isNotFoundErr(err) {
 			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
 				"tenant_id": input.TenantID,
@@ -164,11 +182,7 @@ func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"tenant_id":  input.TenantID,
-		"plan":       input.Plan,
-		"applied_at": time.Now().UTC(),
-	})
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *VeridianHandler) handleSuspend(w http.ResponseWriter, r *http.Request) {

@@ -243,7 +243,14 @@ func TestVeridianHandleUpdatePlan_OK(t *testing.T) {
 	defer ctrl.Finish()
 
 	svc := mocks.NewMockVeridianService(ctrl)
-	svc.EXPECT().UpdatePlan(gomock.Any(), domain.UpdatePlanInput{TenantID: "ws-1", Plan: "pro"}).Return(nil)
+	svc.EXPECT().UpdatePlan(gomock.Any(), domain.UpdatePlanInput{TenantID: "ws-1", Plan: "pro"}).
+		Return(&domain.UpdatePlanResponse{
+			TenantID:     "ws-1",
+			Plan:         "pro",
+			PreviousPlan: "free",
+			PlanSource:   domain.PlanSourceStripe,
+			AppliedAt:    time.Now().UTC(),
+		}, nil)
 	h := newHandlerWithService(svc)
 
 	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
@@ -254,6 +261,8 @@ func TestVeridianHandleUpdatePlan_OK(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "ws-1", resp["tenant_id"])
 	assert.Equal(t, "pro", resp["plan"])
+	assert.Equal(t, "free", resp["previous_plan"])
+	assert.Equal(t, "stripe", resp["plan_source"])
 	assert.NotNil(t, resp["applied_at"])
 }
 
@@ -274,7 +283,7 @@ func TestVeridianHandleUpdatePlan_NotFound(t *testing.T) {
 	defer ctrl.Finish()
 
 	svc := mocks.NewMockVeridianService(ctrl)
-	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).Return(errors.New("veridian_plan: workspace ws-x not found"))
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).Return(nil, errors.New("veridian_plan: workspace ws-x not found"))
 	h := newHandlerWithService(svc)
 
 	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
@@ -1002,12 +1011,47 @@ func TestVeridianErrorCode_handleUpdatePlan_TenantNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
-	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).Return(sql.ErrNoRows)
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).Return(nil, sql.ErrNoRows)
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
 		`{"tenant_id":"ghost","plan":"pro"}`)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Equal(t, ErrCodeTenantNotFound, decodeErrCode(t, rec.Body.Bytes()))
+}
+
+func TestVeridianErrorCode_handleUpdatePlan_PlanLocked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).Return(nil, service.ErrPlanImmune)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ws-vip","plan":"free","plan_source":"stripe"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, ErrCodePlanLocked, decodeErrCode(t, rec.Body.Bytes()))
+	// details : tenant_id, requested_plan, hint
+	var resp VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Details)
+	assert.Equal(t, "ws-vip", resp.Details["tenant_id"])
+	assert.Equal(t, "free", resp.Details["requested_plan"])
+	assert.NotEmpty(t, resp.Details["hint"])
+}
+
+func TestVeridianErrorCode_handleUpdatePlan_InvalidPlanSource(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	// PAS d'EXPECT : la validation handler court-circuite avant le service.
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ws-1","plan":"pro","plan_source":"garbage"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, ErrCodeInvalidPayload, decodeErrCode(t, rec.Body.Bytes()))
+	var resp VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Details)
+	assert.Equal(t, "garbage", resp.Details["plan_source"])
 }
 
 func TestVeridianErrorCode_handleSuspend_MissingTenantID(t *testing.T) {

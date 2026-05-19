@@ -86,6 +86,22 @@ var ErrTenantSoftDeleted = errors.New("tenant is soft-deleted, awaiting purge �
 // 2026-05-18-confirm-provision-idempotence).
 var ErrOwnerMismatch = errors.New("workspace exists with different owner")
 
+// === Veridian patch ===
+// ErrPlanImmune est retourne par UpdatePlan quand le plan existant a un
+// plan_source immunise (lifetime_site_vitrine, lifetime_partner, internal,
+// manual) et que l'appelant Hub essaie de le passer en plan_source=stripe.
+// Protection contre les downgrades automatiques venant des webhooks Stripe :
+// un cron Stripe ne doit jamais ecraser un plan offert a la main.
+//
+// Le handler mappe ce sentinel vers HTTP 409 Conflict + code plan_locked
+// (CONTRAT-HUB sec. 3.3 + sec. 5.10).
+//
+// Note : on autorise les transitions inverses (stripe → lifetime_*) et les
+// transitions entre sources immunes (lifetime_* → manual, etc.) — c'est
+// uniquement la collision "automation Stripe ecrase un plan offert" qu'on
+// bloque.
+var ErrPlanImmune = errors.New("plan is immune to automatic downgrades (lifetime/manual/internal)")
+
 // veridianService est l'implementation par defaut de domain.VeridianService.
 type veridianService struct {
 	workspaceService domain.WorkspaceServiceInterface
@@ -533,25 +549,69 @@ func (s *veridianService) transferOwnershipToTenant(ctx, rootCtx context.Context
 }
 
 // UpdatePlan change le plan d'un tenant existant. Recalcule le quota
-// mensuel a partir du PlanQuotas.
-func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePlanInput) error {
+// mensuel a partir du PlanQuotas. Renvoie un UpdatePlanResponse avec audit
+// trail previous_plan (CONTRAT-HUB sec. 5.2).
+//
+// Immunite plan offert (CONTRAT-HUB sec. 3.3) : si le plan_source existant
+// est immune (lifetime_*, internal, manual) et que l'appelant essaie de le
+// passer en plan_source=stripe (downgrade Stripe webhook), on refuse avec
+// ErrPlanImmune. Le handler mappe vers 409 plan_locked.
+//
+// PlanSource vide dans input = "garder l'existant" (cf. repo COALESCE) — ce
+// n'est PAS interprete comme une demande stripe.
+func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePlanInput) (*domain.UpdatePlanResponse, error) {
 	if input.TenantID == "" {
-		return errors.New("tenant_id required")
+		return nil, errors.New("tenant_id required")
 	}
 	if input.Plan == "" {
-		return errors.New("plan required")
+		return nil, errors.New("plan required")
 	}
+	if !input.PlanSource.IsValid() {
+		return nil, fmt.Errorf("invalid plan_source %q", input.PlanSource)
+	}
+
+	// Read current state for previous_plan + immunity check.
+	existing, err := s.planRepo.Get(ctx, input.TenantID)
+	if err != nil {
+		return nil, err // sql.ErrNoRows propage tel quel (handler mappe → 404)
+	}
+
+	// Garde-fou immunite : un plan_source immune ne peut pas etre ecrase par
+	// stripe. Les autres transitions sont autorisees (stripe → lifetime,
+	// lifetime → manual, lifetime → lifetime, etc.) — c'est uniquement la
+	// collision "automation Stripe ecrase un plan offert" qu'on bloque.
+	if existing.PlanSource.IsImmune() && input.PlanSource == domain.PlanSourceStripe {
+		return nil, ErrPlanImmune
+	}
+
 	quota := domain.QuotaForPlan(input.Plan)
-	if err := s.planRepo.UpdatePlan(ctx, input.TenantID, input.Plan, quota); err != nil {
-		return err
+	if err := s.planRepo.UpdatePlan(ctx, input.TenantID, input.Plan, quota, input.PlanSource); err != nil {
+		return nil, err
 	}
+
+	// Compute effective plan_source apres ecriture : si input vide, on a
+	// preserve l'existant (cf. repo COALESCE), sinon c'est input.PlanSource.
+	effectiveSource := existing.PlanSource
+	if input.PlanSource != "" {
+		effectiveSource = input.PlanSource
+	}
+
 	if s.emitter != nil {
 		s.emitter.Emit(ctx, domain.EventTenantPlanChanged, input.TenantID, map[string]interface{}{
-			"plan":  input.Plan,
-			"quota": quota,
+			"plan":          input.Plan,
+			"previous_plan": existing.Plan,
+			"plan_source":   string(effectiveSource),
+			"quota":         quota,
 		})
 	}
-	return nil
+
+	return &domain.UpdatePlanResponse{
+		TenantID:     input.TenantID,
+		Plan:         input.Plan,
+		PreviousPlan: existing.Plan,
+		PlanSource:   effectiveSource,
+		AppliedAt:    time.Now().UTC(),
+	}, nil
 }
 
 // Suspend bloque les envois pour un tenant (paywall middleware retourne 402).

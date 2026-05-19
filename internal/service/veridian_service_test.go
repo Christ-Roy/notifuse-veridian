@@ -351,26 +351,154 @@ func TestVeridianService_UpdatePlan_EmitsEventWithQuota(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
-	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "business", int64(50000)).Return(nil).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-1",
+		Plan:        "free",
+		PlanSource:  domain.PlanSourceStripe,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "business", int64(50000), domain.PlanSource("")).Return(nil).Times(1)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantPlanChanged, "ws-1", gomock.Any()).
 		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
 			assert.Equal(t, "business", data["plan"])
+			assert.Equal(t, "free", data["previous_plan"])
 			assert.Equal(t, int64(50000), data["quota"])
+			assert.Equal(t, "stripe", data["plan_source"])
 		}).Times(1)
 
-	err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "ws-1", Plan: "business"})
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "ws-1", Plan: "business"})
 	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "ws-1", resp.TenantID)
+	assert.Equal(t, "business", resp.Plan)
+	assert.Equal(t, "free", resp.PreviousPlan)
+	assert.Equal(t, domain.PlanSourceStripe, resp.PlanSource)
+	assert.False(t, resp.AppliedAt.IsZero())
 }
 
 func TestVeridianService_UpdatePlan_RejectsEmptyInput(t *testing.T) {
 	svc, _ := newVeridianService(t)
 	ctx := context.Background()
 
-	err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "", Plan: "pro"})
+	_, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "", Plan: "pro"})
 	assert.ErrorContains(t, err, "tenant_id required")
 
-	err = svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "ws-1", Plan: ""})
+	_, err = svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "ws-1", Plan: ""})
 	assert.ErrorContains(t, err, "plan required")
+}
+
+func TestVeridianService_UpdatePlan_RejectsInvalidPlanSource(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	ctx := context.Background()
+
+	_, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID:   "ws-1",
+		Plan:       "pro",
+		PlanSource: domain.PlanSource("garbage"),
+	})
+	assert.ErrorContains(t, err, "invalid plan_source")
+}
+
+func TestVeridianService_UpdatePlan_ImmuneRejectsStripeDowngrade(t *testing.T) {
+	// Cas critique sec. 3.3 : un plan offert (lifetime_partner) ne doit pas
+	// pouvoir etre ecrase par un webhook Stripe.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-vip").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-vip",
+		Plan:        "business",
+		PlanSource:  domain.PlanSourceLifetimePartner,
+	}, nil).Times(1)
+	// PAS d'appel UpdatePlan attendu : on doit court-circuiter avant.
+
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID:   "ws-vip",
+		Plan:       "free",
+		PlanSource: domain.PlanSourceStripe,
+	})
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrPlanImmune)
+}
+
+func TestVeridianService_UpdatePlan_ImmuneAllowsManualOverride(t *testing.T) {
+	// Transition entre sources immunes (lifetime -> manual) autorisee.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-vip").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-vip",
+		Plan:        "business",
+		PlanSource:  domain.PlanSourceLifetimePartner,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-vip", "enterprise", int64(-1), domain.PlanSourceManual).Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantPlanChanged, "ws-vip", gomock.Any()).Times(1)
+
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID:   "ws-vip",
+		Plan:       "enterprise",
+		PlanSource: domain.PlanSourceManual,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanSourceManual, resp.PlanSource)
+}
+
+func TestVeridianService_UpdatePlan_StripeToLifetimeAllowed(t *testing.T) {
+	// Robert offre un plan a un user Stripe -> autorise (transition entrante).
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-stripe").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-stripe",
+		Plan:        "pro",
+		PlanSource:  domain.PlanSourceStripe,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-stripe", "enterprise", int64(-1), domain.PlanSourceLifetimePartner).Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantPlanChanged, "ws-stripe", gomock.Any()).Times(1)
+
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID:   "ws-stripe",
+		Plan:       "enterprise",
+		PlanSource: domain.PlanSourceLifetimePartner,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanSourceLifetimePartner, resp.PlanSource)
+}
+
+func TestVeridianService_UpdatePlan_EmptySourcePreservesExisting(t *testing.T) {
+	// Sec compat : appel Hub legacy sans plan_source ne doit pas changer la
+	// source existante (cf. repo COALESCE). On verifie le comportement du
+	// service via la response : effectiveSource = existing.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-vip").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-vip",
+		Plan:        "business",
+		PlanSource:  domain.PlanSourceLifetimePartner,
+	}, nil).Times(1)
+	// PlanSource passe = "" -> repo COALESCE preserve la valeur existante.
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-vip", "enterprise", int64(-1), domain.PlanSource("")).Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantPlanChanged, "ws-vip", gomock.Any()).Times(1)
+
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID: "ws-vip",
+		Plan:     "enterprise",
+		// PlanSource laisse vide
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanSourceLifetimePartner, resp.PlanSource, "doit refleter l'existant preserve, pas 'stripe'")
+}
+
+func TestVeridianService_UpdatePlan_NotFoundProsRepo(t *testing.T) {
+	// Si le Get retourne sql.ErrNoRows, le service propage tel quel.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ghost").Return(nil, sql.ErrNoRows).Times(1)
+
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "ghost", Plan: "pro"})
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, sql.ErrNoRows)
 }
 
 func TestVeridianService_GetStatus(t *testing.T) {

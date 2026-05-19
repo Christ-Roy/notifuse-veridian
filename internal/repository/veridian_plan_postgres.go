@@ -23,24 +23,25 @@ func NewVeridianPlanRepository(systemDB *sql.DB) domain.VeridianPlanRepository {
 // Get recupere une ligne par workspace_id. Retourne sql.ErrNoRows si absent.
 func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*domain.VeridianPlan, error) {
 	const q = `
-		SELECT workspace_id, plan, status, monthly_email_quota, emails_sent_this_month,
+		SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
 		       last_reset_at, suspended_at, suspended_reason, deleted_at, created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
 	`
 	var p domain.VeridianPlan
-	var status string
+	var status, planSource string
 	var suspendedAt, deletedAt sql.NullTime
 	var suspendedReason sql.NullString
 
 	err := r.systemDB.QueryRowContext(ctx, q, workspaceID).Scan(
-		&p.WorkspaceID, &p.Plan, &status, &p.MonthlyEmailQuota, &p.EmailsSentThisMonth,
+		&p.WorkspaceID, &p.Plan, &planSource, &status, &p.MonthlyEmailQuota, &p.EmailsSentThisMonth,
 		&p.LastResetAt, &suspendedAt, &suspendedReason, &deletedAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 	p.Status = domain.PlanStatus(status)
+	p.PlanSource = domain.PlanSource(planSource)
 	if suspendedAt.Valid {
 		t := suspendedAt.Time
 		p.SuspendedAt = &t
@@ -56,6 +57,12 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 }
 
 // Upsert insere ou remplace une ligne complete.
+//
+// Important : plan_source utilise COALESCE pour PRESERVER la valeur existante
+// au moment du ON CONFLICT si l'appelant passe une chaine vide. Cela evite
+// qu'un re-provision via Hub (qui peut ne pas envoyer plan_source) ecrase
+// silencieusement un lifetime_partner par 'stripe'. Sur INSERT pur, la
+// chaine vide est convertie en 'stripe' par le COALESCE($2, 'stripe').
 func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianPlan) error {
 	if p.WorkspaceID == "" {
 		return errors.New("workspace_id required")
@@ -72,32 +79,57 @@ func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianP
 		p.Status = domain.PlanStatusActive
 	}
 
+	// On passe NULL si vide pour que COALESCE prenne la valeur existante en UPDATE
+	// (ou 'stripe' en INSERT initial).
+	var planSourceArg interface{}
+	if p.PlanSource != "" {
+		planSourceArg = string(p.PlanSource)
+	} else {
+		planSourceArg = nil
+	}
+
 	const q = `
 		INSERT INTO veridian_plan (
-			workspace_id, plan, status, monthly_email_quota, emails_sent_this_month,
+			workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
 			last_reset_at, suspended_at, suspended_reason, deleted_at, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		ON CONFLICT (workspace_id) DO UPDATE SET
 			plan = EXCLUDED.plan,
+			plan_source = COALESCE(EXCLUDED.plan_source, veridian_plan.plan_source),
 			status = EXCLUDED.status,
 			monthly_email_quota = EXCLUDED.monthly_email_quota,
 			updated_at = EXCLUDED.updated_at
 	`
 	_, err := r.systemDB.ExecContext(ctx, q,
-		p.WorkspaceID, p.Plan, string(p.Status), p.MonthlyEmailQuota, p.EmailsSentThisMonth,
+		p.WorkspaceID, p.Plan, planSourceArg, string(p.Status), p.MonthlyEmailQuota, p.EmailsSentThisMonth,
 		p.LastResetAt, p.SuspendedAt, p.SuspendedReason, p.DeletedAt, p.CreatedAt, p.UpdatedAt,
 	)
 	return err
 }
 
-// UpdatePlan change le plan + quota d'un workspace existant. No-op si absent.
-func (r *veridianPlanRepository) UpdatePlan(ctx context.Context, workspaceID, plan string, quota int64) error {
+// UpdatePlan change le plan + quota + plan_source d'un workspace existant.
+// No-op si absent.
+//
+// Si planSource est vide, la colonne plan_source est preservee via COALESCE
+// (pas d'ecrasement implicite par 'stripe' — protection contre les appels Hub
+// legacy qui n'envoient pas plan_source).
+func (r *veridianPlanRepository) UpdatePlan(ctx context.Context, workspaceID, plan string, quota int64, planSource domain.PlanSource) error {
+	var planSourceArg interface{}
+	if planSource != "" {
+		planSourceArg = string(planSource)
+	} else {
+		planSourceArg = nil
+	}
+
 	const q = `
 		UPDATE veridian_plan
-		SET plan = $2, monthly_email_quota = $3, updated_at = $4
+		SET plan = $2,
+		    monthly_email_quota = $3,
+		    plan_source = COALESCE($4, plan_source),
+		    updated_at = $5
 		WHERE workspace_id = $1
 	`
-	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, plan, quota, time.Now().UTC())
+	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, plan, quota, planSourceArg, time.Now().UTC())
 	if err != nil {
 		return err
 	}

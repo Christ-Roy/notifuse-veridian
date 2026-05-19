@@ -3,6 +3,5 @@ internal/domain/blog_feed.go
 internal/domain/contact_segment_queue.go
 internal/domain/ses_client.go
 internal/domain/telemetry.go
-internal/domain/veridian.go
 internal/repository/workspace_postgres.go
 internal/service/llm_service_openai.go
