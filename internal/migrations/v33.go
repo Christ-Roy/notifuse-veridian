@@ -52,14 +52,13 @@ func (m *V33Migration) UpdateSystem(ctx context.Context, _ *config.Config, db DB
 	`); err != nil {
 		return fmt.Errorf("add veridian_plan.plan_source: %w", err)
 	}
-	// Index leger pour les futures requetes d'audit "tous les lifetime_*"
-	// quand Robert voudra lister les plans offerts depuis le Hub admin.
-	if _, err := db.ExecContext(ctx, `
-		CREATE INDEX IF NOT EXISTS idx_veridian_plan_source ON veridian_plan (plan_source)
-		WHERE plan_source <> 'stripe'
-	`); err != nil {
-		return fmt.Errorf("create idx_veridian_plan_source: %w", err)
-	}
+	// Pas d'index sur plan_source ici : les migrations Notifuse tournent en
+	// transaction (cf. internal/migrations/manager.go:201 BeginTx) et la
+	// version CONCURRENTLY ne peut pas etre dans une TX. Le scan full table
+	// est acceptable pour les requetes audit "plans offerts" tant que
+	// veridian_plan reste petit (<10k tenants). Si Robert finit par avoir
+	// des centaines de milliers de tenants ET besoin de cette requete, on
+	// ajoutera l'index via une migration hors-TX dediee.
 	return nil
 }
 

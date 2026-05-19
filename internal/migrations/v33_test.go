@@ -35,8 +35,6 @@ func TestV33Migration_UpdateSystem_Success(t *testing.T) {
 
 	mock.ExpectExec(`ALTER TABLE veridian_plan\s+ADD COLUMN IF NOT EXISTS plan_source VARCHAR\(32\) NOT NULL DEFAULT 'stripe'`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE INDEX IF NOT EXISTS idx_veridian_plan_source ON veridian_plan \(plan_source\)\s+WHERE plan_source <> 'stripe'`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = (&V33Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
 	assert.NoError(t, err)
@@ -44,14 +42,12 @@ func TestV33Migration_UpdateSystem_Success(t *testing.T) {
 }
 
 func TestV33Migration_UpdateSystem_Idempotent(t *testing.T) {
-	// Re-run sur DB ou la colonne et l'index existent deja : ALTER + CREATE
-	// sont no-op (IF NOT EXISTS).
+	// Re-run sur DB ou la colonne existe deja : ALTER est no-op (IF NOT EXISTS).
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
 
 	mock.ExpectExec(`ALTER TABLE veridian_plan`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE INDEX IF NOT EXISTS idx_veridian_plan_source`).WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = (&V33Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
 	assert.NoError(t, err)
@@ -67,19 +63,6 @@ func TestV33Migration_UpdateSystem_AlterError(t *testing.T) {
 	err = (&V33Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "add veridian_plan.plan_source")
-}
-
-func TestV33Migration_UpdateSystem_IndexError(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mock.ExpectExec(`ALTER TABLE veridian_plan`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE INDEX IF NOT EXISTS idx_veridian_plan_source`).WillReturnError(assert.AnError)
-
-	err = (&V33Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "create idx_veridian_plan_source")
 }
 
 func TestV33Migration_UpdateWorkspace_Noop(t *testing.T) {
