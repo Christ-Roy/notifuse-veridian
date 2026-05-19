@@ -21,7 +21,7 @@ Le contrat a évolué massivement : v1.1 (lifecycle endpoints), v1.2 (rotation/t
 | `2026-05-19-plan-source-immunity.md` | P1 | M (2-8h) | §3.3, §5.2 |
 | `2026-05-19-paywall-obfuscation-degrade.md` | P1 | L (1-2j) | §5.9 |
 | `2026-05-19-rotate-transfer-owner-endpoints.md` | P2 | M (2-8h) | §5.15, §5.16 |
-| `2026-05-19-multi-membre-cross-app.md` | P3 | L (1-2j) | §5.18-5.21 |
+| `2026-05-19-v13-multi-membre-cross-app.md` (ticket Hub officiel) | P2 | L (2-3j) | §5.18-5.21 |
 | `2026-05-19-quotas-au-provision.md` | P3 | S (<2h) | §5.17 |
 
 ## Points DEJA OK (faux positifs agent audit)
