@@ -892,13 +892,29 @@ func (s *veridianService) UsageSummary(ctx context.Context, tenantID string) (*d
 // defaultSafetyClientPrefixes : prefixes de tenants qui ne sont JAMAIS effaces
 // par WipeTestTenants, meme avec un wildcard. Defense en profondeur si le
 // HUB_API_SECRET fuit ou si un test a un prefix trop large.
-// Ces prefixes correspondent aux clients reels staging documentes dans CLAUDE.md.
+// Ces prefixes correspondent aux clients reels + tenants internes Veridian.
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
 var defaultSafetyClientPrefixes = []string{
+	// Clients réels (prod + staging)
 	"apicalinfo",
 	"robinix",
 	"lyon",
 	"loyer",
 	"veridiansite",
+	"antjacquet",
+	"darysisowath",
+	"guilhemjacquet",
+	"ismailelmouaddab",
+	// === Veridian patch 2026-05-20 === Canary witness tenants (long-lived)
+	// canaryfree, canarypro, canaryenterprise — baseline tenants utilisés
+	// avant chaque promote prod pour détecter régressions schéma/migration.
+	"canary",
+	// Workspaces personnels Robert (immune accidental wipe)
+	"robertbrunon",
+	"robertstagingtest",
+	"brunon5robert",
+	"rbrunon",
+	"truy",
 }
 
 // WipeTestTenants supprime DEFINITIVEMENT (hard delete) les tenants matchant

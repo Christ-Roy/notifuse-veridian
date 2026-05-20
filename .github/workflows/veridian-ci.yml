@@ -614,6 +614,11 @@ jobs:
           # propre + workspace row) + planRepo.HardDelete sur la veridian_plan.
           # Skip les tenants matchant safety_client_prefixes (clients reels).
           # On wipe par chaque prefix de test connu (3+ chars min, pas de wildcard).
+          #
+          # === Veridian fix 2026-05-20 — flaky-ci-staging-postgres-saturation ===
+          # Sérialisation avec sleep 1s entre prefixes pour ne pas saturer le pool
+          # Postgres staging (`pq: sorry, too many clients already`). Coût +30s
+          # mais évite ~5 re-runs/jour. Cf. todo/2026-05-20-flaky-ci-staging-postgres-saturation.md
           for prefix in chaos magic stat paywall pwsus pwdel pwpath pwread autotest idem bump dbg smoke fresh statsus statdel up down unkplan resume sus mag genmag magtam magicre delconf e2e replaytest tampertest wrongsecret huge nofix wscre wscre2 uiguard direct paywsmoke; do
             BODY="{\"prefix\":\"${prefix}\"}"
             TS=$(date +%s%3N)
@@ -628,9 +633,21 @@ jobs:
             if [ "$WIPED" != "0" ] || [ "$ERRORS" != "0" ]; then
               echo "  prefix=${prefix} wiped=${WIPED} errors=${ERRORS}"
             fi
+            sleep 1
           done
           # Verifier que staging repond toujours (les wipes ne doivent pas casser l'app)
           curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null && echo "Staging still healthy after cleanup" || (echo "Staging UNHEALTHY after cleanup" && exit 1)
+
+      - name: Warmup pause après cleanup (anti-saturation pool DB)
+        if: github.event.inputs.skip_wipe != 'true'
+        run: |
+          # === Veridian fix 2026-05-20 — flaky-ci-staging-postgres-saturation ===
+          # Le cleanup wipe 38 prefixes (DROP DATABASE + DELETE rows) → laisse
+          # le pool DB respirer 30s avant que l'e2e démarre avec sa rafale de
+          # provisionTenant(). Sans ça, on hit `too many clients already`.
+          echo "Warmup pause 30s avant e2e..."
+          sleep 30
+          curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null && echo "Pool DB OK" || (echo "Pool DB still under pressure" && exit 1)
 
       - name: Cleanup runner (always — Constitution §20)
         if: always()

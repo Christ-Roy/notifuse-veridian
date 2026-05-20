@@ -1395,3 +1395,86 @@ func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing
 	assert.True(t, resp.OwnerTransferred)
 	assert.Equal(t, "bob-id", resp.UserID)
 }
+
+// === Veridian patch 2026-05-20 — e2e-cleanup-discipline-canary-safety ===
+//
+// defaultSafetyClientPrefixes est la dernière ligne de défense contre un wipe
+// accidentel d'un tenant légitime (client réel, canary witness, workspace
+// personnel de Robert). Toute régression sur cette slice = risque de
+// suppression irréversible d'un tenant prod.
+//
+// Ce test vérifie 3 invariants :
+//   1. Tous les prefixes connus sont déclarés (clients réels + canary + Robert).
+//   2. Aucune entrée doublon (qui serait du bruit).
+//   3. Aucune entrée trop courte (< 3 chars) qui ferait match trop large
+//      (ex: "rb" matcherait "rbrunon" mais aussi "rbtest123").
+func TestVeridianService_DefaultSafetyClientPrefixes_ContainsCriticalEntries(t *testing.T) {
+	required := []string{
+		// Clients réels staging + prod
+		"apicalinfo", "robinix", "lyon", "loyer", "veridiansite",
+		"antjacquet", "darysisowath", "guilhemjacquet", "ismailelmouaddab",
+		// Canary witness tenants (long-lived, utilisés pour détecter régressions)
+		"canary",
+		// Workspaces personnels Robert
+		"robertbrunon", "robertstagingtest", "brunon5robert", "rbrunon", "truy",
+	}
+
+	have := make(map[string]int, len(defaultSafetyClientPrefixes))
+	for _, p := range defaultSafetyClientPrefixes {
+		have[p]++
+		assert.GreaterOrEqual(t, len(p), 3,
+			"prefix %q trop court (< 3 chars) → risque de match trop large", p)
+	}
+
+	for _, r := range required {
+		assert.GreaterOrEqual(t, have[r], 1,
+			"prefix %q manquant dans defaultSafetyClientPrefixes (tenant risque d'être wipé)", r)
+	}
+
+	for p, count := range have {
+		assert.Equal(t, 1, count, "prefix %q est dupliqué (count=%d)", p, count)
+	}
+}
+
+// Vérifie que WipeTestTenants skip bien les tenants matchant la prefix-list
+// par défaut. Test fonctionnel : on passe explicitement TenantIDs pour
+// éviter de mocker planRepo.ListByPrefix (le but est de tester le filtre
+// safety, pas la resolution prefix → ids).
+//
+// Comportement attendu : tous les tenants matchant un safety prefix
+// atterrissent dans resp.Skipped, aucun dans resp.Wiped, aucune erreur.
+// Aucun appel à wipeOneTenant ne doit avoir lieu (pas d'EXPECT sur
+// workspace.DeleteWorkspace ou planRepo.HardDelete).
+func TestVeridianService_WipeTestTenants_SkipsCanaryAndClientPrefixes(t *testing.T) {
+	svc, m := newVeridianService(t)
+
+	// Setup minimal ctxAsRoot mock (called once at the start of WipeTestTenants).
+	// ctxAsRoot fait : GetUserByEmail(rootEmail) → CreateSession → defer DeleteSession.
+	// On stub les 3 méthodes du userRepo, c'est suffisant — pas de wipe réel
+	// déclenché car tous les tids matchent un safety prefix.
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").
+		Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	candidates := []string{
+		"canaryfree",          // canary witness → MUST skip
+		"canarypro",           // canary witness → MUST skip
+		"canaryenterprise",    // canary witness → MUST skip
+		"robertbrunon42",      // Robert perso → MUST skip
+		"apicalinfoclient1",   // client réel → MUST skip
+		"antjacquet-staging",  // client réel → MUST skip
+	}
+
+	resp, err := svc.WipeTestTenants(context.Background(), domain.WipeTestTenantsInput{
+		TenantIDs: candidates,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.ElementsMatch(t, candidates, resp.Skipped,
+		"tous les tenants matchant un safety prefix doivent être skippés")
+	assert.Empty(t, resp.Wiped, "aucun tenant safety ne doit avoir été wipé")
+	assert.Empty(t, resp.Errors, "aucune erreur attendue, juste des skips")
+}
