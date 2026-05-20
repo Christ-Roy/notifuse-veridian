@@ -512,3 +512,223 @@ func TestVeridianPaywallCache_ConcurrentInvalidateAndLookup(t *testing.T) {
 	<-done
 	<-done
 }
+
+// === V37 lot 4a — Feature gate A/B testing ===
+
+// newFeatureGateReq construit une requete sur un path feature-gated avec
+// body JSON contenant workspace_id. Default /api/broadcasts.getTestResults
+// (A/B testing) — passer un autre path si besoin.
+func newFeatureGateReq(t *testing.T, path, body string) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	return r
+}
+
+func TestVeridianFeatureGate_ProPlanAllowsABTesting(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-pro").Return(&domain.VeridianPlan{
+		WorkspaceID:      "ws-pro",
+		Plan:             "pro",
+		Status:           domain.PlanStatusActive,
+		FeatureABTesting: true, // Pro inclut A/B
+	}, nil)
+
+	var called atomic.Bool
+	cache := NewPaywallCache()
+	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newFeatureGateReq(t, "/api/broadcasts.getTestResults", `{"workspace_id":"ws-pro"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, called.Load(), "handler upstream must be reached when feature allowed")
+}
+
+func TestVeridianFeatureGate_FreePlanBlocksABTestingWith402(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-free").Return(&domain.VeridianPlan{
+		WorkspaceID:      "ws-free",
+		Plan:             "free",
+		Status:           domain.PlanStatusActive,
+		FeatureABTesting: false, // Free n'a PAS A/B
+	}, nil)
+
+	var called atomic.Bool
+	cache := NewPaywallCache()
+	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newFeatureGateReq(t, "/api/broadcasts.selectWinner", `{"workspace_id":"ws-free"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusPaymentRequired, rec.Code, "Free must be blocked on A/B endpoints")
+	assert.False(t, called.Load(), "handler upstream must NOT be reached when blocked")
+	// Le body doit contenir error_code=feature_not_in_plan + feature key
+	body := rec.Body.String()
+	assert.Contains(t, body, `"error_code":"feature_not_in_plan"`)
+	assert.Contains(t, body, `"feature":"ab_testing"`)
+	assert.Contains(t, body, `"tenant_plan":"free"`)
+}
+
+func TestVeridianFeatureGate_TenantNotInVeridianLetsThrough(t *testing.T) {
+	// Tenant non-Veridian (sql.ErrNoRows) → fail-open : passe.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-selfhosted").Return(nil, sql.ErrNoRows)
+
+	var called atomic.Bool
+	cache := NewPaywallCache()
+	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newFeatureGateReq(t, "/api/broadcasts.getTestResults", `{"workspace_id":"ws-selfhosted"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code, "non-Veridian tenant must be allowed (self-hosted compat)")
+	assert.True(t, called.Load())
+}
+
+func TestVeridianFeatureGate_DBErrorFailsOpen(t *testing.T) {
+	// Erreur DB transitoire → fail-open (meme strategie que paywall) pour
+	// ne pas bloquer la consommation A/B sur un incident DB.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-broken").Return(nil, errors.New("connection refused"))
+
+	var called atomic.Bool
+	cache := NewPaywallCache()
+	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newFeatureGateReq(t, "/api/broadcasts.selectWinner", `{"workspace_id":"ws-broken"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code, "DB error must fail-open (allow request)")
+	assert.True(t, called.Load())
+}
+
+func TestVeridianFeatureGate_BusinessPlanIncludesABTesting(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-biz").Return(&domain.VeridianPlan{
+		WorkspaceID:      "ws-biz",
+		Plan:             "business",
+		Status:           domain.PlanStatusActive,
+		FeatureABTesting: true,
+	}, nil)
+
+	var called atomic.Bool
+	cache := NewPaywallCache()
+	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newFeatureGateReq(t, "/api/broadcasts.getTestResults", `{"workspace_id":"ws-biz"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, called.Load())
+}
+
+func TestVeridianFeatureGate_MissingWorkspaceIDLetsThrough(t *testing.T) {
+	// Body sans workspace_id → on ne sait pas qui c'est, on laisse passer
+	// (le handler upstream rejettera ou utilisera un autre champ).
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	// Aucun appel attendu sur le repo
+
+	var called atomic.Bool
+	cache := NewPaywallCache()
+	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newFeatureGateReq(t, "/api/broadcasts.selectWinner", `{"something_else":"value"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, called.Load())
+}
+
+// TestVeridianPaywallPathFilter_RoutesFeatureGatedPaths verifie que le path
+// filter route les paths A/B vers le feature gate (et pas vers le suspend/delete
+// paywall qui ne checkerait pas la feature). Garde-fou anti-typo du mapping.
+func TestVeridianPaywallPathFilter_RoutesFeatureGatedPaths(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	// Tenant Free actif : le suspend/delete paywall laisserait passer (IsBlocked=false),
+	// mais le feature gate doit refuser.
+	repo.EXPECT().Get(gomock.Any(), "ws-free").Return(&domain.VeridianPlan{
+		WorkspaceID:      "ws-free",
+		Plan:             "free",
+		Status:           domain.PlanStatusActive,
+		FeatureABTesting: false,
+	}, nil)
+
+	var called atomic.Bool
+	cache := NewPaywallCache()
+	filter := VeridianPaywallPathFilterWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newFeatureGateReq(t, "/api/broadcasts.selectWinner", `{"workspace_id":"ws-free"}`)
+	rec := httptest.NewRecorder()
+	filter.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusPaymentRequired, rec.Code,
+		"path filter must route A/B paths through feature gate (which blocks Free)")
+	assert.False(t, called.Load())
+}
+
+// TestCheckFeatureAllowed_NilPlanReturnsTrue — invariant safe : si plan est
+// nil (tenant non-Veridian), on autorise (fail-open).
+func TestCheckFeatureAllowed_NilPlanReturnsTrue(t *testing.T) {
+	assert.True(t, checkFeatureAllowed(nil, "ab_testing"))
+	assert.True(t, checkFeatureAllowed(nil, "white_label"))
+}
+
+// TestCheckFeatureAllowed_UnknownFeatureFailsOpen — feature key inconnue
+// (typo ou ajout future non-cable) → fail-open. Mieux qu'un panic.
+func TestCheckFeatureAllowed_UnknownFeatureFailsOpen(t *testing.T) {
+	p := &domain.VeridianPlan{Plan: "free"}
+	assert.True(t, checkFeatureAllowed(p, "feature_from_the_future"))
+}
+
+// TestCheckFeatureAllowed_KnownFeatures verifie le mapping correct des 3
+// features (ab_testing / branding_removed / white_label) vers les champs
+// PlanLimits de la struct VeridianPlan.
+func TestCheckFeatureAllowed_KnownFeatures(t *testing.T) {
+	pro := &domain.VeridianPlan{
+		Plan:                   "pro",
+		FeatureABTesting:       true,
+		FeatureBrandingRemoved: true,
+		FeatureWhiteLabel:      false,
+	}
+	assert.True(t, checkFeatureAllowed(pro, "ab_testing"))
+	assert.True(t, checkFeatureAllowed(pro, "branding_removed"))
+	assert.False(t, checkFeatureAllowed(pro, "white_label"))
+
+	free := &domain.VeridianPlan{
+		Plan:                   "free",
+		FeatureABTesting:       false,
+		FeatureBrandingRemoved: false,
+		FeatureWhiteLabel:      false,
+	}
+	assert.False(t, checkFeatureAllowed(free, "ab_testing"))
+	assert.False(t, checkFeatureAllowed(free, "branding_removed"))
+	assert.False(t, checkFeatureAllowed(free, "white_label"))
+}

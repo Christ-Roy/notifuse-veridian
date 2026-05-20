@@ -220,12 +220,50 @@ func NewVeridianPaywallMiddlewareWithCache(cache *PaywallCache, planRepo domain.
 }
 
 // paywallProtectedPaths est l'ensemble des paths sur lesquels le paywall
-// s'active (exact match). Les autres paths passent sans inspection.
+// status (suspended/deleted) s'active (exact match). Les autres paths
+// passent sans inspection sauf s'ils sont dans une autre map specialisee.
 var paywallProtectedPaths = map[string]struct{}{
 	"/api/transactional.send":           {},
 	"/api/broadcasts.create":            {},
 	"/api/broadcasts.schedule":          {},
 	"/api/broadcasts.sendToIndividual":  {},
+}
+
+// featureGatedPaths mappe un path API → la cle feature dans PlanLimits qui
+// doit etre TRUE pour autoriser l'acces. Si la feature est false sur le plan
+// du tenant, le middleware retourne 402 avec error_code=feature_not_in_plan.
+//
+// Decision design : on gate les endpoints qui ne servent QU'A la feature
+// (broadcasts.getTestResults / selectWinner = A/B uniquement) plutot que
+// d'essayer de parser le body de broadcasts.create pour detecter le test_settings.
+// Plus simple, plus robuste, et bloque effectivement la consommation A/B.
+//
+// Cle = nom JSON de la feature dans PlanLimits (sensible a la casse Go).
+var featureGatedPaths = map[string]string{
+	"/api/broadcasts.getTestResults": "ab_testing",
+	"/api/broadcasts.selectWinner":   "ab_testing",
+}
+
+// checkFeatureAllowed retourne true si la feature est activee sur le plan,
+// false sinon. Si plan est nil (tenant non-Veridian / self-hosted), on
+// considere que toutes les features sont autorisees (pas de paywall actif).
+func checkFeatureAllowed(plan *domain.VeridianPlan, feature string) bool {
+	if plan == nil {
+		return true
+	}
+	switch feature {
+	case "ab_testing":
+		return plan.FeatureABTesting
+	case "branding_removed":
+		return plan.FeatureBrandingRemoved
+	case "white_label":
+		return plan.FeatureWhiteLabel
+	default:
+		// Feature inconnue dans la map : fail-open (= laisse passer) pour
+		// ne pas casser un endpoint dont le mapping aurait une typo. Mieux
+		// vaut une feature non-gatee qu'un endpoint qui plante en prod.
+		return true
+	}
 }
 
 // VeridianPaywallPathFilter est un wrapper applique au niveau Server.Handler
@@ -242,15 +280,149 @@ func VeridianPaywallPathFilter(planRepo domain.VeridianPlanRepository, log logge
 // VeridianPaywallPathFilterWithCache permet d'injecter un cache partage avec
 // le handler admin invalidate. A utiliser dans app.Start() en passant le
 // meme *PaywallCache qui a ete fourni au VeridianHandler.
+//
+// V37 lot 4a : ajoute le routage vers le feature gate middleware pour les
+// paths dans featureGatedPaths (A/B testing). Le path filter check d'abord
+// les protected paths (suspend/delete), puis les feature gated paths, sinon
+// passe direct.
 func VeridianPaywallPathFilterWithCache(cache *PaywallCache, planRepo domain.VeridianPlanRepository, log logger.Logger) func(http.Handler) http.Handler {
 	paywall := NewVeridianPaywallMiddlewareWithCache(cache, planRepo, log)
+	featureGate := NewVeridianFeatureGateMiddlewareWithCache(cache, planRepo, log)
 	return func(next http.Handler) http.Handler {
 		protected := paywall(next)
+		gated := featureGate(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if _, isProtected := paywallProtectedPaths[r.URL.Path]; isProtected {
 				protected.ServeHTTP(w, r)
 				return
 			}
+			if _, isGated := featureGatedPaths[r.URL.Path]; isGated {
+				gated.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// NewVeridianFeatureGateMiddlewareWithCache retourne un middleware qui bloque
+// les endpoints feature-gated si la feature n'est pas active sur le plan du
+// tenant (V37 lot 4a). Reutilise le PaywallCache existant pour eviter un
+// round-trip DB par requete.
+//
+// Le mapping path → feature key vit dans featureGatedPaths (mutuel-exclusif
+// avec paywallProtectedPaths). Si le tenant n'a pas de ligne veridian_plan
+// (mode self-hosted), on laisse passer (fail-open).
+//
+// La detection de workspace_id reutilise la meme heuristique que le paywall
+// (lecture body JSON + champ workspace_id), donc compatible avec tous les
+// endpoints broadcast existants.
+//
+// Reponse 402 :
+//
+//	{
+//	  "error": "feature_not_in_plan: ab_testing requires a Pro or higher plan",
+//	  "error_code": "feature_not_in_plan",
+//	  "feature": "ab_testing",
+//	  "tenant_plan": "free"
+//	}
+func NewVeridianFeatureGateMiddlewareWithCache(cache *PaywallCache, planRepo domain.VeridianPlanRepository, log logger.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if planRepo == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if r.Body == nil || r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			feature, isGated := featureGatedPaths[r.URL.Path]
+			if !isGated {
+				// Ne devrait pas arriver vu le routage upstream, mais belt &
+				// braces : si on est appele sur un path non-gated, passe.
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Lire et rebufferer le body (meme pattern que paywall).
+			body, err := io.ReadAll(io.LimitReader(r.Body, veridianPaywallMaxBody+1))
+			if err != nil {
+				writeJSONError(w, "Failed to read request body", http.StatusBadRequest)
+				return
+			}
+			if len(body) > veridianPaywallMaxBody {
+				writeJSONError(w, "Request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			_ = r.Body.Close()
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			r.ContentLength = int64(len(body))
+
+			var probe struct {
+				WorkspaceID string `json:"workspace_id"`
+			}
+			if err := json.Unmarshal(body, &probe); err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if probe.WorkspaceID == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Cache lookup (partage avec le paywall — meme cache, meme TTL).
+			entry, hit := cache.get(probe.WorkspaceID)
+			if !hit {
+				plan, err := planRepo.Get(r.Context(), probe.WorkspaceID)
+				if err != nil {
+					if errors.Is(err, sql.ErrNoRows) {
+						entry = paywallCacheEntry{
+							notFound:  true,
+							expiresAt: time.Now().Add(veridianPaywallCacheTTL),
+						}
+						cache.set(probe.WorkspaceID, entry)
+					} else {
+						// Fail-open sur erreur DB transitoire — meme decision que paywall.
+						if log != nil {
+							log.WithFields(map[string]interface{}{
+								"workspace_id": probe.WorkspaceID,
+								"feature":      feature,
+								"error":        err.Error(),
+							}).Warn("veridian feature gate: failed to read plan, allowing request")
+						}
+						next.ServeHTTP(w, r)
+						return
+					}
+				} else {
+					entry = paywallCacheEntry{
+						plan:      plan,
+						expiresAt: time.Now().Add(veridianPaywallCacheTTL),
+					}
+					cache.set(probe.WorkspaceID, entry)
+				}
+			}
+
+			// Workspace pas gere par Veridian : passe (fail-open).
+			if entry.notFound {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Verifier l'activation feature.
+			if !checkFeatureAllowed(entry.plan, feature) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusPaymentRequired)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":       "feature_not_in_plan: " + feature + " requires a Pro or higher plan",
+					"error_code":  "feature_not_in_plan",
+					"feature":     feature,
+					"tenant_plan": entry.plan.Plan,
+				})
+				return
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
