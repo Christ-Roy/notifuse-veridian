@@ -235,15 +235,64 @@ Câbler dans le code Notifuse les nouveaux plans tels que décrits dans `VISION-
 - [x] Bump VERSION 35.0 → 37.0 (V36 reservee au ticket aligner-types-timestamp)
 - [x] Curl live tests post-deploy staging+prod OK (`/api/version` retourne tag v37, colonnes confirmees en prod via psql sur notifuse_system)
 
+### ✅ Lot 2 livré 2026-05-20 (commit `7e028c1b` → rejoue dans c85ffd28)
+
+- [x] Repo `veridian_plan_postgres.go` étendu Get/Upsert/UpdatePlan
+- [x] `Get` SELECT et scan vers les 9 nouveaux champs de VeridianPlan
+- [x] `Upsert` INSERT 21 params avec auto-fill via `domain.LimitsForPlan(plan)`
+  si dimensions toutes à zéro (cas Provision standard) — sinon respecte
+  les overrides custom (deal Enterprise hors-grille). `ON CONFLICT DO
+  UPDATE` ne touche PAS les dimensions V37 (un Upsert idempotent ne doit
+  pas régresser un Pro vers Free silencieusement).
+- [x] `UpdatePlan` applique `LimitsForPlan(plan)` au changement de plan →
+  upgrade/downgrade re-applique les limites du nouveau tier. Fallback
+  Free safe sur plan inconnu (no privilege escalation).
+- [x] Helpers internes `isZeroPricingDimensions` + `applyDefaultLimits`
+- [x] Tests : `Get` 3 sous-tests + `Upsert` 4 sous-tests (avec custom
+  override) + `UpdatePlan` 6 sous-tests + `PreservesSourceOnEmpty` +
+  garde-fou V34 lifecycle scan. Tous verts.
+
+### ✅ Lot 3 livré 2026-05-20 (commit `1309def0` → rejoue dans c85ffd28)
+
+- [x] `domain.LimitsResponse` struct + `VeridianService.GetLimits` interface
+- [x] `service.GetLimits` lit `planRepo.Get`, expose limites DB telles
+  quelles. Fallback safe `LimitsForPlan(p.Plan)` si toutes dimensions
+  à zéro (row antédiluvien jamais re-upsert post-V37). Fallback Free
+  strict sur plan inconnu.
+- [x] Mock `MockVeridianService.GetLimits` ajouté (mockgen v1.6.0 legacy,
+  extension manuelle).
+- [x] `Provision` et `UpdatePlan` côté service : NON modifiés (le lot 2
+  câble déjà l'auto-application au niveau du repo).
+- [x] Tests service (5) + domain `LimitsResponse` JSON schema + interface
+  expose `GetLimits`. Tous verts.
+
+### ✅ Lot 7 livré 2026-05-20 (commit `c85ffd28`)
+
+- [x] Handler `GET /api/tenants/{id}/limits` HMAC dans `veridian_handler.go`
+- [x] Mappe `sql.ErrNoRows` → 404, autres erreurs → 500
+- [x] Pattern strictement copié de `handleHealth` (cohérence contrat Hub)
+- [x] Tests handler (5) : OK / MissingID / NotFound / InternalError /
+  RegisteredInRoutes (garde-fou anti-suppression)
+- [x] **Note routage** : ticket original proposait `GET /api/veridian/limits`
+  (sans tenant_id). Choix actuel `GET /api/tenants/{id}/limits` pour
+  cohérence avec `/status` `/health` `/usage-summary` + HMAC strict.
+
 ### ⏳ Lots restants
 
-- [ ] **Lot 2** — Repository : étendre `veridian_plan_postgres.go` Get/Upsert/UpdatePlan pour lire/écrire les nouvelles colonnes. + tests
-- [ ] **Lot 3** — Service : helpers `GetLimits`, `CanAddSeat`, `CanAddContact`, `CanAddOAuthAccount`, `CanAddCustomDomain` + appliquer `DefaultPlanLimits` au Provision/UpdatePlan
-- [ ] **Lot 4** — Middleware paywall étendu (seat_limit, contact_limit, sequence_limit) + nouveau feature_gate (A/B testing, custom domain)
-- [ ] **Lot 5** — Branding "Powered by Veridian" cablé (gater par `feature_branding_removed`)
-- [ ] **Lot 6** — Cron cleanup historique (`history_retention_days`)
-- [ ] **Lot 7** — Endpoint `GET /api/veridian/limits` pour console UI
-- [ ] **Lot 8** — Documentation (CHANGELOG + README)
-- [ ] Promote prod OK (auto-promote staging→main→prod fait à chaque lot)
+- [ ] **Lot 4** — Middleware paywall étendu (seat_limit, contact_limit,
+  sequence_limit) + nouveau feature_gate (A/B testing, custom domain).
+  Nécessite reco terrain sur les compteurs : `contactService.Count(ctx,
+  ws)`, `workspaceService.Members(ctx, ws)`, `automationService.Active(...)`.
+- [ ] **Lot 5** — Branding "Powered by Veridian" câblé (gater par
+  `feature_branding_removed`) — toucher les templates MJML ou ajouter un
+  middleware d'envoi post-processing.
+- [ ] **Lot 6** — Cron cleanup historique (`history_retention_days`).
+- [ ] **Lot 8** — Documentation (CHANGELOG + README).
+- [ ] Promote prod OK (auto-promote staging→main→prod à chaque lot).
 
-**Note lot 1** : choix volontairement non-régressif — repo/service/middleware non touchés, donc zéro risque runtime. Les nouvelles colonnes existent en DB (backfillees), mais le code applicatif les ignore encore. Permet de poser la fondation contractuelle stable avant les enforces.
+**Note lot 1** : choix volontairement non-régressif — fondation seule.
+**Note lot 2** : auto-fill côté repo = lots 1+2 deviennent transparents
+pour le Provision/UpdatePlan côté service, qui profitent gratuitement.
+**Note lot 3** : GetLimits lit le repo, fallback safe pour les rows
+antédiluviens. Surface API stable consommable par middleware + UI + Hub.
+**Note lot 7** : endpoint /limits expose la primitive aux callers.
