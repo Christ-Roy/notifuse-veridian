@@ -445,6 +445,12 @@ type VeridianService interface {
 	// API key valide, capacité magic link, count membres. Le Hub poll en cron
 	// 1×/h pour détecter régressions du type bug 2026-05-17 (owner orphelin).
 	Health(ctx context.Context, tenantID string) (*TenantHealthResponse, error)
+
+	// === Veridian patch === Grant unlimited access (équipe interne + clients
+	// fideles + partenaires). Passe le tenant en plan=enterprise + quota=-1 +
+	// plan_source=lifetime_partner (par defaut). Immune aux downgrades Stripe.
+	// Idempotent. reason obligatoire pour audit GDPR/compta.
+	GrantUnlimited(ctx context.Context, input GrantUnlimitedInput) (*GrantUnlimitedResponse, error)
 }
 
 // EventTenantOwnerChanged event émis quand AttachOwner promote un user humain

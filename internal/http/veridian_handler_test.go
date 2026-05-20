@@ -1414,3 +1414,23 @@ func TestVeridianHandler_LifecycleRoutes_Registered(t *testing.T) {
 	_, pattern := mux.Handler(req)
 	assert.NotEmpty(t, pattern, "GET /api/tenants/:id/usage-summary should be registered")
 }
+
+// TestVeridianHandler_GrantUnlimitedRoute_Registered verifie que la route
+// POST /api/veridian/admin/grant-unlimited est bien enregistree via
+// RegisterRoutes. Si quelqu'un supprime accidentellement la ligne du mux.Handle,
+// ce test fail et evite une regression silencieuse de l'echappatoire interne
+// equipe + clients fideles.
+func TestVeridianHandler_GrantUnlimitedRoute_Registered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/veridian/admin/grant-unlimited", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/veridian/admin/grant-unlimited should be registered")
+	assert.Contains(t, pattern, "grant-unlimited", "route should target grant-unlimited handler")
+}

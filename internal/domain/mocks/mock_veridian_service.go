@@ -80,6 +80,21 @@ func (mr *MockVeridianServiceMockRecorder) GetStatus(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStatus", reflect.TypeOf((*MockVeridianService)(nil).GetStatus), arg0, arg1)
 }
 
+// GrantUnlimited mocks base method.
+func (m *MockVeridianService) GrantUnlimited(arg0 context.Context, arg1 domain.GrantUnlimitedInput) (*domain.GrantUnlimitedResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GrantUnlimited", arg0, arg1)
+	ret0, _ := ret[0].(*domain.GrantUnlimitedResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GrantUnlimited indicates an expected call of GrantUnlimited.
+func (mr *MockVeridianServiceMockRecorder) GrantUnlimited(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantUnlimited", reflect.TypeOf((*MockVeridianService)(nil).GrantUnlimited), arg0, arg1)
+}
+
 // Health mocks base method.
 func (m *MockVeridianService) Health(arg0 context.Context, arg1 string) (*domain.TenantHealthResponse, error) {
 	m.ctrl.T.Helper()

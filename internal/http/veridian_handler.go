@@ -114,6 +114,10 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// la feature Hub-Veridian). Idempotent : safe à appeler en boucle pour
 	// réparer en batch. Voir todo/2026-05-17-provision-owner-attach.md.
 	mux.Handle("POST /api/veridian/admin/attach-owner", writeRoute(h.handleAttachOwner))
+	// === Veridian patch === Grant unlimited (equipe interne + clients fideles
+	// + partenaires). Passe le tenant en plan=enterprise + quota=-1 +
+	// plan_source=lifetime_partner. Immune au downgrade Stripe.
+	mux.Handle("POST /api/veridian/admin/grant-unlimited", writeRoute(h.handleGrantUnlimited))
 	// === Veridian patch === Health observable du tenant (livrable 3 contrat
 	// intégrations Hub). Le Hub poll en cron 1×/h pour détecter régression
 	// silencieuse du flow magic link Hub → app (bug 2026-05-17).

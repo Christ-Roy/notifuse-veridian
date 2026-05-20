@@ -425,6 +425,15 @@ func (a *App) InitRepositories() error {
 	a.broadcastRepo = repository.NewBroadcastRepository(a.workspaceRepo)
 	a.transactionalNotificationRepo = repository.NewTransactionalNotificationRepository(a.workspaceRepo)
 	a.messageHistoryRepo = repository.NewMessageHistoryRepository(a.workspaceRepo)
+	// === Veridian patch === Wrap messageHistoryRepo with quota increment
+	// decorator. Le decorator incrémente veridian_plan.emails_sent_this_month
+	// apres chaque Create reussi → paywall middleware peut enforcer le quota
+	// mensuel. Sans cette decoration, le compteur reste a 0 et le paywall ne
+	// bloque jamais sur le quota (bug détecté 2026-05-20).
+	// veridianPlanRepo est créé plus bas dans la fonction (ligne ~450) — on
+	// le crée maintenant en avance pour pouvoir wrapper.
+	a.veridianPlanRepo = repository.NewVeridianPlanRepository(a.db)
+	a.messageHistoryRepo = repository.NewVeridianMessageHistoryDecorator(a.messageHistoryRepo, a.veridianPlanRepo, a.logger)
 	a.inboundWebhookEventRepo = repository.NewInboundWebhookEventRepository(a.workspaceRepo)
 	a.telemetryRepo = repository.NewTelemetryRepository(a.workspaceRepo)
 	a.analyticsRepo = repository.NewAnalyticsRepository(a.workspaceRepo, a.logger)
@@ -447,7 +456,8 @@ func (a *App) InitRepositories() error {
 	a.emailQueueRepo = repository.NewEmailQueueRepository(a.workspaceRepo)
 
 	// === Veridian patches ===
-	a.veridianPlanRepo = repository.NewVeridianPlanRepository(a.db)
+	// veridianPlanRepo est deja initialise plus haut (avant le decorator
+	// messageHistoryRepo). On garde juste l'init du repo idempotency ici.
 	a.veridianIdempotencyRepo = repository.NewVeridianIdempotencyRepository(a.db)
 
 	// Initialize setting service
