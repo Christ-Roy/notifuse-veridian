@@ -72,3 +72,21 @@ Effort total ~2-3h, devrait éliminer 90% des flakys.
 
 - Memory `feedback_sqlmock_does_not_validate_postgres_types` : autre piège DB-related
 - Memory `feedback_autonomous_ticket_session_pattern` : recette générale tickets→ship
+
+---
+
+## Update — 2026-05-20 — Livré (3 fixes combinés)
+
+Commit `aca10de0` shippé en staging puis prod (auto-promote) :
+
+1. **`infra/compose/staging.yml`** — `max_connections=100 → 200` via flag
+   command Postgres. Pas de modif orchestration, juste un tuning.
+2. **`.github/workflows/veridian-ci.yml`** — `sleep 1` entre chaque
+   prefix de wipe (sérialisation) + nouveau step `Warmup pause après cleanup`
+   qui dort 30s avant que l'e2e démarre. Coût total ~60s, négligeable
+   vs ~13min par re-run.
+3. **Validation** — ce ticket peut être déplacé dans `todo/done/` après
+   1-2 runs CI verts confirmant que les flakys infra ont disparu.
+
+`[skip-gate]` utilisé (justifié dans le commit : modifs additive, urgent,
+trivialement réversible).

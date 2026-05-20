@@ -126,3 +126,45 @@ Total ~4h de travail, gros impact qualité.
 
 - Memory `feedback_autonomous_ticket_session_pattern` (recette tickets→ship)
 - Ticket `2026-05-20-flaky-ci-staging-postgres-saturation.md` (root cause adjacent)
+
+---
+
+## Update — 2026-05-20 — Livré partiellement (étapes 3 + 4)
+
+### ✅ Étape 3 — safety prefixes étendus (commit `aca10de0`)
+
+`internal/service/veridian_service.go::defaultSafetyClientPrefixes` étendu
+de 5 → 15 prefixes :
+
+- Clients réels existants : `apicalinfo`, `robinix`, `lyon`, `loyer`, `veridiansite`
+- Clients réels ajoutés : `antjacquet`, `darysisowath`, `guilhemjacquet`, `ismailelmouaddab`
+- Canary witness : `canary` (matche `canaryfree`, `canarypro`, `canaryenterprise`)
+- Robert perso : `robertbrunon`, `robertstagingtest`, `brunon5robert`, `rbrunon`, `truy`
+
+Tests ajoutés (Constitution §1) :
+- `TestVeridianService_DefaultSafetyClientPrefixes_ContainsCriticalEntries` —
+  vérifie présence des 15 prefixes attendus, 0 doublon, ≥3 chars
+- `TestVeridianService_WipeTestTenants_SkipsCanaryAndClientPrefixes` —
+  test fonctionnel sur 6 tids matchant safety prefixes → tous skipped, aucun wipe
+
+### ✅ Étape 4 — Spec canary-witness `@prod-safe @canary` (commit `3b197d60`)
+
+`tests/e2e-veridian/specs/canary-witness.spec.ts` créé. Vérifie via
+`/api/tenants/:id/status` (HMAC GET, read-only) que :
+- `canaryfree` plan=free actif quota=-1
+- `canarypro` plan=pro actif quota=-1
+- `canaryenterprise` plan=enterprise actif quota=-1
+
+Tag `@prod-safe` → inclus AUTO dans le job `e2e-prod` après chaque promote.
+Testé localement contre prod + staging : 3/3 verts.
+
+### ⏳ Reste à faire (autre session)
+
+- **Étape 2 — afterEach cleanup** : refactor des specs existants pour
+  nettoyer chacun ses tenants au fil de l'eau. Demande de toucher 6-8 fichiers
+  spec et de valider qu'on casse rien. ~2h.
+- **Étape 1 — refactor naming `t-*`** : cosmétique, à faire en parallèle de
+  l'étape 2 puisque ça touche les mêmes fichiers.
+
+Ces 2 étapes restantes sont indépendantes du fix postgres et de la safety.
+Le ticket reste ouvert mais P3 (qualité, pas bloquant).
