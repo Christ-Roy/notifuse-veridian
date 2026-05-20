@@ -1434,3 +1434,99 @@ func TestVeridianHandler_GrantUnlimitedRoute_Registered(t *testing.T) {
 	assert.NotEmpty(t, pattern, "POST /api/veridian/admin/grant-unlimited should be registered")
 	assert.Contains(t, pattern, "grant-unlimited", "route should target grant-unlimited handler")
 }
+
+// === handleLimits (V37 pricing-plans lot 7) ===
+// Endpoint GET /api/tenants/{id}/limits, auth HMAC, renvoie LimitsResponse.
+
+func TestVeridianHandleLimits_OK(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	now := time.Now().UTC()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().GetLimits(gomock.Any(), "ws-pro").Return(&domain.LimitsResponse{
+		TenantID:   "ws-pro",
+		Plan:       "pro",
+		PlanSource: domain.PlanSourceStripe,
+		Status:     domain.PlanStatusActive,
+		Limits: domain.PlanLimits{
+			MonthlyEmailQuota:      -1,
+			MaxContacts:            5000,
+			MaxSeats:               5,
+			MaxOAuthAccounts:       5,
+			MaxCustomDomains:       1,
+			MaxActiveSequences:     -1,
+			FeatureABTesting:       true,
+			FeatureBrandingRemoved: true,
+			FeatureWhiteLabel:      false,
+			HistoryRetentionDays:   365,
+		},
+		GeneratedAt: now,
+	}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleLimits, http.MethodGet, "/api/tenants/ws-pro/limits", "ws-pro", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp domain.LimitsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "ws-pro", resp.TenantID)
+	assert.Equal(t, "pro", resp.Plan)
+	assert.Equal(t, domain.PlanSourceStripe, resp.PlanSource)
+	assert.Equal(t, int64(5000), resp.Limits.MaxContacts)
+	assert.Equal(t, 5, resp.Limits.MaxSeats)
+	assert.True(t, resp.Limits.FeatureABTesting)
+	assert.False(t, resp.Limits.FeatureWhiteLabel, "Pro != Business white-label")
+}
+
+func TestVeridianHandleLimits_MissingID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleLimits, http.MethodGet, "/api/tenants//limits", "", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestVeridianHandleLimits_NotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().GetLimits(gomock.Any(), "ws-ghost").Return(nil, sql.ErrNoRows)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleLimits, http.MethodGet, "/api/tenants/ws-ghost/limits", "ws-ghost", "")
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestVeridianHandleLimits_InternalError(t *testing.T) {
+	// Erreur autre que sql.ErrNoRows → 500 (ne pas leaker le detail au caller).
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().GetLimits(gomock.Any(), "ws-broken").Return(nil, errors.New("planRepo: connection refused"))
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleLimits, http.MethodGet, "/api/tenants/ws-broken/limits", "ws-broken", "")
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+// TestVeridianHandleLimits_RegisteredInRoutes — la route doit etre cablee
+// dans RegisterRoutes. Garde-fou contre suppression accidentelle.
+func TestVeridianHandleLimits_RegisteredInRoutes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/tenants/ws-1/limits", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "GET /api/tenants/:id/limits should be registered")
+	assert.Contains(t, pattern, "limits", "route should target limits handler")
+}

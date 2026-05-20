@@ -122,6 +122,10 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// intégrations Hub). Le Hub poll en cron 1×/h pour détecter régression
 	// silencieuse du flow magic link Hub → app (bug 2026-05-17).
 	mux.Handle("GET /api/tenants/{id}/health", hmac(http.HandlerFunc(h.handleHealth)))
+	// === Veridian patch V37 === Limites + dimensions feature d'un tenant
+	// (lot 7 ticket pricing-plans-implementation). Source de verite pour la
+	// console UI (widgets quota) et le paywall middleware. Auth HMAC.
+	mux.Handle("GET /api/tenants/{id}/limits", hmac(http.HandlerFunc(h.handleLimits)))
 
 	// === Veridian patch === Endpoint public (no HMAC) qui renvoie le tag
 	// et le SHA git du binaire qui tourne. Permet à la CI de valider qu'un
@@ -740,6 +744,62 @@ func (h *VeridianHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logError("health", err, map[string]interface{}{"tenant_id": tenantID})
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleLimits renvoie les limites + dimensions feature pour un tenant
+// (lot 7 ticket pricing-plans-implementation V37). Auth HMAC. 404 si
+// tenant inexistant.
+//
+// Reponse 200 (domain.LimitsResponse) :
+//
+//	{
+//	  "tenant_id": "client42",
+//	  "plan": "pro",
+//	  "plan_source": "stripe",
+//	  "status": "active",
+//	  "limits": {
+//	    "MonthlyEmailQuota": -1,
+//	    "MaxContacts": 5000,
+//	    "MaxSeats": 5,
+//	    "MaxOAuthAccounts": 5,
+//	    "MaxCustomDomains": 1,
+//	    "MaxActiveSequences": -1,
+//	    "FeatureABTesting": true,
+//	    "FeatureBrandingRemoved": true,
+//	    "FeatureWhiteLabel": false,
+//	    "HistoryRetentionDays": 365
+//	  },
+//	  "generated_at": "2026-05-21T08:42:11Z"
+//	}
+//
+// Convention -1 = illimite (cf. domain.PlanLimits). Le caller (console UI,
+// paywall middleware) decide quoi afficher / bloquer en fonction des
+// valeurs. La struct PlanLimits utilise les noms de champs Go en JSON
+// (pas de tag JSON sur les sous-champs) — c'est volontaire, les noms sont
+// stables et la struct est interne au domain Veridian.
+func (h *VeridianHandler) handleLimits(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("id")
+	if tenantID == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenant_id"},
+		})
+		return
+	}
+
+	resp, err := h.service.GetLimits(r.Context(), tenantID)
+	if err != nil {
+		if isNotFoundErr(err) {
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
+			return
+		}
+		h.logError("limits", err, map[string]interface{}{"tenant_id": tenantID})
 		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
