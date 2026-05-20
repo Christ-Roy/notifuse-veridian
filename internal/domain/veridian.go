@@ -112,7 +112,22 @@ func (p *VeridianPlan) QuotaRemaining() int64 {
 }
 
 // IsBlocked retourne true si le workspace ne peut pas envoyer d'emails.
-// Raisons possibles : suspended, deleted, quota mensuel atteint.
+// Raisons possibles : suspended, deleted.
+//
+// === DÉCISION 2026-05-20 ===
+// Le quota mensuel d'envoi (monthly_email_quota) N'EST PLUS un motif de
+// blocage. Raison business : Notifuse ne fournit AUCUN provider d'envoi
+// — les clients connectent leur propre Gmail/Outlook/SES/SMTP (BYO).
+// C'est leur provider qui a les limites d'envoi, pas nous. Limiter ici
+// serait du paywall artificiel sur un service qu'on n'offre pas.
+//
+// On continue d'incrémenter emails_sent_this_month via le decorator pour
+// usage statistique + audit + futur cas Phase C (provider managé Veridian
+// avec Resend) — mais aucun blocage runtime tant qu'on ne fournit pas
+// nous-mêmes le sending. Cf. memory project_email_sending_strategy.
+//
+// Suspend et deleted continuent de bloquer (légitimes : suspended =
+// problème compte Veridian, deleted = compte fermé).
 func (p *VeridianPlan) IsBlocked() (blocked bool, reason string) {
 	if p.DeletedAt != nil {
 		return true, "tenant deleted"
@@ -123,18 +138,24 @@ func (p *VeridianPlan) IsBlocked() (blocked bool, reason string) {
 		}
 		return true, "tenant suspended"
 	}
-	if p.MonthlyEmailQuota >= 0 && p.EmailsSentThisMonth >= p.MonthlyEmailQuota {
-		return true, "monthly email quota exceeded"
-	}
+	// Volontairement PAS de check sur monthly_email_quota — voir doc ci-dessus.
 	return false, ""
 }
 
 // PlanQuotas mappe un nom de plan a un quota mensuel d'emails.
-// Override possible via env var VERIDIAN_QUOTA_OVERRIDE (parse dans config).
+//
+// === DÉCISION 2026-05-20 === Tous les plans = -1 (illimité) tant que
+// Veridian ne fournit pas son propre provider d'envoi. Le client utilise
+// sa propre boîte (BYO) → c'est son provider qui limite, pas nous.
+// IsBlocked() ne check plus ce quota. Le compteur emails_sent_this_month
+// continue d'etre incremente pour stats/audit/futur Resend managé.
+//
+// Si Phase C (Veridian managed sending avec Resend) arrive un jour, on
+// reactivera ces seuils + le check dans IsBlocked.
 var PlanQuotas = map[string]int64{
-	"free":       500,
-	"pro":        10000,
-	"business":   50000,
+	"free":       -1, // unlimited (BYO sending)
+	"pro":        -1, // unlimited (BYO sending)
+	"business":   -1, // unlimited (BYO sending)
 	"enterprise": -1, // unlimited
 }
 

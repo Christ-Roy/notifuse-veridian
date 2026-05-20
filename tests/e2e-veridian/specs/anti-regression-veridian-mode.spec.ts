@@ -274,7 +274,8 @@ test.describe('Veridian-managed mode — flow nominal préservé', () => {
     const s = await status.json();
     expect(s.tenant_id).toBe(tid);
     expect(s.plan).toBe('business');
-    expect(s.monthly_email_quota).toBe(50000); // business plan quota
+    // 2026-05-20 : tous plans en quota=-1 (BYO sending — pas de provider Veridian)
+    expect(s.monthly_email_quota).toBe(-1);
     expect(s.status).toBe('active');
   });
 });

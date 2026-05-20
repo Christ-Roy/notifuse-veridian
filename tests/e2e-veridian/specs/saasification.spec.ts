@@ -126,8 +126,9 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     expect(data.tenant_id).toBe(tenantId);
     expect(data.status).toBe('active');
     expect(data.plan).toBe('pro');
-    expect(data.monthly_email_quota).toBe(10000);
-    expect(data.quota_remaining).toBe(10000);
+    // 2026-05-20 : tous plans en quota=-1 (BYO sending — pas de provider Veridian)
+    expect(data.monthly_email_quota).toBe(-1);
+    expect(data.quota_remaining).toBe(-1); // unlimited
   });
 
   test('6. Send transactional email (active plan, success)', async () => {

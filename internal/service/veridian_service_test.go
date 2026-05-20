@@ -120,7 +120,8 @@ func TestVeridianService_Provision_NewTenant(t *testing.T) {
 			assert.Equal(t, "ws-new", p.WorkspaceID)
 			assert.Equal(t, "pro", p.Plan)
 			assert.Equal(t, domain.PlanStatusActive, p.Status)
-			assert.Equal(t, int64(10000), p.MonthlyEmailQuota)
+			// 2026-05-20 : tous plans en quota=-1 (BYO sending — pas de limite Notifuse)
+			assert.Equal(t, int64(-1), p.MonthlyEmailQuota)
 			return nil
 		}).Times(1)
 
@@ -626,12 +627,13 @@ func TestVeridianService_UpdatePlan_EmitsEventWithQuota(t *testing.T) {
 		Plan:        "free",
 		PlanSource:  domain.PlanSourceStripe,
 	}, nil).Times(1)
-	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "business", int64(50000), domain.PlanSource("")).Return(nil).Times(1)
+	// 2026-05-20 : business = -1 (BYO sending)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "business", int64(-1), domain.PlanSource("")).Return(nil).Times(1)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantPlanChanged, "ws-1", gomock.Any()).
 		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
 			assert.Equal(t, "business", data["plan"])
 			assert.Equal(t, "free", data["previous_plan"])
-			assert.Equal(t, int64(50000), data["quota"])
+			assert.Equal(t, int64(-1), data["quota"])
 			assert.Equal(t, "stripe", data["plan_source"])
 		}).Times(1)
 
@@ -785,7 +787,8 @@ func TestVeridianService_UpdatePlan_QuotasOverrideHardcoded(t *testing.T) {
 }
 
 func TestVeridianService_UpdatePlan_QuotasNilFallsBackToHardcoded(t *testing.T) {
-	// Si input.Quotas est nil, on utilise QuotaForPlan(plan) = 10000 pour "pro".
+	// Si input.Quotas est nil, on utilise QuotaForPlan(plan).
+	// 2026-05-20 : tous plans = -1 (BYO sending).
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
@@ -794,7 +797,7 @@ func TestVeridianService_UpdatePlan_QuotasNilFallsBackToHardcoded(t *testing.T) 
 		Plan:        "free",
 		PlanSource:  domain.PlanSourceStripe,
 	}, nil).Times(1)
-	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "pro", int64(10000), domain.PlanSource("")).Return(nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "pro", int64(-1), domain.PlanSource("")).Return(nil).Times(1)
 	m.emitter.EXPECT().Emit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	_, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{TenantID: "ws-1", Plan: "pro"})
@@ -804,6 +807,7 @@ func TestVeridianService_UpdatePlan_QuotasNilFallsBackToHardcoded(t *testing.T) 
 func TestVeridianService_UpdatePlan_QuotasMonthlyEmailsNilFallsBack(t *testing.T) {
 	// Cas particulier : input.Quotas non-nil mais MonthlyEmails nil (le Hub
 	// envoie une struct vide en preparation de futurs quotas) → fallback hardcoded.
+	// 2026-05-20 : tous plans = -1 (BYO sending).
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
@@ -812,7 +816,7 @@ func TestVeridianService_UpdatePlan_QuotasMonthlyEmailsNilFallsBack(t *testing.T
 		Plan:        "free",
 		PlanSource:  domain.PlanSourceStripe,
 	}, nil).Times(1)
-	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "pro", int64(10000), domain.PlanSource("")).Return(nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-1", "pro", int64(-1), domain.PlanSource("")).Return(nil).Times(1)
 	m.emitter.EXPECT().Emit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	_, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
@@ -862,11 +866,12 @@ func TestVeridianService_GetStatus(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
+	// 2026-05-20 : tous plans = -1 (BYO sending → quota_remaining = -1 unlimited).
 	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(&domain.VeridianPlan{
 		WorkspaceID:         "ws-1",
 		Plan:                "pro",
 		Status:              domain.PlanStatusActive,
-		MonthlyEmailQuota:   10000,
+		MonthlyEmailQuota:   -1,
 		EmailsSentThisMonth: 250,
 	}, nil).Times(1)
 
@@ -875,9 +880,9 @@ func TestVeridianService_GetStatus(t *testing.T) {
 	assert.Equal(t, "ws-1", resp.TenantID)
 	assert.Equal(t, domain.PlanStatusActive, resp.Status)
 	assert.Equal(t, "pro", resp.Plan)
-	assert.Equal(t, int64(10000), resp.MonthlyEmailQuota)
-	assert.Equal(t, int64(250), resp.EmailsSentThisMonth)
-	assert.Equal(t, int64(9750), resp.QuotaRemaining)
+	assert.Equal(t, int64(-1), resp.MonthlyEmailQuota)
+	assert.Equal(t, int64(250), resp.EmailsSentThisMonth) // compteur conserve pour stats
+	assert.Equal(t, int64(-1), resp.QuotaRemaining)       // unlimited
 }
 
 func TestVeridianService_GetStatus_RejectsEmpty(t *testing.T) {

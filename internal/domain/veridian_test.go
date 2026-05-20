@@ -114,14 +114,19 @@ func TestVeridianPlan_IsBlocked_Suspended(t *testing.T) {
 }
 
 func TestVeridianPlan_IsBlocked_QuotaExceeded(t *testing.T) {
+	// === DÉCISION 2026-05-20 === Le quota mensuel d'envoi n'est PLUS un
+	// motif de blocage tant que Veridian ne fournit pas son propre provider
+	// (BYO sending). Le test, qui validait l'ancien comportement, valide
+	// maintenant le NOUVEAU : un tenant qui aurait théoriquement dépassé son
+	// quota peut quand même envoyer car c'est son provider qui limite.
 	p := &VeridianPlan{
 		Status:              PlanStatusActive,
 		MonthlyEmailQuota:   500,
 		EmailsSentThisMonth: 500,
 	}
 	blocked, reason := p.IsBlocked()
-	assert.True(t, blocked)
-	assert.Equal(t, "monthly email quota exceeded", reason)
+	assert.False(t, blocked, "quota dépassé ne doit PLUS bloquer (BYO sending)")
+	assert.Empty(t, reason)
 }
 
 func TestVeridianPlan_IsBlocked_Active(t *testing.T) {
@@ -184,12 +189,56 @@ func TestPlanQuotasInput_ExplicitMonthlyEmails(t *testing.T) {
 }
 
 func TestQuotaForPlan(t *testing.T) {
-	assert.Equal(t, int64(500), QuotaForPlan("free"))
-	assert.Equal(t, int64(10000), QuotaForPlan("pro"))
-	assert.Equal(t, int64(50000), QuotaForPlan("business"))
+	// === DÉCISION 2026-05-20 === Tous les plans sont en quota -1 (illimite)
+	// tant que Veridian ne fournit pas son propre provider d'envoi (BYO).
+	// Le client utilise sa propre boite, c'est son provider qui limite.
+	assert.Equal(t, int64(-1), QuotaForPlan("free"))
+	assert.Equal(t, int64(-1), QuotaForPlan("pro"))
+	assert.Equal(t, int64(-1), QuotaForPlan("business"))
 	assert.Equal(t, int64(-1), QuotaForPlan("enterprise"))
-	// fallback : plan inconnu → quota free
-	assert.Equal(t, int64(500), QuotaForPlan("unknown"))
+	// fallback : plan inconnu → quota free (= -1 maintenant aussi)
+	assert.Equal(t, int64(-1), QuotaForPlan("unknown"))
+}
+
+// TestVeridianPlan_IsBlocked_QuotaNoLongerBlocks verifie que le quota mensuel
+// n'est PLUS un motif de blocage (décision 2026-05-20 BYO sending). Garde-fou
+// contre une regression : si quelqu'un re-active le check ligne 126 sans
+// changer cette doc, ce test fail.
+func TestVeridianPlan_IsBlocked_QuotaNoLongerBlocks(t *testing.T) {
+	// Plan free, quota=300 (ancienne valeur), 9999 mails envoyés (très au-dessus)
+	// → ne doit PAS etre bloqué.
+	p := &VeridianPlan{
+		Plan:                "free",
+		Status:              PlanStatusActive,
+		MonthlyEmailQuota:   300,
+		EmailsSentThisMonth: 9999,
+	}
+	blocked, reason := p.IsBlocked()
+	assert.False(t, blocked, "quota dépassé ne doit PLUS bloquer (BYO sending)")
+	assert.Empty(t, reason)
+}
+
+func TestVeridianPlan_IsBlocked_SuspendedStillBlocks(t *testing.T) {
+	// Suspend reste un motif de blocage légitime (problème compte Veridian).
+	p := &VeridianPlan{
+		Status:          PlanStatusSuspended,
+		SuspendedReason: "payment_failed",
+	}
+	blocked, reason := p.IsBlocked()
+	assert.True(t, blocked)
+	assert.Equal(t, "payment_failed", reason)
+}
+
+func TestVeridianPlan_IsBlocked_DeletedStillBlocks(t *testing.T) {
+	// Deleted reste un motif de blocage légitime (compte fermé).
+	now := time.Now()
+	p := &VeridianPlan{
+		Status:    PlanStatusActive,
+		DeletedAt: &now,
+	}
+	blocked, reason := p.IsBlocked()
+	assert.True(t, blocked)
+	assert.Contains(t, reason, "deleted")
 }
 
 // === GrantUnlimited — équipe interne + clients fideles + partenaires ===

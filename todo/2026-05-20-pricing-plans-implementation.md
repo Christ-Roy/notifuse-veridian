@@ -6,6 +6,15 @@
 > **Effort estimé** : 5-8 jours dev (backend pur + tests)
 > **Dépendances** : ticket Hub `2026-XX-XX-trial-state-machine.md` (à créer) pour gestion trial centralisée
 
+> **⚠️ Update 2026-05-20** — Pas de limite **emails/mois** côté Notifuse tant que
+> Veridian ne fournit pas son propre provider d'envoi. Le BYO sending fait
+> que c'est le provider du client (Gmail/SES/...) qui limite, pas nous.
+> Le code a déjà été modifié (PlanQuotas tous à -1, IsBlocked ne check plus
+> ce quota). **L'implémentation V37 doit donc PORTER UNIQUEMENT** sur les
+> autres dimensions : contacts, seats, oauth, custom domains, sequences,
+> A/B, branding, white-label, historique. **Ne PAS recâbler de limite
+> emails/mois sauf instruction explicite de Robert (Phase C Resend managé).**
+
 ---
 
 ## Objectif

@@ -173,34 +173,35 @@ test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () 
     expect(r.status).toBe(404);
   });
 
-  test('grant-unlimited debloque un tenant qui avait depasse son quota', async () => {
-    // Scenario : un tenant free est arrive au quota → bloque 402 sur envoi
-    // → grant-unlimited debloque immediatement.
-    const tid = `qgrunblk${Date.now().toString(36).slice(-6)}`;
+  test('grant-unlimited resume un tenant suspended (autre motif de blocage)', async () => {
+    // Scenario adapté à la decision 2026-05-20 (BYO sending) :
+    // Le quota mensuel ne bloque PLUS, donc on test le seul motif qui reste
+    // côté paywall : suspend. Grant-unlimited doit auto-resume le tenant
+    // (cf. service.GrantUnlimited).
+    const tid = `qgrresume${Date.now().toString(36).slice(-6)}`;
     const { api_key } = await provisionTenant(tid, 'free');
 
-    // Simuler quota atteint via update-plan avec quota=0
-    const updResp = await hmacFetch('/api/tenants/update-plan', 'POST', {
+    // Suspend le tenant
+    const susResp = await hmacFetch('/api/tenants/suspend', 'POST', {
       tenant_id: tid,
-      plan: 'free',
-      quotas: { monthly_emails: 0 },
+      reason: 'e2e_test_suspend',
     });
-    expect(updResp.status).toBe(200);
+    expect(susResp.status).toBe(200);
     await invalidatePaywallCache(tid);
 
-    // L'envoi doit echouer en 402 (quota 0 atteint)
+    // L'envoi doit echouer en 402 (suspended)
     let send = await sendTransactional(api_key, tid);
     expect(send.status).toBe(402);
 
-    // Grant unlimited
+    // Grant unlimited (resume auto)
     const grantResp = await hmacFetch('/api/veridian/admin/grant-unlimited', 'POST', {
       tenant_id: tid,
-      reason: 'unblock_after_quota_exceeded',
+      reason: 'unblock_via_grant_resume',
     });
     expect(grantResp.status).toBe(200);
 
     // Cache deja invalide par le handler grant-unlimited. L'envoi doit
-    // maintenant passer (plus 402).
+    // maintenant passer (status=active, plan=enterprise).
     send = await sendTransactional(api_key, tid);
     expect(send.status).not.toBe(402);
   });
