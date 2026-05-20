@@ -6,8 +6,29 @@ on:
     tags:
       - 'v*-veridian.*'
       - 'saas-v*'
+    # === Veridian patch 2026-05-20 — Constitution §8 Path-based skip docs ===
+    # Un commit docs/todo-only n'a pas besoin de build image, push GHCR,
+    # deploy staging, e2e (~10min gaspillés). Le pre-push hook continue de
+    # vérifier le mapping source↔test localement, donc on ne risque pas
+    # un fichier critique sans test qui glisse.
+    # Cf. todo/2026-05-19-ci-paths-ignore-docs.md
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'todo/**'
+      - 'CHANGELOG.md'
+      - 'runbooks/**'
+      - 'plans/**'
   pull_request:
     branches: [veridian]
+    # Idem pour les PRs : pas de CI sur docs-only.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'todo/**'
+      - 'CHANGELOG.md'
+      - 'runbooks/**'
+      - 'plans/**'
   workflow_dispatch:
     inputs:
       deploy_staging:
