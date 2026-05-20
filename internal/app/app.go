@@ -1304,8 +1304,18 @@ func (a *App) Start() error {
 		a.logger.Info("OpenCensus tracing middleware enabled")
 	}
 
-	// Apply CORS middleware
-	handler = middleware.CORSMiddleware(handler)
+	// === Veridian patch 2026-05-20 — pentest doomsday CRITICAL ===
+	// Remplace CORSMiddleware upstream (qui renvoyait ACAO=* + ACAC=true,
+	// combo interdit par spec CORS et exploitable cross-origin) par notre
+	// VeridianSecurityHeadersMiddleware qui :
+	//   1. Fait CORS allowlist explicite (notifuse.app/staging.veridian.site
+	//      + localhost dev), Origin hors allowlist → pas d'ACAO renvoyée
+	//   2. Pose HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+	//      sur toutes les réponses
+	//   3. CSP volontairement absente — calibrage manuel à faire (cf. doc
+	//      en tête du middleware)
+	// Cf. ~/.veridian-obs/pentest/runs/20260520-190723-doomsday/report.md
+	handler = middleware.VeridianSecurityHeadersMiddleware(handler)
 
 	addr := fmt.Sprintf("%s:%d", a.config.Server.Host, a.config.Server.Port)
 	a.logger.WithField("address", addr).
