@@ -227,16 +227,23 @@ Câbler dans le code Notifuse les nouveaux plans tels que décrits dans `VISION-
 
 ## Status
 
-- [ ] Reconnaissance terrain faite
-- [ ] Migration V37 shippée
-- [ ] Domain étendu + tests
-- [ ] Repository étendu + tests
-- [ ] Service étendu + tests
-- [ ] Middleware paywall étendu
-- [ ] Middleware feature gate créé
-- [ ] Branding "Powered by Veridian" câblé
-- [ ] Cron cleanup historique câblé
-- [ ] Endpoint `/api/veridian/limits` exposé
-- [ ] Documentation à jour
-- [ ] Curl live tests post-deploy staging OK
-- [ ] Promote prod OK
+### ✅ Lot 1 livré 2026-05-20 (commit `a260adcf`, v37.0-veridian.a260adcf)
+
+- [x] Reconnaissance terrain faite
+- [x] Migration V37 shippée — 9 colonnes ADD + backfill par plan, idempotente. Verifie en prod : free=500/1, pro=5000/5, enterprise=-1/-1.
+- [x] Domain étendu + tests — `PlanLimits` struct, `DefaultPlanLimits` map, `LimitsForPlan(plan)` helper avec fallback Free safe. 7 tests verts.
+- [x] Bump VERSION 35.0 → 37.0 (V36 reservee au ticket aligner-types-timestamp)
+- [x] Curl live tests post-deploy staging+prod OK (`/api/version` retourne tag v37, colonnes confirmees en prod via psql sur notifuse_system)
+
+### ⏳ Lots restants
+
+- [ ] **Lot 2** — Repository : étendre `veridian_plan_postgres.go` Get/Upsert/UpdatePlan pour lire/écrire les nouvelles colonnes. + tests
+- [ ] **Lot 3** — Service : helpers `GetLimits`, `CanAddSeat`, `CanAddContact`, `CanAddOAuthAccount`, `CanAddCustomDomain` + appliquer `DefaultPlanLimits` au Provision/UpdatePlan
+- [ ] **Lot 4** — Middleware paywall étendu (seat_limit, contact_limit, sequence_limit) + nouveau feature_gate (A/B testing, custom domain)
+- [ ] **Lot 5** — Branding "Powered by Veridian" cablé (gater par `feature_branding_removed`)
+- [ ] **Lot 6** — Cron cleanup historique (`history_retention_days`)
+- [ ] **Lot 7** — Endpoint `GET /api/veridian/limits` pour console UI
+- [ ] **Lot 8** — Documentation (CHANGELOG + README)
+- [ ] Promote prod OK (auto-promote staging→main→prod fait à chaque lot)
+
+**Note lot 1** : choix volontairement non-régressif — repo/service/middleware non touchés, donc zéro risque runtime. Les nouvelles colonnes existent en DB (backfillees), mais le code applicatif les ignore encore. Permet de poser la fondation contractuelle stable avant les enforces.
