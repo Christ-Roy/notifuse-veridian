@@ -110,16 +110,14 @@ test.describe('Quota — increment emails_sent_this_month sur envoi', () => {
 });
 
 test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () => {
-  test('grant-unlimited passe un tenant en enterprise + quota=-1', async () => {
+  test('grant-unlimited passe un tenant en enterprise + plan_source lifetime_partner', async () => {
     const tid = `qgrant${Date.now().toString(36).slice(-6)}`;
     await provisionTenant(tid, 'free');
 
-    // Etat initial : free + quota 300 (ou QuotaForPlan free)
+    // Etat initial : free + quota=-1 (BYO sending 2026-05-20)
     let status = await getTenantStatus(tid);
     expect(status.plan).toBe('free');
-    const initialQuota = status.monthly_email_quota;
-    expect(initialQuota).toBeGreaterThan(0);
-    expect(initialQuota).not.toBe(-1);
+    expect(status.monthly_email_quota).toBe(-1); // BYO unlimited sur tous plans
 
     // Grant unlimited
     const grantResp = await hmacFetch('/api/veridian/admin/grant-unlimited', 'POST', {
@@ -133,7 +131,8 @@ test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () 
     expect(grantBody.quota).toBe(-1);
     expect(grantBody.plan_source).toBe('lifetime_partner');
 
-    // Etat post-grant : enterprise + quota=-1
+    // Etat post-grant : enterprise (le quota reste -1 puisqu'il l'était déjà,
+    // mais le plan_source devient lifetime_partner — immune au downgrade Stripe).
     status = await getTenantStatus(tid);
     expect(status.plan).toBe('enterprise');
     expect(status.monthly_email_quota).toBe(-1);
