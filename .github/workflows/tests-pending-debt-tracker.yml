@@ -1,0 +1,124 @@
+# Tests pending debt tracker — Constitution CI §1
+#
+# Ticket : todo/2026-05-19-ci-tests-pending-debt-tracker.md
+#
+# tests-pending.txt liste les fichiers critiques sans test colocalisé
+# (baseline historique). Constitution §1 cible 0 sous 90j. Ce workflow
+# tourne chaque lundi 9h Paris : il met à jour (ou crée) une issue
+# `tests-pending-debt` avec count, delta semaine, et liste des fichiers
+# restants. Crée une dynamique psychologique pour faire baisser le compteur.
+
+name: Tests pending debt tracker
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'  # Lundi 07:00 UTC = 09:00 Europe/Paris
+  workflow_dispatch:     # Run manuel pour debug
+
+jobs:
+  report:
+    name: Update tests-pending debt issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write  # créer / éditer l'issue tracker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Count current debt
+        id: count
+        run: |
+          set -euo pipefail
+          if [ ! -f tests-pending.txt ]; then
+            echo "::warning::tests-pending.txt absent — debt = 0 ou fichier renommé ?"
+            echo "count=0" >> $GITHUB_OUTPUT
+            echo "files=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Exclude empty lines and comments (# ...)
+          ACTIVE=$(grep -vE '^\s*(#|$)' tests-pending.txt || true)
+          COUNT=$(echo "$ACTIVE" | grep -c . || echo 0)
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          # Markdown bullet list pour insertion dans issue body
+          {
+            echo 'files<<EOF'
+            echo "$ACTIVE" | sed 's/^/- `/' | sed 's/$/`/'
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+      - name: Find or create tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COUNT: ${{ steps.count.outputs.count }}
+          FILES: ${{ steps.count.outputs.files }}
+        run: |
+          set -euo pipefail
+          TITLE="📉 Tests pending debt tracker (Constitution §1)"
+          LABEL="tests-pending-debt"
+
+          # S'assurer que le label existe (silencieux si déjà créé)
+          gh label create "$LABEL" \
+            --color "fbca04" \
+            --description "Suivi hebdo de la dette tests-pending.txt (Constitution §1)" \
+            2>/dev/null || true
+
+          # Récupérer l'issue ouverte existante (s'il y en a une)
+          EXISTING=$(gh issue list \
+            --label "$LABEL" \
+            --state open \
+            --json number,body \
+            --jq '.[0] // empty')
+
+          # Calculer delta vs dernière mesure (parse "Count: N" dans le body)
+          PREV_COUNT=""
+          if [ -n "$EXISTING" ]; then
+            PREV_COUNT=$(echo "$EXISTING" | jq -r '.body' | grep -m1 -oE 'Count actuel : \*\*[0-9]+\*\*' | grep -oE '[0-9]+' || true)
+          fi
+
+          DELTA=""
+          if [ -n "$PREV_COUNT" ] && [ "$PREV_COUNT" != "$COUNT" ]; then
+            DIFF=$((COUNT - PREV_COUNT))
+            if [ "$DIFF" -gt 0 ]; then
+              DELTA=" (📈 +$DIFF vs semaine dernière — régression à corriger)"
+            else
+              DELTA=" (📉 $DIFF vs semaine dernière — bien joué)"
+            fi
+          fi
+
+          # Compose le body
+          DATE=$(date -u +'%Y-%m-%d')
+          BODY=$(cat <<EOF
+          ## Snapshot $DATE
+
+          Count actuel : **$COUNT**$DELTA
+
+          Cible Constitution §1 : **0** sous 90 jours depuis baseline.
+
+          ### Fichiers restants
+
+          $FILES
+
+          ### Comment réduire
+
+          1. Choisir un fichier ci-dessus
+          2. Écrire le test colocalisé (\`foo.go\` → \`foo_test.go\`)
+          3. Retirer la ligne de \`tests-pending.txt\`
+          4. Push → pre-push hook vérifie le mapping, accepte la suppression
+
+          ---
+
+          *Mis à jour automatiquement par \`.github/workflows/tests-pending-debt-tracker.yml\` chaque lundi 9h Paris.*
+          EOF
+          )
+
+          if [ -n "$EXISTING" ]; then
+            NUM=$(echo "$EXISTING" | jq -r '.number')
+            echo "Issue #$NUM existante, update body"
+            gh issue edit "$NUM" --body "$BODY"
+          else
+            echo "Crée nouvelle issue tracker"
+            gh issue create \
+              --title "$TITLE" \
+              --label "$LABEL" \
+              --body "$BODY"
+          fi
