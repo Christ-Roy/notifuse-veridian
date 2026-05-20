@@ -214,8 +214,11 @@ test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () 
         tenant_id: tid,
         reason: `idempotent_call_${i}`,
       });
-      expect(r.status, await r.text()).toBe(200);
-      const body = await r.json();
+      // Lire le body UNE SEULE FOIS (Fetch API : body est un stream consommable
+      // une seule fois — text() puis json() sur la meme reponse echoue).
+      const raw = await r.text();
+      expect(r.status, raw).toBe(200);
+      const body = JSON.parse(raw);
       expect(body.plan).toBe('enterprise');
       expect(body.quota).toBe(-1);
     }
