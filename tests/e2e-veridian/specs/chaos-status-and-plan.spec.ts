@@ -64,9 +64,10 @@ test.describe('Status endpoint', () => {
     expect(data.tenant_id).toBe(tid);
     expect(data.status).toBe('active');
     expect(data.plan).toBe('pro');
-    expect(data.monthly_email_quota).toBe(10000);
+    // 2026-05-20 : tous plans en quota=-1 (BYO sending — pas de provider Veridian)
+    expect(data.monthly_email_quota).toBe(-1);
     expect(data.emails_sent_this_month).toBe(0);
-    expect(data.quota_remaining).toBe(10000);
+    expect(data.quota_remaining).toBe(-1); // unlimited
     expect(data.suspended_at).toBeFalsy();
     expect(data.deleted_at).toBeFalsy();
   });
@@ -116,10 +117,14 @@ test.describe('Update-plan transitions', () => {
     r = await hmacFetch(`/api/tenants/${tid}/status`, 'GET');
     const data = await r.json();
     expect(data.plan).toBe('pro');
-    expect(data.monthly_email_quota).toBe(10000);
+    // 2026-05-20 : tous plans en quota=-1 (BYO sending)
+    expect(data.monthly_email_quota).toBe(-1);
   });
 
-  test('downgrade pro → free : quota reduit, mais pas de retroactif si compteur > nouveau quota', async () => {
+  test('downgrade pro → free : quota reste illimite (BYO sending)', async () => {
+    // 2026-05-20 : avec la décision BYO, tous plans ont quota=-1 — donc
+    // pas de "reduction" sur downgrade côté emails. Le test reste utile
+    // pour valider que update-plan ne casse pas (plan change bien).
     const tid = `down${Date.now().toString(36).slice(-6)}`;
     await provisionTenant(tid, 'pro');
 
@@ -132,7 +137,7 @@ test.describe('Update-plan transitions', () => {
     const status = await hmacFetch(`/api/tenants/${tid}/status`, 'GET');
     const data = await status.json();
     expect(data.plan).toBe('free');
-    expect(data.monthly_email_quota).toBe(500);
+    expect(data.monthly_email_quota).toBe(-1); // BYO unlimited
   });
 
   test('plan inconnu → 400 ou fallback free (selon decision)', async () => {
