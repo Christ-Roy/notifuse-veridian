@@ -39,3 +39,22 @@ Aujourd'hui l'allowlist CVE (notamment `@tanstack/history GHSA-rmmr-r34h-pfm5`) 
 ## Risque
 
 P0 — additive. Une fois en place, retirer le hardcode du workflow.
+
+---
+
+## Update — 2026-05-20 — Livré (commit b0529876)
+
+`.trivyignore.yaml` créé à la racine avec format officiel Aqua Security :
+- 1 entrée : `GHSA-rmmr-r34h-pfm5` (@tanstack/history supply-chain 2026-05-11)
+- Statement écrit + paths ciblés + expires 2026-12-31 (re-audit annuel forcé)
+- Discipline imposée : pas d'allowlist sans VEX écrit
+
+Workflow câblé : `trivyignores: '.trivyignore.yaml'` ajouté sur les 2 steps Trivy.
+
+Reste hors scope (ticket séparé si besoin) : cron annuel qui ouvre une issue
+sur `expires` dépassé. L'allowlist `@tanstack/*` côté npm audit (cve-scan job
+lignes 200-235) est REDONDANTE mais pas urgent à retirer (npm audit + Trivy
+sont 2 outils différents).
+
+Job Constitution §13 vert en CI : run 26185051428 confirme "Trivy fs scan
+→ success" avec la nouvelle config.
