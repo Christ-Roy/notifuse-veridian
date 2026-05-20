@@ -1,0 +1,45 @@
+# Constitution CI §13 — Trivy + VEX (Vulnerability Exploitability eXchange)
+#
+# Format officiel Aqua Security :
+#   https://aquasecurity.github.io/trivy/v0.50/docs/configuration/filtering/
+#
+# Chaque entrée doit :
+#   1. Avoir une `id` (CVE-* ou GHSA-*)
+#   2. Indiquer le `statement` (justification écrite, lisible humain)
+#   3. Indiquer `expires` (date au-delà de laquelle l'entrée doit être ré-auditée)
+#
+# Ré-audit annuel via cron (Constitution §13.7). Une entrée expirée doit
+# faire fail le CI ou ouvrir une issue automatique.
+#
+# IMPORTANT : ne PAS allowlister sans VEX écrit. Cf. CLAUDE.md §⚠️🔥
+# "TU CORRIGES MON RAISONNEMENT" : si l'agent veut allowlister un CVE sans
+# pouvoir écrire une justification "vulnerable_code_not_in_execute_path" ou
+# équivalent, c'est que le CVE est probablement exploitable → fix-le au lieu
+# de le cacher.
+
+vulnerabilities:
+  # GHSA-rmmr-r34h-pfm5 : @tanstack/history malware (v1.161.9, v1.161.12 publiées 2026-05-11).
+  # L'advisory utilise une range défensive `>= 0` qui flag TOUTES les versions,
+  # y compris notre 1.161.6 (publiée 2026-03-15, AVANT l'attaque — verifiably clean).
+  # Notre package-lock pin via overrides à 1.161.6 ; integrity hash match registry.
+  # Cf. cve-scan job dans veridian-ci.yml lignes 200-235 pour le détail de l'audit
+  # côté npm-audit. On le déclare aussi ici pour Trivy (langs:node).
+  - id: GHSA-rmmr-r34h-pfm5
+    paths:
+      - console/package-lock.json
+      - console/package.json
+    statement: |
+      @tanstack/history pinné à v1.161.6 (publiée 2026-03-15, avant l'attaque
+      supply-chain du 2026-05-11 qui a affecté v1.161.9 + v1.161.12). Intégrité
+      vérifiée via package-lock (sha512 match registry npm). Le code malicieux
+      n'est pas dans notre bundle build. À re-checker quand TanStack republiera
+      une version clean post-1.161.12 et qu'on pourra unpin.
+    expires: 2026-12-31
+
+  # === Note : aucune autre CVE allowlistée pour le moment. ===
+  # Si trivy fail sur une nouvelle CVE CRITICAL, NE PAS l'ajouter ici sans
+  # passer par la procédure VEX :
+  #   1. Identifier la fonction vulnérable
+  #   2. Vérifier qu'elle n'est PAS appelée dans le chemin runtime
+  #   3. Documenter ci-dessous avec statement clair + expires
+  #   4. Si vulnérable → patcher (bump dep, fork, vendor) au lieu d'allowlister

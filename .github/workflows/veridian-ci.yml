@@ -324,6 +324,10 @@ jobs:
           # bloque tout). Critical-only via étape suivante.
           exit-code: '0'
           ignore-unfixed: 'true'
+          # === Veridian patch 2026-05-20 — Constitution §13 VEX allowlist ===
+          # Allowlist versionnée avec justifications écrites + expires dates.
+          # Cf. .trivyignore.yaml + todo/2026-05-19-ci-trivy-allowlist-yaml.md
+          trivyignores: '.trivyignore.yaml'
       - name: Upload SARIF to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -341,6 +345,7 @@ jobs:
           format: 'table'
           exit-code: '1'
           ignore-unfixed: 'true'
+          trivyignores: '.trivyignore.yaml'
 
   gitleaks:
     name: Gitleaks (secrets dans le diff Git)
