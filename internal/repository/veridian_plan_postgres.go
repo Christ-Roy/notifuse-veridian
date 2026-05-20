@@ -21,11 +21,18 @@ func NewVeridianPlanRepository(systemDB *sql.DB) domain.VeridianPlanRepository {
 }
 
 // Get recupere une ligne par workspace_id. Retourne sql.ErrNoRows si absent.
+//
+// Les colonnes V37 (max_contacts, max_seats, ..., history_retention_days)
+// sont scannees vers les champs ajoutes a VeridianPlan dans le lot 1
+// (cf. todo/2026-05-20-pricing-plans-implementation.md). Convention
+// -1 = illimite (cf. domain.PlanLimits).
 func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*domain.VeridianPlan, error) {
 	const q = `
 		SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
 		       last_reset_at, suspended_at, suspended_reason, deleted_at,
 		       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
+		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
+		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -39,6 +46,8 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 		&p.WorkspaceID, &p.Plan, &planSource, &status, &p.MonthlyEmailQuota, &p.EmailsSentThisMonth,
 		&p.LastResetAt, &suspendedAt, &suspendedReason, &deletedAt,
 		&restoredAt, &purgeEligibleAt, &lastTouchedAt, &lifecycleReason,
+		&p.MaxContacts, &p.MaxSeats, &p.MaxOAuthAccounts, &p.MaxCustomDomains, &p.MaxActiveSequences,
+		&p.FeatureABTesting, &p.FeatureBrandingRemoved, &p.FeatureWhiteLabel, &p.HistoryRetentionDays,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -82,6 +91,16 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 // qu'un re-provision via Hub (qui peut ne pas envoyer plan_source) ecrase
 // silencieusement un lifetime_partner par 'stripe'. Sur INSERT pur, la
 // chaine vide est convertie en 'stripe' par le COALESCE($2, 'stripe').
+//
+// V37 dimensions (max_contacts, max_seats, ..., history_retention_days) :
+//   - Si toutes a zero dans la struct → auto-fill via domain.LimitsForPlan(p.Plan)
+//     a l'INSERT (provisioning standard depuis plan free/pro/business/enterprise).
+//   - Si l'appelant a fixe au moins un champ V37 non-zero → on persiste la struct
+//     telle quelle (custom override par Robert ou le Hub).
+//   - Au ON CONFLICT, on NE met PAS a jour les dimensions V37 : un Upsert
+//     idempotent ne doit pas regresser silencieusement un tenant pro vers
+//     les defaults free. Pour changer les limites, passer par UpdatePlan
+//     (qui applique LimitsForPlan du nouveau plan) ou un futur SetLimits.
 func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianPlan) error {
 	if p.WorkspaceID == "" {
 		return errors.New("workspace_id required")
@@ -98,6 +117,12 @@ func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianP
 		p.Status = domain.PlanStatusActive
 	}
 
+	// Auto-fill V37 dimensions si toutes a zero (provisioning standard).
+	// Si l'appelant a fixe au moins une dimension, on respecte ses overrides.
+	if isZeroPricingDimensions(p) {
+		applyDefaultLimits(p)
+	}
+
 	// On passe NULL si vide pour que COALESCE prenne la valeur existante en UPDATE
 	// (ou 'stripe' en INSERT initial).
 	var planSourceArg interface{}
@@ -110,8 +135,11 @@ func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianP
 	const q = `
 		INSERT INTO veridian_plan (
 			workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-			last_reset_at, suspended_at, suspended_reason, deleted_at, created_at, updated_at
-		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			last_reset_at, suspended_at, suspended_reason, deleted_at,
+			max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
+			feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
+			created_at, updated_at
+		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		ON CONFLICT (workspace_id) DO UPDATE SET
 			plan = EXCLUDED.plan,
 			plan_source = COALESCE(EXCLUDED.plan_source, veridian_plan.plan_source),
@@ -121,9 +149,49 @@ func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianP
 	`
 	_, err := r.systemDB.ExecContext(ctx, q,
 		p.WorkspaceID, p.Plan, planSourceArg, string(p.Status), p.MonthlyEmailQuota, p.EmailsSentThisMonth,
-		p.LastResetAt, p.SuspendedAt, p.SuspendedReason, p.DeletedAt, p.CreatedAt, p.UpdatedAt,
+		p.LastResetAt, p.SuspendedAt, p.SuspendedReason, p.DeletedAt,
+		p.MaxContacts, p.MaxSeats, p.MaxOAuthAccounts, p.MaxCustomDomains, p.MaxActiveSequences,
+		p.FeatureABTesting, p.FeatureBrandingRemoved, p.FeatureWhiteLabel, p.HistoryRetentionDays,
+		p.CreatedAt, p.UpdatedAt,
 	)
 	return err
+}
+
+// isZeroPricingDimensions retourne true si toutes les dimensions V37 sont
+// a zero / false dans la struct. Sert a detecter un appelant qui ne fixe
+// pas les dimensions (cas standard Provision sans custom override).
+//
+// Note semantique : -1 = illimite, 0 = "non fixe" (cas Free legitime aussi
+// pour MaxCustomDomains qui est a 0 par defaut). Pour distinguer ces deux
+// cas, on regarde si **tous** les champs sont a zero, pas un seul. Un
+// appelant qui veut explicitement set "0 domains" mais 500 contacts
+// declarera MaxContacts=500 et le check tombera a false.
+func isZeroPricingDimensions(p *domain.VeridianPlan) bool {
+	return p.MaxContacts == 0 &&
+		p.MaxSeats == 0 &&
+		p.MaxOAuthAccounts == 0 &&
+		p.MaxCustomDomains == 0 &&
+		p.MaxActiveSequences == 0 &&
+		!p.FeatureABTesting &&
+		!p.FeatureBrandingRemoved &&
+		!p.FeatureWhiteLabel &&
+		p.HistoryRetentionDays == 0
+}
+
+// applyDefaultLimits ecrit les dimensions V37 de la struct depuis
+// domain.LimitsForPlan(p.Plan). Fallback Free si plan inconnu (cf.
+// semantique safe LimitsForPlan).
+func applyDefaultLimits(p *domain.VeridianPlan) {
+	l := domain.LimitsForPlan(p.Plan)
+	p.MaxContacts = l.MaxContacts
+	p.MaxSeats = l.MaxSeats
+	p.MaxOAuthAccounts = l.MaxOAuthAccounts
+	p.MaxCustomDomains = l.MaxCustomDomains
+	p.MaxActiveSequences = l.MaxActiveSequences
+	p.FeatureABTesting = l.FeatureABTesting
+	p.FeatureBrandingRemoved = l.FeatureBrandingRemoved
+	p.FeatureWhiteLabel = l.FeatureWhiteLabel
+	p.HistoryRetentionDays = l.HistoryRetentionDays
 }
 
 // UpdatePlan change le plan + quota + plan_source d'un workspace existant.
@@ -132,6 +200,21 @@ func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianP
 // Si planSource est vide, la colonne plan_source est preservee via COALESCE
 // (pas d'ecrasement implicite par 'stripe' — protection contre les appels Hub
 // legacy qui n'envoient pas plan_source).
+//
+// V37 — Application automatique des dimensions du nouveau plan :
+// changement de plan = changement de tier business → on ecrase TOUTES les
+// dimensions (max_contacts, max_seats, ..., history_retention_days) avec
+// domain.LimitsForPlan(plan). Si plan inconnu, fallback Free (no privilege
+// escalation, cf. semantique LimitsForPlan).
+//
+// Cas d'usage qui motive cette decision :
+//   - Hub envoie update-plan(pro→business) → 25k contacts + 25 seats appliques
+//   - Hub envoie update-plan(pro→free) downgrade → repli aux limites Free
+//   - Stripe webhook subscription_deleted → free → re-applique Free strict
+//
+// Pour des limites custom (deal Enterprise avec quotas hors-grille), passer
+// par un endpoint dedie (lot 3) qui appellera Upsert directement avec une
+// struct VeridianPlan pre-remplie.
 func (r *veridianPlanRepository) UpdatePlan(ctx context.Context, workspaceID, plan string, quota int64, planSource domain.PlanSource) error {
 	var planSourceArg interface{}
 	if planSource != "" {
@@ -140,15 +223,29 @@ func (r *veridianPlanRepository) UpdatePlan(ctx context.Context, workspaceID, pl
 		planSourceArg = nil
 	}
 
+	limits := domain.LimitsForPlan(plan)
+
 	const q = `
 		UPDATE veridian_plan
 		SET plan = $2,
 		    monthly_email_quota = $3,
 		    plan_source = COALESCE($4, plan_source),
-		    updated_at = $5
+		    max_contacts = $5,
+		    max_seats = $6,
+		    max_oauth_accounts = $7,
+		    max_custom_domains = $8,
+		    max_active_sequences = $9,
+		    feature_ab_testing = $10,
+		    feature_branding_removed = $11,
+		    feature_white_label = $12,
+		    history_retention_days = $13,
+		    updated_at = $14
 		WHERE workspace_id = $1
 	`
-	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, plan, quota, planSourceArg, time.Now().UTC())
+	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, plan, quota, planSourceArg,
+		limits.MaxContacts, limits.MaxSeats, limits.MaxOAuthAccounts, limits.MaxCustomDomains, limits.MaxActiveSequences,
+		limits.FeatureABTesting, limits.FeatureBrandingRemoved, limits.FeatureWhiteLabel, limits.HistoryRetentionDays,
+		time.Now().UTC())
 	if err != nil {
 		return err
 	}

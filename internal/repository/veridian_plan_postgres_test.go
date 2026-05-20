@@ -24,26 +24,42 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 	ctx := context.Background()
 	const wsID = "ws-1"
 
+	// V37 — la SELECT inclut maintenant les 9 nouvelles colonnes pricing.
+	// On factorise la query litterale et la liste des colonnes pour eviter
+	// la duplication entre les 3 sous-tests (Constitution §1 lisibilite).
+	const getSQL = `
+		SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
+		       last_reset_at, suspended_at, suspended_reason, deleted_at,
+		       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
+		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
+		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
+		       created_at, updated_at
+		FROM veridian_plan
+		WHERE workspace_id = $1
+	`
+	getColumns := []string{
+		"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
+		"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
+		"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
+		"max_contacts", "max_seats", "max_oauth_accounts", "max_custom_domains", "max_active_sequences",
+		"feature_ab_testing", "feature_branding_removed", "feature_white_label", "history_retention_days",
+		"created_at", "updated_at",
+	}
+
 	t.Run("found", func(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
 		now := time.Now().UTC()
-		rows := sqlmock.NewRows([]string{
-			"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
-			"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
-			"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
-			"created_at", "updated_at",
-		}).AddRow(wsID, "pro", "stripe", "active", int64(10000), int64(42), now, nil, nil, nil, nil, nil, nil, nil, now, now)
+		// Tenant pro avec dimensions V37 backfillees par la migration.
+		rows := sqlmock.NewRows(getColumns).AddRow(
+			wsID, "pro", "stripe", "active", int64(10000), int64(42),
+			now, nil, nil, nil, nil, nil, nil, nil,
+			int64(5000), 5, 5, 1, -1, true, true, false, 365,
+			now, now,
+		)
 
-		mock.ExpectQuery(`
-			SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-			       last_reset_at, suspended_at, suspended_reason, deleted_at,
-			       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
-			       created_at, updated_at
-			FROM veridian_plan
-			WHERE workspace_id = $1
-		`).WithArgs(wsID).WillReturnRows(rows)
+		mock.ExpectQuery(getSQL).WithArgs(wsID).WillReturnRows(rows)
 
 		p, err := repo.Get(ctx, wsID)
 		require.NoError(t, err)
@@ -55,6 +71,14 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		assert.Equal(t, int64(42), p.EmailsSentThisMonth)
 		assert.Nil(t, p.SuspendedAt)
 		assert.Nil(t, p.DeletedAt)
+		// V37 dimensions correctement scannees
+		assert.Equal(t, int64(5000), p.MaxContacts)
+		assert.Equal(t, 5, p.MaxSeats)
+		assert.Equal(t, -1, p.MaxActiveSequences, "Pro = sequences illimitees")
+		assert.True(t, p.FeatureABTesting)
+		assert.True(t, p.FeatureBrandingRemoved)
+		assert.False(t, p.FeatureWhiteLabel, "white-label = Business+ uniquement")
+		assert.Equal(t, 365, p.HistoryRetentionDays)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -66,22 +90,16 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		susp := now.Add(-1 * time.Hour)
 		del := now.Add(-30 * time.Minute)
 		purgeEligible := del.Add(30 * 24 * time.Hour)
-		rows := sqlmock.NewRows([]string{
-			"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
-			"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
-			"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
-			"created_at", "updated_at",
-		}).AddRow(wsID, "free", "lifetime_partner", "suspended", int64(500), int64(0), now, susp, "non-payment", del,
-			nil, purgeEligible, nil, "GDPR user request", now, now)
+		// Tenant free suspended-deleted, dimensions = defaults Free.
+		rows := sqlmock.NewRows(getColumns).AddRow(
+			wsID, "free", "lifetime_partner", "suspended", int64(500), int64(0),
+			now, susp, "non-payment", del,
+			nil, purgeEligible, nil, "GDPR user request",
+			int64(500), 1, 1, 0, 1, false, false, false, 30,
+			now, now,
+		)
 
-		mock.ExpectQuery(`
-			SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-			       last_reset_at, suspended_at, suspended_reason, deleted_at,
-			       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
-			       created_at, updated_at
-			FROM veridian_plan
-			WHERE workspace_id = $1
-		`).WithArgs(wsID).WillReturnRows(rows)
+		mock.ExpectQuery(getSQL).WithArgs(wsID).WillReturnRows(rows)
 
 		p, err := repo.Get(ctx, wsID)
 		require.NoError(t, err)
@@ -96,6 +114,10 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		assert.Equal(t, "GDPR user request", p.LifecycleReason)
 		assert.Nil(t, p.RestoredAt, "tenant pas restore")
 		assert.Nil(t, p.LastTouchedAt, "tenant pas touche")
+		// V37 dimensions Free
+		assert.Equal(t, int64(500), p.MaxContacts)
+		assert.Equal(t, 0, p.MaxCustomDomains, "Free = 0 domaines custom")
+		assert.False(t, p.FeatureBrandingRemoved, "Free GARDE Powered by Veridian")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -103,14 +125,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
-		mock.ExpectQuery(`
-			SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-			       last_reset_at, suspended_at, suspended_reason, deleted_at,
-			       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
-			       created_at, updated_at
-			FROM veridian_plan
-			WHERE workspace_id = $1
-		`).WithArgs("missing").WillReturnError(sql.ErrNoRows)
+		mock.ExpectQuery(getSQL).WithArgs("missing").WillReturnError(sql.ErrNoRows)
 
 		_, err := repo.Get(ctx, "missing")
 		assert.ErrorIs(t, err, sql.ErrNoRows)
@@ -121,11 +136,16 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 func TestVeridianPlanRepository_Upsert(t *testing.T) {
 	ctx := context.Background()
 
+	// V37 — la INSERT inclut maintenant les 9 nouvelles colonnes pricing.
+	// L'ordre des params suit l'ordre des colonnes dans le INSERT du repo.
 	const upsertSQL = `
 		INSERT INTO veridian_plan (
 			workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
-			last_reset_at, suspended_at, suspended_reason, deleted_at, created_at, updated_at
-		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			last_reset_at, suspended_at, suspended_reason, deleted_at,
+			max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
+			feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
+			created_at, updated_at
+		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		ON CONFLICT (workspace_id) DO UPDATE SET
 			plan = EXCLUDED.plan,
 			plan_source = COALESCE(EXCLUDED.plan_source, veridian_plan.plan_source),
@@ -134,7 +154,7 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 			updated_at = EXCLUDED.updated_at
 	`
 
-	t.Run("insert sets defaults (plan_source vide → nil → 'stripe' via COALESCE)", func(t *testing.T) {
+	t.Run("insert sets defaults — auto-fill V37 dimensions depuis LimitsForPlan(free)", func(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
@@ -142,11 +162,15 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 			WorkspaceID:       "ws-new",
 			Plan:              "free",
 			MonthlyEmailQuota: 500,
+			// V37 dimensions toutes a zero → auto-fill via LimitsForPlan(free)
 		}
 
 		mock.ExpectExec(upsertSQL).WithArgs(
 			"ws-new", "free", nil, "active", int64(500), int64(0),
-			sqlmock.AnyArg(), nil, "", nil, sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), nil, "", nil,
+			// V37 defaults Free : 500/1/1/0/1/false/false/false/30
+			int64(500), 1, 1, 0, 1, false, false, false, 30,
+			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := repo.Upsert(ctx, p)
@@ -154,10 +178,13 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 		assert.Equal(t, domain.PlanStatusActive, p.Status, "status defaulted to active")
 		assert.False(t, p.CreatedAt.IsZero())
 		assert.False(t, p.UpdatedAt.IsZero())
+		// La struct doit avoir ete mutee par applyDefaultLimits.
+		assert.Equal(t, int64(500), p.MaxContacts)
+		assert.Equal(t, 1, p.MaxSeats)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("insert with explicit plan_source persists it", func(t *testing.T) {
+	t.Run("insert with explicit plan_source persists it (auto-fill enterprise)", func(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
@@ -170,11 +197,51 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 
 		mock.ExpectExec(upsertSQL).WithArgs(
 			"ws-vip", "enterprise", "lifetime_partner", "active", int64(-1), int64(0),
-			sqlmock.AnyArg(), nil, "", nil, sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), nil, "", nil,
+			// V37 defaults Enterprise : tout -1 + features true
+			int64(-1), -1, -1, -1, -1, true, true, true, -1,
+			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := repo.Upsert(ctx, p)
 		require.NoError(t, err)
+		assert.True(t, p.FeatureWhiteLabel, "Enterprise = white-label active apres auto-fill")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("insert preserves explicit V37 custom override (deal Enterprise hors-grille)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		// Cas : Robert deal un Pro a 50k contacts (custom). La struct
+		// fournit deja MaxContacts=50000, l'auto-fill ne doit PAS ecraser.
+		p := &domain.VeridianPlan{
+			WorkspaceID:            "ws-custom",
+			Plan:                   "pro",
+			PlanSource:             domain.PlanSourceManual,
+			MonthlyEmailQuota:      -1,
+			MaxContacts:            50000, // override custom
+			MaxSeats:               5,
+			MaxOAuthAccounts:       5,
+			MaxCustomDomains:       1,
+			MaxActiveSequences:     -1,
+			FeatureABTesting:       true,
+			FeatureBrandingRemoved: true,
+			FeatureWhiteLabel:      false,
+			HistoryRetentionDays:   365,
+		}
+
+		mock.ExpectExec(upsertSQL).WithArgs(
+			"ws-custom", "pro", "manual", "active", int64(-1), int64(0),
+			sqlmock.AnyArg(), nil, "", nil,
+			// V37 valeurs custom telles que fournies (50k contacts != defaut Pro 5k)
+			int64(50000), 5, 5, 1, -1, true, true, false, 365,
+			sqlmock.AnyArg(), sqlmock.AnyArg(),
+		).WillReturnResult(sqlmock.NewResult(1, 1))
+
+		err := repo.Upsert(ctx, p)
+		require.NoError(t, err)
+		assert.Equal(t, int64(50000), p.MaxContacts, "override custom preserve")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -191,26 +258,72 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 	ctx := context.Background()
 
-	// QueryMatcherEqual exige match exact (espaces compris). On reprend le
-	// SQL litteral du repo plutot que d'essayer de l'aligner manuellement.
+	// V37 — UpdatePlan applique maintenant les dimensions du nouveau plan
+	// via domain.LimitsForPlan(plan). Le SQL UPDATE inclut donc les 9
+	// colonnes V37 + plan/quota/plan_source/updated_at. Total 14 params.
 	const expectedSQL = `
 		UPDATE veridian_plan
 		SET plan = $2,
 		    monthly_email_quota = $3,
 		    plan_source = COALESCE($4, plan_source),
-		    updated_at = $5
+		    max_contacts = $5,
+		    max_seats = $6,
+		    max_oauth_accounts = $7,
+		    max_custom_domains = $8,
+		    max_active_sequences = $9,
+		    feature_ab_testing = $10,
+		    feature_branding_removed = $11,
+		    feature_white_label = $12,
+		    history_retention_days = $13,
+		    updated_at = $14
 		WHERE workspace_id = $1
 	`
 
-	t.Run("updates existing with explicit plan_source", func(t *testing.T) {
+	t.Run("updates existing with explicit plan_source — applies Pro limits", func(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
+		// upgrade vers pro → dimensions Pro appliquees : 5000/5/5/1/-1/true/true/false/365
 		mock.ExpectExec(expectedSQL).
-			WithArgs("ws-1", "pro", int64(10000), "lifetime_partner", sqlmock.AnyArg()).
+			WithArgs("ws-1", "pro", int64(10000), "lifetime_partner",
+				int64(5000), 5, 5, 1, -1, true, true, false, 365,
+				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
 		err := repo.UpdatePlan(ctx, "ws-1", "pro", 10000, domain.PlanSourceLifetimePartner)
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("downgrade pro→free applies Free limits", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		// downgrade vers free → dimensions Free strictes : 500/1/1/0/1/false/false/false/30
+		// Cas typique : Stripe webhook subscription_deleted → repli Free.
+		mock.ExpectExec(expectedSQL).
+			WithArgs("ws-1", "free", int64(-1), "stripe",
+				int64(500), 1, 1, 0, 1, false, false, false, 30,
+				sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.UpdatePlan(ctx, "ws-1", "free", -1, domain.PlanSourceStripe)
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("upgrade to business applies all features including white-label", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		// business → 25k/25/25/5/-1/true/true/true/-1
+		mock.ExpectExec(expectedSQL).
+			WithArgs("ws-1", "business", int64(50000), nil,
+				int64(25000), 25, 25, 5, -1, true, true, true, -1,
+				sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.UpdatePlan(ctx, "ws-1", "business", 50000, domain.PlanSource(""))
 		require.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -222,7 +335,9 @@ func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 		// Quand l'appelant passe "" (rétro-compat Hub legacy), le repo passe NULL
 		// pour que le COALESCE preserve la valeur DB existante.
 		mock.ExpectExec(expectedSQL).
-			WithArgs("ws-1", "pro", int64(10000), nil, sqlmock.AnyArg()).
+			WithArgs("ws-1", "pro", int64(10000), nil,
+				int64(5000), 5, 5, 1, -1, true, true, false, 365,
+				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
 		err := repo.UpdatePlan(ctx, "ws-1", "pro", 10000, domain.PlanSource(""))
@@ -235,12 +350,31 @@ func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 		repo := NewVeridianPlanRepository(db)
 
 		mock.ExpectExec(expectedSQL).
-			WithArgs("ws-missing", "pro", int64(10000), nil, sqlmock.AnyArg()).
+			WithArgs("ws-missing", "pro", int64(10000), nil,
+				int64(5000), 5, 5, 1, -1, true, true, false, 365,
+				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err := repo.UpdatePlan(ctx, "ws-missing", "pro", 10000, domain.PlanSource(""))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
+	})
+
+	t.Run("unknown plan falls back to Free limits (no privilege escalation)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		// Plan inconnu → LimitsForPlan retourne Free (semantique safe).
+		// Le quota fourni est respecte tel quel (le caller a deja decide).
+		mock.ExpectExec(expectedSQL).
+			WithArgs("ws-1", "mystery-tier", int64(999999), nil,
+				int64(500), 1, 1, 0, 1, false, false, false, 30,
+				sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.UpdatePlan(ctx, "ws-1", "mystery-tier", 999999, domain.PlanSource(""))
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
 
@@ -262,11 +396,23 @@ func TestVeridianPlanRepository_UpdatePlan_PreservesSourceOnEmpty(t *testing.T) 
 		SET plan = $2,
 		    monthly_email_quota = $3,
 		    plan_source = COALESCE($4, plan_source),
-		    updated_at = $5
+		    max_contacts = $5,
+		    max_seats = $6,
+		    max_oauth_accounts = $7,
+		    max_custom_domains = $8,
+		    max_active_sequences = $9,
+		    feature_ab_testing = $10,
+		    feature_branding_removed = $11,
+		    feature_white_label = $12,
+		    history_retention_days = $13,
+		    updated_at = $14
 		WHERE workspace_id = $1
 	`
+	// enterprise → tout illimite + tous features true
 	mock.ExpectExec(sqlPattern).
-		WithArgs("ws-vip-untouched", "enterprise", int64(-1), nil, sqlmock.AnyArg()).
+		WithArgs("ws-vip-untouched", "enterprise", int64(-1), nil,
+			int64(-1), -1, -1, -1, -1, true, true, true, -1,
+			sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err := repo.UpdatePlan(ctx, "ws-vip-untouched", "enterprise", -1, domain.PlanSource(""))
@@ -415,20 +561,27 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 	purgeEligibleAt := now.Add(25 * 24 * time.Hour)
 	lastTouchedAt := now.Add(-12 * time.Hour)
 
+	// V37 — SELECT etendu avec 9 colonnes pricing. On reflete des defaults
+	// Pro pour ne pas distraire le focus du test (lifecycle V34).
 	rows := sqlmock.NewRows([]string{
 		"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
 		"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
 		"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
+		"max_contacts", "max_seats", "max_oauth_accounts", "max_custom_domains", "max_active_sequences",
+		"feature_ab_testing", "feature_branding_removed", "feature_white_label", "history_retention_days",
 		"created_at", "updated_at",
 	}).AddRow("ws-1", "pro", "stripe", "active", int64(10000), int64(0),
 		now, nil, nil, nil,
 		restoredAt, purgeEligibleAt, lastTouchedAt, "audit reason for V34 lifecycle",
+		int64(5000), 5, 5, 1, -1, true, true, false, 365,
 		now, now)
 
 	mock.ExpectQuery(`
 		SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
 		       last_reset_at, suspended_at, suspended_reason, deleted_at,
 		       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
+		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
+		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
