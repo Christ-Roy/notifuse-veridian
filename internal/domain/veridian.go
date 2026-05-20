@@ -523,6 +523,25 @@ type AttachOwnerResponse struct {
 	OwnerTransferred bool  `json:"owner_transferred"` // true si TransferOwnership a effectivement promu le user à owner pendant cet appel
 }
 
+// LimitsResponse est la reponse de GET /api/veridian/limits — expose au
+// caller (console UI, paywall middleware, agent Hub debug) l'integralite
+// des limites + dimensions feature pour un tenant. La struct est concue
+// pour s'enrichir progressivement avec l'usage actuel (lots 4+) sans
+// breaking change sur la surface JSON.
+//
+// Convention : -1 = illimite. Les booleens feature sont en clair (vs nullable)
+// car ils ont toujours une valeur (false par defaut sur Free).
+//
+// Cf. ticket todo/2026-05-20-pricing-plans-implementation.md livrable 8.
+type LimitsResponse struct {
+	TenantID    string     `json:"tenant_id"`
+	Plan        string     `json:"plan"`
+	PlanSource  PlanSource `json:"plan_source"`
+	Status      PlanStatus `json:"status"`
+	Limits      PlanLimits `json:"limits"`
+	GeneratedAt time.Time  `json:"generated_at"`
+}
+
 // VeridianService est l'interface des operations Hub-driven.
 type VeridianService interface {
 	Provision(ctx context.Context, input ProvisionInput) (*ProvisionResponse, error)
@@ -576,6 +595,17 @@ type VeridianService interface {
 	// plan_source=lifetime_partner (par defaut). Immune aux downgrades Stripe.
 	// Idempotent. reason obligatoire pour audit GDPR/compta.
 	GrantUnlimited(ctx context.Context, input GrantUnlimitedInput) (*GrantUnlimitedResponse, error)
+
+	// === Veridian patch V37 === GetLimits retourne les limites + dimensions
+	// feature effectives pour un tenant (lus depuis veridian_plan). Source de
+	// verite pour le paywall middleware (lot 4), l'endpoint /api/veridian/limits
+	// (lot 7), et le UI console (widgets quota).
+	//
+	// La priorite est : valeurs DB (qui matchent backfill V37 + overrides
+	// custom Hub) → fallback PlanLimits depuis LimitsForPlan(plan) si la
+	// row a toutes les dimensions a zero (cas tenant antedeluvien jamais
+	// re-upsert apres la migration). Retourne sql.ErrNoRows si tenant absent.
+	GetLimits(ctx context.Context, tenantID string) (*LimitsResponse, error)
 }
 
 // EventTenantOwnerChanged event émis quand AttachOwner promote un user humain

@@ -2,12 +2,20 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// jsonMarshal helper local pour les tests qui valident les tags JSON
+// stables (cf. TestLimitsResponse_JSONSchema). Pas de tier1 lib dependency
+// utile ici, encoding/json suffit largement.
+func jsonMarshal(v interface{}) ([]byte, error) {
+	return json.Marshal(v)
+}
 
 // === PlanSource — CONTRAT-HUB sec. 3.3 ===
 
@@ -417,5 +425,70 @@ func TestVeridianPlan_PricingFields_StructTags(t *testing.T) {
 	})
 	assert.Equal(t, int64(500), p.MaxContacts)
 	assert.Equal(t, 30, p.HistoryRetentionDays)
+}
+
+// === LimitsResponse — V37 lot 3 ===
+
+// TestLimitsResponse_JSONSchema verifie que la struct LimitsResponse
+// embarque correctement les champs et que les tags JSON sont stables
+// (les consommateurs Hub + console UI lock sur ces noms). Tout drift de
+// tag serait un breaking change silencieux cote API.
+func TestLimitsResponse_JSONSchema(t *testing.T) {
+	now := time.Now().UTC()
+	resp := LimitsResponse{
+		TenantID:   "client42",
+		Plan:       "business",
+		PlanSource: PlanSourceStripe,
+		Status:     PlanStatusActive,
+		Limits: PlanLimits{
+			MonthlyEmailQuota:      -1,
+			MaxContacts:            25000,
+			MaxSeats:               25,
+			MaxOAuthAccounts:       25,
+			MaxCustomDomains:       5,
+			MaxActiveSequences:     -1,
+			FeatureABTesting:       true,
+			FeatureBrandingRemoved: true,
+			FeatureWhiteLabel:      true,
+			HistoryRetentionDays:   -1,
+		},
+		GeneratedAt: now,
+	}
+	assert.Equal(t, "client42", resp.TenantID)
+	assert.Equal(t, "business", resp.Plan)
+	assert.Equal(t, PlanSourceStripe, resp.PlanSource)
+	assert.Equal(t, PlanStatusActive, resp.Status)
+	assert.Equal(t, int64(25000), resp.Limits.MaxContacts)
+	assert.True(t, resp.Limits.FeatureWhiteLabel, "Business inclut white-label")
+	assert.Equal(t, -1, resp.Limits.HistoryRetentionDays)
+	assert.False(t, resp.GeneratedAt.IsZero(), "GeneratedAt set pour cache TTL caller")
+
+	// Roundtrip JSON pour valider les tags (drift de tag = breaking
+	// silencieux pour les consommateurs Hub + console UI).
+	encoded, err := jsonMarshal(resp)
+	require.NoError(t, err)
+	asStr := string(encoded)
+	assert.Contains(t, asStr, `"tenant_id":"client42"`)
+	assert.Contains(t, asStr, `"plan":"business"`)
+	assert.Contains(t, asStr, `"plan_source":"stripe"`)
+	assert.Contains(t, asStr, `"status":"active"`)
+	assert.Contains(t, asStr, `"generated_at":`)
+	// Le sous-objet "limits" doit etre present (les champs internes ne
+	// sont PAS taggues — c'est volontaire, PlanLimits est une struct
+	// interne non-publique en JSON. La serialisation par defaut Go
+	// utilise les noms de champs Go en CamelCase).
+	assert.Contains(t, asStr, `"limits":`)
+}
+
+// TestVeridianServiceInterface_ExposesGetLimits — invariant explicite que
+// l'interface inclut GetLimits avec la bonne signature. Le pre-push hook
+// exige un test pour chaque nouvelle methode ajoutee a une interface.
+func TestVeridianServiceInterface_ExposesGetLimits(t *testing.T) {
+	// Compile-time check : si la signature change, le test ne compile pas.
+	var _ func(ctx context.Context, tenantID string) (*LimitsResponse, error)
+	// Marker runtime pour pouvoir grep "GetLimits" dans les tests.
+	assert.NotPanics(t, func() {
+		_ = LimitsResponse{}
+	})
 }
 

@@ -1468,6 +1468,79 @@ func (s *veridianService) lookupUserType(ctx context.Context, userID string) (do
 	return u.Type, nil
 }
 
+// GetLimits retourne les limites + dimensions feature pour un tenant
+// (V37 pricing dimensions). Source de verite pour le paywall middleware
+// (lot 4) et l'endpoint /api/veridian/limits (lot 7).
+//
+// Strategie :
+//   - On lit le row complet (Get inclut deja les 9 colonnes V37 depuis le lot 2)
+//   - On expose les valeurs DB telles quelles dans la reponse
+//   - Si toutes les dimensions V37 sont a zero ET les booleens features
+//     a false (= row antedeluvien jamais re-upsert apres la migration V37
+//     dont le backfill aurait merdu sur ce tenant en particulier), on
+//     retombe sur domain.LimitsForPlan(p.Plan) pour ne pas casser le caller
+//     avec un Plan = "free" mais MaxContacts = 0
+//
+// sql.ErrNoRows propage tel quel (handler mappe → 404).
+func (s *veridianService) GetLimits(ctx context.Context, tenantID string) (*domain.LimitsResponse, error) {
+	if tenantID == "" {
+		return nil, errors.New("tenant_id required")
+	}
+	p, err := s.planRepo.Get(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	limits := domain.PlanLimits{
+		MonthlyEmailQuota:      p.MonthlyEmailQuota,
+		MaxContacts:            p.MaxContacts,
+		MaxSeats:               p.MaxSeats,
+		MaxOAuthAccounts:       p.MaxOAuthAccounts,
+		MaxCustomDomains:       p.MaxCustomDomains,
+		MaxActiveSequences:     p.MaxActiveSequences,
+		FeatureABTesting:       p.FeatureABTesting,
+		FeatureBrandingRemoved: p.FeatureBrandingRemoved,
+		FeatureWhiteLabel:      p.FeatureWhiteLabel,
+		HistoryRetentionDays:   p.HistoryRetentionDays,
+	}
+
+	// Fallback safe : row antedeluvien dont les dimensions V37 sont toutes
+	// a zero/false (cas tenant créé pre-V37 jamais re-upsert). On retombe
+	// sur LimitsForPlan(p.Plan) pour ne pas exposer un "free avec 0
+	// contacts max" qui bloquerait toute action. Note : pour Free, le
+	// fallback retourne aussi MaxCustomDomains=0 et FeatureWhiteLabel=false
+	// — donc le check pessimiste reste toujours strict.
+	if isEmptyLimits(limits) {
+		limits = domain.LimitsForPlan(p.Plan)
+	}
+
+	return &domain.LimitsResponse{
+		TenantID:    p.WorkspaceID,
+		Plan:        p.Plan,
+		PlanSource:  p.PlanSource,
+		Status:      p.Status,
+		Limits:      limits,
+		GeneratedAt: time.Now().UTC(),
+	}, nil
+}
+
+// isEmptyLimits retourne true si toutes les dimensions V37 d'une struct
+// PlanLimits sont a zero + booleens false. Sert au fallback GetLimits.
+// Note : duplique repo.isZeroPricingDimensions mais en operant sur
+// PlanLimits (vs VeridianPlan). Constitution §1 : duplication tolerable
+// pour 9 lignes evidentes (vs creer un sous-package juste pour ca).
+func isEmptyLimits(l domain.PlanLimits) bool {
+	return l.MaxContacts == 0 &&
+		l.MaxSeats == 0 &&
+		l.MaxOAuthAccounts == 0 &&
+		l.MaxCustomDomains == 0 &&
+		l.MaxActiveSequences == 0 &&
+		!l.FeatureABTesting &&
+		!l.FeatureBrandingRemoved &&
+		!l.FeatureWhiteLabel &&
+		l.HistoryRetentionDays == 0
+}
+
 // Compile-time check.
 var _ domain.VeridianService = (*veridianService)(nil)
 

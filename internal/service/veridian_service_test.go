@@ -1478,3 +1478,113 @@ func TestVeridianService_WipeTestTenants_SkipsCanaryAndClientPrefixes(t *testing
 	assert.Empty(t, resp.Wiped, "aucun tenant safety ne doit avoir été wipé")
 	assert.Empty(t, resp.Errors, "aucune erreur attendue, juste des skips")
 }
+
+// === V37 — GetLimits (lot 3 pricing-plans) ===
+
+func TestVeridianService_GetLimits_RejectsEmpty(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	_, err := svc.GetLimits(context.Background(), "")
+	assert.ErrorContains(t, err, "tenant_id required")
+}
+
+func TestVeridianService_GetLimits_NotFound(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ghost").Return(nil, sql.ErrNoRows).Times(1)
+
+	resp, err := svc.GetLimits(ctx, "ghost")
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, sql.ErrNoRows, "sql.ErrNoRows propage pour mapping 404 handler")
+}
+
+func TestVeridianService_GetLimits_ReadsV37Dimensions(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	// Tenant pro avec dimensions V37 backfillees ou re-upsertees post-V37.
+	m.planRepo.EXPECT().Get(ctx, "ws-pro").Return(&domain.VeridianPlan{
+		WorkspaceID:            "ws-pro",
+		Plan:                   "pro",
+		PlanSource:             domain.PlanSourceStripe,
+		Status:                 domain.PlanStatusActive,
+		MonthlyEmailQuota:      -1,
+		MaxContacts:            5000,
+		MaxSeats:               5,
+		MaxOAuthAccounts:       5,
+		MaxCustomDomains:       1,
+		MaxActiveSequences:     -1,
+		FeatureABTesting:       true,
+		FeatureBrandingRemoved: true,
+		FeatureWhiteLabel:      false,
+		HistoryRetentionDays:   365,
+	}, nil).Times(1)
+
+	resp, err := svc.GetLimits(ctx, "ws-pro")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "ws-pro", resp.TenantID)
+	assert.Equal(t, "pro", resp.Plan)
+	assert.Equal(t, domain.PlanSourceStripe, resp.PlanSource)
+	assert.Equal(t, domain.PlanStatusActive, resp.Status)
+	assert.Equal(t, int64(5000), resp.Limits.MaxContacts)
+	assert.Equal(t, 5, resp.Limits.MaxSeats)
+	assert.Equal(t, -1, resp.Limits.MaxActiveSequences)
+	assert.True(t, resp.Limits.FeatureABTesting)
+	assert.True(t, resp.Limits.FeatureBrandingRemoved)
+	assert.False(t, resp.Limits.FeatureWhiteLabel, "Pro != Business")
+	assert.Equal(t, 365, resp.Limits.HistoryRetentionDays)
+	assert.False(t, resp.GeneratedAt.IsZero(), "GeneratedAt set pour cache TTL caller")
+}
+
+// TestVeridianService_GetLimits_LegacyZeroFallsBackToPlanDefaults verifie
+// le fallback safe : row antedeluvien dont toutes les dimensions V37 sont
+// a zero (cas tenant cree pre-V37 ou backfill rate sur ce tenant) — on
+// retombe sur LimitsForPlan(p.Plan) au lieu d'exposer des 0 absurdes.
+func TestVeridianService_GetLimits_LegacyZeroFallsBackToPlanDefaults(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	// Row "antedeluvien" : Plan = pro mais TOUTES les dimensions a zero.
+	// Cas reel : tenant cree avant V37 et jamais re-upsert depuis.
+	m.planRepo.EXPECT().Get(ctx, "ws-legacy").Return(&domain.VeridianPlan{
+		WorkspaceID:       "ws-legacy",
+		Plan:              "pro",
+		PlanSource:        domain.PlanSourceStripe,
+		Status:            domain.PlanStatusActive,
+		MonthlyEmailQuota: -1,
+		// Toutes les dimensions V37 implicitement a zero/false
+	}, nil).Times(1)
+
+	resp, err := svc.GetLimits(ctx, "ws-legacy")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	// Fallback applique : on doit avoir les defaults Pro, pas du 0.
+	assert.Equal(t, int64(5000), resp.Limits.MaxContacts, "fallback Pro = 5000 contacts")
+	assert.Equal(t, 5, resp.Limits.MaxSeats)
+	assert.True(t, resp.Limits.FeatureABTesting, "fallback Pro = A/B testing on")
+}
+
+// TestVeridianService_GetLimits_UnknownPlanFallsBackToFree — un row avec
+// plan inexistant doit retomber sur Free strict via LimitsForPlan.
+func TestVeridianService_GetLimits_UnknownPlanFallsBackToFree(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().Get(ctx, "ws-mystery").Return(&domain.VeridianPlan{
+		WorkspaceID:       "ws-mystery",
+		Plan:              "tier-from-the-future",
+		PlanSource:        domain.PlanSourceManual,
+		Status:            domain.PlanStatusActive,
+		MonthlyEmailQuota: -1,
+		// Dimensions V37 a zero → trigger fallback → Plan inconnu → Free
+	}, nil).Times(1)
+
+	resp, err := svc.GetLimits(ctx, "ws-mystery")
+	require.NoError(t, err)
+	assert.Equal(t, "tier-from-the-future", resp.Plan, "plan preserve dans la reponse")
+	// Fallback Free strict — pas d'escalade
+	assert.Equal(t, int64(500), resp.Limits.MaxContacts)
+	assert.Equal(t, 1, resp.Limits.MaxSeats)
+	assert.False(t, resp.Limits.FeatureBrandingRemoved, "Free DOIT garder branding")
+}
