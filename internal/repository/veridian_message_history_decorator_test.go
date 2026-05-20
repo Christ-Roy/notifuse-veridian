@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
@@ -147,6 +148,161 @@ func TestVeridianMessageHistoryDecorator_Create_NilPlanRepo_Passthrough(t *testi
 	d := NewVeridianMessageHistoryDecorator(upstream, nil, log)
 	err := d.Create(ctx, "ws-6", "secret", msg)
 	require.NoError(t, err)
+}
+
+// Les methodes ci-dessous sont des passthrough trivial vers l'upstream.
+// On verifie pour chaque : (1) l'upstream est appele avec les memes args,
+// (2) le retour upstream est propage, (3) planRepo n'est PAS sollicite (ce
+// ne sont pas des points d'increment quota).
+
+func TestVeridianMessageHistoryDecorator_Update_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	planRepo := domainmocks.NewMockVeridianPlanRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, planRepo, pkgmocks.NewMockLogger(ctrl))
+
+	msg := &domain.MessageHistory{ID: "msg-u"}
+	upstream.EXPECT().Update(gomock.Any(), "ws", msg).Return(errors.New("up err")).Times(1)
+	err := d.Update(context.Background(), "ws", msg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "up err")
+}
+
+func TestVeridianMessageHistoryDecorator_Get_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	expected := &domain.MessageHistory{ID: "msg-g"}
+	upstream.EXPECT().Get(gomock.Any(), "ws", "sec", "msg-g").Return(expected, nil).Times(1)
+	got, err := d.Get(context.Background(), "ws", "sec", "msg-g")
+	require.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestVeridianMessageHistoryDecorator_GetByExternalID_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	expected := &domain.MessageHistory{ID: "msg-ext"}
+	upstream.EXPECT().GetByExternalID(gomock.Any(), "ws", "sec", "ext-1").Return(expected, nil).Times(1)
+	got, err := d.GetByExternalID(context.Background(), "ws", "sec", "ext-1")
+	require.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestVeridianMessageHistoryDecorator_GetByContact_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	msgs := []*domain.MessageHistory{{ID: "1"}, {ID: "2"}}
+	upstream.EXPECT().GetByContact(gomock.Any(), "ws", "sec", "foo@bar", 10, 0).
+		Return(msgs, 2, nil).Times(1)
+	got, total, err := d.GetByContact(context.Background(), "ws", "sec", "foo@bar", 10, 0)
+	require.NoError(t, err)
+	assert.Len(t, got, 2)
+	assert.Equal(t, 2, total)
+}
+
+func TestVeridianMessageHistoryDecorator_GetByBroadcast_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	upstream.EXPECT().GetByBroadcast(gomock.Any(), "ws", "sec", "b-1", 10, 0).
+		Return(nil, 0, nil).Times(1)
+	_, _, err := d.GetByBroadcast(context.Background(), "ws", "sec", "b-1", 10, 0)
+	require.NoError(t, err)
+}
+
+func TestVeridianMessageHistoryDecorator_ListMessages_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	params := domain.MessageListParams{}
+	upstream.EXPECT().ListMessages(gomock.Any(), "ws", "sec", params).
+		Return(nil, "cursor-next", nil).Times(1)
+	_, cursor, err := d.ListMessages(context.Background(), "ws", "sec", params)
+	require.NoError(t, err)
+	assert.Equal(t, "cursor-next", cursor)
+}
+
+func TestVeridianMessageHistoryDecorator_SetStatusesIfNotSet_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	updates := []domain.MessageEventUpdate{{ID: "1", Event: domain.MessageEventOpened}}
+	upstream.EXPECT().SetStatusesIfNotSet(gomock.Any(), "ws", updates).Return(nil).Times(1)
+	require.NoError(t, d.SetStatusesIfNotSet(context.Background(), "ws", updates))
+}
+
+func TestVeridianMessageHistoryDecorator_SetClicked_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	ts := time.Now()
+	upstream.EXPECT().SetClicked(gomock.Any(), "ws", "id-c", ts).Return(nil).Times(1)
+	require.NoError(t, d.SetClicked(context.Background(), "ws", "id-c", ts))
+}
+
+func TestVeridianMessageHistoryDecorator_SetOpened_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	ts := time.Now()
+	upstream.EXPECT().SetOpened(gomock.Any(), "ws", "id-o", ts).Return(nil).Times(1)
+	require.NoError(t, d.SetOpened(context.Background(), "ws", "id-o", ts))
+}
+
+func TestVeridianMessageHistoryDecorator_GetBroadcastStats_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	expected := &domain.MessageHistoryStatusSum{TotalSent: 42}
+	upstream.EXPECT().GetBroadcastStats(gomock.Any(), "ws", "b-1").Return(expected, nil).Times(1)
+	got, err := d.GetBroadcastStats(context.Background(), "ws", "b-1")
+	require.NoError(t, err)
+	assert.Equal(t, 42, got.TotalSent)
+}
+
+func TestVeridianMessageHistoryDecorator_GetBroadcastVariationStats_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	upstream.EXPECT().GetBroadcastVariationStats(gomock.Any(), "ws", "b-1", "t-A").
+		Return(&domain.MessageHistoryStatusSum{TotalOpened: 7}, nil).Times(1)
+	got, err := d.GetBroadcastVariationStats(context.Background(), "ws", "b-1", "t-A")
+	require.NoError(t, err)
+	assert.Equal(t, 7, got.TotalOpened)
+}
+
+func TestVeridianMessageHistoryDecorator_DeleteForEmail_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	upstream.EXPECT().DeleteForEmail(gomock.Any(), "ws", "foo@bar").Return(nil).Times(1)
+	require.NoError(t, d.DeleteForEmail(context.Background(), "ws", "foo@bar"))
 }
 
 func TestIsWorkspaceNotFoundErr(t *testing.T) {
