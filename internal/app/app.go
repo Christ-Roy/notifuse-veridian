@@ -1375,6 +1375,22 @@ func (a *App) Start() error {
 		a.telemetryService.StartDailyScheduler(ctx)
 	}
 
+	// === Veridian patch 2026-05-20 — cron cleanup idempotency keys ===
+	// Purge quotidienne des entrées expirées de veridian_idempotency_keys
+	// (CONTRAT-HUB §5.11). DeleteExpired existait mais aucun cron upstream
+	// ne l'appelait. Branché AVANT le rollout massif du header Idempotency-Key
+	// côté Hub pour éviter dette qui devient urgente.
+	// Cf. todo/2026-05-19-cron-cleanup-idempotency-keys.md
+	if a.veridianIdempotencyRepo != nil {
+		cleanup := service.NewVeridianIdempotencyCleanupService(
+			a.veridianIdempotencyRepo,
+			a.logger,
+			24*time.Hour,
+		)
+		cleanup.Start(a.GetShutdownContext())
+		a.logger.Info("Veridian idempotency cleanup scheduler started (24h interval)")
+	}
+
 	// Start SMTP bridge server if enabled
 	if a.smtpBridgeServer != nil {
 		go func() {
