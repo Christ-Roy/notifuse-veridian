@@ -31,3 +31,19 @@ Aujourd'hui, un commit `docs(todo): bla` ou un update README déclenche le pipel
 P3 — fonctionnellement safe : si quelqu'un veut force un re-deploy sans changement code, il peut utiliser `workflow_dispatch` manuel.
 
 **Alternative plus paranoïaque** : utiliser `paths` au lieu de `paths-ignore`, et lister explicitement les chemins qui déclenchent la CI. Plus verbeux mais plus prévisible.
+
+---
+
+## Update — 2026-05-20 — Livré (commit 9976490e)
+
+`paths-ignore` ajouté au workflow sur `push` ET `pull_request` :
+- `**/*.md`, `docs/**`, `todo/**`, `CHANGELOG.md`, `runbooks/**`, `plans/**`
+
+Sécurité maintenue :
+- Pre-push hook local check-test-mapping.sh continue de tourner
+- Commits mixtes (docs + Go) déclenchent quand même la CI (AND filter
+  GitHub Actions = run si au moins un path ne match pas paths-ignore)
+- Bot ci(gitops): utilise `[skip ci]` → pas de boucle infinie
+
+À déplacer vers `todo/done/` après confirmation que le prochain commit
+docs-only ne déclenche pas de run CI.

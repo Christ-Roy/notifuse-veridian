@@ -41,3 +41,23 @@ Pas de cron, pas de visibilité sur la décroissance.
 ## Reco
 
 Petit ticket. À shipper en passant. Crée une dynamique psychologique pour faire baisser le compteur (gamification light).
+
+---
+
+## Update — 2026-05-20 — Livré (commit c952a796)
+
+`.github/workflows/tests-pending-debt-tracker.yml` créé. Tourne chaque
+lundi 7h UTC = 9h Paris. workflow_dispatch dispo pour run manuel.
+
+Comportement :
+- Compte lignes non-vides / non-commentaires de tests-pending.txt
+- Trouve issue existante via label `tests-pending-debt`
+- Parse count précédent pour delta (📈 hausse / 📉 baisse)
+- Update ou crée l'issue avec snapshot date + count + delta + liste
+  fichiers + reco "comment réduire"
+
+État actuel : 7 fichiers (1 de moins que les 8 cités dans le ticket
+initial → Robert progresse déjà sans le tracker).
+
+À déplacer vers `todo/done/` après confirmation que l'issue est créée
+au premier run (lundi prochain ou via gh workflow run manuel).

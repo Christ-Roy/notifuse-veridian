@@ -30,3 +30,17 @@ Test unitaire du job (mock du repo) + smoke test qu'il tourne 1×/jour.
 
 - Implémentation idempotency : commit `20689427`
 - Memory : [[project_contrat_hub_v13_audit]] mentionne ce ticket dans "Dette détectée"
+
+---
+
+## Update — 2026-05-20 — Livré (commit 9fd0379b)
+
+`VeridianIdempotencyCleanupService` créé dans `internal/service/
+veridian_idempotency_cleanup.go` + 5 tests colocalisés. Câblé depuis
+`internal/app/app.go` (Start après telemetryService).
+
+Pattern goroutine + 24h ticker (identique TelemetryService). Best-effort
+sur erreur (log et continue). Stop propre via ctx shutdown.
+
+À déplacer vers `todo/done/` après confirmation log "VeridianIdempotency
+Cleanup: purged expired entries" visible en prod (24h après deploy).

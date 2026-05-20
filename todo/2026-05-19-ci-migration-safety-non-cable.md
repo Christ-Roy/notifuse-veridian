@@ -37,3 +37,17 @@ Le script bloque les opérations destructives. Pour les autoriser quand légitim
 ## Risque
 
 P0 — addition pure d'un job, ne casse rien. Le gate révèlera peut-être des migrations passées qui ne respectent pas Expand & Contract — à traiter au cas par cas.
+
+---
+
+## Update — 2026-05-20 — Livré (commit 9db7d0ec)
+
+Job `migration-safety` ajouté dans `.github/workflows/veridian-ci.yml`
+après `compose-validate`. `test-go` dépend désormais de
+`[test-mapping, compose-validate, migration-safety]` — gate avant build.
+
+Override `[safe-migration]` dans subject de commit câblé pour les
+opérations légitimes (rollback ciblé, suppression colonne déjà migrée
+2 deploys en avance). Documenté dans le step CI.
+
+À déplacer vers `todo/done/` après confirmation 1-2 runs CI verts.
