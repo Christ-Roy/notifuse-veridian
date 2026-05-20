@@ -277,18 +277,52 @@ Câbler dans le code Notifuse les nouveaux plans tels que décrits dans `VISION-
   (sans tenant_id). Choix actuel `GET /api/tenants/{id}/limits` pour
   cohérence avec `/status` `/health` `/usage-summary` + HMAC strict.
 
-### ⏳ Lots restants
+### ✅ Lot 4a livré 2026-05-21 (commit `f08410cd`) — Feature gate A/B testing
 
-- [ ] **Lot 4** — Middleware paywall étendu (seat_limit, contact_limit,
-  sequence_limit) + nouveau feature_gate (A/B testing, custom domain).
-  Nécessite reco terrain sur les compteurs : `contactService.Count(ctx,
-  ws)`, `workspaceService.Members(ctx, ws)`, `automationService.Active(...)`.
-- [ ] **Lot 5** — Branding "Powered by Veridian" câblé (gater par
-  `feature_branding_removed`) — toucher les templates MJML ou ajouter un
-  middleware d'envoi post-processing.
+- [x] Nouveau middleware `NewVeridianFeatureGateMiddlewareWithCache`
+  partageant le `PaywallCache` 60s existant.
+- [x] Map `featureGatedPaths` :
+  - `/api/broadcasts.getTestResults` → ab_testing
+  - `/api/broadcasts.selectWinner` → ab_testing
+- [x] Helper `checkFeatureAllowed(plan, feature)` avec switch ab_testing/
+  branding_removed/white_label. Fail-open sur plan nil ou feature inconnue.
+- [x] `VeridianPaywallPathFilterWithCache` route les paths gated vers le
+  feature gate (avant le passe-direct).
+- [x] Stratégie fail-open cohérente avec paywall existant : tenant
+  non-Veridian / erreur DB transitoire → laisse passer.
+- [x] Réponse 402 avec `error_code: "feature_not_in_plan"`, `feature`,
+  `tenant_plan` dans le body JSON.
+- [x] 10 tests verts couvrant chemins nominaux + edge cases + path filter.
+
+**Choix design** : gater les endpoints "A/B only" plutôt que de parser
+le body de `broadcasts.create` pour détecter `test_settings`. Plus
+simple, plus robuste, business-équivalent.
+
+### ⏳ Lots restants (à arbitrer avec Robert avant de coder)
+
+- [ ] **Lot 4b** — Seat enforcement sur `/api/user.add` ou équivalent.
+  **Question design** : où compter les seats ? `workspace_users.WHERE
+  workspace_id=X AND type='user'` (excluant les api_keys) — à
+  confirmer.
+- [ ] **Lot 4c** — Contact count enforcement sur `/api/contacts.upsert`
+  et `/api/contacts.import`. **Question design** : `SELECT COUNT(*)` à
+  chaque insert = coûteux. Alternative : compteur dénormalisé
+  `veridian_plan.contacts_count` mis à jour via trigger ou increment
+  service, refresh nightly pour audit.
+- [ ] **Lot 4d** — Custom domain enforcement (`feature_white_label` ou
+  `MaxCustomDomains > 0`).
+- [ ] **Lot 5** — Branding "Powered by Veridian". **Question design** :
+  footer MJML ajouté côté serveur dans `EmailService.SendEmailForTemplate`
+  juste avant le `providerRequest` (besoin d'ajouter `planRepo` en
+  dépendance à `EmailService`) OU modifier les templates Veridian dans
+  la console (UX différente, pas de modif code).
 - [ ] **Lot 6** — Cron cleanup historique (`history_retention_days`).
-- [ ] **Lot 8** — Documentation (CHANGELOG + README).
-- [ ] Promote prod OK (auto-promote staging→main→prod à chaque lot).
+  **Question design** : DELETE direct dans `messages` / `message_history`
+  par workspace_id ou soft-delete avec audit ? Chaque tenant ayant sa
+  propre DB Postgres, le cron doit itérer sur tous les tenants Veridian.
+- [ ] **Lot 8** — Documentation CHANGELOG + README. Note : CHANGELOG
+  est upstream-aligned, peut-être préférable de documenter dans CLAUDE.md
+  ou dans un fichier dédié `VERIDIAN-PRICING-V37.md`.
 
 **Note lot 1** : choix volontairement non-régressif — fondation seule.
 **Note lot 2** : auto-fill côté repo = lots 1+2 deviennent transparents
