@@ -84,7 +84,15 @@ func TestVeridianPaywall_SuspendedReturns402(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "suspended")
 }
 
-func TestVeridianPaywall_QuotaExceededReturns402(t *testing.T) {
+// TestVeridianPaywall_QuotaDoesNotBlock vérifie qu'un tenant actif avec son
+// compteur emails au-dessus du quota mensuel NE DOIT PLUS être bloqué par
+// le paywall — décision 2026-05-20 (BYO sending : Veridian ne fournit aucun
+// provider d'envoi, c'est le provider du client qui limite).
+//
+// Renomme l'ancien TestVeridianPaywall_QuotaExceededReturns402 qui validait
+// l'ancien comportement. Le test sert maintenant de garde-fou anti-régression :
+// si quelqu'un re-active le check quota dans IsBlocked(), ce test fail.
+func TestVeridianPaywall_QuotaDoesNotBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -94,7 +102,7 @@ func TestVeridianPaywall_QuotaExceededReturns402(t *testing.T) {
 		Plan:                "free",
 		Status:              domain.PlanStatusActive,
 		MonthlyEmailQuota:   500,
-		EmailsSentThisMonth: 500,
+		EmailsSentThisMonth: 500, // au-dessus du quota
 	}, nil).Times(1)
 
 	var called atomic.Bool
@@ -104,9 +112,9 @@ func TestVeridianPaywall_QuotaExceededReturns402(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mw.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusPaymentRequired, rec.Code)
-	assert.False(t, called.Load())
-	assert.Contains(t, rec.Body.String(), "quota")
+	// 2026-05-20 : quota dépassé ne doit PLUS bloquer (BYO sending)
+	assert.NotEqual(t, http.StatusPaymentRequired, rec.Code, "quota dépassé ne doit pas retourner 402")
+	assert.True(t, called.Load(), "next handler doit être appelé (passthrough)")
 }
 
 func TestVeridianPaywall_DeletedReturns402(t *testing.T) {
