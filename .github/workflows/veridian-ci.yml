@@ -83,6 +83,47 @@ jobs:
           # Pas de génération côté repo (compose merge non reproductible cross-version).
           scripts/ci/generate-compose.sh staging prod
 
+  # === Veridian patch 2026-05-20 — câblage Constitution CI §12 ===
+  # check-migration-safety.sh existait mais n'était pas appelé directement.
+  # Bloque les opérations destructives (DROP COLUMN, ALTER NOT NULL sur table
+  # peuplée, etc.) sans la convention Expand & Contract documentée dans
+  # CI-ARCHITECTURE.md §12. Override possible via `[safe-migration]` dans le
+  # subject de commit pour les cas légitimes (ex: rollback ciblé).
+  # Cf. todo/2026-05-19-ci-migration-safety-non-cable.md
+  migration-safety:
+    name: Constitution CI §12 (migrations Expand & Contract)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run check-migration-safety.sh
+        run: |
+          chmod +x scripts/ci/check-migration-safety.sh
+          # Même logique BASE_REF que test-mapping pour la cohérence.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export BASE_REF="origin/${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              export BASE_REF="origin/veridian"
+            else
+              export BASE_REF="$BEFORE"
+            fi
+          else
+            echo "Event ${{ github.event_name }} : skip migration-safety"
+            exit 0
+          fi
+          echo "BASE_REF=$BASE_REF"
+          # Override : [safe-migration] dans commit subject autorise opération destructive
+          # (ex: rollback ciblé, suppression colonne déjà migrée 2 deploys avant).
+          COMMIT_MSG=$(git log -1 --format='%s')
+          if echo "$COMMIT_MSG" | grep -q '\[safe-migration\]'; then
+            echo "ℹ Bypass via [safe-migration] (validation humaine) — Constitution §12 override"
+            exit 0
+          fi
+          scripts/ci/check-migration-safety.sh
+
   workflow-lint:
     name: Constitution CI §20 (self-hosted jobs cleanup always())
     runs-on: ubuntu-latest
@@ -178,7 +219,7 @@ jobs:
 
   test-go:
     name: Go tests (unit + Veridian patches)
-    needs: [test-mapping, compose-validate]
+    needs: [test-mapping, compose-validate, migration-safety]
     runs-on: ubuntu-latest
     services:
       postgres:
