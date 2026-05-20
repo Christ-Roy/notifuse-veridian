@@ -96,6 +96,23 @@ type VeridianPlan struct {
 	LifecycleReason string    `json:"lifecycle_reason,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+
+	// === Pricing dimensions (V37, ticket pricing-plans-implementation) ===
+	// Convention -1 = illimite (semantique partagee avec MonthlyEmailQuota).
+	// Ces colonnes sont initialement persistees par la migration V37 avec
+	// les defaults Free + backfill par plan. Le repository (lot 2) lit /
+	// ecrit ces champs. Pour ce lot 1 (domain), elles existent comme
+	// surface contractuelle stable que repo + service + middleware vont
+	// progressivement consommer. Cf. DefaultPlanLimits + LimitsForPlan.
+	MaxContacts            int64 `json:"max_contacts"`
+	MaxSeats               int   `json:"max_seats"`
+	MaxOAuthAccounts       int   `json:"max_oauth_accounts"`
+	MaxCustomDomains       int   `json:"max_custom_domains"`
+	MaxActiveSequences     int   `json:"max_active_sequences"`
+	FeatureABTesting       bool  `json:"feature_ab_testing"`
+	FeatureBrandingRemoved bool  `json:"feature_branding_removed"`
+	FeatureWhiteLabel      bool  `json:"feature_white_label"`
+	HistoryRetentionDays   int   `json:"history_retention_days"`
 }
 
 // QuotaRemaining retourne le nombre d'emails encore envoyables ce mois.
@@ -166,6 +183,93 @@ func QuotaForPlan(plan string) int64 {
 		return q
 	}
 	return PlanQuotas["free"]
+}
+
+// PlanLimits regroupe TOUTES les dimensions d'un plan Veridian
+// (cf. VISION-BUSINESS.md + ticket todo/2026-05-20-pricing-plans-implementation).
+// Convention -1 = illimite (semantique partagee avec MonthlyEmailQuota).
+//
+// MonthlyEmailQuota reste a -1 pour tous les plans tant que Veridian ne
+// fournit pas son propre provider d'envoi (cf. memory
+// project_email_sending_strategy). Le champ est conserve pour Phase C
+// (Resend manage) sans casser la surface contractuelle.
+type PlanLimits struct {
+	MonthlyEmailQuota      int64
+	MaxContacts            int64
+	MaxSeats               int
+	MaxOAuthAccounts       int
+	MaxCustomDomains       int
+	MaxActiveSequences     int
+	FeatureABTesting       bool
+	FeatureBrandingRemoved bool
+	FeatureWhiteLabel      bool
+	HistoryRetentionDays   int
+}
+
+// DefaultPlanLimits expose les limites par defaut de chaque plan, en miroir
+// du backfill V37 + de VISION-BUSINESS.md. Le repository utilise cette map
+// au provision / update-plan pour appliquer les limites en l'absence de
+// custom override (champ `quotas` envoye par le Hub).
+var DefaultPlanLimits = map[string]PlanLimits{
+	"free": {
+		MonthlyEmailQuota:      -1, // BYO sending, pas de cap Notifuse
+		MaxContacts:            500,
+		MaxSeats:               1,
+		MaxOAuthAccounts:       1,
+		MaxCustomDomains:       0,
+		MaxActiveSequences:     1,
+		FeatureABTesting:       false,
+		FeatureBrandingRemoved: false,
+		FeatureWhiteLabel:      false,
+		HistoryRetentionDays:   30,
+	},
+	"pro": {
+		MonthlyEmailQuota:      -1,
+		MaxContacts:            5000,
+		MaxSeats:               5,
+		MaxOAuthAccounts:       5,
+		MaxCustomDomains:       1,
+		MaxActiveSequences:     -1,
+		FeatureABTesting:       true,
+		FeatureBrandingRemoved: true,
+		FeatureWhiteLabel:      false,
+		HistoryRetentionDays:   365,
+	},
+	"business": {
+		MonthlyEmailQuota:      -1,
+		MaxContacts:            25000,
+		MaxSeats:               25,
+		MaxOAuthAccounts:       25,
+		MaxCustomDomains:       5,
+		MaxActiveSequences:     -1,
+		FeatureABTesting:       true,
+		FeatureBrandingRemoved: true,
+		FeatureWhiteLabel:      true,
+		HistoryRetentionDays:   -1,
+	},
+	"enterprise": {
+		MonthlyEmailQuota:      -1,
+		MaxContacts:            -1,
+		MaxSeats:               -1,
+		MaxOAuthAccounts:       -1,
+		MaxCustomDomains:       -1,
+		MaxActiveSequences:     -1,
+		FeatureABTesting:       true,
+		FeatureBrandingRemoved: true,
+		FeatureWhiteLabel:      true,
+		HistoryRetentionDays:   -1,
+	},
+}
+
+// LimitsForPlan retourne les limites par defaut pour un plan donne.
+// Si plan inconnu (ou chaine vide), fallback Free — semantique safe :
+// le tenant ne pourra rien faire de plus que Free, jamais d'escalade
+// silencieuse de privileges.
+func LimitsForPlan(plan string) PlanLimits {
+	if l, ok := DefaultPlanLimits[plan]; ok {
+		return l
+	}
+	return DefaultPlanLimits["free"]
 }
 
 // === Repository ===

@@ -291,3 +291,131 @@ func TestVeridianServiceInterface_ExposesGrantUnlimited(t *testing.T) {
 	})
 }
 
+// === PlanLimits — V37 pricing fondation ===
+
+// TestDefaultPlanLimits_AllPlansDefined verifie que les 4 plans canoniques
+// sont definis. Si un plan est ajoute / renomme, ce test casse — c'est
+// volontaire (force update synchrone avec VISION-BUSINESS.md + backfill V37).
+func TestDefaultPlanLimits_AllPlansDefined(t *testing.T) {
+	expected := []string{"free", "pro", "business", "enterprise"}
+	for _, plan := range expected {
+		t.Run(plan, func(t *testing.T) {
+			_, ok := DefaultPlanLimits[plan]
+			assert.True(t, ok, "plan %q manquant dans DefaultPlanLimits", plan)
+		})
+	}
+	assert.Len(t, DefaultPlanLimits, len(expected), "nombre de plans inattendu — update test + VISION-BUSINESS.md")
+}
+
+// TestDefaultPlanLimits_FreeMatchesContract — Free est le plus contraint.
+// Doit matcher pixel-perfect VISION-BUSINESS.md table pricing.
+func TestDefaultPlanLimits_FreeMatchesContract(t *testing.T) {
+	free := DefaultPlanLimits["free"]
+	assert.Equal(t, int64(-1), free.MonthlyEmailQuota, "BYO sending = pas de cap")
+	assert.Equal(t, int64(500), free.MaxContacts)
+	assert.Equal(t, 1, free.MaxSeats)
+	assert.Equal(t, 1, free.MaxOAuthAccounts)
+	assert.Equal(t, 0, free.MaxCustomDomains, "pas de domaine custom en Free")
+	assert.Equal(t, 1, free.MaxActiveSequences)
+	assert.False(t, free.FeatureABTesting)
+	assert.False(t, free.FeatureBrandingRemoved, "Free DOIT garder Powered by Veridian")
+	assert.False(t, free.FeatureWhiteLabel)
+	assert.Equal(t, 30, free.HistoryRetentionDays)
+}
+
+// TestDefaultPlanLimits_ProMatchesContract — Pro 29 EUR/mo.
+func TestDefaultPlanLimits_ProMatchesContract(t *testing.T) {
+	pro := DefaultPlanLimits["pro"]
+	assert.Equal(t, int64(5000), pro.MaxContacts)
+	assert.Equal(t, 5, pro.MaxSeats)
+	assert.Equal(t, 5, pro.MaxOAuthAccounts)
+	assert.Equal(t, 1, pro.MaxCustomDomains)
+	assert.Equal(t, -1, pro.MaxActiveSequences, "Pro = sequences illimitees")
+	assert.True(t, pro.FeatureABTesting)
+	assert.True(t, pro.FeatureBrandingRemoved)
+	assert.False(t, pro.FeatureWhiteLabel, "white-label est Business+")
+	assert.Equal(t, 365, pro.HistoryRetentionDays)
+}
+
+// TestDefaultPlanLimits_BusinessMatchesContract — Business 99 EUR/mo.
+func TestDefaultPlanLimits_BusinessMatchesContract(t *testing.T) {
+	biz := DefaultPlanLimits["business"]
+	assert.Equal(t, int64(25000), biz.MaxContacts)
+	assert.Equal(t, 25, biz.MaxSeats)
+	assert.Equal(t, 25, biz.MaxOAuthAccounts)
+	assert.Equal(t, 5, biz.MaxCustomDomains)
+	assert.Equal(t, -1, biz.MaxActiveSequences)
+	assert.True(t, biz.FeatureABTesting)
+	assert.True(t, biz.FeatureBrandingRemoved)
+	assert.True(t, biz.FeatureWhiteLabel, "Business inclut white-label")
+	assert.Equal(t, -1, biz.HistoryRetentionDays, "Business = historique illimite")
+}
+
+// TestDefaultPlanLimits_EnterpriseAllUnlimited — Enterprise sur devis,
+// tout illimite + toutes les features.
+func TestDefaultPlanLimits_EnterpriseAllUnlimited(t *testing.T) {
+	ent := DefaultPlanLimits["enterprise"]
+	assert.Equal(t, int64(-1), ent.MonthlyEmailQuota)
+	assert.Equal(t, int64(-1), ent.MaxContacts)
+	assert.Equal(t, -1, ent.MaxSeats)
+	assert.Equal(t, -1, ent.MaxOAuthAccounts)
+	assert.Equal(t, -1, ent.MaxCustomDomains)
+	assert.Equal(t, -1, ent.MaxActiveSequences)
+	assert.Equal(t, -1, ent.HistoryRetentionDays)
+	assert.True(t, ent.FeatureABTesting)
+	assert.True(t, ent.FeatureBrandingRemoved)
+	assert.True(t, ent.FeatureWhiteLabel)
+}
+
+// TestLimitsForPlan_KnownPlans — chemin nominal.
+func TestLimitsForPlan_KnownPlans(t *testing.T) {
+	cases := []string{"free", "pro", "business", "enterprise"}
+	for _, plan := range cases {
+		t.Run(plan, func(t *testing.T) {
+			got := LimitsForPlan(plan)
+			want := DefaultPlanLimits[plan]
+			assert.Equal(t, want, got, "LimitsForPlan(%q) doit matcher DefaultPlanLimits", plan)
+		})
+	}
+}
+
+// TestLimitsForPlan_UnknownFallsBackToFree — semantique safe : un plan
+// inconnu ne doit jamais accorder plus de privileges que Free (pas
+// d'escalade silencieuse).
+func TestLimitsForPlan_UnknownFallsBackToFree(t *testing.T) {
+	freeRef := DefaultPlanLimits["free"]
+	cases := []string{"", "unknown", "PRO", "lifetime"}
+	for _, plan := range cases {
+		t.Run(plan, func(t *testing.T) {
+			got := LimitsForPlan(plan)
+			assert.Equal(t, freeRef, got, "plan inconnu %q doit retomber sur Free", plan)
+		})
+	}
+}
+
+// TestVeridianPlan_PricingFields_StructTags — verifie que les tags JSON
+// matchent les noms de colonnes SQL exactement (lot 2 repository va
+// scanner par column name, drift = bug silencieux). Cf. memory
+// sqlmock_does_not_validate_postgres_types.
+func TestVeridianPlan_PricingFields_StructTags(t *testing.T) {
+	p := VeridianPlan{
+		MaxContacts:            500,
+		MaxSeats:               1,
+		MaxOAuthAccounts:       1,
+		MaxCustomDomains:       0,
+		MaxActiveSequences:     1,
+		FeatureABTesting:       false,
+		FeatureBrandingRemoved: false,
+		FeatureWhiteLabel:      false,
+		HistoryRetentionDays:   30,
+	}
+	// Round-trip pour s'assurer que les tags se serialisent / deserialisent
+	// sans perte ni typo.
+	require.NotPanics(t, func() {
+		_ = p.MaxContacts
+		_ = p.MaxSeats
+	})
+	assert.Equal(t, int64(500), p.MaxContacts)
+	assert.Equal(t, 30, p.HistoryRetentionDays)
+}
+

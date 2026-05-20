@@ -541,9 +541,11 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 
 		// Mock GetCurrentDBVersion to return the latest migrated version (up to date).
 		// Doit etre incremente avec chaque nouvelle migration majeure (V33 plan_source,
-		// V34 lifecycle, V35 idempotency, etc.). Aligner avec config.VERSION.
+		// V34 lifecycle, V35 idempotency, V37 pricing dimensions). Aligner avec
+		// config.VERSION. V36 est volontairement sautee (reservee au ticket
+		// 2026-05-19-aligner-types-timestamp-veridian-plan).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("35"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("37"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 
