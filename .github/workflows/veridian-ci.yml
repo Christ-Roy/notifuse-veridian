@@ -686,13 +686,15 @@ jobs:
           # Sérialisation avec sleep 1s entre prefixes pour ne pas saturer le pool
           # Postgres staging (`pq: sorry, too many clients already`). Coût +30s
           # mais évite ~5 re-runs/jour. Cf. todo/2026-05-20-flaky-ci-staging-postgres-saturation.md
-          # Lot G 2026-05-21 : include_orphans=true scanne aussi workspaceRepo.List
-          # (source de verite globale) pour attraper les workspaces orphelins
-          # crees sans passer par /api/tenants/provision (donc absents de
-          # veridian_plan mais presents dans workspaces + DB postgres dediee).
-          # Cf. ticket 2026-05-20-e2e-cleanup-discipline-canary-safety.
+          # Lot G 2026-05-21 : la feature include_orphans=true existe côté API
+          # (workspaceRepo.List scan), mais on NE L'UTILISE PAS en batch CI.
+          # Reason : run 26236522659 a montré que wiper en masse les orphelins
+          # encore connectés par goroutines workspace fait crash le container
+          # (DROP DATABASE avec connections actives → restart → healthcheck
+          # planté). L'option reste activable manuellement par Robert via curl
+          # à la demande pour les nettoyages ponctuels.
           for prefix in chaos magic stat paywall pwsus pwdel pwpath pwread autotest idem bump dbg smoke fresh statsus statdel up down unkplan resume sus mag genmag magtam magicre delconf e2e replaytest tampertest wrongsecret huge nofix wscre wscre2 uiguard direct paywsmoke; do
-            BODY="{\"prefix\":\"${prefix}\",\"include_orphans\":true}"
+            BODY="{\"prefix\":\"${prefix}\"}"
             TS=$(date +%s%3N)
             SIG=$(echo -n "${TS}.${BODY}" | openssl dgst -sha256 -hmac "${HUB_SECRET}" -hex | awk '{print $2}')
             RESP=$(curl -sS -X POST "https://notifuse.staging.veridian.site/api/veridian/admin/wipe-test-tenants" \
