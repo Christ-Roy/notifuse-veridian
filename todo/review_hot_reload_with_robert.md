@@ -158,29 +158,105 @@ Quand on traite une feature → on passe à **✅ POLISHED** et on garde la note
 - **Polish à faire ensemble** : décider si Robert veut un bouton dans le Hub ou s'il fait juste du curl à la main pour les rares cas. Reco : on commence par curl manuel (déjà testé live 2026-05-20), on câble un bouton Hub quand le volume justifie. 🟡 admin / Robert seul.
 - **Pré-requis pour V37** : quand les nouvelles dimensions arriveront (seats, contacts, oauth_accounts, custom_domains, sequences, A/B, branding, white_label, history), grant-unlimited devra aussi forcer toutes ces dimensions à `-1` / `true`. Pas encore câblé.
 
+## 17. Attach-member endpoint (lot B 2026-05-21) 🔴
+
+- **Backend** : `POST /api/tenants/{tenantId}/attach-member` HMAC Hub. Quand un user accepte une invitation cross-app côté Hub, le Hub appelle ce endpoint pour attacher le user au workspace Notifuse. Idempotent. Crée le user si absent, INSERT/UPDATE `user_workspaces`, génère `login_url` magic link. Codes : 201 first attach, 200 already_member, 401/404/400/423/409.
+- **UI actuelle** : **AUCUNE indication** côté console Notifuse. Un user invité via Hub apparaît dans Settings → Team comme n'importe quel autre membre, sans contexte sur l'origine de l'invitation.
+- **UI manquante** :
+  - **Badge "Invité via Veridian"** sur les rows membres dont la `metadata` indique `via_hub_invitation_id` (à câbler : stocker l'invitation_id reçu dans `user_workspaces.metadata`).
+  - **Bouton "Gérer dans Veridian"** sur la fiche membre → redirige vers `app.veridian.site/team/{tenantId}` (route Hub à venir).
+  - **Tooltip explicatif** : "Ce membre a été invité depuis le dashboard Veridian. Pour révoquer l'accès, gérez ses permissions cross-app depuis là."
+- **Polish à faire ensemble** : décider si on stocke `via_hub_invitation_id` en metadata (impact backend mineur, ~10 lignes) ou si on accepte d'avoir tous les membres uniformes côté UI Notifuse. Reco : **stocker la metadata** maintenant, polish UI plus tard quand le flow invitation Hub aura plus de volume. 🔴 visible client (multi-membre).
+
+## 18. Discovery endpoint by-email (lot D 2026-05-21) 🟢
+
+- **Backend** : `POST /api/users/by-email` HMAC Hub. Hub interroge Notifuse au login user pour savoir quels workspaces ce user possède côté Notifuse. Read-only, retourne `{found, user_email, workspaces[]}` avec `magic_link_capable: true` toujours.
+- **UI actuelle** : N/A — endpoint HMAC, consommé par Hub uniquement.
+- **UI manquante** : RIEN côté Notifuse. Côté Hub : la carte "Notifuse" du dashboard user sera désormais alimentée par discovery (vs colonnes dénormalisées `tenants.notifuse_*`). 🟢 invisible.
+
+## 19. V38 — Signal trial activity_threshold (lot C 2026-05-21) 🟢
+
+- **Backend** : V38 ajoute `emails_sent_lifetime BIGINT` + `activity_threshold_reached_at TIMESTAMPTZ` sur `veridian_plan`. Quand le tenant atteint 5 mails envoyés (cumul lifetime, jamais reset), Notifuse émet event webhook `tenant.activity_threshold_reached` vers Hub (1 fois, idempotent). Le Hub orchestre ensuite le trial 2j wait → 15j visible.
+- **UI actuelle** : N/A — signal métier interne, pas exposé client.
+- **UI manquante** : **INTERDITE** par CLAUDE.md projet (philosophie pivot 2026-05-21) :
+  - ❌ PAS de "Vous avez envoyé X mails depuis votre activation"
+  - ❌ PAS de progress bar "3/5 vers votre trial Pro"
+  - ❌ PAS de compteur visible AVANT phase 3 (J+2 post-5 mails côté Hub)
+  - ✅ Le bandeau trial 15j (puis +30j si CB) sera affiché par le Hub uniquement, **après** J+2. Notifuse reste muet jusque-là.
+- **Polish** : RIEN, intentionnel. 🟢 invisible.
+
+## 20. Admin listing dry-run + wipe orphelins (lot G 2026-05-21) 🟢
+
+- **Backend** : `GET /api/veridian/admin/tenants?prefix=X&include_orphans=true&limit=N` dry-run listing (managed vs orphans buckets). `WipeTestTenantsInput.IncludeOrphans bool` étend le scan à `workspaceRepo.List` (source de vérité globale). Le step CI cleanup utilise désormais `include_orphans:true`.
+- **UI actuelle** : N/A — endpoint admin curl, consommé par Robert et le CI cron cleanup.
+- **UI manquante** :
+  - **Page admin Robert** côté **Hub** (pas Notifuse) : "Tenants orphelins détectés" — liste les workspaces qui traînent sans `veridian_plan`. Bouton "Wipe" qui appelle `/api/veridian/admin/wipe-test-tenants` avec confirmation `confirm:"WIPE"`.
+  - Pas urgent : le cron CI nettoie déjà automatiquement les orphelins matchant les prefixes E2E.
+- **Polish** : RIEN côté Notifuse, à router vers agent Hub si volume orphelins justifie un dashboard. 🟢 invisible côté Notifuse.
+
+## 21. Paywall mode dégradé soft-deleted (PENDING `2026-05-21-paywall-degraded-mode-soft-deleted.md`) 🔴
+
+- **Backend** : ⏳ **PAS ENCORE SHIPPÉ**. Ticket actif. Remplacera le mur béton actuel (`402 Payment Required: tenant deleted`) par un mode dégradé :
+  - Routes **lecture** : 33% des chars en clair + obfuscation `fooba••••••` (sauf `SENSITIVE_FIELDS` = password/api_key/billing → toujours obfusqués)
+  - Routes **écriture** : `402` + `error: tenant_soft_deleted` + lien `restore_url` du Hub
+- **UI actuelle** : **catastrophique UX**. Un user soft-deleted via Hub voit la console crasher avec page d'erreur cryptique, sans chemin de récupération visible.
+- **UI manquante** (gros morceau, lié à §3 bandeau soft-delete) :
+  - **Bandeau persistant top de page** : "Votre compte est supprimé — N jours pour restaurer. [Restaurer dans Veridian →]"
+  - **Modal au login** si soft-deleted détecté : "Bonjour, votre compte est suspendu depuis le DD/MM. Vous pouvez consulter vos données en lecture seule. [Restaurer →] [Exporter mes contacts →]"
+  - **Export bouton dédié** dans Settings → Account pour télécharger ses contacts/templates avant la purge.
+- **Polish à faire ensemble** : ATTENDRE que le backend soit shippé. À polish dès que le middleware obfuscation est en place. 🔴 visible client (impact rétention + image de marque).
+
+## 22. PIVOT PRICING 2026-05-21 — UI doit purger les compteurs visibles 🔴🔴🔴
+
+> **PRIORITÉ #1 ABSOLUE.** Le pivot pricing 2026-05-21 (`PRICING-VERIDIAN.md`) **interdit explicitement les compteurs visibles UI client** — or notre console actuelle en affiche encore.
+
+- **Backend** : `DefaultPlanLimits` figé à `-1` (illimité) sur **toutes** les dimensions sauf `FeatureWhiteLabel` (Business+ only). Free a TOUT illimité y compris contacts, OAuth, seats, automation, A/B, branding optionnel, custom domains, historique. **Seules différenciations** : Free → durée 15j révélée à J+2 + Business → white-label custom.
+- **UI actuelle** : la console upstream Notifuse affiche encore des compteurs / limites partout (contacts list, members, templates, etc.) — ces écrans **violent CLAUDE.md** qui interdit :
+  - ❌ Compteur visible "il vous reste X mails / contacts / domaines"
+  - ❌ Menu grisé "🔒 Pro", pop-up "passez Pro pour faire ça"
+  - ❌ Toute limite enforced sur contacts / OAuth / seats / automation / historique / custom domains / A/B
+- **UI à polish** (gros chantier) :
+  - **Widget quota Dashboard (§4)** : afficher "∞ Illimité" au lieu de progress bar quand `quota=-1`. Ne JAMAIS afficher de pourcentage.
+  - **Page Contacts** : retirer "X / 1000 contacts utilisés" (si présent upstream)
+  - **Page Templates / Broadcasts** : retirer toute mention de "limite mensuelle"
+  - **Settings → Plan** : afficher "Plan Free — accès illimité pendant 15 jours" (pour les Free actifs). **Pas** de feature list grisée.
+  - **Aucun mur béton** sur les features upstream qui auraient des limites natives (A/B testing notamment — déjà reverté côté backend lot 4a, vérifier UI cohérente)
+- **Vérification systématique nécessaire** : audit page-par-page de la console pour identifier tous les écrans qui violent le pivot. Robert + agent en hot reload, 1h grand max.
+- **Polish à faire ensemble** : **URGENT** — chaque jour qui passe avec ces compteurs visibles = friction artificielle vs la promesse "générosité maximale". 🔴🔴🔴 visible client (#1 priorité).
+
 ---
 
 ## Récap visuel — priorité de polish UI
 
 | # | Feature | Priorité | Effort estimé |
 |---|---|---|---|
+| **22** | **PIVOT PRICING — purger compteurs/limites visibles** | **🔴🔴🔴 URGENT** | **M (2-3h audit + fix)** |
+| 4 | Widget quota mensuel → "∞ Illimité" quand quota=-1 (sous-cas du §22) | 🔴 | S (1h) |
+| 5 | Intercepteur 402 + modal paywall | 🔴 | S (1-2h) |
+| 21 | Paywall mode dégradé soft-deleted (attend backend, post-§3) | 🔴 | M (2-4h) après backend shippé |
+| 3 | Bandeau soft-delete + page status | 🔴 | M (2-4h) bandeau seul, L pour obfuscation |
+| 17 | Attach-member — badge "Invité via Veridian" + bouton "Gérer dans Veridian" | 🔴 | S (1-2h, dont metadata backend) |
 | 1 | Branding/white-label `veridian-managed` | 🔴 | M (2-4h) |
 | 2 | Vérif filtre api_key sur toutes les surfaces | 🔴 | S (30min) |
-| 3 | Bandeau soft-delete + page status | 🔴 | M (2-4h) bandeau seul, L pour obfuscation |
-| 4 | Widget quota mensuel sur Dashboard (**+ cas `-1=unlimited`** depuis ship 2026-05-20) | 🔴 | M (3-4h) |
-| 5 | Intercepteur 402 + modal paywall | 🔴 | S (1-2h) |
 | 6 | Mapping error_code i18n | 🟡 | S (1h) si on prend que les top 3 |
 | 7 | Badge plan_source sur Settings (**+ copy par source** depuis grant-unlimited 2026-05-20) | 🟡 | S (1h) |
 | 9 | Toast auto-login + page token expiré | 🟡 | S (1h) |
 | 16 | Bouton Hub "Offrir accès illimité" (**nouveau 2026-05-20**) | 🟡 admin | S (1h) côté Hub, 0 Notifuse |
 
-**Total polish 🔴 estimé** : ~8-12h de travail UI ensemble, qui ferait passer la console Notifuse de "Notifuse upstream avec quelques redirections" à "vraie expérience SaaS Veridian-managed cohérente avec le reste du dashboard Hub".
+**Total polish 🔴 estimé** : ~12-18h de travail UI ensemble, qui ferait passer la console Notifuse de "Notifuse upstream avec quelques redirections" à "vraie expérience SaaS Veridian-managed cohérente avec le pivot pricing 2026-05-21 et le dashboard Hub".
 
 **Changements depuis le ship du 2026-05-20** (wire-increment + grant-unlimited) :
 - §4 widget quota devient *réellement utile* (avant : compteur perpétuellement à 0)
 - §4 doit gérer le cas `quota=-1 = unlimited` (enterprise + lifetime + grant)
 - §7 badge plan_source devient *plus visible* (lifetime_partner fréquent maintenant)
 - §16 nouvelle section grant-unlimited (côté Hub seul, pas côté Notifuse)
+
+**Changements depuis le sprint 2026-05-21** (lots B/C/D/E/G + pivot pricing) :
+- **§22 PIVOT PRICING** = **nouvelle priorité #1 absolue** — la console doit cesser d'afficher tous les compteurs/limites/menus grisés qui violent la philosophie "générosité maximale" gravée par Robert. Audit page-par-page nécessaire.
+- §17 nouvelle section attach-member (post-lot B) — badge + bouton "Gérer dans Veridian"
+- §18-§20 nouvelles sections invisibles (Hub-only, pas d'impact UI Notifuse)
+- §19 V38 trial signal : **UI explicitement interdite** côté Notifuse (compteur invisible jusqu'à phase 3 Hub J+2)
+- §21 paywall mode dégradé : backend pending, gros polish UI à prévoir dès qu'il est shippé
 
 ---
 
