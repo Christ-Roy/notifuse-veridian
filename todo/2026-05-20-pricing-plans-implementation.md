@@ -1,19 +1,49 @@
 # Implémentation plans Notifuse — Free / Pro / Business / Enterprise
 
 > **Owner** : agent Notifuse
-> **Source de vérité** : `../VISION-BUSINESS.md` (racine veridian-platform)
+> **Source de vérité** : `CLAUDE.md` Notifuse §"Vision pricing — actée 2026-05-21"
 > **Sévérité** : 🔴 P1 — bloque la commercialisation SaaS
-> **Effort estimé** : 5-8 jours dev (backend pur + tests)
-> **Dépendances** : ticket Hub `2026-XX-XX-trial-state-machine.md` (à créer) pour gestion trial centralisée
+> **Effort estimé** restant : 2-3 jours dev (refactor de l'existant + lots restants)
 
-> **⚠️ Update 2026-05-20** — Pas de limite **emails/mois** côté Notifuse tant que
-> Veridian ne fournit pas son propre provider d'envoi. Le BYO sending fait
-> que c'est le provider du client (Gmail/SES/...) qui limite, pas nous.
-> Le code a déjà été modifié (PlanQuotas tous à -1, IsBlocked ne check plus
-> ce quota). **L'implémentation V37 doit donc PORTER UNIQUEMENT** sur les
-> autres dimensions : contacts, seats, oauth, custom domains, sequences,
-> A/B, branding, white-label, historique. **Ne PAS recâbler de limite
-> emails/mois sauf instruction explicite de Robert (Phase C Resend managé).**
+---
+
+## 🚨 PIVOT MAJEUR 2026-05-21 — Générosité maximale
+
+**Décision Robert** : on **annule la plupart des limites** initialement
+prévues. L'app **ne doit JAMAIS être défigurée** par des murs béton ou
+des compteurs visibles. La conversion se fait par **la deadline 15j Free**
+(le temps), pas par l'agacement (les limites de features).
+
+### Nouvelle grille (cf. CLAUDE.md Notifuse pour le détail)
+
+**TOUT est illimité partout, sauf :**
+
+1. **Durée Free** : 15 jours → puis paywall
+2. **Domaines custom** : Free=0 / Pro=1 / Business=5 / Enterprise=illimité
+
+**Et c'est tout.** Le reste (contacts, seats, OAuth, automation, A/B,
+historique, branding) = **illimité pour tous les plans, y compris Free**.
+
+### Ce qui devient interdit code-side
+
+- ❌ Mur béton 402 sur une feature
+- ❌ Compteur visible "il vous reste X / Y"
+- ❌ Menu grisé "🔒 Pro"
+- ❌ Pop-up "passez Pro pour faire ça"
+- ❌ Branding obligatoire (les Free peuvent l'enlever aussi)
+
+### Conséquence sur ce ticket
+
+- **Lot 4a A/B feature gate** déjà livré → **à revert / désactiver**
+  (A/B devient gratuit pour tous)
+- **Lots 4b seat, 4c contact, 5 branding** → **annulés**
+- **Lot 4d custom domain** → **conservé** (seule vraie limite enforcée)
+- **Lot 6 cron retention** → déjà annulé hier
+
+### Update emails/mois (toujours valide)
+
+Pas de limite emails/mois côté Notifuse tant que Veridian ne fournit pas
+son propre provider d'envoi (BYO sending). Décision 2026-05-20.
 
 ---
 
@@ -298,35 +328,51 @@ Câbler dans le code Notifuse les nouveaux plans tels que décrits dans `VISION-
 le body de `broadcasts.create` pour détecter `test_settings`. Plus
 simple, plus robuste, business-équivalent.
 
-### ⏳ Lots restants (à arbitrer avec Robert avant de coder)
+### ⏳ Lots restants après le pivot 2026-05-21
 
-- [ ] **Lot 4b** — Seat enforcement sur `/api/user.add` ou équivalent.
-  **Question design** : où compter les seats ? `workspace_users.WHERE
-  workspace_id=X AND type='user'` (excluant les api_keys) — à
-  confirmer.
-- [ ] **Lot 4c** — Contact count enforcement sur `/api/contacts.upsert`
-  et `/api/contacts.import`. **Question design** : `SELECT COUNT(*)` à
-  chaque insert = coûteux. Alternative : compteur dénormalisé
-  `veridian_plan.contacts_count` mis à jour via trigger ou increment
-  service, refresh nightly pour audit.
-- [ ] **Lot 4d** — Custom domain enforcement (`feature_white_label` ou
-  `MaxCustomDomains > 0`).
-- [ ] **Lot 5** — Branding "Powered by Veridian". **Question design** :
-  footer MJML ajouté côté serveur dans `EmailService.SendEmailForTemplate`
-  juste avant le `providerRequest` (besoin d'ajouter `planRepo` en
-  dépendance à `EmailService`) OU modifier les templates Veridian dans
-  la console (UX différente, pas de modif code).
-- [x] ~~**Lot 6** — Cron cleanup historique (`history_retention_days`)~~ —
-  **ABANDONNÉ 2026-05-21**. Décision Robert : pas de gain business à
-  l'échelle actuelle (qq milliers de lignes par tenant = rien pour
-  Postgres), et la conformité RGPD est déjà couverte par le soft-delete
-  + purge 30j du lifecycle V34. La colonne `history_retention_days`
-  reste en DB (gratuite, future-proof si la volumétrie explose un jour),
-  mais aucun cron n'est implémenté. À reprendre uniquement si une table
-  dépasse les millions de lignes ou si un audit RGPD client le demande.
-- [ ] **Lot 8** — Documentation CHANGELOG + README. Note : CHANGELOG
-  est upstream-aligned, peut-être préférable de documenter dans CLAUDE.md
-  ou dans un fichier dédié `VERIDIAN-PRICING-V37.md`.
+#### 🔴 À faire — vraies limites
+
+- [ ] **Lot 4d** — Custom domain enforcement sur l'endpoint d'ajout de
+  domaine custom (à identifier dans le code Notifuse). Free=0 / Pro=1 /
+  Business=5 / Enterprise=illimité. Refus 402 + `error_code=domain_limit_reached`
+  si dépassement. **C'est la seule limite enforcée vraiment.**
+
+#### 🟡 À reverter / désactiver — features gratuites désormais
+
+- [ ] **Lot 4a A/B feature gate (déjà livré)** → **REVERT** : les Free
+  ont maintenant accès à A/B testing. Supprimer la map
+  `featureGatedPaths` côté middleware (ou la laisser vide).
+- [ ] **Backfill V37** : passer `feature_ab_testing=TRUE` pour tous les
+  tenants Free existants (canaryfree inclus). Migration V38 ?
+- [ ] **Domain `DefaultPlanLimits`** : Free doit avoir `FeatureABTesting=true`
+  désormais (cohérence avec le code revert + nouveaux clients).
+
+#### ❌ Annulés définitivement (pivot 2026-05-21)
+
+- [x] ~~**Lot 4b** — Seat enforcement~~ — seats illimités pour tous
+  (growth hacking par invitation cross-Free)
+- [x] ~~**Lot 4c** — Contact count enforcement~~ — contacts illimités
+  pour tous
+- [x] ~~**Lot 5** — Branding "Powered by Veridian" obligatoire~~ — le
+  branding devient **optionnel pour tous** (toggle Settings ou OFF par
+  défaut, décision UI à figer). Plus de dégradation des emails Free.
+- [x] ~~**Lot 6** — Cron cleanup historique~~ — abandonné 2026-05-20
+  (overkill à l'échelle actuelle + RGPD déjà couvert par soft-delete)
+
+#### 🟡 Mécanisme central remaining
+
+- [ ] **Trial 15j → expiration → paywall Free** :
+  - Notifuse signal d'éligibilité (ticket `2026-05-21-trial-eligible-signal.md`)
+  - Hub state machine (ticket Hub `2026-05-21-trial-state-machine.md`)
+  - **Décision design à figer** : la deadline 15j Free démarre quand ?
+    Au signup ou au 1er signal d'activité (5 mails) ?
+- [ ] **Mode paywall post-15j Free** : hard block ou dégradé lecture-seule
+  (cf. ticket `2026-05-21-paywall-degraded-mode-soft-deleted.md` qui
+  traite le cas soft-delete, à étendre / reproduire pour le cas
+  trial-expired).
+- [ ] **Documentation CHANGELOG + README** — Note : CHANGELOG upstream-aligned,
+  préférer doc dans `CLAUDE.md` Notifuse (déjà fait pour la nouvelle
+  vision pricing 2026-05-21) ou fichier dédié.
 
 **Note lot 1** : choix volontairement non-régressif — fondation seule.
 **Note lot 2** : auto-fill côté repo = lots 1+2 deviennent transparents

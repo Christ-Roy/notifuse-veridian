@@ -74,6 +74,88 @@ qui peuvent tourner sur prod (read-only, pas de pollution data).
 
 ---
 
+## 💰 Vision pricing — actée 2026-05-21
+
+**Philosophie globale Robert** : générosité maximale au début, raffinement
+plus tard. L'app **ne doit JAMAIS être défigurée** par des limites visibles
+ou des murs béton. Conversion par la **deadline 15j** (temps), pas par
+l'agacement (limites de features).
+
+### Grille de prix
+
+| Dimension | Free | Pro 29€ | Business 99€ | Enterprise |
+|---|---|---|---|---|
+| **Durée d'usage** | **15 jours** puis paywall | illimité | illimité | illimité |
+| Emails/mois | illimité | illimité | illimité | illimité |
+| Contacts en base | illimité | illimité | illimité | illimité |
+| Comptes OAuth (BYO sending) | illimité | illimité | illimité | illimité |
+| Automation sequences | illimité | illimité | illimité | illimité |
+| Historique data | illimité | illimité | illimité | illimité |
+| Seats (utilisateurs invités) | illimité | illimité | illimité | illimité |
+| A/B testing | ✅ | ✅ | ✅ | ✅ |
+| Branding "Powered by Veridian" | ❌ optionnel | ❌ optionnel | ❌ + white-label custom | ❌ |
+| **Domaines custom** | **0** | **1** | **5** | illimité |
+
+### Les SEULES limites réelles côté Free
+
+1. **Le temps** : 15 jours d'usage à partir du déclencheur (à figer cf.
+   ticket trial-eligible-signal — vraisemblablement signup ou activité)
+2. **Les domaines custom** : un Free n'a pas de domaine perso `mail.client.com`,
+   il envoie depuis son OAuth (Gmail/Outlook). C'est la **seule vraie
+   différenciation produit** vs paid.
+
+### Pourquoi cette générosité
+
+- **Growth hacking par les seats illimités** : un Free peut inviter
+  toute son équipe → multiplication virale du nb de comptes
+- **Branding "Powered by Veridian" optionnel** : un Free qui veut nous
+  retirer le footer peut le faire — les emails restent professionnels,
+  pas de bandeau honteux qui dégrade l'expérience de SES destinataires
+- **App utilisable, pas une démo cassée** : un Free qui teste pendant
+  15j voit le **produit complet** (A/B testing, automation illimitée,
+  contacts illimités). Convertit parce qu'il l'aime, pas parce qu'on
+  l'a brisé
+- **Toutes les features sont des arguments de vente** : "contacts
+  illimités sur tous les plans" devient un differenciateur vs concurrents
+
+### Ce qui devient interdit côté code
+
+- ❌ Mur béton `402 Payment Required` sur une feature
+- ❌ Compteur visible "il vous reste X mails / Y contacts"
+- ❌ Menu A/B testing grisé "🔒 Pro"
+- ❌ Pop-up "passez Pro pour faire ça"
+- ❌ Branding obligatoire qui dégrade les emails du client
+- ❌ Tout enforcement de quotas autre que :
+  - la deadline 15j (qui transforme Free → expired)
+  - le nb de domaines custom (limite physique au moment d'ajouter un domaine)
+
+### Conséquences pour le code
+
+- **V37 lots 4b/4c/4d et 5** sont **annulés** (seat/contact/A-B/branding enforcement)
+- **Lot 4a feature gate A/B** déjà livré → **à revert ou désactiver** (A/B
+  devient gratuit pour tous)
+- Seul lot enforcement à garder éventuellement : **custom domains** (0 / 1 / 5)
+- **Le trial intelligent** (5 mails → 2j → 15j) reste pertinent mais devient
+  **le mécanisme central** : c'est la deadline 15j qui fait le pricing,
+  pas les dimensions
+
+### Compteurs invisibles (télémétrie interne uniquement)
+
+- `emails_sent_lifetime` reste utile pour télémétrie + signal d'activité
+- `contacts_count`, `members_count`, `oauth_accounts_count` → si tracés,
+  uniquement pour stats internes (PA dashboards Robert), **JAMAIS exposés**
+  à l'UI client. Aucun "47/500 contacts" visible.
+
+### Décisions design encore à figer (cf. tickets)
+
+- Quand démarrent les 15j Free ? Signup ou activité (5 mails) ?
+- Que se passe-t-il après les 15j ? Hard paywall (login impossible) ou
+  mode dégradé lecture seule + lien upgrade ?
+- Le branding "Powered by Veridian" optionnel → toggle dans Settings
+  ou par défaut OFF pour tous ?
+
+---
+
 ## 📜 Constitution CI — règles non négociables
 
 Standard de référence : `../CI-ARCHITECTURE.md` (racine `veridian-platform/`).
