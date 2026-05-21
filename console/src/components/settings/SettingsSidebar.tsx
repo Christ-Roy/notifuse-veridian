@@ -4,7 +4,8 @@ import {
   TagsOutlined,
   SettingOutlined,
   ExclamationCircleOutlined,
-  MailOutlined
+  MailOutlined,
+  CreditCardOutlined
 } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 
@@ -16,6 +17,7 @@ export type SettingsSection =
   | 'smtp-bridge'
   | 'general'
   | 'blog'
+  | 'plan'
   | 'danger-zone'
 
 interface SettingsSidebarProps {
@@ -111,6 +113,13 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
       key: 'general',
       icon: <SettingOutlined />,
       label: t`General`
+    },
+    {
+      // === Veridian patch === entrée "Plan" pour Settings → plan_source badge
+      // + CTA Manage subscription. Cf. veridian_plan_settings.tsx.
+      key: 'plan',
+      icon: <CreditCardOutlined />,
+      label: t`Plan`
     }
   ]
 

@@ -14,6 +14,8 @@ import { WebhooksSettings } from '../components/settings/WebhooksSettings'
 import { useAuth } from '../contexts/AuthContext'
 import { DeleteWorkspaceSection } from '../components/settings/DeleteWorkspace'
 import { SettingsSidebar, SettingsSection } from '../components/settings/SettingsSidebar'
+// === Veridian patch === section Plan ajoutée au sidebar settings.
+import { VeridianPlanSettings } from '../components/settings/veridian_plan_settings'
 
 const { Sider, Content } = Layout
 
@@ -38,6 +40,7 @@ export function WorkspaceSettingsPage() {
     'smtp-bridge',
     'general',
     'blog',
+    'plan',
     'danger-zone'
   ]
 
@@ -152,6 +155,9 @@ export function WorkspaceSettingsPage() {
             isOwner={isOwner}
           />
         )
+      case 'plan':
+        // === Veridian patch === section Plan : badge plan_source + CTA Hub.
+        return <VeridianPlanSettings workspaceId={workspaceId} />
       case 'danger-zone':
         return workspace && isOwner ? (
           <DeleteWorkspaceSection workspace={workspace} onDeleteSuccess={handleWorkspaceDelete} />

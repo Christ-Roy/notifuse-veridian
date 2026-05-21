@@ -102,7 +102,12 @@ export function CreateWorkspacePage() {
     } catch (error) {
       console.error('Error creating workspace:', error)
       if (error instanceof ApiError && error.status === 403 && error.message.includes('workspace limit')) {
-        message.error(t`Workspace limit reached. Please upgrade your plan to create more workspaces.`)
+        // === Veridian patch === pivot pricing 2026-05-21 : pas de copy
+        // "Upgrade your plan" visible. La limite workspace côté backend
+        // reste un garde-fou (root-only par défaut), mais le wording est
+        // neutre. Robert tranchera en session calme si on ajoute un CTA
+        // contextuel "Contactez Veridian" — pour l'instant message neutre.
+        message.error(t`Unable to create workspace. Please contact your administrator.`)
       } else {
         message.error(error instanceof Error ? error.message : t`Failed to create workspace`)
       }

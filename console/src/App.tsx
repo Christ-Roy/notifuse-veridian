@@ -6,6 +6,12 @@ import { router } from './router'
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider, useLocale, i18n } from './contexts/LocaleContext'
 import { initializeAnalytics } from './utils/analytics-config'
+// === Veridian patch === Global UX layer : modal paywall (402), toast
+// hub_sync_dead (503), welcome toast post auto-login. Composants
+// event-driven, ne rendent rien si pas d'event. Doivent vivre sous
+// <AntApp> pour utiliser App.useApp().
+import { VeridianPaywallModal } from './components/veridian_paywall_modal'
+import { VeridianWelcomeToast } from './components/veridian_welcome_toast'
 import enUS from 'antd/locale/en_US'
 import frFR from 'antd/locale/fr_FR'
 import esES from 'antd/locale/es_ES'
@@ -89,6 +95,9 @@ function AppContent() {
     <I18nProvider i18n={i18n} key={locale}>
       <ConfigProvider theme={theme} locale={antdLocales[locale]}>
         <AntApp>
+          {/* === Veridian patch === Global UX components — voir veridian_*.tsx */}
+          <VeridianPaywallModal />
+          <VeridianWelcomeToast />
           <RouterProvider router={router} />
         </AntApp>
       </ConfigProvider>

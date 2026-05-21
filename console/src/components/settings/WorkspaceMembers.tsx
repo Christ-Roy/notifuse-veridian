@@ -265,7 +265,11 @@ export function WorkspaceMembers({
       onMembersChange()
     } catch (error) {
       if (error instanceof ApiError && error.status === 403 && error.message.includes('team member limit')) {
-        message.error(t`Team member limit reached. Please upgrade your plan to add more members.`)
+        // === Veridian patch === pivot pricing 2026-05-21 : pas de copy
+        // "Upgrade your plan" visible côté client. Seats sont illimités sur
+        // tous les plans (cf. PRICING-VERIDIAN.md). Si ce message survient
+        // c'est un garde-fou anti-abuse côté backend — wording neutre.
+        message.error(t`Unable to add this member. Please contact your administrator.`)
       } else {
         const msg = error instanceof Error ? error.message : t`Failed to invite member`
         message.error(msg)

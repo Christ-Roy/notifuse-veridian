@@ -33,6 +33,12 @@ import {
   WarningOutlined,
   DownOutlined
 } from '@ant-design/icons'
+// === Veridian patch === co-brand léger (header link, footer) + bandeau
+// soft-delete. Composants event-driven / query-driven, dégradent
+// silencieusement en mode self-hosted.
+import { VeridianBrandHeaderLink } from '../components/veridian_brand_header_link'
+import { VeridianBrandFooter } from '../components/veridian_brand_footer'
+import { VeridianSoftDeleteBanner } from '../components/veridian_soft_delete_banner'
 
 const { Content, Sider, Header } = Layout
 
@@ -494,7 +500,10 @@ export function WorkspaceLayout() {
               transition: 'width 0.2s'
             }}
           >
-            <Select
+            <Space size="small">
+              {/* === Veridian patch === Lien discret retour Hub si managed */}
+              <VeridianBrandHeaderLink />
+              <Select
               value={workspaceId}
               variant="filled"
               onChange={handleWorkspaceChange}
@@ -536,6 +545,7 @@ export function WorkspaceLayout() {
                   : [])
               ]}
             />
+            </Space>
             <Space size="middle">
               <Dropdown
                 trigger={['click']}
@@ -617,6 +627,10 @@ export function WorkspaceLayout() {
             }}
           >
             <Content style={{ backgroundColor: '#F9F9F9' }}>
+              {/* === Veridian patch === bandeau soft-delete persistant.
+                  Affiché uniquement si middleware backend signale via
+                  header X-Tenant-Soft-Deleted. */}
+              <VeridianSoftDeleteBanner workspaceId={workspaceId} />
               <FileManagerProvider
                 key={`fm-${workspaceId}-${!userPermissions?.templates?.write}`}
                 settings={workspaces.find((w) => w.id === workspaceId)?.settings.file_manager}
@@ -625,6 +639,9 @@ export function WorkspaceLayout() {
               >
                 <Outlet />
               </FileManagerProvider>
+              {/* === Veridian patch === footer co-brand affiché uniquement
+                  en mode veridian-managed. */}
+              <VeridianBrandFooter />
             </Content>
           </Layout>
         </Layout>
