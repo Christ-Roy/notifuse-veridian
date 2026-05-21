@@ -316,10 +316,14 @@ simple, plus robuste, business-équivalent.
   juste avant le `providerRequest` (besoin d'ajouter `planRepo` en
   dépendance à `EmailService`) OU modifier les templates Veridian dans
   la console (UX différente, pas de modif code).
-- [ ] **Lot 6** — Cron cleanup historique (`history_retention_days`).
-  **Question design** : DELETE direct dans `messages` / `message_history`
-  par workspace_id ou soft-delete avec audit ? Chaque tenant ayant sa
-  propre DB Postgres, le cron doit itérer sur tous les tenants Veridian.
+- [x] ~~**Lot 6** — Cron cleanup historique (`history_retention_days`)~~ —
+  **ABANDONNÉ 2026-05-21**. Décision Robert : pas de gain business à
+  l'échelle actuelle (qq milliers de lignes par tenant = rien pour
+  Postgres), et la conformité RGPD est déjà couverte par le soft-delete
+  + purge 30j du lifecycle V34. La colonne `history_retention_days`
+  reste en DB (gratuite, future-proof si la volumétrie explose un jour),
+  mais aucun cron n'est implémenté. À reprendre uniquement si une table
+  dépasse les millions de lignes ou si un audit RGPD client le demande.
 - [ ] **Lot 8** — Documentation CHANGELOG + README. Note : CHANGELOG
   est upstream-aligned, peut-être préférable de documenter dans CLAUDE.md
   ou dans un fichier dédié `VERIDIAN-PRICING-V37.md`.
