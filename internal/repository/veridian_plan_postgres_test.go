@@ -55,7 +55,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		rows := sqlmock.NewRows(getColumns).AddRow(
 			wsID, "pro", "stripe", "active", int64(10000), int64(42),
 			now, nil, nil, nil, nil, nil, nil, nil,
-			int64(5000), 5, 5, 1, -1, true, true, false, 365,
+			int64(-1), -1, -1, -1, -1, true, true, false, -1,
 			now, now,
 		)
 
@@ -71,14 +71,14 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		assert.Equal(t, int64(42), p.EmailsSentThisMonth)
 		assert.Nil(t, p.SuspendedAt)
 		assert.Nil(t, p.DeletedAt)
-		// V37 dimensions correctement scannees
-		assert.Equal(t, int64(5000), p.MaxContacts)
-		assert.Equal(t, 5, p.MaxSeats)
-		assert.Equal(t, -1, p.MaxActiveSequences, "Pro = sequences illimitees")
+		// V37 dimensions scannees — pivot 2026-05-21 : tout illimite
+		assert.Equal(t, int64(-1), p.MaxContacts)
+		assert.Equal(t, -1, p.MaxSeats)
+		assert.Equal(t, -1, p.MaxActiveSequences)
 		assert.True(t, p.FeatureABTesting)
 		assert.True(t, p.FeatureBrandingRemoved)
 		assert.False(t, p.FeatureWhiteLabel, "white-label = Business+ uniquement")
-		assert.Equal(t, 365, p.HistoryRetentionDays)
+		assert.Equal(t, -1, p.HistoryRetentionDays)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -95,7 +95,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 			wsID, "free", "lifetime_partner", "suspended", int64(500), int64(0),
 			now, susp, "non-payment", del,
 			nil, purgeEligible, nil, "GDPR user request",
-			int64(500), 1, 1, 0, 1, false, false, false, 30,
+			int64(-1), -1, -1, -1, -1, true, true, false, -1,
 			now, now,
 		)
 
@@ -114,10 +114,10 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		assert.Equal(t, "GDPR user request", p.LifecycleReason)
 		assert.Nil(t, p.RestoredAt, "tenant pas restore")
 		assert.Nil(t, p.LastTouchedAt, "tenant pas touche")
-		// V37 dimensions Free
-		assert.Equal(t, int64(500), p.MaxContacts)
-		assert.Equal(t, 0, p.MaxCustomDomains, "Free = 0 domaines custom")
-		assert.False(t, p.FeatureBrandingRemoved, "Free GARDE Powered by Veridian")
+		// V37 dimensions Free — pivot 2026-05-21 : tout illimite
+		assert.Equal(t, int64(-1), p.MaxContacts)
+		assert.Equal(t, -1, p.MaxCustomDomains, "pivot : custom domains illimite partout")
+		assert.True(t, p.FeatureBrandingRemoved, "pivot : branding optionnel pour tous y compris Free")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -169,7 +169,7 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 			"ws-new", "free", nil, "active", int64(500), int64(0),
 			sqlmock.AnyArg(), nil, "", nil,
 			// V37 defaults Free : 500/1/1/0/1/false/false/false/30
-			int64(500), 1, 1, 0, 1, false, false, false, 30,
+			int64(-1), -1, -1, -1, -1, true, true, false, -1,
 			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -178,9 +178,10 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 		assert.Equal(t, domain.PlanStatusActive, p.Status, "status defaulted to active")
 		assert.False(t, p.CreatedAt.IsZero())
 		assert.False(t, p.UpdatedAt.IsZero())
-		// La struct doit avoir ete mutee par applyDefaultLimits.
-		assert.Equal(t, int64(500), p.MaxContacts)
-		assert.Equal(t, 1, p.MaxSeats)
+		// La struct doit avoir ete mutee par applyDefaultLimits — pivot
+		// 2026-05-21 : tout illimite pour Free.
+		assert.Equal(t, int64(-1), p.MaxContacts)
+		assert.Equal(t, -1, p.MaxSeats)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -286,7 +287,7 @@ func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 		// upgrade vers pro → dimensions Pro appliquees : 5000/5/5/1/-1/true/true/false/365
 		mock.ExpectExec(expectedSQL).
 			WithArgs("ws-1", "pro", int64(10000), "lifetime_partner",
-				int64(5000), 5, 5, 1, -1, true, true, false, 365,
+				int64(-1), -1, -1, -1, -1, true, true, false, -1,
 				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -303,7 +304,7 @@ func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 		// Cas typique : Stripe webhook subscription_deleted → repli Free.
 		mock.ExpectExec(expectedSQL).
 			WithArgs("ws-1", "free", int64(-1), "stripe",
-				int64(500), 1, 1, 0, 1, false, false, false, 30,
+				int64(-1), -1, -1, -1, -1, true, true, false, -1,
 				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -319,7 +320,7 @@ func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 		// business → 25k/25/25/5/-1/true/true/true/-1
 		mock.ExpectExec(expectedSQL).
 			WithArgs("ws-1", "business", int64(50000), nil,
-				int64(25000), 25, 25, 5, -1, true, true, true, -1,
+				int64(-1), -1, -1, -1, -1, true, true, true, -1,
 				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -336,7 +337,7 @@ func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 		// pour que le COALESCE preserve la valeur DB existante.
 		mock.ExpectExec(expectedSQL).
 			WithArgs("ws-1", "pro", int64(10000), nil,
-				int64(5000), 5, 5, 1, -1, true, true, false, 365,
+				int64(-1), -1, -1, -1, -1, true, true, false, -1,
 				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -351,7 +352,7 @@ func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 
 		mock.ExpectExec(expectedSQL).
 			WithArgs("ws-missing", "pro", int64(10000), nil,
-				int64(5000), 5, 5, 1, -1, true, true, false, 365,
+				int64(-1), -1, -1, -1, -1, true, true, false, -1,
 				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
@@ -368,7 +369,7 @@ func TestVeridianPlanRepository_UpdatePlan(t *testing.T) {
 		// Le quota fourni est respecte tel quel (le caller a deja decide).
 		mock.ExpectExec(expectedSQL).
 			WithArgs("ws-1", "mystery-tier", int64(999999), nil,
-				int64(500), 1, 1, 0, 1, false, false, false, 30,
+				int64(-1), -1, -1, -1, -1, true, true, false, -1,
 				sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -573,7 +574,7 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 	}).AddRow("ws-1", "pro", "stripe", "active", int64(10000), int64(0),
 		now, nil, nil, nil,
 		restoredAt, purgeEligibleAt, lastTouchedAt, "audit reason for V34 lifecycle",
-		int64(5000), 5, 5, 1, -1, true, true, false, 365,
+		int64(-1), -1, -1, -1, -1, true, true, false, -1,
 		now, now)
 
 	mock.ExpectQuery(`

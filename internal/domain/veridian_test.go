@@ -315,52 +315,61 @@ func TestDefaultPlanLimits_AllPlansDefined(t *testing.T) {
 	assert.Len(t, DefaultPlanLimits, len(expected), "nombre de plans inattendu — update test + VISION-BUSINESS.md")
 }
 
-// TestDefaultPlanLimits_FreeMatchesContract — Free est le plus contraint.
-// Doit matcher pixel-perfect VISION-BUSINESS.md table pricing.
-func TestDefaultPlanLimits_FreeMatchesContract(t *testing.T) {
+// TestDefaultPlanLimits_FreeAllUnlimited — Pivot 2026-05-21 generosite
+// maximale : Free a TOUT illimite. SEULE difference vs paid = la duree
+// (deadline 15j cf. trial state machine Hub). Pas de white-label Free.
+func TestDefaultPlanLimits_FreeAllUnlimited(t *testing.T) {
 	free := DefaultPlanLimits["free"]
 	assert.Equal(t, int64(-1), free.MonthlyEmailQuota, "BYO sending = pas de cap")
-	assert.Equal(t, int64(500), free.MaxContacts)
-	assert.Equal(t, 1, free.MaxSeats)
-	assert.Equal(t, 1, free.MaxOAuthAccounts)
-	assert.Equal(t, 0, free.MaxCustomDomains, "pas de domaine custom en Free")
-	assert.Equal(t, 1, free.MaxActiveSequences)
-	assert.False(t, free.FeatureABTesting)
-	assert.False(t, free.FeatureBrandingRemoved, "Free DOIT garder Powered by Veridian")
-	assert.False(t, free.FeatureWhiteLabel)
-	assert.Equal(t, 30, free.HistoryRetentionDays)
+	assert.Equal(t, int64(-1), free.MaxContacts, "pivot 2026-05-21 illimite")
+	assert.Equal(t, -1, free.MaxSeats, "growth hacking = invitation illimitee")
+	assert.Equal(t, -1, free.MaxOAuthAccounts)
+	assert.Equal(t, -1, free.MaxCustomDomains, "pivot 2026-05-21 illimite — pas de cout infra")
+	assert.Equal(t, -1, free.MaxActiveSequences)
+	assert.True(t, free.FeatureABTesting, "A/B gratuit pour tous")
+	assert.True(t, free.FeatureBrandingRemoved, "branding optionnel pour tous (Free inclus)")
+	assert.False(t, free.FeatureWhiteLabel, "white-label reste differenciant Business+")
+	assert.Equal(t, -1, free.HistoryRetentionDays)
 }
 
-// TestDefaultPlanLimits_ProMatchesContract — Pro 29 EUR/mo.
-func TestDefaultPlanLimits_ProMatchesContract(t *testing.T) {
+// TestDefaultPlanLimits_ProAllUnlimited — Pivot 2026-05-21 : Pro 29 EUR/mo.
+// Identique a Free sauf qu'il echappe au paywall 15j (geree cote Hub).
+// Pas de white-label Pro (reste Business+).
+func TestDefaultPlanLimits_ProAllUnlimited(t *testing.T) {
 	pro := DefaultPlanLimits["pro"]
-	assert.Equal(t, int64(5000), pro.MaxContacts)
-	assert.Equal(t, 5, pro.MaxSeats)
-	assert.Equal(t, 5, pro.MaxOAuthAccounts)
-	assert.Equal(t, 1, pro.MaxCustomDomains)
-	assert.Equal(t, -1, pro.MaxActiveSequences, "Pro = sequences illimitees")
+	assert.Equal(t, int64(-1), pro.MonthlyEmailQuota)
+	assert.Equal(t, int64(-1), pro.MaxContacts)
+	assert.Equal(t, -1, pro.MaxSeats)
+	assert.Equal(t, -1, pro.MaxOAuthAccounts)
+	assert.Equal(t, -1, pro.MaxCustomDomains)
+	assert.Equal(t, -1, pro.MaxActiveSequences)
+	assert.Equal(t, -1, pro.HistoryRetentionDays)
 	assert.True(t, pro.FeatureABTesting)
 	assert.True(t, pro.FeatureBrandingRemoved)
-	assert.False(t, pro.FeatureWhiteLabel, "white-label est Business+")
-	assert.Equal(t, 365, pro.HistoryRetentionDays)
+	assert.False(t, pro.FeatureWhiteLabel, "white-label = SEUL differenciant Business vs Pro")
 }
 
-// TestDefaultPlanLimits_BusinessMatchesContract — Business 99 EUR/mo.
-func TestDefaultPlanLimits_BusinessMatchesContract(t *testing.T) {
+// TestDefaultPlanLimits_BusinessUnlimitedPlusWhiteLabel — Business 99 EUR/mo.
+// SEULE difference vs Pro = white-label custom (le client met son propre
+// footer "Sent by ClientName" au lieu de juste retirer "Powered by Veridian").
+func TestDefaultPlanLimits_BusinessUnlimitedPlusWhiteLabel(t *testing.T) {
 	biz := DefaultPlanLimits["business"]
-	assert.Equal(t, int64(25000), biz.MaxContacts)
-	assert.Equal(t, 25, biz.MaxSeats)
-	assert.Equal(t, 25, biz.MaxOAuthAccounts)
-	assert.Equal(t, 5, biz.MaxCustomDomains)
+	assert.Equal(t, int64(-1), biz.MonthlyEmailQuota)
+	assert.Equal(t, int64(-1), biz.MaxContacts)
+	assert.Equal(t, -1, biz.MaxSeats)
+	assert.Equal(t, -1, biz.MaxOAuthAccounts)
+	assert.Equal(t, -1, biz.MaxCustomDomains)
 	assert.Equal(t, -1, biz.MaxActiveSequences)
+	assert.Equal(t, -1, biz.HistoryRetentionDays)
 	assert.True(t, biz.FeatureABTesting)
 	assert.True(t, biz.FeatureBrandingRemoved)
-	assert.True(t, biz.FeatureWhiteLabel, "Business inclut white-label")
-	assert.Equal(t, -1, biz.HistoryRetentionDays, "Business = historique illimite")
+	assert.True(t, biz.FeatureWhiteLabel, "Business INCLUT white-label (seul differenciant vs Pro)")
 }
 
 // TestDefaultPlanLimits_EnterpriseAllUnlimited — Enterprise sur devis,
-// tout illimite + toutes les features.
+// strict identique a Business sur les dimensions (tout -1 + white-label).
+// Differenciation Enterprise = sur devis (SLA, support dedie, contrat
+// custom — pas reflete dans PlanLimits).
 func TestDefaultPlanLimits_EnterpriseAllUnlimited(t *testing.T) {
 	ent := DefaultPlanLimits["enterprise"]
 	assert.Equal(t, int64(-1), ent.MonthlyEmailQuota)
@@ -373,6 +382,34 @@ func TestDefaultPlanLimits_EnterpriseAllUnlimited(t *testing.T) {
 	assert.True(t, ent.FeatureABTesting)
 	assert.True(t, ent.FeatureBrandingRemoved)
 	assert.True(t, ent.FeatureWhiteLabel)
+}
+
+// TestDefaultPlanLimits_PivotInvariant_OnlyDifferenceIsWhiteLabel —
+// Garde-fou anti-regression : si un agent re-cable une limite (ex:
+// MaxContacts=500 pour Free), ce test casse. La SEULE difference
+// entre plans (a part durabilite Free 15j geree cote Hub) c'est
+// white-label custom Business+.
+func TestDefaultPlanLimits_PivotInvariant_OnlyDifferenceIsWhiteLabel(t *testing.T) {
+	plans := []string{"free", "pro", "business", "enterprise"}
+	for _, plan := range plans {
+		limits := DefaultPlanLimits[plan]
+		t.Run(plan+"_all_dimensions_unlimited", func(t *testing.T) {
+			assert.Equal(t, int64(-1), limits.MonthlyEmailQuota, "%s monthly emails", plan)
+			assert.Equal(t, int64(-1), limits.MaxContacts, "%s contacts", plan)
+			assert.Equal(t, -1, limits.MaxSeats, "%s seats", plan)
+			assert.Equal(t, -1, limits.MaxOAuthAccounts, "%s oauth", plan)
+			assert.Equal(t, -1, limits.MaxCustomDomains, "%s custom domains", plan)
+			assert.Equal(t, -1, limits.MaxActiveSequences, "%s sequences", plan)
+			assert.Equal(t, -1, limits.HistoryRetentionDays, "%s history", plan)
+			assert.True(t, limits.FeatureABTesting, "%s A/B testing", plan)
+			assert.True(t, limits.FeatureBrandingRemoved, "%s branding optionnel", plan)
+		})
+	}
+	// White-label : SEULE difference Business+ vs Free/Pro.
+	assert.False(t, DefaultPlanLimits["free"].FeatureWhiteLabel)
+	assert.False(t, DefaultPlanLimits["pro"].FeatureWhiteLabel)
+	assert.True(t, DefaultPlanLimits["business"].FeatureWhiteLabel)
+	assert.True(t, DefaultPlanLimits["enterprise"].FeatureWhiteLabel)
 }
 
 // TestLimitsForPlan_KnownPlans — chemin nominal.

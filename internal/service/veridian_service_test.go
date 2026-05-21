@@ -1502,22 +1502,22 @@ func TestVeridianService_GetLimits_ReadsV37Dimensions(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
-	// Tenant pro avec dimensions V37 backfillees ou re-upsertees post-V37.
+	// Tenant pro post-pivot 2026-05-21 : tout illimite.
 	m.planRepo.EXPECT().Get(ctx, "ws-pro").Return(&domain.VeridianPlan{
 		WorkspaceID:            "ws-pro",
 		Plan:                   "pro",
 		PlanSource:             domain.PlanSourceStripe,
 		Status:                 domain.PlanStatusActive,
 		MonthlyEmailQuota:      -1,
-		MaxContacts:            5000,
-		MaxSeats:               5,
-		MaxOAuthAccounts:       5,
-		MaxCustomDomains:       1,
+		MaxContacts:            -1,
+		MaxSeats:               -1,
+		MaxOAuthAccounts:       -1,
+		MaxCustomDomains:       -1,
 		MaxActiveSequences:     -1,
 		FeatureABTesting:       true,
 		FeatureBrandingRemoved: true,
 		FeatureWhiteLabel:      false,
-		HistoryRetentionDays:   365,
+		HistoryRetentionDays:   -1,
 	}, nil).Times(1)
 
 	resp, err := svc.GetLimits(ctx, "ws-pro")
@@ -1527,13 +1527,13 @@ func TestVeridianService_GetLimits_ReadsV37Dimensions(t *testing.T) {
 	assert.Equal(t, "pro", resp.Plan)
 	assert.Equal(t, domain.PlanSourceStripe, resp.PlanSource)
 	assert.Equal(t, domain.PlanStatusActive, resp.Status)
-	assert.Equal(t, int64(5000), resp.Limits.MaxContacts)
-	assert.Equal(t, 5, resp.Limits.MaxSeats)
+	assert.Equal(t, int64(-1), resp.Limits.MaxContacts)
+	assert.Equal(t, -1, resp.Limits.MaxSeats)
 	assert.Equal(t, -1, resp.Limits.MaxActiveSequences)
 	assert.True(t, resp.Limits.FeatureABTesting)
 	assert.True(t, resp.Limits.FeatureBrandingRemoved)
-	assert.False(t, resp.Limits.FeatureWhiteLabel, "Pro != Business")
-	assert.Equal(t, 365, resp.Limits.HistoryRetentionDays)
+	assert.False(t, resp.Limits.FeatureWhiteLabel, "Pro != Business (white-label seul differenciant)")
+	assert.Equal(t, -1, resp.Limits.HistoryRetentionDays)
 	assert.False(t, resp.GeneratedAt.IsZero(), "GeneratedAt set pour cache TTL caller")
 }
 
@@ -1559,14 +1559,15 @@ func TestVeridianService_GetLimits_LegacyZeroFallsBackToPlanDefaults(t *testing.
 	resp, err := svc.GetLimits(ctx, "ws-legacy")
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	// Fallback applique : on doit avoir les defaults Pro, pas du 0.
-	assert.Equal(t, int64(5000), resp.Limits.MaxContacts, "fallback Pro = 5000 contacts")
-	assert.Equal(t, 5, resp.Limits.MaxSeats)
+	// Fallback applique : pivot 2026-05-21, Pro = tout illimite.
+	assert.Equal(t, int64(-1), resp.Limits.MaxContacts, "fallback Pro post-pivot = illimite")
+	assert.Equal(t, -1, resp.Limits.MaxSeats)
 	assert.True(t, resp.Limits.FeatureABTesting, "fallback Pro = A/B testing on")
 }
 
 // TestVeridianService_GetLimits_UnknownPlanFallsBackToFree — un row avec
 // plan inexistant doit retomber sur Free strict via LimitsForPlan.
+// Post-pivot 2026-05-21 : Free = tout illimite aussi, donc fallback safe.
 func TestVeridianService_GetLimits_UnknownPlanFallsBackToFree(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
@@ -1583,8 +1584,11 @@ func TestVeridianService_GetLimits_UnknownPlanFallsBackToFree(t *testing.T) {
 	resp, err := svc.GetLimits(ctx, "ws-mystery")
 	require.NoError(t, err)
 	assert.Equal(t, "tier-from-the-future", resp.Plan, "plan preserve dans la reponse")
-	// Fallback Free strict — pas d'escalade
-	assert.Equal(t, int64(500), resp.Limits.MaxContacts)
-	assert.Equal(t, 1, resp.Limits.MaxSeats)
-	assert.False(t, resp.Limits.FeatureBrandingRemoved, "Free DOIT garder branding")
+	// Fallback Free post-pivot = tout illimite y compris pour plan inconnu.
+	// La SEULE chose qui distingue Free vs paid = white-label (false) +
+	// la deadline temps geree cote Hub.
+	assert.Equal(t, int64(-1), resp.Limits.MaxContacts)
+	assert.Equal(t, -1, resp.Limits.MaxSeats)
+	assert.True(t, resp.Limits.FeatureBrandingRemoved, "pivot : branding optionnel meme pour Free")
+	assert.False(t, resp.Limits.FeatureWhiteLabel, "Free n'a PAS white-label custom (Business+ only)")
 }

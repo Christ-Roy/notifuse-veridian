@@ -233,16 +233,18 @@ var paywallProtectedPaths = map[string]struct{}{
 // doit etre TRUE pour autoriser l'acces. Si la feature est false sur le plan
 // du tenant, le middleware retourne 402 avec error_code=feature_not_in_plan.
 //
-// Decision design : on gate les endpoints qui ne servent QU'A la feature
-// (broadcasts.getTestResults / selectWinner = A/B uniquement) plutot que
-// d'essayer de parser le body de broadcasts.create pour detecter le test_settings.
-// Plus simple, plus robuste, et bloque effectivement la consommation A/B.
+// === PIVOT 2026-05-21 ===
+// Vide intentionnellement : decision Robert "generosite maximale, A/B
+// testing gratuit pour tous y compris Free" (cf. CLAUDE.md Notifuse
+// §Vision pricing 2026-05-21). Le middleware feature gate reste en place
+// au cas ou on re-gaterait une autre feature plus tard, mais aucun path
+// n'est gate aujourd'hui. Pour reactivation : ajouter
+// "/api/path" → "feature_key" et flipper le champ correspondant dans
+// DefaultPlanLimits.
 //
-// Cle = nom JSON de la feature dans PlanLimits (sensible a la casse Go).
-var featureGatedPaths = map[string]string{
-	"/api/broadcasts.getTestResults": "ab_testing",
-	"/api/broadcasts.selectWinner":   "ab_testing",
-}
+// Historique : lot 4a V37 avait gate les 2 endpoints A/B (getTestResults,
+// selectWinner) — revert acte le 2026-05-21 suite au pivot generosite.
+var featureGatedPaths = map[string]string{}
 
 // checkFeatureAllowed retourne true si la feature est activee sur le plan,
 // false sinon. Si plan est nil (tenant non-Veridian / self-hosted), on

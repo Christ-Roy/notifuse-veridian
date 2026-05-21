@@ -513,11 +513,23 @@ func TestVeridianPaywallCache_ConcurrentInvalidateAndLookup(t *testing.T) {
 	<-done
 }
 
-// === V37 lot 4a — Feature gate A/B testing ===
+// === V37 lot 4a feature gate A/B testing — REVERT 2026-05-21 ===
+//
+// Le pivot pricing 2026-05-21 a libere A/B testing pour tous les plans
+// (cf. CLAUDE.md Notifuse §Vision pricing). La map featureGatedPaths
+// est desormais vide → le middleware feature gate est effectivement
+// desactive (pass-through systematique).
+//
+// Les tests ci-dessous verifient que :
+//   1. La map featureGatedPaths reste vide (garde-fou anti-regression
+//      si un agent re-ajoute un path par erreur)
+//   2. Le helper checkFeatureAllowed reste fonctionnel (utilise par
+//      l'UI pour decider d'afficher / griser un bouton sans bloquer)
+//   3. Le middleware passe meme sur les paths historiquement gates
 
-// newFeatureGateReq construit une requete sur un path feature-gated avec
-// body JSON contenant workspace_id. Default /api/broadcasts.getTestResults
-// (A/B testing) — passer un autre path si besoin.
+// newFeatureGateReq construit une requete sur un path historiquement
+// feature-gated avec body JSON contenant workspace_id. Utilise pour
+// verifier que le pass-through fonctionne post-pivot.
 func newFeatureGateReq(t *testing.T, path, body string) *http.Request {
 	t.Helper()
 	r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
@@ -525,173 +537,67 @@ func newFeatureGateReq(t *testing.T, path, body string) *http.Request {
 	return r
 }
 
-func TestVeridianFeatureGate_ProPlanAllowsABTesting(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockVeridianPlanRepository(ctrl)
-	repo.EXPECT().Get(gomock.Any(), "ws-pro").Return(&domain.VeridianPlan{
-		WorkspaceID:      "ws-pro",
-		Plan:             "pro",
-		Status:           domain.PlanStatusActive,
-		FeatureABTesting: true, // Pro inclut A/B
-	}, nil)
-
-	var called atomic.Bool
-	cache := NewPaywallCache()
-	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
-
-	req := newFeatureGateReq(t, "/api/broadcasts.getTestResults", `{"workspace_id":"ws-pro"}`)
-	rec := httptest.NewRecorder()
-	mw.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.True(t, called.Load(), "handler upstream must be reached when feature allowed")
+// TestFeatureGatedPaths_EmptyAfterPivot — garde-fou pivot 2026-05-21.
+// Si un agent re-ajoute une cle dans featureGatedPaths sans validation
+// Robert, ce test casse. Maintient l'invariant "generosite maximale".
+func TestFeatureGatedPaths_EmptyAfterPivot(t *testing.T) {
+	assert.Empty(t, featureGatedPaths,
+		"pivot 2026-05-21 : aucune feature ne doit etre gatee (A/B gratuit pour tous, etc.). "+
+			"Re-ajouter une cle exige validation Robert + update CLAUDE.md.")
 }
 
-func TestVeridianFeatureGate_FreePlanBlocksABTestingWith402(t *testing.T) {
+// TestVeridianFeatureGate_PathFilterPassesAllPaths — apres le pivot,
+// les endpoints historiquement gates (A/B testing) passent au handler
+// upstream sans intervention du feature gate.
+func TestVeridianFeatureGate_PathFilterPassesAllPaths(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Le repo n'est meme pas appele : path filter ne route plus vers
+	// le feature gate (map vide → isGated=false).
 	repo := mocks.NewMockVeridianPlanRepository(ctrl)
-	repo.EXPECT().Get(gomock.Any(), "ws-free").Return(&domain.VeridianPlan{
-		WorkspaceID:      "ws-free",
-		Plan:             "free",
-		Status:           domain.PlanStatusActive,
-		FeatureABTesting: false, // Free n'a PAS A/B
-	}, nil)
-
-	var called atomic.Bool
-	cache := NewPaywallCache()
-	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
-
-	req := newFeatureGateReq(t, "/api/broadcasts.selectWinner", `{"workspace_id":"ws-free"}`)
-	rec := httptest.NewRecorder()
-	mw.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusPaymentRequired, rec.Code, "Free must be blocked on A/B endpoints")
-	assert.False(t, called.Load(), "handler upstream must NOT be reached when blocked")
-	// Le body doit contenir error_code=feature_not_in_plan + feature key
-	body := rec.Body.String()
-	assert.Contains(t, body, `"error_code":"feature_not_in_plan"`)
-	assert.Contains(t, body, `"feature":"ab_testing"`)
-	assert.Contains(t, body, `"tenant_plan":"free"`)
-}
-
-func TestVeridianFeatureGate_TenantNotInVeridianLetsThrough(t *testing.T) {
-	// Tenant non-Veridian (sql.ErrNoRows) → fail-open : passe.
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockVeridianPlanRepository(ctrl)
-	repo.EXPECT().Get(gomock.Any(), "ws-selfhosted").Return(nil, sql.ErrNoRows)
-
-	var called atomic.Bool
-	cache := NewPaywallCache()
-	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
-
-	req := newFeatureGateReq(t, "/api/broadcasts.getTestResults", `{"workspace_id":"ws-selfhosted"}`)
-	rec := httptest.NewRecorder()
-	mw.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code, "non-Veridian tenant must be allowed (self-hosted compat)")
-	assert.True(t, called.Load())
-}
-
-func TestVeridianFeatureGate_DBErrorFailsOpen(t *testing.T) {
-	// Erreur DB transitoire → fail-open (meme strategie que paywall) pour
-	// ne pas bloquer la consommation A/B sur un incident DB.
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockVeridianPlanRepository(ctrl)
-	repo.EXPECT().Get(gomock.Any(), "ws-broken").Return(nil, errors.New("connection refused"))
-
-	var called atomic.Bool
-	cache := NewPaywallCache()
-	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
-
-	req := newFeatureGateReq(t, "/api/broadcasts.selectWinner", `{"workspace_id":"ws-broken"}`)
-	rec := httptest.NewRecorder()
-	mw.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code, "DB error must fail-open (allow request)")
-	assert.True(t, called.Load())
-}
-
-func TestVeridianFeatureGate_BusinessPlanIncludesABTesting(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockVeridianPlanRepository(ctrl)
-	repo.EXPECT().Get(gomock.Any(), "ws-biz").Return(&domain.VeridianPlan{
-		WorkspaceID:      "ws-biz",
-		Plan:             "business",
-		Status:           domain.PlanStatusActive,
-		FeatureABTesting: true,
-	}, nil)
-
-	var called atomic.Bool
-	cache := NewPaywallCache()
-	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
-
-	req := newFeatureGateReq(t, "/api/broadcasts.getTestResults", `{"workspace_id":"ws-biz"}`)
-	rec := httptest.NewRecorder()
-	mw.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.True(t, called.Load())
-}
-
-func TestVeridianFeatureGate_MissingWorkspaceIDLetsThrough(t *testing.T) {
-	// Body sans workspace_id → on ne sait pas qui c'est, on laisse passer
-	// (le handler upstream rejettera ou utilisera un autre champ).
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockVeridianPlanRepository(ctrl)
-	// Aucun appel attendu sur le repo
-
-	var called atomic.Bool
-	cache := NewPaywallCache()
-	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
-
-	req := newFeatureGateReq(t, "/api/broadcasts.selectWinner", `{"something_else":"value"}`)
-	rec := httptest.NewRecorder()
-	mw.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.True(t, called.Load())
-}
-
-// TestVeridianPaywallPathFilter_RoutesFeatureGatedPaths verifie que le path
-// filter route les paths A/B vers le feature gate (et pas vers le suspend/delete
-// paywall qui ne checkerait pas la feature). Garde-fou anti-typo du mapping.
-func TestVeridianPaywallPathFilter_RoutesFeatureGatedPaths(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	repo := mocks.NewMockVeridianPlanRepository(ctrl)
-	// Tenant Free actif : le suspend/delete paywall laisserait passer (IsBlocked=false),
-	// mais le feature gate doit refuser.
-	repo.EXPECT().Get(gomock.Any(), "ws-free").Return(&domain.VeridianPlan{
-		WorkspaceID:      "ws-free",
-		Plan:             "free",
-		Status:           domain.PlanStatusActive,
-		FeatureABTesting: false,
-	}, nil)
 
 	var called atomic.Bool
 	cache := NewPaywallCache()
 	filter := VeridianPaywallPathFilterWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
 
-	req := newFeatureGateReq(t, "/api/broadcasts.selectWinner", `{"workspace_id":"ws-free"}`)
-	rec := httptest.NewRecorder()
-	filter.ServeHTTP(rec, req)
+	// Tester sur les anciens paths gates A/B
+	for _, path := range []string{"/api/broadcasts.getTestResults", "/api/broadcasts.selectWinner"} {
+		t.Run(path, func(t *testing.T) {
+			called.Store(false)
+			req := newFeatureGateReq(t, path, `{"workspace_id":"ws-any"}`)
+			rec := httptest.NewRecorder()
+			filter.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusOK, rec.Code, "pivot : A/B endpoints accessibles a tous")
+			assert.True(t, called.Load(), "handler upstream doit etre atteint")
+		})
+	}
+}
 
-	assert.Equal(t, http.StatusPaymentRequired, rec.Code,
-		"path filter must route A/B paths through feature gate (which blocks Free)")
-	assert.False(t, called.Load())
+// TestVeridianFeatureGate_MiddlewareDirectStillFunctional — si on appelle
+// le middleware feature gate directement (sans passer par le path filter)
+// sur un path PAS dans la map, il doit laisser passer immediatement.
+// Comportement intrinseque qui doit survivre meme apres re-ajout futur
+// d'un path gate.
+func TestVeridianFeatureGate_MiddlewareDirectStillFunctional(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	// Aucun appel sur le repo attendu
+
+	var called atomic.Bool
+	cache := NewPaywallCache()
+	mw := NewVeridianFeatureGateMiddlewareWithCache(cache, repo, logger.NewLogger())(nextHandler(&called))
+
+	// Un path qui n'est PAS dans featureGatedPaths (et meme si la map
+	// est vide, ca couvre le cas "path inconnu" qui doit toujours passer).
+	req := newFeatureGateReq(t, "/api/broadcasts.getTestResults", `{"workspace_id":"ws-any"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, called.Load())
 }
 
 // TestCheckFeatureAllowed_NilPlanReturnsTrue — invariant safe : si plan est
@@ -710,7 +616,11 @@ func TestCheckFeatureAllowed_UnknownFeatureFailsOpen(t *testing.T) {
 
 // TestCheckFeatureAllowed_KnownFeatures verifie le mapping correct des 3
 // features (ab_testing / branding_removed / white_label) vers les champs
-// PlanLimits de la struct VeridianPlan.
+// PlanLimits de la struct VeridianPlan. Le helper reste utile pour l'UI
+// console qui peut decider d'afficher / griser des elements selon le
+// plan, MEME sans enforcement backend (cf. pivot 2026-05-21 : pas de
+// menu grisé "🔒 Pro", mais le helper sert si on veut un jour la
+// telemetrie ou un toggle UI subtil).
 func TestCheckFeatureAllowed_KnownFeatures(t *testing.T) {
 	pro := &domain.VeridianPlan{
 		Plan:                   "pro",
@@ -722,13 +632,14 @@ func TestCheckFeatureAllowed_KnownFeatures(t *testing.T) {
 	assert.True(t, checkFeatureAllowed(pro, "branding_removed"))
 	assert.False(t, checkFeatureAllowed(pro, "white_label"))
 
+	// Apres le pivot, un Free a TOUS les features true sauf white_label.
 	free := &domain.VeridianPlan{
 		Plan:                   "free",
-		FeatureABTesting:       false,
-		FeatureBrandingRemoved: false,
+		FeatureABTesting:       true, // pivot : A/B gratuit
+		FeatureBrandingRemoved: true, // pivot : branding optionnel
 		FeatureWhiteLabel:      false,
 	}
-	assert.False(t, checkFeatureAllowed(free, "ab_testing"))
-	assert.False(t, checkFeatureAllowed(free, "branding_removed"))
+	assert.True(t, checkFeatureAllowed(free, "ab_testing"))
+	assert.True(t, checkFeatureAllowed(free, "branding_removed"))
 	assert.False(t, checkFeatureAllowed(free, "white_label"))
 }

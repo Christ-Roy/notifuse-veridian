@@ -210,41 +210,58 @@ type PlanLimits struct {
 // du backfill V37 + de VISION-BUSINESS.md. Le repository utilise cette map
 // au provision / update-plan pour appliquer les limites en l'absence de
 // custom override (champ `quotas` envoye par le Hub).
+// === PIVOT 2026-05-21 — Generosite maximale FINALE ===
+// Decision Robert (figee) : TOUT illimite partout y compris Free.
+// La SEULE difference Free vs paid = la DUREE (deadline 15j visible
+// apres trigger 5 mails + 2j silence, geree par le Hub state machine).
+//
+// La SEULE difference Business 99 vs Pro 29 = FeatureWhiteLabel
+// (le client met son propre footer custom, vs juste retirer
+// "Powered by Veridian" en Pro).
+//
+// Toutes les autres dimensions = -1 ou true pour tous les plans.
+// Les colonnes V37 restent en DB (gratuit, future-proof) mais
+// ne doivent PAS etre recablees comme des limites enforcees —
+// cf. CLAUDE.md §Vision pricing 2026-05-21.
+//
+// L'app ne doit JAMAIS etre defiguree par des limites visibles ou
+// des murs beton. Conversion = deadline 15j visible apres
+// activation silencieuse (5 mails + 2j), pas l'agacement.
 var DefaultPlanLimits = map[string]PlanLimits{
 	"free": {
-		MonthlyEmailQuota:      -1, // BYO sending, pas de cap Notifuse
-		MaxContacts:            500,
-		MaxSeats:               1,
-		MaxOAuthAccounts:       1,
-		MaxCustomDomains:       0,
-		MaxActiveSequences:     1,
-		FeatureABTesting:       false,
-		FeatureBrandingRemoved: false,
+		MonthlyEmailQuota:      -1,
+		MaxContacts:            -1,
+		MaxSeats:               -1, // growth hacking par invitation
+		MaxOAuthAccounts:       -1,
+		MaxCustomDomains:       -1, // illimite — pas de cout infra pour nous
+		MaxActiveSequences:     -1,
+		FeatureABTesting:       true, // gratuit pour tous
+		FeatureBrandingRemoved: true, // branding optionnel — les Free aussi
 		FeatureWhiteLabel:      false,
-		HistoryRetentionDays:   30,
+		HistoryRetentionDays:   -1,
 	},
 	"pro": {
 		MonthlyEmailQuota:      -1,
-		MaxContacts:            5000,
-		MaxSeats:               5,
-		MaxOAuthAccounts:       5,
-		MaxCustomDomains:       1,
+		MaxContacts:            -1,
+		MaxSeats:               -1,
+		MaxOAuthAccounts:       -1,
+		MaxCustomDomains:       -1,
 		MaxActiveSequences:     -1,
 		FeatureABTesting:       true,
 		FeatureBrandingRemoved: true,
 		FeatureWhiteLabel:      false,
-		HistoryRetentionDays:   365,
+		HistoryRetentionDays:   -1,
 	},
 	"business": {
 		MonthlyEmailQuota:      -1,
-		MaxContacts:            25000,
-		MaxSeats:               25,
-		MaxOAuthAccounts:       25,
-		MaxCustomDomains:       5,
+		MaxContacts:            -1,
+		MaxSeats:               -1,
+		MaxOAuthAccounts:       -1,
+		MaxCustomDomains:       -1,
 		MaxActiveSequences:     -1,
 		FeatureABTesting:       true,
 		FeatureBrandingRemoved: true,
-		FeatureWhiteLabel:      true,
+		FeatureWhiteLabel:      true, // SEUL differenciant Business vs Pro
 		HistoryRetentionDays:   -1,
 	},
 	"enterprise": {
