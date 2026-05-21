@@ -1614,3 +1614,14 @@ func TestAttachMember_ServiceExposed(t *testing.T) {
 	}
 	assert.True(t, true, "compile-time check passed: AttachMember exists on veridianService")
 }
+
+// TestListTenants_ServiceExposed : compile-time check que ListTenants est bien
+// dans le contrat veridianService (Constitution §1 mapping 1-pour-1). Le
+// contenu fonctionnel est couvert par veridian_admin_list_tenants_test.go
+// (9 cas listing + 3 cas wipe avec orphelins, total 12 tests).
+func TestListTenants_ServiceExposed(t *testing.T) {
+	var _ func(svc *veridianService) interface{} = func(svc *veridianService) interface{} {
+		return svc.ListTenants
+	}
+	assert.True(t, true, "compile-time check passed: ListTenants exists on veridianService")
+}

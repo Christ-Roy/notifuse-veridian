@@ -168,3 +168,33 @@ Testé localement contre prod + staging : 3/3 verts.
 
 Ces 2 étapes restantes sont indépendantes du fix postgres et de la safety.
 Le ticket reste ouvert mais P3 (qualité, pas bloquant).
+
+---
+
+## Update — 2026-05-21 — Étape "API admin orphelins" livrée (lot G hors ticket)
+
+### ✅ Livré indépendamment du ticket original
+
+Pendant un sprint de cleanup CI, j'ai trouvé que `WipeTestTenants` filtrait
+les candidats UNIQUEMENT via `veridian_plan` — donc rate **tous** les
+workspaces orphelins (présents dans `workspaces` mais sans plan).
+
+**Solutions shippées** (commit Lot G 2026-05-21) :
+
+1. `WipeTestTenantsInput.IncludeOrphans bool` — scan workspaceRepo.List en plus
+2. `GET /api/veridian/admin/tenants?prefix=X&include_orphans=true` — dry-run
+   listing read-only (managed vs orphans buckets)
+3. `.github/workflows/veridian-ci.yml` : ajout `include_orphans:true` au body
+   du step Cleanup test tenants → plus d'orphelins qui s'accumulent
+
+**Tests colocalisés** (Constitution §1) : domain (JSON), service (12), http (7).
+
+### ⏳ Reste à faire (toujours pertinent même après lot G)
+
+- **Étape 1 — refactor naming `t-*`** : cosmétique, en parallèle de l'étape 2
+- **Étape 2 — afterEach cleanup spec** : refactor 11 specs pour cleanup au fil
+  de l'eau. Bénéfice : plus de batch wipe en fin de CI → CI plus rapide +
+  pool DB toujours propre. ~2-3h.
+
+Ces 2 étapes restantes sont du refactor frontend Playwright, indépendant du
+fix backend lot G. Priorité P3 (le bug pool DB orphelins est résolu).
