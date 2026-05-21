@@ -35,6 +35,21 @@ func (m *MockVeridianService) EXPECT() *MockVeridianServiceMockRecorder {
 	return m.recorder
 }
 
+// AttachMember mocks base method.
+func (m *MockVeridianService) AttachMember(arg0 context.Context, arg1 domain.AttachMemberInput) (*domain.AttachMemberResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AttachMember", arg0, arg1)
+	ret0, _ := ret[0].(*domain.AttachMemberResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AttachMember indicates an expected call of AttachMember.
+func (mr *MockVeridianServiceMockRecorder) AttachMember(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachMember", reflect.TypeOf((*MockVeridianService)(nil).AttachMember), arg0, arg1)
+}
+
 // AttachOwner mocks base method.
 func (m *MockVeridianService) AttachOwner(arg0 context.Context, arg1 domain.AttachOwnerInput) (*domain.AttachOwnerResponse, error) {
 	m.ctrl.T.Helper()
@@ -256,6 +271,21 @@ func (m *MockVeridianService) UsageSummary(arg0 context.Context, arg1 string) (*
 func (mr *MockVeridianServiceMockRecorder) UsageSummary(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UsageSummary", reflect.TypeOf((*MockVeridianService)(nil).UsageSummary), arg0, arg1)
+}
+
+// LookupByEmail mocks base method.
+func (m *MockVeridianService) LookupByEmail(arg0 context.Context, arg1 string) (*domain.DiscoveryResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LookupByEmail", arg0, arg1)
+	ret0, _ := ret[0].(*domain.DiscoveryResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LookupByEmail indicates an expected call of LookupByEmail.
+func (mr *MockVeridianServiceMockRecorder) LookupByEmail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupByEmail", reflect.TypeOf((*MockVeridianService)(nil).LookupByEmail), arg0, arg1)
 }
 
 // WipeTestTenants mocks base method.

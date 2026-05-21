@@ -122,10 +122,20 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// intégrations Hub). Le Hub poll en cron 1×/h pour détecter régression
 	// silencieuse du flow magic link Hub → app (bug 2026-05-17).
 	mux.Handle("GET /api/tenants/{id}/health", hmac(http.HandlerFunc(h.handleHealth)))
+	// === Veridian patch — hub-attach-member (2026-05-21) ===
+	// Appelé par le Hub après acceptation d'une invitation cross-app Notifuse.
+	// Attache un user Hub invité au workspace Notifuse d'un tenant. Idempotent.
+	// Voir todo/2026-05-21-hub-attach-member-endpoint.md
+	mux.Handle("POST /api/tenants/{tenantId}/attach-member", writeRoute(h.handleAttachMember))
 	// === Veridian patch V37 === Limites + dimensions feature d'un tenant
 	// (lot 7 ticket pricing-plans-implementation). Source de verite pour la
 	// console UI (widgets quota) et le paywall middleware. Auth HMAC.
 	mux.Handle("GET /api/tenants/{id}/limits", hmac(http.HandlerFunc(h.handleLimits)))
+	// === Veridian patch — Hub discovery cross-app (2026-05-20) ===
+	// POST (pas GET) pour eviter de logger l email en clair dans les access logs URL.
+	// Semantique : toujours 200 — found:false si email inconnu, found:true + workspaces sinon.
+	// Auth : HMAC read-only (pas d idempotency — requete safe et idempotente par nature).
+	mux.Handle("POST /api/users/by-email", hmac(http.HandlerFunc(h.handleDiscovery)))
 
 	// === Veridian patch === Endpoint public (no HMAC) qui renvoie le tag
 	// et le SHA git du binaire qui tourne. Permet à la CI de valider qu'un
@@ -821,6 +831,110 @@ func (h *VeridianHandler) handleVersion(w http.ResponseWriter, _ *http.Request) 
 		"git_sha":    buildinfo.GitSHA,
 		"build_date": buildinfo.BuildDate,
 	})
+}
+
+// === Veridian patch — hub-attach-member (2026-05-21) ===
+// handleAttachMember attache un user Hub invite au workspace Notifuse d'un
+// tenant apres acceptation d'une invitation cross-app.
+//
+// Route : POST /api/tenants/{tenantId}/attach-member
+// Auth  : middleware HMAC (X-Veridian-Hub-Signature) — identique aux autres
+//         routes Hub→Notifuse. Meme secret HUB_API_SECRET.
+//
+// Securite : 404 est retourne APRES validation HMAC pour eviter l'enumeration
+// de tenantId. Le body n'est pas loggue en clair (contient hub_user_email).
+//
+// Reponse 201 (premier attach) ou 200 (idempotent already_member=true) :
+//
+//	{"attached":true,"already_member":false,"workspace_id":"...","role":"member","login_url":"..."}
+func (h *VeridianHandler) handleAttachMember(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("tenantId")
+	if tenantID == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenantId path param is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"tenantId"},
+		})
+		return
+	}
+
+	var body struct {
+		HubUserID    string                  `json:"hub_user_id"`
+		HubUserEmail string                  `json:"hub_user_email"`
+		Role         domain.AttachMemberRole `json:"role"`
+		InvitationID string                  `json:"invitation_id,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
+		return
+	}
+
+	// Validation champs obligatoires (avant d'appeler le service).
+	missing := missingFields(
+		body.HubUserID == "", "hub_user_id",
+		body.HubUserEmail == "", "hub_user_email",
+		string(body.Role) == "", "role",
+	)
+	if len(missing) > 0 {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "hub_user_id, hub_user_email and role are required", http.StatusBadRequest, map[string]interface{}{
+			"missing": missing,
+		})
+		return
+	}
+
+	// Validation role (enum check) avant appel service.
+	if !body.Role.IsValid() {
+		WriteJSONErrorCode(w, ErrCodeInvalidRole, "role must be owner|admin|member", http.StatusBadRequest, map[string]interface{}{
+			"role":    string(body.Role),
+			"allowed": []string{"owner", "admin", "member"},
+		})
+		return
+	}
+
+	input := domain.AttachMemberInput{
+		TenantID:     tenantID,
+		HubUserID:    body.HubUserID,
+		HubUserEmail: body.HubUserEmail,
+		Role:         body.Role,
+		InvitationID: body.InvitationID,
+	}
+
+	resp, err := h.service.AttachMember(r.Context(), input)
+	if err != nil {
+		// 404 APRES HMAC (voir note sécurité en en-tête).
+		if isNotFoundErr(err) {
+			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
+			return
+		}
+		// 423 Locked si tenant suspendu ou deleted.
+		if errors.Is(err, service.ErrTenantSuspended) {
+			WriteJSONErrorCode(w, ErrCodeTenantSuspended, "tenant is suspended — member attachment refused", http.StatusLocked, map[string]interface{}{
+				"tenant_id": tenantID,
+			})
+			return
+		}
+		// 409 race condition (très rare en pratique).
+		if errors.Is(err, service.ErrUserRoleConflict) {
+			WriteJSONErrorCode(w, ErrCodeUserRoleConflict, err.Error(), http.StatusConflict, map[string]interface{}{
+				"tenant_id":   tenantID,
+				"hub_user_id": body.HubUserID,
+			})
+			return
+		}
+		h.logError("attach_member", err, map[string]interface{}{
+			"tenant_id":   tenantID,
+			"hub_user_id": body.HubUserID,
+		})
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	// 200 si already_member (idempotent re-call), 201 si premier attach.
+	statusCode := http.StatusCreated
+	if resp.AlreadyMember {
+		statusCode = http.StatusOK
+	}
+	writeJSON(w, statusCode, resp)
 }
 
 // handleMode renvoie le mode de deploiement Notifuse (managed vs self-hosted).

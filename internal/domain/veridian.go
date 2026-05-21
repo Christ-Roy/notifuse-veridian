@@ -97,6 +97,19 @@ type VeridianPlan struct {
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 
+	// === Activation tracking (V38, ticket trial-eligible-signal) ===
+	// EmailsSentLifetime : compteur cumulatif jamais reset (vs
+	// EmailsSentThisMonth qui se reset mensuellement par cron). Signal
+	// d'activation business : seuil ActivityThresholdEmails = le tenant
+	// "utilise vraiment" l'outil → webhook tenant.activity_threshold_reached.
+	EmailsSentLifetime int64 `json:"emails_sent_lifetime"`
+	// ActivityThresholdReachedAt : timestamp du franchissement du seuil.
+	// NULL tant que non atteint. Écrit une seule fois (idempotent par
+	// WHERE activity_threshold_reached_at IS NULL) pour garantir que le
+	// webhook n'est émis qu'une seule fois. Le Hub démarre le timer trial
+	// 2j → 15j en consommant ce signal.
+	ActivityThresholdReachedAt *time.Time `json:"activity_threshold_reached_at,omitempty"`
+
 	// === Pricing dimensions (V37, ticket pricing-plans-implementation) ===
 	// Convention -1 = illimite (semantique partagee avec MonthlyEmailQuota).
 	// Ces colonnes sont initialement persistees par la migration V37 avec
@@ -318,7 +331,21 @@ type VeridianPlanRepository interface {
 	// par cron Hub). Pas d'autre effet de bord — le service applique le
 	// debouncing 24h en amont.
 	Touch(ctx context.Context, workspaceID string) error
+	// IncrementEmailsSent incrémente emails_sent_this_month (utilisé par le
+	// décorateur message history). Délègue désormais à IncrementEmailsSentReturning
+	// et gère la détection de seuil + émission webhook côté service.
 	IncrementEmailsSent(ctx context.Context, workspaceID string, delta int64) error
+	// IncrementEmailsSentReturning incrémente ATOMIQUEMENT emails_sent_this_month
+	// ET emails_sent_lifetime puis retourne le lifetime après incrément et si le
+	// seuil avait déjà été atteint (activity_threshold_reached_at IS NOT NULL).
+	// Permet au service de détecter le franchissement du seuil sans second
+	// roundtrip DB. Si la ligne n'existe pas, retourne (0, false, nil) — no-op.
+	IncrementEmailsSentReturning(ctx context.Context, workspaceID string, delta int64) (lifetimeAfter int64, alreadyReached bool, err error)
+	// MarkActivityThresholdReached set activity_threshold_reached_at = at
+	// uniquement si le champ est encore NULL (idempotent par construction :
+	// si déjà set, le WHERE filtre et l'UPDATE est no-op silencieux). Utilisé
+	// par le service pour marquer le franchissement du seuil activation.
+	MarkActivityThresholdReached(ctx context.Context, workspaceID string, at time.Time) error
 	ResetMonthlyCounters(ctx context.Context) (int64, error) // appele par cron
 	// === Veridian patch === Hard delete (tests / admin platform).
 	HardDelete(ctx context.Context, workspaceID string) error
@@ -528,6 +555,53 @@ type AttachOwnerInput struct {
 	OwnerEmail string `json:"owner_email"`
 }
 
+// === Veridian patch — hub-attach-member (2026-05-21) ===
+
+// AttachMemberRole represente les roles acceptes pour AttachMember.
+// Miroir du schema user_workspaces upstream.
+type AttachMemberRole string
+
+const (
+	AttachMemberRoleOwner  AttachMemberRole = "owner"
+	AttachMemberRoleAdmin  AttachMemberRole = "admin"
+	AttachMemberRoleMember AttachMemberRole = "member"
+)
+
+// IsValidMemberRole retourne true si le role est un des 3 valeurs acceptees.
+func (r AttachMemberRole) IsValid() bool {
+	switch r {
+	case AttachMemberRoleOwner, AttachMemberRoleAdmin, AttachMemberRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
+// AttachMemberInput est le body de POST /api/tenants/{tenantId}/attach-member.
+// Appele par le Hub apres acceptation d'une invitation cross-app Notifuse.
+type AttachMemberInput struct {
+	// HubUserID : id cote hub_app.users — champ user_id dans la table users Notifuse.
+	HubUserID    string           `json:"hub_user_id"`
+	// HubUserEmail : email pour creation user Notifuse si absent.
+	HubUserEmail string           `json:"hub_user_email"`
+	// Role : owner | admin | member.
+	Role         AttachMemberRole `json:"role"`
+	// InvitationID : traçabilité audit — "attached via Hub invitation X".
+	InvitationID string           `json:"invitation_id,omitempty"`
+	// TenantID est injecté par le handler depuis le path param {tenantId}.
+	TenantID     string           `json:"-"`
+}
+
+// AttachMemberResponse est la reponse de POST /api/tenants/{tenantId}/attach-member.
+type AttachMemberResponse struct {
+	Attached      bool   `json:"attached"`
+	AlreadyMember bool   `json:"already_member"`
+	WorkspaceID   string `json:"workspace_id"`
+	Role          string `json:"role"`
+	// LoginURL : magic link auto-login (pattern identique a provision.auto_login_url).
+	LoginURL string `json:"login_url"`
+}
+
 // AttachOwnerResponse decrit l'état post-attach. Idempotent : `attached` est
 // toujours true en sortie si l'op a réussi ; `already_attached` indique si la
 // row user_workspaces existait déjà avant l'appel.
@@ -623,6 +697,46 @@ type VeridianService interface {
 	// row a toutes les dimensions a zero (cas tenant antedeluvien jamais
 	// re-upsert apres la migration). Retourne sql.ErrNoRows si tenant absent.
 	GetLimits(ctx context.Context, tenantID string) (*LimitsResponse, error)
+
+	// === Veridian patch — hub-attach-member (2026-05-21) ===
+	// AttachMember attache un user Hub invite au workspace Notifuse d'un tenant.
+	// Appele par le Hub apres acceptation d'une invitation cross-app. Idempotent :
+	// re-call avec memes params = 200 already_member=true. Genere un login_url
+	// auto-login (pattern provision.auto_login_url). Retourne ErrTenantSuspended
+	// si le tenant est suspendu (423 Locked cote handler).
+	AttachMember(ctx context.Context, input AttachMemberInput) (*AttachMemberResponse, error)
+
+	// === Veridian patch — Hub discovery cross-app ===
+	// LookupByEmail permet au Hub de decouvrir si un user (par email) est
+	// present sur cette instance Notifuse et quels workspaces il possede.
+	// Pattern "discovery pull" (CONTRAT-HUB 2026-05-20-hub-discovery-by-email-pattern).
+	//
+	// Semantique : retourne toujours un DiscoveryResponse (jamais d erreur not found).
+	// found=false + workspaces=[] si l email est inconnu. Jamais de 404.
+	LookupByEmail(ctx context.Context, email string) (*DiscoveryResponse, error)
+}
+
+// === Hub discovery types (2026-05-20) ===
+
+// DiscoveryWorkspace decrit un workspace Notifuse dans la reponse discovery.
+// magic_link_capable est toujours true car Notifuse a le flow auto-login.
+// fallback_url est l URL de signin si l auto-login echoue.
+type DiscoveryWorkspace struct {
+	WorkspaceID      string `json:"workspace_id"`
+	WorkspaceName    string `json:"workspace_name"`
+	Role             string `json:"role"`
+	Plan             string `json:"plan"`
+	MagicLinkCapable bool   `json:"magic_link_capable"`
+	FallbackURL      string `json:"fallback_url"`
+}
+
+// DiscoveryResponse est la reponse de POST /api/users/by-email.
+// found=false avec workspaces=[] signifie que l email est inconnu sur cette
+// instance (200, pas 404).
+type DiscoveryResponse struct {
+	Found      bool                 `json:"found"`
+	UserEmail  string               `json:"user_email"`
+	Workspaces []DiscoveryWorkspace `json:"workspaces"`
 }
 
 // EventTenantOwnerChanged event émis quand AttachOwner promote un user humain
@@ -674,7 +788,20 @@ const (
 	EventEmailBounced      VeridianEvent = "email.bounced"
 	EventEmailComplaint    VeridianEvent = "email.complaint"
 	EventQuotaExceeded     VeridianEvent = "tenant.quota_exceeded"
+
+	// === V38 — Activation tracking ===
+	// EventTenantActivityThresholdReached est emis UNE SEULE FOIS par tenant
+	// quand emails_sent_lifetime atteint ActivityThresholdEmails (5). Le Hub
+	// consomme ce signal pour démarrer le timer trial 2j → 15j. L'idempotence
+	// est garantie côté DB (activity_threshold_reached_at IS NULL gate).
+	EventTenantActivityThresholdReached VeridianEvent = "tenant.activity_threshold_reached"
 )
+
+// ActivityThresholdEmails est le nombre de mails envoyés cumulés qui déclenche
+// l'émission du webhook tenant.activity_threshold_reached.
+// Valeur business : un user qui envoie 5 mails est "activé" = candidat trial.
+// Constante exportée pour que les tests Hub puissent assert sur la même valeur.
+const ActivityThresholdEmails int64 = 5
 
 // VeridianEventPayload est le payload signe envoye au Hub.
 //
@@ -712,3 +839,4 @@ func (p VeridianEventPayload) MarshalJSON() ([]byte, error) {
 type WebhookEmitter interface {
 	Emit(ctx context.Context, eventType VeridianEvent, tenantID string, data map[string]interface{})
 }
+

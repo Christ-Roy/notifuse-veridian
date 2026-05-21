@@ -712,6 +712,18 @@ func (s *veridianService) SoftDelete(ctx context.Context, input domain.SoftDelet
 // dans l'etat soft_deleted (rien a restaurer). Le handler mappe → 409.
 var ErrTenantNotSoftDeleted = errors.New("tenant is not soft-deleted, nothing to restore")
 
+// === Veridian patch — attach-member (2026-05-21) ===
+// ErrTenantSuspended est retourne par AttachMember quand le tenant est suspendu.
+// Le handler mappe vers 423 Locked : pas d'ajout de membre sur un compte bloque.
+var ErrTenantSuspended = errors.New("tenant is suspended — member attachment refused")
+
+// ErrUserRoleConflict est retourne par AttachMember en cas de race condition
+// (deux appels concurrents tentent d'assigner des roles incompatibles apres
+// le lookup idempotence). Race tres rare en pratique — le cas normal (role
+// different detecte proprement) provoque un UPDATE, pas un 409. Le handler
+// mappe → 409.
+var ErrUserRoleConflict = errors.New("user role conflict (race condition during attach)")
+
 // Restore annule un soft-delete (CONTRAT-HUB sec. 5.7-5.8). Le tenant repasse
 // en active. Refuse si le tenant n'est pas soft-deleted (ErrTenantNotSoftDeleted).
 //
@@ -1541,8 +1553,299 @@ func isEmptyLimits(l domain.PlanLimits) bool {
 		l.HistoryRetentionDays == 0
 }
 
+// === Veridian patch — hub-attach-member (2026-05-21) ===
+// AttachMember attache un user Hub invite au workspace Notifuse d'un tenant.
+//
+// Algorithme :
+//  1. Vérifier que le workspace existe (404 safe).
+//  2. Vérifier que le tenant n'est pas suspendu (ErrTenantSuspended → 423).
+//     Le check plan peut echouer (tenant pre-Hub sans plan row) — OK on continue.
+//  3. Lookup user Notifuse par user_id = HubUserID.
+//     Si absent → créer user {user_id: HubUserID, email, type: user}.
+//  4. Lookup user_workspaces (user_id, workspace_id).
+//     Si présent même role → 200 already_member=true.
+//     Si présent role différent → UPDATE via RemoveUser+AddUser (+ audit log).
+//     Si absent → INSERT via AddUserToWorkspace.
+//  5. Générer login_url auto-login (pattern BuildAutoLoginURL).
+//  6. Retourner {attached, already_member, workspace_id, role, login_url}.
+//
+// Idempotence stricte : 2e call avec memes params = 200 already_member=true.
+// Sécurité : le check tenant_not_found est APRES HMAC (handler) pour éviter
+// l'énumération de tenantId. Pas de log du body complet (contient hub_user_email).
+func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachMemberInput) (*domain.AttachMemberResponse, error) {
+	if input.TenantID == "" {
+		return nil, errors.New("tenant_id required")
+	}
+	if input.HubUserID == "" {
+		return nil, errors.New("hub_user_id required")
+	}
+	if input.HubUserEmail == "" {
+		return nil, errors.New("hub_user_email required")
+	}
+	if !input.Role.IsValid() {
+		return nil, fmt.Errorf("invalid role %q: must be owner|admin|member", input.Role)
+	}
+
+	// Step 1 : vérifier que le workspace existe (source de vérité pour 404).
+	if _, wsErr := s.workspaceRepo.GetByID(ctx, input.TenantID); wsErr != nil {
+		if errors.Is(wsErr, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		msg := strings.ToLower(wsErr.Error())
+		if strings.Contains(msg, "not found") || strings.Contains(msg, "no rows") {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("lookup workspace: %w", wsErr)
+	}
+
+	// Step 2 : vérifier que le tenant n'est pas suspendu.
+	// Le plan peut etre absent (tenant pre-Hub) → on continue sans bloquer.
+	plan, planErr := s.planRepo.Get(ctx, input.TenantID)
+	if planErr == nil && plan != nil {
+		if blocked, reason := plan.IsBlocked(); blocked {
+			if plan.Status == domain.PlanStatusSuspended {
+				return nil, fmt.Errorf("%w: %s", ErrTenantSuspended, reason)
+			}
+			// Soft-deleted : on refuse aussi (le tenant est en cours de purge).
+			return nil, fmt.Errorf("%w: tenant deleted", ErrTenantSuspended)
+		}
+	}
+
+	// Step 3 : trouver/créer le user Notifuse via user_id = HubUserID.
+	// Convention cross-app : le champ `user_id` Notifuse correspond à hub_user_id
+	// (UUIDs Hub → Notifuse at provision time). On lookup d'abord par email
+	// pour retrouver les users existants créés avant cette feature.
+	member, err := s.userService.GetUserByEmail(ctx, input.HubUserEmail)
+	if err != nil {
+		var notFound *domain.ErrUserNotFound
+		if !errors.As(err, &notFound) {
+			return nil, fmt.Errorf("get user by email: %w", err)
+		}
+		member = nil
+	}
+	if member == nil {
+		member = &domain.User{
+			ID:        input.HubUserID,
+			Email:     input.HubUserEmail,
+			Type:      domain.UserTypeUser,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}
+		if err := s.userRepo.CreateUser(ctx, member); err != nil {
+			return nil, fmt.Errorf("create member user: %w", err)
+		}
+	}
+
+	targetRole := string(input.Role)
+
+	// Step 4 : lookup user_workspaces pour décider idempotence / UPDATE.
+	existing, lookupErr := s.workspaceRepo.GetUserWorkspace(ctx, member.ID, input.TenantID)
+	alreadyMember := false
+	if lookupErr == nil && existing != nil {
+		alreadyMember = true
+		if existing.Role == targetRole {
+			// Idempotent : même role → 200 already_member=true sans aucun effet.
+			loginURL, _, _ := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.HubUserEmail)
+			if s.logger != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"tenant_id":     input.TenantID,
+					"hub_user_id":   input.HubUserID,
+					"role":          targetRole,
+					"invitation_id": input.InvitationID,
+				}).Info("veridian AttachMember: already_member idempotent return")
+			}
+			return &domain.AttachMemberResponse{
+				Attached:      true,
+				AlreadyMember: true,
+				WorkspaceID:   input.TenantID,
+				Role:          targetRole,
+				LoginURL:      loginURL,
+			}, nil
+		}
+		// Role différent → UPDATE : remove + re-add avec nouveau role.
+		// On utilise le ctx root (workspace-level op via service).
+		if s.logger != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"tenant_id":     input.TenantID,
+				"hub_user_id":   input.HubUserID,
+				"old_role":      existing.Role,
+				"new_role":      targetRole,
+				"invitation_id": input.InvitationID,
+			}).Info("veridian AttachMember: role update via Hub invitation")
+		}
+	} else if lookupErr != nil {
+		msg := strings.ToLower(lookupErr.Error())
+		notAttached := strings.Contains(msg, "not found") ||
+			strings.Contains(msg, "is not a member") ||
+			strings.Contains(msg, "no rows") ||
+			errors.Is(lookupErr, sql.ErrNoRows)
+		if !notAttached {
+			return nil, fmt.Errorf("lookup user workspace: %w", lookupErr)
+		}
+	}
+
+	// Résoudre l'owner actuel du workspace pour construire un ctx caller valide.
+	// Depuis owner-natif, root n'est plus dans les workspaces managed. On doit
+	// appeler AddUserToWorkspace depuis le ctx d'un owner existant du workspace.
+	members, listErr := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, input.TenantID)
+	if listErr != nil {
+		return nil, fmt.Errorf("list workspace members: %w", listErr)
+	}
+	var callerOwnerID string
+	for _, m := range members {
+		if m != nil && m.Role == "owner" {
+			callerOwnerID = m.UserID
+			break
+		}
+	}
+	if callerOwnerID == "" {
+		// Fallback root si pas d'owner trouvé (workspace orphelin).
+		rootUser, rootErr := s.userRepo.GetUserByEmail(ctx, s.rootEmail)
+		if rootErr != nil {
+			return nil, fmt.Errorf("resolve fallback caller (root): %w", rootErr)
+		}
+		callerOwnerID = rootUser.ID
+	}
+
+	callerCtx, callerSessionID, err := s.ctxAsUser(ctx, callerOwnerID)
+	if err != nil {
+		return nil, fmt.Errorf("ctxAsUser workspace owner: %w", err)
+	}
+	defer s.cleanupSession(ctx, callerSessionID)
+
+	if alreadyMember {
+		// Role différent : retirer puis re-ajouter avec le nouveau role.
+		if rmErr := s.workspaceService.RemoveUserFromWorkspace(callerCtx, input.TenantID, member.ID); rmErr != nil {
+			// Si remove fail (race), on tente quand meme l'add.
+			if s.logger != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"tenant_id":   input.TenantID,
+					"hub_user_id": input.HubUserID,
+					"error":       rmErr.Error(),
+				}).Warn("veridian AttachMember: remove for role update failed (attempting add anyway)")
+			}
+		}
+	}
+
+	// INSERT (ou re-add après role update) via AddUserToWorkspace.
+	if addErr := s.workspaceService.AddUserToWorkspace(
+		callerCtx,
+		input.TenantID,
+		member.ID,
+		targetRole,
+		domain.FullPermissions,
+	); addErr != nil {
+		// "already" indique une race condition idempotente → on continue.
+		if !strings.Contains(strings.ToLower(addErr.Error()), "already") {
+			return nil, fmt.Errorf("add user to workspace: %w", addErr)
+		}
+	}
+
+	// Step 5 : générer login_url auto-login (pattern provision). Best-effort.
+	loginURL, _, autoErr := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.HubUserEmail)
+	if autoErr != nil && s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"tenant_id":   input.TenantID,
+			"hub_user_id": input.HubUserID,
+			"error":       autoErr.Error(),
+		}).Warn("veridian AttachMember: failed to build auto-login url (HUB_API_SECRET missing?)")
+	}
+
+	if s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"tenant_id":      input.TenantID,
+			"hub_user_id":    input.HubUserID,
+			"role":           targetRole,
+			"already_member": alreadyMember,
+			"invitation_id":  input.InvitationID,
+		}).Info("veridian AttachMember: member attached")
+	}
+
+	return &domain.AttachMemberResponse{
+		Attached:      true,
+		AlreadyMember: false,
+		WorkspaceID:   input.TenantID,
+		Role:          targetRole,
+		LoginURL:      loginURL,
+	}, nil
+}
+
 // Compile-time check.
 var _ domain.VeridianService = (*veridianService)(nil)
 
 // errPlanNotFound est exporte pour permettre au handler de renvoyer un 404.
 var errPlanNotFound = sql.ErrNoRows
+
+// === Veridian patch — Hub discovery cross-app (2026-05-20) ===
+// LookupByEmail retourne les workspaces Notifuse associes a un email Hub.
+// Appele par POST /api/users/by-email (HMAC Hub).
+//
+// Semantique non-error : retourne always DiscoveryResponse. Si l'email est
+// inconnu : found=false + workspaces=[]. Vraies erreurs DB propagees normalement.
+func (s *veridianService) LookupByEmail(ctx context.Context, email string) (*domain.DiscoveryResponse, error) {
+	resp := &domain.DiscoveryResponse{
+		UserEmail:  email,
+		Workspaces: []domain.DiscoveryWorkspace{},
+	}
+
+	// 1. Lookup user par email.
+	user, err := s.userRepo.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			resp.Found = false
+			return resp, nil
+		}
+		errMsg := err.Error()
+		if errMsg != "" && (strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "no rows")) {
+			resp.Found = false
+			return resp, nil
+		}
+		return nil, fmt.Errorf("lookup user by email: %w", err)
+	}
+
+	// Exclure les users de type api_key (non-humains, internes Veridian).
+	if user.Type != domain.UserTypeUser {
+		resp.Found = false
+		return resp, nil
+	}
+
+	resp.Found = true
+
+	// 2. Lire les workspaces du user.
+	userWorkspaces, err := s.workspaceRepo.GetUserWorkspaces(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get user workspaces: %w", err)
+	}
+
+	for _, uw := range userWorkspaces {
+		// Lire workspace name (tolerant : si absent, fallback workspace_id).
+		wsName := uw.WorkspaceID
+		ws, wsErr := s.workspaceRepo.GetByID(ctx, uw.WorkspaceID)
+		if wsErr == nil && ws != nil {
+			wsName = ws.Name
+		}
+
+		// Lire plan (tolerant : absent = legacy tenant sans plan row).
+		plan := ""
+		planRow, planErr := s.planRepo.Get(ctx, uw.WorkspaceID)
+		if planErr == nil && planRow != nil {
+			plan = planRow.Plan
+		}
+
+		fallbackURL := s.apiEndpoint + "/console/signin"
+		if s.apiEndpoint == "" {
+			fallbackURL = "https://notifuse.app.veridian.site/console/signin"
+		}
+
+		resp.Workspaces = append(resp.Workspaces, domain.DiscoveryWorkspace{
+			WorkspaceID:      uw.WorkspaceID,
+			WorkspaceName:    wsName,
+			Role:             uw.Role,
+			Plan:             plan,
+			MagicLinkCapable: true,
+			FallbackURL:      fallbackURL,
+		})
+	}
+
+	return resp, nil
+}

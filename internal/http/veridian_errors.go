@@ -27,6 +27,10 @@ const (
 	ErrCodePurgeNotEligible       = "purge_not_eligible"
 	ErrCodePaywallUnavailable     = "paywall_unavailable"
 	ErrCodeInternalError          = "internal_error"
+	// === attach-member (2026-05-21) ===
+	ErrCodeTenantSuspended        = "tenant_suspended"
+	ErrCodeInvalidRole            = "invalid_role"
+	ErrCodeUserRoleConflict       = "user_role_conflict"
 )
 
 // VeridianErrorResponse est le format d'erreur additif des endpoints Veridian.
