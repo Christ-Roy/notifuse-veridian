@@ -191,3 +191,32 @@ func TestVeridianService_GrantUnlimited_AlreadyEnterprise_Idempotent(t *testing.
 	assert.Equal(t, "enterprise", resp.Plan)
 	assert.Equal(t, "enterprise", resp.PreviousPlan) // previous = enterprise (idempotent)
 }
+
+// TestGrantUnlimited_TouchHubSync_WiredViaGrantUnlimitedFile — V39 garde-fou
+// que touchHubSync est bien câblé dans veridian_grant_unlimited.go (fichier source modifié).
+// La couverture Times(1) est dans veridian_hub_sync_test.go (TestGrantUnlimited_TouchHubSync_Wired).
+// Ce test complète le mapping Constitution §1 : veridian_grant_unlimited.go → ce fichier.
+func TestGrantUnlimited_TouchHubSync_NewFuncPresent(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	existing := &domain.VeridianPlan{
+		WorkspaceID: "ws-hubsync-guard",
+		Plan:        "free",
+		PlanSource:  domain.PlanSourceStripe,
+		Status:      domain.PlanStatusActive,
+	}
+	m.planRepo.EXPECT().Get(ctx, "ws-hubsync-guard").Return(existing, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-hubsync-guard", "enterprise", int64(-1), domain.PlanSourceLifetimePartner).
+		Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantPlanChanged, "ws-hubsync-guard", gomock.Any()).Times(1)
+	// planRepo.TouchHubSync est géré par AnyTimes() dans newVeridianService.
+
+	resp, err := svc.GrantUnlimited(ctx, domain.GrantUnlimitedInput{
+		TenantID:   "ws-hubsync-guard",
+		Reason:     "v39_touchhubsync_guard",
+		PlanSource: domain.PlanSourceLifetimePartner,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "enterprise", resp.Plan)
+}

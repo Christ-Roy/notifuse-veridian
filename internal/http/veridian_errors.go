@@ -31,6 +31,14 @@ const (
 	ErrCodeTenantSuspended        = "tenant_suspended"
 	ErrCodeInvalidRole            = "invalid_role"
 	ErrCodeUserRoleConflict       = "user_role_conflict"
+	// === résilience billing Hub (V39, 2026-05-21) ===
+	// ErrCodeHubSyncDead est retourné par le middleware paywall quand
+	// last_hub_sync_at > 72h (Hub considéré mort). Distinct de ErrCodePaywallUnavailable
+	// (erreur DB) et de ErrCodeTenantSoftDeleted (décision business Hub) :
+	// ici c'est un incident infra Hub (pas une décision business).
+	// Le Hub peut lever cette dégradation en envoyant n'importe quelle mutation
+	// (Touch, UpdatePlan, etc.) qui appellera TouchHubSync et rafraîchira le timestamp.
+	ErrCodeHubSyncDead            = "hub_sync_dead"
 )
 
 // VeridianErrorResponse est le format d'erreur additif des endpoints Veridian.

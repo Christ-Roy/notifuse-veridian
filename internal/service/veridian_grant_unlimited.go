@@ -89,6 +89,9 @@ func (s *veridianService) GrantUnlimited(ctx context.Context, input domain.Grant
 		})
 	}
 
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, input.TenantID)
+
 	return &domain.GrantUnlimitedResponse{
 		TenantID:     input.TenantID,
 		Plan:         enterprisePlan,

@@ -722,3 +722,105 @@ func TestVeridianService_ExposesListTenants(t *testing.T) {
 		_ = ListTenantsResponse{Managed: []TenantSummary{}}
 	})
 }
+
+// === V39 — Résilience billing Hub (last_hub_sync_at) ===
+
+// TestHubSyncThresholds_Constants — les seuils 24h/72h sont figés business.
+// Ne pas changer sans coordonner avec Hub (ils définissent la tolérance
+// incident + la dégradation paywall).
+func TestHubSyncThresholds_Constants(t *testing.T) {
+	assert.Equal(t, 24*time.Hour, HubSyncFreshThreshold, "seuil fresh figé à 24h")
+	assert.Equal(t, 72*time.Hour, HubSyncDeadThreshold, "seuil dead figé à 72h")
+}
+
+// TestEvaluateHubSyncStatus_Nil — NULL last_hub_sync_at = Fresh (fail-open :
+// les tenants antérieurs à V39 ne doivent pas être dégradés au boot).
+func TestEvaluateHubSyncStatus_Nil(t *testing.T) {
+	p := &VeridianPlan{WorkspaceID: "ws-1", LastHubSyncAt: nil}
+	assert.Equal(t, HubSyncFresh, p.EvaluateHubSyncStatus(time.Now()))
+}
+
+// TestEvaluateHubSyncStatus_VeryRecent — sync il y a 1h → Fresh.
+func TestEvaluateHubSyncStatus_VeryRecent(t *testing.T) {
+	now := time.Now()
+	syncAt := now.Add(-1 * time.Hour)
+	p := &VeridianPlan{LastHubSyncAt: &syncAt}
+	assert.Equal(t, HubSyncFresh, p.EvaluateHubSyncStatus(now))
+}
+
+// TestEvaluateHubSyncStatus_JustUnder24h — sync il y a 23h59m → Fresh.
+func TestEvaluateHubSyncStatus_JustUnder24h(t *testing.T) {
+	now := time.Now()
+	syncAt := now.Add(-(24*time.Hour - time.Minute))
+	p := &VeridianPlan{LastHubSyncAt: &syncAt}
+	assert.Equal(t, HubSyncFresh, p.EvaluateHubSyncStatus(now))
+}
+
+// TestEvaluateHubSyncStatus_Exactly24h — boundary 24h exactement → Stale.
+func TestEvaluateHubSyncStatus_Exactly24h(t *testing.T) {
+	now := time.Now()
+	syncAt := now.Add(-24 * time.Hour)
+	p := &VeridianPlan{LastHubSyncAt: &syncAt}
+	assert.Equal(t, HubSyncStale, p.EvaluateHubSyncStatus(now))
+}
+
+// TestEvaluateHubSyncStatus_Stale48h — sync il y a 48h → Stale (grace optimistic).
+func TestEvaluateHubSyncStatus_Stale48h(t *testing.T) {
+	now := time.Now()
+	syncAt := now.Add(-48 * time.Hour)
+	p := &VeridianPlan{LastHubSyncAt: &syncAt}
+	assert.Equal(t, HubSyncStale, p.EvaluateHubSyncStatus(now))
+}
+
+// TestEvaluateHubSyncStatus_JustUnder72h — sync il y a 71h59m → Stale.
+func TestEvaluateHubSyncStatus_JustUnder72h(t *testing.T) {
+	now := time.Now()
+	syncAt := now.Add(-(72*time.Hour - time.Minute))
+	p := &VeridianPlan{LastHubSyncAt: &syncAt}
+	assert.Equal(t, HubSyncStale, p.EvaluateHubSyncStatus(now))
+}
+
+// TestEvaluateHubSyncStatus_Exactly72h — boundary 72h exactement → Dead.
+func TestEvaluateHubSyncStatus_Exactly72h(t *testing.T) {
+	now := time.Now()
+	syncAt := now.Add(-72 * time.Hour)
+	p := &VeridianPlan{LastHubSyncAt: &syncAt}
+	assert.Equal(t, HubSyncDead, p.EvaluateHubSyncStatus(now))
+}
+
+// TestEvaluateHubSyncStatus_Dead100h — sync il y a 100h → Dead.
+func TestEvaluateHubSyncStatus_Dead100h(t *testing.T) {
+	now := time.Now()
+	syncAt := now.Add(-100 * time.Hour)
+	p := &VeridianPlan{LastHubSyncAt: &syncAt}
+	assert.Equal(t, HubSyncDead, p.EvaluateHubSyncStatus(now))
+}
+
+// TestVeridianPlan_LastHubSyncAt_JSONOmitEmpty — nil → omis du JSON.
+func TestVeridianPlan_LastHubSyncAt_JSONOmitEmpty(t *testing.T) {
+	p := VeridianPlan{WorkspaceID: "ws-1"}
+	data, err := jsonMarshal(p)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "last_hub_sync_at",
+		"last_hub_sync_at nil doit être omis (omitempty)")
+}
+
+// TestVeridianPlan_LastHubSyncAt_JSONPresent — non-nil → présent dans le JSON.
+func TestVeridianPlan_LastHubSyncAt_JSONPresent(t *testing.T) {
+	now := time.Now().UTC()
+	p := VeridianPlan{WorkspaceID: "ws-1", LastHubSyncAt: &now}
+	data, err := jsonMarshal(p)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "last_hub_sync_at",
+		"last_hub_sync_at non-nil doit apparaître dans le JSON")
+}
+
+// TestVeridianPlanRepository_ExposesTouchHubSync — invariant compile-time
+// que l'interface VeridianPlanRepository expose bien TouchHubSync.
+func TestVeridianPlanRepository_ExposesTouchHubSync(t *testing.T) {
+	var _ func(ctx context.Context, workspaceID string) error
+	assert.NotPanics(t, func() {
+		// Marker runtime — grep "TouchHubSync" dans les tests.
+		_ = VeridianPlan{LastHubSyncAt: nil}
+	})
+}

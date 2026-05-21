@@ -97,6 +97,14 @@ type VeridianPlan struct {
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 
+	// === Résilience billing Hub (V39, ticket resilience-billing-niveau-1) ===
+	// LastHubSyncAt : timestamp du dernier push Hub→Notifuse réussi (Provision,
+	// UpdatePlan, Suspend, Resume, SoftDelete, Restore, Touch, AttachOwner,
+	// AttachMember, GrantUnlimited). Si Hub down > 72h sans push, le middleware
+	// paywall bascule en dégradation : writes bloqués 503 (HubSyncDead).
+	// NULL = jamais synchronisé (tenants antérieurs à V39 — backfillé par migration).
+	LastHubSyncAt *time.Time `json:"last_hub_sync_at,omitempty"`
+
 	// === Activation tracking (V38, ticket trial-eligible-signal) ===
 	// EmailsSentLifetime : compteur cumulatif jamais reset (vs
 	// EmailsSentThisMonth qui se reset mensuellement par cron). Signal
@@ -170,6 +178,50 @@ func (p *VeridianPlan) IsBlocked() (blocked bool, reason string) {
 	}
 	// Volontairement PAS de check sur monthly_email_quota — voir doc ci-dessus.
 	return false, ""
+}
+
+// === Résilience billing Hub (V39) — fraîcheur du lien Hub→Notifuse ===
+
+// HubSyncFreshThreshold : âge max de last_hub_sync_at pour considérer le lien
+// Hub→Notifuse frais. En dessous de ce seuil : mode normal, aucune contrainte.
+const HubSyncFreshThreshold = 24 * time.Hour
+
+// HubSyncDeadThreshold : âge de last_hub_sync_at au-delà duquel le lien Hub est
+// considéré mort (incident infra Hub). Entre Fresh et Dead = zone de grâce
+// optimiste (log warn, continue à servir). Au-delà : dégradation paywall
+// (writes bloqués 503, reads OK best-effort).
+const HubSyncDeadThreshold = 72 * time.Hour
+
+// HubSyncStatus représente l'état de fraîcheur du lien Hub→Notifuse.
+type HubSyncStatus string
+
+const (
+	// HubSyncFresh : last_hub_sync_at < NOW - 24h → mode normal.
+	HubSyncFresh HubSyncStatus = "fresh"
+	// HubSyncStale : 24h ≤ last_hub_sync_at < 72h → grace optimistic, log warn.
+	HubSyncStale HubSyncStatus = "stale"
+	// HubSyncDead : last_hub_sync_at ≥ 72h → dégradation paywall.
+	HubSyncDead HubSyncStatus = "dead"
+)
+
+// EvaluateHubSyncStatus retourne l'état de fraîcheur du lien Hub→Notifuse
+// pour ce plan, relativement à now.
+//
+// NULL = jamais synchronisé (tenants antérieurs à V39, backfillés par migration
+// via updated_at) → traité comme HubSyncFresh (best-effort, pas de dégradation).
+func (p *VeridianPlan) EvaluateHubSyncStatus(now time.Time) HubSyncStatus {
+	if p.LastHubSyncAt == nil {
+		return HubSyncFresh // pas de signal = pas de dégradation (fail-open)
+	}
+	age := now.Sub(*p.LastHubSyncAt)
+	switch {
+	case age < HubSyncFreshThreshold:
+		return HubSyncFresh
+	case age < HubSyncDeadThreshold:
+		return HubSyncStale
+	default:
+		return HubSyncDead
+	}
 }
 
 // PlanQuotas mappe un nom de plan a un quota mensuel d'emails.
@@ -347,6 +399,11 @@ type VeridianPlanRepository interface {
 	// par le service pour marquer le franchissement du seuil activation.
 	MarkActivityThresholdReached(ctx context.Context, workspaceID string, at time.Time) error
 	ResetMonthlyCounters(ctx context.Context) (int64, error) // appele par cron
+	// TouchHubSync met à jour last_hub_sync_at = NOW pour le workspace.
+	// Idempotent. No-op silencieux si la row n'existe pas.
+	// Appelé en queue de chaque mutation Hub→Notifuse (best-effort, non bloquant)
+	// pour mesurer la fraîcheur du lien Hub→Notifuse (résilience billing V39).
+	TouchHubSync(ctx context.Context, workspaceID string) error
 	// === Veridian patch === Hard delete (tests / admin platform).
 	HardDelete(ctx context.Context, workspaceID string) error
 	// ListByPrefix retourne tous les workspace_id matchant un prefix SQL LIKE.

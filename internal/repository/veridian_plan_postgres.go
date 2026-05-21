@@ -53,6 +53,7 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
 		       emails_sent_lifetime, activity_threshold_reached_at,
+		       last_hub_sync_at,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -62,8 +63,9 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 	var suspendedAt, deletedAt, restoredAt, purgeEligibleAt, lastTouchedAt sql.NullTime
 	var suspendedReason, lifecycleReason sql.NullString
 	// V38 : activity_threshold_reached_at est TIMESTAMP WITH TIME ZONE (nullable).
-	// Utilise sql.NullTime pour le scan null-safe.
 	var activityThresholdReachedAt sql.NullTime
+	// V39 : last_hub_sync_at est TIMESTAMP WITH TIME ZONE (nullable).
+	var lastHubSyncAt sql.NullTime
 
 	err := r.systemDB.QueryRowContext(ctx, q, workspaceID).Scan(
 		&p.WorkspaceID, &p.Plan, &planSource, &status, &p.MonthlyEmailQuota, &p.EmailsSentThisMonth,
@@ -72,6 +74,7 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 		&p.MaxContacts, &p.MaxSeats, &p.MaxOAuthAccounts, &p.MaxCustomDomains, &p.MaxActiveSequences,
 		&p.FeatureABTesting, &p.FeatureBrandingRemoved, &p.FeatureWhiteLabel, &p.HistoryRetentionDays,
 		&p.EmailsSentLifetime, &activityThresholdReachedAt,
+		&lastHubSyncAt,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -108,6 +111,10 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 	if activityThresholdReachedAt.Valid {
 		t := activityThresholdReachedAt.Time
 		p.ActivityThresholdReachedAt = &t
+	}
+	if lastHubSyncAt.Valid {
+		t := lastHubSyncAt.Time
+		p.LastHubSyncAt = &t
 	}
 	return &p, nil
 }
@@ -588,6 +595,26 @@ func (r *veridianPlanRepository) ListByPrefix(ctx context.Context, prefix string
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// TouchHubSync met à jour last_hub_sync_at = NOW pour le workspace donné.
+// Idempotent. No-op silencieux si la row n'existe pas (0 rows affected, pas d'erreur).
+// Appelé en queue de chaque mutation Hub→Notifuse (best-effort, non bloquant)
+// pour mesurer la fraîcheur du lien Hub→Notifuse.
+//
+// ⚠️ Piège TZ : last_hub_sync_at est TIMESTAMP WITH TIME ZONE (V39 additif).
+// updated_at est TIMESTAMP WITHOUT TIME ZONE (legacy upstream). Ne JAMAIS
+// partager le même $N entre ces deux colonnes dans un même UPDATE — bug Postgres
+// "inconsistent types deduced for parameter $N". Ce UPDATE ne touche que
+// last_hub_sync_at, donc safe.
+func (r *veridianPlanRepository) TouchHubSync(ctx context.Context, workspaceID string) error {
+	const q = `
+		UPDATE veridian_plan
+		SET last_hub_sync_at = $2
+		WHERE workspace_id = $1
+	`
+	_, err := r.systemDB.ExecContext(ctx, q, workspaceID, time.Now().UTC())
+	return err
 }
 
 // ResetMonthlyCounters remet a zero emails_sent_this_month pour tous les workspaces

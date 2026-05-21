@@ -63,6 +63,23 @@ Accepter le drift, garder le test régression `NoSharedParamAcrossMixedTzColumns
 
 **Option 1** quand on aura un slot tranquille (genre pas de feature urgente sur la table). C'est la dette propre. En attendant **Option 3** (déjà en place via le garde-fou test).
 
+## Statut 2026-05-21
+
+**Décision en place** : Option 3 (no-op + garde-fou). Confirmé toujours
+valide post-sprint 2026-05-21 (V38 + V39) — les nouvelles colonnes
+ajoutées (`emails_sent_lifetime BIGINT`, `activity_threshold_reached_at
+TIMESTAMPTZ`, `last_hub_sync_at TIMESTAMPTZ`) ont été codées avec
+paramètres `$N` distincts pour éviter le bug type mismatch. Memory
+`feedback_sqlmock_does_not_validate_postgres_types` documente le piège
+pour les sessions futures.
+
+Ce ticket reste pending comme **référence pour la future migration ALTER
+COLUMN consolidée** (option 1) — à dégainer quand on aura :
+- 0 feature pricing/lifecycle urgente sur `veridian_plan`
+- Slot 24h+ de rodage staging dispo (Constitution §15)
+- Idéalement : tous les workspaces inactifs purgés pour minimiser le
+  AccessExclusiveLock impact
+
 ## Tests
 
 - Vérifier après ALTER que tous les `time.Time` round-trip via JSON conservent leur précision (microseconde)

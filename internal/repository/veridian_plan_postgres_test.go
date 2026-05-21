@@ -24,10 +24,11 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 	ctx := context.Background()
 	const wsID = "ws-1"
 
-	// V38 — la SELECT inclut maintenant les 9 colonnes pricing V37 + les 2
-	// nouvelles colonnes V38 (emails_sent_lifetime, activity_threshold_reached_at).
-	// On factorise la query litterale et la liste des colonnes pour eviter
-	// la duplication entre les 3 sous-tests (Constitution §1 lisibilite).
+	// V39 — la SELECT inclut maintenant les 9 colonnes pricing V37 + les 2
+	// colonnes V38 (emails_sent_lifetime, activity_threshold_reached_at) + la
+	// colonne V39 (last_hub_sync_at). On factorise la query litterale et la
+	// liste des colonnes pour eviter la duplication entre les 3 sous-tests
+	// (Constitution §1 lisibilite).
 	const getSQL = `
 		SELECT workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
 		       last_reset_at, suspended_at, suspended_reason, deleted_at,
@@ -35,6 +36,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
 		       emails_sent_lifetime, activity_threshold_reached_at,
+		       last_hub_sync_at,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -46,6 +48,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		"max_contacts", "max_seats", "max_oauth_accounts", "max_custom_domains", "max_active_sequences",
 		"feature_ab_testing", "feature_branding_removed", "feature_white_label", "history_retention_days",
 		"emails_sent_lifetime", "activity_threshold_reached_at",
+		"last_hub_sync_at",
 		"created_at", "updated_at",
 	}
 
@@ -56,12 +59,15 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		now := time.Now().UTC()
 		// Tenant pro avec dimensions V37 backfillees par la migration.
 		// V38 : emails_sent_lifetime=7, activity_threshold_reached_at=non-null (seuil atteint)
+		// V39 : last_hub_sync_at = now - 1h (fresh)
 		reachedAt := now.Add(-1 * time.Hour)
+		hubSyncAt := now.Add(-1 * time.Hour)
 		rows := sqlmock.NewRows(getColumns).AddRow(
 			wsID, "pro", "stripe", "active", int64(10000), int64(42),
 			now, nil, nil, nil, nil, nil, nil, nil,
 			int64(-1), -1, -1, -1, -1, true, true, false, -1,
 			int64(7), reachedAt,
+			hubSyncAt,
 			now, now,
 		)
 
@@ -88,6 +94,8 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		// V38 : activation tracking
 		assert.Equal(t, int64(7), p.EmailsSentLifetime)
 		require.NotNil(t, p.ActivityThresholdReachedAt, "seuil atteint → champ non-nil")
+		// V39 : last_hub_sync_at scannée (non-nil car tenant récent)
+		require.NotNil(t, p.LastHubSyncAt, "last_hub_sync_at doit être scanné depuis la DB")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -101,12 +109,14 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		purgeEligible := del.Add(30 * 24 * time.Hour)
 		// Tenant free suspended-deleted, dimensions = defaults Free.
 		// V38 : emails_sent_lifetime=2, activity_threshold_reached_at=nil (pas encore activé)
+		// V39 : last_hub_sync_at=nil (tenant antérieur à V39, backfillé = fresh)
 		rows := sqlmock.NewRows(getColumns).AddRow(
 			wsID, "free", "lifetime_partner", "suspended", int64(500), int64(0),
 			now, susp, "non-payment", del,
 			nil, purgeEligible, nil, "GDPR user request",
 			int64(-1), -1, -1, -1, -1, true, true, false, -1,
 			int64(2), nil,
+			nil, // last_hub_sync_at nullable
 			now, now,
 		)
 
@@ -132,6 +142,8 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		// V38 : activation tracking
 		assert.Equal(t, int64(2), p.EmailsSentLifetime, "2 mails envoyés, seuil 5 pas encore atteint")
 		assert.Nil(t, p.ActivityThresholdReachedAt, "seuil pas atteint → nil")
+		// V39 : last_hub_sync_at null → nil (tenant antérieur à V39 non encore TouchHubSync)
+		assert.Nil(t, p.LastHubSyncAt, "last_hub_sync_at nil → scannée comme nil")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -585,8 +597,9 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 	purgeEligibleAt := now.Add(25 * 24 * time.Hour)
 	lastTouchedAt := now.Add(-12 * time.Hour)
 
-	// V38 — SELECT etendu avec 9 colonnes pricing V37 + 2 colonnes V38.
+	// V39 — SELECT etendu avec 9 colonnes pricing V37 + 2 colonnes V38 + 1 colonne V39.
 	// On reflete des defaults Pro pour ne pas distraire le focus du test (lifecycle V34).
+	hubSyncAt := now.Add(-2 * time.Hour)
 	rows := sqlmock.NewRows([]string{
 		"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
 		"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
@@ -594,12 +607,14 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 		"max_contacts", "max_seats", "max_oauth_accounts", "max_custom_domains", "max_active_sequences",
 		"feature_ab_testing", "feature_branding_removed", "feature_white_label", "history_retention_days",
 		"emails_sent_lifetime", "activity_threshold_reached_at",
+		"last_hub_sync_at",
 		"created_at", "updated_at",
 	}).AddRow("ws-1", "pro", "stripe", "active", int64(10000), int64(0),
 		now, nil, nil, nil,
 		restoredAt, purgeEligibleAt, lastTouchedAt, "audit reason for V34 lifecycle",
 		int64(-1), -1, -1, -1, -1, true, true, false, -1,
 		int64(3), nil, // V38 : 3 mails lifetime, seuil pas atteint
+		hubSyncAt,     // V39 : last_hub_sync_at non-nil
 		now, now)
 
 	mock.ExpectQuery(`
@@ -609,6 +624,7 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
 		       emails_sent_lifetime, activity_threshold_reached_at,
+		       last_hub_sync_at,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -1168,6 +1184,59 @@ func TestVeridianPlanRepository_IncrementEmailsSent_ThresholdDetection(t *testin
 		require.NoError(t, err, "mark failure est best-effort — pas d'erreur retournée")
 		// Emit ne doit pas être appelé si mark a échoué.
 		assert.Empty(t, emitter.calls, "no emit if mark failed")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+// === V39 — TouchHubSync ===
+
+func TestVeridianPlanRepository_TouchHubSync(t *testing.T) {
+	ctx := context.Background()
+
+	const touchSQL = `
+		UPDATE veridian_plan
+		SET last_hub_sync_at = $2
+		WHERE workspace_id = $1
+	`
+
+	t.Run("updates last_hub_sync_at for existing workspace", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(touchSQL).
+			WithArgs("ws-1", sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.TouchHubSync(ctx, "ws-1")
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("no-op silencieux si workspace absent (0 rows affected — pas d'erreur)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		// 0 rows affected = workspace inexistant → no-op, pas d'erreur.
+		mock.ExpectExec(touchSQL).
+			WithArgs("nonexistent", sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := repo.TouchHubSync(ctx, "nonexistent")
+		// Pas d'erreur attendue : TouchHubSync est idempotent + best-effort.
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("propage l'erreur DB si l'UPDATE échoue", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectExec(touchSQL).
+			WithArgs("ws-err", sqlmock.AnyArg()).
+			WillReturnError(assert.AnError)
+
+		err := repo.TouchHubSync(ctx, "ws-err")
+		require.Error(t, err, "erreur DB doit être propagée pour que le service puisse log")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }

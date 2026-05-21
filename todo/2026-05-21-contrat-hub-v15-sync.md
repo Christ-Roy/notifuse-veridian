@@ -37,41 +37,45 @@ du contrat v1.3 → v1.4 → v1.5 :
   des droits par action + pattern de vérification d'auth + cas particuliers.
 - API-REF v1.1 : section **PERMS** avec helpers + matrice endpoint → droit.
 
-## 1. État Notifuse au 2026-05-21 (audit agent Prospection)
+## 1. État Notifuse au 2026-05-21 (audit agent Prospection) — MAJ 2026-05-21 soir
 
-**Score conformité** : 13/22 endpoints livrés (59 %, parmi les meilleurs cross-app).
+**Score conformité** : ~15/22 endpoints livrés (~68 %, en tête cross-app post-sprint).
 
 ✅ Endpoints socle + lifecycle complets (provision, update-plan, attach-owner,
 suspend/resume, health, soft-delete, restore, purge, touch, usage-summary,
 magicLink, limits, auto-login, admin/grant-unlimited, admin/wipe-test-tenants,
-admin/cache/invalidate).
+admin/cache/invalidate, admin/tenants listing).
+
+✅ **§5.22 attach-member (P1)** : LIVRÉ sprint 2026-05-21 lot B (commit `7f3adccb`).
+Voir `todo/done/2026-05-21-hub-attach-member-endpoint.md`. Tests 13 handler + 12 service.
+
+✅ **§5.12 Discovery `/users/by-email`** : LIVRÉ sprint 2026-05-21 lot D
+(commits `7f3adccb`/`9534f0d4`/`b694609f`). Voir
+`todo/done/2026-05-20-add-discovery-endpoint-by-email.md`.
 
 ❌ Multi-membre (§5.18-5.21) : 0/5 endpoints livrés. Ticket existant
-`2026-05-19-v13-multi-membre-cross-app.md`.
-
-❌ §5.22 attach-member (P1) : ticket existant `2026-05-21-hub-attach-member-endpoint.md`.
+`2026-05-19-v13-multi-membre-cross-app.md` (pas bloquant aujourd'hui).
 
 ❌ Rotate api-key + transfer-owner (§5.15-5.16) : ticket
-`2026-05-19-rotate-transfer-owner-endpoints.md`.
+`2026-05-19-rotate-transfer-owner-endpoints.md` — Hub a un fallback,
+P3 cosmétique d'après l'audit 2026-05-19.
 
-❌ Discovery `/users/by-email` (§5.12) : ticket
-`2026-05-20-add-discovery-endpoint-by-email.md`.
+❌ Webhooks lifecycle/quota manquants : `2026-05-19-webhooks-manquants.md`.
 
 ## 2. Actions Notifuse immédiates pour v1.4 (P1)
 
-### 2.1 Endpoint §5.22 attach-member (P1 bloqueur Hub)
+### 2.1 ✅ Endpoint §5.22 attach-member — LIVRÉ sprint 2026-05-21 lot B
 
-Suivre `2026-05-21-hub-attach-member-endpoint.md`. Spec complète dans
-`CONTRAT-HUB-API-REF.md` section ATTACH (route, body, response 201/200,
-codes erreur, tests obligatoires).
+Commit `7f3adccb`. Spec respectée :
+- HMAC Hub via middleware existant (réutilise `HUB_API_SECRET`)
+- Body `{hub_user_id, hub_user_email, role, invitation_id}`
+- Response 201 first attach, 200 already_member idempotent
+- Codes 401/404/400/423/409 standard
+- Lookup user par `hub_user_id`, INSERT/UPDATE `user_workspaces`
+- Génère `login_url` magic link auto-login
+- Tests : 13 handler + 12 service (Constitution §1 OK)
 
-**Spécificités Notifuse** :
-
-- 1 workspace = 1 tenant. Donc `workspaceId` reçu = `workspace.id` Notifuse
-  (= slug). Si le Hub envoie un `workspaceId` qui ne matche pas
-  `workspace.id`, retourner 404.
-- Ajouter au `user_workspaces(workspace_id, user_id)` avec `role` par défaut.
-- Ne JAMAIS écraser un `role` existant (cf §5.22.4 contrat).
+Hub peut désormais débloquer phase 4b invitation (`accept.ts` retourne 200 + login_url).
 
 ### 2.2 Colonne `users.hub_user_id` (§3.7)
 

@@ -11,6 +11,10 @@ package middleware
 // consommer pour le handler suivant), regarde la table veridian_plan via
 // le repo, et retourne 402 Payment Required si IsBlocked.
 //
+// V39 — Résilience billing Hub : si last_hub_sync_at > 72h (HubSyncDead),
+// les writes sont bloqués 503 (best-effort : reads passent). Entre 24-72h
+// (HubSyncStale), on log warn mais continue à servir.
+//
 // Si le workspace_id n'a PAS de ligne veridian_plan (sql.ErrNoRows), on
 // laisse passer : ce workspace n'est pas gere par Veridian (mode self-
 // hosted ou workspace upstream cree avant migration).
@@ -26,12 +30,40 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
+
+// hubSyncDeadErrCode est le code machine-readable pour une dégradation
+// hub_sync_dead. Dupliqué ici pour éviter un import cycle avec internal/http.
+// La valeur DOIT être identique à ErrCodeHubSyncDead dans internal/http/veridian_errors.go.
+const hubSyncDeadErrCode = "hub_sync_dead"
+
+// paywallErrorResponse est une version locale minimale de VeridianErrorResponse
+// pour le middleware (évite l'import cycle internal/http ← middleware ← internal/http).
+type paywallErrorResponse struct {
+	Error   string                 `json:"error"`
+	Code    string                 `json:"code"`
+	Message string                 `json:"message,omitempty"`
+	Details map[string]interface{} `json:"details,omitempty"`
+}
+
+// writeJSONErrorWithCode émet une réponse d'erreur enrichie avec un code machine.
+// Distinct de writeJSONError (qui est définie dans auth.go, simple message string).
+func writeJSONErrorWithCode(w http.ResponseWriter, code, message string, statusCode int, details map[string]interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(paywallErrorResponse{
+		Error:   message,
+		Code:    code,
+		Message: message,
+		Details: details,
+	})
+}
 
 const (
 	// veridianPaywallCacheTTL est la duree de vie d'une entree de cache.
@@ -101,6 +133,45 @@ func (c *PaywallCache) Clear() {
 		c.m.Delete(key)
 		return true
 	})
+}
+
+// === V39 — HubSync gating helpers ===
+
+// staleLogState stocke le timestamp du dernier log warn par tenant (pour le
+// rate-limit 1×/min). Map mémoire — état perdu au restart container, ce qui
+// est acceptable (au pire on re-log au boot). Pas de cleanup : la map est
+// bornée par le nombre de tenants actifs (petit en pratique).
+var staleLogState sync.Map // map[string]time.Time
+
+// shouldLogStale retourne true si le dernier log warn pour ce tenant remonte
+// à plus d'une minute (rate-limit pour ne pas spammer les logs en mode stale).
+func shouldLogStale(tenantID string) bool {
+	const minInterval = time.Minute
+	now := time.Now()
+	if v, ok := staleLogState.Load(tenantID); ok {
+		if last, ok := v.(time.Time); ok && now.Sub(last) < minInterval {
+			return false
+		}
+	}
+	staleLogState.Store(tenantID, now)
+	return true
+}
+
+// isHubSyncWriteBlock retourne true si la requête est un write (POST/PUT/PATCH/DELETE)
+// sur un chemin qui N'EST PAS une route admin Hub (/api/veridian/*). Les routes
+// admin sont exemptées pour que le Hub puisse réveiller le tenant en mode dead.
+func isHubSyncWriteBlock(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		// Exempter les routes admin Hub — elles doivent passer même en mode dead
+		// pour que le Hub puisse envoyer un Touch/Resume et rafraîchir le timestamp.
+		if strings.HasPrefix(r.URL.Path, "/api/veridian/") {
+			return false
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 // NewVeridianPaywallMiddleware retourne un middleware applicable sur les
@@ -202,7 +273,10 @@ func NewVeridianPaywallMiddlewareWithCache(cache *PaywallCache, planRepo domain.
 				return
 			}
 
-			// Plan present : verifier le blocage.
+			// Plan present : verifier le blocage (suspend / deleted).
+			// Soft-deleted PRIME sur HubSyncDead (UX cohérent : si le tenant
+			// a été explicitement fermé par le Hub, ne pas afficher un message
+			// d'incident infra).
 			blocked, reason := entry.plan.IsBlocked()
 			if blocked {
 				w.Header().Set("Content-Type", "application/json")
@@ -212,6 +286,35 @@ func NewVeridianPaywallMiddlewareWithCache(cache *PaywallCache, planRepo domain.
 					"tenant_status": string(entry.plan.Status),
 				})
 				return
+			}
+
+			// V39 — Évaluer la fraîcheur du lien Hub→Notifuse.
+			switch hubStatus := entry.plan.EvaluateHubSyncStatus(time.Now()); hubStatus {
+			case domain.HubSyncFresh:
+				// mode normal, rien à faire
+			case domain.HubSyncStale:
+				// mode grace optimistic : log warn 1×/min par tenant, continue à servir
+				if log != nil && shouldLogStale(probe.WorkspaceID) {
+					log.WithFields(map[string]interface{}{
+						"workspace_id":    probe.WorkspaceID,
+						"last_hub_sync":   entry.plan.LastHubSyncAt,
+						"hub_sync_status": string(hubStatus),
+					}).Warn("veridian paywall: hub sync stale > 24h, continuing best-effort")
+				}
+			case domain.HubSyncDead:
+				// mode dégradé : bloquer les writes, laisser passer les reads
+				if isHubSyncWriteBlock(r) {
+					w.Header().Set("Retry-After", "3600")
+					writeJSONErrorWithCode(w, hubSyncDeadErrCode,
+						"Service degraded — Veridian Hub unreachable since > 72h. Writes paused for safety.",
+						http.StatusServiceUnavailable,
+						map[string]interface{}{
+							"last_hub_sync_at": entry.plan.LastHubSyncAt,
+							"retry_after_s":    3600,
+						})
+					return
+				}
+				// Reads passent en best-effort (pas de return ici)
 			}
 
 			next.ServeHTTP(w, r)

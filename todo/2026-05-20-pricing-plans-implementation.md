@@ -328,51 +328,56 @@ Câbler dans le code Notifuse les nouveaux plans tels que décrits dans `VISION-
 le body de `broadcasts.create` pour détecter `test_settings`. Plus
 simple, plus robuste, business-équivalent.
 
-### ⏳ Lots restants après le pivot 2026-05-21
+### ✅ Audit post-pivot 2026-05-21 — tout shippé ou délégué
 
-#### 🔴 À faire — vraies limites
+#### ✅ Items résolus depuis le pivot
 
-- [ ] **Lot 4d** — Custom domain enforcement sur l'endpoint d'ajout de
-  domaine custom (à identifier dans le code Notifuse). Free=0 / Pro=1 /
-  Business=5 / Enterprise=illimité. Refus 402 + `error_code=domain_limit_reached`
-  si dépassement. **C'est la seule limite enforcée vraiment.**
+- [x] **Lot 4a A/B feature gate REVERT** — `featureGatedPaths = map[string]string{}`
+  vide dans `internal/http/middleware/veridian_paywall.go`. A/B testing
+  désormais gratuit pour tous les plans. Confirmé code 2026-05-21.
+- [x] **`DefaultPlanLimits` pivot acté** — Free a `FeatureABTesting=true`
+  + `FeatureBrandingRemoved=true` + tous les `Max*=-1` (illimité). Seul
+  `FeatureWhiteLabel` distingue Business+ (true) vs autres (false).
+  Confirmé `internal/domain/veridian.go` ligne ~115. Commit `51e289ee`.
+- [x] **Lot 4d Custom domain enforcement** — **ANNULÉ par pivot**.
+  `MaxCustomDomains: -1` partout, plus aucune limite enforcée côté code.
+  La "seule vraie limite" annoncée pre-pivot n'a plus de sens.
+- [x] **Backfill V37 ws existants** — couvert par migration V37 (commit
+  `a260adcf`) qui applique `DefaultPlanLimits` à toutes les rows. Plus
+  besoin de migration V38 dédiée pour ça.
 
-#### 🟡 À reverter / désactiver — features gratuites désormais
+#### ⏳ Mécanisme central trial — délégué à d'autres tickets
 
-- [ ] **Lot 4a A/B feature gate (déjà livré)** → **REVERT** : les Free
-  ont maintenant accès à A/B testing. Supprimer la map
-  `featureGatedPaths` côté middleware (ou la laisser vide).
-- [ ] **Backfill V37** : passer `feature_ab_testing=TRUE` pour tous les
-  tenants Free existants (canaryfree inclus). Migration V38 ?
-- [ ] **Domain `DefaultPlanLimits`** : Free doit avoir `FeatureABTesting=true`
-  désormais (cohérence avec le code revert + nouveaux clients).
+- [ ] **Trial 15j → expiration → paywall Free** : voir tickets dédiés
+  - Notifuse signal d'éligibilité (ticket `2026-05-21-trial-eligible-signal.md`) — **LIVRÉ lot C V38 commit `1d564282`**
+  - Hub state machine (ticket Hub `veridian-hub/todo/2026-05-21-trial-state-machine.md`) — **pending Hub**
+  - **Décision design figée par Robert** : la deadline 15j Free démarre
+    à J+2 post-5 mails (signal `tenant.activity_threshold_reached`),
+    pas au signup. Voir `CLAUDE.md` Notifuse + ticket Hub.
+- [ ] **Mode paywall post-15j Free** : voir ticket dédié
+  `2026-05-21-paywall-degraded-mode-soft-deleted.md` qui étend déjà ce
+  pattern au cas trial-expired (même middleware, même UX dégradée).
+- [x] **Documentation pricing** — figée dans `CLAUDE.md` Notifuse
+  (philosophie + interdits code-side) + `veridian-hub/docs/PRICING-VERIDIAN.md`
+  (source de vérité grille). Plus rien à doc ici.
 
-#### ❌ Annulés définitivement (pivot 2026-05-21)
+#### ❌ Annulés définitivement par pivot 2026-05-21
 
 - [x] ~~**Lot 4b** — Seat enforcement~~ — seats illimités pour tous
-  (growth hacking par invitation cross-Free)
 - [x] ~~**Lot 4c** — Contact count enforcement~~ — contacts illimités
-  pour tous
-- [x] ~~**Lot 5** — Branding "Powered by Veridian" obligatoire~~ — le
-  branding devient **optionnel pour tous** (toggle Settings ou OFF par
-  défaut, décision UI à figer). Plus de dégradation des emails Free.
+- [x] ~~**Lot 4d** — Custom domain enforcement~~ — domaines illimités
+- [x] ~~**Lot 5** — Branding "Powered by Veridian" obligatoire~~ — branding optionnel pour tous
 - [x] ~~**Lot 6** — Cron cleanup historique~~ — abandonné 2026-05-20
-  (overkill à l'échelle actuelle + RGPD déjà couvert par soft-delete)
 
-#### 🟡 Mécanisme central remaining
+### 🎯 Statut final du ticket
 
-- [ ] **Trial 15j → expiration → paywall Free** :
-  - Notifuse signal d'éligibilité (ticket `2026-05-21-trial-eligible-signal.md`)
-  - Hub state machine (ticket Hub `2026-05-21-trial-state-machine.md`)
-  - **Décision design à figer** : la deadline 15j Free démarre quand ?
-    Au signup ou au 1er signal d'activité (5 mails) ?
-- [ ] **Mode paywall post-15j Free** : hard block ou dégradé lecture-seule
-  (cf. ticket `2026-05-21-paywall-degraded-mode-soft-deleted.md` qui
-  traite le cas soft-delete, à étendre / reproduire pour le cas
-  trial-expired).
-- [ ] **Documentation CHANGELOG + README** — Note : CHANGELOG upstream-aligned,
-  préférer doc dans `CLAUDE.md` Notifuse (déjà fait pour la nouvelle
-  vision pricing 2026-05-21) ou fichier dédié.
+**Tous les livrables internes Notifuse sont shippés ou annulés par le
+pivot.** Ce qui reste = orchestration trial côté Hub (ticket Hub dédié)
++ paywall mode dégradé (ticket dédié `2026-05-21-paywall-degraded-mode-soft-deleted.md`).
+
+**Reco archivage** : ce ticket peut passer en `todo/done/` une fois le
+ticket paywall dégradé shippé. En attendant, le laisser pending comme
+référence historique du pivot pricing.
 
 **Note lot 1** : choix volontairement non-régressif — fondation seule.
 **Note lot 2** : auto-fill côté repo = lots 1+2 deviennent transparents

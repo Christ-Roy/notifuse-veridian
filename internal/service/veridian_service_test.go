@@ -38,6 +38,12 @@ func newVeridianService(t *testing.T) (*veridianService, *veridianServiceMocks) 
 		emitter:       mocks.NewMockWebhookEmitter(ctrl),
 	}
 
+	// V39 — TouchHubSync est best-effort dans toutes les mutations : les tests
+	// existants ne doivent pas être cassés par son ajout. On déclare une
+	// expectation AnyTimes() par défaut qui peut être surchargée par un test
+	// spécifique qui veut Times(1) / Times(0).
+	m.planRepo.EXPECT().TouchHubSync(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	svc := &veridianService{
 		workspaceService: m.workspace,
 		workspaceRepo:    m.workspaceRepo,

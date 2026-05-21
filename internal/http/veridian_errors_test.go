@@ -123,3 +123,31 @@ func TestVeridianErrors_AttachMemberCodes(t *testing.T) {
 	assert.Equal(t, "invalid_role", ErrCodeInvalidRole, "ErrCodeInvalidRole doit valoir invalid_role")
 	assert.Equal(t, "user_role_conflict", ErrCodeUserRoleConflict, "ErrCodeUserRoleConflict doit valoir user_role_conflict")
 }
+
+// TestVeridianErrors_HubSyncDeadCode — V39 résilience billing.
+// hub_sync_dead est un nouveau code machine lisible distinct des autres
+// codes paywall. String figée pour les consommateurs Hub.
+func TestVeridianErrors_HubSyncDeadCode(t *testing.T) {
+	assert.Equal(t, "hub_sync_dead", ErrCodeHubSyncDead,
+		"ErrCodeHubSyncDead doit valoir hub_sync_dead — string figée pour les consommateurs Hub")
+}
+
+func TestWriteJSONErrorCode_HubSyncDead_503(t *testing.T) {
+	rec := httptest.NewRecorder()
+	now := "2026-05-21T10:00:00Z"
+	WriteJSONErrorCode(rec, ErrCodeHubSyncDead,
+		"Service degraded — Veridian Hub unreachable since > 72h. Writes paused for safety.",
+		http.StatusServiceUnavailable,
+		map[string]interface{}{
+			"last_hub_sync_at": now,
+			"retry_after_s":    3600,
+		})
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+
+	var body VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeHubSyncDead, body.Code)
+	require.NotNil(t, body.Details)
+	assert.Equal(t, float64(3600), body.Details["retry_after_s"])
+}

@@ -487,6 +487,9 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		})
 	}
 
+	// 10. Marquer le sync Hub réussi (best-effort, ne bloque pas le provisioning).
+	s.touchHubSync(ctx, input.TenantID)
+
 	return &domain.ProvisionResponse{
 		WorkspaceID:  input.TenantID,
 		OwnerUserID:  owner.ID,
@@ -625,6 +628,9 @@ func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePla
 		})
 	}
 
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, input.TenantID)
+
 	return &domain.UpdatePlanResponse{
 		TenantID:     input.TenantID,
 		Plan:         input.Plan,
@@ -647,6 +653,8 @@ func (s *veridianService) Suspend(ctx context.Context, input domain.SuspendInput
 			"reason": input.Reason,
 		})
 	}
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, input.TenantID)
 	return nil
 }
 
@@ -661,6 +669,8 @@ func (s *veridianService) Resume(ctx context.Context, input domain.ResumeInput) 
 	if s.emitter != nil {
 		s.emitter.Emit(ctx, domain.EventTenantResumed, input.TenantID, nil)
 	}
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, input.TenantID)
 	return nil
 }
 
@@ -698,6 +708,9 @@ func (s *veridianService) SoftDelete(ctx context.Context, input domain.SoftDelet
 		// Hub legacy qui ne connaissent pas encore tenant.soft_deleted.
 		s.emitter.Emit(ctx, domain.EventTenantDeleted, input.TenantID, nil)
 	}
+
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, input.TenantID)
 
 	return &domain.SoftDeleteResponse{
 		TenantID:        input.TenantID,
@@ -755,6 +768,9 @@ func (s *veridianService) Restore(ctx context.Context, input domain.RestoreInput
 		}
 		s.emitter.Emit(ctx, domain.EventTenantRestored, input.TenantID, payload)
 	}
+
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, input.TenantID)
 
 	return &domain.RestoreResponse{
 		TenantID:   input.TenantID,
@@ -861,6 +877,9 @@ func (s *veridianService) Touch(ctx context.Context, tenantID string) (*domain.T
 			"touched_at": now,
 		})
 	}
+
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, tenantID)
 
 	return &domain.TouchResponse{
 		TenantID:  tenantID,
@@ -1489,6 +1508,9 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		})
 	}
 
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, input.TenantID)
+
 	return &domain.AttachOwnerResponse{
 		TenantID:         input.TenantID,
 		OwnerEmail:       input.OwnerEmail,
@@ -1874,6 +1896,9 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 		}).Info("veridian AttachMember: member attached")
 	}
 
+	// Marquer le sync Hub réussi (best-effort).
+	s.touchHubSync(ctx, input.TenantID)
+
 	return &domain.AttachMemberResponse{
 		Attached:      true,
 		AlreadyMember: false,
@@ -1881,6 +1906,22 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 		Role:          targetRole,
 		LoginURL:      loginURL,
 	}, nil
+}
+
+// touchHubSync marque last_hub_sync_at = NOW pour le tenant (best-effort,
+// non bloquant). Appelé en queue de chaque mutation Hub→Notifuse pour mesurer
+// la fraîcheur du lien Hub→Notifuse (résilience billing V39).
+//
+// Si l'appel échoue, on log warn et on retourne silencieusement : la mutation
+// principale a déjà réussi et on ne veut pas la rendre échouée à cause d'un
+// bookkeeping secondaire.
+func (s *veridianService) touchHubSync(ctx context.Context, workspaceID string) {
+	if err := s.planRepo.TouchHubSync(ctx, workspaceID); err != nil && s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID,
+			"error":        err.Error(),
+		}).Warn("veridian: touch hub sync failed (non-fatal, last_hub_sync_at not updated)")
+	}
 }
 
 // Compile-time check.

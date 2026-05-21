@@ -643,3 +643,202 @@ func TestCheckFeatureAllowed_KnownFeatures(t *testing.T) {
 	assert.True(t, checkFeatureAllowed(free, "branding_removed"))
 	assert.False(t, checkFeatureAllowed(free, "white_label"))
 }
+
+// === V39 — HubSync gating 3 phases ===
+
+// newPaywallReqWithPath crée une requête POST sur un path donné.
+func newPaywallReqWithPath(t *testing.T, path, body string) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	return r
+}
+
+// freshPlan retourne un plan actif avec last_hub_sync_at frais (< 24h).
+func freshPlan(workspaceID string) *domain.VeridianPlan {
+	syncAt := time.Now().Add(-1 * time.Hour)
+	return &domain.VeridianPlan{
+		WorkspaceID:   workspaceID,
+		Plan:          "pro",
+		Status:        domain.PlanStatusActive,
+		LastHubSyncAt: &syncAt,
+	}
+}
+
+// stalePlan retourne un plan actif avec last_hub_sync_at stale (25h).
+func stalePlan(workspaceID string) *domain.VeridianPlan {
+	syncAt := time.Now().Add(-25 * time.Hour)
+	return &domain.VeridianPlan{
+		WorkspaceID:   workspaceID,
+		Plan:          "pro",
+		Status:        domain.PlanStatusActive,
+		LastHubSyncAt: &syncAt,
+	}
+}
+
+// deadPlan retourne un plan actif avec last_hub_sync_at dead (73h).
+func deadPlan(workspaceID string) *domain.VeridianPlan {
+	syncAt := time.Now().Add(-73 * time.Hour)
+	return &domain.VeridianPlan{
+		WorkspaceID:   workspaceID,
+		Plan:          "pro",
+		Status:        domain.PlanStatusActive,
+		LastHubSyncAt: &syncAt,
+	}
+}
+
+func TestVeridianPaywall_HubSyncFresh_WritePasses(t *testing.T) {
+	// Tenant fresh (< 24h) + write → passe normalement.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-fresh").Return(freshPlan("ws-fresh"), nil).Times(1)
+
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddleware(repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newPaywallReq(t, `{"workspace_id":"ws-fresh"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, called.Load(), "write frais doit passer")
+}
+
+func TestVeridianPaywall_HubSyncStale_WritePasses(t *testing.T) {
+	// Tenant stale (25h) + write → passe (grace optimistic), no 503.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-stale").Return(stalePlan("ws-stale"), nil).Times(1)
+
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddleware(repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newPaywallReq(t, `{"workspace_id":"ws-stale"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code, "stale doit passer (grace optimistic)")
+	assert.True(t, called.Load())
+}
+
+func TestVeridianPaywall_HubSyncDead_WriteBlocked503(t *testing.T) {
+	// Tenant dead (73h) + write → 503 + Retry-After + hub_sync_dead.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-dead").Return(deadPlan("ws-dead"), nil).Times(1)
+
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddleware(repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newPaywallReq(t, `{"workspace_id":"ws-dead"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, "dead write → 503")
+	assert.False(t, called.Load(), "next handler ne doit PAS être appelé")
+	assert.Equal(t, "3600", rec.Header().Get("Retry-After"), "Retry-After requis")
+	body := rec.Body.String()
+	assert.Contains(t, body, "hub_sync_dead", "code machine hub_sync_dead requis")
+}
+
+func TestVeridianPaywall_HubSyncDead_ReadPasses(t *testing.T) {
+	// Tenant dead (73h) + GET → passe (reads best-effort).
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Le middleware laisse passer les GET sans lire le body.
+	var called atomic.Bool
+	// planRepo non appelé car GET → early return avant lookup
+	mw := NewVeridianPaywallMiddleware(nil, logger.NewLogger())(nextHandler(&called))
+
+	r := httptest.NewRequest(http.MethodGet, "/api/transactional.send", nil)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, r)
+
+	assert.Equal(t, http.StatusOK, rec.Code, "GET doit passer (pas de body à inspecter)")
+	assert.True(t, called.Load())
+}
+
+func TestVeridianPaywall_HubSyncDead_AdminRouteExempted(t *testing.T) {
+	// Tenant dead (73h) + route admin /api/veridian/* → passe (Hub doit pouvoir réveiller).
+	// Note : le middleware du path filter routera les routes admin directement vers next,
+	// mais on teste ici isHubSyncWriteBlock directement.
+	r := httptest.NewRequest(http.MethodPost, "/api/veridian/admin/touch", nil)
+	assert.False(t, isHubSyncWriteBlock(r),
+		"/api/veridian/* doit être exemptée du blocage dead")
+
+	r2 := httptest.NewRequest(http.MethodPost, "/api/transactional.send", nil)
+	assert.True(t, isHubSyncWriteBlock(r2),
+		"/api/transactional.send doit être bloquée en mode dead")
+}
+
+func TestVeridianPaywall_HubSyncDead_SoftDeletedPrimes(t *testing.T) {
+	// Tenant soft-deleted ET dead → soft-deleted prime (UX cohérent).
+	// IsBlocked retourne true pour deleted → réponse 402 (pas 503).
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	deletedAt := time.Now().Add(-73 * time.Hour)
+	syncAt := time.Now().Add(-73 * time.Hour)
+	plan := &domain.VeridianPlan{
+		WorkspaceID:   "ws-deleted-dead",
+		Plan:          "pro",
+		Status:        domain.PlanStatusDeleted,
+		DeletedAt:     &deletedAt,
+		LastHubSyncAt: &syncAt,
+	}
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-deleted-dead").Return(plan, nil).Times(1)
+
+	var called atomic.Bool
+	mw := NewVeridianPaywallMiddleware(repo, logger.NewLogger())(nextHandler(&called))
+
+	req := newPaywallReq(t, `{"workspace_id":"ws-deleted-dead"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	// Soft-deleted prime : 402, pas 503.
+	assert.Equal(t, http.StatusPaymentRequired, rec.Code,
+		"soft-deleted prime sur HubSyncDead → 402 pas 503")
+	assert.False(t, called.Load())
+}
+
+func TestShouldLogStale_RateLimit(t *testing.T) {
+	// Nettoyer l'état global avant le test.
+	staleLogState.Delete("ws-rate-limit-test")
+	defer staleLogState.Delete("ws-rate-limit-test")
+
+	// Premier appel → doit logger.
+	assert.True(t, shouldLogStale("ws-rate-limit-test"), "premier appel = doit logger")
+	// Deuxième appel immédiat → ne doit PAS logger (< 1 min).
+	assert.False(t, shouldLogStale("ws-rate-limit-test"), "appel immédiat = rate-limited")
+}
+
+func TestIsHubSyncWriteBlock(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodPost, "/api/transactional.send", true},
+		{http.MethodPut, "/api/broadcasts.create", true},
+		{http.MethodDelete, "/api/broadcasts.schedule", true},
+		{http.MethodGet, "/api/transactional.send", false},
+		{http.MethodHead, "/api/transactional.send", false},
+		{http.MethodPost, "/api/veridian/admin/touch", false},   // admin exempt
+		{http.MethodPost, "/api/veridian/admin/resume", false},  // admin exempt
+		{http.MethodPost, "/api/veridian/", false},              // admin prefix exempt
+	}
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			r := httptest.NewRequest(tc.method, tc.path, nil)
+			assert.Equal(t, tc.want, isHubSyncWriteBlock(r))
+		})
+	}
+}

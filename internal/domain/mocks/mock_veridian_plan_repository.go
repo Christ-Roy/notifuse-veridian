@@ -95,20 +95,6 @@ func (mr *MockVeridianPlanRepositoryMockRecorder) IncrementEmailsSentReturning(a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementEmailsSentReturning", reflect.TypeOf((*MockVeridianPlanRepository)(nil).IncrementEmailsSentReturning), arg0, arg1, arg2)
 }
 
-// MarkActivityThresholdReached mocks base method.
-func (m *MockVeridianPlanRepository) MarkActivityThresholdReached(arg0 context.Context, arg1 string, arg2 time.Time) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MarkActivityThresholdReached", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// MarkActivityThresholdReached indicates an expected call of MarkActivityThresholdReached.
-func (mr *MockVeridianPlanRepositoryMockRecorder) MarkActivityThresholdReached(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkActivityThresholdReached", reflect.TypeOf((*MockVeridianPlanRepository)(nil).MarkActivityThresholdReached), arg0, arg1, arg2)
-}
-
 // ListByPrefix mocks base method.
 func (m *MockVeridianPlanRepository) ListByPrefix(arg0 context.Context, arg1 string) ([]string, error) {
 	m.ctrl.T.Helper()
@@ -122,6 +108,20 @@ func (m *MockVeridianPlanRepository) ListByPrefix(arg0 context.Context, arg1 str
 func (mr *MockVeridianPlanRepositoryMockRecorder) ListByPrefix(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPrefix", reflect.TypeOf((*MockVeridianPlanRepository)(nil).ListByPrefix), arg0, arg1)
+}
+
+// MarkActivityThresholdReached mocks base method.
+func (m *MockVeridianPlanRepository) MarkActivityThresholdReached(arg0 context.Context, arg1 string, arg2 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkActivityThresholdReached", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkActivityThresholdReached indicates an expected call of MarkActivityThresholdReached.
+func (mr *MockVeridianPlanRepositoryMockRecorder) MarkActivityThresholdReached(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkActivityThresholdReached", reflect.TypeOf((*MockVeridianPlanRepository)(nil).MarkActivityThresholdReached), arg0, arg1, arg2)
 }
 
 // Purge mocks base method.
@@ -221,6 +221,20 @@ func (m *MockVeridianPlanRepository) Touch(arg0 context.Context, arg1 string) er
 func (mr *MockVeridianPlanRepositoryMockRecorder) Touch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Touch", reflect.TypeOf((*MockVeridianPlanRepository)(nil).Touch), arg0, arg1)
+}
+
+// TouchHubSync mocks base method.
+func (m *MockVeridianPlanRepository) TouchHubSync(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TouchHubSync", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// TouchHubSync indicates an expected call of TouchHubSync.
+func (mr *MockVeridianPlanRepositoryMockRecorder) TouchHubSync(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TouchHubSync", reflect.TypeOf((*MockVeridianPlanRepository)(nil).TouchHubSync), arg0, arg1)
 }
 
 // UpdatePlan mocks base method.
