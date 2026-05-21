@@ -74,85 +74,179 @@ qui peuvent tourner sur prod (read-only, pas de pollution data).
 
 ---
 
-## 💰 Vision pricing — actée 2026-05-21
+## 💰 Vision pricing — actée 2026-05-21 (figée par Robert)
 
-**Philosophie globale Robert** : générosité maximale au début, raffinement
-plus tard. L'app **ne doit JAMAIS être défigurée** par des limites visibles
-ou des murs béton. Conversion par la **deadline 15j** (temps), pas par
-l'agacement (limites de features).
+> **Source de vérité cross-app** : `../veridian-hub/docs/PRICING-VERIDIAN.md`
+>
+> Ce fichier Notifuse est la **vue spécifique app Notifuse** du pricing.
+> Pour la **vision globale cross-app** (Stripe, Hub state machine,
+> responsabilités cross-app, autres apps), lire le doc Hub en parallèle.
+>
+> Tickets actifs reliés :
+> - `todo/2026-05-21-trial-eligible-signal.md` (signal 5 mails Notifuse→Hub)
+> - `todo/2026-05-21-paywall-degraded-mode-soft-deleted.md` (UX dégradée)
+> - `todo/2026-05-20-pricing-plans-implementation.md` (ticket V37 — lots
+>   1+3+4a+7 livrés, lots 4b/4c/4d/5/6 annulés post-pivot)
+> - `../veridian-hub/todo/2026-05-21-trial-state-machine.md` (Hub)
+> - `../veridian-hub/todo/2026-05-21-stripe-webhook-orchestrator.md` (Hub)
 
-### Grille de prix
+**Philosophie globale** : générosité maximale, **tout illimité partout
+y compris Free**. L'app **ne doit JAMAIS être défigurée** par des
+limites visibles ou des murs béton. La **seule** différenciation Free
+vs payant = **le temps** (deadline 15j masquée puis révélée).
+
+### Grille de prix — TOUT illimité partout
 
 | Dimension | Free | Pro 29€ | Business 99€ | Enterprise |
 |---|---|---|---|---|
-| **Durée d'usage** | **15 jours** puis paywall | illimité | illimité | illimité |
+| **Durée d'usage** | **15 jours visibles** puis paywall | illimité | illimité | illimité |
 | Emails/mois | illimité | illimité | illimité | illimité |
 | Contacts en base | illimité | illimité | illimité | illimité |
-| Comptes OAuth (BYO sending) | illimité | illimité | illimité | illimité |
+| Comptes OAuth (BYO) | illimité | illimité | illimité | illimité |
 | Automation sequences | illimité | illimité | illimité | illimité |
 | Historique data | illimité | illimité | illimité | illimité |
-| Seats (utilisateurs invités) | illimité | illimité | illimité | illimité |
+| Seats invités | illimité | illimité | illimité | illimité |
+| Domaines custom | illimité | illimité | illimité | illimité |
 | A/B testing | ✅ | ✅ | ✅ | ✅ |
 | Branding "Powered by Veridian" | ❌ optionnel | ❌ optionnel | ❌ + white-label custom | ❌ |
-| **Domaines custom** | **0** | **1** | **5** | illimité |
 
-### Les SEULES limites réelles côté Free
+**La seule différence Business 99€ vs Pro 29€** : white-label custom
+(le client met **son propre footer** "Sent by ClientName" au lieu de
+juste retirer "Powered by Veridian"). + support prioritaire (à câbler
+plus tard).
 
-1. **Le temps** : 15 jours d'usage à partir du déclencheur (à figer cf.
-   ticket trial-eligible-signal — vraisemblablement signup ou activité)
-2. **Les domaines custom** : un Free n'a pas de domaine perso `mail.client.com`,
-   il envoie depuis son OAuth (Gmail/Outlook). C'est la **seule vraie
-   différenciation produit** vs paid.
+### Le flow trial — pièce centrale du pricing
 
-### Pourquoi cette générosité
+#### Phase 1 — Signup (J0)
+Tenant créé en `free`. **Rien de visible** côté UI. Le client peut
+tout faire (contacts, OAuth, A/B, automation, custom domains,
+seats — illimité partout). Aucun compteur, aucun bandeau, aucune
+deadline visible.
 
-- **Growth hacking par les seats illimités** : un Free peut inviter
-  toute son équipe → multiplication virale du nb de comptes
-- **Branding "Powered by Veridian" optionnel** : un Free qui veut nous
-  retirer le footer peut le faire — les emails restent professionnels,
-  pas de bandeau honteux qui dégrade l'expérience de SES destinataires
-- **App utilisable, pas une démo cassée** : un Free qui teste pendant
-  15j voit le **produit complet** (A/B testing, automation illimitée,
-  contacts illimités). Convertit parce qu'il l'aime, pas parce qu'on
-  l'a brisé
-- **Toutes les features sont des arguments de vente** : "contacts
-  illimités sur tous les plans" devient un differenciateur vs concurrents
+#### Phase 2 — Mode silence
+Tant que le client n'a **pas envoyé 5 mails**, rien ne se passe.
+Il peut rester ainsi indéfiniment (pas de timeout post-signup).
 
-### Ce qui devient interdit côté code
+À terme on le relancera par email/leads qualifiés (futur, hors scope
+MVP). Mais pas de logique de timeout obligatoire.
+
+#### Phase 3 — Activation silencieuse (5ème mail envoyé)
+Au 5ème mail envoyé : timer 2 jours démarre **côté serveur**.
+Aucune indication visible côté client. Il continue d'utiliser
+normalement, sans savoir qu'une horloge tourne.
+
+#### Phase 4 — Révélation trial (J+2 après le 5ème mail)
+2 jours plus tard, bandeau apparaît dans la console :
+"Tu es en essai gratuit Pro — il te reste 15 jours pour profiter
+de tout".
+
+Le client a déjà investi du temps + a déjà des résultats (templates
+créés, contacts importés, automations qui tournent). Effet
+psychologique = "j'ai investi, je continue".
+
+#### Phase 5 — Décision pendant les 15j
+
+**Si le client AJOUTE SA CB pendant les 15j → cadeau immédiat de
+30 jours supplémentaires** :
+- L'expiration passe à **J+30 à partir du moment où il met la CB**
+  (option A actée — "ajoute ta CB, tu as 30 jours offerts")
+- **Le cadeau est inconditionnel** : même s'il retire sa CB après,
+  on **NE LUI RETIRE PAS les 30j bonus**. Cadeau gratuit pour nous,
+  trust pour le client.
+- Si CB encore présente à expiration des 30j → débit automatique
+  Pro 29€/mois (subscription)
+- Si CB retirée avant expiration → paywall à expiration
+
+**Si le client N'AJOUTE RIEN pendant les 15j** :
+- À J+15 → paywall lecture seule (cf. ticket paywall-degraded-mode)
+- Lien Upgrade dans le bandeau "Réactiver"
+
+**Si le client UPGRADE direct sans attendre** :
+- Débit immédiat Pro, plus de logique trial
+
+#### Phase 6 — Cancel facile à tout moment
+1 clic dans Settings → "Annuler mon abonnement" → confirmation
+simple → fini. Le client garde son accès jusqu'à la fin de la
+période payée (convention Stripe standard).
+
+#### Phase 7 — Subscription Pro normale
+Facturation mensuelle classique. Peut cancel n'importe quand
+depuis Settings.
+
+### Pourquoi ce design est malin
+
+1. **Avant 5 mails** = zéro pression, le client juge tranquille
+2. **Entre 5 mails et J+2** = il investit en silence, prend des
+   habitudes
+3. **Bandeau à J+2** = il découvre qu'il a un trial → renversement
+   psycho (l'urgence vient de lui, pas de nous)
+4. **Cadeau 30j inconditionnel** = retire toute friction "et si
+   j'enlève ma carte pour profiter du trial ?" → on s'en fout,
+   le cadeau est gratuit pour nous
+5. **Auto-débit à expiration des 30j** = par défaut il convertit,
+   sauf s'il cancel activement
+
+### Ce qui devient INTERDIT côté code
 
 - ❌ Mur béton `402 Payment Required` sur une feature
-- ❌ Compteur visible "il vous reste X mails / Y contacts"
-- ❌ Menu A/B testing grisé "🔒 Pro"
+- ❌ Compteur visible "il vous reste X mails / Y contacts / Y domaines"
+- ❌ Menu A/B testing grisé "🔒 Pro" / ou tout autre menu grisé
 - ❌ Pop-up "passez Pro pour faire ça"
 - ❌ Branding obligatoire qui dégrade les emails du client
-- ❌ Tout enforcement de quotas autre que :
-  - la deadline 15j (qui transforme Free → expired)
-  - le nb de domaines custom (limite physique au moment d'ajouter un domaine)
+- ❌ Toute limite enforced sur contacts / OAuth / seats / automation /
+     historique / custom domains / A/B testing
+- ❌ Affichage du timer trial AVANT J+2 (le timer 2j post-5mails
+     doit rester INVISIBLE côté UI client)
 
-### Conséquences pour le code
+### Ce qui devient ACCEPTABLE côté code
 
-- **V37 lots 4b/4c/4d et 5** sont **annulés** (seat/contact/A-B/branding enforcement)
-- **Lot 4a feature gate A/B** déjà livré → **à revert ou désactiver** (A/B
-  devient gratuit pour tous)
-- Seul lot enforcement à garder éventuellement : **custom domains** (0 / 1 / 5)
-- **Le trial intelligent** (5 mails → 2j → 15j) reste pertinent mais devient
-  **le mécanisme central** : c'est la deadline 15j qui fait le pricing,
-  pas les dimensions
+- ✅ Bandeau trial visible UNIQUEMENT en phase 4+ (J+2 après les 5 mails)
+- ✅ Compte à rebours visible pendant les 15j (puis 30j si CB)
+- ✅ Lien "Upgrade" pour ajouter CB
+- ✅ Paywall lecture seule (mode dégradé) à expiration
+- ✅ White-label custom = différenciation Business+ uniquement
+
+### Conséquences pour le code Notifuse
+
+- **V37 lots 4b/4c/4d et 5** = **TOUS ANNULÉS** (aucun enforcement de
+  dimensions, custom domains inclus)
+- **Lot 4a A/B feature gate déjà livré** = **REVERT** (A/B gratuit pour
+  tous, `featureGatedPaths` vidé)
+- **DefaultPlanLimits** = tout à `-1` / `true` partout sauf
+  `FeatureWhiteLabel` qui reste Business+ uniquement
+- **Le trial intelligent (5 mails → 2j silencieux → 15j visible → +30j
+  si CB → débit ou expiration)** = **le mécanisme central** du pricing
+
+### État machine trial complet (pour ref Hub)
+
+```
+[no_trial] (signup, mode silence côté UI)
+  ↓ (5 mails envoyés)
+[eligible] (timer 2j côté serveur, mode silence)
+  ↓ (2 jours écoulés)
+[trial_15j_visible] (bandeau visible, peut tout faire)
+  ├─→ (ajoute CB n'importe quand) → [trial_30j_with_card_bonus]
+  │     ├─→ (30j écoulés, CB encore présente) → [paying_pro] (auto-débit 29€/mois)
+  │     ├─→ (30j écoulés, CB retirée) → [trial_expired_paywall]
+  │     └─→ (cancel pendant la période) → garde accès jusqu'à expiration → [free]
+  ├─→ (upgrade direct sans attendre) → [paying_pro]
+  └─→ (15j écoulés sans CB) → [trial_expired_paywall] (mode dégradé)
+```
+
+### Décisions design encore à figer
+
+Aucune côté Notifuse — tout est tranché.
+
+Côté Hub (state machine + Stripe) : cf. tickets
+`veridian-hub/todo/2026-05-21-trial-state-machine.md` et
+`veridian-hub/todo/2026-05-21-stripe-webhook-orchestrator.md`.
 
 ### Compteurs invisibles (télémétrie interne uniquement)
 
 - `emails_sent_lifetime` reste utile pour télémétrie + signal d'activité
-- `contacts_count`, `members_count`, `oauth_accounts_count` → si tracés,
-  uniquement pour stats internes (PA dashboards Robert), **JAMAIS exposés**
-  à l'UI client. Aucun "47/500 contacts" visible.
-
-### Décisions design encore à figer (cf. tickets)
-
-- Quand démarrent les 15j Free ? Signup ou activité (5 mails) ?
-- Que se passe-t-il après les 15j ? Hard paywall (login impossible) ou
-  mode dégradé lecture seule + lien upgrade ?
-- Le branding "Powered by Veridian" optionnel → toggle dans Settings
-  ou par défaut OFF pour tous ?
+- `activity_threshold_reached_at` (post-5ème mail) = timestamp serveur
+  consommé par le Hub
+- **JAMAIS exposés à l'UI client tant que phase 3 n'est pas atteinte**
 
 ---
 
