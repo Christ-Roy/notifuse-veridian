@@ -115,3 +115,11 @@ func TestWriteJSONError_backwardCompat(t *testing.T) {
 	_, hasCode := raw["code"]
 	assert.False(t, hasCode, "WriteJSONError upstream ne doit pas emettre 'code'")
 }
+
+// TestVeridianErrors_AttachMemberCodes valide que les codes erreur attach-member
+// sont bien declares (regression guard — Constitution §1 mapping errors.go).
+func TestVeridianErrors_AttachMemberCodes(t *testing.T) {
+	assert.Equal(t, "tenant_suspended", ErrCodeTenantSuspended, "ErrCodeTenantSuspended doit valoir tenant_suspended")
+	assert.Equal(t, "invalid_role", ErrCodeInvalidRole, "ErrCodeInvalidRole doit valoir invalid_role")
+	assert.Equal(t, "user_role_conflict", ErrCodeUserRoleConflict, "ErrCodeUserRoleConflict doit valoir user_role_conflict")
+}

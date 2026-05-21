@@ -1592,3 +1592,15 @@ func TestVeridianService_GetLimits_UnknownPlanFallsBackToFree(t *testing.T) {
 	assert.True(t, resp.Limits.FeatureBrandingRemoved, "pivot : branding optionnel meme pour Free")
 	assert.False(t, resp.Limits.FeatureWhiteLabel, "Free n'a PAS white-label custom (Business+ only)")
 }
+
+// TestLookupByEmail_ServiceExposed : compile-time check que LookupByEmail est
+// bien dans le contrat veridianService (Constitution §1 mapping 1-pour-1).
+// Le contenu fonctionnel est couvert par veridian_discovery_service_test.go.
+func TestLookupByEmail_ServiceExposed(t *testing.T) {
+	// Verify the service implements LookupByEmail via the domain.VeridianService interface.
+	// If LookupByEmail is removed from the interface or service, this test file won't compile.
+	var _ func(svc *veridianService) interface{} = func(svc *veridianService) interface{} {
+		return svc.LookupByEmail
+	}
+	assert.True(t, true, "compile-time check passed: LookupByEmail exists on veridianService")
+}

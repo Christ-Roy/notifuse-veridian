@@ -1530,3 +1530,22 @@ func TestVeridianHandleLimits_RegisteredInRoutes(t *testing.T) {
 	assert.NotEmpty(t, pattern, "GET /api/tenants/:id/limits should be registered")
 	assert.Contains(t, pattern, "limits", "route should target limits handler")
 }
+
+// TestVeridianRouteRegistered_DiscoveryByEmail valide que la route
+// POST /api/users/by-email est bien enregistree dans le mux veridian
+// (regression guard — Constitution §1 routes API coverage 100%).
+func TestVeridianRouteRegistered_DiscoveryByEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users/by-email", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/users/by-email should be registered")
+	assert.Contains(t, pattern, "by-email", "route should target discovery handler")
+}

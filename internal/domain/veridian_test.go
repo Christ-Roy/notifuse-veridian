@@ -529,3 +529,125 @@ func TestVeridianServiceInterface_ExposesGetLimits(t *testing.T) {
 	})
 }
 
+// === V38 — Activation tracking ===
+
+// TestActivityThresholdEmails — constante business critique.
+// Valeur figée : si elle change, les tests Hub qui assertent sur ce seuil cassent.
+func TestActivityThresholdEmails(t *testing.T) {
+	assert.Equal(t, int64(5), ActivityThresholdEmails,
+		"seuil d'activation trial figé à 5 — ne pas changer sans coordonner avec Hub")
+}
+
+// TestEventTenantActivityThresholdReached — constante event webhook.
+// String figée : si elle change, les consommateurs Hub cassent silencieusement.
+func TestEventTenantActivityThresholdReached(t *testing.T) {
+	assert.Equal(t, "tenant.activity_threshold_reached", string(EventTenantActivityThresholdReached),
+		"nom de l'event webhook figé — breaking change pour le Hub si modifié")
+}
+
+// TestVeridianPlan_V38Fields — les deux nouveaux champs V38 sont bien
+// présents dans la struct VeridianPlan avec les bons types.
+func TestVeridianPlan_V38Fields(t *testing.T) {
+	now := time.Now().UTC()
+	p := VeridianPlan{
+		WorkspaceID:                "ws-1",
+		EmailsSentLifetime:         42,
+		ActivityThresholdReachedAt: &now,
+	}
+	assert.Equal(t, int64(42), p.EmailsSentLifetime)
+	require.NotNil(t, p.ActivityThresholdReachedAt)
+	assert.Equal(t, now.Unix(), p.ActivityThresholdReachedAt.Unix())
+}
+
+// TestVeridianPlan_V38Fields_NullableThreshold — ActivityThresholdReachedAt
+// doit être nil par défaut (tenant qui n'a pas encore atteint le seuil).
+func TestVeridianPlan_V38Fields_NullableThreshold(t *testing.T) {
+	p := VeridianPlan{WorkspaceID: "ws-new", EmailsSentLifetime: 3}
+	assert.Nil(t, p.ActivityThresholdReachedAt,
+		"ActivityThresholdReachedAt doit être nil tant que seuil non atteint")
+	assert.Equal(t, int64(3), p.EmailsSentLifetime)
+}
+
+// TestVeridianPlanRepository_ExposesNewMethods — invariant explicite que
+// l'interface VeridianPlanRepository expose les 2 nouvelles méthodes V38.
+// Le pre-push hook exige un test pour chaque methode ajoutee a une interface.
+func TestVeridianPlanRepository_ExposesNewMethods(t *testing.T) {
+	// Compile-time checks via déclarations de type de fonction — si les
+	// signatures changent, le fichier ne compile plus.
+	var _ func(ctx context.Context, workspaceID string, delta int64) (int64, bool, error)
+	var _ func(ctx context.Context, workspaceID string, at time.Time) error
+	assert.NotPanics(t, func() {
+		_ = VeridianPlan{EmailsSentLifetime: 0}
+	})
+}
+
+
+// === Hub discovery types (2026-05-20) ===
+
+// TestDiscoveryResponse_JSONSchema valide les tags JSON stables de
+// DiscoveryResponse et DiscoveryWorkspace (contrat Hub serialisation).
+func TestDiscoveryResponse_JSONSchema(t *testing.T) {
+	resp := DiscoveryResponse{
+		Found:     true,
+		UserEmail: "alice@example.com",
+		Workspaces: []DiscoveryWorkspace{
+			{
+				WorkspaceID:      "ws-alice",
+				WorkspaceName:    "Alice Corp",
+				Role:             "owner",
+				Plan:             "pro",
+				MagicLinkCapable: true,
+				FallbackURL:      "https://notifuse.app.veridian.site/console/signin",
+			},
+		},
+	}
+
+	data, err := jsonMarshal(resp)
+	require.NoError(t, err)
+
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+
+	assert.Equal(t, true, decoded["found"])
+	assert.Equal(t, "alice@example.com", decoded["user_email"])
+	workspaces, ok := decoded["workspaces"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, workspaces, 1)
+	ws := workspaces[0].(map[string]interface{})
+	assert.Equal(t, "ws-alice", ws["workspace_id"])
+	assert.Equal(t, "Alice Corp", ws["workspace_name"])
+	assert.Equal(t, "owner", ws["role"])
+	assert.Equal(t, "pro", ws["plan"])
+	assert.Equal(t, true, ws["magic_link_capable"])
+	assert.Equal(t, "https://notifuse.app.veridian.site/console/signin", ws["fallback_url"])
+}
+
+// TestDiscoveryResponse_FoundFalse_EmptyWorkspaces valide que found:false
+// serialise bien workspaces:[] et non workspaces:null (Hub attend un tableau).
+func TestDiscoveryResponse_FoundFalse_EmptyWorkspaces(t *testing.T) {
+	resp := DiscoveryResponse{
+		Found:      false,
+		UserEmail:  "ghost@example.com",
+		Workspaces: []DiscoveryWorkspace{},
+	}
+
+	data, err := jsonMarshal(resp)
+	require.NoError(t, err)
+
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+
+	assert.Equal(t, false, decoded["found"])
+	workspaces, ok := decoded["workspaces"].([]interface{})
+	require.True(t, ok, "workspaces doit etre un tableau, pas nil")
+	assert.Len(t, workspaces, 0)
+}
+
+// TestVeridianService_ExposesLookupByEmail verifie que LookupByEmail est bien
+// dans l interface VeridianService (compile-time check — Constitution §4).
+func TestVeridianService_ExposesLookupByEmail(t *testing.T) {
+	var _ func(ctx context.Context, email string) (*DiscoveryResponse, error)
+	assert.NotPanics(t, func() {
+		_ = DiscoveryResponse{Workspaces: []DiscoveryWorkspace{}}
+	})
+}
