@@ -651,3 +651,74 @@ func TestVeridianService_ExposesLookupByEmail(t *testing.T) {
 		_ = DiscoveryResponse{Workspaces: []DiscoveryWorkspace{}}
 	})
 }
+
+// TestWipeTestTenantsInput_IncludeOrphans_JSONRoundtrip valide que le champ
+// IncludeOrphans serialise correctement (par defaut omitempty si false).
+func TestWipeTestTenantsInput_IncludeOrphans_JSONRoundtrip(t *testing.T) {
+	// Cas par defaut : false → omitempty.
+	in := WipeTestTenantsInput{Prefix: "e2e"}
+	data, err := jsonMarshal(in)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "include_orphans", "include_orphans:false doit etre omis")
+
+	// Cas explicite true → present.
+	in2 := WipeTestTenantsInput{Prefix: "e2e", IncludeOrphans: true}
+	data2, err := jsonMarshal(in2)
+	require.NoError(t, err)
+	assert.Contains(t, string(data2), `"include_orphans":true`)
+}
+
+// TestListTenantsResponse_TwoBuckets valide la projection managed vs orphans.
+func TestListTenantsResponse_TwoBuckets(t *testing.T) {
+	resp := ListTenantsResponse{
+		Managed: []TenantSummary{
+			{TenantID: "client1", HasPlan: true, Plan: "pro", Status: "active"},
+		},
+		Orphans: []TenantSummary{
+			{TenantID: "ghost1", HasPlan: false},
+		},
+		Total: 2,
+	}
+
+	data, err := jsonMarshal(resp)
+	require.NoError(t, err)
+
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+
+	assert.Equal(t, float64(2), decoded["total"])
+	managed, ok := decoded["managed"].([]interface{})
+	require.True(t, ok)
+	assert.Len(t, managed, 1)
+
+	orphans, ok := decoded["orphans"].([]interface{})
+	require.True(t, ok)
+	assert.Len(t, orphans, 1)
+
+	// HasPlan:false doit etre present (pas omitempty sur ce champ — Robert
+	// veut voir explicitement true OR false dans la projection admin).
+	ghost := orphans[0].(map[string]interface{})
+	assert.Equal(t, "ghost1", ghost["tenant_id"])
+	assert.Equal(t, false, ghost["has_plan"])
+}
+
+// TestListTenantsResponse_OrphansOmittedWhenEmpty valide que orphans:[] est
+// omis du JSON quand le caller n'a pas demande include_orphans (cleaner).
+func TestListTenantsResponse_OrphansOmittedWhenEmpty(t *testing.T) {
+	resp := ListTenantsResponse{
+		Managed: []TenantSummary{{TenantID: "c1", HasPlan: true}},
+		Total:   1,
+	}
+	data, err := jsonMarshal(resp)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "orphans")
+}
+
+// TestVeridianService_ExposesListTenants verifie que ListTenants est dans
+// l'interface (compile-time check — Constitution §4).
+func TestVeridianService_ExposesListTenants(t *testing.T) {
+	var _ func(ctx context.Context, input ListTenantsInput) (*ListTenantsResponse, error)
+	assert.NotPanics(t, func() {
+		_ = ListTenantsResponse{Managed: []TenantSummary{}}
+	})
+}

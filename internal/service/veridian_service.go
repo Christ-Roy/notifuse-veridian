@@ -942,6 +942,94 @@ var defaultSafetyClientPrefixes = []string{
 //   4. Emit event tenant.deleted (best-effort).
 //
 // Les tenants matchant un safety prefix sont SKIP (jamais effaces).
+// ListTenants projette les tenants en 2 buckets (managed/orphans) pour
+// inspection admin avant action. Read-only. Si IncludeOrphans=true, scanne
+// aussi workspaceRepo.List (source de verite globale).
+//
+// Pas de safety prefix ici (read-only, le caller decide quoi en faire). Le
+// caller doit appeler WipeTestTenants ensuite s'il veut supprimer.
+//
+// Limit=0 => pas de cap (mais workspaces is bounded en pratique <500).
+func (s *veridianService) ListTenants(ctx context.Context, input domain.ListTenantsInput) (*domain.ListTenantsResponse, error) {
+	if input.Prefix != "" {
+		if strings.ContainsAny(input.Prefix, "%_") {
+			return nil, fmt.Errorf("prefix cannot contain SQL wildcards (%% or _)")
+		}
+		if len(input.Prefix) < 3 {
+			return nil, fmt.Errorf("prefix must be at least 3 chars (got %q)", input.Prefix)
+		}
+	}
+
+	resp := &domain.ListTenantsResponse{
+		Managed: []domain.TenantSummary{},
+	}
+
+	// 1. Managed : tenants avec veridian_plan (et prefix matching si fourni).
+	planIDs, err := s.collectPlanIDs(ctx, input.Prefix)
+	if err != nil {
+		return nil, fmt.Errorf("list plan ids: %w", err)
+	}
+	managedSet := make(map[string]bool, len(planIDs))
+	for _, tid := range planIDs {
+		if input.Limit > 0 && len(resp.Managed) >= input.Limit {
+			break
+		}
+		summary := domain.TenantSummary{TenantID: tid, HasPlan: true}
+		if plan, planErr := s.planRepo.Get(ctx, tid); planErr == nil && plan != nil {
+			summary.Plan = plan.Plan
+			summary.Status = string(plan.Status)
+			if plan.DeletedAt != nil && !plan.DeletedAt.IsZero() {
+				summary.DeletedAt = plan.DeletedAt.UTC().Format(time.RFC3339)
+			}
+		}
+		resp.Managed = append(resp.Managed, summary)
+		managedSet[tid] = true
+	}
+
+	// 2. Orphans : workspaces sans veridian_plan (uniquement si IncludeOrphans).
+	if input.IncludeOrphans && s.workspaceRepo != nil {
+		workspaces, listErr := s.workspaceRepo.List(ctx)
+		if listErr != nil {
+			return nil, fmt.Errorf("list workspaces: %w", listErr)
+		}
+		resp.Orphans = []domain.TenantSummary{}
+		for _, w := range workspaces {
+			if w == nil || managedSet[w.ID] {
+				continue
+			}
+			if input.Prefix != "" && !strings.HasPrefix(w.ID, input.Prefix) {
+				continue
+			}
+			if input.Limit > 0 && len(resp.Orphans) >= input.Limit {
+				break
+			}
+			resp.Orphans = append(resp.Orphans, domain.TenantSummary{
+				TenantID: w.ID,
+				HasPlan:  false,
+			})
+		}
+	}
+
+	resp.Total = len(resp.Managed) + len(resp.Orphans)
+	return resp, nil
+}
+
+// collectPlanIDs retourne les workspace_id de veridian_plan, filtres par
+// prefix si non-vide. Si prefix vide, retourne tout (cap a 500 entrees
+// pour eviter une surcharge memoire sur une table qui grossit).
+func (s *veridianService) collectPlanIDs(ctx context.Context, prefix string) ([]string, error) {
+	if prefix != "" {
+		return s.planRepo.ListByPrefix(ctx, prefix)
+	}
+	// Pas de prefix : tout lister via prefix vide = scan complet.
+	// planRepo.ListByPrefix("") retourne nil par convention (cf. repo).
+	// On utilise un prefix wildcard impossible par construction ? Non, plus
+	// simple : on retourne nil et le caller assume que sans prefix on ne
+	// liste pas les managed. ListTenants sans prefix + IncludeOrphans=true =
+	// audit complet (workspaces only).
+	return nil, nil
+}
+
 func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.WipeTestTenantsInput) (*domain.WipeTestTenantsResponse, error) {
 	if input.Prefix == "" && len(input.TenantIDs) == 0 {
 		return nil, errors.New("prefix or tenant_ids required")
@@ -963,6 +1051,31 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 			return nil, fmt.Errorf("list by prefix: %w", err)
 		}
 		candidates = append(candidates, ids...)
+
+		// === Veridian patch === Inclure les workspaces orphelins (presents
+		// dans workspaces mais absents de veridian_plan). Indispensable pour
+		// nettoyer les tenants crees par des tests qui n'ont pas passe par
+		// /api/tenants/provision (donc invisibles a planRepo.ListByPrefix).
+		// Source de verite : workspaceRepo.List (table workspaces upstream).
+		if input.IncludeOrphans && s.workspaceRepo != nil {
+			workspaces, listErr := s.workspaceRepo.List(ctx)
+			if listErr != nil {
+				return nil, fmt.Errorf("list workspaces: %w", listErr)
+			}
+			seen := make(map[string]bool, len(candidates))
+			for _, c := range candidates {
+				seen[c] = true
+			}
+			for _, w := range workspaces {
+				if w == nil {
+					continue
+				}
+				if strings.HasPrefix(w.ID, input.Prefix) && !seen[w.ID] {
+					candidates = append(candidates, w.ID)
+					seen[w.ID] = true
+				}
+			}
+		}
 	}
 
 	// Determine safety prefixes

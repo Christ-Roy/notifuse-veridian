@@ -686,8 +686,13 @@ jobs:
           # Sérialisation avec sleep 1s entre prefixes pour ne pas saturer le pool
           # Postgres staging (`pq: sorry, too many clients already`). Coût +30s
           # mais évite ~5 re-runs/jour. Cf. todo/2026-05-20-flaky-ci-staging-postgres-saturation.md
+          # Lot G 2026-05-21 : include_orphans=true scanne aussi workspaceRepo.List
+          # (source de verite globale) pour attraper les workspaces orphelins
+          # crees sans passer par /api/tenants/provision (donc absents de
+          # veridian_plan mais presents dans workspaces + DB postgres dediee).
+          # Cf. ticket 2026-05-20-e2e-cleanup-discipline-canary-safety.
           for prefix in chaos magic stat paywall pwsus pwdel pwpath pwread autotest idem bump dbg smoke fresh statsus statdel up down unkplan resume sus mag genmag magtam magicre delconf e2e replaytest tampertest wrongsecret huge nofix wscre wscre2 uiguard direct paywsmoke; do
-            BODY="{\"prefix\":\"${prefix}\"}"
+            BODY="{\"prefix\":\"${prefix}\",\"include_orphans\":true}"
             TS=$(date +%s%3N)
             SIG=$(echo -n "${TS}.${BODY}" | openssl dgst -sha256 -hmac "${HUB_SECRET}" -hex | awk '{print $2}')
             RESP=$(curl -sS -X POST "https://notifuse.staging.veridian.site/api/veridian/admin/wipe-test-tenants" \

@@ -1549,3 +1549,140 @@ func TestVeridianRouteRegistered_DiscoveryByEmail(t *testing.T) {
 	assert.NotEmpty(t, pattern, "POST /api/users/by-email should be registered")
 	assert.Contains(t, pattern, "by-email", "route should target discovery handler")
 }
+
+// === Lot G — handleListTenants (2026-05-21) ===
+
+func TestVeridianHandleListTenants_OK_Managed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().ListTenants(gomock.Any(), gomock.Any()).
+		Return(&domain.ListTenantsResponse{
+			Managed: []domain.TenantSummary{
+				{TenantID: "test1", HasPlan: true, Plan: "free", Status: "active"},
+			},
+			Total: 1,
+		}, nil)
+	h := newHandlerWithService(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/veridian/admin/tenants?prefix=test", nil)
+	rec := httptest.NewRecorder()
+	h.handleListTenants(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp domain.ListTenantsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Total)
+	assert.Len(t, resp.Managed, 1)
+}
+
+func TestVeridianHandleListTenants_IncludeOrphans_QueryParam(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	// Capture l'input pour valider le parsing query params.
+	var captured domain.ListTenantsInput
+	svc.EXPECT().ListTenants(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ interface{}, input domain.ListTenantsInput) (*domain.ListTenantsResponse, error) {
+			captured = input
+			return &domain.ListTenantsResponse{
+				Managed: []domain.TenantSummary{},
+				Orphans: []domain.TenantSummary{{TenantID: "ghost1", HasPlan: false}},
+				Total:   1,
+			}, nil
+		})
+	h := newHandlerWithService(svc)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/veridian/admin/tenants?prefix=test&include_orphans=true&limit=10", nil)
+	rec := httptest.NewRecorder()
+	h.handleListTenants(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "test", captured.Prefix)
+	assert.True(t, captured.IncludeOrphans)
+	assert.Equal(t, 10, captured.Limit)
+}
+
+func TestVeridianHandleListTenants_InvalidLimit_400(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/veridian/admin/tenants?limit=notanumber", nil)
+	rec := httptest.NewRecorder()
+	h.handleListTenants(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "invalid limit")
+}
+
+func TestVeridianHandleListTenants_NegativeLimit_400(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/veridian/admin/tenants?limit=-5", nil)
+	rec := httptest.NewRecorder()
+	h.handleListTenants(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestVeridianHandleListTenants_PrefixValidationError_400(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().ListTenants(gomock.Any(), gomock.Any()).
+		Return(nil, errors.New("prefix must be at least 3 chars (got \"ab\")"))
+	h := newHandlerWithService(svc)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/veridian/admin/tenants?prefix=ab", nil)
+	rec := httptest.NewRecorder()
+	h.handleListTenants(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code,
+		"validation errors with 'prefix' in message → 400 (pas 500)")
+	assert.Contains(t, rec.Body.String(), "at least 3 chars")
+}
+
+func TestVeridianHandleListTenants_ServiceError_500(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().ListTenants(gomock.Any(), gomock.Any()).
+		Return(nil, errors.New("db down"))
+	h := newHandlerWithService(svc)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/veridian/admin/tenants?prefix=test", nil)
+	rec := httptest.NewRecorder()
+	h.handleListTenants(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "db down")
+}
+
+func TestVeridianHandleListTenants_RouteRegistered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/veridian/admin/tenants?prefix=test", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "GET /api/veridian/admin/tenants should be registered")
+	assert.Contains(t, pattern, "tenants")
+}

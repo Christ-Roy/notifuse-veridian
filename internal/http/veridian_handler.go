@@ -17,7 +17,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/buildinfo"
@@ -104,6 +106,11 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Supprime DEFINITIVEMENT (hard delete) workspace + DB + plan row.
 	// Refuse les tenants matchant safety_client_prefixes (clients reels).
 	mux.Handle("POST /api/veridian/admin/wipe-test-tenants", writeRoute(h.handleWipeTestTenants))
+	// === Veridian patch === Dry-run listing admin (lot G 2026-05-21).
+	// Read-only. Permet d'inspecter avant wipe : projette managed vs orphans.
+	// Indispensable pour cibler les workspaces orphelins (sans veridian_plan)
+	// que le wipe historique rate. Pas d'effet de bord — pas d'idempotency.
+	mux.Handle("GET /api/veridian/admin/tenants", hmac(http.HandlerFunc(h.handleListTenants)))
 	// === Veridian patch === Cache invalidate pour eliminer le sleep 60s
 	// des tests e2e paywall apres suspend/resume/update-plan/delete. En prod,
 	// peut etre appele par le Hub pour propager rapidement un changement de
@@ -634,6 +641,60 @@ func (h *VeridianHandler) handleWipeTestTenants(w http.ResponseWriter, r *http.R
 		h.logError("wipe_test_tenants", err, map[string]interface{}{
 			"prefix":     input.Prefix,
 			"tenant_ids": len(input.TenantIDs),
+		})
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// === Veridian patch — lot G admin listing (2026-05-21) ===
+// handleListTenants projette les tenants en 2 buckets (managed / orphans)
+// pour inspection admin AVANT action. Read-only. Pattern dry-run.
+//
+// Auth : HMAC Hub (mux wrapper). Pas d'idempotency — read-only.
+//
+// Query params :
+//   - prefix : filtre prefix (min 3 chars, pas de %/_)
+//   - include_orphans : "true" pour scanner workspaceRepo (source de verite globale)
+//   - limit : cap entier sur Managed et Orphans (0 = pas de cap)
+//
+// Reponse 200 :
+//
+//	{
+//	  "managed": [{tenant_id, has_plan, plan, status, deleted_at}],
+//	  "orphans": [{tenant_id, has_plan: false}],
+//	  "total": N
+//	}
+//
+// 400 si prefix < 3 chars ou contient %/_.
+func (h *VeridianHandler) handleListTenants(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	input := domain.ListTenantsInput{
+		Prefix:         q.Get("prefix"),
+		IncludeOrphans: q.Get("include_orphans") == "true",
+	}
+	if l := q.Get("limit"); l != "" {
+		var parsed int
+		if _, err := fmt.Sscanf(l, "%d", &parsed); err != nil || parsed < 0 {
+			WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid limit (must be positive integer)", http.StatusBadRequest, nil)
+			return
+		}
+		input.Limit = parsed
+	}
+
+	resp, err := h.service.ListTenants(r.Context(), input)
+	if err != nil {
+		// Erreurs de validation prefix (wildcards, longueur) → 400.
+		// Erreurs DB → 500.
+		if strings.Contains(err.Error(), "prefix") {
+			WriteJSONErrorCode(w, ErrCodeInvalidPayload, err.Error(), http.StatusBadRequest, nil)
+			return
+		}
+		h.logError("list_tenants", err, map[string]interface{}{
+			"prefix":          input.Prefix,
+			"include_orphans": input.IncludeOrphans,
 		})
 		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return

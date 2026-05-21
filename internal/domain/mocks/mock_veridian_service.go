@@ -80,21 +80,6 @@ func (mr *MockVeridianServiceMockRecorder) GenerateMagicLink(arg0, arg1, arg2 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateMagicLink", reflect.TypeOf((*MockVeridianService)(nil).GenerateMagicLink), arg0, arg1, arg2)
 }
 
-// GetStatus mocks base method.
-func (m *MockVeridianService) GetStatus(arg0 context.Context, arg1 string) (*domain.StatusResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStatus", arg0, arg1)
-	ret0, _ := ret[0].(*domain.StatusResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetStatus indicates an expected call of GetStatus.
-func (mr *MockVeridianServiceMockRecorder) GetStatus(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStatus", reflect.TypeOf((*MockVeridianService)(nil).GetStatus), arg0, arg1)
-}
-
 // GetLimits mocks base method.
 func (m *MockVeridianService) GetLimits(arg0 context.Context, arg1 string) (*domain.LimitsResponse, error) {
 	m.ctrl.T.Helper()
@@ -108,6 +93,21 @@ func (m *MockVeridianService) GetLimits(arg0 context.Context, arg1 string) (*dom
 func (mr *MockVeridianServiceMockRecorder) GetLimits(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLimits", reflect.TypeOf((*MockVeridianService)(nil).GetLimits), arg0, arg1)
+}
+
+// GetStatus mocks base method.
+func (m *MockVeridianService) GetStatus(arg0 context.Context, arg1 string) (*domain.StatusResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStatus", arg0, arg1)
+	ret0, _ := ret[0].(*domain.StatusResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStatus indicates an expected call of GetStatus.
+func (mr *MockVeridianServiceMockRecorder) GetStatus(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStatus", reflect.TypeOf((*MockVeridianService)(nil).GetStatus), arg0, arg1)
 }
 
 // GrantUnlimited mocks base method.
@@ -138,6 +138,36 @@ func (m *MockVeridianService) Health(arg0 context.Context, arg1 string) (*domain
 func (mr *MockVeridianServiceMockRecorder) Health(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockVeridianService)(nil).Health), arg0, arg1)
+}
+
+// ListTenants mocks base method.
+func (m *MockVeridianService) ListTenants(arg0 context.Context, arg1 domain.ListTenantsInput) (*domain.ListTenantsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTenants", arg0, arg1)
+	ret0, _ := ret[0].(*domain.ListTenantsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTenants indicates an expected call of ListTenants.
+func (mr *MockVeridianServiceMockRecorder) ListTenants(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTenants", reflect.TypeOf((*MockVeridianService)(nil).ListTenants), arg0, arg1)
+}
+
+// LookupByEmail mocks base method.
+func (m *MockVeridianService) LookupByEmail(arg0 context.Context, arg1 string) (*domain.DiscoveryResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LookupByEmail", arg0, arg1)
+	ret0, _ := ret[0].(*domain.DiscoveryResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LookupByEmail indicates an expected call of LookupByEmail.
+func (mr *MockVeridianServiceMockRecorder) LookupByEmail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupByEmail", reflect.TypeOf((*MockVeridianService)(nil).LookupByEmail), arg0, arg1)
 }
 
 // Provision mocks base method.
@@ -271,21 +301,6 @@ func (m *MockVeridianService) UsageSummary(arg0 context.Context, arg1 string) (*
 func (mr *MockVeridianServiceMockRecorder) UsageSummary(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UsageSummary", reflect.TypeOf((*MockVeridianService)(nil).UsageSummary), arg0, arg1)
-}
-
-// LookupByEmail mocks base method.
-func (m *MockVeridianService) LookupByEmail(arg0 context.Context, arg1 string) (*domain.DiscoveryResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LookupByEmail", arg0, arg1)
-	ret0, _ := ret[0].(*domain.DiscoveryResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// LookupByEmail indicates an expected call of LookupByEmail.
-func (mr *MockVeridianServiceMockRecorder) LookupByEmail(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupByEmail", reflect.TypeOf((*MockVeridianService)(nil).LookupByEmail), arg0, arg1)
 }
 
 // WipeTestTenants mocks base method.

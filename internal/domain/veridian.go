@@ -667,6 +667,12 @@ type VeridianService interface {
 	// pas de fenetre 30j de purge. Reserve aux tests + admin platform.
 	WipeTestTenants(ctx context.Context, input WipeTestTenantsInput) (*WipeTestTenantsResponse, error)
 
+	// === Veridian patch === Dry-run listing admin pour inspection avant wipe.
+	// Distingue managed (avec veridian_plan) vs orphans (workspace sans plan).
+	// Read-only, ne touche a rien. Utilise par le CI cron cleanup pour cibler
+	// les orphelins sans risque de wiper du legitime.
+	ListTenants(ctx context.Context, input ListTenantsInput) (*ListTenantsResponse, error)
+
 	// === Veridian patch === Repair endpoint pour tenants existants.
 	// Trouve / crée le user humain owner_email, l'attache au workspace (role
 	// member), puis promote owner (avec demotion de l'ancien owner non-humain).
@@ -754,6 +760,13 @@ type WipeTestTenantsInput struct {
 	// loyer, veridiansite. Necessaire pour proteger les tenants prod en cas
 	// de fuite du HUB_API_SECRET vers un attaquant.
 	SafetyClientPrefixes []string `json:"safety_client_prefixes,omitempty"`
+	// IncludeOrphans : si true, etend la recherche de candidats au repo
+	// workspaces upstream (source de verite globale) en plus de veridian_plan.
+	// Indispensable pour nettoyer les workspaces orphelins crees par des
+	// tests qui n'ont jamais passe par /api/tenants/provision (donc absents
+	// de veridian_plan mais presents dans workspaces + DB postgres dediee).
+	// Ne s'applique qu'avec Prefix non-vide (sinon scan trop large).
+	IncludeOrphans bool `json:"include_orphans,omitempty"`
 }
 
 // WipeTestTenantsResponse renvoie la liste des tenants supprimes + erreurs.
@@ -761,6 +774,32 @@ type WipeTestTenantsResponse struct {
 	Wiped   []string          `json:"wiped"`             // tenant_ids supprimes avec succes
 	Skipped []string          `json:"skipped,omitempty"` // tenant_ids matchant safety prefixes
 	Errors  map[string]string `json:"errors,omitempty"`  // tenant_id → message d'erreur
+}
+
+// ListTenantsInput est le query de GET /api/veridian/admin/tenants. Dry-run
+// listing — retourne la projection avant action (Robert verifie ce qui va
+// sauter avant un wipe).
+type ListTenantsInput struct {
+	Prefix         string `json:"prefix,omitempty"`          // filtre prefix (LIKE 'prefix%')
+	IncludeOrphans bool   `json:"include_orphans,omitempty"` // inclure les workspaces sans veridian_plan
+	Limit          int    `json:"limit,omitempty"`           // 0 = pas de limite (max raisonnable 500)
+}
+
+// ListTenantsResponse projette les tenants en 2 buckets : managed (avec
+// veridian_plan) et orphans (workspace sans veridian_plan = pas Veridian-mode).
+type ListTenantsResponse struct {
+	Managed []TenantSummary `json:"managed"`           // tenants avec veridian_plan
+	Orphans []TenantSummary `json:"orphans,omitempty"` // workspaces sans veridian_plan (uniquement si IncludeOrphans)
+	Total   int             `json:"total"`             // managed + orphans
+}
+
+// TenantSummary est la projection minimale d'un tenant pour les listings admin.
+type TenantSummary struct {
+	TenantID  string `json:"tenant_id"`
+	HasPlan   bool   `json:"has_plan"`             // true si une row veridian_plan existe
+	Plan      string `json:"plan,omitempty"`       // free/pro/business/enterprise (si HasPlan)
+	Status    string `json:"status,omitempty"`     // active/suspended/deleted (si HasPlan)
+	DeletedAt string `json:"deleted_at,omitempty"` // ISO 8601 si soft-deleted
 }
 
 // === Webhook events vers Hub ===
