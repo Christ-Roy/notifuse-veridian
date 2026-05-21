@@ -24,9 +24,10 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 	ctx := context.Background()
 	const wsID = "ws-1"
 
-	// V39 — la SELECT inclut maintenant les 9 colonnes pricing V37 + les 2
+	// V40 — la SELECT inclut maintenant les 9 colonnes pricing V37 + les 2
 	// colonnes V38 (emails_sent_lifetime, activity_threshold_reached_at) + la
-	// colonne V39 (last_hub_sync_at). On factorise la query litterale et la
+	// colonne V39 (last_hub_sync_at) + la colonne V40
+	// (quota_exceeded_emitted_at_month). On factorise la query litterale et la
 	// liste des colonnes pour eviter la duplication entre les 3 sous-tests
 	// (Constitution §1 lisibilite).
 	const getSQL = `
@@ -37,6 +38,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
 		       emails_sent_lifetime, activity_threshold_reached_at,
 		       last_hub_sync_at,
+		       quota_exceeded_emitted_at_month,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -49,6 +51,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		"feature_ab_testing", "feature_branding_removed", "feature_white_label", "history_retention_days",
 		"emails_sent_lifetime", "activity_threshold_reached_at",
 		"last_hub_sync_at",
+		"quota_exceeded_emitted_at_month",
 		"created_at", "updated_at",
 	}
 
@@ -62,12 +65,14 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		// V39 : last_hub_sync_at = now - 1h (fresh)
 		reachedAt := now.Add(-1 * time.Hour)
 		hubSyncAt := now.Add(-1 * time.Hour)
+		quotaEmittedMonth := now.Add(-2 * time.Hour)
 		rows := sqlmock.NewRows(getColumns).AddRow(
 			wsID, "pro", "stripe", "active", int64(10000), int64(42),
 			now, nil, nil, nil, nil, nil, nil, nil,
 			int64(-1), -1, -1, -1, -1, true, true, false, -1,
 			int64(7), reachedAt,
 			hubSyncAt,
+			quotaEmittedMonth,
 			now, now,
 		)
 
@@ -96,6 +101,8 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		require.NotNil(t, p.ActivityThresholdReachedAt, "seuil atteint → champ non-nil")
 		// V39 : last_hub_sync_at scannée (non-nil car tenant récent)
 		require.NotNil(t, p.LastHubSyncAt, "last_hub_sync_at doit être scanné depuis la DB")
+		// V40 : quota_exceeded_emitted_at_month scannée (non-nil = emit ce mois)
+		require.NotNil(t, p.QuotaExceededEmittedAtMonth, "quota_exceeded_emitted_at_month doit être scanné depuis la DB")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -117,6 +124,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 			int64(-1), -1, -1, -1, -1, true, true, false, -1,
 			int64(2), nil,
 			nil, // last_hub_sync_at nullable
+			nil, // quota_exceeded_emitted_at_month nullable
 			now, now,
 		)
 
@@ -144,6 +152,8 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		assert.Nil(t, p.ActivityThresholdReachedAt, "seuil pas atteint → nil")
 		// V39 : last_hub_sync_at null → nil (tenant antérieur à V39 non encore TouchHubSync)
 		assert.Nil(t, p.LastHubSyncAt, "last_hub_sync_at nil → scannée comme nil")
+		// V40 : quota_exceeded_emitted_at_month null → nil (jamais franchi)
+		assert.Nil(t, p.QuotaExceededEmittedAtMonth, "quota_exceeded_emitted_at_month nil → scannée comme nil")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -597,7 +607,7 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 	purgeEligibleAt := now.Add(25 * 24 * time.Hour)
 	lastTouchedAt := now.Add(-12 * time.Hour)
 
-	// V39 — SELECT etendu avec 9 colonnes pricing V37 + 2 colonnes V38 + 1 colonne V39.
+	// V40 — SELECT etendu avec 9 colonnes pricing V37 + 2 colonnes V38 + 1 colonne V39 + 1 colonne V40.
 	// On reflete des defaults Pro pour ne pas distraire le focus du test (lifecycle V34).
 	hubSyncAt := now.Add(-2 * time.Hour)
 	rows := sqlmock.NewRows([]string{
@@ -608,6 +618,7 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 		"feature_ab_testing", "feature_branding_removed", "feature_white_label", "history_retention_days",
 		"emails_sent_lifetime", "activity_threshold_reached_at",
 		"last_hub_sync_at",
+		"quota_exceeded_emitted_at_month",
 		"created_at", "updated_at",
 	}).AddRow("ws-1", "pro", "stripe", "active", int64(10000), int64(0),
 		now, nil, nil, nil,
@@ -615,6 +626,7 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 		int64(-1), -1, -1, -1, -1, true, true, false, -1,
 		int64(3), nil, // V38 : 3 mails lifetime, seuil pas atteint
 		hubSyncAt,     // V39 : last_hub_sync_at non-nil
+		nil,           // V40 : quota_exceeded_emitted_at_month nullable, jamais franchi
 		now, now)
 
 	mock.ExpectQuery(`
@@ -625,6 +637,7 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
 		       emails_sent_lifetime, activity_threshold_reached_at,
 		       last_hub_sync_at,
+		       quota_exceeded_emitted_at_month,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -873,6 +886,37 @@ const incrementEmailsSentReturningSQL = `
 		RETURNING emails_sent_lifetime, activity_threshold_reached_at
 	`
 
+// evalQuotaSelectSQL est le SELECT post-incrément utilisé par evalAndEmitQuotaExceeded
+// pour décider si tenant.quota_exceeded doit être émis (V40, Lot I).
+const evalQuotaSelectSQL = `
+		SELECT emails_sent_this_month, monthly_email_quota, plan
+		FROM veridian_plan
+		WHERE workspace_id = $1
+	`
+
+// markQuotaExceededSQL est le SQL de MarkQuotaExceededEmitted, idempotent par mois
+// calendaire (V40, Lot I).
+const markQuotaExceededSQL = `
+		UPDATE veridian_plan
+		SET quota_exceeded_emitted_at_month = $2
+		WHERE workspace_id = $1
+		  AND (
+		      quota_exceeded_emitted_at_month IS NULL
+		      OR date_trunc('month', quota_exceeded_emitted_at_month) < date_trunc('month', $2::timestamptz)
+		  )
+	`
+
+// expectEvalQuotaUnlimited mock un workspace avec monthly_email_quota=-1
+// (quota illimité = pivot 2026-05-21). Le repo skip silencieux sans
+// MarkQuotaExceededEmitted ni Emit. Helper pour ne pas répéter dans tous les
+// tests IncrementEmailsSent qui ne testent pas le chemin quota.
+func expectEvalQuotaUnlimited(mock sqlmock.Sqlmock, workspaceID string) {
+	mock.ExpectQuery(evalQuotaSelectSQL).
+		WithArgs(workspaceID).
+		WillReturnRows(sqlmock.NewRows([]string{"emails_sent_this_month", "monthly_email_quota", "plan"}).
+			AddRow(int64(1), int64(-1), "free"))
+}
+
 func TestVeridianPlanRepository_IncrementEmailsSent(t *testing.T) {
 	ctx := context.Background()
 
@@ -887,6 +931,8 @@ func TestVeridianPlanRepository_IncrementEmailsSent(t *testing.T) {
 		mock.ExpectQuery(incrementEmailsSentReturningSQL).
 			WithArgs("ws-1", int64(5), sqlmock.AnyArg()).
 			WillReturnRows(rows)
+		// V40 : evalAndEmitQuotaExceeded → SELECT post-incrément, quota=-1 → skip.
+		expectEvalQuotaUnlimited(mock, "ws-1")
 
 		err := repo.IncrementEmailsSent(ctx, "ws-1", 5)
 		require.NoError(t, err)
@@ -898,6 +944,8 @@ func TestVeridianPlanRepository_IncrementEmailsSent(t *testing.T) {
 		repo := NewVeridianPlanRepository(db)
 
 		// Workspace absent : RETURNING retourne 0 rows → sql.ErrNoRows → no-op silencieux.
+		// PAS d'appel evalAndEmitQuotaExceeded car lifetimeAfter=0 && !alreadyReached
+		// = workspace absent → return tôt.
 		mock.ExpectQuery(incrementEmailsSentReturningSQL).
 			WithArgs("ws-missing", int64(1), sqlmock.AnyArg()).
 			WillReturnError(sql.ErrNoRows)
@@ -1096,6 +1144,8 @@ func TestVeridianPlanRepository_IncrementEmailsSent_ThresholdDetection(t *testin
 		mock.ExpectExec(markSQL).
 			WithArgs("ws-trial", sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
+		// V40 : evalAndEmitQuotaExceeded → quota -1 = skip silencieux
+		expectEvalQuotaUnlimited(mock, "ws-trial")
 
 		err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
 		require.NoError(t, err)
@@ -1120,6 +1170,8 @@ func TestVeridianPlanRepository_IncrementEmailsSent_ThresholdDetection(t *testin
 		mock.ExpectQuery(incrementEmailsSentReturningSQL).
 			WithArgs("ws-trial", int64(1), sqlmock.AnyArg()).
 			WillReturnRows(returnRows)
+		// V40 : evalAndEmitQuotaExceeded → quota -1 = skip silencieux
+		expectEvalQuotaUnlimited(mock, "ws-trial")
 
 		err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
 		require.NoError(t, err)
@@ -1137,6 +1189,8 @@ func TestVeridianPlanRepository_IncrementEmailsSent_ThresholdDetection(t *testin
 		mock.ExpectQuery(incrementEmailsSentReturningSQL).
 			WithArgs("ws-trial", int64(1), sqlmock.AnyArg()).
 			WillReturnRows(returnRows)
+		// V40 : evalAndEmitQuotaExceeded → quota -1 = skip silencieux
+		expectEvalQuotaUnlimited(mock, "ws-trial")
 
 		err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
 		require.NoError(t, err)
@@ -1158,6 +1212,8 @@ func TestVeridianPlanRepository_IncrementEmailsSent_ThresholdDetection(t *testin
 		mock.ExpectExec(markSQL).
 			WithArgs("ws-trial", sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
+		// V40 : evalAndEmitQuotaExceeded → quota -1 = skip silencieux
+		expectEvalQuotaUnlimited(mock, "ws-trial")
 
 		assert.NotPanics(t, func() {
 			err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
@@ -1179,10 +1235,13 @@ func TestVeridianPlanRepository_IncrementEmailsSent_ThresholdDetection(t *testin
 		mock.ExpectExec(markSQL).
 			WithArgs("ws-trial", sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnError(assert.AnError)
+		// V40 : evalAndEmitQuotaExceeded est appelé même si mark threshold a fail
+		// (logique indépendante, le mark threshold error est logué mais le flow continue).
+		expectEvalQuotaUnlimited(mock, "ws-trial")
 
 		err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
 		require.NoError(t, err, "mark failure est best-effort — pas d'erreur retournée")
-		// Emit ne doit pas être appelé si mark a échoué.
+		// Emit threshold ne doit pas être appelé si mark a échoué.
 		assert.Empty(t, emitter.calls, "no emit if mark failed")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -1237,6 +1296,276 @@ func TestVeridianPlanRepository_TouchHubSync(t *testing.T) {
 
 		err := repo.TouchHubSync(ctx, "ws-err")
 		require.Error(t, err, "erreur DB doit être propagée pour que le service puisse log")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+// === V40 — MarkQuotaExceededEmitted ===
+
+// TestVeridianPlanRepository_MarkQuotaExceededEmitted teste l'idempotence
+// mensuelle de la marque quota_exceeded_emitted_at_month.
+func TestVeridianPlanRepository_MarkQuotaExceededEmitted(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("first emit this month → affected=true", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		now := time.Now().UTC()
+		// Premier passage : quota_exceeded_emitted_at_month IS NULL → WHERE OK,
+		// UPDATE applique, 1 row affected.
+		mock.ExpectExec(markQuotaExceededSQL).
+			WithArgs("ws-1", now).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		affected, err := repo.MarkQuotaExceededEmitted(ctx, "ws-1", now)
+		require.NoError(t, err)
+		assert.True(t, affected, "premier emit du mois → affected=true (signal d'émission)")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("already emitted this month → affected=false (idempotent)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		now := time.Now().UTC()
+		// Le WHERE filtre car le mois enregistré est déjà le mois courant.
+		// 0 rows affected = idempotent no-op.
+		mock.ExpectExec(markQuotaExceededSQL).
+			WithArgs("ws-1", now).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		affected, err := repo.MarkQuotaExceededEmitted(ctx, "ws-1", now)
+		require.NoError(t, err, "idempotent : 0 rows affected n'est pas une erreur")
+		assert.False(t, affected, "déjà emis ce mois → affected=false (pas de signal)")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("workspace absent → affected=false, no error", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		now := time.Now().UTC()
+		// Workspace inexistant : 0 rows affected, pas d'erreur.
+		mock.ExpectExec(markQuotaExceededSQL).
+			WithArgs("ws-missing", now).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		affected, err := repo.MarkQuotaExceededEmitted(ctx, "ws-missing", now)
+		require.NoError(t, err)
+		assert.False(t, affected)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error propagated", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		now := time.Now().UTC()
+		mock.ExpectExec(markQuotaExceededSQL).
+			WithArgs("ws-1", now).
+			WillReturnError(assert.AnError)
+
+		_, err := repo.MarkQuotaExceededEmitted(ctx, "ws-1", now)
+		require.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+// TestVeridianPlanRepository_IncrementEmailsSent_QuotaExceededEmission teste
+// la logique d'émission tenant.quota_exceeded dans IncrementEmailsSent (V40).
+//
+// Scénarios couverts :
+//  1. quota=-1 (illimité) → pas d'évaluation, pas d'emit
+//  2. sentThisMonth < quota → pas franchi, pas d'emit
+//  3. 1er franchissement (mark affected=true) → emit
+//  4. Re-franchissement même mois (mark affected=false) → pas d'emit (idempotent)
+//  5. Workspace absent post-incrément (SELECT sql.ErrNoRows) → no-op silencieux
+//  6. SELECT erreur DB → best-effort, no panic
+//  7. MarkQuotaExceededEmitted erreur DB → best-effort, pas d'emit
+//
+// La logique d'activation threshold (V38) est tirée à part en mock sans seuil
+// (lifetime=2, alreadyReached=false) pour ne pas brouiller le scénario.
+func TestVeridianPlanRepository_IncrementEmailsSent_QuotaExceededEmission(t *testing.T) {
+	ctx := context.Background()
+
+	// Helper : mock IncrementEmailsSentReturning sous le seuil V38 (lifetime=2,
+	// pas de mark threshold ni d'emit threshold à attendre).
+	expectIncrementBelowThreshold := func(mock sqlmock.Sqlmock, workspaceID string) {
+		rows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(2), nil)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs(workspaceID, int64(1), sqlmock.AnyArg()).
+			WillReturnRows(rows)
+	}
+
+	t.Run("quota -1 (unlimited) → no emit, no mark", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		expectIncrementBelowThreshold(mock, "ws-pro")
+		// SELECT post-incrément : quota -1 = illimité
+		mock.ExpectQuery(evalQuotaSelectSQL).
+			WithArgs("ws-pro").
+			WillReturnRows(sqlmock.NewRows([]string{"emails_sent_this_month", "monthly_email_quota", "plan"}).
+				AddRow(int64(50000), int64(-1), "pro"))
+
+		err := repo.IncrementEmailsSent(ctx, "ws-pro", 1)
+		require.NoError(t, err)
+		assert.Empty(t, emitter.calls, "quota illimité → pas d'emit quota_exceeded")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("below quota → no emit", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		expectIncrementBelowThreshold(mock, "ws-pro")
+		// SELECT post-incrément : 100 envoyés sur 500 quota
+		mock.ExpectQuery(evalQuotaSelectSQL).
+			WithArgs("ws-pro").
+			WillReturnRows(sqlmock.NewRows([]string{"emails_sent_this_month", "monthly_email_quota", "plan"}).
+				AddRow(int64(100), int64(500), "pro"))
+
+		err := repo.IncrementEmailsSent(ctx, "ws-pro", 1)
+		require.NoError(t, err)
+		assert.Empty(t, emitter.calls, "sous le quota → pas d'emit")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("first crossing → emit + mark", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		expectIncrementBelowThreshold(mock, "ws-pro")
+		// SELECT post-incrément : 500 envoyés sur 500 quota (franchissement exact)
+		mock.ExpectQuery(evalQuotaSelectSQL).
+			WithArgs("ws-pro").
+			WillReturnRows(sqlmock.NewRows([]string{"emails_sent_this_month", "monthly_email_quota", "plan"}).
+				AddRow(int64(500), int64(500), "pro"))
+		// MarkQuotaExceededEmitted : premier passage du mois → 1 row affected
+		mock.ExpectExec(markQuotaExceededSQL).
+			WithArgs("ws-pro", sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.IncrementEmailsSent(ctx, "ws-pro", 1)
+		require.NoError(t, err)
+		require.Len(t, emitter.calls, 1, "exactly 1 emit quota_exceeded au premier franchissement")
+		assert.Equal(t, domain.EventQuotaExceeded, emitter.calls[0].eventType)
+		assert.Equal(t, "ws-pro", emitter.calls[0].tenantID)
+		assert.Equal(t, int64(500), emitter.calls[0].data["monthly_email_quota"])
+		assert.Equal(t, int64(500), emitter.calls[0].data["emails_sent_this_month"])
+		assert.Equal(t, "pro", emitter.calls[0].data["plan"])
+		assert.NotEmpty(t, emitter.calls[0].data["exceeded_at"], "exceeded_at présent (RFC3339 string)")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("already emitted this month → no emit (idempotent)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		expectIncrementBelowThreshold(mock, "ws-pro")
+		// Tenant déjà au-dessus du quota, l'incrément continue
+		mock.ExpectQuery(evalQuotaSelectSQL).
+			WithArgs("ws-pro").
+			WillReturnRows(sqlmock.NewRows([]string{"emails_sent_this_month", "monthly_email_quota", "plan"}).
+				AddRow(int64(501), int64(500), "pro"))
+		// MarkQuotaExceededEmitted : déjà emis ce mois → 0 rows affected
+		mock.ExpectExec(markQuotaExceededSQL).
+			WithArgs("ws-pro", sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := repo.IncrementEmailsSent(ctx, "ws-pro", 1)
+		require.NoError(t, err)
+		assert.Empty(t, emitter.calls, "déjà emis ce mois → pas de re-emit")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("workspace absent post-incrément → no-op silencieux", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		// IncrementEmailsSentReturning retourne lifetime non-zero pour entrer dans
+		// le flow eval (sinon early return). 3 mails lifetime, sous seuil V38.
+		rows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(3), nil)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-deleted", int64(1), sqlmock.AnyArg()).
+			WillReturnRows(rows)
+		// SELECT post-incrément : workspace supprimé entre les deux roundtrips
+		// (race rare). sql.ErrNoRows → return silencieux dans evalAndEmit.
+		mock.ExpectQuery(evalQuotaSelectSQL).
+			WithArgs("ws-deleted").
+			WillReturnError(sql.ErrNoRows)
+
+		err := repo.IncrementEmailsSent(ctx, "ws-deleted", 1)
+		require.NoError(t, err, "sql.ErrNoRows post-incrément = best-effort, pas d'erreur")
+		assert.Empty(t, emitter.calls)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("SELECT db error → best-effort, no panic", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		expectIncrementBelowThreshold(mock, "ws-pro")
+		mock.ExpectQuery(evalQuotaSelectSQL).
+			WithArgs("ws-pro").
+			WillReturnError(assert.AnError)
+
+		assert.NotPanics(t, func() {
+			err := repo.IncrementEmailsSent(ctx, "ws-pro", 1)
+			require.NoError(t, err, "SELECT DB error = best-effort, pas d'erreur")
+		})
+		assert.Empty(t, emitter.calls, "pas d'emit si SELECT a fail")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("mark quota fails → best-effort, no emit", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		expectIncrementBelowThreshold(mock, "ws-pro")
+		mock.ExpectQuery(evalQuotaSelectSQL).
+			WithArgs("ws-pro").
+			WillReturnRows(sqlmock.NewRows([]string{"emails_sent_this_month", "monthly_email_quota", "plan"}).
+				AddRow(int64(500), int64(500), "pro"))
+		mock.ExpectExec(markQuotaExceededSQL).
+			WithArgs("ws-pro", sqlmock.AnyArg()).
+			WillReturnError(assert.AnError)
+
+		err := repo.IncrementEmailsSent(ctx, "ws-pro", 1)
+		require.NoError(t, err, "mark quota error = best-effort, pas d'erreur")
+		assert.Empty(t, emitter.calls, "pas d'emit si mark a fail")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("nil emitter — mark still happens, no panic", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		// Pas d'emitter injecté (WithWebhookEmitter non appelé)
+		repo := NewVeridianPlanRepository(db)
+
+		expectIncrementBelowThreshold(mock, "ws-pro")
+		mock.ExpectQuery(evalQuotaSelectSQL).
+			WithArgs("ws-pro").
+			WillReturnRows(sqlmock.NewRows([]string{"emails_sent_this_month", "monthly_email_quota", "plan"}).
+				AddRow(int64(500), int64(500), "pro"))
+		// MarkQuotaExceededEmitted est appelé même sans emitter.
+		mock.ExpectExec(markQuotaExceededSQL).
+			WithArgs("ws-pro", sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		assert.NotPanics(t, func() {
+			err := repo.IncrementEmailsSent(ctx, "ws-pro", 1)
+			require.NoError(t, err)
+		})
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }

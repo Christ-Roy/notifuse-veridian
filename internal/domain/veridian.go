@@ -105,6 +105,19 @@ type VeridianPlan struct {
 	// NULL = jamais synchronisé (tenants antérieurs à V39 — backfillé par migration).
 	LastHubSyncAt *time.Time `json:"last_hub_sync_at,omitempty"`
 
+	// === Webhook idempotence mensuelle quota_exceeded (V40, ticket Lot I) ===
+	// QuotaExceededEmittedAtMonth : mois (timestamp au début du mois UTC) du
+	// dernier emit tenant.quota_exceeded pour ce tenant. Mis à jour atomiquement
+	// par MarkQuotaExceededEmitted quand l'incrément mensuel franchit le seuil
+	// `monthly_email_quota` et que le champ est NULL ou anterieur au mois
+	// courant. Garantit 1 et 1 seul webhook quota_exceeded par tenant par mois
+	// calendaire, même si le tenant continue d'envoyer après franchissement.
+	//
+	// NULL = jamais franchi (cas par défaut). En contexte pricing 2026-05-21
+	// (tout illimité, monthly_email_quota=-1), le webhook reste dormant tant que
+	// Phase C (Resend managé) ne réactive pas les quotas finis.
+	QuotaExceededEmittedAtMonth *time.Time `json:"quota_exceeded_emitted_at_month,omitempty"`
+
 	// === Activation tracking (V38, ticket trial-eligible-signal) ===
 	// EmailsSentLifetime : compteur cumulatif jamais reset (vs
 	// EmailsSentThisMonth qui se reset mensuellement par cron). Signal
@@ -398,6 +411,15 @@ type VeridianPlanRepository interface {
 	// si déjà set, le WHERE filtre et l'UPDATE est no-op silencieux). Utilisé
 	// par le service pour marquer le franchissement du seuil activation.
 	MarkActivityThresholdReached(ctx context.Context, workspaceID string, at time.Time) error
+	// MarkQuotaExceededEmitted set quota_exceeded_emitted_at_month = atMonth
+	// uniquement si le champ est NULL OU si le mois enregistré (date_trunc
+	// 'month') est anterieur au mois de atMonth. Idempotent par mois calendaire.
+	// Retourne `affected=true` si l'UPDATE a effectivement marqué cette ligne
+	// (signal "premier franchissement du mois — émettre le webhook"), `false`
+	// si no-op (déjà marqué ce mois-ci, ou workspace absent).
+	// Utilisé par IncrementEmailsSent pour garantir 1 webhook
+	// tenant.quota_exceeded par tenant par mois (V40, Lot I).
+	MarkQuotaExceededEmitted(ctx context.Context, workspaceID string, atMonth time.Time) (affected bool, err error)
 	ResetMonthlyCounters(ctx context.Context) (int64, error) // appele par cron
 	// TouchHubSync met à jour last_hub_sync_at = NOW pour le workspace.
 	// Idempotent. No-op silencieux si la row n'existe pas.

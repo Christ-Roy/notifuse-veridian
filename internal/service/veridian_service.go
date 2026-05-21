@@ -696,17 +696,25 @@ func (s *veridianService) SoftDelete(ctx context.Context, input domain.SoftDelet
 	purgeEligibleAt := now.Add(veridianPurgeDelay)
 
 	if s.emitter != nil {
+		// === Lot I (V40) === Payloads en RFC3339 strings pour conformité
+		// contrat Hub v1.4 (cf. veridian-hub/lib/notifuse/types.ts —
+		// TenantDeletedEventData.deleted_at: string). Go sérialise time.Time
+		// en JSON RFC3339 par défaut mais on explicite ici pour stabilité du
+		// contrat indépendamment du marshaller (tests Hub assert sur string).
 		payload := map[string]interface{}{
-			"deleted_at":        now,
-			"purge_eligible_at": purgeEligibleAt,
+			"deleted_at":        now.Format(time.RFC3339),
+			"purge_eligible_at": purgeEligibleAt.Format(time.RFC3339),
 		}
 		if input.Reason != "" {
 			payload["reason"] = input.Reason
 		}
 		s.emitter.Emit(ctx, domain.EventTenantSoftDeleted, input.TenantID, payload)
 		// back-compat : continuer a emettre tenant.deleted pour les consommateurs
-		// Hub legacy qui ne connaissent pas encore tenant.soft_deleted.
-		s.emitter.Emit(ctx, domain.EventTenantDeleted, input.TenantID, nil)
+		// Hub legacy qui ne connaissent pas encore tenant.soft_deleted. Payload
+		// minimal (deleted_at uniquement) pour parité avec TenantDeletedEventData.
+		s.emitter.Emit(ctx, domain.EventTenantDeleted, input.TenantID, map[string]interface{}{
+			"deleted_at": now.Format(time.RFC3339),
+		})
 	}
 
 	// Marquer le sync Hub réussi (best-effort).
@@ -762,7 +770,8 @@ func (s *veridianService) Restore(ctx context.Context, input domain.RestoreInput
 
 	now := time.Now().UTC()
 	if s.emitter != nil {
-		payload := map[string]interface{}{"restored_at": now}
+		// === Lot I (V40) === Payload RFC3339 string (cf. SoftDelete).
+		payload := map[string]interface{}{"restored_at": now.Format(time.RFC3339)}
 		if input.Reason != "" {
 			payload["reason"] = input.Reason
 		}
@@ -827,8 +836,9 @@ func (s *veridianService) Purge(ctx context.Context, input domain.PurgeInput) (*
 
 	now := time.Now().UTC()
 	if s.emitter != nil {
+		// === Lot I (V40) === Payload RFC3339 string (cf. SoftDelete).
 		s.emitter.Emit(ctx, domain.EventTenantPurged, input.TenantID, map[string]interface{}{
-			"purged_at": now,
+			"purged_at": now.Format(time.RFC3339),
 			"reason":    input.Reason,
 		})
 	}
@@ -873,8 +883,12 @@ func (s *veridianService) Touch(ctx context.Context, tenantID string) (*domain.T
 	}
 
 	if s.emitter != nil {
+		// === Lot I (V40) === Payload RFC3339 string (cf. SoftDelete).
+		// soft_delete_eligible_at = last_touched_at + heartbeat threshold côté Hub
+		// (le Hub a sa propre constante GraceDeleteEligibleAfter). On envoie juste
+		// touched_at, le Hub déduit ; pas de duplication d'info contractuelle.
 		s.emitter.Emit(ctx, domain.EventTenantTouched, tenantID, map[string]interface{}{
-			"touched_at": now,
+			"touched_at": now.Format(time.RFC3339),
 		})
 	}
 

@@ -54,6 +54,7 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
 		       emails_sent_lifetime, activity_threshold_reached_at,
 		       last_hub_sync_at,
+		       quota_exceeded_emitted_at_month,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -66,6 +67,8 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 	var activityThresholdReachedAt sql.NullTime
 	// V39 : last_hub_sync_at est TIMESTAMP WITH TIME ZONE (nullable).
 	var lastHubSyncAt sql.NullTime
+	// V40 : quota_exceeded_emitted_at_month est TIMESTAMP WITH TIME ZONE (nullable).
+	var quotaExceededEmittedAtMonth sql.NullTime
 
 	err := r.systemDB.QueryRowContext(ctx, q, workspaceID).Scan(
 		&p.WorkspaceID, &p.Plan, &planSource, &status, &p.MonthlyEmailQuota, &p.EmailsSentThisMonth,
@@ -75,6 +78,7 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 		&p.FeatureABTesting, &p.FeatureBrandingRemoved, &p.FeatureWhiteLabel, &p.HistoryRetentionDays,
 		&p.EmailsSentLifetime, &activityThresholdReachedAt,
 		&lastHubSyncAt,
+		&quotaExceededEmittedAtMonth,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -115,6 +119,10 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 	if lastHubSyncAt.Valid {
 		t := lastHubSyncAt.Time
 		p.LastHubSyncAt = &t
+	}
+	if quotaExceededEmittedAtMonth.Valid {
+		t := quotaExceededEmittedAtMonth.Time
+		p.QuotaExceededEmittedAtMonth = &t
 	}
 	return &p, nil
 }
@@ -459,44 +467,137 @@ func (r *veridianPlanRepository) Touch(ctx context.Context, workspaceID string) 
 const veridianPurgeDelayPostgres = 30 * 24 * time.Hour
 
 // IncrementEmailsSent ajoute delta aux compteurs mensuel ET lifetime (atomique),
-// puis détecte le franchissement du seuil d'activation trial (5 mails).
+// puis détecte deux signaux distincts :
 //
-// Si le seuil vient d'être franchi (lifetimeAfter >= ActivityThresholdEmails
-// AND !alreadyReached) :
-//  1. MarkActivityThresholdReached (idempotent) — persiste le timestamp
-//  2. Émet EventTenantActivityThresholdReached via l'emitter (best-effort)
+//  1. Franchissement du seuil d'activation trial (5 mails lifetime, V38) :
+//     - MarkActivityThresholdReached (idempotent one-shot)
+//     - Emit EventTenantActivityThresholdReached
 //
-// L'émission webhook est best-effort : si l'emitter est nil ou échoue,
-// le timestamp activity_threshold_reached_at reste set en DB — le Hub
-// peut réconcilier via polling de GET /api/veridian/limits.
-// Si la ligne n'existe pas, no-op silencieux.
+//  2. Franchissement du quota mensuel (V40, Lot I) :
+//     - Si monthly_email_quota > 0 ET emails_sent_this_month >= quota
+//     - MarkQuotaExceededEmitted (idempotent par mois calendaire)
+//     - Si MarkQuotaExceededEmitted retourne affected=true → Emit
+//       EventQuotaExceeded
+//
+// Les deux émissions sont best-effort : si l'emitter est nil ou échoue,
+// les timestamps activity_threshold_reached_at et
+// quota_exceeded_emitted_at_month restent set en DB — le Hub peut réconcilier
+// via polling de GET /api/veridian/limits.
+//
+// Si la ligne n'existe pas, no-op silencieux (sql.ErrNoRows absorbé par
+// IncrementEmailsSentReturning).
 func (r *veridianPlanRepository) IncrementEmailsSent(ctx context.Context, workspaceID string, delta int64) error {
 	lifetimeAfter, alreadyReached, err := r.IncrementEmailsSentReturning(ctx, workspaceID, delta)
 	if err != nil {
 		return err
 	}
-	// Seuil non encore atteint ET on vient de le franchir avec cet incrément.
+	// Workspace absent (returning vide) : pas de signal possible. Sortie silencieuse.
+	if lifetimeAfter == 0 && !alreadyReached {
+		// Note : lifetimeAfter=0 ET !alreadyReached est *aussi* possible pour un
+		// workspace qui vient d'être incrémenté de 0 (cas dégénéré). On accepte
+		// ce faux négatif — le caller (decorator) passe toujours delta=1.
+		return nil
+	}
+
+	now := time.Now().UTC()
+
+	// ============================================================
+	// 1. Seuil d'activation trial (V38) — idempotent one-shot global
+	// ============================================================
 	if !alreadyReached && lifetimeAfter >= domain.ActivityThresholdEmails {
-		now := time.Now().UTC()
 		if markErr := r.MarkActivityThresholdReached(ctx, workspaceID, now); markErr != nil {
-			// Best-effort : log warn, ne bloque pas l'envoi.
+			// Best-effort : log warn, ne bloque pas la suite.
 			if r.log != nil {
 				r.log.WithFields(map[string]interface{}{
 					"workspace_id": workspaceID,
 					"error":        markErr.Error(),
 				}).Warn("veridian: MarkActivityThresholdReached failed (best-effort, activity_threshold_reached_at not set)")
 			}
-			return nil
-		}
-		if r.emitter != nil {
+		} else if r.emitter != nil {
 			r.emitter.Emit(ctx, domain.EventTenantActivityThresholdReached, workspaceID, map[string]interface{}{
 				"emails_sent_lifetime": lifetimeAfter,
 				"threshold":            domain.ActivityThresholdEmails,
-				"reached_at":           now.UTC().Format("2006-01-02T15:04:05Z07:00"),
+				"reached_at":           now.Format(time.RFC3339),
 			})
 		}
 	}
+
+	// ============================================================
+	// 2. Franchissement quota mensuel (V40) — idempotent par mois
+	// ============================================================
+	// Lecture séparée des compteurs mensuels + quota + flag mois (1 SELECT,
+	// hot row déjà en cache après l'UPDATE atomique). Le RETURNING n'a pas
+	// été étendu pour garder la rétro-compat des signatures publiques.
+	r.evalAndEmitQuotaExceeded(ctx, workspaceID, now)
+
 	return nil
+}
+
+// evalAndEmitQuotaExceeded interroge l'état mensuel post-incrément et émet
+// tenant.quota_exceeded si le seuil est franchi et qu'aucun emit n'a été
+// fait pour ce mois calendaire. Best-effort : toute erreur DB est loggée mais
+// pas remontée (le Create message_history a déjà persisté l'envoi).
+//
+// Sémantique :
+//   - monthly_email_quota <= 0 → unlimited / désactivé, skip silencieux
+//     (consistant avec pivot pricing 2026-05-21, tous les plans à -1)
+//   - emails_sent_this_month < quota → pas encore franchi, no-op
+//   - franchi + déjà emis ce mois (date_trunc match) → no-op (idempotent)
+//   - franchi + jamais emis OU mois antérieur → MarkQuotaExceededEmitted + Emit
+func (r *veridianPlanRepository) evalAndEmitQuotaExceeded(ctx context.Context, workspaceID string, now time.Time) {
+	const q = `
+		SELECT emails_sent_this_month, monthly_email_quota, plan
+		FROM veridian_plan
+		WHERE workspace_id = $1
+	`
+	var sentThisMonth, monthlyQuota int64
+	var plan string
+	if err := r.systemDB.QueryRowContext(ctx, q, workspaceID).Scan(&sentThisMonth, &monthlyQuota, &plan); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return
+		}
+		if r.log != nil {
+			r.log.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"error":        err.Error(),
+			}).Warn("veridian: evalQuotaExceeded select failed (best-effort)")
+		}
+		return
+	}
+	// Quota illimité (-1) ou désactivé (0) → pas de webhook.
+	// Cf. pivot pricing 2026-05-21 : tous les plans à -1 jusqu'à Phase C.
+	if monthlyQuota <= 0 {
+		return
+	}
+	if sentThisMonth < monthlyQuota {
+		return
+	}
+
+	// Seuil franchi. MarkQuotaExceededEmitted gère l'idempotence par mois
+	// au niveau SQL (atomique). Si affected=false, un autre incrément
+	// concurrent a déjà émis ce mois — on reste silencieux.
+	affected, markErr := r.MarkQuotaExceededEmitted(ctx, workspaceID, now)
+	if markErr != nil {
+		if r.log != nil {
+			r.log.WithFields(map[string]interface{}{
+				"workspace_id": workspaceID,
+				"error":        markErr.Error(),
+			}).Warn("veridian: MarkQuotaExceededEmitted failed (best-effort, quota_exceeded_emitted_at_month not set)")
+		}
+		return
+	}
+	if !affected {
+		return // déjà emis ce mois
+	}
+
+	if r.emitter != nil {
+		r.emitter.Emit(ctx, domain.EventQuotaExceeded, workspaceID, map[string]interface{}{
+			"plan":                   plan,
+			"monthly_email_quota":    monthlyQuota,
+			"emails_sent_this_month": sentThisMonth,
+			"exceeded_at":            now.Format(time.RFC3339),
+		})
+	}
 }
 
 // IncrementEmailsSentReturning incrémente ATOMIQUEMENT emails_sent_this_month
@@ -560,6 +661,40 @@ func (r *veridianPlanRepository) MarkActivityThresholdReached(ctx context.Contex
 	`
 	_, err := r.systemDB.ExecContext(ctx, q, workspaceID, at, at)
 	return err
+}
+
+// MarkQuotaExceededEmitted set quota_exceeded_emitted_at_month = atMonth
+// uniquement si le champ est NULL OU si le mois enregistré (date_trunc 'month')
+// est anterieur au mois de atMonth. Idempotent par mois calendaire.
+//
+// Retourne (affected=true, nil) si l'UPDATE a effectivement marqué cette ligne
+// (premier franchissement du mois — signal d'émission webhook),
+// (affected=false, nil) si no-op (déjà marqué ce mois-ci, ou workspace absent).
+//
+// L'idempotence mensuelle est garantie au niveau SQL : deux callers
+// concurrents qui détectent simultanément un franchissement et qui appellent
+// cette méthode en parallèle obtiendront affected=true pour UN seul, false
+// pour l'autre. Atomicité Postgres (single UPDATE, row-level lock implicite).
+//
+// ⚠️ Piège TZ : quota_exceeded_emitted_at_month est TIMESTAMP WITH TIME ZONE (V40).
+// Pas de mélange avec updated_at (TIMESTAMP WITHOUT TIME ZONE legacy) — cette
+// méthode ne touche QUE quota_exceeded_emitted_at_month, donc safe.
+func (r *veridianPlanRepository) MarkQuotaExceededEmitted(ctx context.Context, workspaceID string, atMonth time.Time) (bool, error) {
+	const q = `
+		UPDATE veridian_plan
+		SET quota_exceeded_emitted_at_month = $2
+		WHERE workspace_id = $1
+		  AND (
+		      quota_exceeded_emitted_at_month IS NULL
+		      OR date_trunc('month', quota_exceeded_emitted_at_month) < date_trunc('month', $2::timestamptz)
+		  )
+	`
+	res, err := r.systemDB.ExecContext(ctx, q, workspaceID, atMonth)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // === Veridian patch === HardDelete supprime definitivement la ligne veridian_plan

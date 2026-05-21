@@ -408,8 +408,26 @@ func TestVeridianService_SoftDelete_EmitsEvent(t *testing.T) {
 	m.planRepo.EXPECT().SoftDelete(ctx, "ws-1", "").Return(nil).Times(1)
 	// 2 events emis : nouveau tenant.soft_deleted (sec. 5.7-5.8) + legacy
 	// tenant.deleted (back-compat). Voir service.SoftDelete.
-	m.emitter.EXPECT().Emit(ctx, domain.EventTenantSoftDeleted, "ws-1", gomock.Any()).Times(1)
-	m.emitter.EXPECT().Emit(ctx, domain.EventTenantDeleted, "ws-1", gomock.Nil()).Times(1)
+	// === Lot I (V40) === Payloads RFC3339 strings — on assert sur la présence
+	// du champ deleted_at + format string, pas sur l'égalité time.Time.
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantSoftDeleted, "ws-1", gomock.Any()).
+		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			deletedAtStr, ok := data["deleted_at"].(string)
+			require.True(t, ok, "deleted_at doit être un string RFC3339")
+			_, parseErr := time.Parse(time.RFC3339, deletedAtStr)
+			assert.NoError(t, parseErr, "deleted_at parseable en RFC3339")
+			purgeStr, ok := data["purge_eligible_at"].(string)
+			require.True(t, ok, "purge_eligible_at doit être un string RFC3339")
+			_, parseErr = time.Parse(time.RFC3339, purgeStr)
+			assert.NoError(t, parseErr)
+		}).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantDeleted, "ws-1", gomock.Any()).
+		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			deletedAtStr, ok := data["deleted_at"].(string)
+			require.True(t, ok, "back-compat deleted_at en RFC3339 string")
+			_, parseErr := time.Parse(time.RFC3339, deletedAtStr)
+			assert.NoError(t, parseErr)
+		}).Times(1)
 
 	resp, err := svc.SoftDelete(ctx, domain.SoftDeleteInput{TenantID: "ws-1"})
 	require.NoError(t, err)
@@ -431,9 +449,13 @@ func TestVeridianService_SoftDelete_WithReason(t *testing.T) {
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantSoftDeleted, "ws-1", gomock.Any()).
 		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
 			assert.Equal(t, "GDPR request", data["reason"])
-			assert.NotNil(t, data["purge_eligible_at"])
+			// === Lot I (V40) === purge_eligible_at est désormais string RFC3339.
+			purgeStr, ok := data["purge_eligible_at"].(string)
+			require.True(t, ok, "purge_eligible_at doit être string RFC3339")
+			_, parseErr := time.Parse(time.RFC3339, purgeStr)
+			assert.NoError(t, parseErr)
 		}).Times(1)
-	m.emitter.EXPECT().Emit(ctx, domain.EventTenantDeleted, "ws-1", gomock.Nil()).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantDeleted, "ws-1", gomock.Any()).Times(1)
 
 	resp, err := svc.SoftDelete(ctx, domain.SoftDeleteInput{TenantID: "ws-1", Reason: "GDPR request"})
 	require.NoError(t, err)

@@ -1300,6 +1300,20 @@ func (a *App) Start() error {
 	// auth middleware si plan suspended ou quota depasse.
 	handler = middleware.VeridianPaywallPathFilterWithCache(a.veridianPaywallCache, a.veridianPlanRepo, a.logger)(handler)
 
+	// === Lot J 2026-05-21 — Mode dégradé soft-deleted (CONTRAT-HUB §5.9) ===
+	// Wrappe le handler GLOBAL : si tenant soft-deleted (deleted_at != NULL),
+	//   - GET/HEAD/OPTIONS : la response JSON est obfusquée (33% en clair)
+	//   - POST/PUT/PATCH/DELETE : 402 + tenant_soft_deleted body
+	// Exempts : /api/veridian/*, /api/tenants/*, /api/health, /api/version,
+	// /api/auth/* — voir middleware.veridianSoftDeletedExemptPrefixes.
+	//
+	// Placé APRÈS le paywall path filter dans la chaîne d'application (donc
+	// EXÉCUTÉ AVANT dans le flow request) pour que la réponse 402 standard
+	// tenant_soft_deleted prime sur les autres décisions de gating (suspended,
+	// HubSyncDead, feature gate). Cache partagé avec le paywall pour
+	// économiser les round-trips DB sur les routes communes.
+	handler = middleware.VeridianSoftDeletedFilterWithCache(a.veridianPaywallCache, a.veridianPlanRepo, a.logger)(handler)
+
 	// Apply graceful shutdown middleware first (outermost)
 	handler = a.gracefulShutdownMiddleware(handler)
 	a.logger.Info("Graceful shutdown middleware enabled")

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -140,6 +141,51 @@ func TestVeridianPaywall_DeletedReturns402(t *testing.T) {
 	assert.Equal(t, http.StatusPaymentRequired, rec.Code)
 	assert.False(t, called.Load())
 	assert.Contains(t, rec.Body.String(), "deleted")
+}
+
+// TestVeridianPaywall_DeletedReturnsSoftDeletedBodyFormat valide que la
+// branche `IsBlocked.DeletedAt != nil` du middleware paywall (4 paths
+// d'envoi) délègue maintenant à `writeSoftDeletedResponse` — donc même
+// format que le middleware soft-deleted global (Lot J).
+//
+// Cohérence cross-route : un tenant soft-deleted qui envoie un email
+// (paywall path) ET un client soft-deleted qui list ses contacts
+// (middleware global) reçoivent EXACTEMENT le même body 402
+// {error: tenant_soft_deleted, error_code, restore_url, deleted_at,
+// purge_eligible_at}. La console peut afficher un message uniforme.
+func TestVeridianPaywall_DeletedReturnsSoftDeletedBodyFormat(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	deletedAt := time.Now().Add(-1 * time.Hour)
+	purgeAt := time.Now().Add(29 * 24 * time.Hour)
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), "ws-softdel-paywall").Return(&domain.VeridianPlan{
+		WorkspaceID:     "ws-softdel-paywall",
+		Plan:            "pro",
+		Status:          domain.PlanStatusDeleted,
+		DeletedAt:       &deletedAt,
+		PurgeEligibleAt: &purgeAt,
+	}, nil).Times(1)
+
+	mw := NewVeridianPaywallMiddleware(repo, logger.NewLogger())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("upstream NE DOIT PAS être appelé pour un tenant soft-deleted")
+	}))
+
+	req := newPaywallReq(t, `{"workspace_id":"ws-softdel-paywall"}`)
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusPaymentRequired, rec.Code)
+
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "tenant_soft_deleted", body["error"], "spec: error == tenant_soft_deleted")
+	assert.Equal(t, "tenant_soft_deleted", body["error_code"], "spec: error_code machine-readable")
+	assert.Contains(t, body["restore_url"], "/dashboard?action=restore&tenant=ws-softdel-paywall",
+		"spec: restore_url pointe vers Hub avec tenant id")
+	assert.NotEmpty(t, body["deleted_at"], "spec: deleted_at ISO 8601")
+	assert.NotEmpty(t, body["purge_eligible_at"], "spec: purge_eligible_at ISO 8601")
 }
 
 func TestVeridianPaywall_PlanAbsentLetsThrough(t *testing.T) {

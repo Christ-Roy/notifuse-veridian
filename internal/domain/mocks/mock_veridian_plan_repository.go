@@ -124,6 +124,21 @@ func (mr *MockVeridianPlanRepositoryMockRecorder) MarkActivityThresholdReached(a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkActivityThresholdReached", reflect.TypeOf((*MockVeridianPlanRepository)(nil).MarkActivityThresholdReached), arg0, arg1, arg2)
 }
 
+// MarkQuotaExceededEmitted mocks base method.
+func (m *MockVeridianPlanRepository) MarkQuotaExceededEmitted(arg0 context.Context, arg1 string, arg2 time.Time) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkQuotaExceededEmitted", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MarkQuotaExceededEmitted indicates an expected call of MarkQuotaExceededEmitted.
+func (mr *MockVeridianPlanRepositoryMockRecorder) MarkQuotaExceededEmitted(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkQuotaExceededEmitted", reflect.TypeOf((*MockVeridianPlanRepository)(nil).MarkQuotaExceededEmitted), arg0, arg1, arg2)
+}
+
 // Purge mocks base method.
 func (m *MockVeridianPlanRepository) Purge(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()

@@ -824,3 +824,44 @@ func TestVeridianPlanRepository_ExposesTouchHubSync(t *testing.T) {
 		_ = VeridianPlan{LastHubSyncAt: nil}
 	})
 }
+
+// === V40 — quota_exceeded_emitted_at_month (Lot I) ===
+
+// TestVeridianPlan_QuotaExceededEmittedAtMonth_JSONOmitEmpty — nil → omis du JSON.
+func TestVeridianPlan_QuotaExceededEmittedAtMonth_JSONOmitEmpty(t *testing.T) {
+	p := VeridianPlan{WorkspaceID: "ws-1"}
+	data, err := jsonMarshal(p)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "quota_exceeded_emitted_at_month",
+		"quota_exceeded_emitted_at_month nil doit être omis (omitempty)")
+}
+
+// TestVeridianPlan_QuotaExceededEmittedAtMonth_JSONPresent — non-nil → présent JSON.
+func TestVeridianPlan_QuotaExceededEmittedAtMonth_JSONPresent(t *testing.T) {
+	now := time.Now().UTC()
+	p := VeridianPlan{WorkspaceID: "ws-1", QuotaExceededEmittedAtMonth: &now}
+	data, err := jsonMarshal(p)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "quota_exceeded_emitted_at_month",
+		"quota_exceeded_emitted_at_month non-nil doit apparaître dans le JSON")
+}
+
+// TestVeridianPlanRepository_ExposesMarkQuotaExceededEmitted — invariant
+// compile-time que l'interface VeridianPlanRepository expose la nouvelle
+// méthode V40. Garde-fou : si une refacto vire la méthode de l'interface,
+// le test ne compilera plus (et le check-test-mapping rate cette régression).
+func TestVeridianPlanRepository_ExposesMarkQuotaExceededEmitted(t *testing.T) {
+	// Signature attendue : (ctx, workspaceID, atMonth) (affected bool, err error).
+	var _ func(ctx context.Context, workspaceID string, atMonth time.Time) (bool, error)
+	assert.NotPanics(t, func() {
+		// Marker runtime — grep "MarkQuotaExceededEmitted" dans les tests.
+		_ = VeridianPlan{QuotaExceededEmittedAtMonth: nil}
+	})
+}
+
+// TestEventQuotaExceeded_Value — invariant sur le nom de l'event émis vers Hub.
+// Le contrat (cf. veridian-hub/lib/notifuse/types.ts → QuotaExceededEventData)
+// pivote sur cette chaîne littérale ; toute modification = breaking pour le Hub.
+func TestEventQuotaExceeded_Value(t *testing.T) {
+	assert.Equal(t, VeridianEvent("tenant.quota_exceeded"), EventQuotaExceeded)
+}

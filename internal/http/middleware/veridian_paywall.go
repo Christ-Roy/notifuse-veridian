@@ -277,6 +277,18 @@ func NewVeridianPaywallMiddlewareWithCache(cache *PaywallCache, planRepo domain.
 			// Soft-deleted PRIME sur HubSyncDead (UX cohérent : si le tenant
 			// a été explicitement fermé par le Hub, ne pas afficher un message
 			// d'incident infra).
+			//
+			// === Lot J 2026-05-21 ===
+			// Quand DeletedAt != nil (soft-deleted), on retourne le body
+			// standardisé tenant_soft_deleted (cf. CONTRAT-HUB §5.9) — même
+			// schéma que le middleware soft-deleted global pour cohérence
+			// cross-route. Ce middleware paywall ne s'applique que sur les 4
+			// paths d'envoi (paywallProtectedPaths) ; le middleware soft-
+			// deleted global se charge des autres routes.
+			if entry.plan.DeletedAt != nil {
+				writeSoftDeletedResponse(w, entry.plan, probe.WorkspaceID)
+				return
+			}
 			blocked, reason := entry.plan.IsBlocked()
 			if blocked {
 				w.Header().Set("Content-Type", "application/json")
