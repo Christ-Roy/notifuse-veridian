@@ -63,11 +63,33 @@ function decodeJWTPayload(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
 }
 
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+const provisioned: string[] = [];
+
+test.afterEach(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`afterEach wipe failed (non-fatal): ${err}`);
+  }
+});
+
 test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
   test('full lifecycle: provision → magic-link → health → suspend/resume → attach-owner → idempotence', async () => {
-    // Tenant ID éphémère pour éviter pollution entre runs. Prefix `e2e-` =
-    // sécurité (cleanup script + safety prefixes côté wipe-test-tenants).
-    const tenantID = `e2e${Date.now().toString(36).slice(-10)}`;
+    // Tenant ID éphémère pour éviter pollution entre runs. Prefix unifié `tst`
+    // — cleanup auto via afterEach + safety_client_prefixes côté HMAC.
+    const tenantID = newTid();
+    provisioned.push(tenantID);
     const aliceEmail = `${tenantID}-alice@e2e.test`;
     const bobEmail = `${tenantID}-bob@e2e.test`;
 
@@ -230,7 +252,8 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     // Si CE test passe → le contrat Hub→Notifuse n'a plus de moyen de
     // casser silencieusement. Si CE test fail → le bug est de retour.
 
-    const tenantID = `regr${Date.now().toString(36).slice(-9)}`;
+    const tenantID = newTid();
+    provisioned.push(tenantID);
     const ownerEmail = `${tenantID}@regression.test`;
 
     const provisionResp = await hmacFetch('/api/tenants/provision', 'POST', {

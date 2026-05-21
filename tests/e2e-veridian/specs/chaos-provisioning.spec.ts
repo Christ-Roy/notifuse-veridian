@@ -35,12 +35,37 @@ async function hmacFetch(
   });
 }
 
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
+// Les tests HMAC chaos (replay/tampering/wrongsecret/nosig/badts/negts/huge/
+// noemail/tenant_id-manquant/JSON-invalide/empty-body) renvoient 401/400
+// AVANT toute écriture DB : aucun tenant créé → aucun push à faire.
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+const provisioned: string[] = [];
+
+test.afterEach(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`afterEach wipe failed (non-fatal): ${err}`);
+  }
+});
+
 test.describe('Chaos provisioning — concurrence', () => {
   test('5 provisions concurrentes meme tenant → 1 created, 4 idempotent, 0 erreur', async () => {
     // 5 au lieu de 10 : Notifuse v30 architecture DB-per-workspace cree
     // une race condition au CreateDatabase quand plusieurs goroutines
     // tentent de creer en parallele. 5 reduit la pression sur postgres.
-    const tenantId = `chaos${Date.now().toString(36).slice(-8)}`;
+    const tenantId = newTid();
+    provisioned.push(tenantId);
     const promises = Array.from({ length: 5 }, () =>
       hmacFetch('/api/tenants/provision', 'POST', {
         tenant_id: tenantId,
@@ -90,7 +115,8 @@ test.describe('Chaos provisioning — concurrence', () => {
     // transitoires (CreateDatabase upstream). On accepte que 80% passent au
     // premier coup, en prod le NotifuseClient TS retry sur 5xx.
     const promises = Array.from({ length: 5 }, (_, i) => {
-      const tid = `chaos5${Date.now().toString(36).slice(-6)}${i}`;
+      const tid = `${newTid()}${i}`;
+      provisioned.push(tid);
       return hmacFetch('/api/tenants/provision', 'POST', {
         tenant_id: tid,
         owner_email: `${tid}@chaos.test`,
@@ -266,7 +292,8 @@ test.describe('Chaos HMAC — replay et tampering', () => {
 
 test.describe('Chaos delete → re-provision', () => {
   test('delete puis re-provision meme tenant → 409 Conflict tant que pas purge 30j', async () => {
-    const tid = `delconf${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
 
     // 1. Provision
     let r = await hmacFetch('/api/tenants/provision', 'POST', {

@@ -45,18 +45,40 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
   });
 }
 
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+const provisioned: string[] = [];
+
+test.afterEach(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`afterEach wipe failed (non-fatal): ${err}`);
+  }
+});
+
 test.describe('Veridian-managed mode — workspace.create blocked', () => {
   test('POST /api/workspaces.create avec API key tenant → 403 + message clair', async () => {
     // Provision un tenant via le Hub HMAC (chemin légitime).
-    const tid = `wscre${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@anti-regression.test`,
       plan: 'free',
     });
     expect(r.status).toBe(200);
-    const provisioned = await r.json();
-    const apiKey = provisioned.api_key;
+    const provisionResp = await r.json();
+    const apiKey = provisionResp.api_key;
     expect(apiKey).toBeTruthy();
 
     // Tenter workspaces.create avec l'API key = caller Veridian-managed.
@@ -95,15 +117,16 @@ test.describe('Veridian-managed mode — workspace.create blocked', () => {
     // Confirme qu'aucun workspace fantôme n'a été créé malgré la tentative
     // (paranoid check : si un jour le block backend laisse passer mais
     // renvoie 403 pour l'UX, on détecte).
-    const tid = `wscre2${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@anti-regression.test`,
       plan: 'free',
     });
     expect(r.status).toBe(200);
-    const provisioned = await r.json();
-    const apiKey = provisioned.api_key;
+    const provisionResp = await r.json();
+    const apiKey = provisionResp.api_key;
 
     // Tentative bypass.
     await fetch(`${NOTIFUSE_URL}/api/workspaces.create`, {
@@ -132,7 +155,8 @@ test.describe('Veridian-managed mode — workspace.create blocked', () => {
 test.describe('Veridian-managed mode — UI guards', () => {
   test('user owner non-root : bouton "+ New workspace" non rendu dans le menu', async ({ page }) => {
     // Provision un tenant + user owner standard.
-    const tid = `uiguard${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const email = `${tid}@anti-regression.test`;
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
@@ -140,10 +164,10 @@ test.describe('Veridian-managed mode — UI guards', () => {
       plan: 'free',
     });
     expect(r.status).toBe(200);
-    const provisioned = await r.json();
+    const provisionResp = await r.json();
 
     // Auto-login via le lien Hub.
-    await page.goto(provisioned.auto_login_url);
+    await page.goto(provisionResp.auto_login_url);
     await page.waitForURL(/\/console$/, { timeout: 30_000 });
     await page.waitForTimeout(3000); // hydrate SPA
 
@@ -175,16 +199,17 @@ test.describe('Veridian-managed mode — UI guards', () => {
     // Test plus rude : même si l'utilisateur force la navigation manuelle vers
     // l'URL de création, la SPA peut afficher un formulaire mais le submit
     // doit échouer en 403 explicite.
-    const tid = `direct${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@anti-regression.test`,
       plan: 'free',
     });
     expect(r.status).toBe(200);
-    const provisioned = await r.json();
+    const provisionResp = await r.json();
 
-    await page.goto(provisioned.auto_login_url);
+    await page.goto(provisionResp.auto_login_url);
     await page.waitForURL(/\/console$/, { timeout: 30_000 });
     await page.waitForTimeout(2000);
 
@@ -224,7 +249,8 @@ test.describe('Veridian-managed mode — flow nominal préservé', () => {
     // endpoint internal), un user owner doit toujours arriver sur sa console
     // et voir son workspace. Si quelqu'un casse l'auth ou la SPA accidentellement,
     // ce test capture la régression.
-    const tid = `smoke${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const email = `${tid}@anti-regression.test`;
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
@@ -232,9 +258,9 @@ test.describe('Veridian-managed mode — flow nominal préservé', () => {
       plan: 'pro',
     });
     expect(r.status).toBe(200);
-    const provisioned = await r.json();
+    const provisionResp = await r.json();
 
-    await page.goto(provisioned.auto_login_url);
+    await page.goto(provisionResp.auto_login_url);
     await page.waitForURL(/\/console$/, { timeout: 30_000 });
     await page.waitForTimeout(2000);
 
@@ -261,7 +287,8 @@ test.describe('Veridian-managed mode — flow nominal préservé', () => {
     // Anti-régression paywall : le scheduler internal doit toujours peupler
     // veridian_plan correctement. Si un patch casse l'init, status renverrait
     // 404 ou un quota défaut nul.
-    const tid = `paywsmoke${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@anti-regression.test`,

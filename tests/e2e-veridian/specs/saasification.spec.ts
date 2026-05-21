@@ -42,9 +42,31 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
   return res;
 }
 
-// Génère un tenant_id unique pour ce run (préfixe e2e + timestamp)
-const tenantId = `e2e${Date.now().toString(36).slice(-8)}`;
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Prefix unifié `tst` + cleanup afterAll (describe.serial = 1 seul tenant
+// traverse les 12 tests, donc afterAll au lieu de afterEach pour préserver
+// l'enchaînement). Le test 11 soft-delete le tenant mais la ligne reste
+// (re-purgée par le wipe HMAC final).
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+const tenantId = newTid();
 const ownerEmail = `${tenantId}@e2e.veridian.test`;
+const provisioned: string[] = [tenantId];
+
+test.afterAll(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`afterAll wipe failed (non-fatal): ${err}`);
+  }
+});
 
 let provisioningResponse: any;
 

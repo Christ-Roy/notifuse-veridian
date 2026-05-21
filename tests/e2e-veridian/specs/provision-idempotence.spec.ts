@@ -37,19 +37,31 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
   });
 }
 
-// Cleanup defensif a la fin : supprime tous les tenants `idempot*` crees.
-test.afterAll(async () => {
-  const wipeRes = await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
-    prefix: 'idempot',
-  });
-  if (wipeRes.status !== 200) {
-    console.warn(`wipe-test-tenants returned ${wipeRes.status} (non-fatal): ${await wipeRes.text()}`);
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+const provisioned: string[] = [];
+
+test.afterEach(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`afterEach wipe failed (non-fatal): ${err}`);
   }
 });
 
 test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
   test('Cas A : replay meme tenant + meme owner → created:false, magic_link FRAIS', async () => {
-    const tenantId = `idempot${Date.now().toString(36).slice(-8)}`;
+    const tenantId = newTid();
+    provisioned.push(tenantId);
     const ownerEmail = `${tenantId}@idempot.test`;
 
     // 1. Premiere provision : created:true, magic_link M1
@@ -87,7 +99,8 @@ test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
   });
 
   test('Cas B : meme tenant + owner_email different → 409', async () => {
-    const tenantId = `idempotb${Date.now().toString(36).slice(-8)}`;
+    const tenantId = newTid();
+    provisioned.push(tenantId);
     const aliceEmail = `${tenantId}-alice@idempot.test`;
     const malloryEmail = `${tenantId}-mallory@idempot.test`;
 
@@ -111,7 +124,8 @@ test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
   });
 
   test('Cas C : nouveau tenant → created:true (smoke)', async () => {
-    const tenantId = `idempotc${Date.now().toString(36).slice(-8)}`;
+    const tenantId = newTid();
+    provisioned.push(tenantId);
     const res = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: `${tenantId}@idempot.test`,
