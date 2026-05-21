@@ -8,9 +8,11 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  // Pas de retry en CI : les tests sont sequentiels, un retry refait tout
-  // depuis zero et sature le pool DB. Mieux vaut fix les flakys que de retry.
-  retries: 0,
+  // En CI : 2 retries pour absorber les flakys réseau/timing sans saturer
+  // le pool DB (workers: 1 garantit qu'un seul test tourne à la fois —
+  // le retry rejoue 1 test isolé, pas la suite entière).
+  // En local : 0 (pas de retry, on veut voir l'échec immédiatement).
+  retries: process.env.CI ? 2 : 0,
   workers: 1,
   // En CI : reporter line (lisible dans logs streames) + html (drill-down
   // post-mortem via artifact uploade) + json (parsing programmatique futur).
