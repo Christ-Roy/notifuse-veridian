@@ -53,9 +53,31 @@ async function provisionTenant(tid: string, plan = 'free') {
   throw new Error('provision retry exhausted (5 attempts incl. 404 transient)');
 }
 
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+const provisioned: string[] = [];
+
+test.afterEach(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`afterEach wipe failed (non-fatal): ${err}`);
+  }
+});
+
 test.describe('Status endpoint', () => {
   test('status apres provision : active, plan, quota matchent input', async () => {
-    const tid = `stat${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'pro');
 
     const r = await hmacFetch(`/api/tenants/${tid}/status`, 'GET');
@@ -73,7 +95,8 @@ test.describe('Status endpoint', () => {
   });
 
   test('status apres suspend : status=suspended, suspended_at populated', async () => {
-    const tid = `statsus${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
     await hmacFetch('/api/tenants/suspend', 'POST', { tenant_id: tid, reason: 'overdue' });
 
@@ -86,7 +109,8 @@ test.describe('Status endpoint', () => {
   });
 
   test('status apres delete : status=deleted, deleted_at populated', async () => {
-    const tid = `statdel${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
     await hmacFetch(`/api/tenants/${tid}`, 'DELETE');
 
@@ -105,7 +129,8 @@ test.describe('Status endpoint', () => {
 
 test.describe('Update-plan transitions', () => {
   test('upgrade free → pro : compteur emails preserve, quota updated', async () => {
-    const tid = `up${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
     let r = await hmacFetch('/api/tenants/update-plan', 'POST', {
@@ -125,7 +150,8 @@ test.describe('Update-plan transitions', () => {
     // 2026-05-20 : avec la décision BYO, tous plans ont quota=-1 — donc
     // pas de "reduction" sur downgrade côté emails. Le test reste utile
     // pour valider que update-plan ne casse pas (plan change bien).
-    const tid = `down${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'pro');
 
     const r = await hmacFetch('/api/tenants/update-plan', 'POST', {
@@ -141,7 +167,8 @@ test.describe('Update-plan transitions', () => {
   });
 
   test('plan inconnu → 400 ou fallback free (selon decision)', async () => {
-    const tid = `unkplan${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
     const r = await hmacFetch('/api/tenants/update-plan', 'POST', {
@@ -156,7 +183,8 @@ test.describe('Update-plan transitions', () => {
 
 test.describe('Resume sans suspend prealable', () => {
   test('resume tenant active → 200 idempotent ou 409 selon impl', async () => {
-    const tid = `resume${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
     const r = await hmacFetch('/api/tenants/resume', 'POST', { tenant_id: tid });
@@ -167,7 +195,8 @@ test.describe('Resume sans suspend prealable', () => {
 
 test.describe('Suspend deja suspended', () => {
   test('suspend deux fois → 200 (idempotent), suspended_reason ecrase', async () => {
-    const tid = `sus2${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
     let r = await hmacFetch('/api/tenants/suspend', 'POST', {

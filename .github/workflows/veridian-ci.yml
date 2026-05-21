@@ -1064,3 +1064,55 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.EMERGENCY_REVERT_PAT }}
 
+      # === Constitution CI §17 — Freeze branch protection ===
+      # Tant que la PR auto-revert n'est pas mergée, on bloque tout
+      # nouveau push sur `veridian` via une protection de branche avec
+      # un status check fictif `FREEZE_LOCK` qui n'existera jamais.
+      #
+      # Le déverrouillage est porté par `unfreeze-after-revert.yml` :
+      # il se déclenche quand la PR auto-revert (label emergency-rollback)
+      # est mergée vers veridian et supprime la protection.
+      #
+      # `enforce_admins: false` pour permettre à Robert de bypass via
+      # l'UI GitHub si urgent. PAT requis : scope repo + admin:repo
+      # (`EMERGENCY_REVERT_PAT` partagé avec le step revert).
+      #
+      # Voir : todo/2026-05-19-ci-freeze-main-rollback.md
+      - name: Freeze branch protection on veridian
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.EMERGENCY_REVERT_PAT }}
+        run: |
+          if [ -z "${{ secrets.EMERGENCY_REVERT_PAT }}" ]; then
+            echo "::warning::EMERGENCY_REVERT_PAT non configuré — skip freeze branch protection (rollback Docker reste appliqué)"
+            exit 0
+          fi
+          set -euo pipefail
+          echo "Activation de la branch protection avec status check fictif FREEZE_LOCK sur veridian"
+          # Construit le payload JSON via printf (heredoc serait piégé par
+          # l'indent YAML — bash <<'JSON' exige terminator sans espaces).
+          PAYLOAD=$(printf '%s' '{"required_status_checks":{"strict":true,"contexts":["FREEZE_LOCK"]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}')
+          if ! echo "$PAYLOAD" | gh api "repos/${GITHUB_REPOSITORY}/branches/veridian/protection" \
+            --method PUT \
+            --input -; then
+            echo "::warning::Branch protection PUT a échoué — vérifier scope du PAT (repo + admin:repo)"
+            exit 0
+          fi
+          echo "Branch protection activée : tout push sur veridian sera rejeté tant que FREEZE_LOCK n'est pas vert (jamais)."
+
+      - name: Telegram alert freeze
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+            echo "::notice::Pas de TELEGRAM_BOT_TOKEN, skip notif freeze"
+            exit 0
+          fi
+          curl -sS -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=🧊 Notifuse Veridian — branche veridian FREEZE après auto-rollback prod sur ${GITHUB_SHA::8}. Push bloqués jusqu'au merge de la PR emergency-rollback. Bypass possible via UI GitHub si urgent."
+

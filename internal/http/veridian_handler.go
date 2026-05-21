@@ -134,6 +134,12 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Attache un user Hub invité au workspace Notifuse d'un tenant. Idempotent.
 	// Voir todo/2026-05-21-hub-attach-member-endpoint.md
 	mux.Handle("POST /api/tenants/{tenantId}/attach-member", writeRoute(h.handleAttachMember))
+	// === Veridian patch — Lot K (2026-05-21) ===
+	// CONTRAT-HUB §5.15 rotate-api-key + §5.16 transfer-owner.
+	// Voir veridian_rotate_transfer_handler.go.
+	// Mutateurs : HMAC + Idempotency.
+	mux.Handle("POST /api/tenants/{id}/rotate-api-key", writeRoute(h.handleRotateAPIKey))
+	mux.Handle("POST /api/tenants/{id}/transfer-owner", writeRoute(h.handleTransferOwner))
 	// === Veridian patch V37 === Limites + dimensions feature d'un tenant
 	// (lot 7 ticket pricing-plans-implementation). Source de verite pour la
 	// console UI (widgets quota) et le paywall middleware. Auth HMAC.

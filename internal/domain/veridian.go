@@ -799,6 +799,20 @@ type VeridianService interface {
 	// Semantique : retourne toujours un DiscoveryResponse (jamais d erreur not found).
 	// found=false + workspaces=[] si l email est inconnu. Jamais de 404.
 	LookupByEmail(ctx context.Context, email string) (*DiscoveryResponse, error)
+
+	// === Veridian patch — Lot K (2026-05-21) ===
+	// RotateAPIKey genere une nouvelle api_key pour un tenant et marque
+	// l'ancienne pour revocation apres APIKeyGracePeriod (5min).
+	// CONTRAT-HUB §5.15. reason obligatoire pour audit GDPR.
+	// Idempotent : rotate dans la grace period precedente ecrase revoke_at.
+	RotateAPIKey(ctx context.Context, input RotateAPIKeyInput) (*RotateAPIKeyResponse, error)
+
+	// TransferOwner transfere l'ownership d'un tenant a un nouvel email.
+	// Thin wrapper sur AttachOwner avec le format response §5.16.
+	// CONTRAT-HUB §5.16. reason obligatoire pour audit GDPR.
+	// Divergence Notifuse : l'ancien owner devient `member` (pas `admin` —
+	// pas natif Notifuse). Cosmetique : les droits sont effectivement retires.
+	TransferOwner(ctx context.Context, input TransferOwnerInput) (*TransferOwnerResponse, error)
 }
 
 // === Hub discovery types (2026-05-20) ===

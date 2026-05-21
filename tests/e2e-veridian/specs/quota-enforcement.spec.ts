@@ -71,9 +71,31 @@ async function invalidatePaywallCache(workspaceId: string) {
   expect(r.status, await r.text()).toBe(200);
 }
 
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+const provisioned: string[] = [];
+
+test.afterEach(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`afterEach wipe failed (non-fatal): ${err}`);
+  }
+});
+
 test.describe('Quota — increment emails_sent_this_month sur envoi', () => {
   test('compteur s incremente apres chaque envoi reussi', async () => {
-    const tid = `qinc${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
     // 1. Etat initial : 0 mails envoyes
@@ -111,7 +133,8 @@ test.describe('Quota — increment emails_sent_this_month sur envoi', () => {
 
 test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () => {
   test('grant-unlimited passe un tenant en enterprise + plan_source lifetime_partner', async () => {
-    const tid = `qgrant${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
     // Etat initial : free + quota=-1 (BYO sending 2026-05-20)
@@ -140,7 +163,8 @@ test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () 
   });
 
   test('grant-unlimited refuse plan_source stripe (non immune)', async () => {
-    const tid = `qgrej${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
     const r = await hmacFetch('/api/veridian/admin/grant-unlimited', 'POST', {
@@ -154,7 +178,8 @@ test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () 
   });
 
   test('grant-unlimited refuse reason vide', async () => {
-    const tid = `qgrnoreason${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
     const r = await hmacFetch('/api/veridian/admin/grant-unlimited', 'POST', {
@@ -165,8 +190,10 @@ test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () 
   });
 
   test('grant-unlimited 404 sur tenant inconnu', async () => {
+    // Pas de provisioned.push : ce tenant n'existe pas (test ciblé sur le 404).
+    // Le `ghost-` reste sans tiret pour rester alphanum (workspace.Validate).
     const r = await hmacFetch('/api/veridian/admin/grant-unlimited', 'POST', {
-      tenant_id: `ghost-${Date.now()}`,
+      tenant_id: `ghost${Date.now().toString(36).slice(-8)}`,
       reason: 'test_404',
     });
     expect(r.status).toBe(404);
@@ -177,7 +204,8 @@ test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () 
     // Le quota mensuel ne bloque PLUS, donc on test le seul motif qui reste
     // côté paywall : suspend. Grant-unlimited doit auto-resume le tenant
     // (cf. service.GrantUnlimited).
-    const tid = `qgrresume${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'free');
 
     // Suspend le tenant
@@ -206,7 +234,8 @@ test.describe('Grant unlimited — bypass paywall pour comptes privilegies', () 
   });
 
   test('grant-unlimited est idempotent (appel x2 sur meme tenant OK)', async () => {
-    const tid = `qgridem${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
     for (let i = 0; i < 2; i++) {

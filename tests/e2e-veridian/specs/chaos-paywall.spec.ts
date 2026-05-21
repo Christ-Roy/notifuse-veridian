@@ -85,9 +85,40 @@ async function sendTransactional(apiKey: string, workspaceId: string) {
   });
 }
 
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Convention naming : prefix `tst` (alphanum ≥3 chars, contrainte
+// workspace.Validate + WipeTestTenants min-prefix) suivi d'un timestamp court.
+// Le wipe CI matche `tst` en 1 appel — défense additionnelle au-delà de
+// l'afterEach par-spec ci-dessous (filet de sécurité si crash mid-test).
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+
+// Tracker des tenants créés par chaque test. Repli au fil de l'eau dans
+// afterEach pour éviter le batch wipe en fin de CI qui sature le pool DB.
+const provisioned: string[] = [];
+
+test.afterEach(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      // Defense en profondeur : safety prefixes explicites en plus des
+      // defaults backend (cf. veridian_service.defaultSafetyClientPrefixes).
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // Cleanup best-effort : on ne fail pas le test si le wipe rate (le step
+    // CI `Cleanup test tenants` repassera avec prefix `tst` en filet).
+    // eslint-disable-next-line no-console
+    console.warn(`afterEach wipe failed (non-fatal): ${err}`);
+  }
+});
+
 test.describe('Paywall — suspend / resume / delete', () => {
   test('suspend → invalidate → 402, resume → invalidate → not 402', async () => {
-    const tid = `pwsus${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
     // 1. Active : envoi passe (pas 402)
@@ -120,7 +151,8 @@ test.describe('Paywall — suspend / resume / delete', () => {
   });
 
   test('delete → invalidate → 402 jusqu a la fin des temps', async () => {
-    const tid = `pwdel${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
     let r = await hmacFetch(`/api/tenants/${tid}`, 'DELETE');
@@ -138,7 +170,8 @@ test.describe('Paywall — suspend / resume / delete', () => {
 
 test.describe('Paywall — path filter precision', () => {
   test('paywall actif sur /api/transactional.send', async () => {
-    const tid = `pwpath${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'free');
     await hmacFetch('/api/tenants/suspend', 'POST', { tenant_id: tid });
     await invalidatePaywallCache(tid);
@@ -148,7 +181,8 @@ test.describe('Paywall — path filter precision', () => {
   });
 
   test('paywall PAS actif sur /api/contacts.list (suspended tenant peut quand meme lire)', async () => {
-    const tid = `pwread${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'free');
     await hmacFetch('/api/tenants/suspend', 'POST', { tenant_id: tid });
     await invalidatePaywallCache(tid);

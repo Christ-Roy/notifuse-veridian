@@ -125,6 +125,7 @@ type App struct {
 	// === Veridian patches ===
 	veridianPlanRepo         domain.VeridianPlanRepository
 	veridianIdempotencyRepo  domain.VeridianIdempotencyRepository
+	veridianAPIKeyGraceRepo  domain.VeridianAPIKeyGraceRepository // Lot K — grace period rotate-api-key
 	veridianService          domain.VeridianService
 	veridianWebhookEmitter   domain.WebhookEmitter
 	veridianPaywallCache     *middleware.PaywallCache // partage middleware paywall + handler invalidate
@@ -459,6 +460,11 @@ func (a *App) InitRepositories() error {
 	// veridianPlanRepo est deja initialise plus haut (avant le decorator
 	// messageHistoryRepo). On garde juste l'init du repo idempotency ici.
 	a.veridianIdempotencyRepo = repository.NewVeridianIdempotencyRepository(a.db)
+
+	// === Veridian patch — Lot K (2026-05-21) === Grace period repo pour
+	// rotate-api-key (CONTRAT-HUB §5.15). Voir migration V41 + service
+	// VeridianAPIKeyGraceCleanupService.
+	a.veridianAPIKeyGraceRepo = repository.NewVeridianAPIKeyGraceRepository(a.db)
 
 	// Initialize setting service
 	a.settingService = service.NewSettingService(a.settingRepo)
@@ -1084,6 +1090,15 @@ func (a *App) InitServices() error {
 		a.config.HubAPISecret,
 		a.logger,
 	)
+
+	// === Veridian patch — Lot K (2026-05-21) === Injecter le grace repo
+	// post-construction (CONTRAT-HUB §5.15 rotate-api-key). Sans ça,
+	// RotateAPIKey retournera ErrAPIKeyGraceRepoNotConfigured.
+	if a.veridianAPIKeyGraceRepo != nil {
+		if err := service.ConfigureAPIKeyGraceSupport(a.veridianService, a.veridianAPIKeyGraceRepo); err != nil {
+			a.logger.WithField("error", err.Error()).Warn("ConfigureAPIKeyGraceSupport failed — rotate-api-key endpoint disabled")
+		}
+	}
 
 	return nil
 }

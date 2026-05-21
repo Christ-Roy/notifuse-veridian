@@ -229,6 +229,21 @@ func (mr *MockVeridianServiceMockRecorder) Resume(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resume", reflect.TypeOf((*MockVeridianService)(nil).Resume), arg0, arg1)
 }
 
+// RotateAPIKey mocks base method.
+func (m *MockVeridianService) RotateAPIKey(arg0 context.Context, arg1 domain.RotateAPIKeyInput) (*domain.RotateAPIKeyResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RotateAPIKey", arg0, arg1)
+	ret0, _ := ret[0].(*domain.RotateAPIKeyResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RotateAPIKey indicates an expected call of RotateAPIKey.
+func (mr *MockVeridianServiceMockRecorder) RotateAPIKey(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateAPIKey", reflect.TypeOf((*MockVeridianService)(nil).RotateAPIKey), arg0, arg1)
+}
+
 // SoftDelete mocks base method.
 func (m *MockVeridianService) SoftDelete(arg0 context.Context, arg1 domain.SoftDeleteInput) (*domain.SoftDeleteResponse, error) {
 	m.ctrl.T.Helper()
@@ -271,6 +286,21 @@ func (m *MockVeridianService) Touch(arg0 context.Context, arg1 string) (*domain.
 func (mr *MockVeridianServiceMockRecorder) Touch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Touch", reflect.TypeOf((*MockVeridianService)(nil).Touch), arg0, arg1)
+}
+
+// TransferOwner mocks base method.
+func (m *MockVeridianService) TransferOwner(arg0 context.Context, arg1 domain.TransferOwnerInput) (*domain.TransferOwnerResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TransferOwner", arg0, arg1)
+	ret0, _ := ret[0].(*domain.TransferOwnerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TransferOwner indicates an expected call of TransferOwner.
+func (mr *MockVeridianServiceMockRecorder) TransferOwner(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferOwner", reflect.TypeOf((*MockVeridianService)(nil).TransferOwner), arg0, arg1)
 }
 
 // UpdatePlan mocks base method.

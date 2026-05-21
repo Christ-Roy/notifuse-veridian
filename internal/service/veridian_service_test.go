@@ -1653,3 +1653,23 @@ func TestListTenants_ServiceExposed(t *testing.T) {
 	}
 	assert.True(t, true, "compile-time check passed: ListTenants exists on veridianService")
 }
+
+// === Veridian patch — Lot K (2026-05-21) ===
+
+// TestRotateAPIKey_ServiceExposed : compile-time check que RotateAPIKey est
+// bien dans le contrat veridianService. Contenu fonctionnel couvert par
+// veridian_rotate_transfer_service_test.go.
+func TestRotateAPIKey_ServiceExposed(t *testing.T) {
+	var _ func(svc *veridianService) interface{} = func(svc *veridianService) interface{} {
+		return svc.RotateAPIKey
+	}
+	assert.True(t, true, "compile-time check passed: RotateAPIKey exists on veridianService")
+}
+
+// TestTransferOwner_ServiceExposed : compile-time check pour TransferOwner.
+func TestTransferOwner_ServiceExposed(t *testing.T) {
+	var _ func(svc *veridianService) interface{} = func(svc *veridianService) interface{} {
+		return svc.TransferOwner
+	}
+	assert.True(t, true, "compile-time check passed: TransferOwner exists on veridianService")
+}

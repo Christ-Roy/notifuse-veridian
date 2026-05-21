@@ -1686,3 +1686,39 @@ func TestVeridianHandleListTenants_RouteRegistered(t *testing.T) {
 	assert.NotEmpty(t, pattern, "GET /api/veridian/admin/tenants should be registered")
 	assert.Contains(t, pattern, "tenants")
 }
+
+// === Veridian patch — Lot K (2026-05-21) ===
+// Validations route-level pour rotate-api-key + transfer-owner.
+// Les unit tests des handlers sont dans veridian_rotate_transfer_handler_test.go ;
+// ici on valide juste que les routes sont enregistrees dans le mux (pour
+// satisfaire le check Nuclear routes API + le mapping 1-pour-1).
+
+func TestVeridianHandleRotateAPIKey_RouteRegistered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants/ws-1/rotate-api-key", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/tenants/{id}/rotate-api-key should be registered")
+	assert.Contains(t, pattern, "rotate-api-key")
+}
+
+func TestVeridianHandleTransferOwner_RouteRegistered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants/ws-1/transfer-owner", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/tenants/{id}/transfer-owner should be registered")
+	assert.Contains(t, pattern, "transfer-owner")
+}

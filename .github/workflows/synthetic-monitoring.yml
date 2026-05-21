@@ -1,0 +1,223 @@
+# Synthetic monitoring — Constitution CI §11
+#
+# Cron */5 qui rejoue le smoke E2E read-only @prod-safe contre prod.
+# Détecte les régressions silencieuses entre les push (cert expiré,
+# DB saturée, cache foiré, dépendance externe down).
+#
+# Comportement :
+#   - 1 fail isolé = run failed, pas d'alerte (peut être un flake)
+#   - 2 fails consécutifs = ouvre une issue label `synthetic-monitoring-alert`
+#     + alerte Telegram
+#   - Premier pass après une série de fails = ferme l'issue ouverte
+#
+# Budget : ~288 runs/jour × ~2 min CPU = ~10h GH Actions/jour. Gratuit en
+# tier public, ~25 USD/mois si repo passé en privé (cf. ticket P3).
+#
+# Voir : todo/2026-05-19-ci-synthetic-monitoring.md
+name: Synthetic monitoring (prod read-only)
+
+on:
+  schedule:
+    # Toutes les 5 minutes — granularité minimale GH Actions.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+# Une seule instance à la fois — évite que 2 runs se marchent dessus
+# si un run dépasse 5 min (timeout théorique 5 min, mais setup-node +
+# npm ci peut prendre du temps).
+concurrency:
+  group: synthetic-monitoring
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  smoke:
+    name: Smoke @prod-safe contre notifuse.app.veridian.site
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NOTIFUSE_URL: https://notifuse.app.veridian.site
+      HUB_URL: https://app.veridian.site
+      HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_PROD }}
+      E2E_PROD_MODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tests/e2e-veridian/package-lock.json
+
+      - name: Install deps + chromium
+        working-directory: tests/e2e-veridian
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Healthcheck prod /api/setup.status (fail fast si prod down)
+        run: |
+          if ! curl -sf --max-time 10 https://notifuse.app.veridian.site/api/setup.status > /dev/null; then
+            echo "::error::Prod /api/setup.status unreachable — abort synthetic run"
+            exit 1
+          fi
+
+      - name: Run @prod-safe smoke
+        id: playwright
+        working-directory: tests/e2e-veridian
+        run: |
+          npx playwright test --project=chromium --grep "@prod-safe" --reporter=line
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-synthetic-${{ github.run_id }}
+          path: |
+            tests/e2e-veridian/playwright-report/
+            tests/e2e-veridian/playwright-results.json
+            tests/e2e-veridian/test-results/
+          retention-days: 7
+
+  alert:
+    name: Open/close synthetic-monitoring-alert issue
+    needs: smoke
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check last run conclusion (fail 2x consécutifs = alerte)
+        id: history
+        env:
+          CURRENT_RUN_CONCLUSION: ${{ needs.smoke.result }}
+        run: |
+          set -euo pipefail
+          # On regarde les 2 derniers runs de ce workflow (en excluant le run
+          # courant) pour décider d'alerter.
+          PREVIOUS=$(gh run list \
+            --workflow synthetic-monitoring.yml \
+            --branch ${{ github.ref_name }} \
+            --limit 5 \
+            --json conclusion,databaseId,createdAt \
+            --jq "[.[] | select(.databaseId != ${{ github.run_id }})][0].conclusion // \"none\"")
+          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT_RUN_CONCLUSION" >> "$GITHUB_OUTPUT"
+          echo "Previous conclusion: $PREVIOUS / current: $CURRENT_RUN_CONCLUSION"
+
+      - name: Find existing open alert issue
+        id: existing
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER=$(gh issue list \
+            --repo "$GH_REPO" \
+            --label synthetic-monitoring-alert \
+            --state open \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // ""')
+          echo "number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure label exists
+        if: needs.smoke.result == 'failure'
+        run: |
+          if ! gh label list --repo "$GH_REPO" --json name --jq '.[].name' | grep -qx synthetic-monitoring-alert; then
+            gh label create synthetic-monitoring-alert \
+              --repo "$GH_REPO" \
+              --color "B60205" \
+              --description "Synthetic monitoring (cron 5min) a détecté 2 fails consécutifs sur prod" || true
+          fi
+
+      - name: Open alert issue (2 fails consécutifs, aucune issue ouverte)
+        if: |
+          needs.smoke.result == 'failure'
+          && steps.history.outputs.previous == 'failure'
+          && steps.existing.outputs.number == ''
+        run: |
+          set -euo pipefail
+          BODY=$(cat <<EOF
+          # Synthetic monitoring — 2 fails consécutifs sur prod
+
+          Le cron \`*/5 * * * *\` du workflow [synthetic-monitoring.yml](.github/workflows/synthetic-monitoring.yml)
+          a détecté **2 runs en échec consécutifs** contre \`https://notifuse.app.veridian.site\`.
+
+          Signal d'une régression silencieuse en prod (cert, DB, cache, dépendance externe).
+
+          ## Actions
+
+          1. Vérifier le dernier run échoué : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          2. \`curl https://notifuse.app.veridian.site/api/setup.status\` depuis local
+          3. Logs prod : \`ssh prod-pub\` + Dokploy API \`docker.getContainerLogs\` (composeId \`WN0jglLj5bDIrXUFZHNmw\`)
+          4. Cette issue sera **fermée automatiquement** au premier run synthetic qui repasse vert.
+
+          ## Contexte run
+
+          - Run ID : ${{ github.run_id }}
+          - Run précédent : ${{ steps.history.outputs.previous }}
+          - SHA repo (FYI, le cron tourne sur le HEAD de la branche, pas du commit prod) : ${{ github.sha }}
+          - Branche : ${{ github.ref_name }}
+          EOF
+          )
+          gh issue create \
+            --repo "$GH_REPO" \
+            --title "[SYNTHETIC ALERT] Prod Notifuse — 2 fails consécutifs ($(date -u '+%Y-%m-%d %H:%M UTC'))" \
+            --label synthetic-monitoring-alert \
+            --body "$BODY"
+
+      - name: Append comment to existing alert issue (fail répété)
+        if: |
+          needs.smoke.result == 'failure'
+          && steps.existing.outputs.number != ''
+        run: |
+          set -euo pipefail
+          gh issue comment "${{ steps.existing.outputs.number }}" \
+            --repo "$GH_REPO" \
+            --body "Nouveau fail synthetic — run ${{ github.run_id }} — $(date -u '+%Y-%m-%d %H:%M UTC')"
+
+      - name: Close alert issue (premier pass après série de fails)
+        if: |
+          needs.smoke.result == 'success'
+          && steps.existing.outputs.number != ''
+        run: |
+          set -euo pipefail
+          gh issue comment "${{ steps.existing.outputs.number }}" \
+            --repo "$GH_REPO" \
+            --body "Synthetic monitoring re-passé vert (run ${{ github.run_id }} — $(date -u '+%Y-%m-%d %H:%M UTC')). Fermeture auto."
+          gh issue close "${{ steps.existing.outputs.number }}" \
+            --repo "$GH_REPO" \
+            --reason completed
+
+      - name: Telegram alert (open OR repeat fail)
+        if: |
+          needs.smoke.result == 'failure'
+          && steps.history.outputs.previous == 'failure'
+          && env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -sS -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=🚨 Notifuse synthetic monitoring — 2 fails consécutifs sur prod. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Telegram recovery (premier pass après fails)
+        if: |
+          needs.smoke.result == 'success'
+          && steps.history.outputs.previous == 'failure'
+          && env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -sS -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=✅ Notifuse synthetic monitoring — prod repassée verte après série de fails. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

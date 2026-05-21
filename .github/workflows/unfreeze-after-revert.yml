@@ -1,0 +1,81 @@
+# Unfreeze branch veridian après merge de la PR auto-revert
+#
+# Compagnon du step "Freeze branch protection" du job `rollback` dans
+# `veridian-ci.yml`. Quand une PR labellée `emergency-rollback` est
+# mergée vers veridian, on supprime la protection FREEZE_LOCK pour
+# permettre à nouveau les push.
+#
+# Trigger : closed sur PR `veridian` avec label `emergency-rollback`,
+# seulement si la PR est mergée (pas juste fermée).
+#
+# Voir : todo/2026-05-19-ci-freeze-main-rollback.md, Constitution CI §17
+name: Unfreeze branch après auto-revert mergé
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [veridian]
+
+permissions:
+  contents: read
+
+jobs:
+  unfreeze:
+    name: Retire branch protection FREEZE_LOCK
+    if: |
+      github.event.pull_request.merged == true
+      && contains(github.event.pull_request.labels.*.name, 'emergency-rollback')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Vérifie que la protection actuelle est bien le FREEZE_LOCK
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.EMERGENCY_REVERT_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::EMERGENCY_REVERT_PAT non configuré — impossible de retirer la protection"
+            exit 1
+          fi
+          # On lit la protection actuelle ; si elle contient FREEZE_LOCK on
+          # peut la supprimer en toute sécurité. Si quelqu'un a changé la
+          # protection entre-temps (mode équipe, futur), on n'écrase pas.
+          if ! gh api "repos/${GITHUB_REPOSITORY}/branches/veridian/protection" \
+            --jq '.required_status_checks.contexts // []' > /tmp/contexts.json 2>/dev/null; then
+            echo "no_protection=true" >> "$GITHUB_OUTPUT"
+            echo "Pas de protection active sur veridian — rien à faire"
+            exit 0
+          fi
+          if grep -q FREEZE_LOCK /tmp/contexts.json; then
+            echo "freeze_lock_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "freeze_lock_present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Protection active sur veridian sans FREEZE_LOCK — ne touche à rien"
+          fi
+
+      - name: Supprime branch protection veridian
+        if: steps.check.outputs.freeze_lock_present == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.EMERGENCY_REVERT_PAT }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/branches/veridian/protection" \
+            --method DELETE
+          echo "Branch protection retirée — push à nouveau possibles sur veridian"
+
+      - name: Telegram notif unfreeze
+        if: steps.check.outputs.freeze_lock_present == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+            echo "::notice::Pas de TELEGRAM_BOT_TOKEN, skip notif unfreeze"
+            exit 0
+          fi
+          curl -sS -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=🔓 Notifuse Veridian — branche veridian UNFREEZE après merge PR #${PR_NUM} (emergency-rollback). Les push sont à nouveau autorisés."

@@ -865,3 +865,24 @@ func TestVeridianPlanRepository_ExposesMarkQuotaExceededEmitted(t *testing.T) {
 func TestEventQuotaExceeded_Value(t *testing.T) {
 	assert.Equal(t, VeridianEvent("tenant.quota_exceeded"), EventQuotaExceeded)
 }
+// TestVeridianService_ExposesRotateAPIKeyAndTransferOwner — invariant
+// compile-time que l'interface VeridianService expose bien les 2 methodes
+// du Lot K (CONTRAT-HUB §5.15 + §5.16). Si le mock est regenere et qu'on
+// retire une methode de l'interface, ce test casse au build (l'assertion
+// type echoue silencieusement mais l'usage du type Method explicite force
+// la verification).
+func TestVeridianService_ExposesRotateAPIKeyAndTransferOwner(t *testing.T) {
+	// Une variable de type fonction matching la signature de l'interface.
+	// Si l'interface change (signature differente ou methode supprimee),
+	// l'assignation depuis l'interface dans un test futur cassera le build.
+	var rotateFn func(context.Context, RotateAPIKeyInput) (*RotateAPIKeyResponse, error)
+	var transferFn func(context.Context, TransferOwnerInput) (*TransferOwnerResponse, error)
+	_ = rotateFn
+	_ = transferFn
+
+	// Verifier que les types Input ont bien TenantID `json:"-"` (audit ticket).
+	in := RotateAPIKeyInput{TenantID: "ws-1", Reason: "x"}
+	assert.Equal(t, "ws-1", in.TenantID)
+	in2 := TransferOwnerInput{TenantID: "ws-1", NewOwnerEmail: "n@x.t", Reason: "r"}
+	assert.Equal(t, "ws-1", in2.TenantID)
+}

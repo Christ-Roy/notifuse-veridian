@@ -122,6 +122,11 @@ type veridianService struct {
 	apiEndpoint      string
 	hubSecret        string // === Veridian patch === pour signer les auto_login_url
 	logger           logger.Logger
+	// === Veridian patch — Lot K (2026-05-21) ===
+	// apiKeyGraceRepo est OPTIONNEL : si nil, RotateAPIKey retourne
+	// ErrAPIKeyGraceRepoNotConfigured. Injecté post-construction via
+	// ConfigureAPIKeyGraceSupport (cf. veridian_rotate_transfer_service.go).
+	apiKeyGraceRepo domain.VeridianAPIKeyGraceRepository
 }
 
 // NewVeridianService construit un VeridianService.

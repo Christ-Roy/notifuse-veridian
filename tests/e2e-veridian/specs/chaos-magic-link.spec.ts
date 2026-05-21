@@ -29,11 +29,33 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
   });
 }
 
+// === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
+// Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
+// Cf. todo/2026-05-20-e2e-cleanup-discipline-canary-safety.md
+const newTid = () => `tst${Date.now().toString(36).slice(-6)}`;
+const provisioned: string[] = [];
+
+test.afterEach(async () => {
+  if (provisioned.length === 0) return;
+  const ids = [...provisioned];
+  provisioned.length = 0;
+  try {
+    await hmacFetch('/api/veridian/admin/wipe-test-tenants', 'POST', {
+      tenant_ids: ids,
+      safety_client_prefixes: ['canary', 'robertbrunon', 'robertstagingtest'],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`afterEach wipe failed (non-fatal): ${err}`);
+  }
+});
+
 test.describe('Magic link — flow nominal headful', () => {
   test('user clique auto-login URL → arrive sur console connecte → owner verifie via API', async ({
     page,
   }) => {
-    const tid = `magic${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const email = `${tid}@magic.test`;
 
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
@@ -77,7 +99,8 @@ test.describe('Magic link — flow nominal headful', () => {
 
 test.describe('Magic link — adversaires', () => {
   test('auto_login_url reutilise apres TTL 60s → erreur', async ({ browser }) => {
-    const tid = `magicre${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
 
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
@@ -110,7 +133,8 @@ test.describe('Magic link — adversaires', () => {
   });
 
   test('tampering auto_login_url token → erreur', async ({ page }) => {
-    const tid = `magtam${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@magic.test`,
@@ -138,7 +162,8 @@ test.describe('Magic link — adversaires', () => {
 
 test.describe('Generate magic link via API key (tenant-scoped)', () => {
   test('admin Hub demande nouveau magic link → user peut se connecter', async ({ page }) => {
-    const tid = `genmag${Date.now().toString(36).slice(-6)}`;
+    const tid = newTid();
+    provisioned.push(tid);
     const email = `${tid}@magic.test`;
 
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
