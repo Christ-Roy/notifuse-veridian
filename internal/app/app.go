@@ -1065,6 +1065,12 @@ func (a *App) InitServices() error {
 		a.config.HubWebhookSecret,
 		a.logger,
 	)
+	// V38 : injecter le webhook emitter dans le plan repo pour que
+	// IncrementEmailsSent puisse émettre tenant.activity_threshold_reached
+	// quand le seuil 5 mails est franchi. Le repo est créé en ligne 435
+	// avant le service (besoin de décorateur messageHistoryRepo), mais
+	// l'emitter est créé ici — on le patch via WithWebhookEmitter.
+	a.veridianPlanRepo = repository.WithWebhookEmitter(a.veridianPlanRepo, a.veridianWebhookEmitter, a.logger)
 	a.veridianService = service.NewVeridianService(
 		a.workspaceService,
 		a.workspaceRepo,

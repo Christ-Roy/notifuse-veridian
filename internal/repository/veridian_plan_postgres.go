@@ -8,16 +8,35 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 // veridianPlanRepository implements domain.VeridianPlanRepository.
 type veridianPlanRepository struct {
 	systemDB *sql.DB
+	// emitter : WebhookEmitter optionnel pour émettre le webhook
+	// tenant.activity_threshold_reached quand le seuil 5 mails est franchi.
+	// nil en mode self-hosted / tests unitaires.
+	// Injecté via WithWebhookEmitter() après création.
+	emitter domain.WebhookEmitter
+	// log : logger optionnel pour les avertissements best-effort.
+	log logger.Logger
 }
 
 // NewVeridianPlanRepository cree un repo PostgreSQL pour la table veridian_plan.
 func NewVeridianPlanRepository(systemDB *sql.DB) domain.VeridianPlanRepository {
 	return &veridianPlanRepository{systemDB: systemDB}
+}
+
+// WithWebhookEmitter retourne une copie du repo avec l'emitter injecté.
+// Appelé dans app.go après la création du webhook emitter (post-ligne 435).
+// Le repo reste utilisable sans emitter (best-effort, nil-safe).
+func WithWebhookEmitter(repo domain.VeridianPlanRepository, emitter domain.WebhookEmitter, log logger.Logger) domain.VeridianPlanRepository {
+	if r, ok := repo.(*veridianPlanRepository); ok {
+		r.emitter = emitter
+		r.log = log
+	}
+	return repo
 }
 
 // Get recupere une ligne par workspace_id. Retourne sql.ErrNoRows si absent.
@@ -33,6 +52,7 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 		       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
 		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
+		       emails_sent_lifetime, activity_threshold_reached_at,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -41,6 +61,9 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 	var status, planSource string
 	var suspendedAt, deletedAt, restoredAt, purgeEligibleAt, lastTouchedAt sql.NullTime
 	var suspendedReason, lifecycleReason sql.NullString
+	// V38 : activity_threshold_reached_at est TIMESTAMP WITH TIME ZONE (nullable).
+	// Utilise sql.NullTime pour le scan null-safe.
+	var activityThresholdReachedAt sql.NullTime
 
 	err := r.systemDB.QueryRowContext(ctx, q, workspaceID).Scan(
 		&p.WorkspaceID, &p.Plan, &planSource, &status, &p.MonthlyEmailQuota, &p.EmailsSentThisMonth,
@@ -48,6 +71,7 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 		&restoredAt, &purgeEligibleAt, &lastTouchedAt, &lifecycleReason,
 		&p.MaxContacts, &p.MaxSeats, &p.MaxOAuthAccounts, &p.MaxCustomDomains, &p.MaxActiveSequences,
 		&p.FeatureABTesting, &p.FeatureBrandingRemoved, &p.FeatureWhiteLabel, &p.HistoryRetentionDays,
+		&p.EmailsSentLifetime, &activityThresholdReachedAt,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -80,6 +104,10 @@ func (r *veridianPlanRepository) Get(ctx context.Context, workspaceID string) (*
 	}
 	if lifecycleReason.Valid {
 		p.LifecycleReason = lifecycleReason.String
+	}
+	if activityThresholdReachedAt.Valid {
+		t := activityThresholdReachedAt.Time
+		p.ActivityThresholdReachedAt = &t
 	}
 	return &p, nil
 }
@@ -138,8 +166,9 @@ func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianP
 			last_reset_at, suspended_at, suspended_reason, deleted_at,
 			max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
 			feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
+			emails_sent_lifetime,
 			created_at, updated_at
-		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 		ON CONFLICT (workspace_id) DO UPDATE SET
 			plan = EXCLUDED.plan,
 			plan_source = COALESCE(EXCLUDED.plan_source, veridian_plan.plan_source),
@@ -147,11 +176,16 @@ func (r *veridianPlanRepository) Upsert(ctx context.Context, p *domain.VeridianP
 			monthly_email_quota = EXCLUDED.monthly_email_quota,
 			updated_at = EXCLUDED.updated_at
 	`
+	// Note : activity_threshold_reached_at n'est PAS inclus dans l'Upsert.
+	// Ce champ est géré exclusivement par MarkActivityThresholdReached
+	// (écriture idempotente one-shot). L'Upsert ne doit pas écraser un
+	// timestamp déjà set lors d'un re-provision ou update-plan.
 	_, err := r.systemDB.ExecContext(ctx, q,
 		p.WorkspaceID, p.Plan, planSourceArg, string(p.Status), p.MonthlyEmailQuota, p.EmailsSentThisMonth,
 		p.LastResetAt, p.SuspendedAt, p.SuspendedReason, p.DeletedAt,
 		p.MaxContacts, p.MaxSeats, p.MaxOAuthAccounts, p.MaxCustomDomains, p.MaxActiveSequences,
 		p.FeatureABTesting, p.FeatureBrandingRemoved, p.FeatureWhiteLabel, p.HistoryRetentionDays,
+		p.EmailsSentLifetime,
 		p.CreatedAt, p.UpdatedAt,
 	)
 	return err
@@ -417,15 +451,107 @@ func (r *veridianPlanRepository) Touch(ctx context.Context, workspaceID string) 
 // Doit rester ALIGNE avec internal/service/veridian_service.go:veridianPurgeDelay.
 const veridianPurgeDelayPostgres = 30 * 24 * time.Hour
 
-// IncrementEmailsSent ajoute delta au compteur de mails envoyes ce mois (atomique).
-// Si la ligne n'existe pas, no-op silencieux (le workspace n'est pas suivi par Veridian).
+// IncrementEmailsSent ajoute delta aux compteurs mensuel ET lifetime (atomique),
+// puis détecte le franchissement du seuil d'activation trial (5 mails).
+//
+// Si le seuil vient d'être franchi (lifetimeAfter >= ActivityThresholdEmails
+// AND !alreadyReached) :
+//  1. MarkActivityThresholdReached (idempotent) — persiste le timestamp
+//  2. Émet EventTenantActivityThresholdReached via l'emitter (best-effort)
+//
+// L'émission webhook est best-effort : si l'emitter est nil ou échoue,
+// le timestamp activity_threshold_reached_at reste set en DB — le Hub
+// peut réconcilier via polling de GET /api/veridian/limits.
+// Si la ligne n'existe pas, no-op silencieux.
 func (r *veridianPlanRepository) IncrementEmailsSent(ctx context.Context, workspaceID string, delta int64) error {
+	lifetimeAfter, alreadyReached, err := r.IncrementEmailsSentReturning(ctx, workspaceID, delta)
+	if err != nil {
+		return err
+	}
+	// Seuil non encore atteint ET on vient de le franchir avec cet incrément.
+	if !alreadyReached && lifetimeAfter >= domain.ActivityThresholdEmails {
+		now := time.Now().UTC()
+		if markErr := r.MarkActivityThresholdReached(ctx, workspaceID, now); markErr != nil {
+			// Best-effort : log warn, ne bloque pas l'envoi.
+			if r.log != nil {
+				r.log.WithFields(map[string]interface{}{
+					"workspace_id": workspaceID,
+					"error":        markErr.Error(),
+				}).Warn("veridian: MarkActivityThresholdReached failed (best-effort, activity_threshold_reached_at not set)")
+			}
+			return nil
+		}
+		if r.emitter != nil {
+			r.emitter.Emit(ctx, domain.EventTenantActivityThresholdReached, workspaceID, map[string]interface{}{
+				"emails_sent_lifetime": lifetimeAfter,
+				"threshold":            domain.ActivityThresholdEmails,
+				"reached_at":           now.UTC().Format("2006-01-02T15:04:05Z07:00"),
+			})
+		}
+	}
+	return nil
+}
+
+// IncrementEmailsSentReturning incrémente ATOMIQUEMENT emails_sent_this_month
+// ET emails_sent_lifetime, puis retourne (lifetimeAfter, alreadyReached, err).
+//
+//   - lifetimeAfter : valeur de emails_sent_lifetime APRÈS l'incrément
+//   - alreadyReached : true si activity_threshold_reached_at IS NOT NULL
+//     avant cet incrément (= seuil déjà marqué, pas d'émission webhook)
+//
+// Si la ligne n'existe pas (workspace non Veridian-managed), retourne (0, false, nil).
+//
+// ⚠️ Piège TZ : updated_at est TIMESTAMP WITHOUT TIME ZONE (legacy upstream),
+// activity_threshold_reached_at est TIMESTAMP WITH TIME ZONE (V38 additif).
+// Ne JAMAIS partager le même $N entre ces deux colonnes dans un même UPDATE
+// — bug "inconsistent types deduced for parameter $N" Postgres. updated_at
+// est passé via $3, distinct du RETURNING qui lit activity_threshold_reached_at.
+func (r *veridianPlanRepository) IncrementEmailsSentReturning(ctx context.Context, workspaceID string, delta int64) (lifetimeAfter int64, alreadyReached bool, err error) {
 	const q = `
 		UPDATE veridian_plan
-		SET emails_sent_this_month = emails_sent_this_month + $2, updated_at = $3
+		SET emails_sent_this_month = emails_sent_this_month + $2,
+		    emails_sent_lifetime   = emails_sent_lifetime + $2,
+		    updated_at = $3
 		WHERE workspace_id = $1
+		RETURNING emails_sent_lifetime, activity_threshold_reached_at
 	`
-	_, err := r.systemDB.ExecContext(ctx, q, workspaceID, delta, time.Now().UTC())
+	now := time.Now().UTC()
+	var thresholdReachedAt sql.NullTime
+	scanErr := r.systemDB.QueryRowContext(ctx, q, workspaceID, delta, now).
+		Scan(&lifetimeAfter, &thresholdReachedAt)
+	if scanErr != nil {
+		if errors.Is(scanErr, sql.ErrNoRows) {
+			// Workspace non géré par Veridian — no-op silencieux.
+			return 0, false, nil
+		}
+		return 0, false, scanErr
+	}
+	alreadyReached = thresholdReachedAt.Valid
+	return lifetimeAfter, alreadyReached, nil
+}
+
+// MarkActivityThresholdReached set activity_threshold_reached_at = at pour
+// le workspace donné, uniquement si le champ est encore NULL (idempotent).
+//
+//   - Si le champ est déjà set (seuil déjà marqué lors d'un incrément
+//     concurrent), l'UPDATE retourne 0 rows affected — no-op silencieux.
+//   - Pas de vérification du nombre de rows affectées : l'idempotence est
+//     garantie par le WHERE, le caller n'a pas besoin de distinguer "first set"
+//     de "already set" à ce stade (la détection se fait via alreadyReached
+//     dans IncrementEmailsSentReturning).
+//
+// ⚠️ Piège TZ : activity_threshold_reached_at est TIMESTAMP WITH TIME ZONE (V38).
+// updated_at est TIMESTAMP WITHOUT TIME ZONE (legacy). Même valeur `at`, mais
+// passée via deux paramètres distincts ($2 et $3) pour éviter le bug Postgres
+// "inconsistent types". Cf. memory feedback_sqlmock_does_not_validate_postgres_types.
+func (r *veridianPlanRepository) MarkActivityThresholdReached(ctx context.Context, workspaceID string, at time.Time) error {
+	const q = `
+		UPDATE veridian_plan
+		SET activity_threshold_reached_at = $2,
+		    updated_at = $3
+		WHERE workspace_id = $1 AND activity_threshold_reached_at IS NULL
+	`
+	_, err := r.systemDB.ExecContext(ctx, q, workspaceID, at, at)
 	return err
 }
 

@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
 	gomock "github.com/golang/mock/gomock"
@@ -76,6 +77,36 @@ func (m *MockVeridianPlanRepository) IncrementEmailsSent(arg0 context.Context, a
 func (mr *MockVeridianPlanRepositoryMockRecorder) IncrementEmailsSent(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementEmailsSent", reflect.TypeOf((*MockVeridianPlanRepository)(nil).IncrementEmailsSent), arg0, arg1, arg2)
+}
+
+// IncrementEmailsSentReturning mocks base method.
+func (m *MockVeridianPlanRepository) IncrementEmailsSentReturning(arg0 context.Context, arg1 string, arg2 int64) (int64, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IncrementEmailsSentReturning", arg0, arg1, arg2)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// IncrementEmailsSentReturning indicates an expected call of IncrementEmailsSentReturning.
+func (mr *MockVeridianPlanRepositoryMockRecorder) IncrementEmailsSentReturning(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementEmailsSentReturning", reflect.TypeOf((*MockVeridianPlanRepository)(nil).IncrementEmailsSentReturning), arg0, arg1, arg2)
+}
+
+// MarkActivityThresholdReached mocks base method.
+func (m *MockVeridianPlanRepository) MarkActivityThresholdReached(arg0 context.Context, arg1 string, arg2 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkActivityThresholdReached", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MarkActivityThresholdReached indicates an expected call of MarkActivityThresholdReached.
+func (mr *MockVeridianPlanRepositoryMockRecorder) MarkActivityThresholdReached(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkActivityThresholdReached", reflect.TypeOf((*MockVeridianPlanRepository)(nil).MarkActivityThresholdReached), arg0, arg1, arg2)
 }
 
 // ListByPrefix mocks base method.

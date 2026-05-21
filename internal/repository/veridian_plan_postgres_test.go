@@ -24,7 +24,8 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 	ctx := context.Background()
 	const wsID = "ws-1"
 
-	// V37 — la SELECT inclut maintenant les 9 nouvelles colonnes pricing.
+	// V38 — la SELECT inclut maintenant les 9 colonnes pricing V37 + les 2
+	// nouvelles colonnes V38 (emails_sent_lifetime, activity_threshold_reached_at).
 	// On factorise la query litterale et la liste des colonnes pour eviter
 	// la duplication entre les 3 sous-tests (Constitution §1 lisibilite).
 	const getSQL = `
@@ -33,6 +34,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
 		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
+		       emails_sent_lifetime, activity_threshold_reached_at,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -43,6 +45,7 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
 		"max_contacts", "max_seats", "max_oauth_accounts", "max_custom_domains", "max_active_sequences",
 		"feature_ab_testing", "feature_branding_removed", "feature_white_label", "history_retention_days",
+		"emails_sent_lifetime", "activity_threshold_reached_at",
 		"created_at", "updated_at",
 	}
 
@@ -52,10 +55,13 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 
 		now := time.Now().UTC()
 		// Tenant pro avec dimensions V37 backfillees par la migration.
+		// V38 : emails_sent_lifetime=7, activity_threshold_reached_at=non-null (seuil atteint)
+		reachedAt := now.Add(-1 * time.Hour)
 		rows := sqlmock.NewRows(getColumns).AddRow(
 			wsID, "pro", "stripe", "active", int64(10000), int64(42),
 			now, nil, nil, nil, nil, nil, nil, nil,
 			int64(-1), -1, -1, -1, -1, true, true, false, -1,
+			int64(7), reachedAt,
 			now, now,
 		)
 
@@ -79,6 +85,9 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		assert.True(t, p.FeatureBrandingRemoved)
 		assert.False(t, p.FeatureWhiteLabel, "white-label = Business+ uniquement")
 		assert.Equal(t, -1, p.HistoryRetentionDays)
+		// V38 : activation tracking
+		assert.Equal(t, int64(7), p.EmailsSentLifetime)
+		require.NotNil(t, p.ActivityThresholdReachedAt, "seuil atteint → champ non-nil")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -91,11 +100,13 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		del := now.Add(-30 * time.Minute)
 		purgeEligible := del.Add(30 * 24 * time.Hour)
 		// Tenant free suspended-deleted, dimensions = defaults Free.
+		// V38 : emails_sent_lifetime=2, activity_threshold_reached_at=nil (pas encore activé)
 		rows := sqlmock.NewRows(getColumns).AddRow(
 			wsID, "free", "lifetime_partner", "suspended", int64(500), int64(0),
 			now, susp, "non-payment", del,
 			nil, purgeEligible, nil, "GDPR user request",
 			int64(-1), -1, -1, -1, -1, true, true, false, -1,
+			int64(2), nil,
 			now, now,
 		)
 
@@ -118,6 +129,9 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		assert.Equal(t, int64(-1), p.MaxContacts)
 		assert.Equal(t, -1, p.MaxCustomDomains, "pivot : custom domains illimite partout")
 		assert.True(t, p.FeatureBrandingRemoved, "pivot : branding optionnel pour tous y compris Free")
+		// V38 : activation tracking
+		assert.Equal(t, int64(2), p.EmailsSentLifetime, "2 mails envoyés, seuil 5 pas encore atteint")
+		assert.Nil(t, p.ActivityThresholdReachedAt, "seuil pas atteint → nil")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -136,16 +150,19 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 func TestVeridianPlanRepository_Upsert(t *testing.T) {
 	ctx := context.Background()
 
-	// V37 — la INSERT inclut maintenant les 9 nouvelles colonnes pricing.
-	// L'ordre des params suit l'ordre des colonnes dans le INSERT du repo.
+	// V38 — la INSERT inclut les 9 colonnes pricing V37 + emails_sent_lifetime (V38).
+	// activity_threshold_reached_at n'est PAS dans l'Upsert (géré exclusivement
+	// par MarkActivityThresholdReached). L'ordre des params suit l'ordre des
+	// colonnes dans le INSERT du repo.
 	const upsertSQL = `
 		INSERT INTO veridian_plan (
 			workspace_id, plan, plan_source, status, monthly_email_quota, emails_sent_this_month,
 			last_reset_at, suspended_at, suspended_reason, deleted_at,
 			max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
 			feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
+			emails_sent_lifetime,
 			created_at, updated_at
-		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+		) VALUES ($1,$2,COALESCE($3,'stripe'),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 		ON CONFLICT (workspace_id) DO UPDATE SET
 			plan = EXCLUDED.plan,
 			plan_source = COALESCE(EXCLUDED.plan_source, veridian_plan.plan_source),
@@ -168,8 +185,10 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 		mock.ExpectExec(upsertSQL).WithArgs(
 			"ws-new", "free", nil, "active", int64(500), int64(0),
 			sqlmock.AnyArg(), nil, "", nil,
-			// V37 defaults Free : 500/1/1/0/1/false/false/false/30
+			// V37 defaults Free : tout illimite (pivot 2026-05-21)
 			int64(-1), -1, -1, -1, -1, true, true, false, -1,
+			// V38 : emails_sent_lifetime = 0 (nouveau tenant)
+			int64(0),
 			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -201,6 +220,8 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 			sqlmock.AnyArg(), nil, "", nil,
 			// V37 defaults Enterprise : tout -1 + features true
 			int64(-1), -1, -1, -1, -1, true, true, true, -1,
+			// V38 : emails_sent_lifetime = 0 (nouveau tenant)
+			int64(0),
 			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -237,6 +258,8 @@ func TestVeridianPlanRepository_Upsert(t *testing.T) {
 			sqlmock.AnyArg(), nil, "", nil,
 			// V37 valeurs custom telles que fournies (50k contacts != defaut Pro 5k)
 			int64(50000), 5, 5, 1, -1, true, true, false, 365,
+			// V38 : emails_sent_lifetime = 0 (nouveau tenant, pas de custom override)
+			int64(0),
 			sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -562,19 +585,21 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 	purgeEligibleAt := now.Add(25 * 24 * time.Hour)
 	lastTouchedAt := now.Add(-12 * time.Hour)
 
-	// V37 — SELECT etendu avec 9 colonnes pricing. On reflete des defaults
-	// Pro pour ne pas distraire le focus du test (lifecycle V34).
+	// V38 — SELECT etendu avec 9 colonnes pricing V37 + 2 colonnes V38.
+	// On reflete des defaults Pro pour ne pas distraire le focus du test (lifecycle V34).
 	rows := sqlmock.NewRows([]string{
 		"workspace_id", "plan", "plan_source", "status", "monthly_email_quota", "emails_sent_this_month",
 		"last_reset_at", "suspended_at", "suspended_reason", "deleted_at",
 		"restored_at", "purge_eligible_at", "last_touched_at", "lifecycle_reason",
 		"max_contacts", "max_seats", "max_oauth_accounts", "max_custom_domains", "max_active_sequences",
 		"feature_ab_testing", "feature_branding_removed", "feature_white_label", "history_retention_days",
+		"emails_sent_lifetime", "activity_threshold_reached_at",
 		"created_at", "updated_at",
 	}).AddRow("ws-1", "pro", "stripe", "active", int64(10000), int64(0),
 		now, nil, nil, nil,
 		restoredAt, purgeEligibleAt, lastTouchedAt, "audit reason for V34 lifecycle",
 		int64(-1), -1, -1, -1, -1, true, true, false, -1,
+		int64(3), nil, // V38 : 3 mails lifetime, seuil pas atteint
 		now, now)
 
 	mock.ExpectQuery(`
@@ -583,6 +608,7 @@ func TestVeridianPlanRepository_Get_ScansV34LifecycleColumns(t *testing.T) {
 		       restored_at, purge_eligible_at, last_touched_at, lifecycle_reason,
 		       max_contacts, max_seats, max_oauth_accounts, max_custom_domains, max_active_sequences,
 		       feature_ab_testing, feature_branding_removed, feature_white_label, history_retention_days,
+		       emails_sent_lifetime, activity_threshold_reached_at,
 		       created_at, updated_at
 		FROM veridian_plan
 		WHERE workspace_id = $1
@@ -820,38 +846,172 @@ func contains(s, substr string) bool {
 	return false
 }
 
+// incrementEmailsSentReturningSQL est le SQL de IncrementEmailsSentReturning.
+// Partagé entre les tests IncrementEmailsSent et IncrementEmailsSentReturning.
+const incrementEmailsSentReturningSQL = `
+		UPDATE veridian_plan
+		SET emails_sent_this_month = emails_sent_this_month + $2,
+		    emails_sent_lifetime   = emails_sent_lifetime + $2,
+		    updated_at = $3
+		WHERE workspace_id = $1
+		RETURNING emails_sent_lifetime, activity_threshold_reached_at
+	`
+
 func TestVeridianPlanRepository_IncrementEmailsSent(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("increments existing", func(t *testing.T) {
+	t.Run("increments existing — below threshold, no emit", func(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
-		mock.ExpectExec(`
-			UPDATE veridian_plan
-			SET emails_sent_this_month = emails_sent_this_month + $2, updated_at = $3
-			WHERE workspace_id = $1
-		`).WithArgs("ws-1", int64(5), sqlmock.AnyArg()).
-			WillReturnResult(sqlmock.NewResult(0, 1))
+		// 3 mails lifetime après incrément = sous le seuil 5.
+		// activity_threshold_reached_at = NULL (pas encore atteint).
+		rows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(3), nil)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-1", int64(5), sqlmock.AnyArg()).
+			WillReturnRows(rows)
 
 		err := repo.IncrementEmailsSent(ctx, "ws-1", 5)
 		require.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("noop if absent (no error)", func(t *testing.T) {
+	t.Run("noop if absent (sql.ErrNoRows → (0, false, nil))", func(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianPlanRepository(db)
 
-		mock.ExpectExec(`
-			UPDATE veridian_plan
-			SET emails_sent_this_month = emails_sent_this_month + $2, updated_at = $3
-			WHERE workspace_id = $1
-		`).WithArgs("ws-missing", int64(1), sqlmock.AnyArg()).
-			WillReturnResult(sqlmock.NewResult(0, 0))
+		// Workspace absent : RETURNING retourne 0 rows → sql.ErrNoRows → no-op silencieux.
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-missing", int64(1), sqlmock.AnyArg()).
+			WillReturnError(sql.ErrNoRows)
 
 		err := repo.IncrementEmailsSent(ctx, "ws-missing", 1)
 		require.NoError(t, err, "absent workspace should be silent no-op")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+// TestVeridianPlanRepository_IncrementEmailsSentReturning teste la nouvelle
+// méthode atomique qui retourne lifetime + alreadyReached.
+func TestVeridianPlanRepository_IncrementEmailsSentReturning(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("below threshold — returns lifetime, alreadyReached=false", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		rows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(3), nil)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-1", int64(1), sqlmock.AnyArg()).
+			WillReturnRows(rows)
+
+		lifetime, alreadyReached, err := repo.(*veridianPlanRepository).IncrementEmailsSentReturning(ctx, "ws-1", 1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(3), lifetime)
+		assert.False(t, alreadyReached)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("threshold already reached — alreadyReached=true", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		reachedAt := time.Now().UTC()
+		rows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(7), reachedAt)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-1", int64(1), sqlmock.AnyArg()).
+			WillReturnRows(rows)
+
+		lifetime, alreadyReached, err := repo.(*veridianPlanRepository).IncrementEmailsSentReturning(ctx, "ws-1", 1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(7), lifetime)
+		assert.True(t, alreadyReached, "activity_threshold_reached_at IS NOT NULL → alreadyReached")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("workspace absent → (0, false, nil)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-missing", int64(1), sqlmock.AnyArg()).
+			WillReturnError(sql.ErrNoRows)
+
+		lifetime, alreadyReached, err := repo.(*veridianPlanRepository).IncrementEmailsSentReturning(ctx, "ws-missing", 1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), lifetime)
+		assert.False(t, alreadyReached)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error propagated", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-1", int64(1), sqlmock.AnyArg()).
+			WillReturnError(assert.AnError)
+
+		_, _, err := repo.(*veridianPlanRepository).IncrementEmailsSentReturning(ctx, "ws-1", 1)
+		require.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+// TestVeridianPlanRepository_MarkActivityThresholdReached teste la méthode
+// idempotente qui set activity_threshold_reached_at = at WHERE IS NULL.
+func TestVeridianPlanRepository_MarkActivityThresholdReached(t *testing.T) {
+	ctx := context.Background()
+
+	const markSQL = `
+		UPDATE veridian_plan
+		SET activity_threshold_reached_at = $2,
+		    updated_at = $3
+		WHERE workspace_id = $1 AND activity_threshold_reached_at IS NULL
+	`
+
+	t.Run("marks threshold (1 row affected)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		now := time.Now().UTC()
+		mock.ExpectExec(markSQL).
+			WithArgs("ws-1", now, now).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.(*veridianPlanRepository).MarkActivityThresholdReached(ctx, "ws-1", now)
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("idempotent — 0 rows affected (already set), no error", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		now := time.Now().UTC()
+		mock.ExpectExec(markSQL).
+			WithArgs("ws-1", now, now).
+			WillReturnResult(sqlmock.NewResult(0, 0)) // WHERE filtre, no-op
+
+		err := repo.(*veridianPlanRepository).MarkActivityThresholdReached(ctx, "ws-1", now)
+		require.NoError(t, err, "idempotent : 0 rows affected n'est pas une erreur")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error propagated", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		now := time.Now().UTC()
+		mock.ExpectExec(markSQL).
+			WithArgs("ws-1", now, now).
+			WillReturnError(assert.AnError)
+
+		err := repo.(*veridianPlanRepository).MarkActivityThresholdReached(ctx, "ws-1", now)
+		require.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
@@ -873,4 +1033,141 @@ func TestVeridianPlanRepository_ResetMonthlyCounters(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(7), n)
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// stubEmitter est un WebhookEmitter minimal pour les tests seuil+emit.
+// Enregistre les calls Emit sans dépendance gomock dans ce package.
+type stubEmitter struct {
+	calls []stubEmitCall
+}
+
+type stubEmitCall struct {
+	eventType domain.VeridianEvent
+	tenantID  string
+	data      map[string]interface{}
+}
+
+func (e *stubEmitter) Emit(_ context.Context, eventType domain.VeridianEvent, tenantID string, data map[string]interface{}) {
+	e.calls = append(e.calls, stubEmitCall{eventType: eventType, tenantID: tenantID, data: data})
+}
+
+// TestVeridianPlanRepository_IncrementEmailsSent_ThresholdDetection teste la
+// logique de détection du seuil d'activation trial (5 mails) dans
+// IncrementEmailsSent, avec un emitter injecté via WithWebhookEmitter.
+func TestVeridianPlanRepository_IncrementEmailsSent_ThresholdDetection(t *testing.T) {
+	ctx := context.Background()
+
+	const markSQL = `
+		UPDATE veridian_plan
+		SET activity_threshold_reached_at = $2,
+		    updated_at = $3
+		WHERE workspace_id = $1 AND activity_threshold_reached_at IS NULL
+	`
+
+	t.Run("5th mail triggers emit and mark", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		// IncrementEmailsSentReturning retourne lifetime=5, alreadyReached=false
+		// → seuil franchi → MarkActivityThresholdReached + Emit attendus.
+		returnRows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(5), nil)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-trial", int64(1), sqlmock.AnyArg()).
+			WillReturnRows(returnRows)
+		// MarkActivityThresholdReached
+		mock.ExpectExec(markSQL).
+			WithArgs("ws-trial", sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+
+		require.Len(t, emitter.calls, 1, "exactly 1 emit on 5th mail")
+		assert.Equal(t, domain.EventTenantActivityThresholdReached, emitter.calls[0].eventType)
+		assert.Equal(t, "ws-trial", emitter.calls[0].tenantID)
+		assert.Equal(t, int64(5), emitter.calls[0].data["emails_sent_lifetime"])
+		assert.Equal(t, domain.ActivityThresholdEmails, emitter.calls[0].data["threshold"])
+	})
+
+	t.Run("6th mail — already reached, no emit", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		// lifetime=6, alreadyReached=true → pas de MarkActivityThresholdReached ni Emit.
+		reachedAt := time.Now().UTC()
+		returnRows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(6), reachedAt)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-trial", int64(1), sqlmock.AnyArg()).
+			WillReturnRows(returnRows)
+
+		err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+		assert.Empty(t, emitter.calls, "no emit when already reached")
+	})
+
+	t.Run("below threshold — no emit (lifetime=3)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		returnRows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(3), nil)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-trial", int64(1), sqlmock.AnyArg()).
+			WillReturnRows(returnRows)
+
+		err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+		assert.Empty(t, emitter.calls, "no emit below threshold")
+	})
+
+	t.Run("nil emitter — mark still happens, no panic", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		// Pas d'emitter (WithWebhookEmitter non appelé) = emitter nil
+		repo := NewVeridianPlanRepository(db)
+
+		returnRows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(5), nil)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-trial", int64(1), sqlmock.AnyArg()).
+			WillReturnRows(returnRows)
+		// MarkActivityThresholdReached est appelé même sans emitter.
+		mock.ExpectExec(markSQL).
+			WithArgs("ws-trial", sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		assert.NotPanics(t, func() {
+			err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
+			require.NoError(t, err)
+		})
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("mark fails → best-effort, no error returned", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		emitter := &stubEmitter{}
+		repo := WithWebhookEmitter(NewVeridianPlanRepository(db), emitter, nil)
+
+		returnRows := sqlmock.NewRows([]string{"emails_sent_lifetime", "activity_threshold_reached_at"}).
+			AddRow(int64(5), nil)
+		mock.ExpectQuery(incrementEmailsSentReturningSQL).
+			WithArgs("ws-trial", int64(1), sqlmock.AnyArg()).
+			WillReturnRows(returnRows)
+		mock.ExpectExec(markSQL).
+			WithArgs("ws-trial", sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnError(assert.AnError)
+
+		err := repo.IncrementEmailsSent(ctx, "ws-trial", 1)
+		require.NoError(t, err, "mark failure est best-effort — pas d'erreur retournée")
+		// Emit ne doit pas être appelé si mark a échoué.
+		assert.Empty(t, emitter.calls, "no emit if mark failed")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
