@@ -24,7 +24,13 @@ services:
       POSTGRES_DB: notifuse_system
     volumes:
       - notifuse-staging-db-data:/var/lib/postgresql/data
-    command: postgres -c 'max_connections=200' -c 'max_wal_size=1GB' -c 'checkpoint_timeout=10min'
+    # 2026-05-21 — bump max_connections 200 → 400 : staging accumule ~50-100
+    # workspaces × pool app 25 conns → satures les 200 dès qu'on a 8+ ws
+    # actifs en concurrent (cf. crash CI 26237259735). 400 = 4GB resident
+    # postgres dans la limite 1024M du container, soutient ~16 ws concurrent
+    # à pleine charge. À combiner avec ENVIRONMENT=staging-test côté app
+    # (TODO) ou réduction DB_MAX_CONNECTIONS_PER_DB plus tard.
+    command: postgres -c 'max_connections=400' -c 'max_wal_size=1GB' -c 'checkpoint_timeout=10min'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -33,10 +39,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1024M
+          memory: 2048M
           cpus: "1.0"
         reservations:
-          memory: 256M
+          memory: 512M
           cpus: "0.1"
 
   notifuse-staging:
