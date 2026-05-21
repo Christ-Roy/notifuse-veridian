@@ -1604,3 +1604,13 @@ func TestLookupByEmail_ServiceExposed(t *testing.T) {
 	}
 	assert.True(t, true, "compile-time check passed: LookupByEmail exists on veridianService")
 }
+
+// TestAttachMember_ServiceExposed : compile-time check que AttachMember est
+// bien dans le contrat veridianService (Constitution §1 mapping 1-pour-1).
+// Le contenu fonctionnel est couvert par veridian_attach_member_service_test.go.
+func TestAttachMember_ServiceExposed(t *testing.T) {
+	var _ func(svc *veridianService) interface{} = func(svc *veridianService) interface{} {
+		return svc.AttachMember
+	}
+	assert.True(t, true, "compile-time check passed: AttachMember exists on veridianService")
+}
