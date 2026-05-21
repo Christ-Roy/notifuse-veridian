@@ -1722,3 +1722,23 @@ func TestVeridianHandleTransferOwner_RouteRegistered(t *testing.T) {
 	assert.NotEmpty(t, pattern, "POST /api/tenants/{id}/transfer-owner should be registered")
 	assert.Contains(t, pattern, "transfer-owner")
 }
+// === Veridian patch — lot O (2026-05-21) ===
+// Anti-regression : la route GET /api/veridian/admin/pricing-cache doit
+// rester enregistree dans le mux Veridian. Si quelqu'un supprime le
+// mux.Handle, ce test casse en CI (vs detection tardive en e2e).
+// Le test detail du handler est dans veridian_pricing_cache_handler_test.go.
+func TestVeridianHandlePricingCache_RouteRegisteredInMainHandler(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/veridian/admin/pricing-cache", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "GET /api/veridian/admin/pricing-cache should be registered")
+	assert.Contains(t, pattern, "pricing-cache")
+}
+

@@ -35,6 +35,10 @@ type VeridianHandler struct {
 	logger           logger.Logger
 	paywallCache     *middleware.PaywallCache              // Peut etre nil (mode self-hosted sans paywall)
 	idempotencyRepo  domain.VeridianIdempotencyRepository // Peut etre nil (passthrough du middleware)
+	// pricingSync est le service de sync catalogue pricing Hub (lot O 2026-05-21).
+	// Peut etre nil (mode self-hosted sans Hub) : handlePricingCache retourne
+	// alors 503. Cf. veridian_pricing_cache_handler.go.
+	pricingSync PricingCacheProvider
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -140,6 +144,9 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Mutateurs : HMAC + Idempotency.
 	mux.Handle("POST /api/tenants/{id}/rotate-api-key", writeRoute(h.handleRotateAPIKey))
 	mux.Handle("POST /api/tenants/{id}/transfer-owner", writeRoute(h.handleTransferOwner))
+	// === Veridian patch — lot O (2026-05-21) === Endpoint debug pour le
+	// cache pricing sync (catalog Hub mirror). Auth HMAC, read-only.
+	mux.Handle("GET /api/veridian/admin/pricing-cache", hmac(http.HandlerFunc(h.handlePricingCache)))
 	// === Veridian patch V37 === Limites + dimensions feature d'un tenant
 	// (lot 7 ticket pricing-plans-implementation). Source de verite pour la
 	// console UI (widgets quota) et le paywall middleware. Auth HMAC.

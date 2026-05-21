@@ -128,7 +128,8 @@ type App struct {
 	veridianAPIKeyGraceRepo  domain.VeridianAPIKeyGraceRepository // Lot K — grace period rotate-api-key
 	veridianService          domain.VeridianService
 	veridianWebhookEmitter   domain.WebhookEmitter
-	veridianPaywallCache     *middleware.PaywallCache // partage middleware paywall + handler invalidate
+	veridianPaywallCache     *middleware.PaywallCache              // partage middleware paywall + handler invalidate
+	veridianPricingSync      *service.VeridianPricingSyncService   // catalogue pricing Hub (lot O 2026-05-21)
 
 	// Services
 	authService                      *service.AuthService
@@ -1279,6 +1280,16 @@ func (a *App) InitHandlers() error {
 	veridianHandler := httpHandler.NewVeridianHandler(a.veridianService, a.logger)
 	veridianHandler.SetPaywallCache(a.veridianPaywallCache)
 	veridianHandler.SetIdempotencyRepo(a.veridianIdempotencyRepo)
+
+	// === Veridian patch — lot O (2026-05-21) ===
+	// Cache pricing Hub : fetch + cron 1h, log warn divergence. Best-effort
+	// (si Hub down, on garde le cache precedent et on continue avec les
+	// valeurs hardcodees `domain.DefaultPlanLimits`). Le service est demarre
+	// plus bas (cf. bloc "Start Veridian pricing sync"). Le handler debug
+	// /api/veridian/admin/pricing-cache expose le snapshot du cache.
+	a.veridianPricingSync = service.NewVeridianPricingSyncService("", nil, a.logger, 0)
+	veridianHandler.SetPricingSync(a.veridianPricingSync)
+
 	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
 
 	// Endpoint generateMagicLink (auth API key tenant Notifuse).
@@ -1424,6 +1435,18 @@ func (a *App) Start() error {
 		)
 		cleanup.Start(a.GetShutdownContext())
 		a.logger.Info("Veridian idempotency cleanup scheduler started (24h interval)")
+	}
+
+	// === Veridian patch lot O — 2026-05-21 — pricing sync Hub ===
+	// Fetch boot + cron 1h du catalogue pricing canonique expose par le Hub
+	// (GET hub.veridian.site/api/pricing/plans). Best-effort : si Hub down,
+	// on garde le cache precedent et l'app continue de tourner avec ses
+	// valeurs hardcodees `domain.DefaultPlanLimits`. Reconcile (log warn si
+	// divergence) tourne a chaque fetch reussi.
+	// Cf. todo/2026-05-21-consume-hub-pricing-api.md
+	if a.veridianPricingSync != nil {
+		a.veridianPricingSync.Start(a.GetShutdownContext())
+		a.logger.Info("Veridian pricing sync scheduler started (1h interval)")
 	}
 
 	// Start SMTP bridge server if enabled
