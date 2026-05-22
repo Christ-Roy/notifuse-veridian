@@ -11,14 +11,25 @@ export class ApiError extends Error {
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
+// Endpoints publics (token-based, hors session) : un 401 y signifie "token
+// invalide/expiré", pas "session expirée". Le composant appelant gère
+// l'erreur lui-même (ex: AcceptInvitationPage affiche un <Result>), on ne
+// doit donc PAS rediriger vers signin sur leur 401.
+const PUBLIC_TOKEN_ENDPOINTS = ['/api/workspaces.verifyInvitationToken']
+
+async function handleResponse<T>(response: Response, endpoint: string): Promise<T> {
   if (!response.ok) {
     const errorData = await response.json().catch(() => null)
 
+    const isPublicTokenEndpoint = PUBLIC_TOKEN_ENDPOINTS.some((path) =>
+      endpoint.startsWith(path)
+    )
+
     if (
-      response.status === 401 ||
-      errorData?.error === 'Session expired' ||
-      errorData?.message === 'Session expired'
+      !isPublicTokenEndpoint &&
+      (response.status === 401 ||
+        errorData?.error === 'Session expired' ||
+        errorData?.message === 'Session expired')
     ) {
       localStorage.removeItem('auth_token')
 
@@ -50,7 +61,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers
   })
 
-  return handleResponse<T>(response)
+  return handleResponse<T>(response, endpoint)
 }
 
 export const api = {
