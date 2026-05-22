@@ -10,7 +10,7 @@
 // Code        : internal/http/middleware/veridian_paywall_softdeleted.go
 //               internal/http/middleware/veridian_paywall_obfuscation.go
 //
-// Conventions Lot N : tids `t-`, afterEach cleanup, tag @regression.
+// Conventions Lot N : tids `tst`, afterEach cleanup, tag @regression.
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
@@ -100,7 +100,7 @@ test.afterEach(async () => {
 
 test.describe('@regression paywall-obfuscation — middleware soft-deleted', () => {
   test('tenant active : pas d obfuscation, pas de headers, response normale', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
@@ -115,7 +115,7 @@ test.describe('@regression paywall-obfuscation — middleware soft-deleted', () 
   });
 
   test('tenant soft-deleted + read /api/contacts.list : obfuscation 33% + headers UI', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
@@ -173,7 +173,7 @@ test.describe('@regression paywall-obfuscation — middleware soft-deleted', () 
   });
 
   test('tenant soft-deleted + write /api/transactional.send : 402 + body tenant_soft_deleted + restore_url', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
@@ -215,7 +215,7 @@ test.describe('@regression paywall-obfuscation — middleware soft-deleted', () 
     // soft-deletant un tenant et en faisant un GET sur un endpoint qui
     // expose un champ obfuscable, puis en cherchant que les bullets sont
     // bien presents partout.
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
@@ -237,7 +237,7 @@ test.describe('@regression paywall-obfuscation — middleware soft-deleted', () 
   });
 
   test('headers UI presents sur soft-deleted, absents sur tenant active (apres restore)', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 

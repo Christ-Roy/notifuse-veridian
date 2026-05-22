@@ -9,7 +9,7 @@
 // Handler     : internal/http/veridian_handler.go:handleAttachMember
 //
 // Conventions Lot N :
-//   - tids prefixe `t-` + timestamp court
+//   - tids prefixe `tst` + timestamp court
 //   - afterEach cleanup via /api/veridian/admin/wipe-test-tenants
 //   - Tag @regression sur tous les tests
 
@@ -89,7 +89,7 @@ test.afterEach(async () => {
 
 test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantId}/attach-member', () => {
   test('happy path : provision puis attach-member user X → 201 + login_url + user dans members_count', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
@@ -121,7 +121,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
   });
 
   test('idempotence : re-attach memes params → 200 already_member=true', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
@@ -152,7 +152,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
   });
 
   test('role conflict : re-attach meme user role different → UPDATE role + 200', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
@@ -186,7 +186,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
   });
 
   test('tenant inconnu : 404', async () => {
-    const ghostTid = `t-ghost-${Date.now().toString(36).slice(-4)}`;
+    const ghostTid = `tstghost${Date.now().toString(36).slice(-4)}`;
     // PAS de provisioned.push → ce tenant n'existe pas, rien a wiper.
 
     const r = await hmacFetch(`/api/tenants/${ghostTid}/attach-member`, 'POST', {
@@ -202,7 +202,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
   });
 
   test('HMAC invalide : 401', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
@@ -229,7 +229,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
   });
 
   test('HMAC drift > 5min : 401', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
@@ -255,7 +255,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
   });
 
   test('body invalide / champs manquants : 400', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 

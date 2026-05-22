@@ -8,7 +8,7 @@
 // Spec parent : todo/done/2026-05-20-add-discovery-endpoint-by-email.md
 // Handler     : internal/http/veridian_discovery_handler.go
 //
-// Conventions Lot N : tids `t-`, afterEach cleanup, tag @regression.
+// Conventions Lot N : tids `tst`, afterEach cleanup, tag @regression.
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
@@ -82,8 +82,8 @@ test.describe('@regression discovery-by-email — POST /api/users/by-email', () 
     // Notifuse expose /api/users/by-email qui resout les workspaces partages par
     // un meme user humain (cf. handler).
     const userEmail = `t-multi-${Date.now().toString(36).slice(-6)}@discovery.test`;
-    const tid1 = `t-${Date.now().toString(36).slice(-6)}a`;
-    const tid2 = `t-${Date.now().toString(36).slice(-6)}b`;
+    const tid1 = `tst${Date.now().toString(36).slice(-6)}a`;
+    const tid2 = `tst${Date.now().toString(36).slice(-6)}b`;
     provisioned.push(tid1, tid2);
 
     await provisionTenant(tid1, userEmail, 'free');
@@ -116,7 +116,7 @@ test.describe('@regression discovery-by-email — POST /api/users/by-email', () 
   });
 
   test('user inconnu : found:false + workspaces:[]', async () => {
-    const ghostEmail = `t-ghost-${Date.now().toString(36).slice(-6)}@discovery.test`;
+    const ghostEmail = `tstghost${Date.now().toString(36).slice(-6)}@discovery.test`;
     const r = await hmacFetch('/api/users/by-email', 'POST', { email: ghostEmail });
     // Spec : toujours 200 (jamais 404) car la decouverte est best-effort
     expect(r.status, await r.text()).toBe(200);

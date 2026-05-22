@@ -18,7 +18,7 @@
 //         - /api/setup.status est exempté du middleware (toujours 200)
 //         - /api/veridian/admin/* est exempté (toujours accessible Hub)
 //
-// Conventions Lot N : tids `t-`, afterEach cleanup, tag @regression.
+// Conventions Lot N : tids `tst`, afterEach cleanup, tag @regression.
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
@@ -111,7 +111,7 @@ test.afterEach(async () => {
 
 test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
   test('tenant fresh (post-provision) : /api/setup.status 200, writes passent', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
@@ -135,7 +135,7 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
     // Invariant code : isHubSyncWriteBlock retourne false pour /api/veridian/*.
     // On verifie qu'un POST cache/invalidate sur un tenant arbitraire passe
     // toujours (le middleware HMAC est applique mais pas le gate hub_sync).
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'pro');
 
@@ -151,7 +151,7 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
         "puis verifie 503 sur write + read OK. Sans cette ENV, le contrat est verifie en unit test (veridian_paywall_test.go).",
     );
 
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
@@ -193,7 +193,7 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
       'STAGING_DB_PSQL_URL required for hub_sync_dead simulation. Voir test precedent.',
     );
 
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'pro');
 
@@ -214,7 +214,7 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
       'STAGING_DB_PSQL_URL required for recovery scenario. Voir test precedent.',
     );
 
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 

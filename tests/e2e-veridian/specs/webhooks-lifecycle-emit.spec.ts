@@ -21,7 +21,7 @@
 //     Le test demarre un http.Server qui ecoute sur ce PORT, recoit les webhooks,
 //     verifie les signatures HMAC + payloads.
 //
-// Conventions Lot N : tids `t-`, afterEach cleanup, tag @regression.
+// Conventions Lot N : tids `tst`, afterEach cleanup, tag @regression.
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
@@ -196,7 +196,7 @@ test.afterEach(async () => {
 
 test.describe('@regression webhooks lifecycle — events emis vers Hub mock', () => {
   test('soft-delete → tenant.soft_deleted avec deleted_at + purge_eligible_at RFC3339', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
@@ -213,7 +213,7 @@ test.describe('@regression webhooks lifecycle — events emis vers Hub mock', ()
   });
 
   test('restore → tenant.restored avec restored_at RFC3339', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
@@ -231,7 +231,7 @@ test.describe('@regression webhooks lifecycle — events emis vers Hub mock', ()
   });
 
   test('touch → tenant.touched avec touched_at RFC3339', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
@@ -245,7 +245,7 @@ test.describe('@regression webhooks lifecycle — events emis vers Hub mock', ()
   });
 
   test('quota_exceeded : N+1 envois sur quota=N → emit 1× + 2e emit meme mois = pas re-emit', async () => {
-    const tid = `t-${Date.now().toString(36).slice(-6)}`;
+    const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'free');
 
