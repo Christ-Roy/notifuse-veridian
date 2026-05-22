@@ -6,6 +6,27 @@
 > **Spec parent** : `veridian-hub/todo/2026-05-20-fallback-login-apps-redirect-hub.md`
 > **Créé** : 2026-05-20
 
+## ⏸️ STATUT 2026-05-23 — BLOQUÉ par Hub
+
+**Bloqué par** : le Hub n'a pas livré le support `?next=<url>` sur
+`app.veridian.site/login`. Vérifié 2026-05-23 par agent Notifuse :
+aucune trace dans `veridian-hub/app/login/` ni
+`veridian-hub/app/api/auth/[...nextauth]/`.
+
+L'OAuth direct Hub fonctionne (Google + Microsoft livrés 2026-05-20),
+mais sans `?next=` le bouton côté Notifuse enverrait l'utilisateur sur
+le Hub et **il y resterait** au lieu de revenir sur Notifuse → flow
+inutilisable.
+
+**Action attendue** : l'agent Hub livre le `?next=` (cf. ticket parent
+mis à jour). Estimation Hub ~30-45 min. Une fois livré, ce ticket
+Notifuse devient trivial (0.5j max).
+
+**À reprendre dès que** : `veridian-hub/todo/2026-05-20-fallback-login-apps-redirect-hub.md`
+passe dans `done/`.
+
+---
+
 ## Demande
 
 Sur `notifuse.app.veridian.site/signin` (page login fallback), ajouter
