@@ -198,3 +198,16 @@ workspaces orphelins (présents dans `workspaces` mais sans plan).
 
 Ces 2 étapes restantes sont du refactor frontend Playwright, indépendant du
 fix backend lot G. Priorité P3 (le bug pool DB orphelins est résolu).
+
+---
+
+## ✅ CLÔTURE 2026-05-22 — toutes les étapes livrées
+
+- Étape 1 (naming `tst` unifié) : ✅ Lot N + Lot N suite — 14/16 specs
+  (les 2 non concernées = canary-witness + prod-safe, read-only, ne
+  créent aucun tenant)
+- Étape 2 (afterEach cleanup) : ✅ Lot N + Lot N suite, 11 specs créatrices
+- Étape 3 (safety prefixes étendus) : ✅ livré avant (commit aca10de0)
+- Étape 4 (canary-witness spec) : ✅ livré avant (commit 3b197d60)
+
+En prod via v41.0-veridian. Ticket clos.
