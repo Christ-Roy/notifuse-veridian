@@ -219,3 +219,34 @@ func TestVeridianWebhookEmitter_DoesNotBlock(t *testing.T) {
 
 	assert.Less(t, elapsed, 50*time.Millisecond, "Emit must return immediately, took %v", elapsed)
 }
+
+// TestVeridianWebhookEmitter_SuccessFirstTry_NoRetry vérifie qu'un succès
+// HTTP 200 au 1er essai n'entraîne AUCUN retry — le webhook delivery s'arrête
+// immédiatement (le log Info "event delivered" est émis dans ce même bloc,
+// cf. veridian_webhook_emitter.go sendWithRetry). Régression-guard : si un
+// jour le `return` après succès saute, ce test détecte les appels multiples.
+func TestVeridianWebhookEmitter_SuccessFirstTry_NoRetry(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	emitter := NewVeridianWebhookEmitter(server.URL, "secret", logger.NewLogger())
+	emitter.Emit(t.Context(), domain.EventTenantProvisioned, "ws-1", map[string]interface{}{"plan": "pro"})
+
+	// Laisser la goroutine sendWithRetry finir.
+	deadline := time.After(2 * time.Second)
+	for atomic.LoadInt32(&calls) == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("webhook never delivered")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	// Petite marge pour s'assurer qu'aucun retry tardif n'arrive.
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&calls),
+		"un succès 200 au 1er essai ne doit déclencher AUCUN retry")
+}

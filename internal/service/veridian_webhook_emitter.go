@@ -127,6 +127,20 @@ func (e *veridianWebhookEmitter) sendWithRetry(eventID string, eventType domain.
 
 		status, err := e.sendOnce(body)
 		if err == nil && status >= 200 && status < 300 {
+			// === Veridian patch 2026-05-22 — log Info au succès ===
+			// Permet aux tests E2E (webhooks-lifecycle-emit.spec.ts) de
+			// vérifier qu'un event est bien parti via `docker logs | grep`,
+			// sans avoir besoin d'un mock receiver côté staging. Discret
+			// (1 ligne Info/event) — utile aussi en debug prod.
+			if e.logger != nil {
+				e.logger.WithFields(map[string]interface{}{
+					"event_id":   eventID,
+					"event_type": string(eventType),
+					"tenant_id":  tenantID,
+					"status":     status,
+					"attempt":    attempt + 1,
+				}).Info("veridian webhook: event delivered")
+			}
 			return
 		}
 

@@ -25,12 +25,38 @@ import * as crypto from 'crypto';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
-// Optionnel : URL postgres direct staging pour forcer last_hub_sync_at.
-// Si non défini, on skip les tests qui nécessitent la manipulation DB.
+// Manipulation DB pour forcer last_hub_sync_at. 2 modes supportés :
+//  - STAGING_DB_PSQL_URL    : URL postgres directe (psql "url" -c ...)
+//  - STAGING_DB_CONTAINER   : nom du container postgres → exécution via
+//    `docker exec <container> psql -U postgres -d notifuse_system -c ...`.
+//    Mode privilégié en CI self-hosted : le runner tourne sur dev-pub à
+//    côté du container, pas besoin d'exposer le port 5432.
+// Si aucun n'est défini, skip des tests qui manipulent la DB (le contrat
+// reste couvert par les unit tests veridian_paywall_test.go).
 const STAGING_DB_PSQL_URL = process.env.STAGING_DB_PSQL_URL;
+const STAGING_DB_CONTAINER = process.env.STAGING_DB_CONTAINER;
+const DB_MANIP_AVAILABLE = !!(STAGING_DB_PSQL_URL || STAGING_DB_CONTAINER);
 
 if (!NOTIFUSE_URL || !HUB_API_SECRET) {
   throw new Error('NOTIFUSE_URL and HUB_API_SECRET env vars required');
+}
+
+/**
+ * Exécute un UPDATE SQL sur la DB system staging. Supporte les 2 modes
+ * (STAGING_DB_PSQL_URL ou STAGING_DB_CONTAINER via docker exec).
+ */
+async function execStagingSQL(sql: string): Promise<void> {
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execp = promisify(exec);
+  if (STAGING_DB_CONTAINER) {
+    const escaped = sql.replace(/'/g, `'\\''`);
+    await execp(
+      `docker exec ${STAGING_DB_CONTAINER} psql -U postgres -d notifuse_system -c '${escaped}'`,
+    );
+  } else {
+    await execp(`psql "${STAGING_DB_PSQL_URL}" -c "${sql}"`);
+  }
 }
 
 function signHMAC(body: string) {
@@ -145,10 +171,11 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
 
   test('hub_sync_dead writes → 503 + Retry-After + error_code=hub_sync_dead, reads passent', async () => {
     test.skip(
-      !STAGING_DB_PSQL_URL,
-      'STAGING_DB_PSQL_URL not set. Pour run : exporter STAGING_DB_PSQL_URL (psql://) ' +
-        'avec accès à veridian_plan. Le test execute UPDATE last_hub_sync_at = NOW - 73h ' +
-        "puis verifie 503 sur write + read OK. Sans cette ENV, le contrat est verifie en unit test (veridian_paywall_test.go).",
+      !DB_MANIP_AVAILABLE,
+      'DB manip non disponible (ni STAGING_DB_PSQL_URL ni STAGING_DB_CONTAINER). ' +
+        'Le test execute UPDATE last_hub_sync_at = NOW - 73h puis verifie 503 sur ' +
+        'write + read OK. Sans accès DB, le contrat est verifie en unit test ' +
+        '(veridian_paywall_test.go).',
     );
 
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
@@ -156,13 +183,9 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
     const { api_key } = await provisionTenant(tid, 'pro');
 
     // === DB manipulation : last_hub_sync_at = NOW - 73h ===
-    // On utilise psql via shell pour eviter une dep node-postgres dans le worktree.
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execp = promisify(exec);
-
-    const sql = `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`;
-    await execp(`psql "${STAGING_DB_PSQL_URL}" -c "${sql}"`);
+    await execStagingSQL(
+      `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`,
+    );
 
     // Invalider le cache paywall (sinon le timestamp obsolete reste en memoire 60s)
     await invalidatePaywallCache(tid);
@@ -189,19 +212,17 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
 
   test('hub_sync_dead : /api/setup.status reste 200 (route systeme exempt)', async () => {
     test.skip(
-      !STAGING_DB_PSQL_URL,
-      'STAGING_DB_PSQL_URL required for hub_sync_dead simulation. Voir test precedent.',
+      !DB_MANIP_AVAILABLE,
+      'DB manip non disponible (STAGING_DB_PSQL_URL/STAGING_DB_CONTAINER). Voir test precedent.',
     );
 
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'pro');
 
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execp = promisify(exec);
-    const sql = `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`;
-    await execp(`psql "${STAGING_DB_PSQL_URL}" -c "${sql}"`);
+    await execStagingSQL(
+      `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`,
+    );
     await invalidatePaywallCache(tid);
 
     const setupResp = await fetch(`${NOTIFUSE_URL}/api/setup.status`);
@@ -210,8 +231,8 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
 
   test('hub_sync recovery : Touch tenant → last_hub_sync_at refresh → writes repassent', async () => {
     test.skip(
-      !STAGING_DB_PSQL_URL,
-      'STAGING_DB_PSQL_URL required for recovery scenario. Voir test precedent.',
+      !DB_MANIP_AVAILABLE,
+      'DB manip non disponible (STAGING_DB_PSQL_URL/STAGING_DB_CONTAINER). Voir test precedent.',
     );
 
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
@@ -219,11 +240,9 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
     const { api_key } = await provisionTenant(tid, 'pro');
 
     // 1. Simuler dead
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execp = promisify(exec);
-    const sqlDead = `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`;
-    await execp(`psql "${STAGING_DB_PSQL_URL}" -c "${sqlDead}"`);
+    await execStagingSQL(
+      `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`,
+    );
     await invalidatePaywallCache(tid);
 
     let send = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {

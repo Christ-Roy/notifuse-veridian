@@ -742,6 +742,12 @@ jobs:
       NOTIFUSE_URL: https://notifuse.staging.veridian.site
       HUB_URL: https://saas-hub.staging.veridian.site
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
+      # === Veridian patch 2026-05-22 — activer les tests E2E hub-sync-resilience ===
+      # Le runner self-hosted tourne sur dev-pub, à côté du container postgres
+      # staging. STAGING_DB_CONTAINER permet à hub-sync-resilience.spec.ts de
+      # faire `docker exec ... psql` pour forcer last_hub_sync_at = NOW - 73h
+      # sans exposer le port 5432. Active les 3 tests dead/recovery jusqu'ici skip.
+      STAGING_DB_CONTAINER: notifuse-staging-db
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -13,13 +13,18 @@
 //
 // Strategie de test :
 //   - Test 100% staging impossible : HUB_WEBHOOK_URL pointe vers Hub prod/staging,
-//     l'agent E2E ne peut pas l'intercepter.
-//   - Solution : test.skip(!process.env.MOCK_WEBHOOK_RECEIVER_URL).
-//     Pour lancer ces tests, executer Notifuse local avec
-//     `HUB_WEBHOOK_URL=http://localhost:PORT/webhook HUB_WEBHOOK_SECRET=test-secret`
-//     puis `MOCK_WEBHOOK_RECEIVER_URL=http://localhost:PORT MOCK_WEBHOOK_SECRET=test-secret`.
-//     Le test demarre un http.Server qui ecoute sur ce PORT, recoit les webhooks,
-//     verifie les signatures HMAC + payloads.
+//     l'agent E2E ne peut pas l'intercepter (re-booter staging avec
+//     HUB_WEBHOOK_URL → mock casserait les autres specs).
+//   - Couverture de remplacement (suffisante, ce N'EST PAS un trou) :
+//       1. UNIT veridian_service_test.go : chaque mutation appelle Emit().
+//       2. UNIT veridian_webhook_emitter_test.go : POST HTTP signe HMAC +
+//          retry + payload RFC3339.
+//       3. OBSERVABILITE : depuis 2026-05-22 l'emitter logge
+//          "veridian webhook: event delivered" (Info) au succes → verifiable
+//          via `docker logs notifuse-staging | grep` en debug.
+//   - Ces tests mock-receiver restent dispo pour un run LOCAL : Notifuse local
+//     avec HUB_WEBHOOK_URL=http://localhost:PORT/webhook + MOCK_WEBHOOK_RECEIVER_URL
+//     + MOCK_WEBHOOK_SECRET. Skip en CI staging (architecture incompatible).
 //
 // Conventions Lot N : tids `tst`, afterEach cleanup, tag @regression.
 
