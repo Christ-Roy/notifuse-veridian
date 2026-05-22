@@ -92,6 +92,32 @@ jobs:
           echo "BASE_REF=$BASE_REF"
           scripts/ci/check-test-mapping.sh
 
+  # === Veridian patch — garde-fou « la console boote » (incident 2026-05-22) ===
+  # Build la console + analyse statique du dist/ (intégrité des chunks, chunk
+  # React atomique). Un manualChunks mal découpé peut mettre la console morte
+  # au boot, invisible pour les tests unitaires Vitest/jsdom. Ce job est en
+  # `needs` de `build` → une console cassée bloque la construction de l'image.
+  console-build:
+    name: Console build & intégrité chunks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install console deps
+        run: |
+          if [ -d console ] && [ -f console/package-lock.json ]; then
+            cd console && npm ci --no-audit --no-fund
+          else
+            echo "console/ absent ou sans lockfile — skip"
+            exit 0
+          fi
+      - name: Build console + check intégrité (check-console-build.sh)
+        run: |
+          chmod +x scripts/ci/check-console-build.sh
+          scripts/ci/check-console-build.sh
+
   compose-validate:
     name: Compose validate (staging + prod)
     runs-on: ubuntu-latest
@@ -368,7 +394,7 @@ jobs:
 
   build:
     name: Build & push image (self-hosted)
-    needs: [test-go, cve-scan, trivy-fs, gitleaks]
+    needs: [test-go, cve-scan, trivy-fs, gitleaks, console-build]
     runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read

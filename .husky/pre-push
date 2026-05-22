@@ -68,3 +68,28 @@ if ! "$SCRIPT"; then
   echo "  Corrige les violations puis re-tente."
   exit 1
 fi
+
+# ─── Garde-fou « la console boote » ─────────────────────────────────────────
+# Incident 2026-05-22 : un manualChunks Vite mal configuré a mis la console
+# prod morte au boot, invisible pour les 225 tests unitaires. check-console-
+# build.sh analyse le dist/ buildé (intégrité des chunks, chunk React
+# atomique). Lancé UNIQUEMENT si le push touche console/ — sinon on ne
+# rebuild pas la console pour rien sur un push purement backend.
+
+CONSOLE_CHECK="scripts/ci/check-console-build.sh"
+
+if git diff --name-only "$BASE_REF" HEAD 2>/dev/null | grep -q '^console/'; then
+  echo
+  echo "${GREEN}── Husky pre-push : console/ modifié → check build console ──${NC}"
+  if [ ! -x "$CONSOLE_CHECK" ]; then
+    echo "${RED}✗ $CONSOLE_CHECK introuvable ou non exécutable — push refusé.${NC}"
+    echo "  Run: chmod +x $CONSOLE_CHECK"
+    exit 1
+  fi
+  if ! "$CONSOLE_CHECK"; then
+    echo
+    echo "${RED}✗ Push refusé : le build de la console est cassé ou structurellement risqué.${NC}"
+    echo "  ${YELLOW}Une console qui ne boote pas = prod morte. Corrige avant de pousser.${NC}"
+    exit 1
+  fi
+fi
