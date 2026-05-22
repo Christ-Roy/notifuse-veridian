@@ -39,6 +39,7 @@ import {
 import { VeridianBrandHeaderLink } from '../components/veridian_brand_header_link'
 import { VeridianBrandFooter } from '../components/veridian_brand_footer'
 import { VeridianSoftDeleteBanner } from '../components/veridian_soft_delete_banner'
+import { VeridianLogo } from '../components/veridian_logo'
 
 const { Content, Sider, Header } = Layout
 
@@ -421,20 +422,16 @@ export function WorkspaceLayout() {
           >
             <div
               style={{
-                padding: '16px 0 16px 27px',
-                textAlign: 'center',
+                height: '64px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                paddingLeft: collapsed ? 0 : 24,
                 borderBottom: '1px solid #f0f0f0'
               }}
             >
-              <img
-                src={collapsed ? '/console/icon.png' : '/console/logo.png'}
-                alt=""
-                style={{
-                  height: '31px',
-                  width: 'auto',
-                  transition: 'height 0.2s'
-                }}
-              />
+              {/* === Veridian patch — wordmark veridian.mail (ticket DA 2026-05-22) */}
+              <VeridianLogo collapsed={collapsed} size={19} />
             </div>
             <Menu
               mode="inline"

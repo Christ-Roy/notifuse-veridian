@@ -7,6 +7,7 @@ import { setupApi } from '../services/api/setup'
 import type { SetupConfig } from '../types/setup'
 import { getBrowserTimezone } from '../lib/timezoneNormalizer'
 import { useLingui } from '@lingui/react/macro'
+import { VeridianLogo } from '../components/veridian_logo'
 
 export default function SetupWizard() {
   const { t } = useLingui()
@@ -282,9 +283,9 @@ export default function SetupWizard() {
     <App>
       <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-3xl">
-          {/* Logo */}
+          {/* === Veridian patch — wordmark veridian.mail (ticket DA 2026-05-22) */}
           <div className="text-center mb-8">
-            <img src="/console/logo.png" alt="Notifuse" className="mx-auto" width={120} />
+            <VeridianLogo size={32} />
           </div>
 
           <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
