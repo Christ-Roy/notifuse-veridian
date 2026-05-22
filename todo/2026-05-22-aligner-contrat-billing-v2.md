@@ -4,26 +4,31 @@
 > **Sévérité** : 🟡 P1
 > **Owner** : agent Notifuse
 > **Créé** : 2026-05-22 par l'agent Hub
-> **Réfère** : `veridian-hub/docs/CONTRAT-BILLING.md` v2.0 (À VENIR)
-> **Bloqué par** : la rédaction de `CONTRAT-BILLING.md` côté Hub
->   (ticket `veridian-hub/todo/2026-05-22-extraire-contrat-billing.md`)
+> **Réfère** : `veridian-hub/docs/CONTRAT-BILLING.md` **v2.0 — RÉDIGÉ**
+>   (rédigé 2026-05-22 sur la branche `staging` de `veridian-hub`)
+> **Statut** : 🟢 DÉBLOCABLE — le contrat existe. Attendre toutefois sa
+>   promotion sur `veridian-hub` main avant d'archiver ce ticket.
 
 ---
 
-## ⚠️ TIMING — ne code pas à l'aveugle
+## ✅ TIMING — le contrat est rédigé
 
-Le contrat `CONTRAT-BILLING.md` v2.0 **n'est pas encore rédigé** au moment où
-ce ticket est déposé. L'agent Hub le rédige en parallèle.
+`CONTRAT-BILLING.md` v2.0 a été **rédigé** (2026-05-22). Tu peux attaquer
+l'audit et les corrections.
 
-**Ce ticket te donne le contexte pour PRÉPARER ton terrain** (lire ton code,
-identifier les écarts) mais **NE COMMENCE PAS l'implémentation tant que
-`CONTRAT-BILLING.md` v2.0 n'est pas mergé sur `veridian-hub` main.** Le
-payload exact `update-plan` v2 sera figé dans ce contrat — coder avant = se
-faire re-corriger après.
+Lis en priorité, AVANT de toucher à ton code :
+`veridian-hub/docs/CONTRAT-BILLING.md` — en entier. Sections critiques
+pour ce ticket :
+- **§3** — payload `update-plan` v2 (schéma exact, `contract_version`,
+  les 4 valeurs `plan_source`, invariants §3.4).
+- **§4** — fail-open (anti-pattern cron downgrade-by-timeout interdit).
+- **§7** — articulation trial : `stripe_trial` ≠ `stripe`, le signal
+  `activity_threshold_reached` (= **§7.4** du contrat, le seul flux
+  billing app→Hub).
 
-Vérifie l'existence du contrat avant d'attaquer :
-`cat ../veridian-hub/docs/CONTRAT-BILLING.md | head -5` — s'il existe et est
-en v2.0, tu peux y aller.
+> Le contrat est sur la branche `staging` de `veridian-hub` au moment où
+> ce ticket est mis à jour. Vérifie qu'il est promu sur `main` avant
+> d'archiver ce ticket en `done/`.
 
 ---
 
@@ -72,9 +77,13 @@ Lis ton handler `update-plan` actuel et vérifie :
 - `POST /api/tenants/update-plan` — le consumer principal à durcir
 - `POST /api/webhooks/...` émetteur vers Hub : le signal
   `activity_threshold_reached` (5e mail → trial) — déjà livré, vérifier qu'il
-  reste conforme au contrat v2 §3.7
-- Éventuel nouvel endpoint si le v2 demande à Notifuse d'exposer un
-  `billing-state` lisible — à confirmer selon ce que le contrat tranche
+  reste conforme au contrat v2 **§7.4** (seul flux billing app→Hub)
+- `billing-state` : le contrat **ne demande PAS** à Notifuse d'exposer un
+  endpoint. La réconciliation v2 (§6) est un **POLL** : c'est **Notifuse
+  qui poll le Hub** sur `GET /api/tenants/{id}/billing-state` (côté Hub),
+  via un cron lent ~1×/jour. Côté Notifuse = câbler ce cron poll (non
+  bloquant, l'endpoint Hub `billing-state` n'est pas encore livré — voir
+  §6.3 du contrat).
 
 ## Ce que ce ticket NE demande PAS
 
@@ -85,12 +94,13 @@ Lis ton handler `update-plan` actuel et vérifie :
 
 ## Definition of Done
 
-- [ ] `CONTRAT-BILLING.md` v2.0 lu (attendre qu'il existe)
+- [ ] `CONTRAT-BILLING.md` v2.0 lu en entier (✅ rédigé — voir lien en tête)
 - [ ] Handler `update-plan` audité contre les 6 écarts ci-dessus
 - [ ] Versioning `contract_version` géré (rejet 400 si major inconnu)
-- [ ] Enum `plan` + `plan_source` fermés et validés
+- [ ] Enum `plan` + `plan_source` (4 valeurs v2) fermés et validés
 - [ ] Idempotence `idempotency_key` confirmée
 - [ ] Fail-open vérifié (aucun cron downgrade-by-timeout)
+- [ ] `activity_threshold_reached` conforme contrat §7.4
 - [ ] Tests de conformité (un par invariant)
 - [ ] Réponse `## Réponse — YYYY-MM-DD` dans ce fichier + archivage done/
 

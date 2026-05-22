@@ -9,6 +9,38 @@
 
 ---
 
+## 📊 STATUT — mis à jour 2026-05-22
+
+**La partie autonome est LIVRÉE. Reste : la session calme avec Robert.**
+
+- ✅ **Lot UI-2** (intercepteur 402, toast auto-login, bandeau soft-delete,
+  badge plan_source) — livré commit `fd487136` (2026-05-21). Composants
+  `veridian_402_interceptor`, `veridian_welcome_toast`,
+  `veridian_soft_delete_banner`, `veridian_plan_source_badge` créés +
+  câblés + tests Vitest.
+- ✅ **Lot UI-3** (co-brand : header lien retour Veridian, footer "Powered
+  by") — livré même commit. `veridian_brand_header_link`,
+  `veridian_brand_footer`.
+- ✅ **Lot UI-1** (purge compteurs/limites visibles) — **rien à purger**.
+  Audit `console/src/` 2026-05-22 : aucun compteur de quota de plan,
+  aucune progress bar de plan, aucun menu grisé "🔒 Pro". Les seuls
+  `remaining` du code sont des compteurs d'envoi de broadcast en cours
+  ("X sent, Y remaining" pendant une campagne) — info opérationnelle
+  légitime, hors interdit du pivot pricing. Critère grep du ticket :
+  satisfait.
+
+⏳ **Hors-scope autonome — RESTE À FAIRE avec Robert** : la session calme
+hot-reload sur staging (polish fin : typo, espacements, couleurs Veridian,
+refonte signin/onboarding, modal paywall design avancé, white-label
+Business+, i18n complet, responsive). Voir §"Hors-scope autonome" plus
+bas. **Ce ticket reste pending pour cette session** — c'est la seule
+raison pour laquelle il n'est pas archivé.
+
+Pré-requis posé 2026-05-22 : ticket perf `2026-05-22-perf-ui-baseline-saine.md`
+livré (bundle 6.28 MB → ~892 KB gzip) → la base est saine pour le polish.
+
+---
+
 ## Contexte
 
 Le ticket `review_hot_reload_with_robert.md` recense 22 sections backend
