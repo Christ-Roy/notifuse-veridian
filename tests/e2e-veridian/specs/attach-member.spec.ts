@@ -107,8 +107,10 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
       role: 'member',
       invitation_id: `inv-${tid}`,
     });
-    expect(attachResp.status, await attachResp.text()).toBe(201);
-    const attachBody = await attachResp.json();
+    // Lire le body une seule fois (.text() puis .json() = "Body already read").
+    const attachRaw = await attachResp.text();
+    expect(attachResp.status, attachRaw).toBe(201);
+    const attachBody = JSON.parse(attachRaw);
     expect(attachBody.attached).toBe(true);
     expect(attachBody.already_member).toBe(false);
     expect(attachBody.workspace_id).toBe(tid);
@@ -136,14 +138,16 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
 
     // 1er attach → 201
     const r1 = await hmacFetch(`/api/tenants/${tid}/attach-member`, 'POST', body);
-    expect(r1.status, await r1.text()).toBe(201);
-    const b1 = await r1.json();
+    const raw1 = await r1.text();
+    expect(r1.status, raw1).toBe(201);
+    const b1 = JSON.parse(raw1);
     expect(b1.already_member).toBe(false);
 
     // 2e attach memes params → 200 already_member=true
     const r2 = await hmacFetch(`/api/tenants/${tid}/attach-member`, 'POST', body);
-    expect(r2.status, await r2.text()).toBe(200);
-    const b2 = await r2.json();
+    const raw2 = await r2.text();
+    expect(r2.status, raw2).toBe(200);
+    const b2 = JSON.parse(raw2);
     expect(b2.already_member).toBe(true);
     expect(b2.attached).toBe(true);
     expect(b2.workspace_id).toBe(tid);
