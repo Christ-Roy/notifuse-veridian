@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams } from '@tanstack/react-router'
-import { Segmented, Select, Space } from 'antd'
+import { Segmented, Select, Space, Result } from 'antd'
 import dayjs from 'dayjs'
 import { useAuth } from '../contexts/AuthContext'
 import { AnalyticsDashboard } from '../components/analytics/AnalyticsDashboard'
@@ -64,10 +64,11 @@ export function AnalyticsPage() {
 
   if (!workspace) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center' }}>
-        <h2>{t`Workspace not found`}</h2>
-        <p>{t`The requested workspace could not be found.`}</p>
-      </div>
+      <Result
+        status="404"
+        title={t`Workspace not found`}
+        subTitle={t`The requested workspace could not be found.`}
+      />
     )
   }
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Statistic, Space, Spin } from 'antd'
+import { Row, Col, Statistic, Space } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleCheck, faFaceFrown, faHourglass } from '@fortawesome/free-regular-svg-icons'
 import { faBan, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
@@ -38,14 +38,6 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
     total_complained: 0
   }
 
-  // Formatter function for statistics that handles loading state
-  const formatStat = (value: number | string) => {
-    if (isLoading) {
-      return <Spin size="small" />
-    }
-    return value
-  }
-
   return (
     <Row gutter={[16, 16]} wrap={false}>
       <Col flex="1">
@@ -69,7 +61,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_active}
           valueStyle={{ fontSize: '16px' }}
-          formatter={formatStat}
+          loading={isLoading}
         />
       </Col>
       <Col flex="1">
@@ -93,7 +85,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_pending}
           valueStyle={{ fontSize: '16px' }}
-          formatter={formatStat}
+          loading={isLoading}
         />
       </Col>
       <Col flex="1">
@@ -113,7 +105,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_unsubscribed}
           valueStyle={{ fontSize: '16px' }}
-          formatter={formatStat}
+          loading={isLoading}
         />
       </Col>
       <Col flex="1">
@@ -137,7 +129,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_bounced}
           valueStyle={{ fontSize: '16px' }}
-          formatter={formatStat}
+          loading={isLoading}
         />
       </Col>
       <Col flex="1">
@@ -161,7 +153,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_complained}
           valueStyle={{ fontSize: '16px' }}
-          formatter={formatStat}
+          loading={isLoading}
         />
       </Col>
     </Row>

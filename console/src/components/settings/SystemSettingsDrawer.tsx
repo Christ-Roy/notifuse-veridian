@@ -385,7 +385,7 @@ export function SystemSettingsDrawer() {
                 >
                   <Input
                     disabled={isOverridden('smtp_from_name')}
-                    placeholder="Notifuse"
+                    placeholder="Veridian Mail"
                     allowClear
                   />
                 </Form.Item>

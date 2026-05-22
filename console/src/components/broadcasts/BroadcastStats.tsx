@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import React, { useEffect } from 'react'
-import { Row, Col, Statistic, Space, Tooltip, Spin } from 'antd'
+import { Row, Col, Statistic, Space, Tooltip } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -116,14 +116,6 @@ export function BroadcastStats({
     navigate({ to: url as string & {} })
   }
 
-  // Formatter function for statistics that handles loading state
-  const formatStat = (value: number | string) => {
-    if (isLoading) {
-      return <Spin size="small" />
-    }
-    return value
-  }
-
   return (
     <Row gutter={[16, 16]} wrap className="flex-nowrap overflow-x-auto">
       <Col span={3}>
@@ -145,7 +137,7 @@ export function BroadcastStats({
               }
               value={stats.total_sent}
               valueStyle={{ fontSize: '16px' }}
-              formatter={formatStat}
+              loading={isLoading}
             />
           </div>
         </Tooltip>
@@ -179,7 +171,7 @@ export function BroadcastStats({
               }
               value={isSmtpProvider ? '-' : getRate(stats.total_delivered, stats.total_sent)}
               valueStyle={{ fontSize: '16px' }}
-              formatter={formatStat}
+              loading={isLoading}
             />
           </div>
         </Tooltip>
@@ -203,7 +195,7 @@ export function BroadcastStats({
               }
               value={getRate(stats.total_opened, stats.total_sent)}
               valueStyle={{ fontSize: '16px' }}
-              formatter={formatStat}
+              loading={isLoading}
             />
           </div>
         </Tooltip>
@@ -227,7 +219,7 @@ export function BroadcastStats({
               }
               value={getRate(stats.total_clicked, stats.total_sent)}
               valueStyle={{ fontSize: '16px' }}
-              formatter={formatStat}
+              loading={isLoading}
             />
           </div>
         </Tooltip>
@@ -251,7 +243,7 @@ export function BroadcastStats({
               }
               value={getRate(stats.total_failed, stats.total_sent)}
               valueStyle={{ fontSize: '16px' }}
-              formatter={formatStat}
+              loading={isLoading}
             />
           </div>
         </Tooltip>
@@ -285,7 +277,7 @@ export function BroadcastStats({
               }
               value={isSmtpProvider ? '-' : getRate(stats.total_bounced, stats.total_sent)}
               valueStyle={{ fontSize: '16px' }}
-              formatter={formatStat}
+              loading={isLoading}
             />
           </div>
         </Tooltip>
@@ -319,7 +311,7 @@ export function BroadcastStats({
               }
               value={isSmtpProvider ? '-' : getRate(stats.total_complained, stats.total_sent)}
               valueStyle={{ fontSize: '16px' }}
-              formatter={formatStat}
+              loading={isLoading}
             />
           </div>
         </Tooltip>
@@ -343,7 +335,7 @@ export function BroadcastStats({
               }
               value={getRate(stats.total_unsubscribed, stats.total_sent)}
               valueStyle={{ fontSize: '16px' }}
-              formatter={formatStat}
+              loading={isLoading}
             />
           </div>
         </Tooltip>

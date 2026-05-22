@@ -1,4 +1,4 @@
-import { Form, Button, Card, App, Spin, Typography } from 'antd'
+import { Form, Button, Card, App, Spin, Typography, Result } from 'antd'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
@@ -112,19 +112,16 @@ export function AcceptInvitationPage() {
     return (
       <MainLayout>
         <div className="flex items-center justify-center h-[calc(100vh-48px)]">
-          <Card style={{ width: 500 }}>
-            <div style={{ textAlign: 'center', marginBottom: 24 }}>
-              <Title level={3} type="danger">
-                {t`Invalid Invitation`}
-              </Title>
-              <Text type="secondary">
-                {error || t`This invitation link is invalid or has expired.`}
-              </Text>
-            </div>
-            <Button type="primary" block onClick={() => navigate({ to: '/console/signin' })}>
-              {t`Go to Sign In`}
-            </Button>
-          </Card>
+          <Result
+            status="error"
+            title={t`Invalid Invitation`}
+            subTitle={error || t`This invitation link is invalid or has expired.`}
+            extra={
+              <Button type="primary" onClick={() => navigate({ to: '/console/signin' })}>
+                {t`Go to Sign In`}
+              </Button>
+            }
+          />
         </div>
       </MainLayout>
     )

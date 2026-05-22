@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { Button, Input, Form, InputNumber, App, Divider, Row, Col, Collapse, Switch } from 'antd'
-import { ApiOutlined, CheckOutlined, ArrowRightOutlined } from '@ant-design/icons'
+import { Button, Input, Form, InputNumber, App, Divider, Row, Col, Collapse, Switch, Steps, Result } from 'antd'
+import { ApiOutlined, ArrowRightOutlined, CheckOutlined } from '@ant-design/icons'
 import { setupApi } from '../services/api/setup'
 import type { SetupConfig } from '../types/setup'
 import { getBrowserTimezone } from '../lib/timezoneNormalizer'
@@ -111,7 +111,7 @@ export default function SetupWizard() {
         setupConfig.smtp_username = typeof values.smtp_username === 'string' ? values.smtp_username : ''
         setupConfig.smtp_password = typeof values.smtp_password === 'string' ? values.smtp_password : ''
         setupConfig.smtp_from_email = typeof values.smtp_from_email === 'string' ? values.smtp_from_email : undefined
-        setupConfig.smtp_from_name = typeof values.smtp_from_name === 'string' ? values.smtp_from_name : 'Notifuse'
+        setupConfig.smtp_from_name = typeof values.smtp_from_name === 'string' ? values.smtp_from_name : 'Veridian Mail'
         setupConfig.smtp_use_tls = typeof values.smtp_use_tls === 'boolean' ? values.smtp_use_tls : true
       }
 
@@ -279,6 +279,28 @@ export default function SetupWizard() {
     )
   }
 
+  // === Veridian patch — repère de progression du setup ===
+  // Le wizard est un formulaire single-page : ce Steps reflète l'état réel
+  // de configuration (sections déjà fournies via env vs. à remplir), pas une
+  // navigation cliquable.
+  const accountDone =
+    configStatus.root_email_configured && configStatus.api_endpoint_configured
+  const currentStep = setupComplete ? 2 : accountDone ? 1 : 0
+  const setupSteps = [
+    {
+      title: t`Account`,
+      description: t`Admin email & public URL`
+    },
+    {
+      title: t`Email delivery`,
+      description: t`SMTP & bridge settings`
+    },
+    {
+      title: t`Done`,
+      description: t`Ready to sign in`
+    }
+  ]
+
   return (
     <App>
       <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -288,24 +310,21 @@ export default function SetupWizard() {
             <VeridianLogo size={32} />
           </div>
 
+          {/* === Veridian patch — repère de progression onboarding === */}
+          <div className="mb-8 px-2">
+            <Steps current={currentStep} items={setupSteps} size="small" />
+          </div>
+
           <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
             {setupComplete ? (
-              <div className="space-y-6">
-                <div className="text-center">
-                  <CheckOutlined
-                    style={{ fontSize: '48px', color: '#52c41a', marginBottom: '16px' }}
-                  />
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">{t`Setup Complete!`}</h2>
-                  <p className="text-gray-600">
-                    {t`Your Notifuse instance has been successfully configured.`}
-                  </p>
-                </div>
-
-                <div className="mt-8 text-center">
+              <Result
+                status="success"
+                title={t`Setup Complete!`}
+                subTitle={t`Your Veridian Mail instance has been successfully configured.`}
+                extra={
                   <Button
                     type="primary"
                     size="large"
-                    block
                     onClick={handleDone}
                     loading={loading}
                     icon={!loading && <ArrowRightOutlined />}
@@ -314,8 +333,8 @@ export default function SetupWizard() {
                   >
                     {loading ? t`Waiting for server restart...` : t`Go to Sign In`}
                   </Button>
-                </div>
-              </div>
+                }
+              />
             ) : (
               <div className="space-y-6">
                 <div className="text-center">
@@ -329,7 +348,7 @@ export default function SetupWizard() {
                   initialValues={{
                     smtp_port: 587,
                     smtp_use_tls: true,
-                    smtp_from_name: 'Notifuse',
+                    smtp_from_name: 'Veridian Mail',
                     subscribe_newsletter: true,
                     telemetry_enabled: true,
                     check_for_updates: true
@@ -359,9 +378,9 @@ export default function SetupWizard() {
                             { required: true, message: t`API endpoint is required` },
                             { type: 'url', message: t`Invalid URL format` }
                           ]}
-                          tooltip={t`Public URL where this Notifuse instance is accessible`}
+                          tooltip={t`Public URL where this Veridian Mail instance is accessible`}
                         >
-                          <Input placeholder="https://notifuse.example.com" />
+                          <Input placeholder="https://mail.example.com" />
                         </Form.Item>
                       )}
                     </div>
@@ -490,7 +509,7 @@ export default function SetupWizard() {
                         </Col>
                         <Col span={12}>
                           <Form.Item label={t`From Name`} name="smtp_from_name">
-                            <Input placeholder="Notifuse" />
+                            <Input placeholder="Veridian Mail" />
                           </Form.Item>
                         </Col>
                       </Row>
@@ -531,7 +550,7 @@ export default function SetupWizard() {
                                   name="telemetry_enabled"
                                   valuePropName="checked"
                                   label={t`Enable Anonymous Telemetry`}
-                                  tooltip={t`Help us improve Notifuse by sending anonymous usage statistics. No personal data or message content is collected.`}
+                                  tooltip={t`Help us improve Veridian Mail by sending anonymous usage statistics. No personal data or message content is collected.`}
                                 >
                                   <Switch />
                                 </Form.Item>
@@ -541,7 +560,7 @@ export default function SetupWizard() {
                                   name="check_for_updates"
                                   valuePropName="checked"
                                   label={t`Check for Updates`}
-                                  tooltip={t`Periodically check for new Notifuse versions and security updates. A popup will list new versions available.`}
+                                  tooltip={t`Periodically check for new Veridian Mail versions and security updates. A popup will list new versions available.`}
                                 >
                                   <Switch />
                                 </Form.Item>

@@ -314,7 +314,7 @@ export function UpsertTransactionalNotificationDrawer({
                     label="utm_source"
                     tooltip={t`Identifies which site sent the traffic (e.g. google, newsletter)`}
                   >
-                    <Input placeholder={t`e.g. notifuse`} />
+                    <Input placeholder={t`e.g. veridian`} />
                   </Form.Item>
 
                   <Form.Item

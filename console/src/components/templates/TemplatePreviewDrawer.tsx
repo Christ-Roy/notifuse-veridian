@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useLingui } from '@lingui/react/macro'
-import { Drawer, Typography, Spin, Alert, Tabs, Tag, Space, Descriptions, Segmented } from 'antd'
+import { Drawer, Typography, Skeleton, Alert, Tabs, Tag, Space, Descriptions, Segmented } from 'antd'
 import type { Template, MjmlCompileError, Workspace } from '../../services/api/types'
 import { templatesApi } from '../../services/api/template'
 import type { CompileTemplateRequest } from '../../services/api/template'
@@ -349,8 +349,8 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
       {/* Main content area */}
       <div className="flex flex-col mt-4">
         {isLoading && (
-          <div className="flex items-center justify-center flex-grow">
-            <Spin size="large" />
+          <div className="p-4 flex-grow">
+            <Skeleton active paragraph={{ rows: 8 }} />
           </div>
         )}
         {!isLoading &&

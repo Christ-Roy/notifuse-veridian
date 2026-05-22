@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Segmented, Alert, Row, Col, Statistic, Space, Tooltip, Spin, Card } from 'antd'
+import { Segmented, Alert, Row, Col, Statistic, Space, Tooltip, Card } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -241,14 +241,6 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
     return `${percentage.toFixed(1)}%`
   }
 
-  // Formatter function for statistics that handles loading state
-  const formatStat = (value: number | string) => {
-    if (statsLoading) {
-      return <Spin size="small" />
-    }
-    return value
-  }
-
   // Define colors that match the icon colors in the statistics cards
   const chartColors = {
     count_sent: '#3b82f6', // blue-500
@@ -323,7 +315,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                 }
                 value={stats.count_sent}
                 valueStyle={{ fontSize: '16px' }}
-                formatter={formatStat}
+                loading={statsLoading}
               />
             </div>
           </Tooltip>
@@ -350,7 +342,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                 }
                 value={getRate(stats.count_delivered, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
-                formatter={formatStat}
+                loading={statsLoading}
               />
             </div>
           </Tooltip>
@@ -377,7 +369,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                 }
                 value={getRate(stats.count_opened, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
-                formatter={formatStat}
+                loading={statsLoading}
               />
             </div>
           </Tooltip>
@@ -404,7 +396,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                 }
                 value={getRate(stats.count_clicked, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
-                formatter={formatStat}
+                loading={statsLoading}
               />
             </div>
           </Tooltip>
@@ -431,7 +423,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                 }
                 value={getRate(stats.count_bounced, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
-                formatter={formatStat}
+                loading={statsLoading}
               />
             </div>
           </Tooltip>
@@ -458,7 +450,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                 }
                 value={getRate(stats.count_complained, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
-                formatter={formatStat}
+                loading={statsLoading}
               />
             </div>
           </Tooltip>
@@ -485,7 +477,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                 }
                 value={getRate(stats.count_unsubscribed, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
-                formatter={formatStat}
+                loading={statsLoading}
               />
             </div>
           </Tooltip>
@@ -512,7 +504,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                 }
                 value={getRate(stats.count_failed, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
-                formatter={formatStat}
+                loading={statsLoading}
               />
             </div>
           </Tooltip>

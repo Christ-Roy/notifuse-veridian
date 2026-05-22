@@ -1,5 +1,5 @@
 import React from 'react'
-import { Row, Col, Statistic, Button, Spin } from 'antd'
+import { Row, Col, Statistic, Button } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
@@ -103,13 +103,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   const totalContacts = totalContactsData?.data?.[0]?.['count'] || 0
   const newContactsCount = newContactsData?.data?.[0]?.['count'] || 0
 
-  // Formatter function for statistics that handles loading state
-  const formatStat = (value: number | string, isLoading: boolean) => {
-    if (isLoading) {
-      return <Spin size="small" />
-    }
-    return numbro(value).format({ thousandSeparated: true })
-  }
+  // Number formatter for statistics (loading state handled by Statistic's `loading` prop)
+  const formatStat = (value: number | string) => numbro(value).format({ thousandSeparated: true })
 
   const handleNavigateToSettings = () => {
     navigate({
@@ -129,7 +124,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               title={t`Total Contacts`}
               value={totalContacts as number}
               valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
-              formatter={(value) => formatStat(value as number, totalContactsLoading)}
+              loading={totalContactsLoading}
+              formatter={(value) => formatStat(value as number)}
             />
           </div>
         </Col>
@@ -141,7 +137,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               title={t`New Contacts`}
               value={newContactsCount as number}
               valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
-              formatter={(value) => formatStat(value as number, newContactsLoading)}
+              loading={newContactsLoading}
+              formatter={(value) => formatStat(value as number)}
             />
           </div>
         </Col>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { Table, Spin, Alert } from 'antd'
+import { Table, Skeleton, Alert } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 import * as echarts from 'echarts/core'
 import { LineChart, BarChart, PieChart } from 'echarts/charts'
@@ -383,8 +383,8 @@ export const ChartVisualization: React.FC<ChartVisualizationProps> = ({
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
-        <Spin size="large" />
+      <div style={{ padding: '24px' }}>
+        <Skeleton active paragraph={{ rows: 6 }} />
       </div>
     )
   }

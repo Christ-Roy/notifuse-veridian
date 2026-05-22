@@ -144,7 +144,7 @@ export function CreateWorkspacePage() {
             subTitle={
               <div style={{ marginTop: 12 }}>
                 <p>
-                  {t`Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at`}{' '}
+                  {t`Your Veridian Mail workspace is provisioned automatically by Veridian when you subscribe at`}{' '}
                   <a href={veridianMode.hub_url} target="_blank" rel="noreferrer">
                     {veridianMode.hub_url?.replace(/^https?:\/\//, '')}
                   </a>

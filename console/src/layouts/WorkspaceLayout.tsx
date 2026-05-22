@@ -30,7 +30,6 @@ import {
   FolderOpenOutlined,
   LineChartOutlined,
   SettingOutlined,
-  WarningOutlined,
   DownOutlined
 } from '@ant-design/icons'
 // === Veridian patch === co-brand léger (header link, footer) + bandeau
@@ -552,24 +551,11 @@ export function WorkspaceLayout() {
                       key: 'docs',
                       label: (
                         <a
-                          href="https://docs.notifuse.com/"
+                          href="https://veridian.site"
                           target="_blank"
                           rel="noopener noreferrer"
                         >
                           <FontAwesomeIcon icon={faFileLines} className="mr-2" /> {t`Documentation`}
-                        </a>
-                      )
-                    },
-                    {
-                      key: 'report-issue',
-                      label: (
-                        <a
-                          href="https://github.com/notifuse/notifuse/issues"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <WarningOutlined className="mr-2" />
-                          {t`Report An Issue`}
                         </a>
                       )
                     }

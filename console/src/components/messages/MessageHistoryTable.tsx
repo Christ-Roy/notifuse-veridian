@@ -1,6 +1,6 @@
 import React from 'react'
 import { useLingui } from '@lingui/react/macro'
-import { Table, Tag, Tooltip, Button, Spin, Empty, Space } from 'antd'
+import { Table, Tag, Tooltip, Button, Skeleton, Empty, Space } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faPaperPlane,
@@ -411,9 +411,8 @@ export function MessageHistoryTable({
 
   if (loading && !isLoadingMore) {
     return (
-      <div className="loading-container" style={{ padding: '40px 0', textAlign: 'center' }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }}>{t`Loading message history...`}</div>
+      <div className="loading-container" style={{ padding: '24px 0' }}>
+        <Skeleton active paragraph={{ rows: 6 }} title={false} />
       </div>
     )
   }
