@@ -41,6 +41,11 @@ msgstr "(Cancel·lat)"
 msgid "(original: {0})"
 msgstr "(original: {0})"
 
+#: src/components/veridian_soft_delete_banner.tsx:70
+#: src/components/veridian_soft_delete_banner.tsx:71
+msgid "(unknown date)"
+msgstr ""
+
 #. placeholder {0}: progress.total
 #: src/components/contacts/BulkActionProgressModal.tsx:79
 msgid "{0, plural, one {# contact} other {# contacts}}"
@@ -56,47 +61,47 @@ msgid "{0} contacts"
 msgstr "{0} contactes"
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:414
+#: src/components/analytics/EmailMetricsChart.tsx:406
 msgid "{0} emails bounced back"
 msgstr "{0} correus rebotats"
 
 #. placeholder {0}: stats.total_bounced
-#: src/components/broadcasts/BroadcastStats.tsx:264
+#: src/components/broadcasts/BroadcastStats.tsx:256
 msgid "{0} emails bounced back - Click to view details"
 msgstr "{0} correus rebotats - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:414
+#: src/components/analytics/EmailMetricsChart.tsx:406
 msgid "{0} emails bounced back (hidden from chart)"
 msgstr "{0} correus rebotats (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_failed
-#: src/components/analytics/EmailMetricsChart.tsx:495
+#: src/components/analytics/EmailMetricsChart.tsx:487
 msgid "{0} emails failed to send"
 msgstr "{0} correus han fallat en enviar-se"
 
 #. placeholder {0}: stats.total_failed
-#: src/components/broadcasts/BroadcastStats.tsx:236
+#: src/components/broadcasts/BroadcastStats.tsx:228
 msgid "{0} emails failed to send - Click to view details"
 msgstr "{0} correus han fallat - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_failed
-#: src/components/analytics/EmailMetricsChart.tsx:495
+#: src/components/analytics/EmailMetricsChart.tsx:487
 msgid "{0} emails failed to send (hidden from chart)"
 msgstr "{0} correus han fallat (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_delivered
-#: src/components/analytics/EmailMetricsChart.tsx:333
+#: src/components/analytics/EmailMetricsChart.tsx:325
 msgid "{0} emails successfully delivered"
 msgstr "{0} correus lliurats correctament"
 
 #. placeholder {0}: stats.total_delivered
-#: src/components/broadcasts/BroadcastStats.tsx:158
+#: src/components/broadcasts/BroadcastStats.tsx:150
 msgid "{0} emails successfully delivered - Click to view details"
 msgstr "{0} correus lliurats - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_delivered
-#: src/components/analytics/EmailMetricsChart.tsx:333
+#: src/components/analytics/EmailMetricsChart.tsx:325
 msgid "{0} emails successfully delivered (hidden from chart)"
 msgstr "{0} correus lliurats (ocults del gràfic)"
 
@@ -114,77 +119,77 @@ msgid "{0} of {1}"
 msgstr "{0} de {1}"
 
 #. placeholder {0}: stats.count_clicked
-#: src/components/analytics/EmailMetricsChart.tsx:387
+#: src/components/analytics/EmailMetricsChart.tsx:379
 msgid "{0} total clicks"
 msgstr "{0} clics totals"
 
 #. placeholder {0}: stats.total_clicked
-#: src/components/broadcasts/BroadcastStats.tsx:212
+#: src/components/broadcasts/BroadcastStats.tsx:204
 msgid "{0} total clicks - Click to view details"
 msgstr "{0} clics totals - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_clicked
-#: src/components/analytics/EmailMetricsChart.tsx:387
+#: src/components/analytics/EmailMetricsChart.tsx:379
 msgid "{0} total clicks (hidden from chart)"
 msgstr "{0} clics totals (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:441
+#: src/components/analytics/EmailMetricsChart.tsx:433
 msgid "{0} total complaints"
 msgstr "{0} queixes totals"
 
 #. placeholder {0}: stats.total_complained
-#: src/components/broadcasts/BroadcastStats.tsx:298
+#: src/components/broadcasts/BroadcastStats.tsx:290
 msgid "{0} total complaints - Click to view details"
 msgstr "{0} queixes totals - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:441
+#: src/components/analytics/EmailMetricsChart.tsx:433
 msgid "{0} total complaints (hidden from chart)"
 msgstr "{0} queixes totals (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:306
+#: src/components/analytics/EmailMetricsChart.tsx:298
 msgid "{0} total emails sent"
 msgstr "{0} correus enviats en total"
 
 #. placeholder {0}: stats.total_sent
-#: src/components/broadcasts/BroadcastStats.tsx:130
+#: src/components/broadcasts/BroadcastStats.tsx:122
 msgid "{0} total emails sent - Click to view details"
 msgstr "{0} correus enviats - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:306
+#: src/components/analytics/EmailMetricsChart.tsx:298
 msgid "{0} total emails sent (hidden from chart)"
 msgstr "{0} correus enviats (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_opened
-#: src/components/analytics/EmailMetricsChart.tsx:360
+#: src/components/analytics/EmailMetricsChart.tsx:352
 msgid "{0} total opens"
 msgstr "{0} obertures totals"
 
 #. placeholder {0}: stats.total_opened
-#: src/components/broadcasts/BroadcastStats.tsx:188
+#: src/components/broadcasts/BroadcastStats.tsx:180
 msgid "{0} total opens - Click to view details"
 msgstr "{0} obertures totals - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_opened
-#: src/components/analytics/EmailMetricsChart.tsx:360
+#: src/components/analytics/EmailMetricsChart.tsx:352
 msgid "{0} total opens (hidden from chart)"
 msgstr "{0} obertures totals (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:468
+#: src/components/analytics/EmailMetricsChart.tsx:460
 msgid "{0} total unsubscribes"
 msgstr "{0} baixes totals"
 
 #. placeholder {0}: stats.total_unsubscribed
-#: src/components/broadcasts/BroadcastStats.tsx:328
+#: src/components/broadcasts/BroadcastStats.tsx:320
 msgid "{0} total unsubscribes - Click to view details"
 msgstr "{0} baixes totals - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:468
+#: src/components/analytics/EmailMetricsChart.tsx:460
 msgid "{0} total unsubscribes (hidden from chart)"
 msgstr "{0} baixes totals (ocults del gràfic)"
 
@@ -407,13 +412,21 @@ msgstr "Es requereix un valor..."
 msgid "A/B Test"
 msgstr "Prova A/B"
 
-#: src/pages/AcceptInvitationPage.tsx:168
+#: src/pages/AcceptInvitationPage.tsx:167
 msgid "Accept Invitation"
 msgstr "Acceptar invitació"
 
 #: src/components/settings/Integrations.tsx:1533
 msgid "Access Key"
 msgstr "Clau d'accés"
+
+#: src/pages/SetupWizard.tsx:291
+msgid "Account"
+msgstr ""
+
+#: src/components/veridian_paywall_modal.tsx:48
+msgid "Account suspended"
+msgstr ""
 
 #: src/components/contacts/BulkUpdateDrawer.tsx:589
 msgid "Action"
@@ -441,7 +454,8 @@ msgstr "Activar automatització?"
 #: src/components/automations/nodes/ListStatusBranchNode.tsx:59
 #: src/components/contacts/ContactDetailsDrawer.tsx:581
 #: src/components/contacts/SegmentsFilter.tsx:53
-#: src/components/lists/ListStats.tsx:66
+#: src/components/lists/ListStats.tsx:58
+#: src/components/settings/veridian_plan_settings.tsx:67
 #: src/pages/ContactsPage.tsx:382
 msgid "Active"
 msgstr "Actiu"
@@ -645,11 +659,15 @@ msgstr "Línia d'adreça 1"
 msgid "Address Line 2"
 msgstr "Línia d'adreça 2"
 
-#: src/pages/SetupWizard.tsx:345
+#: src/pages/SetupWizard.tsx:292
+msgid "Admin email & public URL"
+msgstr ""
+
+#: src/pages/SetupWizard.tsx:365
 msgid "Admin email is required"
 msgstr "El correu de l'administrador és obligatori"
 
-#: src/pages/SetupWizard.tsx:524
+#: src/pages/SetupWizard.tsx:544
 msgid "Advanced Settings"
 msgstr "Configuració avançada"
 
@@ -721,7 +739,7 @@ msgstr "Alinear a dalt"
 msgid "Alignment"
 msgstr "Alineació"
 
-#: src/components/analytics/EmailMetricsChart.tsx:284
+#: src/components/analytics/EmailMetricsChart.tsx:276
 #: src/pages/TemplatesPage.tsx:77
 msgid "All"
 msgstr "Tot"
@@ -733,6 +751,10 @@ msgstr "Tot"
 #: src/components/transactional/ApiCommandModal.tsx:1007
 msgid "All contact fields are optional except email."
 msgstr "Tots els camps de contacte són opcionals excepte el correu electrònic."
+
+#: src/components/settings/veridian_plan_settings.tsx:72
+msgid "All features are unlimited on every plan. Your subscription is managed by Veridian."
+msgstr ""
 
 #: src/components/settings/Integrations.tsx:383
 msgid "All marketing emails (broadcasts, campaigns) will be sent through this provider from now on."
@@ -752,7 +774,7 @@ msgstr "Tots els costats"
 msgid "All transactional emails (notifications, password resets, etc.) will be sent through this provider from now on."
 msgstr "Tots els correus transaccionals (notificacions, restabliments de contrasenya, etc.) s'enviaran a través d'aquest proveïdor a partir d'ara."
 
-#: src/pages/SetupWizard.tsx:559
+#: src/pages/SetupWizard.tsx:579
 msgid "Allow receiving emails to trigger transactional notifications. Requires TLS certificates."
 msgstr "Permet rebre correus per activar notificacions transaccionals. Requereix certificats TLS."
 
@@ -833,11 +855,11 @@ msgstr "Comanda API"
 #: src/components/settings/Integrations.tsx:1741
 #: src/components/settings/Integrations.tsx:1995
 #: src/components/settings/SystemSettingsDrawer.tsx:245
-#: src/pages/SetupWizard.tsx:355
+#: src/pages/SetupWizard.tsx:375
 msgid "API Endpoint"
 msgstr "Punt final API"
 
-#: src/pages/SetupWizard.tsx:358
+#: src/pages/SetupWizard.tsx:378
 msgid "API endpoint is required"
 msgstr "El punt final API és obligatori"
 
@@ -856,19 +878,19 @@ msgstr "Identificador API"
 msgid "API Key"
 msgstr "Clau API"
 
-#: src/components/settings/WorkspaceMembers.tsx:299
+#: src/components/settings/WorkspaceMembers.tsx:303
 msgid "API key created successfully"
 msgstr "Clau API creada correctament"
 
-#: src/components/settings/WorkspaceMembers.tsx:637
+#: src/components/settings/WorkspaceMembers.tsx:641
 msgid "API Key Created Successfully"
 msgstr "Clau API creada correctament"
 
-#: src/components/settings/WorkspaceMembers.tsx:611
+#: src/components/settings/WorkspaceMembers.tsx:615
 msgid "API Key Name"
 msgstr "Nom de la clau API"
 
-#: src/components/settings/WorkspaceMembers.tsx:644
+#: src/components/settings/WorkspaceMembers.tsx:648
 msgid "API Token"
 msgstr "Token API"
 
@@ -1113,7 +1135,7 @@ msgstr "Automatització actualitzada correctament"
 msgid "Automation:"
 msgstr "Automatització:"
 
-#: src/layouts/WorkspaceLayout.tsx:307
+#: src/layouts/WorkspaceLayout.tsx:313
 #: src/pages/AutomationsPage.tsx:153
 msgid "Automations"
 msgstr "Automatitzacions"
@@ -1146,6 +1168,10 @@ msgstr "Regió AWS"
 #: src/components/settings/Integrations.tsx:1535
 msgid "AWS Secret Key"
 msgstr "Clau secreta AWS"
+
+#: src/pages/AnalyticsPage.tsx:74
+msgid "Back to workspaces"
+msgstr ""
 
 #: src/components/blog_editor/components/colors/ColorGrid.tsx:62
 #: src/components/blog_editor/toolbars/components/ColorPicker.tsx:135
@@ -1202,7 +1228,7 @@ msgstr "URL base (opcional)"
 msgid "Base64 encoded TLS certificate"
 msgstr ""
 
-#: src/pages/SetupWizard.tsx:622
+#: src/pages/SetupWizard.tsx:642
 msgid "Base64 encoded TLS certificate. Run: cat fullchain.pem | base64 -w 0"
 msgstr "Certificat TLS codificat en Base64. Executeu: cat fullchain.pem | base64 -w 0"
 
@@ -1210,7 +1236,7 @@ msgstr "Certificat TLS codificat en Base64. Executeu: cat fullchain.pem | base64
 msgid "Base64 encoded TLS private key"
 msgstr ""
 
-#: src/pages/SetupWizard.tsx:640
+#: src/pages/SetupWizard.tsx:660
 msgid "Base64 encoded TLS private key. Run: cat privkey.pem | base64 -w 0"
 msgstr "Clau privada TLS codificada en Base64. Executeu: cat privkey.pem | base64 -w 0"
 
@@ -1290,8 +1316,8 @@ msgstr "Blocs"
 #: src/components/settings/BlogSettings.tsx:197
 #: src/components/settings/BlogSettings.tsx:205
 #: src/components/settings/BlogSettings.tsx:238
-#: src/components/settings/SettingsSidebar.tsx:98
-#: src/layouts/WorkspaceLayout.tsx:344
+#: src/components/settings/SettingsSidebar.tsx:100
+#: src/layouts/WorkspaceLayout.tsx:350
 msgid "Blog"
 msgstr "Blog"
 
@@ -1408,13 +1434,13 @@ msgstr "Correu de rebot"
 msgid "Bounce Type"
 msgstr "Tipus de rebot"
 
-#: src/components/analytics/EmailMetricsChart.tsx:270
-#: src/components/analytics/EmailMetricsChart.tsx:429
+#: src/components/analytics/EmailMetricsChart.tsx:262
+#: src/components/analytics/EmailMetricsChart.tsx:421
 #: src/components/automations/config/TriggerConfigForm.tsx:71
 #: src/components/automations/config/TriggerConfigForm.tsx:93
-#: src/components/broadcasts/BroadcastStats.tsx:283
+#: src/components/broadcasts/BroadcastStats.tsx:275
 #: src/components/contacts/ContactDetailsDrawer.tsx:584
-#: src/components/lists/ListStats.tsx:134
+#: src/components/lists/ListStats.tsx:126
 #: src/components/messages/MessageHistoryTab.tsx:166
 #: src/components/messages/MessageHistoryTab.tsx:171
 #: src/components/messages/MessageHistoryTable.tsx:298
@@ -1525,8 +1551,8 @@ msgstr "Nom de la difusió"
 msgid "Broadcast updated successfully"
 msgstr "Difusió actualitzada correctament"
 
-#: src/components/analytics/EmailMetricsChart.tsx:285
-#: src/layouts/WorkspaceLayout.tsx:281
+#: src/components/analytics/EmailMetricsChart.tsx:277
+#: src/layouts/WorkspaceLayout.tsx:287
 #: src/pages/BroadcastsPage.tsx:1286
 msgid "Broadcasts"
 msgstr "Difusions"
@@ -1633,8 +1659,8 @@ msgstr "Mida del botó"
 #: src/components/settings/SystemSettingsDrawer.tsx:148
 #: src/components/settings/WebhookCard.tsx:348
 #: src/components/settings/WebhooksSettings.tsx:213
-#: src/components/settings/WorkspaceMembers.tsx:550
-#: src/components/settings/WorkspaceMembers.tsx:595
+#: src/components/settings/WorkspaceMembers.tsx:554
+#: src/components/settings/WorkspaceMembers.tsx:599
 #: src/components/templates/CreateTemplateDrawer.tsx:500
 #: src/components/templates/SendTemplateModal.tsx:268
 #: src/components/templates/TemplateTranslationsTab.tsx:254
@@ -1771,7 +1797,7 @@ msgid "Check"
 msgstr "Comprovar"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:519
-#: src/pages/SetupWizard.tsx:542
+#: src/pages/SetupWizard.tsx:562
 msgid "Check for Updates"
 msgstr "Comprovar actualitzacions"
 
@@ -1849,9 +1875,9 @@ msgstr "Clicat"
 msgid "clicks"
 msgstr "Clics"
 
-#: src/components/analytics/EmailMetricsChart.tsx:269
-#: src/components/analytics/EmailMetricsChart.tsx:402
-#: src/components/broadcasts/BroadcastStats.tsx:225
+#: src/components/analytics/EmailMetricsChart.tsx:261
+#: src/components/analytics/EmailMetricsChart.tsx:394
+#: src/components/broadcasts/BroadcastStats.tsx:217
 #: src/pages/BroadcastsPage.tsx:782
 msgid "Clicks"
 msgstr "Clics"
@@ -1880,7 +1906,7 @@ msgstr "Clonar plantilla"
 #: src/components/contacts/BulkActionProgressModal.tsx:65
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:825
 #: src/components/settings/WebhookCard.tsx:345
-#: src/components/settings/WorkspaceMembers.tsx:590
+#: src/components/settings/WorkspaceMembers.tsx:594
 #: src/components/transactional/ApiCommandModal.tsx:990
 msgid "Close"
 msgstr "Tancar"
@@ -1907,7 +1933,7 @@ msgid "Code Editor"
 msgstr "Editor de codi"
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
-#: src/layouts/WorkspaceLayout.tsx:476
+#: src/layouts/WorkspaceLayout.tsx:478
 msgid "Collapse"
 msgstr "Contraure"
 
@@ -1931,7 +1957,7 @@ msgstr "Atributs de columna"
 msgid "Column width (e.g., '50%', '300px', 'auto')"
 msgstr "Amplada de columna (p. ex., '50%', '300px', 'auto')"
 
-#: src/pages/SetupWizard.tsx:442
+#: src/pages/SetupWizard.tsx:462
 msgid "Common ports: 587 (TLS), 465 (SSL), 25 (unencrypted)"
 msgstr "Ports comuns: 587 (TLS), 465 (SSL), 25 (sense xifrar)"
 
@@ -1975,10 +2001,10 @@ msgstr "Queixa"
 msgid "Complaint"
 msgstr "Queixa"
 
-#: src/components/analytics/EmailMetricsChart.tsx:271
-#: src/components/analytics/EmailMetricsChart.tsx:456
-#: src/components/broadcasts/BroadcastStats.tsx:317
-#: src/components/lists/ListStats.tsx:158
+#: src/components/analytics/EmailMetricsChart.tsx:263
+#: src/components/analytics/EmailMetricsChart.tsx:448
+#: src/components/broadcasts/BroadcastStats.tsx:309
+#: src/components/lists/ListStats.tsx:150
 msgid "Complaints"
 msgstr "Queixes"
 
@@ -1986,7 +2012,7 @@ msgstr "Queixes"
 msgid "Complement, don't repeat the subject line"
 msgstr "Complementeu, no repetiu la línia d'assumpte"
 
-#: src/pages/SetupWizard.tsx:672
+#: src/pages/SetupWizard.tsx:692
 msgid "Complete Setup"
 msgstr "Completar configuració"
 
@@ -2021,8 +2047,8 @@ msgstr "Condicions"
 msgid "Configuration for {nodeType} is not available in Phase 2"
 msgstr "La configuració per a {nodeType} no està disponible a la Fase 2"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:166
-#: src/components/analytics/AnalyticsDashboard.tsx:190
+#: src/components/analytics/AnalyticsDashboard.tsx:163
+#: src/components/analytics/AnalyticsDashboard.tsx:187
 #: src/components/automations/NodeConfigPanel.tsx:144
 #: src/components/automations/nodes/ABTestNode.tsx:59
 #: src/components/automations/nodes/AddToListNode.tsx:53
@@ -2178,7 +2204,7 @@ msgstr "El contacte torna a entrar cada vegada que es produeix l'esdeveniment"
 msgid "Contact updated successfully"
 msgstr "Contacte actualitzat correctament"
 
-#: src/layouts/WorkspaceLayout.tsx:236
+#: src/layouts/WorkspaceLayout.tsx:242
 #: src/pages/ContactsPage.tsx:988
 msgid "Contacts"
 msgstr "Contactes"
@@ -2294,9 +2320,9 @@ msgstr "Crear una plantilla de correu"
 msgid "Create and manage your blog content"
 msgstr "Creeu i gestioneu el contingut del vostre blog"
 
-#: src/components/settings/WorkspaceMembers.tsx:519
-#: src/components/settings/WorkspaceMembers.tsx:583
-#: src/components/settings/WorkspaceMembers.tsx:603
+#: src/components/settings/WorkspaceMembers.tsx:523
+#: src/components/settings/WorkspaceMembers.tsx:587
+#: src/components/settings/WorkspaceMembers.tsx:607
 msgid "Create API Key"
 msgstr "Crear clau API"
 
@@ -2378,7 +2404,7 @@ msgstr "Creeu urgència o curiositat"
 msgid "Create Webhook"
 msgstr "Crear webhook"
 
-#: src/pages/CreateWorkspacePage.tsx:262
+#: src/pages/CreateWorkspacePage.tsx:274
 msgid "Create Workspace"
 msgstr "Crear espai de treball"
 
@@ -2469,6 +2495,10 @@ msgstr "Editor d'estils CSS"
 msgid "CSV must have at least a header row and one data row"
 msgstr "El CSV ha de tenir com a mínim una fila de capçalera i una fila de dades"
 
+#: src/components/settings/veridian_plan_settings.tsx:60
+msgid "Current plan"
+msgstr ""
+
 #: src/pages/DebugSegmentPage.tsx:89
 msgid "Current Segment Tree JSON"
 msgstr "JSON de l'arbre de segment actual"
@@ -2555,7 +2585,7 @@ msgstr "Etiqueta de camp personalitzat desada correctament"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1136
 #: src/components/settings/CustomFieldsConfiguration.tsx:161
-#: src/components/settings/SettingsSidebar.tsx:103
+#: src/components/settings/SettingsSidebar.tsx:105
 msgid "Custom Fields"
 msgstr "Camps personalitzats"
 
@@ -2668,12 +2698,12 @@ msgstr "Camps de cadena personalitzats"
 
 #: src/components/settings/BlogSettings.tsx:463
 #: src/components/settings/DeleteWorkspace.tsx:45
-#: src/components/settings/SettingsSidebar.tsx:122
+#: src/components/settings/SettingsSidebar.tsx:131
 msgid "Danger Zone"
 msgstr "Zona de perill"
 
-#: src/layouts/WorkspaceLayout.tsx:209
-#: src/pages/AnalyticsPage.tsx:77
+#: src/layouts/WorkspaceLayout.tsx:215
+#: src/pages/AnalyticsPage.tsx:84
 msgid "Dashboard"
 msgstr "Dashboard"
 
@@ -2702,7 +2732,7 @@ msgstr "Dies"
 msgid "Debug Segment Builder"
 msgstr "Depurar constructor de segments"
 
-#: src/pages/AcceptInvitationPage.tsx:173
+#: src/pages/AcceptInvitationPage.tsx:172
 msgid "Decline"
 msgstr "Rebutjar"
 
@@ -2755,7 +2785,7 @@ msgid "Defaults to meta title"
 msgstr "Per defecte és el meta títol"
 
 #: src/components/settings/Integrations.tsx:1732
-#: src/pages/SetupWizard.tsx:502
+#: src/pages/SetupWizard.tsx:522
 msgid "Defaults to SMTP host"
 msgstr ""
 
@@ -2932,10 +2962,10 @@ msgstr "Eliminat(s) {deletedCount}, fallat(s) {failedCount}"
 msgid "delivered"
 msgstr "Lliurat"
 
-#: src/components/analytics/EmailMetricsChart.tsx:267
-#: src/components/analytics/EmailMetricsChart.tsx:348
+#: src/components/analytics/EmailMetricsChart.tsx:259
+#: src/components/analytics/EmailMetricsChart.tsx:340
 #: src/components/automations/config/TriggerConfigForm.tsx:90
-#: src/components/broadcasts/BroadcastStats.tsx:177
+#: src/components/broadcasts/BroadcastStats.tsx:169
 #: src/components/messages/MessageHistoryTab.tsx:114
 #: src/components/messages/MessageHistoryTab.tsx:116
 #: src/components/messages/MessageHistoryTable.tsx:266
@@ -3062,17 +3092,17 @@ msgstr "Voleu eliminar permanentment aquest fitxer del vostre emmagatzematge?"
 msgid "Do you want to send \"{0}\" immediately or schedule it for later?"
 msgstr "Voleu enviar \"{0}\" immediatament o programar-ho per més tard?"
 
-#: src/layouts/WorkspaceLayout.tsx:552
+#: src/layouts/WorkspaceLayout.tsx:558
 msgid "Documentation"
 msgstr "Documentació"
 
 #: src/components/settings/Integrations.tsx:1789
 #: src/components/settings/Integrations.tsx:2004
-#: src/pages/SetupWizard.tsx:581
+#: src/pages/SetupWizard.tsx:601
 msgid "Domain"
 msgstr "Domini"
 
-#: src/pages/SetupWizard.tsx:589
+#: src/pages/SetupWizard.tsx:609
 msgid "Domain for the SMTP bridge server (e.g., smtp.yourcompany.com)"
 msgstr "Domini per al servidor de retransmissió SMTP (p. ex., smtp.yourcompany.com)"
 
@@ -3087,6 +3117,7 @@ msgid "Don't index, but follow links"
 msgstr "No indexar, però seguir enllaços"
 
 #: src/components/templates/TemplateTranslationsTab.tsx:297
+#: src/pages/SetupWizard.tsx:299
 msgid "Done"
 msgstr ""
 
@@ -3147,8 +3178,8 @@ msgid "e.g. email"
 msgstr "p. ex. email"
 
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:317
-msgid "e.g. notifuse"
-msgstr "p. ex. notifuse"
+#~ msgid "e.g. notifuse"
+#~ msgstr "p. ex. notifuse"
 
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:263
 msgid "E.g. Password Reset Email"
@@ -3157,6 +3188,10 @@ msgstr "P. ex. Correu de restabliment de contrasenya"
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:278
 msgid "E.g. password_reset"
 msgstr "P. ex. password_reset"
+
+#: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:317
+msgid "e.g. veridian"
+msgstr ""
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:514
 msgid "E.g. Weekly Newsletter - May 2023"
@@ -3359,7 +3394,7 @@ msgstr ""
 #: src/components/settings/Integrations.tsx:1729
 #: src/components/settings/Integrations.tsx:1982
 #: src/components/settings/SystemSettingsDrawer.tsx:399
-#: src/pages/SetupWizard.tsx:499
+#: src/pages/SetupWizard.tsx:519
 msgid "EHLO Hostname"
 msgstr ""
 
@@ -3393,8 +3428,8 @@ msgstr "Correu electrònic"
 #: src/components/timeline/ContactTimeline.tsx:505
 #: src/pages/ContactsPage.tsx:359
 #: src/pages/ContactsPage.tsx:526
-#: src/pages/SignInPage.tsx:142
-#: src/pages/SignInPage.tsx:149
+#: src/pages/SignInPage.tsx:147
+#: src/pages/SignInPage.tsx:154
 msgid "Email"
 msgstr "Correu electrònic"
 
@@ -3404,7 +3439,7 @@ msgstr "Correu (obligatori)"
 
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:383
 #: src/components/settings/Integrations.tsx:1604
-#: src/components/settings/WorkspaceMembers.tsx:559
+#: src/components/settings/WorkspaceMembers.tsx:563
 msgid "Email Address"
 msgstr "Adreça de correu electrònic"
 
@@ -3424,6 +3459,10 @@ msgstr "Càrrega del cos del correu"
 #: src/pages/ContactsPage.tsx:566
 msgid "Email bounced"
 msgstr "Correu rebotat"
+
+#: src/pages/SetupWizard.tsx:295
+msgid "Email delivery"
+msgstr ""
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:455
 msgid "Email field mapping is required"
@@ -3450,7 +3489,7 @@ msgstr "L'assignació de correu falta o és invàlida"
 msgid "Email mapping required"
 msgstr "Assignació de correu obligatòria"
 
-#: src/components/analytics/EmailMetricsChart.tsx:278
+#: src/components/analytics/EmailMetricsChart.tsx:270
 msgid "Email Metrics"
 msgstr "Mètriques de correu"
 
@@ -3504,7 +3543,7 @@ msgstr "Configuració del títol del correu"
 msgid "Email widths above 650px may not display correctly in some email clients"
 msgstr "Les amplades de correu superiors a 650px poden no mostrar-se correctament en alguns clients de correu"
 
-#: src/pages/AcceptInvitationPage.tsx:151
+#: src/pages/AcceptInvitationPage.tsx:150
 msgid "Email:"
 msgstr "Correu:"
 
@@ -3530,7 +3569,7 @@ msgstr "Columna buida. Afegiu contingut de text, botó o imatge."
 msgid "Enable A/B Testing"
 msgstr "Activar proves A/B"
 
-#: src/pages/SetupWizard.tsx:532
+#: src/pages/SetupWizard.tsx:552
 msgid "Enable Anonymous Telemetry"
 msgstr "Activar telemetria anònima"
 
@@ -3543,7 +3582,7 @@ msgstr "Activar blog"
 msgid "Enable closed captions by default"
 msgstr "Activar subtítols per defecte"
 
-#: src/pages/SetupWizard.tsx:558
+#: src/pages/SetupWizard.tsx:578
 msgid "Enable SMTP Bridge Server"
 msgstr "Activar servidor de retransmissió SMTP"
 
@@ -3552,7 +3591,7 @@ msgid "Enable the blog feature to publish articles and content on your custom do
 msgstr "Activeu la funció de blog per publicar articles i contingut a la pàgina d'inici del vostre domini personalitzat. El vostre blog serà accessible a"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:322
-#: src/pages/SetupWizard.tsx:457
+#: src/pages/SetupWizard.tsx:477
 msgid "Enable TLS encryption for SMTP connection"
 msgstr "Activar xifratge TLS per a la connexió SMTP"
 
@@ -3605,7 +3644,7 @@ msgstr "Introduïu un nom per a aquest bloc"
 msgid "Enter a name for this integration"
 msgstr "Introduïu un nom per a aquesta integració"
 
-#: src/pages/CreateWorkspacePage.tsx:209
+#: src/pages/CreateWorkspacePage.tsx:221
 msgid "Enter a name for your workspace"
 msgstr "Introduïu un nom per al vostre espai de treball"
 
@@ -3673,7 +3712,7 @@ msgid "Enter duration"
 msgstr "Introduïu durada"
 
 #: src/components/contacts/ContactUpsertDrawer.tsx:521
-#: src/components/settings/WorkspaceMembers.tsx:564
+#: src/components/settings/WorkspaceMembers.tsx:568
 msgid "Enter email address"
 msgstr "Introduïu adreça de correu"
 
@@ -3745,7 +3784,7 @@ msgstr "Introduïu adreça de correu de resposta"
 msgid "Enter spacing"
 msgstr "Introduïu espaiat"
 
-#: src/pages/SignInPage.tsx:160
+#: src/pages/SignInPage.tsx:165
 msgid "Enter the 6-digit code sent to {email}"
 msgstr "Introdueix el codi de 6 dígits enviat a {email}"
 
@@ -3773,8 +3812,8 @@ msgstr "Introduïu el nom de l'espai de treball"
 msgid "Entity ID:"
 msgstr "ID de l'entitat:"
 
-#: src/components/analytics/ChartVisualization.tsx:390
-#: src/components/analytics/EmailMetricsChart.tsx:294
+#: src/components/analytics/ChartVisualization.tsx:393
+#: src/components/analytics/EmailMetricsChart.tsx:286
 #: src/components/analytics/FailedMessagesTable.tsx:68
 #: src/components/analytics/NewContactsTable.tsx:208
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:930
@@ -3898,7 +3937,7 @@ msgstr "Sortit"
 msgid "Expand"
 msgstr "Expandir"
 
-#: src/pages/AcceptInvitationPage.tsx:154
+#: src/pages/AcceptInvitationPage.tsx:153
 msgid "Expires:"
 msgstr "Caduca:"
 
@@ -3940,13 +3979,13 @@ msgstr "ID extern"
 msgid "failed"
 msgstr "Fallat"
 
-#: src/components/analytics/EmailMetricsChart.tsx:273
-#: src/components/analytics/EmailMetricsChart.tsx:510
+#: src/components/analytics/EmailMetricsChart.tsx:265
+#: src/components/analytics/EmailMetricsChart.tsx:502
 #: src/components/automations/AutomationCard.tsx:281
 #: src/components/automations/nodes/StatNode.tsx:114
 #: src/components/automations/nodes/StatNode.tsx:178
 #: src/components/automations/nodes/StatNode.tsx:261
-#: src/components/broadcasts/BroadcastStats.tsx:249
+#: src/components/broadcasts/BroadcastStats.tsx:241
 #: src/components/contacts/BulkActionProgressModal.tsx:106
 #: src/components/contacts/BulkActionProgressModal.tsx:146
 #: src/components/contacts/BulkUpdateDrawer.tsx:695
@@ -3963,7 +4002,7 @@ msgstr "Fallat"
 msgid "Failed"
 msgstr "Fallat"
 
-#: src/pages/AcceptInvitationPage.tsx:84
+#: src/pages/AcceptInvitationPage.tsx:86
 msgid "Failed to accept invitation"
 msgstr "No s'ha pogut acceptar la invitació"
 
@@ -3987,7 +4026,7 @@ msgstr "No s'ha pogut esborrar el camp"
 msgid "Failed to compile template preview."
 msgstr "No s'ha pogut compilar la previsualització de la plantilla."
 
-#: src/pages/SetupWizard.tsx:218
+#: src/pages/SetupWizard.tsx:219
 msgid "Failed to complete setup"
 msgstr "No s'ha pogut completar la configuració"
 
@@ -3995,7 +4034,7 @@ msgstr "No s'ha pogut completar la configuració"
 msgid "Failed to copy to clipboard"
 msgstr "No s'ha pogut copiar al porta-retalls"
 
-#: src/components/settings/WorkspaceMembers.tsx:305
+#: src/components/settings/WorkspaceMembers.tsx:309
 msgid "Failed to create API key"
 msgstr "No s'ha pogut crear la clau API"
 
@@ -4042,7 +4081,7 @@ msgstr "No s'ha pogut crear el segment"
 msgid "Failed to create template: {0}"
 msgstr "No s'ha pogut crear la plantilla: {0}"
 
-#: src/pages/CreateWorkspacePage.tsx:107
+#: src/pages/CreateWorkspacePage.tsx:112
 msgid "Failed to create workspace"
 msgstr "No s'ha pogut crear l'espai de treball"
 
@@ -4071,7 +4110,7 @@ msgstr "No s'ha pogut eliminar el fitxer: "
 msgid "Failed to delete integration"
 msgstr "No s'ha pogut eliminar la integració"
 
-#: src/components/settings/WorkspaceMembers.tsx:354
+#: src/components/settings/WorkspaceMembers.tsx:358
 msgid "Failed to delete invitation"
 msgstr "No s'ha pogut eliminar la invitació"
 
@@ -4149,11 +4188,11 @@ msgstr "No s'han pogut obtenir les dades de nous contactes"
 msgid "Failed to fetch objects: "
 msgstr "No s'han pogut obtenir els objectes: "
 
-#: src/pages/SetupWizard.tsx:55
+#: src/pages/SetupWizard.tsx:56
 msgid "Failed to fetch setup status"
 msgstr "No s'ha pogut obtenir l'estat de configuració"
 
-#: src/pages/WorkspaceSettingsPage.tsx:82
+#: src/pages/WorkspaceSettingsPage.tsx:85
 msgid "Failed to fetch workspace members"
 msgstr "No s'han pogut obtenir els membres de l'espai de treball"
 
@@ -4165,7 +4204,7 @@ msgstr "No s'ha pogut importar la plantilla MJML. Si us plau, comproveu la sinta
 msgid "Failed to import template. Please check the file format."
 msgstr "No s'ha pogut importar la plantilla. Si us plau, comproveu el format del fitxer."
 
-#: src/components/settings/WorkspaceMembers.tsx:270
+#: src/components/settings/WorkspaceMembers.tsx:274
 msgid "Failed to invite member"
 msgstr "No s'ha pogut convidar el membre"
 
@@ -4237,7 +4276,7 @@ msgstr "No s'han pogut registrar els webhooks"
 msgid "Failed to remove custom field label"
 msgstr "No s'ha pogut treure l'etiqueta de camp personalitzat"
 
-#: src/components/settings/WorkspaceMembers.tsx:335
+#: src/components/settings/WorkspaceMembers.tsx:339
 msgid "Failed to remove member"
 msgstr "No s'ha pogut treure el membre"
 
@@ -4245,11 +4284,11 @@ msgstr "No s'ha pogut treure el membre"
 msgid "Failed to render preview"
 msgstr "No s'ha pogut renderitzar la previsualització"
 
-#: src/components/settings/WorkspaceMembers.tsx:390
+#: src/components/settings/WorkspaceMembers.tsx:394
 msgid "Failed to resend invitation"
 msgstr "No s'ha pogut reenviar la invitació"
 
-#: src/pages/SignInPage.tsx:122
+#: src/pages/SignInPage.tsx:123
 msgid "Failed to resend magic code"
 msgstr "Error en reenviar el codi màgic"
 
@@ -4316,7 +4355,7 @@ msgstr "No s'ha pogut seleccionar el guanyador"
 msgid "Failed to send broadcast"
 msgstr "No s'ha pogut enviar la difusió"
 
-#: src/pages/SignInPage.tsx:73
+#: src/pages/SignInPage.tsx:74
 msgid "Failed to send magic code"
 msgstr "Error en enviar el codi màgic"
 
@@ -4344,7 +4383,7 @@ msgstr "No s'ha pogut provar el proveïdor de correu"
 msgid "Failed to test recipient feed: {0}"
 msgstr ""
 
-#: src/pages/SetupWizard.tsx:84
+#: src/pages/SetupWizard.tsx:85
 msgid "Failed to test SMTP connection"
 msgstr "No s'ha pogut provar la connexió SMTP"
 
@@ -4422,11 +4461,11 @@ msgstr "No s'ha pogut actualitzar la plantilla: {0}"
 msgid "Failed to update workspace settings"
 msgstr "No s'han pogut actualitzar els paràmetres de l'espai de treball"
 
-#: src/layouts/WorkspaceLayout.tsx:198
+#: src/layouts/WorkspaceLayout.tsx:204
 msgid "Failed to update workspace settings: {errorMessage}"
 msgstr "No s'han pogut actualitzar els paràmetres de l'espai de treball: {errorMessage}"
 
-#: src/pages/SignInPage.tsx:44
+#: src/pages/SignInPage.tsx:45
 msgid "Failed to verify code"
 msgstr "Error en verificar el codi"
 
@@ -4500,7 +4539,7 @@ msgid "File is too large. Maximum size is 1MB."
 msgstr ""
 
 #: src/components/file_manager/context.tsx:155
-#: src/layouts/WorkspaceLayout.tsx:371
+#: src/layouts/WorkspaceLayout.tsx:377
 #: src/pages/FileManagerPage.tsx:119
 msgid "File Manager"
 msgstr "Gestor de fitxers"
@@ -4679,16 +4718,16 @@ msgid "From"
 msgstr "Des de"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:366
-#: src/pages/SetupWizard.tsx:480
+#: src/pages/SetupWizard.tsx:500
 msgid "From Email"
 msgstr "De correu"
 
-#: src/pages/SetupWizard.tsx:483
+#: src/pages/SetupWizard.tsx:503
 msgid "From email is required"
 msgstr "El correu del remitent és obligatori"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:382
-#: src/pages/SetupWizard.tsx:491
+#: src/pages/SetupWizard.tsx:511
 msgid "From Name"
 msgstr "Del nom"
 
@@ -4729,7 +4768,7 @@ msgstr "Amplada completa al mòbil"
 msgid "Fullscreen"
 msgstr "Pantalla completa"
 
-#: src/components/settings/SettingsSidebar.tsx:113
+#: src/components/settings/SettingsSidebar.tsx:115
 #: src/components/settings/SystemSettingsDrawer.tsx:228
 msgid "General"
 msgstr "General"
@@ -4774,8 +4813,8 @@ msgstr ""
 msgid "Global feed URL is required when enabled"
 msgstr "L'URL del feed global és requerida quan està habilitat"
 
-#: src/pages/AcceptInvitationPage.tsx:125
-#: src/pages/SetupWizard.tsx:314
+#: src/pages/AcceptInvitationPage.tsx:123
+#: src/pages/SetupWizard.tsx:334
 msgid "Go to Sign In"
 msgstr "Anar a iniciar sessió"
 
@@ -4858,7 +4897,7 @@ msgstr "Alçada"
 
 #: src/components/email_builder/MjmlCodeEditor.tsx:701
 #: src/components/templates/CreateTemplateDrawer.tsx:136
-#: src/layouts/WorkspaceLayout.tsx:578
+#: src/layouts/WorkspaceLayout.tsx:571
 msgid "Help"
 msgstr "Ajuda"
 
@@ -4867,8 +4906,12 @@ msgid "Help & Support"
 msgstr "Ajuda i suport"
 
 #: src/pages/SetupWizard.tsx:533
-msgid "Help us improve Notifuse by sending anonymous usage statistics. No personal data or message content is collected."
-msgstr "Ajudeu-nos a millorar Notifuse enviant estadístiques d'ús anònimes. No es recopilen dades personals ni contingut de missatges."
+#~ msgid "Help us improve Notifuse by sending anonymous usage statistics. No personal data or message content is collected."
+#~ msgstr "Ajudeu-nos a millorar Notifuse enviant estadístiques d'ús anònimes. No es recopilen dades personals ni contingut de missatges."
+
+#: src/pages/SetupWizard.tsx:553
+msgid "Help us improve Veridian Mail by sending anonymous usage statistics. No personal data or message content is collected."
+msgstr ""
 
 #: src/components/blog_editor/components/image/ImageNodeView.tsx:329
 msgid "Helps screen readers describe the image"
@@ -4993,7 +5036,7 @@ msgstr "URL d'icona/favicon"
 msgid "ID"
 msgstr "ID"
 
-#: src/pages/CreateWorkspacePage.tsx:226
+#: src/pages/CreateWorkspacePage.tsx:238
 msgid "ID can only contain lowercase letters and numbers"
 msgstr "L'ID només pot contenir lletres minúscules i números"
 
@@ -5010,7 +5053,7 @@ msgstr "L'ID no coincideix"
 msgid "ID for API:"
 msgstr "ID per a API:"
 
-#: src/pages/CreateWorkspacePage.tsx:233
+#: src/pages/CreateWorkspacePage.tsx:245
 msgid "ID is automatically generated but can be modified if needed"
 msgstr "L'ID es genera automàticament però es pot modificar si cal"
 
@@ -5082,7 +5125,7 @@ msgstr "Si està activat, la difusió s'enviarà segons el fus horari de cada de
 msgid "If the contact email doesn't exist in your workspace, it will be automatically created."
 msgstr "Si el correu del contacte no existeix al vostre espai de treball, es crearà automàticament."
 
-#: src/pages/CreateWorkspacePage.tsx:149
+#: src/pages/CreateWorkspacePage.tsx:154
 msgid "If you already have a workspace, sign in below with the email you used to subscribe — a secure magic link will be sent to your inbox."
 msgstr ""
 
@@ -5315,17 +5358,21 @@ msgid "Integration updated successfully"
 msgstr "Integració actualitzada correctament"
 
 #: src/components/settings/Integrations.tsx:2142
-#: src/components/settings/SettingsSidebar.tsx:55
+#: src/components/settings/SettingsSidebar.tsx:57
 msgid "Integrations"
 msgstr "Integracions"
+
+#: src/components/settings/veridian_plan_source_badge.tsx:44
+msgid "Internal Veridian account"
+msgstr ""
 
 #: src/components/settings/SystemSettingsDrawer.tsx:236
 #: src/components/settings/SystemSettingsDrawer.tsx:370
 msgid "Invalid email"
 msgstr ""
 
-#: src/pages/SetupWizard.tsx:346
-#: src/pages/SetupWizard.tsx:484
+#: src/pages/SetupWizard.tsx:366
+#: src/pages/SetupWizard.tsx:504
 msgid "Invalid email format"
 msgstr "Format de correu invàlid"
 
@@ -5333,7 +5380,7 @@ msgstr "Format de correu invàlid"
 msgid "Invalid format. Use: 90 or 1:30 or 1:00:30"
 msgstr "Format invàlid. Utilitzeu: 90 o 1:30 o 1:00:30"
 
-#: src/pages/AcceptInvitationPage.tsx:118
+#: src/pages/AcceptInvitationPage.tsx:119
 msgid "Invalid Invitation"
 msgstr "Invitació invàlida"
 
@@ -5379,7 +5426,7 @@ msgstr "Estructura d'arbre invàlida: no és un objecte"
 msgid "Invalid tree structure: root must be mjml type"
 msgstr "Estructura d'arbre invàlida: l'arrel ha de ser de tipus mjml"
 
-#: src/pages/SetupWizard.tsx:359
+#: src/pages/SetupWizard.tsx:379
 msgid "Invalid URL format"
 msgstr "Format d'URL invàlid"
 
@@ -5392,15 +5439,15 @@ msgstr "Format d'URL invàlid. Utilitzeu una URL vàlida o una expressió liquid
 msgid "Invalid YouTube URL"
 msgstr "URL de YouTube invàlida"
 
-#: src/pages/AcceptInvitationPage.tsx:77
+#: src/pages/AcceptInvitationPage.tsx:79
 msgid "Invitation accepted successfully! Welcome to the workspace."
 msgstr "Invitació acceptada correctament! Benvingut a l'espai de treball."
 
-#: src/components/settings/WorkspaceMembers.tsx:350
+#: src/components/settings/WorkspaceMembers.tsx:354
 msgid "Invitation deleted successfully"
 msgstr "Invitació eliminada correctament"
 
-#: src/components/settings/WorkspaceMembers.tsx:386
+#: src/components/settings/WorkspaceMembers.tsx:390
 msgid "Invitation resent to {email}"
 msgstr "Invitació reenviada a {email}"
 
@@ -5412,8 +5459,8 @@ msgstr "Invitació enviada"
 msgid "Invitation sent to {inviteEmail}"
 msgstr "Invitació enviada a {inviteEmail}"
 
-#: src/components/settings/WorkspaceMembers.tsx:522
-#: src/components/settings/WorkspaceMembers.tsx:544
+#: src/components/settings/WorkspaceMembers.tsx:526
+#: src/components/settings/WorkspaceMembers.tsx:548
 msgid "Invite Member"
 msgstr "Convidar membre"
 
@@ -5609,6 +5656,14 @@ msgstr "Fem un ràpid recorregut per ajudar-vos a començar a construir correus 
 msgid "Letter Spacing"
 msgstr "Espaiat de lletres"
 
+#: src/components/settings/veridian_plan_source_badge.tsx:40
+msgid "Lifetime — access offered by Veridian"
+msgstr ""
+
+#: src/components/settings/veridian_plan_source_badge.tsx:42
+msgid "Lifetime — included with your Veridian website"
+msgstr ""
+
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx:286
 msgid "Lighter"
 msgstr "Més clar"
@@ -5729,7 +5784,7 @@ msgid "List:"
 msgstr "Llista:"
 
 #: src/components/analytics/NewContactsTable.tsx:73
-#: src/layouts/WorkspaceLayout.tsx:246
+#: src/layouts/WorkspaceLayout.tsx:252
 #: src/pages/ContactsPage.tsx:414
 #: src/pages/ContactsPage.tsx:534
 #: src/pages/ListsPage.tsx:155
@@ -5749,7 +5804,7 @@ msgstr "En directe"
 msgid "LLM integration saved successfully"
 msgstr "Integració LLM desada correctament"
 
-#: src/components/messages/MessageHistoryTable.tsx:445
+#: src/components/messages/MessageHistoryTable.tsx:444
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:554
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:506
 #: src/pages/ContactsPage.tsx:1154
@@ -5769,10 +5824,10 @@ msgid "Loading automations..."
 msgstr "Carregant automatitzacions..."
 
 #: src/components/messages/MessageHistoryTable.tsx:416
-msgid "Loading message history..."
-msgstr "Carregant historial de missatges..."
+#~ msgid "Loading message history..."
+#~ msgstr "Carregant historial de missatges..."
 
-#: src/pages/SetupWizard.tsx:274
+#: src/pages/SetupWizard.tsx:275
 msgid "Loading setup..."
 msgstr "Carregant configuració..."
 
@@ -5825,11 +5880,11 @@ msgstr "Previsualització del logotip"
 msgid "Logo URL"
 msgstr "URL del logotip"
 
-#: src/layouts/WorkspaceLayout.tsx:590
+#: src/layouts/WorkspaceLayout.tsx:583
 msgid "Logout"
 msgstr "Tancar sessió"
 
-#: src/layouts/WorkspaceLayout.tsx:380
+#: src/layouts/WorkspaceLayout.tsx:386
 #: src/pages/LogsPage.tsx:28
 msgid "Logs"
 msgstr "Registres"
@@ -5842,7 +5897,7 @@ msgstr "Bucle"
 msgid "lowercase"
 msgstr "Minúscules"
 
-#: src/pages/SignInPage.tsx:71
+#: src/pages/SignInPage.tsx:72
 msgid "Magic code sent to your email"
 msgstr "Codi màgic enviat al teu correu"
 
@@ -5862,7 +5917,12 @@ msgstr "Fa que la secció ocupi tota l'amplada de la vista del correu, ignorant 
 msgid "Makes the wrapper span the entire email viewport width, ignoring container constraints (typically 600px). Useful for full-bleed backgrounds and hero sections."
 msgstr "Fa que el contenidor ocupi tota l'amplada de la vista del correu, ignorant les restriccions del contenidor (normalment 600px). Útil per a fons de sang completa i seccions hero."
 
-#: src/components/settings/WorkspaceMembers.tsx:513
+#: src/components/settings/veridian_plan_settings.tsx:81
+#: src/components/veridian_brand_footer.tsx:62
+msgid "Manage subscription"
+msgstr ""
+
+#: src/components/settings/WorkspaceMembers.tsx:517
 msgid "Manage your workspace members"
 msgstr "Gestioneu els membres del vostre espai de treball"
 
@@ -5871,6 +5931,10 @@ msgstr "Gestioneu els membres del vostre espai de treball"
 #: src/pages/TransactionalNotificationsPage.tsx:132
 msgid "Managed by {0} ({1} integration)"
 msgstr "Gestionat per {0} (integració {1})"
+
+#: src/components/settings/veridian_plan_source_badge.tsx:46
+msgid "Manual admin plan"
+msgstr ""
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1042
 msgid "Map your CSV columns to contact fields. The"
@@ -5893,7 +5957,7 @@ msgstr "Es requereix proveïdor de correu de màrqueting"
 msgid "Marketing Emails"
 msgstr "Correus de màrqueting"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:176
+#: src/components/analytics/AnalyticsDashboard.tsx:173
 msgid "Marketing Provider"
 msgstr "Proveïdor de màrqueting"
 
@@ -5921,7 +5985,7 @@ msgstr "Es permeten màxim 20 adjunts"
 msgid "Maximum number of posts to include in the RSS/JSON feed (1–20)"
 msgstr ""
 
-#: src/components/settings/WorkspaceMembers.tsx:331
+#: src/components/settings/WorkspaceMembers.tsx:335
 msgid "Member removed successfully"
 msgstr "Membre tret correctament"
 
@@ -6150,7 +6214,7 @@ msgstr "Nom:"
 msgid "New Category"
 msgstr "Nova categoria"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:141
+#: src/components/analytics/AnalyticsDashboard.tsx:137
 msgid "New Contacts"
 msgstr "Nous contactes"
 
@@ -6162,7 +6226,7 @@ msgstr "Nova conversa"
 msgid "New folder"
 msgstr "Nova carpeta"
 
-#: src/pages/SignInPage.tsx:120
+#: src/pages/SignInPage.tsx:121
 msgid "New magic code sent to your email"
 msgstr "Nou codi màgic enviat al teu correu"
 
@@ -6187,8 +6251,8 @@ msgstr "Nou tema"
 msgid "New Window"
 msgstr "Nova finestra"
 
-#: src/layouts/WorkspaceLayout.tsx:530
-#: src/pages/CreateWorkspacePage.tsx:182
+#: src/layouts/WorkspaceLayout.tsx:535
+#: src/pages/CreateWorkspacePage.tsx:194
 msgid "New workspace"
 msgstr "Nou espai de treball"
 
@@ -6236,8 +6300,8 @@ msgstr "Propera execució"
 #: src/components/settings/WebhookCard.tsx:279
 #: src/components/settings/WorkspaceMembers.tsx:194
 #: src/components/settings/WorkspaceMembers.tsx:214
-#: src/components/settings/WorkspaceMembers.tsx:430
-#: src/components/settings/WorkspaceMembers.tsx:438
+#: src/components/settings/WorkspaceMembers.tsx:434
+#: src/components/settings/WorkspaceMembers.tsx:442
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:148
 #: src/pages/BroadcastsPage.tsx:566
 msgid "No"
@@ -6284,7 +6348,7 @@ msgstr "No hi ha contactes que coincideixin amb els filtres actuals"
 msgid "No CSV data available"
 msgstr "No hi ha dades CSV disponibles"
 
-#: src/components/analytics/ChartVisualization.tsx:395
+#: src/components/analytics/ChartVisualization.tsx:398
 msgid "No data available"
 msgstr "No hi ha dades disponibles"
 
@@ -6348,11 +6412,11 @@ msgstr "Sense llista"
 msgid "No lists found"
 msgstr "No s'han trobat llistes"
 
-#: src/components/settings/WorkspaceMembers.tsx:538
+#: src/components/settings/WorkspaceMembers.tsx:542
 msgid "No members found"
 msgstr "No s'han trobat membres"
 
-#: src/components/messages/MessageHistoryTable.tsx:425
+#: src/components/messages/MessageHistoryTable.tsx:424
 msgid "No messages found"
 msgstr "No s'han trobat missatges"
 
@@ -6508,8 +6572,8 @@ msgstr "Normal"
 msgid "Not assigned"
 msgstr "No assignat"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:164
-#: src/components/analytics/AnalyticsDashboard.tsx:188
+#: src/components/analytics/AnalyticsDashboard.tsx:161
+#: src/components/analytics/AnalyticsDashboard.tsx:185
 #: src/components/settings/Integrations.tsx:1238
 #: src/components/settings/Integrations.tsx:1275
 msgid "Not configured"
@@ -6680,6 +6744,10 @@ msgstr "Obrir al web"
 msgid "Open Rate"
 msgstr "Taxa d'obertura"
 
+#: src/components/veridian_paywall_modal.tsx:52
+msgid "Open Veridian"
+msgstr ""
+
 #: src/components/timeline/ContactTimeline.tsx:498
 msgid "opened"
 msgstr "Obert"
@@ -6695,9 +6763,9 @@ msgstr "Obert"
 msgid "opens"
 msgstr "Obertures"
 
-#: src/components/analytics/EmailMetricsChart.tsx:268
-#: src/components/analytics/EmailMetricsChart.tsx:375
-#: src/components/broadcasts/BroadcastStats.tsx:201
+#: src/components/analytics/EmailMetricsChart.tsx:260
+#: src/components/analytics/EmailMetricsChart.tsx:367
+#: src/components/broadcasts/BroadcastStats.tsx:193
 #: src/pages/BroadcastsPage.tsx:751
 msgid "Opens"
 msgstr "Obertures"
@@ -6841,7 +6909,7 @@ msgstr "Càrrega:"
 #: src/components/automations/config/AddToListConfigForm.tsx:18
 #: src/components/automations/config/TriggerConfigForm.tsx:73
 #: src/components/contacts/ContactDetailsDrawer.tsx:582
-#: src/components/lists/ListStats.tsx:90
+#: src/components/lists/ListStats.tsx:82
 #: src/components/settings/WorkspaceMembers.tsx:116
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:79
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:236
@@ -6868,8 +6936,12 @@ msgid "Per-recipient feed URL is required when enabled"
 msgstr "L'URL del feed per destinatari és requerida quan està habilitat"
 
 #: src/pages/SetupWizard.tsx:543
-msgid "Periodically check for new Notifuse versions and security updates. A popup will list new versions available."
-msgstr "Comproveu periòdicament noves versions de Notifuse i actualitzacions de seguretat. Una finestra emergent llistarà les noves versions disponibles."
+#~ msgid "Periodically check for new Notifuse versions and security updates. A popup will list new versions available."
+#~ msgstr "Comproveu periòdicament noves versions de Notifuse i actualitzacions de seguretat. Una finestra emergent llistarà les noves versions disponibles."
+
+#: src/pages/SetupWizard.tsx:563
+msgid "Periodically check for new Veridian Mail versions and security updates. A popup will list new versions available."
+msgstr ""
 
 #: src/components/settings/WorkspaceMembers.tsx:130
 #: src/components/settings/WorkspaceMembers.tsx:145
@@ -6877,7 +6949,7 @@ msgid "Permission Details"
 msgstr "Detalls del permís"
 
 #: src/components/settings/WorkspaceMembers.tsx:109
-#: src/components/settings/WorkspaceMembers.tsx:570
+#: src/components/settings/WorkspaceMembers.tsx:574
 msgid "Permissions"
 msgstr "Permisos"
 
@@ -6914,6 +6986,11 @@ msgstr "URL de la foto"
 
 #: src/components/transactional/ApiCommandModal.tsx:524
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
+msgstr ""
+
+#: src/components/settings/SettingsSidebar.tsx:122
+#: src/components/settings/veridian_plan_settings.tsx:51
+msgid "Plan"
 msgstr ""
 
 #: src/components/blog_editor/components/youtube/YoutubeNodeView.tsx:604
@@ -6991,7 +7068,7 @@ msgstr "Si us plau, introduïu un slug"
 msgid "Please enter a URL"
 msgstr "Si us plau, introduïu una URL"
 
-#: src/pages/SignInPage.tsx:168
+#: src/pages/SignInPage.tsx:173
 msgid "Please enter a valid 6-digit code!"
 msgstr "Si us plau, introdueix un codi de 6 dígits vàlid!"
 
@@ -6999,7 +7076,7 @@ msgstr "Si us plau, introdueix un codi de 6 dígits vàlid!"
 msgid "Please enter a valid email"
 msgstr "Si us plau, introduïu un correu vàlid"
 
-#: src/pages/SignInPage.tsx:146
+#: src/pages/SignInPage.tsx:151
 msgid "Please enter a valid email!"
 msgstr "Si us plau, introdueix un correu vàlid!"
 
@@ -7011,7 +7088,7 @@ msgstr "Si us plau, introduïu una URL d'imatge vàlida"
 #: src/components/settings/GeneralSettings.tsx:244
 #: src/components/settings/LogoInput.tsx:27
 #: src/components/settings/WebhooksSettings.tsx:235
-#: src/pages/CreateWorkspacePage.tsx:246
+#: src/pages/CreateWorkspacePage.tsx:258
 msgid "Please enter a valid URL"
 msgstr "Si us plau, introduïu una URL vàlida"
 
@@ -7023,7 +7100,7 @@ msgstr "Si us plau, introduïu una URL de YouTube vàlida"
 msgid "Please enter a website URL first"
 msgstr "Si us plau, introduïu primer una URL de lloc web"
 
-#: src/pages/CreateWorkspacePage.tsx:205
+#: src/pages/CreateWorkspacePage.tsx:217
 msgid "Please enter a workspace name"
 msgstr "Si us plau, introduïu un nom d'espai de treball"
 
@@ -7031,8 +7108,8 @@ msgstr "Si us plau, introduïu un nom d'espai de treball"
 msgid "Please enter an API identifier"
 msgstr "Si us plau, introduïu un identificador API"
 
-#: src/components/settings/WorkspaceMembers.tsx:280
-#: src/components/settings/WorkspaceMembers.tsx:613
+#: src/components/settings/WorkspaceMembers.tsx:284
+#: src/components/settings/WorkspaceMembers.tsx:617
 msgid "Please enter an API key name"
 msgstr "Si us plau, introduïu un nom de clau API"
 
@@ -7042,7 +7119,7 @@ msgid "Please enter an automation name"
 msgstr "Si us plau, introduïu un nom d'automatització"
 
 #: src/components/settings/WorkspaceMembers.tsx:247
-#: src/components/settings/WorkspaceMembers.tsx:561
+#: src/components/settings/WorkspaceMembers.tsx:565
 msgid "Please enter an email address"
 msgstr "Si us plau, introduïu una adreça de correu"
 
@@ -7065,11 +7142,11 @@ msgstr "Si us plau, introduïu el nom de l'espai de treball"
 msgid "Please enter your API key"
 msgstr "Si us plau, introduïu la vostra clau API"
 
-#: src/pages/SignInPage.tsx:165
+#: src/pages/SignInPage.tsx:170
 msgid "Please input the magic code!"
 msgstr "Si us plau, introdueix el codi màgic!"
 
-#: src/pages/SignInPage.tsx:145
+#: src/pages/SignInPage.tsx:150
 msgid "Please input your email!"
 msgstr "Si us plau, introdueix el teu correu!"
 
@@ -7178,11 +7255,11 @@ msgid "Please upload a CSV file with email addresses"
 msgstr "Si us plau, pugeu un fitxer CSV amb adreces de correu"
 
 #: src/components/transactional/ApiCommandModal.tsx:533
-#: src/pages/SetupWizard.tsx:595
+#: src/pages/SetupWizard.tsx:615
 msgid "Port"
 msgstr "Port"
 
-#: src/pages/SetupWizard.tsx:604
+#: src/pages/SetupWizard.tsx:624
 msgid "Port for the SMTP bridge server (default: 587)"
 msgstr "Port per al servidor de retransmissió SMTP (per defecte: 587)"
 
@@ -7242,6 +7319,10 @@ msgstr "Publicacions a les pàgines de categoria"
 #: src/components/settings/BlogSettings.tsx:361
 msgid "Posts on homepage"
 msgstr "Publicacions a la pàgina d'inici"
+
+#: src/components/veridian_brand_footer.tsx:54
+msgid "Powered by Veridian"
+msgstr ""
 
 #: src/components/seo/SEOSettingsForm.tsx:95
 #: src/components/seo/SEOSettingsForm.tsx:207
@@ -7404,8 +7485,12 @@ msgid "Public lists are visible in the Notification Center for users to subscrib
 msgstr "Les llistes públiques són visibles al Centre de notificacions perquè els usuaris s'hi subscriguin"
 
 #: src/pages/SetupWizard.tsx:361
-msgid "Public URL where this Notifuse instance is accessible"
-msgstr "URL pública on aquesta instància de Notifuse és accessible"
+#~ msgid "Public URL where this Notifuse instance is accessible"
+#~ msgstr "URL pública on aquesta instància de Notifuse és accessible"
+
+#: src/pages/SetupWizard.tsx:381
+msgid "Public URL where this Veridian Mail instance is accessible"
+msgstr ""
 
 #: src/components/blog/PublishModal.tsx:113
 msgid "Publication"
@@ -7487,8 +7572,8 @@ msgid "Re-register"
 msgstr "Tornar a registrar"
 
 #: src/components/settings/EditPermissionsModal.tsx:86
-#: src/components/settings/WorkspaceMembers.tsx:430
-#: src/components/settings/WorkspaceMembers.tsx:484
+#: src/components/settings/WorkspaceMembers.tsx:434
+#: src/components/settings/WorkspaceMembers.tsx:488
 msgid "Read"
 msgstr "Llegit"
 
@@ -7503,6 +7588,10 @@ msgstr "Temps de lectura"
 #: src/components/templates/ImportExportButton.tsx:423
 msgid "Ready to send"
 msgstr "Llest per enviar"
+
+#: src/pages/SetupWizard.tsx:300
+msgid "Ready to sign in"
+msgstr ""
 
 #: src/components/contacts/SegmentsFilter.tsx:53
 msgid "Ready to use"
@@ -7720,8 +7809,8 @@ msgid "Reply-To"
 msgstr "Respondre a"
 
 #: src/layouts/WorkspaceLayout.tsx:565
-msgid "Report An Issue"
-msgstr "Informar d'un problema"
+#~ msgid "Report An Issue"
+#~ msgstr "Informar d'un problema"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:235
 #: src/components/settings/SystemSettingsDrawer.tsx:247
@@ -7745,7 +7834,7 @@ msgstr ""
 msgid "Requires a padding"
 msgstr "Requereix un farciment"
 
-#: src/pages/SignInPage.tsx:199
+#: src/pages/SignInPage.tsx:204
 msgid "Resend code"
 msgstr "Reenviar codi"
 
@@ -7772,7 +7861,7 @@ msgid "Reset translation"
 msgstr ""
 
 #: src/components/settings/EditPermissionsModal.tsx:80
-#: src/components/settings/WorkspaceMembers.tsx:478
+#: src/components/settings/WorkspaceMembers.tsx:482
 msgid "Resource"
 msgstr "Recurs"
 
@@ -7800,6 +7889,10 @@ msgstr "Restaurar esborrany"
 #: src/components/blog/ThemeEditorDrawer.tsx:452
 msgid "Restore Draft?"
 msgstr "Restaurar esborrany?"
+
+#: src/components/veridian_soft_delete_banner.tsx:86
+msgid "Restore in Veridian"
+msgstr ""
 
 #: src/components/automations/config/TriggerConfigForm.tsx:70
 msgid "Resubscribed"
@@ -7861,7 +7954,7 @@ msgid "Role"
 msgstr "Rol"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:232
-#: src/pages/SetupWizard.tsx:342
+#: src/pages/SetupWizard.tsx:362
 msgid "Root Email"
 msgstr "Correu arrel"
 
@@ -8095,7 +8188,7 @@ msgstr "Atributs de secció"
 msgid "Security"
 msgstr "Seguretat"
 
-#: src/pages/SetupWizard.tsx:388
+#: src/pages/SetupWizard.tsx:408
 msgid "See docs for:"
 msgstr "Consulteu la documentació per a:"
 
@@ -8383,7 +8476,7 @@ msgstr "Seleccionar hora"
 #: src/components/blog/PublishModal.tsx:195
 #: src/components/broadcasts/SendOrScheduleModal.tsx:276
 #: src/components/contacts/ContactUpsertDrawer.tsx:430
-#: src/pages/AnalyticsPage.tsx:86
+#: src/pages/AnalyticsPage.tsx:93
 msgid "Select timezone"
 msgstr "Seleccionar fus horari"
 
@@ -8419,7 +8512,7 @@ msgstr "Seleccioneu a quin segment s'aplica aquest activador"
 msgid "Select Winner"
 msgstr "Seleccionar guanyador"
 
-#: src/layouts/WorkspaceLayout.tsx:502
+#: src/layouts/WorkspaceLayout.tsx:507
 #: src/pages/DashboardPage.tsx:31
 msgid "Select workspace"
 msgstr "Seleccionar espai de treball"
@@ -8459,11 +8552,11 @@ msgstr "Envieu una notificació transaccional utilitzant Python:"
 msgid "Send a transactional notification using TypeScript/JavaScript:"
 msgstr "Envieu una notificació transaccional utilitzant TypeScript/JavaScript:"
 
-#: src/components/settings/WorkspaceMembers.tsx:553
+#: src/components/settings/WorkspaceMembers.tsx:557
 msgid "Send Invitation"
 msgstr "Enviar invitació"
 
-#: src/pages/SignInPage.tsx:154
+#: src/pages/SignInPage.tsx:159
 msgid "Send Magic Code"
 msgstr "Enviar codi màgic"
 
@@ -8524,10 +8617,10 @@ msgstr "Enviant webhook de prova..."
 msgid "sent"
 msgstr "Enviat"
 
-#: src/components/analytics/EmailMetricsChart.tsx:266
-#: src/components/analytics/EmailMetricsChart.tsx:321
+#: src/components/analytics/EmailMetricsChart.tsx:258
+#: src/components/analytics/EmailMetricsChart.tsx:313
 #: src/components/automations/config/TriggerConfigForm.tsx:89
-#: src/components/broadcasts/BroadcastStats.tsx:143
+#: src/components/broadcasts/BroadcastStats.tsx:135
 #: src/components/messages/MessageHistoryTab.tsx:101
 #: src/components/messages/MessageHistoryTab.tsx:103
 #: src/components/messages/MessageHistoryTable.tsx:258
@@ -8556,7 +8649,7 @@ msgstr "Títol SEO per als motors de cerca (recomanat: 50-60 caràcters)"
 msgid "Separate sides"
 msgstr "Separar costats"
 
-#: src/pages/SetupWizard.tsx:187
+#: src/pages/SetupWizard.tsx:188
 msgid "Server is restarting with new configuration..."
 msgstr "El servidor s'està reiniciant amb la nova configuració..."
 
@@ -8565,7 +8658,7 @@ msgid "Server is restarting..."
 msgstr ""
 
 #: src/components/settings/SystemSettingsDrawer.tsx:180
-#: src/pages/SetupWizard.tsx:211
+#: src/pages/SetupWizard.tsx:212
 msgid "Server restart timeout. Please refresh the page manually."
 msgstr "Temps d'espera del reinici del servidor. Si us plau, actualitzeu la pàgina manualment."
 
@@ -8573,7 +8666,7 @@ msgstr "Temps d'espera del reinici del servidor. Si us plau, actualitzeu la pàg
 msgid "Server restarted successfully!"
 msgstr ""
 
-#: src/pages/SetupWizard.tsx:201
+#: src/pages/SetupWizard.tsx:202
 msgid "Server restarted successfully! You can now sign in."
 msgstr "Servidor reiniciat correctament! Ara podeu iniciar sessió."
 
@@ -8673,20 +8766,20 @@ msgstr "Estableix el punt de ruptura responsiu per a tot el correu"
 msgid "Sets the screen width below which the email will switch to mobile layout. Most email clients use 480px as the standard mobile breakpoint."
 msgstr "Estableix l'amplada de pantalla per sota de la qual el correu canviarà al disseny mòbil. La majoria de clients de correu utilitzen 480px com a punt de ruptura mòbil estàndard."
 
-#: src/pages/SetupWizard.tsx:672
+#: src/pages/SetupWizard.tsx:692
 msgid "Setting up..."
 msgstr "Configurant..."
 
-#: src/components/settings/SettingsSidebar.tsx:128
-#: src/layouts/WorkspaceLayout.tsx:389
+#: src/components/settings/SettingsSidebar.tsx:137
+#: src/layouts/WorkspaceLayout.tsx:395
 msgid "Settings"
 msgstr "Configuració"
 
-#: src/pages/SetupWizard.tsx:321
+#: src/pages/SetupWizard.tsx:341
 msgid "Setup"
 msgstr "Configuració"
 
-#: src/pages/SetupWizard.tsx:297
+#: src/pages/SetupWizard.tsx:322
 msgid "Setup Complete!"
 msgstr "Configuració completada!"
 
@@ -8711,11 +8804,11 @@ msgstr "Mostrar detalls"
 msgid "Show More ({0} remaining)"
 msgstr "Mostrar més ({0} restants)"
 
-#: src/pages/SignInPage.tsx:132
+#: src/pages/SignInPage.tsx:137
 msgid "Sign In"
 msgstr "Iniciar sessió"
 
-#: src/pages/CreateWorkspacePage.tsx:161
+#: src/pages/CreateWorkspacePage.tsx:173
 msgid "Sign in with magic link"
 msgstr ""
 
@@ -8767,13 +8860,17 @@ msgstr "L'slug només pot contenir lletres minúscules, números i guions"
 msgid "SMS"
 msgstr "SMS"
 
-#: src/components/settings/SettingsSidebar.tsx:108
+#: src/pages/SetupWizard.tsx:296
+msgid "SMTP & bridge settings"
+msgstr ""
+
+#: src/components/settings/SettingsSidebar.tsx:110
 #: src/components/settings/SMTPBridgeSettings.tsx:20
 #: src/components/settings/SystemSettingsDrawer.tsx:422
 msgid "SMTP Bridge"
 msgstr "Relay SMTP"
 
-#: src/pages/SetupWizard.tsx:586
+#: src/pages/SetupWizard.tsx:606
 msgid "SMTP bridge domain is required"
 msgstr "El domini de relay SMTP és obligatori"
 
@@ -8781,7 +8878,7 @@ msgstr "El domini de relay SMTP és obligatori"
 msgid "SMTP bridge is not configured."
 msgstr "El relay SMTP no està configurat."
 
-#: src/pages/SetupWizard.tsx:601
+#: src/pages/SetupWizard.tsx:621
 msgid "SMTP bridge port is required"
 msgstr "El port de relay SMTP és obligatori"
 
@@ -8789,11 +8886,11 @@ msgstr "El port de relay SMTP és obligatori"
 msgid "SMTP bridge server for forwarding transactional emails"
 msgstr "Servidor de relay SMTP per reenviar correus transaccionals"
 
-#: src/pages/SetupWizard.tsx:383
+#: src/pages/SetupWizard.tsx:403
 msgid "SMTP Configuration"
 msgstr "Configuració SMTP"
 
-#: src/pages/SetupWizard.tsx:81
+#: src/pages/SetupWizard.tsx:82
 msgid "SMTP connection successful!"
 msgstr "Connexió SMTP correcta!"
 
@@ -8812,17 +8909,17 @@ msgstr "Domini SMTP"
 #: src/components/settings/Integrations.tsx:1545
 #: src/components/settings/Integrations.tsx:1961
 #: src/components/settings/SystemSettingsDrawer.tsx:284
-#: src/pages/SetupWizard.tsx:430
+#: src/pages/SetupWizard.tsx:450
 msgid "SMTP Host"
 msgstr "Amfitrió SMTP"
 
-#: src/pages/SetupWizard.tsx:432
+#: src/pages/SetupWizard.tsx:452
 msgid "SMTP host is required"
 msgstr "L'amfitrió SMTP és obligatori"
 
 #: src/components/settings/Integrations.tsx:1719
 #: src/components/settings/SystemSettingsDrawer.tsx:351
-#: src/pages/SetupWizard.tsx:471
+#: src/pages/SetupWizard.tsx:491
 msgid "SMTP Password"
 msgstr "Contrasenya SMTP"
 
@@ -8832,23 +8929,23 @@ msgstr "Port SMTP"
 
 #: src/components/settings/Integrations.tsx:1550
 #: src/components/settings/SystemSettingsDrawer.tsx:297
-#: src/pages/SetupWizard.tsx:439
+#: src/pages/SetupWizard.tsx:459
 msgid "SMTP Port"
 msgstr "Port SMTP"
 
-#: src/pages/SetupWizard.tsx:441
+#: src/pages/SetupWizard.tsx:461
 msgid "SMTP port is required"
 msgstr "El port SMTP és obligatori"
 
-#: src/components/broadcasts/BroadcastStats.tsx:263
+#: src/components/broadcasts/BroadcastStats.tsx:255
 msgid "SMTP provider doesn't support bounce webhooks, so bounce status cannot be tracked"
 msgstr "El proveïdor SMTP no suporta webhooks de rebot, per tant l'estat de rebot no es pot rastrejar"
 
-#: src/components/broadcasts/BroadcastStats.tsx:297
+#: src/components/broadcasts/BroadcastStats.tsx:289
 msgid "SMTP provider doesn't support complaint webhooks, so spam complaints cannot be tracked"
 msgstr "El proveïdor SMTP no suporta webhooks de queixes, per tant les queixes de spam no es poden rastrejar"
 
-#: src/components/broadcasts/BroadcastStats.tsx:157
+#: src/components/broadcasts/BroadcastStats.tsx:149
 msgid "SMTP provider doesn't support delivery webhooks, so delivery status cannot be tracked"
 msgstr "El proveïdor SMTP no suporta webhooks de lliurament, per tant l'estat de lliurament no es pot rastrejar"
 
@@ -8858,7 +8955,7 @@ msgstr "Usuari SMTP"
 
 #: src/components/settings/Integrations.tsx:1714
 #: src/components/settings/SystemSettingsDrawer.tsx:338
-#: src/pages/SetupWizard.tsx:466
+#: src/pages/SetupWizard.tsx:486
 msgid "SMTP Username"
 msgstr "Nom d'usuari SMTP"
 
@@ -8996,6 +9093,7 @@ msgstr "Estat"
 #: src/components/blog/RecentThemesTable.tsx:122
 #: src/components/contacts/ContactDetailsDrawer.tsx:981
 #: src/components/messages/MessageHistoryTab.tsx:580
+#: src/components/settings/veridian_plan_settings.tsx:66
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:76
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:363
 #: src/pages/BroadcastsPage.tsx:363
@@ -9060,7 +9158,7 @@ msgstr ""
 msgid "Subscribe"
 msgstr "Subscriure's"
 
-#: src/pages/CreateWorkspacePage.tsx:169
+#: src/pages/CreateWorkspacePage.tsx:181
 msgid "Subscribe at Veridian"
 msgstr ""
 
@@ -9070,7 +9168,7 @@ msgstr ""
 msgid "Subscribe to List"
 msgstr "Subscriure a la llista"
 
-#: src/pages/SetupWizard.tsx:373
+#: src/pages/SetupWizard.tsx:393
 msgid "Subscribe to the newsletter (new features...)"
 msgstr "Subscriure al butlletí (noves funcionalitats...)"
 
@@ -9144,7 +9242,7 @@ msgstr "Correcte"
 msgid "Successfully processed {successful} contacts"
 msgstr "Processats {successful} contactes correctament"
 
-#: src/pages/SignInPage.tsx:37
+#: src/pages/SignInPage.tsx:38
 msgid "Successfully signed in"
 msgstr "Sessió iniciada correctament"
 
@@ -9213,14 +9311,14 @@ msgstr "Estat de la tasca"
 msgid "Task type:"
 msgstr "Tipus de tasca:"
 
-#: src/components/settings/SettingsSidebar.tsx:34
-#: src/components/settings/WorkspaceMembers.tsx:513
+#: src/components/settings/SettingsSidebar.tsx:36
+#: src/components/settings/WorkspaceMembers.tsx:517
 msgid "Team"
 msgstr "Equip"
 
 #: src/components/settings/WorkspaceMembers.tsx:268
-msgid "Team member limit reached. Please upgrade your plan to add more members."
-msgstr ""
+#~ msgid "Team member limit reached. Please upgrade your plan to add more members."
+#~ msgstr ""
 
 #: src/components/settings/SystemSettingsDrawer.tsx:510
 msgid "Telemetry"
@@ -9325,7 +9423,7 @@ msgstr "Variables de plantilla:"
 msgid "Template:"
 msgstr "Plantilla:"
 
-#: src/layouts/WorkspaceLayout.tsx:272
+#: src/layouts/WorkspaceLayout.tsx:278
 #: src/pages/TemplatesPage.tsx:348
 msgid "Templates"
 msgstr "Plantilles"
@@ -9339,6 +9437,10 @@ msgstr "Les plantilles que utilitzen aquest remitent hauran de ser actualitzades
 msgid "Templating markup allowed"
 msgstr "Marcatge de plantilles permès"
 
+#: src/components/veridian_paywall_modal.tsx:78
+msgid "Temporary degraded mode"
+msgstr ""
+
 #: src/components/broadcasts/GlobalFeedSettings.tsx:122
 #: src/components/broadcasts/RecipientFeedSettings.tsx:130
 #: src/components/settings/Integrations.tsx:319
@@ -9347,7 +9449,7 @@ msgid "Test"
 msgstr "Provar"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:278
-#: src/pages/SetupWizard.tsx:511
+#: src/pages/SetupWizard.tsx:531
 msgid "Test Connection"
 msgstr "Provar connexió"
 
@@ -9526,7 +9628,7 @@ msgid "The following validation errors were found in your import:"
 msgstr "S'han trobat els següents errors de validació a la vostra importació:"
 
 #: src/components/settings/Integrations.tsx:1730
-#: src/pages/SetupWizard.tsx:500
+#: src/pages/SetupWizard.tsx:520
 msgid "The hostname your server identifies itself as when connecting to the SMTP server. Defaults to the SMTP host value if empty."
 msgstr ""
 
@@ -9538,7 +9640,7 @@ msgstr "El títol principal del vostre blog"
 msgid "The primary language for template content. Translations are stored for other languages."
 msgstr ""
 
-#: src/pages/AnalyticsPage.tsx:69
+#: src/pages/AnalyticsPage.tsx:71
 msgid "The requested workspace could not be found."
 msgstr "No s'ha pogut trobar l'espai de treball sol·licitat."
 
@@ -9656,7 +9758,7 @@ msgstr "Això no es pot desfer."
 msgid "This contact is not subscribed to any lists"
 msgstr "Aquest contacte no està subscrit a cap llista"
 
-#: src/pages/SetupWizard.tsx:348
+#: src/pages/SetupWizard.tsx:368
 msgid "This email will be used for the root administrator account"
 msgstr "Aquest correu s'utilitzarà per al compte d'administrador arrel"
 
@@ -9668,7 +9770,7 @@ msgstr "Aquesta funcionalitat fa una sol·licitud HTTP per a cada destinatari ab
 msgid "This hook never blocks Supabase user creation for errors. However, if 'Reject Disposable Email Addresses' is enabled and a disposable email is detected, the user signup will be rejected by Supabase."
 msgstr "Aquest hook mai bloqueja la creació d'usuaris de Supabase per errors. No obstant això, si 'Rebutjar adreces de correu d'un sol ús' està habilitat i es detecta un correu d'un sol ús, el registre d'usuari serà rebutjat per Supabase."
 
-#: src/pages/CreateWorkspacePage.tsx:216
+#: src/pages/CreateWorkspacePage.tsx:228
 msgid "This ID will be used in URLs and API requests. It can only contain lowercase letters and numbers."
 msgstr "Aquest ID s'utilitzarà en URLs i sol·licituds API. Només pot contenir lletres minúscules i números."
 
@@ -9676,7 +9778,7 @@ msgstr "Aquest ID s'utilitzarà en URLs i sol·licituds API. Només pot contenir
 msgid "This ID will be used when triggering the notification via API"
 msgstr "Aquest ID s'utilitzarà quan s'activi la notificació via API"
 
-#: src/pages/AcceptInvitationPage.tsx:121
+#: src/pages/AcceptInvitationPage.tsx:120
 msgid "This invitation link is invalid or has expired."
 msgstr "Aquest enllaç d'invitació no és vàlid o ha caducat."
 
@@ -9720,7 +9822,7 @@ msgstr "Aquesta plantilla està gestionada per una integració i no es pot elimi
 msgid "This text appears in the email client's preview pane, typically after the subject line. Keep it concise and compelling (100-140 characters recommended)."
 msgstr "Aquest text apareix al panell de vista prèvia del client de correu, normalment després de l'assumpte. Manteniu-lo concís i atractiu (es recomanen 100-140 caràcters)."
 
-#: src/components/settings/WorkspaceMembers.tsx:638
+#: src/components/settings/WorkspaceMembers.tsx:642
 msgid "This token will only be displayed once. Please save it in a secure location. It cannot be retrieved again."
 msgstr "Aquest token només es mostrarà una vegada. Si us plau, deseu-lo en una ubicació segura. No es podrà recuperar de nou."
 
@@ -9843,11 +9945,11 @@ msgid "TLS"
 msgstr "TLS"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:473
-#: src/pages/SetupWizard.tsx:614
+#: src/pages/SetupWizard.tsx:634
 msgid "TLS Certificate (Base64)"
 msgstr "Certificat TLS (Base64)"
 
-#: src/pages/SetupWizard.tsx:619
+#: src/pages/SetupWizard.tsx:639
 msgid "TLS certificate is required"
 msgstr "El certificat TLS és obligatori"
 
@@ -9859,11 +9961,11 @@ msgstr "TLS habilitat"
 msgid "TLS Key (Base64)"
 msgstr ""
 
-#: src/pages/SetupWizard.tsx:632
+#: src/pages/SetupWizard.tsx:652
 msgid "TLS Private Key (Base64)"
 msgstr "Clau privada TLS (Base64)"
 
-#: src/pages/SetupWizard.tsx:637
+#: src/pages/SetupWizard.tsx:657
 msgid "TLS private key is required"
 msgstr "La clau privada TLS és obligatòria"
 
@@ -9935,7 +10037,7 @@ msgstr "Total {total} publicacions"
 msgid "Total attachments size exceeds 10MB limit"
 msgstr "La mida total dels fitxers adjunts supera el límit de 10MB"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:129
+#: src/components/analytics/AnalyticsDashboard.tsx:124
 msgid "Total Contacts"
 msgstr "Contactes totals"
 
@@ -9947,9 +10049,9 @@ msgstr "El seguiment (obertures i clics) ha d'estar habilitat a la configuració
 msgid "Tracking (opens & clicks) should be enabled in your workspace settings to use this feature"
 msgstr "El seguiment (obertures i clics) hauria d'estar habilitat a la configuració de l'espai de treball per utilitzar aquesta funcionalitat"
 
-#: src/components/analytics/EmailMetricsChart.tsx:286
+#: src/components/analytics/EmailMetricsChart.tsx:278
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:408
-#: src/layouts/WorkspaceLayout.tsx:319
+#: src/layouts/WorkspaceLayout.tsx:325
 #: src/pages/TemplatesPage.tsx:79
 msgid "Transactional"
 msgstr "Transaccional"
@@ -9970,7 +10072,7 @@ msgstr "Notificació transaccional eliminada correctament"
 msgid "Transactional Notifications"
 msgstr "Notificacions transaccionals"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:152
+#: src/components/analytics/AnalyticsDashboard.tsx:149
 msgid "Transactional Provider"
 msgstr "Proveïdor transaccional"
 
@@ -10041,6 +10143,14 @@ msgstr ""
 msgid "Type:"
 msgstr "Tipus:"
 
+#: src/components/settings/WorkspaceMembers.tsx:272
+msgid "Unable to add this member. Please contact your administrator."
+msgstr ""
+
+#: src/pages/CreateWorkspacePage.tsx:110
+msgid "Unable to create workspace. Please contact your administrator."
+msgstr ""
+
 #: src/components/blog/PostsTable.tsx:168
 msgid "Uncategorized"
 msgstr "Sense categoria"
@@ -10075,7 +10185,7 @@ msgstr "Desconegut"
 msgid "Unknown date"
 msgstr "Data desconeguda"
 
-#: src/layouts/WorkspaceLayout.tsx:197
+#: src/layouts/WorkspaceLayout.tsx:203
 msgid "Unknown error"
 msgstr "Error desconegut"
 
@@ -10125,12 +10235,12 @@ msgstr "Canvis no desats"
 msgid "Unsaved draft found."
 msgstr ""
 
-#: src/components/lists/ListStats.tsx:110
+#: src/components/lists/ListStats.tsx:102
 msgid "Unsub"
 msgstr "Donat de baixa"
 
-#: src/components/analytics/EmailMetricsChart.tsx:483
-#: src/components/broadcasts/BroadcastStats.tsx:341
+#: src/components/analytics/EmailMetricsChart.tsx:475
+#: src/components/broadcasts/BroadcastStats.tsx:333
 msgid "Unsub."
 msgstr "Donat de baixa"
 
@@ -10166,7 +10276,7 @@ msgstr "Donat de baixa"
 msgid "Unsubscribed from list"
 msgstr "Donat de baixa de la llista"
 
-#: src/components/analytics/EmailMetricsChart.tsx:272
+#: src/components/analytics/EmailMetricsChart.tsx:264
 msgid "Unsubscribes"
 msgstr "Baixes"
 
@@ -10287,7 +10397,7 @@ msgstr "URL:"
 msgid "Use"
 msgstr "Utilitzar"
 
-#: src/pages/SignInPage.tsx:191
+#: src/pages/SignInPage.tsx:196
 msgid "Use a different email"
 msgstr "Utilitzar un altre correu"
 
@@ -10337,7 +10447,7 @@ msgstr "Utilitzar aquest tema"
 
 #: src/components/settings/Integrations.tsx:1558
 #: src/components/settings/SystemSettingsDrawer.tsx:321
-#: src/pages/SetupWizard.tsx:456
+#: src/pages/SetupWizard.tsx:476
 msgid "Use TLS"
 msgstr "Utilitzar TLS"
 
@@ -10425,11 +10535,19 @@ msgstr "Nom de la variant"
 msgid "Variations"
 msgstr "Variacions"
 
-#: src/pages/SignInPage.tsx:181
+#: src/components/veridian_brand_header_link.tsx:43
+msgid "Veridian dashboard"
+msgstr ""
+
+#: src/components/veridian_paywall_modal.tsx:79
+msgid "Veridian Hub is unreachable. The app is in read-only mode — please try again in {retryHours}h."
+msgstr ""
+
+#: src/pages/SignInPage.tsx:186
 msgid "Verify Code"
 msgstr "Verificar codi"
 
-#: src/pages/AcceptInvitationPage.tsx:103
+#: src/pages/AcceptInvitationPage.tsx:105
 msgid "Verifying invitation..."
 msgstr "Verificant invitació..."
 
@@ -10495,7 +10613,7 @@ msgstr "Editor visual de correu"
 msgid "Wait Duration"
 msgstr "Durada d'espera"
 
-#: src/pages/SetupWizard.tsx:314
+#: src/pages/SetupWizard.tsx:334
 msgid "Waiting for server restart..."
 msgstr "Esperant el reinici del servidor..."
 
@@ -10503,7 +10621,7 @@ msgstr "Esperant el reinici del servidor..."
 msgid "Warning"
 msgstr "Avís"
 
-#: src/pages/CreateWorkspacePage.tsx:250
+#: src/pages/CreateWorkspacePage.tsx:262
 msgid "We'll automatically detect and use your website's favicon"
 msgstr "Detectarem i utilitzarem automàticament el favicon del vostre lloc web"
 
@@ -10558,7 +10676,7 @@ msgstr "URL del webhook"
 #: src/components/settings/Integrations.tsx:198
 #: src/components/settings/Integrations.tsx:206
 #: src/components/settings/Integrations.tsx:237
-#: src/components/settings/SettingsSidebar.tsx:77
+#: src/components/settings/SettingsSidebar.tsx:79
 #: src/components/settings/WebhooksSettings.tsx:169
 msgid "Webhooks"
 msgstr "Webhooks"
@@ -10573,7 +10691,7 @@ msgstr "Lloc web"
 
 #: src/components/settings/GeneralSettings.tsx:114
 #: src/components/settings/GeneralSettings.tsx:179
-#: src/pages/CreateWorkspacePage.tsx:241
+#: src/pages/CreateWorkspacePage.tsx:253
 msgid "Website URL"
 msgstr "URL del lloc web"
 
@@ -10593,6 +10711,11 @@ msgstr "Benvingut a l'Editor de correu!"
 #: src/components/settings/BlogSettings.tsx:434
 msgid "Welcome to my blog where I share insights about..."
 msgstr "Benvingut al meu blog on comparteixo reflexions sobre..."
+
+#. placeholder {0}: user.email
+#: src/components/veridian_welcome_toast.tsx:61
+msgid "Welcome, {0}"
+msgstr ""
 
 #: src/components/settings/GeneralSettings.tsx:234
 msgid "When enabled, links in the email will be tracked for opens and clicks"
@@ -10671,7 +10794,7 @@ msgstr "amb estat"
 msgid "Workspace \"{0}\" created successfully!"
 msgstr "Espai de treball \"{0}\" creat correctament!"
 
-#: src/pages/CreateWorkspacePage.tsx:138
+#: src/pages/CreateWorkspacePage.tsx:143
 msgid "Workspace creation disabled"
 msgstr ""
 
@@ -10679,7 +10802,7 @@ msgstr ""
 msgid "Workspace deleted successfully"
 msgstr "Espai de treball eliminat correctament"
 
-#: src/pages/CreateWorkspacePage.tsx:215
+#: src/pages/CreateWorkspacePage.tsx:227
 msgid "Workspace ID"
 msgstr "ID d'espai de treball"
 
@@ -10687,17 +10810,17 @@ msgstr "ID d'espai de treball"
 msgid "Workspace ID does not match"
 msgstr "L'ID de l'espai de treball no coincideix"
 
-#: src/pages/CreateWorkspacePage.tsx:223
+#: src/pages/CreateWorkspacePage.tsx:235
 msgid "Workspace ID is required"
 msgstr "L'ID de l'espai de treball és obligatori"
 
-#: src/pages/AcceptInvitationPage.tsx:138
+#: src/pages/AcceptInvitationPage.tsx:137
 msgid "Workspace Invitation"
 msgstr "Invitació a l'espai de treball"
 
 #: src/pages/CreateWorkspacePage.tsx:105
-msgid "Workspace limit reached. Please upgrade your plan to create more workspaces."
-msgstr ""
+#~ msgid "Workspace limit reached. Please upgrade your plan to create more workspaces."
+#~ msgstr ""
 
 #: src/components/settings/GeneralSettings.tsx:122
 msgid "Workspace logo"
@@ -10705,26 +10828,26 @@ msgstr "Logotip de l'espai de treball"
 
 #: src/components/settings/GeneralSettings.tsx:110
 #: src/components/settings/GeneralSettings.tsx:171
-#: src/pages/CreateWorkspacePage.tsx:202
+#: src/pages/CreateWorkspacePage.tsx:214
 msgid "Workspace Name"
 msgstr "Nom de l'espai de treball"
 
-#: src/pages/CreateWorkspacePage.tsx:206
+#: src/pages/CreateWorkspacePage.tsx:218
 msgid "Workspace name must be at least 3 characters long"
 msgstr "El nom de l'espai de treball ha de tenir almenys 3 caràcters"
 
-#: src/layouts/WorkspaceLayout.tsx:176
-#: src/pages/AnalyticsPage.tsx:68
+#: src/layouts/WorkspaceLayout.tsx:182
+#: src/pages/AnalyticsPage.tsx:70
 #: src/pages/FileManagerPage.tsx:56
 msgid "Workspace not found"
 msgstr "Espai de treball no trobat"
 
 #: src/components/settings/GeneralSettings.tsx:80
-#: src/layouts/WorkspaceLayout.tsx:194
+#: src/layouts/WorkspaceLayout.tsx:200
 msgid "Workspace settings updated successfully"
 msgstr "Configuració de l'espai de treball actualitzada correctament"
 
-#: src/pages/AcceptInvitationPage.tsx:148
+#: src/pages/AcceptInvitationPage.tsx:147
 msgid "Workspace:"
 msgstr "Espai de treball:"
 
@@ -10733,8 +10856,8 @@ msgid "Wrapper Attributes"
 msgstr "Atributs del contenidor"
 
 #: src/components/settings/EditPermissionsModal.tsx:99
-#: src/components/settings/WorkspaceMembers.tsx:438
-#: src/components/settings/WorkspaceMembers.tsx:497
+#: src/components/settings/WorkspaceMembers.tsx:442
+#: src/components/settings/WorkspaceMembers.tsx:501
 msgid "Write"
 msgstr "Escriure"
 
@@ -10811,6 +10934,10 @@ msgstr "Sí, reprendre"
 #: src/pages/BroadcastsPage.tsx:887
 msgid "Yes, Select Winner"
 msgstr "Sí, seleccionar guanyador"
+
+#: src/components/veridian_welcome_toast.tsx:62
+msgid "You are now signed in via Veridian."
+msgstr ""
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:322
 msgid "You can only upload CSV files!"
@@ -10894,7 +11021,7 @@ msgstr "Necessiteu permisos de lectura de plantilla i escriptura de contacte per
 msgid "You're continuing a previous upload session of \"{fileName}\". The upload will resume from row {0} of {totalRows}."
 msgstr "Esteu continuant una sessió de càrrega anterior de \"{fileName}\". La càrrega es reprendrà des de la fila {0} de {totalRows}."
 
-#: src/pages/AcceptInvitationPage.tsx:140
+#: src/pages/AcceptInvitationPage.tsx:139
 msgid "You've been invited to join"
 msgstr "Heu estat convidat a unir-vos"
 
@@ -10903,11 +11030,24 @@ msgid "Your files can be uploaded to any S3 compatible storage."
 msgstr "Els vostres fitxers es poden pujar a qualsevol emmagatzematge compatible amb S3."
 
 #: src/pages/SetupWizard.tsx:299
-msgid "Your Notifuse instance has been successfully configured."
-msgstr "La vostra instància de Notifuse s'ha configurat correctament."
+#~ msgid "Your Notifuse instance has been successfully configured."
+#~ msgstr "La vostra instància de Notifuse s'ha configurat correctament."
 
 #: src/pages/CreateWorkspacePage.tsx:142
-msgid "Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at"
+#~ msgid "Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at"
+#~ msgstr ""
+
+#: src/components/veridian_paywall_modal.tsx:50
+#: src/components/veridian_paywall_modal.tsx:51
+msgid "Your subscription is no longer active. Manage your billing at Veridian to restore access."
+msgstr ""
+
+#: src/pages/SetupWizard.tsx:323
+msgid "Your Veridian Mail instance has been successfully configured."
+msgstr ""
+
+#: src/pages/CreateWorkspacePage.tsx:147
+msgid "Your Veridian Mail workspace is provisioned automatically by Veridian when you subscribe at"
 msgstr ""
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:616
@@ -10921,6 +11061,16 @@ msgstr "El correu de l'API del vostre espai de treball (el correu associat a la 
 #: src/components/transactional/ApiCommandModal.tsx:538
 msgid "Your workspace API key"
 msgstr "La clau API del vostre espai de treball"
+
+#. placeholder {0}: deletedAtStr || t`(unknown date)`
+#: src/components/veridian_soft_delete_banner.tsx:70
+msgid "Your workspace was deleted on {0} — restoration possible until {purgeAtStr}."
+msgstr ""
+
+#. placeholder {0}: deletedAtStr || t`(unknown date)`
+#: src/components/veridian_soft_delete_banner.tsx:71
+msgid "Your workspace was deleted on {0}."
+msgstr ""
 
 #: src/components/file_manager/fileManager.tsx:784
 msgid "Zip"

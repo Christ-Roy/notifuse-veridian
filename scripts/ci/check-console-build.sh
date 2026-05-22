@@ -118,5 +118,30 @@ else
   echo "  ${YELLOW}(pas de chunk react-vendor — check d'intégrité React non applicable)${NC}"
 fi
 
+# ── 6. Catalogues i18n à jour (incident 2026-05-22 #2) ──────────────────
+# Le build fait `lingui compile` mais PAS `lingui extract`. Si une nouvelle
+# chaîne `t\`...\`` est ajoutée sans extraire, elle est absente des
+# catalogues → Lingui affiche le messageId hash brut en prod
+# (« GdgCoi » au lieu de « Plan »). Ce check lance extract et échoue si
+# les .po bougent = des chaînes n'avaient pas été extraites.
+if [ -f "$CONSOLE_DIR/lingui.config.ts" ] || [ -f "$CONSOLE_DIR/lingui.config.js" ]; then
+  echo "  vérification des catalogues i18n (lingui extract)…"
+  PO_BEFORE=$(cd "$REPO_ROOT" && git diff --name-only -- console/src/i18n/ 2>/dev/null | wc -l | tr -d ' ')
+  if ( cd "$CONSOLE_DIR" && npx lingui extract >/tmp/lingui-extract.log 2>&1 ); then
+    PO_AFTER=$(cd "$REPO_ROOT" && git diff --name-only -- console/src/i18n/ 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$PO_AFTER" -gt "$PO_BEFORE" ]; then
+      echo "${RED}  ✗ des chaînes i18n ne sont pas extraites — catalogues .po obsolètes${NC}"
+      echo "${YELLOW}    Une chaîne t\`...\` absente du catalogue s'affiche en hash brut${NC}"
+      echo "${YELLOW}    en prod (ex: « GdgCoi » au lieu de « Plan »).${NC}"
+      echo "${YELLOW}    Fix : cd console && npm run lingui:extract && npm run lingui:compile${NC}"
+      echo "${YELLOW}    puis committer les catalogues mis à jour.${NC}"
+      fail "catalogues i18n obsolètes — risque d'affichage de hash en prod"
+    fi
+    ok "catalogues i18n à jour"
+  else
+    echo "${YELLOW}  (lingui extract a échoué — check i18n ignoré, voir /tmp/lingui-extract.log)${NC}"
+  fi
+fi
+
 echo "${GREEN}── check-console-build : la console est buildable et structurellement saine ──${NC}"
 exit 0
