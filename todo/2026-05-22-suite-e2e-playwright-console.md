@@ -9,17 +9,29 @@
 
 ## Pourquoi ce ticket
 
-**Incident 2026-05-22** : le code-splitting Vite (`manualChunks`) a été mal
-configuré — React et TanStack/Antd dans des chunks séparés. Rollup ne
-garantit pas l'ordre d'évaluation entre chunks frères → crash au boot
-`Cannot read properties of undefined (reading 'createContext')`. **La
-console est restée morte EN PROD**, et les **225 tests unitaires
-(Vitest/jsdom) ne l'ont pas vu** : ils montent les composants depuis le
-code source, jamais depuis le build réel découpé en chunks servi par un
-navigateur.
+**DEUX incidents en prod le même jour (2026-05-22), aucun détecté par
+les 225 tests unitaires :**
+
+**Incident #1 — console morte au boot.** Le code-splitting Vite
+(`manualChunks`) a été mal configuré — React et TanStack/Antd dans des
+chunks séparés. Rollup ne garantit pas l'ordre d'évaluation entre chunks
+frères → crash au boot `Cannot read properties of undefined (reading
+'createContext')`. Console morte EN PROD.
+
+**Incident #2 — caractères aléatoires (« GdgCoi », « 8wOKeG »).** Les
+chaînes de texte ajoutées au polish n'avaient jamais été extraites dans
+les catalogues Lingui (`build` fait `lingui compile` mais pas
+`lingui extract`). Lingui affichait le messageId hash brut en prod au
+lieu du texte. Visible sur la page Plan et le lien de retour.
+
+**Pourquoi les tests unitaires ne les ont pas vus** : Vitest/jsdom monte
+les composants depuis le code source, avec les `t\`...\`` résolus à
+l'extraction — jamais depuis le build réel (chunks découpés + catalogues
+compilés) servi par un vrai navigateur.
 
 **Trou identifié** : zéro test qui exerce la console comme un vrai
-utilisateur, sur un vrai build, dans un vrai navigateur.
+utilisateur, sur un vrai build, dans un vrai navigateur — et qui
+vérifierait que les textes affichés sont du vrai texte, pas des hash.
 
 ## Ce qui a déjà été fait (garde-fou léger — livré 2026-05-22)
 
@@ -44,7 +56,10 @@ d'abord, bloquante ensuite quand elle sera fiable et qu'on aura décidé
    - Ouvrir `/console/` → l'app monte réellement (le splash disparaît,
      un élément React rendu apparaît).
    - **Zéro erreur console** au chargement.
-   - C'est le test qui aurait attrapé l'incident en conditions réelles.
+   - **Zéro hash i18n affiché** : assertion que le texte visible ne
+     contient pas de messageId brut (chaîne courte alphanumérique type
+     `GdgCoi`) — couvre l'incident #2 en conditions réelles.
+   - C'est le test qui aurait attrapé les deux incidents.
 
 2. **Parcours authentification**
    - Login par magic code (le flow réel).
