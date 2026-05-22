@@ -70,6 +70,14 @@ services:
       DB_PREFIX: notifuse
       DB_NAME: notifuse_system
       DB_SSLMODE: disable
+      # 2026-05-22 — fix pool DB staging : l'app cape à DB_MAX_CONNECTIONS
+      # (défaut 100). Le bump postgres max_connections=400 ne servait à rien
+      # tant que l'app se limitait à 100. staging accumule ~50-100 workspaces
+      # de test (chacun ouvre un pool DB_MAX_CONNECTIONS_PER_DB), les E2E
+      # provisionnent en burst → 98/100 atteint → provision 500. 350 = sous
+      # la limite postgres 400, marge pour les bursts CI.
+      DB_MAX_CONNECTIONS: "350"
+      DB_MAX_CONNECTIONS_PER_DB: "3"
       SECRET_KEY: ${NOTIFUSE_SECRET_KEY}
       TASK_SCHEDULER_ENABLED: "true"
       TASK_SCHEDULER_INTERVAL: 20s
