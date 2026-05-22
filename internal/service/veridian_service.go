@@ -1796,7 +1796,15 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 		}
 	}
 
-	targetRole := string(input.Role)
+	// Mapper le role Hub → role interne workspace Notifuse.
+	// Notifuse upstream n'a QUE 2 roles workspace : 'owner' et 'member'
+	// (workspace_service.AddUserToWorkspace refuse tout autre). Le Hub
+	// envoie owner|admin|member — 'admin' n'existe pas côté Notifuse.
+	// Conformément au CONTRAT-HUB §3.5 ("le Hub n'est PAS autoritatif sur
+	// les rôles internes app"), on mappe : owner→member, admin→member.
+	// Le endpoint attach-member ne crée jamais un owner (un workspace a déjà
+	// son owner via provision/attach-owner). Tous les invités = 'member'.
+	targetRole := "member"
 
 	// Step 4 : lookup user_workspaces pour décider idempotence / UPDATE.
 	existing, lookupErr := s.workspaceRepo.GetUserWorkspace(ctx, member.ID, input.TenantID)

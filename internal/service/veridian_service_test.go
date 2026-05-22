@@ -1726,3 +1726,44 @@ func TestAttachMember_GeneratesUUIDNotHubUserID(t *testing.T) {
 	_, parseErr := uuid.Parse(createdUserID)
 	assert.NoError(t, parseErr, "users.id doit être un UUID valide (colonne UUID stricte Postgres)")
 }
+
+// TestAttachMember_RoleAdminMappedToMember — régression-guard du bug
+// 2026-05-22 : AttachMember passait input.Role direct à AddUserToWorkspace.
+// Notifuse upstream n'a QUE owner|member en role workspace (workspace_service
+// refuse 'admin') → role 'admin' Hub provoquait un 500 "role must be either
+// owner or member". Le fix mappe TOUT invité vers 'member' (CONTRAT-HUB §3.5
+// — le Hub n'est pas autoritatif sur les rôles internes app).
+//
+// Ce test assert que AddUserToWorkspace reçoit bien "member" même quand
+// l'input demande "admin", et que la réponse reflète "member".
+func TestAttachMember_RoleAdminMappedToMember(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-rolemap").Return(&domain.Workspace{ID: "ws-rolemap"}, nil)
+	m.planRepo.EXPECT().Get(ctx, "ws-rolemap").Return(nil, sql.ErrNoRows)
+	m.user.EXPECT().GetUserByEmail(ctx, "admin-invitee@example.com").
+		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, gomock.Any(), "ws-rolemap").
+		Return(nil, sql.ErrNoRows)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-rolemap").
+		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-rm", "owner@ws.test")}, nil)
+	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+
+	// Le cœur du test : AddUserToWorkspace DOIT recevoir "member", pas "admin".
+	m.workspace.EXPECT().
+		AddUserToWorkspace(gomock.Any(), "ws-rolemap", gomock.Any(), "member", gomock.Any()).
+		Return(nil)
+	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+
+	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-rolemap",
+		HubUserID:    "hub-admin-x",
+		HubUserEmail: "admin-invitee@example.com",
+		Role:         domain.AttachMemberRoleAdmin, // input = admin
+		InvitationID: "inv-rolemap",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "member", resp.Role, "role Hub 'admin' doit être mappé vers 'member' Notifuse")
+}

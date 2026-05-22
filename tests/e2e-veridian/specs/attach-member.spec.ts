@@ -155,7 +155,11 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
     expect(b2.login_url).toBeTruthy(); // toujours un login_url frais
   });
 
-  test('role conflict : re-attach meme user role different → UPDATE role + 200', async () => {
+  test('role Hub admin → mappé member (Notifuse n a pas de role admin)', async () => {
+    // Notifuse upstream n'a QUE 2 roles workspace : owner et member.
+    // Le Hub envoie owner|admin|member ; attach-member mappe TOUT invité
+    // vers 'member' (CONTRAT-HUB §3.5 : le Hub n'est pas autoritatif sur
+    // les rôles internes app). Un 2e attach du même user = idempotent.
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
@@ -163,30 +167,30 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
     const inviteeID = `hub-user-role-${tid}`;
     const inviteeEmail = `${tid}-role@attach-member.test`;
 
-    // 1er attach role=member
+    // 1er attach role=member → 201, mappé member
     const r1 = await hmacFetch(`/api/tenants/${tid}/attach-member`, 'POST', {
       hub_user_id: inviteeID,
       hub_user_email: inviteeEmail,
       role: 'member',
       invitation_id: `inv-role-1-${tid}`,
     });
-    expect(r1.status, await r1.text()).toBe(201);
+    const raw1 = await r1.text();
+    expect(r1.status, raw1).toBe(201);
+    expect(JSON.parse(raw1).role).toBe('member');
 
-    // 2e attach meme user, role=admin → UPDATE role, response 200 already_member=true
-    // (le user existe deja, on update juste son role — pas un 409 race rare)
+    // 2e attach même user role=admin → 200 already_member, toujours mappé member
+    // (admin Hub n'existe pas côté Notifuse — pas d'UPDATE, idempotent).
     const r2 = await hmacFetch(`/api/tenants/${tid}/attach-member`, 'POST', {
       hub_user_id: inviteeID,
       hub_user_email: inviteeEmail,
       role: 'admin',
       invitation_id: `inv-role-2-${tid}`,
     });
-    // Le spec laisse la flexibilite : soit 200 (UPDATE in-place) soit 409 si race detectee.
-    // Le contrat documente : "Membre existant avec autre role (preferer UPDATE)".
-    expect([200, 409]).toContain(r2.status);
-    if (r2.status === 200) {
-      const b2 = await r2.json();
-      expect(b2.role).toBe('admin');
-    }
+    const raw2 = await r2.text();
+    expect(r2.status, raw2).toBe(200);
+    const b2 = JSON.parse(raw2);
+    expect(b2.already_member).toBe(true);
+    expect(b2.role).toBe('member');
   });
 
   test('tenant inconnu : 404', async () => {

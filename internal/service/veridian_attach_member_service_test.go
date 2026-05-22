@@ -368,7 +368,12 @@ func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
 
 	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
-	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-prehub", "user-hub-1", "admin", gomock.Any()).
+	// Le role Hub 'admin' est mappé vers 'member' côté Notifuse : upstream
+	// n'a QUE owner|member en role workspace (workspace_service refuse tout
+	// autre). CONTRAT-HUB §3.5 — le Hub n'est pas autoritatif sur les rôles
+	// internes app. Régression-guard du bug 2026-05-22 (500 'role must be
+	// owner or member').
+	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-prehub", "user-hub-1", "member", gomock.Any()).
 		Return(nil)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
@@ -380,5 +385,5 @@ func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.True(t, resp.Attached)
-	assert.Equal(t, "admin", resp.Role)
+	assert.Equal(t, "member", resp.Role, "role Hub 'admin' mappé vers 'member' Notifuse")
 }
