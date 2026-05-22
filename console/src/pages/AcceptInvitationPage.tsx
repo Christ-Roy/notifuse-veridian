@@ -51,15 +51,17 @@ export function AcceptInvitationPage() {
       } catch (error: unknown) {
         const errorMessage =
           error instanceof Error ? error.message : t`Invalid or expired invitation token`
+        // L'erreur de vérification du token s'affiche dans le <Result> ci-dessous —
+        // pas de toast en plus (sinon le message est doublé). Le message.error
+        // reste sur handleAcceptInvitation : là c'est une action user qui échoue.
         setError(errorMessage)
-        message.error(errorMessage)
       } finally {
         setLoading(false)
       }
     }
 
     verifyToken()
-  }, [token, user, signout, message, accepted, t])
+  }, [token, user, signout, accepted, t])
 
   const handleAcceptInvitation = async () => {
     if (!token || !invitationData) return

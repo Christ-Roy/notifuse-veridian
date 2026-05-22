@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useParams } from '@tanstack/react-router'
-import { Segmented, Select, Space, Result } from 'antd'
+import { useParams, useNavigate } from '@tanstack/react-router'
+import { Segmented, Select, Space, Result, Button } from 'antd'
 import dayjs from 'dayjs'
 import { useAuth } from '../contexts/AuthContext'
 import { AnalyticsDashboard } from '../components/analytics/AnalyticsDashboard'
@@ -12,6 +12,7 @@ type TimePeriod = '7D' | '14D' | '30D' | '90D'
 
 export function AnalyticsPage() {
   const { t } = useLingui()
+  const navigate = useNavigate()
   const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId' })
   const { workspaces } = useAuth()
 
@@ -68,6 +69,11 @@ export function AnalyticsPage() {
         status="404"
         title={t`Workspace not found`}
         subTitle={t`The requested workspace could not be found.`}
+        extra={
+          <Button type="primary" onClick={() => navigate({ to: '/console' })}>
+            {t`Back to workspaces`}
+          </Button>
+        }
       />
     )
   }
