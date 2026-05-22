@@ -1326,6 +1326,15 @@ func (a *App) Start() error {
 	// auth middleware si plan suspended ou quota depasse.
 	handler = middleware.VeridianPaywallPathFilterWithCache(a.veridianPaywallCache, a.veridianPlanRepo, a.logger)(handler)
 
+	// === Veridian patch — perf-ui-baseline (ticket 2026-05-22) ===
+	// Optimise le serving des assets console (/console/assets/*) : gzip à
+	// la volée + cache mémoire + Cache-Control immutable sur les assets
+	// hashés. Sans ce filtre, le bundle Vite de ~6.3 MB est servi brut et
+	// sans cache par le http.FileServer upstream. N'intercepte QUE
+	// /console/assets/* — tout le reste passe direct. Voir
+	// internal/http/veridian_static_handler.go.
+	handler = httpHandler.VeridianStaticAssetsFilter(a.logger)(handler)
+
 	// === Lot J 2026-05-21 — Mode dégradé soft-deleted (CONTRAT-HUB §5.9) ===
 	// Wrappe le handler GLOBAL : si tenant soft-deleted (deleted_at != NULL),
 	//   - GET/HEAD/OPTIONS : la response JSON est obfusquée (33% en clair)

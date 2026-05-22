@@ -1,26 +1,81 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
+import type { ComponentType } from 'react'
+import { Spin } from 'antd'
 import { createRootRoute, createRoute, useParams, useNavigate } from '@tanstack/react-router'
 import { RootLayout } from './layouts/RootLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { SignInPage } from './pages/SignInPage'
 import { LogoutPage } from './pages/LogoutPage'
 import { AcceptInvitationPage } from './pages/AcceptInvitationPage'
-import { CreateWorkspacePage } from './pages/CreateWorkspacePage'
-import { DashboardPage } from './pages/DashboardPage'
-import { WorkspaceSettingsPage } from './pages/WorkspaceSettingsPage'
-import { ContactsPage } from './pages/ContactsPage'
-import { ListsPage } from './pages/ListsPage'
-import { FileManagerPage } from './pages/FileManagerPage'
-import { TemplatesPage } from './pages/TemplatesPage'
-import { BroadcastsPage } from './pages/BroadcastsPage'
-import { AutomationsPage } from './pages/AutomationsPage'
-import { TransactionalNotificationsPage } from './pages/TransactionalNotificationsPage'
-import { LogsPage } from './pages/LogsPage'
-import { AnalyticsPage } from './pages/AnalyticsPage'
-import { DebugSegmentPage } from './pages/DebugSegmentPage'
-import { BlogPage } from './pages/BlogPage'
 import SetupWizard from './pages/SetupWizard'
 import { createRouter } from '@tanstack/react-router'
+
+// === Veridian patch — perf-ui-baseline (ticket 2026-05-22) ===
+// Sans lazy-loading, TanStack Router importe TOUTES les pages en
+// statique → tout le code applicatif (dashboard, contacts, settings,
+// email builder, automations, analytics…) part dans le chunk initial,
+// même pour afficher l'écran de login.
+//
+// On garde en import statique uniquement le chemin critique AVANT
+// authentification (SignIn, Logout, AcceptInvitation, Setup) — c'est ce
+// qu'il faut pour le premier paint. Toutes les pages post-login passent
+// en React.lazy() : leur code n'est téléchargé qu'à la navigation vers
+// l'écran. Les pages lourdes (Automations→@xyflow, Analytics→echarts,
+// Templates/Broadcasts/Blog→email builder+Monaco) y gagnent le plus,
+// mais sortir aussi les pages Antd « simples » vide le chunk initial.
+//
+// veridianLazyPage wrappe React.lazy dans un Suspense local (spinner
+// Antd) pour que TanStack Router puisse rendre le composant sans
+// Suspense global dans App.tsx.
+function veridianLazyPage(
+  loader: () => Promise<{ [key: string]: ComponentType<unknown> }>,
+  exportName: string
+): ComponentType {
+  const LazyComp = lazy(async () => {
+    const mod = await loader()
+    return { default: mod[exportName] }
+  })
+  return function VeridianLazyRoute() {
+    return (
+      <Suspense
+        fallback={
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}>
+            <Spin size="large" />
+          </div>
+        }>
+        <LazyComp />
+      </Suspense>
+    )
+  }
+}
+
+// Pages post-login — toutes lazy-loadées.
+const DashboardPage = veridianLazyPage(() => import('./pages/DashboardPage'), 'DashboardPage')
+const CreateWorkspacePage = veridianLazyPage(
+  () => import('./pages/CreateWorkspacePage'),
+  'CreateWorkspacePage'
+)
+const WorkspaceSettingsPage = veridianLazyPage(
+  () => import('./pages/WorkspaceSettingsPage'),
+  'WorkspaceSettingsPage'
+)
+const ContactsPage = veridianLazyPage(() => import('./pages/ContactsPage'), 'ContactsPage')
+const ListsPage = veridianLazyPage(() => import('./pages/ListsPage'), 'ListsPage')
+const FileManagerPage = veridianLazyPage(() => import('./pages/FileManagerPage'), 'FileManagerPage')
+const TransactionalNotificationsPage = veridianLazyPage(
+  () => import('./pages/TransactionalNotificationsPage'),
+  'TransactionalNotificationsPage'
+)
+const LogsPage = veridianLazyPage(() => import('./pages/LogsPage'), 'LogsPage')
+const DebugSegmentPage = veridianLazyPage(
+  () => import('./pages/DebugSegmentPage'),
+  'DebugSegmentPage'
+)
+const AutomationsPage = veridianLazyPage(() => import('./pages/AutomationsPage'), 'AutomationsPage')
+const AnalyticsPage = veridianLazyPage(() => import('./pages/AnalyticsPage'), 'AnalyticsPage')
+const TemplatesPage = veridianLazyPage(() => import('./pages/TemplatesPage'), 'TemplatesPage')
+const BroadcastsPage = veridianLazyPage(() => import('./pages/BroadcastsPage'), 'BroadcastsPage')
+const BlogPage = veridianLazyPage(() => import('./pages/BlogPage'), 'BlogPage')
 
 export interface ContactsSearch {
   email?: string

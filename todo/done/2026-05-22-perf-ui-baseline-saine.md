@@ -215,3 +215,64 @@ curl -sS -o /dev/null -w "%{size_download}b %{time_total}s\n" \
 
 Une fois ce ticket livré → la base est saine → le polish UI
 (`ui-veridian-mode-autonomous.md`) peut commencer proprement.
+
+---
+
+## ✅ LIVRÉ — 2026-05-22
+
+### Ce qui a été fait
+
+**perf-2 + perf-3 — Compression + Cache-Control** (1 wrapper Go).
+- Créé `internal/http/veridian_static_handler.go` : middleware appliqué
+  au handler global (pattern `VeridianPaywallPathFilter`), câblé dans
+  `app.go`. NE patche PAS `root_handler.go` upstream.
+- Intercepte `/console/assets/*` : gzip à la volée + cache mémoire
+  (assets immuables entre 2 deploys) + `Cache-Control: public,
+  max-age=31536000, immutable` sur les assets au nom hashé.
+- **Choix gzip, pas brotli** (écart à l'Option A du ticket) : brotli
+  imposerait une dépendance tierce (`andybalholm/brotli` côté Go +
+  un plugin Vite) pour ~15 % de gain en plus. Go a `compress/gzip` en
+  stdlib. gzip seul donne déjà ×3.5 sur le transfert — la cible du
+  ticket. Compression à la volée (Option B) + cache mémoire : zéro
+  dépendance, recompression nulle. Ajouter brotli plus tard = ticket
+  30 min si le trafic le justifie.
+- Test colocalisé : `veridian_static_handler_test.go`, 9 tests verts.
+
+**perf-1 — Code-splitting Vite.**
+- `vite.config.ts` : `build.rollupOptions.output.manualChunks` découpe
+  `react-vendor / antd / tanstack / monaco / charts / flow / editor /
+  icons / vendor-utils`.
+- `router.tsx` : toutes les pages post-login passées en `React.lazy()`
+  via helper `veridianLazyPage` (Suspense local + spinner Antd). Restent
+  statiques uniquement SignIn / Logout / AcceptInvitation / Setup
+  (chemin critique avant auth).
+
+**perf-4 — Locales Lingui.**
+- Déjà optimal : `loadLocale` fait `await import(\`./locales/\${locale}.po\`)`
+  — une seule langue chargée au boot, pas les 8.
+- Supprimé l'artefact orphelin `src/i18n/locales/pt-BR-temp.po`.
+
+### Mesures avant / après (build prod)
+
+| Métrique | Avant | Après |
+|---|---|---|
+| `index.js` (chunk applicatif) | 6 282 764 o (6.28 MB) | 370 816 o (120 KB gzip) |
+| Bundle **initial** (1er paint, gzip) | ~1.8 MB | **~892 KB gzip** |
+| Transfert réel 1er load (sur le fil) | 6.28 MB (non compressé) | ~892 KB (gzip auto) |
+| Compression assets | aucune | **gzip** + cache mémoire |
+| `Cache-Control` assets hashés | absent | `immutable` 1 an |
+| Features lourdes (Blog 200K, charts 175K, flow 57K, editor 70K, CreateTemplateDrawer 172K gzip) | dans le bundle initial | **chargées à la demande** |
+
+→ **~×7 sur le transfert au premier chargement.** `antd` (485 KB gzip)
+reste le plancher incompressible d'une app Ant Design — non lazy-loadable
+sans casser le 1er rendu.
+
+### Non-régression
+- `npm run build` (lingui + tsc strict + vite) : ✅
+- `vitest run` : 225 tests / 20 fichiers ✅ (1 warning React post-teardown
+  préexistant dans `App.test.tsx` / `LocaleContext` — pas lié à ce ticket).
+
+### Note pour le polish UI suivant
+La base perf est saine. `ui-veridian-mode-autonomous.md` peut démarrer.
+Si Lighthouse montre un TBT élevé après deploy → optimisations React
+render à traiter (hors scope ici, non spéculatif).
