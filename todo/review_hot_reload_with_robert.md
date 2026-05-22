@@ -265,3 +265,244 @@ Quand on traite une feature → on passe à **✅ POLISHED** et on garde la note
 Quand une nouvelle feature backend est shippée (nouveau endpoint, nouveau comportement visible, nouveau champ exposé) → on ajoute une section **# N+1. <nom>** à la fin avec le même format. Quand on polish une section ensemble → on la marque `✅ POLISHED — <date>` avec une note rapide.
 
 Le `done/` n'est pas pour ce ticket : il reste actif tant que des sections 🔴 / 🟡 ne sont pas traitées.
+
+---
+
+# DA & Design System — audit 2026-05-22
+
+> **Type** : audit direction artistique de la console (`console/src/`).
+> **Méthode** : lecture `App.tsx` (ThemeConfig), `index.css`, `App.css`,
+> `styles/`, `index.html`, layouts + grep hex/fontSize/margins sur tout
+> `console/src/`. Lecture seule, rien modifié côté code.
+> **Constat global** : la console tourne encore sur du **template Vite
+> brut + thème Antd quasi vide**. Aucune DA Veridian formalisée. Le violet
+> `#7763F1` est posé sur `colorPrimary` mais tout le reste — typo, gris,
+> espacements, surfaces — est laissé au défaut Antd ou hardcodé à la main
+> écran par écran. Ça « marche » mais ça ne ressemble pas à un produit
+> Veridian, ça ressemble à du Notifuse upstream avec un accent violet.
+
+## D1. `index.css` — boilerplate Vite qui contredit la DA 🔴
+
+Le fichier contient des vestiges du template Vite jamais nettoyés, dont
+certains **cassent activement** le rendu :
+
+- `a { color: #646cff }` + `a:hover { color: #535bf2 }` (lignes 27-34) :
+  **bleu Vite**, pas le violet Veridian `#7763F1`. Tout lien `<a>` natif
+  hors composant Antd s'affiche en bleu Vite. → **Fix** : remplacer par
+  `var(--color-primary)` (#7763f1) ou retirer le bloc et laisser Antd
+  gérer (`colorLink` est déjà à #7763F1 dans le thème — mais ne s'applique
+  qu'aux `<Typography.Link>`/`<a>` Antd, pas aux `<a>` bruts).
+- `color: rgba(255, 255, 255, 0.87)` sur `:root` (ligne 18) : **vestige
+  dark mode** — couleur de texte blanche sur fond clair. Invisible
+  seulement parce qu'Antd réécrit la couleur sur ses propres composants.
+  Tout texte rendu hors Antd hérite de blanc sur blanc. → **Fix** :
+  `color: var(--foreground)` (#171717, déjà défini juste au-dessus mais
+  jamais consommé).
+- `color-scheme: light dark` (ligne 17) : déclare un support dark mode
+  qui n'existe pas. → **Fix** : `color-scheme: light` uniquement.
+- `h1 { font-size: 3.2em; line-height: 1.1 }` (lignes 36-39) : titre
+  géant du template Vite. Aucun écran console ne veut un h1 à 3.2em. →
+  **Fix** : supprimer, laisser la hiérarchie typo (cf. D4) décider.
+- `font-synthesis: none` + smoothing : OK à garder.
+- Vestige `--background: rgb(243, 246, 252)` (ligne 9) vs le fond réel
+  appliqué partout `#F9F9F9` (App.tsx Layout, WorkspaceLayout). Deux
+  valeurs de fond qui divergent. → **Fix** : aligner sur une seule valeur
+  tokenisée.
+
+## D2. `App.css` — fichier 100 % mort à supprimer 🟢
+
+`console/src/App.css` est le **CSS par défaut Vite intégral** (`#root`
+max-width 1280px, `.logo` spin animation, `#646cffaa` drop-shadow,
+`.read-the-docs`). **Il n'est importé nulle part** (`grep "App.css"
+src/` = 0 résultat). C'est du fichier fantôme. → **Fix** : `git rm
+console/src/App.css`. Zéro risque, pur nettoyage de dette template.
+
+## D3. Thème Antd (`App.tsx`) — squelette à étoffer 🔴
+
+Le `ThemeConfig` est une coquille : `colorPrimary` + `colorLink` + une
+poignée d'overrides Layout/Card/Table/Drawer/Modal, dont **plusieurs
+lignes en commentaires morts** (`bodyBg` commenté, `Button.primaryColor`
+commenté, `Card.headerBg` commenté). Ce qui manque pour avoir une vraie
+DA tokenisée :
+
+- **Tokens globaux absents** : `colorSuccess`, `colorWarning`,
+  `colorError`, `colorInfo` laissés au défaut Antd (vert/orange/rouge/bleu
+  génériques). À ce stade les statuts ne sont pas accordés au violet
+  Veridian. → décider une palette sémantique Veridian.
+- **`borderRadius` global** : non défini → défaut Antd 6px. Or `Card` est
+  forcé à 4px localement. Incohérence : Cards à 4px, Buttons/Inputs/Modals
+  à 6px. → **Fix** : poser un `token.borderRadius` global unique.
+- **`fontFamily`** : non déclaré dans le token Antd. Antd utilise sa
+  propre stack système. `index.css` déclare `Inter` sur `:root` mais Antd
+  ne lit pas `:root` pour sa font. → poser `token.fontFamily` (cf. D5).
+- **`colorBgLayout` / `colorBgContainer`** : le fond `#F9F9F9` est
+  réinjecté **à la main 11 fois** dans `WorkspaceLayout.tsx` + dans 5
+  composants du thème (`Layout.bodyBg/siderBg`, `Card`, `Drawer`,
+  `Modal`, `Timeline.dotBg`). → **Fix** : un seul `token.colorBgLayout`
+  + `token.colorBgContainer` → supprime les 11 inline.
+- **`controlHeight`, `fontSize`, espacements (`padding*`, `margin*`)** :
+  tous au défaut Antd. Aucun rythme d'espacement Veridian.
+- `Table.fontSize: 12` + `Card.headerFontSize: 16` : tailles posées
+  isolément sans échelle typo cohérente (cf. D4).
+- **Commentaires morts à purger** : lignes 47, 53-54, 57 de `App.tsx`.
+
+→ **Fix structurant** : créer un module `console/src/theme/veridian.ts`
+(ou `styles/theme.ts`) qui exporte le `ThemeConfig` complet — tokens
+couleur sémantiques, `borderRadius`, `fontFamily`, échelle d'espacement,
+échelle typo — et l'importer dans `App.tsx`. Sortir le thème du fichier
+`App.tsx` = base d'un vrai design system.
+
+## D4. Typographie — pas de hiérarchie, tailles arbitraires 🟡
+
+Aucune échelle typo. Les tailles sont posées à la main, au cas par cas :
+
+- **53 occurrences** de `fontSize: <number>` inline dans des `.tsx` (hors
+  tests). Valeurs vues en vrac : `6, 8, 9, 10, 11, 12, 13, 14, 16, 18`.
+  Dix tailles différentes sans logique d'échelle.
+- Tailles **micro illisibles** : `fontSize: 6` et `fontSize: 8`
+  (`EmailBlockClass.tsx` — labels de blocs email), `fontSize: '9px'`
+  (footer version `WorkspaceLayout`, crédit photo `MainLayout`
+  `text-[9px]`). En dessous de 11px c'est sous le seuil de lisibilité
+  confortable. À auditer écran par écran : légitime (badge dense) ou
+  négligence ?
+- `Menu` de la sidebar : `fontSize: '13px', fontWeight: 600` hardcodé
+  inline dans `WorkspaceLayout` — devrait être un override `Menu` du
+  thème.
+- → **Fix** : définir une échelle (ex. `xs 11 / sm 12 / base 14 / md 16
+  / lg 20 / xl 24`), la poser dans le thème, et remplacer progressivement
+  les `fontSize:` inline. Au minimum bannir `< 11px` sauf cas justifié
+  documenté.
+
+## D5. Font Inter déclarée mais JAMAIS chargée 🔴
+
+`index.css` déclare `font-family: Inter, system-ui, ...` sur `:root`.
+**Mais Inter n'est chargée nulle part** : aucun `<link>` Google Fonts
+dans `index.html`, aucun `@import`, aucun `.woff2` self-hosted (`find
+-name "*.woff*"` = 0 résultat). Résultat : **la console n'affiche jamais
+Inter** — elle tombe en silence sur `system-ui` (donc des polices
+différentes selon OS : Segoe UI sur Windows, San Francisco sur Mac,
+Cantarell/Ubuntu sur Linux). La DA typo n'est ni Inter, ni cohérente
+cross-plateforme. → **Fix** : soit self-host Inter (woff2 dans `public/`
++ `@font-face`, recommandé — pas de dépendance Google, meilleure perf),
+soit `<link>` Google Fonts. Puis poser `token.fontFamily` Antd sur la
+même stack pour que les composants Antd l'utilisent aussi.
+
+## D6. Couleurs en dur — 797 hex dans `console/src/` 🟡
+
+`grep -rE '#[0-9a-fA-F]{3,8}' src/` (hors tests) = **797 occurrences**.
+Répartition :
+
+- **~574 dans `email_builder/` + `blog_editor/` + `blog/`** : en grande
+  partie **légitime** — ce sont des outils d'édition de contenu
+  utilisateur (color pickers, presets de thème blog, défauts MJML). Top
+  fichiers : `TiptapToolbar.tsx` (83), `ColorPickerWithPresets.tsx`
+  (82), `EmailBlockClass.tsx` (45), `blog/themePresets.ts` (45). Ces hex
+  appartiennent au *contenu* édité, pas au *chrome* de l'app. À ne PAS
+  tokeniser de force.
+- **~223 dans le chrome de l'app** (hors email/blog) : **c'est là que
+  se concentre la dette DA**. Cas concrets à tokeniser :
+  - `WorkspaceLayout.tsx` : **11 hex** — `#F9F9F9` ×7, `#f0f0f0` ×3
+    (bordures), `#000`. Tout le fond + les bordures de la coquille
+    principale en dur. → tokens.
+  - `formatters.tsx` : `#999` ×5 (texte secondaire / bordures dotted).
+  - `automations/nodes/constants.ts` : 10 hex de couleurs de nœuds
+    (`#52c41a`, `#1890ff`, `#722ed1`...) = **palette Ant Design legacy**
+    (les couleurs « daybreak blue / polar green » d'Antd v4), pas la
+    palette Veridian. À reaccorder.
+  - `analytics/EmailMetricsChart.tsx` : 8 hex Tailwind (`#3b82f6`
+    blue-500, `#10b981` green-500, `#8b5cf6` purple-500...) — une 3e
+    palette encore différente (Tailwind). → la console mélange palette
+    Antd v4 (automations), palette Tailwind (analytics) et le violet
+    Veridian. Trois systèmes de couleur cohabitent.
+  - `DashboardPage.tsx` : `#1890ff` (bleu Antd v4) + `#f5f5f5` +
+    `#e6f7ff` inline pour l'avatar workspace.
+  - `BaseNode.tsx` : `#7763F1` hardcodé en dur (devrait lire le token).
+  - `veridian_brand_footer.tsx` : `#9ca3af` ×2 hardcodé (le composant
+    Veridian lui-même n'utilise pas de token — à corriger en passant).
+  - `index.css` : `rgba(78, 108, 255, 0.4)` sur le hover de table
+    (ligne 46) = encore une **4e nuance de bleu**, ni Antd ni Veridian.
+- → **Fix** : (1) ne toucher à rien dans email_builder/blog (contenu
+  user). (2) Sur le chrome : remplacer les hex par les tokens du thème
+  Veridian (D3). (3) Trancher **une** palette unique (Veridian violet +
+  gris neutres + 4 couleurs sémantiques) et tuer le mélange Antd-v4 /
+  Tailwind / nuances bleues random.
+
+## D7. Espacements — 276 marges inline, pas de rythme 🟡
+
+`grep marginBottom/Top/Left/Right: <number>` (hors tests) = **276
+occurrences**. Les écrans posent leurs espacements à la main
+(`marginBottom: '8px'`, `'12px'`, `'20px'`, `'24px'`, `margin: '24px
+0'`...) au lieu d'utiliser les primitives Antd (`<Space>`, `<Row
+gutter>`, `<Flex gap>`). Exemple `DashboardPage.tsx` : `gap: '8px'`,
+`gap: '12px'`, `marginBottom: '8px'`, `margin: '24px 0'` — quatre
+valeurs d'espacement sur un seul petit écran, toutes en dur. Pas de
+catastrophe visuelle mais **aucun rythme d'espacement** → micro-
+incohérences partout. → **Fix** : définir une échelle (4/8/12/16/24/32)
+et privilégier `<Space size>` / `<Flex gap>` plutôt que `style={{
+margin... }}`. Chantier progressif, pas bloquant.
+
+## D8. Incohérence d'usage Antd — composants & tailles 🟡
+
+- **`borderRadius` mixte** : `Card` forcé à 4px (thème), tout le reste à
+  6px (défaut Antd). Cards anguleuses à côté de Buttons arrondis. →
+  unifier (cf. D3).
+- **`tabs-in-header` dans `index.css`** (lignes 73-86) : positionnement
+  absolu avec des magic numbers fragiles (`width: 40%; right: 30%; left:
+  30%; height: 65px; line-height: 41px`). Casse au moindre changement de
+  hauteur de header (le header fait 64px, le CSS dit 65px). → à revoir,
+  hack responsive fragile.
+- **Override `.ant-alert`** (index.css 91-111) : reskin Alert avec
+  bordure gauche colorée — mais les 4 couleurs sont les hex Antd v4
+  (`#1890ff`, `#52c41a`, `#faad14`, `#ff4d4f`), pas des tokens. Cohérent
+  visuellement mais hardcodé.
+- Le crédit photo `MainLayout` (`text-[9px]` overlay noir 60%) traîne
+  sur les écrans pré-login — détail mais ça fait « template ».
+- `index.html` : `<title>Console | Notifuse</title>` + splash logo
+  `logo.png` Notifuse + `<meta name="msapplication-TileColor"
+  content="#da532c">` (orange random) + `mask-icon color="#5bbad5"`
+  (cyan) — le **branding du document HTML est encore 100 % Notifuse
+  upstream**, couleurs de tuile sans rapport avec la DA. → à reskin
+  quand on traitera le co-brand (§1).
+
+## D9. Écrans à prioriser pour un polish 🟡
+
+Pages les plus rentables à repasser en session calme, avec la raison :
+
+- **`SignInPage.tsx`** 🔴 — première impression. Aujourd'hui : `<Card>`
+  Antd brut 400px centré sur la photo Unsplash, titre « Sign In ». Zéro
+  branding. C'est l'écran le plus vu d'un nouvel utilisateur → mérite le
+  plus de soin (logo Veridian, copy, accent violet).
+- **`DashboardPage.tsx`** 🔴 — sélecteur de workspace. Avatar en
+  `#1890ff` (bleu Antd, pas Veridian), 4 valeurs d'espacement en dur,
+  `<Empty>` brut. Petit écran, vite repassable.
+- **`MainLayout.tsx`** 🟡 — fond photo Unsplash + crédit `text-[9px]`.
+  Décider si on garde le fond photo ou un fond DA Veridian.
+- **`WorkspaceLayout.tsx`** 🔴 — la coquille principale (sidebar +
+  header). 11 hex en dur, footer version `9px`, logo Notifuse. C'est le
+  cadre vu en permanence → le tokeniser a le meilleur ROI visuel.
+- **`CreateWorkspacePage.tsx`** 🟡 — écran `<Result>` mode
+  veridian-managed (déjà custom Veridian) — vérifier que le branding est
+  raccord une fois la DA posée.
+- **`SetupWizard.tsx`** (29 KB) 🟡 — gros wizard, à auditer pour
+  cohérence espacements/typo une fois l'échelle posée.
+
+## D10. Plan de remise en ordre suggéré (ordre de ROI)
+
+1. 🟢 **Nettoyage template** (15 min, zéro risque) : `git rm App.css`,
+   purger le boilerplate Vite de `index.css` (liens bleus, h1 3.2em,
+   `color-scheme dark`, `rgba(255,255,255,.87)`).
+2. 🔴 **Charger Inter** (self-host woff2 + `@font-face` + `token.
+   fontFamily`).
+3. 🔴 **Extraire le thème** dans `console/src/theme/veridian.ts` :
+   tokens couleur sémantiques, `borderRadius` unique, échelle typo,
+   échelle d'espacement. Importer dans `App.tsx`.
+4. 🟡 **Tokeniser le chrome** : remplacer les ~223 hex du chrome (hors
+   email/blog) par les tokens — priorité `WorkspaceLayout`, `DashboardPage`,
+   `formatters`, `automations/constants`, `analytics`.
+5. 🟡 **Unifier la palette** : tuer le mélange Antd-v4 / Tailwind /
+   nuances bleues, une seule palette Veridian.
+6. 🟡 **Rythme d'espacement** : migrer progressivement les 276 marges
+   inline vers `<Space>` / `<Flex gap>` + échelle.
+
+Étapes 1-3 = base du design system, faisables vite et à fort impact
+visuel. Étapes 4-6 = chantier progressif, page par page en hot-reload.

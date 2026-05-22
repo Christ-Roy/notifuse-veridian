@@ -165,8 +165,82 @@ question de les faire seul :
 - **Animations / transitions** : tout ce qui demande un sens du polish
 - **Mobile / responsive** : tester sur différentes tailles, ajuster
 
+### Audit DA & design system — findings 2026-05-22
+
+> Audit lecture seule de `console/src/` (App.tsx ThemeConfig, index.css,
+> App.css, styles/, index.html, layouts + grep hex/fontSize/margins).
+> Détail complet et plan de remise en ordre dans le ticket parent
+> `review_hot_reload_with_robert.md` → section `# DA & Design System —
+> audit 2026-05-22` (D1→D10). Résumé actionnable ci-dessous, classé par
+> ce qui peut tomber en quick-win vs ce qui demande un arbitrage DA.
+
+**Quick-wins quasi sans risque (peuvent être traités en début de session
+calme, < 30 min) :**
+
+- 🟢 **Supprimer `console/src/App.css`** : fichier 100 % boilerplate Vite
+  (`#root` max-width 1280px, `.logo` spin, `.read-the-docs`),
+  **importé nulle part** (`grep "App.css" src/` = 0). `git rm` direct.
+- 🟢 **Purger le boilerplate Vite de `index.css`** : `a { color: #646cff }`
+  + `a:hover #535bf2` (bleu Vite, pas le violet Veridian — tout `<a>`
+  natif s'affiche en bleu Vite) ; `h1 { font-size: 3.2em }` (titre géant
+  template) ; `color-scheme: light dark` (faux support dark mode) ;
+  `color: rgba(255,255,255,0.87)` sur `:root` (vestige dark mode = texte
+  blanc sur fond clair, masqué seulement parce qu'Antd réécrit).
+
+**Demandent un arbitrage DA avec Robert (cœur de la session calme) :**
+
+- 🔴 **Font Inter déclarée mais JAMAIS chargée** : `index.css` met
+  `font-family: Inter, ...` mais aucun `<link>` Google Fonts ni `.woff2`
+  self-hosted (`find -name "*.woff*"` = 0). La console tombe en silence
+  sur `system-ui` → typo différente selon l'OS, jamais Inter. Décider :
+  self-host woff2 (reco) ou Google Fonts, puis poser `token.fontFamily`.
+- 🔴 **Thème Antd quasi vide à étoffer** (`App.tsx`) : juste
+  `colorPrimary` + `colorLink` + qq overrides éparpillés dont la moitié
+  en commentaires morts. Manquent : `colorSuccess/Warning/Error/Info`
+  sémantiques accordés Veridian, `borderRadius` global (incohérence :
+  Card forcé 4px, reste à 6px Antd), `fontFamily`, `colorBgLayout`/
+  `colorBgContainer` (le fond `#F9F9F9` est réinjecté à la main 11× dans
+  `WorkspaceLayout` + 5 composants du thème), échelle d'espacement.
+  → extraire un vrai `console/src/theme/veridian.ts`.
+- 🟡 **Palette incohérente — 3 systèmes de couleur cohabitent** : le
+  chrome mélange palette **Antd v4 legacy** (`automations/nodes/
+  constants.ts` : `#1890ff`, `#52c41a`, `#722ed1`...), palette
+  **Tailwind** (`analytics/EmailMetricsChart.tsx` : `#3b82f6`,
+  `#10b981`, `#8b5cf6`...) et le violet Veridian. Plus des nuances de
+  bleu random (`rgba(78,108,255,.4)` hover table, `#4e6cff` dans
+  `segment/button_upsert`). Trancher UNE palette Veridian.
+- 🟡 **797 hex en dur dans `console/src/`** — ~574 dans email_builder/
+  blog_editor/blog (légitime = contenu user édité, NE PAS toucher),
+  **~223 dans le chrome de l'app** (= la vraie dette : `WorkspaceLayout`
+  11 hex, `formatters` 5×`#999`, `DashboardPage` avatar `#1890ff`,
+  `BaseNode` `#7763F1` hardcodé au lieu du token, `veridian_brand_footer`
+  `#9ca3af` hardcodé). À tokeniser une fois le thème extrait.
+- 🟡 **Pas de hiérarchie typo** : 53 `fontSize:` inline, 10 tailles
+  différentes (6/8/9/10/11/12/13/14/16/18) sans échelle. Tailles micro
+  illisibles `fontSize: 6/8` (labels email_builder), `9px` (footer
+  version sidebar, crédit photo). Définir une échelle, bannir `< 11px`
+  hors cas justifié.
+- 🟡 **Pas de rythme d'espacement** : 276 marges inline (`marginBottom:
+  '8px'/'12px'/'20px'/'24px'`...) au lieu de `<Space>` / `<Flex gap>` /
+  `<Row gutter>`. Migration progressive page par page.
+- 🟡 **`index.html` encore 100 % branding Notifuse** : `<title>Console |
+  Notifuse</title>`, splash `logo.png` Notifuse, `msapplication-TileColor
+  #da532c` (orange random), `mask-icon #5bbad5` (cyan) — couleurs de
+  tuile sans rapport avec la DA Veridian.
+- 🟡 **Écrans prioritaires à repasser** (raison concrète) :
+  `SignInPage` (première impression, `<Card>` Antd brut sans branding),
+  `WorkspaceLayout` (coquille permanente, 11 hex + logo Notifuse + footer
+  9px), `DashboardPage` (avatar bleu Antd, 4 espacements en dur),
+  `MainLayout` (fond photo Unsplash + crédit `text-[9px]` — garder ou
+  reskin ?), `SetupWizard` (29 KB, cohérence à auditer).
+- 🟡 **`tabs-in-header` (index.css)** : positionnement absolu fragile
+  (`width:40% right:30% left:30% height:65px` alors que le header fait
+  64px) — hack à revoir.
+
 → Session "calme sans sub-agents" Robert + agent, hot-reload sur staging,
-on tranche en live.
+on tranche en live. Ordre de ROI suggéré : (1) nettoyage template
+[App.css + index.css], (2) charger Inter, (3) extraire le thème, (4-6)
+tokeniser le chrome / unifier palette / rythme d'espacement page par page.
 
 ---
 
