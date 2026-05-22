@@ -92,8 +92,11 @@ test.describe('@regression discovery-by-email — POST /api/users/by-email', () 
     await provisionTenant(tid2, userEmail, 'pro');
 
     const r = await hmacFetch('/api/users/by-email', 'POST', { email: userEmail });
-    expect(r.status, await r.text()).toBe(200);
-    const body = await r.json();
+    // Lire le body UNE SEULE fois (un Response stream n'est lisible qu'une fois —
+    // .text() puis .json() = "Body has already been read").
+    const raw = await r.text();
+    expect(r.status, raw).toBe(200);
+    const body = JSON.parse(raw);
     expect(body.found).toBe(true);
     expect(body.user_email).toBe(userEmail);
     expect(Array.isArray(body.workspaces)).toBe(true);
@@ -118,9 +121,11 @@ test.describe('@regression discovery-by-email — POST /api/users/by-email', () 
   test('user inconnu : found:false + workspaces:[]', async () => {
     const ghostEmail = `tstghost${Date.now().toString(36).slice(-6)}@discovery.test`;
     const r = await hmacFetch('/api/users/by-email', 'POST', { email: ghostEmail });
-    // Spec : toujours 200 (jamais 404) car la decouverte est best-effort
-    expect(r.status, await r.text()).toBe(200);
-    const body = await r.json();
+    // Spec : toujours 200 (jamais 404) car la decouverte est best-effort.
+    // Lire le body une seule fois (.text() puis .json() = "already read").
+    const raw = await r.text();
+    expect(r.status, raw).toBe(200);
+    const body = JSON.parse(raw);
     expect(body.found).toBe(false);
     expect(body.user_email).toBe(ghostEmail);
     expect(Array.isArray(body.workspaces)).toBe(true);

@@ -164,7 +164,11 @@ test.describe('Paywall — suspend / resume / delete', () => {
     r = await sendTransactional(api_key, tid);
     expect(r.status).toBe(402);
     const body = await r.json();
-    expect(body.tenant_status).toBe('deleted');
+    // Format standardisé Lot J 2026-05-21 (CONTRAT-HUB §5.9 mode dégradé
+    // soft-deleted) : error_code=tenant_soft_deleted + restore_url. Remplace
+    // l'ancien champ tenant_status='deleted'.
+    expect(body.error_code).toBe('tenant_soft_deleted');
+    expect(body.restore_url).toContain(tid);
   });
 });
 

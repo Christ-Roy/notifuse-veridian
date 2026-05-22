@@ -11,6 +11,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1672,4 +1673,56 @@ func TestTransferOwner_ServiceExposed(t *testing.T) {
 		return svc.TransferOwner
 	}
 	assert.True(t, true, "compile-time check passed: TransferOwner exists on veridianService")
+}
+
+// TestAttachMember_GeneratesUUIDNotHubUserID — régression-guard du bug
+// 2026-05-22 : AttachMember mettait input.HubUserID (ex "user_abc123",
+// non-UUID) directement dans users.id (colonne UUID stricte Postgres) →
+// "pq: invalid input syntax for type uuid" → 500.
+//
+// Le fix génère un uuid.New() Notifuse natif. Ce test CAPTURE le user
+// passé à CreateUser et assert que son ID est un UUID valide ET différent
+// du HubUserID non-UUID fourni. C'est exactement le check que les mocks
+// gomock.Any() ne faisaient pas (d'où le bug passé en E2E only).
+func TestAttachMember_GeneratesUUIDNotHubUserID(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	const nonUUIDHubID = "hub-user-not-a-uuid-123"
+
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-uuid").Return(&domain.Workspace{ID: "ws-uuid"}, nil)
+	m.planRepo.EXPECT().Get(ctx, "ws-uuid").Return(nil, sql.ErrNoRows)
+	m.user.EXPECT().GetUserByEmail(ctx, "newmember@example.com").
+		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+
+	// CAPTURE le user créé : son ID doit être un UUID, PAS le HubUserID.
+	var createdUserID string
+	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).
+		DoAndReturn(func(_ context.Context, u *domain.User) error {
+			createdUserID = u.ID
+			return nil
+		})
+
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, gomock.Any(), "ws-uuid").
+		Return(nil, sql.ErrNoRows)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-uuid").
+		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-x", "owner@ws.test")}, nil)
+	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-uuid", gomock.Any(), "member", gomock.Any()).
+		Return(nil)
+	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+
+	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-uuid",
+		HubUserID:    nonUUIDHubID,
+		HubUserEmail: "newmember@example.com",
+		Role:         domain.AttachMemberRoleMember,
+		InvitationID: "inv-uuid-test",
+	})
+	require.NoError(t, err)
+
+	assert.NotEqual(t, nonUUIDHubID, createdUserID,
+		"le user créé NE doit PAS reprendre le HubUserID non-UUID")
+	_, parseErr := uuid.Parse(createdUserID)
+	assert.NoError(t, parseErr, "users.id doit être un UUID valide (colonne UUID stricte Postgres)")
 }

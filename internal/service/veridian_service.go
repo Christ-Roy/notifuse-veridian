@@ -1765,10 +1765,16 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 		}
 	}
 
-	// Step 3 : trouver/créer le user Notifuse via user_id = HubUserID.
-	// Convention cross-app : le champ `user_id` Notifuse correspond à hub_user_id
-	// (UUIDs Hub → Notifuse at provision time). On lookup d'abord par email
-	// pour retrouver les users existants créés avant cette feature.
+	// Step 3 : trouver/créer le user Notifuse, identifié par son EMAIL.
+	// On lookup d'abord par email (source de vérité d'identité cross-app,
+	// cf. CONTRAT-HUB §3.7 — l'email canonique est la clé, pas le hub_user_id).
+	//
+	// ⚠️ La colonne users.id Notifuse est de type UUID strict en DB. Le
+	// hub_user_id reçu du Hub (ex: "user_abc123") n'est PAS forcément un UUID
+	// → on génère un UUID Notifuse natif, exactement comme Provision (cf. la
+	// création de l'owner plus haut dans ce fichier). Le lien avec le Hub se
+	// fait par l'email, pas par un id partagé. invitation_id reste tracé en
+	// audit log uniquement.
 	member, err := s.userService.GetUserByEmail(ctx, input.HubUserEmail)
 	if err != nil {
 		var notFound *domain.ErrUserNotFound
@@ -1779,7 +1785,7 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 	}
 	if member == nil {
 		member = &domain.User{
-			ID:        input.HubUserID,
+			ID:        uuid.New().String(),
 			Email:     input.HubUserEmail,
 			Type:      domain.UserTypeUser,
 			CreatedAt: time.Now().UTC(),
