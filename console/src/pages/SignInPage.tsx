@@ -7,6 +7,7 @@ import { SignInRequest, VerifyCodeRequest } from '../services/api/types'
 import { MainLayout } from '../layouts/MainLayout'
 import { useLingui } from '@lingui/react/macro'
 import { VeridianLogo } from '../components/veridian_logo'
+import { VeridianOAuthButtons } from '../components/veridian_oauth_buttons'
 
 export function SignInPage() {
   const { t } = useLingui()
@@ -136,30 +137,34 @@ export function SignInPage() {
         </div>
         <Card title={t`Sign In`} style={{ width: 400 }}>
           {!showCodeInput ? (
-            <Form
-              form={form}
-              name="email"
-              onFinish={handleEmailSubmit}
-              layout="vertical"
-              initialValues={{ email }}
-            >
-              <Form.Item
-                label={t`Email`}
+            <>
+              {/* === Veridian patch — boutons OAuth Hub (CONTRAT-HUB §6bis.8.1) */}
+              <VeridianOAuthButtons />
+              <Form
+                form={form}
                 name="email"
-                rules={[
-                  { required: true, message: t`Please input your email!` },
-                  { type: 'email', message: t`Please enter a valid email!` }
-                ]}
+                onFinish={handleEmailSubmit}
+                layout="vertical"
+                initialValues={{ email }}
               >
-                <Input placeholder={t`Email`} type="email" />
-              </Form.Item>
+                <Form.Item
+                  label={t`Email`}
+                  name="email"
+                  rules={[
+                    { required: true, message: t`Please input your email!` },
+                    { type: 'email', message: t`Please enter a valid email!` }
+                  ]}
+                >
+                  <Input placeholder={t`Email`} type="email" />
+                </Form.Item>
 
-              <Form.Item>
-                <Button type="primary" htmlType="submit" block loading={loading}>
-                  {t`Send Magic Code`}
-                </Button>
-              </Form.Item>
-            </Form>
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" block loading={loading}>
+                    {t`Send Magic Code`}
+                  </Button>
+                </Form.Item>
+              </Form>
+            </>
           ) : (
             <>
               <p style={{ marginBottom: 24 }}>{t`Enter the 6-digit code sent to ${email}`}</p>

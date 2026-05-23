@@ -2244,6 +2244,14 @@ msgstr "Farciment del contenidor"
 msgid "Content Structure Tree"
 msgstr "Arbre d'estructura del contingut"
 
+#: src/components/veridian_oauth_buttons.tsx:98
+msgid "Continue with Google"
+msgstr ""
+
+#: src/components/veridian_oauth_buttons.tsx:106
+msgid "Continue with Microsoft"
+msgstr ""
+
 #: src/components/seo/SEOSettingsForm.tsx:74
 #: src/components/seo/SEOSettingsForm.tsx:188
 msgid "Control how search engines index and follow links on your blog"
@@ -3428,8 +3436,8 @@ msgstr "Correu electrònic"
 #: src/components/timeline/ContactTimeline.tsx:505
 #: src/pages/ContactsPage.tsx:359
 #: src/pages/ContactsPage.tsx:526
-#: src/pages/SignInPage.tsx:147
-#: src/pages/SignInPage.tsx:154
+#: src/pages/SignInPage.tsx:151
+#: src/pages/SignInPage.tsx:158
 msgid "Email"
 msgstr "Correu electrònic"
 
@@ -3784,7 +3792,7 @@ msgstr "Introduïu adreça de correu de resposta"
 msgid "Enter spacing"
 msgstr "Introduïu espaiat"
 
-#: src/pages/SignInPage.tsx:165
+#: src/pages/SignInPage.tsx:170
 msgid "Enter the 6-digit code sent to {email}"
 msgstr "Introdueix el codi de 6 dígits enviat a {email}"
 
@@ -4288,7 +4296,7 @@ msgstr "No s'ha pogut renderitzar la previsualització"
 msgid "Failed to resend invitation"
 msgstr "No s'ha pogut reenviar la invitació"
 
-#: src/pages/SignInPage.tsx:123
+#: src/pages/SignInPage.tsx:124
 msgid "Failed to resend magic code"
 msgstr "Error en reenviar el codi màgic"
 
@@ -4355,7 +4363,7 @@ msgstr "No s'ha pogut seleccionar el guanyador"
 msgid "Failed to send broadcast"
 msgstr "No s'ha pogut enviar la difusió"
 
-#: src/pages/SignInPage.tsx:74
+#: src/pages/SignInPage.tsx:75
 msgid "Failed to send magic code"
 msgstr "Error en enviar el codi màgic"
 
@@ -4465,7 +4473,7 @@ msgstr "No s'han pogut actualitzar els paràmetres de l'espai de treball"
 msgid "Failed to update workspace settings: {errorMessage}"
 msgstr "No s'han pogut actualitzar els paràmetres de l'espai de treball: {errorMessage}"
 
-#: src/pages/SignInPage.tsx:45
+#: src/pages/SignInPage.tsx:46
 msgid "Failed to verify code"
 msgstr "Error en verificar el codi"
 
@@ -5897,7 +5905,7 @@ msgstr "Bucle"
 msgid "lowercase"
 msgstr "Minúscules"
 
-#: src/pages/SignInPage.tsx:72
+#: src/pages/SignInPage.tsx:73
 msgid "Magic code sent to your email"
 msgstr "Codi màgic enviat al teu correu"
 
@@ -6226,7 +6234,7 @@ msgstr "Nova conversa"
 msgid "New folder"
 msgstr "Nova carpeta"
 
-#: src/pages/SignInPage.tsx:121
+#: src/pages/SignInPage.tsx:122
 msgid "New magic code sent to your email"
 msgstr "Nou codi màgic enviat al teu correu"
 
@@ -6808,6 +6816,10 @@ msgstr "Opcional. Si es proporciona, s'envia com Authorization: Bearer <secret>"
 msgid "Optionally filter contacts by segments within the selected lists"
 msgstr "Opcionalment filtreu contactes per segments dins de les llistes seleccionades"
 
+#: src/components/veridian_oauth_buttons.tsx:109
+msgid "or"
+msgstr ""
+
 #: src/components/email_builder/ui/ImportFontInput.tsx:153
 msgid "Or select a popular Google Font"
 msgstr "O seleccioneu una font de Google popular"
@@ -7068,7 +7080,7 @@ msgstr "Si us plau, introduïu un slug"
 msgid "Please enter a URL"
 msgstr "Si us plau, introduïu una URL"
 
-#: src/pages/SignInPage.tsx:173
+#: src/pages/SignInPage.tsx:178
 msgid "Please enter a valid 6-digit code!"
 msgstr "Si us plau, introdueix un codi de 6 dígits vàlid!"
 
@@ -7076,7 +7088,7 @@ msgstr "Si us plau, introdueix un codi de 6 dígits vàlid!"
 msgid "Please enter a valid email"
 msgstr "Si us plau, introduïu un correu vàlid"
 
-#: src/pages/SignInPage.tsx:151
+#: src/pages/SignInPage.tsx:155
 msgid "Please enter a valid email!"
 msgstr "Si us plau, introdueix un correu vàlid!"
 
@@ -7142,11 +7154,11 @@ msgstr "Si us plau, introduïu el nom de l'espai de treball"
 msgid "Please enter your API key"
 msgstr "Si us plau, introduïu la vostra clau API"
 
-#: src/pages/SignInPage.tsx:170
+#: src/pages/SignInPage.tsx:175
 msgid "Please input the magic code!"
 msgstr "Si us plau, introdueix el codi màgic!"
 
-#: src/pages/SignInPage.tsx:150
+#: src/pages/SignInPage.tsx:154
 msgid "Please input your email!"
 msgstr "Si us plau, introdueix el teu correu!"
 
@@ -7834,7 +7846,7 @@ msgstr ""
 msgid "Requires a padding"
 msgstr "Requereix un farciment"
 
-#: src/pages/SignInPage.tsx:204
+#: src/pages/SignInPage.tsx:209
 msgid "Resend code"
 msgstr "Reenviar codi"
 
@@ -8556,7 +8568,7 @@ msgstr "Envieu una notificació transaccional utilitzant TypeScript/JavaScript:"
 msgid "Send Invitation"
 msgstr "Enviar invitació"
 
-#: src/pages/SignInPage.tsx:159
+#: src/pages/SignInPage.tsx:163
 msgid "Send Magic Code"
 msgstr "Enviar codi màgic"
 
@@ -8804,7 +8816,7 @@ msgstr "Mostrar detalls"
 msgid "Show More ({0} remaining)"
 msgstr "Mostrar més ({0} restants)"
 
-#: src/pages/SignInPage.tsx:137
+#: src/pages/SignInPage.tsx:138
 msgid "Sign In"
 msgstr "Iniciar sessió"
 
@@ -9242,7 +9254,7 @@ msgstr "Correcte"
 msgid "Successfully processed {successful} contacts"
 msgstr "Processats {successful} contactes correctament"
 
-#: src/pages/SignInPage.tsx:38
+#: src/pages/SignInPage.tsx:39
 msgid "Successfully signed in"
 msgstr "Sessió iniciada correctament"
 
@@ -10397,7 +10409,7 @@ msgstr "URL:"
 msgid "Use"
 msgstr "Utilitzar"
 
-#: src/pages/SignInPage.tsx:196
+#: src/pages/SignInPage.tsx:201
 msgid "Use a different email"
 msgstr "Utilitzar un altre correu"
 
@@ -10543,7 +10555,7 @@ msgstr ""
 msgid "Veridian Hub is unreachable. The app is in read-only mode — please try again in {retryHours}h."
 msgstr ""
 
-#: src/pages/SignInPage.tsx:186
+#: src/pages/SignInPage.tsx:191
 msgid "Verify Code"
 msgstr "Verificar codi"
 

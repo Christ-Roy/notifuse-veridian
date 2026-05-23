@@ -2244,6 +2244,14 @@ msgstr "Espacement du conteneur"
 msgid "Content Structure Tree"
 msgstr "Arborescence de la structure du contenu"
 
+#: src/components/veridian_oauth_buttons.tsx:98
+msgid "Continue with Google"
+msgstr ""
+
+#: src/components/veridian_oauth_buttons.tsx:106
+msgid "Continue with Microsoft"
+msgstr ""
+
 #: src/components/seo/SEOSettingsForm.tsx:74
 #: src/components/seo/SEOSettingsForm.tsx:188
 msgid "Control how search engines index and follow links on your blog"
@@ -3428,8 +3436,8 @@ msgstr "email"
 #: src/components/timeline/ContactTimeline.tsx:505
 #: src/pages/ContactsPage.tsx:359
 #: src/pages/ContactsPage.tsx:526
-#: src/pages/SignInPage.tsx:147
-#: src/pages/SignInPage.tsx:154
+#: src/pages/SignInPage.tsx:151
+#: src/pages/SignInPage.tsx:158
 msgid "Email"
 msgstr "Email"
 
@@ -3784,7 +3792,7 @@ msgstr "Entrez l adresse email de réponse"
 msgid "Enter spacing"
 msgstr "Entrez l espacement"
 
-#: src/pages/SignInPage.tsx:165
+#: src/pages/SignInPage.tsx:170
 msgid "Enter the 6-digit code sent to {email}"
 msgstr "Entrez le code à 6 chiffres envoyé à {email}"
 
@@ -4288,7 +4296,7 @@ msgstr "Échec du rendu de l aperçu"
 msgid "Failed to resend invitation"
 msgstr "Échec du renvoi de l invitation"
 
-#: src/pages/SignInPage.tsx:123
+#: src/pages/SignInPage.tsx:124
 msgid "Failed to resend magic code"
 msgstr "Échec du renvoi du code magique"
 
@@ -4355,7 +4363,7 @@ msgstr "Échec de la sélection du gagnant"
 msgid "Failed to send broadcast"
 msgstr "Échec de l envoi de la diffusion"
 
-#: src/pages/SignInPage.tsx:74
+#: src/pages/SignInPage.tsx:75
 msgid "Failed to send magic code"
 msgstr "Échec de l'envoi du code magique"
 
@@ -4465,7 +4473,7 @@ msgstr "Échec de la mise à jour des paramètres de l espace de travail"
 msgid "Failed to update workspace settings: {errorMessage}"
 msgstr "Échec de la mise à jour des paramètres de l espace de travail : {errorMessage}"
 
-#: src/pages/SignInPage.tsx:45
+#: src/pages/SignInPage.tsx:46
 msgid "Failed to verify code"
 msgstr "Échec de la vérification du code"
 
@@ -5897,7 +5905,7 @@ msgstr "Boucle"
 msgid "lowercase"
 msgstr "minuscules"
 
-#: src/pages/SignInPage.tsx:72
+#: src/pages/SignInPage.tsx:73
 msgid "Magic code sent to your email"
 msgstr "Code magique envoyé à votre email"
 
@@ -6226,7 +6234,7 @@ msgstr "Nouvelle conversation"
 msgid "New folder"
 msgstr "Nouveau dossier"
 
-#: src/pages/SignInPage.tsx:121
+#: src/pages/SignInPage.tsx:122
 msgid "New magic code sent to your email"
 msgstr "Nouveau code magique envoyé à votre email"
 
@@ -6808,6 +6816,10 @@ msgstr "Optionnel. Si fourni, envoyé comme Authorization : Bearer <secret>"
 msgid "Optionally filter contacts by segments within the selected lists"
 msgstr "Filtrer optionnellement les contacts par segments dans les listes sélectionnées"
 
+#: src/components/veridian_oauth_buttons.tsx:109
+msgid "or"
+msgstr ""
+
 #: src/components/email_builder/ui/ImportFontInput.tsx:153
 msgid "Or select a popular Google Font"
 msgstr "Ou sélectionnez une police Google populaire"
@@ -7068,7 +7080,7 @@ msgstr "Veuillez entrer un slug"
 msgid "Please enter a URL"
 msgstr "Veuillez entrer une URL"
 
-#: src/pages/SignInPage.tsx:173
+#: src/pages/SignInPage.tsx:178
 msgid "Please enter a valid 6-digit code!"
 msgstr "Veuillez entrer un code à 6 chiffres valide !"
 
@@ -7076,7 +7088,7 @@ msgstr "Veuillez entrer un code à 6 chiffres valide !"
 msgid "Please enter a valid email"
 msgstr "Veuillez entrer un email valide"
 
-#: src/pages/SignInPage.tsx:151
+#: src/pages/SignInPage.tsx:155
 msgid "Please enter a valid email!"
 msgstr "Veuillez entrer un email valide !"
 
@@ -7142,11 +7154,11 @@ msgstr "Veuillez entrer le nom de l espace de travail"
 msgid "Please enter your API key"
 msgstr "Veuillez entrer votre clé API"
 
-#: src/pages/SignInPage.tsx:170
+#: src/pages/SignInPage.tsx:175
 msgid "Please input the magic code!"
 msgstr "Veuillez entrer le code magique !"
 
-#: src/pages/SignInPage.tsx:150
+#: src/pages/SignInPage.tsx:154
 msgid "Please input your email!"
 msgstr "Veuillez entrer votre email !"
 
@@ -7834,7 +7846,7 @@ msgstr ""
 msgid "Requires a padding"
 msgstr "Nécessite un espacement"
 
-#: src/pages/SignInPage.tsx:204
+#: src/pages/SignInPage.tsx:209
 msgid "Resend code"
 msgstr "Renvoyer le code"
 
@@ -8556,7 +8568,7 @@ msgstr "Envoyer une notification transactionnelle avec TypeScript/JavaScript :"
 msgid "Send Invitation"
 msgstr "Envoyer l invitation"
 
-#: src/pages/SignInPage.tsx:159
+#: src/pages/SignInPage.tsx:163
 msgid "Send Magic Code"
 msgstr "Envoyer le code magique"
 
@@ -8804,7 +8816,7 @@ msgstr "Afficher les détails"
 msgid "Show More ({0} remaining)"
 msgstr "Afficher plus ({0} restants)"
 
-#: src/pages/SignInPage.tsx:137
+#: src/pages/SignInPage.tsx:138
 msgid "Sign In"
 msgstr "Connexion"
 
@@ -9242,7 +9254,7 @@ msgstr "Réussi"
 msgid "Successfully processed {successful} contacts"
 msgstr "{successful} contacts traités avec succès"
 
-#: src/pages/SignInPage.tsx:38
+#: src/pages/SignInPage.tsx:39
 msgid "Successfully signed in"
 msgstr "Connexion réussie"
 
@@ -10397,7 +10409,7 @@ msgstr "URL :"
 msgid "Use"
 msgstr "Utiliser"
 
-#: src/pages/SignInPage.tsx:196
+#: src/pages/SignInPage.tsx:201
 msgid "Use a different email"
 msgstr "Utiliser un autre email"
 
@@ -10543,7 +10555,7 @@ msgstr "Tableau de bord Veridian"
 msgid "Veridian Hub is unreachable. The app is in read-only mode — please try again in {retryHours}h."
 msgstr "Veridian Hub est injoignable. L'application est en lecture seule — réessayez dans {retryHours}h."
 
-#: src/pages/SignInPage.tsx:186
+#: src/pages/SignInPage.tsx:191
 msgid "Verify Code"
 msgstr "Vérifier le code"
 
