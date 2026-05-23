@@ -233,16 +233,40 @@ func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Reques
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
+	// === CONTRAT-BILLING v2 §3.4.1 — versioning du payload ===
+	// Rejette 400 si contract_version major inconnu. Chaîne vide tolérée
+	// (back-compat legacy v1 — Hub pas encore migré côté lib/notifuse/client.ts).
+	if !domain.IsSupportedContractVersion(input.ContractVersion) {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "unsupported contract_version major", http.StatusBadRequest, map[string]interface{}{
+			"contract_version":           input.ContractVersion,
+			"supported_contract_version": domain.CurrentContractVersion,
+		})
+		return
+	}
 	if input.TenantID == "" || input.Plan == "" {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "tenant_id and plan are required", http.StatusBadRequest, map[string]interface{}{
 			"missing": missingFields(input.TenantID == "", "tenant_id", input.Plan == "", "plan"),
 		})
 		return
 	}
-	if !input.PlanSource.IsValid() {
+	// === CONTRAT-BILLING v2 §3.4.2 — enum `plan` fermé ===
+	// Rejette 400 invalid_plan si hors {free, pro, business, enterprise}.
+	if !domain.IsValidCanonicalPlan(input.Plan) {
+		WriteJSONErrorCode(w, ErrCodeInvalidPlan, "plan must be one of free|pro|business|enterprise", http.StatusBadRequest, map[string]interface{}{
+			"plan":          input.Plan,
+			"allowed_plans": domain.AllowedCanonicalPlans,
+		})
+		return
+	}
+	// === CONTRAT-BILLING v2 §3.3 — enum `plan_source` v2 ===
+	// Accepte v2 (stripe|stripe_trial|grant_manual|downgrade_auto) ET legacy
+	// v1 (manual|lifetime_*|internal) pour back-compat des appels Hub pas
+	// encore migrés. Vide → défaut "stripe" au repo upsert.
+	if !domain.IsValidPlanSourceV2(input.PlanSource) {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid plan_source", http.StatusBadRequest, map[string]interface{}{
-			"plan_source": string(input.PlanSource),
-			"allowed":     []string{"", "stripe", "manual", "lifetime_site_vitrine", "lifetime_partner", "internal"},
+			"plan_source":          string(input.PlanSource),
+			"allowed_plan_sources": domain.AllowedPlanSourcesV2,
+			"hint":                 "v1 legacy values (manual, lifetime_*, internal) also accepted as back-compat — they map to grant_manual in responses",
 		})
 		return
 	}

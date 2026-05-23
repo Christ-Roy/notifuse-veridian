@@ -485,11 +485,42 @@ type ProvisionResponse struct {
 }
 
 // UpdatePlanInput est le body de POST /api/tenants/update-plan.
+//
+// === CONTRAT-BILLING v2.0 (2026-05-22) — payload versionné ===
+// Champs ajoutés en v2 :
+//   - ContractVersion : major doit être supporté (cf domain.SupportedContractMajor).
+//     Chaîne vide tolérée pour back-compat legacy v1 (Hub pas encore migré).
+//   - EffectiveAt : date d'effet du plan (en pratique ~= now). Audit uniquement.
+//   - StripeSubscriptionID : ID Stripe opaque côté app (audit, jamais utilisé
+//     pour appeler Stripe — cf §2.3 frontière unidirectionnelle).
+//   - IdempotencyKey : uuid déterministe (Hub-side). Si présent, complète le
+//     header `Idempotency-Key` (sec. 5.11). En pratique le Hub envoie les deux.
+//   - Reason : trace d'audit humaine (ex : "checkout.session.completed evt_X").
 type UpdatePlanInput struct {
-	TenantID   string      `json:"tenant_id"`
-	Plan       string      `json:"plan"`
-	PlanSource PlanSource  `json:"plan_source,omitempty"` // optionnel, defaut = "stripe"
-	Quotas     *PlanQuotasInput `json:"quotas,omitempty"` // optionnel, defaut = QuotaForPlan(plan)
+	// ContractVersion : `"2.0"` aujourd'hui. Cf domain.IsSupportedContractVersion.
+	// Chaîne vide = legacy v1 (toléré).
+	ContractVersion string `json:"contract_version,omitempty"`
+	TenantID        string `json:"tenant_id"`
+	// Plan : enum FERMÉ {free, pro, business, enterprise} validé côté handler
+	// (§3.4.2). Valeur hors enum → 400 invalid_plan.
+	Plan string `json:"plan"`
+	// PlanSource : enum v2 {stripe, stripe_trial, grant_manual, downgrade_auto}
+	// + valeurs legacy v1 tolérées en entrée (manual, lifetime_*, internal).
+	// Vide = défaut "stripe" au repo upsert (back-compat).
+	PlanSource PlanSource `json:"plan_source,omitempty"`
+	// EffectiveAt : date d'effet ISO8601. Optionnel — si vide, le service
+	// considère que c'est `now`.
+	EffectiveAt string `json:"effective_at,omitempty"`
+	// StripeSubscriptionID : opaque côté app. NULL/vide si plan offert ou trial.
+	StripeSubscriptionID string `json:"stripe_subscription_id,omitempty"`
+	// IdempotencyKey : uuid (body-level, v2). Complète le header
+	// `Idempotency-Key`. Si seul un des deux est présent, on accepte.
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	// Reason : trace d'audit humaine (logué uniquement, jamais persisté).
+	Reason string `json:"reason,omitempty"`
+	// Quotas : override du quota mensuel hardcoded. Si nil, fallback
+	// QuotaForPlan(plan). En contexte 2026-05-21 (tout illimité), reste à -1.
+	Quotas *PlanQuotasInput `json:"quotas,omitempty"`
 }
 
 // UpdatePlanResponse est la reponse de POST /api/tenants/update-plan

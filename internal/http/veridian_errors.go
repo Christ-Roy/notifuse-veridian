@@ -20,6 +20,9 @@ const (
 	ErrCodeQuotaExceeded          = "quota_exceeded"
 	ErrCodePlanNotFound           = "plan_not_found"
 	ErrCodePlanLocked             = "plan_locked"
+	// ErrCodeInvalidPlan : `plan` hors enum canonique
+	// {free, pro, business, enterprise}. Cf CONTRAT-BILLING §3.4.2 + §3.6.
+	ErrCodeInvalidPlan            = "invalid_plan"
 	ErrCodeUserNotFound           = "user_not_found"
 	ErrCodeApiKeyMultiWorkspace   = "api_key_multi_workspace"
 	ErrCodeApiKeyNoWorkspace      = "api_key_no_workspace"

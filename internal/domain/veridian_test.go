@@ -951,3 +951,67 @@ func TestVeridianService_ExposesMembershipMethods(t *testing.T) {
 	restoreIn := RestoreMemberInput{TenantID: "ws-1", UserEmail: "a@x.test"}
 	assert.Equal(t, "ws-1", restoreIn.TenantID)
 }
+
+// === CONTRAT-BILLING v2.0 — UpdatePlanInput payload versionné ===
+//
+// Le contrat v2 (CONTRAT-BILLING.md §3.2) impose un schéma stable pour
+// `POST /api/tenants/update-plan`. Toute régression sur les noms de tags
+// JSON casse le client Hub. Ces tests garantissent la stabilité du wire
+// format.
+
+func TestUpdatePlanInput_V2JSONSchema(t *testing.T) {
+	// Payload v2 complet (ce que le Hub enverra côté lib/notifuse/client.ts
+	// une fois migré).
+	raw := []byte(`{
+		"contract_version": "2.0",
+		"tenant_id": "ws-acme",
+		"plan": "pro",
+		"plan_source": "stripe",
+		"effective_at": "2026-05-23T10:00:00Z",
+		"stripe_subscription_id": "sub_1Abc",
+		"idempotency_key": "evt_1XyZ",
+		"reason": "checkout.session.completed evt_1XyZ"
+	}`)
+	var in UpdatePlanInput
+	require.NoError(t, json.Unmarshal(raw, &in))
+	assert.Equal(t, "2.0", in.ContractVersion)
+	assert.Equal(t, "ws-acme", in.TenantID)
+	assert.Equal(t, "pro", in.Plan)
+	assert.Equal(t, PlanSourceStripe, in.PlanSource)
+	assert.Equal(t, "2026-05-23T10:00:00Z", in.EffectiveAt)
+	assert.Equal(t, "sub_1Abc", in.StripeSubscriptionID)
+	assert.Equal(t, "evt_1XyZ", in.IdempotencyKey)
+	assert.Equal(t, "checkout.session.completed evt_1XyZ", in.Reason)
+}
+
+func TestUpdatePlanInput_LegacyV1Compat(t *testing.T) {
+	// Payload v1 legacy : Hub pas encore migré, envoie {tenant_id, plan} seul.
+	// L'app doit décoder sans erreur — ContractVersion sera vide, toléré
+	// par IsSupportedContractVersion (§3.4.1 note migration).
+	raw := []byte(`{"tenant_id":"ws-legacy","plan":"free"}`)
+	var in UpdatePlanInput
+	require.NoError(t, json.Unmarshal(raw, &in))
+	assert.Empty(t, in.ContractVersion, "legacy v1 a ContractVersion vide")
+	assert.Equal(t, "ws-legacy", in.TenantID)
+	assert.Equal(t, "free", in.Plan)
+	assert.True(t, IsSupportedContractVersion(in.ContractVersion),
+		"ContractVersion vide doit être toléré comme legacy v1")
+}
+
+func TestUpdatePlanInput_NewV2PlanSourceValues(t *testing.T) {
+	// Les 3 nouvelles valeurs plan_source v2 doivent décoder correctement.
+	for _, src := range []string{"stripe_trial", "grant_manual", "downgrade_auto"} {
+		t.Run(src, func(t *testing.T) {
+			raw := []byte(`{
+				"contract_version": "2.0",
+				"tenant_id": "ws-x",
+				"plan": "pro",
+				"plan_source": "` + src + `"
+			}`)
+			var in UpdatePlanInput
+			require.NoError(t, json.Unmarshal(raw, &in))
+			assert.Equal(t, PlanSource(src), in.PlanSource)
+			assert.True(t, IsValidPlanSourceV2(in.PlanSource))
+		})
+	}
+}

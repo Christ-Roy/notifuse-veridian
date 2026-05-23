@@ -611,7 +611,11 @@ func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePla
 	if input.Plan == "" {
 		return nil, errors.New("plan required")
 	}
-	if !input.PlanSource.IsValid() {
+	// === CONTRAT-BILLING v2 §3.3 — enum plan_source (v2 + legacy v1) ===
+	// IsValidPlanSourceV2 accepte les 4 valeurs v2 + les valeurs legacy.
+	// Le handler valide aussi en amont — ce check est une défense en
+	// profondeur pour les callers qui invoqueraient le service directement.
+	if !domain.IsValidPlanSourceV2(input.PlanSource) {
 		return nil, fmt.Errorf("invalid plan_source %q", input.PlanSource)
 	}
 
@@ -621,11 +625,18 @@ func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePla
 		return nil, err // sql.ErrNoRows propage tel quel (handler mappe → 404)
 	}
 
-	// Garde-fou immunite : un plan_source immune ne peut pas etre ecrase par
-	// stripe. Les autres transitions sont autorisees (stripe → lifetime,
-	// lifetime → manual, lifetime → lifetime, etc.) — c'est uniquement la
-	// collision "automation Stripe ecrase un plan offert" qu'on bloque.
-	if existing.PlanSource.IsImmune() && input.PlanSource == domain.PlanSourceStripe {
+	// === CONTRAT-BILLING v2 §3.4.4 — immunité plan offert ===
+	// Garde-fou : un plan_source immune (grant_manual + valeurs legacy
+	// équivalentes : manual, lifetime_*, internal) ne peut PAS être écrasé
+	// par une source auto :
+	//   - stripe          (subscription Stripe payante)
+	//   - stripe_trial    (activation trial state machine)
+	//   - downgrade_auto  (sub Stripe expirée / trial expiré)
+	//
+	// Seul un `update-plan` plan_source=grant_manual (ou valeur legacy
+	// équivalente) peut écraser un plan offert — un admin Hub a toujours
+	// le dernier mot.
+	if domain.IsImmuneV2(existing.PlanSource) && domain.IsAutoDowngradeSource(input.PlanSource) {
 		return nil, ErrPlanImmune
 	}
 
