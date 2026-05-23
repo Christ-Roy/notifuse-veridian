@@ -112,6 +112,25 @@ th.ant-table-cell.contacts-fixed-col {
   border-left-color: #ff4d4f !important;
 }
 
+/* Fix: on narrow viewports, .ant-alert-content collapses to width:0 when
+   the alert has an `action` button. Force it to keep usable width so text
+   doesn't wrap vertically one letter per line. */
+.ant-alert .ant-alert-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .ant-alert.ant-alert-with-description {
+    flex-wrap: wrap;
+  }
+  .ant-alert.ant-alert-with-description .ant-alert-action {
+    margin-left: 0;
+    margin-top: 8px;
+    width: 100%;
+  }
+}
+
 /* Required mark inscreses the line height of the form item creating discrepancy when using 2 columns */
 :where(.css-dev-only-do-not-override-1d0rgb4).ant-form-item .ant-form-item-label > label.ant-form-item-required::before {
   font-family: inherit;
