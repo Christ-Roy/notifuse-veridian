@@ -543,11 +543,12 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// Doit etre incremente avec chaque nouvelle migration majeure (V33 plan_source,
 		// V34 lifecycle, V35 idempotency, V37 pricing dimensions, V38 lifetime+threshold,
 		// V39 last_hub_sync_at resilience billing niveau 1,
-		// V40 quota_exceeded_emitted_at_month idempotence mensuelle webhook).
+		// V40 quota_exceeded_emitted_at_month idempotence mensuelle webhook,
+		// V41 veridian_api_key_grace table, V42 users.language colonne).
 		// Aligner avec config.VERSION. V36 est volontairement sautee (reservee au
 		// ticket 2026-05-19-aligner-types-timestamp-veridian-plan).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("41"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("42"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 
