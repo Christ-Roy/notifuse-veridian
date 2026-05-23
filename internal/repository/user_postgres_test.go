@@ -30,8 +30,10 @@ func TestCreateUser(t *testing.T) {
 		Type:  domain.UserTypeUser,
 	}
 
-	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7\)`).
-		WithArgs(user.ID, user.Email, user.Name, user.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+	// === Veridian patch V46 === hub_user_id ajoute en queue de l'INSERT
+	// (8e parametre). User sans HubUserID -> nil binding en DB.
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at, hub_user_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)`).
+		WithArgs(user.ID, user.Email, user.Name, user.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), nil).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err := repo.CreateUser(context.Background(), user)
@@ -45,8 +47,8 @@ func TestCreateUser(t *testing.T) {
 		Type:  domain.UserTypeUser,
 	}
 
-	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7\)`).
-		WithArgs(userWithError.ID, userWithError.Email, userWithError.Name, userWithError.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at, hub_user_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)`).
+		WithArgs(userWithError.ID, userWithError.Email, userWithError.Name, userWithError.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), nil).
 		WillReturnError(errors.New("database error"))
 
 	err = repo.CreateUser(context.Background(), userWithError)
@@ -61,14 +63,67 @@ func TestCreateUser(t *testing.T) {
 		Type:  domain.UserTypeUser,
 	}
 
-	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7\)`).
-		WithArgs(duplicateUser.ID, duplicateUser.Email, duplicateUser.Name, duplicateUser.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at, hub_user_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)`).
+		WithArgs(duplicateUser.ID, duplicateUser.Email, duplicateUser.Name, duplicateUser.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), nil).
 		WillReturnError(errors.New("pq: duplicate key value violates unique constraint \"users_email_key\""))
 
 	err = repo.CreateUser(context.Background(), duplicateUser)
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrUserExists{}, err)
 	assert.Equal(t, "user already exists", err.Error())
+}
+
+// === Veridian patch V46 === Verifie que CreateUser persiste hub_user_id
+// quand le pointer struct est set (cas AttachMember nouveau membre, sinon
+// /api/user.me renvoie undefined apres SELECT car la colonne reste NULL).
+// CONTRAT-HUB §3.7.
+func TestCreateUser_PersistsHubUserID(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	hubUUID := "11111111-2222-3333-4444-555555555555"
+	user := &domain.User{
+		ID:        uuid.New().String(),
+		Email:     "new-member@huid.test",
+		Name:      "New Member",
+		Type:      domain.UserTypeUser,
+		HubUserID: &hubUUID,
+	}
+
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at, hub_user_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)`).
+		WithArgs(user.ID, user.Email, user.Name, user.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), hubUUID).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err := repo.CreateUser(context.Background(), user)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// === Veridian patch V46 === Defense en profondeur : un pointer non-nil
+// vers une string vide ne doit PAS etre inserer comme "" (la colonne est
+// UUID strict — un INSERT "" planterait). On stocke nil interface dans
+// ce cas pour matcher la semantique "pas de binding Hub connu".
+func TestCreateUser_EmptyHubUserID_StoredAsNull(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	empty := ""
+	user := &domain.User{
+		ID:        uuid.New().String(),
+		Email:     "edge@huid.test",
+		Type:      domain.UserTypeUser,
+		HubUserID: &empty,
+	}
+
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at, hub_user_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)`).
+		WithArgs(user.ID, user.Email, user.Name, user.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), nil).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err := repo.CreateUser(context.Background(), user)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestGetUserByEmail(t *testing.T) {

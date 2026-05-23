@@ -39,9 +39,20 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
 	user.CreatedAt = now
 	user.UpdatedAt = now
 
+	// === Veridian patch V46 === HubUserID inclus dans l'INSERT pour
+	// persister le binding Hub-side cross-app (CONTRAT-HUB §3.7). Stocke
+	// NULL si pointer nil (cas user upstream pre-V46 ou api_key sans
+	// counterpart Hub). Sans ça, AttachMember crée bien un User avec
+	// HubUserID en mémoire mais la colonne reste NULL en DB → user.me
+	// renvoie undefined (omitempty cache le champ nil après SELECT).
+	var hubUserID interface{}
+	if user.HubUserID != nil && *user.HubUserID != "" {
+		hubUserID = *user.HubUserID
+	}
+
 	query := `
-		INSERT INTO users (id, email, name, type, language, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (id, email, name, type, language, created_at, updated_at, hub_user_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err := r.systemDB.ExecContext(ctx, query,
 		user.ID,
@@ -51,6 +62,7 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
 		user.Language,
 		user.CreatedAt,
 		user.UpdatedAt,
+		hubUserID,
 	)
 	if err != nil {
 		// Check for duplicate key constraint violation (PostgreSQL error code 23505)

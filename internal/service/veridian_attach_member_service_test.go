@@ -477,3 +477,55 @@ func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 	assert.True(t, resp.Attached)
 	assert.Equal(t, "member", resp.Role, "role Hub 'admin' mappé vers 'member' Notifuse")
 }
+
+// TestAttachMember_NewUser_PassesHubUserIDToCreateUser — V46 §3.7
+// regression guard. Bug 2026-05-23 : AttachMember constructait bien un
+// User avec HubUserID set, mais userRepository.CreateUser ne le persistait
+// pas en DB (INSERT n'incluait pas la colonne) → /api/user.me renvoyait
+// undefined. Ce test capture l'argument passé a CreateUser et asserte que
+// HubUserID est bien set, pour attraper la regression au niveau service.
+func TestAttachMember_NewUser_PassesHubUserIDToCreateUser(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	hubID := "11111111-2222-3333-4444-555555555555"
+	email := "newmember@huid.test"
+
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(nil, sql.ErrNoRows)
+
+	// User absent → AttachMember doit construire un &User{HubUserID:&hubID}
+	// et l'envoyer a CreateUser. On capture le user via Do() pour asserter.
+	m.user.EXPECT().GetUserByEmail(ctx, email).
+		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+	var captured *domain.User
+	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).
+		Do(func(_ context.Context, u *domain.User) {
+			captured = u
+		}).
+		Return(nil)
+
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, gomock.Any(), "ws-1").
+		Return(nil, sql.ErrNoRows)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
+		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
+	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", gomock.Any(), "member", gomock.Any()).
+		Return(nil)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
+	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+
+	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-1",
+		HubUserID:    hubID,
+		HubUserEmail: email,
+		Role:         domain.AttachMemberRoleMember,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, captured, "CreateUser doit etre appele avec le user nouveau membre")
+	assert.Equal(t, email, captured.Email)
+	require.NotNil(t, captured.HubUserID,
+		"V46 §3.7 — HubUserID DOIT etre set sur le user passe a CreateUser, sinon le binding Hub est perdu en DB (bug 2026-05-23)")
+	assert.Equal(t, hubID, *captured.HubUserID,
+		"HubUserID doit refleter exactement input.HubUserID du Hub")
+}
