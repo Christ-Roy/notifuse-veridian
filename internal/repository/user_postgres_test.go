@@ -666,10 +666,10 @@ func TestUserRepository_BackfillHubUserID_NullColumn_SetsOK(t *testing.T) {
 	repo := NewUserRepository(db)
 
 	mock.ExpectExec(`UPDATE users\s+SET hub_user_id = \$1, updated_at = NOW\(\)\s+WHERE id = \$2 AND \(hub_user_id IS NULL OR hub_user_id = \$1\)`).
-		WithArgs("hub-uuid-1", "user-local-1").
+		WithArgs("11111111-2222-3333-4444-555555555555", "user-local-1").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "hub-uuid-1")
+	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "11111111-2222-3333-4444-555555555555")
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -682,10 +682,10 @@ func TestUserRepository_BackfillHubUserID_MatchingValue_NoOp(t *testing.T) {
 	// Re-call avec MEME hub_user_id = UPDATE matche la ligne (clause `OR
 	// hub_user_id = $1`) → rows=1 sans probe.
 	mock.ExpectExec(`UPDATE users\s+SET hub_user_id = \$1, updated_at = NOW\(\)\s+WHERE id = \$2 AND \(hub_user_id IS NULL OR hub_user_id = \$1\)`).
-		WithArgs("hub-uuid-1", "user-local-1").
+		WithArgs("11111111-2222-3333-4444-555555555555", "user-local-1").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "hub-uuid-1")
+	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "11111111-2222-3333-4444-555555555555")
 	require.NoError(t, err, "re-call avec meme hub_user_id = idempotent no-op")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -698,15 +698,15 @@ func TestUserRepository_BackfillHubUserID_Mismatch_ReturnsSentinel(t *testing.T)
 	// User existe avec hub_user_id DIFFERENT → UPDATE ne matche pas (clause
 	// WHERE refuse l'overwrite) → rows=0 → probe SELECT pour disambiguer.
 	mock.ExpectExec(`UPDATE users\s+SET hub_user_id`).
-		WithArgs("hub-uuid-NEW", "user-local-1").
+		WithArgs("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "user-local-1").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	probeRows := sqlmock.NewRows([]string{"hub_user_id"}).AddRow("hub-uuid-OLD")
+	probeRows := sqlmock.NewRows([]string{"hub_user_id"}).AddRow("ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb")
 	mock.ExpectQuery(`SELECT hub_user_id FROM users WHERE id = \$1`).
 		WithArgs("user-local-1").
 		WillReturnRows(probeRows)
 
-	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "hub-uuid-NEW")
+	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, domain.ErrHubUserIDMismatch),
 		"doit etre attrapable via errors.Is(ErrHubUserIDMismatch): %v", err)
@@ -721,14 +721,14 @@ func TestUserRepository_BackfillHubUserID_UserMissing_ReturnsErrUserNotFound(t *
 	// User n'existe pas du tout → UPDATE rows=0 → probe SELECT → ErrNoRows
 	// → ErrUserNotFound (PAS Mismatch).
 	mock.ExpectExec(`UPDATE users\s+SET hub_user_id`).
-		WithArgs("hub-uuid-1", "ghost-id").
+		WithArgs("11111111-2222-3333-4444-555555555555", "ghost-id").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	mock.ExpectQuery(`SELECT hub_user_id FROM users WHERE id = \$1`).
 		WithArgs("ghost-id").
 		WillReturnError(sql.ErrNoRows)
 
-	err := repo.BackfillHubUserID(context.Background(), "ghost-id", "hub-uuid-1")
+	err := repo.BackfillHubUserID(context.Background(), "ghost-id", "11111111-2222-3333-4444-555555555555")
 	require.Error(t, err)
 	assert.IsType(t, &domain.ErrUserNotFound{}, err)
 	assert.False(t, errors.Is(err, domain.ErrHubUserIDMismatch),
@@ -740,7 +740,7 @@ func TestUserRepository_BackfillHubUserID_EmptyInputs_Validation(t *testing.T) {
 	defer cleanup()
 	repo := NewUserRepository(db)
 
-	err := repo.BackfillHubUserID(context.Background(), "", "hub-uuid-1")
+	err := repo.BackfillHubUserID(context.Background(), "", "11111111-2222-3333-4444-555555555555")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty user_id")
 
@@ -749,16 +749,60 @@ func TestUserRepository_BackfillHubUserID_EmptyInputs_Validation(t *testing.T) {
 	assert.Contains(t, err.Error(), "empty hub_user_id")
 }
 
+// === Veridian patch V46 === Defense en profondeur : la colonne
+// `users.hub_user_id` est `UUID NULL` strict. BackfillHubUserID DOIT
+// retourner nil sans toucher la DB si le hub_user_id n'est pas un UUID
+// valide (sinon "pq: invalid input syntax for type uuid" runtime
+// catastrophique). Cas reel : payloads Hub historiques "hub-user-xyz"
+// non-UUID dans certains tests legacy / scripts d'admin.
+func TestUserRepository_BackfillHubUserID_NonUUID_SilentSkip(t *testing.T) {
+	db, _, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	// PAS de mock UPDATE attendu — le guard UUID short-circuit avant DB.
+	err := repo.BackfillHubUserID(context.Background(), "user-1", "hub-user-not-a-uuid")
+	require.NoError(t, err, "non-UUID = silent skip best-effort §3.7")
+}
+
+// === Veridian patch V46 === Idem pour CreateUser : un HubUserID
+// non-UUID doit etre stocke comme NULL (la colonne est UUID strict).
+// Sans ce guard, AttachMember avec hub_user_id legacy "hub-user-xxx"
+// fait planter l'INSERT runtime ("invalid input syntax for type uuid").
+func TestCreateUser_NonUUIDHubUserID_StoredAsNull(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	notUUID := "hub-user-legacy-xyz"
+	user := &domain.User{
+		ID:        uuid.New().String(),
+		Email:     "legacy@huid.test",
+		Type:      domain.UserTypeUser,
+		HubUserID: &notUUID,
+	}
+
+	// L'INSERT doit etre appele avec nil au lieu de la string non-UUID
+	// pour eviter l'erreur Postgres.
+	mock.ExpectExec(`INSERT INTO users \(id, email, name, type, language, created_at, updated_at, hub_user_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)`).
+		WithArgs(user.ID, user.Email, user.Name, user.Type, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), nil).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err := repo.CreateUser(context.Background(), user)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUserRepository_BackfillHubUserID_DBError(t *testing.T) {
 	db, mock, cleanup := testutil.SetupMockDB(t)
 	defer cleanup()
 	repo := NewUserRepository(db)
 
 	mock.ExpectExec(`UPDATE users\s+SET hub_user_id`).
-		WithArgs("hub-uuid-1", "user-1").
+		WithArgs("11111111-2222-3333-4444-555555555555", "user-1").
 		WillReturnError(errors.New("connection refused"))
 
-	err := repo.BackfillHubUserID(context.Background(), "user-1", "hub-uuid-1")
+	err := repo.BackfillHubUserID(context.Background(), "user-1", "11111111-2222-3333-4444-555555555555")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "backfill hub_user_id")
 }

@@ -40,14 +40,25 @@ func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) erro
 	user.UpdatedAt = now
 
 	// === Veridian patch V46 === HubUserID inclus dans l'INSERT pour
-	// persister le binding Hub-side cross-app (CONTRAT-HUB §3.7). Stocke
-	// NULL si pointer nil (cas user upstream pre-V46 ou api_key sans
-	// counterpart Hub). Sans ça, AttachMember crée bien un User avec
-	// HubUserID en mémoire mais la colonne reste NULL en DB → user.me
-	// renvoie undefined (omitempty cache le champ nil après SELECT).
+	// persister le binding Hub-side cross-app (CONTRAT-HUB §3.7). Sans
+	// ça, AttachMember crée bien un User avec HubUserID en mémoire mais
+	// la colonne reste NULL en DB → user.me renvoie undefined (omitempty
+	// cache le champ nil après SELECT).
+	//
+	// Validation UUID stricte avant INSERT : la colonne `users.hub_user_id`
+	// est `UUID NULL` strict (migration V46). Si le caller passe une string
+	// non-UUID (ex: "hub-user-xyz" comme dans certains tests legacy ou
+	// payloads Hub historiques), on stocke NULL plutôt que de planter
+	// l'INSERT — cohérent avec le comportement silencieux pré-fix où la
+	// colonne n'était pas du tout persistée. Le binding cross-app reste
+	// best-effort (§3.7 — l'email est la clé canonique, pas hub_user_id).
 	var hubUserID interface{}
 	if user.HubUserID != nil && *user.HubUserID != "" {
-		hubUserID = *user.HubUserID
+		if _, parseErr := uuid.Parse(*user.HubUserID); parseErr == nil {
+			hubUserID = *user.HubUserID
+		}
+		// else: format non-UUID → stocke NULL silencieusement (§3.7
+		// informationnel, l'email reste la clé canonique join cross-app).
 	}
 
 	query := `
@@ -438,6 +449,14 @@ func (r *userRepository) BackfillHubUserID(ctx context.Context, userID, hubUserI
 	}
 	if hubUserID == "" {
 		return fmt.Errorf("backfill hub_user_id: empty hub_user_id")
+	}
+	// Validation UUID stricte : colonne `users.hub_user_id` est `UUID NULL`
+	// strict (V46). Un non-UUID ferait planter le UPDATE avec "invalid
+	// input syntax for type uuid". Best-effort §3.7 : retour silencieux
+	// nil — le binding informationnel est juste skippé, l'email reste la
+	// clé canonique. Cohérent avec CreateUser (stocke NULL si non-UUID).
+	if _, parseErr := uuid.Parse(hubUserID); parseErr != nil {
+		return nil
 	}
 	const q = `
 		UPDATE users
