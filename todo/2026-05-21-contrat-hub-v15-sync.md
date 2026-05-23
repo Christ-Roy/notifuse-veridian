@@ -143,3 +143,68 @@ Ticket existant `2026-05-19-webhooks-manquants.md`. Compléter pour
 
 Sous `## Réponse — YYYY-MM-DD` en fin de ce fichier, puis `done/` une fois
 toutes les actions §2 traitées (§3 reste P2, peut prendre plusieurs jours).
+
+---
+
+## Réponse — 2026-05-23 (agent Notifuse, partie 1/2)
+
+**Statut : partiel — 2 livrables sur 6, suite v15-sync renvoyee a un commit suivant.**
+
+### Livre (commits push origin/veridian) :
+
+- **e4cf5433** `feat(v15-sync): V46 users.hub_user_id + route attach-member workspace-level [risk:medium]`
+- **ab6cb16b** `fix(v15-sync): drop CREATE INDEX in V46 + add alias route test [risk:low]`
+- **9192e25a** `chore(merge): fix rebase glitches dans tests v15-sync + billing v2 [risk:low]`
+
+#### V46 — Migration users.hub_user_id (CONTRAT-HUB §3.7)
+
+- ADD COLUMN `users.hub_user_id UUID NULL` additif pur
+- VERSION bumped 43.0 -> 46.0 + manager_test fixture mise a jour (V44/V45 reserves)
+- 7 tests V46 colocalises (version, success, idempotent, alter error, workspace noop, registered)
+- **PAS d'INDEX UNIQUE** dans la migration : CONCURRENTLY interdit dans TX,
+  sans CONCURRENTLY pris en AccessExclusiveLock => refuse Constitution §12.
+  Documente comme pattern V33/V41. L'unicite reste enforced applicativement
+  par BackfillHubUserID (UPDATE conditionne `hub_user_id IS NULL`).
+
+#### Route alias §5.22.2 — workspace-level
+
+- `POST /api/veridian/workspaces/{tenantId}/attach-member` ajoutee dans
+  `veridian_handler.go` RegisterRoutes. Delegue au meme `handleAttachMember`
+  que la route tenant-level historique. Conforme §5.22.2 (specifie alias
+  workspace-level pour coherence cross-app avec Prospection multi-workspace).
+- 1 test colocalise `TestVeridianRegisterRoutes_AttachMemberWorkspaceAlias`
+  qui verifie l'enregistrement mux + coexistence avec la route tenant-level.
+
+### Audit complet realise (lecture CONTRAT-HUB.md v1.5 + CONTRAT-HUB-API-REF.md v1.1)
+
+| Section | Statut | Action prise |
+|---|---|---|
+| **§1.4** Hub source de verite + resilience apps | Deja conforme | Pas de call Hub synchrone hot path detecte. Paywall middleware cache local. Aucune refactoring requise. |
+| **§3.7** Modele identite cross-app | **Partiel** | Migration V46 schema OK. Le wiring code (struct User.HubUserID + BackfillHubUserID + push dans AttachMember) reporte partie 2/2 (blocage edits concurrents agent C billing v2 sur les memes fichiers). |
+| **§4.4** Cycle de vie membre | Deja conforme | Provision cree owner, AttachMember ajoute invite, soft_deleted/suspended refuse. |
+| **§5.18.2** [DEPRECIE] admin invite-member | Conforme | Aucune route Notifuse ne consomme cet endpoint Hub. Rien a deprecier cote app. |
+| **§5.22.2** attach-member workspace-level | **Livre** | Route alias enregistree (cf commit e4cf5433). Service deja livre lot B 2026-05-21 (commit 7f3adccb). |
+| **§5.22.4** ne JAMAIS ecraser role local | **Partiel** | Detecte que le service actuel fait remove+re-add sur role conflict (downgrade silencieux d'admin local). Refactor reporte partie 2/2. |
+
+### Reste a faire (partie 2/2)
+
+Bloque temporairement par les edits concurrents de l'agent C sur :
+- `internal/domain/user.go` (ajout struct field `HubUserID *string` + interface method `BackfillHubUserID` + type `ErrHubUserIDMismatch`)
+- `internal/repository/user_postgres.go` (implem `BackfillHubUserID` + SELECT `hub_user_id`)
+- `internal/service/veridian_service.go` AttachMember (appel BackfillHubUserID + refactor §5.22.4 sans ecraser role local)
+- `internal/domain/mocks/mock_user_repository.go` (regen mockgen v1.6.0)
+- Tests service AttachMember mocks BackfillHubUserID + nouveau test RoleConflict_KeepsLocalRole
+
+A reprendre en session dediee (1h estimee) une fois que les autres agents
+auront fini leur travail sur veridian_service.go (billing v2 + multi-membre).
+
+### Note sur la guerre des bumps VERSION 42 -> 43 -> 46
+
+Trois agents en parallele ont bumpe la VERSION en meme temps (V43 timestamp
+alignment cote F, V46 hub_user_id cote moi). Resolution : pour eviter le
+trashing, ne pas mettre la migration V46 dans la branche staging avant que
+V43+V44+V45 soient soit livrees soit explicitement skipped. V44/V45 sont
+reserves a d'autres tickets v1.5 (multi-membre, webhooks). VERSION = 46.0
+en HEAD apres rebase sur origin/veridian. Manager_test mockup aligne.
+
+Pas d'archivage `done/` — ticket reste pending tant que partie 2/2 pas livree.
