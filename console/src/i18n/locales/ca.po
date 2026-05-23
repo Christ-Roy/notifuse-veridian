@@ -874,23 +874,23 @@ msgstr "Identificador API"
 #: src/components/settings/Integrations.tsx:1792
 #: src/components/settings/Integrations.tsx:1810
 #: src/components/settings/Integrations.tsx:1832
-#: src/components/settings/WorkspaceMembers.tsx:93
+#: src/components/settings/WorkspaceMembers.tsx:114
 msgid "API Key"
 msgstr "Clau API"
 
-#: src/components/settings/WorkspaceMembers.tsx:303
+#: src/components/settings/WorkspaceMembers.tsx:351
 msgid "API key created successfully"
 msgstr "Clau API creada correctament"
 
-#: src/components/settings/WorkspaceMembers.tsx:641
+#: src/components/settings/WorkspaceMembers.tsx:700
 msgid "API Key Created Successfully"
 msgstr "Clau API creada correctament"
 
-#: src/components/settings/WorkspaceMembers.tsx:615
+#: src/components/settings/WorkspaceMembers.tsx:674
 msgid "API Key Name"
 msgstr "Nom de la clau API"
 
-#: src/components/settings/WorkspaceMembers.tsx:648
+#: src/components/settings/WorkspaceMembers.tsx:707
 msgid "API Token"
 msgstr "Token API"
 
@@ -931,7 +931,7 @@ msgid "Are you sure you want to delete the category"
 msgstr "Esteu segur que voleu eliminar la categoria"
 
 #. placeholder {0}: record.email
-#: src/components/settings/WorkspaceMembers.tsx:211
+#: src/components/settings/WorkspaceMembers.tsx:232
 msgid "Are you sure you want to delete the invitation for {0}?"
 msgstr "Esteu segur que voleu eliminar la invitació per a {0}?"
 
@@ -977,7 +977,7 @@ msgstr "Esteu segur que voleu reconstruir \"{0}\"? Això recalcularà la pertine
 
 #. placeholder {0}: record.email
 #. placeholder {1}: record.type === 'api_key' ? ' This API key will be permanently deleted.' : ''
-#: src/components/settings/WorkspaceMembers.tsx:191
+#: src/components/settings/WorkspaceMembers.tsx:212
 msgid "Are you sure you want to remove {0}?{1}"
 msgstr "Esteu segur que voleu treure {0}?{1}"
 
@@ -1659,8 +1659,8 @@ msgstr "Mida del botó"
 #: src/components/settings/SystemSettingsDrawer.tsx:148
 #: src/components/settings/WebhookCard.tsx:348
 #: src/components/settings/WebhooksSettings.tsx:213
-#: src/components/settings/WorkspaceMembers.tsx:554
-#: src/components/settings/WorkspaceMembers.tsx:599
+#: src/components/settings/WorkspaceMembers.tsx:613
+#: src/components/settings/WorkspaceMembers.tsx:658
 #: src/components/templates/CreateTemplateDrawer.tsx:500
 #: src/components/templates/SendTemplateModal.tsx:268
 #: src/components/templates/TemplateTranslationsTab.tsx:254
@@ -1906,7 +1906,7 @@ msgstr "Clonar plantilla"
 #: src/components/contacts/BulkActionProgressModal.tsx:65
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:825
 #: src/components/settings/WebhookCard.tsx:345
-#: src/components/settings/WorkspaceMembers.tsx:594
+#: src/components/settings/WorkspaceMembers.tsx:653
 #: src/components/transactional/ApiCommandModal.tsx:990
 msgid "Close"
 msgstr "Tancar"
@@ -2328,9 +2328,9 @@ msgstr "Crear una plantilla de correu"
 msgid "Create and manage your blog content"
 msgstr "Creeu i gestioneu el contingut del vostre blog"
 
-#: src/components/settings/WorkspaceMembers.tsx:523
-#: src/components/settings/WorkspaceMembers.tsx:587
-#: src/components/settings/WorkspaceMembers.tsx:607
+#: src/components/settings/WorkspaceMembers.tsx:582
+#: src/components/settings/WorkspaceMembers.tsx:646
+#: src/components/settings/WorkspaceMembers.tsx:666
 msgid "Create API Key"
 msgstr "Crear clau API"
 
@@ -2894,8 +2894,8 @@ msgstr "Eliminar carpeta (Mode de només lectura)"
 msgid "Delete header"
 msgstr ""
 
-#: src/components/settings/WorkspaceMembers.tsx:210
-#: src/components/settings/WorkspaceMembers.tsx:217
+#: src/components/settings/WorkspaceMembers.tsx:231
+#: src/components/settings/WorkspaceMembers.tsx:238
 msgid "Delete invitation"
 msgstr "Eliminar invitació"
 
@@ -3339,7 +3339,7 @@ msgstr "Editar notificació"
 msgid "Edit Notification"
 msgstr "Editar notificació"
 
-#: src/components/settings/WorkspaceMembers.tsx:179
+#: src/components/settings/WorkspaceMembers.tsx:200
 msgid "Edit permissions"
 msgstr "Editar permisos"
 
@@ -3432,7 +3432,7 @@ msgstr "Correu electrònic"
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:338
 #: src/components/messages/MessageHistoryTab.tsx:219
 #: src/components/settings/Integrations.tsx:2209
-#: src/components/settings/WorkspaceMembers.tsx:78
+#: src/components/settings/WorkspaceMembers.tsx:99
 #: src/components/timeline/ContactTimeline.tsx:505
 #: src/pages/ContactsPage.tsx:359
 #: src/pages/ContactsPage.tsx:526
@@ -3447,7 +3447,7 @@ msgstr "Correu (obligatori)"
 
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:383
 #: src/components/settings/Integrations.tsx:1604
-#: src/components/settings/WorkspaceMembers.tsx:563
+#: src/components/settings/WorkspaceMembers.tsx:622
 msgid "Email Address"
 msgstr "Adreça de correu electrònic"
 
@@ -3720,7 +3720,7 @@ msgid "Enter duration"
 msgstr "Introduïu durada"
 
 #: src/components/contacts/ContactUpsertDrawer.tsx:521
-#: src/components/settings/WorkspaceMembers.tsx:568
+#: src/components/settings/WorkspaceMembers.tsx:627
 msgid "Enter email address"
 msgstr "Introduïu adreça de correu"
 
@@ -4042,7 +4042,7 @@ msgstr "No s'ha pogut completar la configuració"
 msgid "Failed to copy to clipboard"
 msgstr "No s'ha pogut copiar al porta-retalls"
 
-#: src/components/settings/WorkspaceMembers.tsx:309
+#: src/components/settings/WorkspaceMembers.tsx:357
 msgid "Failed to create API key"
 msgstr "No s'ha pogut crear la clau API"
 
@@ -4118,7 +4118,7 @@ msgstr "No s'ha pogut eliminar el fitxer: "
 msgid "Failed to delete integration"
 msgstr "No s'ha pogut eliminar la integració"
 
-#: src/components/settings/WorkspaceMembers.tsx:358
+#: src/components/settings/WorkspaceMembers.tsx:406
 msgid "Failed to delete invitation"
 msgstr "No s'ha pogut eliminar la invitació"
 
@@ -4212,7 +4212,7 @@ msgstr "No s'ha pogut importar la plantilla MJML. Si us plau, comproveu la sinta
 msgid "Failed to import template. Please check the file format."
 msgstr "No s'ha pogut importar la plantilla. Si us plau, comproveu el format del fitxer."
 
-#: src/components/settings/WorkspaceMembers.tsx:274
+#: src/components/settings/WorkspaceMembers.tsx:322
 msgid "Failed to invite member"
 msgstr "No s'ha pogut convidar el membre"
 
@@ -4284,7 +4284,7 @@ msgstr "No s'han pogut registrar els webhooks"
 msgid "Failed to remove custom field label"
 msgstr "No s'ha pogut treure l'etiqueta de camp personalitzat"
 
-#: src/components/settings/WorkspaceMembers.tsx:339
+#: src/components/settings/WorkspaceMembers.tsx:387
 msgid "Failed to remove member"
 msgstr "No s'ha pogut treure el membre"
 
@@ -4292,7 +4292,7 @@ msgstr "No s'ha pogut treure el membre"
 msgid "Failed to render preview"
 msgstr "No s'ha pogut renderitzar la previsualització"
 
-#: src/components/settings/WorkspaceMembers.tsx:394
+#: src/components/settings/WorkspaceMembers.tsx:453
 msgid "Failed to resend invitation"
 msgstr "No s'ha pogut reenviar la invitació"
 
@@ -4747,8 +4747,8 @@ msgstr "Nom del remitent (anul·lar)"
 msgid "From:"
 msgstr "De:"
 
-#: src/components/settings/WorkspaceMembers.tsx:113
-#: src/components/settings/WorkspaceMembers.tsx:140
+#: src/components/settings/WorkspaceMembers.tsx:134
+#: src/components/settings/WorkspaceMembers.tsx:161
 msgid "Full Access"
 msgstr "Accés complet"
 
@@ -5451,24 +5451,28 @@ msgstr "URL de YouTube invàlida"
 msgid "Invitation accepted successfully! Welcome to the workspace."
 msgstr "Invitació acceptada correctament! Benvingut a l'espai de treball."
 
-#: src/components/settings/WorkspaceMembers.tsx:354
+#: src/components/settings/WorkspaceMembers.tsx:402
 msgid "Invitation deleted successfully"
 msgstr "Invitació eliminada correctament"
 
-#: src/components/settings/WorkspaceMembers.tsx:390
+#: src/components/settings/WorkspaceMembers.tsx:449
 msgid "Invitation resent to {email}"
 msgstr "Invitació reenviada a {email}"
 
-#: src/components/settings/WorkspaceMembers.tsx:98
+#: src/components/settings/WorkspaceMembers.tsx:119
 msgid "Invitation sent"
 msgstr "Invitació enviada"
 
-#: src/components/settings/WorkspaceMembers.tsx:260
+#: src/components/settings/WorkspaceMembers.tsx:291
 msgid "Invitation sent to {inviteEmail}"
 msgstr "Invitació enviada a {inviteEmail}"
 
-#: src/components/settings/WorkspaceMembers.tsx:526
-#: src/components/settings/WorkspaceMembers.tsx:548
+#: src/components/settings/WorkspaceMembers.tsx:283
+msgid "Invitation sent to {inviteEmail} via Veridian Hub"
+msgstr ""
+
+#: src/components/settings/WorkspaceMembers.tsx:585
+#: src/components/settings/WorkspaceMembers.tsx:607
 msgid "Invite Member"
 msgstr "Convidar membre"
 
@@ -5930,7 +5934,7 @@ msgstr "Fa que el contenidor ocupi tota l'amplada de la vista del correu, ignora
 msgid "Manage subscription"
 msgstr ""
 
-#: src/components/settings/WorkspaceMembers.tsx:517
+#: src/components/settings/WorkspaceMembers.tsx:576
 msgid "Manage your workspace members"
 msgstr "Gestioneu els membres del vostre espai de treball"
 
@@ -5993,7 +5997,7 @@ msgstr "Es permeten màxim 20 adjunts"
 msgid "Maximum number of posts to include in the RSS/JSON feed (1–20)"
 msgstr ""
 
-#: src/components/settings/WorkspaceMembers.tsx:335
+#: src/components/settings/WorkspaceMembers.tsx:383
 msgid "Member removed successfully"
 msgstr "Membre tret correctament"
 
@@ -6306,10 +6310,10 @@ msgstr "Propera execució"
 #: src/components/settings/WebhookCard.tsx:193
 #: src/components/settings/WebhookCard.tsx:237
 #: src/components/settings/WebhookCard.tsx:279
-#: src/components/settings/WorkspaceMembers.tsx:194
-#: src/components/settings/WorkspaceMembers.tsx:214
-#: src/components/settings/WorkspaceMembers.tsx:434
-#: src/components/settings/WorkspaceMembers.tsx:442
+#: src/components/settings/WorkspaceMembers.tsx:215
+#: src/components/settings/WorkspaceMembers.tsx:235
+#: src/components/settings/WorkspaceMembers.tsx:493
+#: src/components/settings/WorkspaceMembers.tsx:501
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:148
 #: src/pages/BroadcastsPage.tsx:566
 msgid "No"
@@ -6320,7 +6324,7 @@ msgstr "No"
 msgid "No {0} content to preview"
 msgstr "No hi ha contingut {0} per previsualitzar"
 
-#: src/components/settings/WorkspaceMembers.tsx:134
+#: src/components/settings/WorkspaceMembers.tsx:155
 msgid "No Access"
 msgstr "Sense accés"
 
@@ -6420,7 +6424,7 @@ msgstr "Sense llista"
 msgid "No lists found"
 msgstr "No s'han trobat llistes"
 
-#: src/components/settings/WorkspaceMembers.tsx:542
+#: src/components/settings/WorkspaceMembers.tsx:601
 msgid "No members found"
 msgstr "No s'han trobat membres"
 
@@ -6922,7 +6926,7 @@ msgstr "Càrrega:"
 #: src/components/automations/config/TriggerConfigForm.tsx:73
 #: src/components/contacts/ContactDetailsDrawer.tsx:582
 #: src/components/lists/ListStats.tsx:82
-#: src/components/settings/WorkspaceMembers.tsx:116
+#: src/components/settings/WorkspaceMembers.tsx:137
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:79
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:236
 #: src/pages/BroadcastsPage.tsx:340
@@ -6955,13 +6959,13 @@ msgstr "L'URL del feed per destinatari és requerida quan està habilitat"
 msgid "Periodically check for new Veridian Mail versions and security updates. A popup will list new versions available."
 msgstr ""
 
-#: src/components/settings/WorkspaceMembers.tsx:130
-#: src/components/settings/WorkspaceMembers.tsx:145
+#: src/components/settings/WorkspaceMembers.tsx:151
+#: src/components/settings/WorkspaceMembers.tsx:166
 msgid "Permission Details"
 msgstr "Detalls del permís"
 
-#: src/components/settings/WorkspaceMembers.tsx:109
-#: src/components/settings/WorkspaceMembers.tsx:574
+#: src/components/settings/WorkspaceMembers.tsx:130
+#: src/components/settings/WorkspaceMembers.tsx:633
 msgid "Permissions"
 msgstr "Permisos"
 
@@ -7120,8 +7124,8 @@ msgstr "Si us plau, introduïu un nom d'espai de treball"
 msgid "Please enter an API identifier"
 msgstr "Si us plau, introduïu un identificador API"
 
-#: src/components/settings/WorkspaceMembers.tsx:284
-#: src/components/settings/WorkspaceMembers.tsx:617
+#: src/components/settings/WorkspaceMembers.tsx:332
+#: src/components/settings/WorkspaceMembers.tsx:676
 msgid "Please enter an API key name"
 msgstr "Si us plau, introduïu un nom de clau API"
 
@@ -7130,8 +7134,8 @@ msgstr "Si us plau, introduïu un nom de clau API"
 msgid "Please enter an automation name"
 msgstr "Si us plau, introduïu un nom d'automatització"
 
-#: src/components/settings/WorkspaceMembers.tsx:247
-#: src/components/settings/WorkspaceMembers.tsx:565
+#: src/components/settings/WorkspaceMembers.tsx:268
+#: src/components/settings/WorkspaceMembers.tsx:624
 msgid "Please enter an email address"
 msgstr "Si us plau, introduïu una adreça de correu"
 
@@ -7584,8 +7588,8 @@ msgid "Re-register"
 msgstr "Tornar a registrar"
 
 #: src/components/settings/EditPermissionsModal.tsx:86
-#: src/components/settings/WorkspaceMembers.tsx:434
-#: src/components/settings/WorkspaceMembers.tsx:488
+#: src/components/settings/WorkspaceMembers.tsx:493
+#: src/components/settings/WorkspaceMembers.tsx:547
 msgid "Read"
 msgstr "Llegit"
 
@@ -7762,8 +7766,8 @@ msgstr "Treure de la llista"
 msgid "Remove Link"
 msgstr "Eliminar enllaç"
 
-#: src/components/settings/WorkspaceMembers.tsx:190
-#: src/components/settings/WorkspaceMembers.tsx:197
+#: src/components/settings/WorkspaceMembers.tsx:211
+#: src/components/settings/WorkspaceMembers.tsx:218
 msgid "Remove member"
 msgstr "Treure membre"
 
@@ -7850,7 +7854,7 @@ msgstr "Requereix un farciment"
 msgid "Resend code"
 msgstr "Reenviar codi"
 
-#: src/components/settings/WorkspaceMembers.tsx:225
+#: src/components/settings/WorkspaceMembers.tsx:246
 msgid "Resend invitation"
 msgstr "Reenviar invitació"
 
@@ -7873,7 +7877,7 @@ msgid "Reset translation"
 msgstr ""
 
 #: src/components/settings/EditPermissionsModal.tsx:80
-#: src/components/settings/WorkspaceMembers.tsx:482
+#: src/components/settings/WorkspaceMembers.tsx:541
 msgid "Resource"
 msgstr "Recurs"
 
@@ -7961,7 +7965,7 @@ msgstr "Dret"
 msgid "Right to Left"
 msgstr "Dreta a esquerra"
 
-#: src/components/settings/WorkspaceMembers.tsx:86
+#: src/components/settings/WorkspaceMembers.tsx:107
 msgid "Role"
 msgstr "Rol"
 
@@ -8564,7 +8568,7 @@ msgstr "Envieu una notificació transaccional utilitzant Python:"
 msgid "Send a transactional notification using TypeScript/JavaScript:"
 msgstr "Envieu una notificació transaccional utilitzant TypeScript/JavaScript:"
 
-#: src/components/settings/WorkspaceMembers.tsx:557
+#: src/components/settings/WorkspaceMembers.tsx:616
 msgid "Send Invitation"
 msgstr "Enviar invitació"
 
@@ -8833,7 +8837,7 @@ msgid "Signup"
 msgstr "Registre"
 
 #: src/components/analytics/NewContactsTable.tsx:184
-#: src/components/settings/WorkspaceMembers.tsx:156
+#: src/components/settings/WorkspaceMembers.tsx:177
 msgid "Since"
 msgstr "Des de"
 
@@ -9324,7 +9328,7 @@ msgid "Task type:"
 msgstr "Tipus de tasca:"
 
 #: src/components/settings/SettingsSidebar.tsx:36
-#: src/components/settings/WorkspaceMembers.tsx:517
+#: src/components/settings/WorkspaceMembers.tsx:576
 msgid "Team"
 msgstr "Equip"
 
@@ -9688,6 +9692,10 @@ msgstr "L'URL on enviar la sol·licitud POST"
 msgid "The user_metadata field in Supabase will be saved to this custom JSON field"
 msgstr "El camp user_metadata de Supabase es desarà en aquest camp JSON personalitzat"
 
+#: src/components/settings/WorkspaceMembers.tsx:319
+msgid "The Veridian Hub is temporarily unavailable. Please try again in a moment."
+msgstr ""
+
 #: src/components/settings/WebhookCard.tsx:190
 msgid "The webhook will stop receiving events."
 msgstr "El webhook deixarà de rebre esdeveniments."
@@ -9834,7 +9842,7 @@ msgstr "Aquesta plantilla està gestionada per una integració i no es pot elimi
 msgid "This text appears in the email client's preview pane, typically after the subject line. Keep it concise and compelling (100-140 characters recommended)."
 msgstr "Aquest text apareix al panell de vista prèvia del client de correu, normalment després de l'assumpte. Manteniu-lo concís i atractiu (es recomanen 100-140 caràcters)."
 
-#: src/components/settings/WorkspaceMembers.tsx:642
+#: src/components/settings/WorkspaceMembers.tsx:701
 msgid "This token will only be displayed once. Please save it in a secure location. It cannot be retrieved again."
 msgstr "Aquest token només es mostrarà una vegada. Si us plau, deseu-lo en una ubicació segura. No es podrà recuperar de nou."
 
@@ -10155,7 +10163,7 @@ msgstr ""
 msgid "Type:"
 msgstr "Tipus:"
 
-#: src/components/settings/WorkspaceMembers.tsx:272
+#: src/components/settings/WorkspaceMembers.tsx:305
 msgid "Unable to add this member. Please contact your administrator."
 msgstr ""
 
@@ -10868,8 +10876,8 @@ msgid "Wrapper Attributes"
 msgstr "Atributs del contenidor"
 
 #: src/components/settings/EditPermissionsModal.tsx:99
-#: src/components/settings/WorkspaceMembers.tsx:442
 #: src/components/settings/WorkspaceMembers.tsx:501
+#: src/components/settings/WorkspaceMembers.tsx:560
 msgid "Write"
 msgstr "Escriure"
 
@@ -10907,8 +10915,8 @@ msgstr ""
 #: src/components/settings/WebhookCard.tsx:192
 #: src/components/settings/WebhookCard.tsx:236
 #: src/components/settings/WebhookCard.tsx:278
-#: src/components/settings/WorkspaceMembers.tsx:193
-#: src/components/settings/WorkspaceMembers.tsx:213
+#: src/components/settings/WorkspaceMembers.tsx:214
+#: src/components/settings/WorkspaceMembers.tsx:234
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:147
 msgid "Yes"
 msgstr "Sí"
@@ -11036,6 +11044,10 @@ msgstr "Esteu continuant una sessió de càrrega anterior de \"{fileName}\". La 
 #: src/pages/AcceptInvitationPage.tsx:139
 msgid "You've been invited to join"
 msgstr "Heu estat convidat a unir-vos"
+
+#: src/components/settings/WorkspaceMembers.tsx:314
+msgid "Your account is not yet linked to the Veridian Hub. Sign in once via the Hub to enable team invitations."
+msgstr ""
 
 #: src/components/file_manager/buttonSettings.tsx:215
 msgid "Your files can be uploaded to any S3 compatible storage."

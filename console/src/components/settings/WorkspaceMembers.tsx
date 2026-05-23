@@ -20,9 +20,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faTrashCan } from '@fortawesome/free-regular-svg-icons'
 import { faRefresh, faUserCog } from '@fortawesome/free-solid-svg-icons'
 import { useLingui } from '@lingui/react/macro'
+import { useQuery } from '@tanstack/react-query'
 import { WorkspaceMember, UserPermissions } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
 import { ApiError } from '../../services/api/client'
+import { veridianApi, type VeridianModeResponse } from '../../services/api/veridian'
 import { EditPermissionsModal } from './EditPermissionsModal'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
 
@@ -47,6 +49,25 @@ export function WorkspaceMembers({
   const [inviteModalVisible, setInviteModalVisible] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting, setInviting] = useState(false)
+
+  // === Veridian patch — Hub invitation flow (2026-05-23) ===
+  // Detecte le mode Veridian-managed via /api/veridian/mode. En mode
+  // managed, on appelle le nouvel endpoint Notifuse qui delegue au Hub
+  // (POST /api/veridian/workspaces.inviteMember) au lieu de creer une
+  // invitation locale (POST /api/workspaces.inviteMember upstream).
+  // En self-hosted, comportement upstream inchange.
+  const { data: veridianMode } = useQuery<VeridianModeResponse | null>({
+    queryKey: ['veridian-mode'],
+    queryFn: async () => {
+      try {
+        return await veridianApi.getMode()
+      } catch {
+        return null
+      }
+    },
+    staleTime: 5 * 60 * 1000 // 5 min : le mode change rarement
+  })
+  const isManagedMode = veridianMode?.mode === 'veridian-managed'
   const [invitePermissions, setInvitePermissions] = useState<UserPermissions>({
     contacts: { read: true, write: true },
     lists: { read: true, write: true },
@@ -250,14 +271,26 @@ export function WorkspaceMembers({
 
     setInviting(true)
     try {
-      // Call the API to invite the user with permissions
-      await workspaceService.inviteMember({
-        workspace_id: workspaceId,
-        email: inviteEmail,
-        permissions: invitePermissions
-      })
+      // === Veridian patch === En mode managed, on delegue au Hub (signup
+      // unifie + magic link auto-loggue). En self-hosted, comportement
+      // upstream (invitation locale notifuse_invitations + email Notifuse).
+      if (isManagedMode) {
+        await workspaceService.inviteMemberViaHub({
+          workspace_id: workspaceId,
+          email: inviteEmail,
+          role: 'member'
+        })
+        message.success(t`Invitation sent to ${inviteEmail} via Veridian Hub`)
+      } else {
+        // Call the API to invite the user with permissions
+        await workspaceService.inviteMember({
+          workspace_id: workspaceId,
+          email: inviteEmail,
+          permissions: invitePermissions
+        })
+        message.success(t`Invitation sent to ${inviteEmail}`)
+      }
 
-      message.success(t`Invitation sent to ${inviteEmail}`)
       setInviteModalVisible(false)
       setInviteEmail('')
 
@@ -270,6 +303,21 @@ export function WorkspaceMembers({
         // tous les plans (cf. PRICING-VERIDIAN.md). Si ce message survient
         // c'est un garde-fou anti-abuse côté backend — wording neutre.
         message.error(t`Unable to add this member. Please contact your administrator.`)
+      } else if (
+        error instanceof ApiError &&
+        error.status === 422 &&
+        error.message.includes('Veridian Hub')
+      ) {
+        // Owner Notifuse pas encore "lie" au Hub (CONTRAT-HUB §3.7). Wording
+        // explicite pour le inciter a passer par signin Hub.
+        message.error(
+          t`Your account is not yet linked to the Veridian Hub. Sign in once via the Hub to enable team invitations.`
+        )
+      } else if (error instanceof ApiError && error.status === 502) {
+        // Hub down ou config en panne — wording neutre.
+        message.error(
+          t`The Veridian Hub is temporarily unavailable. Please try again in a moment.`
+        )
       } else {
         const msg = error instanceof Error ? error.message : t`Failed to invite member`
         message.error(msg)
@@ -366,26 +414,37 @@ export function WorkspaceMembers({
 
     setResendingInvitation(true)
     try {
-      // Reuse the inviteMember API which will update the existing invitation due to UPSERT logic
-      // Use default permissions for resending
-      const defaultPermissions: UserPermissions = {
-        contacts: { read: true, write: true },
-        lists: { read: true, write: true },
-        templates: { read: true, write: true },
-        broadcasts: { read: true, write: true },
-        transactional: { read: true, write: true },
-        workspace: { read: true, write: true },
-        message_history: { read: true, write: true },
-        blog: { read: true, write: true },
-        automations: { read: true, write: true },
-        llm: { read: true, write: true }
-      }
+      // === Veridian patch === En mode managed, le Hub gere l'idempotence
+      // (reused=true reemmet le mail d'invitation). En self-hosted, l'API
+      // upstream upsert via inviteMember.
+      if (isManagedMode) {
+        await workspaceService.inviteMemberViaHub({
+          workspace_id: workspaceId,
+          email: email,
+          role: 'member'
+        })
+      } else {
+        // Reuse the inviteMember API which will update the existing invitation due to UPSERT logic
+        // Use default permissions for resending
+        const defaultPermissions: UserPermissions = {
+          contacts: { read: true, write: true },
+          lists: { read: true, write: true },
+          templates: { read: true, write: true },
+          broadcasts: { read: true, write: true },
+          transactional: { read: true, write: true },
+          workspace: { read: true, write: true },
+          message_history: { read: true, write: true },
+          blog: { read: true, write: true },
+          automations: { read: true, write: true },
+          llm: { read: true, write: true }
+        }
 
-      await workspaceService.inviteMember({
-        workspace_id: workspaceId,
-        email: email,
-        permissions: defaultPermissions
-      })
+        await workspaceService.inviteMember({
+          workspace_id: workspaceId,
+          email: email,
+          permissions: defaultPermissions
+        })
+      }
 
       message.success(t`Invitation resent to ${email}`)
       onMembersChange()

@@ -348,6 +348,27 @@ export interface InviteMemberResponse {
   message: string
 }
 
+// === Veridian patch — Hub invitation flow (2026-05-23) ===
+// Request/response du nouvel endpoint POST /api/veridian/workspaces.inviteMember
+// qui delegue l'invitation cross-app au Hub Veridian (au lieu de creer une
+// invitation locale notifuse_invitations).
+// Voir todo/2026-05-20-hub-invitation-flow-multi-membre.md.
+export interface VeridianInviteMemberRequest {
+  workspace_id: string
+  email: string
+  role?: 'owner' | 'admin' | 'member'
+  message?: string
+}
+
+export interface VeridianInviteMemberResponse {
+  status: string
+  message: string
+  hub_invitation_id: string
+  magic_link_url: string
+  expires_at: string
+  reused: boolean
+}
+
 // Permission types
 export interface ResourcePermissions {
   read: boolean
@@ -451,6 +472,12 @@ export const workspaceService = {
 
   inviteMember: (data: InviteMemberRequest) =>
     api.post<InviteMemberResponse>('/api/workspaces.inviteMember', data),
+
+  // === Veridian patch === Invitation via Hub (mode managed only).
+  // Le front decide entre cette methode et inviteMember() en fonction de
+  // /api/veridian/mode (cf. WorkspaceMembers.tsx).
+  inviteMemberViaHub: (data: VeridianInviteMemberRequest) =>
+    api.post<VeridianInviteMemberResponse>('/api/veridian/workspaces.inviteMember', data),
 
   createAPIKey: (data: CreateAPIKeyRequest) =>
     api.post<CreateAPIKeyResponse>('/api/workspaces.createAPIKey', data),

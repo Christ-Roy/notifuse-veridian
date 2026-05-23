@@ -1342,6 +1342,39 @@ func (a *App) InitHandlers() error {
 	)
 	veridianHubDiscoveryHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patch — Hub invitation flow (2026-05-23) ===
+	// Endpoint POST /api/veridian/workspaces.inviteMember : delegue
+	// l'invitation cross-app au Hub. Quand owner Notifuse clique "Inviter
+	// membre" en mode managed, le front appelle ce handler au lieu de
+	// l'endpoint upstream /api/workspaces.inviteMember. Cf. todo/
+	// 2026-05-20-hub-invitation-flow-multi-membre.md.
+	//
+	// managedMode := (HUB_API_SECRET != "" && HUB_INVITATION_SECRET_NOTIFUSE != "").
+	// Si l'un manque, l'endpoint renvoie 503 avec un message explicite.
+	hubInvitationManaged := a.config.HubAPISecret != "" && a.config.HubInvitationSecretNotifuse != ""
+	hubInvitationClient := service.NewVeridianHubInvitationClient(
+		a.config.HubBaseURL,
+		a.config.HubInvitationSecretNotifuse,
+		nil, // default timeout
+		a.logger,
+	)
+	veridianInviteHandler := httpHandler.NewVeridianInviteMemberHandler(
+		hubInvitationClient,
+		a.authService,
+		a.userService,
+		httpHandler.NewSQLHubUserIDResolver(a.db),
+		getJWTSecret,
+		a.logger,
+		hubInvitationManaged,
+	)
+	veridianInviteHandler.RegisterRoutes(a.mux)
+	if !hubInvitationManaged {
+		a.logger.WithFields(map[string]interface{}{
+			"hub_api_secret_set":             a.config.HubAPISecret != "",
+			"hub_invitation_secret_notifuse": a.config.HubInvitationSecretNotifuse != "",
+		}).Warn("Veridian hub invitation endpoint disabled (self-hosted or secret missing)")
+	}
+
 	return nil
 }
 
