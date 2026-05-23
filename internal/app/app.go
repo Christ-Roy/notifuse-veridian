@@ -24,6 +24,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/service/queue"
 	"github.com/Notifuse/notifuse/pkg/cache"
 	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
+	"github.com/Notifuse/notifuse/pkg/hub_discovery"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
@@ -1321,6 +1322,25 @@ func (a *App) InitHandlers() error {
 		a.logger,
 	)
 	veridianAutoLoginHandler.RegisterRoutes(a.mux)
+
+	// === Veridian patch lot 2026-05-23 — Hub Discovery client ===
+	// Endpoint GET /api/veridian/hub-discovery/me : la console l'appelle
+	// post-login (best-effort) pour decouvrir si l'email du user est
+	// connu cote Hub et pre-charger les liens cross-app du dashboard.
+	// Si HUB_API_SECRET vide -> client disabled, repond hub_available=false.
+	// Le call Hub est non-bloquant (timeout 2s, fail-safe). Cf. ticket
+	// todo/2026-05-23-call-hub-discovery-by-email.md + CONTRAT-HUB §6.5.
+	hubDiscoveryClient := hub_discovery.NewClient(hub_discovery.Config{
+		Secret: a.config.HubAPISecret,
+		Logger: a.logger,
+	})
+	veridianHubDiscoveryHandler := httpHandler.NewVeridianHubDiscoveryHandler(
+		hubDiscoveryClient,
+		a.userService,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianHubDiscoveryHandler.RegisterRoutes(a.mux)
 
 	return nil
 }
