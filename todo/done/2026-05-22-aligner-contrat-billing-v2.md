@@ -109,3 +109,78 @@ Lis ton handler `update-plan` actuel et vérifie :
 Sous `## Réponse — YYYY-MM-DD`, lister les écarts trouvés + les corrections
 faites. Prévenir Robert si un invariant du contrat est impossible/coûteux
 côté Notifuse (arbitrage).
+
+## Réponse — 2026-05-23
+
+✅ **Implémenté et livré** dans commit `2939b65c` (push sur origin/veridian).
+
+### Écarts détectés et corrigés vs contrat v2.0
+
+1. **§3.4.1 — contract_version absent** : handler ne lisait pas le champ.
+   → Ajouté `UpdatePlanInput.ContractVersion`. Handler reject 400
+   `invalid_payload` si major != 2. Chaîne vide tolérée (back-compat
+   legacy v1 — Hub pas encore migré côté `lib/notifuse/client.ts`).
+   Helper `domain.IsSupportedContractVersion()`.
+
+2. **§3.4.2 — enum `plan` pas validé** : handler acceptait tout string.
+   → Ajouté `domain.IsValidCanonicalPlan()` (enum fermé free/pro/business/
+   enterprise). Handler reject 400 `invalid_plan` (nouveau code machine
+   `ErrCodeInvalidPlan`) avec `details.allowed_plans`.
+
+3. **§3.3 — enum `plan_source` v2 non câblé** : seul `IsValid()` legacy
+   v1 (stripe/manual/lifetime_*/internal). 3 valeurs v2 manquaient :
+   `stripe_trial`, `grant_manual`, `downgrade_auto`.
+   → Ajouté constantes `PlanSourceStripeTrial`, `PlanSourceGrantManual`,
+   `PlanSourceDowngradeAuto` dans `veridian_billing_contract.go`.
+   `IsValidPlanSourceV2()` accepte les 4 v2 + les valeurs legacy v1
+   (back-compat données existantes + appels Hub pas encore migrés).
+   `NormalizePlanSourceV2()` mappe legacy → grant_manual pour exposition.
+
+4. **§3.4.4 — immunité incomplète** : service ne bloquait que `stripe`,
+   pas `stripe_trial` ni `downgrade_auto`.
+   → Étendu via `IsImmuneV2()` + `IsAutoDowngradeSource()`. Un tenant
+   immune (`grant_manual` + legacy lifetime_*/manual/internal) bloque
+   TOUTES les sources auto (stripe + stripe_trial + downgrade_auto).
+   Seul un `update-plan plan_source=grant_manual` peut écraser (admin
+   Hub a le dernier mot).
+
+5. **§4 — fail-open** : audit passé, déjà conforme.
+   Mécanisme `last_hub_sync_at` / `HubSyncDead` (V39) bloque les writes
+   en 503 si Hub silencieux > 72h, mais **les reads passent toujours**.
+   Pas de cron downgrade-by-timeout. `time.NewTicker` audité : aucun
+   tenant n'est downgradé sur silence Hub.
+
+6. **§3.4.3 — idempotence** : déjà gérée via header `Idempotency-Key`
+   (middleware sec. 5.11). Ajouté `IdempotencyKey` dans body pour
+   compat v2 (passé en passthrough — middleware reste sur le header
+   qui est le standard CONTRAT-HUB).
+
+7. **§7.4 — `activity_threshold_reached`** : déjà livré V38 (signal
+   5e mail). Conforme contrat v2.
+
+### Tests colocalisés ajoutés (Constitution CI §1)
+
+- `veridian_billing_contract_test.go` (nouveau) — 7 tests, 60+ sous-cas :
+  `TestIsSupportedContractVersion`, `TestIsValidCanonicalPlan`,
+  `TestIsValidPlanSourceV2`, `TestNormalizePlanSourceV2`, `TestIsImmuneV2`,
+  `TestIsAutoDowngradeSource`, `TestImmunityInvariant_PaywallContract`.
+- `veridian_test.go` (extension) : `TestUpdatePlanInput_V2JSONSchema`,
+  `TestUpdatePlanInput_LegacyV1Compat`,
+  `TestUpdatePlanInput_NewV2PlanSourceValues`.
+- `veridian_errors_test.go` (extension) : `TestErrCodeInvalidPlan_Value`,
+  `TestWriteJSONErrorCode_InvalidPlan_400`.
+- `veridian_handler_test.go` (extension) : 6 tests
+  `TestVeridianHandleUpdatePlan_V2_*` (versioning, plan enum,
+  plan_source v2, back-compat legacy v1).
+- `veridian_service_test.go` (extension) : 5 tests
+  `TestVeridianService_UpdatePlan_V2_*` (immunité étendue v2 + override
+  grant_manual + activations légitimes trial / downgrade).
+
+Tous tests : `go test ./internal/domain/ ./internal/http/ ./internal/service/` → PASS.
+
+### Hors scope (filets de sécurité non implémentés)
+
+- **§6.4 — cron poll `billing-state`** : non câblé. Le contrat précise
+  que l'endpoint Hub `GET /api/tenants/{id}/billing-state` (§6.3)
+  n'existe pas encore — non bloquant. Ticket à créer côté Hub pour
+  livrer l'endpoint, puis ticket Notifuse pour câbler le cron consommateur.
