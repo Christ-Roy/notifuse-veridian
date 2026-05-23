@@ -138,6 +138,13 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Attache un user Hub invité au workspace Notifuse d'un tenant. Idempotent.
 	// Voir todo/2026-05-21-hub-attach-member-endpoint.md
 	mux.Handle("POST /api/tenants/{tenantId}/attach-member", writeRoute(h.handleAttachMember))
+	// === Veridian patch — sync v1.5 CONTRAT-HUB §5.22.2 (2026-05-23) ===
+	// Route workspace-level prescrite par le contrat v1.4 (preferentielle pour
+	// les apps multi-workspace, ex: Prospection). Notifuse etant mono-workspace
+	// (tenantId == workspaceId), l'alias delegue au meme handler — meme
+	// semantique (idempotent, HMAC, §5.22.4 souverainete locale role).
+	// Voir todo/2026-05-21-contrat-hub-v15-sync.md.
+	mux.Handle("POST /api/veridian/workspaces/{tenantId}/attach-member", writeRoute(h.handleAttachMember))
 	// === Veridian patch — Lot K (2026-05-21) ===
 	// CONTRAT-HUB §5.15 rotate-api-key + §5.16 transfer-owner.
 	// Voir veridian_rotate_transfer_handler.go.

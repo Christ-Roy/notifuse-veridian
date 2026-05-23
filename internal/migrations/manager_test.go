@@ -549,7 +549,7 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// Aligner avec config.VERSION. V36 reste vide (le ticket
 		// 2026-05-19-aligner-types-timestamp-veridian-plan a été livré en V43).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("43"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("46"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 
