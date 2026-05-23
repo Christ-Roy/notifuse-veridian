@@ -2104,4 +2104,116 @@ func TestVeridianService_UpdatePlan_V2_DowngradeAutoOnStripeAllowed(t *testing.T
 		TenantID: "ws-expired", Plan: "free", PlanSource: domain.PlanSourceDowngradeAuto,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, domain.PlanSourceDowngradeAuto, resp.PlanSource)}
+	assert.Equal(t, domain.PlanSourceDowngradeAuto, resp.PlanSource)
+}
+
+// === Veridian patch — v15-sync part 2/2 (2026-05-23) ===
+// AttachMember refactor §5.22.4 + §3.7 — sanity checks colocalises sur
+// veridian_service.go pour la regle 1-pour-1 du mapping CI. Les scenarios
+// complets vivent dans veridian_attach_member_service_test.go (file
+// dedie historique du lot B 2026-05-21).
+
+// TestAttachMember_NoDowngradeOnRoleConflict — garde-fou colocalise du
+// nouveau comportement §5.22.4 : si un user est deja membre d'un workspace
+// avec un role DIFFERENT (typiquement 'admin' local promu via Team
+// Settings), une nouvelle invitation Hub demandant 'member' NE DOIT PAS
+// le downgrader. Le service retourne 200 already_member=true en
+// conservant le role local intact, et N'INVOQUE NI RemoveUserFromWorkspace
+// NI AddUserToWorkspace (gomock leverait un "Unexpected call").
+func TestAttachMember_NoDowngradeOnRoleConflict(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-nodown").
+		Return(&domain.Workspace{ID: "ws-nodown"}, nil)
+	m.planRepo.EXPECT().Get(ctx, "ws-nodown").Return(nil, sql.ErrNoRows)
+
+	existingUser := &domain.User{
+		ID:    "user-local-x",
+		Email: "promoted@example.com",
+		Type:  domain.UserTypeUser,
+	}
+	m.user.EXPECT().GetUserByEmail(ctx, "promoted@example.com").
+		Return(existingUser, nil)
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-local-x", "hub-uuid-promoted").
+		Return(nil)
+
+	// Deja "admin" local souverain (promu via UI Team Settings).
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-local-x", "ws-nodown").
+		Return(&domain.UserWorkspace{
+			UserID:      "user-local-x",
+			WorkspaceID: "ws-nodown",
+			Role:        "admin",
+		}, nil)
+
+	// AUCUNE expectation sur AddUserToWorkspace / RemoveUserFromWorkspace /
+	// CreateSession / DeleteSession : si le service les invoquait, gomock
+	// echouerait avec "Unexpected call" → assertion comportementale forte.
+
+	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-nodown",
+		HubUserID:    "hub-uuid-promoted",
+		HubUserEmail: "promoted@example.com",
+		Role:         domain.AttachMemberRoleMember,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.Attached, "attach reussi (idempotent)")
+	assert.True(t, resp.AlreadyMember, "already_member=true §5.22.4")
+	assert.Equal(t, "admin", resp.Role, "role LOCAL souverain conserve, JAMAIS ecrase par Hub (§5.22.4)")
+}
+
+// TestAttachMember_BackfillMismatchDoesNotAbort — garde-fou colocalise du
+// nouveau comportement §3.7 : si BackfillHubUserID retourne
+// ErrHubUserIDMismatch (le user local est deja lie a un hub_user_id
+// DIFFERENT — cas rare de re-signup Hub avec meme email), le service
+// log warn et CONTINUE le flow normal. Pas d'erreur 500 propagee.
+// L'email reste la cle de jointure canonique cross-app (§3.7).
+func TestAttachMember_BackfillMismatchDoesNotAbort(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-bf-mis").
+		Return(&domain.Workspace{ID: "ws-bf-mis"}, nil)
+	m.planRepo.EXPECT().Get(ctx, "ws-bf-mis").Return(nil, sql.ErrNoRows)
+
+	existingUser := &domain.User{
+		ID:    "user-local-bf",
+		Email: "bf@example.com",
+		Type:  domain.UserTypeUser,
+	}
+	m.user.EXPECT().GetUserByEmail(ctx, "bf@example.com").Return(existingUser, nil)
+
+	// Backfill retourne mismatch (binding existant different) — non bloquant.
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-local-bf", "hub-uuid-NEW").
+		Return(domain.ErrHubUserIDMismatch)
+
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-local-bf", "ws-bf-mis").
+		Return(nil, sql.ErrNoRows)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-bf-mis").
+		Return([]*domain.UserWorkspaceWithEmail{
+			{
+				UserWorkspace: domain.UserWorkspace{
+					UserID: "owner-bf", WorkspaceID: "ws-bf-mis", Role: "owner",
+				},
+				Email: "owner@ws.test",
+			},
+		}, nil)
+	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.workspace.EXPECT().
+		AddUserToWorkspace(gomock.Any(), "ws-bf-mis", "user-local-bf", "member", gomock.Any()).
+		Return(nil)
+	// Webhook member_added emis sur attach neuf (post lot M §7.1).
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-bf-mis", gomock.Any()).Times(1)
+	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+
+	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-bf-mis",
+		HubUserID:    "hub-uuid-NEW",
+		HubUserEmail: "bf@example.com",
+		Role:         domain.AttachMemberRoleMember,
+	})
+	require.NoError(t, err, "ErrHubUserIDMismatch doit etre log+continue, jamais propage 500 (§3.7)")
+	require.NotNil(t, resp)
+	assert.True(t, resp.Attached)
+}

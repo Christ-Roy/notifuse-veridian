@@ -1740,19 +1740,24 @@ func isEmptyLimits(l domain.PlanLimits) bool {
 		l.HistoryRetentionDays == 0
 }
 
-// === Veridian patch — hub-attach-member (2026-05-21) ===
+// === Veridian patch — hub-attach-member (2026-05-21, refactor v1.5 §5.22.4 2026-05-23) ===
 // AttachMember attache un user Hub invite au workspace Notifuse d'un tenant.
 //
 // Algorithme :
 //  1. Vérifier que le workspace existe (404 safe).
 //  2. Vérifier que le tenant n'est pas suspendu (ErrTenantSuspended → 423).
 //     Le check plan peut echouer (tenant pre-Hub sans plan row) — OK on continue.
-//  3. Lookup user Notifuse par user_id = HubUserID.
-//     Si absent → créer user {user_id: HubUserID, email, type: user}.
+//  3. Lookup user Notifuse par EMAIL (source de verite §3.7). Si absent →
+//     creer user avec uuid.New() Notifuse natif (PAS HubUserID qui n'est pas
+//     forcement UUID strict). Le binding hub_user_id est stocke en colonne
+//     dediee via BackfillHubUserID (best-effort §3.7).
 //  4. Lookup user_workspaces (user_id, workspace_id).
-//     Si présent même role → 200 already_member=true.
-//     Si présent role différent → UPDATE via RemoveUser+AddUser (+ audit log).
-//     Si absent → INSERT via AddUserToWorkspace.
+//     - Si present meme role → 200 already_member=true (idempotent).
+//     - Si present role DIFFERENT → 200 already_member=true avec role LOCAL
+//       INCHANGE (§5.22.4 : le Hub n'est PAS autoritatif sur les roles
+//       internes, JAMAIS de UPDATE remove+re-add — downgrade silencieux
+//       interdit). Log info "role conflict ignored, local role kept".
+//     - Si absent → INSERT via AddUserToWorkspace (role mappe vers 'member').
 //  5. Générer login_url auto-login (pattern BuildAutoLoginURL).
 //  6. Retourner {attached, already_member, workspace_id, role, login_url}.
 //
@@ -1817,15 +1822,37 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 		member = nil
 	}
 	if member == nil {
+		hubID := input.HubUserID // capture pour pointer (struct field *string)
 		member = &domain.User{
 			ID:        uuid.New().String(),
 			Email:     input.HubUserEmail,
 			Type:      domain.UserTypeUser,
 			CreatedAt: time.Now().UTC(),
 			UpdatedAt: time.Now().UTC(),
+			HubUserID: &hubID,
 		}
 		if err := s.userRepo.CreateUser(ctx, member); err != nil {
 			return nil, fmt.Errorf("create member user: %w", err)
+		}
+	} else {
+		// User existant : backfill best-effort du binding Hub (V46 §3.7).
+		// Non bloquant : si le binding existe deja avec une valeur differente
+		// (ErrHubUserIDMismatch), on log warn et on continue — l'email reste
+		// la cle canonique cross-app, le binding hub_user_id est informationnel.
+		if bfErr := s.userRepo.BackfillHubUserID(ctx, member.ID, input.HubUserID); bfErr != nil {
+			if s.logger != nil {
+				level := "warn"
+				if errors.Is(bfErr, domain.ErrHubUserIDMismatch) {
+					level = "warn_mismatch"
+				}
+				s.logger.WithFields(map[string]interface{}{
+					"user_id":     member.ID,
+					"hub_user_id": input.HubUserID,
+					"tenant_id":   input.TenantID,
+					"error":       bfErr.Error(),
+					"level":       level,
+				}).Warn("veridian AttachMember: backfill hub_user_id failed (non-blocking, email remains canonical join key §3.7)")
+			}
 		}
 	}
 
@@ -1839,46 +1866,42 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 	// son owner via provision/attach-owner). Tous les invités = 'member'.
 	targetRole := "member"
 
-	// Step 4 : lookup user_workspaces pour décider idempotence / UPDATE.
+	// Step 4 : lookup user_workspaces pour décider idempotence / no-downgrade.
+	// CONTRAT-HUB §5.22.4 : le Hub n'est PAS autoritatif sur les roles
+	// internes Notifuse. Si le user est deja membre (quel que soit son role
+	// local) → on retourne 200 already_member=true en conservant le role
+	// local intact. JAMAIS de UPDATE remove+re-add (downgrade silencieux
+	// d'un admin local interdit). Donc PAS besoin de tracer `oldRole` pour
+	// emettre tenant.member_role_changed depuis ici — on ne change jamais
+	// le role via AttachMember. Le webhook role_changed reste reserve aux
+	// flows UI Team Settings (futur lot).
 	existing, lookupErr := s.workspaceRepo.GetUserWorkspace(ctx, member.ID, input.TenantID)
-	alreadyMember := false
-	// oldRole : conserve pour emettre tenant.member_role_changed quand un
-	// role est promu/abaisse via AttachMember (CONTRAT-HUB §5.18.4). Vide si
-	// pas de membre preexistant (cas member_added pur).
-	oldRole := ""
 	if lookupErr == nil && existing != nil {
-		alreadyMember = true
-		oldRole = existing.Role
-		if existing.Role == targetRole {
-			// Idempotent : même role → 200 already_member=true sans aucun effet.
-			loginURL, _, _ := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.HubUserEmail)
-			if s.logger != nil {
-				s.logger.WithFields(map[string]interface{}{
-					"tenant_id":     input.TenantID,
-					"hub_user_id":   input.HubUserID,
-					"role":          targetRole,
-					"invitation_id": input.InvitationID,
-				}).Info("veridian AttachMember: already_member idempotent return")
-			}
-			return &domain.AttachMemberResponse{
-				Attached:      true,
-				AlreadyMember: true,
-				WorkspaceID:   input.TenantID,
-				Role:          targetRole,
-				LoginURL:      loginURL,
-			}, nil
+		if s.logger != nil && existing.Role != targetRole {
+			s.logger.WithFields(map[string]interface{}{
+				"tenant_id":     input.TenantID,
+				"hub_user_id":   input.HubUserID,
+				"local_role":    existing.Role,
+				"requested":     targetRole,
+				"invitation_id": input.InvitationID,
+			}).Info("veridian AttachMember: role conflict ignored, local role kept (§5.22.4)")
 		}
-		// Role différent → UPDATE : remove + re-add avec nouveau role.
-		// On utilise le ctx root (workspace-level op via service).
+		loginURL, _, _ := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.HubUserEmail)
 		if s.logger != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"tenant_id":     input.TenantID,
 				"hub_user_id":   input.HubUserID,
-				"old_role":      existing.Role,
-				"new_role":      targetRole,
+				"role":          existing.Role,
 				"invitation_id": input.InvitationID,
-			}).Info("veridian AttachMember: role update via Hub invitation")
+			}).Info("veridian AttachMember: already_member idempotent return")
 		}
+		return &domain.AttachMemberResponse{
+			Attached:      true,
+			AlreadyMember: true,
+			WorkspaceID:   input.TenantID,
+			Role:          existing.Role, // role LOCAL souverain, jamais ecrase
+			LoginURL:      loginURL,
+		}, nil
 	} else if lookupErr != nil {
 		msg := strings.ToLower(lookupErr.Error())
 		notAttached := strings.Contains(msg, "not found") ||
@@ -1919,21 +1942,10 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 	}
 	defer s.cleanupSession(ctx, callerSessionID)
 
-	if alreadyMember {
-		// Role différent : retirer puis re-ajouter avec le nouveau role.
-		if rmErr := s.workspaceService.RemoveUserFromWorkspace(callerCtx, input.TenantID, member.ID); rmErr != nil {
-			// Si remove fail (race), on tente quand meme l'add.
-			if s.logger != nil {
-				s.logger.WithFields(map[string]interface{}{
-					"tenant_id":   input.TenantID,
-					"hub_user_id": input.HubUserID,
-					"error":       rmErr.Error(),
-				}).Warn("veridian AttachMember: remove for role update failed (attempting add anyway)")
-			}
-		}
-	}
-
-	// INSERT (ou re-add après role update) via AddUserToWorkspace.
+	// INSERT pur via AddUserToWorkspace. Pas de remove+re-add §5.22.4 :
+	// si on arrive ici, c'est que le user N'EST PAS deja membre (sinon on
+	// serait sorti plus haut avec already_member=true). Le bloc RemoveUser
+	// historique a ete supprime au profit du no-downgrade strict §5.22.4.
 	if addErr := s.workspaceService.AddUserToWorkspace(
 		callerCtx,
 		input.TenantID,
@@ -1959,41 +1971,28 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 
 	if s.logger != nil {
 		s.logger.WithFields(map[string]interface{}{
-			"tenant_id":      input.TenantID,
-			"hub_user_id":    input.HubUserID,
-			"role":           targetRole,
-			"already_member": alreadyMember,
-			"invitation_id":  input.InvitationID,
+			"tenant_id":     input.TenantID,
+			"hub_user_id":   input.HubUserID,
+			"role":          targetRole,
+			"invitation_id": input.InvitationID,
 		}).Info("veridian AttachMember: member attached")
 	}
 
-	// Webhook app → Hub (CONTRAT-HUB §5.18.4 + §7.1) :
-	// - Si alreadyMember && oldRole != targetRole → role_changed (UPDATE).
-	//   En pratique avec le mapping actuel targetRole="member" toujours, ce
-	//   cas n'arrive que si un owner repassait member via Hub (workflow
-	//   improbable). On garde l'emit defensif au cas ou le mapping evolue.
-	// - Si !alreadyMember → member_added (INSERT neuf).
-	// Pas d'emit sur le short-circuit "same role" (idempotent return ci-dessus).
+	// Webhook app → Hub (CONTRAT-HUB §5.18.4 + §7.1) : member_added pur.
+	// Avec le refactor §5.22.4, si on arrive ici c'est que le user n'etait
+	// PAS deja membre (sinon short-circuit already_member plus haut sans
+	// emission webhook). Donc emit unique tenant.member_added, JAMAIS
+	// role_changed depuis AttachMember (le role local est souverain et ne
+	// peut etre mute que via l'UI Team Settings, futur lot dedie).
 	if s.emitter != nil {
-		if alreadyMember {
-			s.emitter.Emit(ctx, domain.EventTenantMemberRoleChanged, input.TenantID, map[string]interface{}{
-				"user_email":  input.HubUserEmail,
-				"old_role":    oldRole,
-				"new_role":    targetRole,
-				"hub_user_id": input.HubUserID,
-				"app_user_id": member.ID,
-				"changed_by":  "hub", // §5.22 : invitation via Hub
-			})
-		} else {
-			s.emitter.Emit(ctx, domain.EventTenantMemberAdded, input.TenantID, map[string]interface{}{
-				"user_email":    input.HubUserEmail,
-				"role":          targetRole,
-				"hub_user_id":   input.HubUserID,
-				"app_user_id":   member.ID,
-				"actor":         "hub",
-				"invitation_id": input.InvitationID, // audit cross-app (§5.22.5)
-			})
-		}
+		s.emitter.Emit(ctx, domain.EventTenantMemberAdded, input.TenantID, map[string]interface{}{
+			"user_email":    input.HubUserEmail,
+			"role":          targetRole,
+			"hub_user_id":   input.HubUserID,
+			"app_user_id":   member.ID,
+			"actor":         "hub",
+			"invitation_id": input.InvitationID, // audit cross-app (§5.22.5)
+		})
 	}
 
 	// Marquer le sync Hub réussi (best-effort).

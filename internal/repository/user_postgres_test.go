@@ -89,10 +89,13 @@ func TestGetUserByEmail(t *testing.T) {
 		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "language", "created_at", "updated_at", "veridian_managed"}).
-		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.Language, expectedUser.CreatedAt, expectedUser.UpdatedAt, false)
+	// === Veridian patch V46 === colonne hub_user_id (CONTRAT-HUB §3.7)
+	// ajoutee en queue du SELECT — fixture nil pour ce cas (user pre-V46
+	// ou pas encore backfille).
+	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "language", "created_at", "updated_at", "veridian_managed", "hub_user_id"}).
+		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.Language, expectedUser.CreatedAt, expectedUser.UpdatedAt, false, nil)
 
-	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed, hub_user_id FROM users WHERE email = \$1`).
 		WithArgs(email).
 		WillReturnRows(rows)
 
@@ -103,9 +106,10 @@ func TestGetUserByEmail(t *testing.T) {
 	assert.Equal(t, expectedUser.Name, user.Name)
 	assert.Equal(t, expectedUser.Type, user.Type)
 	assert.Equal(t, expectedUser.Language, user.Language)
+	assert.Nil(t, user.HubUserID, "hub_user_id NULL en DB → nil sur le struct")
 
 	// Test case 2: User not found
-	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed, hub_user_id FROM users WHERE email = \$1`).
 		WithArgs("nonexistent@example.com").
 		WillReturnError(sql.ErrNoRows)
 
@@ -115,7 +119,7 @@ func TestGetUserByEmail(t *testing.T) {
 	assert.IsType(t, &domain.ErrUserNotFound{}, err)
 
 	// Test case 3: Database error
-	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed FROM users WHERE email = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed, hub_user_id FROM users WHERE email = \$1`).
 		WithArgs("error@example.com").
 		WillReturnError(errors.New("database error"))
 
@@ -143,10 +147,12 @@ func TestGetUserByID(t *testing.T) {
 		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "language", "created_at", "updated_at", "veridian_managed"}).
-		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.Language, expectedUser.CreatedAt, expectedUser.UpdatedAt, false)
+	// === Veridian patch V46 === colonne hub_user_id (CONTRAT-HUB §3.7)
+	// ajoutee en queue du SELECT — fixture nil pour ce cas.
+	rows := sqlmock.NewRows([]string{"id", "email", "name", "type", "language", "created_at", "updated_at", "veridian_managed", "hub_user_id"}).
+		AddRow(expectedUser.ID, expectedUser.Email, expectedUser.Name, expectedUser.Type, expectedUser.Language, expectedUser.CreatedAt, expectedUser.UpdatedAt, false, nil)
 
-	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed FROM users WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed, hub_user_id FROM users WHERE id = \$1`).
 		WithArgs(userID).
 		WillReturnRows(rows)
 
@@ -157,9 +163,10 @@ func TestGetUserByID(t *testing.T) {
 	assert.Equal(t, expectedUser.Name, user.Name)
 	assert.Equal(t, expectedUser.Type, user.Type)
 	assert.Equal(t, expectedUser.Language, user.Language)
+	assert.Nil(t, user.HubUserID, "hub_user_id NULL en DB → nil sur le struct")
 
 	// Test case 2: User not found
-	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed FROM users WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, email, name, type, language, created_at, updated_at, veridian_managed, hub_user_id FROM users WHERE id = \$1`).
 		WithArgs("nonexistent-id").
 		WillReturnError(sql.ErrNoRows)
 
@@ -591,4 +598,112 @@ func TestMarkVeridianManaged_Idempotent(t *testing.T) {
 
 	err := repo.MarkVeridianManaged(context.Background(), "api@notifuse.test")
 	require.NoError(t, err, "re-call sur user deja marque doit etre no-op silencieux")
+}
+
+// === Veridian patch === Tests pour BackfillHubUserID (V46, CONTRAT-HUB §3.7).
+// Le UPDATE est conditionnel sur (hub_user_id IS NULL OR hub_user_id = $1)
+// pour ne JAMAIS ecraser un binding existant different. 0 rows affected =>
+// disambigue user manquant vs mismatch via SELECT probe.
+
+func TestUserRepository_BackfillHubUserID_NullColumn_SetsOK(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	mock.ExpectExec(`UPDATE users\s+SET hub_user_id = \$1, updated_at = NOW\(\)\s+WHERE id = \$2 AND \(hub_user_id IS NULL OR hub_user_id = \$1\)`).
+		WithArgs("hub-uuid-1", "user-local-1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "hub-uuid-1")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserRepository_BackfillHubUserID_MatchingValue_NoOp(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	// Re-call avec MEME hub_user_id = UPDATE matche la ligne (clause `OR
+	// hub_user_id = $1`) → rows=1 sans probe.
+	mock.ExpectExec(`UPDATE users\s+SET hub_user_id = \$1, updated_at = NOW\(\)\s+WHERE id = \$2 AND \(hub_user_id IS NULL OR hub_user_id = \$1\)`).
+		WithArgs("hub-uuid-1", "user-local-1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "hub-uuid-1")
+	require.NoError(t, err, "re-call avec meme hub_user_id = idempotent no-op")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserRepository_BackfillHubUserID_Mismatch_ReturnsSentinel(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	// User existe avec hub_user_id DIFFERENT → UPDATE ne matche pas (clause
+	// WHERE refuse l'overwrite) → rows=0 → probe SELECT pour disambiguer.
+	mock.ExpectExec(`UPDATE users\s+SET hub_user_id`).
+		WithArgs("hub-uuid-NEW", "user-local-1").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	probeRows := sqlmock.NewRows([]string{"hub_user_id"}).AddRow("hub-uuid-OLD")
+	mock.ExpectQuery(`SELECT hub_user_id FROM users WHERE id = \$1`).
+		WithArgs("user-local-1").
+		WillReturnRows(probeRows)
+
+	err := repo.BackfillHubUserID(context.Background(), "user-local-1", "hub-uuid-NEW")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrHubUserIDMismatch),
+		"doit etre attrapable via errors.Is(ErrHubUserIDMismatch): %v", err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserRepository_BackfillHubUserID_UserMissing_ReturnsErrUserNotFound(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	// User n'existe pas du tout → UPDATE rows=0 → probe SELECT → ErrNoRows
+	// → ErrUserNotFound (PAS Mismatch).
+	mock.ExpectExec(`UPDATE users\s+SET hub_user_id`).
+		WithArgs("hub-uuid-1", "ghost-id").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectQuery(`SELECT hub_user_id FROM users WHERE id = \$1`).
+		WithArgs("ghost-id").
+		WillReturnError(sql.ErrNoRows)
+
+	err := repo.BackfillHubUserID(context.Background(), "ghost-id", "hub-uuid-1")
+	require.Error(t, err)
+	assert.IsType(t, &domain.ErrUserNotFound{}, err)
+	assert.False(t, errors.Is(err, domain.ErrHubUserIDMismatch),
+		"un user manquant n'est PAS un mismatch")
+}
+
+func TestUserRepository_BackfillHubUserID_EmptyInputs_Validation(t *testing.T) {
+	db, _, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	err := repo.BackfillHubUserID(context.Background(), "", "hub-uuid-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty user_id")
+
+	err = repo.BackfillHubUserID(context.Background(), "user-1", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty hub_user_id")
+}
+
+func TestUserRepository_BackfillHubUserID_DBError(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	mock.ExpectExec(`UPDATE users\s+SET hub_user_id`).
+		WithArgs("hub-uuid-1", "user-1").
+		WillReturnError(errors.New("connection refused"))
+
+	err := repo.BackfillHubUserID(context.Background(), "user-1", "hub-uuid-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "backfill hub_user_id")
 }

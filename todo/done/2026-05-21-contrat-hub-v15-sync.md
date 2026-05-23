@@ -208,3 +208,120 @@ reserves a d'autres tickets v1.5 (multi-membre, webhooks). VERSION = 46.0
 en HEAD apres rebase sur origin/veridian. Manager_test mockup aligne.
 
 Pas d'archivage `done/` — ticket reste pending tant que partie 2/2 pas livree.
+
+---
+
+## Réponse partie 2/2 — 2026-05-23 (agent Notifuse)
+
+**Statut : LIVRE — wiring code Go autour de V46 + refactor §5.22.4 no-downgrade. Ticket archivable.**
+
+### Livre (commit unique push origin/veridian)
+
+Fichiers touches :
+
+- **`internal/domain/user.go`** : ajout struct field `User.HubUserID *string`,
+  interface method `UserRepository.BackfillHubUserID(ctx, userID, hubUserID) error`,
+  sentinel `domain.ErrHubUserIDMismatch` (attrapable via `errors.Is` apres wrap).
+- **`internal/domain/user_test.go`** : tests `TestUser_HubUserIDDefault` (default nil
+  + binding explicite) + `TestErrHubUserIDMismatch_Sentinel` (assert
+  wrap-safe via `errors.Is(fmt.Errorf("...: %w", e), sentinel)`).
+- **`internal/domain/mocks/mock_user_repository.go`** : regenere via
+  `mockgen v1.6.0` (`github.com/golang/mock`). 13 → 14 methodes mockees.
+- **`internal/repository/user_postgres.go`** :
+  - Impl `BackfillHubUserID` : UPDATE conditionnel
+    `WHERE id=$2 AND (hub_user_id IS NULL OR hub_user_id = $1)` →
+    idempotent re-call meme valeur OK, mismatch refuse silencieusement
+    (rows=0) puis probe SELECT pour disambiguer `ErrUserNotFound` vs
+    `ErrHubUserIDMismatch`.
+  - `GetUserByEmail` + `GetUserByID` SELECT etendu colonne `hub_user_id`,
+    Scan dans `sql.NullString` puis pointer-copy vers `user.HubUserID`.
+- **`internal/repository/user_postgres_test.go`** : MAJ fixtures sqlmock
+  GetUserByEmail/ID (9 colonnes au lieu de 8, `nil` pour `hub_user_id`).
+  Ajout 6 tests tabulaires `TestUserRepository_BackfillHubUserID_*` :
+  NullColumn/MatchingValue/Mismatch/UserMissing/EmptyInputs/DBError.
+- **`internal/http/setup_handler_test.go`** : ajout stub `BackfillHubUserID`
+  sur `mockUserRepository` manuel (interface elargie, sinon le package
+  http ne compilait plus).
+- **`internal/service/veridian_service.go::AttachMember`** : refactor §5.22.4 :
+  - Si user existant (lookup par email §3.7) : appel best-effort
+    `BackfillHubUserID(member.ID, input.HubUserID)`. Si erreur
+    (`ErrHubUserIDMismatch` inclus), log warn + continue (jamais bloquant
+    — §3.7 : l'email reste la cle de jointure canonique cross-app).
+  - Si user nouveau cree : `User.HubUserID` rempli a la creation Go-side.
+  - Si user deja membre du workspace avec role DIFFERENT : retour direct
+    `already_member=true` avec **role LOCAL inchange**. PAS de
+    RemoveUserFromWorkspace+AddUserToWorkspace. Log info "role conflict
+    ignored, local role kept (§5.22.4)". Suppression complete de la
+    variable `alreadyMember` et du bloc remove+re-add.
+- **`internal/service/veridian_attach_member_service_test.go`** :
+  - `TestAttachMember_RoleConflict_UpdatesRole` **renomme** en
+    `TestAttachMember_RoleConflict_KeepsLocalRole` + assertions refondues
+    (`AlreadyMember: true`, `Role: "admin"` au lieu de `"member"`, aucune
+    expectation Remove/Add).
+  - Nouveau test `TestAttachMember_HubUserIDMismatch_NonBlocking` qui
+    stub `BackfillHubUserID` retournant `ErrHubUserIDMismatch` et asserte
+    que le flow complet d'attach continue (NoError, Attached=true).
+  - MAJ tests existants `ExistingUser_AttachedByEmail`,
+    `Idempotent_SameRole`, `PreHubTenant_NoPlanRow_Allowed` : ajout
+    expectation `BackfillHubUserID(...).Return(nil)` sur la branche user
+    existant.
+- **`internal/service/veridian_service_test.go`** : 2 tests colocalises
+  ajoutes pour le mapping CI 1-pour-1 (le check-test-mapping.sh exige le
+  test colocalise dans le `*_test.go` au meme niveau, pas dans un fichier
+  veridian-dedie) :
+  - `TestAttachMember_NoDowngradeOnRoleConflict` : assert role local
+    'admin' conserve sur invitation Hub 'member'. Aucune expectation
+    Remove/Add (gomock leverait Unexpected si appele).
+  - `TestAttachMember_BackfillMismatchDoesNotAbort` : assert non
+    propagation 500 quand backfill retourne mismatch.
+
+### Tests
+
+Suite unitaire complete verte (`go test ./internal/...`) :
+
+```
+ok  github.com/Notifuse/notifuse/internal/domain
+ok  github.com/Notifuse/notifuse/internal/http
+ok  github.com/Notifuse/notifuse/internal/repository
+ok  github.com/Notifuse/notifuse/internal/service (28.6s, broadcast 45s)
+```
+
+Pre-push `BASE_REF=HEAD bash scripts/ci/check-test-mapping.sh` :
+
+```
+✓ internal/domain/user.go → internal/domain/user_test.go (exports=0 tests=2)
+✓ internal/repository/user_postgres.go → internal/repository/user_postgres_test.go (exports=1 tests=6)
+✓ internal/service/veridian_service.go → internal/service/veridian_service_test.go (exports=0 tests=2)
+✓ Toutes les routes declarees ont un test (couverture 100%)
+✓ Mapping handler↔test OK (Go)
+```
+
+Fails uniquement : tests integration `tests/integration/*` qui exigent une
+DB locale port 5433 (connection refused) — sans rapport avec ce changement,
+deja en echec en absence de service docker.
+
+### Note de dette (a creuser une autre fois)
+
+`userRepository.CreateUser` n'INSERT actuellement pas la colonne
+`hub_user_id` (INSERT garde la signature originale a 7 colonnes). Le user
+nouveau cree par `AttachMember` recoit donc `HubUserID = &hubID` sur la
+struct Go en memoire, mais la colonne DB reste NULL apres l'INSERT.
+**Impact runtime : nul** — le prochain call `AttachMember` (re-invitation
+ou call cron) retrouvera ce user par email, son hub_user_id sera NULL en
+DB → `BackfillHubUserID` matchera la clause `IS NULL` et stockera la
+valeur. Auto-correction au 2e contact, jamais bloquant. A nettoyer dans
+un sprint dedie (simple INSERT etendu + adapter mocks `CreateUser`).
+
+### Archivage
+
+Toutes les actions §2 (P1) du ticket sont desormais livrees :
+- ✅ §2.1 attach-member endpoint (lot B 2026-05-21)
+- ✅ §2.1bis route alias workspace-level (partie 1/2, commit e4cf5433)
+- ✅ §2.2 colonne `users.hub_user_id` (partie 1/2 — migration V46)
+- ✅ §2.2bis wiring code Go autour de V46 (partie 2/2, ce commit)
+- ✅ §5.22.4 no-downgrade refactor (partie 2/2, ce commit)
+- ⏳ §2.3 secret HMAC staging — action cote Hub, non bloquant cote Notifuse
+
+Le ticket peut etre archive dans `todo/done/` apres merge de ce commit. Les
+sections §3 (P2) restent suivies par les tickets dedies existants
+(`2026-05-19-v13-multi-membre-cross-app.md`, `2026-05-19-webhooks-manquants.md`).

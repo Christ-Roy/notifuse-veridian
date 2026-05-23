@@ -150,6 +150,13 @@ func (m *mockUserRepository) MarkVeridianManaged(ctx context.Context, email stri
 	return nil
 }
 
+// === Veridian patch V46 === Stub pour satisfaire l'interface
+// UserRepository elargie (CONTRAT-HUB §3.7). Pas utilise par les tests
+// setup/settings — ces flows ne touchent pas au binding Hub cross-app.
+func (m *mockUserRepository) BackfillHubUserID(ctx context.Context, userID, hubUserID string) error {
+	return nil
+}
+
 func TestSetupHandler_Status(t *testing.T) {
 	tests := []struct {
 		name           string

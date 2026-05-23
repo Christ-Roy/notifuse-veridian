@@ -1,10 +1,13 @@
 package domain
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestUser(t *testing.T) {
@@ -115,4 +118,36 @@ func TestUser_VeridianManagedDefault(t *testing.T) {
 		VeridianManaged: true,
 	}
 	assert.True(t, managed.VeridianManaged)
+}
+
+// === Veridian patch === Smoke test sur le champ HubUserID (V46,
+// CONTRAT-HUB §3.7). Verifie default nil + binding explicite quand le user
+// a ete backfille via /provision ou /attach-member.
+func TestUser_HubUserIDDefault(t *testing.T) {
+	u := User{ID: "u-1", Email: "human@x.test", Type: UserTypeUser}
+	assert.Nil(t, u.HubUserID, "default doit etre nil (pre-V46 / pas encore backfille)")
+
+	hubID := "hub-user-uuid-abc"
+	bound := User{
+		ID:        "u-2",
+		Email:     "alice@example.com",
+		Type:      UserTypeUser,
+		HubUserID: &hubID,
+	}
+	require.NotNil(t, bound.HubUserID)
+	assert.Equal(t, "hub-user-uuid-abc", *bound.HubUserID)
+}
+
+// === Veridian patch === ErrHubUserIDMismatch est une sentinel `errors.Is`
+// qui signale qu'on tente d'ecraser le hub_user_id existant d'un user local
+// avec une valeur differente. Le repository la renvoie via BackfillHubUserID,
+// le service doit l'attraper en non-bloquant et logger warn (cf CONTRAT-HUB
+// §3.7 — l'email reste la cle canonique, le binding hub_user_id est
+// informationnel).
+func TestErrHubUserIDMismatch_Sentinel(t *testing.T) {
+	assert.NotNil(t, ErrHubUserIDMismatch)
+	assert.Contains(t, ErrHubUserIDMismatch.Error(), "hub_user_id")
+
+	wrapped := fmt.Errorf("backfill hub_user_id: %w", ErrHubUserIDMismatch)
+	assert.True(t, errors.Is(wrapped, ErrHubUserIDMismatch), "doit etre attrapable via errors.Is meme apres wrap")
 }

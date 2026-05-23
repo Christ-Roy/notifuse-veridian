@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -47,6 +48,15 @@ type User struct {
 	// them silently breaks the Hub→Notifuse magic-link flow. Backfilled by
 	// migration V32 based on the `veridian-api-*` email prefix.
 	VeridianManaged bool `json:"veridian_managed,omitempty" db:"veridian_managed"`
+
+	// === Veridian patch === HubUserID is the canonical user id minted by the
+	// Veridian Hub (`hub_app.users.id`) backfilled at the first cross-app
+	// contact (provision / attach-member / sync-member). Nullable because
+	// pre-V46 users existed before the Hub was introduced and because some
+	// internal users (root, veridian-api-* api keys) have no Hub counterpart.
+	// Invariant V46 : a given hub_user_id is bound to at most one Notifuse
+	// user (CONTRAT-HUB §3.7) — enforced applicatively by BackfillHubUserID.
+	HubUserID *string `json:"hub_user_id,omitempty" db:"hub_user_id"`
 }
 
 // Session represents a user session
@@ -158,6 +168,17 @@ type UserRepository interface {
 	// managed user is a no-op. Called by VeridianService.Provision right
 	// after CreateAPIKey to lock down the freshly-minted api_key user.
 	MarkVeridianManaged(ctx context.Context, email string) error
+
+	// === Veridian patch === BackfillHubUserID stores the Hub-issued user id
+	// on a local Notifuse user (CONTRAT-HUB §3.7). Best-effort, conditional :
+	//   - row hub_user_id IS NULL → set to hubUserID
+	//   - row hub_user_id = hubUserID → no-op (idempotent re-call)
+	//   - row hub_user_id ≠ hubUserID → returns ErrHubUserIDMismatch (caller
+	//     is expected to log+warn, NOT to abort the parent operation : the
+	//     cross-app binding is informational only, the email remains the
+	//     canonical join key per §3.7).
+	// ErrUserNotFound when the user id does not exist locally.
+	BackfillHubUserID(ctx context.Context, userID, hubUserID string) error
 }
 
 // ErrUserNotFound is returned when a user is not found
@@ -186,3 +207,11 @@ type ErrSessionNotFound struct {
 func (e *ErrSessionNotFound) Error() string {
 	return e.Message
 }
+
+// === Veridian patch === ErrHubUserIDMismatch is returned by
+// UserRepository.BackfillHubUserID when the row already has a hub_user_id
+// distinct from the one being written. The contract V46 invariant forbids
+// silent overwrite of an existing Hub-side identity binding ; callers must
+// log+continue (cross-app sync is best-effort, email remains the canonical
+// join key per CONTRAT-HUB §3.7), NOT abort the parent operation.
+var ErrHubUserIDMismatch = errors.New("hub_user_id mismatch: refusing to overwrite an existing binding")

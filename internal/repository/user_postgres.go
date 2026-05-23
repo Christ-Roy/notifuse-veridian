@@ -67,11 +67,14 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 	var user domain.User
 	// === Veridian patch === SELECT veridian_managed pour que le service
 	// RemoveMember puisse refuser 403 sur les api_key gérées par le Hub.
+	// SELECT hub_user_id (V46, CONTRAT-HUB §3.7) pour exposer le binding
+	// Hub-side cross-app aux services qui en ont besoin (debug, audit).
 	query := `
-		SELECT id, email, name, type, language, created_at, updated_at, veridian_managed
+		SELECT id, email, name, type, language, created_at, updated_at, veridian_managed, hub_user_id
 		FROM users
 		WHERE email = $1
 	`
+	var hubUserID sql.NullString
 	err := r.systemDB.QueryRowContext(ctx, query, email).Scan(
 		&user.ID,
 		&user.Email,
@@ -81,12 +84,17 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&user.VeridianManaged,
+		&hubUserID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, &domain.ErrUserNotFound{Message: "user not found"}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	if hubUserID.Valid {
+		v := hubUserID.String
+		user.HubUserID = &v
 	}
 	return &user, nil
 }
@@ -100,12 +108,15 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 	var user domain.User
 	// === Veridian patch === SELECT veridian_managed pour que le service
 	// RemoveMember puisse refuser 403 sur les api_key gérées par le Hub.
+	// SELECT hub_user_id (V46, CONTRAT-HUB §3.7) pour exposer le binding
+	// Hub-side cross-app aux services qui en ont besoin (debug, audit).
 	query := `
-		SELECT id, email, name, type, language, created_at, updated_at, veridian_managed
+		SELECT id, email, name, type, language, created_at, updated_at, veridian_managed, hub_user_id
 		FROM users
 		WHERE id = $1
 	`
 	startTime := time.Now()
+	var hubUserID sql.NullString
 	err := r.systemDB.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
 		&user.Email,
@@ -115,6 +126,7 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&user.VeridianManaged,
+		&hubUserID,
 	)
 	queryDuration := time.Since(startTime)
 
@@ -140,6 +152,11 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 
 	// Add user email to span
 	span.AddAttributes(trace.StringAttribute("user.email", user.Email))
+
+	if hubUserID.Valid {
+		v := hubUserID.String
+		user.HubUserID = &v
+	}
 
 	return &user, nil
 }
@@ -386,4 +403,58 @@ func (r *userRepository) MarkVeridianManaged(ctx context.Context, email string) 
 		return &domain.ErrUserNotFound{Message: "user not found"}
 	}
 	return nil
+}
+
+// === Veridian patch === BackfillHubUserID lie un user Notifuse local a son
+// id source-of-truth Hub (CONTRAT-HUB §3.7, migration V46). Idempotent et
+// non destructif :
+//
+//   - SET conditionne sur (hub_user_id IS NULL OR hub_user_id = $1) → un
+//     re-call avec la meme valeur est no-op silencieux, mais on refuse
+//     d'ecraser une valeur differente preexistante.
+//   - 0 row affected → on disambigue : soit le user n'existe pas
+//     (ErrUserNotFound), soit il existe avec un hub_user_id DIFFERENT
+//     (ErrHubUserIDMismatch). Le caller est tenu de logger warn et
+//     **continuer** : le lien Hub est informationnel, pas un blocker (§3.7).
+//   - Met aussi updated_at = NOW() pour tracer la mutation cross-app.
+//
+// Concurrence : conditionnel WHERE clause = idempotent sous race
+// (PostgreSQL serialise via row lock implicit du UPDATE).
+func (r *userRepository) BackfillHubUserID(ctx context.Context, userID, hubUserID string) error {
+	if userID == "" {
+		return fmt.Errorf("backfill hub_user_id: empty user_id")
+	}
+	if hubUserID == "" {
+		return fmt.Errorf("backfill hub_user_id: empty hub_user_id")
+	}
+	const q = `
+		UPDATE users
+		SET hub_user_id = $1, updated_at = NOW()
+		WHERE id = $2 AND (hub_user_id IS NULL OR hub_user_id = $1)
+	`
+	result, err := r.systemDB.ExecContext(ctx, q, hubUserID, userID)
+	if err != nil {
+		return fmt.Errorf("backfill hub_user_id: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("backfill hub_user_id rows: %w", err)
+	}
+	if rows == 1 {
+		return nil
+	}
+	// 0 rows → disambigue : user manquant vs mismatch.
+	var existing sql.NullString
+	probe := `SELECT hub_user_id FROM users WHERE id = $1`
+	if err := r.systemDB.QueryRowContext(ctx, probe, userID).Scan(&existing); err != nil {
+		if err == sql.ErrNoRows {
+			return &domain.ErrUserNotFound{Message: "user not found"}
+		}
+		return fmt.Errorf("backfill hub_user_id probe: %w", err)
+	}
+	// User existe → c'est un mismatch (rows=0 + clause WHERE n'a pas matche).
+	// Note : si existing.Valid == false on aurait du matcher (clause IS NULL)
+	// donc on est forcement dans le cas existing.Valid && existing.String != $1.
+	return fmt.Errorf("backfill hub_user_id: %w (existing=%q, requested=%q)",
+		domain.ErrHubUserIDMismatch, existing.String, hubUserID)
 }

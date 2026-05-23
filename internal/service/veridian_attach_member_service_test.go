@@ -137,6 +137,9 @@ func TestAttachMember_ExistingUser_AttachedByEmail(t *testing.T) {
 	// User trouvé par email
 	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(hubMemberUser(), nil)
 
+	// V46 §3.7 : backfill best-effort du hub_user_id sur user existant.
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").Return(nil)
+
 	// Pas encore dans user_workspaces
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-1").
 		Return(nil, sql.ErrNoRows)
@@ -179,6 +182,9 @@ func TestAttachMember_Idempotent_SameRole_Returns200AlreadyMember(t *testing.T) 
 
 	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(hubMemberUser(), nil)
 
+	// V46 §3.7 : backfill best-effort du hub_user_id.
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").Return(nil)
+
 	// Déjà dans user_workspaces avec le même role
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-1").
 		Return(workspaceMemberEntry("user-hub-1", "ws-1", "member"), nil)
@@ -198,7 +204,18 @@ func TestAttachMember_Idempotent_SameRole_Returns200AlreadyMember(t *testing.T) 
 	assert.Equal(t, "member", resp.Role)
 }
 
-func TestAttachMember_RoleConflict_UpdatesRole(t *testing.T) {
+// TestAttachMember_RoleConflict_KeepsLocalRole — CONTRAT-HUB §5.22.4
+// (refactor 2026-05-23) : le Hub n'est PAS autoritatif sur les roles
+// internes Notifuse. Si un user est deja membre du workspace avec un
+// role DIFFERENT de celui demande par le Hub, on retourne 200
+// already_member=true en CONSERVANT le role local intact. PAS de UPDATE
+// remove+re-add (downgrade silencieux d'un admin local interdit).
+//
+// Cas concret : un user a ete promu "owner" en local via Team Settings,
+// puis le Hub renvoie une invitation "member" pour ce meme user → on doit
+// garder son "owner" local. Sans cette protection, l'invitation Hub
+// retroactive ecraserait silencieusement le role local souverain.
+func TestAttachMember_RoleConflict_KeepsLocalRole(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
@@ -215,42 +232,90 @@ func TestAttachMember_RoleConflict_UpdatesRole(t *testing.T) {
 
 	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(hubMemberUser(), nil)
 
-	// Dans user_workspaces avec un role DIFFERENT (admin → on veut member)
+	// V46 §3.7 : backfill best-effort du hub_user_id.
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").Return(nil)
+
+	// Deja dans user_workspaces avec un role LOCAL DIFFERENT (admin local
+	// souverain — promu via UI Team Settings) que celui demande par Hub.
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-1").
 		Return(workspaceMemberEntry("user-hub-1", "ws-1", "admin"), nil)
 
-	// Résolution owner
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
-		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
-
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
-
-	// Remove (role update) + Add (new role)
-	m.workspace.EXPECT().RemoveUserFromWorkspace(gomock.Any(), "ws-1", "user-hub-1").Return(nil)
-	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "user-hub-1", "member", gomock.Any()).
-		Return(nil)
-
-	// Webhook tenant.member_role_changed emit sur role update via Hub (§5.18.4).
-	// Asserter old_role/new_role pour valider la trace audit cote Hub.
-	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberRoleChanged, "ws-1", gomock.Any()).
-		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
-			assert.Equal(t, "alice@example.com", data["user_email"])
-			assert.Equal(t, "admin", data["old_role"])
-			assert.Equal(t, "member", data["new_role"])
-			assert.Equal(t, "hub", data["changed_by"])
-		}).Times(1)
-
-	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+	// ⚠️ Le service NE DOIT PAS appeler RemoveUserFromWorkspace ni
+	// AddUserToWorkspace ni CreateSession ni emitter.Emit (pas de mutation,
+	// sortie already_member anticipee — l'emit role_changed historique du
+	// lot M est aussi supprime du flow AttachMember car le role local n'est
+	// jamais mute via Hub depuis §5.22.4). Mocks gomock leveront un
+	// "Unexpected call" si une de ces methodes est invoquee.
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-1",
 		HubUserID:    "user-hub-1",
 		HubUserEmail: "alice@example.com",
-		Role:         domain.AttachMemberRoleMember,
+		Role:         domain.AttachMemberRoleMember, // Hub demande "member"
 	})
 	require.NoError(t, err)
 	assert.True(t, resp.Attached)
-	assert.False(t, resp.AlreadyMember) // ce n'est PAS already_member (role a changé)
+	assert.True(t, resp.AlreadyMember, "doit etre already_member=true (no-downgrade §5.22.4)")
+	assert.Equal(t, "admin", resp.Role, "role LOCAL conserve, pas ecrase par le Hub (§5.22.4)")
+}
+
+// TestAttachMember_HubUserIDMismatch_NonBlocking — CONTRAT-HUB §3.7 :
+// BackfillHubUserID peut retourner ErrHubUserIDMismatch si le user local
+// est deja lie a un hub_user_id DIFFERENT (cas rare : email canonique
+// partage entre 2 identites Hub-side, par exemple si quelqu'un a re-signe
+// up cote Hub avec le meme email apres delete). Dans ce cas, le service
+// doit LOGGER + CONTINUER (l'email reste la cle de jointure canonique).
+// Aucune erreur 500 ne doit etre propagee a l'appelant Hub.
+func TestAttachMember_HubUserIDMismatch_NonBlocking(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-mismatch").
+		Return(&domain.Workspace{ID: "ws-mismatch"}, nil)
+	m.planRepo.EXPECT().Get(ctx, "ws-mismatch").Return(nil, sql.ErrNoRows)
+
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").
+		Return(hubMemberUser(), nil)
+
+	// V46 §3.7 : Backfill retourne ErrHubUserIDMismatch (binding existant
+	// different) → le service log warn et continue, surtout PAS d'erreur
+	// retournee. La suite du flow doit s'executer normalement.
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").
+		Return(domain.ErrHubUserIDMismatch)
+
+	// Le flow attach continue comme un user nouveau a brancher.
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-mismatch").
+		Return(nil, sql.ErrNoRows)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-mismatch").
+		Return([]*domain.UserWorkspaceWithEmail{
+			{
+				UserWorkspace: domain.UserWorkspace{
+					UserID:      "owner-mismatch",
+					WorkspaceID: "ws-mismatch",
+					Role:        "owner",
+				},
+				Email: "owner@ws.test",
+			},
+		}, nil)
+	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.workspace.EXPECT().
+		AddUserToWorkspace(gomock.Any(), "ws-mismatch", "user-hub-1", "member", gomock.Any()).
+		Return(nil)
+	// Webhook member_added emis sur attach neuf (post lot M §7.1) — present
+	// meme apres ErrHubUserIDMismatch puisque le flow continue normalement.
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-mismatch", gomock.Any()).Times(1)
+	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+
+	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-mismatch",
+		HubUserID:    "user-hub-1",
+		HubUserEmail: "alice@example.com",
+		Role:         domain.AttachMemberRoleMember,
+	})
+	require.NoError(t, err, "ErrHubUserIDMismatch doit etre non-bloquant (cross-app sync best-effort §3.7)")
+	require.NotNil(t, resp)
+	assert.True(t, resp.Attached)
+	assert.False(t, resp.AlreadyMember)
 	assert.Equal(t, "member", resp.Role)
 }
 
@@ -383,6 +448,8 @@ func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 	m.planRepo.EXPECT().Get(ctx, "ws-prehub").Return(nil, sql.ErrNoRows) // pas de plan row
 
 	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(hubMemberUser(), nil)
+	// V46 §3.7 : backfill best-effort sur user existant.
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").Return(nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-prehub").
 		Return(nil, sql.ErrNoRows)
 
