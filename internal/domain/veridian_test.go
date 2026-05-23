@@ -86,6 +86,19 @@ func TestVeridianEvent_LifecycleConstants(t *testing.T) {
 	assert.Equal(t, "tenant.deleted", string(EventTenantDeleted))
 }
 
+// TestVeridianEvent_MembershipConstants — invariant sur les noms des events
+// emis app → Hub pour les mutations de membres (CONTRAT-HUB §5.18.4 + §7.1).
+// Si ces strings changent, le consommateur Hub
+// (`POST /api/webhooks/notifuse`) casse en silence (event_type inconnu).
+func TestVeridianEvent_MembershipConstants(t *testing.T) {
+	assert.Equal(t, "tenant.member_added", string(EventTenantMemberAdded),
+		"CONTRAT-HUB §7.1 — colonne 'Event' table 7.1")
+	assert.Equal(t, "tenant.member_removed", string(EventTenantMemberRemoved),
+		"CONTRAT-HUB §7.1")
+	assert.Equal(t, "tenant.member_role_changed", string(EventTenantMemberRoleChanged),
+		"CONTRAT-HUB §5.18.4 + §7.1")
+}
+
 func TestVeridianPlan_LifecycleFields(t *testing.T) {
 	// Verifie que les nouveaux champs V34 sont bien des pointeurs (null-safe
 	// pour les tenants pre-V34 qui n'ont jamais ete touche/restore/purge).

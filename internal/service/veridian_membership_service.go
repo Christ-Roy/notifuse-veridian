@@ -17,7 +17,18 @@ package service
 //
 // freeze/unfreeze (§5.21) non livre : exige un mecanisme paywall per-user
 // que Notifuse n'a pas (paywall middleware tenant-level). Ticket de suivi
-// requis pour activer une fois le quota seats live cote Hub.
+// requis pour activer une fois le quota seats live cote Hub. Cf. note Option B
+// dans le ticket todo/2026-05-19-v13-multi-membre-cross-app.md : le default
+// conservateur §5.21.4 (Hub bloque les invitations au-dela du seat-limit)
+// suffit comme protection minimale tant que le Hub n'emet pas
+// `tenant.member_frozen` cross-app.
+//
+// Webhooks app → Hub (§5.18.4 + §7.1) : SyncMember/RestoreMember emettent
+// `tenant.member_added`, RemoveMember emet `tenant.member_removed`. L'event
+// `tenant.member_role_changed` est emis cote AttachMember
+// (veridian_service.go) quand un role est promu via Hub invitation — seul
+// site Notifuse qui modifie un role existant (SyncMember est additif
+// uniquement, donc pas concerne).
 
 import (
 	"context"
@@ -168,6 +179,19 @@ func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMembe
 		}).Info("veridian SyncMember: member attached")
 	}
 
+	// Webhook app → Hub (CONTRAT-HUB §7.1) : tenant.member_added emit uniquement
+	// sur nouveau attach (idempotent replay ci-dessus a deja return sans
+	// passer ici). Best-effort, non bloquant (goroutine + retry interne).
+	if s.emitter != nil {
+		s.emitter.Emit(ctx, domain.EventTenantMemberAdded, input.TenantID, map[string]interface{}{
+			"user_email":  input.UserEmail,
+			"role":        "member",
+			"hub_user_id": input.HubUserID,
+			"app_user_id": member.ID,
+			"actor":       "hub", // §5.18.3 : appele par script admin Hub
+		})
+	}
+
 	s.touchHubSync(ctx, input.TenantID)
 
 	return &domain.SyncMemberResponse{
@@ -290,6 +314,18 @@ func (s *veridianService) RemoveMember(ctx context.Context, input domain.RemoveM
 		}).Info("veridian RemoveMember: member removed from workspace")
 	}
 
+	// Webhook app → Hub (CONTRAT-HUB §7.1) : tenant.member_removed emit sur
+	// hard delete reussi uniquement (pas sur les short-circuits idempotents
+	// ci-dessus, ni sur ErrCannotRemoveOwner). Best-effort, non bloquant.
+	if s.emitter != nil {
+		s.emitter.Emit(ctx, domain.EventTenantMemberRemoved, input.TenantID, map[string]interface{}{
+			"user_email":  input.UserEmail,
+			"reason":      input.Reason,
+			"app_user_id": member.ID,
+			"actor":       "hub", // §5.19.2 : appele par script admin Hub
+		})
+	}
+
 	s.touchHubSync(ctx, input.TenantID)
 
 	return &domain.RemoveMemberResponse{
@@ -406,6 +442,20 @@ func (s *veridianService) RestoreMember(ctx context.Context, input domain.Restor
 			"user_email": input.UserEmail,
 			"user_id":    member.ID,
 		}).Info("veridian RestoreMember: member restored to workspace")
+	}
+
+	// Webhook app → Hub (CONTRAT-HUB §7.1) : tenant.member_added emit sur
+	// restore reussi uniquement (le short-circuit "deja membre" ci-dessus a
+	// deja return sans passer ici). Du point de vue Hub, un restore est
+	// equivalent a un add — meme event, payload `actor=hub`.
+	if s.emitter != nil {
+		s.emitter.Emit(ctx, domain.EventTenantMemberAdded, input.TenantID, map[string]interface{}{
+			"user_email":  input.UserEmail,
+			"role":        "member",
+			"app_user_id": member.ID,
+			"actor":       "hub", // §5.20 : appele par script admin Hub
+			"restored":    true,  // distingue un restore d'un add neuf
+		})
 	}
 
 	s.touchHubSync(ctx, input.TenantID)

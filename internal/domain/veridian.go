@@ -1015,6 +1015,32 @@ const (
 	// consomme ce signal pour démarrer le timer trial 2j → 15j. L'idempotence
 	// est garantie côté DB (activity_threshold_reached_at IS NULL gate).
 	EventTenantActivityThresholdReached VeridianEvent = "tenant.activity_threshold_reached"
+
+	// === v1.3 Multi-membre — webhooks app → Hub (CONTRAT-HUB §5.18.4 + §7.1) ===
+	//
+	// Ces 3 events informent le Hub des mutations de membres COTE APP. Le Hub
+	// n'est PAS autoritatif sur les roles internes — il consomme ces signaux a
+	// titre d'audit (cf §3.5 + §5.18.4).
+	//
+	// Sites d'emission :
+	//   - EventTenantMemberAdded   : SyncMember (nouveau attach), RestoreMember
+	//                                (re-attach apres soft remove), AttachMember
+	//                                (workspace-level, premier attach via Hub).
+	//   - EventTenantMemberRemoved : RemoveMember (hard delete user_workspaces).
+	//   - EventTenantMemberRoleChanged : AttachMember (role update via Hub
+	//                                invitation — le seul site Notifuse qui
+	//                                modifie un role existant). Pas emis depuis
+	//                                SyncMember (additif uniquement, pas de
+	//                                downgrade owner → member).
+	//
+	// Payload `data` (cf §7.1 du contrat) :
+	//   member_added   : {user_email, role, hub_user_id?, app_user_id, actor?}
+	//   member_removed : {user_email, reason?, hub_user_id?, app_user_id}
+	//   member_role_changed : {user_email, old_role, new_role, changed_by?,
+	//                          hub_user_id?, app_user_id}
+	EventTenantMemberAdded       VeridianEvent = "tenant.member_added"
+	EventTenantMemberRemoved     VeridianEvent = "tenant.member_removed"
+	EventTenantMemberRoleChanged VeridianEvent = "tenant.member_role_changed"
 )
 
 // ActivityThresholdEmails est le nombre de mails envoyés cumulés qui déclenche

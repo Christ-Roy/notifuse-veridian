@@ -1730,6 +1730,8 @@ func TestAttachMember_GeneratesUUIDNotHubUserID(t *testing.T) {
 	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-uuid", gomock.Any(), "member", gomock.Any()).
 		Return(nil)
+	// Webhook tenant.member_added emit sur new attach (§7.1).
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-uuid", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
 	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
@@ -1775,6 +1777,8 @@ func TestAttachMember_RoleAdminMappedToMember(t *testing.T) {
 	m.workspace.EXPECT().
 		AddUserToWorkspace(gomock.Any(), "ws-rolemap", gomock.Any(), "member", gomock.Any()).
 		Return(nil)
+	// Webhook tenant.member_added emit sur new attach (§7.1).
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-rolemap", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{

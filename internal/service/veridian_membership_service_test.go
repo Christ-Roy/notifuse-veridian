@@ -82,6 +82,9 @@ func TestSyncMember_NewUser_CreatedAndAttached(t *testing.T) {
 	// AddUserToWorkspace.
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", gomock.Any(), "member", gomock.Any()).Return(nil)
 
+	// Webhook tenant.member_added emit sur new attach (§7.1).
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
+
 	// Cleanup.
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
@@ -108,6 +111,7 @@ func TestSyncMember_ExistingUser_AttachedByEmail(t *testing.T) {
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
 	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "member-uuid-1", "member", gomock.Any()).Return(nil)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
 	resp, err := svc.SyncMember(ctx, domain.SyncMemberInput{
@@ -209,6 +213,16 @@ func TestRemoveMember_Success_HardDeletes(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").
 		Return(membershipEntry("member-uuid-1", "ws-1", "member"), nil)
 	m.workspaceRepo.EXPECT().RemoveUserFromWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil)
+
+	// Webhook tenant.member_removed emit sur hard delete reussi (§7.1).
+	// Asserter sur le payload : reason + actor + user_email obligatoires.
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberRemoved, "ws-1", gomock.Any()).
+		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			assert.Equal(t, "alice@example.com", data["user_email"])
+			assert.Equal(t, "admin_action", data["reason"])
+			assert.Equal(t, "hub", data["actor"])
+			assert.Equal(t, "member-uuid-1", data["app_user_id"])
+		}).Times(1)
 
 	resp, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{
 		TenantID:  "ws-1",
@@ -319,6 +333,12 @@ func TestRestoreMember_Success_NewUser(t *testing.T) {
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
 	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", gomock.Any(), "member", gomock.Any()).Return(nil)
+	// Webhook tenant.member_added emit sur restore reussi (§7.1).
+	// Le payload doit contenir restored:true pour distinguer d'un add neuf.
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).
+		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			assert.Equal(t, true, data["restored"], "restored:true distingue restore d'un add neuf")
+		}).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
 	resp, err := svc.RestoreMember(ctx, domain.RestoreMemberInput{
@@ -341,6 +361,7 @@ func TestRestoreMember_Success_ExistingUser(t *testing.T) {
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
 	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "member-uuid-1", "member", gomock.Any()).Return(nil)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
 	_, err := svc.RestoreMember(ctx, domain.RestoreMemberInput{

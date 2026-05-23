@@ -1842,8 +1842,13 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 	// Step 4 : lookup user_workspaces pour décider idempotence / UPDATE.
 	existing, lookupErr := s.workspaceRepo.GetUserWorkspace(ctx, member.ID, input.TenantID)
 	alreadyMember := false
+	// oldRole : conserve pour emettre tenant.member_role_changed quand un
+	// role est promu/abaisse via AttachMember (CONTRAT-HUB §5.18.4). Vide si
+	// pas de membre preexistant (cas member_added pur).
+	oldRole := ""
 	if lookupErr == nil && existing != nil {
 		alreadyMember = true
+		oldRole = existing.Role
 		if existing.Role == targetRole {
 			// Idempotent : même role → 200 already_member=true sans aucun effet.
 			loginURL, _, _ := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, input.TenantID, input.HubUserEmail)
@@ -1960,6 +1965,35 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 			"already_member": alreadyMember,
 			"invitation_id":  input.InvitationID,
 		}).Info("veridian AttachMember: member attached")
+	}
+
+	// Webhook app → Hub (CONTRAT-HUB §5.18.4 + §7.1) :
+	// - Si alreadyMember && oldRole != targetRole → role_changed (UPDATE).
+	//   En pratique avec le mapping actuel targetRole="member" toujours, ce
+	//   cas n'arrive que si un owner repassait member via Hub (workflow
+	//   improbable). On garde l'emit defensif au cas ou le mapping evolue.
+	// - Si !alreadyMember → member_added (INSERT neuf).
+	// Pas d'emit sur le short-circuit "same role" (idempotent return ci-dessus).
+	if s.emitter != nil {
+		if alreadyMember {
+			s.emitter.Emit(ctx, domain.EventTenantMemberRoleChanged, input.TenantID, map[string]interface{}{
+				"user_email":  input.HubUserEmail,
+				"old_role":    oldRole,
+				"new_role":    targetRole,
+				"hub_user_id": input.HubUserID,
+				"app_user_id": member.ID,
+				"changed_by":  "hub", // §5.22 : invitation via Hub
+			})
+		} else {
+			s.emitter.Emit(ctx, domain.EventTenantMemberAdded, input.TenantID, map[string]interface{}{
+				"user_email":    input.HubUserEmail,
+				"role":          targetRole,
+				"hub_user_id":   input.HubUserID,
+				"app_user_id":   member.ID,
+				"actor":         "hub",
+				"invitation_id": input.InvitationID, // audit cross-app (§5.22.5)
+			})
+		}
 	}
 
 	// Marquer le sync Hub réussi (best-effort).

@@ -89,6 +89,17 @@ func TestAttachMember_NewUser_CreatedAndAttached(t *testing.T) {
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", gomock.Any(), "member", gomock.Any()).
 		Return(nil)
 
+	// Webhook tenant.member_added emit sur new attach (§7.1).
+	// Assert sur invitation_id pour valider l'audit cross-app §5.22.5.
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).
+		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			assert.Equal(t, "alice@example.com", data["user_email"])
+			assert.Equal(t, "member", data["role"])
+			assert.Equal(t, "user-hub-1", data["hub_user_id"])
+			assert.Equal(t, "inv-xyz", data["invitation_id"])
+			assert.Equal(t, "hub", data["actor"])
+		}).Times(1)
+
 	// Session cleanup
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
@@ -137,6 +148,7 @@ func TestAttachMember_ExistingUser_AttachedByEmail(t *testing.T) {
 	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "user-hub-1", "member", gomock.Any()).
 		Return(nil)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
@@ -217,6 +229,16 @@ func TestAttachMember_RoleConflict_UpdatesRole(t *testing.T) {
 	m.workspace.EXPECT().RemoveUserFromWorkspace(gomock.Any(), "ws-1", "user-hub-1").Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "user-hub-1", "member", gomock.Any()).
 		Return(nil)
+
+	// Webhook tenant.member_role_changed emit sur role update via Hub (§5.18.4).
+	// Asserter old_role/new_role pour valider la trace audit cote Hub.
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberRoleChanged, "ws-1", gomock.Any()).
+		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			assert.Equal(t, "alice@example.com", data["user_email"])
+			assert.Equal(t, "admin", data["old_role"])
+			assert.Equal(t, "member", data["new_role"])
+			assert.Equal(t, "hub", data["changed_by"])
+		}).Times(1)
 
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
@@ -375,6 +397,7 @@ func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 	// owner or member').
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-prehub", "user-hub-1", "member", gomock.Any()).
 		Return(nil)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-prehub", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
