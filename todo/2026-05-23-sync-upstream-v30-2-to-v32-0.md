@@ -160,11 +160,11 @@ Une fois les 10 commits traités :
 | v30.2 | 9d1b5a96 | ✅ PRIS | preview email subjects with compile endpoint. Touche template_compilation + TemplatePreviewDrawer. Pas de conflit. |
 | v30.2 | d50c83a6 | ✅ PRIS | openapi.yaml — docs API. Pas de conflit. |
 | v30.2 | 8aaae0e1 | ✅ PRIS | openapi.json — docs API. Pas de conflit. |
-| v30.3 | 57a42d69 | ⬜ | (à traiter) |
-| v31.0 | f5f144f7 | ⬜ | (à traiter) |
-| v31.0 | eb1ead06 | ⬜ | (à traiter) |
-| v31.0 | f9741fc8 | ⬜ | (à traiter) |
-| v32.0 | 7a42651d | ⬜ | (à traiter) |
+| v30.3 | 57a42d69 | ✅ PRIS | fix utm params (Liquid). Conflit config.go résolu en gardant VERSION=41.0. |
+| v31.0 | f5f144f7 | ✅ PRIS | pool ping (DB connection pool). Conflit config.go résolu en gardant VERSION=41.0. |
+| v31.0 | eb1ead06 | ⏭️ SKIP | triggers loop. Conflit majeur : on a déjà notre V31Migration custom (backfill veridian_plan). Le SQL fix sur `queue_contact_for_segment_recomputation` reste **pending** — à appliquer dans une future migration Veridian (V42 ou V43) avec rodage staging. **Ticket follow-up** : enregistré dans ce ticket section "Reste à faire post-sync". |
+| v31.0 | f9741fc8 | ⏭️ SKIP | cleaning. Suppression de fichiers plans/* JSON qui n'existent pas dans notre fork. No-op chez nous. |
+| v32.0 | 7a42651d | ✅ PRIS (adapté) | translate system emails. Conflit majeur sur V32Migration (on a déjà users.veridian_managed). Résolu en **combinant** les 2 ALTER TABLE dans v32.go (veridian_managed + language). Conflits SQL queries résolus en combinant les colonnes des SELECT (user_postgres + workspace_postgres). CHANGELOG et user_service.go fusionnés (UpdateUserLanguage co-existe avec GenerateMagicCodeForVeridian + CreateAutoLoginSession). |
 
 ---
 
@@ -190,3 +190,45 @@ polish UI + 2 incidents prod résolus).
   pas créer un nouveau ticket.
 - Pattern `veridian_*.{go,tsx}` flat (CLAUDE.md Notifuse) :
   upstream ne touche jamais ces fichiers, ils sont safe.
+
+---
+
+## Reste à faire post-sync (follow-up)
+
+### 🔴 V31 upstream trigger fix — non appliqué
+
+Le commit upstream `eb1ead06` (v31.0 "triggers loop") corrige un bug
+de boucle infinie sur la fonction Postgres
+`queue_contact_for_segment_recomputation()` : le trigger se déclenchait
+sur ses propres écritures de `contact_timeline` (kind=segment.joined/left)
+et bouclait sur la file `contact_segment_queue`, gaspillant des cycles
+worker et provoquant des contentions sous charge broadcast.
+
+**Pourquoi non appliqué dans cette session** :
+- L'upstream livre la correction comme une migration `internal/migrations/v31.go`
+- On a déjà notre propre `V31Migration` (backfill veridian_plan)
+- Cherry-pick brut = collision migration version
+
+**Plan d'action** :
+1. Créer une nouvelle migration Veridian (V42 ou V43 suivant numérotation
+   en cours) avec uniquement le SQL trigger fix de `eb1ead06`.
+2. Bump `config.VERSION` en conséquence + ajouter la fixture sqlmock
+   dans `manager_test.go`.
+3. Tester sur staging avant prod (charge broadcast réelle pour valider
+   le fix de contention).
+4. Risque P2 : aucun, c'est un fix de perf qui n'affecte pas la
+   sémantique métier.
+
+À planifier dans une session dédiée — pas urgent tant qu'on n'a pas de
+trafic broadcast intense en prod.
+
+### Status final session 2026-05-23
+
+- **Pris (cherry-pick)** : 8 commits upstream
+  (5 v30.2 + 1 v30.3 + 1 v31.0 pool ping + 1 v32.0)
+- **Skip documenté** : 2 commits (v31.0 triggers loop → ticket follow-up,
+  v31.0 cleaning → no-op)
+- **Build vert** : `go build ./...` + `go test ./internal/...` + console
+  `npm run build` + check-console-build OK
+- **Push trunk-based** : direct sur `veridian`, auto-promote main si CI
+  vert (pas de PR).
