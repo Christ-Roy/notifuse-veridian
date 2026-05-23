@@ -2217,3 +2217,120 @@ func TestAttachMember_BackfillMismatchDoesNotAbort(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.True(t, resp.Attached)
 }
+
+// TestVeridianService_Provision_SeedReceivesOwnerID couvre le bug runtime
+// 2026-05-23 (todo/2026-05-23-seed-templates-fail-silent-staging.md). Avant
+// le fix, Provision appelait `seedInvitationProspectionTemplate(ctx, tenantID)`
+// qui passait par `ctxAsRoot` — or root n'est plus membre du workspace après
+// l'étape 6 (transferOwnershipToTenant) donc AuthenticateUserForWorkspace côté
+// TemplateService échouait silencieusement et le template n'était jamais créé.
+//
+// Le fix : passer owner.ID au seed, qui utilise ctxAsUser(owner) — l'owner
+// EST membre du workspace donc l'auth passe.
+//
+// Ce test prouve l'invariant en câblant un templateService mock et en
+// vérifiant que GetTemplateByID/CreateTemplate sont bien appelés (preuve
+// que le ctx d'auth a passé). Si on régresse vers ctxAsRoot un jour, le mock
+// recevrait un ctx sans session owner valide → test fail.
+func TestVeridianService_Provision_SeedReceivesOwnerID(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	// === Setup Provision classique (workspace inexistant) ===
+	m.workspace.EXPECT().GetWorkspace(gomock.Any(), "ws-seed").Return(nil, errors.New("not found")).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "ws-seed").Return(nil, sql.ErrNoRows).Times(1)
+	m.user.EXPECT().GetUserByEmail(ctx, "owner@example.com").
+		Return(nil, &domain.ErrUserNotFound{Message: "not found"}).Times(1)
+
+	// On capture l'ID owner créé pour pouvoir asserter l'égalité avec ce qui
+	// sera passé au seed (proxy : le ctx UserIDKey lors des appels mock).
+	var capturedOwnerID string
+	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).
+		DoAndReturn(func(_ context.Context, u *domain.User) error {
+			capturedOwnerID = u.ID
+			return nil
+		}).Times(1)
+
+	// 2 ctxAsRoot (idempotence + ops workspace) + 1 ctxAsUser(owner) pour
+	// remove root post-transfer + 1 ctxAsUser(owner) pour le seed. Total
+	// CreateSession = 4 (2 root, 2 owner).
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(4)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(4)
+
+	m.workspace.EXPECT().CreateWorkspace(
+		gomock.Any(), "ws-seed", "ws-seed",
+		gomock.Any(), gomock.Any(), gomock.Any(),
+		"UTC", gomock.Any(), "en", gomock.Any(),
+	).Return(&domain.Workspace{ID: "ws-seed"}, nil).Times(1)
+	m.workspace.EXPECT().AddUserToWorkspace(
+		gomock.Any(), "ws-seed", gomock.Any(), "member", gomock.Any(),
+	).Return(nil).Times(1)
+	m.workspace.EXPECT().TransferOwnership(
+		gomock.Any(), "ws-seed", gomock.Any(), rootUser.ID,
+	).Return(nil).Times(1)
+	m.workspace.EXPECT().RemoveUserFromWorkspace(
+		gomock.Any(), "ws-seed", rootUser.ID,
+	).Return(nil).Times(1)
+	m.workspace.EXPECT().CreateAPIKey(gomock.Any(), "ws-seed", "veridian-api-ws-seed").
+		Return("sk_test", "veridian-api-ws-seed@ws-seed.notifuse", nil).Times(1)
+	m.userRepo.EXPECT().MarkVeridianManaged(ctx, gomock.Any()).Return(nil).Times(1)
+	m.planRepo.EXPECT().Upsert(ctx, gomock.AssignableToTypeOf(&domain.VeridianPlan{})).Return(nil).Times(1)
+	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, "owner@example.com", "ws-seed").
+		Return("magic-code", time.Now().Add(15*time.Minute), nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantProvisioned, "ws-seed", gomock.Any()).Times(1)
+
+	// === Cœur du test : câbler le seed et vérifier qu'il reçoit owner.ID ===
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	txSvc, txMocks := buildTxService(t, ctrl, mockTemplateSvc)
+	require.NoError(t, ConfigureSeedTemplatesSupport(svc, mockTemplateSvc, txSvc))
+
+	// Le seed va appeler GetTemplateByID puis CreateTemplate. On capture le
+	// ctx pour vérifier que UserIDKey == owner.ID (et NON root.ID).
+	// Si on régressait vers ctxAsRoot, UserIDKey serait "root-id" → fail.
+	var seedCtxUserID string
+	mockTemplateSvc.EXPECT().
+		GetTemplateByID(gomock.Any(), "ws-seed", SeedInvitationProspectionTemplateID, int64(0)).
+		DoAndReturn(func(seedCtx context.Context, _, _ string, _ int64) (*domain.Template, error) {
+			if uid, ok := seedCtx.Value(domain.UserIDKey).(string); ok {
+				seedCtxUserID = uid
+			}
+			return nil, errors.New("not found")
+		}).Times(1)
+	mockTemplateSvc.EXPECT().
+		CreateTemplate(gomock.Any(), "ws-seed", gomock.Any()).Return(nil).Times(1)
+
+	// Notification path : auth OK + repo.Get not found + repo.Create OK.
+	txMocks.authSvc.EXPECT().
+		AuthenticateUserForWorkspace(gomock.Any(), "ws-seed").
+		DoAndReturn(func(c context.Context, _ string) (context.Context, *domain.User, *domain.UserWorkspace, error) {
+			return c, &domain.User{ID: capturedOwnerID, Type: domain.UserTypeUser},
+				&domain.UserWorkspace{UserID: capturedOwnerID, WorkspaceID: "ws-seed", Role: "owner", Permissions: domain.FullPermissions}, nil
+		}).AnyTimes()
+	txMocks.repo.EXPECT().Get(gomock.Any(), "ws-seed", SeedInvitationProspectionTemplateID).
+		Return(nil, errors.New("not found")).Times(1)
+	// CreateNotification va re-checker l'existence du template via templateSvc.
+	mockTemplateSvc.EXPECT().
+		GetTemplateByID(gomock.Any(), "ws-seed", SeedInvitationProspectionTemplateID, int64(0)).
+		Return(&domain.Template{ID: SeedInvitationProspectionTemplateID}, nil).Times(1)
+	txMocks.repo.EXPECT().Create(gomock.Any(), "ws-seed", gomock.Any()).Return(nil).Times(1)
+
+	resp, err := svc.Provision(ctx, domain.ProvisionInput{
+		TenantID:   "ws-seed",
+		OwnerEmail: "owner@example.com",
+		Plan:       "pro",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	// Invariant central : le ctx du seed contient l'ID de l'owner, pas celui
+	// du root. Si quelqu'un re-régresse en ctxAsRoot, seedCtxUserID == "root-id".
+	require.NotEmpty(t, capturedOwnerID, "owner.ID doit être capturé dans CreateUser")
+	assert.Equal(t, capturedOwnerID, seedCtxUserID,
+		"le seed doit s'authentifier avec owner.ID (et non root.ID) — sinon AuthenticateUserForWorkspace échoue car root n'est plus membre du workspace post-transferOwnership")
+	assert.NotEqual(t, rootUser.ID, seedCtxUserID, "le seed NE doit PAS utiliser root.ID")
+}

@@ -72,28 +72,44 @@ func ConfigureSeedTemplatesSupport(
 //
 // Ordre d'exécution :
 //  1. Skip si templateService ou transactionalNotificationService non câblé
-//     (mode test ou config minimaliste).
-//  2. ctxAsRoot pour bypasser auth — Provision est déjà sous HMAC Hub, on
-//     ne re-vérifie pas un user humain ici.
+//     (mode test ou config minimaliste), ou si ownerUserID est vide
+//     (anomalie : on ne peut pas authentifier sans owner).
+//  2. ctxAsUser(ownerUserID) — l'owner du tenant est l'unique membre du
+//     workspace après l'étape 6 du Provision (transferOwnershipToTenant
+//     retire root du workspace). On ne peut PAS utiliser ctxAsRoot ici :
+//     TemplateService.CreateTemplate et TransactionalNotificationService.*
+//     appellent AuthenticateUserForWorkspace qui exige que le caller soit
+//     membre du workspace. Root ne l'étant plus, l'appel échouait
+//     silencieusement (bug runtime découvert 2026-05-23, spec
+//     tests/e2e-veridian/specs/seed-templates.spec.ts).
+//     Note : ctxAsUser inclut déjà SystemCallKey dans le ctx pour bypass les
+//     guards Veridian-managed côté WorkspaceService.
 //  3. Check si le template existe déjà via GetTemplateByID. Si oui → skip.
 //  4. Sinon CreateTemplate avec EditorMode=code + MjmlSource.
 //  5. Check si la notification existe déjà via GetNotification. Si oui → done.
 //  6. Sinon CreateNotification qui référence le template.
-func (s *veridianService) seedInvitationProspectionTemplate(ctx context.Context, workspaceID string) {
+func (s *veridianService) seedInvitationProspectionTemplate(ctx context.Context, workspaceID, ownerUserID string) {
 	if s.templateService == nil || s.transactionalNotificationService == nil {
 		// Mode test ou self-hosted minimaliste : pas de seed.
 		return
 	}
+	if ownerUserID == "" {
+		// Anomalie : Provision a appelé le seed sans owner.ID. Sans owner,
+		// impossible d'authentifier l'appel (root n'est plus membre du
+		// workspace post-transferOwnership). Log + skip plutôt que panic.
+		s.logWarnSeed(workspaceID, errors.New("empty ownerUserID"), "seed skipped: missing owner user id")
+		return
+	}
 
-	rootCtx, sessionID, _, err := s.ctxAsRoot(ctx)
+	ownerCtx, sessionID, err := s.ctxAsUser(ctx, ownerUserID)
 	if err != nil {
-		s.logWarnSeed(workspaceID, err, "ctxAsRoot failed")
+		s.logWarnSeed(workspaceID, err, "ctxAsUser(owner) failed")
 		return
 	}
 	defer s.cleanupSession(ctx, sessionID)
 
 	// Étape 1 — template MJML
-	existing, getErr := s.templateService.GetTemplateByID(rootCtx, workspaceID, SeedInvitationProspectionTemplateID, 0)
+	existing, getErr := s.templateService.GetTemplateByID(ownerCtx, workspaceID, SeedInvitationProspectionTemplateID, 0)
 	if getErr == nil && existing != nil && existing.DeletedAt == nil {
 		// Déjà présent et non soft-deleted → on garde le template existant
 		// (le client a peut-être customisé son contenu). On poursuit sur la
@@ -124,7 +140,7 @@ func (s *veridianService) seedInvitationProspectionTemplate(ctx context.Context,
 				"unsubscribe_url": "https://prospection.app.veridian.site/unsubscribe/example",
 			},
 		}
-		if err := s.templateService.CreateTemplate(rootCtx, workspaceID, tmpl); err != nil {
+		if err := s.templateService.CreateTemplate(ownerCtx, workspaceID, tmpl); err != nil {
 			if !isDuplicateErr(err) {
 				s.logWarnSeed(workspaceID, err, "CreateTemplate failed")
 				return
@@ -135,7 +151,7 @@ func (s *veridianService) seedInvitationProspectionTemplate(ctx context.Context,
 	}
 
 	// Étape 2 — transactional notification (référence le template)
-	existingNotif, getNotifErr := s.transactionalNotificationService.GetNotification(rootCtx, workspaceID, SeedInvitationProspectionTemplateID)
+	existingNotif, getNotifErr := s.transactionalNotificationService.GetNotification(ownerCtx, workspaceID, SeedInvitationProspectionTemplateID)
 	if getNotifErr == nil && existingNotif != nil && existingNotif.DeletedAt == nil {
 		// Déjà présent → done.
 		return
@@ -158,7 +174,7 @@ func (s *veridianService) seedInvitationProspectionTemplate(ctx context.Context,
 			"category": "cross-app-invitation",
 		},
 	}
-	if _, err := s.transactionalNotificationService.CreateNotification(rootCtx, workspaceID, params); err != nil {
+	if _, err := s.transactionalNotificationService.CreateNotification(ownerCtx, workspaceID, params); err != nil {
 		if !isDuplicateErr(err) {
 			s.logWarnSeed(workspaceID, err, "CreateNotification failed")
 		}

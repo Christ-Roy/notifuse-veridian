@@ -97,3 +97,34 @@ Pour les tenants déjà provisionnés sans seed : si la Hub re-provision
 idempotente est OK (cf. `seed-templates.spec.ts` test 5 préserve les
 existings), une simple re-call `/api/tenants/provision` les couvre en lazy.
 Sinon, prévoir un script de backfill `for tenant in active: seed_now`.
+
+## Résolution — 2026-05-23 (agent Notifuse)
+
+**Option 2 retenue** (préférée à l'option 1 SystemCallKey car
+TemplateService.CreateTemplate upstream ne supporte pas le bypass —
+patcher template_service.go violerait la règle "jamais patcher upstream").
+
+**Diff** :
+- `internal/service/veridian_seed_templates.go` : signature
+  `seedInvitationProspectionTemplate(ctx, workspaceID, ownerUserID string)`,
+  ctxAsUser(ownerUserID) au lieu de ctxAsRoot, early-return si
+  ownerUserID == "".
+- `internal/service/veridian_service.go` : étape 11 Provision passe
+  `owner.ID` au seed avec commentaire pointant ce ticket.
+- `internal/service/veridian_seed_templates_test.go` : helper
+  `expectCtxAsRoot` → `expectCtxAsUser` (plus de lookup root par email),
+  tests existants migrés vers la nouvelle signature, ajout du test
+  `TestSeedInvitationProspection_EmptyOwnerUserID_NoOp` (couvre la garde).
+- `internal/service/veridian_service_test.go` : ajout
+  `TestVeridianService_Provision_SeedReceivesOwnerID` qui capture le ctx
+  passé au mock TemplateService et asserte que `UserIDKey == owner.ID`
+  (et NON root.ID). Garde-fou anti-régression vers ctxAsRoot.
+
+**Validation post-fix** :
+- `go test ./internal/service/...` : OK (toutes suites)
+- E2E staging à re-run après deploy : `tests/e2e-veridian/specs/seed-templates.spec.ts`
+  (cible 7/7 passing, attendu vu que la modif corrige la cause racine
+  identifiée par le ticket).
+
+**Backfill tenants existants** : non implémenté (option lazy via
+re-provision côté Hub privilégiée, le seed est idempotent).

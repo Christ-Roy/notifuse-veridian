@@ -515,7 +515,13 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	// 11. === Veridian patch 2026-05-23 === Seed du template transactionnel
 	// invitation-prospection (cf. veridian_seed_templates.go). Best-effort,
 	// idempotent, jamais bloquant. Skip silencieux si services non câblés.
-	s.seedInvitationProspectionTemplate(ctx, input.TenantID)
+	//
+	// Passe owner.ID (et non root) car post-étape 6 (transferOwnershipToTenant)
+	// root N'EST PLUS membre du workspace : ctxAsRoot ferait planter
+	// AuthenticateUserForWorkspace côté TemplateService / TransactionalNotificationService.
+	// L'owner du tenant est l'unique membre du workspace à ce stade.
+	// Bug runtime découvert 2026-05-23 (tests/e2e-veridian/specs/seed-templates.spec.ts).
+	s.seedInvitationProspectionTemplate(ctx, input.TenantID, owner.ID)
 
 	return &domain.ProvisionResponse{
 		WorkspaceID:  input.TenantID,

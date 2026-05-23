@@ -112,7 +112,27 @@ func TestSeedInvitationProspection_NoServicesConfigured_SilentNoOp(t *testing.T)
 	// templateService + transactionalNotificationService restent nil → skip.
 	// Doit pas paniquer ni rien faire.
 	require.NotPanics(t, func() {
-		svc.seedInvitationProspectionTemplate(context.Background(), "ws-1")
+		svc.seedInvitationProspectionTemplate(context.Background(), "ws-1", "owner-user-id")
+	})
+}
+
+// TestSeedInvitationProspection_EmptyOwnerUserID_NoOp couvre la garde
+// défensive : si Provision oublie de passer owner.ID (régression refactor),
+// le seed doit log et skip plutôt que tenter un ctxAsUser("") qui créerait
+// une session orpheline. La fonction ne doit pas paniquer.
+func TestSeedInvitationProspection_EmptyOwnerUserID_NoOp(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc, _ := newVeridianService(t)
+	mockTemplateSvc := mocks.NewMockTemplateService(ctrl)
+	txSvc, _ := buildTxService(t, ctrl, mockTemplateSvc)
+	require.NoError(t, ConfigureSeedTemplatesSupport(svc, mockTemplateSvc, txSvc))
+
+	// Aucun EXPECT : la fonction doit return AVANT tout appel mock.
+	// gomock fera échouer le test si CreateSession / GetTemplateByID est touché.
+	require.NotPanics(t, func() {
+		svc.seedInvitationProspectionTemplate(context.Background(), "ws-1", "")
 	})
 }
 
@@ -125,8 +145,7 @@ func TestSeedInvitationProspection_HappyPath_CreatesTemplateAndNotification(t *t
 	txSvc, txMocks := buildTxService(t, ctrl, mockTemplateSvc)
 	require.NoError(t, ConfigureSeedTemplatesSupport(svc, mockTemplateSvc, txSvc))
 
-	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
-	expectCtxAsRoot(m, rootUser)
+	expectCtxAsUser(m)
 
 	// Template absent → CreateTemplate appelé.
 	mockTemplateSvc.EXPECT().
@@ -166,7 +185,7 @@ func TestSeedInvitationProspection_HappyPath_CreatesTemplateAndNotification(t *t
 			return nil
 		})
 
-	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1")
+	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1", "owner-user-id")
 }
 
 func TestSeedInvitationProspection_TemplateExists_OnlyCreatesNotification(t *testing.T) {
@@ -178,8 +197,7 @@ func TestSeedInvitationProspection_TemplateExists_OnlyCreatesNotification(t *tes
 	txSvc, txMocks := buildTxService(t, ctrl, mockTemplateSvc)
 	require.NoError(t, ConfigureSeedTemplatesSupport(svc, mockTemplateSvc, txSvc))
 
-	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
-	expectCtxAsRoot(m, rootUser)
+	expectCtxAsUser(m)
 
 	// Template DÉJÀ présent → CreateTemplate NE doit PAS être appelé
 	// (préserve la customisation client).
@@ -197,7 +215,7 @@ func TestSeedInvitationProspection_TemplateExists_OnlyCreatesNotification(t *tes
 		Return(existingTmpl, nil)
 	txMocks.repo.EXPECT().Create(gomock.Any(), "ws-1", gomock.Any()).Return(nil)
 
-	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1")
+	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1", "owner-user-id")
 }
 
 func TestSeedInvitationProspection_NotificationAlreadyExists_NoOp(t *testing.T) {
@@ -209,8 +227,7 @@ func TestSeedInvitationProspection_NotificationAlreadyExists_NoOp(t *testing.T) 
 	txSvc, txMocks := buildTxService(t, ctrl, mockTemplateSvc)
 	require.NoError(t, ConfigureSeedTemplatesSupport(svc, mockTemplateSvc, txSvc))
 
-	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
-	expectCtxAsRoot(m, rootUser)
+	expectCtxAsUser(m)
 
 	// Template présent.
 	existingTmpl := &domain.Template{ID: SeedInvitationProspectionTemplateID}
@@ -224,7 +241,7 @@ func TestSeedInvitationProspection_NotificationAlreadyExists_NoOp(t *testing.T) 
 	txMocks.repo.EXPECT().Get(gomock.Any(), "ws-1", SeedInvitationProspectionTemplateID).Return(existingNotif, nil)
 	// PAS d'EXPECT sur Create — il ne doit pas être appelé.
 
-	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1")
+	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1", "owner-user-id")
 }
 
 func TestSeedInvitationProspection_TemplateDuplicateError_ContinuesToNotification(t *testing.T) {
@@ -236,8 +253,7 @@ func TestSeedInvitationProspection_TemplateDuplicateError_ContinuesToNotificatio
 	txSvc, txMocks := buildTxService(t, ctrl, mockTemplateSvc)
 	require.NoError(t, ConfigureSeedTemplatesSupport(svc, mockTemplateSvc, txSvc))
 
-	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
-	expectCtxAsRoot(m, rootUser)
+	expectCtxAsUser(m)
 
 	// Get : not found (race avec un autre provision)
 	mockTemplateSvc.EXPECT().
@@ -256,7 +272,7 @@ func TestSeedInvitationProspection_TemplateDuplicateError_ContinuesToNotificatio
 		Return(&domain.Template{ID: SeedInvitationProspectionTemplateID}, nil)
 	txMocks.repo.EXPECT().Create(gomock.Any(), "ws-1", gomock.Any()).Return(nil)
 
-	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1")
+	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1", "owner-user-id")
 }
 
 func TestSeedInvitationProspection_TemplateUnknownError_AbortsWithoutNotification(t *testing.T) {
@@ -268,8 +284,7 @@ func TestSeedInvitationProspection_TemplateUnknownError_AbortsWithoutNotificatio
 	txSvc, txMocks := buildTxService(t, ctrl, mockTemplateSvc)
 	require.NoError(t, ConfigureSeedTemplatesSupport(svc, mockTemplateSvc, txSvc))
 
-	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
-	expectCtxAsRoot(m, rootUser)
+	expectCtxAsUser(m)
 
 	mockTemplateSvc.EXPECT().
 		GetTemplateByID(gomock.Any(), "ws-1", SeedInvitationProspectionTemplateID, int64(0)).
@@ -282,16 +297,15 @@ func TestSeedInvitationProspection_TemplateUnknownError_AbortsWithoutNotificatio
 	// PAS d'EXPECT sur txMocks.repo — la fonction doit return early.
 	_ = txMocks
 
-	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1")
+	svc.seedInvitationProspectionTemplate(context.Background(), "ws-1", "owner-user-id")
 }
 
 // ─── Helpers de test ─────────────────────────────────────────────────────────
 
-// expectCtxAsRoot prépare les attentes mock pour que ctxAsRoot() réussisse :
-// lookup root user par email + création de session. La session est nettoyée
-// en defer via cleanupSession → on l'attend aussi.
-func expectCtxAsRoot(m *veridianServiceMocks, rootUser *domain.User) {
-	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil)
+// expectCtxAsUser prépare les attentes mock pour que ctxAsUser(owner) réussisse :
+// création de session pour l'owner + cleanup en defer. Pas de lookup user
+// par email (l'ID est déjà connu — c'est la différence avec ctxAsRoot).
+func expectCtxAsUser(m *veridianServiceMocks) {
 	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil)
 }
@@ -355,10 +369,11 @@ func newTxServiceWithMocks(t *testing.T, ctrl *gomock.Controller) *Transactional
 // expectTxAuthOK prépare l'attente d'auth pour un appel sur le
 // TransactionalNotificationService — qui passe par authService
 // AuthenticateUserForWorkspace avant chaque op. On retourne un userWorkspace
-// avec full permissions transactional.
+// avec full permissions transactional. UserID = owner-user-id (cohérent avec
+// le ctxAsUser(owner) utilisé désormais par le seed).
 func expectTxAuthOK(m *txServiceMocks, workspaceID string) {
 	userWorkspace := &domain.UserWorkspace{
-		UserID:      "root-id",
+		UserID:      "owner-user-id",
 		WorkspaceID: workspaceID,
 		Role:        "owner",
 		Permissions: domain.FullPermissions,
@@ -367,7 +382,7 @@ func expectTxAuthOK(m *txServiceMocks, workspaceID string) {
 	m.authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
 		DoAndReturn(func(ctx context.Context, _ string) (context.Context, *domain.User, *domain.UserWorkspace, error) {
-			return ctx, &domain.User{ID: "root-id", Type: domain.UserTypeUser}, userWorkspace, nil
+			return ctx, &domain.User{ID: "owner-user-id", Type: domain.UserTypeUser}, userWorkspace, nil
 		}).
 		AnyTimes()
 }
