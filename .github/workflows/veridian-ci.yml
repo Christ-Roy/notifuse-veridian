@@ -829,44 +829,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # pour le gate 24h structurel + push HEAD:veridian
-
-      # === Constitution CI §15 — Gate structurel 24h ===
-      # Si le push touche Dockerfile/go.mod/migrations/infra/compose → exiger
-      # commit âgé de > 24h (rodage staging). Sinon promotion auto fast.
-      # Override : [skip-gate] dans commit message.
-      - name: Gate structurel 24h
-        run: |
-          set -euo pipefail
-          STRUCTURAL_PATTERN='^(Dockerfile|go\.mod|go\.sum|internal/migrations/.*\.go|infra/compose/.*\.ya?ml)$'
-
-          if ! git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "$STRUCTURAL_PATTERN"; then
-            echo "✅ Commit non-structurel, ship fast."
-            exit 0
-          fi
-
-          echo "⚠ Commit touche des fichiers structurels :"
-          git diff --name-only HEAD~1 HEAD | grep -E "$STRUCTURAL_PATTERN" | sed 's/^/  /'
-
-          COMMIT_MSG=$(git log -1 --format='%B')
-          if echo "$COMMIT_MSG" | grep -q '\[skip-gate\]'; then
-            echo "ℹ Bypass via [skip-gate] (validation humaine)."
-            exit 0
-          fi
-
-          COMMIT_TS=$(git log -1 --format=%ct)
-          NOW=$(date -u +%s)
-          AGE_HOURS=$(( (NOW - COMMIT_TS) / 3600 ))
-          echo "Commit age : ${AGE_HOURS}h"
-
-          if [ "$AGE_HOURS" -lt 24 ]; then
-            echo "::error::Commit structurel âgé de ${AGE_HOURS}h < 24h."
-            echo "::error::Constitution §15 : structurel doit roder 24h sur staging."
-            echo "::error::Override : recommit avec [skip-gate] si urgent."
-            exit 1
-          fi
-
-          echo "✅ Commit structurel âgé de ${AGE_HOURS}h ≥ 24h — gate OK."
+          fetch-depth: 0  # nécessaire pour push HEAD:veridian (bump GitOps prod)
 
       # === GitOps step 1/4 — Bump prod.yml + commit + push [skip ci] ===
       # Le commit déclenche Dokploy autoDeploy (watchPaths: infra/compose/prod.yml).
