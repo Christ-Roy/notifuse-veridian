@@ -116,3 +116,91 @@ d'abord, bloquante ensuite quand elle sera fiable et qu'on aura décidé
 - Garde-fou léger livré : `scripts/ci/check-console-build.sh`
 - Incident : régression `manualChunks` dans le code-splitting perf
   (ticket `done/2026-05-22-perf-ui-baseline-saine.md`).
+
+---
+
+## Livraison — phase 1 : smoke de boot production-build (2026-05-23)
+
+**Périmètre §1 « Smoke de boot »** : livré et bloquant en CI. Les
+parcours auth (§2), métier (§3) et responsive (§4) restent à faire —
+ticket gardé pending.
+
+### Ce qui est en place
+
+Une suite Playwright dédiée qui exerce la console sur le **vrai build**
+(non plus sur le dev server Vite, qui ne reproduisait ni les chunks
+découpés ni les catalogues Lingui compilés). Tourne via `vite preview`
+sur le `dist/`.
+
+- `console/playwright.prod-smoke.config.ts` — config Playwright dédiée
+  (`webServer` = `npm run build && vite preview --config vite.preview.config.ts`)
+- `console/vite.preview.config.ts` — config Vite minimale **sans** le
+  `server.https` du dev server (sinon le healthcheck `webServer.url`
+  Playwright timeout sur cert self-signed)
+- `console/e2e-prod-smoke/helpers.ts` — `trackConsoleErrors` (capte
+  `console.error` + `pageerror` uncaught), `mockConfigJs`, `defaultApiStub`,
+  `waitForAppMount` (attend que le splash inline soit remplacé par le
+  tree React), `findVisibleLinguiHashes` (heuristique 6-8 chars
+  alphanum + 2 majuscules + 2 minuscules)
+- `console/e2e-prod-smoke/boot-smoke.spec.ts` — 2 specs : SignIn et
+  `/console/` racine. Assert wordmark visible, card `Sign In` rendue,
+  zéro uncaught JS, zéro hash i18n.
+- `console/e2e-prod-smoke/chunks-integrity.spec.ts` — 2 specs : aucun
+  chunk JS/CSS en 4xx/5xx, aucun chunk de taille 0, et si `react-vendor-*`
+  existe alors aucun chunk `antd-*` / `tanstack-*` / `rc-*` séparé
+  (ceinture runtime du check statique).
+- `console/e2e-prod-smoke/i18n-no-hashes.spec.ts` — itère sur les
+  routes publiques (signin, logout), assert aucun hash Lingui visible
+  + aucune erreur JS Lingui.
+
+### Scripts npm
+
+```bash
+cd console
+npm run test:prod-smoke              # build complet + tests
+npm run test:prod-smoke:skip-build   # réutilise dist/ existant (itération locale)
+```
+
+### Wiring CI — bloquant
+
+Job `e2e-console-prod-smoke` ajouté dans
+`.github/workflows/veridian-ci.yml` :
+
+- `needs: console-build` (récupère le `dist/` via `actions/upload-artifact` →
+  `actions/download-artifact`, pas de rebuild = pas de +5 min)
+- Installe Playwright Chromium, lance `npm run test:prod-smoke:skip-build`
+- Artefact `playwright-report-prod-smoke` uploadé en cas d'échec
+- Ajouté aux `needs:` du job `build` → si rouge, **pas de deploy staging**
+
+### Pourquoi cette couche aurait attrapé les 2 incidents
+
+| Incident | Mécanisme de détection |
+|---|---|
+| #1 `createContext undefined` (manualChunks) | `trackConsoleErrors` capte `pageerror` (uncaught exception JS) → `boot-smoke.spec.ts` fail dès le 1er goto |
+| #2 hash Lingui (`GdgCoi`, `8wOKeG`) | `findVisibleLinguiHashes` scanne le DOM textNode-par-textNode → `boot-smoke.spec.ts` ET `i18n-no-hashes.spec.ts` fail |
+
+### Validation locale (2026-05-23)
+
+```
+Running 6 tests using 1 worker
+  ✓  boot-smoke.spec.ts › SignIn page monte sans erreur JS ni hash i18n (13.1s)
+  ✓  boot-smoke.spec.ts › Page racine /console/ monte sans erreur JS (6.3s)
+  ✓  chunks-integrity.spec.ts › aucun chunk JS/CSS ne 404 ou body vide (3.6s)
+  ✓  chunks-integrity.spec.ts › react-vendor atomique (3.5s)
+  ✓  i18n-no-hashes.spec.ts › SignIn aucun hash Lingui (3.2s)
+  ✓  i18n-no-hashes.spec.ts › Logout aucun hash Lingui (2.4s)
+  6 passed (59.8s)
+```
+
+### Reste à faire (re-priorisation)
+
+- §2 Parcours authentification (login magic code, auto-login token,
+  token expiré) → demande un tenant staging dédié + mock magic code
+- §3 Parcours workspace (sidebar nav, écrans Dashboard/Contacts/Lists…)
+  → demande fixture `authenticatedPage` étendue pour le mode prod-build
+- §4 Parcours métier (créer contact, template, broadcast)
+- §5 Responsive 375 / 768 / 1440 px
+
+Une bonne suite de ces 4 chantiers tournerait sur staging (data réelle)
+plutôt que sur le preview local — voir convention `@prod-safe` dans
+`tests/e2e-veridian/`.

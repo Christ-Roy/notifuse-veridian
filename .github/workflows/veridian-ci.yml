@@ -117,6 +117,70 @@ jobs:
         run: |
           chmod +x scripts/ci/check-console-build.sh
           scripts/ci/check-console-build.sh
+      - name: Upload console/dist/ pour le job suivant (e2e-console-prod-smoke)
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-dist
+          path: console/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  # === Veridian patch — suite E2E « production-build smoke » (ticket 2026-05-22) ===
+  #
+  # Pourquoi cette couche en plus de `console-build` :
+  #   - `console-build` fait l'analyse STATIQUE du dist/ (chunks existent,
+  #     react-vendor atomique). C'est rapide, mais ne charge JAMAIS la
+  #     SPA dans un navigateur.
+  #   - Ce job-ci sert dist/ via `vite preview` et fait monter la SPA
+  #     dans Chromium headless. C'est là qu'on attrape :
+  #       1. Le bug `createContext` au boot (uncaught JS exception).
+  #       2. Les hash Lingui non-extractés affichés à l'écran.
+  #     Les 2 incidents prod du 2026-05-22 que les 225 tests unitaires
+  #     n'ont PAS vus parce qu'ils tournent en jsdom sur le code source.
+  #
+  # On ne refait PAS le build (sinon +5 min) : on récupère le dist/ de
+  # `console-build` via artefact, puis `SKIP_BUILD=1 npm run test:prod-smoke`.
+  #
+  # Bloquant : si rouge, `build` (deploy staging) ne se déclenche pas.
+  e2e-console-prod-smoke:
+    name: E2E console — production-build smoke
+    runs-on: ubuntu-latest
+    needs: console-build
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install console deps
+        run: cd console && npm ci --no-audit --no-fund
+      - name: Récupère le dist/ depuis console-build (pas de rebuild)
+        uses: actions/download-artifact@v4
+        with:
+          name: console-dist
+          path: console/dist
+      - name: Vérifie que le dist/ a bien atterri
+        run: |
+          set -e
+          if [ ! -f console/dist/index.html ]; then
+            echo "::error::console/dist/index.html absent après download-artifact"
+            exit 1
+          fi
+          echo "Contenu du dist/ :"
+          ls console/dist/
+      - name: Install Playwright Chromium
+        run: cd console && npx playwright install --with-deps chromium
+      - name: Run prod-smoke E2E (skip build, réutilise dist/)
+        run: cd console && npm run test:prod-smoke:skip-build
+        env:
+          CI: '1'
+      - name: Upload playwright-report en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-prod-smoke
+          path: console/playwright-report-prod-smoke
+          retention-days: 7
 
   compose-validate:
     name: Compose validate (staging + prod)
@@ -394,7 +458,7 @@ jobs:
 
   build:
     name: Build & push image (self-hosted)
-    needs: [test-go, cve-scan, trivy-fs, gitleaks, console-build]
+    needs: [test-go, cve-scan, trivy-fs, gitleaks, console-build, e2e-console-prod-smoke]
     runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read
