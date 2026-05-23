@@ -1,8 +1,8 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-05-22 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-05-22
+> **Dernier run** : 2026-05-23 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-05-23
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
 > **CVE bruts détectés** : 27 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
@@ -11,22 +11,22 @@
 
 - 🚨 **0 RED** — fix prioritaire
 - 🔴 **0 HIGH** — action recommandée cette semaine
-- 🟡 **7 MEDIUM** — récap, pas urgent
-- 🟢 **7 NOISE** — annexe collapse
+- 🟡 **5 MEDIUM** — récap, pas urgent
+- 🟢 **9 NOISE** — annexe collapse
 
 ✅ **Rien d'urgent.** Quelques items MEDIUM à voir quand t'as 5 min.
 
 
 ---
 
-## 🟡 MEDIUM — 7 CVE en 3 groupes
+## 🟡 MEDIUM — 5 CVE en 3 groupes
 
 ### 1. `libpq` + `postgresql17-client` — 17.9-r0 → **17.10-r0** *(base image OS)*
 
-- **CVE** : `CVE-2026-6476` (HIGH/SQL injection), `CVE-2026-6638` (HIGH/SQL injection), `CVE-2026-6637` (HIGH/Memory corruption)
-- **Type** : Memory corruption, SQL injection
+- **CVE** : `CVE-2026-6638` (HIGH/SQL injection)
+- **Type** : SQL injection
 - **Score max** : 22.5
-- **Title** : SQL injection in PostgreSQL pg_createsubscriber allows an attacker wit ...
+- **Title** : SQL injection in PostgreSQL logical replication ALTER SUBSCRIPTION ... ...
 - **Source** : `ghcr.io/christ-roy/notifuse-veridian:latest (alpine 3.21.7)`
 - **Fix** : rebuild image avec base image patchée — `libpq` >= `17.10-r0`
 
@@ -51,14 +51,14 @@
 
 ---
 
-## 🟢 NOISE filtré (7 CVE)
+## 🟢 NOISE filtré (9 CVE)
 
 <details>
 <summary>Liste complète (1 groupe — clique pour déplier)</summary>
 
 | Package | Installed | Fix | CVE count | Max score |
 |---|---|---|---|---|
-| `libpq` | 17.9-r0 | 17.10-r0 | 7 | 7.5 |
+| `libpq` | 17.9-r0 | 17.10-r0 | 9 | 9.0 |
 
 </details>
 
