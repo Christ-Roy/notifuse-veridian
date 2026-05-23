@@ -1453,10 +1453,10 @@ func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing
 // suppression irréversible d'un tenant prod.
 //
 // Ce test vérifie 3 invariants :
-//   1. Tous les prefixes connus sont déclarés (clients réels + canary + Robert).
-//   2. Aucune entrée doublon (qui serait du bruit).
-//   3. Aucune entrée trop courte (< 3 chars) qui ferait match trop large
-//      (ex: "rb" matcherait "rbrunon" mais aussi "rbtest123").
+//  1. Tous les prefixes connus sont déclarés (clients réels + canary + Robert).
+//  2. Aucune entrée doublon (qui serait du bruit).
+//  3. Aucune entrée trop courte (< 3 chars) qui ferait match trop large
+//     (ex: "rb" matcherait "rbrunon" mais aussi "rbtest123").
 func TestVeridianService_DefaultSafetyClientPrefixes_ContainsCriticalEntries(t *testing.T) {
 	required := []string{
 		// Clients réels staging + prod
@@ -1508,12 +1508,12 @@ func TestVeridianService_WipeTestTenants_SkipsCanaryAndClientPrefixes(t *testing
 	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	candidates := []string{
-		"canaryfree",          // canary witness → MUST skip
-		"canarypro",           // canary witness → MUST skip
-		"canaryenterprise",    // canary witness → MUST skip
-		"robertbrunon42",      // Robert perso → MUST skip
-		"apicalinfoclient1",   // client réel → MUST skip
-		"antjacquet-staging",  // client réel → MUST skip
+		"canaryfree",         // canary witness → MUST skip
+		"canarypro",          // canary witness → MUST skip
+		"canaryenterprise",   // canary witness → MUST skip
+		"robertbrunon42",     // Robert perso → MUST skip
+		"apicalinfoclient1",  // client réel → MUST skip
+		"antjacquet-staging", // client réel → MUST skip
 	}
 
 	resp, err := svc.WipeTestTenants(context.Background(), domain.WipeTestTenantsInput{
@@ -2025,4 +2025,77 @@ func decodeAutoLoginPayload(t *testing.T, urlStr string) (*domain.AutoLoginPaylo
 	}
 	token := urlStr[idx+len("token="):]
 	return domain.VerifyAutoLoginToken(token, "test-hub-secret-32chars-min-len-ok-padding")
+// === CONTRAT-BILLING v2 §3.4.4 — immunite plan offert (couverture etendue) ===
+
+func TestVeridianService_UpdatePlan_V2_ImmuneRejectsStripeTrial(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ws-lifetime").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-lifetime", Plan: "business", PlanSource: domain.PlanSourceLifetimePartner,
+	}, nil).Times(1)
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID: "ws-lifetime", Plan: "pro", PlanSource: domain.PlanSourceStripeTrial,
+	})
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrPlanImmune)
 }
+
+func TestVeridianService_UpdatePlan_V2_ImmuneRejectsDowngradeAuto(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ws-grant").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-grant", Plan: "enterprise", PlanSource: domain.PlanSourceGrantManual,
+	}, nil).Times(1)
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID: "ws-grant", Plan: "free", PlanSource: domain.PlanSourceDowngradeAuto,
+	})
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrPlanImmune)
+}
+
+func TestVeridianService_UpdatePlan_V2_GrantManualOverridesLifetime(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ws-lifetime").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-lifetime", Plan: "business", PlanSource: domain.PlanSourceLifetimePartner,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-lifetime", "enterprise", int64(-1), domain.PlanSourceGrantManual).
+		Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantPlanChanged, "ws-lifetime", gomock.Any()).Times(1)
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID: "ws-lifetime", Plan: "enterprise", PlanSource: domain.PlanSourceGrantManual,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanSourceGrantManual, resp.PlanSource)
+}
+
+func TestVeridianService_UpdatePlan_V2_StripeTrialOnFreeAllowed(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ws-free").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-free", Plan: "free", PlanSource: domain.PlanSourceStripe,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-free", "pro", int64(-1), domain.PlanSourceStripeTrial).
+		Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantPlanChanged, "ws-free", gomock.Any()).Times(1)
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID: "ws-free", Plan: "pro", PlanSource: domain.PlanSourceStripeTrial,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanSourceStripeTrial, resp.PlanSource)
+}
+
+func TestVeridianService_UpdatePlan_V2_DowngradeAutoOnStripeAllowed(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.planRepo.EXPECT().Get(ctx, "ws-expired").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws-expired", Plan: "pro", PlanSource: domain.PlanSourceStripe,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(ctx, "ws-expired", "free", int64(-1), domain.PlanSourceDowngradeAuto).
+		Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantPlanChanged, "ws-expired", gomock.Any()).Times(1)
+	resp, err := svc.UpdatePlan(ctx, domain.UpdatePlanInput{
+		TenantID: "ws-expired", Plan: "free", PlanSource: domain.PlanSourceDowngradeAuto,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanSourceDowngradeAuto, resp.PlanSource)}

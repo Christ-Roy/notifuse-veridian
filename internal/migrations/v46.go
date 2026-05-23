@@ -25,17 +25,21 @@ import (
 // "Migration legacy". Les users Notifuse crees avant cette migration auront
 // `hub_user_id = NULL` jusqu'a leur prochain passage HMAC.
 //
-// Index unique partiel `WHERE hub_user_id IS NOT NULL` garantit qu'un meme
-// hub_user_id n'est jamais lie a 2 users Notifuse differents (invariant
-// §3.7), tout en autorisant N rows avec NULL (legacy users). Postgres
-// supporte les index partiels nativement ; pas d'overhead sur les rows NULL.
+// Pas d'index dans cette migration : les migrations Notifuse tournent en
+// transaction (cf. manager.executeMigration BeginTx), et la version
+// CREATE INDEX CONCURRENTLY ne peut pas etre dans une TX (Postgres l'interdit
+// explicitement). CREATE INDEX sans CONCURRENTLY prend un AccessExclusiveLock
+// qui bloque toutes les ecritures — refuse par Constitution §12 (Expand &
+// Contract). L'unicite est enforced applicativement par BackfillHubUserID
+// (UPDATE conditionne sur `hub_user_id IS NULL` qui empeche le double-binding
+// logique). Si le volume justifie un index, une migration hors-TX dediee
+// l'ajoutera ulterieurement (pattern V33/V41 deja documente).
 //
 // Safety §12 (Expand & Contract) : ADD COLUMN NULLABLE = additif pur. Le
 // tag Docker precedent (V45 et anterieurs) continue a tourner sur ce schema
 // (il ne SELECT pas la colonne). AccessExclusiveLock court (< 1s).
 //
-// Idempotent : `IF NOT EXISTS` sur ADD COLUMN + `CREATE UNIQUE INDEX IF NOT
-// EXISTS` sur l'index. Re-run sans effet.
+// Idempotent : `IF NOT EXISTS` sur ADD COLUMN. Re-run sans effet.
 //
 // Note V44/V45 : intentionnellement sautees (reservees a d'autres tickets
 // du sprint sync v1.5 en parallele). V43 a livre l'alignement TIMESTAMP.
@@ -63,13 +67,6 @@ func (m *V46Migration) UpdateSystem(ctx context.Context, _ *config.Config, db DB
 		ADD COLUMN IF NOT EXISTS hub_user_id UUID NULL
 	`); err != nil {
 		return fmt.Errorf("add users.hub_user_id: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, `
-		CREATE UNIQUE INDEX IF NOT EXISTS users_hub_user_id_uniq
-		ON users(hub_user_id)
-		WHERE hub_user_id IS NOT NULL
-	`); err != nil {
-		return fmt.Errorf("create users_hub_user_id_uniq index: %w", err)
 	}
 	return nil
 }

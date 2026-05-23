@@ -301,6 +301,89 @@ func TestVeridianHandleUpdatePlan_InvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+// === CONTRAT-BILLING v2 — conformite du handler update-plan ===
+func TestVeridianHandleUpdatePlan_V2_UnsupportedContractVersionMajor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"contract_version":"3.0","tenant_id":"ws-1","plan":"pro"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var body VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeInvalidPayload, body.Code)
+	assert.Equal(t, "3.0", body.Details["contract_version"])
+}
+
+func TestVeridianHandleUpdatePlan_V2_AcceptsContractVersionMinorBump(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).
+		Return(&domain.UpdatePlanResponse{TenantID: "ws-1", Plan: "pro", AppliedAt: time.Now().UTC()}, nil)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"contract_version":"2.99","tenant_id":"ws-1","plan":"pro"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestVeridianHandleUpdatePlan_V2_AcceptsLegacyV1NoContractVersion(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).
+		Return(&domain.UpdatePlanResponse{TenantID: "ws-1", Plan: "free", AppliedAt: time.Now().UTC()}, nil)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ws-1","plan":"free"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestVeridianHandleUpdatePlan_V2_InvalidPlan_400(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"contract_version":"2.0","tenant_id":"ws-1","plan":"freemium"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var body VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeInvalidPlan, body.Code)
+	assert.Equal(t, "freemium", body.Details["plan"])
+}
+
+func TestVeridianHandleUpdatePlan_V2_AcceptsNewPlanSourceValues(t *testing.T) {
+	for _, src := range []string{"stripe_trial", "grant_manual", "downgrade_auto"} {
+		t.Run(src, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			svc := mocks.NewMockVeridianService(ctrl)
+			svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).
+				Return(&domain.UpdatePlanResponse{TenantID: "ws-1", Plan: "pro", AppliedAt: time.Now().UTC()}, nil)
+			h := newHandlerWithService(svc)
+			body := `{"contract_version":"2.0","tenant_id":"ws-1","plan":"pro","plan_source":"` + src + `"}`
+			rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan", body)
+			assert.Equal(t, http.StatusOK, rec.Code)
+		})
+	}
+}
+
+func TestVeridianHandleUpdatePlan_V2_RejectsUnknownPlanSource(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"contract_version":"2.0","tenant_id":"ws-1","plan":"pro","plan_source":"garbage"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var body VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeInvalidPayload, body.Code)
+	assert.Equal(t, "garbage", body.Details["plan_source"])
+}
+
 // === handleSuspend ===
 
 func TestVeridianHandleSuspend_OK(t *testing.T) {
@@ -584,8 +667,8 @@ func TestVeridianContainsAny(t *testing.T) {
 	assert.True(t, containsAny("hello world", "world"))
 	assert.True(t, containsAny("hello world", "no", "world"))
 	assert.False(t, containsAny("hello world", "xxx"))
-	assert.False(t, containsAny("hello world"))            // no needles
-	assert.True(t, containsAny("aaa", "", "a"))            // empty skipped, then match
+	assert.False(t, containsAny("hello world")) // no needles
+	assert.True(t, containsAny("aaa", "", "a")) // empty skipped, then match
 	assert.True(t, containsAny("404 page not found", "not found"))
 }
 
@@ -866,7 +949,7 @@ func TestVeridianHandleHealth_OK(t *testing.T) {
 	svc := mocks.NewMockVeridianService(ctrl)
 	svc.EXPECT().Health(gomock.Any(), "ws-h").Return(&domain.TenantHealthResponse{
 		TenantID: "ws-h", WorkspaceID: "ws-h",
-		Status: domain.PlanStatusActive,
+		Status:        domain.PlanStatusActive,
 		OwnerAttached: true, OwnerEmail: "owner@x.test", OwnerUserID: "owner-id",
 		APIKeyValid: true, MagicLinkCapable: true, MembersCount: 2, Plan: "free",
 	}, nil)
@@ -914,7 +997,7 @@ func TestVeridianHandleHealth_BugDetectionReturnsOK(t *testing.T) {
 	svc := mocks.NewMockVeridianService(ctrl)
 	svc.EXPECT().Health(gomock.Any(), "ws-bug").Return(&domain.TenantHealthResponse{
 		TenantID: "ws-bug", WorkspaceID: "ws-bug",
-		Status: domain.PlanStatusActive,
+		Status:        domain.PlanStatusActive,
 		OwnerAttached: false, APIKeyValid: true,
 		MagicLinkCapable: false, MembersCount: 1,
 	}, nil)
@@ -1722,6 +1805,7 @@ func TestVeridianHandleTransferOwner_RouteRegistered(t *testing.T) {
 	assert.NotEmpty(t, pattern, "POST /api/tenants/{id}/transfer-owner should be registered")
 	assert.Contains(t, pattern, "transfer-owner")
 }
+
 // === Veridian patch — v1.3 Multi-membre cross-app (2026-05-19) ===
 // Anti-regression : les 3 routes /api/tenants/{id}/{sync,remove,restore}-member
 // doivent rester enregistrees dans le mux Veridian. Si quelqu'un supprime
@@ -1803,7 +1887,19 @@ func TestVeridianHandleIssueMagicLink_RouteRegisteredInMainHandler(t *testing.T)
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
-
+// === Veridian patch — sync v1.5 CONTRAT-HUB §5.22.2 (2026-05-23) ===
+// Test que la route alias workspace-level prescrite par le contrat v1.4
+// (`POST /api/veridian/workspaces/{tenantId}/attach-member`) est bien
+// enregistree dans le mux et resout vers le handler `handleAttachMember`
+// (mono-workspace : alias delegue au meme handler que la route tenant-level
+// historique).
+//
+// Cf todo/2026-05-21-contrat-hub-v15-sync.md §2.1.
+func TestVeridianRegisterRoutes_AttachMemberWorkspaceAlias(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := NewVeridianHandler(svc, logger.NewLogger())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
 
@@ -1813,3 +1909,16 @@ func TestVeridianHandleIssueMagicLink_RouteRegisteredInMainHandler(t *testing.T)
 	assert.Contains(t, pattern, "issue-magic-link")
 }
 
+	// Alias workspace-level prescrit par §5.22.2.
+	req := httptest.NewRequest(http.MethodPost, "/api/veridian/workspaces/ws-1/attach-member", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/veridian/workspaces/{tenantId}/attach-member should be registered")
+	assert.Contains(t, pattern, "attach-member")
+	assert.Contains(t, pattern, "veridian/workspaces", "should match the workspace-level pattern, not the tenant-level one")
+
+	// Route tenant-level historique toujours active.
+	tenantReq := httptest.NewRequest(http.MethodPost, "/api/tenants/ws-1/attach-member", nil)
+	_, tenantPattern := mux.Handler(tenantReq)
+	assert.NotEmpty(t, tenantPattern, "POST /api/tenants/{tenantId}/attach-member should remain registered")
+	assert.Contains(t, tenantPattern, "tenants", "tenant-level route must coexist with workspace-level alias")
+}

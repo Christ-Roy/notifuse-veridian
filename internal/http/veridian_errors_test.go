@@ -209,4 +209,26 @@ func TestWriteJSONErrorCode_UserNotInApp_400(t *testing.T) {
 	assert.Equal(t, "user_not_in_app", body.Code)
 	require.NotNil(t, body.Details)
 	assert.Equal(t, "no workspace for this hub_user_id", body.Details["hint"])
+// === CONTRAT-BILLING v2 §3.4.2 + §3.6 — ErrCodeInvalidPlan ===
+func TestErrCodeInvalidPlan_Value(t *testing.T) {
+	assert.Equal(t, "invalid_plan", ErrCodeInvalidPlan,
+		"code machine `invalid_plan` doit rester litteral pour le client Hub")
 }
+
+func TestWriteJSONErrorCode_InvalidPlan_400(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteJSONErrorCode(rec, ErrCodeInvalidPlan,
+		"plan must be one of free|pro|business|enterprise",
+		http.StatusBadRequest,
+		map[string]interface{}{
+			"plan":          "freemium",
+			"allowed_plans": []string{"free", "pro", "business", "enterprise"},
+		})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	var body VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeInvalidPlan, body.Code)
+	require.NotNil(t, body.Details)
+	assert.Equal(t, "freemium", body.Details["plan"])
+	assert.NotNil(t, body.Details["allowed_plans"])}

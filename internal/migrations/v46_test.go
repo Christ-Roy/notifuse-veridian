@@ -35,8 +35,6 @@ func TestV46Migration_UpdateSystem_Success(t *testing.T) {
 
 	mock.ExpectExec(`ALTER TABLE users\s+ADD COLUMN IF NOT EXISTS hub_user_id UUID NULL`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE UNIQUE INDEX IF NOT EXISTS users_hub_user_id_uniq\s+ON users\(hub_user_id\)\s+WHERE hub_user_id IS NOT NULL`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = (&V46Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
 	assert.NoError(t, err)
@@ -44,14 +42,12 @@ func TestV46Migration_UpdateSystem_Success(t *testing.T) {
 }
 
 func TestV46Migration_UpdateSystem_Idempotent(t *testing.T) {
-	// Re-run : ALTER + CREATE INDEX no-op grace a IF NOT EXISTS.
+	// Re-run : ALTER no-op grace a IF NOT EXISTS.
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
 
 	mock.ExpectExec(`ALTER TABLE users`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE UNIQUE INDEX IF NOT EXISTS users_hub_user_id_uniq`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = (&V46Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
 	assert.NoError(t, err)
@@ -68,19 +64,6 @@ func TestV46Migration_UpdateSystem_AlterError(t *testing.T) {
 	err = (&V46Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "add users.hub_user_id")
-}
-
-func TestV46Migration_UpdateSystem_CreateIndexError(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mock.ExpectExec(`ALTER TABLE users`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE UNIQUE INDEX`).WillReturnError(assert.AnError)
-
-	err = (&V46Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "users_hub_user_id_uniq")
 }
 
 func TestV46Migration_UpdateWorkspace_Noop(t *testing.T) {
