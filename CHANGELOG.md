@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [32.0] - 2026-05-22
+
+### Database Schema Changes
+
+- Migration v32.0 adds a `language` column (`VARCHAR(10) NOT NULL DEFAULT 'en'`) to the system `users` table. Existing users default to English.
+
+### Features
+
+- **Feature**: System emails and the console UI are now localized per user. Each user has a `language` preference — one of `en`, `fr`, `es`, `de`, `ca`, `pt-BR`, `ja`, `it` — that drives both their console UI locale and the language of the system emails (authentication code, workspace invitation, broadcast circuit-breaker alert) sent to them. The language is changed from the console language switcher and persisted via the new `POST /api/user.updateLanguage` endpoint. Magic-code emails use the recipient's language, circuit-breaker alerts use each owner's language, and workspace invitations use the inviter's language.
+
+## [31.0] - 2026-05-19 *(skipped — see veridian fork notes)*
+
+> Upstream v31.0 introduced `internal/migrations/v31.go` (`queue_contact_for_segment_recomputation` trigger fix). Our fork already shipped its own `V31Migration` (backfill veridian_plan) at the same numbering slot. The upstream SQL fix is **pending** — to be re-applied in a future Veridian-numbered migration (see `todo/2026-05-23-sync-upstream-v30-2-to-v32-0.md`).
+
 ## [30.4] - 2026-05-18
 
 - **Fix**: Workspace database pool no longer falsely evicted when the caller's HTTP request context expires mid-Ping during broadcast load. Previously, a single caller-context cancellation could close the cached pool, causing every other in-flight worker (segment queue, webhook delivery, email send) to fail with `sql: database is closed` on its next operation. The pool health check now uses an isolated, sub-second context.

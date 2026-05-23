@@ -36,8 +36,8 @@ msgstr "(Cancelado)"
 
 #. placeholder {0}: record.email.reply_to
 #. placeholder {0}: templateSender?.name || defaultSender?.name
-#: src/components/templates/TemplatePreviewDrawer.tsx:258
-#: src/components/templates/TemplatePreviewDrawer.tsx:294
+#: src/components/templates/TemplatePreviewDrawer.tsx:249
+#: src/components/templates/TemplatePreviewDrawer.tsx:285
 msgid "(original: {0})"
 msgstr "(original: {0})"
 
@@ -1248,7 +1248,7 @@ msgstr "Autenticación básica (Usuario/Contraseña)"
 msgid "Basic Information"
 msgstr "Información básica"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:328
+#: src/components/templates/TemplatePreviewDrawer.tsx:319
 msgid "BCC"
 msgstr "CCO"
 
@@ -1747,7 +1747,7 @@ msgstr "Categoría actualizada exitosamente"
 msgid "Category:"
 msgstr "Categoría:"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:316
+#: src/components/templates/TemplatePreviewDrawer.tsx:307
 msgid "CC"
 msgstr "CC"
 
@@ -3834,7 +3834,7 @@ msgstr "Error al cargar automatizaciones"
 msgid "Error loading data"
 msgstr "Error al cargar datos"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:360
+#: src/components/templates/TemplatePreviewDrawer.tsx:351
 msgid "Error loading preview"
 msgstr "Error al cargar vista previa"
 
@@ -4022,7 +4022,7 @@ msgstr "Error al cancelar envío masivo"
 msgid "Failed to clear field"
 msgstr "Error al limpiar campo"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:153
+#: src/components/templates/TemplatePreviewDrawer.tsx:164
 msgid "Failed to compile template preview."
 msgstr "Error al compilar vista previa de plantilla."
 
@@ -4713,7 +4713,7 @@ msgstr "Se encontraron cambios sin guardar de {0}"
 msgid "Frequency"
 msgstr "Frecuencia"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:249
+#: src/components/templates/TemplatePreviewDrawer.tsx:240
 msgid "From"
 msgstr "Desde"
 
@@ -4979,12 +4979,12 @@ msgstr "Error en la exportación HTML"
 msgid "HTML exported successfully"
 msgstr "HTML exportado exitosamente"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:205
+#: src/components/templates/TemplatePreviewDrawer.tsx:196
 msgid "HTML Preview"
 msgstr "Vista previa HTML"
 
 #. placeholder {0}: record.name
-#: src/components/templates/TemplatePreviewDrawer.tsx:211
+#: src/components/templates/TemplatePreviewDrawer.tsx:202
 msgid "HTML Preview of {0}"
 msgstr "Vista previa HTML de {0}"
 
@@ -5405,7 +5405,7 @@ msgstr "JSON inválido en campo {field}"
 msgid "Invalid or expired invitation token"
 msgstr "Token de invitación inválido o expirado"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:113
+#: src/components/templates/TemplatePreviewDrawer.tsx:119
 msgid "Invalid template structure data."
 msgstr "Datos de estructura de plantilla inválidos."
 
@@ -5554,7 +5554,7 @@ msgstr "La etiqueta debe tener como máximo 100 caracteres"
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:96
 #: src/components/contacts/ExportContactsModal.tsx:68
 #: src/components/templates/SendTemplateModal.tsx:326
-#: src/components/templates/TemplatePreviewDrawer.tsx:339
+#: src/components/templates/TemplatePreviewDrawer.tsx:330
 #: src/pages/ContactsPage.tsx:365
 #: src/pages/ContactsPage.tsx:421
 #: src/pages/ContactsPage.tsx:696
@@ -5676,7 +5676,7 @@ msgstr "Línea"
 #. placeholder {0}: detail.line
 #. placeholder {1}: detail.tagName
 #. placeholder {2}: detail.message
-#: src/components/templates/TemplatePreviewDrawer.tsx:375
+#: src/components/templates/TemplatePreviewDrawer.tsx:366
 msgid "Line {0} ({1}): {2}"
 msgstr "Línea {0} ({1}): {2}"
 
@@ -6084,7 +6084,7 @@ msgid "MJML compilation completed successfully with no warnings or errors."
 msgstr "La compilación MJML se completó exitosamente sin advertencias ni errores."
 
 #. placeholder {0}: mjmlError.message
-#: src/components/templates/TemplatePreviewDrawer.tsx:367
+#: src/components/templates/TemplatePreviewDrawer.tsx:358
 msgid "MJML Compilation Error: {0}"
 msgstr "Error de compilación MJML: {0}"
 
@@ -6116,7 +6116,7 @@ msgstr "Error de importación MJML"
 msgid "MJML Import Validation Failed"
 msgstr "Error en la validación de importación MJML"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:221
+#: src/components/templates/TemplatePreviewDrawer.tsx:212
 msgid "MJML Source"
 msgstr "Fuente MJML"
 
@@ -6356,7 +6356,7 @@ msgstr "No hay datos disponibles"
 msgid "No data returned"
 msgstr ""
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:279
+#: src/components/templates/TemplatePreviewDrawer.tsx:270
 msgid "No default sender configured"
 msgstr "No hay remitente predeterminado configurado"
 
@@ -6364,7 +6364,7 @@ msgstr "No hay remitente predeterminado configurado"
 msgid "No draft posts"
 msgstr "Sin publicaciones en borrador"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:254
+#: src/components/templates/TemplatePreviewDrawer.tsx:245
 msgid "no email"
 msgstr "sin correo"
 
@@ -6444,7 +6444,7 @@ msgstr "Sin publicaciones en esta categoría"
 msgid "No posts yet"
 msgstr "Sin publicaciones aún"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:404
+#: src/components/templates/TemplatePreviewDrawer.tsx:395
 msgid "No preview available or template is empty."
 msgstr "No hay vista previa disponible o la plantilla está vacía."
 
@@ -6488,7 +6488,7 @@ msgstr "No hay configuración disponible para el contenedor de atributos."
 msgid "No settings available for the head element."
 msgstr "No hay configuración disponible para el elemento head."
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:380
+#: src/components/templates/TemplatePreviewDrawer.tsx:371
 msgid "No specific details provided."
 msgstr "No se proporcionaron detalles específicos."
 
@@ -6596,7 +6596,7 @@ msgstr "No está en lista"
 #: src/components/settings/GeneralSettings.tsx:126
 #: src/components/settings/SMTPBridgeSettings.tsx:42
 #: src/components/settings/SMTPBridgeSettings.tsx:46
-#: src/components/templates/TemplatePreviewDrawer.tsx:299
+#: src/components/templates/TemplatePreviewDrawer.tsx:290
 msgid "Not set"
 msgstr "No establecido"
 
@@ -7796,7 +7796,7 @@ msgid "Repeat Y"
 msgstr "Repetir Y"
 
 #: src/components/templates/CreateTemplateDrawer.tsx:816
-#: src/components/templates/TemplatePreviewDrawer.tsx:288
+#: src/components/templates/TemplatePreviewDrawer.tsx:279
 msgid "Reply to"
 msgstr "Responder a"
 
@@ -9131,7 +9131,7 @@ msgstr "Estilo"
 msgid "Style Attributes"
 msgstr "Atributos de estilo"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:304
+#: src/components/templates/TemplatePreviewDrawer.tsx:295
 #: src/components/templates/TemplateTranslationsTab.tsx:212
 #: src/pages/BroadcastsPage.tsx:719
 #: src/pages/TemplatesPage.tsx:202
@@ -9140,7 +9140,7 @@ msgstr "Asunto"
 
 #: src/components/email_builder/blocks/MjPreviewBlock.tsx:33
 #: src/components/templates/CreateTemplateDrawer.tsx:795
-#: src/components/templates/TemplatePreviewDrawer.tsx:309
+#: src/components/templates/TemplatePreviewDrawer.tsx:300
 #: src/components/templates/TemplateTranslationsTab.tsx:220
 msgid "Subject preview"
 msgstr "Vista previa del asunto"
@@ -9366,7 +9366,7 @@ msgid "Template created successfully"
 msgstr "Plantilla creada exitosamente"
 
 #: src/components/email_builder/panels/Preview.tsx:336
-#: src/components/templates/TemplatePreviewDrawer.tsx:230
+#: src/components/templates/TemplatePreviewDrawer.tsx:221
 msgid "Template Data"
 msgstr "Datos de plantilla"
 
@@ -9406,7 +9406,7 @@ msgstr "Nombre de plantilla"
 msgid "Template set"
 msgstr "Conjunto de plantillas"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:124
+#: src/components/templates/TemplatePreviewDrawer.tsx:130
 msgid "Template structure data is missing or invalid."
 msgstr "Los datos de estructura de la plantilla faltan o son inválidos."
 

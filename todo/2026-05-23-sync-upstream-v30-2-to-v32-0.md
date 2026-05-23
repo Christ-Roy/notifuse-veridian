@@ -155,11 +155,11 @@ Une fois les 10 commits traités :
 
 | Release | Commit | Décision | Note |
 |---|---|---|---|
-| v30.2 | eec68b93 | ⬜ | (à traiter) |
-| v30.2 | 2118c6c2 | ⬜ | (à traiter) |
-| v30.2 | 9d1b5a96 | ⬜ | (à traiter) |
-| v30.2 | d50c83a6 | ⬜ | (à traiter) |
-| v30.2 | 8aaae0e1 | ⬜ | (à traiter) |
+| v30.2 | eec68b93 | ✅ PRIS (adapté) | openai + deps. Conflit config.go résolu en gardant VERSION=41.0 (notre numérotation). package-lock régénéré via npm install. |
+| v30.2 | 2118c6c2 | ✅ PRIS | soft bounce threshold. Touche bounce_classification, contact, inbound_webhook. Pas de conflit. |
+| v30.2 | 9d1b5a96 | ✅ PRIS | preview email subjects with compile endpoint. Touche template_compilation + TemplatePreviewDrawer. Pas de conflit. |
+| v30.2 | d50c83a6 | ✅ PRIS | openapi.yaml — docs API. Pas de conflit. |
+| v30.2 | 8aaae0e1 | ✅ PRIS | openapi.json — docs API. Pas de conflit. |
 | v30.3 | 57a42d69 | ⬜ | (à traiter) |
 | v31.0 | f5f144f7 | ⬜ | (à traiter) |
 | v31.0 | eb1ead06 | ⬜ | (à traiter) |

@@ -667,7 +667,7 @@ func (r *workspaceRepository) GetWorkspaceUsersWithEmail(ctx context.Context, wo
 	// puisse filtrer les users gérés par le Hub côté UI (Team Settings) tout
 	// en preservant l'usage AttachOwner qui consume la liste complete.
 	query := `
-		SELECT uw.user_id, uw.workspace_id, uw.role, uw.permissions, uw.created_at, uw.updated_at, u.email, u.type, u.veridian_managed
+		SELECT uw.user_id, uw.workspace_id, uw.role, uw.permissions, uw.created_at, uw.updated_at, u.email, u.type, u.veridian_managed, u.language
 		FROM user_workspaces uw
 		JOIN users u ON uw.user_id = u.id
 		WHERE uw.workspace_id = $1
@@ -691,6 +691,7 @@ func (r *workspaceRepository) GetWorkspaceUsersWithEmail(ctx context.Context, wo
 			&uw.Email,
 			&uw.Type,
 			&uw.VeridianManaged,
+			&uw.Language,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user workspace with email: %w", err)
