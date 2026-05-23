@@ -160,3 +160,6 @@ func (stubVeridianServiceWithoutCleanup) RotateAPIKey(context.Context, domain.Ro
 func (stubVeridianServiceWithoutCleanup) TransferOwner(context.Context, domain.TransferOwnerInput) (*domain.TransferOwnerResponse, error) {
 	return nil, nil
 }
+func (stubVeridianServiceWithoutCleanup) IssueMagicLinkForHub(context.Context, domain.IssueMagicLinkInput) (*domain.IssueMagicLinkResponse, error) {
+	return nil, nil
+}

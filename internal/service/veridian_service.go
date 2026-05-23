@@ -109,6 +109,14 @@ var ErrPlanImmune = errors.New("plan is immune to automatic downgrades (lifetime
 // HTTP 409 Conflict + code purge_not_eligible. CONTRAT-HUB sec. 5.8.
 var ErrPurgeNotEligible = errors.New("tenant not yet eligible for purge")
 
+// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+// ErrUserNotInApp est retourne par IssueMagicLinkForHub quand l'user existe
+// cote Hub mais n'a aucun workspace dans cette app Notifuse. Le handler mappe
+// ce sentinel vers HTTP 400 + {"error": "user_not_in_app", "hint": "..."}.
+// Le Hub redirige alors vers /dashboard?app=notifuse&hint=signup. PAS
+// d'auto-creation cote app (anti-pattern §6bis.2).
+var ErrUserNotInApp = errors.New("user has no workspace in this app")
+
 // veridianService est l'implementation par defaut de domain.VeridianService.
 type veridianService struct {
 	workspaceService domain.WorkspaceServiceInterface
@@ -2049,4 +2057,84 @@ func (s *veridianService) LookupByEmail(ctx context.Context, email string) (*dom
 	}
 
 	return resp, nil
+}
+
+// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+//
+// IssueMagicLinkForHub genere une URL self-contained auto-login pour un user
+// authentifie cote Hub (post-OAuth Google/Microsoft). Appele par le Hub en
+// HMAC apres bounce OAuth reussi.
+//
+// Algorithme :
+//  1. Lookup user par email (source de verite identite cross-app, cf §3.7).
+//     User inconnu (sql.ErrNoRows / ErrUserNotFound) ou type != user
+//     → ErrUserNotInApp (handler => 400 user_not_in_app).
+//  2. Lister les workspaces du user. Aucun workspace → ErrUserNotInApp.
+//  3. Picker le dernier actif (MAX(UpdatedAt) sur user_workspaces). Convention
+//     Notifuse : pas de last_seen_at dedie, UpdatedAt sert de proxy "derniere
+//     activite sur cette adhesion" (re-add, role change, etc.).
+//  4. BuildAutoLoginURL avec hubSecret → token HMAC self-contained TTL 60s.
+//
+// Pas d'auto-creation de workspace (anti-pattern §6bis.2). Le Hub gere la
+// redirection signup-app cote Hub via /dashboard?app=...&hint=signup.
+//
+// hubUserID n'est pas resolveur d'identite (Notifuse users.id est UUID strict,
+// hub_user_id peut etre "user_abc"). Conserve pour log/audit uniquement.
+func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain.IssueMagicLinkInput) (*domain.IssueMagicLinkResponse, error) {
+	if input.Email == "" {
+		return nil, errors.New("email required")
+	}
+	if input.HubUserID == "" {
+		return nil, errors.New("hub_user_id required")
+	}
+
+	// Step 1 : lookup user par email.
+	user, err := s.userRepo.GetUserByEmail(ctx, input.Email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotInApp
+		}
+		errMsg := err.Error()
+		if errMsg != "" && (strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "no rows")) {
+			return nil, ErrUserNotInApp
+		}
+		return nil, fmt.Errorf("lookup user by email: %w", err)
+	}
+	if user == nil {
+		return nil, ErrUserNotInApp
+	}
+	// Exclure les users non-humains (type=api_key) — coherent avec LookupByEmail.
+	if user.Type != domain.UserTypeUser {
+		return nil, ErrUserNotInApp
+	}
+
+	// Step 2 : lister workspaces.
+	userWorkspaces, err := s.workspaceRepo.GetUserWorkspaces(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get user workspaces: %w", err)
+	}
+	if len(userWorkspaces) == 0 {
+		return nil, ErrUserNotInApp
+	}
+
+	// Step 3 : pick le dernier actif (MAX UpdatedAt). Si tie / vide, prend
+	// le premier — deterministe pour les tests.
+	latest := userWorkspaces[0]
+	for _, uw := range userWorkspaces[1:] {
+		if uw.UpdatedAt.After(latest.UpdatedAt) {
+			latest = uw
+		}
+	}
+
+	// Step 4 : BuildAutoLoginURL (token HMAC self-contained, TTL 60s).
+	// Le Hub valide host *.veridian.site + https (cf. bounce-apps.ts).
+	autoLoginURL, _, err := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, latest.WorkspaceID, input.Email)
+	if err != nil {
+		// HUB_API_SECRET non configure → 500 cote handler.
+		return nil, fmt.Errorf("build auto-login url: %w", err)
+	}
+
+	return &domain.IssueMagicLinkResponse{
+		MagicLinkURL: autoLoginURL,
+	}, nil
 }

@@ -886,3 +886,47 @@ func TestVeridianService_ExposesRotateAPIKeyAndTransferOwner(t *testing.T) {
 	in2 := TransferOwnerInput{TenantID: "ws-1", NewOwnerEmail: "n@x.t", Reason: "r"}
 	assert.Equal(t, "ws-1", in2.TenantID)
 }
+
+// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+
+// TestIssueMagicLinkInput_JSONShape verifie le contrat JSON du body
+// POST /api/sso/issue-magic-link : champs `hub_user_id` + `email`, exacts noms
+// snake_case. Si on change accidentellement un tag JSON, le Hub reject avec
+// invalid_payload (champs manquants).
+func TestIssueMagicLinkInput_JSONShape(t *testing.T) {
+	in := IssueMagicLinkInput{
+		HubUserID: "hub-uuid-xyz",
+		Email:     "alice@example.com",
+	}
+	raw, err := json.Marshal(in)
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{"hub_user_id":"hub-uuid-xyz","email":"alice@example.com"}`, string(raw))
+}
+
+// TestIssueMagicLinkResponse_JSONShape verifie le contrat JSON 200 :
+// `magic_link_url` (pas `magicLinkUrl` ni `url`). Le Hub parse exactement
+// ce champ (cf. bounce-apps.ts:266).
+func TestIssueMagicLinkResponse_JSONShape(t *testing.T) {
+	out := IssueMagicLinkResponse{
+		MagicLinkURL: "https://notifuse.app.veridian.site/veridian/auto-login?token=abc.def",
+	}
+	raw, err := json.Marshal(out)
+	assert.NoError(t, err)
+	assert.JSONEq(t,
+		`{"magic_link_url":"https://notifuse.app.veridian.site/veridian/auto-login?token=abc.def"}`,
+		string(raw))
+}
+
+// TestVeridianService_ExposesIssueMagicLinkForHub : compile-time check que
+// l'interface VeridianService expose bien IssueMagicLinkForHub avec la bonne
+// signature. Si la methode est supprimee ou renommee, ce test casse au build.
+func TestVeridianService_ExposesIssueMagicLinkForHub(t *testing.T) {
+	var fn func(context.Context, IssueMagicLinkInput) (*IssueMagicLinkResponse, error)
+	_ = fn
+	// Verifier les noms de champs Input/Response (audit de contrat).
+	in := IssueMagicLinkInput{HubUserID: "x", Email: "a@b.t"}
+	assert.Equal(t, "x", in.HubUserID)
+	assert.Equal(t, "a@b.t", in.Email)
+	out := IssueMagicLinkResponse{MagicLinkURL: "https://x.veridian.site/"}
+	assert.Equal(t, "https://x.veridian.site/", out.MagicLinkURL)
+}

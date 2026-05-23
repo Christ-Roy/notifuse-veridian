@@ -1742,3 +1742,23 @@ func TestVeridianHandlePricingCache_RouteRegisteredInMainHandler(t *testing.T) {
 	assert.Contains(t, pattern, "pricing-cache")
 }
 
+// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+// Anti-regression : la route POST /api/sso/issue-magic-link doit rester
+// enregistree dans le mux Veridian. Si quelqu'un supprime le mux.Handle,
+// ce test casse en CI (vs detection tardive en e2e bounce OAuth).
+// Le test detail du handler est dans veridian_sso_handler_test.go.
+func TestVeridianHandleIssueMagicLink_RouteRegisteredInMainHandler(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sso/issue-magic-link", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/sso/issue-magic-link should be registered")
+	assert.Contains(t, pattern, "issue-magic-link")
+}
+

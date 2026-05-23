@@ -39,6 +39,12 @@ const (
 	// Le Hub peut lever cette dégradation en envoyant n'importe quelle mutation
 	// (Touch, UpdatePlan, etc.) qui appellera TouchHubSync et rafraîchira le timestamp.
 	ErrCodeHubSyncDead            = "hub_sync_dead"
+	// === Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+	// ErrCodeUserNotInApp est retourné par POST /api/sso/issue-magic-link
+	// quand l'user authentifié par le Hub n'a aucun workspace local. Le Hub
+	// redirige alors vers /dashboard?app=notifuse&hint=signup (flow §6bis.8.2).
+	// Pas d'auto-création de workspace cote app (anti-pattern §6bis.2).
+	ErrCodeUserNotInApp           = "user_not_in_app"
 )
 
 // VeridianErrorResponse est le format d'erreur additif des endpoints Veridian.

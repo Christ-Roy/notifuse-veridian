@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -1785,4 +1786,243 @@ func TestAttachMember_RoleAdminMappedToMember(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "member", resp.Role, "role Hub 'admin' doit être mappé vers 'member' Notifuse")
+}
+
+// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+// Tests unitaires de veridianService.IssueMagicLinkForHub.
+// Couvre :
+//   - User connu + 1 workspace → 200 magic_link_url
+//   - User connu + 2 workspaces → pick MAX(UpdatedAt)
+//   - User inconnu sql.ErrNoRows → ErrUserNotInApp
+//   - User inconnu message "not found" → ErrUserNotInApp
+//   - User de type api_key → ErrUserNotInApp
+//   - User connu + 0 workspace → ErrUserNotInApp
+//   - Email vide / hub_user_id vide → erreur validation
+//   - hubSecret vide → erreur "build auto-login url"
+//   - GetUserWorkspaces erreur → erreur propagee
+
+func TestIssueMagicLinkForHub_FoundOneWorkspace(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	email := "alice@example.com"
+	userID := "user-alice-uuid"
+	user := &domain.User{ID: userID, Email: email, Type: domain.UserTypeUser}
+
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(user, nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, userID).Return([]*domain.UserWorkspace{
+		{UserID: userID, WorkspaceID: "ws-alice", Role: "owner", UpdatedAt: time.Now()},
+	}, nil)
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid-1",
+		Email:     email,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Contains(t, resp.MagicLinkURL, "https://notifuse.app.veridian.site/veridian/auto-login?token=",
+		"magic_link_url doit pointer sur le host veridian.site avec token HMAC self-contained")
+}
+
+func TestIssueMagicLinkForHub_PicksLatestWorkspace(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	email := "multi@example.com"
+	userID := "user-multi-uuid"
+	user := &domain.User{ID: userID, Email: email, Type: domain.UserTypeUser}
+
+	now := time.Now()
+	older := now.Add(-30 * 24 * time.Hour) // 30j plus vieux
+	newer := now.Add(-1 * 24 * time.Hour)  // 1j plus vieux (= dernier actif)
+
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(user, nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, userID).Return([]*domain.UserWorkspace{
+		{UserID: userID, WorkspaceID: "ws-old", Role: "member", UpdatedAt: older},
+		{UserID: userID, WorkspaceID: "ws-recent", Role: "owner", UpdatedAt: newer},
+	}, nil)
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid-2",
+		Email:     email,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Contains(t, resp.MagicLinkURL, "token=", "URL doit contenir un token")
+	// Le workspace_id est embedde dans le payload base64 du token.
+	payload, perr := decodeAutoLoginPayload(t, resp.MagicLinkURL)
+	require.NoError(t, perr)
+	assert.Equal(t, "ws-recent", payload.WorkspaceID, "doit picker le workspace avec UpdatedAt le plus recent")
+}
+
+func TestIssueMagicLinkForHub_UserNotFound_ErrNoRows(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	email := "ghost@example.com"
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(nil, sql.ErrNoRows)
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid-ghost",
+		Email:     email,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrUserNotInApp))
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_UserNotFound_MessageNotFound(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	email := "ghost@example.com"
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(nil, errors.New("user not found in db"))
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid-ghost",
+		Email:     email,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrUserNotInApp))
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_APIKeyUser_Rejected(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	email := "veridian-api-tenant@notifuse.app"
+	apiKeyUser := &domain.User{ID: "apikey-uuid", Email: email, Type: domain.UserTypeAPIKey}
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(apiKeyUser, nil)
+	// GetUserWorkspaces ne doit PAS etre appele (user api_key rejete avant).
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid-x",
+		Email:     email,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrUserNotInApp))
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_ZeroWorkspaces_ErrUserNotInApp(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	email := "solo@example.com"
+	userID := "user-solo-uuid"
+	user := &domain.User{ID: userID, Email: email, Type: domain.UserTypeUser}
+
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(user, nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, userID).Return([]*domain.UserWorkspace{}, nil)
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid-solo",
+		Email:     email,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrUserNotInApp))
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_EmptyEmail_Validation(t *testing.T) {
+	svc, _ := newVeridianService(t)
+
+	resp, err := svc.IssueMagicLinkForHub(context.Background(), domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid",
+		Email:     "",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "email")
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_EmptyHubUserID_Validation(t *testing.T) {
+	svc, _ := newVeridianService(t)
+
+	resp, err := svc.IssueMagicLinkForHub(context.Background(), domain.IssueMagicLinkInput{
+		HubUserID: "",
+		Email:     "alice@example.com",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "hub_user_id")
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_HubSecretEmpty_BuildAutoLoginFails(t *testing.T) {
+	// Si hubSecret est vide, BuildAutoLoginURL retourne une erreur (cf.
+	// veridian_token.go). Le service propage en erreur infra (handler => 500).
+	svc, m := newVeridianService(t)
+	svc.hubSecret = "" // override post-construction
+	ctx := context.Background()
+
+	email := "alice@example.com"
+	userID := "user-alice-uuid"
+	user := &domain.User{ID: userID, Email: email, Type: domain.UserTypeUser}
+
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(user, nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, userID).Return([]*domain.UserWorkspace{
+		{UserID: userID, WorkspaceID: "ws-alice", Role: "owner", UpdatedAt: time.Now()},
+	}, nil)
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid",
+		Email:     email,
+	})
+	require.Error(t, err)
+	assert.False(t, errors.Is(err, ErrUserNotInApp),
+		"hubSecret vide doit etre une erreur infra, pas user_not_in_app")
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_GetUserWorkspacesError_Propagated(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	email := "bob@example.com"
+	userID := "user-bob-uuid"
+	user := &domain.User{ID: userID, Email: email, Type: domain.UserTypeUser}
+
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(user, nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, userID).Return(nil, errors.New("db timeout"))
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid-bob",
+		Email:     email,
+	})
+	require.Error(t, err)
+	assert.False(t, errors.Is(err, ErrUserNotInApp),
+		"erreur DB doit etre propagee (500), pas mappe en user_not_in_app")
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_DBError_Propagated(t *testing.T) {
+	// Erreur DB sur GetUserByEmail (autre que sql.ErrNoRows / "not found")
+	// doit etre propagee, pas mappee en ErrUserNotInApp.
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	email := "alice@example.com"
+	m.userRepo.EXPECT().GetUserByEmail(ctx, email).Return(nil, errors.New("connection refused"))
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{
+		HubUserID: "hub-uuid",
+		Email:     email,
+	})
+	require.Error(t, err)
+	assert.False(t, errors.Is(err, ErrUserNotInApp))
+	assert.Nil(t, resp)
+}
+
+// decodeAutoLoginPayload extrait le segment base64 du token URL et le decode
+// en AutoLoginPayload. Utilitaire de test pour verifier que le bon workspace_id
+// est embarque dans le token genere.
+func decodeAutoLoginPayload(t *testing.T, urlStr string) (*domain.AutoLoginPayload, error) {
+	t.Helper()
+	idx := strings.Index(urlStr, "token=")
+	if idx < 0 {
+		return nil, errors.New("no token= in url")
+	}
+	token := urlStr[idx+len("token="):]
+	return domain.VerifyAutoLoginToken(token, "test-hub-secret-32chars-min-len-ok-padding")
 }

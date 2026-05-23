@@ -157,6 +157,13 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Auth : HMAC read-only (pas d idempotency — requete safe et idempotente par nature).
 	mux.Handle("POST /api/users/by-email", hmac(http.HandlerFunc(h.handleDiscovery)))
 
+	// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8, 2026-05-23) ===
+	// Appele par le Hub apres OAuth Google/Microsoft reussi pour delivrer un
+	// magic link self-contained sans 2eme tour OAuth cote app. Idempotent par
+	// nature (chaque call genere un token TTL 60s), pas besoin d Idempotency-Key.
+	// Auth : HMAC seul.
+	mux.Handle("POST /api/sso/issue-magic-link", hmac(http.HandlerFunc(h.handleIssueMagicLink)))
+
 	// === Veridian patch === Endpoint public (no HMAC) qui renvoie le tag
 	// et le SHA git du binaire qui tourne. Permet à la CI de valider qu'un
 	// redeploy a effectivement remplacé le container — défense contre le

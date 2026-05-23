@@ -813,6 +813,43 @@ type VeridianService interface {
 	// Divergence Notifuse : l'ancien owner devient `member` (pas `admin` —
 	// pas natif Notifuse). Cosmetique : les droits sont effectivement retires.
 	TransferOwner(ctx context.Context, input TransferOwnerInput) (*TransferOwnerResponse, error)
+
+	// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+	// IssueMagicLinkForHub genere une URL self-contained auto-login pour un
+	// user authentifie par le Hub (post-OAuth Google/Microsoft).
+	//
+	// Semantique :
+	//   - Lookup user par EMAIL (source de verite cross-app, cf §3.7 — le
+	//     hub_user_id n'est PAS forcement un UUID Notifuse).
+	//   - User inconnu ou aucun workspace → ErrUserNotInApp (handler => 400
+	//     {error: "user_not_in_app"}). Pas d'auto-creation (anti-pattern §6bis.2).
+	//   - Plusieurs workspaces → pick le dernier actif (MAX(UpdatedAt) sur
+	//     user_workspaces). L'user peut switcher apres dans l'UI app.
+	//   - Genere un BuildAutoLoginURL (token HMAC self-contained, TTL 60s).
+	//
+	// Le hub_user_id est conserve pour le log/audit mais n'est pas resolveur
+	// d'identite cote Notifuse.
+	IssueMagicLinkForHub(ctx context.Context, input IssueMagicLinkInput) (*IssueMagicLinkResponse, error)
+}
+
+// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+
+// IssueMagicLinkInput est le body de POST /api/sso/issue-magic-link.
+// Appele par le Hub apres OAuth Google/Microsoft reussi pour delivrer un
+// magic link cross-app sans deuxieme tour OAuth cote app.
+type IssueMagicLinkInput struct {
+	// HubUserID : id cote hub_app.users (uuid bridge). Conserve pour log/audit
+	// uniquement — Notifuse resout l'identite par EMAIL (CONTRAT-HUB §3.7).
+	HubUserID string `json:"hub_user_id"`
+	// Email : email du user authentifie par le Hub. Source de verite identite.
+	Email string `json:"email"`
+}
+
+// IssueMagicLinkResponse est la reponse 200 de POST /api/sso/issue-magic-link.
+// magic_link_url doit etre en https sur un host *.veridian.site (le Hub valide
+// cote lui et rejette sinon avec invalid_response, cf. bounce-apps.ts).
+type IssueMagicLinkResponse struct {
+	MagicLinkURL string `json:"magic_link_url"`
 }
 
 // === Hub discovery types (2026-05-20) ===

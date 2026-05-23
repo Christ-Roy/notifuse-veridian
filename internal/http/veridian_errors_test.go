@@ -151,3 +151,31 @@ func TestWriteJSONErrorCode_HubSyncDead_503(t *testing.T) {
 	require.NotNil(t, body.Details)
 	assert.Equal(t, float64(3600), body.Details["retry_after_s"])
 }
+
+// === Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
+
+// TestVeridianErrors_UserNotInAppCode valide que ErrCodeUserNotInApp = "user_not_in_app".
+// String FIGÉE — le Hub parse ce literal (bounce-apps.ts:228) pour distinguer
+// user_not_in_app (redirect signup) du reste (unreachable).
+func TestVeridianErrors_UserNotInAppCode(t *testing.T) {
+	assert.Equal(t, "user_not_in_app", ErrCodeUserNotInApp,
+		"ErrCodeUserNotInApp doit valoir 'user_not_in_app' — string figée pour le parser Hub")
+}
+
+// TestWriteJSONErrorCode_UserNotInApp_400 valide le format de reponse 400
+// user_not_in_app. Le champ `error` doit valoir litteralement "user_not_in_app"
+// (pas un message humain) parce que le Hub lit exactement ce champ pour brancher.
+func TestWriteJSONErrorCode_UserNotInApp_400(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteJSONErrorCode(rec, ErrCodeUserNotInApp, "user_not_in_app", http.StatusBadRequest,
+		map[string]interface{}{"hint": "no workspace for this hub_user_id"})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var body VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "user_not_in_app", body.Error, "champ `error` doit etre 'user_not_in_app' litteral")
+	assert.Equal(t, "user_not_in_app", body.Code)
+	require.NotNil(t, body.Details)
+	assert.Equal(t, "no workspace for this hub_user_id", body.Details["hint"])
+}
