@@ -2025,6 +2025,8 @@ func decodeAutoLoginPayload(t *testing.T, urlStr string) (*domain.AutoLoginPaylo
 	}
 	token := urlStr[idx+len("token="):]
 	return domain.VerifyAutoLoginToken(token, "test-hub-secret-32chars-min-len-ok-padding")
+}
+
 // === CONTRAT-BILLING v2 §3.4.4 — immunite plan offert (couverture etendue) ===
 
 func TestVeridianService_UpdatePlan_V2_ImmuneRejectsStripeTrial(t *testing.T) {

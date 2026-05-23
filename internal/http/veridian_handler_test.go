@@ -1887,6 +1887,16 @@ func TestVeridianHandleIssueMagicLink_RouteRegisteredInMainHandler(t *testing.T)
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sso/issue-magic-link", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/sso/issue-magic-link should be registered")
+	assert.Contains(t, pattern, "issue-magic-link")
+}
+
 // === Veridian patch — sync v1.5 CONTRAT-HUB §5.22.2 (2026-05-23) ===
 // Test que la route alias workspace-level prescrite par le contrat v1.4
 // (`POST /api/veridian/workspaces/{tenantId}/attach-member`) est bien
@@ -1900,14 +1910,9 @@ func TestVeridianRegisterRoutes_AttachMemberWorkspaceAlias(t *testing.T) {
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := NewVeridianHandler(svc, logger.NewLogger())
+
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/sso/issue-magic-link", nil)
-	_, pattern := mux.Handler(req)
-	assert.NotEmpty(t, pattern, "POST /api/sso/issue-magic-link should be registered")
-	assert.Contains(t, pattern, "issue-magic-link")
-}
 
 	// Alias workspace-level prescrit par §5.22.2.
 	req := httptest.NewRequest(http.MethodPost, "/api/veridian/workspaces/ws-1/attach-member", nil)
