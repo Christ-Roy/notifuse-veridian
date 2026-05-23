@@ -1,0 +1,110 @@
+<!--
+  Template Notifuse : invitation Prospection
+  ──────────────────────────────────────────
+  Notification ID Notifuse : "invitation-prospection"
+  Workspace cible          : workspace Notifuse du tenant Prospection
+                             (1 workspace Notifuse = 1 tenant Prospection)
+  Caller                   : src/lib/notifuse/client.ts → sendInvitationEmail()
+                             via src/lib/invitations.ts → createInvitation()
+
+  Variables Liquid (data, sans préfixe `data.`) :
+    inviter_email     ex: "boss@acme.com"
+    workspace_name    ex: "Team Sales" (fallback tenant.name)
+    invite_url        ex: "https://prospection.app.veridian.site/invite/<token>"
+    expires_at        ISO string ex: "2026-05-30T00:00:00.000Z"
+
+  À importer dans chaque workspace Notifuse Prospection (cf
+  notifuse-veridian/todo/2026-05-23-import-template-invitation-prospection.md).
+
+  Direction artistique Veridian (cohérent avec
+  veridian-hub/lib/email/templates/cross-app-invitation.ts) :
+    vert primary  #6DD5B0  (CTA)
+    vert foncé    #1A4D3A  (titres)
+    bg clair      #F0FDF7
+    bg footer     #F9FAFB
+    texte         #374151
+    texte footer  #9CA3AF
+-->
+<mjml>
+  <mj-head>
+    <mj-title>Invitation Veridian Prospection</mj-title>
+    <mj-preview>{{ inviter_email }} vous invite à rejoindre {{ workspace_name }} sur Veridian Prospection.</mj-preview>
+    <mj-attributes>
+      <mj-text font-family="'Segoe UI', Arial, Helvetica, sans-serif" font-size="16px" color="#374151" line-height="24px" />
+      <mj-section padding="20px 0" />
+    </mj-attributes>
+    <mj-style>
+      .veridian-link { color: #1A4D3A; text-decoration: underline; }
+    </mj-style>
+  </mj-head>
+
+  <mj-body background-color="#F0FDF7">
+
+    <!-- Header logo -->
+    <mj-section padding="24px 0">
+      <mj-column>
+        <mj-image src="https://veridian.site/icon.svg" alt="Veridian" width="48px" align="center" />
+        <mj-text align="center" font-size="14px" color="#6B7280" letter-spacing="0.5px" padding-top="8px">VERIDIAN</mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Carte principale -->
+    <mj-section background-color="#FFFFFF" border-radius="12px" padding="40px" border="1px solid #E5E7EB">
+      <mj-column>
+        <mj-text font-size="24px" font-weight="700" color="#1A4D3A" line-height="32px" padding-bottom="16px">
+          Vous avez été invité sur Prospection
+        </mj-text>
+
+        <mj-text padding-bottom="16px">
+          <strong style="color: #1A4D3A;">{{ inviter_email }}</strong>
+          vous invite à rejoindre l'espace
+          <strong style="color: #1A4D3A;">{{ workspace_name }}</strong>
+          sur Veridian Prospection, l'outil de prospection commerciale B2B Veridian.
+        </mj-text>
+
+        <mj-button
+          href="{{ invite_url }}"
+          background-color="#6DD5B0"
+          color="#1A4D3A"
+          font-weight="700"
+          font-size="15px"
+          border-radius="8px"
+          padding="24px 0 16px 0"
+          inner-padding="14px 32px"
+        >
+          Accepter l'invitation
+        </mj-button>
+
+        <mj-text align="center" font-size="13px" color="#9CA3AF" line-height="20px" padding-top="16px">
+          Ce lien expire le <strong>{{ expires_at }}</strong>.<br />
+          Si vous n'attendiez pas cette invitation, ignorez cet email.
+        </mj-text>
+
+        <mj-text align="center" font-size="12px" color="#9CA3AF" line-height="18px" padding-top="16px">
+          Si le bouton ne fonctionne pas, copiez-collez ce lien dans votre navigateur&nbsp;:<br />
+          <a href="{{ invite_url }}" class="veridian-link">{{ invite_url }}</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section background-color="#F9FAFB" padding="32px 24px 16px">
+      <mj-column>
+        <mj-text align="center" font-size="12px" color="#9CA3AF" padding-bottom="8px">
+          Cet email vous a été envoyé par Veridian car {{ inviter_email }} vous a explicitement invité sur Prospection.
+        </mj-text>
+        <mj-text align="center" font-size="12px" color="#9CA3AF" padding-bottom="8px">
+          <a href="https://veridian.site" class="veridian-link" style="color: #6B7280;">veridian.site</a>
+          &nbsp;&middot;&nbsp;
+          <a href="{{ unsubscribe_url }}" class="veridian-link" style="color: #6B7280;">Se désinscrire</a>
+          &nbsp;&middot;&nbsp;
+          <a href="https://veridian.site/legal" class="veridian-link" style="color: #6B7280;">Mentions légales</a>
+        </mj-text>
+        <mj-text align="center" font-size="11px" color="#9CA3AF">
+          &copy; 2026 Veridian. Tous droits réservés.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+  </mj-body>
+</mjml>

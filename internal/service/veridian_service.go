@@ -127,6 +127,15 @@ type veridianService struct {
 	// ErrAPIKeyGraceRepoNotConfigured. Injecté post-construction via
 	// ConfigureAPIKeyGraceSupport (cf. veridian_rotate_transfer_service.go).
 	apiKeyGraceRepo domain.VeridianAPIKeyGraceRepository
+
+	// === Veridian patch — 2026-05-23 ===
+	// templateService + transactionalNotificationService sont OPTIONNELS :
+	// si nil, le seed du template invitation-prospection au Provision() est
+	// silencieusement skippé (best-effort, jamais bloquant). Injectés
+	// post-construction via ConfigureSeedTemplatesSupport
+	// (cf. veridian_seed_templates.go).
+	templateService                  domain.TemplateService
+	transactionalNotificationService *TransactionalNotificationService
 }
 
 // NewVeridianService construit un VeridianService.
@@ -494,6 +503,11 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 
 	// 10. Marquer le sync Hub réussi (best-effort, ne bloque pas le provisioning).
 	s.touchHubSync(ctx, input.TenantID)
+
+	// 11. === Veridian patch 2026-05-23 === Seed du template transactionnel
+	// invitation-prospection (cf. veridian_seed_templates.go). Best-effort,
+	// idempotent, jamais bloquant. Skip silencieux si services non câblés.
+	s.seedInvitationProspectionTemplate(ctx, input.TenantID)
 
 	return &domain.ProvisionResponse{
 		WorkspaceID:  input.TenantID,

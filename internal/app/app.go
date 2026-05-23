@@ -1101,6 +1101,16 @@ func (a *App) InitServices() error {
 		}
 	}
 
+	// === Veridian patch — 2026-05-23 === Injecter templateService +
+	// transactionalNotificationService pour le seed du template
+	// invitation-prospection au Provision (cf. veridian_seed_templates.go).
+	// Best-effort : si non câblé, le seed est skippé silencieusement.
+	if a.templateService != nil && a.transactionalNotificationService != nil {
+		if err := service.ConfigureSeedTemplatesSupport(a.veridianService, a.templateService, a.transactionalNotificationService); err != nil {
+			a.logger.WithField("error", err.Error()).Warn("ConfigureSeedTemplatesSupport failed — invitation-prospection seed disabled")
+		}
+	}
+
 	return nil
 }
 

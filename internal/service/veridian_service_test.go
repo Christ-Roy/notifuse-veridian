@@ -68,6 +68,25 @@ func TestVeridianService_New_DefaultsPlanToFree(t *testing.T) {
 	assert.Equal(t, "free", concrete.defaultPlan)
 }
 
+// === Veridian patch — 2026-05-23 === Garde-fou de back-compat : les
+// nouveaux champs templateService + transactionalNotificationService ajoutés
+// pour le seed du template invitation-prospection (cf.
+// veridian_seed_templates.go) doivent rester nil par défaut au sortir de
+// NewVeridianService. C'est ce qui permet à tous les tests Provision
+// existants (TestVeridianService_Provision_*) de ne pas avoir à stub le
+// seed — il est skippé silencieusement quand non câblé.
+//
+// Si ce test casse, c'est qu'on a réintégré les services dans le
+// constructeur — alors il faut soit refaire tous les mocks Provision, soit
+// garder le pattern setter post-construction
+// (ConfigureSeedTemplatesSupport).
+func TestVeridianService_New_SeedServicesUnconfigured(t *testing.T) {
+	svc := NewVeridianService(nil, nil, nil, nil, nil, nil, "free", "root@x", "http://x", "test-hub-secret", logger.NewLogger())
+	concrete := svc.(*veridianService)
+	assert.Nil(t, concrete.templateService, "templateService doit rester nil sortie constructor (seed opt-in via ConfigureSeedTemplatesSupport)")
+	assert.Nil(t, concrete.transactionalNotificationService, "transactionalNotificationService doit rester nil sortie constructor")
+}
+
 func TestVeridianService_Provision_NewTenant(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
