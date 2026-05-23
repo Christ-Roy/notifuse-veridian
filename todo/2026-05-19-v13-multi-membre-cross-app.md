@@ -215,3 +215,95 @@ ajout `user_workspaces.deleted_at` si pas déjà présent.
 
 Sous `## Réponse — YYYY-MM-DD` en fin de ce fichier, puis déplacement dans
 `done/` une fois mergé. Ping Robert pour route le résultat vers l'agent Hub.
+
+## Réponse — 2026-05-23 — Livrables 1+2+3 (sync/remove/restore-member) — partiel
+
+**Status** : 3 endpoints sur 6 livrés. Freeze/webhook/backfill remis à plus
+tard (cf. justification ci-dessous).
+
+### Livrés
+
+- ✅ **POST /api/tenants/{id}/sync-member** (§5.18.3) — propage un membre Hub
+  → Notifuse. Idempotent (replay = 200 synced=true). Owner kept no-downgrade.
+  Mappe Hub admin → Notifuse member (workspace upstream sans admin natif).
+- ✅ **POST /api/tenants/{id}/remove-member** (§5.19.2) — hard delete
+  user_workspaces row (le user reste en table users pour audit). Refuse si
+  target = owner → 409 `cannot_remove_owner` avec hint vers transfer-owner.
+  Idempotent (unknown user / not member = 200).
+- ✅ **POST /api/tenants/{id}/restore-member** (§5.20) — re-add user en role
+  member. Idempotent. Recree le user si supprime entre-temps (defensif).
+
+### Architecture
+
+- Handlers : `internal/http/veridian_membership_handler.go` (+test) — pattern
+  identique aux autres handlers Veridian. HMAC + Idempotency-Key via
+  `writeRoute()`. Mapping erreurs cohérent : 400/404/409/422/500.
+- Service : `internal/service/veridian_membership_service.go` (+test) — 3
+  methodes sur `veridianService`. Réutilise `ctxAsUser`/`cleanupSession` +
+  factorise `resolveWorkspaceCaller()` (owner humain → fallback root).
+- Domain : `internal/domain/veridian_membership.go` — types
+  Sync/Remove/Restore Member Input/Response. Validation `SyncMemberRole`
+  (member|admin uniquement, owner refusé).
+- Error code : nouveau `ErrCodeCannotRemoveOwner = "cannot_remove_owner"`.
+- Mocks regenerés : `mock_veridian_service.go` + stubs back-compat
+  (`veridian_api_key_grace_cleanup_test.go`).
+- Routes : 3 nouvelles routes enregistrées dans `RegisterRoutes()`.
+
+### Sémantique remove-member : hard delete vs soft-delete
+
+Le contrat parle de "soft delete user_workspaces.deleted_at" mais Notifuse
+n'a pas cette colonne v1.3. **Hard delete + restore en re-INSERT** preserve
+le comportement metier exigé (user perd l'accès, peut être restauré) sans
+imposer une migration DB destructive. Le user lui-même reste en table users
+pour audit. Sa data créée (templates, broadcasts) reste attachée au tenant.
+
+Si Robert veut tracer l'historique des retraits (qui/quand/why), il faudra
+ajouter une colonne `user_workspaces.deleted_at` (migration additive V45+)
++ refactor service. Pas critique pour la sémantique métier.
+
+### NON livrés (à reporter dans un ticket de suivi)
+
+- ⏸️ **Livrable 4 — Webhook `tenant.member_role_changed` app → Hub** (§5.18.4)
+  Notifuse n'a pas de UI admin pour changer le rôle d'un member en interne
+  (workspace_service.AddUserToWorkspace hardcode 'member'). Le webhook est
+  donc dormant — pas d'événement à émettre tant qu'une UI admin n'existe
+  pas. Si elle est ajoutée plus tard, brancher l'emit via veridian_webhook_emitter.
+
+- ⏸️ **Livrable 5 — Freeze/Unfreeze members en mode dégradé** (§5.21)
+  Le paywall middleware Notifuse est **tenant-level**, pas per-user. Le
+  freeze per-membre exige :
+  1. Nouvelle colonne `user_workspaces.frozen_at TIMESTAMP NULL` (V45+).
+  2. Refonte paywall middleware pour évaluer per-user (lookup
+     user_workspaces.frozen_at en plus de veridian_plan).
+  3. Mapping 402 `tenant_paywall` + obfuscation §5.9 par user_id.
+
+  Refactor non trivial (~1j de dev + tests). Reporté à un ticket dédié à
+  ouvrir quand le quota seats Hub sera live (Hub n'émet pas encore
+  `tenant.member_frozen` cross-app — premier consommateur business absent).
+
+  **Default conservateur §5.21.4** : le quota côté Hub bloque les nouvelles
+  invitations, c'est suffisant comme protection minimale en l'attente.
+
+- ⏸️ **Livrable 6 — Migration backfill `hub_app.tenant_members`**
+  Script idempotent qui scan user_workspaces et émet webhooks
+  `tenant.member_migrated_to_v13` vers le Hub. Pas critique tant que Hub
+  v1.3 n'a pas créé la table `tenant_members` côté lui (Hub stocke encore
+  les owners only). À planifier en co-coordination avec l'agent Hub quand
+  la table sera live côté hub_app.
+
+### Test coverage
+
+- Handler tests : 23 cas (success + validation + error mapping).
+- Service tests : 16 cas (state machine + idempotence + ErrCannotRemoveOwner).
+- Route registration tests : 3 (sync/remove/restore).
+- Domain tests : SyncMemberRole.IsValid + interface VeridianService exposes
+  SyncMember/RemoveMember/RestoreMember.
+- Pre-push hook `check-test-mapping.sh` : passe (mapping 1-pour-1 strict
+  respecté, couverture routes API 100%).
+
+### Suivi à ouvrir
+
+À déposer dans `todo/` Notifuse à activation freeze :
+- `2026-05-XX-membership-freeze-per-user.md` (livrable 5 + migration V45+)
+- `2026-05-XX-member-role-change-webhook.md` (livrable 4 si UI admin ajoutée)
+- `2026-05-XX-backfill-tenant-members-v13.md` (livrable 6, après alignement Hub)

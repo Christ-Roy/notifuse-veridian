@@ -215,6 +215,21 @@ func (mr *MockVeridianServiceMockRecorder) Purge(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Purge", reflect.TypeOf((*MockVeridianService)(nil).Purge), arg0, arg1)
 }
 
+// RemoveMember mocks base method.
+func (m *MockVeridianService) RemoveMember(arg0 context.Context, arg1 domain.RemoveMemberInput) (*domain.RemoveMemberResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveMember", arg0, arg1)
+	ret0, _ := ret[0].(*domain.RemoveMemberResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveMember indicates an expected call of RemoveMember.
+func (mr *MockVeridianServiceMockRecorder) RemoveMember(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveMember", reflect.TypeOf((*MockVeridianService)(nil).RemoveMember), arg0, arg1)
+}
+
 // Restore mocks base method.
 func (m *MockVeridianService) Restore(arg0 context.Context, arg1 domain.RestoreInput) (*domain.RestoreResponse, error) {
 	m.ctrl.T.Helper()
@@ -228,6 +243,21 @@ func (m *MockVeridianService) Restore(arg0 context.Context, arg1 domain.RestoreI
 func (mr *MockVeridianServiceMockRecorder) Restore(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockVeridianService)(nil).Restore), arg0, arg1)
+}
+
+// RestoreMember mocks base method.
+func (m *MockVeridianService) RestoreMember(arg0 context.Context, arg1 domain.RestoreMemberInput) (*domain.RestoreMemberResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestoreMember", arg0, arg1)
+	ret0, _ := ret[0].(*domain.RestoreMemberResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RestoreMember indicates an expected call of RestoreMember.
+func (mr *MockVeridianServiceMockRecorder) RestoreMember(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreMember", reflect.TypeOf((*MockVeridianService)(nil).RestoreMember), arg0, arg1)
 }
 
 // Resume mocks base method.
@@ -286,6 +316,21 @@ func (m *MockVeridianService) Suspend(arg0 context.Context, arg1 domain.SuspendI
 func (mr *MockVeridianServiceMockRecorder) Suspend(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suspend", reflect.TypeOf((*MockVeridianService)(nil).Suspend), arg0, arg1)
+}
+
+// SyncMember mocks base method.
+func (m *MockVeridianService) SyncMember(arg0 context.Context, arg1 domain.SyncMemberInput) (*domain.SyncMemberResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncMember", arg0, arg1)
+	ret0, _ := ret[0].(*domain.SyncMemberResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SyncMember indicates an expected call of SyncMember.
+func (mr *MockVeridianServiceMockRecorder) SyncMember(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncMember", reflect.TypeOf((*MockVeridianService)(nil).SyncMember), arg0, arg1)
 }
 
 // Touch mocks base method.

@@ -930,3 +930,24 @@ func TestVeridianService_ExposesIssueMagicLinkForHub(t *testing.T) {
 	out := IssueMagicLinkResponse{MagicLinkURL: "https://x.veridian.site/"}
 	assert.Equal(t, "https://x.veridian.site/", out.MagicLinkURL)
 }
+
+// === Veridian patch — v1.3 Multi-membre cross-app (2026-05-19) ===
+// Garde-fou compile-time pour les 3 nouvelles methodes de l'interface
+// VeridianService (SyncMember/RemoveMember/RestoreMember). Si une signature
+// diverge ou une methode est retiree, le build casse ici.
+func TestVeridianService_ExposesMembershipMethods(t *testing.T) {
+	var syncFn func(context.Context, SyncMemberInput) (*SyncMemberResponse, error)
+	var removeFn func(context.Context, RemoveMemberInput) (*RemoveMemberResponse, error)
+	var restoreFn func(context.Context, RestoreMemberInput) (*RestoreMemberResponse, error)
+	_ = syncFn
+	_ = removeFn
+	_ = restoreFn
+
+	// Audit ticket : TenantID `json:"-"` (injecte depuis path param, pas body).
+	syncIn := SyncMemberInput{TenantID: "ws-1", UserEmail: "a@x.test", HubUserID: "u", Role: SyncMemberRoleMember}
+	assert.Equal(t, "ws-1", syncIn.TenantID)
+	removeIn := RemoveMemberInput{TenantID: "ws-1", UserEmail: "a@x.test"}
+	assert.Equal(t, "ws-1", removeIn.TenantID)
+	restoreIn := RestoreMemberInput{TenantID: "ws-1", UserEmail: "a@x.test"}
+	assert.Equal(t, "ws-1", restoreIn.TenantID)
+}

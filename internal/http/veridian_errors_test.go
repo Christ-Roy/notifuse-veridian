@@ -124,6 +124,37 @@ func TestVeridianErrors_AttachMemberCodes(t *testing.T) {
 	assert.Equal(t, "user_role_conflict", ErrCodeUserRoleConflict, "ErrCodeUserRoleConflict doit valoir user_role_conflict")
 }
 
+// TestVeridianErrors_MembershipCodes — v1.3 multi-membre cross-app (§5.19.1).
+// cannot_remove_owner est le code retourné par remove-member quand le target est
+// l'owner du workspace. String figée pour les consommateurs Hub (mapping 409).
+func TestVeridianErrors_MembershipCodes(t *testing.T) {
+	assert.Equal(t, "cannot_remove_owner", ErrCodeCannotRemoveOwner,
+		"ErrCodeCannotRemoveOwner doit valoir cannot_remove_owner — string figée pour les consommateurs Hub")
+}
+
+// TestWriteJSONErrorCode_CannotRemoveOwner_409 — garde-fou sur le mapping
+// 409 + hint vers transfer-owner (CONTRAT-HUB §5.19.1).
+func TestWriteJSONErrorCode_CannotRemoveOwner_409(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteJSONErrorCode(rec, ErrCodeCannotRemoveOwner,
+		"cannot remove workspace owner — use transfer-owner instead",
+		http.StatusConflict,
+		map[string]interface{}{
+			"tenant_id":  "ws-1",
+			"user_email": "owner@x.test",
+			"hint":       "use POST /api/tenants/{id}/transfer-owner to change owner first",
+		})
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+
+	var body VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeCannotRemoveOwner, body.Code)
+	require.NotNil(t, body.Details)
+	assert.Equal(t, "ws-1", body.Details["tenant_id"])
+	assert.Contains(t, body.Details["hint"], "transfer-owner")
+}
+
 // TestVeridianErrors_HubSyncDeadCode — V39 résilience billing.
 // hub_sync_dead est un nouveau code machine lisible distinct des autres
 // codes paywall. String figée pour les consommateurs Hub.

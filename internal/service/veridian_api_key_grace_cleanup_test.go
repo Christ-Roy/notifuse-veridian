@@ -163,3 +163,12 @@ func (stubVeridianServiceWithoutCleanup) TransferOwner(context.Context, domain.T
 func (stubVeridianServiceWithoutCleanup) IssueMagicLinkForHub(context.Context, domain.IssueMagicLinkInput) (*domain.IssueMagicLinkResponse, error) {
 	return nil, nil
 }
+func (stubVeridianServiceWithoutCleanup) SyncMember(context.Context, domain.SyncMemberInput) (*domain.SyncMemberResponse, error) {
+	return nil, nil
+}
+func (stubVeridianServiceWithoutCleanup) RemoveMember(context.Context, domain.RemoveMemberInput) (*domain.RemoveMemberResponse, error) {
+	return nil, nil
+}
+func (stubVeridianServiceWithoutCleanup) RestoreMember(context.Context, domain.RestoreMemberInput) (*domain.RestoreMemberResponse, error) {
+	return nil, nil
+}

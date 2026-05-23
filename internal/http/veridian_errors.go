@@ -31,6 +31,10 @@ const (
 	ErrCodeTenantSuspended        = "tenant_suspended"
 	ErrCodeInvalidRole            = "invalid_role"
 	ErrCodeUserRoleConflict       = "user_role_conflict"
+	// === v1.3 multi-membre (2026-05-19) ===
+	// CONTRAT-HUB §5.19.1 : remove-member refuse de retirer l'owner.
+	// L'appelant doit utiliser transfer-owner (§5.16) au prealable.
+	ErrCodeCannotRemoveOwner      = "cannot_remove_owner"
 	// === résilience billing Hub (V39, 2026-05-21) ===
 	// ErrCodeHubSyncDead est retourné par le middleware paywall quand
 	// last_hub_sync_at > 72h (Hub considéré mort). Distinct de ErrCodePaywallUnavailable

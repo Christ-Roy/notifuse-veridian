@@ -830,6 +830,26 @@ type VeridianService interface {
 	// Le hub_user_id est conserve pour le log/audit mais n'est pas resolveur
 	// d'identite cote Notifuse.
 	IssueMagicLinkForHub(ctx context.Context, input IssueMagicLinkInput) (*IssueMagicLinkResponse, error)
+
+	// === Veridian patch — v1.3 Multi-membre cross-app (2026-05-19) ===
+	// CONTRAT-HUB §5.18 (sync-member), §5.19 (remove-member), §5.20 (restore-member).
+	// Voir todo/2026-05-19-v13-multi-membre-cross-app.md et veridian_membership.go.
+
+	// SyncMember propage un membre Hub → Notifuse. Cree le user app s'il
+	// n'existe pas, attache au workspace (role member). Idempotent : re-call
+	// avec memes params = 200 synced=true sans effet. JAMAIS de downgrade.
+	// Retourne sql.ErrNoRows si tenant absent (handler => 404).
+	SyncMember(ctx context.Context, input SyncMemberInput) (*SyncMemberResponse, error)
+
+	// RemoveMember retire un membre du workspace tenant (hard delete user_workspaces
+	// row — le user reste en DB pour audit). Refuse de retirer l'owner
+	// (ErrCannotRemoveOwner → handler 409). Idempotent : 200 si deja absent.
+	RemoveMember(ctx context.Context, input RemoveMemberInput) (*RemoveMemberResponse, error)
+
+	// RestoreMember annule un remove-member precedent (re-add user au workspace
+	// avec role member). Idempotent : 200 si user deja membre. Cree le user app
+	// s'il a ete supprime entre-temps (cf. SyncMember).
+	RestoreMember(ctx context.Context, input RestoreMemberInput) (*RestoreMemberResponse, error)
 }
 
 // === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===

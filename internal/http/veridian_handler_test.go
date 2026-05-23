@@ -1722,6 +1722,57 @@ func TestVeridianHandleTransferOwner_RouteRegistered(t *testing.T) {
 	assert.NotEmpty(t, pattern, "POST /api/tenants/{id}/transfer-owner should be registered")
 	assert.Contains(t, pattern, "transfer-owner")
 }
+// === Veridian patch — v1.3 Multi-membre cross-app (2026-05-19) ===
+// Anti-regression : les 3 routes /api/tenants/{id}/{sync,remove,restore}-member
+// doivent rester enregistrees dans le mux Veridian. Si quelqu'un supprime
+// mux.Handle, ces tests cassent en CI plutot que d'attendre l'E2E.
+// Tests handler detailles dans veridian_membership_handler_test.go.
+
+func TestVeridianHandleSyncMember_RouteRegistered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants/ws-1/sync-member", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/tenants/{id}/sync-member should be registered")
+	assert.Contains(t, pattern, "sync-member")
+}
+
+func TestVeridianHandleRemoveMember_RouteRegistered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants/ws-1/remove-member", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/tenants/{id}/remove-member should be registered")
+	assert.Contains(t, pattern, "remove-member")
+}
+
+func TestVeridianHandleRestoreMember_RouteRegistered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants/ws-1/restore-member", nil)
+	_, pattern := mux.Handler(req)
+	assert.NotEmpty(t, pattern, "POST /api/tenants/{id}/restore-member should be registered")
+	assert.Contains(t, pattern, "restore-member")
+}
+
 // === Veridian patch — lot O (2026-05-21) ===
 // Anti-regression : la route GET /api/veridian/admin/pricing-cache doit
 // rester enregistree dans le mux Veridian. Si quelqu'un supprime le

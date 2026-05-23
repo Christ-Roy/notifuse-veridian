@@ -144,6 +144,13 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Mutateurs : HMAC + Idempotency.
 	mux.Handle("POST /api/tenants/{id}/rotate-api-key", writeRoute(h.handleRotateAPIKey))
 	mux.Handle("POST /api/tenants/{id}/transfer-owner", writeRoute(h.handleTransferOwner))
+	// === Veridian patch — v1.3 Multi-membre cross-app (2026-05-19) ===
+	// CONTRAT-HUB §5.18 sync-member + §5.19 remove-member + §5.20 restore-member.
+	// Voir veridian_membership_handler.go et todo/2026-05-19-v13-multi-membre-cross-app.md.
+	// Mutateurs : HMAC + Idempotency.
+	mux.Handle("POST /api/tenants/{id}/sync-member", writeRoute(h.handleSyncMember))
+	mux.Handle("POST /api/tenants/{id}/remove-member", writeRoute(h.handleRemoveMember))
+	mux.Handle("POST /api/tenants/{id}/restore-member", writeRoute(h.handleRestoreMember))
 	// === Veridian patch — lot O (2026-05-21) === Endpoint debug pour le
 	// cache pricing sync (catalog Hub mirror). Auth HMAC, read-only.
 	mux.Handle("GET /api/veridian/admin/pricing-cache", hmac(http.HandlerFunc(h.handlePricingCache)))
