@@ -1,0 +1,161 @@
+# === Veridian patch — workflow E2E console-suite (informative, non-bloquant) ===
+#
+# Suite Playwright qui exerce la console sur staging RÉEL après chaque push
+# branche veridian. Couvre les §2-§5 du ticket
+# `todo/2026-05-22-suite-e2e-playwright-console.md` :
+#   - parcours authentification (auto-login URL, magic link, token falsifié)
+#   - navigation workspace sidebar (11 écrans, vérif chunks lazy + Lingui)
+#   - section Settings > Plan (label, badge plan_source, CTA Hub)
+#   - responsive 375 / 768 / 1440 px
+#
+# Pourquoi un workflow SÉPARÉ de veridian-ci.yml :
+#   1. Informative d'abord — un flaky ne doit PAS bloquer la promo prod.
+#      Quand la suite sera mûre et stable plusieurs semaines, on la branchera
+#      en `needs:` du job deploy-prod dans veridian-ci.yml.
+#   2. Indépendant du build self-hosted — tourne sur ubuntu-latest hosted
+#      runner (pas de pression sur dev-pub disk).
+#   3. Découplage temporel — peut être relancé seul via workflow_dispatch
+#      sans re-déclencher tout veridian-ci.yml.
+#
+# Déclenchement : push branche veridian (UNIQUEMENT le hot path qui touche
+# au code applicatif). Skip docs / todo / runbooks comme veridian-ci.yml.
+# `workflow_run` (déclenché APRÈS veridian-ci.yml) serait plus rigoureux
+# (garanti staging à jour) mais ajoute une latence de 10-15min. On accepte
+# que le 1er run après un push tombe sur le staging précédent (les tests
+# sont écrits pour être résilients : ils provisionent leur propre tenant
+# et n'assument rien du code en place).
+
+name: Notifuse console E2E suite (informative)
+
+on:
+  push:
+    branches: [veridian]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'todo/**'
+      - 'CHANGELOG.md'
+      - 'runbooks/**'
+      - 'plans/**'
+  workflow_dispatch:
+    inputs:
+      wait_for_staging_deploy:
+        description: 'Attendre que staging reflète le SHA courant (max 10min)'
+        required: false
+        default: 'true'
+
+# La suite est informative — pas de concurrency cancel-in-progress, on laisse
+# les runs s'enchaîner pour avoir une trace de chaque commit même si la file
+# d'attente grossit.
+concurrency:
+  group: notifuse-console-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  console-e2e:
+    name: Console E2E sur staging réel (informative)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # `continue-on-error` au niveau du job entier serait préférable mais
+    # GitHub Actions ne le permet pas pour les single-job workflows. La
+    # nature informative est portée par :
+    #   1. L'absence de `needs:` côté workflows de deploy (veridian-ci.yml
+    #      ne mentionne pas ce workflow).
+    #   2. La doc du fichier (ce header) qui explique pourquoi on n'exige
+    #      pas vert pour promote.
+    # Si le team lead veut bloquer la promo dessus plus tard, ajouter
+    # `needs:` côté veridian-ci.yml — pas besoin de modifier ce workflow.
+    env:
+      NOTIFUSE_URL: https://notifuse.staging.veridian.site
+      # Le secret partagé entre veridian-ci.yml jobs et ce workflow.
+      HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Attend que staging soit healthy ET (optionnellement) que /api/version
+      # reflète le SHA courant. Évite de partir contre un staging dans un état
+      # de migration ou un container en cours de swap.
+      - name: Wait for staging healthy
+        run: |
+          for i in {1..30}; do
+            if curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null 2>&1; then
+              echo "Staging healthy after ${i}0s"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "::error::Staging unhealthy after 5min"
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Wait for staging to reflect current SHA (optionnel)
+        if: github.event_name == 'push' || github.event.inputs.wait_for_staging_deploy == 'true'
+        run: |
+          # /api/version retourne le SHA du build courant. Si staging tourne
+          # encore l'ancien build, on accepte (la suite est résiliente — elle
+          # provisione son propre tenant et teste l'app, pas une feature
+          # spécifique). On émet juste un warning.
+          EXPECTED_SHA="${GITHUB_SHA::8}"
+          for i in {1..30}; do
+            RESP=$(curl -sf https://notifuse.staging.veridian.site/api/version 2>/dev/null || echo "")
+            if [ -n "$RESP" ]; then
+              GOT_TAG=$(echo "$RESP" | jq -r '.tag // empty')
+              if echo "$GOT_TAG" | grep -q "$EXPECTED_SHA"; then
+                echo "✓ Staging reflète SHA courant ($GOT_TAG)"
+                exit 0
+              fi
+            fi
+            sleep 20
+          done
+          echo "::warning::Staging n'a pas atteint SHA $EXPECTED_SHA après 10min — tests lancés contre l'état courant de staging."
+          exit 0
+
+      - name: Install e2e deps
+        run: |
+          cd tests/e2e-veridian
+          npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        run: |
+          cd tests/e2e-veridian
+          npx playwright install --with-deps chromium
+
+      - name: Run console-suite Playwright tests
+        run: |
+          cd tests/e2e-veridian
+          npm run test:console-suite
+        env:
+          CI: '1'
+
+      - name: Upload Playwright artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-console-suite
+          path: |
+            tests/e2e-veridian/playwright-report-console-suite/
+            tests/e2e-veridian/playwright-results-console-suite.json
+            tests/e2e-veridian/test-results/
+          retention-days: 14
+
+      # Notification Telegram en cas de fail uniquement (pas de spam vert).
+      # Robert sait que vert = OK, rouge = à regarder dans la queue UI/UX.
+      - name: Telegram alert sur fail (informative)
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+            echo "::notice::Pas de TELEGRAM_BOT_TOKEN, skip notif"
+            exit 0
+          fi
+          curl -sS -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=⚠️ Notifuse console E2E (informative) FAIL sur ${GITHUB_SHA::8}. Voir https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

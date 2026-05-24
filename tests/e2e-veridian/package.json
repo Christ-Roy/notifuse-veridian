@@ -5,7 +5,9 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "test:ui": "playwright test --ui"
+    "test:ui": "playwright test --ui",
+    "test:console-suite": "playwright test --config=playwright.console-suite.config.ts",
+    "test:console-suite:headed": "HEADED=1 playwright test --config=playwright.console-suite.config.ts --headed"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

@@ -9,5 +9,10 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["specs/**/*.ts", "playwright.config.ts"]
+  "include": [
+    "specs/**/*.ts",
+    "console-suite/**/*.ts",
+    "playwright.config.ts",
+    "playwright.console-suite.config.ts"
+  ]
 }
