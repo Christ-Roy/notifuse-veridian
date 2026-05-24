@@ -204,3 +204,65 @@ Running 6 tests using 1 worker
 Une bonne suite de ces 4 chantiers tournerait sur staging (data réelle)
 plutôt que sur le preview local — voir convention `@prod-safe` dans
 `tests/e2e-veridian/`.
+
+---
+
+## Livraison — phase 2 : §2-§5 sur staging réel (2026-05-25)
+
+**Périmètre §2-§5 (auth + navigation + métier Plan + responsive)** : livré
+en mode INFORMATIVE (workflow CI séparé, pas dans `needs:` de deploy-prod).
+Le périmètre §3 métier complet (créer contact / template / broadcast) reste
+ouvert — couverture livrée = navigation + assertions de boot sur chaque
+écran. Création active = scope futur (les flows métier upstream demandent
+un email builder mount + Monaco load qui sont des chantiers ≥1j chacun).
+
+### Ce qui est en place (commit `1a746ba6`)
+
+- `tests/e2e-veridian/console-suite/` — 5 spec files, 31 tests :
+  - `console-boot.spec.ts` (3 tests `@prod-safe`) — SignIn / /console / Logout
+  - `console-auth.spec.ts` (3 tests serial) — auto-login URL + magic link
+    via API key + token falsifié → page d'erreur sans crash
+  - `console-navigation.spec.ts` (11 tests serial) — chaque entrée
+    sidebar workspace (Dashboard, Contacts, Lists, Templates, Broadcasts,
+    Automations, Transactional, Blog, File Manager, Logs, Settings)
+  - `console-plan-settings.spec.ts` (2 tests) — tenant Pro affiche
+    label + bouton Manage subscription ; tenant lifetime_partner affiche
+    badge plan_source
+  - `console-responsive.spec.ts` (12 tests) — Dashboard / Contacts /
+    Templates / Settings × 375 / 768 / 1440 px (assert pas d'overflow X)
+- `playwright.console-suite.config.ts` — config dédiée (testDir hors
+  `specs/`, timeout 240s pour les lazy chunks, trace=on)
+- `.github/workflows/notifuse-console-e2e.yml` — workflow CI séparé,
+  ubuntu-latest, déclenché sur push veridian + workflow_dispatch.
+  Attend que staging soit healthy + (optionnel) que /api/version
+  reflète le SHA courant. Telegram alert sur fail.
+
+### Validation locale
+
+- 3 specs `@prod-safe` (boot) : **3/3 vert** contre
+  https://notifuse.staging.veridian.site
+- 1 spec auto-login : **1/1 vert** avec secret staging
+- 4 specs responsive (Dashboard + Contacts @ 375 / 768 px) : **4/4 rouge**
+  — révèle des vrais bugs overflow horizontal sur mobile. Cohérent avec
+  Task #2 (Mobile responsive Lot 1) en cours. La suite étant
+  informative, ces rouges sont attendus et utiles : signalent les
+  régressions UI sans bloquer la promo.
+
+### Comment basculer en bloquant (plus tard, §5 du ticket)
+
+Quand la suite aura tourné stable plusieurs semaines : ajouter
+`needs: [console-e2e]` au job `deploy-prod` dans `veridian-ci.yml`,
+et déclencher `notifuse-console-e2e.yml` via `workflow_run` (pour
+garantir un staging à jour).
+
+### Reste à faire
+
+- §3 parcours métier réels (créer contact, créer template via builder,
+  créer broadcast) — chantier 1j chacun, demande mocks ou tenants
+  fixture
+- Validation E2E sur prod via tag `@prod-safe` (les 3 specs boot le
+  sont déjà — peuvent tourner après promotion prod pour validation
+  post-deploy)
+- Quand Task #2 (Mobile responsive Lot 1) livre, les 4 specs responsive
+  rouges devraient repasser vertes — confirmer puis basculer la suite
+  en bloquant si stable
