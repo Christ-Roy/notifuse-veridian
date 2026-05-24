@@ -131,6 +131,7 @@ type App struct {
 	veridianWebhookEmitter   domain.WebhookEmitter
 	veridianPaywallCache     *middleware.PaywallCache              // partage middleware paywall + handler invalidate
 	veridianPricingSync      *service.VeridianPricingSyncService   // catalogue pricing Hub (lot O 2026-05-21)
+	veridianTestTenantsCleanup *service.VeridianTestTenantsCleanupService // cron auto-cleanup orphans staging (2026-05-24)
 
 	// Services
 	authService                      *service.AuthService
@@ -1302,6 +1303,21 @@ func (a *App) InitHandlers() error {
 	a.veridianPricingSync = service.NewVeridianPricingSyncService("", nil, a.logger, 0)
 	veridianHandler.SetPricingSync(a.veridianPricingSync)
 
+	// === Veridian patch — 2026-05-24 — cron auto-cleanup orphans staging ===
+	// Garde-fou strict : ne tourne QUE si cfg.Environment == "staging". Sur
+	// prod / dev / demo / vide, NewVeridianTestTenantsCleanupService est
+	// instancie quand meme (pour que le handler stats puisse retourner
+	// enabled:false), mais Start() est un no-op silencieux. Cf.
+	// todo/2026-05-24-staging-db-pool-orphan-cleanup-auto.md.
+	a.veridianTestTenantsCleanup = service.NewVeridianTestTenantsCleanupService(
+		a.veridianService,
+		a.workspaceRepo,
+		a.logger,
+		a.config.Environment,
+		0, // 0 = default 30 min
+	)
+	veridianHandler.SetTestTenantsCleanup(a.veridianTestTenantsCleanup)
+
 	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
 
 	// Endpoint generateMagicLink (auth API key tenant Notifuse).
@@ -1520,6 +1536,15 @@ func (a *App) Start() error {
 	if a.veridianPricingSync != nil {
 		a.veridianPricingSync.Start(a.GetShutdownContext())
 		a.logger.Info("Veridian pricing sync scheduler started (1h interval)")
+	}
+
+	// === Veridian patch 2026-05-24 — cron auto-cleanup orphans staging ===
+	// Start() est un no-op silencieux + log info "disabled" si Environment
+	// != "staging". Le check garde-fou est dans le service, pas ici, pour
+	// que le handler stats reste exploitable en prod (audit "enabled:false").
+	// Cf. todo/2026-05-24-staging-db-pool-orphan-cleanup-auto.md
+	if a.veridianTestTenantsCleanup != nil {
+		a.veridianTestTenantsCleanup.Start(a.GetShutdownContext())
 	}
 
 	// Start SMTP bridge server if enabled

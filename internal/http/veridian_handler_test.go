@@ -712,6 +712,8 @@ func TestVeridianRegisterRoutes_AllPathsRegistered(t *testing.T) {
 		{"GET", "/api/tenants/ws-1/status"},
 		{"POST", "/api/veridian/admin/wipe-test-tenants"},
 		{"POST", "/api/veridian/admin/cache/invalidate"},
+		// === Veridian patch 2026-05-24 — cron auto-cleanup orphans staging ===
+		{"GET", "/api/veridian/admin/test-tenants-stats"},
 	}
 
 	for _, p := range pathsToVerify {
@@ -719,6 +721,24 @@ func TestVeridianRegisterRoutes_AllPathsRegistered(t *testing.T) {
 		_, pattern := mux.Handler(req)
 		assert.NotEmpty(t, pattern, "route %s %s should be registered", p.method, p.path)
 	}
+}
+
+// === Veridian patch 2026-05-24 — cron auto-cleanup orphans staging ===
+// Test que SetTestTenantsCleanup (nil par défaut) entraîne 503 sur l'endpoint
+// GET /api/veridian/admin/test-tenants-stats — garde-fou prod : un agent qui
+// curl en prod doit voir 503 explicit, jamais un 200 muet.
+func TestVeridianSetTestTenantsCleanup_NilByDefaultReturns503(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := NewVeridianHandler(svc, logger.NewLogger())
+
+	// Sans setter, le handler doit retourner 503.
+	req := httptest.NewRequest(http.MethodGet, "/api/veridian/admin/test-tenants-stats", nil)
+	rec := httptest.NewRecorder()
+	h.handleTestTenantsStats(rec, req)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code,
+		"sans SetTestTenantsCleanup, l'endpoint stats doit retourner 503")
 }
 
 // Test que sans HUB_API_SECRET (secret vide), les routes sont quand meme
