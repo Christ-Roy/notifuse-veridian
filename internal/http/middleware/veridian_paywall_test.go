@@ -866,6 +866,76 @@ func TestShouldLogStale_RateLimit(t *testing.T) {
 	assert.False(t, shouldLogStale("ws-rate-limit-test"), "appel immédiat = rate-limited")
 }
 
+// === Has() — observation cache state (AUDIT-TRIAL-RESIDUS-2026-05-24) ===
+//
+// Has() expose un read non-destructif sur l'état du cache, sans changer
+// son contenu (sauf nettoyage TTL expiré, cohérent avec get()). Utilisé
+// par les tests anti-régression du pattern d'invalidation post-mutation
+// (cf. veridian_handler_test.go §AUDIT-TRIAL-RESIDUS-2026-05-24).
+
+func TestPaywallCache_Has_EmptyCache(t *testing.T) {
+	cache := NewPaywallCache()
+	assert.False(t, cache.Has("ws-1"), "cache vide → Has retourne false")
+}
+
+func TestPaywallCache_Has_AfterSeed(t *testing.T) {
+	cache := NewPaywallCache()
+	cache.SeedForTest("ws-seeded")
+	assert.True(t, cache.Has("ws-seeded"), "post-seed → Has retourne true")
+	// L'appel précédent ne doit pas consommer l'entrée (Has est idempotent).
+	assert.True(t, cache.Has("ws-seeded"), "Has est idempotent — entrée non consommée")
+}
+
+func TestPaywallCache_Has_AfterInvalidate(t *testing.T) {
+	cache := NewPaywallCache()
+	cache.SeedForTest("ws-tobeinvalidated")
+	require.True(t, cache.Has("ws-tobeinvalidated"))
+	cache.Invalidate("ws-tobeinvalidated")
+	assert.False(t, cache.Has("ws-tobeinvalidated"), "post-Invalidate → Has retourne false")
+}
+
+func TestPaywallCache_Has_AfterClear(t *testing.T) {
+	cache := NewPaywallCache()
+	cache.SeedForTest("ws-A")
+	cache.SeedForTest("ws-B")
+	require.True(t, cache.Has("ws-A"))
+	require.True(t, cache.Has("ws-B"))
+	cache.Clear()
+	assert.False(t, cache.Has("ws-A"), "post-Clear → tous absents")
+	assert.False(t, cache.Has("ws-B"), "post-Clear → tous absents")
+}
+
+func TestPaywallCache_Has_IndependentEntries(t *testing.T) {
+	// Invalidate(A) ne doit pas toucher B.
+	cache := NewPaywallCache()
+	cache.SeedForTest("ws-A")
+	cache.SeedForTest("ws-B")
+	cache.Invalidate("ws-A")
+	assert.False(t, cache.Has("ws-A"), "A invalidé")
+	assert.True(t, cache.Has("ws-B"), "B intact — Invalidate ne doit toucher que l'entrée ciblée")
+}
+
+// === SeedForTest() — sentinelle test-only ===
+//
+// SeedForTest crée une entrée notFound:true avec TTL standard 60s. Utilisé
+// par les tests anti-régression qui veulent observer une invalidation
+// sans monter le middleware complet + planRepo mocké.
+
+func TestPaywallCache_SeedForTest_CreatesEntry(t *testing.T) {
+	cache := NewPaywallCache()
+	assert.False(t, cache.Has("ws-x"), "avant seed")
+	cache.SeedForTest("ws-x")
+	assert.True(t, cache.Has("ws-x"), "après seed")
+}
+
+func TestPaywallCache_SeedForTest_Overwrite(t *testing.T) {
+	// Re-seed sur la même clé doit rester idempotent (overwrite OK).
+	cache := NewPaywallCache()
+	cache.SeedForTest("ws-double")
+	cache.SeedForTest("ws-double") // ne doit pas paniquer
+	assert.True(t, cache.Has("ws-double"))
+}
+
 func TestIsHubSyncWriteBlock(t *testing.T) {
 	cases := []struct {
 		method string

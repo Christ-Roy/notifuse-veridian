@@ -294,6 +294,17 @@ func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// === Veridian patch 2026-05-24 — audit trial résidus §C/F ===
+	// Invalidation immédiate du cache paywall après UpdatePlan : sinon les
+	// middlewares paywall + soft-deleted continueraient à servir l'ancien
+	// plan/status jusqu'à 60s. Conséquence du gap : un tenant qui paie via
+	// Stripe (Hub → update-plan plan=pro) pouvait voir l'UI Free + bandeau
+	// trial 60s côté serveur (puis 5min côté React Query). Pattern identique
+	// à handleGrantUnlimited (cf. veridian_grant_unlimited_handler.go §92).
+	if h.paywallCache != nil {
+		h.paywallCache.Invalidate(input.TenantID)
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -320,6 +331,13 @@ func (h *VeridianHandler) handleSuspend(w http.ResponseWriter, r *http.Request) 
 		}
 		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
+	}
+
+	// Invalidation cache : un envoi qui passait avant la suspension doit être
+	// bloqué immédiatement par le paywall, pas après 60s TTL (sécurité côté
+	// blocage — moins critique que Resume/Restore mais cohérence cross-route).
+	if h.paywallCache != nil {
+		h.paywallCache.Invalidate(input.TenantID)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -353,6 +371,13 @@ func (h *VeridianHandler) handleResume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidation cache : un Resume doit débloquer les envois immédiatement,
+	// sans attendre 60s — sinon les writes restent 402 alors que la DB dit
+	// status=active. Symétrique de handleSuspend.
+	if h.paywallCache != nil {
+		h.paywallCache.Invalidate(input.TenantID)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"tenant_id":  input.TenantID,
 		"resumed_at": time.Now().UTC(),
@@ -383,6 +408,15 @@ func (h *VeridianHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		}
 		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
+	}
+
+	// Invalidation cache : un SoftDelete (route legacy DELETE) doit basculer
+	// les writes en 402 tenant_soft_deleted et les reads en mode dégradé
+	// (obfuscation) immédiatement. Sans invalidation, le cache servait encore
+	// l'ancien plan deleted_at=nil pendant ≤60s — les envois passaient alors
+	// qu'ils devraient renvoyer le body standardisé tenant_soft_deleted.
+	if h.paywallCache != nil {
+		h.paywallCache.Invalidate(tenantID)
 	}
 
 	// Format response legacy preserve (champs additionnels purge_eligible_at
@@ -434,6 +468,11 @@ func (h *VeridianHandler) handleSoftDelete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Invalidation cache (cf. handleDelete pour la justification).
+	if h.paywallCache != nil {
+		h.paywallCache.Invalidate(tenantID)
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -478,6 +517,17 @@ func (h *VeridianHandler) handleRestore(w http.ResponseWriter, r *http.Request) 
 		}
 		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
+	}
+
+	// === Veridian patch 2026-05-24 — audit trial résidus §C ===
+	// Invalidation critique : Restore clear deleted_at en DB, mais le cache
+	// garde la version `deleted_at != nil` jusqu'à 60s. Sans invalidation, le
+	// middleware soft-deleted continue à obfusquer les reads et 402 les writes
+	// alors que le tenant est officiellement actif. Scénario typique :
+	// trial expiré → Hub a soft-deleted → user paie → Hub send Restore → fenêtre
+	// 60s de "tenant déjà sauvé mais UI dégradée".
+	if h.paywallCache != nil {
+		h.paywallCache.Invalidate(tenantID)
 	}
 
 	writeJSON(w, http.StatusOK, resp)

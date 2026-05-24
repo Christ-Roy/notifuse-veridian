@@ -125,6 +125,34 @@ func (c *PaywallCache) Invalidate(workspaceID string) {
 	c.m.Delete(workspaceID)
 }
 
+// Has retourne true si une entrée pour ce workspace_id est présente dans
+// le cache ET non-expirée. Utilisé par les tests anti-régression pour
+// vérifier qu'une mutation (UpdatePlan, Resume, Restore...) a bien
+// invalidé le cache via Invalidate(). Les expirations naturelles ne
+// comptent PAS comme une invalidation observable.
+//
+// Side-effect : si l'entrée est expirée au moment de l'appel, elle est
+// supprimée (cohérent avec get()). Sans effet en pratique pour les
+// tests qui populent le cache puis appellent Has immédiatement.
+func (c *PaywallCache) Has(workspaceID string) bool {
+	_, ok := c.get(workspaceID)
+	return ok
+}
+
+// SeedForTest insère une entrée sentinelle pour `workspaceID` (TTL 60s).
+// EXCLUSIVEMENT pour les tests anti-régression du pattern d'invalidation
+// post-mutation (cf. veridian_handler_test.go §AUDIT-TRIAL-RESIDUS-2026-05-24).
+// L'entrée stockée est `notFound:true` minimale — suffisante pour observer
+// via Has() qu'elle a disparu après un Invalidate() côté handler. Ne jamais
+// utiliser en prod : les vraies entrées sont créées par le middleware au
+// premier lookup DB miss.
+func (c *PaywallCache) SeedForTest(workspaceID string) {
+	c.set(workspaceID, paywallCacheEntry{
+		notFound:  true,
+		expiresAt: time.Now().Add(veridianPaywallCacheTTL),
+	})
+}
+
 // Clear supprime toutes les entrees du cache. Reserve aux cas exceptionnels
 // (test cleanup, reload config). En prod, prefere Invalidate(workspaceID)
 // sur l'evenement specifique pour eviter les recalculs de tous les tenants.

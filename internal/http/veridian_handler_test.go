@@ -50,6 +50,21 @@ func newHandlerWithService(svc domain.VeridianService) *VeridianHandler {
 	}
 }
 
+// newHandlerWithServiceAndCache combine un service mocké + un PaywallCache
+// injecté. Utilisé par les tests d'invalidation cache post-mutation (audit
+// trial résidus 2026-05-24) qui doivent observer que le cache est purgé
+// après UpdatePlan / Resume / Suspend / SoftDelete / Restore.
+func newHandlerWithServiceAndCache(svc domain.VeridianService, cache *middleware.PaywallCache) *VeridianHandler {
+	h := &VeridianHandler{
+		service: svc,
+		logger:  logger.NewLogger(),
+	}
+	if cache != nil {
+		h.SetPaywallCache(cache)
+	}
+	return h
+}
+
 // helper : POST avec body JSON, retourne la reponse decodee
 func postJSON(t *testing.T, h func(http.ResponseWriter, *http.Request), path, body string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -1926,4 +1941,233 @@ func TestVeridianRegisterRoutes_AttachMemberWorkspaceAlias(t *testing.T) {
 	_, tenantPattern := mux.Handler(tenantReq)
 	assert.NotEmpty(t, tenantPattern, "POST /api/tenants/{tenantId}/attach-member should remain registered")
 	assert.Contains(t, tenantPattern, "tenants", "tenant-level route must coexist with workspace-level alias")
+}
+
+// === AUDIT-TRIAL-RESIDUS-2026-05-24 — anti-régression invalidation cache ===
+//
+// Contexte : le ticket Hub `2026-05-23-audit-trial-residus-apres-paiement.md`
+// a livré 2 fixes côté Hub pour garantir qu'un client qui paie ne voit plus
+// aucun résidu trial. Côté Notifuse, le gap correspondant était que les
+// handlers UpdatePlan / Resume / Restore / Suspend / SoftDelete ne purgeaient
+// PAS le PaywallCache après succès → fenêtre ≤60s pendant laquelle :
+//   - middleware paywall sert l'ancien plan/status
+//   - middleware soft-deleted continue à obfusquer un tenant pourtant restored
+//   - UI affiche encore le bandeau "Free — 15-day trial" alors que plan=pro en DB
+//
+// Ces tests vérifient que chaque handler purge le cache pour le tenantID
+// concerné après une mutation réussie. Pattern : seed via `cache.SeedForTest`,
+// call handler, assert `cache.Has(...)` == false.
+//
+// Pattern de référence : handleGrantUnlimited (cf. veridian_grant_unlimited_handler.go §92).
+
+func TestVeridianHandleUpdatePlan_InvalidatesCacheOnSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cache := middleware.NewPaywallCache()
+	cache.SeedForTest("ws-pro")
+	require.True(t, cache.Has("ws-pro"), "seed sentinel doit être présent avant la call")
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).
+		Return(&domain.UpdatePlanResponse{
+			TenantID:     "ws-pro",
+			Plan:         "pro",
+			PreviousPlan: "free",
+			PlanSource:   domain.PlanSourceStripe,
+			AppliedAt:    time.Now().UTC(),
+		}, nil)
+	h := newHandlerWithServiceAndCache(svc, cache)
+
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ws-pro","plan":"pro","plan_source":"stripe"}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, cache.Has("ws-pro"),
+		"cache doit être invalidé après UpdatePlan success — sinon paywall sert plan stale 60s")
+}
+
+func TestVeridianHandleUpdatePlan_DoesNotInvalidateOnError(t *testing.T) {
+	// Garde-fou : sur erreur service (PlanImmune, NotFound, etc.), le cache
+	// NE doit PAS être purgé inutilement (sinon coût DB lookup gratuit).
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cache := middleware.NewPaywallCache()
+	cache.SeedForTest("ws-vip")
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).
+		Return(nil, service.ErrPlanImmune)
+	h := newHandlerWithServiceAndCache(svc, cache)
+
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ws-vip","plan":"free","plan_source":"stripe"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.True(t, cache.Has("ws-vip"),
+		"cache doit rester intact sur erreur service (rien n'a changé en DB)")
+}
+
+func TestVeridianHandleSuspend_InvalidatesCacheOnSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cache := middleware.NewPaywallCache()
+	cache.SeedForTest("ws-1")
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Suspend(gomock.Any(), gomock.Any()).Return(nil)
+	h := newHandlerWithServiceAndCache(svc, cache)
+
+	rec := postJSON(t, h.handleSuspend, "/api/tenants/suspend",
+		`{"tenant_id":"ws-1","reason":"manual"}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, cache.Has("ws-1"),
+		"cache doit être invalidé après Suspend — un envoi qui passait avant doit être bloqué immédiatement")
+}
+
+func TestVeridianHandleResume_InvalidatesCacheOnSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cache := middleware.NewPaywallCache()
+	cache.SeedForTest("ws-1")
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Resume(gomock.Any(), gomock.Any()).Return(nil)
+	h := newHandlerWithServiceAndCache(svc, cache)
+
+	rec := postJSON(t, h.handleResume, "/api/tenants/resume",
+		`{"tenant_id":"ws-1"}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, cache.Has("ws-1"),
+		"cache doit être invalidé après Resume — les writes doivent être débloqués immédiatement")
+}
+
+func TestVeridianHandleDelete_InvalidatesCacheOnSuccess(t *testing.T) {
+	// Route legacy DELETE /api/tenants/{id} — délègue à SoftDelete service.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cache := middleware.NewPaywallCache()
+	cache.SeedForTest("ws-deleteme")
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().SoftDelete(gomock.Any(), gomock.Any()).
+		Return(&domain.SoftDeleteResponse{
+			TenantID:        "ws-deleteme",
+			Status:          "deleted",
+			DeletedAt:       time.Now().UTC(),
+			PurgeEligibleAt: time.Now().UTC().Add(30 * 24 * time.Hour),
+		}, nil)
+	h := newHandlerWithServiceAndCache(svc, cache)
+
+	rec := postWithPathValue(t, h.handleDelete, http.MethodDelete, "/api/tenants/ws-deleteme", "ws-deleteme", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, cache.Has("ws-deleteme"),
+		"cache doit être invalidé après SoftDelete (route legacy) — les middlewares doivent voir deleted_at immédiatement")
+}
+
+func TestVeridianHandleSoftDelete_InvalidatesCacheOnSuccess(t *testing.T) {
+	// Route nouvelle POST /api/tenants/{id}/soft-delete.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cache := middleware.NewPaywallCache()
+	cache.SeedForTest("ws-sd")
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().SoftDelete(gomock.Any(), gomock.Any()).
+		Return(&domain.SoftDeleteResponse{
+			TenantID:        "ws-sd",
+			Status:          "deleted",
+			DeletedAt:       time.Now().UTC(),
+			PurgeEligibleAt: time.Now().UTC().Add(30 * 24 * time.Hour),
+		}, nil)
+	h := newHandlerWithServiceAndCache(svc, cache)
+
+	rec := postWithPathValue(t, h.handleSoftDelete, http.MethodPost,
+		"/api/tenants/ws-sd/soft-delete", "ws-sd", `{"reason":"trial_expired"}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, cache.Has("ws-sd"),
+		"cache doit être invalidé après SoftDelete (route v1.4) — middleware doit bloquer writes immédiatement")
+}
+
+func TestVeridianHandleRestore_InvalidatesCacheOnSuccess(t *testing.T) {
+	// === Cas critique audit trial résidus §C : Restore inverse soft-delete ===
+	// Sans invalidation, le middleware soft-deleted continue à obfusquer le
+	// tenant restored pendant ≤60s — exactement le résidu que le ticket Hub
+	// nous demande d'éliminer.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cache := middleware.NewPaywallCache()
+	cache.SeedForTest("ws-restored")
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Restore(gomock.Any(), gomock.Any()).
+		Return(&domain.RestoreResponse{
+			TenantID:   "ws-restored",
+			Status:     string(domain.PlanStatusActive),
+			RestoredAt: time.Now().UTC(),
+		}, nil)
+	h := newHandlerWithServiceAndCache(svc, cache)
+
+	rec := postWithPathValue(t, h.handleRestore, http.MethodPost,
+		"/api/tenants/ws-restored/restore", "ws-restored", `{"reason":"payment_received"}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, cache.Has("ws-restored"),
+		"cache doit être invalidé après Restore — sinon middleware soft-deleted continue obfusquer 60s")
+}
+
+func TestVeridianHandleRestore_DoesNotInvalidateOnError(t *testing.T) {
+	// Garde-fou : ErrTenantNotSoftDeleted (409) ne doit pas purger le cache.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cache := middleware.NewPaywallCache()
+	cache.SeedForTest("ws-active")
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().Restore(gomock.Any(), gomock.Any()).
+		Return(nil, service.ErrTenantNotSoftDeleted)
+	h := newHandlerWithServiceAndCache(svc, cache)
+
+	rec := postWithPathValue(t, h.handleRestore, http.MethodPost,
+		"/api/tenants/ws-active/restore", "ws-active", "")
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.True(t, cache.Has("ws-active"),
+		"cache doit rester intact sur erreur (rien n'a changé en DB)")
+}
+
+// TestVeridianHandle_CacheInvalidationGracefulWithoutCache vérifie qu'aucun
+// handler ne panic si paywallCache n'est PAS injecté (mode self-hosted sans
+// middleware paywall). Tous les call sites font `if h.paywallCache != nil`.
+func TestVeridianHandle_CacheInvalidationGracefulWithoutCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UpdatePlan(gomock.Any(), gomock.Any()).
+		Return(&domain.UpdatePlanResponse{
+			TenantID: "ws-1", Plan: "pro",
+			PlanSource: domain.PlanSourceStripe,
+			AppliedAt:  time.Now().UTC(),
+		}, nil)
+	svc.EXPECT().Resume(gomock.Any(), gomock.Any()).Return(nil)
+	svc.EXPECT().Restore(gomock.Any(), gomock.Any()).
+		Return(&domain.RestoreResponse{TenantID: "ws-1", Status: "active", RestoredAt: time.Now().UTC()}, nil)
+
+	h := newHandlerWithService(svc) // cache nil
+
+	// Aucun de ces 3 appels ne doit panic même sans cache injecté.
+	rec1 := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ws-1","plan":"pro","plan_source":"stripe"}`)
+	assert.Equal(t, http.StatusOK, rec1.Code)
+
+	rec2 := postJSON(t, h.handleResume, "/api/tenants/resume", `{"tenant_id":"ws-1"}`)
+	assert.Equal(t, http.StatusOK, rec2.Code)
+
+	rec3 := postWithPathValue(t, h.handleRestore, http.MethodPost,
+		"/api/tenants/ws-1/restore", "ws-1", "")
+	assert.Equal(t, http.StatusOK, rec3.Code)
 }

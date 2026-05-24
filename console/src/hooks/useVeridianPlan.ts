@@ -6,8 +6,18 @@
  * accessible (cf. note dans veridian_plan.ts). Les composants
  * consommateurs (badge, settings → plan) gèrent le null gracieusement.
  *
- * Refetch désactivé sur window focus + cache 5 min : le plan change
- * rarement, inutile de spammer l'API.
+ * === Veridian patch 2026-05-24 — audit trial résidus §C/D ===
+ * Avant : staleTime 5 min + refetchOnWindowFocus désactivé → après un
+ * paiement Stripe (Hub → Notifuse update-plan), l'UI affichait encore
+ * "Free — 15-day trial" pendant 5 min même si l'utilisateur revenait
+ * sur l'onglet. Promesse Robert "le client paie = plus aucun bandeau"
+ * violée pendant cette fenêtre.
+ *
+ * Après : staleTime 30s + refetchOnWindowFocus actif → l'utilisateur qui
+ * revient sur l'onglet voit le bon plan immédiatement (refetch sync sur
+ * focus), et de toute façon plus de 30s d'écart entre DB et UI. Combiné
+ * avec l'invalidation du PaywallCache backend (cf. veridian_handler.go
+ * handleUpdatePlan/Restore), le résidu trial post-paiement est éliminé.
  */
 
 import { useQuery } from '@tanstack/react-query'
@@ -18,7 +28,8 @@ export function useVeridianPlan(workspaceId: string | undefined) {
     queryKey: ['veridian', 'workspace-plan', workspaceId],
     queryFn: () => (workspaceId ? veridianPlanApi.getWorkspacePlan(workspaceId) : Promise.resolve(null)),
     enabled: Boolean(workspaceId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
     retry: false
   })
 }
