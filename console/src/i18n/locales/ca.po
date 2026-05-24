@@ -1135,7 +1135,7 @@ msgstr "Automatització actualitzada correctament"
 msgid "Automation:"
 msgstr "Automatització:"
 
-#: src/layouts/WorkspaceLayout.tsx:313
+#: src/layouts/WorkspaceLayout.tsx:323
 #: src/pages/AutomationsPage.tsx:153
 msgid "Automations"
 msgstr "Automatitzacions"
@@ -1317,7 +1317,7 @@ msgstr "Blocs"
 #: src/components/settings/BlogSettings.tsx:205
 #: src/components/settings/BlogSettings.tsx:238
 #: src/components/settings/SettingsSidebar.tsx:100
-#: src/layouts/WorkspaceLayout.tsx:350
+#: src/layouts/WorkspaceLayout.tsx:360
 msgid "Blog"
 msgstr "Blog"
 
@@ -1552,7 +1552,7 @@ msgid "Broadcast updated successfully"
 msgstr "Difusió actualitzada correctament"
 
 #: src/components/analytics/EmailMetricsChart.tsx:277
-#: src/layouts/WorkspaceLayout.tsx:287
+#: src/layouts/WorkspaceLayout.tsx:297
 #: src/pages/BroadcastsPage.tsx:1286
 msgid "Broadcasts"
 msgstr "Difusions"
@@ -1933,7 +1933,7 @@ msgid "Code Editor"
 msgstr "Editor de codi"
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
-#: src/layouts/WorkspaceLayout.tsx:478
+#: src/layouts/WorkspaceLayout.tsx:505
 msgid "Collapse"
 msgstr "Contraure"
 
@@ -2204,7 +2204,7 @@ msgstr "El contacte torna a entrar cada vegada que es produeix l'esdeveniment"
 msgid "Contact updated successfully"
 msgstr "Contacte actualitzat correctament"
 
-#: src/layouts/WorkspaceLayout.tsx:242
+#: src/layouts/WorkspaceLayout.tsx:252
 #: src/pages/ContactsPage.tsx:988
 msgid "Contacts"
 msgstr "Contactes"
@@ -2710,7 +2710,7 @@ msgstr "Camps de cadena personalitzats"
 msgid "Danger Zone"
 msgstr "Zona de perill"
 
-#: src/layouts/WorkspaceLayout.tsx:215
+#: src/layouts/WorkspaceLayout.tsx:225
 #: src/pages/AnalyticsPage.tsx:84
 msgid "Dashboard"
 msgstr "Dashboard"
@@ -3100,7 +3100,7 @@ msgstr "Voleu eliminar permanentment aquest fitxer del vostre emmagatzematge?"
 msgid "Do you want to send \"{0}\" immediately or schedule it for later?"
 msgstr "Voleu enviar \"{0}\" immediatament o programar-ho per més tard?"
 
-#: src/layouts/WorkspaceLayout.tsx:558
+#: src/layouts/WorkspaceLayout.tsx:643
 msgid "Documentation"
 msgstr "Documentació"
 
@@ -4469,7 +4469,7 @@ msgstr "No s'ha pogut actualitzar la plantilla: {0}"
 msgid "Failed to update workspace settings"
 msgstr "No s'han pogut actualitzar els paràmetres de l'espai de treball"
 
-#: src/layouts/WorkspaceLayout.tsx:204
+#: src/layouts/WorkspaceLayout.tsx:214
 msgid "Failed to update workspace settings: {errorMessage}"
 msgstr "No s'han pogut actualitzar els paràmetres de l'espai de treball: {errorMessage}"
 
@@ -4547,7 +4547,7 @@ msgid "File is too large. Maximum size is 1MB."
 msgstr ""
 
 #: src/components/file_manager/context.tsx:155
-#: src/layouts/WorkspaceLayout.tsx:377
+#: src/layouts/WorkspaceLayout.tsx:387
 #: src/pages/FileManagerPage.tsx:119
 msgid "File Manager"
 msgstr "Gestor de fitxers"
@@ -4905,7 +4905,8 @@ msgstr "Alçada"
 
 #: src/components/email_builder/MjmlCodeEditor.tsx:701
 #: src/components/templates/CreateTemplateDrawer.tsx:136
-#: src/layouts/WorkspaceLayout.tsx:571
+#: src/layouts/WorkspaceLayout.tsx:656
+#: src/layouts/WorkspaceLayout.tsx:678
 msgid "Help"
 msgstr "Ajuda"
 
@@ -5796,7 +5797,7 @@ msgid "List:"
 msgstr "Llista:"
 
 #: src/components/analytics/NewContactsTable.tsx:73
-#: src/layouts/WorkspaceLayout.tsx:252
+#: src/layouts/WorkspaceLayout.tsx:262
 #: src/pages/ContactsPage.tsx:414
 #: src/pages/ContactsPage.tsx:534
 #: src/pages/ListsPage.tsx:155
@@ -5892,11 +5893,11 @@ msgstr "Previsualització del logotip"
 msgid "Logo URL"
 msgstr "URL del logotip"
 
-#: src/layouts/WorkspaceLayout.tsx:583
+#: src/layouts/WorkspaceLayout.tsx:704
 msgid "Logout"
 msgstr "Tancar sessió"
 
-#: src/layouts/WorkspaceLayout.tsx:386
+#: src/layouts/WorkspaceLayout.tsx:396
 #: src/pages/LogsPage.tsx:28
 msgid "Logs"
 msgstr "Registres"
@@ -6222,6 +6223,10 @@ msgstr "El nom ha de tenir menys de 255 caràcters"
 msgid "Name:"
 msgstr "Nom:"
 
+#: src/layouts/WorkspaceLayout.tsx:522
+msgid "Navigation menu"
+msgstr ""
+
 #: src/components/blog/BlogSidebar.tsx:108
 msgid "New Category"
 msgstr "Nova categoria"
@@ -6263,7 +6268,7 @@ msgstr "Nou tema"
 msgid "New Window"
 msgstr "Nova finestra"
 
-#: src/layouts/WorkspaceLayout.tsx:535
+#: src/layouts/WorkspaceLayout.tsx:615
 #: src/pages/CreateWorkspacePage.tsx:194
 msgid "New workspace"
 msgstr "Nou espai de treball"
@@ -6747,6 +6752,10 @@ msgstr "Títol Open Graph"
 #: src/components/file_manager/fileManager.tsx:913
 msgid "Open in a window"
 msgstr "Obrir en una finestra"
+
+#: src/layouts/WorkspaceLayout.tsx:576
+msgid "Open navigation menu"
+msgstr ""
 
 #: src/components/blog/PostsTable.tsx:302
 msgid "Open on web"
@@ -8528,7 +8537,7 @@ msgstr "Seleccioneu a quin segment s'aplica aquest activador"
 msgid "Select Winner"
 msgstr "Seleccionar guanyador"
 
-#: src/layouts/WorkspaceLayout.tsx:507
+#: src/layouts/WorkspaceLayout.tsx:587
 #: src/pages/DashboardPage.tsx:31
 msgid "Select workspace"
 msgstr "Seleccionar espai de treball"
@@ -8787,7 +8796,7 @@ msgid "Setting up..."
 msgstr "Configurant..."
 
 #: src/components/settings/SettingsSidebar.tsx:137
-#: src/layouts/WorkspaceLayout.tsx:395
+#: src/layouts/WorkspaceLayout.tsx:405
 msgid "Settings"
 msgstr "Configuració"
 
@@ -9439,7 +9448,7 @@ msgstr "Variables de plantilla:"
 msgid "Template:"
 msgstr "Plantilla:"
 
-#: src/layouts/WorkspaceLayout.tsx:278
+#: src/layouts/WorkspaceLayout.tsx:288
 #: src/pages/TemplatesPage.tsx:348
 msgid "Templates"
 msgstr "Plantilles"
@@ -10071,7 +10080,7 @@ msgstr "El seguiment (obertures i clics) hauria d'estar habilitat a la configura
 
 #: src/components/analytics/EmailMetricsChart.tsx:278
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:408
-#: src/layouts/WorkspaceLayout.tsx:325
+#: src/layouts/WorkspaceLayout.tsx:335
 #: src/pages/TemplatesPage.tsx:79
 msgid "Transactional"
 msgstr "Transaccional"
@@ -10205,7 +10214,7 @@ msgstr "Desconegut"
 msgid "Unknown date"
 msgstr "Data desconeguda"
 
-#: src/layouts/WorkspaceLayout.tsx:203
+#: src/layouts/WorkspaceLayout.tsx:213
 msgid "Unknown error"
 msgstr "Error desconegut"
 
@@ -10856,14 +10865,14 @@ msgstr "Nom de l'espai de treball"
 msgid "Workspace name must be at least 3 characters long"
 msgstr "El nom de l'espai de treball ha de tenir almenys 3 caràcters"
 
-#: src/layouts/WorkspaceLayout.tsx:182
+#: src/layouts/WorkspaceLayout.tsx:192
 #: src/pages/AnalyticsPage.tsx:70
 #: src/pages/FileManagerPage.tsx:56
 msgid "Workspace not found"
 msgstr "Espai de treball no trobat"
 
 #: src/components/settings/GeneralSettings.tsx:80
-#: src/layouts/WorkspaceLayout.tsx:200
+#: src/layouts/WorkspaceLayout.tsx:210
 msgid "Workspace settings updated successfully"
 msgstr "Configuració de l'espai de treball actualitzada correctament"
 

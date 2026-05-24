@@ -1135,7 +1135,7 @@ msgstr "Automazione aggiornata con successo"
 msgid "Automation:"
 msgstr "Automazione:"
 
-#: src/layouts/WorkspaceLayout.tsx:313
+#: src/layouts/WorkspaceLayout.tsx:323
 #: src/pages/AutomationsPage.tsx:153
 msgid "Automations"
 msgstr "Automazioni"
@@ -1317,7 +1317,7 @@ msgstr "Blocchi"
 #: src/components/settings/BlogSettings.tsx:205
 #: src/components/settings/BlogSettings.tsx:238
 #: src/components/settings/SettingsSidebar.tsx:100
-#: src/layouts/WorkspaceLayout.tsx:350
+#: src/layouts/WorkspaceLayout.tsx:360
 msgid "Blog"
 msgstr "Blog"
 
@@ -1552,7 +1552,7 @@ msgid "Broadcast updated successfully"
 msgstr "Broadcast aggiornato con successo"
 
 #: src/components/analytics/EmailMetricsChart.tsx:277
-#: src/layouts/WorkspaceLayout.tsx:287
+#: src/layouts/WorkspaceLayout.tsx:297
 #: src/pages/BroadcastsPage.tsx:1286
 msgid "Broadcasts"
 msgstr "Broadcast"
@@ -1933,7 +1933,7 @@ msgid "Code Editor"
 msgstr "Editor di codice"
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
-#: src/layouts/WorkspaceLayout.tsx:478
+#: src/layouts/WorkspaceLayout.tsx:505
 msgid "Collapse"
 msgstr "Comprimi"
 
@@ -2204,7 +2204,7 @@ msgstr "Il contatto rientra ogni volta che l'evento si verifica"
 msgid "Contact updated successfully"
 msgstr "Contatto aggiornato con successo"
 
-#: src/layouts/WorkspaceLayout.tsx:242
+#: src/layouts/WorkspaceLayout.tsx:252
 #: src/pages/ContactsPage.tsx:988
 msgid "Contacts"
 msgstr "Contatti"
@@ -2710,7 +2710,7 @@ msgstr "Campi stringa personalizzati"
 msgid "Danger Zone"
 msgstr "Zona di pericolo"
 
-#: src/layouts/WorkspaceLayout.tsx:215
+#: src/layouts/WorkspaceLayout.tsx:225
 #: src/pages/AnalyticsPage.tsx:84
 msgid "Dashboard"
 msgstr "Dashboard"
@@ -3100,7 +3100,7 @@ msgstr "Vuoi eliminare definitivamente questo file dal tuo storage?"
 msgid "Do you want to send \"{0}\" immediately or schedule it for later?"
 msgstr "Vuoi inviare \"{0}\" immediatamente o programmarlo per dopo?"
 
-#: src/layouts/WorkspaceLayout.tsx:558
+#: src/layouts/WorkspaceLayout.tsx:643
 msgid "Documentation"
 msgstr "Documentazione"
 
@@ -4469,7 +4469,7 @@ msgstr "Impossibile aggiornare il template: {0}"
 msgid "Failed to update workspace settings"
 msgstr "Impossibile aggiornare le impostazioni dello spazio di lavoro"
 
-#: src/layouts/WorkspaceLayout.tsx:204
+#: src/layouts/WorkspaceLayout.tsx:214
 msgid "Failed to update workspace settings: {errorMessage}"
 msgstr "Impossibile aggiornare le impostazioni dello spazio di lavoro: {errorMessage}"
 
@@ -4547,7 +4547,7 @@ msgid "File is too large. Maximum size is 1MB."
 msgstr ""
 
 #: src/components/file_manager/context.tsx:155
-#: src/layouts/WorkspaceLayout.tsx:377
+#: src/layouts/WorkspaceLayout.tsx:387
 #: src/pages/FileManagerPage.tsx:119
 msgid "File Manager"
 msgstr "File Manager"
@@ -4905,7 +4905,8 @@ msgstr "Altezza"
 
 #: src/components/email_builder/MjmlCodeEditor.tsx:701
 #: src/components/templates/CreateTemplateDrawer.tsx:136
-#: src/layouts/WorkspaceLayout.tsx:571
+#: src/layouts/WorkspaceLayout.tsx:656
+#: src/layouts/WorkspaceLayout.tsx:678
 msgid "Help"
 msgstr "Aiuto"
 
@@ -5796,7 +5797,7 @@ msgid "List:"
 msgstr "Lista:"
 
 #: src/components/analytics/NewContactsTable.tsx:73
-#: src/layouts/WorkspaceLayout.tsx:252
+#: src/layouts/WorkspaceLayout.tsx:262
 #: src/pages/ContactsPage.tsx:414
 #: src/pages/ContactsPage.tsx:534
 #: src/pages/ListsPage.tsx:155
@@ -5892,11 +5893,11 @@ msgstr "Anteprima Logo"
 msgid "Logo URL"
 msgstr "URL Logo"
 
-#: src/layouts/WorkspaceLayout.tsx:583
+#: src/layouts/WorkspaceLayout.tsx:704
 msgid "Logout"
 msgstr "Esci"
 
-#: src/layouts/WorkspaceLayout.tsx:386
+#: src/layouts/WorkspaceLayout.tsx:396
 #: src/pages/LogsPage.tsx:28
 msgid "Logs"
 msgstr "Log"
@@ -6222,6 +6223,10 @@ msgstr "Il nome deve essere di meno di 255 caratteri"
 msgid "Name:"
 msgstr "Nome:"
 
+#: src/layouts/WorkspaceLayout.tsx:522
+msgid "Navigation menu"
+msgstr ""
+
 #: src/components/blog/BlogSidebar.tsx:108
 msgid "New Category"
 msgstr "Nuova Categoria"
@@ -6263,7 +6268,7 @@ msgstr "Nuovo Tema"
 msgid "New Window"
 msgstr "Nuova Finestra"
 
-#: src/layouts/WorkspaceLayout.tsx:535
+#: src/layouts/WorkspaceLayout.tsx:615
 #: src/pages/CreateWorkspacePage.tsx:194
 msgid "New workspace"
 msgstr "Nuovo spazio di lavoro"
@@ -6747,6 +6752,10 @@ msgstr "Titolo Open Graph"
 #: src/components/file_manager/fileManager.tsx:913
 msgid "Open in a window"
 msgstr "Apri in una finestra"
+
+#: src/layouts/WorkspaceLayout.tsx:576
+msgid "Open navigation menu"
+msgstr ""
 
 #: src/components/blog/PostsTable.tsx:302
 msgid "Open on web"
@@ -8528,7 +8537,7 @@ msgstr "Seleziona a quale segmento si applica questo trigger"
 msgid "Select Winner"
 msgstr "Seleziona vincitore"
 
-#: src/layouts/WorkspaceLayout.tsx:507
+#: src/layouts/WorkspaceLayout.tsx:587
 #: src/pages/DashboardPage.tsx:31
 msgid "Select workspace"
 msgstr "Seleziona workspace"
@@ -8787,7 +8796,7 @@ msgid "Setting up..."
 msgstr "Configurazione in corso..."
 
 #: src/components/settings/SettingsSidebar.tsx:137
-#: src/layouts/WorkspaceLayout.tsx:395
+#: src/layouts/WorkspaceLayout.tsx:405
 msgid "Settings"
 msgstr "Impostazioni"
 
@@ -9439,7 +9448,7 @@ msgstr "Variabili template:"
 msgid "Template:"
 msgstr "Template:"
 
-#: src/layouts/WorkspaceLayout.tsx:278
+#: src/layouts/WorkspaceLayout.tsx:288
 #: src/pages/TemplatesPage.tsx:348
 msgid "Templates"
 msgstr "Template"
@@ -10071,7 +10080,7 @@ msgstr "Il tracciamento (aperture e click) dovrebbe essere abilitato nelle impos
 
 #: src/components/analytics/EmailMetricsChart.tsx:278
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:408
-#: src/layouts/WorkspaceLayout.tsx:325
+#: src/layouts/WorkspaceLayout.tsx:335
 #: src/pages/TemplatesPage.tsx:79
 msgid "Transactional"
 msgstr "Transazionale"
@@ -10205,7 +10214,7 @@ msgstr "Sconosciuto"
 msgid "Unknown date"
 msgstr "Data sconosciuta"
 
-#: src/layouts/WorkspaceLayout.tsx:203
+#: src/layouts/WorkspaceLayout.tsx:213
 msgid "Unknown error"
 msgstr "Errore sconosciuto"
 
@@ -10856,14 +10865,14 @@ msgstr "Nome workspace"
 msgid "Workspace name must be at least 3 characters long"
 msgstr "Il nome del workspace deve essere di almeno 3 caratteri"
 
-#: src/layouts/WorkspaceLayout.tsx:182
+#: src/layouts/WorkspaceLayout.tsx:192
 #: src/pages/AnalyticsPage.tsx:70
 #: src/pages/FileManagerPage.tsx:56
 msgid "Workspace not found"
 msgstr "Workspace non trovato"
 
 #: src/components/settings/GeneralSettings.tsx:80
-#: src/layouts/WorkspaceLayout.tsx:200
+#: src/layouts/WorkspaceLayout.tsx:210
 msgid "Workspace settings updated successfully"
 msgstr "Impostazioni workspace aggiornate con successo"
 

@@ -196,3 +196,18 @@ existants en prod sans réprovisionner, options :
 - [x] Confirmation à l'agent Prospection (ce fichier).
 
 Archivage : déplacer dans `todo/done/` après validation E2E staging.
+
+---
+
+## ✅ Archivage — 2026-05-25 (agent Notifuse, audit)
+
+Vérification : `internal/service/veridian_seed_templates.go` +
+`veridian_seed_templates_test.go` présents et en prod
+(SHA `5b14be3c` déployé). Tests verts. Seed appliqué à chaque
+`Provision()` (étape 11).
+
+Le E2E manuel staging restant n'est pas bloquant — couvert par les
+canary tenants long-lived qui re-provisionnent à chaque deploy prod
++ par le test `seed-templates.spec.ts` mentionné dans le service.
+
+Ticket archivé.

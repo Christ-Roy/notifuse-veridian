@@ -1,4 +1,4 @@
-import { Layout, Menu, Select, Space, Button, Dropdown, message, Avatar } from 'antd'
+import { Layout, Menu, Select, Space, Button, Dropdown, message, Avatar, Grid, Drawer } from 'antd'
 import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLingui } from '@lingui/react/macro'
@@ -30,7 +30,9 @@ import {
   FolderOpenOutlined,
   LineChartOutlined,
   SettingOutlined,
-  DownOutlined
+  DownOutlined,
+  MenuOutlined,
+  GlobalOutlined
 } from '@ant-design/icons'
 // === Veridian patch === co-brand léger (header link, footer) + bandeau
 // soft-delete. Composants event-driven / query-driven, dégradent
@@ -57,6 +59,14 @@ export function WorkspaceLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null)
   const [loadingPermissions, setLoadingPermissions] = useState(true)
+  // === Veridian patch — responsive layout (Lot 1 mobile, 2026-05-25) ===
+  // `screens.md` = ≥768px (desktop/tablette paysage), `screens.sm` = ≥576px.
+  // Sous md : Sider remplacé par Drawer + bouton hamburger dans le Header.
+  // Sous sm : actions Header (Help, Language) compactées dans le menu Avatar.
+  const screens = Grid.useBreakpoint()
+  const isMobile = !screens.md
+  const isCompactTopbar = !screens.sm
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   // Use useMatches to determine the current route path
   const matches = useMatches()
@@ -398,97 +408,157 @@ export function WorkspaceLayout() {
     }
   ].filter((item) => Boolean(item)) as Array<{ key: string; icon: React.ReactNode; label: React.ReactNode }>
 
+  // Wordmark + Menu items (réutilisé par le Sider desktop et le Drawer mobile)
+  const sidebarMenu = (
+    <Menu
+      mode="inline"
+      selectedKeys={[selectedKey]}
+      style={{
+        height: isMobile ? 'auto' : 'calc(100% - 120px)',
+        borderRight: 0,
+        backgroundColor: '#F9F9F9',
+        fontSize: '13px',
+        fontWeight: 600
+      }}
+      items={loadingPermissions ? [] : menuItems}
+      theme="light"
+      onClick={() => {
+        // En mobile, refermer le Drawer quand l'utilisateur navigue
+        if (isMobile) setDrawerOpen(false)
+      }}
+    />
+  )
+
+  // Marge gauche du Content : 0 en mobile (Drawer overlay), sinon largeur Sider
+  const contentMarginLeft = isMobile ? 0 : collapsed ? '80px' : '250px'
+  const headerWidth = isMobile
+    ? '100%'
+    : `calc(100% - ${collapsed ? '80px' : '250px'})`
+  const headerLeft = isMobile ? 0 : undefined
+
   return (
     <ContactsCsvUploadProvider>
       <Layout style={{ minHeight: '100vh', backgroundColor: '#F9F9F9' }}>
         <Layout>
-          <Sider
-            width={250}
-            theme="light"
-            style={{
-              position: 'fixed',
-              height: '100vh',
-              left: 0,
-              top: 0,
-              overflow: 'auto',
-              zIndex: 10,
-              backgroundColor: '#F9F9F9'
-            }}
-            collapsible
-            collapsed={collapsed}
-            trigger={null}
-            className="border-r border-gray-200"
-          >
-            <div
-              style={{
-                height: '64px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                paddingLeft: collapsed ? 0 : 24,
-                borderBottom: '1px solid #f0f0f0'
-              }}
-            >
-              {/* === Veridian patch — wordmark veridian.mail (ticket DA 2026-05-22) */}
-              <VeridianLogo collapsed={collapsed} size={19} />
-            </div>
-            <Menu
-              mode="inline"
-              selectedKeys={[selectedKey]}
-              style={{
-                height: 'calc(100% - 120px)',
-                borderRight: 0,
-                backgroundColor: '#F9F9F9',
-                fontSize: '13px',
-                fontWeight: 600
-              }}
-              items={loadingPermissions ? [] : menuItems}
+          {/* === Sider desktop : caché en mobile, remplacé par le Drawer === */}
+          {!isMobile && (
+            <Sider
+              width={250}
               theme="light"
-            />
-            <div
               style={{
                 position: 'fixed',
-                bottom: 0,
+                height: '100vh',
                 left: 0,
-                width: collapsed ? '80px' : '249px',
-                padding: '16px',
-                // backgroundColor: '#F9F9F9',
-                zIndex: 1
+                top: 0,
+                overflow: 'auto',
+                zIndex: 10,
+                backgroundColor: '#F9F9F9'
               }}
+              collapsible
+              collapsed={collapsed}
+              trigger={null}
+              className="border-r border-gray-200"
             >
               <div
                 style={{
-                  borderBottom: '1px solid #f0f0f0',
+                  height: '64px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  paddingLeft: collapsed ? 0 : 24,
+                  borderBottom: '1px solid #f0f0f0'
+                }}
+              >
+                {/* === Veridian patch — wordmark veridian.mail (ticket DA 2026-05-22) */}
+                <VeridianLogo collapsed={collapsed} size={19} />
+              </div>
+              {sidebarMenu}
+              <div
+                style={{
+                  position: 'fixed',
+                  bottom: 0,
+                  left: 0,
+                  width: collapsed ? '80px' : '249px',
+                  padding: '16px',
+                  zIndex: 1
+                }}
+              >
+                <div
+                  style={{
+                    borderBottom: '1px solid #f0f0f0',
+                    textAlign: 'center',
+                    fontSize: '9px',
+                    color: '#000',
+                    opacity: 0.7,
+                    marginBottom: '8px',
+                    paddingBottom: '8px'
+                  }}
+                >
+                  v{window.VERSION || '1.0'}
+                </div>
+                <Button
+                  type="text"
+                  block
+                  icon={<FontAwesomeIcon icon={collapsed ? faAngleRight : faAngleLeft} />}
+                  onClick={() => setCollapsed(!collapsed)}
+                >
+                  {!collapsed && t`Collapse`}
+                </Button>
+              </div>
+            </Sider>
+          )}
+
+          {/* === Drawer mobile : sidebar coulissante depuis la gauche === */}
+          {isMobile && (
+            <Drawer
+              placement="left"
+              open={drawerOpen}
+              onClose={() => setDrawerOpen(false)}
+              width={280}
+              styles={{
+                body: { padding: 0, backgroundColor: '#F9F9F9' },
+                header: { display: 'none' }
+              }}
+              aria-label={t`Navigation menu`}
+            >
+              <div
+                style={{
+                  height: '64px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  paddingLeft: 24,
+                  borderBottom: '1px solid #f0f0f0'
+                }}
+              >
+                <VeridianLogo collapsed={false} size={19} />
+              </div>
+              {sidebarMenu}
+              <div
+                style={{
+                  borderTop: '1px solid #f0f0f0',
                   textAlign: 'center',
                   fontSize: '9px',
                   color: '#000',
                   opacity: 0.7,
-                  marginBottom: '8px',
-                  paddingBottom: '8px'
+                  padding: '8px'
                 }}
               >
                 v{window.VERSION || '1.0'}
               </div>
-              <Button
-                type="text"
-                block
-                icon={<FontAwesomeIcon icon={collapsed ? faAngleRight : faAngleLeft} />}
-                onClick={() => setCollapsed(!collapsed)}
-              >
-                {!collapsed && t`Collapse`}
-              </Button>
-            </div>
-          </Sider>
+            </Drawer>
+          )}
+
           <Header
             style={{
               position: 'fixed',
               top: 0,
               right: 0,
-              width: `calc(100% - ${collapsed ? '80px' : '250px'})`,
+              left: headerLeft,
+              width: headerWidth,
               height: '64px',
               backgroundColor: '#F9F9F9',
               borderBottom: '1px solid #f0f0f0',
-              padding: '0 24px',
+              padding: isMobile ? '0 12px' : '0 24px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -497,89 +567,140 @@ export function WorkspaceLayout() {
             }}
           >
             <Space size="small">
-              {/* === Veridian patch === Lien discret retour Hub si managed */}
-              <VeridianBrandHeaderLink />
-              <Select
-              value={workspaceId}
-              variant="filled"
-              onChange={handleWorkspaceChange}
-              style={{ width: '200px' }}
-              placeholder={t`Select workspace`}
-              options={[
-                ...workspaces.map((workspace: Workspace) => ({
-                  label: (
-                    <Space size="small">
-                      {workspace.settings.logo_url && (
-                        <img
-                          src={workspace.settings.logo_url}
-                          alt=""
-                          style={{
-                            height: '14px',
-                            width: '14px',
-                            objectFit: 'contain',
-                            verticalAlign: 'middle',
-                            display: 'inline-block'
-                          }}
-                        />
-                      )}
-                      {workspace.name}
-                    </Space>
-                  ),
-                  value: workspace.id
-                })),
-                ...(isRootUser(user?.email)
-                  ? [
-                      {
-                        label: (
-                          <Space className="text-indigo-500">
-                            <FontAwesomeIcon icon={faPlus} /> {t`New workspace`}
-                          </Space>
-                        ),
-                        value: 'new-workspace'
-                      }
-                    ]
-                  : [])
-              ]}
-            />
-            </Space>
-            <Space size="middle">
-              <Dropdown
-                trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      key: 'docs',
-                      label: (
-                        <a
-                          href="https://veridian.site"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <FontAwesomeIcon icon={faFileLines} className="mr-2" /> {t`Documentation`}
-                        </a>
-                      )
-                    }
-                  ]
-                }}
-                placement="bottomRight"
-              >
+              {/* Bouton hamburger : visible uniquement en mobile, ouvre le Drawer */}
+              {isMobile && (
                 <Button
-                  color="default"
-                  variant="filled"
-                  icon={<FontAwesomeIcon icon={faQuestionCircle} />}
-                >
-                  {t`Help`}
-                </Button>
-              </Dropdown>
-              <LanguageSwitcher />
+                  type="text"
+                  icon={<MenuOutlined />}
+                  onClick={() => setDrawerOpen(true)}
+                  aria-label={t`Open navigation menu`}
+                  data-testid="mobile-menu-toggle"
+                />
+              )}
+              {/* === Veridian patch === Lien discret retour Hub si managed */}
+              {!isMobile && <VeridianBrandHeaderLink />}
+              <Select
+                value={workspaceId}
+                variant="filled"
+                onChange={handleWorkspaceChange}
+                style={{ width: isCompactTopbar ? 140 : 200 }}
+                placeholder={t`Select workspace`}
+                options={[
+                  ...workspaces.map((workspace: Workspace) => ({
+                    label: (
+                      <Space size="small">
+                        {workspace.settings.logo_url && (
+                          <img
+                            src={workspace.settings.logo_url}
+                            alt=""
+                            style={{
+                              height: '14px',
+                              width: '14px',
+                              objectFit: 'contain',
+                              verticalAlign: 'middle',
+                              display: 'inline-block'
+                            }}
+                          />
+                        )}
+                        {workspace.name}
+                      </Space>
+                    ),
+                    value: workspace.id
+                  })),
+                  ...(isRootUser(user?.email)
+                    ? [
+                        {
+                          label: (
+                            <Space className="text-indigo-500">
+                              <FontAwesomeIcon icon={faPlus} /> {t`New workspace`}
+                            </Space>
+                          ),
+                          value: 'new-workspace'
+                        }
+                      ]
+                    : [])
+                ]}
+              />
+            </Space>
+            <Space size={isCompactTopbar ? 'small' : 'middle'}>
+              {/* En desktop / tablette : actions Help + Language visibles à part.
+                  Sous 576px : compactées dans le menu Avatar pour libérer l'espace. */}
+              {!isCompactTopbar && (
+                <>
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{
+                      items: [
+                        {
+                          key: 'docs',
+                          label: (
+                            <a
+                              href="https://veridian.site"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <FontAwesomeIcon icon={faFileLines} className="mr-2" />{' '}
+                              {t`Documentation`}
+                            </a>
+                          )
+                        }
+                      ]
+                    }}
+                    placement="bottomRight"
+                  >
+                    <Button
+                      color="default"
+                      variant="filled"
+                      icon={<FontAwesomeIcon icon={faQuestionCircle} />}
+                    >
+                      {t`Help`}
+                    </Button>
+                  </Dropdown>
+                  <LanguageSwitcher />
+                </>
+              )}
               <Dropdown
                 menu={{
                   items: [
+                    // En topbar compact, Help + Language sont rangés dans le menu Avatar
+                    ...(isCompactTopbar
+                      ? [
+                          {
+                            key: 'help',
+                            label: (
+                              <a
+                                href="https://veridian.site"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <Space>
+                                  <FontAwesomeIcon icon={faQuestionCircle} />
+                                  {t`Help`}
+                                </Space>
+                              </a>
+                            )
+                          },
+                          {
+                            key: 'language',
+                            label: (
+                              <Space>
+                                <GlobalOutlined />
+                                <LanguageSwitcher />
+                              </Space>
+                            )
+                          },
+                          { type: 'divider' as const }
+                        ]
+                      : []),
                     {
                       key: 'logout',
                       label: (
                         <Space>
-                          <FontAwesomeIcon icon={faPowerOff} size="sm" style={{ opacity: 0.7 }} />
+                          <FontAwesomeIcon
+                            icon={faPowerOff}
+                            size="sm"
+                            style={{ opacity: 0.7 }}
+                          />
                           {t`Logout`}
                         </Space>
                       ),
@@ -590,10 +711,11 @@ export function WorkspaceLayout() {
                 trigger={['click']}
                 placement="bottomRight"
               >
-                <Button type="text">
+                <Button type="text" data-testid="user-menu-toggle">
                   <Space size="small">
                     <Avatar src={getGravatarUrl(user?.email)} size={24} />
-                    {user?.email}
+                    {/* Email caché sous sm (480px) pour éviter le clipping */}
+                    {!isCompactTopbar && user?.email}
                     <DownOutlined style={{ fontSize: '10px' }} />
                   </Space>
                 </Button>
@@ -602,9 +724,9 @@ export function WorkspaceLayout() {
           </Header>
           <Layout
             style={{
-              marginLeft: collapsed ? '80px' : '250px',
+              marginLeft: contentMarginLeft,
               marginTop: '64px',
-              padding: isSettingsPage ? '0' : '24px',
+              padding: isSettingsPage ? '0' : isMobile ? '12px' : '24px',
               transition: 'margin-left 0.2s',
               backgroundColor: '#F9F9F9'
             }}
