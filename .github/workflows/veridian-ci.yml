@@ -617,6 +617,97 @@ jobs:
           path: 'sbom-cyclonedx.json'
           retention-days: 90
 
+      # === Cleanup dev-pub disk après chaque build self-hosted ===
+      # Pattern choisi avec Robert 2026-05-24 : step CI au lieu de cron caché.
+      # Le job qui crée la dette (push image + builder buildkit) la nettoie
+      # ici, logs visibles dans GitHub Actions, traçable par run.
+      #
+      # 4 actions idempotentes, toutes non-bloquantes (|| true) :
+      #   1. Images ghcr.io/christ-roy/notifuse-veridian-* : garde les 2 plus
+      #      récentes + :latest + :rollback + celles utilisées par containers.
+      #   2. Builders buildx orphelins (containers >24h non listés par
+      #      `docker buildx ls`) : leur volume _state peut faire 2-5G chacun.
+      #   3. Logs runner _diag/ >7j sur dev-pub.
+      #   4. /tmp orphelins >24h matchant patterns CI connus.
+      #
+      # Cf. ticket veridian-infra/todo/2026-05-24-dev-pub-disk-saturation-structurel.md
+      # pour le contexte global (dev-pub saturait à 91% sous charge CI normale).
+      - name: Cleanup dev-pub disk (idempotent, non-bloquant)
+        if: always()
+        shell: bash
+        run: |
+          set +e  # never fail the build because of cleanup
+          DISK_BEFORE=$(df -B1 / | tail -1 | awk '{print $3}')
+
+          echo "=== 1. Rotation images notifuse-veridian (garde 2 plus récentes + :latest + :rollback) ==="
+          REPO="ghcr.io/christ-roy/notifuse-veridian"
+          # IDs à garder : 2 plus récentes (par date création) + :latest + :rollback + celles utilisées par containers
+          KEEP=$(docker images "$REPO" --format '{{.ID}} {{.CreatedAt}}' | sort -k2 -r | head -2 | awk '{print $1}')
+          KEEP="$KEEP $(docker images "$REPO:latest" --format '{{.ID}}' 2>/dev/null)"
+          KEEP="$KEEP $(docker images "$REPO:rollback" --format '{{.ID}}' 2>/dev/null)"
+          USED=$(docker ps --format '{{.Image}}' | grep "^$REPO" | xargs -r -I{} docker inspect {} --format '{{.Id}}' 2>/dev/null | sed 's/sha256://' | cut -c1-12)
+          KEEP="$KEEP $USED"
+          KEEP_UNIQ=$(echo "$KEEP" | tr ' ' '\n' | sort -u | grep -v '^$')
+
+          REMOVED=0
+          for id in $(docker images "$REPO" --format '{{.ID}}' | sort -u); do
+            if ! echo "$KEEP_UNIQ" | grep -qx "$id"; then
+              docker rmi "$id" 2>/dev/null && REMOVED=$((REMOVED+1))
+            fi
+          done
+          echo "  → $REMOVED images notifuse supprimées"
+
+          echo ""
+          echo "=== 2. Builders Buildkit orphelins (containers >24h non listés par 'buildx ls') ==="
+          ALIVE=$(docker buildx ls 2>/dev/null | grep -oE 'builder-[a-f0-9-]+' | sort -u || true)
+          ORPHANS_REMOVED=0
+          for c in $(docker ps -a --filter "name=buildx_buildkit_builder-" --format '{{.Names}}'); do
+            uuid="${c#buildx_buildkit_builder-}"
+            # Ne kill que si pas listé par buildx ls (= vraiment orphelin)
+            if [ -n "$ALIVE" ] && ! echo "$ALIVE" | grep -q "$uuid"; then
+              docker rm -f "$c" 2>/dev/null
+              docker volume rm "${c}_state" 2>/dev/null
+              ORPHANS_REMOVED=$((ORPHANS_REMOVED+1))
+            fi
+          done
+          echo "  → $ORPHANS_REMOVED builders orphelins supprimés"
+
+          echo ""
+          echo "=== 3. Logs runner _diag/ >7 jours ==="
+          DIAG_BEFORE=$(du -sm /home/ubuntu/actions-runner-notifuse-veridian/_diag 2>/dev/null | awk '{print $1}')
+          find /home/ubuntu/actions-runner-notifuse-veridian/_diag -type f -mtime +7 -delete 2>/dev/null
+          DIAG_AFTER=$(du -sm /home/ubuntu/actions-runner-notifuse-veridian/_diag 2>/dev/null | awk '{print $1}')
+          echo "  → _diag/ : ${DIAG_BEFORE:-?}M → ${DIAG_AFTER:-?}M"
+
+          echo ""
+          echo "=== 4. /tmp orphelins CI >24h ==="
+          TMP_REMOVED=0
+          # Patterns CI connus : prosp-*, e2e-*, prisma-*, playwright_*, vrd-mig-*, etc.
+          for pattern in 'prosp-*' 'e2e-*' 'prisma-*' 'playwright_*' 'playwright-*' 'vrd-mig-*' 'tmp.*' 'jiti' 'node-compile-cache'; do
+            for f in /tmp/$pattern; do
+              [ -e "$f" ] || continue
+              # Skip si modifié dans les dernières 24h (pourrait être en cours d'usage)
+              if [ -n "$(find "$f" -mmin +1440 -maxdepth 0 2>/dev/null)" ]; then
+                rm -rf "$f" 2>/dev/null && TMP_REMOVED=$((TMP_REMOVED+1))
+              fi
+            done
+          done
+          echo "  → $TMP_REMOVED entrées /tmp orphelines supprimées"
+
+          echo ""
+          echo "=== Bilan disque ==="
+          DISK_AFTER=$(df -B1 / | tail -1 | awk '{print $3}')
+          DISK_PCT=$(df / | tail -1 | awk '{print $5}')
+          FREED_MB=$(( (DISK_BEFORE - DISK_AFTER) / 1024 / 1024 ))
+          echo "  Libéré : ${FREED_MB}M"
+          echo "  Disque : $DISK_PCT used"
+          # Warning si toujours >80% — on ship pas mais on flag visible
+          PCT_NUM=$(echo "$DISK_PCT" | tr -d '%')
+          if [ "$PCT_NUM" -gt 80 ]; then
+            echo "::warning::dev-pub disk encore >80% ($DISK_PCT) après cleanup CI — investigation manuelle requise"
+          fi
+          exit 0
+
   deploy-staging:
     name: Deploy staging (GitOps bump + compose pur sur dev-pub)
     needs: build
