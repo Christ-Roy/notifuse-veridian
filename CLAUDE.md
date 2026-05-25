@@ -169,6 +169,105 @@ l'**élever** localement via UI Team Settings (pattern §5.18.4 informatif).
 
 ---
 
+## Secrets HMAC cross-app — matrice exhaustive
+
+> **But** : éviter qu'un agent perde 30 min à chercher quel secret /
+> header / canonical-string utiliser pour un endpoint HMAC donné. Tout
+> nouveau endpoint HMAC cross-app DOIT étendre cette table.
+>
+> Symétrie : un secret HMAC est partagé entre les 2 parties. Le **même
+> matériel cryptographique** vit sous des **noms d'env divergents** côté
+> Notifuse vs côté Hub. La colonne "même valeur" l'indique explicitement.
+
+### Vue d'ensemble par flux
+
+| Sens du flux | Env Notifuse | Env Hub | Header signature | Canonical string | Endpoint(s) |
+|---|---|---|---|---|---|
+| Hub → Notifuse (mutations + reads admin) | `HUB_API_SECRET` | `NOTIFUSE_HUB_API_SECRET` (= même valeur) | `X-Veridian-Hub-Signature` | `${ts}.${rawBody}` (POST/DELETE) ou `${ts}.GET.${pathname}?${sortedQuery}` (GET) | `/api/tenants/*`, `/api/veridian/admin/*`, `/api/veridian/workspaces/{id}/attach-member`, `/api/sso/issue-magic-link`, `POST /api/users/by-email` |
+| Notifuse → Hub (discovery user) | `HUB_API_SECRET` (même secret) | `NOTIFUSE_HUB_API_SECRET` (même) | `x-veridian-hub-signature` (lowercase pour outbound, accepté côté Hub) | `${ts}.GET.${pathname}?${sortedQuery}` (tri alphabétique des clés, encodage `encodeURIComponent`-compatible — cf. `pkg/hub_discovery/client.go`) | `GET <hub>/api/users/by-email?email=...` |
+| Notifuse → Hub (invitation cross-app) | `HUB_INVITATION_SECRET_NOTIFUSE` | `HUB_INVITATION_SECRET_NOTIFUSE` (même nom) | `x-veridian-invitation-signature` | `${ts}.${rawBody}` | `POST <hub>/api/invitations/create` |
+| Notifuse → Hub (webhooks lifecycle) | `HUB_WEBHOOK_SECRET` (+ `HUB_WEBHOOK_URL`) | `NOTIFUSE_HUB_WEBHOOK_SECRET` (= même valeur) | `X-Veridian-Notifuse-Signature` | `${ts}.${rawBody}` | `POST ${HUB_WEBHOOK_URL}` (cf. §7.1 events `tenant.*`, `email.*`) |
+
+### Headers communs à toutes les requêtes HMAC
+
+- **`x-veridian-app`** : nom canonique de l'app caller (`notifuse`,
+  `prospection`, `analytics`, `cms`). Côté Hub, sélectionne le bon
+  secret. Côté Notifuse, pas vérifié (un seul secret possible).
+- **`x-veridian-timestamp`** : Unix epoch en **millisecondes**. Drift
+  max anti-replay : **5 minutes** (constante `MaxClockDrift` côté
+  Notifuse, équivalent côté Hub). Body lu avec `MaxBodySize = 1 MiB`.
+
+### Où trouver les valeurs
+
+- **Source de vérité dev** : `~/credentials/.all-creds.env` (noms
+  canoniques `NOTIFUSE_HUB_API_SECRET`, `NOTIFUSE_HUB_WEBHOOK_SECRET`,
+  `HUB_INVITATION_SECRET_NOTIFUSE`, etc.)
+- **Staging** : compose Dokploy `compose-bypass-bluetooth-feed-tbayqr`
+  (Notifuse staging) — ENV injectées via `infra/compose/staging.yml`
+- **Prod Notifuse** : compose Dokploy `WN0jglLj5bDIrXUFZHNmw` (cf.
+  CLAUDE.md racine `veridian-platform/`, section ComposeIds)
+- **Prod Hub** : compose Dokploy `_kxAHDCv1LhvsdwNRX3Vk`
+- **Inspection live** : `POST /api/compose.one body {composeId}` via
+  Dokploy API (header `x-api-key: $DOKPLOY_API_KEY`) pour lire les ENV
+  d'une stack sans SSH
+
+### Conventions code (où regarder)
+
+- `internal/http/middleware/veridian_hmac.go` — middleware **inbound**
+  (Hub → Notifuse), header `X-Veridian-Hub-Signature`, canonical
+  `${ts}.${rawBody}`. 503 si `HUB_API_SECRET` vide (pas 401).
+- `pkg/hub_discovery/client.go` — client **outbound** GET signé pour
+  `/api/users/by-email`. Constantes `AppHeaderName`,
+  `TimestampHeaderName`, `SignatureHeaderName` exportées. **encodage
+  `encodeURIComponent`-compatible** (PAS `url.QueryEscape` — diverge sur
+  espaces et caractères réservés). Tri alphabétique des clés impératif
+  pour matcher `lib/discovery/hmac.ts` côté Hub.
+- `internal/service/veridian_hub_invitation_client.go` — client
+  **outbound** POST signé pour `/api/invitations/create`. Headers
+  lowercase. Mode "disabled" silencieux si `HUB_INVITATION_SECRET_NOTIFUSE`
+  vide (retourne `ErrHubInvitationDisabled`).
+- `internal/service/veridian_webhook_emitter.go` — emitter **outbound**
+  POST best-effort vers `HUB_WEBHOOK_URL`. Header `X-Veridian-Notifuse-Signature`
+  (note : **différent** du header inbound, car le Hub a besoin de
+  distinguer l'origine du signal). Noop si URL ou secret manquants.
+
+### Pièges historiques (vécus, pas hypothétiques)
+
+- **`HUB_INVITATION_SECRET_NOTIFUSE` absent des composes Dokploy prod**
+  jusqu'au 2026-05-23 (corrigé en session). Toujours vérifier les ENV
+  des **DEUX** composes (Notifuse `WN0jglLj5bDIrXUFZHNmw` ET Hub
+  `_kxAHDCv1LhvsdwNRX3Vk`) en parallèle quand un nouveau secret HMAC
+  est introduit — sinon HMAC marche en staging et plante en prod.
+  À noter : ce secret n'est PAS dans `infra/compose/{staging,prod}.yml`
+  du repo Notifuse, il est injecté directement via l'UI/API Dokploy.
+- **Canonical string différente POST vs GET pour le MÊME secret**
+  (`HUB_API_SECRET`) : `${ts}.${body}` pour les mutations, mais
+  `${ts}.GET.${path}?${sortedQuery}` pour `/api/users/by-email`. Coller
+  le mauvais format = `401 Invalid signature` opaque.
+- **Tri alphabétique des query params obligatoire** sur la signature GET
+  (anti-malléabilité si un proxy réordonne). Cf. `encodeSortedQuery` dans
+  `pkg/hub_discovery/client.go`.
+- **Header webhook ≠ header inbound** : outbound webhook utilise
+  `X-Veridian-Notifuse-Signature`, inbound mutations utilise
+  `X-Veridian-Hub-Signature`. Symétrie volontaire : le destinataire sait
+  à quel secret matcher.
+- **Validation UUID stricte côté Notifuse `hub_user_id`** (V46) : si
+  payload Hub envoie un non-UUID, stocké comme NULL silencieusement
+  (cf. fix `7d5b352d`). HMAC valide mais data perdue.
+- **Casse des headers HTTP** : Go normalise via `r.Header.Get` (case
+  insensitive) donc lowercase outbound et CamelCase inbound coexistent
+  sans problème. Ne pas s'alarmer si on voit les deux dans le code.
+
+### Vue Hub-side
+
+La VUE Hub (quels endpoints exposent l'inbound HMAC pour chaque app,
+quelles ENV `<APP>_HUB_API_SECRET` sont définies) est maintenue côté
+Hub. Voir `../veridian-hub/CLAUDE.md` section équivalente — ticket
+ouvert `../veridian-hub/todo/2026-05-25-secrets-hmac-cross-app-doc-CLAUDE.md`
+pour la créer en miroir.
+
+---
+
 ## Pricing — source de vérité
 
 > **Source unique cross-app** : `../veridian-hub/docs/PRICING-VERIDIAN.md`.
