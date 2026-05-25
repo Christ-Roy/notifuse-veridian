@@ -183,8 +183,8 @@ l'**élever** localement via UI Team Settings (pattern §5.18.4 informatif).
 
 | Sens du flux | Env Notifuse | Env Hub | Header signature | Canonical string | Endpoint(s) |
 |---|---|---|---|---|---|
-| Hub → Notifuse (mutations + reads admin) | `HUB_API_SECRET` | `NOTIFUSE_HUB_API_SECRET` (= même valeur) | `X-Veridian-Hub-Signature` | `${ts}.${rawBody}` (POST/DELETE) ou `${ts}.GET.${pathname}?${sortedQuery}` (GET) | `/api/tenants/*`, `/api/veridian/admin/*`, `/api/veridian/workspaces/{id}/attach-member`, `/api/sso/issue-magic-link`, `POST /api/users/by-email` |
-| Notifuse → Hub (discovery user) | `HUB_API_SECRET` (même secret) | `NOTIFUSE_HUB_API_SECRET` (même) | `x-veridian-hub-signature` (lowercase pour outbound, accepté côté Hub) | `${ts}.GET.${pathname}?${sortedQuery}` (tri alphabétique des clés, encodage `encodeURIComponent`-compatible — cf. `pkg/hub_discovery/client.go`) | `GET <hub>/api/users/by-email?email=...` |
+| Hub → Notifuse (mutations + reads admin) | `HUB_API_SECRET` | `NOTIFUSE_HUB_API_SECRET` (= même valeur) | `X-Veridian-Hub-Signature` | `${ts}.${rawBody}` (POST/DELETE) ou `${ts}.GET.${pathname}?${sortedQuery}` (GET) | `/api/tenants/*`, `/api/veridian/admin/*`, `/api/veridian/workspaces/{id}/attach-member`, `/api/sso/issue-magic-link`, **`POST /api/users/by-email`** ET **`GET /api/users/by-email`** (les 2 routées — cf. piège catchall plus bas) |
+| Notifuse → Hub (discovery user, 2 méthodes) | `HUB_API_SECRET` (même secret) | `NOTIFUSE_HUB_API_SECRET` (même) | `x-veridian-hub-signature` (lowercase pour outbound, accepté côté Hub) | **POST** : `${ts}.${rawBody}` (SDK/UI Notifuse, évite email en URL) — **GET** : `${ts}.GET.${pathname}?${sortedQuery}` (cron reconcile Hub `lib/sync/discovery.ts`, tri alphabétique des clés + encodage `encodeURIComponent`-compatible — cf. `pkg/hub_discovery/client.go`). Pour body vide, le canonical POST s'écrit `${ts}.` (timestamp + point + chaîne vide) | `POST <hub>/api/users/by-email` (body `{"email":"..."}`) ET `GET <hub>/api/users/by-email?email=...` |
 | Notifuse → Hub (invitation cross-app) | `HUB_INVITATION_SECRET_NOTIFUSE` | `HUB_INVITATION_SECRET_NOTIFUSE` (même nom) | `x-veridian-invitation-signature` | `${ts}.${rawBody}` | `POST <hub>/api/invitations/create` |
 | Notifuse → Hub (webhooks lifecycle) | `HUB_WEBHOOK_SECRET` (+ `HUB_WEBHOOK_URL`) | `NOTIFUSE_HUB_WEBHOOK_SECRET` (= même valeur) | `X-Veridian-Notifuse-Signature` | `${ts}.${rawBody}` | `POST ${HUB_WEBHOOK_URL}` (cf. §7.1 events `tenant.*`, `email.*`) |
 
@@ -215,7 +215,14 @@ l'**élever** localement via UI Team Settings (pattern §5.18.4 informatif).
 
 - `internal/http/middleware/veridian_hmac.go` — middleware **inbound**
   (Hub → Notifuse), header `X-Veridian-Hub-Signature`, canonical
-  `${ts}.${rawBody}`. 503 si `HUB_API_SECRET` vide (pas 401).
+  `${ts}.${rawBody}`. 503 si `HUB_API_SECRET` vide (pas 401). Sait
+  gérer les deux modes : si body absent (GET), `rawBody = ""` et le
+  canonical devient `${ts}.` (timestamp + point sec).
+- `internal/http/veridian_discovery_handler.go` — handlers **inbound**
+  jumeaux `handleDiscovery` (POST) et `handleDiscoveryGET` (GET) pour
+  `/api/users/by-email`. Les deux sont nécessaires : POST sert le
+  SDK/UI Notifuse, GET sert le cron reconcile Hub. Si un seul est
+  routé, l'autre tombe dans le catchall SPA (cf. piège).
 - `pkg/hub_discovery/client.go` — client **outbound** GET signé pour
   `/api/users/by-email`. Constantes `AppHeaderName`,
   `TimestampHeaderName`, `SignatureHeaderName` exportées. **encodage
@@ -233,6 +240,20 @@ l'**élever** localement via UI Team Settings (pattern §5.18.4 informatif).
 
 ### Pièges historiques (vécus, pas hypothétiques)
 
+- **Catchall `root_handler.go` qui mange les méthodes HTTP non routées**
+  (incident 2026-05-25, P0 prod) : Go 1.22+ exige la méthode HTTP
+  explicite dans `mux.Handle("METHOD /path", ...)`. Si tu route
+  uniquement `POST /api/foo` et qu'un caller appelle `GET /api/foo`, le
+  mux **ne match pas** → la requête tombe sur le catchall
+  `root_handler.go` qui sert la **SPA console** (HTML 200) → le caller
+  parse le body comme JSON et lit "body vide" silencieusement. Aucun log
+  d'erreur côté Notifuse, aucun 404, juste un 200 trompeur. Vécu :
+  17 faux positifs `tenant_missing_app` côté Hub reconcile cron parce
+  que `GET /api/users/by-email` n'était pas routé. **Règle** : pour tout
+  endpoint HMAC critique, router POST **ET** GET explicitement (même si
+  un seul est utilisé aujourd'hui — l'autre cause un crash silencieux le
+  jour où un nouveau caller arrive). Smoke test obligatoire : `curl -X
+  <METHOD>` chaque méthode déclarée dans la matrice ci-dessus.
 - **`HUB_INVITATION_SECRET_NOTIFUSE` absent des composes Dokploy prod**
   jusqu'au 2026-05-23 (corrigé en session). Toujours vérifier les ENV
   des **DEUX** composes (Notifuse `WN0jglLj5bDIrXUFZHNmw` ET Hub
