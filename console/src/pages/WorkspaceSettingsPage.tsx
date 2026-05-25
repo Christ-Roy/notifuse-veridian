@@ -16,6 +16,8 @@ import { DeleteWorkspaceSection } from '../components/settings/DeleteWorkspace'
 import { SettingsSidebar, SettingsSection } from '../components/settings/SettingsSidebar'
 // === Veridian patch === section Plan ajoutée au sidebar settings.
 import { VeridianPlanSettings } from '../components/settings/veridian_plan_settings'
+// === Veridian patch (vague 6) === section Mail account (sender Veridian vs Gmail Hub).
+import { VeridianMailAccountSettings } from '../components/settings/veridian_mail_account_settings'
 
 const { Sider, Content } = Layout
 
@@ -41,6 +43,7 @@ export function WorkspaceSettingsPage() {
     'general',
     'blog',
     'plan',
+    'mail-account',
     'danger-zone'
   ]
 
@@ -158,6 +161,9 @@ export function WorkspaceSettingsPage() {
       case 'plan':
         // === Veridian patch === section Plan : badge plan_source + CTA Hub.
         return <VeridianPlanSettings workspaceId={workspaceId} />
+      case 'mail-account':
+        // === Veridian patch (vague 6) === sender choice + Connect Gmail via Hub.
+        return <VeridianMailAccountSettings workspaceId={workspaceId} />
       case 'danger-zone':
         return workspace && isOwner ? (
           <DeleteWorkspaceSection workspace={workspace} onDeleteSuccess={handleWorkspaceDelete} />

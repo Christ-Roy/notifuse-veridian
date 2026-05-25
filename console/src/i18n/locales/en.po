@@ -1316,7 +1316,7 @@ msgstr "Blocks"
 #: src/components/settings/BlogSettings.tsx:197
 #: src/components/settings/BlogSettings.tsx:205
 #: src/components/settings/BlogSettings.tsx:238
-#: src/components/settings/SettingsSidebar.tsx:100
+#: src/components/settings/SettingsSidebar.tsx:101
 #: src/layouts/WorkspaceLayout.tsx:360
 msgid "Blog"
 msgstr "Blog"
@@ -1809,6 +1809,10 @@ msgstr "Choose a saved block to update"
 msgid "Choose a starting point for your new theme. You can customize everything later."
 msgstr "Choose a starting point for your new theme. You can customize everything later."
 
+#: src/components/settings/veridian_mail_account_settings.tsx:80
+msgid "Choose how transactional emails (magic links, MFA, notifications) are sent on behalf of your workspace."
+msgstr "Choose how transactional emails (magic links, MFA, notifications) are sent on behalf of your workspace."
+
 #. placeholder {0}: post.settings.title
 #: src/components/blog/PublishModal.tsx:110
 msgid "Choose when to publish \"{0}\""
@@ -1833,6 +1837,10 @@ msgstr "Clear All"
 #: src/components/contacts/InlineEditableField.tsx:295
 msgid "Clear field"
 msgstr "Clear field"
+
+#: src/components/settings/veridian_mail_account_settings.tsx:122
+msgid "Click below to connect your Gmail account from the Veridian Hub. Once connected, the \"My Gmail\" option above will route sends through your Gmail."
+msgstr "Click below to connect your Gmail account from the Veridian Hub. Once connected, the \"My Gmail\" option above will route sends through your Gmail."
 
 #: src/components/segment/form_leaf.tsx:295
 #: src/components/segment/input.tsx:726
@@ -2125,6 +2133,14 @@ msgstr "Confirmed"
 #: src/components/settings/Integrations.tsx:2143
 msgid "Connect and manage external services"
 msgstr "Connect and manage external services"
+
+#: src/components/settings/veridian_mail_account_settings.tsx:131
+msgid "Connect my Gmail"
+msgstr "Connect my Gmail"
+
+#: src/components/settings/veridian_mail_account_settings.tsx:119
+msgid "Connect your Gmail account"
+msgstr "Connect your Gmail account"
 
 #: src/components/transactional/ApiCommandModal.tsx:530
 msgid "Connection Details"
@@ -2593,7 +2609,7 @@ msgstr "Custom field label saved successfully"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1136
 #: src/components/settings/CustomFieldsConfiguration.tsx:161
-#: src/components/settings/SettingsSidebar.tsx:105
+#: src/components/settings/SettingsSidebar.tsx:106
 msgid "Custom Fields"
 msgstr "Custom Fields"
 
@@ -2706,7 +2722,7 @@ msgstr "Custom String Fields"
 
 #: src/components/settings/BlogSettings.tsx:463
 #: src/components/settings/DeleteWorkspace.tsx:45
-#: src/components/settings/SettingsSidebar.tsx:131
+#: src/components/settings/SettingsSidebar.tsx:140
 msgid "Danger Zone"
 msgstr "Danger Zone"
 
@@ -4200,7 +4216,7 @@ msgstr "Failed to fetch objects: "
 msgid "Failed to fetch setup status"
 msgstr "Failed to fetch setup status"
 
-#: src/pages/WorkspaceSettingsPage.tsx:85
+#: src/pages/WorkspaceSettingsPage.tsx:88
 msgid "Failed to fetch workspace members"
 msgstr "Failed to fetch workspace members"
 
@@ -4330,6 +4346,10 @@ msgstr "Failed to save integration"
 #: src/components/settings/Integrations.tsx:820
 msgid "Failed to save LLM integration"
 msgstr "Failed to save LLM integration"
+
+#: src/components/settings/veridian_mail_account_settings.tsx:64
+msgid "Failed to save mail provider preference. Please retry."
+msgstr "Failed to save mail provider preference. Please retry."
 
 #: src/components/settings/SystemSettingsDrawer.tsx:188
 msgid "Failed to save settings"
@@ -4776,7 +4796,7 @@ msgstr "Full width on mobile"
 msgid "Fullscreen"
 msgstr "Fullscreen"
 
-#: src/components/settings/SettingsSidebar.tsx:115
+#: src/components/settings/SettingsSidebar.tsx:116
 #: src/components/settings/SystemSettingsDrawer.tsx:228
 msgid "General"
 msgstr "General"
@@ -5130,6 +5150,10 @@ msgstr "If a contact with this email already exists, the provided fields will be
 msgid "If enabled, the broadcast will be sent according to each recipient's timezone"
 msgstr "If enabled, the broadcast will be sent according to each recipient's timezone"
 
+#: src/components/settings/veridian_mail_account_settings.tsx:113
+msgid "If Gmail is not connected on the Hub, sends will automatically fall back to the generic sender."
+msgstr "If Gmail is not connected on the Hub, sends will automatically fall back to the generic sender."
+
 #: src/components/transactional/ApiCommandModal.tsx:1002
 msgid "If the contact email doesn't exist in your workspace, it will be automatically created."
 msgstr "If the contact email doesn't exist in your workspace, it will be automatically created."
@@ -5367,7 +5391,7 @@ msgid "Integration updated successfully"
 msgstr "Integration updated successfully"
 
 #: src/components/settings/Integrations.tsx:2142
-#: src/components/settings/SettingsSidebar.tsx:57
+#: src/components/settings/SettingsSidebar.tsx:58
 msgid "Integrations"
 msgstr "Integrations"
 
@@ -5914,6 +5938,15 @@ msgstr "lowercase"
 msgid "Magic code sent to your email"
 msgstr "Magic code sent to your email"
 
+#: src/components/settings/SettingsSidebar.tsx:131
+#: src/components/settings/veridian_mail_account_settings.tsx:71
+msgid "Mail account"
+msgstr "Mail account"
+
+#: src/components/settings/veridian_mail_account_settings.tsx:61
+msgid "Mail provider preference saved."
+msgstr "Mail provider preference saved."
+
 #: src/components/settings/BlogSettings.tsx:328
 msgid "Main logo for your blog. Recommended size: 200x50px or similar aspect ratio"
 msgstr "Main logo for your blog. Recommended size: 200x50px or similar aspect ratio"
@@ -6183,6 +6216,10 @@ msgstr "More options"
 #: src/components/settings/BlogSettings.tsx:433
 msgid "My Amazing Blog"
 msgstr "My Amazing Blog"
+
+#: src/components/settings/veridian_mail_account_settings.tsx:102
+msgid "My Gmail connected via Hub"
+msgstr "My Gmail connected via Hub"
 
 #: src/components/settings/WebhooksSettings.tsx:227
 msgid "My Webhook"
@@ -7021,7 +7058,7 @@ msgstr "Photo URL"
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
 msgstr "Plain text (only safe behind a TLS-terminating proxy)"
 
-#: src/components/settings/SettingsSidebar.tsx:122
+#: src/components/settings/SettingsSidebar.tsx:123
 #: src/components/settings/veridian_plan_settings.tsx:51
 msgid "Plan"
 msgstr "Plan"
@@ -8622,6 +8659,7 @@ msgstr "Send Test Email"
 msgid "Send transactional notifications using SMTP bridge. Perfect for integrating with existing email systems or applications that support SMTP."
 msgstr "Send transactional notifications using SMTP bridge. Perfect for integrating with existing email systems or applications that support SMTP."
 
+#: src/components/settings/veridian_mail_account_settings.tsx:85
 #: src/components/templates/CreateTemplateDrawer.tsx:772
 #: src/components/templates/SendTemplateModal.tsx:303
 #: src/pages/TemplatesPage.tsx:181
@@ -8803,7 +8841,7 @@ msgstr "Sets the screen width below which the email will switch to mobile layout
 msgid "Setting up..."
 msgstr "Setting up..."
 
-#: src/components/settings/SettingsSidebar.tsx:137
+#: src/components/settings/SettingsSidebar.tsx:146
 #: src/layouts/WorkspaceLayout.tsx:405
 msgid "Settings"
 msgstr "Settings"
@@ -8897,7 +8935,7 @@ msgstr "SMS"
 msgid "SMTP & bridge settings"
 msgstr "SMTP & bridge settings"
 
-#: src/components/settings/SettingsSidebar.tsx:110
+#: src/components/settings/SettingsSidebar.tsx:111
 #: src/components/settings/SMTPBridgeSettings.tsx:20
 #: src/components/settings/SystemSettingsDrawer.tsx:422
 msgid "SMTP Bridge"
@@ -9344,7 +9382,7 @@ msgstr "Task Status"
 msgid "Task type:"
 msgstr "Task type:"
 
-#: src/components/settings/SettingsSidebar.tsx:36
+#: src/components/settings/SettingsSidebar.tsx:37
 #: src/components/settings/WorkspaceMembers.tsx:576
 msgid "Team"
 msgstr "Team"
@@ -10576,6 +10614,10 @@ msgstr "Variations"
 msgid "Veridian dashboard"
 msgstr "Veridian dashboard"
 
+#: src/components/settings/veridian_mail_account_settings.tsx:96
+msgid "Veridian generic sender (default)"
+msgstr "Veridian generic sender (default)"
+
 #: src/components/veridian_paywall_modal.tsx:79
 msgid "Veridian Hub is unreachable. The app is in read-only mode — please try again in {retryHours}h."
 msgstr "Veridian Hub is unreachable. The app is in read-only mode — please try again in {retryHours}h."
@@ -10713,7 +10755,7 @@ msgstr "Webhook URL"
 #: src/components/settings/Integrations.tsx:198
 #: src/components/settings/Integrations.tsx:206
 #: src/components/settings/Integrations.tsx:237
-#: src/components/settings/SettingsSidebar.tsx:79
+#: src/components/settings/SettingsSidebar.tsx:80
 #: src/components/settings/WebhooksSettings.tsx:169
 msgid "Webhooks"
 msgstr "Webhooks"
