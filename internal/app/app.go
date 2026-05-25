@@ -127,9 +127,11 @@ type App struct {
 	veridianPlanRepo         domain.VeridianPlanRepository
 	veridianIdempotencyRepo  domain.VeridianIdempotencyRepository
 	veridianAPIKeyGraceRepo  domain.VeridianAPIKeyGraceRepository // Lot K — grace period rotate-api-key
+	veridianFrozenMemberRepo domain.VeridianFrozenMemberRepository // §5.21 — freeze member per-user
 	veridianService          domain.VeridianService
 	veridianWebhookEmitter   domain.WebhookEmitter
 	veridianPaywallCache     *middleware.PaywallCache              // partage middleware paywall + handler invalidate
+	veridianFrozenCache      *middleware.FrozenMemberCache         // partage middleware frozen + handler freeze/unfreeze invalidate
 	veridianPricingSync      *service.VeridianPricingSyncService   // catalogue pricing Hub (lot O 2026-05-21)
 	veridianTestTenantsCleanup *service.VeridianTestTenantsCleanupService // cron auto-cleanup orphans staging (2026-05-24)
 
@@ -468,6 +470,12 @@ func (a *App) InitRepositories() error {
 	// rotate-api-key (CONTRAT-HUB §5.15). Voir migration V41 + service
 	// VeridianAPIKeyGraceCleanupService.
 	a.veridianAPIKeyGraceRepo = repository.NewVeridianAPIKeyGraceRepository(a.db)
+
+	// === Veridian patch — Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
+	// Repo Postgres pour la table veridian_frozen_members (migration V47).
+	// Utilise par : (a) service.FreezeMember/UnfreezeMember, (b) middleware
+	// paywall per-user pour decider 402 user_frozen vs reads obfusques.
+	a.veridianFrozenMemberRepo = repository.NewVeridianFrozenMemberRepository(a.db)
 
 	// Initialize setting service
 	a.settingService = service.NewSettingService(a.settingRepo)
@@ -1104,6 +1112,15 @@ func (a *App) InitServices() error {
 		}
 	}
 
+	// === Veridian patch — Freeze member per-user (2026-05-25) === Injecter
+	// le frozen_member repo post-construction (CONTRAT-HUB §5.21). Sans ça,
+	// FreezeMember/UnfreezeMember retournent ErrFrozenMemberRepoNotConfigured.
+	if a.veridianFrozenMemberRepo != nil {
+		if err := service.ConfigureFrozenMemberSupport(a.veridianService, a.veridianFrozenMemberRepo); err != nil {
+			a.logger.WithField("error", err.Error()).Warn("ConfigureFrozenMemberSupport failed — freeze/unfreeze-member endpoints disabled")
+		}
+	}
+
 	// === Veridian patch — 2026-05-23 === Injecter templateService +
 	// transactionalNotificationService pour le seed du template
 	// invitation-prospection au Provision (cf. veridian_seed_templates.go).
@@ -1290,8 +1307,14 @@ func (a *App) InitHandlers() error {
 	// de purger une entree sans attendre le TTL (60s). Critique pour reduire
 	// le wall-clock e2e CI paywall (gain ~5min/run).
 	a.veridianPaywallCache = middleware.NewPaywallCache()
+	// === Veridian patch — Freeze member per-user (2026-05-25) === Cache
+	// partage middleware frozen + handler freeze/unfreeze. Permet
+	// l'invalidation immediate post-mutation sans attendre le TTL 60s
+	// (critique pour les E2E qui freeze puis ecrit immediatement).
+	a.veridianFrozenCache = middleware.NewFrozenMemberCache()
 	veridianHandler := httpHandler.NewVeridianHandler(a.veridianService, a.logger)
 	veridianHandler.SetPaywallCache(a.veridianPaywallCache)
+	veridianHandler.SetFrozenCache(a.veridianFrozenCache)
 	veridianHandler.SetIdempotencyRepo(a.veridianIdempotencyRepo)
 
 	// === Veridian patch — lot O (2026-05-21) ===
@@ -1428,6 +1451,35 @@ func (a *App) Start() error {
 	// HubSyncDead, feature gate). Cache partagé avec le paywall pour
 	// économiser les round-trips DB sur les routes communes.
 	handler = middleware.VeridianSoftDeletedFilterWithCache(a.veridianPaywallCache, a.veridianPlanRepo, a.logger)(handler)
+
+	// === Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
+	// Wrappe le handler GLOBAL : si user frozen sur le workspace courant,
+	//   - GET/HEAD/OPTIONS : reads obfusques (header X-User-Frozen=true)
+	//   - POST/PUT/PATCH/DELETE : 402 user_frozen body + unfreeze_url
+	// Exempts : /api/veridian/*, /api/tenants/*, /api/health, /api/version,
+	// /api/auth/* (HMAC + systeme — pas concernes par freeze user-side).
+	//
+	// Place APRES soft-deleted dans la chaine d'application (donc EXECUTE
+	// AVANT dans le flow request) : soft-deleted prime sur frozen (un
+	// tenant deleted court-circuite le freeze user). Cache decouple
+	// (FrozenMemberCache, cle (workspace, user)) pour eviter de polluer
+	// le PaywallCache existant cle workspace seul.
+	//
+	// frozenRepo nil = passthrough (mode self-hosted ou freeze pas configure).
+	if a.veridianFrozenMemberRepo != nil {
+		getJWTSecret := func() ([]byte, error) {
+			if len(a.config.Security.JWTSecret) == 0 {
+				return nil, fmt.Errorf("JWT secret not configured")
+			}
+			return a.config.Security.JWTSecret, nil
+		}
+		handler = middleware.VeridianFrozenMemberFilterWithCache(
+			a.veridianFrozenCache,
+			a.veridianFrozenMemberRepo,
+			getJWTSecret,
+			a.logger,
+		)(handler)
+	}
 
 	// Apply graceful shutdown middleware first (outermost)
 	handler = a.gracefulShutdownMiddleware(handler)

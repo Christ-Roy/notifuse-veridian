@@ -78,6 +78,21 @@ func TestWriteJSONErrorCode_codesEnum(t *testing.T) {
 	}
 }
 
+// TestWriteJSONErrorCode_FreezeCodesValues — invariant sur les valeurs string
+// des nouveaux codes d'erreur freeze member (CONTRAT-HUB §5.21). Si ces
+// strings changent, le Hub doit etre re-aligne (mapping handler client
+// `code` → action UI). Test colocalise pour ne pas regresser silencieusement.
+func TestWriteJSONErrorCode_FreezeCodesValues(t *testing.T) {
+	assert.Equal(t, "cannot_freeze_owner", ErrCodeCannotFreezeOwner,
+		"CONTRAT-HUB §5.21 — refus de freeze l'owner du workspace")
+	assert.Equal(t, "user_not_member", ErrCodeUserNotMember,
+		"CONTRAT-HUB §5.21 — freeze/unfreeze sur user pas membre du workspace")
+	assert.Equal(t, "member_already_frozen", ErrCodeMemberAlreadyFrozen,
+		"CONTRAT-HUB §5.21 — idempotent 409 sur freeze deja frozen")
+	assert.Equal(t, "user_frozen", ErrCodeUserFrozen,
+		"CONTRAT-HUB §5.21 + §5.10 — 402 sur writes d'un user frozen via middleware paywall per-user")
+}
+
 func TestMissingFields(t *testing.T) {
 	t.Run("empty when no condition true", func(t *testing.T) {
 		got := missingFields(false, "a", false, "b")

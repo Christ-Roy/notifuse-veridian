@@ -548,8 +548,9 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// V43 veridian_plan TIMESTAMP WITH TIME ZONE alignment).
 		// Aligner avec config.VERSION. V36 reste vide (le ticket
 		// 2026-05-19-aligner-types-timestamp-veridian-plan a été livré en V43).
+		// V47 : table veridian_frozen_members (freeze per-user §5.21).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("46"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("47"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 

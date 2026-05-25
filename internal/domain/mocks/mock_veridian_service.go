@@ -260,6 +260,38 @@ func (mr *MockVeridianServiceMockRecorder) RestoreMember(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreMember", reflect.TypeOf((*MockVeridianService)(nil).RestoreMember), arg0, arg1)
 }
 
+// FreezeMember mocks base method.
+func (m *MockVeridianService) FreezeMember(arg0 context.Context, arg1 domain.FreezeMemberInput) (*domain.FreezeMemberResponse, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FreezeMember", arg0, arg1)
+	ret0, _ := ret[0].(*domain.FreezeMemberResponse)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// FreezeMember indicates an expected call of FreezeMember.
+func (mr *MockVeridianServiceMockRecorder) FreezeMember(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FreezeMember", reflect.TypeOf((*MockVeridianService)(nil).FreezeMember), arg0, arg1)
+}
+
+// UnfreezeMember mocks base method.
+func (m *MockVeridianService) UnfreezeMember(arg0 context.Context, arg1 domain.UnfreezeMemberInput) (*domain.UnfreezeMemberResponse, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnfreezeMember", arg0, arg1)
+	ret0, _ := ret[0].(*domain.UnfreezeMemberResponse)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// UnfreezeMember indicates an expected call of UnfreezeMember.
+func (mr *MockVeridianServiceMockRecorder) UnfreezeMember(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnfreezeMember", reflect.TypeOf((*MockVeridianService)(nil).UnfreezeMember), arg0, arg1)
+}
+
 // Resume mocks base method.
 func (m *MockVeridianService) Resume(arg0 context.Context, arg1 domain.ResumeInput) error {
 	m.ctrl.T.Helper()

@@ -99,6 +99,18 @@ func TestVeridianEvent_MembershipConstants(t *testing.T) {
 		"CONTRAT-HUB §5.18.4 + §7.1")
 }
 
+// TestVeridianEvent_FreezeConstants — invariant sur les noms des events emis
+// app → Hub apres freeze/unfreeze member (CONTRAT-HUB §5.21 + §7.1).
+// Si ces strings changent, le consommateur Hub casse en silence (event_type
+// inconnu cote orchestrator). Test colocalise pour bloquer toute regression
+// de naming en pre-push.
+func TestVeridianEvent_FreezeConstants(t *testing.T) {
+	assert.Equal(t, "tenant.member_frozen", string(EventTenantMemberFrozen),
+		"CONTRAT-HUB §5.21 + §7.1 — quota_seat_exceeded soft warning")
+	assert.Equal(t, "tenant.member_unfrozen", string(EventTenantMemberUnfrozen),
+		"CONTRAT-HUB §5.21 + §7.1 — reverse op of freeze")
+}
+
 func TestVeridianPlan_LifecycleFields(t *testing.T) {
 	// Verifie que les nouveaux champs V34 sont bien des pointeurs (null-safe
 	// pour les tenants pre-V34 qui n'ont jamais ete touche/restore/purge).

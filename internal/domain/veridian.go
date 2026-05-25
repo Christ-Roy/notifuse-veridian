@@ -881,6 +881,21 @@ type VeridianService interface {
 	// avec role member). Idempotent : 200 si user deja membre. Cree le user app
 	// s'il a ete supprime entre-temps (cf. SyncMember).
 	RestoreMember(ctx context.Context, input RestoreMemberInput) (*RestoreMemberResponse, error)
+
+	// === Veridian patch — Freeze member per-user (CONTRAT-HUB §5.21) ===
+	// Voir todo/2026-05-23-membership-freeze-per-user.md et veridian_freeze.go.
+
+	// FreezeMember marque un user comme frozen sur un workspace : reads obfusques,
+	// writes 402 user_frozen via middleware paywall per-user. Idempotent : retourne
+	// alreadyFrozen=true au 2eme call. Refuse de freeze l'owner (ErrCannotFreezeOwner
+	// → handler 409). Retourne sql.ErrNoRows si tenant absent (handler => 404),
+	// ErrMemberNotInWorkspace si user pas membre.
+	FreezeMember(ctx context.Context, input FreezeMemberInput) (*FreezeMemberResponse, bool, error)
+
+	// UnfreezeMember enleve le freeze d'un user (le user retrouve son acces
+	// normal au workspace). Idempotent : retourne wasFrozen=false si le user
+	// n'etait pas frozen. Pas de webhook sur replay idempotent.
+	UnfreezeMember(ctx context.Context, input UnfreezeMemberInput) (*UnfreezeMemberResponse, bool, error)
 }
 
 // === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===

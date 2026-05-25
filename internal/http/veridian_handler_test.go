@@ -2191,3 +2191,56 @@ func TestVeridianHandle_CacheInvalidationGracefulWithoutCache(t *testing.T) {
 		"/api/tenants/ws-1/restore", "ws-1", "")
 	assert.Equal(t, http.StatusOK, rec3.Code)
 }
+// === Veridian patch — Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
+
+// TestVeridianHandler_SetFrozenCache : le setter optionnel doit accepter nil
+// (mode self-hosted sans freeze) ET un cache non-nil (mode prod). Pas de panic.
+func TestVeridianHandler_SetFrozenCache(t *testing.T) {
+	h := &VeridianHandler{logger: logger.NewLogger()}
+	assert.Nil(t, h.frozenCache, "cache nil par defaut (mode self-hosted)")
+
+	cache := middleware.NewFrozenMemberCache()
+	h.SetFrozenCache(cache)
+	assert.NotNil(t, h.frozenCache)
+
+	// Setter idempotent : reset a nil OK (utile pour les tests).
+	h.SetFrozenCache(nil)
+	assert.Nil(t, h.frozenCache)
+}
+
+// TestVeridianHandler_RegisterRoutes_FreezeUnfreeze : verifie que les 2 routes
+// freeze/unfreeze sont bien enregistrees sur le mux apres RegisterRoutes.
+// Lance les routes via le mux pour s'assurer qu'elles match le pattern
+// /api/tenants/{tenantId}/(un)freeze-member sans erreur "no route".
+func TestVeridianHandler_RegisterRoutes_FreezeUnfreeze(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().FreezeMember(gomock.Any(), gomock.Any()).Return(&domain.FreezeMemberResponse{
+		TenantID: "ws-1", UserEmail: "bob@x.test", Reason: domain.FreezeReasonManual,
+	}, false, nil).AnyTimes()
+	svc.EXPECT().UnfreezeMember(gomock.Any(), gomock.Any()).Return(&domain.UnfreezeMemberResponse{
+		TenantID: "ws-1", UserEmail: "bob@x.test",
+	}, true, nil).AnyTimes()
+
+	h := newHandlerWithService(svc)
+	mux := http.NewServeMux()
+	// HUB_API_SECRET vide → middleware HMAC laisse passer 503 mais routes enregistrees.
+	// On utilise un secret arbitraire pour que le HMAC se calcule normalement
+	// — mais on ne signe pas, donc on attend 401. Ce qui importe est que la
+	// route MATCH (pas 404 method-not-allowed / no-route).
+	h.RegisterRoutes(mux, "test-secret-for-route-check-padding-ok")
+
+	for _, path := range []string{
+		"/api/tenants/ws-1/freeze-member",
+		"/api/tenants/ws-1/unfreeze-member",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader([]byte(`{}`)))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		// 401 = route matched + HMAC middleware reject. 404 = route NOT matched.
+		assert.NotEqual(t, http.StatusNotFound, rec.Code, "route %s must be registered", path)
+		assert.NotEqual(t, http.StatusMethodNotAllowed, rec.Code, "route %s must accept POST", path)
+	}
+}

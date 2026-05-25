@@ -136,6 +136,12 @@ type veridianService struct {
 	// ConfigureAPIKeyGraceSupport (cf. veridian_rotate_transfer_service.go).
 	apiKeyGraceRepo domain.VeridianAPIKeyGraceRepository
 
+	// === Veridian patch — Freeze member per-user (2026-05-25) ===
+	// frozenMemberRepo est OPTIONNEL : si nil, FreezeMember/UnfreezeMember
+	// retournent ErrFrozenMemberRepoNotConfigured. Injecté post-construction
+	// via ConfigureFrozenMemberSupport (cf. veridian_freeze_service.go).
+	frozenMemberRepo domain.VeridianFrozenMemberRepository
+
 	// === Veridian patch — 2026-05-23 ===
 	// templateService + transactionalNotificationService sont OPTIONNELS :
 	// si nil, le seed du template invitation-prospection au Provision() est

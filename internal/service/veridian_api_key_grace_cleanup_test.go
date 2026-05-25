@@ -172,3 +172,9 @@ func (stubVeridianServiceWithoutCleanup) RemoveMember(context.Context, domain.Re
 func (stubVeridianServiceWithoutCleanup) RestoreMember(context.Context, domain.RestoreMemberInput) (*domain.RestoreMemberResponse, error) {
 	return nil, nil
 }
+func (stubVeridianServiceWithoutCleanup) FreezeMember(context.Context, domain.FreezeMemberInput) (*domain.FreezeMemberResponse, bool, error) {
+	return nil, false, nil
+}
+func (stubVeridianServiceWithoutCleanup) UnfreezeMember(context.Context, domain.UnfreezeMemberInput) (*domain.UnfreezeMemberResponse, bool, error) {
+	return nil, false, nil
+}

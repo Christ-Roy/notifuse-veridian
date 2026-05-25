@@ -34,6 +34,7 @@ type VeridianHandler struct {
 	service          domain.VeridianService
 	logger           logger.Logger
 	paywallCache     *middleware.PaywallCache              // Peut etre nil (mode self-hosted sans paywall)
+	frozenCache      *middleware.FrozenMemberCache         // Peut etre nil (mode self-hosted sans freeze)
 	idempotencyRepo  domain.VeridianIdempotencyRepository // Peut etre nil (passthrough du middleware)
 	// pricingSync est le service de sync catalogue pricing Hub (lot O 2026-05-21).
 	// Peut etre nil (mode self-hosted sans Hub) : handlePricingCache retourne
@@ -66,6 +67,14 @@ func (h *VeridianHandler) SetPaywallCache(cache *middleware.PaywallCache) {
 // est passthrough (mode self-hosted, ou avant la migration V35).
 func (h *VeridianHandler) SetIdempotencyRepo(repo domain.VeridianIdempotencyRepository) {
 	h.idempotencyRepo = repo
+}
+
+// SetFrozenCache injecte le cache freeze partage avec le middleware
+// veridian_paywall_frozen pour que les handlers freeze/unfreeze puissent
+// invalider une entree apres mutation (sans attendre TTL 60s). Optionnel :
+// si nil, l'invalidation post-mutation est skip et le cache attend l'expiration.
+func (h *VeridianHandler) SetFrozenCache(cache *middleware.FrozenMemberCache) {
+	h.frozenCache = cache
 }
 
 // RegisterRoutes enregistre les 6 endpoints /api/tenants/* WRAPPES dans
@@ -162,6 +171,14 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	mux.Handle("POST /api/tenants/{id}/sync-member", writeRoute(h.handleSyncMember))
 	mux.Handle("POST /api/tenants/{id}/remove-member", writeRoute(h.handleRemoveMember))
 	mux.Handle("POST /api/tenants/{id}/restore-member", writeRoute(h.handleRestoreMember))
+	// === Veridian patch — Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
+	// freeze : Hub a depasse son quota seats sur ce tenant et frozen les
+	// derniers invites (mode degrade : reads obfusques, writes 402 user_frozen
+	// via middleware paywall per-user). unfreeze : reversible.
+	// Voir veridian_freeze_handler.go et todo/2026-05-23-membership-freeze-per-user.md.
+	// Mutateurs : HMAC + Idempotency.
+	mux.Handle("POST /api/tenants/{tenantId}/freeze-member", writeRoute(h.handleFreezeMember))
+	mux.Handle("POST /api/tenants/{tenantId}/unfreeze-member", writeRoute(h.handleUnfreezeMember))
 	// === Veridian patch — lot O (2026-05-21) === Endpoint debug pour le
 	// cache pricing sync (catalog Hub mirror). Auth HMAC, read-only.
 	mux.Handle("GET /api/veridian/admin/pricing-cache", hmac(http.HandlerFunc(h.handlePricingCache)))

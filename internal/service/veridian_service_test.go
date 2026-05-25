@@ -2334,3 +2334,20 @@ func TestVeridianService_Provision_SeedReceivesOwnerID(t *testing.T) {
 		"le seed doit s'authentifier avec owner.ID (et non root.ID) — sinon AuthenticateUserForWorkspace échoue car root n'est plus membre du workspace post-transferOwnership")
 	assert.NotEqual(t, rootUser.ID, seedCtxUserID, "le seed NE doit PAS utiliser root.ID")
 }
+
+// === Veridian patch — Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
+
+// TestVeridianService_New_FrozenMemberRepoUnconfigured : garde-fou back-compat
+// du constructor NewVeridianService. Le nouveau champ frozenMemberRepo doit
+// rester nil par defaut — c'est le pattern setter post-construction
+// (ConfigureFrozenMemberSupport) qui l'injecte. Si on casse ça, tous les
+// tests Provision/Suspend/Resume existants devraient stub un mock repo
+// frozen — non maintenable.
+//
+// Equivalent du TestVeridianService_New_SeedServicesUnconfigured pour le
+// freeze repo : meme rationale.
+func TestVeridianService_New_FrozenMemberRepoUnconfigured(t *testing.T) {
+	svc := NewVeridianService(nil, nil, nil, nil, nil, nil, "free", "root@x", "http://x", "test-hub-secret", logger.NewLogger())
+	concrete := svc.(*veridianService)
+	assert.Nil(t, concrete.frozenMemberRepo, "frozenMemberRepo doit rester nil sortie constructor (freeze opt-in via ConfigureFrozenMemberSupport)")
+}

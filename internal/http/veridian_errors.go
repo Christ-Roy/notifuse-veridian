@@ -52,6 +52,23 @@ const (
 	// redirige alors vers /dashboard?app=notifuse&hint=signup (flow §6bis.8.2).
 	// Pas d'auto-création de workspace cote app (anti-pattern §6bis.2).
 	ErrCodeUserNotInApp           = "user_not_in_app"
+	// === Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
+	// ErrCodeCannotFreezeOwner : refus de freeze l'owner du workspace
+	// (la chaine d'admin du tenant serait cassee). Le caller doit
+	// transfer-owner avant de freeze.
+	ErrCodeCannotFreezeOwner      = "cannot_freeze_owner"
+	// ErrCodeUserNotMember : freeze/unfreeze sur un user qui n'est pas
+	// membre du workspace. Distinct de tenant_not_found (workspace existe
+	// mais user pas dedans).
+	ErrCodeUserNotMember          = "user_not_member"
+	// ErrCodeMemberAlreadyFrozen : freeze appele sur un user deja frozen
+	// (idempotent côté repo, le handler renvoie 409 pour signaler au Hub
+	// qu'il ne devrait pas re-emettre le webhook).
+	ErrCodeMemberAlreadyFrozen    = "member_already_frozen"
+	// ErrCodeUserFrozen : retourne par le middleware paywall per-user
+	// quand un user frozen tente une ecriture. 402 avec unfreeze_url pour
+	// que le client puisse rediriger l'utilisateur vers le Hub.
+	ErrCodeUserFrozen             = "user_frozen"
 )
 
 // VeridianErrorResponse est le format d'erreur additif des endpoints Veridian.
