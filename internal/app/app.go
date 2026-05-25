@@ -1341,6 +1341,20 @@ func (a *App) InitHandlers() error {
 	)
 	veridianHandler.SetTestTenantsCleanup(a.veridianTestTenantsCleanup)
 
+	// === Veridian patch — 2026-05-25 — Mail provider choice (V48) ===
+	// Service standalone (pas dans le grand veridianService) qui gere la
+	// preference mail-provider par workspace : smtp_generic (defaut) vs
+	// hub_gmail (via Hub Mail Gateway). Endpoints GET/POST exposes par
+	// veridianHandler quand le service est injecte. Cf. todo/done/
+	// 2026-05-25-mail-send-as-user-via-hub-gateway.md §3.4.
+	veridianMailProviderRepo := repository.NewVeridianMailProviderRepository(a.db)
+	veridianMailProviderSvc := service.NewVeridianMailProviderService(
+		veridianMailProviderRepo,
+		a.veridianWebhookEmitter,
+		a.logger,
+	)
+	veridianHandler.SetMailProviderService(veridianMailProviderSvc)
+
 	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
 
 	// Endpoint generateMagicLink (auth API key tenant Notifuse).
