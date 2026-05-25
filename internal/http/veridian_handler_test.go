@@ -2256,3 +2256,42 @@ func TestVeridianHandler_RegisterRoutes_FreezeUnfreeze(t *testing.T) {
 		assert.NotEqual(t, http.StatusMethodNotAllowed, rec.Code, "route %s must accept POST", path)
 	}
 }
+
+// === Veridian patch — V48 mail provider choice (2026-05-25) ===
+// Verifie que SetMailProviderService injecte le service et que les routes
+// GET/POST /api/workspaces/{id}/mail-provider-choice sont enregistrees dans
+// le mux par RegisterRoutes (defense contre le piege catchall root_handler
+// memory feedback_marathon_vagues_1_5_patterns).
+func TestVeridianHandler_SetMailProviderService_Injects(t *testing.T) {
+	h := &VeridianHandler{logger: logger.NewLogger()}
+	assert.Nil(t, h.mailProviderService, "doit etre nil par defaut")
+
+	// stub minimal pour valider l'injection
+	stub := &fakeMailProviderService{}
+	h.SetMailProviderService(stub)
+	assert.Equal(t, service.VeridianMailProviderService(stub), h.mailProviderService)
+}
+
+func TestVeridianHandler_RegisterRoutes_MailProviderChoice_RouteRegistered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-for-route-check-padding-ok")
+
+	for _, tc := range []struct {
+		method, path string
+	}{
+		{http.MethodPost, "/api/workspaces/ws-1/mail-provider-choice"},
+		{http.MethodGet, "/api/workspaces/ws-1/mail-provider-choice"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(`{"choice":"smtp_generic"}`)))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		// 401 = HMAC reject (route matched). 404/405 = not registered (regression).
+		assert.NotEqual(t, http.StatusNotFound, rec.Code, "route %s %s must be registered", tc.method, tc.path)
+		assert.NotEqual(t, http.StatusMethodNotAllowed, rec.Code, "route %s %s must accept method", tc.method, tc.path)
+	}
+}

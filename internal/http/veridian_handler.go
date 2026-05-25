@@ -44,6 +44,12 @@ type VeridianHandler struct {
 	// Peut etre nil (mode prod / boot partiel) : handleTestTenantsStats retourne
 	// alors 503. Cf. veridian_test_tenants_stats_handler.go.
 	testTenantsCleanup TestTenantsCleanupStatsProvider
+	// mailProviderService gere la preference mail-provider par workspace
+	// (V48, ticket todo/2026-05-25-mail-send-as-user-via-hub-gateway.md §3.4).
+	// Peut etre nil (mode self-hosted ou pre-injection) : les handlers
+	// GET/POST /api/workspaces/{id}/mail-provider-choice retournent alors 503.
+	// Injecte via SetMailProviderService.
+	mailProviderService service.VeridianMailProviderService
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -75,6 +81,12 @@ func (h *VeridianHandler) SetIdempotencyRepo(repo domain.VeridianIdempotencyRepo
 // si nil, l'invalidation post-mutation est skip et le cache attend l'expiration.
 func (h *VeridianHandler) SetFrozenCache(cache *middleware.FrozenMemberCache) {
 	h.frozenCache = cache
+}
+
+// SetMailProviderService injecte le service mail-provider-choice (V48).
+// Optionnel : si nil, les handlers GET/POST mail-provider-choice retournent 503.
+func (h *VeridianHandler) SetMailProviderService(svc service.VeridianMailProviderService) {
+	h.mailProviderService = svc
 }
 
 // RegisterRoutes enregistre les 6 endpoints /api/tenants/* WRAPPES dans
@@ -200,6 +212,18 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// cf. todo/2026-05-25-discovery-by-email-prod-returns-empty-body.md.
 	mux.Handle("POST /api/users/by-email", hmac(http.HandlerFunc(h.handleDiscovery)))
 	mux.Handle("GET /api/users/by-email", hmac(http.HandlerFunc(h.handleDiscoveryGET)))
+
+	// === Veridian patch — Mail provider choice per workspace (V48, 2026-05-25) ===
+	// Ticket todo/2026-05-25-mail-send-as-user-via-hub-gateway.md §3.4.
+	// Preference par workspace : 'smtp_generic' (defaut, sender Veridian) ou
+	// 'hub_gmail' (via Hub Mail Gateway, Gmail user owner).
+	//
+	// POST + GET routes explicitement (cf. memory feedback_marathon_vagues_1_5_patterns
+	// "catchall root_handler trap" : un GET non route tombe sur la SPA console
+	// = 200 body vide silencieux. Defense en profondeur, meme si seul POST est
+	// consomme aujourd'hui par l'UI Notifuse).
+	mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", writeRoute(h.handleSetMailProviderChoice))
+	mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", hmac(http.HandlerFunc(h.handleGetMailProviderChoice)))
 
 	// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8, 2026-05-23) ===
 	// Appele par le Hub apres OAuth Google/Microsoft reussi pour delivrer un
