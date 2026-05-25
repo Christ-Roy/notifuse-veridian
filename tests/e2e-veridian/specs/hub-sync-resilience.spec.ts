@@ -35,10 +35,48 @@ const HUB_API_SECRET = process.env.HUB_API_SECRET!;
 // reste couvert par les unit tests veridian_paywall_test.go).
 const STAGING_DB_PSQL_URL = process.env.STAGING_DB_PSQL_URL;
 const STAGING_DB_CONTAINER = process.env.STAGING_DB_CONTAINER;
-const DB_MANIP_AVAILABLE = !!(STAGING_DB_PSQL_URL || STAGING_DB_CONTAINER);
 
 if (!NOTIFUSE_URL || !HUB_API_SECRET) {
   throw new Error('NOTIFUSE_URL and HUB_API_SECRET env vars required');
+}
+
+// Portabilité (ticket 2026-05-24-hub-sync-resilience-specs-portable.md) :
+// `docker exec` ne marche que sur le runner self-hosted qui partage la
+// machine avec le container postgres staging. Sur n'importe quelle autre
+// machine (poste dev, runner GitHub-hosted), il faut détecter et skip
+// proprement. On résout l'état réel au boot du fichier, AVANT que les
+// tests ne s'exécutent : ENV présent ≠ ENV utilisable.
+let DB_MANIP_AVAILABLE = false;
+let DB_MANIP_SKIP_REASON = '';
+
+if (STAGING_DB_PSQL_URL) {
+  // URL psql directe : on assume qu'elle marche (sinon les tests fail bruyamment
+  // sur le 1er execStagingSQL avec une erreur Postgres claire).
+  DB_MANIP_AVAILABLE = true;
+} else if (STAGING_DB_CONTAINER) {
+  // Mode docker exec : ENV peut être set même si docker absent ou container
+  // pas accessible (ex : on relance la suite localement avec un .env CI copié).
+  // On probe une fois `docker exec <container> echo ok`.
+  try {
+    const { execSync } = require('child_process') as typeof import('child_process');
+    execSync(`docker exec ${STAGING_DB_CONTAINER} echo ok`, {
+      stdio: 'ignore',
+      timeout: 5_000,
+    });
+    DB_MANIP_AVAILABLE = true;
+  } catch {
+    DB_MANIP_SKIP_REASON =
+      `STAGING_DB_CONTAINER=${STAGING_DB_CONTAINER} set, mais docker exec a échoué ` +
+      `(docker absent, container inaccessible, ou ce n'est pas le runner self-hosted). ` +
+      `Les 3 tests qui manipulent last_hub_sync_at sont skip — le contrat reste couvert ` +
+      `par unit tests veridian_paywall_test.go.`;
+  }
+} else {
+  DB_MANIP_SKIP_REASON =
+    'Ni STAGING_DB_PSQL_URL ni STAGING_DB_CONTAINER set. Les 3 tests qui manipulent ' +
+    'last_hub_sync_at sont skip — le contrat reste couvert par unit tests ' +
+    'veridian_paywall_test.go. Pour activer en local : SSH dev-pub + définir ' +
+    'STAGING_DB_CONTAINER=notifuse-staging-db, ou expose-toi un tunnel psql vers staging.';
 }
 
 /**
@@ -170,13 +208,7 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
   });
 
   test('hub_sync_dead writes → 503 + Retry-After + error_code=hub_sync_dead, reads passent', async () => {
-    test.skip(
-      !DB_MANIP_AVAILABLE,
-      'DB manip non disponible (ni STAGING_DB_PSQL_URL ni STAGING_DB_CONTAINER). ' +
-        'Le test execute UPDATE last_hub_sync_at = NOW - 73h puis verifie 503 sur ' +
-        'write + read OK. Sans accès DB, le contrat est verifie en unit test ' +
-        '(veridian_paywall_test.go).',
-    );
+    test.skip(!DB_MANIP_AVAILABLE, DB_MANIP_SKIP_REASON);
 
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
@@ -211,10 +243,7 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
   });
 
   test('hub_sync_dead : /api/setup.status reste 200 (route systeme exempt)', async () => {
-    test.skip(
-      !DB_MANIP_AVAILABLE,
-      'DB manip non disponible (STAGING_DB_PSQL_URL/STAGING_DB_CONTAINER). Voir test precedent.',
-    );
+    test.skip(!DB_MANIP_AVAILABLE, DB_MANIP_SKIP_REASON);
 
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
@@ -230,10 +259,7 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
   });
 
   test('hub_sync recovery : Touch tenant → last_hub_sync_at refresh → writes repassent', async () => {
-    test.skip(
-      !DB_MANIP_AVAILABLE,
-      'DB manip non disponible (STAGING_DB_PSQL_URL/STAGING_DB_CONTAINER). Voir test precedent.',
-    );
+    test.skip(!DB_MANIP_AVAILABLE, DB_MANIP_SKIP_REASON);
 
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
