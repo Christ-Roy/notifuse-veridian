@@ -183,8 +183,8 @@ l'**élever** localement via UI Team Settings (pattern §5.18.4 informatif).
 
 | Sens du flux | Env Notifuse | Env Hub | Header signature | Canonical string | Endpoint(s) |
 |---|---|---|---|---|---|
-| Hub → Notifuse (mutations + reads admin) | `HUB_API_SECRET` | `NOTIFUSE_HUB_API_SECRET` (= même valeur) | `X-Veridian-Hub-Signature` | `${ts}.${rawBody}` (POST/DELETE) ou `${ts}.GET.${pathname}?${sortedQuery}` (GET) | `/api/tenants/*`, `/api/veridian/admin/*`, `/api/veridian/workspaces/{id}/attach-member`, `/api/sso/issue-magic-link`, **`POST /api/users/by-email`** ET **`GET /api/users/by-email`** (les 2 routées — cf. piège catchall plus bas) |
-| Notifuse → Hub (discovery user, 2 méthodes) | `HUB_API_SECRET` (même secret) | `NOTIFUSE_HUB_API_SECRET` (même) | `x-veridian-hub-signature` (lowercase pour outbound, accepté côté Hub) | **POST** : `${ts}.${rawBody}` (SDK/UI Notifuse, évite email en URL) — **GET** : `${ts}.GET.${pathname}?${sortedQuery}` (cron reconcile Hub `lib/sync/discovery.ts`, tri alphabétique des clés + encodage `encodeURIComponent`-compatible — cf. `pkg/hub_discovery/client.go`). Pour body vide, le canonical POST s'écrit `${ts}.` (timestamp + point + chaîne vide) | `POST <hub>/api/users/by-email` (body `{"email":"..."}`) ET `GET <hub>/api/users/by-email?email=...` |
+| Hub → Notifuse (mutations + reads admin + cron reconcile GET) | `HUB_API_SECRET` | `NOTIFUSE_HUB_API_SECRET` (= même valeur) | `X-Veridian-Hub-Signature` | **Toujours `${ts}.${rawBody}`** quel que soit la méthode HTTP. Pour un GET (body vide), `rawBody = ""` donc canonical = **`${ts}.`** (timestamp + point + chaîne vide). Pattern volontairement "pixel-parfait" côté Hub (`lib/sync/discovery.ts:signGet` lignes 105-114 : "On garde le format `${ts}.${rawBody}` ici aussi (body=''), pour rester pixel-parfait avec les clients existants") afin d'éviter d'avoir 2 conventions HMAC à gérer côté app. Validé par smoke prod 2026-05-25 : `${ts}.` → 200 ; `${ts}.GET.${path}?${query}` → 401. | `/api/tenants/*`, `/api/veridian/admin/*`, `/api/veridian/workspaces/{id}/attach-member`, `/api/sso/issue-magic-link`, **`POST /api/users/by-email`** ET **`GET /api/users/by-email`** (les 2 routées — cf. piège catchall plus bas) |
+| Notifuse → Hub (discovery user, GET au login user) | `HUB_API_SECRET` (même secret) | `NOTIFUSE_HUB_API_SECRET` (même) | `x-veridian-hub-signature` (lowercase pour outbound, accepté côté Hub) | **`${ts}.${METHOD}.${pathname}?${sortedQuery}`** — pattern OWASP "HMAC Signing for GET requests" (cf. `veridian-hub/lib/discovery/hmac.ts:buildCanonicalGetString` lignes 80-100). METHOD en majuscule. Tri alphabétique des clés de query (anti-malléabilité proxy). Encodage `encodeURIComponent`-compatible (PAS `url.QueryEscape` côté Go — diverge sur espaces). Réf code Notifuse outbound : `pkg/hub_discovery/client.go:buildCanonicalGetString` lignes 293-302. ⚠️ **Convention différente du flux Hub→Notifuse** : ce sens-là utilise bien `${ts}.METHOD.path?query`, contrairement au flux inverse qui reste sur `${ts}.${rawBody}`. | `GET <hub>/api/users/by-email?email=...` |
 | Notifuse → Hub (invitation cross-app) | `HUB_INVITATION_SECRET_NOTIFUSE` | `HUB_INVITATION_SECRET_NOTIFUSE` (même nom) | `x-veridian-invitation-signature` | `${ts}.${rawBody}` | `POST <hub>/api/invitations/create` |
 | Notifuse → Hub (webhooks lifecycle) | `HUB_WEBHOOK_SECRET` (+ `HUB_WEBHOOK_URL`) | `NOTIFUSE_HUB_WEBHOOK_SECRET` (= même valeur) | `X-Veridian-Notifuse-Signature` | `${ts}.${rawBody}` | `POST ${HUB_WEBHOOK_URL}` (cf. §7.1 events `tenant.*`, `email.*`) |
 
@@ -261,13 +261,37 @@ l'**élever** localement via UI Team Settings (pattern §5.18.4 informatif).
   est introduit — sinon HMAC marche en staging et plante en prod.
   À noter : ce secret n'est PAS dans `infra/compose/{staging,prod}.yml`
   du repo Notifuse, il est injecté directement via l'UI/API Dokploy.
-- **Canonical string différente POST vs GET pour le MÊME secret**
-  (`HUB_API_SECRET`) : `${ts}.${body}` pour les mutations, mais
-  `${ts}.GET.${path}?${sortedQuery}` pour `/api/users/by-email`. Coller
-  le mauvais format = `401 Invalid signature` opaque.
+- **Canonical string ASYMÉTRIQUE selon le sens du flux pour le MÊME
+  secret** (`HUB_API_SECRET` / `NOTIFUSE_HUB_API_SECRET`) :
+  - **Hub → Notifuse** (inbound côté app, y compris GET cron reconcile) :
+    `${ts}.${rawBody}` toujours. GET = `${ts}.` (body vide).
+    Réf : `internal/http/middleware/veridian_hmac.go` (Notifuse inbound)
+    + `veridian-hub/lib/sync/discovery.ts:signGet` (Hub outbound).
+  - **Notifuse → Hub** (outbound discovery) :
+    `${ts}.${METHOD}.${pathname}?${sortedQuery}`.
+    Réf : `pkg/hub_discovery/client.go:buildCanonicalGetString` (Notifuse
+    outbound) + `veridian-hub/lib/discovery/hmac.ts:buildCanonicalGetString`
+    (Hub inbound).
+
+  Coller le mauvais format = `401 Invalid signature` opaque. Le smoke
+  prod 2026-05-25 a confirmé l'asymétrie : un canonical
+  `${ts}.GET.${path}?${query}` envoyé sur le flux Hub→Notifuse retourne
+  401 ; seul `${ts}.` (body vide) passe.
 - **Tri alphabétique des query params obligatoire** sur la signature GET
-  (anti-malléabilité si un proxy réordonne). Cf. `encodeSortedQuery` dans
-  `pkg/hub_discovery/client.go`.
+  côté Notifuse→Hub uniquement (le flux Hub→Notifuse ne signe pas le path).
+  Cf. `encodeSortedQuery` dans `pkg/hub_discovery/client.go`.
+- **Ne JAMAIS écrire une cellule de cette matrice sans avoir lu le code
+  source des DEUX parties (client signataire + serveur vérificateur)**.
+  Cette matrice a été corrigée en v3 (2026-05-25) après que le team-lead
+  vague 4 ait perdu plusieurs minutes en validation P0 parce que la v2
+  documentait `${ts}.GET.${path}?${sortedQuery}` côté flux Hub→Notifuse
+  alors que le vrai code Hub `lib/sync/discovery.ts:signGet` (lignes
+  105-114) signe `${ts}.`. Réflexe minimum avant d'éditer cette section :
+  `grep -rn "createHmac\|hmac.New" <repo>/{lib,pkg,internal}/` côté
+  caller ET côté receiver, et coller la ligne de code exacte dans la
+  cellule (pas une paraphrase). Une doc qui contredit le code est pire
+  qu'une doc absente — elle envoie les agents dans le mur avec
+  confiance.
 - **Header webhook ≠ header inbound** : outbound webhook utilise
   `X-Veridian-Notifuse-Signature`, inbound mutations utilise
   `X-Veridian-Hub-Signature`. Symétrie volontaire : le destinataire sait
