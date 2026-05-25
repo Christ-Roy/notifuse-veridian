@@ -1,4 +1,17 @@
-import { Alert, Button, Col, Form, Input, Modal, Row, Select, Switch, Typography, message } from 'antd'
+import {
+  Alert,
+  Button,
+  Col,
+  Form,
+  Grid,
+  Input,
+  Modal,
+  Row,
+  Select,
+  Switch,
+  Typography,
+  message
+} from 'antd'
 import { useState, useEffect } from 'react'
 import { useForm } from 'antd/lib/form/Form'
 import type { FileManagerSettings } from './interfaces'
@@ -19,6 +32,8 @@ type ScreenType = 'provider' | 'settings'
 
 const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
   const { t } = useLingui()
+  const screens = Grid.useBreakpoint()
+  const isHorizontalForm = !!screens.md
   const [loading, setLoading] = useState(false)
   const [form] = useForm()
   const [settingsVisible, setSettingsVisible] = useState(false)
@@ -197,9 +212,9 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
 
       <Form
         form={form}
-        layout="horizontal"
-        labelCol={{ span: 6 }}
-        wrapperCol={{ span: 18 }}
+        layout={isHorizontalForm ? 'horizontal' : 'vertical'}
+        labelCol={isHorizontalForm ? { span: 6 } : undefined}
+        wrapperCol={isHorizontalForm ? { span: 18 } : undefined}
         style={{ marginTop: hasExistingSettings ? 0 : 24, marginBottom: 40 }}
         onFinish={onFinish}
       >

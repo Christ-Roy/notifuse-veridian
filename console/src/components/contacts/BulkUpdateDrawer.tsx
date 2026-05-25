@@ -15,7 +15,8 @@ import {
   List as AntList,
   App,
   Radio,
-  Form
+  Form,
+  Grid
 } from 'antd'
 import {
   UploadOutlined,
@@ -88,6 +89,8 @@ interface SavedProgress {
 
 export function BulkUpdateDrawer({ workspaceId, lists, buttonProps }: BulkUpdateDrawerProps) {
   const { t } = useLingui()
+  const screens = Grid.useBreakpoint()
+  const isHorizontalForm = !!screens.md
   const [open, setOpen] = useState(false)
   const [csvData, setCsvData] = useState<CSVData | null>(null)
   const [fileList, setFileList] = useState<UploadFile[]>([])
@@ -584,8 +587,14 @@ export function BulkUpdateDrawer({ workspaceId, lists, buttonProps }: BulkUpdate
           </Space>
         }
       >
-        {/* Operation Selection Form - Always show but disable when processing */}
-        <Form layout="horizontal" labelCol={{ span: 3 }} wrapperCol={{ span: 18 }}>
+        {/* Operation Selection Form - Always show but disable when processing.
+            Veridian patch (Lot 4 mobile, 2026-05-25) : bascule vertical sous md
+            (<768px) pour éviter l'écrasement des labels sur mobile. */}
+        <Form
+          layout={isHorizontalForm ? 'horizontal' : 'vertical'}
+          labelCol={isHorizontalForm ? { span: 3 } : undefined}
+          wrapperCol={isHorizontalForm ? { span: 18 } : undefined}
+        >
           <Form.Item label={t`Action`}>
             <Radio.Group
               value={operation}

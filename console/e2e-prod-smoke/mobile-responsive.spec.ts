@@ -188,3 +188,74 @@ test.describe('Mobile responsive Lot 1 — WorkspaceLayout', () => {
     })
   })
 })
+
+// === Veridian patch — mobile responsive Lots 2-3 (2026-05-25) ===
+//
+// Garde-fou « les règles CSS globales mobile sont bien appliquées ».
+//
+// On boot la console à un viewport < 576px et on vérifie que les règles
+// de la media query `@media (max-width: 575px)` dans index.css sont
+// effectivement actives sur des éléments Antd factices créés à la volée
+// (Modal, Drawer). C'est le test minimal pour attraper une régression
+// de purge CSS Tailwind ou de réécriture du fichier.
+
+test.describe('Mobile responsive Lots 2-3 — CSS global Modal/Drawer/Table', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockConfigJs(page)
+    await stubAuthAndWorkspace(page)
+  })
+
+  test('viewport 375×667 : règles media query mobile actives en CSSOM', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 })
+    await page.goto(`/console/workspace/${STUB_WORKSPACE_ID}`, {
+      waitUntil: 'domcontentloaded'
+    })
+    await waitForAppMount(page)
+
+    // Injecte un faux contenu Modal Antd + Drawer Antd dans le DOM pour
+    // mesurer la width réelle après application des règles `!important`.
+    // On évite de devoir ouvrir un vrai Modal — c'est plus rapide et
+    // découplé du dataflow.
+    const widths = await page.evaluate(() => {
+      const modal = document.createElement('div')
+      modal.className = 'ant-modal'
+      modal.style.width = '520px'
+      document.body.appendChild(modal)
+      const modalWidth = modal.getBoundingClientRect().width
+
+      const drawerWrap = document.createElement('div')
+      drawerWrap.className = 'ant-drawer-right'
+      const drawerContent = document.createElement('div')
+      drawerContent.className = 'ant-drawer-content-wrapper'
+      drawerContent.style.width = '378px'
+      drawerWrap.appendChild(drawerContent)
+      document.body.appendChild(drawerWrap)
+      const drawerWidth = drawerContent.getBoundingClientRect().width
+
+      return { modalWidth, drawerWidth, viewport: window.innerWidth }
+    })
+
+    // Sous 575px, modal et drawer doivent être à ~100vw (375px), pas leur
+    // width inline 520/378. Tolérance ±2px pour les paddings system.
+    expect(widths.modalWidth).toBeGreaterThanOrEqual(widths.viewport - 2)
+    expect(widths.drawerWidth).toBeGreaterThanOrEqual(widths.viewport - 2)
+  })
+
+  test('viewport 1024×768 : règles media query mobile INACTIVES', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 })
+    await page.goto(`/console/workspace/${STUB_WORKSPACE_ID}`, {
+      waitUntil: 'domcontentloaded'
+    })
+    await waitForAppMount(page)
+
+    // Au-dessus de 575px, la modal doit garder sa width inline native.
+    const modalWidth = await page.evaluate(() => {
+      const modal = document.createElement('div')
+      modal.className = 'ant-modal'
+      modal.style.width = '520px'
+      document.body.appendChild(modal)
+      return modal.getBoundingClientRect().width
+    })
+    expect(modalWidth).toBeLessThanOrEqual(522) // 520 + paddings
+  })
+})

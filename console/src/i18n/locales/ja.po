@@ -26,7 +26,7 @@ msgid " (Paused)"
 msgstr " (一時停止中)"
 
 #. placeholder {0}: csvData.emails.length - 10
-#: src/components/contacts/BulkUpdateDrawer.tsx:671
+#: src/components/contacts/BulkUpdateDrawer.tsx:680
 msgid "... and {0} more emails"
 msgstr "... 他{0}件のメール"
 
@@ -56,7 +56,7 @@ msgstr ""
 #~ msgstr ""
 
 #. placeholder {0}: previewResponse.total_count
-#: src/components/segment/button_upsert.tsx:602
+#: src/components/segment/button_upsert.tsx:606
 msgid "{0} contacts"
 msgstr "{0}件のコンタクト"
 
@@ -289,7 +289,7 @@ msgstr "+ バリエーションを追加"
 msgid "0 clicks out of 0 recipients"
 msgstr "0人中0クリック"
 
-#: src/components/segment/button_upsert.tsx:600
+#: src/components/segment/button_upsert.tsx:604
 msgid "0 contacts"
 msgstr "0件のコンタクト"
 
@@ -383,7 +383,7 @@ msgid "A newer draft was found in local storage. Would you like to restore it or
 msgstr "ローカルストレージに新しい下書きが見つかりました。復元しますか、それとも破棄しますか?"
 
 #. placeholder {0}: csvData.fileName
-#: src/components/contacts/BulkUpdateDrawer.tsx:398
+#: src/components/contacts/BulkUpdateDrawer.tsx:401
 msgid "A previous {operation} operation for \"{0}\" was found. Would you like to resume from where you left off?"
 msgstr "\"{0}\"の前回の{operation}操作が見つかりました。中断したところから再開しますか?"
 
@@ -393,11 +393,11 @@ msgstr "\"{0}\"の前回の{operation}操作が見つかりました。中断し
 msgid "A previous upload for \"{0}\" was found ({1}). Would you like to resume from where you left off?"
 msgstr "\"{0}\"の前回のアップロード ({1}) が見つかりました。中断したところから再開しますか?"
 
-#: src/components/segment/button_upsert.tsx:210
+#: src/components/segment/button_upsert.tsx:213
 msgid "A segment with ID \"{id}\" already exists"
 msgstr ""
 
-#: src/components/segment/button_upsert.tsx:714
+#: src/components/segment/button_upsert.tsx:718
 msgid "A tree is required"
 msgstr "ツリーが必要です"
 
@@ -428,7 +428,7 @@ msgstr ""
 msgid "Account suspended"
 msgstr ""
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:589
+#: src/components/contacts/BulkUpdateDrawer.tsx:598
 msgid "Action"
 msgstr "アクション"
 
@@ -904,7 +904,7 @@ msgstr "適用"
 msgid "Apply & Recompile"
 msgstr ""
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:434
+#: src/components/contacts/BulkUpdateDrawer.tsx:437
 msgid "Are you sure you want to cancel the operation? Progress will be saved and you can resume later."
 msgstr "操作をキャンセルしますか?進捗は保存され、後で再開できます。"
 
@@ -1582,7 +1582,7 @@ msgstr "セグメントを構築中"
 msgid "Bulk Update"
 msgstr "一括更新"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:552
+#: src/components/contacts/BulkUpdateDrawer.tsx:555
 msgid "Bulk Update Contacts"
 msgstr "コンタクトを一括更新"
 
@@ -1620,7 +1620,7 @@ msgstr "ボタンサイズ"
 #: src/components/broadcasts/SendOrScheduleModal.tsx:301
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:328
 #: src/components/contacts/BulkActionProgressModal.tsx:60
-#: src/components/contacts/BulkUpdateDrawer.tsx:576
+#: src/components/contacts/BulkUpdateDrawer.tsx:579
 #: src/components/contacts/ContactDetailsDrawer.tsx:1113
 #: src/components/contacts/ContactDetailsDrawer.tsx:1145
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:812
@@ -1637,14 +1637,14 @@ msgstr "ボタンサイズ"
 #: src/components/email_builder/ui/ImportFontInput.tsx:173
 #: src/components/email_builder/ui/StringPopoverInput.tsx:95
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:398
-#: src/components/file_manager/buttonSettings.tsx:309
+#: src/components/file_manager/buttonSettings.tsx:324
 #: src/components/file_manager/context.tsx:192
 #: src/components/file_manager/fileManager.tsx:653
 #: src/components/file_manager/fileManager.tsx:774
 #: src/components/file_manager/fileManager.tsx:952
 #: src/components/file_manager/fileManager.tsx:1020
 #: src/components/file_manager/fileManager.tsx:1130
-#: src/components/segment/button_upsert.tsx:347
+#: src/components/segment/button_upsert.tsx:350
 #: src/components/segment/input_dimension_filters.tsx:162
 #: src/components/segment/input.tsx:385
 #: src/components/settings/BlogSettings.tsx:185
@@ -1683,7 +1683,7 @@ msgstr "ブロードキャストをキャンセル"
 msgid "Cancel broadcast?"
 msgstr ""
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:432
+#: src/components/contacts/BulkUpdateDrawer.tsx:435
 msgid "Cancel Operation?"
 msgstr "操作をキャンセルしますか?"
 
@@ -1755,7 +1755,7 @@ msgstr "CC"
 msgid "CC Recipients"
 msgstr "CC宛先"
 
-#: src/components/file_manager/buttonSettings.tsx:285
+#: src/components/file_manager/buttonSettings.tsx:300
 msgid "CDN endpoint"
 msgstr "CDNエンドポイント"
 
@@ -1775,7 +1775,7 @@ msgstr "左中央"
 msgid "Center Right"
 msgstr "右中央"
 
-#: src/components/file_manager/buttonSettings.tsx:192
+#: src/components/file_manager/buttonSettings.tsx:207
 msgid "Change provider"
 msgstr "プロバイダーを変更"
 
@@ -1843,7 +1843,7 @@ msgstr "メールクリック"
 msgid "Click for options"
 msgstr "クリックでオプションを表示"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:645
+#: src/components/contacts/BulkUpdateDrawer.tsx:654
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:837
 msgid "Click or drag a CSV file to this area to upload"
 msgstr "CSVファイルをクリックまたはドラッグしてアップロード"
@@ -1852,7 +1852,7 @@ msgstr "CSVファイルをクリックまたはドラッグしてアップロー
 msgid "Click Rate"
 msgstr "クリック率"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:701
+#: src/components/contacts/BulkUpdateDrawer.tsx:710
 msgid "Click Resume to continue processing"
 msgstr "再開をクリックして処理を続行"
 
@@ -2102,14 +2102,14 @@ msgid "Configured"
 msgstr "設定済み"
 
 #. placeholder {0}: selectedProvider.name
-#: src/components/file_manager/buttonSettings.tsx:214
+#: src/components/file_manager/buttonSettings.tsx:229
 msgid "Configuring {0}"
 msgstr "{0}を設定中"
 
 #: src/components/contacts/BulkActionsBar.tsx:193
 #: src/components/filters/Filter.tsx:185
 #: src/components/filters/Filter.tsx:204
-#: src/components/segment/button_upsert.tsx:356
+#: src/components/segment/button_upsert.tsx:359
 #: src/components/segment/form_leaf.tsx:101
 #: src/components/segment/form_leaf.tsx:218
 #: src/components/segment/form_leaf.tsx:522
@@ -2499,7 +2499,7 @@ msgstr "CSSファイルURL"
 msgid "CSS Style Editor"
 msgstr "CSSスタイルエディタ"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:132
+#: src/components/contacts/BulkUpdateDrawer.tsx:135
 msgid "CSV must have at least a header row and one data row"
 msgstr "CSVにはヘッダー行と少なくとも1つのデータ行が必要です"
 
@@ -2829,7 +2829,7 @@ msgstr "遅延"
 msgid "Delete"
 msgstr "削除"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:563
+#: src/components/contacts/BulkUpdateDrawer.tsx:566
 msgid "DELETE"
 msgstr "削除"
 
@@ -2868,7 +2868,7 @@ msgid "Delete Contact"
 msgstr "コンタクトを削除"
 
 #: src/components/contacts/BulkActionsBar.tsx:215
-#: src/components/contacts/BulkUpdateDrawer.tsx:596
+#: src/components/contacts/BulkUpdateDrawer.tsx:605
 #: src/pages/ContactsPage.tsx:254
 msgid "Delete contacts"
 msgstr "コンタクトを削除"
@@ -3352,7 +3352,7 @@ msgstr "{0}の権限を編集"
 msgid "Edit Post"
 msgstr "投稿を編集"
 
-#: src/components/segment/button_upsert.tsx:101
+#: src/components/segment/button_upsert.tsx:102
 msgid "Edit segment"
 msgstr "セグメントを編集"
 
@@ -3422,7 +3422,7 @@ msgstr "メール"
 #: src/components/automations/config/TriggerConfigForm.tsx:87
 #: src/components/automations/nodes/EmailNode.tsx:39
 #: src/components/automations/nodes/StatNode.tsx:53
-#: src/components/contacts/BulkUpdateDrawer.tsx:665
+#: src/components/contacts/BulkUpdateDrawer.tsx:674
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:89
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:920
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1042
@@ -3996,8 +3996,8 @@ msgstr "失敗"
 #: src/components/broadcasts/BroadcastStats.tsx:241
 #: src/components/contacts/BulkActionProgressModal.tsx:106
 #: src/components/contacts/BulkActionProgressModal.tsx:146
-#: src/components/contacts/BulkUpdateDrawer.tsx:695
-#: src/components/contacts/BulkUpdateDrawer.tsx:734
+#: src/components/contacts/BulkUpdateDrawer.tsx:704
+#: src/components/contacts/BulkUpdateDrawer.tsx:743
 #: src/components/messages/MessageHistoryTab.tsx:127
 #: src/components/messages/MessageHistoryTab.tsx:129
 #: src/components/messages/MessageHistoryTable.tsx:274
@@ -4080,7 +4080,7 @@ msgstr "通知の作成に失敗しました: {0}"
 msgid "Failed to create post: {0}"
 msgstr "投稿の作成に失敗しました: {0}"
 
-#: src/components/segment/button_upsert.tsx:323
+#: src/components/segment/button_upsert.tsx:326
 msgid "Failed to create segment"
 msgstr "セグメントの作成に失敗しました"
 
@@ -4236,12 +4236,12 @@ msgstr "オートメーションの一時停止に失敗しました"
 msgid "Failed to pause broadcast"
 msgstr "ブロードキャストの一時停止に失敗しました"
 
-#: src/components/segment/button_upsert.tsx:247
+#: src/components/segment/button_upsert.tsx:250
 msgid "Failed to preview segment"
 msgstr "セグメントのプレビューに失敗しました"
 
 #. placeholder {0}: emails.length
-#: src/components/contacts/BulkUpdateDrawer.tsx:370
+#: src/components/contacts/BulkUpdateDrawer.tsx:373
 msgid "Failed to process all {0} contacts"
 msgstr "全{0}件のコンタクト処理に失敗しました"
 
@@ -4452,7 +4452,7 @@ msgstr "権限の更新に失敗しました"
 msgid "Failed to update post: {0}"
 msgstr "投稿の更新に失敗しました: {0}"
 
-#: src/components/segment/button_upsert.tsx:323
+#: src/components/segment/button_upsert.tsx:326
 msgid "Failed to update segment"
 msgstr "セグメントの更新に失敗しました"
 
@@ -4564,7 +4564,7 @@ msgstr "ファイルマネージャー設定を更新しました"
 msgid "File storage is not configured."
 msgstr "ファイルストレージが設定されていません。"
 
-#: src/components/file_manager/buttonSettings.tsx:300
+#: src/components/file_manager/buttonSettings.tsx:315
 msgid "File storage settings"
 msgstr "ファイルストレージ設定"
 
@@ -4707,7 +4707,7 @@ msgid "Format"
 msgstr ""
 
 #. placeholder {0}: parsedData.emails.length
-#: src/components/contacts/BulkUpdateDrawer.tsx:246
+#: src/components/contacts/BulkUpdateDrawer.tsx:249
 msgid "Found {0} email addresses"
 msgstr "{0}件のメールアドレスが見つかりました"
 
@@ -4801,7 +4801,7 @@ msgstr "Supabase Auth Hooks設定でこのキーを生成してください"
 msgid "Generated HTML"
 msgstr ""
 
-#: src/components/segment/button_upsert.tsx:642
+#: src/components/segment/button_upsert.tsx:646
 msgid "Generated SQL:"
 msgstr "生成されたSQL:"
 
@@ -5005,7 +5005,7 @@ msgstr "https://example.com または {{ url }}"
 msgid "https://fonts.googleapis.com/css?family=... or {{ font_url }}"
 msgstr "https://fonts.googleapis.com/css?family=... または {{ font_url }}"
 
-#: src/components/segment/button_upsert.tsx:391
+#: src/components/segment/button_upsert.tsx:395
 msgid "i.e: Big spenders..."
 msgstr "例: 高額利用者..."
 
@@ -5737,7 +5737,7 @@ msgstr ""
 #: src/components/automations/config/TriggerConfigForm.tsx:256
 #: src/components/automations/UpsertAutomationDrawer.tsx:178
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:519
-#: src/components/contacts/BulkUpdateDrawer.tsx:602
+#: src/components/contacts/BulkUpdateDrawer.tsx:611
 #: src/components/contacts/ExportContactsModal.tsx:73
 #: src/components/messages/MessageHistoryTable.tsx:132
 #: src/components/messages/MessageHistoryTable.tsx:215
@@ -5982,7 +5982,7 @@ msgstr "一致"
 msgid "Matched on:"
 msgstr "一致した項目:"
 
-#: src/components/segment/button_upsert.tsx:637
+#: src/components/segment/button_upsert.tsx:641
 msgid "Matching contacts:"
 msgstr "一致するコンタクト:"
 
@@ -6153,6 +6153,10 @@ msgstr "モバイル＆デスクトッププレビュー"
 msgid "Mobile Breakpoint"
 msgstr "モバイルブレークポイント"
 
+#: src/components/email_builder/EmailBuilder.tsx:804
+msgid "Mobile preview only. Switch to desktop to edit this template."
+msgstr ""
+
 #: src/components/email_builder/panels/Preview.tsx:437
 msgid "Mobile view (400px)"
 msgstr "モバイルビュー（400px）"
@@ -6204,7 +6208,7 @@ msgstr "N/A"
 #: src/components/blog/CategoryDrawer.tsx:130
 #: src/components/file_manager/fileManager.tsx:868
 #: src/components/lists/ListDrawer.tsx:185
-#: src/components/segment/button_upsert.tsx:372
+#: src/components/segment/button_upsert.tsx:376
 #: src/components/settings/Integrations.tsx:333
 #: src/components/settings/Integrations.tsx:1204
 #: src/components/settings/Integrations.tsx:1363
@@ -6256,7 +6260,7 @@ msgstr "新規メッセージ（メール...）"
 msgid "New Post"
 msgstr "新規投稿"
 
-#: src/components/segment/button_upsert.tsx:339
+#: src/components/segment/button_upsert.tsx:342
 msgid "New segment"
 msgstr "新規セグメント"
 
@@ -6385,7 +6389,7 @@ msgstr "下書き投稿がありません"
 msgid "no email"
 msgstr "メールなし"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:149
+#: src/components/contacts/BulkUpdateDrawer.tsx:152
 msgid "No email column found. Please ensure your CSV has a column with \"email\" in the name"
 msgstr "メール列が見つかりません。CSVに「email」という名前の列があることを確認してください"
 
@@ -6465,7 +6469,7 @@ msgstr "投稿がまだありません"
 msgid "No preview available or template is empty."
 msgstr "プレビューが利用できないか、テンプレートが空です。"
 
-#: src/components/segment/button_upsert.tsx:696
+#: src/components/segment/button_upsert.tsx:700
 msgid "No preview available..."
 msgstr "プレビューが利用できません..."
 
@@ -6803,7 +6807,7 @@ msgstr ""
 msgid "Operation complete"
 msgstr ""
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:751
+#: src/components/contacts/BulkUpdateDrawer.tsx:760
 msgid "Operation Complete"
 msgstr "操作完了"
 
@@ -6899,12 +6903,12 @@ msgstr "パスワード"
 msgid "Paste YouTube URL..."
 msgstr "YouTube URLを貼り付け..."
 
-#: src/components/file_manager/buttonSettings.tsx:276
+#: src/components/file_manager/buttonSettings.tsx:291
 msgid "Path-style access"
 msgstr "パス形式アクセス"
 
 #: src/components/contacts/BulkActionProgressModal.tsx:50
-#: src/components/contacts/BulkUpdateDrawer.tsx:571
+#: src/components/contacts/BulkUpdateDrawer.tsx:574
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:802
 msgid "Pause"
 msgstr "一時停止"
@@ -7048,7 +7052,7 @@ msgstr "フォームにエラーがないか確認してください"
 msgid "Please check the form for errors."
 msgstr "フォームにエラーがないか確認してください。"
 
-#: src/components/segment/button_upsert.tsx:272
+#: src/components/segment/button_upsert.tsx:275
 msgid "Please choose a different segment name"
 msgstr ""
 
@@ -7210,7 +7214,7 @@ msgstr "JSONファイルを選択してください"
 msgid "Please select a list"
 msgstr "リストを選択してください"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:388
+#: src/components/contacts/BulkUpdateDrawer.tsx:391
 msgid "Please select a list for unsubscribe operation"
 msgstr "配信停止操作のリストを選択してください"
 
@@ -7267,7 +7271,7 @@ msgstr "MJMLファイルを選択してください"
 msgid "Please select an OAuth2 provider"
 msgstr "OAuth2プロバイダーを選択してください"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:383
+#: src/components/contacts/BulkUpdateDrawer.tsx:386
 msgid "Please select an operation"
 msgstr "操作を選択してください"
 
@@ -7279,7 +7283,7 @@ msgstr "イベントタイプを1つ以上選択してください"
 msgid "Please select operator"
 msgstr "演算子を選択してください"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:378
+#: src/components/contacts/BulkUpdateDrawer.tsx:381
 msgid "Please upload a CSV file with email addresses"
 msgstr "メールアドレスを含むCSVファイルをアップロードしてください"
 
@@ -7374,12 +7378,12 @@ msgstr "プレビュー"
 #: src/components/blog/ThemePresetPreviewDrawer.tsx:37
 #: src/components/blog/ThemeSelectionModal.tsx:89
 #: src/components/common/ImageURLInput.tsx:52
-#: src/components/segment/button_upsert.tsx:550
-#: src/components/segment/button_upsert.tsx:589
+#: src/components/segment/button_upsert.tsx:554
+#: src/components/segment/button_upsert.tsx:593
 msgid "Preview"
 msgstr "プレビュー"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:658
+#: src/components/contacts/BulkUpdateDrawer.tsx:667
 msgid "Preview (first 10 emails)"
 msgstr "プレビュー（最初の10件）"
 
@@ -7399,7 +7403,7 @@ msgstr "メッセージをプレビュー"
 msgid "Preview Mode Required"
 msgstr "プレビューモードが必要です"
 
-#: src/components/segment/button_upsert.tsx:632
+#: src/components/segment/button_upsert.tsx:636
 msgid "Preview Results"
 msgstr "結果をプレビュー"
 
@@ -7463,12 +7467,12 @@ msgstr "処理済み"
 #. placeholder {1}: successCount.toLocaleString()
 #. placeholder {2}: failureCount.toLocaleString()
 #. placeholder {2}: progress.failed
-#: src/components/contacts/BulkUpdateDrawer.tsx:752
+#: src/components/contacts/BulkUpdateDrawer.tsx:761
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:887
 msgid "Processed {0} contacts: {1} successful, {2} failed"
 msgstr "{0}件の連絡先を処理: {1}件成功、{2}件失敗"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:372
+#: src/components/contacts/BulkUpdateDrawer.tsx:375
 msgid "Processed {successful} contacts successfully, {failed} failed"
 msgstr "{successful}件の連絡先を処理しました。{failed}件失敗"
 
@@ -7483,12 +7487,12 @@ msgid "Processing contacts"
 msgstr "連絡先を処理中"
 
 #: src/components/contacts/BulkActionProgressModal.tsx:75
-#: src/components/contacts/BulkUpdateDrawer.tsx:684
+#: src/components/contacts/BulkUpdateDrawer.tsx:693
 msgid "Processing contacts..."
 msgstr "連絡先を処理中..."
 
 #: src/components/contacts/BulkActionProgressModal.tsx:114
-#: src/components/contacts/BulkUpdateDrawer.tsx:700
+#: src/components/contacts/BulkUpdateDrawer.tsx:709
 msgid "Processing paused"
 msgstr "処理を一時停止中"
 
@@ -7927,7 +7931,7 @@ msgstr ""
 msgid "Resubscribed"
 msgstr "再購読"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:714
+#: src/components/contacts/BulkUpdateDrawer.tsx:723
 msgid "Results"
 msgstr "結果"
 
@@ -7936,8 +7940,8 @@ msgid "Results:"
 msgstr ""
 
 #: src/components/contacts/BulkActionProgressModal.tsx:55
-#: src/components/contacts/BulkUpdateDrawer.tsx:399
-#: src/components/contacts/BulkUpdateDrawer.tsx:581
+#: src/components/contacts/BulkUpdateDrawer.tsx:402
+#: src/components/contacts/BulkUpdateDrawer.tsx:584
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:375
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:807
 msgid "Resume"
@@ -7951,7 +7955,7 @@ msgstr "ブロードキャストを再開"
 msgid "Resume broadcast?"
 msgstr "ブロードキャストを再開しますか？"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:397
+#: src/components/contacts/BulkUpdateDrawer.tsx:400
 msgid "Resume Previous Operation"
 msgstr "前回の操作を再開"
 
@@ -8007,11 +8011,11 @@ msgstr ""
 msgid "Running"
 msgstr "実行中"
 
-#: src/components/file_manager/buttonSettings.tsx:263
+#: src/components/file_manager/buttonSettings.tsx:278
 msgid "S3 access key"
 msgstr "S3アクセスキー"
 
-#: src/components/file_manager/buttonSettings.tsx:271
+#: src/components/file_manager/buttonSettings.tsx:286
 msgid "S3 bucket"
 msgstr "S3バケット"
 
@@ -8021,16 +8025,16 @@ msgstr "S3バケット"
 msgid "S3 client is not initialized."
 msgstr "S3クライアントが初期化されていません。"
 
-#: src/components/file_manager/buttonSettings.tsx:224
+#: src/components/file_manager/buttonSettings.tsx:239
 msgid "S3 Endpoint"
 msgstr "S3エンドポイント"
 
-#: src/components/file_manager/buttonSettings.tsx:234
-#: src/components/file_manager/buttonSettings.tsx:252
+#: src/components/file_manager/buttonSettings.tsx:249
+#: src/components/file_manager/buttonSettings.tsx:267
 msgid "S3 region"
 msgstr "S3リージョン"
 
-#: src/components/file_manager/buttonSettings.tsx:267
+#: src/components/file_manager/buttonSettings.tsx:282
 msgid "S3 secret key"
 msgstr "S3シークレットキー"
 
@@ -8064,7 +8068,7 @@ msgstr "サンドボックスモード"
 #: src/components/email_builder/panels/Preview.tsx:185
 #: src/components/email_builder/ui/BlockToolbar.tsx:209
 #: src/components/email_builder/ui/StringPopoverInput.tsx:103
-#: src/components/file_manager/buttonSettings.tsx:312
+#: src/components/file_manager/buttonSettings.tsx:327
 #: src/components/lists/ListDrawer.tsx:170
 #: src/components/settings/CustomFieldsConfiguration.tsx:275
 #: src/components/settings/Integrations.tsx:2079
@@ -8224,7 +8228,7 @@ msgstr "ドキュメント:"
 #: src/components/automations/config/TriggerConfigForm.tsx:79
 #: src/components/automations/config/TriggerConfigForm.tsx:277
 #: src/components/contacts/ExportContactsModal.tsx:89
-#: src/components/segment/button_upsert.tsx:101
+#: src/components/segment/button_upsert.tsx:102
 #: src/components/timeline/ContactTimeline.tsx:482
 msgid "Segment"
 msgstr "セグメント"
@@ -8324,7 +8328,7 @@ msgstr "送信者を選択"
 msgid "Select a template"
 msgstr "テンプレートを選択"
 
-#: src/components/segment/button_upsert.tsx:508
+#: src/components/segment/button_upsert.tsx:512
 msgid "Select a time zone"
 msgstr "タイムゾーンを選択"
 
@@ -8439,7 +8443,7 @@ msgid "Select language..."
 msgstr "言語を選択..."
 
 #: src/components/automations/UpsertAutomationDrawer.tsx:182
-#: src/components/contacts/BulkUpdateDrawer.tsx:604
+#: src/components/contacts/BulkUpdateDrawer.tsx:613
 msgid "Select list"
 msgstr "リストを選択"
 
@@ -8472,7 +8476,7 @@ msgstr "セグメントを選択（任意）"
 msgid "Select status"
 msgstr "ステータスを選択"
 
-#: src/components/file_manager/buttonSettings.tsx:298
+#: src/components/file_manager/buttonSettings.tsx:313
 msgid "Select storage provider"
 msgstr "ストレージプロバイダーを選択"
 
@@ -8546,7 +8550,7 @@ msgstr "勝者を選択"
 msgid "Select workspace"
 msgstr "ワークスペースを選択"
 
-#: src/components/file_manager/buttonSettings.tsx:164
+#: src/components/file_manager/buttonSettings.tsx:179
 msgid "Select your storage provider to pre-fill the configuration:"
 msgstr "設定を事前入力するストレージプロバイダーを選択:"
 
@@ -8862,7 +8866,7 @@ msgstr "サイズ"
 
 #: src/components/contacts/BulkActionProgressModal.tsx:102
 #: src/components/contacts/BulkActionProgressModal.tsx:140
-#: src/components/contacts/BulkUpdateDrawer.tsx:727
+#: src/components/contacts/BulkUpdateDrawer.tsx:736
 msgid "Skipped"
 msgstr "スキップ"
 
@@ -9054,7 +9058,7 @@ msgstr "SparkPost APIキー"
 msgid "Split"
 msgstr "分割"
 
-#: src/components/segment/button_upsert.tsx:661
+#: src/components/segment/button_upsert.tsx:665
 msgid "SQL Arguments:"
 msgstr "SQL引数:"
 
@@ -9062,7 +9066,7 @@ msgstr "SQL引数:"
 msgid "Standard value is 480px for most email clients"
 msgstr "ほとんどのメールクライアントで標準値は480pxです"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:566
+#: src/components/contacts/BulkUpdateDrawer.tsx:569
 msgid "Start"
 msgstr "開始"
 
@@ -9070,7 +9074,7 @@ msgstr "開始"
 msgid "Start Fresh"
 msgstr "最初から開始"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:400
+#: src/components/contacts/BulkUpdateDrawer.tsx:403
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:376
 msgid "Start New"
 msgstr "新規開始"
@@ -9254,7 +9258,7 @@ msgid "Subscription status updated successfully"
 msgstr "購読ステータスが正常に更新されました"
 
 #: src/components/contacts/BulkActionProgressModal.tsx:143
-#: src/components/contacts/BulkUpdateDrawer.tsx:730
+#: src/components/contacts/BulkUpdateDrawer.tsx:739
 msgid "Success"
 msgstr "成功"
 
@@ -9263,11 +9267,11 @@ msgid "Success Rate"
 msgstr "成功率"
 
 #: src/components/contacts/BulkActionProgressModal.tsx:98
-#: src/components/contacts/BulkUpdateDrawer.tsx:694
+#: src/components/contacts/BulkUpdateDrawer.tsx:703
 msgid "Successful"
 msgstr "成功"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:368
+#: src/components/contacts/BulkUpdateDrawer.tsx:371
 msgid "Successfully processed {successful} contacts"
 msgstr "{successful}件のコンタクトを正常に処理しました"
 
@@ -9628,7 +9632,7 @@ msgstr "ブロードキャストは送信を停止し、後で再開できます
 msgid "The CSV file appears to be empty or invalid."
 msgstr "CSVファイルが空か無効です。"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:647
+#: src/components/contacts/BulkUpdateDrawer.tsx:656
 msgid "The CSV file should have a column containing email addresses"
 msgstr "CSVファイルにはメールアドレスを含む列が必要です"
 
@@ -9673,11 +9677,11 @@ msgstr ""
 msgid "The requested workspace could not be found."
 msgstr "リクエストされたワークスペースが見つかりませんでした。"
 
-#: src/components/segment/button_upsert.tsx:310
+#: src/components/segment/button_upsert.tsx:313
 msgid "The segment has been created!"
 msgstr "セグメントが作成されました！"
 
-#: src/components/segment/button_upsert.tsx:290
+#: src/components/segment/button_upsert.tsx:293
 msgid "The segment has been updated!"
 msgstr "セグメントが更新されました！"
 
@@ -9713,7 +9717,7 @@ msgstr ""
 msgid "The webhook will stop receiving events."
 msgstr "Webhookはイベントの受信を停止します。"
 
-#: src/components/file_manager/buttonSettings.tsx:138
+#: src/components/file_manager/buttonSettings.tsx:153
 msgid "The workspace settings have been updated!"
 msgstr "ワークスペース設定が更新されました！"
 
@@ -9770,12 +9774,12 @@ msgid "This action cannot be undone. To confirm, please enter the list ID:"
 msgstr "この操作は元に戻せません。確認のため、リストIDを入力してください:"
 
 #. placeholder {0}: csvData.emails.length
-#: src/components/contacts/BulkUpdateDrawer.tsx:622
+#: src/components/contacts/BulkUpdateDrawer.tsx:631
 msgid "This action will permanently delete {0} contact(s)"
 msgstr "この操作により{0}件のコンタクトが完全に削除されます"
 
 #. placeholder {0}: csvData.emails.length
-#: src/components/contacts/BulkUpdateDrawer.tsx:623
+#: src/components/contacts/BulkUpdateDrawer.tsx:632
 msgid "This action will unsubscribe {0} contact(s)"
 msgstr "この操作により{0}件のコンタクトが購読解除されます"
 
@@ -9839,7 +9843,7 @@ msgstr "この通知は連携によって管理されており、テンプレー
 msgid "This section is empty. Add columns or groups to display content."
 msgstr "このセクションは空です。コンテンツを表示するには列またはグループを追加してください。"
 
-#: src/components/segment/button_upsert.tsx:533
+#: src/components/segment/button_upsert.tsx:537
 msgid "This segment uses relative date filters and will be automatically recomputed daily at 5:00 AM ({timezone})"
 msgstr "このセグメントは相対日付フィルターを使用しており、毎日午前5時（{timezone}）に自動的に再計算されます"
 
@@ -9935,7 +9939,7 @@ msgstr "タイムスタンプ"
 msgid "Timezone"
 msgstr "タイムゾーン"
 
-#: src/components/segment/button_upsert.tsx:503
+#: src/components/segment/button_upsert.tsx:507
 msgid "Timezone used for dates"
 msgstr "日付に使用されるタイムゾーン"
 
@@ -10281,13 +10285,13 @@ msgstr "解除"
 msgid "Unsubscribe"
 msgstr "購読解除"
 
-#: src/components/contacts/BulkUpdateDrawer.tsx:565
+#: src/components/contacts/BulkUpdateDrawer.tsx:568
 msgid "UNSUBSCRIBE"
 msgstr "購読解除"
 
 #: src/components/contacts/BulkActionsBar.tsx:96
 #: src/components/contacts/BulkActionsBar.tsx:162
-#: src/components/contacts/BulkUpdateDrawer.tsx:595
+#: src/components/contacts/BulkUpdateDrawer.tsx:604
 #: src/components/segment/form_leaf.tsx:298
 #: src/components/segment/input.tsx:730
 #: src/pages/ContactsPage.tsx:326
@@ -10336,7 +10340,7 @@ msgstr "既存ブロックを更新"
 msgid "Update Link"
 msgstr "リンクを更新"
 
-#: src/components/segment/button_upsert.tsx:339
+#: src/components/segment/button_upsert.tsx:342
 msgid "Update segment"
 msgstr "セグメントを更新"
 
@@ -10411,7 +10415,7 @@ msgstr "URLは必須です"
 msgid "URL must start with http:// or https://"
 msgstr "URLはhttp://またはhttps://で始まる必要があります"
 
-#: src/components/file_manager/buttonSettings.tsx:287
+#: src/components/file_manager/buttonSettings.tsx:302
 msgid "URL of the CDN that caches your files"
 msgstr "ファイルをキャッシュするCDNのURL"
 
@@ -10446,7 +10450,7 @@ msgstr "マーケティングに使用"
 msgid "Use for Transactional"
 msgstr "トランザクションに使用"
 
-#: src/components/file_manager/buttonSettings.tsx:279
+#: src/components/file_manager/buttonSettings.tsx:294
 msgid "Use path-style URLs (bucket in path instead of subdomain)"
 msgstr "パススタイルURLを使用（サブドメインではなくパスにバケットを配置）"
 
@@ -11062,7 +11066,7 @@ msgstr "招待されています"
 msgid "Your account is not yet linked to the Veridian Hub. Sign in once via the Hub to enable team invitations."
 msgstr ""
 
-#: src/components/file_manager/buttonSettings.tsx:215
+#: src/components/file_manager/buttonSettings.tsx:230
 msgid "Your files can be uploaded to any S3 compatible storage."
 msgstr "ファイルは任意のS3互換ストレージにアップロードできます。"
 

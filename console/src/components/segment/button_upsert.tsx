@@ -4,6 +4,7 @@ import {
   Col,
   Drawer,
   Form,
+  Grid,
   Input,
   Row,
   Select,
@@ -120,6 +121,8 @@ const DrawerSegment = (props: {
   onSuccess?: () => void
 }) => {
   const { t } = useLingui()
+  const screens = Grid.useBreakpoint()
+  const isHorizontalForm = !!screens.md
   const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId' })
   const { workspaces } = useAuth()
   const [form] = Form.useForm()
@@ -362,8 +365,9 @@ const DrawerSegment = (props: {
         <Form
           form={form}
           initialValues={initialValues}
-          labelCol={{ span: 8 }}
-          wrapperCol={{ span: 12 }}
+          layout={isHorizontalForm ? 'horizontal' : 'vertical'}
+          labelCol={isHorizontalForm ? { span: 8 } : undefined}
+          wrapperCol={isHorizontalForm ? { span: 12 } : undefined}
           name="groupForm"
           onFinish={onFinish}
         >

@@ -131,6 +131,52 @@ th.ant-table-cell.contacts-fixed-col {
   }
 }
 
+/* === Veridian patch — mobile responsive Lots 2+3 (2026-05-25) ===
+ * Approche: CSS global, zéro patch sur les ~50 fichiers Modal/Drawer/Table.
+ *
+ * Lot 3 — Drawers et Modals : sous 576px (Antd `sm` breakpoint), forcer
+ * la largeur à 100vw au lieu du défaut (Drawer 378-1200px / Modal 520px)
+ * qui déborde le viewport. `!important` nécessaire car Antd injecte la
+ * width via style inline depuis la prop `width={N}` du JSX.
+ *
+ * Lot 2 — Tables : sous 576px, autoriser le scroll horizontal natif au
+ * lieu de couper le contenu. Ant Design fournit déjà `scroll={{x: ...}}`
+ * mais beaucoup de Tables historiques ne l'ont pas — ce fallback CSS
+ * garantit l'usabilité minimale sans toucher au JSX.
+ */
+@media (max-width: 575px) {
+  /* Drawer right/left : full-width, plus de fenêtre 80% qui déborde */
+  .ant-drawer-right > .ant-drawer-content-wrapper,
+  .ant-drawer-left > .ant-drawer-content-wrapper {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+  /* Drawer top/bottom : pleine hauteur */
+  .ant-drawer-top > .ant-drawer-content-wrapper,
+  .ant-drawer-bottom > .ant-drawer-content-wrapper {
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+  /* Modal : full-width avec marge 0, écrase la width inline du JSX.
+     `.ant-modal-centered .ant-modal` n'a pas la même structure que les
+     modales non-centered : on cible les 2 cas. */
+  .ant-modal {
+    max-width: 100vw !important;
+    margin: 0 !important;
+    top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .ant-modal-content {
+    border-radius: 0 !important;
+  }
+  /* Tables : scroll horizontal natif. Évite l'écrasement des colonnes
+     quand le JSX ne déclare pas `scroll={{x:'max-content'}}`. */
+  .ant-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* Required mark inscreses the line height of the form item creating discrepancy when using 2 columns */
 :where(.css-dev-only-do-not-override-1d0rgb4).ant-form-item .ant-form-item-label > label.ant-form-item-required::before {
   font-family: inherit;

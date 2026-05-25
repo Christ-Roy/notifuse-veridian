@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { Button, Space, Segmented, Spin } from 'antd'
+import { Alert, Button, Grid, Space, Segmented, Spin } from 'antd'
+import { useLingui } from '@lingui/react/macro'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faRedoAlt, faUndoAlt } from '@fortawesome/free-solid-svg-icons'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-react'
@@ -63,6 +64,15 @@ const EmailBuilderContent: React.FC<EmailBuilderProps> = ({
   hiddenBlocks,
   height
 }) => {
+  // === Veridian patch — mobile preview-only (Lot 6, 2026-05-25) ===
+  // L'éditeur MJML (panneau gauche tree, panneau droit settings, preview
+  // central) demande au minimum un écran tablette pour être manipulable.
+  // Sous md (<768px) on affiche un bandeau d'avertissement non-bloquant
+  // qui invite l'utilisateur à repasser sur desktop pour éditer.
+  const { t } = useLingui()
+  const screens = Grid.useBreakpoint()
+  const isMobileViewport = !screens.md
+
   // State for current selection, UI, and history
   const [state, setState] = useState<
     EmailBuilderState & { history: EmailBlock[]; historyIndex: number }
@@ -785,6 +795,16 @@ const EmailBuilderContent: React.FC<EmailBuilderProps> = ({
 
   return (
     <div className="flex flex-col w-screen bg-gray-50" style={{ height: height || '100vh' }}>
+      {/* === Veridian patch — Lot 6 : bandeau mobile preview-only === */}
+      {isMobileViewport && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          message={t`Mobile preview only. Switch to desktop to edit this template.`}
+          style={{ flexShrink: 0 }}
+        />
+      )}
       {/* Top Toolbar */}
       <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
         {/* Left section - Undo/Redo buttons */}

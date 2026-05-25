@@ -254,29 +254,29 @@ export const AutomationCard: React.FC<AutomationCardProps> = ({
       {/* Stats Row */}
       {automation.stats && (
         <div className="px-6 py-4 border-b border-gray-100">
-          <Row gutter={24}>
-            <Col span={6}>
+          <Row gutter={[16, 16]}>
+            <Col xs={12} sm={6}>
               <Statistic
                 title={t`Enrolled`}
                 value={automation.stats.enrolled}
                 valueStyle={{ fontSize: '20px' }}
               />
             </Col>
-            <Col span={6}>
+            <Col xs={12} sm={6}>
               <Statistic
                 title={t`Completed`}
                 value={automation.stats.completed}
                 valueStyle={{ fontSize: '20px', color: '#52c41a' }}
               />
             </Col>
-            <Col span={6}>
+            <Col xs={12} sm={6}>
               <Statistic
                 title={t`Exited`}
                 value={automation.stats.exited}
                 valueStyle={{ fontSize: '20px', color: '#faad14' }}
               />
             </Col>
-            <Col span={6}>
+            <Col xs={12} sm={6}>
               <Statistic
                 title={t`Failed`}
                 value={automation.stats.failed}
