@@ -55,6 +55,15 @@ async function hmacFetch(path: string, method: string, body: object | null = nul
   });
 }
 
+// readBody lit le body UNE seule fois en string et retourne {raw, json}.
+// Le body fetch est un stream non-rewindable : appeler r.text() puis r.json()
+// crash avec "Body is unusable: Body has already been read". Ce helper permet
+// d'utiliser le raw comme message d'assertion ET de parser le JSON après.
+async function readBody(r: Response): Promise<{ raw: string; json: () => any }> {
+  const raw = await r.text();
+  return { raw, json: () => (raw ? JSON.parse(raw) : null) };
+}
+
 async function provisionTenant(tenantId: string) {
   const ownerEmail = `${tenantId}@freeze.test`;
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -63,15 +72,15 @@ async function provisionTenant(tenantId: string) {
       owner_email: ownerEmail,
       plan: 'free',
     });
+    const body = await readBody(r);
     if (r.status === 200) {
-      const body = await r.json();
-      return { ...body, owner_email: ownerEmail };
+      return { ...body.json(), owner_email: ownerEmail };
     }
     if ((r.status >= 500 || r.status === 404) && attempt < 4) {
       await new Promise((res) => setTimeout(res, 500 * Math.pow(2, attempt)));
       continue;
     }
-    expect(r.status, await r.text()).toBe(200);
+    expect(r.status, body.raw).toBe(200);
   }
   throw new Error('provision retry exhausted');
 }
@@ -82,7 +91,8 @@ async function attachMember(tenantId: string, memberEmail: string) {
     hub_user_id: `hub-u-${memberEmail.split('@')[0]}`,
     role: 'member',
   });
-  expect(r.status, await r.text()).toBe(200);
+  const body = await readBody(r);
+  expect(r.status, body.raw).toBe(200);
 }
 
 // === Cleanup tracker ========================================================
@@ -120,8 +130,9 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       hub_user_id: `hub-u-${tid}-bob`,
       reason: 'quota_seat_exceeded',
     });
-    expect(r1.status, await r1.text()).toBe(200);
-    const body1 = await r1.json();
+    const b1 = await readBody(r1);
+    expect(r1.status, b1.raw).toBe(200);
+    const body1 = b1.json();
     expect(body1.tenant_id).toBe(tid);
     expect(body1.user_email).toBe(memberEmail);
     expect(body1.reason).toBe('quota_seat_exceeded');
@@ -133,17 +144,18 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       hub_user_id: `hub-u-${tid}-bob`,
       reason: 'quota_seat_exceeded',
     });
-    expect(r2.status, await r2.text()).toBe(409);
-    const body2 = await r2.json();
-    expect(body2.code).toBe('member_already_frozen');
+    const b2 = await readBody(r2);
+    expect(r2.status, b2.raw).toBe(409);
+    expect(b2.json().code).toBe('member_already_frozen');
 
     // (3) Unfreeze → 200, restoration flow nominal.
     const r3 = await hmacFetch(`/api/tenants/${tid}/unfreeze-member`, 'POST', {
       user_email: memberEmail,
       hub_user_id: `hub-u-${tid}-bob`,
     });
-    expect(r3.status, await r3.text()).toBe(200);
-    const body3 = await r3.json();
+    const b3 = await readBody(r3);
+    expect(r3.status, b3.raw).toBe(200);
+    const body3 = b3.json();
     expect(body3.tenant_id).toBe(tid);
     expect(body3.unfrozen_at).toBeTruthy();
 
@@ -153,7 +165,8 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       hub_user_id: `hub-u-${tid}-bob`,
       reason: 'manual',
     });
-    expect(r4.status, await r4.text()).toBe(200);
+    const b4 = await readBody(r4);
+    expect(r4.status, b4.raw).toBe(200);
   });
 
   test('owner refuse : freeze owner → 409 cannot_freeze_owner', async () => {
@@ -166,9 +179,9 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       hub_user_id: `hub-u-owner-${tid}`,
       reason: 'manual',
     });
-    expect(r.status, await r.text()).toBe(409);
-    const body = await r.json();
-    expect(body.code).toBe('cannot_freeze_owner');
+    const body = await readBody(r);
+    expect(r.status, body.raw).toBe(409);
+    expect(body.json().code).toBe('cannot_freeze_owner');
   });
 
   test('user pas membre du workspace → 404 user_not_member', async () => {
@@ -181,9 +194,9 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       hub_user_id: 'hub-u-ghost',
       reason: 'manual',
     });
-    expect(r.status, await r.text()).toBe(404);
-    const body = await r.json();
-    expect(body.code).toBe('user_not_member');
+    const body = await readBody(r);
+    expect(r.status, body.raw).toBe(404);
+    expect(body.json().code).toBe('user_not_member');
   });
 
   test('tenant inexistant → 404 tenant_not_found', async () => {
@@ -202,9 +215,9 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       hub_user_id: 'hub-u-anyone',
       reason: 'manual',
     });
-    expect(r.status, await r.text()).toBe(404);
-    const body = await r.json();
-    expect(body.code).toBe('tenant_not_found');
+    const body = await readBody(r);
+    expect(r.status, body.raw).toBe(404);
+    expect(body.json().code).toBe('tenant_not_found');
   });
 
   test('HMAC invalide → 401', async () => {
@@ -242,9 +255,9 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       hub_user_id: 'u-1',
       reason: 'manual',
     });
-    expect(r.status, await r.text()).toBe(400);
-    const body = await r.json();
-    expect(body.code).toBe('invalid_payload');
+    const body = await readBody(r);
+    expect(r.status, body.raw).toBe(400);
+    expect(body.json().code).toBe('invalid_payload');
   });
 
   test('validation : reason inconnue → 400', async () => {
@@ -257,7 +270,8 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       hub_user_id: 'u-1',
       reason: 'invalid_reason_zzz',
     });
-    expect(r.status, await r.text()).toBe(400);
+    const body = await readBody(r);
+    expect(r.status, body.raw).toBe(400);
   });
 });
 
@@ -279,7 +293,8 @@ test.describe('@regression unfreeze-member — POST /api/tenants/{tenantId}/unfr
       user_email: memberEmail,
       hub_user_id: `hub-u-${tid}-carol`,
     });
-    expect(r.status, await r.text()).toBe(200);
+    const body = await readBody(r);
+    expect(r.status, body.raw).toBe(200);
   });
 
   test('HMAC invalide → 401', async () => {
