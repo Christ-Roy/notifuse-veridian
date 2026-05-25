@@ -66,9 +66,18 @@ const (
 	// CallerApp est l'identifiant de Notifuse cote Hub.
 	CallerApp = "notifuse"
 
-	// ContractVersion verrouille la forme du body. Bump si le Hub change
-	// la signature Zod.
-	ContractVersion = "1.0"
+	// ContractVersionV1 — forme historique (sans mail_account_id).
+	// Envoye quand le caller ne specifie pas MailAccountID (back-compat).
+	ContractVersionV1 = "1.0"
+
+	// ContractVersionV11 — additif : champ mail_account_id optionnel
+	// pour selectionner un compte OAuth specifique (multi-comptes user).
+	// Envoye uniquement si MailAccountID != "".
+	ContractVersionV11 = "1.1"
+
+	// ContractVersion (alias historique) = V1 pour compat externe.
+	// Deprecated: utiliser ContractVersionV1 explicitement.
+	ContractVersion = ContractVersionV1
 
 	// DefaultTimeout per-attempt. Le Hub doit servir 200 ou erreur en
 	// < 5s p99 (envoi Gmail API best-effort).
@@ -108,6 +117,12 @@ type SendMailParams struct {
 	BCC            []string
 	ReplyTo        string
 	IdempotencyKey string // UUID v4 — anti-double-envoi
+
+	// MailAccountID — v1.1 optionnel. Identifiant Hub d'un compte OAuth
+	// specifique (`hub_app.mail_accounts.id`) parmi les N comptes du user.
+	// Si vide : le Hub envoie avec le compte par defaut du user (back-compat).
+	// Si renseigne : upgrade le body en contract_version "1.1".
+	MailAccountID string
 }
 
 // sendMailRequest est la forme JSON-marshalled envoyee au Hub. Les tags
@@ -126,6 +141,9 @@ type sendMailRequest struct {
 	ReplyTo         string   `json:"reply_to,omitempty"`
 	IdempotencyKey  string   `json:"idempotency_key"`
 	ContractVersion string   `json:"contract_version"`
+	// MailAccountID — v1.1 uniquement. `omitempty` garantit l'absence
+	// totale du champ en wire format quand vide => body v1.0 inchange.
+	MailAccountID string `json:"mail_account_id,omitempty"`
 }
 
 // Reason* sont les codes d'erreur courts retournes dans SendMailResult.Reason
@@ -135,11 +153,22 @@ const (
 	ReasonNeedsReauth       = "needs_reauth"
 	ReasonProviderNotLinked = "provider_not_linked"
 	ReasonRateLimit         = "rate_limit"
-	ReasonUserNotFound      = "user_not_found"
-	ReasonUnreachable       = "unreachable"
-	ReasonInvalidPayload    = "invalid_payload"
-	ReasonInvalidHMAC       = "invalid_hmac"
-	ReasonUnknown           = "unknown"
+	// ReasonRecipientRateLimited — v1.1 : Hub a refuse l'envoi car le
+	// destinataire (`Recipient`) a recu un mail < 20 min auparavant.
+	// Le caller peut skip ce destinataire et continuer le batch
+	// (cf. broadcasts), ou re-tenter apres `RetryAfterSeconds`.
+	//
+	// Valeur ALIGNEE sur le champ `error` du body Hub (`rate_limit_recipient`,
+	// cf. spec `2026-05-25-mail-provider-status-endpoint.md` §3). Comme
+	// pour les autres Reason*, on miroite la valeur exacte que le Hub
+	// envoie — cf. mapNonOKStatus qui assigne `result.Reason = errBody.Error`.
+	ReasonRecipientRateLimited = "rate_limit_recipient"
+	ReasonAccountNotFound      = "account_not_found"
+	ReasonUserNotFound         = "user_not_found"
+	ReasonUnreachable          = "unreachable"
+	ReasonInvalidPayload       = "invalid_payload"
+	ReasonInvalidHMAC          = "invalid_hmac"
+	ReasonUnknown              = "unknown"
 )
 
 // SendMailResult — resultat type retourne par SendMailAsUser.
@@ -157,6 +186,19 @@ type SendMailResult struct {
 	IdempotentReplay bool
 	Reason           string
 	HTTPStatus       int
+
+	// MailAccountIDUsed — v1.1 : id du compte OAuth qui a effectivement
+	// envoye (utile quand le caller laisse Hub choisir le defaut). Vide
+	// si le Hub ne le retourne pas (anciennes reponses v1.0).
+	MailAccountIDUsed string
+
+	// Recipient — populated when Reason == ReasonRecipientRateLimited.
+	// Email destinataire concrete qui a declenche le 429.
+	Recipient string
+
+	// RetryAfterSeconds — populated when Reason == ReasonRecipientRateLimited.
+	// Nombre de secondes a attendre avant de pouvoir re-tenter cet envoi.
+	RetryAfterSeconds int
 }
 
 // Client interface — facilite le mock dans les tests des callers.
@@ -291,6 +333,14 @@ func (c *httpClient) SendMailAsUser(ctx context.Context, p SendMailParams) (*Sen
 		return nil, err
 	}
 
+	// Contract version : auto-detection sur MailAccountID. Vide -> "1.0"
+	// (wire format historique inchange, back-compat Hub v1.0 garanti).
+	// Renseigne -> "1.1" + champ mail_account_id ajoute.
+	contractVersion := ContractVersionV1
+	if strings.TrimSpace(p.MailAccountID) != "" {
+		contractVersion = ContractVersionV11
+	}
+
 	req := sendMailRequest{
 		UserID:          p.UserID,
 		To:              p.To,
@@ -301,7 +351,8 @@ func (c *httpClient) SendMailAsUser(ctx context.Context, p SendMailParams) (*Sen
 		BCC:             p.BCC,
 		ReplyTo:         p.ReplyTo,
 		IdempotencyKey:  p.IdempotencyKey,
-		ContractVersion: ContractVersion,
+		ContractVersion: contractVersion,
+		MailAccountID:   p.MailAccountID, // omitempty => absent du wire si ""
 	}
 
 	rawBody, err := json.Marshal(req)
@@ -412,9 +463,10 @@ func (c *httpClient) sendOnce(ctx context.Context, rawBody []byte) *SendMailResu
 
 	if resp.StatusCode == http.StatusOK {
 		var parsed struct {
-			MessageID        string `json:"message_id"`
-			SentAt           string `json:"sent_at"`
-			IdempotentReplay bool   `json:"idempotent_replay"`
+			MessageID         string `json:"message_id"`
+			SentAt            string `json:"sent_at"`
+			IdempotentReplay  bool   `json:"idempotent_replay"`
+			MailAccountIDUsed string `json:"mail_account_id_used"`
 		}
 		if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
 			c.warn("hub_mail_gateway: decode 200 body failed", map[string]interface{}{
@@ -424,11 +476,12 @@ func (c *httpClient) sendOnce(ctx context.Context, rawBody []byte) *SendMailResu
 		}
 		sentAt, _ := time.Parse(time.RFC3339, parsed.SentAt)
 		return &SendMailResult{
-			OK:               true,
-			MessageID:        parsed.MessageID,
-			SentAt:           sentAt,
-			IdempotentReplay: parsed.IdempotentReplay,
-			HTTPStatus:       200,
+			OK:                true,
+			MessageID:         parsed.MessageID,
+			SentAt:            sentAt,
+			IdempotentReplay:  parsed.IdempotentReplay,
+			MailAccountIDUsed: parsed.MailAccountIDUsed,
+			HTTPStatus:        200,
 		}
 	}
 
@@ -438,12 +491,29 @@ func (c *httpClient) sendOnce(ctx context.Context, rawBody []byte) *SendMailResu
 // mapNonOKStatus traduit un status HTTP non-200 en SendMailResult typed.
 // Si bodyBytes contient un `{error: "..."}` cohérent, on l'utilise pour
 // le Reason ; sinon on retombe sur le mapping par defaut du status.
+//
+// Cas special 429 (v1.1) : discrimination sur le champ `error` du body.
+//   - `{"error":"rate_limit_recipient","recipient":...,"retry_after_seconds":...}`
+//     -> Reason=ReasonRecipientRateLimited + Recipient + RetryAfterSeconds peuples
+//   - `{"error":"rate_limit"}` (ou body vide) -> Reason=ReasonRateLimit (back-compat v6)
+//
+// Cas special 404 (v1.1) : `{"error":"account_not_found"}` -> Reason=ReasonAccountNotFound
+// quand mail_account_id explicitement fourni mais inexistant Hub-side.
 func mapNonOKStatus(status int, bodyBytes []byte) *SendMailResult {
+	// Body etendu pour capter recipient + retry_after_seconds (429 v1.1).
+	// Les champs absents restent zero-value sans erreur Unmarshal.
 	var errBody struct {
-		Error string `json:"error"`
+		Error             string `json:"error"`
+		Recipient         string `json:"recipient"`
+		RetryAfterSeconds int    `json:"retry_after_seconds"`
 	}
 	if len(bodyBytes) > 0 {
 		_ = json.Unmarshal(bodyBytes, &errBody)
+	}
+
+	result := &SendMailResult{
+		OK:         false,
+		HTTPStatus: status,
 	}
 
 	reason := errBody.Error
@@ -469,11 +539,18 @@ func mapNonOKStatus(status int, bodyBytes []byte) *SendMailResult {
 		}
 	}
 
-	return &SendMailResult{
-		OK:         false,
-		Reason:     reason,
-		HTTPStatus: status,
+	result.Reason = reason
+
+	// Per-recipient rate limit (v1.1) : peupler Recipient + RetryAfterSeconds.
+	// Discrimination volontairement basee sur Reason==ReasonRecipientRateLimited
+	// (champ `error` du body), pas sur le HTTP status seul, pour distinguer
+	// du rate limit global user-level qui partage le 429.
+	if reason == ReasonRecipientRateLimited {
+		result.Recipient = errBody.Recipient
+		result.RetryAfterSeconds = errBody.RetryAfterSeconds
 	}
+
+	return result
 }
 
 func (c *httpClient) warn(msg string, fields map[string]interface{}) {

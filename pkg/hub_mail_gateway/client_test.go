@@ -420,6 +420,111 @@ func TestSendMailAsUser_CustomHTTPClient(t *testing.T) {
 	assert.Equal(t, int32(1), calls.Load())
 }
 
+// --- v1.1 — multi-comptes + rate limit per-recipient ---
+
+// captureBody renvoie un handler httptest qui repond 200 puis capture
+// le body JSON pour assertion. Variante de newOKServer qui accepte un
+// response body JSON custom (utile pour tester mail_account_id_used).
+func captureBody(t *testing.T, cap *captured, respBody string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cap.hits.Add(1)
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		cap.body = body
+		cap.hdrs = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(respBody))
+	}))
+}
+
+func TestSendMailAsUser_WithMailAccountID(t *testing.T) {
+	cap := &captured{}
+	srv := captureBody(t, cap, `{"message_id":"v11-msg","sent_at":"2026-05-25T12:00:00Z","mail_account_id_used":"acc_clx123abc"}`)
+	defer srv.Close()
+
+	client := NewClient(Config{HubURL: srv.URL, HMACSecret: testSecret})
+
+	p := mustParams()
+	p.MailAccountID = "acc_clx123abc"
+	res, err := client.SendMailAsUser(context.Background(), p)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.True(t, res.OK)
+	assert.Equal(t, "v11-msg", res.MessageID)
+	assert.Equal(t, "acc_clx123abc", res.MailAccountIDUsed, "MailAccountIDUsed doit etre extrait de la 200 v1.1")
+
+	// Body wire format : contract_version=1.1 + mail_account_id present
+	var got map[string]interface{}
+	require.NoError(t, json.Unmarshal(cap.body, &got))
+	assert.Equal(t, "1.1", got["contract_version"], "MailAccountID non vide doit upgrader contract_version a 1.1")
+	assert.Equal(t, "acc_clx123abc", got["mail_account_id"], "mail_account_id doit etre present dans le body")
+}
+
+func TestSendMailAsUser_WithoutMailAccountID(t *testing.T) {
+	cap := &captured{}
+	srv := captureBody(t, cap, `{"message_id":"v10-msg","sent_at":"2026-05-25T12:00:00Z"}`)
+	defer srv.Close()
+
+	client := NewClient(Config{HubURL: srv.URL, HMACSecret: testSecret})
+
+	p := mustParams() // MailAccountID vide
+	res, err := client.SendMailAsUser(context.Background(), p)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.True(t, res.OK)
+	assert.Empty(t, res.MailAccountIDUsed, "MailAccountIDUsed doit etre vide quand le Hub ne le retourne pas (v1.0)")
+
+	// Back-compat : contract_version=1.0 + mail_account_id ABSENT du wire
+	var got map[string]interface{}
+	require.NoError(t, json.Unmarshal(cap.body, &got))
+	assert.Equal(t, "1.0", got["contract_version"], "MailAccountID vide doit garder contract_version 1.0 (back-compat Hub v1.0)")
+	_, hasField := got["mail_account_id"]
+	assert.False(t, hasField, "mail_account_id NE DOIT PAS apparaitre dans le wire format quand MailAccountID est vide (omitempty)")
+}
+
+func TestSendMailAsUser_RateLimitRecipient(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"rate_limit_recipient","recipient":"spam@example.com","retry_after_seconds":1200}`))
+	}))
+	defer srv.Close()
+
+	defer setFastBackoffs()()
+	client := NewClient(Config{HubURL: srv.URL, HMACSecret: testSecret})
+	res, err := client.SendMailAsUser(context.Background(), mustParams())
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.False(t, res.OK)
+	assert.Equal(t, ReasonRecipientRateLimited, res.Reason, "doit mapper sur le nouveau Reason v1.1, pas sur ReasonRateLimit")
+	assert.Equal(t, "rate_limit_recipient", res.Reason, "valeur Reason doit miroiter exactement le champ `error` du body Hub")
+	assert.Equal(t, 429, res.HTTPStatus)
+	assert.Equal(t, "spam@example.com", res.Recipient, "Recipient doit etre extrait du body 429")
+	assert.Equal(t, 1200, res.RetryAfterSeconds, "RetryAfterSeconds doit etre extrait du body 429")
+}
+
+func TestSendMailAsUser_RateLimitGlobal_StaysRateLimit(t *testing.T) {
+	// Back-compat vague 6 : 429 sans `recipient` doit rester Reason="rate_limit"
+	// (rate limit user-level global). NE PAS confondre avec rate_limit_recipient.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"rate_limit"}`))
+	}))
+	defer srv.Close()
+
+	defer setFastBackoffs()()
+	client := NewClient(Config{HubURL: srv.URL, HMACSecret: testSecret})
+	res, err := client.SendMailAsUser(context.Background(), mustParams())
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.False(t, res.OK)
+	assert.Equal(t, ReasonRateLimit, res.Reason, "429 sans `recipient` doit rester ReasonRateLimit (back-compat vague 6)")
+	assert.Equal(t, 429, res.HTTPStatus)
+	assert.Empty(t, res.Recipient, "Recipient doit etre vide pour rate_limit global")
+	assert.Equal(t, 0, res.RetryAfterSeconds, "RetryAfterSeconds doit etre 0 pour rate_limit global")
+}
+
 // stringReader convertit une string en io.Reader (helper test).
 func stringReader(s string) io.Reader {
 	return &readerOnce{s: s}
