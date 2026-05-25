@@ -88,7 +88,11 @@ RUN go build \
 FROM alpine:3.21
 
 # Add necessary runtime packages
-RUN apk add --no-cache \
+# === Veridian patch === apk upgrade en amont pour récupérer les CVE patches
+# OS (ex: libpq 17.9→17.10 CVE-2026-6638 SQL injection). Sans upgrade, l'index
+# Alpine cache une version antérieure même si le repo a déjà le fix.
+RUN apk upgrade --no-cache && \
+    apk add --no-cache \
     ca-certificates \
     tzdata \
     postgresql-client
