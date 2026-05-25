@@ -1,2 +1,93 @@
 # test-coverage-map.yaml — Standard CI Veridian §1 (Go variant)
-# Aucune couverture non-canonique déclarée pour le moment.
+#
+# Déclare les fichiers source qui n'ont pas de _test.go colocalisé mais sont
+# couverts par d'autres tests existants. Format consommé par
+# scripts/ci/check-test-mapping.sh (awk parser : `sources:` / `covered_by:` /
+# `reason:`).
+
+- sources:
+    - internal/domain/auth.go
+  covered_by:
+    - internal/service/auth_service_test.go
+    - internal/repository/auth_repository_test.go
+  reason: |
+    Pure interfaces (AuthRepository, AuthService) + 2 constantes
+    (SystemCallKey, WorkspaceIDKey). Aucune logique runtime testable
+    en isolation. Les contrats des interfaces sont validés par les
+    tests des implémentations concrètes (auth_service / auth_repository)
+    et les consommateurs (workspace_users_service_test, email_service_test,
+    sparkpost_service_test) via mocks générés (mockgen //go:generate).
+
+- sources:
+    - internal/domain/blog_feed.go
+  covered_by:
+    - internal/blogfeed/rss_test.go
+    - internal/http/root_handler_test.go
+  reason: |
+    Structs DTO pures (BlogFeedItem, BlogFeedMeta, BlogFeed) sans
+    méthodes ni fonctions. Sérialisation/désérialisation validées par
+    blogfeed/rss_test.go (RSS rendering) et le test du root handler
+    qui assemble le payload pour le renderer public.
+
+- sources:
+    - internal/domain/contact_segment_queue.go
+  covered_by:
+    - internal/repository/contact_segment_queue_postgres_test.go
+    - internal/service/contact_segment_queue_processor_test.go
+    - internal/service/contact_segment_queue_task_processor_test.go
+  reason: |
+    Interface ContactSegmentQueueRepository + struct DTO
+    ContactSegmentQueueItem. L'interface est implémentée par
+    contact_segment_queue_postgres.go (testée colocalisée) et consommée
+    par les 2 processors (testés colocalisés). Aucune logique testable
+    dans le fichier domain lui-même.
+
+- sources:
+    - internal/domain/ses_client.go
+  covered_by:
+    - internal/service/ses_service_test.go
+  reason: |
+    Interfaces SESWebhookClient + SNSWebhookClient ré-exposant l'API
+    aws-sdk-go. Aucune logique métier — uniquement les signatures
+    exigées par ses_service qui consomme ces interfaces (via mocks
+    AWS dans ses_service_test.go).
+
+- sources:
+    - internal/domain/telemetry.go
+  covered_by:
+    - internal/repository/telemetry_postgres_test.go
+    - internal/service/telemetry_service_test.go
+    - internal/app/app_test.go
+  reason: |
+    Interface TelemetryRepository + struct DTO TelemetryMetrics.
+    L'interface est implémentée par telemetry_postgres.go (testée
+    colocalisée) et consommée par telemetry_service (testé). Le wiring
+    DI est validé dans app_test.go.
+
+- sources:
+    - internal/repository/workspace_postgres.go
+  covered_by:
+    - internal/repository/workspace_core_test.go
+    - internal/repository/workspace_database_test.go
+    - internal/repository/workspace_invitations_test.go
+    - internal/repository/workspace_users_email_test.go
+    - internal/repository/workspace_users_membership_test.go
+    - internal/repository/workspace_users_operations_test.go
+    - internal/repository/workspace_users_queries_test.go
+  reason: |
+    Implémentation workspaceRepository scindée historiquement en 7
+    suites de tests adjacentes (core CRUD, database lifecycle,
+    invitations, users email/membership/operations/queries). Toutes
+    les méthodes exportées de workspace_postgres.go (Create, GetByID,
+    List, Update, Delete, GetWorkspaceByCustomDomain,
+    GetSystemConnection, WithWorkspaceTransaction, CreateDatabase,
+    DeleteDatabase, AddUserToWorkspace, RemoveUserFromWorkspace,
+    UpdateUserWorkspacePermissions, GetUserWorkspaces, GetUserWorkspace,
+    CreateInvitation, GetInvitationByID, GetInvitationByEmail,
+    GetWorkspaceInvitations, DeleteInvitation, IsUserWorkspaceMember,
+    CountWorkspaceMembersAndInvitations, CountWorkspaces,
+    GetWorkspaceUsersWithEmail) sont exercées via sqlmock dans ces
+    suites (TestWorkspaceRepository_* x30+). Pas de fichier
+    workspace_postgres_test.go colocalisé car la suite serait
+    monolithique (> 700 lignes) ; la séparation par responsabilité
+    est plus maintenable.
