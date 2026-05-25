@@ -28,14 +28,19 @@ import {
 
 const WORKSPACE_ID = 'ws-smoke-mail-account'
 
-// === Veridian patch 2026-05-25 — skip provisoire team-lead vague 6 ===
+// === Veridian patch 2026-05-25 — skip provisoire team-lead vague 6/7 ===
 // La spec fail systématiquement avec "Something went wrong!" (error boundary
 // React) malgré 2 itérations de fix sur les stubs (URL `**/api/**` au lieu de
 // `prod-smoke-stub.invalid`, shape user.me complète avec workspaces +
 // permissions). Le composant `VeridianMailAccountSettings` marche en
-// Vitest unit (6/6 verts), donc le bug est dans le harness E2E prod-smoke
-// (probablement un fetch additionnel non-stubbé déclenché par
+// Vitest unit (vague 7 : 11/11 verts), donc le bug est dans le harness E2E
+// prod-smoke (probablement un fetch additionnel non-stubbé déclenché par
 // `WorkspaceSettingsPage` qui crash en error boundary).
+//
+// MAJ vague 7 (2026-05-25 mail-accounts-ui-v2) : labels updated pour
+// matcher la nouvelle UI multi-comptes ("Connect another / Connect first"
+// au lieu de "Connect my Gmail", "My connected account" au lieu de
+// "My Gmail connected via Hub"). Le stub mail-accounts/me ajouté.
 //
 // Skip provisoire pour débloquer la promo prod de la feature backend +
 // migration V48. Ticket dédié à créer : todo/2026-05-25-mail-account-spec-prod-smoke-debug.md
@@ -109,6 +114,14 @@ test.describe.skip('Mail account settings — prod-smoke (SKIPPED — debug en c
           })
         })
       }
+      // Vague 7 — proxy mail-accounts/me : fallback gracieux hub_available=false
+      if (url.includes('/api/veridian/mail-accounts/me')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ hub_available: false, accounts: [] })
+        })
+      }
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -140,13 +153,19 @@ test.describe.skip('Mail account settings — prod-smoke (SKIPPED — debug en c
       page.getByRole('radio', { name: /Veridian generic sender/i })
     ).toBeVisible({ timeout: 10000 })
 
-    // Radio "My Gmail connected via Hub"
+    // Radio "My connected account" (vague 7 — renomme vs vague 6)
     await expect(
-      page.getByRole('radio', { name: /My Gmail connected via Hub/i })
+      page.getByRole('radio', { name: /My connected account/i })
     ).toBeVisible()
 
-    // Bouton "Connect my Gmail"
-    await expect(page.getByRole('button', { name: /Connect my Gmail/i })).toBeVisible()
+    // Bouton "Connect your first Gmail account" (hub_available=false)
+    await expect(
+      page.getByRole('button', { name: /Connect your first Gmail account/i })
+    ).toBeVisible()
+    // Bouton Microsoft
+    await expect(
+      page.getByRole('button', { name: /Connect a Microsoft account/i })
+    ).toBeVisible()
 
     // Aucune uncaught JS exception
     expect(
