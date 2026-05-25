@@ -5079,7 +5079,7 @@ msgid "ID must contain only lowercase letters, numbers, underscores, and hyphens
 msgstr "ID darf nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche enthalten"
 
 #: src/components/timeline/ContactTimeline.tsx:698
-#: src/pages/DashboardPage.tsx:91
+#: src/pages/DashboardPage.tsx:92
 msgid "ID:"
 msgstr "ID:"
 
@@ -6551,7 +6551,7 @@ msgstr "Keine Webhook-Ereignisse gefunden"
 msgid "No webhook subscriptions configured"
 msgstr "Keine Webhook-Abonnements konfiguriert"
 
-#: src/pages/DashboardPage.tsx:48
+#: src/pages/DashboardPage.tsx:49
 msgid "No workspaces"
 msgstr "Keine Arbeitsbereiche"
 
@@ -6727,6 +6727,10 @@ msgstr "Nur ein Breakpoint pro E-Mail-Vorlage ist erlaubt"
 #: src/components/integrations/SupabaseIntegration.tsx:77
 msgid "Only workspace owners can modify integrations"
 msgstr "Nur Arbeitsbereich-Inhaber können Integrationen ändern"
+
+#: src/components/veridian_cross_app_cards.tsx:98
+msgid "Open"
+msgstr ""
 
 #: src/components/segment/form_leaf.tsx:294
 #: src/components/segment/input.tsx:725
@@ -8538,7 +8542,7 @@ msgid "Select Winner"
 msgstr "Gewinner auswählen"
 
 #: src/layouts/WorkspaceLayout.tsx:587
-#: src/pages/DashboardPage.tsx:31
+#: src/pages/DashboardPage.tsx:32
 msgid "Select workspace"
 msgstr "Arbeitsbereich auswählen"
 
@@ -11069,6 +11073,10 @@ msgstr "Ihre Dateien können in jeden S3-kompatiblen Speicher hochgeladen werden
 #: src/pages/CreateWorkspacePage.tsx:142
 #~ msgid "Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at"
 #~ msgstr ""
+
+#: src/components/veridian_cross_app_cards.tsx:63
+msgid "Your other Veridian apps"
+msgstr ""
 
 #: src/components/veridian_paywall_modal.tsx:50
 #: src/components/veridian_paywall_modal.tsx:51

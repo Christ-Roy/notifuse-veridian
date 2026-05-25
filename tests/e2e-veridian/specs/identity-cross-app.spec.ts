@@ -243,6 +243,141 @@ test.describe('@regression identity-cross-app — A. hub-discovery client', () =
 });
 
 // ===================================================================
+// Section A bis — wiring UI cross-app cards (DashboardPage)
+// ===================================================================
+// Ticket todo/2026-05-24-veridian-hub-discovery-handler-e2e-validation.md :
+// le handler /api/veridian/hub-discovery/me est shippe (Section A ci-dessus),
+// mais avant cette section l'UI ne le consommait pas. Ce bloc verifie que
+// le composant <VeridianCrossAppCards/> est bien mount dans DashboardPage
+// et affiche les cards quand le Hub renvoie d'autres tenants.
+//
+// Strategie de mock : on intercepte /api/veridian/hub-discovery/me cote
+// browser via `page.route()` (les fixtures Hub staging ne peuvent pas
+// fabriquer un user multi-app deterministe, donc on stub la reponse
+// au niveau du navigateur, c'est la couche que l'utilisateur final voit).
+test.describe('@regression identity-cross-app — A bis. UI cross-app cards', () => {
+  test('Aui1. cards Prospection visibles quand discovery retourne d\'autres tenants', async ({ page }) => {
+    const tid = newTid();
+    provisioned.push(tid);
+    const ownerEmail = `${tid}@uicards.test`;
+    const provision = await provisionTenant(tid, ownerEmail, 'free');
+    const apiKey = provision.api_key as string;
+    expect(provision.auto_login_url).toBeTruthy();
+
+    // Intercepte le call /api/veridian/hub-discovery/me cote navigateur
+    // et retourne une reponse synthetique avec prospection + analytics.
+    // Le composant doit afficher 2 cards (notifuse exclu — c'est l'app courante).
+    await page.route('**/api/veridian/hub-discovery/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          hub_available: true,
+          exists: true,
+          tenants: [
+            { app: 'notifuse', role: 'owner' },
+            { app: 'prospection', role: 'owner' },
+            { app: 'analytics', role: 'member' },
+          ],
+        }),
+      });
+    });
+
+    // Genere un magic link user et navigue vers l'auto-login (set JWT
+    // dans localStorage). Apres redirect, l'utilisateur arrive sur la
+    // page /console qui rend DashboardPage (workspace picker).
+    const magicResp = await bearerFetch(
+      '/api/workspaces.generateMagicLink',
+      'POST',
+      apiKey,
+      { user_email: ownerEmail },
+    );
+    const magic = JSON.parse(await magicResp.text());
+    expect(magic.auto_login_url).toBeTruthy();
+
+    await page.goto(magic.auto_login_url, { waitUntil: 'networkidle' });
+    // Le auto-login redirige vers /console (DashboardPage si plusieurs
+    // workspaces, sinon WorkspaceLayout direct). On force /console pour
+    // garantir qu'on est sur la page workspace picker.
+    await page.goto(`${NOTIFUSE_URL}/console`, { waitUntil: 'networkidle' });
+
+    // Le composant doit avoir affiche le wrapper + 2 cards.
+    const wrapper = page.getByTestId('veridian-cross-app-cards');
+    await expect(wrapper).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('veridian-cross-app-card-prospection')).toBeVisible();
+    await expect(page.getByTestId('veridian-cross-app-card-analytics')).toBeVisible();
+    // Notifuse JAMAIS affiche (c'est l'app courante).
+    await expect(page.getByTestId('veridian-cross-app-card-notifuse')).toHaveCount(0);
+  });
+
+  test('Aui2. aucune card quand discovery retourne uniquement notifuse', async ({ page }) => {
+    const tid = newTid();
+    provisioned.push(tid);
+    const ownerEmail = `${tid}@uicards-solo.test`;
+    const provision = await provisionTenant(tid, ownerEmail, 'free');
+    const apiKey = provision.api_key as string;
+
+    await page.route('**/api/veridian/hub-discovery/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          hub_available: true,
+          exists: true,
+          tenants: [{ app: 'notifuse', role: 'owner' }],
+        }),
+      });
+    });
+
+    const magicResp = await bearerFetch(
+      '/api/workspaces.generateMagicLink',
+      'POST',
+      apiKey,
+      { user_email: ownerEmail },
+    );
+    const magic = JSON.parse(await magicResp.text());
+    await page.goto(magic.auto_login_url, { waitUntil: 'networkidle' });
+    await page.goto(`${NOTIFUSE_URL}/console`, { waitUntil: 'networkidle' });
+
+    // Wrapper ne doit pas apparaitre (filtre `app !== notifuse` vide).
+    await expect(page.getByTestId('veridian-cross-app-cards')).toHaveCount(0);
+  });
+
+  test('Aui3. aucune card quand Hub indisponible (hub_available=false)', async ({ page }) => {
+    const tid = newTid();
+    provisioned.push(tid);
+    const ownerEmail = `${tid}@uicards-down.test`;
+    const provision = await provisionTenant(tid, ownerEmail, 'free');
+    const apiKey = provision.api_key as string;
+
+    await page.route('**/api/veridian/hub-discovery/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          hub_available: false,
+          exists: false,
+          tenants: [],
+        }),
+      });
+    });
+
+    const magicResp = await bearerFetch(
+      '/api/workspaces.generateMagicLink',
+      'POST',
+      apiKey,
+      { user_email: ownerEmail },
+    );
+    const magic = JSON.parse(await magicResp.text());
+    await page.goto(magic.auto_login_url, { waitUntil: 'networkidle' });
+    await page.goto(`${NOTIFUSE_URL}/console`, { waitUntil: 'networkidle' });
+
+    // Hub down → wrapper absent (mode degrade silencieux).
+    await expect(page.getByTestId('veridian-cross-app-cards')).toHaveCount(0);
+  });
+});
+
+// ===================================================================
 // Section B — users.language (V42)
 // ===================================================================
 test.describe('@regression identity-cross-app — B. users.language (V42)', () => {

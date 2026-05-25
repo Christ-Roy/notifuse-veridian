@@ -5079,7 +5079,7 @@ msgid "ID must contain only lowercase letters, numbers, underscores, and hyphens
 msgstr "ID deve conter apenas letras minúsculas, números, underscores e hífens"
 
 #: src/components/timeline/ContactTimeline.tsx:698
-#: src/pages/DashboardPage.tsx:91
+#: src/pages/DashboardPage.tsx:92
 msgid "ID:"
 msgstr "ID:"
 
@@ -6551,7 +6551,7 @@ msgstr "Nenhum evento de webhook encontrado"
 msgid "No webhook subscriptions configured"
 msgstr "Nenhuma assinatura de webhook configurada"
 
-#: src/pages/DashboardPage.tsx:48
+#: src/pages/DashboardPage.tsx:49
 msgid "No workspaces"
 msgstr "Nenhum workspace"
 
@@ -6727,6 +6727,10 @@ msgstr "Apenas um ponto de quebra por template de email é permitido"
 #: src/components/integrations/SupabaseIntegration.tsx:77
 msgid "Only workspace owners can modify integrations"
 msgstr "Apenas proprietários do workspace podem modificar integrações"
+
+#: src/components/veridian_cross_app_cards.tsx:98
+msgid "Open"
+msgstr ""
 
 #: src/components/segment/form_leaf.tsx:294
 #: src/components/segment/input.tsx:725
@@ -8538,7 +8542,7 @@ msgid "Select Winner"
 msgstr "Selecionar Vencedor"
 
 #: src/layouts/WorkspaceLayout.tsx:587
-#: src/pages/DashboardPage.tsx:31
+#: src/pages/DashboardPage.tsx:32
 msgid "Select workspace"
 msgstr "Selecionar workspace"
 
@@ -11069,6 +11073,10 @@ msgstr "Seus arquivos podem ser enviados para qualquer armazenamento compatível
 #: src/pages/CreateWorkspacePage.tsx:142
 #~ msgid "Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at"
 #~ msgstr ""
+
+#: src/components/veridian_cross_app_cards.tsx:63
+msgid "Your other Veridian apps"
+msgstr ""
 
 #: src/components/veridian_paywall_modal.tsx:50
 #: src/components/veridian_paywall_modal.tsx:51

@@ -5079,7 +5079,7 @@ msgid "ID must contain only lowercase letters, numbers, underscores, and hyphens
 msgstr "L ID ne doit contenir que des lettres minuscules, des chiffres, des tirets bas et des tirets"
 
 #: src/components/timeline/ContactTimeline.tsx:698
-#: src/pages/DashboardPage.tsx:91
+#: src/pages/DashboardPage.tsx:92
 msgid "ID:"
 msgstr "ID :"
 
@@ -6551,7 +6551,7 @@ msgstr "Aucun événement webhook trouvé"
 msgid "No webhook subscriptions configured"
 msgstr "Aucun abonnement webhook configuré"
 
-#: src/pages/DashboardPage.tsx:48
+#: src/pages/DashboardPage.tsx:49
 msgid "No workspaces"
 msgstr "Aucun espace de travail"
 
@@ -6727,6 +6727,10 @@ msgstr "Un seul point de rupture par modèle d email est autorisé"
 #: src/components/integrations/SupabaseIntegration.tsx:77
 msgid "Only workspace owners can modify integrations"
 msgstr "Seuls les propriétaires de l espace de travail peuvent modifier les intégrations"
+
+#: src/components/veridian_cross_app_cards.tsx:98
+msgid "Open"
+msgstr ""
 
 #: src/components/segment/form_leaf.tsx:294
 #: src/components/segment/input.tsx:725
@@ -8538,7 +8542,7 @@ msgid "Select Winner"
 msgstr "Sélectionner le gagnant"
 
 #: src/layouts/WorkspaceLayout.tsx:587
-#: src/pages/DashboardPage.tsx:31
+#: src/pages/DashboardPage.tsx:32
 msgid "Select workspace"
 msgstr "Sélectionner un espace de travail"
 
@@ -11069,6 +11073,10 @@ msgstr "Vos fichiers peuvent être téléversés vers n'importe quel stockage co
 #: src/pages/CreateWorkspacePage.tsx:142
 #~ msgid "Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at"
 #~ msgstr "Votre workspace Notifuse est créé automatiquement par Veridian quand vous souscrivez sur"
+
+#: src/components/veridian_cross_app_cards.tsx:63
+msgid "Your other Veridian apps"
+msgstr ""
 
 #: src/components/veridian_paywall_modal.tsx:50
 #: src/components/veridian_paywall_modal.tsx:51

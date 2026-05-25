@@ -5079,7 +5079,7 @@ msgid "ID must contain only lowercase letters, numbers, underscores, and hyphens
 msgstr "IDは小文字の英字、数字、アンダースコア、ハイフンのみ使用できます"
 
 #: src/components/timeline/ContactTimeline.tsx:698
-#: src/pages/DashboardPage.tsx:91
+#: src/pages/DashboardPage.tsx:92
 msgid "ID:"
 msgstr "ID:"
 
@@ -6551,7 +6551,7 @@ msgstr "Webhookイベントが見つかりません"
 msgid "No webhook subscriptions configured"
 msgstr "Webhookサブスクリプションが設定されていません"
 
-#: src/pages/DashboardPage.tsx:48
+#: src/pages/DashboardPage.tsx:49
 msgid "No workspaces"
 msgstr "ワークスペースがありません"
 
@@ -6727,6 +6727,10 @@ msgstr "メールテンプレートごとに1つのブレークポイントの�
 #: src/components/integrations/SupabaseIntegration.tsx:77
 msgid "Only workspace owners can modify integrations"
 msgstr "ワークスペースオーナーのみが連携を変更できます"
+
+#: src/components/veridian_cross_app_cards.tsx:98
+msgid "Open"
+msgstr ""
 
 #: src/components/segment/form_leaf.tsx:294
 #: src/components/segment/input.tsx:725
@@ -8538,7 +8542,7 @@ msgid "Select Winner"
 msgstr "勝者を選択"
 
 #: src/layouts/WorkspaceLayout.tsx:587
-#: src/pages/DashboardPage.tsx:31
+#: src/pages/DashboardPage.tsx:32
 msgid "Select workspace"
 msgstr "ワークスペースを選択"
 
@@ -11069,6 +11073,10 @@ msgstr "ファイルは任意のS3互換ストレージにアップロードで�
 #: src/pages/CreateWorkspacePage.tsx:142
 #~ msgid "Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at"
 #~ msgstr ""
+
+#: src/components/veridian_cross_app_cards.tsx:63
+msgid "Your other Veridian apps"
+msgstr ""
 
 #: src/components/veridian_paywall_modal.tsx:50
 #: src/components/veridian_paywall_modal.tsx:51
