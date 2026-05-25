@@ -60,13 +60,11 @@ async function readBody(r: Response): Promise<{ raw: string; json: () => any }> 
 // Plans attendus (seeding manuel 2026-05-20). Si Robert change un canary,
 // mettre a jour ici en parallele.
 //
-// NOTE drift observe staging 2026-05-25 (a signaler team-lead) :
-//   - canaryfree : FeatureABTesting=false alors que code DefaultPlanLimits
-//     post-pivot 2026-05-21 dit true ("A/B gratuit pour tous"). Soit le
-//     canary date d avant le pivot, soit DefaultPlanLimits n est pas lu par
-//     /limits handler. A trancher dans un ticket separe — pour l instant
-//     MEGA-05 valide les invariants DURS (plan_source=internal, plan/quota
-//     coherent) sans asserter les features qui peuvent drifter.
+// Pivot pricing 2026-05-21 : tous plans = tout illimite (-1 / true) sauf
+// FeatureWhiteLabel reserve aux business+. SEUL differenciant Free vs paid
+// = duree 15j visible (geree par Hub state machine, pas par limits).
+// Cf ticket todo/2026-05-25-drift-canary-free-limits-vs-pivot-pricing.md
+// (resolu : data fix via update-plan plan_source=internal le 2026-05-25).
 const CANARIES = [
   { id: 'canaryfree', plan: 'free', whiteLabel: false },
   { id: 'canarypro', plan: 'pro', whiteLabel: false },
@@ -107,7 +105,26 @@ test.describe('@mega @prod-safe @canary MEGA-05 — canary witness verification 
       // === Verif 3 : limits structure presente + quota -1 (sending unlimited) ===
       expect(limits.limits, 'limits object obligatoire').toBeTruthy();
       expect(limits.limits.MonthlyEmailQuota).toBe(-1);
-      // White-label : invariant business stable depuis le pivot →
+
+      // === Verif 4 : invariants pivot pricing 2026-05-21 ===
+      // Tous les plans (Free inclus) doivent avoir TOUTES les dimensions
+      // V37 illimitees (-1) et toutes les features actives (true), sauf
+      // FeatureWhiteLabel qui reste reserve business+.
+      //
+      // Anti-regression : si un canary drift sur ces valeurs, soit le pivot
+      // 2026-05-21 a ete viole cote code (DefaultPlanLimits modifie), soit
+      // un Upsert legacy a fige des vieilles dimensions V37 (cf bug fix
+      // 2026-05-25 — re-run update-plan plan_source=internal pour resoudre).
+      expect(limits.limits.MaxContacts, `${canary.id} MaxContacts pivot violated`).toBe(-1);
+      expect(limits.limits.MaxSeats, `${canary.id} MaxSeats pivot violated`).toBe(-1);
+      expect(limits.limits.MaxOAuthAccounts, `${canary.id} MaxOAuthAccounts pivot violated`).toBe(-1);
+      expect(limits.limits.MaxCustomDomains, `${canary.id} MaxCustomDomains pivot violated`).toBe(-1);
+      expect(limits.limits.MaxActiveSequences, `${canary.id} MaxActiveSequences pivot violated`).toBe(-1);
+      expect(limits.limits.HistoryRetentionDays, `${canary.id} HistoryRetentionDays pivot violated`).toBe(-1);
+      expect(limits.limits.FeatureABTesting, `${canary.id} FeatureABTesting must be true (A/B gratuit pour tous post-pivot)`).toBe(true);
+      expect(limits.limits.FeatureBrandingRemoved, `${canary.id} FeatureBrandingRemoved must be true (branding optionnel post-pivot)`).toBe(true);
+
+      // White-label : SEUL differenciant business+ stable depuis le pivot →
       //   - free/pro : white-label false (branding non-personnalisable)
       //   - enterprise (business+) : white-label true
       // Si ce drift, le canary signale un casse business critique
