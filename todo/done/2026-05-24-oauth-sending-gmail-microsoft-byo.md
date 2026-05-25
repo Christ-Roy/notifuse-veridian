@@ -145,3 +145,18 @@ Phase A stratégie email (Robert 2026-05-20). Bloque le ticket Notifuse
 ```
 
 **À déposer chez `veridian-hub/todo/` par Robert ou à pinger l'agent Hub.**
+
+---
+
+## ⛔ SUPERSEDED — 2026-05-25 (team-lead)
+
+Ce ticket est superseded par `todo/2026-05-25-mail-send-as-user-via-hub-gateway.md`.
+
+**Raison** : Robert a tranché 2026-05-25 sur une architecture **Hub-centric** au lieu de Notifuse-storage-de-tokens :
+- L'OAuth Sending tokens sont stockés **côté Hub** (table `Account` du Hub via Auth.js v5)
+- L'envoi Gmail se fait via le Hub Mail Gateway (`POST /api/mail/send-as-user`)
+- Notifuse fait juste un call HMAC au Hub (cf. spec dans le ticket superseded)
+
+L'architecture initialement spec dans CE ticket (Notifuse stocke `refresh_token chiffré`, endpoint `GET /api/oauth-sending/credentials/{tenant_id}` etc.) n'est plus pertinente. Pas de double effort.
+
+Ticket archivé. La suite Notifuse-side est dans le ticket Hub gateway.

@@ -119,3 +119,15 @@ Aucune. Tout est dans `console/src/`, pas de coordination cross-app.
 - [ ] Pas de régression desktop (spec existante `boot-smoke.spec.ts` toujours verte)
 - [ ] CLAUDE.md mis à jour : note breakpoints standard (`sm:640px md:768px
       lg:1024px xl:1280px 2xl:1536px`)
+
+---
+
+## ✅ Lots 1-6 livrés — 2026-05-25 (team-lead audit cumulatif)
+
+- Lot 1 : sidebar hamburger + topbar compact (commit 6ef902bd)
+- Lots 2-3 : CSS global tables/modals/drawers (commit 8f90b538)
+- Lot 4 : forms vertical (3/3 instances traitées)
+- Lot 5 : KPI Row responsive
+- Lot 6 : editor preview-only alert
+
+**Reste backlog futur faible priorité** : audit lingui exhaustif, désactivation totale editor mobile. Ticket clos — créer nouveau ticket si besoin.

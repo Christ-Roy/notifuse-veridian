@@ -62,3 +62,9 @@ Wirer côté `console/src/` :
 
 Pure UX nice-to-have. L'absence ne casse rien. Mais c'est le complément
 naturel du flow SSO + OAuth Hub qu'on a livré cette session.
+
+---
+
+## ✅ Archivé — 2026-05-25 (team-lead vague 2 audit)
+
+Livré par les agents vague 2 (cf. commits 77a44f94 freeze, 2e50fef1 user-me, 2213d0b3 cross-app cards). Voir notes des agents dans le commit message + giga E2E 9/9 PASS post-fix freeze body bug.

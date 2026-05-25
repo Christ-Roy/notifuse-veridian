@@ -84,3 +84,8 @@ Ajouter une **section dédiée dans `CLAUDE.md` Notifuse** (table de référence
 - [ ] Section ajoutée à CLAUDE.md Notifuse
 - [ ] Au moins 1 lien depuis un ticket récent qui pointe vers cette doc
 - [ ] Pas besoin d'agents cross-app (pure doc)
+
+---
+
+## ✅ Archivé — 2026-05-25 (team-lead)
+Livré en prod sur SHA 8f90b538 (giga E2E 226/241 passed). Voir notes ci-dessus.

@@ -102,3 +102,9 @@ Hub → user grille).
 - CONTRAT-HUB §5.10 codes erreur paywall
 - CONTRAT-HUB §5.21 seat overage soft warning
 - Ticket parent : `todo/2026-05-19-v13-multi-membre-cross-app.md`
+
+---
+
+## ✅ Archivé — 2026-05-25 (team-lead vague 2 audit)
+
+Livré par les agents vague 2 (cf. commits 77a44f94 freeze, 2e50fef1 user-me, 2213d0b3 cross-app cards). Voir notes des agents dans le commit message + giga E2E 9/9 PASS post-fix freeze body bug.

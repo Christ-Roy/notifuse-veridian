@@ -88,3 +88,8 @@ vérifier que les 17 faux positifs disparaissent.
 Le bug est **silencieux** : Notifuse retourne 200, le Hub considère que
 c'est un user inconnu (pas une erreur), donc personne n'a alerté. C'est
 exactement le genre de bug que les MEGA-E2E doivent attraper.
+
+---
+
+## ✅ Archivé — 2026-05-25 (team-lead)
+Livré en prod sur SHA 8f90b538 (giga E2E 226/241 passed). Voir notes ci-dessus.
