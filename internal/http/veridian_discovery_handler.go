@@ -1,15 +1,22 @@
 package http
 
 // === Veridian patch ===
-// Handler POST /api/users/by-email — pattern Hub discovery cross-app.
+// Handler POST + GET /api/users/by-email — pattern Hub discovery cross-app.
 //
 // Securite : HMAC Hub (meme middleware que les autres endpoints /api/tenants/*).
-// Verb HTTP : POST (pas GET) pour eviter de logger l'email dans les access logs URL.
 //
-// Use case : le Hub appelle cet endpoint au login user pour decouvrir si
-// l'utilisateur a un compte Notifuse et quels workspaces il possede, sans
-// dependre des colonnes denormalisees hub_app.tenants. Pattern "discovery pull"
-// (CONTRAT-HUB 2026-05-20-hub-discovery-by-email-pattern.md).
+// Verbe HTTP :
+//   - POST (body JSON `{"email": "..."}`) — initial, evite de logger l email en URL
+//   - GET (querystring `?email=...`) — utilise par le Hub `lib/sync/discovery.ts`
+//     (signature HMAC body vide, `${ts}.`) pour le cron reconcile cross-app.
+//     Le passage en GET cote Hub a casse silencieusement la discovery en prod
+//     (200 body vide via root_handler catchall) — cf. ticket
+//     2026-05-25-discovery-by-email-prod-returns-empty-body.md.
+//
+// Use case : le Hub appelle cet endpoint au login user OU via cron reconcile
+// pour decouvrir si l utilisateur a un compte Notifuse et quels workspaces il
+// possede, sans dependre des colonnes denormalisees hub_app.tenants. Pattern
+// "discovery pull" (CONTRAT-HUB 2026-05-20-hub-discovery-by-email-pattern.md).
 //
 // Semantique :
 //   - 200 {"found": true, "workspaces": [...]}  si user connu
@@ -58,8 +65,20 @@ func (h *VeridianHandler) handleDiscovery(w http.ResponseWriter, r *http.Request
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
+	h.runDiscovery(w, r, req.Email)
+}
 
-	email := strings.TrimSpace(req.Email)
+// handleDiscoveryGET : GET /api/users/by-email?email=...
+// Variante GET pour le client Hub `lib/sync/discovery.ts`. La signature HMAC
+// est calculee sur `${ts}.` (body vide) — le middleware HMAC accepte cela
+// nativement (lit r.Body, qui est vide pour un GET).
+func (h *VeridianHandler) handleDiscoveryGET(w http.ResponseWriter, r *http.Request) {
+	h.runDiscovery(w, r, r.URL.Query().Get("email"))
+}
+
+// runDiscovery : logique partagee POST + GET.
+func (h *VeridianHandler) runDiscovery(w http.ResponseWriter, r *http.Request, rawEmail string) {
+	email := strings.TrimSpace(rawEmail)
 	if email == "" {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "email is required", http.StatusBadRequest, map[string]interface{}{
 			"missing": []string{"email"},

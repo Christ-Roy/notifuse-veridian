@@ -1649,9 +1649,11 @@ func TestVeridianHandleLimits_RegisteredInRoutes(t *testing.T) {
 	assert.Contains(t, pattern, "limits", "route should target limits handler")
 }
 
-// TestVeridianRouteRegistered_DiscoveryByEmail valide que la route
-// POST /api/users/by-email est bien enregistree dans le mux veridian
-// (regression guard — Constitution §1 routes API coverage 100%).
+// TestVeridianRouteRegistered_DiscoveryByEmail valide que les routes
+// POST + GET /api/users/by-email sont bien enregistrees dans le mux veridian.
+// Regression guard — Constitution §1 routes API coverage 100%.
+// GET ajoute apres bug prod 2026-05-25 (200 body vide via root_handler
+// catchall quand seul POST etait declare et que le Hub appelait en GET).
 func TestVeridianRouteRegistered_DiscoveryByEmail(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1662,10 +1664,20 @@ func TestVeridianRouteRegistered_DiscoveryByEmail(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/users/by-email", nil)
-	_, pattern := mux.Handler(req)
-	assert.NotEmpty(t, pattern, "POST /api/users/by-email should be registered")
-	assert.Contains(t, pattern, "by-email", "route should target discovery handler")
+	t.Run("POST", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/users/by-email", nil)
+		_, pattern := mux.Handler(req)
+		assert.NotEmpty(t, pattern, "POST /api/users/by-email should be registered")
+		assert.Contains(t, pattern, "by-email", "route should target discovery handler")
+	})
+
+	t.Run("GET", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/users/by-email?email=alice@example.com", nil)
+		_, pattern := mux.Handler(req)
+		assert.NotEmpty(t, pattern, "GET /api/users/by-email should be registered (Hub reconcile client)")
+		assert.Contains(t, pattern, "by-email", "route should target discovery handler")
+		assert.Contains(t, pattern, "GET", "route must explicitly bind GET method (not fallback to catchall)")
+	})
 }
 
 // === Lot G — handleListTenants (2026-05-21) ===

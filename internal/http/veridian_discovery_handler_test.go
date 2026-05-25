@@ -265,3 +265,143 @@ func TestDiscovery_EmailTrimmed(t *testing.T) {
 	rec := invokeDiscovery(t, svc, buildDiscoveryHMACRequest(t, body, 0))
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
+
+// === GET variant ===
+//
+// Le Hub `lib/sync/discovery.ts` appelle en GET avec querystring depuis le
+// cron reconcile. Le bug prod 2026-05-25 (200 body vide) venait du fait que
+// seule la route POST etait declaree — GET tombait dans le catchall
+// root_handler.go qui sort silencieusement sur tout `/api/*` non-matche.
+
+// buildDiscoveryHMACGetRequest : signature HMAC body vide (`${ts}.`) comme
+// le client Hub `signGet()` (cf. veridian-hub/lib/sync/discovery.ts:110).
+func buildDiscoveryHMACGetRequest(t *testing.T, email string, timestampOffset time.Duration) *http.Request {
+	t.Helper()
+	ts := time.Now().Add(timestampOffset)
+	tsStr := strconv.FormatInt(ts.UnixMilli(), 10)
+
+	mac := hmac.New(sha256.New, []byte(discoveryTestSecret))
+	mac.Write([]byte(tsStr))
+	mac.Write([]byte("."))
+	// body vide pour GET — signature = HMAC(secret, "${ts}.")
+	sig := hex.EncodeToString(mac.Sum(nil))
+
+	url := "/api/users/by-email"
+	if email != "" {
+		url = fmt.Sprintf("/api/users/by-email?email=%s", email)
+	}
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("X-Veridian-Hub-Signature", sig)
+	req.Header.Set("X-Veridian-Timestamp", tsStr)
+	return req
+}
+
+// === Test GET 1 : user connu + 2 workspaces → 200 found:true ===
+
+func TestDiscoveryGET_FoundTwoWorkspaces(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	email := "alice@example.com"
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().LookupByEmail(gomock.Any(), email).Return(&domain.DiscoveryResponse{
+		Found:     true,
+		UserEmail: email,
+		Workspaces: []domain.DiscoveryWorkspace{
+			{
+				WorkspaceID:      "ws-alice",
+				WorkspaceName:    "Alice Corp",
+				Role:             "owner",
+				Plan:             "pro",
+				MagicLinkCapable: true,
+				FallbackURL:      "https://notifuse.app.veridian.site/console/signin",
+			},
+			{
+				WorkspaceID:      "ws-shared",
+				WorkspaceName:    "Shared Project",
+				Role:             "member",
+				Plan:             "free",
+				MagicLinkCapable: true,
+				FallbackURL:      "https://notifuse.app.veridian.site/console/signin",
+			},
+		},
+	}, nil)
+
+	rec := invokeDiscovery(t, svc, buildDiscoveryHMACGetRequest(t, email, 0))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.NotEmpty(t, rec.Body.Bytes(), "GET response body must not be empty (bug prod 2026-05-25)")
+	var resp domain.DiscoveryResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.True(t, resp.Found)
+	assert.Equal(t, email, resp.UserEmail)
+	require.Len(t, resp.Workspaces, 2)
+	assert.Equal(t, "ws-alice", resp.Workspaces[0].WorkspaceID)
+}
+
+// === Test GET 2 : user inconnu → 200 found:false ===
+
+func TestDiscoveryGET_UserNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	email := "ghost@example.com"
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().LookupByEmail(gomock.Any(), email).Return(&domain.DiscoveryResponse{
+		Found:      false,
+		UserEmail:  email,
+		Workspaces: []domain.DiscoveryWorkspace{},
+	}, nil)
+
+	rec := invokeDiscovery(t, svc, buildDiscoveryHMACGetRequest(t, email, 0))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var resp domain.DiscoveryResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Found)
+	assert.Empty(t, resp.Workspaces)
+}
+
+// === Test GET 3 : email manquant en query → 400 ===
+
+func TestDiscoveryGET_MissingEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	// service ne doit pas etre appele
+
+	rec := invokeDiscovery(t, svc, buildDiscoveryHMACGetRequest(t, "", 0))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "email is required")
+}
+
+// === Test GET 4 : HMAC absent → 401 ===
+
+func TestDiscoveryGET_NoHMAC(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/by-email?email=alice@example.com", nil)
+	rec := invokeDiscovery(t, svc, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// === Test GET 5 : email URL-encode (cas Hub `encodeURIComponent`) ===
+
+func TestDiscoveryGET_URLEncodedEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	email := "alice+test@example.com"
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().LookupByEmail(gomock.Any(), email).Return(&domain.DiscoveryResponse{
+		Found:      false,
+		UserEmail:  email,
+		Workspaces: []domain.DiscoveryWorkspace{},
+	}, nil)
+
+	// `+` doit etre encode en `%2B` pour ne pas etre interprete comme espace
+	rec := invokeDiscovery(t, svc, buildDiscoveryHMACGetRequest(t, "alice%2Btest@example.com", 0))
+	assert.Equal(t, http.StatusOK, rec.Code)
+}

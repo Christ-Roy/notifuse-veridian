@@ -178,3 +178,95 @@ test.describe('@regression discovery-by-email — POST /api/users/by-email', () 
     expect([401, 403]).toContain(r.status);
   });
 });
+
+// === GET variant — bug prod 2026-05-25 ===
+//
+// Le Hub `lib/sync/discovery.ts` appelle en GET avec querystring depuis le
+// cron reconcile. Avant fix, seule la route POST etait declaree → GET tombait
+// dans le catchall root_handler.go (200 body vide) → cron Hub voyait 17 faux
+// positifs `tenant_missing_app`. Ces tests garantissent que la regression ne
+// peut pas revenir silencieusement : un body vide ferait fail `body.found`
+// undefined.
+//
+// Signature HMAC GET : body vide → `HMAC(${ts}.)`. Pixel-parfait avec
+// `signGet()` cote Hub (veridian-hub/lib/sync/discovery.ts:110).
+
+function signHMACGet(tsOverride?: string) {
+  const ts = tsOverride ?? Date.now().toString();
+  return {
+    timestamp: ts,
+    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.`).digest('hex'),
+  };
+}
+
+async function hmacGetByEmail(email: string) {
+  const { timestamp, signature } = signHMACGet();
+  const url = `${NOTIFUSE_URL}/api/users/by-email?email=${encodeURIComponent(email)}`;
+  return fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-Veridian-Hub-Signature': signature,
+      'X-Veridian-Timestamp': timestamp,
+    },
+  });
+}
+
+test.describe('@regression discovery-by-email — GET /api/users/by-email (Hub reconcile client)', () => {
+  test('user existant : 200 body NON vide + found:true + workspaces', async () => {
+    const userEmail = `t-getmulti-${Date.now().toString(36).slice(-6)}@discovery.test`;
+    const tid1 = `tst${Date.now().toString(36).slice(-6)}c`;
+    provisioned.push(tid1);
+
+    await provisionTenant(tid1, userEmail, 'free');
+
+    const r = await hmacGetByEmail(userEmail);
+    const raw = await r.text();
+    expect(r.status, raw).toBe(200);
+    // Guard explicite contre la regression : body vide HTTP 200 etait le bug.
+    expect(raw.length, 'GET response body must not be empty (bug prod 2026-05-25)').toBeGreaterThan(0);
+
+    const body = JSON.parse(raw);
+    expect(body.found).toBe(true);
+    expect(body.user_email).toBe(userEmail);
+    expect(Array.isArray(body.workspaces)).toBe(true);
+    expect(body.workspaces.length).toBeGreaterThanOrEqual(1);
+    const wsIds = body.workspaces.map((w: { workspace_id: string }) => w.workspace_id);
+    expect(wsIds).toContain(tid1);
+  });
+
+  test('user inconnu : 200 body NON vide + found:false', async () => {
+    const ghostEmail = `tstghostget${Date.now().toString(36).slice(-6)}@discovery.test`;
+    const r = await hmacGetByEmail(ghostEmail);
+    const raw = await r.text();
+    expect(r.status, raw).toBe(200);
+    expect(raw.length, 'body must not be empty even when user unknown').toBeGreaterThan(0);
+
+    const body = JSON.parse(raw);
+    expect(body.found).toBe(false);
+    expect(body.user_email).toBe(ghostEmail);
+    expect(Array.isArray(body.workspaces)).toBe(true);
+    expect(body.workspaces).toHaveLength(0);
+  });
+
+  test('HMAC absent : 401', async () => {
+    const r = await fetch(
+      `${NOTIFUSE_URL}/api/users/by-email?email=whatever@discovery.test`,
+      { method: 'GET' },
+    );
+    expect([401, 403]).toContain(r.status);
+  });
+
+  test('email query manquant : 400', async () => {
+    const { timestamp, signature } = signHMACGet();
+    const r = await fetch(`${NOTIFUSE_URL}/api/users/by-email`, {
+      method: 'GET',
+      headers: {
+        'X-Veridian-Hub-Signature': signature,
+        'X-Veridian-Timestamp': timestamp,
+      },
+    });
+    const raw = await r.text();
+    expect(r.status, raw).toBe(400);
+    expect(raw).toMatch(/email/i);
+  });
+});

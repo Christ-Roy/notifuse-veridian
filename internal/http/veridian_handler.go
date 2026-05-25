@@ -191,10 +191,15 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// console UI (widgets quota) et le paywall middleware. Auth HMAC.
 	mux.Handle("GET /api/tenants/{id}/limits", hmac(http.HandlerFunc(h.handleLimits)))
 	// === Veridian patch — Hub discovery cross-app (2026-05-20) ===
-	// POST (pas GET) pour eviter de logger l email en clair dans les access logs URL.
+	// POST + GET supportes :
+	//   - POST {"email":"..."}      : appel UI/SDK Notifuse, evite email en URL
+	//   - GET  ?email=...           : client Hub `lib/sync/discovery.ts` (cron reconcile)
 	// Semantique : toujours 200 — found:false si email inconnu, found:true + workspaces sinon.
-	// Auth : HMAC read-only (pas d idempotency — requete safe et idempotente par nature).
+	// Auth : HMAC read-only (signature sur body, body vide pour GET → `${ts}.`).
+	// Fix 2026-05-25 : GET ajoute apres bug prod silencieux (200 body vide via root_handler catchall)
+	// cf. todo/2026-05-25-discovery-by-email-prod-returns-empty-body.md.
 	mux.Handle("POST /api/users/by-email", hmac(http.HandlerFunc(h.handleDiscovery)))
+	mux.Handle("GET /api/users/by-email", hmac(http.HandlerFunc(h.handleDiscoveryGET)))
 
 	// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8, 2026-05-23) ===
 	// Appele par le Hub apres OAuth Google/Microsoft reussi pour delivrer un
