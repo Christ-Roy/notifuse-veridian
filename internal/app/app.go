@@ -25,6 +25,7 @@ import (
 	"github.com/Notifuse/notifuse/pkg/cache"
 	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
+	"github.com/Notifuse/notifuse/pkg/hub_mail_accounts"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
@@ -1394,6 +1395,26 @@ func (a *App) InitHandlers() error {
 		a.logger,
 	)
 	veridianHubDiscoveryHandler.RegisterRoutes(a.mux)
+
+	// === Veridian patch — Mail accounts proxy (vague 7, 2026-05-25) ===
+	// Endpoints GET /api/veridian/mail-accounts/me et POST .../{accountId}/default :
+	// proxy user-auth -> Hub HMAC vers les endpoints Hub multi-comptes OAuth
+	// (cf. ticket Hub `2026-05-25-mail-provider-status-endpoint.md`). Mode
+	// optimiste : si HUB_API_SECRET vide -> client disabled, repond
+	// hub_available=false. Le proxy resout user JWT -> hub_user_id local
+	// (V46) puis signe HMAC vers Hub.
+	hubMailAccountsClient := hub_mail_accounts.NewClient(hub_mail_accounts.Config{
+		HubURL:     a.config.HubBaseURL,
+		HMACSecret: a.config.HubAPISecret,
+		Logger:     a.logger,
+	})
+	veridianMailAccountsProxyHandler := httpHandler.NewVeridianMailAccountsProxyHandler(
+		hubMailAccountsClient,
+		a.userService,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianMailAccountsProxyHandler.RegisterRoutes(a.mux)
 
 	// === Veridian patch — Hub invitation flow (2026-05-23) ===
 	// Endpoint POST /api/veridian/workspaces.inviteMember : delegue

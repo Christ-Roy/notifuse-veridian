@@ -7,6 +7,12 @@ import { VeridianMailAccountSettings } from './veridian_mail_account_settings'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 
+vi.mock('../../services/api/veridian_mail_accounts', () => ({
+  veridianMailAccountsApi: {
+    list: vi.fn(),
+    setDefault: vi.fn()
+  }
+}))
 vi.mock('../../services/api/veridian_mail_provider', () => ({
   veridianMailProviderApi: {
     getChoice: vi.fn(),
@@ -14,9 +20,10 @@ vi.mock('../../services/api/veridian_mail_provider', () => ({
   }
 }))
 
+import { veridianMailAccountsApi } from '../../services/api/veridian_mail_accounts'
 import { veridianMailProviderApi } from '../../services/api/veridian_mail_provider'
 
-const renderSettings = (workspaceId: string) => {
+const renderSettings = (workspaceId = 'ws-1') => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   })
@@ -29,7 +36,7 @@ const renderSettings = (workspaceId: string) => {
   )
 }
 
-describe('VeridianMailAccountSettings', () => {
+describe('VeridianMailAccountSettings — vague 7 multi-comptes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(veridianMailProviderApi.getChoice).mockResolvedValue({
@@ -37,20 +44,136 @@ describe('VeridianMailAccountSettings', () => {
       choice: 'smtp_generic',
       updated_at: ''
     })
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: false,
+      accounts: []
+    })
   })
 
-  it('renders the Card title and reassurance copy', async () => {
-    renderSettings('ws-1')
+  it('renders Mail account heading and both card sections', async () => {
+    renderSettings()
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /Mail account/i })).toBeInTheDocument()
-      expect(
-        screen.getByText(/Choose how transactional emails/i)
-      ).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Connected accounts/i)).toBeInTheDocument()
+    expect(screen.getByText(/Sender preference/i)).toBeInTheDocument()
+  })
+
+  it('shows empty state when hub_available=false', async () => {
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: false,
+      accounts: []
+    })
+    renderSettings()
+
+    await waitFor(() => {
+      expect(screen.getByText(/No accounts connected yet/i)).toBeInTheDocument()
+    })
+    expect(
+      screen.getByRole('button', { name: /Connect your first Gmail account/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Connect a Microsoft account/i })
+    ).toBeInTheDocument()
+  })
+
+  it('shows empty state when hub_available=true but accounts=[]', async () => {
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: true,
+      accounts: []
+    })
+    renderSettings()
+    await waitFor(() => {
+      expect(screen.getByText(/No accounts connected yet/i)).toBeInTheDocument()
+    })
+  })
+
+  it('renders connected accounts list with Default tag + needs_reauth badge', async () => {
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: true,
+      accounts: [
+        {
+          id: 'acc1',
+          provider: 'google',
+          email: 'robert@gmail.com',
+          name: 'Robert Brunon',
+          is_default: true,
+          needs_reauth: false,
+          connected_at: '2026-05-20T10:00:00Z'
+        },
+        {
+          id: 'acc2',
+          provider: 'microsoft',
+          email: 'robert@entreprise.com',
+          name: 'Robert (work)',
+          is_default: false,
+          needs_reauth: true,
+          connected_at: '2026-05-22T14:00:00Z'
+        }
+      ]
+    })
+    renderSettings()
+
+    await waitFor(() => {
+      expect(screen.getByText('robert@gmail.com')).toBeInTheDocument()
+    })
+    expect(screen.getByText('robert@entreprise.com')).toBeInTheDocument()
+    expect(screen.getByText('Default')).toBeInTheDocument()
+    expect(screen.getByText('Needs reauth')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Reconnect/i })).toBeInTheDocument()
+    // acc2 needs_reauth donc Set-as-default n'apparait PAS (priorite Reconnect)
+    expect(screen.queryByText('Set as default')).not.toBeInTheDocument()
+    // Bouton "Connect another Gmail account" maintenant (vs first)
+    expect(
+      screen.getByRole('button', { name: /Connect another Gmail account/i })
+    ).toBeInTheDocument()
+  })
+
+  it('shows Set as default on a non-default healthy account and dispatches setDefault on click', async () => {
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: true,
+      accounts: [
+        {
+          id: 'acc1',
+          provider: 'google',
+          email: 'a@b.com',
+          name: 'A',
+          is_default: true,
+          needs_reauth: false,
+          connected_at: '2026-05-20T10:00:00Z'
+        },
+        {
+          id: 'acc2',
+          provider: 'google',
+          email: 'c@d.com',
+          name: 'C',
+          is_default: false,
+          needs_reauth: false,
+          connected_at: '2026-05-21T10:00:00Z'
+        }
+      ]
+    })
+    vi.mocked(veridianMailAccountsApi.setDefault).mockResolvedValue({
+      hub_available: true,
+      user_id: 'u-hub',
+      account_id: 'acc2',
+      is_default: true
+    })
+    renderSettings()
+
+    await waitFor(() => {
+      expect(screen.getByText('c@d.com')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Set as default'))
+
+    await waitFor(() => {
+      expect(veridianMailAccountsApi.setDefault).toHaveBeenCalledWith('acc2')
     })
   })
 
   it('defaults to smtp_generic radio when API returns it', async () => {
-    renderSettings('ws-1')
+    renderSettings()
     await waitFor(() => {
       const radio = screen.getByRole('radio', {
         name: /Veridian generic sender/i
@@ -59,49 +182,106 @@ describe('VeridianMailAccountSettings', () => {
     })
   })
 
-  it('renders the Connect my Gmail button with Hub redirect target', async () => {
-    renderSettings('ws-1')
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Connect my Gmail/i })).toBeInTheDocument()
+  it('mentions the default account email in the hub_gmail info alert', async () => {
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: true,
+      accounts: [
+        {
+          id: 'acc1',
+          provider: 'google',
+          email: 'default@example.com',
+          name: 'Default',
+          is_default: true,
+          needs_reauth: false,
+          connected_at: '2026-05-20T10:00:00Z'
+        }
+      ]
     })
-  })
-
-  it('shows the fallback warning only when hub_gmail is selected', async () => {
     vi.mocked(veridianMailProviderApi.getChoice).mockResolvedValue({
       workspace_id: 'ws-1',
       choice: 'hub_gmail',
       updated_at: ''
     })
-    renderSettings('ws-1')
+    renderSettings()
+
     await waitFor(() => {
       expect(
-        screen.getByText(/sends will automatically fall back to the generic sender/i)
+        screen.getByText(/Sends will route through default@example.com/i)
       ).toBeInTheDocument()
     })
   })
 
-  it('does NOT show the fallback warning when smtp_generic is selected', async () => {
-    renderSettings('ws-1')
+  it('warns about fallback when hub_gmail selected but no default account', async () => {
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: true,
+      accounts: []
+    })
+    vi.mocked(veridianMailProviderApi.getChoice).mockResolvedValue({
+      workspace_id: 'ws-1',
+      choice: 'hub_gmail',
+      updated_at: ''
+    })
+    renderSettings()
+
     await waitFor(() => {
       expect(
-        screen.queryByText(/sends will automatically fall back to the generic sender/i)
-      ).not.toBeInTheDocument()
+        screen.getByText(/No default account selected/i)
+      ).toBeInTheDocument()
     })
   })
 
-  it('calls setChoice when user clicks the hub_gmail radio', async () => {
+  it('calls setChoice when user clicks the hub_gmail radio (vague 6 preserve)', async () => {
     vi.mocked(veridianMailProviderApi.setChoice).mockResolvedValue({
       workspace_id: 'ws-1',
       choice: 'hub_gmail',
       updated_at: '2026-05-25T12:00:00Z'
     })
-    renderSettings('ws-1')
+    renderSettings()
 
-    const hubRadio = await screen.findByRole('radio', { name: /My Gmail connected via Hub/i })
+    const hubRadio = await screen.findByRole('radio', { name: /My connected account/i })
     fireEvent.click(hubRadio)
 
     await waitFor(() => {
       expect(veridianMailProviderApi.setChoice).toHaveBeenCalledWith('ws-1', 'hub_gmail')
     })
+  })
+
+  it('mounts without crashing when both endpoints fail (defensive)', async () => {
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: false,
+      accounts: []
+    })
+    vi.mocked(veridianMailProviderApi.getChoice).mockResolvedValue({
+      workspace_id: 'ws-1',
+      choice: 'smtp_generic',
+      updated_at: ''
+    })
+    renderSettings()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Mail account/i })).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/Something went wrong/i)).not.toBeInTheDocument()
+  })
+
+  it('test negatif : un shape avec is_default=false partout ne montre PAS de Default tag', async () => {
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: true,
+      accounts: [
+        {
+          id: 'acc1',
+          provider: 'google',
+          email: 'a@b.com',
+          name: 'A',
+          is_default: false,
+          needs_reauth: false,
+          connected_at: '2026-05-20T10:00:00Z'
+        }
+      ]
+    })
+    renderSettings()
+    await waitFor(() => {
+      expect(screen.getByText('a@b.com')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Default')).not.toBeInTheDocument()
   })
 })
