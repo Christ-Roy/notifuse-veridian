@@ -328,33 +328,34 @@ func NewVeridianPaywallMiddlewareWithCache(cache *PaywallCache, planRepo domain.
 				return
 			}
 
-			// V39 — Évaluer la fraîcheur du lien Hub→Notifuse.
+			// V39 — Fraîcheur du lien Hub→Notifuse : OBSERVABILITÉ SEULEMENT.
+			//
+			// === Fix 2026-05-30 (Robert) : ne JAMAIS bloquer les writes. ===
+			// Le blocage HubSyncDead (writes 503 si last_hub_sync_at > 72h) était
+			// un faux positif structurel + une violation de la règle d'or "chaque
+			// app marche seule sans dépendre du Hub" :
+			//   - last_hub_sync_at n'est rafraîchi QUE par des ops Hub rares
+			//     (attach/sync-member, transfer-owner). Aucun ping périodique.
+			//   - Donc un tenant actif normal (qui ne fait qu'envoyer des mails)
+			//     voit ce timestamp vieillir fatalement jusqu'à "Dead" → se bloque
+			//     tout seul après 72h alors que le Hub répond 200.
+			//   - De plus, pricing = tout illimité + BYO sending : aucun envoi ne
+			//     nécessite d'autorisation Hub. Ce garde-fou "billing" protégeait
+			//     quelque chose qui n'existe pas.
+			// On garde l'évaluation pour le LOG (savoir qu'un lien est vieux), mais
+			// on ne bloque plus aucun write. Notifuse est stand-alone.
 			switch hubStatus := entry.plan.EvaluateHubSyncStatus(time.Now()); hubStatus {
 			case domain.HubSyncFresh:
 				// mode normal, rien à faire
-			case domain.HubSyncStale:
-				// mode grace optimistic : log warn 1×/min par tenant, continue à servir
+			case domain.HubSyncStale, domain.HubSyncDead:
+				// observabilité best-effort : log warn rate-limité, JAMAIS de blocage.
 				if log != nil && shouldLogStale(probe.WorkspaceID) {
 					log.WithFields(map[string]interface{}{
 						"workspace_id":    probe.WorkspaceID,
 						"last_hub_sync":   entry.plan.LastHubSyncAt,
 						"hub_sync_status": string(hubStatus),
-					}).Warn("veridian paywall: hub sync stale > 24h, continuing best-effort")
+					}).Warn("veridian paywall: hub sync ancien, continuing best-effort (no write block)")
 				}
-			case domain.HubSyncDead:
-				// mode dégradé : bloquer les writes, laisser passer les reads
-				if isHubSyncWriteBlock(r) {
-					w.Header().Set("Retry-After", "3600")
-					writeJSONErrorWithCode(w, hubSyncDeadErrCode,
-						"Service degraded — Veridian Hub unreachable since > 72h. Writes paused for safety.",
-						http.StatusServiceUnavailable,
-						map[string]interface{}{
-							"last_hub_sync_at": entry.plan.LastHubSyncAt,
-							"retry_after_s":    3600,
-						})
-					return
-				}
-				// Reads passent en best-effort (pas de return ici)
 			}
 
 			next.ServeHTTP(w, r)

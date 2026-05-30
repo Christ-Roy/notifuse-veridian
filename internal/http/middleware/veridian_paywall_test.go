@@ -771,8 +771,11 @@ func TestVeridianPaywall_HubSyncStale_WritePasses(t *testing.T) {
 	assert.True(t, called.Load())
 }
 
-func TestVeridianPaywall_HubSyncDead_WriteBlocked503(t *testing.T) {
-	// Tenant dead (73h) + write → 503 + Retry-After + hub_sync_dead.
+func TestVeridianPaywall_HubSyncDead_WritePasses(t *testing.T) {
+	// Fix 2026-05-30 : un tenant "dead" (73h sans op Hub) ne bloque PLUS les
+	// writes. Notifuse est stand-alone — aucun write ne dépend du Hub.
+	// (Avant : 503 hub_sync_dead. Le blocage était un faux positif structurel
+	// + une violation de la règle d'or "chaque app marche seule".)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -786,11 +789,10 @@ func TestVeridianPaywall_HubSyncDead_WriteBlocked503(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mw.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, "dead write → 503")
-	assert.False(t, called.Load(), "next handler ne doit PAS être appelé")
-	assert.Equal(t, "3600", rec.Header().Get("Retry-After"), "Retry-After requis")
+	assert.Equal(t, http.StatusOK, rec.Code, "dead write doit PASSER (stand-alone, pas de blocage)")
+	assert.True(t, called.Load(), "next handler DOIT être appelé")
 	body := rec.Body.String()
-	assert.Contains(t, body, "hub_sync_dead", "code machine hub_sync_dead requis")
+	assert.NotContains(t, body, "hub_sync_dead", "plus de blocage hub_sync_dead")
 }
 
 func TestVeridianPaywall_HubSyncDead_ReadPasses(t *testing.T) {
