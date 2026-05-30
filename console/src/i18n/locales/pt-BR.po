@@ -1809,7 +1809,7 @@ msgstr "Escolha um bloco salvo para atualizar"
 msgid "Choose a starting point for your new theme. You can customize everything later."
 msgstr "Escolha um ponto de partida para seu novo tema. Voce pode personalizar tudo depois."
 
-#: src/components/settings/veridian_mail_account_settings.tsx:262
+#: src/components/settings/veridian_mail_account_settings.tsx:280
 msgid "Choose how transactional emails (magic links, MFA, notifications) are sent on behalf of your workspace."
 msgstr ""
 
@@ -2130,7 +2130,7 @@ msgstr "Confirmar"
 msgid "Confirmed"
 msgstr "Confirmado"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:246
+#: src/components/settings/veridian_mail_account_settings.tsx:264
 msgid "Connect a Microsoft account"
 msgstr ""
 
@@ -2138,7 +2138,7 @@ msgstr ""
 msgid "Connect and manage external services"
 msgstr "Conecte e gerencie serviços externos"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:238
+#: src/components/settings/veridian_mail_account_settings.tsx:256
 msgid "Connect another Gmail account"
 msgstr ""
 
@@ -2146,12 +2146,12 @@ msgstr ""
 #~ msgid "Connect my Gmail"
 #~ msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:237
+#: src/components/settings/veridian_mail_account_settings.tsx:255
 msgid "Connect your first Gmail account"
 msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:168
-#: src/components/settings/veridian_mail_account_settings.tsx:177
+#: src/components/settings/veridian_mail_account_settings.tsx:186
+#: src/components/settings/veridian_mail_account_settings.tsx:195
 msgid "Connect your first Gmail or Microsoft account to send emails on behalf of your workspace."
 msgstr ""
 
@@ -2160,11 +2160,11 @@ msgstr ""
 #~ msgstr ""
 
 #. placeholder {0}: formatDate(account.connected_at)
-#: src/components/settings/veridian_mail_account_settings.tsx:218
+#: src/components/settings/veridian_mail_account_settings.tsx:236
 msgid "connected {0}"
 msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:156
+#: src/components/settings/veridian_mail_account_settings.tsx:174
 msgid "Connected accounts"
 msgstr ""
 
@@ -2331,11 +2331,11 @@ msgstr "Campos Principais"
 msgid "Cost"
 msgstr "Custo"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:130
+#: src/components/settings/veridian_mail_account_settings.tsx:148
 msgid "Could not set default account."
 msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:134
+#: src/components/settings/veridian_mail_account_settings.tsx:152
 msgid "Could not set default account. Please retry."
 msgstr ""
 
@@ -2809,7 +2809,7 @@ msgstr "padrão"
 
 #: src/components/email_builder/ui/FontStyleInput.tsx:232
 #: src/components/settings/Integrations.tsx:342
-#: src/components/settings/veridian_mail_account_settings.tsx:203
+#: src/components/settings/veridian_mail_account_settings.tsx:221
 msgid "Default"
 msgstr "Padrão"
 
@@ -2817,7 +2817,7 @@ msgstr "Padrão"
 msgid "Default (API endpoint)"
 msgstr "Padrão (endpoint da API)"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:126
+#: src/components/settings/veridian_mail_account_settings.tsx:144
 msgid "Default account updated."
 msgstr ""
 
@@ -3106,7 +3106,7 @@ msgstr "Desativar o blog removerá todas as configurações de SEO e tornará se
 msgid "Discard Draft"
 msgstr "Descartar Rascunho"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:144
+#: src/components/settings/veridian_mail_account_settings.tsx:162
 msgid "Disconnect is not available yet. Please remove the account from the Veridian Hub."
 msgstr ""
 
@@ -4390,7 +4390,7 @@ msgstr "Falha ao salvar integração"
 msgid "Failed to save LLM integration"
 msgstr "Falha ao salvar integração LLM"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:117
+#: src/components/settings/veridian_mail_account_settings.tsx:135
 msgid "Failed to save mail provider preference. Please retry."
 msgstr ""
 
@@ -5068,7 +5068,7 @@ msgstr "https://example.com ou {{ url }}"
 msgid "https://fonts.googleapis.com/css?family=... or {{ font_url }}"
 msgstr "https://fonts.googleapis.com/css?family=... ou {{ font_url }}"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:128
+#: src/components/settings/veridian_mail_account_settings.tsx:146
 msgid "Hub unavailable. Please retry in a moment."
 msgstr ""
 
@@ -5986,11 +5986,11 @@ msgid "Magic code sent to your email"
 msgstr "Código mágico enviado para seu email"
 
 #: src/components/settings/SettingsSidebar.tsx:131
-#: src/components/settings/veridian_mail_account_settings.tsx:153
+#: src/components/settings/veridian_mail_account_settings.tsx:171
 msgid "Mail account"
 msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:114
+#: src/components/settings/veridian_mail_account_settings.tsx:132
 msgid "Mail provider preference saved."
 msgstr ""
 
@@ -6264,7 +6264,7 @@ msgstr "Mais opções"
 msgid "My Amazing Blog"
 msgstr "Meu Blog Incrível"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:284
+#: src/components/settings/veridian_mail_account_settings.tsx:302
 msgid "My connected account (default)"
 msgstr ""
 
@@ -6319,7 +6319,7 @@ msgstr "Nome:"
 msgid "Navigation menu"
 msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:207
+#: src/components/settings/veridian_mail_account_settings.tsx:225
 msgid "Needs reauth"
 msgstr ""
 
@@ -6429,8 +6429,8 @@ msgstr "Nenhum conteúdo {0} para pré-visualizar"
 msgid "No Access"
 msgstr "Sem Acesso"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:167
-#: src/components/settings/veridian_mail_account_settings.tsx:176
+#: src/components/settings/veridian_mail_account_settings.tsx:185
+#: src/components/settings/veridian_mail_account_settings.tsx:194
 msgid "No accounts connected yet"
 msgstr ""
 
@@ -6474,7 +6474,7 @@ msgstr "Nenhum dado disponível"
 msgid "No data returned"
 msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:298
+#: src/components/settings/veridian_mail_account_settings.tsx:316
 msgid "No default account selected. Sends will fall back to the Veridian generic sender until you connect and pick a default account above."
 msgstr ""
 
@@ -8723,7 +8723,7 @@ msgstr "Enviar Email de Teste"
 msgid "Send transactional notifications using SMTP bridge. Perfect for integrating with existing email systems or applications that support SMTP."
 msgstr "Envie notificações transacionais usando SMTP bridge. Perfeito para integração com sistemas de email existentes ou aplicações que suportam SMTP."
 
-#: src/components/settings/veridian_mail_account_settings.tsx:267
+#: src/components/settings/veridian_mail_account_settings.tsx:285
 #: src/components/templates/CreateTemplateDrawer.tsx:772
 #: src/components/templates/SendTemplateModal.tsx:303
 #: src/pages/TemplatesPage.tsx:181
@@ -8735,7 +8735,7 @@ msgstr "Remetente"
 msgid "Sender Name"
 msgstr "Nome do Remetente"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:254
+#: src/components/settings/veridian_mail_account_settings.tsx:272
 msgid "Sender preference"
 msgstr ""
 
@@ -8753,7 +8753,7 @@ msgid "Sending test webhook..."
 msgstr "Enviando webhook de teste..."
 
 #. placeholder {0}: defaultAccount.email
-#: src/components/settings/veridian_mail_account_settings.tsx:297
+#: src/components/settings/veridian_mail_account_settings.tsx:315
 msgid "Sends will route through {0}."
 msgstr ""
 
@@ -10687,7 +10687,7 @@ msgstr "Variações"
 msgid "Veridian dashboard"
 msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:278
+#: src/components/settings/veridian_mail_account_settings.tsx:296
 msgid "Veridian generic sender (default)"
 msgstr ""
 
