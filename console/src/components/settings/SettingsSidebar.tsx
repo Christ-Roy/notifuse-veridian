@@ -18,7 +18,6 @@ export type SettingsSection =
   | 'general'
   | 'blog'
   | 'plan'
-  | 'mail-account'
   | 'danger-zone'
 
 interface SettingsSidebarProps {
@@ -121,14 +120,6 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
       key: 'plan',
       icon: <CreditCardOutlined />,
       label: t`Plan`
-    },
-    {
-      // === Veridian patch (vague 6 ticket mail-send-as-user-via-hub-gateway) ===
-      // Section "Mail account" : choix sender (Veridian générique vs Gmail via Hub)
-      // + bouton "Connect my Gmail" redirect Hub OAuth.
-      key: 'mail-account',
-      icon: <MailOutlined />,
-      label: t`Mail account`
     }
   ]
 

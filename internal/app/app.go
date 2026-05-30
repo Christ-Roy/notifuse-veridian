@@ -25,7 +25,6 @@ import (
 	"github.com/Notifuse/notifuse/pkg/cache"
 	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
-	"github.com/Notifuse/notifuse/pkg/hub_mail_accounts"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
@@ -1342,23 +1341,14 @@ func (a *App) InitHandlers() error {
 	)
 	veridianHandler.SetTestTenantsCleanup(a.veridianTestTenantsCleanup)
 
-	// === Veridian patch — 2026-05-25 — Mail provider choice (V48) ===
-	// Service standalone (pas dans le grand veridianService) qui gere la
-	// preference mail-provider par workspace : smtp_generic (defaut) vs
-	// hub_gmail (via Hub Mail Gateway). Endpoints GET/POST exposes par
-	// veridianHandler quand le service est injecte. Cf. todo/done/
-	// 2026-05-25-mail-send-as-user-via-hub-gateway.md §3.4.
-	veridianMailProviderRepo := repository.NewVeridianMailProviderRepository(a.db)
-	veridianMailProviderSvc := service.NewVeridianMailProviderService(
-		veridianMailProviderRepo,
-		a.veridianWebhookEmitter,
-		a.logger,
-	)
-	veridianHandler.SetMailProviderService(veridianMailProviderSvc)
-	// Auth USER (JWT) pour les endpoints mail-provider-choice consommes par la
-	// console (pas le Hub). Fix 2026-05-30 : sans ça ils retombent sur HMAC et
-	// la console se prend un 401 -> logout au clic "Mail account".
-	veridianHandler.SetUserAuth(getJWTSecret)
+	// === Veridian patch — Mail provider choice (V48) SUPPRIMÉ 2026-05-31 ===
+	// Le pipeline "envoi via Hub Mail Gateway" (mail-provider-choice + proxy
+	// mail-accounts) a été retiré : il créait une dépendance Hub sur l'envoi
+	// (aberration vs règle d'or stand-alone) et n'était jamais câblé à l'envoi
+	// réel (email_service.go ignore MailProviderChoice). L'envoi passe
+	// uniquement par le provider configuré par workspace (Settings >
+	// Integrations, natif upstream : SMTP/SES/...). Cf. memory
+	// project_mail_sending_standalone_decision.
 
 	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
 
@@ -1400,25 +1390,10 @@ func (a *App) InitHandlers() error {
 	)
 	veridianHubDiscoveryHandler.RegisterRoutes(a.mux)
 
-	// === Veridian patch — Mail accounts proxy (vague 7, 2026-05-25) ===
-	// Endpoints GET /api/veridian/mail-accounts/me et POST .../{accountId}/default :
-	// proxy user-auth -> Hub HMAC vers les endpoints Hub multi-comptes OAuth
-	// (cf. ticket Hub `2026-05-25-mail-provider-status-endpoint.md`). Mode
-	// optimiste : si HUB_API_SECRET vide -> client disabled, repond
-	// hub_available=false. Le proxy resout user JWT -> hub_user_id local
-	// (V46) puis signe HMAC vers Hub.
-	hubMailAccountsClient := hub_mail_accounts.NewClient(hub_mail_accounts.Config{
-		HubURL:     a.config.HubBaseURL,
-		HMACSecret: a.config.HubAPISecret,
-		Logger:     a.logger,
-	})
-	veridianMailAccountsProxyHandler := httpHandler.NewVeridianMailAccountsProxyHandler(
-		hubMailAccountsClient,
-		a.userService,
-		getJWTSecret,
-		a.logger,
-	)
-	veridianMailAccountsProxyHandler.RegisterRoutes(a.mux)
+	// === Veridian patch — Mail accounts proxy SUPPRIMÉ 2026-05-31 ===
+	// Retiré avec le pipeline mail-provider (cf. ci-dessus). La gestion des
+	// comptes d'envoi se fait via Settings > Integrations (provider local par
+	// workspace), pas via un proxy vers le Hub.
 
 	// === Veridian patch — Hub invitation flow (2026-05-23) ===
 	// Endpoint POST /api/veridian/workspaces.inviteMember : delegue

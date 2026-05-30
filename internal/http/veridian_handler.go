@@ -44,19 +44,6 @@ type VeridianHandler struct {
 	// Peut etre nil (mode prod / boot partiel) : handleTestTenantsStats retourne
 	// alors 503. Cf. veridian_test_tenants_stats_handler.go.
 	testTenantsCleanup TestTenantsCleanupStatsProvider
-	// mailProviderService gere la preference mail-provider par workspace
-	// (V48, ticket todo/2026-05-25-mail-send-as-user-via-hub-gateway.md §3.4).
-	// Peut etre nil (mode self-hosted ou pre-injection) : les handlers
-	// GET/POST /api/workspaces/{id}/mail-provider-choice retournent alors 503.
-	// Injecte via SetMailProviderService.
-	mailProviderService service.VeridianMailProviderService
-	// getJWTSecret fournit le secret JWT pour authentifier les endpoints
-	// USER-auth (pas HMAC server-to-server) exposes par ce handler. Aujourd'hui
-	// seul mail-provider-choice est dans ce cas : il est appele par la console
-	// Notifuse (Bearer JWT user), PAS par le Hub. Injecte via SetUserAuth.
-	// Peut etre nil (mode self-hosted) : on retombe alors sur HMAC pour ces
-	// routes afin de ne pas casser le boot.
-	getJWTSecret func() ([]byte, error)
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -88,22 +75,6 @@ func (h *VeridianHandler) SetIdempotencyRepo(repo domain.VeridianIdempotencyRepo
 // si nil, l'invalidation post-mutation est skip et le cache attend l'expiration.
 func (h *VeridianHandler) SetFrozenCache(cache *middleware.FrozenMemberCache) {
 	h.frozenCache = cache
-}
-
-// SetMailProviderService injecte le service mail-provider-choice (V48).
-// Optionnel : si nil, les handlers GET/POST mail-provider-choice retournent 503.
-func (h *VeridianHandler) SetMailProviderService(svc service.VeridianMailProviderService) {
-	h.mailProviderService = svc
-}
-
-// SetUserAuth injecte le getter de secret JWT pour les endpoints USER-auth
-// de ce handler (mail-provider-choice). Sans ça, ces routes retombent sur
-// HMAC server-to-server — ce qui est FAUX pour mail-provider-choice qui est
-// appele par la console (Bearer JWT user), provoquant un 401 -> logout.
-// Cf. fix 2026-05-30 : GET/POST mail-provider-choice etaient cables en HMAC
-// alors que seul le front user les consomme (aucun appel Hub).
-func (h *VeridianHandler) SetUserAuth(getJWTSecret func() ([]byte, error)) {
-	h.getJWTSecret = getJWTSecret
 }
 
 // RegisterRoutes enregistre les 6 endpoints /api/tenants/* WRAPPES dans
@@ -230,46 +201,11 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	mux.Handle("POST /api/users/by-email", hmac(http.HandlerFunc(h.handleDiscovery)))
 	mux.Handle("GET /api/users/by-email", hmac(http.HandlerFunc(h.handleDiscoveryGET)))
 
-	// === Veridian patch — Mail provider choice per workspace (V48, 2026-05-25) ===
-	// Ticket todo/2026-05-25-mail-send-as-user-via-hub-gateway.md §3.4.
-	// Preference par workspace : 'smtp_generic' (defaut, sender Veridian) ou
-	// 'hub_gmail' (via Hub Mail Gateway, Gmail user owner).
-	//
-	// AUTH DUALE (JWT user OU HMAC Hub) — fix 2026-05-30 :
-	//   - La console Notifuse appelle avec un Bearer JWT user
-	//     (console/src/services/api/veridian_mail_provider.ts).
-	//   - Le Hub (et les tests E2E) peuvent appeler en HMAC server-to-server.
-	//
-	// Bug d'origine (logout au clic "Mail account") : l'endpoint etait cable en
-	// HMAC SEUL (GET sous `hmac`, POST sous `writeRoute`=hmac+idem). La console
-	// n'envoie pas de signature HMAC -> 401 -> client.ts efface le token et
-	// redirige /console/signin. Le user etait deconnecte des l'ouverture.
-	// La vraie correction n'est pas "JWT au lieu de HMAC" mais "JWT EN PLUS de
-	// HMAC" : dualAuth route selon les headers presents.
-	//
-	// dualAuth : si `Authorization: Bearer` present -> RequireAuth (JWT user) ;
-	// sinon -> HMAC (signature Hub). Fallback HMAC seul si getJWTSecret nil
-	// (self-hosted sans auth user cablee). POST + GET routes explicitement
-	// (memory feedback_marathon_vagues_1_5_patterns "catchall root_handler trap").
-	if h.getJWTSecret != nil {
-		requireAuth := middleware.NewAuthMiddleware(h.getJWTSecret).RequireAuth()
-		dualAuth := func(handler http.HandlerFunc) http.Handler {
-			jwtChain := requireAuth(http.HandlerFunc(handler))
-			hmacChain := hmac(http.HandlerFunc(handler))
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("Authorization") != "" {
-					jwtChain.ServeHTTP(w, r)
-					return
-				}
-				hmacChain.ServeHTTP(w, r)
-			})
-		}
-		mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", dualAuth(h.handleSetMailProviderChoice))
-		mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", dualAuth(h.handleGetMailProviderChoice))
-	} else {
-		mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", writeRoute(h.handleSetMailProviderChoice))
-		mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", hmac(http.HandlerFunc(h.handleGetMailProviderChoice)))
-	}
+	// === Mail provider choice (V48) — routes SUPPRIMÉES 2026-05-31 ===
+	// Le pipeline "envoi via Hub" a été retiré (dépendance Hub = aberration,
+	// jamais câblé à l'envoi réel). L'envoi se configure via Settings >
+	// Integrations (provider local par workspace). Cf. memory
+	// project_mail_sending_standalone_decision.
 
 	// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8, 2026-05-23) ===
 	// Appele par le Hub apres OAuth Google/Microsoft reussi pour delivrer un
