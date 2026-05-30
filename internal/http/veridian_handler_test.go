@@ -11,12 +11,16 @@ package http
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -2313,7 +2317,9 @@ func TestVeridianHandler_SetUserAuth_Injects(t *testing.T) {
 	assert.Equal(t, secret, got)
 }
 
-func TestVeridianHandler_MailProviderChoice_UserAuth_RejectsWithoutBearer(t *testing.T) {
+// dualAuth : Bearer présent mais INVALIDE → route vers la chaîne JWT
+// → reject "Invalid token" (PAS "Missing X-Veridian-Hub-Signature").
+func TestVeridianHandler_MailProviderChoice_DualAuth_BearerRoutesToJWT(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -2331,16 +2337,17 @@ func TestVeridianHandler_MailProviderChoice_UserAuth_RejectsWithoutBearer(t *tes
 		{http.MethodPost, "/api/workspaces/ws-1/mail-provider-choice"},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(`{"choice":"smtp_generic"}`)))
+		req.Header.Set("Authorization", "Bearer not-a-real-jwt")
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
-		// Auth USER : sans Bearer -> 401 "Authorization header is required"
-		// (PAS le 401 HMAC "Missing X-Veridian-Hub-Signature").
-		assert.Equal(t, http.StatusUnauthorized, rec.Code, "%s sans Bearer doit 401", tc.method)
-		assert.Contains(t, rec.Body.String(), "Authorization header", "doit etre un reject AUTH USER, pas HMAC (%s)", tc.method)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, "%s Bearer invalide doit 401", tc.method)
+		assert.Contains(t, rec.Body.String(), "Invalid token", "doit etre un reject JWT, pas HMAC (%s)", tc.method)
 	}
 }
 
-func TestVeridianHandler_MailProviderChoice_UserAuth_PassesWithValidBearer(t *testing.T) {
+// dualAuth : JWT user VALIDE passe l'auth et atteint le handler. C'est le fix
+// du bug logout (la console envoie ce Bearer).
+func TestVeridianHandler_MailProviderChoice_DualAuth_PassesWithValidBearer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -2359,8 +2366,38 @@ func TestVeridianHandler_MailProviderChoice_UserAuth_PassesWithValidBearer(t *te
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	// JWT valide -> on passe l'auth et on atteint le handler (200 via le fake).
-	// Surtout PAS 401 : ce serait la regression du bug.
 	assert.NotEqual(t, http.StatusUnauthorized, rec.Code, "JWT valide ne doit jamais 401")
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// dualAuth : SANS Bearer, route vers HMAC. HMAC valide passe → le contrat
+// Hub/E2E reste intact (la spec E2E MEGA-06 appelle en HMAC sur `${ts}.`).
+func TestVeridianHandler_MailProviderChoice_DualAuth_PassesWithValidHMAC(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	h.SetMailProviderService(&fakeMailProviderService{})
+	jwtSecret := []byte("test-jwt-secret-padding-okokokokok")
+	h.SetUserAuth(func() ([]byte, error) { return jwtSecret, nil })
+
+	secret := "test-secret-for-route-check-padding-ok"
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, secret)
+
+	// Signature HMAC valide sur `${ts}.` (GET, body vide) — cf. matrice HMAC.
+	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(ts + "."))
+	sig := hex.EncodeToString(mac.Sum(nil))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/ws-1/mail-provider-choice", nil)
+	req.Header.Set("X-Veridian-Hub-Signature", sig)
+	req.Header.Set("X-Veridian-Timestamp", ts)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.NotEqual(t, http.StatusUnauthorized, rec.Code, "HMAC valide ne doit pas 401")
 	assert.Equal(t, http.StatusOK, rec.Code)
 }

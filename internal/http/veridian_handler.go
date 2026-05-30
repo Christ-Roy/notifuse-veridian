@@ -235,24 +235,37 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Preference par workspace : 'smtp_generic' (defaut, sender Veridian) ou
 	// 'hub_gmail' (via Hub Mail Gateway, Gmail user owner).
 	//
-	// AUTH USER (JWT Bearer), PAS HMAC : ces endpoints sont consommes UNIQUEMENT
-	// par la console Notifuse (cf. console/src/services/api/veridian_mail_provider.ts).
-	// Aucun appel Hub server-to-server (grep veridian-hub : zero occurrence).
+	// AUTH DUALE (JWT user OU HMAC Hub) — fix 2026-05-30 :
+	//   - La console Notifuse appelle avec un Bearer JWT user
+	//     (console/src/services/api/veridian_mail_provider.ts).
+	//   - Le Hub (et les tests E2E) peuvent appeler en HMAC server-to-server.
 	//
-	// Fix 2026-05-30 (bug prod : logout au clic "Mail account") : avant, GET etait
-	// cable sous `hmac` et POST sous `writeRoute` (= hmac+idem). La console envoie
-	// un Bearer JWT, pas de signature HMAC -> 401 -> client.ts efface le token et
-	// redirige /console/signin. Le user etait deconnecte des qu'il ouvrait la page.
+	// Bug d'origine (logout au clic "Mail account") : l'endpoint etait cable en
+	// HMAC SEUL (GET sous `hmac`, POST sous `writeRoute`=hmac+idem). La console
+	// n'envoie pas de signature HMAC -> 401 -> client.ts efface le token et
+	// redirige /console/signin. Le user etait deconnecte des l'ouverture.
+	// La vraie correction n'est pas "JWT au lieu de HMAC" mais "JWT EN PLUS de
+	// HMAC" : dualAuth route selon les headers presents.
 	//
-	// POST + GET routes explicitement (cf. memory feedback_marathon_vagues_1_5_patterns
-	// "catchall root_handler trap" : un GET non route tombe sur la SPA console).
-	//
-	// Fallback HMAC si getJWTSecret non injecte (mode self-hosted sans auth user
-	// cablee) : on ne casse pas le boot, l'endpoint reste joignable server-to-server.
+	// dualAuth : si `Authorization: Bearer` present -> RequireAuth (JWT user) ;
+	// sinon -> HMAC (signature Hub). Fallback HMAC seul si getJWTSecret nil
+	// (self-hosted sans auth user cablee). POST + GET routes explicitement
+	// (memory feedback_marathon_vagues_1_5_patterns "catchall root_handler trap").
 	if h.getJWTSecret != nil {
 		requireAuth := middleware.NewAuthMiddleware(h.getJWTSecret).RequireAuth()
-		mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", requireAuth(http.HandlerFunc(h.handleSetMailProviderChoice)))
-		mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", requireAuth(http.HandlerFunc(h.handleGetMailProviderChoice)))
+		dualAuth := func(handler http.HandlerFunc) http.Handler {
+			jwtChain := requireAuth(http.HandlerFunc(handler))
+			hmacChain := hmac(http.HandlerFunc(handler))
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") != "" {
+					jwtChain.ServeHTTP(w, r)
+					return
+				}
+				hmacChain.ServeHTTP(w, r)
+			})
+		}
+		mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", dualAuth(h.handleSetMailProviderChoice))
+		mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", dualAuth(h.handleGetMailProviderChoice))
 	} else {
 		mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", writeRoute(h.handleSetMailProviderChoice))
 		mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", hmac(http.HandlerFunc(h.handleGetMailProviderChoice)))
