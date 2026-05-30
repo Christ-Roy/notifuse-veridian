@@ -50,6 +50,13 @@ type VeridianHandler struct {
 	// GET/POST /api/workspaces/{id}/mail-provider-choice retournent alors 503.
 	// Injecte via SetMailProviderService.
 	mailProviderService service.VeridianMailProviderService
+	// getJWTSecret fournit le secret JWT pour authentifier les endpoints
+	// USER-auth (pas HMAC server-to-server) exposes par ce handler. Aujourd'hui
+	// seul mail-provider-choice est dans ce cas : il est appele par la console
+	// Notifuse (Bearer JWT user), PAS par le Hub. Injecte via SetUserAuth.
+	// Peut etre nil (mode self-hosted) : on retombe alors sur HMAC pour ces
+	// routes afin de ne pas casser le boot.
+	getJWTSecret func() ([]byte, error)
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -87,6 +94,16 @@ func (h *VeridianHandler) SetFrozenCache(cache *middleware.FrozenMemberCache) {
 // Optionnel : si nil, les handlers GET/POST mail-provider-choice retournent 503.
 func (h *VeridianHandler) SetMailProviderService(svc service.VeridianMailProviderService) {
 	h.mailProviderService = svc
+}
+
+// SetUserAuth injecte le getter de secret JWT pour les endpoints USER-auth
+// de ce handler (mail-provider-choice). Sans ça, ces routes retombent sur
+// HMAC server-to-server — ce qui est FAUX pour mail-provider-choice qui est
+// appele par la console (Bearer JWT user), provoquant un 401 -> logout.
+// Cf. fix 2026-05-30 : GET/POST mail-provider-choice etaient cables en HMAC
+// alors que seul le front user les consomme (aucun appel Hub).
+func (h *VeridianHandler) SetUserAuth(getJWTSecret func() ([]byte, error)) {
+	h.getJWTSecret = getJWTSecret
 }
 
 // RegisterRoutes enregistre les 6 endpoints /api/tenants/* WRAPPES dans
@@ -218,12 +235,28 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// Preference par workspace : 'smtp_generic' (defaut, sender Veridian) ou
 	// 'hub_gmail' (via Hub Mail Gateway, Gmail user owner).
 	//
+	// AUTH USER (JWT Bearer), PAS HMAC : ces endpoints sont consommes UNIQUEMENT
+	// par la console Notifuse (cf. console/src/services/api/veridian_mail_provider.ts).
+	// Aucun appel Hub server-to-server (grep veridian-hub : zero occurrence).
+	//
+	// Fix 2026-05-30 (bug prod : logout au clic "Mail account") : avant, GET etait
+	// cable sous `hmac` et POST sous `writeRoute` (= hmac+idem). La console envoie
+	// un Bearer JWT, pas de signature HMAC -> 401 -> client.ts efface le token et
+	// redirige /console/signin. Le user etait deconnecte des qu'il ouvrait la page.
+	//
 	// POST + GET routes explicitement (cf. memory feedback_marathon_vagues_1_5_patterns
-	// "catchall root_handler trap" : un GET non route tombe sur la SPA console
-	// = 200 body vide silencieux. Defense en profondeur, meme si seul POST est
-	// consomme aujourd'hui par l'UI Notifuse).
-	mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", writeRoute(h.handleSetMailProviderChoice))
-	mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", hmac(http.HandlerFunc(h.handleGetMailProviderChoice)))
+	// "catchall root_handler trap" : un GET non route tombe sur la SPA console).
+	//
+	// Fallback HMAC si getJWTSecret non injecte (mode self-hosted sans auth user
+	// cablee) : on ne casse pas le boot, l'endpoint reste joignable server-to-server.
+	if h.getJWTSecret != nil {
+		requireAuth := middleware.NewAuthMiddleware(h.getJWTSecret).RequireAuth()
+		mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", requireAuth(http.HandlerFunc(h.handleSetMailProviderChoice)))
+		mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", requireAuth(http.HandlerFunc(h.handleGetMailProviderChoice)))
+	} else {
+		mux.Handle("POST /api/workspaces/{id}/mail-provider-choice", writeRoute(h.handleSetMailProviderChoice))
+		mux.Handle("GET /api/workspaces/{id}/mail-provider-choice", hmac(http.HandlerFunc(h.handleGetMailProviderChoice)))
+	}
 
 	// === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8, 2026-05-23) ===
 	// Appele par le Hub apres OAuth Google/Microsoft reussi pour delivrer un

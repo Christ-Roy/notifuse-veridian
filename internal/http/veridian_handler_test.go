@@ -2295,3 +2295,72 @@ func TestVeridianHandler_RegisterRoutes_MailProviderChoice_RouteRegistered(t *te
 		assert.NotEqual(t, http.StatusMethodNotAllowed, rec.Code, "route %s %s must accept method", tc.method, tc.path)
 	}
 }
+
+// === Veridian patch — Fix 2026-05-30 : mail-provider-choice en USER-auth ===
+// Regression test du bug prod "logout au clic Mail account" : ces endpoints
+// sont consommes par la console (Bearer JWT), pas par le Hub. Avec SetUserAuth
+// injecte, RegisterRoutes doit les router sous RequireAuth (JWT), pas HMAC.
+
+func TestVeridianHandler_SetUserAuth_Injects(t *testing.T) {
+	h := &VeridianHandler{logger: logger.NewLogger()}
+	assert.Nil(t, h.getJWTSecret, "doit etre nil par defaut")
+
+	secret := []byte("test-jwt-secret-padding-okokokokok")
+	h.SetUserAuth(func() ([]byte, error) { return secret, nil })
+	require.NotNil(t, h.getJWTSecret, "SetUserAuth doit injecter le getter")
+	got, err := h.getJWTSecret()
+	require.NoError(t, err)
+	assert.Equal(t, secret, got)
+}
+
+func TestVeridianHandler_MailProviderChoice_UserAuth_RejectsWithoutBearer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	h.SetMailProviderService(&fakeMailProviderService{})
+	jwtSecret := []byte("test-jwt-secret-padding-okokokokok")
+	h.SetUserAuth(func() ([]byte, error) { return jwtSecret, nil })
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-for-route-check-padding-ok")
+
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/workspaces/ws-1/mail-provider-choice"},
+		{http.MethodPost, "/api/workspaces/ws-1/mail-provider-choice"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(`{"choice":"smtp_generic"}`)))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		// Auth USER : sans Bearer -> 401 "Authorization header is required"
+		// (PAS le 401 HMAC "Missing X-Veridian-Hub-Signature").
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, "%s sans Bearer doit 401", tc.method)
+		assert.Contains(t, rec.Body.String(), "Authorization header", "doit etre un reject AUTH USER, pas HMAC (%s)", tc.method)
+	}
+}
+
+func TestVeridianHandler_MailProviderChoice_UserAuth_PassesWithValidBearer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	h.SetMailProviderService(&fakeMailProviderService{})
+	jwtSecret := []byte("test-jwt-secret-padding-okokokokok")
+	h.SetUserAuth(func() ([]byte, error) { return jwtSecret, nil })
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-for-route-check-padding-ok")
+
+	token := createTestToken(t, jwtSecret, "test-user")
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/ws-1/mail-provider-choice", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	// JWT valide -> on passe l'auth et on atteint le handler (200 via le fake).
+	// Surtout PAS 401 : ce serait la regression du bug.
+	assert.NotEqual(t, http.StatusUnauthorized, rec.Code, "JWT valide ne doit jamais 401")
+	assert.Equal(t, http.StatusOK, rec.Code)
+}

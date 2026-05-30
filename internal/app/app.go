@@ -1355,6 +1355,10 @@ func (a *App) InitHandlers() error {
 		a.logger,
 	)
 	veridianHandler.SetMailProviderService(veridianMailProviderSvc)
+	// Auth USER (JWT) pour les endpoints mail-provider-choice consommes par la
+	// console (pas le Hub). Fix 2026-05-30 : sans ça ils retombent sur HMAC et
+	// la console se prend un 401 -> logout au clic "Mail account".
+	veridianHandler.SetUserAuth(getJWTSecret)
 
 	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
 
