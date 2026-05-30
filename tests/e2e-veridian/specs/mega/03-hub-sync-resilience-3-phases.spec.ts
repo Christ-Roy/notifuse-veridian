@@ -197,7 +197,9 @@ test.describe('@mega @regression MEGA-03 — hub sync resilience 3 phases', () =
     expect(r.status, 'admin invalidate cache toujours autorisee').toBe(200);
   });
 
-  test('phase DEAD : writes → 503 hub_sync_dead + Retry-After, reads passent', async () => {
+  // === Fix 2026-05-30 : phase DEAD ne bloque PLUS les writes ===
+  // Notifuse stand-alone — un last_hub_sync_at vieux n'a aucun effet bloquant.
+  test('phase "ancienne" (>72h) : writes PASSENT (plus de blocage hub_sync_dead)', async () => {
     test.skip(!DB_MANIP_AVAILABLE, DB_MANIP_SKIP_REASON);
 
     const tid = `m03${RUN_STAMP}d`;
@@ -205,65 +207,25 @@ test.describe('@mega @regression MEGA-03 — hub sync resilience 3 phases', () =
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, ownerEmail, 'pro');
 
-    // Simuler dead : last_hub_sync_at = NOW - 73h
     await execStagingSQL(
       `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`,
     );
     await invalidatePaywallCache(tid);
 
-    // Write → 503 + Retry-After + error_code=hub_sync_dead
+    // Write → JAMAIS 503 hub_sync_dead. L'envoi est indépendant du Hub.
     const send = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
       body: JSON.stringify({ workspace_id: tid, to: 'sink-dead@e2e.veridian.site' }),
     });
-    expect(send.status, 'dead phase write doit etre 503').toBe(503);
-    expect(send.headers.get('retry-after'), 'Retry-After header obligatoire').toBe('3600');
+    expect(send.status, 'write ne doit jamais etre 503 hub_sync_dead').not.toBe(503);
     const sendBody = await readBody(send);
-    const data = sendBody.json();
-    expect(data.code ?? data.error_code, `code expected hub_sync_dead, body: ${sendBody.raw}`).toBe('hub_sync_dead');
+    const data = sendBody.json() ?? {};
+    expect(data.code ?? data.error_code, `pas de hub_sync_dead, body: ${sendBody.raw}`).not.toBe('hub_sync_dead');
 
-    // Reads en mode dead : best-effort, doivent passer (pas 503)
     const read = await bearerFetch(`/api/contacts.list?workspace_id=${tid}&limit=1`, 'GET', api_key);
-    expect(read.status, 'reads en dead phase passent best-effort').not.toBe(503);
+    expect(read.status, 'reads passent').not.toBe(503);
   });
 
-  test('RECOVERY : dead → touch refresh last_hub_sync_at → writes repassent (journey complet)', async () => {
-    test.skip(!DB_MANIP_AVAILABLE, DB_MANIP_SKIP_REASON);
-
-    const tid = `m03${RUN_STAMP}r`;
-    const ownerEmail = `e2e-mega-03-recov-${RUN_STAMP}@e2e.veridian.site`;
-    provisioned.push(tid);
-    const { api_key } = await provisionTenant(tid, ownerEmail, 'pro');
-
-    // (1) Force dead
-    await execStagingSQL(
-      `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`,
-    );
-    await invalidatePaywallCache(tid);
-
-    // (2) Verifier dead phase observee
-    let send = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
-      body: JSON.stringify({ workspace_id: tid, to: 'pre-recovery@e2e.veridian.site' }),
-    });
-    expect(send.status, 'pre-recovery doit etre dead 503').toBe(503);
-
-    // (3) Touch via Hub (mutation refresh last_hub_sync_at)
-    const touch = await hmacFetch(`/api/tenants/${tid}/touch`, 'POST', {});
-    expect([200, 204], `touch responded ${touch.status}`).toContain(touch.status);
-
-    // (4) Invalider cache pour relire le plan rafraichi
-    await invalidatePaywallCache(tid);
-
-    // (5) Write doit repasser nominal (fresh)
-    send = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
-      body: JSON.stringify({ workspace_id: tid, to: 'post-recovery@e2e.veridian.site' }),
-    });
-    expect(send.status, 'recovery write doit pas etre 503').not.toBe(503);
-    expect(send.status, 'recovery write doit pas etre 402').not.toBe(402);
-  });
+  // Test RECOVERY supprimé 2026-05-30 : plus de blocage DEAD à récupérer.
 });

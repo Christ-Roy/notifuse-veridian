@@ -207,42 +207,41 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
     expect(r.status).toBe(200);
   });
 
-  test('hub_sync_dead writes → 503 + Retry-After + error_code=hub_sync_dead, reads passent', async () => {
+  // === Fix 2026-05-30 : HubSyncDead ne bloque PLUS les writes ===
+  // Notifuse est stand-alone — un last_hub_sync_at vieux (> 72h) ne doit JAMAIS
+  // bloquer un envoi. Avant : 503 hub_sync_dead. Maintenant : write passe.
+  // (Le blocage était un faux positif structurel : le timestamp n'est rafraîchi
+  // que par des ops Hub rares, donc un tenant actif normal se bloquait seul.)
+  test('hub_sync ancien (>72h) : writes PASSENT (stand-alone, plus de blocage 503)', async () => {
     test.skip(!DB_MANIP_AVAILABLE, DB_MANIP_SKIP_REASON);
 
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     const { api_key } = await provisionTenant(tid, 'pro');
 
-    // === DB manipulation : last_hub_sync_at = NOW - 73h ===
+    // Simuler un lien Hub "mort" (73h) — ne doit PLUS bloquer.
     await execStagingSQL(
       `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`,
     );
-
-    // Invalider le cache paywall (sinon le timestamp obsolete reste en memoire 60s)
     await invalidatePaywallCache(tid);
 
-    // 1. Write → 503 + Retry-After + error_code=hub_sync_dead
+    // Write → ne doit JAMAIS être 503 hub_sync_dead (ni 402). Le mail part
+    // via le provider du workspace, indépendamment du Hub.
     const send = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
       body: JSON.stringify({ workspace_id: tid, to: 'sink@hub-sync.test' }),
     });
-    expect(send.status).toBe(503);
-    expect(send.headers.get('retry-after')).toBe('3600');
-    const sendBody = await send.json();
-    expect(sendBody.code ?? sendBody.error_code).toBe('hub_sync_dead');
-    // Detail : last_hub_sync_at + retry_after_s
-    const detail = sendBody.details ?? sendBody.detail ?? sendBody;
-    expect(detail.last_hub_sync_at ?? detail.last_hub_sync).toBeTruthy();
+    expect(send.status).not.toBe(503);
+    const sendBody = await send.json().catch(() => ({}));
+    expect(sendBody.code ?? sendBody.error_code).not.toBe('hub_sync_dead');
 
-    // 2. Read → passe (best-effort). /api/contacts.list est un read.
+    // Read aussi (jamais bloqué).
     const read = await bearerFetch(`/api/contacts.list?workspace_id=${tid}&limit=1`, 'GET', api_key);
-    // 200 ou 4xx upstream tolere, mais PAS 503
     expect(read.status).not.toBe(503);
   });
 
-  test('hub_sync_dead : /api/setup.status reste 200 (route systeme exempt)', async () => {
+  test('hub_sync ancien : /api/setup.status reste 200 (route systeme exempt)', async () => {
     test.skip(!DB_MANIP_AVAILABLE, DB_MANIP_SKIP_REASON);
 
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
@@ -258,40 +257,6 @@ test.describe('@regression hub-sync-resilience — V39 gating 3 phases', () => {
     expect(setupResp.status).toBe(200);
   });
 
-  test('hub_sync recovery : Touch tenant → last_hub_sync_at refresh → writes repassent', async () => {
-    test.skip(!DB_MANIP_AVAILABLE, DB_MANIP_SKIP_REASON);
-
-    const tid = `tst${Date.now().toString(36).slice(-6)}`;
-    provisioned.push(tid);
-    const { api_key } = await provisionTenant(tid, 'pro');
-
-    // 1. Simuler dead
-    await execStagingSQL(
-      `UPDATE veridian_plan SET last_hub_sync_at = NOW() - INTERVAL '73 hours' WHERE workspace_id = '${tid}'`,
-    );
-    await invalidatePaywallCache(tid);
-
-    let send = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
-      body: JSON.stringify({ workspace_id: tid, to: 'pre-recovery@hub-sync.test' }),
-    });
-    expect(send.status).toBe(503);
-
-    // 2. Touch via Hub (mutation refresh last_hub_sync_at)
-    const touch = await hmacFetch(`/api/tenants/${tid}/touch`, 'POST', {});
-    expect([200, 204]).toContain(touch.status);
-
-    // 3. Invalider cache pour re-lire le plan refreshed
-    await invalidatePaywallCache(tid);
-
-    // 4. Write doit repasser (fresh)
-    send = await fetch(`${NOTIFUSE_URL}/api/transactional.send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
-      body: JSON.stringify({ workspace_id: tid, to: 'post-recovery@hub-sync.test' }),
-    });
-    expect(send.status).not.toBe(503);
-    expect(send.status).not.toBe(402);
-  });
+  // Test "recovery" supprimé 2026-05-30 : il n'y a plus de blocage HubSyncDead
+  // à "récupérer". Un tenant n'est jamais bloqué par l'âge du sync Hub.
 });
