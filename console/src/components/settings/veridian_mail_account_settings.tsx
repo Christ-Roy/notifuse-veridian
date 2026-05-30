@@ -72,7 +72,14 @@ interface Props {
   workspaceId: string
 }
 
-const HUB_CONNECT_GMAIL_URL = 'https://app.veridian.site/dashboard/settings/mail'
+const HUB_BASE_URL = 'https://app.veridian.site'
+// Endpoint Hub qui démarre le consent Google DIRECTEMENT (302 → écran Google),
+// sans page Hub intermédiaire. Lit `return` (allowlisté côté Hub) pour rebondir
+// dans Notifuse après consent. Cf. veridian-hub app/api/gmail/connect/route.ts.
+const HUB_GMAIL_CONNECT_ENDPOINT = `${HUB_BASE_URL}/api/gmail/connect`
+// Microsoft : pas d'endpoint /api/microsoft/connect côté Hub aujourd'hui →
+// on passe par la page Hub historique. Ticket ouvert pour l'endpoint direct.
+const HUB_CONNECT_PAGE_URL = `${HUB_BASE_URL}/dashboard/settings/mail`
 const NOTIFUSE_RETURN_URL = 'https://notifuse.app.veridian.site/console'
 
 function buildHubConnectUrl(
@@ -80,7 +87,18 @@ function buildHubConnectUrl(
   provider: 'google' | 'microsoft'
 ): string {
   const returnTo = `${NOTIFUSE_RETURN_URL}/workspace/${workspaceId}/settings/mail-account`
-  const url = new URL(HUB_CONNECT_GMAIL_URL)
+
+  // Gmail : flow DIRECT — clic Notifuse → écran Google, pas de page Hub visible.
+  // L'endpoint /api/gmail/connect redirige immédiatement (302) vers le consent
+  // Google puis rebondit sur `return` (Notifuse) après autorisation.
+  if (provider === 'google') {
+    const url = new URL(HUB_GMAIL_CONNECT_ENDPOINT)
+    url.searchParams.set('return', returnTo)
+    return url.toString()
+  }
+
+  // Microsoft : pas d'endpoint connect direct Hub → page Hub intermédiaire.
+  const url = new URL(HUB_CONNECT_PAGE_URL)
   url.searchParams.set('return', returnTo)
   url.searchParams.set('add', '1')
   url.searchParams.set('provider', provider)

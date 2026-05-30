@@ -284,4 +284,65 @@ describe('VeridianMailAccountSettings — vague 7 multi-comptes', () => {
     })
     expect(screen.queryByText('Default')).not.toBeInTheDocument()
   })
+
+  // === Fix 2026-05-30 : flow Gmail DIRECT (pas de page Hub intermédiaire) ===
+  it('le bouton Connect Gmail redirige DIRECT vers /api/gmail/connect (pas la page Hub)', async () => {
+    const originalLocation = window.location
+    // @ts-expect-error — override pour capturer la redirection
+    delete window.location
+    // @ts-expect-error — stub minimal
+    window.location = { href: '' }
+
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: false,
+      accounts: []
+    })
+    renderSettings('ws-42')
+
+    const btn = await screen.findByRole('button', {
+      name: /Connect your first Gmail account/i
+    })
+    fireEvent.click(btn)
+
+    const dest = window.location.href
+    // @ts-expect-error — restore
+    window.location = originalLocation
+
+    // Flow direct : endpoint OAuth, PAS la page /dashboard/settings/mail.
+    expect(dest).toContain('app.veridian.site/api/gmail/connect')
+    expect(dest).not.toContain('/dashboard/settings/mail')
+    // return allowlisté vers Notifuse pour le rebond post-consent.
+    expect(dest).toContain(
+      'return=' +
+        encodeURIComponent(
+          'https://notifuse.app.veridian.site/console/workspace/ws-42/settings/mail-account'
+        )
+    )
+  })
+
+  it('le bouton Microsoft garde la page Hub (pas d endpoint connect direct MS)', async () => {
+    const originalLocation = window.location
+    // @ts-expect-error — override
+    delete window.location
+    // @ts-expect-error — stub
+    window.location = { href: '' }
+
+    vi.mocked(veridianMailAccountsApi.list).mockResolvedValue({
+      hub_available: false,
+      accounts: []
+    })
+    renderSettings('ws-7')
+
+    const btn = await screen.findByRole('button', {
+      name: /Connect a Microsoft account/i
+    })
+    fireEvent.click(btn)
+
+    const dest = window.location.href
+    // @ts-expect-error — restore
+    window.location = originalLocation
+
+    expect(dest).toContain('app.veridian.site/dashboard/settings/mail')
+    expect(dest).toContain('provider=microsoft')
+  })
 })
