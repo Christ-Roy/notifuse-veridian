@@ -1,20 +1,48 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-06-05 04:26 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-05
+> **Dernier run** : 2026-06-06 04:26 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-06
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 0 (avant filtrage)
+> **CVE bruts détectés** : 3 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
 - 🔴 **0 HIGH** — action recommandée cette semaine
-- 🟡 **0 MEDIUM** — récap, pas urgent
-- 🟢 **0 NOISE** — annexe collapse
+- 🟡 **1 MEDIUM** — récap, pas urgent
+- 🟢 **2 NOISE** — annexe collapse
 
-✅ **Aucune action requise.** Rapport régénéré quotidiennement.
+✅ **Rien d'urgent.** Quelques items MEDIUM à voir quand t'as 5 min.
+
+
+---
+
+## 🟡 MEDIUM — 1 CVE en 1 groupe
+
+### 1. `stdlib` — v1.25.10 → **1.26.4**
+
+- **CVE** : `CVE-2026-42504` (HIGH/Unclassified)
+- **Type** : Unclassified
+- **Score max** : 15
+- **Title** : Decoding a maliciously-crafted MIME header containing many invalid enc ...
+- **Source** : `app/server`
+- **Fix** : `pnpm up stdlib` (jusqu'à >= `1.26.4`)
+
+
+---
+
+## 🟢 NOISE filtré (2 CVE)
+
+<details>
+<summary>Liste complète (1 groupe — clique pour déplier)</summary>
+
+| Package | Installed | Fix | CVE count | Max score |
+|---|---|---|---|---|
+| `stdlib` | v1.25.10 | 1.26.4 | 2 | 6 |
+
+</details>
 
 
 ---
