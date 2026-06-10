@@ -1,8 +1,8 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-06-09 04:26 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-09
+> **Dernier run** : 2026-06-10 04:26 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-10
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
 > **CVE bruts détectés** : 3 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
