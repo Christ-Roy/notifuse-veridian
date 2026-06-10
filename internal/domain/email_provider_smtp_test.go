@@ -235,6 +235,29 @@ func TestSMTPSettings_Validate(t *testing.T) {
 			},
 			wantErr: false, // Empty password is allowed
 		},
+		{
+			// Veridian fork: skip_tls_verify autorisé vers un relai interne privé
+			name: "skip_tls_verify ok vers host privé (Tailscale)",
+			settings: domain.SMTPSettings{
+				Host:          "100.92.215.42",
+				Port:          587,
+				UseTLS:        true,
+				SkipTLSVerify: true,
+			},
+			wantErr: false,
+		},
+		{
+			// Veridian fork: garde-fou — skip_tls_verify refusé vers host public
+			name: "skip_tls_verify refusé vers host public",
+			settings: domain.SMTPSettings{
+				Host:          "smtp.gmail.com",
+				Port:          587,
+				UseTLS:        true,
+				SkipTLSVerify: true,
+			},
+			wantErr: true,
+			errMsg:  "skip_tls_verify",
+		},
 	}
 
 	for _, tt := range tests {

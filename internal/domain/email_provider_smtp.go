@@ -32,6 +32,17 @@ type SMTPSettings struct {
 	UseTLS            bool   `json:"use_tls"`
 	EHLOHostname      string `json:"ehlo_hostname,omitempty"`
 
+	// Veridian fork — SkipTLSVerify désactive la vérification du certificat
+	// serveur sur le STARTTLS sortant. Opt-in, défaut false (vérification
+	// stricte = comportement upstream). Légitime UNIQUEMENT pour un relai
+	// interne à cert self-signed sur réseau privé chiffré (cas: relai cold
+	// outbound agences-veridian.fr, Tailscale-only + iptables DROP-public +
+	// SASL). Garde-fou : Validate() refuse skip si Host n'est pas une adresse
+	// privée (Tailscale 100.64/10, RFC1918, loopback) — on n'autorise jamais
+	// à désactiver la vérif TLS vers un serveur public.
+	// Consommé dans internal/service/smtp_service.go (tls.Config).
+	SkipTLSVerify bool `json:"skip_tls_verify,omitempty"`
+
 	// decoded username, not stored in the database
 	// decoded password , not stored in the database
 	Username string `json:"username"`
@@ -133,6 +144,13 @@ func (s *SMTPSettings) Validate(passphrase string) error {
 
 	if s.Port <= 0 || s.Port > 65535 {
 		return fmt.Errorf("invalid port number for SMTP configuration: %d", s.Port)
+	}
+
+	// Veridian fork — garde-fou SkipTLSVerify : on n'autorise à désactiver la
+	// vérification du certificat que vers un host PRIVÉ (relai interne self-
+	// signed). Refusé vers un host public (réputation/MITM).
+	if s.SkipTLSVerify && !veridianIsPrivateSMTPHost(s.Host) {
+		return fmt.Errorf("skip_tls_verify n'est autorisé que pour un host privé (Tailscale/RFC1918/loopback), pas pour %q", s.Host)
 	}
 
 	// Handle OAuth2 authentication

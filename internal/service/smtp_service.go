@@ -187,9 +187,14 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 		}
 
 		// Upgrade connection to TLS
+		// Veridian fork: SkipTLSVerify (opt-in, défaut false) désactive la
+		// vérification du cert pour un relai interne self-signed sur réseau
+		// privé (cf. domain.SMTPSettings.SkipTLSVerify + garde-fou Validate
+		// qui refuse skip vers un host public).
 		tlsConfig := &tls.Config{
-			ServerName: settings.Host,
-			MinVersion: tls.VersionTLS12,
+			ServerName:         settings.Host,
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: settings.SkipTLSVerify, //nolint:gosec // opt-in, host privé only (Validate)
 		}
 		tlsConn := tls.Client(conn, tlsConfig)
 		if err := tlsConn.Handshake(); err != nil {

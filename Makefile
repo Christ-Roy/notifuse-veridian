@@ -257,3 +257,9 @@ check-test-mapping:
 	@BASE_REF=$${BASE_REF:-origin/main} scripts/ci/check-test-mapping.sh
 
 .DEFAULT_GOAL := build
+# E2E tunnel outbound — envoi test scriptable/rejouable (gate #11, giga test CI).
+# Env requis : NOTIFUSE_HUB_API_SECRET + SMTP_RELAY_HOST/PORT/USER/PASS.
+# Voir l'en-tête de scripts/e2e/tunnel-send.sh pour les options et la sortie JSON.
+.PHONY: e2e-tunnel-send
+e2e-tunnel-send:
+	@scripts/e2e/tunnel-send.sh $(ARGS)

@@ -3,8 +3,14 @@ package service
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"fmt"
+	"math/big"
 	"net"
 	"strings"
 	"sync"
@@ -1804,4 +1810,76 @@ func TestDotStuffingIntegration(t *testing.T) {
 	// Our mock server stores the raw data as received (with dot-stuffing applied).
 	assert.Contains(t, receivedData, "..com/path/to/image.png",
 		"Expected dot-stuffed content (double dot) but got: %s", receivedData)
+}
+
+// Veridian fork — STARTTLS vers un relai à cert self-signed (cas relai cold
+// agences-veridian.fr). Prouve que SMTPSettings.SkipTLSVerify=true passe le
+// handshake là où la vérification stricte (false) le rejette (unknown
+// authority). Mock STARTTLS minimal avec cert self-signed généré à la volée.
+func TestSendRawEmail_SkipTLSVerify_SelfSignedRelay(t *testing.T) {
+	// Cert self-signed éphémère pour 127.0.0.1
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "relay.internal.test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &priv.PublicKey, priv)
+	require.NoError(t, err)
+	cert := tls.Certificate{Certificate: [][]byte{der}, PrivateKey: priv}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	// Mini serveur SMTP STARTTLS : greeting, EHLO, STARTTLS, upgrade TLS,
+	// puis accepte tout (le test s'arrête après le handshake réussi/échoué).
+	go func() {
+		conn, e := ln.Accept()
+		if e != nil {
+			return
+		}
+		defer conn.Close()
+		br := bufio.NewReader(conn)
+		fmt.Fprintf(conn, "220 relay ready\r\n")
+		for {
+			line, e := br.ReadString('\n')
+			if e != nil {
+				return
+			}
+			up := strings.ToUpper(strings.TrimSpace(line))
+			switch {
+			case strings.HasPrefix(up, "EHLO"):
+				fmt.Fprintf(conn, "250-relay\r\n250 STARTTLS\r\n")
+			case up == "STARTTLS":
+				fmt.Fprintf(conn, "220 go ahead\r\n")
+				tconn := tls.Server(conn, &tls.Config{Certificates: []tls.Certificate{cert}})
+				if e := tconn.Handshake(); e != nil {
+					return // handshake refusé côté client (skip=false)
+				}
+				// handshake ok : lire l'EHLO post-TLS puis couper
+				tbr := bufio.NewReader(tconn)
+				tbr.ReadString('\n')
+				fmt.Fprintf(tconn, "250 ok\r\n")
+				return
+			default:
+				fmt.Fprintf(conn, "250 ok\r\n")
+			}
+		}
+	}()
+
+	base := &domain.SMTPSettings{
+		Host: "127.0.0.1", Port: port, UseTLS: true, AuthType: "basic",
+	}
+
+	// Sans skip : la vérif stricte rejette le self-signed → erreur handshake.
+	strict := *base
+	errStrict := sendRawEmailWithSettings(&strict, "from@test", []string{"to@test"}, []byte("Subject: t\r\n\r\nx"), nil)
+	require.Error(t, errStrict, "vérif stricte doit rejeter un cert self-signed")
+	assert.Contains(t, strings.ToLower(errStrict.Error()), "tls",
+		"l'erreur attendue est un échec TLS, got: %v", errStrict)
 }
