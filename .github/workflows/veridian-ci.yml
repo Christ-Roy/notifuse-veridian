@@ -956,25 +956,73 @@ jobs:
             tests/e2e-veridian/test-results/
           retention-days: 14
 
+  # === Gate §20 — staging vert SANS [risk:low] : reco/promotion attendue ===
+  # Symétrique du gate sur deploy-prod : quand staging + e2e-staging passent
+  # vert mais que le commit n'est PAS [risk:low] (donc deploy-prod a été skip),
+  # ce job alerte Robert via Telegram qu'un commit tier 🟡/🔴 attend une reco
+  # agent ou une promotion explicite (workflow_dispatch deploy_prod=true).
+  # Sans ce job, le push resterait staging-only en silence et Robert ne saurait
+  # pas qu'une décision de promotion est due. Job vert/no-op si rien à signaler.
+  notify-promotion-needed:
+    name: Notify Robert — staging vert, promotion prod attendue (§20)
+    needs: e2e-staging
+    if: |
+      github.event_name == 'push' && github.ref == 'refs/heads/veridian'
+      && !contains(github.event.head_commit.message, '[risk:low]')
+      && !contains(github.event.head_commit.message, '[skip-prod]')
+      && !contains(github.event.head_commit.message, '[wip]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Telegram notify (promotion prod attendue)
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT:-}" ]; then
+            echo "::notice::Telegram non configuré (TELEGRAM_BOT_TOKEN/CHAT_ID absents) — skip notif. Staging vert, promotion prod en attente de reco."
+            exit 0
+          fi
+          SHA7=$(echo "${{ github.sha }}" | cut -c1-7)
+          SUBJECT=$(echo "$COMMIT_MSG" | head -1)
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -sf -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="${TG_CHAT}" \
+            -d parse_mode=Markdown \
+            --data-urlencode "text=🟡 Notifuse staging *vert* (\`${SHA7}\`) sans \`[risk:low]\` — promotion prod NON déclenchée automatiquement.%0A%0A_${SUBJECT}_%0A%0AReco agent attendue, ou promote manuelle : workflow_dispatch deploy_prod=true.%0A%0ARun : ${RUN_URL}" \
+            >/dev/null || echo "::warning::Notif Telegram échouée (non bloquant)."
+          echo "✓ Robert notifié — promotion prod en attente de reco/dispatch."
+
   deploy-prod:
     name: Deploy prod (auto-promote sur push veridian — ship fast & safe)
     # === Veridian fix 2026-05-18 === build dans needs sinon outputs vide.
     needs: [build, e2e-staging]
-    # === Veridian patch === Auto-promote prod activé 2026-05-17.
+    # === Veridian patch === Auto-promote prod 2026-05-17, GATÉ §20 le 2026-06-10.
+    #
+    # ⚠️ CHANGEMENT DE MODÈLE (incident gouvernance 2026-06-10) : avant cette
+    # date, l'auto-promote prod était INCONDITIONNELLE (opt-OUT via [skip-prod]).
+    # Un commit tier 🔴 (throttle 7b813504) est parti en prod sans gate humain.
+    # Désormais aligné sur Hub §20 : auto-promote en OPT-IN via marker `[risk:low]`.
     #
     # Conditions d'auto-promote (toutes doivent être vraies) :
     #   1. Event = push sur branche veridian (pas PR, pas tag, pas dispatch)
     #   2. e2e-staging vert (implicite via `needs`)
-    #   3. Commit message ne contient PAS [skip-prod] ou [wip]
+    #   3. Commit message CONTIENT [risk:low] (présence grossière ici ; le step
+    #      "Check [risk:low] is in subject" durcit ensuite : doit être en 1ère ligne)
+    #   4. Commit message ne contient PAS [skip-prod] ou [wip]
     #
-    # Override manuel : workflow_dispatch avec deploy_prod=true reste actif.
-    # Stop-gap : commit avec [skip-prod] dans le message → staging only.
+    # Sans marker [risk:low] : staging seul + job `notify-promotion-needed`
+    # alerte Robert (Telegram) que staging est vert et qu'une reco agent /
+    # promotion explicite est attendue. Promotion manuelle = workflow_dispatch
+    # avec deploy_prod=true (override toujours actif, ignore le marker).
     #
     # Defense in depth : e2e-prod reste bloquant après ce step, rollback
     # auto si fail, auto-revert Git PR. Donc même en cas de bug glissé
     # à travers e2e-staging, l'impact en prod est < 5 minutes.
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/veridian'
+        && contains(github.event.head_commit.message, '[risk:low]')
         && !contains(github.event.head_commit.message, '[skip-prod]')
         && !contains(github.event.head_commit.message, '[wip]'))
       || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
@@ -982,6 +1030,28 @@ jobs:
     permissions:
       contents: write  # nécessaire pour push le bump GitOps de prod.yml
     steps:
+      # === Gate §20 — durcir le filtre [risk:low] : doit être en 1ère ligne ===
+      # Le `if:` du job ne fait qu'un pré-filtre grossier (marker n'importe où
+      # dans le message). Ce step échoue le job si le marker n'est PAS dans le
+      # subject (1ère ligne) — empêche un agent de "claim" [risk:low] en le
+      # glissant dans le body, ou de promote via un body qui mentionne le marker
+      # pour expliquer son absence. Skip pour workflow_dispatch (override manuel
+      # assumé par Robert, pas besoin de marker).
+      - name: Check [risk:low] is in subject line (not just body)
+        if: github.event_name == 'push'
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          SUBJECT=$(echo "$COMMIT_MSG" | head -1)
+          if echo "$SUBJECT" | grep -q '\[risk:low\]'; then
+            echo "✓ Marker [risk:low] dans le subject — auto-promote prod autorisée"
+          else
+            echo "::error::Marker [risk:low] absent du subject (présent dans le body uniquement) — promotion prod refusée. Cf. CLAUDE.md §9 / Hub CI-ARCHITECTURE §20."
+            echo "Subject : $SUBJECT"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # nécessaire pour push HEAD:veridian (bump GitOps prod)
