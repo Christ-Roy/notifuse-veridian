@@ -1,5 +1,13 @@
 # notifuse-veridian — fork Veridian de Notifuse
 
+> ## 🔴 Règle d'or Veridian — zéro contournement (gravée Robert 2026-06-10)
+> **Interdit absolu** : cron bricolé, SQLite/store parallèle, job maison pour
+> ÉVITER l'API ou la DB réelle de l'app. On travaille AVEC le vrai système :
+> coder propre → tester staging → fixer la logique → MAJ DB staging si besoin
+> → test lourd → push prod. Un blocage (accès, credential) se débloque via le
+> lead, il ne se contourne pas. Détail : CLAUDE.md racine veridian-platform.
+
+
 > Fork du projet [Notifuse](https://github.com/Notifuse/notifuse). Sync régulière
 > via `git pull upstream main` sur la branche `veridian`. Tech stack upstream
 > (Go 1.25 + Postgres 17 + React 18 + Vite + Ant Design) : voir le `README.md`
