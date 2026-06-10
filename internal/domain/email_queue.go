@@ -83,6 +83,12 @@ type EmailQueuePayload struct {
 	TemplateVersion int                    `json:"template_version"`        // Needed for message_history
 	ListID          string                 `json:"list_id,omitempty"`       // For broadcasts
 	TemplateData    map[string]interface{} `json:"template_data,omitempty"` // For message history logging
+
+	// Veridian fork — throttle par classe de provider destinataire (cold
+	// outbound). Champs optionnels posés à l'enqueue, consommés par le worker.
+	// Vides = comportement upstream inchangé. Cf. domain/veridian_provider_class.go.
+	VeridianProviderClass      string             `json:"veridian_provider_class,omitempty"`
+	VeridianProviderClassRates map[string]float64 `json:"veridian_provider_class_rates,omitempty"`
 }
 
 // ToSendEmailProviderRequest converts the payload to a SendEmailProviderRequest

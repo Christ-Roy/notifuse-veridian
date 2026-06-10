@@ -55,6 +55,11 @@ func TestNewEmailQueueWorker(t *testing.T) {
 		require.NotNil(t, worker)
 		assert.Equal(t, config, worker.config)
 		assert.NotNil(t, worker.rateLimiter)
+		// Veridian: le limiter par classe de provider destinataire doit être
+		// initialisé inconditionnellement (le gate est no-op sans config,
+		// mais un limiter nil paniquerait au premier broadcast configuré)
+		assert.NotNil(t, worker.providerClassLimiter)
+		assert.Empty(t, worker.GetProviderClassStats())
 	})
 
 	t.Run("uses default config when nil provided", func(t *testing.T) {

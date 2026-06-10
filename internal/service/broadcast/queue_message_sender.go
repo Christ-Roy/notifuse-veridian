@@ -77,6 +77,10 @@ func (s *queueMessageSender) SendToRecipient(
 		return err
 	}
 
+	// Veridian fork: attach provider-class throttle config (no contact here,
+	// the worker classifies from the recipient email). No-op without config.
+	domain.VeridianApplyProviderThrottle(entry, broadcast, nil)
+
 	// Enqueue the email
 	if err := s.queueRepo.Enqueue(ctx, workspaceID, []*domain.EmailQueueEntry{entry}); err != nil {
 		s.logger.WithFields(map[string]interface{}{
@@ -229,6 +233,10 @@ func (s *queueMessageSender) SendBatch(
 			buildErrors++
 			continue
 		}
+
+		// Veridian fork: attach provider-class throttle config + contact tag
+		// (provider_class posé par l'export batch). No-op without config.
+		domain.VeridianApplyProviderThrottle(entry, broadcast, recipient.Contact)
 
 		entries = append(entries, entry)
 	}

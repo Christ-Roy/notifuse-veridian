@@ -1450,3 +1450,136 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			"ReplyTo from template should be preserved in queue entry")
 	})
 }
+
+// Veridian — l'enqueue doit propager la config de throttle par classe de
+// provider destinataire dans le payload : débits du broadcast (metadata) +
+// tag contact custom_string_5 posé par l'export batch (contrat provider_class).
+// Sans config ni tag, le payload reste strictement upstream.
+func TestQueueMessageSender_SendBatch_VeridianProviderThrottle(t *testing.T) {
+	newSender := func(ctrl *gomock.Controller, broadcast *domain.Broadcast, onEnqueue func([]*domain.EmailQueueEntry)) MessageSender {
+		mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+		mockBroadcastRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+		mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-1", broadcast.ID).
+			Return(broadcast, nil)
+		mockQueueRepo.EXPECT().Enqueue(gomock.Any(), "workspace-1", gomock.Any()).
+			DoAndReturn(func(ctx context.Context, workspaceID string, entries []*domain.EmailQueueEntry) error {
+				onEnqueue(entries)
+				return nil
+			})
+
+		return NewQueueMessageSender(
+			mockQueueRepo, mockBroadcastRepo, mockMessageHistoryRepo,
+			mockTemplateRepo, nil, mockLogger, nil, "https://api.example.com",
+		)
+	}
+
+	emailSender := domain.NewEmailSender("sender@example.com", "Test Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+	}
+	template := &domain.Template{
+		ID: "template-1",
+		Email: &domain.EmailTemplate{
+			SenderID:         emailSender.ID,
+			Subject:          "Test Subject",
+			VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1", "Hello")),
+		},
+	}
+	templates := map[string]*domain.Template{"template-1": template}
+
+	sendBatch := func(s MessageSender, broadcastID string, recipients []*domain.ContactWithList) {
+		sent, failed, err := s.SendBatch(
+			context.Background(), "workspace-1", "integration-1", "secret-key",
+			"https://api.example.com", true, broadcastID, recipients,
+			templates, emailProvider, time.Now().Add(5*time.Minute), "",
+		)
+		require.NoError(t, err)
+		require.Equal(t, len(recipients), sent)
+		require.Equal(t, 0, failed)
+	}
+
+	t.Run("rates from broadcast metadata + contact tag propagated", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		broadcast := &domain.Broadcast{
+			ID:          "broadcast-vt",
+			WorkspaceID: "workspace-1",
+			Metadata: domain.MapOfAny{
+				domain.VeridianProviderClassRatesMetadataKey: map[string]any{
+					"google": 0.5, "corporate": 30.0,
+				},
+			},
+			UTMParameters: &domain.UTMParameters{},
+		}
+
+		recipients := []*domain.ContactWithList{
+			{
+				// taggué google par l'export (ex. MX Google Workspace résolu en amont)
+				Contact: &domain.Contact{
+					Email:         "tagged@boitepro.fr",
+					CustomString5: &domain.NullableString{String: "google"},
+				},
+				ListID: "list-1",
+			},
+			{
+				// non taggué : le worker classifiera par suffixe
+				Contact: &domain.Contact{Email: "untagged@acme-corp.com"},
+				ListID:  "list-1",
+			},
+		}
+
+		sender := newSender(ctrl, broadcast, func(entries []*domain.EmailQueueEntry) {
+			require.Len(t, entries, 2)
+			byEmail := map[string]*domain.EmailQueueEntry{}
+			for _, e := range entries {
+				byEmail[e.ContactEmail] = e
+			}
+
+			tagged := byEmail["tagged@boitepro.fr"]
+			require.NotNil(t, tagged)
+			assert.Equal(t, "google", tagged.Payload.VeridianProviderClass)
+			assert.Equal(t, map[string]float64{"google": 0.5, "corporate": 30},
+				tagged.Payload.VeridianProviderClassRates)
+
+			untagged := byEmail["untagged@acme-corp.com"]
+			require.NotNil(t, untagged)
+			assert.Empty(t, untagged.Payload.VeridianProviderClass)
+			assert.Equal(t, map[string]float64{"google": 0.5, "corporate": 30},
+				untagged.Payload.VeridianProviderClassRates)
+		})
+
+		sendBatch(sender, "broadcast-vt", recipients)
+	})
+
+	t.Run("no metadata and no tag leaves payload strictly upstream", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		broadcast := &domain.Broadcast{
+			ID:            "broadcast-plain",
+			WorkspaceID:   "workspace-1",
+			UTMParameters: &domain.UTMParameters{},
+		}
+
+		recipients := []*domain.ContactWithList{
+			{Contact: &domain.Contact{Email: "user@example.com"}, ListID: "list-1"},
+		}
+
+		sender := newSender(ctrl, broadcast, func(entries []*domain.EmailQueueEntry) {
+			require.Len(t, entries, 1)
+			assert.Empty(t, entries[0].Payload.VeridianProviderClass)
+			assert.Nil(t, entries[0].Payload.VeridianProviderClassRates)
+		})
+
+		sendBatch(sender, "broadcast-plain", recipients)
+	})
+}

@@ -347,6 +347,12 @@ type WorkspaceSettings struct {
 	DefaultLanguage              string              `json:"default_language"`
 	Languages                    []string            `json:"languages"`
 
+	// Veridian fork — débits par classe de provider destinataire par défaut
+	// pour ce workspace (emails/minute, fractions autorisées). Fallback quand
+	// un broadcast ne définit pas veridian_provider_class_rates dans son
+	// metadata. Vide = pas de throttle classe. Cf. veridian_provider_class.go.
+	VeridianProviderClassRates map[string]float64 `json:"veridian_provider_class_rates,omitempty"`
+
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
 }

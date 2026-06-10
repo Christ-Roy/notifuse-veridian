@@ -48,10 +48,13 @@ type EmailQueueWorker struct {
 	emailService       domain.EmailServiceInterface
 	messageHistoryRepo domain.MessageHistoryRepository
 	rateLimiter        *IntegrationRateLimiter
-	circuitBreaker     *IntegrationCircuitBreaker
-	errorClassifier    *emailerror.Classifier
-	config             *EmailQueueWorkerConfig
-	logger             logger.Logger
+	// Veridian fork: second rate-limiting stage, keyed by recipient provider
+	// class (cf. veridian_provider_throttle.go). No-op without configuration.
+	providerClassLimiter *ProviderClassRateLimiter
+	circuitBreaker       *IntegrationCircuitBreaker
+	errorClassifier      *emailerror.Classifier
+	config               *EmailQueueWorkerConfig
+	logger               logger.Logger
 
 	// Control
 	ctx     context.Context
@@ -91,15 +94,16 @@ func NewEmailQueueWorker(
 	}
 
 	return &EmailQueueWorker{
-		queueRepo:          queueRepo,
-		workspaceRepo:      workspaceRepo,
-		emailService:       emailService,
-		messageHistoryRepo: messageHistoryRepo,
-		rateLimiter:        NewIntegrationRateLimiter(),
-		circuitBreaker:     NewIntegrationCircuitBreaker(cbConfig),
-		errorClassifier:    emailerror.NewClassifier(),
-		config:             config,
-		logger:             log,
+		queueRepo:            queueRepo,
+		workspaceRepo:        workspaceRepo,
+		emailService:         emailService,
+		messageHistoryRepo:   messageHistoryRepo,
+		rateLimiter:          NewIntegrationRateLimiter(),
+		providerClassLimiter: NewProviderClassRateLimiter(),
+		circuitBreaker:       NewIntegrationCircuitBreaker(cbConfig),
+		errorClassifier:      emailerror.NewClassifier(),
+		config:               config,
+		logger:               log,
 	}
 }
 
@@ -282,6 +286,21 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 				"entry_id": entry.ID,
 				"error":    err.Error(),
 			}).Warn("Failed to set next retry for circuit breaker skip")
+		}
+		return
+	}
+
+	// Veridian fork: recipient provider-class throttle gate (cold outbound).
+	// Placed BEFORE MarkAsProcessing, like the circuit breaker check, so a
+	// throttled skip never burns a retry attempt. No-op without configuration.
+	// Cf. veridian_provider_throttle.go.
+	if delay, throttled := w.veridianProviderClassGate(workspace, entry); throttled {
+		nextRetry := time.Now().Add(delay)
+		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Warn("Failed to set next retry for provider class throttle skip")
 		}
 		return
 	}

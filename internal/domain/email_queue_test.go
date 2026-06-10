@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -8,6 +9,41 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Veridian — les champs throttle par classe du payload doivent survivre au
+// round-trip JSONB (stockage queue) et rester absents du JSON quand non
+// configurés (compat ascendante : les entrées enqueueées avant le deploy
+// n'ont pas ces clés et doivent se désérialiser à l'identique).
+func TestEmailQueuePayload_VeridianProviderThrottleRoundTrip(t *testing.T) {
+	t.Run("fields survive JSON round-trip", func(t *testing.T) {
+		payload := EmailQueuePayload{
+			Subject:                    "s",
+			RateLimitPerMinute:         100,
+			VeridianProviderClass:      ProviderClassGoogle,
+			VeridianProviderClassRates: map[string]float64{"google": 0.5, "corporate": 30},
+		}
+
+		raw, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.Equal(t, ProviderClassGoogle, decoded.VeridianProviderClass)
+		assert.Equal(t, payload.VeridianProviderClassRates, decoded.VeridianProviderClassRates)
+	})
+
+	t.Run("omitted when unset (upstream payloads unchanged)", func(t *testing.T) {
+		raw, err := json.Marshal(EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_provider_class")
+
+		// Entrée pré-deploy (sans les clés veridian) : zéro valeurs, pas d'erreur
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal([]byte(`{"subject":"old","rate_limit_per_minute":25}`), &decoded))
+		assert.Empty(t, decoded.VeridianProviderClass)
+		assert.Nil(t, decoded.VeridianProviderClassRates)
+	})
+}
 
 func TestEmailQueueStatus_Values(t *testing.T) {
 	tests := []struct {
