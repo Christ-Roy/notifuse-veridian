@@ -18,13 +18,21 @@
 #   - relai d'envoi = agences-veridian.fr (dev), JAMAIS le domaine principal.
 #   - rates par classe volontairement étalés pour rendre le throttle visible.
 #
+# 🔴 DÉFAUT = AUCUN ENVOI RÉEL (consigne Robert 2026-06-11, DoD §2.4 amendée).
+#    Les alias test-tunnel-*@veridian.site routent vers la boîte Lark PERSONNELLE
+#    de Robert : un envoi réel pollue sa boîte. Donc par défaut ce script fait
+#    TOUT le setup + crée le broadcast en DRAFT mais NE SCHEDULE PAS (= --no-send
+#    implicite). L'envoi réel exige le flag EXPLICITE --real-send, qui ne doit
+#    être utilisé qu'après GO du lead (qui prévient Robert avant le tir).
+#
 # Usage :
-#   scripts/e2e/tunnel-send.sh [--rounds N] [--no-send] [--workspace ID]
+#   scripts/e2e/tunnel-send.sh [--rounds N] [--real-send] [--no-send] [--workspace ID]
 #     --rounds N    : N broadcasts successifs (défaut 1). Avec N≥2 le throttle
 #                     devient VISIBLE : round 2 attend les tokens par classe
 #                     (google +60s, microsoft +30s, …), corporate refile direct.
-#     --no-send     : fait tout le setup + crée le broadcast en DRAFT, ne
-#                     schedule pas (pré-vol sans envoi).
+#     --real-send   : 🔴 ENVOI RÉEL via relai (mails dans la boîte Lark de Robert).
+#                     Défaut sans ce flag = DRAFT/no-send. À n'utiliser qu'avec GO lead.
+#     --no-send     : explicite le comportement par défaut (setup + DRAFT, pas d'envoi).
 #     --workspace W : id workspace (défaut: coldtest)
 #
 # Env requis :
@@ -47,15 +55,20 @@ set -euo pipefail
 BASE="${NOTIFUSE_URL:-https://notifuse.staging.veridian.site}"
 WID="coldtest"
 ROUNDS=1
-SEND=1
+SEND=0   # 🔴 défaut = AUCUN envoi réel (consigne Robert). --real-send pour tirer.
 while [ $# -gt 0 ]; do
   case "$1" in
     --rounds) ROUNDS="$2"; shift 2;;
+    --real-send) SEND=1; shift;;
     --no-send) SEND=0; shift;;
     --workspace) WID="$2"; shift 2;;
     *) echo "arg inconnu: $1" >&2; exit 2;;
   esac
 done
+
+if [ "$SEND" = "1" ]; then
+  printf '\033[1;31m[tunnel-send] ⚠️  --real-send : ENVOI RÉEL vers la boîte Lark de Robert. Doit être autorisé par le lead (GO préalable).\033[0m\n' >&2
+fi
 
 : "${NOTIFUSE_HUB_API_SECRET:?NOTIFUSE_HUB_API_SECRET requis}"
 : "${SMTP_RELAY_HOST:?SMTP_RELAY_HOST requis}"

@@ -72,6 +72,48 @@ upstream, le pre-push bypass `@notifuse.com` ne les protège pas) :
 | `internal/service/queue/worker.go` | +champ `providerClassLimiter` + init constructeur + gate `veridianProviderClassGate` dans `processEntry` (avant `MarkAsProcessing`, après circuit breaker) |
 | `internal/service/broadcast/queue_message_sender.go` | +2 appels `domain.VeridianApplyProviderThrottle(entry, broadcast, contact)` (SendBatch + SendToRecipient) |
 
+### Open tracking — pixel email.opened PAR CLASSE (cold outbound, 2026-06-11)
+
+Découple le pixel d'**ouverture** (`email.opened`) de la réécriture de **liens**
+(clics). Le tunnel cold veut le pixel ON sur les petits providers peu sensibles
+(`freemail_fr`/`yahoo_aol`/`corporate`) et OFF sur `google`/`microsoft`
+(réputation), tout en gardant le tracking de clics partout. Spec : ticket
+`todo/2026-06-10-open-tracking-petits-providers.md` + DoD V1 §1.3.
+
+- **Fichier veridian** : `internal/domain/veridian_open_pixel.go`
+  (`VeridianResolveOpenPixel(contact, email, broadcast, workspace) → *bool` :
+  défaut tunnel ON petits/FAI, OFF gros ; parsing config
+  `veridian_open_pixel_by_class` ; détection contexte tunnel = tag
+  `custom_string_5` OU config pixel/rates).
+- **Découplage** (dans `template_compilation.go`, fichier critique, pas
+  upstream-pur) : nouveau champ `TrackingSettings.EnableOpenPixel *bool`
+  (nullable), helper `openPixelEnabled()`. `nil` = comportement upstream (pixel
+  suit `EnableTracking`), non-nil = override explicite par classe. Le
+  early-return de `TrackLinks` est corrigé pour insérer le pixel même quand
+  `EnableTracking=false` (pixel ON sans réécriture de liens).
+- **Config** : `broadcast.metadata["veridian_open_pixel_by_class"]` (map
+  classe→bool) puis workspace settings `veridian_open_pixel_by_class` (fallback).
+  Hors contexte tunnel = `nil` = strictement upstream (non-régression).
+- **Validé** : E2E réel staging (5/5 reçus alias Lark via relai, pixel ABSENT
+  google/microsoft + PRÉSENT freemail_fr/yahoo_aol/corporate, clics ON partout,
+  `opened_at` posé au fetch du pixel). Délivrabilité : sans pixel 10/10, avec
+  pixel le coût réel = `T_REMOTE_IMAGE` ~0.01 (le pixel ne dégrade quasi rien sur
+  petit provider ; prévoir un template à ratio texte/image sain pour éviter
+  `HTML_IMAGE_ONLY`).
+- 🔴 **Garde-fou envoi** : `scripts/e2e/tunnel-send.sh` NE TIRE PLUS de mail réel
+  par défaut (consigne Robert 2026-06-11 — les alias test routent vers sa boîte
+  Lark perso). Setup + DRAFT par défaut ; envoi réel = flag `--real-send` après
+  GO du lead.
+
+⚠️ **Diffs INLINE supplémentaires** (pixel par classe) :
+
+| Fichier upstream | Diff Veridian |
+|---|---|
+| `pkg/notifuse_mjml/template_compilation.go` | +champ `TrackingSettings.EnableOpenPixel *bool` + `openPixelEnabled()` + pixel gouverné par ce flag dans `TrackLinks` (early-return inclus) |
+| `internal/domain/workspace.go` | +1 champ `WorkspaceSettings.VeridianOpenPixelByClass` (map[string]bool, omitempty) |
+| `internal/service/broadcast/queue_message_sender.go` | `buildQueueEntry(+param contact)` + `EnableOpenPixel = VeridianResolveOpenPixel(...)` avant compilation HTML |
+| `internal/service/broadcast/message_sender.go` | 2 call-sites (SendToRecipient + boucle batch) : `EnableOpenPixel = VeridianResolveOpenPixel(...)` |
+
 ### Sync upstream
 
 ```bash
