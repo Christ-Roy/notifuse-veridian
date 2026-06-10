@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -247,4 +248,49 @@ func TestProcessEntry_MixedBatchClassesDoNotBlockEachOther(t *testing.T) {
 	// court-circuitait l'étage émetteur, tout partirait en < 10ms.
 	assert.GreaterOrEqual(t, elapsed, 180*time.Millisecond,
 		"le throttle émetteur doit rester appliqué par-dessus le throttle classe")
+}
+
+// Anti busy-loop (vigilance lead, CONTRATS-TUNNEL.md §1) : une queue saturée
+// d'une SEULE classe throttlée (50 gmail à 1/min) ne doit ni bloquer le
+// worker (pas de Wait de 49 minutes), ni le faire tourner à vide : chaque
+// entrée sans token est re-planifiée dans le FUTUR (≥ ~1s) via SetNextRetry,
+// donc exclue des FetchPending suivants (WHERE next_retry_at <= NOW())
+// jusqu'à l'arrivée du prochain token. Un seul envoi réel consomme le token.
+func TestProcessEntry_SaturatedClassNoBusyLoop(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	workspace := veridianTestWorkspace(map[string]float64{"google": 1}, 6000)
+
+	const total = 50
+	entries := make([]*domain.EmailQueueEntry, 0, total)
+	for i := 0; i < total; i++ {
+		entries = append(entries, veridianTestEntry(
+			fmt.Sprintf("g%02d", i), "user@gmail.com", domain.EmailQueuePayload{}))
+	}
+
+	// Exactement 1 envoi complet (le token du bucket google)
+	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", entries[0].ID).Return(nil)
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil)
+	env.mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), "ws-1", entries[0].ID).Return(nil)
+
+	// Les 49 autres : re-planifiées strictement dans le futur (≥ ~1s), jamais
+	// envoyées, jamais MarkAsProcessing (pas d'attempt brûlé)
+	start := time.Now()
+	env.mockQueueRepo.EXPECT().
+		SetNextRetry(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, nextRetry time.Time) error {
+			assert.True(t, nextRetry.After(start.Add(900*time.Millisecond)),
+				"re-schedule trop proche = risque de busy-loop au prochain poll")
+			return nil
+		}).Times(total - 1)
+
+	for _, e := range entries {
+		env.worker.processEntry(workspace, e)
+	}
+	elapsed := time.Since(start)
+
+	// Tout le batch saturé est traité quasi instantanément (skip non bloquant) :
+	// un design à Wait bloquant aurait pris ~49 minutes ici.
+	assert.Less(t, elapsed, 5*time.Second,
+		"une classe saturée ne doit pas bloquer le worker pool")
 }
