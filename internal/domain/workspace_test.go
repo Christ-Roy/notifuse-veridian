@@ -5081,3 +5081,33 @@ func TestWorkspaceSettings_VeridianProviderClassRatesRoundTrip(t *testing.T) {
 		assert.Nil(t, decoded.VeridianProviderClassRates)
 	})
 }
+
+func TestWorkspaceSettings_VeridianOpenPixelByClassRoundTrip(t *testing.T) {
+	t.Run("open pixel policy survives JSON round-trip", func(t *testing.T) {
+		// false explicite ET true doivent survivre (map[string]bool, pas de
+		// confusion zéro-value : la clé présente porte la valeur voulue).
+		settings := WorkspaceSettings{
+			Timezone:                 "Europe/Paris",
+			VeridianOpenPixelByClass: map[string]bool{"google": false, "freemail_fr": true},
+		}
+
+		raw, err := json.Marshal(settings)
+		require.NoError(t, err)
+
+		var decoded WorkspaceSettings
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.Equal(t, settings.VeridianOpenPixelByClass, decoded.VeridianOpenPixelByClass)
+		assert.False(t, decoded.VeridianOpenPixelByClass["google"])
+		assert.True(t, decoded.VeridianOpenPixelByClass["freemail_fr"])
+	})
+
+	t.Run("omitted when unset (existing workspaces unchanged)", func(t *testing.T) {
+		raw, err := json.Marshal(WorkspaceSettings{Timezone: "UTC"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_open_pixel_by_class")
+
+		var decoded WorkspaceSettings
+		require.NoError(t, json.Unmarshal([]byte(`{"timezone":"UTC"}`), &decoded))
+		assert.Nil(t, decoded.VeridianOpenPixelByClass)
+	})
+}

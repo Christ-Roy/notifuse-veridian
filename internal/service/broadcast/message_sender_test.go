@@ -15,6 +15,7 @@ import (
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestMessageSenderCreation tests creation of the message sender
@@ -3300,4 +3301,113 @@ func TestSendBatch_WithRecipientFeed_NilSettings(t *testing.T) {
 // With the new behavior, feed errors cause immediate broadcast pause.
 func TestSendBatch_WithRecipientFeed_ConsecutiveFailuresReset(t *testing.T) {
 	t.Skip("Removed - consecutive failure counter no longer exists. Feed errors now cause immediate pause.")
+}
+
+// TestSendToRecipient_VeridianOpenPixelByClass vérifie le branchement du pixel
+// d'ouverture PAR CLASSE dans le sender (non-queue). En contexte tunnel (config
+// rates dans broadcast.Metadata), le HTML compilé doit contenir le pixel /t/
+// pour un petit provider (freemail_fr) et NE PAS le contenir pour google, alors
+// que le tracking de clics (EnableTracking=true) reste actif. C'est le contrat
+// data-driven du ticket open-tracking-petits-providers.
+func TestSendToRecipient_VeridianOpenPixelByClass(t *testing.T) {
+	buildSender := func(t *testing.T, capturedHTML *string) MessageSender {
+		t.Helper()
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Warn(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).Return().AnyTimes()
+
+		mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+		mockEmailService.EXPECT().
+			SendEmail(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+				*capturedHTML = req.Content
+				return nil
+			})
+
+		return NewMessageSender(
+			mocks.NewMockBroadcastRepository(ctrl),
+			mocks.NewMockMessageHistoryRepository(ctrl),
+			mocks.NewMockTemplateRepository(ctrl),
+			mockEmailService,
+			nil,
+			mockLogger,
+			TestConfig(),
+			"",
+		)
+	}
+
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+		SMTP:    &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p", UseTLS: true},
+	}
+	template := &domain.Template{
+		ID: "template-123",
+		Email: &domain.EmailTemplate{
+			SenderID:         emailSender.ID,
+			Subject:          "Audit",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Votre audit")),
+		},
+	}
+	// Contexte tunnel : config rates par classe dans le metadata du broadcast.
+	tunnelBroadcast := func() *domain.Broadcast {
+		return &domain.Broadcast{
+			ID: "b-1", WorkspaceID: "ws-1", Name: "tunnel", ChannelType: "email",
+			Audience:      domain.AudienceSettings{List: "list-1"},
+			Status:        domain.BroadcastStatusDraft,
+			UTMParameters: &domain.UTMParameters{Source: "s", Medium: "email"},
+			Metadata: domain.MapOfAny{
+				domain.VeridianProviderClassRatesMetadataKey: map[string]any{"google": 1.0, "freemail_fr": 30.0},
+			},
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}
+	}
+
+	t.Run("google: pixel OFF mais clics ON", func(t *testing.T) {
+		var html string
+		sender := buildSender(t, &html)
+		err := sender.SendToRecipient(context.Background(), "ws-1", "int-1", "https://api.test.com",
+			true, tunnelBroadcast(), "msg-g", "prospect@gmail.com", template,
+			map[string]interface{}{}, emailProvider, time.Now().Add(30*time.Second), "", "")
+		require.NoError(t, err)
+		assert.NotContains(t, html, "/t/", "google : pixel d'ouverture attendu ABSENT")
+		assert.NotContains(t, html, "/opens", "google : pixel legacy attendu ABSENT")
+	})
+
+	t.Run("freemail_fr: pixel ON", func(t *testing.T) {
+		var html string
+		sender := buildSender(t, &html)
+		err := sender.SendToRecipient(context.Background(), "ws-1", "int-1", "https://api.test.com",
+			true, tunnelBroadcast(), "msg-f", "prospect@orange.fr", template,
+			map[string]interface{}{}, emailProvider, time.Now().Add(30*time.Second), "", "")
+		require.NoError(t, err)
+		assert.Contains(t, html, "/t/", "freemail_fr : pixel d'ouverture attendu PRÉSENT")
+	})
+
+	t.Run("hors tunnel: comportement upstream (pixel suit tracking)", func(t *testing.T) {
+		var html string
+		sender := buildSender(t, &html)
+		// Pas de metadata tunnel → EnableTracking=true doit insérer le pixel
+		// (non-régression : même un email gmail garde le pixel hors tunnel).
+		plain := &domain.Broadcast{
+			ID: "b-2", WorkspaceID: "ws-1", Name: "plain", ChannelType: "email",
+			Audience:      domain.AudienceSettings{List: "list-1"},
+			Status:        domain.BroadcastStatusDraft,
+			UTMParameters: &domain.UTMParameters{Source: "s", Medium: "email"},
+			CreatedAt:     time.Now(), UpdatedAt: time.Now(),
+		}
+		err := sender.SendToRecipient(context.Background(), "ws-1", "int-1", "https://api.test.com",
+			true, plain, "msg-p", "prospect@gmail.com", template,
+			map[string]interface{}{}, emailProvider, time.Now().Add(30*time.Second), "", "")
+		require.NoError(t, err)
+		assert.Contains(t, html, "/t/", "hors tunnel + tracking ON : pixel attendu (non-régression)")
+	})
 }

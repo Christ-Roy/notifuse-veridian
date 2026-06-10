@@ -251,6 +251,10 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		MessageID:      messageID,
 	}
 
+	// Veridian fork — pixel d'ouverture par classe (single recipient : contact
+	// non chargé → classification par email si tunnel actif). Cf. queue sender.
+	trackingSettings.EnableOpenPixel = domain.VeridianResolveOpenPixel(nil, email, broadcast, nil)
+
 	// Resolve language variant
 	emailContent := template.ResolveEmailContent(contactLanguage, workspaceDefaultLanguage)
 	if emailContent == nil {
@@ -534,6 +538,9 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, integ
 			WorkspaceID:    workspaceID,
 			MessageID:      messageID,
 		}
+
+		// Veridian fork — pixel d'ouverture par classe de provider destinataire.
+		trackingSettings.EnableOpenPixel = domain.VeridianResolveOpenPixel(contact, contact.Email, broadcast, nil)
 
 		if broadcast.UTMParameters.Content == "" {
 			broadcast.UTMParameters.Content = templateID

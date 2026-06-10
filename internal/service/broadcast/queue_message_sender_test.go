@@ -1298,6 +1298,7 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			emailProvider,
 			"",
 			"",
+			nil, // Veridian: contact (pixel par classe)
 		)
 
 		require.NoError(t, err)
@@ -1360,6 +1361,7 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			emailProvider,
 			"",
 			"",
+			nil, // Veridian: contact (pixel par classe)
 		)
 
 		require.NoError(t, err)
@@ -1399,6 +1401,7 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			emailProvider,
 			"",
 			"",
+			nil, // Veridian: contact (pixel par classe)
 		)
 
 		assert.Error(t, err)
@@ -1442,6 +1445,7 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			emailProvider,
 			"",
 			"",
+			nil, // Veridian: contact (pixel par classe)
 		)
 
 		require.NoError(t, err)

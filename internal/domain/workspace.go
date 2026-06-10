@@ -353,6 +353,14 @@ type WorkspaceSettings struct {
 	// metadata. Vide = pas de throttle classe. Cf. veridian_provider_class.go.
 	VeridianProviderClassRates map[string]float64 `json:"veridian_provider_class_rates,omitempty"`
 
+	// Veridian fork — politique du pixel d'ouverture (email.opened) par classe
+	// de provider destinataire. {classe: bool}, override du défaut tunnel
+	// (ON freemail_fr/yahoo_aol/corporate, OFF google/microsoft). Fallback quand
+	// un broadcast ne définit pas veridian_open_pixel_by_class dans son metadata.
+	// Vide/nil = défaut tunnel. Cf. veridian_open_pixel.go. Permet la révision
+	// data-driven (ex. réactiver google si les tests délivrabilité passent).
+	VeridianOpenPixelByClass map[string]bool `json:"veridian_open_pixel_by_class,omitempty"`
+
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
 }

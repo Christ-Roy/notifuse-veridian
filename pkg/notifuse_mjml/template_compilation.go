@@ -103,8 +103,19 @@ func preprocessMjmlForXML(mjmlString string) string {
 type MapOfAny map[string]any
 
 type TrackingSettings struct {
-	EnableTracking bool   `json:"enable_tracking"`
-	Endpoint       string `json:"endpoint,omitempty"`
+	EnableTracking bool `json:"enable_tracking"`
+
+	// Veridian fork — EnableOpenPixel découple le pixel d'OUVERTURE (email.opened)
+	// de la réécriture de liens (EnableTracking, clics). Le tunnel cold veut le
+	// pixel ON sur les petits providers (freemail_fr, yahoo_aol, corporate) mais
+	// OFF sur google/microsoft (réputation sensible), tout en gardant le tracking
+	// de clics partout. Pointeur nullable pour NON-RÉGRESSION STRICTE : nil =
+	// comportement upstream (le pixel suit EnableTracking) ; non-nil = override
+	// veridian explicite (true force le pixel, false le supprime) indépendamment
+	// d'EnableTracking. Posé par VeridianResolveOpenPixel (queue_message_sender).
+	EnableOpenPixel *bool `json:"enable_open_pixel,omitempty"`
+
+	Endpoint string `json:"endpoint,omitempty"`
 	UTMSource      string `json:"utm_source,omitempty"`
 	UTMMedium      string `json:"utm_medium,omitempty"`
 	UTMCampaign    string `json:"utm_campaign,omitempty"`
@@ -602,9 +613,24 @@ func decodeHTMLEntitiesInURLAttributes(html string) string {
 	})
 }
 
+// openPixelEnabled retourne si le pixel d'ouverture doit être inséré. Veridian
+// fork : nil EnableOpenPixel = comportement upstream (le pixel suit
+// EnableTracking) ; non-nil = override explicite par classe de provider,
+// indépendant d'EnableTracking (cf. VeridianResolveOpenPixel).
+func (t TrackingSettings) openPixelEnabled() bool {
+	if t.EnableOpenPixel != nil {
+		return *t.EnableOpenPixel
+	}
+	return t.EnableTracking
+}
+
 func TrackLinks(htmlString string, trackingSettings TrackingSettings) (updatedHTML string, err error) {
-	// If tracking is disabled and no UTM parameters to add, return original HTML
-	if !trackingSettings.EnableTracking && trackingSettings.UTMSource == "" &&
+	// If tracking is disabled, no pixel to insert, and no UTM parameters to add,
+	// return original HTML. (Veridian fork: openPixelEnabled() peut forcer
+	// l'insertion du pixel même quand EnableTracking est false — cas pixel ON sur
+	// petit provider sans réécriture de liens.)
+	if !trackingSettings.EnableTracking && !trackingSettings.openPixelEnabled() &&
+		trackingSettings.UTMSource == "" &&
 		trackingSettings.UTMMedium == "" && trackingSettings.UTMCampaign == "" &&
 		trackingSettings.UTMContent == "" && trackingSettings.UTMTerm == "" {
 		return htmlString, nil
@@ -647,7 +673,7 @@ func TrackLinks(htmlString string, trackingSettings TrackingSettings) (updatedHT
 		return beforeURL + trackedURL + afterURL
 	})
 
-	if trackingSettings.EnableTracking {
+	if trackingSettings.openPixelEnabled() {
 		// Insert tracking pixel before </body>. The pixel is wrapped in a <table>
 		// by GenerateHTMLOpenTrackingPixel to look like a structural layout element
 		// rather than a standalone tracking pixel.

@@ -71,8 +71,9 @@ func (s *queueMessageSender) SendToRecipient(
 	contactLanguage string,
 	workspaceDefaultLanguage string,
 ) error {
-	// Build the email payload
-	entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage)
+	// Build the email payload (contact nil ici : envoi single sans contact
+	// chargé ; le pixel résout par classification de l'email si tunnel actif).
+	entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage, nil)
 	if err != nil {
 		return err
 	}
@@ -222,7 +223,7 @@ func (s *queueMessageSender) SendBatch(
 		}
 
 		// Build queue entry
-		entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, recipient.Contact.Email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage)
+		entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, recipient.Contact.Email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage, recipient.Contact)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,
@@ -282,6 +283,9 @@ func (s *queueMessageSender) buildQueueEntry(
 	emailProvider *domain.EmailProvider,
 	contactLanguage string,
 	workspaceDefaultLanguage string,
+	// Veridian fork — contact destinataire (nil pour SendToRecipient single)
+	// pour résoudre le pixel d'ouverture par classe de provider.
+	contact *domain.Contact,
 ) (*domain.EmailQueueEntry, error) {
 	// Ensure UTM parameters object is present
 	if broadcast.UTMParameters == nil {
@@ -304,6 +308,13 @@ func (s *queueMessageSender) buildQueueEntry(
 		WorkspaceID:    workspaceID,
 		MessageID:      messageID,
 	}
+
+	// Veridian fork — découple le pixel d'ouverture (email.opened) de la
+	// réécriture de liens, par classe de provider destinataire. Le workspace
+	// n'est pas injecté dans ce sender ; le contexte tunnel est porté par le
+	// broadcast metadata (rates/pixel) + le tag contact custom_string_5. Hors
+	// tunnel → nil → comportement upstream (pixel suit EnableTracking).
+	trackingSettings.EnableOpenPixel = domain.VeridianResolveOpenPixel(contact, email, broadcast, nil)
 
 	// Resolve language variant
 	emailContent := template.ResolveEmailContent(contactLanguage, workspaceDefaultLanguage)

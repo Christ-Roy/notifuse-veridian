@@ -113,12 +113,22 @@ for i in w.get("integrations") or []:
     if i.get("name")=="relai-agences": print(i["id"]); break
 ')
 if [ -z "$INTEG_ID" ]; then
-  INTEG_ID=$(api /api/workspaces.createIntegration "{\"workspace_id\":\"$WID\",\"name\":\"relai-agences\",\"type\":\"email\",\"provider\":{\"kind\":\"smtp\",\"smtp\":{\"host\":\"$SMTP_RELAY_HOST\",\"port\":$SMTP_RELAY_PORT,\"username\":\"$SMTP_RELAY_USER\",\"password\":\"$SMTP_RELAY_PASS\",\"use_tls\":$SMTP_RELAY_TLS},\"senders\":[{\"id\":\"sender-tunnel\",\"email\":\"$SENDER_EMAIL\",\"name\":\"Veridian Audit\",\"is_default\":true}],\"rate_limit_per_minute\":120}}" \
+  # skip_tls_verify=true : le relai cold agences-veridian.fr (Tailscale
+  # 100.92.215.42) a un cert STARTTLS self-signed → sans ce flag le handshake
+  # est rejeté (x509: unknown authority). Garde-fou domain Validate() : accepté
+  # car host privé (CGNAT 100.64/10). Sans ce champ, aucun envoi réel possible.
+  INTEG_ID=$(api /api/workspaces.createIntegration "{\"workspace_id\":\"$WID\",\"name\":\"relai-agences\",\"type\":\"email\",\"provider\":{\"kind\":\"smtp\",\"smtp\":{\"host\":\"$SMTP_RELAY_HOST\",\"port\":$SMTP_RELAY_PORT,\"username\":\"$SMTP_RELAY_USER\",\"password\":\"$SMTP_RELAY_PASS\",\"use_tls\":$SMTP_RELAY_TLS,\"skip_tls_verify\":true},\"senders\":[{\"id\":\"sender-tunnel\",\"email\":\"$SENDER_EMAIL\",\"name\":\"Veridian Audit\",\"is_default\":true}],\"rate_limit_per_minute\":120}}" \
     | python3 -c 'import json,sys;print(json.load(sys.stdin)["integration_id"])') \
     || fail "createIntegration"
   log "    intégration créée: $INTEG_ID"
 else
-  log "    intégration réutilisée: $INTEG_ID"
+  # Convergence idempotente : le workspace 'coldtest' est pérenne. Une
+  # intégration créée par un run AVANT le flag skip_tls_verify n'aurait pas la
+  # vérif TLS désactivée → handshake x509 rejeté à l'envoi. On force l'état
+  # désiré par update (pas de DELETE/recreate : on garde l'ID + l'historique).
+  api /api/workspaces.updateIntegration "{\"workspace_id\":\"$WID\",\"integration_id\":\"$INTEG_ID\",\"name\":\"relai-agences\",\"provider\":{\"kind\":\"smtp\",\"smtp\":{\"host\":\"$SMTP_RELAY_HOST\",\"port\":$SMTP_RELAY_PORT,\"username\":\"$SMTP_RELAY_USER\",\"password\":\"$SMTP_RELAY_PASS\",\"use_tls\":$SMTP_RELAY_TLS,\"skip_tls_verify\":true},\"senders\":[{\"id\":\"sender-tunnel\",\"email\":\"$SENDER_EMAIL\",\"name\":\"Veridian Audit\",\"is_default\":true}],\"rate_limit_per_minute\":120}}" >/dev/null \
+    || fail "updateIntegration (convergence skip_tls_verify)"
+  log "    intégration réutilisée + convergée (skip_tls_verify): $INTEG_ID"
 fi
 
 log "3/7 ensure workspace settings (marketing provider = relai)"
