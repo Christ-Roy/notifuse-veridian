@@ -1,6 +1,6 @@
 module github.com/Notifuse/notifuse
 
-go 1.25.10
+go 1.25.11
 
 require (
 	contrib.go.opencensus.io/exporter/aws v0.0.0-20230502192102-15967c811cec
@@ -35,7 +35,7 @@ require (
 	github.com/tidwall/gjson v1.18.0
 	github.com/wneessen/go-mail v0.7.2
 	go.opencensus.io v0.24.0
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/time v0.15.0
