@@ -99,11 +99,13 @@ services:
       - traefik.docker.network=dokploy-network
       - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-web.rule=Host(`${NOTIFUSE_HOST:-notifuse.app.veridian.site}`)
       - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-web.entrypoints=web
-      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-web.middlewares=redirect-to-https@file,notifuse-${DEPLOY_ENV:-prod}-noindex@docker
       - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.rule=Host(`${NOTIFUSE_HOST:-notifuse.app.veridian.site}`)
       - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.entrypoints=websecure
+      - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.middlewares=notifuse-${DEPLOY_ENV:-prod}-noindex@docker
       - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.tls=true
       - traefik.http.routers.notifuse-${DEPLOY_ENV:-prod}-websecure.tls.certresolver=letsencrypt
+      - traefik.http.middlewares.notifuse-${DEPLOY_ENV:-prod}-noindex.headers.customresponseheaders.X-Robots-Tag=noindex, nofollow, noarchive
       - traefik.http.services.notifuse-${DEPLOY_ENV:-prod}.loadbalancer.server.port=8081
 
 volumes:
