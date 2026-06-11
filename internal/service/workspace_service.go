@@ -394,6 +394,15 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.DefaultLanguage = settings.DefaultLanguage
 	existingWorkspace.Settings.Languages = settings.Languages
 
+	// Veridian fork — le mapping ci-dessus est une allowlist explicite (les
+	// champs non recopiés sont silencieusement droppés). On propage donc nos
+	// settings cold outreach (débits par classe + politique pixel par classe),
+	// sinon l'UI Settings → Cold outreach sauve sans persister (bug vu en
+	// validation staging 2026-06-11). nil = la config est effacée (comportement
+	// attendu : vider l'UI revient au défaut tunnel).
+	existingWorkspace.Settings.VeridianProviderClassRates = settings.VeridianProviderClassRates
+	existingWorkspace.Settings.VeridianOpenPixelByClass = settings.VeridianOpenPixelByClass
+
 	// Handle template blocks - preserve existing blocks if not provided in update
 	// Note: Template blocks should be managed via dedicated /api/templateBlocks.* endpoints
 	// which support granular template permissions instead of requiring owner role.

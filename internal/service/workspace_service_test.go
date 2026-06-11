@@ -1046,6 +1046,43 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.Len(t, workspace.Settings.TemplateBlocks, 1)
 		assert.Equal(t, "New Block", workspace.Settings.TemplateBlocks[0].Name)
 	})
+
+	// Veridian fork — le mapping de UpdateWorkspace est une allowlist explicite.
+	// Ce test garantit que les settings cold outreach (débits + pixel par classe)
+	// sont PERSISTÉS et pas droppés silencieusement (bug vu en validation staging
+	// 2026-06-11 : l'UI sauvait "successfully" mais les champs restaient nil).
+	t.Run("persists veridian cold outreach settings", func(t *testing.T) {
+		settings := domain.WorkspaceSettings{
+			Timezone:        "UTC",
+			DefaultLanguage: "en",
+			Languages:       []string{"en"},
+			VeridianProviderClassRates: map[string]float64{"google": 0.5, "corporate": 30},
+			VeridianOpenPixelByClass:   map[string]bool{"google": false, "freemail_fr": true},
+		}
+		existing := &domain.Workspace{
+			ID:       workspaceID,
+			Name:     "WS",
+			Settings: domain.WorkspaceSettings{Timezone: "UTC"},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(ctx, &domain.User{ID: userID}, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).
+			Return(&domain.UserWorkspace{UserID: userID, WorkspaceID: workspaceID, Role: "owner"}, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existing, nil)
+
+		var saved *domain.Workspace
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(
+			func(_ context.Context, w *domain.Workspace) error { saved = w; return nil })
+
+		_, err := service.UpdateWorkspace(ctx, workspaceID, "WS", settings)
+		require.NoError(t, err)
+		require.NotNil(t, saved)
+		assert.Equal(t, 0.5, saved.Settings.VeridianProviderClassRates["google"])
+		assert.Equal(t, float64(30), saved.Settings.VeridianProviderClassRates["corporate"])
+		assert.False(t, saved.Settings.VeridianOpenPixelByClass["google"])
+		assert.True(t, saved.Settings.VeridianOpenPixelByClass["freemail_fr"])
+	})
 }
 
 func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
