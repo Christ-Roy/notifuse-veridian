@@ -105,6 +105,11 @@ msgstr "{0}件のメールを配信済み - クリックして詳細を表示"
 msgid "{0} emails successfully delivered (hidden from chart)"
 msgstr "{0}件のメールを配信済み (チャートでは非表示)"
 
+#. placeholder {0}: rates[c]
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:74
+msgid "{0} emails/min"
+msgstr ""
+
 #. placeholder {0}: dayjs(dateString).format('lll')
 #. placeholder {1}: currentWorkspace?.settings.timezone || 'UTC'
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:338
@@ -233,6 +238,10 @@ msgstr "{recipients}人中{opens}回開封"
 msgid "{propertyCount} properties"
 msgstr "{propertyCount}件のプロパティ"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:155
+msgid "{rate} emails/min"
+msgstr ""
+
 #: src/components/contacts/ExportContactsModal.tsx:115
 msgid "{seconds} second"
 msgstr "{seconds}秒"
@@ -281,7 +290,7 @@ msgstr "+ フィルターを追加"
 msgid "+ add from name, CC, BCC, reply-to, attachments"
 msgstr "+ 差出人名、CC、BCC、返信先、添付ファイルを追加"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:809
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:813
 msgid "+ Add variation"
 msgstr "+ バリエーションを追加"
 
@@ -297,7 +306,7 @@ msgstr "0件のコンタクト"
 msgid "0 opens out of 0 recipients"
 msgstr "0人中0回開封"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:490
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:491
 msgid "1. Audience"
 msgstr "1. オーディエンス"
 
@@ -318,7 +327,7 @@ msgstr "2. テンプレート"
 msgid "2. Template ({0})"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:494
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:495
 msgid "2. Web Analytics"
 msgstr "2. Web Analytics"
 
@@ -326,7 +335,7 @@ msgstr "2. Web Analytics"
 msgid "200 - Extra Light"
 msgstr "200 - 超細"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:498
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:499
 msgid "3. Data Feeds"
 msgstr ""
 
@@ -338,7 +347,7 @@ msgstr ""
 msgid "300 - Light"
 msgstr "300 - 細"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:502
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:503
 msgid "4. Content"
 msgstr ""
 
@@ -993,7 +1002,7 @@ msgstr "このカスタムフィールドラベルを削除してもよろしい
 msgid "Are you sure you want to remove this field?"
 msgstr "このフィールドを削除してもよろしいですか?"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:779
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:783
 msgid "Are you sure you want to remove this variation?"
 msgstr "このバリエーションを削除してもよろしいですか?"
 
@@ -1103,7 +1112,7 @@ msgstr "リストへ自動登録"
 msgid "Automatically add new users to the selected lists"
 msgstr "新規ユーザーを選択したリストに自動追加"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:698
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:702
 msgid "Automatically send winner"
 msgstr "勝者を自動送信"
 
@@ -1270,7 +1279,7 @@ msgstr "日付以前"
 msgid "Before User Created Hook"
 msgstr "ユーザー作成前フック"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:541
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:542
 msgid "Belonging to at least one of the following segments"
 msgstr "以下のセグメントの少なくとも1つに属する"
 
@@ -1316,7 +1325,7 @@ msgstr "ブロック"
 #: src/components/settings/BlogSettings.tsx:197
 #: src/components/settings/BlogSettings.tsx:205
 #: src/components/settings/BlogSettings.tsx:238
-#: src/components/settings/SettingsSidebar.tsx:100
+#: src/components/settings/SettingsSidebar.tsx:102
 #: src/layouts/WorkspaceLayout.tsx:360
 msgid "Blog"
 msgstr "ブログ"
@@ -1530,7 +1539,7 @@ msgstr "ブロードキャスト\"{0}\"を予約しました"
 msgid "Broadcast \"{0}\" sending started"
 msgstr "ブロードキャスト\"{0}\"の送信を開始しました"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:158
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:159
 msgid "Broadcast created successfully"
 msgstr "ブロードキャストを作成しました"
 
@@ -1543,11 +1552,11 @@ msgstr "ブロードキャストID"
 msgid "Broadcast ID copied to clipboard"
 msgstr "ブロードキャストIDをクリップボードにコピーしました"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:511
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:512
 msgid "Broadcast name"
 msgstr "ブロードキャスト名"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:158
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:159
 msgid "Broadcast updated successfully"
 msgstr "ブロードキャストを更新しました"
 
@@ -1618,7 +1627,7 @@ msgstr "ボタンサイズ"
 #: src/components/blog/ThemeEditorDrawer.tsx:469
 #: src/components/broadcasts/HeadersEditor.tsx:103
 #: src/components/broadcasts/SendOrScheduleModal.tsx:301
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:328
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:329
 #: src/components/contacts/BulkActionProgressModal.tsx:60
 #: src/components/contacts/BulkUpdateDrawer.tsx:579
 #: src/components/contacts/ContactDetailsDrawer.tsx:1113
@@ -1856,7 +1865,7 @@ msgstr "クリックでオプションを表示"
 msgid "Click or drag a CSV file to this area to upload"
 msgstr "CSVファイルをクリックまたはドラッグしてアップロード"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:55
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:56
 msgid "Click Rate"
 msgstr "クリック率"
 
@@ -1939,6 +1948,14 @@ msgstr ""
 #: src/components/email_builder/ui/CodeDrawerInput.tsx:24
 msgid "Code Editor"
 msgstr "コードエディター"
+
+#: src/components/settings/SettingsSidebar.tsx:131
+msgid "Cold outreach"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:125
+msgid "Cold outreach settings updated successfully"
+msgstr ""
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
 #: src/layouts/WorkspaceLayout.tsx:505
@@ -2361,7 +2378,7 @@ msgstr "カバー"
 msgid "Create"
 msgstr "作成"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:387
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:388
 msgid "Create a broadcast"
 msgstr "ブロードキャストを作成"
 
@@ -2389,7 +2406,7 @@ msgstr "APIキーを作成"
 msgid "Create Automation"
 msgstr "オートメーションを作成"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:383
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:384
 #: src/pages/BroadcastsPage.tsx:1301
 #: src/pages/BroadcastsPage.tsx:1397
 msgid "Create Broadcast"
@@ -2642,7 +2659,7 @@ msgstr "カスタムフィールドラベルを保存しました"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1136
 #: src/components/settings/CustomFieldsConfiguration.tsx:161
-#: src/components/settings/SettingsSidebar.tsx:105
+#: src/components/settings/SettingsSidebar.tsx:107
 msgid "Custom Fields"
 msgstr "カスタムフィールド"
 
@@ -2755,7 +2772,7 @@ msgstr "カスタム文字列フィールド"
 
 #: src/components/settings/BlogSettings.tsx:463
 #: src/components/settings/DeleteWorkspace.tsx:45
-#: src/components/settings/SettingsSidebar.tsx:131
+#: src/components/settings/SettingsSidebar.tsx:140
 msgid "Danger Zone"
 msgstr "危険な操作"
 
@@ -3258,7 +3275,7 @@ msgstr "例: password_reset"
 msgid "e.g. veridian"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:514
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:515
 msgid "E.g. Weekly Newsletter - May 2023"
 msgstr "例: ウィークリーニュースレター - 2023年5月"
 
@@ -3341,11 +3358,11 @@ msgstr "著者を編集"
 msgid "Edit Automation"
 msgstr "オートメーションを編集"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:387
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:388
 msgid "Edit broadcast"
 msgstr "ブロードキャストを編集"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:383
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:384
 #: src/pages/BroadcastsPage.tsx:484
 msgid "Edit Broadcast"
 msgstr "ブロードキャストを編集"
@@ -3471,7 +3488,7 @@ msgstr "経過時間"
 msgid "Element Padding"
 msgstr "要素パディング"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:623
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:624
 msgid "email"
 msgstr "メール"
 
@@ -3630,7 +3647,7 @@ msgstr "絵文字候補"
 msgid "Empty column. Add text, button, or image content."
 msgstr "空のカラムです。テキスト、ボタン、または画像を追加してください。"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:665
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:669
 msgid "Enable A/B Testing"
 msgstr "A/Bテストを有効化"
 
@@ -3986,7 +4003,7 @@ msgstr ""
 msgid "Exclude Unsubscribed"
 msgstr "配信停止者を除外"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:599
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:600
 msgid "Exclude unsubscribed, bounced & complained recipients"
 msgstr ""
 
@@ -4109,7 +4126,7 @@ msgid "Failed to create automation: {0}"
 msgstr "オートメーションの作成に失敗しました: {0}"
 
 #. placeholder {0}: error.message
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:164
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:165
 msgid "Failed to create broadcast: {0}"
 msgstr "ブロードキャストの作成に失敗しました: {0}"
 
@@ -4257,7 +4274,7 @@ msgstr "オブジェクトの取得に失敗しました: "
 msgid "Failed to fetch setup status"
 msgstr "セットアップ状態の取得に失敗しました"
 
-#: src/pages/WorkspaceSettingsPage.tsx:85
+#: src/pages/WorkspaceSettingsPage.tsx:87
 msgid "Failed to fetch workspace members"
 msgstr "ワークスペースメンバーの取得に失敗しました"
 
@@ -4474,7 +4491,7 @@ msgid "Failed to update blog settings"
 msgstr "ブログ設定の更新に失敗しました"
 
 #. placeholder {0}: error.message
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:164
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:165
 msgid "Failed to update broadcast: {0}"
 msgstr "ブロードキャストの更新に失敗しました: {0}"
 
@@ -4482,6 +4499,10 @@ msgstr "ブロードキャストの更新に失敗しました: {0}"
 #: src/components/blog/CategoryDrawer.tsx:61
 msgid "Failed to update category: {0}"
 msgstr "カテゴリの更新に失敗しました: {0}"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:127
+msgid "Failed to update cold outreach settings"
+msgstr ""
 
 #: src/components/settings/CustomFieldsConfiguration.tsx:126
 msgid "Failed to update custom field label"
@@ -4837,7 +4858,7 @@ msgstr "モバイルで全幅"
 msgid "Fullscreen"
 msgstr "フルスクリーン"
 
-#: src/components/settings/SettingsSidebar.tsx:115
+#: src/components/settings/SettingsSidebar.tsx:117
 #: src/components/settings/SystemSettingsDrawer.tsx:228
 msgid "General"
 msgstr "一般"
@@ -4878,7 +4899,7 @@ msgstr ""
 msgid "Global feed URL"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:403
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:404
 msgid "Global feed URL is required when enabled"
 msgstr "有効時はグローバルフィードのURLが必須です"
 
@@ -5436,7 +5457,7 @@ msgid "Integration updated successfully"
 msgstr "連携を更新しました"
 
 #: src/components/settings/Integrations.tsx:2142
-#: src/components/settings/SettingsSidebar.tsx:57
+#: src/components/settings/SettingsSidebar.tsx:59
 msgid "Integrations"
 msgstr "連携"
 
@@ -5805,7 +5826,7 @@ msgstr ""
 #: src/components/automations/config/TriggerConfigForm.tsx:65
 #: src/components/automations/config/TriggerConfigForm.tsx:256
 #: src/components/automations/UpsertAutomationDrawer.tsx:178
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:519
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:520
 #: src/components/contacts/BulkUpdateDrawer.tsx:611
 #: src/components/contacts/ExportContactsModal.tsx:73
 #: src/components/messages/MessageHistoryTable.tsx:132
@@ -6067,6 +6088,10 @@ msgstr "一致するコンタクト:"
 #: src/components/templates/SendTemplateModal.tsx:394
 msgid "Max 3MB per file, 10MB total, 20 files maximum"
 msgstr "ファイルあたり最大3MB、合計10MB、最大20ファイル"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:215
+msgid "Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle."
+msgstr ""
 
 #: src/components/templates/SendTemplateModal.tsx:199
 msgid "Maximum 20 attachments allowed"
@@ -6367,9 +6392,9 @@ msgstr "新しいウィンドウ"
 msgid "New workspace"
 msgstr "新規ワークスペース"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:333
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:343
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:354
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:334
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:344
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:355
 #: src/components/templates/CreateTemplateDrawer.tsx:505
 #: src/components/templates/CreateTemplateDrawer.tsx:526
 msgid "Next"
@@ -6385,8 +6410,8 @@ msgstr "次回実行"
 #: src/components/blog/PostDrawer.tsx:488
 #: src/components/blog/PostsTable.tsx:319
 #: src/components/broadcasts/HeadersEditor.tsx:66
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:250
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:782
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:251
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:786
 #: src/components/contacts/ContactUpsertDrawer.tsx:540
 #: src/components/contacts/SegmentsFilter.tsx:134
 #: src/components/contacts/SegmentsFilter.tsx:149
@@ -6630,6 +6655,14 @@ msgstr "カテゴリ「{selectedCategory}」のテンプレートが見つかり
 msgid "No themes yet"
 msgstr "テーマがまだありません"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:217
+msgid "no throttle"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:156
+msgid "No throttle (uses sender rate limit)"
+msgstr ""
+
 #: src/components/timeline/ContactTimeline.tsx:790
 msgid "No timeline events found for this contact"
 msgstr "このコンタクトのタイムラインイベントが見つかりません"
@@ -6868,9 +6901,25 @@ msgstr ""
 msgid "Open on web"
 msgstr "Webで開く"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:54
+#: src/components/settings/veridian_cold_outreach_settings.tsx:225
+msgid "Open pixel"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:167
+msgid "Open pixel OFF"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:162
+msgid "Open pixel ON"
+msgstr ""
+
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:55
 msgid "Open Rate"
 msgstr "開封率"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:223
+msgid "Open tracking pixel for this provider class. Default: ON for small providers, OFF for Google/Microsoft."
+msgstr ""
 
 #: src/components/veridian_paywall_modal.tsx:52
 msgid "Open Veridian"
@@ -6932,7 +6981,7 @@ msgstr ""
 msgid "Optional. If provided, sent as Authorization: Bearer <secret>"
 msgstr "任意。指定すると Authorization: Bearer <secret> として送信"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:543
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:544
 msgid "Optionally filter contacts by segments within the selected lists"
 msgstr "選択したリスト内のコンタクトをセグメントでフィルタリング（任意）"
 
@@ -7055,6 +7104,18 @@ msgstr "保留中"
 msgid "Pending confirmation"
 msgstr "確認待ち"
 
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:69
+msgid "Per-provider sending rates (Veridian cold outreach)"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:140
+msgid "Per-provider sending rates and open-tracking policy for outbound campaigns."
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:184
+msgid "Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability."
+msgstr ""
+
 #: src/components/broadcasts/RecipientFeedSettings.tsx:88
 msgid "Per-Recipient Data Feed"
 msgstr "受信者別データフィード"
@@ -7063,7 +7124,7 @@ msgstr "受信者別データフィード"
 msgid "Per-recipient feed URL"
 msgstr "受信者別フィードURL"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:408
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:409
 msgid "Per-recipient feed URL is required when enabled"
 msgstr "有効時は受信者別フィードのURLが必須です"
 
@@ -7112,6 +7173,10 @@ msgstr "写真: Zetong Li"
 msgid "Photo URL"
 msgstr "写真URL"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:204
+msgid "pixel OFF by default"
+msgstr ""
+
 #: src/components/transactional/ApiCommandModal.tsx:529
 #~ msgid "Plain text (not recommended for production)"
 #~ msgstr "プレーンテキスト（本番環境では非推奨）"
@@ -7120,7 +7185,7 @@ msgstr "写真URL"
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
 msgstr ""
 
-#: src/components/settings/SettingsSidebar.tsx:122
+#: src/components/settings/SettingsSidebar.tsx:124
 #: src/components/settings/veridian_plan_settings.tsx:51
 msgid "Plan"
 msgstr ""
@@ -7146,7 +7211,7 @@ msgid "Please check the form for errors"
 msgstr "フォームにエラーがないか確認してください"
 
 #: src/components/blog/PostDrawer.tsx:629
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:472
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:473
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:244
 msgid "Please check the form for errors."
 msgstr "フォームにエラーがないか確認してください。"
@@ -7155,7 +7220,7 @@ msgstr "フォームにエラーがないか確認してください。"
 msgid "Please choose a different segment name"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:512
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:513
 msgid "Please enter a broadcast name"
 msgstr "ブロードキャスト名を入力してください"
 
@@ -7307,7 +7372,7 @@ msgstr "ゴールタイプを選択してください"
 msgid "Please select a JSON file"
 msgstr "JSONファイルを選択してください"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:524
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:525
 #: src/components/contacts/ContactDetailsDrawer.tsx:1130
 #: src/components/segment/form_leaf.tsx:168
 msgid "Please select a list"
@@ -7540,9 +7605,9 @@ msgstr ""
 msgid "Preview Your Email"
 msgstr "メールをプレビュー"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:340
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:351
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:362
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:341
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:352
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:363
 #: src/components/templates/CreateTemplateDrawer.tsx:510
 #: src/components/templates/CreateTemplateDrawer.tsx:531
 msgid "Previous"
@@ -7669,6 +7734,10 @@ msgstr "プッシュ"
 
 #: src/pages/BroadcastsPage.tsx:563
 msgid "Queued emails will not be sent. In-flight sends will complete."
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:213
+msgid "Rate (emails/min)"
 msgstr ""
 
 #: src/components/settings/Integrations.tsx:2027
@@ -7891,7 +7960,7 @@ msgstr "メンバーを削除"
 msgid "Remove this author?"
 msgstr "この著者を削除しますか？"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:778
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:782
 msgid "Remove variation"
 msgstr "バリエーションを削除"
 
@@ -8161,7 +8230,7 @@ msgstr "サンドボックスモード"
 #: src/components/blog/PostDrawer.tsx:617
 #: src/components/blog/ThemeEditorDrawer.tsx:318
 #: src/components/blog/ThemeEditorDrawer.tsx:468
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:371
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:372
 #: src/components/contacts/ContactUpsertDrawer.tsx:502
 #: src/components/contacts/InlineEditableField.tsx:318
 #: src/components/email_builder/panels/Preview.tsx:185
@@ -8206,6 +8275,7 @@ msgstr "ブロックを保存"
 #: src/components/email_builder/ui/CodeDrawerInput.tsx:182
 #: src/components/settings/BlogSettings.tsx:444
 #: src/components/settings/GeneralSettings.tsx:299
+#: src/components/settings/veridian_cold_outreach_settings.tsx:247
 msgid "Save Changes"
 msgstr "変更を保存"
 
@@ -8388,7 +8458,7 @@ msgid "Select a field"
 msgstr "フィールドを選択"
 
 #: src/components/automations/nodes/ListStatusBranchNode.tsx:50
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:529
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:530
 #: src/components/contacts/BulkActionsBar.tsx:203
 #: src/components/contacts/ContactDetailsDrawer.tsx:1137
 #: src/components/segment/form_leaf.tsx:170
@@ -8567,7 +8637,7 @@ msgstr "OAuth2プロバイダーを選択"
 msgid "Select page size"
 msgstr "ページサイズを選択"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:553
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:554
 msgid "Select segments (optional)"
 msgstr "セグメントを選択（任意）"
 
@@ -8583,8 +8653,8 @@ msgstr "ストレージプロバイダーを選択"
 msgid "Select supported languages"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:766
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:829
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:770
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:833
 msgid "Select template"
 msgstr "テンプレートを選択"
 
@@ -8910,7 +8980,7 @@ msgstr "メールがモバイルレイアウトに切り替わる画面幅を設
 msgid "Setting up..."
 msgstr "セットアップ中..."
 
-#: src/components/settings/SettingsSidebar.tsx:137
+#: src/components/settings/SettingsSidebar.tsx:146
 #: src/layouts/WorkspaceLayout.tsx:405
 msgid "Settings"
 msgstr "設定"
@@ -9004,7 +9074,7 @@ msgstr "SMS"
 msgid "SMTP & bridge settings"
 msgstr ""
 
-#: src/components/settings/SettingsSidebar.tsx:110
+#: src/components/settings/SettingsSidebar.tsx:112
 #: src/components/settings/SMTPBridgeSettings.tsx:20
 #: src/components/settings/SystemSettingsDrawer.tsx:422
 msgid "SMTP Bridge"
@@ -9451,7 +9521,7 @@ msgstr "タスクステータス"
 msgid "Task type:"
 msgstr "タスクタイプ:"
 
-#: src/components/settings/SettingsSidebar.tsx:36
+#: src/components/settings/SettingsSidebar.tsx:38
 #: src/components/settings/WorkspaceMembers.tsx:576
 msgid "Team"
 msgstr "チーム"
@@ -9469,7 +9539,7 @@ msgstr ""
 msgid "template"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:824
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:828
 #: src/components/messages/MessageHistoryTable.tsx:130
 #: src/components/messages/MessageHistoryTable.tsx:172
 #: src/pages/BroadcastsPage.tsx:714
@@ -9479,7 +9549,7 @@ msgid "Template"
 msgstr "テンプレート"
 
 #. placeholder {0}: field.key + 1
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:733
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:737
 msgid "Template {0}"
 msgstr "テンプレート {0}"
 
@@ -9605,7 +9675,7 @@ msgstr ""
 msgid "Test data updated successfully"
 msgstr "テストデータが正常に更新されました"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:63
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:64
 msgid "Test duration (hours)"
 msgstr "テスト期間（時間）"
 
@@ -9639,7 +9709,7 @@ msgstr "連携テスト"
 msgid "Test Recipient Feed"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:689
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:693
 msgid "Test sample size (%)"
 msgstr "テストサンプルサイズ（%）"
 
@@ -9856,7 +9926,11 @@ msgstr ""
 msgid "These contacts will be subscribed to the selected list (status: active)."
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:611
+#: src/components/settings/veridian_cold_outreach_settings.tsx:241
+msgid "These defaults apply when a campaign does not set its own per-class rates. Link click tracking stays ON for every class regardless of the open pixel."
+msgstr ""
+
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:612
 msgid "These parameters are automatically added to the URL of the broadcast. They are used by web analytics tools to analyze the performance of your campaign."
 msgstr "これらのパラメータはブロードキャストのURLに自動的に追加されます。Webアナリティクスツールがキャンペーンのパフォーマンスを分析するために使用されます。"
 
@@ -9954,7 +10028,7 @@ msgstr "このセクションは空です。コンテンツを表示するには
 msgid "This segment uses relative date filters and will be automatically recomputed daily at 5:00 AM ({timezone})"
 msgstr "このセグメントは相対日付フィルターを使用しており、毎日午前5時（{timezone}）に自動的に再計算されます"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:754
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:758
 msgid "This template is already used in another variation"
 msgstr "このテンプレートは既に別のバリエーションで使用されています"
 
@@ -10185,11 +10259,11 @@ msgstr "添付ファイルの合計サイズが10MBの制限を超えていま�
 msgid "Total Contacts"
 msgstr "コンタクト総数"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:656
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:660
 msgid "Tracking (opens & clicks) must be enabled in workspace settings to use A/B testing features."
 msgstr "A/Bテスト機能を使用するには、ワークスペース設定でトラッキング（開封＆クリック）を有効にする必要があります。"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:702
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:706
 msgid "Tracking (opens & clicks) should be enabled in your workspace settings to use this feature"
 msgstr "この機能を使用するには、ワークスペース設定でトラッキング（開封＆クリック）を有効にする必要があります"
 
@@ -10365,7 +10439,7 @@ msgstr "投稿を非公開"
 
 #: src/components/automations/UpsertAutomationDrawer.tsx:132
 #: src/components/blog/PostDrawer.tsx:485
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:247
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:248
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:145
 msgid "Unsaved changes"
 msgstr "未保存の変更"
@@ -10674,10 +10748,15 @@ msgstr "値:"
 msgid "Variant name"
 msgstr "バリアント名"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:720
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:724
 #: src/pages/BroadcastsPage.tsx:663
 msgid "Variations"
 msgstr "バリエーション"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:139
+#: src/components/settings/veridian_cold_outreach_settings.tsx:183
+msgid "Veridian — Cold outreach"
+msgstr ""
 
 #: src/components/veridian_brand_header_link.tsx:43
 msgid "Veridian dashboard"
@@ -10824,7 +10903,7 @@ msgstr "Webhook URL"
 #: src/components/settings/Integrations.tsx:198
 #: src/components/settings/Integrations.tsx:206
 #: src/components/settings/Integrations.tsx:237
-#: src/components/settings/SettingsSidebar.tsx:79
+#: src/components/settings/SettingsSidebar.tsx:81
 #: src/components/settings/WebhooksSettings.tsx:169
 msgid "Webhooks"
 msgstr "Webhooks"
@@ -10919,7 +10998,7 @@ msgstr "優勝"
 msgid "Winner selected successfully! The broadcast will be sent to remaining recipients."
 msgstr "優勝者が正常に選択されました！ブロードキャストは残りの受信者に送信されます。"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:49
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:50
 msgid "Winning metric"
 msgstr "勝利指標"
 
@@ -11019,8 +11098,8 @@ msgstr ""
 #: src/components/blog/PostDrawer.tsx:487
 #: src/components/blog/PostsTable.tsx:318
 #: src/components/broadcasts/HeadersEditor.tsx:65
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:249
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:781
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:250
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:785
 #: src/components/contacts/ContactUpsertDrawer.tsx:539
 #: src/components/contacts/SegmentsFilter.tsx:133
 #: src/components/contacts/SegmentsFilter.tsx:148
@@ -11142,7 +11221,7 @@ msgid "You don't have write permission for transactional notifications"
 msgstr "トランザクション通知の書き込み権限がありません"
 
 #: src/components/blog/PostDrawer.tsx:486
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:248
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:249
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:146
 msgid "You have unsaved changes. Are you sure you want to close this drawer?"
 msgstr "未保存の変更があります。このドロワーを閉じてもよろしいですか？"
@@ -11206,7 +11285,7 @@ msgstr ""
 msgid "Your Veridian Mail workspace is provisioned automatically by Veridian when you subscribe at"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:616
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:617
 msgid "Your website or company name"
 msgstr "ウェブサイトまたは会社名"
 

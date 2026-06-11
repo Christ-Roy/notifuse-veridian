@@ -16,6 +16,7 @@ import { DeleteWorkspaceSection } from '../components/settings/DeleteWorkspace'
 import { SettingsSidebar, SettingsSection } from '../components/settings/SettingsSidebar'
 // === Veridian patch === section Plan ajoutée au sidebar settings.
 import { VeridianPlanSettings } from '../components/settings/veridian_plan_settings'
+import { VeridianColdOutreachSettings } from '../components/settings/veridian_cold_outreach_settings'
 
 const { Sider, Content } = Layout
 
@@ -41,6 +42,7 @@ export function WorkspaceSettingsPage() {
     'general',
     'blog',
     'plan',
+    'cold-outreach',
     'danger-zone'
   ]
 
@@ -158,6 +160,15 @@ export function WorkspaceSettingsPage() {
       case 'plan':
         // === Veridian patch === section Plan : badge plan_source + CTA Hub.
         return <VeridianPlanSettings workspaceId={workspaceId} />
+      case 'cold-outreach':
+        // === Veridian patch === config tunnel cold outreach (débits + pixel/classe).
+        return (
+          <VeridianColdOutreachSettings
+            workspace={workspace}
+            onWorkspaceUpdate={handleWorkspaceUpdate}
+            isOwner={isOwner}
+          />
+        )
       case 'danger-zone':
         return workspace && isOwner ? (
           <DeleteWorkspaceSection workspace={workspace} onDeleteSuccess={handleWorkspaceDelete} />

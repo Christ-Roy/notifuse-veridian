@@ -51,6 +51,41 @@ export interface WorkspaceSettings {
   blog_settings?: BlogSettings
   default_language: string
   languages: string[]
+  // Veridian fork — cold outreach (tunnel de vente)
+  // Débits par classe de provider destinataire (emails/minute, fractions OK).
+  veridian_provider_class_rates?: Record<VeridianProviderClass, number>
+  // Politique du pixel d'ouverture par classe (true = pixel ON). Override du
+  // défaut tunnel (ON freemail_fr/yahoo_aol/corporate, OFF google/microsoft).
+  veridian_open_pixel_by_class?: Record<VeridianProviderClass, boolean>
+}
+
+// Veridian fork — classes canoniques de provider destinataire (cf. backend
+// internal/domain/veridian_provider_class.go). Source de vérité = le Go ;
+// dupliquée ici pour le typage UI de la config cold outreach.
+export type VeridianProviderClass =
+  | 'google'
+  | 'microsoft'
+  | 'yahoo_aol'
+  | 'freemail_fr'
+  | 'corporate'
+
+export const VERIDIAN_PROVIDER_CLASSES: VeridianProviderClass[] = [
+  'google',
+  'microsoft',
+  'yahoo_aol',
+  'freemail_fr',
+  'corporate'
+]
+
+// Défaut tunnel du pixel d'ouverture (miroir de veridianDefaultOpenPixelByClass
+// côté Go) : ON petits providers, OFF gros. Sert de placeholder visuel quand
+// aucune config explicite n'existe.
+export const VERIDIAN_DEFAULT_OPEN_PIXEL: Record<VeridianProviderClass, boolean> = {
+  google: false,
+  microsoft: false,
+  yahoo_aol: true,
+  freemail_fr: true,
+  corporate: true
 }
 
 export interface FileManagerSettings {

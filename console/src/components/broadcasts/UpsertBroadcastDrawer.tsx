@@ -32,6 +32,7 @@ import React from 'react'
 import extractTLD from '../../lib/tld'
 import type { List } from '../../services/api/list'
 import { DataFeedSettings } from './DataFeedSettings'
+import { VeridianBroadcastRatesInfo } from './veridian_broadcast_rates_info'
 import type { GlobalFeedSettings, RecipientFeedSettings } from '../../services/api/broadcast'
 
 // Custom component to handle A/B testing configuration
@@ -651,6 +652,9 @@ export function UpsertBroadcastDrawer({
 
                 <div style={{ display: tab === 'content' ? 'block' : 'none' }}>
                   <div className="pt-8 pr-8">
+                    {/* Veridian — débits par classe (lecture seule) si posés sur ce broadcast */}
+                    <VeridianBroadcastRatesInfo metadata={broadcast?.metadata} />
+
                     {!workspace.settings?.email_tracking_enabled && (
                       <Alert
                         description={t`Tracking (opens & clicks) must be enabled in workspace settings to use A/B testing features.`}

@@ -5,7 +5,8 @@ import {
   SettingOutlined,
   ExclamationCircleOutlined,
   MailOutlined,
-  CreditCardOutlined
+  CreditCardOutlined,
+  SendOutlined
 } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 
@@ -18,6 +19,7 @@ export type SettingsSection =
   | 'general'
   | 'blog'
   | 'plan'
+  | 'cold-outreach'
   | 'danger-zone'
 
 interface SettingsSidebarProps {
@@ -120,6 +122,13 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
       key: 'plan',
       icon: <CreditCardOutlined />,
       label: t`Plan`
+    },
+    {
+      // === Veridian patch === config tunnel cold outreach (débits + pixel par
+      // classe de provider). Cf. veridian_cold_outreach_settings.tsx.
+      key: 'cold-outreach',
+      icon: <SendOutlined />,
+      label: t`Cold outreach`
     }
   ]
 

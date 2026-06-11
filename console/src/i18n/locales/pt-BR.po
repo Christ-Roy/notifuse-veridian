@@ -105,6 +105,11 @@ msgstr "{0} emails entregues com sucesso - Clique para ver detalhes"
 msgid "{0} emails successfully delivered (hidden from chart)"
 msgstr "{0} emails entregues com sucesso (oculto do grafico)"
 
+#. placeholder {0}: rates[c]
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:74
+msgid "{0} emails/min"
+msgstr ""
+
 #. placeholder {0}: dayjs(dateString).format('lll')
 #. placeholder {1}: currentWorkspace?.settings.timezone || 'UTC'
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:338
@@ -233,6 +238,10 @@ msgstr "{opens} aberturas de {recipients} destinatarios"
 msgid "{propertyCount} properties"
 msgstr "{propertyCount} propriedades"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:155
+msgid "{rate} emails/min"
+msgstr ""
+
 #: src/components/contacts/ExportContactsModal.tsx:115
 msgid "{seconds} second"
 msgstr "{seconds} segundo"
@@ -281,7 +290,7 @@ msgstr "+ Adicionar filtro"
 msgid "+ add from name, CC, BCC, reply-to, attachments"
 msgstr "+ adicionar nome do remetente, CC, BCC, responder-para, anexos"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:809
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:813
 msgid "+ Add variation"
 msgstr "+ Adicionar variacao"
 
@@ -297,7 +306,7 @@ msgstr "0 contatos"
 msgid "0 opens out of 0 recipients"
 msgstr "0 aberturas de 0 destinatarios"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:490
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:491
 msgid "1. Audience"
 msgstr "1. Audiencia"
 
@@ -318,7 +327,7 @@ msgstr "2. Template"
 msgid "2. Template ({0})"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:494
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:495
 msgid "2. Web Analytics"
 msgstr "2. Web Analytics"
 
@@ -326,7 +335,7 @@ msgstr "2. Web Analytics"
 msgid "200 - Extra Light"
 msgstr "200 - Extra Leve"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:498
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:499
 msgid "3. Data Feeds"
 msgstr ""
 
@@ -338,7 +347,7 @@ msgstr ""
 msgid "300 - Light"
 msgstr "300 - Leve"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:502
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:503
 msgid "4. Content"
 msgstr ""
 
@@ -993,7 +1002,7 @@ msgstr "Tem certeza que deseja remover este rotulo de campo personalizado?"
 msgid "Are you sure you want to remove this field?"
 msgstr "Tem certeza que deseja remover este campo?"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:779
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:783
 msgid "Are you sure you want to remove this variation?"
 msgstr "Tem certeza que deseja remover esta variacao?"
 
@@ -1103,7 +1112,7 @@ msgstr "Inscrever-se Automaticamente nas Listas"
 msgid "Automatically add new users to the selected lists"
 msgstr "Adicionar novos usuarios automaticamente as listas selecionadas"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:698
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:702
 msgid "Automatically send winner"
 msgstr "Enviar vencedor automaticamente"
 
@@ -1270,7 +1279,7 @@ msgstr "antes da data"
 msgid "Before User Created Hook"
 msgstr "Hook Antes de Criar Usuario"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:541
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:542
 msgid "Belonging to at least one of the following segments"
 msgstr "Pertencendo a pelo menos um dos seguintes segmentos"
 
@@ -1316,7 +1325,7 @@ msgstr "Blocos"
 #: src/components/settings/BlogSettings.tsx:197
 #: src/components/settings/BlogSettings.tsx:205
 #: src/components/settings/BlogSettings.tsx:238
-#: src/components/settings/SettingsSidebar.tsx:100
+#: src/components/settings/SettingsSidebar.tsx:102
 #: src/layouts/WorkspaceLayout.tsx:360
 msgid "Blog"
 msgstr "Blog"
@@ -1530,7 +1539,7 @@ msgstr "Broadcast \"{0}\" agendado com sucesso"
 msgid "Broadcast \"{0}\" sending started"
 msgstr "Envio do broadcast \"{0}\" iniciado"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:158
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:159
 msgid "Broadcast created successfully"
 msgstr "Broadcast criado com sucesso"
 
@@ -1543,11 +1552,11 @@ msgstr "ID do Broadcast"
 msgid "Broadcast ID copied to clipboard"
 msgstr "ID do Broadcast copiado para a area de transferencia"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:511
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:512
 msgid "Broadcast name"
 msgstr "Nome do broadcast"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:158
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:159
 msgid "Broadcast updated successfully"
 msgstr "Broadcast atualizado com sucesso"
 
@@ -1618,7 +1627,7 @@ msgstr "Tamanho do Botao"
 #: src/components/blog/ThemeEditorDrawer.tsx:469
 #: src/components/broadcasts/HeadersEditor.tsx:103
 #: src/components/broadcasts/SendOrScheduleModal.tsx:301
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:328
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:329
 #: src/components/contacts/BulkActionProgressModal.tsx:60
 #: src/components/contacts/BulkUpdateDrawer.tsx:579
 #: src/components/contacts/ContactDetailsDrawer.tsx:1113
@@ -1856,7 +1865,7 @@ msgstr "Clique para ver opções"
 msgid "Click or drag a CSV file to this area to upload"
 msgstr "Clique ou arraste um arquivo CSV para esta área para fazer upload"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:55
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:56
 msgid "Click Rate"
 msgstr "Taxa de Cliques"
 
@@ -1939,6 +1948,14 @@ msgstr ""
 #: src/components/email_builder/ui/CodeDrawerInput.tsx:24
 msgid "Code Editor"
 msgstr "Editor de Código"
+
+#: src/components/settings/SettingsSidebar.tsx:131
+msgid "Cold outreach"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:125
+msgid "Cold outreach settings updated successfully"
+msgstr ""
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
 #: src/layouts/WorkspaceLayout.tsx:505
@@ -2361,7 +2378,7 @@ msgstr "Cobrir"
 msgid "Create"
 msgstr "Criar"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:387
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:388
 msgid "Create a broadcast"
 msgstr "Criar um broadcast"
 
@@ -2389,7 +2406,7 @@ msgstr "Criar Chave API"
 msgid "Create Automation"
 msgstr "Criar Automação"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:383
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:384
 #: src/pages/BroadcastsPage.tsx:1301
 #: src/pages/BroadcastsPage.tsx:1397
 msgid "Create Broadcast"
@@ -2642,7 +2659,7 @@ msgstr "Rótulo do campo personalizado salvo com sucesso"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1136
 #: src/components/settings/CustomFieldsConfiguration.tsx:161
-#: src/components/settings/SettingsSidebar.tsx:105
+#: src/components/settings/SettingsSidebar.tsx:107
 msgid "Custom Fields"
 msgstr "Campos Personalizados"
 
@@ -2755,7 +2772,7 @@ msgstr "Campos de Texto Personalizados"
 
 #: src/components/settings/BlogSettings.tsx:463
 #: src/components/settings/DeleteWorkspace.tsx:45
-#: src/components/settings/SettingsSidebar.tsx:131
+#: src/components/settings/SettingsSidebar.tsx:140
 msgid "Danger Zone"
 msgstr "Zona de Perigo"
 
@@ -3258,7 +3275,7 @@ msgstr "Ex: password_reset"
 msgid "e.g. veridian"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:514
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:515
 msgid "E.g. Weekly Newsletter - May 2023"
 msgstr "Ex: Newsletter Semanal - Maio 2023"
 
@@ -3341,11 +3358,11 @@ msgstr "Editar Autor"
 msgid "Edit Automation"
 msgstr "Editar Automação"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:387
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:388
 msgid "Edit broadcast"
 msgstr "Editar broadcast"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:383
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:384
 #: src/pages/BroadcastsPage.tsx:484
 msgid "Edit Broadcast"
 msgstr "Editar Broadcast"
@@ -3471,7 +3488,7 @@ msgstr "Tempo decorrido"
 msgid "Element Padding"
 msgstr "Espaçamento do Elemento"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:623
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:624
 msgid "email"
 msgstr "email"
 
@@ -3630,7 +3647,7 @@ msgstr "Sugestões de Emoji"
 msgid "Empty column. Add text, button, or image content."
 msgstr "Coluna vazia. Adicione texto, botão ou imagem."
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:665
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:669
 msgid "Enable A/B Testing"
 msgstr "Habilitar Teste A/B"
 
@@ -3986,7 +4003,7 @@ msgstr ""
 msgid "Exclude Unsubscribed"
 msgstr "Excluir Descadastrados"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:599
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:600
 msgid "Exclude unsubscribed, bounced & complained recipients"
 msgstr ""
 
@@ -4109,7 +4126,7 @@ msgid "Failed to create automation: {0}"
 msgstr "Falha ao criar automação: {0}"
 
 #. placeholder {0}: error.message
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:164
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:165
 msgid "Failed to create broadcast: {0}"
 msgstr "Falha ao criar broadcast: {0}"
 
@@ -4257,7 +4274,7 @@ msgstr "Falha ao buscar objetos: "
 msgid "Failed to fetch setup status"
 msgstr "Falha ao buscar status da configuração"
 
-#: src/pages/WorkspaceSettingsPage.tsx:85
+#: src/pages/WorkspaceSettingsPage.tsx:87
 msgid "Failed to fetch workspace members"
 msgstr "Falha ao buscar membros do workspace"
 
@@ -4474,7 +4491,7 @@ msgid "Failed to update blog settings"
 msgstr "Falha ao atualizar configurações do blog"
 
 #. placeholder {0}: error.message
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:164
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:165
 msgid "Failed to update broadcast: {0}"
 msgstr "Falha ao atualizar broadcast: {0}"
 
@@ -4482,6 +4499,10 @@ msgstr "Falha ao atualizar broadcast: {0}"
 #: src/components/blog/CategoryDrawer.tsx:61
 msgid "Failed to update category: {0}"
 msgstr "Falha ao atualizar categoria: {0}"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:127
+msgid "Failed to update cold outreach settings"
+msgstr ""
 
 #: src/components/settings/CustomFieldsConfiguration.tsx:126
 msgid "Failed to update custom field label"
@@ -4837,7 +4858,7 @@ msgstr "Largura total no celular"
 msgid "Fullscreen"
 msgstr "Tela Cheia"
 
-#: src/components/settings/SettingsSidebar.tsx:115
+#: src/components/settings/SettingsSidebar.tsx:117
 #: src/components/settings/SystemSettingsDrawer.tsx:228
 msgid "General"
 msgstr "Geral"
@@ -4878,7 +4899,7 @@ msgstr ""
 msgid "Global feed URL"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:403
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:404
 msgid "Global feed URL is required when enabled"
 msgstr "A URL do feed global é obrigatória quando habilitado"
 
@@ -5436,7 +5457,7 @@ msgid "Integration updated successfully"
 msgstr "Integração atualizada com sucesso"
 
 #: src/components/settings/Integrations.tsx:2142
-#: src/components/settings/SettingsSidebar.tsx:57
+#: src/components/settings/SettingsSidebar.tsx:59
 msgid "Integrations"
 msgstr "Integrações"
 
@@ -5805,7 +5826,7 @@ msgstr ""
 #: src/components/automations/config/TriggerConfigForm.tsx:65
 #: src/components/automations/config/TriggerConfigForm.tsx:256
 #: src/components/automations/UpsertAutomationDrawer.tsx:178
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:519
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:520
 #: src/components/contacts/BulkUpdateDrawer.tsx:611
 #: src/components/contacts/ExportContactsModal.tsx:73
 #: src/components/messages/MessageHistoryTable.tsx:132
@@ -6067,6 +6088,10 @@ msgstr "Contatos correspondentes:"
 #: src/components/templates/SendTemplateModal.tsx:394
 msgid "Max 3MB per file, 10MB total, 20 files maximum"
 msgstr "Máx. 3MB por arquivo, 10MB total, máximo de 20 arquivos"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:215
+msgid "Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle."
+msgstr ""
 
 #: src/components/templates/SendTemplateModal.tsx:199
 msgid "Maximum 20 attachments allowed"
@@ -6367,9 +6392,9 @@ msgstr "Nova Janela"
 msgid "New workspace"
 msgstr "Novo workspace"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:333
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:343
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:354
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:334
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:344
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:355
 #: src/components/templates/CreateTemplateDrawer.tsx:505
 #: src/components/templates/CreateTemplateDrawer.tsx:526
 msgid "Next"
@@ -6385,8 +6410,8 @@ msgstr "Próxima Execução"
 #: src/components/blog/PostDrawer.tsx:488
 #: src/components/blog/PostsTable.tsx:319
 #: src/components/broadcasts/HeadersEditor.tsx:66
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:250
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:782
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:251
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:786
 #: src/components/contacts/ContactUpsertDrawer.tsx:540
 #: src/components/contacts/SegmentsFilter.tsx:134
 #: src/components/contacts/SegmentsFilter.tsx:149
@@ -6630,6 +6655,14 @@ msgstr "Nenhum template encontrado para categoria \"{selectedCategory}\""
 msgid "No themes yet"
 msgstr "Nenhum tema ainda"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:217
+msgid "no throttle"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:156
+msgid "No throttle (uses sender rate limit)"
+msgstr ""
+
 #: src/components/timeline/ContactTimeline.tsx:790
 msgid "No timeline events found for this contact"
 msgstr "Nenhum evento de linha do tempo encontrado para este contato"
@@ -6868,9 +6901,25 @@ msgstr ""
 msgid "Open on web"
 msgstr "Abrir na web"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:54
+#: src/components/settings/veridian_cold_outreach_settings.tsx:225
+msgid "Open pixel"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:167
+msgid "Open pixel OFF"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:162
+msgid "Open pixel ON"
+msgstr ""
+
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:55
 msgid "Open Rate"
 msgstr "Taxa de Abertura"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:223
+msgid "Open tracking pixel for this provider class. Default: ON for small providers, OFF for Google/Microsoft."
+msgstr ""
 
 #: src/components/veridian_paywall_modal.tsx:52
 msgid "Open Veridian"
@@ -6932,7 +6981,7 @@ msgstr ""
 msgid "Optional. If provided, sent as Authorization: Bearer <secret>"
 msgstr "Opcional. Se fornecido, enviado como Authorization: Bearer <secret>"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:543
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:544
 msgid "Optionally filter contacts by segments within the selected lists"
 msgstr "Opcionalmente filtre contatos por segmentos dentro das listas selecionadas"
 
@@ -7055,6 +7104,18 @@ msgstr "Pendente"
 msgid "Pending confirmation"
 msgstr "Aguardando confirmação"
 
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:69
+msgid "Per-provider sending rates (Veridian cold outreach)"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:140
+msgid "Per-provider sending rates and open-tracking policy for outbound campaigns."
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:184
+msgid "Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability."
+msgstr ""
+
 #: src/components/broadcasts/RecipientFeedSettings.tsx:88
 msgid "Per-Recipient Data Feed"
 msgstr "Feed de dados por destinatário"
@@ -7063,7 +7124,7 @@ msgstr "Feed de dados por destinatário"
 msgid "Per-recipient feed URL"
 msgstr "URL do feed por destinatário"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:408
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:409
 msgid "Per-recipient feed URL is required when enabled"
 msgstr "A URL do feed por destinatário é obrigatória quando habilitado"
 
@@ -7112,6 +7173,10 @@ msgstr "Foto por Zetong Li"
 msgid "Photo URL"
 msgstr "URL da Foto"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:204
+msgid "pixel OFF by default"
+msgstr ""
+
 #: src/components/transactional/ApiCommandModal.tsx:529
 #~ msgid "Plain text (not recommended for production)"
 #~ msgstr "Texto simples (não recomendado para produção)"
@@ -7120,7 +7185,7 @@ msgstr "URL da Foto"
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
 msgstr ""
 
-#: src/components/settings/SettingsSidebar.tsx:122
+#: src/components/settings/SettingsSidebar.tsx:124
 #: src/components/settings/veridian_plan_settings.tsx:51
 msgid "Plan"
 msgstr ""
@@ -7146,7 +7211,7 @@ msgid "Please check the form for errors"
 msgstr "Por favor, verifique o formulário para erros"
 
 #: src/components/blog/PostDrawer.tsx:629
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:472
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:473
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:244
 msgid "Please check the form for errors."
 msgstr "Por favor, verifique o formulário para erros."
@@ -7155,7 +7220,7 @@ msgstr "Por favor, verifique o formulário para erros."
 msgid "Please choose a different segment name"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:512
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:513
 msgid "Please enter a broadcast name"
 msgstr "Por favor, insira um nome para o broadcast"
 
@@ -7307,7 +7372,7 @@ msgstr "Por favor, selecione um tipo de meta"
 msgid "Please select a JSON file"
 msgstr "Por favor, selecione um arquivo JSON"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:524
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:525
 #: src/components/contacts/ContactDetailsDrawer.tsx:1130
 #: src/components/segment/form_leaf.tsx:168
 msgid "Please select a list"
@@ -7540,9 +7605,9 @@ msgstr ""
 msgid "Preview Your Email"
 msgstr "Visualize seu email"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:340
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:351
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:362
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:341
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:352
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:363
 #: src/components/templates/CreateTemplateDrawer.tsx:510
 #: src/components/templates/CreateTemplateDrawer.tsx:531
 msgid "Previous"
@@ -7669,6 +7734,10 @@ msgstr "Push"
 
 #: src/pages/BroadcastsPage.tsx:563
 msgid "Queued emails will not be sent. In-flight sends will complete."
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:213
+msgid "Rate (emails/min)"
 msgstr ""
 
 #: src/components/settings/Integrations.tsx:2027
@@ -7891,7 +7960,7 @@ msgstr "Remover membro"
 msgid "Remove this author?"
 msgstr "Remover este autor?"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:778
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:782
 msgid "Remove variation"
 msgstr "Remover variação"
 
@@ -8161,7 +8230,7 @@ msgstr "Modo Sandbox"
 #: src/components/blog/PostDrawer.tsx:617
 #: src/components/blog/ThemeEditorDrawer.tsx:318
 #: src/components/blog/ThemeEditorDrawer.tsx:468
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:371
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:372
 #: src/components/contacts/ContactUpsertDrawer.tsx:502
 #: src/components/contacts/InlineEditableField.tsx:318
 #: src/components/email_builder/panels/Preview.tsx:185
@@ -8206,6 +8275,7 @@ msgstr "Salvar Bloco"
 #: src/components/email_builder/ui/CodeDrawerInput.tsx:182
 #: src/components/settings/BlogSettings.tsx:444
 #: src/components/settings/GeneralSettings.tsx:299
+#: src/components/settings/veridian_cold_outreach_settings.tsx:247
 msgid "Save Changes"
 msgstr "Salvar Alterações"
 
@@ -8388,7 +8458,7 @@ msgid "Select a field"
 msgstr "Selecione um campo"
 
 #: src/components/automations/nodes/ListStatusBranchNode.tsx:50
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:529
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:530
 #: src/components/contacts/BulkActionsBar.tsx:203
 #: src/components/contacts/ContactDetailsDrawer.tsx:1137
 #: src/components/segment/form_leaf.tsx:170
@@ -8567,7 +8637,7 @@ msgstr "Selecionar Provedor OAuth2"
 msgid "Select page size"
 msgstr "Selecionar tamanho da página"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:553
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:554
 msgid "Select segments (optional)"
 msgstr "Selecionar segmentos (opcional)"
 
@@ -8583,8 +8653,8 @@ msgstr "Selecionar provedor de armazenamento"
 msgid "Select supported languages"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:766
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:829
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:770
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:833
 msgid "Select template"
 msgstr "Selecionar template"
 
@@ -8910,7 +8980,7 @@ msgstr "Define a largura da tela abaixo da qual o email mudará para o layout m�
 msgid "Setting up..."
 msgstr "Configurando..."
 
-#: src/components/settings/SettingsSidebar.tsx:137
+#: src/components/settings/SettingsSidebar.tsx:146
 #: src/layouts/WorkspaceLayout.tsx:405
 msgid "Settings"
 msgstr "Configurações"
@@ -9004,7 +9074,7 @@ msgstr "SMS"
 msgid "SMTP & bridge settings"
 msgstr ""
 
-#: src/components/settings/SettingsSidebar.tsx:110
+#: src/components/settings/SettingsSidebar.tsx:112
 #: src/components/settings/SMTPBridgeSettings.tsx:20
 #: src/components/settings/SystemSettingsDrawer.tsx:422
 msgid "SMTP Bridge"
@@ -9451,7 +9521,7 @@ msgstr "Status da Tarefa"
 msgid "Task type:"
 msgstr "Tipo de tarefa:"
 
-#: src/components/settings/SettingsSidebar.tsx:36
+#: src/components/settings/SettingsSidebar.tsx:38
 #: src/components/settings/WorkspaceMembers.tsx:576
 msgid "Team"
 msgstr "Equipe"
@@ -9469,7 +9539,7 @@ msgstr ""
 msgid "template"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:824
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:828
 #: src/components/messages/MessageHistoryTable.tsx:130
 #: src/components/messages/MessageHistoryTable.tsx:172
 #: src/pages/BroadcastsPage.tsx:714
@@ -9479,7 +9549,7 @@ msgid "Template"
 msgstr "Template"
 
 #. placeholder {0}: field.key + 1
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:733
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:737
 msgid "Template {0}"
 msgstr "Template {0}"
 
@@ -9605,7 +9675,7 @@ msgstr ""
 msgid "Test data updated successfully"
 msgstr "Dados de teste atualizados com sucesso"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:63
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:64
 msgid "Test duration (hours)"
 msgstr "Duração do teste (horas)"
 
@@ -9639,7 +9709,7 @@ msgstr "Testar Integração"
 msgid "Test Recipient Feed"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:689
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:693
 msgid "Test sample size (%)"
 msgstr "Tamanho da amostra de teste (%)"
 
@@ -9856,7 +9926,11 @@ msgstr ""
 msgid "These contacts will be subscribed to the selected list (status: active)."
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:611
+#: src/components/settings/veridian_cold_outreach_settings.tsx:241
+msgid "These defaults apply when a campaign does not set its own per-class rates. Link click tracking stays ON for every class regardless of the open pixel."
+msgstr ""
+
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:612
 msgid "These parameters are automatically added to the URL of the broadcast. They are used by web analytics tools to analyze the performance of your campaign."
 msgstr "Esses parâmetros são adicionados automaticamente à URL do broadcast. Eles são usados por ferramentas de web analytics para analisar o desempenho da sua campanha."
 
@@ -9954,7 +10028,7 @@ msgstr "Esta seção está vazia. Adicione colunas ou grupos para exibir conteú
 msgid "This segment uses relative date filters and will be automatically recomputed daily at 5:00 AM ({timezone})"
 msgstr "Este segmento usa filtros de data relativos e será recalculado automaticamente diariamente às 5:00 AM ({timezone})"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:754
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:758
 msgid "This template is already used in another variation"
 msgstr "Este template já está sendo usado em outra variação"
 
@@ -10185,11 +10259,11 @@ msgstr "O tamanho total dos anexos excede o limite de 10MB"
 msgid "Total Contacts"
 msgstr "Total de Contatos"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:656
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:660
 msgid "Tracking (opens & clicks) must be enabled in workspace settings to use A/B testing features."
 msgstr "O rastreamento (aberturas e cliques) deve estar habilitado nas configurações do workspace para usar recursos de teste A/B."
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:702
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:706
 msgid "Tracking (opens & clicks) should be enabled in your workspace settings to use this feature"
 msgstr "O rastreamento (aberturas e cliques) deve estar habilitado nas configurações do seu workspace para usar este recurso"
 
@@ -10365,7 +10439,7 @@ msgstr "Despublicar post"
 
 #: src/components/automations/UpsertAutomationDrawer.tsx:132
 #: src/components/blog/PostDrawer.tsx:485
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:247
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:248
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:145
 msgid "Unsaved changes"
 msgstr "Alterações não salvas"
@@ -10674,10 +10748,15 @@ msgstr "Valor:"
 msgid "Variant name"
 msgstr "Nome da variante"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:720
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:724
 #: src/pages/BroadcastsPage.tsx:663
 msgid "Variations"
 msgstr "Variações"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:139
+#: src/components/settings/veridian_cold_outreach_settings.tsx:183
+msgid "Veridian — Cold outreach"
+msgstr ""
 
 #: src/components/veridian_brand_header_link.tsx:43
 msgid "Veridian dashboard"
@@ -10824,7 +10903,7 @@ msgstr "URL do Webhook"
 #: src/components/settings/Integrations.tsx:198
 #: src/components/settings/Integrations.tsx:206
 #: src/components/settings/Integrations.tsx:237
-#: src/components/settings/SettingsSidebar.tsx:79
+#: src/components/settings/SettingsSidebar.tsx:81
 #: src/components/settings/WebhooksSettings.tsx:169
 msgid "Webhooks"
 msgstr "Webhooks"
@@ -10919,7 +10998,7 @@ msgstr "Vencedor"
 msgid "Winner selected successfully! The broadcast will be sent to remaining recipients."
 msgstr "Vencedor selecionado com sucesso! O broadcast será enviado para os destinatários restantes."
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:49
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:50
 msgid "Winning metric"
 msgstr "Métrica vencedora"
 
@@ -11019,8 +11098,8 @@ msgstr ""
 #: src/components/blog/PostDrawer.tsx:487
 #: src/components/blog/PostsTable.tsx:318
 #: src/components/broadcasts/HeadersEditor.tsx:65
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:249
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:781
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:250
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:785
 #: src/components/contacts/ContactUpsertDrawer.tsx:539
 #: src/components/contacts/SegmentsFilter.tsx:133
 #: src/components/contacts/SegmentsFilter.tsx:148
@@ -11142,7 +11221,7 @@ msgid "You don't have write permission for transactional notifications"
 msgstr "Você não tem permissão de escrita para notificações transacionais"
 
 #: src/components/blog/PostDrawer.tsx:486
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:248
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:249
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:146
 msgid "You have unsaved changes. Are you sure you want to close this drawer?"
 msgstr "Você tem alterações não salvas. Tem certeza que deseja fechar este painel?"
@@ -11206,7 +11285,7 @@ msgstr ""
 msgid "Your Veridian Mail workspace is provisioned automatically by Veridian when you subscribe at"
 msgstr ""
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:616
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx:617
 msgid "Your website or company name"
 msgstr "O nome do seu site ou empresa"
 
