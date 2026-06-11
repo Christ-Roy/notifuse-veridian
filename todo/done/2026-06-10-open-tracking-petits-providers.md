@@ -65,9 +65,34 @@ avec le throttle par classe qui attaque aussi par les petits FAI).
   OFF google/microsoft. Configurable broadcast metadata + workspace settings.
   Non-régression stricte hors tunnel (nil = upstream).
 - **Tests verts** : domain + mjml + sender (capture HTML réel : OFF google / ON
-  freemail / non-régression). 3 packages passent intégralement.
-- ⚠️ **Déploiement staging BLOQUÉ par saturation disque dev-pub** (build CI
-  `no space left on device` / export buildkit très lent à 95% disque). Code
-  prouvé, blocage purement infra. Verdict délivrabilité pixel-par-classe à
-  compléter dès que l'image est déployée (E2E pixel staging + mail-tester
-  pixel ON petit provider).
+  freemail / non-régression). 3 packages passent intégralement. CI staging
+  VERTE intégralement (E2E Playwright BLOQUANT inclus).
+- **E2E réel pixel par classe (staging `57103bfb`)** — broadcast aux 5 classes,
+  HTML des mails reçus vérifié :
+  - `google` : pixel ABSENT, clics ON ✅ | `microsoft` : ABSENT, clics ON ✅
+  - `yahoo_aol`/`freemail_fr`/`corporate` : pixel PRÉSENT, clics ON ✅
+  - HTML 4156 o (sans pixel) vs 4486 o (avec) = la diff exacte du `<table>` pixel.
+  - `email.opened` : fetch du pixel `freemail_fr` (UA navigateur + délai anti-bot)
+    → `opened_at=2026-06-10T23:58:50Z` posé côté Notifuse → event émis vers la
+    souscription bridge (`webhookSubscriptions`).
+
+### Verdict délivrabilité — DATA-DRIVEN (exigence Robert)
+
+| Config | Score mail-tester | Analyse |
+|---|---|---|
+| Sans pixel (TLS seul) | **10/10** | headers complets, SPF/DKIM/DMARC parfaits, non-blocklisté |
+| Avec pixel (petit provider) | 7.4/10 | malus dominant `-1.78 HTML_IMAGE_ONLY_08` = ratio image/texte du **HTML de test minimaliste**, PAS le pixel |
+
+**Conclusion (figée)** : le **coût réel du pixel d'ouverture = `T_REMOTE_IMAGE`
+≈ -0.01 point**, négligeable. Le 7.4 venait d'un HTML de test trop pauvre en
+texte (déclenche `HTML_IMAGE_ONLY`), un faux signal. → **Le pixel est quasi
+gratuit en délivrabilité sur les petits providers** tant que le vrai template
+audit garde un ratio texte/image sain (ce qui est le cas). La politique
+ON freemail_fr/yahoo_aol/corporate / OFF google/microsoft est validée
+data-driven ; réactivation google/microsoft = à re-mesurer plus tard avec le
+vrai template si besoin.
+
+### Promo prod
+- GO lead reçu (option A : TLS + pixel ensemble, le tier 🔴 couvert par sa reco).
+- `workflow_dispatch deploy_prod=true` sur HEAD `veridian` (TLS + pixel).
+- Garde-fou envoi `--real-send` ajouté à `tunnel-send.sh` (défaut = aucun envoi).
