@@ -921,7 +921,11 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     env:
       NOTIFUSE_URL: https://notifuse.staging.veridian.site
-      HUB_URL: https://saas-hub.staging.veridian.site
+      # HUB_URL retiré 2026-06-13 : plus aucune spec e2e-veridian ne tape le Hub
+      # directement (la seule, MEGA-07 mail-gateway, supprimée au pivot stand-alone
+      # 31/05). Les specs cross-app simulent le Hub vers Notifuse via HMAC
+      # (HUB_API_SECRET). La valeur saas-hub.staging.veridian.site ne résolvait
+      # de toute façon pas (ticket 2026-05-25-ci-hub-url-saas-hub-unreachable, clos).
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
       # === Veridian patch 2026-05-22 — activer les tests E2E hub-sync-resilience ===
       # Le runner self-hosted tourne sur dev-pub, à côté du container postgres
@@ -1170,7 +1174,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     env:
       NOTIFUSE_URL: https://notifuse.app.veridian.site
-      HUB_URL: https://app.veridian.site
+      # HUB_URL retiré 2026-06-13 (cf. job e2e-staging) : aucune spec ne le lit.
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_PROD }}
       E2E_PROD_MODE: '1'
     steps:
