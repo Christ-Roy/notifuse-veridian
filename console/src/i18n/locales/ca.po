@@ -51,10 +51,6 @@ msgstr ""
 msgid "{0, plural, one {# contact} other {# contacts}}"
 msgstr ""
 
-#: src/components/contacts/BulkActionProgressModal.tsx:78
-#~ msgid "{0} contact(s)"
-#~ msgstr ""
-
 #. placeholder {0}: previewResponse.total_count
 #: src/components/segment/button_upsert.tsx:606
 msgid "{0} contacts"
@@ -257,10 +253,6 @@ msgstr ""
 #: src/components/contacts/BulkActionsBar.tsx:230
 msgid "{selectedCount, plural, one {This will permanently delete # contact. This action cannot be undone.} other {This will permanently delete # contacts. This action cannot be undone.}}"
 msgstr ""
-
-#: src/components/contacts/BulkActionsBar.tsx:111
-#~ msgid "{selectedCount} contact(s) selected"
-#~ msgstr ""
 
 #: src/components/email_builder/panels/Preview.tsx:218
 msgid "// No test data yet..."
@@ -1818,10 +1810,6 @@ msgstr "Trieu un bloc desat per actualitzar"
 msgid "Choose a starting point for your new theme. You can customize everything later."
 msgstr "Trieu un punt de partida per al vostre nou tema. Podeu personalitzar-ho tot més tard."
 
-#: src/components/settings/veridian_mail_account_settings.tsx:280
-#~ msgid "Choose how transactional emails (magic links, MFA, notifications) are sent on behalf of your workspace."
-#~ msgstr ""
-
 #. placeholder {0}: post.settings.title
 #: src/components/blog/PublishModal.tsx:110
 msgid "Choose when to publish \"{0}\""
@@ -1846,10 +1834,6 @@ msgstr "Esborrar tot"
 #: src/components/contacts/InlineEditableField.tsx:295
 msgid "Clear field"
 msgstr "Esborrar camp"
-
-#: src/components/settings/veridian_mail_account_settings.tsx:122
-#~ msgid "Click below to connect your Gmail account from the Veridian Hub. Once connected, the \"My Gmail\" option above will route sends through your Gmail."
-#~ msgstr ""
 
 #: src/components/segment/form_leaf.tsx:295
 #: src/components/segment/input.tsx:726
@@ -2147,42 +2131,9 @@ msgstr "Confirmar"
 msgid "Confirmed"
 msgstr "Confirmat"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:264
-#~ msgid "Connect a Microsoft account"
-#~ msgstr ""
-
 #: src/components/settings/Integrations.tsx:2143
 msgid "Connect and manage external services"
 msgstr "Connecteu i gestioneu serveis externs"
-
-#: src/components/settings/veridian_mail_account_settings.tsx:256
-#~ msgid "Connect another Gmail account"
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:131
-#~ msgid "Connect my Gmail"
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:255
-#~ msgid "Connect your first Gmail account"
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:186
-#: src/components/settings/veridian_mail_account_settings.tsx:195
-#~ msgid "Connect your first Gmail or Microsoft account to send emails on behalf of your workspace."
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:119
-#~ msgid "Connect your Gmail account"
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:236
-#~ msgid "connected {0}"
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:174
-#~ msgid "Connected accounts"
-#~ msgstr ""
 
 #: src/components/transactional/ApiCommandModal.tsx:530
 msgid "Connection Details"
@@ -2346,14 +2297,6 @@ msgstr "Camps principals"
 #: src/components/ai-assistant/AIAssistantChat.tsx:281
 msgid "Cost"
 msgstr "Cost"
-
-#: src/components/settings/veridian_mail_account_settings.tsx:148
-#~ msgid "Could not set default account."
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:152
-#~ msgid "Could not set default account. Please retry."
-#~ msgstr ""
 
 #: src/components/analytics/NewContactsTable.tsx:178
 #: src/components/automations/config/TriggerConfigForm.tsx:121
@@ -2832,10 +2775,6 @@ msgstr "Per defecte"
 msgid "Default (API endpoint)"
 msgstr "Per defecte (punt final API)"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:144
-#~ msgid "Default account updated."
-#~ msgstr ""
-
 #: src/components/email_builder/blocks/MjAttributesBlock.tsx:13
 msgid "Default Attributes"
 msgstr "Atributs per defecte"
@@ -3121,10 +3060,6 @@ msgstr "Desactivar el blog eliminarà tots els paràmetres SEO i farà que el vo
 msgid "Discard Draft"
 msgstr "Descartar esborrany"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:162
-#~ msgid "Disconnect is not available yet. Please remove the account from the Veridian Hub."
-#~ msgstr ""
-
 #: src/components/blog_editor/components/youtube/YoutubeNodeView.tsx:452
 msgid "Display video player controls"
 msgstr "Mostrar controls del reproductor de vídeo"
@@ -3258,10 +3193,6 @@ msgstr "p. ex. cta_button"
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:325
 msgid "e.g. email"
 msgstr "p. ex. email"
-
-#: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:317
-#~ msgid "e.g. notifuse"
-#~ msgstr "p. ex. notifuse"
 
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:263
 msgid "E.g. Password Reset Email"
@@ -4405,10 +4336,6 @@ msgstr "No s'ha pogut desar la integració"
 msgid "Failed to save LLM integration"
 msgstr "No s'ha pogut desar la integració LLM"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:135
-#~ msgid "Failed to save mail provider preference. Please retry."
-#~ msgstr ""
-
 #: src/components/settings/SystemSettingsDrawer.tsx:188
 msgid "Failed to save settings"
 msgstr ""
@@ -4929,10 +4856,6 @@ msgstr "Google Workspace / Gmail"
 msgid "gpt-4.1, gpt-5.4, o4-mini, or custom model name"
 msgstr ""
 
-#: src/components/integrations/LLMIntegration.tsx:166
-#~ msgid "gpt-4o, gpt-4.1, o4-mini, or custom model name"
-#~ msgstr ""
-
 #: src/components/email_builder/ui/BorderInput.tsx:60
 msgid "Groove"
 msgstr "Groove"
@@ -4995,10 +4918,6 @@ msgstr "Ajuda"
 #: src/components/templates/CreateTemplateDrawer.tsx:131
 msgid "Help & Support"
 msgstr "Ajuda i suport"
-
-#: src/pages/SetupWizard.tsx:533
-#~ msgid "Help us improve Notifuse by sending anonymous usage statistics. No personal data or message content is collected."
-#~ msgstr "Ajudeu-nos a millorar Notifuse enviant estadístiques d'ús anònimes. No es recopilen dades personals ni contingut de missatges."
 
 #: src/pages/SetupWizard.tsx:553
 msgid "Help us improve Veridian Mail by sending anonymous usage statistics. No personal data or message content is collected."
@@ -5086,10 +5005,6 @@ msgstr "https://exemple.com o {{ url }}"
 #: src/components/email_builder/ui/ImportFontInput.tsx:141
 msgid "https://fonts.googleapis.com/css?family=... or {{ font_url }}"
 msgstr "https://fonts.googleapis.com/css?family=... o {{ font_url }}"
-
-#: src/components/settings/veridian_mail_account_settings.tsx:146
-#~ msgid "Hub unavailable. Please retry in a moment."
-#~ msgstr ""
 
 #: src/components/segment/button_upsert.tsx:395
 msgid "i.e: Big spenders..."
@@ -5215,10 +5130,6 @@ msgstr "Si ja existeix un contacte amb aquest correu, els camps proporcionats se
 #: src/components/broadcasts/SendOrScheduleModal.tsx:289
 msgid "If enabled, the broadcast will be sent according to each recipient's timezone"
 msgstr "Si està activat, la difusió s'enviarà segons el fus horari de cada destinatari"
-
-#: src/components/settings/veridian_mail_account_settings.tsx:113
-#~ msgid "If Gmail is not connected on the Hub, sends will automatically fall back to the generic sender."
-#~ msgstr ""
 
 #: src/components/transactional/ApiCommandModal.tsx:1002
 msgid "If the contact email doesn't exist in your workspace, it will be automatically created."
@@ -5926,10 +5837,6 @@ msgstr "Carregar plantilla desada"
 msgid "Loading automations..."
 msgstr "Carregant automatitzacions..."
 
-#: src/components/messages/MessageHistoryTable.tsx:416
-#~ msgid "Loading message history..."
-#~ msgstr "Carregant historial de missatges..."
-
 #: src/pages/SetupWizard.tsx:275
 msgid "Loading setup..."
 msgstr "Carregant configuració..."
@@ -6003,15 +5910,6 @@ msgstr "Minúscules"
 #: src/pages/SignInPage.tsx:73
 msgid "Magic code sent to your email"
 msgstr "Codi màgic enviat al teu correu"
-
-#: src/components/settings/SettingsSidebar.tsx:131
-#: src/components/settings/veridian_mail_account_settings.tsx:171
-#~ msgid "Mail account"
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:132
-#~ msgid "Mail provider preference saved."
-#~ msgstr ""
 
 #: src/components/settings/BlogSettings.tsx:328
 msgid "Main logo for your blog. Recommended size: 200x50px or similar aspect ratio"
@@ -6287,14 +6185,6 @@ msgstr "Més opcions"
 msgid "My Amazing Blog"
 msgstr "El meu blog impressionant"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:302
-#~ msgid "My connected account (default)"
-#~ msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:102
-#~ msgid "My Gmail connected via Hub"
-#~ msgstr ""
-
 #: src/components/settings/WebhooksSettings.tsx:227
 msgid "My Webhook"
 msgstr "El meu webhook"
@@ -6341,10 +6231,6 @@ msgstr "Nom:"
 #: src/layouts/WorkspaceLayout.tsx:522
 msgid "Navigation menu"
 msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:225
-#~ msgid "Needs reauth"
-#~ msgstr ""
 
 #: src/components/blog/BlogSidebar.tsx:108
 msgid "New Category"
@@ -6452,11 +6338,6 @@ msgstr "No hi ha contingut {0} per previsualitzar"
 msgid "No Access"
 msgstr "Sense accés"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:185
-#: src/components/settings/veridian_mail_account_settings.tsx:194
-#~ msgid "No accounts connected yet"
-#~ msgstr ""
-
 #: src/pages/AutomationsPage.tsx:180
 msgid "No automations yet"
 msgstr "Encara no hi ha automatitzacions"
@@ -6496,10 +6377,6 @@ msgstr "No hi ha dades disponibles"
 #: src/components/broadcasts/GlobalFeedSettings.tsx:179
 msgid "No data returned"
 msgstr ""
-
-#: src/components/settings/veridian_mail_account_settings.tsx:316
-#~ msgid "No default account selected. Sends will fall back to the Veridian generic sender until you connect and pick a default account above."
-#~ msgstr ""
 
 #: src/components/templates/TemplatePreviewDrawer.tsx:270
 msgid "No default sender configured"
@@ -7128,10 +7005,6 @@ msgstr "URL del feed per destinatari"
 msgid "Per-recipient feed URL is required when enabled"
 msgstr "L'URL del feed per destinatari és requerida quan està habilitat"
 
-#: src/pages/SetupWizard.tsx:543
-#~ msgid "Periodically check for new Notifuse versions and security updates. A popup will list new versions available."
-#~ msgstr "Comproveu periòdicament noves versions de Notifuse i actualitzacions de seguretat. Una finestra emergent llistarà les noves versions disponibles."
-
 #: src/pages/SetupWizard.tsx:563
 msgid "Periodically check for new Veridian Mail versions and security updates. A popup will list new versions available."
 msgstr ""
@@ -7176,10 +7049,6 @@ msgstr "URL de la foto"
 #: src/components/settings/veridian_cold_outreach_settings.tsx:204
 msgid "pixel OFF by default"
 msgstr ""
-
-#: src/components/transactional/ApiCommandModal.tsx:529
-#~ msgid "Plain text (not recommended for production)"
-#~ msgstr "Text pla (no recomanat per a producció)"
 
 #: src/components/transactional/ApiCommandModal.tsx:524
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
@@ -7681,10 +7550,6 @@ msgstr "Públic"
 msgid "Public lists are visible in the Notification Center for users to subscribe to"
 msgstr "Les llistes públiques són visibles al Centre de notificacions perquè els usuaris s'hi subscriguin"
 
-#: src/pages/SetupWizard.tsx:361
-#~ msgid "Public URL where this Notifuse instance is accessible"
-#~ msgstr "URL pública on aquesta instància de Notifuse és accessible"
-
 #: src/pages/SetupWizard.tsx:381
 msgid "Public URL where this Veridian Mail instance is accessible"
 msgstr ""
@@ -8008,10 +7873,6 @@ msgstr "Respondre a:"
 #: src/components/templates/SendTemplateModal.tsx:378
 msgid "Reply-To"
 msgstr "Respondre a"
-
-#: src/layouts/WorkspaceLayout.tsx:565
-#~ msgid "Report An Issue"
-#~ msgstr "Informar d'un problema"
 
 #: src/components/settings/SystemSettingsDrawer.tsx:235
 #: src/components/settings/SystemSettingsDrawer.tsx:247
@@ -8802,10 +8663,6 @@ msgstr "Remitent"
 msgid "Sender Name"
 msgstr "Nom del remitent"
 
-#: src/components/settings/veridian_mail_account_settings.tsx:272
-#~ msgid "Sender preference"
-#~ msgstr ""
-
 #: src/components/settings/Integrations.tsx:334
 #: src/components/settings/Integrations.tsx:1927
 msgid "Senders"
@@ -8818,10 +8675,6 @@ msgstr "Enviant correus..."
 #: src/components/settings/WebhookCard.tsx:385
 msgid "Sending test webhook..."
 msgstr "Enviant webhook de prova..."
-
-#: src/components/settings/veridian_mail_account_settings.tsx:315
-#~ msgid "Sends will route through {0}."
-#~ msgstr ""
 
 #: src/components/timeline/ContactTimeline.tsx:494
 msgid "sent"
@@ -9526,10 +9379,6 @@ msgstr "Tipus de tasca:"
 msgid "Team"
 msgstr "Equip"
 
-#: src/components/settings/WorkspaceMembers.tsx:268
-#~ msgid "Team member limit reached. Please upgrade your plan to add more members."
-#~ msgstr ""
-
 #: src/components/settings/SystemSettingsDrawer.tsx:510
 msgid "Telemetry"
 msgstr ""
@@ -10047,10 +9896,6 @@ msgstr "Aquest token només es mostrarà una vegada. Si us plau, deseu-lo en una
 #: src/components/settings/WebhookCard.tsx:276
 msgid "This will invalidate the current secret. You'll need to update your webhook receiver."
 msgstr "Això invalidarà el secret actual. Haureu d'actualitzar el vostre receptor de webhook."
-
-#: src/components/contacts/BulkActionsBar.tsx:196
-#~ msgid "This will permanently delete {selectedCount} contact(s). This action cannot be undone."
-#~ msgstr ""
 
 #. placeholder {0}: workspace.name
 #: src/components/settings/DeleteWorkspace.tsx:49
@@ -10762,10 +10607,6 @@ msgstr ""
 msgid "Veridian dashboard"
 msgstr ""
 
-#: src/components/settings/veridian_mail_account_settings.tsx:296
-#~ msgid "Veridian generic sender (default)"
-#~ msgstr ""
-
 #: src/components/veridian_paywall_modal.tsx:79
 msgid "Veridian Hub is unreachable. The app is in read-only mode — please try again in {retryHours}h."
 msgstr ""
@@ -11045,10 +10886,6 @@ msgstr "L'ID de l'espai de treball és obligatori"
 msgid "Workspace Invitation"
 msgstr "Invitació a l'espai de treball"
 
-#: src/pages/CreateWorkspacePage.tsx:105
-#~ msgid "Workspace limit reached. Please upgrade your plan to create more workspaces."
-#~ msgstr ""
-
 #: src/components/settings/GeneralSettings.tsx:122
 msgid "Workspace logo"
 msgstr "Logotip de l'espai de treball"
@@ -11259,14 +11096,6 @@ msgstr ""
 #: src/components/file_manager/buttonSettings.tsx:230
 msgid "Your files can be uploaded to any S3 compatible storage."
 msgstr "Els vostres fitxers es poden pujar a qualsevol emmagatzematge compatible amb S3."
-
-#: src/pages/SetupWizard.tsx:299
-#~ msgid "Your Notifuse instance has been successfully configured."
-#~ msgstr "La vostra instància de Notifuse s'ha configurat correctament."
-
-#: src/pages/CreateWorkspacePage.tsx:142
-#~ msgid "Your Notifuse workspace is provisioned automatically by Veridian when you subscribe at"
-#~ msgstr ""
 
 #: src/components/veridian_cross_app_cards.tsx:63
 msgid "Your other Veridian apps"
