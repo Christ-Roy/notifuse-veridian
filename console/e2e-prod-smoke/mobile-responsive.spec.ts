@@ -111,13 +111,23 @@ test.describe('Mobile responsive Lot 1 — WorkspaceLayout', () => {
     await stubAuthAndWorkspace(page)
   })
 
-  // SKIP 2026-05-31 : le `hamburger.click()` (L133) hang systématiquement en
-  // CI (timeout 60s, échoue aussi en retry) — le Drawer Antd ne s'ouvre pas de
-  // façon fiable sous le runner headless à 320px. Test fragile introduit par le
-  // lot mobile responsive (6ef902bd), bloque la promo prod de fixes critiques.
-  // Dette tracée : todo/2026-05-31-e2e-mobile-drawer-flaky.md. À réparer hors
-  // chemin critique (le hamburger lui-même + la sidebar masquée sont couverts
-  // par les autres assertions ; seul l'ouverture du Drawer est instable).
+  // CORRECTIF PRÊT, en attente de validation E2E avant dé-skip (2026-06-13,
+  // todo/2026-05-31-e2e-mobile-drawer-flaky.md) :
+  // La flakiness venait d'une RACE entre `Grid.useBreakpoint()` (Antd, qui
+  // évalue `isMobile` de façon ASYNCHRONE après le mount via matchMedia) et le
+  // `hamburger.click()`. Le Drawer mobile est rendu conditionnellement
+  // (`{isMobile && <Drawer>}`) : si on clique avant que le breakpoint soit
+  // stabilisé, `drawerOpen` passe à true mais le Drawer n'est pas monté →
+  // `.ant-drawer-open` n'apparaît jamais → timeout 60s.
+  // Le corps ci-dessous corrige la race : (1) on attend la stabilisation du
+  // breakpoint mobile via une post-condition observable (Sider absent =
+  // isMobile a basculé true) AVANT de cliquer, (2) on attend la fin de
+  // l'animation d'ouverture en ciblant l'état FINAL (menu item visible) avec
+  // un timeout généreux.
+  // Le test reste `.skip` tant qu'un run E2E prod-smoke réel ne l'a pas vu
+  // passer 3× d'affilée — on ne re-dé-skip pas à l'aveugle un test qui a
+  // bloqué la promo prod. Dé-skip = retirer `.skip` quand la CI verte le
+  // confirme (commande dans le ticket).
   test.skip('viewport 320×568 : hamburger visible, sidebar masquée, Drawer ouvrable', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 })
     const errors = trackConsoleErrors(page)
@@ -131,19 +141,29 @@ test.describe('Mobile responsive Lot 1 — WorkspaceLayout', () => {
     const hamburger = page.getByTestId('mobile-menu-toggle')
     await expect(hamburger).toBeVisible({ timeout: 10000 })
 
-    // 2. La sidebar Antd Sider (.ant-layout-sider) NE DOIT PAS être
-    //    rendue. En mobile on remplace le Sider par un Drawer fermé.
+    // 2. La sidebar Antd Sider (.ant-layout-sider) NE DOIT PAS être rendue.
+    //    En mobile on remplace le Sider par un Drawer fermé. Cette assertion
+    //    sert AUSSI de barrière de synchro : tant que `Grid.useBreakpoint()`
+    //    n'a pas confirmé le mode mobile, le Sider desktop peut encore être
+    //    monté. On attend donc activement qu'il disparaisse → garantit que
+    //    `isMobile === true` et donc que le Drawer conditionnel EXISTE dans
+    //    l'arbre React avant qu'on clique sur le hamburger.
     const sider = page.locator('.ant-layout-sider')
-    await expect(sider).toHaveCount(0)
+    await expect(sider).toHaveCount(0, { timeout: 10000 })
 
-    // 3. Click hamburger → Drawer s'ouvre.
+    // 3. Click hamburger → Drawer s'ouvre. On attend le wrapper du Drawer
+    //    (monté dès l'ouverture) puis l'état OUVERT (classe .ant-drawer-open
+    //    posée en fin de transition), avec un timeout généreux pour absorber
+    //    l'animation Antd sous runner headless lent.
     await hamburger.click()
     const drawer = page.locator('.ant-drawer-open')
-    await expect(drawer).toBeVisible({ timeout: 5000 })
+    await expect(drawer).toBeVisible({ timeout: 15000 })
 
-    // 4. Les items de menu sont présents dans le Drawer.
+    // 4. Les items de menu sont présents et visibles dans le Drawer. Attendre
+    //    leur visibilité confirme que l'animation d'ouverture est terminée
+    //    (le contenu n'est interactif qu'une fois le Drawer entièrement glissé).
     const dashboardItem = drawer.locator('.ant-menu-item').filter({ hasText: /Dashboard|Tableau/i })
-    await expect(dashboardItem).toBeVisible()
+    await expect(dashboardItem).toBeVisible({ timeout: 15000 })
 
     // 5. Aucune exception JS uncaught.
     expect(
