@@ -42,9 +42,11 @@ import (
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
-// DefaultHubBaseURL est l'URL racine du Hub Veridian en prod. Override via
-// env HUB_BASE_URL (ex: staging "https://hub.staging.veridian.site").
-const DefaultHubBaseURL = "https://hub.veridian.site"
+// DefaultHubBaseURL est l'URL racine du Hub Veridian en prod. Le host public
+// Veridian est `app.veridian.site` (PAS `hub.veridian.site` qui n'existe pas
+// en DNS public — bug corrigé 2026-06-13). Override via env HUB_BASE_URL
+// (ex: staging "https://hub.staging.veridian.site").
+const DefaultHubBaseURL = "https://app.veridian.site"
 
 // DefaultHubInvitationTimeout : 10s. Le Hub fait surface DB + send email
 // (best-effort), donc p99 ~ 2-3s. 10s tolere un pic sans bloquer l'UX

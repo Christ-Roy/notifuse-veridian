@@ -9,7 +9,7 @@ package http
 // Il appelle ensuite :
 //   - authService.AuthenticateUserForWorkspace -> verifie membership
 //   - hubUserResolver.GetHubUserID -> SELECT users.hub_user_id (V46)
-//   - hubClient.Create -> POST hub.veridian.site/api/invitations/create
+//   - hubClient.Create -> POST app.veridian.site/api/invitations/create
 //
 // Tests = bypass middleware en appelant handleInvite directement.
 

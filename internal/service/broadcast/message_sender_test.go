@@ -530,6 +530,94 @@ func TestSendBatch(t *testing.T) {
 }
 
 // Veridian fork — bout-en-bout du FIX fallback workspace pixel (2026-06-13) sur
+// Sync upstream v32.2 — SendBatch a gagné un param `websiteURL` (commit
+// "website_url var in template", #342) propagé jusqu'à `{{ workspace.website_url }}`
+// dans les templates. Ce test exerce la nouvelle signature et vérifie que l'URL
+// (trailing slash trimmé) atteint bien le HTML rendu, distincte du tracking
+// endpoint. Garde-fou de non-régression sur la feature upstream intégrée au fork.
+func TestSendBatch_WebsiteURLPropagatedToTemplate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).Return().AnyTimes()
+
+	ctx := context.Background()
+	workspaceID := "workspace-wu"
+	broadcastID := "broadcast-wu"
+
+	broadcast := &domain.Broadcast{
+		ID:            broadcastID,
+		WorkspaceID:   workspaceID,
+		Audience:      domain.AudienceSettings{List: "list-1"},
+		UTMParameters: &domain.UTMParameters{},
+		TestSettings: domain.BroadcastTestSettings{
+			Variations: []domain.BroadcastVariation{{TemplateID: "template-wu"}},
+		},
+	}
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+		SMTP:    &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p", UseTLS: true},
+	}
+	// Le template compose un lien applicatif via {{ workspace.website_url }}.
+	template := &domain.Template{
+		ID: "template-wu",
+		Email: &domain.EmailTemplate{
+			SenderID:         emailSender.ID,
+			Subject:          "Hello",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", `<a href="{{ workspace.website_url }}/verify">Vérifier</a>`)),
+		},
+	}
+
+	mockBroadcastRepository.EXPECT().GetBroadcast(ctx, workspaceID, broadcastID).Return(broadcast, nil)
+
+	var sentContent string
+	mockEmailService.EXPECT().
+		SendEmail(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+			sentContent = req.Content
+			return nil
+		}).Times(1)
+	mockMessageHistoryRepo.EXPECT().Create(ctx, workspaceID, gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+	sender := NewMessageSender(
+		mockBroadcastRepository, mockMessageHistoryRepo, mockTemplateRepo,
+		mockEmailService, nil, mockLogger, TestConfig(), "",
+	)
+
+	recipients := []*domain.ContactWithList{
+		{Contact: &domain.Contact{Email: "lead@example.com"}, ListID: "list-1"},
+	}
+	templates := map[string]*domain.Template{"template-wu": template}
+
+	// websiteURL avec trailing slash → doit être trimmé dans le rendu.
+	// trackingEnabled=false pour que le lien {{ workspace.website_url }} reste en
+	// clair dans le HTML (sinon TrackLinks le réécrit en redirect /r/ chiffré et
+	// l'URL résolue serait encodée dans le token, pas vérifiable par substring).
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "int-1", "secret-key",
+		"https://track.example.com", "https://app.example.com/", false,
+		broadcastID, recipients, templates, emailProvider, time.Now().Add(30*time.Second), "")
+	require.NoError(t, err)
+	require.Equal(t, 1, sent)
+	require.Equal(t, 0, failed)
+
+	assert.Contains(t, sentContent, "https://app.example.com/verify",
+		"{{ workspace.website_url }} doit résoudre l'URL passée à SendBatch (slash trimmé)")
+	assert.NotContains(t, sentContent, "https://app.example.com//verify",
+		"le trailing slash du websiteURL doit être trimmé")
+}
+
 // le sender DIRECT : SetVeridianWorkspaceRepo injecté + workspace avec config
 // pixel par classe → le HTML réellement envoyé (SendEmailProviderRequest.Content)
 // reflète la politique pixel posée AU NIVEAU WORKSPACE. Avant le fix, le sender

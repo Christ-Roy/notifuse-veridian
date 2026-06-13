@@ -79,6 +79,39 @@ is_upstream_only_diff() {
   return 0
 }
 
+is_file_upstream_only() {
+  # Variante PER-FICHIER de is_upstream_only_diff, pour les SYNC UPSTREAM mergés.
+  #
+  # Pourquoi : un `git merge upstream/main` crée une plage BASE_REF...HEAD dont
+  # les auteurs sont MIXTES — les 13 commits Notifuse (@notifuse.com / bazoge)
+  # ET les merge commits Veridian (auteur brunon5). is_upstream_only_diff() ci-
+  # dessus lit les auteurs de TOUTE la plage en tout-ou-rien, donc le bypass
+  # global n'active jamais sur un merge → les fichiers upstream-purs touchés
+  # SEULEMENT par les commits Notifuse (ex. transactional_service.go) tombent à
+  # tort sous la discipline mapping alors qu'ils ont déjà leurs tests upstream.
+  #
+  # Cette fonction restreint le test d'auteur aux commits qui ont RÉELLEMENT
+  # touché le fichier `f` dans la plage. Bypass UNIQUEMENT si TOUS ces commits
+  # matchent UPSTREAM_EMAIL_REGEX (réutilisé, pas dupliqué). Si un seul commit
+  # Veridian (brunon5 ou autre non-upstream) a touché `f` → return 1 → `f` reste
+  # sous discipline mapping STRICTE. Conséquence voulue : les fichiers upstream
+  # qu'un agent Veridian a modifiés cette session (diffs INLINE : workspace.go,
+  # queue_message_sender.go, message_sender.go, workspace_service.go,
+  # template_compilation.go…) ne sont JAMAIS bypassés — leur merge commit
+  # Veridian les a touchés. Les fichiers veridian_*.go sont en plus exclus par
+  # is_veridian_file() à l'appel (cf. boucle principale).
+  local f="$1"
+  [ "$MODE" = "working-tree" ] && return 1
+  local authors
+  authors=$(git log --pretty=format:'%ae' "$BASE_REF"...HEAD -- "$f" 2>/dev/null | sort -u)
+  [ -z "$authors" ] && return 1
+  while IFS= read -r email; do
+    [ -z "$email" ] && continue
+    echo "$email" | grep -qE "$UPSTREAM_EMAIL_REGEX" || return 1
+  done <<< "$authors"
+  return 0
+}
+
 is_veridian_file() {
   # Tout fichier dont le basename commence par veridian_ ou qui s'appelle
   # veridian.go / veridian_token.go (etc.) est Veridian-custom.
@@ -172,12 +205,24 @@ for f in $CHANGED; do
     continue
   fi
 
-  # Bypass upstream : si tout le diff est upstream ET le fichier n'est pas
-  # veridian_*, on skip. Les fichiers veridian_* restent sous discipline
-  # même si un commit upstream les a touchés (ce qui ne devrait jamais arriver
-  # vu la convention, mais filet de sécurité).
+  # Bypass upstream GLOBAL : si TOUTE la plage est upstream (diff linéaire pur,
+  # ex. cherry-pick d'un commit Notifuse) ET le fichier n'est pas veridian_*,
+  # on skip. Les fichiers veridian_* restent sous discipline même si un commit
+  # upstream les a touchés (ne devrait jamais arriver vu la convention, filet
+  # de sécurité).
   if [ "$UPSTREAM_BYPASS" = "1" ] && ! is_veridian_file "$f"; then
-    echo "${BLUE}↷ $f bypass upstream${NC}"
+    echo "${BLUE}↷ $f bypass upstream (plage 100%% upstream)${NC}"
+    continue
+  fi
+
+  # Bypass upstream PER-FICHIER : cas d'un SYNC UPSTREAM mergé (plage à auteurs
+  # mixtes upstream+Veridian, où le bypass global ne s'active pas). On skip un
+  # fichier non-veridian_* si TOUS les commits qui l'ont touché dans la plage
+  # sont upstream — il a déjà ses tests upstream et aucun commit Veridian ne l'a
+  # modifié. Un fichier qu'un commit Veridian a touché (y compris le merge
+  # commit s'il y a résolu un conflit) reste sous discipline mapping stricte.
+  if ! is_veridian_file "$f" && is_file_upstream_only "$f"; then
+    echo "${BLUE}↷ $f bypass upstream (fichier touché uniquement par des commits Notifuse)${NC}"
     continue
   fi
 
@@ -328,6 +373,21 @@ if [ "$UPSTREAM_BYPASS" != "1" ]; then
   # Pour chaque fichier handler modifié, on extrait les routes qu'il déclare,
   # puis on vérifie qu'au moins un test modifié dans le push exerce cette route.
   HANDLERS_TOUCHED=$(echo "$CHANGED" | grep -E '^internal/http/[^/]+\.go$' | grep -vE '_test\.go$' || true)
+  # Bypass upstream PER-FICHIER (cf. is_file_upstream_only) : un handler touché
+  # UNIQUEMENT par des commits Notifuse dans un sync mergé garde ses tests de
+  # routes upstream — il ne doit pas exiger un test Veridian. Un handler que TU
+  # as modifié (auteur Veridian dans la plage) ou veridian_* reste sous discipline.
+  if [ -n "$HANDLERS_TOUCHED" ]; then
+    _filtered_handlers=""
+    for _h in $HANDLERS_TOUCHED; do
+      if ! is_veridian_file "$_h" && is_file_upstream_only "$_h"; then
+        echo "${BLUE}↷ routes de $_h bypass upstream (handler touché uniquement par des commits Notifuse)${NC}"
+        continue
+      fi
+      _filtered_handlers="$_filtered_handlers $_h"
+    done
+    HANDLERS_TOUCHED=$(echo "$_filtered_handlers" | tr ' ' '\n' | grep -v '^$' || true)
+  fi
   if [ -n "$HANDLERS_TOUCHED" ]; then
     TESTS_TOUCHED_FILES=$(echo "$CHANGED" | grep -E '^internal/(http|service|repository|domain)/.*_test\.go$' || true)
     if [ -z "$TESTS_TOUCHED_FILES" ]; then

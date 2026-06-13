@@ -81,6 +81,21 @@ func TestNewVeridianPricingSyncService_DefaultsApplied(t *testing.T) {
 	require.NotNil(t, svc.client)
 }
 
+// TestDefaultHubPricingURL_UsesPublicHost est un garde-fou anti-régression du
+// bug du 2026-06-13 : le default pointait sur `hub.veridian.site` qui n'existe
+// PAS en DNS public -> `VeridianPricingSync: fetch failed` en boucle, cache
+// jamais rafraichi (cf. todo/done pricing-sync-dns-hub-failed). Le host public
+// Veridian est `app.veridian.site`. Ce test echoue si quelqu'un re-introduit le
+// host fantome.
+func TestDefaultHubPricingURL_UsesPublicHost(t *testing.T) {
+	assert.Contains(t, DefaultHubPricingURL, "app.veridian.site",
+		"le default doit pointer sur le host public app.veridian.site")
+	assert.NotContains(t, DefaultHubPricingURL, "hub.veridian.site",
+		"hub.veridian.site n'existe pas en DNS public (bug 2026-06-13)")
+	assert.True(t, strings.HasSuffix(DefaultHubPricingURL, "/api/pricing/plans"),
+		"le default doit cibler l'endpoint pricing du Hub")
+}
+
 // TestNewVeridianPricingSyncService_AcceptsCustom verifie que les overrides
 // sont bien transmis (URL custom, interval court, client custom).
 func TestNewVeridianPricingSyncService_AcceptsCustom(t *testing.T) {

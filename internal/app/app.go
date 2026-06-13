@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1323,7 +1324,20 @@ func (a *App) InitHandlers() error {
 	// valeurs hardcodees `domain.DefaultPlanLimits`). Le service est demarre
 	// plus bas (cf. bloc "Start Veridian pricing sync"). Le handler debug
 	// /api/veridian/admin/pricing-cache expose le snapshot du cache.
-	a.veridianPricingSync = service.NewVeridianPricingSyncService("", nil, a.logger, 0)
+	//
+	// L'URL est derivee de HUB_BASE_URL (host public Veridian = app.veridian.site
+	// en prod, hub.staging.veridian.site en staging) pour rester alignee sur le
+	// reste du cablage Hub (invitation client, webhooks). Avant le 2026-06-13 on
+	// passait "" -> le service tombait sur un default `hub.veridian.site` qui
+	// n'existe PAS en DNS public -> `VeridianPricingSync: fetch failed` en boucle,
+	// cache jamais rafraichi (cf. todo/done pricing-sync-dns-hub-failed). Si
+	// HUB_BASE_URL est vide (self-hosted sans Hub), pricingURL reste "" et le
+	// service applique son default constant (corrige).
+	pricingURL := ""
+	if a.config.HubBaseURL != "" {
+		pricingURL = strings.TrimRight(a.config.HubBaseURL, "/") + "/api/pricing/plans"
+	}
+	a.veridianPricingSync = service.NewVeridianPricingSyncService(pricingURL, nil, a.logger, 0)
 	veridianHandler.SetPricingSync(a.veridianPricingSync)
 
 	// === Veridian patch — 2026-05-24 — cron auto-cleanup orphans staging ===
@@ -1379,8 +1393,9 @@ func (a *App) InitHandlers() error {
 	// Le call Hub est non-bloquant (timeout 2s, fail-safe). Cf. ticket
 	// todo/2026-05-23-call-hub-discovery-by-email.md + CONTRAT-HUB §6.5.
 	hubDiscoveryClient := hub_discovery.NewClient(hub_discovery.Config{
-		Secret: a.config.HubAPISecret,
-		Logger: a.logger,
+		BaseURL: a.config.HubBaseURL, // vide -> DefaultHubBaseURL (app.veridian.site) ; surcharge staging via HUB_BASE_URL
+		Secret:  a.config.HubAPISecret,
+		Logger:  a.logger,
 	})
 	veridianHubDiscoveryHandler := httpHandler.NewVeridianHubDiscoveryHandler(
 		hubDiscoveryClient,
@@ -1594,7 +1609,7 @@ func (a *App) Start() error {
 
 	// === Veridian patch lot O — 2026-05-21 — pricing sync Hub ===
 	// Fetch boot + cron 1h du catalogue pricing canonique expose par le Hub
-	// (GET hub.veridian.site/api/pricing/plans). Best-effort : si Hub down,
+	// (GET app.veridian.site/api/pricing/plans). Best-effort : si Hub down,
 	// on garde le cache precedent et l'app continue de tourner avec ses
 	// valeurs hardcodees `domain.DefaultPlanLimits`. Reconcile (log warn si
 	// divergence) tourne a chaque fetch reussi.

@@ -47,10 +47,11 @@ import (
 // Constantes du contrat. Toute modification doit etre synchronisee avec
 // `veridian-hub/lib/discovery/hmac.ts` du Hub.
 const (
-	// DefaultHubBaseURL est l'URL canonique du Hub Veridian en prod. La
-	// config Notifuse peut surcharger (utile pour staging, tests E2E,
-	// httptest.NewServer en unit tests).
-	DefaultHubBaseURL = "https://hub.veridian.site"
+	// DefaultHubBaseURL est l'URL canonique du Hub Veridian en prod. Le host
+	// public Veridian est `app.veridian.site` (PAS `hub.veridian.site` qui
+	// n'existe pas en DNS public — bug corrigé 2026-06-13). La config Notifuse
+	// surcharge via HUB_BASE_URL (staging, tests E2E, httptest.NewServer).
+	DefaultHubBaseURL = "https://app.veridian.site"
 
 	// DiscoveryByEmailPath est le chemin du endpoint Hub.
 	DiscoveryByEmailPath = "/api/users/by-email"
@@ -120,7 +121,7 @@ type httpClient struct {
 // Config — parametres de construction d'un Client.
 //
 // Tous les champs sont optionnels avec des defaults raisonnables :
-//   - BaseURL vide  -> DefaultHubBaseURL ("https://hub.veridian.site")
+//   - BaseURL vide  -> DefaultHubBaseURL ("https://app.veridian.site")
 //   - Timeout zero  -> DefaultTimeout (2s)
 //   - HTTPClient nil -> &http.Client{Timeout: timeout}
 //   - Logger nil    -> les warnings best-effort sont silencieux

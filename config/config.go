@@ -50,8 +50,11 @@ type Config struct {
 	// HUB_API_SECRET vide => endpoints /api/tenants/* renvoient 503 (mode self-hosted, pas de Hub).
 	// HUB_WEBHOOK_URL vide => webhook emitter en noop.
 	// VERIDIAN_DEFAULT_PLAN: plan par defaut sur provision si non precise (defaut "free").
-	// HUB_BASE_URL : URL racine du Hub Veridian (default "https://hub.veridian.site").
-	//   Utilisee pour les appels SORTANTS Notifuse->Hub (invitation cross-app).
+	// HUB_BASE_URL : URL racine du Hub Veridian (default "https://app.veridian.site").
+	//   Host public Veridian = `app.veridian.site` (PAS `hub.veridian.site` qui
+	//   n'existe pas en DNS public — bug corrigé 2026-06-13).
+	//   Utilisee pour les appels SORTANTS Notifuse->Hub (invitation cross-app,
+	//   sync pricing `{HUB_BASE_URL}/api/pricing/plans`).
 	//   Override staging : "https://hub.staging.veridian.site".
 	// HUB_INVITATION_SECRET_NOTIFUSE : secret HMAC partage avec le Hub pour
 	//   signer les requetes POST /api/invitations/create. Si vide en mode

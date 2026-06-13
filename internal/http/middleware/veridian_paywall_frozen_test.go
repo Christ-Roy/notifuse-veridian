@@ -220,6 +220,14 @@ func TestVeridianFrozenMiddleware_Frozen_Write_Returns402(t *testing.T) {
 	assert.Equal(t, "user_frozen", respBody["error"])
 	assert.Equal(t, "quota_seat_exceeded", respBody["reason"])
 	assert.Contains(t, respBody["unfreeze_url"], "ws-1")
+	// L'unfreeze_url doit pointer sur le host public Veridian (app.veridian.site),
+	// PAS sur le host fantôme hub.veridian.site qui n'existe pas en DNS public
+	// (bug 2026-06-13). Garde-fou : si quelqu'un re-introduit le mauvais default
+	// dans veridianHubURL (veridian_paywall_obfuscation.go), ce bouton "débloquer"
+	// renverrait les users frozen vers une page morte.
+	unfreezeURL, _ := respBody["unfreeze_url"].(string)
+	assert.Contains(t, unfreezeURL, "app.veridian.site")
+	assert.NotContains(t, unfreezeURL, "hub.veridian.site")
 }
 
 func TestVeridianFrozenMiddleware_Frozen_Read_Obfuscated(t *testing.T) {

@@ -316,7 +316,7 @@ func TestVeridianHubInvitationClient_DefaultBaseURLUsedWhenEmpty(t *testing.T) {
 	})
 	require.Error(t, err)
 	// L'erreur doit venir du round-tripper bloque (preuve qu'on a tente
-	// d'appeler hub.veridian.site). On accepte juste que ce soit une
+	// d.appeler le Hub, default app.veridian.site). On accepte juste que ce soit une
 	// erreur HubInvitationError code hub_unreachable.
 	var hubErr *HubInvitationError
 	require.True(t, errors.As(err, &hubErr))

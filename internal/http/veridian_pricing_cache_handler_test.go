@@ -55,7 +55,7 @@ func TestVeridianHandlePricingCache_ReturnsSnapshot(t *testing.T) {
 		},
 		LastFetchedAt:  &now,
 		LastSuccessAt:  &now,
-		SourceURL:      "https://hub.veridian.site/api/pricing/plans",
+		SourceURL:      "https://app.veridian.site/api/pricing/plans",
 		Stale:          false,
 		StaleThreshold: "2h0m0s",
 	}}
@@ -68,7 +68,7 @@ func TestVeridianHandlePricingCache_ReturnsSnapshot(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp service.PricingCacheSnapshot
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "https://hub.veridian.site/api/pricing/plans", resp.SourceURL)
+	assert.Equal(t, "https://app.veridian.site/api/pricing/plans", resp.SourceURL)
 	require.NotNil(t, resp.Catalog)
 	assert.Equal(t, "0.1.0", resp.Catalog.Version)
 	require.Contains(t, resp.Catalog.Plans, "notifuse-pro")
@@ -95,8 +95,8 @@ func TestVeridianHandlePricingCache_ExposesLastErrorWhenStale(t *testing.T) {
 	prov := &fakePricingProvider{snap: service.PricingCacheSnapshot{
 		Catalog:        nil, // pas encore peuple
 		LastFetchedAt:  &now,
-		LastError:      "unexpected status 502 from https://hub.veridian.site/...",
-		SourceURL:      "https://hub.veridian.site/api/pricing/plans",
+		LastError:      "unexpected status 502 from https://app.veridian.site/...",
+		SourceURL:      "https://app.veridian.site/api/pricing/plans",
 		Stale:          true,
 		StaleThreshold: "2h0m0s",
 	}}
@@ -139,7 +139,7 @@ func TestVeridianSetPricingSync_Idempotent(t *testing.T) {
 func TestVeridianHandlePricingCache_RegisteredInRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	h := newHandlerWithPricing(&fakePricingProvider{snap: service.PricingCacheSnapshot{
-		SourceURL: "https://hub.veridian.site/api/pricing/plans",
+		SourceURL: "https://app.veridian.site/api/pricing/plans",
 	}})
 	h.RegisterRoutes(mux, "test-secret-for-route-check")
 
