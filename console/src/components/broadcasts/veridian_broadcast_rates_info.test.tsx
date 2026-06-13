@@ -4,7 +4,8 @@ import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import {
   VeridianBroadcastRatesInfo,
-  parseBroadcastRates
+  parseBroadcastRates,
+  parseBroadcastPixels
 } from './veridian_broadcast_rates_info'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
@@ -38,6 +39,26 @@ describe('parseBroadcastRates', () => {
   })
 })
 
+describe('parseBroadcastPixels', () => {
+  it('returns empty for undefined / missing / malformed metadata', () => {
+    expect(parseBroadcastPixels(undefined)).toEqual({})
+    expect(parseBroadcastPixels({})).toEqual({})
+    expect(parseBroadcastPixels({ veridian_open_pixel_by_class: 'nope' })).toEqual({})
+  })
+
+  it('keeps only canonical classes with boolean values', () => {
+    const out = parseBroadcastPixels({
+      veridian_open_pixel_by_class: {
+        google: false,
+        freemail_fr: true,
+        microsoft: 1, // ignoré (pas un booléen)
+        INVALID: true // ignoré (classe non canonique)
+      }
+    })
+    expect(out).toEqual({ google: false, freemail_fr: true })
+  })
+})
+
 describe('VeridianBroadcastRatesInfo', () => {
   it('renders nothing when no rates are set (transparent for classic broadcasts)', () => {
     const { container } = renderInfo(undefined)
@@ -50,8 +71,17 @@ describe('VeridianBroadcastRatesInfo', () => {
     renderInfo({
       veridian_provider_class_rates: { google: 1, freemail_fr: 4 }
     })
-    expect(screen.getByText(/Per-provider sending rates/i)).toBeInTheDocument()
+    expect(screen.getByText(/per-provider settings for this campaign/i)).toBeInTheDocument()
     expect(screen.getByText(/Google: 1 emails\/min/)).toBeInTheDocument()
-    expect(screen.getByText(/FAI FR: 4 emails\/min/)).toBeInTheDocument()
+    expect(screen.getByText(/FR ISPs: 4 emails\/min/)).toBeInTheDocument()
+  })
+
+  it('renders the open-pixel policy when set on the broadcast', () => {
+    renderInfo({
+      veridian_open_pixel_by_class: { google: false, freemail_fr: true }
+    })
+    expect(screen.getByText(/per-provider settings for this campaign/i)).toBeInTheDocument()
+    expect(screen.getByText(/Google: Off/)).toBeInTheDocument()
+    expect(screen.getByText(/FR ISPs: On/)).toBeInTheDocument()
   })
 })
