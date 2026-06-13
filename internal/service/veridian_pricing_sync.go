@@ -92,10 +92,28 @@ type StripePriceIDs struct {
 	Year  *string `json:"year"`
 }
 
+// RefillTier miroir d'un palier de prix refill leads. Source de vérité :
+// veridian-infra/shared/pricing/types.ts (interface RefillTier) + refill.ts.
+// Le Hub sérialise un OBJET {min, max, perLead} par palier — PAS une paire
+// [min, max] (bug de typage historique corrigé 2026-06-13 : la struct attendait
+// `[2]int` → `cannot unmarshal object into Go struct field ... of type [2]int`,
+// le catalogue pricing ne se décodait jamais une fois le fetch réparé).
+//
+// Max est *int : le dernier palier business a `max: Infinity` côté TS, ce qui
+// se sérialise en `null` en JSON (JSON.stringify(Infinity) === "null").
+type RefillTier struct {
+	Min     int  `json:"min"`
+	Max     *int `json:"max"` // null = palier ouvert (dernier, "et plus")
+	PerLead int  `json:"perLead"`
+}
+
 // RefillCatalog miroir des prix de refill leads (Veridian Prospection).
+// Notifuse ne consomme pas le refill (c'est Prospection) — ce miroir existe
+// uniquement pour que le catalogue Hub se décode SANS erreur (tout échec de
+// décodage vide le cache pricing entier, cf. runOnce).
 type RefillCatalog struct {
-	PricingCents map[string][][2]int `json:"pricing_cents"`
-	MaxPerOrder  int                 `json:"max_per_order"`
+	PricingCents map[string][]RefillTier `json:"pricing_cents"`
+	MaxPerOrder  int                     `json:"max_per_order"`
 }
 
 // AnnualPerksCatalog miroir des perks abonnement annuel.

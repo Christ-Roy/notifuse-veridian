@@ -58,7 +58,11 @@ const validCatalogJSON = `{
     }
   },
   "refill": {
-    "pricing_cents": {"freemium": [[10, 1000]], "pro": [], "business": []},
+    "pricing_cents": {
+      "freemium": [{"min": 1, "max": 99, "perLead": 50}, {"min": 100, "max": 999, "perLead": 40}],
+      "pro": [{"min": 1, "max": 99, "perLead": 30}],
+      "business": [{"min": 1, "max": 99, "perLead": 20}, {"min": 50000, "max": null, "perLead": 4}]
+    },
     "max_per_order": 100000
   },
   "annual_perks": {
@@ -157,6 +161,23 @@ func TestVeridianPricingSyncService_Start_FetchesOnBootAndPopulatesCache(t *test
 	require.Contains(t, cat.Plans, "notifuse-pro")
 	assert.Equal(t, float64(29), cat.Plans["notifuse-pro"].PriceEUR)
 	assert.GreaterOrEqual(t, atomic.LoadInt64(&hits), int64(1))
+
+	// Régression 2026-06-13 : le refill.pricing_cents du Hub est un OBJET
+	// {min, max, perLead} par palier, pas une paire [min, max]. La struct Go
+	// attendait `[2]int` → "cannot unmarshal object into ... [2]int" → tout le
+	// catalogue refusait de décoder (cache jamais peuplé en prod, masqué par le
+	// bug DNS jusqu'à ce qu'il soit corrigé). On vérifie le décodage correct,
+	// dont le palier ouvert `max: null` (Infinity côté TS) → Max == nil.
+	require.Contains(t, cat.Refill.PricingCents, "business")
+	biz := cat.Refill.PricingCents["business"]
+	require.Len(t, biz, 2)
+	assert.Equal(t, 1, biz[0].Min)
+	require.NotNil(t, biz[0].Max)
+	assert.Equal(t, 99, *biz[0].Max)
+	assert.Equal(t, 20, biz[0].PerLead)
+	assert.Equal(t, 50000, biz[1].Min)
+	assert.Nil(t, biz[1].Max, "dernier palier business = max ouvert (null)")
+	assert.Equal(t, 100000, cat.Refill.MaxPerOrder)
 }
 
 // TestVeridianPricingSyncService_Start_KeepsPreviousCacheOnError verifie
