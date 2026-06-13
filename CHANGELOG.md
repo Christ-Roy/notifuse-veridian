@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [32.2] - 2026-05-31
+
+- **Feature**: Exposed `{{ workspace.website_url }}` in email templates — the workspace's public Website URL (trailing slash trimmed), distinct from `{{ workspace.base_url }}` (the tracking endpoint) — so templates can compose application links like `{{ workspace.website_url }}/users/verify/xxx` instead of pointing at the tracking domain (#342).
+
+## [32.1] - 2026-05-29
+
+- **Feature**: Exposed `{{ workspace.base_url }}` in email templates — the resolved Custom Endpoint URL (or the default API endpoint), trailing slash trimmed — so templates can compose links from relative paths like `{{ workspace.base_url }}/users/verify/xxx` (#342).
+- **Security**: Bumped `liquidjs` to 10.27.0 in console to clear 6 Dependabot alerts (critical RCE, ReDoS in `strip_html`, `date` filter padding DoS, `{% render %}` `ownPropertyOnly` bypass, empty `{% for %}` renderLimit bypass, and `strip_html` newline XSS); `npm audit fix` also cleared transitive `brace-expansion` and `ws` advisories.
+- **Fix**: Mailgun webhook registration no longer fails with `400` on domains shared with other services — Notifuse now merges its callback URL into each event's existing URL set via `PUT` (up to Mailgun's limit of 3 per event) instead of always `POST`ing, and unregistering removes only its own URL while preserving other consumers' (#340).
+
 ## [32.0] - 2026-05-22
 
 ### Database Schema Changes
@@ -12,9 +22,9 @@ All notable changes to this project will be documented in this file.
 
 - **Feature**: System emails and the console UI are now localized per user. Each user has a `language` preference — one of `en`, `fr`, `es`, `de`, `ca`, `pt-BR`, `ja`, `it` — that drives both their console UI locale and the language of the system emails (authentication code, workspace invitation, broadcast circuit-breaker alert) sent to them. The language is changed from the console language switcher and persisted via the new `POST /api/user.updateLanguage` endpoint. Magic-code emails use the recipient's language, circuit-breaker alerts use each owner's language, and workspace invitations use the inviter's language.
 
-## [31.0] - 2026-05-19 *(skipped — see veridian fork notes)*
+## [31.0] - 2026-05-19 *(numéro réutilisé par le fork — voir note ci-dessous)*
 
-> Upstream v31.0 introduced `internal/migrations/v31.go` (`queue_contact_for_segment_recomputation` trigger fix). Our fork already shipped its own `V31Migration` (backfill veridian_plan) at the same numbering slot. The upstream SQL fix is **pending** — to be re-applied in a future Veridian-numbered migration (see `todo/2026-05-23-sync-upstream-v30-2-to-v32-0.md`).
+> Upstream v31.0 introduced `internal/migrations/v31.go` (`queue_contact_for_segment_recomputation` trigger fix). Our fork already shipped its own `V31Migration` (backfill veridian_plan) at the same numbering slot. The upstream SQL fix (short-circuit when the inserted `contact_timeline` row is itself a `segment.joined`/`segment.left` event, to break the segment-recomputation self-loop) is **pending** — to be re-applied in a future Veridian-numbered migration (≥ V49). See `todo/2026-05-23-sync-upstream-v30-2-to-v32-0.md`. The upstream v31 UTC `timeout_after` fix is already covered by our own scheduler handling.
 
 ## [30.4] - 2026-05-18
 

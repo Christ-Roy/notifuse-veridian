@@ -433,6 +433,7 @@ func TestQueueMessageSender_SendBatch(t *testing.T) {
 			"integration-1",
 			"secret-key",
 			"https://api.example.com",
+			"",
 			true,
 			"broadcast-1",
 			recipients,
@@ -474,6 +475,7 @@ func TestQueueMessageSender_SendBatch(t *testing.T) {
 			"integration-1",
 			"secret-key",
 			"https://api.example.com",
+			"",
 			true,
 			"broadcast-1",
 			[]*domain.ContactWithList{}, // Empty
@@ -550,6 +552,7 @@ func TestQueueMessageSender_SendBatch(t *testing.T) {
 			"integration-1",
 			"secret-key",
 			"https://api.example.com",
+			"",
 			true,
 			"broadcast-1",
 			recipients,
@@ -661,6 +664,7 @@ func TestQueueMessageSender_SendBatch(t *testing.T) {
 			"integration-1",
 			"test-secret-key",
 			"https://api.example.com",
+			"",
 			true,
 			"broadcast-1",
 			recipients,
@@ -755,6 +759,7 @@ func TestQueueMessageSender_SendBatch(t *testing.T) {
 			"integration-1",
 			"test-secret-key",
 			"https://api.example.com",
+			"",
 			true,
 			"broadcast-1",
 			recipients,
@@ -871,6 +876,7 @@ func TestQueueSendBatch_WithRecipientFeed_Success(t *testing.T) {
 		"integration-1",
 		"secret-key",
 		"https://api.example.com",
+		"",
 		true,
 		"broadcast-1",
 		recipients,
@@ -966,6 +972,7 @@ func TestQueueSendBatch_WithRecipientFeed_FetchError_PausesBroadcast(t *testing.
 		"integration-1",
 		"secret-key",
 		"https://api.example.com",
+		"",
 		true,
 		"broadcast-1",
 		recipients,
@@ -1062,6 +1069,7 @@ func TestQueueSendBatch_WithRecipientFeed_Disabled(t *testing.T) {
 		"integration-1",
 		"secret-key",
 		"https://api.example.com",
+		"",
 		true,
 		"broadcast-1",
 		recipients,
@@ -1152,6 +1160,7 @@ func TestQueueSendBatch_WithRecipientFeed_NilFetcher(t *testing.T) {
 		"integration-1",
 		"secret-key",
 		"https://api.example.com",
+		"",
 		true,
 		"broadcast-1",
 		recipients,
@@ -1548,7 +1557,7 @@ func TestQueueMessageSender_SendBatch_VeridianWorkspacePixelFallback(t *testing.
 
 	sent, failed, err := sender.SendBatch(
 		context.Background(), "workspace-1", "integration-1", "secret-key",
-		"https://api.example.com", true, broadcast.ID, recipients,
+		"https://api.example.com", "", true, broadcast.ID, recipients,
 		templates, emailProvider, time.Now().Add(5*time.Minute), "",
 	)
 	require.NoError(t, err)
@@ -1617,7 +1626,7 @@ func TestQueueMessageSender_SendBatch_VeridianProviderThrottle(t *testing.T) {
 	sendBatch := func(s MessageSender, broadcastID string, recipients []*domain.ContactWithList) {
 		sent, failed, err := s.SendBatch(
 			context.Background(), "workspace-1", "integration-1", "secret-key",
-			"https://api.example.com", true, broadcastID, recipients,
+			"https://api.example.com", "", true, broadcastID, recipients,
 			templates, emailProvider, time.Now().Add(5*time.Minute), "",
 		)
 		require.NoError(t, err)
