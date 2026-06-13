@@ -1,5 +1,7 @@
 # [NOTIFUSE] Refactor EmailService pour brancher hub_mail_gateway
 
+> **OBSOLÈTE 2026-06-13** — pivot envoi stand-alone 31/05, archi mail-gateway via Hub abandonnée.
+
 > **Sévérité** : 🟡 P2 — feature mail-gateway consumer-side livrée vague 6 mais sans refactor des call sites broadcasts
 > **Owner** : agent Notifuse
 > **Créé** : 2026-05-26 par team-lead vague 6 (reco d'agent-mail-gateway-lib)

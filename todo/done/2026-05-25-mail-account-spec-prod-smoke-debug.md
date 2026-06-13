@@ -1,5 +1,7 @@
 # [NOTIFUSE] Spec mail-account-settings prod-smoke fail "Something went wrong!"
 
+> **OBSOLÈTE 2026-06-13** — pivot envoi stand-alone 31/05, archi mail-gateway via Hub abandonnée.
+
 > **Sévérité** : 🟢 P3 — debug E2E harness, pas de régression prod
 > **Owner** : agent Notifuse
 > **Créé** : 2026-05-25 par team-lead vague 6

@@ -1,5 +1,7 @@
 # [NOTIFUSE] Envoi mail au nom du user via Hub Mail Gateway (v1 Gmail)
 
+> **OBSOLÈTE 2026-06-13** — pivot envoi stand-alone 31/05, archi mail-gateway via Hub abandonnée.
+
 > **Type** : Feature — envoi mail depuis le compte Gmail de l'utilisateur
 > **Sévérité** : 🟡 P1 — démarrer en parallèle du Hub (livraison en cours)
 > **Owner** : agent Notifuse

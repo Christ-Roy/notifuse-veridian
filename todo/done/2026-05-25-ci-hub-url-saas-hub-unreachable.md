@@ -1,5 +1,7 @@
 # Bug CI : HUB_URL=saas-hub.staging.veridian.site unreachable depuis runner
 
+> **OBSOLÈTE 2026-06-13** — résolu par suppression : la spec MEGA-07 mail-gateway visée par ce ticket est supprimée (pivot stand-alone 31/05), et la variable CI HUB_URL (saas-hub erroné) retirée car plus aucune spec ne la lit.
+
 > **Sévérité** : 🟡 P1
 > **Owner** : agent notifuse / infra
 > **Créé** : 2026-05-25

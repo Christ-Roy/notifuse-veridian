@@ -1,5 +1,7 @@
 # Audit + harmonisation UI/UX du choix d'envoi mail (sender) Notifuse
 
+> **OBSOLÈTE 2026-06-13** — pivot envoi stand-alone 31/05, archi mail-gateway via Hub abandonnée.
+
 > **Sévérité** : 🟡 P1
 > **Owner** : agent notifuse-veridian
 > **Créé** : 2026-05-30

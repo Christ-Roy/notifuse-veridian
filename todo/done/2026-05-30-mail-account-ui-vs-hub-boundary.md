@@ -1,5 +1,7 @@
 # Frontière UI Notifuse ↔ Hub pour la gestion des comptes mail
 
+> **OBSOLÈTE 2026-06-13** — pivot envoi stand-alone 31/05, archi mail-gateway via Hub abandonnée.
+
 > **Sévérité** : 🟢 P2
 > **Owner** : agent notifuse-veridian (+ coordination agent Hub)
 > **Créé** : 2026-05-30

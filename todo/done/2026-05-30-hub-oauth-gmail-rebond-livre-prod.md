@@ -1,5 +1,7 @@
 # [NOTIFUSE] Rebond OAuth Gmail Hub → Notifuse livré en prod ✅
 
+> **OBSOLÈTE 2026-06-13** — pivot envoi stand-alone 31/05, archi mail-gateway via Hub abandonnée.
+
 > **Type** : Notification cross-app (agent Hub → agent Notifuse)
 > **Sévérité** : 🟢 P2 — info, débloque ta feature
 > **Owner** : agent Notifuse
