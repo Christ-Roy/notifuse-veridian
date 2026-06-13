@@ -2,7 +2,7 @@ package service
 
 // === Veridian patch — lot O (2026-05-21) ===
 // VeridianPricingSyncService : consomme le catalogue pricing canonique
-// expose par le Hub Veridian (GET hub.veridian.site/api/pricing/plans)
+// expose par le Hub Veridian (GET app.veridian.site/api/pricing/plans)
 // et le maintient en cache memoire pour rester aligne sur la source de
 // verite (veridian-infra/shared/pricing/plans.ts).
 //
@@ -43,10 +43,15 @@ import (
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
-// DefaultHubPricingURL est l'endpoint canonique du Hub. Surcharge possible
-// via la variable env `HUB_PRICING_URL` (utile pour les tests + le mode
-// staging qui pointe vers `hub.staging.veridian.site`).
-const DefaultHubPricingURL = "https://hub.veridian.site/api/pricing/plans"
+// DefaultHubPricingURL est l'endpoint canonique du Hub (host public Veridian
+// = `app.veridian.site`, PAS `hub.veridian.site` qui n'existe pas en DNS
+// public — bug corrigé 2026-06-13, cf. todo/done pricing-sync-dns-hub-failed).
+//
+// En pratique l'URL réelle est dérivée de `HUB_BASE_URL` côté app.go
+// (`{HUB_BASE_URL}/api/pricing/plans`), pour rester aligné sur le reste du
+// câblage Hub (invitation client, webhooks). Ce default ne s'applique QUE si
+// HUB_BASE_URL est vide (mode self-hosted sans Hub) ou en test.
+const DefaultHubPricingURL = "https://app.veridian.site/api/pricing/plans"
 
 // DefaultPricingSyncInterval est la frequence de refresh du cache. Aligne
 // sur le Cache-Control max-age=3600 expose par le Hub : on rafraichit en

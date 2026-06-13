@@ -44,7 +44,7 @@ func (h *VeridianHandler) SetPricingSync(p PricingCacheProvider) {
 //	  "last_fetched_at": "2026-05-21T12:00:00Z",
 //	  "last_success_at": "2026-05-21T12:00:00Z",
 //	  "last_error": "",
-//	  "source_url": "https://hub.veridian.site/api/pricing/plans",
+//	  "source_url": "https://app.veridian.site/api/pricing/plans",
 //	  "stale": false,
 //	  "stale_threshold": "2h0m0s"
 //	}

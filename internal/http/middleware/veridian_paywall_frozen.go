@@ -166,7 +166,7 @@ func extractUserIDFromJWT(r *http.Request, getJWTSecret func() ([]byte, error)) 
 //	  "error":        "user_frozen",
 //	  "code":         "user_frozen",
 //	  "message":      "Your access is temporarily restricted. Contact your workspace admin.",
-//	  "unfreeze_url": "https://hub.veridian.site/dashboard?action=unfreeze&tenant=<id>"
+//	  "unfreeze_url": "https://app.veridian.site/dashboard?action=unfreeze&tenant=<id>"
 //	}
 func writeFrozenResponse(w http.ResponseWriter, workspaceID string, reason domain.FreezeReason) {
 	w.Header().Set("Content-Type", "application/json")
