@@ -1,0 +1,64 @@
+# === .dockerignore Veridian (2026-06-13) ===
+# But : réduire le contexte de build envoyé à BuildKit. Sans ce fichier, le
+# `context: .` du workflow CI transférait ~1.4 GB inutiles (console/node_modules
+# 989M, .git 373M, tests 43M, dist 8.7M) à chaque build — gonflant le temps de
+# build et les layers COPY, ce qui élargissait la fenêtre du timeout de push
+# GHCR (DeadlineExceeded / "no active session", récurrent 2026-05-30/31).
+# Cf. todo/done/2026-05-31-ci-ghcr-push-timeout-flaky.md.
+#
+# Les `node_modules` sont RÉINSTALLÉS dans les stages builder via `npm ci`
+# (Dockerfile lignes 14, 35), donc les exclure est nécessaire ET correct : sinon
+# le `COPY console/ ./` écrasait le node_modules fraîchement installé par celui
+# (potentiellement obsolète) du contexte. Idem pour les `dist/` (rebuild via
+# `npm run build`).
+
+# --- Dépendances installées dans l'image (réinstallées via npm ci) ---
+**/node_modules
+
+# --- Artefacts de build (régénérés dans l'image) ---
+console/dist
+notification_center/dist
+**/coverage
+**/*.tsbuildinfo
+
+# --- Historique Git (inutile au build) ---
+.git
+.gitignore
+.gitattributes
+.github
+
+# --- Tests E2E / outils de test (ne servent pas au build de l'image) ---
+tests
+console/e2e
+console/e2e-prod-smoke
+console/test-results
+console/playwright-report
+console/certificates
+**/playwright.config.ts
+**/playwright.prod-smoke.config.ts
+
+# --- Docs, runbooks, plans, tickets (jamais embarqués) ---
+**/*.md
+docs
+runbooks
+plans
+todo
+infra
+
+# --- Outils de dev / hooks / CI locale ---
+.husky
+.claude
+scripts/ci
+*.log
+Makefile
+
+# --- Fichiers d'environnement et secrets (ne JAMAIS leak dans l'image) ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- Divers IDE / OS ---
+.vscode
+.idea
+.DS_Store
