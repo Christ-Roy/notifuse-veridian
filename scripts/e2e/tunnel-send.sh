@@ -192,7 +192,14 @@ print(json.dumps({
  'yahoo_aol': float(os.environ.get('RATE_YAHOO_AOL',3)),
  'freemail_fr': float(os.environ.get('RATE_FREEMAIL_FR',4)),
  'corporate': float(os.environ.get('RATE_CORPORATE',60))}))")
-  BID=$(api /api/broadcasts.create "{\"workspace_id\":\"$WID\",\"name\":\"$BNAME\",\"audience\":{\"list\":\"tunnel\",\"exclude_unsubscribed\":true},\"test_settings\":{\"enabled\":false,\"sample_percentage\":100,\"variations\":[{\"variation_name\":\"a\",\"template_id\":\"e2e-tunnel-tpl\"}]},\"tracking_enabled\":true,\"metadata\":{\"veridian_provider_class_rates\":$RATES}}" \
+  # Note : pas de "tracking_enabled" ici — ce champ existe sur le DTO
+  # CreateBroadcastRequest mais N'EST PAS propagé au modèle Broadcast (vérifié
+  # 2026-06-13 : CreateBroadcastRequest.Validate() ne le recopie pas, et aucun
+  # code service ne lit broadcast.TrackingEnabled). Le tracking de clics (/r/)
+  # et le pixel d'ouverture (/t/) sont gouvernés par TrackingSettings au niveau
+  # compilation du template — l'E2E sink du 13/06 a confirmé clics ON sur les
+  # 5 classes. L'envoyer ici n'avait aucun effet (champ mort).
+  BID=$(api /api/broadcasts.create "{\"workspace_id\":\"$WID\",\"name\":\"$BNAME\",\"audience\":{\"list\":\"tunnel\",\"exclude_unsubscribed\":true},\"test_settings\":{\"enabled\":false,\"sample_percentage\":100,\"variations\":[{\"variation_name\":\"a\",\"template_id\":\"e2e-tunnel-tpl\"}]},\"metadata\":{\"veridian_provider_class_rates\":$RATES}}" \
     | python3 -c 'import json,sys;d=json.load(sys.stdin);print((d.get("broadcast") or d)["id"])') \
     || fail "broadcasts.create"
 
