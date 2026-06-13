@@ -67,7 +67,7 @@ func NewFactory(
 // for processing by the queue worker. Otherwise, it creates a direct sender.
 func (f *Factory) CreateMessageSender() MessageSender {
 	if f.useQueueSender && f.emailQueueRepo != nil {
-		return NewQueueMessageSender(
+		sender := NewQueueMessageSender(
 			f.emailQueueRepo,
 			f.broadcastRepo,
 			f.messageHistoryRepo,
@@ -77,9 +77,15 @@ func (f *Factory) CreateMessageSender() MessageSender {
 			f.config,
 			f.apiEndpoint,
 		)
+		// Veridian fork — injecte le workspace repo pour le fallback pixel par
+		// classe au niveau workspace (cf. veridian_pixel_resolver.go).
+		if s, ok := sender.(*queueMessageSender); ok {
+			s.SetVeridianWorkspaceRepo(f.workspaceRepo)
+		}
+		return sender
 	}
 
-	return NewMessageSender(
+	sender := NewMessageSender(
 		f.broadcastRepo,
 		f.messageHistoryRepo,
 		f.templateRepo,
@@ -89,6 +95,11 @@ func (f *Factory) CreateMessageSender() MessageSender {
 		f.config,
 		f.apiEndpoint,
 	)
+	// Veridian fork — idem pour le sender direct (chemin legacy).
+	if s, ok := sender.(*messageSender); ok {
+		s.SetVeridianWorkspaceRepo(f.workspaceRepo)
+	}
+	return sender
 }
 
 // CreateOrchestrator creates a new broadcast orchestrator

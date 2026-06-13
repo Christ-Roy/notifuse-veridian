@@ -115,6 +115,17 @@ type messageSender struct {
 	lastSendTime       time.Time
 	sendMutex          sync.Mutex
 	apiEndpoint        string
+
+	// Veridian fork — repo optionnel pour le fallback workspace du pixel
+	// d'ouverture par classe (cf. veridian_pixel_resolver.go). Injecté par la
+	// factory. nil = fallback workspace inactif (comportement upstream).
+	veridianWorkspaceRepo domain.WorkspaceRepository
+}
+
+// SetVeridianWorkspaceRepo injecte le workspace repo pour le fallback pixel par
+// classe au niveau workspace (DI optionnelle post-construction, cf. queue sender).
+func (s *messageSender) SetVeridianWorkspaceRepo(repo domain.WorkspaceRepository) {
+	s.veridianWorkspaceRepo = repo
 }
 
 // NewMessageSender creates a new message sender
@@ -252,8 +263,10 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	}
 
 	// Veridian fork — pixel d'ouverture par classe (single recipient : contact
-	// non chargé → classification par email si tunnel actif). Cf. queue sender.
-	trackingSettings.EnableOpenPixel = domain.VeridianResolveOpenPixel(nil, email, broadcast, nil)
+	// non chargé → classification par email si tunnel actif). Fallback workspace
+	// résolu via le pixelResolver (nil-safe sans repo injecté). Cf. queue sender.
+	pixelResolver := newVeridianWorkspacePixelResolver(s.veridianWorkspaceRepo, s.logger)
+	trackingSettings.EnableOpenPixel = pixelResolver.resolveOpenPixel(ctx, workspaceID, nil, email, broadcast)
 
 	// Resolve language variant
 	emailContent := template.ResolveEmailContent(contactLanguage, workspaceDefaultLanguage)
@@ -539,7 +552,11 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, integ
 			MessageID:      messageID,
 		}
 
-		// Veridian fork — pixel d'ouverture par classe de provider destinataire.
+		// Veridian fork — pixel d'ouverture par classe. Note : ce trackingSettings
+		// ne sert qu'à BuildTemplateData (variables UTM/unsubscribe), qui n'insère
+		// PAS le pixel — l'insertion réelle se fait dans SendToRecipient ci-dessous,
+		// qui RÉSOUT le pixel avec le fallback workspace. On reste donc sur la
+		// résolution légère sans fetch ici (pas de double GetByID workspace).
 		trackingSettings.EnableOpenPixel = domain.VeridianResolveOpenPixel(contact, contact.Email, broadcast, nil)
 
 		if broadcast.UTMParameters.Content == "" {

@@ -44,11 +44,34 @@ func TestClassifyProviderClass(t *testing.T) {
 		{"corporate com", "info@acme-corp.com", ProviderClassCorporate},
 		{"subdomain of gmail is NOT gmail", "a@mail.gmail.com", ProviderClassCorporate},
 
+		// V1 : table de SUFFIXE EXACT (MX résolu en amont par Prospection). Les
+		// sous-domaines de providers tombent donc en corporate — comportement
+		// voulu et documenté, testé ici pour le verrouiller contre une dérive.
+		{"subdomain corp.google.com is corporate", "a@corp.google.com", ProviderClassCorporate},
+		{"subdomain mail.yahoo.com is corporate", "a@mail.yahoo.com", ProviderClassCorporate},
+		{"gmail.co.uk not in table is corporate", "a@gmail.co.uk", ProviderClassCorporate},
+
+		// FQDN absolu : point terminal normalisé → classé comme le domaine nu.
+		{"gmail FQDN trailing dot", "a@gmail.com.", ProviderClassGoogle},
+		{"outlook FQDN trailing dot", "a@outlook.fr.", ProviderClassMicrosoft},
+		{"corporate FQDN trailing dot stays corporate", "a@acme.fr.", ProviderClassCorporate},
+
+		// Casse mixte sur le domaine.
+		{"gmail mixed case", "Jean@Gmail.Com", ProviderClassGoogle},
+
+		// IDN / unicode : non transformé en punycode ici → corporate (jamais de
+		// panic). La résolution fine d'un domaine IDN provider relève de l'amont.
+		{"IDN unicode domain", "a@münchen.de", ProviderClassCorporate},
+		{"punycode domain", "a@xn--mnchen-3ya.de", ProviderClassCorporate},
+
 		// Robustesse : jamais de panic, toujours corporate
 		{"empty", "", ProviderClassCorporate},
 		{"no at sign", "not-an-email", ProviderClassCorporate},
 		{"trailing at", "jean@", ProviderClassCorporate},
 		{"only at", "@", ProviderClassCorporate},
+		{"only dot domain", "a@.", ProviderClassCorporate},
+		{"whitespace only domain", "a@   ", ProviderClassCorporate},
+		{"tab in email handled", "a@gmail.com\t", ProviderClassGoogle},
 		{"double at takes last", "a@b@gmail.com", ProviderClassGoogle},
 		{"domain with spaces", "a@ gmail.com ", ProviderClassGoogle},
 	}

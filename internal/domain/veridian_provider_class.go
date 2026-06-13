@@ -119,6 +119,10 @@ func ClassifyProviderClass(email string) string {
 		return ProviderClassCorporate
 	}
 	domain := strings.ToLower(strings.TrimSpace(email[at+1:]))
+	// FQDN absolu : "gmail.com." est strictement équivalent à "gmail.com" en
+	// DNS. On normalise le point terminal pour ne pas mal classer un Gmail
+	// présenté en FQDN absolu (rare mais légal) en corporate.
+	domain = strings.TrimSuffix(domain, ".")
 	if class, ok := veridianProviderDomainTable[domain]; ok {
 		return class
 	}

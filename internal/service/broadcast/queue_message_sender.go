@@ -25,6 +25,19 @@ type queueMessageSender struct {
 	logger             logger.Logger
 	config             *Config
 	apiEndpoint        string
+
+	// Veridian fork — repo optionnel pour le fallback workspace du pixel
+	// d'ouverture par classe (cf. veridian_pixel_resolver.go). Injecté par la
+	// factory via SetVeridianWorkspaceRepo. nil = fallback workspace inactif
+	// (comportement upstream : le pixel suit broadcast metadata + défaut tunnel).
+	veridianWorkspaceRepo domain.WorkspaceRepository
+}
+
+// SetVeridianWorkspaceRepo injecte le workspace repo utilisé pour le fallback
+// pixel par classe au niveau workspace. DI optionnelle (post-construction) pour
+// ne pas changer la signature du constructeur ni casser les tests existants.
+func (s *queueMessageSender) SetVeridianWorkspaceRepo(repo domain.WorkspaceRepository) {
+	s.veridianWorkspaceRepo = repo
 }
 
 // NewQueueMessageSender creates a new message sender that enqueues to the email queue
@@ -73,7 +86,9 @@ func (s *queueMessageSender) SendToRecipient(
 ) error {
 	// Build the email payload (contact nil ici : envoi single sans contact
 	// chargé ; le pixel résout par classification de l'email si tunnel actif).
-	entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage, nil)
+	// Veridian fork — resolver pixel mémoïsé (fallback workspace, nil-safe).
+	pixelResolver := newVeridianWorkspacePixelResolver(s.veridianWorkspaceRepo, s.logger)
+	entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage, nil, pixelResolver)
 	if err != nil {
 		return err
 	}
@@ -120,6 +135,11 @@ func (s *queueMessageSender) SendBatch(
 	if err != nil {
 		return 0, len(recipients), fmt.Errorf("failed to get broadcast: %w", err)
 	}
+
+	// Veridian fork — resolver pixel par classe avec fallback workspace, mémoïsé
+	// pour ce batch (un seul GetByID workspace, zéro I/O par recipient). nil-safe
+	// si le repo n'est pas injecté.
+	pixelResolver := newVeridianWorkspacePixelResolver(s.veridianWorkspaceRepo, s.logger)
 
 	// Build queue entries
 	var entries []*domain.EmailQueueEntry
@@ -223,7 +243,7 @@ func (s *queueMessageSender) SendBatch(
 		}
 
 		// Build queue entry
-		entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, recipient.Contact.Email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage, recipient.Contact)
+		entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, recipient.Contact.Email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage, recipient.Contact, pixelResolver)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,
@@ -286,6 +306,9 @@ func (s *queueMessageSender) buildQueueEntry(
 	// Veridian fork — contact destinataire (nil pour SendToRecipient single)
 	// pour résoudre le pixel d'ouverture par classe de provider.
 	contact *domain.Contact,
+	// Veridian fork — resolver pixel par classe avec fallback workspace (mémoïsé
+	// par batch). Jamais nil (créé par l'appelant).
+	pixelResolver *veridianWorkspacePixelResolver,
 ) (*domain.EmailQueueEntry, error) {
 	// Ensure UTM parameters object is present
 	if broadcast.UTMParameters == nil {
@@ -310,11 +333,12 @@ func (s *queueMessageSender) buildQueueEntry(
 	}
 
 	// Veridian fork — découple le pixel d'ouverture (email.opened) de la
-	// réécriture de liens, par classe de provider destinataire. Le workspace
-	// n'est pas injecté dans ce sender ; le contexte tunnel est porté par le
-	// broadcast metadata (rates/pixel) + le tag contact custom_string_5. Hors
-	// tunnel → nil → comportement upstream (pixel suit EnableTracking).
-	trackingSettings.EnableOpenPixel = domain.VeridianResolveOpenPixel(contact, email, broadcast, nil)
+	// réécriture de liens, par classe de provider destinataire. Le contexte
+	// tunnel est porté par le broadcast metadata (rates/pixel), le tag contact
+	// custom_string_5, OU les settings workspace (fallback résolu par le
+	// pixelResolver, mémoïsé par batch). Hors tunnel → nil → comportement
+	// upstream (pixel suit EnableTracking).
+	trackingSettings.EnableOpenPixel = pixelResolver.resolveOpenPixel(ctx, workspaceID, contact, email, broadcast)
 
 	// Resolve language variant
 	emailContent := template.ResolveEmailContent(contactLanguage, workspaceDefaultLanguage)

@@ -25,6 +25,34 @@ func TestVeridianResolveOpenPixel_NonRegressionHorsTunnel(t *testing.T) {
 	}
 }
 
+func TestVeridianResolveOpenPixel_BroadcastNilAvecTag(t *testing.T) {
+	// broadcast nil ET workspace nil, mais tag contact présent → tunnel actif
+	// via le tag, aucun nil-deref, résolution au défaut tunnel de la classe.
+	got := VeridianResolveOpenPixel(contactWithClass("a@gmail.com", "google"), "a@gmail.com", nil, nil)
+	if got == nil || *got != false {
+		t.Fatalf("broadcast+workspace nil, tag google → pixel OFF attendu, got %v", got)
+	}
+	got = VeridianResolveOpenPixel(contactWithClass("b@orange.fr", "freemail_fr"), "b@orange.fr", nil, nil)
+	if got == nil || *got != true {
+		t.Fatalf("broadcast+workspace nil, tag freemail_fr → pixel ON attendu, got %v", got)
+	}
+}
+
+func TestVeridianResolveOpenPixel_ClasseInconnueDefautFalse(t *testing.T) {
+	// Tag canonique absent de la map de défaut serait impossible (les 5 classes
+	// y sont) ; on vérifie la robustesse si un override broadcast cible une
+	// classe que le destinataire n'a pas : on retombe sur le défaut de SA classe.
+	b := &Broadcast{Metadata: MapOfAny{
+		VeridianOpenPixelByClassMetadataKey: map[string]any{"microsoft": true},
+	}}
+	// Destinataire gmail : l'override microsoft ne le concerne pas → défaut
+	// google = false.
+	got := VeridianResolveOpenPixel(&Contact{Email: "x@gmail.com"}, "x@gmail.com", b, nil)
+	if got == nil || *got != false {
+		t.Fatalf("override d'une AUTRE classe ne doit pas affecter google (défaut OFF), got %v", got)
+	}
+}
+
 func TestVeridianResolveOpenPixel_DefautTunnelParClasse(t *testing.T) {
 	// Tunnel actif via config rates broadcast (signal). Politique par défaut :
 	// OFF google/microsoft, ON freemail_fr/yahoo_aol/corporate.

@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,6 +61,53 @@ func TestProviderClassRateLimiter_InvalidRateFallsBackToFloor(t *testing.T) {
 
 	limiter = prl.GetOrCreateLimiter("int-1", "microsoft", -5)
 	assert.Equal(t, rate.Limit(1.0/60.0), limiter.Limit())
+}
+
+// Le providerClassLimiter est UNIQUE et PARTAGÉ entre toutes les goroutines
+// workspace du worker pool (worker.go:processAllWorkspaces lance jusqu'à
+// WorkerCount workspaces en parallèle). On doit prouver l'absence de data race
+// sous accès concurrent : Allow/GetOrCreateLimiter (création + SetLimit) +
+// GetStats (Range) + Clear, sur des clés partagées ET distinctes. À lancer avec
+// -race (CI : go test -race).
+func TestProviderClassRateLimiter_ConcurrentAccessNoRace(t *testing.T) {
+	prl := NewProviderClassRateLimiter()
+
+	const goroutines = 24
+	const iterations = 400
+	classes := []string{"google", "microsoft", "yahoo_aol", "freemail_fr", "corporate"}
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func(g int) {
+			defer wg.Done()
+			// Moitié des goroutines tapent une intégration PARTAGÉE (contention
+			// max sur les mêmes buckets), l'autre moitié une intégration propre.
+			integrationID := "shared-int"
+			if g%2 == 0 {
+				integrationID = fmt.Sprintf("int-%d", g)
+			}
+			for i := 0; i < iterations; i++ {
+				class := classes[i%len(classes)]
+				// Débit qui varie → force des SetLimit concurrents sur un bucket
+				// éventuellement partagé (le chemin TOCTOU du Load-hit).
+				rate := float64(1 + i%120)
+				prl.Allow(integrationID, class, rate)
+				if i%50 == 0 {
+					_ = prl.GetStats()
+				}
+				if i%97 == 0 {
+					prl.Clear()
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	// Pas d'assertion fonctionnelle (les débits sont chaotiques par design) :
+	// le seul critère est l'absence de race/panic, garanti par -race + le fait
+	// d'arriver ici sans crash.
+	_ = prl.GetStats()
 }
 
 func TestProviderClassRateLimiter_GetStatsAndClear(t *testing.T) {

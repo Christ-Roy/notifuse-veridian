@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -256,6 +257,54 @@ func TestProcessEntry_MixedBatchClassesDoNotBlockEachOther(t *testing.T) {
 // entrée sans token est re-planifiée dans le FUTUR (≥ ~1s) via SetNextRetry,
 // donc exclue des FetchPending suivants (WHERE next_retry_at <= NOW())
 // jusqu'à l'arrivée du prochain token. Un seul envoi réel consomme le token.
+// Le worker traite jusqu'à WorkerCount WORKSPACES en parallèle
+// (processAllWorkspaces), tous partageant le MÊME providerClassLimiter. Le gate
+// veridianProviderClassGate est donc appelé concurremment. On prouve l'absence
+// de data race sur ce chemin (gate → limiter.Allow → SetLimit), sur des
+// workspaces et classes variés. À lancer avec -race.
+func TestVeridianProviderClassGate_ConcurrentWorkspacesNoRace(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+
+	const goroutines = 16
+	const iterations = 300
+	emails := []string{"a@gmail.com", "b@outlook.fr", "c@yahoo.fr", "d@orange.fr", "e@acme.fr"}
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func(g int) {
+			defer wg.Done()
+			// Workspaces distincts mais throttle config sur les mêmes classes :
+			// le providerClassLimiter partagé voit des clés integrationID|classe
+			// qui se chevauchent quand g pointe la même intégration.
+			ws := &domain.Workspace{
+				ID: fmt.Sprintf("ws-%d", g%4),
+				Settings: domain.WorkspaceSettings{
+					VeridianProviderClassRates: map[string]float64{
+						"google": 1, "microsoft": 2, "yahoo_aol": 5,
+					},
+				},
+				Integrations: []domain.Integration{{
+					ID:            fmt.Sprintf("int-%d", g%4),
+					EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 6000},
+				}},
+			}
+			for i := 0; i < iterations; i++ {
+				entry := veridianTestEntry(
+					fmt.Sprintf("e-%d-%d", g, i), emails[i%len(emails)], domain.EmailQueuePayload{})
+				entry.IntegrationID = ws.Integrations[0].ID
+				// On ne fait que solliciter le gate (lecture + Allow) : pas de
+				// repo touché, c'est le chemin concurrent partagé qu'on stresse.
+				env.worker.veridianProviderClassGate(ws, entry)
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	// Critère : pas de race/panic. Les stats restent lisibles après la tempête.
+	_ = env.worker.GetProviderClassStats()
+}
+
 func TestProcessEntry_SaturatedClassNoBusyLoop(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	workspace := veridianTestWorkspace(map[string]float64{"google": 1}, 6000)

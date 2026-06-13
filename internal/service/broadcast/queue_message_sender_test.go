@@ -1299,6 +1299,7 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			"",
 			"",
 			nil, // Veridian: contact (pixel par classe)
+			newVeridianWorkspacePixelResolver(nil, qms.logger), // Veridian: pixel resolver (nil repo = pas de fallback workspace)
 		)
 
 		require.NoError(t, err)
@@ -1362,6 +1363,7 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			"",
 			"",
 			nil, // Veridian: contact (pixel par classe)
+			newVeridianWorkspacePixelResolver(nil, qms.logger), // Veridian: pixel resolver (nil repo = pas de fallback workspace)
 		)
 
 		require.NoError(t, err)
@@ -1402,6 +1404,7 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			"",
 			"",
 			nil, // Veridian: contact (pixel par classe)
+			newVeridianWorkspacePixelResolver(nil, qms.logger), // Veridian: pixel resolver (nil repo = pas de fallback workspace)
 		)
 
 		assert.Error(t, err)
@@ -1446,6 +1449,7 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			"",
 			"",
 			nil, // Veridian: contact (pixel par classe)
+			newVeridianWorkspacePixelResolver(nil, qms.logger), // Veridian: pixel resolver (nil repo = pas de fallback workspace)
 		)
 
 		require.NoError(t, err)
@@ -1459,6 +1463,117 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 // provider destinataire dans le payload : débits du broadcast (metadata) +
 // tag contact custom_string_5 posé par l'export batch (contrat provider_class).
 // Sans config ni tag, le payload reste strictement upstream.
+// Veridian fork — bout-en-bout du FIX fallback workspace pixel (2026-06-13) :
+// SetVeridianWorkspaceRepo injecté + workspace avec config pixel par classe →
+// le HTML RÉELLEMENT compilé puis enqueué reflète la politique pixel posée AU
+// NIVEAU WORKSPACE (chemin UI Settings → Cold outreach). Avant le fix, les
+// senders passaient workspace=nil et cette config était silencieusement ignorée.
+//
+// Le pixel d'ouverture apparaît comme un chemin /t/ chiffré dans le HTML
+// (cf. GenerateHTMLOpenTrackingPixel). On vérifie ON/OFF par classe + le fait
+// que la réécriture de liens (/r/) reste appliquée indépendamment.
+func TestQueueMessageSender_SendBatch_VeridianWorkspacePixelFallback(t *testing.T) {
+	emailSender := domain.NewEmailSender("sender@example.com", "Test Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+	}
+	template := &domain.Template{
+		ID: "template-1",
+		Email: &domain.EmailTemplate{
+			SenderID: emailSender.ID,
+			Subject:  "Hello",
+			// Le tree contient un lien → on peut vérifier /r/ (clics) séparément.
+			VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1",
+				`<a href="https://example.com">Voir</a>`)),
+		},
+	}
+	templates := map[string]*domain.Template{"template-1": template}
+
+	// Broadcast SANS config pixel → la politique vient UNIQUEMENT du workspace.
+	broadcast := &domain.Broadcast{
+		ID:            "broadcast-wpx",
+		WorkspaceID:   "workspace-1",
+		UTMParameters: &domain.UTMParameters{},
+	}
+
+	// Workspace : pixel OFF sur google, ON sur freemail_fr. C'est la config que
+	// l'UI persiste et que le fix doit faire respecter à l'envoi.
+	workspace := &domain.Workspace{
+		ID: "workspace-1",
+		Settings: domain.WorkspaceSettings{
+			VeridianOpenPixelByClass: map[string]bool{
+				"google":      false,
+				"freemail_fr": true,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockBroadcastRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-1", broadcast.ID).Return(broadcast, nil)
+	// Le fallback workspace ne doit charger le workspace qu'UNE fois pour tout
+	// le batch (mémoïsation), pas une fois par recipient.
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-1").Return(workspace, nil).Times(1)
+
+	var enqueued []*domain.EmailQueueEntry
+	mockQueueRepo.EXPECT().Enqueue(gomock.Any(), "workspace-1", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, entries []*domain.EmailQueueEntry) error {
+			enqueued = entries
+			return nil
+		})
+
+	sender := NewQueueMessageSender(
+		mockQueueRepo, mockBroadcastRepo, mockMessageHistoryRepo,
+		mockTemplateRepo, nil, mockLogger, nil, "https://api.example.com",
+	)
+	// LE FIX : sans cet appel, workspace=nil et le test échouerait (pixel google
+	// présent car EnableTracking=true → comportement upstream).
+	sender.(*queueMessageSender).SetVeridianWorkspaceRepo(mockWorkspaceRepo)
+
+	recipients := []*domain.ContactWithList{
+		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"},   // google → pixel OFF
+		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"},   // freemail_fr → pixel ON
+	}
+
+	sent, failed, err := sender.SendBatch(
+		context.Background(), "workspace-1", "integration-1", "secret-key",
+		"https://api.example.com", true, broadcast.ID, recipients,
+		templates, emailProvider, time.Now().Add(5*time.Minute), "",
+	)
+	require.NoError(t, err)
+	require.Equal(t, 2, sent)
+	require.Equal(t, 0, failed)
+
+	require.Len(t, enqueued, 2)
+	byEmail := map[string]*domain.EmailQueueEntry{}
+	for _, e := range enqueued {
+		byEmail[e.ContactEmail] = e
+	}
+
+	gmail := byEmail["lead@gmail.com"]
+	require.NotNil(t, gmail)
+	assert.NotContains(t, gmail.Payload.HTMLContent, "/t/",
+		"workspace pixel google=false doit supprimer le pixel d'ouverture à l'envoi")
+	assert.Contains(t, gmail.Payload.HTMLContent, "/r/",
+		"les clics restent trackés (EnableTracking=true) malgré le pixel OFF")
+
+	orange := byEmail["lead@orange.fr"]
+	require.NotNil(t, orange)
+	assert.Contains(t, orange.Payload.HTMLContent, "/t/",
+		"workspace pixel freemail_fr=true doit conserver le pixel d'ouverture")
+}
+
 func TestQueueMessageSender_SendBatch_VeridianProviderThrottle(t *testing.T) {
 	newSender := func(ctrl *gomock.Controller, broadcast *domain.Broadcast, onEnqueue func([]*domain.EmailQueueEntry)) MessageSender {
 		mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)

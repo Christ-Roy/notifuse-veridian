@@ -124,6 +124,51 @@ func TestFactory_CreateMessageSender(t *testing.T) {
 	// messageSender already has type MessageSender, no need for type assertion
 }
 
+// Veridian fork — vérifie que CreateMessageSender injecte le workspaceRepo dans
+// le sender (les deux chemins : queue + direct). Sans cette injection, le
+// fallback workspace du pixel par classe est mort (bug corrigé 2026-06-13).
+func TestFactory_CreateMessageSender_InjectsVeridianWorkspaceRepo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+	newFactory := func(useQueueSender bool) *Factory {
+		return NewFactory(
+			mocks.NewMockBroadcastRepository(ctrl),
+			mocks.NewMockMessageHistoryRepository(ctrl),
+			mocks.NewMockTemplateRepository(ctrl),
+			mocks.NewMockEmailServiceInterface(ctrl),
+			mocks.NewMockContactRepository(ctrl),
+			mocks.NewMockTaskRepository(ctrl),
+			mockWorkspaceRepo,
+			mocks.NewMockEmailQueueRepository(ctrl),
+			broadcastmocks.NewMockDataFeedFetcher(ctrl),
+			pkgmocks.NewMockLogger(ctrl),
+			DefaultConfig(),
+			"https://api.notifuse.com",
+			mocks.NewMockEventBus(ctrl),
+			useQueueSender,
+		)
+	}
+
+	t.Run("queue sender path", func(t *testing.T) {
+		sender := newFactory(true).CreateMessageSender()
+		qms, ok := sender.(*queueMessageSender)
+		assert.True(t, ok, "useQueueSender=true doit produire un queueMessageSender")
+		assert.Same(t, mockWorkspaceRepo, qms.veridianWorkspaceRepo,
+			"le workspaceRepo de la factory doit être injecté dans le queue sender")
+	})
+
+	t.Run("direct sender path", func(t *testing.T) {
+		sender := newFactory(false).CreateMessageSender()
+		ms, ok := sender.(*messageSender)
+		assert.True(t, ok, "useQueueSender=false doit produire un messageSender direct")
+		assert.Same(t, mockWorkspaceRepo, ms.veridianWorkspaceRepo,
+			"le workspaceRepo de la factory doit être injecté dans le sender direct")
+	})
+}
+
 func TestFactory_CreateOrchestrator(t *testing.T) {
 	// Create mock controller
 	ctrl := gomock.NewController(t)
