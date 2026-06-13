@@ -33,7 +33,6 @@ console/e2e
 console/e2e-prod-smoke
 console/test-results
 console/playwright-report
-console/certificates
 **/playwright.config.ts
 **/playwright.prod-smoke.config.ts
 
@@ -57,6 +56,17 @@ Makefile
 .env.*
 *.pem
 *.key
+
+# --- Exception : certs de DEV self-signed trackés, requis AU BUILD ---
+# console/vite.config.ts lit certificates/{key,cert}.pem inconditionnellement
+# (bloc `https:` du dev server, évalué même en build prod via readFileSync au
+# chargement de la config). Ces 2 fichiers sont committés dans le repo
+# (`git ls-files console/certificates/`) = certs self-signed de dev, pas de
+# vrais secrets. Sans cette exception, le build BuildKit échoue :
+# "ENOENT: open '/build/console/certificates/key.pem'". L'exclusion *.pem/*.key
+# ci-dessus reste active pour TOUT autre cert (garde-fou anti-leak).
+!console/certificates/key.pem
+!console/certificates/cert.pem
 
 # --- Divers IDE / OS ---
 .vscode
