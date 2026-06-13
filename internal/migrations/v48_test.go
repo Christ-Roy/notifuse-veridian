@@ -85,3 +85,34 @@ func TestV48Migration_Registered(t *testing.T) {
 	}
 	t.Fatal("V48Migration not registered")
 }
+
+// TestV48Migration_StaysAdditiveOnly verrouille l'invariant central de cette
+// migration depuis qu'elle est marquée INERTE (pivot stand-alone 31/05) : V48
+// est purement additive et le reste. Un retrait physique de la colonne
+// `mail_provider_choice` (instruction destructive DDL) doit se faire dans une
+// migration V49 "contract" dédiée, JAMAIS en mutant V48 (sinon le rollback sur
+// le tag Docker N-1 casse — Constitution CI §12 Expand & Contract).
+//
+// Ce test échoue si quelqu'un ajoute une opération destructive dans
+// UpdateSystem : on n'accepte qu'une unique instruction `ALTER TABLE ... ADD
+// COLUMN IF NOT EXISTS`. Toute autre commande SQL (suppression de colonne,
+// SET NOT NULL, RENAME, etc.) ferait échouer ExpectationsWereMet ou matcherait
+// un ExpectExec non déclaré → test rouge.
+func TestV48Migration_StaysAdditiveOnly(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	// On ne déclare QUE l'ADD COLUMN additif. Si UpdateSystem émettait une
+	// commande destructive supplémentaire (DDL de retrait, NOT NULL, RENAME...),
+	// sqlmock retournerait une erreur "call to ExecContext was not expected"
+	// et le test échouerait — c'est exactement le garde-fou voulu.
+	mock.ExpectExec(`^ALTER TABLE workspaces\s+ADD COLUMN IF NOT EXISTS mail_provider_choice TEXT NOT NULL DEFAULT 'smtp_generic'`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = (&V48Migration{}).UpdateSystem(context.Background(), &config.Config{}, db)
+	require.NoError(t, err)
+	// ExpectationsWereMet garantit qu'AUCUNE autre instruction n'a été émise :
+	// V48 = une seule opération, additive, point.
+	require.NoError(t, mock.ExpectationsWereMet())
+}

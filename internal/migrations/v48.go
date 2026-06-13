@@ -8,6 +8,32 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 )
 
+// ⚠️ COLONNE INERTE / DÉPRÉCIÉE DEPUIS LE PIVOT STAND-ALONE 2026-05-31. ⚠️
+//
+// Le pipeline "envoi via Hub Mail Gateway" (mail-provider-choice + proxy
+// mail-accounts) a été RETIRÉ le 2026-05-31 : il créait une dépendance Hub
+// sur l'envoi (aberration vs règle d'or stand-alone) et n'a JAMAIS été câblé
+// à l'envoi réel. Conséquences pour cette colonne `mail_provider_choice` :
+//   - Plus AUCUN code Go ne la lit ni ne l'écrit (lib `pkg/hub_mail_gateway`,
+//     repo `veridian_mail_provider_postgres.go`, UI `veridian_mail_account_settings.tsx`,
+//     wiring `app.go` : tout supprimé — cf. app.go:1344 + memory
+//     project_mail_sending_standalone_decision). L'envoi passe uniquement par
+//     le provider configuré par workspace (Settings > Integrations, natif
+//     upstream : SMTP/SES/...).
+//   - La colonne reste physiquement en prod (V48 déployée) à 'smtp_generic'
+//     sur tous les workspaces : c'est un résidu additif INERTE, sans impact
+//     fonctionnel (defaut constant, lu par personne).
+//
+// On NE supprime PAS physiquement la colonne ici : un retrait de colonne
+// (instruction destructive DDL) = tier 💀 (cf. Constitution CI §12 Expand &
+// Contract + CLAUDE.md racine §20), il casserait le rollback car le tag Docker
+// N-1 doit pouvoir tourner sur le schéma courant. Le retrait physique, s'il est
+// décidé, se fait via une migration V49 "contract" dédiée en 2 deploys. En
+// attendant, la migration V48 reste en place telle quelle pour préserver la
+// linéarité de l'historique et la replayabilité (idempotente).
+//
+// --- Doc historique d'origine (vague 6, 2026-05-25, archi abandonnée) ---
+//
 // V48Migration ajoute la colonne `workspaces.mail_provider_choice` TEXT NOT NULL
 // DEFAULT 'smtp_generic' pour materialiser la preference de provider d'envoi
 // mail par workspace (CONTRAT-HUB §3.4 ticket mail-send-as-user-via-hub-gateway,
