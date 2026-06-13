@@ -11,14 +11,15 @@
  *
  * Le backend (internal/domain/veridian_provider_class.go +
  * veridian_open_pixel.go) reste la source de vérité ; cette UI lit/écrit via
- * `POST /api/workspaces.update` (aucun endpoint dédié — settings JSON).
+ * `POST /api/workspaces.update` (aucun endpoint dédié — settings JSON). Le shape
+ * envoyé est strictement celui que le backend sait lire (non-régression).
  *
- * Non-owner = lecture seule (Descriptions), owner = formulaire éditable.
+ * Non-owner = lecture seule (cartes statiques), owner = formulaire éditable.
  */
 
 import { useEffect, useState } from 'react'
-import { App, Button, Descriptions, Form, InputNumber, Switch, Tag, Tooltip, Typography } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { App, Alert, Button, Card, Col, Form, InputNumber, Row, Space, Switch, Tag, Typography } from 'antd'
+import { CheckCircleFilled, CloseCircleFilled, InfoCircleOutlined } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 import { Workspace } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
@@ -29,7 +30,7 @@ import {
 } from '../../services/api/workspace'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
 
-const { Text } = Typography
+const { Text, Paragraph } = Typography
 
 interface Props {
   workspace: Workspace | null
@@ -37,19 +38,22 @@ interface Props {
   isOwner: boolean
 }
 
+// Les "gros" providers (réputation sensible au pixel d'ouverture).
+const BIG_PROVIDERS: VeridianProviderClass[] = ['google', 'microsoft']
+
 // Libellé lisible d'une classe (les values restent canoniques côté code/API).
-function classLabel(c: VeridianProviderClass): string {
+function classLabel(c: VeridianProviderClass, t: ReturnType<typeof useLingui>['t']): string {
   switch (c) {
     case 'google':
-      return 'Google (Gmail / Workspace)'
+      return t`Google (Gmail / Workspace)`
     case 'microsoft':
-      return 'Microsoft (Outlook / M365)'
+      return t`Microsoft (Outlook / Microsoft 365)`
     case 'yahoo_aol':
-      return 'Yahoo / AOL'
+      return t`Yahoo / AOL`
     case 'freemail_fr':
-      return 'FAI français (Orange, SFR, Free…)'
+      return t`French ISPs (Orange, SFR, Free…)`
     case 'corporate':
-      return 'Corporate (autres domaines)'
+      return t`Corporate (any other domain)`
   }
 }
 
@@ -122,14 +126,41 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
       const response = await workspaceService.get(workspace.id)
       onWorkspaceUpdate(response.workspace)
       setTouched(false)
-      message.success(t`Cold outreach settings updated successfully`)
+      message.success(t`Cold outreach settings saved`)
     } catch (error: unknown) {
-      const errorMessage = (error as Error)?.message || t`Failed to update cold outreach settings`
+      const errorMessage = (error as Error)?.message || t`Failed to save cold outreach settings`
       message.error(errorMessage)
     } finally {
       setSaving(false)
     }
   }
+
+  // Remet le pixel de chaque classe sur le défaut tunnel (sans toucher aux rates),
+  // marque le formulaire comme modifié pour que l'admin puisse sauver.
+  const resetPixelsToDefault = () => {
+    const values: Record<string, boolean> = {}
+    for (const c of VERIDIAN_PROVIDER_CLASSES) {
+      values[pixelField(c)] = VERIDIAN_DEFAULT_OPEN_PIXEL[c]
+    }
+    form.setFieldsValue(values)
+    setTouched(true)
+  }
+
+  // Encart pédagogique : ce que l'admin doit comprendre en 30 secondes.
+  const explainer = (
+    <Alert
+      type="info"
+      showIcon
+      icon={<InfoCircleOutlined />}
+      className="!mb-6"
+      message={t`How cold outreach throttling works`}
+      description={
+        <Paragraph style={{ marginBottom: 0 }} type="secondary">
+          {t`Recipients are grouped by their mailbox provider. Each provider tolerates a different sending pace, so you can cap how many emails per minute go to each group — slower toward Google and Microsoft, faster toward smaller providers. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere.`}
+        </Paragraph>
+      }
+    />
+  )
 
   // ── Non-owner : lecture seule ────────────────────────────────────────────
   if (!isOwner) {
@@ -139,39 +170,52 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
           title={t`Veridian — Cold outreach`}
           description={t`Per-provider sending rates and open-tracking policy for outbound campaigns.`}
         />
-        <Descriptions
-          bordered
-          column={1}
-          size="small"
-          styles={{ label: { width: '280px', fontWeight: '500' } }}
-        >
+        {explainer}
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           {VERIDIAN_PROVIDER_CLASSES.map((c) => {
             const rate = rates?.[c]
             const pixelOn = effectivePixel(pixels, c)
             return (
-              <Descriptions.Item key={c} label={classLabel(c)}>
-                <span>
-                  {rate
-                    ? t`${rate} emails/min`
-                    : t`No throttle (uses sender rate limit)`}
-                </span>
-                <span style={{ marginLeft: 16 }}>
-                  {pixelOn ? (
-                    <Text style={{ color: '#52c41a' }}>
-                      <CheckCircleOutlined style={{ marginRight: 6 }} />
-                      {t`Open pixel ON`}
+              <Card key={c} size="small">
+                <Row gutter={[16, 12]} align="middle" wrap>
+                  <Col xs={24} sm={10}>
+                    <Text strong>{classLabel(c, t)}</Text>
+                  </Col>
+                  <Col xs={12} sm={7}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {t`Rate`}
                     </Text>
-                  ) : (
-                    <Text style={{ color: '#ff4d4f' }}>
-                      <CloseCircleOutlined style={{ marginRight: 6 }} />
-                      {t`Open pixel OFF`}
+                    <div>
+                      {rate ? (
+                        <Text>{t`${rate} emails/min`}</Text>
+                      ) : (
+                        <Text type="secondary">{t`No throttle`}</Text>
+                      )}
+                    </div>
+                  </Col>
+                  <Col xs={12} sm={7}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {t`Open pixel`}
                     </Text>
-                  )}
-                </span>
-              </Descriptions.Item>
+                    <div>
+                      {pixelOn ? (
+                        <Text style={{ color: '#52c41a' }}>
+                          <CheckCircleFilled style={{ marginRight: 6 }} />
+                          {t`On`}
+                        </Text>
+                      ) : (
+                        <Text type="secondary">
+                          <CloseCircleFilled style={{ marginRight: 6 }} />
+                          {t`Off`}
+                        </Text>
+                      )}
+                    </div>
+                  </Col>
+                </Row>
+              </Card>
             )
           })}
-        </Descriptions>
+        </Space>
       </>
     )
   }
@@ -181,72 +225,70 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
     <>
       <SettingsSectionHeader
         title={t`Veridian — Cold outreach`}
-        description={t`Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability.`}
+        description={t`Per-provider sending rates and open-tracking policy for outbound campaigns.`}
       />
+      {explainer}
 
       <Form form={form} layout="vertical" onFinish={handleSave} onValuesChange={() => setTouched(true)}>
-        <Descriptions
-          bordered
-          column={1}
-          size="small"
-          styles={{ label: { width: '280px', fontWeight: '500', verticalAlign: 'top' } }}
-        >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           {VERIDIAN_PROVIDER_CLASSES.map((c) => {
-            const isBig = c === 'google' || c === 'microsoft'
+            const isBig = BIG_PROVIDERS.includes(c)
             return (
-              <Descriptions.Item
-                key={c}
-                label={
-                  <span>
-                    {classLabel(c)}
-                    {isBig && (
-                      <Tag color="orange" style={{ marginLeft: 8 }}>
-                        {t`pixel OFF by default`}
-                      </Tag>
-                    )}
-                  </span>
-                }
-              >
-                <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Form.Item
-                    name={rateField(c)}
-                    label={t`Rate (emails/min)`}
-                    style={{ marginBottom: 0 }}
-                    tooltip={t`Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle.`}
-                  >
-                    <InputNumber min={0} step={0.5} placeholder={t`no throttle`} style={{ width: 140 }} />
-                  </Form.Item>
-                  <Form.Item
-                    name={pixelField(c)}
-                    label={
-                      <Tooltip
-                        title={t`Open tracking pixel for this provider class. Default: ON for small providers, OFF for Google/Microsoft.`}
-                      >
-                        {t`Open pixel`}
-                      </Tooltip>
-                    }
-                    valuePropName="checked"
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Switch />
-                  </Form.Item>
-                </div>
-              </Descriptions.Item>
+              <Card key={c} size="small">
+                <Row gutter={[24, 8]} align="bottom" wrap>
+                  <Col xs={24} sm={10} style={{ display: 'flex', alignItems: 'center' }}>
+                    <Space size="small" wrap>
+                      <Text strong>{classLabel(c, t)}</Text>
+                      {isBig && <Tag color="orange">{t`pixel OFF by default`}</Tag>}
+                    </Space>
+                  </Col>
+                  <Col xs={14} sm={8}>
+                    <Form.Item
+                      name={rateField(c)}
+                      label={t`Rate (emails/min)`}
+                      style={{ marginBottom: 0 }}
+                      tooltip={t`Maximum emails per minute toward this provider. Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class throttle.`}
+                    >
+                      <InputNumber
+                        min={0}
+                        step={0.5}
+                        placeholder={t`No throttle`}
+                        style={{ width: '100%' }}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={10} sm={6}>
+                    <Form.Item
+                      name={pixelField(c)}
+                      label={t`Open pixel`}
+                      valuePropName="checked"
+                      style={{ marginBottom: 0 }}
+                      tooltip={t`Open-tracking pixel for this provider class. Default: ON for smaller providers, OFF for Google/Microsoft to protect deliverability.`}
+                    >
+                      <Switch
+                        checkedChildren={t`On`}
+                        unCheckedChildren={t`Off`}
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Card>
             )
           })}
-        </Descriptions>
+        </Space>
 
-        <div style={{ marginTop: 16 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {t`These defaults apply when a campaign does not set its own per-class rates. Link click tracking stays ON for every class regardless of the open pixel.`}
-          </Text>
-        </div>
+        <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 16 }}>
+          {t`These defaults apply when a campaign does not set its own per-class rates. A campaign can still override them from its own settings.`}
+        </Paragraph>
 
-        <Form.Item style={{ marginTop: 24 }}>
+        <Space style={{ marginTop: 16 }}>
           <Button type="primary" htmlType="submit" loading={saving} disabled={!touched}>
-            {t`Save Changes`}
+            {t`Save changes`}
           </Button>
-        </Form.Item>
+          <Button type="text" onClick={resetPixelsToDefault} disabled={saving}>
+            {t`Reset pixel to defaults`}
+          </Button>
+        </Space>
       </Form>
     </>
   )

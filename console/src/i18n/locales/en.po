@@ -102,7 +102,7 @@ msgid "{0} emails successfully delivered (hidden from chart)"
 msgstr "{0} emails successfully delivered (hidden from chart)"
 
 #. placeholder {0}: rates[c]
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:74
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:105
 msgid "{0} emails/min"
 msgstr "{0} emails/min"
 
@@ -234,7 +234,7 @@ msgstr "{opens} opens out of {recipients} recipients"
 msgid "{propertyCount} properties"
 msgstr "{propertyCount} properties"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:155
+#: src/components/settings/veridian_cold_outreach_settings.tsx:190
 msgid "{rate} emails/min"
 msgstr "{rate} emails/min"
 
@@ -1937,9 +1937,13 @@ msgstr "Code Editor"
 msgid "Cold outreach"
 msgstr "Cold outreach"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:129
+msgid "Cold outreach settings saved"
+msgstr "Cold outreach settings saved"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:125
-msgid "Cold outreach settings updated successfully"
-msgstr "Cold outreach settings updated successfully"
+#~ msgid "Cold outreach settings updated successfully"
+#~ msgstr "Cold outreach settings updated successfully"
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
 #: src/layouts/WorkspaceLayout.tsx:505
@@ -4309,6 +4313,10 @@ msgstr "Failed to resend magic code"
 msgid "Failed to resume broadcast"
 msgstr "Failed to resume broadcast"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:131
+msgid "Failed to save cold outreach settings"
+msgstr "Failed to save cold outreach settings"
+
 #: src/components/contacts/ContactUpsertDrawer.tsx:323
 msgid "Failed to save contact"
 msgstr "Failed to save contact"
@@ -4428,8 +4436,8 @@ msgid "Failed to update category: {0}"
 msgstr "Failed to update category: {0}"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:127
-msgid "Failed to update cold outreach settings"
-msgstr "Failed to update cold outreach settings"
+#~ msgid "Failed to update cold outreach settings"
+#~ msgstr "Failed to update cold outreach settings"
 
 #: src/components/settings/CustomFieldsConfiguration.tsx:126
 msgid "Failed to update custom field label"
@@ -4955,6 +4963,10 @@ msgstr "Hours"
 #: src/components/email_builder/ui/AddBlockPopover.tsx:339
 msgid "Hover over a block to see details"
 msgstr "Hover over a block to see details"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:156
+msgid "How cold outreach throttling works"
+msgstr "How cold outreach throttling works"
 
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx:44
 msgid "How it works:"
@@ -5988,12 +6000,16 @@ msgid "Max 3MB per file, 10MB total, 20 files maximum"
 msgstr "Max 3MB per file, 10MB total, 20 files maximum"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:215
-msgid "Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle."
-msgstr "Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle."
+#~ msgid "Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle."
+#~ msgstr "Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle."
 
 #: src/components/templates/SendTemplateModal.tsx:199
 msgid "Maximum 20 attachments allowed"
 msgstr "Maximum 20 attachments allowed"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:250
+msgid "Maximum emails per minute toward this provider. Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class throttle."
+msgstr "Maximum emails per minute toward this provider. Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class throttle."
 
 #: src/components/settings/BlogSettings.tsx:404
 msgid "Maximum number of posts to include in the RSS/JSON feed (1–20)"
@@ -6533,12 +6549,17 @@ msgid "No themes yet"
 msgstr "No themes yet"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:217
-msgid "no throttle"
-msgstr "no throttle"
+#~ msgid "no throttle"
+#~ msgstr "no throttle"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:192
+#: src/components/settings/veridian_cold_outreach_settings.tsx:255
+msgid "No throttle"
+msgstr "No throttle"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:156
-msgid "No throttle (uses sender rate limit)"
-msgstr "No throttle (uses sender rate limit)"
+#~ msgid "No throttle (uses sender rate limit)"
+#~ msgstr "No throttle (uses sender rate limit)"
 
 #: src/components/timeline/ContactTimeline.tsx:790
 msgid "No timeline events found for this contact"
@@ -6710,6 +6731,12 @@ msgstr "Occurred:"
 msgid "of the following conditions match:"
 msgstr "of the following conditions match:"
 
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:119
+#: src/components/settings/veridian_cold_outreach_settings.tsx:209
+#: src/components/settings/veridian_cold_outreach_settings.tsx:270
+msgid "Off"
+msgstr "Off"
+
 #: src/components/settings/SMTPBridgeSettings.tsx:11
 msgid "Off (plaintext)"
 msgstr "Off (plaintext)"
@@ -6717,6 +6744,12 @@ msgstr "Off (plaintext)"
 #: src/components/templates/ImportExportButton.tsx:491
 msgid "OK"
 msgstr "OK"
+
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:119
+#: src/components/settings/veridian_cold_outreach_settings.tsx:204
+#: src/components/settings/veridian_cold_outreach_settings.tsx:269
+msgid "On"
+msgstr "On"
 
 #: src/components/automations/nodes/TriggerNode.tsx:25
 msgid "Once"
@@ -6778,29 +6811,35 @@ msgstr "Open navigation menu"
 msgid "Open on web"
 msgstr "Open on web"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:225
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:114
+#: src/components/settings/veridian_cold_outreach_settings.tsx:198
+#: src/components/settings/veridian_cold_outreach_settings.tsx:263
 msgid "Open pixel"
 msgstr "Open pixel"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:167
-msgid "Open pixel OFF"
-msgstr "Open pixel OFF"
+#~ msgid "Open pixel OFF"
+#~ msgstr "Open pixel OFF"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:162
-msgid "Open pixel ON"
-msgstr "Open pixel ON"
+#~ msgid "Open pixel ON"
+#~ msgstr "Open pixel ON"
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:55
 msgid "Open Rate"
 msgstr "Open Rate"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:223
-msgid "Open tracking pixel for this provider class. Default: ON for small providers, OFF for Google/Microsoft."
-msgstr "Open tracking pixel for this provider class. Default: ON for small providers, OFF for Google/Microsoft."
+#~ msgid "Open tracking pixel for this provider class. Default: ON for small providers, OFF for Google/Microsoft."
+#~ msgstr "Open tracking pixel for this provider class. Default: ON for small providers, OFF for Google/Microsoft."
 
 #: src/components/veridian_paywall_modal.tsx:52
 msgid "Open Veridian"
 msgstr "Open Veridian"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:266
+msgid "Open-tracking pixel for this provider class. Default: ON for smaller providers, OFF for Google/Microsoft to protect deliverability."
+msgstr "Open-tracking pixel for this provider class. Default: ON for smaller providers, OFF for Google/Microsoft to protect deliverability."
 
 #: src/components/timeline/ContactTimeline.tsx:498
 msgid "opened"
@@ -6982,16 +7021,17 @@ msgid "Pending confirmation"
 msgstr "Pending confirmation"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:69
-msgid "Per-provider sending rates (Veridian cold outreach)"
-msgstr "Per-provider sending rates (Veridian cold outreach)"
+#~ msgid "Per-provider sending rates (Veridian cold outreach)"
+#~ msgstr "Per-provider sending rates (Veridian cold outreach)"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:140
+#: src/components/settings/veridian_cold_outreach_settings.tsx:171
+#: src/components/settings/veridian_cold_outreach_settings.tsx:228
 msgid "Per-provider sending rates and open-tracking policy for outbound campaigns."
 msgstr "Per-provider sending rates and open-tracking policy for outbound campaigns."
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:184
-msgid "Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability."
-msgstr "Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability."
+#~ msgid "Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability."
+#~ msgstr "Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability."
 
 #: src/components/broadcasts/RecipientFeedSettings.tsx:88
 msgid "Per-Recipient Data Feed"
@@ -7046,7 +7086,7 @@ msgstr "Photo by Zetong Li"
 msgid "Photo URL"
 msgstr "Photo URL"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:204
+#: src/components/settings/veridian_cold_outreach_settings.tsx:242
 msgid "pixel OFF by default"
 msgstr "pixel OFF by default"
 
@@ -7601,7 +7641,11 @@ msgstr "Push"
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr "Queued emails will not be sent. In-flight sends will complete."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:213
+#: src/components/settings/veridian_cold_outreach_settings.tsx:186
+msgid "Rate"
+msgstr "Rate"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:248
 msgid "Rate (emails/min)"
 msgstr "Rate (emails/min)"
 
@@ -7704,6 +7748,10 @@ msgstr "Recipient feed test completed successfully"
 #: src/components/templates/SendTemplateModal.tsx:318
 msgid "recipient@example.com"
 msgstr "recipient@example.com"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:159
+msgid "Recipients are grouped by their mailbox provider. Each provider tolerates a different sending pace, so you can cap how many emails per minute go to each group — slower toward Google and Microsoft, faster toward smaller providers. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
+msgstr "Recipients are grouped by their mailbox provider. Each provider tolerates a different sending pace, so you can cap how many emails per minute go to each group — slower toward Google and Microsoft, faster toward smaller providers. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
 
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:98
 #: src/pages/BroadcastsPage.tsx:1074
@@ -7913,6 +7961,10 @@ msgstr "Reset"
 #: src/components/blog_editor/menus/block-actions/TransformOptionsGroup.tsx:46
 msgid "Reset formatting"
 msgstr "Reset formatting"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:289
+msgid "Reset pixel to defaults"
+msgstr "Reset pixel to defaults"
 
 #: src/pages/TemplatesPage.tsx:427
 msgid "reset the filter"
@@ -8130,13 +8182,16 @@ msgstr "Save as new block"
 msgid "Save Block"
 msgstr "Save Block"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:286
+msgid "Save changes"
+msgstr "Save changes"
+
 #: src/components/automations/UpsertAutomationDrawer.tsx:158
 #: src/components/email_builder/blocks/MjStyleBlock.tsx:158
 #: src/components/email_builder/ui/CodeDrawerInput.tsx:142
 #: src/components/email_builder/ui/CodeDrawerInput.tsx:182
 #: src/components/settings/BlogSettings.tsx:444
 #: src/components/settings/GeneralSettings.tsx:299
-#: src/components/settings/veridian_cold_outreach_settings.tsx:247
 msgid "Save Changes"
 msgstr "Save Changes"
 
@@ -8671,6 +8726,10 @@ msgstr "Senders"
 #: src/components/broadcasts/SendingProgress.tsx:56
 msgid "Sending emails..."
 msgstr "Sending emails..."
+
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:100
+msgid "Sending rate"
+msgstr "Sending rate"
 
 #: src/components/settings/WebhookCard.tsx:385
 msgid "Sending test webhook..."
@@ -9775,9 +9834,13 @@ msgstr "These contacts will be removed from the selected list. This is a true re
 msgid "These contacts will be subscribed to the selected list (status: active)."
 msgstr "These contacts will be subscribed to the selected list (status: active)."
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:281
+msgid "These defaults apply when a campaign does not set its own per-class rates. A campaign can still override them from its own settings."
+msgstr "These defaults apply when a campaign does not set its own per-class rates. A campaign can still override them from its own settings."
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:241
-msgid "These defaults apply when a campaign does not set its own per-class rates. Link click tracking stays ON for every class regardless of the open pixel."
-msgstr "These defaults apply when a campaign does not set its own per-class rates. Link click tracking stays ON for every class regardless of the open pixel."
+#~ msgid "These defaults apply when a campaign does not set its own per-class rates. Link click tracking stays ON for every class regardless of the open pixel."
+#~ msgstr "These defaults apply when a campaign does not set its own per-class rates. Link click tracking stays ON for every class regardless of the open pixel."
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:612
 msgid "These parameters are automatically added to the URL of the broadcast. They are used by web analytics tools to analyze the performance of your campaign."
@@ -10598,10 +10661,14 @@ msgstr "Variant name"
 msgid "Variations"
 msgstr "Variations"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:139
-#: src/components/settings/veridian_cold_outreach_settings.tsx:183
+#: src/components/settings/veridian_cold_outreach_settings.tsx:170
+#: src/components/settings/veridian_cold_outreach_settings.tsx:227
 msgid "Veridian — Cold outreach"
 msgstr "Veridian — Cold outreach"
+
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:94
+msgid "Veridian cold outreach — per-provider settings for this campaign"
+msgstr "Veridian cold outreach — per-provider settings for this campaign"
 
 #: src/components/veridian_brand_header_link.tsx:43
 msgid "Veridian dashboard"

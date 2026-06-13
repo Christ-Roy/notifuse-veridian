@@ -70,7 +70,7 @@ describe('VeridianColdOutreachSettings', () => {
     expect(screen.getByText(/Google \(Gmail/)).toBeInTheDocument()
     expect(screen.getByText(/Microsoft \(Outlook/)).toBeInTheDocument()
     expect(screen.getByText(/Yahoo \/ AOL/)).toBeInTheDocument()
-    expect(screen.getByText(/FAI français/)).toBeInTheDocument()
+    expect(screen.getByText(/French ISPs/)).toBeInTheDocument()
     expect(screen.getByText(/Corporate/)).toBeInTheDocument()
   })
 
