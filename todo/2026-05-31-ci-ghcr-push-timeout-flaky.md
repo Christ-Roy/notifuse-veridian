@@ -1,5 +1,7 @@
 # CI : push image GHCR timeout récurrent (DeadlineExceeded)
 
+> **MITIGÉ 2026-06-13** — ajout .dockerignore (commit 9d2cf97b) : retire ~1.4 GB du contexte build (console/node_modules 989M, .git 373M, tests 43M) qui gonflaient layers+temps de build et élargissaient la fenêtre du timeout push (piste #2 du ticket). Validation = build CI. Si le DeadlineExceeded persiste après ça = vrai problème réseau runner OVH->ghcr.io (piste #1/#3) à traiter côté infra.
+
 > **Sévérité** : 🟡 P1
 > **Owner** : agent notifuse-veridian / infra
 > **Créé** : 2026-05-31

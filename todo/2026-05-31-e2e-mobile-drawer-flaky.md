@@ -36,3 +36,25 @@ présent à 768px, bascule mobile→tablette, media queries CSSOM. Seule
 
 Ce n'est PAS lié au refactor mail stand-alone (2026-05-31) — c'est un test
 préexistant fragile qui s'est révélé bloquant en le déclenchant.
+
+## Réponse — 2026-06-13 (cleaner)
+
+Correctif posé (commit bde96c0c) mais test **toujours `.skip`** : on ne dé-skip
+pas à l'aveugle un test qui a bloqué la promo prod.
+
+**Cause identifiée** : race entre `Grid.useBreakpoint()` (Antd évalue `isMobile`
+async après mount via matchMedia) et `hamburger.click()`. Le Drawer mobile est
+rendu `{isMobile && <Drawer>}` ; cliquer avant la stabilisation du breakpoint
+passe `drawerOpen=true` sans que le Drawer soit monté → `.ant-drawer-open`
+n'apparaît jamais → timeout 60s.
+
+**Correctif** (dans le corps du test) : (1) attendre la disparition du Sider
+desktop AVANT le click (barrière de synchro : Sider absent ⇒ isMobile=true ⇒
+Drawer monté), (2) attendre l'état FINAL (menu item visible) avec timeout
+généreux pour l'animation headless.
+
+**Pour clore** : lancer le E2E prod-smoke réel
+(`cd console && npx playwright test e2e-prod-smoke/mobile-responsive.spec.ts`
+avec le `.skip` retiré localement), confirmer 3 runs verts d'affilée, PUIS
+retirer le `.skip` (L121) + archiver ce ticket. Non fait ici : machine saturée
+(bridage build E2E lourd interdit en parallèle des autres agents).

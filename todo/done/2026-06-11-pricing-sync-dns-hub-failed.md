@@ -1,5 +1,7 @@
 # VeridianPricingSync : fetch failed — DNS `hub.veridian.site` non résolu depuis le container prod
 
+> **RÉSOLU 2026-06-13** — fix host Hub fantôme hub.veridian.site -> app.veridian.site (commit 600b7001). pricing sync dérive désormais de HUB_BASE_URL (= app.veridian.site en prod). Garde-fou TestDefaultHubPricingURL_UsesPublicHost.
+
 > **Sévérité** : 🟡 P2 (dégradation gracieuse en place, mais le cache pricing ne se rafraîchit JAMAIS)
 > **Owner** : agent notifuse (+ infra si réseau)
 > **Créé** : 2026-06-11 (par lead tunnel-de-vente, signalé par l'agent notifuse pendant le monitoring post-deploy `75cde46b`)
