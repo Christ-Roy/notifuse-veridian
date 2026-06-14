@@ -12,6 +12,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
+	"github.com/Notifuse/notifuse/pkg/veridian_spintax"
 	"github.com/google/uuid"
 	"golang.org/x/sync/semaphore"
 )
@@ -250,8 +251,12 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		broadcast.UTMParameters.Content = template.ID
 	}
 
+	// Veridian fork — custom tracking domain par infra d'envoi (Lot 5 cold) :
+	// liens /t/ et /r/ alignés au domaine d'envoi de cette infra
+	// (EmailProvider.VeridianTrackingDomain) quand configuré, sinon fallback strict
+	// sur `endpoint` (déjà résolu workspace > global). Non-régression stricte.
 	trackingSettings := notifuse_mjml.TrackingSettings{
-		Endpoint:       endpoint,
+		Endpoint:       domain.VeridianResolveTrackingEndpoint(emailProvider, endpoint),
 		EnableTracking: trackingEnabled,
 		UTMSource:      broadcast.UTMParameters.Source,
 		UTMMedium:      broadcast.UTMParameters.Medium,
@@ -274,13 +279,16 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeTemplateCompile, "email content not available after language resolution", true, nil)
 	}
 
-	// Compile template with the provided data
+	// Compile template with the provided data.
+	// Veridian fork (cold outbound) — graine spintax = email du destinataire
+	// (variante déterministe par contact, anti-empreinte). No-op si pas de spintax.
 	compileReq := notifuse_mjml.CompileTemplateRequest{
-		WorkspaceID:      workspaceID,
-		MessageID:        messageID,
-		VisualEditorTree: emailContent.VisualEditorTree,
-		TemplateData:     data,
-		TrackingSettings: trackingSettings,
+		WorkspaceID:         workspaceID,
+		MessageID:           messageID,
+		VisualEditorTree:    emailContent.VisualEditorTree,
+		TemplateData:        data,
+		TrackingSettings:    trackingSettings,
+		VeridianSpintaxSeed: email,
 	}
 	compileReq.MjmlSource = emailContent.GetCodeModeMjmlSource()
 	compiledTemplate, err := notifuse_mjml.CompileTemplate(compileReq)
@@ -339,6 +347,9 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		}).Error("Failed to process subject line with Liquid templating")
 		return NewBroadcastError(ErrCodeTemplateCompile, "failed to process subject with Liquid", true, err)
 	}
+	// Veridian fork (cold outbound) — spintax du sujet (même graine que le corps).
+	// Rendu hors CompileTemplate, donc résolu explicitement ici.
+	processedSubject = veridian_spintax.ResolveSpintax(processedSubject, email)
 
 	// Create SendEmailProviderRequest
 	emailRequest := domain.SendEmailProviderRequest{

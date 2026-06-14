@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -698,8 +699,8 @@ func TestSendBatch_VeridianWorkspacePixelFallback(t *testing.T) {
 	sender.(*messageSender).SetVeridianWorkspaceRepo(mockWorkspaceRepo)
 
 	recipients := []*domain.ContactWithList{
-		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"},   // google → OFF
-		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"},   // freemail_fr → ON
+		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"}, // google → OFF
+		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"}, // freemail_fr → ON
 	}
 	templates := map[string]*domain.Template{"template-px": template}
 
@@ -3598,5 +3599,119 @@ func TestSendToRecipient_VeridianOpenPixelByClass(t *testing.T) {
 			map[string]interface{}{}, emailProvider, time.Now().Add(30*time.Second), "", "")
 		require.NoError(t, err)
 		assert.Contains(t, html, "/t/", "hors tunnel + tracking ON : pixel attendu (non-régression)")
+	})
+}
+
+// TestMessageSender_SpintaxResolvedPerRecipient vérifie le câblage Veridian du
+// spintax (Lot 6) dans le sender DIRECT : le sujet ET le corps réellement
+// envoyés (SendEmailProviderRequest.Subject / .Content) sont résolus par
+// destinataire avec une graine déterministe = l'email du contact. Comportement
+// réel capturé sur le mock emailService — pas un mock du resolver.
+func TestMessageSender_SpintaxResolvedPerRecipient(t *testing.T) {
+	newSender := func(t *testing.T, captureSubjects, captureBodies *[]string) MessageSender {
+		t.Helper()
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+		mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+		mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+		mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Warn(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).Return().AnyTimes()
+
+		mockEmailService.EXPECT().
+			SendEmail(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+				*captureSubjects = append(*captureSubjects, req.Subject)
+				*captureBodies = append(*captureBodies, req.Content)
+				return nil
+			}).AnyTimes()
+
+		return NewMessageSender(
+			mockBroadcastRepository, mockMessageHistoryRepo, mockTemplateRepo,
+			mockEmailService, nil, mockLogger, TestConfig(), "",
+		)
+	}
+
+	makeTemplate := func() *domain.Template {
+		emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+		return &domain.Template{
+			ID: "template-spintax",
+			Email: &domain.EmailTemplate{
+				SenderID:         emailSender.ID,
+				Subject:          "{Offre|Promo} exclusive",
+				VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "{Bonjour|Salut} cher client")),
+			},
+		}
+	}
+	makeProvider := func(tpl *domain.Template) *domain.EmailProvider {
+		return &domain.EmailProvider{
+			Kind:    domain.EmailProviderKindSMTP,
+			Senders: []domain.EmailSender{{ID: tpl.Email.SenderID, Email: "sender@example.com", Name: "Sender"}},
+			SMTP:    &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p", UseTLS: true},
+		}
+	}
+	broadcast := &domain.Broadcast{
+		ID: "broadcast-spintax", WorkspaceID: "ws-1",
+		ChannelType: "email", Audience: domain.AudienceSettings{List: "list-1"},
+		UTMParameters: &domain.UTMParameters{},
+	}
+
+	send := func(t *testing.T, sender MessageSender, tpl *domain.Template, ep *domain.EmailProvider, email string) {
+		t.Helper()
+		err := sender.SendToRecipient(context.Background(), "ws-1", "int-1", "https://api.test.com",
+			false, broadcast, "msg-"+email, email, tpl, map[string]interface{}{}, ep,
+			time.Now().Add(30*time.Second), "", "")
+		require.NoError(t, err)
+	}
+
+	t.Run("subject and body resolved, no raw spintax", func(t *testing.T) {
+		var subjects, bodies []string
+		sender := newSender(t, &subjects, &bodies)
+		tpl := makeTemplate()
+		send(t, sender, tpl, makeProvider(tpl), "alice@example.com")
+
+		require.Len(t, subjects, 1)
+		require.Len(t, bodies, 1)
+		assert.Contains(t, []string{"Offre exclusive", "Promo exclusive"}, subjects[0],
+			"sujet doit être résolu, eu %q", subjects[0])
+		assert.NotContains(t, subjects[0], "|")
+		bonjour := strings.Contains(bodies[0], "Bonjour cher client")
+		salut := strings.Contains(bodies[0], "Salut cher client")
+		assert.True(t, bonjour != salut, "exactement une variante de corps (bonjour=%v salut=%v)", bonjour, salut)
+		assert.NotContains(t, bodies[0], "{Bonjour|Salut}")
+	})
+
+	t.Run("same recipient deterministic", func(t *testing.T) {
+		var subjects, bodies []string
+		sender := newSender(t, &subjects, &bodies)
+		tpl := makeTemplate()
+		ep := makeProvider(tpl)
+		send(t, sender, tpl, ep, "bob@example.com")
+		send(t, sender, tpl, ep, "bob@example.com")
+		require.Len(t, subjects, 2)
+		assert.Equal(t, subjects[0], subjects[1], "même destinataire = même sujet")
+		assert.Equal(t, bodies[0], bodies[1], "même destinataire = même corps")
+	})
+
+	t.Run("different recipients can differ", func(t *testing.T) {
+		var subjects, bodies []string
+		sender := newSender(t, &subjects, &bodies)
+		tpl := makeTemplate()
+		ep := makeProvider(tpl)
+		for _, e := range []string{"a@x.com", "b@x.com", "c@x.com", "d@x.com", "e@x.com", "f@x.com", "g@x.com", "h@x.com"} {
+			send(t, sender, tpl, ep, e)
+		}
+		seen := map[string]bool{}
+		for _, s := range subjects {
+			seen[s] = true
+		}
+		assert.Greater(t, len(seen), 1, "des destinataires différents doivent recevoir des sujets différents")
 	})
 }

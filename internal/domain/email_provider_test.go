@@ -1822,6 +1822,26 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 		assert.Equal(t, 1, got.VeridianPerRecipientDailyCap)
 	})
 
+	t.Run("round-trip JSON conserve le tracking domain par infra (Lot 5)", func(t *testing.T) {
+		// Persistance sans migration : EmailProvider est sérialisé comme JSON blob
+		// dans la colonne integrations. Ce test verrouille que le champ traverse le
+		// round-trip (tag JSON intact) — toute régression du tag ou perte du champ
+		// casse silencieusement le custom tracking domain sinon.
+		p := EmailProvider{
+			Kind:                   EmailProviderKindSMTP,
+			RateLimitPerMinute:     600,
+			VeridianTrackingDomain: "track.agences-veridian.fr",
+		}
+
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"veridian_tracking_domain":"track.agences-veridian.fr"`)
+
+		var got EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &got))
+		assert.Equal(t, "track.agences-veridian.fr", got.VeridianTrackingDomain)
+	})
+
 	t.Run("champs omitempty absents du JSON quand non configurés", func(t *testing.T) {
 		p := EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600}
 		raw, err := json.Marshal(p)
@@ -1829,6 +1849,7 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_provider_class_rates")
 		assert.NotContains(t, string(raw), "veridian_provider_class_daily_cap")
 		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
+		assert.NotContains(t, string(raw), "veridian_tracking_domain")
 	})
 
 	t.Run("Validate ignore les champs Veridian (pas de contrainte ajoutée)", func(t *testing.T) {
@@ -1838,9 +1859,13 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 			Senders:                    []EmailSender{{ID: "", Email: "s@example.com", Name: "S", IsDefault: true}},
 			SMTP:                       &SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p"},
 			VeridianProviderClassRates: map[string]float64{"google": 0.5},
+			VeridianTrackingDomain:     "track.agences-veridian.fr",
 		}
 		// Les champs Veridian n'ajoutent aucune règle de validation : seul le
-		// socle upstream (rate>0, sender valide, settings SMTP) est vérifié.
+		// socle upstream (rate>0, sender valide, settings SMTP) est vérifié. Un
+		// tracking domain arbitraire (domaine nu) ne fait PAS échouer Validate —
+		// la normalisation a lieu à la lecture (VeridianResolveTrackingEndpoint),
+		// pas à la validation de l'intégration.
 		err := p.Validate("test-passphrase")
 		assert.NoError(t, err)
 	})

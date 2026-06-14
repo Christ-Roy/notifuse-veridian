@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -1551,8 +1552,8 @@ func TestQueueMessageSender_SendBatch_VeridianWorkspacePixelFallback(t *testing.
 	sender.(*queueMessageSender).SetVeridianWorkspaceRepo(mockWorkspaceRepo)
 
 	recipients := []*domain.ContactWithList{
-		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"},   // google → pixel OFF
-		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"},   // freemail_fr → pixel ON
+		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"}, // google → pixel OFF
+		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"}, // freemail_fr → pixel ON
 	}
 
 	sent, failed, err := sender.SendBatch(
@@ -1709,5 +1710,123 @@ func TestQueueMessageSender_SendBatch_VeridianProviderThrottle(t *testing.T) {
 		})
 
 		sendBatch(sender, "broadcast-plain", recipients)
+	})
+}
+
+// TestQueueMessageSender_SpintaxResolvedPerRecipient vérifie le câblage Veridian
+// du spintax (Lot 6) dans le queue sender : le sujet ET le corps HTML enqueués
+// sont résolus par destinataire, avec une graine déterministe = l'email du
+// contact. C'est un test de comportement réel (entry capturée), pas un mock du
+// resolver : on s'assure que la variation cold est effectivement appliquée à
+// l'envoi et qu'elle est stable par destinataire (re-render = même variante).
+func TestQueueMessageSender_SpintaxResolvedPerRecipient(t *testing.T) {
+	newSenderWithCapture := func(t *testing.T) (MessageSender, *domain.EmailProvider, *domain.Broadcast, *domain.Template, *[]*domain.EmailQueueEntry) {
+		t.Helper()
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+		mockBroadcastRepo := mocks.NewMockBroadcastRepository(ctrl)
+		mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+		mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		emailSender := domain.NewEmailSender("sender@example.com", "Test Sender")
+		emailProvider := &domain.EmailProvider{
+			Kind:    domain.EmailProviderKindSMTP,
+			Senders: []domain.EmailSender{emailSender},
+			SMTP:    &domain.SMTPSettings{Host: "smtp.example.com", Port: 587},
+		}
+		broadcast := &domain.Broadcast{
+			ID:            "broadcast-spintax",
+			WorkspaceID:   "workspace-1",
+			Name:          "Spintax Broadcast",
+			UTMParameters: &domain.UTMParameters{},
+		}
+		// Sujet ET corps porteurs de spintax.
+		template := &domain.Template{
+			ID: "template-spintax",
+			Email: &domain.EmailTemplate{
+				SenderID:         emailSender.ID,
+				Subject:          "{Offre|Promo} exclusive",
+				VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1", "{Bonjour|Salut} cher client")),
+			},
+		}
+
+		var captured []*domain.EmailQueueEntry
+		mockQueueRepo.EXPECT().Enqueue(gomock.Any(), "workspace-1", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, entries []*domain.EmailQueueEntry) error {
+				captured = append(captured, entries...)
+				return nil
+			}).AnyTimes()
+
+		sender := NewQueueMessageSender(
+			mockQueueRepo, mockBroadcastRepo, mockMessageHistoryRepo, mockTemplateRepo,
+			nil, mockLogger, nil, "https://api.example.com",
+		)
+		return sender, emailProvider, broadcast, template, &captured
+	}
+
+	send := func(t *testing.T, sender MessageSender, ep *domain.EmailProvider, b *domain.Broadcast, tpl *domain.Template, email string) {
+		t.Helper()
+		err := sender.SendToRecipient(
+			context.Background(), "workspace-1", "integration-1", "https://api.test.com",
+			false, b, "msg-"+email, email, tpl,
+			map[string]interface{}{"contact": map[string]interface{}{"email": email}},
+			ep, time.Now().Add(5*time.Minute), "", "",
+		)
+		require.NoError(t, err)
+	}
+
+	t.Run("subject and body are resolved (no raw spintax leaks)", func(t *testing.T) {
+		sender, ep, b, tpl, captured := newSenderWithCapture(t)
+		send(t, sender, ep, b, tpl, "alice@example.com")
+
+		require.Len(t, *captured, 1)
+		entry := (*captured)[0]
+
+		// Sujet : une variante exacte, jamais le spintax brut.
+		assert.Contains(t, []string{"Offre exclusive", "Promo exclusive"}, entry.Payload.Subject,
+			"sujet doit être une variante résolue, eu %q", entry.Payload.Subject)
+		assert.NotContains(t, entry.Payload.Subject, "|")
+
+		// Corps : variante résolue présente, spintax brut absent.
+		body := entry.Payload.HTMLContent
+		bonjour := strings.Contains(body, "Bonjour cher client")
+		salut := strings.Contains(body, "Salut cher client")
+		assert.True(t, bonjour != salut, "exactement une variante de corps attendue (bonjour=%v salut=%v)", bonjour, salut)
+		assert.NotContains(t, body, "{Bonjour|Salut}", "spintax brut du corps ne doit pas subsister")
+	})
+
+	t.Run("same recipient yields the same variant (deterministic)", func(t *testing.T) {
+		sender, ep, b, tpl, captured := newSenderWithCapture(t)
+		send(t, sender, ep, b, tpl, "bob@example.com")
+		send(t, sender, ep, b, tpl, "bob@example.com")
+
+		require.Len(t, *captured, 2)
+		assert.Equal(t, (*captured)[0].Payload.Subject, (*captured)[1].Payload.Subject,
+			"même destinataire = même variante de sujet")
+		assert.Equal(t, (*captured)[0].Payload.HTMLContent, (*captured)[1].Payload.HTMLContent,
+			"même destinataire = même variante de corps")
+	})
+
+	t.Run("different recipients can yield different variants", func(t *testing.T) {
+		sender, ep, b, tpl, captured := newSenderWithCapture(t)
+		// Sujet à 2 options : sur un échantillon de destinataires, les deux
+		// variantes doivent apparaître (sinon la variation cold est inopérante).
+		emails := []string{
+			"a@x.com", "b@x.com", "c@x.com", "d@x.com", "e@x.com",
+			"f@x.com", "g@x.com", "h@x.com", "i@x.com", "j@x.com",
+		}
+		for _, e := range emails {
+			send(t, sender, ep, b, tpl, e)
+		}
+		seen := map[string]bool{}
+		for _, entry := range *captured {
+			seen[entry.Payload.Subject] = true
+		}
+		assert.Greater(t, len(seen), 1, "des destinataires différents doivent recevoir des sujets différents")
 	})
 }

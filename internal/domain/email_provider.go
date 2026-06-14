@@ -75,6 +75,21 @@ type EmailProvider struct {
 	VeridianProviderClassRates    map[string]float64 `json:"veridian_provider_class_rates,omitempty"`
 	VeridianProviderClassDailyCap map[string]int     `json:"veridian_provider_class_daily_cap,omitempty"`
 	VeridianPerRecipientDailyCap  int                `json:"veridian_per_recipient_daily_cap,omitempty"`
+
+	// Veridian fork — custom tracking domain PAR INFRA d'envoi (Lot 5 cold). En
+	// cold, les liens de tracking (pixel ouverture /t/, redirect clic /r/) doivent
+	// vivre sur un sous-domaine ALIGNÉ au domaine d'envoi de cette infra (ex.
+	// envoi depuis agences-veridian.fr → tracking sur track.agences-veridian.fr).
+	// Un lien de tracking vers un domaine tiers (notifuse.app.veridian.site) est un
+	// signal anti-spam (mismatch domaine perçu, casse l'alignement DKIM/DMARC). Comme
+	// l'infra EST le domaine d'envoi (host/IP/senders), le tracking domain se règle
+	// AU NIVEAU INFRA, en cohérence avec les rates/caps R2. Accepte un domaine nu
+	// (track.agences-veridian.fr → préfixé https://) ou une URL complète. Prime sur
+	// le CustomEndpointURL workspace upstream et sur l'API endpoint global. Vide =
+	// fallback endpoint résolu en amont (workspace > global), non-régression stricte.
+	// Cf. veridian_tracking_domain.go. omitempty → persisté dans le JSON blob
+	// integrations sans migration ni allowlist (comme les autres champs R2).
+	VeridianTrackingDomain string `json:"veridian_tracking_domain,omitempty"`
 }
 
 // Validate validates the email provider settings

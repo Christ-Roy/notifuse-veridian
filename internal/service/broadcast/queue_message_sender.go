@@ -10,6 +10,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
+	"github.com/Notifuse/notifuse/pkg/veridian_spintax"
 	"github.com/google/uuid"
 )
 
@@ -321,9 +322,14 @@ func (s *queueMessageSender) buildQueueEntry(
 		broadcast.UTMParameters.Content = template.ID
 	}
 
-	// Build tracking settings
+	// Build tracking settings.
+	// Veridian fork — custom tracking domain par infra d'envoi (Lot 5 cold) :
+	// l'endpoint des liens /t/ et /r/ est aligné au domaine d'envoi de cette infra
+	// (EmailProvider.VeridianTrackingDomain) quand configuré, sinon fallback strict
+	// sur `endpoint` (déjà résolu workspace CustomEndpointURL > API endpoint global).
+	// Cf. domain.VeridianResolveTrackingEndpoint — best-effort, non-régression.
 	trackingSettings := notifuse_mjml.TrackingSettings{
-		Endpoint:       endpoint,
+		Endpoint:       domain.VeridianResolveTrackingEndpoint(emailProvider, endpoint),
 		EnableTracking: trackingEnabled,
 		UTMSource:      broadcast.UTMParameters.Source,
 		UTMMedium:      broadcast.UTMParameters.Medium,
@@ -354,13 +360,17 @@ func (s *queueMessageSender) buildQueueEntry(
 		return nil, fmt.Errorf("no sender configured for email provider")
 	}
 
-	// Compile template with the provided data
+	// Compile template with the provided data.
+	// Veridian fork (cold outbound) — graine spintax = email du destinataire :
+	// chaque contact reçoit une variante déterministe du corps, cassant
+	// l'empreinte de contenu commune. Sans groupe spintax dans le template = no-op.
 	compileReq := notifuse_mjml.CompileTemplateRequest{
-		WorkspaceID:      workspaceID,
-		MessageID:        messageID,
-		VisualEditorTree: emailContent.VisualEditorTree,
-		TemplateData:     data,
-		TrackingSettings: trackingSettings,
+		WorkspaceID:         workspaceID,
+		MessageID:           messageID,
+		VisualEditorTree:    emailContent.VisualEditorTree,
+		TemplateData:        data,
+		TrackingSettings:    trackingSettings,
+		VeridianSpintaxSeed: email,
 	}
 	compileReq.MjmlSource = emailContent.GetCodeModeMjmlSource()
 	compiledTemplate, err := notifuse_mjml.CompileTemplate(compileReq)
@@ -385,6 +395,9 @@ func (s *queueMessageSender) buildQueueEntry(
 	if err != nil {
 		return nil, fmt.Errorf("failed to process subject: %w", err)
 	}
+	// Veridian fork (cold outbound) — spintax du sujet (même graine que le corps).
+	// Le sujet est rendu hors CompileTemplate, donc résolu explicitement ici.
+	subject = veridian_spintax.ResolveSpintax(subject, email)
 
 	// Build the queue entry
 	entry := &domain.EmailQueueEntry{

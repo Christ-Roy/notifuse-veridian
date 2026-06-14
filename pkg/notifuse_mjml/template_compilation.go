@@ -115,14 +115,14 @@ type TrackingSettings struct {
 	// d'EnableTracking. Posé par VeridianResolveOpenPixel (queue_message_sender).
 	EnableOpenPixel *bool `json:"enable_open_pixel,omitempty"`
 
-	Endpoint string `json:"endpoint,omitempty"`
-	UTMSource      string `json:"utm_source,omitempty"`
-	UTMMedium      string `json:"utm_medium,omitempty"`
-	UTMCampaign    string `json:"utm_campaign,omitempty"`
-	UTMContent     string `json:"utm_content,omitempty"`
-	UTMTerm        string `json:"utm_term,omitempty"`
-	WorkspaceID    string `json:"workspace_id,omitempty"`
-	MessageID      string `json:"message_id,omitempty"`
+	Endpoint    string `json:"endpoint,omitempty"`
+	UTMSource   string `json:"utm_source,omitempty"`
+	UTMMedium   string `json:"utm_medium,omitempty"`
+	UTMCampaign string `json:"utm_campaign,omitempty"`
+	UTMContent  string `json:"utm_content,omitempty"`
+	UTMTerm     string `json:"utm_term,omitempty"`
+	WorkspaceID string `json:"workspace_id,omitempty"`
+	MessageID   string `json:"message_id,omitempty"`
 }
 
 // Value implements the driver.Valuer interface for database storage
@@ -258,13 +258,19 @@ type CompileTemplateRequest struct {
 	MessageID              string           `json:"message_id"`
 	VisualEditorTree       EmailBlock       `json:"visual_editor_tree"`
 	MjmlSource             *string          `json:"mjml_source,omitempty"`
-	Subject                *string          `json:"subject,omitempty"`                  // Email subject; processed through Liquid using TemplateData
-	SubjectPreview         *string          `json:"subject_preview,omitempty"`          // Email subject preview (inbox preview text); processed through Liquid
+	Subject                *string          `json:"subject,omitempty"`         // Email subject; processed through Liquid using TemplateData
+	SubjectPreview         *string          `json:"subject_preview,omitempty"` // Email subject preview (inbox preview text); processed through Liquid
 	TemplateData           MapOfAny         `json:"test_data,omitempty"`
 	TrackingSettings       TrackingSettings `json:"tracking_settings,omitempty"`
 	Channel                string           `json:"channel,omitempty"`                  // "email" or "web"
 	PreserveLiquid         bool             `json:"preserve_liquid,omitempty"`          // When true, skip Liquid template processing and preserve raw syntax
 	SubjectPreviewOverride *string          `json:"subject_preview_override,omitempty"` // Override mj-preview content before compilation
+
+	// VeridianSpintaxSeed (fork Veridian, cold outbound) : graine déterministe de
+	// résolution spintax `{a|b|c}`, typiquement l'email du destinataire. Posée
+	// par les senders broadcast. Vide = AUCUNE résolution spintax (no-op strict,
+	// non-régression upstream totale). Voir pkg/veridian_spintax.
+	VeridianSpintaxSeed string `json:"veridian_spintax_seed,omitempty"`
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for CompileTemplateRequest
@@ -409,6 +415,22 @@ func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse,
 		return &CompileTemplateResponse{Success: false, Subject: renderedSubject, Error: previewErr}, nil
 	}
 
+	// Veridian fork (cold outbound) — résolution spintax du sujet et du preview,
+	// même graine déterministe que le corps. Un sujet identique sur 500 envois est
+	// une signature spam aussi forte qu'un corps identique. Appliqué APRÈS le rendu
+	// Liquid du champ. Seed vide = no-op strict. nil-safe (renderSubjectField peut
+	// renvoyer nil quand le champ est absent).
+	if req.VeridianSpintaxSeed != "" {
+		if renderedSubject != nil {
+			v := veridianApplySpintax(*renderedSubject, req.VeridianSpintaxSeed)
+			renderedSubject = &v
+		}
+		if renderedSubjectPreview != nil {
+			v := veridianApplySpintax(*renderedSubjectPreview, req.VeridianSpintaxSeed)
+			renderedSubjectPreview = &v
+		}
+	}
+
 	// If MjmlSource is provided (code mode), use it directly.
 	// Note: Channel filtering is not applied in code mode — code mode users
 	// control their own MJML structure directly.
@@ -515,6 +537,13 @@ func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse,
 			mjmlString = overrideMjPreviewInSource(mjmlString, *req.SubjectPreviewOverride)
 		}
 	}
+
+	// Veridian fork (cold outbound) — résolution spintax `{a|b|c}` par destinataire.
+	// Placée APRÈS tout rendu Liquid (les `{{ }}` sont déjà remplacés) et AVANT le
+	// preprocessing/rendu MJML, sur la string MJML complète : un seul point
+	// d'invocation, zone disjointe du tracking de liens (TrackLinks plus bas).
+	// Seed vide = no-op strict (non-régression). Voir veridian_spintax_apply.go.
+	mjmlString = veridianApplySpintax(mjmlString, req.VeridianSpintaxSeed)
 
 	// Preprocess MJML to fix HTML vs XML incompatibilities
 	// gomjml uses a strict XML parser that doesn't accept HTML void tags (<br>) or HTML entities (&nbsp;)
