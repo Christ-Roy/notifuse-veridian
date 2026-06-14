@@ -129,12 +129,14 @@ type App struct {
 	veridianIdempotencyRepo  domain.VeridianIdempotencyRepository
 	veridianAPIKeyGraceRepo  domain.VeridianAPIKeyGraceRepository // Lot K — grace period rotate-api-key
 	veridianFrozenMemberRepo domain.VeridianFrozenMemberRepository // §5.21 — freeze member per-user
+	veridianIMAPUIDSeenRepo  domain.VeridianIMAPUIDSeenRepository  // Lot 1 cold — idempotence poller IMAP (V50)
 	veridianService          domain.VeridianService
 	veridianWebhookEmitter   domain.WebhookEmitter
 	veridianPaywallCache     *middleware.PaywallCache              // partage middleware paywall + handler invalidate
 	veridianFrozenCache      *middleware.FrozenMemberCache         // partage middleware frozen + handler freeze/unfreeze invalidate
 	veridianPricingSync      *service.VeridianPricingSyncService   // catalogue pricing Hub (lot O 2026-05-21)
 	veridianTestTenantsCleanup *service.VeridianTestTenantsCleanupService // cron auto-cleanup orphans staging (2026-05-24)
+	veridianIMAPPoller       *queue.VeridianIMAPPollerService      // Lot 1 cold — poller IMAP self-service (réception bounces/réponses)
 
 	// Services
 	authService                      *service.AuthService
@@ -477,6 +479,13 @@ func (a *App) InitRepositories() error {
 	// Utilise par : (a) service.FreezeMember/UnfreezeMember, (b) middleware
 	// paywall per-user pour decider 402 user_frozen vs reads obfusques.
 	a.veridianFrozenMemberRepo = repository.NewVeridianFrozenMemberRepository(a.db)
+
+	// === Veridian patch — Lot 1 sprint cold (2026-06-15) === Repo Postgres pour
+	// l'idempotence du poller IMAP self-service (table système
+	// veridian_imap_uid_seen, migration V50). Consommé par le poller pour ne
+	// jamais re-dispatcher un UID déjà traité aux lots downstream (bounce-loop,
+	// stop-on-reply). Cf. internal/domain/veridian_imap_integration.go.
+	a.veridianIMAPUIDSeenRepo = repository.NewVeridianIMAPUIDSeenRepository(a.db)
 
 	// Initialize setting service
 	a.settingService = service.NewSettingService(a.settingRepo)
@@ -1355,6 +1364,26 @@ func (a *App) InitHandlers() error {
 	)
 	veridianHandler.SetTestTenantsCleanup(a.veridianTestTenantsCleanup)
 
+	// === Veridian patch — Lot 1 sprint cold (2026-06-15) — poller IMAP ===
+	// BRIQUE FONDATRICE. Poll les boîtes IMAP configurées (Integration de type
+	// "imap" par workspace) et dispatche les messages neufs aux consumers
+	// enregistrés par les lots downstream (bounce-loop, stop-on-reply) via
+	// RegisterConsumer. Best-effort, démarré dans Start().
+	//
+	// 🔌 LOTS 2/3 — POINT D'ENREGISTREMENT : ajouter ICI, juste après la
+	// création, vos appels :
+	//     a.veridianIMAPPoller.RegisterConsumer(<votreConsumer>)
+	// Tant qu'AUCUN consumer n'est enregistré, Start() est un no-op volontaire
+	// (poller une boîte pour dispatcher à personne = travail inutile). Le poller
+	// s'active automatiquement dès qu'un consumer est branché ici.
+	a.veridianIMAPPoller = queue.NewVeridianIMAPPollerService(
+		a.workspaceRepo,
+		a.veridianIMAPUIDSeenRepo,
+		a.logger,
+		0, // 0 = default tick 30s
+		0, // 0 = default lookback 7j
+	)
+
 	// === Veridian patch — Mail provider choice (V48) SUPPRIMÉ 2026-05-31 ===
 	// Le pipeline "envoi via Hub Mail Gateway" (mail-provider-choice + proxy
 	// mail-accounts) a été retiré : il créait une dépendance Hub sur l'envoi
@@ -1645,6 +1674,16 @@ func (a *App) Start() error {
 	// Cf. todo/2026-05-24-staging-db-pool-orphan-cleanup-auto.md
 	if a.veridianTestTenantsCleanup != nil {
 		a.veridianTestTenantsCleanup.Start(a.GetShutdownContext())
+	}
+
+	// === Veridian patch 2026-06-15 — poller IMAP self-service (Lot 1 cold) ===
+	// Démarre le polling des boîtes IMAP configurées. Best-effort : Start() est
+	// un no-op silencieux si les deps sont nil. Disabled en demo (pas de réseau
+	// sortant vers des boîtes tierces). Cf.
+	// internal/service/queue/veridian_imap_poller.go.
+	if a.veridianIMAPPoller != nil && !a.config.IsDemo() {
+		a.veridianIMAPPoller.Start(a.GetShutdownContext())
+		a.logger.Info("Veridian IMAP poller scheduler started")
 	}
 
 	// Start SMTP bridge server if enabled

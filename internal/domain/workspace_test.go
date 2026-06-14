@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/asaskevich/govalidator"
 	"github.com/stretchr/testify/assert"
@@ -5138,5 +5139,78 @@ func TestWorkspaceSettings_VeridianOpenPixelByClassRoundTrip(t *testing.T) {
 		var decoded WorkspaceSettings
 		require.NoError(t, json.Unmarshal([]byte(`{"timezone":"UTC"}`), &decoded))
 		assert.Nil(t, decoded.VeridianOpenPixelByClass)
+	})
+}
+
+// TestWorkspace_IMAPIntegration_FullRoundtrip valide le câblage du type
+// d'intégration IMAP (Lot 1 sprint cold) à travers les switch cases ajoutés dans
+// Integration.Validate / BeforeSave / AfterLoad, ET au niveau Workspace (qui
+// itère ses intégrations). C'est exactement le chemin sur lequel le poller IMAP
+// s'appuie : un workspace chargé depuis la DB (AfterLoad) doit exposer un
+// password IMAP déchiffré ; un workspace persisté (BeforeSave) ne doit jamais
+// stocker le password en clair.
+func TestWorkspace_IMAPIntegration_FullRoundtrip(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	t.Run("workspace BeforeSave encrypts then AfterLoad decrypts imap password", func(t *testing.T) {
+		ws := &Workspace{
+			ID: "ws-imap",
+			Settings: WorkspaceSettings{
+				SecretKey: "ws-internal-secret",
+			},
+			Integrations: Integrations{
+				{
+					ID:   "imap-1",
+					Name: "Bounce inbox",
+					Type: IntegrationTypeIMAP,
+					IMAPSettings: &IMAPSettings{
+						Host: "imap.example.com", Port: 993, Username: "bounce@x.fr",
+						Password: "super-secret-app-pw", UseTLS: true, Folder: "INBOX",
+					},
+				},
+			},
+		}
+
+		require.NoError(t, ws.BeforeSave(passphrase))
+		enc := ws.Integrations[0].IMAPSettings.EncryptedPassword
+		require.NotEmpty(t, enc, "password must be encrypted at rest")
+
+		// Simulate persistence: only the encrypted field survives a DB round-trip.
+		ws.Integrations[0].IMAPSettings.Password = ""
+
+		require.NoError(t, ws.AfterLoad(passphrase))
+		assert.Equal(t, "super-secret-app-pw", ws.Integrations[0].IMAPSettings.Password,
+			"password must be decrypted for the poller after load")
+		// uses the same encrypted material round-tripped
+		assert.Equal(t, enc, ws.Integrations[0].IMAPSettings.EncryptedPassword)
+	})
+
+	t.Run("Integration.Validate rejects imap without settings", func(t *testing.T) {
+		integ := &Integration{ID: "i", Name: "n", Type: IntegrationTypeIMAP}
+		err := integ.Validate(passphrase)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "imap settings are required")
+	})
+
+	t.Run("Integration.Validate rejects invalid imap settings", func(t *testing.T) {
+		integ := &Integration{
+			ID: "i", Name: "n", Type: IntegrationTypeIMAP,
+			IMAPSettings: &IMAPSettings{Port: 993, Username: "u", Password: "p"}, // host missing
+		}
+		err := integ.Validate(passphrase)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid imap settings")
+	})
+
+	t.Run("Integration.BeforeSave no-op when imap password already encrypted", func(t *testing.T) {
+		// Edit flow: an existing encrypted password must not be clobbered.
+		enc, err := crypto.EncryptString("existing", passphrase)
+		require.NoError(t, err)
+		integ := &Integration{
+			ID: "i", Name: "n", Type: IntegrationTypeIMAP,
+			IMAPSettings: &IMAPSettings{Host: "h", Port: 993, Username: "u", EncryptedPassword: enc},
+		}
+		require.NoError(t, integ.BeforeSave(passphrase))
+		assert.Equal(t, enc, integ.IMAPSettings.EncryptedPassword)
 	})
 }

@@ -134,8 +134,12 @@ type Integration struct {
 	SupabaseSettings  *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"`
 	LLMProvider       *LLMProvider                 `json:"llm_provider,omitempty"`
 	FirecrawlSettings *FirecrawlSettings           `json:"firecrawl_settings,omitempty"`
-	CreatedAt         time.Time                    `json:"created_at"`
-	UpdatedAt         time.Time                    `json:"updated_at"`
+	// Veridian fork — config d'une boîte IMAP pollée (réception bounces /
+	// réponses cold outbound, Lot 1 2026-06-15). Présent ssi Type == "imap".
+	// Cf. internal/domain/veridian_imap_integration.go.
+	IMAPSettings *IMAPSettings `json:"imap_settings,omitempty"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
 }
 
 // Validate validates the integration
@@ -183,6 +187,14 @@ func (i *Integration) Validate(passphrase string) error {
 		if err := i.FirecrawlSettings.Validate(passphrase); err != nil {
 			return fmt.Errorf("invalid firecrawl settings: %w", err)
 		}
+	case IntegrationTypeIMAP:
+		// Veridian fork — validate IMAP settings (chiffre le password en place).
+		if i.IMAPSettings == nil {
+			return fmt.Errorf("imap settings are required for imap integration")
+		}
+		if err := i.IMAPSettings.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid imap settings: %w", err)
+		}
 	default:
 		return fmt.Errorf("unsupported integration type: %s", i.Type)
 	}
@@ -216,6 +228,13 @@ func (i *Integration) BeforeSave(secretkey string) error {
 				return fmt.Errorf("failed to encrypt firecrawl secret keys: %w", err)
 			}
 		}
+	case IntegrationTypeIMAP:
+		// Veridian fork — chiffre le password IMAP au repos (si présent en clair).
+		if i.IMAPSettings != nil && i.IMAPSettings.Password != "" {
+			if err := i.IMAPSettings.EncryptPassword(secretkey); err != nil {
+				return fmt.Errorf("failed to encrypt imap password: %w", err)
+			}
+		}
 	}
 
 	return nil
@@ -245,6 +264,13 @@ func (i *Integration) AfterLoad(secretkey string) error {
 		if i.FirecrawlSettings != nil {
 			if err := i.FirecrawlSettings.DecryptSecretKeys(secretkey); err != nil {
 				return fmt.Errorf("failed to decrypt firecrawl secret keys: %w", err)
+			}
+		}
+	case IntegrationTypeIMAP:
+		// Veridian fork — déchiffre le password IMAP pour usage runtime (poller).
+		if i.IMAPSettings != nil && i.IMAPSettings.EncryptedPassword != "" {
+			if err := i.IMAPSettings.DecryptPassword(secretkey); err != nil {
+				return fmt.Errorf("failed to decrypt imap password: %w", err)
 			}
 		}
 	}

@@ -553,8 +553,10 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// 2026-05-31 — colonne orpheline, lue par personne ; cf. v48.go header).
 		// V49 : index message_history (contact_email,sent_at)+(sent_at) pour le
 		// plafond journalier cold outbound (cf. v49.go header).
+		// V50 : table système veridian_imap_uid_seen (idempotence poller IMAP
+		// self-service, Lot 1 sprint cold ; cf. v50.go header).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("49"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("50"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 
