@@ -112,19 +112,26 @@ test.describe.serial('Console — navigation workspace sidebar', () => {
         `Body vide sur ${target.label} — chunk lazy planté ou Suspense bloqué ?`
       ).toBeGreaterThan(50)
 
-      // ⚠️ Garde-fou anti faux-négatif (bug P0 2026-06-14) : TanStack Router
-      // rend "Not Found" dans l'Outlet quand aucune route ne matche, TOUT EN
-      // gardant la sidebar — donc body.length > 50 PASSE sur une page cassée.
-      // On échoue explicitement si la zone de contenu dit "Not Found".
+      // ⚠️ On juge le CONTENU (zone .ant-layout-content = l'Outlet), PAS le
+      // body entier : la sidebar contient "Lists", "Templates", "Broadcasts"…
+      // donc un contentMarker testé sur le body matcherait toujours via la
+      // sidebar, même sur une page "Not Found". TanStack rend "Not Found" DANS
+      // l'Outlet (= dans .ant-layout-content) tout en gardant la sidebar — donc
+      // c'est bien cette zone qu'il faut inspecter pour attraper le bug P0
+      // Dashboard→Not Found audité par Robert le 2026-06-14.
+      const mainText = await page.locator('.ant-layout-content').last().innerText()
+
+      // Garde-fou anti faux-négatif : la zone de contenu ne doit JAMAIS dire
+      // "Not Found".
       expect(
-        bodyText,
+        mainText,
         `"Not Found" rendu sur ${target.label} — route manquante ou lien sidebar pointant vers une route inexistante. C'est le bug Dashboard→Not Found.`
       ).not.toMatch(/Not Found/i)
 
-      // Validation par RENDU RÉEL (pas comptage DOM) : la page doit afficher
-      // un texte PROPRE à son écran, pas seulement la sidebar commune.
+      // Validation par RENDU RÉEL (pas comptage DOM) : la zone de contenu doit
+      // afficher un texte PROPRE à son écran (hors sidebar).
       expect(
-        bodyText,
+        mainText,
         `Contenu attendu absent sur ${target.label} (marker ${target.contentMarker}). La page a monté la sidebar mais pas son écran ?`
       ).toMatch(target.contentMarker)
 
@@ -179,15 +186,16 @@ test.describe.serial('Console — clic sidebar "Dashboard" (geste réel utilisat
 
     // Après clic : on doit être sur l'index workspace et voir le Dashboard.
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
-    const bodyText = await page.locator('body').innerText()
+    // Zone de contenu (Outlet), pas le body : c'est là que "Not Found" se rend.
+    const mainText = await page.locator('.ant-layout-content').last().innerText()
 
     expect(
-      bodyText,
+      mainText,
       '"Not Found" après clic sur le menu Dashboard — le lien sidebar pointe vers une route inexistante (bug P0 Dashboard→Not Found).'
     ).not.toMatch(/Not Found/i)
 
     expect(
-      bodyText,
+      mainText,
       'Écran Dashboard non rendu après clic menu — métriques absentes.'
     ).toMatch(/Total Contacts|Email Metrics|Transactional Provider/i)
 
@@ -195,5 +203,31 @@ test.describe.serial('Console — clic sidebar "Dashboard" (geste réel utilisat
       errors,
       `Erreurs JS après clic menu Dashboard :\n${errors.join('\n---\n')}`
     ).toEqual([])
+  })
+
+  // Fail-safe : la route /dashboard (ancien bundle en cache, bookmark, lien
+  // externe) doit REDIRIGER vers l'index workspace, jamais afficher "Not Found".
+  // Verrouille le patch router 2026-06-14 (WorkspaceDashboardRedirect).
+  test('Route /dashboard redirige vers l\'index workspace (pas Not Found)', async ({ page }) => {
+    await authenticate(page)
+    await page.goto(`${NOTIFUSE_URL}/console/workspace/${tenantId}/dashboard`)
+    await waitForAppMount(page)
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+
+    // Le redirect (replace:true) doit avoir ramené sur l'index workspace.
+    expect(
+      page.url(),
+      'La route /dashboard ne redirige pas vers l\'index — fail-safe cassé.'
+    ).not.toMatch(/\/dashboard(\?|$)/)
+
+    const mainText = await page.locator('.ant-layout-content').last().innerText()
+    expect(
+      mainText,
+      '"Not Found" sur /dashboard — le redirect fail-safe ne couvre pas cette route.'
+    ).not.toMatch(/Not Found/i)
+    expect(
+      mainText,
+      'Dashboard non rendu après redirect /dashboard.'
+    ).toMatch(/Total Contacts|Email Metrics|Transactional Provider/i)
   })
 })

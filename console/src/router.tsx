@@ -262,6 +262,37 @@ const workspaceSettingsRedirectRoute = createRoute({
   component: WorkspaceSettingsRedirect
 })
 
+// === Veridian patch — fail-safe route /dashboard (bug P0 2026-06-14) ===
+// Le Dashboard vit sur l'index workspace (`/console/workspace/$id`), pas sur
+// `/dashboard`. Mais un ancien bundle (servi par un cache navigateur), un
+// bookmark, ou un lien externe peuvent pointer vers `/console/workspace/$id/
+// dashboard` — qui n'existait PAS → defaultNotFoundComponent de TanStack →
+// "Not Found" sur le premier écran (bug audité par Robert). On ajoute une route
+// `/dashboard` qui REDIRIGE vers l'index : peu importe d'où vient le lien, on
+// atterrit sur le Dashboard, jamais sur "Not Found". Fail-safe, pas de doublon
+// de page (l'écran reste l'index/AnalyticsPage).
+// eslint-disable-next-line react-refresh/only-export-components -- Internal redirect component
+const WorkspaceDashboardRedirect = () => {
+  const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId/dashboard' })
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    navigate({
+      to: '/console/workspace/$workspaceId',
+      params: { workspaceId },
+      replace: true
+    })
+  }, [workspaceId, navigate])
+
+  return null
+}
+
+const workspaceDashboardRedirectRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/dashboard',
+  component: WorkspaceDashboardRedirect
+})
+
 const workspaceSettingsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/settings/$section',
@@ -306,6 +337,7 @@ const routeTree = rootRoute.addChildren([
   workspaceCreateRoute,
   workspaceRoute.addChildren([
     workspaceIndexRoute,
+    workspaceDashboardRedirectRoute,
     workspaceBroadcastsRoute,
     workspaceAutomationsRoute,
     workspaceContactsRoute,
