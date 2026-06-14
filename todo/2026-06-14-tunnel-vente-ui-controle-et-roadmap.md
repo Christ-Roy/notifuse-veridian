@@ -111,7 +111,57 @@ sur ce que "dashboard" désigne.
 - **Classification provider** : `internal/domain/veridian_provider_class.go`
   (classe dérivée du suffixe email OU forcée par `custom_string_5`).
 
-## ⏳ CE QUI N'EXISTE PAS ENCORE (roadmap demandée par Robert)
+## 🔴 R0 — PLAFOND JOURNALIER (le vrai trou, prioritaire) — décidé Robert 2026-06-14
+
+> **Doute Robert (juste) 2026-06-14** : *"je veux être capable de limiter à 1 envoi
+> par jour par provider destinataire"*. ➜ Les features actuelles NE SUFFISENT PAS.
+> Vérifié dans le code :
+> - le throttle par classe est en **emails/MINUTE** (`ratePerSecond = ratePerMinute/60`,
+>   `veridian_provider_rate_limiter.go:39`). "1/jour" = 0.000694/min = inexprimable en UI.
+> - le rate limiter est un **token-bucket EN MÉMOIRE** (`rate.NewLimiter`, burst 1) → il
+>   se RÉINITIALISE au redémarrage du worker → ne garantit AUCUN plafond journalier durable.
+> - **AUCUN compteur d'envois journalier persisté** n'existe (vérifié).
+> - **AUCUN rate-limit par destinataire** (le "1 mail/20min/email" de l'ancien ticket Hub
+>   mail-gateway mort n'a jamais été porté côté Notifuse).
+
+### Besoin (Robert : "les deux", le plus restrictif gagne)
+1. **Cap journalier par CLASSE** : max N emails/jour vers toute une classe (ex: 50/jour
+   vers Google) — protège la réputation d'envoi.
+2. **Cap par DESTINATAIRE** : max 1 email/jour (ou /fenêtre) vers une MÊME adresse —
+   anti-harcèlement du même contact.
+Le plus restrictif des deux s'applique.
+
+### Design (greffé sur l'EXISTANT — règle Robert "pas de cron/SQL de merde")
+- **Source de vérité = `message_history`** (table v21, déjà peuplée à CHAQUE envoi, a
+  `contact_email` + `sent_at`). PAS de table compteur parallèle, PAS de cron de reset
+  (le "jour" = `sent_at >= date_trunc('day', now())`, calculé à la lecture).
+- **Le worker a DÉJÀ `messageHistoryRepo` injecté** (worker.go:49/76/100) et le gate
+  `veridianProviderClassGate` est une méthode du worker → accès au repo SANS nouvelle DI.
+- **Gate** (avant MarkAsProcessing, même pattern skip-and-reschedule que le throttle minute) :
+  - cap destinataire : `COUNT message_history WHERE contact_email=? AND sent_at>=minuit` ≥ cap → skip+reschedule au lendemain.
+  - cap classe : `COUNT … WHERE <classe du destinataire> AND sent_at>=minuit` ≥ cap → idem.
+- ⚠️ **Index requis** : `message_history(contact_email, sent_at)` pour le cap destinataire
+  (migration additive, index IF NOT EXISTS, CONCURRENTLY si table peuplée). La classe n'est
+  PAS stockée dans message_history → soit la dériver à la lecture (email→classe via
+  ClassifyProviderClass, mais COUNT par classe = scan), soit stocker la classe sur
+  message_history (colonne additive). **Décision team-lead** : commencer par dériver
+  (cap destinataire indexé d'abord = le besoin anti-harcèlement le plus net), mesurer, et
+  ajouter la colonne classe + index si le cap-par-classe devient un point chaud. NE PAS
+  sur-construire un agrégat avant d'en voir le besoin réel.
+- **Config** : nouveaux champs `veridian_provider_class_daily_cap` (map classe→int) +
+  `veridian_per_recipient_daily_cap` (int) dans la même cascade que les rates
+  (broadcast → infra/EmailProvider → workspace). UI : unité "/jour" explicite, distincte
+  du "/min".
+- **Perf** : si COUNT live trop coûteux à grande échelle (>100k message_history), envisager
+  un cache court (TTL 1min en mémoire par clé) AVANT d'inventer une table agrégée. Mesurer
+  d'abord. (décision team-lead, pas Robert.)
+
+### Ordre : R0 AVANT R2. Régler "par infra" (R2) sur un moteur qui ne sait pas faire de
+### plafond journalier ne sert à rien. R0 (jour) + l'unité /jour en UI = le vrai socle.
+
+---
+
+## ⏳ AUTRES (roadmap)
 
 ### R1 — Data "nombre de contacts par fournisseur"
 Aucun agrégat aujourd'hui. À construire : endpoint
