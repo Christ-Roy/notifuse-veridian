@@ -115,12 +115,14 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 	}
 
 	// 2. Cap par classe (réputation). Dérivation de la classe : tag contact
-	//    (option B) sinon classification locale par suffixe de domaine.
+	//    (option B) sinon classification par MX RÉEL (Lot 4 : suffixe connu sans
+	//    lookup, inconnu via MX caché). ⚠️ Pour une classe MX (ovh/ionos/…),
+	//    VeridianDomainsForClass renvoie une liste vide → le COUNT par domaine
+	//    ne s'enforce pas (dégradation gracieuse documentée ; le throttle minute
+	//    protège la réputation sur le hot path). Le cap-classe reste pleinement
+	//    enforcé pour les classes adossées à un suffixe (google public, etc.).
 	if len(classCaps) > 0 {
-		class := entry.Payload.VeridianProviderClass
-		if !domain.IsValidProviderClass(class) {
-			class = domain.ClassifyProviderClass(entry.ContactEmail)
-		}
+		class := w.veridianClassifyRecipient(entry)
 		if classCap, ok := classCaps[class]; ok && classCap > 0 {
 			domains, exclude := domain.VeridianDomainsForClass(class)
 			count, err := w.messageHistoryRepo.CountSentSinceForDomains(w.ctx, workspaceID, domains, exclude, since)

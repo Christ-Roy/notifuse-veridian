@@ -21,12 +21,31 @@ import "strings"
 //   - débits en emails/minute, fractions autorisées (0.5 = 1 mail / 2 min)
 
 // Classes canoniques de provider destinataire.
+//
+// Les 5 premières sont les classes HISTORIQUES (V1, classification par suffixe
+// de domaine). Elles restent valides partout (throttle, daily cap, breakdown,
+// pixel) sans changement de comportement.
+//
+// Les classes suivantes (Lot 4, 2026-06-14) sont issues de la classification par
+// MX RÉEL : le DNS dit où le mail atterrit vraiment, quel que soit le suffixe du
+// domaine. Un `@cabinet-dupont.fr` dont le MX est `*.protection.outlook.com` est
+// désormais classé `microsoft` (et non `corporate` à tort), ce qui protège la
+// réputation Google/Microsoft à grande échelle (cf. ticket
+// todo/2026-06-14-classification-mx-table-patterns-option-A.md).
 const (
 	ProviderClassGoogle     = "google"
 	ProviderClassMicrosoft  = "microsoft"
 	ProviderClassYahooAol   = "yahoo_aol"
 	ProviderClassFreemailFR = "freemail_fr"
-	ProviderClassCorporate  = "corporate"
+	ProviderClassCorporate  = "corporate" // suffixe inconnu, AVANT résolution MX (rétrocompat)
+
+	// Nouvelles classes MX (Option A, Lot 4).
+	ProviderClassOVH               = "ovh"                // nébuleuse FR majeure (~17%)
+	ProviderClassIonos             = "ionos"              // nébuleuse FR (~6%) — IONOS / 1&1 / kundenserver
+	ProviderClassAppleICloud       = "apple_icloud"       // iCloud / Apple — règles strictes
+	ProviderClassSecurityGateway   = "security_gateway"   // passerelle anti-spam pro → débit ULTRA-prudent
+	ProviderClassOtherHoster       = "other_hoster"       // hébergeurs propres (infomaniak/gandi/hostinger/zoho/proton/…)
+	ProviderClassCorporateSelfhost = "corporate_selfhost" // vrai self-hosted / MX inconnu — fallback prudent
 )
 
 // VeridianProviderClassRatesMetadataKey est la clé de broadcast.Metadata
@@ -46,12 +65,45 @@ const VeridianProviderClassDailyCapMetadataKey = "veridian_provider_class_daily_
 const VeridianPerRecipientDailyCapMetadataKey = "veridian_per_recipient_daily_cap"
 
 // veridianProviderClassSet permet la validation O(1) d'une valeur canonique.
+// Les 5 classes historiques restent valides à l'identique (non-régression :
+// toute config / tag / cap existant continue de passer IsValidProviderClass).
+// Les nouvelles classes MX (Lot 4) sont ajoutées : elles deviennent acceptées
+// partout où IsValidProviderClass garde l'entrée (rates, daily cap, pixel, tag
+// contact). Un set unique = une seule source de vérité pour TOUS les consommateurs.
 var veridianProviderClassSet = map[string]struct{}{
+	// Historiques (V1).
 	ProviderClassGoogle:     {},
 	ProviderClassMicrosoft:  {},
 	ProviderClassYahooAol:   {},
 	ProviderClassFreemailFR: {},
 	ProviderClassCorporate:  {},
+	// Nouvelles classes MX (Lot 4).
+	ProviderClassOVH:               {},
+	ProviderClassIonos:             {},
+	ProviderClassAppleICloud:       {},
+	ProviderClassSecurityGateway:   {},
+	ProviderClassOtherHoster:       {},
+	ProviderClassCorporateSelfhost: {},
+}
+
+// VeridianAllProviderClasses retourne la liste ORDONNÉE de toutes les classes
+// canoniques (historiques d'abord, puis MX). Sert aux consommateurs qui doivent
+// énumérer les classes (breakdown stable, UI). L'ordre est déterministe pour un
+// rendu reproductible.
+func VeridianAllProviderClasses() []string {
+	return []string{
+		ProviderClassGoogle,
+		ProviderClassMicrosoft,
+		ProviderClassYahooAol,
+		ProviderClassFreemailFR,
+		ProviderClassCorporate,
+		ProviderClassOVH,
+		ProviderClassIonos,
+		ProviderClassAppleICloud,
+		ProviderClassSecurityGateway,
+		ProviderClassOtherHoster,
+		ProviderClassCorporateSelfhost,
+	}
 }
 
 // veridianProviderDomainTable mappe les domaines destinataires connus vers
@@ -125,11 +177,23 @@ func IsValidProviderClass(s string) bool {
 // VeridianDomainsForClass retourne la liste des domaines connus d'une classe et
 // un booléen `exclude`. Pour les classes adossées à une table de suffixes
 // (google/microsoft/yahoo_aol/freemail_fr), `exclude=false` et la liste contient
-// leurs domaines. Pour `corporate` (= tout domaine inconnu), `exclude=true` et
-// la liste contient TOUS les domaines connus à exclure. Classe inconnue → liste
-// vide, exclude=false (aucun domaine ne matche). Sert au COUNT par classe du
-// plafond journalier (la classe n'est pas matérialisée en DB, on la dérive par
-// domaines — cf. CountSentSinceForDomains).
+// leurs domaines. Pour `corporate` (= tout domaine inconnu par suffixe),
+// `exclude=true` et la liste contient TOUS les domaines connus à exclure.
+// Classe inconnue → liste vide, exclude=false (aucun domaine ne matche). Sert au
+// COUNT par classe du plafond journalier (la classe n'est pas matérialisée en
+// DB, on la dérive par domaines — cf. CountSentSinceForDomains).
+//
+// ⚠️ Classes MX (Lot 4 : ovh/ionos/apple_icloud/security_gateway/other_hoster/
+// corporate_selfhost) : elles ne sont PAS adossées à une table de suffixes (un
+// domaine custom n'est rangé dans ces classes que via son MX, qui n'est pas
+// stocké en DB). VeridianDomainsForClass retourne donc une liste VIDE pour
+// elles → le COUNT par domaine du plafond journalier renvoie 0 = le cap-CLASSE
+// ne s'enforce PAS via ce chemin pour les classes MX. C'est une dégradation
+// GRACIEUSE assumée (le throttle par MINUTE, lui, keye directement sur la classe
+// résolue `integrationID|classe` et protège bien la réputation sur le hot path).
+// Si le cap-classe journalier doit un jour s'enforcer sur les classes MX, la
+// décision lead (cf. v49.go) est de matérialiser la classe sur message_history
+// (colonne + index) — pas de COUNT par liste de domaines pour ces classes.
 func VeridianDomainsForClass(class string) (domains []string, exclude bool) {
 	if class == ProviderClassCorporate {
 		all := make([]string, 0, len(veridianProviderDomainTable))
@@ -150,20 +214,55 @@ func VeridianDomainsForClass(class string) (domains []string, exclude bool) {
 	return matched, false
 }
 
-// ClassifyProviderClass dérive la classe de provider destinataire depuis
-// l'adresse email (V1 : suffixe de domaine). Fallback corporate pour tout
-// domaine inconnu, email invalide ou vide — jamais d'erreur, jamais de panic.
-func ClassifyProviderClass(email string) string {
+// veridianDomainFromEmail extrait et normalise le domaine d'une adresse email
+// (lowercase, trim, point terminal FQDN retiré). Retourne "" si l'adresse est
+// vide / sans @ / sans domaine. Helper partagé par la classification suffixe et
+// la classification MX, pour une normalisation strictement identique.
+func veridianDomainFromEmail(email string) string {
 	at := strings.LastIndex(email, "@")
 	if at < 0 || at == len(email)-1 {
-		return ProviderClassCorporate
+		return ""
 	}
 	domain := strings.ToLower(strings.TrimSpace(email[at+1:]))
 	// FQDN absolu : "gmail.com." est strictement équivalent à "gmail.com" en
 	// DNS. On normalise le point terminal pour ne pas mal classer un Gmail
 	// présenté en FQDN absolu (rare mais légal) en corporate.
 	domain = strings.TrimSuffix(domain, ".")
+	if domain == "" || domain == "." {
+		return ""
+	}
+	return domain
+}
+
+// classifyBySuffix mappe un domaine NORMALISÉ à sa classe via la table de
+// suffixes connus. Retourne ("", false) si le domaine n'est pas dans la table
+// (= il faut tenter le MX, ou tomber en corporate pour le chemin pur).
+func classifyBySuffix(domain string) (string, bool) {
+	if domain == "" {
+		return "", false
+	}
 	if class, ok := veridianProviderDomainTable[domain]; ok {
+		return class, true
+	}
+	return "", false
+}
+
+// ClassifyProviderClass dérive la classe de provider destinataire depuis
+// l'adresse email par SUFFIXE DE DOMAINE UNIQUEMENT (fonction PURE, zéro I/O,
+// jamais de lookup DNS). Fallback `corporate` pour tout domaine inconnu, email
+// invalide ou vide — jamais d'erreur, jamais de panic.
+//
+// ⚠️ Cette fonction reste volontairement PURE et SYNCHRONE : elle est appelée
+// dans le hot path du worker (gates throttle/cap) et dans les tests sans réseau.
+// La classification par MX RÉEL (qui résout les domaines custom hébergés
+// Google/M365/OVH/… mal classés `corporate` par suffixe) est portée par
+// ClassifyProviderClassMX, qui appelle CECI d'abord (suffixe connu → réponse
+// directe sans lookup) puis ne résout le MX QUE pour les domaines inconnus.
+// Tous les call-sites historiques de ClassifyProviderClass continuent de marcher
+// à l'identique (non-régression stricte).
+func ClassifyProviderClass(email string) string {
+	domain := veridianDomainFromEmail(email)
+	if class, ok := classifyBySuffix(domain); ok {
 		return class
 	}
 	return ProviderClassCorporate

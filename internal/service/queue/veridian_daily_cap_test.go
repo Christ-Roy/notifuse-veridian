@@ -141,9 +141,15 @@ func TestVeridianDailyCapGate_ClassUnderCapPasses(t *testing.T) {
 func TestVeridianDailyCapGate_CorporateUsesExclusion(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	ws := veridianTestWorkspaceWithCaps(map[string]int{"corporate": 10}, 0)
-	entry := veridianTestEntry("e1", "ceo@acme-corp.com", domain.EmailQueuePayload{})
+	// Classe `corporate` portée explicitement (tag amont) : depuis le Lot 4, un
+	// domaine custom inconnu est classé par MX (→ corporate_selfhost) ; le chemin
+	// d'EXCLUSION par domaines connus reste spécifique à la classe HISTORIQUE
+	// `corporate`. On la pose donc via le tag pour couvrir exactement ce chemin.
+	entry := veridianTestEntry("e1", "ceo@acme-corp.com", domain.EmailQueuePayload{
+		VeridianProviderClass: domain.ProviderClassCorporate,
+	})
 
-	// acme-corp.com inconnu → classe corporate → exclude=true sur la liste des domaines connus.
+	// classe corporate → exclude=true sur la liste des domaines connus.
 	env.mockMessageHistoryRepo.EXPECT().
 		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), true, gomock.Any()).
 		Return(10, nil)

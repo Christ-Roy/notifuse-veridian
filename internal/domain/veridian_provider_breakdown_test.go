@@ -83,13 +83,14 @@ func TestVeridianAggregateProviderBreakdown(t *testing.T) {
 	t.Run("workspace vide -> toutes classes à 0, total 0", func(t *testing.T) {
 		got := VeridianAggregateProviderBreakdown(nil)
 		assert.Equal(t, 0, got.Total)
-		assert.Equal(t, map[string]int{
-			ProviderClassGoogle:     0,
-			ProviderClassMicrosoft:  0,
-			ProviderClassYahooAol:   0,
-			ProviderClassFreemailFR: 0,
-			ProviderClassCorporate:  0,
-		}, got.Breakdown)
+		// Sortie STABLE : TOUTES les classes canoniques (historiques + MX)
+		// sont présentes à 0, pour que l'UI rende une carte par classe.
+		want := map[string]int{}
+		for _, c := range VeridianAllProviderClasses() {
+			want[c] = 0
+		}
+		assert.Equal(t, want, got.Breakdown)
+		assert.Len(t, got.Breakdown, 11, "11 classes attendues dans le breakdown")
 	})
 
 	t.Run("comptage mixte par classe", func(t *testing.T) {

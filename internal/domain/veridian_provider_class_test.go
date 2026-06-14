@@ -84,13 +84,22 @@ func TestClassifyProviderClass(t *testing.T) {
 }
 
 func TestIsValidProviderClass(t *testing.T) {
+	// Les 5 historiques restent valides (non-régression stricte).
 	for _, valid := range []string{
 		ProviderClassGoogle, ProviderClassMicrosoft, ProviderClassYahooAol,
 		ProviderClassFreemailFR, ProviderClassCorporate,
 	} {
 		assert.True(t, IsValidProviderClass(valid), valid)
 	}
-	for _, invalid := range []string{"", "gmail", "Google", "GOOGLE", "outlook", "unknown"} {
+	// Les 6 nouvelles classes MX (Lot 4) sont désormais valides PARTOUT où
+	// IsValidProviderClass garde l'entrée (rates, caps, pixel, tag contact).
+	for _, valid := range []string{
+		ProviderClassOVH, ProviderClassIonos, ProviderClassAppleICloud,
+		ProviderClassSecurityGateway, ProviderClassOtherHoster, ProviderClassCorporateSelfhost,
+	} {
+		assert.True(t, IsValidProviderClass(valid), valid)
+	}
+	for _, invalid := range []string{"", "gmail", "Google", "GOOGLE", "outlook", "unknown", "Ovh", "selfhost"} {
 		assert.False(t, IsValidProviderClass(invalid), invalid)
 	}
 }
@@ -286,9 +295,9 @@ func TestVeridianProviderClassDailyCapFromMetadata(t *testing.T) {
 
 	t.Run("non-canonical class and non-positive caps dropped", func(t *testing.T) {
 		md := MapOfAny{VeridianProviderClassDailyCapMetadataKey: map[string]any{
-			"google":  float64(1),
-			"gmail":   float64(99), // non canonique → ignoré
-			"corporate": float64(0),  // <= 0 → ignoré
+			"google":      float64(1),
+			"gmail":       float64(99), // non canonique → ignoré
+			"corporate":   float64(0),  // <= 0 → ignoré
 			"freemail_fr": float64(-3), // négatif → ignoré
 		}}
 		assert.Equal(t, map[string]int{"google": 1}, VeridianProviderClassDailyCapFromMetadata(md))
@@ -361,4 +370,70 @@ func TestVeridianDomainsForClass(t *testing.T) {
 			assert.Equal(t, ProviderClassMicrosoft, ClassifyProviderClass("x@"+d), "domaine %s mal classé", d)
 		}
 	})
+
+	t.Run("MX classes return empty (not suffix-backed) -> daily cap no-op", func(t *testing.T) {
+		// Les classes MX (Lot 4) ne sont PAS adossées à la table de suffixes :
+		// VeridianDomainsForClass renvoie une liste vide → le COUNT par domaine
+		// du cap journalier est un no-op pour elles (dégradation gracieuse
+		// documentée, le throttle minute protège la réputation sur le hot path).
+		for _, c := range []string{
+			ProviderClassOVH, ProviderClassIonos, ProviderClassAppleICloud,
+			ProviderClassSecurityGateway, ProviderClassOtherHoster, ProviderClassCorporateSelfhost,
+		} {
+			domains, exclude := VeridianDomainsForClass(c)
+			assert.Empty(t, domains, "classe MX %s ne doit avoir aucun domaine de suffixe", c)
+			assert.False(t, exclude, "classe MX %s ne doit pas être en mode exclusion", c)
+		}
+	})
+}
+
+// TestVeridianAllProviderClasses : la liste énumère EXACTEMENT les 11 classes
+// canoniques (5 historiques + 6 MX), toutes valides, sans doublon, et les 5
+// historiques en tête (ordre déterministe pour un rendu reproductible).
+func TestVeridianAllProviderClasses(t *testing.T) {
+	all := VeridianAllProviderClasses()
+	require.Len(t, all, 11)
+
+	seen := map[string]bool{}
+	for _, c := range all {
+		assert.True(t, IsValidProviderClass(c), "classe %q non canonique", c)
+		assert.False(t, seen[c], "doublon %q dans la liste", c)
+		seen[c] = true
+	}
+
+	// Les 5 historiques d'abord, dans l'ordre attendu (non-régression d'ordre).
+	assert.Equal(t, []string{
+		ProviderClassGoogle, ProviderClassMicrosoft, ProviderClassYahooAol,
+		ProviderClassFreemailFR, ProviderClassCorporate,
+	}, all[:5])
+
+	// Les 6 MX présentes.
+	for _, mx := range []string{
+		ProviderClassOVH, ProviderClassIonos, ProviderClassAppleICloud,
+		ProviderClassSecurityGateway, ProviderClassOtherHoster, ProviderClassCorporateSelfhost,
+	} {
+		assert.Contains(t, all, mx)
+	}
+}
+
+// TestClassifyProviderClassStaysPure verrouille la NON-RÉGRESSION de la fonction
+// PURE après l'ajout de la couche MX : ClassifyProviderClass(email) ne fait
+// JAMAIS de lookup et retombe sur `corporate` (PAS corporate_selfhost, qui est
+// le fallback de la couche MX) pour tout domaine inconnu par suffixe. C'est ce
+// que tous les call-sites historiques attendent.
+func TestClassifyProviderClassStaysPure(t *testing.T) {
+	// Domaines inconnus par suffixe → corporate (jamais corporate_selfhost ici).
+	for _, email := range []string{
+		"contact@cabinet-dupont.fr", // hébergé M365 en vrai, mais la fonction pure l'ignore
+		"info@acme-corp.com",
+		"x@une-pme-quelconque.io",
+		"", "not-an-email", "jean@",
+	} {
+		got := ClassifyProviderClass(email)
+		assert.Equal(t, ProviderClassCorporate, got, "%q doit rester corporate (pas corporate_selfhost)", email)
+		assert.NotEqual(t, ProviderClassCorporateSelfhost, got)
+	}
+	// Suffixes connus inchangés (échantillon).
+	assert.Equal(t, ProviderClassGoogle, ClassifyProviderClass("a@gmail.com"))
+	assert.Equal(t, ProviderClassMicrosoft, ClassifyProviderClass("a@outlook.fr"))
 }

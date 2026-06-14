@@ -63,10 +63,10 @@ func TestVeridianResolveOpenPixel_DefautTunnelParClasse(t *testing.T) {
 		email string
 		want  bool
 	}{
-		{"jean@gmail.com", false},      // google → OFF
-		{"jean@outlook.fr", false},     // microsoft → OFF
-		{"jean@yahoo.fr", true},        // yahoo_aol → ON
-		{"jean@orange.fr", true},       // freemail_fr → ON
+		{"jean@gmail.com", false},          // google → OFF
+		{"jean@outlook.fr", false},         // microsoft → OFF
+		{"jean@yahoo.fr", true},            // yahoo_aol → ON
+		{"jean@orange.fr", true},           // freemail_fr → ON
 		{"jean@boucherie-durand.fr", true}, // corporate → ON
 	}
 	for _, c := range cases {
@@ -169,6 +169,61 @@ func TestVeridianToBool(t *testing.T) {
 		v, ok := veridianToBool(c.in)
 		if ok != c.valid || (ok && v != c.val) {
 			t.Errorf("veridianToBool(%v) = (%v,%v), attendu (%v,%v)", c.in, v, ok, c.val, c.valid)
+		}
+	}
+}
+
+// TestVeridianDefaultOpenPixel_MXClasses verrouille la politique pixel par
+// défaut pour les classes MX (Lot 4) : OFF sur les sensibles
+// (security_gateway/apple_icloud) qui scrutent les pixels, ON sur les nébuleuses
+// FR et hébergeurs propres (ovh/ionos/other_hoster/corporate_selfhost). Couvre
+// la modif du défaut tunnel après l'ajout des classes MX.
+func TestVeridianDefaultOpenPixel_MXClasses(t *testing.T) {
+	// Contexte tunnel forcé via une config rates non vide (un signal suffit),
+	// sans override pixel explicite → on tombe sur le défaut tunnel par classe.
+	tunnelBroadcast := &Broadcast{
+		ID:       "b",
+		Metadata: MapOfAny{VeridianProviderClassRatesMetadataKey: map[string]any{"google": 1.0}},
+	}
+
+	cases := []struct {
+		email string
+		want  bool
+	}{
+		{"x@gmail.com", false}, // google : OFF (historique, non-régression)
+		{"x@orange.fr", true},  // freemail_fr : ON (historique)
+	}
+	for _, c := range cases {
+		got := VeridianResolveOpenPixel(nil, c.email, tunnelBroadcast, nil)
+		if got == nil {
+			t.Fatalf("%s : contexte tunnel actif → pixel non nil attendu", c.email)
+		}
+		if *got != c.want {
+			t.Errorf("%s : pixel = %v, attendu %v", c.email, *got, c.want)
+		}
+	}
+
+	// Les classes MX sont posées via le tag contact (custom_string_5) pour
+	// éviter tout lookup DNS dans ce test pur domaine.
+	mxCases := []struct {
+		class string
+		want  bool
+	}{
+		{ProviderClassOVH, true},
+		{ProviderClassIonos, true},
+		{ProviderClassOtherHoster, true},
+		{ProviderClassCorporateSelfhost, true},
+		{ProviderClassSecurityGateway, false},
+		{ProviderClassAppleICloud, false},
+	}
+	for _, c := range mxCases {
+		contact := &Contact{Email: "x@custom.fr", CustomString5: &NullableString{String: c.class}}
+		got := VeridianResolveOpenPixel(contact, "x@custom.fr", tunnelBroadcast, nil)
+		if got == nil {
+			t.Fatalf("classe %s en contexte tunnel → pixel non nil attendu", c.class)
+		}
+		if *got != c.want {
+			t.Errorf("classe %s : pixel = %v, attendu %v", c.class, *got, c.want)
 		}
 	}
 }

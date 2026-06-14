@@ -65,12 +65,29 @@ Derrière les vrais "corporate self-host", on trouve (pondéré leads) :
 par défaut** (l'inverse de l'app aujourd'hui où corporate = débit rapide). NON, on
 ne peut pas envoyer en masse aux self-hosted comme si c'était neutre.
 
-## Classes recommandées (au-delà des 5 actuelles)
+## Classes finales — IMPLÉMENTÉES (Lot 4, 2026-06-14)
 
-À throttler séparément vu la distribution réelle :
-`google` · `microsoft` · `ovh` (17%!) · `ionos` · `yahoo_aol` · `freemail_fr` ·
-`apple_icloud` · `security_gateway` (anti-spam → quasi-exclusion cold) ·
-`other_hoster` (infomaniak/gandi/hostinger/zoho...) · `corporate_selfhost` (prudent).
+11 classes canoniques, throttlées séparément vu la distribution réelle
+(`domain.VeridianAllProviderClasses()` = source de vérité Go) :
+
+| Classe | Origine | Patterns MX (suffixe host, case-insensitive) |
+|---|---|---|
+| `google` | Gmail public + Workspace | `.google.com`, `.googlemail.com`, `.psmtp.com` |
+| `microsoft` | Outlook + M365 | `.protection.outlook.com`, `.outlook.com`, `.office365.com` |
+| `yahoo_aol` | Yahoo/AOL | `.yahoodns.net` |
+| `freemail_fr` | FAI FR (host MX) | `.orange.fr`, `.sfr.fr`, `.free.fr`, `.laposte.net`, `.bbox.fr` |
+| `corporate` | suffixe inconnu AVANT MX (rétrocompat) | — (jamais retourné par le MX, gardé pour les configs/tags existants) |
+| `ovh` | nébuleuse FR ~17% | `.ovh.net`, `.ovh.com` |
+| `ionos` | IONOS / 1&1 ~6% | `.ionos.*`, `.kundenserver.de`, `.1and1.com` |
+| `apple_icloud` | iCloud/Apple | `.mail.icloud.com`, `.icloud.com`, `.apple.com` |
+| `security_gateway` | anti-spam pro → débit ultra-prudent / quasi-exclusion cold | `.vadesecure.com`, `.mailinblack.com`, `.proofpoint.com`/`.pphosted.com`, `.mimecast.com`, `.hornetsecurity.com`, `.messagelabs.com`, `.cudasvc.com` (Barracuda), `.sophos.com`, `.retarus.com`, `.trendmicro.*`, … |
+| `other_hoster` | hébergeurs propres | `.infomaniak.*`, `.gandi.net`, `.hostinger.*`, `.zoho.*`, `.proton*`, `.online.net`/`.scaleway.com`, `.titan.email`, … |
+| `corporate_selfhost` | vrai self-host / MX inconnu (fallback prudent) | aucun pattern reconnu / échec lookup / NXDOMAIN |
+
+Table de patterns versionnée : `veridianMXPatternTable` dans
+`internal/domain/veridian_provider_class_mx.go`. **Gateways anti-spam testées EN
+PREMIER** (elles frontent un MX d'entreprise). Pour étendre : ajouter le suffixe
+host **OBSERVÉ en data** (pas deviné).
 
 ## Le script réutilisable (pour CHAQUE future DB)
 
@@ -95,7 +112,15 @@ python3 mx_provider_map.py   # voir .README.md pour les paramètres DB/table/col
    → classification exacte d'emblée, zéro lookup à l'envoi.
 
 ## Lien avec le code Notifuse
-- Classification actuelle (par suffixe) : `internal/domain/veridian_provider_class.go`.
-- Fix MX à câbler : ticket `todo/2026-06-14-classification-mx-nebuleuses-google-microsoft.md`.
+- Classification par suffixe (pure, hot path) : `internal/domain/veridian_provider_class.go`
+  (`ClassifyProviderClass`).
+- **Classification par MX RÉEL (LIVRÉE Lot 4)** : `internal/domain/veridian_provider_class_mx.go`
+  (`VeridianMXClassifier` : suffixe connu sans lookup → MX caché → fallback
+  `corporate_selfhost`, resolver DI 8.8.8.8/1.1.1.1, cache in-memory TTL 7j,
+  best-effort timeout 2s). Câblé dans le worker via `veridianClassifyRecipient`
+  (tag amont `custom_string_5` prime, sinon MX), utilisé par les deux gates
+  throttle minute + daily cap.
 - Le throttle/cap par classe est étanche (rate limiter keyé `integrationID|classe`) —
   le fix porte sur la CLASSIFICATION d'entrée, pas sur le throttle.
+- Pré-remplissage massif à venir : tag `custom_string_5` posé à l'import par
+  Prospection (ticket Prospection séparé) → zéro lookup à l'envoi pour les 7,8M.

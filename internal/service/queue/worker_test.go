@@ -1530,3 +1530,33 @@ func TestEmailQueueWorker_ProcessEntry_VeridianInfraRateThrottle(t *testing.T) {
 	mockQueueRepo.EXPECT().SetNextRetry(gomock.Any(), workspaceID, "e2", gomock.Any()).Return(nil)
 	worker.processEntry(workspace, newEntry("e2"))
 }
+
+// TestNewEmailQueueWorker_InstallsMXClassifier verrouille la modif worker.go du
+// Lot 4 : le constructeur installe un classifier MX non-nil (resolver réseau par
+// défaut). Sans lui, veridianClassifyRecipient retomberait sur la classification
+// pure par suffixe — on veut le MX réel sur le hot path.
+func TestNewEmailQueueWorker_InstallsMXClassifier(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo, mockWorkspaceRepo, mockEmailService, mockMessageHistoryRepo,
+		DefaultWorkerConfig(), mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	require.NotNil(t, worker.providerMXClassifier, "le constructeur doit installer un classifier MX")
+
+	// Un suffixe connu se classe sans toucher au réseau (preuve que le
+	// classifier est branché et fonctionnel via le helper).
+	entry := &domain.EmailQueueEntry{ContactEmail: "x@gmail.com"}
+	assert.Equal(t, domain.ProviderClassGoogle, worker.veridianClassifyRecipient(entry))
+}

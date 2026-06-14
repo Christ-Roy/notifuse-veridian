@@ -40,6 +40,18 @@ function classLabel(c: VeridianProviderClass): string {
       return 'FR ISPs'
     case 'corporate':
       return 'Corporate'
+    case 'ovh':
+      return 'OVH'
+    case 'ionos':
+      return 'IONOS'
+    case 'apple_icloud':
+      return 'Apple iCloud'
+    case 'security_gateway':
+      return 'Anti-spam GW'
+    case 'other_hoster':
+      return 'Other hosters'
+    case 'corporate_selfhost':
+      return 'Corporate self-host'
   }
 }
 

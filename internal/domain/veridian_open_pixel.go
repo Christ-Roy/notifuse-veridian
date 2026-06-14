@@ -26,14 +26,28 @@ package domain
 const VeridianOpenPixelByClassMetadataKey = "veridian_open_pixel_by_class"
 
 // veridianDefaultOpenPixelByClass = politique par défaut quand le tunnel est
-// actif : ON sur les petits providers, OFF sur les gros (réputation sensible).
+// actif : ON sur les petits providers, OFF sur les gros / sensibles (réputation).
 // Révisable data-driven par config sans toucher au code.
+//
+// Classes MX (Lot 4) : pixel OFF sur les gros / sensibles
+// (google/microsoft/security_gateway — les gateways anti-spam scrutent les pixels),
+// ON sur les nébuleuses FR et hébergeurs propres (ovh/ionos/apple_icloud/
+// other_hoster/corporate_selfhost) moins regardants. Toute classe absente de
+// cette map prend le zéro-value `false` (pixel OFF), donc un défaut prudent.
 var veridianDefaultOpenPixelByClass = map[string]bool{
+	// Historiques.
 	ProviderClassGoogle:     false,
 	ProviderClassMicrosoft:  false,
 	ProviderClassYahooAol:   true,
 	ProviderClassFreemailFR: true,
 	ProviderClassCorporate:  true,
+	// MX (Lot 4).
+	ProviderClassOVH:               true,
+	ProviderClassIonos:             true,
+	ProviderClassAppleICloud:       false, // Apple = règles strictes → prudent
+	ProviderClassSecurityGateway:   false, // anti-spam pro → surtout pas de pixel
+	ProviderClassOtherHoster:       true,
+	ProviderClassCorporateSelfhost: true,
 }
 
 // VeridianOpenPixelByClassFromMetadata extrait la map {classe: bool} d'un

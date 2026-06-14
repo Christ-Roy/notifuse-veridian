@@ -51,6 +51,11 @@ type EmailQueueWorker struct {
 	// Veridian fork: second rate-limiting stage, keyed by recipient provider
 	// class (cf. veridian_provider_throttle.go). No-op without configuration.
 	providerClassLimiter *ProviderClassRateLimiter
+	// Veridian fork (Lot 4): classifies the recipient provider by REAL MX
+	// (cf. domain.VeridianMXClassifier). Suffix-known domains resolve with zero
+	// I/O; unknown domains do a cached MX lookup (best-effort, short timeout).
+	// Never nil after the constructor; replaceable in tests via the setter.
+	providerMXClassifier *domain.VeridianMXClassifier
 	circuitBreaker       *IntegrationCircuitBreaker
 	errorClassifier      *emailerror.Classifier
 	config               *EmailQueueWorkerConfig
@@ -100,6 +105,7 @@ func NewEmailQueueWorker(
 		messageHistoryRepo:   messageHistoryRepo,
 		rateLimiter:          NewIntegrationRateLimiter(),
 		providerClassLimiter: NewProviderClassRateLimiter(),
+		providerMXClassifier: domain.NewVeridianMXClassifier(nil), // default net resolver (8.8.8.8 / 1.1.1.1)
 		circuitBreaker:       NewIntegrationCircuitBreaker(cbConfig),
 		errorClassifier:      emailerror.NewClassifier(),
 		config:               config,

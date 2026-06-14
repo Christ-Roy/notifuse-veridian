@@ -52,8 +52,10 @@ interface Props {
   isOwner: boolean
 }
 
-// Les "gros" providers (réputation sensible au pixel d'ouverture).
-const BIG_PROVIDERS: VeridianProviderClass[] = ['google', 'microsoft']
+// Les "gros" / sensibles providers (réputation sensible au pixel d'ouverture).
+// security_gateway = passerelle anti-spam pro qui scrute les pixels → traitée
+// comme un gros provider pour l'avertissement UI.
+const BIG_PROVIDERS: VeridianProviderClass[] = ['google', 'microsoft', 'security_gateway']
 
 // Libellé lisible d'une classe (les values restent canoniques côté code/API).
 //
@@ -75,7 +77,19 @@ function classLabel(c: VeridianProviderClass): string {
     case 'freemail_fr':
       return 'French ISPs (Orange, SFR, Free…)'
     case 'corporate':
-      return 'Corporate (any other domain)'
+      return 'Corporate (unknown by suffix)'
+    case 'ovh':
+      return 'OVH (MX-resolved)'
+    case 'ionos':
+      return 'IONOS / 1&1 (MX-resolved)'
+    case 'apple_icloud':
+      return 'Apple iCloud (MX-resolved)'
+    case 'security_gateway':
+      return 'Anti-spam gateway (Vade, Mailinblack, Proofpoint…)'
+    case 'other_hoster':
+      return 'Other hosters (Infomaniak, Gandi, Zoho…)'
+    case 'corporate_selfhost':
+      return 'Corporate self-hosted (MX unknown)'
   }
 }
 

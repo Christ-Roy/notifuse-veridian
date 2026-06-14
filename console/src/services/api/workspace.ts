@@ -70,30 +70,53 @@ export interface WorkspaceSettings {
 // Veridian fork — classes canoniques de provider destinataire (cf. backend
 // internal/domain/veridian_provider_class.go). Source de vérité = le Go ;
 // dupliquée ici pour le typage UI de la config cold outreach.
+//
+// Les 5 premières sont historiques (classification par suffixe). Les suivantes
+// (Lot 4, 2026-06-14) sont issues de la classification par MX réel : un domaine
+// custom hébergé Google/M365/OVH/… est désormais classé selon son MX, pas jeté
+// en `corporate`. Garder STRICTEMENT aligné sur VeridianAllProviderClasses() Go.
 export type VeridianProviderClass =
   | 'google'
   | 'microsoft'
   | 'yahoo_aol'
   | 'freemail_fr'
   | 'corporate'
+  | 'ovh'
+  | 'ionos'
+  | 'apple_icloud'
+  | 'security_gateway'
+  | 'other_hoster'
+  | 'corporate_selfhost'
 
 export const VERIDIAN_PROVIDER_CLASSES: VeridianProviderClass[] = [
   'google',
   'microsoft',
   'yahoo_aol',
   'freemail_fr',
-  'corporate'
+  'corporate',
+  'ovh',
+  'ionos',
+  'apple_icloud',
+  'security_gateway',
+  'other_hoster',
+  'corporate_selfhost'
 ]
 
 // Défaut tunnel du pixel d'ouverture (miroir de veridianDefaultOpenPixelByClass
-// côté Go) : ON petits providers, OFF gros. Sert de placeholder visuel quand
-// aucune config explicite n'existe.
+// côté Go) : ON petits providers, OFF gros / sensibles. Sert de placeholder
+// visuel quand aucune config explicite n'existe.
 export const VERIDIAN_DEFAULT_OPEN_PIXEL: Record<VeridianProviderClass, boolean> = {
   google: false,
   microsoft: false,
   yahoo_aol: true,
   freemail_fr: true,
-  corporate: true
+  corporate: true,
+  ovh: true,
+  ionos: true,
+  apple_icloud: false,
+  security_gateway: false,
+  other_hoster: true,
+  corporate_selfhost: true
 }
 
 export interface FileManagerSettings {

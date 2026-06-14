@@ -1,0 +1,321 @@
+package domain
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// fakeMXResolver est un MXResolver de test : map domaine→hosts, + compteur de
+// lookups pour vérifier le cache, + option d'erreur/latence pour le best-effort.
+type fakeMXResolver struct {
+	mu       sync.Mutex
+	byDomain map[string][]string
+	err      error         // si non nil, renvoyé pour tout domaine
+	delay    time.Duration // simule un lookup lent (test timeout)
+	calls    int32         // nombre total de LookupMXHosts appelés
+}
+
+func (f *fakeMXResolver) LookupMXHosts(ctx context.Context, domain string) ([]string, error) {
+	atomic.AddInt32(&f.calls, 1)
+	if f.delay > 0 {
+		select {
+		case <-time.After(f.delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	f.mu.Lock()
+	hosts, ok := f.byDomain[domain]
+	f.mu.Unlock()
+	if !ok {
+		return nil, errors.New("no MX (NXDOMAIN)")
+	}
+	return hosts, nil
+}
+
+func (f *fakeMXResolver) callCount() int32 { return atomic.LoadInt32(&f.calls) }
+
+// TestClassifyMXHost couvre la table de patterns MX→classe TELLE QU'ELLE est
+// dérivée de la vraie data (un cas par famille du ticket), case-insensitive,
+// suffixe, et l'ordre de priorité (gateway avant hébergeur).
+func TestClassifyMXHost(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		want string
+	}{
+		// Google
+		{"aspmx google", "aspmx.l.google.com", ProviderClassGoogle},
+		{"alt aspmx google", "alt1.aspmx.l.google.com", ProviderClassGoogle},
+		{"gmail-smtp-in google", "gmail-smtp-in.l.google.com", ProviderClassGoogle},
+		{"google UPPERCASE", "ASPMX.L.GOOGLE.COM", ProviderClassGoogle},
+		{"google mixed case", "AspMx.L.Google.Com", ProviderClassGoogle},
+		{"google trailing dot FQDN", "aspmx.l.google.com.", ProviderClassGoogle},
+		{"googlemail variant", "gmail-smtp-in.l.googlemail.com", ProviderClassGoogle},
+
+		// Microsoft
+		{"outlook protection", "veridian-site.mail.protection.outlook.com", ProviderClassMicrosoft},
+		{"olc protection outlook", "host.olc.protection.outlook.com", ProviderClassMicrosoft},
+		{"outlook plain", "mx.outlook.com", ProviderClassMicrosoft},
+
+		// OVH
+		{"ovh mx1", "mx1.mail.ovh.net", ProviderClassOVH},
+		{"ovh mx0", "mx0.mail.ovh.net", ProviderClassOVH},
+
+		// IONOS
+		{"ionos fr", "mx00.ionos.fr", ProviderClassIonos},
+		{"ionos de", "mx01.ionos.de", ProviderClassIonos},
+		{"kundenserver", "mx00.kundenserver.de", ProviderClassIonos},
+
+		// Yahoo / AOL
+		{"yahoodns", "mta5.am0.yahoodns.net", ProviderClassYahooAol},
+
+		// Freemail FR (host MX)
+		{"orange smtp-in", "smtp-in.orange.fr", ProviderClassFreemailFR},
+		{"free mx", "mx1.free.fr", ProviderClassFreemailFR},
+
+		// Apple iCloud
+		{"icloud mail", "mx01.mail.icloud.com", ProviderClassAppleICloud},
+
+		// Security gateways (PRIORITÉ : testées avant les hébergeurs)
+		{"vadesecure", "mx.vadesecure.com", ProviderClassSecurityGateway},
+		{"mailinblack", "smtp.mailinblack.com", ProviderClassSecurityGateway},
+		{"proofpoint pphosted", "mx1.eu1.pphosted.com", ProviderClassSecurityGateway},
+		{"mimecast", "eu-smtp-inbound-1.mimecast.com", ProviderClassSecurityGateway},
+		{"hornetsecurity", "mx.hornetsecurity.com", ProviderClassSecurityGateway},
+		{"barracuda cudasvc", "mx.region.cudasvc.com", ProviderClassSecurityGateway},
+		{"messagelabs", "cluster.eu.messagelabs.com", ProviderClassSecurityGateway},
+
+		// Other hosters
+		{"infomaniak", "mta-gw.infomaniak.ch", ProviderClassOtherHoster},
+		{"gandi", "spool.mail.gandi.net", ProviderClassOtherHoster},
+		{"hostinger", "mx1.hostinger.com", ProviderClassOtherHoster},
+		{"zoho", "mx.zoho.eu", ProviderClassOtherHoster},
+		{"proton", "mail.protonmail.ch", ProviderClassOtherHoster},
+		{"online scaleway", "mx.online.net", ProviderClassOtherHoster},
+
+		// Unknown → no match (caller falls back to corporate_selfhost)
+		{"unknown self-host", "mail.cabinet-dupont.fr", ""},
+		{"empty host", "", ""},
+		{"random", "smtp.some-random-host.tld", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := classifyMXHost(tt.host)
+			if tt.want == "" {
+				assert.False(t, ok, "expected no match for %q", tt.host)
+				return
+			}
+			require.True(t, ok, "expected a match for %q", tt.host)
+			assert.Equal(t, tt.want, got)
+			// Toute classe retournée par la table DOIT être canonique (sinon les
+			// consommateurs throttle/cap/pixel la rejetteraient).
+			assert.True(t, IsValidProviderClass(got), "classe %q non canonique", got)
+		})
+	}
+}
+
+// TestClassifyMXHosts vérifie qu'on prend le PREMIER host reconnu d'une liste.
+func TestClassifyMXHosts(t *testing.T) {
+	t.Run("first recognized wins", func(t *testing.T) {
+		class, ok := classifyMXHosts([]string{"unknown.tld", "aspmx.l.google.com"})
+		require.True(t, ok)
+		assert.Equal(t, ProviderClassGoogle, class)
+	})
+	t.Run("none recognized", func(t *testing.T) {
+		_, ok := classifyMXHosts([]string{"a.tld", "b.tld"})
+		assert.False(t, ok)
+	})
+	t.Run("empty list", func(t *testing.T) {
+		_, ok := classifyMXHosts(nil)
+		assert.False(t, ok)
+	})
+}
+
+// TestMXClassifier_SuffixKnownNoLookup : un domaine grand public connu par
+// suffixe ne déclenche AUCUN lookup MX (hot path, non-régression).
+func TestMXClassifier_SuffixKnownNoLookup(t *testing.T) {
+	res := &fakeMXResolver{byDomain: map[string][]string{}}
+	c := NewVeridianMXClassifier(res)
+
+	for _, tc := range []struct {
+		email string
+		want  string
+	}{
+		{"jean@gmail.com", ProviderClassGoogle},
+		{"a@outlook.fr", ProviderClassMicrosoft},
+		{"a@orange.fr", ProviderClassFreemailFR},
+		{"a@yahoo.com", ProviderClassYahooAol},
+	} {
+		assert.Equal(t, tc.want, c.ClassifyEmail(context.Background(), tc.email))
+	}
+	assert.Equal(t, int32(0), res.callCount(), "aucun lookup MX ne doit partir pour un suffixe connu")
+}
+
+// TestMXClassifier_CustomDomainResolvedByMX : LE cœur du Lot 4. Un domaine
+// custom inconnu par suffixe est classé selon son MX réel.
+func TestMXClassifier_CustomDomainResolvedByMX(t *testing.T) {
+	res := &fakeMXResolver{byDomain: map[string][]string{
+		"cabinet-dupont.fr": {"veridian.mail.protection.outlook.com"}, // M365
+		"udevweb.co":        {"aspmx.l.google.com"},                   // Google Workspace
+		"agence-immo.fr":    {"mx1.mail.ovh.net"},                     // OVH
+		"startup.io":        {"mx00.ionos.fr"},                        // IONOS
+		"protected-corp.fr": {"mx.vadesecure.com"},                    // gateway
+		"vraie-pme.fr":      {"mail.vraie-pme.fr"},                    // self-host inconnu
+	}}
+	c := NewVeridianMXClassifier(res)
+
+	cases := []struct {
+		email string
+		want  string
+	}{
+		{"contact@cabinet-dupont.fr", ProviderClassMicrosoft},
+		{"hello@udevweb.co", ProviderClassGoogle},
+		{"info@agence-immo.fr", ProviderClassOVH},
+		{"ceo@startup.io", ProviderClassIonos},
+		{"rh@protected-corp.fr", ProviderClassSecurityGateway},
+		{"gerant@vraie-pme.fr", ProviderClassCorporateSelfhost}, // MX connu mais pattern inconnu
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, c.ClassifyEmail(context.Background(), tc.email), tc.email)
+	}
+}
+
+// TestMXClassifier_CacheHit : un domaine custom n'est résolu qu'UNE fois, les
+// envois suivants viennent du cache (zéro lookup supplémentaire).
+func TestMXClassifier_CacheHit(t *testing.T) {
+	res := &fakeMXResolver{byDomain: map[string][]string{
+		"cabinet-dupont.fr": {"veridian.mail.protection.outlook.com"},
+	}}
+	c := NewVeridianMXClassifier(res)
+
+	for i := 0; i < 5; i++ {
+		assert.Equal(t, ProviderClassMicrosoft, c.ClassifyEmail(context.Background(), "x@cabinet-dupont.fr"))
+	}
+	assert.Equal(t, int32(1), res.callCount(), "le domaine ne doit être résolu qu'une fois (cache)")
+}
+
+// TestMXClassifier_CacheMissAfterTTL : passé le TTL, l'entrée est re-résolue.
+func TestMXClassifier_CacheMissAfterTTL(t *testing.T) {
+	res := &fakeMXResolver{byDomain: map[string][]string{
+		"cabinet-dupont.fr": {"aspmx.l.google.com"},
+	}}
+	c := NewVeridianMXClassifier(res)
+
+	// Horloge contrôlée pour franchir le TTL sans attendre.
+	var clock atomic.Int64
+	clock.Store(time.Now().UnixNano())
+	c.now = func() time.Time { return time.Unix(0, clock.Load()) }
+
+	assert.Equal(t, ProviderClassGoogle, c.ClassifyDomain(context.Background(), "cabinet-dupont.fr"))
+	assert.Equal(t, int32(1), res.callCount())
+
+	// Avance au-delà du TTL → re-lookup.
+	clock.Add(int64(veridianMXCacheTTL) + int64(time.Hour))
+	assert.Equal(t, ProviderClassGoogle, c.ClassifyDomain(context.Background(), "cabinet-dupont.fr"))
+	assert.Equal(t, int32(2), res.callCount(), "après TTL le domaine doit être re-résolu")
+}
+
+// TestMXClassifier_LookupErrorFallback : NXDOMAIN / erreur DNS → corporate_selfhost,
+// et le résultat est caché (pas de re-lookup en boucle sur un domaine mort).
+func TestMXClassifier_LookupErrorFallback(t *testing.T) {
+	res := &fakeMXResolver{err: errors.New("communications error")}
+	c := NewVeridianMXClassifier(res)
+
+	assert.Equal(t, ProviderClassCorporateSelfhost, c.ClassifyEmail(context.Background(), "x@dead-domain.tld"))
+	assert.Equal(t, ProviderClassCorporateSelfhost, c.ClassifyEmail(context.Background(), "x@dead-domain.tld"))
+	assert.Equal(t, int32(1), res.callCount(), "un échec est caché : pas de re-lookup à chaque envoi")
+}
+
+// TestMXClassifier_TimeoutFallback : un lookup plus lent que le timeout dégrade
+// vers corporate_selfhost SANS bloquer (best-effort strict).
+func TestMXClassifier_TimeoutFallback(t *testing.T) {
+	res := &fakeMXResolver{
+		byDomain: map[string][]string{"slow.fr": {"aspmx.l.google.com"}},
+		delay:    veridianMXLookupTimeout + 500*time.Millisecond,
+	}
+	c := NewVeridianMXClassifier(res)
+
+	start := time.Now()
+	got := c.ClassifyEmail(context.Background(), "x@slow.fr")
+	elapsed := time.Since(start)
+
+	assert.Equal(t, ProviderClassCorporateSelfhost, got)
+	assert.Less(t, elapsed, veridianMXLookupTimeout+400*time.Millisecond,
+		"le timeout doit couper bien avant que le lookup lent ne réponde")
+}
+
+// TestMXClassifier_InvalidEmail : adresse vide / sans @ → corporate_selfhost,
+// jamais de panic, jamais de lookup.
+func TestMXClassifier_InvalidEmail(t *testing.T) {
+	res := &fakeMXResolver{byDomain: map[string][]string{}}
+	c := NewVeridianMXClassifier(res)
+	for _, bad := range []string{"", "not-an-email", "jean@", "@", "a@ "} {
+		assert.Equal(t, ProviderClassCorporateSelfhost, c.ClassifyEmail(context.Background(), bad), bad)
+	}
+	assert.Equal(t, int32(0), res.callCount())
+}
+
+// TestMXClassifier_NilResolverUsesNetDefault : un classifier construit sans
+// resolver injecté ne panique pas (resolver réseau par défaut installé).
+func TestMXClassifier_NilResolverUsesNetDefault(t *testing.T) {
+	c := NewVeridianMXClassifier(nil)
+	require.NotNil(t, c)
+	// Suffixe connu : réponse directe sans toucher au réseau.
+	assert.Equal(t, ProviderClassGoogle, c.ClassifyEmail(context.Background(), "x@gmail.com"))
+}
+
+// TestVeridianAllProviderClasses_Canonical : toutes les classes énumérées sont
+// canoniques et le set contient EXACTEMENT ces classes (garde-fou contre un
+// oubli d'ajout dans le set ou la liste).
+func TestVeridianAllProviderClasses_Canonical(t *testing.T) {
+	all := VeridianAllProviderClasses()
+	require.Len(t, all, 11, "11 classes attendues (5 historiques + 6 MX)")
+	seen := map[string]bool{}
+	for _, c := range all {
+		assert.True(t, IsValidProviderClass(c), "classe %q non valide", c)
+		assert.False(t, seen[c], "doublon %q", c)
+		seen[c] = true
+	}
+	// Les 5 historiques DOIVENT toujours être présentes (non-régression).
+	for _, h := range []string{
+		ProviderClassGoogle, ProviderClassMicrosoft, ProviderClassYahooAol,
+		ProviderClassFreemailFR, ProviderClassCorporate,
+	} {
+		assert.Contains(t, all, h)
+	}
+}
+
+// TestMXClassifier_ConcurrentSafe : le cache est thread-safe (race detector).
+func TestMXClassifier_ConcurrentSafe(t *testing.T) {
+	res := &fakeMXResolver{byDomain: map[string][]string{
+		"a.fr": {"aspmx.l.google.com"},
+		"b.fr": {"mx1.mail.ovh.net"},
+	}}
+	c := NewVeridianMXClassifier(res)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if i%2 == 0 {
+				assert.Equal(t, ProviderClassGoogle, c.ClassifyEmail(context.Background(), "x@a.fr"))
+			} else {
+				assert.Equal(t, ProviderClassOVH, c.ClassifyEmail(context.Background(), "x@b.fr"))
+			}
+		}(i)
+	}
+	wg.Wait()
+}

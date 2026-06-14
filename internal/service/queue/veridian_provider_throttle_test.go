@@ -15,6 +15,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// queueTestNXDOMAINResolver est un MXResolver de test : aucun MX pour aucun
+// domaine (= tout domaine custom inconnu tombe en corporate_selfhost). Évite
+// tout lookup DNS réel dans les tests du worker (déterminisme + vitesse).
+type queueTestNXDOMAINResolver struct{}
+
+func (queueTestNXDOMAINResolver) LookupMXHosts(_ context.Context, _ string) ([]string, error) {
+	return nil, fmt.Errorf("no MX (test resolver)")
+}
+
 type veridianThrottleTestEnv struct {
 	worker                 *EmailQueueWorker
 	mockQueueRepo          *mocks.MockEmailQueueRepository
@@ -48,6 +57,11 @@ func newVeridianThrottleTestEnv(t *testing.T) *veridianThrottleTestEnv {
 		mockLogger,
 	)
 	worker.ctx = context.Background()
+	// Injecte un classifier MX déterministe (zéro DNS réel) : tout domaine
+	// custom inconnu → corporate_selfhost. Les domaines grand public connus par
+	// suffixe (gmail.com…) restent classés sans lookup. Garantit des tests
+	// rapides et reproductibles indépendamment du réseau de la machine de CI.
+	worker.SetVeridianMXClassifier(domain.NewVeridianMXClassifier(&queueTestNXDOMAINResolver{}))
 
 	return &veridianThrottleTestEnv{
 		worker:                 worker,
@@ -342,4 +356,61 @@ func TestProcessEntry_SaturatedClassNoBusyLoop(t *testing.T) {
 	// un design à Wait bloquant aurait pris ~49 minutes ici.
 	assert.Less(t, elapsed, 5*time.Second,
 		"une classe saturée ne doit pas bloquer le worker pool")
+}
+
+// TestSetVeridianMXClassifier_AndRecipientResolution couvre l'injection du
+// classifier MX (DI test) ET la précédence de veridianClassifyRecipient :
+// tag amont (payload) prime > classification MX (suffixe sans lookup, inconnu
+// via MX caché) > fallback. Garantit que les deux gates classent via le MX réel.
+func TestSetVeridianMXClassifier_AndRecipientResolution(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+
+	// Resolver MX déterministe : un domaine custom hébergé M365, un OVH.
+	fake := domain.NewVeridianMXClassifier(&fakeQueueMXResolver{byDomain: map[string][]string{
+		"cabinet-dupont.fr": {"veridian.mail.protection.outlook.com"},
+		"agence-immo.fr":    {"mx1.mail.ovh.net"},
+	}})
+	env.worker.SetVeridianMXClassifier(fake)
+
+	t.Run("tag amont prime (zéro lookup)", func(t *testing.T) {
+		entry := veridianTestEntry("e", "x@cabinet-dupont.fr", domain.EmailQueuePayload{
+			VeridianProviderClass: domain.ProviderClassGoogle, // tag explicite
+		})
+		assert.Equal(t, domain.ProviderClassGoogle, env.worker.veridianClassifyRecipient(entry))
+	})
+
+	t.Run("suffixe connu classé sans lookup", func(t *testing.T) {
+		entry := veridianTestEntry("e", "x@gmail.com", domain.EmailQueuePayload{})
+		assert.Equal(t, domain.ProviderClassGoogle, env.worker.veridianClassifyRecipient(entry))
+	})
+
+	t.Run("domaine custom résolu par MX réel", func(t *testing.T) {
+		ms := veridianTestEntry("e", "contact@cabinet-dupont.fr", domain.EmailQueuePayload{})
+		assert.Equal(t, domain.ProviderClassMicrosoft, env.worker.veridianClassifyRecipient(ms))
+		ovh := veridianTestEntry("e", "info@agence-immo.fr", domain.EmailQueuePayload{})
+		assert.Equal(t, domain.ProviderClassOVH, env.worker.veridianClassifyRecipient(ovh))
+	})
+
+	t.Run("domaine custom inconnu (NXDOMAIN) -> corporate_selfhost", func(t *testing.T) {
+		entry := veridianTestEntry("e", "x@inconnu-total.tld", domain.EmailQueuePayload{})
+		assert.Equal(t, domain.ProviderClassCorporateSelfhost, env.worker.veridianClassifyRecipient(entry))
+	})
+
+	t.Run("setter nil ne casse pas le classifier existant", func(t *testing.T) {
+		env.worker.SetVeridianMXClassifier(nil) // no-op : garde le fake
+		entry := veridianTestEntry("e", "info@agence-immo.fr", domain.EmailQueuePayload{})
+		assert.Equal(t, domain.ProviderClassOVH, env.worker.veridianClassifyRecipient(entry))
+	})
+}
+
+// fakeQueueMXResolver : MXResolver de test mappé par domaine (NXDOMAIN sinon).
+type fakeQueueMXResolver struct {
+	byDomain map[string][]string
+}
+
+func (f *fakeQueueMXResolver) LookupMXHosts(_ context.Context, domainName string) ([]string, error) {
+	if hosts, ok := f.byDomain[domainName]; ok {
+		return hosts, nil
+	}
+	return nil, fmt.Errorf("no MX (test)")
 }

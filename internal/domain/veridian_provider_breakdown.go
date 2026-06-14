@@ -87,14 +87,24 @@ func veridianProviderClassFromTag(tag *NullableString) string {
 }
 
 // VeridianAggregateProviderBreakdown classifie chaque row et agrège le compte
-// par classe. Les 5 classes canoniques sont initialisées à 0 (sortie stable).
+// par classe. TOUTES les classes canoniques (historiques + MX, cf.
+// VeridianAllProviderClasses) sont initialisées à 0 pour une sortie STABLE :
+// l'UI rend une carte par classe sans connaître la liste côté front, et les
+// classes MX (ovh/ionos/…) apparaissent désormais dans le breakdown.
+//
+// Note : ce breakdown classifie par SUFFIXE (+ override tag custom_string_5),
+// PAS par MX réel — il ne fait pas de lookup DNS (zéro I/O sur potentiellement
+// des dizaines de milliers de contacts). Les classes MX n'apparaîtront donc
+// peuplées QUE pour les contacts dont le tag custom_string_5 porte déjà la
+// classe résolue en amont (pré-remplissage à l'import, ticket Prospection). Sans
+// tag, un domaine custom hébergé Google reste compté `corporate` ici — c'est
+// cohérent avec le coût/perf d'un breakdown de masse, et l'enforcement réputation
+// (throttle) utilise bien le MX au moment de l'envoi.
 func VeridianAggregateProviderBreakdown(rows []VeridianContactProviderRow) *VeridianProviderBreakdown {
-	breakdown := map[string]int{
-		ProviderClassGoogle:     0,
-		ProviderClassMicrosoft:  0,
-		ProviderClassYahooAol:   0,
-		ProviderClassFreemailFR: 0,
-		ProviderClassCorporate:  0,
+	classes := VeridianAllProviderClasses()
+	breakdown := make(map[string]int, len(classes))
+	for _, class := range classes {
+		breakdown[class] = 0
 	}
 	for _, row := range rows {
 		class := VeridianClassifyContactProviderClass(row)

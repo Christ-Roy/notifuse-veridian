@@ -67,10 +67,9 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 		return 0, false
 	}
 
-	class := entry.Payload.VeridianProviderClass
-	if !domain.IsValidProviderClass(class) {
-		class = domain.ClassifyProviderClass(entry.ContactEmail)
-	}
+	// Classe du destinataire : tag amont (payload) sinon classification par MX
+	// RÉEL (suffixe connu = sans lookup ; inconnu = MX caché best-effort).
+	class := w.veridianClassifyRecipient(entry)
 
 	ratePerMinute, ok := rates[class]
 	if !ok || ratePerMinute <= 0 {
@@ -108,4 +107,35 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 // (clé "integrationID|classe") à côté de GetStats (limiters émetteurs).
 func (w *EmailQueueWorker) GetProviderClassStats() map[string]RateLimiterStats {
 	return w.providerClassLimiter.GetStats()
+}
+
+// SetVeridianMXClassifier remplace le classifier MX du worker (DI pour les
+// tests : injection d'un faux resolver sans DNS réel). En prod, le constructeur
+// installe le classifier réseau par défaut — ne PAS appeler ce setter.
+func (w *EmailQueueWorker) SetVeridianMXClassifier(c *domain.VeridianMXClassifier) {
+	if c != nil {
+		w.providerMXClassifier = c
+	}
+}
+
+// veridianClassifyRecipient résout la classe de provider destinataire pour une
+// entrée de queue, dans l'ordre de précédence du contrat cold :
+//  1. tag posé en amont sur le payload (option B, custom_string_5 → résolu à
+//     l'enqueue) : prime, ZÉRO I/O ;
+//  2. classification par MX RÉEL (Lot 4) : suffixe connu → classe directe sans
+//     lookup ; suffixe inconnu → MX caché (best-effort, timeout court, fallback
+//     corporate_selfhost). Si le classifier MX est absent (worker construit hors
+//     constructeur normal), on retombe sur la classification pure par suffixe
+//     (domain.ClassifyProviderClass) — comportement pré-Lot-4, jamais de panic.
+//
+// Utilisé par les DEUX gates (throttle minute + cap journalier) pour une
+// classification unique et cohérente du destinataire.
+func (w *EmailQueueWorker) veridianClassifyRecipient(entry *domain.EmailQueueEntry) string {
+	if class := entry.Payload.VeridianProviderClass; domain.IsValidProviderClass(class) {
+		return class
+	}
+	if w.providerMXClassifier != nil {
+		return w.providerMXClassifier.ClassifyEmail(w.ctx, entry.ContactEmail)
+	}
+	return domain.ClassifyProviderClass(entry.ContactEmail)
 }
