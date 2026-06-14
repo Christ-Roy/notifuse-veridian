@@ -305,6 +305,35 @@ func TestVeridianMessageHistoryDecorator_DeleteForEmail_Passthrough(t *testing.T
 	require.NoError(t, d.DeleteForEmail(context.Background(), "ws", "foo@bar"))
 }
 
+func TestVeridianMessageHistoryDecorator_CountSentSinceForContact_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	upstream.EXPECT().CountSentSinceForContact(gomock.Any(), "ws", "foo@bar", since).
+		Return(5, nil).Times(1)
+	got, err := d.CountSentSinceForContact(context.Background(), "ws", "foo@bar", since)
+	require.NoError(t, err)
+	assert.Equal(t, 5, got)
+}
+
+func TestVeridianMessageHistoryDecorator_CountSentSinceForDomains_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	domains := []string{"gmail.com"}
+	upstream.EXPECT().CountSentSinceForDomains(gomock.Any(), "ws", domains, true, since).
+		Return(11, nil).Times(1)
+	got, err := d.CountSentSinceForDomains(context.Background(), "ws", domains, true, since)
+	require.NoError(t, err)
+	assert.Equal(t, 11, got)
+}
+
 func TestIsWorkspaceNotFoundErr(t *testing.T) {
 	tests := []struct {
 		name string

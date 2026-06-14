@@ -1315,3 +1315,146 @@ func TestEmailQueueWorker_DynamicBatchSize(t *testing.T) {
 		}
 	})
 }
+
+// TestEmailQueueWorker_ProcessEntry_DailyCapSkips prouve le WIRING du gate de
+// plafond journalier dans processEntry (Veridian fork) : quand le cap par
+// destinataire est atteint, l'entrée est re-planifiée via SetNextRetry SANS
+// consommer d'attempt (pas de MarkAsProcessing) ni envoyer (pas de SendEmail).
+// Même contrat skip-and-reschedule que le circuit breaker et le throttle minute.
+func TestEmailQueueWorker_ProcessEntry_DailyCapSkips(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	const integrationID = "integration-1"
+	const entryID = "entry-cap"
+	const workspaceID = "workspace-1"
+
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Settings: domain.WorkspaceSettings{
+			// 1 mail/jour/destinataire.
+			VeridianPerRecipientDailyCap: 1,
+		},
+		Integrations: []domain.Integration{
+			{
+				ID: integrationID,
+				EmailProvider: domain.EmailProvider{
+					Kind:               domain.EmailProviderKindSMTP,
+					RateLimitPerMinute: 100,
+				},
+			},
+		},
+	}
+
+	entry := &domain.EmailQueueEntry{
+		ID:            entryID,
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: integrationID,
+		ContactEmail:  "victim@gmail.com",
+		MessageID:     "msg-cap",
+		Payload:       domain.EmailQueuePayload{RateLimitPerMinute: 100},
+		Attempts:      0,
+		MaxAttempts:   3,
+	}
+
+	// Déjà 1 envoi aujourd'hui → cap atteint.
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForContact(gomock.Any(), workspaceID, "victim@gmail.com", gomock.Any()).
+		Return(1, nil)
+
+	// Skip-and-reschedule : SetNextRetry appelé, mais PAS MarkAsProcessing,
+	// PAS SendEmail (gomock échoue si ces appels non attendus surviennent).
+	mockQueueRepo.EXPECT().
+		SetNextRetry(gomock.Any(), workspaceID, entryID, gomock.Any()).
+		Return(nil)
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo,
+		mockWorkspaceRepo,
+		mockEmailService,
+		mockMessageHistoryRepo,
+		DefaultWorkerConfig(),
+		mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	worker.processEntry(workspace, entry)
+
+	// L'entrée n'a pas consommé d'attempt (skip avant MarkAsProcessing).
+	assert.Equal(t, 0, entry.Attempts)
+}
+
+// TestEmailQueueWorker_ProcessEntry_NoDailyCapSends prouve la non-régression :
+// sans cap configuré, processEntry envoie normalement (le gate est un no-op).
+func TestEmailQueueWorker_ProcessEntry_NoDailyCapSends(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	const integrationID = "integration-1"
+	const entryID = "entry-ok"
+	const workspaceID = "workspace-1"
+
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		// Aucun cap → gate no-op, aucun COUNT attendu.
+		Integrations: []domain.Integration{
+			{
+				ID: integrationID,
+				EmailProvider: domain.EmailProvider{
+					Kind:               domain.EmailProviderKindSMTP,
+					RateLimitPerMinute: 100,
+				},
+			},
+		},
+	}
+
+	entry := &domain.EmailQueueEntry{
+		ID:            entryID,
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: integrationID,
+		ContactEmail:  "ok@gmail.com",
+		MessageID:     "msg-ok",
+		Payload:       domain.EmailQueuePayload{RateLimitPerMinute: 100},
+		MaxAttempts:   3,
+	}
+
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
+	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, entryID).Return(nil)
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo,
+		mockWorkspaceRepo,
+		mockEmailService,
+		mockMessageHistoryRepo,
+		DefaultWorkerConfig(),
+		mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	worker.processEntry(workspace, entry)
+}

@@ -210,6 +210,10 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_message_history_transactional_notification_id ON message_history(transactional_notification_id) WHERE transactional_notification_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_template_id ON message_history(template_id, template_version)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_created_at_id ON message_history(created_at DESC, id DESC)`,
+		// Veridian fork — plafond journalier cold outbound (V49) : cap par
+		// destinataire (contact_email, sent_at) + cap par classe (sent_at).
+		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_email_sent_at ON message_history(contact_email, sent_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_sent_at ON message_history(sent_at)`,
 		`CREATE TABLE IF NOT EXISTS transactional_notifications (
 			id VARCHAR(32) NOT NULL PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,

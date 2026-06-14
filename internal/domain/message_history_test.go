@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/url"
@@ -1452,5 +1453,74 @@ func TestChannelOptions_Scan_SQLErrors(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Equal(t, sql.ErrNoRows, err)
+	})
+}
+
+// Veridian — fake minimal qui n'implémente QUE les méthodes de comptage
+// journalier (les autres méthodes de l'interface sont héritées de l'embed nil,
+// jamais appelées ici). Exerce le contrat des nouvelles méthodes
+// CountSentSinceForContact / CountSentSinceForDomains du plafond journalier (R0)
+// sans vraie DB, et donne un compile-time check des signatures vs l'interface.
+type veridianDailyCapFakeRepo struct {
+	MessageHistoryRepository // embed nil : panique si une autre méthode est appelée
+	sentByContact            map[string]int
+	sentByDomain             map[string]int
+	gotSince                 time.Time
+}
+
+func (f *veridianDailyCapFakeRepo) CountSentSinceForContact(_ context.Context, _ string, contactEmail string, since time.Time) (int, error) {
+	f.gotSince = since
+	return f.sentByContact[contactEmail], nil
+}
+
+func (f *veridianDailyCapFakeRepo) CountSentSinceForDomains(_ context.Context, _ string, domains []string, exclude bool, _ time.Time) (int, error) {
+	total := 0
+	if exclude {
+		in := make(map[string]struct{}, len(domains))
+		for _, d := range domains {
+			in[d] = struct{}{}
+		}
+		for d, n := range f.sentByDomain {
+			if _, ok := in[d]; !ok {
+				total += n
+			}
+		}
+		return total, nil
+	}
+	for _, d := range domains {
+		total += f.sentByDomain[d]
+	}
+	return total, nil
+}
+
+func TestMessageHistoryRepository_DailyCapContract(t *testing.T) {
+	// compile-time : le fake satisfait bien l'interface étendue.
+	var _ MessageHistoryRepository = (*veridianDailyCapFakeRepo)(nil)
+
+	ctx := context.Background()
+	since := time.Date(2026, 6, 14, 0, 0, 0, 0, time.UTC)
+
+	repo := &veridianDailyCapFakeRepo{
+		sentByContact: map[string]int{"victim@gmail.com": 3},
+		sentByDomain:  map[string]int{"gmail.com": 5, "acme-corp.com": 2},
+	}
+
+	t.Run("per-contact count returns today's sends and forwards since", func(t *testing.T) {
+		n, err := repo.CountSentSinceForContact(ctx, "ws", "victim@gmail.com", since)
+		require.NoError(t, err)
+		assert.Equal(t, 3, n)
+		assert.Equal(t, since, repo.gotSince, "le since (minuit) doit être transmis tel quel")
+	})
+
+	t.Run("class count by inclusion sums matching domains", func(t *testing.T) {
+		n, err := repo.CountSentSinceForDomains(ctx, "ws", []string{"gmail.com", "googlemail.com"}, false, since)
+		require.NoError(t, err)
+		assert.Equal(t, 5, n)
+	})
+
+	t.Run("corporate count by exclusion sums non-listed domains", func(t *testing.T) {
+		n, err := repo.CountSentSinceForDomains(ctx, "ws", []string{"gmail.com"}, true, since)
+		require.NoError(t, err)
+		assert.Equal(t, 2, n)
 	})
 }

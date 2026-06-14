@@ -551,8 +551,10 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// V47 : table veridian_frozen_members (freeze per-user §5.21).
 		// V48 : workspaces.mail_provider_choice (INERTE depuis pivot stand-alone
 		// 2026-05-31 — colonne orpheline, lue par personne ; cf. v48.go header).
+		// V49 : index message_history (contact_email,sent_at)+(sent_at) pour le
+		// plafond journalier cold outbound (cf. v49.go header).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("48"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("49"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 

@@ -42,6 +42,31 @@ func TestEmailQueuePayload_VeridianProviderThrottleRoundTrip(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(`{"subject":"old","rate_limit_per_minute":25}`), &decoded))
 		assert.Empty(t, decoded.VeridianProviderClass)
 		assert.Nil(t, decoded.VeridianProviderClassRates)
+		assert.Nil(t, decoded.VeridianProviderClassDailyCap)
+		assert.Zero(t, decoded.VeridianPerRecipientDailyCap)
+	})
+
+	t.Run("daily caps survive JSON round-trip", func(t *testing.T) {
+		payload := EmailQueuePayload{
+			Subject:                       "s",
+			RateLimitPerMinute:            100,
+			VeridianProviderClassDailyCap: map[string]int{"google": 1, "microsoft": 50},
+			VeridianPerRecipientDailyCap:  1,
+		}
+		raw, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.Equal(t, map[string]int{"google": 1, "microsoft": 50}, decoded.VeridianProviderClassDailyCap)
+		assert.Equal(t, 1, decoded.VeridianPerRecipientDailyCap)
+	})
+
+	t.Run("daily caps omitted when unset", func(t *testing.T) {
+		raw, err := json.Marshal(EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_provider_class_daily_cap")
+		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
 	})
 }
 

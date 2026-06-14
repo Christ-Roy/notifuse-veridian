@@ -36,6 +36,36 @@ func (m *MockMessageHistoryRepository) EXPECT() *MockMessageHistoryRepositoryMoc
 	return m.recorder
 }
 
+// CountSentSinceForContact mocks base method.
+func (m *MockMessageHistoryRepository) CountSentSinceForContact(arg0 context.Context, arg1, arg2 string, arg3 time.Time) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountSentSinceForContact", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountSentSinceForContact indicates an expected call of CountSentSinceForContact.
+func (mr *MockMessageHistoryRepositoryMockRecorder) CountSentSinceForContact(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountSentSinceForContact", reflect.TypeOf((*MockMessageHistoryRepository)(nil).CountSentSinceForContact), arg0, arg1, arg2, arg3)
+}
+
+// CountSentSinceForDomains mocks base method.
+func (m *MockMessageHistoryRepository) CountSentSinceForDomains(arg0 context.Context, arg1 string, arg2 []string, arg3 bool, arg4 time.Time) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountSentSinceForDomains", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountSentSinceForDomains indicates an expected call of CountSentSinceForDomains.
+func (mr *MockMessageHistoryRepositoryMockRecorder) CountSentSinceForDomains(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountSentSinceForDomains", reflect.TypeOf((*MockMessageHistoryRepository)(nil).CountSentSinceForDomains), arg0, arg1, arg2, arg3, arg4)
+}
+
 // Create mocks base method.
 func (m *MockMessageHistoryRepository) Create(arg0 context.Context, arg1, arg2 string, arg3 *domain.MessageHistory) error {
 	m.ctrl.T.Helper()

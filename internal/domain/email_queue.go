@@ -89,6 +89,14 @@ type EmailQueuePayload struct {
 	// Vides = comportement upstream inchangé. Cf. domain/veridian_provider_class.go.
 	VeridianProviderClass      string             `json:"veridian_provider_class,omitempty"`
 	VeridianProviderClassRates map[string]float64 `json:"veridian_provider_class_rates,omitempty"`
+
+	// Veridian fork — plafonds JOURNALIERS (cold outbound). Distincts du débit
+	// par minute ci-dessus : ce sont des volumes maximaux par jour calendaire
+	// (source de vérité = COUNT message_history depuis minuit, cf.
+	// veridian_daily_cap.go). Copiés à l'enqueue depuis broadcast.metadata ;
+	// fallback workspace lu en live par le worker. 0/vide = pas de plafond.
+	VeridianProviderClassDailyCap map[string]int `json:"veridian_provider_class_daily_cap,omitempty"`
+	VeridianPerRecipientDailyCap  int            `json:"veridian_per_recipient_daily_cap,omitempty"`
 }
 
 // ToSendEmailProviderRequest converts the payload to a SendEmailProviderRequest

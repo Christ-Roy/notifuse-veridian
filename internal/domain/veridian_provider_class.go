@@ -33,6 +33,18 @@ const (
 // portant la map {classe: emails/minute} pour ce broadcast.
 const VeridianProviderClassRatesMetadataKey = "veridian_provider_class_rates"
 
+// VeridianProviderClassDailyCapMetadataKey est la clé de broadcast.Metadata
+// portant la map {classe: emails/jour MAX} pour ce broadcast. Plafond
+// JOURNALIER durable (≠ le débit par minute des rates) : protège la réputation
+// d'envoi en limitant le volume quotidien vers une classe receveuse entière.
+// 0 ou absent = pas de plafond journalier (le débit minute reste appliqué).
+const VeridianProviderClassDailyCapMetadataKey = "veridian_provider_class_daily_cap"
+
+// VeridianPerRecipientDailyCapMetadataKey est la clé de broadcast.Metadata
+// portant le plafond JOURNALIER d'envois vers une MÊME adresse (anti-harcèlement
+// du même contact). Entier global (non keyé par classe). 0 ou absent = illimité.
+const VeridianPerRecipientDailyCapMetadataKey = "veridian_per_recipient_daily_cap"
+
 // veridianProviderClassSet permet la validation O(1) d'une valeur canonique.
 var veridianProviderClassSet = map[string]struct{}{
 	ProviderClassGoogle:     {},
@@ -110,6 +122,34 @@ func IsValidProviderClass(s string) bool {
 	return ok
 }
 
+// VeridianDomainsForClass retourne la liste des domaines connus d'une classe et
+// un booléen `exclude`. Pour les classes adossées à une table de suffixes
+// (google/microsoft/yahoo_aol/freemail_fr), `exclude=false` et la liste contient
+// leurs domaines. Pour `corporate` (= tout domaine inconnu), `exclude=true` et
+// la liste contient TOUS les domaines connus à exclure. Classe inconnue → liste
+// vide, exclude=false (aucun domaine ne matche). Sert au COUNT par classe du
+// plafond journalier (la classe n'est pas matérialisée en DB, on la dérive par
+// domaines — cf. CountSentSinceForDomains).
+func VeridianDomainsForClass(class string) (domains []string, exclude bool) {
+	if class == ProviderClassCorporate {
+		all := make([]string, 0, len(veridianProviderDomainTable))
+		for d := range veridianProviderDomainTable {
+			all = append(all, d)
+		}
+		return all, true
+	}
+	if !IsValidProviderClass(class) {
+		return nil, false
+	}
+	matched := make([]string, 0, 16)
+	for d, c := range veridianProviderDomainTable {
+		if c == class {
+			matched = append(matched, d)
+		}
+	}
+	return matched, false
+}
+
 // ClassifyProviderClass dérive la classe de provider destinataire depuis
 // l'adresse email (V1 : suffixe de domaine). Fallback corporate pour tout
 // domaine inconnu, email invalide ou vide — jamais d'erreur, jamais de panic.
@@ -168,6 +208,85 @@ func VeridianProviderClassRatesFromMetadata(metadata MapOfAny) map[string]float6
 	return rates
 }
 
+// VeridianProviderClassDailyCapFromMetadata extrait la map {classe: cap/jour}
+// d'un broadcast.Metadata. Seules les classes canoniques avec un cap entier
+// strictement positif sont retenues (un cap <= 0 = pas de plafond, on l'ignore
+// donc plutôt que de bloquer tout envoi). Config malformée → nil = pas de cap
+// journalier classe, comme l'extraction des rates (dégradation gracieuse).
+func VeridianProviderClassDailyCapFromMetadata(metadata MapOfAny) map[string]int {
+	if metadata == nil {
+		return nil
+	}
+	raw, ok := metadata[VeridianProviderClassDailyCapMetadataKey]
+	if !ok {
+		return nil
+	}
+
+	caps := make(map[string]int)
+	switch m := raw.(type) {
+	case map[string]any:
+		for class, v := range m {
+			if !IsValidProviderClass(class) {
+				continue
+			}
+			if cap, ok := veridianToInt(v); ok && cap > 0 {
+				caps[class] = cap
+			}
+		}
+	case map[string]int:
+		for class, cap := range m {
+			if IsValidProviderClass(class) && cap > 0 {
+				caps[class] = cap
+			}
+		}
+	case map[string]float64:
+		for class, cap := range m {
+			if IsValidProviderClass(class) && cap > 0 {
+				caps[class] = int(cap)
+			}
+		}
+	}
+
+	if len(caps) == 0 {
+		return nil
+	}
+	return caps
+}
+
+// VeridianPerRecipientDailyCapFromMetadata extrait le plafond journalier par
+// destinataire d'un broadcast.Metadata. Retourne 0 si absent, malformé ou <= 0
+// (0 = illimité, sémantique opt-in).
+func VeridianPerRecipientDailyCapFromMetadata(metadata MapOfAny) int {
+	if metadata == nil {
+		return 0
+	}
+	raw, ok := metadata[VeridianPerRecipientDailyCapMetadataKey]
+	if !ok {
+		return 0
+	}
+	if cap, ok := veridianToInt(raw); ok && cap > 0 {
+		return cap
+	}
+	return 0
+}
+
+// veridianToInt normalise les types numériques possibles après un round-trip
+// JSON (float64) ou une construction Go directe (int). Les valeurs
+// fractionnaires sont tronquées (un cap journalier est un entier).
+func veridianToInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	case float32:
+		return int(n), true
+	}
+	return 0, false
+}
+
 // veridianToFloat normalise les types numériques possibles après un
 // round-trip JSON (float64) ou une construction Go directe (int).
 func veridianToFloat(v any) (float64, bool) {
@@ -214,6 +333,12 @@ func VeridianApplyProviderThrottle(entry *EmailQueueEntry, broadcast *Broadcast,
 	if broadcast != nil {
 		if rates := VeridianProviderClassRatesFromMetadata(broadcast.Metadata); len(rates) > 0 {
 			entry.Payload.VeridianProviderClassRates = rates
+		}
+		if caps := VeridianProviderClassDailyCapFromMetadata(broadcast.Metadata); len(caps) > 0 {
+			entry.Payload.VeridianProviderClassDailyCap = caps
+		}
+		if cap := VeridianPerRecipientDailyCapFromMetadata(broadcast.Metadata); cap > 0 {
+			entry.Payload.VeridianPerRecipientDailyCap = cap
 		}
 	}
 }

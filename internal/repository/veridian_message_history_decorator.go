@@ -134,6 +134,16 @@ func (d *VeridianMessageHistoryDecorator) DeleteForEmail(ctx context.Context, wo
 	return d.upstream.DeleteForEmail(ctx, workspaceID, email)
 }
 
+// CountSentSinceForContact : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) CountSentSinceForContact(ctx context.Context, workspaceID, contactEmail string, since time.Time) (int, error) {
+	return d.upstream.CountSentSinceForContact(ctx, workspaceID, contactEmail, since)
+}
+
+// CountSentSinceForDomains : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) CountSentSinceForDomains(ctx context.Context, workspaceID string, domains []string, exclude bool, since time.Time) (int, error) {
+	return d.upstream.CountSentSinceForDomains(ctx, workspaceID, domains, exclude, since)
+}
+
 // incrementQuota appelle planRepo.IncrementEmailsSent en best-effort.
 // Erreur "workspace not found" = workspace pas gere par Veridian (self-hosted
 // ou ancien workspace avant migration) → log Debug et passe. Autres erreurs

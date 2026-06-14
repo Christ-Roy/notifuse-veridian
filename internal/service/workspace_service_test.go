@@ -1056,8 +1056,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
-			VeridianProviderClassRates: map[string]float64{"google": 0.5, "corporate": 30},
-			VeridianOpenPixelByClass:   map[string]bool{"google": false, "freemail_fr": true},
+			VeridianProviderClassRates:    map[string]float64{"google": 0.5, "corporate": 30},
+			VeridianOpenPixelByClass:      map[string]bool{"google": false, "freemail_fr": true},
+			VeridianProviderClassDailyCap: map[string]int{"google": 1, "microsoft": 50},
+			VeridianPerRecipientDailyCap:  1,
 		}
 		existing := &domain.Workspace{
 			ID:       workspaceID,
@@ -1082,6 +1084,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.Equal(t, float64(30), saved.Settings.VeridianProviderClassRates["corporate"])
 		assert.False(t, saved.Settings.VeridianOpenPixelByClass["google"])
 		assert.True(t, saved.Settings.VeridianOpenPixelByClass["freemail_fr"])
+		// Plafonds journaliers (R0) : même allowlist, même anti-régression.
+		assert.Equal(t, 1, saved.Settings.VeridianProviderClassDailyCap["google"])
+		assert.Equal(t, 50, saved.Settings.VeridianProviderClassDailyCap["microsoft"])
+		assert.Equal(t, 1, saved.Settings.VeridianPerRecipientDailyCap)
 	})
 }
 

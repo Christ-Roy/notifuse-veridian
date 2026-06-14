@@ -361,6 +361,19 @@ type WorkspaceSettings struct {
 	// data-driven (ex. réactiver google si les tests délivrabilité passent).
 	VeridianOpenPixelByClass map[string]bool `json:"veridian_open_pixel_by_class,omitempty"`
 
+	// Veridian fork — plafond JOURNALIER d'envois par classe de provider
+	// destinataire pour ce workspace (emails/jour MAX). Fallback quand un
+	// broadcast ne définit pas veridian_provider_class_daily_cap dans son
+	// metadata. Vide = pas de plafond journalier classe (le débit minute
+	// veridian_provider_class_rates reste appliqué). Source de vérité du
+	// compteur : COUNT message_history depuis minuit. Cf. veridian_daily_cap.go.
+	VeridianProviderClassDailyCap map[string]int `json:"veridian_provider_class_daily_cap,omitempty"`
+
+	// Veridian fork — plafond JOURNALIER d'envois vers une MÊME adresse
+	// (anti-harcèlement). Entier global, non keyé par classe. Fallback quand un
+	// broadcast ne définit pas veridian_per_recipient_daily_cap. 0 = illimité.
+	VeridianPerRecipientDailyCap int `json:"veridian_per_recipient_daily_cap,omitempty"`
+
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
 }

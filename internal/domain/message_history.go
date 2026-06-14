@@ -189,6 +189,21 @@ type MessageHistoryRepository interface {
 
 	// DeleteForEmail deletes all message history records for a specific email
 	DeleteForEmail(ctx context.Context, workspaceID, email string) error
+
+	// CountSentSinceForContact compte les messages envoyés à un destinataire
+	// depuis l'instant `since` (typiquement minuit du jour courant). Sert au
+	// plafond JOURNALIER par destinataire (anti-harcèlement). Indexé sur
+	// (contact_email, sent_at). Cf. veridian_daily_cap.go.
+	CountSentSinceForContact(ctx context.Context, workspaceID, contactEmail string, since time.Time) (int, error)
+
+	// CountSentSinceForDomains compte les messages envoyés depuis `since` vers
+	// les destinataires d'un ensemble de domaines (classe de provider concrète,
+	// ex. tous les domaines gmail/google). Si `exclude` est true, compte au
+	// contraire les destinataires HORS de ces domaines (classe "corporate" =
+	// tout domaine inconnu). La classe n'étant pas stockée en DB, on filtre par
+	// la liste de domaines dérivée en Go. Sert au plafond JOURNALIER par classe
+	// (réputation). Cf. veridian_daily_cap.go.
+	CountSentSinceForDomains(ctx context.Context, workspaceID string, domains []string, exclude bool, since time.Time) (int, error)
 }
 
 // MessageHistoryService defines methods for interacting with message history

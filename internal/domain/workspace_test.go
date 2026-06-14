@@ -346,6 +346,35 @@ func (m *mockScanner) Scan(dest ...interface{}) error {
 	return nil
 }
 
+// Veridian — les plafonds journaliers cold outbound (R0) doivent survivre au
+// round-trip JSONB des settings workspace et rester absents quand non
+// configurés (compat ascendante : un workspace pré-deploy n'a pas ces clés).
+func TestWorkspaceSettings_VeridianDailyCapRoundTrip(t *testing.T) {
+	t.Run("caps survive JSON round-trip", func(t *testing.T) {
+		settings := WorkspaceSettings{
+			Timezone:                      "UTC",
+			DefaultLanguage:               "en",
+			Languages:                     []string{"en"},
+			VeridianProviderClassDailyCap: map[string]int{"google": 1, "microsoft": 50},
+			VeridianPerRecipientDailyCap:  1,
+		}
+		raw, err := json.Marshal(settings)
+		require.NoError(t, err)
+
+		var decoded WorkspaceSettings
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.Equal(t, map[string]int{"google": 1, "microsoft": 50}, decoded.VeridianProviderClassDailyCap)
+		assert.Equal(t, 1, decoded.VeridianPerRecipientDailyCap)
+	})
+
+	t.Run("omitted when unset", func(t *testing.T) {
+		raw, err := json.Marshal(WorkspaceSettings{Timezone: "UTC"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_provider_class_daily_cap")
+		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
+	})
+}
+
 func TestScanWorkspace(t *testing.T) {
 	now := time.Now()
 	settingsJSON, _ := json.Marshal(WorkspaceSettings{

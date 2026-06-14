@@ -305,6 +305,22 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Veridian fork: recipient/class DAILY CAP gate (cold outbound). Durable
+	// daily ceiling backed by message_history (survives worker restarts, unlike
+	// the in-memory minute throttle above). Same skip-and-reschedule contract,
+	// also placed BEFORE MarkAsProcessing. No-op without configuration.
+	// Cf. veridian_daily_cap.go.
+	if delay, capped := w.veridianDailyCapGate(workspace, entry); capped {
+		nextRetry := time.Now().Add(delay)
+		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Warn("Failed to set next retry for daily cap skip")
+		}
+		return
+	}
+
 	// Mark as processing (this increments attempts)
 	if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
 		w.logger.WithFields(map[string]interface{}{

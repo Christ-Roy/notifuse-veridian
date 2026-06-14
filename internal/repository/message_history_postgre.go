@@ -13,6 +13,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/Notifuse/notifuse/pkg/tracing"
+	"github.com/lib/pq"
 )
 
 // MessageHistoryRepository implements domain.MessageHistoryRepository
@@ -1251,4 +1252,65 @@ func (r *MessageHistoryRepository) DeleteForEmail(ctx context.Context, workspace
 	_ = rows
 
 	return nil
+}
+
+// CountSentSinceForContact compte les messages envoyés à un destinataire depuis
+// `since`. Plafond journalier par destinataire (anti-harcèlement). S'appuie sur
+// l'index (contact_email, sent_at) posé par V49 : le filtre email est ultra
+// sélectif (peu de messages par destinataire), le COUNT est donc index-only.
+func (r *MessageHistoryRepository) CountSentSinceForContact(ctx context.Context, workspaceID, contactEmail string, since time.Time) (int, error) {
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COUNT(*) FROM message_history WHERE contact_email = $1 AND sent_at >= $2`
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, contactEmail, since).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count messages sent to contact since: %w", err)
+	}
+	return count, nil
+}
+
+// CountSentSinceForDomains compte les messages envoyés depuis `since` vers une
+// classe de provider concrète, identifiée par sa liste de domaines. Le domaine
+// destinataire est extrait à la lecture via split_part(contact_email,'@',2) :
+// la classe n'étant pas matérialisée en DB (décision V1, cf. ticket R0), on la
+// dérive ici par la même table de domaines qu'en Go. `exclude=true` inverse le
+// prédicat (classe "corporate" = tout domaine HORS des classes connues).
+//
+// Perf : filtré par sent_at (index idx_message_history_sent_at posé par V49).
+// Le volume cold quotidien (dizaines de k max) rend ce COUNT négligeable. Si un
+// jour il devient un point chaud, on matérialisera la classe sur message_history
+// (colonne + index additifs) — pas avant d'en mesurer le besoin.
+func (r *MessageHistoryRepository) CountSentSinceForDomains(ctx context.Context, workspaceID string, domains []string, exclude bool, since time.Time) (int, error) {
+	if len(domains) == 0 {
+		// Aucune classe connue à filtrer : un cap sur un ensemble vide n'a pas
+		// de sens (0 envoi matche), sauf en exclusion où "hors de rien" = tout.
+		if !exclude {
+			return 0, nil
+		}
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// lower() pour matcher la normalisation Go (ClassifyProviderClass lowercase
+	// le domaine). Les domaines passés sont déjà en minuscules.
+	op := "= ANY"
+	if exclude {
+		op = "<> ALL"
+	}
+	query := fmt.Sprintf(
+		`SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND lower(split_part(contact_email, '@', 2)) %s($2)`,
+		op,
+	)
+
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, since, pq.Array(domains)).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count messages sent to domain class since: %w", err)
+	}
+	return count, nil
 }

@@ -238,4 +238,127 @@ func TestVeridianApplyProviderThrottle(t *testing.T) {
 		VeridianApplyProviderThrottle(entry, broadcastWithRates, contact)
 		assert.Empty(t, entry.Payload.VeridianProviderClass)
 	})
+
+	t.Run("daily caps copied into payload from metadata", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		b := &Broadcast{
+			ID: "b3",
+			Metadata: MapOfAny{
+				VeridianProviderClassDailyCapMetadataKey: map[string]any{"google": float64(1), "microsoft": float64(5)},
+				VeridianPerRecipientDailyCapMetadataKey:  float64(1),
+			},
+		}
+		VeridianApplyProviderThrottle(entry, b, nil)
+		assert.Equal(t, map[string]int{"google": 1, "microsoft": 5}, entry.Payload.VeridianProviderClassDailyCap)
+		assert.Equal(t, 1, entry.Payload.VeridianPerRecipientDailyCap)
+	})
+
+	t.Run("no daily cap metadata leaves payload caps empty", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		VeridianApplyProviderThrottle(entry, broadcastWithRates, nil)
+		assert.Nil(t, entry.Payload.VeridianProviderClassDailyCap)
+		assert.Zero(t, entry.Payload.VeridianPerRecipientDailyCap)
+	})
+}
+
+func TestVeridianProviderClassDailyCapFromMetadata(t *testing.T) {
+	t.Run("nil metadata returns nil", func(t *testing.T) {
+		assert.Nil(t, VeridianProviderClassDailyCapFromMetadata(nil))
+	})
+
+	t.Run("missing key returns nil", func(t *testing.T) {
+		assert.Nil(t, VeridianProviderClassDailyCapFromMetadata(MapOfAny{"other": 1}))
+	})
+
+	t.Run("json round-trip float64 values", func(t *testing.T) {
+		md := MapOfAny{VeridianProviderClassDailyCapMetadataKey: map[string]any{
+			"google":    float64(50),
+			"microsoft": float64(20),
+		}}
+		got := VeridianProviderClassDailyCapFromMetadata(md)
+		assert.Equal(t, map[string]int{"google": 50, "microsoft": 20}, got)
+	})
+
+	t.Run("native map[string]int", func(t *testing.T) {
+		md := MapOfAny{VeridianProviderClassDailyCapMetadataKey: map[string]int{"yahoo_aol": 10}}
+		assert.Equal(t, map[string]int{"yahoo_aol": 10}, VeridianProviderClassDailyCapFromMetadata(md))
+	})
+
+	t.Run("non-canonical class and non-positive caps dropped", func(t *testing.T) {
+		md := MapOfAny{VeridianProviderClassDailyCapMetadataKey: map[string]any{
+			"google":  float64(1),
+			"gmail":   float64(99), // non canonique → ignoré
+			"corporate": float64(0),  // <= 0 → ignoré
+			"freemail_fr": float64(-3), // négatif → ignoré
+		}}
+		assert.Equal(t, map[string]int{"google": 1}, VeridianProviderClassDailyCapFromMetadata(md))
+	})
+
+	t.Run("all dropped returns nil", func(t *testing.T) {
+		md := MapOfAny{VeridianProviderClassDailyCapMetadataKey: map[string]any{"gmail": float64(5)}}
+		assert.Nil(t, VeridianProviderClassDailyCapFromMetadata(md))
+	})
+}
+
+func TestVeridianPerRecipientDailyCapFromMetadata(t *testing.T) {
+	t.Run("nil metadata returns 0", func(t *testing.T) {
+		assert.Zero(t, VeridianPerRecipientDailyCapFromMetadata(nil))
+	})
+
+	t.Run("missing key returns 0", func(t *testing.T) {
+		assert.Zero(t, VeridianPerRecipientDailyCapFromMetadata(MapOfAny{"x": 1}))
+	})
+
+	t.Run("float64 round-trip", func(t *testing.T) {
+		md := MapOfAny{VeridianPerRecipientDailyCapMetadataKey: float64(1)}
+		assert.Equal(t, 1, VeridianPerRecipientDailyCapFromMetadata(md))
+	})
+
+	t.Run("native int", func(t *testing.T) {
+		md := MapOfAny{VeridianPerRecipientDailyCapMetadataKey: 3}
+		assert.Equal(t, 3, VeridianPerRecipientDailyCapFromMetadata(md))
+	})
+
+	t.Run("zero or negative returns 0 (unlimited)", func(t *testing.T) {
+		assert.Zero(t, VeridianPerRecipientDailyCapFromMetadata(MapOfAny{VeridianPerRecipientDailyCapMetadataKey: float64(0)}))
+		assert.Zero(t, VeridianPerRecipientDailyCapFromMetadata(MapOfAny{VeridianPerRecipientDailyCapMetadataKey: float64(-1)}))
+	})
+
+	t.Run("non-numeric returns 0", func(t *testing.T) {
+		assert.Zero(t, VeridianPerRecipientDailyCapFromMetadata(MapOfAny{VeridianPerRecipientDailyCapMetadataKey: "nope"}))
+	})
+}
+
+func TestVeridianDomainsForClass(t *testing.T) {
+	t.Run("google returns gmail domains, not excluded", func(t *testing.T) {
+		domains, exclude := VeridianDomainsForClass(ProviderClassGoogle)
+		assert.False(t, exclude)
+		assert.Contains(t, domains, "gmail.com")
+		assert.Contains(t, domains, "googlemail.com")
+		// ne doit pas contenir un domaine d'une autre classe
+		assert.NotContains(t, domains, "outlook.com")
+	})
+
+	t.Run("corporate returns ALL known domains, excluded", func(t *testing.T) {
+		domains, exclude := VeridianDomainsForClass(ProviderClassCorporate)
+		assert.True(t, exclude)
+		// la liste corporate = tous les domaines connus à EXCLURE
+		assert.Contains(t, domains, "gmail.com")
+		assert.Contains(t, domains, "outlook.com")
+		assert.Contains(t, domains, "orange.fr")
+		assert.Greater(t, len(domains), 20)
+	})
+
+	t.Run("unknown class returns empty, not excluded", func(t *testing.T) {
+		domains, exclude := VeridianDomainsForClass("not_a_class")
+		assert.False(t, exclude)
+		assert.Empty(t, domains)
+	})
+
+	t.Run("each known class returns only its own domains", func(t *testing.T) {
+		ms, _ := VeridianDomainsForClass(ProviderClassMicrosoft)
+		for _, d := range ms {
+			assert.Equal(t, ProviderClassMicrosoft, ClassifyProviderClass("x@"+d), "domaine %s mal classé", d)
+		}
+	})
 }

@@ -402,6 +402,8 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	// attendu : vider l'UI revient au défaut tunnel).
 	existingWorkspace.Settings.VeridianProviderClassRates = settings.VeridianProviderClassRates
 	existingWorkspace.Settings.VeridianOpenPixelByClass = settings.VeridianOpenPixelByClass
+	existingWorkspace.Settings.VeridianProviderClassDailyCap = settings.VeridianProviderClassDailyCap
+	existingWorkspace.Settings.VeridianPerRecipientDailyCap = settings.VeridianPerRecipientDailyCap
 
 	// Handle template blocks - preserve existing blocks if not provided in update
 	// Note: Template blocks should be managed via dedicated /api/templateBlocks.* endpoints

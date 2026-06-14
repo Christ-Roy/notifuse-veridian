@@ -1,0 +1,21 @@
+# Allowlist migration safety (Constitution CI §12 — override justifié).
+#
+# Le check-migration-safety.sh exige CREATE INDEX CONCURRENTLY. Or les
+# migrations Notifuse tournent DANS une transaction (internal/migrations/
+# manager.go : BeginTx pour UpdateSystem ET UpdateWorkspace) et Postgres
+# INTERDIT CREATE INDEX CONCURRENTLY dans une transaction. CONCURRENTLY est
+# donc structurellement impossible dans ce runner — contrainte déjà documentée
+# dans v33.go/v46.go (commentaires "version CONCURRENTLY ne peut pas etre dans
+# une TX").
+#
+# Le CREATE INDEX simple est le pattern ÉTABLI pour les index message_history
+# de ce repo (v21 idx_broadcast_id, v28 idx_transactional_notification_id, +
+# tous les index de init.go). Le lock AccessExclusiveLock est court et borné
+# par la taille de la table de CHAQUE workspace (multi-tenant par DB : pas de
+# table globale géante). Sur le volume cold outbound, négligeable. Si un
+# workspace devient très volumineux, le retrait/recréation de l'index se fera
+# via une migration hors-TX dédiée (pattern à introduire si le besoin se mesure).
+#
+# Une ligne = un fichier de migration autorisé (chemin exact, matché par
+# grep -Fxq dans check-migration-safety.sh).
+internal/migrations/v49.go
