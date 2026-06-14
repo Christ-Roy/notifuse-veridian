@@ -1797,3 +1797,51 @@ func TestEmailOptions_ToChannelOptions(t *testing.T) {
 		assert.Empty(t, channelOptions.ReplyTo)
 	})
 }
+
+// TestEmailProviderVeridianInfraCascadeFields vérifie le round-trip JSON des 3
+// champs Veridian de config cold outbound PAR INFRA (R2). Ces champs sont
+// persistés via le JSON blob `integrations` (pas d'allowlist champ-par-champ) :
+// le round-trip prouve qu'ils survivent à la persistance sans modif du repo.
+func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
+	t.Run("round-trip JSON conserve les 3 champs infra", func(t *testing.T) {
+		p := EmailProvider{
+			Kind:                          EmailProviderKindSMTP,
+			RateLimitPerMinute:            600,
+			VeridianProviderClassRates:    map[string]float64{"google": 0.5, "microsoft": 1},
+			VeridianProviderClassDailyCap: map[string]int{"google": 50},
+			VeridianPerRecipientDailyCap:  1,
+		}
+
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+
+		var got EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &got))
+		assert.Equal(t, map[string]float64{"google": 0.5, "microsoft": 1}, got.VeridianProviderClassRates)
+		assert.Equal(t, map[string]int{"google": 50}, got.VeridianProviderClassDailyCap)
+		assert.Equal(t, 1, got.VeridianPerRecipientDailyCap)
+	})
+
+	t.Run("champs omitempty absents du JSON quand non configurés", func(t *testing.T) {
+		p := EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_provider_class_rates")
+		assert.NotContains(t, string(raw), "veridian_provider_class_daily_cap")
+		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
+	})
+
+	t.Run("Validate ignore les champs Veridian (pas de contrainte ajoutée)", func(t *testing.T) {
+		p := EmailProvider{
+			Kind:                       EmailProviderKindSMTP,
+			RateLimitPerMinute:         600,
+			Senders:                    []EmailSender{{ID: "", Email: "s@example.com", Name: "S", IsDefault: true}},
+			SMTP:                       &SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p"},
+			VeridianProviderClassRates: map[string]float64{"google": 0.5},
+		}
+		// Les champs Veridian n'ajoutent aucune règle de validation : seul le
+		// socle upstream (rate>0, sender valide, settings SMTP) est vérifié.
+		err := p.Validate("test-passphrase")
+		assert.NoError(t, err)
+	})
+}

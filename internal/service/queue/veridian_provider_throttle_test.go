@@ -100,7 +100,7 @@ func TestVeridianProviderClassGate_NoConfigIsNoop(t *testing.T) {
 	// Aucune config (ni payload ni workspace) : jamais throttlé, même appelé
 	// en rafale — non-régression stricte du comportement upstream.
 	for i := 0; i < 10; i++ {
-		delay, throttled := env.worker.veridianProviderClassGate(workspace, entry)
+		delay, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
 		assert.False(t, throttled)
 		assert.Zero(t, delay)
 	}
@@ -112,12 +112,12 @@ func TestVeridianProviderClassGate_WorkspaceDefaultsApply(t *testing.T) {
 	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
 
 	// 1er passage : token consommé, pas de throttle
-	delay, throttled := env.worker.veridianProviderClassGate(workspace, entry)
+	delay, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
 	assert.False(t, throttled)
 	assert.Zero(t, delay)
 
 	// 2e passage immédiat : throttlé, délai ≈ 60s (1/min), borné [1s, 5min]
-	delay, throttled = env.worker.veridianProviderClassGate(workspace, entry)
+	delay, throttled = env.worker.veridianProviderClassGate(workspace, nil, entry)
 	assert.True(t, throttled)
 	assert.GreaterOrEqual(t, delay, time.Second)
 	assert.LessOrEqual(t, delay, veridianMaxProviderClassRetryDelay)
@@ -131,9 +131,9 @@ func TestVeridianProviderClassGate_PayloadRatesTakePrecedence(t *testing.T) {
 		VeridianProviderClassRates: map[string]float64{"google": 1},
 	})
 
-	_, throttled := env.worker.veridianProviderClassGate(workspace, entry)
+	_, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
 	require.False(t, throttled)
-	_, throttled = env.worker.veridianProviderClassGate(workspace, entry)
+	_, throttled = env.worker.veridianProviderClassGate(workspace, nil, entry)
 	assert.True(t, throttled, "les débits du broadcast (payload) doivent primer sur le workspace")
 }
 
@@ -147,9 +147,9 @@ func TestVeridianProviderClassGate_ContactTagOverridesClassification(t *testing.
 		VeridianProviderClass: "google",
 	})
 
-	_, throttled := env.worker.veridianProviderClassGate(workspace, entry)
+	_, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
 	require.False(t, throttled)
-	_, throttled = env.worker.veridianProviderClassGate(workspace, entry)
+	_, throttled = env.worker.veridianProviderClassGate(workspace, nil, entry)
 	assert.True(t, throttled, "le tag contact doit primer sur la classification par suffixe")
 }
 
@@ -160,7 +160,7 @@ func TestVeridianProviderClassGate_UnconfiguredClassNotThrottled(t *testing.T) {
 	entry := veridianTestEntry("e1", "contact@boitepro.fr", domain.EmailQueuePayload{})
 
 	for i := 0; i < 10; i++ {
-		_, throttled := env.worker.veridianProviderClassGate(workspace, entry)
+		_, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
 		assert.False(t, throttled)
 	}
 }
@@ -172,9 +172,9 @@ func TestVeridianProviderClassGate_DelayCappedForSlowRates(t *testing.T) {
 	workspace := veridianTestWorkspace(map[string]float64{"google": 0.005}, 6000)
 	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
 
-	_, throttled := env.worker.veridianProviderClassGate(workspace, entry)
+	_, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
 	require.False(t, throttled)
-	delay, throttled := env.worker.veridianProviderClassGate(workspace, entry)
+	delay, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
 	require.True(t, throttled)
 	assert.Equal(t, veridianMaxProviderClassRetryDelay, delay)
 }
@@ -295,7 +295,7 @@ func TestVeridianProviderClassGate_ConcurrentWorkspacesNoRace(t *testing.T) {
 				entry.IntegrationID = ws.Integrations[0].ID
 				// On ne fait que solliciter le gate (lecture + Allow) : pas de
 				// repo touché, c'est le chemin concurrent partagé qu'on stresse.
-				env.worker.veridianProviderClassGate(ws, entry)
+				env.worker.veridianProviderClassGate(ws, nil, entry)
 			}
 		}(g)
 	}

@@ -30,8 +30,9 @@ import (
 //     la classe (dérivée en Go).
 //
 // Résolution de la config (du plus spécifique au plus général), identique aux
-// rates : payload (copié à l'enqueue depuis broadcast.metadata) → workspace
-// settings (lus en live) → rien = no-op strict (non-régression upstream).
+// rates : payload (copié à l'enqueue depuis broadcast.metadata) → infra
+// (EmailProvider, R2) → workspace settings (lus en live) → rien = no-op strict
+// (non-régression upstream).
 //
 // Best-effort : une erreur DB sur le COUNT NE bloque PAS l'envoi (on dégrade
 // vers "pas de cap" et on log), pour ne jamais geler le pipeline sur un incident
@@ -51,17 +52,30 @@ func veridianStartOfDayUTC(now time.Time) time.Time {
 	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// veridianResolveDailyCaps fusionne la config payload (override broadcast) et
-// les défauts workspace. Retourne le cap classe (map, peut être nil) et le cap
-// destinataire (0 = illimité).
-func veridianResolveDailyCaps(workspace *domain.Workspace, entry *domain.EmailQueueEntry) (classCaps map[string]int, perRecipientCap int) {
-	classCaps = entry.Payload.VeridianProviderClassDailyCap
-	if len(classCaps) == 0 && workspace != nil {
+// veridianResolveDailyCaps fusionne la config des trois niveaux de la cascade
+// (du plus spécifique au plus général) : payload broadcast → infra
+// (EmailProvider, R2) → workspace. Le cap classe et le cap destinataire sont
+// résolus INDÉPENDAMMENT (chacun prend son premier niveau non vide) : une infra
+// peut poser son cap-classe et hériter le cap-destinataire du workspace.
+// provider peut être nil (legacy / intégration sans config Veridian) → niveau
+// sauté. Retourne le cap classe (map, peut être nil) et le cap destinataire
+// (0 = illimité).
+func veridianResolveDailyCaps(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (classCaps map[string]int, perRecipientCap int) {
+	switch {
+	case len(entry.Payload.VeridianProviderClassDailyCap) > 0:
+		classCaps = entry.Payload.VeridianProviderClassDailyCap
+	case provider != nil && len(provider.VeridianProviderClassDailyCap) > 0:
+		classCaps = provider.VeridianProviderClassDailyCap
+	case workspace != nil:
 		classCaps = workspace.Settings.VeridianProviderClassDailyCap
 	}
 
-	perRecipientCap = entry.Payload.VeridianPerRecipientDailyCap
-	if perRecipientCap <= 0 && workspace != nil {
+	switch {
+	case entry.Payload.VeridianPerRecipientDailyCap > 0:
+		perRecipientCap = entry.Payload.VeridianPerRecipientDailyCap
+	case provider != nil && provider.VeridianPerRecipientDailyCap > 0:
+		perRecipientCap = provider.VeridianPerRecipientDailyCap
+	case workspace != nil:
 		perRecipientCap = workspace.Settings.VeridianPerRecipientDailyCap
 	}
 	return classCaps, perRecipientCap
@@ -71,8 +85,8 @@ func veridianResolveDailyCaps(workspace *domain.Workspace, entry *domain.EmailQu
 // plafond journalier (destinataire ou classe). Retourne (délai, true) si
 // l'entrée doit être re-planifiée, (0, false) si elle peut partir (aucun cap
 // atteint) ou si aucun cap ne s'applique. No-op strict sans configuration.
-func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, entry *domain.EmailQueueEntry) (time.Duration, bool) {
-	classCaps, perRecipientCap := veridianResolveDailyCaps(workspace, entry)
+func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
+	classCaps, perRecipientCap := veridianResolveDailyCaps(workspace, provider, entry)
 	if len(classCaps) == 0 && perRecipientCap <= 0 {
 		return 0, false
 	}

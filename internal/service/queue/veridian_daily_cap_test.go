@@ -47,7 +47,7 @@ func TestVeridianResolveDailyCaps(t *testing.T) {
 			VeridianProviderClassDailyCap: map[string]int{"google": 1},
 			VeridianPerRecipientDailyCap:  1,
 		})
-		classCaps, perRecipient := veridianResolveDailyCaps(ws, entry)
+		classCaps, perRecipient := veridianResolveDailyCaps(ws, nil, entry)
 		assert.Equal(t, map[string]int{"google": 1}, classCaps)
 		assert.Equal(t, 1, perRecipient)
 	})
@@ -55,14 +55,14 @@ func TestVeridianResolveDailyCaps(t *testing.T) {
 	t.Run("falls back to workspace when payload empty", func(t *testing.T) {
 		ws := veridianTestWorkspaceWithCaps(map[string]int{"microsoft": 5}, 3)
 		entry := veridianTestEntry("e", "a@outlook.com", domain.EmailQueuePayload{})
-		classCaps, perRecipient := veridianResolveDailyCaps(ws, entry)
+		classCaps, perRecipient := veridianResolveDailyCaps(ws, nil, entry)
 		assert.Equal(t, map[string]int{"microsoft": 5}, classCaps)
 		assert.Equal(t, 3, perRecipient)
 	})
 
 	t.Run("nil workspace safe", func(t *testing.T) {
 		entry := veridianTestEntry("e", "a@gmail.com", domain.EmailQueuePayload{VeridianPerRecipientDailyCap: 2})
-		classCaps, perRecipient := veridianResolveDailyCaps(nil, entry)
+		classCaps, perRecipient := veridianResolveDailyCaps(nil, nil, entry)
 		assert.Nil(t, classCaps)
 		assert.Equal(t, 2, perRecipient)
 	})
@@ -74,7 +74,7 @@ func TestVeridianDailyCapGate_NoConfigIsNoop(t *testing.T) {
 	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
 
 	// Aucun cap : aucun COUNT ne doit être appelé, jamais cappé.
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.False(t, capped)
 	assert.Zero(t, delay)
 }
@@ -89,7 +89,7 @@ func TestVeridianDailyCapGate_PerRecipientReached(t *testing.T) {
 		CountSentSinceForContact(gomock.Any(), "ws-1", "victim@gmail.com", gomock.Any()).
 		Return(1, nil)
 
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.True(t, capped)
 	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 }
@@ -104,7 +104,7 @@ func TestVeridianDailyCapGate_PerRecipientUnderCapPasses(t *testing.T) {
 		CountSentSinceForContact(gomock.Any(), "ws-1", "ok@gmail.com", gomock.Any()).
 		Return(1, nil)
 
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.False(t, capped)
 	assert.Zero(t, delay)
 }
@@ -119,7 +119,7 @@ func TestVeridianDailyCapGate_ClassReached(t *testing.T) {
 		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
 		Return(50, nil)
 
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.True(t, capped)
 	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 }
@@ -133,7 +133,7 @@ func TestVeridianDailyCapGate_ClassUnderCapPasses(t *testing.T) {
 		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
 		Return(49, nil)
 
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.False(t, capped)
 	assert.Zero(t, delay)
 }
@@ -148,7 +148,7 @@ func TestVeridianDailyCapGate_CorporateUsesExclusion(t *testing.T) {
 		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), true, gomock.Any()).
 		Return(10, nil)
 
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.True(t, capped)
 	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 }
@@ -165,7 +165,7 @@ func TestVeridianDailyCapGate_PerRecipientWinsOverClass(t *testing.T) {
 		Return(1, nil)
 	// CountSentSinceForDomains NE doit PAS être appelé (court-circuit) — pas d'EXPECT.
 
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.True(t, capped)
 	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 }
@@ -183,7 +183,7 @@ func TestVeridianDailyCapGate_ClassCheckedWhenRecipientUnderCap(t *testing.T) {
 		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
 		Return(5, nil) // classe atteinte → skip
 
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.True(t, capped)
 	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 }
@@ -198,7 +198,7 @@ func TestVeridianDailyCapGate_CountErrorDegradesToAllow(t *testing.T) {
 			CountSentSinceForContact(gomock.Any(), "ws-1", "a@gmail.com", gomock.Any()).
 			Return(0, errors.New("db down"))
 
-		delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+		delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 		assert.False(t, capped, "une erreur de COUNT ne doit jamais bloquer l'envoi")
 		assert.Zero(t, delay)
 	})
@@ -212,7 +212,7 @@ func TestVeridianDailyCapGate_CountErrorDegradesToAllow(t *testing.T) {
 			CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
 			Return(0, errors.New("db down"))
 
-		delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+		delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 		assert.False(t, capped)
 		assert.Zero(t, delay)
 	})
@@ -225,7 +225,7 @@ func TestVeridianDailyCapGate_ClassWithoutCapForResolvedClassSkipsCount(t *testi
 	ws := veridianTestWorkspaceWithCaps(map[string]int{"microsoft": 5}, 0)
 	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
 
-	delay, capped := env.worker.veridianDailyCapGate(ws, entry)
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.False(t, capped)
 	assert.Zero(t, delay)
 }
@@ -242,6 +242,6 @@ func TestVeridianDailyCapGate_PayloadTagDrivesClass(t *testing.T) {
 		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
 		Return(1, nil)
 
-	_, capped := env.worker.veridianDailyCapGate(ws, entry)
+	_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.True(t, capped)
 }

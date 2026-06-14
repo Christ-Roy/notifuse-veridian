@@ -1458,3 +1458,75 @@ func TestEmailQueueWorker_ProcessEntry_NoDailyCapSends(t *testing.T) {
 
 	worker.processEntry(workspace, entry)
 }
+
+// TestEmailQueueWorker_ProcessEntry_VeridianInfraRateThrottle prouve que
+// processEntry passe bien l'infra (integration.EmailProvider) au gate de
+// throttle par classe (R2) : le débit Veridian est posé UNIQUEMENT sur
+// l'intégration (ni broadcast ni workspace), et il doit s'appliquer. Le 1er
+// envoi part (token burst), le 2e immédiat est reporté via SetNextRetry SANS
+// MarkAsProcessing ni SendEmail (skip-and-reschedule).
+func TestEmailQueueWorker_ProcessEntry_VeridianInfraRateThrottle(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	const workspaceID = "workspace-1"
+	const integrationID = "integration-1"
+
+	// Débit cold posé SUR L'INFRA uniquement (workspace.Settings vide, payload vide).
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{
+			{
+				ID: integrationID,
+				EmailProvider: domain.EmailProvider{
+					Kind:                       domain.EmailProviderKindSMTP,
+					RateLimitPerMinute:         6000,
+					VeridianProviderClassRates: map[string]float64{"google": 1}, // 1 mail/min
+				},
+			},
+		},
+	}
+
+	newEntry := func(id string) *domain.EmailQueueEntry {
+		return &domain.EmailQueueEntry{
+			ID:            id,
+			Status:        domain.EmailQueueStatusPending,
+			SourceType:    domain.EmailQueueSourceBroadcast,
+			SourceID:      "broadcast-1",
+			IntegrationID: integrationID,
+			ContactEmail:  "lead@gmail.com",
+			MessageID:     "msg-" + id,
+			Payload:       domain.EmailQueuePayload{RateLimitPerMinute: 6000},
+			MaxAttempts:   3,
+		}
+	}
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo, mockWorkspaceRepo, mockEmailService, mockMessageHistoryRepo,
+		DefaultWorkerConfig(), mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	// 1er envoi : token dispo → traité normalement.
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, "e1").Return(nil)
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
+	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, "e1").Return(nil)
+	worker.processEntry(workspace, newEntry("e1"))
+
+	// 2e envoi immédiat : token épuisé (1/min) → reporté via SetNextRetry, AUCUN
+	// MarkAsProcessing/SendEmail (preuve que le throttle INFRA s'applique via processEntry).
+	mockQueueRepo.EXPECT().SetNextRetry(gomock.Any(), workspaceID, "e2", gomock.Any()).Return(nil)
+	worker.processEntry(workspace, newEntry("e2"))
+}

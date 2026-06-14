@@ -22,8 +22,10 @@ import (
 // Résolution de la config (du plus spécifique au plus général) :
 //  1. débits du broadcast (copiés dans le payload à l'enqueue depuis
 //     broadcast.metadata["veridian_provider_class_rates"]) ;
-//  2. défauts du workspace (settings, lus en live — pas de staleness) ;
-//  3. rien → no-op strict, comportement upstream inchangé.
+//  2. débits de l'INFRA d'envoi (intégration EmailProvider, R2) — une IP en
+//     warm-up porte ses propres débits, indépendants du workspace ;
+//  3. défauts du workspace (settings, lus en live — pas de staleness) ;
+//  4. rien → no-op strict, comportement upstream inchangé.
 //
 // Résolution de la classe : tag contact posé en amont (payload, option B du
 // contrat provider_class), sinon classification locale par suffixe de domaine
@@ -35,15 +37,32 @@ import (
 // config sans attendre le prochain token théorique.
 const veridianMaxProviderClassRetryDelay = 5 * time.Minute
 
+// veridianResolveProviderClassRates fusionne la config des trois niveaux de la
+// cascade (du plus spécifique au plus général) : payload broadcast → infra
+// (EmailProvider) → workspace. Le premier niveau non vide gagne (pas de merge
+// par classe entre niveaux : un override infra REMPLACE le workspace, comme un
+// override broadcast remplace l'infra). provider peut être nil (cas legacy /
+// intégration sans config Veridian) → on saute simplement ce niveau.
+func veridianResolveProviderClassRates(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) map[string]float64 {
+	if rates := entry.Payload.VeridianProviderClassRates; len(rates) > 0 {
+		return rates
+	}
+	if provider != nil && len(provider.VeridianProviderClassRates) > 0 {
+		return provider.VeridianProviderClassRates
+	}
+	if workspace != nil && len(workspace.Settings.VeridianProviderClassRates) > 0 {
+		return workspace.Settings.VeridianProviderClassRates
+	}
+	return nil
+}
+
 // veridianProviderClassGate décide si l'entrée doit être reportée pour cause
 // de throttle par classe destinataire. Retourne (délai, true) si l'entrée doit
 // être re-planifiée, (0, false) si elle peut partir maintenant (un token a
-// alors été consommé) ou si aucun throttle classe ne s'applique.
-func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace, entry *domain.EmailQueueEntry) (time.Duration, bool) {
-	rates := entry.Payload.VeridianProviderClassRates
-	if len(rates) == 0 && workspace != nil {
-		rates = workspace.Settings.VeridianProviderClassRates
-	}
+// alors été consommé) ou si aucun throttle classe ne s'applique. provider est
+// l'infra d'envoi (intégration EmailProvider) déjà en main du worker au call-site.
+func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
+	rates := veridianResolveProviderClassRates(workspace, provider, entry)
 	if len(rates) == 0 {
 		return 0, false
 	}

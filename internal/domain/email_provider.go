@@ -63,6 +63,18 @@ type EmailProvider struct {
 	SendGrid           *SendGridSettings  `json:"sendgrid,omitempty"`
 	Senders            []EmailSender      `json:"senders"`
 	RateLimitPerMinute int                `json:"rate_limit_per_minute"`
+
+	// Veridian fork — config cold outbound PAR INFRA d'envoi (R2). L'infra
+	// d'envoi EST l'intégration (host/port/IP/relai SMTP + senders + son propre
+	// rate). Une IP fraîche en warm-up porte des débits/plafonds plus bas qu'une
+	// IP mature, indépendamment du workspace. Ces 3 champs s'insèrent comme
+	// niveau INTERMÉDIAIRE dans les cascades de config existantes (broadcast →
+	// INFRA → workspace) : cf. veridian_provider_throttle.go (rates) et
+	// veridian_daily_cap.go (caps). Tous omitempty → infra non configurée =
+	// héritage workspace, comportement upstream strictement inchangé.
+	VeridianProviderClassRates    map[string]float64 `json:"veridian_provider_class_rates,omitempty"`
+	VeridianProviderClassDailyCap map[string]int     `json:"veridian_provider_class_daily_cap,omitempty"`
+	VeridianPerRecipientDailyCap  int                `json:"veridian_per_recipient_daily_cap,omitempty"`
 }
 
 // Validate validates the email provider settings
@@ -310,9 +322,9 @@ func (e *EmailProvider) DecryptSecretKeys(passphrase string) error {
 }
 
 type EmailOptions struct {
-	FromName           *string      `json:"from_name,omitempty"`        // Override default sender from name
-	Subject            *string      `json:"subject,omitempty"`          // Override template subject
-	SubjectPreview     *string      `json:"subject_preview,omitempty"`  // Override template preheader
+	FromName           *string      `json:"from_name,omitempty"`       // Override default sender from name
+	Subject            *string      `json:"subject,omitempty"`         // Override template subject
+	SubjectPreview     *string      `json:"subject_preview,omitempty"` // Override template preheader
 	CC                 []string     `json:"cc,omitempty"`
 	BCC                []string     `json:"bcc,omitempty"`
 	ReplyTo            string       `json:"reply_to,omitempty"`
@@ -396,9 +408,9 @@ func (r *SendEmailProviderRequest) Validate() error {
 // SendEmailRequest encapsulates all parameters needed to send an email using a template
 type SendEmailRequest struct {
 	// Core identification
-	WorkspaceID   string `validate:"required"`
-	IntegrationID string `validate:"required"`
-	MessageID     string `validate:"required"`
+	WorkspaceID                 string `validate:"required"`
+	IntegrationID               string `validate:"required"`
+	MessageID                   string `validate:"required"`
 	ExternalID                  *string
 	AutomationID                *string
 	TransactionalNotificationID *string

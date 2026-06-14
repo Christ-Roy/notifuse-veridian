@@ -294,7 +294,7 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// Placed BEFORE MarkAsProcessing, like the circuit breaker check, so a
 	// throttled skip never burns a retry attempt. No-op without configuration.
 	// Cf. veridian_provider_throttle.go.
-	if delay, throttled := w.veridianProviderClassGate(workspace, entry); throttled {
+	if delay, throttled := w.veridianProviderClassGate(workspace, &integration.EmailProvider, entry); throttled {
 		nextRetry := time.Now().Add(delay)
 		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
 			w.logger.WithFields(map[string]interface{}{
@@ -310,7 +310,7 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// the in-memory minute throttle above). Same skip-and-reschedule contract,
 	// also placed BEFORE MarkAsProcessing. No-op without configuration.
 	// Cf. veridian_daily_cap.go.
-	if delay, capped := w.veridianDailyCapGate(workspace, entry); capped {
+	if delay, capped := w.veridianDailyCapGate(workspace, &integration.EmailProvider, entry); capped {
 		nextRetry := time.Now().Add(delay)
 		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
 			w.logger.WithFields(map[string]interface{}{
