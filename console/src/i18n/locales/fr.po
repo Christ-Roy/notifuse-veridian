@@ -206,6 +206,10 @@ msgstr "{0}-{1} sur {total} automations"
 msgid "{0}-{1} of {total} broadcasts"
 msgstr "{0}-{1} sur {total} diffusions"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:297
+msgid "{cap} / day"
+msgstr ""
+
 #: src/pages/BroadcastsPage.tsx:805
 msgid "{clicks} clicks out of {recipients} recipients"
 msgstr "{clicks} clics sur {recipients} destinataires"
@@ -226,17 +230,29 @@ msgstr "Code {language} copié dans le presse-papiers !"
 msgid "{minutes}m {remainingSeconds}s"
 msgstr "{minutes}m {remainingSeconds}s"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:213
+msgid "{n} contacts"
+msgstr ""
+
 #: src/pages/BroadcastsPage.tsx:770
 msgid "{opens} opens out of {recipients} recipients"
 msgstr "{opens} ouvertures sur {recipients} destinataires"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:257
+msgid "{perRecipientCap} / day"
+msgstr ""
 
 #: src/components/timeline/ContactTimeline.tsx:335
 msgid "{propertyCount} properties"
 msgstr "{propertyCount} propriétés"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:285
+msgid "{rate} / min"
+msgstr ""
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:198
-msgid "{rate} emails/min"
-msgstr "{rate} emails/min"
+#~ msgid "{rate} emails/min"
+#~ msgstr "{rate} emails/min"
 
 #: src/components/contacts/ExportContactsModal.tsx:115
 msgid "{seconds} second"
@@ -1937,7 +1953,7 @@ msgstr "Éditeur de code"
 msgid "Cold outreach"
 msgstr "Cold outreach"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:137
+#: src/components/settings/veridian_cold_outreach_settings.tsx:186
 msgid "Cold outreach settings saved"
 msgstr ""
 
@@ -2716,6 +2732,14 @@ msgstr "Chaîne personnalisée 5"
 #: src/components/contacts/ContactDetailsDrawer.tsx:844
 msgid "Custom String Fields"
 msgstr "Champs de chaîne personnalisés"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:293
+msgid "Daily cap"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:398
+msgid "Daily cap (emails/day)"
+msgstr ""
 
 #: src/components/settings/BlogSettings.tsx:463
 #: src/components/settings/DeleteWorkspace.tsx:45
@@ -3564,6 +3588,10 @@ msgstr "Les largeurs d email supérieures à 650px peuvent ne pas s afficher cor
 msgid "Email:"
 msgstr "Email :"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:356
+msgid "Emails / recipient / day"
+msgstr ""
+
 #: src/components/settings/Integrations.tsx:1852
 #: src/components/settings/Integrations.tsx:2031
 msgid "emails per day"
@@ -4313,7 +4341,7 @@ msgstr "Échec du renvoi du code magique"
 msgid "Failed to resume broadcast"
 msgstr "Échec de la reprise de la diffusion"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:139
+#: src/components/settings/veridian_cold_outreach_settings.tsx:188
 msgid "Failed to save cold outreach settings"
 msgstr ""
 
@@ -4881,6 +4909,10 @@ msgstr "Attributs du groupe"
 msgid "happened"
 msgstr "s est produit"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:358
+msgid "Hard daily limit per email address, all classes combined. Counted from message history since midnight. 0 or empty = unlimited."
+msgstr ""
+
 #: src/components/messages/MessageHistoryTab.tsx:232
 msgid "Has Error"
 msgstr "A une erreur"
@@ -4964,7 +4996,7 @@ msgstr "Heures"
 msgid "Hover over a block to see details"
 msgstr "Survolez un bloc pour voir les détails"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:164
+#: src/components/settings/veridian_cold_outreach_settings.tsx:226
 msgid "How cold outreach throttling works"
 msgstr ""
 
@@ -6003,13 +6035,29 @@ msgstr "Max 3 Mo par fichier, 10 Mo au total, 20 fichiers maximum"
 #~ msgid "Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle."
 #~ msgstr "Nombre maximal d'emails par minute vers ce fournisseur. Fractions autorisées (0.5 = 1 email / 2 min). Vide = pas de limite par classe."
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:348
+msgid "Max emails toward a single address per day — protects a contact from being harassed across campaigns. Leave empty (0) for unlimited."
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:251
+msgid "Max emails toward a single address per day (anti-harassment)."
+msgstr ""
+
 #: src/components/templates/SendTemplateModal.tsx:199
 msgid "Maximum 20 attachments allowed"
 msgstr "Maximum 20 pièces jointes autorisées"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:258
-msgid "Maximum emails per minute toward this provider. Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class throttle."
+#: src/components/settings/veridian_cold_outreach_settings.tsx:402
+msgid "Maximum emails per DAY toward this provider (VOLUME), counted since midnight from message history. Use this to express \"1 email/day\" which a per-minute rate cannot. Leave empty for no daily cap."
 msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:388
+msgid "Maximum emails per MINUTE toward this provider (SPEED). Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class rate."
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:258
+#~ msgid "Maximum emails per minute toward this provider. Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class throttle."
+#~ msgstr ""
 
 #: src/components/settings/BlogSettings.tsx:404
 msgid "Maximum number of posts to include in the RSS/JSON feed (1–20)"
@@ -6362,6 +6410,11 @@ msgstr "Pas encore d automations"
 msgid "No broadcasts found"
 msgstr "Aucune diffusion trouvée"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:299
+#: src/components/settings/veridian_cold_outreach_settings.tsx:404
+msgid "No cap"
+msgstr ""
+
 #: src/pages/BlogPage.tsx:138
 msgid "No categories yet"
 msgstr "Pas encore de catégories"
@@ -6552,8 +6605,8 @@ msgstr "Pas encore de thèmes"
 #~ msgid "no throttle"
 #~ msgstr "aucune limite"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:200
-#: src/components/settings/veridian_cold_outreach_settings.tsx:263
+#: src/components/settings/veridian_cold_outreach_settings.tsx:287
+#: src/components/settings/veridian_cold_outreach_settings.tsx:390
 msgid "No throttle"
 msgstr ""
 
@@ -6732,8 +6785,8 @@ msgid "of the following conditions match:"
 msgstr "des conditions suivantes correspondent :"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:119
-#: src/components/settings/veridian_cold_outreach_settings.tsx:217
-#: src/components/settings/veridian_cold_outreach_settings.tsx:278
+#: src/components/settings/veridian_cold_outreach_settings.tsx:316
+#: src/components/settings/veridian_cold_outreach_settings.tsx:415
 msgid "Off"
 msgstr ""
 
@@ -6746,8 +6799,8 @@ msgid "OK"
 msgstr "OK"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:119
-#: src/components/settings/veridian_cold_outreach_settings.tsx:212
-#: src/components/settings/veridian_cold_outreach_settings.tsx:277
+#: src/components/settings/veridian_cold_outreach_settings.tsx:311
+#: src/components/settings/veridian_cold_outreach_settings.tsx:415
 msgid "On"
 msgstr ""
 
@@ -6812,8 +6865,8 @@ msgid "Open on web"
 msgstr "Ouvrir sur le web"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:114
-#: src/components/settings/veridian_cold_outreach_settings.tsx:206
-#: src/components/settings/veridian_cold_outreach_settings.tsx:271
+#: src/components/settings/veridian_cold_outreach_settings.tsx:305
+#: src/components/settings/veridian_cold_outreach_settings.tsx:410
 msgid "Open pixel"
 msgstr "Pixel d'ouverture"
 
@@ -6837,7 +6890,7 @@ msgstr "Taux d ouverture"
 msgid "Open Veridian"
 msgstr "Ouvrir Veridian"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:274
+#: src/components/settings/veridian_cold_outreach_settings.tsx:413
 msgid "Open-tracking pixel for this provider class. Default: ON for smaller providers, OFF for Google/Microsoft to protect deliverability."
 msgstr ""
 
@@ -7026,12 +7079,22 @@ msgstr "En attente de confirmation"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:179
 #: src/components/settings/veridian_cold_outreach_settings.tsx:236
-msgid "Per-provider sending rates and open-tracking policy for outbound campaigns."
-msgstr "Débits d'envoi par fournisseur et politique de suivi d'ouverture pour les campagnes sortantes."
+#~ msgid "Per-provider sending rates and open-tracking policy for outbound campaigns."
+#~ msgstr "Débits d'envoi par fournisseur et politique de suivi d'ouverture pour les campagnes sortantes."
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:184
 #~ msgid "Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability."
 #~ msgstr "Débits d'envoi par fournisseur et politique de suivi d'ouverture pour les campagnes sortantes. Par défaut, le pixel d'ouverture reste désactivé sur Google/Microsoft pour préserver la délivrabilité."
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:241
+#: src/components/settings/veridian_cold_outreach_settings.tsx:335
+msgid "Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns."
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:248
+#: src/components/settings/veridian_cold_outreach_settings.tsx:345
+msgid "Per-recipient daily cap"
+msgstr ""
 
 #: src/components/broadcasts/RecipientFeedSettings.tsx:88
 msgid "Per-Recipient Data Feed"
@@ -7086,7 +7149,7 @@ msgstr "Photo par Zetong Li"
 msgid "Photo URL"
 msgstr "URL de la photo"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:250
+#: src/components/settings/veridian_cold_outreach_settings.tsx:376
 msgid "pixel OFF by default"
 msgstr "pixel désactivé par défaut"
 
@@ -7641,11 +7704,11 @@ msgstr "Push"
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:194
+#: src/components/settings/veridian_cold_outreach_settings.tsx:281
 msgid "Rate"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:256
+#: src/components/settings/veridian_cold_outreach_settings.tsx:384
 msgid "Rate (emails/min)"
 msgstr "Débit (emails/min)"
 
@@ -7750,7 +7813,11 @@ msgid "recipient@example.com"
 msgstr "destinataire@exemple.com"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:167
-msgid "Recipients are grouped by their mailbox provider. Each provider tolerates a different sending pace, so you can cap how many emails per minute go to each group — slower toward Google and Microsoft, faster toward smaller providers. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
+#~ msgid "Recipients are grouped by their mailbox provider. Each provider tolerates a different sending pace, so you can cap how many emails per minute go to each group — slower toward Google and Microsoft, faster toward smaller providers. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
+#~ msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:229
+msgid "Recipients are grouped by their mailbox provider. Two independent limits protect your reputation: the per-minute rate caps the SPEED of sending toward each group, while the daily cap limits the TOTAL VOLUME sent to that group in a single day (e.g. \"1 email/day toward Google\" — impossible to express as a per-minute rate). Both apply together, and the stricter one wins. The per-recipient daily cap (top of this section) limits how many emails a single address can receive per day to avoid harassing the same contact. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
 msgstr ""
 
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:98
@@ -7962,7 +8029,7 @@ msgstr "Réinitialiser"
 msgid "Reset formatting"
 msgstr "Réinitialiser le formatage"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:297
+#: src/components/settings/veridian_cold_outreach_settings.tsx:433
 msgid "Reset pixel to defaults"
 msgstr ""
 
@@ -8182,7 +8249,7 @@ msgstr "Enregistrer comme nouveau bloc"
 msgid "Save Block"
 msgstr "Enregistrer le bloc"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:294
+#: src/components/settings/veridian_cold_outreach_settings.tsx:430
 msgid "Save changes"
 msgstr ""
 
@@ -9143,6 +9210,10 @@ msgstr "Attributs de l'espaceur"
 msgid "SparkPost API Key"
 msgstr "Clé API SparkPost"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:383
+msgid "Speed limit: how fast emails go out toward this provider."
+msgstr ""
+
 #: src/components/blog/ThemeEditorDrawer.tsx:410
 msgid "Split"
 msgstr "Divisé"
@@ -9834,9 +9905,13 @@ msgstr ""
 msgid "These contacts will be subscribed to the selected list (status: active)."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:289
-msgid "These defaults apply when a campaign does not set its own per-class rates. A campaign can still override them from its own settings."
+#: src/components/settings/veridian_cold_outreach_settings.tsx:425
+msgid "These defaults apply when a campaign does not set its own per-class rates or caps. A campaign can still override them from its own settings."
 msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:289
+#~ msgid "These defaults apply when a campaign does not set its own per-class rates. A campaign can still override them from its own settings."
+#~ msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:241
 #~ msgid "These defaults apply when a campaign does not set its own per-class rates. Link click tracking stays ON for every class regardless of the open pixel."
@@ -10337,6 +10412,11 @@ msgstr "Segment inconnu"
 msgid "Unknown status"
 msgstr "Statut inconnu"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:259
+#: src/components/settings/veridian_cold_outreach_settings.tsx:360
+msgid "Unlimited"
+msgstr ""
+
 #: src/components/blog/PostsTable.tsx:321
 msgid "Unpublish"
 msgstr "Dépublier"
@@ -10661,8 +10741,8 @@ msgstr "Nom de la variante"
 msgid "Variations"
 msgstr "Variations"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:178
-#: src/components/settings/veridian_cold_outreach_settings.tsx:235
+#: src/components/settings/veridian_cold_outreach_settings.tsx:240
+#: src/components/settings/veridian_cold_outreach_settings.tsx:334
 msgid "Veridian — Cold outreach"
 msgstr "Veridian — Prospection à froid"
 
@@ -10743,6 +10823,10 @@ msgstr ""
 #: src/components/templates/CreateTemplateDrawer.tsx:1094
 msgid "Visual Email Editor"
 msgstr "Éditeur d'email visuel"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:397
+msgid "Volume limit: how many emails total toward this provider in a single day."
+msgstr ""
 
 #: src/components/automations/config/DelayConfigForm.tsx:30
 msgid "Wait Duration"

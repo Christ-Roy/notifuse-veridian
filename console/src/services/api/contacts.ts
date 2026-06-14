@@ -1,4 +1,5 @@
 import { api } from './client'
+import { VeridianProviderClass } from './workspace'
 
 export interface ListContactsRequest {
   workspace_id: string
@@ -109,6 +110,14 @@ export interface GetTotalContactsResponse {
   total_contacts: number
 }
 
+// Veridian fork — breakdown du nombre de contacts par classe de provider
+// destinataire (cold outreach R1, endpoint /api/veridian/contacts.providerBreakdown).
+// Les 5 classes canoniques sont toujours présentes (0 si vide) côté backend.
+export interface ProviderBreakdownResponse {
+  breakdown: Record<VeridianProviderClass, number>
+  total: number
+}
+
 export const contactsApi = {
   list: async (params: ListContactsRequest): Promise<ListContactsResponse> => {
     const searchParams = new URLSearchParams()
@@ -174,5 +183,20 @@ export const contactsApi = {
     const searchParams = new URLSearchParams()
     searchParams.append('workspace_id', params.workspace_id)
     return api.get<GetTotalContactsResponse>(`/api/contacts.count?${searchParams.toString()}`)
+  },
+
+  // Veridian fork — compte les contacts par classe de provider destinataire,
+  // pour dimensionner le throttle cold outreach (ex : "5000 Google à 1/jour =
+  // 5000 jours"). list_id optionnel restreint au comptage d'une liste.
+  providerBreakdown: async (params: {
+    workspace_id: string
+    list_id?: string
+  }): Promise<ProviderBreakdownResponse> => {
+    const searchParams = new URLSearchParams()
+    searchParams.append('workspace_id', params.workspace_id)
+    if (params.list_id) searchParams.append('list_id', params.list_id)
+    return api.get<ProviderBreakdownResponse>(
+      `/api/veridian/contacts.providerBreakdown?${searchParams.toString()}`
+    )
   }
 }

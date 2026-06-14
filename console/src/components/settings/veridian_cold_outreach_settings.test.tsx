@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import { App as AntApp } from 'antd'
@@ -22,7 +23,19 @@ vi.mock('../../services/api/workspace', async () => {
   }
 })
 
+// Breakdown R1 — mocké pour ne pas dépendre du réseau et tester l'affichage
+// du compte de contacts par classe.
+vi.mock('../../services/api/contacts', () => ({
+  contactsApi: {
+    providerBreakdown: vi.fn().mockResolvedValue({
+      breakdown: { google: 1240, microsoft: 830, yahoo_aol: 95, freemail_fr: 410, corporate: 1502 },
+      total: 4077
+    })
+  }
+}))
+
 import { workspaceService } from '../../services/api/workspace'
+import { contactsApi } from '../../services/api/contacts'
 
 function makeWorkspace(overrides?: Partial<Workspace['settings']>): Workspace {
   return {
@@ -45,16 +58,19 @@ function renderCmp(props: {
   isOwner: boolean
   onWorkspaceUpdate?: (w: Workspace) => void
 }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <I18nProvider i18n={i18n}>
-      <AntApp>
-        <VeridianColdOutreachSettings
-          workspace={props.workspace}
-          isOwner={props.isOwner}
-          onWorkspaceUpdate={props.onWorkspaceUpdate ?? (() => {})}
-        />
-      </AntApp>
-    </I18nProvider>
+    <QueryClientProvider client={client}>
+      <I18nProvider i18n={i18n}>
+        <AntApp>
+          <VeridianColdOutreachSettings
+            workspace={props.workspace}
+            isOwner={props.isOwner}
+            onWorkspaceUpdate={props.onWorkspaceUpdate ?? (() => {})}
+          />
+        </AntApp>
+      </I18nProvider>
+    </QueryClientProvider>
   )
 }
 
@@ -123,5 +139,55 @@ describe('VeridianColdOutreachSettings', () => {
     // pixel map présente avec des booléens pour les 5 classes
     expect(arg.settings?.veridian_open_pixel_by_class).toBeDefined()
     expect(typeof arg.settings?.veridian_open_pixel_by_class?.corporate).toBe('boolean')
+  })
+
+  it('renders the per-recipient daily cap field and the daily cap label (owner)', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    expect(screen.getByText('Per-recipient daily cap')).toBeInTheDocument()
+    // Au moins une carte de classe expose un champ "Daily cap (emails/day)"
+    expect(screen.getAllByText(/Daily cap \(emails\/day\)/i).length).toBeGreaterThan(0)
+  })
+
+  it('shows the contact count badge per class from the breakdown endpoint', async () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    await waitFor(() => expect(contactsApi.providerBreakdown).toHaveBeenCalled())
+    // Le breakdown mocké pose 1240 (google) et 1502 (corporate)
+    await waitFor(() => {
+      expect(screen.getByText(/1240 contacts/)).toBeInTheDocument()
+      expect(screen.getByText(/1502 contacts/)).toBeInTheDocument()
+    })
+  })
+
+  it('persists positive daily caps and per-recipient cap, omits zeros', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+
+    // Champ per-recipient (premier spinbutton de la page).
+    const recipInput = screen.getByLabelText(/Emails \/ recipient \/ day/i)
+    await user.clear(recipInput)
+    await user.type(recipInput, '1')
+
+    const saveBtn = screen.getByRole('button', { name: /Save Changes/i })
+    await waitFor(() => expect(saveBtn).toBeEnabled())
+    await user.click(saveBtn)
+
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    expect(arg.settings?.veridian_per_recipient_daily_cap).toBe(1)
+  })
+
+  it('shows per-recipient cap and daily caps read-only for non-owner', () => {
+    renderCmp({
+      workspace: makeWorkspace({
+        veridian_per_recipient_daily_cap: 2,
+        veridian_provider_class_daily_cap: { google: 50 } as never
+      }),
+      isOwner: false
+    })
+    expect(screen.getByText('Per-recipient daily cap')).toBeInTheDocument()
+    // valeur "2 / day" rendue pour le cap destinataire
+    expect(screen.getByText(/2 \/ day/)).toBeInTheDocument()
+    // cap classe google "50 / day"
+    expect(screen.getByText(/50 \/ day/)).toBeInTheDocument()
   })
 })

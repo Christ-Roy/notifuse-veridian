@@ -57,6 +57,14 @@ export interface WorkspaceSettings {
   // Politique du pixel d'ouverture par classe (true = pixel ON). Override du
   // défaut tunnel (ON freemail_fr/yahoo_aol/corporate, OFF google/microsoft).
   veridian_open_pixel_by_class?: Record<VeridianProviderClass, boolean>
+  // Plafond JOURNALIER d'envois par classe (emails/jour MAX). Distinct du débit
+  // minute ci-dessus : le rate borne la VITESSE, le cap borne le VOLUME du jour.
+  // Source de vérité backend : COUNT message_history depuis minuit. Vide/omis =
+  // pas de plafond journalier (le débit minute reste appliqué).
+  veridian_provider_class_daily_cap?: Record<VeridianProviderClass, number>
+  // Plafond JOURNALIER d'envois vers une MÊME adresse (anti-harcèlement).
+  // Entier global, non keyé par classe. 0 / omis = illimité.
+  veridian_per_recipient_daily_cap?: number
 }
 
 // Veridian fork — classes canoniques de provider destinataire (cf. backend
