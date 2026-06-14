@@ -1405,6 +1405,25 @@ func (a *App) InitHandlers() error {
 	)
 	veridianHubDiscoveryHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patch — R1 breakdown contacts par classe de provider (2026-06-14) ===
+	// Endpoint POST+GET /api/veridian/contacts.providerBreakdown : compte les
+	// contacts par classe de provider destinataire (google/microsoft/yahoo_aol/
+	// freemail_fr/corporate) pour dimensionner le throttle cold outbound. Auth
+	// JWT console + permission contacts:read (gardien dans le service). Cf.
+	// todo/2026-06-14-tunnel-vente-ui-controle-et-roadmap.md (R1).
+	veridianContactBreakdownRepo := repository.NewVeridianContactBreakdownRepository(a.workspaceRepo)
+	veridianContactBreakdownService := service.NewVeridianContactBreakdownService(
+		veridianContactBreakdownRepo,
+		a.authService,
+		a.logger,
+	)
+	veridianContactBreakdownHandler := httpHandler.NewVeridianContactBreakdownHandler(
+		veridianContactBreakdownService,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianContactBreakdownHandler.RegisterRoutes(a.mux)
+
 	// === Veridian patch — Mail accounts proxy SUPPRIMÉ 2026-05-31 ===
 	// Retiré avec le pipeline mail-provider (cf. ci-dessus). La gestion des
 	// comptes d'envoi se fait via Settings > Integrations (provider local par

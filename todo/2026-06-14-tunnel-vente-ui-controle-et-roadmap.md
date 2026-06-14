@@ -122,6 +122,73 @@ Affiché dans l'UI Cold outreach (à côté de chaque carte de classe : "X conta
 et/ou sur la page Contacts/Lists. ➜ permet de dimensionner le throttle en connaissance
 de cause (ex : 5000 contacts Google à 1/min = combien de jours).
 
+#### ✅ R1 BACKEND LIVRÉ (agent databack, 2026-06-14) — reste l'UI
+
+**Endpoint** : `POST` **et** `GET` `/api/veridian/contacts.providerBreakdown`
+(les deux méthodes routées explicitement — piège catchall `root_handler.go`).
+
+**Auth** : JWT console (`RequireAuth`) + gardien `AuthenticateUserForWorkspace`
++ permission `contacts:read` côté service (un user non membre du workspace → 403,
+exactement comme `/api/contacts.list`). Ce n'est PAS du HMAC Hub : c'est un
+endpoint console interne, consommé par l'UI Cold outreach.
+
+**Paramètres** :
+- `workspace_id` (requis)
+- `list_id` (optionnel — restreint aux contacts membres de cette liste, hors
+  entrées soft-deleted ; même EXISTS subquery que `contacts.list`)
+
+**Réponse 200** (les 5 classes canoniques toujours présentes, 0 si vide) :
+```json
+{
+  "breakdown": {
+    "google": 1240, "microsoft": 830, "yahoo_aol": 95,
+    "freemail_fr": 410, "corporate": 1502
+  },
+  "total": 4077
+}
+```
+
+**Exemple curl** (JWT console dans le header) :
+```bash
+curl -s -X POST https://notifuse.staging.veridian.site/api/veridian/contacts.providerBreakdown \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"workspace_id":"<ws>","list_id":"<optional>"}'
+# équivalent GET :
+curl -s "https://notifuse.staging.veridian.site/api/veridian/contacts.providerBreakdown?workspace_id=<ws>&list_id=<optional>" \
+  -H "Authorization: Bearer $JWT"
+```
+
+**Classification** : réutilise STRICTEMENT `veridian_provider_class.go` —
+override `custom_string_5` prime, sinon suffixe de domaine, sinon `corporate`.
+Pas de CASE SQL (zéro duplication de la table de domaines) : le repo projette
+`(email, custom_string_5)` et la classification se fait en Go
+(`VeridianAggregateProviderBreakdown`). Coût = SELECT de 2 colonnes texte + scan
+O(n) ; négligeable sur le volume cold outreach (dizaines de k de contacts/ws).
+Index PK sur `email` existant ; pas de migration nécessaire.
+
+**Fichiers** (convention `veridian_*.go` flat, zéro patch upstream) :
+- `internal/domain/veridian_provider_breakdown.go` (+ test) — types, interfaces,
+  agrégation pure
+- `internal/repository/veridian_contact_breakdown_postgres.go` (+ test) — SELECT
+  Squirrel + filtre liste EXISTS
+- `internal/service/veridian_contact_breakdown_service.go` (+ test) — auth +
+  permission contacts:read
+- `internal/http/veridian_contact_breakdown_handler.go` (+ test) — POST+GET,
+  403 perm / 401 auth / 500 sinon
+- câblage `internal/app/app.go` (bloc "R1 breakdown contacts")
+- mocks générés : `mock_veridian_contact_breakdown_{repository,service}.go`
+
+**⏳ TODO UI (agent uifix)** : afficher le compte par classe à côté de chaque
+carte dans `console/src/components/settings/veridian_cold_outreach_settings.tsx`.
+Appeler l'endpoint au mount (TanStack Query), passer `workspace_id` (déjà dans le
+contexte de la page Settings). `list_id` non pertinent au niveau workspace
+Settings (laisser vide = tout le workspace) ; il deviendra utile si on affiche le
+breakdown dans le drawer broadcast (où une liste est sélectionnée). Mapper les 5
+clés vers les libellés des cartes (mêmes clés canoniques que le throttle). Ajouter
+la constante de route dans `console/src/services/api/` à côté des endpoints
+contacts. ⚠️ Piège SW cache : valider staging avec `?cachebust=`.
+
 ### R2 — Paramètres par infra mail d'envoi (domaine + IP)
 Aujourd'hui le throttle est par WORKSPACE (global) + override broadcast. Robert veut
 pouvoir cadrer les débits **par infra d'envoi** (un domaine d'envoi + son IP/relai ont
