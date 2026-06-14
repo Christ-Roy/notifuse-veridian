@@ -42,18 +42,26 @@ interface Props {
 const BIG_PROVIDERS: VeridianProviderClass[] = ['google', 'microsoft']
 
 // Libellé lisible d'une classe (les values restent canoniques côté code/API).
-function classLabel(c: VeridianProviderClass, t: ReturnType<typeof useLingui>['t']): string {
+//
+// ⚠️ Libellés LITTÉRAUX (pas `t`...``) : ce sont des noms propres de providers
+// (Google = Google partout) qui ne se traduisent pas. Surtout, passer un `t`
+// en paramètre d'une fonction HORS composant casse l'extracteur statique Lingui
+// (il ne capte pas les `t`...`` ainsi placés) → clés absentes du catalogue →
+// `t` renvoie VIDE en runtime. Bug P0 vécu en prod 2026-06-14 (5 cartes de
+// classe sans nom dans Settings → Cold outreach). Littéral = zéro dépendance
+// i18n = zéro risque de vide.
+function classLabel(c: VeridianProviderClass): string {
   switch (c) {
     case 'google':
-      return t`Google (Gmail / Workspace)`
+      return 'Google (Gmail / Workspace)'
     case 'microsoft':
-      return t`Microsoft (Outlook / Microsoft 365)`
+      return 'Microsoft (Outlook / Microsoft 365)'
     case 'yahoo_aol':
-      return t`Yahoo / AOL`
+      return 'Yahoo / AOL'
     case 'freemail_fr':
-      return t`French ISPs (Orange, SFR, Free…)`
+      return 'French ISPs (Orange, SFR, Free…)'
     case 'corporate':
-      return t`Corporate (any other domain)`
+      return 'Corporate (any other domain)'
   }
 }
 
@@ -179,7 +187,7 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
               <Card key={c} size="small">
                 <Row gutter={[16, 12]} align="middle" wrap>
                   <Col xs={24} sm={10}>
-                    <Text strong>{classLabel(c, t)}</Text>
+                    <Text strong>{classLabel(c)}</Text>
                   </Col>
                   <Col xs={12} sm={7}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
@@ -238,7 +246,7 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
                 <Row gutter={[24, 8]} align="bottom" wrap>
                   <Col xs={24} sm={10} style={{ display: 'flex', alignItems: 'center' }}>
                     <Space size="small" wrap>
-                      <Text strong>{classLabel(c, t)}</Text>
+                      <Text strong>{classLabel(c)}</Text>
                       {isBig && <Tag color="orange">{t`pixel OFF by default`}</Tag>}
                     </Space>
                   </Col>

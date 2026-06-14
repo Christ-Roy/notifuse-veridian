@@ -33,11 +33,17 @@ interface Props {
 
 const VERIDIAN_HUB_URL = 'https://app.veridian.site/dashboard'
 
-function planLabel(plan: string | undefined, t: ReturnType<typeof useLingui>['t']): string {
-  if (!plan || plan === 'free') return t`Free — unlimited access during your 15-day trial`
-  if (plan === 'pro') return t`Pro`
-  if (plan === 'business') return t`Business`
-  if (plan === 'enterprise') return t`Enterprise`
+// ⚠️ Libellés LITTÉRAUX (pas `t`...``) : même piège Lingui que classLabel dans
+// veridian_cold_outreach_settings.tsx — un `t` passé en paramètre d'une fonction
+// HORS composant n'est PAS capté par l'extracteur statique → clés absentes du
+// catalogue → `t` renvoie VIDE en runtime (libellé de plan vide dans
+// Settings → Plan). Les noms de plan sont des noms propres Veridian (Pro =
+// Pro partout) qui ne se traduisent pas ; littéral = zéro risque de vide.
+function planLabel(plan: string | undefined): string {
+  if (!plan || plan === 'free') return 'Free — unlimited access during your 15-day trial'
+  if (plan === 'pro') return 'Pro'
+  if (plan === 'business') return 'Business'
+  if (plan === 'enterprise') return 'Enterprise'
   // Inconnu : retourne tel quel en minuscule + neutre, pas "Upgrade"
   return plan
 }
@@ -59,7 +65,7 @@ export function VeridianPlanSettings({ workspaceId }: Props) {
             <Descriptions column={1} colon={false}>
               <Descriptions.Item label={t`Current plan`}>
                 <Space size="small">
-                  <Text strong>{planLabel(data?.plan, t)}</Text>
+                  <Text strong>{planLabel(data?.plan)}</Text>
                   <VeridianPlanSourceBadge planSource={data?.plan_source} />
                 </Space>
               </Descriptions.Item>

@@ -234,7 +234,7 @@ msgstr "{recipients}人中{opens}回開封"
 msgid "{propertyCount} properties"
 msgstr "{propertyCount}件のプロパティ"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:190
+#: src/components/settings/veridian_cold_outreach_settings.tsx:198
 msgid "{rate} emails/min"
 msgstr ""
 
@@ -456,7 +456,7 @@ msgstr "オートメーションを有効化しますか?"
 #: src/components/contacts/ContactDetailsDrawer.tsx:581
 #: src/components/contacts/SegmentsFilter.tsx:53
 #: src/components/lists/ListStats.tsx:58
-#: src/components/settings/veridian_plan_settings.tsx:67
+#: src/components/settings/veridian_plan_settings.tsx:73
 #: src/pages/ContactsPage.tsx:382
 msgid "Active"
 msgstr "アクティブ"
@@ -753,7 +753,7 @@ msgstr "すべて"
 msgid "All contact fields are optional except email."
 msgstr "メール以外のすべてのコンタクトフィールドはオプションです。"
 
-#: src/components/settings/veridian_plan_settings.tsx:72
+#: src/components/settings/veridian_plan_settings.tsx:78
 msgid "All features are unlimited on every plan. Your subscription is managed by Veridian."
 msgstr ""
 
@@ -1937,7 +1937,7 @@ msgstr "コードエディター"
 msgid "Cold outreach"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:129
+#: src/components/settings/veridian_cold_outreach_settings.tsx:137
 msgid "Cold outreach settings saved"
 msgstr ""
 
@@ -2516,7 +2516,7 @@ msgstr "CSSスタイルエディタ"
 msgid "CSV must have at least a header row and one data row"
 msgstr "CSVにはヘッダー行と少なくとも1つのデータ行が必要です"
 
-#: src/components/settings/veridian_plan_settings.tsx:60
+#: src/components/settings/veridian_plan_settings.tsx:66
 msgid "Current plan"
 msgstr ""
 
@@ -4313,7 +4313,7 @@ msgstr "マジックコードの再送信に失敗しました"
 msgid "Failed to resume broadcast"
 msgstr "ブロードキャストの再開に失敗しました"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:131
+#: src/components/settings/veridian_cold_outreach_settings.tsx:139
 msgid "Failed to save cold outreach settings"
 msgstr ""
 
@@ -4964,7 +4964,7 @@ msgstr "時間"
 msgid "Hover over a block to see details"
 msgstr "ブロックにカーソルを合わせると詳細が表示されます"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:156
+#: src/components/settings/veridian_cold_outreach_settings.tsx:164
 msgid "How cold outreach throttling works"
 msgstr ""
 
@@ -5939,7 +5939,7 @@ msgstr "セクションをメールビューポート全幅に広げ、コンテ
 msgid "Makes the wrapper span the entire email viewport width, ignoring container constraints (typically 600px). Useful for full-bleed backgrounds and hero sections."
 msgstr "ラッパーをメールビューポート全幅に広げ、コンテナの制約（通常600px）を無視します。全面背景やヒーローセクションに便利です。"
 
-#: src/components/settings/veridian_plan_settings.tsx:81
+#: src/components/settings/veridian_plan_settings.tsx:87
 #: src/components/veridian_brand_footer.tsx:62
 msgid "Manage subscription"
 msgstr ""
@@ -6007,7 +6007,7 @@ msgstr "ファイルあたり最大3MB、合計10MB、最大20ファイル"
 msgid "Maximum 20 attachments allowed"
 msgstr "添付ファイルは最大20個まで"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:250
+#: src/components/settings/veridian_cold_outreach_settings.tsx:258
 msgid "Maximum emails per minute toward this provider. Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class throttle."
 msgstr ""
 
@@ -6552,8 +6552,8 @@ msgstr "テーマがまだありません"
 #~ msgid "no throttle"
 #~ msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:192
-#: src/components/settings/veridian_cold_outreach_settings.tsx:255
+#: src/components/settings/veridian_cold_outreach_settings.tsx:200
+#: src/components/settings/veridian_cold_outreach_settings.tsx:263
 msgid "No throttle"
 msgstr ""
 
@@ -6732,8 +6732,8 @@ msgid "of the following conditions match:"
 msgstr "の以下の条件に一致:"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:119
-#: src/components/settings/veridian_cold_outreach_settings.tsx:209
-#: src/components/settings/veridian_cold_outreach_settings.tsx:270
+#: src/components/settings/veridian_cold_outreach_settings.tsx:217
+#: src/components/settings/veridian_cold_outreach_settings.tsx:278
 msgid "Off"
 msgstr ""
 
@@ -6746,8 +6746,8 @@ msgid "OK"
 msgstr "OK"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:119
-#: src/components/settings/veridian_cold_outreach_settings.tsx:204
-#: src/components/settings/veridian_cold_outreach_settings.tsx:269
+#: src/components/settings/veridian_cold_outreach_settings.tsx:212
+#: src/components/settings/veridian_cold_outreach_settings.tsx:277
 msgid "On"
 msgstr ""
 
@@ -6812,8 +6812,8 @@ msgid "Open on web"
 msgstr "Webで開く"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:114
-#: src/components/settings/veridian_cold_outreach_settings.tsx:198
-#: src/components/settings/veridian_cold_outreach_settings.tsx:263
+#: src/components/settings/veridian_cold_outreach_settings.tsx:206
+#: src/components/settings/veridian_cold_outreach_settings.tsx:271
 msgid "Open pixel"
 msgstr ""
 
@@ -6837,7 +6837,7 @@ msgstr "開封率"
 msgid "Open Veridian"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:266
+#: src/components/settings/veridian_cold_outreach_settings.tsx:274
 msgid "Open-tracking pixel for this provider class. Default: ON for smaller providers, OFF for Google/Microsoft to protect deliverability."
 msgstr ""
 
@@ -7024,8 +7024,8 @@ msgstr "確認待ち"
 #~ msgid "Per-provider sending rates (Veridian cold outreach)"
 #~ msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:171
-#: src/components/settings/veridian_cold_outreach_settings.tsx:228
+#: src/components/settings/veridian_cold_outreach_settings.tsx:179
+#: src/components/settings/veridian_cold_outreach_settings.tsx:236
 msgid "Per-provider sending rates and open-tracking policy for outbound campaigns."
 msgstr ""
 
@@ -7086,7 +7086,7 @@ msgstr "写真: Zetong Li"
 msgid "Photo URL"
 msgstr "写真URL"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:242
+#: src/components/settings/veridian_cold_outreach_settings.tsx:250
 msgid "pixel OFF by default"
 msgstr ""
 
@@ -7095,7 +7095,7 @@ msgid "Plain text (only safe behind a TLS-terminating proxy)"
 msgstr ""
 
 #: src/components/settings/SettingsSidebar.tsx:124
-#: src/components/settings/veridian_plan_settings.tsx:51
+#: src/components/settings/veridian_plan_settings.tsx:57
 msgid "Plan"
 msgstr ""
 
@@ -7641,11 +7641,11 @@ msgstr "プッシュ"
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:186
+#: src/components/settings/veridian_cold_outreach_settings.tsx:194
 msgid "Rate"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:248
+#: src/components/settings/veridian_cold_outreach_settings.tsx:256
 msgid "Rate (emails/min)"
 msgstr ""
 
@@ -7749,7 +7749,7 @@ msgstr "受信者フィードのテストが正常に完了しました"
 msgid "recipient@example.com"
 msgstr "recipient@example.com"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:159
+#: src/components/settings/veridian_cold_outreach_settings.tsx:167
 msgid "Recipients are grouped by their mailbox provider. Each provider tolerates a different sending pace, so you can cap how many emails per minute go to each group — slower toward Google and Microsoft, faster toward smaller providers. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
 msgstr ""
 
@@ -7962,7 +7962,7 @@ msgstr "リセット"
 msgid "Reset formatting"
 msgstr "書式をリセット"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:289
+#: src/components/settings/veridian_cold_outreach_settings.tsx:297
 msgid "Reset pixel to defaults"
 msgstr ""
 
@@ -8182,7 +8182,7 @@ msgstr "新規ブロックとして保存"
 msgid "Save Block"
 msgstr "ブロックを保存"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:286
+#: src/components/settings/veridian_cold_outreach_settings.tsx:294
 msgid "Save changes"
 msgstr ""
 
@@ -9215,7 +9215,7 @@ msgstr "都道府県"
 #: src/components/blog/RecentThemesTable.tsx:122
 #: src/components/contacts/ContactDetailsDrawer.tsx:981
 #: src/components/messages/MessageHistoryTab.tsx:580
-#: src/components/settings/veridian_plan_settings.tsx:66
+#: src/components/settings/veridian_plan_settings.tsx:72
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:76
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:363
 #: src/pages/BroadcastsPage.tsx:363
@@ -9834,7 +9834,7 @@ msgstr ""
 msgid "These contacts will be subscribed to the selected list (status: active)."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:281
+#: src/components/settings/veridian_cold_outreach_settings.tsx:289
 msgid "These defaults apply when a campaign does not set its own per-class rates. A campaign can still override them from its own settings."
 msgstr ""
 
@@ -10661,8 +10661,8 @@ msgstr "バリアント名"
 msgid "Variations"
 msgstr "バリエーション"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:170
-#: src/components/settings/veridian_cold_outreach_settings.tsx:227
+#: src/components/settings/veridian_cold_outreach_settings.tsx:178
+#: src/components/settings/veridian_cold_outreach_settings.tsx:235
 msgid "Veridian — Cold outreach"
 msgstr ""
 
