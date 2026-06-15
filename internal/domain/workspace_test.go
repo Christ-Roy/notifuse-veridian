@@ -2517,6 +2517,50 @@ func TestCreateIntegrationRequest_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			// Veridian fork (Lot 8) — config IMAP self-service valide. Sans le
+			// case IntegrationTypeIMAP ajouté, le default: rejetterait ce type
+			// → UI IMAP morte.
+			name: "valid imap request",
+			request: CreateIntegrationRequest{
+				WorkspaceID: "workspace-123",
+				Name:        "Cold reply inbox",
+				Type:        IntegrationTypeIMAP,
+				IMAPSettings: &IMAPSettings{
+					Host:     "imap.example.com",
+					Port:     993,
+					Username: "returns@example.com",
+					Password: "s3cret",
+					UseTLS:   true,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			// Veridian fork (Lot 8) — type imap sans settings → erreur.
+			name: "imap request missing settings",
+			request: CreateIntegrationRequest{
+				WorkspaceID: "workspace-123",
+				Name:        "Cold reply inbox",
+				Type:        IntegrationTypeIMAP,
+			},
+			wantErr: true,
+		},
+		{
+			// Veridian fork (Lot 8) — type imap avec settings invalides (host vide).
+			name: "imap request invalid settings",
+			request: CreateIntegrationRequest{
+				WorkspaceID: "workspace-123",
+				Name:        "Cold reply inbox",
+				Type:        IntegrationTypeIMAP,
+				IMAPSettings: &IMAPSettings{
+					Port:     993,
+					Username: "returns@example.com",
+					Password: "s3cret",
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range testCases {

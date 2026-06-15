@@ -30,11 +30,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import { App, Alert, Button, Card, Col, Form, InputNumber, Row, Space, Switch, Tag, Tooltip, Typography } from 'antd'
-import { CheckCircleFilled, CloseCircleFilled, InfoCircleOutlined, TeamOutlined } from '@ant-design/icons'
+import { App, Alert, Button, Card, Col, Divider, Form, Input, InputNumber, Row, Space, Switch, Tag, Tooltip, Typography } from 'antd'
+import { CheckCircleFilled, CloseCircleFilled, InfoCircleOutlined, InboxOutlined, LinkOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
-import { Workspace } from '../../services/api/types'
+import { Workspace, EmailProvider, IMAPSettings, Integration } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
 import {
   VERIDIAN_DEFAULT_OPEN_PIXEL,
@@ -107,6 +107,379 @@ function effectivePixel(
 ): boolean {
   if (configured && c in configured) return configured[c]
   return VERIDIAN_DEFAULT_OPEN_PIXEL[c]
+}
+
+// ── Boîte IMAP de retour (self-service) ───────────────────────────────────────
+//
+// Configure la boîte IMAP que Notifuse poll lui-même pour détecter (a) les NDR
+// de bounce remontés par le relai Postfix cold (Lot 2) et (b) les réponses
+// humaines des prospects qui stoppent la séquence (Lot 3). C'est la brique qui
+// permet à un non-dev d'activer bounce-loop + stop-on-reply SANS curl ni script.
+//
+// Persistée comme une intégration de type "imap" (createIntegration /
+// updateIntegration). Le password n'est jamais renvoyé en clair par l'API : à
+// l'édition on le laisse vide pour ne pas le changer (le backend préserve
+// encrypted_password).
+const DEFAULT_IMAP_POLLING_SECONDS = 120
+
+interface IMAPInboxCardProps {
+  workspace: Workspace
+  isOwner: boolean
+  onWorkspaceUpdate: (workspace: Workspace) => void
+}
+
+function IMAPInboxCard({ workspace, isOwner, onWorkspaceUpdate }: IMAPInboxCardProps) {
+  const { t } = useLingui()
+  const [form] = Form.useForm()
+  const [saving, setSaving] = useState(false)
+  const { message } = App.useApp()
+
+  // Une seule boîte IMAP de retour par workspace dans notre cas d'usage cold :
+  // on prend la première intégration de type "imap" si elle existe.
+  const imapIntegration = workspace.integrations?.find((i) => i.type === 'imap')
+  const imap = imapIntegration?.imap_settings
+
+  useEffect(() => {
+    form.setFieldsValue({
+      host: imap?.host,
+      port: imap?.port ?? 993,
+      username: imap?.username,
+      // Password jamais pré-rempli (l'API ne renvoie que encrypted_password).
+      password: '',
+      use_tls: imap?.use_tls ?? true,
+      folder: imap?.folder || 'INBOX',
+      polling_interval_seconds: imap?.polling_interval_seconds || DEFAULT_IMAP_POLLING_SECONDS
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync sur l'intégration
+  }, [imapIntegration?.id, imap?.host, imap?.username])
+
+  const handleSave = async (values: {
+    host: string
+    port: number
+    username: string
+    password?: string
+    use_tls: boolean
+    folder?: string
+    polling_interval_seconds?: number
+  }) => {
+    setSaving(true)
+    try {
+      const imapSettings: IMAPSettings = {
+        host: values.host.trim(),
+        port: values.port,
+        username: values.username.trim(),
+        use_tls: values.use_tls,
+        folder: values.folder?.trim() || 'INBOX',
+        polling_interval_seconds: values.polling_interval_seconds || DEFAULT_IMAP_POLLING_SECONDS
+      }
+      // Password seulement si saisi (sinon on ne le change pas à l'édition).
+      if (values.password && values.password.length > 0) {
+        imapSettings.password = values.password
+      }
+
+      if (imapIntegration) {
+        await workspaceService.updateIntegration({
+          workspace_id: workspace.id,
+          integration_id: imapIntegration.id,
+          name: imapIntegration.name || 'Cold reply inbox',
+          imap_settings: imapSettings
+        })
+      } else {
+        await workspaceService.createIntegration({
+          workspace_id: workspace.id,
+          name: 'Cold reply inbox',
+          type: 'imap',
+          imap_settings: imapSettings
+        })
+      }
+
+      const response = await workspaceService.get(workspace.id)
+      onWorkspaceUpdate(response.workspace)
+      form.setFieldValue('password', '')
+      message.success(t`IMAP inbox saved`)
+    } catch (error: unknown) {
+      const errorMessage = (error as Error)?.message || t`Failed to save IMAP inbox`
+      message.error(errorMessage)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const header = (
+    <Space>
+      <InboxOutlined />
+      <Text strong>{t`Reply & bounce inbox (IMAP)`}</Text>
+      {imapIntegration ? (
+        <Tag color="green">{t`Configured`}</Tag>
+      ) : (
+        <Tag color="default">{t`Not configured`}</Tag>
+      )}
+    </Space>
+  )
+
+  const help = (
+    <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+      {t`Notifuse polls this mailbox to detect bounce reports (failed deliveries reported back by your SMTP relay) and human replies from prospects. Detecting a reply automatically stops the cold sequence for that contact; detecting a bounce suppresses the address. Use the IMAP credentials of the address your campaigns send from (or its dedicated return mailbox).`}
+    </Paragraph>
+  )
+
+  // ── Non-owner : lecture seule ───────────────────────────────────────────────
+  if (!isOwner) {
+    return (
+      <Card size="small" title={header} className="!mb-6">
+        {help}
+        {imap ? (
+          <Row gutter={[16, 8]}>
+            <Col xs={24} sm={12}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t`Host`}
+              </Text>
+              <div>
+                <Text>{`${imap.host}:${imap.port}`}</Text>
+              </div>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t`Username`}
+              </Text>
+              <div>
+                <Text>{imap.username}</Text>
+              </div>
+            </Col>
+            <Col xs={12} sm={8}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t`Folder`}
+              </Text>
+              <div>
+                <Text>{imap.folder || 'INBOX'}</Text>
+              </div>
+            </Col>
+            <Col xs={12} sm={8}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t`TLS`}
+              </Text>
+              <div>{imap.use_tls ? <Text>{t`On`}</Text> : <Text type="secondary">{t`Off`}</Text>}</div>
+            </Col>
+          </Row>
+        ) : (
+          <Text type="secondary">{t`No IMAP inbox configured yet.`}</Text>
+        )}
+      </Card>
+    )
+  }
+
+  // ── Owner : formulaire éditable ─────────────────────────────────────────────
+  return (
+    <Card size="small" title={header} className="!mb-6">
+      {help}
+      <Form form={form} layout="vertical" onFinish={handleSave}>
+        <Row gutter={16}>
+          <Col xs={24} sm={14}>
+            <Form.Item
+              name="host"
+              label={t`IMAP host`}
+              rules={[{ required: true, message: t`Host is required` }]}
+            >
+              <Input placeholder="imap.example.com" />
+            </Form.Item>
+          </Col>
+          <Col xs={12} sm={5}>
+            <Form.Item
+              name="port"
+              label={t`Port`}
+              rules={[{ required: true, message: t`Port is required` }]}
+            >
+              <InputNumber min={1} max={65535} placeholder="993" style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col xs={12} sm={5}>
+            <Form.Item name="use_tls" label={t`TLS`} valuePropName="checked">
+              <Switch checkedChildren={t`On`} unCheckedChildren={t`Off`} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} sm={12}>
+            <Form.Item
+              name="username"
+              label={t`Username`}
+              rules={[{ required: true, message: t`Username is required` }]}
+            >
+              <Input placeholder="user@example.com" autoComplete="off" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item
+              name="password"
+              label={t`Password`}
+              tooltip={t`Leave empty to keep the current password unchanged.`}
+            >
+              <Input.Password
+                placeholder={imapIntegration ? t`Unchanged` : t`Mailbox password`}
+                autoComplete="new-password"
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={12} sm={8}>
+            <Form.Item name="folder" label={t`Folder`}>
+              <Input placeholder="INBOX" />
+            </Form.Item>
+          </Col>
+          <Col xs={12} sm={8}>
+            <Form.Item
+              name="polling_interval_seconds"
+              label={t`Polling interval (seconds)`}
+              tooltip={t`How often Notifuse checks the mailbox. Minimum 30s to avoid being throttled by the IMAP server.`}
+            >
+              <InputNumber min={30} step={30} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Button type="primary" htmlType="submit" loading={saving}>
+          {imapIntegration ? t`Save IMAP inbox` : t`Connect IMAP inbox`}
+        </Button>
+      </Form>
+    </Card>
+  )
+}
+
+// ── Custom tracking domain PAR INFRA d'envoi ──────────────────────────────────
+//
+// En cold, un lien de tracking (pixel d'ouverture /t/, redirect de clic /r/) sur
+// un domaine DIFFÉRENT du From est un signal anti-spam. La pratique standard
+// (Lemlist / Instantly) est un custom tracking domain ALIGNÉ au domaine d'envoi :
+// envoi depuis agences-veridian.fr → tracking sur track.agences-veridian.fr.
+// Comme l'infra d'envoi EST le domaine d'envoi (l'intégration EmailProvider porte
+// les senders + le relai SMTP), le tracking domain se règle AU NIVEAU INFRA.
+//
+// Persisté sur EmailProvider.veridian_tracking_domain via updateIntegration. On
+// renvoie le provider COMPLET (senders + rate_limit conservés) pour ne rien
+// perdre — l'API attend l'EmailProvider entier.
+interface TrackingDomainCardProps {
+  workspace: Workspace
+  isOwner: boolean
+  onWorkspaceUpdate: (workspace: Workspace) => void
+}
+
+function TrackingDomainCard({ workspace, isOwner, onWorkspaceUpdate }: TrackingDomainCardProps) {
+  const { t } = useLingui()
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const { message } = App.useApp()
+
+  const emailIntegrations = (workspace.integrations || []).filter(
+    (i): i is Integration & { email_provider: EmailProvider } =>
+      i.type === 'email' && !!i.email_provider
+  )
+
+  const draftFor = (i: Integration & { email_provider: EmailProvider }): string =>
+    i.id in drafts ? drafts[i.id] : i.email_provider.veridian_tracking_domain || ''
+
+  const handleSave = async (integration: Integration & { email_provider: EmailProvider }) => {
+    setSavingId(integration.id)
+    try {
+      const trackingDomain = draftFor(integration).trim()
+      // On renvoie l'EmailProvider COMPLET + le tracking domain modifié (vide =
+      // supprime l'override → fallback workspace/global). Les autres champs
+      // (senders, rate_limit, settings provider) sont conservés tels quels.
+      const provider: EmailProvider = {
+        ...integration.email_provider,
+        veridian_tracking_domain: trackingDomain || undefined
+      }
+      await workspaceService.updateIntegration({
+        workspace_id: workspace.id,
+        integration_id: integration.id,
+        name: integration.name,
+        provider
+      })
+      const response = await workspaceService.get(workspace.id)
+      onWorkspaceUpdate(response.workspace)
+      setDrafts((d) => {
+        const next = { ...d }
+        delete next[integration.id]
+        return next
+      })
+      message.success(t`Tracking domain saved`)
+    } catch (error: unknown) {
+      const errorMessage = (error as Error)?.message || t`Failed to save tracking domain`
+      message.error(errorMessage)
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const header = (
+    <Space>
+      <LinkOutlined />
+      <Text strong>{t`Custom tracking domain (per sending infrastructure)`}</Text>
+    </Space>
+  )
+
+  const help = (
+    <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+      {t`Tracking links (open pixel, click redirects) point to Notifuse by default. For cold outreach, a tracking link on a domain different from your sending domain is an anti-spam signal. Set a custom tracking domain aligned with each sending domain (e.g. send from agences-veridian.fr → track on track.agences-veridian.fr) — it must be a CNAME/A record pointing to Notifuse. Leave empty to fall back to the workspace/global endpoint.`}
+    </Paragraph>
+  )
+
+  if (emailIntegrations.length === 0) {
+    return (
+      <Card size="small" title={header} className="!mb-6">
+        {help}
+        <Text type="secondary">
+          {t`No sending integration configured yet. Add an email provider in Settings → Integrations first.`}
+        </Text>
+      </Card>
+    )
+  }
+
+  return (
+    <Card size="small" title={header} className="!mb-6">
+      {help}
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        {emailIntegrations.map((integration) => {
+          const senderDomain = integration.email_provider.senders?.[0]?.email?.split('@')[1]
+          return (
+            <Row key={integration.id} gutter={[16, 8]} align="bottom" wrap>
+              <Col xs={24} sm={8}>
+                <Text strong>{integration.name}</Text>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {senderDomain ? t`Sends from @${senderDomain}` : t`No sender domain`}
+                  </Text>
+                </div>
+              </Col>
+              <Col xs={24} sm={11}>
+                <Input
+                  value={draftFor(integration)}
+                  placeholder={
+                    senderDomain ? `track.${senderDomain}` : 'track.your-sending-domain.com'
+                  }
+                  disabled={!isOwner}
+                  onChange={(e) =>
+                    setDrafts((d) => ({ ...d, [integration.id]: e.target.value }))
+                  }
+                />
+              </Col>
+              <Col xs={24} sm={5}>
+                {isOwner && (
+                  <Button
+                    type="primary"
+                    loading={savingId === integration.id}
+                    onClick={() => handleSave(integration)}
+                    block
+                  >
+                    {t`Save`}
+                  </Button>
+                )}
+              </Col>
+            </Row>
+          )
+        })}
+      </Space>
+    </Card>
+  )
 }
 
 export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isOwner }: Props) {
@@ -256,6 +629,22 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
         />
         {explainer}
 
+        {workspace && (
+          <>
+            <IMAPInboxCard
+              workspace={workspace}
+              isOwner={isOwner}
+              onWorkspaceUpdate={onWorkspaceUpdate}
+            />
+            <TrackingDomainCard
+              workspace={workspace}
+              isOwner={isOwner}
+              onWorkspaceUpdate={onWorkspaceUpdate}
+            />
+            <Divider />
+          </>
+        )}
+
         <Card size="small" className="!mb-4">
           <Row gutter={[16, 8]} align="middle" wrap>
             <Col xs={24} sm={14}>
@@ -349,6 +738,22 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
         description={t`Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns.`}
       />
       {explainer}
+
+      {workspace && (
+        <>
+          <IMAPInboxCard
+            workspace={workspace}
+            isOwner={isOwner}
+            onWorkspaceUpdate={onWorkspaceUpdate}
+          />
+          <TrackingDomainCard
+            workspace={workspace}
+            isOwner={isOwner}
+            onWorkspaceUpdate={onWorkspaceUpdate}
+          />
+          <Divider />
+        </>
+      )}
 
       <Form form={form} layout="vertical" onFinish={handleSave} onValuesChange={() => setTouched(true)}>
         {/* Cap global par destinataire (anti-harcèlement) — en tête, hors carte de classe. */}

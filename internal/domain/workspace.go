@@ -1108,6 +1108,10 @@ type CreateIntegrationRequest struct {
 	SupabaseSettings  *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"`  // For Supabase integrations
 	LLMProvider       *LLMProvider                 `json:"llm_provider,omitempty"`       // For LLM integrations
 	FirecrawlSettings *FirecrawlSettings           `json:"firecrawl_settings,omitempty"` // For Firecrawl integrations
+	// Veridian fork — config IMAP self-service (Lot 8 cold outbound). Présent ssi
+	// Type == "imap". Sans ce champ, l'UI ne peut pas configurer la boîte IMAP de
+	// retour qui alimente bounce-loop (Lot 2) + stop-on-reply (Lot 3).
+	IMAPSettings *IMAPSettings `json:"imap_settings,omitempty"` // For IMAP integrations
 }
 
 func (r *CreateIntegrationRequest) Validate(passphrase string) error {
@@ -1150,6 +1154,15 @@ func (r *CreateIntegrationRequest) Validate(passphrase string) error {
 		if err := r.FirecrawlSettings.Validate(passphrase); err != nil {
 			return fmt.Errorf("invalid firecrawl settings: %w", err)
 		}
+	case IntegrationTypeIMAP:
+		// Veridian fork — config IMAP self-service (Lot 8). Le password est
+		// chiffré en place par IMAPSettings.Validate (même pattern que SMTP).
+		if r.IMAPSettings == nil {
+			return fmt.Errorf("imap settings are required for imap integration")
+		}
+		if err := r.IMAPSettings.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid imap settings: %w", err)
+		}
 	default:
 		return fmt.Errorf("unsupported integration type: %s", r.Type)
 	}
@@ -1166,6 +1179,9 @@ type UpdateIntegrationRequest struct {
 	SupabaseSettings  *SupabaseIntegrationSettings `json:"supabase_settings,omitempty"`  // For Supabase integrations
 	LLMProvider       *LLMProvider                 `json:"llm_provider,omitempty"`       // For LLM integrations
 	FirecrawlSettings *FirecrawlSettings           `json:"firecrawl_settings,omitempty"` // For Firecrawl integrations
+	// Veridian fork — config IMAP self-service (Lot 8 cold outbound). Présent ssi
+	// l'intégration éditée est de type "imap".
+	IMAPSettings *IMAPSettings `json:"imap_settings,omitempty"` // For IMAP integrations
 }
 
 func (r *UpdateIntegrationRequest) Validate(passphrase string) error {
@@ -1198,6 +1214,14 @@ func (r *UpdateIntegrationRequest) Validate(passphrase string) error {
 	} else if r.FirecrawlSettings != nil {
 		if err := r.FirecrawlSettings.Validate(passphrase); err != nil {
 			return fmt.Errorf("invalid firecrawl settings: %w", err)
+		}
+	} else if r.IMAPSettings != nil {
+		// Veridian fork — valide la config IMAP fournie à l'édition (Lot 8). Le
+		// service re-valide l'intégration complète, mais valider tôt donne un
+		// message d'erreur clair. Password vide + EncryptedPassword existant =
+		// édition sans changer le mot de passe (toléré par IMAPSettings.Validate).
+		if err := r.IMAPSettings.Validate(passphrase); err != nil {
+			return fmt.Errorf("invalid imap settings: %w", err)
 		}
 	}
 

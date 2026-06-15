@@ -151,6 +151,37 @@ export interface EmailProvider {
   sendgrid?: SendGridSettings
   senders: Sender[]
   rate_limit_per_minute: number
+
+  // Veridian fork — config cold outbound PAR INFRA d'envoi (R2 + Lot 5/8). Une
+  // infra (= cette intégration EmailProvider, son host/IP/relai SMTP + senders)
+  // peut porter ses propres débits/plafonds (en warm-up) et son custom tracking
+  // domain aligné au domaine d'envoi. Source de vérité backend :
+  // internal/domain/email_provider.go. Persisté comme JSON blob (pas d'allowlist
+  // champ-par-champ — passe automatiquement via updateIntegration).
+  veridian_provider_class_rates?: Record<VeridianProviderClass, number>
+  veridian_provider_class_daily_cap?: Record<VeridianProviderClass, number>
+  veridian_per_recipient_daily_cap?: number
+  // Custom tracking domain aligné au domaine d'envoi (ex track.agences-veridian.fr).
+  // Domaine nu OU URL complète. Vide = fallback workspace/global. Cf.
+  // internal/domain/veridian_tracking_domain.go.
+  veridian_tracking_domain?: string
+}
+
+// Veridian fork — config d'une boîte IMAP pollée par Notifuse (réception :
+// bounces NDR Postfix + réponses prospects cold). C'est la brique self-service
+// qui débloque bounce-loop (Lot 2) + stop-on-reply (Lot 3) sans script externe.
+// Source de vérité backend : internal/domain/veridian_imap_integration.go.
+// Le password n'est jamais renvoyé en clair par l'API (encrypted_password seul
+// persiste) ; l'UI le laisse vide à l'édition pour ne pas le changer.
+export interface IMAPSettings {
+  host: string
+  port: number
+  username: string
+  password?: string
+  encrypted_password?: string
+  use_tls: boolean
+  folder?: string
+  polling_interval_seconds?: number
 }
 
 export interface AmazonSES {
@@ -219,7 +250,15 @@ export interface SendGridSettings {
   encrypted_api_key?: string
 }
 
-export type IntegrationType = 'email' | 'sms' | 'whatsapp' | 'supabase' | 'llm' | 'firecrawl'
+export type IntegrationType =
+  | 'email'
+  | 'sms'
+  | 'whatsapp'
+  | 'supabase'
+  | 'llm'
+  | 'firecrawl'
+  // Veridian fork — boîte IMAP pollée (réception bounces/réponses cold, Lot 8).
+  | 'imap'
 
 // LLM Provider types
 export type LLMProviderKind = 'anthropic' | 'openai'
@@ -276,6 +315,8 @@ export interface Integration {
   supabase_settings?: SupabaseIntegrationSettings
   llm_provider?: LLMProvider
   firecrawl_settings?: FirecrawlSettings
+  // Veridian fork — présent ssi type === 'imap' (Lot 8).
+  imap_settings?: IMAPSettings
   created_at: string
   updated_at: string
 }
@@ -354,6 +395,8 @@ export interface CreateIntegrationRequest {
   supabase_settings?: SupabaseIntegrationSettings
   llm_provider?: LLMProvider
   firecrawl_settings?: FirecrawlSettings
+  // Veridian fork — config IMAP self-service (Lot 8), présent ssi type === 'imap'.
+  imap_settings?: IMAPSettings
 }
 
 export interface UpdateIntegrationRequest {
@@ -364,6 +407,9 @@ export interface UpdateIntegrationRequest {
   supabase_settings?: SupabaseIntegrationSettings
   llm_provider?: LLMProvider
   firecrawl_settings?: FirecrawlSettings
+  // Veridian fork — config IMAP self-service (Lot 8). Password vide à l'édition =
+  // ne change pas le mot de passe (le backend préserve encrypted_password).
+  imap_settings?: IMAPSettings
 }
 
 export interface DeleteIntegrationRequest {

@@ -1274,6 +1274,11 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 		integration.LLMProvider = req.LLMProvider
 	case domain.IntegrationTypeFirecrawl:
 		integration.FirecrawlSettings = req.FirecrawlSettings
+	case domain.IntegrationTypeIMAP:
+		// Veridian fork — config IMAP self-service (Lot 8). Le password en clair
+		// est chiffré au repos par integration.Validate (case IntegrationTypeIMAP
+		// dans workspace.go) puis le poller (Lot 1) le déchiffre au runtime.
+		integration.IMAPSettings = req.IMAPSettings
 	}
 
 	// Validate the integration
@@ -1457,6 +1462,23 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 		} else {
 			// If no settings provided, preserve existing
 			updatedIntegration.FirecrawlSettings = existingIntegration.FirecrawlSettings
+		}
+	case domain.IntegrationTypeIMAP:
+		// Veridian fork — config IMAP self-service (Lot 8). Préserve le password
+		// chiffré existant si l'admin re-sauve sans retaper le mot de passe (même
+		// pattern que les API keys Supabase/LLM/Firecrawl ci-dessus).
+		if req.IMAPSettings != nil {
+			updatedIntegration.IMAPSettings = req.IMAPSettings
+
+			if req.IMAPSettings.Password == "" &&
+				req.IMAPSettings.EncryptedPassword == "" &&
+				existingIntegration.IMAPSettings != nil {
+				updatedIntegration.IMAPSettings.EncryptedPassword =
+					existingIntegration.IMAPSettings.EncryptedPassword
+			}
+		} else {
+			// If no settings provided, preserve existing
+			updatedIntegration.IMAPSettings = existingIntegration.IMAPSettings
 		}
 	}
 

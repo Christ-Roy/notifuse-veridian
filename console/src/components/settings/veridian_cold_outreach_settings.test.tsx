@@ -18,7 +18,9 @@ vi.mock('../../services/api/workspace', async () => {
     ...actual,
     workspaceService: {
       update: vi.fn().mockResolvedValue({}),
-      get: vi.fn()
+      get: vi.fn(),
+      createIntegration: vi.fn().mockResolvedValue({ integration_id: 'imap-new' }),
+      updateIntegration: vi.fn().mockResolvedValue({ status: 'ok' })
     }
   }
 })
@@ -37,10 +39,14 @@ vi.mock('../../services/api/contacts', () => ({
 import { workspaceService } from '../../services/api/workspace'
 import { contactsApi } from '../../services/api/contacts'
 
-function makeWorkspace(overrides?: Partial<Workspace['settings']>): Workspace {
+function makeWorkspace(
+  overrides?: Partial<Workspace['settings']>,
+  integrations?: Workspace['integrations']
+): Workspace {
   return {
     id: 'ws-1',
     name: 'WS',
+    integrations: integrations ?? [],
     settings: {
       timezone: 'UTC',
       email_tracking_enabled: true,
@@ -80,20 +86,24 @@ describe('VeridianColdOutreachSettings', () => {
     vi.mocked(workspaceService.get).mockResolvedValue({ workspace: makeWorkspace() } as never)
   })
 
-  it('shows the section header and all 5 provider classes', () => {
+  it('shows the section header and the provider classes', () => {
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
     expect(screen.getByText('Veridian — Cold outreach')).toBeInTheDocument()
     expect(screen.getByText(/Google \(Gmail/)).toBeInTheDocument()
     expect(screen.getByText(/Microsoft \(Outlook/)).toBeInTheDocument()
     expect(screen.getByText(/Yahoo \/ AOL/)).toBeInTheDocument()
     expect(screen.getByText(/French ISPs/)).toBeInTheDocument()
-    expect(screen.getByText(/Corporate/)).toBeInTheDocument()
+    // Deux classes "Corporate" depuis la classification MX (Lot 4) : suffixe
+    // inconnu + self-hosted. Matchers exacts pour lever l'ambiguïté.
+    expect(screen.getByText('Corporate (unknown by suffix)')).toBeInTheDocument()
+    expect(screen.getByText('Corporate self-hosted (MX unknown)')).toBeInTheDocument()
   })
 
-  it('tags Google and Microsoft as pixel OFF by default (owner view)', () => {
+  it('tags the big/sensitive providers as pixel OFF by default (owner view)', () => {
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
-    // 2 tags "pixel OFF by default" (google + microsoft)
-    expect(screen.getAllByText(/pixel OFF by default/i)).toHaveLength(2)
+    // 3 tags "pixel OFF by default" : google + microsoft + security_gateway
+    // (BIG_PROVIDERS — réputation sensible au pixel d'ouverture).
+    expect(screen.getAllByText(/pixel OFF by default/i)).toHaveLength(3)
   })
 
   it('renders read-only descriptions for non-owner', () => {
@@ -123,9 +133,11 @@ describe('VeridianColdOutreachSettings', () => {
     const saveBtn = screen.getByRole('button', { name: /Save Changes/i })
     expect(saveBtn).toBeDisabled()
 
-    // Le rate google est pré-rempli à 1 ; on bascule un toggle pixel pour toucher le form.
-    const switches = screen.getAllByRole('switch')
-    await user.click(switches[0]) // toggle pixel google
+    // Touche le form de RATES de façon déterministe via le champ per-recipient
+    // (unique sur la page). NB : ne pas cibler un switch par index global — la
+    // carte IMAP rend aussi un switch TLS qui se glisserait en switches[0].
+    const recipInput = screen.getByLabelText(/Emails \/ recipient \/ day/i)
+    await user.type(recipInput, '2')
 
     await waitFor(() => expect(saveBtn).toBeEnabled())
     await user.click(saveBtn)
@@ -189,5 +201,144 @@ describe('VeridianColdOutreachSettings', () => {
     expect(screen.getByText(/2 \/ day/)).toBeInTheDocument()
     // cap classe google "50 / day"
     expect(screen.getByText(/50 \/ day/)).toBeInTheDocument()
+  })
+
+  // ── IMAP inbox (self-service bounce/reply) ──────────────────────────────────
+
+  it('creates a new IMAP integration when none exists (owner)', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+
+    expect(screen.getByText('Reply & bounce inbox (IMAP)')).toBeInTheDocument()
+    // Pas d'intégration → tag "Not configured" + bouton "Connect"
+    expect(screen.getByText('Not configured')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/IMAP host/i), 'imap.example.com')
+    const username = screen.getByLabelText('Username')
+    await user.clear(username)
+    await user.type(username, 'returns@example.com')
+    // password (1er Input.Password de la carte IMAP)
+    const pwd = screen.getByPlaceholderText(/Mailbox password/i)
+    await user.type(pwd, 's3cret')
+
+    await user.click(screen.getByRole('button', { name: /Connect IMAP inbox/i }))
+
+    await waitFor(() => {
+      expect(workspaceService.createIntegration).toHaveBeenCalledTimes(1)
+    })
+    const arg = vi.mocked(workspaceService.createIntegration).mock.calls[0][0]
+    expect(arg.type).toBe('imap')
+    expect(arg.imap_settings?.host).toBe('imap.example.com')
+    expect(arg.imap_settings?.username).toBe('returns@example.com')
+    expect(arg.imap_settings?.password).toBe('s3cret')
+    // TLS coché par défaut + dossier INBOX
+    expect(arg.imap_settings?.use_tls).toBe(true)
+    expect(arg.imap_settings?.folder).toBe('INBOX')
+  })
+
+  it('updates an existing IMAP integration without resending the password (owner)', async () => {
+    const user = userEvent.setup()
+    const imapIntegration = {
+      id: 'imap-1',
+      name: 'Cold reply inbox',
+      type: 'imap' as const,
+      imap_settings: {
+        host: 'imap.example.com',
+        port: 993,
+        username: 'returns@example.com',
+        encrypted_password: 'deadbeef',
+        use_tls: true,
+        folder: 'INBOX'
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({
+      workspace: makeWorkspace({}, [imapIntegration]),
+      isOwner: true
+    })
+
+    // Intégration présente → tag "Configured" et host pré-rempli
+    expect(screen.getByText('Configured')).toBeInTheDocument()
+    expect((screen.getByLabelText(/IMAP host/i) as HTMLInputElement).value).toBe('imap.example.com')
+
+    // On change juste le dossier, on ne touche pas au password → updateIntegration
+    // doit partir SANS password (le backend préserve encrypted_password).
+    const folder = screen.getByLabelText('Folder')
+    await user.clear(folder)
+    await user.type(folder, 'Bounces')
+    await user.click(screen.getByRole('button', { name: /Save IMAP inbox/i }))
+
+    await waitFor(() => {
+      expect(workspaceService.updateIntegration).toHaveBeenCalledTimes(1)
+    })
+    const arg = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
+    expect(arg.integration_id).toBe('imap-1')
+    expect(arg.imap_settings?.folder).toBe('Bounces')
+    expect(arg.imap_settings?.password).toBeUndefined()
+  })
+
+  it('renders the IMAP inbox read-only for non-owner', () => {
+    const imapIntegration = {
+      id: 'imap-1',
+      name: 'Cold reply inbox',
+      type: 'imap' as const,
+      imap_settings: {
+        host: 'imap.example.com',
+        port: 993,
+        username: 'returns@example.com',
+        use_tls: true,
+        folder: 'INBOX'
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [imapIntegration]), isOwner: false })
+    expect(screen.getByText('imap.example.com:993')).toBeInTheDocument()
+    expect(screen.getByText('returns@example.com')).toBeInTheDocument()
+    // pas de bouton de connexion en lecture seule
+    expect(screen.queryByRole('button', { name: /IMAP inbox/i })).not.toBeInTheDocument()
+  })
+
+  // ── Custom tracking domain per sending infra ────────────────────────────────
+
+  it('saves a custom tracking domain on the email provider, preserving senders (owner)', async () => {
+    const user = userEvent.setup()
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: true })
+
+    expect(screen.getByText('Custom tracking domain (per sending infrastructure)')).toBeInTheDocument()
+    // placeholder suggère track.<sender domain>
+    const input = screen.getByPlaceholderText('track.agences-veridian.fr')
+    await user.type(input, 'track.agences-veridian.fr')
+    await user.click(screen.getByRole('button', { name: /^Save$/i }))
+
+    await waitFor(() => {
+      expect(workspaceService.updateIntegration).toHaveBeenCalledTimes(1)
+    })
+    const arg = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
+    expect(arg.integration_id).toBe('email-1')
+    expect(arg.provider?.veridian_tracking_domain).toBe('track.agences-veridian.fr')
+    // senders + rate_limit conservés (on renvoie le provider COMPLET)
+    expect(arg.provider?.senders).toHaveLength(1)
+    expect(arg.provider?.rate_limit_per_minute).toBe(25)
+  })
+
+  it('shows a hint when no sending integration exists for tracking domain', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    expect(
+      screen.getByText(/No sending integration configured yet/i)
+    ).toBeInTheDocument()
   })
 })

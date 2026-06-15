@@ -728,10 +728,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		}
 
 		settings := domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -775,10 +775,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, nil, nil, assert.AnError)
 
 		settings := domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -806,10 +806,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		}
 
 		settings := domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -834,10 +834,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		}
 
 		settings := domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -875,10 +875,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		}
 
 		settings := domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -1053,9 +1053,9 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	// 2026-06-11 : l'UI sauvait "successfully" mais les champs restaient nil).
 	t.Run("persists veridian cold outreach settings", func(t *testing.T) {
 		settings := domain.WorkspaceSettings{
-			Timezone:        "UTC",
-			DefaultLanguage: "en",
-			Languages:       []string{"en"},
+			Timezone:                      "UTC",
+			DefaultLanguage:               "en",
+			Languages:                     []string{"en"},
 			VeridianProviderClassRates:    map[string]float64{"google": 0.5, "corporate": 30},
 			VeridianOpenPixelByClass:      map[string]bool{"google": false, "freemail_fr": true},
 			VeridianProviderClassDailyCap: map[string]int{"google": 1, "microsoft": 50},
@@ -1423,6 +1423,47 @@ func TestWorkspaceService_CreateIntegration(t *testing.T) {
 		require.NotEmpty(t, integrationID)
 	})
 
+	t.Run("successful create imap integration", func(t *testing.T) {
+		// Veridian fork (Lot 8) — config IMAP self-service de bout en bout : le
+		// service doit accepter le type "imap", persister les settings et chiffrer
+		// le password au repos (pas de webhook registration pour ce type).
+		expectedUser := &domain.User{ID: userID}
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+		expectedWorkspace := &domain.Workspace{ID: workspaceID, Name: "Test Workspace"}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			require.Equal(t, 1, len(workspace.Integrations))
+			require.Equal(t, domain.IntegrationTypeIMAP, workspace.Integrations[0].Type)
+			require.NotNil(t, workspace.Integrations[0].IMAPSettings)
+			require.Equal(t, "imap.example.com", workspace.Integrations[0].IMAPSettings.Host)
+			// Password chiffré au repos : le clair ne doit pas être persisté.
+			require.NotEmpty(t, workspace.Integrations[0].IMAPSettings.EncryptedPassword)
+			return nil
+		})
+
+		integrationID, err := service.CreateIntegration(ctx, domain.CreateIntegrationRequest{
+			WorkspaceID: workspaceID,
+			Name:        "Cold reply inbox",
+			Type:        domain.IntegrationTypeIMAP,
+			IMAPSettings: &domain.IMAPSettings{
+				Host:     "imap.example.com",
+				Port:     993,
+				Username: "returns@example.com",
+				Password: "s3cret",
+				UseTLS:   true,
+			},
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, integrationID)
+	})
+
 	t.Run("unauthorized user", func(t *testing.T) {
 		expectedUser := &domain.User{
 			ID: userID,
@@ -1675,6 +1716,67 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 			IntegrationID: integrationID,
 			Name:          integrationName,
 			Provider:      provider,
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("update imap integration preserves password when not resent", func(t *testing.T) {
+		// Veridian fork (Lot 8) — l'admin re-sauve une boîte IMAP sans retaper le
+		// mot de passe (UI laisse le champ vide). Le service doit préserver
+		// l'EncryptedPassword existant plutôt que de planter la validation.
+		const existingEncrypted = "encrypted-existing-pwd"
+		expectedUser := &domain.User{ID: userID}
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+		existingIMAP := domain.Integration{
+			ID:   integrationID,
+			Name: "Cold reply inbox",
+			Type: domain.IntegrationTypeIMAP,
+			IMAPSettings: &domain.IMAPSettings{
+				Host:              "imap.example.com",
+				Port:              993,
+				Username:          "returns@example.com",
+				EncryptedPassword: existingEncrypted,
+				UseTLS:            true,
+				Folder:            "INBOX",
+			},
+			CreatedAt: time.Now().Add(-24 * time.Hour),
+			UpdatedAt: time.Now().Add(-24 * time.Hour),
+		}
+		expectedWorkspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: []domain.Integration{existingIMAP},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			require.Equal(t, 1, len(workspace.Integrations))
+			require.Equal(t, domain.IntegrationTypeIMAP, workspace.Integrations[0].Type)
+			require.NotNil(t, workspace.Integrations[0].IMAPSettings)
+			// Dossier mis à jour, password chiffré préservé.
+			require.Equal(t, "Bounces", workspace.Integrations[0].IMAPSettings.Folder)
+			require.Equal(t, existingEncrypted, workspace.Integrations[0].IMAPSettings.EncryptedPassword)
+			return nil
+		})
+
+		err := service.UpdateIntegration(ctx, domain.UpdateIntegrationRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: integrationID,
+			Name:          "Cold reply inbox",
+			IMAPSettings: &domain.IMAPSettings{
+				Host:     "imap.example.com",
+				Port:     993,
+				Username: "returns@example.com",
+				UseTLS:   true,
+				Folder:   "Bounces",
+				// Password vide => ne change pas le mot de passe.
+			},
 		})
 		require.NoError(t, err)
 	})
