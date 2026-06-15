@@ -64,3 +64,78 @@
               $ref: '../components/schemas/common.yaml#/ErrorResponse'
             example:
               error: Failed to send notification
+
+/api/transactional.testTemplate:
+  post:
+    summary: Send a test of a template to a single recipient
+    description: |
+      Renders a template and sends it to one recipient address for testing,
+      using a specific sending integration + sender. Requires authentication.
+      Disabled in demo mode.
+    operationId: testTransactionalTemplate
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - workspace_id
+              - template_id
+              - integration_id
+              - sender_id
+              - recipient_email
+            properties:
+              workspace_id:
+                type: string
+                example: ws_demo
+              template_id:
+                type: string
+                example: tpl_welcome
+              integration_id:
+                type: string
+                description: Sending integration (EmailProvider) to use.
+                example: smtp_main
+              sender_id:
+                type: string
+                description: Sender (from address) within the integration.
+                example: sender_1
+              recipient_email:
+                type: string
+                format: email
+                example: you@example.com
+              language:
+                type: string
+                description: Optional language for template rendering.
+                example: en
+              email_options:
+                type: object
+                description: Same shape as transactional.send email_options (subject/cc/bcc/reply_to/attachments overrides).
+                additionalProperties: true
+    responses:
+      '200':
+        description: Test email sent
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+      '400':
+        description: Bad request - validation failed
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/ErrorResponse'
+      '401':
+        description: Unauthorized
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/ErrorResponse'
+            example:
+              error: Unauthorized

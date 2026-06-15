@@ -1,0 +1,334 @@
+/api/automations.create:
+  post:
+    summary: Create an automation
+    description: |
+      Creates an automation (workflow). Created in `draft` status — call
+      `automations.activate` to install the trigger and start enrolling contacts.
+      Requires `automations:write` permission.
+    operationId: createAutomation
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/automation.yaml#/CreateAutomationRequest'
+    responses:
+      '201':
+        description: Automation created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                automation:
+                  $ref: '../components/schemas/automation.yaml#/Automation'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/automations.get:
+  get:
+    summary: Get an automation
+    operationId: getAutomation
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: id
+        in: query
+        required: true
+        description: Automation ID.
+        schema: { type: string }
+    responses:
+      '200':
+        description: Automation
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                automation:
+                  $ref: '../components/schemas/automation.yaml#/Automation'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/automations.list:
+  get:
+    summary: List automations
+    operationId: listAutomations
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: status
+        in: query
+        description: Filter by status (repeatable).
+        schema:
+          type: string
+          enum: [draft, live, paused]
+      - name: list_id
+        in: query
+        schema: { type: string }
+      - name: limit
+        in: query
+        schema: { type: integer }
+      - name: offset
+        in: query
+        schema: { type: integer }
+    responses:
+      '200':
+        description: Automations
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                automations:
+                  type: array
+                  items:
+                    $ref: '../components/schemas/automation.yaml#/Automation'
+                total:
+                  type: integer
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+
+/api/automations.update:
+  post:
+    summary: Update an automation
+    operationId: updateAutomation
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/automation.yaml#/UpdateAutomationRequest'
+    responses:
+      '200':
+        description: Automation updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                automation:
+                  $ref: '../components/schemas/automation.yaml#/Automation'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/automations.delete:
+  post:
+    summary: Delete an automation
+    description: Soft-deletes the automation, drops its trigger, and exits active contacts.
+    operationId: deleteAutomation
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/automation.yaml#/AutomationIDRequest'
+    responses:
+      '200':
+        description: Deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success: { type: boolean }
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/automations.activate:
+  post:
+    summary: Activate an automation
+    description: |
+      Transitions the automation to `live` and installs the DB trigger so the
+      configured event starts enrolling contacts.
+    operationId: activateAutomation
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/automation.yaml#/AutomationIDRequest'
+    responses:
+      '200':
+        description: Activated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success: { type: boolean }
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/automations.pause:
+  post:
+    summary: Pause a live automation
+    description: Drops the trigger and freezes contacts at their current node.
+    operationId: pauseAutomation
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/automation.yaml#/AutomationIDRequest'
+    responses:
+      '200':
+        description: Paused
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success: { type: boolean }
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/automations.enroll:
+  post:
+    summary: Enroll contacts into an automation (Veridian extension)
+    description: |
+      Enrolls one or more contacts into a LIVE automation at its root node,
+      programmatically — without having to fire the trigger event. This is the
+      API-first way to push contacts into a cold sequence. Reuses the exact same
+      enrollment path as the event trigger (the `automation_enroll_contact` SQL
+      function): each contact gets a contact_automation row at the root node, the
+      enrolled stat increments, a node execution is logged, and an `automation.start`
+      timeline event is created.
+
+      Idempotent: a contact already `active` in the automation is skipped
+      (`already_active`). Contacts that previously completed/exited can be re-enrolled.
+      The automation must be `live`; enrolling into draft/paused is rejected.
+      Best-effort per contact — one failing email does not abort the batch.
+
+      Requires `automations:write` permission. Auth = JWT (console) or API key.
+    operationId: enrollContactsIntoAutomation
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/automation.yaml#/EnrollContactsRequest'
+    responses:
+      '200':
+        description: Enrollment outcome (per-contact results)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/automation.yaml#/EnrollContactsResponse'
+      '400':
+        description: Validation failed (missing fields, invalid email, automation not live)
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/ErrorResponse'
+            examples:
+              notLive:
+                value:
+                  error: 'cannot enroll contacts: automation is not live (status: draft)'
+              invalidEmail:
+                value:
+                  error: 'invalid email format: "not-an-email"'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/automations.nodeExecutions:
+  get:
+    summary: Get a contact's node executions for an automation
+    description: Debugging — returns the contact_automation record and its node execution log.
+    operationId: getContactNodeExecutions
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: automation_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: email
+        in: query
+        required: true
+        schema: { type: string, format: email }
+    responses:
+      '200':
+        description: Contact automation + node executions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_automation:
+                  $ref: '../components/schemas/automation.yaml#/ContactAutomation'
+                node_executions:
+                  type: array
+                  items:
+                    $ref: '../components/schemas/automation.yaml#/NodeExecution'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+components:
+  responses:
+    BadRequest:
+      description: Bad request - validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized - invalid or missing authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+          example:
+            error: Unauthorized
+    Forbidden:
+      description: Forbidden - insufficient permissions for this workspace
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+          example:
+            error: 'Insufficient permissions: write access to automations required'

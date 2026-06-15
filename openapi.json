@@ -127,6 +127,111 @@
         }
       }
     },
+    "/api/transactional.testTemplate": {
+      "post": {
+        "summary": "Send a test of a template to a single recipient",
+        "description": "Renders a template and sends it to one recipient address for testing,\nusing a specific sending integration + sender. Requires authentication.\nDisabled in demo mode.\n",
+        "operationId": "testTransactionalTemplate",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "template_id",
+                  "integration_id",
+                  "sender_id",
+                  "recipient_email"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "ws_demo"
+                  },
+                  "template_id": {
+                    "type": "string",
+                    "example": "tpl_welcome"
+                  },
+                  "integration_id": {
+                    "type": "string",
+                    "description": "Sending integration (EmailProvider) to use.",
+                    "example": "smtp_main"
+                  },
+                  "sender_id": {
+                    "type": "string",
+                    "description": "Sender (from address) within the integration.",
+                    "example": "sender_1"
+                  },
+                  "recipient_email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "you@example.com"
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Optional language for template rendering.",
+                    "example": "en"
+                  },
+                  "email_options": {
+                    "type": "object",
+                    "description": "Same shape as transactional.send email_options (subject/cc/bcc/reply_to/attachments overrides).",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test email sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/contacts.list": {
       "get": {
         "summary": "List contacts with filtering and pagination",
@@ -2801,6 +2906,598 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/automations.create": {
+      "post": {
+        "summary": "Create an automation",
+        "description": "Creates an automation (workflow). Created in `draft` status — call\n`automations.activate` to install the trigger and start enrolling contacts.\nRequires `automations:write` permission.\n",
+        "operationId": "createAutomation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAutomationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Automation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "automation": {
+                      "$ref": "#/components/schemas/Automation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/automations.get": {
+      "get": {
+        "summary": "Get an automation",
+        "operationId": "getAutomation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Automation ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Automation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "automation": {
+                      "$ref": "#/components/schemas/Automation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/automations.list": {
+      "get": {
+        "summary": "List automations",
+        "operationId": "listAutomations",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (repeatable).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "live",
+                "paused"
+              ]
+            }
+          },
+          {
+            "name": "list_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Automations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "automations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Automation"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/automations.update": {
+      "post": {
+        "summary": "Update an automation",
+        "operationId": "updateAutomation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAutomationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Automation updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "automation": {
+                      "$ref": "#/components/schemas/Automation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/automations.delete": {
+      "post": {
+        "summary": "Delete an automation",
+        "description": "Soft-deletes the automation, drops its trigger, and exits active contacts.",
+        "operationId": "deleteAutomation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutomationIDRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/automations.activate": {
+      "post": {
+        "summary": "Activate an automation",
+        "description": "Transitions the automation to `live` and installs the DB trigger so the\nconfigured event starts enrolling contacts.\n",
+        "operationId": "activateAutomation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutomationIDRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Activated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/automations.pause": {
+      "post": {
+        "summary": "Pause a live automation",
+        "description": "Drops the trigger and freezes contacts at their current node.",
+        "operationId": "pauseAutomation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutomationIDRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Paused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/automations.enroll": {
+      "post": {
+        "summary": "Enroll contacts into an automation (Veridian extension)",
+        "description": "Enrolls one or more contacts into a LIVE automation at its root node,\nprogrammatically — without having to fire the trigger event. This is the\nAPI-first way to push contacts into a cold sequence. Reuses the exact same\nenrollment path as the event trigger (the `automation_enroll_contact` SQL\nfunction): each contact gets a contact_automation row at the root node, the\nenrolled stat increments, a node execution is logged, and an `automation.start`\ntimeline event is created.\n\nIdempotent: a contact already `active` in the automation is skipped\n(`already_active`). Contacts that previously completed/exited can be re-enrolled.\nThe automation must be `live`; enrolling into draft/paused is rejected.\nBest-effort per contact — one failing email does not abort the batch.\n\nRequires `automations:write` permission. Auth = JWT (console) or API key.\n",
+        "operationId": "enrollContactsIntoAutomation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollContactsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Enrollment outcome (per-contact results)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollContactsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (missing fields, invalid email, automation not live)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "notLive": {
+                    "value": {
+                      "error": "cannot enroll contacts: automation is not live (status: draft)"
+                    }
+                  },
+                  "invalidEmail": {
+                    "value": {
+                      "error": "invalid email format: \"not-an-email\""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/automations.nodeExecutions": {
+      "get": {
+        "summary": "Get a contact's node executions for an automation",
+        "description": "Debugging — returns the contact_automation record and its node execution log.",
+        "operationId": "getContactNodeExecutions",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "automation_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact automation + node executions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact_automation": {
+                      "$ref": "#/components/schemas/ContactAutomation"
+                    },
+                    "node_executions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NodeExecution"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/veridian/contacts.providerBreakdown": {
+      "post": {
+        "summary": "Count contacts by recipient provider class (Veridian cold outreach)",
+        "description": "Veridian extension. Returns the number of contacts grouped by recipient\nprovider class — used to size the per-class cold-outbound throttle/caps.\nClassification reuses the same logic as the send-time throttle (a contact's\n`custom_string_5` override wins, else the domain suffix, else `corporate`).\n\nAuth = JWT (console). Requires `contacts:read` permission for the workspace.\nBoth POST (RPC-style) and GET are routed.\n",
+        "operationId": "veridianContactsProviderBreakdown",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "ws_demo"
+                  },
+                  "list_id": {
+                    "type": "string",
+                    "description": "Optional — restrict the count to a single list.",
+                    "example": "list_main"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-class breakdown",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderBreakdown"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized-2"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden-2"
+          }
+        }
+      },
+      "get": {
+        "summary": "Count contacts by recipient provider class (GET form)",
+        "operationId": "veridianContactsProviderBreakdownGet",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "list_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-class breakdown",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderBreakdown"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized-2"
           }
         }
       }
@@ -7537,6 +8234,11 @@
             "description": "User's display name",
             "example": "Admin User"
           },
+          "language": {
+            "type": "string",
+            "description": "User's preferred locale for the console UI and system emails",
+            "example": "en"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -7554,6 +8256,758 @@
           "id",
           "email"
         ]
+      },
+      "Automation": {
+        "type": "object",
+        "description": "An automation is a visual workflow (sequence of nodes) that contacts travel\nthrough when a trigger event fires. Nodes are embedded in the automation as a\nflat list; `root_node_id` points to the entry node. The graph is followed via\neach node's `next_node_id` (or branch/filter targets in the node config).\n",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "trigger"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 36,
+            "description": "Unique automation ID (UUID recommended). Required, max 36 chars.",
+            "example": "7c3e2b1a-1234-4abc-9def-0123456789ab"
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace this automation belongs to.",
+            "example": "ws_demo"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Human-readable name.",
+            "example": "Cold outreach 3-step sequence"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "live",
+              "paused"
+            ],
+            "description": "Lifecycle status. `draft` (default on create), `live` (trigger installed,\nenrolling contacts), `paused` (trigger dropped, contacts frozen). Use the\nactivate/pause endpoints to transition — do not flip this field manually.\n",
+            "example": "draft"
+          },
+          "list_id": {
+            "type": "string",
+            "description": "Optional list used for unsubscribe links in email nodes. NOT an enrollment\nfilter. Required when the automation contains email nodes.\n",
+            "example": "list_main"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/TimelineTriggerConfig"
+          },
+          "root_node_id": {
+            "type": "string",
+            "description": "ID of the entry node. Required when `nodes` is non-empty.",
+            "example": "node_start"
+          },
+          "nodes": {
+            "type": "array",
+            "description": "Embedded workflow nodes (the steps of the sequence).",
+            "items": {
+              "$ref": "#/components/schemas/AutomationNode"
+            }
+          },
+          "stats": {
+            "$ref": "#/components/schemas/AutomationStats"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "TimelineTriggerConfig": {
+        "type": "object",
+        "description": "Defines which timeline event enrolls a contact into the automation.",
+        "required": [
+          "event_kind",
+          "frequency"
+        ],
+        "properties": {
+          "event_kind": {
+            "type": "string",
+            "description": "Timeline event that triggers enrollment.",
+            "enum": [
+              "contact.created",
+              "contact.updated",
+              "contact.deleted",
+              "list.subscribed",
+              "list.unsubscribed",
+              "list.confirmed",
+              "list.resubscribed",
+              "list.bounced",
+              "list.complained",
+              "list.pending",
+              "list.removed",
+              "segment.joined",
+              "segment.left",
+              "email.sent",
+              "email.delivered",
+              "email.opened",
+              "email.clicked",
+              "email.bounced",
+              "email.complained",
+              "email.unsubscribed",
+              "custom_event"
+            ],
+            "example": "contact.created"
+          },
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "once",
+              "every_time"
+            ],
+            "description": "`once` = enroll a contact only on the first occurrence (deduped via\nautomation_trigger_log). `every_time` = re-enroll on each occurrence.\n",
+            "example": "once"
+          },
+          "list_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Required for `list.*` events (filters on the list)."
+          },
+          "segment_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Required for `segment.*` events."
+          },
+          "custom_event_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Required for `custom_event` (matches `custom_event.{name}`)."
+          },
+          "updated_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "For `contact.updated` — only trigger when one of these fields changed."
+          },
+          "conditions": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Optional TreeNode condition tree (same DSL as segments)."
+          }
+        }
+      },
+      "AutomationNode": {
+        "type": "object",
+        "description": "A single step in the workflow. `config` is a polymorphic object whose shape\ndepends on `type` (see the per-type config schemas below).\n",
+        "required": [
+          "id",
+          "type",
+          "config"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "node_email_1"
+          },
+          "automation_id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "trigger",
+              "delay",
+              "email",
+              "branch",
+              "filter",
+              "add_to_list",
+              "remove_from_list",
+              "ab_test",
+              "webhook",
+              "list_status_branch"
+            ],
+            "description": "Node type. `config` shape per type:\ndelay → DelayNodeConfig; email → EmailNodeConfig; branch → BranchNodeConfig;\nfilter → FilterNodeConfig; add_to_list → AddToListNodeConfig;\nremove_from_list → RemoveFromListNodeConfig; ab_test → ABTestNodeConfig;\nwebhook → WebhookNodeConfig; list_status_branch → ListStatusBranchNodeConfig.\n",
+            "example": "email"
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Type-specific configuration. See *NodeConfig schemas."
+          },
+          "next_node_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Next node in linear flow (branch/filter use their own targets)."
+          },
+          "position": {
+            "type": "object",
+            "description": "Canvas coordinates (UI only).",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "DelayNodeConfig": {
+        "type": "object",
+        "description": "Wait before continuing.",
+        "required": [
+          "duration",
+          "unit"
+        ],
+        "properties": {
+          "duration": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 2
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "minutes",
+              "hours",
+              "days"
+            ],
+            "example": "days"
+          }
+        }
+      },
+      "EmailNodeConfig": {
+        "type": "object",
+        "description": "Send an email using a template.",
+        "required": [
+          "template_id"
+        ],
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "example": "tpl_welcome"
+          },
+          "integration_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Sending integration (EmailProvider) override."
+          },
+          "subject_override": {
+            "type": "string",
+            "nullable": true
+          },
+          "from_override": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "BranchNodeConfig": {
+        "type": "object",
+        "description": "Route the contact down one of several condition paths.",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "conditions": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                },
+                "next_node_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default_path_id": {
+            "type": "string"
+          }
+        }
+      },
+      "FilterNodeConfig": {
+        "type": "object",
+        "description": "Continue or exit based on a condition.",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "continue_node_id": {
+            "type": "string"
+          },
+          "exit_node_id": {
+            "type": "string"
+          }
+        }
+      },
+      "AddToListNodeConfig": {
+        "type": "object",
+        "required": [
+          "list_id",
+          "status"
+        ],
+        "properties": {
+          "list_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "pending"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "RemoveFromListNodeConfig": {
+        "type": "object",
+        "required": [
+          "list_id"
+        ],
+        "properties": {
+          "list_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ListStatusBranchNodeConfig": {
+        "type": "object",
+        "required": [
+          "list_id"
+        ],
+        "properties": {
+          "list_id": {
+            "type": "string"
+          },
+          "not_in_list_node_id": {
+            "type": "string"
+          },
+          "active_node_id": {
+            "type": "string"
+          },
+          "non_active_node_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ABTestNodeConfig": {
+        "type": "object",
+        "description": "Split contacts across weighted variants (weights must sum to 100).",
+        "required": [
+          "variants"
+        ],
+        "properties": {
+          "variants": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "weight",
+                "next_node_id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "example": "A"
+                },
+                "name": {
+                  "type": "string",
+                  "example": "Control"
+                },
+                "weight": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100,
+                  "example": 50
+                },
+                "next_node_id": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "WebhookNodeConfig": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "HTTP(S) URL to POST to.",
+            "example": "https://hooks.example.com/automation"
+          },
+          "secret": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional — sent as an `Authorization: Bearer <secret>` header."
+          }
+        }
+      },
+      "AutomationStats": {
+        "type": "object",
+        "readOnly": true,
+        "properties": {
+          "enrolled": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "exited": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          }
+        }
+      },
+      "ContactAutomation": {
+        "type": "object",
+        "description": "Tracks one contact's journey through one automation.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "automation_id": {
+            "type": "string"
+          },
+          "contact_email": {
+            "type": "string",
+            "format": "email"
+          },
+          "current_node_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "completed",
+              "exited",
+              "failed"
+            ]
+          },
+          "exit_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "entered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scheduled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "NodeExecution": {
+        "type": "object",
+        "description": "One log entry of a contact passing through a node.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "contact_automation_id": {
+            "type": "string"
+          },
+          "automation_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "node_type": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "entered",
+              "processing",
+              "completed",
+              "failed",
+              "skipped"
+            ]
+          },
+          "entered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "duration_ms": {
+            "type": "integer",
+            "nullable": true
+          },
+          "output": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CreateAutomationRequest": {
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "automation"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "example": "ws_demo"
+          },
+          "automation": {
+            "$ref": "#/components/schemas/Automation"
+          }
+        }
+      },
+      "UpdateAutomationRequest": {
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "automation"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "automation": {
+            "$ref": "#/components/schemas/Automation"
+          }
+        }
+      },
+      "AutomationIDRequest": {
+        "type": "object",
+        "description": "Shared body for activate / pause / delete.",
+        "required": [
+          "workspace_id",
+          "automation_id"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "example": "ws_demo"
+          },
+          "automation_id": {
+            "type": "string",
+            "example": "7c3e2b1a-1234-4abc-9def-0123456789ab"
+          }
+        }
+      },
+      "EnrollContactsRequest": {
+        "type": "object",
+        "description": "Veridian extension. Enroll one or more contacts into a LIVE automation at its\nroot node, programmatically (without firing the trigger event). Idempotent:\na contact already `active` in the automation is skipped.\n",
+        "required": [
+          "workspace_id",
+          "automation_id",
+          "contact_emails"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "example": "ws_demo"
+          },
+          "automation_id": {
+            "type": "string",
+            "example": "7c3e2b1a-1234-4abc-9def-0123456789ab"
+          },
+          "contact_emails": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "description": "Bare email addresses (no display name). Deduplicated and lowercased.",
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "example": [
+              "alice@example.com",
+              "bob@acme.io"
+            ]
+          }
+        }
+      },
+      "EnrollContactsResponse": {
+        "type": "object",
+        "properties": {
+          "enrolled": {
+            "type": "integer",
+            "description": "Newly enrolled contacts.",
+            "example": 1
+          },
+          "skipped": {
+            "type": "integer",
+            "description": "Contacts already active (idempotent no-op).",
+            "example": 1
+          },
+          "failed": {
+            "type": "integer",
+            "description": "Contacts that errored.",
+            "example": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "enrolled",
+                    "already_active",
+                    "error"
+                  ]
+                },
+                "error": {
+                  "type": "string"
+                }
+              }
+            },
+            "example": [
+              {
+                "email": "alice@example.com",
+                "status": "enrolled"
+              },
+              {
+                "email": "bob@acme.io",
+                "status": "already_active"
+              }
+            ]
+          }
+        }
+      },
+      "ProviderBreakdown": {
+        "type": "object",
+        "description": "`breakdown` maps each provider class to a contact count. The 5 canonical\nclasses are always present (0 when empty). MX-derived classes (ovh, ionos,\napple_icloud, security_gateway, other_hoster, corporate_selfhost) may also\nappear depending on the data.\n",
+        "properties": {
+          "breakdown": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "example": {
+              "google": 120,
+              "microsoft": 88,
+              "yahoo_aol": 12,
+              "freemail_fr": 30,
+              "corporate": 250
+            }
+          },
+          "total": {
+            "type": "integer",
+            "example": 500
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request - validation failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized - invalid or missing authentication token",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Unauthorized"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden - insufficient permissions for this workspace",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Insufficient permissions: write access to automations required"
+            }
+          }
+        }
+      },
+      "Unauthorized-2": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Unauthorized"
+            }
+          }
+        }
+      },
+      "Forbidden-2": {
+        "description": "Forbidden - insufficient permissions",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Insufficient permissions: read access to contacts required"
+            }
+          }
+        }
       }
     }
   }

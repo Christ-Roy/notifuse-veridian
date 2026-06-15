@@ -1,0 +1,111 @@
+/api/veridian/contacts.providerBreakdown:
+  post:
+    summary: Count contacts by recipient provider class (Veridian cold outreach)
+    description: |
+      Veridian extension. Returns the number of contacts grouped by recipient
+      provider class — used to size the per-class cold-outbound throttle/caps.
+      Classification reuses the same logic as the send-time throttle (a contact's
+      `custom_string_5` override wins, else the domain suffix, else `corporate`).
+
+      Auth = JWT (console). Requires `contacts:read` permission for the workspace.
+      Both POST (RPC-style) and GET are routed.
+    operationId: veridianContactsProviderBreakdown
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id]
+            properties:
+              workspace_id:
+                type: string
+                example: ws_demo
+              list_id:
+                type: string
+                description: Optional — restrict the count to a single list.
+                example: list_main
+    responses:
+      '200':
+        description: Per-class breakdown
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderBreakdown'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+  get:
+    summary: Count contacts by recipient provider class (GET form)
+    operationId: veridianContactsProviderBreakdownGet
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: list_id
+        in: query
+        schema: { type: string }
+    responses:
+      '200':
+        description: Per-class breakdown
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderBreakdown'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+
+components:
+  schemas:
+    ProviderBreakdown:
+      type: object
+      description: |
+        `breakdown` maps each provider class to a contact count. The 5 canonical
+        classes are always present (0 when empty). MX-derived classes (ovh, ionos,
+        apple_icloud, security_gateway, other_hoster, corporate_selfhost) may also
+        appear depending on the data.
+      properties:
+        breakdown:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            google: 120
+            microsoft: 88
+            yahoo_aol: 12
+            freemail_fr: 30
+            corporate: 250
+        total:
+          type: integer
+          example: 500
+  responses:
+    BadRequest:
+      description: Bad request - validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+          example:
+            error: Unauthorized
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+          example:
+            error: 'Insufficient permissions: read access to contacts required'

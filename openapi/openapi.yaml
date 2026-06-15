@@ -17,6 +17,8 @@ servers:
 paths:
   /api/transactional.send:
     $ref: './paths/transactional.yaml#/~1api~1transactional.send'
+  /api/transactional.testTemplate:
+    $ref: './paths/transactional.yaml#/~1api~1transactional.testTemplate'
   /api/contacts.list:
     $ref: './paths/contacts.yaml#/~1api~1contacts.list'
   /api/contacts.count:
@@ -73,6 +75,26 @@ paths:
     $ref: './paths/templates.yaml#/~1api~1templates.delete'
   /api/templates.compile:
     $ref: './paths/templates.yaml#/~1api~1templates.compile'
+  /api/automations.create:
+    $ref: './paths/automations.yaml#/~1api~1automations.create'
+  /api/automations.get:
+    $ref: './paths/automations.yaml#/~1api~1automations.get'
+  /api/automations.list:
+    $ref: './paths/automations.yaml#/~1api~1automations.list'
+  /api/automations.update:
+    $ref: './paths/automations.yaml#/~1api~1automations.update'
+  /api/automations.delete:
+    $ref: './paths/automations.yaml#/~1api~1automations.delete'
+  /api/automations.activate:
+    $ref: './paths/automations.yaml#/~1api~1automations.activate'
+  /api/automations.pause:
+    $ref: './paths/automations.yaml#/~1api~1automations.pause'
+  /api/automations.enroll:
+    $ref: './paths/automations.yaml#/~1api~1automations.enroll'
+  /api/automations.nodeExecutions:
+    $ref: './paths/automations.yaml#/~1api~1automations.nodeExecutions'
+  /api/veridian/contacts.providerBreakdown:
+    $ref: './paths/veridian-cold.yaml#/~1api~1veridian~1contacts.providerBreakdown'
   /api/customEvents.import:
     $ref: './paths/custom-events.yaml#/~1api~1customEvents.import'
   /api/webhookSubscriptions.create:
@@ -270,3 +292,43 @@ components:
       $ref: './components/schemas/user.yaml#/RootSigninResponse'
     User:
       $ref: './components/schemas/user.yaml#/User'
+    Automation:
+      $ref: './components/schemas/automation.yaml#/Automation'
+    TimelineTriggerConfig:
+      $ref: './components/schemas/automation.yaml#/TimelineTriggerConfig'
+    AutomationNode:
+      $ref: './components/schemas/automation.yaml#/AutomationNode'
+    DelayNodeConfig:
+      $ref: './components/schemas/automation.yaml#/DelayNodeConfig'
+    EmailNodeConfig:
+      $ref: './components/schemas/automation.yaml#/EmailNodeConfig'
+    BranchNodeConfig:
+      $ref: './components/schemas/automation.yaml#/BranchNodeConfig'
+    FilterNodeConfig:
+      $ref: './components/schemas/automation.yaml#/FilterNodeConfig'
+    AddToListNodeConfig:
+      $ref: './components/schemas/automation.yaml#/AddToListNodeConfig'
+    RemoveFromListNodeConfig:
+      $ref: './components/schemas/automation.yaml#/RemoveFromListNodeConfig'
+    ListStatusBranchNodeConfig:
+      $ref: './components/schemas/automation.yaml#/ListStatusBranchNodeConfig'
+    ABTestNodeConfig:
+      $ref: './components/schemas/automation.yaml#/ABTestNodeConfig'
+    WebhookNodeConfig:
+      $ref: './components/schemas/automation.yaml#/WebhookNodeConfig'
+    AutomationStats:
+      $ref: './components/schemas/automation.yaml#/AutomationStats'
+    ContactAutomation:
+      $ref: './components/schemas/automation.yaml#/ContactAutomation'
+    NodeExecution:
+      $ref: './components/schemas/automation.yaml#/NodeExecution'
+    CreateAutomationRequest:
+      $ref: './components/schemas/automation.yaml#/CreateAutomationRequest'
+    UpdateAutomationRequest:
+      $ref: './components/schemas/automation.yaml#/UpdateAutomationRequest'
+    AutomationIDRequest:
+      $ref: './components/schemas/automation.yaml#/AutomationIDRequest'
+    EnrollContactsRequest:
+      $ref: './components/schemas/automation.yaml#/EnrollContactsRequest'
+    EnrollContactsResponse:
+      $ref: './components/schemas/automation.yaml#/EnrollContactsResponse'
