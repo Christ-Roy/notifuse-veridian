@@ -68,6 +68,31 @@ func TestEmailQueuePayload_VeridianProviderThrottleRoundTrip(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_provider_class_daily_cap")
 		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
 	})
+
+	t.Run("sending window survives JSON round-trip", func(t *testing.T) {
+		payload := EmailQueuePayload{
+			Subject:            "s",
+			RateLimitPerMinute: 100,
+			VeridianSendingWindow: &VeridianSendingWindow{
+				Days: []int{1, 2, 3, 4, 5}, StartHour: 9, EndHour: 18, Timezone: "Europe/Paris",
+			},
+		}
+		raw, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.NotNil(t, decoded.VeridianSendingWindow)
+		assert.Equal(t, []int{1, 2, 3, 4, 5}, decoded.VeridianSendingWindow.Days)
+		assert.Equal(t, 9, decoded.VeridianSendingWindow.StartHour)
+		assert.Equal(t, "Europe/Paris", decoded.VeridianSendingWindow.Timezone)
+	})
+
+	t.Run("sending window omitted when unset", func(t *testing.T) {
+		raw, err := json.Marshal(EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_sending_window")
+	})
 }
 
 func TestEmailQueueStatus_Values(t *testing.T) {

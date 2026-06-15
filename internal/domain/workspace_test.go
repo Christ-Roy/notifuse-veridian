@@ -374,6 +374,34 @@ func TestWorkspaceSettings_VeridianDailyCapRoundTrip(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_provider_class_daily_cap")
 		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
 	})
+
+	t.Run("sending window survives JSON round-trip", func(t *testing.T) {
+		settings := WorkspaceSettings{
+			Timezone:        "Europe/Paris",
+			DefaultLanguage: "fr",
+			Languages:       []string{"fr"},
+			VeridianSendingWindow: &VeridianSendingWindow{
+				Days: []int{1, 2, 3, 4, 5}, StartHour: 9, EndHour: 18,
+			},
+		}
+		raw, err := json.Marshal(settings)
+		require.NoError(t, err)
+
+		var decoded WorkspaceSettings
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.NotNil(t, decoded.VeridianSendingWindow)
+		assert.Equal(t, 9, decoded.VeridianSendingWindow.StartHour)
+		assert.Equal(t, 18, decoded.VeridianSendingWindow.EndHour)
+		// Timezone vide sur la fenêtre → le fallback workspace (Europe/Paris) jouera
+		// à la résolution dans le gate (testé côté queue).
+		assert.Empty(t, decoded.VeridianSendingWindow.Timezone)
+	})
+
+	t.Run("sending window omitted when unset", func(t *testing.T) {
+		raw, err := json.Marshal(WorkspaceSettings{Timezone: "UTC"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_sending_window")
+	})
 }
 
 func TestScanWorkspace(t *testing.T) {

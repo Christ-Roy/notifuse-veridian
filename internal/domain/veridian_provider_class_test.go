@@ -268,6 +268,33 @@ func TestVeridianApplyProviderThrottle(t *testing.T) {
 		assert.Nil(t, entry.Payload.VeridianProviderClassDailyCap)
 		assert.Zero(t, entry.Payload.VeridianPerRecipientDailyCap)
 	})
+
+	t.Run("sending window copied into payload from metadata", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		b := &Broadcast{
+			ID: "b4",
+			Metadata: MapOfAny{
+				VeridianSendingWindowMetadataKey: map[string]any{
+					"days": []any{1.0, 2.0, 3.0, 4.0, 5.0}, "start_hour": 9.0, "end_hour": 18.0, "timezone": "Europe/Paris",
+				},
+			},
+		}
+		VeridianApplyProviderThrottle(entry, b, nil)
+		require.NotNil(t, entry.Payload.VeridianSendingWindow)
+		assert.Equal(t, 9, entry.Payload.VeridianSendingWindow.StartHour)
+		assert.Equal(t, 18, entry.Payload.VeridianSendingWindow.EndHour)
+		assert.Equal(t, "Europe/Paris", entry.Payload.VeridianSendingWindow.Timezone)
+	})
+
+	t.Run("invalid sending window metadata leaves payload window nil", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		b := &Broadcast{
+			ID:       "b5",
+			Metadata: MapOfAny{VeridianSendingWindowMetadataKey: map[string]any{"start_hour": 18.0, "end_hour": 9.0}}, // inversée
+		}
+		VeridianApplyProviderThrottle(entry, b, nil)
+		assert.Nil(t, entry.Payload.VeridianSendingWindow)
+	})
 }
 
 func TestVeridianProviderClassDailyCapFromMetadata(t *testing.T) {

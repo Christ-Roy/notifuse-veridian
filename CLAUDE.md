@@ -756,6 +756,68 @@ date"*). Spec : ticket `todo/2026-06-14-tunnel-vente-ui-controle-et-roadmap.md`.
 | Fichier upstream | Diff Veridian |
 |---|---|
 | `internal/service/automation_executor.go` | `ProcessBatch` : hisse `now` hors du call repo + appel `veridianPrioritizeFollowups(contacts, now)` après le fetch, avant la boucle `Execute` (fichier déjà étendu Veridian : gate cold exit + `coldReplyChecker`). |
+### Multi-SMTP round-robin par provider destinataire + capacité alignée (2026-06-15)
+
+Répartit les envois cold sur TOUS les senders d'une infra (les 3 boîtes
+`agences-veridian.fr` p.ex.), en **round-robin keyé par CLASSE de provider
+destinataire** : chaque classe (`google`/`microsoft`/…) a son propre curseur, on
+ne martèle pas le même couple (sender → provider) → préservation réputation
+IP/domaine. Spec : ticket `todo/2026-06-15-...` (Lot ENVOI). + **alignement de
+capacité** : le débit global de l'infra = `RateLimitPerMinute · N senders` (les N
+boîtes envoient en parallèle, chacune porte sa part).
+
+- **Sélection à l'ENQUEUE** : le sender est figé dans le payload
+  (`buildQueueEntry` → `FromAddress`/`FromName`). C'est là (et dans le sender
+  direct `SendToRecipient`) que la rotation remplace `GetSender`. Le worker ne
+  choisit PAS le sender (il consomme le payload).
+- **Fichiers veridian** : `internal/domain/veridian_sender_rotation.go`
+  (`VeridianSenderRotator` thread-safe, curseur `integrationID|classe` ;
+  `EmailProvider.VeridianSelectSender` respecte le SenderID explicite du template
+  puis round-robin si >1 sender ; `VeridianActiveSenderCount` /
+  `VeridianEffectiveRateLimit` ; `VeridianIsColdContext` centralise la détection
+  tunnel — tag contact OU config broadcast OU config workspace) +
+  `internal/service/broadcast/veridian_sender_rotation.go` (`veridianResolveSender` :
+  détection cold via workspace mémoïsé du pixel resolver, classification par
+  suffixe — pas de lookup MX, la précision MX reste réservée au throttle/cap).
+- **OPT-IN strict** : rotation active uniquement si `len(senders) > 1` ET contexte
+  cold. Sinon `GetSender` upstream figé (non-régression). rotator nil = upstream.
+- **Rotator partagé** par la factory (`f.veridianSenderRotator`), injecté dans les
+  deux senders → curseurs persistants entre batchs.
+
+### Fenêtre d'envoi — horaires ouvrables (sending windows, 2026-06-15)
+
+Gate worker qui ne laisse envoyer que dans une fenêtre configurable (jours +
+heures + timezone, ex. lun-ven 9h-18h Europe/Paris). Hors fenêtre →
+skip-and-reschedule à la prochaine ouverture (`NextOpening`), MÊME contrat que les
+gates throttle/cap : `SetNextRetry` SANS incrément d'attempts, délai borné à 24h.
+Aucune fenêtre = envoi 24/7 (non-régression). Spec : ticket Lot WINDOWS.
+
+- **Fichiers veridian** : `internal/domain/veridian_sending_window.go`
+  (`VeridianSendingWindow` : `IsValid`/`IsWithinWindow`/`NextOpening` ; plage
+  croissante stricte, pas de wrap minuit = pas de fenêtre ; parsing
+  `VeridianSendingWindowFromMetadata`) +
+  `internal/service/queue/veridian_sending_window_gate.go`
+  (`veridianSendingWindowGate` + `veridianResolveSendingWindow` cascade). Timezone
+  de la fenêtre, si vide → fallback `WorkspaceSettings.Timezone`.
+- **Cascade** identique aux rates/caps : `broadcast (metadata)` → `infra
+  (EmailProvider)` → `workspace settings` → rien = pas de fenêtre. Premier niveau
+  VALIDE gagne.
+- **Câblage worker** : gate dans `processEntry` APRÈS le daily cap, AVANT le
+  pré-filtre (pas de classification/COUNT si on est hors fenêtre).
+
+⚠️ **Diffs INLINE supplémentaires** (multi-SMTP round-robin + sending windows) :
+
+| Fichier upstream | Diff Veridian |
+|---|---|
+| `internal/domain/email_provider.go` | +1 champ `EmailProvider.VeridianSendingWindow` (*VeridianSendingWindow, omitempty) ; +3 méthodes via `veridian_sender_rotation.go` : `VeridianSelectSender`, `VeridianActiveSenderCount`, `VeridianEffectiveRateLimit` (déclarées hors ce fichier, comptées sur `veridian_sender_rotation.go`) |
+| `internal/domain/email_queue.go` | +1 champ `EmailQueuePayload.VeridianSendingWindow` (*VeridianSendingWindow, omitempty) — copié à l'enqueue |
+| `internal/domain/workspace.go` | +1 champ `WorkspaceSettings.VeridianSendingWindow` (*VeridianSendingWindow, omitempty) ; le `Timezone` workspace sert de fallback à la fenêtre |
+| `internal/domain/veridian_provider_class.go` | `VeridianApplyProviderThrottle` propage la sending window broadcast → payload |
+| `internal/service/queue/worker.go` | +gate `veridianSendingWindowGate` dans `processEntry` (après daily cap, avant pré-filtre) ; `RateLimitPerMinute` → `VeridianEffectiveRateLimit()` au call-site rate limiter ET dans `getMinEmailRateLimit` (capacité alignée multi-SMTP) |
+| `internal/service/broadcast/message_sender.go` | `GetSender` → `veridianResolveSender` dans `SendToRecipient` ; +champ `veridianSenderRotator` + `SetVeridianSenderRotator` |
+| `internal/service/broadcast/queue_message_sender.go` | `GetSender` → `veridianResolveSender` dans `buildQueueEntry` ; +champ `veridianSenderRotator` + `SetVeridianSenderRotator` |
+| `internal/service/broadcast/factory.go` | +champ `veridianSenderRotator` (créé une fois, partagé) injecté dans les deux senders via `SetVeridianSenderRotator` |
+| `internal/service/workspace_service.go` | `UpdateWorkspace` allowlist : +1 ligne propageant `VeridianSendingWindow` (sinon l'UI Settings sauve sans persister) |
 
 ### Sync upstream
 

@@ -439,5 +439,8 @@ func VeridianApplyProviderThrottle(entry *EmailQueueEntry, broadcast *Broadcast,
 		if cap := VeridianPerRecipientDailyCapFromMetadata(broadcast.Metadata); cap > 0 {
 			entry.Payload.VeridianPerRecipientDailyCap = cap
 		}
+		if window := VeridianSendingWindowFromMetadata(broadcast.Metadata); window != nil {
+			entry.Payload.VeridianSendingWindow = window
+		}
 	}
 }

@@ -1870,3 +1870,35 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+// Veridian fork — la fenêtre d'envoi par infra est persistée dans le JSON blob
+// integrations (pas d'allowlist, omitempty). Ce round-trip garantit que le champ
+// survit au cycle marshal/unmarshal (et reste absent quand non configuré, pour
+// ne pas polluer les blobs upstream).
+func TestEmailProvider_VeridianSendingWindowRoundTrip(t *testing.T) {
+	t.Run("window survives JSON round-trip", func(t *testing.T) {
+		p := EmailProvider{
+			Kind:               EmailProviderKindSMTP,
+			RateLimitPerMinute: 10,
+			Senders:            []EmailSender{{ID: "s1", Email: "a@a.fr", Name: "A", IsDefault: true}},
+			VeridianSendingWindow: &VeridianSendingWindow{
+				Days: []int{1, 2, 3, 4, 5}, StartHour: 10, EndHour: 16, Timezone: "Europe/Paris",
+			},
+		}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+
+		var decoded EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.NotNil(t, decoded.VeridianSendingWindow)
+		assert.Equal(t, 10, decoded.VeridianSendingWindow.StartHour)
+		assert.Equal(t, 16, decoded.VeridianSendingWindow.EndHour)
+		assert.Equal(t, "Europe/Paris", decoded.VeridianSendingWindow.Timezone)
+	})
+
+	t.Run("omitted when unset", func(t *testing.T) {
+		raw, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_sending_window")
+	})
+}

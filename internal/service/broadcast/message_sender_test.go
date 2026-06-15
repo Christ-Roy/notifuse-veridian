@@ -181,6 +181,72 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// Veridian fork — round-robin multi-SMTP sur le chemin direct (SendToRecipient).
+// En contexte cold (rates sur le broadcast) avec 3 senders et un template SANS
+// SenderID fixe, le FromAddress passé à SendEmail doit tourner d'un appel à
+// l'autre. Couvre le diff message_sender.go de ce lot.
+func TestSendToRecipient_VeridianColdRoundRobin(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBroadcastRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	ctx := context.Background()
+	broadcast := &domain.Broadcast{
+		ID:            "b-rr",
+		WorkspaceID:   "ws-1",
+		ChannelType:   "email",
+		UTMParameters: &domain.UTMParameters{},
+		// Contexte cold via rates broadcast.
+		Metadata: domain.MapOfAny{domain.VeridianProviderClassRatesMetadataKey: map[string]any{"google": 1.0}},
+	}
+	emailProvider := &domain.EmailProvider{
+		Kind: domain.EmailProviderKindSMTP,
+		SMTP: &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p", UseTLS: true},
+		Senders: []domain.EmailSender{
+			{ID: "s1", Email: "a@agences-veridian.fr", Name: "A", IsDefault: true},
+			{ID: "s2", Email: "b@agences-veridian.fr", Name: "B"},
+			{ID: "s3", Email: "c@agences-veridian.fr", Name: "C"},
+		},
+	}
+	template := &domain.Template{
+		ID:    "t-rr",
+		Email: &domain.EmailTemplate{SenderID: "", Subject: "Hi", VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Hello"))},
+	}
+
+	var froms []string
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+			froms = append(froms, req.FromAddress)
+			return nil
+		}).Times(4)
+
+	sender := NewMessageSender(mockBroadcastRepo, mockMessageHistoryRepo, mockTemplateRepo,
+		mockEmailService, nil, mockLogger, TestConfig(), "")
+	sender.(*messageSender).SetVeridianSenderRotator(domain.NewVeridianSenderRotator())
+
+	timeoutAt := time.Now().Add(30 * time.Second)
+	for _, email := range []string{"u1@gmail.com", "u2@gmail.com", "u3@gmail.com", "u4@gmail.com"} {
+		require.NoError(t, sender.SendToRecipient(ctx, "ws-1", "int-1", "https://api.test.com", true,
+			broadcast, "msg-"+email, email, template, map[string]interface{}{}, emailProvider, timeoutAt, "", ""))
+	}
+
+	assert.Equal(t, []string{
+		"a@agences-veridian.fr", "b@agences-veridian.fr",
+		"c@agences-veridian.fr", "a@agences-veridian.fr",
+	}, froms)
+}
+
 // TestSendToRecipientCompileFailure tests failure in template compilation
 func TestSendToRecipientCompileFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)

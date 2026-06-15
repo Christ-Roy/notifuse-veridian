@@ -1060,6 +1060,9 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 			VeridianOpenPixelByClass:      map[string]bool{"google": false, "freemail_fr": true},
 			VeridianProviderClassDailyCap: map[string]int{"google": 1, "microsoft": 50},
 			VeridianPerRecipientDailyCap:  1,
+			VeridianSendingWindow: &domain.VeridianSendingWindow{
+				Days: []int{1, 2, 3, 4, 5}, StartHour: 9, EndHour: 18, Timezone: "Europe/Paris",
+			},
 		}
 		existing := &domain.Workspace{
 			ID:       workspaceID,
@@ -1088,6 +1091,11 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.Equal(t, 1, saved.Settings.VeridianProviderClassDailyCap["google"])
 		assert.Equal(t, 50, saved.Settings.VeridianProviderClassDailyCap["microsoft"])
 		assert.Equal(t, 1, saved.Settings.VeridianPerRecipientDailyCap)
+		// Fenêtre d'envoi (sending windows) : même allowlist, même anti-régression.
+		require.NotNil(t, saved.Settings.VeridianSendingWindow)
+		assert.Equal(t, 9, saved.Settings.VeridianSendingWindow.StartHour)
+		assert.Equal(t, 18, saved.Settings.VeridianSendingWindow.EndHour)
+		assert.Equal(t, "Europe/Paris", saved.Settings.VeridianSendingWindow.Timezone)
 	})
 }
 

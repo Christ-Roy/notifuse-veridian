@@ -97,6 +97,12 @@ type EmailQueuePayload struct {
 	// fallback workspace lu en live par le worker. 0/vide = pas de plafond.
 	VeridianProviderClassDailyCap map[string]int `json:"veridian_provider_class_daily_cap,omitempty"`
 	VeridianPerRecipientDailyCap  int            `json:"veridian_per_recipient_daily_cap,omitempty"`
+
+	// Veridian fork — FENÊTRE D'ENVOI (cold outbound) copiée à l'enqueue depuis
+	// broadcast.metadata. Niveau le plus spécifique de la cascade ; le worker
+	// retombe sur l'infra puis le workspace si nil. nil = pas de fenêtre sur ce
+	// broadcast (héritage). Cf. veridian_sending_window.go.
+	VeridianSendingWindow *VeridianSendingWindow `json:"veridian_sending_window,omitempty"`
 }
 
 // ToSendEmailProviderRequest converts the payload to a SendEmailProviderRequest

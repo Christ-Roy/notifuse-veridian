@@ -121,12 +121,23 @@ type messageSender struct {
 	// d'ouverture par classe (cf. veridian_pixel_resolver.go). Injecté par la
 	// factory. nil = fallback workspace inactif (comportement upstream).
 	veridianWorkspaceRepo domain.WorkspaceRepository
+
+	// Veridian fork — rotator multi-SMTP partagé (round-robin sender ⇄ classe
+	// destinataire, cold outbound). Injecté par la factory. nil = rotation
+	// désactivée (sender figé). Cf. veridian_sender_rotation.go.
+	veridianSenderRotator *domain.VeridianSenderRotator
 }
 
 // SetVeridianWorkspaceRepo injecte le workspace repo pour le fallback pixel par
 // classe au niveau workspace (DI optionnelle post-construction, cf. queue sender).
 func (s *messageSender) SetVeridianWorkspaceRepo(repo domain.WorkspaceRepository) {
 	s.veridianWorkspaceRepo = repo
+}
+
+// SetVeridianSenderRotator injecte le rotator multi-SMTP partagé (DI optionnelle).
+// nil = rotation désactivée.
+func (s *messageSender) SetVeridianSenderRotator(r *domain.VeridianSenderRotator) {
+	s.veridianSenderRotator = r
 }
 
 // NewMessageSender creates a new message sender
@@ -319,7 +330,11 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		return NewBroadcastError(ErrCodeTemplateCompile, errMsg, true, nil)
 	}
 
-	emailSender := emailProvider.GetSender(emailContent.SenderID)
+	// Veridian fork — round-robin multi-SMTP par classe destinataire en contexte
+	// cold (sinon GetSender upstream figé). Contact non chargé sur ce chemin
+	// single → classification par email. Cf. veridian_sender_rotation.go.
+	emailSender := veridianResolveSender(ctx, s.veridianSenderRotator, pixelResolver,
+		workspaceID, integrationID, emailProvider, emailContent.SenderID, nil, email, broadcast)
 
 	if emailSender == nil {
 		s.logger.WithFields(map[string]interface{}{

@@ -76,6 +76,15 @@ type EmailProvider struct {
 	VeridianProviderClassDailyCap map[string]int     `json:"veridian_provider_class_daily_cap,omitempty"`
 	VeridianPerRecipientDailyCap  int                `json:"veridian_per_recipient_daily_cap,omitempty"`
 
+	// Veridian fork — FENÊTRE D'ENVOI par infra (cold outbound). L'infra d'envoi
+	// = le domaine/IP émetteur ; ses horaires ouvrables peuvent différer du
+	// workspace (ex. une IP warm-up cantonnée 10h-16h). Niveau INTERMÉDIAIRE de
+	// la cascade (broadcast → INFRA → workspace), comme les rates/caps R2. nil =
+	// pas de fenêtre infra → héritage workspace, non-régression stricte. Persisté
+	// dans le JSON blob integrations sans migration ni allowlist (omitempty).
+	// Cf. veridian_sending_window.go + veridian_sending_window_gate.go.
+	VeridianSendingWindow *VeridianSendingWindow `json:"veridian_sending_window,omitempty"`
+
 	// Veridian fork — custom tracking domain PAR INFRA d'envoi (Lot 5 cold). En
 	// cold, les liens de tracking (pixel ouverture /t/, redirect clic /r/) doivent
 	// vivre sur un sous-domaine ALIGNÉ au domaine d'envoi de cette infra (ex.

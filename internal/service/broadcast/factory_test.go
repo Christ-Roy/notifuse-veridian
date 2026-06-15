@@ -8,6 +8,7 @@ import (
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewFactory(t *testing.T) {
@@ -166,6 +167,50 @@ func TestFactory_CreateMessageSender_InjectsVeridianWorkspaceRepo(t *testing.T) 
 		assert.True(t, ok, "useQueueSender=false doit produire un messageSender direct")
 		assert.Same(t, mockWorkspaceRepo, ms.veridianWorkspaceRepo,
 			"le workspaceRepo de la factory doit être injecté dans le sender direct")
+	})
+}
+
+// Veridian fork — vérifie que CreateMessageSender injecte le rotator multi-SMTP
+// partagé (round-robin sender ⇄ classe). Sans cette injection, la rotation est
+// morte (sender figé). Le rotator doit être le MÊME instance que celui de la
+// factory (état des curseurs partagé entre senders successifs).
+func TestFactory_CreateMessageSender_InjectsVeridianSenderRotator(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	newFactory := func(useQueueSender bool) *Factory {
+		return NewFactory(
+			mocks.NewMockBroadcastRepository(ctrl),
+			mocks.NewMockMessageHistoryRepository(ctrl),
+			mocks.NewMockTemplateRepository(ctrl),
+			mocks.NewMockEmailServiceInterface(ctrl),
+			mocks.NewMockContactRepository(ctrl),
+			mocks.NewMockTaskRepository(ctrl),
+			mocks.NewMockWorkspaceRepository(ctrl),
+			mocks.NewMockEmailQueueRepository(ctrl),
+			broadcastmocks.NewMockDataFeedFetcher(ctrl),
+			pkgmocks.NewMockLogger(ctrl),
+			DefaultConfig(),
+			"https://api.notifuse.com",
+			mocks.NewMockEventBus(ctrl),
+			useQueueSender,
+		)
+	}
+
+	t.Run("queue sender path", func(t *testing.T) {
+		f := newFactory(true)
+		require.NotNil(t, f.veridianSenderRotator, "la factory doit créer un rotator")
+		qms := f.CreateMessageSender().(*queueMessageSender)
+		assert.Same(t, f.veridianSenderRotator, qms.veridianSenderRotator,
+			"le rotator de la factory doit être injecté dans le queue sender")
+	})
+
+	t.Run("direct sender path", func(t *testing.T) {
+		f := newFactory(false)
+		require.NotNil(t, f.veridianSenderRotator)
+		ms := f.CreateMessageSender().(*messageSender)
+		assert.Same(t, f.veridianSenderRotator, ms.veridianSenderRotator,
+			"le rotator de la factory doit être injecté dans le sender direct")
 	})
 }
 

@@ -385,6 +385,80 @@ func TestEmailQueueWorker_ProcessEntry_PrefilterSkipsInvalid(t *testing.T) {
 	worker.processEntry(workspace, entry)
 }
 
+// TestEmailQueueWorker_ProcessEntry_OutsideSendingWindowReschedules vérifie le
+// CÂBLAGE du gate sending-window dans processEntry (le diff worker.go de ce lot) :
+// hors fenêtre, l'entrée est RE-PLANIFIÉE via SetNextRetry SANS MarkAsProcessing
+// (donc sans incrément d'attempts) et SANS SendEmail. Complément du test
+// colocalisé veridian_sending_window_gate_test.go pour le worker.go.
+func TestEmailQueueWorker_ProcessEntry_OutsideSendingWindowReschedules(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	// Fenêtre GARANTIE fermée : un seul jour autorisé qui n'est pas aujourd'hui,
+	// déterministe quelle que soit l'heure de CI (pas de dépendance à minuit).
+	closedDay := int((time.Now().UTC().Weekday() + 3) % 7) // +3 jours = jamais aujourd'hui
+	window := &domain.VeridianSendingWindow{
+		Days: []int{closedDay}, StartHour: 9, EndHour: 18, Timezone: "UTC",
+	}
+	workspace := &domain.Workspace{
+		ID:       "workspace-1",
+		Settings: domain.WorkspaceSettings{VeridianSendingWindow: window},
+		Integrations: []domain.Integration{
+			{
+				ID:            "integration-1",
+				EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 100},
+			},
+		},
+	}
+	entry := &domain.EmailQueueEntry{
+		ID:            "entry-windowed",
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: "integration-1",
+		ContactEmail:  "test@gmail.com",
+		MessageID:     "msg-w",
+		Payload:       domain.EmailQueuePayload{RateLimitPerMinute: 100},
+		Attempts:      0,
+		MaxAttempts:   3,
+	}
+
+	// Seul SetNextRetry est attendu (skip-and-reschedule). AUCUN MarkAsProcessing,
+	// AUCUN SendEmail → ctrl.Finish() garantit qu'aucune autre interaction n'a lieu.
+	mockQueueRepo.EXPECT().SetNextRetry(gomock.Any(), "workspace-1", "entry-windowed", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, next time.Time) error {
+			assert.True(t, next.After(time.Now()), "reprogrammé dans le futur")
+			return nil
+		})
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo,
+		mockWorkspaceRepo,
+		mockEmailService,
+		mockMessageHistoryRepo,
+		DefaultWorkerConfig(),
+		mockLogger,
+	)
+	worker.ctx = context.Background()
+	// Classifier MX déterministe (zéro DNS) — cohérent avec les autres tests gate.
+	worker.SetVeridianMXClassifier(domain.NewVeridianMXClassifier(&queueTestNXDOMAINResolver{}))
+
+	// Vérifie qu'aucun attempt n'est consommé.
+	assert.Equal(t, 0, entry.Attempts)
+	worker.processEntry(workspace, entry)
+	assert.Equal(t, 0, entry.Attempts, "skip hors fenêtre ne consomme pas d'attempt")
+}
+
 func TestEmailQueueWorker_ProcessEntry_SendFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1345,6 +1419,49 @@ func TestEmailQueueWorker_GetMinEmailRateLimit(t *testing.T) {
 
 		rate := worker.getMinEmailRateLimit(workspace)
 		assert.Equal(t, 30, rate)
+	})
+
+	// Veridian fork — alignement de capacité multi-SMTP : le batch sizing
+	// dimensionne sur le débit EFFECTIF (RateLimitPerMinute · N senders).
+	t.Run("multi-SMTP: capacity aligned on sender count", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID: "workspace-1",
+			Integrations: []domain.Integration{
+				{
+					ID:   "integration-1",
+					Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind:               domain.EmailProviderKindSMTP,
+						RateLimitPerMinute: 10,
+						Senders: []domain.EmailSender{
+							{ID: "s1", Email: "a@agences-veridian.fr"},
+							{ID: "s2", Email: "b@agences-veridian.fr"},
+							{ID: "s3", Email: "c@agences-veridian.fr"},
+						},
+					},
+				},
+			},
+		}
+		// 3 senders à 10/min → 30/min effectif.
+		assert.Equal(t, 30, worker.getMinEmailRateLimit(workspace))
+	})
+
+	t.Run("single sender: rate unchanged (non-regression)", func(t *testing.T) {
+		workspace := &domain.Workspace{
+			ID: "workspace-1",
+			Integrations: []domain.Integration{
+				{
+					ID:   "integration-1",
+					Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind:               domain.EmailProviderKindSMTP,
+						RateLimitPerMinute: 25,
+						Senders:            []domain.EmailSender{{ID: "s1", Email: "a@a.fr"}},
+					},
+				},
+			},
+		}
+		assert.Equal(t, 25, worker.getMinEmailRateLimit(workspace))
 	})
 }
 

@@ -1469,6 +1469,101 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 	})
 }
 
+// Veridian fork — round-robin multi-SMTP à l'enqueue (queue_message_sender.go).
+// Couvre SetVeridianSenderRotator + la sélection cold dans buildQueueEntry :
+// en contexte cold avec 3 senders et un template SANS SenderID fixe, le
+// FromAddress du payload tourne d'un recipient à l'autre ; hors cold, le sender
+// par défaut reste figé (non-régression upstream).
+func TestQueueMessageSender_VeridianColdRoundRobin(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockBroadcastRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	newSender := func() *queueMessageSender {
+		s := NewQueueMessageSender(mockQueueRepo, mockBroadcastRepo, mockMessageHistoryRepo,
+			mockTemplateRepo, nil, mockLogger, nil, "https://api.example.com").(*queueMessageSender)
+		s.SetVeridianSenderRotator(domain.NewVeridianSenderRotator())
+		return s
+	}
+
+	t.Run("cold round-robin rotates sender per recipient", func(t *testing.T) {
+		emailProvider := &domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSMTP,
+			RateLimitPerMinute: 10,
+			Senders: []domain.EmailSender{
+				{ID: "s1", Email: "a@agences-veridian.fr", Name: "A", IsDefault: true},
+				{ID: "s2", Email: "b@agences-veridian.fr", Name: "B"},
+				{ID: "s3", Email: "c@agences-veridian.fr", Name: "C"},
+			},
+		}
+		// Broadcast cold (rates dans metadata) → contexte cold détecté.
+		broadcast := &domain.Broadcast{
+			ID:            "broadcast-rr",
+			UTMParameters: &domain.UTMParameters{},
+			Metadata:      domain.MapOfAny{domain.VeridianProviderClassRatesMetadataKey: map[string]any{"google": 1.0}},
+		}
+		// Template SANS SenderID fixe → la rotation choisit.
+		template := &domain.Template{
+			ID: "template-rr",
+			Email: &domain.EmailTemplate{
+				SenderID:         "",
+				Subject:          "Hi",
+				VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1", "Hello")),
+			},
+		}
+
+		s := newSender()
+		resolver := newVeridianWorkspacePixelResolver(nil, s.logger)
+
+		var froms []string
+		for _, email := range []string{"u1@gmail.com", "u2@gmail.com", "u3@gmail.com", "u4@gmail.com"} {
+			entry, err := s.buildQueueEntry(context.Background(), "workspace-1", "integration-1",
+				"https://api.test.com", true, broadcast, "msg-"+email, email, template,
+				map[string]interface{}{}, emailProvider, "", "", nil, resolver)
+			require.NoError(t, err)
+			froms = append(froms, entry.Payload.FromAddress)
+		}
+
+		// Round-robin trié par ID : s1, s2, s3, s1.
+		assert.Equal(t, []string{
+			"a@agences-veridian.fr", "b@agences-veridian.fr",
+			"c@agences-veridian.fr", "a@agences-veridian.fr",
+		}, froms)
+	})
+
+	t.Run("non-cold keeps default sender (no rotation)", func(t *testing.T) {
+		emailProvider := &domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSMTP,
+			RateLimitPerMinute: 10,
+			Senders: []domain.EmailSender{
+				{ID: "s1", Email: "a@a.fr", Name: "A", IsDefault: true},
+				{ID: "s2", Email: "b@a.fr", Name: "B"},
+			},
+		}
+		broadcast := &domain.Broadcast{ID: "b-plain", UTMParameters: &domain.UTMParameters{}, Metadata: domain.MapOfAny{}}
+		template := &domain.Template{
+			ID:    "t-plain",
+			Email: &domain.EmailTemplate{SenderID: "", Subject: "Hi", VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1", "Hello"))},
+		}
+
+		s := newSender()
+		resolver := newVeridianWorkspacePixelResolver(nil, s.logger)
+
+		for _, email := range []string{"u1@gmail.com", "u2@gmail.com", "u3@gmail.com"} {
+			entry, err := s.buildQueueEntry(context.Background(), "workspace-1", "integration-1",
+				"https://api.test.com", true, broadcast, "msg-"+email, email, template,
+				map[string]interface{}{}, emailProvider, "", "", nil, resolver)
+			require.NoError(t, err)
+			assert.Equal(t, "a@a.fr", entry.Payload.FromAddress, "hors cold : sender par défaut figé")
+		}
+	})
+}
+
 // Veridian — l'enqueue doit propager la config de throttle par classe de
 // provider destinataire dans le payload : débits du broadcast (metadata) +
 // tag contact custom_string_5 posé par l'export batch (contrat provider_class).

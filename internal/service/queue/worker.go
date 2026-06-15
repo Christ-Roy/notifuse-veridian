@@ -327,6 +327,23 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Veridian fork: SENDING WINDOW gate (cold outbound). Only allows sends
+	// within configured business hours/days (e.g. 9h-18h, Mon-Fri, workspace
+	// timezone). Outside the window the entry is rescheduled to the next opening
+	// via SetNextRetry WITHOUT incrementing attempts (same skip-and-reschedule
+	// contract as the throttle/cap gates). No window configured = 24/7 sending
+	// (strict non-regression). Cf. veridian_sending_window_gate.go.
+	if delay, closed := w.veridianSendingWindowGate(workspace, &integration.EmailProvider, entry); closed {
+		nextRetry := time.Now().Add(delay)
+		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Warn("Failed to set next retry for sending window skip")
+		}
+		return
+	}
+
 	// Veridian fork (Lot 7): PRE-FILTER gate (cold outbound). Skips addresses we
 	// KNOW are dead (invalid syntax / disposable domain / DNS-undeliverable)
 	// BEFORE hitting SMTP, to protect IP reputation and quota. Unlike the
@@ -372,8 +389,14 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
-	// Wait for rate limiter - always use current integration rate limit (not stale payload value)
-	ratePerMinute := integration.EmailProvider.RateLimitPerMinute
+	// Wait for rate limiter - always use current integration rate limit (not stale payload value).
+	// Veridian fork — alignement de capacité multi-SMTP : avec N senders actifs, le
+	// débit global de l'infra = RateLimitPerMinute · N (chaque boîte porte sa part,
+	// elles envoient en parallèle). VeridianEffectiveRateLimit renvoie le rate
+	// inchangé pour 0/1 sender (non-régression). Le throttle PAR CLASSE
+	// (veridianProviderClassGate) reste appliqué en amont et borne, lui, la pression
+	// vers chaque provider destinataire indépendamment du nombre de senders.
+	ratePerMinute := integration.EmailProvider.VeridianEffectiveRateLimit()
 	if ratePerMinute <= 0 {
 		ratePerMinute = 60 // Default to 1 per second if not configured
 	}
@@ -593,10 +616,13 @@ func (w *EmailQueueWorker) getMinEmailRateLimit(workspace *domain.Workspace) int
 		return 60 // Default: 1 per second
 	}
 
-	minRate := emailIntegrations[0].EmailProvider.RateLimitPerMinute
+	// Veridian fork — capacité effective alignée sur le nombre de senders
+	// (VeridianEffectiveRateLimit = rate · N senders ; inchangé pour 0/1 sender).
+	// Le batch sizing dimensionne ainsi le fetch sur le débit agrégé réel.
+	minRate := emailIntegrations[0].EmailProvider.VeridianEffectiveRateLimit()
 	for _, integration := range emailIntegrations[1:] {
-		if integration.EmailProvider.RateLimitPerMinute < minRate {
-			minRate = integration.EmailProvider.RateLimitPerMinute
+		if rate := integration.EmailProvider.VeridianEffectiveRateLimit(); rate < minRate {
+			minRate = rate
 		}
 	}
 	return minRate

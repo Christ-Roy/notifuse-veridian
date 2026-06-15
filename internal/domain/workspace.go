@@ -400,6 +400,14 @@ type WorkspaceSettings struct {
 	// broadcast ne définit pas veridian_per_recipient_daily_cap. 0 = illimité.
 	VeridianPerRecipientDailyCap int `json:"veridian_per_recipient_daily_cap,omitempty"`
 
+	// Veridian fork — FENÊTRE D'ENVOI par défaut du workspace (cold outbound) :
+	// horaires/jours ouvrables où les envois cold sont autorisés. Niveau le plus
+	// général de la cascade (broadcast → infra → WORKSPACE). nil/invalide = pas
+	// de fenêtre = envoi 24/7 (non-régression upstream). Le timezone de la
+	// fenêtre, s'il est vide, retombe sur WorkspaceSettings.Timezone.
+	// Cf. veridian_sending_window.go.
+	VeridianSendingWindow *VeridianSendingWindow `json:"veridian_sending_window,omitempty"`
+
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
 }

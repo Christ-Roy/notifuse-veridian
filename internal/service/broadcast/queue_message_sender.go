@@ -32,6 +32,13 @@ type queueMessageSender struct {
 	// factory via SetVeridianWorkspaceRepo. nil = fallback workspace inactif
 	// (comportement upstream : le pixel suit broadcast metadata + défaut tunnel).
 	veridianWorkspaceRepo domain.WorkspaceRepository
+
+	// Veridian fork — rotator multi-SMTP partagé (round-robin sender ⇄ classe
+	// destinataire, cold outbound). Injecté par la factory pour conserver l'état
+	// des curseurs entre les batchs/recipients d'une même session. nil = rotation
+	// désactivée (sender figé par GetSender, comportement upstream).
+	// Cf. domain/veridian_sender_rotation.go + veridian_sender_rotation.go.
+	veridianSenderRotator *domain.VeridianSenderRotator
 }
 
 // SetVeridianWorkspaceRepo injecte le workspace repo utilisé pour le fallback
@@ -39,6 +46,12 @@ type queueMessageSender struct {
 // ne pas changer la signature du constructeur ni casser les tests existants.
 func (s *queueMessageSender) SetVeridianWorkspaceRepo(repo domain.WorkspaceRepository) {
 	s.veridianWorkspaceRepo = repo
+}
+
+// SetVeridianSenderRotator injecte le rotator multi-SMTP partagé (DI optionnelle).
+// nil = rotation désactivée.
+func (s *queueMessageSender) SetVeridianSenderRotator(r *domain.VeridianSenderRotator) {
+	s.veridianSenderRotator = r
 }
 
 // NewQueueMessageSender creates a new message sender that enqueues to the email queue
@@ -354,8 +367,11 @@ func (s *queueMessageSender) buildQueueEntry(
 		return nil, fmt.Errorf("email content not available after language resolution")
 	}
 
-	// Get sender (use template's sender ID if specified, otherwise default)
-	sender := emailProvider.GetSender(emailContent.SenderID)
+	// Get sender. Veridian fork — round-robin multi-SMTP par classe destinataire
+	// en contexte cold (sinon GetSender upstream figé). Le SenderID explicite du
+	// template garde la priorité. Cf. veridian_sender_rotation.go.
+	sender := veridianResolveSender(ctx, s.veridianSenderRotator, pixelResolver,
+		workspaceID, integrationID, emailProvider, emailContent.SenderID, contact, email, broadcast)
 	if sender == nil {
 		return nil, fmt.Errorf("no sender configured for email provider")
 	}

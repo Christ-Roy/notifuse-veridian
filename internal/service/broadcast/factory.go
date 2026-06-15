@@ -21,6 +21,11 @@ type Factory struct {
 	apiEndpoint        string
 	eventBus           domain.EventBus
 	useQueueSender     bool
+
+	// Veridian fork — rotator multi-SMTP partagé entre tous les senders créés par
+	// cette factory, pour que les curseurs round-robin (sender ⇄ classe) persistent
+	// entre batchs/recipients. Cf. domain/veridian_sender_rotation.go.
+	veridianSenderRotator *domain.VeridianSenderRotator
 }
 
 // NewFactory creates a new factory for broadcast components
@@ -59,6 +64,9 @@ func NewFactory(
 		apiEndpoint:        apiEndpoint,
 		eventBus:           eventBus,
 		useQueueSender:     useQueueSender,
+		// Veridian fork — un seul rotator partagé pour toute la durée de vie de la
+		// factory (les senders successifs réutilisent les mêmes curseurs).
+		veridianSenderRotator: domain.NewVeridianSenderRotator(),
 	}
 }
 
@@ -78,9 +86,11 @@ func (f *Factory) CreateMessageSender() MessageSender {
 			f.apiEndpoint,
 		)
 		// Veridian fork — injecte le workspace repo pour le fallback pixel par
-		// classe au niveau workspace (cf. veridian_pixel_resolver.go).
+		// classe au niveau workspace (cf. veridian_pixel_resolver.go) + le rotator
+		// multi-SMTP partagé (round-robin sender ⇄ classe destinataire).
 		if s, ok := sender.(*queueMessageSender); ok {
 			s.SetVeridianWorkspaceRepo(f.workspaceRepo)
+			s.SetVeridianSenderRotator(f.veridianSenderRotator)
 		}
 		return sender
 	}
@@ -98,6 +108,7 @@ func (f *Factory) CreateMessageSender() MessageSender {
 	// Veridian fork — idem pour le sender direct (chemin legacy).
 	if s, ok := sender.(*messageSender); ok {
 		s.SetVeridianWorkspaceRepo(f.workspaceRepo)
+		s.SetVeridianSenderRotator(f.veridianSenderRotator)
 	}
 	return sender
 }
