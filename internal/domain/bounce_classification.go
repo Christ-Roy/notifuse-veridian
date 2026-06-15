@@ -76,6 +76,35 @@ type BounceInput struct {
 // has retried for 840 minutes and given up.
 var retryExhaustedRe = regexp.MustCompile(`\b4\.4\.7\b`)
 
+// dsnEnhancedCodeRe matches an RFC 3463 enhanced status code (e.g. "5.1.1",
+// "4.2.2") anywhere in a string. Used by the Veridian SMTP path to classify
+// Postfix NDR diagnostics that carry no hardbounce/softbounce label.
+var dsnEnhancedCodeRe = regexp.MustCompile(`\b([45])\.\d{1,3}\.\d{1,3}\b`)
+
+// classifyDSNCode extracts an enhanced DSN status code from s and maps its
+// class digit to a bounce classification: 5 -> Hard (permanent), 4 -> SoftCount
+// (transient). Returns nil when no code is present (caller falls through to the
+// safe default). Veridian fork — Lot 2 cold bounce loop.
+func classifyDSNCode(s string) *BounceClassification {
+	if s == "" {
+		return nil
+	}
+	m := dsnEnhancedCodeRe.FindStringSubmatch(s)
+	if m == nil {
+		return nil
+	}
+	var c BounceClassification
+	switch m[1] {
+	case "5":
+		c = BounceClassificationHard
+	case "4":
+		c = BounceClassificationSoftCount
+	default:
+		return nil
+	}
+	return &c
+}
+
 // isRetryExhaustedDiagnostic reports whether the SMTP diagnostic indicates
 // SES retry exhaustion (effectively undeliverable).
 func isRetryExhaustedDiagnostic(diagnostic string) bool {
@@ -181,6 +210,20 @@ func ClassifyBounce(in BounceInput) BounceClassification {
 		}
 		if bounceType == "softbounce" {
 			return BounceClassificationSoftCount
+		}
+		// Veridian fork (Lot 2 cold, 2026-06-15) — classification par code DSN.
+		// Les NDR du relai Postfix cold outbound (parsés par pkg/veridian_ndr)
+		// passent par processSMTPWebhook qui force BounceType="Bounce" : on ne
+		// peut donc PAS s'appuyer sur le libellé hardbounce/softbounce. On lit
+		// alors le code de statut enrichi RFC 3463 dans le subtype (BounceCategory)
+		// puis dans le diagnostic : 5.x.x = permanent (Hard), 4.x.x = temporaire
+		// (SoftCount). Indispensable pour qu'un hard bounce supprime le contact
+		// IMMÉDIATEMENT (réputation cold #1), sans attendre le seuil soft.
+		if c := classifyDSNCode(subtype); c != nil {
+			return *c
+		}
+		if c := classifyDSNCode(in.Diagnostic); c != nil {
+			return *c
 		}
 	}
 

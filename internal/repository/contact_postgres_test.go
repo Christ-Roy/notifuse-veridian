@@ -1372,9 +1372,9 @@ func TestGetContactsForBroadcast(t *testing.T) {
 			// Expect query with JOINS for list filtering and excludeUnsubscribed (cursor-based pagination)
 		mock.ExpectQuery(`SELECT `+contactColumnsPattern+`, cl\.list_id, l\.name as list_name FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id = \$1 AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 ORDER BY c\.email ASC LIMIT 10`).
 			WithArgs("list1",
-				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
-				domain.ContactListStatusComplained).
+				domain.ContactListStatusComplained,
+				domain.ContactListStatusUnsubscribed).
 			WillReturnRows(rows)
 
 		// Call the method being tested (empty string for first batch cursor)
@@ -1519,9 +1519,9 @@ func TestGetContactsForBroadcast(t *testing.T) {
 		// Expect query with error (cursor-based pagination)
 		mock.ExpectQuery(`SELECT `+contactColumnsPattern+`, cl\.list_id, l\.name as list_name FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id = \$1 AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 ORDER BY c\.email ASC LIMIT 10`).
 			WithArgs("list1",
-				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
-				domain.ContactListStatusComplained).
+				domain.ContactListStatusComplained,
+				domain.ContactListStatusUnsubscribed).
 			WillReturnError(fmt.Errorf("database error"))
 
 		// Call the method being tested (empty string for first batch cursor)
@@ -1620,9 +1620,9 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		// Note: SkipDuplicateEmails is false, so we expect COUNT(*) not COUNT(DISTINCT)
 		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id WHERE cl\.list_id = \$1 AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4`).
 			WithArgs("list1",
-				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
-				domain.ContactListStatusComplained).
+				domain.ContactListStatusComplained,
+				domain.ContactListStatusUnsubscribed).
 			WillReturnRows(rows)
 
 		// Call the method being tested
@@ -1717,9 +1717,9 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		// Expect query with error
 		mock.ExpectQuery(`SELECT COUNT\(DISTINCT c\.email\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email WHERE cl\.list_id IN \(\$1\) AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4`).
 			WithArgs("list1",
-				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
-				domain.ContactListStatusComplained).
+				domain.ContactListStatusComplained,
+				domain.ContactListStatusUnsubscribed).
 			WillReturnError(fmt.Errorf("database error"))
 
 		// Call the method being tested
@@ -1795,9 +1795,9 @@ func TestCountContactsForBroadcast(t *testing.T) {
 		// The query should join contact_lists, lists, then also join contact_segments
 		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM contacts c JOIN contact_lists cl ON c\.email = cl\.email JOIN lists l ON cl\.list_id = l\.id JOIN contact_segments cs ON c\.email = cs\.email WHERE cl\.list_id = \$1 AND l\.deleted_at IS NULL AND cl\.status <> \$2 AND cl\.status <> \$3 AND cl\.status <> \$4 AND cs\.segment_id IN \(\$5\)`).
 			WithArgs("list1",
-				domain.ContactListStatusUnsubscribed,
 				domain.ContactListStatusBounced,
 				domain.ContactListStatusComplained,
+				domain.ContactListStatusUnsubscribed,
 				"segment1").
 			WillReturnRows(rows)
 

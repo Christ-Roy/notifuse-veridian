@@ -1384,6 +1384,17 @@ func (a *App) InitHandlers() error {
 		0, // 0 = default lookback 7j
 	)
 
+	// Lot 2 cold — bounce-loop : détecte les NDR Postfix rapatriés par le poller
+	// IMAP et déclenche la suppression du contact via la chaîne webhook SMTP
+	// existante (ProcessWebhook → ClassifyBounce → MarkEmailsAsBounced). Son
+	// enregistrement ACTIVE le poller (no-op sans consumer).
+	veridianBounceConsumer := service.NewVeridianBounceConsumer(
+		a.inboundWebhookEventService,
+		a.workspaceRepo,
+		a.logger,
+	)
+	a.veridianIMAPPoller.RegisterConsumer(veridianBounceConsumer)
+
 	// === Veridian patch — Mail provider choice (V48) SUPPRIMÉ 2026-05-31 ===
 	// Le pipeline "envoi via Hub Mail Gateway" (mail-provider-choice + proxy
 	// mail-accounts) a été retiré : il créait une dépendance Hub sur l'envoi

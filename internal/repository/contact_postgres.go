@@ -1391,11 +1391,16 @@ func (r *contactRepository) GetContactsForBroadcast(
 			query = query.Where(sq.Gt{"c.email": afterEmail})
 		}
 
-		// Exclude unsubscribed contacts if required
+		// Veridian fork (Lot 2 cold, 2026-06-15) — les statuts terminaux 'bounced'
+		// et 'complained' sont TOUJOURS exclus de l'envoi, indépendamment du flag
+		// ExcludeUnsubscribed (qui ne gate QUE les désinscrits). Renvoyer à une
+		// adresse déjà bounce = suicide réputation (consigne Robert : "je ne veux
+		// pas renvoyer des mails à une adresse qui n'en reçoit pas"). Le flag
+		// ExcludeUnsubscribed reste optionnel pour les unsubscribed seuls.
+		query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusBounced})
+		query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusComplained})
 		if audience.ExcludeUnsubscribed {
 			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusUnsubscribed})
-			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusBounced})
-			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusComplained})
 		}
 	} else {
 		// For non-list based audiences (e.g., segments in the future)
@@ -1666,11 +1671,14 @@ func (r *contactRepository) CountContactsForBroadcast(
 		// Filter out soft-deleted lists (matches GetContactsForBroadcast)
 		query = query.Where(sq.Eq{"l.deleted_at": nil})
 
-		// Exclude unsubscribed contacts if required
+		// Veridian fork (Lot 2 cold, 2026-06-15) — 'bounced'/'complained' toujours
+		// exclus (cf. GetContactsForBroadcast). Le count doit refléter la même
+		// audience que l'envoi, sinon les stats annoncent des destinataires qui
+		// ne recevront jamais.
+		query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusBounced})
+		query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusComplained})
 		if audience.ExcludeUnsubscribed {
 			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusUnsubscribed})
-			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusBounced})
-			query = query.Where(sq.NotEq{"cl.status": domain.ContactListStatusComplained})
 		}
 	}
 

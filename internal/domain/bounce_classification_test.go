@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestClassifyBounce(t *testing.T) {
@@ -273,6 +274,33 @@ func TestClassifyBounce(t *testing.T) {
 			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "softbounce"},
 			expected: BounceClassificationSoftCount,
 		},
+		// Veridian fork — NDR Postfix cold : BounceType forcé à "Bounce" par
+		// processSMTPWebhook, classification dérivée du code DSN enrichi.
+		{
+			name:     "SMTP NDR hard via subtype 5.1.1",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.1.1"},
+			expected: BounceClassificationHard,
+		},
+		{
+			name:     "SMTP NDR soft via subtype 4.2.2",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "4.2.2"},
+			expected: BounceClassificationSoftCount,
+		},
+		{
+			name:     "SMTP NDR hard via diagnostic 550 5.1.1",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Diagnostic: "smtp; 550 5.1.1 User unknown"},
+			expected: BounceClassificationHard,
+		},
+		{
+			name:     "SMTP NDR soft via diagnostic 452 4.2.2",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Diagnostic: "smtp; 452 4.2.2 over quota"},
+			expected: BounceClassificationSoftCount,
+		},
+		{
+			name:     "SMTP NDR no DSN code defaults to SoftCount",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Diagnostic: "transient failure, no code"},
+			expected: BounceClassificationSoftCount,
+		},
 
 		// ---- Empty / unknown defaults ----
 		{
@@ -323,4 +351,36 @@ func TestIsRetryExhaustedDiagnostic(t *testing.T) {
 
 func TestDefaultSoftBounceThreshold(t *testing.T) {
 	assert.Equal(t, 5, DefaultSoftBounceThreshold)
+}
+
+// TestClassifyDSNCode couvre le helper Veridian de classification par code DSN
+// enrichi (Lot 2 cold bounce loop).
+func TestClassifyDSNCode(t *testing.T) {
+	hard := BounceClassificationHard
+	soft := BounceClassificationSoftCount
+	cases := []struct {
+		in   string
+		want *BounceClassification
+	}{
+		{"", nil},
+		{"no code at all", nil},
+		{"5.1.1", &hard},
+		{"4.2.2", &soft},
+		{"smtp; 550 5.7.1 blocked", &hard},
+		{"smtp; 421 4.4.1 connection timed out", &soft},
+		{"Status: 5.0.0", &hard},
+		{"2.0.0 success-looking but not a bounce class", nil}, // 2.x is not 4/5
+		{"prefix 4.7.28 throttled suffix", &soft},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			got := classifyDSNCode(c.in)
+			if c.want == nil {
+				assert.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			assert.Equal(t, *c.want, *got)
+		})
+	}
 }
