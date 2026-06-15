@@ -114,8 +114,11 @@ type veridianColdSimulateResponse struct {
 	// seed_sent + daily_cap_decision : COUNT réel via CountSentSinceForContact
 	SentToday int `json:"sent_today"`
 
-	// daily_cap_decision : décision EXACTE du gate (count >= cap)
-	WouldBeCapped bool `json:"would_be_capped,omitempty"`
+	// daily_cap_decision : décision EXACTE du gate (count >= cap).
+	// PAS d'omitempty : c'est un booléen de décision, false doit être présent
+	// dans le JSON (sinon le client lit `undefined` au lieu de `false` quand
+	// l'envoi est autorisé — piège omitempty sur bool, attrapé par l'E2E cap).
+	WouldBeCapped bool `json:"would_be_capped"`
 }
 
 // handleColdSimulate aiguille selon `mode`. Tous les modes opèrent sur le VRAI

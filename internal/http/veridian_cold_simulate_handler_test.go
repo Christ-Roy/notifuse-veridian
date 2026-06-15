@@ -127,6 +127,13 @@ func TestHandleColdSimulate_DailyCapDecision_BelowCap(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	assert.Equal(t, 2, got.SentToday)
 	assert.False(t, got.WouldBeCapped, "2 < cap 3 → pas bloqué")
+
+	// PIÈGE omitempty : la clé would_be_capped DOIT être physiquement présente
+	// dans le JSON même quand elle vaut false (sinon le client cold-lifecycle.spec
+	// lit `undefined` au lieu de `false` quand l'envoi est autorisé). On vérifie
+	// le JSON BRUT, pas la struct désérialisée (qui masquerait l'absence de clé).
+	assert.Contains(t, rec.Body.String(), `"would_be_capped":false`,
+		"would_be_capped=false doit rester présent dans le JSON (pas d'omitempty)")
 }
 
 func TestHandleColdSimulate_DailyCapDecision_AtCapBlocks(t *testing.T) {
