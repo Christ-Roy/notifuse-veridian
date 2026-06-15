@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useLingui } from '@lingui/react/macro'
-import { Drawer, Typography, Skeleton, Alert, Tabs, Tag, Space, Descriptions, Segmented } from 'antd'
+import { Drawer, Typography, Skeleton, Alert, Tabs, Tag, Space, Descriptions, Segmented, Select, Button, List } from 'antd'
+import { SafetyCertificateOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { Template, MjmlCompileError, Workspace } from '../../services/api/types'
 import { templatesApi } from '../../services/api/template'
 import type { CompileTemplateRequest } from '../../services/api/template'
@@ -8,6 +9,15 @@ import type { EmailBlock } from '../email_builder/types'
 import { Highlight, themes } from 'prism-react-renderer'
 import type { MessageHistory } from '../../services/api/messages_history'
 import { SUPPORTED_LANGUAGES } from '../../lib/languages'
+import { deliverabilityApi } from '../../services/api/deliverability'
+import type {
+  VeridianDeliverabilityResult,
+  VeridianDeliverabilityMode
+} from '../../services/api/deliverability'
+import {
+  VERIDIAN_PROVIDER_CLASSES,
+  type VeridianProviderClass
+} from '../../services/api/workspace'
 
 const { Text } = Typography
 
@@ -243,6 +253,26 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
   const defaultSender = emailProvider?.senders.find((s) => s.is_default)
   const templateSender = emailProvider?.senders.find((s) => s.id === record.email?.sender_id)
 
+  // Veridian — onglet "Délivrabilité" : linte le HTML RENDU (spam score) avant
+  // envoi. Disponible dès qu'un HTML est compilé. from_domain dérivé du sender
+  // (alignement tracking) pour la règle TRACKING_DOMAIN_MISMATCH.
+  const fromEmail = templateSender?.email || defaultSender?.email
+  const fromDomain = fromEmail?.split('@')[1]
+  if (previewHtml) {
+    items.push({
+      key: '4',
+      label: t`Deliverability`,
+      children: (
+        <DeliverabilityPanel
+          workspaceId={workspace.id}
+          html={previewHtml}
+          subject={renderedSubject ?? effectiveEmail?.subject ?? ''}
+          fromDomain={fromDomain}
+        />
+      )
+    })
+  }
+
   const drawerContent = (
     <div>
       {/* Header details */}
@@ -427,6 +457,217 @@ const TemplatePreviewDrawer: React.FC<TemplatePreviewDrawerProps> = ({
         {drawerContent}
       </Drawer>
     </>
+  )
+}
+
+// ── Panneau Délivrabilité (Veridian) ─────────────────────────────────────────
+//
+// Garde-fou AVANT envoi : l'admin voit le risque spam de son template (linter Go
+// natif, instantané). Score 0-10 (>5 = risque), règles déclenchées avec message
+// d'aide. Un sélecteur de classe de provider permet de voir le mode strict
+// (Google/Microsoft, draconien) vs lenient (petits providers, tolérant).
+//
+// Endpoint POST /api/veridian/templates.deliverabilityScore. On lint le HTML
+// COMPILÉ (rendu final) : c'est ce que verra le destinataire, et c'est là qu'on
+// détecte les variables Liquid/spintax qui fuitent non résolues.
+
+// Couleur du badge selon le score (façon SpamAssassin) : vert <3, orange 3-5,
+// rouge >5 (RiskThreshold backend = 5).
+function deliverabilityScoreColor(score: number): string {
+  if (score < 3) return '#52c41a' // vert
+  if (score <= 5) return '#faad14' // orange
+  return '#ff4d4f' // rouge
+}
+
+// Libellé lisible d'une classe de provider. ⚠️ LITTÉRAUX (pas `t`...``) : noms
+// propres de providers qui ne se traduisent pas, et un `t` passé hors composant
+// casse l'extracteur statique Lingui (clé absente → libellé VIDE runtime, bug P0
+// vécu 2026-06-14). Aligné sur classLabel() de veridian_cold_outreach_settings.tsx.
+const DELIVERABILITY_CLASS_LABELS: Record<VeridianProviderClass, string> = {
+  google: 'Google (Gmail / Workspace) — strict',
+  microsoft: 'Microsoft (Outlook / Microsoft 365) — strict',
+  yahoo_aol: 'Yahoo / AOL',
+  freemail_fr: 'French ISPs (Orange, SFR, Free…)',
+  corporate: 'Corporate (unknown by suffix)',
+  ovh: 'OVH',
+  ionos: 'IONOS / 1&1',
+  apple_icloud: 'Apple iCloud — strict',
+  security_gateway: 'Anti-spam gateway (Vade, Mailinblack…)',
+  other_hoster: 'Other hosters (Infomaniak, Gandi, Zoho…)',
+  corporate_selfhost: 'Corporate self-hosted'
+}
+
+interface DeliverabilityPanelProps {
+  workspaceId: string
+  html: string
+  subject: string
+  fromDomain?: string
+}
+
+export const DeliverabilityPanel: React.FC<DeliverabilityPanelProps> = ({
+  workspaceId,
+  html,
+  subject,
+  fromDomain
+}) => {
+  const { t } = useLingui()
+  // Classe destinataire choisie ('' = mode "default" neutre, pas de classe).
+  const [providerClass, setProviderClass] = useState<VeridianProviderClass | ''>('')
+  const [result, setResult] = useState<VeridianDeliverabilityResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // ⚠️ `t` (Lingui) n'est PAS stable entre renders → on le SORT des deps du
+  // useCallback / useEffect (sinon boucle de re-render infinie : runScore change
+  // à chaque render → useEffect reboucle → score() en boucle). Le message
+  // d'erreur a un fallback littéral.
+  const runScore = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await deliverabilityApi.score({
+        workspace_id: workspaceId,
+        subject,
+        body: html,
+        is_html: true,
+        from_domain: fromDomain,
+        provider_class: providerClass || undefined,
+        // Pas de classe = profil neutre explicite.
+        mode: providerClass ? undefined : ('default' as VeridianDeliverabilityMode)
+      })
+      setResult(res)
+    } catch (err: unknown) {
+      setError((err as Error)?.message || 'Failed to score deliverability')
+      setResult(null)
+    } finally {
+      setLoading(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t volontairement exclu (instable)
+  }, [workspaceId, subject, html, fromDomain, providerClass])
+
+  // Lint au montage et à chaque changement de classe / de HTML rendu.
+  useEffect(() => {
+    runScore()
+  }, [runScore])
+
+  const classOptions = [
+    { value: '', label: t`Neutral profile (no recipient class)` },
+    ...VERIDIAN_PROVIDER_CLASSES.map((c) => ({
+      value: c,
+      label: DELIVERABILITY_CLASS_LABELS[c]
+    }))
+  ]
+
+  return (
+    <div className="p-2">
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Alert
+          type="info"
+          showIcon
+          icon={<SafetyCertificateOutlined />}
+          message={t`Deliverability check (spam score)`}
+          description={
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t`Native lint of the rendered HTML before sending. Score 0-10 (above 5 = high spam risk). Pick a recipient provider class to see the strict profile (Google/Microsoft penalize links, tracking and HTML heavily) vs the lenient one (smaller providers tolerate light HTML).`}
+            </Text>
+          }
+        />
+
+        <Space wrap>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t`Simulate for`}
+          </Text>
+          <Select
+            value={providerClass}
+            onChange={(v) => setProviderClass(v as VeridianProviderClass | '')}
+            options={classOptions}
+            style={{ minWidth: 320 }}
+            aria-label={t`Recipient provider class`}
+          />
+          <Button
+            icon={<ReloadOutlined />}
+            size="small"
+            onClick={runScore}
+            loading={loading}
+            aria-label={t`Re-run deliverability score`}
+          >
+            {t`Re-check`}
+          </Button>
+        </Space>
+
+        {loading && <Skeleton active paragraph={{ rows: 3 }} />}
+
+        {!loading && error && (
+          <Alert type="error" showIcon message={t`Could not score the template`} description={error} />
+        )}
+
+        {!loading && !error && result && (
+          <>
+            <Space align="center" size="large" wrap>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: deliverabilityScoreColor(result.score),
+                  color: '#fff',
+                  fontSize: 22,
+                  fontWeight: 700
+                }}
+                aria-label={t`Deliverability score`}
+              >
+                {result.score}
+              </div>
+              <div>
+                <div>
+                  {result.is_risky ? (
+                    <Tag color="red">{t`High spam risk`}</Tag>
+                  ) : (
+                    <Tag color="green">{t`Looks good`}</Tag>
+                  )}
+                  <Tag>{t`mode: ${result.mode}`}</Tag>
+                </div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {result.summary}
+                </Text>
+              </div>
+            </Space>
+
+            {result.rules.length === 0 ? (
+              <Alert type="success" showIcon message={t`No spam rule triggered. Clean template.`} />
+            ) : (
+              <List
+                size="small"
+                header={
+                  <Text strong>{t`Triggered rules (${result.rules.length})`}</Text>
+                }
+                dataSource={result.rules}
+                renderItem={(rule) => (
+                  <List.Item>
+                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                      <Space size="small" wrap>
+                        <Tag color={rule.weight < 0 ? 'green' : rule.weight >= 2 ? 'red' : 'orange'}>
+                          {rule.weight > 0 ? `+${rule.weight}` : `${rule.weight}`}
+                        </Tag>
+                        <Text code style={{ fontSize: 12 }}>
+                          {rule.name}
+                        </Text>
+                      </Space>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {rule.message}
+                      </Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            )}
+          </>
+        )}
+      </Space>
+    </div>
   )
 }
 
