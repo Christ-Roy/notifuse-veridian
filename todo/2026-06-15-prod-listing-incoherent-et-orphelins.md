@@ -5,6 +5,21 @@
 > **Créé** : 2026-06-15 par le lead, en peuplant la prod (workspace cold `coldtunnel`).
 > Découvert en conditions réelles sur `notifuse.app.veridian.site`.
 
+## ✅ Problème 1 LIVRÉ (2026-06-15, commit 1b3700b0)
+
+Fix : `collectPlanIDs(prefix=="")` scannait `nil` → bucket managed vide. Ajout
+`VeridianPlanRepository.ListAllIDs(ctx, limit)` (SELECT workspace_id FROM
+veridian_plan LIMIT 1000) + test contractuel de cohérence (managed sans prefix
+== managed avec prefix). Confirmé en amont par le lead : coldtunnel + canary*
+ONT bien leur plan (vu via `?prefix=`), donc le bug était purement listing,
+ZÉRO perte de plan réelle. → une fois ce fix en prod, la vraie liste d'orphelins
+(Pb2) sera fiable.
+
+**⏳ Problème 2 (20 orphelins) reste pending** : investigation data prod. Sur les
+20, au moins coldtunnel + canaryenterprise/pro/free sont en fait MANAGÉS (artefact
+du Pb1, maintenant corrigé). Restent ~16 vrais orphelins à trier (résidus test vs
+vrais clients sans plan). À reprendre une fois le fix Pb1 déployé en prod.
+
 ## Problème 1 — `GET /api/veridian/admin/tenants` : bucket `managed` incohérent selon `prefix`
 
 Symptôme reproductible en prod (HMAC admin) :
