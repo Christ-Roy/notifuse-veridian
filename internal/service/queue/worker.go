@@ -327,6 +327,42 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Veridian fork (Lot 7): PRE-FILTER gate (cold outbound). Skips addresses we
+	// KNOW are dead (invalid syntax / disposable domain / DNS-undeliverable)
+	// BEFORE hitting SMTP, to protect IP reputation and quota. Unlike the
+	// throttle/cap gates above, an invalid address never becomes valid: we route
+	// it to PERMANENT failure (not a reschedule) via the same path as a
+	// non-retryable `550 user unknown` provider error, so it is never re-tried in
+	// a loop. Best-effort STRICT: any indeterminate verdict lets the send through.
+	// Cf. veridian_prefilter.go.
+	if reason, invalid := w.veridianPrefilterRecipient(entry); invalid {
+		// MarkAsProcessing first (increments attempts) so handleError, which
+		// assumes the attempt counter has already advanced, deletes the entry as
+		// a permanent failure instead of leaving it half-processed.
+		if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Warn("Failed to mark entry as processing for pre-filter skip")
+			return
+		}
+		w.logger.WithFields(map[string]interface{}{
+			"entry_id":  entry.ID,
+			"recipient": entry.ContactEmail,
+			"reason":    string(reason),
+		}).Info("Pre-filtered recipient, skipping SMTP and failing permanently")
+		// Non-retryable recipient error → handleError marks it permanent (delete
+		// + message_history FailedAt). No SMTP connection is ever opened.
+		prefilterErr := &emailerror.ClassifiedError{
+			Original:  fmt.Errorf("pre-filtered recipient: %s", reason),
+			Type:      emailerror.ErrorTypeRecipient,
+			Provider:  string(integration.EmailProvider.Kind),
+			Retryable: false,
+		}
+		w.handleError(workspace, entry, prefilterErr, prefilterErr)
+		return
+	}
+
 	// Mark as processing (this increments attempts)
 	if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
 		w.logger.WithFields(map[string]interface{}{

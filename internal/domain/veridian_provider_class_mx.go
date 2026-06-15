@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sort"
 	"strings"
@@ -354,4 +355,112 @@ func (r *veridianNetMXResolver) LookupMXHosts(ctx context.Context, domain string
 		}
 	}
 	return hosts, nil
+}
+
+// LookupHostAddrs résout les A/AAAA du domaine (fallback « implicit MX » de la
+// RFC 5321 §5.1 : un domaine sans MX mais avec un A reste délivrable en SMTP).
+// Sert UNIQUEMENT à NE PAS classer mort un domaine qui n'a pas de MX mais qui
+// reçoit quand même du mail sur son A.
+func (r *veridianNetMXResolver) LookupHostAddrs(ctx context.Context, domain string) ([]string, error) {
+	return r.resolver.LookupHost(ctx, domain)
+}
+
+// VeridianMXDeliverability classe le verdict de délivrabilité d'un domaine au
+// niveau DNS, à l'usage du pré-filtrage d'envoi cold (Lot 7). Trois états, et
+// SEUL `VeridianMXUndeliverable` justifie de bloquer un envoi (best-effort
+// strict : l'indéterminé laisse TOUJOURS passer).
+type VeridianMXDeliverability int
+
+const (
+	// VeridianMXIndeterminate : on ne peut pas conclure (timeout, erreur réseau
+	// transitoire, resolver sans capacité host). NE JAMAIS bloquer là-dessus.
+	VeridianMXIndeterminate VeridianMXDeliverability = iota
+	// VeridianMXDeliverable : MX trouvé, OU suffixe public connu (gmail/orange…),
+	// OU pas de MX mais un A/AAAA (implicit MX RFC 5321). L'envoi peut partir.
+	VeridianMXDeliverable
+	// VeridianMXUndeliverable : le DNS dit de façon DÉCISIVE que ce domaine ne
+	// reçoit pas de mail (NXDOMAIN, ou aucun MX ET aucun A/AAAA). Verdict durable.
+	VeridianMXUndeliverable
+)
+
+// veridianHostResolver est une capacité OPTIONNELLE d'un MXResolver : résoudre
+// les A/AAAA d'un domaine. Détectée par type-assertion pour ne pas alourdir
+// l'interface MXResolver (les resolvers de test n'ont pas à l'implémenter ;
+// sans elle, le verdict « pas de MX » reste INDÉTERMINÉ — on ne bloque pas).
+type veridianHostResolver interface {
+	LookupHostAddrs(ctx context.Context, domain string) ([]string, error)
+}
+
+// veridianMXNotFound reconnaît un NXDOMAIN / « pas de tel host » DÉCISIF dans
+// une erreur de resolver. Un timeout ou une erreur réseau retourne false (=
+// indéterminé) : on ne bloquera jamais un envoi sur une glitch DNS transitoire.
+func veridianMXNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		// IsNotFound = NXDOMAIN ou pas d'enregistrement du type demandé : décisif.
+		// IsTimeout / IsTemporary = transitoire : surtout PAS décisif.
+		return dnsErr.IsNotFound && !dnsErr.IsTimeout && !dnsErr.IsTemporary
+	}
+	return false
+}
+
+// ResolveDeliverability établit le verdict DNS de délivrabilité d'un domaine
+// pour le pré-filtrage cold (Lot 7). Best-effort STRICT, jamais d'erreur :
+//  1. domaine vide → indéterminé (la syntaxe est vérifiée en amont) ;
+//  2. suffixe public connu (gmail/orange/…) → délivrable SANS lookup (hot path) ;
+//  3. lookup MX : au moins un MX → délivrable ;
+//  4. pas de MX :
+//     - erreur NON décisive (timeout/temp) → indéterminé (on laisse passer) ;
+//     - NXDOMAIN décisif OU « no MX » : on tente le fallback A/AAAA (implicit MX) ;
+//     A/AAAA présent → délivrable ; aucun A/AAAA (avec verdict décisif) →
+//     UNDELIVERABLE ; sinon (pas de capacité host / verdict non décisif) →
+//     indéterminé.
+//
+// Le cache MX du classifier (domaine→classe) n'est PAS réutilisé ici : il stocke
+// une classe, pas un verdict de délivrabilité. Le lookup reste borné par
+// veridianMXLookupTimeout et n'est tenté que pour les domaines à suffixe inconnu
+// (l'immense majorité du cold custom passe d'abord par le tag amont / le throttle
+// qui réchauffe de toute façon le DNS du domaine).
+func (c *VeridianMXClassifier) ResolveDeliverability(ctx context.Context, domain string) VeridianMXDeliverability {
+	if domain == "" {
+		return VeridianMXIndeterminate
+	}
+	// Suffixe public connu = forcément délivrable, zéro I/O.
+	if _, ok := classifyBySuffix(domain); ok {
+		return VeridianMXDeliverable
+	}
+
+	lookupCtx, cancel := context.WithTimeout(ctx, veridianMXLookupTimeout)
+	defer cancel()
+
+	hosts, err := c.resolver.LookupMXHosts(lookupCtx, domain)
+	if err == nil && len(hosts) > 0 {
+		return VeridianMXDeliverable
+	}
+
+	// À partir d'ici : pas de MX exploitable. Décisif uniquement si NXDOMAIN /
+	// « no such host », sinon transitoire → indéterminé.
+	decisive := err == nil || veridianMXNotFound(err)
+	if !decisive {
+		return VeridianMXIndeterminate
+	}
+
+	// Fallback implicit MX (RFC 5321) : un A/AAAA suffit à recevoir du mail.
+	hostRes, ok := c.resolver.(veridianHostResolver)
+	if !ok {
+		// Resolver sans capacité host → on ne tranche pas (best-effort).
+		return VeridianMXIndeterminate
+	}
+	addrs, aErr := hostRes.LookupHostAddrs(lookupCtx, domain)
+	if aErr == nil && len(addrs) > 0 {
+		return VeridianMXDeliverable
+	}
+	if aErr == nil || veridianMXNotFound(aErr) {
+		// Ni MX ni A/AAAA, de façon décisive → adresse morte.
+		return VeridianMXUndeliverable
+	}
+	return VeridianMXIndeterminate
 }

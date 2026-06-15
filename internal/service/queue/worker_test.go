@@ -320,6 +320,71 @@ func TestEmailQueueWorker_ProcessEntry_Success(t *testing.T) {
 	worker.processEntry(workspace, entry)
 }
 
+// TestEmailQueueWorker_ProcessEntry_PrefilterSkipsInvalid vérifie le CÂBLAGE du
+// gate de pré-filtrage Lot 7 dans processEntry : une adresse syntaxiquement
+// invalide est routée vers l'échec PERMANENT (MarkAsProcessing → message_history
+// FailedAt → Delete) SANS jamais ouvrir SMTP, et n'est pas re-planifiée.
+// Complément du test colocalisé veridian_prefilter_test.go côté worker.go (le
+// fichier upstream que ce lot modifie).
+func TestEmailQueueWorker_ProcessEntry_PrefilterSkipsInvalid(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	workspace := &domain.Workspace{
+		ID: "workspace-1",
+		Integrations: []domain.Integration{
+			{
+				ID:            "integration-1",
+				EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 100},
+			},
+		},
+	}
+	entry := &domain.EmailQueueEntry{
+		ID:            "entry-bad",
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: "integration-1",
+		ContactEmail:  "not-an-email", // syntaxe invalide → pré-filtré
+		MessageID:     "msg-bad",
+		Payload:       domain.EmailQueuePayload{RateLimitPerMinute: 100},
+		MaxAttempts:   3,
+	}
+
+	// Chemin PERMANENT (handleError non-retryable) : MarkAsProcessing + Upsert
+	// (FailedAt) + Delete. AUCUN SendEmail, AUCUN SetNextRetry → ctrl.Finish() le
+	// garantit (re-tentative en boucle exclue).
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "workspace-1", "entry-bad").Return(nil)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "workspace-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, msg *domain.MessageHistory) error {
+			assert.NotNil(t, msg.FailedAt, "échec permanent : FailedAt doit être posé")
+			return nil
+		})
+	mockQueueRepo.EXPECT().Delete(gomock.Any(), "workspace-1", "entry-bad").Return(nil)
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo,
+		mockWorkspaceRepo,
+		mockEmailService,
+		mockMessageHistoryRepo,
+		DefaultWorkerConfig(),
+		mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	worker.processEntry(workspace, entry)
+}
+
 func TestEmailQueueWorker_ProcessEntry_SendFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

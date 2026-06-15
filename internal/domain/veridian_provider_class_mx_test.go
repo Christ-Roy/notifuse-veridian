@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -318,4 +319,116 @@ func TestMXClassifier_ConcurrentSafe(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// --- Lot 7 : ResolveDeliverability (pré-filtrage DNS best-effort) -----------
+
+// fakeDeliverabilityResolver est un MXResolver de test qui implémente AUSSI la
+// capacité host optionnelle, et qui peut simuler chaque cas DNS : MX présent,
+// NXDOMAIN décisif, timeout transitoire, et présence/absence d'A record.
+type fakeDeliverabilityResolver struct {
+	mxByDomain   map[string][]string
+	mxErr        map[string]error // erreur de LookupMXHosts par domaine
+	addrByDomain map[string][]string
+	addrErr      map[string]error // erreur de LookupHostAddrs par domaine
+}
+
+func (f *fakeDeliverabilityResolver) LookupMXHosts(_ context.Context, domain string) ([]string, error) {
+	if err, ok := f.mxErr[domain]; ok {
+		return nil, err
+	}
+	if hosts, ok := f.mxByDomain[domain]; ok {
+		return hosts, nil
+	}
+	// défaut : pas de MX, sans erreur explicite → liste vide sans erreur
+	return nil, nil
+}
+
+func (f *fakeDeliverabilityResolver) LookupHostAddrs(_ context.Context, domain string) ([]string, error) {
+	if err, ok := f.addrErr[domain]; ok {
+		return nil, err
+	}
+	if addrs, ok := f.addrByDomain[domain]; ok {
+		return addrs, nil
+	}
+	return nil, nil
+}
+
+// resolverWithoutHostCap implémente UNIQUEMENT MXResolver (pas la capacité host),
+// pour vérifier que sans LookupHostAddrs le verdict « pas de MX » reste indéterminé.
+type resolverWithoutHostCap struct{ err error }
+
+func (r resolverWithoutHostCap) LookupMXHosts(_ context.Context, _ string) ([]string, error) {
+	return nil, r.err
+}
+
+func nxdomainErr() error {
+	return &net.DNSError{Err: "no such host", Name: "x", IsNotFound: true}
+}
+
+func timeoutErr() error {
+	return &net.DNSError{Err: "i/o timeout", Name: "x", IsTimeout: true}
+}
+
+func TestResolveDeliverability(t *testing.T) {
+	res := &fakeDeliverabilityResolver{
+		mxByDomain: map[string][]string{
+			"has-mx.example": {"mx1.has-mx.example"},
+		},
+		mxErr: map[string]error{
+			"nxdomain.invalid":      nxdomainErr(), // MX NXDOMAIN décisif
+			"timeout.example":       timeoutErr(),  // MX timeout transitoire
+			"nomx-hasa.example":     nxdomainErr(), // pas de MX (décisif) mais A présent
+			"nomx-noa.example":      nxdomainErr(), // ni MX ni A (décisif)
+			"nomx-atimeout.example": nxdomainErr(), // MX décisif mais A timeout → indéterminé
+		},
+		addrByDomain: map[string][]string{
+			"nomx-hasa.example": {"203.0.113.7"}, // implicit MX RFC 5321
+		},
+		addrErr: map[string]error{
+			"nxdomain.invalid":      nxdomainErr(), // pas d'A non plus → mort
+			"nomx-noa.example":      nxdomainErr(), // pas d'A → mort
+			"nomx-atimeout.example": timeoutErr(),  // A transitoire → indéterminé
+		},
+	}
+	c := NewVeridianMXClassifier(res)
+
+	tests := []struct {
+		name   string
+		domain string
+		want   VeridianMXDeliverability
+	}{
+		{"suffixe public connu = délivrable sans lookup", "gmail.com", VeridianMXDeliverable},
+		{"MX présent = délivrable", "has-mx.example", VeridianMXDeliverable},
+		{"NXDOMAIN + pas d'A = mort", "nxdomain.invalid", VeridianMXUndeliverable},
+		{"pas de MX mais A présent = délivrable (implicit MX)", "nomx-hasa.example", VeridianMXDeliverable},
+		{"ni MX ni A (décisif) = mort", "nomx-noa.example", VeridianMXUndeliverable},
+		{"MX timeout transitoire = indéterminé (laisse passer)", "timeout.example", VeridianMXIndeterminate},
+		{"MX décisif mais A timeout = indéterminé (laisse passer)", "nomx-atimeout.example", VeridianMXIndeterminate},
+		{"domaine vide = indéterminé", "", VeridianMXIndeterminate},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := c.ResolveDeliverability(context.Background(), tt.domain)
+			assert.Equal(t, tt.want, got, "domaine %q", tt.domain)
+		})
+	}
+}
+
+func TestResolveDeliverability_NoHostCapStaysIndeterminate(t *testing.T) {
+	// Resolver sans capacité host : un « pas de MX » même décisif ne peut pas être
+	// confirmé mort (pas de fallback A) → on ne bloque JAMAIS (best-effort).
+	c := NewVeridianMXClassifier(resolverWithoutHostCap{err: nxdomainErr()})
+	got := c.ResolveDeliverability(context.Background(), "unknown-custom.example")
+	assert.Equal(t, VeridianMXIndeterminate, got)
+}
+
+func TestVeridianMXNotFound(t *testing.T) {
+	assert.False(t, veridianMXNotFound(nil), "nil = pas décisif")
+	assert.True(t, veridianMXNotFound(nxdomainErr()), "NXDOMAIN = décisif")
+	assert.False(t, veridianMXNotFound(timeoutErr()), "timeout = pas décisif")
+	assert.False(t, veridianMXNotFound(errors.New("plain error")), "erreur générique = pas décisif")
+	// IsNotFound + IsTemporary simultané → on reste prudent (pas décisif).
+	tempNotFound := &net.DNSError{Err: "x", IsNotFound: true, IsTemporary: true}
+	assert.False(t, veridianMXNotFound(tempNotFound), "not-found temporaire = pas décisif")
 }
