@@ -1525,3 +1525,49 @@ func TestAutomationRepository_ListContactAutomations_DataQueryError(t *testing.T
 	assert.Nil(t, cas)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+// === Veridian patch — sprint AI-first API (2026-06-15) ===
+
+func TestAutomationRepository_EnrollContact(t *testing.T) {
+	ctx := context.Background()
+	const workspaceID = "workspace-123"
+
+	t.Run("calls automation_enroll_contact with resolved frequency", func(t *testing.T) {
+		db, mock, repo := setupAutomationMock(t)
+		defer func() { _ = db.Close() }()
+
+		mock.ExpectExec("SELECT automation_enroll_contact").
+			WithArgs("auto-1", "user@example.com", "root-1", "once").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.EnrollContact(ctx, workspaceID, "auto-1", "root-1", "user@example.com", domain.TriggerFrequencyOnce)
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty frequency defaults to every_time", func(t *testing.T) {
+		db, mock, repo := setupAutomationMock(t)
+		defer func() { _ = db.Close() }()
+
+		mock.ExpectExec("SELECT automation_enroll_contact").
+			WithArgs("auto-1", "user@example.com", "root-1", "every_time").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.EnrollContact(ctx, workspaceID, "auto-1", "root-1", "user@example.com", domain.TriggerFrequency(""))
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("propagates DB error", func(t *testing.T) {
+		db, mock, repo := setupAutomationMock(t)
+		defer func() { _ = db.Close() }()
+
+		mock.ExpectExec("SELECT automation_enroll_contact").
+			WillReturnError(fmt.Errorf("connection refused"))
+
+		err := repo.EnrollContact(ctx, workspaceID, "auto-1", "root-1", "user@example.com", domain.TriggerFrequencyEveryTime)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to enroll contact")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}

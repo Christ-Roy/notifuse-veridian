@@ -611,6 +611,39 @@ func (r *AutomationRepository) GetContactAutomationByEmail(ctx context.Context, 
 	return &ca, nil
 }
 
+// EnrollContact enrolls a contact into an automation at its root node by calling
+// the canonical SQL function automation_enroll_contact — the exact same path the
+// AFTER INSERT trigger on contact_timeline uses (see automation_trigger_generator.go
+// and migrations v25). This guarantees that programmatic enrollment goes through the
+// identical side effects as event-driven enrollment: contact_automations row at the
+// root node (status 'active'), enrolled stat increment, node execution log, and the
+// automation.start timeline event. No reimplementation of the executor.
+//
+// Veridian addition (sprint AI-first API): exposes enrollment over HTTP via
+// /api/automations.enroll. The "once" frequency dedup lives inside the SQL function
+// (automation_trigger_log), so re-enrolling a contact already triggered for a "once"
+// automation is a no-op at the DB level.
+func (r *AutomationRepository) EnrollContact(ctx context.Context, workspaceID, automationID, rootNodeID, email string, frequency domain.TriggerFrequency) error {
+	db, err := r.getDB(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get database connection: %w", err)
+	}
+
+	freq := string(frequency)
+	if freq == "" {
+		freq = "every_time"
+	}
+
+	if _, err := db.ExecContext(ctx,
+		"SELECT automation_enroll_contact($1, $2, $3, $4)",
+		automationID, email, rootNodeID, freq,
+	); err != nil {
+		return fmt.Errorf("failed to enroll contact %s into automation %s: %w", email, automationID, err)
+	}
+
+	return nil
+}
+
 // ListContactAutomations retrieves contact automations with filtering
 func (r *AutomationRepository) ListContactAutomations(ctx context.Context, workspaceID string, filter domain.ContactAutomationFilter) ([]*domain.ContactAutomation, int, error) {
 	db, err := r.getDB(ctx, workspaceID)

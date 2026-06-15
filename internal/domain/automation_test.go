@@ -1,7 +1,9 @@
 package domain
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -1680,4 +1682,61 @@ func TestABTestNodeConfig_Validate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// === Veridian patch — sprint AI-first API (2026-06-15) ===
+// Test de contrat pour EnrollContact, la méthode ajoutée à AutomationRepository
+// pour l'enrôlement programmatique (POST /api/automations.enroll). On ne teste
+// pas une implémentation concrète ici (c'est le rôle du repo postgres + de son
+// test sqlmock) ; on verrouille le CONTRAT de l'interface domaine :
+//   1. la signature exacte (workspaceID, automationID, rootNodeID, email, freq) ;
+//   2. qu'un appelant peut invoquer la méthode via l'interface et récupérer
+//      l'erreur propagée.
+// Si un sync upstream ou un refactor casse la signature, ce test ne compile plus
+// — exactement le signal qu'on veut (l'endpoint enroll dépend de ce contrat).
+
+// enrollContractRepo embarque l'interface (les méthodes non utilisées restent
+// nil — non appelées dans ce test) et n'implémente que EnrollContact, pour
+// capturer les arguments reçus et renvoyer une erreur contrôlée.
+type enrollContractRepo struct {
+	AutomationRepository
+	gotWorkspaceID  string
+	gotAutomationID string
+	gotRootNodeID   string
+	gotEmail        string
+	gotFrequency    TriggerFrequency
+	retErr          error
+}
+
+func (r *enrollContractRepo) EnrollContact(ctx context.Context, workspaceID, automationID, rootNodeID, email string, frequency TriggerFrequency) error {
+	r.gotWorkspaceID = workspaceID
+	r.gotAutomationID = automationID
+	r.gotRootNodeID = rootNodeID
+	r.gotEmail = email
+	r.gotFrequency = frequency
+	return r.retErr
+}
+
+func TestAutomationRepository_EnrollContact_Contract(t *testing.T) {
+	t.Run("arguments forwarded and success propagated", func(t *testing.T) {
+		fake := &enrollContractRepo{}
+		var repo AutomationRepository = fake // assertion de conformité à l'interface
+
+		err := repo.EnrollContact(context.Background(), "ws1", "auto1", "root1", "user@example.com", TriggerFrequencyOnce)
+		require.NoError(t, err)
+		assert.Equal(t, "ws1", fake.gotWorkspaceID)
+		assert.Equal(t, "auto1", fake.gotAutomationID)
+		assert.Equal(t, "root1", fake.gotRootNodeID)
+		assert.Equal(t, "user@example.com", fake.gotEmail)
+		assert.Equal(t, TriggerFrequencyOnce, fake.gotFrequency)
+	})
+
+	t.Run("error propagated to caller", func(t *testing.T) {
+		fake := &enrollContractRepo{retErr: errors.New("enroll failed")}
+		var repo AutomationRepository = fake
+
+		err := repo.EnrollContact(context.Background(), "ws1", "auto1", "root1", "user@example.com", TriggerFrequencyEveryTime)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "enroll failed")
+	})
 }

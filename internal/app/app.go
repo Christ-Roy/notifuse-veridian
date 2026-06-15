@@ -1511,6 +1511,26 @@ func (a *App) InitHandlers() error {
 	)
 	veridianContactBreakdownHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patch — automations.enroll (sprint AI-first API, 2026-06-15) ===
+	// Endpoint POST /api/automations.enroll : enrôle un/des contact(s) au node
+	// d'entrée d'une automation LIVE par API (maillon manquant du pilotage
+	// AI-first). Réutilise la fonction SQL automation_enroll_contact via
+	// AutomationRepository.EnrollContact (même chemin que le trigger timeline) —
+	// zéro réimplémentation de l'executor. Auth JWT console + permission
+	// automations:write (gardien dans le service). Idempotent : contact déjà actif
+	// = no-op "already_active".
+	veridianAutomationEnrollService := service.NewVeridianAutomationEnrollService(
+		a.automationRepo,
+		a.authService,
+		a.logger,
+	)
+	veridianAutomationEnrollHandler := httpHandler.NewVeridianAutomationEnrollHandler(
+		veridianAutomationEnrollService,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianAutomationEnrollHandler.RegisterRoutes(a.mux)
+
 	// === Veridian patch — Mail accounts proxy SUPPRIMÉ 2026-05-31 ===
 	// Retiré avec le pipeline mail-provider (cf. ci-dessus). La gestion des
 	// comptes d'envoi se fait via Settings > Integrations (provider local par

@@ -149,6 +149,20 @@ func (mr *MockAutomationRepositoryMockRecorder) DropAutomationTrigger(arg0, arg1
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropAutomationTrigger", reflect.TypeOf((*MockAutomationRepository)(nil).DropAutomationTrigger), arg0, arg1, arg2)
 }
 
+// EnrollContact mocks base method.
+func (m *MockAutomationRepository) EnrollContact(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5 domain.TriggerFrequency) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnrollContact", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnrollContact indicates an expected call of EnrollContact.
+func (mr *MockAutomationRepositoryMockRecorder) EnrollContact(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnrollContact", reflect.TypeOf((*MockAutomationRepository)(nil).EnrollContact), arg0, arg1, arg2, arg3, arg4, arg5)
+}
+
 // GetByID mocks base method.
 func (m *MockAutomationRepository) GetByID(arg0 context.Context, arg1, arg2 string) (*domain.Automation, error) {
 	m.ctrl.T.Helper()

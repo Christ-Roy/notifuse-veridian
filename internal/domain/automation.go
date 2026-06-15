@@ -691,6 +691,10 @@ type AutomationRepository interface {
 	DropAutomationTrigger(ctx context.Context, workspaceID, automationID string) error
 
 	// Contact automation operations
+	// EnrollContact enrolls a contact into an automation at its root node by
+	// invoking the canonical SQL function automation_enroll_contact (the same
+	// path the DB trigger uses). Veridian addition for programmatic/API enrollment.
+	EnrollContact(ctx context.Context, workspaceID, automationID, rootNodeID, email string, frequency TriggerFrequency) error
 	GetContactAutomation(ctx context.Context, workspaceID, id string) (*ContactAutomation, error)
 	GetContactAutomationTx(ctx context.Context, tx *sql.Tx, workspaceID, id string) (*ContactAutomation, error)
 	GetContactAutomationByEmail(ctx context.Context, workspaceID, automationID, email string) (*ContactAutomation, error)
