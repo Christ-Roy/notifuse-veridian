@@ -415,6 +415,14 @@ type WorkspaceSettings struct {
 	// *0 = jitter explicitement désactivé. Cf. veridian_jitter.go.
 	VeridianJitterPct *float64 `json:"veridian_jitter_pct,omitempty"`
 
+	// Veridian fork — ANTI-HASH IDENTIQUE par classe de provider destinataire
+	// (cold outbound) au niveau workspace. enabled : pointeur nil = non configuré
+	// (→ défaut cold ON), *false = désactivé voulu. window (heures, <=0 = défaut
+	// 72h). Niveau le plus général de la cascade (broadcast → infra → WORKSPACE).
+	// Cf. veridian_content_hash.go.
+	VeridianAntiHashEnabled     *bool `json:"veridian_anti_hash_enabled,omitempty"`
+	VeridianAntiHashWindowHours int   `json:"veridian_anti_hash_window_hours,omitempty"`
+
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
 }

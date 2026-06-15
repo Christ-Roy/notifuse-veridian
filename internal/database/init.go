@@ -202,7 +202,8 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			complained_at TIMESTAMP WITH TIME ZONE,
 			unsubscribed_at TIMESTAMP WITH TIME ZONE,
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			veridian_content_hash CHAR(32)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_email ON message_history(contact_email)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id ON message_history(broadcast_id) WHERE broadcast_id IS NOT NULL`,
@@ -214,6 +215,9 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		// destinataire (contact_email, sent_at) + cap par classe (sent_at).
 		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_email_sent_at ON message_history(contact_email, sent_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_sent_at ON message_history(sent_at)`,
+		// Veridian fork — anti-hash identique cold outbound (V52) : EXISTS du hash
+		// de contenu dans la fenêtre glissante (veridian_content_hash, sent_at).
+		`CREATE INDEX IF NOT EXISTS idx_message_history_content_hash_sent_at ON message_history(veridian_content_hash, sent_at) WHERE veridian_content_hash IS NOT NULL`,
 		`CREATE TABLE IF NOT EXISTS transactional_notifications (
 			id VARCHAR(32) NOT NULL PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,

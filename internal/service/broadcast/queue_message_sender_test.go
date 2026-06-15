@@ -153,6 +153,38 @@ func createQueueValidTestTree(textBlock notifuse_mjml.EmailBlock) notifuse_mjml.
 	return &notifuse_mjml.MJMLBlock{BaseBlock: rootBase}
 }
 
+// Veridian fork — couvre le setter DI du dédupliqueur anti-hash. Sans dedup
+// injecté (état par défaut), buildQueueEntry NE pose AUCUN hash (non-régression
+// upstream stricte) ; une fois injecté, le champ est bien câblé.
+func TestQueueMessageSender_SetVeridianContentDedup(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	sender := NewQueueMessageSender(
+		mocks.NewMockEmailQueueRepository(ctrl),
+		mocks.NewMockBroadcastRepository(ctrl),
+		mocks.NewMockMessageHistoryRepository(ctrl),
+		mocks.NewMockTemplateRepository(ctrl),
+		nil,
+		pkgmocks.NewMockLogger(ctrl),
+		nil,
+		"https://api.example.com",
+	)
+	qms := sender.(*queueMessageSender)
+
+	// État par défaut : aucun dedup → anti-hash inactif (non-régression).
+	assert.Nil(t, qms.veridianContentDedup)
+
+	// Injection : le setter câble le dédupliqueur.
+	d := newVeridianContentDedup(mocks.NewMockMessageHistoryRepository(ctrl), qms.logger)
+	qms.SetVeridianContentDedup(d)
+	assert.Same(t, d, qms.veridianContentDedup)
+
+	// Réinjection nil : remet l'anti-hash inactif (idempotent).
+	qms.SetVeridianContentDedup(nil)
+	assert.Nil(t, qms.veridianContentDedup)
+}
+
 func TestQueueMessageSender_SendToRecipient(t *testing.T) {
 	t.Run("successfully enqueues single email", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -1331,6 +1363,56 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 		assert.NotEmpty(t, entry.Payload.HTMLContent)
 		assert.Equal(t, 100, entry.Payload.RateLimitPerMinute)
 		assert.Equal(t, 3, entry.MaxAttempts)
+		// Anti-hash : sans dedup injecté → aucun hash posé (non-régression upstream).
+		assert.Empty(t, entry.Payload.VeridianContentHash)
+	})
+
+	// Veridian fork — anti-hash : avec le dedup injecté ET un contexte cold
+	// (broadcast porteur de rates par classe), buildQueueEntry pose le hash du
+	// rendu final sur le payload (alimente la fenêtre glissante). Couvre le
+	// câblage SetVeridianContentDedup + l'appel Resolve dans buildQueueEntry.
+	t.Run("anti-hash pose le content hash en contexte cold", func(t *testing.T) {
+		mockMessageHistoryRepo.EXPECT().
+			ExistsContentHashSince(gomock.Any(), "workspace-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(false, nil) // pas de collision → hash initial retenu
+		qms.SetVeridianContentDedup(newVeridianContentDedup(mockMessageHistoryRepo, qms.logger))
+		defer qms.SetVeridianContentDedup(nil) // ne pas fuiter sur les autres sous-tests
+
+		emailSender := domain.NewEmailSender("sender@example.com", "Test Sender")
+		emailProvider := &domain.EmailProvider{
+			Kind:               domain.EmailProviderKindSMTP,
+			Senders:            []domain.EmailSender{emailSender},
+			RateLimitPerMinute: 100,
+		}
+		// Contexte cold : rates par classe sur le broadcast → VeridianIsColdContext=true.
+		broadcast := &domain.Broadcast{
+			ID:            "broadcast-1",
+			WorkspaceID:   "workspace-1",
+			UTMParameters: &domain.UTMParameters{},
+			Metadata: domain.MapOfAny{
+				domain.VeridianProviderClassRatesMetadataKey: map[string]any{"google": 1.0},
+			},
+		}
+		template := &domain.Template{
+			ID: "template-1",
+			Email: &domain.EmailTemplate{
+				SenderID:         emailSender.ID,
+				Subject:          "Bonjour",
+				VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1", "Hello")),
+			},
+		}
+
+		entry, err := qms.buildQueueEntry(
+			context.Background(), "workspace-1", "integration-1", "https://api.test.com", true,
+			broadcast, "msg-123", "john@gmail.com", template, map[string]interface{}{},
+			emailProvider, "", "", nil,
+			newVeridianWorkspacePixelResolver(nil, qms.logger),
+		)
+		require.NoError(t, err)
+		require.NotNil(t, entry)
+		// Le hash doit être posé (32 hex = SHA-256 tronqué 128 bits).
+		assert.Len(t, entry.Payload.VeridianContentHash, 32)
+		assert.Equal(t, domain.VeridianContentHash(entry.Payload.Subject, entry.Payload.HTMLContent), entry.Payload.VeridianContentHash)
 	})
 
 	t.Run("extracts List-Unsubscribe URL from data", func(t *testing.T) {

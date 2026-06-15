@@ -86,6 +86,17 @@ type EmailProvider struct {
 	// migration ni allowlist (omitempty). Cf. veridian_jitter.go.
 	VeridianJitterPct *float64 `json:"veridian_jitter_pct,omitempty"`
 
+	// Veridian fork — ANTI-HASH IDENTIQUE par infra (cold outbound). Empêche deux
+	// mails au rendu identique (sujet + corps) de partir vers la même classe de
+	// provider destinataire dans une fenêtre glissante. enabled : pointeur nil =
+	// non configuré (→ défaut cold ON), *false = désactivé voulu. window (heures,
+	// <=0 = non configuré → défaut 72h). Niveau INTERMÉDIAIRE de la cascade
+	// (broadcast → INFRA → workspace), comme les rates/caps R2. Persisté dans le
+	// JSON blob integrations sans migration ni allowlist (omitempty). Cf.
+	// veridian_content_hash.go + veridian_content_dedup.go.
+	VeridianAntiHashEnabled     *bool `json:"veridian_anti_hash_enabled,omitempty"`
+	VeridianAntiHashWindowHours int   `json:"veridian_anti_hash_window_hours,omitempty"`
+
 	// Veridian fork — FENÊTRE D'ENVOI par infra (cold outbound). L'infra d'envoi
 	// = le domaine/IP émetteur ; ses horaires ouvrables peuvent différer du
 	// workspace (ex. une IP warm-up cantonnée 10h-16h). Niveau INTERMÉDIAIRE de

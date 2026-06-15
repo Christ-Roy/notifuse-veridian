@@ -132,6 +132,12 @@ type MessageHistory struct {
 	// System timestamps
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// Veridian fork — ANTI-HASH IDENTIQUE (cold outbound). Hash du rendu final
+	// normalisé (sujet + corps), persisté pour la fenêtre glissante anti-collision
+	// par classe de provider destinataire. Vide pour les envois non-cold / anti-
+	// hash désactivé (colonne nullable, V52). Cf. veridian_content_hash.go.
+	VeridianContentHash string `json:"veridian_content_hash,omitempty"`
 }
 
 type MessageHistoryStatusSum struct {
@@ -213,6 +219,19 @@ type MessageHistoryRepository interface {
 	// stop-on-reply (Lot 3) — confirmer qu'un In-Reply-To/References cité par un
 	// prospect correspond bien à un de NOS envois vers CE contact.
 	FindContactEmailByMessageID(ctx context.Context, workspaceID, messageID string) (email string, found bool, err error)
+
+	// ExistsContentHashSince retourne true s'il existe DÉJÀ un envoi portant le
+	// hash de contenu `contentHash` depuis `since` (fenêtre glissante anti-hash)
+	// vers la même CLASSE de provider destinataire, identifiée par sa liste de
+	// `domains` (si exclude=false, le destinataire DOIT être dans ces domaines ;
+	// si exclude=true = classe "corporate", le destinataire est HORS des domaines
+	// connus). Sert l'anti-hash identique par classe (cold outbound) : deux mails
+	// au rendu identique vers la même classe dans la fenêtre = empreinte. EXISTS
+	// index-only (idx_message_history_content_hash_sent_at). La classe n'étant pas
+	// matérialisée, on la dérive par domaines comme le daily cap (V49) → même
+	// dégradation gracieuse pour les classes MX (domaines vide → pas d'enforcement
+	// par ce chemin). Cf. veridian_content_hash.go.
+	ExistsContentHashSince(ctx context.Context, workspaceID, contentHash string, domains []string, exclude bool, since time.Time) (bool, error)
 }
 
 // MessageHistoryService defines methods for interacting with message history

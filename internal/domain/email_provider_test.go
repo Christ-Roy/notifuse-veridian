@@ -1868,6 +1868,38 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 		assert.Equal(t, 0.0, *got.VeridianJitterPct)
 	})
 
+	t.Run("round-trip JSON conserve la config anti-hash par infra", func(t *testing.T) {
+		on := true
+		p := EmailProvider{
+			Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600,
+			VeridianAntiHashEnabled:     &on,
+			VeridianAntiHashWindowHours: 48,
+		}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"veridian_anti_hash_enabled":true`)
+		assert.Contains(t, string(raw), `"veridian_anti_hash_window_hours":48`)
+
+		var got EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &got))
+		require.NotNil(t, got.VeridianAntiHashEnabled)
+		assert.True(t, *got.VeridianAntiHashEnabled)
+		assert.Equal(t, 48, got.VeridianAntiHashWindowHours)
+	})
+
+	t.Run("anti-hash *false survit comme present (disable, not nil)", func(t *testing.T) {
+		off := false
+		p := EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600, VeridianAntiHashEnabled: &off}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_anti_hash_enabled")
+
+		var got EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &got))
+		require.NotNil(t, got.VeridianAntiHashEnabled)
+		assert.False(t, *got.VeridianAntiHashEnabled)
+	})
+
 	t.Run("champs omitempty absents du JSON quand non configurés", func(t *testing.T) {
 		p := EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600}
 		raw, err := json.Marshal(p)
@@ -1877,6 +1909,8 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
 		assert.NotContains(t, string(raw), "veridian_tracking_domain")
 		assert.NotContains(t, string(raw), "veridian_jitter_pct")
+		assert.NotContains(t, string(raw), "veridian_anti_hash_enabled")
+		assert.NotContains(t, string(raw), "veridian_anti_hash_window_hours")
 	})
 
 	t.Run("Validate ignore les champs Veridian (pas de contrainte ajoutée)", func(t *testing.T) {

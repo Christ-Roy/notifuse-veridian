@@ -1063,7 +1063,9 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 			VeridianSendingWindow: &domain.VeridianSendingWindow{
 				Days: []int{1, 2, 3, 4, 5}, StartHour: 9, EndHour: 18, Timezone: "Europe/Paris",
 			},
-			VeridianJitterPct: func() *float64 { v := 0.4; return &v }(),
+			VeridianJitterPct:           func() *float64 { v := 0.4; return &v }(),
+			VeridianAntiHashEnabled:     func() *bool { b := true; return &b }(),
+			VeridianAntiHashWindowHours: 48,
 		}
 		existing := &domain.Workspace{
 			ID:       workspaceID,
@@ -1101,6 +1103,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		// Cold outreach sauve le jitter sans le persister).
 		require.NotNil(t, saved.Settings.VeridianJitterPct)
 		assert.Equal(t, 0.4, *saved.Settings.VeridianJitterPct)
+		// Anti-hash : même allowlist, même anti-régression.
+		require.NotNil(t, saved.Settings.VeridianAntiHashEnabled)
+		assert.True(t, *saved.Settings.VeridianAntiHashEnabled)
+		assert.Equal(t, 48, saved.Settings.VeridianAntiHashWindowHours)
 	})
 }
 

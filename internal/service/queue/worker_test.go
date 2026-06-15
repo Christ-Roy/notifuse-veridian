@@ -320,6 +320,72 @@ func TestEmailQueueWorker_ProcessEntry_Success(t *testing.T) {
 	worker.processEntry(workspace, entry)
 }
 
+// TestEmailQueueWorker_ProcessEntry_PersistsContentHash vérifie le diff worker.go
+// de l'anti-hash : le VeridianContentHash posé sur le payload à l'enqueue est
+// propagé dans le message_history persisté (alimente la fenêtre glissante). Le
+// gate filet (veridianContentHashGate) est aussi traversé sans bloquer l'envoi.
+func TestEmailQueueWorker_ProcessEntry_PersistsContentHash(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	const integrationID, entryID, workspaceID = "integration-1", "entry-1", "workspace-1"
+	const hash = "0123456789abcdef0123456789abcdef"
+
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{
+			{ID: integrationID, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 100}},
+		},
+	}
+	entry := &domain.EmailQueueEntry{
+		ID:            entryID,
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: integrationID,
+		ContactEmail:  "test@example.com",
+		MessageID:     "msg-1",
+		Payload: domain.EmailQueuePayload{
+			FromAddress: "sender@example.com", FromName: "Sender",
+			Subject: "Test", HTMLContent: "<p>Hello</p>", RateLimitPerMinute: 100,
+			VeridianContentHash: hash,
+		},
+		MaxAttempts: 3,
+	}
+
+	// Le gate filet n'est PAS appelé ici : le payload porte un hash mais aucune
+	// config rates/cold n'est posée → le gate lit le hash et fait l'EXISTS. On
+	// l'attend donc (best-effort, retourne false = pas de collision).
+	mockMessageHistoryRepo.EXPECT().
+		ExistsContentHashSince(gomock.Any(), workspaceID, hash, gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(false, nil)
+
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	// Capture le message persisté pour vérifier la propagation du hash.
+	mockMessageHistoryRepo.EXPECT().
+		Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			assert.Equal(t, hash, m.VeridianContentHash, "le hash payload doit être persisté en message_history")
+			return nil
+		})
+	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, entryID).Return(nil)
+
+	worker := NewEmailQueueWorker(mockQueueRepo, mockWorkspaceRepo, mockEmailService, mockMessageHistoryRepo, DefaultWorkerConfig(), mockLogger)
+	worker.ctx = context.Background()
+	worker.processEntry(workspace, entry)
+}
+
 // TestEmailQueueWorker_ProcessEntry_PrefilterSkipsInvalid vérifie le CÂBLAGE du
 // gate de pré-filtrage Lot 7 dans processEntry : une adresse syntaxiquement
 // invalide est routée vers l'échec PERMANENT (MarkAsProcessing → message_history

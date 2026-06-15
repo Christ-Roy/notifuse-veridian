@@ -149,6 +149,11 @@ func (d *VeridianMessageHistoryDecorator) FindContactEmailByMessageID(ctx contex
 	return d.upstream.FindContactEmailByMessageID(ctx, workspaceID, messageID)
 }
 
+// ExistsContentHashSince : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) ExistsContentHashSince(ctx context.Context, workspaceID, contentHash string, domains []string, exclude bool, since time.Time) (bool, error) {
+	return d.upstream.ExistsContentHashSince(ctx, workspaceID, contentHash, domains, exclude, since)
+}
+
 // incrementQuota appelle planRepo.IncrementEmailsSent en best-effort.
 // Erreur "workspace not found" = workspace pas gere par Veridian (self-hosted
 // ou ancien workspace avant migration) → log Debug et passe. Autres erreurs

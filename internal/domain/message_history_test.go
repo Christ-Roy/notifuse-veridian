@@ -456,6 +456,23 @@ func TestMessageHistory(t *testing.T) {
 		assert.Equal(t, unsubscribedAt, *message.UnsubscribedAt)
 		assert.Equal(t, failedAt, *message.FailedAt)
 	})
+
+	// Veridian fork — le hash de contenu anti-hash doit survivre au round-trip JSON
+	// et être omis quand vide (colonne nullable V52, omitempty).
+	t.Run("veridian content hash round-trip and omitempty", func(t *testing.T) {
+		m := MessageHistory{ID: "m1", ContactEmail: "a@b.fr", Channel: "email", VeridianContentHash: "0123456789abcdef0123456789abcdef"}
+		raw, err := json.Marshal(m)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_content_hash")
+
+		var got MessageHistory
+		require.NoError(t, json.Unmarshal(raw, &got))
+		assert.Equal(t, "0123456789abcdef0123456789abcdef", got.VeridianContentHash)
+
+		rawEmpty, err := json.Marshal(MessageHistory{ID: "m2", ContactEmail: "a@b.fr", Channel: "email"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(rawEmpty), "veridian_content_hash")
+	})
 }
 
 func TestParseTimeParam(t *testing.T) {

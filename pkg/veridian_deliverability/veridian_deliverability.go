@@ -88,6 +88,17 @@ type Input struct {
 	FromDomain    string // domaine du From, ex. "agences-veridian.fr" (optionnel)
 	ProviderClass string // classe destinataire canonique (optionnel)
 	Mode          Mode   // override explicite ; sinon déduit de ProviderClass
+
+	// Veridian fork — volet anti-hash (avertissement amont). Le linter score un
+	// RENDU unique, il ne voit pas le template brut ni sa diversité. L'appelant
+	// (UI/sender) calcule VariantCount via pkg/veridian_spintax.CountVariants sur
+	// le template BRUT et le volume cible (nombre d'envois prévus vers la plus
+	// grosse classe). Si VariantCount > 0 ET VariantCount < TargetVolume, le
+	// linter AVERTIT (variété insuffisante → risque de collision de hash). Les
+	// deux à 0 (non renseignés) = règle inactive (non-régression). Guide, pas
+	// filet (le filet dur est le gate anti-hash à l'enqueue).
+	VariantCount int // nb de variantes spintax du template brut (0 = non renseigné)
+	TargetVolume int // nb d'envois prévus vers la plus grosse classe (0 = non renseigné)
 }
 
 // Rule est une règle déclenchée : un nom stable (façon SA, ex.
@@ -140,6 +151,7 @@ const (
 	wSpintaxUnresolved   = 2.5 // {A|B} qui fuit dans le rendu
 	wNoPersonalization   = 0.5 // aucune trace de personnalisation (générique/bulk)
 	wTrackingStrict      = 1.0 // présence de tracking en mode strict
+	wLowSpintaxVariety   = 1.0 // variété spintax insuffisante vs volume cible (anti-hash)
 )
 
 // veridianSpammyWords : mots/phrases déclencheurs pondérés. Les poids sont
@@ -355,6 +367,18 @@ func Score(in Input) Result {
 	if !reLiquidVar.MatchString(body) && looksGeneric(visibleText) {
 		add("NO_PERSONALIZATION", wNoPersonalization,
 			"Aucune trace de personnalisation : un cold générique ressemble à du bulk. Personnaliser (prénom, société, accroche spécifique).")
+	}
+
+	// --- 🟡 Anti-hash : variété spintax vs volume (avertissement amont) ---
+	// L'appelant renseigne VariantCount (variantes du template brut) + TargetVolume
+	// (envois prévus vers la plus grosse classe). Trop peu de variantes pour le
+	// volume = beaucoup d'envois au rendu IDENTIQUE vers une même classe =
+	// empreinte de campagne (le gate anti-hash en re-spinnera certains, mais
+	// au-delà du nombre de variantes il ne PEUT PAS varier). On guide vers plus de
+	// spintax. Inactif si l'un des deux n'est pas renseigné (0).
+	if in.VariantCount > 0 && in.TargetVolume > 0 && in.VariantCount < in.TargetVolume {
+		add("LOW_SPINTAX_VARIETY", wLowSpintaxVariety,
+			"Variété de contenu insuffisante : le template ne produit que quelques variantes pour un volume bien supérieur. Beaucoup de destinataires d'une même classe recevront un rendu identique (empreinte de campagne). Ajouter des groupes spintax {A|B} dans le sujet et le corps.")
 	}
 
 	// --- Agrégation ---

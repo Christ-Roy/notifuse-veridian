@@ -406,6 +406,8 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.VeridianPerRecipientDailyCap = settings.VeridianPerRecipientDailyCap
 	existingWorkspace.Settings.VeridianSendingWindow = settings.VeridianSendingWindow
 	existingWorkspace.Settings.VeridianJitterPct = settings.VeridianJitterPct
+	existingWorkspace.Settings.VeridianAntiHashEnabled = settings.VeridianAntiHashEnabled
+	existingWorkspace.Settings.VeridianAntiHashWindowHours = settings.VeridianAntiHashWindowHours
 
 	// Handle template blocks - preserve existing blocks if not provided in update
 	// Note: Template blocks should be managed via dedicated /api/templateBlocks.* endpoints

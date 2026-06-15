@@ -94,6 +94,21 @@ func (mr *MockMessageHistoryRepositoryMockRecorder) DeleteForEmail(arg0, arg1, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteForEmail", reflect.TypeOf((*MockMessageHistoryRepository)(nil).DeleteForEmail), arg0, arg1, arg2)
 }
 
+// ExistsContentHashSince mocks base method.
+func (m *MockMessageHistoryRepository) ExistsContentHashSince(arg0 context.Context, arg1, arg2 string, arg3 []string, arg4 bool, arg5 time.Time) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExistsContentHashSince", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExistsContentHashSince indicates an expected call of ExistsContentHashSince.
+func (mr *MockMessageHistoryRepositoryMockRecorder) ExistsContentHashSince(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExistsContentHashSince", reflect.TypeOf((*MockMessageHistoryRepository)(nil).ExistsContentHashSince), arg0, arg1, arg2, arg3, arg4, arg5)
+}
+
 // FindContactEmailByMessageID mocks base method.
 func (m *MockMessageHistoryRepository) FindContactEmailByMessageID(arg0 context.Context, arg1, arg2 string) (string, bool, error) {
 	m.ctrl.T.Helper()

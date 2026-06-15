@@ -132,6 +132,22 @@ func TestEmailQueuePayload_VeridianProviderThrottleRoundTrip(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(`{"subject":"old"}`), &decoded))
 		assert.Nil(t, decoded.VeridianJitterPct, "absent → nil (non configuré, le gate applique le défaut cold)")
 	})
+
+	t.Run("content hash survives round-trip and omitted when empty", func(t *testing.T) {
+		payload := EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100, VeridianContentHash: "deadbeefdeadbeefdeadbeefdeadbeef"}
+		raw, err := json.Marshal(payload)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_content_hash")
+
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.Equal(t, "deadbeefdeadbeefdeadbeefdeadbeef", decoded.VeridianContentHash)
+
+		// Vide → absent (omitempty), non-régression.
+		rawEmpty, err := json.Marshal(EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100})
+		require.NoError(t, err)
+		assert.NotContains(t, string(rawEmpty), "veridian_content_hash")
+	})
 }
 
 func TestEmailQueueStatus_Values(t *testing.T) {

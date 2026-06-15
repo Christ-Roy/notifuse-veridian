@@ -460,3 +460,46 @@ func TestScore_FloatStrFormatting(t *testing.T) {
 		}
 	}
 }
+
+// TestScore_LowSpintaxVariety couvre le volet anti-hash (avertissement amont) :
+// le linter avertit quand la variété spintax du template (renseignée par
+// l'appelant via CountVariants) est inférieure au volume cible.
+func TestScore_LowSpintaxVariety(t *testing.T) {
+	t.Run("variété < volume → règle LOW_SPINTAX_VARIETY", func(t *testing.T) {
+		res := Score(Input{
+			Subject:      "Question rapide",
+			Body:         cleanColdBody,
+			VariantCount: 4,   // 4 variantes
+			TargetVolume: 500, // 500 envois prévus
+		})
+		if !hasRule(res, "LOW_SPINTAX_VARIETY") {
+			t.Fatalf("attendu LOW_SPINTAX_VARIETY, rules=%+v", res.Rules)
+		}
+	})
+
+	t.Run("variété suffisante → pas de règle", func(t *testing.T) {
+		res := Score(Input{
+			Subject:      "Question rapide",
+			Body:         cleanColdBody,
+			VariantCount: 1000,
+			TargetVolume: 500,
+		})
+		if hasRule(res, "LOW_SPINTAX_VARIETY") {
+			t.Fatalf("ne devait PAS déclencher (variété > volume), rules=%+v", res.Rules)
+		}
+	})
+
+	t.Run("champs non renseignés (0) → règle inactive (non-régression)", func(t *testing.T) {
+		res := Score(Input{Subject: "Question rapide", Body: cleanColdBody})
+		if hasRule(res, "LOW_SPINTAX_VARIETY") {
+			t.Fatalf("ne devait PAS déclencher sans VariantCount/TargetVolume, rules=%+v", res.Rules)
+		}
+	})
+
+	t.Run("volume renseigné mais variété 0 → inactive (donnée incomplète)", func(t *testing.T) {
+		res := Score(Input{Subject: "S", Body: "B", TargetVolume: 500})
+		if hasRule(res, "LOW_SPINTAX_VARIETY") {
+			t.Fatalf("ne devait PAS déclencher sans VariantCount, rules=%+v", res.Rules)
+		}
+	})
+}

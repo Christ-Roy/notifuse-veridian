@@ -91,6 +91,9 @@ func (f *Factory) CreateMessageSender() MessageSender {
 		if s, ok := sender.(*queueMessageSender); ok {
 			s.SetVeridianWorkspaceRepo(f.workspaceRepo)
 			s.SetVeridianSenderRotator(f.veridianSenderRotator)
+			// Veridian fork — dédupliqueur anti-hash à l'enqueue (cold outbound),
+			// construit avec le repo message_history (lookup fenêtre glissante).
+			s.SetVeridianContentDedup(newVeridianContentDedup(f.messageHistoryRepo, f.logger))
 		}
 		return sender
 	}

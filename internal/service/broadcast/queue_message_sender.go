@@ -39,6 +39,12 @@ type queueMessageSender struct {
 	// désactivée (sender figé par GetSender, comportement upstream).
 	// Cf. domain/veridian_sender_rotation.go + veridian_sender_rotation.go.
 	veridianSenderRotator *domain.VeridianSenderRotator
+
+	// Veridian fork — dédupliqueur anti-hash à l'enqueue (cold outbound). Injecté
+	// par la factory (construit avec messageHistoryRepo). nil = anti-hash inactif
+	// (comportement upstream : aucune détection de collision, aucun hash posé).
+	// Cf. veridian_content_dedup.go.
+	veridianContentDedup *veridianContentDedup
 }
 
 // SetVeridianWorkspaceRepo injecte le workspace repo utilisé pour le fallback
@@ -52,6 +58,12 @@ func (s *queueMessageSender) SetVeridianWorkspaceRepo(repo domain.WorkspaceRepos
 // nil = rotation désactivée.
 func (s *queueMessageSender) SetVeridianSenderRotator(r *domain.VeridianSenderRotator) {
 	s.veridianSenderRotator = r
+}
+
+// SetVeridianContentDedup injecte le dédupliqueur anti-hash (DI optionnelle).
+// nil = anti-hash inactif (comportement upstream).
+func (s *queueMessageSender) SetVeridianContentDedup(d *veridianContentDedup) {
+	s.veridianContentDedup = d
 }
 
 // NewQueueMessageSender creates a new message sender that enqueues to the email queue
@@ -413,7 +425,46 @@ func (s *queueMessageSender) buildQueueEntry(
 	}
 	// Veridian fork (cold outbound) — spintax du sujet (même graine que le corps).
 	// Le sujet est rendu hors CompileTemplate, donc résolu explicitement ici.
+	// subjectLiquid = sujet post-Liquid AVANT spintax, conservé pour la re-spin
+	// du dédupliqueur anti-hash (il doit pouvoir ré-appliquer spintax avec un seed
+	// perturbé sur la base post-Liquid, pas sur le sujet déjà spintaxé).
+	subjectLiquid := subject
 	subject = veridian_spintax.ResolveSpintax(subject, email)
+
+	// Veridian fork (cold outbound) — ANTI-HASH IDENTIQUE par classe de provider
+	// destinataire. Détecte si ce rendu final (subject + body) a déjà été envoyé
+	// vers la même classe dans la fenêtre glissante ; si oui, RE-SPIN avec un seed
+	// perturbé (re-compile body + re-spintaxe subject) jusqu'à obtenir un rendu
+	// neuf. Template sans variété → pas de perte de mail (envoi du rendu courant +
+	// warning). No-op strict hors contexte cold / anti-hash désactivé / dedup non
+	// injecté. Le hash retenu est posé sur le payload (persisté en message_history
+	// pour alimenter la fenêtre, relu par le filet worker). Cf.
+	// veridian_content_dedup.go + veridian_content_hash.go.
+	var contentHash string
+	if s.veridianContentDedup != nil {
+		respin := func(seed string) (string, string) {
+			rs := veridian_spintax.ResolveSpintax(subjectLiquid, seed)
+			rb := htmlContent
+			respinReq := compileReq
+			respinReq.VeridianSpintaxSeed = seed
+			if rc, rerr := notifuse_mjml.CompileTemplate(respinReq); rerr == nil && rc.Success && rc.HTML != nil {
+				rb = *rc.HTML
+			}
+			return rs, rb
+		}
+		dedupRes := s.veridianContentDedup.Resolve(ctx, veridianContentDedupParams{
+			WorkspaceID:    workspaceID,
+			Email:          email,
+			Contact:        contact,
+			Broadcast:      broadcast,
+			Provider:       emailProvider,
+			Workspace:      pixelResolver.workspace(ctx, workspaceID),
+			InitialSubject: subject,
+			InitialBody:    htmlContent,
+			Respin:         respin,
+		})
+		subject, htmlContent, contentHash = dedupRes.Subject, dedupRes.Body, dedupRes.ContentHash
+	}
 
 	// Build the queue entry
 	entry := &domain.EmailQueueEntry{
@@ -439,6 +490,10 @@ func (s *queueMessageSender) buildQueueEntry(
 			TemplateVersion: int(template.Version),
 			ListID:          broadcast.Audience.List,
 			TemplateData:    data, // Store template data for message history
+			// Veridian fork — anti-hash : hash du rendu final retenu (après re-spin
+			// éventuelle). Vide hors contexte cold / anti-hash off. Persisté en
+			// message_history pour la fenêtre glissante. Cf. veridian_content_dedup.go.
+			VeridianContentHash: contentHash,
 		},
 		MaxAttempts: 3,
 		CreatedAt:   time.Now().UTC(),

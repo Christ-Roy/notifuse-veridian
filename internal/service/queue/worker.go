@@ -380,6 +380,14 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Veridian fork: ANTI-HASH residual net (cold outbound). Best-effort,
+	// LOG-ONLY filet : la variété est garantie à l'enqueue (re-spin) ; ce gate ne
+	// fait que CONSTATER + TRACER une collision résiduelle (template sans spintax)
+	// sans jamais bloquer l'envoi (pas de perte de mail). No-op sans hash sur le
+	// payload. Placé après le pré-filtre, avant MarkAsProcessing.
+	// Cf. veridian_content_hash_gate.go.
+	w.veridianContentHashGate(workspace, &integration.EmailProvider, entry)
+
 	// Mark as processing (this increments attempts)
 	if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
 		w.logger.WithFields(map[string]interface{}{
@@ -560,6 +568,10 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		SentAt:          entry.CreatedAt,                                      // Use queue entry creation time (stable across retries)
 		CreatedAt:       entry.CreatedAt,
 		UpdatedAt:       now,
+		// Veridian fork — anti-hash identique cold outbound : persiste le hash du
+		// rendu final (posé à l'enqueue) pour alimenter la fenêtre glissante de
+		// déduplication par classe. Vide pour les envois non-cold → stocké NULL.
+		VeridianContentHash: entry.Payload.VeridianContentHash,
 	}
 
 	// Set source (broadcast or automation)

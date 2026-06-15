@@ -167,17 +167,20 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 		attachmentsJSON = message.Attachments
 	}
 
+	// Veridian fork — NULLIF($N,'') : un hash vide (envoi non-cold / anti-hash
+	// désactivé) est stocké NULL pour rester HORS de l'index partiel
+	// idx_message_history_content_hash_sent_at (WHERE veridian_content_hash IS NOT NULL).
 	query := `
 		INSERT INTO message_history (
 			id, external_id, contact_email, broadcast_id, automation_id, transactional_notification_id, list_id, template_id, template_version,
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
-			unsubscribed_at, created_at, updated_at
+			unsubscribed_at, created_at, updated_at, veridian_content_hash
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, LEFT($11, 255), $12, $13, $14, $15, $16,
 			$17, $18, $19, $20, $21,
-			$22, $23, $24
+			$22, $23, $24, NULLIF($25, '')
 		)
 	`
 
@@ -208,6 +211,7 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 		message.UnsubscribedAt,
 		message.CreatedAt,
 		message.UpdatedAt,
+		message.VeridianContentHash,
 	)
 
 	if err != nil {
@@ -238,22 +242,29 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 		attachmentsJSON = message.Attachments
 	}
 
+	// Veridian fork — veridian_content_hash posé à l'INSERT (NULLIF vide → NULL,
+	// hors index partiel). Le DO UPDATE ne le touche PAS : un retry réussi ne
+	// change pas le rendu, le hash reste celui du 1er insert (la fenêtre anti-hash
+	// raisonne sur l'envoi initial). COALESCE garde l'ancien hash si EXCLUDED est
+	// NULL (cas d'une 1re tentative qui aurait échoué sans hash, suivie d'un
+	// succès cold avec hash : on préserve le hash apparu).
 	query := `
 		INSERT INTO message_history (
 			id, external_id, contact_email, broadcast_id, automation_id, transactional_notification_id, list_id, template_id, template_version,
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
-			unsubscribed_at, created_at, updated_at
+			unsubscribed_at, created_at, updated_at, veridian_content_hash
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, LEFT($11, 255), $12, $13, $14, $15, $16,
 			$17, $18, $19, $20, $21,
-			$22, $23, $24
+			$22, $23, $24, NULLIF($25, '')
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			failed_at = EXCLUDED.failed_at,
 			status_info = EXCLUDED.status_info,
-			updated_at = EXCLUDED.updated_at
+			updated_at = EXCLUDED.updated_at,
+			veridian_content_hash = COALESCE(message_history.veridian_content_hash, EXCLUDED.veridian_content_hash)
 	`
 
 	_, err = workspaceDB.ExecContext(
@@ -283,6 +294,7 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 		message.UnsubscribedAt,
 		message.CreatedAt,
 		message.UpdatedAt,
+		message.VeridianContentHash,
 	)
 
 	if err != nil {
@@ -1337,4 +1349,51 @@ func (r *MessageHistoryRepository) CountSentSinceForDomains(ctx context.Context,
 		return 0, fmt.Errorf("failed to count messages sent to domain class since: %w", err)
 	}
 	return count, nil
+}
+
+// ExistsContentHashSince retourne true s'il existe déjà un envoi portant
+// `contentHash` depuis `since` vers la même classe (dérivée par la liste de
+// `domains`, cf. CountSentSinceForDomains). Anti-hash identique par classe (cold
+// outbound). EXISTS index-only via idx_message_history_content_hash_sent_at
+// (préfixe veridian_content_hash ultra sélectif + sent_at). Le filtre par classe
+// réutilise le même prédicat domaine `= ANY` / `<> ALL` que le daily cap (même
+// dégradation gracieuse MX : domaines vide non-exclude → false sans requête).
+// Cf. internal/domain/message_history.go + veridian_content_hash.go.
+func (r *MessageHistoryRepository) ExistsContentHashSince(ctx context.Context, workspaceID, contentHash string, domains []string, exclude bool, since time.Time) (bool, error) {
+	if contentHash == "" {
+		// Pas de hash = rien à dédupliquer (envoi non-cold / anti-hash off).
+		return false, nil
+	}
+	if len(domains) == 0 && !exclude {
+		// Classe à liste vide non-exclude (classe MX : domaine non matérialisé) :
+		// aucun envoi ne matche par construction → dégradation gracieuse assumée
+		// (cohérente avec CountSentSinceForDomains), pas de requête.
+		return false, nil
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// lower() pour matcher la normalisation Go du domaine (cf. CountSentSinceForDomains).
+	op := "= ANY"
+	if exclude {
+		op = "<> ALL"
+	}
+	query := fmt.Sprintf(
+		`SELECT EXISTS(
+			SELECT 1 FROM message_history
+			WHERE veridian_content_hash = $1
+			  AND sent_at >= $2
+			  AND lower(split_part(contact_email, '@', 2)) %s($3)
+		)`,
+		op,
+	)
+
+	var exists bool
+	if err := workspaceDB.QueryRowContext(ctx, query, contentHash, since, pq.Array(domains)).Scan(&exists); err != nil {
+		return false, fmt.Errorf("failed to check content hash existence since: %w", err)
+	}
+	return exists, nil
 }

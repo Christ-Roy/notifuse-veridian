@@ -436,6 +436,27 @@ func TestWorkspaceSettings_VeridianDailyCapRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotContains(t, string(raw), "veridian_jitter_pct")
 	})
+
+	t.Run("anti-hash settings survive round-trip and omitempty", func(t *testing.T) {
+		on := true
+		settings := WorkspaceSettings{Timezone: "UTC", VeridianAntiHashEnabled: &on, VeridianAntiHashWindowHours: 72}
+		raw, err := json.Marshal(settings)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_anti_hash_enabled")
+		assert.Contains(t, string(raw), "veridian_anti_hash_window_hours")
+
+		var decoded WorkspaceSettings
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.NotNil(t, decoded.VeridianAntiHashEnabled)
+		assert.True(t, *decoded.VeridianAntiHashEnabled)
+		assert.Equal(t, 72, decoded.VeridianAntiHashWindowHours)
+
+		// Vide → omitempty absent (non-régression).
+		rawEmpty, err := json.Marshal(WorkspaceSettings{Timezone: "UTC"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(rawEmpty), "veridian_anti_hash_enabled")
+		assert.NotContains(t, string(rawEmpty), "veridian_anti_hash_window_hours")
+	})
 }
 
 func TestScanWorkspace(t *testing.T) {

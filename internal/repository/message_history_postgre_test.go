@@ -135,6 +135,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.UnsubscribedAt,
 				message.CreatedAt,
 				message.UpdatedAt,
+				message.VeridianContentHash,
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -183,6 +184,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.UnsubscribedAt,
 				message.CreatedAt,
 				message.UpdatedAt,
+				message.VeridianContentHash,
 			).
 			WillReturnError(errors.New("execution error"))
 
@@ -2698,6 +2700,71 @@ func TestMessageHistoryRepository_CountSentSinceForDomains(t *testing.T) {
 		_, err := repo.CountSentSinceForDomains(ctx, workspaceID, domains, false, since)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "workspace connection")
+	})
+}
+
+func TestMessageHistoryRepository_ExistsContentHashSince(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	since := time.Date(2026, 6, 14, 0, 0, 0, 0, time.UTC)
+	domains := []string{"gmail.com", "googlemail.com"}
+	const hash = "deadbeefdeadbeefdeadbeefdeadbeef"
+
+	t.Run("empty hash → false without query", func(t *testing.T) {
+		got, err := repo.ExistsContentHashSince(ctx, workspaceID, "", domains, false, since)
+		require.NoError(t, err)
+		assert.False(t, got)
+	})
+
+	t.Run("empty domains non-exclude → false without query (graceful MX degradation)", func(t *testing.T) {
+		got, err := repo.ExistsContentHashSince(ctx, workspaceID, hash, nil, false, since)
+		require.NoError(t, err)
+		assert.False(t, got)
+	})
+
+	t.Run("inclusion (= ANY) returns existence", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT EXISTS\(\s*SELECT 1 FROM message_history\s+WHERE veridian_content_hash = \$1\s+AND sent_at >= \$2\s+AND lower\(split_part\(contact_email, '@', 2\)\) = ANY\(\$3\)\s*\)`).
+			WithArgs(hash, since, pq.Array(domains)).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+		got, err := repo.ExistsContentHashSince(ctx, workspaceID, hash, domains, false, since)
+		require.NoError(t, err)
+		assert.True(t, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("exclusion (<> ALL) for corporate", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`AND lower\(split_part\(contact_email, '@', 2\)\) <> ALL\(\$3\)`).
+			WithArgs(hash, since, pq.Array(domains)).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		got, err := repo.ExistsContentHashSince(ctx, workspaceID, hash, domains, true, since)
+		require.NoError(t, err)
+		assert.False(t, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("no conn"))
+		_, err := repo.ExistsContentHashSince(ctx, workspaceID, hash, domains, false, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error surfaced", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT EXISTS`).
+			WithArgs(hash, since, pq.Array(domains)).
+			WillReturnError(errors.New("boom"))
+		_, err := repo.ExistsContentHashSince(ctx, workspaceID, hash, domains, false, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "content hash existence")
 	})
 }
 

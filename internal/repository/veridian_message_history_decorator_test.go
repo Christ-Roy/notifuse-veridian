@@ -348,6 +348,22 @@ func TestVeridianMessageHistoryDecorator_FindContactEmailByMessageID_Passthrough
 	assert.Equal(t, "prospect@acme.fr", email)
 }
 
+func TestVeridianMessageHistoryDecorator_ExistsContentHashSince_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	domains := []string{"gmail.com"}
+	upstream.EXPECT().
+		ExistsContentHashSince(gomock.Any(), "ws", "abc123", domains, false, since).
+		Return(true, nil).Times(1)
+	got, err := d.ExistsContentHashSince(context.Background(), "ws", "abc123", domains, false, since)
+	require.NoError(t, err)
+	assert.True(t, got)
+}
+
 func TestIsWorkspaceNotFoundErr(t *testing.T) {
 	tests := []struct {
 		name string

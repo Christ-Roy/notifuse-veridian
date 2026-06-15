@@ -110,6 +110,14 @@ type EmailQueuePayload struct {
 	// de la cascade (broadcast → infra → workspace). nil = non configuré (le gate
 	// applique le défaut cold), *0 = jitter désactivé. Cf. veridian_jitter.go.
 	VeridianJitterPct *float64 `json:"veridian_jitter_pct,omitempty"`
+
+	// Veridian fork — ANTI-HASH IDENTIQUE (cold outbound). Hash du rendu final
+	// normalisé (sujet + corps), posé à l'enqueue APRÈS spintax + déduplication.
+	// Persisté dans message_history (colonne veridian_content_hash) pour la
+	// fenêtre glissante anti-collision par classe ; relu par le filet best-effort
+	// du worker (veridian_content_hash_gate.go). Vide = pas calculé (hors contexte
+	// cold / anti-hash désactivé). Cf. veridian_content_hash.go.
+	VeridianContentHash string `json:"veridian_content_hash,omitempty"`
 }
 
 // ToSendEmailProviderRequest converts the payload to a SendEmailProviderRequest

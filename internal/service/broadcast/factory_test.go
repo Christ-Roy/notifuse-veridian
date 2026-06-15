@@ -214,6 +214,34 @@ func TestFactory_CreateMessageSender_InjectsVeridianSenderRotator(t *testing.T) 
 	})
 }
 
+// Veridian fork — vérifie que CreateMessageSender injecte le dédupliqueur
+// anti-hash dans le queue sender. Sans cette injection, l'anti-hash est mort
+// (aucun hash posé, aucune détection de collision à l'enqueue).
+func TestFactory_CreateMessageSender_InjectsVeridianContentDedup(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := NewFactory(
+		mocks.NewMockBroadcastRepository(ctrl),
+		mocks.NewMockMessageHistoryRepository(ctrl),
+		mocks.NewMockTemplateRepository(ctrl),
+		mocks.NewMockEmailServiceInterface(ctrl),
+		mocks.NewMockContactRepository(ctrl),
+		mocks.NewMockTaskRepository(ctrl),
+		mocks.NewMockWorkspaceRepository(ctrl),
+		mocks.NewMockEmailQueueRepository(ctrl),
+		broadcastmocks.NewMockDataFeedFetcher(ctrl),
+		pkgmocks.NewMockLogger(ctrl),
+		DefaultConfig(),
+		"https://api.notifuse.com",
+		mocks.NewMockEventBus(ctrl),
+		true, // useQueueSender
+	)
+
+	qms := f.CreateMessageSender().(*queueMessageSender)
+	require.NotNil(t, qms.veridianContentDedup, "le dédupliqueur anti-hash doit être injecté dans le queue sender")
+}
+
 func TestFactory_CreateOrchestrator(t *testing.T) {
 	// Create mock controller
 	ctrl := gomock.NewController(t)
