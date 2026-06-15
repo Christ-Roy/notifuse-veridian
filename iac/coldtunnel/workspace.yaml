@@ -112,8 +112,42 @@ sending_window:
 # ----------------------------------------------------------------------------
 # Contenu : listes / templates / séquences cold (cadence J+0 / J+3 / J+7).
 # Déclaré ici, appliqué via API (templates.create + automations.create + enroll).
-# À détailler quand le contenu réel sera prêt.
+# ⚠️ SQUELETTE — le COPY (objet + corps MJML) reste à écrire par Robert (sa voix
+# commerciale). Spintax {A|B} supporté (Lot 6) pour varier le contenu par
+# destinataire. Liquid {{ contact.first_name }} etc. disponible.
+# NB : le CLI IAC applique listes+templates+séquences quand cette section est
+# décommentée et le copy renseigné (endpoints templates.create / automations.create
+# / automations.enroll — cf docs/AGENT-API.md).
 # ----------------------------------------------------------------------------
-# lists:     []   # à définir
-# templates: []   # MJML, à définir (skill notifuse-templates)
-# sequences: []   # cadence cold, à définir
+lists:
+  - id: cold-prospects
+    name: Prospects cold (agences)
+
+templates:
+  - id: cold-step1            # J+0 — premier contact
+    name: Cold — Initial
+    subject: "{Bonjour|Bonsoir} {{ contact.first_name }}, {une question rapide|un mot rapide}"
+    body_mjml: ""             # ⚠️ à écrire (skill notifuse-templates, charte Veridian)
+  - id: cold-step2            # J+3 — relance 1
+    name: Cold — Relance 1
+    subject: "{Re|Suite à mon message} — {{ contact.first_name }}"
+    body_mjml: ""             # ⚠️ à écrire
+  - id: cold-step3            # J+7 — relance 2 (dernière)
+    name: Cold — Relance 2
+    subject: "{Dernier message|Je n'insiste plus} {{ contact.first_name }}"
+    body_mjml: ""             # ⚠️ à écrire
+
+sequences:
+  - id: cold-cadence-j0-j3-j7
+    name: Cold cadence J+0 / J+3 / J+7
+    status: draft             # passer 'live' via automations.activate quand le copy est prêt
+    list_id: cold-prospects
+    trigger: { event_kind: contact.created, frequency: once }
+    # Exit-on-reply (Lot 3+9) + exit-on-bounce (Lot 2) sont AUTOMATIQUES : le gate
+    # ColdReplyChecker sort le contact dès réponse/bounce, à chaque tick. Rien à déclarer.
+    nodes:
+      - { id: n_step1, type: email, config: { template_id: cold-step1 }, next_node_id: n_wait1 }
+      - { id: n_wait1, type: delay, config: { duration: 3, unit: days }, next_node_id: n_step2 }
+      - { id: n_step2, type: email, config: { template_id: cold-step2 }, next_node_id: n_wait2 }
+      - { id: n_wait2, type: delay, config: { duration: 4, unit: days }, next_node_id: n_step3 }
+      - { id: n_step3, type: email, config: { template_id: cold-step3 } }
