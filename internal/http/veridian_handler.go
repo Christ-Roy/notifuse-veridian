@@ -44,6 +44,10 @@ type VeridianHandler struct {
 	// Peut etre nil (mode prod / boot partiel) : handleTestTenantsStats retourne
 	// alors 503. Cf. veridian_test_tenants_stats_handler.go.
 	testTenantsCleanup TestTenantsCleanupStatsProvider
+	// coldSimulate porte les deps de l'endpoint de test cold lifecycle
+	// (2026-06-15). Peut etre nil (prod / self-hosted) : handleColdSimulate
+	// retourne alors 503. Staging-only. Cf. veridian_cold_simulate_handler.go.
+	coldSimulate *veridianColdSimulateDeps
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -186,6 +190,12 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// staging. Auth HMAC, read-only. Retourne 503 si pas de service injecte
 	// (cas: prod ou self-hosted). Cf. todo/2026-05-24-staging-db-pool-orphan-cleanup-auto.md.
 	mux.Handle("GET /api/veridian/admin/test-tenants-stats", hmac(http.HandlerFunc(h.handleTestTenantsStats)))
+	// === Veridian patch — 2026-06-15 === Endpoint de test cold lifecycle
+	// (stop-on-reply + cap destinataire) pour les E2E, frappe le VRAI code
+	// métier sans envoi de mail ni IMAP réel. Auth HMAC, STAGING-ONLY (503
+	// sinon). Mutateur (seed message_history) → HMAC + Idempotency.
+	// Cf. veridian_cold_simulate_handler.go + tests/e2e-veridian/specs/cold-lifecycle.spec.ts.
+	mux.Handle("POST /api/veridian/admin/cold-simulate", writeRoute(h.handleColdSimulate))
 	// === Veridian patch V37 === Limites + dimensions feature d'un tenant
 	// (lot 7 ticket pricing-plans-implementation). Source de verite pour la
 	// console UI (widgets quota) et le paywall middleware. Auth HMAC.

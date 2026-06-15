@@ -2256,3 +2256,25 @@ func TestVeridianHandler_RegisterRoutes_FreezeUnfreeze(t *testing.T) {
 		assert.NotEqual(t, http.StatusMethodNotAllowed, rec.Code, "route %s must accept POST", path)
 	}
 }
+
+// TestVeridianHandler_RegisterRoutes_ColdSimulate : la route de test cold
+// lifecycle (POST /api/veridian/admin/cold-simulate) DOIT être enregistrée
+// explicitement sur le mux. Garde-fou contre le piège catchall documenté
+// (incident 2026-05-25) : une route non montée tombe dans le catchall SPA
+// (HTML 200) au lieu d'un rejet d'auth — un faux 200 trompeur. Ici, sans
+// signature HMAC valide on attend un rejet (401/503), JAMAIS 404/405 ni un
+// 200 (qui signalerait un fall-through vers la SPA).
+func TestVeridianHandler_RegisterRoutes_ColdSimulate(t *testing.T) {
+	h := newHandlerWithService(nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-for-route-check-padding-ok")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/veridian/admin/cold-simulate",
+		bytes.NewReader([]byte(`{"mode":"seed_sent","workspace_id":"ws-1"}`)))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.NotEqual(t, http.StatusNotFound, rec.Code, "cold-simulate route must be registered")
+	assert.NotEqual(t, http.StatusMethodNotAllowed, rec.Code, "cold-simulate route must accept POST")
+	assert.NotEqual(t, http.StatusOK, rec.Code, "sans HMAC valide on ne doit jamais voir 200 (fall-through SPA)")
+}

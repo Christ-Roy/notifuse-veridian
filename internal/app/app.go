@@ -1390,6 +1390,20 @@ func (a *App) InitHandlers() error {
 	)
 	veridianHandler.SetTestTenantsCleanup(a.veridianTestTenantsCleanup)
 
+	// === Veridian patch — 2026-06-15 === Endpoint de test cold lifecycle
+	// (POST /api/veridian/admin/cold-simulate). STAGING-ONLY (l'env est passé
+	// au handler qui refuse en 503 hors staging). Branche le VRAI service
+	// stop-on-reply (a.veridianReplyService) + le repo message_history réel +
+	// le workspace repo (secret key pour chiffrer message_data au seed). Les
+	// E2E cold-lifecycle.spec.ts frappent cet endpoint pour valider stop-on-reply
+	// et le cap destinataire sans envoi de mail ni IMAP réel.
+	veridianHandler.SetColdSimulate(
+		a.veridianReplyService,
+		a.messageHistoryRepo,
+		a.workspaceRepo,
+		a.config.Environment,
+	)
+
 	// === Veridian patch — Lot 1 sprint cold (2026-06-15) — poller IMAP ===
 	// BRIQUE FONDATRICE. Poll les boîtes IMAP configurées (Integration de type
 	// "imap" par workspace) et dispatche les messages neufs aux consumers
