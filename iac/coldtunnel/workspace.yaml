@@ -51,7 +51,7 @@ sending_integrations:
       - email: ${SMTP_AGENCES_USER3} # robert-brunon@agences-veridian.fr
         password: ${SMTP_AGENCES_PW3}
         name: Robert Brunon
-    veridian_tracking_domain: track.agences-veridian.fr   # ⚠️ DNS à câbler (ticket tracking-sous-domaine)
+    veridian_tracking_domain: track.agences-veridian.fr   # ✅ DNS+TLS câblés 2026-06-15 : CNAME Cloudflare → notifuse.app.veridian.site (DNS-only) + routeur Traefik prod dynamic/agences-tracking.yml (cert Let's Encrypt DNS-01). HTTPS 200 sur /t/ vérifié depuis prod. Reste : poser CustomEndpointURL=https://track.agences-veridian.fr sur le workspace (settings owner) pour que Notifuse génère les liens dessus.
 
 # ----------------------------------------------------------------------------
 # Boîte de RETOUR IMAP : bounce-loop (NDR → suppression) + stop-on-reply.
