@@ -732,6 +732,40 @@ func (r *veridianPlanRepository) ListByPrefix(ctx context.Context, prefix string
 	return ids, rows.Err()
 }
 
+// ListAllIDs retourne tous les workspace_id de veridian_plan, plafonne a
+// `limit` lignes (ORDER BY workspace_id pour un resultat deterministe). Sert
+// au listing admin SANS prefix (GET /api/veridian/admin/tenants sans param) :
+// un tenant qui a un plan doit TOUJOURS apparaitre dans le bucket "managed",
+// que l'appelant fournisse un prefix ou non. Le cap protege la memoire sur une
+// table qui grossit (le caller passe un cap raisonnable type 1000).
+//
+// limit <= 0 : on applique le cap par defaut veridianListAllDefaultLimit plutot
+// que de retourner illimite (defense en profondeur contre un SELECT massif).
+func (r *veridianPlanRepository) ListAllIDs(ctx context.Context, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = veridianListAllDefaultLimit
+	}
+	const q = `SELECT workspace_id FROM veridian_plan ORDER BY workspace_id LIMIT $1`
+	rows, err := r.systemDB.QueryContext(ctx, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// veridianListAllDefaultLimit : plafond de securite applique par ListAllIDs
+// quand le caller ne fournit pas de limite explicite (ou en fournit une <= 0).
+const veridianListAllDefaultLimit = 1000
+
 // TouchHubSync met à jour last_hub_sync_at = NOW pour le workspace donné.
 // Idempotent. No-op silencieux si la row n'existe pas (0 rows affected, pas d'erreur).
 // Appelé en queue de chaque mutation Hub→Notifuse (best-effort, non bloquant)

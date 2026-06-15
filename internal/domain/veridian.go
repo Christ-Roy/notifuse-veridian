@@ -430,6 +430,12 @@ type VeridianPlanRepository interface {
 	HardDelete(ctx context.Context, workspaceID string) error
 	// ListByPrefix retourne tous les workspace_id matchant un prefix SQL LIKE.
 	ListByPrefix(ctx context.Context, prefix string) ([]string, error)
+	// ListAllIDs retourne tous les workspace_id de veridian_plan, plafonne a
+	// `limit` lignes (ordre deterministe). Sert au listing admin SANS prefix :
+	// un tenant qui a un plan doit TOUJOURS etre dans le bucket "managed", que
+	// l'appelant fournisse un prefix ou non. Le cap protege la memoire.
+	// limit <= 0 → cap par defaut applique cote repo.
+	ListAllIDs(ctx context.Context, limit int) ([]string, error)
 }
 
 // === Service ===

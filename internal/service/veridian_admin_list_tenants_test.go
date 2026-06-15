@@ -92,8 +92,16 @@ func TestVeridianService_ListTenants_IncludeOrphans_NoPrefix_ListsAllWorkspaces(
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
-	// Sans prefix : collectPlanIDs retourne nil (pas de scan managed),
-	// orphans = TOUS les workspaces.
+	// Sans prefix : collectPlanIDs scanne TOUTE la table veridian_plan via
+	// ListAllIDs → les tenants manages atterrissent dans Managed, et les
+	// workspaces SANS plan dans Orphans. Ici ws1 a un plan (managed), ws2/ws3
+	// sont orphelins (pas de ligne veridian_plan).
+	m.planRepo.EXPECT().ListAllIDs(ctx, gomock.Any()).
+		Return([]string{"ws1"}, nil).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "ws1").Return(&domain.VeridianPlan{
+		WorkspaceID: "ws1", Plan: "pro", Status: domain.PlanStatusActive,
+	}, nil).Times(1)
+
 	m.workspaceRepo.EXPECT().List(ctx).Return([]*domain.Workspace{
 		{ID: "ws1"}, {ID: "ws2"}, {ID: "ws3"},
 	}, nil).Times(1)
@@ -103,8 +111,77 @@ func TestVeridianService_ListTenants_IncludeOrphans_NoPrefix_ListsAllWorkspaces(
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 3, resp.Total)
-	assert.Empty(t, resp.Managed)
-	assert.Len(t, resp.Orphans, 3)
+	assert.Len(t, resp.Managed, 1, "ws1 a un plan → managed même sans prefix")
+	assert.Equal(t, "ws1", resp.Managed[0].TenantID)
+	assert.Len(t, resp.Orphans, 2, "ws2/ws3 sans plan → orphans")
+}
+
+// TestVeridianService_ListTenants_NoPrefix_ListsManaged : le fix du bug
+// 2026-06-15 — SANS prefix ni IncludeOrphans, le bucket "managed" doit lister
+// TOUS les tenants ayant un plan (avant le fix : managed vide alors que des
+// tenants manages existaient).
+func TestVeridianService_ListTenants_NoPrefix_ListsManaged(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.planRepo.EXPECT().ListAllIDs(ctx, gomock.Any()).
+		Return([]string{"coldtunnel", "canaryfree"}, nil).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "coldtunnel").Return(&domain.VeridianPlan{
+		WorkspaceID: "coldtunnel", Plan: "pro", Status: domain.PlanStatusActive,
+	}, nil).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "canaryfree").Return(&domain.VeridianPlan{
+		WorkspaceID: "canaryfree", Plan: "free", Status: domain.PlanStatusActive,
+	}, nil).Times(1)
+
+	resp, err := svc.ListTenants(ctx, domain.ListTenantsInput{}) // aucun param
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, 2, resp.Total)
+	require.Len(t, resp.Managed, 2, "sans prefix, managed doit lister TOUS les tenants avec plan")
+	for _, summ := range resp.Managed {
+		assert.True(t, summ.HasPlan, "tenant avec plan → HasPlan=true")
+	}
+	assert.Empty(t, resp.Orphans, "sans IncludeOrphans, pas de scan workspaces")
+}
+
+// TestVeridianService_ListTenants_Coherence_ManagedSameWithAndWithoutPrefix :
+// test contractuel qui VERROUILLE l'invariant du ticket — un tenant has_plan
+// présent dans le bucket "managed" AVEC un prefix qui le matche doit AUSSI
+// être présent dans "managed" SANS prefix. Avant le fix, l'appel sans prefix
+// renvoyait un bucket managed vide → incohérence. Ce test échoue si quelqu'un
+// re-casse collectPlanIDs pour le cas prefix=="".
+func TestVeridianService_ListTenants_Coherence_ManagedSameWithAndWithoutPrefix(t *testing.T) {
+	ctx := context.Background()
+
+	plan := &domain.VeridianPlan{
+		WorkspaceID: "coldtunnel", Plan: "pro", Status: domain.PlanStatusActive,
+	}
+
+	// --- Avec prefix "cold" : le tenant apparaît dans managed (chemin OK).
+	svcP, mP := newVeridianService(t)
+	mP.planRepo.EXPECT().ListByPrefix(ctx, "cold").
+		Return([]string{"coldtunnel"}, nil).Times(1)
+	mP.planRepo.EXPECT().Get(ctx, "coldtunnel").Return(plan, nil).Times(1)
+
+	respWithPrefix, err := svcP.ListTenants(ctx, domain.ListTenantsInput{Prefix: "cold"})
+	require.NoError(t, err)
+	require.Len(t, respWithPrefix.Managed, 1)
+	assert.Equal(t, "coldtunnel", respWithPrefix.Managed[0].TenantID)
+
+	// --- Sans prefix : le MÊME tenant DOIT apparaître dans managed (le fix).
+	svcN, mN := newVeridianService(t)
+	mN.planRepo.EXPECT().ListAllIDs(ctx, gomock.Any()).
+		Return([]string{"coldtunnel"}, nil).Times(1)
+	mN.planRepo.EXPECT().Get(ctx, "coldtunnel").Return(plan, nil).Times(1)
+
+	respNoPrefix, err := svcN.ListTenants(ctx, domain.ListTenantsInput{})
+	require.NoError(t, err)
+	require.Len(t, respNoPrefix.Managed, 1,
+		"INVARIANT: un tenant has_plan présent avec prefix DOIT être présent sans prefix")
+
+	// Verrou explicite : le même TenantID dans les deux buckets managed.
+	assert.Equal(t, respWithPrefix.Managed[0].TenantID, respNoPrefix.Managed[0].TenantID,
+		"le tenant managé doit être le même avec et sans prefix")
 }
 
 func TestVeridianService_ListTenants_Limit_CapsManaged(t *testing.T) {

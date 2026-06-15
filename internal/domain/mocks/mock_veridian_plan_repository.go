@@ -110,6 +110,21 @@ func (mr *MockVeridianPlanRepositoryMockRecorder) ListByPrefix(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPrefix", reflect.TypeOf((*MockVeridianPlanRepository)(nil).ListByPrefix), arg0, arg1)
 }
 
+// ListAllIDs mocks base method.
+func (m *MockVeridianPlanRepository) ListAllIDs(arg0 context.Context, arg1 int) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAllIDs", arg0, arg1)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAllIDs indicates an expected call of ListAllIDs.
+func (mr *MockVeridianPlanRepositoryMockRecorder) ListAllIDs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllIDs", reflect.TypeOf((*MockVeridianPlanRepository)(nil).ListAllIDs), arg0, arg1)
+}
+
 // MarkActivityThresholdReached mocks base method.
 func (m *MockVeridianPlanRepository) MarkActivityThresholdReached(arg0 context.Context, arg1 string, arg2 time.Time) error {
 	m.ctrl.T.Helper()

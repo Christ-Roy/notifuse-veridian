@@ -1675,6 +1675,47 @@ func TestListTenants_ServiceExposed(t *testing.T) {
 	assert.True(t, true, "compile-time check passed: ListTenants exists on veridianService")
 }
 
+// TestVeridianService_CollectPlanIDs_NoPrefixScansAllPlans verrouille la
+// correction du bug d'incoherence listing (2026-06-15) AU NIVEAU de
+// collectPlanIDs (logique vivant dans veridian_service.go) :
+//   - AVEC prefix → planRepo.ListByPrefix(prefix) (chemin historique inchange)
+//   - SANS prefix → planRepo.ListAllIDs(cap) au lieu de retourner nil
+//
+// Avant le fix, le cas sans prefix retournait nil → bucket "managed" vide
+// alors que des tenants manages existaient. Ce test echoue si quelqu'un
+// re-casse collectPlanIDs pour le cas prefix=="".
+func TestVeridianService_CollectPlanIDs_NoPrefixScansAllPlans(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("sans prefix → ListAllIDs (cap mémoire passé)", func(t *testing.T) {
+		svc, m := newVeridianService(t)
+		m.planRepo.EXPECT().ListAllIDs(ctx, veridianListAllPlansCap).
+			Return([]string{"coldtunnel", "canaryfree"}, nil).Times(1)
+
+		ids, err := svc.collectPlanIDs(ctx, "")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"coldtunnel", "canaryfree"}, ids,
+			"sans prefix on doit scanner TOUTE la table veridian_plan (bucket managed cohérent)")
+	})
+
+	t.Run("avec prefix → ListByPrefix (chemin historique)", func(t *testing.T) {
+		svc, m := newVeridianService(t)
+		m.planRepo.EXPECT().ListByPrefix(ctx, "cold").
+			Return([]string{"coldtunnel"}, nil).Times(1)
+
+		ids, err := svc.collectPlanIDs(ctx, "cold")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"coldtunnel"}, ids)
+	})
+
+	t.Run("cap mémoire raisonnable (≤ 1000, > 0)", func(t *testing.T) {
+		// Garde-fou : le cap passé à ListAllIDs ne doit ni être nul (sinon
+		// fallback repo silencieux) ni démesuré (protection mémoire).
+		assert.Greater(t, veridianListAllPlansCap, 0)
+		assert.LessOrEqual(t, veridianListAllPlansCap, 1000)
+	})
+}
+
 // === Veridian patch — Lot K (2026-05-21) ===
 
 // TestRotateAPIKey_ServiceExposed : compile-time check que RotateAPIKey est

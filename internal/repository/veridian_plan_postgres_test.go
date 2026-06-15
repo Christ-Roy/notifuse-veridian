@@ -1569,3 +1569,70 @@ func TestVeridianPlanRepository_IncrementEmailsSent_QuotaExceededEmission(t *tes
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
+
+// TestVeridianPlanRepository_ListAllIDs verifie le scan complet plafonne
+// utilise par le listing admin SANS prefix (bucket "managed" coherent — fix
+// incoherence prod 2026-06-15). La query DOIT projeter workspace_id, ordonner
+// de maniere deterministe et appliquer la LIMIT passee en parametre.
+func TestVeridianPlanRepository_ListAllIDs(t *testing.T) {
+	ctx := context.Background()
+	const listAllSQL = `SELECT workspace_id FROM veridian_plan ORDER BY workspace_id LIMIT $1`
+
+	t.Run("returns all ids capped by limit", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectQuery(listAllSQL).
+			WithArgs(500).
+			WillReturnRows(sqlmock.NewRows([]string{"workspace_id"}).
+				AddRow("canaryfree").
+				AddRow("coldtunnel"))
+
+		ids, err := repo.ListAllIDs(ctx, 500)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"canaryfree", "coldtunnel"}, ids)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty table returns empty slice", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectQuery(listAllSQL).
+			WithArgs(500).
+			WillReturnRows(sqlmock.NewRows([]string{"workspace_id"}))
+
+		ids, err := repo.ListAllIDs(ctx, 500)
+		require.NoError(t, err)
+		assert.Empty(t, ids)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("non-positive limit falls back to default cap", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		// limit <= 0 → le repo applique veridianListAllDefaultLimit (1000).
+		mock.ExpectQuery(listAllSQL).
+			WithArgs(veridianListAllDefaultLimit).
+			WillReturnRows(sqlmock.NewRows([]string{"workspace_id"}).AddRow("ws1"))
+
+		ids, err := repo.ListAllIDs(ctx, 0)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"ws1"}, ids)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("query error propagates", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db)
+
+		mock.ExpectQuery(listAllSQL).
+			WithArgs(500).
+			WillReturnError(sql.ErrConnDone)
+
+		_, err := repo.ListAllIDs(ctx, 500)
+		require.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}

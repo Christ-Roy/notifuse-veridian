@@ -1097,20 +1097,28 @@ func (s *veridianService) ListTenants(ctx context.Context, input domain.ListTena
 	return resp, nil
 }
 
+// veridianListAllPlansCap : plafond memoire pour le scan complet de
+// veridian_plan effectue par collectPlanIDs quand AUCUN prefix n'est fourni.
+// Distinct de input.Limit (qui borne le nb d'entrees renvoyees a l'appelant) :
+// ce cap borne ce qu'on charge en memoire depuis la DB. Cap genereux (1000)
+// car le bucket "managed" reste petit en pratique (tenants Veridian-managed).
+const veridianListAllPlansCap = 1000
+
 // collectPlanIDs retourne les workspace_id de veridian_plan, filtres par
-// prefix si non-vide. Si prefix vide, retourne tout (cap a 500 entrees
-// pour eviter une surcharge memoire sur une table qui grossit).
+// prefix si non-vide. Si prefix vide, retourne TOUS les workspace_id de
+// veridian_plan (plafonnes a veridianListAllPlansCap pour borner la memoire).
+//
+// Invariant : un tenant qui a un plan (ligne dans veridian_plan) doit
+// TOUJOURS apparaitre dans le bucket "managed" de ListTenants, que l'appelant
+// fournisse un prefix ou non. Avant le fix, sans prefix on retournait nil → le
+// bucket "managed" etait vide alors que des tenants manages existaient
+// (incoherence prod 2026-06-15).
 func (s *veridianService) collectPlanIDs(ctx context.Context, prefix string) ([]string, error) {
 	if prefix != "" {
 		return s.planRepo.ListByPrefix(ctx, prefix)
 	}
-	// Pas de prefix : tout lister via prefix vide = scan complet.
-	// planRepo.ListByPrefix("") retourne nil par convention (cf. repo).
-	// On utilise un prefix wildcard impossible par construction ? Non, plus
-	// simple : on retourne nil et le caller assume que sans prefix on ne
-	// liste pas les managed. ListTenants sans prefix + IncludeOrphans=true =
-	// audit complet (workspaces only).
-	return nil, nil
+	// Pas de prefix : scan complet plafonne de veridian_plan.
+	return s.planRepo.ListAllIDs(ctx, veridianListAllPlansCap)
 }
 
 func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.WipeTestTenantsInput) (*domain.WipeTestTenantsResponse, error) {

@@ -606,6 +606,45 @@ func TestVeridianPlanRepository_ExposesNewMethods(t *testing.T) {
 	})
 }
 
+// fakePlanRepoListAll est une implementation minimale de VeridianPlanRepository
+// utilisee pour verrouiller la signature de ListAllIDs au niveau interface
+// (le listing admin sans prefix en depend — fix incoherence bucket "managed"
+// 2026-06-15). Toutes les autres methodes sont des no-op : seule ListAllIDs
+// porte une logique observable (renvoie une liste plafonnee par `limit`).
+type fakePlanRepoListAll struct {
+	VeridianPlanRepository // embed l'interface → no-op nil pour les methodes non surchargees
+	ids []string
+}
+
+func (f *fakePlanRepoListAll) ListAllIDs(_ context.Context, limit int) ([]string, error) {
+	if limit > 0 && limit < len(f.ids) {
+		return f.ids[:limit], nil
+	}
+	return f.ids, nil
+}
+
+// TestVeridianPlanRepository_ExposesListAllIDs verrouille l'ajout de ListAllIDs
+// a l'interface VeridianPlanRepository : un implementeur qui ne fournit pas la
+// methode ne compile plus (assignation a la variable d'interface), et le
+// comportement de plafonnement par `limit` est verifie. C'est le contrat dont
+// depend collectPlanIDs(prefix=="") pour remplir le bucket "managed".
+func TestVeridianPlanRepository_ExposesListAllIDs(t *testing.T) {
+	// Assignation a l'interface → echoue a la compilation si ListAllIDs manque.
+	var repo VeridianPlanRepository = &fakePlanRepoListAll{
+		ids: []string{"coldtunnel", "canaryfree", "canarypro"},
+	}
+
+	// limit large : tout est renvoye (un tenant avec plan est toujours liste).
+	all, err := repo.ListAllIDs(context.Background(), 1000)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"coldtunnel", "canaryfree", "canarypro"}, all)
+
+	// limit serre : cap memoire respecte (on ne charge pas plus que demande).
+	capped, err := repo.ListAllIDs(context.Background(), 2)
+	require.NoError(t, err)
+	assert.Len(t, capped, 2, "ListAllIDs doit plafonner le scan a `limit`")
+}
+
 
 // === Hub discovery types (2026-05-20) ===
 
