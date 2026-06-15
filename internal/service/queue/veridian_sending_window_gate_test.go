@@ -125,6 +125,7 @@ func TestVeridianSendingWindowGate_InvalidWindowIsNoop(t *testing.T) {
 }
 
 func TestVeridianResolveSendingWindow_Cascade(t *testing.T) {
+	skipNearMidnight(t) // les fenêtres relatives ±3h enjamberaient minuit (non supporté), cf. autres tests du fichier
 	openW := windowAround(-1*time.Hour, 1*time.Hour)
 	closedW := windowAround(2*time.Hour, 3*time.Hour)
 
