@@ -13,7 +13,8 @@ import {
   FilterConfigForm,
   BranchConfigForm,
   WebhookConfigForm,
-  ListStatusBranchConfigForm
+  ListStatusBranchConfigForm,
+  ReplyBranchConfigForm
 } from './config'
 import { useAutomation } from './context'
 import type { AutomationNodeData } from './utils/flowConverter'
@@ -26,7 +27,8 @@ import type {
   FilterNodeConfig,
   BranchNodeConfig,
   WebhookNodeConfig,
-  ListStatusBranchNodeConfig
+  ListStatusBranchNodeConfig,
+  ReplyBranchNodeConfig
 } from '../../services/api/automation'
 
 const { Title } = Typography
@@ -133,6 +135,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         return (
           <ListStatusBranchConfigForm
             config={config as ListStatusBranchNodeConfig}
+            onChange={handleConfigChange}
+          />
+        )
+      case 'reply_branch':
+        return (
+          <ReplyBranchConfigForm
+            config={config as ReplyBranchNodeConfig}
             onChange={handleConfigChange}
           />
         )

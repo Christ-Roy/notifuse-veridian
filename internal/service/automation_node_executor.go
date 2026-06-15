@@ -1161,3 +1161,112 @@ func parseWebhookNodeConfig(config map[string]interface{}) (*domain.WebhookNodeC
 
 	return &c, nil
 }
+
+// ReplyBranchNodeExecutor executes reply_branch nodes (Veridian cold outbound).
+//
+// Sémantique "routage, pas relance" (décision Robert) : un prospect qui a RÉPONDU n'est
+// jamais relancé, mais l'admin peut le router vers une action via le scénario (ajout à
+// une liste "à rappeler", webhook vers un agent IA qui prend le relais, tag) au lieu de
+// l'exit cold global. Ce node consomme le MÊME signal que le gate d'exit cold du Lot 9
+// (ColdReplyChecker.HasReplied, source de vérité = table veridian_contact_reply du Lot 3)
+// et route : a répondu → RepliedNodeID, sinon → NotRepliedNodeID.
+//
+// Best-effort : si le checker est absent (nil) ou erreur, on route vers le chemin
+// "n'a pas répondu" (comportement le plus sûr : on ne relance pas par défaut, mais on
+// ne bloque jamais la cadence sur une panne du store de réponses).
+type ReplyBranchNodeExecutor struct {
+	coldReplyChecker ColdReplyChecker
+	logger           logger.Logger
+}
+
+// NewReplyBranchNodeExecutor creates a new reply branch node executor. checker peut être
+// nil (DI optionnelle) : dans ce cas le node route toujours vers not_replied.
+func NewReplyBranchNodeExecutor(checker ColdReplyChecker, log logger.Logger) *ReplyBranchNodeExecutor {
+	return &ReplyBranchNodeExecutor{
+		coldReplyChecker: checker,
+		logger:           log,
+	}
+}
+
+// NodeType returns the node type this executor handles
+func (e *ReplyBranchNodeExecutor) NodeType() domain.NodeType {
+	return domain.NodeTypeReplyBranch
+}
+
+// Execute processes a reply branch node
+func (e *ReplyBranchNodeExecutor) Execute(ctx context.Context, params NodeExecutionParams) (*NodeExecutionResult, error) {
+	config, err := parseReplyBranchNodeConfig(params.Node.Config)
+	if err != nil {
+		return nil, fmt.Errorf("invalid reply_branch node config: %w", err)
+	}
+
+	email := ""
+	if params.ContactData != nil {
+		email = params.ContactData.Email
+	} else if params.Contact != nil {
+		email = params.Contact.ContactEmail
+	}
+
+	replied := false
+	if e.coldReplyChecker != nil && email != "" {
+		hasReplied, checkErr := e.coldReplyChecker.HasReplied(ctx, params.WorkspaceID, email)
+		if checkErr != nil {
+			// Best-effort : une panne du store de réponses ne bloque pas la cadence,
+			// on route vers "n'a pas répondu" (on ne relance JAMAIS à tort un répondeur,
+			// mais on n'exit pas non plus le contact sur un glitch DB).
+			if e.logger != nil {
+				e.logger.WithField("error", checkErr).Warn("reply_branch: HasReplied check failed (best-effort, routing to not_replied)")
+			}
+		} else {
+			replied = hasReplied
+		}
+	}
+
+	var targetNodeID string
+	branchTaken := "not_replied"
+	if replied {
+		targetNodeID = config.RepliedNodeID
+		branchTaken = "replied"
+	} else {
+		targetNodeID = config.NotRepliedNodeID
+	}
+
+	var nextNodePtr *string
+	if targetNodeID != "" {
+		nextNodePtr = &targetNodeID
+	}
+
+	status := domain.ContactAutomationStatusActive
+	if nextNodePtr == nil {
+		// Branch sans cible = fin de cadence pour ce contact (terminal).
+		status = domain.ContactAutomationStatusCompleted
+	}
+
+	return &NodeExecutionResult{
+		NextNodeID: nextNodePtr,
+		Status:     status,
+		Output: buildNodeOutput(domain.NodeTypeReplyBranch, map[string]interface{}{
+			"branch_taken": branchTaken,
+			"replied":      replied,
+		}),
+	}, nil
+}
+
+// parseReplyBranchNodeConfig parses reply branch node configuration from map
+func parseReplyBranchNodeConfig(config map[string]interface{}) (*domain.ReplyBranchNodeConfig, error) {
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	var c domain.ReplyBranchNodeConfig
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+
+	return &c, nil
+}

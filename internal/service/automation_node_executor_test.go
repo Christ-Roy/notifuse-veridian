@@ -3658,3 +3658,164 @@ func TestWebhookNodeExecutor_Execute_EmptyResponse(t *testing.T) {
 	// Empty response should result in nil map
 	assert.Nil(t, result.Output["response"])
 }
+
+// ─── Veridian reply_branch node executor (cold outbound) ──────────────────
+
+func TestReplyBranchNodeExecutor_NodeType(t *testing.T) {
+	executor := NewReplyBranchNodeExecutor(nil, nil)
+	assert.Equal(t, domain.NodeTypeReplyBranch, executor.NodeType())
+}
+
+func TestReplyBranchNodeExecutor_Execute_RoutesToReplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	log := setupMockLoggerForNodeExecutor(ctrl)
+
+	executor := NewReplyBranchNodeExecutor(&fakeColdReplyChecker{replied: true}, log)
+
+	params := NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node: &domain.AutomationNode{
+			ID:   "rb1",
+			Type: domain.NodeTypeReplyBranch,
+			Config: map[string]interface{}{
+				"replied_node_id":     "webhook_node",
+				"not_replied_node_id": "delay_node",
+			},
+		},
+		ContactData: &domain.Contact{Email: "prospect@acme.fr"},
+	}
+
+	result, err := executor.Execute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result.NextNodeID)
+	assert.Equal(t, "webhook_node", *result.NextNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusActive, result.Status)
+	assert.Equal(t, "replied", result.Output["branch_taken"])
+	assert.Equal(t, true, result.Output["replied"])
+}
+
+func TestReplyBranchNodeExecutor_Execute_RoutesToNotReplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	log := setupMockLoggerForNodeExecutor(ctrl)
+
+	executor := NewReplyBranchNodeExecutor(&fakeColdReplyChecker{replied: false}, log)
+
+	params := NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node: &domain.AutomationNode{
+			ID:   "rb1",
+			Type: domain.NodeTypeReplyBranch,
+			Config: map[string]interface{}{
+				"replied_node_id":     "webhook_node",
+				"not_replied_node_id": "delay_node",
+			},
+		},
+		ContactData: &domain.Contact{Email: "prospect@acme.fr"},
+	}
+
+	result, err := executor.Execute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result.NextNodeID)
+	assert.Equal(t, "delay_node", *result.NextNodeID)
+	assert.Equal(t, "not_replied", result.Output["branch_taken"])
+}
+
+func TestReplyBranchNodeExecutor_Execute_NilCheckerRoutesNotReplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	log := setupMockLoggerForNodeExecutor(ctrl)
+
+	// Pas de checker injecté → on ne relance jamais à tort, on route vers not_replied.
+	executor := NewReplyBranchNodeExecutor(nil, log)
+
+	params := NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node: &domain.AutomationNode{
+			ID:   "rb1",
+			Type: domain.NodeTypeReplyBranch,
+			Config: map[string]interface{}{
+				"replied_node_id":     "webhook_node",
+				"not_replied_node_id": "delay_node",
+			},
+		},
+		ContactData: &domain.Contact{Email: "prospect@acme.fr"},
+	}
+
+	result, err := executor.Execute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result.NextNodeID)
+	assert.Equal(t, "delay_node", *result.NextNodeID)
+	assert.Equal(t, false, result.Output["replied"])
+}
+
+func TestReplyBranchNodeExecutor_Execute_CheckerErrorRoutesNotReplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	log := setupMockLoggerForNodeExecutor(ctrl)
+
+	// Best-effort : une panne du store de réponses ne bloque pas → route not_replied.
+	executor := NewReplyBranchNodeExecutor(&fakeColdReplyChecker{err: errors.New("reply store down")}, log)
+
+	params := NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node: &domain.AutomationNode{
+			ID:   "rb1",
+			Type: domain.NodeTypeReplyBranch,
+			Config: map[string]interface{}{
+				"replied_node_id":     "webhook_node",
+				"not_replied_node_id": "delay_node",
+			},
+		},
+		ContactData: &domain.Contact{Email: "prospect@acme.fr"},
+	}
+
+	result, err := executor.Execute(context.Background(), params)
+	require.NoError(t, err, "best-effort: erreur du checker ne fait pas échouer le node")
+	require.NotNil(t, result.NextNodeID)
+	assert.Equal(t, "delay_node", *result.NextNodeID)
+}
+
+func TestReplyBranchNodeExecutor_Execute_TerminalWhenNoTarget(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	log := setupMockLoggerForNodeExecutor(ctrl)
+
+	// A répondu mais replied_node_id vide → terminal (completed), pas de relance.
+	executor := NewReplyBranchNodeExecutor(&fakeColdReplyChecker{replied: true}, log)
+
+	params := NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node: &domain.AutomationNode{
+			ID:   "rb1",
+			Type: domain.NodeTypeReplyBranch,
+			Config: map[string]interface{}{
+				"replied_node_id":     "",
+				"not_replied_node_id": "delay_node",
+			},
+		},
+		ContactData: &domain.Contact{Email: "prospect@acme.fr"},
+	}
+
+	result, err := executor.Execute(context.Background(), params)
+	require.NoError(t, err)
+	assert.Nil(t, result.NextNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusCompleted, result.Status)
+}
+
+func TestReplyBranchNodeExecutor_Execute_InvalidConfig(t *testing.T) {
+	executor := NewReplyBranchNodeExecutor(nil, nil)
+	params := NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node: &domain.AutomationNode{
+			ID:     "rb1",
+			Type:   domain.NodeTypeReplyBranch,
+			Config: map[string]interface{}{}, // both targets empty → invalid
+		},
+		ContactData: &domain.Contact{Email: "prospect@acme.fr"},
+	}
+	_, err := executor.Execute(context.Background(), params)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid reply_branch node config")
+}

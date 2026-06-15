@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { Popover, Tooltip } from 'antd'
-import { Plus, UserPlus, UserMinus, Filter, Globe, ListChecks, GitBranch } from 'lucide-react'
+import { Plus, UserPlus, UserMinus, Filter, Globe, ListChecks, GitBranch, MailQuestion } from 'lucide-react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faHourglass, faEnvelope } from '@fortawesome/free-regular-svg-icons'
 import { faFlask } from '@fortawesome/free-solid-svg-icons'
@@ -16,6 +16,7 @@ export const ADD_NODE_MENU_ITEMS: { key: NodeType; label: string; icon: React.Re
   { key: 'branch', label: 'Branch', icon: <GitBranch size={14} style={{ color: '#722ed1' }} /> },
   { key: 'ab_test', label: 'A/B Test', icon: <FontAwesomeIcon icon={faFlask} style={{ color: '#2f54eb' }} /> },
   { key: 'list_status_branch', label: 'List Status', icon: <ListChecks size={14} style={{ color: '#389e0d' }} /> },
+  { key: 'reply_branch', label: 'Reply Branch', icon: <MailQuestion size={14} style={{ color: '#08979c' }} /> },
   { key: 'add_to_list', label: 'Add to List', icon: <UserPlus size={14} style={{ color: '#13c2c2' }} /> },
   { key: 'remove_from_list', label: 'Remove from List', icon: <UserMinus size={14} style={{ color: '#fa541c' }} /> },
   { key: 'webhook', label: 'Webhook', icon: <Globe size={14} style={{ color: '#9254de' }} /> }
@@ -33,7 +34,8 @@ export const getNodeTypeLabel = (key: NodeType, t: (str: TemplateStringsArray) =
     add_to_list: t`Add to List`,
     remove_from_list: t`Remove from List`,
     webhook: t`Webhook`,
-    branch: t`Branch`
+    branch: t`Branch`,
+    reply_branch: t`Reply Branch`
   }
   return labels[key] || key
 }

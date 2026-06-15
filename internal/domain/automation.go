@@ -88,6 +88,11 @@ const (
 	NodeTypeABTest           NodeType = "ab_test"
 	NodeTypeWebhook          NodeType = "webhook"
 	NodeTypeListStatusBranch NodeType = "list_status_branch"
+	// NodeTypeReplyBranch (Veridian cold outbound) : route le contact selon qu'il a
+	// RÉPONDU ou non. Décision Robert "routage, pas relance" : un prospect qui répond
+	// n'est jamais relancé (décence cold), mais l'admin peut le router vers une action
+	// (ajout liste "à rappeler", webhook vers un agent IA, tag) au lieu de l'exit global.
+	NodeTypeReplyBranch NodeType = "reply_branch"
 )
 
 // IsValid checks if the node type is valid
@@ -95,7 +100,8 @@ func (t NodeType) IsValid() bool {
 	switch t {
 	case NodeTypeTrigger, NodeTypeDelay, NodeTypeEmail, NodeTypeBranch,
 		NodeTypeFilter, NodeTypeAddToList, NodeTypeRemoveFromList,
-		NodeTypeABTest, NodeTypeWebhook, NodeTypeListStatusBranch:
+		NodeTypeABTest, NodeTypeWebhook, NodeTypeListStatusBranch,
+		NodeTypeReplyBranch:
 		return true
 	default:
 		return false
@@ -574,6 +580,41 @@ func (c ListStatusBranchNodeConfig) Validate() error {
 		return fmt.Errorf("at least one branch must have a target node")
 	}
 	return nil
+}
+
+// ReplyBranchNodeConfig configures a reply branch node (Veridian cold outbound).
+// Route le contact selon le signal "a répondu" (consommé via ColdReplyChecker, source
+// de vérité = table veridian_contact_reply du Lot 3 stop-on-reply). Les deux cibles
+// pointent vers des nodes EXISTANTS (webhook, add_to_list, delay, email...) : ce node
+// ne fait que ROUTER, il ne crée aucun nouveau type d'action.
+type ReplyBranchNodeConfig struct {
+	RepliedNodeID    string `json:"replied_node_id"`     // Next node when the contact HAS replied
+	NotRepliedNodeID string `json:"not_replied_node_id"` // Next node when the contact has NOT replied
+}
+
+// Validate validates the reply branch node config
+func (c ReplyBranchNodeConfig) Validate() error {
+	if c.RepliedNodeID == "" && c.NotRepliedNodeID == "" {
+		return fmt.Errorf("at least one branch (replied or not_replied) must have a target node")
+	}
+	return nil
+}
+
+// HasReplyBranchNode returns true if the automation contains at least one reply_branch
+// node. Used by the cold exit gate: when an admin places a reply_branch in the flow, he
+// REPREND la main on reply handling → the global exit-on-reply is suppressed so the
+// contact can actually REACH the reply_branch node instead of being exited beforehand.
+// The exit-on-BOUNCE stays active regardless (a dead address is never "routed").
+func (a *Automation) HasReplyBranchNode() bool {
+	if a == nil {
+		return false
+	}
+	for _, n := range a.Nodes {
+		if n != nil && n.Type == NodeTypeReplyBranch {
+			return true
+		}
+	}
+	return false
 }
 
 // ABTestVariant represents a variant in an A/B test node

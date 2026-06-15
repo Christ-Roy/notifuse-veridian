@@ -20,6 +20,7 @@ export type NodeType =
   | 'ab_test'
   | 'webhook'
   | 'list_status_branch'
+  | 'reply_branch'
 
 // Contact automation status
 export type ContactAutomationStatus = 'active' | 'completed' | 'exited' | 'failed'
@@ -133,6 +134,14 @@ export interface ListStatusBranchNodeConfig {
   non_active_node_id: string
 }
 
+// Veridian cold outbound: route the contact based on whether they replied.
+// "Routage, pas relance" — a prospect who replied is never re-emailed; the admin
+// routes them to an action (list, webhook to an AI agent, tag) via existing nodes.
+export interface ReplyBranchNodeConfig {
+  replied_node_id: string // Next node when the contact HAS replied
+  not_replied_node_id: string // Next node when the contact has NOT replied
+}
+
 export interface ABTestVariant {
   id: string
   name: string
@@ -158,6 +167,7 @@ export type NodeConfig =
   | AddToListNodeConfig
   | RemoveFromListNodeConfig
   | ListStatusBranchNodeConfig
+  | ReplyBranchNodeConfig
   | ABTestNodeConfig
   | WebhookNodeConfig
   | Record<string, unknown> // For trigger nodes with no config

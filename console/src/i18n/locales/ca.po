@@ -410,6 +410,10 @@ msgstr "S'ha trobat una operació {operation} anterior per a \"{0}\". Voleu repr
 msgid "A previous upload for \"{0}\" was found ({1}). Would you like to resume from where you left off?"
 msgstr "S'ha trobat una pujada anterior per a \"{0}\" ({1}). Voleu reprendre des d'on ho vau deixar?"
 
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:38
+msgid "A prospect who replied is never re-emailed. Use the two outputs to route them to an action instead."
+msgstr ""
+
 #: src/components/segment/button_upsert.tsx:213
 msgid "A segment with ID \"{id}\" already exists"
 msgstr ""
@@ -423,8 +427,8 @@ msgid "A value is required..."
 msgstr "Es requereix un valor..."
 
 #: src/components/automations/nodes/ABTestNode.tsx:47
-#: src/components/automations/nodes/StatNode.tsx:58
-#: src/components/automations/nodes/StatNode.tsx:243
+#: src/components/automations/nodes/StatNode.tsx:59
+#: src/components/automations/nodes/StatNode.tsx:245
 #: src/pages/BroadcastsPage.tsx:1047
 msgid "A/B Test"
 msgstr "Prova A/B"
@@ -605,7 +609,7 @@ msgstr "Afegir paraules clau..."
 msgid "Add Label"
 msgstr "Afegir etiqueta"
 
-#: src/components/automations/AddNodeButton.tsx:124
+#: src/components/automations/AddNodeButton.tsx:127
 msgid "Add node"
 msgstr "Afegir node"
 
@@ -620,6 +624,10 @@ msgstr "Afegiu un o més remitents de correu. El primer remitent s'utilitzarà p
 #: src/components/segment/input_json_path.tsx:110
 msgid "Add path"
 msgstr "Afegir camí"
+
+#: src/components/automations/config/BranchConfigForm.tsx:166
+msgid "Add Path"
+msgstr ""
 
 #: src/components/settings/Integrations.tsx:1888
 #: src/components/settings/Integrations.tsx:1944
@@ -642,7 +650,7 @@ msgid "Add to list"
 msgstr ""
 
 #: src/components/automations/nodes/AddToListNode.tsx:41
-#: src/components/automations/nodes/StatNode.tsx:56
+#: src/components/automations/nodes/StatNode.tsx:57
 msgid "Add to List"
 msgstr "Afegir a la llista"
 
@@ -1466,10 +1474,12 @@ msgstr "Tipus de rebot"
 msgid "Bounced"
 msgstr "Rebotat"
 
-#: src/components/automations/nodes/StatNode.tsx:54
+#: src/components/automations/nodes/BranchNode.tsx:45
+#: src/components/automations/nodes/StatNode.tsx:55
 msgid "Branch"
 msgstr "Branca"
 
+#: src/components/automations/config/BranchConfigForm.tsx:105
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx:41
 msgid "Branch Logic"
 msgstr "Lògica de branca"
@@ -2050,9 +2060,9 @@ msgid "completed"
 msgstr "Completat"
 
 #: src/components/automations/AutomationCard.tsx:267
-#: src/components/automations/nodes/StatNode.tsx:108
-#: src/components/automations/nodes/StatNode.tsx:173
-#: src/components/automations/nodes/StatNode.tsx:255
+#: src/components/automations/nodes/StatNode.tsx:110
+#: src/components/automations/nodes/StatNode.tsx:175
+#: src/components/automations/nodes/StatNode.tsx:257
 #: src/pages/BroadcastsPage.tsx:344
 #: src/pages/BroadcastsPage.tsx:985
 msgid "Completed"
@@ -2072,13 +2082,17 @@ msgstr "Condició"
 msgid "conditions"
 msgstr "Condicions"
 
-#: src/components/automations/NodeConfigPanel.tsx:133
+#: src/components/automations/config/BranchConfigForm.tsx:136
+msgid "Conditions"
+msgstr ""
+
+#: src/components/automations/NodeConfigPanel.tsx:151
 msgid "Configuration for {nodeType} is not available in Phase 2"
 msgstr "La configuració per a {nodeType} no està disponible a la Fase 2"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:163
 #: src/components/analytics/AnalyticsDashboard.tsx:187
-#: src/components/automations/NodeConfigPanel.tsx:144
+#: src/components/automations/NodeConfigPanel.tsx:162
 #: src/components/automations/nodes/ABTestNode.tsx:59
 #: src/components/automations/nodes/AddToListNode.tsx:53
 #: src/components/automations/nodes/DelayNode.tsx:20
@@ -2113,6 +2127,10 @@ msgstr "Configurar ara"
 #: src/components/settings/WebhooksSettings.tsx:170
 msgid "Configure outgoing webhooks to receive real-time notifications when events occur in your workspace."
 msgstr "Configureu webhooks sortints per rebre notificacions en temps real quan es produeixin esdeveniments al vostre espai de treball."
+
+#: src/components/automations/nodes/BranchNode.tsx:52
+msgid "Configure paths"
+msgstr ""
 
 #: src/components/broadcasts/SendOrScheduleModal.tsx:187
 #: src/pages/BroadcastsPage.tsx:1325
@@ -2156,6 +2174,10 @@ msgstr "Confirmat"
 msgid "Connect and manage external services"
 msgstr "Connecteu i gestioneu serveis externs"
 
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:51
+msgid "Connect each output to the next node using the handles on the block."
+msgstr ""
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:341
 msgid "Connect IMAP inbox"
 msgstr ""
@@ -2186,6 +2208,10 @@ msgstr "Contacte"
 msgid "Contact added to list successfully"
 msgstr "Contacte afegit a la llista correctament"
 
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:43
+msgid "Contact answered — route to an action (add to a \"to call back\" list, webhook to an AI agent, tag)."
+msgstr ""
+
 #: src/components/contacts/ContactUpsertDrawer.tsx:329
 msgid "Contact created successfully"
 msgstr "Contacte creat correctament"
@@ -2215,6 +2241,10 @@ msgstr "Correu del contacte:"
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx:48
 msgid "Contact has \"active\" subscription status"
 msgstr "El contacte té l'estat de subscripció \"actiu\""
+
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:47
+msgid "Contact has not answered yet — continue the sequence."
+msgstr ""
 
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx:51
 msgid "Contact has pending, unsubscribed, bounced, or complained status"
@@ -2820,6 +2850,14 @@ msgstr "Atributs per defecte"
 msgid "Default Language"
 msgstr ""
 
+#: src/components/automations/config/BranchConfigForm.tsx:170
+msgid "Default Path"
+msgstr ""
+
+#: src/components/automations/config/BranchConfigForm.tsx:132
+msgid "Default path - taken when no other path matches."
+msgstr ""
+
 #: src/pages/BroadcastsPage.tsx:692
 msgid "Default sender"
 msgstr "Remitent per defecte"
@@ -2848,7 +2886,7 @@ msgid "Define UTM parameters for links in your email for better campaign trackin
 msgstr "Definiu paràmetres UTM per als enllaços del vostre correu per a un millor seguiment de campanyes."
 
 #: src/components/automations/nodes/DelayNode.tsx:45
-#: src/components/automations/nodes/StatNode.tsx:52
+#: src/components/automations/nodes/StatNode.tsx:53
 msgid "Delay"
 msgstr "Retard"
 
@@ -3064,6 +3102,10 @@ msgstr "Detectar des de l'URL del lloc web"
 #: src/components/timeline/ContactTimeline.tsx:628
 msgid "Diagnostic:"
 msgstr "Diagnòstic:"
+
+#: src/components/automations/nodes/ReplyBranchNode.tsx:39
+msgid "Did the contact reply?"
+msgstr ""
 
 #: src/components/settings/BlogSettings.tsx:183
 #: src/components/settings/BlogSettings.tsx:468
@@ -3291,6 +3333,10 @@ msgstr "p. ex., Raleway, Open Sans"
 msgid "Each contact enters the automation only once"
 msgstr "Cada contacte entra a l'automatització només una vegada"
 
+#: src/components/automations/config/BranchConfigForm.tsx:106
+msgid "Each path is evaluated top to bottom. The contact follows the first path whose conditions match. If none match, the default path is taken."
+msgstr ""
+
 #: src/pages/ListsPage.tsx:80
 msgid "edit"
 msgstr "Editar"
@@ -3463,7 +3509,7 @@ msgstr "Correu electrònic"
 #: src/components/analytics/NewContactsTable.tsx:67
 #: src/components/automations/config/TriggerConfigForm.tsx:87
 #: src/components/automations/nodes/EmailNode.tsx:39
-#: src/components/automations/nodes/StatNode.tsx:53
+#: src/components/automations/nodes/StatNode.tsx:54
 #: src/components/contacts/BulkUpdateDrawer.tsx:674
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:89
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:920
@@ -4036,9 +4082,9 @@ msgstr "Fallat"
 #: src/components/analytics/EmailMetricsChart.tsx:265
 #: src/components/analytics/EmailMetricsChart.tsx:502
 #: src/components/automations/AutomationCard.tsx:281
-#: src/components/automations/nodes/StatNode.tsx:114
-#: src/components/automations/nodes/StatNode.tsx:178
-#: src/components/automations/nodes/StatNode.tsx:261
+#: src/components/automations/nodes/StatNode.tsx:116
+#: src/components/automations/nodes/StatNode.tsx:180
+#: src/components/automations/nodes/StatNode.tsx:263
 #: src/components/broadcasts/BroadcastStats.tsx:241
 #: src/components/contacts/BulkActionProgressModal.tsx:106
 #: src/components/contacts/BulkActionProgressModal.tsx:146
@@ -4631,8 +4677,8 @@ msgid "File storage settings"
 msgstr "Configuració d'emmagatzematge de fitxers"
 
 #: src/components/automations/nodes/FilterNode.tsx:48
-#: src/components/automations/nodes/StatNode.tsx:55
-#: src/components/automations/nodes/StatNode.tsx:161
+#: src/components/automations/nodes/StatNode.tsx:56
+#: src/components/automations/nodes/StatNode.tsx:163
 msgid "Filter"
 msgstr "Filtrar"
 
@@ -5373,9 +5419,9 @@ msgstr "Indexar i seguir enllaços"
 msgid "Index, but don't follow links"
 msgstr "Indexar, però no seguir enllaços"
 
-#: src/components/automations/nodes/StatNode.tsx:103
-#: src/components/automations/nodes/StatNode.tsx:168
-#: src/components/automations/nodes/StatNode.tsx:250
+#: src/components/automations/nodes/StatNode.tsx:105
+#: src/components/automations/nodes/StatNode.tsx:170
+#: src/components/automations/nodes/StatNode.tsx:252
 msgid "Inflight"
 msgstr "En vol"
 
@@ -5928,7 +5974,7 @@ msgstr "Carregant automatitzacions..."
 msgid "Loading setup..."
 msgstr "Carregant configuració..."
 
-#: src/components/automations/AutomationFlowViewer.tsx:223
+#: src/components/automations/AutomationFlowViewer.tsx:252
 msgid "Loading stats..."
 msgstr "Carregant estadístiques..."
 
@@ -6170,7 +6216,7 @@ msgstr "Mig"
 msgid "min"
 msgstr "Mínim"
 
-#: src/components/automations/AutomationFlowEditor.tsx:409
+#: src/components/automations/AutomationFlowEditor.tsx:415
 msgid "Minimap"
 msgstr "Minimapa"
 
@@ -6570,7 +6616,7 @@ msgstr "No hi ha contingut MJML per exportar"
 msgid "No name"
 msgstr "Sense nom"
 
-#: src/components/automations/AutomationFlowViewer.tsx:231
+#: src/components/automations/AutomationFlowViewer.tsx:260
 msgid "No nodes in this automation"
 msgstr "No hi ha nodes a aquesta automatització"
 
@@ -6609,6 +6655,11 @@ msgstr "No hi ha publicacions publicades"
 #: src/components/email_builder/ui/BackgroundInput.tsx:97
 msgid "No Repeat"
 msgstr "Sense repetició"
+
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:46
+#: src/components/automations/nodes/ReplyBranchNode.tsx:43
+msgid "No reply"
+msgstr ""
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1187
 msgid "No sample values available"
@@ -7088,6 +7139,14 @@ msgstr "Contrasenya"
 #: src/components/blog_editor/components/youtube/YoutubeNodeView.tsx:340
 msgid "Paste YouTube URL..."
 msgstr "Enganxar URL de YouTube..."
+
+#: src/components/automations/config/BranchConfigForm.tsx:118
+msgid "Path name"
+msgstr ""
+
+#: src/components/automations/config/BranchConfigForm.tsx:170
+msgid "Path taken when no conditions match"
+msgstr ""
 
 #: src/components/file_manager/buttonSettings.tsx:291
 msgid "Path-style access"
@@ -8001,7 +8060,7 @@ msgid "Remove from list"
 msgstr ""
 
 #: src/components/automations/nodes/RemoveFromListNode.tsx:39
-#: src/components/automations/nodes/StatNode.tsx:57
+#: src/components/automations/nodes/StatNode.tsx:58
 msgid "Remove from List"
 msgstr "Treure de la llista"
 
@@ -8034,7 +8093,7 @@ msgstr "Eliminat"
 msgid "Rendering preview..."
 msgstr "Renderitzant vista prèvia..."
 
-#: src/components/automations/AutomationFlowEditor.tsx:397
+#: src/components/automations/AutomationFlowEditor.tsx:403
 msgid "Reorganize layout"
 msgstr "Reorganitzar disseny"
 
@@ -8054,8 +8113,18 @@ msgstr "Repetir X"
 msgid "Repeat Y"
 msgstr "Repetir Y"
 
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:42
+#: src/components/automations/nodes/ReplyBranchNode.tsx:42
+msgid "Replied"
+msgstr ""
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:211
 msgid "Reply & bounce inbox (IMAP)"
+msgstr ""
+
+#: src/components/automations/nodes/ReplyBranchNode.tsx:33
+#: src/components/automations/nodes/StatNode.tsx:61
+msgid "Reply Branch"
 msgstr ""
 
 #: src/components/templates/CreateTemplateDrawer.tsx:819
@@ -8224,6 +8293,10 @@ msgstr "Correu arrel"
 #: src/components/email_builder/ui/BackgroundInput.tsx:99
 msgid "Round"
 msgstr "Arrodonit"
+
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:34
+msgid "Route on reply"
+msgstr ""
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:969
 msgid "rows"
@@ -8522,6 +8595,10 @@ msgstr "Seleccioneu un bloc per editar els seus atributs"
 msgid "Select a category"
 msgstr "Seleccioneu una categoria"
 
+#: src/components/automations/config/BranchConfigForm.tsx:176
+msgid "Select a default path..."
+msgstr ""
+
 #: src/components/contacts/ContactUpsertDrawer.tsx:558
 #: src/components/segment/input_dimension_filters.tsx:196
 msgid "Select a field"
@@ -8535,7 +8612,7 @@ msgstr "Seleccioneu un camp"
 msgid "Select a list"
 msgstr "Seleccioneu una llista"
 
-#: src/components/automations/AddNodeButton.tsx:112
+#: src/components/automations/AddNodeButton.tsx:115
 #: src/components/automations/NodePalette.tsx:40
 msgid "Select a list to enable email nodes"
 msgstr "Seleccioneu una llista per habilitar nodes de correu"
@@ -10388,7 +10465,7 @@ msgid "Trial"
 msgstr "Prova"
 
 #: src/components/automations/AutomationCard.tsx:294
-#: src/components/automations/nodes/StatNode.tsx:51
+#: src/components/automations/nodes/StatNode.tsx:52
 #: src/components/automations/nodes/TriggerNode.tsx:63
 msgid "Trigger"
 msgstr "Disparador"
@@ -10959,7 +11036,7 @@ msgstr "Detectarem i utilitzarem automàticament el favicon del vostre lloc web"
 msgid "Web Analytics"
 msgstr "Analítica web"
 
-#: src/components/automations/nodes/StatNode.tsx:59
+#: src/components/automations/nodes/StatNode.tsx:60
 #: src/components/automations/nodes/WebhookNode.tsx:43
 #: src/components/timeline/ContactTimeline.tsx:586
 msgid "Webhook"

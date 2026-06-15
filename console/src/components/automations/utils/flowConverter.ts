@@ -11,7 +11,8 @@ import type {
   ABTestNodeConfig,
   AddToListNodeConfig,
   RemoveFromListNodeConfig,
-  ListStatusBranchNodeConfig
+  ListStatusBranchNodeConfig,
+  ReplyBranchNodeConfig
 } from '../../../services/api/automation'
 
 // Node data stored in ReactFlow nodes
@@ -24,7 +25,7 @@ export interface AutomationNodeData {
 }
 
 // Node types that support multiple outgoing connections
-const MULTI_CHILD_NODE_TYPES: NodeType[] = ['branch', 'filter', 'ab_test', 'list_status_branch']
+const MULTI_CHILD_NODE_TYPES: NodeType[] = ['branch', 'filter', 'ab_test', 'list_status_branch', 'reply_branch']
 
 export function canHaveMultipleChildren(nodeType: NodeType): boolean {
   return MULTI_CHILD_NODE_TYPES.includes(nodeType)
@@ -42,7 +43,8 @@ export function getNodeLabel(type: NodeType): string {
     remove_from_list: 'Remove from List',
     ab_test: 'A/B Test',
     webhook: 'Webhook',
-    list_status_branch: 'List Status'
+    list_status_branch: 'List Status',
+    reply_branch: 'Reply Branch'
   }
   return labels[type] || type
 }
@@ -203,6 +205,31 @@ export function automationToFlow(automation: Automation): {
           sourceHandle: 'non_active',
           target: config.non_active_node_id,
           type: 'smoothstep'
+        })
+      }
+    }
+
+    // Handle reply branch nodes with two paths (replied / not_replied)
+    if (node.type === 'reply_branch' && node.config) {
+      const config = node.config as ReplyBranchNodeConfig
+      if (config.replied_node_id) {
+        edges.push({
+          id: `${node.id}-replied-${config.replied_node_id}`,
+          source: node.id,
+          sourceHandle: 'replied',
+          target: config.replied_node_id,
+          type: 'smoothstep',
+          label: 'Replied'
+        })
+      }
+      if (config.not_replied_node_id) {
+        edges.push({
+          id: `${node.id}-not_replied-${config.not_replied_node_id}`,
+          source: node.id,
+          sourceHandle: 'not_replied',
+          target: config.not_replied_node_id,
+          type: 'smoothstep',
+          label: 'No reply'
         })
       }
     }

@@ -15,7 +15,7 @@ import {
 import { LayoutGrid } from 'lucide-react'
 import { Tooltip } from 'antd'
 import { useLingui } from '@lingui/react/macro'
-import { TriggerNode, DelayNode, EmailNode, ABTestNode, AddToListNode, RemoveFromListNode, FilterNode, BranchNode, WebhookNode, ListStatusBranchNode } from './nodes'
+import { TriggerNode, DelayNode, EmailNode, ABTestNode, AddToListNode, RemoveFromListNode, FilterNode, BranchNode, WebhookNode, ListStatusBranchNode, ReplyBranchNode } from './nodes'
 import { PlaceholderNode } from './nodes/PlaceholderNode'
 import { NodeConfigPanel } from './NodeConfigPanel'
 import { AddNodeEdge, type AddNodeEdgeData } from './edges/AddNodeEdge'
@@ -39,6 +39,7 @@ const nodeTypes: NodeTypes = {
   branch: BranchNode,
   webhook: WebhookNode,
   list_status_branch: ListStatusBranchNode,
+  reply_branch: ReplyBranchNode,
   placeholder: PlaceholderNode
 }
 
@@ -160,7 +161,7 @@ const AutomationFlowEditorInner: React.FC = () => {
 
       let offsetX = 0
 
-      if (sourceNode.data.nodeType === 'filter' || sourceNode.data.nodeType === 'ab_test' || sourceNode.data.nodeType === 'list_status_branch' || sourceNode.data.nodeType === 'branch') {
+      if (sourceNode.data.nodeType === 'filter' || sourceNode.data.nodeType === 'ab_test' || sourceNode.data.nodeType === 'list_status_branch' || sourceNode.data.nodeType === 'branch' || sourceNode.data.nodeType === 'reply_branch') {
         if (existingChildren.length === 0) {
           // First child: position on the LEFT (centered under left handle area)
           offsetX = -150
@@ -187,10 +188,12 @@ const AutomationFlowEditorInner: React.FC = () => {
         nodeType === 'ab_test' ||
         nodeType === 'list_status_branch' ||
         nodeType === 'branch' ||
+        nodeType === 'reply_branch' ||
         sourceNode.data.nodeType === 'filter' ||
         sourceNode.data.nodeType === 'ab_test' ||
         sourceNode.data.nodeType === 'list_status_branch' ||
-        sourceNode.data.nodeType === 'branch'
+        sourceNode.data.nodeType === 'branch' ||
+        sourceNode.data.nodeType === 'reply_branch'
 
       if (shouldReorganize) {
         pendingReorganizeRef.current = true

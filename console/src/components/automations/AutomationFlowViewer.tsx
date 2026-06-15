@@ -19,7 +19,8 @@ import type {
   BranchNodeConfig,
   FilterNodeConfig,
   ABTestNodeConfig,
-  ListStatusBranchNodeConfig
+  ListStatusBranchNodeConfig,
+  ReplyBranchNodeConfig
 } from '../../services/api/automation'
 
 import '@xyflow/react/dist/style.css'
@@ -35,7 +36,8 @@ const nodeTypes: NodeTypes = {
   remove_from_list: StatNode,
   ab_test: ABTestStatNode,
   webhook: StatNode,
-  list_status_branch: StatNode
+  list_status_branch: StatNode,
+  reply_branch: StatNode
 }
 
 interface AutomationFlowViewerProps {
@@ -184,6 +186,33 @@ function automationToViewerFlow(
           target: config.non_active_node_id,
           type: 'smoothstep',
           style: { stroke: '#f97316', strokeWidth: 2 }
+        })
+      }
+    }
+
+    // Handle reply branch nodes with two paths (replied / not_replied)
+    if (node.type === 'reply_branch' && node.config) {
+      const config = node.config as ReplyBranchNodeConfig
+      if (config.replied_node_id) {
+        edges.push({
+          id: `${node.id}-replied-${config.replied_node_id}`,
+          source: node.id,
+          sourceHandle: 'replied',
+          target: config.replied_node_id,
+          type: 'smoothstep',
+          label: 'Replied',
+          style: { stroke: '#08979c', strokeWidth: 2 }
+        })
+      }
+      if (config.not_replied_node_id) {
+        edges.push({
+          id: `${node.id}-not_replied-${config.not_replied_node_id}`,
+          source: node.id,
+          sourceHandle: 'not_replied',
+          target: config.not_replied_node_id,
+          type: 'smoothstep',
+          label: 'No reply',
+          style: { stroke: '#6b7280', strokeWidth: 2 }
         })
       }
     }

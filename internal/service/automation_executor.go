@@ -28,6 +28,11 @@ type AutomationExecutor struct {
 	// répondu → exit de la cadence cold. nil = exit-on-reply OFF (exit-on-bounce
 	// reste actif). Injecté via SetColdReplyChecker.
 	coldReplyChecker ColdReplyChecker
+
+	// replyBranchExecutor : référence typée au node executor reply_branch (Veridian),
+	// pour pouvoir lui injecter le coldReplyChecker via SetColdReplyChecker (le map des
+	// executors est construit avant l'injection du checker). nil si non construit.
+	replyBranchExecutor *ReplyBranchNodeExecutor
 }
 
 // NewAutomationExecutor creates a new AutomationExecutor
@@ -46,6 +51,10 @@ func NewAutomationExecutor(
 ) *AutomationExecutor {
 	qb := NewQueryBuilder()
 
+	// Veridian reply_branch executor : checker injecté plus tard via SetColdReplyChecker
+	// (le map est construit avant que le service Lot 3 soit disponible dans app.go).
+	replyBranchExecutor := NewReplyBranchNodeExecutor(nil, log)
+
 	executors := map[domain.NodeType]NodeExecutor{
 		domain.NodeTypeTrigger:          NewTriggerNodeExecutor(),
 		domain.NodeTypeDelay:            NewDelayNodeExecutor(),
@@ -57,20 +66,22 @@ func NewAutomationExecutor(
 		domain.NodeTypeABTest:           NewABTestNodeExecutor(),
 		domain.NodeTypeWebhook:          NewWebhookNodeExecutor(log),
 		domain.NodeTypeListStatusBranch: NewListStatusBranchNodeExecutor(contactListRepo),
+		domain.NodeTypeReplyBranch:      replyBranchExecutor,
 	}
 
 	return &AutomationExecutor{
-		automationRepo:  automationRepo,
-		contactRepo:     contactRepo,
-		workspaceRepo:   workspaceRepo,
-		contactListRepo: contactListRepo,
-		templateRepo:    templateRepo,
-		emailQueueRepo:  emailQueueRepo,
-		messageRepo:     messageRepo,
-		timelineRepo:    timelineRepo,
-		nodeExecutors:   executors,
-		logger:          log,
-		apiEndpoint:     apiEndpoint,
+		automationRepo:      automationRepo,
+		contactRepo:         contactRepo,
+		workspaceRepo:       workspaceRepo,
+		contactListRepo:     contactListRepo,
+		templateRepo:        templateRepo,
+		emailQueueRepo:      emailQueueRepo,
+		messageRepo:         messageRepo,
+		timelineRepo:        timelineRepo,
+		nodeExecutors:       executors,
+		replyBranchExecutor: replyBranchExecutor,
+		logger:              log,
+		apiEndpoint:         apiEndpoint,
 	}
 }
 

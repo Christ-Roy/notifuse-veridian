@@ -38,8 +38,16 @@ type ColdReplyChecker interface {
 // SetColdReplyChecker injecte (optionnellement) le checker de réponse du Lot 3.
 // DI volontairement optionnelle : nil = exit-on-reply désactivé, exit-on-bounce conservé.
 // Branché par app.go une fois le service Lot 3 disponible.
+//
+// Propage AUSSI le checker au node executor reply_branch (Veridian) : ce node consomme
+// le même signal "a répondu" pour ROUTER le contact (au lieu de l'exit global), donc il
+// a besoin du même checker. Le map des executors étant construit dans le constructeur
+// (avant l'injection), on patche l'executor ici.
 func (e *AutomationExecutor) SetColdReplyChecker(checker ColdReplyChecker) {
 	e.coldReplyChecker = checker
+	if e.replyBranchExecutor != nil {
+		e.replyBranchExecutor.coldReplyChecker = checker
+	}
 }
 
 // veridianColdExitReason inspecte les signaux d'arrêt cold pour un contact et retourne
@@ -62,7 +70,15 @@ func (e *AutomationExecutor) veridianColdExitReason(
 	contactEmail string,
 ) (string, error) {
 	// 1. Réponse du prospect (Lot 3). No-op si non branché.
-	if e.coldReplyChecker != nil {
+	//
+	// SÉMANTIQUE reply_branch (Veridian) : si l'automation contient un node reply_branch,
+	// l'admin a EXPLICITEMENT choisi de gérer la réponse via le scénario (routage vers une
+	// action : liste "à rappeler", webhook agent IA, tag) plutôt que de subir l'exit cold
+	// global. On NE déclenche donc PAS l'exit-on-reply ici : on laisse le contact AVANCER
+	// jusqu'au node reply_branch, qui consomme le même signal HasReplied et route. Sans
+	// reply_branch dans le flow → comportement inchangé (exit global on reply). L'exit-on-
+	// BOUNCE (étape 2) reste actif quoi qu'il arrive : une adresse morte ne se "route" pas.
+	if e.coldReplyChecker != nil && !automation.HasReplyBranchNode() {
 		replied, err := e.coldReplyChecker.HasReplied(ctx, workspaceID, contactEmail)
 		if err != nil {
 			return "", err

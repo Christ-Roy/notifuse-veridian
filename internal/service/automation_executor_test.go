@@ -2234,3 +2234,46 @@ func TestAutomationExecutor_Execute_ExitReasonPropagation(t *testing.T) {
 	require.NotNil(t, contactAutomation.ExitReason)
 	assert.Equal(t, "unsubscribed", *contactAutomation.ExitReason)
 }
+
+// TestNewAutomationExecutor_RegistersReplyBranchExecutor garde-fou de câblage : le
+// constructeur doit enregistrer l'executor reply_branch (Veridian cold outbound) dans
+// le map des node executors ET conserver une référence typée pour pouvoir lui injecter
+// le ColdReplyChecker via SetColdReplyChecker. Régression-guard : si quelqu'un retire
+// reply_branch du map ou casse la propagation, ce test échoue.
+func TestNewAutomationExecutor_RegistersReplyBranchExecutor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	log := setupMockLogger(ctrl)
+
+	exec := NewAutomationExecutor(
+		mocks.NewMockAutomationRepository(ctrl),
+		mocks.NewMockContactRepository(ctrl),
+		mocks.NewMockWorkspaceRepository(ctrl),
+		mocks.NewMockContactListRepository(ctrl),
+		mocks.NewMockListRepository(ctrl),
+		mocks.NewMockTemplateRepository(ctrl),
+		mocks.NewMockEmailQueueRepository(ctrl),
+		mocks.NewMockMessageHistoryRepository(ctrl),
+		mocks.NewMockContactTimelineRepository(ctrl),
+		log,
+		"https://api.example.com",
+	)
+
+	// L'executor reply_branch est dans le map des node executors.
+	nodeExec, ok := exec.nodeExecutors[domain.NodeTypeReplyBranch]
+	require.True(t, ok, "reply_branch executor must be registered in the node executors map")
+	require.NotNil(t, nodeExec)
+	assert.Equal(t, domain.NodeTypeReplyBranch, nodeExec.NodeType())
+
+	// La référence typée existe et le checker n'est pas encore injecté.
+	require.NotNil(t, exec.replyBranchExecutor)
+	assert.Nil(t, exec.replyBranchExecutor.coldReplyChecker)
+
+	// SetColdReplyChecker propage le checker dans l'executor reply_branch enregistré.
+	checker := &fakeColdReplyChecker{}
+	exec.SetColdReplyChecker(checker)
+	assert.Same(t, checker, exec.coldReplyChecker)
+	assert.Same(t, checker, exec.replyBranchExecutor.coldReplyChecker)
+	// Et c'est bien LE MÊME objet que celui dans le map (pas une copie).
+	assert.Same(t, exec.replyBranchExecutor, exec.nodeExecutors[domain.NodeTypeReplyBranch])
+}

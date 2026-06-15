@@ -26,7 +26,8 @@ const nodeIcons: Record<NodeType, React.ReactNode> = {
   add_to_list: <ListPlus size={16} />,
   remove_from_list: <ListMinus size={16} />,
   ab_test: <FlaskConical size={16} />,
-  webhook: <Webhook size={16} />
+  webhook: <Webhook size={16} />,
+  reply_branch: <GitBranch size={16} />
 }
 
 // Labels are generated inside component for i18n support
@@ -56,7 +57,8 @@ export const StatNode: React.FC<StatNodeProps> = ({ data }) => {
     add_to_list: t`Add to List`,
     remove_from_list: t`Remove from List`,
     ab_test: t`A/B Test`,
-    webhook: t`Webhook`
+    webhook: t`Webhook`,
+    reply_branch: t`Reply Branch`
   }
 
   const nodeLabel = label || nodeLabels[nodeType]

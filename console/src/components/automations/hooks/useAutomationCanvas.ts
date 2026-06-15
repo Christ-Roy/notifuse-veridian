@@ -20,7 +20,7 @@ import {
   type ValidationError
 } from '../utils/flowConverter'
 import { layoutNodes } from '../utils/layoutNodes'
-import type { NodeType, ABTestNodeConfig, FilterNodeConfig, ListStatusBranchNodeConfig, BranchNodeConfig } from '../../../services/api/automation'
+import type { NodeType, ABTestNodeConfig, FilterNodeConfig, ListStatusBranchNodeConfig, BranchNodeConfig, ReplyBranchNodeConfig } from '../../../services/api/automation'
 
 // Editor uses larger nodes
 const EDITOR_NODE_WIDTH = 300
@@ -248,6 +248,19 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
       }
     }
 
+    // For reply_branch nodes, update replied_node_id or not_replied_node_id based on sourceHandle
+    if (sourceNode.data.nodeType === 'reply_branch' && params.sourceHandle) {
+      const config = sourceNode.data.config as ReplyBranchNodeConfig
+      const field = params.sourceHandle === 'replied' ? 'replied_node_id' : 'not_replied_node_id'
+      setNodes(nds =>
+        nds.map(n =>
+          n.id === params.source
+            ? { ...n, data: { ...n.data, config: { ...config, [field]: params.target } } }
+            : n
+        )
+      )
+    }
+
     // For single-child nodes, remove existing outgoing edge before adding new one
     if (!canHaveMultipleChildren(sourceNode.data.nodeType)) {
       setEdges(eds => {
@@ -309,6 +322,8 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
           default_path_id: defaultPathId
         }
       }
+      case 'reply_branch':
+        return { replied_node_id: '', not_replied_node_id: '' }
       default:
         return {}
     }
@@ -430,6 +445,18 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
       } else {
         setNodes(nds => [...nds, newNode])
       }
+    } else if (sourceHandle && sourceNode.data.nodeType === 'reply_branch') {
+      // Update reply_branch config when adding via handle
+      const config = sourceNode.data.config as ReplyBranchNodeConfig
+      const field = sourceHandle === 'replied' ? 'replied_node_id' : 'not_replied_node_id'
+      setNodes(nds => [
+        ...nds.map(n =>
+          n.id === sourceNodeId
+            ? { ...n, data: { ...n.data, config: { ...config, [field]: newNodeId } } }
+            : n
+        ),
+        newNode
+      ])
     } else {
       setNodes(nds => [...nds, newNode])
     }
@@ -672,6 +699,18 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
         }
       }
 
+      // For reply_branch nodes, clear replied_node_id or not_replied_node_id when edge is deleted
+      if (sourceNode?.data.nodeType === 'reply_branch') {
+        const config = sourceNode.data.config as ReplyBranchNodeConfig
+        const field = edge.sourceHandle === 'replied' ? 'replied_node_id' : 'not_replied_node_id'
+        setNodes(nds =>
+          nds.map(n =>
+            n.id === edge.source
+              ? { ...n, data: { ...n.data, config: { ...config, [field]: '' } } }
+              : n
+          )
+        )
+      }
     }
 
     setEdges(eds => eds.filter(e => e.id !== edgeId))
@@ -829,6 +868,29 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
             })
           }
         })
+      } else if (node.data.nodeType === 'reply_branch') {
+        // Reply branch has 2 fixed outputs: replied (left) and not_replied (right)
+        const hasRepliedEdge = edges.some(e => e.source === node.id && e.sourceHandle === 'replied')
+        const hasNotRepliedEdge = edges.some(e => e.source === node.id && e.sourceHandle === 'not_replied')
+        const nodeWidth = node.measured?.width || 300
+        if (!hasRepliedEdge) {
+          outputs.push({
+            nodeId: node.id,
+            handleId: 'replied',
+            position: { x: node.position.x + (nodeWidth * 0.3), y: node.position.y + 120 },
+            label: 'Replied',
+            color: '#08979c'  // teal = replied
+          })
+        }
+        if (!hasNotRepliedEdge) {
+          outputs.push({
+            nodeId: node.id,
+            handleId: 'not_replied',
+            position: { x: node.position.x + (nodeWidth * 0.7), y: node.position.y + 120 },
+            label: 'No reply',
+            color: '#6b7280'  // gray = not replied
+          })
+        }
       } else {
         // Single-output nodes
         const hasOutgoingEdge = edges.some(e => e.source === node.id)

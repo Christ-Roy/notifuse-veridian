@@ -410,6 +410,10 @@ msgstr "A previous {operation} operation for \"{0}\" was found. Would you like t
 msgid "A previous upload for \"{0}\" was found ({1}). Would you like to resume from where you left off?"
 msgstr "A previous upload for \"{0}\" was found ({1}). Would you like to resume from where you left off?"
 
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:38
+msgid "A prospect who replied is never re-emailed. Use the two outputs to route them to an action instead."
+msgstr "A prospect who replied is never re-emailed. Use the two outputs to route them to an action instead."
+
 #: src/components/segment/button_upsert.tsx:213
 msgid "A segment with ID \"{id}\" already exists"
 msgstr "A segment with ID \"{id}\" already exists"
@@ -423,8 +427,8 @@ msgid "A value is required..."
 msgstr "A value is required..."
 
 #: src/components/automations/nodes/ABTestNode.tsx:47
-#: src/components/automations/nodes/StatNode.tsx:58
-#: src/components/automations/nodes/StatNode.tsx:243
+#: src/components/automations/nodes/StatNode.tsx:59
+#: src/components/automations/nodes/StatNode.tsx:245
 #: src/pages/BroadcastsPage.tsx:1047
 msgid "A/B Test"
 msgstr "A/B Test"
@@ -605,7 +609,7 @@ msgstr "Add keywords..."
 msgid "Add Label"
 msgstr "Add Label"
 
-#: src/components/automations/AddNodeButton.tsx:124
+#: src/components/automations/AddNodeButton.tsx:127
 msgid "Add node"
 msgstr "Add node"
 
@@ -620,6 +624,10 @@ msgstr "Add one or more email senders. The first sender will be used as the defa
 #: src/components/segment/input_json_path.tsx:110
 msgid "Add path"
 msgstr "Add path"
+
+#: src/components/automations/config/BranchConfigForm.tsx:166
+msgid "Add Path"
+msgstr "Add Path"
 
 #: src/components/settings/Integrations.tsx:1888
 #: src/components/settings/Integrations.tsx:1944
@@ -642,7 +650,7 @@ msgid "Add to list"
 msgstr "Add to list"
 
 #: src/components/automations/nodes/AddToListNode.tsx:41
-#: src/components/automations/nodes/StatNode.tsx:56
+#: src/components/automations/nodes/StatNode.tsx:57
 msgid "Add to List"
 msgstr "Add to List"
 
@@ -1466,10 +1474,12 @@ msgstr "Bounce Type"
 msgid "Bounced"
 msgstr "Bounced"
 
-#: src/components/automations/nodes/StatNode.tsx:54
+#: src/components/automations/nodes/BranchNode.tsx:45
+#: src/components/automations/nodes/StatNode.tsx:55
 msgid "Branch"
 msgstr "Branch"
 
+#: src/components/automations/config/BranchConfigForm.tsx:105
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx:41
 msgid "Branch Logic"
 msgstr "Branch Logic"
@@ -2050,9 +2060,9 @@ msgid "completed"
 msgstr "completed"
 
 #: src/components/automations/AutomationCard.tsx:267
-#: src/components/automations/nodes/StatNode.tsx:108
-#: src/components/automations/nodes/StatNode.tsx:173
-#: src/components/automations/nodes/StatNode.tsx:255
+#: src/components/automations/nodes/StatNode.tsx:110
+#: src/components/automations/nodes/StatNode.tsx:175
+#: src/components/automations/nodes/StatNode.tsx:257
 #: src/pages/BroadcastsPage.tsx:344
 #: src/pages/BroadcastsPage.tsx:985
 msgid "Completed"
@@ -2072,13 +2082,17 @@ msgstr "Condition"
 msgid "conditions"
 msgstr "conditions"
 
-#: src/components/automations/NodeConfigPanel.tsx:133
+#: src/components/automations/config/BranchConfigForm.tsx:136
+msgid "Conditions"
+msgstr "Conditions"
+
+#: src/components/automations/NodeConfigPanel.tsx:151
 msgid "Configuration for {nodeType} is not available in Phase 2"
 msgstr "Configuration for {nodeType} is not available in Phase 2"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:163
 #: src/components/analytics/AnalyticsDashboard.tsx:187
-#: src/components/automations/NodeConfigPanel.tsx:144
+#: src/components/automations/NodeConfigPanel.tsx:162
 #: src/components/automations/nodes/ABTestNode.tsx:59
 #: src/components/automations/nodes/AddToListNode.tsx:53
 #: src/components/automations/nodes/DelayNode.tsx:20
@@ -2113,6 +2127,10 @@ msgstr "Configure now"
 #: src/components/settings/WebhooksSettings.tsx:170
 msgid "Configure outgoing webhooks to receive real-time notifications when events occur in your workspace."
 msgstr "Configure outgoing webhooks to receive real-time notifications when events occur in your workspace."
+
+#: src/components/automations/nodes/BranchNode.tsx:52
+msgid "Configure paths"
+msgstr "Configure paths"
 
 #: src/components/broadcasts/SendOrScheduleModal.tsx:187
 #: src/pages/BroadcastsPage.tsx:1325
@@ -2156,6 +2174,10 @@ msgstr "Confirmed"
 msgid "Connect and manage external services"
 msgstr "Connect and manage external services"
 
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:51
+msgid "Connect each output to the next node using the handles on the block."
+msgstr "Connect each output to the next node using the handles on the block."
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:341
 msgid "Connect IMAP inbox"
 msgstr "Connect IMAP inbox"
@@ -2186,6 +2208,10 @@ msgstr "Contact"
 msgid "Contact added to list successfully"
 msgstr "Contact added to list successfully"
 
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:43
+msgid "Contact answered — route to an action (add to a \"to call back\" list, webhook to an AI agent, tag)."
+msgstr "Contact answered — route to an action (add to a \"to call back\" list, webhook to an AI agent, tag)."
+
 #: src/components/contacts/ContactUpsertDrawer.tsx:329
 msgid "Contact created successfully"
 msgstr "Contact created successfully"
@@ -2215,6 +2241,10 @@ msgstr "Contact Email:"
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx:48
 msgid "Contact has \"active\" subscription status"
 msgstr "Contact has \"active\" subscription status"
+
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:47
+msgid "Contact has not answered yet — continue the sequence."
+msgstr "Contact has not answered yet — continue the sequence."
 
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx:51
 msgid "Contact has pending, unsubscribed, bounced, or complained status"
@@ -2820,6 +2850,14 @@ msgstr "Default Attributes"
 msgid "Default Language"
 msgstr "Default Language"
 
+#: src/components/automations/config/BranchConfigForm.tsx:170
+msgid "Default Path"
+msgstr "Default Path"
+
+#: src/components/automations/config/BranchConfigForm.tsx:132
+msgid "Default path - taken when no other path matches."
+msgstr "Default path - taken when no other path matches."
+
 #: src/pages/BroadcastsPage.tsx:692
 msgid "Default sender"
 msgstr "Default sender"
@@ -2848,7 +2886,7 @@ msgid "Define UTM parameters for links in your email for better campaign trackin
 msgstr "Define UTM parameters for links in your email for better campaign tracking."
 
 #: src/components/automations/nodes/DelayNode.tsx:45
-#: src/components/automations/nodes/StatNode.tsx:52
+#: src/components/automations/nodes/StatNode.tsx:53
 msgid "Delay"
 msgstr "Delay"
 
@@ -3064,6 +3102,10 @@ msgstr "Detect from website URL"
 #: src/components/timeline/ContactTimeline.tsx:628
 msgid "Diagnostic:"
 msgstr "Diagnostic:"
+
+#: src/components/automations/nodes/ReplyBranchNode.tsx:39
+msgid "Did the contact reply?"
+msgstr "Did the contact reply?"
 
 #: src/components/settings/BlogSettings.tsx:183
 #: src/components/settings/BlogSettings.tsx:468
@@ -3291,6 +3333,10 @@ msgstr "e.g., Raleway, Open Sans"
 msgid "Each contact enters the automation only once"
 msgstr "Each contact enters the automation only once"
 
+#: src/components/automations/config/BranchConfigForm.tsx:106
+msgid "Each path is evaluated top to bottom. The contact follows the first path whose conditions match. If none match, the default path is taken."
+msgstr "Each path is evaluated top to bottom. The contact follows the first path whose conditions match. If none match, the default path is taken."
+
 #: src/pages/ListsPage.tsx:80
 msgid "edit"
 msgstr "edit"
@@ -3463,7 +3509,7 @@ msgstr "email"
 #: src/components/analytics/NewContactsTable.tsx:67
 #: src/components/automations/config/TriggerConfigForm.tsx:87
 #: src/components/automations/nodes/EmailNode.tsx:39
-#: src/components/automations/nodes/StatNode.tsx:53
+#: src/components/automations/nodes/StatNode.tsx:54
 #: src/components/contacts/BulkUpdateDrawer.tsx:674
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:89
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:920
@@ -4036,9 +4082,9 @@ msgstr "failed"
 #: src/components/analytics/EmailMetricsChart.tsx:265
 #: src/components/analytics/EmailMetricsChart.tsx:502
 #: src/components/automations/AutomationCard.tsx:281
-#: src/components/automations/nodes/StatNode.tsx:114
-#: src/components/automations/nodes/StatNode.tsx:178
-#: src/components/automations/nodes/StatNode.tsx:261
+#: src/components/automations/nodes/StatNode.tsx:116
+#: src/components/automations/nodes/StatNode.tsx:180
+#: src/components/automations/nodes/StatNode.tsx:263
 #: src/components/broadcasts/BroadcastStats.tsx:241
 #: src/components/contacts/BulkActionProgressModal.tsx:106
 #: src/components/contacts/BulkActionProgressModal.tsx:146
@@ -4631,8 +4677,8 @@ msgid "File storage settings"
 msgstr "File storage settings"
 
 #: src/components/automations/nodes/FilterNode.tsx:48
-#: src/components/automations/nodes/StatNode.tsx:55
-#: src/components/automations/nodes/StatNode.tsx:161
+#: src/components/automations/nodes/StatNode.tsx:56
+#: src/components/automations/nodes/StatNode.tsx:163
 msgid "Filter"
 msgstr "Filter"
 
@@ -5373,9 +5419,9 @@ msgstr "Index and follow links"
 msgid "Index, but don't follow links"
 msgstr "Index, but don't follow links"
 
-#: src/components/automations/nodes/StatNode.tsx:103
-#: src/components/automations/nodes/StatNode.tsx:168
-#: src/components/automations/nodes/StatNode.tsx:250
+#: src/components/automations/nodes/StatNode.tsx:105
+#: src/components/automations/nodes/StatNode.tsx:170
+#: src/components/automations/nodes/StatNode.tsx:252
 msgid "Inflight"
 msgstr "Inflight"
 
@@ -5928,7 +5974,7 @@ msgstr "Loading automations..."
 msgid "Loading setup..."
 msgstr "Loading setup..."
 
-#: src/components/automations/AutomationFlowViewer.tsx:223
+#: src/components/automations/AutomationFlowViewer.tsx:252
 msgid "Loading stats..."
 msgstr "Loading stats..."
 
@@ -6170,7 +6216,7 @@ msgstr "Middle"
 msgid "min"
 msgstr "min"
 
-#: src/components/automations/AutomationFlowEditor.tsx:409
+#: src/components/automations/AutomationFlowEditor.tsx:415
 msgid "Minimap"
 msgstr "Minimap"
 
@@ -6570,7 +6616,7 @@ msgstr "No MJML content to export"
 msgid "No name"
 msgstr "No name"
 
-#: src/components/automations/AutomationFlowViewer.tsx:231
+#: src/components/automations/AutomationFlowViewer.tsx:260
 msgid "No nodes in this automation"
 msgstr "No nodes in this automation"
 
@@ -6609,6 +6655,11 @@ msgstr "No published posts"
 #: src/components/email_builder/ui/BackgroundInput.tsx:97
 msgid "No Repeat"
 msgstr "No Repeat"
+
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:46
+#: src/components/automations/nodes/ReplyBranchNode.tsx:43
+msgid "No reply"
+msgstr "No reply"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1187
 msgid "No sample values available"
@@ -7088,6 +7139,14 @@ msgstr "Password"
 #: src/components/blog_editor/components/youtube/YoutubeNodeView.tsx:340
 msgid "Paste YouTube URL..."
 msgstr "Paste YouTube URL..."
+
+#: src/components/automations/config/BranchConfigForm.tsx:118
+msgid "Path name"
+msgstr "Path name"
+
+#: src/components/automations/config/BranchConfigForm.tsx:170
+msgid "Path taken when no conditions match"
+msgstr "Path taken when no conditions match"
 
 #: src/components/file_manager/buttonSettings.tsx:291
 msgid "Path-style access"
@@ -8001,7 +8060,7 @@ msgid "Remove from list"
 msgstr "Remove from list"
 
 #: src/components/automations/nodes/RemoveFromListNode.tsx:39
-#: src/components/automations/nodes/StatNode.tsx:57
+#: src/components/automations/nodes/StatNode.tsx:58
 msgid "Remove from List"
 msgstr "Remove from List"
 
@@ -8034,7 +8093,7 @@ msgstr "Removed"
 msgid "Rendering preview..."
 msgstr "Rendering preview..."
 
-#: src/components/automations/AutomationFlowEditor.tsx:397
+#: src/components/automations/AutomationFlowEditor.tsx:403
 msgid "Reorganize layout"
 msgstr "Reorganize layout"
 
@@ -8054,9 +8113,19 @@ msgstr "Repeat X"
 msgid "Repeat Y"
 msgstr "Repeat Y"
 
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:42
+#: src/components/automations/nodes/ReplyBranchNode.tsx:42
+msgid "Replied"
+msgstr "Replied"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:211
 msgid "Reply & bounce inbox (IMAP)"
 msgstr "Reply & bounce inbox (IMAP)"
+
+#: src/components/automations/nodes/ReplyBranchNode.tsx:33
+#: src/components/automations/nodes/StatNode.tsx:61
+msgid "Reply Branch"
+msgstr "Reply Branch"
 
 #: src/components/templates/CreateTemplateDrawer.tsx:819
 #: src/components/templates/TemplatePreviewDrawer.tsx:289
@@ -8224,6 +8293,10 @@ msgstr "Root Email"
 #: src/components/email_builder/ui/BackgroundInput.tsx:99
 msgid "Round"
 msgstr "Round"
+
+#: src/components/automations/config/ReplyBranchConfigForm.tsx:34
+msgid "Route on reply"
+msgstr "Route on reply"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:969
 msgid "rows"
@@ -8522,6 +8595,10 @@ msgstr "Select a block to edit its attributes"
 msgid "Select a category"
 msgstr "Select a category"
 
+#: src/components/automations/config/BranchConfigForm.tsx:176
+msgid "Select a default path..."
+msgstr "Select a default path..."
+
 #: src/components/contacts/ContactUpsertDrawer.tsx:558
 #: src/components/segment/input_dimension_filters.tsx:196
 msgid "Select a field"
@@ -8535,7 +8612,7 @@ msgstr "Select a field"
 msgid "Select a list"
 msgstr "Select a list"
 
-#: src/components/automations/AddNodeButton.tsx:112
+#: src/components/automations/AddNodeButton.tsx:115
 #: src/components/automations/NodePalette.tsx:40
 msgid "Select a list to enable email nodes"
 msgstr "Select a list to enable email nodes"
@@ -10388,7 +10465,7 @@ msgid "Trial"
 msgstr "Trial"
 
 #: src/components/automations/AutomationCard.tsx:294
-#: src/components/automations/nodes/StatNode.tsx:51
+#: src/components/automations/nodes/StatNode.tsx:52
 #: src/components/automations/nodes/TriggerNode.tsx:63
 msgid "Trigger"
 msgstr "Trigger"
@@ -10959,7 +11036,7 @@ msgstr "We'll automatically detect and use your website's favicon"
 msgid "Web Analytics"
 msgstr "Web Analytics"
 
-#: src/components/automations/nodes/StatNode.tsx:59
+#: src/components/automations/nodes/StatNode.tsx:60
 #: src/components/automations/nodes/WebhookNode.tsx:43
 #: src/components/timeline/ContactTimeline.tsx:586
 msgid "Webhook"

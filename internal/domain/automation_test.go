@@ -1740,3 +1740,61 @@ func TestAutomationRepository_EnrollContact_Contract(t *testing.T) {
 		assert.Contains(t, err.Error(), "enroll failed")
 	})
 }
+
+// ─── Veridian reply_branch node (cold outbound) ────────────────────────────
+
+func TestNodeType_IsValid_ReplyBranch(t *testing.T) {
+	assert.True(t, NodeTypeReplyBranch.IsValid(), "reply_branch must be a valid node type")
+	assert.Equal(t, NodeType("reply_branch"), NodeTypeReplyBranch)
+}
+
+func TestReplyBranchNodeConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  ReplyBranchNodeConfig
+		wantErr bool
+	}{
+		{"both targets set", ReplyBranchNodeConfig{RepliedNodeID: "n1", NotRepliedNodeID: "n2"}, false},
+		{"only replied set", ReplyBranchNodeConfig{RepliedNodeID: "n1"}, false},
+		{"only not_replied set", ReplyBranchNodeConfig{NotRepliedNodeID: "n2"}, false},
+		{"both empty is invalid", ReplyBranchNodeConfig{}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAutomation_HasReplyBranchNode(t *testing.T) {
+	t.Run("nil automation is safe and false", func(t *testing.T) {
+		var a *Automation
+		assert.False(t, a.HasReplyBranchNode())
+	})
+
+	t.Run("no reply_branch node", func(t *testing.T) {
+		a := &Automation{Nodes: []*AutomationNode{
+			{ID: "n1", Type: NodeTypeDelay},
+			{ID: "n2", Type: NodeTypeEmail},
+		}}
+		assert.False(t, a.HasReplyBranchNode())
+	})
+
+	t.Run("contains a reply_branch node", func(t *testing.T) {
+		a := &Automation{Nodes: []*AutomationNode{
+			{ID: "n1", Type: NodeTypeDelay},
+			{ID: "n2", Type: NodeTypeReplyBranch},
+		}}
+		assert.True(t, a.HasReplyBranchNode())
+	})
+
+	t.Run("nil node entries are skipped", func(t *testing.T) {
+		a := &Automation{Nodes: []*AutomationNode{nil, {ID: "n2", Type: NodeTypeReplyBranch}}}
+		assert.True(t, a.HasReplyBranchNode())
+	})
+}

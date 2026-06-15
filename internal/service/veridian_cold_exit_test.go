@@ -33,6 +33,19 @@ func TestAutomationExecutor_SetColdReplyChecker(t *testing.T) {
 	assert.Same(t, checker, executor.coldReplyChecker)
 }
 
+func TestAutomationExecutor_SetColdReplyChecker_PropagatesToReplyBranchExecutor(t *testing.T) {
+	// Le checker doit aussi être injecté dans le node executor reply_branch (Veridian) :
+	// ce node consomme le même signal HasReplied pour ROUTER au lieu d'exiter.
+	replyBranchExec := NewReplyBranchNodeExecutor(nil, nil)
+	executor := &AutomationExecutor{replyBranchExecutor: replyBranchExec}
+
+	checker := &fakeColdReplyChecker{}
+	executor.SetColdReplyChecker(checker)
+
+	assert.Same(t, checker, executor.coldReplyChecker)
+	assert.Same(t, checker, replyBranchExec.coldReplyChecker, "checker propagated to reply_branch executor")
+}
+
 func TestAutomationExecutor_veridianColdExitReason(t *testing.T) {
 	const (
 		workspaceID = "ws1"
@@ -64,6 +77,48 @@ func TestAutomationExecutor_veridianColdExitReason(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, domain.ExitReasonReplied, reason)
 		assert.Equal(t, 1, checker.calls)
+	})
+
+	t.Run("replied + reply_branch in flow -> NO reply exit (admin reprend la main)", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		clRepo := mocks.NewMockContactListRepository(ctrl)
+		// Automation contient un node reply_branch + une liste : l'exit-on-reply est
+		// supprimé (le contact doit atteindre le reply_branch), donc on tombe sur le
+		// check bounce. Statut actif → pas d'exit du tout.
+		clRepo.EXPECT().GetContactListByIDs(gomock.Any(), workspaceID, email, listID).
+			Return(&domain.ContactList{Status: domain.ContactListStatusActive}, nil)
+		checker := &fakeColdReplyChecker{replied: true}
+		autoWithReplyBranch := &domain.Automation{
+			ID:     "auto1",
+			ListID: listID,
+			Nodes:  []*domain.AutomationNode{{ID: "rb1", Type: domain.NodeTypeReplyBranch}},
+		}
+		e := &AutomationExecutor{contactListRepo: clRepo, coldReplyChecker: checker}
+
+		reason, err := e.veridianColdExitReason(context.Background(), workspaceID, autoWithReplyBranch, email)
+		require.NoError(t, err)
+		assert.Equal(t, "", reason, "reply_branch present → exit-on-reply suppressed, contact reaches the node")
+		assert.Equal(t, 0, checker.calls, "HasReplied not even called when reply_branch handles routing")
+	})
+
+	t.Run("replied + reply_branch + bounced -> STILL ExitReasonBounced (dead address never routed)", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		clRepo := mocks.NewMockContactListRepository(ctrl)
+		clRepo.EXPECT().GetContactListByIDs(gomock.Any(), workspaceID, email, listID).
+			Return(&domain.ContactList{Status: domain.ContactListStatusBounced}, nil)
+		checker := &fakeColdReplyChecker{replied: true}
+		autoWithReplyBranch := &domain.Automation{
+			ID:     "auto1",
+			ListID: listID,
+			Nodes:  []*domain.AutomationNode{{ID: "rb1", Type: domain.NodeTypeReplyBranch}},
+		}
+		e := &AutomationExecutor{contactListRepo: clRepo, coldReplyChecker: checker}
+
+		reason, err := e.veridianColdExitReason(context.Background(), workspaceID, autoWithReplyBranch, email)
+		require.NoError(t, err)
+		assert.Equal(t, domain.ExitReasonBounced, reason, "bounce exit always wins, even with reply_branch")
 	})
 
 	t.Run("not replied + bounced -> ExitReasonBounced", func(t *testing.T) {
