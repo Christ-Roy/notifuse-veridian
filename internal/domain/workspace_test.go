@@ -2704,6 +2704,41 @@ func TestUpdateIntegrationRequest_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			// Veridian fork (Lot 8) — édition IMAP SANS password : à l'update le
+			// payload n'embarque pas l'EncryptedPassword (en DB) ; l'admin re-sauve
+			// sans retaper le mot de passe. La validation de requête ne doit PAS
+			// exiger le password (sinon faux négatif → bug update folder vécu E2E).
+			name: "valid imap update without password (preserve existing)",
+			request: UpdateIntegrationRequest{
+				WorkspaceID:   "workspace-123",
+				IntegrationID: "integration-123",
+				Name:          "Cold reply inbox",
+				IMAPSettings: &IMAPSettings{
+					Host:     "imap.example.com",
+					Port:     993,
+					Username: "returns@example.com",
+					Folder:   "Bounces",
+					// Password volontairement absent — préservé par le service.
+				},
+			},
+			wantErr: false,
+		},
+		{
+			// Veridian fork (Lot 8) — édition IMAP avec host manquant → erreur
+			// structurelle (validée au niveau requête, indépendamment du password).
+			name: "invalid imap update missing host",
+			request: UpdateIntegrationRequest{
+				WorkspaceID:   "workspace-123",
+				IntegrationID: "integration-123",
+				Name:          "Cold reply inbox",
+				IMAPSettings: &IMAPSettings{
+					Port:     993,
+					Username: "returns@example.com",
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range testCases {

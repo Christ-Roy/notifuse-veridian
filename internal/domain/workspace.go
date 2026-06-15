@@ -1216,12 +1216,22 @@ func (r *UpdateIntegrationRequest) Validate(passphrase string) error {
 			return fmt.Errorf("invalid firecrawl settings: %w", err)
 		}
 	} else if r.IMAPSettings != nil {
-		// Veridian fork — valide la config IMAP fournie à l'édition (Lot 8). Le
-		// service re-valide l'intégration complète, mais valider tôt donne un
-		// message d'erreur clair. Password vide + EncryptedPassword existant =
-		// édition sans changer le mot de passe (toléré par IMAPSettings.Validate).
-		if err := r.IMAPSettings.Validate(passphrase); err != nil {
-			return fmt.Errorf("invalid imap settings: %w", err)
+		// Veridian fork — IMAP (Lot 8) : on NE valide PAS le password ici à
+		// l'édition. À l'update, le payload n'embarque pas l'EncryptedPassword
+		// existant (il vit en DB) : l'admin peut re-sauver sans retaper le mot de
+		// passe, donc Password="" est légitime. IMAPSettings.Validate exigerait
+		// pourtant un password → faux négatif. Le service UpdateIntegration
+		// recopie l'EncryptedPassword existant PUIS appelle integration.Validate()
+		// qui valide l'ensemble correctement. On se limite ici aux champs
+		// structurels (host/port/username), comme pour la cohérence d'un payload.
+		if strings.TrimSpace(r.IMAPSettings.Host) == "" {
+			return fmt.Errorf("invalid imap settings: host is required")
+		}
+		if r.IMAPSettings.Port <= 0 || r.IMAPSettings.Port > 65535 {
+			return fmt.Errorf("invalid imap settings: invalid port number: %d", r.IMAPSettings.Port)
+		}
+		if strings.TrimSpace(r.IMAPSettings.Username) == "" {
+			return fmt.Errorf("invalid imap settings: username is required")
 		}
 	}
 
