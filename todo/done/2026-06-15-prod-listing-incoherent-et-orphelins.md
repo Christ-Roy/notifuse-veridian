@@ -1,3 +1,14 @@
+## ✅ RÉSOLU INTÉGRALEMENT (2026-06-15, prod)
+
+Smoke prod post-fix : `GET /api/veridian/admin/tenants` sans prefix → **20 managed**
+(avant : 0), **0 orphelin réel** (`include_orphans=true` → `orphans:[]`). Les 20
+"orphelins" du titre avaient TOUS un `veridian_plan` (19 free + coldtunnel/canary
+enterprise) — ils étaient juste invisibles à cause du bug listing (Pb1). Donc :
+- **Pb1** : corrigé (commit 1b3700b0, `ListAllIDs`). Vérifié prod.
+- **Pb2** : INEXISTANT. Aucun workspace sans plan. Aucune hygiène data à faire,
+  aucun wipe. Ce sont des comptes free légitimes (tests perso Robert + quelques
+  noms réels qui ont bien leur plan free).
+
 # [NOTIFUSE] 🟡 P1 — Listing admin tenants incohérent + 20 workspaces orphelins en prod
 
 > **Sévérité** : 🟡 P1 (cohérence admin + hygiène data prod)
