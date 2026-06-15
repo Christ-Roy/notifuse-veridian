@@ -4,6 +4,17 @@
 > **Owner** : agent notifuse-veridian (+ coordination skill postfix / repo prospection)
 > **Créé** : 2026-06-14 par Robert. Cold outreach via SMTP Postfix self-hosted.
 > Robert : *"je ne veux pas renvoyer des mails à une adresse qui n'en reçoit pas"*.
+>
+> ## ✅ MAJ 2026-06-15 (sprint cold) — code NOTIFUSE LIVRÉ EN PROD (v51)
+> Lot A côté Notifuse : consumer NDR IMAP → suppression livré (commit a79c9432) —
+> `pkg/veridian_ndr/parser.go` (RFC3464 + heuristiques), `VeridianBounceConsumer` sur le
+> poller IMAP (Lot 1), chaîne suppression réutilisée, pré-filtrage broadcast durci.
+> Lot B (skip adresses invalides avant SMTP) livré aussi (Lot 7, commit 3150f63e).
+> **RESTE (hors code, NE PAS archiver tant que non fait) :**
+> - 🔴 Brancher une VRAIE boîte IMAP sur le workspace cold (UI Settings → Cold outreach) —
+>   sans creds saisis, le consumer ne poll rien. Action opérationnelle (skill postfix/Robert).
+> - 🟡 Lot C Mailinblack : resté exploratoire, NON fait.
+> - 🟡 Pré-filtrage à l'import sur email_verification.result : côté prospection (ticket séparé).
 
 ## Le problème
 

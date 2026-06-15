@@ -3,6 +3,17 @@
 > **Sévérité** : 🟡 P1 délivrabilité cold
 > **Owner** : agent notifuse-veridian (+ infra/DNS + skill postfix)
 > **Créé** : 2026-06-14 par Robert. Envoi cold depuis `agences-veridian.fr`.
+>
+> ## ✅ MAJ 2026-06-15 (sprint cold) — Lot A (code) LIVRÉ EN PROD (v51)
+> Custom tracking domain configurable par infra d'envoi (EmailProvider.veridian_tracking_domain)
+> + par workspace, fallback apiEndpoint global (non-régression). Livré commits 4d1cd779 + 0a44cbfd.
+> Réglable dans l'UI Settings → Cold outreach (carte "Custom tracking domain").
+> **RESTE À FAIRE (Lot B, hors code Notifuse — NE PAS archiver) :**
+> - 🟡 **DNS + Traefik** : créer le sous-domaine `track.agences-veridian.fr` (CNAME/A → Traefik
+>   prod Notifuse) + cert Let's Encrypt + router vers le conteneur Notifuse (routes /t/ /r/
+>   répondent déjà indépendamment du Host). SANS ce câblage, le tracking domain est configurable
+>   mais ne route nulle part. Action skill postfix/DNS Cloudflare.
+> - 🟢 Lot C (réduire taille du lien) : optionnel, non fait.
 
 ## Le besoin (Robert)
 
