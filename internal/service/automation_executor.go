@@ -23,6 +23,11 @@ type AutomationExecutor struct {
 	nodeExecutors   map[domain.NodeType]NodeExecutor
 	logger          logger.Logger
 	apiEndpoint     string
+
+	// coldReplyChecker (Lot 3 cold outbound, optionnel) : signale qu'un contact a
+	// répondu → exit de la cadence cold. nil = exit-on-reply OFF (exit-on-bounce
+	// reste actif). Injecté via SetColdReplyChecker.
+	coldReplyChecker ColdReplyChecker
 }
 
 // NewAutomationExecutor creates a new AutomationExecutor
@@ -103,6 +108,17 @@ func (e *AutomationExecutor) Execute(ctx context.Context, workspaceID string, co
 		node := automation.GetNodeByID(*contactAutomation.CurrentNodeID)
 		if node == nil {
 			return e.markAsExited(ctx, workspaceID, contactAutomation, "automation_node_deleted")
+		}
+
+		// Veridian cold outbound (Lot 9) — gate d'exit souverain AVANT de processer le
+		// node : un prospect qui a répondu (Lot 3) ou bouncé sort de la cadence à ce tick,
+		// même s'il dort dans un node delay (l'engine upstream ne checke le bounce qu'à un
+		// email node, insuffisant pour une cadence cold). Best-effort : une erreur de check
+		// ne fige jamais la cadence — on log et on laisse le contact avancer.
+		if exitReason, coldErr := e.veridianColdExitReason(ctx, workspaceID, automation, contactAutomation.ContactEmail); coldErr != nil {
+			e.logger.WithField("error", coldErr).Warn("cold exit check failed (best-effort, contact continues)")
+		} else if exitReason != "" {
+			return e.markAsExited(ctx, workspaceID, contactAutomation, exitReason)
 		}
 
 		// Get executor for node type

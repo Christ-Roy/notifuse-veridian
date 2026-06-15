@@ -103,6 +103,84 @@ func TestAutomationExecutor_Execute_HappyPath(t *testing.T) {
 	assert.Equal(t, domain.ContactAutomationStatusActive, contactAutomation.Status)
 }
 
+// TestAutomationExecutor_Execute_ColdExitOnReply vérifie le câblage du gate cold
+// (Lot 9) dans la boucle Execute : un contact qui a répondu (ColdReplyChecker du
+// Lot 3 → true) est sorti de la cadence AVANT que son node courant soit processé.
+// C'est le comportement souverain du cold outbound : un prospect qui répond ne doit
+// jamais être relancé, même s'il dort dans un node delay. Régression-guard du fix
+// trunk (champ coldReplyChecker + appel du gate dans Execute).
+func TestAutomationExecutor_Execute_ColdExitOnReply(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockTimelineRepo := mocks.NewMockContactTimelineRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	executor := &AutomationExecutor{
+		automationRepo: mockAutomationRepo,
+		contactRepo:    mockContactRepo,
+		workspaceRepo:  mockWorkspaceRepo,
+		timelineRepo:   mockTimelineRepo,
+		nodeExecutors: map[domain.NodeType]NodeExecutor{
+			domain.NodeTypeDelay: NewDelayNodeExecutor(),
+		},
+		logger: mockLogger,
+		// Le prospect a répondu → le gate doit l'exiter au tick courant.
+		coldReplyChecker: &fakeColdReplyChecker{replied: true},
+	}
+
+	workspaceID := "ws1"
+	automationID := "auto1"
+	nodeID := "node1"
+	nextNodeID := "node2"
+
+	contactAutomation := &domain.ContactAutomation{
+		ID:            "ca1",
+		AutomationID:  automationID,
+		ContactEmail:  "prospect@example.com",
+		CurrentNodeID: &nodeID,
+		Status:        domain.ContactAutomationStatusActive,
+		MaxRetries:    3,
+	}
+
+	delayNode := &domain.AutomationNode{
+		ID:         nodeID,
+		Type:       domain.NodeTypeDelay,
+		NextNodeID: &nextNodeID,
+		Config:     map[string]interface{}{"duration": 30, "unit": "minutes"},
+	}
+
+	automation := &domain.Automation{
+		ID:     automationID,
+		Name:   "Cold cadence",
+		Status: domain.AutomationStatusLive,
+		Nodes:  []*domain.AutomationNode{delayNode},
+	}
+
+	contact := &domain.Contact{Email: "prospect@example.com"}
+
+	mockAutomationRepo.EXPECT().GetByID(gomock.Any(), workspaceID, automationID).Return(automation, nil)
+	mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, "prospect@example.com").Return(contact, nil)
+	// Le contact est exité → IncrementAutomationStat("exited") + event timeline
+	// automation.end + UpdateContactAutomation pour persister l'exit.
+	// CreateNodeExecution NE doit PAS être appelé : le node delay n'est jamais processé
+	// (le gate intercepte avant). gomock échouera si un appel inattendu survient.
+	mockAutomationRepo.EXPECT().IncrementAutomationStat(gomock.Any(), workspaceID, automationID, "exited").Return(nil)
+	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+
+	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
+	require.NoError(t, err)
+
+	// Le contact est sorti avec la raison 'replied' et ne sera plus relancé.
+	assert.Equal(t, domain.ContactAutomationStatusExited, contactAutomation.Status)
+	require.NotNil(t, contactAutomation.ExitReason)
+	assert.Equal(t, domain.ExitReasonReplied, *contactAutomation.ExitReason)
+}
+
 func TestAutomationExecutor_Execute_AutomationPaused(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
