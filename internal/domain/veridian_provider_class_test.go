@@ -295,6 +295,78 @@ func TestVeridianApplyProviderThrottle(t *testing.T) {
 		VeridianApplyProviderThrottle(entry, b, nil)
 		assert.Nil(t, entry.Payload.VeridianSendingWindow)
 	})
+
+	t.Run("jitter pct copied into payload from metadata", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		b := &Broadcast{
+			ID:       "b6",
+			Metadata: MapOfAny{VeridianJitterPctMetadataKey: 0.5},
+		}
+		VeridianApplyProviderThrottle(entry, b, nil)
+		require.NotNil(t, entry.Payload.VeridianJitterPct)
+		assert.Equal(t, 0.5, *entry.Payload.VeridianJitterPct)
+	})
+
+	t.Run("jitter pct 0 explicit copied as *0 (disable, not nil)", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		b := &Broadcast{
+			ID:       "b7",
+			Metadata: MapOfAny{VeridianJitterPctMetadataKey: 0.0},
+		}
+		VeridianApplyProviderThrottle(entry, b, nil)
+		require.NotNil(t, entry.Payload.VeridianJitterPct, "0 explicite doit être propagé comme *0, pas nil")
+		assert.Equal(t, 0.0, *entry.Payload.VeridianJitterPct)
+	})
+
+	t.Run("no jitter metadata leaves payload jitter nil", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		VeridianApplyProviderThrottle(entry, broadcastWithRates, nil)
+		assert.Nil(t, entry.Payload.VeridianJitterPct)
+	})
+}
+
+func TestVeridianJitterPctFromMetadata(t *testing.T) {
+	t.Run("nil metadata returns not-set", func(t *testing.T) {
+		pct, ok := VeridianJitterPctFromMetadata(nil)
+		assert.False(t, ok)
+		assert.Zero(t, pct)
+	})
+
+	t.Run("missing key returns not-set", func(t *testing.T) {
+		pct, ok := VeridianJitterPctFromMetadata(MapOfAny{"x": 1})
+		assert.False(t, ok)
+		assert.Zero(t, pct)
+	})
+
+	t.Run("float64 round-trip", func(t *testing.T) {
+		pct, ok := VeridianJitterPctFromMetadata(MapOfAny{VeridianJitterPctMetadataKey: 0.3})
+		assert.True(t, ok)
+		assert.Equal(t, 0.3, pct)
+	})
+
+	t.Run("native int", func(t *testing.T) {
+		pct, ok := VeridianJitterPctFromMetadata(MapOfAny{VeridianJitterPctMetadataKey: 1})
+		assert.True(t, ok)
+		assert.Equal(t, 1.0, pct)
+	})
+
+	t.Run("zero is a valid value (jitter disabled), present=true", func(t *testing.T) {
+		pct, ok := VeridianJitterPctFromMetadata(MapOfAny{VeridianJitterPctMetadataKey: 0.0})
+		assert.True(t, ok, "0 doit être considéré présent (disable), pas absent")
+		assert.Zero(t, pct)
+	})
+
+	t.Run("negative dropped as not-set", func(t *testing.T) {
+		pct, ok := VeridianJitterPctFromMetadata(MapOfAny{VeridianJitterPctMetadataKey: -0.5})
+		assert.False(t, ok)
+		assert.Zero(t, pct)
+	})
+
+	t.Run("non-numeric returns not-set", func(t *testing.T) {
+		pct, ok := VeridianJitterPctFromMetadata(MapOfAny{VeridianJitterPctMetadataKey: "nope"})
+		assert.False(t, ok)
+		assert.Zero(t, pct)
+	})
 }
 
 func TestVeridianProviderClassDailyCapFromMetadata(t *testing.T) {

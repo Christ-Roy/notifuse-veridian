@@ -64,6 +64,12 @@ const VeridianProviderClassDailyCapMetadataKey = "veridian_provider_class_daily_
 // du même contact). Entier global (non keyé par classe). 0 ou absent = illimité.
 const VeridianPerRecipientDailyCapMetadataKey = "veridian_per_recipient_daily_cap"
 
+// VeridianJitterPctMetadataKey est la clé de broadcast.Metadata portant
+// l'amplitude (±) de jitter temporel du throttle minute, en fraction du pas
+// nominal (0.30 = ±30 %). Absent = non configuré (le gate applique le défaut
+// cold) ; 0 = jitter explicitement désactivé. Cf. veridian_jitter.go.
+const VeridianJitterPctMetadataKey = "veridian_jitter_pct"
+
 // veridianProviderClassSet permet la validation O(1) d'une valeur canonique.
 // Les 5 classes historiques restent valides à l'identique (non-régression :
 // toute config / tag / cap existant continue de passer IsValidProviderClass).
@@ -369,6 +375,27 @@ func VeridianPerRecipientDailyCapFromMetadata(metadata MapOfAny) int {
 	return 0
 }
 
+// VeridianJitterPctFromMetadata extrait l'amplitude de jitter d'un
+// broadcast.Metadata. Retourne (pct, true) si la clé est présente avec une
+// valeur numérique >= 0 (0 inclus = jitter désactivé explicitement) ;
+// (0, false) si la clé est absente ou malformée (= non configuré → le gate
+// applique le défaut cold). La distinction présent/absent est portée par le
+// booléen (mappé en *float64 dans le payload), pour respecter la sémantique
+// "nil = défaut, *0 = OFF".
+func VeridianJitterPctFromMetadata(metadata MapOfAny) (float64, bool) {
+	if metadata == nil {
+		return 0, false
+	}
+	raw, ok := metadata[VeridianJitterPctMetadataKey]
+	if !ok {
+		return 0, false
+	}
+	if pct, ok := veridianToFloat(raw); ok && pct >= 0 {
+		return pct, true
+	}
+	return 0, false
+}
+
 // veridianToInt normalise les types numériques possibles après un round-trip
 // JSON (float64) ou une construction Go directe (int). Les valeurs
 // fractionnaires sont tronquées (un cap journalier est un entier).
@@ -441,6 +468,9 @@ func VeridianApplyProviderThrottle(entry *EmailQueueEntry, broadcast *Broadcast,
 		}
 		if window := VeridianSendingWindowFromMetadata(broadcast.Metadata); window != nil {
 			entry.Payload.VeridianSendingWindow = window
+		}
+		if pct, ok := VeridianJitterPctFromMetadata(broadcast.Metadata); ok {
+			entry.Payload.VeridianJitterPct = &pct
 		}
 	}
 }

@@ -1063,6 +1063,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 			VeridianSendingWindow: &domain.VeridianSendingWindow{
 				Days: []int{1, 2, 3, 4, 5}, StartHour: 9, EndHour: 18, Timezone: "Europe/Paris",
 			},
+			VeridianJitterPct: func() *float64 { v := 0.4; return &v }(),
 		}
 		existing := &domain.Workspace{
 			ID:       workspaceID,
@@ -1096,6 +1097,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.Equal(t, 9, saved.Settings.VeridianSendingWindow.StartHour)
 		assert.Equal(t, 18, saved.Settings.VeridianSendingWindow.EndHour)
 		assert.Equal(t, "Europe/Paris", saved.Settings.VeridianSendingWindow.Timezone)
+		// Jitter temporel : même allowlist, même anti-régression (sinon l'UI
+		// Cold outreach sauve le jitter sans le persister).
+		require.NotNil(t, saved.Settings.VeridianJitterPct)
+		assert.Equal(t, 0.4, *saved.Settings.VeridianJitterPct)
 	})
 }
 

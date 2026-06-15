@@ -83,8 +83,16 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 		return 0, false
 	}
 
-	// Pas de token : estimer l'arrivée du prochain (60/rate secondes), bornée.
+	// Pas de token : estimer l'arrivée du prochain (60/rate secondes).
 	delay := time.Duration(60.0 / ratePerMinute * float64(time.Second))
+
+	// Veridian — JITTER TEMPOREL : disperser ce délai autour de sa valeur
+	// nominale (±jitter_pct) AVANT le clamp, pour casser le rythme métronomique
+	// (tell de machine cold). Le débit moyen reste piloté par le token-bucket
+	// ci-dessus (Allow()), le jitter ne disperse que les re-checks. Le gate
+	// applique LUI-MÊME le jitter (le worker n'en sait rien, diff worker.go = 0).
+	// No-op strict si jitter résolu à 0. Cf. veridian_jitter.go.
+	delay = veridianJitterDelay(workspace, provider, entry, delay)
 	if delay > veridianMaxProviderClassRetryDelay {
 		delay = veridianMaxProviderClassRetryDelay
 	}
@@ -98,7 +106,7 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 		"provider_class": class,
 		"rate_per_min":   ratePerMinute,
 		"retry_in":       delay.String(),
-	}).Debug("Provider class throttled, rescheduling without attempt increment")
+	}).Debug("Provider class throttled (jittered), rescheduling without attempt increment")
 
 	return delay, true
 }

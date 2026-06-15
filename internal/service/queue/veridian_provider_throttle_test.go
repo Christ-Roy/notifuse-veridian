@@ -211,7 +211,13 @@ func TestProcessEntry_ProviderClassThrottleSkipsWithoutAttempt(t *testing.T) {
 	env.mockQueueRepo.EXPECT().
 		SetNextRetry(gomock.Any(), "ws-1", "e2", gomock.Any()).
 		DoAndReturn(func(_ context.Context, _ string, _ string, nextRetry time.Time) error {
-			assert.WithinDuration(t, time.Now().Add(60*time.Second), nextRetry, 5*time.Second)
+			// Le délai nominal est 60s (1/min) MAIS le JITTER par défaut (±30 %,
+			// veridianDefaultJitterPct) le disperse dans [42s, 78s] pour casser le
+			// rythme métronomique (tell de machine cold, cf. veridian_jitter.go).
+			// On vérifie donc l'INTERVALLE jitté, pas une valeur exacte.
+			delay := time.Until(nextRetry)
+			assert.GreaterOrEqual(t, delay, 41*time.Second, "délai sous la borne basse jittée (~42s)")
+			assert.LessOrEqual(t, delay, 79*time.Second, "délai au-dessus de la borne haute jittée (~78s)")
 			return nil
 		})
 

@@ -103,6 +103,13 @@ type EmailQueuePayload struct {
 	// retombe sur l'infra puis le workspace si nil. nil = pas de fenêtre sur ce
 	// broadcast (héritage). Cf. veridian_sending_window.go.
 	VeridianSendingWindow *VeridianSendingWindow `json:"veridian_sending_window,omitempty"`
+
+	// Veridian fork — JITTER TEMPOREL (cold outbound) copié à l'enqueue depuis
+	// broadcast.metadata. Amplitude (±) de dispersion du délai de re-planification
+	// du throttle minute, en fraction du pas nominal. Niveau le plus spécifique
+	// de la cascade (broadcast → infra → workspace). nil = non configuré (le gate
+	// applique le défaut cold), *0 = jitter désactivé. Cf. veridian_jitter.go.
+	VeridianJitterPct *float64 `json:"veridian_jitter_pct,omitempty"`
 }
 
 // ToSendEmailProviderRequest converts the payload to a SendEmailProviderRequest

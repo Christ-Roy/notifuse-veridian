@@ -93,6 +93,45 @@ func TestEmailQueuePayload_VeridianProviderThrottleRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotContains(t, string(raw), "veridian_sending_window")
 	})
+
+	// Le PIÈGE POINTEUR du jitter : *0 (jitter explicitement désactivé) DOIT
+	// survivre au round-trip JSONB comme distinct de nil (non configuré). Si
+	// omitempty droppait *0, le worker confondrait "désactivé" avec "défaut cold".
+	t.Run("jitter pct *0 survives round-trip as present (not dropped)", func(t *testing.T) {
+		zero := 0.0
+		payload := EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100, VeridianJitterPct: &zero}
+		raw, err := json.Marshal(payload)
+		require.NoError(t, err)
+		// *0 doit être SÉRIALISÉ (un pointeur non-nil n'est pas omis par omitempty).
+		assert.Contains(t, string(raw), "veridian_jitter_pct")
+
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.NotNil(t, decoded.VeridianJitterPct, "*0 doit rester non-nil après round-trip")
+		assert.Equal(t, 0.0, *decoded.VeridianJitterPct)
+	})
+
+	t.Run("jitter pct value survives round-trip", func(t *testing.T) {
+		v := 0.3
+		payload := EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100, VeridianJitterPct: &v}
+		raw, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.NotNil(t, decoded.VeridianJitterPct)
+		assert.Equal(t, 0.3, *decoded.VeridianJitterPct)
+	})
+
+	t.Run("jitter pct omitted (nil) when unset", func(t *testing.T) {
+		raw, err := json.Marshal(EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_jitter_pct")
+
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal([]byte(`{"subject":"old"}`), &decoded))
+		assert.Nil(t, decoded.VeridianJitterPct, "absent → nil (non configuré, le gate applique le défaut cold)")
+	})
 }
 
 func TestEmailQueueStatus_Values(t *testing.T) {

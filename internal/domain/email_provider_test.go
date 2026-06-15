@@ -1842,6 +1842,32 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 		assert.Equal(t, "track.agences-veridian.fr", got.VeridianTrackingDomain)
 	})
 
+	t.Run("round-trip JSON conserve le jitter pct par infra", func(t *testing.T) {
+		v := 0.2
+		p := EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600, VeridianJitterPct: &v}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"veridian_jitter_pct":0.2`)
+
+		var got EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &got))
+		require.NotNil(t, got.VeridianJitterPct)
+		assert.Equal(t, 0.2, *got.VeridianJitterPct)
+	})
+
+	t.Run("jitter pct *0 par infra survit comme present (disable, not nil)", func(t *testing.T) {
+		zero := 0.0
+		p := EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600, VeridianJitterPct: &zero}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_jitter_pct")
+
+		var got EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &got))
+		require.NotNil(t, got.VeridianJitterPct)
+		assert.Equal(t, 0.0, *got.VeridianJitterPct)
+	})
+
 	t.Run("champs omitempty absents du JSON quand non configurés", func(t *testing.T) {
 		p := EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600}
 		raw, err := json.Marshal(p)
@@ -1850,6 +1876,7 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_provider_class_daily_cap")
 		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
 		assert.NotContains(t, string(raw), "veridian_tracking_domain")
+		assert.NotContains(t, string(raw), "veridian_jitter_pct")
 	})
 
 	t.Run("Validate ignore les champs Veridian (pas de contrainte ajoutée)", func(t *testing.T) {

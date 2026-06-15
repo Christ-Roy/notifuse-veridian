@@ -76,6 +76,16 @@ type EmailProvider struct {
 	VeridianProviderClassDailyCap map[string]int     `json:"veridian_provider_class_daily_cap,omitempty"`
 	VeridianPerRecipientDailyCap  int                `json:"veridian_per_recipient_daily_cap,omitempty"`
 
+	// Veridian fork — JITTER TEMPOREL par infra (cold outbound). Amplitude (±) de
+	// dispersion du délai de re-planification du throttle minute par classe, en
+	// FRACTION du pas nominal (0.30 = ±30 %). Casse le rythme métronomique (tell
+	// de machine cold) sans toucher le débit moyen. Niveau INTERMÉDIAIRE de la
+	// cascade (broadcast → INFRA → workspace), comme les rates/caps R2. Pointeur :
+	// nil = non configuré (→ défaut cold 0.30 appliqué par le gate), *0 = jitter
+	// explicitement désactivé. Persisté dans le JSON blob integrations sans
+	// migration ni allowlist (omitempty). Cf. veridian_jitter.go.
+	VeridianJitterPct *float64 `json:"veridian_jitter_pct,omitempty"`
+
 	// Veridian fork — FENÊTRE D'ENVOI par infra (cold outbound). L'infra d'envoi
 	// = le domaine/IP émetteur ; ses horaires ouvrables peuvent différer du
 	// workspace (ex. une IP warm-up cantonnée 10h-16h). Niveau INTERMÉDIAIRE de

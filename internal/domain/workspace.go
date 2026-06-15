@@ -408,6 +408,13 @@ type WorkspaceSettings struct {
 	// Cf. veridian_sending_window.go.
 	VeridianSendingWindow *VeridianSendingWindow `json:"veridian_sending_window,omitempty"`
 
+	// Veridian fork — JITTER TEMPOREL par défaut du workspace (cold outbound).
+	// Amplitude (±) de dispersion du délai de re-planification du throttle minute,
+	// en fraction du pas nominal. Niveau le plus général de la cascade (broadcast
+	// → infra → WORKSPACE). Pointeur : nil = non configuré (→ défaut cold 0.30),
+	// *0 = jitter explicitement désactivé. Cf. veridian_jitter.go.
+	VeridianJitterPct *float64 `json:"veridian_jitter_pct,omitempty"`
+
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
 }

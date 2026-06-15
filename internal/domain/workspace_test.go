@@ -402,6 +402,40 @@ func TestWorkspaceSettings_VeridianDailyCapRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotContains(t, string(raw), "veridian_sending_window")
 	})
+
+	// Jitter au niveau workspace (fallback de la cascade). Le piège pointeur :
+	// *0 (jitter désactivé pour tout le workspace) doit survivre comme distinct
+	// de nil (non configuré → défaut cold).
+	t.Run("jitter pct value survives round-trip", func(t *testing.T) {
+		v := 0.4
+		settings := WorkspaceSettings{Timezone: "UTC", VeridianJitterPct: &v}
+		raw, err := json.Marshal(settings)
+		require.NoError(t, err)
+
+		var decoded WorkspaceSettings
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.NotNil(t, decoded.VeridianJitterPct)
+		assert.Equal(t, 0.4, *decoded.VeridianJitterPct)
+	})
+
+	t.Run("jitter pct *0 survives as present (disable, not nil)", func(t *testing.T) {
+		zero := 0.0
+		settings := WorkspaceSettings{Timezone: "UTC", VeridianJitterPct: &zero}
+		raw, err := json.Marshal(settings)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_jitter_pct")
+
+		var decoded WorkspaceSettings
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		require.NotNil(t, decoded.VeridianJitterPct)
+		assert.Equal(t, 0.0, *decoded.VeridianJitterPct)
+	})
+
+	t.Run("jitter pct omitted (nil) when unset", func(t *testing.T) {
+		raw, err := json.Marshal(WorkspaceSettings{Timezone: "UTC"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_jitter_pct")
+	})
 }
 
 func TestScanWorkspace(t *testing.T) {
