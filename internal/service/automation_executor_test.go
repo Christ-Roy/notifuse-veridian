@@ -618,6 +618,120 @@ func TestAutomationExecutor_ProcessBatch(t *testing.T) {
 	assert.Equal(t, 2, processed)
 }
 
+// TestAutomationExecutor_ProcessBatch_PrioritizesFollowupsByOverdue prouve que
+// ProcessBatch traite les contacts dûs dans l'ordre de PRIORITÉ follow-up (le plus en
+// retard sur son échéance d'abord), PAS dans l'ordre brut renvoyé par le repo. C'est la
+// non-régression du Lot FOLLOWUP (priorisation par contrainte de date) au niveau intégré :
+// quand la capacité est contrainte, le plus urgent passe en premier.
+//
+// On capture l'ordre RÉEL de traitement via GetContactByEmail (un email unique par
+// contact, appelé une fois par Execute) et on vérifie qu'il suit le retard décroissant
+// même si le repo renvoie les contacts dans le désordre.
+func TestAutomationExecutor_ProcessBatch_PrioritizesFollowupsByOverdue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
+	mockTimelineRepo := mocks.NewMockContactTimelineRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	executor := &AutomationExecutor{
+		automationRepo:  mockAutomationRepo,
+		contactRepo:     mockContactRepo,
+		contactListRepo: mockContactListRepo,
+		timelineRepo:    mockTimelineRepo,
+		nodeExecutors: map[domain.NodeType]NodeExecutor{
+			domain.NodeTypeAddToList: NewAddToListNodeExecutor(mockContactListRepo),
+		},
+		logger: mockLogger,
+	}
+
+	workspaceID := "ws1"
+	nodeID := "terminal_node"
+	now := time.Now().UTC()
+
+	// Helper : un contact dû avec une échéance donnée (retard = now - scheduledAt).
+	mkDue := func(id, email string, scheduledAt time.Time) *domain.ContactAutomationWithWorkspace {
+		return &domain.ContactAutomationWithWorkspace{
+			WorkspaceID: workspaceID,
+			ContactAutomation: domain.ContactAutomation{
+				ID:            id,
+				AutomationID:  "auto1",
+				ContactEmail:  email,
+				CurrentNodeID: &nodeID,
+				Status:        domain.ContactAutomationStatusActive,
+				ScheduledAt:   ptrTime(scheduledAt),
+				EnteredAt:     now.Add(-30 * 24 * time.Hour),
+			},
+		}
+	}
+
+	// Repo renvoie 3 contacts DANS LE DÉSORDRE par rapport à l'urgence :
+	//   fresh    : dû à l'instant            (retard ~0)        → doit passer EN DERNIER
+	//   veryLate : relance dûe depuis 3 jours (retard 72h)     → doit passer EN PREMIER
+	//   mid      : relance dûe depuis 6 heures (retard 6h)     → au milieu
+	fresh := mkDue("ca_fresh", "fresh@example.com", now)
+	veryLate := mkDue("ca_verylate", "verylate@example.com", now.Add(-72*time.Hour))
+	mid := mkDue("ca_mid", "mid@example.com", now.Add(-6*time.Hour))
+
+	// Ordre du repo volontairement NON priorisé : fresh, mid, veryLate.
+	repoOrder := []*domain.ContactAutomationWithWorkspace{fresh, mid, veryLate}
+
+	terminalNode := &domain.AutomationNode{
+		ID:         nodeID,
+		Type:       domain.NodeTypeAddToList,
+		NextNodeID: nil,
+		Config: map[string]interface{}{
+			"list_id": "list1",
+			"status":  "active",
+		},
+	}
+	automation := &domain.Automation{
+		ID:     "auto1",
+		Name:   "Cold sequence",
+		Status: domain.AutomationStatusLive,
+		Nodes:  []*domain.AutomationNode{terminalNode},
+	}
+
+	mockAutomationRepo.EXPECT().
+		GetScheduledContactAutomationsGlobal(gomock.Any(), gomock.Any(), 50).
+		Return(repoOrder, nil)
+
+	// Capture l'ordre RÉEL de traitement : GetContactByEmail est appelé une fois par
+	// contact, au début de Execute, donc l'ordre des emails observés = l'ordre de
+	// traitement effectif du batch.
+	var processedOrder []string
+	mockContactRepo.EXPECT().
+		GetContactByEmail(gomock.Any(), workspaceID, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, email string) (*domain.Contact, error) {
+			processedOrder = append(processedOrder, email)
+			return &domain.Contact{Email: email}, nil
+		}).
+		Times(3)
+
+	// Le reste du flux par contact (terminal add_to_list → completed). AnyTimes car
+	// l'ordre de ces appels n'est pas ce qu'on teste ici ; seul GetContactByEmail trace l'ordre.
+	mockAutomationRepo.EXPECT().GetByID(gomock.Any(), workspaceID, "auto1").Return(automation, nil).AnyTimes()
+	mockAutomationRepo.EXPECT().CreateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil).AnyTimes()
+	mockAutomationRepo.EXPECT().GetNodeExecutions(gomock.Any(), workspaceID, gomock.Any()).Return([]*domain.NodeExecution{}, nil).AnyTimes()
+	mockContactListRepo.EXPECT().AddContactToList(gomock.Any(), workspaceID, gomock.Any()).Return(nil).AnyTimes()
+	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).Return(nil).AnyTimes()
+	mockAutomationRepo.EXPECT().UpdateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil).AnyTimes()
+	mockAutomationRepo.EXPECT().IncrementAutomationStat(gomock.Any(), workspaceID, "auto1", "completed").Return(nil).AnyTimes()
+	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil).AnyTimes()
+
+	processed, err := executor.ProcessBatch(context.Background(), 50)
+	require.NoError(t, err)
+	assert.Equal(t, 3, processed)
+
+	// Vérité du Lot FOLLOWUP : le plus en retard est traité en PREMIER, le frais en DERNIER,
+	// indépendamment de l'ordre fourni par le repo (fresh, mid, veryLate).
+	require.Equal(t, []string{"verylate@example.com", "mid@example.com", "fresh@example.com"}, processedOrder,
+		"ProcessBatch doit traiter les follow-up par retard décroissant (le plus urgent d'abord)")
+}
+
 func TestAutomationExecutor_ProcessBatch_Empty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

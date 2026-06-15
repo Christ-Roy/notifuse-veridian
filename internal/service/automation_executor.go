@@ -225,7 +225,8 @@ func (e *AutomationExecutor) Execute(ctx context.Context, workspaceID string, co
 // ProcessBatch processes a batch of scheduled contacts
 func (e *AutomationExecutor) ProcessBatch(ctx context.Context, limit int) (int, error) {
 	// Get scheduled contacts globally
-	contacts, err := e.automationRepo.GetScheduledContactAutomationsGlobal(ctx, time.Now().UTC(), limit)
+	now := time.Now().UTC()
+	contacts, err := e.automationRepo.GetScheduledContactAutomationsGlobal(ctx, now, limit)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get scheduled contacts: %w", err)
 	}
@@ -233,6 +234,13 @@ func (e *AutomationExecutor) ProcessBatch(ctx context.Context, limit int) (int, 
 	if len(contacts) == 0 {
 		return 0, nil
 	}
+
+	// Veridian cold outbound (follow-up prioritization) — quand la capacité d'envoi est
+	// contrainte (caps provider, sending windows, senders limités), tout le batch ne sera
+	// pas servi à ce tick : on priorise les follow-up dont la fenêtre se ferme le plus
+	// (le plus en retard sur son échéance d'abord). Tri PUR sur ScheduledAt/now, zéro
+	// nouvelle colonne ; non-régressif hors contrainte (cf. veridian_followup_prioritizer.go).
+	veridianPrioritizeFollowups(contacts, now)
 
 	processed := 0
 	for _, ca := range contacts {
