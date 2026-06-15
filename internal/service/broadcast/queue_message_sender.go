@@ -446,8 +446,17 @@ func (s *queueMessageSender) buildQueueEntry(
 	}
 
 	// Extract List-Unsubscribe URL from template data for RFC-8058 compliance (broadcast emails only)
-	if unsubscribeURL, ok := data["oneclick_unsubscribe_url"].(string); ok && unsubscribeURL != "" {
-		entry.Payload.EmailOptions.ListUnsubscribeURL = unsubscribeURL
+	// Veridian fork (cold outbound) — EN CONTEXTE TUNNEL COLD, on NE propage PAS
+	// l'unsubscribe (ni header RFC-8058, ni footer) : le cold B2B se présente comme
+	// du 1-to-1 ; un List-Unsubscribe = signal "mailing de masse" qui tue la
+	// délivrabilité. Hors tunnel → comportement upstream inchangé (broadcasts
+	// marketing gardent leur unsubscribe). Workspace mémoïsé via le pixelResolver
+	// (zéro I/O supplémentaire). Cf. domain.VeridianSuppressUnsubscribe.
+	suppressUnsubscribe := domain.VeridianSuppressUnsubscribe(contact, broadcast, pixelResolver.workspace(ctx, workspaceID))
+	if !suppressUnsubscribe {
+		if unsubscribeURL, ok := data["oneclick_unsubscribe_url"].(string); ok && unsubscribeURL != "" {
+			entry.Payload.EmailOptions.ListUnsubscribeURL = unsubscribeURL
+		}
 	}
 
 	return entry, nil

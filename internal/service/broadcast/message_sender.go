@@ -383,8 +383,16 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	}
 
 	// Extract List-Unsubscribe URL from template data for RFC-8058 compliance (broadcast emails only)
-	if unsubscribeURL, ok := data["oneclick_unsubscribe_url"].(string); ok && unsubscribeURL != "" {
-		emailRequest.EmailOptions.ListUnsubscribeURL = unsubscribeURL
+	// Veridian fork (cold outbound) — EN CONTEXTE TUNNEL COLD, on NE propage PAS
+	// l'unsubscribe (ni header RFC-8058, ni footer) : signal "mailing de masse"
+	// qui tue la délivrabilité du cold 1-to-1. Hors tunnel → upstream inchangé.
+	// Contact non chargé sur ce chemin single (nil) ; workspace mémoïsé via le
+	// pixelResolver (zéro I/O supplémentaire). Cf. domain.VeridianSuppressUnsubscribe.
+	suppressUnsubscribe := domain.VeridianSuppressUnsubscribe(nil, broadcast, pixelResolver.workspace(ctx, workspaceID))
+	if !suppressUnsubscribe {
+		if unsubscribeURL, ok := data["oneclick_unsubscribe_url"].(string); ok && unsubscribeURL != "" {
+			emailRequest.EmailOptions.ListUnsubscribeURL = unsubscribeURL
+		}
 	}
 
 	// Now send email directly using compiled HTML rather than passing template to broadcastRepo

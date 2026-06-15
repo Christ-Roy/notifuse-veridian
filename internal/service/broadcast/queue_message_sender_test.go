@@ -1380,6 +1380,92 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 		assert.Equal(t, "https://example.com/unsubscribe?token=abc123", entry.Payload.EmailOptions.ListUnsubscribeURL)
 	})
 
+	// Veridian fork (cold outbound) — en contexte tunnel cold, l'unsubscribe ne
+	// doit PAS être propagé MÊME si data porte oneclick_unsubscribe_url (sinon
+	// header RFC-8058 List-Unsubscribe = signal mailing de masse qui tue la
+	// délivrabilité). Le contexte cold est ici signalé par config cold sur le
+	// broadcast (rates) ET, dans un second cas, par le tag contact custom_string_5.
+	t.Run("Veridian: cold context suppresses List-Unsubscribe URL", func(t *testing.T) {
+		emailSender := domain.NewEmailSender("sender@example.com", "Test Sender")
+		emailProvider := &domain.EmailProvider{
+			Kind:    domain.EmailProviderKindSMTP,
+			Senders: []domain.EmailSender{emailSender},
+		}
+
+		template := &domain.Template{
+			ID: "template-1",
+			Email: &domain.EmailTemplate{
+				SenderID:         emailSender.ID,
+				Subject:          "Test",
+				VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1", "Hello")),
+			},
+		}
+
+		data := map[string]interface{}{
+			"oneclick_unsubscribe_url": "https://example.com/unsubscribe?token=abc123",
+		}
+
+		// Cas 1 : contexte cold signalé par config rates sur le broadcast.
+		coldBroadcast := &domain.Broadcast{
+			ID:            "broadcast-cold",
+			UTMParameters: &domain.UTMParameters{},
+			Metadata: domain.MapOfAny{
+				domain.VeridianProviderClassRatesMetadataKey: map[string]any{"google": 1.0},
+			},
+		}
+		entry, err := qms.buildQueueEntry(
+			context.Background(),
+			"workspace-1",
+			"integration-1",
+			"https://api.test.com",
+			true,
+			coldBroadcast,
+			"msg-cold-1",
+			"lead@gmail.com",
+			template,
+			data,
+			emailProvider,
+			"",
+			"",
+			nil, // contact non chargé sur ce chemin
+			newVeridianWorkspacePixelResolver(nil, qms.logger),
+		)
+		require.NoError(t, err)
+		assert.Empty(t, entry.Payload.EmailOptions.ListUnsubscribeURL,
+			"cold context (broadcast rates) doit supprimer List-Unsubscribe malgré oneclick_unsubscribe_url")
+
+		// Cas 2 : contexte cold signalé par le tag contact custom_string_5, sur un
+		// broadcast SANS config cold (le tag suffit à activer le tunnel).
+		plainBroadcast := &domain.Broadcast{
+			ID:            "broadcast-plain",
+			UTMParameters: &domain.UTMParameters{},
+		}
+		coldContact := &domain.Contact{
+			Email:         "lead@gmail.com",
+			CustomString5: &domain.NullableString{String: domain.ProviderClassGoogle},
+		}
+		entry2, err := qms.buildQueueEntry(
+			context.Background(),
+			"workspace-1",
+			"integration-1",
+			"https://api.test.com",
+			true,
+			plainBroadcast,
+			"msg-cold-2",
+			"lead@gmail.com",
+			template,
+			data,
+			emailProvider,
+			"",
+			"",
+			coldContact, // tag cold → tunnel actif
+			newVeridianWorkspacePixelResolver(nil, qms.logger),
+		)
+		require.NoError(t, err)
+		assert.Empty(t, entry2.Payload.EmailOptions.ListUnsubscribeURL,
+			"cold context (tag contact) doit supprimer List-Unsubscribe malgré oneclick_unsubscribe_url")
+	})
+
 	t.Run("returns error when no sender configured", func(t *testing.T) {
 		emailProvider := &domain.EmailProvider{
 			Kind:    domain.EmailProviderKindSMTP,

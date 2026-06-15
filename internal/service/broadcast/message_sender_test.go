@@ -181,6 +181,104 @@ func TestSendToRecipientSuccess(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// Veridian fork (cold outbound) — sur le chemin direct (SendToRecipient), en
+// contexte tunnel cold l'unsubscribe ne doit PAS être propagé MÊME si data porte
+// oneclick_unsubscribe_url (header RFC-8058 = signal mailing de masse). Hors
+// tunnel, l'URL reste propagée (non-régression). On capture la
+// SendEmailProviderRequest passée à SendEmail pour inspecter ListUnsubscribeURL.
+func TestSendToRecipient_VeridianColdSuppressesUnsubscribe(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	newSender := func(captured *domain.SendEmailProviderRequest) MessageSender {
+		mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+		mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+		mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+		mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Warn(gomock.Any()).Return().AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).Return().AnyTimes()
+
+		mockEmailService.EXPECT().
+			SendEmail(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+				*captured = req
+				return nil
+			})
+
+		return NewMessageSender(
+			mockBroadcastRepository,
+			mockMessageHistoryRepo,
+			mockTemplateRepo,
+			mockEmailService,
+			nil,
+			mockLogger,
+			TestConfig(),
+			"",
+		)
+	}
+
+	ctx := context.Background()
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+		SMTP:    &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "user", Password: "pass", UseTLS: true},
+	}
+	template := &domain.Template{
+		ID: "template-123",
+		Email: &domain.EmailTemplate{
+			SenderID:         emailSender.ID,
+			Subject:          "Test Subject",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Test content")),
+		},
+	}
+	data := map[string]interface{}{
+		"oneclick_unsubscribe_url": "https://example.com/unsubscribe?token=abc123",
+	}
+	timeoutAt := time.Now().Add(30 * time.Second)
+
+	t.Run("cold context suppresses List-Unsubscribe", func(t *testing.T) {
+		var captured domain.SendEmailProviderRequest
+		sender := newSender(&captured)
+		coldBroadcast := &domain.Broadcast{
+			ID:            "broadcast-cold",
+			WorkspaceID:   "ws-1",
+			ChannelType:   "email",
+			UTMParameters: &domain.UTMParameters{},
+			Metadata: domain.MapOfAny{
+				domain.VeridianProviderClassRatesMetadataKey: map[string]any{"google": 1.0},
+			},
+		}
+		err := sender.SendToRecipient(ctx, "ws-1", "int-1", "https://api.test.com", true,
+			coldBroadcast, "msg-cold", "lead@gmail.com", template, data, emailProvider, timeoutAt, "", "")
+		require.NoError(t, err)
+		assert.Empty(t, captured.EmailOptions.ListUnsubscribeURL,
+			"cold context doit supprimer List-Unsubscribe malgré oneclick_unsubscribe_url")
+	})
+
+	t.Run("non-cold context keeps List-Unsubscribe (non-regression)", func(t *testing.T) {
+		var captured domain.SendEmailProviderRequest
+		sender := newSender(&captured)
+		plainBroadcast := &domain.Broadcast{
+			ID:            "broadcast-plain",
+			WorkspaceID:   "ws-1",
+			ChannelType:   "email",
+			UTMParameters: &domain.UTMParameters{},
+		}
+		err := sender.SendToRecipient(ctx, "ws-1", "int-1", "https://api.test.com", true,
+			plainBroadcast, "msg-plain", "lead@gmail.com", template, data, emailProvider, timeoutAt, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "https://example.com/unsubscribe?token=abc123", captured.EmailOptions.ListUnsubscribeURL,
+			"hors tunnel : List-Unsubscribe doit rester propagé (comportement upstream)")
+	})
+}
+
 // Veridian fork — round-robin multi-SMTP sur le chemin direct (SendToRecipient).
 // En contexte cold (rates sur le broadcast) avec 3 senders et un template SANS
 // SenderID fixe, le FromAddress passé à SendEmail doit tourner d'un appel à
