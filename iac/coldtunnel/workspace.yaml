@@ -1,0 +1,115 @@
+# ============================================================================
+# IAC — Workspace cold "coldtunnel" (prod Notifuse)
+# ============================================================================
+# Manifeste DÉCLARATIF idempotent de la config cold outreach.
+# But (Robert 2026-06-15) : "tout poser comme IAC idempotent pour avoir d'un
+# coup d'œil notre contenu et l'éditer facilement depuis des fichiers".
+#
+# Appliqué par : scripts/iac/apply.sh (à livrer par Lot IAC #18) — plan/apply
+# idempotent contre l'API Notifuse (POST /api/<resource>.<verb>, auth owner).
+# Les SECRETS ne sont JAMAIS en clair ici : référencés par ${VAR} depuis
+# ~/credentials/.all-creds.env, injectés à l'apply.
+#
+# ⚠️ STATUT 2026-06-15 : workspace PROVISIONNÉ (HMAC, plan enterprise, owner
+# robert.brunon@veridian.site). Intégrations SMTP/IMAP + config cold PAS encore
+# appliquées (exigent auth owner via magic-link + le CLI apply du Lot IAC).
+# Ce fichier est la CIBLE déclarative, pas encore l'état appliqué.
+# ============================================================================
+
+workspace:
+  id: coldtunnel
+  name: Cold Tunnel — Veridian
+  owner_email: robert.brunon@veridian.site
+  plan: enterprise          # générosité maximale, pas de limite visible (pivot pricing)
+  environment: prod         # notifuse.app.veridian.site
+
+# ----------------------------------------------------------------------------
+# Infra d'ENVOI : multi-SMTP (3 boîtes agences-veridian.fr) — round-robin
+# par provider destinataire (cf. Lot ENVOI #19). La capacité globale s'aligne
+# sur le nombre de senders dispo.
+# ----------------------------------------------------------------------------
+sending_integrations:
+  - id: agences-relay
+    type: email
+    kind: smtp
+    smtp:
+      host: ${SMTP_AGENCES_HOST}     # 100.92.215.42 (Tailscale — voir note réseau)
+      port: ${SMTP_AGENCES_PORT}     # 587
+      use_tls: true
+    senders:
+      - email: ${SMTP_AGENCES_USER1} # robert.brunon@agences-veridian.fr
+        password: ${SMTP_AGENCES_PW1}
+        name: Robert Brunon
+        is_default: true
+      - email: ${SMTP_AGENCES_USER2} # r.brunon@agences-veridian.fr
+        password: ${SMTP_AGENCES_PW2}
+        name: Robert Brunon
+      - email: ${SMTP_AGENCES_USER3} # robert-brunon@agences-veridian.fr
+        password: ${SMTP_AGENCES_PW3}
+        name: Robert Brunon
+    veridian_tracking_domain: track.agences-veridian.fr   # ⚠️ DNS à câbler (ticket tracking-sous-domaine)
+
+# ----------------------------------------------------------------------------
+# Boîte de RETOUR IMAP : bounce-loop (NDR → suppression) + stop-on-reply.
+# Notifuse poll cette boîte. OWNER-ONLY à configurer (auth user).
+# ----------------------------------------------------------------------------
+reply_inbox:
+  type: imap
+  imap:
+    host: ${LARK_IMAP_HOST}          # imap.larksuite.com
+    port: ${LARK_IMAP_PORT}          # 993
+    username: ${LARK_IMAP_USERNAME}  # robert.brunon@veridian.site
+    password: ${LARK_IMAP_PASSWORD}
+    use_tls: true
+    folder: INBOX
+    polling_interval_seconds: 120
+
+# ----------------------------------------------------------------------------
+# Config COLD par classe de provider destinataire (rates/min + caps/jour + pixel).
+# Réputation : prudent sur google/microsoft, plus large sur petits providers.
+# Valeurs de DÉPART conservatrices (IP en warm-up) — à ajuster.
+# ----------------------------------------------------------------------------
+cold_outreach:
+  per_recipient_daily_cap: 1         # anti-harcèlement : max 1 mail/jour/adresse
+  provider_class_rates:              # emails / minute
+    google: 0.5                      # 1 mail / 2 min (réputation)
+    microsoft: 0.5
+    yahoo_aol: 1
+    freemail_fr: 1
+    corporate: 2
+    ovh: 1
+    ionos: 1
+    apple_icloud: 0.5
+    security_gateway: 0.1            # ultra-prudent (anti-spam pro)
+    other_hoster: 1
+    corporate_selfhost: 1
+  provider_class_daily_cap:          # emails / jour / classe (warm-up bas)
+    google: 50
+    microsoft: 50
+    yahoo_aol: 30
+    freemail_fr: 50
+    corporate: 100
+    security_gateway: 5
+  open_pixel_by_class:               # pixel OFF gros providers (réputation)
+    google: false
+    microsoft: false
+    yahoo_aol: true
+    freemail_fr: true
+    corporate: true
+
+# ----------------------------------------------------------------------------
+# Sending windows (Lot WINDOWS #21) — heures ouvrables. À appliquer quand livré.
+# ----------------------------------------------------------------------------
+sending_window:
+  timezone: Europe/Paris
+  days: [mon, tue, wed, thu, fri]
+  hours: "09:00-18:00"
+
+# ----------------------------------------------------------------------------
+# Contenu : listes / templates / séquences cold (cadence J+0 / J+3 / J+7).
+# Déclaré ici, appliqué via API (templates.create + automations.create + enroll).
+# À détailler quand le contenu réel sera prêt.
+# ----------------------------------------------------------------------------
+# lists:     []   # à définir
+# templates: []   # MJML, à définir (skill notifuse-templates)
+# sequences: []   # cadence cold, à définir
