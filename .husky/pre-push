@@ -69,6 +69,32 @@ if ! "$SCRIPT"; then
   exit 1
 fi
 
+# ─── Garde-fou « rate-limit global de l'API » (OWASP API4) ──────────────────
+# Vérifie que le middleware VeridianAPIRateLimitMiddleware est toujours câblé
+# dans app.go (sinon TOUTE l'API authentifiée perd son rate-limit) et alerte
+# si un mux HTTP parallèle non-wrappé apparaît. La règle de câblage est
+# BLOQUANTE ; la détection de mux parallèle est informative (non bloquante).
+# Toujours lancé (le rate-limit global est transverse, pas lié à un fichier
+# précis du diff).
+
+RATE_LIMIT_CHECK="scripts/ci/check-rate-limit-coverage.sh"
+
+if [ -x "$RATE_LIMIT_CHECK" ]; then
+  echo
+  echo "${GREEN}── Husky pre-push : couverture rate-limit global (OWASP API4) ──${NC}"
+  if ! "$RATE_LIMIT_CHECK"; then
+    echo
+    echo "${RED}✗ Push refusé : le rate-limit global de l'API est cassé ou absent.${NC}"
+    echo "  ${YELLOW}Sans ce middleware, tous les endpoints authentifiés sont sans${NC}"
+    echo "  ${YELLOW}rate-limit (Unrestricted Resource Consumption). Re-branche-le.${NC}"
+    exit 1
+  fi
+elif [ -f "$RATE_LIMIT_CHECK" ]; then
+  echo "${RED}✗ $RATE_LIMIT_CHECK présent mais non exécutable — push refusé.${NC}"
+  echo "  Run: chmod +x $RATE_LIMIT_CHECK"
+  exit 1
+fi
+
 # ─── Garde-fou « la console boote » ─────────────────────────────────────────
 # Incident 2026-05-22 : un manualChunks Vite mal configuré a mis la console
 # prod morte au boot, invisible pour les 225 tests unitaires. check-console-

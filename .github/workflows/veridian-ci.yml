@@ -91,6 +91,14 @@ jobs:
           fi
           echo "BASE_REF=$BASE_REF"
           scripts/ci/check-test-mapping.sh
+      # === Veridian — couverture rate-limit global (OWASP API4) ===
+      # Transverse (pas lié au diff) : tourne sur tous les events. Bloque si le
+      # middleware global a été dé-câblé d'app.go ; alerte (non bloquant) sur un
+      # mux HTTP parallèle. Miroir CI du même check joué en pre-push.
+      - name: Run check-rate-limit-coverage.sh
+        run: |
+          chmod +x scripts/ci/check-rate-limit-coverage.sh
+          scripts/ci/check-rate-limit-coverage.sh
 
   # === Veridian patch — garde-fou « la console boote » (incident 2026-05-22) ===
   # Build la console + analyse statique du dist/ (intégrité des chunks, chunk

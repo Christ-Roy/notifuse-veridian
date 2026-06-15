@@ -1620,6 +1620,21 @@ func (a *App) Start() error {
 	handler = a.gracefulShutdownMiddleware(handler)
 	a.logger.Info("Graceful shutdown middleware enabled")
 
+	// === Veridian — rate-limit GLOBAL de l'API (OWASP API4:2023) ===
+	// Defense-in-depth : limite tout /api/ par IP + identité authentifiée
+	// best-effort. Placé ICI dans la chaîne (donc EXÉCUTÉ avant les filtres
+	// paywall/frozen/soft-deleted qui font des lookups DB, mais APRÈS le CORS
+	// + preflight gérés par VeridianSecurityHeadersMiddleware plus externe) :
+	// un flood est rejeté en 429 sans toucher la DB. Réutilise le RateLimiter
+	// PARTAGÉ (a.rateLimiter), pas de 2e goroutine de cleanup. Config ENV
+	// VERIDIAN_API_RATE_LIMIT_* (défaut activé, 300/min IP + 600/min identité).
+	// Exempte health/version + flux HMAC Hub (signature + anti-replay + rafales
+	// cron reconcile). Cf. internal/http/middleware/veridian_rate_limit.go.
+	veridianRLConfig := middleware.LoadVeridianAPIRateLimitConfig()
+	handler = middleware.VeridianAPIRateLimitMiddleware(a.rateLimiter, veridianRLConfig, a.logger)(handler)
+	a.logger.WithField("rate_limit", veridianRLConfig.String()).
+		Info("Veridian global API rate limit middleware configured")
+
 	// Apply tracing middleware if enabled
 	if a.config.Tracing.Enabled {
 		handler = middleware.TracingMiddleware(handler)
