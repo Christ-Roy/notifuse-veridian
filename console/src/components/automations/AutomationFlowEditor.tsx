@@ -15,7 +15,7 @@ import {
 import { LayoutGrid } from 'lucide-react'
 import { Tooltip } from 'antd'
 import { useLingui } from '@lingui/react/macro'
-import { TriggerNode, DelayNode, EmailNode, ABTestNode, AddToListNode, RemoveFromListNode, FilterNode, WebhookNode, ListStatusBranchNode } from './nodes'
+import { TriggerNode, DelayNode, EmailNode, ABTestNode, AddToListNode, RemoveFromListNode, FilterNode, BranchNode, WebhookNode, ListStatusBranchNode } from './nodes'
 import { PlaceholderNode } from './nodes/PlaceholderNode'
 import { NodeConfigPanel } from './NodeConfigPanel'
 import { AddNodeEdge, type AddNodeEdgeData } from './edges/AddNodeEdge'
@@ -36,6 +36,7 @@ const nodeTypes: NodeTypes = {
   add_to_list: AddToListNode,
   remove_from_list: RemoveFromListNode,
   filter: FilterNode,
+  branch: BranchNode,
   webhook: WebhookNode,
   list_status_branch: ListStatusBranchNode,
   placeholder: PlaceholderNode
@@ -159,7 +160,7 @@ const AutomationFlowEditorInner: React.FC = () => {
 
       let offsetX = 0
 
-      if (sourceNode.data.nodeType === 'filter' || sourceNode.data.nodeType === 'ab_test' || sourceNode.data.nodeType === 'list_status_branch') {
+      if (sourceNode.data.nodeType === 'filter' || sourceNode.data.nodeType === 'ab_test' || sourceNode.data.nodeType === 'list_status_branch' || sourceNode.data.nodeType === 'branch') {
         if (existingChildren.length === 0) {
           // First child: position on the LEFT (centered under left handle area)
           offsetX = -150
@@ -185,9 +186,11 @@ const AutomationFlowEditorInner: React.FC = () => {
         nodeType === 'filter' ||
         nodeType === 'ab_test' ||
         nodeType === 'list_status_branch' ||
+        nodeType === 'branch' ||
         sourceNode.data.nodeType === 'filter' ||
         sourceNode.data.nodeType === 'ab_test' ||
-        sourceNode.data.nodeType === 'list_status_branch'
+        sourceNode.data.nodeType === 'list_status_branch' ||
+        sourceNode.data.nodeType === 'branch'
 
       if (shouldReorganize) {
         pendingReorganizeRef.current = true

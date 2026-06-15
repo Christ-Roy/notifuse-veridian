@@ -11,6 +11,7 @@ import {
   AddToListConfigForm,
   RemoveFromListConfigForm,
   FilterConfigForm,
+  BranchConfigForm,
   WebhookConfigForm,
   ListStatusBranchConfigForm
 } from './config'
@@ -23,6 +24,7 @@ import type {
   AddToListNodeConfig,
   RemoveFromListNodeConfig,
   FilterNodeConfig,
+  BranchNodeConfig,
   WebhookNodeConfig,
   ListStatusBranchNodeConfig
 } from '../../services/api/automation'
@@ -110,6 +112,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         return (
           <FilterConfigForm
             config={config as FilterNodeConfig}
+            onChange={handleConfigChange}
+          />
+        )
+      case 'branch':
+        return (
+          <BranchConfigForm
+            config={config as BranchNodeConfig}
             onChange={handleConfigChange}
           />
         )

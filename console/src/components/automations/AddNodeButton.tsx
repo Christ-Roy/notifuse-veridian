@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { Popover, Tooltip } from 'antd'
-import { Plus, UserPlus, UserMinus, Filter, Globe, ListChecks } from 'lucide-react'
+import { Plus, UserPlus, UserMinus, Filter, Globe, ListChecks, GitBranch } from 'lucide-react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faHourglass, faEnvelope } from '@fortawesome/free-regular-svg-icons'
 import { faFlask } from '@fortawesome/free-solid-svg-icons'
@@ -13,6 +13,7 @@ export const ADD_NODE_MENU_ITEMS: { key: NodeType; label: string; icon: React.Re
   { key: 'delay', label: 'Delay', icon: <FontAwesomeIcon icon={faHourglass} style={{ color: '#faad14' }} /> },
   { key: 'email', label: 'Email', icon: <FontAwesomeIcon icon={faEnvelope} style={{ color: '#1890ff' }} /> },
   { key: 'filter', label: 'Filter', icon: <Filter size={14} style={{ color: '#eb2f96' }} /> },
+  { key: 'branch', label: 'Branch', icon: <GitBranch size={14} style={{ color: '#722ed1' }} /> },
   { key: 'ab_test', label: 'A/B Test', icon: <FontAwesomeIcon icon={faFlask} style={{ color: '#2f54eb' }} /> },
   { key: 'list_status_branch', label: 'List Status', icon: <ListChecks size={14} style={{ color: '#389e0d' }} /> },
   { key: 'add_to_list', label: 'Add to List', icon: <UserPlus size={14} style={{ color: '#13c2c2' }} /> },

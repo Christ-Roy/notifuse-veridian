@@ -20,7 +20,7 @@ import {
   type ValidationError
 } from '../utils/flowConverter'
 import { layoutNodes } from '../utils/layoutNodes'
-import type { NodeType, ABTestNodeConfig, FilterNodeConfig, ListStatusBranchNodeConfig } from '../../../services/api/automation'
+import type { NodeType, ABTestNodeConfig, FilterNodeConfig, ListStatusBranchNodeConfig, BranchNodeConfig } from '../../../services/api/automation'
 
 // Editor uses larger nodes
 const EDITOR_NODE_WIDTH = 300
@@ -231,6 +231,23 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
       }
     }
 
+    // For branch nodes, update the matching path's next_node_id (sourceHandle = path.id)
+    if (sourceNode.data.nodeType === 'branch' && params.sourceHandle) {
+      const config = sourceNode.data.config as BranchNodeConfig
+      if (config?.paths) {
+        const updatedPaths = config.paths.map(p =>
+          p.id === params.sourceHandle ? { ...p, next_node_id: params.target! } : p
+        )
+        setNodes(nds =>
+          nds.map(n =>
+            n.id === params.source
+              ? { ...n, data: { ...n.data, config: { ...config, paths: updatedPaths } } }
+              : n
+          )
+        )
+      }
+    }
+
     // For single-child nodes, remove existing outgoing edge before adding new one
     if (!canHaveMultipleChildren(sourceNode.data.nodeType)) {
       setEdges(eds => {
@@ -276,6 +293,22 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
           active_node_id: '',
           non_active_node_id: ''
         }
+      case 'branch': {
+        // Default branch: one conditional path + one default catch-all path.
+        const defaultPathId = generateId()
+        return {
+          paths: [
+            {
+              id: generateId(),
+              name: 'Path 1',
+              conditions: { kind: 'branch', branch: { operator: 'and', leaves: [] } },
+              next_node_id: ''
+            },
+            { id: defaultPathId, name: 'Otherwise', next_node_id: '' }
+          ],
+          default_path_id: defaultPathId
+        }
+      }
       default:
         return {}
     }
@@ -372,6 +405,24 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
           ...nds.map(n =>
             n.id === sourceNodeId
               ? { ...n, data: { ...n.data, config: { ...config, variants: updatedVariants } } }
+              : n
+          ),
+          newNode
+        ])
+      } else {
+        setNodes(nds => [...nds, newNode])
+      }
+    } else if (sourceHandle && sourceNode.data.nodeType === 'branch') {
+      // Update branch path's next_node_id when adding via handle (sourceHandle = path.id)
+      const config = sourceNode.data.config as BranchNodeConfig
+      const updatedPaths = config?.paths?.map(p =>
+        p.id === sourceHandle ? { ...p, next_node_id: newNodeId } : p
+      )
+      if (updatedPaths) {
+        setNodes(nds => [
+          ...nds.map(n =>
+            n.id === sourceNodeId
+              ? { ...n, data: { ...n.data, config: { ...config, paths: updatedPaths } } }
               : n
           ),
           newNode
@@ -603,6 +654,24 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
           )
         }
       }
+
+      // For branch nodes, clear the matching path's next_node_id when edge is deleted
+      if (sourceNode?.data.nodeType === 'branch') {
+        const config = sourceNode.data.config as BranchNodeConfig
+        if (config?.paths) {
+          const updatedPaths = config.paths.map(p =>
+            p.id === edge.sourceHandle ? { ...p, next_node_id: '' } : p
+          )
+          setNodes(nds =>
+            nds.map(n =>
+              n.id === edge.source
+                ? { ...n, data: { ...n.data, config: { ...config, paths: updatedPaths } } }
+                : n
+            )
+          )
+        }
+      }
+
     }
 
     setEdges(eds => eds.filter(e => e.id !== edgeId))
@@ -739,6 +808,27 @@ export function useAutomationCanvas(): UseAutomationCanvasReturn {
             color: '#f97316'  // orange
           })
         }
+      } else if (node.data.nodeType === 'branch') {
+        // Branch has one output per path (handleId = path.id), spread 20%-80%
+        const config = node.data.config as BranchNodeConfig
+        const paths = config?.paths || []
+        const nodeWidth = node.measured?.width || 300
+        const total = paths.length
+        paths.forEach((path, originalIndex) => {
+          const hasEdge = edges.some(e => e.source === node.id && e.sourceHandle === path.id)
+          if (!hasEdge) {
+            const start = 20
+            const end = 80
+            const handlePercent = total === 1 ? 50 : start + (originalIndex * (end - start)) / (total - 1)
+            outputs.push({
+              nodeId: node.id,
+              handleId: path.id,
+              position: { x: node.position.x + (nodeWidth * handlePercent / 100), y: node.position.y + 120 },
+              label: path.name,
+              color: path.id === config?.default_path_id ? '#9ca3af' : '#722ed1'
+            })
+          }
+        })
       } else {
         // Single-output nodes
         const hasOutgoingEdge = edges.some(e => e.source === node.id)
