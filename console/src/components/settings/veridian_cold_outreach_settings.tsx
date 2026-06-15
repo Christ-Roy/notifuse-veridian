@@ -30,8 +30,8 @@
  */
 
 import { useEffect, useState } from 'react'
-import { App, Alert, Button, Card, Col, Divider, Form, Input, InputNumber, Row, Space, Switch, Tag, Tooltip, Typography } from 'antd'
-import { CheckCircleFilled, CloseCircleFilled, InfoCircleOutlined, InboxOutlined, LinkOutlined, TeamOutlined } from '@ant-design/icons'
+import { App, Alert, Button, Card, Col, Divider, Form, Input, InputNumber, Row, Select, Space, Switch, Tag, Tooltip, Typography } from 'antd'
+import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, InfoCircleOutlined, InboxOutlined, LinkOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
 import { Workspace, EmailProvider, IMAPSettings, Integration } from '../../services/api/types'
@@ -39,7 +39,8 @@ import { workspaceService } from '../../services/api/workspace'
 import {
   VERIDIAN_DEFAULT_OPEN_PIXEL,
   VERIDIAN_PROVIDER_CLASSES,
-  VeridianProviderClass
+  VeridianProviderClass,
+  VeridianSendingWindow
 } from '../../services/api/workspace'
 import { contactsApi } from '../../services/api/contacts'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
@@ -482,6 +483,285 @@ function TrackingDomainCard({ workspace, isOwner, onWorkspaceUpdate }: TrackingD
   )
 }
 
+// ── Fenêtre d'envoi (horaires ouvrables) PAR WORKSPACE ────────────────────────
+//
+// En cold, marteler une boîte à 3h du matin ou le dimanche est un signal
+// anti-spam (et inutile : personne ne lit). On cantonne l'envoi aux heures
+// ouvrables (ex. lun-ven 9h-18h, Europe/Paris). Hors fenêtre, le worker
+// re-planifie à la prochaine ouverture (gate veridianSendingWindowGate). Aucune
+// fenêtre = envoi 24/7 (non-régression).
+//
+// Persistée dans les settings workspace `veridian_sending_window` via le MÊME
+// POST /api/workspaces.update que le reste de la section. Shape miroir du Go :
+// { days:[1..5], start_hour, start_minute, end_hour (exclusif), end_minute, timezone }.
+
+// Jours de la semaine, convention Go time.Weekday (0=dimanche … 6=samedi).
+// ⚠️ Libellés LITTÉRAUX (pas `t`...``) : un `t` passé en paramètre / utilisé hors
+// composant React n'est PAS capté par l'extracteur statique Lingui → clé absente
+// du catalogue → libellé VIDE en runtime (bug P0 vécu 2026-06-14). Les noms de
+// jours sont fixes en français pour le tunnel FR ; littéral = zéro risque de vide.
+const WEEKDAY_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: 'Lundi' },
+  { value: 2, label: 'Mardi' },
+  { value: 3, label: 'Mercredi' },
+  { value: 4, label: 'Jeudi' },
+  { value: 5, label: 'Vendredi' },
+  { value: 6, label: 'Samedi' },
+  { value: 0, label: 'Dimanche' }
+]
+
+// Timezones cold courantes. Littéraux (identifiants IANA, jamais traduits).
+const TIMEZONE_OPTIONS: string[] = [
+  'Europe/Paris',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Madrid',
+  'America/New_York',
+  'America/Los_Angeles',
+  'UTC'
+]
+
+// Créneaux horaires de 00:00 à 23:30 par pas de 30 min, pour les bornes de la
+// fenêtre. Représentation en minutes depuis minuit (déterministe, sans dayjs).
+// La borne de fin accepte 24:00 (1440 = fin de journée, exclusif côté backend).
+function minutesToHHMM(total: number): string {
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
+  return `${pad(h)}:${pad(m)}`
+}
+const START_SLOTS: { value: number; label: string }[] = Array.from({ length: 48 }, (_, i) => {
+  const total = i * 30
+  return { value: total, label: minutesToHHMM(total) }
+})
+const END_SLOTS: { value: number; label: string }[] = [
+  ...START_SLOTS.slice(1), // 00:30 … 23:30
+  { value: 1440, label: '24:00' }
+]
+
+interface SendingWindowCardProps {
+  workspace: Workspace
+  isOwner: boolean
+  onWorkspaceUpdate: (workspace: Workspace) => void
+}
+
+function SendingWindowCard({ workspace, isOwner, onWorkspaceUpdate }: SendingWindowCardProps) {
+  const { t } = useLingui()
+  const { message } = App.useApp()
+  const [saving, setSaving] = useState(false)
+
+  const existing = workspace.settings.veridian_sending_window
+  const initialEnabled = !!existing
+  const [enabled, setEnabled] = useState(initialEnabled)
+  const [days, setDays] = useState<number[]>(existing?.days ?? [1, 2, 3, 4, 5])
+  const [startMin, setStartMin] = useState<number>(
+    existing ? (existing.start_hour ?? 0) * 60 + (existing.start_minute ?? 0) : 9 * 60
+  )
+  const [endMin, setEndMin] = useState<number>(
+    existing ? (existing.end_hour ?? 0) * 60 + (existing.end_minute ?? 0) : 18 * 60
+  )
+  const [timezone, setTimezone] = useState<string>(
+    existing?.timezone || workspace.settings.timezone || 'Europe/Paris'
+  )
+
+  // Re-sync si le workspace change (sauvegarde aboutie, switch d'onglet…).
+  useEffect(() => {
+    const w = workspace.settings.veridian_sending_window
+    setEnabled(!!w)
+    setDays(w?.days ?? [1, 2, 3, 4, 5])
+    setStartMin(w ? (w.start_hour ?? 0) * 60 + (w.start_minute ?? 0) : 9 * 60)
+    setEndMin(w ? (w.end_hour ?? 0) * 60 + (w.end_minute ?? 0) : 18 * 60)
+    setTimezone(w?.timezone || workspace.settings.timezone || 'Europe/Paris')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync sur la fenêtre persistée
+  }, [workspace.id, JSON.stringify(workspace.settings.veridian_sending_window)])
+
+  const rangeInvalid = endMin <= startMin
+
+  const handleSave = async () => {
+    if (enabled && rangeInvalid) {
+      message.error(t`The closing time must be after the opening time.`)
+      return
+    }
+    setSaving(true)
+    try {
+      // Désactivé → on retire la fenêtre (undefined = pas de clé = 24/7 backend).
+      // Activé → on construit le shape Go (end_hour exclusif ; 24:00 = end_hour 24).
+      const window: VeridianSendingWindow | undefined = enabled
+        ? {
+            days,
+            start_hour: Math.floor(startMin / 60),
+            start_minute: startMin % 60,
+            end_hour: Math.floor(endMin / 60),
+            end_minute: endMin % 60,
+            timezone
+          }
+        : undefined
+
+      await workspaceService.update({
+        ...workspace,
+        settings: {
+          ...workspace.settings,
+          veridian_sending_window: window
+        }
+      })
+      const response = await workspaceService.get(workspace.id)
+      onWorkspaceUpdate(response.workspace)
+      message.success(t`Sending window saved`)
+    } catch (error: unknown) {
+      const errorMessage = (error as Error)?.message || t`Failed to save sending window`
+      message.error(errorMessage)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const header = (
+    <Space>
+      <ClockCircleOutlined />
+      <Text strong>{t`Sending window (business hours)`}</Text>
+      {existing ? (
+        <Tag color="green">{t`Active`}</Tag>
+      ) : (
+        <Tag color="default">{t`24/7 (no window)`}</Tag>
+      )}
+    </Space>
+  )
+
+  const help = (
+    <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+      {t`Restrict cold sending to business hours. Emails scheduled outside the window are automatically deferred to the next opening — never dropped. Sending at 3am or on weekends is an anti-spam signal and nobody reads it. Leave disabled to send 24/7.`}
+    </Paragraph>
+  )
+
+  // Résumé lisible de la fenêtre persistée (lecture seule + entête owner). On
+  // construit la string AVANT le rendu pour ne PAS mettre d'interpolation
+  // complexe dans un `t`...`` (l'extracteur Lingui n'aime pas les ternaires
+  // imbriqués) : ici c'est un littéral assemblé, zéro clé i18n à risque.
+  const summaryDaysLabel =
+    existing && existing.days && existing.days.length > 0
+      ? existing.days
+          .map((d) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label || String(d))
+          .join(', ')
+      : 'Every day'
+  const summaryText = existing
+    ? `${summaryDaysLabel} · ${minutesToHHMM(
+        (existing.start_hour ?? 0) * 60 + (existing.start_minute ?? 0)
+      )}–${minutesToHHMM(
+        (existing.end_hour ?? 0) * 60 + (existing.end_minute ?? 0)
+      )} · ${existing.timezone || workspace.settings.timezone || 'Europe/Paris'}`
+    : ''
+  const summary = existing ? (
+    <Text type="secondary" style={{ fontSize: 12 }}>
+      {summaryText}
+    </Text>
+  ) : (
+    <Text type="secondary">{t`No sending window — emails go out 24/7.`}</Text>
+  )
+
+  // ── Non-owner : lecture seule ───────────────────────────────────────────────
+  if (!isOwner) {
+    return (
+      <Card size="small" title={header} className="!mb-6">
+        {help}
+        {summary}
+      </Card>
+    )
+  }
+
+  // ── Owner : édition ─────────────────────────────────────────────────────────
+  return (
+    <Card size="small" title={header} className="!mb-6">
+      {help}
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space>
+          <Switch
+            checked={enabled}
+            onChange={setEnabled}
+            checkedChildren={t`On`}
+            unCheckedChildren={t`Off`}
+            aria-label={t`Enable sending window`}
+          />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {enabled ? t`Restrict to the window below` : t`Sending 24/7`}
+          </Text>
+        </Space>
+
+        {enabled && (
+          <>
+            <Row gutter={[16, 12]} align="bottom" wrap>
+              <Col xs={24} md={12}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t`Working days`}
+                </Text>
+                <Select
+                  mode="multiple"
+                  value={days}
+                  onChange={setDays}
+                  options={WEEKDAY_OPTIONS}
+                  placeholder={t`All days`}
+                  style={{ width: '100%', marginTop: 4 }}
+                  aria-label={t`Working days`}
+                />
+              </Col>
+              <Col xs={24} md={12}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t`Timezone`}
+                </Text>
+                <Select
+                  value={timezone}
+                  onChange={setTimezone}
+                  options={TIMEZONE_OPTIONS.map((tz) => ({ value: tz, label: tz }))}
+                  showSearch
+                  style={{ width: '100%', marginTop: 4 }}
+                  aria-label={t`Timezone`}
+                />
+              </Col>
+            </Row>
+            <Row gutter={[16, 12]} align="bottom" wrap>
+              <Col xs={12} md={8}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t`Opening time`}
+                </Text>
+                <Select
+                  value={startMin}
+                  onChange={setStartMin}
+                  options={START_SLOTS}
+                  style={{ width: '100%', marginTop: 4 }}
+                  aria-label={t`Opening time`}
+                />
+              </Col>
+              <Col xs={12} md={8}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t`Closing time`}
+                </Text>
+                <Select
+                  value={endMin}
+                  onChange={setEndMin}
+                  options={END_SLOTS}
+                  status={rangeInvalid ? 'error' : undefined}
+                  style={{ width: '100%', marginTop: 4 }}
+                  aria-label={t`Closing time`}
+                />
+              </Col>
+            </Row>
+            {rangeInvalid && (
+              <Alert
+                type="error"
+                showIcon
+                message={t`The closing time must be after the opening time.`}
+              />
+            )}
+          </>
+        )}
+
+        <Button type="primary" loading={saving} onClick={handleSave} disabled={enabled && rangeInvalid}>
+          {t`Save sending window`}
+        </Button>
+      </Space>
+    </Card>
+  )
+}
+
 export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isOwner }: Props) {
   const { t } = useLingui()
   const [saving, setSaving] = useState(false)
@@ -641,6 +921,11 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
               isOwner={isOwner}
               onWorkspaceUpdate={onWorkspaceUpdate}
             />
+            <SendingWindowCard
+              workspace={workspace}
+              isOwner={isOwner}
+              onWorkspaceUpdate={onWorkspaceUpdate}
+            />
             <Divider />
           </>
         )}
@@ -747,6 +1032,11 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
             onWorkspaceUpdate={onWorkspaceUpdate}
           />
           <TrackingDomainCard
+            workspace={workspace}
+            isOwner={isOwner}
+            onWorkspaceUpdate={onWorkspaceUpdate}
+          />
+          <SendingWindowCard
             workspace={workspace}
             isOwner={isOwner}
             onWorkspaceUpdate={onWorkspaceUpdate}

@@ -341,4 +341,87 @@ describe('VeridianColdOutreachSettings', () => {
       screen.getByText(/No sending integration configured yet/i)
     ).toBeInTheDocument()
   })
+
+  // ── Sending window (business hours) ─────────────────────────────────────────
+
+  it('renders the sending window card disabled (24/7) when none is configured', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    expect(screen.getByText('Sending window (business hours)')).toBeInTheDocument()
+    // Pas de fenêtre → tag "24/7 (no window)"
+    expect(screen.getByText('24/7 (no window)')).toBeInTheDocument()
+  })
+
+  it('persists a sending window with the Go-shaped payload when enabled (owner)', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+
+    // Le switch enable de la carte, ciblé par son aria-label dédié (la carte
+    // IMAP a aussi un switch TLS — on ne cible donc PAS par index).
+    const enableSwitch = screen.getByLabelText('Enable sending window')
+    await user.click(enableSwitch)
+
+    // Une fois activé, les contrôles de plage horaire apparaissent. On attend
+    // "Opening time" (label unique, non dupliqué par un aria-label de Select).
+    await waitFor(() => expect(screen.getByText('Opening time')).toBeInTheDocument())
+
+    // Re-query le bouton APRÈS le re-render (la carte s'est étendue avec les
+    // contrôles, l'ancienne ref pourrait être détachée).
+    await user.click(screen.getByRole('button', { name: /Save sending window/i }))
+
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    const win = arg.settings?.veridian_sending_window
+    expect(win).toBeDefined()
+    // Défauts : lun-ven (1-5), 9h-18h.
+    expect(win?.days).toEqual([1, 2, 3, 4, 5])
+    expect(win?.start_hour).toBe(9)
+    expect(win?.end_hour).toBe(18)
+    expect(win?.timezone).toBeTruthy()
+  })
+
+  it('removes the sending window (24/7) when disabled and saved (owner)', async () => {
+    const user = userEvent.setup()
+    renderCmp({
+      workspace: makeWorkspace({
+        veridian_sending_window: {
+          days: [1, 2, 3, 4, 5],
+          start_hour: 9,
+          end_hour: 18,
+          timezone: 'Europe/Paris'
+        }
+      }),
+      isOwner: true
+    })
+
+    // Fenêtre active → tag "Active" + toggle "On". On désactive.
+    expect(screen.getByText('Active')).toBeInTheDocument()
+    const enableSwitch = screen.getByLabelText('Enable sending window')
+    await user.click(enableSwitch)
+
+    await user.click(screen.getByRole('button', { name: /Save sending window/i }))
+
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    // Désactivé → undefined (pas de fenêtre = 24/7 côté backend).
+    expect(arg.settings?.veridian_sending_window).toBeUndefined()
+  })
+
+  it('renders the sending window read-only for non-owner with a summary', () => {
+    renderCmp({
+      workspace: makeWorkspace({
+        veridian_sending_window: {
+          days: [1, 2, 3, 4, 5],
+          start_hour: 9,
+          end_hour: 18,
+          timezone: 'Europe/Paris'
+        }
+      }),
+      isOwner: false
+    })
+    expect(screen.getByText('Sending window (business hours)')).toBeInTheDocument()
+    // Résumé littéral : jours + plage + timezone (libellés littéraux, pas de t``)
+    expect(screen.getByText(/Lundi.*09:00.*18:00.*Europe\/Paris/)).toBeInTheDocument()
+    // pas de bouton de save en lecture seule
+    expect(screen.queryByRole('button', { name: /Save sending window/i })).not.toBeInTheDocument()
+  })
 })

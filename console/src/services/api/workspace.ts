@@ -65,6 +65,30 @@ export interface WorkspaceSettings {
   // Plafond JOURNALIER d'envois vers une MÊME adresse (anti-harcèlement).
   // Entier global, non keyé par classe. 0 / omis = illimité.
   veridian_per_recipient_daily_cap?: number
+  // Fenêtre d'envoi (horaires ouvrables) cold outbound. Hors fenêtre, le worker
+  // re-planifie l'envoi à la prochaine ouverture. Vide/omis = envoi 24/7
+  // (non-régression). Source de vérité backend :
+  // internal/domain/veridian_sending_window.go. Cascade : broadcast → infra →
+  // workspace (ce niveau) → rien.
+  veridian_sending_window?: VeridianSendingWindow
+}
+
+// Veridian fork — fenêtre d'envoi hebdomadaire (cold outbound). Miroir EXACT du
+// shape JSON Go (internal/domain/veridian_sending_window.go) :
+//   days        : jours autorisés, 0=dimanche … 6=samedi (time.Weekday). Vide =
+//                 tous les jours.
+//   start_hour  : heure d'ouverture INCLUSE (0-23), start_minute (0-59).
+//   end_hour    : heure de fermeture EXCLUSIVE (0-24), end_minute (0-59).
+//   timezone    : nom IANA (ex "Europe/Paris"). Vide = fallback timezone workspace.
+// Une plage où start == end (ou end < start) est traitée comme "pas de fenêtre"
+// (envoi 24/7) côté backend — on ne fige jamais le pipeline sur une config absurde.
+export interface VeridianSendingWindow {
+  days?: number[]
+  start_hour: number
+  start_minute?: number
+  end_hour: number
+  end_minute?: number
+  timezone?: string
 }
 
 // Veridian fork — classes canoniques de provider destinataire (cf. backend
