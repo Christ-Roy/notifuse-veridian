@@ -337,9 +337,10 @@ describe('VeridianColdOutreachSettings', () => {
 
   it('shows a hint when no sending integration exists for tracking domain', () => {
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    // Tracking domain + infra limits cards affichent toutes deux ce hint.
     expect(
-      screen.getByText(/No sending integration configured yet/i)
-    ).toBeInTheDocument()
+      screen.getAllByText(/No sending integration configured yet/i).length
+    ).toBeGreaterThan(0)
   })
 
   // ── Sending window (business hours) ─────────────────────────────────────────
@@ -404,6 +405,80 @@ describe('VeridianColdOutreachSettings', () => {
     const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
     // Désactivé → undefined (pas de fenêtre = 24/7 côté backend).
     expect(arg.settings?.veridian_sending_window).toBeUndefined()
+  })
+
+  // ── Per-infrastructure limits (R2) ──────────────────────────────────────────
+
+  it('saves per-infra rates and caps on the email provider, preserving senders/rate_limit (owner)', async () => {
+    const user = userEvent.setup()
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25,
+        veridian_tracking_domain: 'track.agences-veridian.fr'
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: true })
+
+    expect(screen.getByText('Per-infrastructure limits (warm-up)')).toBeInTheDocument()
+
+    // Pose un rate Google = 1/min sur cette infra (warm-up).
+    const googleRate = screen.getByLabelText('rate google Cold relay')
+    await user.type(googleRate, '1')
+    // Pose un cap journalier Microsoft = 50/jour.
+    const msCap = screen.getByLabelText('cap microsoft Cold relay')
+    await user.type(msCap, '50')
+
+    await user.click(screen.getByRole('button', { name: /Save Cold relay limits/i }))
+
+    await waitFor(() => expect(workspaceService.updateIntegration).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
+    expect(arg.integration_id).toBe('email-1')
+    // limites posées par classe
+    expect(arg.provider?.veridian_provider_class_rates?.google).toBe(1)
+    expect(arg.provider?.veridian_provider_class_daily_cap?.microsoft).toBe(50)
+    // provider COMPLET conservé : senders + rate_limit + tracking_domain
+    expect(arg.provider?.senders).toHaveLength(1)
+    expect(arg.provider?.rate_limit_per_minute).toBe(25)
+    expect(arg.provider?.veridian_tracking_domain).toBe('track.agences-veridian.fr')
+  })
+
+  it('renders existing per-infra limits and is read-only for non-owner', () => {
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25,
+        veridian_provider_class_rates: { google: 2 } as never,
+        veridian_per_recipient_daily_cap: 3
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: false })
+    expect(screen.getByText('Per-infrastructure limits (warm-up)')).toBeInTheDocument()
+    // valeur persistée affichée (rate google = 2). InputNumber avec step=0.5
+    // formate "2" → "2.0" : on tolère les deux représentations.
+    expect((screen.getByLabelText('rate google Cold relay') as HTMLInputElement).value).toMatch(
+      /^2(\.0)?$/
+    )
+    // pas de bouton de save en lecture seule
+    expect(screen.queryByRole('button', { name: /Cold relay limits/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a hint when no sending integration exists for per-infra limits', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    // 2 cartes (tracking domain + infra limits) affichent le même hint → présent.
+    expect(screen.getAllByText(/No sending integration configured yet/i).length).toBeGreaterThan(0)
   })
 
   it('renders the sending window read-only for non-owner with a summary', () => {

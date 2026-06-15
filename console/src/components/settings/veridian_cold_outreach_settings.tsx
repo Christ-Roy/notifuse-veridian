@@ -483,6 +483,295 @@ function TrackingDomainCard({ workspace, isOwner, onWorkspaceUpdate }: TrackingD
   )
 }
 
+// ── Limites (rates + caps) PAR INFRA d'envoi (R2) ─────────────────────────────
+//
+// Les débits/plafonds réglés en haut de section sont au niveau WORKSPACE
+// (fallback). En warm-up, chaque INFRA (= intégration EmailProvider : son
+// host/IP/relai SMTP + senders) porte SES PROPRES débits/plafonds, qui PRIMENT
+// sur le workspace (cascade backend : broadcast → infra → workspace). Une IP
+// fraîche tape Google à 1/min pendant que le reste du workspace envoie plus vite.
+//
+// Persisté sur EmailProvider.veridian_provider_class_rates / _daily_cap /
+// _per_recipient_daily_cap via updateIntegration. On renvoie le provider COMPLET
+// (senders + rate_limit + tracking_domain conservés) — l'API attend l'EmailProvider
+// entier, écraser un champ casserait l'envoi.
+
+interface InfraLimitsCardProps {
+  workspace: Workspace
+  isOwner: boolean
+  onWorkspaceUpdate: (workspace: Workspace) => void
+}
+
+// Les 5 classes "principales" (historiques, classification par suffixe) affichées
+// par défaut. Les 6 classes MX (Lot 4) sont repliées derrière un toggle : on les
+// règle rarement à la main, et les afficher toutes ferait un mur de 22 champs par
+// infra (lourd visuellement ET au rendu).
+const INFRA_PRIMARY_CLASSES: VeridianProviderClass[] = [
+  'google',
+  'microsoft',
+  'yahoo_aol',
+  'freemail_fr',
+  'corporate'
+]
+
+function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsCardProps) {
+  const { t } = useLingui()
+  const { message } = App.useApp()
+  const [savingId, setSavingId] = useState<string | null>(null)
+  // Affiche les 11 classes (dont les 6 MX) ou seulement les 5 principales.
+  const [showAllClasses, setShowAllClasses] = useState(false)
+  // Brouillons d'édition par intégration : rates/caps par classe + cap destinataire.
+  const [drafts, setDrafts] = useState<
+    Record<
+      string,
+      {
+        rates: Partial<Record<VeridianProviderClass, number>>
+        caps: Partial<Record<VeridianProviderClass, number>>
+        perRecipient?: number
+      }
+    >
+  >({})
+
+  const emailIntegrations = (workspace.integrations || []).filter(
+    (i): i is Integration & { email_provider: EmailProvider } =>
+      i.type === 'email' && !!i.email_provider
+  )
+
+  // Valeur courante d'un champ : brouillon si édité, sinon valeur persistée.
+  const rateVal = (
+    integ: Integration & { email_provider: EmailProvider },
+    c: VeridianProviderClass
+  ): number | undefined => {
+    const d = drafts[integ.id]
+    if (d && c in d.rates) return d.rates[c]
+    return integ.email_provider.veridian_provider_class_rates?.[c]
+  }
+  const capVal = (
+    integ: Integration & { email_provider: EmailProvider },
+    c: VeridianProviderClass
+  ): number | undefined => {
+    const d = drafts[integ.id]
+    if (d && c in d.caps) return d.caps[c]
+    return integ.email_provider.veridian_provider_class_daily_cap?.[c]
+  }
+  const perRecipVal = (
+    integ: Integration & { email_provider: EmailProvider }
+  ): number | undefined => {
+    const d = drafts[integ.id]
+    if (d && 'perRecipient' in d) return d.perRecipient
+    return integ.email_provider.veridian_per_recipient_daily_cap
+  }
+
+  const setRate = (id: string, c: VeridianProviderClass, v: number | null) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      return { ...prev, [id]: { ...cur, rates: { ...cur.rates, [c]: v ?? 0 } } }
+    })
+  const setCap = (id: string, c: VeridianProviderClass, v: number | null) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      return { ...prev, [id]: { ...cur, caps: { ...cur.caps, [c]: v ?? 0 } } }
+    })
+  const setPerRecip = (id: string, v: number | null) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      return { ...prev, [id]: { ...cur, perRecipient: v ?? 0 } }
+    })
+
+  const handleSave = async (integration: Integration & { email_provider: EmailProvider }) => {
+    setSavingId(integration.id)
+    try {
+      // On part des valeurs persistées et on applique le brouillon, en NE
+      // gardant que les valeurs strictement positives (0/vide = pas de limite
+      // pour cette classe → on omet la clé, non-régression backend).
+      const nextRates: Partial<Record<VeridianProviderClass, number>> = {}
+      const nextCaps: Partial<Record<VeridianProviderClass, number>> = {}
+      for (const c of VERIDIAN_PROVIDER_CLASSES) {
+        const r = rateVal(integration, c)
+        if (typeof r === 'number' && r > 0) nextRates[c] = r
+        const cap = capVal(integration, c)
+        if (typeof cap === 'number' && cap > 0) nextCaps[c] = Math.floor(cap)
+      }
+      const recip = perRecipVal(integration)
+      const nextRecipient = typeof recip === 'number' && recip > 0 ? Math.floor(recip) : undefined
+
+      // Provider COMPLET (senders, rate_limit, tracking_domain conservés) + les
+      // limites mises à jour. Map vide → undefined (pas de clé) pour rester en
+      // non-régression.
+      const provider: EmailProvider = {
+        ...integration.email_provider,
+        veridian_provider_class_rates:
+          Object.keys(nextRates).length > 0
+            ? (nextRates as Record<VeridianProviderClass, number>)
+            : undefined,
+        veridian_provider_class_daily_cap:
+          Object.keys(nextCaps).length > 0
+            ? (nextCaps as Record<VeridianProviderClass, number>)
+            : undefined,
+        veridian_per_recipient_daily_cap: nextRecipient
+      }
+
+      await workspaceService.updateIntegration({
+        workspace_id: workspace.id,
+        integration_id: integration.id,
+        name: integration.name,
+        provider
+      })
+      const response = await workspaceService.get(workspace.id)
+      onWorkspaceUpdate(response.workspace)
+      setDrafts((d) => {
+        const next = { ...d }
+        delete next[integration.id]
+        return next
+      })
+      message.success(t`Infra limits saved`)
+    } catch (error: unknown) {
+      const errorMessage = (error as Error)?.message || t`Failed to save infra limits`
+      message.error(errorMessage)
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const header = (
+    <Space>
+      <TeamOutlined />
+      <Text strong>{t`Per-infrastructure limits (warm-up)`}</Text>
+    </Space>
+  )
+
+  const help = (
+    <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+      {t`Rates and daily caps set above apply at the workspace level (fallback). Each sending infrastructure (an email integration: its IP / SMTP relay + senders) can carry its OWN limits that override the workspace — essential during IP warm-up, where a fresh IP must crawl while the rest of the workspace runs faster. Leave a field empty for no per-class limit on that infra (the workspace value, then the campaign value, still apply).`}
+    </Paragraph>
+  )
+
+  if (emailIntegrations.length === 0) {
+    return (
+      <Card size="small" title={header} className="!mb-6">
+        {help}
+        <Text type="secondary">
+          {t`No sending integration configured yet. Add an email provider in Settings → Integrations first.`}
+        </Text>
+      </Card>
+    )
+  }
+
+  const visibleClasses = showAllClasses ? VERIDIAN_PROVIDER_CLASSES : INFRA_PRIMARY_CLASSES
+
+  return (
+    <Card size="small" title={header} className="!mb-6">
+      {help}
+      <Space style={{ marginBottom: 12 }}>
+        <Switch
+          checked={showAllClasses}
+          onChange={setShowAllClasses}
+          size="small"
+          aria-label={t`Show all provider classes`}
+        />
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {showAllClasses
+            ? t`Showing all 11 provider classes (incl. MX-resolved)`
+            : t`Showing the 5 main provider classes`}
+        </Text>
+      </Space>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        {emailIntegrations.map((integration) => {
+          const senderDomain = integration.email_provider.senders?.[0]?.email?.split('@')[1]
+          return (
+            <div key={integration.id}>
+              <Space size="small" wrap style={{ marginBottom: 8 }}>
+                <Text strong>{integration.name}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {senderDomain ? `@${senderDomain}` : ''}
+                </Text>
+              </Space>
+
+              <Row gutter={[12, 8]} align="bottom" style={{ marginBottom: 8 }}>
+                <Col xs={24} sm={12}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t`Per-recipient daily cap (this infra)`}
+                  </Text>
+                  <InputNumber
+                    min={0}
+                    step={1}
+                    precision={0}
+                    value={perRecipVal(integration)}
+                    onChange={(v) => setPerRecip(integration.id, v)}
+                    placeholder={t`Unlimited`}
+                    disabled={!isOwner}
+                    style={{ width: '100%', marginTop: 4 }}
+                    aria-label={t`Per-recipient daily cap for ${integration.name}`}
+                  />
+                </Col>
+              </Row>
+
+              {/* Grille rate/cap par classe. Compacte : libellé + 2 champs. */}
+              <Row gutter={[8, 4]} style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>
+                <Col xs={12} sm={12}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>{t`Provider class`}</Text>
+                </Col>
+                <Col xs={6} sm={6}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>{t`Rate /min`}</Text>
+                </Col>
+                <Col xs={6} sm={6}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>{t`Cap /day`}</Text>
+                </Col>
+              </Row>
+              {visibleClasses.map((c) => (
+                <Row key={c} gutter={[8, 4]} align="middle" style={{ marginBottom: 4 }}>
+                  <Col xs={12} sm={12}>
+                    <Text style={{ fontSize: 12 }}>{classLabel(c)}</Text>
+                  </Col>
+                  <Col xs={6} sm={6}>
+                    <InputNumber
+                      min={0}
+                      step={0.5}
+                      value={rateVal(integration, c)}
+                      onChange={(v) => setRate(integration.id, c, v)}
+                      placeholder="—"
+                      disabled={!isOwner}
+                      size="small"
+                      style={{ width: '100%' }}
+                      aria-label={`rate ${c} ${integration.name}`}
+                    />
+                  </Col>
+                  <Col xs={6} sm={6}>
+                    <InputNumber
+                      min={0}
+                      step={1}
+                      precision={0}
+                      value={capVal(integration, c)}
+                      onChange={(v) => setCap(integration.id, c, v)}
+                      placeholder="—"
+                      disabled={!isOwner}
+                      size="small"
+                      style={{ width: '100%' }}
+                      aria-label={`cap ${c} ${integration.name}`}
+                    />
+                  </Col>
+                </Row>
+              ))}
+
+              {isOwner && (
+                <Button
+                  type="primary"
+                  size="small"
+                  loading={savingId === integration.id}
+                  onClick={() => handleSave(integration)}
+                  style={{ marginTop: 8 }}
+                >
+                  {t`Save ${integration.name} limits`}
+                </Button>
+              )}
+            </div>
+          )
+        })}
+      </Space>
+    </Card>
+  )
+}
+
 // ── Fenêtre d'envoi (horaires ouvrables) PAR WORKSPACE ────────────────────────
 //
 // En cold, marteler une boîte à 3h du matin ou le dimanche est un signal
@@ -921,6 +1210,11 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
               isOwner={isOwner}
               onWorkspaceUpdate={onWorkspaceUpdate}
             />
+            <InfraLimitsCard
+              workspace={workspace}
+              isOwner={isOwner}
+              onWorkspaceUpdate={onWorkspaceUpdate}
+            />
             <SendingWindowCard
               workspace={workspace}
               isOwner={isOwner}
@@ -1032,6 +1326,11 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
             onWorkspaceUpdate={onWorkspaceUpdate}
           />
           <TrackingDomainCard
+            workspace={workspace}
+            isOwner={isOwner}
+            onWorkspaceUpdate={onWorkspaceUpdate}
+          />
+          <InfraLimitsCard
             workspace={workspace}
             isOwner={isOwner}
             onWorkspaceUpdate={onWorkspaceUpdate}
