@@ -1,3 +1,8 @@
+> **CLOS 2026-06-15** : la mitigation .dockerignore tient. Le build de la vague
+> cold (6 lots, run 27566920104) a poussé l'image GHCR SANS DeadlineExceeded.
+> Plus de timeout observé depuis le .dockerignore. Si ça re-fail un jour =
+> vrai souci réseau runner OVH→ghcr.io (piste infra, rouvrir côté veridian-infra).
+
 # CI : push image GHCR timeout récurrent (DeadlineExceeded)
 
 > **MITIGÉ 2026-06-13** — ajout .dockerignore (commit 9d2cf97b) : retire ~1.4 GB du contexte build (console/node_modules 989M, .git 373M, tests 43M) qui gonflaient layers+temps de build et élargissaient la fenêtre du timeout push (piste #2 du ticket). Validation = build CI. Si le DeadlineExceeded persiste après ça = vrai problème réseau runner OVH->ghcr.io (piste #1/#3) à traiter côté infra.
