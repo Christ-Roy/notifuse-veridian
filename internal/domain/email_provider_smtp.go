@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
@@ -61,6 +62,40 @@ type SMTPSettings struct {
 	// Runtime decrypted OAuth2 secrets (not stored in database)
 	OAuth2ClientSecret string `json:"oauth2_client_secret,omitempty"` // Decrypted client secret
 	OAuth2RefreshToken string `json:"oauth2_refresh_token,omitempty"` // Decrypted refresh token (Google)
+}
+
+// MarshalJSON masque les secrets SMTP EN CLAIR (champs runtime déchiffrés) à
+// toute sérialisation JSON sortante — symétrie avec IMAPSettings.MarshalJSON
+// (ticket 2026-06-15-fuite-password-imap-workspaces-get.md).
+//
+// Contexte : AfterLoad -> EmailProvider.DecryptSecretKeys (email_provider.go,
+// case SMTP) déchiffre EncryptedPassword/OAuth2* vers les champs CLAIRS pour le
+// runtime d'envoi. Le chemin GET (workspaces.get) renvoie cet objet déchiffré
+// tel quel. Le chemin de PERSISTANCE (BeforeSave -> EncryptSecretKeys) vide bien
+// ces clairs (Password/OAuth2ClientSecret/OAuth2RefreshToken) avant le save,
+// mais le chemin GET ne les vidait PAS => le password SMTP fuyait lui aussi en
+// clair dans la réponse API dès qu'un mot de passe basic-auth était configuré
+// (fuite symétrique à l'IMAP, juste masquée sur staging par une infra SMTP sans
+// password basic stocké). Ce MarshalJSON ferme la fuite quel que soit le caller.
+//
+// On masque EXACTEMENT les 3 clairs que le chemin de persistance upstream vide
+// (Password, OAuth2ClientSecret, OAuth2RefreshToken). On NE touche PAS :
+//   - Username (clair) : upstream le laisse volontairement revenir par l'API
+//     (affichage du compte configuré ; ce n'est pas un secret) — non-régression.
+//   - les champs Encrypted* (ciphertext) : ils SONT les credentials persistés ;
+//     le même json.Marshal sert le blob DB (Integration.Value) — les strip
+//     casserait le round-trip (secret effacé au save).
+//
+// `type Alias SMTPSettings` casse la récursion ; UnmarshalJSON (décodage entrant
+// create/update intégration SMTP) n'est PAS affecté.
+func (s SMTPSettings) MarshalJSON() ([]byte, error) {
+	type Alias SMTPSettings
+	clone := Alias(s)
+	// Ne jamais sérialiser les secrets en clair (les ciphertext Encrypted* restent).
+	clone.Password = ""
+	clone.OAuth2ClientSecret = ""
+	clone.OAuth2RefreshToken = ""
+	return json.Marshal(clone)
 }
 
 func (s *SMTPSettings) DecryptUsername(passphrase string) error {

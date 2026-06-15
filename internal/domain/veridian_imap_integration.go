@@ -33,6 +33,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -78,6 +79,38 @@ type IMAPSettings struct {
 
 	// Password : mot de passe en clair, NON persisté (runtime uniquement).
 	Password string `json:"password,omitempty"`
+}
+
+// MarshalJSON masque le mot de passe IMAP EN CLAIR (champ runtime `Password`)
+// à toute sérialisation JSON sortante.
+//
+// Pourquoi : AfterLoad (workspace.go, case IntegrationTypeIMAP) déchiffre
+// EncryptedPassword -> Password pour alimenter le poller runtime. Cet objet
+// déchiffré est ensuite renvoyé TEL QUEL par les handlers qui sérialisent un
+// Workspace (ex. `GET /api/workspaces.get`) — sans ce masquage, le password
+// IMAP en clair fuit dans la réponse API à tout MEMBRE du workspace (fuite de
+// secret, ticket 2026-06-15-fuite-password-imap-workspaces-get.md). Le poller
+// lit le champ Go directement (jamais via un unmarshal de la réponse API),
+// donc masquer en sortie ne casse rien côté runtime.
+//
+// Bonus : le même `json.Marshal` sert AUSSI la persistance DB (Integration.Value
+// -> json.Marshal). BeforeSave (IMAP) chiffre le password mais ne vide PAS le
+// clair => sans ce masquage, le clair partait aussi DANS LE BLOB `integrations`
+// (secret au repos). Ce MarshalJSON ferme les deux fuites d'un coup.
+//
+// On garde EncryptedPassword (ciphertext AES, inexploitable sans la clé serveur)
+// car il EST le credential persisté : le strip casserait le round-trip DB
+// (password effacé au save). Seul le CLAIR est masqué.
+//
+// `type Alias IMAPSettings` casse la récursion (l'Alias n'hérite pas de la
+// méthode MarshalJSON). UnmarshalJSON n'est PAS affecté (décodage entrant
+// create/update intégration IMAP inchangé : le password entrant est lu, chiffré,
+// persisté normalement).
+func (s IMAPSettings) MarshalJSON() ([]byte, error) {
+	type Alias IMAPSettings
+	clone := Alias(s)
+	clone.Password = "" // ne jamais sérialiser le mot de passe en clair
+	return json.Marshal(clone)
 }
 
 // GetFolder retourne le dossier à scruter, avec fallback sur INBOX.

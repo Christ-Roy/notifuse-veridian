@@ -630,3 +630,78 @@ func TestSMTPWebhookPayload(t *testing.T) {
 	assert.Equal(t, payload.DiagnosticCode, decodedPayload.DiagnosticCode)
 	assert.Equal(t, payload.ComplaintType, decodedPayload.ComplaintType)
 }
+
+// TestSMTPSettings_MarshalJSON_MasksPlaintextSecrets garantit la symétrie avec
+// IMAP : aucun secret SMTP en clair (Password, OAuth2ClientSecret,
+// OAuth2RefreshToken) ne fuit dans la sérialisation JSON sortante, tout en
+// préservant les ciphertext (round-trip DB) et le username clair (non secret,
+// volontairement retourné par l'API upstream).
+func TestSMTPSettings_MarshalJSON_MasksPlaintextSecrets(t *testing.T) {
+	const passphrase = "0123456789abcdef0123456789abcdef"
+
+	t.Run("basic auth password masked, encrypted preserved", func(t *testing.T) {
+		s := &domain.SMTPSettings{
+			Host:     "smtp.example.com",
+			Port:     587,
+			Username: "sender@agences-veridian.fr",
+			Password: "smtp-plaintext-pw",
+			UseTLS:   true,
+		}
+		require.NoError(t, s.EncryptPassword(passphrase))   // remplit EncryptedPassword
+		require.NoError(t, s.EncryptUsername(passphrase))   // remplit EncryptedUsername
+		// Le clair reste posé (comme après AfterLoad/DecryptSecretKeys côté GET).
+
+		raw, err := json.Marshal(s)
+		require.NoError(t, err)
+		js := string(raw)
+		assert.NotContains(t, js, "smtp-plaintext-pw", "plaintext SMTP password must never appear in JSON")
+		assert.NotContains(t, js, `"password"`, "the cleartext password field must be omitted")
+		assert.Contains(t, js, `"encrypted_password"`, "encrypted password must be preserved for DB persistence")
+		// Username clair conservé (comportement upstream : pas un secret).
+		assert.Contains(t, js, `"username"`)
+		assert.Contains(t, js, "sender@agences-veridian.fr")
+	})
+
+	t.Run("oauth2 runtime secrets masked", func(t *testing.T) {
+		s := &domain.SMTPSettings{
+			Host:               "smtp.office365.com",
+			Port:               587,
+			AuthType:           "oauth2",
+			OAuth2Provider:     "microsoft",
+			OAuth2ClientID:     "client-id-visible",
+			OAuth2ClientSecret: "oauth-client-secret-CLEAR",
+			OAuth2RefreshToken: "oauth-refresh-token-CLEAR",
+		}
+		require.NoError(t, s.EncryptOAuth2ClientSecret(passphrase))
+		require.NoError(t, s.EncryptOAuth2RefreshToken(passphrase))
+
+		raw, err := json.Marshal(s)
+		require.NoError(t, err)
+		js := string(raw)
+		assert.NotContains(t, js, "oauth-client-secret-CLEAR")
+		assert.NotContains(t, js, "oauth-refresh-token-CLEAR")
+		assert.NotContains(t, js, `"oauth2_client_secret"`)
+		assert.NotContains(t, js, `"oauth2_refresh_token"`)
+		// Ciphertext + champs non secrets conservés.
+		assert.Contains(t, js, `"encrypted_oauth2_client_secret"`)
+		assert.Contains(t, js, `"encrypted_oauth2_refresh_token"`)
+		assert.Contains(t, js, "client-id-visible")
+	})
+
+	t.Run("marshal via containing EmailProvider does not leak", func(t *testing.T) {
+		s := &domain.SMTPSettings{Host: "h", Port: 587, Username: "u", Password: "leak-me"}
+		require.NoError(t, s.EncryptPassword(passphrase))
+		provider := domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: s}
+		raw, err := json.Marshal(provider)
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "leak-me", "leak through containing EmailProvider")
+	})
+
+	t.Run("unmarshal still reads incoming password", func(t *testing.T) {
+		// Non-régression du décodage entrant (create/update intégration SMTP).
+		incoming := `{"host":"smtp.example.com","port":587,"username":"u","password":"incoming-smtp-pw","use_tls":true}`
+		var s domain.SMTPSettings
+		require.NoError(t, json.Unmarshal([]byte(incoming), &s))
+		assert.Equal(t, "incoming-smtp-pw", s.Password)
+	})
+}

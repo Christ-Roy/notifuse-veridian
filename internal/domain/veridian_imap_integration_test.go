@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -155,6 +157,90 @@ func TestIMAPSettings_Validate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestIMAPSettings_MarshalJSON_MasksPlaintextPassword garantit qu'AUCUNE
+// sérialisation JSON sortante n'expose le mot de passe IMAP en clair, tout en
+// préservant le ciphertext nécessaire au round-trip DB.
+func TestIMAPSettings_MarshalJSON_MasksPlaintextPassword(t *testing.T) {
+	const plaintext = "super-secret-imap-pw"
+	s := &IMAPSettings{
+		Host:              "imap.larksuite.com",
+		Port:              993,
+		Username:          "robert.brunon@veridian.site",
+		Password:          plaintext,               // champ runtime (déchiffré)
+		EncryptedPassword: mustEncrypt(t, plaintext), // ciphertext persisté
+		UseTLS:            true,
+	}
+
+	t.Run("marshal direct", func(t *testing.T) {
+		raw, err := json.Marshal(s)
+		require.NoError(t, err)
+		js := string(raw)
+		assert.NotContains(t, js, plaintext, "plaintext IMAP password must never appear in JSON")
+		assert.NotContains(t, js, `"password"`, "the cleartext password field must be omitted")
+		// Le ciphertext DOIT rester (round-trip DB + il n'est pas exploitable nu).
+		assert.Contains(t, js, `"encrypted_password"`, "encrypted password must be preserved for DB persistence")
+		assert.Contains(t, js, s.EncryptedPassword)
+		// Champs non secrets toujours là.
+		assert.Contains(t, js, "imap.larksuite.com")
+		assert.Contains(t, js, "robert.brunon@veridian.site")
+	})
+
+	t.Run("marshal via pointer in containing struct", func(t *testing.T) {
+		// Sérialisé comme dans la vraie réponse API (Integration imbrique *IMAPSettings).
+		integ := Integration{ID: "i1", Name: "Bounce box", Type: IntegrationTypeIMAP, IMAPSettings: s}
+		raw, err := json.Marshal(integ)
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), plaintext, "leak through containing struct")
+	})
+
+	t.Run("round-trip Encrypt->Marshal does not leak", func(t *testing.T) {
+		fresh := &IMAPSettings{Host: "h", Port: 993, Username: "u", Password: "another-secret"}
+		require.NoError(t, fresh.EncryptPassword(testIMAPPassphrase))
+		raw, err := json.Marshal(fresh)
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "another-secret")
+		assert.NotContains(t, string(raw), `"password"`)
+		assert.Contains(t, string(raw), `"encrypted_password"`)
+	})
+}
+
+// TestIMAPSettings_UnmarshalJSON_StillReadsIncomingPassword garantit que le
+// MarshalJSON custom n'a PAS cassé le décodage entrant : un POST
+// create/update intégration IMAP avec un `password` clair doit toujours être lu
+// (puis chiffré + persisté par Validate/BeforeSave).
+func TestIMAPSettings_UnmarshalJSON_StillReadsIncomingPassword(t *testing.T) {
+	incoming := `{"host":"imap.example.com","port":993,"username":"u","password":"incoming-pw","use_tls":true}`
+	var s IMAPSettings
+	require.NoError(t, json.Unmarshal([]byte(incoming), &s))
+	assert.Equal(t, "incoming-pw", s.Password, "incoming plaintext password must still be decodable")
+
+	// Et il se chiffre normalement en aval (chaîne complète create intégration).
+	require.NoError(t, s.Validate(testIMAPPassphrase))
+	assert.NotEmpty(t, s.EncryptedPassword)
+	loaded := &IMAPSettings{EncryptedPassword: s.EncryptedPassword}
+	require.NoError(t, loaded.DecryptPassword(testIMAPPassphrase))
+	assert.Equal(t, "incoming-pw", loaded.Password)
+}
+
+// TestIMAPSettings_Value_DBBlobHasNoPlaintext vérifie que le blob persisté en DB
+// (Integration.Value -> json.Marshal) ne contient pas le password en clair —
+// BeforeSave ne vide pas le clair IMAP, c'est le MarshalJSON qui le protège.
+func TestIMAPSettings_Value_DBBlobHasNoPlaintext(t *testing.T) {
+	integ := Integration{
+		ID: "i1", Name: "Bounce box", Type: IntegrationTypeIMAP,
+		IMAPSettings: &IMAPSettings{
+			Host: "imap.example.com", Port: 993, Username: "u",
+			Password: "db-plaintext-pw", EncryptedPassword: mustEncrypt(t, "db-plaintext-pw"),
+		},
+	}
+	v, err := integ.Value()
+	require.NoError(t, err)
+	blob, ok := v.([]byte)
+	require.True(t, ok)
+	assert.False(t, strings.Contains(string(blob), "db-plaintext-pw"), "plaintext password must not be written to the DB blob")
+	assert.Contains(t, string(blob), `"encrypted_password"`)
 }
 
 func mustEncrypt(t *testing.T, plain string) string {
