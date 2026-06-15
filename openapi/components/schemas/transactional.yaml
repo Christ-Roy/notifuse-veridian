@@ -135,3 +135,159 @@ EmailAttachment:
       description: How the attachment should be displayed (defaults to 'attachment')
       example: attachment
       default: attachment
+
+ChannelTemplate:
+  type: object
+  description: Template configuration for a single channel.
+  required:
+    - template_id
+  properties:
+    template_id:
+      type: string
+      description: ID of the template to render for this channel.
+      example: tpl_welcome
+    settings:
+      type: object
+      additionalProperties: true
+      description: Optional channel-specific settings.
+
+ChannelTemplates:
+  type: object
+  description: |
+    Maps a channel name to its template configuration. The only supported
+    channel today is `email`. At least one channel is required.
+  minProperties: 1
+  additionalProperties:
+    $ref: '#/ChannelTemplate'
+  example:
+    email:
+      template_id: tpl_welcome
+
+TransactionalNotification:
+  type: object
+  description: A transactional notification configuration (template binding + tracking).
+  properties:
+    id:
+      type: string
+      description: Unique identifier, also used as the trigger ID in transactional.send.
+      example: welcome_email
+    name:
+      type: string
+      example: Welcome email
+    description:
+      type: string
+      example: Sent right after signup.
+    channels:
+      $ref: '#/ChannelTemplates'
+    tracking_settings:
+      $ref: 'template.yaml#/TrackingSettings'
+    metadata:
+      type: object
+      additionalProperties: true
+      description: Arbitrary metadata stored with the notification.
+    integration_id:
+      type: string
+      nullable: true
+      description: Set if the notification is managed by an integration (e.g. Supabase).
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    deleted_at:
+      type: string
+      format: date-time
+      nullable: true
+
+TransactionalNotificationCreateParams:
+  type: object
+  description: Parameters to create a transactional notification.
+  required:
+    - id
+    - name
+    - channels
+  properties:
+    id:
+      type: string
+      description: Unique identifier for API triggering (used as the `id` in transactional.send).
+      example: welcome_email
+    name:
+      type: string
+      example: Welcome email
+    description:
+      type: string
+      example: Sent right after signup.
+    channels:
+      $ref: '#/ChannelTemplates'
+    tracking_settings:
+      $ref: 'template.yaml#/TrackingSettings'
+    metadata:
+      type: object
+      additionalProperties: true
+
+TransactionalNotificationUpdateParams:
+  type: object
+  description: |
+    Fields to update on an existing transactional notification. All fields are
+    optional but at least one of `name`, `description`, `channels` or `metadata`
+    must be provided.
+  properties:
+    name:
+      type: string
+      example: Welcome email (v2)
+    description:
+      type: string
+    channels:
+      $ref: '#/ChannelTemplates'
+    tracking_settings:
+      $ref: 'template.yaml#/TrackingSettings'
+    metadata:
+      type: object
+      additionalProperties: true
+
+CreateTransactionalRequest:
+  type: object
+  required:
+    - workspace_id
+    - notification
+  properties:
+    workspace_id:
+      type: string
+      description: The ID of the workspace.
+      example: ws_demo
+    notification:
+      $ref: '#/TransactionalNotificationCreateParams'
+
+UpdateTransactionalRequest:
+  type: object
+  required:
+    - workspace_id
+    - id
+    - updates
+  properties:
+    workspace_id:
+      type: string
+      description: The ID of the workspace.
+      example: ws_demo
+    id:
+      type: string
+      description: ID of the notification to update.
+      example: welcome_email
+    updates:
+      $ref: '#/TransactionalNotificationUpdateParams'
+
+DeleteTransactionalRequest:
+  type: object
+  required:
+    - workspace_id
+    - id
+  properties:
+    workspace_id:
+      type: string
+      description: The ID of the workspace.
+      example: ws_demo
+    id:
+      type: string
+      description: ID of the notification to soft-delete.
+      example: welcome_email

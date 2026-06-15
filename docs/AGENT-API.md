@@ -69,6 +69,55 @@ configurée) : `POST /api/transactional.testTemplate` avec `template_id`,
 **Juste rendre un template sans l'envoyer** (preview, debug) :
 `POST /api/templates.compile` → renvoie le HTML compilé.
 
+### 2.1 Gérer les transactional notifications (CRUD)
+
+Une **transactional notification** = un binding réutilisable (id + nom +
+templates par canal + tracking) que `transactional.send` déclenche ensuite via
+son `id`. Tout est pilotable par API (permission de ressource côté service).
+
+**Créer** (`POST /api/transactional.create`) → `201 {"notification": {…}}` :
+
+```bash
+curl -X POST …/api/transactional.create -H "Authorization: Bearer $TOKEN" -d '{
+  "workspace_id": "ws_demo",
+  "notification": {
+    "id": "welcome_email",                       // requis, sert d'id de trigger
+    "name": "Welcome email",                     // requis
+    "description": "Sent right after signup.",
+    "channels": {                                // requis, ≥1 canal (email seul supporté)
+      "email": { "template_id": "tpl_welcome" }
+    },
+    "tracking_settings": { "enable_tracking": true },
+    "metadata": { "category": "lifecycle" }
+  }
+}'
+```
+
+**Mettre à jour** (`POST /api/transactional.update`) → `200 {"notification": {…}}`.
+Au moins un champ parmi `name`/`description`/`channels`/`metadata` requis dans
+`updates` :
+
+```bash
+curl -X POST …/api/transactional.update -H "Authorization: Bearer $TOKEN" -d '{
+  "workspace_id": "ws_demo",
+  "id": "welcome_email",
+  "updates": { "channels": { "email": { "template_id": "tpl_welcome_v2" } } }
+}'
+```
+
+**Supprimer** (soft-delete) (`POST /api/transactional.delete`) →
+`200 {"success": true}` :
+
+```bash
+curl -X POST …/api/transactional.delete -H "Authorization: Bearer $TOKEN" \
+  -d '{"workspace_id":"ws_demo","id":"welcome_email"}'
+```
+
+Erreurs : `400` (id/name/channels manquants ou `at least one field must be
+updated`, ou `invalid template`), `404 Notification not found` (update/delete).
+**Lecture** : `GET /api/transactional.list?workspace_id=…` et
+`GET /api/transactional.get?workspace_id=…&id=…`.
+
 ---
 
 ## 3. Créer une séquence (automation) et y enrôler des contacts
@@ -262,6 +311,4 @@ Schémas et exemples complets : `openapi/openapi.yaml`.
 
 - **Génération/rotation d'une api_key** : se fait dans la console (Settings →
   API keys), pas d'endpoint public. Un agent doit recevoir un token déjà émis.
-- **Création des transactional notifications** : `transactional.create/update`
-  existent mais ne sont pas encore dans l'OpenAPI (documenter dans un prochain lot).
 - **Désinscription cold** : volontairement absente (choix produit cold outreach).

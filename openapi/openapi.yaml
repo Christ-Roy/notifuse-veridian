@@ -15,6 +15,12 @@ servers:
         description: Your unique Notifuse domain
         default: demo.notifuse.com
 paths:
+  /api/transactional.create:
+    $ref: './paths/transactional.yaml#/~1api~1transactional.create'
+  /api/transactional.update:
+    $ref: './paths/transactional.yaml#/~1api~1transactional.update'
+  /api/transactional.delete:
+    $ref: './paths/transactional.yaml#/~1api~1transactional.delete'
   /api/transactional.send:
     $ref: './paths/transactional.yaml#/~1api~1transactional.send'
   /api/transactional.testTemplate:
@@ -134,6 +140,22 @@ components:
       $ref: './components/schemas/transactional.yaml#/SendTransactionalRequest'
     TransactionalNotificationSendParams:
       $ref: './components/schemas/transactional.yaml#/TransactionalNotificationSendParams'
+    TransactionalNotification:
+      $ref: './components/schemas/transactional.yaml#/TransactionalNotification'
+    ChannelTemplate:
+      $ref: './components/schemas/transactional.yaml#/ChannelTemplate'
+    ChannelTemplates:
+      $ref: './components/schemas/transactional.yaml#/ChannelTemplates'
+    TransactionalNotificationCreateParams:
+      $ref: './components/schemas/transactional.yaml#/TransactionalNotificationCreateParams'
+    TransactionalNotificationUpdateParams:
+      $ref: './components/schemas/transactional.yaml#/TransactionalNotificationUpdateParams'
+    CreateTransactionalRequest:
+      $ref: './components/schemas/transactional.yaml#/CreateTransactionalRequest'
+    UpdateTransactionalRequest:
+      $ref: './components/schemas/transactional.yaml#/UpdateTransactionalRequest'
+    DeleteTransactionalRequest:
+      $ref: './components/schemas/transactional.yaml#/DeleteTransactionalRequest'
     Contact:
       $ref: './components/schemas/contact.yaml#/Contact'
     ContactInput:
