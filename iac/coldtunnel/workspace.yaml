@@ -5,15 +5,19 @@
 # But (Robert 2026-06-15) : "tout poser comme IAC idempotent pour avoir d'un
 # coup d'œil notre contenu et l'éditer facilement depuis des fichiers".
 #
-# Appliqué par : scripts/iac/apply.sh (à livrer par Lot IAC #18) — plan/apply
+# Appliqué par : scripts/iac/notifuse-iac.sh (Lot IAC #18) — plan/apply
 # idempotent contre l'API Notifuse (POST /api/<resource>.<verb>, auth owner).
 # Les SECRETS ne sont JAMAIS en clair ici : référencés par ${VAR} depuis
-# ~/credentials/.all-creds.env, injectés à l'apply.
+# ~/credentials/.all-creds.env, injectés à l'apply (fichier temp 0600).
 #
-# ⚠️ STATUT 2026-06-15 : workspace PROVISIONNÉ (HMAC, plan enterprise, owner
-# robert.brunon@veridian.site). Intégrations SMTP/IMAP + config cold PAS encore
-# appliquées (exigent auth owner via magic-link + le CLI apply du Lot IAC).
-# Ce fichier est la CIBLE déclarative, pas encore l'état appliqué.
+#   scripts/iac/notifuse-iac.sh plan  --env staging   # diff read-only
+#   scripts/iac/notifuse-iac.sh apply --env staging   # converge (idempotent)
+#   scripts/iac/notifuse-iac.sh apply --env prod --yes # prod = opt-in explicite
+#
+# ✅ STATUT 2026-06-15 : APPLIQUÉ + idempotence vérifiée sur STAGING
+# (notifuse.staging.veridian.site) — SMTP relay agences-veridian.fr (3 senders,
+# rates/caps/tracking par classe), IMAP retour Lark, settings cold workspace.
+# Re-apply = 0 changement. PROD non appliquée (attend GO lead, --env prod --yes).
 # ============================================================================
 
 workspace:
