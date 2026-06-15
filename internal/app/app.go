@@ -1511,6 +1511,25 @@ func (a *App) InitHandlers() error {
 	)
 	veridianContactBreakdownHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patch — linter de délivrabilité (spam score) cold (2026-06-15) ===
+	// Endpoint POST+GET /api/veridian/templates.deliverabilityScore : score 0-10
+	// (façon SpamAssassin) + règles déclenchées avec poids, sur un template cold
+	// RENDU (Liquid+spintax résolus). Moteur = package pur pkg/veridian_deliverability
+	// (zéro I/O, instantané). Modes strict (Google/MS) / lenient (petits providers)
+	// déduits de la classe destinataire. Auth JWT console + permission templates:read
+	// (gardien dans le service). Cf.
+	// todo/2026-06-15-linter-deliverabilite-spam-score-templates.md.
+	veridianDeliverabilityScoreService := service.NewVeridianDeliverabilityScoreService(
+		a.authService,
+		a.logger,
+	)
+	veridianDeliverabilityScoreHandler := httpHandler.NewVeridianDeliverabilityScoreHandler(
+		veridianDeliverabilityScoreService,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianDeliverabilityScoreHandler.RegisterRoutes(a.mux)
+
 	// === Veridian patch — automations.enroll (sprint AI-first API, 2026-06-15) ===
 	// Endpoint POST /api/automations.enroll : enrôle un/des contact(s) au node
 	// d'entrée d'une automation LIVE par API (maillon manquant du pilotage
