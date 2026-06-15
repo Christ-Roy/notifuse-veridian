@@ -438,6 +438,41 @@ func TestSMTPService_SendEmail_Integration(t *testing.T) {
 	assert.NotContains(t, mailFromCmd, "SMTPUTF8")
 }
 
+// Veridian (Lot 3 stop-on-reply) : le Message-ID RFC822 doit être DÉTERMINISTE
+// <message_id@from-domain> (pas l'aléatoire go-mail), pour que les réponses prospect
+// soient matchables par leur In-Reply-To/References. Cf. veridian_send_message_id.go.
+func TestSMTPService_SendEmail_VeridianDeterministicMessageID(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID:   "workspace-123",
+		IntegrationID: "integration-123",
+		MessageID:     "11111111-2222-3333-4444-555555555555",
+		FromAddress:   "cold@send.veridian.site",
+		FromName:      "Cold Outreach",
+		To:            "prospect@acme.fr",
+		Subject:       "Bonjour",
+		Content:       "<p>Hello</p>",
+		Provider: &domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false},
+		},
+		EmailOptions: domain.EmailOptions{},
+	}
+
+	require.NoError(t, service.SendEmail(context.Background(), request))
+
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	data := string(messages[0].data)
+	// Header RFC822 déterministe présent…
+	assert.Contains(t, data, "Message-ID: <11111111-2222-3333-4444-555555555555@send.veridian.site>")
+	// …et le X-Message-ID de tracking reste posé (usage distinct, non régressé).
+	assert.Contains(t, data, "X-Message-ID: 11111111-2222-3333-4444-555555555555")
+}
+
 func TestSMTPService_SendEmail_DefaultEhloUsesFromDomain(t *testing.T) {
 	server := newMockSMTPServer(t, true)
 	defer server.Close()

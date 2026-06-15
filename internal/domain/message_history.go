@@ -204,6 +204,15 @@ type MessageHistoryRepository interface {
 	// la liste de domaines dérivée en Go. Sert au plafond JOURNALIER par classe
 	// (réputation). Cf. veridian_daily_cap.go.
 	CountSentSinceForDomains(ctx context.Context, workspaceID string, domains []string, exclude bool, since time.Time) (int, error)
+
+	// FindContactEmailByMessageID retourne le contact_email de l'envoi dont l'id
+	// (= message_history.id, posé comme local-part du Message-ID RFC822 à l'envoi)
+	// est `messageID`. found=false si aucun envoi ne porte cet id (le Message-ID
+	// cité dans une réponse ne vient pas de nous). Projection LÉGÈRE (un seul
+	// champ, pas de secretKey, pas de déchiffrement) : sert le MATCH FORT du
+	// stop-on-reply (Lot 3) — confirmer qu'un In-Reply-To/References cité par un
+	// prospect correspond bien à un de NOS envois vers CE contact.
+	FindContactEmailByMessageID(ctx context.Context, workspaceID, messageID string) (email string, found bool, err error)
 }
 
 // MessageHistoryService defines methods for interacting with message history

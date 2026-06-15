@@ -334,6 +334,20 @@ func TestVeridianMessageHistoryDecorator_CountSentSinceForDomains_Passthrough(t 
 	assert.Equal(t, 11, got)
 }
 
+func TestVeridianMessageHistoryDecorator_FindContactEmailByMessageID_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	upstream.EXPECT().FindContactEmailByMessageID(gomock.Any(), "ws", "msg-1").
+		Return("prospect@acme.fr", true, nil).Times(1)
+	email, found, err := d.FindContactEmailByMessageID(context.Background(), "ws", "msg-1")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "prospect@acme.fr", email)
+}
+
 func TestIsWorkspaceNotFoundErr(t *testing.T) {
 	tests := []struct {
 		name string

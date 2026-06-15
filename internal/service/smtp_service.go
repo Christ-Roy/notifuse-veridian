@@ -439,6 +439,16 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 	// Add message ID tracking header
 	msg.SetGenHeader("X-Message-ID", request.MessageID)
 
+	// === Veridian cold (Lot 3 stop-on-reply) === Message-ID RFC822 DÉTERMINISTE.
+	// Par défaut go-mail générerait un Message-ID aléatoire qu'on ne pourrait pas
+	// relier à une réponse. On le rend matchable : <message_history.id@domaine>.
+	// La réponse du prospect recopiera ce Message-ID dans In-Reply-To/References,
+	// que le reply-detection retrouve par sa local-part. Vide => fallback go-mail
+	// (non-régression). Cf. internal/service/veridian_send_message_id.go.
+	if mid := veridianMessageIDForSend(request.MessageID, request.FromAddress); mid != "" {
+		msg.SetMessageIDWithValue(mid)
+	}
+
 	// Add RFC-8058 List-Unsubscribe headers for one-click unsubscribe
 	if request.EmailOptions.ListUnsubscribeURL != "" {
 		msg.SetGenHeader("List-Unsubscribe", fmt.Sprintf("<%s>", request.EmailOptions.ListUnsubscribeURL))

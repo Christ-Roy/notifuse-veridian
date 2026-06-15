@@ -398,6 +398,30 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID string, 
 	return &message, nil
 }
 
+// FindContactEmailByMessageID projette le contact_email de l'envoi dont l'id est
+// `messageID`. Lookup PK (id) → O(1), aucun déchiffrement (un seul champ projeté).
+// found=false (sans erreur) si l'id n'existe pas : un Message-ID cité par un
+// prospect peut ne PAS venir de nous (autre expéditeur dans le thread). Sert le
+// match fort du stop-on-reply (Lot 3). Cf. internal/domain/message_history.go.
+func (r *MessageHistoryRepository) FindContactEmailByMessageID(ctx context.Context, workspaceID, messageID string) (string, bool, error) {
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	var contactEmail string
+	err = workspaceDB.QueryRowContext(ctx,
+		`SELECT contact_email FROM message_history WHERE id = $1`, messageID,
+	).Scan(&contactEmail)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to find contact_email by message id: %w", err)
+	}
+	return contactEmail, true, nil
+}
+
 // GetByExternalID retrieves a message history by external ID for idempotency checks
 func (r *MessageHistoryRepository) GetByExternalID(ctx context.Context, workspaceID string, secretKey string, externalID string) (*domain.MessageHistory, error) {
 	// Get the workspace database connection

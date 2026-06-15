@@ -1524,3 +1524,38 @@ func TestMessageHistoryRepository_DailyCapContract(t *testing.T) {
 		assert.Equal(t, 2, n)
 	})
 }
+
+// Veridian — fake pour la méthode FindContactEmailByMessageID (stop-on-reply, Lot 3) :
+// vérifie le contrat (found bool + email) sans vraie DB, et le compile-time check de la
+// signature vs l'interface. Le repo Postgres réel est testé dans internal/repository.
+type veridianReplyLookupFakeRepo struct {
+	MessageHistoryRepository // embed nil : panique si une autre méthode est appelée
+	byID                     map[string]string
+}
+
+func (f *veridianReplyLookupFakeRepo) FindContactEmailByMessageID(_ context.Context, _ string, messageID string) (string, bool, error) {
+	email, ok := f.byID[messageID]
+	return email, ok, nil
+}
+
+func TestMessageHistoryRepository_FindContactEmailByMessageID_Contract(t *testing.T) {
+	// compile-time : le fake satisfait bien l'interface étendue.
+	var _ MessageHistoryRepository = (*veridianReplyLookupFakeRepo)(nil)
+
+	ctx := context.Background()
+	repo := &veridianReplyLookupFakeRepo{byID: map[string]string{"msg-1": "prospect@acme.fr"}}
+
+	t.Run("found returns email", func(t *testing.T) {
+		email, found, err := repo.FindContactEmailByMessageID(ctx, "ws", "msg-1")
+		require.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, "prospect@acme.fr", email)
+	})
+
+	t.Run("not ours returns found=false", func(t *testing.T) {
+		email, found, err := repo.FindContactEmailByMessageID(ctx, "ws", "unknown")
+		require.NoError(t, err)
+		assert.False(t, found)
+		assert.Empty(t, email)
+	})
+}

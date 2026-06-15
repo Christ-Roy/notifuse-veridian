@@ -2700,3 +2700,64 @@ func TestMessageHistoryRepository_CountSentSinceForDomains(t *testing.T) {
 		assert.Contains(t, err.Error(), "workspace connection")
 	})
 }
+
+func TestMessageHistoryRepository_FindContactEmailByMessageID(t *testing.T) {
+	ctx := context.Background()
+	const workspaceID = "ws1"
+
+	t.Run("found returns email", func(t *testing.T) {
+		mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+		defer cleanup()
+
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
+			WithArgs("msg-1").
+			WillReturnRows(sqlmock.NewRows([]string{"contact_email"}).AddRow("prospect@acme.fr"))
+
+		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, "msg-1")
+		require.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, "prospect@acme.fr", email)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("not found returns found=false without error", func(t *testing.T) {
+		mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+		defer cleanup()
+
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
+			WithArgs("nope").
+			WillReturnError(sql.ErrNoRows)
+
+		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, "nope")
+		require.NoError(t, err)
+		assert.False(t, found)
+		assert.Empty(t, email)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("query error surfaced", func(t *testing.T) {
+		mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+		defer cleanup()
+
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
+			WithArgs("x").
+			WillReturnError(errors.New("db down"))
+
+		_, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, "x")
+		require.Error(t, err)
+		assert.False(t, found)
+	})
+
+	t.Run("connection error surfaced", func(t *testing.T) {
+		mockWorkspaceRepo, repo, _, _, cleanup := setupMessageHistoryTest(t)
+		defer cleanup()
+
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(nil, errors.New("conn fail"))
+		_, _, err := repo.FindContactEmailByMessageID(ctx, workspaceID, "x")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+}

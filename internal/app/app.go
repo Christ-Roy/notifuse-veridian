@@ -130,6 +130,7 @@ type App struct {
 	veridianAPIKeyGraceRepo  domain.VeridianAPIKeyGraceRepository // Lot K — grace period rotate-api-key
 	veridianFrozenMemberRepo domain.VeridianFrozenMemberRepository // §5.21 — freeze member per-user
 	veridianIMAPUIDSeenRepo  domain.VeridianIMAPUIDSeenRepository  // Lot 1 cold — idempotence poller IMAP (V50)
+	veridianContactReplyRepo domain.VeridianContactReplyRepository // Lot 3 cold — signal durable stop-on-reply (V51)
 	veridianService          domain.VeridianService
 	veridianWebhookEmitter   domain.WebhookEmitter
 	veridianPaywallCache     *middleware.PaywallCache              // partage middleware paywall + handler invalidate
@@ -137,6 +138,7 @@ type App struct {
 	veridianPricingSync      *service.VeridianPricingSyncService   // catalogue pricing Hub (lot O 2026-05-21)
 	veridianTestTenantsCleanup *service.VeridianTestTenantsCleanupService // cron auto-cleanup orphans staging (2026-05-24)
 	veridianIMAPPoller       *queue.VeridianIMAPPollerService      // Lot 1 cold — poller IMAP self-service (réception bounces/réponses)
+	veridianReplyService     *service.VeridianReplyService         // Lot 3 cold — détection réponse + exit séquence (stop-on-reply)
 
 	// Services
 	authService                      *service.AuthService
@@ -486,6 +488,13 @@ func (a *App) InitRepositories() error {
 	// jamais re-dispatcher un UID déjà traité aux lots downstream (bounce-loop,
 	// stop-on-reply). Cf. internal/domain/veridian_imap_integration.go.
 	a.veridianIMAPUIDSeenRepo = repository.NewVeridianIMAPUIDSeenRepository(a.db)
+
+	// === Veridian patch — Lot 3 sprint cold (2026-06-15) === Repo Postgres pour
+	// le signal durable stop-on-reply (table workspace veridian_contact_reply,
+	// migration V51). Source de vérité "ce contact a répondu", consommée par le
+	// gate d'exit de séquence (Lot 9) via ColdReplyChecker et par l'exit actif des
+	// automations. Cf. internal/domain/veridian_contact_reply.go.
+	a.veridianContactReplyRepo = repository.NewVeridianContactReplyRepository(a.workspaceRepo)
 
 	// Initialize setting service
 	a.settingService = service.NewSettingService(a.settingRepo)
@@ -1008,6 +1017,21 @@ func (a *App) InitServices() error {
 	})
 
 	// Initialize automation executor and scheduler
+	// === Veridian patch — Lot 3 sprint cold (2026-06-15) === Service stop-on-reply.
+	// Détecte les réponses prospect (consommées via le poller IMAP, branché plus bas)
+	// et pose le signal 'replied' + exit actif des automations. Il EST aussi le
+	// ColdReplyChecker du Lot 9 : injecté dans l'executor via SetColdReplyChecker pour
+	// que le gate d'exit de séquence sorte un contact dès qu'il a répondu, y compris
+	// au milieu d'un délai de relance. Cf. internal/service/veridian_reply_service.go.
+	a.veridianReplyService = service.NewVeridianReplyService(
+		a.veridianContactReplyRepo,
+		a.messageHistoryRepo,
+		a.contactRepo,
+		a.automationRepo,
+		a.contactTimelineRepo,
+		a.logger,
+	)
+
 	automationExecutor := service.NewAutomationExecutor(
 		a.automationRepo,
 		a.contactRepo,
@@ -1021,6 +1045,8 @@ func (a *App) InitServices() error {
 		a.logger,
 		a.config.APIEndpoint,
 	)
+	// Branche le checker stop-on-reply (Lot 3) sur le gate d'exit cold (Lot 9).
+	automationExecutor.SetColdReplyChecker(a.veridianReplyService)
 	a.automationScheduler = service.NewAutomationScheduler(
 		automationExecutor,
 		a.logger,
@@ -1394,6 +1420,13 @@ func (a *App) InitHandlers() error {
 		a.logger,
 	)
 	a.veridianIMAPPoller.RegisterConsumer(veridianBounceConsumer)
+
+	// Lot 3 cold — stop-on-reply : détecte qu'un prospect a répondu (match fort par
+	// Message-ID, fallback expéditeur, NDR exclus via pkg/veridian_ndr) et stoppe sa
+	// cadence (signal durable + exit actif des automations + gate Lot 9). Best-effort,
+	// idempotent. Son enregistrement (comme le bounce-loop) garde le poller actif.
+	veridianReplyConsumer := service.NewVeridianReplyConsumer(a.veridianReplyService, a.logger)
+	a.veridianIMAPPoller.RegisterConsumer(veridianReplyConsumer)
 
 	// === Veridian patch — Mail provider choice (V48) SUPPRIMÉ 2026-05-31 ===
 	// Le pipeline "envoi via Hub Mail Gateway" (mail-provider-choice + proxy

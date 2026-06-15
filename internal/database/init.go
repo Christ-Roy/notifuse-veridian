@@ -476,6 +476,19 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_email_queue_retry ON email_queue(next_retry_at) WHERE status = 'failed' AND attempts < max_attempts`,
 		`CREATE INDEX IF NOT EXISTS idx_email_queue_source ON email_queue(source_type, source_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_email_queue_integration ON email_queue(integration_id, status)`,
+		// === Veridian cold (Lot 3 stop-on-reply, V51) === Signal durable "a
+		// répondu" : source de vérité du stop-on-reply, consommée par le gate
+		// d'exit de séquence (Lot 9) et l'exit actif des automations. Cf.
+		// internal/domain/veridian_contact_reply.go + migration v51.go (pour les
+		// workspaces existants ; ce CREATE sert les workspaces créés après V51).
+		`CREATE TABLE IF NOT EXISTS veridian_contact_reply (
+			contact_email      TEXT NOT NULL,
+			replied_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			match_type         TEXT NOT NULL,
+			matched_message_id TEXT,
+			created_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (contact_email)
+		)`,
 	}
 
 	// Run all table creation queries

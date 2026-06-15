@@ -555,8 +555,10 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// plafond journalier cold outbound (cf. v49.go header).
 		// V50 : table système veridian_imap_uid_seen (idempotence poller IMAP
 		// self-service, Lot 1 sprint cold ; cf. v50.go header).
+		// V51 : table workspace veridian_contact_reply (signal durable stop-on-reply,
+		// Lot 3 sprint cold ; cf. v51.go header).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("50"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("51"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 
