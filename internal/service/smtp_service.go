@@ -436,8 +436,15 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 		}
 	}
 
-	// Add message ID tracking header
-	msg.SetGenHeader("X-Message-ID", request.MessageID)
+	// === Veridian cold (conformité client mail, 2026-06-15) ===
+	// Pas de header custom X-Message-ID sur le chemin SMTP : un vrai client mail
+	// (Thunderbird/Apple Mail) n'en pose pas — c'est un tell de machine. Le
+	// Message-ID RFC822 standard (posé juste en dessous) suffit au tracking interne
+	// (réponses matchées via In-Reply-To/References, bounces cold via NDR IMAP).
+	// Le fallback webhook SES qui relit X-Message-ID (extractXMessageIDFromHeaders
+	// dans inbound_webhook_event_service.go) ne concerne QUE le chemin SES
+	// (ses_service.go pose toujours le header) — pas le relai SMTP/cold, donc le
+	// retrait ici est sans impact sur le tracking SES.
 
 	// === Veridian cold (Lot 3 stop-on-reply) === Message-ID RFC822 DÉTERMINISTE.
 	// Par défaut go-mail générerait un Message-ID aléatoire qu'on ne pourrait pas
@@ -456,7 +463,22 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 	}
 
 	msg.Subject(request.Subject)
-	msg.SetBodyString(mail.TypeTextHTML, request.Content)
+
+	// === Veridian cold (conformité client mail, 2026-06-15) ===
+	// multipart/alternative : partie text/plain D'ABORD, partie text/html ENSUITE.
+	// RFC 2046 §5.1.4 : les alternatives vont du moins riche au plus riche, le
+	// client affiche la dernière qu'il sait rendre (donc le HTML pour un webmail,
+	// le texte pour un client texte). go-mail écrit les parts dans l'ordre du
+	// slice (SetBodyString = part[0], AddAlternativeString = append). Un HTML-only
+	// est un tell anti-spam (HTML_IMAGE_ONLY / MIME_HTML_ONLY côté SpamAssassin).
+	// Best-effort : pas de texte dérivable → on reste HTML-only (non-régression,
+	// l'envoi n'échoue jamais pour cette raison).
+	if plain := veridianHTMLToText(request.Content); plain != "" {
+		msg.SetBodyString(mail.TypeTextPlain, plain)
+		msg.AddAlternativeString(mail.TypeTextHTML, request.Content)
+	} else {
+		msg.SetBodyString(mail.TypeTextHTML, request.Content)
+	}
 
 	// Add attachments if specified
 	for i, att := range request.EmailOptions.Attachments {

@@ -469,8 +469,92 @@ func TestSMTPService_SendEmail_VeridianDeterministicMessageID(t *testing.T) {
 	data := string(messages[0].data)
 	// Header RFC822 déterministe présent…
 	assert.Contains(t, data, "Message-ID: <11111111-2222-3333-4444-555555555555@send.veridian.site>")
-	// …et le X-Message-ID de tracking reste posé (usage distinct, non régressé).
-	assert.Contains(t, data, "X-Message-ID: 11111111-2222-3333-4444-555555555555")
+	// …et le header custom X-Message-ID n'est PLUS posé sur le chemin SMTP
+	// (conformité client mail 2026-06-15) : un vrai client n'en met pas, le
+	// Message-ID RFC822 suffit au tracking interne.
+	assert.NotContains(t, data, "X-Message-ID")
+}
+
+// Veridian (conformité client mail, 2026-06-15) : le chemin SMTP doit produire un
+// multipart/alternative (text/plain + text/html), comme un vrai client mail. Un
+// HTML-only est un tell anti-spam (HTML_IMAGE_ONLY / MIME_HTML_ONLY).
+func TestSMTPService_SendEmail_VeridianMultipartTextHTML(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID:   "workspace-123",
+		IntegrationID: "integration-123",
+		MessageID:     "22222222-3333-4444-5555-666666666666",
+		FromAddress:   "cold@send.veridian.site",
+		FromName:      "Cold Outreach",
+		To:            "prospect@acme.fr",
+		Subject:       "Bonjour",
+		Content:       "<h1>Salut Jean</h1><p>On peut <strong>échanger</strong> cette semaine ?</p>",
+		Provider: &domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false},
+		},
+		EmailOptions: domain.EmailOptions{},
+	}
+
+	require.NoError(t, service.SendEmail(context.Background(), request))
+
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	data := string(messages[0].data)
+
+	// Conteneur multipart/alternative annoncé.
+	assert.Contains(t, data, "multipart/alternative", "le message doit être multipart/alternative")
+	// Les deux représentations sont présentes.
+	assert.Contains(t, data, "text/plain", "partie text/plain manquante")
+	assert.Contains(t, data, "text/html", "partie text/html manquante")
+	// Pas de header custom non-standard.
+	assert.NotContains(t, data, "X-Message-ID")
+
+	// ORDRE RFC 2046 §5.1.4 : text/plain AVANT text/html (du moins riche au plus
+	// riche) — le client affiche la dernière qu'il sait rendre.
+	idxPlain := strings.Index(data, "text/plain")
+	idxHTML := strings.Index(data, "text/html")
+	require.GreaterOrEqual(t, idxPlain, 0)
+	require.GreaterOrEqual(t, idxHTML, 0)
+	assert.Less(t, idxPlain, idxHTML, "text/plain doit précéder text/html dans le MIME")
+}
+
+// Non-régression : si le HTML ne produit aucun texte exploitable (cas dégénéré),
+// on retombe sur un envoi HTML-only sans planter (pas de multipart vide).
+func TestSMTPService_SendEmail_VeridianMultipartFallbackHTMLOnly(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID:   "workspace-123",
+		IntegrationID: "integration-123",
+		MessageID:     "33333333-4444-5555-6666-777777777777",
+		FromAddress:   "cold@send.veridian.site",
+		FromName:      "Cold Outreach",
+		To:            "prospect@acme.fr",
+		Subject:       "Bonjour",
+		// Contenu sans aucun texte visible (uniquement des balises non rendues).
+		Content: "<style>.x{color:red}</style><script>var a=1;</script>",
+		Provider: &domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false},
+		},
+		EmailOptions: domain.EmailOptions{},
+	}
+
+	require.NoError(t, service.SendEmail(context.Background(), request))
+
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	data := string(messages[0].data)
+
+	// HTML-only : la partie HTML est là, pas de conteneur multipart/alternative.
+	assert.Contains(t, data, "text/html")
+	assert.NotContains(t, data, "multipart/alternative")
 }
 
 func TestSMTPService_SendEmail_DefaultEhloUsesFromDomain(t *testing.T) {
