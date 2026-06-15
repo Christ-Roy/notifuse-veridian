@@ -20,9 +20,11 @@ orchestre), il manque un endpoint owner-only de génération/rotation d'api_key.
   sans passer par la console.
 - DoD : endpoint `apiKeys.create`/`apiKeys.rotate` owner-only + test + doc OpenAPI + AGENT-API.
 
-## Trou 2 — 🟢 transactional.create/update absents de l'OpenAPI (doc-only)
+## Trou 2 — ✅ LIVRÉ (2026-06-15, commit b56589a1) — transactional.create/update/delete dans l'OpenAPI
 Les routes EXISTENT (`internal/http/transactional_handler.go` : transactional.create/update/delete)
-mais ne sont pas documentées dans l'OpenAPI (aifirst-api est resté fidèle au déjà-documenté).
+mais n'étaient pas documentées dans l'OpenAPI (aifirst-api est resté fidèle au déjà-documenté).
+→ Documentées : `openapi/paths/transactional.yaml` + `openapi/components/schemas/transactional.yaml`
++ `openapi/openapi.yaml` + `docs/AGENT-API.md` §2.1. redocly lint vert.
 - DoD : ajouter transactional.create/update/delete aux chunks OpenAPI + AGENT-API. Commit doc-only `[risk:low]`.
 
 ## Trou 3 — Désinscription cold : absente PAR CHOIX produit (pas un trou)
