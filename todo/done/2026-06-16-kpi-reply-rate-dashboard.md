@@ -148,3 +148,64 @@ livrer d'abord celui-ci.**
   Pour un ratio exact « réponses / contacts contactés uniques » il faudrait
   `COUNT(DISTINCT contact_email)` sur message_history ; à trancher par le lead, le
   ratio simple suffit pour un dashboard de pilotage.
+
+---
+
+## ✅ Résolu — 2026-06-16 (agent reply-kpi)
+
+**SHA** : `dec1df0d` (poussé sur `veridian`, staging only, SANS `[risk:low]` —
+tier 🟡 : nouvelle route JWT lecture seule + carte UI. Promo prod par le lead
+après E2E on-premise staging).
+
+**Choix d'archi retenu** (le plus propre) : **endpoint dédié**
+`POST + GET /api/veridian/messages.replyStats`, calqué pixel sur le breakdown
+contacts R1. PAS de greffe dans le moteur analytics générique `message_history`
+(la donnée reply vit dans la table SÉPARÉE `veridian_contact_reply`, pas de
+colonne `count_replied`, pas de jointure dans le moteur → greffe = invasif et
+faux). Le backend renvoie `{"replied": N}` brut ; le ratio `replied/sent` est
+calculé côté front avec le `count_sent` déjà chargé par `EmailMetricsChart`
+(pas de 2e source de vérité pour "sent").
+
+**Pas de migration** : table `veridian_contact_reply` existante (V51), méthode
+de COUNT lecture seule additive. PK `contact_email` seul → seq-scan négligeable
+sur le volume cold quotidien (index `(replied_at)` à ajouter SI/quand mesuré
+chaud, posture daily cap V49). `config.VERSION` NON bumpé.
+
+**Fichiers créés** :
+- `internal/domain/veridian_reply_stats.go` (+ `_test.go`) — types + interface
+  service + doc du choix d'archi. Test : interface satisfiable + pin JSON shape
+  (contrat front `{"replied":N}`).
+- `internal/service/veridian_reply_stats_service.go` (+ `_test.go`) — gardien
+  auth + permission `contacts:read` (le reply est une donnée contact).
+- `internal/http/veridian_reply_stats_handler.go` (+ `_test.go`) — POST+GET
+  routés explicitement (piège catchall), parsing start/end ISO → `[since, until[`
+  end inclusif (borne exclusive au lendemain, aligné dateRange dashboard).
+- `internal/domain/mocks/mock_veridian_reply_stats_service.go` — mock service.
+- `console/src/services/api/veridian_reply_stats.ts` (+ `.test.ts`) — client GET.
+
+**Fichiers modifiés** :
+- `internal/domain/veridian_contact_reply.go` — +méthode interface
+  `CountRepliedSince(ctx, ws, since, until)`.
+- `internal/repository/veridian_contact_reply_postgres.go` (+ `_test.go`) —
+  impl Postgres (COUNT bornes optionnelles via Squirrel).
+- `internal/domain/mocks/mock_veridian_contact_reply_repository.go` — mock régénéré.
+- `internal/domain/veridian_contact_reply_test.go` — stub étendu (CountRepliedSince).
+- `internal/app/app.go` — câblage du handler (bloc à côté de R1 breakdown).
+- `console/src/components/analytics/EmailMetricsChart.tsx` — carte KPI "Replies"
+  (icône faComments, `getRate(replied, count_sent)`, tooltip avec compte brut +
+  note "#1 cold outreach KPI"). Fetch reply en parallèle, même fenêtre dateRange.
+  Best-effort (échec endpoint reply → replied=0, dashboard non cassé).
+- `console/src/i18n/locales/*.{po,js}` — extraction + compilation Lingui (msgids
+  `Replies` + tooltip présents dans en.po, vérifié → pas de label vide runtime).
+
+**Build/tests verts** :
+- `GOMAXPROCS=2 go build ./...` → exit 0.
+- `go test ./internal/{domain,repository,service,http}/` → 4/4 packages ok.
+- `npx tsc --noEmit` console → exit 0.
+- `npx vitest run veridian_reply_stats.test.ts` → 2/2 pass.
+- Pre-push : check-test-mapping 100% (mapping 1-pour-1 OK, routes API 100%),
+  rate-limit coverage OK, console build (lingui compile + tsc + vite build) OK,
+  intégrité React OK, catalogues i18n à jour.
+
+**Reste (lead)** : promo prod après E2E on-premise staging (worker + DB staging
+réels). Validation rendu réel de la carte par `?cachebust=` (piège SW cache).
