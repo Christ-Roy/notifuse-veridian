@@ -1359,26 +1359,57 @@ Adaptations Go pour ce repo :
    pour les fichiers **non-veridian_***. Les `veridian_*.go` restent sous
    discipline stricte.
 8. **Skip docs** : `paths-ignore: ['**.md', 'docs/**', 'runbooks/**', 'plans/**']`.
-9. **Promotion prod gatée par marker `[risk:low]` (§20, câblé 2026-06-10)**.
-   Un push sur `veridian` qui passe build + e2e-staging part en prod
-   **automatiquement UNIQUEMENT si le subject du commit contient `[risk:low]`**
-   (1ère ligne — un marker dans le body ne suffit pas, le job `deploy-prod`
-   échoue dans ce cas). Sans `[risk:low]` : staging seul + job
-   `notify-promotion-needed` alerte Robert (Telegram) qu'une reco agent /
-   promotion explicite est attendue. Promotion manuelle d'un commit non-low =
-   `workflow_dispatch` avec `deploy_prod=true` (override, ignore le marker).
-   Stop-gap `[skip-prod]` / `[wip]` : bloquent toujours la prod.
-   ⚠️ **Historique** : avant le 2026-06-10 la prod était auto-promote
-   **inconditionnelle** (opt-out `[skip-prod]`) — un commit tier 🔴 (throttle
-   `7b813504`) est parti en prod sans gate. Modèle inversé en opt-in `[risk:low]`
-   pour aligner sur Hub CI-ARCHITECTURE §20. Le marker n'est PAS vérifié par
-   le pre-push hook côté Notifuse (pas de `check-risk-marker.sh` ici, contrairement
-   au Hub) : l'agent est responsable de ne mettre `[risk:low]` que sur du tier
-   🟢 (doc, todo, tests-only, refactor sans surface API). Tier 🟡/🔴 → push sans
-   marker, puis reco/dispatch.
-   Toujours valable : si `Dockerfile`, `go.mod`, `docker-compose.yml`,
-   `internal/migrations/**` modifiés → staging vert + e2e-staging vert exigés
-   avant toute prod (implicite via `needs`).
+9. **Promotion prod — L'AGENT TRANCHE (gravé Robert 2026-06-16).**
+
+   **C'est l'agent propriétaire de Notifuse qui décide de la promo prod, pas
+   Robert.** Robert délègue le résultat : il ne valide PAS chaque push, il
+   n'attend PAS au bout d'une notif Telegram. L'agent juge le risque, lance les
+   tests qu'il faut, promeut quand c'est vert, rend compte après. Robert
+   intervient seulement (a) en veto explicite (`stop`/`rollback`/`freeze`), ou
+   (b) sur le tier 💀 destructif-irréversible (cf. ci-dessous).
+
+   **Le critère de promo n'est PAS un marker, c'est le NIVEAU DE PREUVE atteint.**
+   L'agent classe son lot par risque et choisit la batterie de tests en
+   conséquence — les unit tests de la CI sont le PLANCHER, jamais le plafond :
+
+   | Tier | Exemples | Preuve EXIGÉE avant promo (par l'agent) | Promo |
+   |---|---|---|---|
+   | 🟢 BAS | doc, todo, tests-only, refactor sans surface API | CI verte (unit + mapping) | Marker `[risk:low]` → auto-promote |
+   | 🟡 MOYEN | UI, route non-auth, bump dep patch | CI verte + smoke ciblé staging (curl/Chrome sur la surface touchée) | Agent promote (`workflow_dispatch deploy_prod=true`) après smoke OK |
+   | 🔴 HAUT | envoi mail core, throttle/pixel cold, HMAC, lib partagée, gros bump dep (CVE), sync upstream | CI verte + **TEST ON-PREMISE staging** = E2E réel sur le vrai système (DB/SMTP staging, sink local si besoin), état vérifié à la main, pas un mock | Agent promote après E2E on-premise vert + monitoring 10 min post-deploy |
+   | 💀 CRITIQUE | DROP COLUMN, rotation secret prod, suppression tenant prod, migration destructive | **SEUL tier où l'agent demande go/stop à Robert** | Robert tranche |
+
+   **Test on-premise = complément OBLIGATOIRE des unit tests sur le tier 🔴.**
+   La CI ne lance que du Vitest/Go-test qui mocke SMTP/DB/apps downstream — un
+   mock vert ne prouve RIEN sur le flux réel (incident `pk_test_fake` 2026-05-23,
+   bug pixel-workspace `workspace=nil` 2026-06-13 : tests unit verts, flux réel
+   cassé). Donc pour tout lot 🔴, AVANT de promouvoir, l'agent DOIT dérouler le
+   vrai flux sur staging (le vrai worker, la vraie DB staging, le vrai SMTP — ou
+   le sink local `aiosmtpd` pour le cold, cf. `todo/2026-06-13-e2e-tunnel-validation-sink-local.md`),
+   lire l'état réel (queue, message_history, HTML émis), et ne promouvoir que
+   sur preuve observée. Pas d'E2E on-premise vert = pas de promo 🔴.
+
+   **Mécanique de promo** :
+   - 🟢 `[risk:low]` dans le subject (1ère ligne) → `deploy-prod` auto.
+   - 🟡/🔴 → push SANS `[risk:low]` (staging only), puis l'agent promeut
+     lui-même via `gh workflow run veridian-ci.yml -f deploy_prod=true` une fois
+     sa batterie de preuve verte. PAS d'attente d'un GO Robert (sauf tier 💀).
+   - Stop-gap `[skip-prod]` / `[wip]` : bloquent toujours la prod (WIP en cours).
+   - ⚠️ Piège connu (mémoire `feedback_risk_low_doc_commit_auto_promote_trap`) :
+     ne JAMAIS finir une vague par un commit doc `[risk:low]` si du tier 🟡/🔴
+     non encore validé est dans le même push range — le head-commit `[risk:low]`
+     déclenche l'auto-promote de TOUT le lot. Valider d'abord, archiver/documenter
+     `[risk:low]` après.
+   - Toujours valable : si `Dockerfile`, `go.mod`, `docker-compose.yml`,
+     `internal/migrations/**` modifiés → staging vert + e2e-staging vert exigés
+     avant toute prod (implicite via `needs`).
+
+   **Fluidité du sprint (gravé 2026-06-16)** : l'objectif est un flow CONTINU,
+   pas une file d'attente de validations. L'agent enchaîne coder → push staging
+   → preuve (selon tier) → promo → monitoring → ticket suivant, SANS s'arrêter
+   demander « je promeus ? » entre chaque. Une vague de team se termine par UNE
+   promo groupée des lots mûrs + UN récap, pas par N demandes de GO. Le seul
+   point d'arrêt est le tier 💀 ou un veto Robert.
 10. **Deploy via Dokploy API** : `POST /api/compose.redeploy` (Bearer).
     Secrets : `DOKPLOY_URL`, `DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID`. Rotation 6 mois.
 11. **Rollback prod auto** sur e2e-prod fail : `:rollback` retagé avant chaque
