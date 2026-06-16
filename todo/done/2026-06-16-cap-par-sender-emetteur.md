@@ -74,3 +74,23 @@ confirmation** — risque de sur-ingénierie d'une dimension que la rampe progre
 
 Optionnel. Ne pas faire sans GO Robert. Tracé ici pour ne pas perdre la lecture B de
 la demande lors de l'exécution du preset.
+
+## ✅ Résolu — 2026-06-17 (SHA ac38dbb0)
+
+Lecture B IMPLÉMENTÉE (décision Robert explicite : le warmup = les DEUX
+dimensions). **Audit confirmé : migration NÉCESSAIRE** — `message_history` ne
+stockait aucune colonne sender exploitable (FROM en JSON `channel_options`,
+non-queryable). Livré PROPREMENT (pas de dérivation) :
+
+- **Migration V53** : colonne `message_history.veridian_sender_email VARCHAR(255)`
+  (nullable, lowercase) + index partiel `(veridian_sender_email, sent_at)`.
+  `config.VERSION` 52→53, fixture manager_test, migrations-pending.txt.
+- **Repo** `CountSentSinceForSender` (index-only) + Create/Upsert écrivent le FROM.
+- **Gate** `veridian_per_sender_cap.go:veridianPerSenderCapGate` (worker.go, après
+  daily-cap, avant window). Cascade broadcast→infra→workspace. Best-effort.
+- **Config** `EmailProvider`/`WorkspaceSettings`/`EmailQueuePayload`
+  `VeridianPerSenderDailyCap` + metadata + allowlist.
+- **UI** : champ par workspace + par infra + intégré au preset warmup.
+- Tests colocalisés verts (Go + front). Diffs INLINE documentés CLAUDE.md.
+
+Promo prod : E2E on-premise staging par le lead.

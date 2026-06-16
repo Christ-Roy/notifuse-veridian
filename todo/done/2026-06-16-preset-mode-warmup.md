@@ -202,3 +202,24 @@ auto est l'itération suivante.
 Débloque le démarrage du tunnel cold demandé #1 par Robert : passer d'une config
 manuelle de ~20 champs error-prone à un bouton « Mode warmup » cohérent et sûr.
 Front-only = livrable rapidement, zéro risque backend/migration.
+
+## ✅ Résolu — 2026-06-17 (SHA d767c23d, backend ac38dbb0)
+
+Preset « Mode warmup » V1 LIVRÉ. Comme le cap émetteur (backend) existe désormais,
+le preset pose AUSSI cette dimension :
+
+- **`VERIDIAN_WARMUP_PRESET`** (`workspace.ts`) : cap/classe=1 (11 classes),
+  per-recipient=1, **per-sender=20** (warmup IP), rates=0.5/min, fenêtre lun-ven
+  9-18 Europe/Paris.
+- **`PresetCard`** (owner-only) dans `veridian_cold_outreach_settings.tsx` :
+  bouton « Appliquer le mode warmup » + Popconfirm (écrase) + avertissement
+  « <2 senders » (round-robin off). `applyWarmupPreset()` pré-remplit le form
+  (setFieldsValue) + nonce → SendingWindowCard pré-remplit sa fenêtre. NE SAUVE
+  PAS (relecture + Save). Pixel NON touché.
+- Champ « per-sender daily cap (warmup) » exposé workspace + infra.
+- Tests colocalisés étendus (25 verts). tsc + lint OK.
+
+V1 = cap STATIQUE. Rampe PROGRESSIVE (1→2→5→10/j auto) = ticket séparé
+`2026-06-16-warmup-progressif-rampe-auto.md`, NON livré ici.
+
+Promo prod : E2E on-premise staging par le lead.
