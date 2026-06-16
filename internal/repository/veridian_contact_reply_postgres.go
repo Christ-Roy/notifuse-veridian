@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/Notifuse/notifuse/internal/domain"
 )
 
@@ -83,4 +85,40 @@ func (r *veridianContactReplyRepository) HasReplied(ctx context.Context, workspa
 		return false, fmt.Errorf("failed to check contact replied: %w", err)
 	}
 	return exists, nil
+}
+
+// CountRepliedSince compte les contacts ayant répondu dans la fenêtre
+// [since, until[. Bornes optionnelles : since.IsZero() = pas de borne basse,
+// until.IsZero() = pas de borne haute. Sert le KPI reply rate du dashboard.
+// COUNT(*) sur la table (1 ligne = 1 contact ayant répondu ≥1 fois) → renvoie
+// donc le nombre de contacts uniques ayant répondu sur la période.
+func (r *veridianContactReplyRepository) CountRepliedSince(
+	ctx context.Context,
+	workspaceID string,
+	since, until time.Time,
+) (int, error) {
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sb := psql.Select("COUNT(*)").From("veridian_contact_reply")
+	if !since.IsZero() {
+		sb = sb.Where(sq.GtOrEq{"replied_at": since})
+	}
+	if !until.IsZero() {
+		sb = sb.Where(sq.Lt{"replied_at": until})
+	}
+
+	query, args, err := sb.ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("failed to build reply count query: %w", err)
+	}
+
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count replied contacts: %w", err)
+	}
+	return count, nil
 }

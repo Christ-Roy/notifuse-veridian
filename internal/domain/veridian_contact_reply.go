@@ -67,4 +67,17 @@ type VeridianContactReplyRepository interface {
 	// court-circuiter un re-dispatch (fast-path idempotent). `email` est normalisé
 	// lowercase par le caller.
 	HasReplied(ctx context.Context, workspaceID, email string) (bool, error)
+
+	// CountRepliedSince compte les contacts ayant répondu dans la fenêtre
+	// [since, until[ (replied_at >= since AND replied_at < until). Sert le KPI
+	// reply rate du dashboard (ticket 2026-06-16). Bornes optionnelles :
+	// since.IsZero() = pas de borne basse, until.IsZero() = pas de borne haute
+	// → tout l'historique. 1 ligne = 1 contact ayant répondu ≥1 fois, donc ce
+	// compte est un nombre de contacts uniques ayant répondu sur la période.
+	//
+	// PK = contact_email seul (pas d'index sur replied_at) → seq-scan sur le
+	// volume cold quotidien d'un workspace, négligeable. Si ça devient chaud,
+	// ajouter un index (replied_at) en migration additive — pas avant mesure
+	// (même posture que le daily cap V49).
+	CountRepliedSince(ctx context.Context, workspaceID string, since, until time.Time) (int, error)
 }

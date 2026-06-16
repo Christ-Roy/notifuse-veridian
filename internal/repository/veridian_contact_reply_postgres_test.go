@@ -180,3 +180,75 @@ func TestVeridianContactReplyRepository_HasReplied(t *testing.T) {
 		assert.False(t, ok)
 	})
 }
+
+func TestVeridianContactReplyRepository_CountRepliedSince(t *testing.T) {
+	ctx := context.Background()
+	const ws = "ws1"
+	since := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	until := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
+
+	t.Run("both bounds -> COUNT with two predicates", func(t *testing.T) {
+		wsRepo, repo, mock, db, cleanup := setupContactReplyTest(t)
+		defer cleanup()
+
+		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM veridian_contact_reply WHERE replied_at >= \$1 AND replied_at < \$2`).
+			WithArgs(since, until).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(7))
+
+		n, err := repo.CountRepliedSince(ctx, ws, since, until)
+		require.NoError(t, err)
+		assert.Equal(t, 7, n)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("no bounds -> COUNT over all history (no WHERE)", func(t *testing.T) {
+		wsRepo, repo, mock, db, cleanup := setupContactReplyTest(t)
+		defer cleanup()
+
+		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM veridian_contact_reply$`).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(42))
+
+		n, err := repo.CountRepliedSince(ctx, ws, time.Time{}, time.Time{})
+		require.NoError(t, err)
+		assert.Equal(t, 42, n)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("only since -> single lower bound predicate", func(t *testing.T) {
+		wsRepo, repo, mock, db, cleanup := setupContactReplyTest(t)
+		defer cleanup()
+
+		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM veridian_contact_reply WHERE replied_at >= \$1$`).
+			WithArgs(since).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+
+		n, err := repo.CountRepliedSince(ctx, ws, since, time.Time{})
+		require.NoError(t, err)
+		assert.Equal(t, 3, n)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("connection error surfaced", func(t *testing.T) {
+		wsRepo, repo, _, _, cleanup := setupContactReplyTest(t)
+		defer cleanup()
+		wsRepo.EXPECT().GetConnection(ctx, ws).Return(nil, errors.New("no conn"))
+		n, err := repo.CountRepliedSince(ctx, ws, since, until)
+		require.Error(t, err)
+		assert.Equal(t, 0, n)
+	})
+
+	t.Run("query error surfaced", func(t *testing.T) {
+		wsRepo, repo, mock, db, cleanup := setupContactReplyTest(t)
+		defer cleanup()
+		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM veridian_contact_reply`).
+			WithArgs(since, until).
+			WillReturnError(errors.New("db down"))
+		n, err := repo.CountRepliedSince(ctx, ws, since, until)
+		require.Error(t, err)
+		assert.Equal(t, 0, n)
+	})
+}

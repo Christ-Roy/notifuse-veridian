@@ -12,8 +12,9 @@ import (
 // satisfiable et que le contrat (signatures) est stable. Pas de DB ici — le repo
 // Postgres réel est testé dans internal/repository.
 type stubReplyRepo struct {
-	marked  *VeridianContactReply
-	replied bool
+	marked       *VeridianContactReply
+	replied      bool
+	repliedCount int
 }
 
 func (s *stubReplyRepo) MarkReplied(_ context.Context, _ string, r *VeridianContactReply) error {
@@ -22,6 +23,9 @@ func (s *stubReplyRepo) MarkReplied(_ context.Context, _ string, r *VeridianCont
 }
 func (s *stubReplyRepo) HasReplied(_ context.Context, _ string, _ string) (bool, error) {
 	return s.replied, nil
+}
+func (s *stubReplyRepo) CountRepliedSince(_ context.Context, _ string, _, _ time.Time) (int, error) {
+	return s.repliedCount, nil
 }
 
 func TestVeridianContactReplyRepository_InterfaceSatisfied(t *testing.T) {

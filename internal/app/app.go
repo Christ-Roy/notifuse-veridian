@@ -1511,6 +1511,27 @@ func (a *App) InitHandlers() error {
 	)
 	veridianContactBreakdownHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patch — KPI reply rate (taux de réponse cold, 2026-06-16) ===
+	// Endpoint POST+GET /api/veridian/messages.replyStats : compte les contacts
+	// ayant répondu (signal stop-on-reply Lot 3, table veridian_contact_reply) sur
+	// la fenêtre [start, end] du dashboard. En cold outreach le reply rate est LE
+	// KPI #1 (conversion réelle). Le ratio replied/sent est calculé côté front avec
+	// le count_sent déjà chargé par EmailMetricsChart. Auth JWT console + permission
+	// contacts:read (gardien dans le service, comme le breakdown R1 — le reply est
+	// une donnée contact). PAS de greffe dans l'analytics : la donnée vit dans une
+	// table séparée. Cf. todo/2026-06-16-kpi-reply-rate-dashboard.md.
+	veridianReplyStatsService := service.NewVeridianReplyStatsService(
+		a.veridianContactReplyRepo,
+		a.authService,
+		a.logger,
+	)
+	veridianReplyStatsHandler := httpHandler.NewVeridianReplyStatsHandler(
+		veridianReplyStatsService,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianReplyStatsHandler.RegisterRoutes(a.mux)
+
 	// === Veridian patch — linter de délivrabilité (spam score) cold (2026-06-15) ===
 	// Endpoint POST+GET /api/veridian/templates.deliverabilityScore : score 0-10
 	// (façon SpamAssassin) + règles déclenchées avec poids, sur un template cold

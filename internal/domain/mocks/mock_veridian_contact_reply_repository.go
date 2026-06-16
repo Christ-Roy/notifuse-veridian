@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
 	gomock "github.com/golang/mock/gomock"
@@ -33,6 +34,21 @@ func NewMockVeridianContactReplyRepository(ctrl *gomock.Controller) *MockVeridia
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockVeridianContactReplyRepository) EXPECT() *MockVeridianContactReplyRepositoryMockRecorder {
 	return m.recorder
+}
+
+// CountRepliedSince mocks base method.
+func (m *MockVeridianContactReplyRepository) CountRepliedSince(arg0 context.Context, arg1 string, arg2, arg3 time.Time) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountRepliedSince", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountRepliedSince indicates an expected call of CountRepliedSince.
+func (mr *MockVeridianContactReplyRepositoryMockRecorder) CountRepliedSince(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountRepliedSince", reflect.TypeOf((*MockVeridianContactReplyRepository)(nil).CountRepliedSince), arg0, arg1, arg2, arg3)
 }
 
 // HasReplied mocks base method.

@@ -9,9 +9,15 @@ import {
   faCircleXmark,
   faFaceFrown
 } from '@fortawesome/free-regular-svg-icons'
-import { faArrowPointer, faTriangleExclamation, faBan } from '@fortawesome/free-solid-svg-icons'
+import {
+  faArrowPointer,
+  faTriangleExclamation,
+  faBan,
+  faComments
+} from '@fortawesome/free-solid-svg-icons'
 import { ChartVisualization } from './ChartVisualization'
 import { analyticsService, AnalyticsQuery, AnalyticsResponse } from '../../services/api/analytics'
+import { replyStatsApi } from '../../services/api/veridian_reply_stats'
 import { Workspace } from '../../services/api/types'
 
 interface EmailMetricsChartProps {
@@ -34,6 +40,10 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   const [loading, setLoading] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Veridian — KPI taux de RÉPONSE (cold outbound). Le signal reply vit dans une
+  // table séparée (veridian_contact_reply, stop-on-reply Lot 3), donc un endpoint
+  // dédié, pas une mesure du moteur analytics message_history.
+  const [replied, setReplied] = useState<number>(0)
 
   // State to track which chart lines are visible
   const [visibleLines, setVisibleLines] = useState<Record<string, boolean>>({
@@ -151,14 +161,24 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
       setStatsLoading(true)
       setError(null)
 
-      // Fetch both chart data and stats data in parallel
-      const [chartResponse, statsResponse] = await Promise.all([
+      // Fetch chart data, stats data, and reply count in parallel. Le reply est
+      // contact-level (pas message-level), donc PAS filtré par broadcast/transactional :
+      // on le compte sur la même fenêtre temporelle uniquement. Best-effort : un échec
+      // de l'endpoint reply ne casse pas le dashboard (replied reste à 0).
+      const [chartResponse, statsResponse, replyResponse] = await Promise.all([
         analyticsService.query(buildQuery(filter), workspace.id),
-        analyticsService.query(buildStatsQuery(filter), workspace.id)
+        analyticsService.query(buildStatsQuery(filter), workspace.id),
+        replyStatsApi
+          .get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] })
+          .catch((replyErr) => {
+            console.error('Failed to fetch reply stats:', replyErr)
+            return { replied: 0 }
+          })
       ])
 
       setData(chartResponse)
       setStatsData(statsResponse)
+      setReplied(replyResponse.replied)
     } catch (err) {
       console.error('Failed to fetch email metrics:', err)
       setError(err instanceof Error ? err.message : t`Failed to fetch email metrics`)
@@ -395,6 +415,32 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                   </Space>
                 }
                 value={getRate(stats.count_clicked, stats.count_sent)}
+                valueStyle={{ fontSize: '16px' }}
+                loading={statsLoading}
+              />
+            </div>
+          </Tooltip>
+        </Col>
+        {/* Veridian — Reply rate : LE KPI #1 du cold outreach (conversion réelle).
+            replied = contacts uniques ayant répondu sur la fenêtre ; ratio approx.
+            replies / sent (un contact peut avoir reçu plusieurs envois). */}
+        <Col span={3}>
+          <Tooltip
+            title={t`${replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI)`}
+          >
+            <div className="p-2 rounded">
+              <Statistic
+                title={
+                  <Space className="font-medium">
+                    <FontAwesomeIcon
+                      icon={faComments}
+                      style={{ opacity: 0.7 }}
+                      className="text-emerald-500"
+                    />{' '}
+                    {t`Replies`}
+                  </Space>
+                }
+                value={getRate(replied, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
                 loading={statsLoading}
               />
