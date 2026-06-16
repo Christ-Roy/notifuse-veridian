@@ -536,3 +536,24 @@ func TestClassifyProviderClassStaysPure(t *testing.T) {
 	assert.Equal(t, ProviderClassGoogle, ClassifyProviderClass("a@gmail.com"))
 	assert.Equal(t, ProviderClassMicrosoft, ClassifyProviderClass("a@outlook.fr"))
 }
+
+// TestVeridianApplyProviderThrottle_PropagatesExcludedClasses couvre la
+// propagation broadcast → payload de l'exclusion de classes ajoutée dans
+// VeridianApplyProviderThrottle (cf. veridian_excluded_classes.go).
+func TestVeridianApplyProviderThrottle_PropagatesExcludedClasses(t *testing.T) {
+	t.Run("excluded classes copied from broadcast metadata", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		b := &Broadcast{
+			ID:       "bex",
+			Metadata: MapOfAny{VeridianExcludedProviderClassesMetadataKey: []any{"microsoft", "google"}},
+		}
+		VeridianApplyProviderThrottle(entry, b, nil)
+		assert.ElementsMatch(t, []string{"microsoft", "google"}, entry.Payload.VeridianExcludedProviderClasses)
+	})
+
+	t.Run("no exclusion metadata leaves payload nil (non-regression)", func(t *testing.T) {
+		entry := &EmailQueueEntry{}
+		VeridianApplyProviderThrottle(entry, &Broadcast{ID: "b", Metadata: MapOfAny{}}, nil)
+		assert.Nil(t, entry.Payload.VeridianExcludedProviderClasses)
+	})
+}

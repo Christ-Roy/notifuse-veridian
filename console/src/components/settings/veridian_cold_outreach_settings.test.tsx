@@ -499,4 +499,100 @@ describe('VeridianColdOutreachSettings', () => {
     // pas de bouton de save en lecture seule
     expect(screen.queryByRole('button', { name: /Save sending window/i })).not.toBeInTheDocument()
   })
+
+  // ── Exclusion de classes de providers (workspace) ───────────────────────────
+
+  it('renders the excluded-classes card with no exclusion by default (owner)', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    expect(screen.getByText('Excluded provider classes (do not contact)')).toBeInTheDocument()
+    expect(screen.getByText('None excluded')).toBeInTheDocument()
+  })
+
+  it('round-trips a persisted workspace exclusion on save (owner)', async () => {
+    const user = userEvent.setup()
+    renderCmp({
+      workspace: makeWorkspace({ veridian_excluded_provider_classes: ['microsoft'] }),
+      isOwner: true
+    })
+    // Tag count visible
+    expect(screen.getByText('1 excluded')).toBeInTheDocument()
+    // Sauver sans modifier → la liste persistée est renvoyée telle quelle.
+    await user.click(screen.getByRole('button', { name: /Save excluded classes/i }))
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    expect(arg.settings?.veridian_excluded_provider_classes).toEqual(['microsoft'])
+  })
+
+  it('omits the exclusion key when the list is cleared and saved (owner)', async () => {
+    const user = userEvent.setup()
+    renderCmp({
+      workspace: makeWorkspace({ veridian_excluded_provider_classes: ['microsoft'] }),
+      isOwner: true
+    })
+    // Scope sur la carte d'exclusion (titre unique) puis vide la sélection via le
+    // bouton clear du Select multiple. On ne passe PAS par getByLabelText : antd
+    // pose le même aria-label sur la combobox ET l'input de recherche interne.
+    const card = screen
+      .getByText('Excluded provider classes (do not contact)')
+      .closest('.ant-card') as HTMLElement
+    const clearBtn = card.querySelector('.ant-select-clear') as HTMLElement
+    await user.click(clearBtn)
+    await user.click(screen.getByRole('button', { name: /Save excluded classes/i }))
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    // Liste vide → undefined (pas de clé = aucune exclusion, non-régression).
+    expect(arg.settings?.veridian_excluded_provider_classes).toBeUndefined()
+  })
+
+  it('warns how many contacts will be skipped for an excluded class (owner)', async () => {
+    renderCmp({
+      workspace: makeWorkspace({ veridian_excluded_provider_classes: ['microsoft'] }),
+      isOwner: true
+    })
+    // Le breakdown mocké renvoie microsoft: 830 → l'alerte d'impact l'affiche.
+    await waitFor(() =>
+      expect(screen.getByText(/830 contacts will be skipped/)).toBeInTheDocument()
+    )
+  })
+
+  it('renders excluded classes read-only for non-owner', () => {
+    renderCmp({
+      workspace: makeWorkspace({ veridian_excluded_provider_classes: ['microsoft'] }),
+      isOwner: false
+    })
+    expect(screen.getByText('Excluded provider classes (do not contact)')).toBeInTheDocument()
+    // Le label Microsoft apparaît dans la carte d'exclusion ET dans la liste
+    // read-only des classes plus bas → on tolère plusieurs occurrences, mais au
+    // moins une (le tag rouge d'exclusion).
+    expect(screen.getAllByText('Microsoft (Outlook / Microsoft 365)').length).toBeGreaterThan(0)
+    // pas de bouton de save en lecture seule
+    expect(
+      screen.queryByRole('button', { name: /Save excluded classes/i })
+    ).not.toBeInTheDocument()
+  })
+
+  it('saves per-infra excluded classes on the email provider, preserving senders (owner)', async () => {
+    const user = userEvent.setup()
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25,
+        veridian_excluded_provider_classes: ['microsoft'] as never
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: true })
+    // Sauver l'infra sans modifier → l'exclusion persistée est renvoyée + senders conservés.
+    await user.click(screen.getByRole('button', { name: /Save Cold relay limits/i }))
+    await waitFor(() => expect(workspaceService.updateIntegration).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
+    expect(arg.provider?.veridian_excluded_provider_classes).toEqual(['microsoft'])
+    expect(arg.provider?.senders).toHaveLength(1)
+    expect(arg.provider?.rate_limit_per_minute).toBe(25)
+  })
 })

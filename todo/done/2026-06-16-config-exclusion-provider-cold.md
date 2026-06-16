@@ -4,6 +4,35 @@
 > **Owner** : agent notifuse-veridian
 > **Créé** : 2026-06-16
 > **Type** : feature BACKEND + UI (capacité inexistante, pas juste un trou d'expo)
+> **✅ LIVRÉ** : 2026-06-17, SHA staging `414b110d` (push veridian, sans `[risk:low]`
+>   → tier 🔴 envoi core, promo prod par Robert après E2E on-premise staging).
+
+## Résolution (2026-06-17)
+
+Feature livrée exactement comme spécifié (levier DÉDIÉ, pas de détour rate=0) :
+- **Backend** : champ cascade `VeridianExcludedProviderClasses []string`
+  (payload `email_queue.go` + infra `email_provider.go` JSON blob + workspace
+  `workspace.go` settings), helper `internal/domain/veridian_excluded_classes.go`
+  (`VeridianResolveExcludedClasses` cascade broadcast→infra→workspace + extracteur
+  metadata + normalisation/dédup/validation), propagation broadcast→payload dans
+  `VeridianApplyProviderThrottle`. Gate worker
+  `internal/service/queue/veridian_excluded_class_gate.go` (`veridianExcludedClassGate`)
+  câblé dans `processEntry` **après circuit breaker, AVANT le throttle minute** :
+  classe résolue via `veridianClassifyRecipient` (MX, même résolution que
+  throttle/cap) → échec PERMANENT par envoi (chemin pré-filtre Lot 7 :
+  `MarkAsProcessing` + `handleError(recipient, non-retryable)` → message_history
+  FailedAt + Delete, AUCUN SMTP, circuit breaker non déclenché). Allowlist
+  `UpdateWorkspace` +1 ligne. PAS de migration, PAS de `config.VERSION` bump.
+- **UI** : `ExcludedClassesCard` (workspace, multi-select 11 classes + warning
+  chiffré « X contacts ignorés » via breakdown R1) + multi-select par infra dans
+  `InfraLimitsCard`. Types front `WorkspaceSettings` + `EmailProvider`.
+- **Tests** : `veridian_excluded_classes_test.go` (cascade + extracteur, 5 t.Run) +
+  `veridian_excluded_class_gate_test.go` (9 cas : skip par niveau, ordre avant
+  throttle, non-régression, tag amont, MX) + round-trip JSON sur les 3 structs +
+  propagation + persistance UpdateWorkspace + worker processEntry + 6 tests front.
+  Go `./internal/domain ./internal/service/queue` verts, UI 26/26 verts (single-fork),
+  mapping CI 8/8 ✓ + routes 100%, rate-limit coverage ✓, tsc console ✓.
+- **CLAUDE.md** : section + tableau « Diffs INLINE » mis à jour.
 
 ## Contexte (demande #1 de Robert)
 

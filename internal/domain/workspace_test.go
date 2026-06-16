@@ -5376,3 +5376,25 @@ func TestWorkspace_IMAPIntegration_FullRoundtrip(t *testing.T) {
 		assert.Equal(t, enc, integ.IMAPSettings.EncryptedPassword)
 	})
 }
+
+// TestWorkspaceSettings_VeridianExcludedProviderClassesRoundTrip couvre le champ
+// WorkspaceSettings.VeridianExcludedProviderClasses (niveau le plus général de la
+// cascade d'exclusion) : round-trip JSON conservé + omitempty quand vide.
+func TestWorkspaceSettings_VeridianExcludedProviderClassesRoundTrip(t *testing.T) {
+	settings := WorkspaceSettings{
+		Timezone:                        "UTC",
+		VeridianExcludedProviderClasses: []string{"microsoft", "yahoo_aol"},
+	}
+	raw, err := json.Marshal(settings)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "veridian_excluded_provider_classes")
+
+	var decoded WorkspaceSettings
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	assert.Equal(t, []string{"microsoft", "yahoo_aol"}, decoded.VeridianExcludedProviderClasses)
+
+	// Vide → omitempty absent (non-régression).
+	rawEmpty, err := json.Marshal(WorkspaceSettings{Timezone: "UTC"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(rawEmpty), "veridian_excluded_provider_classes")
+}

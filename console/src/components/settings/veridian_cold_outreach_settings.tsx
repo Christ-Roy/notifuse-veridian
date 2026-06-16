@@ -520,7 +520,8 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
   const [savingId, setSavingId] = useState<string | null>(null)
   // Affiche les 11 classes (dont les 6 MX) ou seulement les 5 principales.
   const [showAllClasses, setShowAllClasses] = useState(false)
-  // Brouillons d'édition par intégration : rates/caps par classe + cap destinataire.
+  // Brouillons d'édition par intégration : rates/caps par classe + cap destinataire
+  // + liste de classes exclues de l'envoi DEPUIS cette infra.
   const [drafts, setDrafts] = useState<
     Record<
       string,
@@ -528,6 +529,7 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
         rates: Partial<Record<VeridianProviderClass, number>>
         caps: Partial<Record<VeridianProviderClass, number>>
         perRecipient?: number
+        excluded?: VeridianProviderClass[]
       }
     >
   >({})
@@ -561,6 +563,13 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
     if (d && 'perRecipient' in d) return d.perRecipient
     return integ.email_provider.veridian_per_recipient_daily_cap
   }
+  const excludedVal = (
+    integ: Integration & { email_provider: EmailProvider }
+  ): VeridianProviderClass[] => {
+    const d = drafts[integ.id]
+    if (d && d.excluded !== undefined) return d.excluded
+    return integ.email_provider.veridian_excluded_provider_classes || []
+  }
 
   const setRate = (id: string, c: VeridianProviderClass, v: number | null) =>
     setDrafts((prev) => {
@@ -576,6 +585,11 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
     setDrafts((prev) => {
       const cur = prev[id] || { rates: {}, caps: {} }
       return { ...prev, [id]: { ...cur, perRecipient: v ?? 0 } }
+    })
+  const setExcluded = (id: string, v: VeridianProviderClass[]) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      return { ...prev, [id]: { ...cur, excluded: v } }
     })
 
   const handleSave = async (integration: Integration & { email_provider: EmailProvider }) => {
@@ -595,6 +609,11 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
       const recip = perRecipVal(integration)
       const nextRecipient = typeof recip === 'number' && recip > 0 ? Math.floor(recip) : undefined
 
+      // Classes exclues de l'envoi depuis cette infra. Liste vide → undefined
+      // (pas de clé = aucune exclusion, non-régression).
+      const excludedList = excludedVal(integration)
+      const nextExcluded = excludedList.length > 0 ? excludedList : undefined
+
       // Provider COMPLET (senders, rate_limit, tracking_domain conservés) + les
       // limites mises à jour. Map vide → undefined (pas de clé) pour rester en
       // non-régression.
@@ -608,7 +627,8 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
           Object.keys(nextCaps).length > 0
             ? (nextCaps as Record<VeridianProviderClass, number>)
             : undefined,
-        veridian_per_recipient_daily_cap: nextRecipient
+        veridian_per_recipient_daily_cap: nextRecipient,
+        veridian_excluded_provider_classes: nextExcluded
       }
 
       await workspaceService.updateIntegration({
@@ -702,6 +722,25 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
                     disabled={!isOwner}
                     style={{ width: '100%', marginTop: 4 }}
                     aria-label={t`Per-recipient daily cap for ${integration.name}`}
+                  />
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t`Excluded provider classes (this infra)`}
+                  </Text>
+                  <Select
+                    mode="multiple"
+                    allowClear
+                    value={excludedVal(integration)}
+                    onChange={(v) => setExcluded(integration.id, v as VeridianProviderClass[])}
+                    options={VERIDIAN_PROVIDER_CLASSES.map((c) => ({
+                      value: c,
+                      label: classLabel(c)
+                    }))}
+                    placeholder={t`Send to all (none excluded)`}
+                    disabled={!isOwner}
+                    style={{ width: '100%', marginTop: 4 }}
+                    aria-label={t`Excluded provider classes for ${integration.name}`}
                   />
                 </Col>
               </Row>
@@ -1051,6 +1090,167 @@ function SendingWindowCard({ workspace, isOwner, onWorkspaceUpdate }: SendingWin
   )
 }
 
+// ── Exclusion de classes de providers (cold outbound) PAR WORKSPACE ───────────
+//
+// Levier DÉDIÉ pour ne PAS contacter une ou plusieurs classes de provider
+// destinataire. Cas concret : sur une IP/un domaine fraîchement monté, on
+// n'envoie PAS à microsoft/outlook (réputation Microsoft = la plus dure à warmer)
+// le temps que l'IP mûrisse, puis on l'ouvre. Les contacts d'une classe exclue
+// sont SKIPPÉS proprement par le worker (pas de SMTP ouvert, pas de bounce) ; le
+// reste du broadcast part normalement.
+//
+// ⚠️ Distinct des rates/caps : un rate ou un cap à 0 signifie "PLEINE VITESSE /
+// illimité" côté backend (opt-in), PAS une exclusion. Mettre rate microsoft = 0
+// envoie microsoft SANS throttle — l'inverse du but. D'où ce levier séparé.
+//
+// Persisté dans les settings workspace `veridian_excluded_provider_classes` via le
+// MÊME POST /api/workspaces.update que la fenêtre d'envoi. Niveau le plus général
+// de la cascade (broadcast → infra → WORKSPACE) ; on peut affiner par infra dans
+// la carte "Per-infrastructure limits".
+
+interface ExcludedClassesCardProps {
+  workspace: Workspace
+  isOwner: boolean
+  onWorkspaceUpdate: (workspace: Workspace) => void
+  // Nombre de contacts par classe (breakdown R1), pour avertir "X contacts seront
+  // ignorés". undefined si le breakdown n'est pas (encore) chargé.
+  contactCount: (c: VeridianProviderClass) => number | undefined
+}
+
+function ExcludedClassesCard({
+  workspace,
+  isOwner,
+  onWorkspaceUpdate,
+  contactCount
+}: ExcludedClassesCardProps) {
+  const { t } = useLingui()
+  const { message } = App.useApp()
+  const [saving, setSaving] = useState(false)
+
+  const persisted = workspace.settings.veridian_excluded_provider_classes || []
+  const [excluded, setExcluded] = useState<VeridianProviderClass[]>(persisted)
+
+  // Re-sync sur le workspace (sauvegarde aboutie, switch d'onglet…).
+  useEffect(() => {
+    setExcluded(workspace.settings.veridian_excluded_provider_classes || [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync sur la liste persistée
+  }, [workspace.id, JSON.stringify(workspace.settings.veridian_excluded_provider_classes)])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      // Liste vide → undefined (pas de clé = aucune exclusion, non-régression).
+      const nextExcluded = excluded.length > 0 ? excluded : undefined
+      await workspaceService.update({
+        ...workspace,
+        settings: {
+          ...workspace.settings,
+          veridian_excluded_provider_classes: nextExcluded
+        }
+      })
+      const response = await workspaceService.get(workspace.id)
+      onWorkspaceUpdate(response.workspace)
+      message.success(t`Excluded provider classes saved`)
+    } catch (error: unknown) {
+      const errorMessage = (error as Error)?.message || t`Failed to save excluded provider classes`
+      message.error(errorMessage)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const header = (
+    <Space>
+      <CloseCircleFilled />
+      <Text strong>{t`Excluded provider classes (do not contact)`}</Text>
+      {persisted.length > 0 ? (
+        <Tag color="red">{t`${persisted.length} excluded`}</Tag>
+      ) : (
+        <Tag color="default">{t`None excluded`}</Tag>
+      )}
+    </Space>
+  )
+
+  const help = (
+    <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+      {t`Pick mailbox provider classes you do NOT want to contact at all. Recipients in an excluded class are skipped cleanly — no email is sent, no bounce is produced — while the rest of the campaign goes out normally. Typical use: don't touch Microsoft/Outlook from a freshly warmed-up IP (Microsoft's reputation is the hardest to earn), then open it once the IP is mature. This is different from a rate or daily cap: setting a rate/cap to 0 means "unlimited", not "excluded".`}
+    </Paragraph>
+  )
+
+  // Avertissement chiffré : combien de contacts seront ignorés pour chaque classe
+  // exclue (à partir du breakdown R1). Aide à mesurer l'impact avant de sauver.
+  const impactRows = excluded
+    .map((c) => ({ c, n: contactCount(c) }))
+    .filter((r): r is { c: VeridianProviderClass; n: number } => typeof r.n === 'number' && r.n > 0)
+
+  const impactAlert =
+    impactRows.length > 0 ? (
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginTop: 12 }}
+        message={t`Contacts that will be skipped`}
+        description={
+          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+            {impactRows.map((r) => (
+              <Text key={r.c} style={{ fontSize: 12 }}>
+                {classLabel(r.c)}: {t`${r.n} contacts will be skipped`}
+              </Text>
+            ))}
+          </Space>
+        }
+      />
+    ) : null
+
+  // ── Non-owner : lecture seule ───────────────────────────────────────────────
+  if (!isOwner) {
+    return (
+      <Card size="small" title={header} className="!mb-6">
+        {help}
+        {persisted.length > 0 ? (
+          <Space size="small" wrap>
+            {persisted.map((c) => (
+              <Tag key={c} color="red">
+                {classLabel(c)}
+              </Tag>
+            ))}
+          </Space>
+        ) : (
+          <Text type="secondary">{t`No provider class is excluded — all recipients are contacted.`}</Text>
+        )}
+      </Card>
+    )
+  }
+
+  // ── Owner : édition ─────────────────────────────────────────────────────────
+  return (
+    <Card size="small" title={header} className="!mb-6">
+      {help}
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t`Classes to never contact`}
+          </Text>
+          <Select
+            mode="multiple"
+            allowClear
+            value={excluded}
+            onChange={(v) => setExcluded(v as VeridianProviderClass[])}
+            options={VERIDIAN_PROVIDER_CLASSES.map((c) => ({ value: c, label: classLabel(c) }))}
+            placeholder={t`Send to all (none excluded)`}
+            style={{ width: '100%', marginTop: 4 }}
+            aria-label={t`Excluded provider classes`}
+          />
+        </div>
+        {impactAlert}
+        <Button type="primary" loading={saving} onClick={handleSave}>
+          {t`Save excluded classes`}
+        </Button>
+      </Space>
+    </Card>
+  )
+}
+
 export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isOwner }: Props) {
   const { t } = useLingui()
   const [saving, setSaving] = useState(false)
@@ -1220,6 +1420,12 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
               isOwner={isOwner}
               onWorkspaceUpdate={onWorkspaceUpdate}
             />
+            <ExcludedClassesCard
+              workspace={workspace}
+              isOwner={isOwner}
+              onWorkspaceUpdate={onWorkspaceUpdate}
+              contactCount={contactCount}
+            />
             <Divider />
           </>
         )}
@@ -1339,6 +1545,12 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
             workspace={workspace}
             isOwner={isOwner}
             onWorkspaceUpdate={onWorkspaceUpdate}
+          />
+          <ExcludedClassesCard
+            workspace={workspace}
+            isOwner={isOwner}
+            onWorkspaceUpdate={onWorkspaceUpdate}
+            contactCount={contactCount}
           />
           <Divider />
         </>

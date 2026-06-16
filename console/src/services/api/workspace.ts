@@ -71,6 +71,14 @@ export interface WorkspaceSettings {
   // internal/domain/veridian_sending_window.go. Cascade : broadcast → infra →
   // workspace (ce niveau) → rien.
   veridian_sending_window?: VeridianSendingWindow
+  // Classes de providers destinataires à NE PAS contacter (cold outbound). Levier
+  // DÉDIÉ, distinct des rates/caps (un rate/cap à 0 = "pleine vitesse/illimité",
+  // PAS une exclusion). Les contacts d'une classe exclue sont skippés proprement
+  // (pas de SMTP, pas de bounce) ; le reste du broadcast part. Cas d'usage : ne
+  // pas taper microsoft sur une IP en warm-up. Cascade : broadcast → infra →
+  // workspace (ce niveau). Vide/omis = aucune exclusion. Source de vérité backend :
+  // internal/domain/veridian_excluded_classes.go.
+  veridian_excluded_provider_classes?: VeridianProviderClass[]
 }
 
 // Veridian fork — fenêtre d'envoi hebdomadaire (cold outbound). Miroir EXACT du
@@ -189,6 +197,12 @@ export interface EmailProvider {
   // Domaine nu OU URL complète. Vide = fallback workspace/global. Cf.
   // internal/domain/veridian_tracking_domain.go.
   veridian_tracking_domain?: string
+  // Classes de providers destinataires à NE PAS contacter DEPUIS CETTE INFRA (cold
+  // outbound). Niveau intermédiaire de la cascade (broadcast → INFRA → workspace).
+  // Typiquement : exclure microsoft sur une IP fraîche le temps du warm-up. Vide/
+  // omis = aucune exclusion sur l'infra (héritage workspace). Cf.
+  // internal/domain/veridian_excluded_classes.go.
+  veridian_excluded_provider_classes?: VeridianProviderClass[]
 }
 
 // Veridian fork — config d'une boîte IMAP pollée par Notifuse (réception :

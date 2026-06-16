@@ -1808,3 +1808,82 @@ func TestNewEmailQueueWorker_InstallsMXClassifier(t *testing.T) {
 	entry := &domain.EmailQueueEntry{ContactEmail: "x@gmail.com"}
 	assert.Equal(t, domain.ProviderClassGoogle, worker.veridianClassifyRecipient(entry))
 }
+
+// TestEmailQueueWorker_ProcessEntry_VeridianExcludedClass verrouille le câblage
+// worker.go de l'exclusion de classe : un destinataire d'une classe exclue est
+// routé en ÉCHEC PERMANENT (MarkAsProcessing → message_history FailedAt → Delete),
+// AUCUN SendEmail (skip SMTP), tandis qu'un destinataire d'une classe non exclue
+// part normalement. Exclusion posée SUR L'INFRA (cascade niveau intermédiaire).
+func TestEmailQueueWorker_ProcessEntry_VeridianExcludedClass(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	const workspaceID = "workspace-1"
+	const integrationID = "integration-1"
+
+	// microsoft exclu SUR L'INFRA (workspace.Settings vide, payload vide).
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{
+			{
+				ID: integrationID,
+				EmailProvider: domain.EmailProvider{
+					Kind:                            domain.EmailProviderKindSMTP,
+					RateLimitPerMinute:              6000,
+					VeridianExcludedProviderClasses: []string{"microsoft"},
+				},
+			},
+		},
+	}
+
+	newEntry := func(id, email string) *domain.EmailQueueEntry {
+		return &domain.EmailQueueEntry{
+			ID:            id,
+			Status:        domain.EmailQueueStatusPending,
+			SourceType:    domain.EmailQueueSourceBroadcast,
+			SourceID:      "broadcast-1",
+			IntegrationID: integrationID,
+			ContactEmail:  email,
+			MessageID:     "msg-" + id,
+			Payload:       domain.EmailQueuePayload{RateLimitPerMinute: 6000},
+			MaxAttempts:   3,
+		}
+	}
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo, mockWorkspaceRepo, mockEmailService, mockMessageHistoryRepo,
+		DefaultWorkerConfig(), mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	// Destinataire microsoft (suffixe connu hotmail.com) → échec PERMANENT :
+	// MarkAsProcessing (incrémente attempts) → Upsert avec FailedAt → Delete.
+	// AUCUN SendEmail attendu (ctrl.Finish() refuse tout appel non déclaré).
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, "e1").Return(nil)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, msg *domain.MessageHistory) error {
+			require.NotNil(t, msg)
+			require.NotNil(t, msg.FailedAt, "une classe exclue doit tracer un échec permanent (FailedAt)")
+			return nil
+		}).Times(1)
+	mockQueueRepo.EXPECT().Delete(gomock.Any(), workspaceID, "e1").Return(nil)
+	worker.processEntry(workspace, newEntry("e1", "prospect@hotmail.com"))
+
+	// Destinataire google (non exclu) → envoi normal complet.
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, "e2").Return(nil)
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
+	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, "e2").Return(nil)
+	worker.processEntry(workspace, newEntry("e2", "lead@gmail.com"))
+}

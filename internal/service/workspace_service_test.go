@@ -1063,9 +1063,10 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 			VeridianSendingWindow: &domain.VeridianSendingWindow{
 				Days: []int{1, 2, 3, 4, 5}, StartHour: 9, EndHour: 18, Timezone: "Europe/Paris",
 			},
-			VeridianJitterPct:           func() *float64 { v := 0.4; return &v }(),
-			VeridianAntiHashEnabled:     func() *bool { b := true; return &b }(),
-			VeridianAntiHashWindowHours: 48,
+			VeridianJitterPct:               func() *float64 { v := 0.4; return &v }(),
+			VeridianAntiHashEnabled:         func() *bool { b := true; return &b }(),
+			VeridianAntiHashWindowHours:     48,
+			VeridianExcludedProviderClasses: []string{"microsoft"},
 		}
 		existing := &domain.Workspace{
 			ID:       workspaceID,
@@ -1107,6 +1108,9 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		require.NotNil(t, saved.Settings.VeridianAntiHashEnabled)
 		assert.True(t, *saved.Settings.VeridianAntiHashEnabled)
 		assert.Equal(t, 48, saved.Settings.VeridianAntiHashWindowHours)
+		// Exclusion de classes : même allowlist, même anti-régression (sinon l'UI
+		// Cold outreach sauve l'exclusion sans la persister).
+		assert.Equal(t, []string{"microsoft"}, saved.Settings.VeridianExcludedProviderClasses)
 	})
 }
 

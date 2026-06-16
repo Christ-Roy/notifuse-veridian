@@ -1963,3 +1963,29 @@ func TestEmailProvider_VeridianSendingWindowRoundTrip(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_sending_window")
 	})
 }
+
+// TestEmailProvider_VeridianExcludedProviderClassesRoundTrip couvre le champ
+// EmailProvider.VeridianExcludedProviderClasses (exclusion par infra, JSON blob,
+// pas de migration) : round-trip JSON conservé + omitempty quand vide.
+func TestEmailProvider_VeridianExcludedProviderClassesRoundTrip(t *testing.T) {
+	t.Run("excluded classes survive round-trip", func(t *testing.T) {
+		p := EmailProvider{
+			Kind:                            EmailProviderKindSMTP,
+			RateLimitPerMinute:              600,
+			VeridianExcludedProviderClasses: []string{"microsoft", "google"},
+		}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_excluded_provider_classes")
+
+		var got EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &got))
+		assert.Equal(t, []string{"microsoft", "google"}, got.VeridianExcludedProviderClasses)
+	})
+
+	t.Run("omitted when empty (non-regression)", func(t *testing.T) {
+		raw, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_excluded_provider_classes")
+	})
+}

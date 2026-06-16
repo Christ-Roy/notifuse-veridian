@@ -118,6 +118,15 @@ type EmailQueuePayload struct {
 	// du worker (veridian_content_hash_gate.go). Vide = pas calculé (hors contexte
 	// cold / anti-hash désactivé). Cf. veridian_content_hash.go.
 	VeridianContentHash string `json:"veridian_content_hash,omitempty"`
+
+	// Veridian fork — EXCLUSION de classes de provider destinataire (cold
+	// outbound). Liste de classes à NE PAS contacter (ex. ["microsoft"] pour
+	// épargner une IP en warm-up). Distinct des rates/caps (0 ≠ exclu) : levier
+	// DÉDIÉ. Copié à l'enqueue depuis broadcast.metadata ; fallback infra puis
+	// workspace lu en live par le gate worker (veridianExcludedClassGate, qui
+	// route un destinataire exclu en échec PERMANENT sans ouvrir de SMTP). Vide =
+	// aucune exclusion (non-régression). Cf. veridian_excluded_classes.go.
+	VeridianExcludedProviderClasses []string `json:"veridian_excluded_provider_classes,omitempty"`
 }
 
 // ToSendEmailProviderRequest converts the payload to a SendEmailProviderRequest

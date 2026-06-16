@@ -472,5 +472,8 @@ func VeridianApplyProviderThrottle(entry *EmailQueueEntry, broadcast *Broadcast,
 		if pct, ok := VeridianJitterPctFromMetadata(broadcast.Metadata); ok {
 			entry.Payload.VeridianJitterPct = &pct
 		}
+		if excluded := VeridianExcludedProviderClassesFromMetadata(broadcast.Metadata); len(excluded) > 0 {
+			entry.Payload.VeridianExcludedProviderClasses = excluded
+		}
 	}
 }

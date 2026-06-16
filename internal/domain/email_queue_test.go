@@ -468,3 +468,26 @@ func TestEmailQueueStats_DefaultValues(t *testing.T) {
 	assert.Equal(t, int64(0), stats.Failed)
 	// Note: Sent entries are deleted immediately, not tracked in stats
 }
+
+// TestEmailQueuePayload_VeridianExcludedProviderClassesRoundTrip couvre le champ
+// EmailQueuePayload.VeridianExcludedProviderClasses (copié à l'enqueue) : il
+// survit au round-trip JSON et reste absent (omitempty) quand vide.
+func TestEmailQueuePayload_VeridianExcludedProviderClassesRoundTrip(t *testing.T) {
+	payload := EmailQueuePayload{
+		Subject:                         "s",
+		RateLimitPerMinute:              100,
+		VeridianExcludedProviderClasses: []string{"microsoft"},
+	}
+	raw, err := json.Marshal(payload)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "veridian_excluded_provider_classes")
+
+	var decoded EmailQueuePayload
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	assert.Equal(t, []string{"microsoft"}, decoded.VeridianExcludedProviderClasses)
+
+	// Vide → absent (omitempty), non-régression.
+	rawEmpty, err := json.Marshal(EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100})
+	require.NoError(t, err)
+	assert.NotContains(t, string(rawEmpty), "veridian_excluded_provider_classes")
+}

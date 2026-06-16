@@ -120,6 +120,15 @@ type EmailProvider struct {
 	// Cf. veridian_tracking_domain.go. omitempty → persisté dans le JSON blob
 	// integrations sans migration ni allowlist (comme les autres champs R2).
 	VeridianTrackingDomain string `json:"veridian_tracking_domain,omitempty"`
+
+	// Veridian fork — EXCLUSION de classes de provider destinataire PAR INFRA
+	// (cold outbound). Liste de classes à NE PAS contacter depuis cette infra
+	// d'envoi (ex. exclure ["microsoft"] sur une IP fraîche le temps du warm-up,
+	// puis l'ouvrir quand l'IP est mature). Niveau INTERMÉDIAIRE de la cascade
+	// (broadcast → INFRA → workspace), comme les rates/caps R2. Distinct des
+	// rates/caps (0 ≠ exclu). Persisté dans le JSON blob integrations sans
+	// migration ni allowlist (omitempty). Cf. veridian_excluded_classes.go.
+	VeridianExcludedProviderClasses []string `json:"veridian_excluded_provider_classes,omitempty"`
 }
 
 // Validate validates the email provider settings

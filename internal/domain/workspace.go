@@ -423,6 +423,13 @@ type WorkspaceSettings struct {
 	VeridianAntiHashEnabled     *bool `json:"veridian_anti_hash_enabled,omitempty"`
 	VeridianAntiHashWindowHours int   `json:"veridian_anti_hash_window_hours,omitempty"`
 
+	// Veridian fork — EXCLUSION de classes de provider destinataire par défaut du
+	// workspace (cold outbound). Liste de classes à NE PAS contacter, fallback
+	// quand ni le broadcast ni l'infra ne posent d'exclusion. Niveau le plus
+	// général de la cascade (broadcast → infra → WORKSPACE). Vide = aucune
+	// exclusion (non-régression). Cf. veridian_excluded_classes.go.
+	VeridianExcludedProviderClasses []string `json:"veridian_excluded_provider_classes,omitempty"`
+
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
 }

@@ -296,6 +296,41 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Veridian fork: recipient provider-class EXCLUSION gate (cold outbound).
+	// Placed BEFORE the throttle minute gate — pointless to reserve a rate token
+	// for a class we are going to skip — and after the circuit breaker. An
+	// excluded class is a POLICY decision (e.g. "don't touch microsoft on a fresh
+	// IP"), not a transient throttle: the entry goes to PERMANENT failure (skip
+	// SMTP, no bounce, never re-tried), via the same path as the pre-filter
+	// (MarkAsProcessing then handleError with a non-retryable recipient error).
+	// The circuit breaker is NOT tripped (recipient-type error). No-op without an
+	// exclusion list (strict non-regression). Cf. veridian_excluded_class_gate.go.
+	if class, excluded := w.veridianExcludedClassGate(workspace, &integration.EmailProvider, entry); excluded {
+		// MarkAsProcessing first (increments attempts) so handleError, which
+		// assumes the attempt counter has advanced, deletes the entry as a
+		// permanent failure instead of leaving it half-processed.
+		if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Warn("Failed to mark entry as processing for excluded-class skip")
+			return
+		}
+		w.logger.WithFields(map[string]interface{}{
+			"entry_id":       entry.ID,
+			"recipient":      entry.ContactEmail,
+			"provider_class": class,
+		}).Info("Excluded provider class, skipping SMTP and failing permanently")
+		excludedErr := &emailerror.ClassifiedError{
+			Original:  fmt.Errorf("excluded_provider_class:%s", class),
+			Type:      emailerror.ErrorTypeRecipient,
+			Provider:  string(integration.EmailProvider.Kind),
+			Retryable: false,
+		}
+		w.handleError(workspace, entry, excludedErr, excludedErr)
+		return
+	}
+
 	// Veridian fork: recipient provider-class throttle gate (cold outbound).
 	// Placed BEFORE MarkAsProcessing, like the circuit breaker check, so a
 	// throttled skip never burns a retry attempt. No-op without configuration.
