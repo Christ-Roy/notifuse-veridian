@@ -1060,6 +1060,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 			VeridianOpenPixelByClass:      map[string]bool{"google": false, "freemail_fr": true},
 			VeridianProviderClassDailyCap: map[string]int{"google": 1, "microsoft": 50},
 			VeridianPerRecipientDailyCap:  1,
+			VeridianPerSenderDailyCap:     20,
 			VeridianSendingWindow: &domain.VeridianSendingWindow{
 				Days: []int{1, 2, 3, 4, 5}, StartHour: 9, EndHour: 18, Timezone: "Europe/Paris",
 			},
@@ -1095,6 +1096,9 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.Equal(t, 1, saved.Settings.VeridianProviderClassDailyCap["google"])
 		assert.Equal(t, 50, saved.Settings.VeridianProviderClassDailyCap["microsoft"])
 		assert.Equal(t, 1, saved.Settings.VeridianPerRecipientDailyCap)
+		// Cap par sender émetteur (warmup IP, V53) : même allowlist, même anti-
+		// régression (sinon l'UI Cold outreach sauve le cap sans le persister).
+		assert.Equal(t, 20, saved.Settings.VeridianPerSenderDailyCap)
 		// Fenêtre d'envoi (sending windows) : même allowlist, même anti-régression.
 		require.NotNil(t, saved.Settings.VeridianSendingWindow)
 		assert.Equal(t, 9, saved.Settings.VeridianSendingWindow.StartHour)

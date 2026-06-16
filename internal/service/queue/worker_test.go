@@ -386,6 +386,64 @@ func TestEmailQueueWorker_ProcessEntry_PersistsContentHash(t *testing.T) {
 	worker.processEntry(workspace, entry)
 }
 
+// TestEmailQueueWorker_ProcessEntry_PersistsSenderEmail vérifie le diff worker.go
+// du cap par sender (V53) : l'adresse FROM du payload est propagée dans le
+// message_history persisté (veridian_sender_email), source de vérité du COUNT du
+// plafond journalier par boîte émettrice (warmup IP). Aucun cap configuré ici →
+// le gate veridianPerSenderCapGate est un no-op (pas de COUNT attendu), mais le
+// FROM doit quand même être tracé pour les futurs envois.
+func TestEmailQueueWorker_ProcessEntry_PersistsSenderEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	const integrationID, entryID, workspaceID = "integration-1", "entry-1", "workspace-1"
+
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{
+			{ID: integrationID, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 100}},
+		},
+	}
+	entry := &domain.EmailQueueEntry{
+		ID:            entryID,
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: integrationID,
+		ContactEmail:  "test@example.com",
+		MessageID:     "msg-1",
+		Payload: domain.EmailQueuePayload{
+			FromAddress: "warmup@send.fr", FromName: "Warmup",
+			Subject: "Test", HTMLContent: "<p>Hello</p>", RateLimitPerMinute: 100,
+		},
+		MaxAttempts: 3,
+	}
+
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	mockMessageHistoryRepo.EXPECT().
+		Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			assert.Equal(t, "warmup@send.fr", m.VeridianSenderEmail, "le FROM payload doit être persisté en message_history (cap sender)")
+			return nil
+		})
+	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, entryID).Return(nil)
+
+	worker := NewEmailQueueWorker(mockQueueRepo, mockWorkspaceRepo, mockEmailService, mockMessageHistoryRepo, DefaultWorkerConfig(), mockLogger)
+	worker.ctx = context.Background()
+	worker.processEntry(workspace, entry)
+}
+
 // TestEmailQueueWorker_ProcessEntry_PrefilterSkipsInvalid vérifie le CÂBLAGE du
 // gate de pré-filtrage Lot 7 dans processEntry : une adresse syntaxiquement
 // invalide est routée vers l'échec PERMANENT (MarkAsProcessing → message_history

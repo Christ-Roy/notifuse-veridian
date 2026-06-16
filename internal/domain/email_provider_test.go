@@ -1822,6 +1822,29 @@ func TestEmailProviderVeridianInfraCascadeFields(t *testing.T) {
 		assert.Equal(t, 1, got.VeridianPerRecipientDailyCap)
 	})
 
+	t.Run("round-trip JSON conserve le cap par sender émetteur (warmup IP, V53)", func(t *testing.T) {
+		// Persistance sans migration : le cap émetteur traverse le JSON blob
+		// integrations comme les autres champs R2. Verrouille le tag JSON +
+		// l'omitempty (0 = pas de plafond → clé absente).
+		p := EmailProvider{
+			Kind:                      EmailProviderKindSMTP,
+			RateLimitPerMinute:        600,
+			VeridianPerSenderDailyCap: 20,
+		}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"veridian_per_sender_daily_cap":20`)
+
+		var got EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &got))
+		assert.Equal(t, 20, got.VeridianPerSenderDailyCap)
+
+		// omitempty : 0 = pas de plafond → la clé doit être absente.
+		rawZero, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP})
+		require.NoError(t, err)
+		assert.NotContains(t, string(rawZero), "veridian_per_sender_daily_cap")
+	})
+
 	t.Run("round-trip JSON conserve le tracking domain par infra (Lot 5)", func(t *testing.T) {
 		// Persistance sans migration : EmailProvider est sérialisé comme JSON blob
 		// dans la colonne integrations. Ce test verrouille que le champ traverse le

@@ -69,6 +69,27 @@ func TestEmailQueuePayload_VeridianProviderThrottleRoundTrip(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
 	})
 
+	t.Run("per-sender daily cap survives JSON round-trip (warmup IP, V53)", func(t *testing.T) {
+		payload := EmailQueuePayload{
+			Subject:                   "s",
+			RateLimitPerMinute:        100,
+			VeridianPerSenderDailyCap: 20,
+		}
+		raw, err := json.Marshal(payload)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"veridian_per_sender_daily_cap":20`)
+
+		var decoded EmailQueuePayload
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.Equal(t, 20, decoded.VeridianPerSenderDailyCap)
+	})
+
+	t.Run("per-sender daily cap omitted when unset", func(t *testing.T) {
+		raw, err := json.Marshal(EmailQueuePayload{Subject: "s", RateLimitPerMinute: 100})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_per_sender_daily_cap")
+	})
+
 	t.Run("sending window survives JSON round-trip", func(t *testing.T) {
 		payload := EmailQueuePayload{
 			Subject:            "s",

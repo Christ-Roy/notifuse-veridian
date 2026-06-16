@@ -373,6 +373,23 @@ func TestWorkspaceSettings_VeridianDailyCapRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotContains(t, string(raw), "veridian_provider_class_daily_cap")
 		assert.NotContains(t, string(raw), "veridian_per_recipient_daily_cap")
+		assert.NotContains(t, string(raw), "veridian_per_sender_daily_cap")
+	})
+
+	t.Run("per-sender daily cap survives JSON round-trip (warmup IP, V53)", func(t *testing.T) {
+		settings := WorkspaceSettings{
+			Timezone:                  "UTC",
+			DefaultLanguage:           "en",
+			Languages:                 []string{"en"},
+			VeridianPerSenderDailyCap: 20,
+		}
+		raw, err := json.Marshal(settings)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"veridian_per_sender_daily_cap":20`)
+
+		var decoded WorkspaceSettings
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		assert.Equal(t, 20, decoded.VeridianPerSenderDailyCap)
 	})
 
 	t.Run("sending window survives JSON round-trip", func(t *testing.T) {

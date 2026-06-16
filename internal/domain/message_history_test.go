@@ -473,6 +473,24 @@ func TestMessageHistory(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotContains(t, string(rawEmpty), "veridian_content_hash")
 	})
+
+	// Veridian fork — l'adresse émettrice (FROM) doit survivre au round-trip JSON
+	// et être omise quand vide (colonne nullable V53, omitempty). Sert le cap
+	// journalier par sender (warmup IP).
+	t.Run("veridian sender email round-trip and omitempty", func(t *testing.T) {
+		m := MessageHistory{ID: "m1", ContactEmail: "a@b.fr", Channel: "email", VeridianSenderEmail: "warmup@send.fr"}
+		raw, err := json.Marshal(m)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"veridian_sender_email":"warmup@send.fr"`)
+
+		var got MessageHistory
+		require.NoError(t, json.Unmarshal(raw, &got))
+		assert.Equal(t, "warmup@send.fr", got.VeridianSenderEmail)
+
+		rawEmpty, err := json.Marshal(MessageHistory{ID: "m2", ContactEmail: "a@b.fr", Channel: "email"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(rawEmpty), "veridian_sender_email")
+	})
 }
 
 func TestParseTimeParam(t *testing.T) {
