@@ -65,6 +65,11 @@ export interface WorkspaceSettings {
   // Plafond JOURNALIER d'envois vers une MÊME adresse (anti-harcèlement).
   // Entier global, non keyé par classe. 0 / omis = illimité.
   veridian_per_recipient_daily_cap?: number
+  // Plafond JOURNALIER par ADRESSE ÉMETTRICE (warmup IP). Dimension ÉMETTRICE
+  // (≠ caps destinataire ci-dessus) : max N envois/jour par boîte d'envoi. En
+  // warmup, chaque boîte monte son propre volume. Source de vérité backend :
+  // COUNT message_history par sender depuis minuit (V53). 0 / omis = pas de plafond.
+  veridian_per_sender_daily_cap?: number
   // Fenêtre d'envoi (horaires ouvrables) cold outbound. Hors fenêtre, le worker
   // re-planifie l'envoi à la prochaine ouverture. Vide/omis = envoi 24/7
   // (non-régression). Source de vérité backend :
@@ -151,6 +156,55 @@ export const VERIDIAN_DEFAULT_OPEN_PIXEL: Record<VeridianProviderClass, boolean>
   corporate_selfhost: true
 }
 
+// Veridian fork — PRESET « Mode warmup » (cold outbound, ticket 2026-06-16). Set
+// cohérent de valeurs qui constitue le démarrage prudent d'une nouvelle IP/domaine :
+// 1 envoi/jour vers chaque classe de provider destinataire + 1/jour/adresse
+// (anti-harcèlement) + plafond bas par boîte émettrice (warmup IP) + débit lent
+// dans la journée + fenêtre ouvrable lun-ven 9-18 Europe/Paris. Le round-robin
+// entre adresses d'envoi n'a AUCUNE valeur à poser : il s'active tout seul dès que
+// l'infra a ≥ 2 senders ET qu'on est en contexte cold (poser n'importe laquelle de
+// ces clés au niveau workspace bascule le contexte cold). Source de vérité des
+// gates backend : veridian_daily_cap.go / veridian_per_sender_cap.go /
+// veridian_provider_throttle.go / veridian_sending_window_gate.go. V1 = cap STATIQUE
+// bas ; la rampe PROGRESSIVE (1→2→5→10/jour auto) est un ticket séparé
+// (2026-06-16-warmup-progressif-rampe-auto.md), NON implémentée ici.
+export interface VeridianWarmupPreset {
+  veridian_provider_class_daily_cap: Record<VeridianProviderClass, number>
+  veridian_per_recipient_daily_cap: number
+  veridian_per_sender_daily_cap: number
+  veridian_provider_class_rates: Record<VeridianProviderClass, number>
+  veridian_sending_window: VeridianSendingWindow
+}
+
+const veridianAllClassesValue = (value: number): Record<VeridianProviderClass, number> =>
+  VERIDIAN_PROVIDER_CLASSES.reduce(
+    (acc, cls) => {
+      acc[cls] = value
+      return acc
+    },
+    {} as Record<VeridianProviderClass, number>
+  )
+
+export const VERIDIAN_WARMUP_PRESET: VeridianWarmupPreset = {
+  // 1 envoi / jour / classe de provider destinataire (toutes les classes connues).
+  veridian_provider_class_daily_cap: veridianAllClassesValue(1),
+  // Jamais 2 mails/jour à la même adresse.
+  veridian_per_recipient_daily_cap: 1,
+  // Warmup IP : démarrage prudent à 20 mails/jour par boîte d'envoi. L'admin
+  // ajuste selon l'âge de l'IP ; la rampe auto (ticket séparé) montera ce chiffre.
+  veridian_per_sender_daily_cap: 20,
+  // Rythme lent dans la journée : 0.5/min = au plus 1 mail / 2 min par classe
+  // (étale au lieu d'un burst). Le cap/jour=1 domine déjà ; le rate humanise.
+  veridian_provider_class_rates: veridianAllClassesValue(0.5),
+  // Heures ouvrables (anti-spam + crédible humain). Jours 1-5 = lun-ven (0=dim).
+  veridian_sending_window: {
+    days: [1, 2, 3, 4, 5],
+    start_hour: 9,
+    end_hour: 18,
+    timezone: 'Europe/Paris'
+  }
+}
+
 export interface FileManagerSettings {
   provider?: string
   endpoint: string
@@ -193,6 +247,9 @@ export interface EmailProvider {
   veridian_provider_class_rates?: Record<VeridianProviderClass, number>
   veridian_provider_class_daily_cap?: Record<VeridianProviderClass, number>
   veridian_per_recipient_daily_cap?: number
+  // Plafond JOURNALIER par ADRESSE ÉMETTRICE de cette infra (warmup IP). Cf.
+  // internal/domain/email_provider.go (VeridianPerSenderDailyCap).
+  veridian_per_sender_daily_cap?: number
   // Custom tracking domain aligné au domaine d'envoi (ex track.agences-veridian.fr).
   // Domaine nu OU URL complète. Vide = fallback workspace/global. Cf.
   // internal/domain/veridian_tracking_domain.go.

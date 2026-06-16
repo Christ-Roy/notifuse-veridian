@@ -595,4 +595,85 @@ describe('VeridianColdOutreachSettings', () => {
     expect(arg.provider?.senders).toHaveLength(1)
     expect(arg.provider?.rate_limit_per_minute).toBe(25)
   })
+
+  // ── Preset « Mode warmup » ────────────────────────────────────────────────
+
+  it('shows the warmup preset button for owner only', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    expect(screen.getByRole('button', { name: /Apply warmup mode/i })).toBeInTheDocument()
+  })
+
+  it('does not show the warmup preset button for non-owner', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: false })
+    expect(screen.queryByRole('button', { name: /Apply warmup mode/i })).not.toBeInTheDocument()
+  })
+
+  it('applying the warmup preset fills caps/per-recipient/per-sender without auto-saving, then Save persists', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+
+    // 1) Clic preset → Popconfirm → Apply. Rien n'est persisté à ce stade.
+    await user.click(screen.getByRole('button', { name: /Apply warmup mode/i }))
+    await user.click(await screen.findByRole('button', { name: /^Apply$/i }))
+    expect(workspaceService.update).not.toHaveBeenCalled()
+
+    // Les champs sont pré-remplis : per-recipient = 1, per-sender = 20.
+    const recipInput = screen.getByLabelText(/Emails \/ recipient \/ day/i) as HTMLInputElement
+    const senderInput = screen.getByLabelText(/Emails \/ sender \/ day/i) as HTMLInputElement
+    await waitFor(() => expect(recipInput.value).toBe('1'))
+    expect(senderInput.value).toBe('20')
+
+    // 2) Save → persiste les valeurs warmup (caps=1 par classe, per-recipient=1,
+    //    per-sender=20).
+    const saveBtn = screen.getByRole('button', { name: /Save Changes/i })
+    await waitFor(() => expect(saveBtn).toBeEnabled())
+    await user.click(saveBtn)
+
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    expect(arg.settings?.veridian_per_recipient_daily_cap).toBe(1)
+    expect(arg.settings?.veridian_per_sender_daily_cap).toBe(20)
+    // cap journalier = 1 pour les classes principales.
+    expect(arg.settings?.veridian_provider_class_daily_cap?.google).toBe(1)
+    expect(arg.settings?.veridian_provider_class_daily_cap?.microsoft).toBe(1)
+    // rate bas = 0.5 par classe.
+    expect(arg.settings?.veridian_provider_class_rates?.google).toBe(0.5)
+  })
+
+  it('warns when a sending integration has fewer than 2 senders (round-robin off)', () => {
+    const oneSenderIntegration = {
+      id: 'int-1',
+      name: 'Cold relay',
+      type: 'email',
+      email_provider: {
+        kind: 'smtp',
+        senders: [{ id: 's1', email: 'bot@send.fr', name: 'Bot', is_default: true }],
+        rate_limit_per_minute: 60
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({
+      workspace: makeWorkspace({}, [oneSenderIntegration] as never),
+      isOwner: true
+    })
+    expect(screen.getByText(/Round-robin needs at least 2 sending addresses/i)).toBeInTheDocument()
+  })
+
+  it('renders the per-sender daily cap field (owner) and persists it', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+
+    const senderInput = screen.getByLabelText(/Emails \/ sender \/ day/i)
+    await user.clear(senderInput)
+    await user.type(senderInput, '50')
+
+    const saveBtn = screen.getByRole('button', { name: /Save Changes/i })
+    await waitFor(() => expect(saveBtn).toBeEnabled())
+    await user.click(saveBtn)
+
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    expect(arg.settings?.veridian_per_sender_daily_cap).toBe(50)
+  })
 })

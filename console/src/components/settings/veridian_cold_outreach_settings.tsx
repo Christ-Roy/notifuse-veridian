@@ -30,8 +30,8 @@
  */
 
 import { useEffect, useState } from 'react'
-import { App, Alert, Button, Card, Col, Divider, Form, Input, InputNumber, Row, Select, Space, Switch, Tag, Tooltip, Typography } from 'antd'
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, InfoCircleOutlined, InboxOutlined, LinkOutlined, TeamOutlined } from '@ant-design/icons'
+import { App, Alert, Button, Card, Col, Divider, Form, Input, InputNumber, Popconfirm, Row, Select, Space, Switch, Tag, Tooltip, Typography } from 'antd'
+import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, InfoCircleOutlined, InboxOutlined, LinkOutlined, RocketOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
 import { Workspace, EmailProvider, IMAPSettings, Integration } from '../../services/api/types'
@@ -39,6 +39,7 @@ import { workspaceService } from '../../services/api/workspace'
 import {
   VERIDIAN_DEFAULT_OPEN_PIXEL,
   VERIDIAN_PROVIDER_CLASSES,
+  VERIDIAN_WARMUP_PRESET,
   VeridianProviderClass,
   VeridianSendingWindow
 } from '../../services/api/workspace'
@@ -99,6 +100,7 @@ const rateField = (c: VeridianProviderClass) => `rate_${c}`
 const capField = (c: VeridianProviderClass) => `cap_${c}`
 const pixelField = (c: VeridianProviderClass) => `pixel_${c}`
 const PER_RECIPIENT_FIELD = 'per_recipient_daily_cap'
+const PER_SENDER_FIELD = 'per_sender_daily_cap'
 
 // Le pixel effectif AFFICHÉ pour une classe : valeur configurée si présente,
 // sinon le défaut tunnel (placeholder, pas persisté tant qu'on ne sauve pas).
@@ -529,6 +531,7 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
         rates: Partial<Record<VeridianProviderClass, number>>
         caps: Partial<Record<VeridianProviderClass, number>>
         perRecipient?: number
+        perSender?: number
         excluded?: VeridianProviderClass[]
       }
     >
@@ -563,6 +566,13 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
     if (d && 'perRecipient' in d) return d.perRecipient
     return integ.email_provider.veridian_per_recipient_daily_cap
   }
+  const perSenderVal = (
+    integ: Integration & { email_provider: EmailProvider }
+  ): number | undefined => {
+    const d = drafts[integ.id]
+    if (d && 'perSender' in d) return d.perSender
+    return integ.email_provider.veridian_per_sender_daily_cap
+  }
   const excludedVal = (
     integ: Integration & { email_provider: EmailProvider }
   ): VeridianProviderClass[] => {
@@ -586,6 +596,11 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
       const cur = prev[id] || { rates: {}, caps: {} }
       return { ...prev, [id]: { ...cur, perRecipient: v ?? 0 } }
     })
+  const setPerSender = (id: string, v: number | null) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      return { ...prev, [id]: { ...cur, perSender: v ?? 0 } }
+    })
   const setExcluded = (id: string, v: VeridianProviderClass[]) =>
     setDrafts((prev) => {
       const cur = prev[id] || { rates: {}, caps: {} }
@@ -608,6 +623,8 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
       }
       const recip = perRecipVal(integration)
       const nextRecipient = typeof recip === 'number' && recip > 0 ? Math.floor(recip) : undefined
+      const senderCap = perSenderVal(integration)
+      const nextSender = typeof senderCap === 'number' && senderCap > 0 ? Math.floor(senderCap) : undefined
 
       // Classes exclues de l'envoi depuis cette infra. Liste vide → undefined
       // (pas de clé = aucune exclusion, non-régression).
@@ -628,6 +645,7 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
             ? (nextCaps as Record<VeridianProviderClass, number>)
             : undefined,
         veridian_per_recipient_daily_cap: nextRecipient,
+        veridian_per_sender_daily_cap: nextSender,
         veridian_excluded_provider_classes: nextExcluded
       }
 
@@ -725,6 +743,25 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
                   />
                 </Col>
                 <Col xs={24} sm={12}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t`Per-sender daily cap (warmup, this infra)`}
+                  </Text>
+                  <InputNumber
+                    min={0}
+                    step={1}
+                    precision={0}
+                    value={perSenderVal(integration)}
+                    onChange={(v) => setPerSender(integration.id, v)}
+                    placeholder={t`No cap`}
+                    disabled={!isOwner}
+                    style={{ width: '100%', marginTop: 4 }}
+                    aria-label={t`Per-sender daily cap for ${integration.name}`}
+                  />
+                </Col>
+              </Row>
+
+              <Row gutter={[12, 8]} align="bottom" style={{ marginBottom: 8 }}>
+                <Col xs={24}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {t`Excluded provider classes (this infra)`}
                   </Text>
@@ -871,9 +908,14 @@ interface SendingWindowCardProps {
   workspace: Workspace
   isOwner: boolean
   onWorkspaceUpdate: (workspace: Workspace) => void
+  // Veridian fork — signal du preset « Mode warmup » : quand ce nombre change
+  // (incrémenté par le PresetCard parent), la carte pré-remplit sa fenêtre aux
+  // valeurs warmup (lun-ven 9-18 Europe/Paris) dans son état LOCAL, sans sauver.
+  // L'owner relit puis clique « Save sending window ». 0 = aucun preset appliqué.
+  warmupNonce?: number
 }
 
-function SendingWindowCard({ workspace, isOwner, onWorkspaceUpdate }: SendingWindowCardProps) {
+function SendingWindowCard({ workspace, isOwner, onWorkspaceUpdate, warmupNonce = 0 }: SendingWindowCardProps) {
   const { t } = useLingui()
   const { message } = App.useApp()
   const [saving, setSaving] = useState(false)
@@ -902,6 +944,19 @@ function SendingWindowCard({ workspace, isOwner, onWorkspaceUpdate }: SendingWin
     setTimezone(w?.timezone || workspace.settings.timezone || 'Europe/Paris')
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync sur la fenêtre persistée
   }, [workspace.id, JSON.stringify(workspace.settings.veridian_sending_window)])
+
+  // Preset « Mode warmup » : applique la fenêtre warmup à l'état LOCAL (sans
+  // sauver). Déclenché à chaque incrément du nonce parent (> 0 = un clic preset).
+  useEffect(() => {
+    if (warmupNonce <= 0) return
+    const w = VERIDIAN_WARMUP_PRESET.veridian_sending_window
+    setEnabled(true)
+    setDays(w.days ?? [1, 2, 3, 4, 5])
+    setStartMin((w.start_hour ?? 0) * 60 + (w.start_minute ?? 0))
+    setEndMin((w.end_hour ?? 0) * 60 + (w.end_minute ?? 0))
+    setTimezone(w.timezone || workspace.settings.timezone || 'Europe/Paris')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- déclenché uniquement par le nonce
+  }, [warmupNonce])
 
   const rangeInvalid = endMin <= startMin
 
@@ -1255,12 +1310,16 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
   const { t } = useLingui()
   const [saving, setSaving] = useState(false)
   const [touched, setTouched] = useState(false)
+  // Nonce du preset « Mode warmup » : incrémenté à chaque clic, propagé à la
+  // SendingWindowCard pour qu'elle pré-remplisse sa fenêtre (état local, sans sauver).
+  const [warmupNonce, setWarmupNonce] = useState(0)
   const [form] = Form.useForm()
   const { message } = App.useApp()
 
   const rates = workspace?.settings.veridian_provider_class_rates
   const dailyCaps = workspace?.settings.veridian_provider_class_daily_cap
   const perRecipientCap = workspace?.settings.veridian_per_recipient_daily_cap
+  const perSenderCap = workspace?.settings.veridian_per_sender_daily_cap
   const pixels = workspace?.settings.veridian_open_pixel_by_class
 
   // Nombre de contacts par classe dans le workspace (R1) — contexte pour régler
@@ -1285,9 +1344,10 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
       values[pixelField(c)] = effectivePixel(pixels, c)
     }
     values[PER_RECIPIENT_FIELD] = perRecipientCap
+    values[PER_SENDER_FIELD] = perSenderCap
     form.setFieldsValue(values)
     setTouched(false)
-  }, [workspace, form, isOwner, rates, dailyCaps, perRecipientCap, pixels])
+  }, [workspace, form, isOwner, rates, dailyCaps, perRecipientCap, perSenderCap, pixels])
 
   const handleSave = async (values: Record<string, number | boolean | undefined>) => {
     if (!workspace) return
@@ -1316,6 +1376,11 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
       const nextRecipient =
         typeof recip === 'number' && recip > 0 ? Math.floor(recip) : undefined
 
+      // Cap par sender émetteur (warmup IP) : entier ≥ 1. 0/vide = pas de plafond.
+      const sender = values[PER_SENDER_FIELD]
+      const nextSender =
+        typeof sender === 'number' && sender > 0 ? Math.floor(sender) : undefined
+
       await workspaceService.update({
         ...workspace,
         settings: {
@@ -1329,6 +1394,7 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
               ? (nextCaps as Record<VeridianProviderClass, number>)
               : undefined,
           veridian_per_recipient_daily_cap: nextRecipient,
+          veridian_per_sender_daily_cap: nextSender,
           veridian_open_pixel_by_class:
             Object.keys(nextPixels).length > 0
               ? (nextPixels as Record<VeridianProviderClass, boolean>)
@@ -1359,6 +1425,36 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
     setTouched(true)
   }
 
+  // Applique le PRESET « Mode warmup » : pré-remplit le formulaire (rates, caps,
+  // per-recipient, per-sender) aux valeurs warmup + signale à la SendingWindowCard
+  // de pré-remplir sa fenêtre. NE SAUVE RIEN : l'owner relit puis clique « Save
+  // changes » (et « Save sending window » sur sa carte). Le pixel N'EST PAS touché
+  // (on ne dégrade pas la réputation : le défaut tunnel OFF google/microsoft reste).
+  const applyWarmupPreset = () => {
+    const values: Record<string, number> = {}
+    for (const c of VERIDIAN_PROVIDER_CLASSES) {
+      values[rateField(c)] = VERIDIAN_WARMUP_PRESET.veridian_provider_class_rates[c]
+      values[capField(c)] = VERIDIAN_WARMUP_PRESET.veridian_provider_class_daily_cap[c]
+    }
+    values[PER_RECIPIENT_FIELD] = VERIDIAN_WARMUP_PRESET.veridian_per_recipient_daily_cap
+    values[PER_SENDER_FIELD] = VERIDIAN_WARMUP_PRESET.veridian_per_sender_daily_cap
+    form.setFieldsValue(values)
+    setTouched(true)
+    // Pousse la fenêtre d'envoi warmup dans la SendingWindowCard (état local).
+    setWarmupNonce((n) => n + 1)
+    message.info(t`Warmup preset applied below — review the values, then click "Save changes" (and "Save sending window").`)
+  }
+
+  // Infras d'envoi (email) ayant < 2 senders : le round-robin entre adresses ne
+  // peut pas s'activer (il faut ≥ 2 boîtes). Sert l'avertissement du PresetCard.
+  const emailIntegrations = (workspace?.integrations || []).filter(
+    (i): i is Integration & { email_provider: EmailProvider } =>
+      i.type === 'email' && !!i.email_provider
+  )
+  const infrasWithoutRoundRobin = emailIntegrations.filter(
+    (i) => (i.email_provider.senders?.length ?? 0) < 2
+  )
+
   // Petit badge "X contacts" affiché sur chaque carte de classe.
   const contactBadge = (c: VeridianProviderClass) => {
     if (breakdownLoading) return null
@@ -1386,6 +1482,47 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
         </Paragraph>
       }
     />
+  )
+
+  // Encart PRESETS (owner) : un bouton « Appliquer le mode warmup » qui pré-remplit
+  // l'ensemble cohérent des valeurs de démarrage prudent. Ne sauve rien (l'owner
+  // relit + Save). Popconfirm car le preset écrase la config cold courante.
+  const presetCard = (
+    <Card size="small" className="!mb-6">
+      <Row gutter={[16, 12]} align="middle" wrap>
+        <Col xs={24} md={16}>
+          <Space size="small" wrap style={{ marginBottom: 4 }}>
+            <RocketOutlined style={{ color: '#1677ff' }} />
+            <Text strong>{t`Presets`}</Text>
+          </Space>
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t`Warmup mode limits sending to 1 email/day toward each provider, caps each sending mailbox to a low daily volume, restricts to business hours, and spreads sends across all your sending addresses (round-robin). Ideal to start a new IP/domain without burning reputation. The preset fills the fields below — review them, then click "Save changes" (and "Save sending window").`}
+            </Text>
+          </div>
+        </Col>
+        <Col xs={24} md={8} style={{ textAlign: 'right' }}>
+          <Popconfirm
+            title={t`Apply warmup preset?`}
+            description={t`This will overwrite your current cold outreach rates, caps and sending window with the warmup values. Nothing is saved until you click Save.`}
+            okText={t`Apply`}
+            cancelText={t`Cancel`}
+            onConfirm={applyWarmupPreset}
+          >
+            <Button icon={<RocketOutlined />}>{t`Apply warmup mode`}</Button>
+          </Popconfirm>
+        </Col>
+      </Row>
+      {infrasWithoutRoundRobin.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          className="!mt-3"
+          message={t`Round-robin needs at least 2 sending addresses`}
+          description={t`Some sending integrations have a single sender, so the round-robin across addresses cannot activate for them. Add at least 2 mailboxes per sending integration in Settings → Integrations to spread the volume.`}
+        />
+      )}
+    </Card>
   )
 
   // ── Non-owner : lecture seule ────────────────────────────────────────────
@@ -1432,19 +1569,30 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
 
         <Card size="small" className="!mb-4">
           <Row gutter={[16, 8]} align="middle" wrap>
-            <Col xs={24} sm={14}>
+            <Col xs={24} sm={12}>
               <Text strong>{t`Per-recipient daily cap`}</Text>
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   {t`Max emails toward a single address per day (anti-harassment).`}
                 </Text>
               </div>
-            </Col>
-            <Col xs={24} sm={10}>
               {perRecipientCap && perRecipientCap > 0 ? (
                 <Text>{t`${perRecipientCap} / day`}</Text>
               ) : (
                 <Text type="secondary">{t`Unlimited`}</Text>
+              )}
+            </Col>
+            <Col xs={24} sm={12}>
+              <Text strong>{t`Per-sender daily cap (warmup)`}</Text>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t`Max emails sent FROM a single address per day (IP warmup).`}
+                </Text>
+              </div>
+              {perSenderCap && perSenderCap > 0 ? (
+                <Text>{t`${perSenderCap} / day`}</Text>
+              ) : (
+                <Text type="secondary">{t`No cap`}</Text>
               )}
             </Col>
           </Row>
@@ -1523,6 +1671,7 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
         description={t`Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns.`}
       />
       {explainer}
+      {presetCard}
 
       {workspace && (
         <>
@@ -1545,6 +1694,7 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
             workspace={workspace}
             isOwner={isOwner}
             onWorkspaceUpdate={onWorkspaceUpdate}
+            warmupNonce={warmupNonce}
           />
           <ExcludedClassesCard
             workspace={workspace}
@@ -1557,11 +1707,12 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
       )}
 
       <Form form={form} layout="vertical" onFinish={handleSave} onValuesChange={() => setTouched(true)}>
-        {/* Cap global par destinataire (anti-harcèlement) — en tête, hors carte de classe. */}
+        {/* Caps globaux — en tête, hors carte de classe. Destinataire (anti-
+            harcèlement) + émetteur (warmup IP), deux dimensions indépendantes. */}
         <Card size="small" className="!mb-4">
-          <Row gutter={[24, 8]} align="bottom" wrap>
-            <Col xs={24} sm={14} style={{ display: 'flex', alignItems: 'center' }}>
-              <div>
+          <Row gutter={[24, 12]} align="bottom" wrap>
+            <Col xs={24} md={12}>
+              <div style={{ marginBottom: 8 }}>
                 <Text strong>{t`Per-recipient daily cap`}</Text>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
@@ -1569,8 +1720,6 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
                   </Text>
                 </div>
               </div>
-            </Col>
-            <Col xs={24} sm={10}>
               <Form.Item
                 name={PER_RECIPIENT_FIELD}
                 label={t`Emails / recipient / day`}
@@ -1578,6 +1727,24 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
                 tooltip={t`Hard daily limit per email address, all classes combined. Counted from message history since midnight. 0 or empty = unlimited.`}
               >
                 <InputNumber min={0} step={1} precision={0} placeholder={t`Unlimited`} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <div style={{ marginBottom: 8 }}>
+                <Text strong>{t`Per-sender daily cap (warmup)`}</Text>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t`Max emails sent FROM a single sending address per day — the classic IP/domain warmup limit. Each mailbox ramps its own volume. Leave empty (0) for no sender limit.`}
+                  </Text>
+                </div>
+              </div>
+              <Form.Item
+                name={PER_SENDER_FIELD}
+                label={t`Emails / sender / day`}
+                style={{ marginBottom: 0 }}
+                tooltip={t`Hard daily limit per SENDING address (FROM), counted from message history since midnight (V53). Distinct from recipient caps: this caps how much each mailbox emits, for IP/domain warmup. 0 or empty = no sender cap. Can also be set per sending integration in the infra card above.`}
+              >
+                <InputNumber min={0} step={1} precision={0} placeholder={t`No cap`} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
           </Row>
