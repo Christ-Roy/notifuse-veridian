@@ -136,6 +136,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.CreatedAt,
 				message.UpdatedAt,
 				message.VeridianContentHash,
+				message.VeridianSenderEmail,
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -185,6 +186,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.CreatedAt,
 				message.UpdatedAt,
 				message.VeridianContentHash,
+				message.VeridianSenderEmail,
 			).
 			WillReturnError(errors.New("execution error"))
 
@@ -2651,6 +2653,46 @@ func TestMessageHistoryRepository_CountSentSinceForContact(t *testing.T) {
 		_, err := repo.CountSentSinceForContact(ctx, workspaceID, email, since)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "count messages sent to contact")
+	})
+}
+
+func TestMessageHistoryRepository_CountSentSinceForSender(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	sender := "warmup@send.fr"
+	since := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
+
+	t.Run("returns count (sender lowered in SQL)", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE veridian_sender_email = lower\(\$1\) AND sent_at >= \$2`).
+			WithArgs(sender, since).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
+		got, err := repo.CountSentSinceForSender(ctx, workspaceID, sender, since)
+		require.NoError(t, err)
+		assert.Equal(t, 2, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("no conn"))
+		_, err := repo.CountSentSinceForSender(ctx, workspaceID, sender, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE veridian_sender_email = lower\(\$1\) AND sent_at >= \$2`).
+			WithArgs(sender, since).
+			WillReturnError(errors.New("boom"))
+		_, err := repo.CountSentSinceForSender(ctx, workspaceID, sender, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "count messages sent from sender")
 	})
 }
 

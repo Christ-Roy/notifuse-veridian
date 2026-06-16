@@ -138,6 +138,13 @@ type MessageHistory struct {
 	// par classe de provider destinataire. Vide pour les envois non-cold / anti-
 	// hash désactivé (colonne nullable, V52). Cf. veridian_content_hash.go.
 	VeridianContentHash string `json:"veridian_content_hash,omitempty"`
+
+	// Veridian fork — ADRESSE ÉMETTRICE (FROM) de l'envoi (colonne nullable,
+	// V53). Posée à l'envoi depuis EmailQueuePayload.FromAddress. Sert le plafond
+	// journalier par sender (warmup IP) : COUNT(message_history) par cette adresse
+	// depuis minuit UTC. Vide pour les envois historiques antérieurs à V53 et tout
+	// envoi où le FROM n'est pas connu (stocké NULL). Cf. veridian_daily_cap.go.
+	VeridianSenderEmail string `json:"veridian_sender_email,omitempty"`
 }
 
 type MessageHistoryStatusSum struct {
@@ -210,6 +217,15 @@ type MessageHistoryRepository interface {
 	// la liste de domaines dérivée en Go. Sert au plafond JOURNALIER par classe
 	// (réputation). Cf. veridian_daily_cap.go.
 	CountSentSinceForDomains(ctx context.Context, workspaceID string, domains []string, exclude bool, since time.Time) (int, error)
+
+	// CountSentSinceForSender compte les messages envoyés DEPUIS une adresse
+	// émettrice (FROM) `senderEmail` depuis l'instant `since` (typiquement minuit
+	// UTC du jour courant). Sert au plafond JOURNALIER par sender (warmup IP :
+	// max N envois/jour par boîte d'envoi). Filtre la colonne veridian_sender_email
+	// (V53), indexée sur (veridian_sender_email, sent_at). La comparaison est
+	// case-insensitive (lower) pour matcher la normalisation de l'adresse FROM.
+	// Cf. veridian_daily_cap.go (gate veridianPerSenderCapGate).
+	CountSentSinceForSender(ctx context.Context, workspaceID, senderEmail string, since time.Time) (int, error)
 
 	// FindContactEmailByMessageID retourne le contact_email de l'envoi dont l'id
 	// (= message_history.id, posé comme local-part du Message-ID RFC822 à l'envoi)

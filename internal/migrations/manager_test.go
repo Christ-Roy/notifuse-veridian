@@ -559,8 +559,10 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// Lot 3 sprint cold ; cf. v51.go header).
 		// V52 : colonne message_history.veridian_content_hash + index partiel
 		// (anti-hash identique par classe cold outbound ; cf. v52.go header).
+		// V53 : colonne message_history.veridian_sender_email + index partiel
+		// (plafond journalier par sender émetteur / warmup IP ; cf. v53.go header).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("52"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("53"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 

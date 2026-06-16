@@ -76,6 +76,20 @@ type EmailProvider struct {
 	VeridianProviderClassDailyCap map[string]int     `json:"veridian_provider_class_daily_cap,omitempty"`
 	VeridianPerRecipientDailyCap  int                `json:"veridian_per_recipient_daily_cap,omitempty"`
 
+	// Veridian fork — plafond JOURNALIER par ADRESSE ÉMETTRICE (warmup IP, cold
+	// outbound). Dimension ÉMETTRICE, distincte des caps ci-dessus qui sont keyés
+	// DESTINATAIRE (par adresse reçue / par classe de provider receveur). Ici :
+	// max N envois/jour PAR boîte d'envoi (sender) de cette infra. C'est le warmup
+	// IP/domaine classique — chaque boîte qui monte en charge porte son propre
+	// plafond quotidien, indépendant du destinataire. Source de vérité = COUNT
+	// message_history filtré par l'adresse FROM réelle (colonne veridian_sender_email,
+	// V53) depuis minuit UTC. Le PLUS RESTRICTIF gagne avec les caps destinataire/
+	// classe. Niveau INTERMÉDIAIRE de la cascade (broadcast → INFRA → workspace),
+	// comme les caps R2. 0 = pas de plafond émetteur (opt-in strict, non-régression).
+	// Persisté dans le JSON blob integrations sans migration ni allowlist (omitempty).
+	// Cf. veridian_daily_cap.go (gate veridianPerSenderCapGate).
+	VeridianPerSenderDailyCap int `json:"veridian_per_sender_daily_cap,omitempty"`
+
 	// Veridian fork — JITTER TEMPOREL par infra (cold outbound). Amplitude (±) de
 	// dispersion du délai de re-planification du throttle minute par classe, en
 	// FRACTION du pas nominal (0.30 = ±30 %). Casse le rythme métronomique (tell

@@ -98,6 +98,12 @@ type EmailQueuePayload struct {
 	VeridianProviderClassDailyCap map[string]int `json:"veridian_provider_class_daily_cap,omitempty"`
 	VeridianPerRecipientDailyCap  int            `json:"veridian_per_recipient_daily_cap,omitempty"`
 
+	// Veridian fork — plafond JOURNALIER par ADRESSE ÉMETTRICE (warmup IP). Niveau
+	// le plus spécifique de la cascade (BROADCAST → infra → workspace). Dimension
+	// ÉMETTRICE (≠ caps destinataire ci-dessus) : max N envois/jour par boîte
+	// d'envoi. Copié à l'enqueue depuis broadcast.metadata ; 0 = pas de plafond.
+	VeridianPerSenderDailyCap int `json:"veridian_per_sender_daily_cap,omitempty"`
+
 	// Veridian fork — FENÊTRE D'ENVOI (cold outbound) copiée à l'enqueue depuis
 	// broadcast.metadata. Niveau le plus spécifique de la cascade ; le worker
 	// retombe sur l'infra puis le workspace si nil. nil = pas de fenêtre sur ce

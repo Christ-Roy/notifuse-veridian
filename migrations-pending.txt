@@ -20,3 +20,4 @@
 # grep -Fxq dans check-migration-safety.sh).
 internal/migrations/v49.go
 internal/migrations/v52.go
+internal/migrations/v53.go

@@ -170,17 +170,20 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 	// Veridian fork — NULLIF($N,'') : un hash vide (envoi non-cold / anti-hash
 	// désactivé) est stocké NULL pour rester HORS de l'index partiel
 	// idx_message_history_content_hash_sent_at (WHERE veridian_content_hash IS NOT NULL).
+	// Idem veridian_sender_email (adresse FROM) : vide → NULL (hors index partiel
+	// idx_message_history_sender_email_sent_at). Stocké lowercase pour matcher le
+	// COUNT case-insensitive du cap par sender.
 	query := `
 		INSERT INTO message_history (
 			id, external_id, contact_email, broadcast_id, automation_id, transactional_notification_id, list_id, template_id, template_version,
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
-			unsubscribed_at, created_at, updated_at, veridian_content_hash
+			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, LEFT($11, 255), $12, $13, $14, $15, $16,
 			$17, $18, $19, $20, $21,
-			$22, $23, $24, NULLIF($25, '')
+			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), '')
 		)
 	`
 
@@ -212,6 +215,7 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 		message.CreatedAt,
 		message.UpdatedAt,
 		message.VeridianContentHash,
+		message.VeridianSenderEmail,
 	)
 
 	if err != nil {
@@ -248,23 +252,27 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 	// raisonne sur l'envoi initial). COALESCE garde l'ancien hash si EXCLUDED est
 	// NULL (cas d'une 1re tentative qui aurait échoué sans hash, suivie d'un
 	// succès cold avec hash : on préserve le hash apparu).
+	// veridian_sender_email posé à l'INSERT (NULLIF lower vide → NULL). Le DO UPDATE
+	// le préserve via COALESCE (un retry réussi ne change pas l'adresse FROM ;
+	// COALESCE garde celui apparu si l'INSERT initial était sans sender).
 	query := `
 		INSERT INTO message_history (
 			id, external_id, contact_email, broadcast_id, automation_id, transactional_notification_id, list_id, template_id, template_version,
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
-			unsubscribed_at, created_at, updated_at, veridian_content_hash
+			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, LEFT($11, 255), $12, $13, $14, $15, $16,
 			$17, $18, $19, $20, $21,
-			$22, $23, $24, NULLIF($25, '')
+			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), '')
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			failed_at = EXCLUDED.failed_at,
 			status_info = EXCLUDED.status_info,
 			updated_at = EXCLUDED.updated_at,
-			veridian_content_hash = COALESCE(message_history.veridian_content_hash, EXCLUDED.veridian_content_hash)
+			veridian_content_hash = COALESCE(message_history.veridian_content_hash, EXCLUDED.veridian_content_hash),
+			veridian_sender_email = COALESCE(message_history.veridian_sender_email, EXCLUDED.veridian_sender_email)
 	`
 
 	_, err = workspaceDB.ExecContext(
@@ -295,6 +303,7 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 		message.CreatedAt,
 		message.UpdatedAt,
 		message.VeridianContentHash,
+		message.VeridianSenderEmail,
 	)
 
 	if err != nil {
@@ -1304,6 +1313,26 @@ func (r *MessageHistoryRepository) CountSentSinceForContact(ctx context.Context,
 	var count int
 	if err := workspaceDB.QueryRowContext(ctx, query, contactEmail, since).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count messages sent to contact since: %w", err)
+	}
+	return count, nil
+}
+
+// CountSentSinceForSender compte les messages envoyés DEPUIS une adresse émettrice
+// (FROM) depuis `since`. Plafond journalier par sender (warmup IP : max N envois/
+// jour par boîte d'envoi). S'appuie sur l'index (veridian_sender_email, sent_at)
+// posé par V53 : le filtre sender est ultra sélectif (peu de boîtes d'envoi par
+// infra), le COUNT est donc index-only. La colonne est stockée lowercase (NULLIF
+// lower à l'insert) ; on lower l'argument pour matcher (case-insensitive).
+func (r *MessageHistoryRepository) CountSentSinceForSender(ctx context.Context, workspaceID, senderEmail string, since time.Time) (int, error) {
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COUNT(*) FROM message_history WHERE veridian_sender_email = lower($1) AND sent_at >= $2`
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, senderEmail, since).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count messages sent from sender since: %w", err)
 	}
 	return count, nil
 }

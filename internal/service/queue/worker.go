@@ -362,6 +362,24 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Veridian fork: PER-SENDER DAILY CAP gate (warmup IP, cold outbound). Twin of
+	// the daily cap gate above but keyed on the SENDER (FROM address) instead of the
+	// recipient/class: caps how many mails a given sending mailbox emits per day,
+	// so a fresh IP/domain ramps its own volume (warmup). Durable, backed by
+	// message_history.veridian_sender_email (V53). Same skip-and-reschedule contract,
+	// also BEFORE MarkAsProcessing. No-op without config or without a known FROM.
+	// Cf. veridian_per_sender_cap.go.
+	if delay, capped := w.veridianPerSenderCapGate(workspace, &integration.EmailProvider, entry); capped {
+		nextRetry := time.Now().Add(delay)
+		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Warn("Failed to set next retry for per-sender cap skip")
+		}
+		return
+	}
+
 	// Veridian fork: SENDING WINDOW gate (cold outbound). Only allows sends
 	// within configured business hours/days (e.g. 9h-18h, Mon-Fri, workspace
 	// timezone). Outside the window the entry is rescheduled to the next opening
@@ -607,6 +625,11 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		// rendu final (posé à l'enqueue) pour alimenter la fenêtre glissante de
 		// déduplication par classe. Vide pour les envois non-cold → stocké NULL.
 		VeridianContentHash: entry.Payload.VeridianContentHash,
+		// Veridian fork — adresse ÉMETTRICE (FROM) de l'envoi : persistée (V53)
+		// pour alimenter le COUNT du plafond journalier par sender (warmup IP).
+		// FromAddress est figé dans le payload à l'enqueue (sender-rotation incluse).
+		// Vide pour les envois sans FROM connu → stocké NULL (hors index partiel).
+		VeridianSenderEmail: entry.Payload.FromAddress,
 	}
 
 	// Set source (broadcast or automation)

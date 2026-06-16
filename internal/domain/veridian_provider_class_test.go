@@ -255,11 +255,13 @@ func TestVeridianApplyProviderThrottle(t *testing.T) {
 			Metadata: MapOfAny{
 				VeridianProviderClassDailyCapMetadataKey: map[string]any{"google": float64(1), "microsoft": float64(5)},
 				VeridianPerRecipientDailyCapMetadataKey:  float64(1),
+				VeridianPerSenderDailyCapMetadataKey:     float64(3),
 			},
 		}
 		VeridianApplyProviderThrottle(entry, b, nil)
 		assert.Equal(t, map[string]int{"google": 1, "microsoft": 5}, entry.Payload.VeridianProviderClassDailyCap)
 		assert.Equal(t, 1, entry.Payload.VeridianPerRecipientDailyCap)
+		assert.Equal(t, 3, entry.Payload.VeridianPerSenderDailyCap)
 	})
 
 	t.Run("no daily cap metadata leaves payload caps empty", func(t *testing.T) {
@@ -267,6 +269,7 @@ func TestVeridianApplyProviderThrottle(t *testing.T) {
 		VeridianApplyProviderThrottle(entry, broadcastWithRates, nil)
 		assert.Nil(t, entry.Payload.VeridianProviderClassDailyCap)
 		assert.Zero(t, entry.Payload.VeridianPerRecipientDailyCap)
+		assert.Zero(t, entry.Payload.VeridianPerSenderDailyCap)
 	})
 
 	t.Run("sending window copied into payload from metadata", func(t *testing.T) {
@@ -434,6 +437,35 @@ func TestVeridianPerRecipientDailyCapFromMetadata(t *testing.T) {
 
 	t.Run("non-numeric returns 0", func(t *testing.T) {
 		assert.Zero(t, VeridianPerRecipientDailyCapFromMetadata(MapOfAny{VeridianPerRecipientDailyCapMetadataKey: "nope"}))
+	})
+}
+
+func TestVeridianPerSenderDailyCapFromMetadata(t *testing.T) {
+	t.Run("nil metadata returns 0", func(t *testing.T) {
+		assert.Zero(t, VeridianPerSenderDailyCapFromMetadata(nil))
+	})
+
+	t.Run("missing key returns 0", func(t *testing.T) {
+		assert.Zero(t, VeridianPerSenderDailyCapFromMetadata(MapOfAny{"x": 1}))
+	})
+
+	t.Run("float64 round-trip", func(t *testing.T) {
+		md := MapOfAny{VeridianPerSenderDailyCapMetadataKey: float64(1)}
+		assert.Equal(t, 1, VeridianPerSenderDailyCapFromMetadata(md))
+	})
+
+	t.Run("native int", func(t *testing.T) {
+		md := MapOfAny{VeridianPerSenderDailyCapMetadataKey: 10}
+		assert.Equal(t, 10, VeridianPerSenderDailyCapFromMetadata(md))
+	})
+
+	t.Run("zero or negative returns 0 (no cap)", func(t *testing.T) {
+		assert.Zero(t, VeridianPerSenderDailyCapFromMetadata(MapOfAny{VeridianPerSenderDailyCapMetadataKey: float64(0)}))
+		assert.Zero(t, VeridianPerSenderDailyCapFromMetadata(MapOfAny{VeridianPerSenderDailyCapMetadataKey: float64(-1)}))
+	})
+
+	t.Run("non-numeric returns 0", func(t *testing.T) {
+		assert.Zero(t, VeridianPerSenderDailyCapFromMetadata(MapOfAny{VeridianPerSenderDailyCapMetadataKey: "nope"}))
 	})
 }
 

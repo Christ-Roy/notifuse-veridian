@@ -404,6 +404,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.VeridianOpenPixelByClass = settings.VeridianOpenPixelByClass
 	existingWorkspace.Settings.VeridianProviderClassDailyCap = settings.VeridianProviderClassDailyCap
 	existingWorkspace.Settings.VeridianPerRecipientDailyCap = settings.VeridianPerRecipientDailyCap
+	existingWorkspace.Settings.VeridianPerSenderDailyCap = settings.VeridianPerSenderDailyCap
 	existingWorkspace.Settings.VeridianSendingWindow = settings.VeridianSendingWindow
 	existingWorkspace.Settings.VeridianJitterPct = settings.VeridianJitterPct
 	existingWorkspace.Settings.VeridianAntiHashEnabled = settings.VeridianAntiHashEnabled

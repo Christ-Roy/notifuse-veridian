@@ -64,6 +64,12 @@ const VeridianProviderClassDailyCapMetadataKey = "veridian_provider_class_daily_
 // du même contact). Entier global (non keyé par classe). 0 ou absent = illimité.
 const VeridianPerRecipientDailyCapMetadataKey = "veridian_per_recipient_daily_cap"
 
+// VeridianPerSenderDailyCapMetadataKey est la clé de broadcast.Metadata portant
+// le plafond JOURNALIER par ADRESSE ÉMETTRICE (warmup IP) : max N envois/jour par
+// boîte d'envoi. Dimension ÉMETTRICE (≠ le cap destinataire ci-dessus). Entier
+// global. 0 ou absent = pas de plafond émetteur. Cf. veridian_per_sender_cap.go.
+const VeridianPerSenderDailyCapMetadataKey = "veridian_per_sender_daily_cap"
+
 // VeridianJitterPctMetadataKey est la clé de broadcast.Metadata portant
 // l'amplitude (±) de jitter temporel du throttle minute, en fraction du pas
 // nominal (0.30 = ±30 %). Absent = non configuré (le gate applique le défaut
@@ -375,6 +381,23 @@ func VeridianPerRecipientDailyCapFromMetadata(metadata MapOfAny) int {
 	return 0
 }
 
+// VeridianPerSenderDailyCapFromMetadata extrait le plafond journalier par
+// adresse ÉMETTRICE (warmup IP) d'un broadcast.Metadata. Retourne 0 si absent,
+// malformé ou <= 0 (0 = pas de plafond émetteur, sémantique opt-in).
+func VeridianPerSenderDailyCapFromMetadata(metadata MapOfAny) int {
+	if metadata == nil {
+		return 0
+	}
+	raw, ok := metadata[VeridianPerSenderDailyCapMetadataKey]
+	if !ok {
+		return 0
+	}
+	if cap, ok := veridianToInt(raw); ok && cap > 0 {
+		return cap
+	}
+	return 0
+}
+
 // VeridianJitterPctFromMetadata extrait l'amplitude de jitter d'un
 // broadcast.Metadata. Retourne (pct, true) si la clé est présente avec une
 // valeur numérique >= 0 (0 inclus = jitter désactivé explicitement) ;
@@ -465,6 +488,9 @@ func VeridianApplyProviderThrottle(entry *EmailQueueEntry, broadcast *Broadcast,
 		}
 		if cap := VeridianPerRecipientDailyCapFromMetadata(broadcast.Metadata); cap > 0 {
 			entry.Payload.VeridianPerRecipientDailyCap = cap
+		}
+		if cap := VeridianPerSenderDailyCapFromMetadata(broadcast.Metadata); cap > 0 {
+			entry.Payload.VeridianPerSenderDailyCap = cap
 		}
 		if window := VeridianSendingWindowFromMetadata(broadcast.Metadata); window != nil {
 			entry.Payload.VeridianSendingWindow = window

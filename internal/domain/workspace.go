@@ -400,6 +400,14 @@ type WorkspaceSettings struct {
 	// broadcast ne définit pas veridian_per_recipient_daily_cap. 0 = illimité.
 	VeridianPerRecipientDailyCap int `json:"veridian_per_recipient_daily_cap,omitempty"`
 
+	// Veridian fork — plafond JOURNALIER par ADRESSE ÉMETTRICE (warmup IP). Niveau
+	// le plus général de la cascade (broadcast → infra → WORKSPACE). Dimension
+	// ÉMETTRICE (≠ les caps destinataire ci-dessus) : max N envois/jour par boîte
+	// d'envoi (sender). En warmup, chaque boîte monte son propre volume. Source de
+	// vérité : COUNT message_history par veridian_sender_email depuis minuit UTC.
+	// 0 = pas de plafond émetteur. Cf. veridian_daily_cap.go (veridianPerSenderCapGate).
+	VeridianPerSenderDailyCap int `json:"veridian_per_sender_daily_cap,omitempty"`
+
 	// Veridian fork — FENÊTRE D'ENVOI par défaut du workspace (cold outbound) :
 	// horaires/jours ouvrables où les envois cold sont autorisés. Niveau le plus
 	// général de la cascade (broadcast → infra → WORKSPACE). nil/invalide = pas
