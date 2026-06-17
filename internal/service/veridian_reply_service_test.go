@@ -296,6 +296,67 @@ func TestVeridianReply_Process_MarksSignal_TimelineEvent_ExitsAutomation(t *test
 	require.NoError(t, err)
 }
 
+func TestVeridianReply_Process_EmitsRepliedToHub(t *testing.T) {
+	m, ctrl := newReplyTestMocks(t)
+	defer ctrl.Finish()
+
+	emitter := mocks.NewMockWebhookEmitter(ctrl)
+	m.svc.SetVeridianWebhookEmitter(emitter)
+
+	repliedDate := time.Date(2026, 6, 17, 10, 0, 0, 0, time.UTC)
+	msg := &domain.VeridianIMAPMessage{
+		WorkspaceID: replyWS,
+		From:        "prospect@acme.fr",
+		Subject:     "Re: proposition",
+		InReplyTo:   "<sent-uuid-9@send.veridian.site>",
+		Date:        repliedDate,
+	}
+
+	m.messageRepo.EXPECT().
+		FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-9").
+		Return("prospect@acme.fr", true, nil)
+	m.replyRepo.EXPECT().HasReplied(gomock.Any(), replyWS, "prospect@acme.fr").Return(false, nil)
+	m.replyRepo.EXPECT().MarkReplied(gomock.Any(), replyWS, gomock.Any()).Return(nil)
+	m.timelineRepo.EXPECT().Create(gomock.Any(), replyWS, gomock.Any()).Return(nil)
+	m.autoRepo.EXPECT().
+		ListContactAutomations(gomock.Any(), replyWS, gomock.Any()).
+		Return([]*domain.ContactAutomation{}, 0, nil)
+
+	// L'event email.replied DOIT être poussé vers le Hub avec contact_email + message_id.
+	emitter.EXPECT().
+		Emit(gomock.Any(), domain.EventEmailReplied, replyWS, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
+			assert.Equal(t, "prospect@acme.fr", data["contact_email"])
+			assert.Equal(t, "sent-uuid-9", data["message_id"])
+			assert.NotEmpty(t, data["occurred_at"])
+		})
+
+	require.NoError(t, m.svc.ProcessInboundMessage(context.Background(), msg))
+}
+
+func TestVeridianReply_Process_NoEmitterIsNoop(t *testing.T) {
+	// Sans emitter injecté, ProcessInboundMessage ne tente aucune émission (nil-safe).
+	m, ctrl := newReplyTestMocks(t)
+	defer ctrl.Finish()
+
+	msg := &domain.VeridianIMAPMessage{
+		WorkspaceID: replyWS,
+		From:        "prospect@acme.fr",
+		InReplyTo:   "<sent-uuid-10@send.veridian.site>",
+	}
+	m.messageRepo.EXPECT().
+		FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-10").
+		Return("prospect@acme.fr", true, nil)
+	m.replyRepo.EXPECT().HasReplied(gomock.Any(), replyWS, "prospect@acme.fr").Return(false, nil)
+	m.replyRepo.EXPECT().MarkReplied(gomock.Any(), replyWS, gomock.Any()).Return(nil)
+	m.timelineRepo.EXPECT().Create(gomock.Any(), replyWS, gomock.Any()).Return(nil)
+	m.autoRepo.EXPECT().
+		ListContactAutomations(gomock.Any(), replyWS, gomock.Any()).
+		Return([]*domain.ContactAutomation{}, 0, nil)
+
+	require.NoError(t, m.svc.ProcessInboundMessage(context.Background(), msg))
+}
+
 func TestVeridianReply_Process_Idempotent_AlreadyReplied_NoOp(t *testing.T) {
 	m, ctrl := newReplyTestMocks(t)
 	defer ctrl.Finish()

@@ -41,6 +41,16 @@ type VeridianReplyService struct {
 	automationRepo domain.AutomationRepository
 	timelineRepo   domain.ContactTimelineRepository
 	logger         logger.Logger
+
+	// Veridian: emitter Hub pour pousser email.replied (scoring prospect +20).
+	// DI optionnelle (SetVeridianWebhookEmitter, app.go), nil = no-op strict.
+	veridianWebhookEmitter domain.WebhookEmitter
+}
+
+// SetVeridianWebhookEmitter injecte (post-construction) l'emitter Hub pour pousser
+// l'event email.replied vers le réconciliateur de scoring. Optionnel et nil-safe.
+func (s *VeridianReplyService) SetVeridianWebhookEmitter(emitter domain.WebhookEmitter) {
+	s.veridianWebhookEmitter = emitter
 }
 
 // NewVeridianReplyService construit le service stop-on-reply.
@@ -222,10 +232,33 @@ func (s *VeridianReplyService) ProcessInboundMessage(ctx context.Context, msg *d
 	// 2. Timeline event (best-effort, ne bloque pas l'exit).
 	s.createReplyTimelineEvent(ctx, msg.WorkspaceID, detection, repliedAt)
 
-	// 3. Exit actif des automations en cours.
+	// 3. Veridian: pousser email.replied vers le Hub (scoring prospect +20).
+	//    Best-effort (Emit est async), no-op si emitter non configuré. Émis APRÈS le
+	//    fast-path idempotent HasReplied → un re-dispatch IMAP du même message ne
+	//    ré-émet pas (et de toute façon le Hub dédup sur event_id/idempotency_key).
+	s.veridianEmitReplied(ctx, msg.WorkspaceID, detection, repliedAt)
+
+	// 4. Exit actif des automations en cours.
 	s.exitActiveAutomations(ctx, msg.WorkspaceID, detection.ContactEmail)
 
 	return nil
+}
+
+// veridianEmitReplied pousse l'event email.replied vers le Hub. contact_email = clé
+// de jointure V1 du scoring. No-op si l'emitter n'est pas configuré.
+func (s *VeridianReplyService) veridianEmitReplied(ctx context.Context, workspaceID string, detection domain.VeridianReplyDetection, repliedAt time.Time) {
+	if s.veridianWebhookEmitter == nil {
+		return
+	}
+	data := map[string]interface{}{
+		"contact_email": detection.ContactEmail, // déjà normalisé par DetectReply
+		"occurred_at":   repliedAt.UTC().Format(time.RFC3339),
+		"match_type":    string(detection.MatchType),
+	}
+	if detection.MatchedMessageID != "" {
+		data["message_id"] = detection.MatchedMessageID
+	}
+	s.veridianWebhookEmitter.Emit(ctx, domain.EventEmailReplied, workspaceID, data)
 }
 
 // resolveRepliedAt retient la Date du mail si elle est plausible, sinon now(). Un

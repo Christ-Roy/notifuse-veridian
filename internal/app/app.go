@@ -1119,6 +1119,16 @@ func (a *App) InitServices() error {
 		a.config.HubWebhookSecret,
 		a.logger,
 	)
+	// === Veridian patch — events comportementaux cold↔web (2026-06-17) ===
+	// Le Hub a livré un réconciliateur de scoring prospect (ingestProspectEvent) qui
+	// attend email.opened/clicked/replied. On injecte l'emitter (créé ci-dessus) dans
+	// les services qui détiennent la donnée d'engagement : EmailService (open/click via
+	// les pixels /t/ et redirects /r/) et VeridianReplyService (reply via le poller IMAP).
+	// DI optionnelle nil-safe : emitter noop si HUB_WEBHOOK_URL/SECRET absents.
+	a.emailService.SetVeridianWebhookEmitter(a.veridianWebhookEmitter)
+	if a.veridianReplyService != nil {
+		a.veridianReplyService.SetVeridianWebhookEmitter(a.veridianWebhookEmitter)
+	}
 	// V38 : injecter le webhook emitter dans le plan repo pour que
 	// IncrementEmailsSent puisse émettre tenant.activity_threshold_reached
 	// quand le seuil 5 mails est franchi. Le repo est créé en ligne 435

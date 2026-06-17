@@ -1062,6 +1062,31 @@ const (
 	EventTenantMemberAdded       VeridianEvent = "tenant.member_added"
 	EventTenantMemberRemoved     VeridianEvent = "tenant.member_removed"
 	EventTenantMemberRoleChanged VeridianEvent = "tenant.member_role_changed"
+
+	// === Events COMPORTEMENTAUX cold↔web (réconciliateur scoring prospect, 2026-06-17) ===
+	//
+	// Le Hub a livré en prod un réconciliateur (ingestProspectEvent) qui ATTEND ces
+	// 3 events pour scorer les prospects (open +1, click +5, reply +20). Notifuse
+	// possède la donnée en interne (SetOpened/SetClicked + signal replied) mais ne
+	// l'émettait jamais → backend Hub orphelin (0 row prospect_events/scores). Émis
+	// via le VeridianWebhookEmitter existant (voie legacy HMAC que le Hub consomme,
+	// cf. veridian-hub/app/api/webhooks/notifuse/route.ts dispatchLegacyEvent).
+	//
+	// Payload `data` lu par le Hub (CONTRAT-HUB §7.5.1/§7.5.2) :
+	//   contact_email : ✅ CLÉ DE JOINTURE V1 — sans elle, l'event est ingéré pour
+	//                   forensics mais ne déplace AUCUN score (jointure par email).
+	//   message_id    : id de l'envoi Notifuse (traçabilité).
+	//   occurred_at   : RFC3339 UTC (sinon le Hub retombe sur payload.occurred_at).
+	//   link_url      : (email.clicked uniquement) URL de destination cliquée.
+	//   vid           : ⏳ étage 2 (ticket vid séparé, bloqué côté Hub) — nullable au V1.
+	//
+	// tenant_id (param Emit) = workspaceID Notifuse = notifuseWorkspaceSlug côté Hub.
+	// event_id (UUID auto par Emit) = idempotency_key applicative côté Hub (un replay
+	// ne ré-incrémente jamais le score). Émission BEST-EFFORT (goroutine, ne bloque
+	// jamais le pixel d'ouverture / la redirection de clic / la détection de réponse).
+	EventEmailOpened  VeridianEvent = "email.opened"
+	EventEmailClicked VeridianEvent = "email.clicked"
+	EventEmailReplied VeridianEvent = "email.replied"
 )
 
 // ActivityThresholdEmails est le nombre de mails envoyés cumulés qui déclenche

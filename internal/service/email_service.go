@@ -36,6 +36,12 @@ type EmailService struct {
 	mailgunService   domain.EmailProviderService
 	mailjetService   domain.EmailProviderService
 	sendGridService  domain.EmailProviderService
+
+	// Veridian: emitter Hub pour les events comportementaux (email.opened/clicked).
+	// DI optionnelle post-construction (SetVeridianWebhookEmitter, app.go) car
+	// l'emitter est instancié bien après EmailService. nil = émission désactivée
+	// (non-régression). Cf. veridian_behavioral_emit.go.
+	veridianWebhookEmitter domain.WebhookEmitter
 }
 
 // NewEmailService creates a new EmailService instance
@@ -217,6 +223,10 @@ func (s *EmailService) VisitLink(ctx context.Context, messageID string, workspac
 		return fmt.Errorf("failed to set clicked: %w", err)
 	}
 
+	// Veridian: pousser email.clicked vers le Hub (scoring prospect, best-effort,
+	// no-op si emitter non configuré). Cf. veridian_behavioral_emit.go.
+	s.veridianEmitBehavioral(ctx, domain.EventEmailClicked, workspaceID, messageID, nil)
+
 	return nil
 }
 
@@ -226,6 +236,11 @@ func (s *EmailService) OpenEmail(ctx context.Context, messageID string, workspac
 	if err != nil {
 		return fmt.Errorf("failed to update message opened: %w", err)
 	}
+
+	// Veridian: pousser email.opened vers le Hub (scoring prospect, best-effort,
+	// no-op si emitter non configuré). Cf. veridian_behavioral_emit.go.
+	s.veridianEmitBehavioral(ctx, domain.EventEmailOpened, workspaceID, messageID, nil)
+
 	return nil
 }
 
