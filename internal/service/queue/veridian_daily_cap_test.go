@@ -236,6 +236,72 @@ func TestVeridianDailyCapGate_ClassWithoutCapForResolvedClassSkipsCount(t *testi
 	assert.Zero(t, delay)
 }
 
+func veridianWarmupTestProvider(startedAt time.Time, schedule []int, stepDays int) *domain.EmailProvider {
+	return &domain.EmailProvider{
+		Kind:                    domain.EmailProviderKindSMTP,
+		RateLimitPerMinute:      6000,
+		VeridianWarmupStartedAt: &startedAt,
+		VeridianWarmupSchedule:  schedule,
+		VeridianWarmupStepDays:  stepDays,
+	}
+}
+
+func TestVeridianWarmupClassCap(t *testing.T) {
+	base := time.Now().UTC()
+	assert.Equal(t, 0, veridianWarmupClassCap(nil, base), "nil provider = no warmup")
+	assert.Equal(t, 0, veridianWarmupClassCap(&domain.EmailProvider{}, base), "no warmup config = 0")
+
+	// Démarré aujourd'hui, courbe [1,2,5], palier 1 jour → jour 0 = 1.
+	p := veridianWarmupTestProvider(base, []int{1, 2, 5}, 1)
+	assert.Equal(t, 1, veridianWarmupClassCap(p, base))
+}
+
+func TestVeridianDailyCapGate_WarmupOverridesStaticClassCap(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	// Workspace pose un cap statique généreux (google 1000), mais l'infra est en
+	// warmup jour 0 (cap 1) → le warmup PRIME → 1 envoi déjà fait aujourd'hui = skip.
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1000}, 0)
+	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{1, 2, 5}, 1)
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		Return(1, nil) // 1 >= warmupCap(1) → skip
+
+	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
+	assert.True(t, capped, "le cap warmup (1) prime sur le cap statique (1000)")
+	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
+}
+
+func TestVeridianDailyCapGate_WarmupAppliesEvenWithoutStaticClassCap(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	// Aucun cap statique configuré nulle part, mais l'infra est en warmup → le cap
+	// warmup s'enforce quand même (sur la classe google adossée à un suffixe).
+	ws := veridianTestWorkspaceWithCaps(nil, 0)
+	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{2, 5}, 1)
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		Return(1, nil) // 1 < warmupCap(2) → passe
+
+	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
+	assert.False(t, capped, "jour 0 cap=2, déjà 1 envoyé → passe")
+	assert.Zero(t, delay)
+}
+
+func TestVeridianDailyCapGate_NoWarmupNoConfigStillNoop(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	// Provider sans warmup + pas de cap → toujours no-op (non-régression).
+	ws := veridianTestWorkspaceWithCaps(nil, 0)
+	provider := &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 6000}
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
+
+	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
+	assert.False(t, capped)
+	assert.Zero(t, delay)
+}
+
 func TestVeridianDailyCapGate_PayloadTagDrivesClass(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	// Le tag payload force la classe microsoft même si l'email est corporate.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/asaskevich/govalidator"
@@ -143,6 +144,19 @@ type EmailProvider struct {
 	// rates/caps (0 ≠ exclu). Persisté dans le JSON blob integrations sans
 	// migration ni allowlist (omitempty). Cf. veridian_excluded_classes.go.
 	VeridianExcludedProviderClasses []string `json:"veridian_excluded_provider_classes,omitempty"`
+
+	// Veridian fork — WARMUP PROGRESSIF PAR INFRA (rampe auto du cap journalier,
+	// 2026-06-17). Au lieu d'un cap statique 1/jour/classe, le cap monte par paliers
+	// au fil des jours écoulés depuis le début du warmup de cette infra (standard
+	// Lemlist/Instantly). Quand StartedAt + Schedule sont posés, le cap effectif
+	// dérivé de `now - StartedAt` PRIME sur VeridianProviderClassDailyCap (uniforme
+	// sur toutes les classes) — calculé À LA LECTURE par le worker, AUCUN cron,
+	// AUCUNE migration (3 champs omitempty, JSON blob integrations, pattern R2). Vides
+	// = pas de warmup, héritage du cap statique (non-régression stricte).
+	// Cf. veridian_warmup.go + veridian_daily_cap.go (veridianResolveDailyCaps).
+	VeridianWarmupStartedAt *time.Time `json:"veridian_warmup_started_at,omitempty"`
+	VeridianWarmupSchedule  []int      `json:"veridian_warmup_schedule,omitempty"`
+	VeridianWarmupStepDays  int        `json:"veridian_warmup_step_days,omitempty"`
 }
 
 // Validate validates the email provider settings
