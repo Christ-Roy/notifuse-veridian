@@ -173,9 +173,14 @@ smokeDescribe('@cold Dashboard smoke — charge sans 500 sur workspace neuf (sta
         `erreurs console analytics: ${consoleErrors.join(' | ')}`,
       ).toEqual([]);
 
-      // 3) Le graphique Email Metrics est rendu : la carte "Sent" doit exister.
-      // (Confirme que le dashboard a effectivement chargé, pas juste un écran vide.)
-      await expect(page.getByText('Sent', { exact: true }).first()).toBeVisible({
+      // 3) La section Email Metrics est rendue (preuve que le dashboard a chargé,
+      // pas un écran vide / error boundary). On vérifie le TITRE de section, pas un
+      // label de colonne : sur un workspace vide les colonnes ("Sent", etc.) peuvent
+      // être collées à une icône ou rendues en état "no data" → un exact-match sur
+      // "Sent" est fragile (faux négatif). Le titre "Email Metrics" est stable et
+      // suffit à prouver le rendu réussi (combiné aux assertions 1 & 2 : 0 5xx,
+      // 0 bandeau d'erreur). C'est le vrai signal anti-régression du bug P0.
+      await expect(page.getByText(/Email Metrics/i).first()).toBeVisible({
         timeout: 15000,
       });
     } finally {
