@@ -36,7 +36,18 @@ async function handleResponse<T>(response: Response, endpoint: string): Promise<
       router.navigate({ to: '/console/signin' })
     }
 
-    throw new ApiError(errorData?.error || 'An error occurred', response.status, errorData)
+    // Extract a HUMAN-READABLE message. Most endpoints return {error: "<msg>"},
+    // but some (e.g. analytics_handler.go writeErrorResponse) return
+    // {error: true, message: "<msg>"} where `error` is a BOOLEAN flag. If we
+    // naively used `errorData.error` there, ApiError.message would become the
+    // string "true" and the UI would show "ApiError: true" instead of the real
+    // cause (bug P0 dashboard 500, 2026-06-17). So: prefer a string `error`,
+    // otherwise fall back to `message`, otherwise a generic label.
+    const errMessage =
+      (typeof errorData?.error === 'string' && errorData.error) ||
+      (typeof errorData?.message === 'string' && errorData.message) ||
+      'An error occurred'
+    throw new ApiError(errMessage, response.status, errorData)
   }
   return response.json()
 }

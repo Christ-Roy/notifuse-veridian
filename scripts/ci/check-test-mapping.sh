@@ -437,6 +437,33 @@ if [ "$UPSTREAM_BYPASS" != "1" ]; then
   fi
 fi
 
+# ─── Règle FRONT — composant dashboard analytics ↔ test colocalisé ───────────
+# (Garde-fou ticket 2026-06-17 dashboard 500 : Robert exige des tests UI imposés
+#  par Husky.) Tout composant `console/src/components/analytics/*.tsx` (hors
+#  *.test.tsx) modifié ou ajouté DOIT avoir son test colocalisé `*.test.tsx`
+#  présent (loading/error/data). NB : ces tests Vitest mockent la DB → ils
+#  n'attrapent PAS un schéma DB cassé (d'où le smoke E2E dashboard dans
+#  e2e-veridian/specs/dashboard-smoke.spec.ts qui CHARGE le dashboard contre le
+#  vrai schéma). Mais ils attrapent les régressions de RENDU (état d'erreur
+#  propre, retry, cartes). Les deux sont complémentaires.
+if [ -n "$CHANGED" ]; then
+  ANALYTICS_TSX=$(echo "$CHANGED" \
+    | grep -E '^console/src/components/analytics/[^/]+\.tsx$' \
+    | grep -vE '\.test\.tsx$' || true)
+  for comp in $ANALYTICS_TSX; do
+    # Fichier supprimé dans le diff → pas de test exigé.
+    [ -f "$comp" ] || continue
+    test_file="${comp%.tsx}.test.tsx"
+    if [ ! -f "$test_file" ]; then
+      echo "${RED}✗ $comp (composant dashboard analytics) modifié sans test colocalisé :${NC}"
+      echo "    attendu : $test_file"
+      echo "  Règle Husky front (ticket dashboard 500) : un composant analytics/"
+      echo "  doit avoir son .test.tsx (états loading/error/data, retry, rendu)."
+      FAILED=$((FAILED + 1))
+    fi
+  done
+fi
+
 echo
 if [ "$FAILED" -gt 0 ]; then
   echo "${RED}╔══════════════════════════════════════════════════════════════════╗${NC}"

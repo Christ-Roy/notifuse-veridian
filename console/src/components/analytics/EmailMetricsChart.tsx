@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Segmented, Alert, Row, Col, Statistic, Space, Tooltip, Card } from 'antd'
+import { Segmented, Alert, Row, Col, Statistic, Space, Tooltip, Card, Button } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -307,11 +307,28 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
         />
       }
     >
-      {/* Error Alert */}
+      {/* Error Alert — état d'erreur PROPRE : message lisible + retry. On ne
+          montre JAMAIS une valeur brute non parlante (ex: "true") à l'écran :
+          le client API extrait déjà un message humain (cf. client.ts), et on
+          affiche un libellé d'aide explicite au-dessus du détail technique. */}
       {error && (
         <Alert
-          message={t`Error`}
-          description={error}
+          message={t`Unable to load email metrics`}
+          description={
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <span>{t`The dashboard could not load your email metrics. This is usually temporary — please try again.`}</span>
+              <span style={{ fontSize: 12, opacity: 0.75, wordBreak: 'break-word' }}>
+                {error}
+              </span>
+              <Button
+                size="small"
+                onClick={() => fetchData(messageTypeFilter)}
+                loading={loading || statsLoading}
+              >
+                {t`Retry`}
+              </Button>
+            </Space>
+          }
           type="error"
           showIcon
           style={{ marginBottom: 16 }}

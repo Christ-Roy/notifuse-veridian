@@ -201,6 +201,12 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			bounced_at TIMESTAMP WITH TIME ZONE,
 			complained_at TIMESTAMP WITH TIME ZONE,
 			unsubscribed_at TIMESTAMP WITH TIME ZONE,
+			-- Veridian fork: bounce_type populated at bounce classification time
+			-- (HardBounce/SoftBounce, cold dashboard KPI). This column was ASSUMED
+			-- to exist but had NEVER been declared (P0 dashboard 500 of 2026-06-17:
+			-- analytics.go filters bounce_type ILIKE hard%). Reconciled on existing
+			-- workspaces by migration V54.
+			bounce_type VARCHAR(100),
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			veridian_content_hash CHAR(32),

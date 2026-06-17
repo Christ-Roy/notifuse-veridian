@@ -561,8 +561,10 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// (anti-hash identique par classe cold outbound ; cf. v52.go header).
 		// V53 : colonne message_history.veridian_sender_email + index partiel
 		// (plafond journalier par sender émetteur / warmup IP ; cf. v53.go header).
+		// V54 : colonne message_history.bounce_type (réconciliation P0 dashboard 500
+		// — colonne supposée exister mais jamais déclarée ; cf. v54.go header).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("53"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("54"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 

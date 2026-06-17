@@ -82,7 +82,7 @@ msgid "{0} delivered"
 msgstr ""
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:472
+#: src/components/analytics/EmailMetricsChart.tsx:489
 msgid "{0} emails bounced back"
 msgstr "{0} correus rebotats"
 
@@ -92,12 +92,12 @@ msgid "{0} emails bounced back - Click to view details"
 msgstr "{0} correus rebotats - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:471
+#: src/components/analytics/EmailMetricsChart.tsx:488
 msgid "{0} emails bounced back (hidden from chart)"
 msgstr "{0} correus rebotats (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_failed
-#: src/components/analytics/EmailMetricsChart.tsx:557
+#: src/components/analytics/EmailMetricsChart.tsx:574
 msgid "{0} emails failed to send"
 msgstr "{0} correus han fallat en enviar-se"
 
@@ -107,12 +107,12 @@ msgid "{0} emails failed to send - Click to view details"
 msgstr "{0} correus han fallat - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_failed
-#: src/components/analytics/EmailMetricsChart.tsx:557
+#: src/components/analytics/EmailMetricsChart.tsx:574
 msgid "{0} emails failed to send (hidden from chart)"
 msgstr "{0} correus han fallat (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_delivered
-#: src/components/analytics/EmailMetricsChart.tsx:352
+#: src/components/analytics/EmailMetricsChart.tsx:369
 msgid "{0} emails successfully delivered"
 msgstr "{0} correus lliurats correctament"
 
@@ -122,7 +122,7 @@ msgid "{0} emails successfully delivered - Click to view details"
 msgstr "{0} correus lliurats - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_delivered
-#: src/components/analytics/EmailMetricsChart.tsx:352
+#: src/components/analytics/EmailMetricsChart.tsx:369
 msgid "{0} emails successfully delivered (hidden from chart)"
 msgstr "{0} correus lliurats (ocults del gràfic)"
 
@@ -160,7 +160,7 @@ msgid "{0} senders · round-robin per class"
 msgstr ""
 
 #. placeholder {0}: stats.count_clicked
-#: src/components/analytics/EmailMetricsChart.tsx:406
+#: src/components/analytics/EmailMetricsChart.tsx:423
 msgid "{0} total clicks"
 msgstr "{0} clics totals"
 
@@ -170,12 +170,12 @@ msgid "{0} total clicks - Click to view details"
 msgstr "{0} clics totals - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_clicked
-#: src/components/analytics/EmailMetricsChart.tsx:406
+#: src/components/analytics/EmailMetricsChart.tsx:423
 msgid "{0} total clicks (hidden from chart)"
 msgstr "{0} clics totals (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:503
+#: src/components/analytics/EmailMetricsChart.tsx:520
 msgid "{0} total complaints"
 msgstr "{0} queixes totals"
 
@@ -185,12 +185,12 @@ msgid "{0} total complaints - Click to view details"
 msgstr "{0} queixes totals - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:503
+#: src/components/analytics/EmailMetricsChart.tsx:520
 msgid "{0} total complaints (hidden from chart)"
 msgstr "{0} queixes totals (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:325
+#: src/components/analytics/EmailMetricsChart.tsx:342
 msgid "{0} total emails sent"
 msgstr "{0} correus enviats en total"
 
@@ -200,12 +200,12 @@ msgid "{0} total emails sent - Click to view details"
 msgstr "{0} correus enviats - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:325
+#: src/components/analytics/EmailMetricsChart.tsx:342
 msgid "{0} total emails sent (hidden from chart)"
 msgstr "{0} correus enviats (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_opened
-#: src/components/analytics/EmailMetricsChart.tsx:379
+#: src/components/analytics/EmailMetricsChart.tsx:396
 msgid "{0} total opens"
 msgstr "{0} obertures totals"
 
@@ -215,12 +215,12 @@ msgid "{0} total opens - Click to view details"
 msgstr "{0} obertures totals - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_opened
-#: src/components/analytics/EmailMetricsChart.tsx:379
+#: src/components/analytics/EmailMetricsChart.tsx:396
 msgid "{0} total opens (hidden from chart)"
 msgstr "{0} obertures totals (ocults del gràfic)"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:530
+#: src/components/analytics/EmailMetricsChart.tsx:547
 msgid "{0} total unsubscribes"
 msgstr "{0} baixes totals"
 
@@ -230,7 +230,7 @@ msgid "{0} total unsubscribes - Click to view details"
 msgstr "{0} baixes totals - Feu clic per veure detalls"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:530
+#: src/components/analytics/EmailMetricsChart.tsx:547
 msgid "{0} total unsubscribes (hidden from chart)"
 msgstr "{0} baixes totals (ocults del gràfic)"
 
@@ -302,7 +302,7 @@ msgstr ""
 #~ msgid "{replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI)"
 #~ msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:440
+#: src/components/analytics/EmailMetricsChart.tsx:457
 msgid "{replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI). All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
 msgstr ""
 
@@ -1574,7 +1574,7 @@ msgid "Bounce Type"
 msgstr "Tipus de rebot"
 
 #: src/components/analytics/EmailMetricsChart.tsx:289
-#: src/components/analytics/EmailMetricsChart.tsx:491
+#: src/components/analytics/EmailMetricsChart.tsx:508
 #: src/components/automations/config/TriggerConfigForm.tsx:71
 #: src/components/automations/config/TriggerConfigForm.tsx:93
 #: src/components/broadcasts/BroadcastStats.tsx:275
@@ -2030,7 +2030,7 @@ msgid "clicks"
 msgstr "Clics"
 
 #: src/components/analytics/EmailMetricsChart.tsx:288
-#: src/components/analytics/EmailMetricsChart.tsx:421
+#: src/components/analytics/EmailMetricsChart.tsx:438
 #: src/components/broadcasts/BroadcastStats.tsx:217
 #: src/pages/BroadcastsPage.tsx:782
 msgid "Clicks"
@@ -2173,7 +2173,7 @@ msgid "Complaint"
 msgstr "Queixa"
 
 #: src/components/analytics/EmailMetricsChart.tsx:290
-#: src/components/analytics/EmailMetricsChart.tsx:518
+#: src/components/analytics/EmailMetricsChart.tsx:535
 #: src/components/broadcasts/BroadcastStats.tsx:309
 #: src/components/lists/ListStats.tsx:150
 msgid "Complaints"
@@ -3229,7 +3229,7 @@ msgid "delivered"
 msgstr "Lliurat"
 
 #: src/components/analytics/EmailMetricsChart.tsx:286
-#: src/components/analytics/EmailMetricsChart.tsx:367
+#: src/components/analytics/EmailMetricsChart.tsx:384
 #: src/components/analytics/veridian_engagement_by_class.tsx:139
 #: src/components/automations/config/TriggerConfigForm.tsx:90
 #: src/components/broadcasts/BroadcastStats.tsx:169
@@ -4101,7 +4101,6 @@ msgid "Entity ID:"
 msgstr "ID de l'entitat:"
 
 #: src/components/analytics/ChartVisualization.tsx:393
-#: src/components/analytics/EmailMetricsChart.tsx:313
 #: src/components/analytics/FailedMessagesTable.tsx:68
 #: src/components/analytics/NewContactsTable.tsx:208
 #: src/components/analytics/veridian_engagement_by_class.tsx:193
@@ -4294,7 +4293,7 @@ msgid "failed"
 msgstr "Fallat"
 
 #: src/components/analytics/EmailMetricsChart.tsx:292
-#: src/components/analytics/EmailMetricsChart.tsx:572
+#: src/components/analytics/EmailMetricsChart.tsx:589
 #: src/components/automations/AutomationCard.tsx:281
 #: src/components/automations/nodes/StatNode.tsx:116
 #: src/components/automations/nodes/StatNode.tsx:180
@@ -5233,7 +5232,7 @@ msgstr ""
 
 #. placeholder {0}: stats.count_bounced_hard
 #. placeholder {1}: stats.count_bounced_soft
-#: src/components/analytics/EmailMetricsChart.tsx:474
+#: src/components/analytics/EmailMetricsChart.tsx:491
 msgid "Hard: {0} (dead address) · Soft: {1} (transient)"
 msgstr ""
 
@@ -7388,7 +7387,7 @@ msgid "opens"
 msgstr "Obertures"
 
 #: src/components/analytics/EmailMetricsChart.tsx:287
-#: src/components/analytics/EmailMetricsChart.tsx:394
+#: src/components/analytics/EmailMetricsChart.tsx:411
 #: src/components/broadcasts/BroadcastStats.tsx:193
 #: src/pages/BroadcastsPage.tsx:751
 msgid "Opens"
@@ -8567,7 +8566,7 @@ msgstr "Repetir Y"
 msgid "Replied"
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:451
+#: src/components/analytics/EmailMetricsChart.tsx:468
 msgid "Replies"
 msgstr ""
 
@@ -8736,6 +8735,10 @@ msgstr "Reprendre càrrega anterior"
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:797
 msgid "Resume Upload"
 msgstr "Reprendre pujada"
+
+#: src/components/analytics/EmailMetricsChart.tsx:328
+msgid "Retry"
+msgstr ""
 
 #: src/components/email_builder/ui/BorderInput.tsx:61
 msgid "Ridge"
@@ -9503,7 +9506,7 @@ msgid "sent"
 msgstr "Enviat"
 
 #: src/components/analytics/EmailMetricsChart.tsx:285
-#: src/components/analytics/EmailMetricsChart.tsx:340
+#: src/components/analytics/EmailMetricsChart.tsx:357
 #: src/components/analytics/veridian_engagement_by_class.tsx:131
 #: src/components/automations/config/TriggerConfigForm.tsx:89
 #: src/components/broadcasts/BroadcastStats.tsx:135
@@ -10527,6 +10530,10 @@ msgstr "El fitxer CSV ha de tenir capçaleres a la primera fila."
 msgid "The currently published theme will be unpublished automatically."
 msgstr "El tema publicat actualment es despublicarà automàticament."
 
+#: src/components/analytics/EmailMetricsChart.tsx:319
+msgid "The dashboard could not load your email metrics. This is usually temporary — please try again."
+msgstr ""
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2263
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2603
 msgid "The default sending policy applied to every campaign and every sending infrastructure, unless overridden below."
@@ -11127,6 +11134,10 @@ msgstr ""
 msgid "Unable to create workspace. Please contact your administrator."
 msgstr ""
 
+#: src/components/analytics/EmailMetricsChart.tsx:316
+msgid "Unable to load email metrics"
+msgstr ""
+
 #: src/components/blog/PostsTable.tsx:168
 msgid "Uncategorized"
 msgstr "Sense categoria"
@@ -11225,7 +11236,7 @@ msgstr ""
 msgid "Unsub"
 msgstr "Donat de baixa"
 
-#: src/components/analytics/EmailMetricsChart.tsx:545
+#: src/components/analytics/EmailMetricsChart.tsx:562
 #: src/components/broadcasts/BroadcastStats.tsx:333
 msgid "Unsub."
 msgstr "Donat de baixa"
