@@ -150,13 +150,20 @@ smokeDescribe('@cold Dashboard smoke — charge sans 500 sur workspace neuf (sta
         consoleErrors.push(`pageerror: ${err.message}`);
       });
 
-      // Auto-login → redirige vers /console/{workspaceId} → dashboard (AnalyticsPage
-      // → AnalyticsDashboard → EmailMetricsChart + engagement par classe).
+      // 1) Auto-login : pose la session. ⚠️ Atterrit sur /console = écran
+      // "Select workspace" (PAS le dashboard) → aucun appel analytics déclenché
+      // ici. (Bug smoke initial : on restait sur cet écran → body quasi vide +
+      // assertions analytics faussement vertes car jamais appelées.)
       await page.goto(autoLoginUrl, { waitUntil: 'networkidle' });
-      // Laisse les requêtes analytics (déclenchées par useEffect au mount) partir
-      // et revenir. networkidle au-dessus + un settle court couvrent le fetch.
+      await page.waitForTimeout(1500);
+      // 2) Navigue EXPLICITEMENT vers le dashboard du workspace → c'est CE mount
+      // qui déclenche AnalyticsPage → analytics.query/replyStats/engagementByClass
+      // (le vrai chemin du bug P0). Sans ça, le smoke ne teste rien.
+      await page.goto(`${NOTIFUSE_URL}/console/workspace/${tid}`, {
+        waitUntil: 'networkidle',
+      });
+      // Laisse les requêtes analytics (useEffect au mount) partir et revenir.
       await page.waitForTimeout(3000);
-      // Re-attend l'inactivité réseau au cas où des appels analytics traînent.
       await page.waitForLoadState('networkidle').catch(() => {});
 
       // 1) AUCUN 5xx sur les endpoints analytics (le bug P0 exact).
