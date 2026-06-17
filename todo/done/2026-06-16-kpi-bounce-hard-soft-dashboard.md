@@ -111,3 +111,26 @@ totalement absent comme le reply.
   validation du rendu réel est faite (memory `feedback_skip_prod_pour_valider_UI`).
 - Quick win possible : ce ticket peut être groupé avec le ticket reply dans la même
   vague UI dashboard (même composant `EmailMetricsChart.tsx`).
+
+---
+
+## ✅ LIVRÉ — 2026-06-17 (agent dashboard-kpi)
+
+**Prémisse du ticket corrigée** : `message_history.bounce_type` EXISTE mais
+n'était JAMAIS écrite (le chemin bounce ne posait que `bounced_at` + `status_info`).
+« +2 mesures analytics » seul aurait donné un KPI mort (toujours 0). Voie propre
+R0, zéro migration : on ÉCRIT désormais le label typé.
+
+- `internal/domain/veridian_bounce_type.go` (+test) : `VeridianBounceTypeLabel`
+  (`HardBounce`/`SoftBounce`) dérivé de `domain.ClassifyBounce`.
+- `MessageEventUpdate.BounceType *string` (message_history.go) écrit sur
+  `bounce_type` pour le groupe Bounced dans `SetStatusesIfNotSet`
+  (message_history_postgre.go, COALESCE idempotent). Renseigné au cas
+  `BounceClassificationHard` dans `inbound_webhook_event_service.go`.
+- 2 mesures analytics `count_bounced_hard`/`_soft` (analytics.go, ILIKE 'hard%'/'soft%').
+- Front : carte Bounced = TOTAL, split hard/soft au tooltip (EmailMetricsChart.tsx).
+- Seuls les HARD posent bounced_at → count_bounced_hard fidèle, soft ~0 sur ce
+  flux (assumé : un soft transitoire n'est pas terminal, poser bounced_at
+  déclencherait à tort la suppression contact + webhook). Documenté.
+- Tests repo (SetStatusesIfNotSet) mis à jour à la nouvelle forme SQL + 1 test neuf
+  bounce_type typé. Build + tests verts.

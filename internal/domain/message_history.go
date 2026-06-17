@@ -37,6 +37,14 @@ type MessageEventUpdate struct {
 	Event      MessageEvent `json:"event"`
 	Timestamp  time.Time    `json:"timestamp"`
 	StatusInfo *string      `json:"status_info,omitempty"`
+	// Veridian fork — BounceType typed hard/soft, persisted on
+	// message_history.bounce_type ONLY for the MessageEventBounced group
+	// (the column already exists since v8 but was never written). Powers the
+	// dashboard KPI count_bounced_hard / count_bounced_soft (ticket
+	// todo/2026-06-16-kpi-bounce-hard-soft-dashboard.md). Values: "HardBounce"
+	// / "SoftBounce" (from domain.ClassifyBounce). nil = leave column
+	// untouched (non-bounce events, or bounce without classification).
+	BounceType *string `json:"bounce_type,omitempty"`
 }
 
 // ChannelOptions represents channel-specific delivery options

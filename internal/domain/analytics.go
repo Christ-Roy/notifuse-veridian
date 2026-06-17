@@ -47,6 +47,39 @@ var PredefinedSchemas = map[string]analytics.SchemaDefinition{
 					{SQL: "bounced_at IS NOT NULL"},
 				},
 			},
+			// Veridian fork — split hard/soft du bounce (cold outbound, ticket
+			// todo/2026-06-16-kpi-bounce-hard-soft-dashboard.md). La distinction
+			// est critique en cold : hard = adresse morte (réputation grillée,
+			// suppression immédiate) ; soft = transitoire (boîte pleine, greylisting).
+			// La colonne message_history.bounce_type est alimentée à la classification
+			// du bounce (inbound_webhook_event_service.go, processSMTPWebhook +
+			// processSESWebhook) avec les littéraux EXACTS "HardBounce"/"SoftBounce"
+			// dérivés de domain.ClassifyBounce → on matche donc 'hard%'/'soft%' ILIKE
+			// (insensible casse, robuste aux variantes provider). Une ligne bouncée
+			// sans bounce_type renseigné tombe dans count_bounced total sans compter
+			// ni hard ni soft.
+			// ⚠️ Diff INLINE sur fichier upstream-pur analytics.go (map de données) :
+			// re-vérifier au prochain sync upstream (cf. tableau Diffs INLINE CLAUDE.md).
+			"count_bounced_hard": {
+				Type:        "count",
+				Title:       "Hard Bounces",
+				SQL:         "*",
+				Description: "Permanent bounces (dead address) — reputation impact, immediate suppression",
+				Filters: []analytics.MeasureFilter{
+					{SQL: "bounced_at IS NOT NULL"},
+					{SQL: "bounce_type ILIKE 'hard%'"},
+				},
+			},
+			"count_bounced_soft": {
+				Type:        "count",
+				Title:       "Soft Bounces",
+				SQL:         "*",
+				Description: "Transient bounces (full mailbox, greylisting) — adjust pace/warm-up",
+				Filters: []analytics.MeasureFilter{
+					{SQL: "bounced_at IS NOT NULL"},
+					{SQL: "bounce_type ILIKE 'soft%'"},
+				},
+			},
 			"count_complained": {
 				Type:        "count",
 				Title:       "Complaints",

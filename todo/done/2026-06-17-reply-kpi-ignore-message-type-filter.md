@@ -42,3 +42,12 @@ voit 7/7 cartes bouger sauf Replies qui reste figée → confusion possible.
 
 Option 1 (tooltip) en attendant un besoin métier de reply rate PAR campagne, qui
 justifierait l'option 3. Pas d'arbitrage business urgent : P3.
+
+---
+
+## ✅ LIVRÉ — 2026-06-17 (agent dashboard-kpi)
+
+**Option 1 retenue** (tooltip explicite, zéro backend). Le tooltip de la carte
+Replies (`EmailMetricsChart.tsx`) précise désormais que le compte est "All
+campaigns combined" et ignore le filtre All/Broadcasts/Transactional (le signal
+reply n'est pas rattaché à un envoi). Lingui extract+compile OK.

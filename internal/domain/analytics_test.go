@@ -327,6 +327,67 @@ func TestPredefinedSchemasWithFilters(t *testing.T) {
 	}
 }
 
+// Veridian fork — split hard/soft du bounce (KPI dashboard cold, ticket
+// 2026-06-16-kpi-bounce-hard-soft-dashboard.md). Vérifie que les 2 mesures
+// neuves génèrent EXACTEMENT le FILTER SQL attendu : le préfixe ILIKE doit
+// matcher les littéraux écrits dans message_history.bounce_type
+// (domain.VeridianBounceTypeHard/Soft = "HardBounce"/"SoftBounce"). Si quelqu'un
+// change l'un sans l'autre, ce test casse (KPI = 0 silencieux sinon).
+func TestMessageHistoryBounceHardSoftMeasures(t *testing.T) {
+	builder := analytics.NewSQLBuilder()
+	schema, exists := PredefinedSchemas["message_history"]
+	require.True(t, exists)
+
+	cases := []struct {
+		measure  string
+		expected string
+		// le label persisté que ce filtre est censé capter
+		label string
+	}{
+		{
+			measure:  "count_bounced_hard",
+			expected: "COUNT(*) FILTER (WHERE bounced_at IS NOT NULL AND bounce_type ILIKE 'hard%')",
+			label:    VeridianBounceTypeHard,
+		},
+		{
+			measure:  "count_bounced_soft",
+			expected: "COUNT(*) FILTER (WHERE bounced_at IS NOT NULL AND bounce_type ILIKE 'soft%')",
+			label:    VeridianBounceTypeSoft,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.measure, func(t *testing.T) {
+			m, ok := schema.Measures[c.measure]
+			require.True(t, ok, "measure %s must exist in message_history schema", c.measure)
+			require.Len(t, m.Filters, 2, "measure %s must filter on bounced_at + bounce_type", c.measure)
+
+			sql, args, err := builder.BuildSQL(analytics.Query{
+				Schema:   "message_history",
+				Measures: []string{c.measure},
+			}, schema)
+			require.NoError(t, err)
+			assert.Contains(t, sql, c.expected, "generated SQL must match the persisted bounce_type prefix")
+			assert.Empty(t, args)
+
+			// Garde-fou anti-drift : le label persisté DOIT matcher le préfixe
+			// ILIKE (insensible à la casse). HardBounce -> 'hard%', SoftBounce -> 'soft%'.
+			lower := []byte(c.label)
+			for i := range lower {
+				if lower[i] >= 'A' && lower[i] <= 'Z' {
+					lower[i] += 'a' - 'A'
+				}
+			}
+			prefix := "hard"
+			if c.measure == "count_bounced_soft" {
+				prefix = "soft"
+			}
+			assert.True(t, len(lower) >= len(prefix) && string(lower[:len(prefix)]) == prefix,
+				"persisted label %q must start with %q so the ILIKE filter catches it", c.label, prefix)
+		})
+	}
+}
+
 // Helper functions
 func intPtr(i int) *int {
 	return &i

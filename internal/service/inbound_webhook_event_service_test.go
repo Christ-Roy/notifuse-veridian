@@ -98,6 +98,11 @@ func TestProcessWebhook_Success(t *testing.T) {
 			assert.Equal(t, 1, len(updates), "Should have 1 message status update")
 			assert.Equal(t, "message1", updates[0].ID)
 			assert.Equal(t, domain.MessageEventBounced, updates[0].Event)
+			// Veridian fork — un bounce HARD (bounceType "Permanent") doit poser le
+			// label typé "HardBounce" sur message_history.bounce_type (KPI
+			// count_bounced_hard, ticket 2026-06-16-kpi-bounce-hard-soft-dashboard.md).
+			require.NotNil(t, updates[0].BounceType, "hard bounce must carry a typed BounceType")
+			assert.Equal(t, domain.VeridianBounceTypeHard, *updates[0].BounceType)
 			return nil
 		})
 

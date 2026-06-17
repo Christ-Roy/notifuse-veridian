@@ -58,6 +58,39 @@ func TestMessageEventUpdate(t *testing.T) {
 		assert.Equal(t, timestamp, update.Timestamp)
 		assert.Nil(t, update.StatusInfo)
 	})
+
+	// Veridian fork — champ BounceType (label hard/soft persisté sur
+	// message_history.bounce_type pour le KPI count_bounced_hard/soft, ticket
+	// 2026-06-16-kpi-bounce-hard-soft-dashboard.md).
+	t.Run("bounced update carries typed bounce_type", func(t *testing.T) {
+		bt := VeridianBounceTypeHard
+		update := MessageEventUpdate{
+			ID:         "msg-hard",
+			Event:      MessageEventBounced,
+			Timestamp:  time.Now(),
+			BounceType: &bt,
+		}
+		require.NotNil(t, update.BounceType)
+		assert.Equal(t, "HardBounce", *update.BounceType)
+
+		// Round-trip JSON : present quand renseigné, omis (omitempty) sinon.
+		raw, err := json.Marshal(update)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"bounce_type":"HardBounce"`)
+
+		var back MessageEventUpdate
+		require.NoError(t, json.Unmarshal(raw, &back))
+		require.NotNil(t, back.BounceType)
+		assert.Equal(t, "HardBounce", *back.BounceType)
+	})
+
+	t.Run("non-bounce update omits bounce_type (omitempty)", func(t *testing.T) {
+		update := MessageEventUpdate{ID: "msg-x", Event: MessageEventDelivered, Timestamp: time.Now()}
+		assert.Nil(t, update.BounceType)
+		raw, err := json.Marshal(update)
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "bounce_type")
+	})
 }
 
 func TestMessageHistoryStatusSum(t *testing.T) {

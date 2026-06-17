@@ -109,3 +109,26 @@ gérer la délivrabilité au quotidien.
   service Go ; ne jamais re-coder le mapping en SQL (source de vérité unique).
 - Si le ticket reply (`2026-06-16-kpi-reply-rate-dashboard.md`) est livré, ajouter
   une colonne reply au tableau par classe (join `veridian_contact_reply` par domaine).
+
+---
+
+## ✅ LIVRÉ — 2026-06-17 (agent dashboard-kpi)
+
+**Option A retenue** (agrégation Go par domaine, zéro migration), comme prévu.
+
+- Endpoint `POST/GET /api/veridian/messages.engagementByClass` :
+  `internal/http/veridian_engagement_by_class_handler.go` (+test),
+  `internal/service/veridian_engagement_by_class_service.go` (+test, auth
+  JWT + `contacts:read`), `internal/repository/veridian_engagement_by_class_postgres.go`
+  (+test, `COUNT(*) FILTER` par domaine sur `message_history`),
+  `internal/domain/veridian_engagement_by_class.go` (+test,
+  `VeridianAggregateEngagementByClass` mappe domaine→classe via
+  `veridian_provider_class.go`, zéro CASE SQL). Mocks régénérés. Câblé dans
+  `app.go` sous le bloc reply stats. POST+GET routés (anti-catchall).
+- Front : `console/src/components/analytics/veridian_engagement_by_class.tsx`
+  (tableau Ant, bounce >5% en rouge, classes vides masquées) +
+  `console/src/services/api/veridian_engagement_by_class.ts`, monté dans
+  `AnalyticsDashboard.tsx` sous `EmailMetricsChart`.
+- Dégradation gracieuse MX documentée (suffixe → classes MX en `corporate`),
+  notée dans le tooltip du tableau.
+- Build Go vert, tsc vert, tests des 4 packages verts, Lingui extract+compile OK.

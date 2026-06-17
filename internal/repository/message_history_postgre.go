@@ -654,25 +654,50 @@ func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, work
 			return fmt.Errorf("invalid status: %s", messageEvent)
 		}
 
+		// Veridian fork — on the Bounced group, persist the typed hard/soft
+		// classification into message_history.bounce_type (column exists since
+		// v8 but was never written). The VALUES row carries a 4th column
+		// bounce_type; COALESCE keeps any existing value (idempotent re-dispatch).
+		// Other event groups keep the original 3-column shape (no bounce_type).
+		isBounce := messageEvent == domain.MessageEventBounced
+
 		// Build VALUES clause for batch update with explicit timestamp casting and status_info
 		valuesParts := make([]string, len(groupUpdates))
 		args := []interface{}{now}
 
 		for i, update := range groupUpdates {
-			valuesParts[i] = fmt.Sprintf("($%d, $%d::TIMESTAMP WITH TIME ZONE, $%d)", len(args)+1, len(args)+2, len(args)+3)
-			args = append(args, update.ID, update.Timestamp, update.StatusInfo)
+			if isBounce {
+				valuesParts[i] = fmt.Sprintf("($%d, $%d::TIMESTAMP WITH TIME ZONE, $%d, $%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4)
+				args = append(args, update.ID, update.Timestamp, update.StatusInfo, update.BounceType)
+			} else {
+				valuesParts[i] = fmt.Sprintf("($%d, $%d::TIMESTAMP WITH TIME ZONE, $%d)", len(args)+1, len(args)+2, len(args)+3)
+				args = append(args, update.ID, update.Timestamp, update.StatusInfo)
+			}
 		}
 
 		valuesClause := strings.Join(valuesParts, ", ")
 
-		query := fmt.Sprintf(`
-			UPDATE message_history 
-			SET %s = updates.timestamp, 
-				status_info = COALESCE(LEFT(updates.status_info, 255), message_history.status_info), 
-				updated_at = $1::TIMESTAMP WITH TIME ZONE
-			FROM (VALUES %s) AS updates(id, timestamp, status_info)
-			WHERE message_history.id = updates.id AND %s IS NULL
-		`, field, valuesClause, field)
+		var query string
+		if isBounce {
+			query = fmt.Sprintf(`
+				UPDATE message_history
+				SET %s = updates.timestamp,
+					status_info = COALESCE(LEFT(updates.status_info, 255), message_history.status_info),
+					bounce_type = COALESCE(message_history.bounce_type, updates.bounce_type),
+					updated_at = $1::TIMESTAMP WITH TIME ZONE
+				FROM (VALUES %s) AS updates(id, timestamp, status_info, bounce_type)
+				WHERE message_history.id = updates.id AND %s IS NULL
+			`, field, valuesClause, field)
+		} else {
+			query = fmt.Sprintf(`
+				UPDATE message_history
+				SET %s = updates.timestamp,
+					status_info = COALESCE(LEFT(updates.status_info, 255), message_history.status_info),
+					updated_at = $1::TIMESTAMP WITH TIME ZONE
+				FROM (VALUES %s) AS updates(id, timestamp, status_info)
+				WHERE message_history.id = updates.id AND %s IS NULL
+			`, field, valuesClause, field)
+		}
 		_, err = workspaceDB.ExecContext(ctx, query, args...)
 		if err != nil {
 			// codecov:ignore:start

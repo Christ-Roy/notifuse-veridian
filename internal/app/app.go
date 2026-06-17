@@ -1542,6 +1542,29 @@ func (a *App) InitHandlers() error {
 	)
 	veridianReplyStatsHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patch — KPI engagement par classe de provider (dashboard cold, 2026-06-16) ===
+	// Endpoint POST+GET /api/veridian/messages.engagementByClass : agrège
+	// sent/delivered/bounced/opened/clicked PAR CLASSE de provider destinataire
+	// sur la fenêtre de dates, pour repérer une classe qui se dégrade (bounce
+	// rate Microsoft qui monte = signal d'arrêt AVANT de griller le domaine). La
+	// classe n'est PAS une dimension de message_history (Lot 4) → le repo agrège
+	// par DOMAINE en SQL, le service mappe domaine → classe en Go (réutilise
+	// veridian_provider_class.go, zéro CASE SQL). Auth JWT console + permission
+	// contacts:read (gardien dans le service, comme breakdown R1 / reply stats).
+	// Cf. todo/2026-06-16-kpi-engagement-par-classe-provider.md.
+	veridianEngagementByClassRepo := repository.NewVeridianEngagementByClassRepository(a.workspaceRepo)
+	veridianEngagementByClassService := service.NewVeridianEngagementByClassService(
+		veridianEngagementByClassRepo,
+		a.authService,
+		a.logger,
+	)
+	veridianEngagementByClassHandler := httpHandler.NewVeridianEngagementByClassHandler(
+		veridianEngagementByClassService,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianEngagementByClassHandler.RegisterRoutes(a.mux)
+
 	// === Veridian patch — linter de délivrabilité (spam score) cold (2026-06-15) ===
 	// Endpoint POST+GET /api/veridian/templates.deliverabilityScore : score 0-10
 	// (façon SpamAssassin) + règles déclenchées avec poids, sur un template cold

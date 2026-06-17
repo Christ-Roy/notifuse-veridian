@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
 import numbro from 'numbro'
 import { EmailMetricsChart } from './EmailMetricsChart'
+import { VeridianEngagementByClass } from './veridian_engagement_by_class'
 // import { NewContactsTable } from './NewContactsTable'
 import { Workspace, Integration } from '../../services/api/types'
 import { FailedMessagesTable } from './FailedMessagesTable'
@@ -198,6 +199,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         workspace={workspace}
         timeRange={timeRange}
         timezone={timezone}
+      />
+
+      {/* Veridian — engagement par classe de provider destinataire (KPI cold :
+          repérer une classe qui se dégrade). Cf.
+          2026-06-16-kpi-engagement-par-classe-provider.md. */}
+      <VeridianEngagementByClass
+        key={`engagement-by-class-${refreshKey}`}
+        workspace={workspace}
+        timeRange={timeRange}
       />
 
       <div className="mt-8">

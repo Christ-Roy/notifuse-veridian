@@ -139,11 +139,17 @@ func (s *InboundWebhookEventService) ProcessWebhook(ctx context.Context, workspa
 					if len(reason) > 255 {
 						reason = reason[:255]
 					}
+					// Veridian fork — persist the canonical hard/soft label on
+					// message_history.bounce_type (KPI count_bounced_hard, ticket
+					// 2026-06-16-kpi-bounce-hard-soft-dashboard.md). Only the hard
+					// path sets bounced_at, so this is where the typed label lives.
+					bounceType := domain.VeridianBounceTypeLabel(class)
 					updates = append(updates, domain.MessageEventUpdate{
 						ID:         *event.MessageID,
 						Event:      domain.MessageEventBounced,
 						Timestamp:  event.Timestamp,
 						StatusInfo: &reason,
+						BounceType: &bounceType,
 					})
 				}
 

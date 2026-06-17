@@ -112,13 +112,18 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   }
 
   const buildStatsQuery = (filter: MessageTypeFilter): AnalyticsQuery => {
-    // Stats query should always include all measures regardless of visibility
+    // Stats query should always include all measures regardless of visibility.
+    // Veridian — count_bounced_hard / count_bounced_soft split the Bounced KPI
+    // (hard = dead address / reputation grilling, soft = transient). Surfaced in
+    // the Bounced card tooltip. Cf. 2026-06-16-kpi-bounce-hard-soft-dashboard.md.
     const baseQuery: AnalyticsQuery = {
       schema: 'message_history',
       measures: [
         'count_sent',
         'count_delivered',
         'count_bounced',
+        'count_bounced_hard',
+        'count_bounced_soft',
         'count_complained',
         'count_opened',
         'count_clicked',
@@ -204,6 +209,10 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
     count_opened: number
     count_clicked: number
     count_bounced: number
+    // Veridian — split hard/soft du bounce (KPI cold). Hard = adresse morte
+    // (réputation), soft = transitoire. Voir le tooltip de la carte Bounced.
+    count_bounced_hard: number
+    count_bounced_soft: number
     count_complained: number
     count_unsubscribed: number
     count_failed: number
@@ -220,37 +229,35 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   }
 
   // Extract and aggregate stats from the stats response (sum up all daily values)
-  const stats: EmailStats = statsData?.data?.reduce<EmailStats>(
-    (acc, row) => ({
-      count_sent: acc.count_sent + toNumber(row.count_sent),
-      count_delivered: acc.count_delivered + toNumber(row.count_delivered),
-      count_opened: acc.count_opened + toNumber(row.count_opened),
-      count_clicked: acc.count_clicked + toNumber(row.count_clicked),
-      count_bounced: acc.count_bounced + toNumber(row.count_bounced),
-      count_complained: acc.count_complained + toNumber(row.count_complained),
-      count_unsubscribed: acc.count_unsubscribed + toNumber(row.count_unsubscribed),
-      count_failed: acc.count_failed + toNumber(row.count_failed)
-    }),
-    {
-      count_sent: 0,
-      count_delivered: 0,
-      count_opened: 0,
-      count_clicked: 0,
-      count_bounced: 0,
-      count_complained: 0,
-      count_unsubscribed: 0,
-      count_failed: 0
-    }
-  ) || {
+  const emptyStats: EmailStats = {
     count_sent: 0,
     count_delivered: 0,
     count_opened: 0,
     count_clicked: 0,
     count_bounced: 0,
+    count_bounced_hard: 0,
+    count_bounced_soft: 0,
     count_complained: 0,
     count_unsubscribed: 0,
     count_failed: 0
   }
+
+  const stats: EmailStats =
+    statsData?.data?.reduce<EmailStats>(
+      (acc, row) => ({
+        count_sent: acc.count_sent + toNumber(row.count_sent),
+        count_delivered: acc.count_delivered + toNumber(row.count_delivered),
+        count_opened: acc.count_opened + toNumber(row.count_opened),
+        count_clicked: acc.count_clicked + toNumber(row.count_clicked),
+        count_bounced: acc.count_bounced + toNumber(row.count_bounced),
+        count_bounced_hard: acc.count_bounced_hard + toNumber(row.count_bounced_hard),
+        count_bounced_soft: acc.count_bounced_soft + toNumber(row.count_bounced_soft),
+        count_complained: acc.count_complained + toNumber(row.count_complained),
+        count_unsubscribed: acc.count_unsubscribed + toNumber(row.count_unsubscribed),
+        count_failed: acc.count_failed + toNumber(row.count_failed)
+      }),
+      { ...emptyStats }
+    ) || emptyStats
 
   const getRate = (numerator: number, denominator: number) => {
     if (denominator === 0) return '-'
@@ -423,10 +430,14 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
         </Col>
         {/* Veridian — Reply rate : LE KPI #1 du cold outreach (conversion réelle).
             replied = contacts uniques ayant répondu sur la fenêtre ; ratio approx.
-            replies / sent (un contact peut avoir reçu plusieurs envois). */}
+            replies / sent (un contact peut avoir reçu plusieurs envois).
+            ⚠️ Le signal reply est CONTACT-level (table veridian_contact_reply, pas
+            rattaché à un envoi) → il IGNORE le filtre All/Broadcasts/Transactional :
+            tooltip explicite pour lever la confusion (ticket
+            2026-06-17-reply-kpi-ignore-message-type-filter.md, option 1). */}
         <Col span={3}>
           <Tooltip
-            title={t`${replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI)`}
+            title={t`${replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI). All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter.`}
           >
             <div className="p-2 rounded">
               <Statistic
@@ -448,8 +459,21 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
           </Tooltip>
         </Col>
         <Col span={3}>
+          {/* Veridian — la carte Bounced reste le TOTAL ; le split hard/soft est
+              révélé au survol. Hard = adresse morte (réputation grillée, suppression
+              immédiate) ; soft = transitoire (boîte pleine, greylisting). Note : sur
+              le flux actuel seuls les hard posent bounced_at sur message_history, donc
+              soft ~0 ici (cf. 2026-06-16-kpi-bounce-hard-soft-dashboard.md). */}
           <Tooltip
-            title={!visibleLines.count_bounced ? t`${stats.count_bounced} emails bounced back (hidden from chart)` : t`${stats.count_bounced} emails bounced back`}
+            title={
+              <span>
+                {!visibleLines.count_bounced
+                  ? t`${stats.count_bounced} emails bounced back (hidden from chart)`
+                  : t`${stats.count_bounced} emails bounced back`}
+                <br />
+                {t`Hard: ${stats.count_bounced_hard} (dead address) · Soft: ${stats.count_bounced_soft} (transient)`}
+              </span>
+            }
           >
             <div
               className="p-2 cursor-pointer hover:bg-gray-50 rounded transition-colors"
