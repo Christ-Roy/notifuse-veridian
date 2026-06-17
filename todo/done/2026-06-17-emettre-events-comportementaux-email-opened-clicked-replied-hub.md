@@ -3,6 +3,15 @@
 > **Sévérité** : 🟡 P1
 > **Owner** : agent notifuse-veridian
 > **Créé** : 2026-06-17 (audit cohérence réconciliateur, agent audit-crossapp)
+> **✅ LIVRÉ STAGING 2026-06-17** (agent events-hub, SHA 7381ace5 + tests 4b41f6fd).
+> 3 events câblés via le VeridianWebhookEmitter existant (voie legacy HMAC). Émission
+> best-effort/async (ne bloque jamais pixel/redirect/reply). `data.contact_email`
+> résolu via `FindContactEmailByMessageID`. open/click depuis `EmailService`, reply
+> depuis `VeridianReplyService`. DI optionnelle nil-safe. Contrat vérifié des DEUX
+> bouts (Hub `dispatchLegacyEvent` lit `event_type`/`tenant_id`/`event_id`/`data.*`).
+> Fichiers : `internal/service/veridian_behavioral_emit.go` + helper reply + 3
+> constantes `veridian.go` + câblage `app.go`. **Promo prod = lead après E2E
+> on-premise staging** (tier 🔴 envoi/tracking core).
 
 ## TL;DR
 Le Hub a livré en prod (Lot 1) un réconciliateur de scoring prospect qui **attend**

@@ -5,6 +5,13 @@
 > **Créé** : 2026-06-16
 > **Type** : audit de cohérence — manque BACKEND identifié sous le preset warmup
 > **Dépend de** : `2026-06-16-preset-mode-warmup.md` (V1 statique livré d'abord)
+> **✅ BACKEND LIVRÉ STAGING 2026-06-17** (agent events-hub, SHA b678dd4d + tests 4b41f6fd).
+> 3 champs JSON-blob `omitempty` sur `EmailProvider` (`VeridianWarmupStartedAt`/
+> `Schedule`/`StepDays`) → AUCUNE migration, AUCUN cron. `VeridianWarmupCapForDay`
+> (pure) dans `internal/domain/veridian_warmup.go` ; cap warmup dérivé de `now-startedAt`
+> appliqué dans `veridianDailyCapGate` (prime sur le cap-classe statique, uniforme
+> toutes classes). Vides = pas de warmup (non-régression). **Volet UI (preset +
+> carte) = agent ui-cold, hors scope backend.** Promo prod = lead après E2E.
 
 ## Le trou
 
