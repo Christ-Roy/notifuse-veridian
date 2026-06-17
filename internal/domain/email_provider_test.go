@@ -2050,3 +2050,45 @@ func TestEmailProvider_WarmupFieldsJSONBlob(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_warmup_step_days")
 	})
 }
+
+// TestEmailProvider_VeridianOpenPixelByClassJSONBlob vérifie le contrat JSON blob
+// du champ VeridianOpenPixelByClass (pixel d'ouverture par classe AU NIVEAU INFRA,
+// 2026-06-17). Comme tous les champs cold par infra (rates/caps/exclusion/warmup),
+// il est persisté SANS migration via le blob `integrations`, donc le round-trip
+// JSON EST le contrat de persistance. Un tag cassé ou un `false` mal géré (piège
+// omitempty bool sur une MAP — ici la map entière est omitempty, mais ses valeurs
+// false DOIVENT survivre) briserait silencieusement la config pixel infra : le pixel
+// retomberait sur le workspace/défaut sans erreur visible. Round-trip = filet durable.
+func TestEmailProvider_VeridianOpenPixelByClassJSONBlob(t *testing.T) {
+	t.Run("renseigné → round-trip fidèle, y compris les false explicites", func(t *testing.T) {
+		p := EmailProvider{
+			Kind:               EmailProviderKindSMTP,
+			RateLimitPerMinute: 600,
+			// google forcé OFF (false), freemail_fr forcé ON (true) au niveau infra.
+			// Le false NE DOIT PAS disparaître (clé présente dans la map = override
+			// explicite ; sa disparition ferait retomber sur la cascade workspace).
+			VeridianOpenPixelByClass: map[string]bool{
+				ProviderClassGoogle:     false,
+				ProviderClassFreemailFR: true,
+			},
+		}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_open_pixel_by_class")
+
+		var back EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &back))
+		require.NotNil(t, back.VeridianOpenPixelByClass)
+		// Les DEUX clés survivent — dont le false explicite (override infra OFF).
+		gv, gok := back.VeridianOpenPixelByClass[ProviderClassGoogle]
+		require.True(t, gok, "la clé google (false explicite) doit survivre au round-trip")
+		assert.False(t, gv)
+		assert.True(t, back.VeridianOpenPixelByClass[ProviderClassFreemailFR])
+	})
+
+	t.Run("vide → champ ABSENT du JSON (omitempty, non-régression)", func(t *testing.T) {
+		raw, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_open_pixel_by_class")
+	})
+}

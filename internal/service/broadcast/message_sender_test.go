@@ -883,6 +883,103 @@ func TestSendBatch_VeridianWorkspacePixelFallback(t *testing.T) {
 		"workspace pixel freemail_fr=true doit conserver le pixel à l'envoi")
 }
 
+// TestSendBatch_VeridianInfraPixelOverride couvre le NIVEAU INFRA du pixel sur le
+// CHEMIN DIRECT (SendToRecipient → compilation réelle). La politique pixel posée
+// sur l'EmailProvider (= cette infra) prime sur le workspace. Câblage du nouveau
+// param `provider` dans resolveOpenPixel. INVERSION testée : workspace ON sur
+// google, infra OFF → le HTML émis vers gmail N'A PAS le pixel /t/, les clics /r/
+// restent. freemail_fr non couvert par l'infra → cascade workspace ON conservée.
+func TestSendBatch_VeridianInfraPixelOverride(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBroadcastRepository := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).Return().AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).Return().AnyTimes()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	broadcastID := "broadcast-ipx"
+
+	broadcast := &domain.Broadcast{
+		ID:            broadcastID,
+		WorkspaceID:   workspaceID,
+		Audience:      domain.AudienceSettings{List: "list-1"},
+		UTMParameters: &domain.UTMParameters{},
+		TestSettings: domain.BroadcastTestSettings{
+			Variations: []domain.BroadcastVariation{{TemplateID: "template-px"}},
+		},
+	}
+	// Workspace : google ON (l'INVERSE de l'infra ci-dessous) + freemail_fr ON.
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Settings: domain.WorkspaceSettings{
+			VeridianOpenPixelByClass: map[string]bool{"google": true, "freemail_fr": true},
+		},
+	}
+	emailSender := domain.NewEmailSender("sender@example.com", "Sender")
+	// Infra : google FORCÉ OFF (warm-up). freemail_fr non couvert → cascade workspace.
+	emailProvider := &domain.EmailProvider{
+		Kind:                     domain.EmailProviderKindSMTP,
+		Senders:                  []domain.EmailSender{emailSender},
+		SMTP:                     &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p", UseTLS: true},
+		VeridianOpenPixelByClass: map[string]bool{"google": false},
+	}
+	template := &domain.Template{
+		ID: "template-px",
+		Email: &domain.EmailTemplate{
+			SenderID:         emailSender.ID,
+			Subject:          "Hello",
+			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", `<a href="https://example.com">Voir</a>`)),
+		},
+	}
+
+	mockBroadcastRepository.EXPECT().GetBroadcast(ctx, workspaceID, broadcastID).Return(broadcast, nil)
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil).Times(2)
+
+	contentByRecipient := map[string]string{}
+	mockEmailService.EXPECT().
+		SendEmail(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+			contentByRecipient[req.To] = req.Content
+			return nil
+		}).Times(2)
+	mockMessageHistoryRepo.EXPECT().Create(ctx, workspaceID, gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	sender := NewMessageSender(
+		mockBroadcastRepository, mockMessageHistoryRepo, mockTemplateRepo,
+		mockEmailService, nil, mockLogger, TestConfig(), "",
+	)
+	sender.(*messageSender).SetVeridianWorkspaceRepo(mockWorkspaceRepo)
+
+	recipients := []*domain.ContactWithList{
+		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"},  // google → infra OFF
+		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"}, // freemail_fr → workspace ON
+	}
+	templates := map[string]*domain.Template{"template-px": template}
+
+	sent, failed, err := sender.SendBatch(ctx, workspaceID, "int-1", "secret-key", "https://api.example.com", "", true, broadcastID, recipients, templates, emailProvider, time.Now().Add(30*time.Second), "")
+	require.NoError(t, err)
+	require.Equal(t, 2, sent)
+	require.Equal(t, 0, failed)
+
+	assert.NotContains(t, contentByRecipient["lead@gmail.com"], "/t/",
+		"infra pixel google=false doit PRIMER sur le workspace ON (sender direct)")
+	assert.Contains(t, contentByRecipient["lead@gmail.com"], "/r/",
+		"les clics restent trackés malgré le pixel infra OFF")
+	assert.Contains(t, contentByRecipient["lead@orange.fr"], "/t/",
+		"freemail_fr non couvert par l'infra → cascade workspace ON conservée")
+}
+
 // TestSendBatch_EmptyRecipients tests SendBatch with no recipients
 func TestSendBatch_EmptyRecipients(t *testing.T) {
 	// Create mock controller

@@ -110,15 +110,22 @@ func veridianToBool(v any) (bool, bool) {
 //     selon la classe, indépendamment de trackingEnabled.
 //
 // "Contexte tunnel" = au moins un signal tunnel présent : tag custom_string_5
-// sur le contact, OU config pixel (broadcast/workspace), OU config rates de
+// sur le contact, OU config pixel (broadcast/INFRA/workspace), OU config rates de
 // throttle par classe (broadcast/workspace). Sans aucun de ces signaux, un
 // broadcast est traité comme un broadcast classique upstream → nil.
 //
-// Précédence de la politique par classe : broadcast metadata > workspace
-// settings > défaut tunnel (veridianDefaultOpenPixelByClass).
-func VeridianResolveOpenPixel(contact *Contact, email string, broadcast *Broadcast, workspace *Workspace) *bool {
+// Précédence de la politique par classe (cascade IDENTIQUE aux rates/caps R2,
+// du + spécifique au + général) : broadcast metadata > INFRA (EmailProvider) >
+// workspace settings > défaut tunnel (veridianDefaultOpenPixelByClass). Le
+// premier niveau qui DÉFINIT EXPLICITEMENT la classe demandée gagne ; un niveau
+// qui n'a pas d'entrée pour cette classe laisse la main au niveau suivant
+// (même esprit que la résolution pixel broadcast>workspace d'origine, étendue à
+// l'infra). provider peut être nil (cas legacy / intégration sans config
+// Veridian) → niveau infra simplement sauté = comportement pré-infra inchangé.
+func VeridianResolveOpenPixel(contact *Contact, email string, broadcast *Broadcast, provider *EmailProvider, workspace *Workspace) *bool {
 	var (
 		broadcastPixel map[string]bool
+		infraPixel     map[string]bool
 		workspacePixel map[string]bool
 		broadcastRates map[string]float64
 		workspaceRates map[string]float64
@@ -127,15 +134,19 @@ func VeridianResolveOpenPixel(contact *Contact, email string, broadcast *Broadca
 		broadcastPixel = VeridianOpenPixelByClassFromMetadata(broadcast.Metadata)
 		broadcastRates = VeridianProviderClassRatesFromMetadata(broadcast.Metadata)
 	}
+	if provider != nil {
+		infraPixel = provider.VeridianOpenPixelByClass
+	}
 	if workspace != nil {
 		workspacePixel = workspace.Settings.VeridianOpenPixelByClass
 		workspaceRates = workspace.Settings.VeridianProviderClassRates
 	}
 
-	// Détection du contexte tunnel : un signal suffit.
+	// Détection du contexte tunnel : un signal suffit. La config pixel INFRA
+	// est un signal tunnel au même titre que broadcast/workspace.
 	contactClass := VeridianContactProviderClass(contact)
 	tunnelActive := contactClass != "" ||
-		len(broadcastPixel) > 0 || len(workspacePixel) > 0 ||
+		len(broadcastPixel) > 0 || len(infraPixel) > 0 || len(workspacePixel) > 0 ||
 		len(broadcastRates) > 0 || len(workspaceRates) > 0
 	if !tunnelActive {
 		return nil
@@ -148,9 +159,14 @@ func VeridianResolveOpenPixel(contact *Contact, email string, broadcast *Broadca
 		class = ClassifyProviderClass(email)
 	}
 
-	// Politique par classe : broadcast > workspace > défaut tunnel.
+	// Politique par classe : broadcast > INFRA > workspace > défaut tunnel.
 	if broadcastPixel != nil {
 		if b, ok := broadcastPixel[class]; ok {
+			return &b
+		}
+	}
+	if infraPixel != nil {
+		if b, ok := infraPixel[class]; ok {
 			return &b
 		}
 	}

@@ -368,10 +368,11 @@ func (s *queueMessageSender) buildQueueEntry(
 	// Veridian fork — découple le pixel d'ouverture (email.opened) de la
 	// réécriture de liens, par classe de provider destinataire. Le contexte
 	// tunnel est porté par le broadcast metadata (rates/pixel), le tag contact
-	// custom_string_5, OU les settings workspace (fallback résolu par le
-	// pixelResolver, mémoïsé par batch). Hors tunnel → nil → comportement
+	// custom_string_5, la config pixel de l'INFRA (EmailProvider), OU les settings
+	// workspace (fallback résolu par le pixelResolver, mémoïsé par batch). Cascade
+	// broadcast > infra > workspace > défaut. Hors tunnel → nil → comportement
 	// upstream (pixel suit EnableTracking).
-	trackingSettings.EnableOpenPixel = pixelResolver.resolveOpenPixel(ctx, workspaceID, contact, email, broadcast)
+	trackingSettings.EnableOpenPixel = pixelResolver.resolveOpenPixel(ctx, workspaceID, contact, email, broadcast, emailProvider)
 
 	// Resolve language variant
 	emailContent := template.ResolveEmailContent(contactLanguage, workspaceDefaultLanguage)

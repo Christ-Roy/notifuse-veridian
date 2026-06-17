@@ -31,7 +31,7 @@ msgid "... and {0} more emails"
 msgstr "... i {0} correus més"
 
 #. placeholder {0}: presetLabel(preset.id)
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2044
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2152
 msgid "\"{0}\" preset applied below — review the values, then click \"Save changes\" (and the Save button on the Sending window / Excluded classes / Anti-detection cards)."
 msgstr ""
 
@@ -72,7 +72,7 @@ msgid "{0} contacts"
 msgstr "{0} contactes"
 
 #. placeholder {0}: r.n
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1625
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1699
 msgid "{0} contacts will be skipped"
 msgstr ""
 
@@ -132,7 +132,7 @@ msgid "{0} emails/min"
 msgstr ""
 
 #. placeholder {0}: persisted.length
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1595
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1669
 msgid "{0} excluded"
 msgstr ""
 
@@ -155,7 +155,7 @@ msgid "{0} opened"
 msgstr ""
 
 #. placeholder {0}: senderCount(integration)
-#: src/components/settings/veridian_cold_outreach_settings.tsx:836
+#: src/components/settings/veridian_cold_outreach_settings.tsx:889
 msgid "{0} senders · round-robin per class"
 msgstr ""
 
@@ -246,7 +246,7 @@ msgstr "{0}-{1} de {total} automatitzacions"
 msgid "{0}-{1} of {total} broadcasts"
 msgstr "{0}-{1} de {total} difusions"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2252
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2339
 msgid "{cap} / day"
 msgstr ""
 
@@ -270,7 +270,7 @@ msgstr "Codi {language} copiat al porta-retalls!"
 msgid "{minutes}m {remainingSeconds}s"
 msgstr "{minutes}m {remainingSeconds}s"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2065
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2173
 msgid "{n} contacts"
 msgstr ""
 
@@ -278,11 +278,11 @@ msgstr ""
 msgid "{opens} opens out of {recipients} recipients"
 msgstr "{opens} obertures de {recipients} destinataris"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2199
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2286
 msgid "{perRecipientCap} / day"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2212
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2299
 msgid "{perSenderCap} / day"
 msgstr ""
 
@@ -290,7 +290,7 @@ msgstr ""
 msgid "{propertyCount} properties"
 msgstr "{propertyCount} propietats"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2240
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2327
 msgid "{rate} / min"
 msgstr ""
 
@@ -355,7 +355,7 @@ msgid "+ Add variation"
 msgstr "+ Afegir variació"
 
 #. placeholder {0}: Math.round(jitter * 100)
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1797
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1870
 msgid "±{0}%"
 msgstr ""
 
@@ -371,7 +371,7 @@ msgstr "0 contactes"
 msgid "0 opens out of 0 recipients"
 msgstr "0 obertures de 0 destinataris"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:839
+#: src/components/settings/veridian_cold_outreach_settings.tsx:892
 msgid "1 sender (no rotation)"
 msgstr ""
 
@@ -404,7 +404,7 @@ msgstr "2. Analítica web"
 msgid "200 - Extra Light"
 msgstr "200 - Extra lleuger"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1443
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1517
 msgid "24/7 (no window)"
 msgstr ""
 
@@ -464,7 +464,7 @@ msgstr ""
 msgid "A newer draft was found in local storage. Would you like to restore it or discard it?"
 msgstr "S'ha trobat un esborrany més nou a l'emmagatzematge local. Voleu restaurar-lo o descartar-lo?"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2100
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2208
 msgid "A preset is a named, coherent set of cold-sending values (rates, daily caps, sending window, jitter, content dedup and provider exclusions). Applying one fills the fields below as a starting point — review and adjust them, then click \"Save changes\" (and the Save button on the Sending window / Excluded classes / Anti-detection cards). Nothing is saved until you do."
 msgstr ""
 
@@ -545,7 +545,7 @@ msgstr "Activar automatització?"
 #: src/components/contacts/ContactDetailsDrawer.tsx:581
 #: src/components/contacts/SegmentsFilter.tsx:53
 #: src/components/lists/ListStats.tsx:58
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1441
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1515
 #: src/components/settings/veridian_plan_settings.tsx:73
 #: src/pages/ContactsPage.tsx:382
 msgid "Active"
@@ -847,7 +847,7 @@ msgstr "Tot"
 msgid "All contact fields are optional except email."
 msgstr "Tots els camps de contacte són opcionals excepte el correu electrònic."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1159
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1233
 msgid "All days"
 msgstr ""
 
@@ -927,23 +927,23 @@ msgstr "I"
 msgid "AND | OR"
 msgstr "I | O"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1780
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1853
 msgid "Anti-detection (jitter & content dedup)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1768
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1841
 msgid "Anti-detection settings saved"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:941
+#: src/components/settings/veridian_cold_outreach_settings.tsx:994
 msgid "Anti-hash dedup (this infra)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1341
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1415
 msgid "Anti-hash mode {idSuffix}"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1354
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1428
 msgid "Anti-hash window hours {idSuffix}"
 msgstr ""
 
@@ -1014,15 +1014,15 @@ msgid "API Token"
 msgstr "Token API"
 
 #: src/components/messages/MessageHistoryTab.tsx:548
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2118
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2123
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2226
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2231
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:307
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:317
 msgid "Apply"
 msgstr "Aplicar"
 
 #. placeholder {0}: presetLabel(preset.id)
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2122
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2230
 msgid "Apply {0} preset"
 msgstr ""
 
@@ -1030,7 +1030,7 @@ msgstr ""
 msgid "Apply & Recompile"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2116
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2224
 msgid "Apply this preset?"
 msgstr ""
 
@@ -1798,7 +1798,7 @@ msgstr "Mida del botó"
 #: src/components/settings/Integrations.tsx:2329
 #: src/components/settings/Integrations.tsx:2376
 #: src/components/settings/SystemSettingsDrawer.tsx:148
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2119
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2227
 #: src/components/settings/WebhookCard.tsx:348
 #: src/components/settings/WebhooksSettings.tsx:213
 #: src/components/settings/WorkspaceMembers.tsx:613
@@ -1855,7 +1855,7 @@ msgstr "No es pot pujar en mode de només lectura"
 msgid "Canonical URL"
 msgstr "URL canònica"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:966
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1022
 msgid "Cap /day"
 msgstr ""
 
@@ -1960,7 +1960,7 @@ msgstr "Trieu un punt de partida per al vostre nou tema. Podeu personalitzar-ho 
 msgid "Choose when to publish \"{0}\""
 msgstr "Trieu quan publicar \"{0}\""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1660
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1734
 msgid "Classes to never contact"
 msgstr ""
 
@@ -2073,8 +2073,8 @@ msgstr "Tancar sense desar"
 msgid "Closed Captions (CC)"
 msgstr "Subtítols (CC)"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1195
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1204
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1269
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1278
 msgid "Closing time"
 msgstr ""
 
@@ -2095,7 +2095,7 @@ msgstr "Editor de codi"
 msgid "Cold outreach"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1981
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2089
 msgid "Cold outreach settings saved"
 msgstr ""
 
@@ -2277,7 +2277,7 @@ msgstr "Configureu l'estil i els paràmetres SEO per al vostre blog. Aquests par
 #: src/components/settings/Integrations.tsx:1246
 #: src/components/settings/Integrations.tsx:1380
 #: src/components/settings/Integrations.tsx:1431
-#: src/components/settings/veridian_cold_outreach_settings.tsx:236
+#: src/components/settings/veridian_cold_outreach_settings.tsx:250
 msgid "Configured"
 msgstr "Configurat"
 
@@ -2310,7 +2310,7 @@ msgstr "Connecteu i gestioneu serveis externs"
 msgid "Connect each output to the next node using the handles on the block."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:364
+#: src/components/settings/veridian_cold_outreach_settings.tsx:378
 msgid "Connect IMAP inbox"
 msgstr ""
 
@@ -2409,7 +2409,7 @@ msgstr "Contactes"
 msgid "Contacts matching these conditions will follow the 'Yes' path. Others will follow 'No'."
 msgstr "Els contactes que compleixin aquestes condicions seguiran el camí 'Sí'. Els altres seguiran 'No'."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1620
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1694
 msgid "Contacts that will be skipped"
 msgstr ""
 
@@ -2440,8 +2440,8 @@ msgstr "Color del contenidor"
 msgid "Container Padding"
 msgstr "Farciment del contenidor"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1814
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1856
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1887
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1929
 msgid "Content dedup (anti-hash)"
 msgstr ""
 
@@ -2680,7 +2680,7 @@ msgstr "Creat el"
 msgid "Created new version v{0}"
 msgstr "Creada nova versió v{0}"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2007
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2115
 msgid "Cruise"
 msgstr ""
 
@@ -2917,15 +2917,15 @@ msgstr "Cadena personalitzada 5"
 msgid "Custom String Fields"
 msgstr "Camps de cadena personalitzats"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:439
+#: src/components/settings/veridian_cold_outreach_settings.tsx:453
 msgid "Custom tracking domain (per sending infrastructure)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2248
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2335
 msgid "Daily cap"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2411
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2557
 msgid "Daily cap (emails/day)"
 msgstr ""
 
@@ -2991,12 +2991,12 @@ msgstr "Per defecte"
 msgid "Default (API endpoint)"
 msgstr "Per defecte (punt final API)"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1799
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1868
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1872
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1941
 msgid "Default (cold ON)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1794
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1867
 msgid "Default ±30%"
 msgstr ""
 
@@ -3004,7 +3004,7 @@ msgstr ""
 msgid "Default Attributes"
 msgstr "Atributs per defecte"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1850
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1923
 msgid "Default cold ±30%"
 msgstr ""
 
@@ -3302,7 +3302,7 @@ msgstr "Desactivar webhook"
 #: src/components/settings/BlogSettings.tsx:214
 #: src/components/settings/GeneralSettings.tsx:143
 #: src/components/settings/Integrations.tsx:1308
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1796
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1869
 #: src/components/templates/TemplateTranslationsTab.tsx:204
 msgid "Disabled"
 msgstr "Desactivat"
@@ -3819,11 +3819,11 @@ msgstr "Les amplades de correu superiors a 650px poden no mostrar-se correctamen
 msgid "Email:"
 msgstr "Correu:"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2351
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2497
 msgid "Emails / recipient / day"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2369
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2515
 msgid "Emails / sender / day"
 msgstr ""
 
@@ -3862,7 +3862,7 @@ msgstr "Activar blog"
 msgid "Enable closed captions by default"
 msgstr "Activar subtítols per defecte"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1139
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1213
 msgid "Enable sending window"
 msgstr ""
 
@@ -4187,6 +4187,10 @@ msgstr "Tipus d'esdeveniments"
 msgid "Events"
 msgstr "Esdeveniments"
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:841
+msgid "Every lever below can either INHERIT the workspace default or OVERRIDE it for this infrastructure only. The open-tracking pixel is per class: \"Inherit\" follows the workspace policy (then the tunnel default), \"On\"/\"Off\" forces it for this infra — useful to cut the pixel everywhere on a brand-new IP during warm-up."
+msgstr ""
+
 #: src/components/automations/AutomationCard.tsx:308
 #: src/components/automations/config/TriggerConfigForm.tsx:340
 #: src/components/automations/nodes/TriggerNode.tsx:25
@@ -4214,24 +4218,24 @@ msgstr "Excloure donats de baixa"
 msgid "Exclude unsubscribed, bounced & complained recipients"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1670
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1744
 msgid "Excluded provider classes"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1593
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1667
 msgid "Excluded provider classes (do not contact)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:881
+#: src/components/settings/veridian_cold_outreach_settings.tsx:934
 msgid "Excluded provider classes (this infra)"
 msgstr ""
 
 #. placeholder {0}: integration.name
-#: src/components/settings/veridian_cold_outreach_settings.tsx:895
+#: src/components/settings/veridian_cold_outreach_settings.tsx:948
 msgid "Excluded provider classes for {0}"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1581
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1655
 msgid "Excluded provider classes saved"
 msgstr ""
 
@@ -4610,11 +4614,11 @@ msgstr "Error en reenviar el codi màgic"
 msgid "Failed to resume broadcast"
 msgstr "No s'ha pogut reprendre la difusió"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1770
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1843
 msgid "Failed to save anti-detection settings"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1983
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2091
 msgid "Failed to save cold outreach settings"
 msgstr ""
 
@@ -4626,7 +4630,7 @@ msgstr "No s'ha pogut desar el contacte"
 msgid "Failed to save contact. Please try again."
 msgstr "No s'ha pogut desar el contacte. Si us plau, torneu-ho a provar."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1583
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1657
 msgid "Failed to save excluded provider classes"
 msgstr ""
 
@@ -4638,11 +4642,11 @@ msgstr "No s'ha pogut desar el camp"
 msgid "Failed to save Firecrawl integration"
 msgstr "No s'ha pogut desar la integració de Firecrawl"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:224
+#: src/components/settings/veridian_cold_outreach_settings.tsx:238
 msgid "Failed to save IMAP inbox"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:768
+#: src/components/settings/veridian_cold_outreach_settings.tsx:818
 msgid "Failed to save infra limits"
 msgstr ""
 
@@ -4657,7 +4661,7 @@ msgstr "No s'ha pogut desar la integració"
 msgid "Failed to save LLM integration"
 msgstr "No s'ha pogut desar la integració LLM"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1429
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1503
 msgid "Failed to save sending window"
 msgstr ""
 
@@ -4677,7 +4681,7 @@ msgstr "No s'ha pogut desar el bloc de plantilla"
 msgid "Failed to save theme"
 msgstr "No s'ha pogut desar el tema"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:429
+#: src/components/settings/veridian_cold_outreach_settings.tsx:443
 msgid "Failed to save tracking domain"
 msgstr ""
 
@@ -4969,8 +4973,8 @@ msgstr "Nom"
 msgid "Flow Stats: {0}"
 msgstr "Estadístiques de flux: {0}"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:274
-#: src/components/settings/veridian_cold_outreach_settings.tsx:349
+#: src/components/settings/veridian_cold_outreach_settings.tsx:288
+#: src/components/settings/veridian_cold_outreach_settings.tsx:363
 msgid "Folder"
 msgstr ""
 
@@ -5045,11 +5049,11 @@ msgstr "per a variables de plantilla,"
 msgid "for tracking (not available in templates)."
 msgstr "per a seguiment (no disponible a plantilles)."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1339
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1413
 msgid "Forced OFF"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1338
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1412
 msgid "Forced ON"
 msgstr ""
 
@@ -5210,7 +5214,7 @@ msgstr "Grup (arrossegueu columnes aquí)"
 msgid "Group Attributes"
 msgstr "Atributs del grup"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1823
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1896
 msgid "h window"
 msgstr ""
 
@@ -5219,11 +5223,11 @@ msgstr ""
 msgid "happened"
 msgstr "ha passat"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2353
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2499
 msgid "Hard daily limit per email address, all classes combined. Counted from message history since midnight. 0 or empty = unlimited."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2371
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2517
 msgid "Hard daily limit per SENDING address (FROM), counted from message history since midnight (V53). Distinct from recipient caps: this caps how much each mailbox emits, for IP/domain warmup. 0 or empty = no sender cap. Can also be set per sending integration in the infra card above."
 msgstr ""
 
@@ -5308,16 +5312,16 @@ msgstr "Manteniu premut per arrossegar"
 msgid "Home"
 msgstr "Inici"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:258
+#: src/components/settings/veridian_cold_outreach_settings.tsx:272
 #: src/components/transactional/ApiCommandModal.tsx:532
 msgid "Host"
 msgstr "Amfitrió"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:304
+#: src/components/settings/veridian_cold_outreach_settings.tsx:318
 msgid "Host is required"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1358
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1432
 msgid "hours"
 msgstr ""
 
@@ -5329,7 +5333,7 @@ msgstr "Hores"
 msgid "Hover over a block to see details"
 msgstr "Passeu el ratolí per sobre d'un bloc per veure'n els detalls"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2078
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2186
 msgid "How cold outreach throttling works"
 msgstr ""
 
@@ -5341,7 +5345,7 @@ msgstr "Com funciona:"
 msgid "How long to wait before proceeding to the next step"
 msgstr "Quant de temps esperar abans de procedir al pas següent"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:357
+#: src/components/settings/veridian_cold_outreach_settings.tsx:371
 msgid "How often Notifuse checks the mailbox. Minimum 30s to avoid being throttled by the IMAP server."
 msgstr ""
 
@@ -5533,11 +5537,11 @@ msgstr "Atributs de la imatge"
 msgid "Image URL when shared on social media (og:image)"
 msgstr "URL de la imatge quan es comparteix a xarxes socials (og:image)"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:303
+#: src/components/settings/veridian_cold_outreach_settings.tsx:317
 msgid "IMAP host"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:222
+#: src/components/settings/veridian_cold_outreach_settings.tsx:236
 msgid "IMAP inbox saved"
 msgstr ""
 
@@ -5637,7 +5641,7 @@ msgstr "Important fitxers..."
 msgid "in {0}"
 msgstr "a {0}"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:788
+#: src/components/settings/veridian_cold_outreach_settings.tsx:838
 msgid "In cold mode, if an infra has several sending addresses, Notifuse alternates them automatically per recipient provider (round-robin) — so the effective capacity is rate/min × number of addresses. Add or remove sending addresses in Settings → Integrations."
 msgstr ""
 
@@ -5693,19 +5697,20 @@ msgstr "En vol"
 msgid "Info"
 msgstr "Informació"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:766
+#: src/components/settings/veridian_cold_outreach_settings.tsx:816
 msgid "Infra limits saved"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:950
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1003
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1068
 msgid "Inherit"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:917
+#: src/components/settings/veridian_cold_outreach_settings.tsx:970
 msgid "Inherit the workspace window"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:934
+#: src/components/settings/veridian_cold_outreach_settings.tsx:987
 msgid "Inherit workspace"
 msgstr ""
 
@@ -5913,7 +5918,7 @@ msgstr "Cursiva"
 msgid "Items per feed"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1274
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1348
 msgid "Jitter amount {idSuffix}"
 msgstr ""
 
@@ -6051,7 +6056,7 @@ msgstr "Deixeu en blanc per utilitzar l'API de Firecrawl per defecte (api.firecr
 msgid "Leave empty for full container width"
 msgstr "Deixeu buit per amplada completa del contenidor"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:338
+#: src/components/settings/veridian_cold_outreach_settings.tsx:352
 msgid "Leave empty to keep the current password unchanged."
 msgstr ""
 
@@ -6332,7 +6337,7 @@ msgstr "Minúscules"
 msgid "Magic code sent to your email"
 msgstr "Codi màgic enviat al teu correu"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:341
+#: src/components/settings/veridian_cold_outreach_settings.tsx:355
 msgid "Mailbox password"
 msgstr ""
 
@@ -6408,7 +6413,7 @@ msgstr "Coincideix amb:"
 msgid "Matching contacts:"
 msgstr "Contactes coincidents:"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2017
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2125
 msgid "Mature IP/domain: comfortable rates and daily caps, wide business hours (8am–8pm), Microsoft re-enabled at a moderate rate. Jitter and content dedup stay on."
 msgstr ""
 
@@ -6420,19 +6425,19 @@ msgstr "Màx. 3MB per fitxer, 10MB en total, màxim 20 fitxers"
 #~ msgid "Max emails per minute toward this provider. Fractions allowed (0.5 = 1 email / 2 min). Empty = no per-class throttle."
 #~ msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2208
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2295
 msgid "Max emails sent FROM a single address per day (IP warmup)."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2363
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2509
 msgid "Max emails sent FROM a single sending address per day — the classic IP/domain warmup limit. Each mailbox ramps its own volume. Leave empty (0) for no sender limit."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2345
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2491
 msgid "Max emails toward a single address per day — protects a contact from being harassed across campaigns. Leave empty (0) for unlimited."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2195
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2282
 msgid "Max emails toward a single address per day (anti-harassment)."
 msgstr ""
 
@@ -6440,11 +6445,11 @@ msgstr ""
 msgid "Maximum 20 attachments allowed"
 msgstr "Es permeten màxim 20 adjunts"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2415
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2561
 msgid "Maximum emails per DAY toward this provider (VOLUME), counted since midnight from message history. Use this to express \"1 email/day\" which a per-minute rate cannot. Leave empty for no daily cap."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2401
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2547
 msgid "Maximum emails per MINUTE toward this provider (SPEED). Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class rate."
 msgstr ""
 
@@ -6506,7 +6511,7 @@ msgstr "Meta títol"
 msgid "Microsoft 365 / Office 365"
 msgstr "Microsoft 365 / Office 365"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2009
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2117
 msgid "Microsoft prudence"
 msgstr ""
 
@@ -6820,11 +6825,11 @@ msgstr "Encara no hi ha automatitzacions"
 msgid "No broadcasts found"
 msgstr "No s'han trobat difusions"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:870
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2214
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2254
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2373
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2417
+#: src/components/settings/veridian_cold_outreach_settings.tsx:923
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2301
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2341
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2519
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2563
 msgid "No cap"
 msgstr ""
 
@@ -6900,7 +6905,7 @@ msgstr "No hi ha contingut HTML per exportar"
 msgid "No icon found"
 msgstr "No s'ha trobat cap icona"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:288
+#: src/components/settings/veridian_cold_outreach_settings.tsx:302
 msgid "No IMAP inbox configured yet."
 msgstr ""
 
@@ -6964,7 +6969,7 @@ msgstr "No hi ha previsualització disponible..."
 msgid "No properties"
 msgstr "Sense propietats"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1647
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1721
 msgid "No provider class is excluded — all recipients are contacted."
 msgstr ""
 
@@ -6993,7 +6998,7 @@ msgstr "No hi ha valors de mostra disponibles"
 msgid "No saved blocks yet"
 msgstr "Encara no hi ha blocs desats"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:472
+#: src/components/settings/veridian_cold_outreach_settings.tsx:486
 msgid "No sender domain"
 msgstr ""
 
@@ -7001,12 +7006,12 @@ msgstr ""
 msgid "No senders configured"
 msgstr "No s'han configurat remitents"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:454
-#: src/components/settings/veridian_cold_outreach_settings.tsx:798
+#: src/components/settings/veridian_cold_outreach_settings.tsx:468
+#: src/components/settings/veridian_cold_outreach_settings.tsx:851
 msgid "No sending integration configured yet. Add an email provider in Settings → Integrations first."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1476
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1550
 msgid "No sending window — emails go out 24/7."
 msgstr ""
 
@@ -7052,8 +7057,8 @@ msgstr "Encara no hi ha temes"
 #~ msgid "no throttle"
 #~ msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2242
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2403
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2329
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2549
 msgid "No throttle"
 msgstr ""
 
@@ -7111,7 +7116,7 @@ msgstr "No actiu"
 msgid "None"
 msgstr "Cap"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1597
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1671
 msgid "None excluded"
 msgstr ""
 
@@ -7131,7 +7136,7 @@ msgstr "No assignat"
 #: src/components/analytics/AnalyticsDashboard.tsx:186
 #: src/components/settings/Integrations.tsx:1238
 #: src/components/settings/Integrations.tsx:1275
-#: src/components/settings/veridian_cold_outreach_settings.tsx:238
+#: src/components/settings/veridian_cold_outreach_settings.tsx:252
 msgid "Not configured"
 msgstr "No configurat"
 
@@ -7184,7 +7189,7 @@ msgstr "Nom de la notificació"
 msgid "Notification updated successfully"
 msgstr "Notificació actualitzada correctament"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:245
+#: src/components/settings/veridian_cold_outreach_settings.tsx:259
 msgid "Notifuse polls this mailbox to detect bounce reports (failed deliveries reported back by your SMTP relay) and human replies from prospects. Detecting a reply automatically stops the cold sequence for that contact; detecting a bounce suppresses the address. Use the IMAP credentials of the address your campaigns send from (or its dedicated return mailbox)."
 msgstr ""
 
@@ -7241,12 +7246,13 @@ msgid "of the following conditions match:"
 msgstr "de les condicions següents coincideixen:"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:131
-#: src/components/settings/veridian_cold_outreach_settings.tsx:284
-#: src/components/settings/veridian_cold_outreach_settings.tsx:320
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1138
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1799
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2271
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2428
+#: src/components/settings/veridian_cold_outreach_settings.tsx:298
+#: src/components/settings/veridian_cold_outreach_settings.tsx:334
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1070
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1212
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1872
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2358
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2574
 msgid "Off"
 msgstr ""
 
@@ -7259,12 +7265,13 @@ msgid "OK"
 msgstr "D'acord"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:131
-#: src/components/settings/veridian_cold_outreach_settings.tsx:284
-#: src/components/settings/veridian_cold_outreach_settings.tsx:320
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1137
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1799
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2266
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2428
+#: src/components/settings/veridian_cold_outreach_settings.tsx:298
+#: src/components/settings/veridian_cold_outreach_settings.tsx:334
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1069
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1211
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1872
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2353
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2574
 msgid "On"
 msgstr ""
 
@@ -7330,8 +7337,9 @@ msgid "Open on web"
 msgstr "Obrir al web"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:126
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2260
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2423
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1025
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2347
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2569
 msgid "Open pixel"
 msgstr ""
 
@@ -7355,7 +7363,7 @@ msgstr "Taxa d'obertura"
 msgid "Open Veridian"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2426
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2572
 msgid "Open-tracking pixel for this provider class. Default: ON for smaller providers, OFF for Google/Microsoft to protect deliverability."
 msgstr ""
 
@@ -7370,8 +7378,8 @@ msgstr "Obert"
 msgid "Opened"
 msgstr "Obert"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1182
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1190
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1256
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1264
 msgid "Opening time"
 msgstr ""
 
@@ -7455,11 +7463,11 @@ msgstr "Exterior"
 msgid "Overline"
 msgstr "Línia superior"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1262
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1336
 msgid "Override jitter {idSuffix}"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1843
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1916
 msgid "Override the default ±30% jitter. Off = default cold ±30%. Set to 0 to disable jitter explicitly."
 msgstr ""
 
@@ -7471,7 +7479,7 @@ msgstr "Anul·lar el nom de remitent per defecte per a aquest correu de prova"
 msgid "Override the workspace default email provider for this node"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:908
+#: src/components/settings/veridian_cold_outreach_settings.tsx:961
 msgid "Overrides the workspace window for this infra (e.g. a fresh IP kept to 10am–4pm). Disabled = inherit the workspace window."
 msgstr ""
 
@@ -7494,7 +7502,7 @@ msgstr "Configuració de farciment"
 msgid "Parent Frame"
 msgstr "Marc pare"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:337
+#: src/components/settings/veridian_cold_outreach_settings.tsx:351
 #: src/components/transactional/ApiCommandModal.tsx:538
 msgid "Password"
 msgstr "Contrasenya"
@@ -7564,8 +7572,13 @@ msgstr "Pendent"
 msgid "Pending confirmation"
 msgstr "Confirmació pendent"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:778
+#: src/components/settings/veridian_cold_outreach_settings.tsx:828
 msgid "Per-infrastructure limits (warm-up)"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2414
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2662
+msgid "Per-infrastructure overrides"
 msgstr ""
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:69
@@ -7581,22 +7594,22 @@ msgstr ""
 #~ msgid "Per-provider sending rates and open-tracking policy for outbound campaigns. Defaults keep the open pixel OFF on Google/Microsoft to protect deliverability."
 #~ msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2148
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2290
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2256
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2471
 msgid "Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2192
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2342
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2279
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2488
 msgid "Per-recipient daily cap"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:846
+#: src/components/settings/veridian_cold_outreach_settings.tsx:899
 msgid "Per-recipient daily cap (this infra)"
 msgstr ""
 
 #. placeholder {0}: integration.name
-#: src/components/settings/veridian_cold_outreach_settings.tsx:857
+#: src/components/settings/veridian_cold_outreach_settings.tsx:910
 msgid "Per-recipient daily cap for {0}"
 msgstr ""
 
@@ -7612,17 +7625,17 @@ msgstr "URL del feed per destinatari"
 msgid "Per-recipient feed URL is required when enabled"
 msgstr "L'URL del feed per destinatari és requerida quan està habilitat"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:862
+#: src/components/settings/veridian_cold_outreach_settings.tsx:915
 msgid "Per-sender daily cap (warmup, this infra)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2205
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2360
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2292
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2506
 msgid "Per-sender daily cap (warmup)"
 msgstr ""
 
 #. placeholder {0}: integration.name
-#: src/components/settings/veridian_cold_outreach_settings.tsx:873
+#: src/components/settings/veridian_cold_outreach_settings.tsx:926
 msgid "Per-sender daily cap for {0}"
 msgstr ""
 
@@ -7667,11 +7680,11 @@ msgstr "Foto de Zetong Li"
 msgid "Photo URL"
 msgstr "URL de la foto"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1604
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1678
 msgid "Pick mailbox provider classes you do NOT want to contact at all. Recipients in an excluded class are skipped cleanly — no email is sent, no bounce is produced — while the rest of the campaign goes out normally. Typical use: don't touch Microsoft/Outlook from a freshly warmed-up IP (Microsoft's reputation is the hardest to earn), then open it once the IP is mature. This is different from a rate or daily cap: setting a rate/cap to 0 means \"unlimited\", not \"excluded\"."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2389
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2535
 msgid "pixel OFF by default"
 msgstr ""
 
@@ -7945,11 +7958,11 @@ msgstr "Si us plau, seleccioneu operador"
 msgid "Please upload a CSV file with email addresses"
 msgstr "Si us plau, pugeu un fitxer CSV amb adreces de correu"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:356
+#: src/components/settings/veridian_cold_outreach_settings.tsx:370
 msgid "Polling interval (seconds)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:312
+#: src/components/settings/veridian_cold_outreach_settings.tsx:326
 #: src/components/transactional/ApiCommandModal.tsx:533
 #: src/pages/SetupWizard.tsx:615
 msgid "Port"
@@ -7959,7 +7972,7 @@ msgstr "Port"
 msgid "Port for the SMTP bridge server (default: 587)"
 msgstr "Port per al servidor de retransmissió SMTP (per defecte: 587)"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:313
+#: src/components/settings/veridian_cold_outreach_settings.tsx:327
 msgid "Port is required"
 msgstr ""
 
@@ -8041,7 +8054,7 @@ msgstr "Premeu Enter o feu clic a D'acord per confirmar, Escape per cancel·lar"
 msgid "Press Enter to confirm, Escape to cancel"
 msgstr "Premeu Enter per confirmar, Escape per cancel·lar"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1859
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1932
 msgid "Prevents two identical emails toward the same provider within the window. Default cold = ON, 72h."
 msgstr ""
 
@@ -8184,7 +8197,7 @@ msgid "Provider"
 msgstr "Proveïdor"
 
 #: src/components/analytics/veridian_engagement_by_class.tsx:125
-#: src/components/settings/veridian_cold_outreach_settings.tsx:960
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1016
 msgid "Provider class"
 msgstr ""
 
@@ -8248,16 +8261,21 @@ msgstr "Enviar"
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2236
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2323
 msgid "Rate"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2397
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2543
 msgid "Rate (emails/min)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:963
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1019
 msgid "Rate /min"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2273
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2613
+msgid "Rate & volume"
 msgstr ""
 
 #: src/components/settings/Integrations.tsx:2027
@@ -8268,7 +8286,7 @@ msgstr "Límit de velocitat per a màrqueting"
 msgid "Rate limit for marketing emails (emails per minute)"
 msgstr "Límit de velocitat per a correus de màrqueting (correus per minut)"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:785
+#: src/components/settings/veridian_cold_outreach_settings.tsx:835
 msgid "Rates and daily caps set above apply at the workspace level (fallback). Each sending infrastructure (an email integration: its IP / SMTP relay + senders) can carry its OWN limits that override the workspace — essential during IP warm-up, where a fresh IP must crawl while the rest of the workspace runs faster. Leave a field empty for no per-class limit on that infra (the workspace value, then the campaign value, still apply)."
 msgstr ""
 
@@ -8384,7 +8402,7 @@ msgstr ""
 #~ msgid "Recipients are grouped by their mailbox provider. Each provider tolerates a different sending pace, so you can cap how many emails per minute go to each group — slower toward Google and Microsoft, faster toward smaller providers. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
 #~ msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2081
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2189
 msgid "Recipients are grouped by their mailbox provider. Two independent limits protect your reputation: the per-minute rate caps the SPEED of sending toward each group, while the daily cap limits the TOTAL VOLUME sent to that group in a single day (e.g. \"1 email/day toward Google\" — impossible to express as a per-minute rate). Both apply together, and the stricter one wins. The per-recipient daily cap (top of this section) limits how many emails a single address can receive per day to avoid harassing the same contact. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
 msgstr ""
 
@@ -8553,7 +8571,12 @@ msgstr ""
 msgid "Replies"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:234
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2449
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2697
+msgid "Reply & bounce inbox"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:248
 msgid "Reply & bounce inbox (IMAP)"
 msgstr ""
 
@@ -8574,6 +8597,11 @@ msgstr "Respondre a:"
 #: src/components/templates/SendTemplateModal.tsx:378
 msgid "Reply-To"
 msgstr "Respondre a"
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2375
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2620
+msgid "Reputation"
+msgstr ""
 
 #: src/components/settings/SystemSettingsDrawer.tsx:235
 #: src/components/settings/SystemSettingsDrawer.tsx:247
@@ -8615,7 +8643,7 @@ msgstr "Restablir"
 msgid "Reset formatting"
 msgstr "Restablir format"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2446
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2592
 msgid "Reset pixel to defaults"
 msgstr ""
 
@@ -8661,11 +8689,11 @@ msgstr "Restaurar esborrany?"
 msgid "Restore in Veridian"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1450
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1524
 msgid "Restrict cold sending to business hours. Emails scheduled outside the window are automatically deferred to the next opening — never dropped. Sending at 3am or on weekends is an anti-spam signal and nobody reads it. Leave disabled to send 24/7."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1142
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1216
 msgid "Restrict to the window below"
 msgstr ""
 
@@ -8737,7 +8765,7 @@ msgstr "Correu arrel"
 msgid "Round"
 msgstr "Arrodonit"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2135
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2243
 msgid "Round-robin needs at least 2 sending addresses"
 msgstr ""
 
@@ -8788,7 +8816,7 @@ msgstr "Regió S3"
 msgid "S3 secret key"
 msgstr "Clau secreta S3"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2019
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2127
 msgid "Same as Cruise but Microsoft/Outlook excluded — use when Microsoft reputation is degraded or never built, while still serving everyone else."
 msgstr ""
 
@@ -8831,7 +8859,7 @@ msgstr "Mode de caixa de proves"
 #: src/components/settings/Integrations.tsx:2337
 #: src/components/settings/Integrations.tsx:2384
 #: src/components/settings/SystemSettingsDrawer.tsx:217
-#: src/components/settings/veridian_cold_outreach_settings.tsx:496
+#: src/components/settings/veridian_cold_outreach_settings.tsx:510
 #: src/components/settings/WebhooksSettings.tsx:215
 #: src/components/templates/CreateTemplateDrawer.tsx:524
 #: src/components/templates/CreateTemplateDrawer.tsx:545
@@ -8840,7 +8868,7 @@ msgid "Save"
 msgstr "Desar"
 
 #. placeholder {0}: integration.name
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1012
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1086
 msgid "Save {0} limits"
 msgstr ""
 
@@ -8848,7 +8876,7 @@ msgstr ""
 msgid "Save & Restart"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1875
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1948
 msgid "Save anti-detection settings"
 msgstr ""
 
@@ -8865,7 +8893,7 @@ msgstr "Desar com a bloc nou"
 msgid "Save Block"
 msgstr "Desar bloc"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2443
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2589
 msgid "Save changes"
 msgstr ""
 
@@ -8878,7 +8906,7 @@ msgstr ""
 msgid "Save Changes"
 msgstr "Desar canvis"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1675
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1749
 msgid "Save excluded classes"
 msgstr ""
 
@@ -8886,7 +8914,7 @@ msgstr ""
 msgid "Save for later import"
 msgstr "Desar per importar més tard"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:364
+#: src/components/settings/veridian_cold_outreach_settings.tsx:378
 msgid "Save IMAP inbox"
 msgstr ""
 
@@ -8902,7 +8930,7 @@ msgstr "Desar permisos"
 msgid "Save Segment (Console Log)"
 msgstr "Desar segment (registre de consola)"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1501
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1575
 msgid "Save sending window"
 msgstr ""
 
@@ -8929,6 +8957,8 @@ msgid "Saving settings will restart the server. You will need to sign in again."
 msgstr ""
 
 #: src/components/broadcasts/SendOrScheduleModal.tsx:308
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2397
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2644
 msgid "Schedule"
 msgstr "Programar"
 
@@ -9402,8 +9432,8 @@ msgstr "Enviar prova"
 msgid "Send Test Email"
 msgstr "Enviar correu de prova"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:892
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1668
+#: src/components/settings/veridian_cold_outreach_settings.tsx:945
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1742
 msgid "Send to all (none excluded)"
 msgstr ""
 
@@ -9427,7 +9457,7 @@ msgstr "Nom del remitent"
 msgid "Senders"
 msgstr "Remitents"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1498
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1572
 msgid "Sending 24/7"
 msgstr ""
 
@@ -9435,7 +9465,12 @@ msgstr ""
 msgid "Sending emails..."
 msgstr "Enviant correus..."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2096
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2425
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2673
+msgid "Sending infrastructures"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2204
 msgid "Sending policy presets"
 msgstr ""
 
@@ -9447,19 +9482,19 @@ msgstr ""
 msgid "Sending test webhook..."
 msgstr "Enviant webhook de prova..."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1439
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1513
 msgid "Sending window (business hours)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:904
+#: src/components/settings/veridian_cold_outreach_settings.tsx:957
 msgid "Sending window (this infra)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1427
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1501
 msgid "Sending window saved"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:472
+#: src/components/settings/veridian_cold_outreach_settings.tsx:486
 msgid "Sends from @{senderDomain}"
 msgstr ""
 
@@ -9642,7 +9677,7 @@ msgstr ""
 msgid "Show"
 msgstr "Mostrar"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:814
+#: src/components/settings/veridian_cold_outreach_settings.tsx:867
 msgid "Show all provider classes"
 msgstr ""
 
@@ -9659,11 +9694,11 @@ msgstr "Mostrar detalls"
 msgid "Show More ({0} remaining)"
 msgstr "Mostrar més ({0} restants)"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:818
+#: src/components/settings/veridian_cold_outreach_settings.tsx:871
 msgid "Showing all 11 provider classes (incl. MX-resolved)"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:819
+#: src/components/settings/veridian_cold_outreach_settings.tsx:872
 msgid "Showing the 5 main provider classes"
 msgstr ""
 
@@ -9867,7 +9902,7 @@ msgstr "Títol per compartir a xarxes socials"
 msgid "Solid"
 msgstr "Sòlid"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2136
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2244
 msgid "Some sending integrations have a single sender, so the round-robin across addresses cannot activate for them. Add at least 2 mailboxes per sending integration in Settings → Integrations to spread the volume."
 msgstr ""
 
@@ -9892,7 +9927,7 @@ msgstr "Atributs d'espaiador"
 msgid "SparkPost API Key"
 msgstr "Clau API de SparkPost"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2396
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2542
 msgid "Speed limit: how fast emails go out toward this provider."
 msgstr ""
 
@@ -9912,7 +9947,7 @@ msgstr "El valor estàndard és 480px per a la majoria de clients de correu"
 msgid "Start"
 msgstr "Inici"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2015
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2123
 msgid "Start a new IP/domain: 1 email/day per provider class, low per-mailbox daily volume, business hours only, Microsoft excluded until the IP matures. Round-robin across addresses activates automatically with ≥2 senders."
 msgstr ""
 
@@ -10470,9 +10505,9 @@ msgstr "La difusió continuarà enviant des d'on es va pausar."
 msgid "The broadcast will stop sending and can be resumed later."
 msgstr "La difusió deixarà d'enviar i es pot reprendre més tard."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:692
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1212
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1412
+#: src/components/settings/veridian_cold_outreach_settings.tsx:732
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1286
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1486
 msgid "The closing time must be after the opening time."
 msgstr ""
 
@@ -10491,6 +10526,11 @@ msgstr "El fitxer CSV ha de tenir capçaleres a la primera fila."
 #: src/components/blog/RecentThemesTable.tsx:96
 msgid "The currently published theme will be unpublished automatically."
 msgstr "El tema publicat actualment es despublicarà automàticament."
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2263
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2603
+msgid "The default sending policy applied to every campaign and every sending infrastructure, unless overridden below."
+msgstr ""
 
 #: src/components/settings/Integrations.tsx:1608
 msgid "The email address that will be used as the SMTP user for authentication"
@@ -10597,7 +10637,7 @@ msgstr ""
 msgid "These contacts will be subscribed to the selected list (status: active)."
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2438
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2584
 msgid "These defaults apply when a campaign does not set its own per-class rates or caps. A campaign can still override them from its own settings."
 msgstr ""
 
@@ -10699,7 +10739,7 @@ msgstr "Aquesta notificació està gestionada per una integració i no es pot ca
 msgid "This notification is managed by an integration and the template cannot be changed"
 msgstr "Aquesta notificació està gestionada per una integració i la plantilla no es pot canviar"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2117
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2225
 msgid "This overwrites your current cold outreach values with the preset values. Nothing is saved until you click Save."
 msgstr ""
 
@@ -10798,8 +10838,8 @@ msgstr "Marca de temps"
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:95
 #: src/components/settings/GeneralSettings.tsx:130
 #: src/components/settings/GeneralSettings.tsx:189
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1166
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1175
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1240
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1249
 #: src/pages/ContactsPage.tsx:422
 #: src/pages/ContactsPage.tsx:702
 msgid "Timezone"
@@ -10814,12 +10854,12 @@ msgstr "Zona horària utilitzada per a dates"
 msgid "Timezone:"
 msgstr "Zona horària:"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1806
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1840
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1879
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1913
 msgid "Timing jitter"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:927
+#: src/components/settings/veridian_cold_outreach_settings.tsx:980
 msgid "Timing jitter (this infra)"
 msgstr ""
 
@@ -10853,8 +10893,8 @@ msgid "Title when shared on social media (optional)"
 msgstr "Títol quan es comparteix a xarxes socials (opcional)"
 
 #: src/components/settings/SMTPBridgeSettings.tsx:49
-#: src/components/settings/veridian_cold_outreach_settings.tsx:282
-#: src/components/settings/veridian_cold_outreach_settings.tsx:319
+#: src/components/settings/veridian_cold_outreach_settings.tsx:296
+#: src/components/settings/veridian_cold_outreach_settings.tsx:333
 msgid "TLS"
 msgstr "TLS"
 
@@ -10963,11 +11003,16 @@ msgstr "El seguiment (obertures i clics) ha d'estar habilitat a la configuració
 msgid "Tracking (opens & clicks) should be enabled in your workspace settings to use this feature"
 msgstr "El seguiment (obertures i clics) hauria d'estar habilitat a la configuració de l'espai de treball per utilitzar aquesta funcionalitat"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:427
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2437
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2685
+msgid "Tracking domain"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:441
 msgid "Tracking domain saved"
 msgstr ""
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:445
+#: src/components/settings/veridian_cold_outreach_settings.tsx:459
 msgid "Tracking links (open pixel, click redirects) point to Notifuse by default. For cold outreach, a tracking link on a domain different from your sending domain is an anti-spam signal. Set a custom tracking domain aligned with each sending domain (e.g. send from agences-veridian.fr → track on track.agences-veridian.fr) — it must be a CNAME/A record pointing to Notifuse. Leave empty to fall back to the workspace/global endpoint."
 msgstr ""
 
@@ -11039,7 +11084,7 @@ msgstr "Convertir en"
 msgid "Turn Into"
 msgstr "Convertir en"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1786
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1859
 msgid "Two cold-sending anti-detection levers. Timing jitter spreads the throttle's re-scheduling delay around its nominal value to break the metronomic rhythm that filters use to spot a machine. Content dedup (anti-hash) prevents two emails with an identical rendering (subject + body) from going out to the same provider class within a sliding window. Both default to ON for cold campaigns — leave them on default unless you have a reason to override per sensitive campaign."
 msgstr ""
 
@@ -11086,7 +11131,7 @@ msgstr ""
 msgid "Uncategorized"
 msgstr "Sense categoria"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:341
+#: src/components/settings/veridian_cold_outreach_settings.tsx:355
 msgid "Unchanged"
 msgstr ""
 
@@ -11146,9 +11191,9 @@ msgstr "Segment desconegut"
 msgid "Unknown status"
 msgstr "Estat desconegut"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:854
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2201
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2355
+#: src/components/settings/veridian_cold_outreach_settings.tsx:907
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2288
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2501
 msgid "Unlimited"
 msgstr ""
 
@@ -11421,13 +11466,13 @@ msgstr "Secret del hook d'usuari creat"
 msgid "User Metadata Field"
 msgstr "Camp de metadades d'usuari"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:266
-#: src/components/settings/veridian_cold_outreach_settings.tsx:328
+#: src/components/settings/veridian_cold_outreach_settings.tsx:280
+#: src/components/settings/veridian_cold_outreach_settings.tsx:342
 #: src/components/transactional/ApiCommandModal.tsx:535
 msgid "Username"
 msgstr "Nom d'usuari"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:329
+#: src/components/settings/veridian_cold_outreach_settings.tsx:343
 msgid "Username is required"
 msgstr ""
 
@@ -11482,8 +11527,8 @@ msgstr "Nom de la variant"
 msgid "Variations"
 msgstr "Variacions"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2147
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2289
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2255
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2470
 msgid "Veridian — Cold outreach"
 msgstr ""
 
@@ -11565,7 +11610,7 @@ msgstr ""
 msgid "Visual Email Editor"
 msgstr "Editor visual de correu"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2410
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2556
 msgid "Volume limit: how many emails total toward this provider in a single day."
 msgstr ""
 
@@ -11577,7 +11622,7 @@ msgstr "Durada d'espera"
 msgid "Waiting for server restart..."
 msgstr "Esperant el reinici del servidor..."
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:2005
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2113
 msgid "Warm-up (cautious)"
 msgstr ""
 
@@ -11689,6 +11734,11 @@ msgstr "Benvingut al meu blog on comparteixo reflexions sobre..."
 msgid "Welcome, {0}"
 msgstr ""
 
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2415
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2663
+msgid "What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults."
+msgstr ""
+
 #: src/components/settings/GeneralSettings.tsx:234
 msgid "When enabled, links in the email will be tracked for opens and clicks"
 msgstr "Quan està habilitat, els enllaços del correu es rastrejaran per obertures i clics"
@@ -11761,8 +11811,8 @@ msgstr "amb filtres"
 msgid "with status"
 msgstr "amb estat"
 
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1151
-#: src/components/settings/veridian_cold_outreach_settings.tsx:1161
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1225
+#: src/components/settings/veridian_cold_outreach_settings.tsx:1235
 msgid "Working days"
 msgstr ""
 
@@ -11773,6 +11823,11 @@ msgstr "Espai de treball \"{0}\" creat correctament!"
 
 #: src/pages/CreateWorkspacePage.tsx:143
 msgid "Workspace creation disabled"
+msgstr ""
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2262
+#: src/components/settings/veridian_cold_outreach_settings.tsx:2602
+msgid "Workspace defaults"
 msgstr ""
 
 #: src/components/settings/DeleteWorkspace.tsx:33

@@ -81,16 +81,20 @@ func (r *veridianWorkspacePixelResolver) workspace(ctx context.Context, workspac
 	return ws
 }
 
-// resolveOpenPixel calcule le flag pixel effectif en injectant le workspace
-// mémoïsé. Wrapper fin autour de domain.VeridianResolveOpenPixel pour centraliser
-// le fallback workspace côté senders.
+// resolveOpenPixel calcule le flag pixel effectif en injectant l'INFRA
+// (EmailProvider) ET le workspace mémoïsé. Wrapper fin autour de
+// domain.VeridianResolveOpenPixel pour centraliser la cascade
+// broadcast > infra > workspace > défaut côté senders. provider est l'infra
+// d'envoi (EmailProvider) déjà en main du sender au call-site (comme pour le
+// tracking domain / la rotation) ; nil = pas d'override infra (cascade pré-infra).
 func (r *veridianWorkspacePixelResolver) resolveOpenPixel(
 	ctx context.Context,
 	workspaceID string,
 	contact *domain.Contact,
 	email string,
 	broadcast *domain.Broadcast,
+	provider *domain.EmailProvider,
 ) *bool {
 	ws := r.workspace(ctx, workspaceID)
-	return domain.VeridianResolveOpenPixel(contact, email, broadcast, ws)
+	return domain.VeridianResolveOpenPixel(contact, email, broadcast, provider, ws)
 }

@@ -279,10 +279,11 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	}
 
 	// Veridian fork — pixel d'ouverture par classe (single recipient : contact
-	// non chargé → classification par email si tunnel actif). Fallback workspace
-	// résolu via le pixelResolver (nil-safe sans repo injecté). Cf. queue sender.
+	// non chargé → classification par email si tunnel actif). Cascade broadcast >
+	// INFRA (emailProvider) > workspace (résolu via le pixelResolver, nil-safe
+	// sans repo injecté) > défaut. Cf. queue sender.
 	pixelResolver := newVeridianWorkspacePixelResolver(s.veridianWorkspaceRepo, s.logger)
-	trackingSettings.EnableOpenPixel = pixelResolver.resolveOpenPixel(ctx, workspaceID, nil, email, broadcast)
+	trackingSettings.EnableOpenPixel = pixelResolver.resolveOpenPixel(ctx, workspaceID, nil, email, broadcast, emailProvider)
 
 	// Resolve language variant
 	emailContent := template.ResolveEmailContent(contactLanguage, workspaceDefaultLanguage)
@@ -590,8 +591,9 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, integ
 		// ne sert qu'à BuildTemplateData (variables UTM/unsubscribe), qui n'insère
 		// PAS le pixel — l'insertion réelle se fait dans SendToRecipient ci-dessous,
 		// qui RÉSOUT le pixel avec le fallback workspace. On reste donc sur la
-		// résolution légère sans fetch ici (pas de double GetByID workspace).
-		trackingSettings.EnableOpenPixel = domain.VeridianResolveOpenPixel(contact, contact.Email, broadcast, nil)
+		// résolution légère sans fetch ici (pas de double GetByID workspace) ;
+		// l'infra (emailProvider) est tout de même passée pour cohérence de cascade.
+		trackingSettings.EnableOpenPixel = domain.VeridianResolveOpenPixel(contact, contact.Email, broadcast, emailProvider, nil)
 
 		if broadcast.UTMParameters.Content == "" {
 			broadcast.UTMParameters.Content = templateID

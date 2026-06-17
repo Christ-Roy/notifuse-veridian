@@ -77,6 +77,18 @@ type EmailProvider struct {
 	VeridianProviderClassDailyCap map[string]int     `json:"veridian_provider_class_daily_cap,omitempty"`
 	VeridianPerRecipientDailyCap  int                `json:"veridian_per_recipient_daily_cap,omitempty"`
 
+	// Veridian fork — pixel d'ouverture (email.opened) PAR CLASSE de provider
+	// destinataire, AU NIVEAU INFRA (cold outbound, 2026-06-17). Comme les rates/
+	// caps R2, l'infra d'envoi (cette IP/domaine) peut surcharger la politique
+	// pixel du workspace : p.ex. une IP fraîche coupe le pixel partout le temps du
+	// warm-up, indépendamment du workspace. Map {classe: bool} (true = pixel ON,
+	// false = pixel OFF). Niveau INTERMÉDIAIRE de la cascade (broadcast → INFRA →
+	// workspace → défaut tunnel) : cf. veridian_open_pixel.go (VeridianResolveOpenPixel).
+	// Vide/nil = pas d'override infra → héritage workspace, comportement upstream
+	// strictement inchangé. Persisté dans le JSON blob integrations sans migration
+	// ni allowlist (omitempty).
+	VeridianOpenPixelByClass map[string]bool `json:"veridian_open_pixel_by_class,omitempty"`
+
 	// Veridian fork — plafond JOURNALIER par ADRESSE ÉMETTRICE (warmup IP, cold
 	// outbound). Dimension ÉMETTRICE, distincte des caps ci-dessus qui sont keyés
 	// DESTINATAIRE (par adresse reçue / par classe de provider receveur). Ici :

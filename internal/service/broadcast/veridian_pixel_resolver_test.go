@@ -38,7 +38,7 @@ func TestVeridianWorkspacePixelResolver_NilRepoIsNoFallback(t *testing.T) {
 	r := newVeridianWorkspacePixelResolver(nil, pixelTestLogger(ctrl))
 
 	got := r.resolveOpenPixel(context.Background(), "ws-1",
-		&domain.Contact{Email: "jean@gmail.com"}, "jean@gmail.com", &domain.Broadcast{})
+		&domain.Contact{Email: "jean@gmail.com"}, "jean@gmail.com", &domain.Broadcast{}, nil)
 	assert.Nil(t, got, "sans repo et hors tunnel : nil (comportement upstream)")
 
 	// workspace() doit retourner nil sans jamais paniquer ni fetcher.
@@ -71,7 +71,7 @@ func TestVeridianWorkspacePixelResolver_WorkspaceFallbackApplied(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		got := r.resolveOpenPixel(context.Background(), "ws-1",
-			&domain.Contact{Email: "x@orange.fr"}, "x@orange.fr", &domain.Broadcast{})
+			&domain.Contact{Email: "x@orange.fr"}, "x@orange.fr", &domain.Broadcast{}, nil)
 		require.NotNil(t, got, "tunnel actif via override workspace → non-nil")
 		assert.False(t, *got, "override workspace freemail_fr=false doit s'appliquer")
 	}
@@ -95,9 +95,33 @@ func TestVeridianWorkspacePixelResolver_BroadcastPrimesOverWorkspace(t *testing.
 		domain.VeridianOpenPixelByClassMetadataKey: map[string]any{"freemail_fr": true},
 	}}
 	got := r.resolveOpenPixel(context.Background(), "ws-1",
-		&domain.Contact{Email: "x@orange.fr"}, "x@orange.fr", b)
+		&domain.Contact{Email: "x@orange.fr"}, "x@orange.fr", b, nil)
 	require.NotNil(t, got)
 	assert.True(t, *got, "broadcast metadata doit primer sur le workspace")
+}
+
+func TestVeridianWorkspacePixelResolver_InfraPrimesOverWorkspace(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	ws := &domain.Workspace{
+		ID:       "ws-1",
+		Settings: domain.WorkspaceSettings{VeridianOpenPixelByClass: map[string]bool{"freemail_fr": true}},
+	}
+	repo.EXPECT().GetByID(gomock.Any(), "ws-1").Return(ws, nil).Times(1)
+
+	r := newVeridianWorkspacePixelResolver(repo, pixelTestLogger(ctrl))
+
+	// L'infra (EmailProvider) force OFF sur freemail_fr : doit primer sur le
+	// workspace ON. Prouve que le niveau INFRA est bien câblé côté sender.
+	infra := &domain.EmailProvider{
+		VeridianOpenPixelByClass: map[string]bool{"freemail_fr": false},
+	}
+	got := r.resolveOpenPixel(context.Background(), "ws-1",
+		&domain.Contact{Email: "x@orange.fr"}, "x@orange.fr", &domain.Broadcast{}, infra)
+	require.NotNil(t, got)
+	assert.False(t, *got, "infra OFF doit primer sur le workspace ON")
 }
 
 func TestVeridianWorkspacePixelResolver_FetchErrorDegradesToDefault(t *testing.T) {
@@ -114,7 +138,7 @@ func TestVeridianWorkspacePixelResolver_FetchErrorDegradesToDefault(t *testing.T
 	// Tunnel actif via tag contact freemail_fr → défaut tunnel = ON, malgré
 	// l'échec du fetch workspace.
 	c := &domain.Contact{Email: "x@orange.fr", CustomString5: &domain.NullableString{String: "freemail_fr"}}
-	got := r.resolveOpenPixel(context.Background(), "ws-1", c, "x@orange.fr", &domain.Broadcast{})
+	got := r.resolveOpenPixel(context.Background(), "ws-1", c, "x@orange.fr", &domain.Broadcast{}, nil)
 	require.NotNil(t, got, "tunnel actif (tag) → non-nil même si fetch workspace échoue")
 	assert.True(t, *got, "défaut tunnel freemail_fr=ON appliqué malgré fetch KO")
 

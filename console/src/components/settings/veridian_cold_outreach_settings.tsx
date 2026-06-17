@@ -30,7 +30,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { App, Alert, Button, Card, Col, Divider, Form, Input, InputNumber, Popconfirm, Row, Select, Space, Switch, Tag, Tooltip, Typography } from 'antd'
+import { App, Alert, Button, Card, Col, Collapse, Form, Input, InputNumber, Popconfirm, Row, Select, Space, Switch, Tag, Tooltip, Typography } from 'antd'
 import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, InfoCircleOutlined, InboxOutlined, LinkOutlined, RocketOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
@@ -130,6 +130,20 @@ function effectivePixel(
 ): boolean {
   if (configured && c in configured) return configured[c]
   return VERIDIAN_DEFAULT_OPEN_PIXEL[c]
+}
+
+// Pixel PAR INFRA, tri-état (comme l'anti-hash) : `undefined` = héritage
+// (workspace puis défaut tunnel), `true`/`false` = override infra explicite.
+// Un Select 3-états rend la sémantique lisible ; un Switch 2-états collapserait
+// héritage et OFF (même piège que le jitter *float64 / l'anti-hash *bool).
+type PixelTriState = 'inherit' | 'on' | 'off'
+function pixelToState(value: boolean | undefined): PixelTriState {
+  if (value === undefined) return 'inherit'
+  return value ? 'on' : 'off'
+}
+function pixelFromState(state: PixelTriState): boolean | undefined {
+  if (state === 'inherit') return undefined
+  return state === 'on'
 }
 
 // ── Boîte IMAP de retour (self-service) ───────────────────────────────────────
@@ -553,6 +567,11 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
       {
         rates: Partial<Record<VeridianProviderClass, number>>
         caps: Partial<Record<VeridianProviderClass, number>>
+        // Override pixel par classe DEPUIS cette infra : tri-état PAR CLASSE.
+        // Une clé présente = pixel forcé (true/false) au niveau infra ; absente
+        // = héritage workspace (puis défaut tunnel). On ne stocke QUE les classes
+        // explicitement surchargées (pas les 11 d'office) pour rester additif.
+        pixels: Partial<Record<VeridianProviderClass, boolean>>
         perRecipient?: number
         perSender?: number
         excluded?: VeridianProviderClass[]
@@ -585,6 +604,17 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
     const d = drafts[integ.id]
     if (d && c in d.caps) return d.caps[c]
     return integ.email_provider.veridian_provider_class_daily_cap?.[c]
+  }
+  // Pixel d'ouverture PAR INFRA, tri-état PAR CLASSE :
+  //   undefined = héritage workspace (puis défaut tunnel)
+  //   true/false = override infra explicite
+  const pixelVal = (
+    integ: Integration & { email_provider: EmailProvider },
+    c: VeridianProviderClass
+  ): boolean | undefined => {
+    const d = drafts[integ.id]
+    if (d && c in d.pixels) return d.pixels[c]
+    return integ.email_provider.veridian_open_pixel_by_class?.[c]
   }
   const perRecipVal = (
     integ: Integration & { email_provider: EmailProvider }
@@ -641,48 +671,58 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
 
   const setRate = (id: string, c: VeridianProviderClass, v: number | null) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       return { ...prev, [id]: { ...cur, rates: { ...cur.rates, [c]: v ?? 0 } } }
     })
   const setCap = (id: string, c: VeridianProviderClass, v: number | null) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       return { ...prev, [id]: { ...cur, caps: { ...cur.caps, [c]: v ?? 0 } } }
+    })
+  // Pose un override pixel infra pour une classe : `undefined` = retour à
+  // l'héritage (on retire la clé), sinon true/false = override explicite.
+  const setPixel = (id: string, c: VeridianProviderClass, v: boolean | undefined) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
+      const nextPixels = { ...cur.pixels }
+      if (v === undefined) delete nextPixels[c]
+      else nextPixels[c] = v
+      return { ...prev, [id]: { ...cur, pixels: nextPixels } }
     })
   const setPerRecip = (id: string, v: number | null) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       return { ...prev, [id]: { ...cur, perRecipient: v ?? 0 } }
     })
   const setPerSender = (id: string, v: number | null) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       return { ...prev, [id]: { ...cur, perSender: v ?? 0 } }
     })
   const setExcluded = (id: string, v: VeridianProviderClass[]) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       return { ...prev, [id]: { ...cur, excluded: v } }
     })
   const setWindow = (id: string, v: VeridianSendingWindow | null) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       return { ...prev, [id]: { ...cur, window: v } }
     })
   const setJitter = (id: string, v: number | undefined) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       // `null` en draft = édité à "héritage" (≠ non touché).
       return { ...prev, [id]: { ...cur, jitterPct: v === undefined ? null : v } }
     })
   const setAntiHashEnabled = (id: string, v: boolean | undefined) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       return { ...prev, [id]: { ...cur, antiHashEnabled: v === undefined ? null : v } }
     })
   const setAntiHashWindow = (id: string, v: number | undefined) =>
     setDrafts((prev) => {
-      const cur = prev[id] || { rates: {}, caps: {} }
+      const cur = prev[id] || { rates: {}, caps: {}, pixels: {} }
       return { ...prev, [id]: { ...cur, antiHashWindowHours: v === undefined ? null : v } }
     })
 
@@ -699,11 +739,17 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
       // pour cette classe → on omet la clé, non-régression backend).
       const nextRates: Partial<Record<VeridianProviderClass, number>> = {}
       const nextCaps: Partial<Record<VeridianProviderClass, number>> = {}
+      // Pixel infra : on ne pose QUE les classes explicitement surchargées
+      // (true/false). Une classe laissée en "héritage" (undefined) n'écrit AUCUNE
+      // clé → la cascade retombe sur le workspace puis le défaut tunnel.
+      const nextPixels: Partial<Record<VeridianProviderClass, boolean>> = {}
       for (const c of VERIDIAN_PROVIDER_CLASSES) {
         const r = rateVal(integration, c)
         if (typeof r === 'number' && r > 0) nextRates[c] = r
         const cap = capVal(integration, c)
         if (typeof cap === 'number' && cap > 0) nextCaps[c] = Math.floor(cap)
+        const px = pixelVal(integration, c)
+        if (typeof px === 'boolean') nextPixels[c] = px
       }
       const recip = perRecipVal(integration)
       const nextRecipient = typeof recip === 'number' && recip > 0 ? Math.floor(recip) : undefined
@@ -747,7 +793,11 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
         veridian_sending_window: nextWindow,
         veridian_jitter_pct: nextJitter,
         veridian_anti_hash_enabled: nextAntiHashEnabled,
-        veridian_anti_hash_window_hours: nextAntiHashWindow
+        veridian_anti_hash_window_hours: nextAntiHashWindow,
+        veridian_open_pixel_by_class:
+          Object.keys(nextPixels).length > 0
+            ? (nextPixels as Record<VeridianProviderClass, boolean>)
+            : undefined
       }
 
       await workspaceService.updateIntegration({
@@ -784,8 +834,11 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
       <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>
         {t`Rates and daily caps set above apply at the workspace level (fallback). Each sending infrastructure (an email integration: its IP / SMTP relay + senders) can carry its OWN limits that override the workspace — essential during IP warm-up, where a fresh IP must crawl while the rest of the workspace runs faster. Leave a field empty for no per-class limit on that infra (the workspace value, then the campaign value, still apply).`}
       </Paragraph>
-      <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+      <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>
         {t`In cold mode, if an infra has several sending addresses, Notifuse alternates them automatically per recipient provider (round-robin) — so the effective capacity is rate/min × number of addresses. Add or remove sending addresses in Settings → Integrations.`}
+      </Paragraph>
+      <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+        {t`Every lever below can either INHERIT the workspace default or OVERRIDE it for this infrastructure only. The open-tracking pixel is per class: "Inherit" follows the workspace policy (then the tunnel default), "On"/"Off" forces it for this infra — useful to cut the pixel everywhere on a brand-new IP during warm-up.`}
       </Paragraph>
     </>
   )
@@ -954,24 +1007,30 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
                 </Col>
               </Row>
 
-              {/* Grille rate/cap par classe. Compacte : libellé + 2 champs. */}
+              {/* Grille rate/cap/pixel par classe. Compacte : libellé + 3 champs.
+                  Le pixel est un tri-état PAR INFRA (Inherit / On / Off) : Inherit
+                  = on suit le workspace (puis le défaut tunnel), On/Off = override
+                  infra explicite pour cette classe. */}
               <Row gutter={[8, 4]} style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>
-                <Col xs={12} sm={12}>
+                <Col xs={10} sm={10}>
                   <Text type="secondary" style={{ fontSize: 11 }}>{t`Provider class`}</Text>
                 </Col>
-                <Col xs={6} sm={6}>
+                <Col xs={5} sm={5}>
                   <Text type="secondary" style={{ fontSize: 11 }}>{t`Rate /min`}</Text>
                 </Col>
-                <Col xs={6} sm={6}>
+                <Col xs={4} sm={4}>
                   <Text type="secondary" style={{ fontSize: 11 }}>{t`Cap /day`}</Text>
+                </Col>
+                <Col xs={5} sm={5}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>{t`Open pixel`}</Text>
                 </Col>
               </Row>
               {visibleClasses.map((c) => (
                 <Row key={c} gutter={[8, 4]} align="middle" style={{ marginBottom: 4 }}>
-                  <Col xs={12} sm={12}>
+                  <Col xs={10} sm={10}>
                     <Text style={{ fontSize: 12 }}>{classLabel(c)}</Text>
                   </Col>
-                  <Col xs={6} sm={6}>
+                  <Col xs={5} sm={5}>
                     <InputNumber
                       min={0}
                       step={0.5}
@@ -984,7 +1043,7 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
                       aria-label={`rate ${c} ${integration.name}`}
                     />
                   </Col>
-                  <Col xs={6} sm={6}>
+                  <Col xs={4} sm={4}>
                     <InputNumber
                       min={0}
                       step={1}
@@ -996,6 +1055,21 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
                       size="small"
                       style={{ width: '100%' }}
                       aria-label={`cap ${c} ${integration.name}`}
+                    />
+                  </Col>
+                  <Col xs={5} sm={5}>
+                    <Select<PixelTriState>
+                      value={pixelToState(pixelVal(integration, c))}
+                      onChange={(s) => setPixel(integration.id, c, pixelFromState(s))}
+                      disabled={!isOwner}
+                      size="small"
+                      style={{ width: '100%' }}
+                      options={[
+                        { value: 'inherit', label: t`Inherit` },
+                        { value: 'on', label: t`On` },
+                        { value: 'off', label: t`Off` }
+                      ]}
+                      aria-label={`pixel ${c} ${integration.name}`}
                     />
                   </Col>
                 </Row>
@@ -1725,7 +1799,6 @@ function JitterAntiHashCard({
     setJitter(workspace.settings.veridian_jitter_pct)
     setAntiHash(workspace.settings.veridian_anti_hash_enabled)
     setAntiHashWindow(workspace.settings.veridian_anti_hash_window_hours)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync sur les valeurs persistées
   }, [
     workspace.id,
     workspace.settings.veridian_jitter_pct,
@@ -1875,6 +1948,41 @@ function JitterAntiHashCard({
         {t`Save anti-detection settings`}
       </Button>
     </Card>
+  )
+}
+
+// Bannière de SCOPE — sépare visuellement les deux niveaux de la config :
+//   (a) « Workspace defaults » : la politique par défaut de TOUT le workspace.
+//   (b) « Per-infrastructure overrides » : ce que CHAQUE infra d'envoi surcharge.
+// L'admin doit comprendre en un coup d'œil « ça c'est mon défaut, ça c'est ce que
+// cette IP-là surcharge ». Composant purement visuel (titre + sous-titre).
+function ScopeBanner({
+  title,
+  subtitle,
+  color
+}: {
+  title: string
+  subtitle: string
+  color: string
+}) {
+  return (
+    <div
+      style={{
+        borderLeft: `3px solid ${color}`,
+        paddingLeft: 12,
+        marginBottom: 16,
+        marginTop: 8
+      }}
+    >
+      <Text strong style={{ fontSize: 15 }}>
+        {title}
+      </Text>
+      <div>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {subtitle}
+        </Text>
+      </div>
+    </div>
   )
 }
 
@@ -2149,135 +2257,208 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
         />
         {explainer}
 
+        {/* SCOPE 1 — Politique par défaut du workspace (lecture seule). */}
+        <ScopeBanner
+          title={t`Workspace defaults`}
+          subtitle={t`The default sending policy applied to every campaign and every sending infrastructure, unless overridden below.`}
+          color="#1677ff"
+        />
+        <Collapse
+          defaultActiveKey={['rate-volume', 'reputation', 'schedule']}
+          className="!mb-6"
+          items={[
+            {
+              key: 'rate-volume',
+              forceRender: true,
+              label: t`Rate & volume`,
+              children: (
+                <>
+                  <Card size="small" className="!mb-4">
+                    <Row gutter={[16, 8]} align="middle" wrap>
+                      <Col xs={24} sm={12}>
+                        <Text strong>{t`Per-recipient daily cap`}</Text>
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t`Max emails toward a single address per day (anti-harassment).`}
+                          </Text>
+                        </div>
+                        {perRecipientCap && perRecipientCap > 0 ? (
+                          <Text>{t`${perRecipientCap} / day`}</Text>
+                        ) : (
+                          <Text type="secondary">{t`Unlimited`}</Text>
+                        )}
+                      </Col>
+                      <Col xs={24} sm={12}>
+                        <Text strong>{t`Per-sender daily cap (warmup)`}</Text>
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t`Max emails sent FROM a single address per day (IP warmup).`}
+                          </Text>
+                        </div>
+                        {perSenderCap && perSenderCap > 0 ? (
+                          <Text>{t`${perSenderCap} / day`}</Text>
+                        ) : (
+                          <Text type="secondary">{t`No cap`}</Text>
+                        )}
+                      </Col>
+                    </Row>
+                  </Card>
+
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    {VERIDIAN_PROVIDER_CLASSES.map((c) => {
+                      const rate = rates?.[c]
+                      const cap = dailyCaps?.[c]
+                      const pixelOn = effectivePixel(pixels, c)
+                      return (
+                        <Card key={c} size="small">
+                          <Row gutter={[16, 12]} align="middle" wrap>
+                            <Col xs={24} sm={8}>
+                              <Space size="small" wrap>
+                                <Text strong>{classLabel(c)}</Text>
+                                {contactBadge(c)}
+                              </Space>
+                            </Col>
+                            <Col xs={8} sm={5}>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {t`Rate`}
+                              </Text>
+                              <div>
+                                {rate ? (
+                                  <Text>{t`${rate} / min`}</Text>
+                                ) : (
+                                  <Text type="secondary">{t`No throttle`}</Text>
+                                )}
+                              </div>
+                            </Col>
+                            <Col xs={8} sm={5}>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {t`Daily cap`}
+                              </Text>
+                              <div>
+                                {cap ? (
+                                  <Text>{t`${cap} / day`}</Text>
+                                ) : (
+                                  <Text type="secondary">{t`No cap`}</Text>
+                                )}
+                              </div>
+                            </Col>
+                            <Col xs={8} sm={6}>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {t`Open pixel`}
+                              </Text>
+                              <div>
+                                {pixelOn ? (
+                                  <Text style={{ color: '#52c41a' }}>
+                                    <CheckCircleFilled style={{ marginRight: 6 }} />
+                                    {t`On`}
+                                  </Text>
+                                ) : (
+                                  <Text type="secondary">
+                                    <CloseCircleFilled style={{ marginRight: 6 }} />
+                                    {t`Off`}
+                                  </Text>
+                                )}
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+                      )
+                    })}
+                  </Space>
+                </>
+              )
+            },
+            workspace
+              ? {
+                  key: 'reputation',
+                  forceRender: true,
+                  label: t`Reputation`,
+                  children: (
+                    <>
+                      <JitterAntiHashCard
+                        workspace={workspace}
+                        isOwner={isOwner}
+                        onWorkspaceUpdate={onWorkspaceUpdate}
+                      />
+                      <ExcludedClassesCard
+                        workspace={workspace}
+                        isOwner={isOwner}
+                        onWorkspaceUpdate={onWorkspaceUpdate}
+                        contactCount={contactCount}
+                      />
+                    </>
+                  )
+                }
+              : null,
+            workspace
+              ? {
+                  key: 'schedule',
+                  forceRender: true,
+                  label: t`Schedule`,
+                  children: (
+                    <SendingWindowCard
+                      workspace={workspace}
+                      isOwner={isOwner}
+                      onWorkspaceUpdate={onWorkspaceUpdate}
+                    />
+                  )
+                }
+              : null
+          ].filter((p): p is NonNullable<typeof p> => p !== null)}
+        />
+
+        {/* SCOPE 2 — Surcharges par infrastructure d'envoi (lecture seule). */}
         {workspace && (
           <>
-            <IMAPInboxCard
-              workspace={workspace}
-              isOwner={isOwner}
-              onWorkspaceUpdate={onWorkspaceUpdate}
+            <ScopeBanner
+              title={t`Per-infrastructure overrides`}
+              subtitle={t`What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults.`}
+              color="#52c41a"
             />
-            <TrackingDomainCard
-              workspace={workspace}
-              isOwner={isOwner}
-              onWorkspaceUpdate={onWorkspaceUpdate}
+            <Collapse
+              defaultActiveKey={['infra-limits', 'tracking', 'inbox']}
+              className="!mb-6"
+              items={[
+                {
+                  key: 'infra-limits',
+                  forceRender: true,
+                  label: t`Sending infrastructures`,
+                  children: (
+                    <InfraLimitsCard
+                      workspace={workspace}
+                      isOwner={isOwner}
+                      onWorkspaceUpdate={onWorkspaceUpdate}
+                    />
+                  )
+                },
+                {
+                  key: 'tracking',
+                  forceRender: true,
+                  label: t`Tracking domain`,
+                  children: (
+                    <TrackingDomainCard
+                      workspace={workspace}
+                      isOwner={isOwner}
+                      onWorkspaceUpdate={onWorkspaceUpdate}
+                    />
+                  )
+                },
+                {
+                  key: 'inbox',
+                  forceRender: true,
+                  label: t`Reply & bounce inbox`,
+                  children: (
+                    <IMAPInboxCard
+                      workspace={workspace}
+                      isOwner={isOwner}
+                      onWorkspaceUpdate={onWorkspaceUpdate}
+                    />
+                  )
+                }
+              ]}
             />
-            <InfraLimitsCard
-              workspace={workspace}
-              isOwner={isOwner}
-              onWorkspaceUpdate={onWorkspaceUpdate}
-            />
-            <SendingWindowCard
-              workspace={workspace}
-              isOwner={isOwner}
-              onWorkspaceUpdate={onWorkspaceUpdate}
-            />
-            <ExcludedClassesCard
-              workspace={workspace}
-              isOwner={isOwner}
-              onWorkspaceUpdate={onWorkspaceUpdate}
-              contactCount={contactCount}
-            />
-            <JitterAntiHashCard
-              workspace={workspace}
-              isOwner={isOwner}
-              onWorkspaceUpdate={onWorkspaceUpdate}
-            />
-            <Divider />
           </>
         )}
-
-        <Card size="small" className="!mb-4">
-          <Row gutter={[16, 8]} align="middle" wrap>
-            <Col xs={24} sm={12}>
-              <Text strong>{t`Per-recipient daily cap`}</Text>
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t`Max emails toward a single address per day (anti-harassment).`}
-                </Text>
-              </div>
-              {perRecipientCap && perRecipientCap > 0 ? (
-                <Text>{t`${perRecipientCap} / day`}</Text>
-              ) : (
-                <Text type="secondary">{t`Unlimited`}</Text>
-              )}
-            </Col>
-            <Col xs={24} sm={12}>
-              <Text strong>{t`Per-sender daily cap (warmup)`}</Text>
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t`Max emails sent FROM a single address per day (IP warmup).`}
-                </Text>
-              </div>
-              {perSenderCap && perSenderCap > 0 ? (
-                <Text>{t`${perSenderCap} / day`}</Text>
-              ) : (
-                <Text type="secondary">{t`No cap`}</Text>
-              )}
-            </Col>
-          </Row>
-        </Card>
-
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          {VERIDIAN_PROVIDER_CLASSES.map((c) => {
-            const rate = rates?.[c]
-            const cap = dailyCaps?.[c]
-            const pixelOn = effectivePixel(pixels, c)
-            return (
-              <Card key={c} size="small">
-                <Row gutter={[16, 12]} align="middle" wrap>
-                  <Col xs={24} sm={8}>
-                    <Space size="small" wrap>
-                      <Text strong>{classLabel(c)}</Text>
-                      {contactBadge(c)}
-                    </Space>
-                  </Col>
-                  <Col xs={8} sm={5}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {t`Rate`}
-                    </Text>
-                    <div>
-                      {rate ? (
-                        <Text>{t`${rate} / min`}</Text>
-                      ) : (
-                        <Text type="secondary">{t`No throttle`}</Text>
-                      )}
-                    </div>
-                  </Col>
-                  <Col xs={8} sm={5}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {t`Daily cap`}
-                    </Text>
-                    <div>
-                      {cap ? (
-                        <Text>{t`${cap} / day`}</Text>
-                      ) : (
-                        <Text type="secondary">{t`No cap`}</Text>
-                      )}
-                    </div>
-                  </Col>
-                  <Col xs={8} sm={6}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {t`Open pixel`}
-                    </Text>
-                    <div>
-                      {pixelOn ? (
-                        <Text style={{ color: '#52c41a' }}>
-                          <CheckCircleFilled style={{ marginRight: 6 }} />
-                          {t`On`}
-                        </Text>
-                      ) : (
-                        <Text type="secondary">
-                          <CloseCircleFilled style={{ marginRight: 6 }} />
-                          {t`Off`}
-                        </Text>
-                      )}
-                    </div>
-                  </Col>
-                </Row>
-              </Card>
-            )
-          })}
-        </Space>
       </>
     )
   }
@@ -2292,161 +2473,243 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
       {explainer}
       {presetCard}
 
-      {workspace && (
-        <>
-          <IMAPInboxCard
-            workspace={workspace}
-            isOwner={isOwner}
-            onWorkspaceUpdate={onWorkspaceUpdate}
-          />
-          <TrackingDomainCard
-            workspace={workspace}
-            isOwner={isOwner}
-            onWorkspaceUpdate={onWorkspaceUpdate}
-          />
-          <InfraLimitsCard
-            workspace={workspace}
-            isOwner={isOwner}
-            onWorkspaceUpdate={onWorkspaceUpdate}
-          />
-          <SendingWindowCard
-            workspace={workspace}
-            isOwner={isOwner}
-            onWorkspaceUpdate={onWorkspaceUpdate}
-            presetSignal={presetSignal}
-          />
-          <ExcludedClassesCard
-            workspace={workspace}
-            isOwner={isOwner}
-            onWorkspaceUpdate={onWorkspaceUpdate}
-            contactCount={contactCount}
-            presetSignal={presetSignal}
-          />
-          <JitterAntiHashCard
-            workspace={workspace}
-            isOwner={isOwner}
-            onWorkspaceUpdate={onWorkspaceUpdate}
-            presetSignal={presetSignal}
-          />
-          <Divider />
-        </>
-      )}
+      {/* La grille rate/cap/pixel + caps globaux vit dans UN Form (state partagé).
+          On l'extrait pour la placer dans le panneau "Rate & volume" du Collapse,
+          sans la couper en deux (le Form doit rester contigu). */}
+      {(() => {
+        const rateVolumeForm = (
+          <Form form={form} layout="vertical" onFinish={handleSave} onValuesChange={() => setTouched(true)}>
+            {/* Caps globaux — en tête, hors carte de classe. Destinataire (anti-
+                harcèlement) + émetteur (warmup IP), deux dimensions indépendantes. */}
+            <Card size="small" className="!mb-4">
+              <Row gutter={[24, 12]} align="bottom" wrap>
+                <Col xs={24} md={12}>
+                  <div style={{ marginBottom: 8 }}>
+                    <Text strong>{t`Per-recipient daily cap`}</Text>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {t`Max emails toward a single address per day — protects a contact from being harassed across campaigns. Leave empty (0) for unlimited.`}
+                      </Text>
+                    </div>
+                  </div>
+                  <Form.Item
+                    name={PER_RECIPIENT_FIELD}
+                    label={t`Emails / recipient / day`}
+                    style={{ marginBottom: 0 }}
+                    tooltip={t`Hard daily limit per email address, all classes combined. Counted from message history since midnight. 0 or empty = unlimited.`}
+                  >
+                    <InputNumber min={0} step={1} precision={0} placeholder={t`Unlimited`} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <div style={{ marginBottom: 8 }}>
+                    <Text strong>{t`Per-sender daily cap (warmup)`}</Text>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {t`Max emails sent FROM a single sending address per day — the classic IP/domain warmup limit. Each mailbox ramps its own volume. Leave empty (0) for no sender limit.`}
+                      </Text>
+                    </div>
+                  </div>
+                  <Form.Item
+                    name={PER_SENDER_FIELD}
+                    label={t`Emails / sender / day`}
+                    style={{ marginBottom: 0 }}
+                    tooltip={t`Hard daily limit per SENDING address (FROM), counted from message history since midnight (V53). Distinct from recipient caps: this caps how much each mailbox emits, for IP/domain warmup. 0 or empty = no sender cap. Can also be set per sending integration in the infra card above.`}
+                  >
+                    <InputNumber min={0} step={1} precision={0} placeholder={t`No cap`} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
 
-      <Form form={form} layout="vertical" onFinish={handleSave} onValuesChange={() => setTouched(true)}>
-        {/* Caps globaux — en tête, hors carte de classe. Destinataire (anti-
-            harcèlement) + émetteur (warmup IP), deux dimensions indépendantes. */}
-        <Card size="small" className="!mb-4">
-          <Row gutter={[24, 12]} align="bottom" wrap>
-            <Col xs={24} md={12}>
-              <div style={{ marginBottom: 8 }}>
-                <Text strong>{t`Per-recipient daily cap`}</Text>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {t`Max emails toward a single address per day — protects a contact from being harassed across campaigns. Leave empty (0) for unlimited.`}
-                  </Text>
-                </div>
-              </div>
-              <Form.Item
-                name={PER_RECIPIENT_FIELD}
-                label={t`Emails / recipient / day`}
-                style={{ marginBottom: 0 }}
-                tooltip={t`Hard daily limit per email address, all classes combined. Counted from message history since midnight. 0 or empty = unlimited.`}
-              >
-                <InputNumber min={0} step={1} precision={0} placeholder={t`Unlimited`} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <div style={{ marginBottom: 8 }}>
-                <Text strong>{t`Per-sender daily cap (warmup)`}</Text>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {t`Max emails sent FROM a single sending address per day — the classic IP/domain warmup limit. Each mailbox ramps its own volume. Leave empty (0) for no sender limit.`}
-                  </Text>
-                </div>
-              </div>
-              <Form.Item
-                name={PER_SENDER_FIELD}
-                label={t`Emails / sender / day`}
-                style={{ marginBottom: 0 }}
-                tooltip={t`Hard daily limit per SENDING address (FROM), counted from message history since midnight (V53). Distinct from recipient caps: this caps how much each mailbox emits, for IP/domain warmup. 0 or empty = no sender cap. Can also be set per sending integration in the infra card above.`}
-              >
-                <InputNumber min={0} step={1} precision={0} placeholder={t`No cap`} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              {VERIDIAN_PROVIDER_CLASSES.map((c) => {
+                const isBig = BIG_PROVIDERS.includes(c)
+                return (
+                  <Card key={c} size="small">
+                    <Row gutter={[24, 8]} align="bottom" wrap>
+                      <Col xs={24} sm={24} md={7} style={{ display: 'flex', alignItems: 'center' }}>
+                        <Space size="small" wrap>
+                          <Text strong>{classLabel(c)}</Text>
+                          {contactBadge(c)}
+                          {isBig && <Tag color="orange">{t`pixel OFF by default`}</Tag>}
+                        </Space>
+                      </Col>
+                      <Col xs={12} sm={8} md={5}>
+                        <Form.Item
+                          name={rateField(c)}
+                          label={
+                            <Tooltip title={t`Speed limit: how fast emails go out toward this provider.`}>
+                              <span>{t`Rate (emails/min)`}</span>
+                            </Tooltip>
+                          }
+                          style={{ marginBottom: 0 }}
+                          tooltip={t`Maximum emails per MINUTE toward this provider (SPEED). Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class rate.`}
+                        >
+                          <InputNumber min={0} step={0.5} placeholder={t`No throttle`} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={12} sm={8} md={6}>
+                        <Form.Item
+                          name={capField(c)}
+                          label={
+                            <Tooltip title={t`Volume limit: how many emails total toward this provider in a single day.`}>
+                              <span>{t`Daily cap (emails/day)`}</span>
+                            </Tooltip>
+                          }
+                          style={{ marginBottom: 0 }}
+                          tooltip={t`Maximum emails per DAY toward this provider (VOLUME), counted since midnight from message history. Use this to express "1 email/day" which a per-minute rate cannot. Leave empty for no daily cap.`}
+                        >
+                          <InputNumber min={0} step={1} precision={0} placeholder={t`No cap`} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={12} sm={8} md={6}>
+                        <Form.Item
+                          name={pixelField(c)}
+                          label={t`Open pixel`}
+                          valuePropName="checked"
+                          style={{ marginBottom: 0 }}
+                          tooltip={t`Open-tracking pixel for this provider class. Default: ON for smaller providers, OFF for Google/Microsoft to protect deliverability.`}
+                        >
+                          <Switch checkedChildren={t`On`} unCheckedChildren={t`Off`} />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </Card>
+                )
+              })}
+            </Space>
 
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          {VERIDIAN_PROVIDER_CLASSES.map((c) => {
-            const isBig = BIG_PROVIDERS.includes(c)
-            return (
-              <Card key={c} size="small">
-                <Row gutter={[24, 8]} align="bottom" wrap>
-                  <Col xs={24} sm={24} md={7} style={{ display: 'flex', alignItems: 'center' }}>
-                    <Space size="small" wrap>
-                      <Text strong>{classLabel(c)}</Text>
-                      {contactBadge(c)}
-                      {isBig && <Tag color="orange">{t`pixel OFF by default`}</Tag>}
-                    </Space>
-                  </Col>
-                  <Col xs={12} sm={8} md={5}>
-                    <Form.Item
-                      name={rateField(c)}
-                      label={
-                        <Tooltip title={t`Speed limit: how fast emails go out toward this provider.`}>
-                          <span>{t`Rate (emails/min)`}</span>
-                        </Tooltip>
-                      }
-                      style={{ marginBottom: 0 }}
-                      tooltip={t`Maximum emails per MINUTE toward this provider (SPEED). Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class rate.`}
-                    >
-                      <InputNumber min={0} step={0.5} placeholder={t`No throttle`} style={{ width: '100%' }} />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={12} sm={8} md={6}>
-                    <Form.Item
-                      name={capField(c)}
-                      label={
-                        <Tooltip title={t`Volume limit: how many emails total toward this provider in a single day.`}>
-                          <span>{t`Daily cap (emails/day)`}</span>
-                        </Tooltip>
-                      }
-                      style={{ marginBottom: 0 }}
-                      tooltip={t`Maximum emails per DAY toward this provider (VOLUME), counted since midnight from message history. Use this to express "1 email/day" which a per-minute rate cannot. Leave empty for no daily cap.`}
-                    >
-                      <InputNumber min={0} step={1} precision={0} placeholder={t`No cap`} style={{ width: '100%' }} />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={12} sm={8} md={6}>
-                    <Form.Item
-                      name={pixelField(c)}
-                      label={t`Open pixel`}
-                      valuePropName="checked"
-                      style={{ marginBottom: 0 }}
-                      tooltip={t`Open-tracking pixel for this provider class. Default: ON for smaller providers, OFF for Google/Microsoft to protect deliverability.`}
-                    >
-                      <Switch checkedChildren={t`On`} unCheckedChildren={t`Off`} />
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </Card>
-            )
-          })}
-        </Space>
+            <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 16 }}>
+              {t`These defaults apply when a campaign does not set its own per-class rates or caps. A campaign can still override them from its own settings.`}
+            </Paragraph>
 
-        <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 16 }}>
-          {t`These defaults apply when a campaign does not set its own per-class rates or caps. A campaign can still override them from its own settings.`}
-        </Paragraph>
+            <Space style={{ marginTop: 16 }}>
+              <Button type="primary" htmlType="submit" loading={saving} disabled={!touched}>
+                {t`Save changes`}
+              </Button>
+              <Button type="text" onClick={resetPixelsToDefault} disabled={saving}>
+                {t`Reset pixel to defaults`}
+              </Button>
+            </Space>
+          </Form>
+        )
 
-        <Space style={{ marginTop: 16 }}>
-          <Button type="primary" htmlType="submit" loading={saving} disabled={!touched}>
-            {t`Save changes`}
-          </Button>
-          <Button type="text" onClick={resetPixelsToDefault} disabled={saving}>
-            {t`Reset pixel to defaults`}
-          </Button>
-        </Space>
-      </Form>
+        return (
+          <>
+            {/* SCOPE 1 — Politique par défaut du workspace (éditable). */}
+            <ScopeBanner
+              title={t`Workspace defaults`}
+              subtitle={t`The default sending policy applied to every campaign and every sending infrastructure, unless overridden below.`}
+              color="#1677ff"
+            />
+            <Collapse
+              defaultActiveKey={['rate-volume', 'reputation', 'schedule']}
+              className="!mb-6"
+              items={[
+                {
+                  key: 'rate-volume',
+                  forceRender: true,
+                  label: t`Rate & volume`,
+                  children: rateVolumeForm
+                },
+                workspace
+                  ? {
+                      key: 'reputation',
+                      forceRender: true,
+                      label: t`Reputation`,
+                      children: (
+                        <>
+                          <JitterAntiHashCard
+                            workspace={workspace}
+                            isOwner={isOwner}
+                            onWorkspaceUpdate={onWorkspaceUpdate}
+                            presetSignal={presetSignal}
+                          />
+                          <ExcludedClassesCard
+                            workspace={workspace}
+                            isOwner={isOwner}
+                            onWorkspaceUpdate={onWorkspaceUpdate}
+                            contactCount={contactCount}
+                            presetSignal={presetSignal}
+                          />
+                        </>
+                      )
+                    }
+                  : null,
+                workspace
+                  ? {
+                      key: 'schedule',
+                      forceRender: true,
+                      label: t`Schedule`,
+                      children: (
+                        <SendingWindowCard
+                          workspace={workspace}
+                          isOwner={isOwner}
+                          onWorkspaceUpdate={onWorkspaceUpdate}
+                          presetSignal={presetSignal}
+                        />
+                      )
+                    }
+                  : null
+              ].filter((p): p is NonNullable<typeof p> => p !== null)}
+            />
+
+            {/* SCOPE 2 — Surcharges par infrastructure d'envoi (éditable). */}
+            {workspace && (
+              <>
+                <ScopeBanner
+                  title={t`Per-infrastructure overrides`}
+                  subtitle={t`What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults.`}
+                  color="#52c41a"
+                />
+                <Collapse
+                  defaultActiveKey={['infra-limits', 'tracking', 'inbox']}
+                  className="!mb-6"
+                  items={[
+                    {
+                      key: 'infra-limits',
+                      forceRender: true,
+                      label: t`Sending infrastructures`,
+                      children: (
+                        <InfraLimitsCard
+                          workspace={workspace}
+                          isOwner={isOwner}
+                          onWorkspaceUpdate={onWorkspaceUpdate}
+                        />
+                      )
+                    },
+                    {
+                      key: 'tracking',
+                      forceRender: true,
+                      label: t`Tracking domain`,
+                      children: (
+                        <TrackingDomainCard
+                          workspace={workspace}
+                          isOwner={isOwner}
+                          onWorkspaceUpdate={onWorkspaceUpdate}
+                        />
+                      )
+                    },
+                    {
+                      key: 'inbox',
+                      forceRender: true,
+                      label: t`Reply & bounce inbox`,
+                      children: (
+                        <IMAPInboxCard
+                          workspace={workspace}
+                          isOwner={isOwner}
+                          onWorkspaceUpdate={onWorkspaceUpdate}
+                        />
+                      )
+                    }
+                  ]}
+                />
+              </>
+            )}
+          </>
+        )
+      })()}
     </>
   )
 }

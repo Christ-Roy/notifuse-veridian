@@ -878,4 +878,104 @@ describe('VeridianColdOutreachSettings', () => {
     expect(arg.provider?.veridian_jitter_pct).toBe(0.3)
     expect(arg.provider?.senders).toHaveLength(1)
   })
+
+  // ── Pixel d'ouverture PAR INFRA (override tri-état, 2026-06-17) ──────────────
+
+  it('saves a per-infra open-pixel override on the email provider, preserving senders (owner)', async () => {
+    const user = userEvent.setup()
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: true })
+
+    // Force le pixel OFF sur Google pour CETTE infra (tri-état Select). On ouvre
+    // la combobox par son aria-label puis on clique l'option "Off" du popup.
+    const select = screen.getByRole('combobox', { name: 'pixel google Cold relay' })
+    await user.click(select)
+    await waitFor(() => {
+      const opts = document.querySelectorAll('.ant-select-item-option-content')
+      expect(Array.from(opts).some((o) => o.textContent === 'Off')).toBe(true)
+    })
+    const offOption = Array.from(
+      document.querySelectorAll('.ant-select-item-option-content')
+    ).find((o) => o.textContent === 'Off') as HTMLElement
+    await user.click(offOption)
+
+    await user.click(screen.getByRole('button', { name: /Save Cold relay limits/i }))
+
+    await waitFor(() => expect(workspaceService.updateIntegration).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
+    // Override infra explicite : google=false POSÉ sur l'EmailProvider.
+    expect(arg.provider?.veridian_open_pixel_by_class?.google).toBe(false)
+    // Les classes laissées en "Inherit" ne posent AUCUNE clé (cascade workspace).
+    expect('microsoft' in (arg.provider?.veridian_open_pixel_by_class ?? {})).toBe(false)
+    // provider COMPLET conservé : senders + rate_limit
+    expect(arg.provider?.senders).toHaveLength(1)
+    expect(arg.provider?.rate_limit_per_minute).toBe(25)
+  })
+
+  it('renders a persisted per-infra pixel override and omits no key when left on inherit (owner)', async () => {
+    const user = userEvent.setup()
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25,
+        // Pixel infra déjà posé : google forcé ON (override de l'infra).
+        veridian_open_pixel_by_class: { google: true } as never
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: true })
+
+    // La valeur persistée s'affiche dans le Select (On pour google).
+    const select = screen.getByRole('combobox', { name: 'pixel google Cold relay' })
+    const selectBox = select.closest('.ant-select') as HTMLElement
+    expect(selectBox.textContent).toContain('On')
+
+    // Save sans rien toucher → la clé persistée google=true est ré-émise telle quelle.
+    await user.click(screen.getByRole('button', { name: /Save Cold relay limits/i }))
+    await waitFor(() => expect(workspaceService.updateIntegration).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
+    expect(arg.provider?.veridian_open_pixel_by_class?.google).toBe(true)
+  })
+
+  // ── Structure ergonomique : scopes + groupes thématiques ────────────────────
+
+  it('renders the two scope banners and the thematic group sections (owner)', () => {
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: true })
+    // Les deux niveaux de scope sont visibles.
+    expect(screen.getByText('Workspace defaults')).toBeInTheDocument()
+    expect(screen.getByText('Per-infrastructure overrides')).toBeInTheDocument()
+    // Les panneaux thématiques (Collapse) sont rendus (forceRender → DOM-present).
+    expect(screen.getByText('Rate & volume')).toBeInTheDocument()
+    expect(screen.getByText('Reputation')).toBeInTheDocument()
+    expect(screen.getByText('Schedule')).toBeInTheDocument()
+    expect(screen.getByText('Sending infrastructures')).toBeInTheDocument()
+  })
 })

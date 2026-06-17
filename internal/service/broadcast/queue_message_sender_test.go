@@ -1847,6 +1847,119 @@ func TestQueueMessageSender_SendBatch_VeridianWorkspacePixelFallback(t *testing.
 		"workspace pixel freemail_fr=true doit conserver le pixel d'ouverture")
 }
 
+// TestQueueMessageSender_SendBatch_VeridianInfraPixelOverride couvre le NIVEAU
+// INFRA du pixel d'ouverture (2026-06-17) : la politique pixel posée sur
+// l'EmailProvider (= cette infra d'envoi) doit gouverner le HTML RÉELLEMENT
+// compilé/enqueué, PRIORITAIRE sur le workspace. C'est le câblage du nouveau
+// param `provider` dans resolveOpenPixel/VeridianResolveOpenPixel. Avant ce lot,
+// le pixel ne pouvait pas se régler par infra (signature sans provider) → une IP
+// fraîche ne pouvait pas couper le pixel sans toucher tout le workspace.
+//
+// On vérifie l'INVERSION : workspace dit ON sur google, infra dit OFF → le HTML
+// émis vers gmail NE contient PAS le pixel /t/ (l'infra prime), les clics /r/
+// restent trackés. Et une classe non couverte par l'infra (freemail_fr) retombe
+// sur le workspace (ON).
+func TestQueueMessageSender_SendBatch_VeridianInfraPixelOverride(t *testing.T) {
+	emailSender := domain.NewEmailSender("sender@example.com", "Test Sender")
+	// Infra : pixel google FORCÉ OFF au niveau infra (warm-up d'une IP fraîche),
+	// freemail_fr non couvert (→ cascade workspace).
+	emailProvider := &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		Senders: []domain.EmailSender{emailSender},
+		VeridianOpenPixelByClass: map[string]bool{
+			"google": false,
+		},
+	}
+	template := &domain.Template{
+		ID: "template-1",
+		Email: &domain.EmailTemplate{
+			SenderID: emailSender.ID,
+			Subject:  "Hello",
+			VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1",
+				`<a href="https://example.com">Voir</a>`)),
+		},
+	}
+	templates := map[string]*domain.Template{"template-1": template}
+
+	broadcast := &domain.Broadcast{
+		ID:            "broadcast-ipx",
+		WorkspaceID:   "workspace-1",
+		UTMParameters: &domain.UTMParameters{},
+	}
+
+	// Workspace : pixel google ON (l'INVERSE de l'infra) + freemail_fr ON. Si la
+	// cascade infra ne primait pas, gmail garderait son pixel → test rouge.
+	workspace := &domain.Workspace{
+		ID: "workspace-1",
+		Settings: domain.WorkspaceSettings{
+			VeridianOpenPixelByClass: map[string]bool{
+				"google":      true,
+				"freemail_fr": true,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockBroadcastRepo := mocks.NewMockBroadcastRepository(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	mockBroadcastRepo.EXPECT().GetBroadcast(gomock.Any(), "workspace-1", broadcast.ID).Return(broadcast, nil)
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-1").Return(workspace, nil).Times(1)
+
+	var enqueued []*domain.EmailQueueEntry
+	mockQueueRepo.EXPECT().Enqueue(gomock.Any(), "workspace-1", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, entries []*domain.EmailQueueEntry) error {
+			enqueued = entries
+			return nil
+		})
+
+	sender := NewQueueMessageSender(
+		mockQueueRepo, mockBroadcastRepo, mockMessageHistoryRepo,
+		mockTemplateRepo, nil, mockLogger, nil, "https://api.example.com",
+	)
+	sender.(*queueMessageSender).SetVeridianWorkspaceRepo(mockWorkspaceRepo)
+
+	recipients := []*domain.ContactWithList{
+		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"},  // google → infra OFF
+		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"}, // freemail_fr → cascade workspace ON
+	}
+
+	sent, failed, err := sender.SendBatch(
+		context.Background(), "workspace-1", "integration-1", "secret-key",
+		"https://api.example.com", "", true, broadcast.ID, recipients,
+		templates, emailProvider, time.Now().Add(5*time.Minute), "",
+	)
+	require.NoError(t, err)
+	require.Equal(t, 2, sent)
+	require.Equal(t, 0, failed)
+
+	require.Len(t, enqueued, 2)
+	byEmail := map[string]*domain.EmailQueueEntry{}
+	for _, e := range enqueued {
+		byEmail[e.ContactEmail] = e
+	}
+
+	gmail := byEmail["lead@gmail.com"]
+	require.NotNil(t, gmail)
+	assert.NotContains(t, gmail.Payload.HTMLContent, "/t/",
+		"infra pixel google=false doit PRIMER sur le workspace ON et supprimer le pixel")
+	assert.Contains(t, gmail.Payload.HTMLContent, "/r/",
+		"les clics restent trackés malgré le pixel infra OFF")
+
+	orange := byEmail["lead@orange.fr"]
+	require.NotNil(t, orange)
+	assert.Contains(t, orange.Payload.HTMLContent, "/t/",
+		"freemail_fr non couvert par l'infra → cascade workspace ON conservée")
+}
+
 func TestQueueMessageSender_SendBatch_VeridianProviderThrottle(t *testing.T) {
 	newSender := func(ctrl *gomock.Controller, broadcast *domain.Broadcast, onEnqueue func([]*domain.EmailQueueEntry)) MessageSender {
 		mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)

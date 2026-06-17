@@ -291,6 +291,13 @@ export interface EmailProvider {
   veridian_anti_hash_enabled?: boolean
   // Fenêtre anti-hash (heures) PAR INFRA. <=0/omis = héritage. Cf. email_provider.go.
   veridian_anti_hash_window_hours?: number
+  // Politique du pixel d'ouverture (email.opened) PAR CLASSE, AU NIVEAU INFRA.
+  // Niveau intermédiaire de la cascade (broadcast → INFRA → workspace → défaut
+  // tunnel) : une IP fraîche peut couper le pixel partout le temps du warm-up,
+  // indépendamment du workspace. Map {classe: bool}. Vide/omis = héritage
+  // workspace (puis défaut tunnel). Cf. internal/domain/email_provider.go
+  // (VeridianOpenPixelByClass) + internal/domain/veridian_open_pixel.go.
+  veridian_open_pixel_by_class?: Record<VeridianProviderClass, boolean>
 }
 
 // Veridian fork — config d'une boîte IMAP pollée par Notifuse (réception :
