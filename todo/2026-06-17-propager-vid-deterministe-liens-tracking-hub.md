@@ -59,3 +59,30 @@ confiance forte → priorisation CRM. C'est le cœur de la valeur du réconcilia
 - ⛔ BLOQUÉ PAR : décision Hub sur la génération/format du vid (ticket Hub).
 - Couplé à : ticket Analytics page.hit+vid (nom du query param à aligner).
 - Vient APRÈS : ticket Notifuse events comportementaux (qui marche sans vid).
+
+## Statut — 2026-06-17 (agent events-hub)
+
+**NON démarré — confirmé BLOQUÉ côté Hub.** Vérification terrain faite avant
+de toucher quoi que ce soit :
+
+- `veridian-hub/lib/prospect/ingest.ts` ne fait que **consommer** un vid s'il
+  est fourni (`vid = input.vid ?? null`, ligne 100) et le `COALESCE`-backfill
+  s'il l'apprend plus tard (ligne 194). **Aucune fonction de génération /
+  dérivation de vid** n'existe côté Hub (`grep generateVid|deriveVid|prospectVid`
+  = 0 hit réel). Le Hub est pourtant la source désignée du vid (contrat
+  cross-app) → tant qu'il n'a pas tranché le format (hash déterministe email+sel ?
+  attribution explicite à l'envoi ?), Notifuse ne peut pas propager un vid sans
+  l'inventer — ce qui violerait la règle d'or (zéro contournement / pas de
+  convention devinée).
+
+- **Le terrain est prêt côté Notifuse pour le jour où le Hub tranche** : les
+  events comportementaux livrés (`email.opened/clicked/replied`, voir ticket
+  frère) émettent déjà un `data` map. Le Hub lit `data.vid` (nullable). Quand le
+  vid sera défini, l'ajout est **une ligne** : poser `data["vid"]` dans
+  `veridian_behavioral_emit.go` (+ reply service) + l'embarquer dans le token de
+  tracking (`pkg/crypto` `EncryptTrackingToken`, plaintext étendu) et dans l'URL
+  de redirection `/r/`. Aucune refonte nécessaire.
+
+→ **Action requise : décision Hub.** Reste dans `todo/` (pas archivé). À router
+vers l'agent Hub pour spécifier la stratégie vid (ticket Hub
+`2026-06-15-reconciliateur-events-cold-web-prospect-scoring.md`).
