@@ -321,6 +321,176 @@ func TestHandleColdSimulate_InboundReply_ProcessErrorPropagates500(t *testing.T)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
+// === mode seed_sent + sender_email : pose veridian_sender_email (cap per-sender) ===
+
+func TestHandleColdSimulate_SeedSent_WithSenderEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	wsRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+	wsRepo.EXPECT().GetByID(gomock.Any(), "ws1").
+		Return(&domain.Workspace{ID: "ws1", Settings: domain.WorkspaceSettings{SecretKey: "sk"}}, nil)
+	// Le sender doit être posé (lowercased) sur l'entrée → le cap per-sender le lit.
+	msgRepo.EXPECT().Create(gomock.Any(), "ws1", "sk", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			assert.Equal(t, "bot1@agences.fr", m.VeridianSenderEmail, "sender posé lowercase pour le cap émetteur")
+			return nil
+		}).Times(2)
+	msgRepo.EXPECT().CountSentSinceForContact(gomock.Any(), "ws1", "p@corp.com", gomock.Any()).Return(2, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, wsRepo, "staging")
+
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "seed_sent", WorkspaceID: "ws1", ContactEmail: "p@corp.com", Count: 2,
+		SenderEmail: "Bot1@Agences.fr",
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, 2, got.Seeded)
+}
+
+// === mode class_cap_decision : prédicat exact du cap CLASSE (CountSentSinceForDomains >= cap) ===
+
+func TestHandleColdSimulate_ClassCapDecision_AtCapBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	// google : domains non vides (gmail.com…), 1 envoi aujourd'hui, cap 1 → bloqué.
+	msgRepo.EXPECT().
+		CountSentSinceForDomains(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(1, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "class_cap_decision", WorkspaceID: "ws1", ProviderClass: "google", ClassCap: 1,
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, 1, got.SentToday)
+	assert.True(t, got.WouldBeCapped, "count 1 >= cap 1 → bloqué (réputation classe)")
+}
+
+func TestHandleColdSimulate_ClassCapDecision_BelowCap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	msgRepo.EXPECT().
+		CountSentSinceForDomains(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(0, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "class_cap_decision", WorkspaceID: "ws1", ProviderClass: "google", ClassCap: 5,
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.False(t, got.WouldBeCapped, "0 < cap 5 → autorisé")
+	assert.Contains(t, rec.Body.String(), `"would_be_capped":false`, "bool présent (pas d'omitempty)")
+}
+
+func TestHandleColdSimulate_ClassCapDecision_Validation400(t *testing.T) {
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, mocks.NewMockMessageHistoryRepository(gomock.NewController(t)), nil, "staging")
+	for _, req := range []veridianColdSimulateRequest{
+		{Mode: "class_cap_decision", WorkspaceID: "ws1", ClassCap: 1},                       // classe manquante
+		{Mode: "class_cap_decision", WorkspaceID: "ws1", ProviderClass: "google", ClassCap: 0}, // cap non positif
+	} {
+		rec := postColdSimulate(t, h, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	}
+}
+
+// === mode per_sender_cap_decision : prédicat exact du cap ÉMETTEUR (CountSentSinceForSender >= cap) ===
+
+func TestHandleColdSimulate_PerSenderCapDecision_AtCapBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	// La requête doit cibler le sender NORMALISÉ (lowercase) — le worker stocke lowercase.
+	msgRepo.EXPECT().
+		CountSentSinceForSender(gomock.Any(), "ws1", "bot1@agences.fr", gomock.Any()).
+		Return(20, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "per_sender_cap_decision", WorkspaceID: "ws1", SenderEmail: "Bot1@Agences.fr", PerSenderCap: 20,
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, 20, got.SentToday)
+	assert.True(t, got.WouldBeCapped, "count 20 >= cap 20 → warmup IP bloque (anti-cramage)")
+}
+
+func TestHandleColdSimulate_PerSenderCapDecision_Validation400(t *testing.T) {
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, mocks.NewMockMessageHistoryRepository(gomock.NewController(t)), nil, "staging")
+	for _, req := range []veridianColdSimulateRequest{
+		{Mode: "per_sender_cap_decision", WorkspaceID: "ws1", PerSenderCap: 1},                   // sender manquant
+		{Mode: "per_sender_cap_decision", WorkspaceID: "ws1", SenderEmail: "b@a.fr", PerSenderCap: 0}, // cap non positif
+	} {
+		rec := postColdSimulate(t, h, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	}
+}
+
+// === mode sending_window_decision : prédicat exact du gate fenêtre (IsWithinWindow) ===
+
+func TestHandleColdSimulate_SendingWindowDecision_OutsideSkips(t *testing.T) {
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, nil, nil, "staging")
+	// Fenêtre 0h00-0h01 UTC : hors fenêtre quasi tout le temps (sauf à minuit pile).
+	// On la teste avec un timezone fixe UTC. La probabilité d'être dans la 1ère
+	// minute du jour UTC pile pendant le test est négligeable, mais pour être
+	// déterministe on assert sur la cohérence within/would_be_skipped, pas sur une
+	// valeur fixe (would_be_skipped = !within toujours).
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "sending_window_decision", WorkspaceID: "ws1",
+		SendingWindow: &domain.VeridianSendingWindow{StartHour: 0, EndHour: 0, EndMinute: 1, Timezone: "UTC"},
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, !got.Within, got.WouldBeSkipped, "would_be_skipped == !within (contrat du gate)")
+	if got.WouldBeSkipped {
+		assert.Greater(t, got.NextOpeningUnix, int64(0), "hors fenêtre → next_opening renseigné")
+	}
+}
+
+func TestHandleColdSimulate_SendingWindowDecision_AllDayLetsThrough(t *testing.T) {
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, nil, nil, "staging")
+	// Fenêtre 0h-24h tous les jours = toujours dans la fenêtre (non-régression : 24/7).
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "sending_window_decision", WorkspaceID: "ws1",
+		SendingWindow: &domain.VeridianSendingWindow{StartHour: 0, EndHour: 24, Timezone: "UTC"},
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.True(t, got.Within, "fenêtre 0-24h → toujours dans la fenêtre")
+	assert.False(t, got.WouldBeSkipped)
+	// would_be_skipped DOIT être présent dans le JSON même à false (piège omitempty).
+	assert.Contains(t, rec.Body.String(), `"would_be_skipped":false`)
+}
+
+func TestHandleColdSimulate_SendingWindowDecision_MissingWindow400(t *testing.T) {
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, nil, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "sending_window_decision", WorkspaceID: "ws1",
+	})
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestHandleColdSimulate_StartOfDayIsMidnightUTC(t *testing.T) {
 	// 2026-06-15T14:32:10Z → 2026-06-15T00:00:00Z.
 	in := time.Date(2026, 6, 15, 14, 32, 10, 999, time.FixedZone("CEST", 2*3600))

@@ -81,7 +81,7 @@ const veridianColdSimulateStagingEnv = "staging"
 
 // veridianColdSimulateRequest est le corps POST. `mode` aiguille le comportement.
 type veridianColdSimulateRequest struct {
-	Mode        string `json:"mode"`         // inbound_reply | seed_sent | daily_cap_decision
+	Mode        string `json:"mode"`         // inbound_reply | seed_sent | daily_cap_decision | class_cap_decision | per_sender_cap_decision | sending_window_decision
 	WorkspaceID string `json:"workspace_id"` // tenant ciblé (jetable, E2E)
 
 	// --- mode seed_sent / daily_cap_decision : adresse destinataire ---
@@ -90,35 +90,61 @@ type veridianColdSimulateRequest struct {
 	// --- mode seed_sent : combien d'entrées message_history "sent" poser ---
 	Count int `json:"count,omitempty"`
 
+	// --- mode seed_sent : adresse émettrice (FROM) posée sur les entrées seedées.
+	// Vide = pas de sender (veridian_sender_email NULL). Sert au cap per-sender. ---
+	SenderEmail string `json:"sender_email,omitempty"`
+
 	// --- mode daily_cap_decision : cap par destinataire à évaluer ---
 	PerRecipientCap int `json:"per_recipient_cap,omitempty"`
 
+	// --- mode class_cap_decision : classe destinataire + cap par classe à évaluer.
+	// La décision est le prédicat EXACT du gate veridian_daily_cap.go (cap classe) :
+	// CountSentSinceForDomains(domains de la classe) >= cap. ---
+	ProviderClass string `json:"provider_class,omitempty"`
+	ClassCap      int    `json:"class_cap,omitempty"`
+
+	// --- mode per_sender_cap_decision : cap journalier par adresse émettrice.
+	// Prédicat EXACT de veridian_per_sender_cap.go : CountSentSinceForSender >= cap. ---
+	PerSenderCap int `json:"per_sender_cap,omitempty"`
+
+	// --- mode sending_window_decision : fenêtre d'envoi + timezone de fallback.
+	// Prédicat EXACT de veridian_sending_window_gate.go : IsWithinWindow(now). ---
+	SendingWindow *domain.VeridianSendingWindow `json:"sending_window,omitempty"`
+	FallbackTZ    string                        `json:"fallback_tz,omitempty"`
+
 	// --- mode inbound_reply : enveloppe du message entrant simulé ---
-	From      string `json:"from,omitempty"`       // expéditeur (= contact qui répond)
+	From      string `json:"from,omitempty"`        // expéditeur (= contact qui répond)
 	InReplyTo string `json:"in_reply_to,omitempty"` // header In-Reply-To : <message_history.id@...>
 	Subject   string `json:"subject,omitempty"`
 }
 
-// veridianColdSimulateResponse couvre les trois modes (champs omitempty).
+// veridianColdSimulateResponse couvre tous les modes (champs omitempty).
 type veridianColdSimulateResponse struct {
 	Mode string `json:"mode"`
 
 	// inbound_reply
-	IsReply    bool   `json:"is_reply,omitempty"`
-	HasReplied bool   `json:"has_replied,omitempty"`
+	IsReply     bool   `json:"is_reply,omitempty"`
+	HasReplied  bool   `json:"has_replied,omitempty"`
 	SeededMsgID string `json:"seeded_message_id,omitempty"`
 
 	// seed_sent
 	Seeded int `json:"seeded,omitempty"`
 
-	// seed_sent + daily_cap_decision : COUNT réel via CountSentSinceForContact
+	// seed_sent + *_cap_decision : COUNT réel via le repo (la valeur lue par le gate)
 	SentToday int `json:"sent_today"`
 
-	// daily_cap_decision : décision EXACTE du gate (count >= cap).
+	// *_cap_decision : décision EXACTE du gate (count >= cap).
 	// PAS d'omitempty : c'est un booléen de décision, false doit être présent
 	// dans le JSON (sinon le client lit `undefined` au lieu de `false` quand
 	// l'envoi est autorisé — piège omitempty sur bool, attrapé par l'E2E cap).
 	WouldBeCapped bool `json:"would_be_capped"`
+
+	// sending_window_decision : la fenêtre laisse-t-elle passer MAINTENANT ?
+	// within = IsWithinWindow(now) ; would_be_skipped = !within (le gate reschedule).
+	// next_opening_unix = NextOpening(now).Unix() (instant absolu de réouverture).
+	Within          bool  `json:"within"`
+	WouldBeSkipped  bool  `json:"would_be_skipped"`
+	NextOpeningUnix int64 `json:"next_opening_unix,omitempty"`
 }
 
 // handleColdSimulate aiguille selon `mode`. Tous les modes opèrent sur le VRAI
@@ -149,9 +175,15 @@ func (h *VeridianHandler) handleColdSimulate(w http.ResponseWriter, r *http.Requ
 		h.coldSimulateSeedSent(w, r, deps, &req)
 	case "daily_cap_decision":
 		h.coldSimulateDailyCapDecision(w, r, deps, &req)
+	case "class_cap_decision":
+		h.coldSimulateClassCapDecision(w, r, deps, &req)
+	case "per_sender_cap_decision":
+		h.coldSimulatePerSenderCapDecision(w, r, deps, &req)
+	case "sending_window_decision":
+		h.coldSimulateSendingWindowDecision(w, r, &req)
 	default:
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload,
-			"mode must be inbound_reply|seed_sent|daily_cap_decision",
+			"mode must be inbound_reply|seed_sent|daily_cap_decision|class_cap_decision|per_sender_cap_decision|sending_window_decision",
 			http.StatusBadRequest, map[string]interface{}{"mode": req.Mode})
 	}
 }
@@ -191,7 +223,7 @@ func (h *VeridianHandler) coldSimulateInboundReply(
 
 	// 1. Seed l'envoi initial (notre mail) avec un id stable → le match fort le citera.
 	msgID := uuid.NewString()
-	if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, msgID, time.Now().UTC()); err != nil {
+	if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, "", msgID, time.Now().UTC()); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInternalError, "seed initial send failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
@@ -259,9 +291,10 @@ func (h *VeridianHandler) coldSimulateSeedSent(
 		return
 	}
 
+	sender := domain.VeridianNormalizeEmail(req.SenderEmail)
 	now := time.Now().UTC()
 	for i := 0; i < req.Count; i++ {
-		if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, uuid.NewString(), now); err != nil {
+		if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, sender, uuid.NewString(), now); err != nil {
 			WriteJSONErrorCode(w, ErrCodeInternalError, "seed failed: "+err.Error(), http.StatusInternalServerError, nil)
 			return
 		}
@@ -338,20 +371,126 @@ func veridianColdSimulateStartOfDay(now time.Time) time.Time {
 }
 
 // coldSimulateSeedOne pose UNE entrée message_history "sent" (sent_at=now,
-// failed_at=nil) via le VRAI repo Create. C'est la donnée exacte que lit le cap
-// (contact_email + sent_at) et que cite le match fort stop-on-reply (id).
+// failed_at=nil) via le VRAI repo Create. C'est la donnée exacte que lisent les
+// caps : contact_email + sent_at (cap destinataire), domaine (cap classe),
+// veridian_sender_email (cap per-sender), et que cite le match fort stop-on-reply
+// (id). `sender` vide = veridian_sender_email NULL (comme un envoi sans rotation).
 func (h *VeridianHandler) coldSimulateSeedOne(
-	ctx context.Context, deps *veridianColdSimulateDeps, secretKey, workspaceID, contact, msgID string, sentAt time.Time,
+	ctx context.Context, deps *veridianColdSimulateDeps, secretKey, workspaceID, contact, sender, msgID string, sentAt time.Time,
 ) error {
 	msg := &domain.MessageHistory{
-		ID:           msgID,
-		ContactEmail: contact,
-		TemplateID:   "cold-simulate-e2e",
-		Channel:      "email",
-		MessageData:  domain.MessageData{Data: map[string]interface{}{"veridian_cold_simulate": true}},
-		SentAt:       sentAt,
-		CreatedAt:    sentAt,
-		UpdatedAt:    sentAt,
+		ID:                  msgID,
+		ContactEmail:        contact,
+		TemplateID:          "cold-simulate-e2e",
+		Channel:             "email",
+		MessageData:         domain.MessageData{Data: map[string]interface{}{"veridian_cold_simulate": true}},
+		SentAt:              sentAt,
+		CreatedAt:           sentAt,
+		UpdatedAt:           sentAt,
+		VeridianSenderEmail: sender,
 	}
 	return deps.messageHistoryRepo.Create(ctx, workspaceID, secretKey, msg)
+}
+
+// coldSimulateClassCapDecision renvoie la décision EXACTE du gate cap-CLASSE
+// (veridian_daily_cap.go §2) : COUNT des envois du jour vers les domaines de la
+// classe demandée (CountSentSinceForDomains, la requête lue par le worker) vs le
+// cap. would_be_capped = count >= class_cap. ⚠️ Pour une classe MX (ovh/ionos/…),
+// VeridianDomainsForClass renvoie une liste vide → le COUNT ne s'enforce pas
+// (dégradation gracieuse documentée) : la décision reflète FIDÈLEMENT ce
+// comportement (count 0 → jamais capé), ce que l'E2E doit constater honnêtement.
+func (h *VeridianHandler) coldSimulateClassCapDecision(
+	w http.ResponseWriter, r *http.Request, deps *veridianColdSimulateDeps, req *veridianColdSimulateRequest,
+) {
+	if deps.messageHistoryRepo == nil {
+		WriteJSONErrorCode(w, ErrCodePaywallUnavailable, "message history repo not wired", http.StatusServiceUnavailable, nil)
+		return
+	}
+	if req.ProviderClass == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "provider_class required", http.StatusBadRequest, nil)
+		return
+	}
+	if req.ClassCap <= 0 {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "class_cap must be > 0", http.StatusBadRequest, nil)
+		return
+	}
+
+	ctx := r.Context()
+	now := time.Now().UTC()
+	domains, exclude := domain.VeridianDomainsForClass(req.ProviderClass)
+	count, err := deps.messageHistoryRepo.CountSentSinceForDomains(ctx, req.WorkspaceID, domains, exclude, veridianColdSimulateStartOfDay(now))
+	if err != nil {
+		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, veridianColdSimulateResponse{
+		Mode:          "class_cap_decision",
+		SentToday:     count,
+		WouldBeCapped: count >= req.ClassCap, // prédicat exact du gate worker (cap classe)
+	})
+}
+
+// coldSimulatePerSenderCapDecision renvoie la décision EXACTE du gate per-sender
+// (veridian_per_sender_cap.go) : COUNT des envois du jour DEPUIS l'adresse
+// émettrice (CountSentSinceForSender) vs le cap. would_be_capped = count >= cap.
+// L'adresse émettrice est portée par sender_email (à seeder au préalable via
+// mode seed_sent + sender_email pour amener le compteur au niveau voulu).
+func (h *VeridianHandler) coldSimulatePerSenderCapDecision(
+	w http.ResponseWriter, r *http.Request, deps *veridianColdSimulateDeps, req *veridianColdSimulateRequest,
+) {
+	if deps.messageHistoryRepo == nil {
+		WriteJSONErrorCode(w, ErrCodePaywallUnavailable, "message history repo not wired", http.StatusServiceUnavailable, nil)
+		return
+	}
+	if req.SenderEmail == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "sender_email required", http.StatusBadRequest, nil)
+		return
+	}
+	if req.PerSenderCap <= 0 {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "per_sender_cap must be > 0", http.StatusBadRequest, nil)
+		return
+	}
+
+	ctx := r.Context()
+	now := time.Now().UTC()
+	sender := domain.VeridianNormalizeEmail(req.SenderEmail)
+	count, err := deps.messageHistoryRepo.CountSentSinceForSender(ctx, req.WorkspaceID, sender, veridianColdSimulateStartOfDay(now))
+	if err != nil {
+		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, veridianColdSimulateResponse{
+		Mode:          "per_sender_cap_decision",
+		SentToday:     count,
+		WouldBeCapped: count >= req.PerSenderCap, // prédicat exact du gate worker (cap émetteur)
+	})
+}
+
+// coldSimulateSendingWindowDecision renvoie la décision EXACTE du gate fenêtre
+// d'envoi (veridian_sending_window_gate.go) : within = IsWithinWindow(now,
+// fallbackTZ), would_be_skipped = !within (le gate reschedule à NextOpening hors
+// fenêtre). Prédicat PUR (aucune DB) : on évalue la VRAIE méthode domaine sur la
+// fenêtre fournie et l'instant serveur courant. Une fenêtre invalide laisse tout
+// passer (within=true, non-régression) — exactement ce que fait le gate.
+func (h *VeridianHandler) coldSimulateSendingWindowDecision(
+	w http.ResponseWriter, r *http.Request, req *veridianColdSimulateRequest,
+) {
+	if req.SendingWindow == nil {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "sending_window required", http.StatusBadRequest, nil)
+		return
+	}
+
+	now := time.Now()
+	within := req.SendingWindow.IsWithinWindow(now, req.FallbackTZ)
+	resp := veridianColdSimulateResponse{
+		Mode:           "sending_window_decision",
+		Within:         within,
+		WouldBeSkipped: !within, // hors fenêtre → le gate skip+reschedule
+	}
+	if !within {
+		resp.NextOpeningUnix = req.SendingWindow.NextOpening(now, req.FallbackTZ).Unix()
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
