@@ -45,9 +45,32 @@ priorité au smoke E2E), mais ça attrape les régressions de rendu.
 retry) au lieu de `error: true` brut. Ne JAMAIS afficher la valeur booléenne d'erreur à l'écran.
 
 ## DoD
-- [ ] Dashboard charge sans 500 sur workspace neuf (staging vérifié + prod après promo)
-- [ ] Migration/fix bounce_type à la racine (colonne garantie)
-- [ ] Smoke E2E dashboard en CI bloquant (provision→login→0 500→0 erreur console)
-- [ ] Règle Husky test colocalisé composants analytics/
-- [ ] Front: état d'erreur propre, plus de "error: true"
-- [ ] Promo prod (tier 🔴 → test on-premise: dashboard charge réellement)
+- [x] Dashboard charge sans 500 sur workspace neuf — preuve SQL réelle staging :
+      la requête `bounce_type ILIKE 'hard%'` reproduisait le 500 sur dasherr873,
+      après `ADD COLUMN IF NOT EXISTS bounce_type` (V54) elle renvoie 0|0. Smoke
+      E2E (dashboard-smoke.spec.ts) valide le rendu navigateur en CI e2e-staging.
+- [x] Migration/fix bounce_type à la racine — V54 (`internal/migrations/v54.go`,
+      additive idempotente) + `init.go` (colonne ajoutée au CREATE TABLE) +
+      `config.VERSION` 53→54 + fixture manager_test. Cause racine identifiée :
+      `bounce_type` n'était déclaré NULLE PART pour message_history (l'init.go:246
+      cité partout appartient à inbound_webhook_events).
+- [x] Smoke E2E dashboard bloquant — `tests/e2e-veridian/specs/dashboard-smoke.spec.ts`
+      (provision→auto-login→charge dashboard headless→0 réponse ≥500→0 erreur
+      console→graphique rendu). Tourne dans le job e2e-staging existant (BLOQUANT).
+- [x] Règle Husky test colocalisé analytics/ — `scripts/ci/check-test-mapping.sh`
+      (negative-test prouvé : ChartVisualization.tsx modifié sans test → bloqué).
+      Test livré : `EmailMetricsChart.test.tsx` (3 tests : data/error/retry).
+- [x] Front état d'erreur propre — `client.ts` extraction robuste (plus de
+      « ApiError: true »), `EmailMetricsChart` bandeau lisible + bouton Retry.
+- [ ] Promo prod (tier 🔴) — délégué au team-lead après e2e-staging vert
+      (test on-premise = dashboard-smoke charge réellement le dashboard).
+
+## Résolution — 2026-06-17 (agent fix-dashboard)
+
+SHA `b9b3b012` (branche `veridian`). Cause racine : la colonne
+`message_history.bounce_type` n'a JAMAIS existé (ni init.go — qui ne la déclarait
+que pour `inbound_webhook_events` — ni aucune migration). Le KPI bounce hard/soft
+(5414a3d7) la filtrait → 500 sur tous les workspaces (read ET write cassés).
+Fix racine voie A : migration V54 + init.go. Garde-fous CI livrés (smoke E2E
+dashboard BLOQUANT + règle Husky front analytics). Front durci.
+Ticket spin-off : `2026-06-17-analytics-handler-error-shape-non-standard.md` (P3).
