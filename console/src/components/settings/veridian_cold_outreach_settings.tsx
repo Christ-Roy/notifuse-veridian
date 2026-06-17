@@ -39,12 +39,25 @@ import { workspaceService } from '../../services/api/workspace'
 import {
   VERIDIAN_DEFAULT_OPEN_PIXEL,
   VERIDIAN_PROVIDER_CLASSES,
-  VERIDIAN_WARMUP_PRESET,
   VeridianProviderClass,
   VeridianSendingWindow
 } from '../../services/api/workspace'
+import {
+  VERIDIAN_SENDING_POLICY_PRESETS,
+  VeridianSendingPolicyPreset
+} from '../../services/cold/sending_policy_presets'
 import { contactsApi } from '../../services/api/contacts'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
+
+// Signal de preset propagé aux cartes à état local (SendingWindow, ExcludedClasses,
+// JitterAntiHash) : à chaque clic sur « Apply » d'un preset, le parent incrémente
+// `nonce` et pose le `preset` choisi. Les cartes réagissent au changement de nonce
+// en pré-remplissant leur slice (sans sauver). nonce 0 = aucun preset appliqué.
+interface PresetSignal {
+  nonce: number
+  preset: VeridianSendingPolicyPreset | null
+}
+const NO_PRESET_SIGNAL: PresetSignal = { nonce: 0, preset: null }
 
 const { Text, Paragraph } = Typography
 
@@ -94,6 +107,13 @@ function classLabel(c: VeridianProviderClass): string {
       return 'Corporate self-hosted (MX unknown)'
   }
 }
+
+// Nombre de senders (adresses d'envoi) d'une infra. ≥2 = le round-robin par
+// classe de provider destinataire s'active automatiquement en contexte cold
+// (backend veridian_sender_rotation.go) → on l'EXPOSE pour que l'admin sache que
+// la capacité = rate/min × nombre d'adresses (et ne sous-dimensionne pas).
+const senderCount = (integ: Integration & { email_provider: EmailProvider }): number =>
+  integ.email_provider.senders?.length ?? 0
 
 // Form field names plats : rate_<classe>, cap_<classe>, pixel_<classe>.
 const rateField = (c: VeridianProviderClass) => `rate_${c}`
@@ -523,7 +543,10 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
   // Affiche les 11 classes (dont les 6 MX) ou seulement les 5 principales.
   const [showAllClasses, setShowAllClasses] = useState(false)
   // Brouillons d'édition par intégration : rates/caps par classe + cap destinataire
-  // + liste de classes exclues de l'envoi DEPUIS cette infra.
+  // + cap sender + liste de classes exclues + fenêtre d'envoi + jitter + anti-hash
+  // DEPUIS cette infra. Les clés présentes (`in`) signalent un override édité ;
+  // pour jitter/anti-hash on stocke `null` pour distinguer "édité à undefined
+  // (héritage)" de "non touché".
   const [drafts, setDrafts] = useState<
     Record<
       string,
@@ -533,6 +556,10 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
         perRecipient?: number
         perSender?: number
         excluded?: VeridianProviderClass[]
+        window?: VeridianSendingWindow | null
+        jitterPct?: number | null
+        antiHashEnabled?: boolean | null
+        antiHashWindowHours?: number | null
       }
     >
   >({})
@@ -580,6 +607,37 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
     if (d && d.excluded !== undefined) return d.excluded
     return integ.email_provider.veridian_excluded_provider_classes || []
   }
+  // Fenêtre d'envoi de l'infra : brouillon (null = désactivée) sinon persistée.
+  const windowVal = (
+    integ: Integration & { email_provider: EmailProvider }
+  ): VeridianSendingWindow | null => {
+    const d = drafts[integ.id]
+    if (d && 'window' in d) return d.window ?? null
+    return integ.email_provider.veridian_sending_window ?? null
+  }
+  // Jitter de l'infra : tri-état (undefined = héritage). `null` en draft =
+  // "édité à héritage" → on retourne undefined.
+  const jitterVal = (
+    integ: Integration & { email_provider: EmailProvider }
+  ): number | undefined => {
+    const d = drafts[integ.id]
+    if (d && 'jitterPct' in d) return d.jitterPct ?? undefined
+    return integ.email_provider.veridian_jitter_pct
+  }
+  const antiHashEnabledVal = (
+    integ: Integration & { email_provider: EmailProvider }
+  ): boolean | undefined => {
+    const d = drafts[integ.id]
+    if (d && 'antiHashEnabled' in d) return d.antiHashEnabled ?? undefined
+    return integ.email_provider.veridian_anti_hash_enabled
+  }
+  const antiHashWindowVal = (
+    integ: Integration & { email_provider: EmailProvider }
+  ): number | undefined => {
+    const d = drafts[integ.id]
+    if (d && 'antiHashWindowHours' in d) return d.antiHashWindowHours ?? undefined
+    return integ.email_provider.veridian_anti_hash_window_hours
+  }
 
   const setRate = (id: string, c: VeridianProviderClass, v: number | null) =>
     setDrafts((prev) => {
@@ -606,8 +664,34 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
       const cur = prev[id] || { rates: {}, caps: {} }
       return { ...prev, [id]: { ...cur, excluded: v } }
     })
+  const setWindow = (id: string, v: VeridianSendingWindow | null) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      return { ...prev, [id]: { ...cur, window: v } }
+    })
+  const setJitter = (id: string, v: number | undefined) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      // `null` en draft = édité à "héritage" (≠ non touché).
+      return { ...prev, [id]: { ...cur, jitterPct: v === undefined ? null : v } }
+    })
+  const setAntiHashEnabled = (id: string, v: boolean | undefined) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      return { ...prev, [id]: { ...cur, antiHashEnabled: v === undefined ? null : v } }
+    })
+  const setAntiHashWindow = (id: string, v: number | undefined) =>
+    setDrafts((prev) => {
+      const cur = prev[id] || { rates: {}, caps: {} }
+      return { ...prev, [id]: { ...cur, antiHashWindowHours: v === undefined ? null : v } }
+    })
 
   const handleSave = async (integration: Integration & { email_provider: EmailProvider }) => {
+    // Fenêtre infra invalide (end ≤ start) → on bloque avec un message explicite.
+    if (!sendingWindowRangeValid(windowVal(integration))) {
+      message.error(t`The closing time must be after the opening time.`)
+      return
+    }
     setSavingId(integration.id)
     try {
       // On part des valeurs persistées et on applique le brouillon, en NE
@@ -631,6 +715,19 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
       const excludedList = excludedVal(integration)
       const nextExcluded = excludedList.length > 0 ? excludedList : undefined
 
+      // Fenêtre d'envoi infra : null/désactivée → undefined (héritage workspace).
+      const nextWindow = windowVal(integration) ?? undefined
+
+      // Jitter infra : tri-état. undefined = pas d'override (héritage). On
+      // PRÉSERVE un 0 explicite (désactivation) — c'est le piège pointeur.
+      const nextJitter = jitterVal(integration)
+      // Anti-hash infra : tri-état idem (undefined = héritage, false = OFF explicite).
+      const nextAntiHashEnabled = antiHashEnabledVal(integration)
+      // Fenêtre anti-hash : entier > 0 sinon undefined (défaut/héritage 72h).
+      const ahWin = antiHashWindowVal(integration)
+      const nextAntiHashWindow =
+        typeof ahWin === 'number' && ahWin > 0 ? Math.floor(ahWin) : undefined
+
       // Provider COMPLET (senders, rate_limit, tracking_domain conservés) + les
       // limites mises à jour. Map vide → undefined (pas de clé) pour rester en
       // non-régression.
@@ -646,7 +743,11 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
             : undefined,
         veridian_per_recipient_daily_cap: nextRecipient,
         veridian_per_sender_daily_cap: nextSender,
-        veridian_excluded_provider_classes: nextExcluded
+        veridian_excluded_provider_classes: nextExcluded,
+        veridian_sending_window: nextWindow,
+        veridian_jitter_pct: nextJitter,
+        veridian_anti_hash_enabled: nextAntiHashEnabled,
+        veridian_anti_hash_window_hours: nextAntiHashWindow
       }
 
       await workspaceService.updateIntegration({
@@ -679,9 +780,14 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
   )
 
   const help = (
-    <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
-      {t`Rates and daily caps set above apply at the workspace level (fallback). Each sending infrastructure (an email integration: its IP / SMTP relay + senders) can carry its OWN limits that override the workspace — essential during IP warm-up, where a fresh IP must crawl while the rest of the workspace runs faster. Leave a field empty for no per-class limit on that infra (the workspace value, then the campaign value, still apply).`}
-    </Paragraph>
+    <>
+      <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>
+        {t`Rates and daily caps set above apply at the workspace level (fallback). Each sending infrastructure (an email integration: its IP / SMTP relay + senders) can carry its OWN limits that override the workspace — essential during IP warm-up, where a fresh IP must crawl while the rest of the workspace runs faster. Leave a field empty for no per-class limit on that infra (the workspace value, then the campaign value, still apply).`}
+      </Paragraph>
+      <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+        {t`In cold mode, if an infra has several sending addresses, Notifuse alternates them automatically per recipient provider (round-robin) — so the effective capacity is rate/min × number of addresses. Add or remove sending addresses in Settings → Integrations.`}
+      </Paragraph>
+    </>
   )
 
   if (emailIntegrations.length === 0) {
@@ -723,6 +829,15 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   {senderDomain ? `@${senderDomain}` : ''}
                 </Text>
+                {/* Visibilité round-robin (ticket parité) : ≥2 senders = rotation
+                    automatique par classe en cold ; 1 sender = pas de rotation. */}
+                {senderCount(integration) > 1 ? (
+                  <Tag color="green" icon={<TeamOutlined />}>
+                    {t`${senderCount(integration)} senders · round-robin per class`}
+                  </Tag>
+                ) : (
+                  <Tag color="default">{t`1 sender (no rotation)`}</Tag>
+                )}
               </Space>
 
               <Row gutter={[12, 8]} align="bottom" style={{ marginBottom: 8 }}>
@@ -779,6 +894,63 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
                     style={{ width: '100%', marginTop: 4 }}
                     aria-label={t`Excluded provider classes for ${integration.name}`}
                   />
+                </Col>
+              </Row>
+
+              {/* Fenêtre d'envoi PAR INFRA (ticket 2026-06-16). Prime sur la
+                  fenêtre du workspace pour cette infra ; désactivée = héritage. */}
+              <div style={{ marginBottom: 8 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t`Sending window (this infra)`}
+                </Text>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    {t`Overrides the workspace window for this infra (e.g. a fresh IP kept to 10am–4pm). Disabled = inherit the workspace window.`}
+                  </Text>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <SendingWindowEditor
+                    value={windowVal(integration)}
+                    onChange={(w) => setWindow(integration.id, w)}
+                    disabled={!isOwner}
+                    fallbackTimezone={workspace.settings.timezone || 'Europe/Paris'}
+                    offHint={t`Inherit the workspace window`}
+                  />
+                </div>
+              </div>
+
+              {/* Jitter + anti-hash PAR INFRA (ticket 2026-06-16). Tri-état :
+                  héritage workspace / override / désactivé explicite. */}
+              <Row gutter={[12, 8]} align="top" style={{ marginBottom: 8 }}>
+                <Col xs={24} sm={12}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t`Timing jitter (this infra)`}
+                  </Text>
+                  <div style={{ marginTop: 4 }}>
+                    <JitterControl
+                      value={jitterVal(integration)}
+                      onChange={(v) => setJitter(integration.id, v)}
+                      disabled={!isOwner}
+                      inheritHint={t`Inherit workspace`}
+                      idSuffix={integration.name}
+                    />
+                  </div>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t`Anti-hash dedup (this infra)`}
+                  </Text>
+                  <div style={{ marginTop: 4 }}>
+                    <AntiHashControl
+                      enabled={antiHashEnabledVal(integration)}
+                      windowHours={antiHashWindowVal(integration)}
+                      onChangeEnabled={(v) => setAntiHashEnabled(integration.id, v)}
+                      onChangeWindow={(v) => setAntiHashWindow(integration.id, v)}
+                      disabled={!isOwner}
+                      inheritLabel={t`Inherit`}
+                      idSuffix={integration.name}
+                    />
+                  </div>
                 </Col>
               </Row>
 
@@ -904,87 +1076,350 @@ const END_SLOTS: { value: number; label: string }[] = [
   { value: 1440, label: '24:00' }
 ]
 
+// ── Éditeur de fenêtre d'envoi RÉUTILISABLE ───────────────────────────────────
+//
+// Corps éditable d'une fenêtre (toggle on/off + jours + horaires + timezone),
+// extrait de SendingWindowCard pour être réutilisé PAR INFRA (InfraLimitsCard)
+// sans dupliquer les constantes WEEKDAY_OPTIONS / START_SLOTS / END_SLOTS ni la
+// validation end > start. Composant CONTRÔLÉ : il ne possède pas l'état, le
+// parent passe `value` (la fenêtre ou null = désactivée) et reçoit `onChange`.
+// Le parent décide quand sauver (ce composant ne fait que de l'édition locale).
+interface SendingWindowEditorProps {
+  value: VeridianSendingWindow | null
+  onChange: (next: VeridianSendingWindow | null) => void
+  disabled?: boolean
+  // Timezone de repli quand la fenêtre n'en porte pas (workspace.settings.timezone).
+  fallbackTimezone: string
+  // Libellé du "off" : workspace = "Sending 24/7", infra = "Inherit workspace window".
+  offHint: string
+}
+
+function SendingWindowEditor({
+  value,
+  onChange,
+  disabled,
+  fallbackTimezone,
+  offHint
+}: SendingWindowEditorProps) {
+  const { t } = useLingui()
+
+  const enabled = !!value
+  const days = value?.days ?? [1, 2, 3, 4, 5]
+  const startMin = value ? (value.start_hour ?? 0) * 60 + (value.start_minute ?? 0) : 9 * 60
+  const endMin = value ? (value.end_hour ?? 0) * 60 + (value.end_minute ?? 0) : 18 * 60
+  const timezone = value?.timezone || fallbackTimezone || 'Europe/Paris'
+  const rangeInvalid = enabled && endMin <= startMin
+
+  // Reconstruit la fenêtre Go à partir de bornes en minutes (end_hour exclusif).
+  const buildWindow = (
+    d: number[],
+    sMin: number,
+    eMin: number,
+    tz: string
+  ): VeridianSendingWindow => ({
+    days: d,
+    start_hour: Math.floor(sMin / 60),
+    start_minute: sMin % 60,
+    end_hour: Math.floor(eMin / 60),
+    end_minute: eMin % 60,
+    timezone: tz
+  })
+
+  return (
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Space>
+        <Switch
+          checked={enabled}
+          disabled={disabled}
+          onChange={(on) =>
+            onChange(on ? buildWindow(days, startMin, endMin, timezone) : null)
+          }
+          checkedChildren={t`On`}
+          unCheckedChildren={t`Off`}
+          aria-label={t`Enable sending window`}
+        />
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {enabled ? t`Restrict to the window below` : offHint}
+        </Text>
+      </Space>
+
+      {enabled && (
+        <>
+          <Row gutter={[16, 12]} align="bottom" wrap>
+            <Col xs={24} md={12}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t`Working days`}
+              </Text>
+              <Select
+                mode="multiple"
+                value={days}
+                disabled={disabled}
+                onChange={(d) => onChange(buildWindow(d, startMin, endMin, timezone))}
+                options={WEEKDAY_OPTIONS}
+                placeholder={t`All days`}
+                style={{ width: '100%', marginTop: 4 }}
+                aria-label={t`Working days`}
+              />
+            </Col>
+            <Col xs={24} md={12}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t`Timezone`}
+              </Text>
+              <Select
+                value={timezone}
+                disabled={disabled}
+                onChange={(tz) => onChange(buildWindow(days, startMin, endMin, tz))}
+                options={TIMEZONE_OPTIONS.map((tz) => ({ value: tz, label: tz }))}
+                showSearch
+                style={{ width: '100%', marginTop: 4 }}
+                aria-label={t`Timezone`}
+              />
+            </Col>
+          </Row>
+          <Row gutter={[16, 12]} align="bottom" wrap>
+            <Col xs={12} md={8}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t`Opening time`}
+              </Text>
+              <Select
+                value={startMin}
+                disabled={disabled}
+                onChange={(s) => onChange(buildWindow(days, s, endMin, timezone))}
+                options={START_SLOTS}
+                style={{ width: '100%', marginTop: 4 }}
+                aria-label={t`Opening time`}
+              />
+            </Col>
+            <Col xs={12} md={8}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t`Closing time`}
+              </Text>
+              <Select
+                value={endMin}
+                disabled={disabled}
+                onChange={(e) => onChange(buildWindow(days, startMin, e, timezone))}
+                options={END_SLOTS}
+                status={rangeInvalid ? 'error' : undefined}
+                style={{ width: '100%', marginTop: 4 }}
+                aria-label={t`Closing time`}
+              />
+            </Col>
+          </Row>
+          {rangeInvalid && (
+            <Alert
+              type="error"
+              showIcon
+              message={t`The closing time must be after the opening time.`}
+            />
+          )}
+        </>
+      )}
+    </Space>
+  )
+}
+
+// Validité d'une fenêtre (pour bloquer le Save) : pas de fenêtre = OK, sinon
+// end > start exigé (en minutes depuis minuit).
+function sendingWindowRangeValid(w: VeridianSendingWindow | null | undefined): boolean {
+  if (!w) return true
+  const startMin = (w.start_hour ?? 0) * 60 + (w.start_minute ?? 0)
+  const endMin = (w.end_hour ?? 0) * 60 + (w.end_minute ?? 0)
+  return endMin > startMin
+}
+
+// ── Contrôle JITTER tri-état RÉUTILISABLE (workspace + infra) ──────────────────
+//
+// Le jitter `veridian_jitter_pct` est un *float64 côté Go : sémantique TRI-ÉTAT.
+//   undefined → pas d'override (défaut cold ±30 %, ou héritage workspace en infra)
+//   0         → jitter DÉSACTIVÉ explicitement (opt-out — NE PAS collapser en
+//               "non configuré", sinon on retombe sur le défaut cold ON)
+//   > 0       → amplitude forcée
+// Un simple InputNumber confond vide↔0 ; on découple donc un Switch "override"
+// (= la valeur est-elle posée ?) d'un InputNumber d'amplitude. Off + Save → la
+// valeur posée est `undefined` (le parent omet la clé) ; On + amplitude → la
+// valeur exacte (y compris 0 = désactivation explicite).
+interface JitterControlProps {
+  value: number | undefined
+  onChange: (next: number | undefined) => void
+  disabled?: boolean
+  // Texte du "off" : workspace = "Default cold ±30%", infra = "Inherit workspace".
+  inheritHint: string
+  idSuffix: string
+}
+
+function JitterControl({ value, onChange, disabled, inheritHint, idSuffix }: JitterControlProps) {
+  const { t } = useLingui()
+  const overridden = value !== undefined
+  return (
+    <Space size="small" wrap align="center">
+      <Switch
+        checked={overridden}
+        disabled={disabled}
+        size="small"
+        // Activer l'override → part d'une amplitude par défaut 0.30. Désactiver →
+        // undefined (héritage/défaut cold).
+        onChange={(on) => onChange(on ? 0.3 : undefined)}
+        aria-label={t`Override jitter ${idSuffix}`}
+      />
+      {overridden ? (
+        <InputNumber
+          min={0}
+          max={0.9}
+          step={0.05}
+          value={value}
+          disabled={disabled}
+          onChange={(v) => onChange(v ?? 0)}
+          size="small"
+          style={{ width: 90 }}
+          aria-label={t`Jitter amount ${idSuffix}`}
+        />
+      ) : (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {inheritHint}
+        </Text>
+      )}
+    </Space>
+  )
+}
+
+// ── Contrôle ANTI-HASH tri-état RÉUTILISABLE (workspace + infra) ──────────────
+//
+// `veridian_anti_hash_enabled` est un *bool côté Go : TRI-ÉTAT.
+//   undefined → défaut cold ON (ou héritage workspace en infra)
+//   true      → forcé ON
+//   false     → désactivé explicite
+// Un Select 3-états (Inherit / On / Off) rend la sémantique explicite ; un Switch
+// 2-états collapserait undefined et false. La fenêtre (heures) n'est pertinente
+// que si non désactivé.
+type AntiHashTriState = 'inherit' | 'on' | 'off'
+
+function antiHashToState(value: boolean | undefined): AntiHashTriState {
+  if (value === undefined) return 'inherit'
+  return value ? 'on' : 'off'
+}
+function antiHashFromState(state: AntiHashTriState): boolean | undefined {
+  if (state === 'inherit') return undefined
+  return state === 'on'
+}
+
+interface AntiHashControlProps {
+  enabled: boolean | undefined
+  windowHours: number | undefined
+  onChangeEnabled: (next: boolean | undefined) => void
+  onChangeWindow: (next: number | undefined) => void
+  disabled?: boolean
+  // Libellé de l'option "inherit" : workspace = "Default (cold ON 72h)", infra =
+  // "Inherit workspace".
+  inheritLabel: string
+  idSuffix: string
+}
+
+function AntiHashControl({
+  enabled,
+  windowHours,
+  onChangeEnabled,
+  onChangeWindow,
+  disabled,
+  inheritLabel,
+  idSuffix
+}: AntiHashControlProps) {
+  const { t } = useLingui()
+  const state = antiHashToState(enabled)
+  return (
+    <Space size="small" wrap align="center">
+      <Select<AntiHashTriState>
+        value={state}
+        disabled={disabled}
+        size="small"
+        style={{ width: 130 }}
+        onChange={(s) => onChangeEnabled(antiHashFromState(s))}
+        options={[
+          { value: 'inherit', label: inheritLabel },
+          { value: 'on', label: t`Forced ON` },
+          { value: 'off', label: t`Forced OFF` }
+        ]}
+        aria-label={t`Anti-hash mode ${idSuffix}`}
+      />
+      {state !== 'off' && (
+        <InputNumber
+          min={0}
+          step={1}
+          precision={0}
+          value={windowHours}
+          disabled={disabled}
+          onChange={(v) => onChangeWindow(v ?? undefined)}
+          placeholder="72"
+          size="small"
+          style={{ width: 80 }}
+          aria-label={t`Anti-hash window hours ${idSuffix}`}
+        />
+      )}
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        {t`hours`}
+      </Text>
+    </Space>
+  )
+}
+
 interface SendingWindowCardProps {
   workspace: Workspace
   isOwner: boolean
   onWorkspaceUpdate: (workspace: Workspace) => void
-  // Veridian fork — signal du preset « Mode warmup » : quand ce nombre change
+  // Veridian fork — signal du preset de politique : quand `nonce` change
   // (incrémenté par le PresetCard parent), la carte pré-remplit sa fenêtre aux
-  // valeurs warmup (lun-ven 9-18 Europe/Paris) dans son état LOCAL, sans sauver.
-  // L'owner relit puis clique « Save sending window ». 0 = aucun preset appliqué.
-  warmupNonce?: number
+  // valeurs du preset choisi dans son état LOCAL, sans sauver. L'owner relit puis
+  // clique « Save sending window ». nonce 0 = aucun preset appliqué.
+  presetSignal?: PresetSignal
 }
 
-function SendingWindowCard({ workspace, isOwner, onWorkspaceUpdate, warmupNonce = 0 }: SendingWindowCardProps) {
+function SendingWindowCard({
+  workspace,
+  isOwner,
+  onWorkspaceUpdate,
+  presetSignal = NO_PRESET_SIGNAL
+}: SendingWindowCardProps) {
   const { t } = useLingui()
   const { message } = App.useApp()
   const [saving, setSaving] = useState(false)
 
   const existing = workspace.settings.veridian_sending_window
-  const initialEnabled = !!existing
-  const [enabled, setEnabled] = useState(initialEnabled)
-  const [days, setDays] = useState<number[]>(existing?.days ?? [1, 2, 3, 4, 5])
-  const [startMin, setStartMin] = useState<number>(
-    existing ? (existing.start_hour ?? 0) * 60 + (existing.start_minute ?? 0) : 9 * 60
-  )
-  const [endMin, setEndMin] = useState<number>(
-    existing ? (existing.end_hour ?? 0) * 60 + (existing.end_minute ?? 0) : 18 * 60
-  )
-  const [timezone, setTimezone] = useState<string>(
-    existing?.timezone || workspace.settings.timezone || 'Europe/Paris'
-  )
+  // État local = la fenêtre éditée (null = désactivée → 24/7).
+  const [draft, setDraft] = useState<VeridianSendingWindow | null>(existing ?? null)
 
   // Re-sync si le workspace change (sauvegarde aboutie, switch d'onglet…).
   useEffect(() => {
-    const w = workspace.settings.veridian_sending_window
-    setEnabled(!!w)
-    setDays(w?.days ?? [1, 2, 3, 4, 5])
-    setStartMin(w ? (w.start_hour ?? 0) * 60 + (w.start_minute ?? 0) : 9 * 60)
-    setEndMin(w ? (w.end_hour ?? 0) * 60 + (w.end_minute ?? 0) : 18 * 60)
-    setTimezone(w?.timezone || workspace.settings.timezone || 'Europe/Paris')
+    setDraft(workspace.settings.veridian_sending_window ?? null)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync sur la fenêtre persistée
   }, [workspace.id, JSON.stringify(workspace.settings.veridian_sending_window)])
 
-  // Preset « Mode warmup » : applique la fenêtre warmup à l'état LOCAL (sans
-  // sauver). Déclenché à chaque incrément du nonce parent (> 0 = un clic preset).
+  // Preset : applique la fenêtre du preset choisi à l'état LOCAL (sans sauver).
+  // Déclenché à chaque incrément du nonce parent (> 0 = un clic preset).
   useEffect(() => {
-    if (warmupNonce <= 0) return
-    const w = VERIDIAN_WARMUP_PRESET.veridian_sending_window
-    setEnabled(true)
-    setDays(w.days ?? [1, 2, 3, 4, 5])
-    setStartMin((w.start_hour ?? 0) * 60 + (w.start_minute ?? 0))
-    setEndMin((w.end_hour ?? 0) * 60 + (w.end_minute ?? 0))
-    setTimezone(w.timezone || workspace.settings.timezone || 'Europe/Paris')
+    if (presetSignal.nonce <= 0) return
+    const w = presetSignal.preset?.sendingWindow
+    if (!w) return
+    setDraft({
+      ...w,
+      timezone: w.timezone || workspace.settings.timezone || 'Europe/Paris'
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- déclenché uniquement par le nonce
-  }, [warmupNonce])
+  }, [presetSignal.nonce])
 
-  const rangeInvalid = endMin <= startMin
+  const rangeInvalid = !sendingWindowRangeValid(draft)
 
   const handleSave = async () => {
-    if (enabled && rangeInvalid) {
+    if (rangeInvalid) {
       message.error(t`The closing time must be after the opening time.`)
       return
     }
     setSaving(true)
     try {
-      // Désactivé → on retire la fenêtre (undefined = pas de clé = 24/7 backend).
-      // Activé → on construit le shape Go (end_hour exclusif ; 24:00 = end_hour 24).
-      const window: VeridianSendingWindow | undefined = enabled
-        ? {
-            days,
-            start_hour: Math.floor(startMin / 60),
-            start_minute: startMin % 60,
-            end_hour: Math.floor(endMin / 60),
-            end_minute: endMin % 60,
-            timezone
-          }
-        : undefined
-
+      // Désactivé (draft null) → undefined = pas de clé = 24/7 backend.
       await workspaceService.update({
         ...workspace,
         settings: {
           ...workspace.settings,
-          veridian_sending_window: window
+          veridian_sending_window: draft ?? undefined
         }
       })
       const response = await workspaceService.get(workspace.id)
@@ -1056,88 +1491,13 @@ function SendingWindowCard({ workspace, isOwner, onWorkspaceUpdate, warmupNonce 
     <Card size="small" title={header} className="!mb-6">
       {help}
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        <Space>
-          <Switch
-            checked={enabled}
-            onChange={setEnabled}
-            checkedChildren={t`On`}
-            unCheckedChildren={t`Off`}
-            aria-label={t`Enable sending window`}
-          />
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {enabled ? t`Restrict to the window below` : t`Sending 24/7`}
-          </Text>
-        </Space>
-
-        {enabled && (
-          <>
-            <Row gutter={[16, 12]} align="bottom" wrap>
-              <Col xs={24} md={12}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t`Working days`}
-                </Text>
-                <Select
-                  mode="multiple"
-                  value={days}
-                  onChange={setDays}
-                  options={WEEKDAY_OPTIONS}
-                  placeholder={t`All days`}
-                  style={{ width: '100%', marginTop: 4 }}
-                  aria-label={t`Working days`}
-                />
-              </Col>
-              <Col xs={24} md={12}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t`Timezone`}
-                </Text>
-                <Select
-                  value={timezone}
-                  onChange={setTimezone}
-                  options={TIMEZONE_OPTIONS.map((tz) => ({ value: tz, label: tz }))}
-                  showSearch
-                  style={{ width: '100%', marginTop: 4 }}
-                  aria-label={t`Timezone`}
-                />
-              </Col>
-            </Row>
-            <Row gutter={[16, 12]} align="bottom" wrap>
-              <Col xs={12} md={8}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t`Opening time`}
-                </Text>
-                <Select
-                  value={startMin}
-                  onChange={setStartMin}
-                  options={START_SLOTS}
-                  style={{ width: '100%', marginTop: 4 }}
-                  aria-label={t`Opening time`}
-                />
-              </Col>
-              <Col xs={12} md={8}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t`Closing time`}
-                </Text>
-                <Select
-                  value={endMin}
-                  onChange={setEndMin}
-                  options={END_SLOTS}
-                  status={rangeInvalid ? 'error' : undefined}
-                  style={{ width: '100%', marginTop: 4 }}
-                  aria-label={t`Closing time`}
-                />
-              </Col>
-            </Row>
-            {rangeInvalid && (
-              <Alert
-                type="error"
-                showIcon
-                message={t`The closing time must be after the opening time.`}
-              />
-            )}
-          </>
-        )}
-
-        <Button type="primary" loading={saving} onClick={handleSave} disabled={enabled && rangeInvalid}>
+        <SendingWindowEditor
+          value={draft}
+          onChange={setDraft}
+          fallbackTimezone={workspace.settings.timezone || 'Europe/Paris'}
+          offHint={t`Sending 24/7`}
+        />
+        <Button type="primary" loading={saving} onClick={handleSave} disabled={rangeInvalid}>
           {t`Save sending window`}
         </Button>
       </Space>
@@ -1170,13 +1530,16 @@ interface ExcludedClassesCardProps {
   // Nombre de contacts par classe (breakdown R1), pour avertir "X contacts seront
   // ignorés". undefined si le breakdown n'est pas (encore) chargé.
   contactCount: (c: VeridianProviderClass) => number | undefined
+  // Signal du preset : pré-remplit la liste d'exclusion aux valeurs du preset.
+  presetSignal?: PresetSignal
 }
 
 function ExcludedClassesCard({
   workspace,
   isOwner,
   onWorkspaceUpdate,
-  contactCount
+  contactCount,
+  presetSignal = NO_PRESET_SIGNAL
 }: ExcludedClassesCardProps) {
   const { t } = useLingui()
   const { message } = App.useApp()
@@ -1190,6 +1553,16 @@ function ExcludedClassesCard({
     setExcluded(workspace.settings.veridian_excluded_provider_classes || [])
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync sur la liste persistée
   }, [workspace.id, JSON.stringify(workspace.settings.veridian_excluded_provider_classes)])
+
+  // Preset : applique la liste d'exclusion du preset (état local, sans sauver).
+  // Le preset peut poser [] (croisière) → on l'applique aussi (réactive Microsoft).
+  useEffect(() => {
+    if (presetSignal.nonce <= 0) return
+    const ex = presetSignal.preset?.excludedClasses
+    if (ex === undefined) return
+    setExcluded(ex)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- déclenché uniquement par le nonce
+  }, [presetSignal.nonce])
 
   const handleSave = async () => {
     setSaving(true)
@@ -1306,13 +1679,213 @@ function ExcludedClassesCard({
   )
 }
 
+// ── Jitter temporel + anti-hash identique PAR WORKSPACE ───────────────────────
+//
+// Deux leviers d'anti-détection cold, persistables workspace (et par infra dans
+// la carte ci-dessus). Tous deux ont une sémantique TRI-ÉTAT côté Go (pointeurs) :
+//   - Jitter (*float64) : undefined = défaut cold ±30 %, 0 = désactivé, >0 = forcé.
+//   - Anti-hash (*bool) : undefined = défaut cold ON, false = OFF, true = forcé ON.
+// L'UI distingue donc "non configuré" de "0/false" via des contrôles dédiés
+// (JitterControl / AntiHashControl), pour ne PAS retomber sur le défaut quand
+// l'admin a explicitement choisi OFF.
+//
+// Persistés dans `veridian_jitter_pct` / `veridian_anti_hash_enabled` /
+// `veridian_anti_hash_window_hours` via le MÊME POST /api/workspaces.update.
+
+interface JitterAntiHashCardProps {
+  workspace: Workspace
+  isOwner: boolean
+  onWorkspaceUpdate: (workspace: Workspace) => void
+  presetSignal?: PresetSignal
+}
+
+function JitterAntiHashCard({
+  workspace,
+  isOwner,
+  onWorkspaceUpdate,
+  presetSignal = NO_PRESET_SIGNAL
+}: JitterAntiHashCardProps) {
+  const { t } = useLingui()
+  const { message } = App.useApp()
+  const [saving, setSaving] = useState(false)
+
+  // États locaux tri-état : `undefined` = non configuré (défaut cold / héritage).
+  const [jitter, setJitter] = useState<number | undefined>(
+    workspace.settings.veridian_jitter_pct
+  )
+  const [antiHash, setAntiHash] = useState<boolean | undefined>(
+    workspace.settings.veridian_anti_hash_enabled
+  )
+  const [antiHashWindow, setAntiHashWindow] = useState<number | undefined>(
+    workspace.settings.veridian_anti_hash_window_hours
+  )
+
+  // Re-sync sur le workspace (sauvegarde aboutie, switch d'onglet…).
+  useEffect(() => {
+    setJitter(workspace.settings.veridian_jitter_pct)
+    setAntiHash(workspace.settings.veridian_anti_hash_enabled)
+    setAntiHashWindow(workspace.settings.veridian_anti_hash_window_hours)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync sur les valeurs persistées
+  }, [
+    workspace.id,
+    workspace.settings.veridian_jitter_pct,
+    workspace.settings.veridian_anti_hash_enabled,
+    workspace.settings.veridian_anti_hash_window_hours
+  ])
+
+  // Preset : applique les valeurs jitter/anti-hash du preset (état local, sans sauver).
+  useEffect(() => {
+    if (presetSignal.nonce <= 0) return
+    const p = presetSignal.preset
+    if (!p) return
+    if (p.jitterPct !== undefined) setJitter(p.jitterPct)
+    if (p.antiHashEnabled !== undefined) setAntiHash(p.antiHashEnabled)
+    if (p.antiHashWindowHours !== undefined) setAntiHashWindow(p.antiHashWindowHours)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- déclenché uniquement par le nonce
+  }, [presetSignal.nonce])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      // Tri-état préservé : on ENVOIE jitter=0 / anti_hash=false explicitement
+      // (sémantique "désactivé"), undefined = pas de clé (défaut cold). Window
+      // anti-hash : entier > 0 sinon undefined (défaut 72h).
+      const nextWindow =
+        typeof antiHashWindow === 'number' && antiHashWindow > 0
+          ? Math.floor(antiHashWindow)
+          : undefined
+      await workspaceService.update({
+        ...workspace,
+        settings: {
+          ...workspace.settings,
+          veridian_jitter_pct: jitter,
+          veridian_anti_hash_enabled: antiHash,
+          veridian_anti_hash_window_hours: nextWindow
+        }
+      })
+      const response = await workspaceService.get(workspace.id)
+      onWorkspaceUpdate(response.workspace)
+      message.success(t`Anti-detection settings saved`)
+    } catch (error: unknown) {
+      const errorMessage = (error as Error)?.message || t`Failed to save anti-detection settings`
+      message.error(errorMessage)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const header = (
+    <Space>
+      <RocketOutlined />
+      <Text strong>{t`Anti-detection (jitter & content dedup)`}</Text>
+    </Space>
+  )
+
+  const help = (
+    <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+      {t`Two cold-sending anti-detection levers. Timing jitter spreads the throttle's re-scheduling delay around its nominal value to break the metronomic rhythm that filters use to spot a machine. Content dedup (anti-hash) prevents two emails with an identical rendering (subject + body) from going out to the same provider class within a sliding window. Both default to ON for cold campaigns — leave them on default unless you have a reason to override per sensitive campaign.`}
+    </Paragraph>
+  )
+
+  // ── Non-owner : lecture seule ───────────────────────────────────────────────
+  if (!isOwner) {
+    const jitterText =
+      jitter === undefined
+        ? t`Default ±30%`
+        : jitter === 0
+          ? t`Disabled`
+          : t`±${Math.round(jitter * 100)}%`
+    const antiHashText =
+      antiHash === undefined ? t`Default (cold ON)` : antiHash ? t`On` : t`Off`
+    return (
+      <Card size="small" title={header} className="!mb-6">
+        {help}
+        <Row gutter={[16, 8]}>
+          <Col xs={24} sm={12}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t`Timing jitter`}
+            </Text>
+            <div>
+              <Text>{jitterText}</Text>
+            </div>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t`Content dedup (anti-hash)`}
+            </Text>
+            <div>
+              <Text>
+                {antiHashText}
+                {antiHash !== false && (
+                  <Text type="secondary">
+                    {' · '}
+                    {antiHashWindow && antiHashWindow > 0 ? antiHashWindow : 72}
+                    {t`h window`}
+                  </Text>
+                )}
+              </Text>
+            </div>
+          </Col>
+        </Row>
+      </Card>
+    )
+  }
+
+  // ── Owner : édition ─────────────────────────────────────────────────────────
+  return (
+    <Card size="small" title={header} className="!mb-6">
+      {help}
+      <Row gutter={[24, 16]} align="top">
+        <Col xs={24} md={12}>
+          <Text strong>{t`Timing jitter`}</Text>
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t`Override the default ±30% jitter. Off = default cold ±30%. Set to 0 to disable jitter explicitly.`}
+            </Text>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <JitterControl
+              value={jitter}
+              onChange={setJitter}
+              inheritHint={t`Default cold ±30%`}
+              idSuffix="workspace"
+            />
+          </div>
+        </Col>
+        <Col xs={24} md={12}>
+          <Text strong>{t`Content dedup (anti-hash)`}</Text>
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t`Prevents two identical emails toward the same provider within the window. Default cold = ON, 72h.`}
+            </Text>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <AntiHashControl
+              enabled={antiHash}
+              windowHours={antiHashWindow}
+              onChangeEnabled={setAntiHash}
+              onChangeWindow={setAntiHashWindow}
+              inheritLabel={t`Default (cold ON)`}
+              idSuffix="workspace"
+            />
+          </div>
+        </Col>
+      </Row>
+      <Button type="primary" loading={saving} onClick={handleSave} style={{ marginTop: 16 }}>
+        {t`Save anti-detection settings`}
+      </Button>
+    </Card>
+  )
+}
+
 export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isOwner }: Props) {
   const { t } = useLingui()
   const [saving, setSaving] = useState(false)
   const [touched, setTouched] = useState(false)
-  // Nonce du preset « Mode warmup » : incrémenté à chaque clic, propagé à la
-  // SendingWindowCard pour qu'elle pré-remplisse sa fenêtre (état local, sans sauver).
-  const [warmupNonce, setWarmupNonce] = useState(0)
+  // Signal du preset appliqué : incrémenté à chaque clic « Apply », propagé aux
+  // cartes à état local (SendingWindow, ExcludedClasses, JitterAntiHash) qui
+  // pré-remplissent leur slice sans sauver.
+  const [presetSignal, setPresetSignal] = useState<PresetSignal>(NO_PRESET_SIGNAL)
   const [form] = Form.useForm()
   const { message } = App.useApp()
 
@@ -1425,24 +1998,51 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
     setTouched(true)
   }
 
-  // Applique le PRESET « Mode warmup » : pré-remplit le formulaire (rates, caps,
-  // per-recipient, per-sender) aux valeurs warmup + signale à la SendingWindowCard
-  // de pré-remplir sa fenêtre. NE SAUVE RIEN : l'owner relit puis clique « Save
-  // changes » (et « Save sending window » sur sa carte). Le pixel N'EST PAS touché
-  // (on ne dégrade pas la réputation : le défaut tunnel OFF google/microsoft reste).
-  const applyWarmupPreset = () => {
+  // Libellé + description d'un preset. DANS le composant → `t` extrait correctement.
+  const presetLabel = (id: VeridianSendingPolicyPreset['id']): string => {
+    switch (id) {
+      case 'warmup':
+        return t`Warm-up (cautious)`
+      case 'cruise':
+        return t`Cruise`
+      case 'microsoft_prudence':
+        return t`Microsoft prudence`
+    }
+  }
+  const presetDescription = (id: VeridianSendingPolicyPreset['id']): string => {
+    switch (id) {
+      case 'warmup':
+        return t`Start a new IP/domain: 1 email/day per provider class, low per-mailbox daily volume, business hours only, Microsoft excluded until the IP matures. Round-robin across addresses activates automatically with ≥2 senders.`
+      case 'cruise':
+        return t`Mature IP/domain: comfortable rates and daily caps, wide business hours (8am–8pm), Microsoft re-enabled at a moderate rate. Jitter and content dedup stay on.`
+      case 'microsoft_prudence':
+        return t`Same as Cruise but Microsoft/Outlook excluded — use when Microsoft reputation is degraded or never built, while still serving everyone else.`
+    }
+  }
+
+  // Applique un PRESET de politique : pré-remplit le formulaire (rates, caps,
+  // per-recipient, per-sender) + signale aux cartes à état local (fenêtre,
+  // exclusion, jitter/anti-hash) de pré-remplir leur slice. NE SAUVE RIEN :
+  // l'owner relit puis clique « Save changes » (et « Save » sur chaque carte
+  // concernée). Le pixel N'EST PAS touché (on ne dégrade pas la réputation : le
+  // défaut tunnel OFF google/microsoft reste).
+  const applyPreset = (preset: VeridianSendingPolicyPreset) => {
     const values: Record<string, number> = {}
     for (const c of VERIDIAN_PROVIDER_CLASSES) {
-      values[rateField(c)] = VERIDIAN_WARMUP_PRESET.veridian_provider_class_rates[c]
-      values[capField(c)] = VERIDIAN_WARMUP_PRESET.veridian_provider_class_daily_cap[c]
+      if (preset.rates) values[rateField(c)] = preset.rates[c]
+      if (preset.classDailyCap) values[capField(c)] = preset.classDailyCap[c]
     }
-    values[PER_RECIPIENT_FIELD] = VERIDIAN_WARMUP_PRESET.veridian_per_recipient_daily_cap
-    values[PER_SENDER_FIELD] = VERIDIAN_WARMUP_PRESET.veridian_per_sender_daily_cap
+    if (preset.perRecipientDailyCap !== undefined)
+      values[PER_RECIPIENT_FIELD] = preset.perRecipientDailyCap
+    if (preset.perSenderDailyCap !== undefined)
+      values[PER_SENDER_FIELD] = preset.perSenderDailyCap
     form.setFieldsValue(values)
     setTouched(true)
-    // Pousse la fenêtre d'envoi warmup dans la SendingWindowCard (état local).
-    setWarmupNonce((n) => n + 1)
-    message.info(t`Warmup preset applied below — review the values, then click "Save changes" (and "Save sending window").`)
+    // Pousse les slices fenêtre / exclusion / jitter-antihash dans leurs cartes.
+    setPresetSignal((s) => ({ nonce: s.nonce + 1, preset }))
+    message.info(
+      t`"${presetLabel(preset.id)}" preset applied below — review the values, then click "Save changes" (and the Save button on the Sending window / Excluded classes / Anti-detection cards).`
+    )
   }
 
   // Infras d'envoi (email) ayant < 2 senders : le round-robin entre adresses ne
@@ -1484,35 +2084,49 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
     />
   )
 
-  // Encart PRESETS (owner) : un bouton « Appliquer le mode warmup » qui pré-remplit
-  // l'ensemble cohérent des valeurs de démarrage prudent. Ne sauve rien (l'owner
-  // relit + Save). Popconfirm car le preset écrase la config cold courante.
+  // Encart PRESETS (owner) : un preset = un ensemble cohérent de valeurs (rates,
+  // caps, fenêtre, jitter, anti-hash, exclusion) qui encode une intention métier
+  // (warm-up / croisière / prudence Microsoft). Cliquer « Apply » pré-remplit les
+  // champs SANS sauver — l'owner relit puis Save. Popconfirm car ça écrase la
+  // config cold courante.
   const presetCard = (
     <Card size="small" className="!mb-6">
-      <Row gutter={[16, 12]} align="middle" wrap>
-        <Col xs={24} md={16}>
-          <Space size="small" wrap style={{ marginBottom: 4 }}>
-            <RocketOutlined style={{ color: '#1677ff' }} />
-            <Text strong>{t`Presets`}</Text>
-          </Space>
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {t`Warmup mode limits sending to 1 email/day toward each provider, caps each sending mailbox to a low daily volume, restricts to business hours, and spreads sends across all your sending addresses (round-robin). Ideal to start a new IP/domain without burning reputation. The preset fills the fields below — review them, then click "Save changes" (and "Save sending window").`}
-            </Text>
-          </div>
-        </Col>
-        <Col xs={24} md={8} style={{ textAlign: 'right' }}>
-          <Popconfirm
-            title={t`Apply warmup preset?`}
-            description={t`This will overwrite your current cold outreach rates, caps and sending window with the warmup values. Nothing is saved until you click Save.`}
-            okText={t`Apply`}
-            cancelText={t`Cancel`}
-            onConfirm={applyWarmupPreset}
-          >
-            <Button icon={<RocketOutlined />}>{t`Apply warmup mode`}</Button>
-          </Popconfirm>
-        </Col>
-      </Row>
+      <Space size="small" wrap style={{ marginBottom: 4 }}>
+        <RocketOutlined style={{ color: '#1677ff' }} />
+        <Text strong>{t`Sending policy presets`}</Text>
+      </Space>
+      <div style={{ marginBottom: 12 }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {t`A preset is a named, coherent set of cold-sending values (rates, daily caps, sending window, jitter, content dedup and provider exclusions). Applying one fills the fields below as a starting point — review and adjust them, then click "Save changes" (and the Save button on the Sending window / Excluded classes / Anti-detection cards). Nothing is saved until you do.`}
+        </Text>
+      </div>
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        {VERIDIAN_SENDING_POLICY_PRESETS.map((preset) => (
+          <Row key={preset.id} gutter={[16, 8]} align="middle" wrap>
+            <Col xs={24} md={18}>
+              <Text strong>{presetLabel(preset.id)}</Text>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {presetDescription(preset.id)}
+                </Text>
+              </div>
+            </Col>
+            <Col xs={24} md={6} style={{ textAlign: 'right' }}>
+              <Popconfirm
+                title={t`Apply this preset?`}
+                description={t`This overwrites your current cold outreach values with the preset values. Nothing is saved until you click Save.`}
+                okText={t`Apply`}
+                cancelText={t`Cancel`}
+                onConfirm={() => applyPreset(preset)}
+              >
+                <Button icon={<RocketOutlined />} aria-label={t`Apply ${presetLabel(preset.id)} preset`}>
+                  {t`Apply`}
+                </Button>
+              </Popconfirm>
+            </Col>
+          </Row>
+        ))}
+      </Space>
       {infrasWithoutRoundRobin.length > 0 && (
         <Alert
           type="warning"
@@ -1562,6 +2176,11 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
               isOwner={isOwner}
               onWorkspaceUpdate={onWorkspaceUpdate}
               contactCount={contactCount}
+            />
+            <JitterAntiHashCard
+              workspace={workspace}
+              isOwner={isOwner}
+              onWorkspaceUpdate={onWorkspaceUpdate}
             />
             <Divider />
           </>
@@ -1694,13 +2313,20 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
             workspace={workspace}
             isOwner={isOwner}
             onWorkspaceUpdate={onWorkspaceUpdate}
-            warmupNonce={warmupNonce}
+            presetSignal={presetSignal}
           />
           <ExcludedClassesCard
             workspace={workspace}
             isOwner={isOwner}
             onWorkspaceUpdate={onWorkspaceUpdate}
             contactCount={contactCount}
+            presetSignal={presetSignal}
+          />
+          <JitterAntiHashCard
+            workspace={workspace}
+            isOwner={isOwner}
+            onWorkspaceUpdate={onWorkspaceUpdate}
+            presetSignal={presetSignal}
           />
           <Divider />
         </>

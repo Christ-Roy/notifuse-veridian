@@ -84,6 +84,22 @@ export interface WorkspaceSettings {
   // workspace (ce niveau). Vide/omis = aucune exclusion. Source de vérité backend :
   // internal/domain/veridian_excluded_classes.go.
   veridian_excluded_provider_classes?: VeridianProviderClass[]
+  // Jitter temporel (±pct) du throttle minute par classe (cold outbound). Disperse
+  // le délai de re-planification autour de sa valeur nominale pour casser le rythme
+  // métronomique (tell de machine cold). ⚠️ POINTEUR côté Go (*float64), sémantique
+  // TRI-ÉTAT : `undefined`/absent = défaut cold ±0.30 ; `0` = jitter DÉSACTIVÉ
+  // explicite (opt-out, NE PAS omettre un 0 voulu). Clamp backend [0, 0.9]. Source
+  // de vérité : internal/service/queue/veridian_jitter.go. Cascade : broadcast →
+  // infra → workspace (ce niveau).
+  veridian_jitter_pct?: number
+  // Anti-hash identique (cold outbound) : empêche deux mails au RENDU identique
+  // (sujet+corps normalisés) de partir vers la même classe dans une fenêtre
+  // glissante. ⚠️ POINTEUR côté Go (*bool), sémantique TRI-ÉTAT : `undefined`/absent
+  // = défaut cold ON ; `false` = désactivé explicite (NE PAS omettre un false voulu) ;
+  // `true` = forcé ON. Source de vérité : internal/domain/veridian_content_hash.go.
+  veridian_anti_hash_enabled?: boolean
+  // Fenêtre glissante (heures) de l'anti-hash. <=0 ou omis = défaut 72h. Entier.
+  veridian_anti_hash_window_hours?: number
 }
 
 // Veridian fork — fenêtre d'envoi hebdomadaire (cold outbound). Miroir EXACT du
@@ -260,6 +276,21 @@ export interface EmailProvider {
   // omis = aucune exclusion sur l'infra (héritage workspace). Cf.
   // internal/domain/veridian_excluded_classes.go.
   veridian_excluded_provider_classes?: VeridianProviderClass[]
+  // Fenêtre d'envoi (horaires ouvrables) PAR INFRA. Niveau intermédiaire de la
+  // cascade (broadcast → INFRA → workspace) : une IP fraîche peut être cantonnée
+  // 10h-16h pendant que le reste du workspace envoie plus large. Vide/omis =
+  // héritage workspace. Cf. internal/domain/email_provider.go (VeridianSendingWindow).
+  veridian_sending_window?: VeridianSendingWindow
+  // Jitter temporel PAR INFRA (±pct). Pointeur côté Go (*float64), TRI-ÉTAT :
+  // `undefined` = héritage (workspace puis défaut cold) ; `0` = désactivé explicite ;
+  // valeur > 0 = override infra. Cf. internal/domain/email_provider.go (VeridianJitterPct).
+  veridian_jitter_pct?: number
+  // Anti-hash PAR INFRA. Pointeur côté Go (*bool), TRI-ÉTAT : `undefined` = héritage ;
+  // `false` = désactivé explicite ; `true` = forcé ON. Cf. email_provider.go
+  // (VeridianAntiHashEnabled).
+  veridian_anti_hash_enabled?: boolean
+  // Fenêtre anti-hash (heures) PAR INFRA. <=0/omis = héritage. Cf. email_provider.go.
+  veridian_anti_hash_window_hours?: number
 }
 
 // Veridian fork — config d'une boîte IMAP pollée par Notifuse (réception :

@@ -10,6 +10,14 @@ import type { Workspace } from '../../services/api/types'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 
+// Ce composant rend la PAGE Cold outreach entière (8 cartes, breakdown R1,
+// formulaire 11 classes × 3 champs, presets, éditeurs de fenêtre…). Chaque
+// render + interaction userEvent est lourd ; sous charge (CI ou machine
+// chargée) le défaut vitest de 5s suffit en isolation mais flake en suite
+// complète. On élargit les timeouts POUR CE FICHIER uniquement (intégration UI
+// lourde), sans toucher au défaut global qui masquerait de vrais hangs ailleurs.
+vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 })
+
 vi.mock('../../services/api/workspace', async () => {
   const actual = await vi.importActual<typeof import('../../services/api/workspace')>(
     '../../services/api/workspace'
@@ -598,22 +606,26 @@ describe('VeridianColdOutreachSettings', () => {
 
   // ── Preset « Mode warmup » ────────────────────────────────────────────────
 
-  it('shows the warmup preset button for owner only', () => {
+  it('shows the warmup preset Apply button for owner only', () => {
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
-    expect(screen.getByRole('button', { name: /Apply warmup mode/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Apply Warm-up \(cautious\) preset/i })
+    ).toBeInTheDocument()
   })
 
   it('does not show the warmup preset button for non-owner', () => {
     renderCmp({ workspace: makeWorkspace(), isOwner: false })
-    expect(screen.queryByRole('button', { name: /Apply warmup mode/i })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Apply Warm-up \(cautious\) preset/i })
+    ).not.toBeInTheDocument()
   })
 
   it('applying the warmup preset fills caps/per-recipient/per-sender without auto-saving, then Save persists', async () => {
     const user = userEvent.setup()
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
-    // 1) Clic preset → Popconfirm → Apply. Rien n'est persisté à ce stade.
-    await user.click(screen.getByRole('button', { name: /Apply warmup mode/i }))
+    // 1) Clic preset Warm-up → Popconfirm → Apply. Rien n'est persisté à ce stade.
+    await user.click(screen.getByRole('button', { name: /Apply Warm-up \(cautious\) preset/i }))
     await user.click(await screen.findByRole('button', { name: /^Apply$/i }))
     expect(workspaceService.update).not.toHaveBeenCalled()
 
@@ -675,5 +687,195 @@ describe('VeridianColdOutreachSettings', () => {
     await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
     const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
     expect(arg.settings?.veridian_per_sender_daily_cap).toBe(50)
+  })
+
+  // ── Presets (warm-up / cruise / microsoft prudence) ─────────────────────────
+
+  it('renders the three sending policy presets for owner', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    expect(screen.getByText('Sending policy presets')).toBeInTheDocument()
+    expect(screen.getByText('Warm-up (cautious)')).toBeInTheDocument()
+    expect(screen.getByText('Cruise')).toBeInTheDocument()
+    expect(screen.getByText('Microsoft prudence')).toBeInTheDocument()
+  })
+
+  it('does not render presets for non-owner', () => {
+    renderCmp({ workspace: makeWorkspace(), isOwner: false })
+    expect(screen.queryByText('Sending policy presets')).not.toBeInTheDocument()
+  })
+
+  it('applying the Cruise preset fills caps/rates without auto-saving, then Save persists', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+
+    // Clic « Apply » sur la carte Cruise → Popconfirm → Apply.
+    await user.click(screen.getByRole('button', { name: /Apply Cruise preset/i }))
+    await user.click(await screen.findByRole('button', { name: /^Apply$/i }))
+    expect(workspaceService.update).not.toHaveBeenCalled()
+
+    const saveBtn = screen.getByRole('button', { name: /Save Changes/i })
+    await waitFor(() => expect(saveBtn).toBeEnabled())
+    await user.click(saveBtn)
+
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    // Cruise : Microsoft réactivé à débit modéré (2/min), corporate 5/min.
+    expect(arg.settings?.veridian_provider_class_rates?.microsoft).toBe(2)
+    expect(arg.settings?.veridian_provider_class_rates?.corporate).toBe(5)
+    expect(arg.settings?.veridian_provider_class_daily_cap?.microsoft).toBe(200)
+  })
+
+  // ── Jitter & anti-hash (workspace) ──────────────────────────────────────────
+
+  it('renders the anti-detection card and saves an explicit jitter override (owner)', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+
+    expect(screen.getByText('Anti-detection (jitter & content dedup)')).toBeInTheDocument()
+
+    // Active l'override jitter (switch) → amplitude par défaut 0.30 posée.
+    const jitterSwitch = screen.getByLabelText('Override jitter workspace')
+    await user.click(jitterSwitch)
+    await user.click(screen.getByRole('button', { name: /Save anti-detection settings/i }))
+
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    expect(arg.settings?.veridian_jitter_pct).toBe(0.3)
+  })
+
+  it('saves anti-hash forced OFF as an explicit false (not omitted) (owner)', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+
+    // Le Select anti-hash workspace → "Forced OFF". antd s'ouvre au mousedown ;
+    // l'option du popup porte la classe ant-select-item-option-content. On ouvre
+    // via la combobox (input) puis on clique l'option du popup.
+    const select = screen.getByRole('combobox', { name: 'Anti-hash mode workspace' })
+    await user.click(select)
+    await waitFor(() => {
+      const opts = document.querySelectorAll('.ant-select-item-option-content')
+      expect(Array.from(opts).some((o) => o.textContent === 'Forced OFF')).toBe(true)
+    })
+    const offOption = Array.from(
+      document.querySelectorAll('.ant-select-item-option-content')
+    ).find((o) => o.textContent === 'Forced OFF') as HTMLElement
+    await user.click(offOption)
+    await user.click(screen.getByRole('button', { name: /Save anti-detection settings/i }))
+
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    // OFF explicite = false ENVOYÉ (≠ undefined qui retomberait sur le défaut cold ON).
+    expect(arg.settings?.veridian_anti_hash_enabled).toBe(false)
+  })
+
+  it('omits jitter/anti-hash when left on inherit/default (owner)', async () => {
+    const user = userEvent.setup()
+    renderCmp({ workspace: makeWorkspace(), isOwner: true })
+    // Sauver sans toucher aux contrôles → tri-état "non configuré" = undefined.
+    await user.click(screen.getByRole('button', { name: /Save anti-detection settings/i }))
+    await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
+    expect(arg.settings?.veridian_jitter_pct).toBeUndefined()
+    expect(arg.settings?.veridian_anti_hash_enabled).toBeUndefined()
+  })
+
+  it('renders anti-detection read-only with persisted values for non-owner', () => {
+    renderCmp({
+      workspace: makeWorkspace({
+        veridian_jitter_pct: 0.5,
+        veridian_anti_hash_enabled: false
+      }),
+      isOwner: false
+    })
+    expect(screen.getByText('Anti-detection (jitter & content dedup)')).toBeInTheDocument()
+    // jitter 0.5 → "±50%"
+    expect(screen.getByText(/±50%/)).toBeInTheDocument()
+  })
+
+  // ── Sending window PER INFRA + round-robin badge ────────────────────────────
+
+  it('shows a round-robin badge per infra based on sender count', () => {
+    const twoSenders = {
+      id: 'email-2',
+      name: 'Multi relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [
+          { id: 's1', email: 'a@send.fr', name: 'A', is_default: true },
+          { id: 's2', email: 'b@send.fr', name: 'B', is_default: false }
+        ],
+        rate_limit_per_minute: 30
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [twoSenders]), isOwner: true })
+    expect(screen.getByText(/2 senders · round-robin per class/i)).toBeInTheDocument()
+  })
+
+  it('saves a per-infra sending window on the email provider, preserving senders (owner)', async () => {
+    const user = userEvent.setup()
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: true })
+
+    // Active la fenêtre d'envoi DE L'INFRA. Il y a deux switches "Enable sending
+    // window" (la carte workspace + l'éditeur infra). On SCOPE sur la carte
+    // infra (titre unique) pour cibler le bon switch sans dépendre de l'ordre DOM.
+    const infraCard = screen
+      .getByText('Per-infrastructure limits (warm-up)')
+      .closest('.ant-card') as HTMLElement
+    const infraSwitch = infraCard.querySelector(
+      'button[aria-label="Enable sending window"]'
+    ) as HTMLElement
+    await user.click(infraSwitch)
+
+    await user.click(screen.getByRole('button', { name: /Save Cold relay limits/i }))
+
+    await waitFor(() => expect(workspaceService.updateIntegration).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
+    expect(arg.provider?.veridian_sending_window).toBeDefined()
+    expect(arg.provider?.veridian_sending_window?.start_hour).toBe(9)
+    expect(arg.provider?.veridian_sending_window?.end_hour).toBe(18)
+    // provider COMPLET conservé
+    expect(arg.provider?.senders).toHaveLength(1)
+    expect(arg.provider?.rate_limit_per_minute).toBe(25)
+  })
+
+  it('saves a per-infra jitter override on the email provider (owner)', async () => {
+    const user = userEvent.setup()
+    const emailIntegration = {
+      id: 'email-1',
+      name: 'Cold relay',
+      type: 'email' as const,
+      email_provider: {
+        kind: 'smtp' as const,
+        senders: [{ id: 's1', email: 'hello@agences-veridian.fr', name: 'Veridian', is_default: true }],
+        rate_limit_per_minute: 25
+      },
+      created_at: '',
+      updated_at: ''
+    }
+    renderCmp({ workspace: makeWorkspace({}, [emailIntegration]), isOwner: true })
+
+    // Le contrôle jitter de l'infra est suffixé par le nom de l'intégration.
+    await user.click(screen.getByLabelText('Override jitter Cold relay'))
+    await user.click(screen.getByRole('button', { name: /Save Cold relay limits/i }))
+
+    await waitFor(() => expect(workspaceService.updateIntegration).toHaveBeenCalledTimes(1))
+    const arg = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
+    expect(arg.provider?.veridian_jitter_pct).toBe(0.3)
+    expect(arg.provider?.senders).toHaveLength(1)
   })
 })
