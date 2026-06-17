@@ -1,5 +1,15 @@
 # [NOTIFUSE] 🟢 P2 — Propager le `vid` (ID prospect déterministe) dans les events + liens de tracking
 
+> **⛔ SANS OBJET pour le cold — vérifié dans le code Hub 2026-06-17 (Robert m'a fait re-vérifier).**
+> Modèle `vid` côté Hub (lib/prospect/analytics-pull.ts:268-269 + lib/notifuse/types.ts) :
+> event ATTRIBUABLE PAR EMAIL → `vid = NULL`, jointure par `contact_email` (clé V1) ; le
+> `vid` ne sert QUE pour les events ANONYMES (analytics web, slug navigateur sans email).
+> Tous les events cold Notifuse (open/click/reply) ont un `contact_email` → le Hub n'attend
+> PAS de vid dessus et les ingère DÉJÀ (app/api/webhooks/notifuse/route.ts:335-352 +
+> lib/webhooks/notifuse-handlers.ts:212-244, vid optionnel/NULL accepté). Le Hub n'a JAMAIS
+> été bloquant — il manquait l'ÉMISSION côté Notifuse, livrée prod 2026-06-17 (f42fdd23).
+> → Pas de travail Notifuse. Archivé done/ pour la trace.
+
 > **Sévérité** : 🟢 P2 (étage 2 — la jointure V1 par `contact_email` marche sans)
 > **Owner** : agent notifuse-veridian
 > **Créé** : 2026-06-17 (audit cohérence réconciliateur, agent audit-crossapp)
