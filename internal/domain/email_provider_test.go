@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2010,5 +2011,42 @@ func TestEmailProvider_VeridianExcludedProviderClassesRoundTrip(t *testing.T) {
 		raw, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600})
 		require.NoError(t, err)
 		assert.NotContains(t, string(raw), "veridian_excluded_provider_classes")
+	})
+}
+
+// TestEmailProvider_WarmupFieldsJSONBlob vérifie le contrat JSON blob des 3 champs
+// warmup (2026-06-17) : round-trip fidèle quand renseignés, ABSENTS (omitempty)
+// quand vides. C'est la garantie « pas de migration » — les champs passent par le
+// blob integrations sans allowlist ; un tag JSON cassé briserait silencieusement la
+// persistance (cf. piège omitempty bool en mémoire). Round-trip = filet durable.
+func TestEmailProvider_WarmupFieldsJSONBlob(t *testing.T) {
+	t.Run("renseignés → round-trip fidèle", func(t *testing.T) {
+		started := time.Date(2026, 6, 17, 0, 0, 0, 0, time.UTC)
+		p := EmailProvider{
+			Kind:                    EmailProviderKindSMTP,
+			RateLimitPerMinute:      600,
+			VeridianWarmupStartedAt: &started,
+			VeridianWarmupSchedule:  []int{1, 2, 5, 10},
+			VeridianWarmupStepDays:  2,
+		}
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), "veridian_warmup_started_at")
+		assert.Contains(t, string(raw), "veridian_warmup_schedule")
+
+		var back EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &back))
+		require.NotNil(t, back.VeridianWarmupStartedAt)
+		assert.True(t, started.Equal(*back.VeridianWarmupStartedAt))
+		assert.Equal(t, []int{1, 2, 5, 10}, back.VeridianWarmupSchedule)
+		assert.Equal(t, 2, back.VeridianWarmupStepDays)
+	})
+
+	t.Run("vides → champs ABSENTS du JSON (omitempty, non-régression)", func(t *testing.T) {
+		raw, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_warmup_started_at")
+		assert.NotContains(t, string(raw), "veridian_warmup_schedule")
+		assert.NotContains(t, string(raw), "veridian_warmup_step_days")
 	})
 }

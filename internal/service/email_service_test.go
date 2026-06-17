@@ -1659,3 +1659,33 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+// TestEmailService_TrackingWithoutEmitter_NoExtraCall garantit la NON-RÉGRESSION
+// du chemin de tracking quand l'emitter Hub n'est PAS configuré (Notifuse
+// self-hosted / Hub absent) : VisitLink/OpenEmail persistent le clic/ouverture et
+// retournent sans tenter aucune émission ni aucun lookup contact_email
+// supplémentaire (court-circuit nil-safe). L'émission Hub elle-même est couverte
+// par veridian_behavioral_emit_test.go ; ici on protège le hot path par défaut.
+func TestEmailService_TrackingWithoutEmitter_NoExtraCall(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockMessageRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	// veridianWebhookEmitter laissé nil (constructeur upstream par défaut).
+	emailService := EmailService{logger: mockLogger, messageRepo: mockMessageRepo}
+
+	ctx := context.Background()
+	ws, msgID := "ws-noemit", "msg-noemit"
+
+	t.Run("VisitLink no emitter", func(t *testing.T) {
+		mockMessageRepo.EXPECT().SetClicked(ctx, ws, msgID, gomock.Any()).Return(nil)
+		// PAS d'EXPECT FindContactEmailByMessageID : ne doit pas être appelé sans emitter.
+		require.NoError(t, emailService.VisitLink(ctx, msgID, ws))
+	})
+
+	t.Run("OpenEmail no emitter", func(t *testing.T) {
+		mockMessageRepo.EXPECT().SetOpened(ctx, ws, msgID, gomock.Any()).Return(nil)
+		require.NoError(t, emailService.OpenEmail(ctx, msgID, ws))
+	})
+}

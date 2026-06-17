@@ -1079,3 +1079,50 @@ func TestUpdatePlanInput_NewV2PlanSourceValues(t *testing.T) {
 		})
 	}
 }
+
+// === Events comportementaux cold↔web (2026-06-17) ===
+
+// TestBehavioralEventConstants_WireValues verrouille les valeurs EXACTES des 3
+// events comportementaux. Le réconciliateur Hub (ingestProspectEvent) route sur
+// ces chaînes littérales (case 'email.opened'/'email.clicked'/'email.replied'
+// dans app/api/webhooks/notifuse/route.ts) : une faute de frappe ici = event
+// ingéré pour forensics mais NON scoré (silencieux). Contrat cross-app figé.
+func TestBehavioralEventConstants_WireValues(t *testing.T) {
+	assert.Equal(t, VeridianEvent("email.opened"), EventEmailOpened)
+	assert.Equal(t, VeridianEvent("email.clicked"), EventEmailClicked)
+	assert.Equal(t, VeridianEvent("email.replied"), EventEmailReplied)
+}
+
+// TestBehavioralEventPayload_HubReadableShape vérifie que le payload sérialisé
+// d'un event comportemental expose bien les champs que le Hub lit : event_type,
+// tenant_id, event_id (idempotency), et data.contact_email (clé de jointure V1).
+func TestBehavioralEventPayload_HubReadableShape(t *testing.T) {
+	p := VeridianEventPayload{
+		EventID:    "id-1",
+		EventType:  EventEmailOpened,
+		TenantID:   "ws-slug",
+		OccurredAt: time.Date(2026, 6, 17, 12, 0, 0, 0, time.UTC),
+		Data: map[string]interface{}{
+			"contact_email": "lead@acme.fr",
+			"message_id":    "msg-1",
+		},
+	}
+	raw, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+
+	// event_type ET l'alias event (contrat README intégrations Hub) présents.
+	assert.Equal(t, "email.opened", decoded["event_type"])
+	assert.Equal(t, "email.opened", decoded["event"])
+	// idempotency : event_id ET alias idempotency_key.
+	assert.Equal(t, "id-1", decoded["event_id"])
+	assert.Equal(t, "id-1", decoded["idempotency_key"])
+	assert.Equal(t, "ws-slug", decoded["tenant_id"])
+
+	data, ok := decoded["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "lead@acme.fr", data["contact_email"])
+	assert.Equal(t, "msg-1", data["message_id"])
+}
