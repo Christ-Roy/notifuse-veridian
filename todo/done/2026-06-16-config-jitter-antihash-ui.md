@@ -89,3 +89,13 @@ par campagne sensible — alors que le backend les expose à 3 niveaux.
 ⚠️ Piège SW cache (memory `project_notifuse_console_sw_cache`) : valider le rendu
 staging avec `?cachebust=`. Tier promo 🟡 → push sans `[risk:low]` (UI à valider en
 rendu réel Chrome avant promo, cf. memory `feedback_skip_prod_pour_valider_UI`).
+
+---
+
+## ✅ Résolu — 2026-06-17 (agent ui-cold)
+
+Livré dans `console/src/components/settings/veridian_cold_outreach_settings.tsx`
++ `console/src/services/api/workspace.ts` + `console/src/services/cold/sending_policy_presets.ts`.
+SHA: 6f7c0ef4 (branche `veridian`). UI-pure (backend allowlist/EmailProvider JSON blob
+vérifiés — zéro Go). tsc vert, 48/48 tests front verts, lingui extract+compile OK.
+À valider en rendu réel staging (Chrome `?cachebust=`) avant promo prod (tier 🟡).

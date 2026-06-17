@@ -80,3 +80,13 @@ de doc. Si OUI → c'est un champ backend à ajouter (comme R2), ticket à promo
 | (si B=oui) `internal/domain/email_provider.go` + `veridian_pixel_resolver.go` + UI | champ pixel par infra (ticket séparé) |
 
 Tier 🟢 BAS (UI affichage only pour A) → `[risk:low]` acceptable pour la partie A.
+
+---
+
+## ✅ Résolu — 2026-06-17 (agent ui-cold)
+
+Livré dans `console/src/components/settings/veridian_cold_outreach_settings.tsx`
++ `console/src/services/api/workspace.ts` + `console/src/services/cold/sending_policy_presets.ts`.
+SHA: 6f7c0ef4 (branche `veridian`). UI-pure (backend allowlist/EmailProvider JSON blob
+vérifiés — zéro Go). tsc vert, 48/48 tests front verts, lingui extract+compile OK.
+À valider en rendu réel staging (Chrome `?cachebust=`) avant promo prod (tier 🟡).
