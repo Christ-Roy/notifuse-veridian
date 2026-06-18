@@ -175,19 +175,27 @@ export const VERIDIAN_DEFAULT_OPEN_PIXEL: Record<VeridianProviderClass, boolean>
 // Veridian fork — PRESET « Mode warmup » (cold outbound, ticket 2026-06-16). Set
 // cohérent de valeurs qui constitue le démarrage prudent d'une nouvelle IP/domaine :
 // 1 envoi/jour vers chaque classe de provider destinataire + 1/jour/adresse
-// (anti-harcèlement) + plafond bas par boîte émettrice (warmup IP) + débit lent
-// dans la journée + fenêtre ouvrable lun-ven 9-18 Europe/Paris. Le round-robin
-// entre adresses d'envoi n'a AUCUNE valeur à poser : il s'active tout seul dès que
-// l'infra a ≥ 2 senders ET qu'on est en contexte cold (poser n'importe laquelle de
-// ces clés au niveau workspace bascule le contexte cold). Source de vérité des
-// gates backend : veridian_daily_cap.go / veridian_per_sender_cap.go /
+// (anti-harcèlement) + débit lent dans la journée + fenêtre ouvrable lun-ven 9-18
+// Europe/Paris. Le round-robin entre adresses d'envoi n'a AUCUNE valeur à poser :
+// il s'active tout seul dès que l'infra a ≥ 2 senders ET qu'on est en contexte cold
+// (poser n'importe laquelle de ces clés au niveau workspace bascule le contexte
+// cold). Source de vérité des gates backend : veridian_daily_cap.go /
 // veridian_provider_throttle.go / veridian_sending_window_gate.go. V1 = cap STATIQUE
 // bas ; la rampe PROGRESSIVE (1→2→5→10/jour auto) est un ticket séparé
 // (2026-06-16-warmup-progressif-rampe-auto.md), NON implémentée ici.
+//
+// 🔴 Doctrine warm-up 2026-06-18 (§7.3bis tunnel de vente) : la SEULE limite qui
+// compte = « 1 infra émettrice (IP + domaine) → 1 classe destinataire = N/jour ».
+// Le cap-classe destinataire (veridian_provider_class_daily_cap) est désormais keyé
+// PAR INFRA ÉMETTRICE côté backend (couple domaine-émetteur × classe), donc posé à 1
+// il plafonne CHAQUE domaine d'envoi à 1/jour/classe. Le cap PAR SENDER individuel
+// (veridian_per_sender_daily_cap) est VOLONTAIREMENT RETIRÉ de ce preset : c'est un
+// faux modèle réputationnel (les N adresses d'un même domaine partagent l'IP/
+// réputation, le bon grain est le domaine, pas l'adresse). Le champ reste supporté
+// par le backend (réglable à la main si besoin), il n'est juste plus posé ici.
 export interface VeridianWarmupPreset {
   veridian_provider_class_daily_cap: Record<VeridianProviderClass, number>
   veridian_per_recipient_daily_cap: number
-  veridian_per_sender_daily_cap: number
   veridian_provider_class_rates: Record<VeridianProviderClass, number>
   veridian_sending_window: VeridianSendingWindow
 }
@@ -203,12 +211,14 @@ const veridianAllClassesValue = (value: number): Record<VeridianProviderClass, n
 
 export const VERIDIAN_WARMUP_PRESET: VeridianWarmupPreset = {
   // 1 envoi / jour / classe de provider destinataire (toutes les classes connues).
+  // Keyé PAR INFRA ÉMETTRICE côté backend (couple domaine-émetteur × classe) →
+  // chaque domaine d'envoi est plafonné à 1/jour/classe indépendamment des autres.
   veridian_provider_class_daily_cap: veridianAllClassesValue(1),
   // Jamais 2 mails/jour à la même adresse.
   veridian_per_recipient_daily_cap: 1,
-  // Warmup IP : démarrage prudent à 20 mails/jour par boîte d'envoi. L'admin
-  // ajuste selon l'âge de l'IP ; la rampe auto (ticket séparé) montera ce chiffre.
-  veridian_per_sender_daily_cap: 20,
+  // veridian_per_sender_daily_cap VOLONTAIREMENT ABSENT : faux modèle réputationnel
+  // (cf. note doctrine §7.3bis ci-dessus). Le grain de réputation = le domaine
+  // d'envoi (déjà couvert par le cap-classe par infra), pas l'adresse individuelle.
   // Rythme lent dans la journée : 0.5/min = au plus 1 mail / 2 min par classe
   // (étale au lieu d'un burst). Le cap/jour=1 domine déjà ; le rate humanise.
   veridian_provider_class_rates: veridianAllClassesValue(0.5),

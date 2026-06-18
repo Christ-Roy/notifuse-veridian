@@ -620,7 +620,7 @@ describe('VeridianColdOutreachSettings', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('applying the warmup preset fills caps/per-recipient/per-sender without auto-saving, then Save persists', async () => {
+  it('applying the warmup preset fills caps/per-recipient WITHOUT touching per-sender (doctrine 2026-06-18), then Save persists', async () => {
     const user = userEvent.setup()
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
@@ -629,14 +629,16 @@ describe('VeridianColdOutreachSettings', () => {
     await user.click(await screen.findByRole('button', { name: /^Apply$/i }))
     expect(workspaceService.update).not.toHaveBeenCalled()
 
-    // Les champs sont pré-remplis : per-recipient = 1, per-sender = 20.
+    // per-recipient = 1 est pré-rempli. Le cap par sender N'EST PLUS posé par le
+    // preset warmup (faux modèle réputationnel : le cap-classe par infra émettrice
+    // couvre la réputation par domaine d'envoi). Le champ reste donc vide.
     const recipInput = screen.getByLabelText(/Emails \/ recipient \/ day/i) as HTMLInputElement
     const senderInput = screen.getByLabelText(/Emails \/ sender \/ day/i) as HTMLInputElement
     await waitFor(() => expect(recipInput.value).toBe('1'))
-    expect(senderInput.value).toBe('20')
+    expect(senderInput.value).toBe('')
 
-    // 2) Save → persiste les valeurs warmup (caps=1 par classe, per-recipient=1,
-    //    per-sender=20).
+    // 2) Save → persiste les valeurs warmup (caps=1 par classe, per-recipient=1).
+    //    Pas de per-sender posé par le preset.
     const saveBtn = screen.getByRole('button', { name: /Save Changes/i })
     await waitFor(() => expect(saveBtn).toBeEnabled())
     await user.click(saveBtn)
@@ -644,8 +646,7 @@ describe('VeridianColdOutreachSettings', () => {
     await waitFor(() => expect(workspaceService.update).toHaveBeenCalledTimes(1))
     const arg = vi.mocked(workspaceService.update).mock.calls[0][0]
     expect(arg.settings?.veridian_per_recipient_daily_cap).toBe(1)
-    expect(arg.settings?.veridian_per_sender_daily_cap).toBe(20)
-    // cap journalier = 1 pour les classes principales.
+    // cap journalier = 1 pour les classes principales (keyé par infra émettrice côté backend).
     expect(arg.settings?.veridian_provider_class_daily_cap?.google).toBe(1)
     expect(arg.settings?.veridian_provider_class_daily_cap?.microsoft).toBe(1)
     // rate bas = 0.5 par classe.

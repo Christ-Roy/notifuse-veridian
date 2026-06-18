@@ -80,12 +80,17 @@ const allClassesWith = (
 // SendingWindowCard via le nonce) + durcit jitter/anti-hash à leurs défauts cold.
 // Microsoft EXCLU : c'est la réputation la plus dure à monter, on ne la touche
 // pas tant que l'IP n'est pas chaude.
+//
+// 🔴 Doctrine warm-up 2026-06-18 (§7.3bis) : le cap-classe destinataire est keyé PAR
+// INFRA ÉMETTRICE côté backend → classDailyCap=1 plafonne chaque domaine d'envoi à
+// 1/jour/classe. Le cap PAR SENDER individuel n'est PLUS posé (faux modèle
+// réputationnel : le grain de réputation est le domaine, pas l'adresse).
 export const WARMUP_PRESET: VeridianSendingPolicyPreset = {
   id: 'warmup',
   rates: VERIDIAN_WARMUP_PRESET.veridian_provider_class_rates, // 0.5/min partout
-  classDailyCap: VERIDIAN_WARMUP_PRESET.veridian_provider_class_daily_cap, // 1/jour partout
+  classDailyCap: VERIDIAN_WARMUP_PRESET.veridian_provider_class_daily_cap, // 1/jour/classe PAR INFRA
   perRecipientDailyCap: VERIDIAN_WARMUP_PRESET.veridian_per_recipient_daily_cap, // 1
-  perSenderDailyCap: VERIDIAN_WARMUP_PRESET.veridian_per_sender_daily_cap, // 20
+  // perSenderDailyCap VOLONTAIREMENT ABSENT (cf. doctrine ci-dessus).
   sendingWindow: VERIDIAN_WARMUP_PRESET.veridian_sending_window, // lun-ven 9-18 Europe/Paris
   jitterPct: 0.3, // défaut cold : ±30 %
   antiHashEnabled: true,

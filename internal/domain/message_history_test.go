@@ -1533,7 +1533,12 @@ type veridianDailyCapFakeRepo struct {
 	MessageHistoryRepository // embed nil : panique si une autre méthode est appelée
 	sentByContact            map[string]int
 	sentByDomain             map[string]int
-	gotSince                 time.Time
+	// sentByDomainAndSenderDomain[senderDomain][recipientDomain] = envois du jour
+	// (cap-classe keyé par infra émettrice, 2026-06-18). Permet de prouver que le
+	// compteur de classe est bien SÉPARÉ par domaine émetteur.
+	sentByDomainAndSenderDomain map[string]map[string]int
+	gotSince                    time.Time
+	gotSenderDomain             string
 }
 
 func (f *veridianDailyCapFakeRepo) CountSentSinceForContact(_ context.Context, _ string, contactEmail string, since time.Time) (int, error) {
@@ -1542,23 +1547,38 @@ func (f *veridianDailyCapFakeRepo) CountSentSinceForContact(_ context.Context, _
 }
 
 func (f *veridianDailyCapFakeRepo) CountSentSinceForDomains(_ context.Context, _ string, domains []string, exclude bool, _ time.Time) (int, error) {
+	return sumDomains(f.sentByDomain, domains, exclude), nil
+}
+
+func (f *veridianDailyCapFakeRepo) CountSentSinceForDomainsAndSenderDomain(_ context.Context, _ string, domains []string, exclude bool, senderDomain string, _ time.Time) (int, error) {
+	f.gotSenderDomain = senderDomain
+	if senderDomain == "" {
+		return 0, nil
+	}
+	return sumDomains(f.sentByDomainAndSenderDomain[senderDomain], domains, exclude), nil
+}
+
+// sumDomains additionne les envois des domaines destinataires matchant la classe
+// (inclusion = ANY) ou hors classe (exclusion <> ALL = corporate). Helper partagé
+// par les deux COUNT (global et par infra émettrice).
+func sumDomains(byDomain map[string]int, domains []string, exclude bool) int {
 	total := 0
 	if exclude {
 		in := make(map[string]struct{}, len(domains))
 		for _, d := range domains {
 			in[d] = struct{}{}
 		}
-		for d, n := range f.sentByDomain {
+		for d, n := range byDomain {
 			if _, ok := in[d]; !ok {
 				total += n
 			}
 		}
-		return total, nil
+		return total
 	}
 	for _, d := range domains {
-		total += f.sentByDomain[d]
+		total += byDomain[d]
 	}
-	return total, nil
+	return total
 }
 
 func TestMessageHistoryRepository_DailyCapContract(t *testing.T) {
@@ -1590,6 +1610,51 @@ func TestMessageHistoryRepository_DailyCapContract(t *testing.T) {
 		n, err := repo.CountSentSinceForDomains(ctx, "ws", []string{"gmail.com"}, true, since)
 		require.NoError(t, err)
 		assert.Equal(t, 2, n)
+	})
+}
+
+// Veridian — contrat de CountSentSinceForDomainsAndSenderDomain : le cap-classe
+// keyé PAR INFRA ÉMETTRICE (couple domaine-émetteur × classe destinataire,
+// 2026-06-18). Prouve que le compteur de classe est SÉPARÉ par domaine émetteur
+// (deux infras ne se marchent plus dessus) et que senderDomain est transmis tel
+// quel au repo. La vraie requête SQL est testée dans internal/repository.
+func TestMessageHistoryRepository_DailyCapPerInfraContract(t *testing.T) {
+	// compile-time : le fake satisfait l'interface étendue.
+	var _ MessageHistoryRepository = (*veridianDailyCapFakeRepo)(nil)
+
+	ctx := context.Background()
+	since := time.Date(2026, 6, 18, 0, 0, 0, 0, time.UTC)
+
+	// Deux infras émettrices distinctes tapant la même classe (gmail.com) : A a
+	// déjà envoyé 5 gmail aujourd'hui, B aucun. Le compteur doit être indépendant.
+	repo := &veridianDailyCapFakeRepo{
+		sentByDomainAndSenderDomain: map[string]map[string]int{
+			"infra-a.fr": {"gmail.com": 5, "acme-corp.com": 2},
+			"infra-b.fr": {},
+		},
+	}
+
+	t.Run("counts class per emitting infra (A has 5 gmail, B has 0)", func(t *testing.T) {
+		nA, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, "ws", []string{"gmail.com"}, false, "infra-a.fr", since)
+		require.NoError(t, err)
+		assert.Equal(t, 5, nA, "infra-a a son propre compteur de classe google")
+		assert.Equal(t, "infra-a.fr", repo.gotSenderDomain, "le domaine émetteur est transmis au repo")
+
+		nB, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, "ws", []string{"gmail.com"}, false, "infra-b.fr", since)
+		require.NoError(t, err)
+		assert.Equal(t, 0, nB, "infra-b a un compteur indépendant — pas affecté par le volume de A")
+	})
+
+	t.Run("corporate exclusion still works per infra", func(t *testing.T) {
+		n, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, "ws", []string{"gmail.com"}, true, "infra-a.fr", since)
+		require.NoError(t, err)
+		assert.Equal(t, 2, n, "exclusion <> ALL : acme-corp.com de l'infra-a")
+	})
+
+	t.Run("empty sender domain returns 0 (no infra attribution)", func(t *testing.T) {
+		n, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, "ws", []string{"gmail.com"}, false, "", since)
+		require.NoError(t, err)
+		assert.Zero(t, n)
 	})
 }
 

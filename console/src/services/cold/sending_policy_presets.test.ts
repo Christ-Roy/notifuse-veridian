@@ -21,7 +21,9 @@ describe('sending_policy_presets', () => {
     expect(WARMUP_PRESET.classDailyCap).toEqual(
       VERIDIAN_WARMUP_PRESET.veridian_provider_class_daily_cap
     )
-    expect(WARMUP_PRESET.perSenderDailyCap).toBe(20)
+    // Doctrine warm-up 2026-06-18 : le cap par sender individuel n'est PLUS posé en
+    // warmup (le cap-classe par infra émettrice couvre la réputation par domaine).
+    expect(WARMUP_PRESET.perSenderDailyCap).toBeUndefined()
     expect(WARMUP_PRESET.perRecipientDailyCap).toBe(1)
     expect(WARMUP_PRESET.rates?.google).toBe(0.5)
     expect(WARMUP_PRESET.excludedClasses).toEqual(['microsoft'])

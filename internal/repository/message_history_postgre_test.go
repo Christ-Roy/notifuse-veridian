@@ -2782,6 +2782,75 @@ func TestMessageHistoryRepository_CountSentSinceForDomains(t *testing.T) {
 	})
 }
 
+func TestMessageHistoryRepository_CountSentSinceForDomainsAndSenderDomain(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	since := time.Date(2026, 6, 18, 0, 0, 0, 0, time.UTC)
+	domains := []string{"gmail.com", "googlemail.com"}
+	const senderDomain = "agences-veridian.fr"
+
+	// Le COUNT filtre destinataire (= ANY / <> ALL) ET émetteur (split_part du
+	// veridian_sender_email = lower($3)). 3 placeholders : $1=since, $2=domains,
+	// $3=senderDomain (attention au drift de l'ordre).
+	t.Run("inclusion (= ANY) + sender domain returns count", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history\s+WHERE sent_at >= \$1\s+AND lower\(split_part\(contact_email, '@', 2\)\) = ANY\(\$2\)\s+AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\)`).
+			WithArgs(since, pq.Array(domains), senderDomain).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+
+		got, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, workspaceID, domains, false, senderDomain, since)
+		require.NoError(t, err)
+		assert.Equal(t, 3, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("exclusion (<> ALL) + sender domain for corporate", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`AND lower\(split_part\(contact_email, '@', 2\)\) <> ALL\(\$2\)\s+AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\)`).
+			WithArgs(since, pq.Array(domains), senderDomain).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+		got, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, workspaceID, domains, true, senderDomain, since)
+		require.NoError(t, err)
+		assert.Equal(t, 5, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty sender domain → 0 without query", func(t *testing.T) {
+		// Aucun GetConnection attendu : court-circuit avant la DB (pas d'attribution infra).
+		got, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, workspaceID, domains, false, "", since)
+		require.NoError(t, err)
+		assert.Zero(t, got)
+	})
+
+	t.Run("empty domains inclusion → 0 without query", func(t *testing.T) {
+		got, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, workspaceID, nil, false, senderDomain, since)
+		require.NoError(t, err)
+		assert.Zero(t, got)
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("no conn"))
+		_, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, workspaceID, domains, false, senderDomain, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history`).
+			WithArgs(since, pq.Array(domains), senderDomain).
+			WillReturnError(errors.New("boom"))
+		_, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, workspaceID, domains, false, senderDomain, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "count messages sent to domain class from sender domain")
+	})
+}
+
 func TestMessageHistoryRepository_ExistsContentHashSince(t *testing.T) {
 	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
 	defer cleanup()

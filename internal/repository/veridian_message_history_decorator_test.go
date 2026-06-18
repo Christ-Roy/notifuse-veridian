@@ -349,6 +349,24 @@ func TestVeridianMessageHistoryDecorator_CountSentSinceForDomains_Passthrough(t 
 	assert.Equal(t, 11, got)
 }
 
+func TestVeridianMessageHistoryDecorator_CountSentSinceForDomainsAndSenderDomain_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	domains := []string{"gmail.com", "googlemail.com"}
+	// Cap-classe par infra émettrice : la lecture est un pur passthrough (aucun
+	// side-effect quota), tous les arguments (dont senderDomain) sont forwardés.
+	upstream.EXPECT().
+		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws", domains, false, "agences-veridian.fr", since).
+		Return(4, nil).Times(1)
+	got, err := d.CountSentSinceForDomainsAndSenderDomain(context.Background(), "ws", domains, false, "agences-veridian.fr", since)
+	require.NoError(t, err)
+	assert.Equal(t, 4, got)
+}
+
 func TestVeridianMessageHistoryDecorator_FindContactEmailByMessageID_Passthrough(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

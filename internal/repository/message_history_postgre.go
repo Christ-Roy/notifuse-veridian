@@ -1405,6 +1405,64 @@ func (r *MessageHistoryRepository) CountSentSinceForDomains(ctx context.Context,
 	return count, nil
 }
 
+// CountSentSinceForDomainsAndSenderDomain compte les messages envoyés depuis
+// `since` vers une classe destinataire (liste de domaines + exclude, comme
+// CountSentSinceForDomains) ET depuis une infra émettrice donnée, identifiée par
+// le DOMAINE de l'adresse FROM (`senderDomain`). C'est le COUNT du plafond
+// journalier par classe keyé PAR INFRA (couple domaine-émetteur × classe-
+// destinataire, warm-up multi-domaine). Le domaine émetteur est dérivé en DB via
+// lower(split_part(veridian_sender_email,'@',2)) : la colonne V53 est déjà
+// lowercase, on lower l'argument côté SQL par robustesse.
+//
+// Perf : filtré par sent_at (index idx_message_history_sent_at, V49) ET par le
+// préfixe veridian_sender_email (index partiel V53). Volume cold quotidien
+// négligeable ; pas d'index dédié sur split_part(veridian_sender_email) (décision
+// "COUNT live, pas d'agrégat" cf. v49.go/v53.go — à matérialiser seulement si
+// mesuré nécessaire). `senderDomain` vide = 0 (l'appelant retombe sinon sur le
+// COUNT workspace-global). Même dégradation gracieuse MX que CountSentSinceForDomains.
+func (r *MessageHistoryRepository) CountSentSinceForDomainsAndSenderDomain(ctx context.Context, workspaceID string, domains []string, exclude bool, senderDomain string, since time.Time) (int, error) {
+	if senderDomain == "" {
+		// Sans domaine émetteur, aucun envoi n'est attribuable à une infra : un
+		// COUNT par infra sur "" ne matche rien par construction. L'appelant
+		// (veridian_daily_cap.go) gère le fallback workspace-global en amont ; ce
+		// garde-fou évite un COUNT inutile sur split_part(...) = '' si jamais on
+		// est appelé avec "".
+		return 0, nil
+	}
+	if len(domains) == 0 {
+		// Aucune classe connue à filtrer (idem CountSentSinceForDomains) : un cap
+		// sur un ensemble vide n'a pas de sens hors exclusion ("hors de rien" = tout).
+		if !exclude {
+			return 0, nil
+		}
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// lower() pour matcher la normalisation Go des domaines destinataires ET du
+	// domaine émetteur. Les domaines passés sont déjà en minuscules.
+	op := "= ANY"
+	if exclude {
+		op = "<> ALL"
+	}
+	query := fmt.Sprintf(
+		`SELECT COUNT(*) FROM message_history
+		 WHERE sent_at >= $1
+		   AND lower(split_part(contact_email, '@', 2)) %s($2)
+		   AND lower(split_part(veridian_sender_email, '@', 2)) = lower($3)`,
+		op,
+	)
+
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, since, pq.Array(domains), senderDomain).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count messages sent to domain class from sender domain since: %w", err)
+	}
+	return count, nil
+}
+
 // ExistsContentHashSince retourne true s'il existe déjà un envoi portant
 // `contentHash` depuis `since` vers la même classe (dérivée par la liste de
 // `domains`, cf. CountSentSinceForDomains). Anti-hash identique par classe (cold

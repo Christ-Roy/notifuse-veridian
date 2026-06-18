@@ -317,3 +317,127 @@ func TestVeridianDailyCapGate_PayloadTagDrivesClass(t *testing.T) {
 	_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.True(t, capped)
 }
+
+// --- Cap par classe KEYÉ PAR INFRA ÉMETTRICE (warm-up multi-domaine, 2026-06-18) ---
+
+// veridianTestEntryFrom construit une entrée avec une adresse FROM (sender) figée,
+// pour exercer l'attribution du cap-classe à l'infra émettrice.
+func veridianTestEntryFrom(id, recipient, from string, payload domain.EmailQueuePayload) *domain.EmailQueueEntry {
+	payload.FromAddress = from
+	return veridianTestEntry(id, recipient, payload)
+}
+
+func TestVeridianDailyCapGate_ClassPerInfra_UsesSenderDomainCount(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1}, 0)
+	// Sender sur agences-veridian.fr : le cap-classe doit compter PAR CE DOMAINE,
+	// pas workspace-global. CountSentSinceForDomains (global) NE doit PAS être appelé.
+	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot1@agences-veridian.fr", domain.EmailQueuePayload{})
+
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "agences-veridian.fr", gomock.Any()).
+		Return(1, nil) // cette infra a déjà atteint son quota google du jour → skip
+
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+	assert.True(t, capped)
+	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
+}
+
+func TestVeridianDailyCapGate_ClassPerInfra_TwoInfrasCappedIndependently(t *testing.T) {
+	// Cœur du ticket : deux domaines d'envoi distincts frappant la MÊME classe
+	// (google) sous le même cap. Le compteur est séparé par infra → l'une au quota
+	// ne bloque pas l'autre.
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1}, 0)
+
+	t.Run("infra A au quota → skip", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryFrom("eA", "lead@gmail.com", "a@infra-a.fr", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "infra-a.fr", gomock.Any()).
+			Return(1, nil) // 1 >= cap 1 → bloqué
+		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+		assert.True(t, capped, "infra-a au quota doit être bloquée")
+	})
+
+	t.Run("infra B sous le quota → passe (indépendant de A)", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryFrom("eB", "lead@gmail.com", "b@infra-b.fr", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "infra-b.fr", gomock.Any()).
+			Return(0, nil) // 0 < cap 1 → passe, même si A est au quota
+		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+		assert.False(t, capped, "infra-b sous le quota ne doit PAS être bloquée par le quota de A")
+	})
+}
+
+func TestVeridianDailyCapGate_ClassPerInfra_SeveralAddressesSameDomainShareCount(t *testing.T) {
+	// Les N adresses d'un MÊME domaine partagent la réputation → comptent ensemble.
+	// Deux senders différents mais MÊME domaine émetteur → même clé de COUNT.
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 5}, 0)
+
+	for _, from := range []string{"alice@agences-veridian.fr", "bob@agences-veridian.fr"} {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryFrom("e", "lead@gmail.com", from, domain.EmailQueuePayload{})
+		// Quel que soit l'alias, la clé de COUNT est le domaine commun.
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "agences-veridian.fr", gomock.Any()).
+			Return(5, nil) // domaine au quota → skip pour TOUTE adresse du domaine
+		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+		assert.True(t, capped, "toutes les adresses du domaine partagent le compteur de classe")
+	}
+}
+
+func TestVeridianDailyCapGate_ClassPerInfra_LegacyNoSenderFallsBackToGlobal(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1}, 0)
+	// Pas de FromAddress (legacy / pré-V53) → fallback au COUNT workspace-global.
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		Return(1, nil)
+	// CountSentSinceForDomainsAndSenderDomain NE doit PAS être appelé (pas d'EXPECT).
+
+	_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+	assert.True(t, capped)
+}
+
+func TestVeridianDailyCapGate_ClassPerInfra_CountErrorDegradesToAllow(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1}, 0)
+	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@agences-veridian.fr", domain.EmailQueuePayload{})
+
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "agences-veridian.fr", gomock.Any()).
+		Return(0, errors.New("db down"))
+
+	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+	assert.False(t, capped, "une erreur de COUNT par infra ne doit jamais bloquer l'envoi")
+	assert.Zero(t, delay)
+}
+
+func TestVeridianCountClassForInfra_SenderDomainDerivation(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	since := veridianStartOfDayUTC(time.Now())
+	domains := []string{"gmail.com"}
+
+	t.Run("derives lowercase domain from mixed-case FROM", func(t *testing.T) {
+		entry := veridianTestEntryFrom("e", "lead@gmail.com", "Bot@Agences-Veridian.FR", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", domains, false, "agences-veridian.fr", since).
+			Return(2, nil)
+		got, err := env.worker.veridianCountClassForInfra("ws-1", domains, false, entry, since)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, got)
+	})
+
+	t.Run("empty FROM → workspace-global count", func(t *testing.T) {
+		entry := veridianTestEntry("e", "lead@gmail.com", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForDomains(gomock.Any(), "ws-1", domains, false, since).
+			Return(9, nil)
+		got, err := env.worker.veridianCountClassForInfra("ws-1", domains, false, entry, since)
+		assert.NoError(t, err)
+		assert.Equal(t, 9, got)
+	})
+}

@@ -235,6 +235,24 @@ type MessageHistoryRepository interface {
 	// Cf. veridian_daily_cap.go (gate veridianPerSenderCapGate).
 	CountSentSinceForSender(ctx context.Context, workspaceID, senderEmail string, since time.Time) (int, error)
 
+	// CountSentSinceForDomainsAndSenderDomain compte les messages envoyés depuis
+	// `since` vers une CLASSE de provider destinataire (identifiée par sa liste de
+	// `domains` + `exclude`, exactement comme CountSentSinceForDomains) ET DEPUIS
+	// une INFRA ÉMETTRICE donnée, identifiée par le DOMAINE de l'adresse FROM
+	// (`senderDomain`, ex. "agences-veridian.fr"). C'est le COUNT du plafond
+	// journalier par classe keyé PAR INFRA (couple domaine-émetteur × classe-
+	// destinataire) : warm-up multi-domaine où chaque domaine d'envoi monte son
+	// volume vers une classe indépendamment des autres infras du workspace. Le
+	// domaine émetteur est dérivé en DB via lower(split_part(veridian_sender_email,
+	// '@',2)) (la colonne V53 est déjà stockée lowercase ; l'argument est lowercé
+	// côté SQL pour robustesse). Le filtre destinataire est strictement identique à
+	// CountSentSinceForDomains → MÊME dégradation gracieuse MX (classe sans domaines
+	// connus non-exclude → 0 sans requête). `senderDomain` vide n'a pas de sens ici
+	// (l'appelant retombe alors sur CountSentSinceForDomains workspace-global) — par
+	// prudence on traite "" comme "aucun envoi attribuable" (0). Cf.
+	// veridian_daily_cap.go (résolution par infra émettrice).
+	CountSentSinceForDomainsAndSenderDomain(ctx context.Context, workspaceID string, domains []string, exclude bool, senderDomain string, since time.Time) (int, error)
+
 	// FindContactEmailByMessageID retourne le contact_email de l'envoi dont l'id
 	// (= message_history.id, posé comme local-part du Message-ID RFC822 à l'envoi)
 	// est `messageID`. found=false si aucun envoi ne porte cet id (le Message-ID
