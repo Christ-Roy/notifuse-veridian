@@ -35,6 +35,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -98,10 +99,23 @@ type veridianColdSimulateRequest struct {
 	PerRecipientCap int `json:"per_recipient_cap,omitempty"`
 
 	// --- mode class_cap_decision : classe destinataire + cap par classe à évaluer.
-	// La décision est le prédicat EXACT du gate veridian_daily_cap.go (cap classe) :
-	// CountSentSinceForDomains(domains de la classe) >= cap. ---
+	// La décision est le prédicat EXACT du gate veridian_daily_cap.go (cap classe).
+	// Deux variantes, selon que l'INFRA ÉMETTRICE est précisée :
+	//   - sans sender_domain → COUNT workspace-global (toutes infras confondues) :
+	//     CountSentSinceForDomains(domains de la classe) >= cap (legacy / fallback).
+	//   - avec sender_domain → COUNT keyé PAR INFRA ÉMETTRICE (warm-up multi-domaine,
+	//     2026-06-18) : CountSentSinceForDomainsAndSenderDomain(domains, senderDomain)
+	//     >= cap, le prédicat EXACT de veridianCountClassForInfra. C'est ce chemin que
+	//     l'E2E 2-infras exerce : deux domaines émetteurs frappant la même classe ont
+	//     chacun leur propre compteur. ---
 	ProviderClass string `json:"provider_class,omitempty"`
 	ClassCap      int    `json:"class_cap,omitempty"`
+
+	// SenderDomain : domaine de l'infra ÉMETTRICE pour le mode class_cap_decision.
+	// Si renseigné (directement, ou dérivé de sender_email), le COUNT de classe est
+	// attribué à CETTE infra (couple domaine-émetteur × classe). Vide = COUNT
+	// workspace-global (fallback legacy, comportement antérieur strict).
+	SenderDomain string `json:"sender_domain,omitempty"`
 
 	// --- mode per_sender_cap_decision : cap journalier par adresse émettrice.
 	// Prédicat EXACT de veridian_per_sender_cap.go : CountSentSinceForSender >= cap. ---
@@ -138,6 +152,18 @@ type veridianColdSimulateResponse struct {
 	// dans le JSON (sinon le client lit `undefined` au lieu de `false` quand
 	// l'envoi est autorisé — piège omitempty sur bool, attrapé par l'E2E cap).
 	WouldBeCapped bool `json:"would_be_capped"`
+
+	// class_cap_decision : domaine de l'infra émettrice effectivement utilisé pour
+	// attribuer le COUNT (vide = COUNT workspace-global, sinon = compteur par infra).
+	// Permet à l'E2E 2-infras de VÉRIFIER que la décision est bien keyée par infra
+	// (deux sender_domain distincts → deux compteurs distincts).
+	SenderDomain string `json:"sender_domain,omitempty"`
+
+	// class_cap_decision : true si le COUNT a été attribué à une infra émettrice
+	// précise (sender_domain non vide), false si c'est le COUNT workspace-global
+	// (fallback legacy). PAS d'omitempty : doit être présent pour que l'E2E lise
+	// explicitement quel chemin a été emprunté, même quand c'est le global (false).
+	PerInfra bool `json:"per_infra"`
 
 	// sending_window_decision : la fenêtre laisse-t-elle passer MAINTENANT ?
 	// within = IsWithinWindow(now) ; would_be_skipped = !within (le gate reschedule).
@@ -394,11 +420,24 @@ func (h *VeridianHandler) coldSimulateSeedOne(
 
 // coldSimulateClassCapDecision renvoie la décision EXACTE du gate cap-CLASSE
 // (veridian_daily_cap.go §2) : COUNT des envois du jour vers les domaines de la
-// classe demandée (CountSentSinceForDomains, la requête lue par le worker) vs le
-// cap. would_be_capped = count >= class_cap. ⚠️ Pour une classe MX (ovh/ionos/…),
-// VeridianDomainsForClass renvoie une liste vide → le COUNT ne s'enforce pas
-// (dégradation gracieuse documentée) : la décision reflète FIDÈLEMENT ce
-// comportement (count 0 → jamais capé), ce que l'E2E doit constater honnêtement.
+// classe demandée vs le cap. would_be_capped = count >= class_cap.
+//
+// Deux chemins, EXACTEMENT comme veridianCountClassForInfra du gate :
+//   - sender_domain VIDE → COUNT workspace-global CountSentSinceForDomains
+//     (toutes infras émettrices confondues ; chemin legacy / fallback).
+//   - sender_domain PRÉSENT → COUNT keyé PAR INFRA ÉMETTRICE
+//     CountSentSinceForDomainsAndSenderDomain (couple domaine-émetteur × classe).
+//     C'est le prédicat du nouveau cap par infra (warm-up multi-domaine) : deux
+//     domaines d'envoi frappant la même classe ont chacun leur propre compteur.
+//
+// Le sender_domain fourni est normalisé comme le gate (veridianEmailDomain) : on
+// accepte soit un domaine nu (`infra-a.fr`), soit une adresse complète
+// (`bot@infra-a.fr`) dont on extrait le domaine, puis lowercase/trim.
+//
+// ⚠️ Pour une classe MX (ovh/ionos/…), VeridianDomainsForClass renvoie une liste
+// vide → le COUNT ne s'enforce pas (dégradation gracieuse documentée) : la décision
+// reflète FIDÈLEMENT ce comportement (count 0 → jamais capé), ce que l'E2E doit
+// constater honnêtement.
 func (h *VeridianHandler) coldSimulateClassCapDecision(
 	w http.ResponseWriter, r *http.Request, deps *veridianColdSimulateDeps, req *veridianColdSimulateRequest,
 ) {
@@ -416,9 +455,24 @@ func (h *VeridianHandler) coldSimulateClassCapDecision(
 	}
 
 	ctx := r.Context()
-	now := time.Now().UTC()
+	since := veridianColdSimulateStartOfDay(time.Now().UTC())
 	domains, exclude := domain.VeridianDomainsForClass(req.ProviderClass)
-	count, err := deps.messageHistoryRepo.CountSentSinceForDomains(ctx, req.WorkspaceID, domains, exclude, veridianColdSimulateStartOfDay(now))
+
+	senderDomain := veridianColdSimulateSenderDomain(req.SenderDomain)
+
+	var (
+		count int
+		err   error
+	)
+	if senderDomain != "" {
+		// Chemin par infra émettrice : exactement le COUNT de veridianCountClassForInfra.
+		count, err = deps.messageHistoryRepo.CountSentSinceForDomainsAndSenderDomain(
+			ctx, req.WorkspaceID, domains, exclude, senderDomain, since)
+	} else {
+		// Fallback workspace-global (legacy) : comportement antérieur strict.
+		count, err = deps.messageHistoryRepo.CountSentSinceForDomains(
+			ctx, req.WorkspaceID, domains, exclude, since)
+	}
 	if err != nil {
 		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
@@ -428,7 +482,28 @@ func (h *VeridianHandler) coldSimulateClassCapDecision(
 		Mode:          "class_cap_decision",
 		SentToday:     count,
 		WouldBeCapped: count >= req.ClassCap, // prédicat exact du gate worker (cap classe)
+		SenderDomain:  senderDomain,
+		PerInfra:      senderDomain != "",
 	})
+}
+
+// veridianColdSimulateSenderDomain normalise le sender_domain fourni au handler
+// EXACTEMENT comme le gate dérive le domaine émetteur (queue.veridianEmailDomain) :
+// on accepte un domaine nu OU une adresse complète, on extrait la part après le
+// dernier '@' le cas échéant, lowercase + trim + retrait du point FQDN final.
+// Retourne "" si rien d'exploitable (l'appelant retombe alors sur le COUNT global).
+func veridianColdSimulateSenderDomain(raw string) string {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" {
+		return ""
+	}
+	if at := strings.LastIndex(s, "@"); at >= 0 {
+		if at == len(s)-1 {
+			return ""
+		}
+		s = s[at+1:]
+	}
+	return strings.TrimSuffix(strings.TrimSpace(s), ".")
 }
 
 // coldSimulatePerSenderCapDecision renvoie la décision EXACTE du gate per-sender

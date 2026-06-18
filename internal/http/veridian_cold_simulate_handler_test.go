@@ -407,6 +407,125 @@ func TestHandleColdSimulate_ClassCapDecision_Validation400(t *testing.T) {
 	}
 }
 
+// Sans sender_domain : le chemin reste le COUNT workspace-global (legacy) →
+// CountSentSinceForDomains, et per_infra = false (présent dans le JSON).
+func TestHandleColdSimulate_ClassCapDecision_NoSenderDomainIsGlobal(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	// Chemin global EXACT : aucune attente sur CountSentSinceForDomainsAndSenderDomain.
+	msgRepo.EXPECT().
+		CountSentSinceForDomains(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(0, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "class_cap_decision", WorkspaceID: "ws1", ProviderClass: "google", ClassCap: 1,
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.False(t, got.PerInfra, "sans sender_domain → COUNT workspace-global")
+	assert.Empty(t, got.SenderDomain)
+	assert.Contains(t, rec.Body.String(), `"per_infra":false`, "per_infra=false présent dans le JSON")
+}
+
+// AVEC sender_domain : le COUNT est keyé PAR INFRA ÉMETTRICE →
+// CountSentSinceForDomainsAndSenderDomain reçoit le domaine émetteur, le COUNT
+// global N'est PAS appelé. C'est le prédicat exact de veridianCountClassForInfra.
+func TestHandleColdSimulate_ClassCapDecision_PerInfraAtCapBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	// infra-a.fr a déjà 1 envoi google aujourd'hui, cap 1 → bloqué pour CETTE infra.
+	msgRepo.EXPECT().
+		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), "infra-a.fr", gomock.Any()).
+		Return(1, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "class_cap_decision", WorkspaceID: "ws1", ProviderClass: "google", ClassCap: 1,
+		SenderDomain: "infra-a.fr",
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, 1, got.SentToday)
+	assert.True(t, got.WouldBeCapped, "count 1 >= cap 1 → bloqué pour infra-a.fr")
+	assert.True(t, got.PerInfra, "sender_domain présent → COUNT par infra")
+	assert.Equal(t, "infra-a.fr", got.SenderDomain)
+}
+
+// L'ISOLATION par infra : une SECONDE infra (infra-b.fr) frappant la même classe
+// a son PROPRE compteur (0) → PAS bloquée, alors que infra-a.fr l'était. C'est la
+// preuve unitaire que le compteur est séparé par domaine émetteur (le scénario
+// E2E 2-infras le confirme contre la vraie DB).
+func TestHandleColdSimulate_ClassCapDecision_PerInfraIsolatedBelowCap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	msgRepo.EXPECT().
+		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), "infra-b.fr", gomock.Any()).
+		Return(0, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "class_cap_decision", WorkspaceID: "ws1", ProviderClass: "google", ClassCap: 1,
+		SenderDomain: "infra-b.fr",
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, 0, got.SentToday)
+	assert.False(t, got.WouldBeCapped, "infra-b.fr a son propre compteur (0) → pas bloquée")
+	assert.True(t, got.PerInfra)
+	assert.Equal(t, "infra-b.fr", got.SenderDomain)
+}
+
+// sender_domain accepte une ADRESSE complète : on extrait le domaine (= ce que le
+// gate fait via veridianEmailDomain sur FromAddress). Vérifie aussi la normalisation
+// (lowercase / trim / display name).
+func TestHandleColdSimulate_ClassCapDecision_SenderDomainFromFullAddress(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	// "Bot1@Infra-A.FR" → domaine "infra-a.fr" passé au repo.
+	msgRepo.EXPECT().
+		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), "infra-a.fr", gomock.Any()).
+		Return(0, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "class_cap_decision", WorkspaceID: "ws1", ProviderClass: "google", ClassCap: 1,
+		SenderDomain: "Bot1@Infra-A.FR",
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "infra-a.fr", got.SenderDomain, "domaine extrait + normalisé")
+}
+
+// veridianColdSimulateSenderDomain : normalisation alignée sur queue.veridianEmailDomain.
+func TestVeridianColdSimulateSenderDomain(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"infra-a.fr", "infra-a.fr"},
+		{"  Infra-A.FR  ", "infra-a.fr"},
+		{"bot@infra-a.fr", "infra-a.fr"},
+		{"Bot1@Infra-A.FR", "infra-a.fr"},
+		{"infra-a.fr.", "infra-a.fr"}, // point FQDN final retiré
+		{"", ""},
+		{"   ", ""},
+		{"bot@", ""}, // adresse sans domaine → rien d'exploitable
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, veridianColdSimulateSenderDomain(c.in), "in=%q", c.in)
+	}
+}
+
 // === mode per_sender_cap_decision : prédicat exact du cap ÉMETTEUR (CountSentSinceForSender >= cap) ===
 
 func TestHandleColdSimulate_PerSenderCapDecision_AtCapBlocks(t *testing.T) {

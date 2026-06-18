@@ -416,12 +416,18 @@ envoi + vérif finale que le relai sortant `mail-relay` n'a vu AUCUN mail.
     (cap-CLASSE de `veridian_daily_cap.go`). ⚠️ Isolation : le COUNT est réel et
     partagé par classe → un test doit lire le baseline ou utiliser une classe non
     polluée par la campagne (sinon faux "FAIL" : la classe a déjà des envois du jour).
+    **Étendu 2026-06-18** : param optionnel `sender_domain` (domaine nu OU adresse
+    dont on extrait le domaine, normalisé comme `veridianEmailDomain`). Fourni → le
+    COUNT passe par `CountSentSinceForDomainsAndSenderDomain` = le prédicat EXACT de
+    `veridianCountClassForInfra` (compteur par INFRA ÉMETTRICE). Absent → COUNT
+    workspace-global `CountSentSinceForDomains` inchangé (non-régression). La réponse
+    expose `sender_domain` (normalisé) + `per_infra` (bool, true = chemin par infra).
   - `per_sender_cap_decision` : `CountSentSinceForSender >= per_sender_cap` (warmup
     IP, `veridian_per_sender_cap.go`). `seed_sent` accepte désormais `sender_email`
     (pose `veridian_sender_email`).
   - `sending_window_decision` : `IsWithinWindow(now)` pur (`veridian_sending_window_gate.go`),
     renvoie `within`/`would_be_skipped`/`next_opening_unix`.
-  - Fichier : `internal/http/veridian_cold_simulate_handler.go` (+ 8 tests neufs).
+  - Fichier : `internal/http/veridian_cold_simulate_handler.go` (+ tests colocalisés).
 
 - **Pièges vécus (gravés)** :
   - **Circuit breaker — race provider-switch** : pour exercer le circuit, on bascule
@@ -1421,6 +1427,17 @@ Front : `console/src/services/api/workspace.ts`,
 `console/src/services/cold/sending_policy_presets.ts` (+ tests). Mock
 `mock_message_history_repository.go` régénéré (méthode ajoutée à la main, mockgen cassé).
 **Pas de migration, pas de `config.VERSION` bump** (la colonne V53 suffit).
+
+**Validation E2E ON-PREMISE (tier 🔴, 2026-06-18)** : prouvée contre la vraie DB
+staging via le prédicat EXACT du gate, ZÉRO mail. `cold-simulate.class_cap_decision`
+étendu d'un param `sender_domain` (route vers `CountSentSinceForDomainsAndSenderDomain`
+quand fourni, fallback `CountSentSinceForDomains` sinon) + harness dédié
+`scripts/e2e/cold-cap-par-infra.sh` (workspace jetable vierge → cap google=1 → seed 1
+envoi google depuis `infra-a` → infra-a `would_be_capped=true` (compteur 1) / infra-b
+`would_be_capped=false` (compteur 0, SÉPARÉ) / global sans `sender_domain`=1 ; recoupé
+par 3 COUNT psql directs). Run staging : toutes assertions vertes. Le gate worker
+réel consomme le même `CountSentSinceForDomainsAndSenderDomain` → le prédicat testé EST
+le code de production.
 
 ### Sync upstream
 
