@@ -1,32 +1,20 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-06-17 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-17
+> **Dernier run** : 2026-06-18 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-18
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 9 (avant filtrage)
+> **CVE bruts détectés** : 8 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
-- 🔴 **1 HIGH** — action recommandée cette semaine
+- 🔴 **0 HIGH** — action recommandée cette semaine
 - 🟡 **4 MEDIUM** — récap, pas urgent
 - 🟢 **4 NOISE** — annexe collapse
 
-
----
-
-## 🔴 HIGH — 1 CVE en 1 groupe
-
-### 1. `esbuild` — 0.27.3 → **0.28.1**
-
-- **CVE** : `GHSA-gv7w-rqvm-qjhr` (HIGH/RCE)
-- **Type** : RCE
-- **Score max** : 75
-- **Title** : esbuild: Missing binary integrity verification in Deno module enables remote code execution via NPM_CONFIG_REGISTRY
-- **Source** : `notification_center/package-lock.json`
-- **Fix** : `pnpm up esbuild` (jusqu'à >= `0.28.1`)
+✅ **Rien d'urgent.** Quelques items MEDIUM à voir quand t'as 5 min.
 
 
 ---
