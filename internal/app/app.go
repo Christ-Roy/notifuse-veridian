@@ -1271,7 +1271,15 @@ func (a *App) InitHandlers() error {
 		a.logger,
 		a.rateLimiter, // Pass global rate limiter
 	)
-	analyticsHandler := httpHandler.NewAnalyticsHandler(
+	// === Veridian patch ===
+	// On route les endpoints analytics via le wrapper veridian pour aligner le
+	// error-shape sur le standard {"error": "<string>"} (l'upstream renvoyait
+	// {"error": true, "message": ...}). Cf. veridian_analytics_handler.go +
+	// ticket todo/2026-06-17-analytics-handler-error-shape-non-standard.md.
+	// Le handler upstream NewAnalyticsHandler n'est PLUS enregistré dans le mux
+	// (le wrapper prend les mêmes routes /api/analytics.query + .schemas — les
+	// enregistrer tous les deux ferait paniquer le mux sur un pattern dupliqué).
+	analyticsHandler := httpHandler.NewVeridianAnalyticsHandler(
 		a.analyticsService,
 		getJWTSecret,
 		a.logger,
