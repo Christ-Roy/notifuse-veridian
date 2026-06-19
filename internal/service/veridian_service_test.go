@@ -1547,20 +1547,35 @@ type workspaceRepoWithDropCapability struct {
 	droppedWSID []string
 	dropErr     error
 	// dbStillExists pilote la réponse de VeridianWorkspaceDBExists (post-rattrapage).
-	dbStillExists    bool
-	dbExistsErr      error
-	dbExistsCalls    int
+	dbStillExists bool
+	dbExistsErr   error
+	dbExistsCalls int
+	// === 2026-06-19 wipe record-first ===
+	recordDeleteCalls int
+	recordDeletedWSID []string
+	recordDeleteErr   error
+	// callOrder trace l'ORDRE des opérations clés pour prouver le record-first :
+	// "record" (suppression system) doit précéder "drop" (force-drop).
+	callOrder []string
 }
 
 func (w *workspaceRepoWithDropCapability) VeridianForceDropDatabase(ctx context.Context, workspaceID string, log logger.Logger) error {
 	w.dropCalls++
 	w.droppedWSID = append(w.droppedWSID, workspaceID)
+	w.callOrder = append(w.callOrder, "drop")
 	return w.dropErr
 }
 
 func (w *workspaceRepoWithDropCapability) VeridianWorkspaceDBExists(ctx context.Context, workspaceID string) (bool, error) {
 	w.dbExistsCalls++
 	return w.dbStillExists, w.dbExistsErr
+}
+
+func (w *workspaceRepoWithDropCapability) VeridianDeleteWorkspaceSystemRecord(ctx context.Context, workspaceID string) error {
+	w.recordDeleteCalls++
+	w.recordDeletedWSID = append(w.recordDeletedWSID, workspaceID)
+	w.callOrder = append(w.callOrder, "record")
+	return w.recordDeleteErr
 }
 
 func TestVeridianService_WipeTestTenants_TriggersForceDropWhenConfigured(t *testing.T) {
@@ -1687,6 +1702,119 @@ func TestVeridianService_WipeTestTenants_ForceDropFailsBaseStillThere(t *testing
 
 // (Les tests unitaires de workspaceDBStillExists vivent dans le fichier colocalisé
 // veridian_workspace_db_cleanup_test.go, où la méthode est définie.)
+
+// === Veridian patch 2026-06-19 — WIPE RECORD-FIRST ===
+//
+// Bug : le force-drop droppe la base mais le worker la RECRÉE dans la seconde car
+// le record `notifuse_system.workspaces` SURVIT (le DROP upstream rate sur la race
+// AVANT d'atteindre le DELETE du record) → le worker round-robin ré-élit le ws et
+// une task segment-queue en vol recrée la base. Fix : supprimer le record system
+// EN PREMIER (coupe la ré-élection), force-drop EN DERNIER (plus rien ne recrée).
+
+// Prouve l'ORDRE : suppression du record system AVANT le force-drop.
+func TestVeridianService_WipeTestTenants_RecordFirst_OrderRecordThenDrop(t *testing.T) {
+	svc, m := newVeridianService(t)
+	wrapped := &workspaceRepoWithDropCapability{MockWorkspaceRepository: m.workspaceRepo}
+	svc.workspaceRepo = wrapped
+	svc.ConfigureWorkspaceDBCleanup("notifuse")
+
+	ctx := context.Background()
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "tstrf1").
+		Return([]*domain.UserWorkspaceWithEmail{}, nil).Times(1)
+	m.workspace.EXPECT().DeleteWorkspace(gomock.Any(), "tstrf1").Return(nil).Times(1)
+	m.planRepo.EXPECT().HardDelete(ctx, "tstrf1").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantDeleted, "tstrf1", gomock.Any()).AnyTimes()
+
+	resp, err := svc.WipeTestTenants(ctx, domain.WipeTestTenantsInput{TenantIDs: []string{"tstrf1"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"tstrf1"}, resp.Wiped)
+
+	assert.Equal(t, 1, wrapped.recordDeleteCalls, "le record system doit être supprimé 1×")
+	assert.Equal(t, []string{"tstrf1"}, wrapped.recordDeletedWSID)
+	require.GreaterOrEqual(t, len(wrapped.callOrder), 2)
+	assert.Equal(t, "record", wrapped.callOrder[0], "record-first : suppression du record AVANT le drop")
+	assert.Contains(t, wrapped.callOrder, "drop")
+	// L'index du record doit être strictement avant celui du drop.
+	recordIdx, dropIdx := -1, -1
+	for i, op := range wrapped.callOrder {
+		if op == "record" && recordIdx == -1 {
+			recordIdx = i
+		}
+		if op == "drop" && dropIdx == -1 {
+			dropIdx = i
+		}
+	}
+	assert.Less(t, recordIdx, dropIdx, "le force-drop doit être la DERNIÈRE opération (après le record-first)")
+}
+
+// Une erreur résiduelle bénigne de DeleteWorkspace (ex. ErrWorkspaceNotFound car le
+// record-first l'a déjà supprimé, ou auth owner échouée) NE doit PAS faire échouer
+// le wipe : le record est déjà coupé + la base force-dropée.
+func TestVeridianService_WipeTestTenants_RecordFirst_BenignDeleteWorkspaceError(t *testing.T) {
+	svc, m := newVeridianService(t)
+	wrapped := &workspaceRepoWithDropCapability{
+		MockWorkspaceRepository: m.workspaceRepo,
+		dbStillExists:           false,
+	}
+	svc.workspaceRepo = wrapped
+	svc.ConfigureWorkspaceDBCleanup("notifuse")
+
+	ctx := context.Background()
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "tstrf2").
+		Return([]*domain.UserWorkspaceWithEmail{}, nil).Times(1)
+	// DeleteWorkspace upstream remonte une erreur générique (auth owner échouée) :
+	// ce n'est NI "not found" NI "being accessed" → sans record-first ça ferait
+	// échouer le wipe. Avec record-first réussi (recordCut), c'est bénin.
+	m.workspace.EXPECT().DeleteWorkspace(gomock.Any(), "tstrf2").
+		Return(errors.New("failed to authenticate user: owner session unavailable")).Times(1)
+	m.planRepo.EXPECT().HardDelete(ctx, "tstrf2").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantDeleted, "tstrf2", gomock.Any()).AnyTimes()
+
+	resp, err := svc.WipeTestTenants(ctx, domain.WipeTestTenantsInput{TenantIDs: []string{"tstrf2"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"tstrf2"}, resp.Wiped, "record-first coupé + force-drop fait → wipe réussit malgré l'erreur bénigne")
+	assert.Equal(t, 1, wrapped.recordDeleteCalls)
+	assert.Equal(t, 1, wrapped.dropCalls)
+}
+
+// Si le record-first échoue (capacité présente mais DELETE en erreur), le wipe NE
+// doit PAS planter : on continue (force-drop tenté). DeleteWorkspace réussit ici →
+// le wipe réussit. recordCut=false donc une erreur générique de DeleteWorkspace
+// resterait fatale (testé séparément ci-dessus avec recordCut=true).
+func TestVeridianService_WipeTestTenants_RecordFirstError_StillWipesViaUpstream(t *testing.T) {
+	svc, m := newVeridianService(t)
+	wrapped := &workspaceRepoWithDropCapability{
+		MockWorkspaceRepository: m.workspaceRepo,
+		recordDeleteErr:         errors.New("system db hiccup"),
+	}
+	svc.workspaceRepo = wrapped
+	svc.ConfigureWorkspaceDBCleanup("notifuse")
+
+	ctx := context.Background()
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "tstrf3").
+		Return([]*domain.UserWorkspaceWithEmail{}, nil).Times(1)
+	m.workspace.EXPECT().DeleteWorkspace(gomock.Any(), "tstrf3").Return(nil).Times(1)
+	m.planRepo.EXPECT().HardDelete(ctx, "tstrf3").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantDeleted, "tstrf3", gomock.Any()).AnyTimes()
+
+	resp, err := svc.WipeTestTenants(ctx, domain.WipeTestTenantsInput{TenantIDs: []string{"tstrf3"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"tstrf3"}, resp.Wiped, "record-first en erreur best-effort : DeleteWorkspace upstream nettoie")
+	assert.Equal(t, 1, wrapped.recordDeleteCalls)
+	assert.Equal(t, 1, wrapped.dropCalls, "force-drop tenté quand même")
+}
 
 // === V37 — GetLimits (lot 3 pricing-plans) ===
 

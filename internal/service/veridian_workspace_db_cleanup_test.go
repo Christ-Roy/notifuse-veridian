@@ -46,6 +46,46 @@ func (f *fakeDBExistenceRepo) VeridianWorkspaceDBExists(ctx context.Context, wor
 	return f.exists, f.err
 }
 
+// fakeSystemRecordDeleterRepo embed WorkspaceRepository (nil) et implémente
+// VeridianDeleteWorkspaceSystemRecord → satisfait veridianSystemRecordDeleter.
+type fakeSystemRecordDeleterRepo struct {
+	domain.WorkspaceRepository
+	called    int
+	lastWSID  string
+	returnErr error
+}
+
+func (f *fakeSystemRecordDeleterRepo) VeridianDeleteWorkspaceSystemRecord(ctx context.Context, workspaceID string) error {
+	f.called++
+	f.lastWSID = workspaceID
+	return f.returnErr
+}
+
+func TestDeleteWorkspaceSystemRecordBestEffort_CutsRecord(t *testing.T) {
+	repo := &fakeSystemRecordDeleterRepo{}
+	s := &veridianService{workspaceRepo: repo}
+	cut := s.deleteWorkspaceSystemRecordBestEffort(context.Background(), "tst123")
+	assert.True(t, cut, "record-first delete succeeded → re-election cut")
+	assert.Equal(t, 1, repo.called)
+	assert.Equal(t, "tst123", repo.lastWSID)
+}
+
+func TestDeleteWorkspaceSystemRecordBestEffort_NoCapability_ReturnsFalse(t *testing.T) {
+	// Repo sans la capacité → false (on retombe sur le comportement upstream seul).
+	s := &veridianService{workspaceRepo: &repoWithoutDropCapability{}}
+	assert.False(t, s.deleteWorkspaceSystemRecordBestEffort(context.Background(), "tst123"))
+}
+
+func TestDeleteWorkspaceSystemRecordBestEffort_Error_ReturnsFalse(t *testing.T) {
+	// Erreur de suppression → false + log, ne panique pas (le force-drop reste tenté).
+	repo := &fakeSystemRecordDeleterRepo{returnErr: errors.New("boom")}
+	s := &veridianService{workspaceRepo: repo, logger: logger.NewLogger()}
+	assert.NotPanics(t, func() {
+		assert.False(t, s.deleteWorkspaceSystemRecordBestEffort(context.Background(), "tst123"))
+	})
+	assert.Equal(t, 1, repo.called)
+}
+
 func TestWorkspaceDBStillExists_TrueWhenRepoSaysExists(t *testing.T) {
 	repo := &fakeDBExistenceRepo{exists: true}
 	s := &veridianService{workspaceRepo: repo}

@@ -40,6 +40,42 @@ type veridianDBExistenceChecker interface {
 	VeridianWorkspaceDBExists(ctx context.Context, workspaceID string) (bool, error)
 }
 
+// veridianSystemRecordDeleter : capacité (optionnelle) de supprimer les ROWS
+// SYSTÈME d'un workspace (workspaces + user_workspaces + workspace_invitations)
+// SANS toucher à la base physique. C'est la brique du wipe « record-first » : on
+// supprime le record system AVANT le DROP pour couper la ré-élection du ws par le
+// worker round-robin (qui lit `workspaces` via List()), donc la recréation de la
+// base par une task segment-queue en vol. Implémentée par
+// *repository.workspaceRepository (méthode dans veridian_workspace_drop.go),
+// détectée par type-assertion → pas d'import du package repository depuis service.
+type veridianSystemRecordDeleter interface {
+	VeridianDeleteWorkspaceSystemRecord(ctx context.Context, workspaceID string) error
+}
+
+// deleteWorkspaceSystemRecordBestEffort supprime le record system du workspace AVANT
+// le DROP (wipe record-first). Retourne true si la suppression a RÉELLEMENT eu lieu
+// (capacité présente + pas d'erreur) — le caller s'en sert pour savoir si la
+// ré-élection worker est coupée et donc s'il peut traiter une erreur ultérieure de
+// DeleteWorkspace comme bénigne. Best-effort : capacité absente → false (on retombe
+// sur le comportement upstream seul) ; erreur → loggée + false (le DROP de
+// rattrapage reste tenté, et le record restant sera re-nettoyé au prochain wipe/GC).
+func (s *veridianService) deleteWorkspaceSystemRecordBestEffort(ctx context.Context, workspaceID string) bool {
+	deleter, ok := s.workspaceRepo.(veridianSystemRecordDeleter)
+	if !ok {
+		return false
+	}
+	if err := deleter.VeridianDeleteWorkspaceSystemRecord(ctx, workspaceID); err != nil {
+		if s.logger != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"tenant_id": workspaceID,
+				"error":     err.Error(),
+			}).Warn("veridian: system-record delete (record-first) failed (continuing to force-drop)")
+		}
+		return false
+	}
+	return true
+}
+
 // workspaceDBStillExists retourne true si la base physique du workspace est encore
 // présente. Best-effort : si le repo n'expose pas la capacité, ou si la requête
 // échoue, on retourne false (on ne bloque PAS le wipe sur une incertitude — le

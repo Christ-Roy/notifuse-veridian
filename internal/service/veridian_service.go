@@ -1026,12 +1026,12 @@ var defaultSafetyClientPrefixes = []string{
 // nettoyer les tenants e2e accumules entre les runs.
 //
 // Pour chaque tenant a supprimer (cf wipeOneTenant) :
-//   1. Resoudre l'owner du workspace via workspaceRepo direct (post-feature
-//      owner-natif, root n'est plus member et ne peut pas appeler
-//      DeleteWorkspace).
-//   2. WorkspaceService.DeleteWorkspace depuis ctx owner → DROP DATABASE.
-//   3. PlanRepo.HardDelete → DELETE row veridian_plan.
-//   4. Emit event tenant.deleted (best-effort).
+//  1. Resoudre l'owner du workspace via workspaceRepo direct (post-feature
+//     owner-natif, root n'est plus member et ne peut pas appeler
+//     DeleteWorkspace).
+//  2. WorkspaceService.DeleteWorkspace depuis ctx owner → DROP DATABASE.
+//  3. PlanRepo.HardDelete → DELETE row veridian_plan.
+//  4. Emit event tenant.deleted (best-effort).
 //
 // Les tenants matchant un safety prefix sont SKIP (jamais effaces).
 // ListTenants projette les tenants en 2 buckets (managed/orphans) pour
@@ -1266,35 +1266,57 @@ func (s *veridianService) wipeOneTenant(ctx, rootCtx context.Context, tid string
 		}
 	}
 
-	// 2. DeleteWorkspace upstream → DROP DATABASE workspace dedie.
-	// Workspace deja absent = OK (peut arriver si planRepo a une row sans workspace).
+	// 2. === Veridian patch — 2026-06-19 — WIPE RECORD-FIRST ===
+	// On supprime le RECORD SYSTÈME du workspace (workspaces + user_workspaces +
+	// workspace_invitations) AVANT tout DROP de base. C'est la correction de la
+	// cause racine du bug « la base est dropée puis RECRÉÉE dans la seconde » :
+	// le worker round-robin élit les workspaces via `List()` = SELECT FROM
+	// workspaces ; tant que ce record vit, le worker continue d'élire le ws mort
+	// et une de ses tasks segment-queue en vol RECRÉE la base (init.go). En
+	// supprimant le record D'ABORD (opération sur la base SYSTÈME, indépendante de
+	// la base workspace → jamais bloquée par la race « being accessed »), on coupe
+	// la ré-élection : plus rien ne peut recréer la base, et le force-drop ci-dessous
+	// devient la DERNIÈRE opération sur elle. Best-effort (capacité absente ou
+	// erreur → on continue : DeleteWorkspace upstream nettoiera le record, ou le
+	// prochain wipe/GC le rattrapera).
+	recordCut := s.deleteWorkspaceSystemRecordBestEffort(ctx, tid)
+
+	// 3. DeleteWorkspace upstream → DROP DATABASE workspace dedie (+ nettoyage des
+	// records, désormais déjà supprimés par le record-first ci-dessus → ses DELETE
+	// sont des no-op et son DELETE FROM workspaces remonte ErrWorkspaceNotFound,
+	// traité comme bénin plus bas). Workspace deja absent = OK.
 	deleteWorkspaceErr := s.workspaceService.DeleteWorkspace(deleteCtx, tid)
 
-	// 2bis. === Veridian patch — 2026-06-18 — DROP FORCE de rattrapage ===
+	// 3bis. === Veridian patch — 2026-06-18 — DROP FORCE de rattrapage (DERNIÈRE op) ===
 	// Le DROP upstream (DeleteDatabase) n'utilise PAS WITH (FORCE) → sur staging
 	// le worker round-robin rouvre une connexion entre le terminate et le drop →
 	// "database is being accessed by other users" → DROP raté → base orpheline.
 	// Et si DeleteWorkspace a retourné "not found" (record absent), le DROP n'a
 	// même pas été tenté alors que la base physique peut subsister.
 	//
-	// ON RATTRAPE INCONDITIONNELLEMENT, AVANT d'évaluer l'erreur de DeleteWorkspace :
-	// le cas le PLUS IMPORTANT à rattraper est justement quand DeleteWorkspace a
-	// échoué sur "is being accessed" (la race). Le DROP FORCE idempotent termine
-	// les backends atomiquement et droppe la base. Best-effort (no-op si dbPrefix
-	// non configuré ; un échec est loggué sans bloquer).
+	// ON RATTRAPE INCONDITIONNELLEMENT, AVANT d'évaluer l'erreur de DeleteWorkspace.
+	// Grâce au record-first ci-dessus, le worker n'élit plus le ws → AUCUNE task ne
+	// peut recréer la base après ce DROP : il est bien la DERNIÈRE opération sur elle.
+	// Le DROP FORCE idempotent termine les backends atomiquement et droppe la base.
+	// Best-effort (no-op si dbPrefix non configuré ; un échec est loggué sans bloquer).
 	s.forceDropWorkspaceDBBestEffort(ctx, tid)
 
-	// 2ter. Évaluation de l'erreur DeleteWorkspace APRÈS le rattrapage :
-	//   - "not found" → OK (record absent, base déjà rattrapée si elle existait).
+	// 3ter. Évaluation de l'erreur DeleteWorkspace APRÈS le rattrapage :
+	//   - "not found" → OK (record absent : soit déjà absent, soit supprimé par le
+	//     record-first ci-dessus → DeleteWorkspace remonte ErrWorkspaceNotFound).
 	//   - "being accessed by other users" → le DROP upstream a raté MAIS notre
 	//     rattrapage FORCE vient de dropper la base : on vérifie si elle a vraiment
 	//     disparu ; si oui, on NE fait PAS échouer le wipe (le but est atteint).
-	//   - autre erreur → on remonte (échec réel non lié à la race de connexions).
+	//   - autre erreur → on remonte (échec réel non lié à la race de connexions),
+	//     SAUF si le record-first a réussi (recordCut) : la suppression du record
+	//     est l'objectif premier (couper la ré-élection) ; une erreur résiduelle de
+	//     DeleteWorkspace (ex. auth échouée car owner introuvable) ne doit pas faire
+	//     échouer un wipe dont le record est déjà coupé et la base déjà force-dropée.
 	if deleteWorkspaceErr != nil {
 		msg := deleteWorkspaceErr.Error()
 		switch {
 		case strings.Contains(msg, "not found"):
-			// OK, record déjà absent.
+			// OK, record absent (record-first ou déjà parti).
 		case strings.Contains(msg, "being accessed by other users"):
 			// Le DROP nu upstream a raté sur la race. Notre DROP FORCE l'a rattrapé.
 			// Si la base a réellement disparu, le wipe est réussi malgré l'erreur
@@ -1305,6 +1327,16 @@ func (s *veridianService) wipeOneTenant(ctx, rootCtx context.Context, tid string
 			if s.logger != nil {
 				s.logger.WithField("tenant_id", tid).
 					Info("veridian: upstream DROP raced (being accessed), force-drop fallback succeeded")
+			}
+		case recordCut:
+			// Le record system a déjà été supprimé (record-first) et la base
+			// force-dropée : l'objectif est atteint. Une erreur résiduelle de
+			// DeleteWorkspace (auth/owner) est bénigne → on log sans échouer.
+			if s.logger != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"tenant_id": tid,
+					"error":     msg,
+				}).Info("veridian: DeleteWorkspace errored but record-first already cut re-election + force-drop done")
 			}
 		default:
 			return fmt.Errorf("delete workspace: %w", deleteWorkspaceErr)
@@ -1432,14 +1464,14 @@ func (s *veridianService) buildMagicLink(ctx context.Context, workspaceID, email
 //
 // Algorithme :
 //
-//	1. Trouver/créer le user humain owner_email (type=user).
-//	2. Lire l'état actuel : déjà attaché ? déjà owner ?
-//	3. Si pas attaché → AddUserToWorkspace(role=member, FullPermissions).
-//	4. Si pas owner → TransferOwnership(workspaceID, newOwner=humain, currentOwner=existingOwner).
-//	   On résout currentOwnerID en regardant la row user_workspaces.role=owner.
-//	5. Optionnel : si l'ancien owner est "root" (≠ owner_email) et qu'on l'a
-//	   demoté à member par TransferOwnership, on le retire pour finir l'owner-
-//	   natif comme dans Provision. Best-effort.
+//  1. Trouver/créer le user humain owner_email (type=user).
+//  2. Lire l'état actuel : déjà attaché ? déjà owner ?
+//  3. Si pas attaché → AddUserToWorkspace(role=member, FullPermissions).
+//  4. Si pas owner → TransferOwnership(workspaceID, newOwner=humain, currentOwner=existingOwner).
+//     On résout currentOwnerID en regardant la row user_workspaces.role=owner.
+//  5. Optionnel : si l'ancien owner est "root" (≠ owner_email) et qu'on l'a
+//     demoté à member par TransferOwnership, on le retire pour finir l'owner-
+//     natif comme dans Provision. Best-effort.
 func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOwnerInput) (*domain.AttachOwnerResponse, error) {
 	if input.TenantID == "" {
 		return nil, errors.New("tenant_id required")
@@ -1820,9 +1852,9 @@ func isEmptyLimits(l domain.PlanLimits) bool {
 //  4. Lookup user_workspaces (user_id, workspace_id).
 //     - Si present meme role → 200 already_member=true (idempotent).
 //     - Si present role DIFFERENT → 200 already_member=true avec role LOCAL
-//       INCHANGE (§5.22.4 : le Hub n'est PAS autoritatif sur les roles
-//       internes, JAMAIS de UPDATE remove+re-add — downgrade silencieux
-//       interdit). Log info "role conflict ignored, local role kept".
+//     INCHANGE (§5.22.4 : le Hub n'est PAS autoritatif sur les roles
+//     internes, JAMAIS de UPDATE remove+re-add — downgrade silencieux
+//     interdit). Log info "role conflict ignored, local role kept".
 //     - Si absent → INSERT via AddUserToWorkspace (role mappe vers 'member').
 //  5. Générer login_url auto-login (pattern BuildAutoLoginURL).
 //  6. Retourner {attached, already_member, workspace_id, role, login_url}.

@@ -91,6 +91,50 @@ func (r *workspaceRepository) VeridianWorkspaceDBPrefix() string {
 	return r.dbConfig.Prefix
 }
 
+// VeridianDeleteWorkspaceSystemRecord supprime les ROWS SYSTÈME d'un workspace
+// (user_workspaces + workspace_invitations + workspaces) SANS toucher à la base
+// physique du workspace. C'est l'opération-clé du wipe « record-first ».
+//
+// POURQUOI (bug 2026-06-19, ticket wipe-recree-base-workspace-record-system-survit) :
+// le Delete upstream (workspace_postgres.go:250) fait DROP DATABASE D'ABORD, puis
+// supprime les records. Quand le DROP rate sur la race « being accessed by other
+// users » (le worker round-robin rouvre une connexion entre terminate et DROP), il
+// return TÔT → le record `workspaces` SURVIT. Or le worker élit les workspaces via
+// `List()` = `SELECT ... FROM workspaces` : tant que le record vit, le worker
+// continue d'élire le ws mort, et une de ses tasks segment-queue EN VOL RECRÉE la
+// base (init.go) dans la même seconde. Le force-drop n'est donc jamais la dernière
+// opération sur la base.
+//
+// Le fix coupe la SOURCE de ré-élection : on supprime le record system EN PREMIER
+// (cette opération vit sur la base SYSTÈME, totalement indépendante de la base
+// workspace → elle n'est PAS bloquée par la race sur la base workspace), PUIS on
+// force-drop la base en DERNIER (plus rien ne peut la recréer).
+//
+// Idempotent : 0 row supprimée n'est PAS une erreur (record déjà absent = OK). Les
+// 3 DELETE sont indépendants ; une erreur sur l'un est remontée (le caller la traite
+// best-effort). Pas de transaction : chaque DELETE est atomique côté Postgres, et on
+// veut que la suppression de `workspaces` (la seule qui coupe la ré-élection worker)
+// parte même si un DELETE annexe échoue → on tente les 3 et on remonte la 1ère erreur.
+func (r *workspaceRepository) VeridianDeleteWorkspaceSystemRecord(ctx context.Context, workspaceID string) error {
+	if r.systemDB == nil {
+		return fmt.Errorf("veridian delete system record: nil systemDB")
+	}
+	// 1. workspaces EN PREMIER : c'est CE record que `List()` lit pour l'élection
+	//    worker → le supprimer coupe immédiatement la ré-élection et donc la
+	//    recréation de la base. Les rows annexes (user_workspaces / invitations)
+	//    sont nettoyées juste après pour ne pas laisser de dangling FK-less rows.
+	if _, err := r.systemDB.ExecContext(ctx, `DELETE FROM workspaces WHERE id = $1`, workspaceID); err != nil {
+		return fmt.Errorf("delete workspace record: %w", err)
+	}
+	if _, err := r.systemDB.ExecContext(ctx, `DELETE FROM user_workspaces WHERE workspace_id = $1`, workspaceID); err != nil {
+		return fmt.Errorf("delete user_workspaces: %w", err)
+	}
+	if _, err := r.systemDB.ExecContext(ctx, `DELETE FROM workspace_invitations WHERE workspace_id = $1`, workspaceID); err != nil {
+		return fmt.Errorf("delete workspace_invitations: %w", err)
+	}
+	return nil
+}
+
 // VeridianWorkspaceDBExists indique si la base physique d'un workspace est encore
 // présente dans pg_database. Sert au wipe à confirmer qu'un DROP FORCE de
 // rattrapage a réellement supprimé la base quand le DROP upstream a raté sur la

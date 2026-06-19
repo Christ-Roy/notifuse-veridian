@@ -142,6 +142,71 @@ func TestWorkspaceRepository_VeridianWorkspaceDBPrefix(t *testing.T) {
 	assert.Equal(t, "nf", repo.VeridianWorkspaceDBPrefix())
 }
 
+func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &workspaceRepository{systemDB: db, dbConfig: &config.DatabaseConfig{Prefix: "notifuse"}}
+
+	// Ordre attendu : workspaces D'ABORD (coupe la ré-élection worker), puis annexes.
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspaces WHERE id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM user_workspaces WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspace_invitations WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "tst123")
+	require.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_Idempotent(t *testing.T) {
+	// 0 row supprimée (record déjà absent) n'est PAS une erreur.
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &workspaceRepository{systemDB: db, dbConfig: &config.DatabaseConfig{Prefix: "notifuse"}}
+
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspaces WHERE id = $1`)).
+		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM user_workspaces WHERE workspace_id = $1`)).
+		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspace_invitations WHERE workspace_id = $1`)).
+		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "gone")
+	require.NoError(t, err, "record already absent (0 rows) must be a no-op success")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_WorkspacesError(t *testing.T) {
+	// Une erreur sur le DELETE FROM workspaces (le 1er, le plus important) est remontée
+	// et stoppe la suite (on ne touche pas aux annexes si le record principal a échoué).
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &workspaceRepository{systemDB: db, dbConfig: &config.DatabaseConfig{Prefix: "notifuse"}}
+
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspaces WHERE id = $1`)).
+		WithArgs("tst123").WillReturnError(errors.New("boom"))
+
+	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "tst123")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "delete workspace record")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_NilDB(t *testing.T) {
+	repo := &workspaceRepository{systemDB: nil, dbConfig: &config.DatabaseConfig{Prefix: "notifuse"}}
+	err := repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "tst123")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil systemDB")
+}
+
 func TestWorkspaceRepository_VeridianWorkspaceDBExists(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
