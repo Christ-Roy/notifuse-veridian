@@ -2733,6 +2733,55 @@ func TestMessageHistoryRepository_CountSentSinceForSender(t *testing.T) {
 	})
 }
 
+func TestMessageHistoryRepository_CountSentSinceForSenderDomain(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	const senderDomain = "agences-veridian.fr"
+	since := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+
+	// COUNT TOTAL par domaine émetteur, AUCUN filtre sur le domaine destinataire
+	// (warmup holistique). 2 placeholders : $1=since, $2=senderDomain.
+	t.Run("returns total count (sender domain lowered in SQL, no recipient filter)", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+			WithArgs(since, senderDomain).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+		got, err := repo.CountSentSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		require.NoError(t, err)
+		assert.Equal(t, 5, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty sender domain → 0 without query", func(t *testing.T) {
+		// Aucun GetConnection attendu : court-circuit avant la DB.
+		got, err := repo.CountSentSinceForSenderDomain(ctx, workspaceID, "", since)
+		require.NoError(t, err)
+		assert.Zero(t, got)
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("no conn"))
+		_, err := repo.CountSentSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+			WithArgs(since, senderDomain).
+			WillReturnError(errors.New("boom"))
+		_, err := repo.CountSentSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "count messages sent from sender domain")
+	})
+}
+
 func TestMessageHistoryRepository_CountSentSinceForDomains(t *testing.T) {
 	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
 	defer cleanup()

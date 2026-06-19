@@ -334,6 +334,21 @@ func TestVeridianMessageHistoryDecorator_CountSentSinceForSender_Passthrough(t *
 	assert.Equal(t, 3, got)
 }
 
+func TestVeridianMessageHistoryDecorator_CountSentSinceForSenderDomain_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	// Lecture pure : aucun side-effect quota, valeur upstream renvoyée telle quelle.
+	upstream.EXPECT().CountSentSinceForSenderDomain(gomock.Any(), "ws", "agences-veridian.fr", since).
+		Return(7, nil).Times(1)
+	got, err := d.CountSentSinceForSenderDomain(context.Background(), "ws", "agences-veridian.fr", since)
+	require.NoError(t, err)
+	assert.Equal(t, 7, got)
+}
+
 func TestVeridianMessageHistoryDecorator_CountSentSinceForDomains_Passthrough(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -1362,6 +1362,39 @@ func (r *MessageHistoryRepository) CountSentSinceForSender(ctx context.Context, 
 	return count, nil
 }
 
+// CountSentSinceForSenderDomain compte le TOTAL des messages envoyés DEPUIS un
+// DOMAINE émetteur depuis `since`, TOUTES classes de provider destinataire
+// confondues (AUCUN filtre sur le domaine destinataire). C'est le COUNT du plafond
+// WARMUP holistique d'une infra (« J1 = N max, toutes classes ») — par construction
+// robuste aux classes MX, puisque la classe du destinataire n'intervient jamais.
+// Le domaine émetteur est dérivé via lower(split_part(veridian_sender_email,'@',2))
+// (colonne V53 déjà lowercase ; argument lowercé côté SQL par robustesse).
+//
+// Perf : filtré par sent_at (index idx_message_history_sent_at, V49) ET par le
+// préfixe veridian_sender_email (index partiel V53). Le split_part du domaine
+// émetteur n'a pas d'index dédié (décision « COUNT live, pas d'agrégat », cf.
+// v49.go/v53.go) ; volume cold quotidien négligeable. `senderDomain` vide = 0 sans
+// requête (l'appelant gère le fallback « pas d'attribution infra »).
+func (r *MessageHistoryRepository) CountSentSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error) {
+	if senderDomain == "" {
+		// Sans domaine émetteur, aucun envoi n'est attribuable à une infra : pas de
+		// COUNT (l'appelant retombe sur "pas de warmup enforçable").
+		return 0, nil
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2)`
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, since, senderDomain).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count messages sent from sender domain since: %w", err)
+	}
+	return count, nil
+}
+
 // CountSentSinceForDomains compte les messages envoyés depuis `since` vers une
 // classe de provider concrète, identifiée par sa liste de domaines. Le domaine
 // destinataire est extrait à la lecture via split_part(contact_email,'@',2) :

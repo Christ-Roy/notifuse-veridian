@@ -12,6 +12,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// veridianMessageHistoryRepoContractStub implémente MessageHistoryRepository pour
+// la SEULE méthode neuve CountSentSinceForSenderDomain (warmup = cap TOTAL par infra,
+// 2026-06-19). Les autres méthodes de l'interface sont promues depuis la base
+// upstream MessageHistoryRepository embeddée nil : le stub n'est jamais utilisé que
+// pour le contrat de la méthode neuve (compile-time + appel direct).
+type veridianMessageHistoryRepoContractStub struct {
+	MessageHistoryRepository // embedding (nil) : satisfait toutes les autres méthodes
+	gotWorkspaceID           string
+	gotSenderDomain          string
+	gotSince                 time.Time
+	ret                      int
+}
+
+func (s *veridianMessageHistoryRepoContractStub) CountSentSinceForSenderDomain(
+	_ context.Context, workspaceID, senderDomain string, since time.Time,
+) (int, error) {
+	s.gotWorkspaceID = workspaceID
+	s.gotSenderDomain = senderDomain
+	s.gotSince = since
+	return s.ret, nil
+}
+
+// TestMessageHistoryRepository_CountSentSinceForSenderDomain_Contract verrouille la
+// SIGNATURE de la méthode neuve du contrat (warmup cap TOTAL par domaine émetteur) :
+// elle prend (ctx, workspaceID, senderDomain, since) et renvoie (int, error), SANS
+// aucun paramètre de classe destinataire — c'est précisément ce qui rend le warmup
+// holistique et robuste aux classes MX (cf. veridian_daily_cap.go branche warmup).
+// Si la signature dérive, ce test ne compile plus (garde-fou contractuel durable).
+func TestMessageHistoryRepository_CountSentSinceForSenderDomain_Contract(t *testing.T) {
+	since := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+	stub := &veridianMessageHistoryRepoContractStub{ret: 7}
+
+	// Appel via le TYPE D'INTERFACE (pas le concret) → garantit que la méthode fait
+	// bien partie de MessageHistoryRepository.
+	var repo MessageHistoryRepository = stub
+	got, err := repo.CountSentSinceForSenderDomain(context.Background(), "ws-1", "agences-veridian.fr", since)
+
+	require.NoError(t, err)
+	assert.Equal(t, 7, got)
+	assert.Equal(t, "ws-1", stub.gotWorkspaceID)
+	assert.Equal(t, "agences-veridian.fr", stub.gotSenderDomain)
+	assert.Equal(t, since, stub.gotSince)
+}
+
 func TestMessageEvent_Constants(t *testing.T) {
 	t.Run("message event constants", func(t *testing.T) {
 		assert.Equal(t, MessageEvent("sent"), MessageEventSent)

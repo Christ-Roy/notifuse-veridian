@@ -91,13 +91,15 @@ func veridianResolveDailyCaps(workspace *domain.Workspace, provider *domain.Emai
 	return classCaps, perRecipientCap
 }
 
-// veridianWarmupClassCap retourne le cap journalier UNIFORME imposé par la rampe
-// de warmup de l'infra (si active), 0 sinon. Quand actif, ce cap PRIME sur le
-// cap-classe statique et s'applique à TOUTES les classes (un warmup IP plafonne le
-// volume total émis par l'infra, pas une classe en particulier). Le warmup se règle
-// PAR INFRA uniquement (l'objet d'une rampe est une IP/un domaine d'envoi, pas un
-// workspace) : pas de niveau broadcast/workspace ici. Cf. veridian_warmup.go.
-func veridianWarmupClassCap(provider *domain.EmailProvider, now time.Time) int {
+// veridianWarmupCap retourne le cap journalier TOTAL imposé par la rampe de warmup
+// de l'infra (si active), 0 sinon. C'est un plafond HOLISTIQUE de l'infra : « J1 = N
+// mails max, TOUTES classes destinataires confondues » (standard Lemlist/Instantly).
+// Il NE s'applique PAS par classe — il plafonne le VOLUME TOTAL émis par l'IP/domaine
+// d'envoi (cf. veridianWarmupTotalCount qui compte le total par domaine émetteur, sans
+// filtre classe). Le warmup se règle PAR INFRA uniquement (l'objet d'une rampe est une
+// IP/un domaine d'envoi, pas un workspace) : pas de niveau broadcast/workspace ici.
+// Cf. veridian_warmup.go.
+func veridianWarmupCap(provider *domain.EmailProvider, now time.Time) int {
 	if provider == nil {
 		return 0
 	}
@@ -116,9 +118,10 @@ func veridianWarmupClassCap(provider *domain.EmailProvider, now time.Time) int {
 func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
 	classCaps, perRecipientCap := veridianResolveDailyCaps(workspace, provider, entry)
 
-	// Rampe de warmup : si l'infra est en warmup, son cap uniforme courant PRIME sur
-	// le cap-classe statique (pour toutes les classes). 0 = pas de warmup actif.
-	warmupCap := veridianWarmupClassCap(provider, time.Now())
+	// Rampe de warmup : si l'infra est en warmup, son cap courant est un plafond
+	// TOTAL de l'infra (toutes classes confondues) qui PRIME sur le cap-classe
+	// statique. 0 = pas de warmup actif. Cf. veridianWarmupTotalCount plus bas.
+	warmupCap := veridianWarmupCap(provider, time.Now())
 
 	if len(classCaps) == 0 && perRecipientCap <= 0 && warmupCap <= 0 {
 		return 0, false
@@ -147,22 +150,45 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 		}
 	}
 
-	// 2. Cap par classe (réputation). Dérivation de la classe : tag contact
-	//    (option B) sinon classification par MX RÉEL (Lot 4 : suffixe connu sans
-	//    lookup, inconnu via MX caché). ⚠️ Pour une classe MX (ovh/ionos/…),
-	//    VeridianDomainsForClass renvoie une liste vide → le COUNT par domaine
-	//    ne s'enforce pas (dégradation gracieuse documentée ; le throttle minute
-	//    protège la réputation sur le hot path). Le cap-classe reste pleinement
-	//    enforcé pour les classes adossées à un suffixe (google public, etc.).
-	if len(classCaps) > 0 || warmupCap > 0 {
-		class := w.veridianClassifyRecipient(entry)
-		// Le warmup (s'il est actif) impose son cap uniforme à TOUTES les classes et
-		// PRIME sur le cap-classe statique. Sinon on prend le cap statique de la classe.
-		classCap, ok := classCaps[class]
-		if warmupCap > 0 {
-			classCap, ok = warmupCap, true
+	// 2a. Plafond WARMUP (si l'infra est en warmup) — TOTAL par infra, toutes classes.
+	//     C'est un cap HOLISTIQUE : « J1 = N max, peu importe le destinataire » — il
+	//     PRIME sur le cap-classe statique et le COURT-CIRCUITE (on n'évalue pas en
+	//     plus le cap-classe ; le warmup est plus restrictif et déjà vérifié). On
+	//     compte le TOTAL des envois du jour DEPUIS le domaine émetteur de l'infra
+	//     (sans aucun filtre sur la classe destinataire) → robuste aux classes MX,
+	//     que le COUNT-par-classe n'enforçait PAS (VeridianDomainsForClass = [] sur MX).
+	//     Sans domaine émetteur exploitable (legacy / sender absent), aucune infra
+	//     n'est attribuable → on ne peut pas enforcer le warmup (best-effort, pass).
+	if warmupCap > 0 {
+		senderDomain := veridianEmailDomain(entry.Payload.FromAddress)
+		if senderDomain != "" {
+			count, err := w.messageHistoryRepo.CountSentSinceForSenderDomain(w.ctx, workspaceID, senderDomain, since)
+			if err != nil {
+				w.logger.WithFields(map[string]interface{}{
+					"entry_id":      entry.ID,
+					"workspace_id":  workspaceID,
+					"sender_domain": senderDomain,
+					"error":         err.Error(),
+				}).Warn("Daily warmup cap count failed, allowing send (degraded)")
+			} else if count >= warmupCap {
+				return w.veridianRescheduleCapped(entry, "warmup", count, warmupCap, "")
+			}
 		}
-		if ok && classCap > 0 {
+		// Warmup actif → il GOUVERNE le plafond de l'infra. On ne retombe PAS sur le
+		// cap-classe statique (le warmup est le plafond effectif pendant la rampe).
+		return 0, false
+	}
+
+	// 2b. Cap par classe STATIQUE (réputation), uniquement HORS warmup. Dérivation de
+	//     la classe : tag contact (option B) sinon classification par MX RÉEL (Lot 4 :
+	//     suffixe connu sans lookup, inconnu via MX caché). ⚠️ Pour une classe MX
+	//     (ovh/ionos/…), VeridianDomainsForClass renvoie une liste vide → le COUNT par
+	//     domaine ne s'enforce pas (dégradation gracieuse documentée ; le throttle
+	//     minute protège la réputation sur le hot path). Le cap-classe reste pleinement
+	//     enforcé pour les classes adossées à un suffixe (google public, etc.).
+	if len(classCaps) > 0 {
+		class := w.veridianClassifyRecipient(entry)
+		if classCap, ok := classCaps[class]; ok && classCap > 0 {
 			domains, exclude := domain.VeridianDomainsForClass(class)
 			count, err := w.veridianCountClassForInfra(workspaceID, domains, exclude, entry, since)
 			if err != nil {

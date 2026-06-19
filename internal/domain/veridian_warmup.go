@@ -19,10 +19,15 @@ import "time"
 // migration ni d'allowlist — pattern R2/jitter/tracking). La rampe est PAR INFRA
 // (granularité recommandée par le ticket : une IP/domaine se warm individuellement).
 //
-// Le cap warmup, quand il est actif sur une infra, PRIME sur le cap-classe statique
-// de cette infra et s'applique UNIFORMÉMENT à toutes les classes de provider
-// destinataire (un warmup IP plafonne le volume total émis par l'IP, pas une classe
-// en particulier). Cf. veridian_daily_cap.go (veridianResolveDailyCaps).
+// Le cap warmup, quand il est actif sur une infra, est un plafond HOLISTIQUE : il
+// plafonne le VOLUME TOTAL émis par l'IP/domaine d'envoi sur la journée, TOUTES
+// classes de provider destinataire confondues (« J1 = N mails max, point », standard
+// Lemlist/Instantly), PAS un cap par classe. Il PRIME sur (et court-circuite) le
+// cap-classe statique de cette infra pendant la rampe. L'enforcement compte le total
+// par DOMAINE émetteur (veridian_sender_email V53), SANS dérivation de classe
+// destinataire — ce qui le rend robuste aux classes MX (ovh/ionos/corporate_selfhost)
+// que le COUNT-par-classe (VeridianDomainsForClass) n'enforce PAS. Cf.
+// veridian_daily_cap.go (gate veridianDailyCapGate, branche warmup).
 
 // VeridianWarmupActive indique si une infra a une rampe de warmup configurée et
 // exploitable : une date de début ET une courbe non vide. Sans les deux, pas de

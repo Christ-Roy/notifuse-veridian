@@ -82,7 +82,7 @@ const veridianColdSimulateStagingEnv = "staging"
 
 // veridianColdSimulateRequest est le corps POST. `mode` aiguille le comportement.
 type veridianColdSimulateRequest struct {
-	Mode        string `json:"mode"`         // inbound_reply | seed_sent | daily_cap_decision | class_cap_decision | per_sender_cap_decision | sending_window_decision
+	Mode        string `json:"mode"`         // inbound_reply | seed_sent | daily_cap_decision | class_cap_decision | per_sender_cap_decision | sending_window_decision | warmup_cap_decision
 	WorkspaceID string `json:"workspace_id"` // tenant ciblé (jetable, E2E)
 
 	// --- mode seed_sent / daily_cap_decision : adresse destinataire ---
@@ -120,6 +120,14 @@ type veridianColdSimulateRequest struct {
 	// --- mode per_sender_cap_decision : cap journalier par adresse émettrice.
 	// Prédicat EXACT de veridian_per_sender_cap.go : CountSentSinceForSender >= cap. ---
 	PerSenderCap int `json:"per_sender_cap,omitempty"`
+
+	// --- mode warmup_cap_decision : cap WARMUP TOTAL par DOMAINE émetteur, toutes
+	// classes destinataires confondues. Prédicat EXACT de la branche warmup de
+	// veridian_daily_cap.go : CountSentSinceForSenderDomain(senderDomain) >= warmupCap.
+	// Le sender_domain est normalisé comme le gate (domaine nu OU adresse complète).
+	// C'est ce qui rend le warmup robuste aux classes MX : AUCUN filtre de classe
+	// destinataire n'intervient (à l'inverse de class_cap_decision). ---
+	WarmupCap int `json:"warmup_cap,omitempty"`
 
 	// --- mode sending_window_decision : fenêtre d'envoi + timezone de fallback.
 	// Prédicat EXACT de veridian_sending_window_gate.go : IsWithinWindow(now). ---
@@ -205,11 +213,13 @@ func (h *VeridianHandler) handleColdSimulate(w http.ResponseWriter, r *http.Requ
 		h.coldSimulateClassCapDecision(w, r, deps, &req)
 	case "per_sender_cap_decision":
 		h.coldSimulatePerSenderCapDecision(w, r, deps, &req)
+	case "warmup_cap_decision":
+		h.coldSimulateWarmupCapDecision(w, r, deps, &req)
 	case "sending_window_decision":
 		h.coldSimulateSendingWindowDecision(w, r, &req)
 	default:
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload,
-			"mode must be inbound_reply|seed_sent|daily_cap_decision|class_cap_decision|per_sender_cap_decision|sending_window_decision",
+			"mode must be inbound_reply|seed_sent|daily_cap_decision|class_cap_decision|per_sender_cap_decision|warmup_cap_decision|sending_window_decision",
 			http.StatusBadRequest, map[string]interface{}{"mode": req.Mode})
 	}
 }
@@ -540,6 +550,64 @@ func (h *VeridianHandler) coldSimulatePerSenderCapDecision(
 		Mode:          "per_sender_cap_decision",
 		SentToday:     count,
 		WouldBeCapped: count >= req.PerSenderCap, // prédicat exact du gate worker (cap émetteur)
+	})
+}
+
+// coldSimulateWarmupCapDecision renvoie la décision EXACTE de la branche WARMUP du
+// gate (veridian_daily_cap.go) : COUNT TOTAL des envois du jour DEPUIS le DOMAINE
+// émetteur (CountSentSinceForSenderDomain), TOUTES classes destinataires confondues,
+// vs le cap warmup courant. would_be_capped = count >= warmup_cap.
+//
+// C'est le prédicat qui PROUVE le fix du ticket warmup-total/MX :
+//   - cap TOTAL par infra (Bug 1) : le COUNT n'a AUCUN filtre de classe destinataire
+//     → un envoi google + un envoi microsoft depuis le même domaine comptent ensemble.
+//   - enforcement sur classes MX (Bug 2) : aucune dérivation de classe destinataire
+//     (donc aucune dégradation gracieuse MX) → le warmup s'enforce quel que soit le MX.
+//
+// Le sender_domain fourni est normalisé comme le gate (veridianEmailDomain) : domaine
+// nu (`send.fr`) OU adresse complète (`bot@send.fr`). Vide = pas d'attribution infra
+// → le warmup n'est pas enforçable (le gate dégrade en pass) : on renvoie alors
+// would_be_capped=false sans COUNT (fidèle au comportement du gate).
+func (h *VeridianHandler) coldSimulateWarmupCapDecision(
+	w http.ResponseWriter, r *http.Request, deps *veridianColdSimulateDeps, req *veridianColdSimulateRequest,
+) {
+	if deps.messageHistoryRepo == nil {
+		WriteJSONErrorCode(w, ErrCodePaywallUnavailable, "message history repo not wired", http.StatusServiceUnavailable, nil)
+		return
+	}
+	if req.WarmupCap <= 0 {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "warmup_cap must be > 0", http.StatusBadRequest, nil)
+		return
+	}
+
+	ctx := r.Context()
+	since := veridianColdSimulateStartOfDay(time.Now().UTC())
+	senderDomain := veridianColdSimulateSenderDomain(req.SenderDomain)
+	if senderDomain == "" {
+		// Pas de domaine émetteur exploitable → le gate ne peut pas enforcer le warmup
+		// (best-effort pass). On reflète FIDÈLEMENT ce comportement : jamais capé, 0 COUNT.
+		writeJSON(w, http.StatusOK, veridianColdSimulateResponse{
+			Mode:          "warmup_cap_decision",
+			SentToday:     0,
+			WouldBeCapped: false,
+			SenderDomain:  "",
+			PerInfra:      false,
+		})
+		return
+	}
+
+	count, err := deps.messageHistoryRepo.CountSentSinceForSenderDomain(ctx, req.WorkspaceID, senderDomain, since)
+	if err != nil {
+		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, veridianColdSimulateResponse{
+		Mode:          "warmup_cap_decision",
+		SentToday:     count,
+		WouldBeCapped: count >= req.WarmupCap, // prédicat exact de la branche warmup du gate
+		SenderDomain:  senderDomain,
+		PerInfra:      true,
 	})
 }
 

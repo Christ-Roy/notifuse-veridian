@@ -235,6 +235,23 @@ type MessageHistoryRepository interface {
 	// Cf. veridian_daily_cap.go (gate veridianPerSenderCapGate).
 	CountSentSinceForSender(ctx context.Context, workspaceID, senderEmail string, since time.Time) (int, error)
 
+	// CountSentSinceForSenderDomain compte le TOTAL des messages envoyés DEPUIS un
+	// DOMAINE émetteur (`senderDomain`, ex. "agences-veridian.fr") depuis `since`,
+	// TOUTES classes de provider destinataire confondues. C'est le COUNT du plafond
+	// WARMUP holistique d'une infra : une IP/un domaine en warm-up monte son volume
+	// TOTAL jour après jour ("J1 = 5 mails max, point", standard Lemlist/Instantly),
+	// indépendamment de la classe du destinataire — donc SANS filtre sur le domaine
+	// destinataire (contrairement à CountSentSinceForDomains*). C'est précisément ce
+	// qui le rend robuste aux classes MX : aucune dérivation de classe destinataire
+	// n'intervient, donc aucune dégradation gracieuse MX (le warmup s'enforce même
+	// vers ovh/ionos/corporate_selfhost). Le domaine émetteur est dérivé en DB via
+	// lower(split_part(veridian_sender_email,'@',2)) (colonne V53, stockée lowercase ;
+	// argument lowercé côté SQL par robustesse). `senderDomain` vide = 0 sans requête
+	// (l'appelant retombe alors sur "pas d'attribution infra possible" → pas de warmup
+	// enforçable, comportement de fallback documenté). Cf. veridian_daily_cap.go
+	// (warmup = cap TOTAL par infra) + veridian_warmup.go.
+	CountSentSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error)
+
 	// CountSentSinceForDomainsAndSenderDomain compte les messages envoyés depuis
 	// `since` vers une CLASSE de provider destinataire (identifiée par sa liste de
 	// `domains` + `exclude`, exactement comme CountSentSinceForDomains) ET DEPUIS

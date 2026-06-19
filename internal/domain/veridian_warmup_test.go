@@ -68,6 +68,32 @@ func TestVeridianWarmupCapForDay(t *testing.T) {
 	}
 }
 
+// TestVeridianWarmupCapForDay_IsTotalNotPerClass verrouille la sémantique CORRIGÉE
+// (2026-06-19) : le cap warmup est un plafond HOLISTIQUE du VOLUME TOTAL de l'infra
+// par jour, TOUTES classes destinataires confondues — PAS un cap par classe. Garde-fou
+// contractuel : la fonction ne prend AUCUN paramètre de classe destinataire (sa
+// signature est (startedAt, schedule, stepDays, now)), donc le palier renvoyé est par
+// construction un nombre UNIQUE pour l'infra, indépendant du destinataire. C'est ce qui
+// rend le warmup robuste aux classes MX dans le gate (veridian_daily_cap.go branche
+// warmup compte le TOTAL par domaine émetteur via CountSentSinceForSenderDomain).
+func TestVeridianWarmupCapForDay_IsTotalNotPerClass(t *testing.T) {
+	base := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	schedule := []int{5, 10, 25}
+
+	// Le cap du jour est un SEUL nombre (le palier), pas une map par classe : appelé
+	// deux fois avec les MÊMES paramètres temporels, il renvoie la MÊME valeur — il ne
+	// dépend d'aucune classe destinataire (la fonction n'en reçoit pas). « J1 = 5 max,
+	// point » : ce 5 est le total de l'infra, pas 5 par classe.
+	day0a := VeridianWarmupCapForDay(ptrTimeWarmup(base), schedule, 1, base)
+	day0b := VeridianWarmupCapForDay(ptrTimeWarmup(base), schedule, 1, base.Add(3*time.Hour))
+	assert.Equal(t, 5, day0a, "J1 = palier 0 = plafond TOTAL de l'infra (toutes classes)")
+	assert.Equal(t, day0a, day0b, "le cap est un total unique, déterministe, indépendant du destinataire")
+
+	// Et il monte par paliers sur le TOTAL (pas par classe) : J2 = 10 total, etc.
+	day1 := VeridianWarmupCapForDay(ptrTimeWarmup(base), schedule, 1, base.Add(24*time.Hour))
+	assert.Equal(t, 10, day1, "J2 = palier 1 = nouveau plafond TOTAL")
+}
+
 func TestVeridianWarmupStep(t *testing.T) {
 	schedule := []int{1, 2, 5, 10}
 	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)

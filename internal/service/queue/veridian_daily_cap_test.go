@@ -246,26 +246,29 @@ func veridianWarmupTestProvider(startedAt time.Time, schedule []int, stepDays in
 	}
 }
 
-func TestVeridianWarmupClassCap(t *testing.T) {
+func TestVeridianWarmupCap(t *testing.T) {
 	base := time.Now().UTC()
-	assert.Equal(t, 0, veridianWarmupClassCap(nil, base), "nil provider = no warmup")
-	assert.Equal(t, 0, veridianWarmupClassCap(&domain.EmailProvider{}, base), "no warmup config = 0")
+	assert.Equal(t, 0, veridianWarmupCap(nil, base), "nil provider = no warmup")
+	assert.Equal(t, 0, veridianWarmupCap(&domain.EmailProvider{}, base), "no warmup config = 0")
 
 	// Démarré aujourd'hui, courbe [1,2,5], palier 1 jour → jour 0 = 1.
 	p := veridianWarmupTestProvider(base, []int{1, 2, 5}, 1)
-	assert.Equal(t, 1, veridianWarmupClassCap(p, base))
+	assert.Equal(t, 1, veridianWarmupCap(p, base))
 }
 
 func TestVeridianDailyCapGate_WarmupOverridesStaticClassCap(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	// Workspace pose un cap statique généreux (google 1000), mais l'infra est en
-	// warmup jour 0 (cap 1) → le warmup PRIME → 1 envoi déjà fait aujourd'hui = skip.
+	// warmup jour 0 (cap 1) → le warmup PRIME → 1 envoi TOTAL déjà fait depuis ce
+	// domaine émetteur aujourd'hui = skip. Le warmup compte le TOTAL par domaine
+	// émetteur (toutes classes), PAS par classe : CountSentSinceForDomains NE doit
+	// PAS être appelé.
 	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1000}, 0)
 	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{1, 2, 5}, 1)
-	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@send.fr", domain.EmailQueuePayload{})
 
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.fr", gomock.Any()).
 		Return(1, nil) // 1 >= warmupCap(1) → skip
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
@@ -276,17 +279,94 @@ func TestVeridianDailyCapGate_WarmupOverridesStaticClassCap(t *testing.T) {
 func TestVeridianDailyCapGate_WarmupAppliesEvenWithoutStaticClassCap(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	// Aucun cap statique configuré nulle part, mais l'infra est en warmup → le cap
-	// warmup s'enforce quand même (sur la classe google adossée à un suffixe).
+	// warmup s'enforce quand même, sur le TOTAL par domaine émetteur.
 	ws := veridianTestWorkspaceWithCaps(nil, 0)
 	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{2, 5}, 1)
-	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@send.fr", domain.EmailQueuePayload{})
 
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.fr", gomock.Any()).
 		Return(1, nil) // 1 < warmupCap(2) → passe
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
 	assert.False(t, capped, "jour 0 cap=2, déjà 1 envoyé → passe")
+	assert.Zero(t, delay)
+}
+
+func TestVeridianDailyCapGate_WarmupIsTotalAcrossClasses(t *testing.T) {
+	// CŒUR DU FIX (Bug 1) : le warmup plafonne le TOTAL de l'infra, pas 5×classes.
+	// Un envoi google ET un envoi microsoft depuis le MÊME domaine émetteur partagent
+	// le compteur. À cap=2, après 2 envois (peu importe leur classe), le 3e (n'importe
+	// quelle classe) est bloqué. On le prouve en frappant le gate avec une classe puis
+	// l'autre : les deux comptent via le MÊME CountSentSinceForSenderDomain("send.fr").
+	ws := veridianTestWorkspaceWithCaps(nil, 0)
+	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{2}, 1) // jour 0 cap=2
+
+	for _, recipient := range []string{"lead@gmail.com" /*google*/, "lead@outlook.com" /*microsoft*/} {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryFrom("e", recipient, "bot@send.fr", domain.EmailQueuePayload{})
+		// Quelle que soit la classe destinataire, le COUNT est le TOTAL du domaine
+		// émetteur (pas un COUNT par classe) → déjà 2 → bloqué.
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.fr", gomock.Any()).
+			Return(2, nil)
+		_, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
+		assert.True(t, capped, "le total de l'infra (2) plafonne %s sans distinction de classe", recipient)
+	}
+}
+
+func TestVeridianDailyCapGate_WarmupEnforcedOnMXClass(t *testing.T) {
+	// CŒUR DU FIX (Bug 2) : le warmup s'enforce maintenant sur les classes MX, que le
+	// COUNT-par-classe bypassait (VeridianDomainsForClass renvoie [] → COUNT 0 → jamais
+	// capé). Destinataire @ovh.com → classifié en classe MX (ovh) ; le warmup compte
+	// quand même le total par domaine émetteur → bloqué. CountSentSinceForDomains*
+	// (chemin par classe) NE doit PAS être appelé.
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithCaps(nil, 0)
+	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{3}, 1) // jour 0 cap=3
+	// Tag amont = ovh (classe MX) pour forcer le chemin MX sans lookup réseau en test.
+	entry := veridianTestEntryFrom("e1", "lead@some-corp.fr", "bot@send.fr", domain.EmailQueuePayload{
+		VeridianProviderClass: domain.ProviderClassOVH,
+	})
+
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.fr", gomock.Any()).
+		Return(3, nil) // 3 >= cap 3 → skip, MÊME pour une classe MX
+	// CountSentSinceForDomains / CountSentSinceForDomainsAndSenderDomain : aucun EXPECT
+	// → le warmup ne passe PAS par le COUNT-par-classe (anti-bypass MX).
+
+	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
+	assert.True(t, capped, "le warmup s'enforce sur les classes MX (fix Bug 2)")
+	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
+}
+
+func TestVeridianDailyCapGate_WarmupLegacyNoSenderNotEnforced(t *testing.T) {
+	// Pas de FROM exploitable (legacy / pré-V53) → aucune infra attribuable → le warmup
+	// ne peut pas s'enforcer (best-effort, pass). AUCUN COUNT appelé. Le cap-classe
+	// statique n'est PAS non plus évalué (warmup gouverne le plafond de l'infra).
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1}, 0)
+	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{1}, 1)
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{}) // pas de FromAddress
+
+	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
+	assert.False(t, capped, "sans domaine émetteur, le warmup n'est pas enforçable (fallback)")
+	assert.Zero(t, delay)
+}
+
+func TestVeridianDailyCapGate_WarmupCountErrorDegradesToAllow(t *testing.T) {
+	// Best-effort : une erreur de COUNT warmup ne bloque jamais l'envoi.
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithCaps(nil, 0)
+	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{1}, 1)
+	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@send.fr", domain.EmailQueuePayload{})
+
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.fr", gomock.Any()).
+		Return(0, errors.New("db down"))
+
+	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
+	assert.False(t, capped, "une erreur de COUNT warmup ne doit jamais bloquer l'envoi")
 	assert.Zero(t, delay)
 }
 

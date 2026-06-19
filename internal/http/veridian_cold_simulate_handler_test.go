@@ -561,6 +561,83 @@ func TestHandleColdSimulate_PerSenderCapDecision_Validation400(t *testing.T) {
 	}
 }
 
+// === mode warmup_cap_decision : prédicat exact de la branche warmup du gate ===
+// (CountSentSinceForSenderDomain TOTAL par domaine émetteur, toutes classes confondues)
+
+func TestHandleColdSimulate_WarmupCapDecision_AtCapBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	// COUNT TOTAL par domaine émetteur (aucun filtre de classe destinataire).
+	msgRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws1", "agences-veridian.fr", gomock.Any()).
+		Return(2, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "warmup_cap_decision", WorkspaceID: "ws1",
+		SenderDomain: "bot@Agences-Veridian.fr", WarmupCap: 2, // adresse complète → domaine extrait+lowercé
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, 2, got.SentToday)
+	assert.True(t, got.WouldBeCapped, "total 2 >= warmup cap 2 → infra plafonnée (toutes classes)")
+	assert.Equal(t, "agences-veridian.fr", got.SenderDomain)
+	assert.True(t, got.PerInfra)
+}
+
+func TestHandleColdSimulate_WarmupCapDecision_BelowCap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	msgRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws1", "send.fr", gomock.Any()).
+		Return(1, nil)
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "warmup_cap_decision", WorkspaceID: "ws1", SenderDomain: "send.fr", WarmupCap: 5,
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, 1, got.SentToday)
+	assert.False(t, got.WouldBeCapped, "1 < cap 5 → passe")
+	// Piège omitempty bool : would_be_capped doit rester présent dans le JSON.
+	assert.Contains(t, rec.Body.String(), `"would_be_capped":false`)
+}
+
+func TestHandleColdSimulate_WarmupCapDecision_NoSenderDomainNotEnforced(t *testing.T) {
+	// Sans domaine émetteur → le gate dégrade en pass (pas d'attribution infra) :
+	// la décision reflète ce comportement (jamais capé, 0 COUNT, aucun appel repo).
+	msgRepo := mocks.NewMockMessageHistoryRepository(gomock.NewController(t))
+	// AUCUN EXPECT : le handler ne doit PAS appeler le repo sans domaine émetteur.
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, msgRepo, nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "warmup_cap_decision", WorkspaceID: "ws1", SenderDomain: "", WarmupCap: 1,
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var got veridianColdSimulateResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.False(t, got.WouldBeCapped)
+	assert.False(t, got.PerInfra)
+	assert.Equal(t, 0, got.SentToday)
+}
+
+func TestHandleColdSimulate_WarmupCapDecision_Validation400(t *testing.T) {
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(&stubColdReplyProcessor{}, mocks.NewMockMessageHistoryRepository(gomock.NewController(t)), nil, "staging")
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "warmup_cap_decision", WorkspaceID: "ws1", SenderDomain: "send.fr", WarmupCap: 0, // cap non positif
+	})
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 // === mode sending_window_decision : prédicat exact du gate fenêtre (IsWithinWindow) ===
 
 func TestHandleColdSimulate_SendingWindowDecision_OutsideSkips(t *testing.T) {
