@@ -1,17 +1,17 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-06-18 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-18
+> **Dernier run** : 2026-06-19 04:26 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-19
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 8 (avant filtrage)
+> **CVE bruts détectés** : 9 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
 - 🔴 **0 HIGH** — action recommandée cette semaine
-- 🟡 **4 MEDIUM** — récap, pas urgent
+- 🟡 **5 MEDIUM** — récap, pas urgent
 - 🟢 **4 NOISE** — annexe collapse
 
 ✅ **Rien d'urgent.** Quelques items MEDIUM à voir quand t'as 5 min.
@@ -19,7 +19,7 @@
 
 ---
 
-## 🟡 MEDIUM — 4 CVE en 2 groupes
+## 🟡 MEDIUM — 5 CVE en 2 groupes
 
 ### 1. `vite` — 7.3.2 → **8.0.16**
 
@@ -30,14 +30,14 @@
 - **Source** : `notification_center/package-lock.json`
 - **Fix** : `pnpm up vite` (jusqu'à >= `8.0.16`)
 
-### 2. `dompurify` — 3.4.0 → **3.4.7**
+### 2. `dompurify` — 3.4.0 → **3.4.11**
 
-- **CVE** : `CVE-2026-49458` (MEDIUM/XSS), `CVE-2026-49459` (MEDIUM/XSS), `CVE-2026-49978` (MEDIUM/XSS)
+- **CVE** : `CVE-2026-49458` (MEDIUM/XSS), `CVE-2026-49459` (MEDIUM/XSS), `CVE-2026-49978` (MEDIUM/XSS), `GHSA-cmwh-pvxp-8882` (MEDIUM/XSS)
 - **Type** : XSS
 - **Score max** : 12
 - **Title** : DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks
 - **Source** : `console/package-lock.json`
-- **Fix** : `pnpm up dompurify` (jusqu'à >= `3.4.7`)
+- **Fix** : `pnpm up dompurify` (jusqu'à >= `3.4.11`)
 
 
 ---
