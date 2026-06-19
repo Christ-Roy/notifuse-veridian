@@ -1,0 +1,72 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
+)
+
+// fakeForceDropRepo embed l'interface WorkspaceRepository (nil) et n'override que
+// VeridianForceDropDatabase → satisfait à la fois domain.WorkspaceRepository (pour
+// le champ s.workspaceRepo) et veridianForceDropper (par type-assertion).
+type fakeForceDropRepo struct {
+	domain.WorkspaceRepository
+	called    int
+	lastWSID  string
+	returnErr error
+}
+
+func (f *fakeForceDropRepo) VeridianForceDropDatabase(ctx context.Context, workspaceID string, log logger.Logger) error {
+	f.called++
+	f.lastWSID = workspaceID
+	return f.returnErr
+}
+
+// repoWithoutDropCapability satisfait WorkspaceRepository mais PAS veridianForceDropper.
+type repoWithoutDropCapability struct {
+	domain.WorkspaceRepository
+}
+
+func TestConfigureWorkspaceDBCleanup_SetsPrefix(t *testing.T) {
+	s := &veridianService{}
+	s.ConfigureWorkspaceDBCleanup("notifuse")
+	assert.Equal(t, "notifuse", s.dbPrefix)
+}
+
+func TestForceDropWorkspaceDBBestEffort_NoPrefix_NoOp(t *testing.T) {
+	repo := &fakeForceDropRepo{}
+	s := &veridianService{workspaceRepo: repo, dbPrefix: ""}
+	s.forceDropWorkspaceDBBestEffort(context.Background(), "tst123")
+	assert.Equal(t, 0, repo.called, "no prefix configured → must not call drop")
+}
+
+func TestForceDropWorkspaceDBBestEffort_CallsDropper(t *testing.T) {
+	repo := &fakeForceDropRepo{}
+	s := &veridianService{workspaceRepo: repo, dbPrefix: "notifuse"}
+	s.forceDropWorkspaceDBBestEffort(context.Background(), "tst123")
+	assert.Equal(t, 1, repo.called)
+	assert.Equal(t, "tst123", repo.lastWSID)
+}
+
+func TestForceDropWorkspaceDBBestEffort_SwallowsError(t *testing.T) {
+	// Un échec du DROP ne doit PAS paniquer ni propager (best-effort).
+	repo := &fakeForceDropRepo{returnErr: errors.New("drop failed")}
+	s := &veridianService{workspaceRepo: repo, dbPrefix: "notifuse"}
+	assert.NotPanics(t, func() {
+		s.forceDropWorkspaceDBBestEffort(context.Background(), "tst123")
+	})
+	assert.Equal(t, 1, repo.called)
+}
+
+func TestForceDropWorkspaceDBBestEffort_RepoWithoutCapability_NoOp(t *testing.T) {
+	repo := &repoWithoutDropCapability{}
+	s := &veridianService{workspaceRepo: repo, dbPrefix: "notifuse"}
+	assert.NotPanics(t, func() {
+		s.forceDropWorkspaceDBBestEffort(context.Background(), "tst123")
+	})
+}

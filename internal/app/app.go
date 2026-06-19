@@ -1422,6 +1422,24 @@ func (a *App) InitHandlers() error {
 		a.config.Environment,
 	)
 
+	// === Veridian patch — 2026-06-18 — DROP FORCE de rattrapage + GC orphelins ===
+	// (todo/2026-06-17-orphan-workspaces-staging-db-starvation.md)
+	// (1) Active le DROP DATABASE ... WITH (FORCE) de rattrapage dans wipeOneTenant
+	//     (le DROP upstream sans FORCE échoue sur la race de connexions worker →
+	//     689 bases orphelines staging). Préfixe = config.Database.Prefix. Actif
+	//     PARTOUT (le rattrapage n'est jamais destructif sur une base à record).
+	// (2) Endpoint GC STAGING-ONLY POST/GET /api/veridian/admin/gc-orphan-workspace-dbs
+	//     qui DROP les bases physiques sans record (FORCE, séquentiel, exclut canary).
+	//     Le handler gate sur a.config.Environment == "staging" (503 sinon).
+	// Détection par type-assertion (le service concret *veridianService est
+	// non-exporté ; ces capacités sont des méthodes veridian_*).
+	if cleaner, ok := a.veridianService.(interface{ ConfigureWorkspaceDBCleanup(string) }); ok {
+		cleaner.ConfigureWorkspaceDBCleanup(a.config.Database.Prefix)
+	}
+	if gcRunner, ok := a.veridianService.(httpHandler.VeridianOrphanDBGCRunner); ok {
+		veridianHandler.SetOrphanDBGC(gcRunner, a.config.Environment)
+	}
+
 	// === Veridian patch — Lot 1 sprint cold (2026-06-15) — poller IMAP ===
 	// BRIQUE FONDATRICE. Poll les boîtes IMAP configurées (Integration de type
 	// "imap" par workspace) et dispatche les messages neufs aux consumers

@@ -48,6 +48,10 @@ type VeridianHandler struct {
 	// (2026-06-15). Peut etre nil (prod / self-hosted) : handleColdSimulate
 	// retourne alors 503. Staging-only. Cf. veridian_cold_simulate_handler.go.
 	coldSimulate *veridianColdSimulateDeps
+	// orphanDBGC porte les deps de l'endpoint GC des bases workspace orphelines
+	// (2026-06-18). nil (prod / self-hosted) → handleGCOrphanWorkspaceDBs renvoie
+	// 503. Staging-only. Cf. veridian_orphan_db_gc_handler.go.
+	orphanDBGC *veridianOrphanDBGCDeps
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -196,6 +200,14 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// sinon). Mutateur (seed message_history) → HMAC + Idempotency.
 	// Cf. veridian_cold_simulate_handler.go + tests/e2e-veridian/specs/cold-lifecycle.spec.ts.
 	mux.Handle("POST /api/veridian/admin/cold-simulate", writeRoute(h.handleColdSimulate))
+	// === Veridian patch — 2026-06-18 === GC des bases workspace orphelines
+	// (notifuse_ws_* sans record `workspaces`). DROP FORCE séquentiel, exclut
+	// canary + clients réels. Auth HMAC, STAGING-ONLY (503 sinon). Mutateur →
+	// writeRoute (HMAC + idempotency). GET routé explicitement (anti-catchall
+	// root_handler.go) pour permettre un dry-run en lecture. Cf.
+	// veridian_orphan_db_gc_handler.go + todo/2026-06-17-orphan-workspaces-...md.
+	mux.Handle("POST /api/veridian/admin/gc-orphan-workspace-dbs", writeRoute(h.handleGCOrphanWorkspaceDBs))
+	mux.Handle("GET /api/veridian/admin/gc-orphan-workspace-dbs", hmac(http.HandlerFunc(h.handleGCOrphanWorkspaceDBs)))
 	// === Veridian patch V37 === Limites + dimensions feature d'un tenant
 	// (lot 7 ticket pricing-plans-implementation). Source de verite pour la
 	// console UI (widgets quota) et le paywall middleware. Auth HMAC.

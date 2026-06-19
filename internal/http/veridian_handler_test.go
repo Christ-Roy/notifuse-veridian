@@ -723,6 +723,43 @@ func TestVeridianRegisterRoutes_AllPathsRegistered(t *testing.T) {
 	}
 }
 
+// === Veridian patch 2026-06-18 — GC bases workspace orphelines ===
+// L'endpoint GC DOIT être routé en POST **ET** GET (piège catchall root_handler.go :
+// une méthode non routée tombe sur la SPA console = 200 HTML trompeur). On vérifie
+// que les deux méthodes résolvent un handler enregistré (pattern non vide), pas la
+// 404 par défaut. Test durable : si quelqu'un retire la route GET, ce test casse.
+func TestVeridianRegisterRoutes_GCOrphanWorkspaceDBs_POSTandGET(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := NewVeridianHandler(svc, logger.NewLogger())
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret")
+
+	for _, method := range []string{http.MethodPost, http.MethodGet} {
+		req := httptest.NewRequest(method, "/api/veridian/admin/gc-orphan-workspace-dbs", nil)
+		_, pattern := mux.Handler(req)
+		assert.NotEmpty(t, pattern,
+			"%s /api/veridian/admin/gc-orphan-workspace-dbs doit être routé (anti-catchall)", method)
+	}
+}
+
+// SetOrphanDBGC non appelé (nil par défaut) → 503 staging-only garde-fou : un curl
+// prod doit voir un 503 explicite, jamais un 200 muet.
+func TestVeridianHandleGCOrphan_NilByDefaultReturns503(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := NewVeridianHandler(svc, logger.NewLogger())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/veridian/admin/gc-orphan-workspace-dbs", nil)
+	rec := httptest.NewRecorder()
+	h.handleGCOrphanWorkspaceDBs(rec, req)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code,
+		"sans SetOrphanDBGC, l'endpoint GC doit retourner 503")
+}
+
 // === Veridian patch 2026-05-24 — cron auto-cleanup orphans staging ===
 // Test que SetTestTenantsCleanup (nil par défaut) entraîne 503 sur l'endpoint
 // GET /api/veridian/admin/test-tenants-stats — garde-fou prod : un agent qui

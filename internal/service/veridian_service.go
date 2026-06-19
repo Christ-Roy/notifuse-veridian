@@ -150,6 +150,15 @@ type veridianService struct {
 	// (cf. veridian_seed_templates.go).
 	templateService                  domain.TemplateService
 	transactionalNotificationService *TransactionalNotificationService
+
+	// === Veridian patch — 2026-06-18 — DROP FORCE de rattrapage ===
+	// dbPrefix est le préfixe des bases workspace (config.Database.Prefix, ex
+	// "notifuse" → bases "notifuse_ws_<id>"). Injecté post-construction via
+	// ConfigureWorkspaceDBCleanup. S'il est non vide, wipeOneTenant DROP la base
+	// physique avec FORCE en rattrapage après DeleteWorkspace (couvre la race du
+	// DROP upstream sans FORCE + le cas record-absent/base-restante). Vide =
+	// rattrapage désactivé (non-régression : comportement upstream seul).
+	dbPrefix string
 }
 
 // NewVeridianService construit un VeridianService.
@@ -1264,6 +1273,17 @@ func (s *veridianService) wipeOneTenant(ctx, rootCtx context.Context, tid string
 			return fmt.Errorf("delete workspace: %w", err)
 		}
 	}
+
+	// 2bis. === Veridian patch — 2026-06-18 — DROP FORCE de rattrapage ===
+	// Le DROP upstream (DeleteDatabase) n'utilise PAS WITH (FORCE) → sur staging
+	// le worker round-robin rouvre une connexion entre le terminate et le drop →
+	// "database is being accessed by other users" → DROP raté → base orpheline.
+	// Et si DeleteWorkspace a retourné "not found" (record absent), le DROP n'a
+	// même pas été tenté alors que la base physique peut subsister. On rattrape
+	// ici inconditionnellement avec un DROP FORCE idempotent (best-effort : un
+	// échec est loggué mais ne fait PAS échouer le wipe — le record est déjà
+	// supprimé, l'important est fait). No-op si dbPrefix non configuré.
+	s.forceDropWorkspaceDBBestEffort(ctx, tid)
 
 	// 3. HardDelete → DELETE veridian_plan row.
 	if err := s.planRepo.HardDelete(ctx, tid); err != nil {
