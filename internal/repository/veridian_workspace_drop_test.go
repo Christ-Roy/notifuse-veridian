@@ -141,3 +141,27 @@ func TestWorkspaceRepository_VeridianWorkspaceDBPrefix(t *testing.T) {
 	repo := &workspaceRepository{dbConfig: &config.DatabaseConfig{Prefix: "nf"}}
 	assert.Equal(t, "nf", repo.VeridianWorkspaceDBPrefix())
 }
+
+func TestWorkspaceRepository_VeridianWorkspaceDBExists(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &workspaceRepository{systemDB: db, dbConfig: &config.DatabaseConfig{Prefix: "notifuse"}}
+
+	// Présente.
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)`)).
+		WithArgs("notifuse_ws_alive").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	exists, err := repo.VeridianWorkspaceDBExists(context.Background(), "alive")
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	// Absente.
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)`)).
+		WithArgs("notifuse_ws_gone").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	exists, err = repo.VeridianWorkspaceDBExists(context.Background(), "gone")
+	require.NoError(t, err)
+	assert.False(t, exists)
+}

@@ -91,6 +91,19 @@ func (r *workspaceRepository) VeridianWorkspaceDBPrefix() string {
 	return r.dbConfig.Prefix
 }
 
+// VeridianWorkspaceDBExists indique si la base physique d'un workspace est encore
+// présente dans pg_database. Sert au wipe à confirmer qu'un DROP FORCE de
+// rattrapage a réellement supprimé la base quand le DROP upstream a raté sur la
+// race ("being accessed by other users"). Best-effort : une erreur de requête
+// renvoie (false, err) — le caller décide (le wipe traite err comme "incertain").
+func (r *workspaceRepository) VeridianWorkspaceDBExists(ctx context.Context, workspaceID string) (bool, error) {
+	dbName := VeridianWorkspaceDBName(r.dbConfig.Prefix, workspaceID)
+	var exists bool
+	err := r.systemDB.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)`, dbName).Scan(&exists)
+	return exists, err
+}
+
 // veridianForceDropByDBName est le coeur : DROP par nom de base déjà construit.
 //
 // systemDB = connexion à la base SYSTÈME, seule autorisée à DROP une autre base.

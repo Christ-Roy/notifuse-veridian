@@ -1268,22 +1268,48 @@ func (s *veridianService) wipeOneTenant(ctx, rootCtx context.Context, tid string
 
 	// 2. DeleteWorkspace upstream → DROP DATABASE workspace dedie.
 	// Workspace deja absent = OK (peut arriver si planRepo a une row sans workspace).
-	if err := s.workspaceService.DeleteWorkspace(deleteCtx, tid); err != nil {
-		if !strings.Contains(err.Error(), "not found") {
-			return fmt.Errorf("delete workspace: %w", err)
-		}
-	}
+	deleteWorkspaceErr := s.workspaceService.DeleteWorkspace(deleteCtx, tid)
 
 	// 2bis. === Veridian patch — 2026-06-18 — DROP FORCE de rattrapage ===
 	// Le DROP upstream (DeleteDatabase) n'utilise PAS WITH (FORCE) → sur staging
 	// le worker round-robin rouvre une connexion entre le terminate et le drop →
 	// "database is being accessed by other users" → DROP raté → base orpheline.
 	// Et si DeleteWorkspace a retourné "not found" (record absent), le DROP n'a
-	// même pas été tenté alors que la base physique peut subsister. On rattrape
-	// ici inconditionnellement avec un DROP FORCE idempotent (best-effort : un
-	// échec est loggué mais ne fait PAS échouer le wipe — le record est déjà
-	// supprimé, l'important est fait). No-op si dbPrefix non configuré.
+	// même pas été tenté alors que la base physique peut subsister.
+	//
+	// ON RATTRAPE INCONDITIONNELLEMENT, AVANT d'évaluer l'erreur de DeleteWorkspace :
+	// le cas le PLUS IMPORTANT à rattraper est justement quand DeleteWorkspace a
+	// échoué sur "is being accessed" (la race). Le DROP FORCE idempotent termine
+	// les backends atomiquement et droppe la base. Best-effort (no-op si dbPrefix
+	// non configuré ; un échec est loggué sans bloquer).
 	s.forceDropWorkspaceDBBestEffort(ctx, tid)
+
+	// 2ter. Évaluation de l'erreur DeleteWorkspace APRÈS le rattrapage :
+	//   - "not found" → OK (record absent, base déjà rattrapée si elle existait).
+	//   - "being accessed by other users" → le DROP upstream a raté MAIS notre
+	//     rattrapage FORCE vient de dropper la base : on vérifie si elle a vraiment
+	//     disparu ; si oui, on NE fait PAS échouer le wipe (le but est atteint).
+	//   - autre erreur → on remonte (échec réel non lié à la race de connexions).
+	if deleteWorkspaceErr != nil {
+		msg := deleteWorkspaceErr.Error()
+		switch {
+		case strings.Contains(msg, "not found"):
+			// OK, record déjà absent.
+		case strings.Contains(msg, "being accessed by other users"):
+			// Le DROP nu upstream a raté sur la race. Notre DROP FORCE l'a rattrapé.
+			// Si la base a réellement disparu, le wipe est réussi malgré l'erreur
+			// upstream. Sinon, on remonte (le rattrapage a aussi échoué).
+			if s.workspaceDBStillExists(ctx, tid) {
+				return fmt.Errorf("delete workspace (force-drop fallback also failed): %w", deleteWorkspaceErr)
+			}
+			if s.logger != nil {
+				s.logger.WithField("tenant_id", tid).
+					Info("veridian: upstream DROP raced (being accessed), force-drop fallback succeeded")
+			}
+		default:
+			return fmt.Errorf("delete workspace: %w", deleteWorkspaceErr)
+		}
+	}
 
 	// 3. HardDelete → DELETE veridian_plan row.
 	if err := s.planRepo.HardDelete(ctx, tid); err != nil {

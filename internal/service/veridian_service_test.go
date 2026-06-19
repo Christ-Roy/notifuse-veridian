@@ -1538,18 +1538,29 @@ func TestVeridianService_WipeTestTenants_SkipsCanaryAndClientPrefixes(t *testing
 // le tenant wipé.
 
 // workspaceRepoWithDropCapability embed le mock gomock (toute l'interface
-// WorkspaceRepository) et ajoute la méthode VeridianForceDropDatabase → satisfait
-// l'interface du champ ET la capacité veridianForceDropper (type-assertion).
+// WorkspaceRepository) et ajoute VeridianForceDropDatabase + VeridianWorkspaceDBExists
+// → satisfait l'interface du champ ET les capacités veridianForceDropper +
+// veridianDBExistenceChecker (type-assertion).
 type workspaceRepoWithDropCapability struct {
 	*mocks.MockWorkspaceRepository
 	dropCalls   int
 	droppedWSID []string
+	dropErr     error
+	// dbStillExists pilote la réponse de VeridianWorkspaceDBExists (post-rattrapage).
+	dbStillExists    bool
+	dbExistsErr      error
+	dbExistsCalls    int
 }
 
 func (w *workspaceRepoWithDropCapability) VeridianForceDropDatabase(ctx context.Context, workspaceID string, log logger.Logger) error {
 	w.dropCalls++
 	w.droppedWSID = append(w.droppedWSID, workspaceID)
-	return nil
+	return w.dropErr
+}
+
+func (w *workspaceRepoWithDropCapability) VeridianWorkspaceDBExists(ctx context.Context, workspaceID string) (bool, error) {
+	w.dbExistsCalls++
+	return w.dbStillExists, w.dbExistsErr
 }
 
 func TestVeridianService_WipeTestTenants_TriggersForceDropWhenConfigured(t *testing.T) {
@@ -1611,6 +1622,71 @@ func TestVeridianService_WipeTestTenants_NoForceDropWhenPrefixUnset(t *testing.T
 	assert.Equal(t, []string{"tstwipe2"}, resp.Wiped)
 	assert.Equal(t, 0, wrapped.dropCalls, "sans dbPrefix configuré, aucun DROP de rattrapage")
 }
+
+// Edge case CRITIQUE (vu en logs staging 2026-06-18) : DeleteWorkspace upstream
+// échoue sur la RACE ("being accessed by other users") — c'est exactement le cas
+// que le DROP FORCE de rattrapage doit couvrir. Le rattrapage DOIT s'exécuter
+// MALGRÉ l'erreur upstream, et si la base a disparu, le wipe réussit.
+func TestVeridianService_WipeTestTenants_ForceDropRescuesRaceError(t *testing.T) {
+	svc, m := newVeridianService(t)
+	wrapped := &workspaceRepoWithDropCapability{
+		MockWorkspaceRepository: m.workspaceRepo,
+		dbStillExists:           false, // après rattrapage, la base a disparu
+	}
+	svc.workspaceRepo = wrapped
+	svc.ConfigureWorkspaceDBCleanup("notifuse")
+
+	ctx := context.Background()
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "tstrace1").
+		Return([]*domain.UserWorkspaceWithEmail{}, nil).Times(1)
+	// DeleteWorkspace upstream ÉCHOUE sur la race (DROP nu sans FORCE).
+	m.workspace.EXPECT().DeleteWorkspace(gomock.Any(), "tstrace1").
+		Return(errors.New(`pq: database "notifuse_ws_tstrace1" is being accessed by other users`)).Times(1)
+	m.planRepo.EXPECT().HardDelete(ctx, "tstrace1").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantDeleted, "tstrace1", gomock.Any()).AnyTimes()
+
+	resp, err := svc.WipeTestTenants(ctx, domain.WipeTestTenantsInput{TenantIDs: []string{"tstrace1"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"tstrace1"}, resp.Wiped, "le wipe réussit : DROP FORCE a rattrapé la race")
+	assert.Equal(t, 1, wrapped.dropCalls, "le rattrapage DOIT s'exécuter MALGRÉ l'erreur upstream")
+	assert.Equal(t, 1, wrapped.dbExistsCalls, "on vérifie que la base a bien disparu")
+}
+
+// Si le rattrapage échoue AUSSI (base toujours présente après FORCE), le wipe
+// remonte l'erreur (échec réel, pas un faux succès).
+func TestVeridianService_WipeTestTenants_ForceDropFailsBaseStillThere(t *testing.T) {
+	svc, m := newVeridianService(t)
+	wrapped := &workspaceRepoWithDropCapability{
+		MockWorkspaceRepository: m.workspaceRepo,
+		dbStillExists:           true, // le rattrapage n'a PAS supprimé la base
+	}
+	svc.workspaceRepo = wrapped
+	svc.ConfigureWorkspaceDBCleanup("notifuse")
+
+	ctx := context.Background()
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "tstrace2").
+		Return([]*domain.UserWorkspaceWithEmail{}, nil).Times(1)
+	m.workspace.EXPECT().DeleteWorkspace(gomock.Any(), "tstrace2").
+		Return(errors.New(`pq: database "notifuse_ws_tstrace2" is being accessed by other users`)).Times(1)
+	// HardDelete NE doit PAS être appelé (on remonte avant).
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantDeleted, gomock.Any(), gomock.Any()).Times(0)
+
+	resp, err := svc.WipeTestTenants(ctx, domain.WipeTestTenantsInput{TenantIDs: []string{"tstrace2"}})
+	require.NoError(t, err) // WipeTestTenants n'erreure pas globalement, il collecte par tenant
+	assert.Empty(t, resp.Wiped, "le tenant n'est PAS wipé si la base subsiste")
+	assert.Contains(t, resp.Errors, "tstrace2", "erreur enregistrée pour ce tenant")
+}
+
+// (Les tests unitaires de workspaceDBStillExists vivent dans le fichier colocalisé
+// veridian_workspace_db_cleanup_test.go, où la méthode est définie.)
 
 // === V37 — GetLimits (lot 3 pricing-plans) ===
 

@@ -32,6 +32,46 @@ type repoWithoutDropCapability struct {
 	domain.WorkspaceRepository
 }
 
+// fakeDBExistenceRepo embed WorkspaceRepository (nil) et implémente
+// VeridianWorkspaceDBExists → satisfait veridianDBExistenceChecker.
+type fakeDBExistenceRepo struct {
+	domain.WorkspaceRepository
+	exists bool
+	err    error
+	calls  int
+}
+
+func (f *fakeDBExistenceRepo) VeridianWorkspaceDBExists(ctx context.Context, workspaceID string) (bool, error) {
+	f.calls++
+	return f.exists, f.err
+}
+
+func TestWorkspaceDBStillExists_TrueWhenRepoSaysExists(t *testing.T) {
+	repo := &fakeDBExistenceRepo{exists: true}
+	s := &veridianService{workspaceRepo: repo}
+	assert.True(t, s.workspaceDBStillExists(context.Background(), "ws1"))
+	assert.Equal(t, 1, repo.calls)
+}
+
+func TestWorkspaceDBStillExists_FalseWhenRepoSaysGone(t *testing.T) {
+	repo := &fakeDBExistenceRepo{exists: false}
+	s := &veridianService{workspaceRepo: repo}
+	assert.False(t, s.workspaceDBStillExists(context.Background(), "ws1"))
+}
+
+func TestWorkspaceDBStillExists_NoCapabilityReturnsFalse(t *testing.T) {
+	// Repo sans la capacité de check → best-effort false (ne bloque pas le wipe).
+	s := &veridianService{workspaceRepo: &repoWithoutDropCapability{}}
+	assert.False(t, s.workspaceDBStillExists(context.Background(), "ws1"))
+}
+
+func TestWorkspaceDBStillExists_CheckErrorReturnsFalse(t *testing.T) {
+	// Erreur de check → best-effort false + log (ne bloque pas le wipe sur incertitude).
+	repo := &fakeDBExistenceRepo{exists: true, err: errors.New("query boom")}
+	s := &veridianService{workspaceRepo: repo, logger: logger.NewLogger()}
+	assert.False(t, s.workspaceDBStillExists(context.Background(), "ws1"))
+}
+
 func TestConfigureWorkspaceDBCleanup_SetsPrefix(t *testing.T) {
 	s := &veridianService{}
 	s.ConfigureWorkspaceDBCleanup("notifuse")

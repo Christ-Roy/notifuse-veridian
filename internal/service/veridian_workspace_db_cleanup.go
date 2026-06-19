@@ -32,6 +32,38 @@ type veridianForceDropper interface {
 	VeridianForceDropDatabase(ctx context.Context, workspaceID string, log logger.Logger) error
 }
 
+// veridianDBExistenceChecker : capacité (optionnelle) de vérifier si la base
+// physique d'un workspace est encore dans pg_database. Sert au wipe à confirmer
+// qu'un DROP FORCE de rattrapage a bien supprimé la base quand le DROP upstream a
+// raté sur la race. Implémentée par *repository.workspaceRepository.
+type veridianDBExistenceChecker interface {
+	VeridianWorkspaceDBExists(ctx context.Context, workspaceID string) (bool, error)
+}
+
+// workspaceDBStillExists retourne true si la base physique du workspace est encore
+// présente. Best-effort : si le repo n'expose pas la capacité, ou si la requête
+// échoue, on retourne false (on ne bloque PAS le wipe sur une incertitude — le
+// record est déjà supprimé, et le DROP FORCE idempotent peut être rejoué au
+// prochain GC). Conservateur uniquement quand on a une réponse CLAIRE "la base
+// est toujours là".
+func (s *veridianService) workspaceDBStillExists(ctx context.Context, workspaceID string) bool {
+	checker, ok := s.workspaceRepo.(veridianDBExistenceChecker)
+	if !ok {
+		return false
+	}
+	exists, err := checker.VeridianWorkspaceDBExists(ctx, workspaceID)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.WithFields(map[string]interface{}{
+				"tenant_id": workspaceID,
+				"error":     err.Error(),
+			}).Warn("veridian: db existence check failed (treating as dropped, best-effort)")
+		}
+		return false
+	}
+	return exists
+}
+
 // ConfigureWorkspaceDBCleanup active le DROP FORCE de rattrapage en injectant le
 // préfixe des bases workspace (config.Database.Prefix). Appelé une fois au
 // câblage (app.go). Préfixe vide = rattrapage désactivé (non-régression).
