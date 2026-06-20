@@ -82,6 +82,13 @@ export const veridianTheme: ThemeConfig = {
       colorTextHeading: 'rgb(51 65 85)',
       colorBgContainer: 'transparent',
       rowHoverBg: 'transparent',
+      // headerBg=transparent ne couvre PAS la colonne triée : Antd a des tokens
+      // dédiés (headerSortActiveBg / headerSortHoverBg) qui, sans override,
+      // résolvaient en noir → en-tête noir illisible sur la colonne triée par
+      // défaut (ex. "Sent" dans le tableau engagement par classe). On les aligne
+      // sur transparent comme le reste de l'en-tête.
+      headerSortActiveBg: 'transparent',
+      headerSortHoverBg: 'transparent',
     },
     Drawer: {
       colorBgElevated: veridianColors.surface,
