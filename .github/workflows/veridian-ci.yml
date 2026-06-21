@@ -465,9 +465,15 @@ jobs:
           GITLEAKS_ENABLE_SUMMARY: true
 
   build:
-    name: Build & push image (self-hosted)
+    name: Build & push image (GitHub-hosted)
     needs: [test-go, cve-scan, trivy-fs, gitleaks, console-build, e2e-console-prod-smoke]
-    runs-on: [self-hosted, linux, x64]
+    # Migré self-hosted (dev-pub) → ubuntu-latest le 2026-06-21 : dev-pub
+    # (7.6G RAM / 72G disque, mutualisé staging 5 apps) saturait au build
+    # (`no space left` / push GHCR `deadline exceeded`) → blocage total des promos.
+    # Le build n'a AUCUNE dépendance dev-pub (context: ., cache type=gha, push
+    # GHCR via token) → tourne sur runner GitHub (16G/14G, jamais saturé). Seuls
+    # les jobs deploy-* restent self-hosted (ils SSH dans dev-pub, c'est leur rôle).
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
