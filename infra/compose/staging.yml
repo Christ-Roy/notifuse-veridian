@@ -30,7 +30,7 @@ services:
     # postgres dans la limite 1024M du container, soutient ~16 ws concurrent
     # à pleine charge. À combiner avec ENVIRONMENT=staging-test côté app
     # (TODO) ou réduction DB_MAX_CONNECTIONS_PER_DB plus tard.
-    command: postgres -c 'max_connections=400' -c 'max_wal_size=1GB' -c 'checkpoint_timeout=10min'
+    command: postgres -c 'max_connections=800' -c 'max_wal_size=1GB' -c 'checkpoint_timeout=10min'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -71,12 +71,18 @@ services:
       DB_NAME: notifuse_system
       DB_SSLMODE: disable
       # 2026-05-22 — fix pool DB staging : l'app cape à DB_MAX_CONNECTIONS
-      # (défaut 100). Le bump postgres max_connections=400 ne servait à rien
+      # (défaut 100). Le bump postgres max_connections=800 ne servait à rien
       # tant que l'app se limitait à 100. staging accumule ~50-100 workspaces
       # de test (chacun ouvre un pool DB_MAX_CONNECTIONS_PER_DB), les E2E
       # provisionnent en burst → 98/100 atteint → provision 500. 350 = sous
       # la limite postgres 400, marge pour les bursts CI.
-      DB_MAX_CONNECTIONS: "350"
+      # 2026-06-21 — bump 350 → 600 (+ postgres max_connections 400→800 ci-dessus) :
+      # la suite E2E (298 tests) provisionne des centaines de workspaces de test
+      # jamais nettoyés ; le pool app cape à DB_MAX_CONNECTIONS → pic atteint
+      # pendant chaos-provisioning (5 provisions CONCURRENTES) → 500/fail. 600
+      # sous la limite postgres 800. Pansement ; vrai fix = cleanup tenants E2E
+      # en fin de run (todo/2026-06-20-e2e-sature-staging-provisioning-pic.md).
+      DB_MAX_CONNECTIONS: "600"
       DB_MAX_CONNECTIONS_PER_DB: "3"
       SECRET_KEY: ${NOTIFUSE_SECRET_KEY}
       TASK_SCHEDULER_ENABLED: "true"
