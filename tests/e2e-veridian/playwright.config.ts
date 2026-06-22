@@ -2,6 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './specs',
+  // Filet anti-accumulation : GC des bases de test orphelines en fin de run
+  // (un test crashé saute son afterAll → tenant+base restent → pool DB sature →
+  // chaos-provisioning/anti-regression flakent). Best-effort, staging-only.
+  // cf. todo/2026-06-20-e2e-sature-staging-provisioning-pic.md
+  globalTeardown: './global-teardown.ts',
   // 180s : certains tests attendent le cache TTL paywall (60s) entre suspend
   // et envoi pour valider le 402, donc 90s est trop court.
   timeout: 180_000,
