@@ -90,3 +90,10 @@ le DROP FORCE : chaque wipe d'un ws actif laisse une base recréée derrière.
 - **Hygiène staging** : starvation lente de bases `notifuse_ws_*` (round-robin worker
   ralenti, throttle E2E flaky — déjà tracé `todo/2026-06-17-orphan-workspaces-…`).
   Ce ticket en identifie une cause active supplémentaire (recréation post-wipe).
+
+## ⚠️ STATUT 2026-06-22 — fix livré sur staging, PROUVÉ, PAS EN PROD
+
+- Fix `514e6c12` (record-first) sur `veridian`/staging. PAS en prod (3bbc1cce).
+- **Preuve on-premise FAITE 2026-06-21** : provision workspace jetable → wipe →
+  base ET record à 0 immédiatement, ET base reste à 0 après 90s (ne se régénère plus). ✅
+- **Reste** : promouvoir en prod via `2026-06-22-PROMO-PROD-lot-fixes-session.md`.

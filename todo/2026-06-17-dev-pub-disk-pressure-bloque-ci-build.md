@@ -63,3 +63,16 @@ staging) juge la régénération (94 records vs ex-630 bases). À PROMOUVOIR EN 
 avec preuve on-premise. Le cron est le garde-fou en attendant que la cause soit
 100% éteinte. Piste durable : réduire l'idle-timeout des connexions worker
 (config pool) pour que le worker ne garde pas une connexion ouverte par base.
+
+## ✅ RÉSOLU pour l'essentiel 2026-06-21 — requalifié 🔴 P0 → 🟢 P2
+
+- **Cause "build bloqué" ÉLIMINÉE** : le job build a été migré self-hosted (dev-pub)
+  → `ubuntu-latest` (commit `f62e7914`). dev-pub n'a plus JAMAIS à builder d'image
+  → plus de timeout GHCR / `no space` au build. C'était LE blocage des promos.
+- Pool DB + bases orphelines : traité par le bump connexions (`204f5824`) + crons
+  de cleanup (purge idle */2min + GC */30min sur dev-pub).
+- **Reste (🟢 P2, non bloquant)** : la cause profonde = le worker garde 1 connexion
+  idle par base élue (round-robin) → réduire l'idle-timeout du pool worker. Suivi
+  dans `2026-06-20-e2e-sature-staging-provisioning-pic.md`.
+- ⚠️ **NB** : l'incident PROD DOWN du 2026-06-22 (VPS prod en mode rescue OVH) est
+  SANS RAPPORT avec ce ticket (c'est l'hôte prod, pas dev-pub ; géré hors Notifuse).

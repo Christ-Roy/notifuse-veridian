@@ -114,3 +114,13 @@ alors **corriger la doc** (`veridian_warmup.go:22-25` + CLAUDE.md) qui affirme
 « volume TOTAL de l'IP » — aujourd'hui la doc ment sur le comportement. Mais le
 trou MX (Bug 2) reste à corriger dans tous les cas : une rampe warmup qui
 n'enforce rien sur la majorité MX des leads cold est inutile pour son objectif.
+
+## ⚠️ STATUT 2026-06-22 — fix livré sur staging, PROUVÉ, PAS EN PROD
+
+- Fix `a39c9f15` (warmup = cap TOTAL par infra) sur `veridian`/staging. PAS en prod (3bbc1cce).
+- **Preuve on-premise FAITE 2026-06-21** (par le lead, pas l'agent qui avait archivé à tort) :
+  workspace jetable + seed 1 envoi `gmail` + 1 envoi `ovh` (classe MX) depuis le MÊME
+  domaine émetteur `warmsender.fr` → `warmup_cap_decision` (cap=2) renvoie
+  `sent_today=2` (TOTAL toutes classes, MX compris) + `would_be_capped=true`. ✅
+  Avant le fix, l'envoi `ovh` MX n'était pas compté → warmup inopérant sur les vraies cibles B2B.
+- **Reste** : promouvoir en prod via le ticket maître `2026-06-22-PROMO-PROD-lot-fixes-session.md`.
