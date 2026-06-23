@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -135,6 +136,29 @@ func TestHandleFreezeMember_TenantNotFound_Returns404(t *testing.T) {
 	var body map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, ErrCodeTenantNotFound, body["code"])
+}
+
+// TestHandleFreezeMember_GenericServiceError_Returns500NoLeak couvre le
+// fallthrough 500 non-classifié : une erreur service brute (DB/infra) ne doit
+// JAMAIS être renvoyée telle quelle au client (axe 2). Message générique côté
+// client, code machine internal_error exposé, erreur brute confinée aux logs.
+func TestHandleFreezeMember_GenericServiceError_Returns500NoLeak(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().FreezeMember(gomock.Any(), gomock.Any()).Return(nil, false, errors.New("pq: db connection lost"))
+
+	h := newHandlerWithService(svc)
+	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
+		`{"user_email":"bob@x.test","hub_user_id":"u-1"}`)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "pq:", "le 500 ne doit pas leak l'erreur interne brute")
+	assert.NotContains(t, rec.Body.String(), "db connection lost", "le 500 ne doit pas leak l'erreur interne brute")
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeInternalError, body["code"], "le code machine internal_error doit rester exposé")
 }
 
 func TestHandleFreezeMember_MissingUserEmail_Returns400(t *testing.T) {

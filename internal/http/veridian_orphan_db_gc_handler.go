@@ -76,7 +76,9 @@ func (h *VeridianHandler) handleGCOrphanWorkspaceDBs(w http.ResponseWriter, r *h
 		h.logError("gc_orphan_workspace_dbs", gcErr, map[string]interface{}{
 			"dry_run": input.DryRun,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, gcErr.Error(), http.StatusInternalServerError, nil)
+		// Message générique : l'erreur brute (Postgres/DROP DATABASE) est déjà
+		// loggée ci-dessus, le code machine reste exposé au client.
+		WriteJSONErrorCode(w, ErrCodeInternalError, "failed to gc orphan workspace dbs", http.StatusInternalServerError, nil)
 		return
 	}
 

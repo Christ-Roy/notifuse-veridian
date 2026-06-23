@@ -151,7 +151,7 @@ func (h *VeridianHandler) handleFreezeMember(w http.ResponseWriter, r *http.Requ
 			"user_email":  body.UserEmail,
 			"hub_user_id": body.HubUserID,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -265,7 +265,7 @@ func (h *VeridianHandler) handleUnfreezeMember(w http.ResponseWriter, r *http.Re
 			"user_email":  body.UserEmail,
 			"hub_user_id": body.HubUserID,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 

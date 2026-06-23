@@ -255,7 +255,10 @@ func TestHandleAttachMember_ServiceError_Returns500(t *testing.T) {
 		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.Contains(t, rec.Body.String(), "db connection refused")
+	// Le 500 ne doit PAS leak l'erreur interne brute au client (axe 2) : message
+	// générique côté client, erreur brute confinée aux logs.
+	assert.NotContains(t, rec.Body.String(), "db connection refused", "le 500 ne doit pas leak l'erreur interne")
+	assert.Contains(t, rec.Body.String(), "internal_error")
 }
 
 func TestHandleAttachMember_EmptyTenantID_Returns400(t *testing.T) {

@@ -234,6 +234,10 @@ func TestDiscovery_InternalError(t *testing.T) {
 	body := fmt.Sprintf(`{"email":"%s"}`, email)
 	rec := invokeDiscovery(t, svc, buildDiscoveryHMACRequest(t, body, 0))
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	// Le 500 ne doit pas leak l'erreur interne brute (DB) au client (axe 2) :
+	// message générique, erreur confinée aux logs ; le code machine reste exposé.
+	assert.NotContains(t, rec.Body.String(), "db connection lost", "le 500 ne doit pas leak l'erreur interne brute")
+	assert.Contains(t, rec.Body.String(), "internal_error")
 }
 
 // === Bonus : JSON malformé → 400 ===
