@@ -114,3 +114,30 @@ func TestEmersionIMAPClient_ToDomainMessage_EmptyBodyTakesFirstNonEmpty(t *testi
 	msg := c.toDomainMessage(buf)
 	assert.Equal(t, []byte("real body"), msg.RawBody)
 }
+
+// TestVeridianIMAPFetchOptions_BodyIsBounded : invariant anti-OOM. Le corps du
+// message DOIT être fetché de façon BORNÉE (FETCH partiel côté serveur), jamais
+// en section non bornée. Ce test casse si un refactor retire le cap — c'est sa
+// raison d'être (un fetch RFC822 complet non borné charge un mail/NDR géant en
+// RAM × le batch et fait amplifier le parser NDR récursif derrière).
+func TestVeridianIMAPFetchOptions_BodyIsBounded(t *testing.T) {
+	opts := veridianIMAPFetchOptions()
+
+	require.Len(t, opts.BodySection, 1, "une seule section de corps fetchée")
+	section := opts.BodySection[0]
+
+	require.NotNil(t, section.Partial,
+		"le corps DOIT être fetché en partiel (borné) — pas de RFC822 complet non borné")
+	assert.Equal(t, int64(0), section.Partial.Offset, "on lit depuis le début du message")
+	assert.Equal(t, int64(veridianIMAPMaxBodyBytes), section.Partial.Size,
+		"la taille fetchée doit être plafonnée à veridianIMAPMaxBodyBytes")
+
+	// Le cap doit rester raisonnable : assez pour les headers de matching +
+	// la structure DSN d'un NDR, sans rapatrier des Mo de pièces jointes.
+	assert.LessOrEqual(t, int64(veridianIMAPMaxBodyBytes), int64(8*1024*1024),
+		"le cap ne doit pas redevenir un quasi-illimité")
+	assert.Positive(t, veridianIMAPMaxBodyBytes, "cap strictement positif")
+
+	assert.True(t, opts.UID, "UID demandé (clé d'idempotence)")
+	assert.True(t, opts.Envelope, "Envelope demandé (headers de matching)")
+}

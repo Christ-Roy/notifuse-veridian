@@ -1,9 +1,12 @@
 package veridian_ndr
 
 import (
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	gomail "github.com/emersion/go-message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -246,4 +249,50 @@ func TestParse_DoesNotPanicOnWeirdInput(t *testing.T) {
 	for i, in := range inputs {
 		assert.NotPanics(t, func() { Parse(in, "", "") }, "input #%d", i)
 	}
+}
+
+// deeplyNestedMIME construit un message multipart imbriqué à `depth` niveaux
+// (chaque niveau contient le niveau suivant) — une MIME-bomb de profondeur.
+func deeplyNestedMIME(depth int) []byte {
+	var sb strings.Builder
+	for i := 0; i < depth; i++ {
+		b := "b" + strconv.Itoa(i)
+		sb.WriteString("Content-Type: multipart/mixed; boundary=" + b + "\r\n\r\n")
+		sb.WriteString("--" + b + "\r\n")
+	}
+	sb.WriteString("Content-Type: text/plain\r\n\r\ncore body 5.1.1 dead@x.tld\r\n")
+	for i := depth - 1; i >= 0; i-- {
+		sb.WriteString("\r\n--b" + strconv.Itoa(i) + "--\r\n")
+	}
+	return []byte(sb.String())
+}
+
+// TestParse_DeeplyNestedMIME_Bounded : un message multipart imbriqué bien
+// au-delà du cap de profondeur ne fait PAS exploser la stack/mémoire et termine
+// (la récursion d'extractAllText est bornée par veridianNDRMaxDepth).
+func TestParse_DeeplyNestedMIME_Bounded(t *testing.T) {
+	raw := deeplyNestedMIME(veridianNDRMaxDepth + 50)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		assert.NotPanics(t, func() { Parse(raw, "", "") })
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Parse n'a pas terminé sur un MIME profondément imbriqué (récursion non bornée ?)")
+	}
+}
+
+// TestExtractAllText_CapsTotalSize : extractAllText n'accumule jamais plus que
+// veridianNDRMaxTextBytes même sur une part géante (anti-OOM côté parseur).
+func TestExtractAllText_CapsTotalSize(t *testing.T) {
+	huge := veridianNDRMaxTextBytes + 5*1024*1024 // 5 MiB au-delà du cap
+	raw := "Content-Type: text/plain\r\n\r\n" + strings.Repeat("A", huge)
+	entity, err := gomail.Read(strings.NewReader(raw))
+	require.NoError(t, err)
+
+	out := extractAllText(entity)
+	assert.LessOrEqual(t, len(out), veridianNDRMaxTextBytes,
+		"le texte extrait ne doit jamais dépasser le plafond")
 }

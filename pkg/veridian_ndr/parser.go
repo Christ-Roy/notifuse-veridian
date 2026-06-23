@@ -215,12 +215,15 @@ func parseDeliveryStatusReport(entity *gomail.Entity, _ map[string]string) (Resu
 		pmt, _ := parseContentType(part.Header.Get("Content-Type"))
 		switch {
 		case strings.EqualFold(pmt, "message/delivery-status"):
-			b, _ := io.ReadAll(part.Body)
+			// Lecture bornée : les champs DSN (Status/Final-Recipient/Diagnostic)
+			// tiennent très largement dans veridianNDRMaxPartBytes (anti-OOM sur
+			// une part piégée surdimensionnée).
+			b, _ := io.ReadAll(io.LimitReader(part.Body, veridianNDRMaxPartBytes))
 			applyDeliveryStatusFields(&res, string(b))
 			found = true
 		case strings.EqualFold(pmt, "message/rfc822"),
 			strings.EqualFold(pmt, "text/rfc822-headers"):
-			b, _ := io.ReadAll(part.Body)
+			b, _ := io.ReadAll(io.LimitReader(part.Body, veridianNDRMaxPartBytes))
 			if id := extractOriginalMessageID(string(b)); id != "" && res.OriginalMessageID == "" {
 				res.OriginalMessageID = id
 			}
@@ -440,19 +443,49 @@ func extractOriginalMessageID(s string) string {
 	return ""
 }
 
+// Garde-fous anti MIME-bomb (un NDR/mail piégé peut imbriquer du multipart à
+// l'infini et/ou contenir des parts énormes) :
+//   - veridianNDRMaxDepth borne la profondeur de récursion multipart. Un NDR
+//     légitime ne dépasse JAMAIS 2-3 niveaux (report > delivery-status / rfc822).
+//   - veridianNDRMaxTextBytes borne le total de texte accumulé. Le fetch IMAP
+//     est déjà cappé (veridianIMAPMaxBodyBytes), ceci est la défense en
+//     profondeur côté parseur (robustesse pour un appel direct hors poller).
+const (
+	veridianNDRMaxDepth     = 10
+	veridianNDRMaxTextBytes = 4 * 1024 * 1024
+	// veridianNDRMaxPartBytes borne la lecture d'UNE part DSN/rfc822 isolée
+	// (les champs utiles tiennent dans 256 KiB ; au-delà = part piégée).
+	veridianNDRMaxPartBytes = 256 * 1024
+)
+
 // extractAllText concatène le texte de toutes les parts d'un message MIME
 // (sert au repli heuristique quand la structure report n'est pas exploitable).
+// Borné en profondeur de récursion ET en taille totale (anti MIME-bomb).
 func extractAllText(entity *gomail.Entity) string {
 	var sb strings.Builder
-	// Toujours inclure les headers bruts utiles (Status/Final-Recipient peuvent
-	// parfois être posés au niveau header par certains MTA exotiques).
+	extractAllTextInto(entity, &sb, 0)
+	return sb.String()
+}
+
+// extractAllTextInto fait le travail récursif en accumulant dans sb, avec un
+// compteur de profondeur (depth) et un plafond de taille (len(sb)). Best-effort :
+// une fois un plafond atteint, on s'arrête proprement (le texte déjà collecté
+// suffit aux heuristiques NDR — l'adresse morte et le code DSN sont en tête).
+func extractAllTextInto(entity *gomail.Entity, sb *strings.Builder, depth int) {
+	if entity == nil || depth > veridianNDRMaxDepth || sb.Len() >= veridianNDRMaxTextBytes {
+		return
+	}
 	mr := entity.MultipartReader()
 	if mr == nil {
-		b, _ := io.ReadAll(entity.Body)
+		// Lecture bornée au reliquat de budget (jamais d'io.ReadAll nu).
+		b, _ := io.ReadAll(io.LimitReader(entity.Body, veridianNDRRemaining(sb)))
 		sb.Write(b)
-		return sb.String()
+		return
 	}
 	for {
+		if sb.Len() >= veridianNDRMaxTextBytes {
+			return
+		}
 		part, err := mr.NextPart()
 		if err == io.EOF {
 			break
@@ -460,19 +493,27 @@ func extractAllText(entity *gomail.Entity) string {
 		if err != nil {
 			break
 		}
-		b, _ := io.ReadAll(part.Body)
+		b, _ := io.ReadAll(io.LimitReader(part.Body, veridianNDRRemaining(sb)))
 		sb.Write(b)
 		sb.WriteByte('\n')
-		// Récursion légère : une part peut être elle-même multipart (report
+		// Récursion bornée : une part peut être elle-même multipart (report
 		// imbriqué). go-message expose ça via Entity sur la part.
 		pmt, _ := parseContentType(part.Header.Get("Content-Type"))
 		if strings.HasPrefix(pmt, "multipart/") {
-			sub := extractAllText(part)
-			sb.WriteString(sub)
+			extractAllTextInto(part, sb, depth+1)
 			sb.WriteByte('\n')
 		}
 	}
-	return sb.String()
+}
+
+// veridianNDRRemaining = budget de lecture restant avant le plafond total.
+// Toujours >= 0 (le caller vérifie déjà sb.Len() < max avant de lire).
+func veridianNDRRemaining(sb *strings.Builder) int64 {
+	rem := veridianNDRMaxTextBytes - sb.Len()
+	if rem < 0 {
+		return 0
+	}
+	return int64(rem)
 }
 
 // decodeHeader décode un header MIME encodé (=?utf-8?...?=). Best-effort.

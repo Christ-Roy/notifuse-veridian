@@ -30,6 +30,16 @@ import (
 // le poller ne doit JAMAIS bloquer le reste de l'app sur une boîte injoignable.
 const veridianIMAPDialTimeout = 15 * time.Second
 
+// veridianIMAPMaxBodyBytes borne la taille du corps rapatrié PAR MESSAGE via un
+// FETCH partiel (SectionPartial côté serveur : le serveur tronque, on ne reçoit
+// jamais plus). SANS cap, on fetch le RFC822 COMPLET — un NDR/mail géant (ou une
+// boîte de retour piégée) charge des centaines de Mo en RAM × le batch, et le
+// parser NDR récursif derrière amplifie. 2 MiB suffit TRÈS largement à tout ce
+// dont les consumers ont besoin : les headers de matching stop-on-reply
+// (In-Reply-To / References) et la structure DSN d'un NDR vivent en TÊTE de
+// message. Au-delà = pièces jointes / contenu inutile pour le bounce-loop.
+const veridianIMAPMaxBodyBytes = 2 * 1024 * 1024
+
 // veridianIMAPClient est le contrat minimal dont le poller a besoin pour une
 // session sur une boîte. Une instance == une connexion ouverte sur un dossier
 // sélectionné. Close() doit toujours être appelé (defer).
@@ -153,15 +163,7 @@ func (c *emersionIMAPClient) FetchSince(ctx context.Context, since time.Time, li
 	var uidSet imap.UIDSet
 	uidSet.AddNum(uids...)
 
-	fetchOptions := &imap.FetchOptions{
-		UID:      true,
-		Envelope: true,
-		BodySection: []*imap.FetchItemBodySection{
-			{}, // section vide = message complet (RFC822)
-		},
-	}
-
-	buffers, err := c.client.Fetch(uidSet, fetchOptions).Collect()
+	buffers, err := c.client.Fetch(uidSet, veridianIMAPFetchOptions()).Collect()
 	if err != nil {
 		return nil, fmt.Errorf("imap fetch: %w", err)
 	}
@@ -173,6 +175,20 @@ func (c *emersionIMAPClient) FetchSince(ctx context.Context, since time.Time, li
 	// Garantir l'ordre UID croissant en sortie (Collect ne le garantit pas).
 	sort.Slice(messages, func(i, j int) bool { return messages[i].UID < messages[j].UID })
 	return messages, nil
+}
+
+// veridianIMAPFetchOptions construit les options FETCH du poller : UID +
+// Envelope + corps RFC822 BORNÉ à veridianIMAPMaxBodyBytes via un FETCH partiel
+// (le serveur tronque, on ne rapatrie jamais plus = anti-OOM sur mail/NDR géant).
+// Extrait en fonction pour rendre l'invariant de cap explicitement testable.
+func veridianIMAPFetchOptions() *imap.FetchOptions {
+	return &imap.FetchOptions{
+		UID:      true,
+		Envelope: true,
+		BodySection: []*imap.FetchItemBodySection{
+			{Partial: &imap.SectionPartial{Offset: 0, Size: veridianIMAPMaxBodyBytes}},
+		},
+	}
 }
 
 // toDomainMessage convertit un buffer go-imap en DTO domain neutre.
