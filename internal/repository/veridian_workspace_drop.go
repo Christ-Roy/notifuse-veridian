@@ -132,6 +132,17 @@ func (r *workspaceRepository) VeridianDeleteWorkspaceSystemRecord(ctx context.Co
 	if _, err := r.systemDB.ExecContext(ctx, `DELETE FROM workspace_invitations WHERE workspace_id = $1`, workspaceID); err != nil {
 		return fmt.Errorf("delete workspace_invitations: %w", err)
 	}
+	// 4. tasks EN DERNIER mais CRITIQUE : le scheduler global poll `tasks`
+	//    (notifuse_system) indépendamment de `workspaces`. Tant que des tasks du
+	//    workspace y survivent, le scheduler les re-dispatche → `tasks.execute` →
+	//    `init.go` RECRÉE la base du workspace mort pour exécuter la task → boucle
+	//    de régénération (constaté 2026-06-23 : 3124 tasks orphelines → 991 bases
+	//    régénérées en continu, dev-pub disque 99%). Supprimer le record
+	//    `workspaces` coupe `List()` mais PAS ce chemin tasks → il faut purger
+	//    `tasks` aussi. Cf. todo/2026-06-22-reactiver-tests-e2e-flaky-provisioning.md.
+	if _, err := r.systemDB.ExecContext(ctx, `DELETE FROM tasks WHERE workspace_id = $1`, workspaceID); err != nil {
+		return fmt.Errorf("delete tasks: %w", err)
+	}
 	return nil
 }
 

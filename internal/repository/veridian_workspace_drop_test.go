@@ -156,6 +156,9 @@ func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_Success(t *test
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspace_invitations WHERE workspace_id = $1`)).
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 0))
+	// tasks EN DERNIER : coupe la régénération de base par le scheduler global.
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM tasks WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 3))
 
 	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "tst123")
 	require.NoError(t, err)
@@ -175,6 +178,8 @@ func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_Idempotent(t *t
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM user_workspaces WHERE workspace_id = $1`)).
 		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspace_invitations WHERE workspace_id = $1`)).
+		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM tasks WHERE workspace_id = $1`)).
 		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "gone")
