@@ -17,6 +17,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,6 +188,33 @@ func TestVeridianMagicLink_InvalidJSON_400(t *testing.T) {
 	h.handleGenerateMagicLink(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "invalid JSON body")
+}
+
+// TestVeridianMagicLink_BodyTooLarge_400 prouve le garde-fou io.LimitReader
+// (OWASP API4:2023 — Unrestricted Resource Consumption). Cet endpoint JWT (API
+// key) ne passe PAS par le middleware HMAC qui bornerait déjà le body : le cap
+// 1 MiB est appliqué dans le handler. Un body > 1 MiB est tronqué → JSON
+// incomplet → 400, et GenerateMagicLink n'est JAMAIS appelé (aucun EXPECT sur le
+// service → ctrl.Finish échouerait sur un appel inattendu). Casse si le cap saute.
+func TestVeridianMagicLink_BodyTooLarge_400(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
+		{UserID: "api-user-1", WorkspaceID: "ws-1"},
+	}, nil)
+	h := newMagicHandler(svc, repo)
+
+	// user_email = string de >1 MiB sans guillemet de fermeture une fois tronquée
+	// → après le LimitReader, le JSON est incomplet → Decode échoue.
+	huge := strings.Repeat("A", (1<<20)+4096)
+	req := reqWithAuthCtx(t, `{"user_email":"`+huge+`"}`, string(domain.UserTypeAPIKey), "api-user-1")
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "un body > 1 MiB doit être rejeté (cap LimitReader)")
 	assert.Contains(t, rec.Body.String(), "invalid JSON body")
 }
 

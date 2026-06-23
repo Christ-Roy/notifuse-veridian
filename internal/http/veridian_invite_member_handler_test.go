@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -245,6 +246,23 @@ func TestVeridianInviteMember_InvalidJSON_400(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.handleInvite(rec, req)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// TestVeridianInviteMember_BodyTooLarge_400 prouve le garde-fou io.LimitReader
+// (OWASP API4:2023 — Unrestricted Resource Consumption). Cet endpoint JWT ne
+// passe PAS par le middleware HMAC qui bornerait déjà le body : le cap 1 MiB est
+// appliqué dans le handler, AVANT tout appel au hub client / auth service. Un
+// body > 1 MiB est tronqué → JSON incomplet → 400. Casse si le cap saute.
+func TestVeridianInviteMember_BodyTooLarge_400(t *testing.T) {
+	hub := &stubHubClient{}
+	h := newInviteHandler(t, hub, nil, &stubHubUserIDResolver{}, true)
+	// email = string de >1 MiB sans guillemet de fermeture une fois tronquée.
+	huge := strings.Repeat("A", (1<<20)+4096)
+	req := buildInviteReq(t, `{"workspace_id":"w","email":"`+huge+`@x.test"}`)
+	rec := httptest.NewRecorder()
+	h.handleInvite(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "un body > 1 MiB doit être rejeté (cap LimitReader)")
+	assert.Equal(t, 0, hub.called, "le hub client ne doit jamais être appelé sur un body rejeté")
 }
 
 func TestVeridianInviteMember_MissingFields_400(t *testing.T) {

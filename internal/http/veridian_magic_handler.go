@@ -15,6 +15,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -98,8 +99,12 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 	}
 	workspaceID := uws[0].WorkspaceID
 
+	// Borne le body (OWASP API4:2023 — Unrestricted Resource Consumption).
+	// Cet endpoint JWT (API key) ne passe PAS par le middleware HMAC (qui
+	// borne déjà à 1 MiB) : sans cap, le body serait illimité. Le payload
+	// attendu est minuscule ({user_email}).
 	var input domain.MagicLinkInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}

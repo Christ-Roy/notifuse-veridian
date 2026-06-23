@@ -27,6 +27,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -145,8 +146,12 @@ func (h *VeridianInviteMemberHandler) handleInvite(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Borne le body (OWASP API4:2023 — Unrestricted Resource Consumption).
+	// Cet endpoint JWT ne passe PAS par le middleware HMAC (qui borne déjà à
+	// 1 MiB) : sans cap, un user authentifié pourrait envoyer un body géant.
+	// Le payload attendu est minuscule ({workspace_id, email, role, message}).
 	var req VeridianInviteMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}

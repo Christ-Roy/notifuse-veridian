@@ -34,6 +34,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -78,8 +79,11 @@ func (h *VeridianAnalyticsHandler) RegisterRoutes(mux *http.ServeMux) {
 // les erreurs au format standard {"error": "<string>"}. Le succès est identique
 // (le *analytics.Response brut).
 func (h *VeridianAnalyticsHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
+	// Borne le body (OWASP API4:2023 — Unrestricted Resource Consumption).
+	// Endpoint JWT (pas de middleware HMAC qui bornerait déjà à 1 MiB) : sans
+	// cap, un user authentifié pourrait envoyer un body illimité.
 	var req AnalyticsQueryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode analytics query request")
 		WriteJSONError(w, "Invalid request payload", http.StatusBadRequest)
 		return
@@ -103,8 +107,9 @@ func (h *VeridianAnalyticsHandler) handleQuery(w http.ResponseWriter, r *http.Re
 // handleGetSchemas réplique la fine logique de l'upstream handleGetSchemas, avec
 // le même error-shape standard. Le succès est identique ({"schemas": ...}).
 func (h *VeridianAnalyticsHandler) handleGetSchemas(w http.ResponseWriter, r *http.Request) {
+	// Borne le body (OWASP API4:2023). Cf. handleQuery.
 	var req AnalyticsSchemasRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to decode analytics schemas request")
 		WriteJSONError(w, "Invalid request payload", http.StatusBadRequest)
 		return

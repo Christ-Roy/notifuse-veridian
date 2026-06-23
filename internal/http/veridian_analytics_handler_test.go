@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
@@ -15,6 +16,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// veridianOversizedJSONBody construit un corps JSON dont la taille dépasse
+// strictement le cap de 1 MiB du LimitReader. La valeur de "workspace_id" est
+// une string de >1 MiB SANS guillemet de fermeture une fois tronquée : après
+// troncature par io.LimitReader, le JSON est forcément incomplet → Decode
+// échoue → 400. Garantit le test du garde-fou OWASP API4:2023 (Unrestricted
+// Resource Consumption) indépendamment de la structure exacte du JSON tronqué.
+func veridianOversizedJSONBody() []byte {
+	huge := strings.Repeat("A", (1<<20)+4096) // > 1 MiB de payload utile
+	return []byte(`{"workspace_id":"` + huge + `"}`)
+}
 
 const veridianAnalyticsTestJWT = "test-jwt-secret-key-for-testing-32bytes"
 
@@ -248,4 +260,37 @@ func TestVeridianAnalyticsHandler_handleGetSchemas(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestVeridianAnalyticsHandler_bodyTooLarge_Query prouve le garde-fou
+// io.LimitReader (OWASP API4:2023 — Unrestricted Resource Consumption). Cet
+// endpoint JWT ne passe PAS par le middleware HMAC (qui bornerait déjà à 1 MiB),
+// donc le cap est appliqué dans le handler. Un body > 1 MiB est tronqué → JSON
+// incomplet → 400, et le service n'est JAMAIS appelé (gomock.NewController.Finish
+// échouerait sur un appel inattendu). Le test casse si quelqu'un retire le cap.
+func TestVeridianAnalyticsHandler_bodyTooLarge_Query(t *testing.T) {
+	h, _ := newVeridianAnalyticsHandlerForTest(t) // aucun EXPECT : le service ne doit pas être atteint
+
+	req := httptest.NewRequest(http.MethodPost, "/api/analytics.query", bytes.NewBuffer(veridianOversizedJSONBody()))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.handleQuery(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "un body > 1 MiB doit être rejeté (cap LimitReader)")
+	assertStandardErrorShape(t, w.Body.Bytes(), "Invalid request payload")
+}
+
+// TestVeridianAnalyticsHandler_bodyTooLarge_Schemas : idem sur handleGetSchemas.
+func TestVeridianAnalyticsHandler_bodyTooLarge_Schemas(t *testing.T) {
+	h, _ := newVeridianAnalyticsHandlerForTest(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/analytics.schemas", bytes.NewBuffer(veridianOversizedJSONBody()))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.handleGetSchemas(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "un body > 1 MiB doit être rejeté (cap LimitReader)")
+	assertStandardErrorShape(t, w.Body.Bytes(), "Invalid request payload")
 }
