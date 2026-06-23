@@ -114,10 +114,13 @@ func TestHandleGC_EmptyBodyUsesDefaults(t *testing.T) {
 }
 
 func TestHandleGC_RunnerErrorReturns500(t *testing.T) {
-	runner := &stubOrphanGCRunner{err: errors.New("db down")}
+	runner := &stubOrphanGCRunner{err: errors.New("pq: terminating connection due to administrator command")}
 	h := newOrphanGCHandler()
 	h.SetOrphanDBGC(runner, "staging")
 
 	rec := postGC(t, h, nil)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	// Le 500 ne doit pas leak l'erreur Postgres brute au client (message générique).
+	assert.NotContains(t, rec.Body.String(), "pq:", "le 500 ne doit pas leak l'erreur Postgres brute")
+	assert.Contains(t, rec.Body.String(), "failed to gc orphan workspace dbs")
 }

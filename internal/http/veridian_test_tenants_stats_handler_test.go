@@ -104,10 +104,13 @@ func TestHandleTestTenantsStats_DisabledInProdReturns200WithEnabledFalse(t *test
 
 // Erreur Stats() sans payload → 500.
 func TestHandleTestTenantsStats_ErrorNoPartial500(t *testing.T) {
-	stub := &fakeStatsProvider{err: errors.New("db down")}
+	stub := &fakeStatsProvider{err: errors.New("pq: too many connections")}
 	h := newHandlerForStats(stub)
 	rec := getStats(t, h)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	// Le 500 ne doit pas leak l'erreur DB brute au client (message générique).
+	assert.NotContains(t, rec.Body.String(), "pq:", "le 500 ne doit pas leak l'erreur DB brute")
+	assert.Contains(t, rec.Body.String(), "failed to compute test tenants stats")
 }
 
 // Erreur Stats() + stats partielles → 500 avec body contenant partial_stats.
@@ -119,6 +122,10 @@ func TestHandleTestTenantsStats_ErrorWithPartial500(t *testing.T) {
 	h := newHandlerForStats(stub)
 	rec := getStats(t, h)
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	// Le message client reste générique (pas de leak de "workspace list timeout"),
+	// mais le body partial_stats de debug est conservé.
+	assert.NotContains(t, rec.Body.String(), "workspace list timeout", "le 500 ne doit pas leak l'erreur brute")
 
 	var body map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))

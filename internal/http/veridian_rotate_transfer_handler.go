@@ -91,7 +91,7 @@ func (h *VeridianHandler) handleRotateAPIKey(w http.ResponseWriter, r *http.Requ
 		h.logError("rotate_api_key", err, map[string]interface{}{
 			"tenant_id": tenantID,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -171,7 +171,7 @@ func (h *VeridianHandler) handleTransferOwner(w http.ResponseWriter, r *http.Req
 			"tenant_id":       tenantID,
 			"new_owner_email": body.NewOwnerEmail,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 

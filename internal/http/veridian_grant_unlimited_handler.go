@@ -82,7 +82,10 @@ func (h *VeridianHandler) handleGrantUnlimited(w http.ResponseWriter, r *http.Re
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		// Erreur interne brute loggée côté serveur, message générique au client
+		// (pas de leak err.Error() — axe 2). Ce chemin ne loggait rien auparavant.
+		h.logError("grant_unlimited", err, map[string]interface{}{"tenant_id": input.TenantID})
+		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 

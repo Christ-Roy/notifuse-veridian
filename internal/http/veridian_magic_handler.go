@@ -129,7 +129,7 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 			"email":        input.UserEmail,
 			"error":        err.Error(),
 		}).Error("magic link: generation failed")
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 

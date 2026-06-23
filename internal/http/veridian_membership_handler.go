@@ -123,7 +123,10 @@ func (h *VeridianHandler) handleSyncMember(w http.ResponseWriter, r *http.Reques
 			"tenant_id":   tenantID,
 			"hub_user_id": body.HubUserID,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		// Message générique côté client : l'erreur brute (potentiellement DB/SQL)
+		// est déjà loggée ci-dessus. Le code machine `internal_error` reste exposé
+		// (le client Hub branche sa logique dessus, pas sur le texte).
+		WriteJSONErrorCode(w, ErrCodeInternalError, "failed to sync member", http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -201,7 +204,8 @@ func (h *VeridianHandler) handleRemoveMember(w http.ResponseWriter, r *http.Requ
 			"tenant_id":  tenantID,
 			"user_email": body.UserEmail,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		// Message générique : l'erreur brute est déjà loggée, le code reste exposé.
+		WriteJSONErrorCode(w, ErrCodeInternalError, "failed to remove member", http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -265,7 +269,8 @@ func (h *VeridianHandler) handleRestoreMember(w http.ResponseWriter, r *http.Req
 			"tenant_id":  tenantID,
 			"user_email": body.UserEmail,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		// Message générique : l'erreur brute est déjà loggée, le code reste exposé.
+		WriteJSONErrorCode(w, ErrCodeInternalError, "failed to restore member", http.StatusInternalServerError, nil)
 		return
 	}
 

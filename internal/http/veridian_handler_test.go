@@ -248,7 +248,9 @@ func TestVeridianHandleProvision_GenericServiceError(t *testing.T) {
 		`{"tenant_id":"ws-1","owner_email":"o@x.test","plan":"free"}`)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.Contains(t, rec.Body.String(), "unexpected upstream")
+	// Le 500 ne doit pas leak l'erreur interne brute au client (axe 2).
+	assert.NotContains(t, rec.Body.String(), "unexpected upstream", "le 500 ne doit pas leak l'erreur interne")
+	assert.Contains(t, rec.Body.String(), "internal_error")
 }
 
 // === handleUpdatePlan ===
@@ -638,7 +640,9 @@ func TestVeridianHandleWipeTestTenants_ServiceError(t *testing.T) {
 	rec := postJSON(t, h.handleWipeTestTenants, "/api/veridian/admin/wipe-test-tenants",
 		`{"prefix":"%"}`)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.Contains(t, rec.Body.String(), "wildcards")
+	// Le 500 ne doit pas leak l'erreur interne brute au client (axe 2).
+	assert.NotContains(t, rec.Body.String(), "wildcards", "le 500 ne doit pas leak l'erreur interne")
+	assert.Contains(t, rec.Body.String(), "internal_error")
 }
 
 func TestVeridianHandleWipeTestTenants_InvalidJSON(t *testing.T) {
@@ -1836,7 +1840,9 @@ func TestVeridianHandleListTenants_ServiceError_500(t *testing.T) {
 	h.handleListTenants(rec, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.Contains(t, rec.Body.String(), "db down")
+	// Le 500 ne doit pas leak l'erreur interne brute au client (axe 2).
+	assert.NotContains(t, rec.Body.String(), "db down", "le 500 ne doit pas leak l'erreur interne")
+	assert.Contains(t, rec.Body.String(), "internal_error")
 }
 
 func TestVeridianHandleListTenants_RouteRegistered(t *testing.T) {
@@ -2240,6 +2246,7 @@ func TestVeridianHandle_CacheInvalidationGracefulWithoutCache(t *testing.T) {
 		"/api/tenants/ws-1/restore", "ws-1", "")
 	assert.Equal(t, http.StatusOK, rec3.Code)
 }
+
 // === Veridian patch — Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
 
 // TestVeridianHandler_SetFrozenCache : le setter optionnel doit accepter nil
