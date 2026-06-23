@@ -46,3 +46,11 @@ workspaces de test dont le record n'existe plus / plus pollés. À investiguer :
 - [ ] Staging stable au repos : bases ≈ records (pas de gonflement spontané)
 - [ ] Retirer les 2 `test.skip` → `test` + run E2E complet vert sur staging propre
 - [ ] Vérifier que le globalTeardown maintient bases ≈ records après un run complet
+
+## ✅ CAUSE RACINE CORRIGÉE 2026-06-23 (commit ae64f878)
+
+Le bug de régénération est FIXÉ : le wipe supprime maintenant les tasks orphelines
+(`DELETE FROM tasks`), qui causaient la recréation des bases via le scheduler.
+Prouvé : 3124 tasks orphelines purgées → 0 tasks.execute fantôme → bases ne
+reviennent plus. → **Réactiver les 2 test.skip une fois ae64f878 en prod + un run
+E2E complet vert sur staging propre.**

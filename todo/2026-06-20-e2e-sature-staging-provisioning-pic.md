@@ -47,3 +47,18 @@ beaucoup provisionnent un workspace jetable → pic de bases vivantes + connexio
   (provision→wipe→base reste à 0 après 90s, preuve on-premise 2026-06-20). Il
   empêche la régénération mais ne réduit PAS le pic transitoire d'un run massif.
 - Cron cleanup : ticket `2026-06-17-dev-pub-disk-pressure-bloque-ci-build.md`.
+
+## ✅ CAUSE RACINE TROUVÉE + FIX 2026-06-23 (commit ae64f878)
+
+La régénération de bases venait de **`notifuse_system.tasks` non purgée au wipe**.
+Le scheduler global poll `tasks` indépendamment de `workspaces` → re-dispatche les
+tasks orphelines → `tasks.execute` → `init.go` RECRÉE la base du workspace mort →
+boucle. Constaté : **3124 tasks orphelines → ~991 bases régénérées**, dev-pub 99%.
+
+**Fix** : `VeridianDeleteWorkspaceSystemRecord` supprime maintenant aussi
+`DELETE FROM tasks WHERE workspace_id = $1` (en dernier, après workspaces). Purge
+immédiate des 3124 tasks orphelines = 0 régénération (prouvé : worker ne poll plus
+QUE canary/réels, plus aucun tst*).
+
+→ Une fois ce fix EN PROD, la dette de bases ne s'accumule plus → les 2 tests E2E
+skippés (todo/2026-06-22) peuvent être réactivés.
