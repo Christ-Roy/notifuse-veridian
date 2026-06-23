@@ -54,6 +54,18 @@ const veridianMXLookupTimeout = 2 * time.Second
 // rare) ; 7 jours est largement prudent et évite de marteler le DNS.
 const veridianMXCacheTTL = 7 * 24 * time.Hour
 
+// veridianMXCacheMaxEntries borne le cache MX en mémoire. SANS ce cap, la map
+// croît de façon MONOTONE : elle est keyée par DOMAINE destinataire distinct et
+// le classifier est partagé par le worker LONG-LIVED → sur du cold massif
+// (centaines de milliers de domaines B2B uniques), le cache fuit lentement
+// jusqu'à l'OOM du conteneur, car une entrée expirée n'est traitée que comme un
+// miss (cacheGet) puis RÉÉCRITE — jamais supprimée. Au-delà du cap, cacheSet
+// purge d'abord les entrées expirées, puis vide entièrement si le TTL n'a pas
+// encore expiré assez d'entrées (best-effort : un cache MX est reconstructible,
+// sa perte ne coûte qu'un re-lookup, jamais un envoi). 100 000 domaines ≈
+// quelques Mo : large pour le débit cold réel, sans risque mémoire.
+const veridianMXCacheMaxEntries = 100_000
+
 // MXResolver abstrait la résolution MX pour permettre l'injection d'un faux
 // resolver en test (zéro dépendance DNS réelle). L'implémentation de prod
 // (veridianNetMXResolver) tape un resolver public fiable avec timeout.
@@ -308,8 +320,32 @@ func (c *VeridianMXClassifier) cacheGet(domain string) (string, bool) {
 
 func (c *VeridianMXClassifier) cacheSet(domain, class string) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Cap mémoire : avant d'ajouter une NOUVELLE clé qui ferait dépasser le cap,
+	// on borne la map. D'abord on purge les entrées expirées (gratuit en
+	// pratique : le TTL de 7j en aura mûri beaucoup sur un cache plein) ; si ça
+	// ne suffit pas (rare : > cap domaines distincts tous dans le TTL), on vide
+	// — best-effort, le cache se reconstruira au fil des envois.
+	if _, exists := c.cache[domain]; !exists && len(c.cache) >= veridianMXCacheMaxEntries {
+		c.evictExpiredLocked()
+		if len(c.cache) >= veridianMXCacheMaxEntries {
+			c.cache = make(map[string]veridianMXCacheEntry, veridianMXCacheMaxEntries)
+		}
+	}
+
 	c.cache[domain] = veridianMXCacheEntry{class: class, expiresAt: c.now().Add(c.ttl)}
-	c.mu.Unlock()
+}
+
+// evictExpiredLocked supprime toutes les entrées dont le TTL est dépassé.
+// L'appelant DOIT détenir c.mu en écriture.
+func (c *VeridianMXClassifier) evictExpiredLocked() {
+	now := c.now()
+	for d, entry := range c.cache {
+		if now.After(entry.expiresAt) {
+			delete(c.cache, d)
+		}
+	}
 }
 
 // veridianNetMXResolver est l'implémentation de prod : un net.Resolver qui

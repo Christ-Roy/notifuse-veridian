@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -319,6 +320,64 @@ func TestMXClassifier_ConcurrentSafe(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// TestMXClassifier_CacheCapEvictsExpired : au cap, cacheSet purge d'abord les
+// entrées EXPIRÉES (gratuit en pratique vu le TTL de 7j) → le cache ne fuit pas.
+func TestMXClassifier_CacheCapEvictsExpired(t *testing.T) {
+	c := NewVeridianMXClassifier(&fakeMXResolver{})
+
+	var clock atomic.Int64
+	clock.Store(time.Now().UnixNano())
+	c.now = func() time.Time { return time.Unix(0, clock.Load()) }
+
+	// Remplis le cache jusqu'au cap avec des entrées qui vont expirer.
+	c.mu.Lock()
+	for i := 0; i < veridianMXCacheMaxEntries; i++ {
+		c.cache["expired"+strconv.Itoa(i)+".tld"] = veridianMXCacheEntry{
+			class: ProviderClassCorporateSelfhost, expiresAt: c.now().Add(c.ttl),
+		}
+	}
+	c.mu.Unlock()
+
+	// Avance au-delà du TTL : toutes les entrées sont expirées.
+	clock.Add(int64(veridianMXCacheTTL) + int64(time.Hour))
+
+	// Un nouvel insert au cap doit purger les expirées et NE PAS dépasser le cap.
+	c.cacheSet("fresh.tld", ProviderClassGoogle)
+
+	c.mu.RLock()
+	size := len(c.cache)
+	_, freshPresent := c.cache["fresh.tld"]
+	c.mu.RUnlock()
+
+	assert.Equal(t, 1, size, "les entrées expirées doivent être purgées, ne laissant que la fraîche")
+	assert.True(t, freshPresent, "la nouvelle entrée doit être présente après la purge")
+}
+
+// TestMXClassifier_CacheCapHardResetWhenAllFresh : cas extrême (> cap domaines
+// distincts tous DANS le TTL) → vidage de secours, le cache reste borné.
+func TestMXClassifier_CacheCapHardResetWhenAllFresh(t *testing.T) {
+	c := NewVeridianMXClassifier(&fakeMXResolver{})
+
+	// Remplis au cap avec des entrées NON expirées (toutes fraîches).
+	c.mu.Lock()
+	for i := 0; i < veridianMXCacheMaxEntries; i++ {
+		c.cache["fresh"+strconv.Itoa(i)+".tld"] = veridianMXCacheEntry{
+			class: ProviderClassCorporateSelfhost, expiresAt: c.now().Add(c.ttl),
+		}
+	}
+	c.mu.Unlock()
+
+	c.cacheSet("brandnew.tld", ProviderClassMicrosoft)
+
+	c.mu.RLock()
+	size := len(c.cache)
+	_, present := c.cache["brandnew.tld"]
+	c.mu.RUnlock()
+
+	assert.LessOrEqual(t, size, veridianMXCacheMaxEntries, "le cache ne doit JAMAIS dépasser le cap")
+	assert.True(t, present, "la nouvelle entrée doit survivre au vidage de secours")
 }
 
 // --- Lot 7 : ResolveDeliverability (pré-filtrage DNS best-effort) -----------
