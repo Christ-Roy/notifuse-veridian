@@ -110,6 +110,36 @@ func TestVeridianHubInvitationClient_CreateSuccess201(t *testing.T) {
 	assert.Less(t, driftMs, int64(60_000), "timestamp drift > 60s suspect")
 }
 
+// TestVeridianHubInvitationClient_CapsResponseBody : la lecture de la réponse
+// Hub est BORNÉE (LimitReader) — un corps géant ne charge jamais des Mo en RAM.
+// On renvoie un body bien au-delà du cap : le client lit au plus le cap, donc le
+// JSON tronqué est invalide → erreur propre (hub_response_invalid_json), JAMAIS
+// d'OOM ni de lecture illimitée.
+func TestVeridianHubInvitationClient_CapsResponseBody(t *testing.T) {
+	secret := "test-secret-cap"
+	huge := strings.Repeat("A", veridianHubInvitationMaxRespBytes+1024*1024) // 1 MiB au-delà du cap
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		// JSON volontairement non clos + padding massif : illisible une fois tronqué.
+		_, _ = w.Write([]byte(`{"invitation_id":"` + huge))
+	}))
+	defer server.Close()
+
+	c := NewVeridianHubInvitationClient(server.URL, secret, server.Client(), logger.NewLogger())
+	res, err := c.Create(context.Background(), HubInvitationInput{
+		InviterUserID:     "hub_user_owner1",
+		InviterEmail:      "owner@example.com",
+		InviteeEmail:      "guest@example.com",
+		TargetApp:         "notifuse",
+		TargetWorkspaceID: "tenant42",
+		TargetRole:        "member",
+	})
+	// Le parse échoue proprement (corps tronqué = JSON invalide), pas d'OOM/hang.
+	require.Error(t, err)
+	assert.Nil(t, res)
+}
+
 func TestVeridianHubInvitationClient_CreateReused200(t *testing.T) {
 	// Idempotence : si une invitation pending existe deja, le Hub renvoie 200 + reused=true.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

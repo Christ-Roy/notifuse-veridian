@@ -15,12 +15,14 @@ import (
 type fakeReplyProcessor struct {
 	calls   int
 	lastMsg *domain.VeridianIMAPMessage
+	lastCtx context.Context
 	err     error
 }
 
-func (f *fakeReplyProcessor) ProcessInboundMessage(_ context.Context, msg *domain.VeridianIMAPMessage) error {
+func (f *fakeReplyProcessor) ProcessInboundMessage(ctx context.Context, msg *domain.VeridianIMAPMessage) error {
 	f.calls++
 	f.lastMsg = msg
+	f.lastCtx = ctx
 	return f.err
 }
 
@@ -45,6 +47,25 @@ func TestVeridianReplyConsumer_OnNewMessage_Delegates(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, proc.calls)
 	assert.Same(t, msg, proc.lastMsg)
+}
+
+// TestVeridianReplyConsumer_OnNewMessage_BoundsContext : le consumer DOIT borner
+// le traitement par un timeout (le poller appelle OnNewMessage sans contexte et
+// de façon SYNCHRONE ; un ProcessInboundMessage qui traîne sur une DB lente
+// bloquerait sa goroutine indéfiniment). On vérifie que le contexte transmis a
+// bien un deadline (pas un context.Background() nu).
+func TestVeridianReplyConsumer_OnNewMessage_BoundsContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	proc := &fakeReplyProcessor{}
+	c := NewVeridianReplyConsumer(proc, setupMockLogger(ctrl))
+
+	require.NoError(t, c.OnNewMessage(&domain.VeridianIMAPMessage{WorkspaceID: "ws1"}))
+	require.NotNil(t, proc.lastCtx)
+	deadline, ok := proc.lastCtx.Deadline()
+	require.True(t, ok, "le contexte transmis doit avoir un deadline (timeout), pas un Background nu")
+	assert.False(t, deadline.IsZero())
 }
 
 func TestVeridianReplyConsumer_OnNewMessage_NilMessage_NoOp(t *testing.T) {

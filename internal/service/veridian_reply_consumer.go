@@ -2,10 +2,17 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
+
+// replyProcessTimeout borne le traitement d'un message (détection réponse +
+// signal + exit séquence = un lookup DB + quelques updates). Sans borne, un
+// ProcessInboundMessage qui traîne sur une DB lente bloquerait la goroutine du
+// poller indéfiniment (OnNewMessage est synchrone). Aligné sur bounceProcessTimeout.
+const replyProcessTimeout = 20 * time.Second
 
 // Veridian fork — Consumer IMAP stop-on-reply (Lot 3 sprint cold outbound, 2026-06-15).
 //
@@ -52,6 +59,9 @@ func (c *VeridianReplyConsumer) OnNewMessage(msg *domain.VeridianIMAPMessage) er
 	if msg == nil {
 		return nil
 	}
-	// Le poller appelle OnNewMessage sans contexte (contrat domain) : on borne nous-mêmes.
-	return c.processor.ProcessInboundMessage(context.Background(), msg)
+	// Le poller appelle OnNewMessage sans contexte (contrat domain) : on borne
+	// nous-mêmes par un timeout, sinon un traitement lent bloque sa goroutine.
+	ctx, cancel := context.WithTimeout(context.Background(), replyProcessTimeout)
+	defer cancel()
+	return c.processor.ProcessInboundMessage(ctx, msg)
 }

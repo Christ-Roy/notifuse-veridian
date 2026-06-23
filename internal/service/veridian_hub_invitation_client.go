@@ -53,6 +53,11 @@ const DefaultHubBaseURL = "https://app.veridian.site"
 // admin (l'owner peut etre cliquer et attendre).
 const DefaultHubInvitationTimeout = 10 * time.Second
 
+// veridianHubInvitationMaxRespBytes borne la lecture de la reponse Hub (un JSON
+// d'invitation est petit ; on ne charge jamais un corps geant en RAM). Aligne
+// sur le cap 256 KiB de pkg/hub_discovery.
+const veridianHubInvitationMaxRespBytes = 256 * 1024
+
 // HubInvitationInput parametres POSTes au Hub. Mapping 1:1 avec le schema
 // Zod cote Hub (cf. veridian-hub/app/api/invitations/create/route.ts).
 //
@@ -215,7 +220,11 @@ func (c *veridianHubInvitationClient) Create(
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, readErr := io.ReadAll(resp.Body)
+	// Réponse Hub bornée (LimitReader) : une réponse d'invitation est petite par
+	// nature ; on ne charge jamais un corps géant en RAM (cohérent avec le cap
+	// 256 KiB de pkg/hub_discovery). Best-effort : au-delà, le JSON est tronqué
+	// et le parse échouera proprement plus bas (pas d'OOM).
+	bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, veridianHubInvitationMaxRespBytes))
 	if readErr != nil {
 		return nil, &HubInvitationError{
 			HubStatus: resp.StatusCode,
