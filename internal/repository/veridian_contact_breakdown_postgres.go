@@ -32,21 +32,36 @@ func NewVeridianContactBreakdownRepository(
 	}
 }
 
-// GetProviderClassRows retourne (email, custom_string_5) pour chaque contact du
-// workspace, restreint à la liste listID si non vide. Les entrées de liste
-// soft-deleted sont exclues (EXISTS ... deleted_at IS NULL), aligné sur le
-// filtrage liste de GetContacts.
-func (r *veridianContactBreakdownRepository) GetProviderClassRows(
+// GetProviderClassCounts retourne le nombre de contacts par (domaine d'email,
+// custom_string_5), PRÉ-AGRÉGÉ en SQL (GROUP BY). Restreint à la liste listID si
+// non vide (EXISTS ... deleted_at IS NULL, aligné sur GetContacts).
+//
+// Anti-OOM : l'ancienne version faisait un SELECT SANS LIMIT et streamait TOUS
+// les contacts (millions sur un workspace cold) dans un slice Go. Ici le GROUP BY
+// réduit ça à K (domaine,tag) distincts (milliers) côté serveur — la classe ne
+// dépendant QUE du domaine et du tag, l'agrégat est strictement équivalent.
+// On groupe par le DOMAINE de l'email (lower(split_part(email,'@',2))), donc la
+// classification Go (VeridianClassifyDomainProviderClass) reçoit exactement le
+// même domaine qu'elle aurait dérivé de l'email — zéro CASE SQL, table de
+// domaines non dupliquée.
+func (r *veridianContactBreakdownRepository) GetProviderClassCounts(
 	ctx context.Context,
 	workspaceID, listID string,
-) ([]domain.VeridianContactProviderRow, error) {
+) ([]domain.VeridianContactProviderCount, error) {
 	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sb := psql.Select("c.email", "c.custom_string_5").From("contacts c")
+	sb := psql.
+		Select(
+			"lower(split_part(c.email, '@', 2)) AS domain",
+			"c.custom_string_5",
+			"COUNT(*) AS cnt",
+		).
+		From("contacts c").
+		GroupBy("lower(split_part(c.email, '@', 2))", "c.custom_string_5")
 
 	if listID != "" {
 		// EXISTS subquery : contact membre de la liste, hors soft-delete.
@@ -68,22 +83,23 @@ func (r *veridianContactBreakdownRepository) GetProviderClassRows(
 	}
 	defer func() { _ = rows.Close() }()
 
-	var result []domain.VeridianContactProviderRow
+	var result []domain.VeridianContactProviderCount
 	for rows.Next() {
-		var email string
+		var domainStr string
 		var customString5 sql.NullString
-		if err := rows.Scan(&email, &customString5); err != nil {
-			return nil, fmt.Errorf("failed to scan provider row: %w", err)
+		var count int
+		if err := rows.Scan(&domainStr, &customString5, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan provider count: %w", err)
 		}
-		row := domain.VeridianContactProviderRow{Email: email}
+		c := domain.VeridianContactProviderCount{Domain: domainStr, Count: count}
 		if customString5.Valid {
-			row.CustomString5 = &domain.NullableString{String: customString5.String, IsNull: false}
+			c.CustomString5 = &domain.NullableString{String: customString5.String, IsNull: false}
 		}
-		result = append(result, row)
+		result = append(result, c)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating provider rows: %w", err)
+		return nil, fmt.Errorf("error iterating provider counts: %w", err)
 	}
 
 	return result, nil

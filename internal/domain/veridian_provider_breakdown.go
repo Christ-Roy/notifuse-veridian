@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 //go:generate mockgen -destination mocks/mock_veridian_contact_breakdown_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain VeridianContactProviderBreakdownRepository
 //go:generate mockgen -destination mocks/mock_veridian_contact_breakdown_service.go -package mocks github.com/Notifuse/notifuse/internal/domain VeridianContactProviderBreakdownService
@@ -43,6 +46,18 @@ type VeridianContactProviderRow struct {
 	CustomString5 *NullableString
 }
 
+// VeridianContactProviderCount est une projection PRÉ-AGRÉGÉE par SQL :
+// (domaine d'email, tag custom_string_5) → nombre de contacts. La classification
+// par suffixe ne dépend QUE du domaine de l'email, et l'override ne dépend QUE
+// du tag — donc agréger par (domaine, tag) en SQL est strictement équivalent à
+// classifier ligne par ligne, MAIS borne le transfert à K (domaine,tag) distincts
+// (milliers) au lieu de N contacts (millions) : anti-OOM sur gros workspace cold.
+type VeridianContactProviderCount struct {
+	Domain        string
+	CustomString5 *NullableString
+	Count         int
+}
+
 // VeridianProviderBreakdownRequest porte les paramètres de la requête de
 // breakdown. WorkspaceID est requis ; ListID est optionnel (restreint le
 // comptage aux contacts membres de cette liste, hors entrées soft-deleted).
@@ -55,9 +70,12 @@ type VeridianProviderBreakdownRequest struct {
 // nécessaires à la classification. Implémentation Postgres :
 // internal/repository/veridian_contact_breakdown_postgres.go.
 type VeridianContactProviderBreakdownRepository interface {
-	// GetProviderClassRows retourne (email, custom_string_5) pour chaque
-	// contact du workspace, restreint à la liste listID si non vide.
-	GetProviderClassRows(ctx context.Context, workspaceID, listID string) ([]VeridianContactProviderRow, error)
+	// GetProviderClassCounts retourne le nombre de contacts par
+	// (domaine d'email, custom_string_5), PRÉ-AGRÉGÉ en SQL (GROUP BY).
+	// Restreint à la liste listID si non vide. Borne le transfert à K
+	// (domaine,tag) distincts au lieu de N contacts : anti-OOM sur gros
+	// workspace cold (le SELECT sans LIMIT chargeait tout en RAM).
+	GetProviderClassCounts(ctx context.Context, workspaceID, listID string) ([]VeridianContactProviderCount, error)
 }
 
 // VeridianContactProviderBreakdownService expose le breakdown à la couche
@@ -78,6 +96,22 @@ func VeridianClassifyContactProviderClass(row VeridianContactProviderRow) string
 	return ClassifyProviderClass(row.Email)
 }
 
+// VeridianClassifyDomainProviderClass est l'équivalent de
+// VeridianClassifyContactProviderClass pour une projection PRÉ-AGRÉGÉE par
+// (domaine, tag) : override custom_string_5 d'abord, sinon classe par SUFFIXE du
+// domaine (classifyBySuffix). STRICTEMENT alignée sur la version email — la
+// seule différence est que le domaine est déjà extrait (par SQL) au lieu d'être
+// dérivé de l'email. Domaine inconnu/vide → corporate (comme ClassifyProviderClass).
+func VeridianClassifyDomainProviderClass(domain string, customString5 *NullableString) string {
+	if override := veridianProviderClassFromTag(customString5); override != "" {
+		return override
+	}
+	if class, ok := classifyBySuffix(strings.ToLower(strings.TrimSpace(domain))); ok {
+		return class
+	}
+	return ProviderClassCorporate
+}
+
 // veridianProviderClassFromTag lit le tag custom_string_5 (override de classe)
 // avec la même normalisation que VeridianContactProviderClass : trim, lower,
 // validation canonique. Retourne "" si absent/null/non-canonique.
@@ -86,32 +120,41 @@ func veridianProviderClassFromTag(tag *NullableString) string {
 	return VeridianContactProviderClass(c)
 }
 
-// VeridianAggregateProviderBreakdown classifie chaque row et agrège le compte
-// par classe. TOUTES les classes canoniques (historiques + MX, cf.
-// VeridianAllProviderClasses) sont initialisées à 0 pour une sortie STABLE :
-// l'UI rend une carte par classe sans connaître la liste côté front, et les
-// classes MX (ovh/ionos/…) apparaissent désormais dans le breakdown.
+// VeridianAggregateProviderBreakdownCounts classifie chaque (domaine, tag)
+// PRÉ-AGRÉGÉ et somme les counts par classe. TOUTES les classes canoniques
+// (historiques + MX, cf. VeridianAllProviderClasses) sont initialisées à 0 pour
+// une sortie STABLE : l'UI rend une carte par classe sans connaître la liste
+// côté front, et les classes MX (ovh/ionos/…) apparaissent dans le breakdown.
+//
+// Équivalence stricte avec l'ancienne agrégation ligne-par-ligne : la classe ne
+// dépend QUE de (domaine, tag), donc agréger en SQL par (domaine, tag) puis
+// sommer les counts donne EXACTEMENT le même breakdown — mais sans charger N
+// contacts en RAM (anti-OOM, le SELECT sans LIMIT chargeait tout).
 //
 // Note : ce breakdown classifie par SUFFIXE (+ override tag custom_string_5),
-// PAS par MX réel — il ne fait pas de lookup DNS (zéro I/O sur potentiellement
-// des dizaines de milliers de contacts). Les classes MX n'apparaîtront donc
-// peuplées QUE pour les contacts dont le tag custom_string_5 porte déjà la
-// classe résolue en amont (pré-remplissage à l'import, ticket Prospection). Sans
-// tag, un domaine custom hébergé Google reste compté `corporate` ici — c'est
-// cohérent avec le coût/perf d'un breakdown de masse, et l'enforcement réputation
-// (throttle) utilise bien le MX au moment de l'envoi.
-func VeridianAggregateProviderBreakdown(rows []VeridianContactProviderRow) *VeridianProviderBreakdown {
+// PAS par MX réel — il ne fait pas de lookup DNS. Les classes MX n'apparaîtront
+// peuplées QUE pour les contacts dont le tag custom_string_5 porte déjà la classe
+// résolue en amont (pré-remplissage à l'import, ticket Prospection). Sans tag, un
+// domaine custom hébergé Google reste compté `corporate` ici — cohérent avec le
+// coût d'un breakdown de masse ; l'enforcement réputation (throttle) utilise bien
+// le MX au moment de l'envoi.
+func VeridianAggregateProviderBreakdownCounts(counts []VeridianContactProviderCount) *VeridianProviderBreakdown {
 	classes := VeridianAllProviderClasses()
 	breakdown := make(map[string]int, len(classes))
 	for _, class := range classes {
 		breakdown[class] = 0
 	}
-	for _, row := range rows {
-		class := VeridianClassifyContactProviderClass(row)
-		breakdown[class]++
+	total := 0
+	for _, c := range counts {
+		if c.Count <= 0 {
+			continue
+		}
+		class := VeridianClassifyDomainProviderClass(c.Domain, c.CustomString5)
+		breakdown[class] += c.Count
+		total += c.Count
 	}
 	return &VeridianProviderBreakdown{
 		Breakdown: breakdown,
-		Total:     len(rows),
+		Total:     total,
 	}
 }

@@ -25,17 +25,17 @@ func TestNewVeridianContactBreakdownRepository(t *testing.T) {
 	db, mock, cleanup := setupMockDB(t)
 	defer cleanup()
 	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws-wire").Return(db, nil)
-	mock.ExpectQuery(`SELECT c\.email, c\.custom_string_5 FROM contacts c`).
-		WillReturnRows(sqlmock.NewRows([]string{"email", "custom_string_5"}))
+	mock.ExpectQuery(`SELECT lower\(split_part\(c\.email, '@', 2\)\) AS domain, c\.custom_string_5, COUNT\(\*\) AS cnt FROM contacts c GROUP BY`).
+		WillReturnRows(sqlmock.NewRows([]string{"domain", "custom_string_5", "cnt"}))
 
-	got, err := repo.GetProviderClassRows(context.Background(), "ws-wire", "")
+	got, err := repo.GetProviderClassCounts(context.Background(), "ws-wire", "")
 	require.NoError(t, err)
 	require.Empty(t, got)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetProviderClassRows(t *testing.T) {
-	t.Run("no list -> selects email + custom_string_5 for whole workspace", func(t *testing.T) {
+func TestGetProviderClassCounts(t *testing.T) {
+	t.Run("no list -> GROUP BY domain+tag for whole workspace (pas de SELECT non borné)", func(t *testing.T) {
 		db, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
@@ -47,19 +47,22 @@ func TestGetProviderClassRows(t *testing.T) {
 
 		repo := NewVeridianContactBreakdownRepository(workspaceRepo)
 
-		rows := sqlmock.NewRows([]string{"email", "custom_string_5"}).
-			AddRow("jane@gmail.com", nil).
-			AddRow("bob@acme.io", "microsoft")
+		// La requête agrège côté SQL : domaine pré-extrait + tag + count.
+		rows := sqlmock.NewRows([]string{"domain", "custom_string_5", "cnt"}).
+			AddRow("gmail.com", nil, 42).
+			AddRow("acme.io", "microsoft", 7)
 
-		mock.ExpectQuery(`SELECT c\.email, c\.custom_string_5 FROM contacts c`).
+		mock.ExpectQuery(`SELECT lower\(split_part\(c\.email, '@', 2\)\) AS domain, c\.custom_string_5, COUNT\(\*\) AS cnt FROM contacts c GROUP BY lower\(split_part\(c\.email, '@', 2\)\), c\.custom_string_5`).
 			WillReturnRows(rows)
 
-		got, err := repo.GetProviderClassRows(context.Background(), "workspace123", "")
+		got, err := repo.GetProviderClassCounts(context.Background(), "workspace123", "")
 		require.NoError(t, err)
 		require.Len(t, got, 2)
-		assert.Equal(t, "jane@gmail.com", got[0].Email)
+		assert.Equal(t, "gmail.com", got[0].Domain)
+		assert.Equal(t, 42, got[0].Count)
 		assert.Nil(t, got[0].CustomString5)
-		assert.Equal(t, "bob@acme.io", got[1].Email)
+		assert.Equal(t, "acme.io", got[1].Domain)
+		assert.Equal(t, 7, got[1].Count)
 		require.NotNil(t, got[1].CustomString5)
 		assert.Equal(t, "microsoft", got[1].CustomString5.String)
 		assert.False(t, got[1].CustomString5.IsNull)
@@ -67,7 +70,7 @@ func TestGetProviderClassRows(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("with list_id -> adds EXISTS subquery filter", func(t *testing.T) {
+	t.Run("with list_id -> adds EXISTS subquery filter avant le GROUP BY", func(t *testing.T) {
 		db, mock, cleanup := setupMockDB(t)
 		defer cleanup()
 
@@ -79,17 +82,18 @@ func TestGetProviderClassRows(t *testing.T) {
 
 		repo := NewVeridianContactBreakdownRepository(workspaceRepo)
 
-		rows := sqlmock.NewRows([]string{"email", "custom_string_5"}).
-			AddRow("x@yahoo.fr", nil)
+		rows := sqlmock.NewRows([]string{"domain", "custom_string_5", "cnt"}).
+			AddRow("yahoo.fr", nil, 3)
 
-		mock.ExpectQuery(`SELECT c\.email, c\.custom_string_5 FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.list_id = \$1\)`).
+		mock.ExpectQuery(`SELECT lower\(split_part\(c\.email, '@', 2\)\) AS domain, c\.custom_string_5, COUNT\(\*\) AS cnt FROM contacts c WHERE EXISTS \(SELECT 1 FROM contact_lists cl WHERE cl\.email = c\.email AND cl\.deleted_at IS NULL AND cl\.list_id = \$1\) GROUP BY lower\(split_part\(c\.email, '@', 2\)\), c\.custom_string_5`).
 			WithArgs("list-abc").
 			WillReturnRows(rows)
 
-		got, err := repo.GetProviderClassRows(context.Background(), "workspace123", "list-abc")
+		got, err := repo.GetProviderClassCounts(context.Background(), "workspace123", "list-abc")
 		require.NoError(t, err)
 		require.Len(t, got, 1)
-		assert.Equal(t, "x@yahoo.fr", got[0].Email)
+		assert.Equal(t, "yahoo.fr", got[0].Domain)
+		assert.Equal(t, 3, got[0].Count)
 
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -106,10 +110,10 @@ func TestGetProviderClassRows(t *testing.T) {
 
 		repo := NewVeridianContactBreakdownRepository(workspaceRepo)
 
-		mock.ExpectQuery(`SELECT c\.email, c\.custom_string_5 FROM contacts c`).
-			WillReturnRows(sqlmock.NewRows([]string{"email", "custom_string_5"}))
+		mock.ExpectQuery(`SELECT lower\(split_part\(c\.email, '@', 2\)\) AS domain, c\.custom_string_5, COUNT\(\*\) AS cnt FROM contacts c GROUP BY`).
+			WillReturnRows(sqlmock.NewRows([]string{"domain", "custom_string_5", "cnt"}))
 
-		got, err := repo.GetProviderClassRows(context.Background(), "workspace123", "")
+		got, err := repo.GetProviderClassCounts(context.Background(), "workspace123", "")
 		require.NoError(t, err)
 		assert.Empty(t, got)
 
@@ -126,7 +130,7 @@ func TestGetProviderClassRows(t *testing.T) {
 
 		repo := NewVeridianContactBreakdownRepository(workspaceRepo)
 
-		got, err := repo.GetProviderClassRows(context.Background(), "ws-bad", "")
+		got, err := repo.GetProviderClassCounts(context.Background(), "ws-bad", "")
 		assert.Error(t, err)
 		assert.Nil(t, got)
 		assert.Contains(t, err.Error(), "failed to get workspace connection")

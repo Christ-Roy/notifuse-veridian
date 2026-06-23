@@ -60,11 +60,11 @@ func (s *veridianContactBreakdownService) GetProviderBreakdown(
 		)
 	}
 
-	rows, err := s.repo.GetProviderClassRows(ctx, req.WorkspaceID, req.ListID)
+	counts, err := s.repo.GetProviderClassCounts(ctx, req.WorkspaceID, req.ListID)
 	if err != nil {
-		s.logger.WithField("error", err.Error()).Error("Failed to fetch provider breakdown rows")
+		s.logger.WithField("error", err.Error()).Error("Failed to fetch provider breakdown counts")
 		return nil, fmt.Errorf("failed to fetch provider breakdown: %w", err)
 	}
 
-	return domain.VeridianAggregateProviderBreakdown(rows), nil
+	return domain.VeridianAggregateProviderBreakdownCounts(counts), nil
 }

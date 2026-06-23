@@ -54,7 +54,7 @@ func TestNewVeridianContactBreakdownService(t *testing.T) {
 	// par AuthenticateUserForWorkspace (preuve que la DP authService est branchée).
 	authSvc.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws-wire").
 		Return(context.Background(), &domain.User{}, contactsReadWorkspace(), nil)
-	repo.EXPECT().GetProviderClassRows(gomock.Any(), "ws-wire", "").Return(nil, nil)
+	repo.EXPECT().GetProviderClassCounts(gomock.Any(), "ws-wire", "").Return(nil, nil)
 
 	got, err := svc.GetProviderBreakdown(context.Background(), &domain.VeridianProviderBreakdownRequest{WorkspaceID: "ws-wire"})
 	require.NoError(t, err)
@@ -72,10 +72,10 @@ func TestGetProviderBreakdown(t *testing.T) {
 		authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
 			Return(ctx, &domain.User{}, contactsReadWorkspace(), nil)
 
-		repo.EXPECT().GetProviderClassRows(ctx, workspaceID, "").Return([]domain.VeridianContactProviderRow{
-			{Email: "a@gmail.com"},
-			{Email: "b@outlook.com"},
-			{Email: "c@acme.io"},
+		repo.EXPECT().GetProviderClassCounts(ctx, workspaceID, "").Return([]domain.VeridianContactProviderCount{
+			{Domain: "gmail.com", Count: 1},
+			{Domain: "outlook.com", Count: 1},
+			{Domain: "acme.io", Count: 1},
 		}, nil)
 
 		got, err := svc.GetProviderBreakdown(ctx, &domain.VeridianProviderBreakdownRequest{WorkspaceID: workspaceID})
@@ -92,8 +92,8 @@ func TestGetProviderBreakdown(t *testing.T) {
 
 		authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
 			Return(ctx, &domain.User{}, contactsReadWorkspace(), nil)
-		repo.EXPECT().GetProviderClassRows(ctx, workspaceID, "list-xyz").
-			Return([]domain.VeridianContactProviderRow{{Email: "x@yahoo.fr"}}, nil)
+		repo.EXPECT().GetProviderClassCounts(ctx, workspaceID, "list-xyz").
+			Return([]domain.VeridianContactProviderCount{{Domain: "yahoo.fr", Count: 1}}, nil)
 
 		got, err := svc.GetProviderBreakdown(ctx, &domain.VeridianProviderBreakdownRequest{
 			WorkspaceID: workspaceID,
@@ -110,7 +110,7 @@ func TestGetProviderBreakdown(t *testing.T) {
 
 		authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
 			Return(ctx, &domain.User{}, contactsReadWorkspace(), nil)
-		repo.EXPECT().GetProviderClassRows(ctx, workspaceID, "").Return(nil, nil)
+		repo.EXPECT().GetProviderClassCounts(ctx, workspaceID, "").Return(nil, nil)
 
 		got, err := svc.GetProviderBreakdown(ctx, &domain.VeridianProviderBreakdownRequest{WorkspaceID: workspaceID})
 		require.NoError(t, err)
@@ -176,7 +176,7 @@ func TestGetProviderBreakdown(t *testing.T) {
 
 		authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
 			Return(ctx, &domain.User{}, contactsReadWorkspace(), nil)
-		repo.EXPECT().GetProviderClassRows(ctx, workspaceID, "").
+		repo.EXPECT().GetProviderClassCounts(ctx, workspaceID, "").
 			Return(nil, errors.New("db down"))
 
 		got, err := svc.GetProviderBreakdown(ctx, &domain.VeridianProviderBreakdownRequest{WorkspaceID: workspaceID})

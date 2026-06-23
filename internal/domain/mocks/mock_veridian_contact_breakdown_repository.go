@@ -35,17 +35,17 @@ func (m *MockVeridianContactProviderBreakdownRepository) EXPECT() *MockVeridianC
 	return m.recorder
 }
 
-// GetProviderClassRows mocks base method.
-func (m *MockVeridianContactProviderBreakdownRepository) GetProviderClassRows(arg0 context.Context, arg1, arg2 string) ([]domain.VeridianContactProviderRow, error) {
+// GetProviderClassCounts mocks base method.
+func (m *MockVeridianContactProviderBreakdownRepository) GetProviderClassCounts(arg0 context.Context, arg1, arg2 string) ([]domain.VeridianContactProviderCount, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProviderClassRows", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]domain.VeridianContactProviderRow)
+	ret := m.ctrl.Call(m, "GetProviderClassCounts", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]domain.VeridianContactProviderCount)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetProviderClassRows indicates an expected call of GetProviderClassRows.
-func (mr *MockVeridianContactProviderBreakdownRepositoryMockRecorder) GetProviderClassRows(arg0, arg1, arg2 interface{}) *gomock.Call {
+// GetProviderClassCounts indicates an expected call of GetProviderClassCounts.
+func (mr *MockVeridianContactProviderBreakdownRepositoryMockRecorder) GetProviderClassCounts(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderClassRows", reflect.TypeOf((*MockVeridianContactProviderBreakdownRepository)(nil).GetProviderClassRows), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderClassCounts", reflect.TypeOf((*MockVeridianContactProviderBreakdownRepository)(nil).GetProviderClassCounts), arg0, arg1, arg2)
 }
