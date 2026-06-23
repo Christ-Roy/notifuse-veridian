@@ -143,6 +143,35 @@ func (r *workspaceRepository) VeridianDeleteWorkspaceSystemRecord(ctx context.Co
 	if _, err := r.systemDB.ExecContext(ctx, `DELETE FROM tasks WHERE workspace_id = $1`, workspaceID); err != nil {
 		return fmt.Errorf("delete tasks: %w", err)
 	}
+	// 5. Tables système Veridian annexes keyées par workspace_id, BEST-EFFORT.
+	//    Propagation incomplète du fix tasks (2026-06-23) : ces 3 tables vivent
+	//    aussi dans notifuse_system (HasSystemUpdate=true → CREATE en UpdateSystem)
+	//    donc elles SURVIVENT au DROP de la base workspace → rows orphelines qui
+	//    s'accumulent à chaque wipe :
+	//      - veridian_api_key_grace   (V41, workspace_id NOT NULL) — grace rotation
+	//      - veridian_frozen_members  (V47, workspace_id PK)        — freeze §5.21
+	//      - veridian_imap_uid_seen   (V50, workspace_id PK)        — idempotence IMAP
+	//    Contrairement à `tasks` (qui RECRÉAIT la base via le scheduler), aucune ne
+	//    régénère ni ne ré-élit le workspace mort (le poller IMAP n'itère que les
+	//    workspaces de `List()`, les autres se lisent par PK ciblée). Le risque est
+	//    une fuite d'hygiène + des données résiduelles si un workspaceID était réutilisé.
+	//    → DELETE best-effort LOG-ONLY : une erreur (ex. table absente sur une base
+	//    pré-migration) ne doit JAMAIS faire échouer un wipe dont la partie critique
+	//    (workspaces + tasks) a déjà réussi. On ne remonte PAS l'erreur.
+	veridianAnnexSystemTables := []string{
+		"veridian_api_key_grace",
+		"veridian_frozen_members",
+		"veridian_imap_uid_seen",
+	}
+	for _, table := range veridianAnnexSystemTables {
+		// #nosec G202 — `table` provient EXCLUSIVEMENT de la liste littérale
+		// ci-dessus (jamais d'input externe). Le workspaceID reste bind-paramétré ($1).
+		// Erreur volontairement ignorée (best-effort) : voir doc ci-dessus. Le
+		// workspaceRepository n'expose pas de logger ; le caller (wipeOneTenant) trace
+		// l'issue globale du wipe.
+		_, _ = r.systemDB.ExecContext(ctx,
+			fmt.Sprintf(`DELETE FROM %s WHERE workspace_id = $1`, table), workspaceID)
+	}
 	return nil
 }
 

@@ -156,9 +156,16 @@ func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_Success(t *test
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspace_invitations WHERE workspace_id = $1`)).
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 0))
-	// tasks EN DERNIER : coupe la régénération de base par le scheduler global.
+	// tasks EN DERNIER (records critiques) : coupe la régénération de base.
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM tasks WHERE workspace_id = $1`)).
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 3))
+	// Tables système Veridian annexes (hygiène anti-orphelins) : keyées workspace_id.
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_api_key_grace WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_frozen_members WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_imap_uid_seen WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 42))
 
 	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "tst123")
 	require.NoError(t, err)
@@ -181,9 +188,48 @@ func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_Idempotent(t *t
 		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM tasks WHERE workspace_id = $1`)).
 		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_api_key_grace WHERE workspace_id = $1`)).
+		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_frozen_members WHERE workspace_id = $1`)).
+		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_imap_uid_seen WHERE workspace_id = $1`)).
+		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "gone")
 	require.NoError(t, err, "record already absent (0 rows) must be a no-op success")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_AnnexTablesBestEffort(t *testing.T) {
+	// Une erreur sur une table système annexe (ex. table absente sur une base
+	// pré-migration) NE DOIT PAS faire échouer le wipe : les records critiques
+	// (workspaces + tasks) ont déjà réussi, le reste est de l'hygiène best-effort.
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &workspaceRepository{systemDB: db, dbConfig: &config.DatabaseConfig{Prefix: "notifuse"}}
+
+	// Records critiques : OK.
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspaces WHERE id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM user_workspaces WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM workspace_invitations WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM tasks WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 1))
+	// Annexe en erreur (table inexistante) → ignorée. Les 2 suivantes sont quand
+	// même tentées (la boucle ne s'arrête pas au 1er échec).
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_api_key_grace WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnError(errors.New(`relation "veridian_api_key_grace" does not exist`))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_frozen_members WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_imap_uid_seen WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 7))
+
+	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "tst123")
+	require.NoError(t, err, "une erreur sur une table annexe ne doit pas faire échouer le wipe")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
