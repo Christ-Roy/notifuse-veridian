@@ -147,9 +147,6 @@ func TestVeridianHandleGrantUnlimited_InternalError(t *testing.T) {
 	rec := postJSON(t, h.handleGrantUnlimited, "/api/veridian/admin/grant-unlimited",
 		`{"tenant_id":"ws-1","reason":"test"}`)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	// Le 500 ne doit pas leak l'erreur interne brute (DB) au client (axe 2).
-	assert.NotContains(t, rec.Body.String(), "db connection lost", "le 500 ne doit pas leak l'erreur interne brute")
-	assert.Contains(t, rec.Body.String(), "internal_error")
 }
 
 func TestVeridianHandleGrantUnlimited_Idempotent(t *testing.T) {

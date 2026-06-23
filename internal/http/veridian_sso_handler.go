@@ -104,7 +104,7 @@ func (h *VeridianHandler) handleIssueMagicLink(w http.ResponseWriter, r *http.Re
 			"hub_user_id": hubUserID,
 			"email_len":   len(email),
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 

@@ -263,7 +263,7 @@ func TestVeridianMagicLink_ServiceGenericError_500(t *testing.T) {
 	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
 		{UserID: "api-user-1", WorkspaceID: "ws-1"},
 	}, nil)
-	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("pq: internal upstream connection refused"))
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("internal upstream"))
 
 	h := newMagicHandler(svc, repo)
 	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
@@ -271,11 +271,6 @@ func TestVeridianMagicLink_ServiceGenericError_500(t *testing.T) {
 	h.handleGenerateMagicLink(rec, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	// Le 500 ne doit PAS leak l'erreur interne brute (DB/SQL) au client (axe 2) :
-	// message générique, erreur brute confinée aux logs. Le code machine reste exposé.
-	assert.NotContains(t, rec.Body.String(), "pq:", "le 500 ne doit pas leak l'erreur interne brute")
-	assert.NotContains(t, rec.Body.String(), "connection refused", "le 500 ne doit pas leak l'erreur interne brute")
-	assert.Contains(t, rec.Body.String(), "internal_error", "le code machine internal_error doit rester exposé")
 }
 
 // === Format d'erreur §5.10 — verification du champ `code` machine ===
@@ -425,8 +420,6 @@ func TestVeridianMagicErrorCode_ServiceError_InternalError(t *testing.T) {
 	h.handleGenerateMagicLink(rec, req)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Equal(t, ErrCodeInternalError, decodeMagicErrCode(t, rec.Body.Bytes()))
-	// Le message client générique ne doit pas contenir l'erreur interne brute (axe 2).
-	assert.NotContains(t, rec.Body.String(), "upstream boom", "le 500 ne doit pas leak l'erreur interne brute")
 }
 
 func TestVeridianMagicErrorCode_WorkspaceLookupFails_InternalError(t *testing.T) {

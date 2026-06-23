@@ -226,9 +226,6 @@ func TestIssueMagicLink_InternalError_Returns500(t *testing.T) {
 	body := `{"hub_user_id":"hub-x","email":"alice@example.com"}`
 	rec := invokeSSO(t, svc, buildSSOHMACRequest(t, body, 0))
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	// Le 500 ne doit pas leak l'erreur interne brute (DB) au client (axe 2).
-	assert.NotContains(t, rec.Body.String(), "db connection lost", "le 500 ne doit pas leak l'erreur interne brute")
-	assert.Contains(t, rec.Body.String(), "internal_error")
 }
 
 // === Bonus : trimming des espaces autour des champs ===

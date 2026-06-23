@@ -59,15 +59,13 @@ func (h *VeridianHandler) handleTestTenantsStats(w http.ResponseWriter, r *http.
 	stats, err := h.testTenantsCleanup.Stats(r.Context())
 	if err != nil {
 		// Best-effort : log mais on retourne quand meme stats partielles si non-nil.
-		// Message client générique : l'erreur brute (DB) est déjà loggée ci-dessus,
-		// le code machine reste exposé.
 		h.logError("test_tenants_stats", err, nil)
 		if stats == nil {
-			WriteJSONErrorCode(w, ErrCodeInternalError, "failed to compute test tenants stats", http.StatusInternalServerError, nil)
+			WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 			return
 		}
 		// Stats partielles : on emet 500 mais avec body pour debug.
-		WriteJSONErrorCode(w, ErrCodeInternalError, "failed to compute test tenants stats (partial)", http.StatusInternalServerError, map[string]interface{}{
+		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, map[string]interface{}{
 			"partial_stats": stats,
 		})
 		return

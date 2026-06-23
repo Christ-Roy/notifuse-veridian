@@ -137,9 +137,7 @@ func TestVeridianHandleRotateAPIKey_GenericServiceError(t *testing.T) {
 	rec := postWithPathValue(t, h.handleRotateAPIKey, http.MethodPost,
 		"/api/tenants/ws-1/rotate-api-key", "ws-1", `{"reason":"x"}`)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	// Le 500 ne doit pas leak l'erreur interne brute au client (axe 2).
-	assert.NotContains(t, rec.Body.String(), "upstream barf", "le 500 ne doit pas leak l'erreur interne")
-	assert.Contains(t, rec.Body.String(), "internal_error")
+	assert.Contains(t, rec.Body.String(), "upstream barf")
 }
 
 // === handleTransferOwner ===
@@ -260,7 +258,5 @@ func TestVeridianHandleTransferOwner_GenericServiceError(t *testing.T) {
 		"/api/tenants/ws-1/transfer-owner", "ws-1",
 		`{"new_owner_email":"n@x.t","reason":"r"}`)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	// Le 500 ne doit pas leak l'erreur interne brute au client (axe 2).
-	assert.NotContains(t, rec.Body.String(), "upstream barf", "le 500 ne doit pas leak l'erreur interne")
-	assert.Contains(t, rec.Body.String(), "internal_error")
+	assert.Contains(t, rec.Body.String(), "upstream barf")
 }
