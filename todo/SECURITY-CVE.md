@@ -1,25 +1,46 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-06-22 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-22
+> **Dernier run** : 2026-06-23 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-23
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 9 (avant filtrage)
+> **CVE bruts détectés** : 29 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
-- 🔴 **0 HIGH** — action recommandée cette semaine
-- 🟡 **5 MEDIUM** — récap, pas urgent
-- 🟢 **4 NOISE** — annexe collapse
-
-✅ **Rien d'urgent.** Quelques items MEDIUM à voir quand t'as 5 min.
+- 🔴 **6 HIGH** — action recommandée cette semaine
+- 🟡 **14 MEDIUM** — récap, pas urgent
+- 🟢 **9 NOISE** — annexe collapse
 
 
 ---
 
-## 🟡 MEDIUM — 5 CVE en 2 groupes
+## 🔴 HIGH — 6 CVE en 2 groupes
+
+### 1. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
+
+- **CVE** : `CVE-2026-46595` (HIGH/Auth bypass)
+- **Type** : Auth bypass
+- **Score max** : 45
+- **Title** : golang.org/x/crypto/ssh: golang.org/x/crypto/ssh: Authorization bypass due to skipped source-address validation
+- **Source** : `telemetry/go.mod`
+- **Fix** : `go get golang.org/x/crypto@0.52.0` + `go mod tidy`
+
+### 2. `golang.org/x/net` — v0.48.0 → **0.55.0**
+
+- **CVE** : `CVE-2026-39821` (HIGH/Priv esc), `CVE-2026-25681` (HIGH/XSS), `CVE-2026-27136` (HIGH/XSS), `CVE-2026-42502` (HIGH/XSS), `CVE-2026-42506` (HIGH/XSS)
+- **Type** : Priv esc, XSS
+- **Score max** : 45
+- **Title** : golang.org/x/net/idna: golang: golang.org/x/net/idna: Privilege escalation via incorrect Punycode label processing
+- **Source** : `telemetry/go.mod`
+- **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
+
+
+---
+
+## 🟡 MEDIUM — 14 CVE en 4 groupes
 
 ### 1. `vite` — 7.3.2 → **8.0.16**
 
@@ -30,7 +51,25 @@
 - **Source** : `notification_center/package-lock.json`
 - **Fix** : `pnpm up vite` (jusqu'à >= `8.0.16`)
 
-### 2. `dompurify` — 3.4.0 → **3.4.11**
+### 2. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
+
+- **CVE** : `CVE-2026-39827` (HIGH/Unclassified), `CVE-2026-39828` (HIGH/Unclassified), `CVE-2026-39829` (HIGH/DoS), `CVE-2026-39830` (HIGH/DoS), `CVE-2026-39835` (HIGH/Unclassified), `CVE-2026-42508` (HIGH/Unclassified), `CVE-2026-46597` (HIGH/Unclassified)
+- **Type** : DoS, Unclassified
+- **Score max** : 15
+- **Title** : An authenticated SSH client that repeatedly opened channels which were ...
+- **Source** : `telemetry/go.mod`
+- **Fix** : `go get golang.org/x/crypto@0.52.0` + `go mod tidy`
+
+### 3. `golang.org/x/net` — v0.48.0 → **0.55.0**
+
+- **CVE** : `CVE-2026-25680` (HIGH/DoS), `CVE-2026-33814` (HIGH/DoS)
+- **Type** : DoS
+- **Score max** : 15
+- **Title** : Parsing arbitrary HTML can consume excessive CPU time, possibly leadin ...
+- **Source** : `telemetry/go.mod`
+- **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
+
+### 4. `dompurify` — 3.4.0 → **3.4.11**
 
 - **CVE** : `CVE-2026-49458` (MEDIUM/XSS), `CVE-2026-49459` (MEDIUM/XSS), `CVE-2026-49978` (MEDIUM/XSS), `GHSA-cmwh-pvxp-8882` (MEDIUM/XSS)
 - **Type** : XSS
@@ -42,10 +81,10 @@
 
 ---
 
-## 🟢 NOISE filtré (4 CVE)
+## 🟢 NOISE filtré (9 CVE)
 
 <details>
-<summary>Liste complète (4 groupes — clique pour déplier)</summary>
+<summary>Liste complète (5 groupes — clique pour déplier)</summary>
 
 | Package | Installed | Fix | CVE count | Max score |
 |---|---|---|---|---|
@@ -53,6 +92,7 @@
 | `js-yaml` | 4.1.1 | 4.2.0 | 1 | 6 |
 | `markdown-it` | 14.1.1 | 14.2.0 | 1 | 6 |
 | `vite` | 7.3.2 | 8.0.16 | 1 | 6 |
+| `golang.org/x/crypto` | v0.46.0 | 0.52.0 | 5 | 6 |
 
 </details>
 
