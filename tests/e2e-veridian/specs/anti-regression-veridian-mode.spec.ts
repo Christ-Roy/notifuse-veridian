@@ -113,12 +113,7 @@ test.describe('Veridian-managed mode — workspace.create blocked', () => {
     expect(JSON.stringify(body).toLowerCase()).toMatch(/veridian|managed|hub/);
   });
 
-  // SKIP temporaire 2026-06-22 : ce test provisionne un tenant en plein run et
-  // flake (404/500) quand staging est saturé par la dette de bases de test
-  // (cf. todo/2026-06-22-reactiver-tests-e2e-flaky-provisioning.md). Le test
-  // lui-même est sain ; c'est l'env staging qui est instable. À RÉACTIVER une
-  // fois le bug de régénération de bases corrigé + le globalTeardown rodé.
-  test.skip('GET /api/workspaces.list après tentative bloquée = 1 seul workspace', async () => {
+  test('GET /api/workspaces.list après tentative bloquée = 1 seul workspace', async () => {
     // Confirme qu'aucun workspace fantôme n'a été créé malgré la tentative
     // (paranoid check : si un jour le block backend laisse passer mais
     // renvoie 403 pour l'UX, on détecte).

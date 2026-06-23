@@ -165,11 +165,7 @@ test.describe('Chaos provisioning — concurrence', () => {
     }
   });
 
-  // SKIP temporaire 2026-06-22 : 5 provisions CONCURRENTES saturent le pool DB
-  // staging quand il est déjà chargé par la dette de bases de test → flake
-  // (cf. todo/2026-06-22-reactiver-tests-e2e-flaky-provisioning.md). Test sain ;
-  // env staging instable. À RÉACTIVER une fois le bug de régénération corrigé.
-  test.skip('5 provisions concurrentes tenants distincts → majorite 200, pas de crash', async () => {
+  test('5 provisions concurrentes tenants distincts → majorite 200, pas de crash', async () => {
     // 5 au lieu de 50 : Notifuse v30 ouvre 3 connexions par workspace (DB-per-tenant
     // architecture). Avec DB_MAX_CONNECTIONS=250 on a marge, mais les e2e
     // s'enchaînent et cumulent. 5 est suffisant pour tester la concurrence.
