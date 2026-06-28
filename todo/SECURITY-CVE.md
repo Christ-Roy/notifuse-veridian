@@ -1,18 +1,18 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-06-26 04:26 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-26
+> **Dernier run** : 2026-06-28 04:26 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-28
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 29 (avant filtrage)
+> **CVE bruts détectés** : 30 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
 - 🔴 **6 HIGH** — action recommandée cette semaine
-- 🟡 **14 MEDIUM** — récap, pas urgent
-- 🟢 **9 NOISE** — annexe collapse
+- 🟡 **16 MEDIUM** — récap, pas urgent
+- 🟢 **8 NOISE** — annexe collapse
 
 
 ---
@@ -40,9 +40,18 @@
 
 ---
 
-## 🟡 MEDIUM — 14 CVE en 4 groupes
+## 🟡 MEDIUM — 16 CVE en 5 groupes
 
-### 1. `vite` — 7.3.2 → **8.0.16**
+### 1. `linkify-it` — 5.0.0 → **5.0.1**
+
+- **CVE** : `CVE-2026-48801` (HIGH/DoS)
+- **Type** : DoS
+- **Score max** : 15
+- **Title** : LinkifyIt#match scan loop has quadratic algorithmic complexity
+- **Source** : `console/package-lock.json`
+- **Fix** : `pnpm up linkify-it` (jusqu'à >= `5.0.1`)
+
+### 2. `vite` — 7.3.2 → **8.0.16**
 
 - **CVE** : `CVE-2026-53571` (HIGH/Unclassified)
 - **Type** : Unclassified
@@ -51,16 +60,16 @@
 - **Source** : `notification_center/package-lock.json`
 - **Fix** : `pnpm up vite` (jusqu'à >= `8.0.16`)
 
-### 2. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
+### 3. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
 
-- **CVE** : `CVE-2026-39827` (HIGH/Unclassified), `CVE-2026-39828` (HIGH/Unclassified), `CVE-2026-39829` (HIGH/DoS), `CVE-2026-39830` (HIGH/DoS), `CVE-2026-39835` (HIGH/Unclassified), `CVE-2026-42508` (HIGH/Unclassified), `CVE-2026-46597` (HIGH/Unclassified)
+- **CVE** : `CVE-2026-39827` (HIGH/Unclassified), `CVE-2026-39828` (HIGH/Unclassified), `CVE-2026-39829` (HIGH/DoS), `CVE-2026-39830` (HIGH/DoS), `CVE-2026-39832` (HIGH/Unclassified), `CVE-2026-39835` (HIGH/Unclassified), `CVE-2026-42508` (HIGH/Unclassified), `CVE-2026-46597` (HIGH/Unclassified)
 - **Type** : DoS, Unclassified
 - **Score max** : 15
 - **Title** : An authenticated SSH client that repeatedly opened channels which were ...
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/crypto@0.52.0` + `go mod tidy`
 
-### 3. `golang.org/x/net` — v0.48.0 → **0.55.0**
+### 4. `golang.org/x/net` — v0.48.0 → **0.55.0**
 
 - **CVE** : `CVE-2026-25680` (HIGH/DoS), `CVE-2026-33814` (HIGH/DoS)
 - **Type** : DoS
@@ -69,7 +78,7 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
 
-### 4. `dompurify` — 3.4.0 → **3.4.11**
+### 5. `dompurify` — 3.4.0 → **3.4.11**
 
 - **CVE** : `CVE-2026-49458` (MEDIUM/XSS), `CVE-2026-49459` (MEDIUM/XSS), `CVE-2026-49978` (MEDIUM/XSS), `GHSA-cmwh-pvxp-8882` (MEDIUM/XSS)
 - **Type** : XSS
@@ -81,7 +90,7 @@
 
 ---
 
-## 🟢 NOISE filtré (9 CVE)
+## 🟢 NOISE filtré (8 CVE)
 
 <details>
 <summary>Liste complète (5 groupes — clique pour déplier)</summary>
@@ -92,7 +101,7 @@
 | `js-yaml` | 4.1.1 | 4.2.0 | 1 | 6 |
 | `markdown-it` | 14.1.1 | 14.2.0 | 1 | 6 |
 | `vite` | 7.3.2 | 8.0.16 | 1 | 6 |
-| `golang.org/x/crypto` | v0.46.0 | 0.52.0 | 5 | 6 |
+| `golang.org/x/crypto` | v0.46.0 | 0.52.0 | 4 | 6 |
 
 </details>
 
