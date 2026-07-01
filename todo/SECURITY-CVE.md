@@ -1,23 +1,23 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-06-30 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-06-30
+> **Dernier run** : 2026-07-01 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-01
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 30 (avant filtrage)
+> **CVE bruts détectés** : 31 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
-- 🔴 **6 HIGH** — action recommandée cette semaine
-- 🟡 **16 MEDIUM** — récap, pas urgent
+- 🔴 **5 HIGH** — action recommandée cette semaine
+- 🟡 **18 MEDIUM** — récap, pas urgent
 - 🟢 **8 NOISE** — annexe collapse
 
 
 ---
 
-## 🔴 HIGH — 6 CVE en 2 groupes
+## 🔴 HIGH — 5 CVE en 2 groupes
 
 ### 1. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
 
@@ -30,7 +30,7 @@
 
 ### 2. `golang.org/x/net` — v0.48.0 → **0.55.0**
 
-- **CVE** : `CVE-2026-39821` (HIGH/Priv esc), `CVE-2026-25681` (HIGH/XSS), `CVE-2026-27136` (HIGH/XSS), `CVE-2026-42502` (HIGH/XSS), `CVE-2026-42506` (HIGH/XSS)
+- **CVE** : `CVE-2026-39821` (HIGH/Priv esc), `CVE-2026-25681` (HIGH/XSS), `CVE-2026-27136` (HIGH/XSS), `CVE-2026-42502` (HIGH/XSS)
 - **Type** : Priv esc, XSS
 - **Score max** : 45
 - **Title** : golang.org/x/net/idna: golang: golang.org/x/net/idna: Privilege escalation via incorrect Punycode label processing
@@ -40,7 +40,7 @@
 
 ---
 
-## 🟡 MEDIUM — 16 CVE en 5 groupes
+## 🟡 MEDIUM — 18 CVE en 6 groupes
 
 ### 1. `linkify-it` — 5.0.0 → **5.0.1**
 
@@ -62,7 +62,7 @@
 
 ### 3. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
 
-- **CVE** : `CVE-2026-39827` (HIGH/Unclassified), `CVE-2026-39828` (HIGH/Unclassified), `CVE-2026-39829` (HIGH/DoS), `CVE-2026-39830` (HIGH/DoS), `CVE-2026-39832` (HIGH/Unclassified), `CVE-2026-39835` (HIGH/Unclassified), `CVE-2026-42508` (HIGH/Unclassified), `CVE-2026-46597` (HIGH/Unclassified)
+- **CVE** : `CVE-2026-39827` (HIGH/Unclassified), `CVE-2026-39828` (HIGH/Unclassified), `CVE-2026-39829` (HIGH/DoS), `CVE-2026-39830` (HIGH/DoS), `CVE-2026-39832` (HIGH/Unclassified), `CVE-2026-39835` (HIGH/DoS), `CVE-2026-42508` (HIGH/Unclassified), `CVE-2026-46597` (HIGH/Unclassified)
 - **Type** : DoS, Unclassified
 - **Score max** : 15
 - **Title** : An authenticated SSH client that repeatedly opened channels which were ...
@@ -71,8 +71,8 @@
 
 ### 4. `golang.org/x/net` — v0.48.0 → **0.55.0**
 
-- **CVE** : `CVE-2026-25680` (HIGH/DoS), `CVE-2026-33814` (HIGH/DoS)
-- **Type** : DoS
+- **CVE** : `CVE-2026-25680` (HIGH/DoS), `CVE-2026-33814` (HIGH/DoS), `CVE-2026-42506` (MEDIUM/XSS)
+- **Type** : DoS, XSS
 - **Score max** : 15
 - **Title** : Parsing arbitrary HTML can consume excessive CPU time, possibly leadin ...
 - **Source** : `telemetry/go.mod`
@@ -86,6 +86,15 @@
 - **Title** : DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks
 - **Source** : `console/package-lock.json`
 - **Fix** : `pnpm up dompurify` (jusqu'à >= `3.4.11`)
+
+### 6. `echarts` — 5.6.0 → **6.1.0**
+
+- **CVE** : `CVE-2026-45249` (MEDIUM/XSS)
+- **Type** : XSS
+- **Score max** : 12
+- **Title** : Apache ECharts has a cross-site scripting (XSS) vulnerability
+- **Source** : `console/package-lock.json`
+- **Fix** : `pnpm up echarts` (jusqu'à >= `6.1.0`)
 
 
 ---
