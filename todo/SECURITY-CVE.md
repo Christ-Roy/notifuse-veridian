@@ -1,8 +1,8 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-07-01 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-01
+> **Dernier run** : 2026-07-02 04:26 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-02
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
 > **CVE bruts détectés** : 31 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
@@ -11,15 +11,24 @@
 
 - 🚨 **0 RED** — fix prioritaire
 - 🔴 **5 HIGH** — action recommandée cette semaine
-- 🟡 **18 MEDIUM** — récap, pas urgent
-- 🟢 **8 NOISE** — annexe collapse
+- 🟡 **17 MEDIUM** — récap, pas urgent
+- 🟢 **9 NOISE** — annexe collapse
 
 
 ---
 
 ## 🔴 HIGH — 5 CVE en 2 groupes
 
-### 1. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
+### 1. `golang.org/x/net` — v0.48.0 → **0.55.0**
+
+- **CVE** : `CVE-2026-25681` (HIGH/RCE), `CVE-2026-39821` (HIGH/Priv esc), `CVE-2026-27136` (HIGH/XSS), `CVE-2026-42502` (HIGH/XSS)
+- **Type** : Priv esc, RCE, XSS
+- **Score max** : 75
+- **Title** : golang.org/x/net/html: golang.org/x/net/html: Arbitrary code execution via Cross-Site Scripting
+- **Source** : `telemetry/go.mod`
+- **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
+
+### 2. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
 
 - **CVE** : `CVE-2026-46595` (HIGH/Auth bypass)
 - **Type** : Auth bypass
@@ -28,19 +37,10 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/crypto@0.52.0` + `go mod tidy`
 
-### 2. `golang.org/x/net` — v0.48.0 → **0.55.0**
-
-- **CVE** : `CVE-2026-39821` (HIGH/Priv esc), `CVE-2026-25681` (HIGH/XSS), `CVE-2026-27136` (HIGH/XSS), `CVE-2026-42502` (HIGH/XSS)
-- **Type** : Priv esc, XSS
-- **Score max** : 45
-- **Title** : golang.org/x/net/idna: golang: golang.org/x/net/idna: Privilege escalation via incorrect Punycode label processing
-- **Source** : `telemetry/go.mod`
-- **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
-
 
 ---
 
-## 🟡 MEDIUM — 18 CVE en 6 groupes
+## 🟡 MEDIUM — 17 CVE en 6 groupes
 
 ### 1. `linkify-it` — 5.0.0 → **5.0.1**
 
@@ -71,10 +71,10 @@
 
 ### 4. `golang.org/x/net` — v0.48.0 → **0.55.0**
 
-- **CVE** : `CVE-2026-25680` (HIGH/DoS), `CVE-2026-33814` (HIGH/DoS), `CVE-2026-42506` (MEDIUM/XSS)
+- **CVE** : `CVE-2026-33814` (HIGH/DoS), `CVE-2026-42506` (MEDIUM/XSS)
 - **Type** : DoS, XSS
 - **Score max** : 15
-- **Title** : Parsing arbitrary HTML can consume excessive CPU time, possibly leadin ...
+- **Title** : net/http/internal/http2: golang: golang.org/x/net: Go HTTP/2: Denial of Service via malformed SETTINGS_MAX_FRAME_SIZE frame
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
 
@@ -99,10 +99,10 @@
 
 ---
 
-## 🟢 NOISE filtré (8 CVE)
+## 🟢 NOISE filtré (9 CVE)
 
 <details>
-<summary>Liste complète (5 groupes — clique pour déplier)</summary>
+<summary>Liste complète (6 groupes — clique pour déplier)</summary>
 
 | Package | Installed | Fix | CVE count | Max score |
 |---|---|---|---|---|
@@ -111,6 +111,7 @@
 | `markdown-it` | 14.1.1 | 14.2.0 | 1 | 6 |
 | `vite` | 7.3.2 | 8.0.16 | 1 | 6 |
 | `golang.org/x/crypto` | v0.46.0 | 0.52.0 | 4 | 6 |
+| `golang.org/x/net` | v0.48.0 | 0.55.0 | 1 | 6 |
 
 </details>
 
