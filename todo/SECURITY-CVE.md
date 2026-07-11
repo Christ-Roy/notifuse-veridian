@@ -1,23 +1,23 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-07-09 04:26 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-09
+> **Dernier run** : 2026-07-11 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-11
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 31 (avant filtrage)
+> **CVE bruts détectés** : 33 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
-- 🔴 **4 HIGH** — action recommandée cette semaine
-- 🟡 **18 MEDIUM** — récap, pas urgent
+- 🔴 **5 HIGH** — action recommandée cette semaine
+- 🟡 **19 MEDIUM** — récap, pas urgent
 - 🟢 **9 NOISE** — annexe collapse
 
 
 ---
 
-## 🔴 HIGH — 4 CVE en 2 groupes
+## 🔴 HIGH — 5 CVE en 3 groupes
 
 ### 1. `golang.org/x/net` — v0.48.0 → **0.55.0**
 
@@ -37,10 +37,19 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/crypto@0.52.0` + `go mod tidy`
 
+### 3. `stdlib` — v1.25.11 → **1.27.0-rc.2**
+
+- **CVE** : `CVE-2026-39822` (HIGH/Data leak)
+- **Type** : Data leak
+- **Score max** : 30
+- **Title** : os: golang: Go os.Root: Symlink following vulnerability allows directory traversal
+- **Source** : `app/server`
+- **Fix** : `pnpm up stdlib` (jusqu'à >= `1.27.0-rc.2`)
+
 
 ---
 
-## 🟡 MEDIUM — 18 CVE en 6 groupes
+## 🟡 MEDIUM — 19 CVE en 7 groupes
 
 ### 1. `linkify-it` — 5.0.0 → **5.0.1**
 
@@ -95,6 +104,15 @@
 - **Title** : Apache ECharts has a cross-site scripting (XSS) vulnerability
 - **Source** : `console/package-lock.json`
 - **Fix** : `pnpm up echarts` (jusqu'à >= `6.1.0`)
+
+### 7. `stdlib` — v1.25.11 → **1.27.0-rc.2**
+
+- **CVE** : `CVE-2026-42505` (MEDIUM/Data leak)
+- **Type** : Data leak
+- **Score max** : 12
+- **Title** : crypto/tls: golang: Go crypto/tls: Information disclosure in Encrypted Client Hello
+- **Source** : `app/server`
+- **Fix** : `pnpm up stdlib` (jusqu'à >= `1.27.0-rc.2`)
 
 
 ---
