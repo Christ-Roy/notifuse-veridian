@@ -723,116 +723,60 @@ jobs:
           exit 0
 
   deploy-staging:
-    name: Deploy staging (GitOps bump + compose pur sur dev-pub)
+    name: Deploy staging (GitOps Nomad — nomad job run sur ovh-dev)
     needs: build
     # Staging deploy auto sur push veridian uniquement.
     # Tags saas-v* sont des releases prod : pas d'auto-deploy.
     if: github.ref == 'refs/heads/veridian'
+    # Runner self-hosted dev-pub : sur Tailscale (atteint NOMAD_ADDR du bastion)
+    # + binaire `nomad` présent (== nœud Nomad ovh-dev).
     runs-on: [self-hosted, linux, x64]
     permissions:
-      contents: write  # nécessaire pour push le bump GitOps de staging.yml
-      packages: read   # docker pull GHCR
+      contents: write  # nécessaire pour push le bump GitOps du HCL
+      packages: read
     environment:
       name: staging
       url: https://notifuse.staging.veridian.site
     env:
-      STAGING_DIR: /opt/veridian/staging/notifuse
-      COMPOSE_FILE: infra/compose/staging.yml
-      PROJECT_NAME: notifuse-staging
-      SVC_APP: notifuse-staging
+      # NOMAD_ADDR/NOMAD_TOKEN : secrets repo (cf scripts/ci/nomad-deploy.sh).
+      NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+      NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # nécessaire pour commit + push (origin/veridian)
           token: ${{ secrets.GITOPS_BUMP_PAT || secrets.GITHUB_TOKEN }}
 
-      # === GitOps step 1/3 — Bump staging.yml avec le tag+digest fraichement
-      # buildés, commit [skip ci] + push. Le tag est immutable :
-      # `:<tag>@sha256:<digest>` dans le yaml. Traçabilité git complète : on
-      # peut savoir quelle image tournait en staging à un instant T en lisant
-      # le git log de infra/compose/staging.yml. Le [skip ci] empêche le push
-      # de retrigger le workflow (sinon boucle infinie).
-      - name: Bump staging.yml (GitOps) + commit + push [skip ci]
+      # === GitOps Nomad — bump le tag image dans deploy/notifuse-staging.nomad.hcl
+      # puis `nomad job run` (validate + plan + run + wait /api/version). Remplace
+      # l'ancien flux Dokploy/compose (migration Dokploy→Nomad, cf ~/nomad-veridian).
+      - name: Deploy staging via Nomad (nomad-deploy.sh)
         env:
           BUMP_TAG: ${{ needs.build.outputs.image_tag }}
-          BUMP_DIGEST: ${{ needs.build.outputs.image_digest }}
         run: |
           set -euo pipefail
-          # docker/build-push-action retourne le digest préfixé "sha256:".
-          # On strip ici pour éviter double-prefix dans les messages de commit
-          # (le script bump-compose-image.sh strip aussi côté yaml).
-          DIGEST_HEX="${BUMP_DIGEST#sha256:}"
+          chmod +x scripts/ci/nomad-deploy.sh
+          scripts/ci/nomad-deploy.sh staging "$BUMP_TAG"
 
-          chmod +x scripts/ci/bump-compose-image.sh
-          scripts/ci/bump-compose-image.sh staging "$BUMP_TAG" "$DIGEST_HEX"
-
-          # Configure git pour le bot commit
+      # === Traçabilité GitOps — commit le HCL bumpé + push [skip ci] pour que le
+      # git log de deploy/notifuse-staging.nomad.hcl reflète le tag qui tourne.
+      - name: Commit bump HCL staging [skip ci]
+        env:
+          BUMP_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Si bump idempotent (déjà à ce tag) → no diff → on skip le commit.
-          if git diff --quiet infra/compose/staging.yml; then
-            echo "ℹ Aucun changement dans staging.yml (idempotent) — pas de commit"
+          if git diff --quiet deploy/notifuse-staging.nomad.hcl; then
+            echo "ℹ HCL staging inchangé (idempotent) — pas de commit"
           else
-            git add infra/compose/staging.yml
-            git commit -m "ci(gitops): bump staging image to ${BUMP_TAG} [skip ci]" \
-                       -m "Auto-bump par .github/workflows/veridian-ci.yml job deploy-staging." \
-                       -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${DIGEST_HEX}"
-            # Rebase avant push : un autre job (deploy-prod en // ou push humain)
-            # peut avoir avancé la branche entre-temps. Sans ça, push rejected
-            # non-fast-forward (bug observé 2026-05-18 sur deploy-prod).
+            git add deploy/notifuse-staging.nomad.hcl
+            git commit -m "ci(gitops): bump staging Nomad job to ${BUMP_TAG} [skip ci]" \
+                       -m "Auto-bump par job deploy-staging (nomad job run)."
             git pull --rebase --autostash origin veridian
             git push origin HEAD:veridian
-            echo "✓ staging.yml bumpé et pushé"
+            echo "✓ HCL staging bumpé et pushé"
           fi
-
-      - name: Sync compose vers ${STAGING_DIR}/infra/compose
-        run: |
-          # Le dossier ${STAGING_DIR} est ubuntu:ubuntu (chown one-shot fait
-          # lors de la création du .env). Le runner peut écrire sans sudo.
-          mkdir -p ${STAGING_DIR}/infra/compose
-          cp infra/compose/staging.yml ${STAGING_DIR}/infra/compose/
-          if [ ! -f ${STAGING_DIR}/.env ]; then
-            echo "❌ ${STAGING_DIR}/.env manquant — créer à la main avec les secrets staging"
-            exit 1
-          fi
-
-      - name: Pull image GHCR + up -d via compose pur
-        working-directory: ${{ env.STAGING_DIR }}
-        run: |
-          # L'image est désormais pinnée en dur dans staging.yml (bump GitOps
-          # ci-dessus), donc docker compose pull tire exactement ce qu'on
-          # vient de bumper. Plus besoin de --force-recreate (le digest
-          # change → docker recreate auto).
-          docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} --env-file .env pull ${SVC_APP} 2>&1 | tail -5
-          docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} --env-file .env up -d 2>&1 | tail -10
-
-      - name: Verify staging runs new code (/api/version)
-        env:
-          EXPECTED_TAG: ${{ needs.build.outputs.image_tag }}
-        run: |
-          # === GitOps step 2/3 — Confirme que le container qui répond est
-          # bien sur le tag attendu. Défense contre faux positif "deploy OK"
-          # mais Dokploy/SSH n'a pas pull la nouvelle image. Si /api/version
-          # n'existe pas (image antérieure à V32.x) on ne fail pas — c'est
-          # la première fois qu'on a cet endpoint, il faut le rolling sur
-          # une image qui le contient avant que ce check soit strict.
-          for i in {1..30}; do
-            RESP=$(curl -sf https://notifuse.staging.veridian.site/api/version 2>/dev/null || echo "")
-            if [ -n "$RESP" ]; then
-              GOT_TAG=$(echo "$RESP" | jq -r '.tag // empty')
-              if [ "$GOT_TAG" = "$EXPECTED_TAG" ]; then
-                echo "✓ Staging runs $GOT_TAG (matches expected)"
-                exit 0
-              fi
-              echo "  attempt $i: /api/version → tag=$GOT_TAG (expected $EXPECTED_TAG)"
-            else
-              echo "  attempt $i: /api/version not responding yet"
-            fi
-            sleep 5
-          done
-          echo "::error::/api/version mismatch ou absent après 2m30 — staging deploy KO. Investigation requise."
-          exit 1
 
       - name: Wait for staging healthy
         run: |
@@ -945,10 +889,30 @@ jobs:
       # Le runner self-hosted tourne sur dev-pub, à côté du container postgres
       # staging. STAGING_DB_CONTAINER permet à hub-sync-resilience.spec.ts de
       # faire `docker exec ... psql` pour forcer last_hub_sync_at = NOW - 73h
-      # sans exposer le port 5432. Active les 3 tests dead/recovery jusqu'ici skip.
-      STAGING_DB_CONTAINER: notifuse-staging-db
+      # sans exposer le port 5432.
+      # ⚠️ Migration Nomad : le container n'est plus nommé `notifuse-staging-db`
+      # (Dokploy) mais `db-<alloc_id>` (Nomad). Résolu dynamiquement ci-dessous
+      # (step "Resolve staging DB container") → injecté dans GITHUB_ENV.
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve staging DB container (Nomad alloc)
+        run: |
+          set -euo pipefail
+          # App et DB partagent l'alloc du group "stack" → même alloc_id.
+          # container app = notifuse-<alloc>, container db = db-<alloc>.
+          APP=$(docker ps --format '{{.Names}}' | grep -E '^notifuse-[0-9a-f-]{36}$' | head -1 || true)
+          if [ -z "$APP" ]; then
+            echo "::warning::container app staging Nomad introuvable — tests hub-sync-resilience seront skip"
+          else
+            ALLOC="${APP#notifuse-}"
+            DB="db-${ALLOC}"
+            if docker inspect "$DB" >/dev/null 2>&1; then
+              echo "STAGING_DB_CONTAINER=${DB}" >> "$GITHUB_ENV"
+              echo "✓ STAGING_DB_CONTAINER=${DB}"
+            else
+              echo "::warning::container db '$DB' introuvable — tests hub-sync-resilience seront skip"
+            fi
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -1044,9 +1008,15 @@ jobs:
         && !contains(github.event.head_commit.message, '[skip-prod]')
         && !contains(github.event.head_commit.message, '[wip]'))
       || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
-    runs-on: ubuntu-latest
+    # Runner self-hosted dev-pub : requis pour atteindre NOMAD_ADDR (bastion,
+    # Tailscale) + binaire nomad. L'ancien deploy Dokploy tapait une API HTTP
+    # publique depuis ubuntu-latest ; le deploy Nomad exige le tailnet.
+    runs-on: [self-hosted, linux, x64]
     permissions:
-      contents: write  # nécessaire pour push le bump GitOps de prod.yml
+      contents: write  # nécessaire pour push le bump GitOps du HCL
+    env:
+      NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+      NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
     steps:
       # === Gate §20 — durcir le filtre [risk:low] : doit être en 1ère ligne ===
       # Le `if:` du job ne fait qu'un pré-filtre grossier (marker n'importe où
@@ -1074,103 +1044,39 @@ jobs:
         with:
           fetch-depth: 0  # nécessaire pour push HEAD:veridian (bump GitOps prod)
 
-      # === GitOps step 1/4 — Bump prod.yml + commit + push [skip ci] ===
-      # Le commit déclenche Dokploy autoDeploy (watchPaths: infra/compose/prod.yml).
-      # On force aussi via compose.redeploy pour ne pas attendre le poll Dokploy
-      # (1-2 min typique). Le [skip ci] empêche le push de retrigger le workflow
-      # (sinon boucle infinie).
-      - name: Bump prod.yml (GitOps) + commit + push [skip ci]
+      # === GitOps Nomad — bump le tag image dans deploy/notifuse.nomad.hcl puis
+      # `nomad job run` (validate + plan + run + wait /api/version == tag). Le
+      # script fail (exit 3) si /api/version ne matche pas sous 5min → job fail
+      # → rollback auto (job `rollback` via `nomad job revert`). Remplace le flux
+      # Dokploy (compose.deploy) décommissionné.
+      - name: Deploy prod via Nomad (nomad-deploy.sh)
         env:
           BUMP_TAG: ${{ needs.build.outputs.image_tag }}
-          BUMP_DIGEST: ${{ needs.build.outputs.image_digest }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/ci/nomad-deploy.sh
+          scripts/ci/nomad-deploy.sh prod "$BUMP_TAG"
+
+      # === Traçabilité GitOps — commit le HCL bumpé + push [skip ci] ===
+      - name: Commit bump HCL prod [skip ci]
+        env:
+          BUMP_TAG: ${{ needs.build.outputs.image_tag }}
           GH_TOKEN: ${{ secrets.GITOPS_BUMP_PAT || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          DIGEST_HEX="${BUMP_DIGEST#sha256:}"
-
-          chmod +x scripts/ci/bump-compose-image.sh
-          scripts/ci/bump-compose-image.sh prod "$BUMP_TAG" "$DIGEST_HEX"
-
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if git diff --quiet infra/compose/prod.yml; then
-            echo "ℹ Aucun changement dans prod.yml (idempotent) — pas de commit"
+          if git diff --quiet deploy/notifuse.nomad.hcl; then
+            echo "ℹ HCL prod inchangé (idempotent) — pas de commit"
           else
-            git add infra/compose/prod.yml
-            git commit -m "ci(gitops): bump prod image to ${BUMP_TAG} [skip ci]" \
-                       -m "Auto-bump par .github/workflows/veridian-ci.yml job deploy-prod après e2e-staging vert." \
-                       -m "Image : ghcr.io/christ-roy/notifuse-veridian:${BUMP_TAG}@sha256:${DIGEST_HEX}"
-            # Le token doit être un PAT avec scope `contents: write` sur le repo,
-            # sinon le push utilise GITHUB_TOKEN qui peut être restrictif sur push.
+            git add deploy/notifuse.nomad.hcl
+            git commit -m "ci(gitops): bump prod Nomad job to ${BUMP_TAG} [skip ci]" \
+                       -m "Auto-bump par job deploy-prod après e2e-staging vert (nomad job run)."
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-            # Rebase obligatoire : deploy-staging vient de push son propre bump
-            # sur veridian, on est forcement derriere. Sans rebase, push rejected
-            # non-fast-forward (bug observe 2026-05-18, run 26043693636).
             git pull --rebase --autostash origin veridian
             git push origin HEAD:veridian
-            echo "✓ prod.yml bumpé et pushé"
+            echo "✓ HCL prod bumpé et pushé"
           fi
-
-      # === GitOps step 2/4 — Force Dokploy à pull + redeploy immédiatement,
-      # plutôt que d'attendre son polling (1-2 min). compose.deploy fait un
-      # git pull + rebuild complet. ATTENTION : compose.redeploy NE pull PAS
-      # le repo, il re-up le composeFile cached → ne voit pas notre bump
-      # GitOps fraichement pushé (bug observé run 26044443408, fix manuel via
-      # compose.deploy). Toujours utiliser compose.deploy après un bump.
-      - name: Trigger Dokploy deploy (force pull + recreate)
-        run: |
-          curl -fsS -X POST \
-            -H "x-api-key: ${{ secrets.DOKPLOY_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            "${{ secrets.DOKPLOY_URL }}/api/compose.deploy" \
-            -d '{"composeId":"${{ secrets.DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID }}"}'
-
-      # === GitOps step 3/4 — Attend que le service répond, healthy à minima.
-      - name: Wait for prod HTTP healthy
-        run: |
-          # 5 min max d'attente. Si pas healthy → fail le job → rollback auto.
-          for i in {1..30}; do
-            if curl -sf https://notifuse.app.veridian.site/api/setup.status > /dev/null 2>&1; then
-              echo "Prod HTTP responding after ${i}0s"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::error::Prod unhealthy after 5min — rollback auto va se déclencher"
-          exit 1
-
-      # === GitOps step 4/4 — Verrou défense contre faux positif :
-      # /api/version doit retourner exactement le tag qu'on vient de bumper.
-      # Si Dokploy a échoué à pull/recreate (ce qui était le cas en
-      # 2026-05-18 avant la refonte GitOps), /api/version renverra l'ancien
-      # tag → on fail le job → rollback auto se déclenche.
-      - name: Verify prod runs new code (/api/version matches)
-        env:
-          EXPECTED_TAG: ${{ needs.build.outputs.image_tag }}
-        run: |
-          set -euo pipefail
-          # On laisse jusqu'à 5min pour que Dokploy finisse le swap container.
-          for i in {1..30}; do
-            RESP=$(curl -sf https://notifuse.app.veridian.site/api/version 2>/dev/null || echo "")
-            if [ -n "$RESP" ]; then
-              GOT_TAG=$(echo "$RESP" | jq -r '.tag // empty')
-              if [ "$GOT_TAG" = "$EXPECTED_TAG" ]; then
-                echo "✓ Prod runs $GOT_TAG (matches expected)"
-                exit 0
-              fi
-              echo "  attempt $i: /api/version → tag=$GOT_TAG (expected $EXPECTED_TAG)"
-            else
-              echo "  attempt $i: /api/version not responding"
-            fi
-            sleep 10
-          done
-          # Toutes les images prod >= v32.0-veridian.17f98186 contiennent
-          # /api/version (cf internal/buildinfo). Si on n'a pas le bon tag
-          # après 5min, c'est un vrai bug de pipeline (Dokploy n'a pas pull,
-          # bump manqué, etc.) -> fail le job -> rollback auto se declenche.
-          echo "::error::/api/version mismatch ou absent après 5min — Dokploy n'a pas swap le container ou /api/version retourne un autre tag. Rollback auto va se declencher."
-          exit 1
 
       - name: Telegram notif deploy prod OK
         if: success()
@@ -1216,26 +1122,39 @@ jobs:
     name: Rollback prod si e2e-prod fail
     needs: [e2e-prod, deploy-prod, build]
     if: failure() && needs.deploy-prod.result == 'success'
-    runs-on: ubuntu-latest
+    # Self-hosted : `nomad job revert` a besoin du tailnet + binaire nomad.
+    runs-on: [self-hosted, linux, x64]
+    env:
+      NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+      NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
     steps:
-      - name: Tag broken + restore rollback
+      # === Rollback Nomad — revient à la version de job PRÉCÉDENTE (Nomad garde
+      # l'historique des versions du job avec leur tag image d'avant). Atomique,
+      # sans dépendre du tag `:rollback` GHCR. `job revert` prend l'index de la
+      # version cible : on liste les versions et on revert vers l'avant-dernière
+      # (la dernière = le deploy cassé qu'on vient de faire).
+      - name: Nomad job revert (version précédente)
         run: |
-          BROKEN_TAG="${{ needs.build.outputs.image_tag }}"
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${BROKEN_TAG}
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${BROKEN_TAG} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:broken-${GITHUB_SHA::8}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:broken-${GITHUB_SHA::8}
-
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
-      - name: Redeploy prod with rollback image
-        run: |
-          curl -X POST \
-            -H "x-api-key: ${{ secrets.DOKPLOY_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            "${{ secrets.DOKPLOY_URL }}/api/compose.redeploy" \
-            -d '{"composeId":"${{ secrets.DOKPLOY_NOTIFUSE_PROD_COMPOSE_ID }}"}'
+          set -euo pipefail
+          # Versions triées desc : [0]=courante (cassée), [1]=précédente (saine).
+          PREV=$(nomad job history -json notifuse \
+                 | jq -r 'sort_by(.Version) | reverse | .[1].Version // empty')
+          if [ -z "$PREV" ]; then
+            echo "::error::Pas de version précédente à restaurer pour le job notifuse"
+            exit 1
+          fi
+          echo "▶ nomad job revert notifuse → version $PREV"
+          nomad job revert notifuse "$PREV"
+          # Attendre que prod re-serve la version saine
+          for i in {1..30}; do
+            if curl -sf https://notifuse.app.veridian.site/api/setup.status > /dev/null 2>&1; then
+              echo "✓ Prod re-healthy après revert (version $PREV)"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Prod toujours unhealthy 5min après revert — intervention manuelle"
+          exit 1
 
       - name: Notify Telegram
         run: |
