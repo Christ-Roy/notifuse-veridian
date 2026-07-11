@@ -51,9 +51,20 @@ dans `deploy/<app>.nomad.hcl` + CI `nomad job run` via secrets NOMAD_ADDR/TOKEN.
 5. **Warning HCL** `shutdown_delay` non set (hérité du live) — amélioration mineure,
    à ajouter côté infra sur le miroir pour cohérence.
 
-## Validation
-- `nomad job validate` + `nomad-v plan` verts sur les 2 HCL (dry-run cluster).
-- `nomad-deploy.sh staging` exécuté en réel (registration successful, /api/version OK).
-- Résolution `db-<alloc>` testée sur dev-pub réel.
-- Token scopé testé (deploy OK, escalade ACL/node refusée 403).
-- E2E on-premise complet du pipeline prod = au 1er push `[risk:low]` (opt-in).
+## Validation CI RÉELLE (run 29166515686, 2026-07-11) — pipeline prouvé end-to-end
+- ✅ **`deploy-staging` (GitOps Nomad — nomad job run) VERT** (1m33s) : la CI a
+  réellement déployé staging via Nomad. C'est la preuve end-to-end de la migration.
+- ✅ workflow-lint (§20), Go tests, build, résolution `db-<alloc>` : tous verts.
+- ✅ Débloqué en passant : **govulncheck** (bump Go 1.25.11→1.25.12, CVE GO-2026-5856
+  crypto/tls + GO-2026-4970 os) — la CI était rouge depuis ~17j pour ça (orthogonal
+  à Nomad mais bloquait tout le pipeline → build/deploy jamais atteints).
+- ⚠️ **e2e-staging : 285 passed / 1 failed** — le seul rouge = `chaos-provisioning.spec.ts:91`
+  (1 des 5 provisions concurrentes du même tenant → 500 transitoire). **NON reproductible** :
+  5 provisions concurrentes rejouées à la main → convergent proprement (0×500). = **flaky**
+  de charge CI documenté (cf `flaky-ci-staging-postgres-saturation`), PAS une régression de
+  la migration (le déploiement est vert, l'app saine). N'impacte pas la prod (opt-in).
+  Piste si récurrent : DB staging Nomad à 256MB (vs 512 en prod) — à confirmer avant de bumper.
+- Preuves unitaires (pré-CI) : `nomad job validate`+`plan` verts, `nomad-deploy.sh staging`
+  exécuté en réel, token scopé testé (deploy OK, escalade ACL/node → 403).
+- **Prod** : deploy-prod reste opt-in `[risk:low]` — 1er déploiement prod Nomad au prochain
+  push marqué, sous surveillance (rollback auto `nomad job revert` si /api/version ≠ tag).

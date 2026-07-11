@@ -5,6 +5,12 @@
 > Constitution CI : `../CLAUDE.md` section "Constitution CI".
 >
 > **Dernière mise à jour** : 2026-05-17 (déblocage push : faux positifs script + CVE npm)
+>
+> ⚠️ **2026-07-11 — DÉPLOIEMENT MIGRÉ DOKPLOY → NOMAD.** Tout ce qui suit décrivant
+> le deploy via Dokploy (`compose.deploy`, `infra/compose/*.yml`, bump prod.yml) est
+> **PÉRIMÉ**. Le déploiement passe désormais par des **jobs Nomad** (`deploy/*.nomad.hcl`
+> + `scripts/ci/nomad-deploy.sh` + `nomad job run/revert`). Voir CLAUDE.md section
+> "Déploiement — GitOps Nomad" + ticket `todo/2026-07-11-migration-ci-gitops-nomad.md`.
 
 ## ✅ FAIT — 2026-05-17 (déblocage push normal)
 
