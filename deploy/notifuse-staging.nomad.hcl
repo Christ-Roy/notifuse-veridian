@@ -95,7 +95,7 @@ EOH
     task "notifuse" {
       driver = "docker"
       config {
-        image = "ghcr.io/christ-roy/notifuse-veridian:v54.0-veridian.7ff43498"
+        image = "ghcr.io/christ-roy/notifuse-veridian:v54.0-veridian.267b7e2c"
         ports = ["http"]
       }
       template {
