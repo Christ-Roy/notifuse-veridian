@@ -1088,6 +1088,16 @@ jobs:
               --data-urlencode "text=🚀 Notifuse Veridian PROD déployé — ${GITHUB_SHA::8} | e2e-prod en cours..."
           fi
 
+      # Constitution §20 — cleanup runner self-hosted (dev-pub). Le job déploie
+      # sur le bastion via `nomad job run` ; ce prune ne touche QUE le runner
+      # (image prune until=24h ne supprime pas les images d'allocs running).
+      - name: Cleanup runner (always — Constitution §20)
+        if: always()
+        run: |
+          docker image prune -f --filter "until=24h" || true
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* || true
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "⚠ Disk:", $5, "used"}'
+
   e2e-prod:
     name: E2E headful Playwright (prod, BLOQUANT)
     needs: deploy-prod
@@ -1157,6 +1167,7 @@ jobs:
           exit 1
 
       - name: Notify Telegram
+        if: always()  # Constitution §20 : step always() sur job self-hosted + on alerte le rollback quoi qu'il arrive
         run: |
           curl -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
