@@ -7,9 +7,17 @@
 # (127.0.0.1:5432), volume bind /opt/veridian-staging/notifuse/db → STATEFUL épinglé
 # provider=ovh-dev, PAS de reschedule. Secrets = Nomad Variable `nomad/jobs/notifuse-staging`.
 #
-# ⚠️ DÉPLOIEMENT : déployé par la CI (job deploy-staging → scripts/ci/nomad-deploy.sh) via
-#    `nomad job run`. La CI bump le tag image avant deploy. Miroir infra :
-#    ~/nomad-veridian/jobs/notifuse-staging.nomad.hcl.
+# ⚠️ DÉPLOIEMENT — canon SSH-bastion (cf veridian-prospection/deploy/README.md) : la CI
+#    (job deploy-staging → scripts/ci/nomad-ssh-deploy.sh) SSH vers le bastion, pré-pull
+#    l'image sur ovh-dev (`ssh -n dev-pub docker pull`), scp CE fichier, puis
+#    `nomad job run -var image_tag=<TAG>`. Déployer TOUJOURS depuis CE HCL (variable
+#    image_tag), jamais la copie ~/nomad-veridian/jobs/.
+variable "image_tag" {
+  type        = string
+  default     = "v54.0-veridian.7ff43498"
+  description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
+}
+
 job "notifuse-staging" {
   datacenters = ["veridian-eu"]
   type        = "service"
@@ -21,6 +29,13 @@ job "notifuse-staging" {
     constraint {
       attribute = "${meta.provider}"
       value     = "ovh-dev"
+    }
+
+    # Deadlines étendues (1er pull lent) + auto_revert — cf piège prospection 2026-07-11.
+    update {
+      healthy_deadline  = "15m"
+      progress_deadline = "20m"
+      auto_revert       = true
     }
 
     restart {
@@ -95,7 +110,7 @@ EOH
     task "notifuse" {
       driver = "docker"
       config {
-        image = "ghcr.io/christ-roy/notifuse-veridian:v54.0-veridian.267b7e2c"
+        image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
         ports = ["http"]
       }
       template {

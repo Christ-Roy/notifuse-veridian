@@ -71,6 +71,29 @@ dans `deploy/<app>.nomad.hcl` + CI `nomad job run` via secrets NOMAD_ADDR/TOKEN.
 
 ---
 
+## ✅ ALIGNÉ SUR LE CANON SSH-BASTION (2026-07-13)
+
+Ma 1ère version (token Nomad scopé en secret GH + runner self-hosted) était une
+**réinvention** — Robert avait arrêté le canon **SSH-bastion** (le NOMAD_TOKEN ne
+quitte jamais le bastion). Refonte pour s'aligner + corriger 3 bugs prod que ma
+version ratait :
+- ✅ **HCL** : `variable "image_tag"` (déployé via `-var`, plus de sed/commit-bump) +
+  stanza `update{healthy_deadline=15m, progress_deadline=20m, auto_revert=true}`
+  (le 1er pull lent ne fait plus échouer le deployment ; auto_revert = filet).
+- ✅ **`scripts/ci/nomad-ssh-deploy.sh`** : SSH bastion → **pré-pull authentifié** de
+  l'image sur le nœud cible (piège n°1 : Nomad ne pull pas les images privées ghcr →
+  401 → 502) → `nomad job run -var` → `deployment status -monitor <id>` (vérif ciblée,
+  ni faux positif du poll ni faux négatif du run bloquant).
+- ✅ CI : `deploy-staging` (self-hosted, steps tailnet) + `deploy-prod`/`rollback`
+  (ubuntu-latest) passent en SSH-bastion. Ancien `nomad-deploy.sh` (token-direct) supprimé.
+- ✅ **Secrets** : `NOMAD_DEPLOY_SSH_KEY` (clé ed25519 dédiée `notifuse-ci-deploy@github`,
+  publique ajoutée à authorized_keys du bastion) + `NOMAD_BASTION_HOST` (75.119.158.217)
+  + `NOMAD_BASTION_USER`. `NOMAD_ADDR`/`NOMAD_TOKEN` retirés, token scopé `notifuse-cd`
+  + policy supprimés du cluster. Auth ghcr root vérifiée (bastion + ovh-dev).
+- ✅ **Testé en réel** (avant push) : `nomad-ssh-deploy.sh staging` exécuté depuis le
+  bastion → SSH + pré-pull + `run -var` + `deployment status -monitor` = **successful**
+  (Job Version 2, auto_revert actif). Le pipeline SSH-bastion marche end-to-end.
+
 ## ✅ CANON PROUVÉ — prospection l'a fait le 2026-07-12, COPIE-LE (ne réinvente pas)
 
 prospection a livré **et validé end-to-end** (CI verte, bon SHA déployé, `/api/health`=200)

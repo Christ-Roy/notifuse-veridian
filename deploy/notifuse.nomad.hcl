@@ -7,13 +7,20 @@
 # STATEFUL épinglé provider=contabo, PAS de reschedule (le volume ne suit pas l'alloc).
 # Secrets = Nomad Variable `nomad/jobs/notifuse` (JAMAIS en clair ici).
 #
-# ⚠️ DÉPLOIEMENT : ce fichier est déployé par la CI (`.github/workflows/veridian-ci.yml`,
-#    job deploy-prod → scripts/ci/nomad-deploy.sh) via `nomad job run`. La CI bump le
-#    tag de l'image (ligne `image = "ghcr.io/christ-roy/notifuse-veridian:<TAG>"`) avant
-#    de déployer. Miroir de référence côté infra : ~/nomad-veridian/jobs/notifuse.nomad.hcl
-#    (autorité en cours de bascule vers CE repo — cf todo/2026-07-11-cli... et infra).
+# ⚠️ DÉPLOIEMENT — canon SSH-bastion (cf veridian-prospection/deploy/README.md,
+#    décision Robert 2026-07-11) : la CI (`veridian-ci.yml` job deploy-prod →
+#    scripts/ci/nomad-ssh-deploy.sh) SSH vers le bastion, pré-pull l'image ghcr
+#    (auth du nœud), scp CE fichier, puis `nomad job run -var image_tag=<TAG>`.
+#    Le NOMAD_TOKEN ne quitte JAMAIS le bastion. Déployer TOUJOURS depuis CE HCL
+#    (il déclare `variable image_tag`), jamais la copie ~/nomad-veridian/jobs/.
 # ⚠️ DB mono-instance sans HA (reschedule OFF, bind bastion) — migration Patroni HA =
 #    chantier infra séparé (backlog nomad-veridian). Ne PAS reschedule ce job stateful.
+variable "image_tag" {
+  type        = string
+  default     = "v54.0-veridian.7ff43498"
+  description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
+}
+
 job "notifuse" {
   datacenters = ["veridian-eu"]
   type        = "service"
@@ -25,6 +32,15 @@ job "notifuse" {
     constraint {
       attribute = "${meta.provider}"
       value     = "contabo"
+    }
+
+    # Deadlines étendues : le 1er pull d'image sur un nœud sans cache dépasse les
+    # 5min par défaut → deployment marqué failed prématurément (piège prospection
+    # 2026-07-11). auto_revert = filet de sécurité (retour à la version saine).
+    update {
+      healthy_deadline  = "15m"
+      progress_deadline = "20m"
+      auto_revert       = true
     }
 
     restart {
@@ -96,7 +112,7 @@ EOH
     task "notifuse" {
       driver = "docker"
       config {
-        image = "ghcr.io/christ-roy/notifuse-veridian:v54.0-veridian.7ff43498"
+        image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
         ports = ["http"]
         volumes = [
           "/opt/veridian-lab/notifuse/data:/app/data",

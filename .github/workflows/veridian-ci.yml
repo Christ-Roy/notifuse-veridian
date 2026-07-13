@@ -723,60 +723,41 @@ jobs:
           exit 0
 
   deploy-staging:
-    name: Deploy staging (GitOps Nomad — nomad job run sur ovh-dev)
+    name: Deploy staging (GitOps Nomad SSH-bastion)
     needs: build
     # Staging deploy auto sur push veridian uniquement.
     # Tags saas-v* sont des releases prod : pas d'auto-deploy.
     if: github.ref == 'refs/heads/veridian'
-    # Runner self-hosted dev-pub : sur Tailscale (atteint NOMAD_ADDR du bastion)
-    # + binaire `nomad` présent (== nœud Nomad ovh-dev).
+    # Runner self-hosted dev-pub : le deploy passe par SSH-bastion (script), mais
+    # les steps POST-deploy (wait healthy, cleanup tenants HMAC) tapent le staging
+    # PRIVÉ (internal-only@nomad) → besoin du tailnet, d'où le runner dev-pub.
     runs-on: [self-hosted, linux, x64]
     permissions:
-      contents: write  # nécessaire pour push le bump GitOps du HCL
+      contents: read
       packages: read
     environment:
       name: staging
       url: https://notifuse.staging.veridian.site
     env:
-      # NOMAD_ADDR/NOMAD_TOKEN : secrets repo (cf scripts/ci/nomad-deploy.sh).
-      NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
-      NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+      # Secrets SSH partagés cross-app (canon prospection) — le NOMAD_TOKEN ne
+      # quitte JAMAIS le bastion (lu in situ dans la session SSH).
+      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY }}
+      NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}
+      NOMAD_BASTION_USER: ${{ secrets.NOMAD_BASTION_USER }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # nécessaire pour commit + push (origin/veridian)
-          token: ${{ secrets.GITOPS_BUMP_PAT || secrets.GITHUB_TOKEN }}
 
-      # === GitOps Nomad — bump le tag image dans deploy/notifuse-staging.nomad.hcl
-      # puis `nomad job run` (validate + plan + run + wait /api/version). Remplace
-      # l'ancien flux Dokploy/compose (migration Dokploy→Nomad, cf ~/nomad-veridian).
-      - name: Deploy staging via Nomad (nomad-deploy.sh)
+      # === GitOps Nomad SSH-bastion — scp le HCL (variable image_tag), pré-pull
+      # l'image sur ovh-dev (auth ghcr du nœud), `nomad job run -var image_tag`
+      # + deployment status -monitor. Le tag est passé en -var → pas de mutation
+      # du HCL, donc PAS de commit-bump (traçabilité via le git SHA = le tag).
+      - name: Deploy staging via SSH-bastion
         env:
           BUMP_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
           set -euo pipefail
-          chmod +x scripts/ci/nomad-deploy.sh
-          scripts/ci/nomad-deploy.sh staging "$BUMP_TAG"
-
-      # === Traçabilité GitOps — commit le HCL bumpé + push [skip ci] pour que le
-      # git log de deploy/notifuse-staging.nomad.hcl reflète le tag qui tourne.
-      - name: Commit bump HCL staging [skip ci]
-        env:
-          BUMP_TAG: ${{ needs.build.outputs.image_tag }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet deploy/notifuse-staging.nomad.hcl; then
-            echo "ℹ HCL staging inchangé (idempotent) — pas de commit"
-          else
-            git add deploy/notifuse-staging.nomad.hcl
-            git commit -m "ci(gitops): bump staging Nomad job to ${BUMP_TAG} [skip ci]" \
-                       -m "Auto-bump par job deploy-staging (nomad job run)."
-            git pull --rebase --autostash origin veridian
-            git push origin HEAD:veridian
-            echo "✓ HCL staging bumpé et pushé"
-          fi
+          chmod +x scripts/ci/nomad-ssh-deploy.sh
+          scripts/ci/nomad-ssh-deploy.sh staging "$BUMP_TAG"
 
       - name: Wait for staging healthy
         run: |
@@ -1008,15 +989,14 @@ jobs:
         && !contains(github.event.head_commit.message, '[skip-prod]')
         && !contains(github.event.head_commit.message, '[wip]'))
       || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
-    # Runner self-hosted dev-pub : requis pour atteindre NOMAD_ADDR (bastion,
-    # Tailscale) + binaire nomad. L'ancien deploy Dokploy tapait une API HTTP
-    # publique depuis ubuntu-latest ; le deploy Nomad exige le tailnet.
-    runs-on: [self-hosted, linux, x64]
-    permissions:
-      contents: write  # nécessaire pour push le bump GitOps du HCL
+    # Runner ubuntu-latest (canon SSH-bastion prospection) : le deploy SSH vers
+    # l'IP publique du bastion + le smoke prod (public) ne nécessitent PAS le
+    # tailnet. Le NOMAD_TOKEN ne quitte jamais le bastion.
+    runs-on: ubuntu-latest
     env:
-      NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
-      NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY }}
+      NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}
+      NOMAD_BASTION_USER: ${{ secrets.NOMAD_BASTION_USER }}
     steps:
       # === Gate §20 — durcir le filtre [risk:low] : doit être en 1ère ligne ===
       # Le `if:` du job ne fait qu'un pré-filtre grossier (marker n'importe où
@@ -1041,42 +1021,36 @@ jobs:
           fi
 
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # nécessaire pour push HEAD:veridian (bump GitOps prod)
 
-      # === GitOps Nomad — bump le tag image dans deploy/notifuse.nomad.hcl puis
-      # `nomad job run` (validate + plan + run + wait /api/version == tag). Le
-      # script fail (exit 3) si /api/version ne matche pas sous 5min → job fail
-      # → rollback auto (job `rollback` via `nomad job revert`). Remplace le flux
-      # Dokploy (compose.deploy) décommissionné.
-      - name: Deploy prod via Nomad (nomad-deploy.sh)
+      # === GitOps Nomad SSH-bastion — pré-pull l'image sur le bastion (auth ghcr
+      # local), scp le HCL (variable image_tag), `nomad job run -var image_tag`
+      # + deployment status -monitor (auto_revert Nomad si le deployment échoue).
+      - name: Deploy prod via SSH-bastion
         env:
           BUMP_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
           set -euo pipefail
-          chmod +x scripts/ci/nomad-deploy.sh
-          scripts/ci/nomad-deploy.sh prod "$BUMP_TAG"
+          chmod +x scripts/ci/nomad-ssh-deploy.sh
+          scripts/ci/nomad-ssh-deploy.sh prod "$BUMP_TAG"
 
-      # === Traçabilité GitOps — commit le HCL bumpé + push [skip ci] ===
-      - name: Commit bump HCL prod [skip ci]
+      # === Smoke prod + anti-stale : /api/version doit renvoyer le tag déployé.
+      # Si mismatch (Nomad n'a pas swap, mauvais tag) → job fail → job `rollback`.
+      - name: Smoke prod (/api/version matches deployed tag)
         env:
-          BUMP_TAG: ${{ needs.build.outputs.image_tag }}
-          GH_TOKEN: ${{ secrets.GITOPS_BUMP_PAT || secrets.GITHUB_TOKEN }}
+          EXPECTED_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet deploy/notifuse.nomad.hcl; then
-            echo "ℹ HCL prod inchangé (idempotent) — pas de commit"
-          else
-            git add deploy/notifuse.nomad.hcl
-            git commit -m "ci(gitops): bump prod Nomad job to ${BUMP_TAG} [skip ci]" \
-                       -m "Auto-bump par job deploy-prod après e2e-staging vert (nomad job run)."
-            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-            git pull --rebase --autostash origin veridian
-            git push origin HEAD:veridian
-            echo "✓ HCL prod bumpé et pushé"
-          fi
+          for i in $(seq 1 30); do
+            RESP=$(curl -sf https://notifuse.app.veridian.site/api/version 2>/dev/null || echo "")
+            GOT=$(echo "$RESP" | jq -r '.tag // empty' 2>/dev/null || echo "")
+            if [ "$GOT" = "$EXPECTED_TAG" ]; then
+              echo "✓ Prod sert $GOT (== attendu)"; exit 0
+            fi
+            echo "  [$i/30] /api/version → ${GOT:-<vide>} (attendu $EXPECTED_TAG)"
+            sleep 10
+          done
+          echo "::error::/api/version ≠ $EXPECTED_TAG après 5min — rollback auto va se déclencher"
+          exit 1
 
       - name: Telegram notif deploy prod OK
         if: success()
@@ -1087,16 +1061,6 @@ jobs:
               -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
               --data-urlencode "text=🚀 Notifuse Veridian PROD déployé — ${GITHUB_SHA::8} | e2e-prod en cours..."
           fi
-
-      # Constitution §20 — cleanup runner self-hosted (dev-pub). Le job déploie
-      # sur le bastion via `nomad job run` ; ce prune ne touche QUE le runner
-      # (image prune until=24h ne supprime pas les images d'allocs running).
-      - name: Cleanup runner (always — Constitution §20)
-        if: always()
-        run: |
-          docker image prune -f --filter "until=24h" || true
-          sudo rm -rf /tmp/runner-${{ github.run_id }}-* || true
-          df -h / | awk 'NR==2 {if ($5+0 > 80) print "⚠ Disk:", $5, "used"}'
 
   e2e-prod:
     name: E2E headful Playwright (prod, BLOQUANT)
@@ -1132,34 +1096,41 @@ jobs:
     name: Rollback prod si e2e-prod fail
     needs: [e2e-prod, deploy-prod, build]
     if: failure() && needs.deploy-prod.result == 'success'
-    # Self-hosted : `nomad job revert` a besoin du tailnet + binaire nomad.
-    runs-on: [self-hosted, linux, x64]
+    # ubuntu-latest + SSH-bastion (canon) : le `nomad job revert` tourne sur le
+    # bastion (token in situ), le curl prod est public.
+    runs-on: ubuntu-latest
     env:
-      NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
-      NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY }}
+      NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}
+      NOMAD_BASTION_USER: ${{ secrets.NOMAD_BASTION_USER }}
     steps:
-      # === Rollback Nomad — revient à la version de job PRÉCÉDENTE (Nomad garde
-      # l'historique des versions du job avec leur tag image d'avant). Atomique,
-      # sans dépendre du tag `:rollback` GHCR. `job revert` prend l'index de la
-      # version cible : on liste les versions et on revert vers l'avant-dernière
-      # (la dernière = le deploy cassé qu'on vient de faire).
-      - name: Nomad job revert (version précédente)
+      # === Rollback Nomad via SSH-bastion — revient à la version de job PRÉCÉDENTE
+      # (Nomad garde l'historique des versions avec leur image_tag figé). Atomique.
+      # Le revert tourne IN SITU sur le bastion (token n'en sort pas).
+      - name: Nomad job revert (version précédente) via SSH-bastion
         run: |
           set -euo pipefail
+          umask 077
+          printf '%s\n' "$NOMAD_DEPLOY_SSH_KEY" > /tmp/nomad_ci_key
+          chmod 600 /tmp/nomad_ci_key
+          ssh-keyscan -H "$NOMAD_BASTION_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -i /tmp/nomad_ci_key -o StrictHostKeyChecking=accept-new \
+            "${NOMAD_BASTION_USER}@${NOMAD_BASTION_HOST}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          source ~/credentials/nomad-bastion.env
+          export NOMAD_ADDR NOMAD_TOKEN="$NOMAD_MGMT_TOKEN"
           # Versions triées desc : [0]=courante (cassée), [1]=précédente (saine).
-          PREV=$(nomad job history -json notifuse \
-                 | jq -r 'sort_by(.Version) | reverse | .[1].Version // empty')
-          if [ -z "$PREV" ]; then
-            echo "::error::Pas de version précédente à restaurer pour le job notifuse"
-            exit 1
-          fi
+          PREV=$(/usr/bin/nomad job history -json notifuse \
+                 | python3 -c 'import sys,json;v=sorted((x["Version"] for x in json.load(sys.stdin)),reverse=True);print(v[1] if len(v)>1 else "")')
+          [ -n "$PREV" ] || { echo "::error::Pas de version précédente pour notifuse"; exit 1; }
           echo "▶ nomad job revert notifuse → version $PREV"
-          nomad job revert notifuse "$PREV"
-          # Attendre que prod re-serve la version saine
-          for i in {1..30}; do
+          /usr/bin/nomad job revert notifuse "$PREV"
+          REMOTE
+          rm -f /tmp/nomad_ci_key
+          # Attendre que prod re-serve la version saine (public)
+          for i in $(seq 1 30); do
             if curl -sf https://notifuse.app.veridian.site/api/setup.status > /dev/null 2>&1; then
-              echo "✓ Prod re-healthy après revert (version $PREV)"
-              exit 0
+              echo "✓ Prod re-healthy après revert"; exit 0
             fi
             sleep 10
           done
@@ -1167,7 +1138,7 @@ jobs:
           exit 1
 
       - name: Notify Telegram
-        if: always()  # Constitution §20 : step always() sur job self-hosted + on alerte le rollback quoi qu'il arrive
+        if: always()  # on alerte le rollback quoi qu'il arrive
         run: |
           curl -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \

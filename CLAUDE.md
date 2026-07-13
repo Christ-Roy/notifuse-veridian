@@ -1662,14 +1662,19 @@ poussés par la CI via `nomad job run` (plus de Dokploy, plus de `infra/compose/
 - **Jobs** : `deploy/notifuse.nomad.hcl` (prod, contabo-bastion) +
   `deploy/notifuse-staging.nomad.hcl` (ovh-dev, privé Tailscale + internal-only).
   Source de vérité gitops de l'app ; miroir infra : `~/nomad-veridian/jobs/`.
-- **Deploy** : CI `veridian-ci.yml` → jobs `deploy-staging`/`deploy-prod` →
-  `scripts/ci/nomad-deploy.sh <env> <tag>` (bump tag HCL → validate → plan → run →
-  wait `/api/version`). Runner **self-hosted** dev-pub (tailnet + binaire nomad).
-- **Rollback** : `nomad job revert notifuse <version_précédente>` (job `rollback`,
-  auto sur e2e-prod fail).
-- **Secrets CI** : `NOMAD_ADDR` + `NOMAD_TOKEN` (repo GitHub). Token Nomad **scopé**
-  (policy `notifuse-cd` : submit-job only, pas de mgmt/ACL/node). Secrets applicatifs
-  = Nomad Variables `nomad/jobs/notifuse{,-staging}` (`template{env=true}` dans le HCL).
+- **Deploy — canon SSH-bastion** (décision Robert, cf `veridian-prospection/deploy/README.md`) :
+  CI `veridian-ci.yml` → `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → SSH vers le
+  bastion (clé dédiée CI), pré-pull image ghcr (auth du nœud), scp le HCL (qui déclare
+  `variable image_tag`), `nomad job run -var image_tag=<tag>` + `deployment status
+  -monitor`. **Le NOMAD_TOKEN ne quitte JAMAIS le bastion** (lu in situ). deploy-staging
+  = runner self-hosted (steps post-deploy tailnet) ; deploy-prod/rollback = ubuntu-latest.
+- **Rollback** : `nomad job revert notifuse <version-1>` via SSH-bastion (job `rollback`,
+  auto sur e2e-prod fail). Stanza `update{auto_revert=true}` = filet Nomad si deployment KO.
+- **Secrets CI** : `NOMAD_DEPLOY_SSH_KEY` (clé ed25519 dédiée notifuse, publique dans
+  authorized_keys bastion) + `NOMAD_BASTION_HOST` + `NOMAD_BASTION_USER`. Secrets
+  applicatifs = Nomad Variables `nomad/jobs/notifuse{,-staging}` (`template{env=true}`).
+  ⚠️ Piège n°1 : Nomad ne pull pas les images privées ghcr → pré-pull authentifié +
+  auth ghcr root sur les nœuds (bastion + ovh-dev, déjà posé).
 - **Endpoints** : staging `notifuse.staging.veridian.site`, prod `notifuse.app.veridian.site`
 - **Pilotage cluster** : skill `/nomad` (`nomad-v state`/`doctor`/`plan`/`deploy`).
   Control-plane = bastion Contabo. Détail migration : ticket
@@ -2112,12 +2117,12 @@ Adaptations Go pour ce repo :
    demander « je promeus ? » entre chaque. Une vague de team se termine par UNE
    promo groupée des lots mûrs + UN récap, pas par N demandes de GO. Le seul
    point d'arrêt est le tier 💀 ou un veto Robert.
-10. **Deploy via Nomad** (Dokploy décommissionné 2026-07-10) :
-    `scripts/ci/nomad-deploy.sh <env> <tag>` → `nomad job run deploy/<job>.nomad.hcl`.
-    Secrets CI : `NOMAD_ADDR` + `NOMAD_TOKEN` (scopé `notifuse-cd`). Runner self-hosted.
+10. **Deploy via Nomad SSH-bastion** (Dokploy décommissionné 2026-07-10, canon
+    prospection) : `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → SSH bastion →
+    `nomad job run -var image_tag=<tag>`. Secrets CI : `NOMAD_DEPLOY_SSH_KEY` +
+    `NOMAD_BASTION_HOST` + `NOMAD_BASTION_USER`. Le token ne quitte pas le bastion.
 11. **Rollback prod auto** sur e2e-prod fail : `nomad job revert notifuse <version-1>`
-    (Nomad garde l'historique des versions du job) → wait `/api/setup.status` →
-    Telegram alert.
+    via SSH-bastion → wait `/api/setup.status` → Telegram alert.
 12. **Migrations Expand & Contract obligatoire**. Le tag Docker précédent doit
     tourner sur le schéma actuel. Versions majeures (V6, V7…) additives ;
     DROP COLUMN / NOT NULL sur table peuplée = 2 PRs sur 2 deploys.
