@@ -71,6 +71,29 @@ dans `deploy/<app>.nomad.hcl` + CI `nomad job run` via secrets NOMAD_ADDR/TOKEN.
 
 ---
 
+## ✅ FIX CVE Go DÉPLOYÉ EN PROD + alignement ovh-prod (2026-07-16)
+
+La prod tournait encore `7ff43498` (Go 1.25.11, CVE `GO-2026-5856` crypto/tls +
+`GO-2026-4970` os ouvertes depuis ~2,5j). Déployé `da06a0e0` (Go 1.25.12).
+
+⚠️ **CHANGEMENT INFRA rattrapé AVANT deploy** : l'infra a migré notifuse
+**bastion → ovh-prod le 2026-07-15** (commit nomad-veridian `82a79dc`, bastion
+saturé à 37 containers) + `memory_max=7000` (fusible 60% VM). Mon `deploy/notifuse.nomad.hcl`
+avait encore `constraint=contabo` → **déployer tel quel aurait servi la DB FIGÉE du
+bastion (copie du 07-15) = ~1j de données clients perdues.** Rattrapé :
+- `deploy/notifuse.nomad.hcl` aligné : `constraint=ovh-prod` + `memory_max=7000` (2 tasks).
+- `scripts/ci/nomad-ssh-deploy.sh` : pré-pull prod → **ovh-prod** (`ssh prod-pub`), plus le bastion.
+- **Backup pré-deploy** : `pg_dumpall` 77/77 bases (dont clients réels) sur `ovh-prod:~/backups/`.
+- Deploy manuel canon (bastion) : pré-pull ovh-prod → `nomad job run -var image_tag=da06a0e0`
+  → `deployment status -monitor` = **successful** (Version 9, auto_revert actif).
+- **Vérifié** : `/api/version`=da06a0e0, tenants clients intacts (animalsd/avsemonetique/…),
+  `/api/setup.status`=200. Downtime court (recréation alloc), DB préservée, zéro incident.
+- Staging : DB 256→512 Mo (débloque le flaky chaos-provisioning sous charge e2e).
+
+🔀 **Coordination infra** : mon HCL repo est désormais aligné sur ovh-prod. Pour éviter
+une re-divergence, le miroir `nomad-veridian/jobs/notifuse.nomad.hcl` doit rester la
+référence de placement (ovh-prod) — la CI notifuse déploie depuis `deploy/` (variable image_tag).
+
 ## ✅ ALIGNÉ SUR LE CANON SSH-BASTION (2026-07-13)
 
 Ma 1ère version (token Nomad scopé en secret GH + runner self-hosted) était une

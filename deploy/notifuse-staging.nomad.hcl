@@ -102,7 +102,8 @@ EOH
       }
       resources {
         cpu    = 250
-        memory = 256
+        memory = 512  # 256→512 : sous la rafale e2e (298 tests), la DB à 256Mo saturait
+                      # → chaos-provisioning 500 flaky. Aligné sur la prod (2026-07-16).
       }
     }
 

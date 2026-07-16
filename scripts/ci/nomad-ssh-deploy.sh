@@ -57,11 +57,12 @@ export NOMAD_ADDR NOMAD_TOKEN="$NOMAD_MGMT_TOKEN"
 IMG="${IMAGE_REPO}:${IMAGE_TAG}"
 
 echo "== pré-pull authentifié de l'image sur le nœud cible ($ENV_TARGET) =="
+# -n IMPÉRATIF : sinon ce ssh lit le stdin du heredoc et avale les commandes nomad suivantes.
 if [ "$ENV_TARGET" = "staging" ]; then
-  # -n : sinon ce ssh lit le stdin du heredoc et avale les commandes nomad suivantes.
   ssh -n -o BatchMode=yes -o ConnectTimeout=15 dev-pub "docker pull '$IMG'"
 else
-  docker pull "$IMG"   # prod = LE bastion (provider=contabo), auth ghcr root local
+  # prod = ovh-prod (migré du bastion le 2026-07-15, cf constraint provider=ovh-prod).
+  ssh -n -o BatchMode=yes -o ConnectTimeout=15 prod-pub "docker pull '$IMG'"
 fi
 
 echo "== nomad job validate =="

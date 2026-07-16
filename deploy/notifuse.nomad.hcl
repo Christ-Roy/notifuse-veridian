@@ -3,17 +3,21 @@
 # Sert les vrais clients sur https://notifuse.app.veridian.site (Model B : ingress
 # Traefik sur le bastion termine le TLS, cert Let's Encrypt DNS-01). Notifuse Go
 # port 8081, health /healthz. DB postgres:17 co-localisée dans le group (127.0.0.1:5432,
-# db notifuse_system), volume bind /opt/veridian-lab/notifuse sur le bastion → job
-# STATEFUL épinglé provider=contabo, PAS de reschedule (le volume ne suit pas l'alloc).
+# db notifuse_system), volume bind /opt/veridian-lab/notifuse sur OVH-PROD → job
+# STATEFUL épinglé provider=ovh-prod, PAS de reschedule (le volume ne suit pas l'alloc).
 # Secrets = Nomad Variable `nomad/jobs/notifuse` (JAMAIS en clair ici).
 #
+# ⚠️ PLACEMENT : migré du bastion (contabo) vers ovh-prod le 2026-07-15 par l'infra
+#    (commit nomad-veridian 82a79dc, bastion saturé). La DB (données) vit sur
+#    ovh-prod:/opt/veridian-lab/notifuse — NE PAS remettre provider=contabo (la copie
+#    du bastion est FIGÉE au 07-15 → servir une DB périmée). memory_max=7000 = fusible 60% VM.
 # ⚠️ DÉPLOIEMENT — canon SSH-bastion (cf veridian-prospection/deploy/README.md,
 #    décision Robert 2026-07-11) : la CI (`veridian-ci.yml` job deploy-prod →
 #    scripts/ci/nomad-ssh-deploy.sh) SSH vers le bastion, pré-pull l'image ghcr
 #    (auth du nœud), scp CE fichier, puis `nomad job run -var image_tag=<TAG>`.
 #    Le NOMAD_TOKEN ne quitte JAMAIS le bastion. Déployer TOUJOURS depuis CE HCL
 #    (il déclare `variable image_tag`), jamais la copie ~/nomad-veridian/jobs/.
-# ⚠️ DB mono-instance sans HA (reschedule OFF, bind bastion) — migration Patroni HA =
+# ⚠️ DB mono-instance sans HA (reschedule OFF, bind ovh-prod) — migration Patroni HA =
 #    chantier infra séparé (backlog nomad-veridian). Ne PAS reschedule ce job stateful.
 variable "image_tag" {
   type        = string
@@ -28,10 +32,11 @@ job "notifuse" {
   group "stack" {
     count = 1
 
-    # Épinglé au bastion : db/data bind sur /opt/veridian-lab/notifuse du bastion uniquement.
+    # Épinglé à ovh-prod : db/data bind sur /opt/veridian-lab/notifuse d'ovh-prod (migré
+    # du bastion le 2026-07-15). Le volume ne suit pas l'alloc → NE PAS changer de nœud.
     constraint {
       attribute = "${meta.provider}"
-      value     = "contabo"
+      value     = "ovh-prod"
     }
 
     # Deadlines étendues : le 1er pull d'image sur un nœud sans cache dépasse les
@@ -103,8 +108,9 @@ POSTGRES_PASSWORD={{ .POSTGRES_PASSWORD }}
 EOH
       }
       resources {
-        cpu    = 300
-        memory = 512
+        cpu        = 300
+        memory     = 512
+        memory_max = 7000  # fusible 60% VM (politique infra 2026-07-15)
       }
     }
 
@@ -158,8 +164,9 @@ SMTP_FROM_NAME={{ .SMTP_SENDER_NAME }}
 EOH
       }
       resources {
-        cpu    = 400
-        memory = 384
+        cpu        = 400
+        memory     = 384
+        memory_max = 7000  # fusible 60% VM (politique infra 2026-07-15)
       }
     }
   }
