@@ -1877,14 +1877,13 @@ l'**élever** localement via UI Team Settings (pattern §5.18.4 informatif).
 - **Source de vérité dev** : `~/credentials/.all-creds.env` (noms
   canoniques `NOTIFUSE_HUB_API_SECRET`, `NOTIFUSE_HUB_WEBHOOK_SECRET`,
   `HUB_INVITATION_SECRET_NOTIFUSE`, etc.)
-- **Staging** : compose Dokploy `compose-bypass-bluetooth-feed-tbayqr`
-  (Notifuse staging) — ENV injectées via `infra/compose/staging.yml`
-- **Prod Notifuse** : compose Dokploy `WN0jglLj5bDIrXUFZHNmw` (cf.
-  CLAUDE.md racine `veridian-platform/`, section ComposeIds)
-- **Prod Hub** : compose Dokploy `_kxAHDCv1LhvsdwNRX3Vk`
-- **Inspection live** : `POST /api/compose.one body {composeId}` via
-  Dokploy API (header `x-api-key: $DOKPLOY_API_KEY`) pour lire les ENV
-  d'une stack sans SSH
+- **Prod/Staging** (Dokploy décommissionné 2026-07-10) : les secrets vivent
+  dans les **Nomad Variables** du job (`nomad/jobs/notifuse`,
+  `nomad/jobs/notifuse-staging`, `nomad/jobs/hub`), injectés au conteneur via
+  `template { env = true }`.
+- **Inspection live** : `nomad var get nomad/jobs/notifuse` (valeurs de la
+  Variable) ou `nomad-v exec <alloc> printenv | grep HUB` (ENV réelles du
+  conteneur), plutôt que l'ancienne `POST /api/compose.one` de l'API Dokploy.
 
 ### Conventions code (où regarder)
 
