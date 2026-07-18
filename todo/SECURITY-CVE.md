@@ -1,8 +1,8 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-07-15 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-15
+> **Dernier run** : 2026-07-18 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-18
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
 > **CVE bruts détectés** : 31 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
@@ -47,7 +47,7 @@
 - **CVE** : `CVE-2026-48801` (HIGH/DoS)
 - **Type** : DoS
 - **Score max** : 15
-- **Title** : LinkifyIt#match scan loop has quadratic algorithmic complexity
+- **Title** : linkify-it: linkify-it: Denial of Service via algorithmic complexity vulnerability
 - **Source** : `console/package-lock.json`
 - **Fix** : `pnpm up linkify-it` (jusqu'à >= `5.0.1`)
 
@@ -83,7 +83,7 @@
 - **CVE** : `CVE-2026-49458` (MEDIUM/XSS), `CVE-2026-49459` (MEDIUM/XSS), `CVE-2026-49978` (MEDIUM/XSS), `GHSA-cmwh-pvxp-8882` (MEDIUM/XSS)
 - **Type** : XSS
 - **Score max** : 12
-- **Title** : DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks
+- **Title** : dompurify: DOMPurify: Cross-site scripting due to improper sanitization of DOM nodes
 - **Source** : `console/package-lock.json`
 - **Fix** : `pnpm up dompurify` (jusqu'à >= `3.4.11`)
 
