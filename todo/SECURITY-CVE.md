@@ -1,23 +1,37 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-07-20 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-20
+> **Dernier run** : 2026-07-28 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-28
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 31 (avant filtrage)
+> **CVE bruts détectés** : 39 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
-- 🚨 **0 RED** — fix prioritaire
-- 🔴 **4 HIGH** — action recommandée cette semaine
-- 🟡 **18 MEDIUM** — récap, pas urgent
+- 🚨 **1 RED** — fix prioritaire
+- 🔴 **6 HIGH** — action recommandée cette semaine
+- 🟡 **21 MEDIUM** — récap, pas urgent
 - 🟢 **9 NOISE** — annexe collapse
 
 
 ---
 
-## 🔴 HIGH — 4 CVE en 2 groupes
+## 🚨 RED — 1 CVE en 1 groupe
+
+### 1. `seroval` — 1.5.0 → **1.5.3**
+
+- **CVE** : `CVE-2026-59940` (CRITICAL/RCE)
+- **Type** : RCE
+- **Score max** : 150
+- **Title** : seroval: `seroval.fromJSON()` Promise resolver type confusion invokes attacker-controlled methods during deserialization
+- **Source** : `console/package-lock.json`
+- **Fix** : `pnpm up seroval` (jusqu'à >= `1.5.3`)
+
+
+---
+
+## 🔴 HIGH — 6 CVE en 4 groupes
 
 ### 1. `golang.org/x/net` — v0.48.0 → **0.55.0**
 
@@ -28,7 +42,16 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
 
-### 2. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
+### 2. `google.golang.org/grpc` — v1.79.3 → **1.82.1**
+
+- **CVE** : `GHSA-hrxh-6v49-42gf` (HIGH/Auth bypass)
+- **Type** : Auth bypass
+- **Score max** : 45
+- **Title** : gRPC-Go: xDS RBAC and HTTP/2 Vulnerabilities
+- **Source** : `go.mod`
+- **Fix** : `go get google.golang.org/grpc@1.82.1` + `go mod tidy`
+
+### 3. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
 
 - **CVE** : `CVE-2026-46595` (HIGH/Auth bypass)
 - **Type** : Auth bypass
@@ -37,21 +60,48 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/crypto@0.52.0` + `go mod tidy`
 
+### 4. `postcss` — 8.5.14 → **8.5.18**
+
+- **CVE** : `GHSA-r28c-9q8g-f849` (HIGH/Data leak)
+- **Type** : Data leak
+- **Score max** : 30
+- **Title** : PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure
+- **Source** : `notification_center/package-lock.json`
+- **Fix** : `pnpm up postcss` (jusqu'à >= `8.5.18`)
+
 
 ---
 
-## 🟡 MEDIUM — 18 CVE en 6 groupes
+## 🟡 MEDIUM — 21 CVE en 8 groupes
 
-### 1. `linkify-it` — 5.0.0 → **5.0.1**
+### 1. `js-yaml` — 4.1.1 → **4.3.0**
 
-- **CVE** : `CVE-2026-48801` (HIGH/DoS)
+- **CVE** : `CVE-2026-59869` (HIGH/DoS)
 - **Type** : DoS
+- **Score max** : 15
+- **Title** : js-yaml: js-yaml: Denial of Service via crafted YAML documents
+- **Source** : `console/package-lock.json`
+- **Fix** : `pnpm up js-yaml` (jusqu'à >= `4.3.0`)
+
+### 2. `linkify-it` — 5.0.0 → **5.0.2**
+
+- **CVE** : `CVE-2026-48801` (HIGH/DoS), `CVE-2026-59887` (HIGH/Unclassified)
+- **Type** : DoS, Unclassified
 - **Score max** : 15
 - **Title** : linkify-it: linkify-it: Denial of Service via algorithmic complexity vulnerability
 - **Source** : `console/package-lock.json`
-- **Fix** : `pnpm up linkify-it` (jusqu'à >= `5.0.1`)
+- **Fix** : `pnpm up linkify-it` (jusqu'à >= `5.0.2`)
 
-### 2. `vite` — 7.3.2 → **8.0.16**
+### 3. `liquidjs` — 10.27.0 → **10.27.1**
+
+- **CVE** : `CVE-2026-55575` (HIGH/Unclassified)
+- **Type** : Unclassified
+- **Score max** : 15
+- **Title** : LiquidJS: `pop` filter bypasses `memoryLimit` accounting that its array-filter siblings enforce
+- **Source** : `console/package-lock.json`
+- **Fix** : `pnpm up liquidjs` (jusqu'à >= `10.27.1`)
+
+### 4. `vite` — 7.3.2 → **8.0.16**
 
 - **CVE** : `CVE-2026-53571` (HIGH/Unclassified)
 - **Type** : Unclassified
@@ -60,7 +110,7 @@
 - **Source** : `notification_center/package-lock.json`
 - **Fix** : `pnpm up vite` (jusqu'à >= `8.0.16`)
 
-### 3. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
+### 5. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
 
 - **CVE** : `CVE-2026-39828` (HIGH/Unclassified), `CVE-2026-39829` (HIGH/DoS), `CVE-2026-39830` (HIGH/DoS), `CVE-2026-39831` (HIGH/Unclassified), `CVE-2026-39832` (HIGH/Unclassified), `CVE-2026-39835` (HIGH/DoS), `CVE-2026-42508` (HIGH/Unclassified), `CVE-2026-46597` (HIGH/DoS)
 - **Type** : DoS, Unclassified
@@ -69,7 +119,7 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/crypto@0.52.0` + `go mod tidy`
 
-### 4. `golang.org/x/net` — v0.48.0 → **0.55.0**
+### 6. `golang.org/x/net` — v0.48.0 → **0.55.0**
 
 - **CVE** : `CVE-2026-33814` (HIGH/DoS), `CVE-2026-42502` (MEDIUM/XSS), `CVE-2026-42506` (MEDIUM/XSS)
 - **Type** : DoS, XSS
@@ -78,16 +128,16 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
 
-### 5. `dompurify` — 3.4.0 → **3.4.11**
+### 7. `dompurify` — 3.4.0 → **3.4.11**
 
-- **CVE** : `CVE-2026-49458` (MEDIUM/XSS), `CVE-2026-49459` (MEDIUM/XSS), `CVE-2026-49978` (MEDIUM/XSS), `GHSA-cmwh-pvxp-8882` (MEDIUM/XSS)
+- **CVE** : `CVE-2026-49458` (MEDIUM/XSS), `CVE-2026-49459` (MEDIUM/XSS), `CVE-2026-49978` (MEDIUM/XSS), `CVE-2026-65898` (MEDIUM/XSS)
 - **Type** : XSS
 - **Score max** : 12
 - **Title** : dompurify: DOMPurify: Cross-site scripting due to improper sanitization of DOM nodes
 - **Source** : `console/package-lock.json`
 - **Fix** : `pnpm up dompurify` (jusqu'à >= `3.4.11`)
 
-### 6. `echarts` — 5.6.0 → **6.1.0**
+### 8. `echarts` — 5.6.0 → **6.1.0**
 
 - **CVE** : `CVE-2026-45249` (MEDIUM/XSS)
 - **Type** : XSS
