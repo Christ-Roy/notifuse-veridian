@@ -1,17 +1,17 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-07-28 04:25 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-28
+> **Dernier run** : 2026-07-29 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-07-29
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 39 (avant filtrage)
+> **CVE bruts détectés** : 42 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **1 RED** — fix prioritaire
 - 🔴 **6 HIGH** — action recommandée cette semaine
-- 🟡 **21 MEDIUM** — récap, pas urgent
+- 🟡 **22 MEDIUM** — récap, pas urgent
 - 🟢 **9 NOISE** — annexe collapse
 
 
@@ -72,7 +72,7 @@
 
 ---
 
-## 🟡 MEDIUM — 21 CVE en 8 groupes
+## 🟡 MEDIUM — 22 CVE en 9 groupes
 
 ### 1. `js-yaml` — 4.1.1 → **4.3.0**
 
@@ -101,7 +101,16 @@
 - **Source** : `console/package-lock.json`
 - **Fix** : `pnpm up liquidjs` (jusqu'à >= `10.27.1`)
 
-### 4. `vite` — 7.3.2 → **8.0.16**
+### 4. `golang.org/x/text` — v0.37.0 → **0.39.0**
+
+- **CVE** : `CVE-2026-56852` (HIGH/DoS)
+- **Type** : DoS
+- **Score max** : 15
+- **Title** : A norm.Iter can enter an infinite loop when handling input containing  ...
+- **Source** : `go.mod`
+- **Fix** : `go get golang.org/x/text@0.39.0` + `go mod tidy`
+
+### 5. `vite` — 7.3.2 → **8.0.16**
 
 - **CVE** : `CVE-2026-53571` (HIGH/Unclassified)
 - **Type** : Unclassified
@@ -110,7 +119,7 @@
 - **Source** : `notification_center/package-lock.json`
 - **Fix** : `pnpm up vite` (jusqu'à >= `8.0.16`)
 
-### 5. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
+### 6. `golang.org/x/crypto` — v0.46.0 → **0.52.0**
 
 - **CVE** : `CVE-2026-39828` (HIGH/Unclassified), `CVE-2026-39829` (HIGH/DoS), `CVE-2026-39830` (HIGH/DoS), `CVE-2026-39831` (HIGH/Unclassified), `CVE-2026-39832` (HIGH/Unclassified), `CVE-2026-39835` (HIGH/DoS), `CVE-2026-42508` (HIGH/Unclassified), `CVE-2026-46597` (HIGH/DoS)
 - **Type** : DoS, Unclassified
@@ -119,7 +128,7 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/crypto@0.52.0` + `go mod tidy`
 
-### 6. `golang.org/x/net` — v0.48.0 → **0.55.0**
+### 7. `golang.org/x/net` — v0.48.0 → **0.55.0**
 
 - **CVE** : `CVE-2026-33814` (HIGH/DoS), `CVE-2026-42502` (MEDIUM/XSS), `CVE-2026-42506` (MEDIUM/XSS)
 - **Type** : DoS, XSS
@@ -128,7 +137,7 @@
 - **Source** : `telemetry/go.mod`
 - **Fix** : `go get golang.org/x/net@0.55.0` + `go mod tidy`
 
-### 7. `dompurify` — 3.4.0 → **3.4.11**
+### 8. `dompurify` — 3.4.0 → **3.4.11**
 
 - **CVE** : `CVE-2026-49458` (MEDIUM/XSS), `CVE-2026-49459` (MEDIUM/XSS), `CVE-2026-49978` (MEDIUM/XSS), `CVE-2026-65898` (MEDIUM/XSS)
 - **Type** : XSS
@@ -137,7 +146,7 @@
 - **Source** : `console/package-lock.json`
 - **Fix** : `pnpm up dompurify` (jusqu'à >= `3.4.11`)
 
-### 8. `echarts` — 5.6.0 → **6.1.0**
+### 9. `echarts` — 5.6.0 → **6.1.0**
 
 - **CVE** : `CVE-2026-45249` (MEDIUM/XSS)
 - **Type** : XSS
