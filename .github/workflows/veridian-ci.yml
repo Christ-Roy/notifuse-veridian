@@ -979,6 +979,16 @@ jobs:
             >/dev/null || echo "::warning::Notif Telegram échouée (non bloquant)."
           echo "✓ Robert notifié — promotion prod en attente de reco/dispatch."
 
+  # Suite console plus large, séquencée après le gate staging afin que le
+  # runner Tailscale unique ne bloque jamais le déploiement qu'il doit tester.
+  console-e2e-informative:
+    name: Console E2E on-prem après staging
+    needs: e2e-staging
+    uses: ./.github/workflows/notifuse-console-e2e.yml
+    with:
+      wait_for_staging_deploy: true
+    secrets: inherit
+
   deploy-prod:
     name: Deploy prod (auto-promote sur push veridian — ship fast & safe)
     # === Veridian fix 2026-05-18 === build dans needs sinon outputs vide.

@@ -17,35 +17,39 @@
 #   3. Découplage temporel — peut être relancé seul via workflow_dispatch
 #      sans re-déclencher tout veridian-ci.yml.
 #
-# Déclenchement : uniquement APRÈS la CI/CD principale réussie. Staging est
-# Tailscale-only et le runner on-prem est unique : lancer les deux workflows
-# en parallèle créerait un verrou (la console attendrait le SHA que le job de
-# déploiement, lui-même en attente du runner, n'aurait pas encore posé).
+# Déclenchement : appelée par la CI/CD principale après ses E2E bloquants, ou
+# manuellement. Staging est Tailscale-only et le runner on-prem est unique :
+# l'ordre séquentiel évite que la console attende le SHA pendant que le job de
+# déploiement attend lui-même le runner.
 
 name: Notifuse console E2E suite (informative)
 
 on:
-  workflow_run:
-    workflows: ["Notifuse Veridian CI/CD"]
-    types: [completed]
+  workflow_call:
+    inputs:
+      wait_for_staging_deploy:
+        description: 'Exiger que staging reflète le SHA courant'
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       wait_for_staging_deploy:
         description: 'Attendre que staging reflète le SHA courant (max 10min)'
         required: false
-        default: 'true'
+        type: boolean
+        default: true
 
 # La suite est informative — pas de concurrency cancel-in-progress, on laisse
 # les runs s'enchaîner pour avoir une trace de chaque commit même si la file
 # d'attente grossit.
 concurrency:
-  group: notifuse-console-e2e-${{ github.event.workflow_run.head_branch || github.ref }}
+  group: notifuse-console-e2e-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   console-e2e:
     name: Console E2E sur staging réel (informative)
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     # `continue-on-error` au niveau du job entier serait préférable mais
@@ -59,7 +63,7 @@ jobs:
     # `needs:` côté veridian-ci.yml — pas besoin de modifier ce workflow.
     env:
       NOTIFUSE_URL: https://notifuse.staging.veridian.site
-      TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      TARGET_SHA: ${{ github.sha }}
       # Le secret partagé entre veridian-ci.yml jobs et ce workflow.
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
     steps:
@@ -91,7 +95,7 @@ jobs:
           done
 
       - name: Wait for staging to reflect current SHA (optionnel)
-        if: github.event_name == 'workflow_run' || github.event.inputs.wait_for_staging_deploy == 'true'
+        if: inputs.wait_for_staging_deploy
         run: |
           # /api/version retourne le SHA du build courant. Si staging tourne
           # encore l'ancien build, on accepte (la suite est résiliente — elle
