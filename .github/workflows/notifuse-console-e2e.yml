@@ -12,8 +12,8 @@
 #   1. Informative d'abord — un flaky ne doit PAS bloquer la promo prod.
 #      Quand la suite sera mûre et stable plusieurs semaines, on la branchera
 #      en `needs:` du job deploy-prod dans veridian-ci.yml.
-#   2. Indépendant du build self-hosted — tourne sur ubuntu-latest hosted
-#      runner (pas de pression sur dev-pub disk).
+#   2. Staging est Tailscale-only : la suite tourne sur le runner on-prem
+#      dev-pub. Un runner GitHub hosted reçoit 403 avant même le réveil Sablier.
 #   3. Découplage temporel — peut être relancé seul via workflow_dispatch
 #      sans re-déclencher tout veridian-ci.yml.
 #
@@ -54,7 +54,7 @@ concurrency:
 jobs:
   console-e2e:
     name: Console E2E sur staging réel (informative)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     # `continue-on-error` au niveau du job entier serait préférable mais
     # GitHub Actions ne le permet pas pour les single-job workflows. La
@@ -144,6 +144,15 @@ jobs:
             tests/e2e-veridian/playwright-results-console-suite.json
             tests/e2e-veridian/test-results/
           retention-days: 14
+
+      - name: Cleanup runner (always — Constitution §20)
+        if: always()
+        run: |
+          docker container prune -f
+          docker image prune -f --filter "until=1h"
+          docker volume prune -f --filter "label!=keep=true"
+          docker buildx prune -f --keep-storage 10GB --filter "until=168h" || true
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* || true
 
       # Notification Telegram en cas de fail uniquement (pas de spam vert).
       # Robert sait que vert = OK, rouge = à regarder dans la queue UI/UX.
