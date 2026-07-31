@@ -5,11 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
+
+const veridianProvisionLockNamespace = "veridian:provision:"
+const veridianProvisionLockWaitTimeout = 30 * time.Second
 
 // veridianPlanRepository implements domain.VeridianPlanRepository.
 type veridianPlanRepository struct {
@@ -37,6 +41,54 @@ func WithWebhookEmitter(repo domain.VeridianPlanRepository, emitter domain.Webho
 		r.log = log
 	}
 	return repo
+}
+
+// AcquireProvisionLock prend un advisory lock Postgres transaction-level sur
+// une connexion dediee. Il serialise le workflow de provision d'un tenant
+// entre plusieurs allocations. Le lock est automatiquement libere par
+// commit/rollback, y compris si le contexte de la requete est annule.
+func (r *veridianPlanRepository) AcquireProvisionLock(ctx context.Context, workspaceID string) (func(context.Context) error, error) {
+	if workspaceID == "" {
+		return nil, errors.New("workspace_id required")
+	}
+
+	conn, err := r.systemDB.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("reserve system database connection: %w", err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("begin provision lock transaction: %w", err)
+	}
+	lockKey := veridianProvisionLockNamespace + workspaceID
+	lockCtx, cancelLock := context.WithTimeout(ctx, veridianProvisionLockWaitTimeout)
+	defer cancelLock()
+	var ignored interface{}
+	if err := tx.QueryRowContext(lockCtx,
+		"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+		lockKey,
+	).Scan(&ignored); err != nil {
+		_ = tx.Rollback()
+		_ = conn.Close()
+		return nil, fmt.Errorf("lock tenant %s: %w", workspaceID, err)
+	}
+
+	var once sync.Once
+	var releaseErr error
+	return func(context.Context) error {
+		once.Do(func() {
+			commitErr := tx.Commit()
+			closeErr := conn.Close()
+			switch {
+			case commitErr != nil:
+				releaseErr = fmt.Errorf("release tenant %s provision lock: %w", workspaceID, commitErr)
+			case closeErr != nil:
+				releaseErr = fmt.Errorf("close provision lock connection: %w", closeErr)
+			}
+		})
+		return releaseErr
+	}, nil
 }
 
 // Get recupere une ligne par workspace_id. Retourne sql.ErrNoRows si absent.

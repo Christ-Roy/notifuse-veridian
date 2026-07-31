@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -167,6 +169,103 @@ func TestVeridianPlanRepository_Get(t *testing.T) {
 		assert.ErrorIs(t, err, sql.ErrNoRows)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+}
+
+func TestVeridianPlanRepository_AcquireProvisionLock(t *testing.T) {
+	const (
+		lockSQL = "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"
+		wsID    = "ws-lock"
+	)
+
+	t.Run("acquires tenant-scoped transaction lock and releases once", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db).(*veridianPlanRepository)
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(lockSQL).
+			WithArgs(veridianProvisionLockNamespace + wsID).
+			WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_xact_lock"}).AddRow(nil))
+		mock.ExpectCommit()
+
+		release, err := repo.AcquireProvisionLock(t.Context(), wsID)
+		require.NoError(t, err)
+		require.NotNil(t, release)
+		require.NoError(t, release(t.Context()))
+		require.NoError(t, release(t.Context()), "release doit etre idempotent")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("returns acquisition error and rolls back", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db).(*veridianPlanRepository)
+		lockErr := errors.New("lock timeout")
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(lockSQL).
+			WithArgs(veridianProvisionLockNamespace + wsID).
+			WillReturnError(lockErr)
+		mock.ExpectRollback()
+
+		release, err := repo.AcquireProvisionLock(t.Context(), wsID)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, lockErr)
+		assert.Nil(t, release)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("rejects empty workspace id before touching postgres", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianPlanRepository(db).(*veridianPlanRepository)
+
+		release, err := repo.AcquireProvisionLock(t.Context(), "")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "workspace_id required")
+		assert.Nil(t, release)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	assert.Equal(t, 30*time.Second, veridianProvisionLockWaitTimeout, "attente lock bornee")
+}
+
+func TestVeridianPlanRepository_AcquireProvisionLock_RealPostgres(t *testing.T) {
+	dsn := os.Getenv("VERIDIAN_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("VERIDIAN_TEST_POSTGRES_DSN absent")
+	}
+
+	db, err := sql.Open("postgres", dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	db.SetMaxOpenConns(4)
+	require.NoError(t, db.PingContext(t.Context()))
+
+	repo := NewVeridianPlanRepository(db).(*veridianPlanRepository)
+	const tenantID = "real-postgres-lock-probe"
+
+	// Le premier acquire valide notamment que Scan accepte la valeur `void`
+	// renvoyee par pg_advisory_xact_lock avec le driver lib/pq reel.
+	releaseFirst, err := repo.AcquireProvisionLock(t.Context(), tenantID)
+	require.NoError(t, err)
+
+	waitCtx, cancelWait := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancelWait()
+	releaseBlocked, err := repo.AcquireProvisionLock(waitCtx, tenantID)
+	require.Error(t, err, "le meme tenant doit attendre le premier lock")
+	assert.Nil(t, releaseBlocked)
+
+	require.NoError(t, releaseFirst(t.Context()))
+	require.Eventually(t, func() bool {
+		return db.Stats().InUse == 0
+	}, time.Second, 10*time.Millisecond, "aucune connexion ne doit rester occupee apres cancel/release")
+
+	// Le lock doit etre reacquerable apres le cancel du waiter et le release
+	// du proprietaire, ce qui exclut un advisory lock orphelin.
+	releaseAgain, err := repo.AcquireProvisionLock(t.Context(), tenantID)
+	require.NoError(t, err)
+	require.NoError(t, releaseAgain(t.Context()))
+	require.Eventually(t, func() bool {
+		return db.Stats().InUse == 0
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestVeridianPlanRepository_Upsert(t *testing.T) {

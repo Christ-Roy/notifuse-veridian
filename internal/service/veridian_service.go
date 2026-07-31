@@ -274,6 +274,17 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		return nil, errors.New("owner_email required")
 	}
 
+	// Provision enchaine plusieurs operations idempotentes individuellement,
+	// mais le workflow complet est un check-then-create. Sans verrou partage,
+	// deux allocations peuvent toutes deux observer l'absence du tenant puis
+	// se heurter sur l'user, la base workspace ou l'API key. Le verrou est pris avant le
+	// premier lookup et toute erreur d'acquisition est retournee au caller.
+	releaseProvisionLock, err := s.acquireProvisionLock(ctx, input.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseProvisionLock()
+
 	plan := strings.TrimSpace(input.Plan)
 	if plan == "" {
 		plan = s.defaultPlan

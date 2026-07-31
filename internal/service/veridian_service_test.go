@@ -51,7 +51,7 @@ func newVeridianService(t *testing.T) (*veridianService, *veridianServiceMocks) 
 		workspaceRepo:    m.workspaceRepo,
 		userService:      m.user,
 		userRepo:         m.userRepo,
-		planRepo:         m.planRepo,
+		planRepo:         newTestProvisionLockingPlanRepo(m.planRepo),
 		emitter:          m.emitter,
 		defaultPlan:      "free",
 		rootEmail:        "root@veridian.site",
