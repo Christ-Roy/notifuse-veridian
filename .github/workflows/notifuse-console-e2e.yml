@@ -82,7 +82,9 @@ jobs:
       - name: Wait for staging healthy
         run: |
           for i in {1..30}; do
-            if curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null 2>&1; then
+            SETUP=$(curl -fsS https://notifuse.staging.veridian.site/api/setup.status 2>/dev/null || true)
+            if echo "$SETUP" | jq -e \
+              'type == "object" and has("is_installed") and has("api_endpoint_configured")' >/dev/null 2>&1; then
               echo "Staging healthy after ${i}0s"
               break
             fi

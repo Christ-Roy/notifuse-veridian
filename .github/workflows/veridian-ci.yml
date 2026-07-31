@@ -774,17 +774,23 @@ jobs:
           # démarré le HTTP listener mais pas encore fini d'enregistrer toutes
           # les routes upstream. Les e2e démarraient et tombaient sur des 404.
           for i in {1..30}; do
-            if curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null 2>&1; then
-              CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            SETUP=$(curl -fsS https://notifuse.staging.veridian.site/api/setup.status 2>/dev/null || true)
+            # Sablier répond HTTP 200 avec une page HTML pendant le réveil.
+            # Seul le JSON de l'application prouve que l'API est réellement prête.
+            if echo "$SETUP" | jq -e \
+              'type == "object" and has("is_installed") and has("api_endpoint_configured")' >/dev/null 2>&1; then
+              RESULT=$(curl -sS -o /tmp/transactional-health-body -w "%{http_code} %{content_type}" -X POST \
                 -H "Content-Type: application/json" \
                 -H "Authorization: Bearer health-check-fake-key" \
                 -d '{}' \
                 https://notifuse.staging.veridian.site/api/transactional.send)
-              if [ "$CODE" != "404" ]; then
-                echo "Staging healthy after ${i} attempts (transactional.send → ${CODE})"
+              CODE="${RESULT%% *}"
+              TYPE="${RESULT#* }"
+              if [ "$CODE" != "404" ] && [[ "$TYPE" == application/json* ]]; then
+                echo "Staging healthy after ${i} attempts (transactional.send → ${CODE}, ${TYPE})"
                 exit 0
               fi
-              echo "  attempt ${i}: setup.status OK but transactional.send → 404 (routes pas encore mountées)"
+              echo "  attempt ${i}: setup.status JSON OK mais transactional.send → ${CODE} ${TYPE}"
             fi
             sleep 10
           done
@@ -876,6 +882,22 @@ jobs:
       # (step "Resolve staging DB container") → injecté dans GITHUB_ENV.
     steps:
       - uses: actions/checkout@v4
+      - name: Wake staging and require the deployed API
+        run: |
+          set -euo pipefail
+          EXPECTED_SHA="${GITHUB_SHA::8}"
+          for i in {1..60}; do
+            VERSION=$(curl -fsS https://notifuse.staging.veridian.site/api/version 2>/dev/null || true)
+            if echo "$VERSION" | jq -e --arg sha "$EXPECTED_SHA" \
+              '.git_sha | type == "string" and startswith($sha)' >/dev/null 2>&1; then
+              echo "Staging API ready on SHA ${EXPECTED_SHA} after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "  attempt ${i}: Sablier démarre encore l'app ou le SHA déployé n'est pas prêt"
+            sleep 10
+          done
+          echo "::error::Staging n'a jamais exposé l'API JSON du SHA ${EXPECTED_SHA}"
+          exit 1
       - name: Resolve staging DB container (Nomad alloc)
         run: |
           set -euo pipefail
@@ -1254,4 +1276,3 @@ jobs:
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=🧊 Notifuse Veridian — branche veridian FREEZE après auto-rollback prod sur ${GITHUB_SHA::8}. Push bloqués jusqu'au merge de la PR emergency-rollback. Bypass possible via UI GitHub si urgent."
-
