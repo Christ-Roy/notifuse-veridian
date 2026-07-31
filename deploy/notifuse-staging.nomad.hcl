@@ -25,6 +25,10 @@ job "notifuse-staging" {
   group "stack" {
     count = 1
 
+    # Le routeur permanent Sablier de l'ingress pointe sur le port fixe 19095.
+    # Cette meta autorise Sablier à endormir/réveiller le job staging.
+    meta = { "sablier.enable" = "true" }
+
     # Épinglé à ovh-dev : la DB bind sur /opt/veridian-staging du nœud ovh-dev uniquement.
     constraint {
       attribute = "${meta.provider}"
@@ -50,6 +54,7 @@ job "notifuse-staging" {
       # host_network tailscale : le port CNI bind sur l'IP Tailscale du nœud uniquement
       # → app injoignable en public (bypass ipAllowList impossible), Traefik route via Tailscale.
       port "http" {
+        static       = 19095
         to           = 8081
         host_network = "tailscale"
       }
@@ -59,22 +64,13 @@ job "notifuse-staging" {
       name     = "notifuse-staging"
       provider = "nomad"
       port     = "http"
-      tags = [
-        "traefik.enable=true",
-        "traefik.http.middlewares.internal-only.ipallowlist.sourcerange=100.64.0.0/10,127.0.0.1/32",
-        "traefik.http.routers.notifuse-staging.rule=Host(`notifuse.staging.veridian.site`)",
-        "traefik.http.routers.notifuse-staging.entrypoints=web",
-        "traefik.http.routers.notifuse-staging.middlewares=internal-only@nomad",
-        "traefik.http.routers.notifuse-stagingsec.rule=Host(`notifuse.staging.veridian.site`)",
-        "traefik.http.routers.notifuse-stagingsec.entrypoints=websecure",
-        "traefik.http.routers.notifuse-stagingsec.tls=true",
-        "traefik.http.routers.notifuse-stagingsec.tls.certresolver=letsencrypt",
-        "traefik.http.routers.notifuse-stagingsec.middlewares=internal-only@nomad",
-      ]
+      # Le routing vit dans ingress.nomad.hcl avec un service @file permanent.
+      # Un second routeur @nomad contournerait Sablier et recréerait du drift.
+      tags = ["traefik.enable=false"]
       check {
         type     = "http"
         path     = "/healthz"
-        interval = "15s"
+        interval = "5s"
         timeout  = "5s"
       }
     }
