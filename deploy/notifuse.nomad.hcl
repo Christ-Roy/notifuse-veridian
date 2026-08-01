@@ -28,6 +28,7 @@ variable "image_tag" {
 job "notifuse" {
   datacenters = ["veridian-eu"]
   type        = "service"
+  priority    = 80
 
   group "stack" {
     count = 1
@@ -39,13 +40,11 @@ job "notifuse" {
       value     = "ovh-prod"
     }
 
-    # Deadlines étendues : le 1er pull d'image sur un nœud sans cache dépasse les
-    # 5min par défaut → deployment marqué failed prématurément (piège prospection
-    # 2026-07-11). auto_revert = filet de sécurité (retour à la version saine).
     update {
-      healthy_deadline  = "15m"
-      progress_deadline = "20m"
-      auto_revert       = true
+      max_parallel     = 1
+      min_healthy_time = "15s"
+      healthy_deadline = "5m"
+      auto_revert      = true
     }
 
     restart {
@@ -68,8 +67,10 @@ job "notifuse" {
         "traefik.enable=true",
         "traefik.http.routers.notifuse.rule=Host(`notifuse-lab.veridian.site`)",
         "traefik.http.routers.notifuse.entrypoints=web",
+        "traefik.http.routers.notifuse.middlewares=internal-only@nomad",
         "traefik.http.routers.notifusesec.rule=Host(`notifuse-lab.veridian.site`)",
         "traefik.http.routers.notifusesec.entrypoints=websecure",
+        "traefik.http.routers.notifusesec.middlewares=internal-only@nomad",
         "traefik.http.routers.notifusesec.tls=true",
         "traefik.http.routers.notifuseprod.rule=Host(`notifuse.app.veridian.site`)",
         "traefik.http.routers.notifuseprod.entrypoints=websecure",
@@ -109,14 +110,33 @@ EOH
       }
       resources {
         cpu        = 300
-        memory     = 512
-        memory_max = 7000  # fusible 60% VM (politique infra 2026-07-15)
+        memory     = 384
+        memory_max = 7000
       }
     }
 
     # ---- notifuse (Go, port 8081) ----
     task "notifuse" {
-      driver = "docker"
+      driver         = "docker"
+      shutdown_delay = "10s"
+      kill_timeout   = "30s"
+      service {
+        name     = "notifuse-selfheal"
+        provider = "nomad"
+        port     = "http"
+        tags     = ["traefik.enable=false"]
+        check {
+          type     = "http"
+          path     = "/healthz"
+          interval = "15s"
+          timeout  = "5s"
+          check_restart {
+            limit           = 4
+            grace           = "90s"
+            ignore_warnings = false
+          }
+        }
+      }
       config {
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
         ports = ["http"]
@@ -165,8 +185,8 @@ EOH
       }
       resources {
         cpu        = 400
-        memory     = 384
-        memory_max = 7000  # fusible 60% VM (politique infra 2026-07-15)
+        memory     = 128
+        memory_max = 7000
       }
     }
   }
