@@ -5,7 +5,7 @@ declare global {
 }
 
 class ApiError extends Error {
-  constructor(message: string, public status: number, public data?: any) {
+  constructor(message: string, public status: number, public data?: unknown) {
     super(message)
     this.name = 'ApiError'
   }
@@ -13,9 +13,16 @@ class ApiError extends Error {
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null)
+    const errorData: unknown = await response.json().catch(() => null)
+    const errorMessage =
+      typeof errorData === 'object' &&
+      errorData !== null &&
+      'error' in errorData &&
+      typeof errorData.error === 'string'
+        ? errorData.error
+        : 'An error occurred'
 
-    throw new ApiError(errorData?.error || 'An error occurred', response.status, errorData)
+    throw new ApiError(errorMessage, response.status, errorData)
   }
   return response.json()
 }
@@ -39,12 +46,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 export const api = {
   get: <T>(endpoint: string) => request<T>(endpoint),
-  post: <T>(endpoint: string, data: any) =>
+  post: <T>(endpoint: string, data: unknown) =>
     request<T>(endpoint, {
       method: 'POST',
       body: JSON.stringify(data)
     }),
-  put: <T>(endpoint: string, data: any) =>
+  put: <T>(endpoint: string, data: unknown) =>
     request<T>(endpoint, {
       method: 'PUT',
       body: JSON.stringify(data)

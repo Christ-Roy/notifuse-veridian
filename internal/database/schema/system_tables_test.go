@@ -177,6 +177,22 @@ func TestUsersTableHasLanguageColumn(t *testing.T) {
 		"fresh-install users table should define the language column")
 }
 
+func TestFreshInstallSchemaIncludesCurrentVeridianSystemMigrations(t *testing.T) {
+	allDefinitions := strings.Join(TableDefinitions, "\n")
+
+	tests := map[string]string{
+		"V46 hub identity binding": "hub_user_id UUID NULL",
+		"V47 frozen members":       "CREATE TABLE IF NOT EXISTS veridian_frozen_members",
+		"V50 IMAP idempotency":      "CREATE TABLE IF NOT EXISTS veridian_imap_uid_seen",
+	}
+
+	for name, expectedDDL := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Contains(t, allDefinitions, expectedDDL)
+		})
+	}
+}
+
 func TestSchemaConsistency(t *testing.T) {
 	t.Run("Migration statements reference some TableNames", func(t *testing.T) {
 		allStatements := strings.Join(MigrationStatements, " ")

@@ -3,10 +3,12 @@ import { render, screen } from '@testing-library/react'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import {
-  VeridianBroadcastRatesInfo,
+  VeridianBroadcastRatesInfo
+} from './veridian_broadcast_rates_info'
+import {
   parseBroadcastRates,
   parseBroadcastPixels
-} from './veridian_broadcast_rates_info'
+} from './veridian_broadcast_metadata'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 

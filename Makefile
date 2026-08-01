@@ -14,11 +14,11 @@ test-unit:
 # End-to-end test command for Cursor Agent: runs all integration tests (non-verbose)
 e2e-test-within-cursor-agent:
 	@echo "Running all integration tests (non-verbose)..."
-	@./run-integration-tests.sh "Test" 2>&1 | grep -E "PASS|FAIL|^ok|===|^---" || true
+	@bash -o pipefail -c './scripts/run-integration-tests.sh "Test" 2>&1 | grep -E "PASS|FAIL|^ok|===|^---"'
 	@echo "\n✅ All integration tests completed"
 
 test-integration:
-	INTEGRATION_TESTS=true go test -race -timeout 9m ./tests/integration/ -v
+	INTEGRATION_TESTS=true go test -race -timeout 30m ./tests/integration/ -v
 
 test-domain:
 	go test -race -v ./internal/domain
@@ -254,7 +254,7 @@ setup-hooks:
 
 # Run le check de mapping en local (working tree)
 check-test-mapping:
-	@BASE_REF=$${BASE_REF:-origin/main} scripts/ci/check-test-mapping.sh
+	@BASE_REF=$${BASE_REF:-origin/veridian} scripts/ci/check-test-mapping.sh
 
 .DEFAULT_GOAL := build
 # E2E tunnel outbound — envoi test scriptable/rejouable (gate #11, giga test CI).

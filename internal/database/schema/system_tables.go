@@ -14,7 +14,10 @@ var TableDefinitions = []string{
 		created_at TIMESTAMP NOT NULL,
 		updated_at TIMESTAMP NOT NULL,
 		-- === Veridian patch === voir migration V32 + internal/domain/user.go
-		veridian_managed BOOLEAN NOT NULL DEFAULT FALSE
+		veridian_managed BOOLEAN NOT NULL DEFAULT FALSE,
+		-- Fresh installs start at the current schema version and therefore do
+		-- not replay V46. Keep the identity binding in the base schema too.
+		hub_user_id UUID NULL
 	)`,
 	`CREATE TABLE IF NOT EXISTS user_sessions (
 		id UUID PRIMARY KEY,
@@ -107,6 +110,25 @@ var TableDefinitions = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_veridian_plan_status ON veridian_plan (status)`,
 	`CREATE INDEX IF NOT EXISTS idx_veridian_plan_deleted_at ON veridian_plan (deleted_at) WHERE deleted_at IS NOT NULL`,
+	// V47 and V50 are system migrations for existing installations. A fresh
+	// installation is stamped directly at the current version, so their tables
+	// must also be part of the base schema.
+	`CREATE TABLE IF NOT EXISTS veridian_frozen_members (
+		workspace_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		frozen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		reason TEXT NOT NULL,
+		PRIMARY KEY (workspace_id, user_id)
+	)`,
+	`CREATE TABLE IF NOT EXISTS veridian_imap_uid_seen (
+		workspace_id TEXT NOT NULL,
+		integration_id TEXT NOT NULL,
+		folder TEXT NOT NULL,
+		uid_validity BIGINT NOT NULL,
+		uid BIGINT NOT NULL,
+		seen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		PRIMARY KEY (workspace_id, integration_id, folder, uid_validity, uid)
+	)`,
 }
 
 // MigrationStatements contains SQL statements to be run after table creation
@@ -156,4 +178,7 @@ var TableNames = []string{
 	"broadcasts",
 	"tasks",
 	"settings",
+	"veridian_plan",
+	"veridian_frozen_members",
+	"veridian_imap_uid_seen",
 }

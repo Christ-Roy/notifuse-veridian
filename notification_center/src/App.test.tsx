@@ -121,7 +121,7 @@ describe('Notification Center App', () => {
       const mockParseParams = vi.mocked(notificationCenterApi.parseNotificationCenterParams)
 
       const paramsWithoutLid = { ...testData.validParams }
-      delete (paramsWithoutLid as any).lid
+      Reflect.deleteProperty(paramsWithoutLid, 'lid')
 
       mockParseParams.mockReturnValue({
         ...paramsWithoutLid,
@@ -516,4 +516,3 @@ describe('Notification Center App', () => {
     })
   })
 })
-

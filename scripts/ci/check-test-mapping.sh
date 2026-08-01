@@ -19,7 +19,7 @@
 #
 set -euo pipefail
 
-BASE_REF="${BASE_REF:-origin/main}"
+BASE_REF="${BASE_REF:-origin/veridian}"
 APP_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$APP_ROOT"
 

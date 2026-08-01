@@ -102,18 +102,24 @@ vi.mock('../services/api/auth', () => ({
 }))
 
 // Mock workspace service
-vi.mock('../services/api/workspace', () => ({
-  workspaceService: {
-    list: vi.fn().mockResolvedValue({ workspaces: [{ id: 'test-workspace', name: 'Test Workspace', settings: { timezone: 'UTC', logo_url: '', custom_fields_labels: {}, default_language: 'en', languages: ['en'] } }] }),
-    get: vi.fn().mockResolvedValue({ workspace: { id: 'test-workspace', name: 'Test Workspace', settings: { timezone: 'UTC', logo_url: '', custom_fields_labels: {}, default_language: 'en', languages: ['en'] } } }),
-    create: vi.fn().mockResolvedValue({ workspace: { id: 'test-workspace', name: 'Test Workspace', settings: { timezone: 'UTC', logo_url: '', custom_fields_labels: {}, default_language: 'en', languages: ['en'] } } }),
-    update: vi.fn().mockResolvedValue({ workspace: { id: 'test-workspace', name: 'Test Workspace', settings: { timezone: 'UTC', logo_url: '', custom_fields_labels: {}, default_language: 'en', languages: ['en'] } } }),
-    getMembers: vi.fn().mockResolvedValue({ members: [] }),
-    inviteMember: vi.fn().mockResolvedValue({}),
-    removeMember: vi.fn().mockResolvedValue({}),
-    updateMemberPermissions: vi.fn().mockResolvedValue({})
+vi.mock('../services/api/workspace', async () => {
+  const actual = await vi.importActual<typeof import('../services/api/workspace')>(
+    '../services/api/workspace'
+  )
+  return {
+    ...actual,
+    workspaceService: {
+      list: vi.fn().mockResolvedValue({ workspaces: [{ id: 'test-workspace', name: 'Test Workspace', settings: { timezone: 'UTC', logo_url: '', custom_fields_labels: {}, default_language: 'en', languages: ['en'] } }] }),
+      get: vi.fn().mockResolvedValue({ workspace: { id: 'test-workspace', name: 'Test Workspace', settings: { timezone: 'UTC', logo_url: '', custom_fields_labels: {}, default_language: 'en', languages: ['en'] } } }),
+      create: vi.fn().mockResolvedValue({ workspace: { id: 'test-workspace', name: 'Test Workspace', settings: { timezone: 'UTC', logo_url: '', custom_fields_labels: {}, default_language: 'en', languages: ['en'] } } }),
+      update: vi.fn().mockResolvedValue({ workspace: { id: 'test-workspace', name: 'Test Workspace', settings: { timezone: 'UTC', logo_url: '', custom_fields_labels: {}, default_language: 'en', languages: ['en'] } } }),
+      getMembers: vi.fn().mockResolvedValue({ members: [] }),
+      inviteMember: vi.fn().mockResolvedValue({}),
+      removeMember: vi.fn().mockResolvedValue({}),
+      updateMemberPermissions: vi.fn().mockResolvedValue({})
+    }
   }
-}))
+})
 
 // Mock contacts API
 vi.mock('../services/api/contacts', () => ({

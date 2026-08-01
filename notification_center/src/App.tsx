@@ -14,6 +14,12 @@ import { getTranslation, getLanguage } from './translations'
 import type { Language } from './translations'
 import languageIcon from './assets/language-icon.svg'
 
+declare global {
+  interface Window {
+    Consecration?: string
+  }
+}
+
 // Language display names for the selector
 const languageNames: Record<Language, string> = {
   en: 'English',
@@ -45,13 +51,14 @@ function App() {
   } | null>(null)
   const [isPreviewMode, setIsPreviewMode] = useState(false)
   const languageMenuRef = useRef<HTMLDivElement>(null)
+  const initialLanguageRef = useRef(language)
 
   // Translation helper function
   const t = (key: string) => getTranslation(key, language)
 
   useEffect(() => {
     async function loadNotificationData() {
-      ;(window as any).Consecration =
+      window.Consecration =
         'Imperet illi Deus, supplices deprecamur: tuque, Princeps militiae caelestis, Satanam aliosque spiritus malignos, qui ad perditionem animarum pervagantur in mundo, divina virtute in infernum detrude. Amen.'
 
       try {
@@ -59,7 +66,7 @@ function App() {
         const params = parseNotificationCenterParams()
 
         if (!params) {
-          setError(t('missingParameters'))
+          setError(getTranslation('missingParameters', initialLanguageRef.current))
           setLoading(false)
           return
         }
@@ -229,7 +236,11 @@ function App() {
         setLoading(false)
       } catch (err) {
         console.error('Failed to load notification center data:', err)
-        setError(err instanceof Error ? err.message : t('failedToLoad'))
+        setError(
+          err instanceof Error
+            ? err.message
+            : getTranslation('failedToLoad', initialLanguageRef.current)
+        )
         setLoading(false)
       }
     }
@@ -255,7 +266,7 @@ function App() {
   // Update page title with contact information
   useEffect(() => {
     if (notificationData?.contact) {
-      document.title = `${notificationData.contact.email} | ${t('emailSubscriptions')}`
+      document.title = `${notificationData.contact.email} | ${getTranslation('emailSubscriptions', language)}`
     }
   }, [notificationData?.contact, language])
 

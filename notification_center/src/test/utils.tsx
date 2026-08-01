@@ -16,13 +16,7 @@ export function renderWithProviders(
  */
 export function mockURLSearchParams(params: Record<string, string>) {
   const searchParams = new URLSearchParams(params)
-  delete (window as any).location
-  ;(window as any).location = {
-    search: `?${searchParams.toString()}`,
-    href: `http://localhost:3001/?${searchParams.toString()}`,
-    origin: 'http://localhost:3001',
-    pathname: '/',
-  }
+  window.history.replaceState({}, '', `/?${searchParams.toString()}`)
 }
 
 /**
@@ -55,4 +49,3 @@ export const testData = {
  * Wait for async operations to complete
  */
 export const waitForAsync = () => new Promise(resolve => setTimeout(resolve, 0))
-

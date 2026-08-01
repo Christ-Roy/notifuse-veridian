@@ -4,7 +4,9 @@
 # This script handles the network connectivity issues when running tests
 # from inside a Docker container (like Cursor dev container)
 
-set -e
+set -euo pipefail
+
+APP_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "🐳 Integration Test Runner"
 echo "=========================="
@@ -13,7 +15,7 @@ echo ""
 # Check if docker compose services are running
 if ! docker ps | grep -q "tests-postgres-test-1"; then
     echo "📦 Starting test infrastructure..."
-    cd /workspace && docker compose -f tests/compose.test.yaml up -d
+    cd "$APP_ROOT" && docker compose -f tests/compose.test.yaml up -d
     echo "⏳ Waiting for services to be healthy..."
     sleep 8
 fi
@@ -46,8 +48,8 @@ TEST_NAME="${1:-TestSetupWizardSigninImmediatelyAfterCompletion}"
 echo "🧪 Running test: $TEST_NAME"
 echo ""
 
-cd /workspace
-go test -v ./tests/integration -run "$TEST_NAME" -timeout 120s
+cd "$APP_ROOT"
+go test -race -v ./tests/integration -run "$TEST_NAME" -timeout 30m
 
 TEST_EXIT_CODE=$?
 

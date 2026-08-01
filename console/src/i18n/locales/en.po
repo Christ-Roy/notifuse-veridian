@@ -127,7 +127,7 @@ msgid "{0} emails successfully delivered (hidden from chart)"
 msgstr "{0} emails successfully delivered (hidden from chart)"
 
 #. placeholder {0}: rates[c]
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:117
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:81
 msgid "{0} emails/min"
 msgstr "{0} emails/min"
 
@@ -2494,7 +2494,7 @@ msgstr "Core Fields"
 msgid "Cost"
 msgstr "Cost"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:601
+#: src/components/templates/TemplatePreviewDrawer.tsx:596
 msgid "Could not score the template"
 msgstr "Could not score the template"
 
@@ -3215,11 +3215,11 @@ msgstr "Deleted {deletedCount}, failed {failedCount}"
 msgid "Deliverability"
 msgstr "Deliverability"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:568
+#: src/components/templates/TemplatePreviewDrawer.tsx:563
 msgid "Deliverability check (spam score)"
 msgstr "Deliverability check (spam score)"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:620
+#: src/components/templates/TemplatePreviewDrawer.tsx:615
 msgid "Deliverability score"
 msgstr "Deliverability score"
 
@@ -5298,7 +5298,7 @@ msgstr "Hide"
 msgid "Hide Details"
 msgstr "Hide Details"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:627
+#: src/components/templates/TemplatePreviewDrawer.tsx:622
 msgid "High spam risk"
 msgstr "High spam risk"
 
@@ -6320,7 +6320,7 @@ msgstr "Logout"
 msgid "Logs"
 msgstr "Logs"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:629
+#: src/components/templates/TemplatePreviewDrawer.tsx:624
 msgid "Looks good"
 msgstr "Looks good"
 
@@ -6628,7 +6628,7 @@ msgid "Mobile view (400px)"
 msgstr "Mobile view (400px)"
 
 #. placeholder {0}: result.mode
-#: src/components/templates/TemplatePreviewDrawer.tsx:631
+#: src/components/templates/TemplatePreviewDrawer.tsx:626
 msgid "mode: {0}"
 msgstr "mode: {0}"
 
@@ -6698,7 +6698,7 @@ msgstr "Name must be less than 255 characters"
 msgid "Name:"
 msgstr "Name:"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:571
+#: src/components/templates/TemplatePreviewDrawer.tsx:566
 msgid "Native lint of the rendered HTML before sending. Score 0-10 (above 5 = high spam risk). Pick a recipient provider class to see the strict profile (Google/Microsoft penalize links, tracking and HTML heavily) vs the lenient one (smaller providers tolerate light HTML)."
 msgstr "Native lint of the rendered HTML before sending. Score 0-10 (above 5 = high spam risk). Pick a recipient provider class to see the strict profile (Google/Microsoft penalize links, tracking and HTML heavily) vs the lenient one (smaller providers tolerate light HTML)."
 
@@ -6706,7 +6706,7 @@ msgstr "Native lint of the rendered HTML before sending. Score 0-10 (above 5 = h
 msgid "Navigation menu"
 msgstr "Navigation menu"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:554
+#: src/components/templates/TemplatePreviewDrawer.tsx:549
 msgid "Neutral profile (no recipient class)"
 msgstr "Neutral profile (no recipient class)"
 
@@ -7026,7 +7026,7 @@ msgstr "No settings available for the attributes container."
 msgid "No settings available for the head element."
 msgstr "No settings available for the head element."
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:640
+#: src/components/templates/TemplatePreviewDrawer.tsx:635
 msgid "No spam rule triggered. Clean template."
 msgstr "No spam rule triggered. Clean template."
 
@@ -7244,7 +7244,7 @@ msgstr "Occurred:"
 msgid "of the following conditions match:"
 msgstr "of the following conditions match:"
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:131
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:95
 #: src/components/settings/veridian_cold_outreach_settings.tsx:298
 #: src/components/settings/veridian_cold_outreach_settings.tsx:334
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1070
@@ -7263,7 +7263,7 @@ msgstr "Off (plaintext)"
 msgid "OK"
 msgstr "OK"
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:131
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:95
 #: src/components/settings/veridian_cold_outreach_settings.tsx:298
 #: src/components/settings/veridian_cold_outreach_settings.tsx:334
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1069
@@ -7335,7 +7335,7 @@ msgstr "Open navigation menu"
 msgid "Open on web"
 msgstr "Open on web"
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:126
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:90
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1025
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2347
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2569
@@ -8309,7 +8309,7 @@ msgstr "Raw JSON"
 msgid "Raw Payload:"
 msgstr "Raw Payload:"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:594
+#: src/components/templates/TemplatePreviewDrawer.tsx:589
 msgid "Re-check"
 msgstr "Re-check"
 
@@ -8317,7 +8317,7 @@ msgstr "Re-check"
 msgid "Re-register"
 msgstr "Re-register"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:592
+#: src/components/templates/TemplatePreviewDrawer.tsx:587
 msgid "Re-run deliverability score"
 msgstr "Re-run deliverability score"
 
@@ -8385,7 +8385,7 @@ msgstr "Recipient Email"
 msgid "Recipient feed test completed successfully"
 msgstr "Recipient feed test completed successfully"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:585
+#: src/components/templates/TemplatePreviewDrawer.tsx:580
 msgid "Recipient provider class"
 msgstr "Recipient provider class"
 
@@ -9477,7 +9477,7 @@ msgstr "Sending infrastructures"
 msgid "Sending policy presets"
 msgstr "Sending policy presets"
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:112
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:76
 msgid "Sending rate"
 msgstr "Sending rate"
 
@@ -9721,7 +9721,7 @@ msgstr "Signing out..."
 msgid "Signup"
 msgstr "Signup"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:578
+#: src/components/templates/TemplatePreviewDrawer.tsx:573
 msgid "Simulate for"
 msgstr "Simulate for"
 
@@ -11074,7 +11074,7 @@ msgid "Trigger on specific field changes"
 msgstr "Trigger on specific field changes"
 
 #. placeholder {0}: result.rules.length
-#: src/components/templates/TemplatePreviewDrawer.tsx:645
+#: src/components/templates/TemplatePreviewDrawer.tsx:640
 msgid "Triggered rules ({0})"
 msgstr "Triggered rules ({0})"
 
@@ -11543,7 +11543,7 @@ msgstr "Variations"
 msgid "Veridian — Cold outreach"
 msgstr "Veridian — Cold outreach"
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:106
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:70
 msgid "Veridian cold outreach — per-provider settings for this campaign"
 msgstr "Veridian cold outreach — per-provider settings for this campaign"
 

@@ -4,6 +4,7 @@ import { SignInPage } from '../pages/SignInPage'
 import { AuthProvider } from '../contexts/AuthContext'
 import * as authService from '../services/api/auth'
 import { App } from 'antd'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // Mock the auth service
 vi.mock('../services/api/auth', () => ({
@@ -40,10 +41,15 @@ const mockMessage = {
 
 // Wrap component with necessary providers
 const renderWithProviders = (ui: React.ReactElement) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  })
   return render(
-    <App message={{ maxCount: 3 }}>
-      <AuthProvider>{ui}</AuthProvider>
-    </App>
+    <QueryClientProvider client={queryClient}>
+      <App message={{ maxCount: 3 }}>
+        <AuthProvider>{ui}</AuthProvider>
+      </App>
+    </QueryClientProvider>
   )
 }
 

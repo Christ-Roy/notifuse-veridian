@@ -22,12 +22,16 @@ export function LocaleProvider({ children }: LocaleProviderProps) {
 
   // Load initial locale on mount
   useEffect(() => {
+    let cancelled = false
     const init = async () => {
       setIsLoading(true)
       await loadLocale(locale)
-      setIsLoading(false)
+      if (!cancelled) setIsLoading(false)
     }
-    init()
+    void init()
+    return () => {
+      cancelled = true
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const setLocale = useCallback(async (newLocale: Locale) => {

@@ -24,13 +24,23 @@ Object.defineProperty(window, 'matchMedia', {
 })
 
 // Mock IntersectionObserver
-global.IntersectionObserver = class IntersectionObserver {
-  constructor() {}
-  disconnect() {}
-  observe() {}
-  takeRecords() {
+globalThis.IntersectionObserver = class MockIntersectionObserver implements IntersectionObserver {
+  readonly root = null
+  readonly rootMargin = ''
+  readonly thresholds: readonly number[] = []
+
+  constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+    void callback
+    void options
+  }
+  disconnect(): void {}
+  observe(target: Element): void {
+    void target
+  }
+  takeRecords(): IntersectionObserverEntry[] {
     return []
   }
-  unobserve() {}
-} as any
-
+  unobserve(target: Element): void {
+    void target
+  }
+}

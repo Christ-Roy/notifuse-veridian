@@ -2135,7 +2135,7 @@ Adaptations Go pour ce repo :
 ```bash
 make setup-hooks                                 # one-time, installe pre-push
 BASE_REF=HEAD scripts/ci/check-test-mapping.sh   # test local working tree
-BASE_REF=origin/main scripts/ci/check-test-mapping.sh  # comme pre-push
+BASE_REF=origin/veridian scripts/ci/check-test-mapping.sh  # comme pre-push
 wc -l tests-pending.txt                          # voir la dette
 git ls-files | grep -E 'veridian_|veridian\.go'  # lister fichiers custom
 ```

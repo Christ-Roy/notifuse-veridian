@@ -127,7 +127,7 @@ msgid "{0} emails successfully delivered (hidden from chart)"
 msgstr "{0}件のメールを配信済み (チャートでは非表示)"
 
 #. placeholder {0}: rates[c]
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:117
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:81
 msgid "{0} emails/min"
 msgstr ""
 
@@ -2494,7 +2494,7 @@ msgstr "基本フィールド"
 msgid "Cost"
 msgstr "コスト"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:601
+#: src/components/templates/TemplatePreviewDrawer.tsx:596
 msgid "Could not score the template"
 msgstr ""
 
@@ -3215,11 +3215,11 @@ msgstr "{deletedCount}件を削除、{failedCount}件が失敗"
 msgid "Deliverability"
 msgstr ""
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:568
+#: src/components/templates/TemplatePreviewDrawer.tsx:563
 msgid "Deliverability check (spam score)"
 msgstr ""
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:620
+#: src/components/templates/TemplatePreviewDrawer.tsx:615
 msgid "Deliverability score"
 msgstr ""
 
@@ -5298,7 +5298,7 @@ msgstr "非表示"
 msgid "Hide Details"
 msgstr "詳細を非表示"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:627
+#: src/components/templates/TemplatePreviewDrawer.tsx:622
 msgid "High spam risk"
 msgstr ""
 
@@ -6320,7 +6320,7 @@ msgstr "ログアウト"
 msgid "Logs"
 msgstr "ログ"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:629
+#: src/components/templates/TemplatePreviewDrawer.tsx:624
 msgid "Looks good"
 msgstr ""
 
@@ -6628,7 +6628,7 @@ msgid "Mobile view (400px)"
 msgstr "モバイルビュー（400px）"
 
 #. placeholder {0}: result.mode
-#: src/components/templates/TemplatePreviewDrawer.tsx:631
+#: src/components/templates/TemplatePreviewDrawer.tsx:626
 msgid "mode: {0}"
 msgstr ""
 
@@ -6698,7 +6698,7 @@ msgstr "名前は255文字未満である必要があります"
 msgid "Name:"
 msgstr "名前:"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:571
+#: src/components/templates/TemplatePreviewDrawer.tsx:566
 msgid "Native lint of the rendered HTML before sending. Score 0-10 (above 5 = high spam risk). Pick a recipient provider class to see the strict profile (Google/Microsoft penalize links, tracking and HTML heavily) vs the lenient one (smaller providers tolerate light HTML)."
 msgstr ""
 
@@ -6706,7 +6706,7 @@ msgstr ""
 msgid "Navigation menu"
 msgstr ""
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:554
+#: src/components/templates/TemplatePreviewDrawer.tsx:549
 msgid "Neutral profile (no recipient class)"
 msgstr ""
 
@@ -7026,7 +7026,7 @@ msgstr "属性コンテナの設定はありません。"
 msgid "No settings available for the head element."
 msgstr "head要素の設定はありません。"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:640
+#: src/components/templates/TemplatePreviewDrawer.tsx:635
 msgid "No spam rule triggered. Clean template."
 msgstr ""
 
@@ -7244,7 +7244,7 @@ msgstr "発生日時:"
 msgid "of the following conditions match:"
 msgstr "の以下の条件に一致:"
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:131
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:95
 #: src/components/settings/veridian_cold_outreach_settings.tsx:298
 #: src/components/settings/veridian_cold_outreach_settings.tsx:334
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1070
@@ -7263,7 +7263,7 @@ msgstr ""
 msgid "OK"
 msgstr "OK"
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:131
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:95
 #: src/components/settings/veridian_cold_outreach_settings.tsx:298
 #: src/components/settings/veridian_cold_outreach_settings.tsx:334
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1069
@@ -7335,7 +7335,7 @@ msgstr ""
 msgid "Open on web"
 msgstr "Webで開く"
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:126
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:90
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1025
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2347
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2569
@@ -8309,7 +8309,7 @@ msgstr "Raw JSON"
 msgid "Raw Payload:"
 msgstr "生のペイロード:"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:594
+#: src/components/templates/TemplatePreviewDrawer.tsx:589
 msgid "Re-check"
 msgstr ""
 
@@ -8317,7 +8317,7 @@ msgstr ""
 msgid "Re-register"
 msgstr "再登録"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:592
+#: src/components/templates/TemplatePreviewDrawer.tsx:587
 msgid "Re-run deliverability score"
 msgstr ""
 
@@ -8385,7 +8385,7 @@ msgstr "受信者メールアドレス"
 msgid "Recipient feed test completed successfully"
 msgstr "受信者フィードのテストが正常に完了しました"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:585
+#: src/components/templates/TemplatePreviewDrawer.tsx:580
 msgid "Recipient provider class"
 msgstr ""
 
@@ -9477,7 +9477,7 @@ msgstr ""
 msgid "Sending policy presets"
 msgstr ""
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:112
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:76
 msgid "Sending rate"
 msgstr ""
 
@@ -9721,7 +9721,7 @@ msgstr "サインアウト中..."
 msgid "Signup"
 msgstr "サインアップ"
 
-#: src/components/templates/TemplatePreviewDrawer.tsx:578
+#: src/components/templates/TemplatePreviewDrawer.tsx:573
 msgid "Simulate for"
 msgstr ""
 
@@ -11074,7 +11074,7 @@ msgid "Trigger on specific field changes"
 msgstr "特定のフィールド変更でトリガー"
 
 #. placeholder {0}: result.rules.length
-#: src/components/templates/TemplatePreviewDrawer.tsx:645
+#: src/components/templates/TemplatePreviewDrawer.tsx:640
 msgid "Triggered rules ({0})"
 msgstr ""
 
@@ -11543,7 +11543,7 @@ msgstr "バリエーション"
 msgid "Veridian — Cold outreach"
 msgstr ""
 
-#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:106
+#: src/components/broadcasts/veridian_broadcast_rates_info.tsx:70
 msgid "Veridian cold outreach — per-provider settings for this campaign"
 msgstr ""
 

@@ -2,9 +2,12 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Notifuse/notifuse/internal/database/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,10 +19,12 @@ func TestCleanDatabase(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = db.Close() }()
 
-		// Mock expectations for dropping tables - we'll expect a reasonable number of DROP statements
-		// Since we can't easily mock the exact number, we'll expect several
-		for i := 0; i < 10; i++ { // Expect up to 10 table drops
-			mock.ExpectExec("DROP TABLE IF EXISTS .+ CASCADE").WillReturnResult(sqlmock.NewResult(0, 0))
+		// Keep the expectation aligned with the canonical table registry. This
+		// makes fresh-install schema additions fail only when cleanup is genuinely
+		// out of sync, not because of an arbitrary hard-coded table count.
+		for i := len(schema.TableNames) - 1; i >= 0; i-- {
+			query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", schema.TableNames[i])
+			mock.ExpectExec(regexp.QuoteMeta(query)).WillReturnResult(sqlmock.NewResult(0, 0))
 		}
 
 		// Expect the webhook_events table drop
@@ -28,8 +33,8 @@ func TestCleanDatabase(t *testing.T) {
 		// Execute the function
 		err = CleanDatabase(db)
 
-		// Verify - we don't check mock expectations here since the exact number of tables may vary
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("Error dropping table", func(t *testing.T) {

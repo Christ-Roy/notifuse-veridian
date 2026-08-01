@@ -517,10 +517,6 @@ export const DeliverabilityPanel: React.FC<DeliverabilityPanelProps> = ({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // ⚠️ `t` (Lingui) n'est PAS stable entre renders → on le SORT des deps du
-  // useCallback / useEffect (sinon boucle de re-render infinie : runScore change
-  // à chaque render → useEffect reboucle → score() en boucle). Le message
-  // d'erreur a un fallback littéral.
   const runScore = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -542,7 +538,6 @@ export const DeliverabilityPanel: React.FC<DeliverabilityPanelProps> = ({
     } finally {
       setLoading(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- t volontairement exclu (instable)
   }, [workspaceId, subject, html, fromDomain, providerClass])
 
   // Lint au montage et à chaque changement de classe / de HTML rendu.

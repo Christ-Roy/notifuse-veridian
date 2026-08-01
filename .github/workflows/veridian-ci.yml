@@ -81,7 +81,7 @@ jobs:
           elif [ "${{ github.event_name }}" = "push" ]; then
             BEFORE="${{ github.event.before }}"
             if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              export BASE_REF="origin/main"
+              export BASE_REF="origin/veridian"
             else
               export BASE_REF="$BEFORE"
             fi
@@ -257,8 +257,8 @@ jobs:
           scripts/ci/lint-workflows.sh
 
   # === Veridian patch === Scan CVE bloquant (regle CLAUDE.md non-negociable
-  # depuis breach 2026-05-07). Detecte high/critical sur deps npm de la suite
-  # e2e + console UI, fail le pipeline avant build.
+  # depuis breach 2026-05-07). Detecte high/critical sur tous les lockfiles npm
+  # livres ou executes, et fail le pipeline avant build.
   cve-scan:
     name: CVE scan (npm audit)
     runs-on: ubuntu-latest
@@ -268,73 +268,56 @@ jobs:
         with:
           node-version: '22'
 
-      # tests/e2e-veridian : deps Playwright + types/node
-      - name: npm audit (e2e tests)
+      - name: npm audit (all lockfiles)
         run: |
-          cd tests/e2e-veridian
           # --audit-level=high : bloque sur high/critical, ignore moderate/low
           # (sinon CI fail tout le temps sur deps transitives non-actionnables).
-          # On ignore le exit code et on parse le JSON pour avoir un message clair.
-          AUDIT_OUT=$(npm audit --audit-level=high --json 2>/dev/null || true)
-          HIGH=$(echo "$AUDIT_OUT" | jq -r '.metadata.vulnerabilities.high // 0')
-          CRIT=$(echo "$AUDIT_OUT" | jq -r '.metadata.vulnerabilities.critical // 0')
-          if [ "${HIGH}" -gt 0 ] || [ "${CRIT}" -gt 0 ]; then
-            echo "::error::npm audit found ${CRIT} critical + ${HIGH} high CVEs in tests/e2e-veridian"
-            echo "$AUDIT_OUT" | jq -r '.vulnerabilities | to_entries[] | "  - \(.key) (\(.value.severity))"' | head -20
-            exit 1
-          fi
-          echo "npm audit (e2e) OK : 0 high/critical"
+          # Une erreur reseau/registre ou un JSON invalide est aussi bloquante :
+          # le scanner ne doit jamais transformer une absence de resultat en vert.
+          audit_lockfile() {
+            local directory="$1"
+            local label="$2"
+            local audit_json audit_stderr audit_status high critical
+            audit_json=$(mktemp)
+            audit_stderr=$(mktemp)
 
-      # console : deps frontend (React, Ant, ...) — geré par upstream Notifuse,
-      # pas patche par les Veridian patches. CVE detectees ici = bug upstream
-      # a remonter via PR, pas a "audit fix" aveuglement (risque de breaking
-      # deps majeur pour les fixes high). Donc ce step WARN seulement, ne fail
-      # pas. Doit etre visible dans logs CI pour suivi.
-      #
-      # CRITICAL en console = STILL BLOQUANT (pas tolerable, meme upstream).
-      # HIGH = warning, on tolere temporairement en attendant merge upstream
-      # ou Veridian patch dedie. A revoir trimestriellement.
-      - name: npm audit (console UI)
-        run: |
-          if [ -d console ] && [ -f console/package-lock.json ]; then
-            cd console
-            AUDIT_OUT=$(npm audit --audit-level=critical --json 2>/dev/null || true)
-            HIGH=$(echo "$AUDIT_OUT" | jq -r '.metadata.vulnerabilities.high // 0')
-            CRIT=$(echo "$AUDIT_OUT" | jq -r '.metadata.vulnerabilities.critical // 0')
+            if (cd "$directory" && npm audit --audit-level=high --json >"$audit_json" 2>"$audit_stderr"); then
+              audit_status=0
+            else
+              audit_status=$?
+            fi
 
-            # === Veridian CVE allowlist (documented) ===
-            # GHSA-rmmr-r34h-pfm5 : malware in @tanstack/history versions 1.161.9 + 1.161.12,
-            # published 2026-05-11 19:20/26 UTC, advisory created 2026-05-11 23:39 UTC.
-            # The advisory uses a defensive range `>= 0` which flags ALL versions,
-            # including 1.161.6 (published 2026-03-15, BEFORE the attack — verifiably clean).
-            # We pin via `overrides` in package.json. The integrity hash of 1.161.6 in our
-            # package-lock matches the npm registry hash, confirming the original tarball.
-            # All downstream @tanstack/* packages flagged here cascade from @tanstack/history,
-            # so the count drops to 0 critical once we ignore this GHSA.
-            # To re-arm : remove this allowlist once TanStack republishes a clean version
-            # that supersedes 1.161.9/12 and the advisory range is narrowed.
-            CRIT_NON_TANSTACK=$(echo "$AUDIT_OUT" | jq -r '
-              [.vulnerabilities | to_entries[]
-                | select(.value.severity == "critical")
-                | select(.key | startswith("@tanstack/") | not)
-              ] | length')
-
-            if [ "${CRIT_NON_TANSTACK}" -gt 0 ]; then
-              echo "::error::npm audit found ${CRIT_NON_TANSTACK} CRITICAL CVEs in console (excluding allowlisted @tanstack/*, BLOQUANT)"
-              echo "$AUDIT_OUT" | jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "critical") | select(.key | startswith("@tanstack/") | not) | "  - \(.key) (\(.value.severity)): \(.value.via | tostring)"' | head -10
+            if ! jq -e '.metadata.vulnerabilities | type == "object"' "$audit_json" >/dev/null; then
+              echo "::error::npm audit did not return valid vulnerability metadata for ${label}"
+              head -20 "$audit_stderr"
+              head -20 "$audit_json"
+              rm -f "$audit_json" "$audit_stderr"
               exit 1
             fi
-            if [ "${CRIT}" -gt 0 ]; then
-              echo "::warning::npm audit found ${CRIT} CRITICAL CVEs in console — ALL on @tanstack/* (GHSA-rmmr-r34h-pfm5), allowlisted because pinned to clean version 1.161.6"
+
+            high=$(jq -r '.metadata.vulnerabilities.high // 0' "$audit_json")
+            critical=$(jq -r '.metadata.vulnerabilities.critical // 0' "$audit_json")
+            if [ "$high" -gt 0 ] || [ "$critical" -gt 0 ]; then
+              echo "::error::npm audit found ${critical} critical + ${high} high CVEs in ${label}"
+              jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "critical" or .value.severity == "high") | "  - \(.key) (\(.value.severity))"' "$audit_json" | head -20
+              rm -f "$audit_json" "$audit_stderr"
+              exit 1
             fi
-            if [ "${HIGH}" -gt 0 ]; then
-              echo "::warning::npm audit found ${HIGH} HIGH CVEs in console (deps upstream Notifuse, a remonter)"
-              echo "$AUDIT_OUT" | jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "high") | "  - \(.key) (high)"' | head -10
+
+            if [ "$audit_status" -ne 0 ]; then
+              echo "::error::npm audit failed for ${label} with exit code ${audit_status}"
+              head -20 "$audit_stderr"
+              rm -f "$audit_json" "$audit_stderr"
+              exit "$audit_status"
             fi
-            echo "npm audit (console) OK : 0 non-allowlisted critical (${HIGH} high warnings)"
-          else
-            echo "console/ skip (no package-lock.json)"
-          fi
+
+            rm -f "$audit_json" "$audit_stderr"
+            echo "npm audit (${label}) OK : 0 high/critical"
+          }
+
+          audit_lockfile tests/e2e-veridian "e2e tests"
+          audit_lockfile console "console UI"
+          audit_lockfile notification_center "notification center"
 
   test-go:
     name: Go tests (unit + Veridian patches)
@@ -418,10 +401,9 @@ jobs:
           severity: 'CRITICAL,HIGH'
           format: 'sarif'
           output: 'trivy-fs.sarif'
-          # Ne pas fail le build sur HIGH (sinon dette upstream Notifuse
-          # bloque tout). Critical-only via étape suivante.
+          # SARIF complet non bloquant ; le gate vulnérabilités HIGH/CRITICAL
+          # séparé ci-dessous conserve un résultat lisible dans les logs.
           exit-code: '0'
-          ignore-unfixed: 'true'
           # === Veridian patch 2026-05-20 — Constitution §13 VEX allowlist ===
           # Allowlist versionnée avec justifications écrites + expires dates.
           # Cf. .trivyignore.yaml + todo/2026-05-19-ci-trivy-allowlist-yaml.md
@@ -433,16 +415,15 @@ jobs:
         with:
           sarif_file: 'trivy-fs.sarif'
           category: 'trivy-fs'
-      - name: Fail on CRITICAL only
+      - name: Fail on HIGH/CRITICAL dependency vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
-          scanners: 'vuln,secret,misconfig'
-          severity: 'CRITICAL'
+          scanners: 'vuln'
+          severity: 'CRITICAL,HIGH'
           format: 'table'
           exit-code: '1'
-          ignore-unfixed: 'true'
           trivyignores: '.trivyignore.yaml'
 
   gitleaks:
@@ -570,22 +551,19 @@ jobs:
       # === Veridian patch === Scan CVE OS + libs systeme + libs upstream
       # bake dans l'image via Trivy. Constitution §13 étage 2.
       #
-      # Strategie BLOQUANTE/WARN identique a npm audit console :
-      # - CRITICAL → bloque (immediatement actionnable, on ne deploit pas)
-      # - HIGH → WARNING uniquement (dette upstream alpine/Go).
-      # - `ignore-unfixed: true` : pas actionnable.
+      # Strategie bloquante identique a npm audit :
+      # - CRITICAL et HIGH → bloquent avant tout deploiement.
       # - `--exit-on-eol 1` : fail si OS distrib en EOL (alpine < 3.18).
       # - SARIF upload → GitHub Security tab pour drill-down.
       # - SBOM CycloneDX artifact → traçabilité supply-chain.
-      - name: Trivy scan image — CRITICAL bloquant + SARIF
+      - name: Trivy scan image — HIGH/CRITICAL + SARIF
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
           severity: 'CRITICAL,HIGH'
           format: 'sarif'
           output: 'trivy-image.sarif'
-          ignore-unfixed: 'true'
-          exit-code: '0'  # SARIF non bloquant, fail séparé sur CRITICAL
+          exit-code: '0'  # SARIF non bloquant, fail séparé sur HIGH/CRITICAL
 
       - name: Upload Trivy image SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -595,25 +573,15 @@ jobs:
           sarif_file: 'trivy-image.sarif'
           category: 'trivy-image'
 
-      - name: Trivy fail on CRITICAL + EOL
+      - name: Trivy fail on HIGH/CRITICAL + EOL
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
-          severity: 'CRITICAL'
+          severity: 'CRITICAL,HIGH'
           format: 'table'
-          ignore-unfixed: 'true'
           exit-code: '1'
         env:
           TRIVY_EXIT_ON_EOL: '1'
-
-      - name: Trivy HIGH report (warning only)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
-          severity: 'HIGH'
-          format: 'table'
-          ignore-unfixed: 'true'
-          exit-code: '0'
 
       - name: Generate CycloneDX SBOM
         uses: aquasecurity/trivy-action@v0.36.0

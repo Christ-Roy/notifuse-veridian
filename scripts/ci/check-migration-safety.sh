@@ -17,13 +17,13 @@
 #   - TRUNCATE                    → catastrophe
 #
 # Usage : appelé depuis check-test-mapping.sh OU autonome
-#   BASE_REF=origin/main scripts/ci/check-migration-safety.sh
+#   BASE_REF=origin/veridian scripts/ci/check-migration-safety.sh
 #
 # Output : exit 1 si pattern dangereux trouvé. Le diff exact est affiché.
 
 set -euo pipefail
 
-BASE_REF="${BASE_REF:-origin/main}"
+BASE_REF="${BASE_REF:-origin/veridian}"
 APP_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$APP_ROOT"
 

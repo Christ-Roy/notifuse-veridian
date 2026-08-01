@@ -24,9 +24,7 @@
     },
     {
       "matchUpdateTypes": ["major"],
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true
+      "automerge": false
     },
     {
       "matchManagers": ["gomod"],

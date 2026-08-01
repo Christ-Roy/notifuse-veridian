@@ -25,5 +25,6 @@ dist-ssr
 
 # Playwright
 playwright-report/
+playwright-report-prod-smoke/
 playwright/.cache/
 test-results/
