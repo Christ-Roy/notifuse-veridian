@@ -99,6 +99,8 @@ jobs:
         run: |
           chmod +x scripts/ci/check-rate-limit-coverage.sh
           scripts/ci/check-rate-limit-coverage.sh
+      - name: Plafonds ressources staging
+        run: python3 scripts/ci/check-staging-resources.py
 
   # === Veridian patch — garde-fou « la console boote » (incident 2026-05-22) ===
   # Build la console + analyse statique du dist/ (intégrité des chunks, chunk

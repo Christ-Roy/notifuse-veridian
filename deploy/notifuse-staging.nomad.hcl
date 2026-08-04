@@ -14,7 +14,7 @@
 #    image_tag), jamais la copie ~/nomad-veridian/jobs/.
 variable "image_tag" {
   type        = string
-  default     = "v54.0-veridian.7ff43498"
+  default     = "v54.0-veridian.727aed4e"
   description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
 }
 
@@ -97,10 +97,11 @@ POSTGRES_PASSWORD={{ .POSTGRES_PASSWORD }}
 EOH
       }
       resources {
-        cpu    = 250
-        memory = 512  # 256→512 : aligné sur la prod (2026-07-16). NB : n'a PAS résolu le
-                      # flaky chaos-provisioning (500 opaque sous concurrence = bug applicatif,
-                      # pas la RAM — cf todo/2026-07-16-chaos-provisioning-500-opaque.md).
+        cpu        = 250
+        # Pic 7 j observé : 239 MiB. La réserve garde 34 % de marge et le
+        # fusible permet toujours restore/maintenance sans menacer la VM.
+        memory     = 320
+        memory_max = 2048
       }
     }
 
@@ -153,8 +154,10 @@ SMTP_FROM_NAME={{ .SMTP_FROM_NAME }}
 EOH
       }
       resources {
-        cpu    = 400
-        memory = 384
+        # Pics 7 j observés : 252 MHz / 66 MiB.
+        cpu        = 300
+        memory     = 96
+        memory_max = 512
       }
     }
   }
