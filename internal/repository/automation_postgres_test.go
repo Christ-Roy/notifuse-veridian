@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"regexp"
 	"testing"
 	"time"
 
@@ -487,6 +489,92 @@ func TestAutomationRepository_DropAutomationTrigger(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to drop trigger")
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAutomationRepository_CreateAutomationTriggerTx(t *testing.T) {
+	t.Run("executes all trigger DDL in the caller transaction", func(t *testing.T) {
+		db, mock, repo := setupAutomationMock(t)
+		defer func() { _ = db.Close() }()
+
+		automation := createTestAutomation("auto-123", "workspace-123")
+		automation.Status = domain.AutomationStatusLive
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta("DROP TRIGGER IF EXISTS automation_trigger_auto123 ON contact_timeline")).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec(regexp.QuoteMeta("DROP FUNCTION IF EXISTS automation_trigger_auto123()")).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec(`CREATE OR REPLACE FUNCTION automation_trigger_auto123\(\)`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec(`CREATE TRIGGER automation_trigger_auto123`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectCommit()
+
+		tx, err := db.BeginTx(context.Background(), nil)
+		require.NoError(t, err)
+		require.NoError(t, repo.CreateAutomationTriggerTx(context.Background(), tx, "workspace-123", automation))
+		require.NoError(t, tx.Commit())
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("returns the failing DDL error so the caller can roll back", func(t *testing.T) {
+		db, mock, repo := setupAutomationMock(t)
+		defer func() { _ = db.Close() }()
+
+		automation := createTestAutomation("auto-123", "workspace-123")
+		sentinel := errors.New("create function failed")
+		mock.ExpectBegin()
+		mock.ExpectExec("DROP TRIGGER IF EXISTS").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("DROP FUNCTION IF EXISTS").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("CREATE OR REPLACE FUNCTION").WillReturnError(sentinel)
+		mock.ExpectRollback()
+
+		tx, err := db.BeginTx(context.Background(), nil)
+		require.NoError(t, err)
+		err = repo.CreateAutomationTriggerTx(context.Background(), tx, "workspace-123", automation)
+		require.ErrorIs(t, err, sentinel)
+		assert.Contains(t, err.Error(), "failed to create trigger function")
+		require.NoError(t, tx.Rollback())
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestAutomationRepository_DropAutomationTriggerTx(t *testing.T) {
+	t.Run("uses sanitized trigger names inside the caller transaction", func(t *testing.T) {
+		db, mock, repo := setupAutomationMock(t)
+		defer func() { _ = db.Close() }()
+
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta("DROP TRIGGER IF EXISTS automation_trigger_auto123 ON contact_timeline")).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec(regexp.QuoteMeta("DROP FUNCTION IF EXISTS automation_trigger_auto123()")).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectCommit()
+
+		tx, err := db.BeginTx(context.Background(), nil)
+		require.NoError(t, err)
+		require.NoError(t, repo.DropAutomationTriggerTx(context.Background(), tx, "workspace-123", "auto-123"))
+		require.NoError(t, tx.Commit())
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("propagates function-drop failure and leaves rollback to the caller", func(t *testing.T) {
+		db, mock, repo := setupAutomationMock(t)
+		defer func() { _ = db.Close() }()
+
+		sentinel := errors.New("drop function failed")
+		mock.ExpectBegin()
+		mock.ExpectExec("DROP TRIGGER IF EXISTS").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("DROP FUNCTION IF EXISTS").WillReturnError(sentinel)
+		mock.ExpectRollback()
+
+		tx, err := db.BeginTx(context.Background(), nil)
+		require.NoError(t, err)
+		err = repo.DropAutomationTriggerTx(context.Background(), tx, "workspace-123", "auto-123")
+		require.ErrorIs(t, err, sentinel)
+		assert.Contains(t, err.Error(), "failed to drop trigger function")
+		require.NoError(t, tx.Rollback())
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestAutomationRepository_GetContactAutomation(t *testing.T) {
