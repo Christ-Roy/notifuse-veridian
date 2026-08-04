@@ -112,8 +112,16 @@ jobs:
           echo "current=$CURRENT_RUN_CONCLUSION" >> "$GITHUB_OUTPUT"
           echo "Previous conclusion: $PREVIOUS / current: $CURRENT_RUN_CONCLUSION"
 
+      - name: Detect whether repository issues are enabled
+        id: repo_features
+        run: |
+          set -euo pipefail
+          ISSUES_ENABLED=$(gh api "repos/$GH_REPO" --jq '.has_issues')
+          echo "issues_enabled=$ISSUES_ENABLED" >> "$GITHUB_OUTPUT"
+
       - name: Find existing open alert issue
         id: existing
+        if: steps.repo_features.outputs.issues_enabled == 'true'
         run: |
           set -euo pipefail
           ISSUE_NUMBER=$(gh issue list \
@@ -126,7 +134,9 @@ jobs:
           echo "number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Ensure label exists
-        if: needs.smoke.result == 'failure'
+        if: |
+          needs.smoke.result == 'failure'
+          && steps.repo_features.outputs.issues_enabled == 'true'
         run: |
           if ! gh label list --repo "$GH_REPO" --json name --jq '.[].name' | grep -qx synthetic-monitoring-alert; then
             gh label create synthetic-monitoring-alert \
@@ -138,6 +148,7 @@ jobs:
       - name: Open alert issue (2 fails consécutifs, aucune issue ouverte)
         if: |
           needs.smoke.result == 'failure'
+          && steps.repo_features.outputs.issues_enabled == 'true'
           && steps.history.outputs.previous == 'failure'
           && steps.existing.outputs.number == ''
         run: |
@@ -174,6 +185,7 @@ jobs:
       - name: Append comment to existing alert issue (fail répété)
         if: |
           needs.smoke.result == 'failure'
+          && steps.repo_features.outputs.issues_enabled == 'true'
           && steps.existing.outputs.number != ''
         run: |
           set -euo pipefail
@@ -184,6 +196,7 @@ jobs:
       - name: Close alert issue (premier pass après série de fails)
         if: |
           needs.smoke.result == 'success'
+          && steps.repo_features.outputs.issues_enabled == 'true'
           && steps.existing.outputs.number != ''
         run: |
           set -euo pipefail
