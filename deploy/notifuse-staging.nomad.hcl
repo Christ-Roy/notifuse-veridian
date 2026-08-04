@@ -21,6 +21,7 @@ variable "image_tag" {
 job "notifuse-staging" {
   datacenters = ["veridian-eu"]
   type        = "service"
+  priority    = 50
 
   group "stack" {
     count = 1
