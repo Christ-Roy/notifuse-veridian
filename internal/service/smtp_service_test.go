@@ -9,9 +9,11 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -436,6 +438,46 @@ func TestSMTPService_SendEmail_Integration(t *testing.T) {
 	mailFromCmd := server.GetMailFromCommand()
 	assert.NotContains(t, mailFromCmd, "BODY=8BITMIME")
 	assert.NotContains(t, mailFromCmd, "SMTPUTF8")
+}
+
+func TestSMTPService_SendEmail_VeridianGoogleOAuthUsesGmailAPI(t *testing.T) {
+	t.Parallel()
+
+	tokens := &veridianGmailTokenStub{tokens: []string{"access-one"}}
+	service := NewSMTPServiceWithOAuth2(&noopLogger{}, tokens)
+	service.gmailHTTPClient = veridianGmailDoerFunc(func(req *http.Request) (*http.Response, error) {
+		var payload map[string]string
+		require.NoError(t, json.NewDecoder(req.Body).Decode(&payload))
+		decoded, err := base64.RawURLEncoding.DecodeString(payload["raw"])
+		require.NoError(t, err)
+		assert.Contains(t, string(decoded), "Subject: Test Gmail API")
+		assert.Contains(t, string(decoded), "recipient@example.com")
+		return veridianGmailResponse(http.StatusOK, `{"id":"gmail-message-id"}`), nil
+	})
+
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID:   "workspace-123",
+		IntegrationID: "integration-123",
+		MessageID:     "message-123",
+		FromAddress:   "sender@gmail.com",
+		FromName:      "Test Sender",
+		To:            "recipient@example.com",
+		Subject:       "Test Gmail API",
+		Content:       "<p>Bonjour</p>",
+		Provider: &domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			SMTP: &domain.SMTPSettings{
+				Host:           "smtp.gmail.com",
+				Port:           587,
+				UseTLS:         true,
+				AuthType:       "oauth2",
+				OAuth2Provider: "google",
+			},
+		},
+	}
+
+	require.NoError(t, service.SendEmail(context.Background(), request))
+	assert.Equal(t, 1, tokens.getCalls)
 }
 
 // Veridian (Lot 3 stop-on-reply) : le Message-ID RFC822 doit être DÉTERMINISTE

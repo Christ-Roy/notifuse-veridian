@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"net/http"
 	"net/textproto"
 	"os"
 	"strings"
@@ -347,22 +348,25 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 
 // SMTPService implements the domain.EmailProviderService interface for SMTP
 type SMTPService struct {
-	logger         logger.Logger
-	oauth2Provider OAuth2TokenProvider
+	logger          logger.Logger
+	oauth2Provider  OAuth2TokenProvider
+	gmailHTTPClient veridianGmailHTTPDoer
 }
 
 // NewSMTPService creates a new instance of SMTPService
 func NewSMTPService(logger logger.Logger) *SMTPService {
 	return &SMTPService{
-		logger: logger,
+		logger:          logger,
+		gmailHTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
 // NewSMTPServiceWithOAuth2 creates a new instance of SMTPService with OAuth2 support
 func NewSMTPServiceWithOAuth2(logger logger.Logger, oauth2Provider OAuth2TokenProvider) *SMTPService {
 	return &SMTPService{
-		logger:         logger,
-		oauth2Provider: oauth2Provider,
+		logger:          logger,
+		oauth2Provider:  oauth2Provider,
+		gmailHTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -517,8 +521,19 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 		return fmt.Errorf("failed to write message: %w", err)
 	}
 
+	// Google requires the broad mail.google.com scope for SMTP XOAUTH2 and asks
+	// send-only applications to use the Gmail API with gmail.send instead. Keep
+	// the existing SMTP integration shape, but route Google OAuth2 MIME messages
+	// through the minimal-scope API transport.
+	if veridianUsesGmailAPI(smtpSettings) {
+		if err := veridianSendViaGmailAPI(ctx, smtpSettings, buf.Bytes(), s.oauth2Provider, s.gmailHTTPClient); err != nil {
+			return fmt.Errorf("failed to send email: %w", err)
+		}
+		return nil
+	}
+
 	// Send using native net/smtp (avoids BODY=8BITMIME extension issues - fix for issue #172)
-	// Use sendRawEmailWithSettings for OAuth2 support
+	// Use sendRawEmailWithSettings for Microsoft OAuth2 and basic SMTP support.
 	if err := sendRawEmailWithSettings(
 		smtpSettings,
 		request.FromAddress,
