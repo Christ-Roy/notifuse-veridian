@@ -127,7 +127,14 @@ sink_since() {
   local alloc
   alloc="$(staging_alloc)"
   [ -n "$alloc" ] || return 1
-  "$NOMAD_V" raw alloc logs -task "$SINK_TASK" -tail -c 1048576 "$alloc" 2>&1
+  "$NOMAD_V" raw alloc logs -task "$SINK_TASK" -tail -c 1048576 "$alloc" 2>&1 \
+    | RUN_WID="$WID" python3 -c '
+import os,re,sys
+data=sys.stdin.read()
+for block in re.findall(r"---------- MESSAGE FOLLOWS ----------.*?------------ END MESSAGE ------------", data, re.S):
+    if os.environ["RUN_WID"] in block:
+        print(block)
+'
 }
 notifuse_since() {
   local alloc
