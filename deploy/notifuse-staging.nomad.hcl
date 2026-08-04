@@ -14,7 +14,7 @@
 #    image_tag), jamais la copie ~/nomad-veridian/jobs/.
 variable "image_tag" {
   type        = string
-  default     = "v54.0-veridian.727aed4e"
+  default     = "v54.0-veridian.6a397c98"
   description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
 }
 
@@ -158,6 +158,27 @@ EOH
         cpu        = 300
         memory     = 96
         memory_max = 512
+      }
+    }
+
+    # ---- smtp-sink (cul-de-sac E2E cold, aucun port hote) ----
+    # Partage le namespace reseau du groupe avec Notifuse : les integrations de
+    # test ciblent exclusivement 127.0.0.1:1025. aiosmtpd Debugging imprime le
+    # message puis le jette, sans resolver ni contacter le MX du destinataire.
+    task "smtp-sink" {
+      driver = "docker"
+      config {
+        image   = "python:3.12-alpine"
+        command = "/bin/sh"
+        args = [
+          "-c",
+          "pip install --no-cache-dir aiosmtpd==1.4.6 >/dev/null && exec python -m aiosmtpd -n -d -l 0.0.0.0:1025",
+        ]
+      }
+      resources {
+        cpu        = 25
+        memory     = 24
+        memory_max = 64
       }
     }
   }

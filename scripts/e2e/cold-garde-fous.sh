@@ -9,8 +9,9 @@
 # que CHAQUE gate de protection du domaine tient. Une faille = domaine grillé.
 #
 # 🔴 CONTRAINTE ABSOLUE (Robert) : ZÉRO mail vers un provider externe.
-#    SMTP cible = smtp-sink:1025 (conteneur aiosmtpd -n -d sur dev-pub, réseau
-#    notifuse-staging_notifuse-internal). aiosmtpd -n = PAS de relayhost : il
+#    SMTP cible = aiosmtpd -n -d dans LA MEME allocation Nomad que Notifuse,
+#    uniquement sur 127.0.0.1:1025 (aucun port hote/public/Tailscale).
+#    aiosmtpd -n = PAS de relayhost : il
 #    imprime le mail dans ses logs et le JETTE (cul-de-sac prouvé). Aucune des
 #    intégrations créées ici ne pointe vers le relai sortant 100.92.215.42 ni
 #    vers un MX externe. DOUBLE-CHECK du host avant tout envoi (abort sinon),
@@ -19,7 +20,7 @@
 # MÉTHODE :
 #  - Provisionne un workspace JETABLE (prefix gfcheck<stamp>), wipe à la fin.
 #  - 6 gates "qui bloquent un envoi frais" prouvés par CAMPAGNE RÉELLE → sink :
-#    on lit docker logs smtp-sink (RCPT TO + HTML émis) + message_history.
+#    on lit les logs Nomad smtp-sink (RCPT TO + HTML émis) + message_history.
 #      G2 exclusion classe · G3 throttle/min · G7 pré-filtre · G8 anti-hash+spintax
 #      G9 pixel par classe · G10 round-robin senders
 #  - 4 gates "état/temps" prouvés par l'endpoint cold-simulate (prédicat EXACT
@@ -36,8 +37,9 @@
 #
 # Env requis : NOTIFUSE_HUB_API_SECRET  (HMAC Hub→Notifuse staging)
 # Env optionnel : NOTIFUSE_URL (défaut https://notifuse.staging.veridian.site)
-#                 DEV_SSH (défaut dev-pub) · SINK_HOST (défaut smtp-sink)
-#                 SINK_PORT (défaut 1025) · DB_CONTAINER (défaut notifuse-staging-db)
+#                 DEV_SSH (défaut dev-pub) · SINK_HOST (doit rester 127.0.0.1)
+#                 SINK_PORT (défaut 1025) · SINK_TASK (défaut smtp-sink)
+#                 STAGING_JOB (défaut notifuse-staging) · NOMAD_V
 #
 # Sortie : log PASS/FAIL par gate sur stderr ; tableau récapitulatif final +
 #          exit non nul si un gate FAIL.
@@ -45,10 +47,12 @@ set -uo pipefail
 
 BASE="${NOTIFUSE_URL:-https://notifuse.staging.veridian.site}"
 DEV_SSH="${DEV_SSH:-dev-pub}"
-SINK_HOST="${SINK_HOST:-smtp-sink}"
+SINK_HOST="${SINK_HOST:-127.0.0.1}"
 SINK_PORT="${SINK_PORT:-1025}"
-DB_CONTAINER="${DB_CONTAINER:-notifuse-staging-db}"
+SINK_TASK="${SINK_TASK:-smtp-sink}"
 RELAY_CONTAINER="${RELAY_CONTAINER:-mail-relay}"
+STAGING_JOB="${STAGING_JOB:-notifuse-staging}"
+NOMAD_V="${NOMAD_V:-$HOME/bin/nomad-v}"
 KEEP=0
 STAMP="$(date +%s | tail -c 7)"
 WID="gfcheck${STAMP}"
@@ -106,10 +110,38 @@ api_get() { curl -s "$BASE$1" -H "Authorization: Bearer $OWNER_TOKEN"; }
 
 # --- DB / sink readers ------------------------------------------------------
 WSDB="notifuse_ws_${WID}"
-psqlq() { ssh "$DEV_SSH" "docker exec $DB_CONTAINER psql -U postgres -d $WSDB -tAc \"$1\"" 2>/dev/null | tr -d '\r'; }
-# Logs sink depuis le début du run (on capture un timestamp ISO au démarrage).
-sink_since() { ssh "$DEV_SSH" "docker logs $SINK_HOST --since '$RUN_START_ISO' 2>&1"; }
+staging_alloc() {
+  "$NOMAD_V" raw job allocs -json "$STAGING_JOB" 2>/dev/null \
+    | python3 -c 'import json,sys; a=json.load(sys.stdin); r=[x for x in a if x.get("ClientStatus")=="running"]; print(r[0]["ID"] if r else "")'
+}
+psqlq() {
+  local alloc
+  alloc="$(staging_alloc)"
+  [ -n "$alloc" ] || return 1
+  "$NOMAD_V" raw alloc exec -task db "$alloc" \
+    psql -U postgres -d "$WSDB" -tAc "$1" 2>/dev/null | tr -d '\r'
+}
+# Les adresses de chaque run sont uniques, donc lire la queue tail des logs de
+# l'allocation suffit et evite toute dependance a un conteneur Docker host.
+sink_since() {
+  local alloc
+  alloc="$(staging_alloc)"
+  [ -n "$alloc" ] || return 1
+  "$NOMAD_V" raw alloc logs -task "$SINK_TASK" -tail -c 1048576 "$alloc" 2>&1
+}
 relay_since() { ssh "$DEV_SSH" "docker logs $RELAY_CONTAINER --since '$RUN_START_ISO' 2>&1"; }
+
+ensure_sink() {
+  local alloc state
+  [ "$SINK_HOST" = "127.0.0.1" ] || fatal "SINK_HOST=$SINK_HOST interdit : le sink doit rester loopback dans l'allocation"
+  alloc="$(staging_alloc)"
+  [ -n "$alloc" ] || fatal "allocation $STAGING_JOB introuvable"
+  state="$($NOMAD_V raw alloc status -json "$alloc" 2>/dev/null \
+    | python3 -c 'import json,sys; print((json.load(sys.stdin).get("TaskStates",{}).get("smtp-sink",{}) or {}).get("State",""))' 2>/dev/null)"
+  [ "$state" = "running" ] || fatal "task Nomad $SINK_TASK non running (state=${state:-absent})"
+  sink_since >/dev/null || fatal "logs Nomad $SINK_TASK illisibles"
+  log "sink Nomad $SINK_TASK actif sur $SINK_HOST:$SINK_PORT (loopback allocation uniquement)"
+}
 
 cleanup() {
   if [ "$KEEP" = "1" ]; then log "--keep : workspace $WID conservé"; return; fi
@@ -121,6 +153,7 @@ cleanup() {
 trap cleanup EXIT
 
 RUN_START_ISO="$(date -u +%Y-%m-%dT%H:%M:%S)"
+ensure_sink
 
 # ============================================================================
 # SETUP
