@@ -375,7 +375,7 @@ print(json.dumps({"id":w["id"],"name":w["name"],"settings":s}))')
   cb_in_sink=$(sink_since | grep -ciP "recip:\s*gf-cb-${STAMP}-")
   cb_q_failed=$(psqlq "SELECT count(*) FROM email_queue WHERE status='failed'")
   cb_q_pending=$(psqlq "SELECT count(*) FROM email_queue WHERE status='pending'")
-  cb_refused=$(ssh "$DEV_SSH" "docker logs notifuse-staging --since '$RUN_START_ISO' 2>&1 | grep -ciE 'dial tcp.*:$FAILPORT.*connection refused|connection refused'")
+  cb_refused=$(notifuse_since | grep -ciE "dial tcp.*:$FAILPORT.*connection refused")
   log "CB : sink=$cb_in_sink(att.0) email_queue[failed=$cb_q_failed pending=$cb_q_pending] refus_connexion_loggé=$cb_refused"
 
   # Verdict : 0 mail au sink (le provider KO n'a JAMAIS livré) ET le worker a réellement

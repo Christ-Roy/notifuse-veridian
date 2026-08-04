@@ -129,6 +129,12 @@ sink_since() {
   [ -n "$alloc" ] || return 1
   "$NOMAD_V" raw alloc logs -task "$SINK_TASK" -tail -c 1048576 "$alloc" 2>&1
 }
+notifuse_since() {
+  local alloc
+  alloc="$(staging_alloc)"
+  [ -n "$alloc" ] || return 1
+  "$NOMAD_V" raw alloc logs -task notifuse -stdout -tail -c 1048576 "$alloc" 2>&1
+}
 relay_since() { ssh "$DEV_SSH" "docker logs $RELAY_CONTAINER --since '$RUN_START_ISO' 2>&1"; }
 
 ensure_sink() {
