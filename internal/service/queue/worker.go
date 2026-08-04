@@ -61,6 +61,12 @@ type EmailQueueWorker struct {
 	config               *EmailQueueWorkerConfig
 	logger               logger.Logger
 
+	// Final automation gate dependencies. The executor checks these before
+	// enqueue, but a reply/unsubscribe/pause can happen while a row is waiting.
+	automationRepo   domain.AutomationRepository
+	contactListRepo  domain.ContactListRepository
+	contactReplyRepo domain.VeridianContactReplyRepository
+
 	// Control
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -71,6 +77,19 @@ type EmailQueueWorker struct {
 	// Callbacks for progress tracking
 	onEmailSent   EmailSentCallback
 	onEmailFailed EmailFailedCallback
+}
+
+// SetAutomationSendGuard wires the durable, last-mile stop checks used only for
+// automation queue entries. It is kept as a setter to preserve the upstream
+// worker constructor surface; production wires it immediately after creation.
+func (w *EmailQueueWorker) SetAutomationSendGuard(
+	automationRepo domain.AutomationRepository,
+	contactListRepo domain.ContactListRepository,
+	contactReplyRepo domain.VeridianContactReplyRepository,
+) {
+	w.automationRepo = automationRepo
+	w.contactListRepo = contactListRepo
+	w.contactReplyRepo = contactReplyRepo
 }
 
 // NewEmailQueueWorker creates a new EmailQueueWorker
@@ -468,6 +487,13 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 			"entry_id": entry.ID,
 			"error":    err.Error(),
 		}).Debug("Rate limit wait cancelled")
+		return
+	}
+
+	// Last possible policy check before constructing the provider request and
+	// opening SMTP. This closes the race where the row was enqueued or even
+	// claimed before a reply, unsubscribe or automation pause was persisted.
+	if !w.veridianAutomationSendAllowed(workspace, entry) {
 		return
 	}
 

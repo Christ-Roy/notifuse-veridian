@@ -2,6 +2,8 @@ package integration
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,6 +75,90 @@ func TestEmailQueue(t *testing.T) {
 	t.Run("Circuit Breaker", func(t *testing.T) {
 		testCircuitBreaker(t, suite, queueRepo, workspace.ID, integration.ID)
 	})
+}
+
+// TestAutomationQueueFinalGuardMailpitSink proves the last-mile invariant with
+// the real workspace DB, repositories, worker and a loopback Mailpit SMTP sink.
+// All rows are enqueued before the stop state is evaluated; none may reach SMTP.
+func TestAutomationQueueFinalGuardMailpitSink(t *testing.T) {
+	testutil.SkipIfShort(t)
+	testutil.SetupTestEnvironment()
+	defer testutil.CleanupTestEnvironment()
+
+	suite := testutil.NewIntegrationTestSuite(t, appFactory)
+	defer suite.Cleanup()
+	factory := suite.DataFactory
+
+	user, err := factory.CreateUser()
+	require.NoError(t, err)
+	workspace, err := factory.CreateWorkspace()
+	require.NoError(t, err)
+	require.NoError(t, factory.AddUserToWorkspace(user.ID, workspace.ID, "owner"))
+	integration, err := factory.SetupWorkspaceWithSMTPProvider(workspace.ID)
+	require.NoError(t, err)
+	require.NoError(t, testutil.ClearMailpitMessages(t))
+
+	type scenario struct {
+		name       string
+		autoStatus domain.AutomationStatus
+		replied    bool
+		listStatus domain.ContactListStatus
+	}
+	scenarios := []scenario{
+		{name: "paused", autoStatus: domain.AutomationStatusPaused, listStatus: domain.ContactListStatusActive},
+		{name: "replied", autoStatus: domain.AutomationStatusLive, replied: true, listStatus: domain.ContactListStatusActive},
+		{name: "unsubscribed", autoStatus: domain.AutomationStatusLive, listStatus: domain.ContactListStatusUnsubscribed},
+	}
+
+	ctx := context.Background()
+	queueRepo := suite.ServerManager.GetApp().GetEmailQueueRepository()
+	subject := "automation-final-guard-" + testutil.GenerateRandomString(8)
+	entries := make([]*domain.EmailQueueEntry, 0, len(scenarios))
+	db, err := factory.GetWorkspaceDB(workspace.ID)
+	require.NoError(t, err)
+
+	for i, sc := range scenarios {
+		list, err := factory.CreateList(workspace.ID)
+		require.NoError(t, err)
+		email := strings.ToLower(fmt.Sprintf("guard-%d-%s@gmail.com", i, testutil.GenerateRandomString(6)))
+		_, err = factory.CreateContact(workspace.ID, testutil.WithContactEmail(email))
+		require.NoError(t, err)
+		_, err = factory.CreateContactList(workspace.ID,
+			testutil.WithContactListEmail(email),
+			testutil.WithContactListListID(list.ID),
+			testutil.WithContactListStatus(sc.listStatus),
+		)
+		require.NoError(t, err)
+		automation, err := factory.CreateAutomation(workspace.ID,
+			testutil.WithAutomationStatus(sc.autoStatus),
+			testutil.WithAutomationListID(list.ID),
+		)
+		require.NoError(t, err)
+		if sc.replied {
+			_, err = db.ExecContext(ctx, `
+				INSERT INTO veridian_contact_reply (contact_email, replied_at, match_type, matched_message_id)
+				VALUES ($1, NOW(), 'sender_fallback', '')
+			`, email)
+			require.NoError(t, err)
+		}
+
+		entry := testutil.CreateTestEmailQueueEntry(integration.ID, email, automation.ID, domain.EmailQueueSourceAutomation)
+		entry.Payload.Subject = subject
+		entry.Payload.ListID = list.ID
+		entries = append(entries, entry)
+	}
+
+	require.NoError(t, queueRepo.Enqueue(ctx, workspace.ID, entries))
+	workerCtx, cancelWorker := context.WithCancel(ctx)
+	defer cancelWorker()
+	require.NoError(t, suite.ServerManager.StartBackgroundWorkers(workerCtx))
+	require.NoError(t, testutil.WaitForQueueEmpty(t, queueRepo, workspace.ID, 15*time.Second))
+
+	// Give Mailpit one full worker tick to expose any accidental provider call.
+	time.Sleep(1500 * time.Millisecond)
+	count, err := testutil.GetMailpitMessageCount(t, subject)
+	require.NoError(t, err)
+	assert.Zero(t, count, "paused/replied/unsubscribed automation rows must never reach the SMTP sink")
 }
 
 func testRepositoryOperations(t *testing.T, queueRepo domain.EmailQueueRepository, workspaceID, integrationID string) {

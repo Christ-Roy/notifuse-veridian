@@ -21,15 +21,14 @@ package service
 // Le hard/soft est porté par le code DSN (BounceCategory=DSNCode), interprété
 // par ClassifyBounce (cas SMTP enrichi en Lot 2 : 5.x.x→Hard, 4.x.x→SoftCount).
 //
-// Idempotence métier (EXIGÉE par le contrat poller "at-most-once dispatch") :
+// Idempotence métier (EXIGÉE car le poller rejoue un UID non acquitté) :
 // MarkEmailsAsBounced est déjà idempotent (UPDATE ... WHERE status NOT IN
 // ('complained','bounced')) → rejouer le MÊME NDR ne supprime qu'une fois et
 // ne renvoie pas d'erreur. Aucun état supplémentaire à tenir ici.
 //
-// Best-effort de bout en bout : toute erreur (workspace introuvable, pas
-// d'intégration SMTP, ProcessWebhook qui échoue) est loggée et retournée, mais
-// le poller marque le message vu quoi qu'il arrive (on ne boucle jamais sur un
-// message empoisonné).
+// Toute erreur (workspace introuvable, pas d'intégration SMTP, ProcessWebhook
+// qui échoue) est loggée et retournée. Le poller laisse alors l'UID non vu pour
+// le rejouer ; l'idempotence ci-dessus rend ce retry sûr.
 
 import (
 	"context"

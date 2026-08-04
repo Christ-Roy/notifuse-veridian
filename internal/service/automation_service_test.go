@@ -6,12 +6,81 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func newAutomationLifecycleService(t *testing.T) (*AutomationService, *mocks.MockAutomationRepository, *mocks.MockEmailQueueRepository, *mocks.MockWorkspaceRepository, *mocks.MockAuthService, sqlmock.Sqlmock) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	db, sqlMock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	automationRepo := mocks.NewMockAutomationRepository(ctrl)
+	queueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	auth := mocks.NewMockAuthService(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+	service := NewAutomationService(automationRepo, auth, log, AutomationLifecycleDependencies{
+		WorkspaceRepo:  workspaceRepo,
+		EmailQueueRepo: queueRepo,
+	})
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace-123").Return(db, nil)
+	auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "workspace-123").Return(context.Background(), &domain.User{}, &domain.UserWorkspace{
+		WorkspaceID: "workspace-123", Permissions: domain.FullPermissions,
+	}, nil)
+	return service, automationRepo, queueRepo, workspaceRepo, auth, sqlMock
+}
+
+func TestAutomationService_LifecycleQueueIsAtomic(t *testing.T) {
+	t.Run("pause atomically pauses queued rows", func(t *testing.T) {
+		service, automationRepo, queueRepo, _, _, db := newAutomationLifecycleService(t)
+		db.ExpectBegin()
+		automation := createTestAutomationService("auto-123", "workspace-123")
+		automation.Status = domain.AutomationStatusLive
+		automationRepo.EXPECT().GetByIDTx(gomock.Any(), gomock.Any(), "workspace-123", "auto-123").Return(automation, nil)
+		automationRepo.EXPECT().DropAutomationTriggerTx(gomock.Any(), gomock.Any(), "workspace-123", "auto-123").Return(nil)
+		automationRepo.EXPECT().UpdateTx(gomock.Any(), gomock.Any(), "workspace-123", gomock.Any()).Return(nil)
+		queueRepo.EXPECT().PauseBySourceTx(gomock.Any(), gomock.Any(), domain.EmailQueueSourceAutomation, "auto-123").Return(int64(92), nil)
+		db.ExpectCommit()
+
+		require.NoError(t, service.Pause(context.Background(), "workspace-123", "auto-123"))
+		require.NoError(t, db.ExpectationsWereMet())
+	})
+
+	t.Run("activate atomically resumes queued rows", func(t *testing.T) {
+		service, automationRepo, queueRepo, _, _, db := newAutomationLifecycleService(t)
+		db.ExpectBegin()
+		automation := createTestAutomationService("auto-123", "workspace-123")
+		automation.Status = domain.AutomationStatusPaused
+		automationRepo.EXPECT().GetByIDTx(gomock.Any(), gomock.Any(), "workspace-123", "auto-123").Return(automation, nil)
+		automationRepo.EXPECT().UpdateTx(gomock.Any(), gomock.Any(), "workspace-123", gomock.Any()).Return(nil)
+		automationRepo.EXPECT().CreateAutomationTriggerTx(gomock.Any(), gomock.Any(), "workspace-123", gomock.Any()).Return(nil)
+		queueRepo.EXPECT().ResumeBySourceTx(gomock.Any(), gomock.Any(), domain.EmailQueueSourceAutomation, "auto-123").Return(int64(92), nil)
+		db.ExpectCommit()
+
+		require.NoError(t, service.Activate(context.Background(), "workspace-123", "auto-123"))
+		require.NoError(t, db.ExpectationsWereMet())
+	})
+
+	t.Run("delete atomically deletes queued rows", func(t *testing.T) {
+		service, automationRepo, queueRepo, _, _, db := newAutomationLifecycleService(t)
+		db.ExpectBegin()
+		automationRepo.EXPECT().DeleteTx(gomock.Any(), gomock.Any(), "workspace-123", "auto-123").Return(nil)
+		queueRepo.EXPECT().DeleteBySourceTx(gomock.Any(), gomock.Any(), domain.EmailQueueSourceAutomation, "auto-123").Return(int64(92), nil)
+		db.ExpectCommit()
+
+		require.NoError(t, service.Delete(context.Background(), "workspace-123", "auto-123"))
+		require.NoError(t, db.ExpectationsWereMet())
+	})
+}
 
 // Helper function to create test automation
 func createTestAutomationService(id, workspaceID string) *domain.Automation {

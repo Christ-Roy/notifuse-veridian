@@ -24,8 +24,8 @@ package domain
 // workspace au même titre que contacts / contact_lists / message_history. Migration V51
 // la crée via UpdateWorkspace (+ init.go pour les nouveaux workspaces).
 //
-// Idempotence métier (CRUCIALE) : le poller IMAP garantit "at-most-once dispatch" mais
-// PEUT re-dispatcher un UID si MarkSeen échoue. Donc MarkReplied DOIT être idempotent :
+// Idempotence métier (CRUCIALE) : le poller IMAP re-dispatche un UID si un consumer
+// échoue ou si MarkSeen échoue. Donc MarkReplied DOIT être idempotent :
 // re-poser le même signal ne fait rien (ON CONFLICT DO NOTHING), et l'exit de séquence
 // associé est lui aussi idempotent (un contact déjà 'exited' ne re-déclenche rien).
 
@@ -58,8 +58,8 @@ type VeridianContactReply struct {
 type VeridianContactReplyRepository interface {
 	// MarkReplied pose (idempotemment) le signal 'replied' pour un contact. ON
 	// CONFLICT (contact_email) DO NOTHING : le premier signal gagne, re-poser ne
-	// fait rien. Best-effort côté caller : une erreur DB ne doit jamais faire échouer
-	// le traitement IMAP (le message sera de toute façon marqué vu).
+	// fait rien. Une erreur remonte au poller : l'UID reste non acquitté et sera
+	// rejoué, ce qui rend le signal résilient aux pannes DB transitoires.
 	MarkReplied(ctx context.Context, workspaceID string, reply *VeridianContactReply) error
 
 	// HasReplied retourne true si le contact `email` a déjà été marqué 'replied'.

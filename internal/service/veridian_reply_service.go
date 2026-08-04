@@ -27,9 +27,9 @@ import (
 //     nouvelle séquence après avoir répondu.
 //   - exit actif (push, ici) : réactivité immédiate à la détection de la réponse.
 //
-// Tout est BEST-EFFORT et IDEMPOTENT (le poller garantit at-most-once dispatch mais
-// peut re-dispatcher si MarkSeen échoue). Une erreur ne fait jamais paniquer le poller
-// (le message sera de toute façon marqué vu). Re-traiter la même réponse 2× → 1 seul
+// Tout est IDEMPOTENT : le poller rejoue un UID tant qu'un consumer obligatoire
+// échoue ou que MarkSeen échoue. Une erreur ne fait jamais paniquer le poller.
+// Re-traiter la même réponse 2× → 1 seul
 // signal (ON CONFLICT DO NOTHING) et au plus 1 exit par automation (un contact déjà
 // 'exited' n'est pas ré-exité).
 
@@ -177,7 +177,7 @@ func (s *VeridianReplyService) DetectReply(ctx context.Context, msg *domain.Veri
 
 // ProcessInboundMessage est le point d'entrée appelé par le reply-consumer pour chaque
 // message neuf. Best-effort : retourne une erreur (loggée par le consumer) mais le
-// message est de toute façon marqué vu par le poller. Idempotent de bout en bout.
+// message restera non acquitté et sera rejoué. Idempotent de bout en bout.
 func (s *VeridianReplyService) ProcessInboundMessage(ctx context.Context, msg *domain.VeridianIMAPMessage) error {
 	detection, err := s.DetectReply(ctx, msg)
 	if err != nil {
@@ -214,7 +214,7 @@ func (s *VeridianReplyService) ProcessInboundMessage(ctx context.Context, msg *d
 	}); err != nil {
 		// Échec du signal : on log et on s'arrête là (sans signal, le gate Lot 9 ne
 		// verra rien ; l'exit actif sans signal serait incohérent). Le message sera
-		// re-dispatché si MarkSeen échoue, sinon perdu — best-effort assumé.
+		// re-dispatché puisque l'erreur remonte au poller et bloque MarkSeen.
 		s.logger.WithFields(map[string]interface{}{
 			"workspace_id": msg.WorkspaceID,
 			"contact":      detection.ContactEmail,

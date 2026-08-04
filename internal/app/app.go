@@ -994,12 +994,21 @@ func (a *App) InitServices() error {
 		queue.DefaultWorkerConfig(),
 		a.logger,
 	)
+	a.emailQueueWorker.SetAutomationSendGuard(
+		a.automationRepo,
+		a.contactListRepo,
+		a.veridianContactReplyRepo,
+	)
 
 	// Initialize automation service
 	a.automationService = service.NewAutomationService(
 		a.automationRepo,
 		a.authService,
 		a.logger,
+		service.AutomationLifecycleDependencies{
+			WorkspaceRepo:  a.workspaceRepo,
+			EmailQueueRepo: a.emailQueueRepo,
+		},
 	)
 
 	// Initialize Firecrawl service

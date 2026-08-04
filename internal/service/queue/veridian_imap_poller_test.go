@@ -34,9 +34,9 @@ func (c *fakeIMAPClient) FetchSince(ctx context.Context, since time.Time, limit 
 func (c *fakeIMAPClient) Close() error { c.closed = true; return nil }
 
 type fakeIMAPDialer struct {
-	client   *fakeIMAPClient
-	dialErr  error
-	dialCount int
+	client       *fakeIMAPClient
+	dialErr      error
+	dialCount    int
 	lastSettings *domain.IMAPSettings
 }
 
@@ -51,11 +51,11 @@ func (d *fakeIMAPDialer) Dial(ctx context.Context, settings *domain.IMAPSettings
 
 // recordingConsumer records every message it receives.
 type recordingConsumer struct {
-	name     string
-	mu       sync.Mutex
-	received []*domain.VeridianIMAPMessage
+	name      string
+	mu        sync.Mutex
+	received  []*domain.VeridianIMAPMessage
 	returnErr error
-	panicNow bool
+	panicNow  bool
 }
 
 func (c *recordingConsumer) Name() string { return c.name }
@@ -313,8 +313,8 @@ func TestVeridianIMAPPoller_ConsumerPanicIsolated(t *testing.T) {
 
 	dialer := &fakeIMAPDialer{client: &fakeIMAPClient{uidValidity: 1, messages: []*domain.VeridianIMAPMessage{{UID: 5}}}}
 	uidRepo.EXPECT().FilterUnseen(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]uint32{5}, nil)
-	// Message still marked seen even though one consumer panics.
-	uidRepo.EXPECT().MarkSeen(gomock.Any(), "ws1", "int1", "INBOX", uint32(1), []uint32{5}).Return(nil)
+	// The panic is isolated so other consumers still run, but the UID remains
+	// unseen because one required consumer did not complete.
 
 	p := NewVeridianIMAPPollerService(wsRepo, uidRepo, log, 0, 0)
 	p.dialer = dialer
@@ -328,7 +328,7 @@ func TestVeridianIMAPPoller_ConsumerPanicIsolated(t *testing.T) {
 	assert.Equal(t, 1, good.count())
 }
 
-func TestVeridianIMAPPoller_ConsumerErrorStillMarksSeen(t *testing.T) {
+func TestVeridianIMAPPoller_ConsumerErrorLeavesUIDUnseen(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := newTestLogger(ctrl)
@@ -341,7 +341,8 @@ func TestVeridianIMAPPoller_ConsumerErrorStillMarksSeen(t *testing.T) {
 
 	dialer := &fakeIMAPDialer{client: &fakeIMAPClient{uidValidity: 1, messages: []*domain.VeridianIMAPMessage{{UID: 9}}}}
 	uidRepo.EXPECT().FilterUnseen(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]uint32{9}, nil)
-	uidRepo.EXPECT().MarkSeen(gomock.Any(), "ws1", "int1", "INBOX", uint32(1), []uint32{9}).Return(nil)
+	// MarkSeen must not be called: the durable business write failed and the UID
+	// must be retried on the next poll.
 
 	p := NewVeridianIMAPPollerService(wsRepo, uidRepo, log, 0, 0)
 	p.dialer = dialer

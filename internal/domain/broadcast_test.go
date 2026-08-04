@@ -392,6 +392,7 @@ func TestCreateBroadcastRequest_Validate(t *testing.T) {
 				assert.NotNil(t, broadcast)
 				assert.Equal(t, tt.request.WorkspaceID, broadcast.WorkspaceID)
 				assert.Equal(t, tt.request.Name, broadcast.Name)
+				assert.Equal(t, "email", broadcast.ChannelType)
 				assert.Equal(t, domain.BroadcastStatusDraft, broadcast.Status)
 				assert.WithinDuration(t, now, broadcast.CreatedAt, 5*time.Second)
 				assert.WithinDuration(t, now, broadcast.UpdatedAt, 5*time.Second)
@@ -1849,6 +1850,7 @@ func TestCreateBroadcastRequest_Validate_Additional(t *testing.T) {
 	broadcast, err := request.Validate()
 	require.NoError(t, err)
 	assert.Equal(t, domain.BroadcastStatusDraft, broadcast.Status)
+	assert.Equal(t, "email", broadcast.ChannelType)
 	assert.False(t, broadcast.Schedule.IsScheduled, "Schedule should be empty - scheduling must be done via broadcasts.schedule endpoint")
 }
 

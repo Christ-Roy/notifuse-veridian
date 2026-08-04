@@ -169,7 +169,7 @@ func (r *AutomationRepository) GetByIDTx(ctx context.Context, tx *sql.Tx, worksp
 		&nodesJSON, &statsJSON, &automation.CreatedAt, &automation.UpdatedAt, &deletedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("automation not found: %s", id)
+		return nil, &domain.ErrAutomationNotFound{ID: id}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get automation: %w", err)
@@ -385,15 +385,32 @@ func (r *AutomationRepository) Delete(ctx context.Context, workspaceID, id strin
 // DeleteTx soft-deletes an automation within a transaction
 // It also drops the trigger if automation is live and exits all active contacts
 func (r *AutomationRepository) DeleteTx(ctx context.Context, tx *sql.Tx, workspaceID, id string) error {
-	db, err := r.getDB(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("failed to get database connection: %w", err)
+	var execer interface {
+		ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	}
+	if tx != nil {
+		execer = tx
+	} else {
+		db, err := r.getDB(ctx, workspaceID)
+		if err != nil {
+			return fmt.Errorf("failed to get database connection: %w", err)
+		}
+		execer = db
 	}
 
 	now := time.Now().UTC()
 
-	// 1. Drop the automation trigger (ignore errors - trigger might not exist)
-	_ = r.DropAutomationTrigger(ctx, workspaceID, id)
+	// 1. Drop the automation trigger. DROP IF EXISTS already handles absence;
+	// any remaining error must abort the lifecycle transaction.
+	if tx != nil {
+		if err := r.DropAutomationTriggerTx(ctx, tx, workspaceID, id); err != nil {
+			return fmt.Errorf("failed to drop automation trigger: %w", err)
+		}
+	} else {
+		if err := r.DropAutomationTrigger(ctx, workspaceID, id); err != nil {
+			return fmt.Errorf("failed to drop automation trigger: %w", err)
+		}
+	}
 
 	// 2. Mark all active contact_automations as exited with reason
 	exitQuery := `
@@ -401,7 +418,7 @@ func (r *AutomationRepository) DeleteTx(ctx context.Context, tx *sql.Tx, workspa
 		SET status = 'exited', scheduled_at = NULL, exit_reason = 'automation_deleted'
 		WHERE automation_id = $1 AND status = 'active'
 	`
-	_, err = db.ExecContext(ctx, exitQuery, id)
+	_, err := execer.ExecContext(ctx, exitQuery, id)
 	if err != nil {
 		return fmt.Errorf("failed to exit active contacts: %w", err)
 	}
@@ -415,15 +432,6 @@ func (r *AutomationRepository) DeleteTx(ctx context.Context, tx *sql.Tx, workspa
 		ToSql()
 	if err != nil {
 		return fmt.Errorf("failed to build query: %w", err)
-	}
-
-	var execer interface {
-		ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-	}
-	if tx != nil {
-		execer = tx
-	} else {
-		execer = db
 	}
 
 	result, err := execer.ExecContext(ctx, query, args...)
@@ -450,6 +458,21 @@ func (r *AutomationRepository) CreateAutomationTrigger(ctx context.Context, work
 	if err != nil {
 		return fmt.Errorf("failed to get database connection: %w", err)
 	}
+	return r.createAutomationTrigger(ctx, db, automation)
+}
+
+// CreateAutomationTriggerTx creates the trigger in the caller transaction so
+// lifecycle state and queued messages cannot diverge on partial failure.
+func (r *AutomationRepository) CreateAutomationTriggerTx(ctx context.Context, tx *sql.Tx, workspaceID string, automation *domain.Automation) error {
+	if tx == nil {
+		return fmt.Errorf("transaction is required")
+	}
+	return r.createAutomationTrigger(ctx, tx, automation)
+}
+
+func (r *AutomationRepository) createAutomationTrigger(ctx context.Context, execer interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+}, automation *domain.Automation) error {
 
 	// Use generator to create trigger SQL
 	triggerSQL, err := r.triggerGenerator.Generate(automation)
@@ -469,7 +492,7 @@ func (r *AutomationRepository) CreateAutomationTrigger(ctx context.Context, work
 	}
 
 	for _, stmt := range statements {
-		if _, err := db.ExecContext(ctx, stmt.sql); err != nil {
+		if _, err := execer.ExecContext(ctx, stmt.sql); err != nil {
 			return fmt.Errorf("%s: %w", stmt.errMsg, err)
 		}
 	}
@@ -483,6 +506,20 @@ func (r *AutomationRepository) DropAutomationTrigger(ctx context.Context, worksp
 	if err != nil {
 		return fmt.Errorf("failed to get database connection: %w", err)
 	}
+	return r.dropAutomationTrigger(ctx, db, automationID)
+}
+
+// DropAutomationTriggerTx drops the trigger in the caller transaction.
+func (r *AutomationRepository) DropAutomationTriggerTx(ctx context.Context, tx *sql.Tx, workspaceID, automationID string) error {
+	if tx == nil {
+		return fmt.Errorf("transaction is required")
+	}
+	return r.dropAutomationTrigger(ctx, tx, automationID)
+}
+
+func (r *AutomationRepository) dropAutomationTrigger(ctx context.Context, execer interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+}, automationID string) error {
 
 	// Remove hyphens from UUID for valid PostgreSQL identifier
 	safeID := strings.ReplaceAll(automationID, "-", "")
@@ -491,14 +528,14 @@ func (r *AutomationRepository) DropAutomationTrigger(ctx context.Context, worksp
 
 	// Drop the trigger
 	dropTriggerSQL := fmt.Sprintf("DROP TRIGGER IF EXISTS %s ON contact_timeline", triggerName)
-	_, err = db.ExecContext(ctx, dropTriggerSQL)
+	_, err := execer.ExecContext(ctx, dropTriggerSQL)
 	if err != nil {
 		return fmt.Errorf("failed to drop trigger: %w", err)
 	}
 
 	// Drop the function
 	dropFunctionSQL := fmt.Sprintf("DROP FUNCTION IF EXISTS %s()", functionName)
-	_, err = db.ExecContext(ctx, dropFunctionSQL)
+	_, err = execer.ExecContext(ctx, dropFunctionSQL)
 	if err != nil {
 		return fmt.Errorf("failed to drop trigger function: %w", err)
 	}

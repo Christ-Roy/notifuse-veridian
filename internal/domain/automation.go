@@ -14,6 +14,17 @@ import (
 // AutomationStatus represents the status of an automation
 type AutomationStatus string
 
+// ErrAutomationNotFound distinguishes a deleted/missing automation from a
+// transient repository failure. Queue workers can then discard stale rows
+// instead of retrying them forever while still failing closed on DB errors.
+type ErrAutomationNotFound struct {
+	ID string
+}
+
+func (e *ErrAutomationNotFound) Error() string {
+	return fmt.Sprintf("automation not found: %s", e.ID)
+}
+
 const (
 	AutomationStatusDraft  AutomationStatus = "draft"
 	AutomationStatusLive   AutomationStatus = "live"
@@ -729,7 +740,9 @@ type AutomationRepository interface {
 
 	// Trigger management (dynamic SQL execution)
 	CreateAutomationTrigger(ctx context.Context, workspaceID string, automation *Automation) error
+	CreateAutomationTriggerTx(ctx context.Context, tx *sql.Tx, workspaceID string, automation *Automation) error
 	DropAutomationTrigger(ctx context.Context, workspaceID, automationID string) error
+	DropAutomationTriggerTx(ctx context.Context, tx *sql.Tx, workspaceID, automationID string) error
 
 	// Contact automation operations
 	// EnrollContact enrolls a contact into an automation at its root node by

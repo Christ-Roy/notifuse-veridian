@@ -23,9 +23,9 @@ const replyProcessTimeout = 20 * time.Second
 //
 // Garanties (cf. doc VeridianIMAPConsumer) : OnNewMessage est synchrone dans la
 // goroutine du poller (travail rapide attendu — un lookup DB + éventuels updates), et
-// le message est marqué vu MÊME si OnNewMessage retourne une erreur (at-most-once
-// dispatch). D'où l'IDEMPOTENCE MÉTIER du service (ON CONFLICT DO NOTHING + exit
-// idempotent) : un re-dispatch (MarkSeen raté) ne double aucun effet.
+// l'UID n'est acquitté que si tous les consumers réussissent. D'où
+// l'IDEMPOTENCE MÉTIER du service (ON CONFLICT DO NOTHING + exit idempotent) :
+// un re-dispatch après erreur ne double aucun effet.
 
 // veridianReplyProcessor est le contrat minimal que le consumer attend du service
 // (découplage / testabilité). Implémenté par *VeridianReplyService.
@@ -53,7 +53,7 @@ func (c *VeridianReplyConsumer) Name() string {
 }
 
 // OnNewMessage traite un message entrant : délègue au service. L'erreur éventuelle est
-// remontée au poller (qui la loggue) ET le message est de toute façon marqué vu — le
+// remontée au poller (qui la loggue) et empêche l'acquittement de l'UID. Le
 // service est idempotent côté métier, un re-dispatch ne double rien.
 func (c *VeridianReplyConsumer) OnNewMessage(msg *domain.VeridianIMAPMessage) error {
 	if msg == nil {

@@ -65,6 +65,20 @@ func (mr *MockAutomationRepositoryMockRecorder) CreateAutomationTrigger(arg0, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAutomationTrigger", reflect.TypeOf((*MockAutomationRepository)(nil).CreateAutomationTrigger), arg0, arg1, arg2)
 }
 
+// CreateAutomationTriggerTx mocks base method.
+func (m *MockAutomationRepository) CreateAutomationTriggerTx(arg0 context.Context, arg1 *sql.Tx, arg2 string, arg3 *domain.Automation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateAutomationTriggerTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateAutomationTriggerTx indicates an expected call of CreateAutomationTriggerTx.
+func (mr *MockAutomationRepositoryMockRecorder) CreateAutomationTriggerTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAutomationTriggerTx", reflect.TypeOf((*MockAutomationRepository)(nil).CreateAutomationTriggerTx), arg0, arg1, arg2, arg3)
+}
+
 // CreateNodeExecution mocks base method.
 func (m *MockAutomationRepository) CreateNodeExecution(arg0 context.Context, arg1 string, arg2 *domain.NodeExecution) error {
 	m.ctrl.T.Helper()
@@ -147,6 +161,20 @@ func (m *MockAutomationRepository) DropAutomationTrigger(arg0 context.Context, a
 func (mr *MockAutomationRepositoryMockRecorder) DropAutomationTrigger(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropAutomationTrigger", reflect.TypeOf((*MockAutomationRepository)(nil).DropAutomationTrigger), arg0, arg1, arg2)
+}
+
+// DropAutomationTriggerTx mocks base method.
+func (m *MockAutomationRepository) DropAutomationTriggerTx(arg0 context.Context, arg1 *sql.Tx, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropAutomationTriggerTx", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropAutomationTriggerTx indicates an expected call of DropAutomationTriggerTx.
+func (mr *MockAutomationRepositoryMockRecorder) DropAutomationTriggerTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropAutomationTriggerTx", reflect.TypeOf((*MockAutomationRepository)(nil).DropAutomationTriggerTx), arg0, arg1, arg2, arg3)
 }
 
 // EnrollContact mocks base method.

@@ -10,7 +10,7 @@ package queue
 //   2. Pour chaque workspace, repère les intégrations de type IMAP.
 //   3. Pour chaque boîte IMAP : dial (timeout court) -> select -> SEARCH SINCE
 //      -> filtre les UID déjà vus (repo durable) -> dispatch aux consumers
-//      -> marque les UID vus.
+//      -> marque les UID vus uniquement si tous les consumers réussissent.
 //
 // Best-effort de bout en bout :
 //   - échec de connexion / login / fetch d'UNE boîte => log + skip cette boîte,
@@ -306,10 +306,11 @@ func (s *VeridianIMAPPollerService) pollBox(parentCtx context.Context, workspace
 		msg.WorkspaceID = workspaceID
 		msg.IntegrationID = integrationID
 
-		s.dispatch(consumers, msg, log)
-		// Marqué vu QUOI QU'IL ARRIVE (at-most-once dispatch). Cf. doc du
-		// VeridianIMAPConsumer : un consumer qui veut retry gère sa persistance.
-		processed = append(processed, msg.UID)
+		if s.dispatch(consumers, msg, log) {
+			processed = append(processed, msg.UID)
+		} else {
+			log.WithField("uid", msg.UID).Warn("VeridianIMAPPoller: required consumer failed, UID left unseen for retry")
+		}
 	}
 
 	if len(processed) > 0 {
@@ -327,17 +328,24 @@ func (s *VeridianIMAPPollerService) pollBox(parentCtx context.Context, workspace
 	}
 }
 
-// dispatch envoie un message à tous les consumers, chacun isolé d'un panic.
-func (s *VeridianIMAPPollerService) dispatch(consumers []domain.VeridianIMAPConsumer, msg *domain.VeridianIMAPMessage, log logger.Logger) {
+// dispatch envoie un message à tous les consumers, chacun isolé d'un panic. Il
+// retourne true uniquement si tous ont réussi, condition d'acquittement UID.
+func (s *VeridianIMAPPollerService) dispatch(consumers []domain.VeridianIMAPConsumer, msg *domain.VeridianIMAPMessage, log logger.Logger) bool {
+	succeeded := true
 	for _, consumer := range consumers {
-		s.safeConsume(consumer, msg, log)
+		if !s.safeConsume(consumer, msg, log) {
+			succeeded = false
+		}
 	}
+	return succeeded
 }
 
 // safeConsume appelle un consumer en récupérant tout panic.
-func (s *VeridianIMAPPollerService) safeConsume(consumer domain.VeridianIMAPConsumer, msg *domain.VeridianIMAPMessage, log logger.Logger) {
+func (s *VeridianIMAPPollerService) safeConsume(consumer domain.VeridianIMAPConsumer, msg *domain.VeridianIMAPMessage, log logger.Logger) (succeeded bool) {
+	succeeded = true
 	defer func() {
 		if r := recover(); r != nil {
+			succeeded = false
 			log.WithFields(map[string]interface{}{
 				"consumer": consumer.Name(),
 				"panic":    r,
@@ -347,10 +355,12 @@ func (s *VeridianIMAPPollerService) safeConsume(consumer domain.VeridianIMAPCons
 	}()
 
 	if err := consumer.OnNewMessage(msg); err != nil {
+		succeeded = false
 		log.WithFields(map[string]interface{}{
 			"consumer": consumer.Name(),
 			"error":    err.Error(),
 			"uid":      msg.UID,
-		}).Warn("VeridianIMAPPoller: consumer returned error (message still marked seen)")
+		}).Warn("VeridianIMAPPoller: consumer returned error")
 	}
+	return succeeded
 }

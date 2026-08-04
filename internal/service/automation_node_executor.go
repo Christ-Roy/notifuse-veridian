@@ -400,6 +400,7 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 			Subject:            subject,
 			HTMLContent:        htmlContent,
 			RateLimitPerMinute: emailProvider.RateLimitPerMinute,
+			ListID:             params.Automation.ListID,
 			EmailOptions: domain.EmailOptions{
 				ReplyTo: emailContent.ReplyTo,
 			},

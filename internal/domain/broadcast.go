@@ -445,6 +445,7 @@ func (r *CreateBroadcastRequest) Validate() (*Broadcast, error) {
 	broadcast := &Broadcast{
 		WorkspaceID:   r.WorkspaceID,
 		Name:          r.Name,
+		ChannelType:   "email",
 		Status:        BroadcastStatusDraft,
 		Audience:      r.Audience,
 		Schedule:      ScheduleSettings{}, // Empty schedule - must use broadcasts.schedule endpoint

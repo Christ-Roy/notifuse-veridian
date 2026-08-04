@@ -236,16 +236,16 @@ type VeridianIMAPMessage struct {
 //     PAS les autres consumers de recevoir le message ni le poller de continuer.
 //   - Name() sert au logging / à la désambiguïsation.
 //
-// IMPORTANT pour lots 2/3 : si OnNewMessage retourne une erreur, le message est
-// QUAND MÊME marqué comme vu (on ne re-traite jamais un UID, pour éviter une
-// boucle infinie sur un message empoisonné). Un consumer qui veut un retry doit
-// gérer sa propre persistance de retry. Ce choix est volontaire : le poller
-// garantit "at-most-once dispatch", pas "exactly-once processing".
+// IMPORTANT pour lots 2/3 : tous les consumers enregistrés sont obligatoires.
+// Si l'un retourne une erreur ou panique, les autres sont quand même appelés,
+// mais l'UID reste non acquitté et sera rejoué. Les consumers doivent donc être
+// idempotents. Ce choix évite de perdre durablement un bounce ou une réponse sur
+// une panne DB transitoire.
 type VeridianIMAPConsumer interface {
 	// Name identifie le consumer (ex: "bounce-loop", "stop-on-reply").
 	Name() string
-	// OnNewMessage traite un message neuf. Best-effort : l'erreur est loggée
-	// mais le message est marqué vu quoi qu'il arrive.
+	// OnNewMessage traite un message neuf. Une erreur est loggée et empêche
+	// l'acquittement de l'UID afin que le message soit rejoué.
 	OnNewMessage(msg *VeridianIMAPMessage) error
 }
 

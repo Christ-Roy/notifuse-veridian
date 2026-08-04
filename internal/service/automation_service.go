@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -10,9 +11,19 @@ import (
 
 // AutomationService handles automation business logic
 type AutomationService struct {
-	repo        domain.AutomationRepository
-	authService domain.AuthService
-	logger      logger.Logger
+	repo           domain.AutomationRepository
+	authService    domain.AuthService
+	workspaceRepo  domain.WorkspaceRepository
+	emailQueueRepo domain.EmailQueueRepository
+	logger         logger.Logger
+}
+
+// AutomationLifecycleDependencies enables the atomic production lifecycle.
+// It is optional only to preserve narrow unit tests which do not exercise the
+// queue; the application wiring always provides it.
+type AutomationLifecycleDependencies struct {
+	WorkspaceRepo  domain.WorkspaceRepository
+	EmailQueueRepo domain.EmailQueueRepository
 }
 
 // NewAutomationService creates a new AutomationService
@@ -20,12 +31,33 @@ func NewAutomationService(
 	repo domain.AutomationRepository,
 	authService domain.AuthService,
 	logger logger.Logger,
+	lifecycle ...AutomationLifecycleDependencies,
 ) *AutomationService {
-	return &AutomationService{
+	service := &AutomationService{
 		repo:        repo,
 		authService: authService,
 		logger:      logger,
 	}
+	if len(lifecycle) > 0 {
+		service.workspaceRepo = lifecycle[0].WorkspaceRepo
+		service.emailQueueRepo = lifecycle[0].EmailQueueRepo
+	}
+	return service
+}
+
+func (s *AutomationService) beginLifecycleTx(ctx context.Context, workspaceID string) (*sql.Tx, error) {
+	if s.workspaceRepo == nil || s.emailQueueRepo == nil {
+		return nil, nil
+	}
+	db, err := s.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace database: %w", err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin automation lifecycle transaction: %w", err)
+	}
+	return tx, nil
 }
 
 // Create creates a new automation
@@ -151,6 +183,25 @@ func (s *AutomationService) Delete(ctx context.Context, workspaceID, automationI
 		)
 	}
 
+	tx, err := s.beginLifecycleTx(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if tx != nil {
+		defer tx.Rollback()
+		if err := s.repo.DeleteTx(ctx, tx, workspaceID, automationID); err != nil {
+			return fmt.Errorf("failed to delete automation: %w", err)
+		}
+		if _, err := s.emailQueueRepo.DeleteBySourceTx(ctx, tx, domain.EmailQueueSourceAutomation, automationID); err != nil {
+			return fmt.Errorf("failed to delete automation queue: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit automation deletion: %w", err)
+		}
+		return nil
+	}
+
+	// Legacy fallback for isolated service tests without lifecycle dependencies.
 	// Repository handles:
 	// 1. Dropping the DB trigger (if automation was live)
 	// 2. Marking all active contact_automations as 'exited'
@@ -178,8 +229,21 @@ func (s *AutomationService) Activate(ctx context.Context, workspaceID, automatio
 		)
 	}
 
-	// Get existing automation
-	automation, err := s.repo.GetByID(ctx, workspaceID, automationID)
+	tx, err := s.beginLifecycleTx(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if tx != nil {
+		defer tx.Rollback()
+	}
+
+	// Get existing automation, using the lifecycle transaction in production.
+	var automation *domain.Automation
+	if tx != nil {
+		automation, err = s.repo.GetByIDTx(ctx, tx, workspaceID, automationID)
+	} else {
+		automation, err = s.repo.GetByID(ctx, workspaceID, automationID)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to get automation: %w", err)
 	}
@@ -198,16 +262,37 @@ func (s *AutomationService) Activate(ctx context.Context, workspaceID, automatio
 
 	// Update status to live
 	automation.Status = domain.AutomationStatusLive
-	if err := s.repo.Update(ctx, workspaceID, automation); err != nil {
+	if tx != nil {
+		err = s.repo.UpdateTx(ctx, tx, workspaceID, automation)
+	} else {
+		err = s.repo.Update(ctx, workspaceID, automation)
+	}
+	if err != nil {
 		return fmt.Errorf("failed to update automation status: %w", err)
 	}
 
 	// Create the database trigger
-	if err := s.repo.CreateAutomationTrigger(ctx, workspaceID, automation); err != nil {
+	if tx != nil {
+		err = s.repo.CreateAutomationTriggerTx(ctx, tx, workspaceID, automation)
+	} else {
+		err = s.repo.CreateAutomationTrigger(ctx, workspaceID, automation)
+	}
+	if err != nil {
 		// Rollback status change
-		automation.Status = domain.AutomationStatusDraft
-		_ = s.repo.Update(ctx, workspaceID, automation)
+		if tx == nil {
+			automation.Status = domain.AutomationStatusDraft
+			_ = s.repo.Update(ctx, workspaceID, automation)
+		}
 		return fmt.Errorf("failed to create automation trigger: %w", err)
+	}
+
+	if tx != nil {
+		if _, err := s.emailQueueRepo.ResumeBySourceTx(ctx, tx, domain.EmailQueueSourceAutomation, automationID); err != nil {
+			return fmt.Errorf("failed to resume automation queue: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit automation activation: %w", err)
+		}
 	}
 
 	return nil
@@ -228,8 +313,20 @@ func (s *AutomationService) Pause(ctx context.Context, workspaceID, automationID
 		)
 	}
 
-	// Get existing automation
-	automation, err := s.repo.GetByID(ctx, workspaceID, automationID)
+	tx, err := s.beginLifecycleTx(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if tx != nil {
+		defer tx.Rollback()
+	}
+
+	var automation *domain.Automation
+	if tx != nil {
+		automation, err = s.repo.GetByIDTx(ctx, tx, workspaceID, automationID)
+	} else {
+		automation, err = s.repo.GetByID(ctx, workspaceID, automationID)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to get automation: %w", err)
 	}
@@ -240,14 +337,33 @@ func (s *AutomationService) Pause(ctx context.Context, workspaceID, automationID
 	}
 
 	// Drop the database trigger first
-	if err := s.repo.DropAutomationTrigger(ctx, workspaceID, automationID); err != nil {
+	if tx != nil {
+		err = s.repo.DropAutomationTriggerTx(ctx, tx, workspaceID, automationID)
+	} else {
+		err = s.repo.DropAutomationTrigger(ctx, workspaceID, automationID)
+	}
+	if err != nil {
 		return fmt.Errorf("failed to drop automation trigger: %w", err)
 	}
 
 	// Update status to paused
 	automation.Status = domain.AutomationStatusPaused
-	if err := s.repo.Update(ctx, workspaceID, automation); err != nil {
+	if tx != nil {
+		err = s.repo.UpdateTx(ctx, tx, workspaceID, automation)
+	} else {
+		err = s.repo.Update(ctx, workspaceID, automation)
+	}
+	if err != nil {
 		return fmt.Errorf("failed to update automation status: %w", err)
+	}
+
+	if tx != nil {
+		if _, err := s.emailQueueRepo.PauseBySourceTx(ctx, tx, domain.EmailQueueSourceAutomation, automationID); err != nil {
+			return fmt.Errorf("failed to pause automation queue: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit automation pause: %w", err)
+		}
 	}
 
 	return nil
