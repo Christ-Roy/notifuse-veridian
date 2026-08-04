@@ -1,0 +1,20 @@
+<mjml>
+  <mj-body>
+    <mj-section>
+      <mj-column>
+        <mj-text>
+          Bonjour,<br /><br />
+          Je me permets un dernier message, puis je clôture le sujet.<br /><br />
+          Si vous souhaitez recevoir un audit détaillé de votre e-commerce, répondez-moi simplement « oui ».<br /><br />
+          Sinon, un simple « non » me suffit.<br /><br />
+          Bien à vous,<br /><br />
+          Robert Brunon<br />
+          Veridian
+        </mj-text>
+        <mj-text font-size="12px" line-height="18px" color="#6B7280">
+          Vous recevez ce message dans le cadre de votre activité professionnelle, à partir de coordonnées publiées par votre entreprise. Un simple « non » suffit pour ne plus être contacté. Informations sur vos données et vos droits : <a href="https://veridian.site/confidentialite">veridian.site/confidentialite</a>.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

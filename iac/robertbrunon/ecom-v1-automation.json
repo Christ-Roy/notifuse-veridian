@@ -1,0 +1,48 @@
+{
+  "id": "ecom-refonte-v1-j0-j3-j7",
+  "name": "E-commerce refonte, vague 1 J0 J3 J7",
+  "status": "draft",
+  "list_id": "ecomrefontev1clean",
+  "trigger": {
+    "event_kind": "list.subscribed",
+    "list_id": "ecomrefontev1clean",
+    "frequency": "once"
+  },
+  "root_node_id": "email_j0",
+  "nodes": [
+    {
+      "id": "email_j0",
+      "automation_id": "ecom-refonte-v1-j0-j3-j7",
+      "type": "email",
+      "config": {"template_id": "ecom-pilot-j0"},
+      "next_node_id": "wait_j3"
+    },
+    {
+      "id": "wait_j3",
+      "automation_id": "ecom-refonte-v1-j0-j3-j7",
+      "type": "delay",
+      "config": {"duration": 3, "unit": "days"},
+      "next_node_id": "email_j3"
+    },
+    {
+      "id": "email_j3",
+      "automation_id": "ecom-refonte-v1-j0-j3-j7",
+      "type": "email",
+      "config": {"template_id": "ecom-pilot-j3"},
+      "next_node_id": "wait_j7"
+    },
+    {
+      "id": "wait_j7",
+      "automation_id": "ecom-refonte-v1-j0-j3-j7",
+      "type": "delay",
+      "config": {"duration": 4, "unit": "days"},
+      "next_node_id": "email_j7"
+    },
+    {
+      "id": "email_j7",
+      "automation_id": "ecom-refonte-v1-j0-j3-j7",
+      "type": "email",
+      "config": {"template_id": "ecom-pilot-j7"}
+    }
+  ]
+}

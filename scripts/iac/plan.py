@@ -85,10 +85,11 @@ def diff_email_integration(declared, real):
     ep = real.get("email_provider") or {}
     reasons = []
 
-    # SMTP host/port/tls.
+    # SMTP host/port/TLS. Le relai Veridian est privé et a un certificat
+    # auto-signé : skip_tls_verify est donc une partie significative du contrat.
     rsmtp = ep.get("smtp") or {}
     if declared.get("smtp"):
-        for k in ("host", "port", "use_tls"):
+        for k in ("host", "port", "use_tls", "skip_tls_verify", "ehlo_hostname"):
             want = _norm(declared["smtp"].get(k))
             have = _norm(rsmtp.get(k))
             if want != have:
@@ -106,7 +107,11 @@ def diff_email_integration(declared, real):
 
     # Cold rates/caps PAR INFRA (posés sur l'EmailProvider).
     for k in ("veridian_provider_class_rates", "veridian_provider_class_daily_cap",
-              "veridian_per_recipient_daily_cap"):
+              "veridian_per_recipient_daily_cap", "veridian_open_pixel_by_class",
+              "veridian_excluded_provider_classes", "veridian_warmup_started_at",
+              "veridian_warmup_schedule", "veridian_warmup_step_days",
+              "veridian_sending_window", "veridian_jitter_pct",
+              "veridian_anti_hash_enabled", "veridian_anti_hash_window_hours"):
         if _norm(declared.get(k)) != _norm(ep.get(k)):
             reasons.append(k)
 
@@ -156,6 +161,8 @@ def main(argv):
                 "host": smtp.get("host"),
                 "port": int(smtp["port"]) if smtp.get("port") not in (None, "") else None,
                 "use_tls": smtp.get("use_tls", True),
+                "skip_tls_verify": smtp.get("skip_tls_verify", False),
+                "ehlo_hostname": smtp.get("ehlo_hostname", ""),
             },
             "senders": si.get("senders", []),
             "veridian_tracking_domain": si.get("veridian_tracking_domain"),
@@ -168,6 +175,19 @@ def main(argv):
             declared["veridian_provider_class_daily_cap"] = cold["provider_class_daily_cap"]
         if "per_recipient_daily_cap" in cold:
             declared["veridian_per_recipient_daily_cap"] = cold["per_recipient_daily_cap"]
+        for man_key, provider_key in (
+            ("open_pixel_by_class", "veridian_open_pixel_by_class"),
+            ("excluded_provider_classes", "veridian_excluded_provider_classes"),
+            ("warmup_started_at", "veridian_warmup_started_at"),
+            ("warmup_schedule", "veridian_warmup_schedule"),
+            ("warmup_step_days", "veridian_warmup_step_days"),
+            ("sending_window", "veridian_sending_window"),
+            ("jitter_pct", "veridian_jitter_pct"),
+            ("anti_hash_enabled", "veridian_anti_hash_enabled"),
+            ("anti_hash_window_hours", "veridian_anti_hash_window_hours"),
+        ):
+            if man_key in cold:
+                declared[provider_key] = cold[man_key]
         op, reason = diff_email_integration(declared, real)
         actions.append({
             "kind": "integration_email", "op": op, "name": name, "reason": reason,

@@ -1,0 +1,21 @@
+<mjml>
+  <mj-body>
+    <mj-section>
+      <mj-column>
+        <mj-text>
+          Bonjour,<br /><br />
+          Je me permets de vous écrire à propos de votre e-commerce.<br /><br />
+          Je pense qu'il y a peut-être quelques améliorations simples à envisager, côté rapidité, parcours d'achat ou administration du site.<br /><br />
+          Si cela vous intéresse, répondez-moi simplement « oui ». Je vous enverrai un audit détaillé de votre e-commerce, sans engagement.<br /><br />
+          Bien à vous,<br /><br />
+          Robert Brunon<br />
+          Veridian<br />
+          06 29 45 43 11
+        </mj-text>
+        <mj-text font-size="12px" line-height="18px" color="#6B7280">
+          Vous recevez ce message dans le cadre de votre activité professionnelle, à partir de coordonnées publiées par votre entreprise. Si le sujet n'est pas d'actualité, répondez simplement « non » et vous ne serez plus relancé. Informations sur vos données et vos droits : <a href="https://veridian.site/confidentialite">veridian.site/confidentialite</a>.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

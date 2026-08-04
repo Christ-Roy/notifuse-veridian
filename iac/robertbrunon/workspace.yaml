@@ -1,0 +1,93 @@
+# Configuration de production du pilote e-commerce Veridian.
+# Ce manifeste configure l'infrastructure et les garde-fous, sans déclencher
+# d'envoi. Les secrets sont lus à l'apply depuis ~/credentials/.all-creds.env.
+workspace:
+  id: robertbrunon
+  name: Robert Brunon
+  owner_email: robert.brunon@veridian.site
+  plan: free
+  environment: prod
+
+sending_integrations:
+  - id: agences-relay
+    type: email
+    kind: smtp
+    smtp:
+      host: ${SMTP_AGENCES_HOST}
+      port: ${SMTP_AGENCES_PORT}
+      use_tls: true
+      # Le relai est accessible uniquement sur le réseau privé Tailscale et
+      # présente un certificat auto-signé. Le backend refuse ce flag vers une
+      # adresse publique.
+      skip_tls_verify: true
+      ehlo_hostname: smtp.agences-veridian.fr
+    senders:
+      - email: ${SMTP_AGENCES_USER1}
+        password: ${SMTP_AGENCES_PW1}
+        name: Robert Brunon
+        is_default: true
+      - email: ${SMTP_AGENCES_USER2}
+        password: ${SMTP_AGENCES_PW2}
+        name: Robert Brunon
+      - email: ${SMTP_AGENCES_USER3}
+        password: ${SMTP_AGENCES_PW3}
+        name: Robert Brunon
+    veridian_tracking_domain: track.agences-veridian.fr
+
+reply_inbox:
+  type: imap
+  imap:
+    host: ${LARK_IMAP_HOST}
+    port: ${LARK_IMAP_PORT}
+    username: ${LARK_IMAP_USERNAME}
+    password: ${LARK_IMAP_PASSWORD}
+    use_tls: true
+    folder: INBOX
+    polling_interval_seconds: 120
+
+# Politique du pilote. Le warm-up plafonne le domaine d'envoi à deux messages
+# par jour au 2026-08-04, toutes relances et classes destinataires confondues.
+# Les gros fournisseurs restent fermés tant que la première série n'a pas
+# démontré une délivrabilité saine.
+cold_outreach:
+  per_recipient_daily_cap: 1
+  provider_class_rates:
+    corporate: 0.1
+    corporate_selfhost: 0.1
+    ovh: 0.1
+    ionos: 0.1
+    other_hoster: 0.1
+    security_gateway: 0.1
+  provider_class_daily_cap:
+    corporate: 1
+    corporate_selfhost: 1
+    ovh: 1
+    ionos: 1
+    other_hoster: 1
+    security_gateway: 1
+  excluded_provider_classes: [google, microsoft, yahoo_aol, freemail_fr, apple_icloud]
+  warmup_started_at: "2026-07-26T00:00:00Z"
+  # Rampe globale du domaine d'envoi. Au 2026-08-04, le domaine entre dans le
+  # palier 2/jour ; la progression reste volontairement lente et plafonne à
+  # 20/jour, relances comprises.
+  warmup_schedule: [1, 2, 3, 5, 8, 12, 16, 20]
+  warmup_step_days: 7
+  sending_window:
+    days: [1, 2, 3, 4, 5]
+    start_hour: 10
+    end_hour: 16
+    timezone: Europe/Paris
+  open_pixel_by_class:
+    google: false
+    microsoft: false
+    yahoo_aol: false
+    freemail_fr: false
+    corporate: false
+    corporate_selfhost: false
+    ovh: false
+    ionos: false
+    other_hoster: false
+    security_gateway: false
+  jitter_pct: 0.30
+  anti_hash_enabled: true
+  anti_hash_window_hours: 72

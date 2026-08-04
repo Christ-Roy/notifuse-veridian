@@ -203,6 +203,8 @@ provider={
     "username":senders[0]["email"] if senders else "",
     "password":next((s.get("password") for s in si.get("senders",[]) if s.get("password")),""),
     "use_tls":bool(smtp.get("use_tls",True)),
+    "skip_tls_verify":bool(smtp.get("skip_tls_verify",False)),
+    "ehlo_hostname":smtp.get("ehlo_hostname", ""),
   },
   "senders":senders,
   "rate_limit_per_minute":600,
@@ -211,6 +213,18 @@ if "provider_class_rates" in cold: provider["veridian_provider_class_rates"]=col
 if "provider_class_daily_cap" in cold: provider["veridian_provider_class_daily_cap"]=cold["provider_class_daily_cap"]
 if "per_recipient_daily_cap" in cold: provider["veridian_per_recipient_daily_cap"]=int(cold["per_recipient_daily_cap"])
 if si.get("veridian_tracking_domain"): provider["veridian_tracking_domain"]=si["veridian_tracking_domain"]
+for man_key, provider_key in (
+    ("open_pixel_by_class", "veridian_open_pixel_by_class"),
+    ("excluded_provider_classes", "veridian_excluded_provider_classes"),
+    ("warmup_started_at", "veridian_warmup_started_at"),
+    ("warmup_schedule", "veridian_warmup_schedule"),
+    ("warmup_step_days", "veridian_warmup_step_days"),
+    ("sending_window", "veridian_sending_window"),
+    ("jitter_pct", "veridian_jitter_pct"),
+    ("anti_hash_enabled", "veridian_anti_hash_enabled"),
+    ("anti_hash_window_hours", "veridian_anti_hash_window_hours"),
+):
+    if man_key in cold: provider[provider_key]=cold[man_key]
 print(json.dumps({"workspace_id":os.environ["WID"],"name":name,"type":"email","provider":provider}))
 PY
 }
@@ -234,6 +248,8 @@ provider={
     "username":senders[0]["email"] if senders else "",
     "password":next((s.get("password") for s in si.get("senders",[]) if s.get("password")),""),
     "use_tls":bool(smtp.get("use_tls",True)),
+    "skip_tls_verify":bool(smtp.get("skip_tls_verify",False)),
+    "ehlo_hostname":smtp.get("ehlo_hostname", ""),
   },
   "senders":senders,
   "rate_limit_per_minute":600,
@@ -242,6 +258,18 @@ if "provider_class_rates" in cold: provider["veridian_provider_class_rates"]=col
 if "provider_class_daily_cap" in cold: provider["veridian_provider_class_daily_cap"]=cold["provider_class_daily_cap"]
 if "per_recipient_daily_cap" in cold: provider["veridian_per_recipient_daily_cap"]=int(cold["per_recipient_daily_cap"])
 if si.get("veridian_tracking_domain"): provider["veridian_tracking_domain"]=si["veridian_tracking_domain"]
+for man_key, provider_key in (
+    ("open_pixel_by_class", "veridian_open_pixel_by_class"),
+    ("excluded_provider_classes", "veridian_excluded_provider_classes"),
+    ("warmup_started_at", "veridian_warmup_started_at"),
+    ("warmup_schedule", "veridian_warmup_schedule"),
+    ("warmup_step_days", "veridian_warmup_step_days"),
+    ("sending_window", "veridian_sending_window"),
+    ("jitter_pct", "veridian_jitter_pct"),
+    ("anti_hash_enabled", "veridian_anti_hash_enabled"),
+    ("anti_hash_window_hours", "veridian_anti_hash_window_hours"),
+):
+    if man_key in cold: provider[provider_key]=cold[man_key]
 # UpdateIntegrationRequest : pas de champ 'type' (le type ne change pas à l'update).
 print(json.dumps({"workspace_id":os.environ["WID"],"integration_id":iid,"name":name,"provider":provider}))
 PY

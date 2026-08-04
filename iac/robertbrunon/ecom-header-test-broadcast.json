@@ -1,0 +1,22 @@
+{
+  "workspace_id": "robertbrunon",
+  "name": "E-commerce, contrôle de délivrabilité",
+  "audience": {
+    "list": "ecomrefontepilot",
+    "exclude_unsubscribed": true
+  },
+  "test_settings": {
+    "enabled": false,
+    "sample_percentage": 100,
+    "variations": [
+      {
+        "variation_name": "plain",
+        "template_id": "ecom-pilot-j0"
+      }
+    ]
+  },
+  "tracking_enabled": false,
+  "metadata": {
+    "purpose": "header_and_delivery_test"
+  }
+}
