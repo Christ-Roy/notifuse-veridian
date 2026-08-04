@@ -265,6 +265,29 @@ workspace. Spec : ticket `todo/2026-06-14-...roadmap.md` (section R2).
 | `internal/domain/email_provider.go` | +3 champs `EmailProvider` : `VeridianProviderClassRates` (map[string]float64), `VeridianProviderClassDailyCap` (map[string]int), `VeridianPerRecipientDailyCap` (int), tous `omitempty` |
 | `internal/service/queue/worker.go` | 2 call-sites : `veridianProviderClassGate` + `veridianDailyCapGate` reçoivent `&integration.EmailProvider` (param `provider` ajouté) |
 
+### Profils d'envoi Gmail par mot de passe d'application (2026-08-04)
+
+La console expose un parcours dédié `Gmail + mot de passe d'application` en plus
+du SMTP avancé et des autres providers. Le preset verrouille `smtp.gmail.com:587`,
+STARTTLS, basic auth, crée le sender depuis l'adresse Gmail et limite le profil à
+1 email/minute par défaut. Plusieurs intégrations email restent possibles dans un
+même workspace ; les actions `Use for Marketing` et `Use for Transactional`
+sélectionnent explicitement le profil actif.
+
+- Le secret de 16 caractères est normalisé sans espaces et chiffré avant
+  persistance. Il n'est jamais réaffiché en clair.
+- Une édition avec le champ secret vide préserve le ciphertext existant pour tous
+  les providers email concernés, au lieu d'effacer silencieusement le credential.
+- Le test d'un profil sauvegardé hydrate le secret uniquement en mémoire avant
+  l'appel au transport. Le payload console continue de ne contenir que le
+  ciphertext.
+- Fichiers Veridian :
+  `console/src/components/settings/veridian_email_profiles.ts`,
+  `internal/service/veridian_email_provider_secrets.go` et tests 1:1.
+- Diffs inline nécessaires :
+  `console/src/components/settings/Integrations.tsx`,
+  `internal/service/workspace_service.go`, `internal/service/email_service.go`.
+
 ### Custom tracking domain aligné au domaine d'envoi (Lot 5 cold outreach, 2026-06-15)
 
 Les liens de tracking (pixel ouverture `/t/`, redirect clic `/r/`) doivent vivre sur

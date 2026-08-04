@@ -1400,6 +1400,7 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 	switch existingIntegration.Type {
 	case domain.IntegrationTypeEmail:
 		updatedIntegration.EmailProvider = req.Provider
+		veridianPreserveEmailProviderSecrets(&updatedIntegration.EmailProvider, existingIntegration.EmailProvider)
 	case domain.IntegrationTypeSupabase:
 		// Preserve existing encrypted keys if new keys are not provided
 		if req.SupabaseSettings != nil {

@@ -113,6 +113,14 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 		return err
 	}
 
+	// Saved integrations only expose encrypted credentials to the console. Load
+	// them for this in-memory test request so testing an existing profile uses the
+	// same secret as real sends. Plaintext credentials from a new unsaved profile
+	// remain authoritative.
+	if err := veridianHydrateEmailProviderSecrets(&provider, s.secretKey); err != nil {
+		return fmt.Errorf("failed to load provider credentials for test: %w", err)
+	}
+
 	// Validate the provider has the required fields
 	if len(provider.Senders) == 0 {
 		return fmt.Errorf("at least one sender is required for the provider")

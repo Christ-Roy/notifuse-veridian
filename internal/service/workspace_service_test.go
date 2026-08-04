@@ -1747,6 +1747,71 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("update SMTP integration preserves app password when not resent", func(t *testing.T) {
+		const existingEncrypted = "encrypted-existing-app-password"
+		expectedUser := &domain.User{ID: userID}
+		expectedUserWorkspace := &domain.UserWorkspace{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+			Role:        "owner",
+		}
+		existingSMTP := domain.Integration{
+			ID:   integrationID,
+			Name: "Gmail sending profile",
+			Type: domain.IntegrationTypeEmail,
+			EmailProvider: domain.EmailProvider{
+				Kind: domain.EmailProviderKindSMTP,
+				SMTP: &domain.SMTPSettings{
+					Host:              "smtp.gmail.com",
+					Port:              587,
+					Username:          "client@gmail.com",
+					EncryptedPassword: existingEncrypted,
+					UseTLS:            true,
+				},
+				Senders: []domain.EmailSender{
+					domain.NewEmailSender("client@gmail.com", "Client"),
+				},
+			},
+			CreatedAt: time.Now().Add(-24 * time.Hour),
+			UpdatedAt: time.Now().Add(-24 * time.Hour),
+		}
+		expectedWorkspace := &domain.Workspace{
+			ID:           workspaceID,
+			Name:         "Test Workspace",
+			Integrations: []domain.Integration{existingSMTP},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, expectedUser, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).Return(expectedUserWorkspace, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(expectedWorkspace, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, workspace *domain.Workspace) error {
+			require.Len(t, workspace.Integrations, 1)
+			updated := workspace.Integrations[0].EmailProvider
+			require.NotNil(t, updated.SMTP)
+			require.Equal(t, existingEncrypted, updated.SMTP.EncryptedPassword)
+			require.Empty(t, updated.SMTP.Password)
+			return nil
+		})
+
+		err := service.UpdateIntegration(ctx, domain.UpdateIntegrationRequest{
+			WorkspaceID:   workspaceID,
+			IntegrationID: integrationID,
+			Name:          "Gmail principal",
+			Provider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSMTP,
+				RateLimitPerMinute: 1,
+				SMTP: &domain.SMTPSettings{
+					Host:     "smtp.gmail.com",
+					Port:     587,
+					Username: "client@gmail.com",
+					UseTLS:   true,
+				},
+				Senders: existingSMTP.EmailProvider.Senders,
+			},
+		})
+		require.NoError(t, err)
+	})
+
 	t.Run("update imap integration preserves password when not resent", func(t *testing.T) {
 		// Veridian fork (Lot 8) — l'admin re-sauve une boîte IMAP sans retaper le
 		// mot de passe (UI laisse le champ vide). Le service doit préserver
