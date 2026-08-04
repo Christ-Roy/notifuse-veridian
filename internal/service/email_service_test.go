@@ -296,6 +296,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 
 	// Create a mock email provider service using the generated mock
 	mockSESService := mocks.NewMockEmailProviderService(ctrl)
+	mockSMTPService := mocks.NewMockEmailProviderService(ctrl)
 
 	secretKey := "test-secret-key"
 	webhookEndpoint := "https://webhook.test"
@@ -311,6 +312,7 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		httpClient:      mockHTTPClient,
 		webhookEndpoint: webhookEndpoint,
 		sesService:      mockSESService,
+		smtpService:     mockSMTPService,
 	}
 
 	ctx := context.Background()
@@ -350,6 +352,43 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		err := emailService.TestEmailProvider(ctx, workspaceID, provider, toEmail)
 
 		// Assertions
+		require.NoError(t, err)
+	})
+
+	t.Run("saved SMTP profile decrypts app password for test send", func(t *testing.T) {
+		smtp := &domain.SMTPSettings{
+			Host:     "smtp.gmail.com",
+			Port:     587,
+			Username: "client@gmail.com",
+			Password: "abcdefghijklmnop",
+			UseTLS:   true,
+		}
+		require.NoError(t, smtp.EncryptPassword(secretKey))
+		smtp.Password = ""
+
+		provider := domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			Senders: []domain.EmailSender{
+				{Email: "client@gmail.com", Name: "Client"},
+			},
+			SMTP: smtp,
+		}
+
+		mockAuthService.EXPECT().
+			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user-123"}, nil, nil)
+
+		mockSMTPService.EXPECT().
+			SendEmail(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, request domain.SendEmailProviderRequest) error {
+				require.NotNil(t, request.Provider)
+				require.NotNil(t, request.Provider.SMTP)
+				require.Equal(t, "abcdefghijklmnop", request.Provider.SMTP.Password)
+				require.NotEmpty(t, request.Provider.SMTP.EncryptedPassword)
+				return nil
+			})
+
+		err := emailService.TestEmailProvider(ctx, workspaceID, provider, toEmail)
 		require.NoError(t, err)
 	})
 
@@ -1013,10 +1052,10 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 			).DoAndReturn(func(ctx context.Context, req domain.SendEmailProviderRequest) error {
-				// Verify the subject was overridden and Liquid processed
-				assert.Equal(t, "Override Test User", req.Subject)
-				return nil
-			})
+			// Verify the subject was overridden and Liquid processed
+			assert.Equal(t, "Override Test User", req.Subject)
+			return nil
+		})
 
 		// Call method under test with subject override
 		overrideSubject := "Override {{ name }}"
@@ -1073,10 +1112,10 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 			).DoAndReturn(func(ctx context.Context, req domain.SendEmailProviderRequest) error {
-				// Verify the subject is the template default (processed through Liquid)
-				assert.Equal(t, "Welcome to Our Service", req.Subject)
-				return nil
-			})
+			// Verify the subject is the template default (processed through Liquid)
+			assert.Equal(t, "Welcome to Our Service", req.Subject)
+			return nil
+		})
 
 		// Call method under test with empty subject override (should use template default)
 		emptySubject := ""

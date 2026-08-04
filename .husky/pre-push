@@ -50,6 +50,12 @@ else
   CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
   BASE_REF="origin/${CURRENT_BRANCH}"
   if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then
+    # New feature branches in this fork are based on the long-lived staging
+    # branch `veridian`. Comparing them to `main` (production) incorrectly
+    # treats every pending staging commit as part of the current push.
+    BASE_REF="origin/veridian"
+  fi
+  if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then
     BASE_REF="origin/main"
   fi
   if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then

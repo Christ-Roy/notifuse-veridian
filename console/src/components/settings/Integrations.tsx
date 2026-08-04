@@ -69,6 +69,11 @@ import { firecrawlProvider } from '../integrations/FirecrawlProviders'
 import { LLMProviderKind } from '../../services/api/types'
 import { v4 as uuidv4 } from 'uuid'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
+import {
+  buildGmailAppPasswordProvider,
+  inferEmailProfileMode
+} from './veridian_email_profiles'
+import type { EmailProfileMode } from './veridian_email_profiles'
 
 // Provider types that only support transactional emails, not marketing emails
 const transactionalEmailOnly: EmailProviderKind[] = []
@@ -322,15 +327,29 @@ const EmailIntegration = ({
             ) : null}
           </div>
           <Tooltip title={integration.id}>
-            {emailProviders
-              .find((p) => p.kind === integration.email_provider.kind)
-              ?.getIcon('', 24) || <FontAwesomeIcon icon={faEnvelope} style={{ height: 24 }} />}
+            <Space>
+              {emailProviders
+                .find((p) => p.kind === integration.email_provider.kind)
+                ?.getIcon('', 24) || <FontAwesomeIcon icon={faEnvelope} style={{ height: 24 }} />}
+              <span>{integration.name}</span>
+              <Tag bordered={false} color="geekblue">
+                {inferEmailProfileMode(provider) === 'gmail_app_password'
+                  ? t`Gmail app password`
+                  : provider.kind === 'smtp' && provider.smtp?.auth_type === 'oauth2'
+                    ? provider.smtp.oauth2_provider === 'google'
+                      ? t`Gmail OAuth`
+                      : t`SMTP OAuth`
+                    : provider.kind === 'smtp'
+                      ? t`Custom SMTP`
+                      : provider.kind.toUpperCase()}
+              </Tag>
+            </Space>
           </Tooltip>
         </>
       }
     >
       <Descriptions bordered size="small" column={1} className="mt-2">
-        <Descriptions.Item label={t`Name`}>{integration.name}</Descriptions.Item>
+        <Descriptions.Item label={t`Profile`}>{integration.name}</Descriptions.Item>
         <Descriptions.Item label={t`Senders`}>
           {provider.senders && provider.senders.length > 0 ? (
             <div>
@@ -440,9 +459,22 @@ interface EmailProviderFormValues {
   senders: Sender[]
   rate_limit_per_minute: number
   type?: IntegrationType
+  profile_mode?: EmailProfileMode
+  gmail_sender_name?: string
 }
 
 const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailProvider => {
+  if (formValues.profile_mode === 'gmail_app_password') {
+    return buildGmailAppPasswordProvider({
+      email: formValues.smtp?.username || '',
+      senderName: formValues.gmail_sender_name || '',
+      appPassword: formValues.smtp?.password,
+      rateLimitPerMinute: formValues.rate_limit_per_minute || 1,
+      existingSenders: formValues.senders,
+      existingSMTP: formValues.smtp
+    })
+  }
+
   const provider: EmailProvider = {
     kind: formValues.kind,
     senders: formValues.senders || [],
@@ -476,6 +508,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const [emailProviderForm] = Form.useForm()
   const rateLimitPerMinute = Form.useWatch('rate_limit_per_minute', emailProviderForm)
   const [selectedProviderType, setSelectedProviderType] = useState<EmailProviderKind | null>(null)
+  const [emailProfileMode, setEmailProfileMode] = useState<EmailProfileMode>('smtp_advanced')
   const [editingIntegrationId, setEditingIntegrationId] = useState<string | null>(null)
   const [senders, setSenders] = useState<Sender[]>([])
   const [senderFormVisible, setSenderFormVisible] = useState(false)
@@ -593,8 +626,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const startEditEmailProvider = (integration: Integration) => {
     if (integration.type !== 'email' || !integration.email_provider) return
 
+    const profileMode = inferEmailProfileMode(integration.email_provider)
     setEditingIntegrationId(integration.id)
     setSelectedProviderType(integration.email_provider.kind)
+    setEmailProfileMode(profileMode)
 
     // Set senders
     const integrationSenders = integration.email_provider.senders || []
@@ -603,6 +638,8 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     emailProviderForm.setFieldsValue({
       name: integration.name,
       kind: integration.email_provider.kind,
+      profile_mode: profileMode,
+      gmail_sender_name: integrationSenders.find((sender) => sender.is_default)?.name || integrationSenders[0]?.name,
       senders: integrationSenders,
       rate_limit_per_minute: integration.email_provider.rate_limit_per_minute || 25,
       ses: integration.email_provider.ses,
@@ -709,6 +746,8 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Handle provider selection and open drawer
   const handleSelectProviderType = (provider: EmailProviderKind) => {
+    setEditingIntegrationId(null)
+    setEmailProfileMode('smtp_advanced')
     setSelectedProviderType(provider)
     // Initialize with empty senders array
     setSenders([])
@@ -716,6 +755,30 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       kind: provider,
       type: 'email',
       name: provider.charAt(0).toUpperCase() + provider.slice(1),
+      profile_mode: 'smtp_advanced',
+      senders: []
+    })
+    setProviderDrawerVisible(true)
+  }
+
+  const handleSelectGmailAppPassword = () => {
+    setEditingIntegrationId(null)
+    setEmailProfileMode('gmail_app_password')
+    setSelectedProviderType('smtp')
+    setSenders([])
+    emailProviderForm.resetFields()
+    emailProviderForm.setFieldsValue({
+      kind: 'smtp',
+      type: 'email',
+      name: t`Gmail sending profile`,
+      profile_mode: 'gmail_app_password',
+      rate_limit_per_minute: 1,
+      smtp: {
+        host: 'smtp.gmail.com',
+        port: 587,
+        use_tls: true,
+        auth_type: 'basic'
+      },
       senders: []
     })
     setProviderDrawerVisible(true)
@@ -878,6 +941,8 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const closeProviderDrawer = () => {
     setProviderDrawerVisible(false)
     setSelectedProviderType(null)
+    setEmailProfileMode('smtp_advanced')
+    setEditingIntegrationId(null)
     setSenders([])
     emailProviderForm.resetFields()
   }
@@ -887,13 +952,16 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     if (!workspace) return
 
     // Make sure we have at least one sender
-    if (!values.senders || values.senders.length === 0) {
+    if (
+      values.profile_mode !== 'gmail_app_password' &&
+      (!values.senders || values.senders.length === 0)
+    ) {
       message.error(t`Please add at least one sender before saving`)
       return
     }
 
     try {
-      const provider = constructProviderFromForm(values)
+      const provider = constructProviderFromForm({ ...values, senders })
       const name = values.name || provider.kind
       const type: IntegrationType = 'email'
 
@@ -923,7 +991,21 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           provider
         }
 
-        await workspaceService.createIntegration(createRequest)
+        const created = await workspaceService.createIntegration(createRequest)
+
+        // The first sending profile should immediately be usable for campaigns.
+        // Additional profiles remain explicit choices and can be promoted with
+        // the "Use for Marketing" action on their card.
+        if (!workspace.settings.marketing_email_provider_id) {
+          const latest = await workspaceService.get(workspace.id)
+          await workspaceService.update({
+            ...latest.workspace,
+            settings: {
+              ...latest.workspace.settings,
+              marketing_email_provider_id: created.integration_id
+            }
+          })
+        }
         message.success(t`Integration created successfully`)
       }
 
@@ -1012,6 +1094,20 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const renderAvailableIntegrations = () => {
     return (
       <>
+        <Card className="mb-4" styles={{ body: { padding: 16 } }}>
+          <div className="flex justify-between items-center gap-4">
+            <div>
+              <div className="font-semibold">{t`Gmail with an app password`}</div>
+              <div className="text-sm text-gray-500 mt-1">
+                {t`Recommended fallback for a Gmail account. No Google Cloud project or OAuth test-user list is needed.`}
+              </div>
+            </div>
+            <Button type="primary" onClick={handleSelectGmailAppPassword}>
+              {t`Add Gmail profile`}
+            </Button>
+          </div>
+        </Card>
+
         {emailProviders.map((provider) => (
           <div
             key={`${provider.type}-${provider.kind}`}
@@ -1020,7 +1116,9 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           >
             <div className="flex items-center">
               {provider.getIcon('', 'large')}
-              <span className="ml-3 font-medium">{provider.name}</span>
+              <span className="ml-3 font-medium">
+                {provider.kind === 'smtp' ? t`Advanced SMTP` : provider.name}
+              </span>
             </div>
             <Button
               type="primary"
@@ -1538,7 +1636,117 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </>
         )}
 
-        {providerType === 'smtp' && (
+        {providerType === 'smtp' && emailProfileMode === 'gmail_app_password' && (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              className="mb-4"
+              message={t`Gmail with an app password`}
+              description={
+                <Space direction="vertical" size="small">
+                  <span>
+                    {t`Enable 2-Step Verification on the Google account, create a dedicated 16-character app password, then enter it below. The regular Gmail password will not work.`}
+                  </span>
+                  <span>
+                    {t`This method does not use Google Cloud OAuth, so no test-user configuration is required.`}
+                  </span>
+                  <Button
+                    href="https://myaccount.google.com/apppasswords"
+                    target="_blank"
+                    rel="noreferrer"
+                    size="small"
+                  >
+                    {t`Open Google app passwords`}
+                  </Button>
+                </Space>
+              }
+            />
+
+            <Form.Item name="profile_mode" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item name={['smtp', 'host']} hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item name={['smtp', 'port']} hidden>
+              <InputNumber />
+            </Form.Item>
+            <Form.Item name={['smtp', 'use_tls']} valuePropName="checked" hidden>
+              <Switch />
+            </Form.Item>
+            <Form.Item name={['smtp', 'auth_type']} hidden>
+              <Input />
+            </Form.Item>
+
+            <Form.Item
+              name={['smtp', 'username']}
+              label={t`Gmail address`}
+              rules={[
+                { required: true, message: t`Gmail address is required` },
+                { type: 'email', message: t`Enter a valid email address` }
+              ]}
+            >
+              <Input placeholder="client@gmail.com" autoComplete="username" disabled={!isOwner} />
+            </Form.Item>
+
+            <Form.Item
+              name="gmail_sender_name"
+              label={t`Sender name`}
+              rules={[{ required: true, message: t`Sender name is required` }]}
+            >
+              <Input placeholder={t`Company or contact name`} disabled={!isOwner} />
+            </Form.Item>
+
+            <Form.Item
+              name={['smtp', 'password']}
+              label={t`Google app password`}
+              rules={
+                editingIntegrationId
+                  ? [
+                      {
+                        validator: async (_, value?: string) => {
+                          if (value && value.replace(/\s/g, '').length !== 16) {
+                            throw new Error(t`The Google app password must contain 16 characters`)
+                          }
+                        }
+                      }
+                    ]
+                  : [
+                      { required: true, message: t`Google app password is required` },
+                      {
+                        validator: async (_, value?: string) => {
+                          if (value && value.replace(/\s/g, '').length !== 16) {
+                            throw new Error(t`The Google app password must contain 16 characters`)
+                          }
+                        }
+                      }
+                    ]
+              }
+              extra={
+                editingIntegrationId
+                  ? t`Leave blank to keep the currently saved app password.`
+                  : t`Paste the 16-character password generated by Google. Spaces are removed automatically.`
+              }
+            >
+              <Input.Password
+                placeholder="abcd efgh ijkl mnop"
+                autoComplete="new-password"
+                disabled={!isOwner}
+              />
+            </Form.Item>
+
+            <Alert
+              type="success"
+              showIcon
+              className="mb-4"
+              message={t`Secure preset applied`}
+              description={t`SMTP server smtp.gmail.com, port 587, TLS enabled. The credential is encrypted before it is stored.`}
+            />
+          </>
+        )}
+
+        {providerType === 'smtp' && emailProfileMode === 'smtp_advanced' && (
           <>
             <Row gutter={16}>
               <Col span={12}>
@@ -1853,7 +2061,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </div>
         )}
 
-        {renderSendersField()}
+        {emailProfileMode !== 'gmail_app_password' && renderSendersField()}
       </>
     )
   }
@@ -2045,7 +2253,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         .validateFields()
         .then((values) => {
           // Create a temporary provider object from form values
-          const tempProvider = constructProviderFromForm(values)
+          const tempProvider = constructProviderFromForm({ ...values, senders })
 
           // Open test modal with the temporary provider
           setTestEmailAddress('')
@@ -2063,9 +2271,13 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     return (
       <Drawer
         title={
-          editingIntegrationId
-            ? `Edit ${selectedProviderType?.toUpperCase() || ''} Integration`
-            : `Add New ${selectedProviderType?.toUpperCase() || ''} Integration`
+          emailProfileMode === 'gmail_app_password'
+            ? editingIntegrationId
+              ? t`Edit Gmail sending profile`
+              : t`Add Gmail sending profile`
+            : editingIntegrationId
+              ? t`Edit sending profile`
+              : t`Add sending profile`
         }
         width={600}
         open={providerDrawerVisible}
@@ -2102,9 +2314,15 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Add integration dropdown menu items
   const integrationMenuItems = [
+    {
+      key: 'gmail-app-password',
+      label: t`Gmail with an app password`,
+      icon: <FontAwesomeIcon icon={faEnvelope} className="mr-1" />,
+      onClick: () => handleSelectGmailAppPassword()
+    },
     ...emailProviders.map((provider) => ({
       key: provider.kind,
-      label: provider.name,
+      label: provider.kind === 'smtp' ? t`Advanced SMTP` : provider.name,
       icon: React.cloneElement(
         provider.getIcon('h-6 w-12 object-contain mr-1') as React.ReactElement
       ),
@@ -2139,15 +2357,15 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   return (
     <>
       <SettingsSectionHeader
-        title={t`Integrations`}
-        description={t`Connect and manage external services`}
+        title={t`Sending profiles and integrations`}
+        description={t`Add several sending profiles, test them, and choose which one is used for marketing or transactional email.`}
       />
 
       {isOwner && (workspace?.integrations?.length ?? 0) > 0 && (
         <div style={{ textAlign: 'right', marginBottom: 16 }}>
           <Dropdown menu={{ items: integrationMenuItems }} trigger={['click']}>
             <Button type="primary" size="small" ghost>
-              {t`Add Integration`} <FontAwesomeIcon icon={faChevronDown} />
+              {t`Add profile or integration`} <FontAwesomeIcon icon={faChevronDown} />
             </Button>
           </Dropdown>
         </div>
