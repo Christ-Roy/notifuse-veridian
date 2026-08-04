@@ -296,6 +296,27 @@ func TestVeridianReply_Process_MarksSignal_TimelineEvent_ExitsAutomation(t *test
 	require.NoError(t, err)
 }
 
+func TestVeridianReply_Process_MarkRepliedErrorStopsSideEffectsAndPropagates(t *testing.T) {
+	m, ctrl := newReplyTestMocks(t)
+	defer ctrl.Finish()
+
+	sentinel := errors.New("temporary reply signal database outage")
+	msg := &domain.VeridianIMAPMessage{
+		WorkspaceID: replyWS,
+		From:        "prospect@acme.fr",
+		InReplyTo:   "<sent-uuid-retry@send.veridian.site>",
+	}
+	m.messageRepo.EXPECT().
+		FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-retry").
+		Return("prospect@acme.fr", true, nil)
+	m.replyRepo.EXPECT().HasReplied(gomock.Any(), replyWS, "prospect@acme.fr").Return(false, nil)
+	m.replyRepo.EXPECT().MarkReplied(gomock.Any(), replyWS, gomock.Any()).Return(sentinel)
+	// No timeline or automation expectations: durable reply persistence must
+	// succeed before either side effect can run.
+	err := m.svc.ProcessInboundMessage(context.Background(), msg)
+	require.ErrorIs(t, err, sentinel)
+}
+
 func TestVeridianReply_Process_EmitsRepliedToHub(t *testing.T) {
 	m, ctrl := newReplyTestMocks(t)
 	defer ctrl.Finish()

@@ -4,12 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestErrAutomationNotFound_PreservesTypedIdentityWhenWrapped(t *testing.T) {
+	err := fmt.Errorf("automation lookup failed: %w", &ErrAutomationNotFound{ID: "auto-deleted"})
+
+	var notFound *ErrAutomationNotFound
+	require.ErrorAs(t, err, &notFound)
+	assert.Equal(t, "auto-deleted", notFound.ID)
+	assert.Equal(t, "automation not found: auto-deleted", notFound.Error())
+}
 
 func TestAutomationStatus_IsValid(t *testing.T) {
 	tests := []struct {

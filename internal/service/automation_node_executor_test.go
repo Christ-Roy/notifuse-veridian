@@ -498,7 +498,11 @@ func TestEmailNodeExecutor_Execute_Success(t *testing.T) {
 
 	mockEmailQueueRepo.EXPECT().
 		Enqueue(gomock.Any(), "ws1", gomock.Any()).
-		Return(nil)
+		DoAndReturn(func(_ context.Context, _ string, entries []*domain.EmailQueueEntry) error {
+			require.Len(t, entries, 1)
+			assert.Equal(t, "list1", entries[0].Payload.ListID, "the final SMTP guard needs the automation list after enqueue")
+			return nil
+		})
 
 	params := NodeExecutionParams{
 		WorkspaceID: "ws1",

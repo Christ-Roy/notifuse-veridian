@@ -320,6 +320,52 @@ func TestEmailQueueWorker_ProcessEntry_Success(t *testing.T) {
 	worker.processEntry(workspace, entry)
 }
 
+func TestEmailQueueWorker_ProcessEntry_AutomationWithoutFinalGuardFailsClosed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	queueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	emailSink := mocks.NewMockEmailServiceInterface(ctrl)
+	historyRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+	log.EXPECT().WithFields(gomock.Any()).Return(log).AnyTimes()
+	log.EXPECT().Debug(gomock.Any()).AnyTimes()
+	log.EXPECT().Warn(gomock.Any()).AnyTimes()
+	log.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	workspace := &domain.Workspace{
+		ID: "workspace-1",
+		Integrations: []domain.Integration{{
+			ID: "smtp-1",
+			EmailProvider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSMTP,
+				RateLimitPerMinute: 6000,
+			},
+		}},
+	}
+	entry := &domain.EmailQueueEntry{
+		ID:            "automation-entry-1",
+		SourceType:    domain.EmailQueueSourceAutomation,
+		SourceID:      "automation-1",
+		IntegrationID: "smtp-1",
+		ContactEmail:  "lead@example.com",
+		MessageID:     "msg-1",
+		Payload:       domain.EmailQueuePayload{ListID: "list-1"},
+		MaxAttempts:   3,
+	}
+
+	queueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspace.ID, entry.ID).Return(nil)
+	queueRepo.EXPECT().MarkAsFailed(
+		gomock.Any(), workspace.ID, entry.ID,
+		"automation final guard is not configured", gomock.Not(gomock.Nil()),
+	).Return(nil)
+	// No SendEmail expectation is registered: an SMTP call fails this test.
+	worker := NewEmailQueueWorker(queueRepo, workspaceRepo, emailSink, historyRepo, DefaultWorkerConfig(), log)
+	worker.ctx = context.Background()
+	worker.processEntry(workspace, entry)
+}
+
 // TestEmailQueueWorker_ProcessEntry_PersistsContentHash vérifie le diff worker.go
 // de l'anti-hash : le VeridianContentHash posé sur le payload à l'enqueue est
 // propagé dans le message_history persisté (alimente la fenêtre glissante). Le

@@ -206,6 +206,9 @@ func TestAutomationRepository_GetByID(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, automation)
 	assert.Contains(t, err.Error(), "automation not found")
+	var notFound *domain.ErrAutomationNotFound
+	require.ErrorAs(t, err, &notFound)
+	assert.Equal(t, automationID, notFound.ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 
 	// Test database error

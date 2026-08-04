@@ -227,6 +227,32 @@ func TestVeridianBounceConsumer_ProcessWebhookError_Propagated(t *testing.T) {
 	assert.Contains(t, err.Error(), "store failed")
 }
 
+func TestVeridianBounceConsumer_TransientWebhookErrorSucceedsOnReplay(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	webhookSvc := mocks.NewMockInboundWebhookEventServiceInterface(ctrl)
+	wsRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	const wsID = "ws-cold-retry"
+	const smtpID = "smtp-retry"
+	sentinel := errors.New("temporary webhook store outage")
+
+	wsRepo.EXPECT().GetByID(gomock.Any(), wsID).Return(workspaceWithSMTP(wsID, smtpID), nil).Times(2)
+	first := webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any()).Return(sentinel)
+	webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any()).Return(nil).After(first)
+
+	consumer := NewVeridianBounceConsumer(webhookSvc, wsRepo, logger.NewLogger())
+	msg := &domain.VeridianIMAPMessage{
+		UID:         84,
+		WorkspaceID: wsID,
+		From:        "MAILER-DAEMON@host",
+		Subject:     "Undelivered Mail Returned to Sender",
+		RawBody:     []byte(postfixHardNDRRaw),
+	}
+	require.ErrorIs(t, consumer.OnNewMessage(msg), sentinel)
+	require.NoError(t, consumer.OnNewMessage(msg), "the same unacknowledged UID must succeed after a transient dependency recovers")
+}
+
 func TestVeridianBounceConsumer_NilMessageAndDeps(t *testing.T) {
 	c := NewVeridianBounceConsumer(nil, nil, logger.NewLogger())
 	assert.NoError(t, c.OnNewMessage(nil), "message nil = no-op")

@@ -18,7 +18,11 @@ type stubReplyRepo struct {
 }
 
 func (s *stubReplyRepo) MarkReplied(_ context.Context, _ string, r *VeridianContactReply) error {
-	s.marked = r
+	// Model the repository contract: ON CONFLICT DO NOTHING, first signal wins.
+	if s.marked == nil {
+		s.marked = r
+	}
+	s.replied = true
 	return nil
 }
 func (s *stubReplyRepo) HasReplied(_ context.Context, _ string, _ string) (bool, error) {
@@ -54,4 +58,23 @@ func TestVeridianContactReply_Fields(t *testing.T) {
 	ok, err := stub.HasReplied(context.Background(), "ws", "prospect@acme.fr")
 	require.NoError(err)
 	require.True(ok)
+}
+
+func TestVeridianContactReplyRepository_RetryKeepsFirstSignal(t *testing.T) {
+	first := &VeridianContactReply{
+		ContactEmail: "prospect@acme.fr",
+		RepliedAt:    time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC),
+		MatchType:    VeridianReplyMatchMessageID,
+	}
+	retry := &VeridianContactReply{
+		ContactEmail: "prospect@acme.fr",
+		RepliedAt:    first.RepliedAt.Add(time.Minute),
+		MatchType:    VeridianReplyMatchSenderFallback,
+	}
+
+	stub := &stubReplyRepo{}
+	assert.NoError(t, stub.MarkReplied(context.Background(), "ws", first))
+	assert.NoError(t, stub.MarkReplied(context.Background(), "ws", retry))
+	assert.Same(t, first, stub.marked, "an IMAP replay must not replace the first reply signal")
+	assert.True(t, stub.replied)
 }

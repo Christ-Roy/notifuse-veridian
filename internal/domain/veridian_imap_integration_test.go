@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,32 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type transientIMAPConsumer struct {
+	calls int
+	err   error
+}
+
+func (c *transientIMAPConsumer) Name() string { return "transient-test" }
+
+func (c *transientIMAPConsumer) OnNewMessage(_ *VeridianIMAPMessage) error {
+	c.calls++
+	if c.calls == 1 {
+		return c.err
+	}
+	return nil
+}
+
+func TestVeridianIMAPConsumer_ErrorIsObservableAndReplaySafe(t *testing.T) {
+	sentinel := errors.New("temporary database outage")
+	consumer := &transientIMAPConsumer{err: sentinel}
+	var contract VeridianIMAPConsumer = consumer
+	msg := &VeridianIMAPMessage{UID: 42, WorkspaceID: "ws-1"}
+
+	require.ErrorIs(t, contract.OnNewMessage(msg), sentinel)
+	require.NoError(t, contract.OnNewMessage(msg))
+	assert.Equal(t, 2, consumer.calls, "an unacknowledged UID must be safe to replay")
+}
 
 const testIMAPPassphrase = "0123456789abcdef0123456789abcdef" // 32 bytes for AES
 
@@ -168,7 +195,7 @@ func TestIMAPSettings_MarshalJSON_MasksPlaintextPassword(t *testing.T) {
 		Host:              "imap.larksuite.com",
 		Port:              993,
 		Username:          "robert.brunon@veridian.site",
-		Password:          plaintext,               // champ runtime (déchiffré)
+		Password:          plaintext,                 // champ runtime (déchiffré)
 		EncryptedPassword: mustEncrypt(t, plaintext), // ciphertext persisté
 		UseTLS:            true,
 	}

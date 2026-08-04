@@ -17,12 +17,16 @@ type fakeReplyProcessor struct {
 	lastMsg *domain.VeridianIMAPMessage
 	lastCtx context.Context
 	err     error
+	errs    []error
 }
 
 func (f *fakeReplyProcessor) ProcessInboundMessage(ctx context.Context, msg *domain.VeridianIMAPMessage) error {
 	f.calls++
 	f.lastMsg = msg
 	f.lastCtx = ctx
+	if len(f.errs) >= f.calls {
+		return f.errs[f.calls-1]
+	}
 	return f.err
 }
 
@@ -83,10 +87,25 @@ func TestVeridianReplyConsumer_OnNewMessage_PropagatesError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	proc := &fakeReplyProcessor{err: errors.New("boom")}
+	sentinel := errors.New("boom")
+	proc := &fakeReplyProcessor{err: sentinel}
 	c := NewVeridianReplyConsumer(proc, setupMockLogger(ctrl))
 
-	// L'erreur remonte au poller (qui logge) ; le poller marque vu quoi qu'il arrive.
+	// L'erreur remonte au poller et garde l'UID non acquitté.
 	err := c.OnNewMessage(&domain.VeridianIMAPMessage{WorkspaceID: "ws1"})
-	require.Error(t, err)
+	require.ErrorIs(t, err, sentinel)
+}
+
+func TestVeridianReplyConsumer_OnNewMessage_TransientFailureSucceedsOnReplay(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	sentinel := errors.New("temporary reply database outage")
+	proc := &fakeReplyProcessor{errs: []error{sentinel, nil}}
+	c := NewVeridianReplyConsumer(proc, setupMockLogger(ctrl))
+	msg := &domain.VeridianIMAPMessage{UID: 42, WorkspaceID: "ws1"}
+
+	require.ErrorIs(t, c.OnNewMessage(msg), sentinel)
+	require.NoError(t, c.OnNewMessage(msg))
+	assert.Equal(t, 2, proc.calls)
 }
