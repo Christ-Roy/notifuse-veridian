@@ -1,0 +1,28 @@
+<mjml>
+  <mj-head>
+    <mj-title>Une maquette pour votre boutique en ligne</mj-title>
+    <mj-preview>&#8203;</mj-preview>
+    <mj-attributes>
+      <mj-text font-family="Arial, Helvetica, sans-serif" font-size="15px" line-height="23px" color="#202124" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#ffffff">
+    <mj-section padding="20px">
+      <mj-column>
+        <mj-text padding="0">
+          Bonjour,<br /><br />
+          J’ai préparé une première maquette de refonte de votre boutique en ligne, à partir de votre site actuel.<br /><br />
+          Je voulais vous la présenter et savoir si la modernisation du site est un sujet d’actualité chez vous.<br /><br />
+          Si c’est le cas, répondez-moi simplement et nous conviendrons d’un moment pour vous la montrer.<br /><br />
+          Bien à vous,<br /><br />
+          Robert Brunon<br />
+          Veridian
+        </mj-text>
+        <mj-text padding="22px 0 0" font-size="11px" line-height="16px" color="#6B7280">
+          Je vous contacte dans un cadre professionnel. Pour ne plus recevoir de message, répondez simplement « non ».<br />
+          Confidentialité : <a href="https://veridian.site/confidentialite" style="color:#6B7280;">veridian.site/confidentialite</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

@@ -1,0 +1,22 @@
+{
+  "workspace_id": "robertbrunon",
+  "name": "E-commerce en devenir, controle interne",
+  "audience": {
+    "list": "ecomdevenirmaq202608",
+    "exclude_unsubscribed": true
+  },
+  "test_settings": {
+    "enabled": false,
+    "sample_percentage": 100,
+    "variations": [
+      {
+        "variation_name": "mail_personnel",
+        "template_id": "ecom-devenir-j0"
+      }
+    ]
+  },
+  "tracking_enabled": false,
+  "metadata": {
+    "purpose": "internal_render_and_delivery_test"
+  }
+}

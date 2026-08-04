@@ -1,0 +1,22 @@
+{
+  "workspace_id": "robertbrunon",
+  "name": "E-commerce vetuste, controle interne",
+  "audience": {
+    "list": "ecomvetustemaq202608",
+    "exclude_unsubscribed": true
+  },
+  "test_settings": {
+    "enabled": false,
+    "sample_percentage": 100,
+    "variations": [
+      {
+        "variation_name": "mail_personnel",
+        "template_id": "ecom-vetuste-j0"
+      }
+    ]
+  },
+  "tracking_enabled": false,
+  "metadata": {
+    "purpose": "internal_render_and_delivery_test"
+  }
+}

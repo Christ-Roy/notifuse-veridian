@@ -1,0 +1,48 @@
+{
+  "id": "ecomvetmaq202608j0j3j7",
+  "name": "E-commerce vétuste, maquette J0 J3 J7",
+  "status": "draft",
+  "list_id": "ecomvetustemaq202608",
+  "trigger": {
+    "event_kind": "list.subscribed",
+    "list_id": "ecomvetustemaq202608",
+    "frequency": "once"
+  },
+  "root_node_id": "email_j0",
+  "nodes": [
+    {
+      "id": "email_j0",
+      "automation_id": "ecomvetmaq202608j0j3j7",
+      "type": "email",
+      "config": {"template_id": "ecom-vetuste-j0"},
+      "next_node_id": "wait_j3"
+    },
+    {
+      "id": "wait_j3",
+      "automation_id": "ecomvetmaq202608j0j3j7",
+      "type": "delay",
+      "config": {"duration": 3, "unit": "days"},
+      "next_node_id": "email_j3"
+    },
+    {
+      "id": "email_j3",
+      "automation_id": "ecomvetmaq202608j0j3j7",
+      "type": "email",
+      "config": {"template_id": "ecom-vetuste-j3"},
+      "next_node_id": "wait_j7"
+    },
+    {
+      "id": "wait_j7",
+      "automation_id": "ecomvetmaq202608j0j3j7",
+      "type": "delay",
+      "config": {"duration": 4, "unit": "days"},
+      "next_node_id": "email_j7"
+    },
+    {
+      "id": "email_j7",
+      "automation_id": "ecomvetmaq202608j0j3j7",
+      "type": "email",
+      "config": {"template_id": "ecom-vetuste-j7"}
+    }
+  ]
+}
