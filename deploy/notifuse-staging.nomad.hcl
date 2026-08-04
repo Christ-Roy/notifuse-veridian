@@ -173,8 +173,33 @@ EOH
         command = "/bin/sh"
         args = [
           "-c",
-          "pip install --no-cache-dir aiosmtpd==1.4.6 >/dev/null && exec python -m aiosmtpd -n -d -l 0.0.0.0:1025",
+          "pip install --no-cache-dir aiosmtpd==1.4.6 >/dev/null && exec python /local/sink.py",
         ]
+      }
+      template {
+        destination = "local/sink.py"
+        data        = <<EOH
+import sys
+from threading import Event
+from aiosmtpd.controller import Controller
+
+class Sink:
+    async def handle_DATA(self, server, session, envelope):
+        print("---------- MESSAGE FOLLOWS ----------", flush=True)
+        for recipient in envelope.rcpt_tos:
+            print(f"RCPT TO:<{recipient}>", flush=True)
+        sys.stdout.buffer.write(envelope.original_content)
+        sys.stdout.buffer.write(b"\n------------ END MESSAGE ------------\n")
+        sys.stdout.buffer.flush()
+        return "250 Message accepted for delivery"
+
+controller = Controller(Sink(), hostname="0.0.0.0", port=1025)
+controller.start()
+try:
+    Event().wait()
+finally:
+    controller.stop()
+EOH
       }
       resources {
         cpu        = 25
