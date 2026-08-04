@@ -186,7 +186,9 @@ from aiosmtpd.controller import Controller
 class Sink:
     async def handle_DATA(self, server, session, envelope):
         print("---------- MESSAGE FOLLOWS ----------", flush=True)
+        print(f"sender: {envelope.mail_from}", flush=True)
         for recipient in envelope.rcpt_tos:
+            print(f"recip: {recipient}", flush=True)
             print(f"RCPT TO:<{recipient}>", flush=True)
         sys.stdout.buffer.write(envelope.original_content)
         sys.stdout.buffer.write(b"\n------------ END MESSAGE ------------\n")
