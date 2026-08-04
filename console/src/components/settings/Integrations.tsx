@@ -137,6 +137,7 @@ const EmailIntegration = ({
 }: EmailIntegrationProps) => {
   const { t } = useLingui()
   const provider = integration.email_provider
+  const isGmailAppPassword = inferEmailProfileMode(provider) === 'gmail_app_password'
   const purposes = getIntegrationPurpose(integration.id)
   const [webhookStatus, setWebhookStatus] = useState<WebhookRegistrationStatus | null>(null)
   const [loadingWebhooks, setLoadingWebhooks] = useState(false)
@@ -328,12 +329,16 @@ const EmailIntegration = ({
           </div>
           <Tooltip title={integration.id}>
             <Space>
-              {emailProviders
-                .find((p) => p.kind === integration.email_provider.kind)
-                ?.getIcon('', 24) || <FontAwesomeIcon icon={faEnvelope} style={{ height: 24 }} />}
+              {isGmailAppPassword ? (
+                <FontAwesomeIcon icon={faEnvelope} style={{ height: 24 }} />
+              ) : (
+                emailProviders
+                  .find((p) => p.kind === integration.email_provider.kind)
+                  ?.getIcon('', 24) || <FontAwesomeIcon icon={faEnvelope} style={{ height: 24 }} />
+              )}
               <span>{integration.name}</span>
               <Tag bordered={false} color="geekblue">
-                {inferEmailProfileMode(provider) === 'gmail_app_password'
+                {isGmailAppPassword
                   ? t`Gmail app password`
                   : provider.kind === 'smtp' && provider.smtp?.auth_type === 'oauth2'
                     ? provider.smtp.oauth2_provider === 'google'
@@ -1560,8 +1565,19 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const renderEmailProviderForm = (providerType: EmailProviderKind) => {
     return (
       <>
-        <Form.Item name="name" label={t`Integration Name`} rules={[{ required: true }]}>
-          <Input placeholder={t`Enter a name for this integration`} disabled={!isOwner} />
+        <Form.Item
+          name="name"
+          label={emailProfileMode === 'gmail_app_password' ? t`Profile name` : t`Integration Name`}
+          rules={[{ required: true }]}
+        >
+          <Input
+            placeholder={
+              emailProfileMode === 'gmail_app_password'
+                ? t`Name this Gmail profile`
+                : t`Enter a name for this integration`
+            }
+            disabled={!isOwner}
+          />
         </Form.Item>
 
         {providerType === 'ses' && (
@@ -2042,23 +2058,27 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </Form.Item>
         )}
 
-        <Form.Item
-          name="rate_limit_per_minute"
-          label={t`Rate limit for marketing emails (emails per minute)`}
-          rules={[
-            { required: true, message: 'Please enter a rate limit' },
-            { type: 'number', min: 1, message: 'Rate limit must be at least 1' }
-          ]}
-          initialValue={25}
-        >
-          <InputNumber min={1} placeholder="25" disabled={!isOwner} style={{ width: '100%' }} />
-        </Form.Item>
+        {emailProfileMode !== 'gmail_app_password' && (
+          <>
+            <Form.Item
+              name="rate_limit_per_minute"
+              label={t`Rate limit for marketing emails (emails per minute)`}
+              rules={[
+                { required: true, message: 'Please enter a rate limit' },
+                { type: 'number', min: 1, message: 'Rate limit must be at least 1' }
+              ]}
+              initialValue={25}
+            >
+              <InputNumber min={1} placeholder="25" disabled={!isOwner} style={{ width: '100%' }} />
+            </Form.Item>
 
-        {(rateLimitPerMinute || 25) > 0 && (
-          <div className="text-xs text-gray-600 -mt-4 mb-4">
-            <div>≈ {((rateLimitPerMinute || 25) * 60).toLocaleString()} {t`emails per hour`}</div>
-            <div>≈ {((rateLimitPerMinute || 25) * 60 * 24).toLocaleString()} {t`emails per day`}</div>
-          </div>
+            {(rateLimitPerMinute || 25) > 0 && (
+              <div className="text-xs text-gray-600 -mt-4 mb-4">
+                <div>≈ {((rateLimitPerMinute || 25) * 60).toLocaleString()} {t`emails per hour`}</div>
+                <div>≈ {((rateLimitPerMinute || 25) * 60 * 24).toLocaleString()} {t`emails per day`}</div>
+              </div>
+            )}
+          </>
         )}
 
         {emailProfileMode !== 'gmail_app_password' && renderSendersField()}
@@ -2173,7 +2193,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           {provider.smtp.username}
         </Descriptions.Item>,
         <Descriptions.Item key="tls" label={t`TLS Enabled`}>
-          {provider.smtp.use_tls ? 'Yes' : 'No'}
+          {provider.smtp.use_tls ? t`Yes` : t`No`}
         </Descriptions.Item>,
         <Descriptions.Item key="auth" label={t`Authentication`}>
           {provider.smtp.auth_type === 'oauth2' ? (
@@ -2181,7 +2201,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
               OAuth2 ({provider.smtp.oauth2_provider === 'microsoft' ? 'Microsoft 365' : 'Google'})
             </span>
           ) : (
-            'Basic (Username/Password)'
+            t`Username and password`
           )}
         </Descriptions.Item>
       )
@@ -2230,14 +2250,28 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       )
     }
 
-    // Add rate limit for all providers
+    const gmailAppPassword = inferEmailProfileMode(provider) === 'gmail_app_password'
+
+    // Gmail keeps a conservative technical cadence. Campaign-level daily caps
+    // are configured separately and must not be inferred from this value.
     items.push(
       <Descriptions.Item key="rate_limit" label={t`Rate Limit for Marketing`}>
-        <div>{provider.rate_limit_per_minute} emails/min</div>
-        <div className="text-xs text-gray-600 mt-1">
-          <div>≈ {(provider.rate_limit_per_minute * 60).toLocaleString()} {t`emails per hour`}</div>
-          <div>≈ {(provider.rate_limit_per_minute * 60 * 24).toLocaleString()} {t`emails per day`}</div>
-        </div>
+        {gmailAppPassword ? (
+          <>
+            <div>{t`Maximum one email per minute`}</div>
+            <div className="text-xs text-gray-600 mt-1">
+              {t`The campaign daily cap is configured separately.`}
+            </div>
+          </>
+        ) : (
+          <>
+            <div>{provider.rate_limit_per_minute} {t`emails per minute`}</div>
+            <div className="text-xs text-gray-600 mt-1">
+              <div>≈ {(provider.rate_limit_per_minute * 60).toLocaleString()} {t`emails per hour`}</div>
+              <div>≈ {(provider.rate_limit_per_minute * 60 * 24).toLocaleString()} {t`emails per day`}</div>
+            </div>
+          </>
+        )}
       </Descriptions.Item>
     )
 
