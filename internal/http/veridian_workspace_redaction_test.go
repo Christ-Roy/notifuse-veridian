@@ -102,6 +102,7 @@ func TestVeridianRedactWorkspaceForAPI_AllSecretsWithoutRuntimeMutation(t *testi
 	assert.Contains(t, jsonText, "claude-test")
 	assert.Contains(t, jsonText, "https://firecrawl.example.com")
 	assert.Contains(t, jsonText, "list-1")
+	assert.True(t, redacted.Integrations[4].IMAPSettings.HasPassword)
 
 	// Every credential-bearing pointer must have been cloned before redaction.
 	assert.NotSame(t, workspace.Integrations[0].EmailProvider.SMTP, redacted.Integrations[0].EmailProvider.SMTP)

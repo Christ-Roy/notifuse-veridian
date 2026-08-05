@@ -181,7 +181,7 @@ function IMAPInboxCard({ workspace, isOwner, onWorkspaceUpdate }: IMAPInboxCardP
       host: imap?.host,
       port: imap?.port ?? 993,
       username: imap?.username,
-      // Password jamais pré-rempli (l'API ne renvoie que encrypted_password).
+      // Password jamais pré-rempli (l'API ne renvoie aucun secret).
       password: '',
       use_tls: imap?.use_tls ?? true,
       folder: imap?.folder || 'INBOX',

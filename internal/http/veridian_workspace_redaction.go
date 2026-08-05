@@ -60,6 +60,7 @@ func veridianRedactWorkspaceForAPI(workspace *domain.Workspace) *domain.Workspac
 		}
 		if integration.IMAPSettings != nil {
 			settings := *integration.IMAPSettings
+			settings.HasPassword = settings.Password != "" || settings.EncryptedPassword != ""
 			settings.Password, settings.EncryptedPassword = "", ""
 			integration.IMAPSettings = &settings
 		}

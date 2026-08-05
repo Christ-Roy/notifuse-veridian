@@ -333,6 +333,7 @@ export interface IMAPSettings {
   port: number
   username: string
   password?: string
+  has_password?: boolean
   use_tls: boolean
   folder?: string
   polling_interval_seconds?: number

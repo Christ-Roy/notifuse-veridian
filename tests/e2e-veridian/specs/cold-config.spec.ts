@@ -224,10 +224,11 @@ mutationDescribe('@cold Cold outreach config — persistance réelle (staging)',
     expect(imap.imap_settings.host).toBe('imap.example.com');
     expect(imap.imap_settings.username).toBe('returns@example.com');
     expect(imap.imap_settings.folder).toBe('INBOX');
-    // Chiffré au repos : encrypted_password posé (le clair n'est jamais stocké en
-    // DB). NB : workspaces.get est owner-only et renvoie aussi le clair déchiffré
-    // pour le propriétaire — comportement upstream identique pour SMTP/SES.
-    expect(imap.imap_settings.encrypted_password, 'password chiffré au repos').toBeTruthy();
+    // L'API confirme qu'un secret est configuré sans renvoyer ni le clair ni le
+    // ciphertext. Le chiffrement au repos est couvert au niveau domaine/repository.
+    expect(imap.imap_settings.has_password).toBe(true);
+    expect(imap.imap_settings.password).toBeUndefined();
+    expect(imap.imap_settings.encrypted_password).toBeUndefined();
   });
 
   test('02. IMAP self-service : update folder sans password → folder changé, creds préservés', async () => {
@@ -235,7 +236,7 @@ mutationDescribe('@cold Cold outreach config — persistance réelle (staging)',
     const ws0 = (await readBody(get0)).json().workspace;
     const imap0 = (ws0.integrations || []).find((i: any) => i.type === 'imap');
     expect(imap0).toBeTruthy();
-    const encBefore = imap0.imap_settings.encrypted_password;
+    expect(imap0.imap_settings.has_password).toBe(true);
 
     const upd = await bearerFetch('/api/workspaces.updateIntegration', jwt, 'POST', {
       workspace_id: tid,
@@ -258,8 +259,10 @@ mutationDescribe('@cold Cold outreach config — persistance réelle (staging)',
     const imap1 = (ws1.integrations || []).find((i: any) => i.type === 'imap');
     expect(imap1.imap_settings.folder).toBe('Bounces');
     expect(imap1.imap_settings.username).toBe('returns@example.com');
-    // Le password chiffré est préservé (pas re-saisi → encrypted_password inchangé).
-    expect(imap1.imap_settings.encrypted_password).toBe(encBefore);
+    // Le password est préservé sans jamais être exposé par l'API.
+    expect(imap1.imap_settings.has_password).toBe(true);
+    expect(imap1.imap_settings.password).toBeUndefined();
+    expect(imap1.imap_settings.encrypted_password).toBeUndefined();
   });
 
   test('03. Custom tracking domain : posé sur l’EmailProvider → persisté, senders conservés', async () => {

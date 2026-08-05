@@ -70,8 +70,11 @@ type IMAPSettings struct {
 	Port              int    `json:"port"`
 	Username          string `json:"username"`
 	EncryptedPassword string `json:"encrypted_password,omitempty"`
-	UseTLS            bool   `json:"use_tls"`
-	Folder            string `json:"folder,omitempty"`
+	// HasPassword is derived for API responses after both the cleartext and
+	// ciphertext have been removed. It is never used as credential material.
+	HasPassword bool   `json:"has_password,omitempty"`
+	UseTLS      bool   `json:"use_tls"`
+	Folder      string `json:"folder,omitempty"`
 
 	// PollingIntervalSeconds : période de scrutation pour CETTE boîte. 0 =>
 	// DefaultIMAPPollingInterval. Borné en bas par minIMAPPollingInterval.
