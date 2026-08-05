@@ -2243,6 +2243,27 @@ func TestWorkspaceHandler_HandleDeleteIntegration_ServiceError(t *testing.T) {
 	assert.Equal(t, "Failed to delete integration", response["error"])
 }
 
+func TestWorkspaceHandler_HandleDeleteIntegration_ActiveQueueConflict(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+	workspaceSvc.EXPECT().
+		DeleteIntegration(gomock.Any(), "workspace-123", "integration-123").
+		Return(fmt.Errorf("%w: integration_id=integration-123", domain.ErrEmailIntegrationQueueActive))
+
+	reqBody := domain.DeleteIntegrationRequest{WorkspaceID: "workspace-123", IntegrationID: "integration-123"}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.deleteIntegration", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	var response map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+	assert.Contains(t, response["error"], "pending or processing queue entries")
+	assert.Contains(t, response["error"], "integration_id=integration-123")
+}
+
 func TestWriteJSON(t *testing.T) {
 	// Create a response recorder
 	w := httptest.NewRecorder()

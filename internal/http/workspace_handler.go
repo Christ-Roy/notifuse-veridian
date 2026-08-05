@@ -587,6 +587,10 @@ func (h *WorkspaceHandler) handleDeleteIntegration(w http.ResponseWriter, r *htt
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
+		if errors.Is(err, domain.ErrEmailIntegrationQueueActive) {
+			WriteJSONError(w, err.Error(), http.StatusConflict)
+			return
+		}
 
 		WriteJSONError(w, "Failed to delete integration", http.StatusInternalServerError)
 		return

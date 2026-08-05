@@ -19,6 +19,23 @@ import (
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 )
 
+type emailIntegrationLifecycleRepoStub struct {
+	err            error
+	callbackCalled bool
+	workspaceID    string
+	integrationID  string
+}
+
+func (s *emailIntegrationLifecycleRepoStub) WithIntegrationQueueIdle(_ context.Context, workspaceID, integrationID string, fn func() error) error {
+	s.workspaceID = workspaceID
+	s.integrationID = integrationID
+	if s.err != nil {
+		return s.err
+	}
+	s.callbackCalled = true
+	return fn()
+}
+
 func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -55,7 +72,6 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 		&DNSVerificationService{},
 		&BlogService{},
 	)
-
 	ctx := context.Background()
 	user := &domain.User{ID: "test-user"}
 
@@ -117,6 +133,59 @@ func TestWorkspaceService_ListWorkspaces(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Empty(t, workspaces)
 	})
+}
+
+func TestWorkspaceService_DeleteIntegration_BlocksActiveEmailQueue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	service := NewWorkspaceService(
+		mockRepo,
+		mocks.NewMockUserRepository(ctrl),
+		mocks.NewMockTaskRepository(ctrl),
+		mockLogger,
+		mocks.NewMockUserServiceInterface(ctrl),
+		mockAuthService,
+		pkgmocks.NewMockMailer(ctrl),
+		&config.Config{RootEmail: "test@example.com"},
+		mocks.NewMockContactService(ctrl),
+		mocks.NewMockListService(ctrl),
+		mocks.NewMockContactListService(ctrl),
+		mocks.NewMockTemplateService(ctrl),
+		mocks.NewMockWebhookRegistrationService(ctrl),
+		"secret_key",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
+	)
+	guard := &emailIntegrationLifecycleRepoStub{err: fmt.Errorf("%w: integration_id=profile-1", domain.ErrEmailIntegrationQueueActive)}
+	service.SetEmailIntegrationLifecycleRepository(guard)
+
+	ctx := context.Background()
+	user := &domain.User{ID: "owner-1"}
+	workspace := &domain.Workspace{
+		ID: "workspace-a",
+		Integrations: []domain.Integration{{
+			ID: "profile-1", Type: domain.IntegrationTypeEmail,
+			EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSMTP},
+		}},
+	}
+	mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, "workspace-a").Return(ctx, user, nil, nil)
+	mockRepo.EXPECT().GetUserWorkspace(ctx, user.ID, "workspace-a").Return(&domain.UserWorkspace{Role: "owner"}, nil)
+	mockRepo.EXPECT().GetByID(ctx, "workspace-a").Return(workspace, nil)
+	mockLogger.EXPECT().WithField("workspace_id", "workspace-a").Return(mockLogger)
+	mockLogger.EXPECT().WithField("integration_id", "profile-1").Return(mockLogger)
+	mockLogger.EXPECT().Warn("Email integration deletion blocked by active queue entries")
+
+	err := service.DeleteIntegration(ctx, "workspace-a", "profile-1")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrEmailIntegrationQueueActive)
+	assert.Equal(t, "workspace-a", guard.workspaceID)
+	assert.Equal(t, "profile-1", guard.integrationID)
+	assert.False(t, guard.callbackCalled)
+	require.Len(t, workspace.Integrations, 1, "blocked deletion must not mutate or remap the workspace")
 }
 
 func TestWorkspaceService_GetWorkspace(t *testing.T) {
@@ -1155,6 +1224,7 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 		&DNSVerificationService{},
 		&BlogService{},
 	)
+	service.SetEmailIntegrationLifecycleRepository(&emailIntegrationLifecycleRepoStub{})
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -2087,6 +2157,7 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		&DNSVerificationService{},
 		&BlogService{},
 	)
+	service.SetEmailIntegrationLifecycleRepository(&emailIntegrationLifecycleRepoStub{})
 
 	// Set up mockLogger to allow any calls
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()

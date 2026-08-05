@@ -867,6 +867,7 @@ func (a *App) InitServices() error {
 		a.dnsVerificationService,
 		a.blogService,
 	)
+	a.workspaceService.SetEmailIntegrationLifecycleRepository(a.emailQueueRepo)
 
 	// Initialize and register segment build processor
 	segmentBuildProcessor := service.NewSegmentBuildProcessor(

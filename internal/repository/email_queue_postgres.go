@@ -61,7 +61,7 @@ func (r *EmailQueueRepository) Enqueue(ctx context.Context, workspaceID string, 
 	}
 	defer tx.Rollback()
 
-	if err := r.EnqueueTx(ctx, tx, entries); err != nil {
+	if err := r.EnqueueTx(ctx, tx, workspaceID, entries); err != nil {
 		return err
 	}
 
@@ -73,9 +73,36 @@ func (r *EmailQueueRepository) Enqueue(ctx context.Context, workspaceID string, 
 }
 
 // EnqueueTx adds emails to the queue within an existing transaction
-func (r *EmailQueueRepository) EnqueueTx(ctx context.Context, tx *sql.Tx, entries []*domain.EmailQueueEntry) error {
+func (r *EmailQueueRepository) EnqueueTx(ctx context.Context, tx *sql.Tx, workspaceID string, entries []*domain.EmailQueueEntry) error {
 	if len(entries) == 0 {
 		return nil
+	}
+
+	// Serialize queue inserts with integration deletion. The deletion guard takes
+	// SHARE; this ROW EXCLUSIVE lock makes the winner observable to the loser.
+	if _, err := tx.ExecContext(ctx, `LOCK TABLE email_queue IN ROW EXCLUSIVE MODE`); err != nil {
+		return fmt.Errorf("failed to lock email queue for enqueue: %w", err)
+	}
+
+	// Re-read the workspace only after acquiring the queue lock. If deletion won
+	// the race, the integration is already absent and no stale row is inserted.
+	// The direct-DB constructor is test-only and deliberately has no workspace repo.
+	if r.workspaceRepo != nil {
+		workspace, err := r.workspaceRepo.GetByID(ctx, workspaceID)
+		if err != nil {
+			return fmt.Errorf("failed to validate queue email integration: %w", err)
+		}
+		validated := make(map[string]struct{}, len(entries))
+		for _, entry := range entries {
+			if _, ok := validated[entry.IntegrationID]; ok {
+				continue
+			}
+			integration := workspace.GetIntegrationByID(entry.IntegrationID)
+			if integration == nil || integration.Type != domain.IntegrationTypeEmail {
+				return fmt.Errorf("email integration %q is not configured in workspace %q", entry.IntegrationID, workspaceID)
+			}
+			validated[entry.IntegrationID] = struct{}{}
+		}
 	}
 
 	now := time.Now().UTC()
@@ -132,6 +159,49 @@ func (r *EmailQueueRepository) EnqueueTx(ctx context.Context, tx *sql.Tx, entrie
 		return fmt.Errorf("failed to insert queue entries: %w", err)
 	}
 
+	return nil
+}
+
+// WithIntegrationQueueIdle runs fn while writes to this workspace's email queue
+// are blocked. EnqueueTx takes the conflicting lock and validates the integration
+// after it resumes, making check plus workspace mutation atomic for queue writers.
+func (r *EmailQueueRepository) WithIntegrationQueueIdle(ctx context.Context, workspaceID, integrationID string, fn func() error) error {
+	db, err := r.getDB(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get database connection: %w", err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin email integration deletion guard: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `LOCK TABLE email_queue IN SHARE MODE`); err != nil {
+		return fmt.Errorf("failed to lock email queue for integration deletion: %w", err)
+	}
+	var active bool
+	if err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM email_queue
+			WHERE integration_id = $1
+			  AND status IN ('pending', 'processing')
+		)
+	`, integrationID).Scan(&active); err != nil {
+		return fmt.Errorf("failed to check active email queue entries: %w", err)
+	}
+	if active {
+		return fmt.Errorf("%w: integration_id=%s", domain.ErrEmailIntegrationQueueActive, integrationID)
+	}
+	if fn == nil {
+		return fmt.Errorf("integration deletion callback is required")
+	}
+	if err := fn(); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit email integration deletion guard: %w", err)
+	}
 	return nil
 }
 

@@ -9,7 +9,9 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/repository/testutil"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,6 +54,7 @@ func TestEmailQueueRepository_Enqueue(t *testing.T) {
 		}
 
 		mock.ExpectBegin()
+		mock.ExpectExec(`LOCK TABLE email_queue IN ROW EXCLUSIVE MODE`).WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec(`INSERT INTO email_queue`).
 			WithArgs(
 				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
@@ -107,6 +110,7 @@ func TestEmailQueueRepository_Enqueue(t *testing.T) {
 		}
 
 		mock.ExpectBegin()
+		mock.ExpectExec(`LOCK TABLE email_queue IN ROW EXCLUSIVE MODE`).WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec(`INSERT INTO email_queue`).
 			WillReturnError(errors.New("insert error"))
 		mock.ExpectRollback()
@@ -130,6 +134,7 @@ func TestEmailQueueRepository_Enqueue(t *testing.T) {
 		}
 
 		mock.ExpectBegin()
+		mock.ExpectExec(`LOCK TABLE email_queue IN ROW EXCLUSIVE MODE`).WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec(`INSERT INTO email_queue`).
 			WithArgs(
 				sqlmock.AnyArg(), // ID should be generated
@@ -166,6 +171,7 @@ func TestEmailQueueRepository_Enqueue(t *testing.T) {
 		}
 
 		mock.ExpectBegin()
+		mock.ExpectExec(`LOCK TABLE email_queue IN ROW EXCLUSIVE MODE`).WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec(`INSERT INTO email_queue`).
 			WillReturnResult(sqlmock.NewResult(2, 2))
 		mock.ExpectCommit()
@@ -580,10 +586,11 @@ func TestEmailQueueRepository_EnqueueTx(t *testing.T) {
 		tx, err := db.BeginTx(ctx, nil)
 		require.NoError(t, err)
 
+		mock.ExpectExec(`LOCK TABLE email_queue IN ROW EXCLUSIVE MODE`).WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectExec(`INSERT INTO email_queue`).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
-		err = repo.EnqueueTx(ctx, tx, []*domain.EmailQueueEntry{entry})
+		err = repo.EnqueueTx(ctx, tx, "workspace-123", []*domain.EmailQueueEntry{entry})
 		assert.NoError(t, err)
 	})
 
@@ -597,9 +604,86 @@ func TestEmailQueueRepository_EnqueueTx(t *testing.T) {
 		tx, err := db.BeginTx(ctx, nil)
 		require.NoError(t, err)
 
-		err = repo.EnqueueTx(ctx, tx, []*domain.EmailQueueEntry{})
+		err = repo.EnqueueTx(ctx, tx, "workspace-123", []*domain.EmailQueueEntry{})
 		assert.NoError(t, err)
 	})
+}
+
+func TestEmailQueueRepository_EnqueueTxRejectsDeletedIntegration(t *testing.T) {
+	ctx := context.Background()
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo := &EmailQueueRepository{db: db, workspaceRepo: workspaceRepo}
+	entry := &domain.EmailQueueEntry{ID: "entry-1", IntegrationID: "deleted-profile"}
+
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	mock.ExpectExec(`LOCK TABLE email_queue IN ROW EXCLUSIVE MODE`).WillReturnResult(sqlmock.NewResult(0, 0))
+	workspaceRepo.EXPECT().GetByID(gomock.Any(), "workspace-a").Return(&domain.Workspace{ID: "workspace-a"}, nil)
+	mock.ExpectRollback()
+
+	err = repo.EnqueueTx(ctx, tx, "workspace-a", []*domain.EmailQueueEntry{entry})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `email integration "deleted-profile" is not configured in workspace "workspace-a"`)
+	require.NoError(t, tx.Rollback())
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEmailQueueRepository_WithIntegrationQueueIdle(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		active         bool
+		expectBlocked  bool
+		callbackCalled bool
+	}{
+		{name: "pending entry blocks", active: true, expectBlocked: true},
+		{name: "processing entry blocks", active: true, expectBlocked: true},
+		{name: "finished entry does not block", active: false, callbackCalled: true},
+		{name: "absent entry does not block", active: false, callbackCalled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			db, mock, cleanup := testutil.SetupMockDB(t)
+			defer cleanup()
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+			workspaceRepo.EXPECT().GetConnection(gomock.Any(), "workspace-a").Return(db, nil)
+			repo := NewEmailQueueRepository(workspaceRepo)
+			lifecycleRepo, ok := repo.(domain.EmailIntegrationLifecycleRepository)
+			require.True(t, ok)
+
+			mock.ExpectBegin()
+			mock.ExpectExec(`LOCK TABLE email_queue IN SHARE MODE`).WillReturnResult(sqlmock.NewResult(0, 0))
+			mock.ExpectQuery(`(?s)SELECT EXISTS .*WHERE integration_id = \$1.*status IN \('pending', 'processing'\)`).
+				WithArgs("profile-1").
+				WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(tc.active))
+			if tc.expectBlocked {
+				mock.ExpectRollback()
+			} else {
+				mock.ExpectCommit()
+			}
+
+			called := false
+			err := lifecycleRepo.WithIntegrationQueueIdle(ctx, "workspace-a", "profile-1", func() error {
+				called = true
+				return nil
+			})
+			if tc.expectBlocked {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, domain.ErrEmailIntegrationQueueActive)
+				assert.Contains(t, err.Error(), "integration_id=profile-1")
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tc.callbackCalled, called)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }
 
 func TestEmailQueueRepository_FetchPending_StuckProcessing(t *testing.T) {

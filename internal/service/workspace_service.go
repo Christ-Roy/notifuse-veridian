@@ -18,23 +18,24 @@ import (
 )
 
 type WorkspaceService struct {
-	repo                   domain.WorkspaceRepository
-	userRepo               domain.UserRepository
-	taskRepo               domain.TaskRepository
-	logger                 logger.Logger
-	userService            domain.UserServiceInterface
-	authService            domain.AuthService
-	mailer                 mailer.Mailer
-	config                 *config.Config
-	contactService         domain.ContactService
-	listService            domain.ListService
-	contactListService     domain.ContactListService
-	templateService        domain.TemplateService
-	webhookRegService      domain.WebhookRegistrationService
-	supabaseService        *SupabaseService
-	secretKey              string
-	dnsVerificationService *DNSVerificationService
-	blogService            *BlogService
+	repo                          domain.WorkspaceRepository
+	userRepo                      domain.UserRepository
+	taskRepo                      domain.TaskRepository
+	logger                        logger.Logger
+	userService                   domain.UserServiceInterface
+	authService                   domain.AuthService
+	mailer                        mailer.Mailer
+	config                        *config.Config
+	contactService                domain.ContactService
+	listService                   domain.ListService
+	contactListService            domain.ContactListService
+	templateService               domain.TemplateService
+	webhookRegService             domain.WebhookRegistrationService
+	supabaseService               *SupabaseService
+	secretKey                     string
+	dnsVerificationService        *DNSVerificationService
+	blogService                   *BlogService
+	emailIntegrationLifecycleRepo domain.EmailIntegrationLifecycleRepository
 }
 
 func NewWorkspaceService(
@@ -75,6 +76,12 @@ func NewWorkspaceService(
 		dnsVerificationService: dnsVerificationService,
 		blogService:            blogService,
 	}
+}
+
+// SetEmailIntegrationLifecycleRepository enables atomic queue lifecycle guards
+// for email integration deletion.
+func (s *WorkspaceService) SetEmailIntegrationLifecycleRepository(repo domain.EmailIntegrationLifecycleRepository) {
+	s.emailIntegrationLifecycleRepo = repo
 }
 
 // ListWorkspaces returns all workspaces for a user
@@ -1552,65 +1559,84 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 		return fmt.Errorf("integration not found")
 	}
 
-	// Handle type-specific cleanup before removing the integration
-	switch integration.Type {
-	case domain.IntegrationTypeEmail:
-		// Attempt to unregister webhooks for email integrations (except SMTP which doesn't support webhooks)
-		if s.webhookRegService != nil && integration.EmailProvider.Kind != domain.EmailProviderKindSMTP {
-			// Try to get webhook status to check what's registered
-			status, err := s.webhookRegService.GetWebhookStatus(ctx, workspaceID, integrationID)
-			if err != nil {
-				// Just log the error, don't prevent deletion
-				s.logger.WithField("workspace_id", workspaceID).
-					WithField("integration_id", integrationID).
-					WithField("error", err.Error()).
-					Warn("Failed to get webhook status during integration deletion")
-			} else if status != nil && status.IsRegistered {
-				// Log that we're removing webhooks
-				s.logger.WithField("workspace_id", workspaceID).
-					WithField("integration_id", integrationID).
-					Info("Unregistering webhooks for integration that is being deleted")
-
-				// Use the dedicated method to unregister webhooks
-				err := s.webhookRegService.UnregisterWebhooks(ctx, workspaceID, integrationID)
+	deleteIntegration := func() error {
+		// Handle type-specific cleanup before removing the integration. For email,
+		// this runs under the queue lock so a blocked deletion has no side effects.
+		switch integration.Type {
+		case domain.IntegrationTypeEmail:
+			// Attempt to unregister webhooks for email integrations (except SMTP which doesn't support webhooks)
+			if s.webhookRegService != nil && integration.EmailProvider.Kind != domain.EmailProviderKindSMTP {
+				// Try to get webhook status to check what's registered
+				status, err := s.webhookRegService.GetWebhookStatus(ctx, workspaceID, integrationID)
 				if err != nil {
+					// Just log the error, don't prevent deletion
 					s.logger.WithField("workspace_id", workspaceID).
 						WithField("integration_id", integrationID).
 						WithField("error", err.Error()).
-						Warn("Failed to unregister webhooks during integration deletion, continuing with deletion anyway")
+						Warn("Failed to get webhook status during integration deletion")
+				} else if status != nil && status.IsRegistered {
+					// Log that we're removing webhooks
+					s.logger.WithField("workspace_id", workspaceID).
+						WithField("integration_id", integrationID).
+						Info("Unregistering webhooks for integration that is being deleted")
+
+					// Use the dedicated method to unregister webhooks
+					err := s.webhookRegService.UnregisterWebhooks(ctx, workspaceID, integrationID)
+					if err != nil {
+						s.logger.WithField("workspace_id", workspaceID).
+							WithField("integration_id", integrationID).
+							WithField("error", err.Error()).
+							Warn("Failed to unregister webhooks during integration deletion, continuing with deletion anyway")
+					}
 				}
+			}
+
+		case domain.IntegrationTypeSupabase:
+			// Delete all templates and transactional notifications associated with this integration
+			err := s.deleteSupabaseIntegrationResources(ctx, workspaceID, integrationID)
+			if err != nil {
+				s.logger.WithField("workspace_id", workspaceID).
+					WithField("integration_id", integrationID).
+					WithField("error", err.Error()).
+					Warn("Failed to delete Supabase integration resources, continuing with deletion anyway")
 			}
 		}
 
-	case domain.IntegrationTypeSupabase:
-		// Delete all templates and transactional notifications associated with this integration
-		err := s.deleteSupabaseIntegrationResources(ctx, workspaceID, integrationID)
-		if err != nil {
+		// Attempt to remove the integration. Queue rows are never remapped: active
+		// rows block before this point and retain their exact integration_id.
+		if !workspace.RemoveIntegration(integrationID) {
+			s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).Error("Integration not found")
+			return fmt.Errorf("integration not found")
+		}
+
+		// Check if the integration is referenced in workspace settings
+		if workspace.Settings.TransactionalEmailProviderID == integrationID {
+			workspace.Settings.TransactionalEmailProviderID = ""
+		}
+		veridianRemoveEmailProfileReference(&workspace.Settings, integrationID)
+
+		// Save the updated workspace
+		if err := s.repo.Update(ctx, workspace); err != nil {
+			s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to update workspace after integration deletion")
+			return err
+		}
+		return nil
+	}
+
+	if integration.Type != domain.IntegrationTypeEmail {
+		return deleteIntegration()
+	}
+	if s.emailIntegrationLifecycleRepo == nil {
+		return fmt.Errorf("email integration lifecycle repository is not configured")
+	}
+	if err := s.emailIntegrationLifecycleRepo.WithIntegrationQueueIdle(ctx, workspaceID, integrationID, deleteIntegration); err != nil {
+		if errors.Is(err, domain.ErrEmailIntegrationQueueActive) {
 			s.logger.WithField("workspace_id", workspaceID).
 				WithField("integration_id", integrationID).
-				WithField("error", err.Error()).
-				Warn("Failed to delete Supabase integration resources, continuing with deletion anyway")
+				Warn("Email integration deletion blocked by active queue entries")
 		}
-	}
-
-	// Attempt to remove the integration
-	if !workspace.RemoveIntegration(integrationID) {
-		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).Error("Integration not found")
-		return fmt.Errorf("integration not found")
-	}
-
-	// Check if the integration is referenced in workspace settings
-	if workspace.Settings.TransactionalEmailProviderID == integrationID {
-		workspace.Settings.TransactionalEmailProviderID = ""
-	}
-	veridianRemoveEmailProfileReference(&workspace.Settings, integrationID)
-
-	// Save the updated workspace
-	if err := s.repo.Update(ctx, workspace); err != nil {
-		s.logger.WithField("workspace_id", workspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to update workspace after integration deletion")
 		return err
 	}
-
 	return nil
 }
 
