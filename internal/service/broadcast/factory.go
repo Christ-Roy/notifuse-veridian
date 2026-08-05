@@ -25,7 +25,8 @@ type Factory struct {
 	// Veridian fork — rotator multi-SMTP partagé entre tous les senders créés par
 	// cette factory, pour que les curseurs round-robin (sender ⇄ classe) persistent
 	// entre batchs/recipients. Cf. domain/veridian_sender_rotation.go.
-	veridianSenderRotator *domain.VeridianSenderRotator
+	veridianSenderRotator       *domain.VeridianSenderRotator
+	veridianEmailProfileRotator *veridianEmailProfileRotator
 }
 
 // NewFactory creates a new factory for broadcast components
@@ -66,7 +67,8 @@ func NewFactory(
 		useQueueSender:     useQueueSender,
 		// Veridian fork — un seul rotator partagé pour toute la durée de vie de la
 		// factory (les senders successifs réutilisent les mêmes curseurs).
-		veridianSenderRotator: domain.NewVeridianSenderRotator(),
+		veridianSenderRotator:       domain.NewVeridianSenderRotator(),
+		veridianEmailProfileRotator: newVeridianEmailProfileRotator(),
 	}
 }
 
@@ -91,6 +93,7 @@ func (f *Factory) CreateMessageSender() MessageSender {
 		if s, ok := sender.(*queueMessageSender); ok {
 			s.SetVeridianWorkspaceRepo(f.workspaceRepo)
 			s.SetVeridianSenderRotator(f.veridianSenderRotator)
+			s.SetVeridianEmailProfileRotator(f.veridianEmailProfileRotator)
 			// Veridian fork — dédupliqueur anti-hash à l'enqueue (cold outbound),
 			// construit avec le repo message_history (lookup fenêtre glissante).
 			s.SetVeridianContentDedup(newVeridianContentDedup(f.messageHistoryRepo, f.logger))
@@ -112,6 +115,7 @@ func (f *Factory) CreateMessageSender() MessageSender {
 	if s, ok := sender.(*messageSender); ok {
 		s.SetVeridianWorkspaceRepo(f.workspaceRepo)
 		s.SetVeridianSenderRotator(f.veridianSenderRotator)
+		s.SetVeridianEmailProfileRotator(f.veridianEmailProfileRotator)
 	}
 	return sender
 }

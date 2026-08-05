@@ -352,6 +352,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.FileManager = settings.FileManager
 	existingWorkspace.Settings.TransactionalEmailProviderID = settings.TransactionalEmailProviderID
 	existingWorkspace.Settings.MarketingEmailProviderID = settings.MarketingEmailProviderID
+	existingWorkspace.Settings.VeridianMarketingEmailProviderIDs = settings.VeridianMarketingEmailProviderIDs
 	existingWorkspace.Settings.EmailTrackingEnabled = settings.EmailTrackingEnabled
 
 	// Verify DNS ownership if custom endpoint URL is being set or changed
@@ -1274,6 +1275,9 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 	switch req.Type {
 	case domain.IntegrationTypeEmail:
 		integration.EmailProvider = req.Provider
+		// Verification is server-issued only after a successful saved-profile test.
+		integration.EmailProvider.VeridianTransportVerifiedAt = nil
+		veridianClearEmailProviderResponseFlags(&integration.EmailProvider)
 	case domain.IntegrationTypeSupabase:
 		integration.SupabaseSettings = req.SupabaseSettings
 	case domain.IntegrationTypeLLM:
@@ -1400,7 +1404,14 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 	switch existingIntegration.Type {
 	case domain.IntegrationTypeEmail:
 		updatedIntegration.EmailProvider = req.Provider
+		transportChanged := veridianEmailProviderTransportChanged(&updatedIntegration.EmailProvider, &existingIntegration.EmailProvider)
 		veridianPreserveEmailProviderSecrets(&updatedIntegration.EmailProvider, existingIntegration.EmailProvider)
+		veridianClearEmailProviderResponseFlags(&updatedIntegration.EmailProvider)
+		if transportChanged {
+			updatedIntegration.EmailProvider.VeridianTransportVerifiedAt = nil
+		} else {
+			updatedIntegration.EmailProvider.VeridianTransportVerifiedAt = existingIntegration.EmailProvider.VeridianTransportVerifiedAt
+		}
 	case domain.IntegrationTypeSupabase:
 		// Preserve existing encrypted keys if new keys are not provided
 		if req.SupabaseSettings != nil {
@@ -1592,9 +1603,7 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 	if workspace.Settings.TransactionalEmailProviderID == integrationID {
 		workspace.Settings.TransactionalEmailProviderID = ""
 	}
-	if workspace.Settings.MarketingEmailProviderID == integrationID {
-		workspace.Settings.MarketingEmailProviderID = ""
-	}
+	veridianRemoveEmailProfileReference(&workspace.Settings, integrationID)
 
 	// Save the updated workspace
 	if err := s.repo.Update(ctx, workspace); err != nil {
@@ -1603,6 +1612,30 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 	}
 
 	return nil
+}
+
+func veridianRemoveEmailProfileReference(settings *domain.WorkspaceSettings, integrationID string) {
+	if settings == nil {
+		return
+	}
+	removedFromPool := false
+	remaining := make([]string, 0, len(settings.VeridianMarketingEmailProviderIDs))
+	for _, id := range settings.VeridianMarketingEmailProviderIDs {
+		if id == integrationID {
+			removedFromPool = true
+			continue
+		}
+		remaining = append(remaining, id)
+	}
+	settings.VeridianMarketingEmailProviderIDs = remaining
+	if removedFromPool {
+		settings.MarketingEmailProviderID = ""
+		if len(remaining) > 0 {
+			settings.MarketingEmailProviderID = remaining[0]
+		}
+	} else if settings.MarketingEmailProviderID == integrationID {
+		settings.MarketingEmailProviderID = ""
+	}
 }
 
 // deleteSupabaseIntegrationResources deletes all templates and transactional notifications associated with a Supabase integration

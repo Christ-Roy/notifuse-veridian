@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -113,13 +114,52 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 		return err
 	}
 
-	// Saved integrations only expose encrypted credentials to the console. Load
-	// them for this in-memory test request so testing an existing profile uses the
-	// same secret as real sends. Plaintext credentials from a new unsaved profile
-	// remain authoritative.
+	// Ciphertext is never a browser credential. Saved integrations are tested by
+	// server-side integration ID; this path only accepts plaintext for a new,
+	// unsaved provider.
+	if veridianEmailProviderHasClientCiphertext(&provider) {
+		return fmt.Errorf("encrypted provider credentials are not accepted from clients")
+	}
+	return s.testEmailProviderTransport(ctx, workspaceID, "test-integration", provider, to)
+}
+
+// TestEmailProviderByIntegrationID loads write-only credentials server-side and
+// persists verification only after the transport accepts the test message.
+func (s *EmailService) TestEmailProviderByIntegrationID(ctx context.Context, workspaceID, integrationID, to string) error {
+	ctx, user, membership, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if membership == nil || membership.Role != "owner" {
+		return &domain.ErrUnauthorized{Message: "only workspace owners can verify an email integration"}
+	}
+	if user == nil || !strings.EqualFold(strings.TrimSpace(to), strings.TrimSpace(user.Email)) {
+		return &domain.ErrUnauthorized{Message: "provider tests may only target the authenticated owner's email"}
+	}
+	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to load workspace: %w", err)
+	}
+	integration := workspace.GetIntegrationByID(integrationID)
+	if integration == nil || integration.Type != domain.IntegrationTypeEmail {
+		return fmt.Errorf("email integration not found")
+	}
+	provider := integration.EmailProvider
 	if err := veridianHydrateEmailProviderSecrets(&provider, s.secretKey); err != nil {
 		return fmt.Errorf("failed to load provider credentials for test: %w", err)
 	}
+	if err := s.testEmailProviderTransport(ctx, workspaceID, integrationID, provider, to); err != nil {
+		return err
+	}
+	verifiedAt := time.Now().UTC()
+	integration.EmailProvider.VeridianTransportVerifiedAt = &verifiedAt
+	if err := s.workspaceRepo.Update(ctx, workspace); err != nil {
+		return fmt.Errorf("test succeeded but verification status could not be saved: %w", err)
+	}
+	return nil
+}
+
+func (s *EmailService) testEmailProviderTransport(ctx context.Context, workspaceID, integrationID string, provider domain.EmailProvider, to string) error {
 
 	// Validate the provider has the required fields
 	if len(provider.Senders) == 0 {
@@ -145,7 +185,7 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 	// Create SendEmailProviderRequest for testing
 	request := domain.SendEmailProviderRequest{
 		WorkspaceID:   workspaceID,
-		IntegrationID: "test-integration", // For testing purposes
+		IntegrationID: integrationID,
 		MessageID:     messageID,
 		FromAddress:   defaultSender.Email,
 		FromName:      defaultSender.Name,
@@ -160,7 +200,7 @@ func (s *EmailService) TestEmailProvider(ctx context.Context, workspaceID string
 		},
 	}
 
-	err = s.SendEmail(ctx, request, false)
+	err := s.SendEmail(ctx, request, false)
 
 	if err != nil {
 		tracing.MarkSpanError(ctx, err)

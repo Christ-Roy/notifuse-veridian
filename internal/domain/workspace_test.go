@@ -5415,3 +5415,13 @@ func TestWorkspaceSettings_VeridianExcludedProviderClassesRoundTrip(t *testing.T
 	require.NoError(t, err)
 	assert.NotContains(t, string(rawEmpty), "veridian_excluded_provider_classes")
 }
+
+func TestWorkspaceSettings_VeridianMarketingEmailProviderIDsRoundTrip(t *testing.T) {
+	settings := WorkspaceSettings{VeridianMarketingEmailProviderIDs: []string{"gmail-1", "gmail-2"}}
+	raw, err := json.Marshal(settings)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"veridian_marketing_email_provider_ids":["gmail-1","gmail-2"]`)
+	var decoded WorkspaceSettings
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	assert.Equal(t, settings.VeridianMarketingEmailProviderIDs, decoded.VeridianMarketingEmailProviderIDs)
+}

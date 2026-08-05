@@ -570,12 +570,13 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	w.upsertMessageHistory(w.ctx, workspace.ID, workspace.Settings.SecretKey, entry, nil)
 
 	w.logger.WithFields(map[string]interface{}{
-		"entry_id":     entry.ID,
-		"message_id":   entry.MessageID,
-		"recipient":    entry.ContactEmail,
-		"source_type":  entry.SourceType,
-		"source_id":    entry.SourceID,
-		"workspace_id": workspace.ID,
+		"entry_id":       entry.ID,
+		"integration_id": entry.IntegrationID,
+		"message_id":     entry.MessageID,
+		"recipient":      entry.ContactEmail,
+		"source_type":    entry.SourceType,
+		"source_id":      entry.SourceID,
+		"workspace_id":   workspace.ID,
 	}).Debug("Email sent successfully")
 
 	// Call success callback
@@ -686,6 +687,8 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		VeridianSenderEmail: entry.Payload.FromAddress,
 		// V55: exact final class used by policy gates (payload tag or cached MX).
 		VeridianProviderClass: entry.Payload.VeridianProviderClass,
+		// V56: exact integration/profile attribution for daily caps and usage.
+		VeridianProfileID: entry.IntegrationID,
 	}
 
 	// Set source (broadcast or automation)

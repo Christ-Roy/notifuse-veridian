@@ -23,6 +23,13 @@ func TestVeridianDailyQuotaContracts(t *testing.T) {
 	}
 	require.Equal(t, "provider_class", VeridianDailyQuotaKindProviderClass)
 	require.Equal(t, "warmup", VeridianDailyQuotaKindWarmup)
+	require.Equal(t, "profile", VeridianDailyQuotaKindProfile)
 	assert.Equal(t, day, reservation.Key.Day)
 	assert.Equal(t, 5, reservation.Cap)
+}
+
+func TestVeridianDailyQuotaProfileKeyUsesExactIntegrationID(t *testing.T) {
+	key := VeridianDailyQuotaKey{Kind: VeridianDailyQuotaKindProfile, ProfileID: "integration-uuid-1"}
+	assert.Equal(t, "integration-uuid-1", key.ProfileID)
+	assert.Empty(t, key.SenderDomain)
 }

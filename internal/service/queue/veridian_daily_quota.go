@@ -20,6 +20,7 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 	classCaps, _ := veridianResolveDailyCaps(workspace, provider, entry)
 	now := time.Now().UTC()
 	warmupCap := veridianWarmupCap(provider, now)
+	profileCap := provider.VeridianEffectiveProfileDailyCap()
 	class := entry.Payload.VeridianProviderClass
 	if class == "" {
 		class = w.veridianClassifyRecipient(entry)
@@ -30,12 +31,12 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 	if configured, ok := classCaps[class]; ok && configured > 0 {
 		classCap = configured
 	}
-	if classCap <= 0 && warmupCap <= 0 {
+	if classCap <= 0 && warmupCap <= 0 && profileCap <= 0 {
 		return nil, 0, false
 	}
 
 	senderDomain := veridianEmailDomain(entry.Payload.FromAddress)
-	if senderDomain == "" {
+	if senderDomain == "" && (classCap > 0 || warmupCap > 0) {
 		// V55 keys every reputation quota by the actual sender domain. Falling
 		// back to a workspace-global wildcard would merge unrelated infras.
 		w.logger.WithField("entry_id", entry.ID).Error("Daily quota has no sender domain; SMTP blocked")
@@ -58,7 +59,19 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 	if messageID == "" {
 		messageID = entry.ID
 	}
-	specs := make([]domain.VeridianDailyQuotaReservation, 0, 2)
+	specs := make([]domain.VeridianDailyQuotaReservation, 0, 3)
+	if profileCap > 0 {
+		specs = append(specs, domain.VeridianDailyQuotaReservation{
+			MessageID: messageID,
+			Cap:       profileCap,
+			Key: domain.VeridianDailyQuotaKey{
+				WorkspaceID: workspace.ID,
+				Day:         veridianStartOfDayUTC(now),
+				Kind:        domain.VeridianDailyQuotaKindProfile,
+				ProfileID:   entry.IntegrationID,
+			},
+		})
+	}
 	if classCap > 0 {
 		specs = append(specs, domain.VeridianDailyQuotaReservation{
 			MessageID: messageID,
@@ -86,6 +99,11 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 			}
 			return nil, veridianDailyCapRecheckInterval, true
 		}
+		w.logger.WithFields(map[string]interface{}{
+			"entry_id": entry.ID, "integration_id": entry.IntegrationID,
+			"quota_kind": reservation.Key.Kind, "quota_used": result.Used,
+			"quota_cap": reservation.Cap, "provider_class": reservation.Key.ProviderClass,
+		}).Debug("Atomic daily quota reserved")
 		leases = append(leases, &veridianDailyQuotaLease{messageID: messageID, kind: reservation.Key.Kind, created: !result.AlreadyReserved})
 	}
 	return leases, 0, false

@@ -278,9 +278,16 @@ sélectionnent explicitement le profil actif.
   persistance. Il n'est jamais réaffiché en clair.
 - Une édition avec le champ secret vide préserve le ciphertext existant pour tous
   les providers email concernés, au lieu d'effacer silencieusement le credential.
-- Le test d'un profil sauvegardé hydrate le secret uniquement en mémoire avant
-  l'appel au transport. Le payload console continue de ne contenir que le
-  ciphertext.
+- Les réponses workspace ne retournent ni secret clair ni ciphertext. Elles
+  exposent seulement `veridian_credentials_configured` et, pour SMTP, les flags
+  `has_password` / `has_oauth2_client_secret` /
+  `has_oauth2_refresh_token`. Ces flags API sont nettoyés avant persistance.
+- Le test d'un profil sauvegardé passe uniquement son `integration_id` : le
+  serveur hydrate le secret en mémoire. Un succès persiste
+  `veridian_transport_verified_at`; seuls les profils vérifiés entrent dans un
+  pool explicite, sauf le singleton marketing legacy déjà actif (grandfather).
+  La route est owner-only, borne le destinataire à l'email du owner connecté et
+  applique un plafond dédié de 3 tests/heure/workspace/profil.
 - Fichiers Veridian :
   `console/src/components/settings/veridian_email_profiles.ts`,
   `internal/service/veridian_email_provider_secrets.go` et tests 1:1.
@@ -1277,6 +1284,33 @@ PostgreSQL dans chaque DB tenant :
 
 Migration V55 additive/expand-safe, index sans `CONCURRENTLY` car le runner de
 migrations est transactionnel (allowlist `migrations-pending.txt`).
+
+### V56 — profils d'envoi multi-intégrations et quota exact (2026-08-05)
+
+- `WorkspaceSettings.veridian_marketing_email_provider_ids` configure un pool
+  ordonné d'intégrations email complètes. La queue choisit par hash stable
+  workspace + classe destinataire + message : allocation et restart convergent
+  vers le même profil, puis l'`integration_id` est figé dans l'entrée.
+- `EmailProvider.veridian_profile_daily_cap` est un plafond total par profil,
+  toutes classes et senders confondus. Gmail prend 30/j par défaut et refuse
+  toute valeur supérieure à 50.
+- Le worker réserve atomiquement le quota `profile` dans le ledger V55 avec
+  l'IntegrationID exact. `message_history.veridian_profile_id` attribue les
+  acceptations au profil exact; migration V56 additive et indexée.
+- `GET|POST /api/veridian/emailProfiles.usage` renvoie `used`/`remaining` depuis
+  le compteur atomique (autorité quota), plus `accepted_used` et
+  `accepted_by_provider_class` depuis l'historique. Une issue SMTP ambiguë peut
+  donc produire `used > accepted_used` sans mentir sur la capacité restante.
+  Le jour de politique est explicitement UTC et les classes inconnues restent
+  sous la clé `unclassified`, jamais reclassées artificiellement `corporate`.
+- Le cache OAuth Google inclut un digest opaque du refresh token : deux comptes
+  partageant le même client OAuth ne partagent jamais un access token, même si
+  leur username est vide. Aucun secret n'apparaît dans la clé ou les logs.
+- Limite lifecycle connue : une entrée déjà en queue n'est jamais reroutée si
+  son profil atteint son cap (elle attend le jour suivant, fail-safe). La
+  suppression d'une intégration encore référencée par des entrées pending n'a
+  pas encore de garde DB dédiée; ne pas supprimer un profil actif avant drainage
+  de queue. À traiter en P1 avec un `EXISTS email_queue.integration_id` atomique.
 
 ### Pixel d'ouverture PAR INFRA — dernier levier non-infra harmonisé (cold outbound, 2026-06-17)
 

@@ -91,6 +91,20 @@ func (mr *MockEmailServiceInterfaceMockRecorder) TestEmailProvider(arg0, arg1, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TestEmailProvider", reflect.TypeOf((*MockEmailServiceInterface)(nil).TestEmailProvider), arg0, arg1, arg2, arg3)
 }
 
+// TestEmailProviderByIntegrationID mocks base method.
+func (m *MockEmailServiceInterface) TestEmailProviderByIntegrationID(arg0 context.Context, arg1, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TestEmailProviderByIntegrationID", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// TestEmailProviderByIntegrationID indicates an expected call of TestEmailProviderByIntegrationID.
+func (mr *MockEmailServiceInterfaceMockRecorder) TestEmailProviderByIntegrationID(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TestEmailProviderByIntegrationID", reflect.TypeOf((*MockEmailServiceInterface)(nil).TestEmailProviderByIntegrationID), arg0, arg1, arg2, arg3)
+}
+
 // VisitLink mocks base method.
 func (m *MockEmailServiceInterface) VisitLink(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()

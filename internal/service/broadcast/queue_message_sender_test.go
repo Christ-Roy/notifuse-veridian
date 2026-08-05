@@ -127,6 +127,13 @@ func TestNewQueueMessageSender(t *testing.T) {
 	})
 }
 
+func TestQueueMessageSender_SetVeridianEmailProfileRotator(t *testing.T) {
+	sender := &queueMessageSender{}
+	rotator := newVeridianEmailProfileRotator()
+	sender.SetVeridianEmailProfileRotator(rotator)
+	assert.Same(t, rotator, sender.veridianEmailProfileRotator)
+}
+
 // Helper functions for creating test data
 func createQueueTestTextBlock(id, textContent string) notifuse_mjml.EmailBlock {
 	content := textContent
@@ -1928,7 +1935,7 @@ func TestQueueMessageSender_SendBatch_VeridianInfraPixelOverride(t *testing.T) {
 	sender.(*queueMessageSender).SetVeridianWorkspaceRepo(mockWorkspaceRepo)
 
 	recipients := []*domain.ContactWithList{
-		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"},  // google → infra OFF
+		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"}, // google → infra OFF
 		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"}, // freemail_fr → cascade workspace ON
 	}
 

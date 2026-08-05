@@ -47,10 +47,10 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -75,10 +75,10 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -117,9 +117,9 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -160,12 +160,13 @@ func TestWorkspaceHandler_List(t *testing.T) {
 	// Mock successful workspace list retrieval
 	expectedWorkspaces := []*domain.Workspace{
 		{
-			ID:   "testworkspace1",
-			Name: "Test Workspace 1",
+			ID:           "testworkspace1",
+			Name:         "Test Workspace 1",
+			Integrations: domain.Integrations{},
 			Settings: domain.WorkspaceSettings{
-				WebsiteURL: "https://example1.com",
-				LogoURL:    "https://example1.com/logo.png",
-				Timezone:   "UTC",
+				WebsiteURL:      "https://example1.com",
+				LogoURL:         "https://example1.com/logo.png",
+				Timezone:        "UTC",
 				DefaultLanguage: "en",
 				Languages:       []string{"en"},
 				FileManager: domain.FileManagerSettings{
@@ -176,12 +177,13 @@ func TestWorkspaceHandler_List(t *testing.T) {
 			},
 		},
 		{
-			ID:   "testworkspace2",
-			Name: "Test Workspace 2",
+			ID:           "testworkspace2",
+			Name:         "Test Workspace 2",
+			Integrations: domain.Integrations{},
 			Settings: domain.WorkspaceSettings{
-				WebsiteURL: "https://example2.com",
-				LogoURL:    "https://example2.com/logo.png",
-				Timezone:   "UTC",
+				WebsiteURL:      "https://example2.com",
+				LogoURL:         "https://example2.com/logo.png",
+				Timezone:        "UTC",
 				DefaultLanguage: "en",
 				Languages:       []string{"en"},
 				FileManager: domain.FileManagerSettings{
@@ -221,10 +223,10 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 		ID:   "testworkspace1",
 		Name: "Updated Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://updated.com",
-			LogoURL:    "https://updated.com/logo.png",
-			CoverURL:   "https://updated.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://updated.com",
+			LogoURL:         "https://updated.com/logo.png",
+			CoverURL:        "https://updated.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -255,10 +257,10 @@ func TestWorkspaceHandler_Update(t *testing.T) {
 		ID:   "testworkspace1",
 		Name: "Updated Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://updated.com",
-			LogoURL:    "https://updated.com/logo.png",
-			CoverURL:   "https://updated.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://updated.com",
+			LogoURL:         "https://updated.com/logo.png",
+			CoverURL:        "https://updated.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -501,10 +503,10 @@ func TestWorkspaceHandler_Create_MissingID(t *testing.T) {
 	reqBody := domain.CreateWorkspaceRequest{
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -534,10 +536,10 @@ func TestWorkspaceHandler_Create_MissingName(t *testing.T) {
 	reqBody := domain.CreateWorkspaceRequest{
 		ID: "testworkspace1",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -606,10 +608,10 @@ func TestWorkspaceHandler_Create_ServiceError(t *testing.T) {
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -644,10 +646,10 @@ func TestWorkspaceHandler_Create_WorkspaceLimitReached(t *testing.T) {
 		ID:   "testworkspace1",
 		Name: "Test Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://example.com",
-			LogoURL:    "https://example.com/logo.png",
-			CoverURL:   "https://example.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://example.com",
+			LogoURL:         "https://example.com/logo.png",
+			CoverURL:        "https://example.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -789,10 +791,10 @@ func TestWorkspaceHandler_Update_MissingID(t *testing.T) {
 	reqBody := domain.UpdateWorkspaceRequest{
 		Name: "Updated Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://updated.com",
-			LogoURL:    "https://updated.com/logo.png",
-			CoverURL:   "https://updated.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://updated.com",
+			LogoURL:         "https://updated.com/logo.png",
+			CoverURL:        "https://updated.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
@@ -828,10 +830,10 @@ func TestWorkspaceHandler_Update_ServiceError(t *testing.T) {
 		ID:   "testworkspace1",
 		Name: "Updated Workspace",
 		Settings: domain.WorkspaceSettings{
-			WebsiteURL: "https://updated.com",
-			LogoURL:    "https://updated.com/logo.png",
-			CoverURL:   "https://updated.com/cover.png",
-			Timezone:   "UTC",
+			WebsiteURL:      "https://updated.com",
+			LogoURL:         "https://updated.com/logo.png",
+			CoverURL:        "https://updated.com/cover.png",
+			Timezone:        "UTC",
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{

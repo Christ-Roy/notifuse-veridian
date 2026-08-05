@@ -62,6 +62,12 @@ type SMTPSettings struct {
 	// Runtime decrypted OAuth2 secrets (not stored in database)
 	OAuth2ClientSecret string `json:"oauth2_client_secret,omitempty"` // Decrypted client secret
 	OAuth2RefreshToken string `json:"oauth2_refresh_token,omitempty"` // Decrypted refresh token (Google)
+
+	// API-only write-only-secret indicators. They are computed on response
+	// clones, never used as credentials and normally omitted from persistence.
+	HasPassword           bool `json:"has_password,omitempty"`
+	HasOAuth2ClientSecret bool `json:"has_oauth2_client_secret,omitempty"`
+	HasOAuth2RefreshToken bool `json:"has_oauth2_refresh_token,omitempty"`
 }
 
 // MarshalJSON masque les secrets SMTP EN CLAIR (champs runtime déchiffrés) à

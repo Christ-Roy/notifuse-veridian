@@ -12,6 +12,7 @@ import (
 	"github.com/Notifuse/notifuse/pkg/botdetection"
 	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/ratelimiter"
 )
 
 // paddedTrackingPixel is a 1x1 transparent PNG padded with tEXt metadata to 825 bytes
@@ -77,6 +78,7 @@ type EmailHandler struct {
 	getJWTSecret func() ([]byte, error)
 	logger       logger.Logger
 	secretKey    string
+	testLimiter  *ratelimiter.RateLimiter
 }
 
 // NewEmailHandler creates a new email handler
@@ -85,12 +87,18 @@ func NewEmailHandler(
 	getJWTSecret func() ([]byte, error),
 	logger logger.Logger,
 	secretKey string,
+	testLimiter *ratelimiter.RateLimiter,
 ) *EmailHandler {
+	if testLimiter == nil {
+		testLimiter = ratelimiter.NewRateLimiter()
+	}
+	testLimiter.SetPolicy("email-provider-test", 3, time.Hour)
 	return &EmailHandler{
 		emailService: emailService,
 		getJWTSecret: getJWTSecret,
 		logger:       logger,
 		secretKey:    secretKey,
+		testLimiter:  testLimiter,
 	}
 }
 
@@ -133,8 +141,19 @@ func (h *EmailHandler) handleTestEmailProvider(w http.ResponseWriter, r *http.Re
 		WriteJSONError(w, "Missing workspace ID", http.StatusBadRequest)
 		return
 	}
+	if req.IntegrationID == "" {
+		WriteJSONError(w, "Missing integration ID", http.StatusBadRequest)
+		return
+	}
+	if !h.testLimiter.Allow("email-provider-test", req.WorkspaceID+"|"+req.IntegrationID) {
+		WriteJSONError(w, "Email provider test rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
 
-	err := h.emailService.TestEmailProvider(r.Context(), req.WorkspaceID, req.Provider, req.To)
+	err := h.emailService.TestEmailProviderByIntegrationID(r.Context(), req.WorkspaceID, req.IntegrationID, req.To)
+	h.logger.WithFields(map[string]interface{}{
+		"workspace_id": req.WorkspaceID, "integration_id": req.IntegrationID, "success": err == nil,
+	}).Info("Email provider transport verification attempted")
 	resp := domain.TestEmailProviderResponse{Success: err == nil}
 	if err != nil {
 		resp.Error = err.Error()

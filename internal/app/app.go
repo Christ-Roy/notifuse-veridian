@@ -1254,7 +1254,7 @@ func (a *App) InitHandlers() error {
 	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, getJWTSecret, a.logger)
 	templateHandler := httpHandler.NewTemplateHandler(a.templateService, getJWTSecret, a.logger)
 	templateBlockHandler := httpHandler.NewTemplateBlockHandler(a.templateBlockService, getJWTSecret, a.logger)
-	emailHandler := httpHandler.NewEmailHandler(a.emailService, getJWTSecret, a.logger, a.config.Security.SecretKey)
+	emailHandler := httpHandler.NewEmailHandler(a.emailService, getJWTSecret, a.logger, a.config.Security.SecretKey, a.rateLimiter)
 	broadcastHandler := httpHandler.NewBroadcastHandler(a.broadcastService, a.templateService, getJWTSecret, a.logger, a.config.IsDemo())
 	blogHandler := httpHandler.NewBlogHandler(a.blogService, getJWTSecret, a.logger, a.config.IsDemo())
 	blogThemeHandler := httpHandler.NewBlogThemeHandler(a.blogService, getJWTSecret, a.logger)
@@ -1599,6 +1599,17 @@ func (a *App) InitHandlers() error {
 		a.logger,
 	)
 	veridianEngagementByClassHandler.RegisterRoutes(a.mux)
+
+	// Exact daily usage per sending integration/profile (V56). The console reads
+	// this endpoint; it never estimates quota consumption client-side.
+	veridianEmailProfileUsageRepo := repository.NewVeridianEmailProfileUsageRepository(a.workspaceRepo)
+	veridianEmailProfileUsageService := service.NewVeridianEmailProfileUsageService(
+		veridianEmailProfileUsageRepo, a.workspaceRepo, a.authService, a.logger,
+	)
+	veridianEmailProfileUsageHandler := httpHandler.NewVeridianEmailProfileUsageHandler(
+		veridianEmailProfileUsageService, getJWTSecret, a.logger,
+	)
+	veridianEmailProfileUsageHandler.RegisterRoutes(a.mux)
 
 	// === Veridian patch — linter de délivrabilité (spam score) cold (2026-06-15) ===
 	// Endpoint POST+GET /api/veridian/templates.deliverabilityScore : score 0-10

@@ -34,7 +34,7 @@ func TestVeridianDailyQuotaRepository_PostgresConcurrency(t *testing.T) {
 		CREATE TABLE message_history (
 			id VARCHAR(255) PRIMARY KEY, contact_email VARCHAR(255) NOT NULL,
 			sent_at TIMESTAMPTZ NOT NULL, failed_at TIMESTAMPTZ,
-			veridian_sender_email VARCHAR(255), veridian_provider_class VARCHAR(64)
+			veridian_sender_email VARCHAR(255), veridian_provider_class VARCHAR(64), veridian_profile_id VARCHAR(255)
 		);
 		CREATE TABLE veridian_daily_quota_counters (
 			workspace_id VARCHAR(255) NOT NULL, quota_day DATE NOT NULL, quota_kind VARCHAR(32) NOT NULL,
@@ -59,6 +59,14 @@ func TestVeridianDailyQuotaRepository_PostgresConcurrency(t *testing.T) {
 		result, err := repo.ReserveDailyQuota(ctx, "ws", domain.VeridianDailyQuotaReservation{
 			MessageID: messageID, Cap: cap,
 			Key: domain.VeridianDailyQuotaKey{Day: day, Kind: domain.VeridianDailyQuotaKindProviderClass, SenderDomain: "send.test", ProviderClass: "microsoft"},
+		})
+		require.NoError(t, err)
+		return result
+	}
+	reserveProfile := func(messageID, profileID string, cap int) domain.VeridianDailyQuotaReservationResult {
+		result, err := repo.ReserveDailyQuota(ctx, "ws", domain.VeridianDailyQuotaReservation{
+			MessageID: messageID, Cap: cap,
+			Key: domain.VeridianDailyQuotaKey{Day: day, Kind: domain.VeridianDailyQuotaKindProfile, ProfileID: profileID},
 		})
 		require.NoError(t, err)
 		return result
@@ -124,6 +132,37 @@ func TestVeridianDailyQuotaRepository_PostgresConcurrency(t *testing.T) {
 		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM veridian_daily_quota_counters`).Scan(&counters))
 		require.Equal(t, 1, reservations)
 		require.Equal(t, 2, counters)
+	})
+
+	t.Run("profile cap is exact isolated concurrent and idempotent", func(t *testing.T) {
+		_, err := db.Exec(`TRUNCATE veridian_daily_quota_reservations, veridian_daily_quota_counters, message_history`)
+		require.NoError(t, err)
+		var acceptedA, acceptedB atomic.Int32
+		var wg sync.WaitGroup
+		for i := 0; i < 40; i++ {
+			wg.Add(2)
+			go func(i int) {
+				defer wg.Done()
+				if reserveProfile(fmt.Sprintf("a-%02d", i), "gmail-a", 7).Reserved {
+					acceptedA.Add(1)
+				}
+			}(i)
+			go func(i int) {
+				defer wg.Done()
+				if reserveProfile(fmt.Sprintf("b-%02d", i), "gmail-b", 7).Reserved {
+					acceptedB.Add(1)
+				}
+			}(i)
+		}
+		wg.Wait()
+		require.Equal(t, int32(7), acceptedA.Load())
+		require.Equal(t, int32(7), acceptedB.Load())
+		first := reserveProfile("same-profile-message", "gmail-c", 7)
+		second := reserveProfile("same-profile-message", "gmail-c", 7)
+		require.True(t, first.Reserved)
+		require.False(t, first.AlreadyReserved)
+		require.True(t, second.Reserved)
+		require.True(t, second.AlreadyReserved)
 	})
 
 	t.Run("historical seed ignores failed rows", func(t *testing.T) {

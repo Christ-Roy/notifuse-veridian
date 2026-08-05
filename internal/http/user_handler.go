@@ -273,7 +273,7 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	// Combine user and workspaces in response
 	response := map[string]interface{}{
 		"user":       user,
-		"workspaces": workspaces,
+		"workspaces": veridianRedactWorkspacesForAPI(workspaces),
 	}
 
 	w.WriteHeader(http.StatusOK)

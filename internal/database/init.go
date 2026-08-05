@@ -211,7 +211,8 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			veridian_content_hash CHAR(32),
 			veridian_sender_email VARCHAR(255),
-			veridian_provider_class VARCHAR(64)
+			veridian_provider_class VARCHAR(64),
+			veridian_profile_id VARCHAR(255)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_email ON message_history(contact_email)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id ON message_history(broadcast_id) WHERE broadcast_id IS NOT NULL`,
@@ -230,6 +231,7 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		// warmup IP) : COUNT par adresse FROM (veridian_sender_email, sent_at).
 		`CREATE INDEX IF NOT EXISTS idx_message_history_sender_email_sent_at ON message_history(veridian_sender_email, sent_at) WHERE veridian_sender_email IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_provider_class_sender_sent_at ON message_history(veridian_provider_class, veridian_sender_email, sent_at) WHERE veridian_provider_class IS NOT NULL AND failed_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_profile_sent_at ON message_history(veridian_profile_id, sent_at) WHERE veridian_profile_id IS NOT NULL AND failed_at IS NULL`,
 		`CREATE TABLE IF NOT EXISTS veridian_daily_quota_counters (
 			workspace_id VARCHAR(255) NOT NULL,
 			quota_day DATE NOT NULL,

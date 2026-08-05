@@ -138,6 +138,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.VeridianContentHash,
 				message.VeridianSenderEmail,
 				message.VeridianProviderClass,
+				message.VeridianProfileID,
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -241,6 +242,7 @@ func TestMessageHistoryRepository_UpsertRefreshesSentAtOnRetry(t *testing.T) {
 			message.VeridianContentHash,
 			message.VeridianSenderEmail,
 			message.VeridianProviderClass,
+			message.VeridianProfileID,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 

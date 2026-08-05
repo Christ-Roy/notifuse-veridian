@@ -80,7 +80,7 @@ func (h *WorkspaceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, workspaces)
+	writeJSON(w, http.StatusOK, veridianRedactWorkspacesForAPI(workspaces))
 }
 
 func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +114,7 @@ func (h *WorkspaceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	// Wrap the workspace in a response object with a workspace field to match frontend expectations
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"workspace": workspace,
+		"workspace": veridianRedactWorkspaceForAPI(workspace),
 	})
 }
 
@@ -168,7 +168,7 @@ func (h *WorkspaceHandler) handleCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, workspace)
+	writeJSON(w, http.StatusCreated, veridianRedactWorkspaceForAPI(workspace))
 }
 
 // Helper function to get bytes from request body
@@ -222,7 +222,7 @@ func (h *WorkspaceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, workspace)
+	writeJSON(w, http.StatusOK, veridianRedactWorkspaceForAPI(workspace))
 }
 
 func (h *WorkspaceHandler) handleDelete(w http.ResponseWriter, r *http.Request) {

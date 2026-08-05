@@ -42,7 +42,7 @@ func setupEmailHandlerTest(t *testing.T) (*mocks.MockEmailServiceInterface, *pkg
 
 	// Create key pair for testing
 	jwtSecret := []byte("test-jwt-secret-key-for-testing-32bytes")
-	handler := NewEmailHandler(mockService, func() ([]byte, error) { return jwtSecret, nil }, mockLogger, "test-secret-key")
+	handler := NewEmailHandler(mockService, func() ([]byte, error) { return jwtSecret, nil }, mockLogger, "test-secret-key", nil)
 
 	return mockService, mockLogger, handler, []byte("test-secret-key")
 }
@@ -56,7 +56,7 @@ func TestNewEmailHandler(t *testing.T) {
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 	jwtSecret := []byte("test-jwt-secret-key-for-testing-32bytes")
 	// Act
-	handler := NewEmailHandler(mockService, func() ([]byte, error) { return jwtSecret, nil }, mockLogger, "test-secret-key")
+	handler := NewEmailHandler(mockService, func() ([]byte, error) { return jwtSecret, nil }, mockLogger, "test-secret-key", nil)
 
 	// Assert
 	assert.NotNil(t, handler)
@@ -64,6 +64,7 @@ func TestNewEmailHandler(t *testing.T) {
 	assert.NotNil(t, handler.getJWTSecret)
 	assert.Equal(t, mockLogger, handler.logger)
 	assert.Equal(t, "test-secret-key", handler.secretKey)
+	assert.NotNil(t, handler.testLimiter)
 }
 
 func TestEmailHandler_RegisterRoutes(t *testing.T) {
@@ -154,31 +155,32 @@ func TestEmailHandler_HandleTestEmailProvider(t *testing.T) {
 			expectedResp:   nil,
 		},
 		{
-			name:   "Service error",
+			name:   "Saved integration uses server-side credentials",
 			method: http.MethodPost,
 			reqBody: domain.TestEmailProviderRequest{
-				WorkspaceID: "workspace123",
-				To:          "test@example.com",
-				Provider: domain.EmailProvider{
-					Kind: domain.EmailProviderKindSMTP,
-					Senders: []domain.EmailSender{
-						domain.NewEmailSender("sender@example.com", "Test Sender"),
-					},
-					SMTP: &domain.SMTPSettings{
-						Host:     "smtp.example.com",
-						Port:     587,
-						Username: "user@example.com",
-					},
-				},
+				WorkspaceID:   "workspace123",
+				IntegrationID: "gmail-profile-1",
+				To:            "test@example.com",
 			},
 			setupMock: func(m *mocks.MockEmailServiceInterface) {
 				m.EXPECT().
-					TestEmailProvider(
-						gomock.Any(),
-						"workspace123",
-						gomock.Any(),
-						"test@example.com",
-					).
+					TestEmailProviderByIntegrationID(gomock.Any(), "workspace123", "gmail-profile-1", "test@example.com").
+					Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResp:   &domain.TestEmailProviderResponse{Success: true},
+		},
+		{
+			name:   "Service error",
+			method: http.MethodPost,
+			reqBody: domain.TestEmailProviderRequest{
+				WorkspaceID:   "workspace123",
+				IntegrationID: "gmail-profile-1",
+				To:            "test@example.com",
+			},
+			setupMock: func(m *mocks.MockEmailServiceInterface) {
+				m.EXPECT().
+					TestEmailProviderByIntegrationID(gomock.Any(), "workspace123", "gmail-profile-1", "test@example.com").
 					Return(errors.New("service error"))
 			},
 			expectedStatus: http.StatusOK,
@@ -188,7 +190,7 @@ func TestEmailHandler_HandleTestEmailProvider(t *testing.T) {
 			},
 		},
 		{
-			name:   "Success",
+			name:   "Arbitrary unsaved provider is rejected",
 			method: http.MethodPost,
 			reqBody: domain.TestEmailProviderRequest{
 				WorkspaceID: "workspace123",
@@ -205,20 +207,9 @@ func TestEmailHandler_HandleTestEmailProvider(t *testing.T) {
 					},
 				},
 			},
-			setupMock: func(m *mocks.MockEmailServiceInterface) {
-				m.EXPECT().
-					TestEmailProvider(
-						gomock.Any(),
-						"workspace123",
-						gomock.Any(),
-						"test@example.com",
-					).
-					Return(nil)
-			},
-			expectedStatus: http.StatusOK,
-			expectedResp: &domain.TestEmailProviderResponse{
-				Success: true,
-			},
+			setupMock:      func(m *mocks.MockEmailServiceInterface) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedResp:   nil,
 		},
 	}
 
@@ -263,6 +254,27 @@ func TestEmailHandler_HandleTestEmailProvider(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestEmailHandler_TestProviderDedicatedRateLimit(t *testing.T) {
+	mockService, _, handler, _ := setupEmailHandlerTest(t)
+	mockService.EXPECT().
+		TestEmailProviderByIntegrationID(gomock.Any(), "workspace123", "gmail-profile-1", "owner@example.com").
+		Return(nil).
+		Times(3)
+	body, err := json.Marshal(domain.TestEmailProviderRequest{
+		WorkspaceID: "workspace123", IntegrationID: "gmail-profile-1", To: "owner@example.com",
+	})
+	require.NoError(t, err)
+	for attempt := 1; attempt <= 4; attempt++ {
+		recorder := httptest.NewRecorder()
+		handler.handleTestEmailProvider(recorder, httptest.NewRequest(http.MethodPost, "/api/email.testProvider", bytes.NewReader(body)))
+		if attempt <= 3 {
+			assert.Equal(t, http.StatusOK, recorder.Code)
+		} else {
+			assert.Equal(t, http.StatusTooManyRequests, recorder.Code)
+		}
 	}
 }
 

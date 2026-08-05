@@ -158,6 +158,10 @@ type MessageHistory struct {
 	// MX resolution). V55 materializes it so MX-hosted corporate domains are no
 	// longer reconstructed incorrectly from the recipient address suffix.
 	VeridianProviderClass string `json:"veridian_provider_class,omitempty"`
+
+	// Stable sending integration/profile selected at enqueue. V56 makes daily
+	// profile quotas and per-profile provider analytics exact across restarts.
+	VeridianProfileID string `json:"veridian_profile_id,omitempty"`
 }
 
 type MessageHistoryStatusSum struct {

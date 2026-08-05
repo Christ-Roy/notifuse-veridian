@@ -1749,6 +1749,7 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 
 	t.Run("update SMTP integration preserves app password when not resent", func(t *testing.T) {
 		const existingEncrypted = "encrypted-existing-app-password"
+		verifiedAt := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC)
 		expectedUser := &domain.User{ID: userID}
 		expectedUserWorkspace := &domain.UserWorkspace{
 			UserID:      userID,
@@ -1760,7 +1761,8 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 			Name: "Gmail sending profile",
 			Type: domain.IntegrationTypeEmail,
 			EmailProvider: domain.EmailProvider{
-				Kind: domain.EmailProviderKindSMTP,
+				Kind:                        domain.EmailProviderKindSMTP,
+				VeridianTransportVerifiedAt: &verifiedAt,
 				SMTP: &domain.SMTPSettings{
 					Host:              "smtp.gmail.com",
 					Port:              587,
@@ -1790,6 +1792,9 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 			require.NotNil(t, updated.SMTP)
 			require.Equal(t, existingEncrypted, updated.SMTP.EncryptedPassword)
 			require.Empty(t, updated.SMTP.Password)
+			require.False(t, updated.SMTP.HasPassword, "API-only configured flag must not persist")
+			require.False(t, updated.VeridianCredentialsConfigured)
+			require.Equal(t, &verifiedAt, updated.VeridianTransportVerifiedAt)
 			return nil
 		})
 
@@ -1801,10 +1806,11 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 				Kind:               domain.EmailProviderKindSMTP,
 				RateLimitPerMinute: 1,
 				SMTP: &domain.SMTPSettings{
-					Host:     "smtp.gmail.com",
-					Port:     587,
-					Username: "client@gmail.com",
-					UseTLS:   true,
+					Host:        "smtp.gmail.com",
+					Port:        587,
+					Username:    "client@gmail.com",
+					UseTLS:      true,
+					HasPassword: true,
 				},
 				Senders: existingSMTP.EmailProvider.Senders,
 			},
@@ -2289,6 +2295,20 @@ func TestWorkspaceService_DeleteIntegration(t *testing.T) {
 		err := service.DeleteIntegration(ctx, workspaceID, integrationID)
 		require.NoError(t, err)
 	})
+}
+
+func TestVeridianRemoveEmailProfileReference(t *testing.T) {
+	settings := &domain.WorkspaceSettings{
+		MarketingEmailProviderID:          "p1",
+		VeridianMarketingEmailProviderIDs: []string{"p1", "p2", "p3"},
+	}
+	veridianRemoveEmailProfileReference(settings, "p1")
+	assert.Equal(t, []string{"p2", "p3"}, settings.VeridianMarketingEmailProviderIDs)
+	assert.Equal(t, "p2", settings.MarketingEmailProviderID)
+
+	veridianRemoveEmailProfileReference(settings, "p3")
+	assert.Equal(t, []string{"p2"}, settings.VeridianMarketingEmailProviderIDs)
+	assert.Equal(t, "p2", settings.MarketingEmailProviderID)
 }
 
 func TestWorkspaceService_RemoveMember(t *testing.T) {
