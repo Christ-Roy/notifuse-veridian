@@ -24,6 +24,8 @@ type emailIntegrationLifecycleRepoStub struct {
 	callbackCalled bool
 	workspaceID    string
 	integrationID  string
+	wakeCalls      int
+	wakeErr        error
 }
 
 func (s *emailIntegrationLifecycleRepoStub) WithIntegrationQueueIdle(_ context.Context, workspaceID, integrationID string, fn func() error) error {
@@ -34,6 +36,13 @@ func (s *emailIntegrationLifecycleRepoStub) WithIntegrationQueueIdle(_ context.C
 	}
 	s.callbackCalled = true
 	return fn()
+}
+
+func (s *emailIntegrationLifecycleRepoStub) WakePendingByIntegration(_ context.Context, workspaceID, integrationID string) (int64, error) {
+	s.workspaceID = workspaceID
+	s.integrationID = integrationID
+	s.wakeCalls++
+	return 3, s.wakeErr
 }
 
 func TestWorkspaceService_ListWorkspaces(t *testing.T) {
@@ -1764,6 +1773,8 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 		&DNSVerificationService{},
 		&BlogService{},
 	)
+	policyQueue := &emailIntegrationLifecycleRepoStub{}
+	service.SetEmailIntegrationLifecycleRepository(policyQueue)
 
 	// Setup common logger expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
@@ -1854,6 +1865,9 @@ func TestWorkspaceService_UpdateIntegration(t *testing.T) {
 			Provider:      provider,
 		})
 		require.NoError(t, err)
+		require.Equal(t, 1, policyQueue.wakeCalls)
+		require.Equal(t, workspaceID, policyQueue.workspaceID)
+		require.Equal(t, integrationID, policyQueue.integrationID)
 	})
 
 	t.Run("update SMTP integration preserves app password when not resent", func(t *testing.T) {

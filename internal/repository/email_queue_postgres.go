@@ -360,6 +360,26 @@ func (r *EmailQueueRepository) SetNextRetry(ctx context.Context, workspaceID str
 	return nil
 }
 
+// WakePendingByIntegration clears deferred retries for one sending profile.
+// Paused, failed and processing rows deliberately remain untouched.
+func (r *EmailQueueRepository) WakePendingByIntegration(ctx context.Context, workspaceID, integrationID string) (int64, error) {
+	db, err := r.getDB(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get database connection: %w", err)
+	}
+	result, err := db.ExecContext(ctx, `
+		UPDATE email_queue
+		SET next_retry_at = NULL, updated_at = NOW()
+		WHERE integration_id = $1
+		  AND status = 'pending'
+		  AND next_retry_at IS NOT NULL
+	`, integrationID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to wake pending queue entries by integration: %w", err)
+	}
+	return result.RowsAffected()
+}
+
 // SetNextRetryAndRefundAttempt is used only after a successful processing claim
 // when the last-mile atomic quota denies SMTP.
 func (r *EmailQueueRepository) SetNextRetryAndRefundAttempt(ctx context.Context, workspaceID string, entryID string, nextRetry time.Time) error {

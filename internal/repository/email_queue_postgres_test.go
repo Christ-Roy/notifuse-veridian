@@ -439,6 +439,23 @@ func TestEmailQueueRepository_SetNextRetryAndRefundAttempt(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestEmailQueueRepository_WakePendingByIntegration(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewEmailQueueRepositoryWithDB(db)
+	policyRepo, ok := repo.(domain.EmailIntegrationPolicyQueueRepository)
+	require.True(t, ok)
+
+	mock.ExpectExec(`(?s)UPDATE email_queue\s+SET next_retry_at = NULL, updated_at = NOW\(\)\s+WHERE integration_id = \$1\s+AND status = 'pending'\s+AND next_retry_at IS NOT NULL`).
+		WithArgs("profile-1").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+
+	woken, err := policyRepo.WakePendingByIntegration(context.Background(), "workspace-123", "profile-1")
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, woken)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestEmailQueueRepository_GetStats(t *testing.T) {
 	ctx := context.Background()
 

@@ -12,7 +12,7 @@
 #
 # Gate actuel attendu sur une version sans le contrat : échec au round-trip de
 # veridian_marketing_email_provider_ids, AVANT toute création de broadcast.
-set -uo pipefail
+set -euo pipefail
 
 BASE="${NOTIFUSE_URL:-https://notifuse.staging.veridian.site}"
 SINK_HOST="${SINK_HOST:-127.0.0.1}"
@@ -69,8 +69,15 @@ hmac() {
 }
 
 api() {
-  curl -fsS -X POST "$BASE$1" -H 'content-type: application/json' \
-    -H "Authorization: Bearer $OWNER_TOKEN" -d "$2"
+  local raw status body
+  raw="$(curl -sS -w $'\n%{http_code}' -X POST "$BASE$1" -H 'content-type: application/json' \
+    -H "Authorization: Bearer $OWNER_TOKEN" -d "$2")" || fatal "transport API impossible pour $1"
+  status="${raw##*$'\n'}"
+  body="${raw%$'\n'*}"
+  case "$status" in
+    2??) printf '%s' "$body" ;;
+    *) fatal "API $1 HTTP $status: ${body:0:500}" ;;
+  esac
 }
 
 api_get() {
@@ -174,6 +181,19 @@ print(json.dumps({"workspace_id":os.environ["WID_VALUE"],"integration_id":os.env
 PY
 )"
   api /api/workspaces.updateIntegration "$body" >/dev/null
+}
+
+set_profile_pool() {
+  local first_profile="$1" profile_ids_csv="$2" workspace_json body
+  workspace_json="$(api_get "/api/workspaces.get?id=$WID")"
+  body="$(printf '%s' "$workspace_json" | FIRST_PROFILE="$first_profile" PROFILE_IDS_CSV="$profile_ids_csv" python3 -c '
+import json,os,sys
+w=json.load(sys.stdin)["workspace"]; s=w["settings"]
+s["marketing_email_provider_id"]=os.environ["FIRST_PROFILE"]
+s["veridian_marketing_email_provider_ids"]=[x for x in os.environ["PROFILE_IDS_CSV"].split(",") if x]
+print(json.dumps({"id":w["id"],"name":w["name"],"settings":s}))
+')"
+  api /api/workspaces.update "$body" >/dev/null
 }
 
 create_list_with_contacts() {
@@ -300,36 +320,50 @@ PY
 api /api/templates.create "$TEMPLATE" >/dev/null
 
 log "phase fenêtre: A fermé demain seulement, B ouvert 24/7"
-create_list_with_contacts gmail-mp-window 2
-BID_WINDOW="$(fire_broadcast gmail-mp-window gmail-mp-window)"
-wait_for_sql "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_B'" 1 "historique profil B ouvert"
-sleep 3
+create_list_with_contacts gmailmpwindow 40
+BID_WINDOW="$(fire_broadcast gmail-mp-window gmailmpwindow)"
+wait_for_sql "SELECT (SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW') + (SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW')" 40 "40 affectations figées"
+A_PENDING="$(psqlq "SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW' AND integration_id='$PROFILE_A' AND status='pending'")"
+B_SENT="$(psqlq "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_B'")"
+[ "$A_PENDING" -gt 0 ] || fatal "rotation non prouvée: aucune affectation au profil A sur 40 messages"
+[ "$B_SENT" -gt 0 ] || fatal "rotation non prouvée: aucune affectation au profil B sur 40 messages"
 [ "$(psqlq "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_A'")" = "0" ] \
   || fatal "profil A fermé a envoyé hors fenêtre"
-wait_for_sql "SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW' AND integration_id='$PROFILE_A' AND status='pending'" 1 "queue figée sur profil A fermé"
+[ "$(psqlq "SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW' AND integration_id='$PROFILE_B'")" = "0" ] \
+  || fatal "le profil B ouvert conserve encore une entrée en queue"
+ok "rotation prouvée: $A_PENDING messages figés sur A fermé, $B_SENT envoyés par B ouvert"
 
 log "ouverture de A: l'entrée doit repartir sans changer de profil"
 update_profile "$PROFILE_A" gmail-profile-a "$SENDER_A" 30 "$open_window"
-wait_for_sql "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_A'" 1 "historique profil A après ouverture"
+wait_for_sql "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW'" 40 "historique complet après ouverture de A"
+A_USED="$(psqlq "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_A'")"
+B_USED="$(psqlq "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_B'")"
+A_CAP=$((A_USED + 2))
+B_CAP=$((B_USED + 2))
 
-log "phase quota: cap abaissé à 3, avec déjà un envoi par profil aujourd'hui"
-update_profile "$PROFILE_A" gmail-profile-a "$SENDER_A" 3 "$open_window"
-update_profile "$PROFILE_B" gmail-profile-b "$SENDER_B" 3 "$open_window"
-create_list_with_contacts gmail-mp-cap 6
-BID_CAP="$(fire_broadcast gmail-mp-cap gmail-mp-cap)"
-wait_for_sql "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_A'" 3 "cap atomique profil A"
-wait_for_sql "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_B'" 3 "cap atomique profil B"
-sleep 3
-[ "$(psqlq "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_CAP'")" = "4" ] \
-  || fatal "le broadcast quota devait produire exactement 4 envois"
-wait_for_sql "SELECT count(*) FROM email_queue WHERE source_id='$BID_CAP' AND status='pending'" 2 "deux entrées reportées par quota"
+log "phase quota: deux envois supplémentaires autorisés par profil, le troisième reporté"
+update_profile "$PROFILE_A" gmail-profile-a "$SENDER_A" "$A_CAP" "$open_window"
+update_profile "$PROFILE_B" gmail-profile-b "$SENDER_B" "$B_CAP" "$open_window"
+
+set_profile_pool "$PROFILE_A" "$PROFILE_A"
+create_list_with_contacts gmailmpcapa 3
+BID_CAP_A="$(fire_broadcast gmail-mp-cap-a gmailmpcapa)"
+wait_for_sql "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_A'" "$A_CAP" "cap atomique profil A"
+wait_for_sql "SELECT count(*) FROM email_queue WHERE source_id='$BID_CAP_A' AND integration_id='$PROFILE_A' AND status='pending'" 1 "une entrée A reportée"
+
+set_profile_pool "$PROFILE_B" "$PROFILE_B"
+create_list_with_contacts gmailmpcapb 3
+BID_CAP_B="$(fire_broadcast gmail-mp-cap-b gmailmpcapb)"
+wait_for_sql "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_B'" "$B_CAP" "cap atomique profil B"
+wait_for_sql "SELECT count(*) FROM email_queue WHERE source_id='$BID_CAP_B' AND integration_id='$PROFILE_B' AND status='pending'" 1 "une entrée B reportée"
+wait_for_sql "SELECT count(*) FROM email_queue WHERE status='pending'" 2 "deux entrées reportées par quota"
 
 SINK_DATA="$(sink_messages)"
 SINK_COUNT="$(printf '%s' "$SINK_DATA" | grep -c -- '---------- MESSAGE FOLLOWS ----------' || true)"
-[ "$SINK_COUNT" = "8" ] || fatal "sink attendu=8 messages (2 vérifications + 6 campagnes) observé=$SINK_COUNT"
+[ "$SINK_COUNT" = "46" ] || fatal "sink attendu=46 messages (2 vérifications + 44 campagnes) observé=$SINK_COUNT"
 printf '%s' "$SINK_DATA" | grep -Fq "$SENDER_A" || fatal "sender A absent des messages sink"
 printf '%s' "$SINK_DATA" | grep -Fq "$SENDER_B" || fatal "sender B absent des messages sink"
-ok "8 messages exclusivement au sink, dont 6 campagnes distribuées 3/3, fenêtre et quota prouvés"
+ok "46 messages exclusivement au sink, rotation, fenêtre et quotas indépendants prouvés"
 
-printf '\nWorkspace: %s\nProfils: %s %s\nBroadcasts: %s %s\n' "$WID" "$PROFILE_A" "$PROFILE_B" "$BID_WINDOW" "$BID_CAP" >&2
+printf '\nWorkspace: %s\nProfils: %s %s\nBroadcasts: %s %s %s\n' "$WID" "$PROFILE_A" "$PROFILE_B" "$BID_WINDOW" "$BID_CAP_A" "$BID_CAP_B" >&2
 ok "E2E multi-profils Gmail terminé sans envoi externe"

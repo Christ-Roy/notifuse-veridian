@@ -242,6 +242,12 @@ type EmailIntegrationLifecycleRepository interface {
 	WithIntegrationQueueIdle(ctx context.Context, workspaceID, integrationID string, fn func() error) error
 }
 
+// EmailIntegrationPolicyQueueRepository wakes pending rows so a profile policy
+// edit (window, rate or cap) is re-evaluated immediately by the worker.
+type EmailIntegrationPolicyQueueRepository interface {
+	WakePendingByIntegration(ctx context.Context, workspaceID, integrationID string) (int64, error)
+}
+
 // getEmailQueueRetryBase returns the base retry interval for exponential backoff.
 // Can be overridden via EMAIL_QUEUE_RETRY_BASE environment variable for testing.
 // Default is 1 minute.

@@ -16,6 +16,7 @@ type setNextRetryContractRepo struct {
 	EmailQueueRepository
 	called       bool
 	refundCalled bool
+	wakeCalled   bool
 }
 
 func (r *setNextRetryContractRepo) SetNextRetry(context.Context, string, string, time.Time) error {
@@ -28,12 +29,22 @@ func (r *setNextRetryContractRepo) SetNextRetryAndRefundAttempt(context.Context,
 	return nil
 }
 
+func (r *setNextRetryContractRepo) WakePendingByIntegration(context.Context, string, string) (int64, error) {
+	r.wakeCalled = true
+	return 2, nil
+}
+
 func TestEmailQueueRepository_SetNextRetryContract(t *testing.T) {
 	var repo EmailQueueRepository = &setNextRetryContractRepo{}
 	require.NoError(t, repo.SetNextRetry(context.Background(), "ws", "entry", time.Now()))
 	require.NoError(t, repo.SetNextRetryAndRefundAttempt(context.Background(), "ws", "entry", time.Now()))
 	assert.True(t, repo.(*setNextRetryContractRepo).called)
 	assert.True(t, repo.(*setNextRetryContractRepo).refundCalled)
+	policyRepo := EmailIntegrationPolicyQueueRepository(repo.(*setNextRetryContractRepo))
+	woken, err := policyRepo.WakePendingByIntegration(context.Background(), "ws", "profile")
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, woken)
+	assert.True(t, repo.(*setNextRetryContractRepo).wakeCalled)
 	// Compile-time guard for the transaction-bearing method retained by the
 	// embedded upstream contract.
 	var _ interface {

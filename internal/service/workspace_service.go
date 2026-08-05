@@ -36,6 +36,7 @@ type WorkspaceService struct {
 	dnsVerificationService        *DNSVerificationService
 	blogService                   *BlogService
 	emailIntegrationLifecycleRepo domain.EmailIntegrationLifecycleRepository
+	emailIntegrationPolicyRepo    domain.EmailIntegrationPolicyQueueRepository
 }
 
 func NewWorkspaceService(
@@ -82,6 +83,9 @@ func NewWorkspaceService(
 // for email integration deletion.
 func (s *WorkspaceService) SetEmailIntegrationLifecycleRepository(repo domain.EmailIntegrationLifecycleRepository) {
 	s.emailIntegrationLifecycleRepo = repo
+	if policyRepo, ok := repo.(domain.EmailIntegrationPolicyQueueRepository); ok {
+		s.emailIntegrationPolicyRepo = policyRepo
+	}
 }
 
 // ListWorkspaces returns all workspaces for a user
@@ -1534,6 +1538,19 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 	if err := s.repo.Update(ctx, workspace); err != nil {
 		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to update workspace with updated integration")
 		return err
+	}
+
+	// A pending row may have been deferred until tomorrow by the previous
+	// sending window (or by a previous rate/cap). Re-evaluate it now that the
+	// profile policy is saved; otherwise the UI appears to update but the queue
+	// keeps obeying stale next_retry_at timestamps.
+	if existingIntegration.Type == domain.IntegrationTypeEmail && s.emailIntegrationPolicyRepo != nil {
+		if _, err := s.emailIntegrationPolicyRepo.WakePendingByIntegration(ctx, req.WorkspaceID, req.IntegrationID); err != nil {
+			s.logger.WithField("workspace_id", req.WorkspaceID).
+				WithField("integration_id", req.IntegrationID).
+				WithField("error", err.Error()).
+				Warn("Email profile updated but pending queue wake failed")
+		}
 	}
 
 	return nil
