@@ -213,6 +213,19 @@ func TestIMAPSettings_MarshalJSON_MasksPlaintextPassword(t *testing.T) {
 		// Champs non secrets toujours là.
 		assert.Contains(t, js, "imap.larksuite.com")
 		assert.Contains(t, js, "robert.brunon@veridian.site")
+		assert.NotContains(t, js, `"has_password"`, "derived API marker must be omitted from stored settings by default")
+	})
+
+	t.Run("derived readiness marker carries no secret", func(t *testing.T) {
+		apiView := *s
+		apiView.HasPassword = true
+		apiView.Password = ""
+		apiView.EncryptedPassword = ""
+		raw, err := json.Marshal(&apiView)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"has_password":true`)
+		assert.NotContains(t, string(raw), plaintext)
+		assert.NotContains(t, string(raw), `"encrypted_password"`)
 	})
 
 	t.Run("marshal via pointer in containing struct", func(t *testing.T) {
