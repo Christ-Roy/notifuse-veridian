@@ -332,7 +332,7 @@ TEMPLATE="$(python3 - "$WID" <<'PY'
 import json,sys
 wid=sys.argv[1]
 tree={"id":"root","type":"mjml","attributes":{"version":"4.0.0"},"children":[{"id":"body","type":"mj-body","children":[{"id":"section","type":"mj-section","children":[{"id":"column","type":"mj-column","children":[{"id":"text","type":"mj-text","content":"Bonjour {{ contact.first_name }}, preuve sink multi-profils."}]}]}]}]}
-print(json.dumps({"workspace_id":wid,"id":"gmail-mp-template","name":"Gmail multi-profile sink","channel":"email","category":"marketing","email":{"sender_id":"default","subject":"Preuve sink multi-profils","visual_editor_tree":tree}}))
+print(json.dumps({"workspace_id":wid,"id":"gmail-mp-template","name":"Gmail multi-profile sink","channel":"email","category":"marketing","email":{"sender_id":"default","subject":"Preuve sink multi-profils","text":"Bonjour {{ contact.first_name }}, preuve sink multi-profils.","plain_text_only":True,"visual_editor_tree":tree}}))
 PY
 )"
 api /api/templates.create "$TEMPLATE" >/dev/null
@@ -381,7 +381,19 @@ SINK_COUNT="$(printf '%s' "$SINK_DATA" | grep -c -- '---------- MESSAGE FOLLOWS 
 [ "$SINK_COUNT" = "46" ] || fatal "sink attendu=46 messages (2 vérifications + 44 campagnes) observé=$SINK_COUNT"
 printf '%s' "$SINK_DATA" | grep -Fq "$SENDER_A" || fatal "sender A absent des messages sink"
 printf '%s' "$SINK_DATA" | grep -Fq "$SENDER_B" || fatal "sender B absent des messages sink"
-ok "46 messages exclusivement au sink, rotation, fenêtre et quotas indépendants prouvés"
+printf '%s' "$SINK_DATA" | python3 -c '
+import sys
+
+blocks = sys.stdin.read().split("---------- MESSAGE FOLLOWS ----------")[1:]
+campaigns = [block for block in blocks if "Subject: Preuve sink multi-profils" in block]
+assert len(campaigns) == 44, f"44 campagnes attendues, {len(campaigns)} observées"
+for index, block in enumerate(campaigns, 1):
+    lowered = block.lower()
+    assert "content-type: text/plain" in lowered, f"campagne {index}: text/plain absent"
+    assert "content-type: text/html" not in lowered, f"campagne {index}: text/html présent"
+    assert "multipart/alternative" not in lowered, f"campagne {index}: multipart présent"
+' || fatal "les campagnes reçues ne sont pas du MIME texte brut pur"
+ok "46 messages exclusivement au sink; 44 campagnes MIME texte brut, rotation, fenêtre et quotas indépendants prouvés"
 
 printf '\nWorkspace: %s\nProfils: %s %s\nBroadcasts: %s %s %s\n' "$WID" "$PROFILE_A" "$PROFILE_B" "$BID_WINDOW" "$BID_CAP_A" "$BID_CAP_B" >&2
 ok "E2E multi-profils Gmail terminé sans envoi externe"
