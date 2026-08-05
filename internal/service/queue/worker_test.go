@@ -1491,11 +1491,12 @@ func TestEmailQueueWorker_UpsertMessageHistory_UsesAttemptTimeForSentAt(t *testi
 	historyRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	queuedAt := time.Now().UTC().Add(-12 * time.Hour)
 	entry := &domain.EmailQueueEntry{
-		ID:           "entry-overnight",
-		MessageID:    "message-overnight",
-		ContactEmail: "lead@example.com",
-		TemplateID:   "template-1",
-		CreatedAt:    queuedAt,
+		ID:            "entry-overnight",
+		IntegrationID: "gmail-profile-1",
+		MessageID:     "message-overnight",
+		ContactEmail:  "lead@example.com",
+		TemplateID:    "template-1",
+		CreatedAt:     queuedAt,
 	}
 
 	beforeAttempt := time.Now().UTC()
@@ -1505,6 +1506,7 @@ func TestEmailQueueWorker_UpsertMessageHistory_UsesAttemptTimeForSentAt(t *testi
 			assert.Equal(t, queuedAt, message.CreatedAt, "created_at must preserve the enqueue time")
 			assert.False(t, message.SentAt.Before(beforeAttempt), "sent_at must use the actual attempt time")
 			assert.False(t, message.SentAt.Equal(queuedAt), "sent_at must not reuse the enqueue time")
+			assert.Equal(t, "gmail-profile-1", message.VeridianProfileID)
 			return nil
 		})
 

@@ -38,7 +38,8 @@ type queueMessageSender struct {
 	// des curseurs entre les batchs/recipients d'une même session. nil = rotation
 	// désactivée (sender figé par GetSender, comportement upstream).
 	// Cf. domain/veridian_sender_rotation.go + veridian_sender_rotation.go.
-	veridianSenderRotator *domain.VeridianSenderRotator
+	veridianSenderRotator       *domain.VeridianSenderRotator
+	veridianEmailProfileRotator *veridianEmailProfileRotator
 
 	// Veridian fork — dédupliqueur anti-hash à l'enqueue (cold outbound). Injecté
 	// par la factory (construit avec messageHistoryRepo). nil = anti-hash inactif
@@ -58,6 +59,10 @@ func (s *queueMessageSender) SetVeridianWorkspaceRepo(repo domain.WorkspaceRepos
 // nil = rotation désactivée.
 func (s *queueMessageSender) SetVeridianSenderRotator(r *domain.VeridianSenderRotator) {
 	s.veridianSenderRotator = r
+}
+
+func (s *queueMessageSender) SetVeridianEmailProfileRotator(r *veridianEmailProfileRotator) {
+	s.veridianEmailProfileRotator = r
 }
 
 // SetVeridianContentDedup injecte le dédupliqueur anti-hash (DI optionnelle).
@@ -114,6 +119,9 @@ func (s *queueMessageSender) SendToRecipient(
 	// chargé ; le pixel résout par classification de l'email si tunnel actif).
 	// Veridian fork — resolver pixel mémoïsé (fallback workspace, nil-safe).
 	pixelResolver := newVeridianWorkspacePixelResolver(s.veridianWorkspaceRepo, s.logger)
+	workspace := pixelResolver.workspace(ctx, workspaceID)
+	class := domain.ClassifyProviderClass(email)
+	integrationID, emailProvider = veridianResolveEmailProfile(s.veridianEmailProfileRotator, workspace, integrationID, emailProvider, class, messageID)
 	entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage, nil, pixelResolver)
 	if err != nil {
 		return err
@@ -270,8 +278,21 @@ func (s *queueMessageSender) SendBatch(
 			contactLanguage = recipient.Contact.Language.String
 		}
 
-		// Build queue entry
-		entry, err := s.buildQueueEntry(ctx, workspaceID, integrationID, endpoint, trackingEnabled, broadcast, messageID, recipient.Contact.Email, template, data, emailProvider, contactLanguage, workspaceDefaultLanguage, recipient.Contact, pixelResolver)
+		// Resolve a complete sending profile before compilation/enqueue. The queue
+		// entry freezes this integration so the worker uses the matching credential,
+		// limits, circuit breaker and FROM address.
+		class := domain.VeridianContactProviderClass(recipient.Contact)
+		if class == "" {
+			class = domain.ClassifyProviderClass(recipient.Contact.Email)
+		}
+		selectedIntegrationID, selectedProvider := veridianResolveEmailProfile(
+			s.veridianEmailProfileRotator, pixelResolver.workspace(ctx, workspaceID), integrationID, emailProvider, class, messageID,
+		)
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID, "broadcast_id": broadcastID,
+			"integration_id": selectedIntegrationID, "provider_class": class,
+		}).Debug("Selected sending profile for queued email")
+		entry, err := s.buildQueueEntry(ctx, workspaceID, selectedIntegrationID, endpoint, trackingEnabled, broadcast, messageID, recipient.Contact.Email, template, data, selectedProvider, contactLanguage, workspaceDefaultLanguage, recipient.Contact, pixelResolver)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"broadcast_id": broadcastID,

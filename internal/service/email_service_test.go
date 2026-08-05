@@ -376,7 +376,11 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 
 		mockAuthService.EXPECT().
 			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
-			Return(ctx, &domain.User{ID: "user-123"}, nil, nil)
+			Return(ctx, &domain.User{ID: "user-123", Email: toEmail}, &domain.UserWorkspace{Role: "owner"}, nil)
+		workspace := &domain.Workspace{ID: workspaceID, Integrations: []domain.Integration{{
+			ID: "gmail-profile-1", Type: domain.IntegrationTypeEmail, EmailProvider: provider,
+		}}}
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
 
 		mockSMTPService.EXPECT().
 			SendEmail(gomock.Any(), gomock.Any()).
@@ -388,8 +392,25 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 				return nil
 			})
 
-		err := emailService.TestEmailProvider(ctx, workspaceID, provider, toEmail)
+		mockWorkspaceRepo.EXPECT().Update(gomock.Any(), workspace).DoAndReturn(func(_ context.Context, saved *domain.Workspace) error {
+			verified := saved.GetIntegrationByID("gmail-profile-1").EmailProvider.VeridianTransportVerifiedAt
+			require.NotNil(t, verified)
+			require.WithinDuration(t, time.Now().UTC(), *verified, time.Second)
+			return nil
+		})
+
+		err := emailService.TestEmailProviderByIntegrationID(ctx, workspaceID, "gmail-profile-1", toEmail)
 		require.NoError(t, err)
+	})
+
+	t.Run("browser ciphertext is rejected rather than replayed", func(t *testing.T) {
+		provider := domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{
+			EncryptedPassword: "opaque-ciphertext",
+		}, Senders: []domain.EmailSender{{Email: "client@gmail.com", Name: "Client"}}}
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
+			Return(ctx, &domain.User{ID: "user-123"}, nil, nil)
+		err := emailService.TestEmailProvider(ctx, workspaceID, provider, toEmail)
+		require.ErrorContains(t, err, "encrypted provider credentials are not accepted")
 	})
 
 	t.Run("Authentication failure", func(t *testing.T) {
@@ -476,6 +497,17 @@ func TestEmailService_TestEmailProvider(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to test provider")
 	})
+}
+
+func TestEmailService_TestEmailProviderByIntegrationIDRequiresOwner(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	auth := mocks.NewMockAuthService(ctrl)
+	auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").
+		Return(context.Background(), &domain.User{ID: "member", Email: "member@example.com"}, &domain.UserWorkspace{Role: "member"}, nil)
+	service := &EmailService{authService: auth}
+	err := service.TestEmailProviderByIntegrationID(context.Background(), "ws1", "gmail-profile-1", "member@example.com")
+	require.ErrorContains(t, err, "only workspace owners")
 }
 
 func TestEmailService_SendEmail(t *testing.T) {

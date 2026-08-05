@@ -363,6 +363,10 @@ type WorkspaceSettings struct {
 	FileManager                  FileManagerSettings `json:"file_manager,omitempty"`
 	TransactionalEmailProviderID string              `json:"transactional_email_provider_id,omitempty"`
 	MarketingEmailProviderID     string              `json:"marketing_email_provider_id,omitempty"`
+	// Veridian fork — pool ordonne de profils marketing. Chaque ID référence une
+	// intégration email complète (SMTP Gmail app-password aujourd'hui, OAuth
+	// demain). Vide = fallback strict sur MarketingEmailProviderID.
+	VeridianMarketingEmailProviderIDs []string `json:"veridian_marketing_email_provider_ids,omitempty"`
 	EncryptedSecretKey           string              `json:"encrypted_secret_key,omitempty"`
 	EmailTrackingEnabled         bool                `json:"email_tracking_enabled"`
 	TemplateBlocks               []TemplateBlock     `json:"template_blocks,omitempty"`
@@ -639,6 +643,9 @@ func (w *Workspace) Validate(passphrase string) error {
 		if err := integration.Validate(passphrase); err != nil {
 			return fmt.Errorf("invalid integration (%s): %w", integration.ID, err)
 		}
+	}
+	if err := w.ValidateVeridianMarketingEmailProfiles(); err != nil {
+		return fmt.Errorf("invalid marketing email profile pool: %w", err)
 	}
 
 	return nil
@@ -1441,9 +1448,10 @@ func (r *InviteMemberRequest) Validate() error {
 // TestEmailProviderRequest is the request for testing an email provider
 // It includes the provider config, a recipient email, and the workspace ID
 type TestEmailProviderRequest struct {
-	Provider    EmailProvider `json:"provider"`
-	To          string        `json:"to"`
-	WorkspaceID string        `json:"workspace_id"`
+	Provider      EmailProvider `json:"provider"`
+	IntegrationID string        `json:"integration_id,omitempty"`
+	To            string        `json:"to"`
+	WorkspaceID   string        `json:"workspace_id"`
 }
 
 // TestEmailProviderResponse is the response for testing an email provider

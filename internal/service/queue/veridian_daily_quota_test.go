@@ -23,6 +23,7 @@ type quotaTestRepository struct {
 	mu       sync.Mutex
 	outcomes map[string]quotaTestOutcome
 	reserved []string
+	specs    []domain.VeridianDailyQuotaReservation
 	released []string
 }
 
@@ -30,8 +31,32 @@ func (r *quotaTestRepository) ReserveDailyQuota(_ context.Context, _ string, res
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.reserved = append(r.reserved, reservation.Key.Kind)
+	r.specs = append(r.specs, reservation)
 	outcome := r.outcomes[reservation.Key.Kind]
 	return outcome.result, outcome.err
+}
+
+func TestVeridianReserveDailyQuota_ProfileUsesExactIntegrationAndDefaultGmailCap(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	repo := &quotaTestRepository{outcomes: map[string]quotaTestOutcome{
+		domain.VeridianDailyQuotaKindProfile: {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
+	}}
+	env.worker.messageHistoryRepo = repo
+	provider := &domain.EmailProvider{
+		Kind: domain.EmailProviderKindSMTP,
+		SMTP: &domain.SMTPSettings{Host: "smtp.gmail.com", Port: 587},
+	}
+	entry := veridianTestEntryFrom("profile", "lead@gmail.com", "account@gmail.com", domain.EmailQueuePayload{})
+	entry.IntegrationID = "gmail-profile-b"
+
+	leases, delay, blocked := env.worker.veridianReserveDailyQuota(veridianTestWorkspace(nil, 60), provider, entry)
+	require.False(t, blocked)
+	require.Zero(t, delay)
+	require.Len(t, leases, 1)
+	require.Len(t, repo.specs, 1)
+	require.Equal(t, domain.VeridianDailyQuotaKindProfile, repo.specs[0].Key.Kind)
+	require.Equal(t, "gmail-profile-b", repo.specs[0].Key.ProfileID)
+	require.Equal(t, domain.VeridianGmailDefaultDailyCap, repo.specs[0].Cap)
 }
 func (r *quotaTestRepository) ReleaseDailyQuota(_ context.Context, _, _, kind string) error {
 	r.mu.Lock()

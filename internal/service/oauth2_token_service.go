@@ -1,6 +1,7 @@
 package service
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -95,13 +96,23 @@ func (s *OAuth2TokenService) GetAccessToken(settings *domain.SMTPSettings) (stri
 }
 
 // getCacheKey generates a unique cache key for the given SMTP settings
-// Format: provider:tenantID:clientID
-// Note: Username is not included because OAuth2 tokens are per-application, not per-mailbox
+// OAuth refresh-token grants are account-scoped. Two Gmail profiles commonly
+// share the same OAuth client and username is optional in legacy settings, so
+// provider/tenant/client/username can still cross-wire account A's token into
+// account B. For Google, hash the refresh token itself. The secret never leaves
+// this process or appears in the key/log, and token rotation invalidates the old
+// cache naturally. Other providers keep the normalized account identity.
 func (s *OAuth2TokenService) getCacheKey(settings *domain.SMTPSettings) string {
-	return fmt.Sprintf("%s:%s:%s",
+	identity := strings.ToLower(strings.TrimSpace(settings.Username))
+	if strings.EqualFold(settings.OAuth2Provider, "google") {
+		identity = settings.OAuth2RefreshToken
+	}
+	identityHash := sha256.Sum256([]byte(identity))
+	return fmt.Sprintf("%s:%s:%s:%x",
 		settings.OAuth2Provider,
 		settings.OAuth2TenantID,
 		settings.OAuth2ClientID,
+		identityHash[:16],
 	)
 }
 

@@ -2051,6 +2051,49 @@ func TestEmailProvider_WarmupFieldsJSONBlob(t *testing.T) {
 	})
 }
 
+func TestEmailProvider_VeridianGmailProfileDailyCap(t *testing.T) {
+	gmail := EmailProvider{
+		Kind: EmailProviderKindSMTP,
+		SMTP: &SMTPSettings{Host: "smtp.gmail.com", Port: 587, AuthType: "basic"},
+	}
+	assert.True(t, gmail.VeridianIsGmailProfile())
+	assert.Equal(t, VeridianGmailDefaultDailyCap, gmail.VeridianEffectiveProfileDailyCap())
+	// Validation persists the backend default and normalizes app-password spaces.
+	// Encryption remains the standard BeforeSave responsibility.
+	gmail.Senders = []EmailSender{{ID: "sender", Email: "me@gmail.com", Name: "Me", IsDefault: true}}
+	gmail.RateLimitPerMinute = 1
+	gmail.SMTP.Username = "me@gmail.com"
+	gmail.SMTP.Password = "abcd efgh ijkl mnop"
+	assert.NoError(t, gmail.Validate("secret"))
+	assert.Equal(t, VeridianGmailDefaultDailyCap, gmail.VeridianProfileDailyCap)
+	assert.Equal(t, "abcdefghijklmnop", gmail.SMTP.Password)
+	assert.NoError(t, gmail.EncryptSecretKeys("secret"))
+	assert.Empty(t, gmail.SMTP.Password)
+	assert.NotEmpty(t, gmail.SMTP.EncryptedPassword)
+
+	gmail.VeridianProfileDailyCap = 50
+	assert.Equal(t, 50, gmail.VeridianEffectiveProfileDailyCap())
+	gmail.VeridianProfileDailyCap = 51
+	assert.ErrorContains(t, gmail.Validate("secret"), "must not exceed 50")
+
+	oauth := EmailProvider{
+		Kind: EmailProviderKindSMTP,
+		SMTP: &SMTPSettings{Host: "smtp.example.test", AuthType: "oauth2", OAuth2Provider: "google"},
+	}
+	assert.True(t, oauth.VeridianIsGmailProfile())
+	assert.Equal(t, VeridianGmailDefaultDailyCap, oauth.VeridianEffectiveProfileDailyCap())
+
+	generic := EmailProvider{Kind: EmailProviderKindSMTP, SMTP: &SMTPSettings{Host: "smtp.example.test"}}
+	assert.False(t, generic.VeridianIsGmailProfile())
+	assert.Zero(t, generic.VeridianEffectiveProfileDailyCap())
+}
+
+func TestEmailProvider_VeridianEffectiveProfileDailyCapLegacyDefault(t *testing.T) {
+	gmail := &EmailProvider{Kind: EmailProviderKindSMTP, SMTP: &SMTPSettings{Host: "SMTP.GMAIL.COM."}}
+	assert.Equal(t, 30, gmail.VeridianEffectiveProfileDailyCap())
+	assert.Zero(t, (&EmailProvider{Kind: EmailProviderKindSMTP, SMTP: &SMTPSettings{Host: "smtp.example.com"}}).VeridianEffectiveProfileDailyCap())
+}
+
 // TestEmailProvider_VeridianOpenPixelByClassJSONBlob vérifie le contrat JSON blob
 // du champ VeridianOpenPixelByClass (pixel d'ouverture par classe AU NIVEAU INFRA,
 // 2026-06-17). Comme tous les champs cold par infra (rates/caps/exclusion/warmup),

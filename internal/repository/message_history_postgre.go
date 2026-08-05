@@ -178,12 +178,12 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 			id, external_id, contact_email, broadcast_id, automation_id, transactional_notification_id, list_id, template_id, template_version,
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
-			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email, veridian_provider_class
+			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email, veridian_provider_class, veridian_profile_id
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, LEFT($11, 255), $12, $13, $14, $15, $16,
 			$17, $18, $19, $20, $21,
-			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), ''), NULLIF(lower($27), '')
+			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), ''), NULLIF(lower($27), ''), NULLIF($28, '')
 		)
 	`
 
@@ -217,6 +217,7 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 		message.VeridianContentHash,
 		message.VeridianSenderEmail,
 		message.VeridianProviderClass,
+		message.VeridianProfileID,
 	)
 
 	if err != nil {
@@ -261,12 +262,12 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 			id, external_id, contact_email, broadcast_id, automation_id, transactional_notification_id, list_id, template_id, template_version,
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
-			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email, veridian_provider_class
+			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email, veridian_provider_class, veridian_profile_id
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, LEFT($11, 255), $12, $13, $14, $15, $16,
 			$17, $18, $19, $20, $21,
-			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), ''), NULLIF(lower($27), '')
+			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), ''), NULLIF(lower($27), ''), NULLIF($28, '')
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			sent_at = EXCLUDED.sent_at,
@@ -275,7 +276,8 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 			updated_at = EXCLUDED.updated_at,
 			veridian_content_hash = COALESCE(message_history.veridian_content_hash, EXCLUDED.veridian_content_hash),
 			veridian_sender_email = COALESCE(message_history.veridian_sender_email, EXCLUDED.veridian_sender_email),
-			veridian_provider_class = COALESCE(EXCLUDED.veridian_provider_class, message_history.veridian_provider_class)
+			veridian_provider_class = COALESCE(EXCLUDED.veridian_provider_class, message_history.veridian_provider_class),
+			veridian_profile_id = COALESCE(EXCLUDED.veridian_profile_id, message_history.veridian_profile_id)
 	`
 
 	_, err = workspaceDB.ExecContext(
@@ -308,6 +310,7 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 		message.VeridianContentHash,
 		message.VeridianSenderEmail,
 		message.VeridianProviderClass,
+		message.VeridianProfileID,
 	)
 
 	if err != nil {
@@ -1515,15 +1518,26 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 	key.WorkspaceID = workspaceID
 	key.Kind = strings.ToLower(strings.TrimSpace(key.Kind))
 	key.SenderDomain = strings.ToLower(strings.TrimSpace(key.SenderDomain))
+	key.ProfileID = strings.TrimSpace(key.ProfileID)
 	key.ProviderClass = strings.ToLower(strings.TrimSpace(key.ProviderClass))
-	if key.SenderDomain == "" {
+	if key.Kind != domain.VeridianDailyQuotaKindProfile && key.SenderDomain == "" {
 		return result, fmt.Errorf("sender domain is required for daily quota")
 	}
-	if key.Kind != domain.VeridianDailyQuotaKindProviderClass && key.Kind != domain.VeridianDailyQuotaKindWarmup {
+	if key.Kind != domain.VeridianDailyQuotaKindProviderClass && key.Kind != domain.VeridianDailyQuotaKindWarmup && key.Kind != domain.VeridianDailyQuotaKindProfile {
 		return result, fmt.Errorf("invalid daily quota kind: %s", key.Kind)
+	}
+	if key.Kind == domain.VeridianDailyQuotaKindProfile && key.ProfileID == "" {
+		return result, fmt.Errorf("profile ID is required for profile daily quota")
 	}
 	if key.Kind == domain.VeridianDailyQuotaKindProviderClass && key.ProviderClass == "" {
 		return result, fmt.Errorf("provider class is required for provider-class quota")
+	}
+	// V55 named this generic counter dimension sender_domain. For the new profile
+	// quota kind it stores the exact IntegrationID; quota_kind keeps namespaces
+	// disjoint. No address/domain approximation is involved.
+	counterScope := key.SenderDomain
+	if key.Kind == domain.VeridianDailyQuotaKindProfile {
+		counterScope = key.ProfileID
 	}
 	day := key.Day.UTC().Truncate(24 * time.Hour)
 
@@ -1544,7 +1558,7 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (workspace_id, message_id, quota_kind) DO NOTHING
 		RETURNING 1
-	`, workspaceID, reservation.MessageID, key.Kind, day, key.SenderDomain, key.ProviderClass).Scan(&inserted)
+	`, workspaceID, reservation.MessageID, key.Kind, day, counterScope, key.ProviderClass).Scan(&inserted)
 	if err != nil && err != sql.ErrNoRows {
 		return result, fmt.Errorf("insert daily quota reservation: %w", err)
 	}
@@ -1558,7 +1572,7 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 		`, workspaceID, reservation.MessageID, key.Kind).Scan(&existingDay, &existingSender, &existingClass); err != nil {
 			return result, fmt.Errorf("read existing daily quota reservation: %w", err)
 		}
-		if existingDay.Equal(day) && (existingSender != key.SenderDomain || existingClass != key.ProviderClass) {
+		if existingDay.Equal(day) && (existingSender != counterScope || existingClass != key.ProviderClass) {
 			return result, fmt.Errorf("daily quota reservation key mismatch for message %s", reservation.MessageID)
 		}
 		if existingDay.Equal(day) {
@@ -1583,7 +1597,7 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 			INSERT INTO veridian_daily_quota_reservations
 				(workspace_id, message_id, quota_kind, quota_day, sender_domain, provider_class)
 			VALUES ($1, $2, $3, $4, $5, $6)
-		`, workspaceID, reservation.MessageID, key.Kind, day, key.SenderDomain, key.ProviderClass); err != nil {
+		`, workspaceID, reservation.MessageID, key.Kind, day, counterScope, key.ProviderClass); err != nil {
 			return result, fmt.Errorf("rotate stale daily quota reservation: %w", err)
 		}
 	}
@@ -1591,8 +1605,12 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 	// Seed a newly created counter from accepted historical sends only. Failed
 	// pre-SMTP policy rows carry sent_at in legacy data and must not consume cap.
 	initialCountSQL := `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND sent_at < $1 + INTERVAL '1 day' AND failed_at IS NULL`
-	initialCountSQL += ` AND lower(split_part(veridian_sender_email, '@', 2)) = $2`
-	args := []interface{}{day, key.SenderDomain}
+	args := []interface{}{day, counterScope}
+	if key.Kind == domain.VeridianDailyQuotaKindProfile {
+		initialCountSQL += ` AND veridian_profile_id = $2`
+	} else {
+		initialCountSQL += ` AND lower(split_part(veridian_sender_email, '@', 2)) = $2`
+	}
 	if key.Kind == domain.VeridianDailyQuotaKindProviderClass {
 		initialCountSQL += fmt.Sprintf(` AND veridian_provider_class = $%d`, len(args)+1)
 		args = append(args, key.ProviderClass)
@@ -1607,7 +1625,7 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 			(workspace_id, quota_day, quota_kind, sender_domain, provider_class, used)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (workspace_id, quota_day, quota_kind, sender_domain, provider_class) DO NOTHING
-	`, workspaceID, day, key.Kind, key.SenderDomain, key.ProviderClass, initialUsed); err != nil {
+	`, workspaceID, day, key.Kind, counterScope, key.ProviderClass, initialUsed); err != nil {
 		return result, fmt.Errorf("initialize daily quota counter: %w", err)
 	}
 
@@ -1617,13 +1635,13 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 		WHERE workspace_id=$1 AND quota_day=$2 AND quota_kind=$3
 		  AND sender_domain=$4 AND provider_class=$5 AND used < $6
 		RETURNING used
-	`, workspaceID, day, key.Kind, key.SenderDomain, key.ProviderClass, reservation.Cap).Scan(&result.Used)
+	`, workspaceID, day, key.Kind, counterScope, key.ProviderClass, reservation.Cap).Scan(&result.Used)
 	if err == sql.ErrNoRows {
 		_ = tx.QueryRowContext(ctx, `
 			SELECT used FROM veridian_daily_quota_counters
 			WHERE workspace_id=$1 AND quota_day=$2 AND quota_kind=$3
 			  AND sender_domain=$4 AND provider_class=$5
-		`, workspaceID, day, key.Kind, key.SenderDomain, key.ProviderClass).Scan(&result.Used)
+		`, workspaceID, day, key.Kind, counterScope, key.ProviderClass).Scan(&result.Used)
 		return result, nil // rollback removes the provisional reservation
 	}
 	if err != nil {

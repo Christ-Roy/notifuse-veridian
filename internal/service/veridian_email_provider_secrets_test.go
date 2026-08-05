@@ -52,3 +52,16 @@ func TestVeridianHydrateEmailProviderSecrets(t *testing.T) {
 	require.NoError(t, veridianHydrateEmailProviderSecrets(&provider, secretKey))
 	require.Equal(t, "gmail-app-password", provider.SMTP.Password)
 }
+
+func TestVeridianEmailProviderTransportChanged(t *testing.T) {
+	senders := []domain.EmailSender{{ID: "s1", Email: "owner@gmail.com", Name: "Owner", IsDefault: true}}
+	current := domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, Senders: senders, SMTP: &domain.SMTPSettings{
+		Host: "smtp.gmail.com", Port: 587, Username: "owner@gmail.com", UseTLS: true, EncryptedPassword: "saved",
+	}}
+	next := domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, Senders: senders, SMTP: &domain.SMTPSettings{
+		Host: "smtp.gmail.com", Port: 587, Username: "owner@gmail.com", UseTLS: true, HasPassword: true,
+	}}
+	require.False(t, veridianEmailProviderTransportChanged(&next, &current), "response flags are not transport state")
+	next.SMTP.Password = "new-app-password"
+	require.True(t, veridianEmailProviderTransportChanged(&next, &current))
+}

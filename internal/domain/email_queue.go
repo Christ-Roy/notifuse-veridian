@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"time"
 )
@@ -19,6 +20,10 @@ const (
 	EmailQueueStatusPaused     EmailQueueStatus = "paused"
 	// Note: There is no "sent" status - entries are deleted immediately after successful send
 )
+
+// ErrEmailIntegrationQueueActive prevents deleting an email integration while
+// queued work still owns its exact transport identity.
+var ErrEmailIntegrationQueueActive = errors.New("email integration has pending or processing queue entries")
 
 // EmailQueueSourceType identifies the origin of the queued email
 type EmailQueueSourceType string
@@ -162,11 +167,13 @@ type EmailQueueStats struct {
 
 // EmailQueueRepository defines data access for the email queue
 type EmailQueueRepository interface {
+	EmailIntegrationLifecycleRepository
+
 	// Enqueue adds emails to the queue
 	Enqueue(ctx context.Context, workspaceID string, entries []*EmailQueueEntry) error
 
 	// EnqueueTx adds emails to the queue within an existing transaction
-	EnqueueTx(ctx context.Context, tx *sql.Tx, entries []*EmailQueueEntry) error
+	EnqueueTx(ctx context.Context, tx *sql.Tx, workspaceID string, entries []*EmailQueueEntry) error
 
 	// FetchPending retrieves pending emails for processing
 	// Uses FOR UPDATE SKIP LOCKED to allow concurrent workers
@@ -227,6 +234,12 @@ type EmailQueueRepository interface {
 
 	// DeleteBySourceTx is the transactional variant of DeleteBySource.
 	DeleteBySourceTx(ctx context.Context, tx *sql.Tx, sourceType EmailQueueSourceType, sourceID string) (int64, error)
+}
+
+// EmailIntegrationLifecycleRepository serializes integration deletion against
+// queue inserts in the workspace database.
+type EmailIntegrationLifecycleRepository interface {
+	WithIntegrationQueueIdle(ctx context.Context, workspaceID, integrationID string, fn func() error) error
 }
 
 // getEmailQueueRetryBase returns the base retry interval for exponential backoff.

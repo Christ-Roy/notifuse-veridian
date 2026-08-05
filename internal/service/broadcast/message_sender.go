@@ -125,7 +125,8 @@ type messageSender struct {
 	// Veridian fork — rotator multi-SMTP partagé (round-robin sender ⇄ classe
 	// destinataire, cold outbound). Injecté par la factory. nil = rotation
 	// désactivée (sender figé). Cf. veridian_sender_rotation.go.
-	veridianSenderRotator *domain.VeridianSenderRotator
+	veridianSenderRotator       *domain.VeridianSenderRotator
+	veridianEmailProfileRotator *veridianEmailProfileRotator
 }
 
 // SetVeridianWorkspaceRepo injecte le workspace repo pour le fallback pixel par
@@ -138,6 +139,10 @@ func (s *messageSender) SetVeridianWorkspaceRepo(repo domain.WorkspaceRepository
 // nil = rotation désactivée.
 func (s *messageSender) SetVeridianSenderRotator(r *domain.VeridianSenderRotator) {
 	s.veridianSenderRotator = r
+}
+
+func (s *messageSender) SetVeridianEmailProfileRotator(r *veridianEmailProfileRotator) {
+	s.veridianEmailProfileRotator = r
 }
 
 // NewMessageSender creates a new message sender
@@ -224,6 +229,10 @@ func (s *messageSender) enforceRateLimit(ctx context.Context, integrationRateLim
 // SendToRecipient sends a message to a single recipient
 func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string, integrationID string, endpoint string, trackingEnabled bool, broadcast *domain.Broadcast, messageID string, email string,
 	template *domain.Template, data map[string]interface{}, emailProvider *domain.EmailProvider, timeoutAt time.Time, contactLanguage string, workspaceDefaultLanguage string) error {
+	pixelResolver := newVeridianWorkspacePixelResolver(s.veridianWorkspaceRepo, s.logger)
+	integrationID, emailProvider = veridianResolveEmailProfile(
+		s.veridianEmailProfileRotator, pixelResolver.workspace(ctx, workspaceID), integrationID, emailProvider, domain.ClassifyProviderClass(email), messageID,
+	)
 
 	// Ensure UTM parameters object is present to avoid nil dereference
 	if broadcast.UTMParameters == nil {
@@ -282,7 +291,6 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	// non chargé → classification par email si tunnel actif). Cascade broadcast >
 	// INFRA (emailProvider) > workspace (résolu via le pixelResolver, nil-safe
 	// sans repo injecté) > défaut. Cf. queue sender.
-	pixelResolver := newVeridianWorkspacePixelResolver(s.veridianWorkspaceRepo, s.logger)
 	trackingSettings.EnableOpenPixel = pixelResolver.resolveOpenPixel(ctx, workspaceID, nil, email, broadcast, emailProvider)
 
 	// Resolve language variant

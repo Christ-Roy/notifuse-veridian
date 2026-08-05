@@ -1742,3 +1742,9 @@ func TestMessageHistoryRepository_FindContactEmailByMessageID_Contract(t *testin
 		assert.Empty(t, email)
 	})
 }
+
+func TestMessageHistory_VeridianProfileIDJSON(t *testing.T) {
+	raw, err := json.Marshal(MessageHistory{ID: "m1", VeridianProfileID: "gmail-profile-1"})
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"veridian_profile_id":"gmail-profile-1"`)
+}

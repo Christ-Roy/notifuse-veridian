@@ -647,8 +647,8 @@ func TestSMTPSettings_MarshalJSON_MasksPlaintextSecrets(t *testing.T) {
 			Password: "smtp-plaintext-pw",
 			UseTLS:   true,
 		}
-		require.NoError(t, s.EncryptPassword(passphrase))   // remplit EncryptedPassword
-		require.NoError(t, s.EncryptUsername(passphrase))   // remplit EncryptedUsername
+		require.NoError(t, s.EncryptPassword(passphrase)) // remplit EncryptedPassword
+		require.NoError(t, s.EncryptUsername(passphrase)) // remplit EncryptedUsername
 		// Le clair reste posé (comme après AfterLoad/DecryptSecretKeys côté GET).
 
 		raw, err := json.Marshal(s)
@@ -704,4 +704,13 @@ func TestSMTPSettings_MarshalJSON_MasksPlaintextSecrets(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(incoming), &s))
 		assert.Equal(t, "incoming-smtp-pw", s.Password)
 	})
+}
+
+func TestSMTPSettings_APIConfiguredFlagsJSON(t *testing.T) {
+	settings := domain.SMTPSettings{HasPassword: true, HasOAuth2ClientSecret: true, HasOAuth2RefreshToken: true}
+	raw, err := json.Marshal(settings)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"has_password":true`)
+	assert.Contains(t, string(raw), `"has_oauth2_client_secret":true`)
+	assert.Contains(t, string(raw), `"has_oauth2_refresh_token":true`)
 }

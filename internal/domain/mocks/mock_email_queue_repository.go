@@ -111,17 +111,17 @@ func (mr *MockEmailQueueRepositoryMockRecorder) Enqueue(arg0, arg1, arg2 interfa
 }
 
 // EnqueueTx mocks base method.
-func (m *MockEmailQueueRepository) EnqueueTx(arg0 context.Context, arg1 *sql.Tx, arg2 []*domain.EmailQueueEntry) error {
+func (m *MockEmailQueueRepository) EnqueueTx(arg0 context.Context, arg1 *sql.Tx, arg2 string, arg3 []*domain.EmailQueueEntry) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnqueueTx", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "EnqueueTx", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnqueueTx indicates an expected call of EnqueueTx.
-func (mr *MockEmailQueueRepositoryMockRecorder) EnqueueTx(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockEmailQueueRepositoryMockRecorder) EnqueueTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnqueueTx", reflect.TypeOf((*MockEmailQueueRepository)(nil).EnqueueTx), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnqueueTx", reflect.TypeOf((*MockEmailQueueRepository)(nil).EnqueueTx), arg0, arg1, arg2, arg3)
 }
 
 // FetchPending mocks base method.
@@ -269,6 +269,20 @@ func (m *MockEmailQueueRepository) ResumeBySourceTx(arg0 context.Context, arg1 *
 func (mr *MockEmailQueueRepositoryMockRecorder) ResumeBySourceTx(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumeBySourceTx", reflect.TypeOf((*MockEmailQueueRepository)(nil).ResumeBySourceTx), arg0, arg1, arg2, arg3)
+}
+
+// WithIntegrationQueueIdle mocks base method.
+func (m *MockEmailQueueRepository) WithIntegrationQueueIdle(arg0 context.Context, arg1, arg2 string, arg3 func() error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithIntegrationQueueIdle", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithIntegrationQueueIdle indicates an expected call of WithIntegrationQueueIdle.
+func (mr *MockEmailQueueRepositoryMockRecorder) WithIntegrationQueueIdle(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithIntegrationQueueIdle", reflect.TypeOf((*MockEmailQueueRepository)(nil).WithIntegrationQueueIdle), arg0, arg1, arg2, arg3)
 }
 
 // SetNextRetry mocks base method.

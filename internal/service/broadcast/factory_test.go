@@ -200,9 +200,11 @@ func TestFactory_CreateMessageSender_InjectsVeridianSenderRotator(t *testing.T) 
 	t.Run("queue sender path", func(t *testing.T) {
 		f := newFactory(true)
 		require.NotNil(t, f.veridianSenderRotator, "la factory doit créer un rotator")
+		require.NotNil(t, f.veridianEmailProfileRotator, "la factory doit créer un rotator de profils")
 		qms := f.CreateMessageSender().(*queueMessageSender)
 		assert.Same(t, f.veridianSenderRotator, qms.veridianSenderRotator,
 			"le rotator de la factory doit être injecté dans le queue sender")
+		assert.Same(t, f.veridianEmailProfileRotator, qms.veridianEmailProfileRotator)
 	})
 
 	t.Run("direct sender path", func(t *testing.T) {
@@ -211,6 +213,7 @@ func TestFactory_CreateMessageSender_InjectsVeridianSenderRotator(t *testing.T) 
 		ms := f.CreateMessageSender().(*messageSender)
 		assert.Same(t, f.veridianSenderRotator, ms.veridianSenderRotator,
 			"le rotator de la factory doit être injecté dans le sender direct")
+		assert.Same(t, f.veridianEmailProfileRotator, ms.veridianEmailProfileRotator)
 	})
 }
 

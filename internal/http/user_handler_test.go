@@ -267,6 +267,10 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 		{
 			ID:   "workspace1",
 			Name: "Workspace 1",
+			Integrations: domain.Integrations{{ID: "gmail-1", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{
+				Kind: domain.EmailProviderKindSMTP,
+				SMTP: &domain.SMTPSettings{Host: "smtp.gmail.com", EncryptedPassword: "must-not-leak"},
+			}}},
 		},
 		{
 			ID:   "workspace2",
@@ -287,6 +291,9 @@ func TestUserHandler_GetCurrentUser(t *testing.T) {
 
 	handler.GetCurrentUser(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "must-not-leak")
+	assert.NotContains(t, rec.Body.String(), "encrypted_password")
+	assert.Contains(t, rec.Body.String(), `"has_password":true`)
 
 	var response map[string]interface{}
 	err := json.NewDecoder(rec.Body).Decode(&response)

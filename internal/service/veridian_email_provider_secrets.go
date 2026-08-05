@@ -1,6 +1,57 @@
 package service
 
-import "github.com/Notifuse/notifuse/internal/domain"
+import (
+	"reflect"
+
+	"github.com/Notifuse/notifuse/internal/domain"
+)
+
+func veridianEmailProviderHasClientCiphertext(provider *domain.EmailProvider) bool {
+	if provider == nil {
+		return false
+	}
+	if provider.SMTP != nil && (provider.SMTP.EncryptedUsername != "" || provider.SMTP.EncryptedPassword != "" ||
+		provider.SMTP.EncryptedOAuth2ClientSecret != "" || provider.SMTP.EncryptedOAuth2RefreshToken != "") {
+		return true
+	}
+	return (provider.SES != nil && provider.SES.EncryptedSecretKey != "") ||
+		(provider.SparkPost != nil && provider.SparkPost.EncryptedAPIKey != "") ||
+		(provider.Postmark != nil && provider.Postmark.EncryptedServerToken != "") ||
+		(provider.Mailgun != nil && provider.Mailgun.EncryptedAPIKey != "") ||
+		(provider.Mailjet != nil && (provider.Mailjet.EncryptedAPIKey != "" || provider.Mailjet.EncryptedSecretKey != "")) ||
+		(provider.SendGrid != nil && provider.SendGrid.EncryptedAPIKey != "")
+}
+
+func veridianClearEmailProviderResponseFlags(provider *domain.EmailProvider) {
+	if provider == nil {
+		return
+	}
+	provider.VeridianCredentialsConfigured = false
+	if provider.SMTP != nil {
+		provider.SMTP.HasPassword = false
+		provider.SMTP.HasOAuth2ClientSecret = false
+		provider.SMTP.HasOAuth2RefreshToken = false
+	}
+}
+
+func veridianEmailProviderTransportChanged(next, current *domain.EmailProvider) bool {
+	if next == nil || current == nil || next.Kind != current.Kind || !reflect.DeepEqual(next.Senders, current.Senders) {
+		return true
+	}
+	if next.Kind != domain.EmailProviderKindSMTP {
+		return true
+	}
+	if next.SMTP == nil || current.SMTP == nil {
+		return next.SMTP != current.SMTP
+	}
+	a, b := next.SMTP, current.SMTP
+	if a.Password != "" || a.OAuth2ClientSecret != "" || a.OAuth2RefreshToken != "" {
+		return true
+	}
+	return a.Host != b.Host || a.Port != b.Port || a.Username != b.Username || a.UseTLS != b.UseTLS ||
+		a.SkipTLSVerify != b.SkipTLSVerify || a.EHLOHostname != b.EHLOHostname || a.AuthType != b.AuthType ||
+		a.OAuth2Provider != b.OAuth2Provider || a.OAuth2TenantID != b.OAuth2TenantID || a.OAuth2ClientID != b.OAuth2ClientID
+}
 
 // veridianPreserveEmailProviderSecrets keeps encrypted credentials when an
 // integration is edited without re-entering them. Console forms intentionally

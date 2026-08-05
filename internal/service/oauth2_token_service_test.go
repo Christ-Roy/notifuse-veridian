@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,14 +18,6 @@ func TestOAuth2TokenService_GetAccessToken_CachedToken(t *testing.T) {
 	// Test that a valid cached token is returned without making HTTP request
 	service := NewOAuth2TokenService(&noopLogger{})
 
-	// Pre-populate cache with a valid token
-	// Cache key format: provider:tenantID:clientID (username no longer included)
-	cacheKey := "microsoft:tenant-123:client-123"
-	service.tokenCache[cacheKey] = &cachedToken{
-		accessToken: "cached-token-123",
-		expiresAt:   time.Now().Add(10 * time.Minute), // Not expired
-	}
-
 	settings := &domain.SMTPSettings{
 		AuthType:           "oauth2",
 		OAuth2Provider:     "microsoft",
@@ -32,6 +25,10 @@ func TestOAuth2TokenService_GetAccessToken_CachedToken(t *testing.T) {
 		OAuth2ClientID:     "client-123",
 		OAuth2ClientSecret: "secret-123",
 		// Username is no longer required for OAuth2
+	}
+	service.tokenCache[service.getCacheKey(settings)] = &cachedToken{
+		accessToken: "cached-token-123",
+		expiresAt:   time.Now().Add(10 * time.Minute),
 	}
 
 	token, err := service.GetAccessToken(settings)
@@ -58,14 +55,6 @@ func TestOAuth2TokenService_GetAccessToken_ExpiredToken(t *testing.T) {
 	service := NewOAuth2TokenService(&noopLogger{})
 	service.microsoftTokenURL = server.URL // Override for testing
 
-	// Pre-populate cache with an expired token
-	// Cache key format: provider:tenantID:clientID (username no longer included)
-	cacheKey := "microsoft:tenant-123:client-123"
-	service.tokenCache[cacheKey] = &cachedToken{
-		accessToken: "expired-token",
-		expiresAt:   time.Now().Add(-10 * time.Minute), // Already expired
-	}
-
 	settings := &domain.SMTPSettings{
 		AuthType:           "oauth2",
 		OAuth2Provider:     "microsoft",
@@ -73,6 +62,10 @@ func TestOAuth2TokenService_GetAccessToken_ExpiredToken(t *testing.T) {
 		OAuth2ClientID:     "client-123",
 		OAuth2ClientSecret: "secret-123",
 		// Username is no longer required for OAuth2
+	}
+	service.tokenCache[service.getCacheKey(settings)] = &cachedToken{
+		accessToken: "expired-token",
+		expiresAt:   time.Now().Add(-10 * time.Minute),
 	}
 
 	token, err := service.GetAccessToken(settings)
@@ -169,13 +162,10 @@ func TestOAuth2TokenService_FetchGoogleToken(t *testing.T) {
 func TestOAuth2TokenService_CacheKeyUniqueness(t *testing.T) {
 	service := NewOAuth2TokenService(&noopLogger{})
 
-	// Test that cache keys are unique for different configurations
-	// Note: Username is no longer part of the cache key since OAuth2 tokens
-	// are per-application (service principal), not per-mailbox
 	tests := []struct {
 		name     string
 		settings *domain.SMTPSettings
-		expected string
+		prefix   string
 	}{
 		{
 			name: "Microsoft with tenant-a",
@@ -184,7 +174,7 @@ func TestOAuth2TokenService_CacheKeyUniqueness(t *testing.T) {
 				OAuth2TenantID: "tenant-a",
 				OAuth2ClientID: "client-123",
 			},
-			expected: "microsoft:tenant-a:client-123",
+			prefix: "microsoft:tenant-a:client-123:",
 		},
 		{
 			name: "Microsoft with same tenant, different client",
@@ -193,7 +183,7 @@ func TestOAuth2TokenService_CacheKeyUniqueness(t *testing.T) {
 				OAuth2TenantID: "tenant-a",
 				OAuth2ClientID: "client-456",
 			},
-			expected: "microsoft:tenant-a:client-456",
+			prefix: "microsoft:tenant-a:client-456:",
 		},
 		{
 			name: "Microsoft with different tenant",
@@ -202,7 +192,7 @@ func TestOAuth2TokenService_CacheKeyUniqueness(t *testing.T) {
 				OAuth2TenantID: "tenant-b",
 				OAuth2ClientID: "client-123",
 			},
-			expected: "microsoft:tenant-b:client-123",
+			prefix: "microsoft:tenant-b:client-123:",
 		},
 		{
 			name: "Google",
@@ -210,14 +200,14 @@ func TestOAuth2TokenService_CacheKeyUniqueness(t *testing.T) {
 				OAuth2Provider: "google",
 				OAuth2ClientID: "client-123",
 			},
-			expected: "google::client-123",
+			prefix: "google::client-123:",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			key := service.getCacheKey(tt.settings)
-			assert.Equal(t, tt.expected, key)
+			assert.True(t, strings.HasPrefix(key, tt.prefix))
 		})
 	}
 
@@ -228,6 +218,40 @@ func TestOAuth2TokenService_CacheKeyUniqueness(t *testing.T) {
 		assert.False(t, keys[key], "Duplicate cache key found: %s", key)
 		keys[key] = true
 	}
+}
+
+func TestOAuth2TokenService_CacheKeyIsolatesGoogleProfilesWithoutSecrets(t *testing.T) {
+	service := NewOAuth2TokenService(&noopLogger{})
+	first := &domain.SMTPSettings{
+		OAuth2Provider: "google", OAuth2ClientID: "shared-client",
+		Username: "first@gmail.com", OAuth2RefreshToken: "refresh-secret-first",
+	}
+	second := &domain.SMTPSettings{
+		OAuth2Provider: "google", OAuth2ClientID: "shared-client",
+		Username: "second@gmail.com", OAuth2RefreshToken: "refresh-secret-second",
+	}
+	firstKey := service.getCacheKey(first)
+	secondKey := service.getCacheKey(second)
+	assert.NotEqual(t, firstKey, secondKey)
+	assert.NotContains(t, firstKey, first.Username)
+	assert.NotContains(t, firstKey, first.OAuth2RefreshToken)
+	assert.NotContains(t, secondKey, second.Username)
+	assert.NotContains(t, secondKey, second.OAuth2RefreshToken)
+
+	service.tokenCache[firstKey] = &cachedToken{accessToken: "account-a-token", expiresAt: time.Now().Add(time.Hour)}
+	valid, token := service.getCachedToken(second)
+	assert.False(t, valid)
+	assert.Empty(t, token)
+
+	// Username is optional in existing Google OAuth settings. Isolation must not
+	// collapse when both profiles leave it blank.
+	first.Username = ""
+	second.Username = ""
+	firstKey = service.getCacheKey(first)
+	secondKey = service.getCacheKey(second)
+	assert.NotEqual(t, firstKey, secondKey)
+	assert.NotContains(t, firstKey, first.OAuth2RefreshToken)
+	assert.NotContains(t, secondKey, second.OAuth2RefreshToken)
 }
 
 func TestOAuth2TokenService_ThreadSafety(t *testing.T) {
@@ -299,22 +323,19 @@ func TestOAuth2TokenService_TokenRefreshBuffer(t *testing.T) {
 	// Test that tokens are refreshed 5 minutes before expiry
 	service := NewOAuth2TokenService(&noopLogger{})
 
-	// Cache key format: provider:tenantID:clientID (username no longer included)
-	cacheKey := "microsoft:tenant-123:client-123"
-
-	// Token expires in 4 minutes (less than 5-minute buffer)
-	service.tokenCache[cacheKey] = &cachedToken{
-		accessToken: "soon-expiring-token",
-		expiresAt:   time.Now().Add(4 * time.Minute),
-	}
-
 	settings := &domain.SMTPSettings{
 		AuthType:           "oauth2",
 		OAuth2Provider:     "microsoft",
 		OAuth2TenantID:     "tenant-123",
 		OAuth2ClientID:     "client-123",
 		OAuth2ClientSecret: "secret-123",
-		// Username is no longer required for OAuth2
+	}
+	cacheKey := service.getCacheKey(settings)
+
+	// Token expires in 4 minutes (less than 5-minute buffer)
+	service.tokenCache[cacheKey] = &cachedToken{
+		accessToken: "soon-expiring-token",
+		expiresAt:   time.Now().Add(4 * time.Minute),
 	}
 
 	// Token should be considered invalid (within buffer)

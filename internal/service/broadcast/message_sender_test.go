@@ -73,6 +73,13 @@ func TestMessageSenderCreation(t *testing.T) {
 	assert.Implements(t, (*MessageSender)(nil), customSender, "Custom sender should implement MessageSender interface")
 }
 
+func TestMessageSender_SetVeridianEmailProfileRotator(t *testing.T) {
+	sender := &messageSender{}
+	rotator := newVeridianEmailProfileRotator()
+	sender.SetVeridianEmailProfileRotator(rotator)
+	assert.Same(t, rotator, sender.veridianEmailProfileRotator)
+}
+
 // Helper function to create a simple text block
 func createTestTextBlock(id, textContent string) notifuse_mjml.EmailBlock {
 	content := textContent
@@ -962,7 +969,7 @@ func TestSendBatch_VeridianInfraPixelOverride(t *testing.T) {
 	sender.(*messageSender).SetVeridianWorkspaceRepo(mockWorkspaceRepo)
 
 	recipients := []*domain.ContactWithList{
-		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"},  // google → infra OFF
+		{Contact: &domain.Contact{Email: "lead@gmail.com"}, ListID: "list-1"}, // google → infra OFF
 		{Contact: &domain.Contact{Email: "lead@orange.fr"}, ListID: "list-1"}, // freemail_fr → workspace ON
 	}
 	templates := map[string]*domain.Template{"template-px": template}

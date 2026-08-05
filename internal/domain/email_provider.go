@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
@@ -103,6 +104,20 @@ type EmailProvider struct {
 	// Cf. veridian_daily_cap.go (gate veridianPerSenderCapGate).
 	VeridianPerSenderDailyCap int `json:"veridian_per_sender_daily_cap,omitempty"`
 
+	// Veridian fork — plafond journalier TOTAL de cette intégration/profil
+	// d'envoi. Contrairement au cap par sender ci-dessus, ce quota agrège tous
+	// les alias/senders et toutes les classes destinataires d'un même profil.
+	// Le worker l'enforce atomiquement par IntegrationID juste avant le transport.
+	// Pour un profil Gmail (app-password aujourd'hui, OAuth Google demain), 0
+	// signifie le défaut prudent de 30/jour et la validation refuse >50.
+	VeridianProfileDailyCap int `json:"veridian_profile_daily_cap,omitempty"`
+
+	// A saved profile becomes eligible for an explicit multi-profile pool only
+	// after a server-side transport test succeeds. CredentialsConfigured is an
+	// API-only derived flag; TransportVerifiedAt is durable state.
+	VeridianCredentialsConfigured bool       `json:"veridian_credentials_configured,omitempty"`
+	VeridianTransportVerifiedAt   *time.Time `json:"veridian_transport_verified_at,omitempty"`
+
 	// Veridian fork — JITTER TEMPOREL par infra (cold outbound). Amplitude (±) de
 	// dispersion du délai de re-planification du throttle minute par classe, en
 	// FRACTION du pas nominal (0.30 = ±30 %). Casse le rythme métronomique (tell
@@ -178,6 +193,24 @@ func (e *EmailProvider) Validate(passphrase string) error {
 		return nil
 	}
 
+	if e.VeridianProfileDailyCap < 0 {
+		return fmt.Errorf("profile daily cap must be greater than or equal to 0")
+	}
+	if e.VeridianIsGmailProfile() {
+		if e.VeridianProfileDailyCap == 0 {
+			e.VeridianProfileDailyCap = VeridianGmailDefaultDailyCap
+		}
+		if e.VeridianProfileDailyCap > VeridianGmailPersonalHardMaxDailyCap {
+			return fmt.Errorf("Gmail profile daily cap must not exceed %d", VeridianGmailPersonalHardMaxDailyCap)
+		}
+		if e.SMTP.AuthType == "" || strings.EqualFold(e.SMTP.AuthType, "basic") {
+			e.SMTP.Password = strings.ReplaceAll(e.SMTP.Password, " ", "")
+			if e.SMTP.Password != "" && len(e.SMTP.Password) != 16 {
+				return fmt.Errorf("Gmail app password must contain exactly 16 characters")
+			}
+		}
+	}
+
 	// Validate rate limit
 	if e.RateLimitPerMinute <= 0 {
 		return fmt.Errorf("rate limit per minute is required and must be greater than 0")
@@ -245,6 +278,39 @@ func (e *EmailProvider) Validate(passphrase string) error {
 	default:
 		return fmt.Errorf("invalid email provider kind: %s", e.Kind)
 	}
+}
+
+const (
+	VeridianGmailDefaultDailyCap         = 30
+	VeridianGmailPersonalHardMaxDailyCap = 50
+)
+
+// VeridianIsGmailProfile recognizes both the current Gmail SMTP app-password
+// transport and the existing Google OAuth/Gmail API transport. Keeping the
+// policy on EmailProvider rather than the UI makes the same quota govern future
+// OAuth profiles automatically.
+func (e *EmailProvider) VeridianIsGmailProfile() bool {
+	if e == nil || e.Kind != EmailProviderKindSMTP || e.SMTP == nil {
+		return false
+	}
+	host := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(e.SMTP.Host)), ".")
+	return host == "smtp.gmail.com" ||
+		(strings.EqualFold(e.SMTP.AuthType, "oauth2") && strings.EqualFold(e.SMTP.OAuth2Provider, "google"))
+}
+
+// VeridianEffectiveProfileDailyCap returns the runtime cap. Legacy Gmail
+// profiles created before the field existed remain protected by the default.
+func (e *EmailProvider) VeridianEffectiveProfileDailyCap() int {
+	if e == nil {
+		return 0
+	}
+	if e.VeridianProfileDailyCap > 0 {
+		return e.VeridianProfileDailyCap
+	}
+	if e.VeridianIsGmailProfile() {
+		return VeridianGmailDefaultDailyCap
+	}
+	return 0
 }
 
 func (e *EmailProvider) GetSender(id string) *EmailSender {
@@ -546,6 +612,7 @@ func (r *SendEmailRequest) Validate() error {
 // EmailServiceInterface defines the interface for the email service
 type EmailServiceInterface interface {
 	TestEmailProvider(ctx context.Context, workspaceID string, provider EmailProvider, to string) error
+	TestEmailProviderByIntegrationID(ctx context.Context, workspaceID, integrationID, to string) error
 	SendEmail(ctx context.Context, request SendEmailProviderRequest, isMarketing bool) error
 	SendEmailForTemplate(ctx context.Context, request SendEmailRequest) error
 	VisitLink(ctx context.Context, messageID string, workspaceID string) error

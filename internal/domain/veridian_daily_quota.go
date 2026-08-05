@@ -8,6 +8,7 @@ import (
 const (
 	VeridianDailyQuotaKindProviderClass = "provider_class"
 	VeridianDailyQuotaKindWarmup        = "warmup"
+	VeridianDailyQuotaKindProfile       = "profile"
 )
 
 // VeridianDailyQuotaKey identifies one durable daily counter. WorkspaceID is
@@ -18,6 +19,7 @@ type VeridianDailyQuotaKey struct {
 	Day           time.Time
 	Kind          string
 	SenderDomain  string
+	ProfileID     string
 	ProviderClass string
 }
 
