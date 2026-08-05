@@ -45,8 +45,9 @@ export interface FileManagerSettings {
   access_key: string
   bucket: string
   region?: string
+  // Write-only. Existing values are represented by has_secret_key.
   secret_key?: string
-  encrypted_secret_key?: string
+  has_secret_key?: boolean
   cdn_endpoint?: string
   force_path_style?: boolean
 }

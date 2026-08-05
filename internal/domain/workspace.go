@@ -366,16 +366,16 @@ type WorkspaceSettings struct {
 	// Veridian fork — pool ordonne de profils marketing. Chaque ID référence une
 	// intégration email complète (SMTP Gmail app-password aujourd'hui, OAuth
 	// demain). Vide = fallback strict sur MarketingEmailProviderID.
-	VeridianMarketingEmailProviderIDs []string `json:"veridian_marketing_email_provider_ids,omitempty"`
-	EncryptedSecretKey           string              `json:"encrypted_secret_key,omitempty"`
-	EmailTrackingEnabled         bool                `json:"email_tracking_enabled"`
-	TemplateBlocks               []TemplateBlock     `json:"template_blocks,omitempty"`
-	CustomEndpointURL            *string             `json:"custom_endpoint_url,omitempty"`
-	CustomFieldLabels            map[string]string   `json:"custom_field_labels,omitempty"`
-	BlogEnabled                  bool                `json:"blog_enabled"`            // Enable blog feature at workspace level
-	BlogSettings                 *BlogSettings       `json:"blog_settings,omitempty"` // Blog styling and SEO settings
-	DefaultLanguage              string              `json:"default_language"`
-	Languages                    []string            `json:"languages"`
+	VeridianMarketingEmailProviderIDs []string          `json:"veridian_marketing_email_provider_ids,omitempty"`
+	EncryptedSecretKey                string            `json:"encrypted_secret_key,omitempty"`
+	EmailTrackingEnabled              bool              `json:"email_tracking_enabled"`
+	TemplateBlocks                    []TemplateBlock   `json:"template_blocks,omitempty"`
+	CustomEndpointURL                 *string           `json:"custom_endpoint_url,omitempty"`
+	CustomFieldLabels                 map[string]string `json:"custom_field_labels,omitempty"`
+	BlogEnabled                       bool              `json:"blog_enabled"`            // Enable blog feature at workspace level
+	BlogSettings                      *BlogSettings     `json:"blog_settings,omitempty"` // Blog styling and SEO settings
+	DefaultLanguage                   string            `json:"default_language"`
+	Languages                         []string          `json:"languages"`
 
 	// Veridian fork — débits par classe de provider destinataire par défaut
 	// pour ce workspace (emails/minute, fractions autorisées). Fallback quand
@@ -813,14 +813,16 @@ func (w *Workspace) MarshalJSON() ([]byte, error) {
 }
 
 type FileManagerSettings struct {
-	Provider           string  `json:"provider,omitempty"`
-	Endpoint           string  `json:"endpoint"`
-	Bucket             string  `json:"bucket"`
-	AccessKey          string  `json:"access_key"`
-	EncryptedSecretKey string  `json:"encrypted_secret_key,omitempty"`
-	Region             *string `json:"region,omitempty"`
-	CDNEndpoint        *string `json:"cdn_endpoint,omitempty"`
-	ForcePathStyle     bool    `json:"force_path_style"`
+	Provider           string `json:"provider,omitempty"`
+	Endpoint           string `json:"endpoint"`
+	Bucket             string `json:"bucket"`
+	AccessKey          string `json:"access_key"`
+	EncryptedSecretKey string `json:"encrypted_secret_key,omitempty"`
+	// HasSecretKey is response-only metadata populated on API redacted clones.
+	HasSecretKey   bool    `json:"has_secret_key,omitempty"`
+	Region         *string `json:"region,omitempty"`
+	CDNEndpoint    *string `json:"cdn_endpoint,omitempty"`
+	ForcePathStyle bool    `json:"force_path_style"`
 
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"secret_key,omitempty"`

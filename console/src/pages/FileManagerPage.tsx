@@ -103,6 +103,7 @@ export function FileManagerPage() {
       bucket: currentWorkspace?.settings?.file_manager?.bucket || '',
       region: currentWorkspace?.settings?.file_manager?.region || '',
       secret_key: currentWorkspace?.settings?.file_manager?.secret_key || '',
+      has_secret_key: currentWorkspace?.settings?.file_manager?.has_secret_key,
       cdn_endpoint: currentWorkspace?.settings?.file_manager?.cdn_endpoint || '',
       force_path_style: currentWorkspace?.settings?.file_manager?.force_path_style
     },

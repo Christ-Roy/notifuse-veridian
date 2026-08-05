@@ -40,14 +40,16 @@ type SupabaseIntegrationSettings struct {
 // Hook activation is controlled in Supabase, not here
 type SupabaseAuthEmailHookSettings struct {
 	SignatureKey          string `json:"signature_key,omitempty"`           // Accepts plaintext key in requests (cleared before API responses)
-	EncryptedSignatureKey string `json:"encrypted_signature_key,omitempty"` // Encrypted key (stored and returned in API responses)
+	EncryptedSignatureKey string `json:"encrypted_signature_key,omitempty"` // Encrypted key (stored only; stripped from API responses)
+	HasSignatureKey       bool   `json:"has_signature_key,omitempty"`       // Response-only metadata
 }
 
 // SupabaseUserCreatedHookSettings configures the Before User Created Hook
 // Hook activation is controlled in Supabase, not here
 type SupabaseUserCreatedHookSettings struct {
 	SignatureKey          string   `json:"signature_key,omitempty"`           // Accepts plaintext key in requests (cleared before API responses)
-	EncryptedSignatureKey string   `json:"encrypted_signature_key,omitempty"` // Encrypted key (stored and returned in API responses)
+	EncryptedSignatureKey string   `json:"encrypted_signature_key,omitempty"` // Encrypted key (stored only; stripped from API responses)
+	HasSignatureKey       bool     `json:"has_signature_key,omitempty"`       // Response-only metadata
 	AddUserToLists        []string `json:"add_user_to_lists,omitempty"`       // Optional lists to add contacts to
 	CustomJSONField       string   `json:"custom_json_field,omitempty"`       // Which custom_json field to use (default: custom_json_1)
 	RejectDisposableEmail bool     `json:"reject_disposable_email,omitempty"` // Reject user creation if email is disposable

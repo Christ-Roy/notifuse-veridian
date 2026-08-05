@@ -191,6 +191,7 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		randomSecretKey = "secret_key_for_dev_env"
 	}
 
+	fileManager.HasSecretKey = false
 	workspace := &domain.Workspace{
 		ID:   id,
 		Name: name,
@@ -349,6 +350,13 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.LogoURL = settings.LogoURL
 	existingWorkspace.Settings.CoverURL = settings.CoverURL
 	existingWorkspace.Settings.Timezone = settings.Timezone
+	// API responses intentionally omit file-manager credentials. Preserve the
+	// stored ciphertext when the owner updates unrelated settings or re-saves
+	// the storage form without entering a replacement secret.
+	if settings.FileManager.SecretKey == "" && settings.FileManager.EncryptedSecretKey == "" {
+		settings.FileManager.EncryptedSecretKey = existingWorkspace.Settings.FileManager.EncryptedSecretKey
+	}
+	settings.FileManager.HasSecretKey = false
 	existingWorkspace.Settings.FileManager = settings.FileManager
 	existingWorkspace.Settings.TransactionalEmailProviderID = settings.TransactionalEmailProviderID
 	existingWorkspace.Settings.MarketingEmailProviderID = settings.MarketingEmailProviderID
@@ -1279,6 +1287,10 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 		integration.EmailProvider.VeridianTransportVerifiedAt = nil
 		veridianClearEmailProviderResponseFlags(&integration.EmailProvider)
 	case domain.IntegrationTypeSupabase:
+		if req.SupabaseSettings != nil {
+			req.SupabaseSettings.AuthEmailHook.HasSignatureKey = false
+			req.SupabaseSettings.BeforeUserCreatedHook.HasSignatureKey = false
+		}
 		integration.SupabaseSettings = req.SupabaseSettings
 	case domain.IntegrationTypeLLM:
 		integration.LLMProvider = req.LLMProvider
@@ -1415,6 +1427,8 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 	case domain.IntegrationTypeSupabase:
 		// Preserve existing encrypted keys if new keys are not provided
 		if req.SupabaseSettings != nil {
+			req.SupabaseSettings.AuthEmailHook.HasSignatureKey = false
+			req.SupabaseSettings.BeforeUserCreatedHook.HasSignatureKey = false
 			// Start with the new settings
 			updatedIntegration.SupabaseSettings = req.SupabaseSettings
 

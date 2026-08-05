@@ -186,9 +186,9 @@ func TestIMAPSettings_Validate(t *testing.T) {
 	}
 }
 
-// TestIMAPSettings_MarshalJSON_MasksPlaintextPassword garantit qu'AUCUNE
-// sérialisation JSON sortante n'expose le mot de passe IMAP en clair, tout en
-// préservant le ciphertext nécessaire au round-trip DB.
+// TestIMAPSettings_MarshalJSON_MasksPlaintextPassword garantit que la
+// sérialisation de persistance masque le clair et conserve le ciphertext. La
+// couche HTTP workspace retire ensuite aussi le ciphertext avant réponse API.
 func TestIMAPSettings_MarshalJSON_MasksPlaintextPassword(t *testing.T) {
 	const plaintext = "super-secret-imap-pw"
 	s := &IMAPSettings{
@@ -206,7 +206,8 @@ func TestIMAPSettings_MarshalJSON_MasksPlaintextPassword(t *testing.T) {
 		js := string(raw)
 		assert.NotContains(t, js, plaintext, "plaintext IMAP password must never appear in JSON")
 		assert.NotContains(t, js, `"password"`, "the cleartext password field must be omitted")
-		// Le ciphertext DOIT rester (round-trip DB + il n'est pas exploitable nu).
+		// Le ciphertext DOIT rester ici pour le round-trip DB. Ce test ne couvre
+		// pas la réponse API, qui passe par veridianRedactWorkspaceForAPI.
 		assert.Contains(t, js, `"encrypted_password"`, "encrypted password must be preserved for DB persistence")
 		assert.Contains(t, js, s.EncryptedPassword)
 		// Champs non secrets toujours là.
@@ -215,7 +216,7 @@ func TestIMAPSettings_MarshalJSON_MasksPlaintextPassword(t *testing.T) {
 	})
 
 	t.Run("marshal via pointer in containing struct", func(t *testing.T) {
-		// Sérialisé comme dans la vraie réponse API (Integration imbrique *IMAPSettings).
+		// Sérialisé comme dans le blob Integration de persistance.
 		integ := Integration{ID: "i1", Name: "Bounce box", Type: IntegrationTypeIMAP, IMAPSettings: s}
 		raw, err := json.Marshal(integ)
 		require.NoError(t, err)

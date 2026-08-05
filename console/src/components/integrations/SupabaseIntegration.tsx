@@ -26,6 +26,7 @@ export const SupabaseIntegration: React.FC<SupabaseIntegrationProps> = ({
   // Expose form instance to parent via ref
   React.useEffect(() => {
     if (formRef) {
+      // eslint-disable-next-line react-hooks/immutability -- Intentionally exposing form to parent via ref
       ;(formRef as React.MutableRefObject<{ submit: () => void } | null>).current = form
     }
   }, [form, formRef])
@@ -57,8 +58,9 @@ export const SupabaseIntegration: React.FC<SupabaseIntegrationProps> = ({
 
       form.setFieldsValue({
         name: integration.name,
-        auth_email_signature_key: settings.auth_email_hook?.signature_key || '',
-        user_created_signature_key: settings.before_user_created_hook?.signature_key || '',
+        // Signature keys are write-only and are never returned by the API.
+        auth_email_signature_key: '',
+        user_created_signature_key: '',
         add_user_created_to_lists: settings.before_user_created_hook?.add_user_to_lists || [],
         user_created_custom_json_field:
           settings.before_user_created_hook?.custom_json_field || undefined,
@@ -150,6 +152,7 @@ export const SupabaseIntegration: React.FC<SupabaseIntegrationProps> = ({
           </Space>
         }
         name="auth_email_signature_key"
+        extra={integration ? t`Leave blank to keep the existing secret` : undefined}
       >
         <Input.Password placeholder="v1,whsec_..." />
       </Form.Item>
@@ -170,6 +173,7 @@ export const SupabaseIntegration: React.FC<SupabaseIntegrationProps> = ({
           </Space>
         }
         name="user_created_signature_key"
+        extra={integration ? t`Leave blank to keep the existing secret` : undefined}
       >
         <Input.Password placeholder="v1,whsec_..." />
       </Form.Item>

@@ -55,6 +55,7 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
         ? getProviderById(props.settings.provider)
         : null
       const resolvedProvider = existingProvider || getProviderById('other') || null
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize the modal from loaded workspace settings.
       setSelectedProvider(resolvedProvider)
       setCurrentScreen('settings')
 
@@ -121,6 +122,29 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
 
         setLoading(true)
 
+        const saveSettings = () => {
+          props
+            .onUpdateSettings(values)
+            .then(() => {
+              message.success(t`The workspace settings have been updated!`)
+              setLoading(false)
+              toggleSettings()
+            })
+            .catch((error) => {
+              console.error(error)
+              message.error(error.toString())
+              setLoading(false)
+            })
+        }
+
+        // Existing storage credentials are write-only. When the owner leaves the
+        // field blank, the backend keeps the stored ciphertext; a browser-side S3
+        // connectivity test is impossible without exposing that credential again.
+        if (!values.secret_key && props.settings?.has_secret_key) {
+          saveSettings()
+          return
+        }
+
         // check if the bucket can be reached
         const input: ListObjectsV2CommandInput = {
           Bucket: values.bucket || ''
@@ -146,20 +170,7 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
 
         s3Client
           .send(command)
-          .then(() => {
-            props
-              .onUpdateSettings(values)
-              .then(() => {
-                message.success(t`The workspace settings have been updated!`)
-                setLoading(false)
-                toggleSettings()
-              })
-              .catch((error) => {
-                console.error(error)
-                message.error(error.toString())
-                setLoading(false)
-              })
-          })
+          .then(saveSettings)
           .catch((e: Error) => {
             console.error(e)
             message.error(e.toString())
@@ -279,7 +290,12 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
           <Input />
         </Form.Item>
 
-        <Form.Item label={t`S3 secret key`} name="secret_key" rules={[{ type: 'string', required: true }]}>
+        <Form.Item
+          label={t`S3 secret key`}
+          name="secret_key"
+          extra={props.settings?.has_secret_key ? t`Leave blank to keep the existing secret` : undefined}
+          rules={[{ type: 'string', required: !props.settings?.has_secret_key }]}
+        >
           <Input type="password" />
         </Form.Item>
 
