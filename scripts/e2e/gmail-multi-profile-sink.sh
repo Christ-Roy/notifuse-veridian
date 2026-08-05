@@ -158,6 +158,13 @@ PY
   printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("integration_id",""))'
 }
 
+verify_profile() {
+  local integration_id="$1" owner_email="$2" response success
+  response="$(api /api/email.testProvider "{\"workspace_id\":\"$WID\",\"integration_id\":\"$integration_id\",\"to\":\"$owner_email\"}")"
+  success="$(printf '%s' "$response" | python3 -c 'import json,sys; print(str(json.load(sys.stdin).get("success", False)).lower())')"
+  [ "$success" = "true" ] || fatal "vérification transport du profil $integration_id impossible: ${response:0:200}"
+}
+
 update_profile() {
   local integration_id="$1" name="$2" sender="$3" cap="$4" window="$5" provider body
   provider="$(provider_json "$sender" "$cap" "$window")"
@@ -215,6 +222,10 @@ PROFILE_A="$(create_profile gmail-profile-a "$SENDER_A" 30 "$closed_window")"
 PROFILE_B="$(create_profile gmail-profile-b "$SENDER_B" 30 "$open_window")"
 [ -n "$PROFILE_A" ] && [ -n "$PROFILE_B" ] || fatal "création des deux profils impossible"
 [ "$PROFILE_A" != "$PROFILE_B" ] || fatal "les deux profils ont le même integration ID"
+OWNER_EMAIL="gmail-mp-${STAMP}@e2e.veridian.site"
+verify_profile "$PROFILE_A" "$OWNER_EMAIL"
+verify_profile "$PROFILE_B" "$OWNER_EMAIL"
+ok "deux profils vérifiés par l'endpoint owner-bound, exclusivement via le sink"
 
 # Sonde write-only séparée, jamais ajoutée aux profils marketing et jamais
 # utilisée pour envoyer. Les valeurs sont fausses et restent confinées au
@@ -315,10 +326,10 @@ wait_for_sql "SELECT count(*) FROM email_queue WHERE source_id='$BID_CAP' AND st
 
 SINK_DATA="$(sink_messages)"
 SINK_COUNT="$(printf '%s' "$SINK_DATA" | grep -c -- '---------- MESSAGE FOLLOWS ----------' || true)"
-[ "$SINK_COUNT" = "6" ] || fatal "sink attendu=6 messages observé=$SINK_COUNT"
+[ "$SINK_COUNT" = "8" ] || fatal "sink attendu=8 messages (2 vérifications + 6 campagnes) observé=$SINK_COUNT"
 printf '%s' "$SINK_DATA" | grep -Fq "$SENDER_A" || fatal "sender A absent des messages sink"
 printf '%s' "$SINK_DATA" | grep -Fq "$SENDER_B" || fatal "sender B absent des messages sink"
-ok "6 messages exclusivement au sink, distribution 3/3, fenêtre et quota prouvés"
+ok "8 messages exclusivement au sink, dont 6 campagnes distribuées 3/3, fenêtre et quota prouvés"
 
 printf '\nWorkspace: %s\nProfils: %s %s\nBroadcasts: %s %s\n' "$WID" "$PROFILE_A" "$PROFILE_B" "$BID_WINDOW" "$BID_CAP" >&2
 ok "E2E multi-profils Gmail terminé sans envoi externe"
