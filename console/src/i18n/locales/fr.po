@@ -7998,6 +7998,10 @@ msgstr "pixel désactivé par défaut"
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
 msgstr ""
 
+#: src/pages/TemplatesPage.tsx:168
+msgid "Plain text"
+msgstr "Texte brut"
+
 #: src/components/settings/SettingsSidebar.tsx:124
 #: src/components/settings/veridian_plan_settings.tsx:57
 msgid "Plan"

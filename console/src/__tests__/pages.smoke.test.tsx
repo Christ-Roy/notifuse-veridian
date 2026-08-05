@@ -164,6 +164,22 @@ vi.mock('../services/api/templates', () => ({
   }
 }))
 
+vi.mock('../services/api/template', () => ({
+  templatesApi: {
+    list: vi.fn().mockResolvedValue({
+      templates: [{
+        id: 'plain-cold-j0', name: 'Cold J0', version: 1, channel: 'email', category: 'marketing',
+        email: { subject: 'Une maquette', compiled_preview: '', visual_editor_tree: {}, editor_mode: 'code', plain_text_only: true },
+        created_at: '2026-08-05T00:00:00Z', updated_at: '2026-08-05T00:00:00Z'
+      }]
+    }),
+    get: vi.fn().mockResolvedValue({ template: null }),
+    create: vi.fn().mockResolvedValue({}),
+    update: vi.fn().mockResolvedValue({}),
+    delete: vi.fn().mockResolvedValue({})
+  }
+}))
+
 // Mock broadcasts API
 vi.mock('../services/api/broadcasts', () => ({
   broadcastsApi: {
@@ -429,7 +445,7 @@ describe('Page Smoke Tests', () => {
       const Wrapper = createWrapper()
       expect(() => render(<TemplatesPage />, { wrapper: Wrapper })).not.toThrow()
       await waitFor(() => {
-        expect(document.body).toBeTruthy()
+        expect(screen.getByText('Plain text')).toBeTruthy()
       })
     })
 

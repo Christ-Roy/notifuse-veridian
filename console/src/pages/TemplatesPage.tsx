@@ -164,9 +164,11 @@ export function TemplatesPage() {
             <Tooltip title={t`ID for API:` + ' ' + record.id}>
               <Text strong>{text}</Text>
             </Tooltip>
-            {record.email?.editor_mode === 'code' && (
+            {record.email?.plain_text_only ? (
+              <Tag bordered={false} color="green">{t`Plain text`}</Tag>
+            ) : record.email?.editor_mode === 'code' ? (
               <Tag bordered={false} color="geekblue">{t`Code`}</Tag>
-            )}
+            ) : null}
           </Space>
         )
       }

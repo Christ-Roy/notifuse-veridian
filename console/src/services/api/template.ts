@@ -33,6 +33,7 @@ export interface EmailTemplate {
   compiled_preview: string // compiled html
   visual_editor_tree: EmailBlock
   text?: string
+  plain_text_only?: boolean
 }
 
 export interface WebTemplate {

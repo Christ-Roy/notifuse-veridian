@@ -29,6 +29,7 @@ export interface EmailTemplate {
   compiled_preview: string
   visual_editor_tree: Record<string, unknown>
   text?: string
+  plain_text_only?: boolean
 }
 
 // Define the Template interface
