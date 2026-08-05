@@ -43,6 +43,10 @@ export interface WorkspaceSettings {
   file_manager?: FileManagerSettings
   transactional_email_provider_id?: string
   marketing_email_provider_id?: string
+  // Veridian fork - ordered pool of sending profiles used for marketing
+  // rotation. The legacy singleton remains the compatibility fallback and is
+  // kept aligned with the first selected profile by the console.
+  veridian_marketing_email_provider_ids?: string[]
   email_tracking_enabled: boolean
   template_blocks?: TemplateBlock[]
   custom_endpoint_url?: string
@@ -264,6 +268,14 @@ export interface EmailProvider {
   senders: Sender[]
   rate_limit_per_minute: number
 
+  // Hard daily volume for this integration/profile across every sender and
+  // recipient-provider class. Distinct from veridian_per_sender_daily_cap.
+  veridian_profile_daily_cap?: number
+  // Read-only server metadata. These fields expose configuration/readiness
+  // without returning any plaintext or encrypted credential to the console.
+  veridian_credentials_configured?: boolean
+  veridian_transport_verified_at?: string
+
   // Veridian fork — config cold outbound PAR INFRA d'envoi (R2 + Lot 5/8). Une
   // infra (= cette intégration EmailProvider, son host/IP/relai SMTP + senders)
   // peut porter ses propres débits/plafonds (en warm-up) et son custom tracking
@@ -342,8 +354,7 @@ export interface SMTPSettings {
   port: number
   username: string
   password?: string
-  encrypted_password?: string
-  encrypted_username?: string
+  has_password?: boolean
   use_tls: boolean
   ehlo_hostname?: string
 
@@ -355,9 +366,9 @@ export interface SMTPSettings {
   oauth2_tenant_id?: string // Microsoft only
   oauth2_client_id?: string
   oauth2_client_secret?: string
-  encrypted_oauth2_client_secret?: string
+  has_oauth2_client_secret?: boolean
   oauth2_refresh_token?: string // Google only
-  encrypted_oauth2_refresh_token?: string // Google only
+  has_oauth2_refresh_token?: boolean
 }
 
 export interface SparkPostSettings {

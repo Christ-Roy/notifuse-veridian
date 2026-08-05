@@ -1,7 +1,6 @@
 import { api } from './client'
 import type { EmailBlock } from '../../components/email_builder/types'
 import type { EmailOptions } from './transactional_notifications'
-import type { EmailProvider } from './workspace'
 
 // Template types
 export interface Template {
@@ -166,7 +165,7 @@ export interface CompileTemplateResponse {
 }
 
 export interface TestEmailProviderRequest {
-  provider: EmailProvider
+  integration_id: string
   to: string
   workspace_id: string
 }
