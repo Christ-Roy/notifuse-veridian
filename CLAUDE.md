@@ -1326,11 +1326,11 @@ migrations est transactionnel (allowlist `migrations-pending.txt`).
 - Le cache OAuth Google inclut un digest opaque du refresh token : deux comptes
   partageant le même client OAuth ne partagent jamais un access token, même si
   leur username est vide. Aucun secret n'apparaît dans la clé ou les logs.
-- Limite lifecycle connue : une entrée déjà en queue n'est jamais reroutée si
-  son profil atteint son cap (elle attend le jour suivant, fail-safe). La
-  suppression d'une intégration encore référencée par des entrées pending n'a
-  pas encore de garde DB dédiée; ne pas supprimer un profil actif avant drainage
-  de queue. À traiter en P1 avec un `EXISTS email_queue.integration_id` atomique.
+- Lifecycle fail-safe : une entrée déjà en queue n'est jamais reroutée si son
+  profil atteint son cap (elle attend le jour suivant). Une suppression prend
+  un verrou partagé sur `email_queue` et refuse en `409` toute intégration encore
+  référencée par une entrée `pending` ou `processing`; les enqueue concurrents
+  prennent le verrou conflictuel puis revalident l'intégration avant insertion.
 
 ### Pixel d'ouverture PAR INFRA — dernier levier non-infra harmonisé (cold outbound, 2026-06-17)
 

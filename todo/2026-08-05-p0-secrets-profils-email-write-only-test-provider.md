@@ -2,6 +2,7 @@
 
 > **Sévérité** : 🔴 P0 sécurité
 > **Surface** : API workspace, console, test SMTP
+> **Statut 2026-08-05** : livré localement, avec redaction exhaustive workspace et conservation serveur des secrets write-only
 
 ## Vulnérabilité constatée
 

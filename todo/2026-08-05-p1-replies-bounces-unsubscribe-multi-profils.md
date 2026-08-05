@@ -1,6 +1,7 @@
 # P1 - Provenance replies/bounces et suppression finale multi-profils
 
 > **Sévérité** : 🟠 P1, conformité et réputation
+> **Statut 2026-08-05** : `veridian_profile_id` et garde de suppression d'un profil en queue livrés ; corrélation multi-inbox et gate marketing universel restent ouverts
 
 ## Problèmes
 

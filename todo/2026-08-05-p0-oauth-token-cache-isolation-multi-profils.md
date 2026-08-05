@@ -1,6 +1,7 @@
 # P0 futur - Isolation du cache OAuth entre profils Gmail
 
 > **Sévérité** : 🔴 P0 avant activation OAuth multi-profils
+> **Statut 2026-08-05** : isolation cache par digest opaque livrée ; consentement, révocation et preuve Gmail multi-comptes non livrés
 
 ## Problème
 

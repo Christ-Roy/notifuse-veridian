@@ -2,6 +2,7 @@
 
 > **Sévérité** : 🔴 P0, surface d'envoi
 > **Bloque** : activation de plusieurs profils Gmail personnels
+> **Statut 2026-08-05** : implémenté localement ; harnais sink staging puis promotion PROD encore requis
 
 ## Problème
 
@@ -62,3 +63,11 @@ Le ticket étend ces primitives ; il ne demande pas de réécrire le pipeline d'
 - Cap 3 par profil avec deux workers : trois historiques maximum par ID, même sous course.
 - Chaque historique, log structuré et métrique d'envoi est attribuable au profil exact.
 - Aucun test ne contacte Gmail, un MX ou le relai sortant.
+
+## Rollback V56
+
+V56 est additive : colonne nullable et index uniquement. Un rollback applicatif
+vers V55 ignore ces champs sans perte du pipeline legacy. Ne pas supprimer la
+colonne ni l'index pendant le rollback ; leur retrait éventuel appartient à une
+migration Contract ultérieure, après preuve qu'aucun historique/profil ne les
+utilise plus.

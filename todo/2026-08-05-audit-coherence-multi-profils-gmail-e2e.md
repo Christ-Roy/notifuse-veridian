@@ -2,7 +2,11 @@
 
 > **Date** : 2026-08-05
 > **Base auditée** : `47be18f0`
-> **Verdict** : 🔴 contrat retenu absent, ne pas activer plusieurs profils Gmail en production
+> **Remédiation locale** : `c9720604`
+> **Verdict courant** : contrat implémenté et hooks locaux verts ; activation multi-profils PROD bloquée jusqu'à la preuve du harnais sink en staging
+
+La matrice ci-dessous reste le constat historique sur `47be18f0`. Elle ne doit
+pas être lue comme l'état du HEAD remédié.
 
 ## Contrat retenu
 
@@ -51,12 +55,12 @@ Le preset SMTP Gmail/app-password, son chiffrement et son UI existent dans la ba
 
 Le code contient un refresh-token Google et un transport Gmail API, mais aucune preuve E2E de consentement, scopes, rattachement du bon compte, révocation, rotation ou émission réelle n'est apportée ici. Corriger la clé de cache est nécessaire pour l'isolation multi-profils, jamais suffisant pour déclarer OAuth Gmail opérationnel. Cette déclaration exige un flow OAuth complet et une preuve contrôlée sur comptes de test dans un chantier séparé.
 
-## Tickets ouverts
+## Suivi après remédiation
 
-1. [P0 contrat, rotation, quota et historique](2026-08-05-p0-multi-profils-gmail-rotation-quota-history.md)
-2. [P0 secrets write-only et test provider](2026-08-05-p0-secrets-profils-email-write-only-test-provider.md)
-3. [P0 isolation OAuth multi-profils](2026-08-05-p0-oauth-token-cache-isolation-multi-profils.md)
-4. [P1 replies, bounces et unsubscribe](2026-08-05-p1-replies-bounces-unsubscribe-multi-profils.md)
+1. [Contrat, rotation, quota et historique](2026-08-05-p0-multi-profils-gmail-rotation-quota-history.md) : livré localement, preuve staging restante.
+2. [Secrets write-only et test provider](2026-08-05-p0-secrets-profils-email-write-only-test-provider.md) : livré localement, redaction étendue à tout le workspace.
+3. [Isolation OAuth multi-profils](2026-08-05-p0-oauth-token-cache-isolation-multi-profils.md) : isolation cache livrée ; flow OAuth Gmail complet toujours futur.
+4. [Replies, bounces et unsubscribe](2026-08-05-p1-replies-bounces-unsubscribe-multi-profils.md) : provenance profil livrée ; corrélation multi-inbox et gate marketing universel restent ouverts.
 
 ## Gate d'acceptation
 
