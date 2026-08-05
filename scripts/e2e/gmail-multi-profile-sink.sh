@@ -37,6 +37,11 @@ done
 log() { printf '\033[1;34m[gmail-mp]\033[0m %s\n' "$*" >&2; }
 ok() { printf '\033[1;32m[gmail-mp PASS]\033[0m %s\n' "$*" >&2; }
 fatal() { printf '\033[1;31m[gmail-mp FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
+unexpected_error() {
+  local rc="$?" line="${BASH_LINENO[0]:-unknown}"
+  fatal "arrêt inattendu ligne $line (code $rc)"
+}
+trap unexpected_error ERR
 
 assert_safe_target() {
   [ "$SINK_HOST" = "127.0.0.1" ] || fatal "SINK_HOST=$SINK_HOST interdit, seul 127.0.0.1 est autorisé"
@@ -95,6 +100,19 @@ psqlq() {
   [ -n "$alloc" ] || return 1
   "$NOMAD_V" raw alloc exec -task db "$alloc" \
     psql -U postgres -d "notifuse_ws_${WID}" -tAc "$1" 2>/dev/null | tr -d '\r'
+}
+
+psql_int() {
+  local sql="$1" label="$2" value="" i
+  for i in $(seq 1 10); do
+    value="$(psqlq "$sql" || true)"
+    if [[ "$value" =~ ^[0-9]+$ ]]; then
+      printf '%s' "$value"
+      return 0
+    fi
+    sleep 1
+  done
+  fatal "$label illisible après 10 tentatives (valeur=${value:-vide})"
 }
 
 sink_messages() {
@@ -323,8 +341,8 @@ log "phase fenêtre: A fermé demain seulement, B ouvert 24/7"
 create_list_with_contacts gmailmpwindow 40
 BID_WINDOW="$(fire_broadcast gmail-mp-window gmailmpwindow)"
 wait_for_sql "SELECT (SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW') + (SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW')" 40 "40 affectations figées"
-A_PENDING="$(psqlq "SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW' AND integration_id='$PROFILE_A' AND status='pending'")"
-B_SENT="$(psqlq "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_B'")"
+A_PENDING="$(psql_int "SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW' AND integration_id='$PROFILE_A' AND status='pending'" "pending profil A")"
+B_SENT="$(psql_int "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_B'" "historique profil B")"
 [ "$A_PENDING" -gt 0 ] || fatal "rotation non prouvée: aucune affectation au profil A sur 40 messages"
 [ "$B_SENT" -gt 0 ] || fatal "rotation non prouvée: aucune affectation au profil B sur 40 messages"
 [ "$(psqlq "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_A'")" = "0" ] \
@@ -336,8 +354,8 @@ ok "rotation prouvée: $A_PENDING messages figés sur A fermé, $B_SENT envoyés
 log "ouverture de A: l'entrée doit repartir sans changer de profil"
 update_profile "$PROFILE_A" gmail-profile-a "$SENDER_A" 30 "$open_window"
 wait_for_sql "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW'" 40 "historique complet après ouverture de A"
-A_USED="$(psqlq "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_A'")"
-B_USED="$(psqlq "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_B'")"
+A_USED="$(psql_int "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_A'" "usage profil A")"
+B_USED="$(psql_int "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_B'" "usage profil B")"
 A_CAP=$((A_USED + 2))
 B_CAP=$((B_USED + 2))
 
