@@ -101,11 +101,6 @@ interface IntegrationsProps {
   isOwner: boolean
 }
 
-export function IntegrationOwnerNotice() {
-  const { t } = useLingui()
-  return <Alert type="warning" showIcon message={t`Only workspace owners can modify integrations`} />
-}
-
 // EmailIntegration component props
 interface EmailIntegrationProps {
   integration: {
@@ -148,8 +143,16 @@ const EmailIntegration = ({
   const [loadingWebhooks, setLoadingWebhooks] = useState(false)
   const [registrationInProgress, setRegistrationInProgress] = useState(false)
 
+  // Fetch webhook status when component mounts
+  useEffect(() => {
+    if (workspace?.id && integration?.id) {
+      fetchWebhookStatus() // eslint-disable-line react-hooks/immutability -- existing callback is declared below
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchWebhookStatus is stable
+  }, [workspace?.id, integration?.id])
+
   // Function to fetch webhook status
-  async function fetchWebhookStatus() {
+  const fetchWebhookStatus = async () => {
     if (!workspace?.id || !integration?.id) return
 
     // Only fetch webhook status for non-SMTP providers
@@ -169,15 +172,6 @@ const EmailIntegration = ({
       setLoadingWebhooks(false)
     }
   }
-
-  // Fetch webhook status when component mounts
-  useEffect(() => {
-    if (workspace?.id && integration?.id) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch synchronizes external webhook state
-      fetchWebhookStatus()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchWebhookStatus is stable
-  }, [workspace?.id, integration?.id])
 
   // Function to register webhooks
   const handleRegisterWebhooks = async () => {
@@ -1103,11 +1097,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Render the list of available integrations
   const renderAvailableIntegrations = () => {
-    if (!isOwner) {
-      return <IntegrationOwnerNotice />
-    }
-
-    return (
+    return isOwner ? (
       <>
         <Card className="mb-4" styles={{ body: { padding: 16 } }}>
           <div className="flex justify-between items-center gap-4">
@@ -1219,7 +1209,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </Button>
         </div>
       </>
-    )
+    ) : <IntegrationOwnerNotice />
   }
 
   // Render the list of integrations
@@ -2660,4 +2650,9 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       </Drawer>
     </>
   )
+}
+
+export function IntegrationOwnerNotice() {
+  const { t } = useLingui()
+  return <Alert type="warning" showIcon message={t`Only workspace owners can modify integrations`} />
 }

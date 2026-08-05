@@ -7392,6 +7392,7 @@ msgstr "Només es permet un punt de ruptura per plantilla de correu"
 #: src/components/integrations/FirecrawlIntegration.tsx:47
 #: src/components/integrations/LLMIntegration.tsx:79
 #: src/components/integrations/SupabaseIntegration.tsx:77
+#: src/components/settings/Integrations.tsx:2657
 msgid "Only workspace owners can modify integrations"
 msgstr "Només els propietaris de l'espai de treball poden modificar integracions"
 
