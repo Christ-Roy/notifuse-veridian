@@ -137,6 +137,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.UpdatedAt,
 				message.VeridianContentHash,
 				message.VeridianSenderEmail,
+				message.VeridianProviderClass,
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -187,6 +188,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.UpdatedAt,
 				message.VeridianContentHash,
 				message.VeridianSenderEmail,
+				message.VeridianProviderClass,
 			).
 			WillReturnError(errors.New("execution error"))
 
@@ -238,6 +240,7 @@ func TestMessageHistoryRepository_UpsertRefreshesSentAtOnRetry(t *testing.T) {
 			message.UpdatedAt,
 			message.VeridianContentHash,
 			message.VeridianSenderEmail,
+			message.VeridianProviderClass,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -2795,7 +2798,7 @@ func TestMessageHistoryRepository_CountSentSinceForSenderDomain(t *testing.T) {
 	// (warmup holistique). 2 placeholders : $1=since, $2=senderDomain.
 	t.Run("returns total count (sender domain lowered in SQL, no recipient filter)", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
 			WithArgs(since, senderDomain).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
@@ -2822,7 +2825,7 @@ func TestMessageHistoryRepository_CountSentSinceForSenderDomain(t *testing.T) {
 
 	t.Run("query error propagated", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
 			WithArgs(since, senderDomain).
 			WillReturnError(errors.New("boom"))
 		_, err := repo.CountSentSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
@@ -2842,7 +2845,7 @@ func TestMessageHistoryRepository_CountSentSinceForDomains(t *testing.T) {
 
 	t.Run("inclusion (= ANY) returns count", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND lower\(split_part\(contact_email, '@', 2\)\) = ANY\(\$2\)`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND lower\(split_part\(contact_email, '@', 2\)\) = ANY\(\$2\)`).
 			WithArgs(since, pq.Array(domains)).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(42))
 
@@ -2854,7 +2857,7 @@ func TestMessageHistoryRepository_CountSentSinceForDomains(t *testing.T) {
 
 	t.Run("exclusion (<> ALL) for corporate", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND lower\(split_part\(contact_email, '@', 2\)\) <> ALL\(\$2\)`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND lower\(split_part\(contact_email, '@', 2\)\) <> ALL\(\$2\)`).
 			WithArgs(since, pq.Array(domains)).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(7))
 
@@ -2895,7 +2898,7 @@ func TestMessageHistoryRepository_CountSentSinceForDomainsAndSenderDomain(t *tes
 	// $3=senderDomain (attention au drift de l'ordre).
 	t.Run("inclusion (= ANY) + sender domain returns count", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history\s+WHERE sent_at >= \$1\s+AND lower\(split_part\(contact_email, '@', 2\)\) = ANY\(\$2\)\s+AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\)`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history\s+WHERE sent_at >= \$1\s+AND failed_at IS NULL\s+AND lower\(split_part\(contact_email, '@', 2\)\) = ANY\(\$2\)\s+AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\)`).
 			WithArgs(since, pq.Array(domains), senderDomain).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
 
@@ -2907,7 +2910,7 @@ func TestMessageHistoryRepository_CountSentSinceForDomainsAndSenderDomain(t *tes
 
 	t.Run("exclusion (<> ALL) + sender domain for corporate", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`AND lower\(split_part\(contact_email, '@', 2\)\) <> ALL\(\$2\)\s+AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\)`).
+		mock.ExpectQuery(`AND failed_at IS NULL\s+AND lower\(split_part\(contact_email, '@', 2\)\) <> ALL\(\$2\)\s+AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\)`).
 			WithArgs(since, pq.Array(domains), senderDomain).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
@@ -2947,6 +2950,38 @@ func TestMessageHistoryRepository_CountSentSinceForDomainsAndSenderDomain(t *tes
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "count messages sent to domain class from sender domain")
 	})
+}
+
+func TestMessageHistoryRepository_ReserveDailyQuotaRejectsInvalidInput(t *testing.T) {
+	repo := NewMessageHistoryRepository(nil)
+	_, err := repo.ReserveDailyQuota(context.Background(), "ws", domain.VeridianDailyQuotaReservation{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid daily quota reservation")
+}
+
+func TestMessageHistoryRepository_ReleaseDailyQuotaPropagatesConnectionError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws").Return(nil, errors.New("db down"))
+	repo := NewMessageHistoryRepository(workspaceRepo)
+	require.Error(t, repo.ReleaseDailyQuota(context.Background(), "ws", "msg", domain.VeridianDailyQuotaKindWarmup))
+}
+
+func TestMessageHistoryRepository_ListUnclassifiedSuccessfulMessagesSincePropagatesConnectionError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws").Return(nil, errors.New("db down"))
+	repo := NewMessageHistoryRepository(workspaceRepo)
+	_, err := repo.ListUnclassifiedSuccessfulMessagesSince(context.Background(), "ws", time.Now())
+	require.Error(t, err)
+}
+
+func TestMessageHistoryRepository_SetMessageProviderClassIfEmptyPropagatesConnectionError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws").Return(nil, errors.New("db down"))
+	repo := NewMessageHistoryRepository(workspaceRepo)
+	require.Error(t, repo.SetMessageProviderClassIfEmpty(context.Background(), "ws", "msg", "microsoft"))
 }
 
 func TestMessageHistoryRepository_ExistsContentHashSince(t *testing.T) {

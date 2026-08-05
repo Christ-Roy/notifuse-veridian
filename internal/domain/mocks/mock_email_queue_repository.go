@@ -284,3 +284,17 @@ func (mr *MockEmailQueueRepositoryMockRecorder) SetNextRetry(arg0, arg1, arg2, a
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNextRetry", reflect.TypeOf((*MockEmailQueueRepository)(nil).SetNextRetry), arg0, arg1, arg2, arg3)
 }
+
+// SetNextRetryAndRefundAttempt mocks base method.
+func (m *MockEmailQueueRepository) SetNextRetryAndRefundAttempt(arg0 context.Context, arg1, arg2 string, arg3 time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetNextRetryAndRefundAttempt", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetNextRetryAndRefundAttempt indicates an expected call of SetNextRetryAndRefundAttempt.
+func (mr *MockEmailQueueRepositoryMockRecorder) SetNextRetryAndRefundAttempt(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNextRetryAndRefundAttempt", reflect.TypeOf((*MockEmailQueueRepository)(nil).SetNextRetryAndRefundAttempt), arg0, arg1, arg2, arg3)
+}

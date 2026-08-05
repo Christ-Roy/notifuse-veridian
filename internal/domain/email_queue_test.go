@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"testing"
@@ -9,6 +11,35 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type setNextRetryContractRepo struct {
+	EmailQueueRepository
+	called       bool
+	refundCalled bool
+}
+
+func (r *setNextRetryContractRepo) SetNextRetry(context.Context, string, string, time.Time) error {
+	r.called = true
+	return nil
+}
+
+func (r *setNextRetryContractRepo) SetNextRetryAndRefundAttempt(context.Context, string, string, time.Time) error {
+	r.refundCalled = true
+	return nil
+}
+
+func TestEmailQueueRepository_SetNextRetryContract(t *testing.T) {
+	var repo EmailQueueRepository = &setNextRetryContractRepo{}
+	require.NoError(t, repo.SetNextRetry(context.Background(), "ws", "entry", time.Now()))
+	require.NoError(t, repo.SetNextRetryAndRefundAttempt(context.Background(), "ws", "entry", time.Now()))
+	assert.True(t, repo.(*setNextRetryContractRepo).called)
+	assert.True(t, repo.(*setNextRetryContractRepo).refundCalled)
+	// Compile-time guard for the transaction-bearing method retained by the
+	// embedded upstream contract.
+	var _ interface {
+		EnqueueTx(context.Context, *sql.Tx, []*EmailQueueEntry) error
+	} = repo
+}
 
 // Veridian — les champs throttle par classe du payload doivent survivre au
 // round-trip JSONB (stockage queue) et rester absents du JSON quand non

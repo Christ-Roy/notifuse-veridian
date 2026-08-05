@@ -25,6 +25,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type decoratorQuotaUpstream struct {
+	domain.MessageHistoryRepository
+	reserveResult domain.VeridianDailyQuotaReservationResult
+	reserveErr    error
+	releasedKind  string
+	listed        []domain.VeridianUnclassifiedSuccessfulMessage
+	setClass      string
+}
+
+func (u *decoratorQuotaUpstream) ReserveDailyQuota(context.Context, string, domain.VeridianDailyQuotaReservation) (domain.VeridianDailyQuotaReservationResult, error) {
+	return u.reserveResult, u.reserveErr
+}
+func (u *decoratorQuotaUpstream) ReleaseDailyQuota(_ context.Context, _, _, kind string) error {
+	u.releasedKind = kind
+	return nil
+}
+func (u *decoratorQuotaUpstream) ListUnclassifiedSuccessfulMessagesSince(context.Context, string, time.Time) ([]domain.VeridianUnclassifiedSuccessfulMessage, error) {
+	return u.listed, nil
+}
+func (u *decoratorQuotaUpstream) SetMessageProviderClassIfEmpty(_ context.Context, _, _, class string) error {
+	u.setClass = class
+	return nil
+}
+
 func TestVeridianMessageHistoryDecorator_Create_IncrementsQuota(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -429,4 +453,38 @@ func TestIsWorkspaceNotFoundErr(t *testing.T) {
 			assert.Equal(t, tc.want, isWorkspaceNotFoundErr(tc.err))
 		})
 	}
+}
+
+func TestVeridianMessageHistoryDecorator_AtomicQuotaCapabilityRequired(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	decorator := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+	_, err := decorator.ReserveDailyQuota(context.Background(), "ws", domain.VeridianDailyQuotaReservation{MessageID: "msg", Cap: 1})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not support atomic daily quota")
+}
+
+func TestVeridianMessageHistoryDecorator_ReserveDailyQuotaPassthrough(t *testing.T) {
+	upstream := &decoratorQuotaUpstream{reserveResult: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}}
+	decorator := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+	result, err := decorator.ReserveDailyQuota(context.Background(), "ws", domain.VeridianDailyQuotaReservation{MessageID: "msg", Cap: 1})
+	require.NoError(t, err)
+	assert.True(t, result.Reserved)
+}
+
+func TestVeridianMessageHistoryDecorator_ReleaseDailyQuotaPassthrough(t *testing.T) {
+	upstream := &decoratorQuotaUpstream{}
+	decorator := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+	require.NoError(t, decorator.ReleaseDailyQuota(context.Background(), "ws", "msg", domain.VeridianDailyQuotaKindWarmup))
+	assert.Equal(t, domain.VeridianDailyQuotaKindWarmup, upstream.releasedKind)
+}
+
+func TestVeridianMessageHistoryDecorator_ProviderClassBackfillPassthrough(t *testing.T) {
+	upstream := &decoratorQuotaUpstream{listed: []domain.VeridianUnclassifiedSuccessfulMessage{{ID: "msg", ContactEmail: "lead@example.com"}}}
+	decorator := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+	messages, err := decorator.ListUnclassifiedSuccessfulMessagesSince(context.Background(), "ws", time.Now())
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+	require.NoError(t, decorator.SetMessageProviderClassIfEmpty(context.Background(), "ws", "msg", "microsoft"))
+	assert.Equal(t, "microsoft", upstream.setClass)
 }

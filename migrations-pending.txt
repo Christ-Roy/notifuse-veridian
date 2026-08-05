@@ -21,3 +21,4 @@
 internal/migrations/v49.go
 internal/migrations/v52.go
 internal/migrations/v53.go
+internal/migrations/v55.go

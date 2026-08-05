@@ -269,8 +269,7 @@ func (r *EmailQueueRepository) Delete(ctx context.Context, workspaceID string, e
 	return nil
 }
 
-// SetNextRetry updates next_retry_at WITHOUT incrementing attempts
-// Used by circuit breaker to schedule retry without burning retry attempts
+// SetNextRetry updates next_retry_at WITHOUT incrementing attempts.
 func (r *EmailQueueRepository) SetNextRetry(ctx context.Context, workspaceID string, entryID string, nextRetry time.Time) error {
 	db, err := r.getDB(ctx, workspaceID)
 	if err != nil {
@@ -288,6 +287,31 @@ func (r *EmailQueueRepository) SetNextRetry(ctx context.Context, workspaceID str
 		return fmt.Errorf("failed to set next retry: %w", err)
 	}
 
+	return nil
+}
+
+// SetNextRetryAndRefundAttempt is used only after a successful processing claim
+// when the last-mile atomic quota denies SMTP.
+func (r *EmailQueueRepository) SetNextRetryAndRefundAttempt(ctx context.Context, workspaceID string, entryID string, nextRetry time.Time) error {
+	db, err := r.getDB(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get database connection: %w", err)
+	}
+	result, err := db.ExecContext(ctx, `
+		UPDATE email_queue
+		SET next_retry_at=$1, attempts=GREATEST(attempts-1, 0), status='pending', updated_at=NOW()
+		WHERE id=$2 AND status='processing'
+	`, nextRetry, entryID)
+	if err != nil {
+		return fmt.Errorf("failed to refund processing attempt: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to read refunded attempt result: %w", err)
+	}
+	if rows != 1 {
+		return fmt.Errorf("email is not processing: %s", entryID)
+	}
 	return nil
 }
 

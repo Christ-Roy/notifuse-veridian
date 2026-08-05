@@ -112,20 +112,20 @@ func (d *MessageData) Scan(value interface{}) error {
 
 // MessageHistory represents a record of a message sent to a contact
 type MessageHistory struct {
-	ID              string               `json:"id"`
-	ExternalID      *string              `json:"external_id,omitempty"` // For idempotency checks
-	ContactEmail    string               `json:"contact_email"`
-	BroadcastID     *string              `json:"broadcast_id,omitempty"`
-	AutomationID                *string `json:"automation_id,omitempty"`                  // Automation this message was sent from (nullable for broadcasts/transactional)
-	TransactionalNotificationID *string `json:"transactional_notification_id,omitempty"` // Transactional notification this message was sent from
-	ListID                      *string `json:"list_id,omitempty"`                       // List this message was sent to (nullable for transactional emails)
-	TemplateID      string               `json:"template_id"`
-	TemplateVersion int64                `json:"template_version"`
-	Channel         string               `json:"channel"` // email, sms, push, etc.
-	StatusInfo      *string              `json:"status_info,omitempty"`
-	MessageData     MessageData          `json:"message_data"`
-	ChannelOptions  *ChannelOptions      `json:"channel_options,omitempty"` // Channel-specific delivery options
-	Attachments     []AttachmentMetadata `json:"attachments,omitempty"`
+	ID                          string               `json:"id"`
+	ExternalID                  *string              `json:"external_id,omitempty"` // For idempotency checks
+	ContactEmail                string               `json:"contact_email"`
+	BroadcastID                 *string              `json:"broadcast_id,omitempty"`
+	AutomationID                *string              `json:"automation_id,omitempty"`                 // Automation this message was sent from (nullable for broadcasts/transactional)
+	TransactionalNotificationID *string              `json:"transactional_notification_id,omitempty"` // Transactional notification this message was sent from
+	ListID                      *string              `json:"list_id,omitempty"`                       // List this message was sent to (nullable for transactional emails)
+	TemplateID                  string               `json:"template_id"`
+	TemplateVersion             int64                `json:"template_version"`
+	Channel                     string               `json:"channel"` // email, sms, push, etc.
+	StatusInfo                  *string              `json:"status_info,omitempty"`
+	MessageData                 MessageData          `json:"message_data"`
+	ChannelOptions              *ChannelOptions      `json:"channel_options,omitempty"` // Channel-specific delivery options
+	Attachments                 []AttachmentMetadata `json:"attachments,omitempty"`
 
 	// Event timestamps
 	SentAt         time.Time  `json:"sent_at"`
@@ -153,6 +153,11 @@ type MessageHistory struct {
 	// depuis minuit UTC. Vide pour les envois historiques antérieurs à V53 et tout
 	// envoi où le FROM n'est pas connu (stocké NULL). Cf. veridian_daily_cap.go.
 	VeridianSenderEmail string `json:"veridian_sender_email,omitempty"`
+
+	// Final recipient provider class actually used by the worker (payload tag or
+	// MX resolution). V55 materializes it so MX-hosted corporate domains are no
+	// longer reconstructed incorrectly from the recipient address suffix.
+	VeridianProviderClass string `json:"veridian_provider_class,omitempty"`
 }
 
 type MessageHistoryStatusSum struct {

@@ -44,9 +44,9 @@ import (
 // (EmailProvider, R2) → workspace settings (lus en live) → rien = no-op strict
 // (non-régression upstream).
 //
-// Best-effort : une erreur DB sur le COUNT NE bloque PAS l'envoi (on dégrade
-// vers "pas de cap" et on log), pour ne jamais geler le pipeline sur un incident
-// de lecture. Le throttle minute et l'étage émetteur restent appliqués par-dessus.
+// V55 : une erreur DB bloque et replanifie l'entrée. Un plafond de réputation
+// n'est pas une métrique best-effort : sans preuve de capacité disponible, le
+// worker n'est pas autorisé à ouvrir SMTP.
 
 // veridianDailyCapRecheckInterval borne le report d'une entrée plafonnée.
 // Sémantiquement le compteur se réinitialise au prochain minuit, mais re-checker
@@ -139,12 +139,12 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 	if perRecipientCap > 0 {
 		count, err := w.messageHistoryRepo.CountSentSinceForContact(w.ctx, workspaceID, entry.ContactEmail, since)
 		if err != nil {
-			// Best-effort : on ne bloque pas l'envoi sur une erreur de lecture.
 			w.logger.WithFields(map[string]interface{}{
 				"entry_id":     entry.ID,
 				"workspace_id": workspaceID,
 				"error":        err.Error(),
-			}).Warn("Daily per-recipient cap count failed, allowing send (degraded)")
+			}).Error("Daily per-recipient cap count failed; SMTP blocked")
+			return w.veridianRescheduleCapped(entry, "per_recipient_count_error", 0, perRecipientCap, "")
 		} else if count >= perRecipientCap {
 			return w.veridianRescheduleCapped(entry, "per_recipient", count, perRecipientCap, "")
 		}
@@ -169,7 +169,8 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 					"workspace_id":  workspaceID,
 					"sender_domain": senderDomain,
 					"error":         err.Error(),
-				}).Warn("Daily warmup cap count failed, allowing send (degraded)")
+				}).Error("Daily warmup cap count failed; SMTP blocked")
+				return w.veridianRescheduleCapped(entry, "warmup_count_error", 0, warmupCap, "")
 			} else if count >= warmupCap {
 				return w.veridianRescheduleCapped(entry, "warmup", count, warmupCap, "")
 			}
@@ -197,7 +198,8 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 					"workspace_id":   workspaceID,
 					"provider_class": class,
 					"error":          err.Error(),
-				}).Warn("Daily provider-class cap count failed, allowing send (degraded)")
+				}).Error("Daily provider-class cap count failed; SMTP blocked")
+				return w.veridianRescheduleCapped(entry, "provider_class_count_error", 0, classCap, class)
 			} else if count >= classCap {
 				return w.veridianRescheduleCapped(entry, "provider_class", count, classCap, class)
 			}

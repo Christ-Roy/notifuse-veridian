@@ -210,7 +210,8 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			veridian_content_hash CHAR(32),
-			veridian_sender_email VARCHAR(255)
+			veridian_sender_email VARCHAR(255),
+			veridian_provider_class VARCHAR(64)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_email ON message_history(contact_email)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id ON message_history(broadcast_id) WHERE broadcast_id IS NOT NULL`,
@@ -228,6 +229,28 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 		// Veridian fork — plafond journalier par sender émetteur cold outbound (V53,
 		// warmup IP) : COUNT par adresse FROM (veridian_sender_email, sent_at).
 		`CREATE INDEX IF NOT EXISTS idx_message_history_sender_email_sent_at ON message_history(veridian_sender_email, sent_at) WHERE veridian_sender_email IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_message_history_provider_class_sender_sent_at ON message_history(veridian_provider_class, veridian_sender_email, sent_at) WHERE veridian_provider_class IS NOT NULL AND failed_at IS NULL`,
+		`CREATE TABLE IF NOT EXISTS veridian_daily_quota_counters (
+			workspace_id VARCHAR(255) NOT NULL,
+			quota_day DATE NOT NULL,
+			quota_kind VARCHAR(32) NOT NULL,
+			sender_domain VARCHAR(255) NOT NULL,
+			provider_class VARCHAR(64) NOT NULL DEFAULT '',
+			used INTEGER NOT NULL DEFAULT 0 CHECK (used >= 0),
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (workspace_id, quota_day, quota_kind, sender_domain, provider_class)
+		)`,
+		`CREATE TABLE IF NOT EXISTS veridian_daily_quota_reservations (
+			workspace_id VARCHAR(255) NOT NULL,
+			message_id VARCHAR(255) NOT NULL,
+			quota_kind VARCHAR(32) NOT NULL,
+			quota_day DATE NOT NULL,
+			sender_domain VARCHAR(255) NOT NULL,
+			provider_class VARCHAR(64) NOT NULL DEFAULT '',
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (workspace_id, message_id, quota_kind)
+		)`,
 		`CREATE TABLE IF NOT EXISTS transactional_notifications (
 			id VARCHAR(32) NOT NULL PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,

@@ -69,6 +69,12 @@ func TestMessageEvent_Constants(t *testing.T) {
 	})
 }
 
+func TestMessageHistory_VeridianProviderClassJSON(t *testing.T) {
+	raw, err := json.Marshal(MessageHistory{ID: "msg-1", VeridianProviderClass: ProviderClassMicrosoft})
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"veridian_provider_class":"microsoft"`)
+}
+
 func TestMessageEventUpdate(t *testing.T) {
 	t.Run("message event update structure", func(t *testing.T) {
 		timestamp := time.Now()

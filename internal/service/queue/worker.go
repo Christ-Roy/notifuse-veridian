@@ -56,6 +56,7 @@ type EmailQueueWorker struct {
 	// I/O; unknown domains do a cached MX lookup (best-effort, short timeout).
 	// Never nil after the constructor; replaceable in tests via the setter.
 	providerMXClassifier *domain.VeridianMXClassifier
+	dailyQuotaBackfilled sync.Map
 	circuitBreaker       *IntegrationCircuitBreaker
 	errorClassifier      *emailerror.Classifier
 	config               *EmailQueueWorkerConfig
@@ -296,6 +297,12 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		w.handleError(workspace, entry, fmt.Errorf("integration not found: %s", entry.IntegrationID), nil)
 		return
 	}
+	// Resolve once and freeze the final class used by every policy gate and by
+	// message_history. Payload tags remain authoritative; otherwise this is the
+	// cached real-MX classification.
+	if entry.Payload.VeridianProviderClass == "" {
+		entry.Payload.VeridianProviderClass = w.veridianClassifyRecipient(entry)
+	}
 
 	// Check circuit breaker BEFORE MarkAsProcessing to avoid incrementing attempts
 	if w.circuitBreaker.IsOpen(entry.IntegrationID) {
@@ -460,15 +467,6 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// Cf. veridian_content_hash_gate.go.
 	w.veridianContentHashGate(workspace, &integration.EmailProvider, entry)
 
-	// Mark as processing (this increments attempts)
-	if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
-		w.logger.WithFields(map[string]interface{}{
-			"entry_id": entry.ID,
-			"error":    err.Error(),
-		}).Warn("Failed to mark entry as processing, may be processed by another worker")
-		return
-	}
-
 	// Wait for rate limiter - always use current integration rate limit (not stale payload value).
 	// Veridian fork — alignement de capacité multi-SMTP : avec N senders actifs, le
 	// débit global de l'infra = RateLimitPerMinute · N (chaque boîte porte sa part,
@@ -497,6 +495,28 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Claim the queue row before reserving quota. This serializes duplicate
+	// workers for the same entry; the dedicated refund below returns a
+	// quota-blocked row to pending without consuming a delivery attempt.
+	if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"entry_id": entry.ID,
+			"error":    err.Error(),
+		}).Warn("Failed to mark entry as processing, may be processed by another worker")
+		return
+	}
+
+	// Atomic daily quota authorization is the LAST database gate before SMTP.
+	// Exclusions, prefilter, window and final automation checks never consume it.
+	quotaLeases, delay, capped := w.veridianReserveDailyQuota(workspace, &integration.EmailProvider, entry)
+	if capped {
+		nextRetry := time.Now().Add(delay)
+		if err := w.queueRepo.SetNextRetryAndRefundAttempt(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
+			w.logger.WithFields(map[string]interface{}{"entry_id": entry.ID, "error": err.Error()}).Error("Failed to reschedule atomic daily quota block")
+		}
+		return
+	}
+
 	// Build the send request
 	request := entry.Payload.ToSendEmailProviderRequest(
 		workspace.ID,
@@ -509,6 +529,11 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// Send the email
 	err := w.emailService.SendEmail(w.ctx, *request, true) // isMarketing = true
 	if err != nil {
+		// Release only when the transport proves the remote did not accept DATA.
+		// Ambiguous post-DATA timeouts keep capacity consumed to avoid oversending.
+		if emailerror.IsBeforeAcceptance(err) {
+			w.veridianReleaseDailyQuotas(workspace.ID, quotaLeases)
+		}
 		// Classify the error
 		classifiedErr := w.errorClassifier.Classify(err, integration.EmailProvider.Kind)
 
@@ -659,6 +684,8 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		// FromAddress est figé dans le payload à l'enqueue (sender-rotation incluse).
 		// Vide pour les envois sans FROM connu → stocké NULL (hors index partiel).
 		VeridianSenderEmail: entry.Payload.FromAddress,
+		// V55: exact final class used by policy gates (payload tag or cached MX).
+		VeridianProviderClass: entry.Payload.VeridianProviderClass,
 	}
 
 	// Set source (broadcast or automation)

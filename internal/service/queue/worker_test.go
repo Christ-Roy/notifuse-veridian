@@ -355,7 +355,6 @@ func TestEmailQueueWorker_ProcessEntry_AutomationWithoutFinalGuardFailsClosed(t 
 		MaxAttempts:   3,
 	}
 
-	queueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspace.ID, entry.ID).Return(nil)
 	queueRepo.EXPECT().MarkAsFailed(
 		gomock.Any(), workspace.ID, entry.ID,
 		"automation final guard is not configured", gomock.Not(gomock.Nil()),

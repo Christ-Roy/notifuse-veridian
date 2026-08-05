@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/emailerror"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/wneessen/go-mail"
 )
@@ -138,13 +139,14 @@ func sendRawEmail(host string, port int, username, password string, useTLS bool,
 // sendRawEmailWithSettings sends an email using raw SMTP commands with full settings support.
 // It supports both basic authentication and OAuth2 (XOAUTH2) authentication.
 func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []string, msg []byte, oauth2Provider OAuth2TokenProvider) error {
+	preAcceptance := func(err error) error { return emailerror.BeforeAcceptance(err) }
 	addr := net.JoinHostPort(settings.Host, fmt.Sprintf("%d", settings.Port))
 
 	// Connect to SMTP server with configurable timeout
 	dialer := &net.Dialer{Timeout: getSMTPDialTimeout()}
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
+		return preAcceptance(fmt.Errorf("failed to connect: %w", err))
 	}
 
 	smtpConn := newSMTPConnection(conn)
@@ -153,10 +155,10 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 	// Read greeting (use multiline to handle RFC 5321 multi-line banners - issue #183)
 	code, err := smtpConn.readMultilineResponse()
 	if err != nil {
-		return fmt.Errorf("failed to read greeting: %w", err)
+		return preAcceptance(fmt.Errorf("failed to read greeting: %w", err))
 	}
 	if code != 220 {
-		return fmt.Errorf("unexpected greeting code: %d", code)
+		return preAcceptance(fmt.Errorf("unexpected greeting code: %d", code))
 	}
 
 	// Send EHLO - use configured hostname, fall back to from-email domain, then SMTP host
@@ -171,20 +173,20 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 	}
 	code, err = smtpConn.sendCommandMultiline(fmt.Sprintf("EHLO %s", hostname))
 	if err != nil {
-		return fmt.Errorf("EHLO failed: %w", err)
+		return preAcceptance(fmt.Errorf("EHLO failed: %w", err))
 	}
 	if code != 250 {
-		return fmt.Errorf("EHLO rejected with code: %d", code)
+		return preAcceptance(fmt.Errorf("EHLO rejected with code: %d", code))
 	}
 
 	// STARTTLS if enabled
 	if settings.UseTLS {
 		code, _, err = smtpConn.sendCommand("STARTTLS")
 		if err != nil {
-			return fmt.Errorf("STARTTLS command failed: %w", err)
+			return preAcceptance(fmt.Errorf("STARTTLS command failed: %w", err))
 		}
 		if code != 220 {
-			return fmt.Errorf("STARTTLS rejected with code: %d", code)
+			return preAcceptance(fmt.Errorf("STARTTLS rejected with code: %d", code))
 		}
 
 		// Upgrade connection to TLS
@@ -199,7 +201,7 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 		}
 		tlsConn := tls.Client(conn, tlsConfig)
 		if err := tlsConn.Handshake(); err != nil {
-			return fmt.Errorf("TLS handshake failed: %w", err)
+			return preAcceptance(fmt.Errorf("TLS handshake failed: %w", err))
 		}
 
 		// Replace connection with TLS connection
@@ -209,10 +211,10 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 		// Send EHLO again after TLS
 		code, err = smtpConn.sendCommandMultiline(fmt.Sprintf("EHLO %s", hostname))
 		if err != nil {
-			return fmt.Errorf("EHLO after TLS failed: %w", err)
+			return preAcceptance(fmt.Errorf("EHLO after TLS failed: %w", err))
 		}
 		if code != 250 {
-			return fmt.Errorf("EHLO after TLS rejected with code: %d", code)
+			return preAcceptance(fmt.Errorf("EHLO after TLS rejected with code: %d", code))
 		}
 	}
 
@@ -220,12 +222,12 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 	if settings.AuthType == "oauth2" {
 		// OAuth2 XOAUTH2 authentication
 		if oauth2Provider == nil {
-			return fmt.Errorf("OAuth2 authentication requires a token provider")
+			return preAcceptance(fmt.Errorf("OAuth2 authentication requires a token provider"))
 		}
 
 		accessToken, err := oauth2Provider.GetAccessToken(settings)
 		if err != nil {
-			return fmt.Errorf("failed to get OAuth2 token: %w", err)
+			return preAcceptance(fmt.Errorf("failed to get OAuth2 token: %w", err))
 		}
 
 		// XOAUTH2 format: base64("user=" + email + "\x01auth=Bearer " + token + "\x01\x01")
@@ -236,7 +238,7 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 
 		code, response, err := smtpConn.sendCommand(fmt.Sprintf("AUTH XOAUTH2 %s", encoded))
 		if err != nil {
-			return fmt.Errorf("XOAUTH2 AUTH failed: %w", err)
+			return preAcceptance(fmt.Errorf("XOAUTH2 AUTH failed: %w", err))
 		}
 		if code != 235 {
 			// Try refresh once if this looks like a token expiry (535)
@@ -257,13 +259,13 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 				responseToTry = parts[1] // Try the part after the status code
 			}
 			if decoded, decodeErr := base64.StdEncoding.DecodeString(responseToTry); decodeErr == nil && len(decoded) > 0 {
-				return fmt.Errorf("XOAUTH2 authentication failed: %s", string(decoded))
+				return preAcceptance(fmt.Errorf("XOAUTH2 authentication failed: %s", string(decoded)))
 			}
 			// Also try the full response in case it's just base64
 			if decoded, decodeErr := base64.StdEncoding.DecodeString(response); decodeErr == nil && len(decoded) > 0 {
-				return fmt.Errorf("XOAUTH2 authentication failed: %s", string(decoded))
+				return preAcceptance(fmt.Errorf("XOAUTH2 authentication failed: %s", string(decoded)))
 			}
-			return fmt.Errorf("XOAUTH2 authentication failed with code: %d, response: %s", code, response)
+			return preAcceptance(fmt.Errorf("XOAUTH2 authentication failed with code: %d, response: %s", code, response))
 		}
 	authComplete:
 	} else {
@@ -274,10 +276,10 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 			encoded := base64.StdEncoding.EncodeToString([]byte(authString))
 			code, _, err = smtpConn.sendCommand(fmt.Sprintf("AUTH PLAIN %s", encoded))
 			if err != nil {
-				return fmt.Errorf("AUTH failed: %w", err)
+				return preAcceptance(fmt.Errorf("AUTH failed: %w", err))
 			}
 			if code != 235 {
-				return fmt.Errorf("authentication failed with code: %d", code)
+				return preAcceptance(fmt.Errorf("authentication failed with code: %d", code))
 			}
 		}
 	}
@@ -285,10 +287,10 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 	// MAIL FROM - without any extensions (this is the key fix for issue #172)
 	code, _, err = smtpConn.sendCommand(fmt.Sprintf("MAIL FROM:<%s>", from))
 	if err != nil {
-		return fmt.Errorf("MAIL FROM failed: %w", err)
+		return preAcceptance(fmt.Errorf("MAIL FROM failed: %w", err))
 	}
 	if code != 250 {
-		return fmt.Errorf("MAIL FROM rejected with code: %d", code)
+		return preAcceptance(fmt.Errorf("MAIL FROM rejected with code: %d", code))
 	}
 
 	// RCPT TO for each recipient
@@ -298,20 +300,20 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 		}
 		code, _, err = smtpConn.sendCommand(fmt.Sprintf("RCPT TO:<%s>", recipient))
 		if err != nil {
-			return fmt.Errorf("RCPT TO failed for %s: %w", recipient, err)
+			return preAcceptance(fmt.Errorf("RCPT TO failed for %s: %w", recipient, err))
 		}
 		if code != 250 && code != 251 {
-			return fmt.Errorf("RCPT TO rejected for %s with code: %d", recipient, code)
+			return preAcceptance(fmt.Errorf("RCPT TO rejected for %s with code: %d", recipient, code))
 		}
 	}
 
 	// DATA
 	code, _, err = smtpConn.sendCommand("DATA")
 	if err != nil {
-		return fmt.Errorf("DATA command failed: %w", err)
+		return preAcceptance(fmt.Errorf("DATA command failed: %w", err))
 	}
 	if code != 354 {
-		return fmt.Errorf("DATA rejected with code: %d", code)
+		return preAcceptance(fmt.Errorf("DATA rejected with code: %d", code))
 	}
 
 	// Send message body using textproto.DotWriter for automatic dot-stuffing
@@ -337,7 +339,7 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 		return fmt.Errorf("failed to read DATA response: %w", err)
 	}
 	if code != 250 {
-		return fmt.Errorf("message rejected with code: %d", code)
+		return preAcceptance(fmt.Errorf("message rejected with code: %d", code))
 	}
 
 	// QUIT
@@ -376,7 +378,16 @@ func (s *SMTPService) SetOAuth2Provider(provider OAuth2TokenProvider) {
 }
 
 // SendEmail sends an email using SMTP
-func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest) error {
+func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailProviderRequest) (sendErr error) {
+	remoteAttempted := false
+	defer func() {
+		// Validation/MIME composition failures happen before any remote command.
+		// Once a remote transport starts, only its explicit stage marker may prove
+		// non-acceptance; unmarked post-DATA failures remain ambiguous.
+		if sendErr != nil && !remoteAttempted && !emailerror.IsBeforeAcceptance(sendErr) {
+			sendErr = emailerror.BeforeAcceptance(sendErr)
+		}
+	}()
 	// Validate the request
 	if err := request.Validate(); err != nil {
 		return fmt.Errorf("invalid request: %w", err)
@@ -526,6 +537,7 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 	// the existing SMTP integration shape, but route Google OAuth2 MIME messages
 	// through the minimal-scope API transport.
 	if veridianUsesGmailAPI(smtpSettings) {
+		remoteAttempted = true
 		if err := veridianSendViaGmailAPI(ctx, smtpSettings, buf.Bytes(), s.oauth2Provider, s.gmailHTTPClient); err != nil {
 			return fmt.Errorf("failed to send email: %w", err)
 		}
@@ -534,6 +546,7 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 
 	// Send using native net/smtp (avoids BODY=8BITMIME extension issues - fix for issue #172)
 	// Use sendRawEmailWithSettings for Microsoft OAuth2 and basic SMTP support.
+	remoteAttempted = true
 	if err := sendRawEmailWithSettings(
 		smtpSettings,
 		request.FromAddress,

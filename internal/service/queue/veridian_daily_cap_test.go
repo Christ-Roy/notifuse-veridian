@@ -194,8 +194,8 @@ func TestVeridianDailyCapGate_ClassCheckedWhenRecipientUnderCap(t *testing.T) {
 	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 }
 
-func TestVeridianDailyCapGate_CountErrorDegradesToAllow(t *testing.T) {
-	t.Run("per-recipient count error → allow (best-effort)", func(t *testing.T) {
+func TestVeridianDailyCapGate_CountErrorFailsClosed(t *testing.T) {
+	t.Run("per-recipient count error blocks SMTP", func(t *testing.T) {
 		env := newVeridianThrottleTestEnv(t)
 		ws := veridianTestWorkspaceWithCaps(nil, 1)
 		entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
@@ -205,11 +205,11 @@ func TestVeridianDailyCapGate_CountErrorDegradesToAllow(t *testing.T) {
 			Return(0, errors.New("db down"))
 
 		delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
-		assert.False(t, capped, "une erreur de COUNT ne doit jamais bloquer l'envoi")
-		assert.Zero(t, delay)
+		assert.True(t, capped)
+		assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 	})
 
-	t.Run("class count error → allow (best-effort)", func(t *testing.T) {
+	t.Run("class count error blocks SMTP", func(t *testing.T) {
 		env := newVeridianThrottleTestEnv(t)
 		ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1}, 0)
 		entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
@@ -219,8 +219,8 @@ func TestVeridianDailyCapGate_CountErrorDegradesToAllow(t *testing.T) {
 			Return(0, errors.New("db down"))
 
 		delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
-		assert.False(t, capped)
-		assert.Zero(t, delay)
+		assert.True(t, capped)
+		assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 	})
 }
 
@@ -354,8 +354,7 @@ func TestVeridianDailyCapGate_WarmupLegacyNoSenderNotEnforced(t *testing.T) {
 	assert.Zero(t, delay)
 }
 
-func TestVeridianDailyCapGate_WarmupCountErrorDegradesToAllow(t *testing.T) {
-	// Best-effort : une erreur de COUNT warmup ne bloque jamais l'envoi.
+func TestVeridianDailyCapGate_WarmupCountErrorFailsClosed(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	ws := veridianTestWorkspaceWithCaps(nil, 0)
 	provider := veridianWarmupTestProvider(time.Now().UTC(), []int{1}, 1)
@@ -366,8 +365,8 @@ func TestVeridianDailyCapGate_WarmupCountErrorDegradesToAllow(t *testing.T) {
 		Return(0, errors.New("db down"))
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
-	assert.False(t, capped, "une erreur de COUNT warmup ne doit jamais bloquer l'envoi")
-	assert.Zero(t, delay)
+	assert.True(t, capped)
+	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 }
 
 func TestVeridianDailyCapGate_NoWarmupNoConfigStillNoop(t *testing.T) {
@@ -482,7 +481,7 @@ func TestVeridianDailyCapGate_ClassPerInfra_LegacyNoSenderFallsBackToGlobal(t *t
 	assert.True(t, capped)
 }
 
-func TestVeridianDailyCapGate_ClassPerInfra_CountErrorDegradesToAllow(t *testing.T) {
+func TestVeridianDailyCapGate_ClassPerInfra_CountErrorFailsClosed(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1}, 0)
 	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@agences-veridian.fr", domain.EmailQueuePayload{})
@@ -492,8 +491,8 @@ func TestVeridianDailyCapGate_ClassPerInfra_CountErrorDegradesToAllow(t *testing
 		Return(0, errors.New("db down"))
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
-	assert.False(t, capped, "une erreur de COUNT par infra ne doit jamais bloquer l'envoi")
-	assert.Zero(t, delay)
+	assert.True(t, capped)
+	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
 }
 
 func TestVeridianCountClassForInfra_SenderDomainDerivation(t *testing.T) {

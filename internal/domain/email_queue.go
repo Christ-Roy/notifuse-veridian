@@ -186,9 +186,13 @@ type EmailQueueRepository interface {
 	// Delete removes a queue entry (used when max retries exhausted)
 	Delete(ctx context.Context, workspaceID string, entryID string) error
 
-	// SetNextRetry updates next_retry_at WITHOUT incrementing attempts
+	// SetNextRetry updates next_retry_at WITHOUT incrementing attempts.
 	// Used by circuit breaker to schedule retry without burning retry attempts
 	SetNextRetry(ctx context.Context, workspaceID string, entryID string, nextRetry time.Time) error
+
+	// SetNextRetryAndRefundAttempt returns a claimed processing row to pending and
+	// atomically refunds the attempt increment made by MarkAsProcessing.
+	SetNextRetryAndRefundAttempt(ctx context.Context, workspaceID string, entryID string, nextRetry time.Time) error
 
 	// GetStats returns queue statistics for a workspace
 	GetStats(ctx context.Context, workspaceID string) (*EmailQueueStats, error)

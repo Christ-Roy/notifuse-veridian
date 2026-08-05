@@ -38,6 +38,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -169,6 +170,46 @@ func (d *VeridianMessageHistoryDecorator) ExistsContentHashSince(ctx context.Con
 	return d.upstream.ExistsContentHashSince(ctx, workspaceID, contentHash, domains, exclude, since)
 }
 
+func (d *VeridianMessageHistoryDecorator) quotaRepository() (domain.VeridianDailyQuotaRepository, error) {
+	repo, ok := d.upstream.(domain.VeridianDailyQuotaRepository)
+	if !ok {
+		return nil, fmt.Errorf("message history repository does not support atomic daily quota")
+	}
+	return repo, nil
+}
+
+func (d *VeridianMessageHistoryDecorator) ReserveDailyQuota(ctx context.Context, workspaceID string, reservation domain.VeridianDailyQuotaReservation) (domain.VeridianDailyQuotaReservationResult, error) {
+	repo, err := d.quotaRepository()
+	if err != nil {
+		return domain.VeridianDailyQuotaReservationResult{}, err
+	}
+	return repo.ReserveDailyQuota(ctx, workspaceID, reservation)
+}
+
+func (d *VeridianMessageHistoryDecorator) ReleaseDailyQuota(ctx context.Context, workspaceID, messageID, quotaKind string) error {
+	repo, err := d.quotaRepository()
+	if err != nil {
+		return err
+	}
+	return repo.ReleaseDailyQuota(ctx, workspaceID, messageID, quotaKind)
+}
+
+func (d *VeridianMessageHistoryDecorator) ListUnclassifiedSuccessfulMessagesSince(ctx context.Context, workspaceID string, since time.Time) ([]domain.VeridianUnclassifiedSuccessfulMessage, error) {
+	repo, err := d.quotaRepository()
+	if err != nil {
+		return nil, err
+	}
+	return repo.ListUnclassifiedSuccessfulMessagesSince(ctx, workspaceID, since)
+}
+
+func (d *VeridianMessageHistoryDecorator) SetMessageProviderClassIfEmpty(ctx context.Context, workspaceID, messageID, providerClass string) error {
+	repo, err := d.quotaRepository()
+	if err != nil {
+		return err
+	}
+	return repo.SetMessageProviderClassIfEmpty(ctx, workspaceID, messageID, providerClass)
+}
+
 // incrementQuota appelle planRepo.IncrementEmailsSent en best-effort.
 // Erreur "workspace not found" = workspace pas gere par Veridian (self-hosted
 // ou ancien workspace avant migration) → log Debug et passe. Autres erreurs
@@ -207,3 +248,4 @@ func isWorkspaceNotFoundErr(err error) bool {
 
 // Compile-time check: decorator satisfait l'interface upstream.
 var _ domain.MessageHistoryRepository = (*VeridianMessageHistoryDecorator)(nil)
+var _ domain.VeridianDailyQuotaRepository = (*VeridianMessageHistoryDecorator)(nil)

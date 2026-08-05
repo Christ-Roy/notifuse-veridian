@@ -563,8 +563,9 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// (plafond journalier par sender émetteur / warmup IP ; cf. v53.go header).
 		// V54 : colonne message_history.bounce_type (réconciliation P0 dashboard 500
 		// — colonne supposée exister mais jamais déclarée ; cf. v54.go header).
+		// V55 : ledger atomique cap journalier + classe provider matérialisée.
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("54"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("55"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 

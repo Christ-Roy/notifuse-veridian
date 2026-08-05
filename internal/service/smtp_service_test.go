@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/emailerror"
 	pkglogger "github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1093,6 +1094,7 @@ func TestSMTPService_SendEmail_InvalidBase64Attachment(t *testing.T) {
 	err := service.SendEmail(context.Background(), request)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to decode content")
+	assert.True(t, emailerror.IsBeforeAcceptance(err), "MIME composition fails before SMTP")
 }
 
 func TestSMTPService_SendEmail_ConnectionError(t *testing.T) {
@@ -1127,6 +1129,14 @@ func TestSMTPService_SendEmail_ConnectionError(t *testing.T) {
 	err := service.SendEmail(context.Background(), request)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to send email")
+	assert.True(t, emailerror.IsBeforeAcceptance(err), "connection refusal is proven before remote acceptance")
+}
+
+func TestSMTPService_PreAcceptanceMarkerOnValidationFailure(t *testing.T) {
+	service := NewSMTPService(&noopLogger{})
+	err := service.SendEmail(context.Background(), domain.SendEmailProviderRequest{})
+	require.Error(t, err)
+	assert.True(t, emailerror.IsBeforeAcceptance(err))
 }
 
 func TestNewSMTPService(t *testing.T) {

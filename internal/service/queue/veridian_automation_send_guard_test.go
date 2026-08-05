@@ -58,7 +58,6 @@ func TestAutomationFinalGuard_QueuedRowNeverReachesSMTPSink(t *testing.T) {
 				MaxAttempts: 3,
 			}
 
-			queueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", entry.ID).Return(nil)
 			var automation *domain.Automation
 			if tc.lookupErr == nil {
 				automation = &domain.Automation{ID: "auto-1", Status: tc.status, ListID: "list-1"}

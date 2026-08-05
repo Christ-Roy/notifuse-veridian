@@ -419,6 +419,20 @@ func TestEmailQueueRepository_Delete(t *testing.T) {
 	})
 }
 
+func TestEmailQueueRepository_SetNextRetryAndRefundAttempt(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewEmailQueueRepositoryWithDB(db)
+	nextRetry := time.Now().UTC().Add(time.Hour)
+
+	mock.ExpectExec(`UPDATE email_queue\s+SET next_retry_at=\$1, attempts=GREATEST\(attempts-1, 0\), status='pending'`).
+		WithArgs(nextRetry, "entry-123").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	require.NoError(t, repo.SetNextRetryAndRefundAttempt(context.Background(), "workspace-123", "entry-123", nextRetry))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestEmailQueueRepository_GetStats(t *testing.T) {
 	ctx := context.Background()
 
