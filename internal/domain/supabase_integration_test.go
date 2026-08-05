@@ -108,6 +108,22 @@ func TestSupabaseIntegrationSettings_EncryptDecrypt_EmptyKeys(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSupabaseIntegrationSettings_ConfiguredFlagsJSON(t *testing.T) {
+	settings := SupabaseIntegrationSettings{
+		AuthEmailHook: SupabaseAuthEmailHookSettings{HasSignatureKey: true},
+		BeforeUserCreatedHook: SupabaseUserCreatedHookSettings{
+			HasSignatureKey: true,
+			AddUserToLists:  []string{"list-1"},
+		},
+	}
+
+	raw, err := json.Marshal(settings)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"has_signature_key":true`)
+	assert.NotContains(t, string(raw), `"signature_key":`)
+	assert.NotContains(t, string(raw), `"encrypted_signature_key":`)
+}
+
 func TestSupabaseTemplateMappings_GetTemplateID(t *testing.T) {
 	mappings := SupabaseTemplateMappings{
 		Signup:           "template-signup",

@@ -241,8 +241,9 @@ export interface FileManagerSettings {
   access_key: string
   bucket: string
   region?: string
+  // Write-only. Existing values are represented by has_secret_key.
   secret_key?: string
-  encrypted_secret_key?: string
+  has_secret_key?: boolean
   cdn_endpoint?: string
   force_path_style?: boolean
 }
@@ -326,14 +327,12 @@ export interface EmailProvider {
 // bounces NDR Postfix + réponses prospects cold). C'est la brique self-service
 // qui débloque bounce-loop (Lot 2) + stop-on-reply (Lot 3) sans script externe.
 // Source de vérité backend : internal/domain/veridian_imap_integration.go.
-// Le password n'est jamais renvoyé en clair par l'API (encrypted_password seul
-// persiste) ; l'UI le laisse vide à l'édition pour ne pas le changer.
+// Le password est write-only. L'UI le laisse vide à l'édition pour le conserver.
 export interface IMAPSettings {
   host: string
   port: number
   username: string
   password?: string
-  encrypted_password?: string
   use_tls: boolean
   folder?: string
   polling_interval_seconds?: number
@@ -343,7 +342,6 @@ export interface AmazonSES {
   region: string
   access_key: string
   secret_key?: string
-  encrypted_secret_key?: string
 }
 
 export type SMTPAuthType = 'basic' | 'oauth2'
@@ -373,35 +371,29 @@ export interface SMTPSettings {
 
 export interface SparkPostSettings {
   api_key?: string
-  encrypted_api_key?: string
   sandbox_mode: boolean
   endpoint: string
 }
 
 export interface PostmarkSettings {
   server_token?: string
-  encrypted_server_token?: string
   message_stream?: string
 }
 
 export interface MailgunSettings {
   api_key?: string
-  encrypted_api_key?: string
   domain: string
   region?: 'US' | 'EU'
 }
 
 export interface MailjetSettings {
   api_key?: string
-  encrypted_api_key?: string
   secret_key?: string
-  encrypted_secret_key?: string
   sandbox_mode: boolean
 }
 
 export interface SendGridSettings {
   api_key?: string
-  encrypted_api_key?: string
 }
 
 export type IntegrationType =
@@ -419,13 +411,11 @@ export type LLMProviderKind = 'anthropic' | 'openai'
 
 export interface AnthropicSettings {
   api_key?: string
-  encrypted_api_key?: string
   model: string
 }
 
 export interface OpenAISettings {
   api_key?: string
-  encrypted_api_key?: string
   model: string
   base_url?: string
 }
@@ -439,18 +429,17 @@ export interface LLMProvider {
 // Firecrawl settings for web scraping and search
 export interface FirecrawlSettings {
   api_key?: string
-  encrypted_api_key?: string
   base_url?: string
 }
 
 export interface SupabaseAuthEmailHookSettings {
   signature_key?: string
-  encrypted_signature_key?: string
+  has_signature_key?: boolean
 }
 
 export interface SupabaseUserCreatedHookSettings {
   signature_key?: string
-  encrypted_signature_key?: string
+  has_signature_key?: boolean
   add_user_to_lists?: string[] // Array of list IDs
   custom_json_field?: string
   reject_disposable_email?: boolean // Reject user creation if email is disposable
@@ -562,7 +551,7 @@ export interface UpdateIntegrationRequest {
   llm_provider?: LLMProvider
   firecrawl_settings?: FirecrawlSettings
   // Veridian fork — config IMAP self-service (Lot 8). Password vide à l'édition =
-  // ne change pas le mot de passe (le backend préserve encrypted_password).
+  // ne change pas le mot de passe (le backend préserve le secret stocké).
   imap_settings?: IMAPSettings
 }
 

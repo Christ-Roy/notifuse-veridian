@@ -1244,6 +1244,19 @@ func TestFileManagerSettings_EncryptDecryptSecretKey(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestFileManagerSettings_HasSecretKeyJSON(t *testing.T) {
+	settings := FileManagerSettings{
+		Endpoint: "https://s3.amazonaws.com", Bucket: "my-bucket", AccessKey: "visible-access-id",
+		HasSecretKey: true,
+	}
+
+	raw, err := json.Marshal(settings)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"has_secret_key":true`)
+	assert.NotContains(t, string(raw), `"secret_key":`)
+	assert.NotContains(t, string(raw), `"encrypted_secret_key":`)
+}
+
 func TestFileManagerSettings_EncryptSecretKey_Error(t *testing.T) {
 	// Create a FileManagerSettings instance with empty secret key
 	settings := FileManagerSettings{

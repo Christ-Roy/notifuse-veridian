@@ -54,10 +54,13 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
-				Endpoint:  "https://s3.amazonaws.com",
-				Bucket:    "my-bucket",
-				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				Endpoint:           "https://s3.amazonaws.com",
+				Bucket:             "my-bucket",
+				AccessKey:          "AKIAIOSFODNN7EXAMPLE",
+				SecretKey:          "get-file-secret",
+				EncryptedSecretKey: "get-file-ciphertext",
 			},
+			EncryptedSecretKey: "get-workspace-ciphertext",
 		},
 	}
 	workspaceSvc.EXPECT().
@@ -106,7 +109,12 @@ func TestWorkspaceHandler_Create(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedWorkspace.ID, response.ID)
 	assert.Equal(t, expectedWorkspace.Name, response.Name)
-	assert.Equal(t, expectedWorkspace.Settings, response.Settings)
+	assert.Equal(t, expectedWorkspace.Settings.FileManager.Endpoint, response.Settings.FileManager.Endpoint)
+	assert.True(t, response.Settings.FileManager.HasSecretKey)
+	assert.Empty(t, response.Settings.EncryptedSecretKey)
+	assert.Empty(t, response.Settings.FileManager.SecretKey)
+	assert.Empty(t, response.Settings.FileManager.EncryptedSecretKey)
+	assert.Equal(t, "get-file-secret", expectedWorkspace.Settings.FileManager.SecretKey, "handler redaction must not mutate service state")
 }
 
 func TestWorkspaceHandler_Get(t *testing.T) {
@@ -123,10 +131,13 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 			DefaultLanguage: "en",
 			Languages:       []string{"en"},
 			FileManager: domain.FileManagerSettings{
-				Endpoint:  "https://s3.amazonaws.com",
-				Bucket:    "my-bucket",
-				AccessKey: "AKIAIOSFODNN7EXAMPLE",
+				Endpoint:           "https://s3.amazonaws.com",
+				Bucket:             "my-bucket",
+				AccessKey:          "AKIAIOSFODNN7EXAMPLE",
+				SecretKey:          "get-file-secret",
+				EncryptedSecretKey: "get-file-ciphertext",
 			},
+			EncryptedSecretKey: "get-workspace-ciphertext",
 		},
 	}
 	workspaceSvc.EXPECT().
@@ -144,14 +155,23 @@ func TestWorkspaceHandler_Get(t *testing.T) {
 	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
+	rawResponse := w.Body.Bytes()
+	assert.NotContains(t, string(rawResponse), "get-file-secret")
+	assert.NotContains(t, string(rawResponse), "get-file-ciphertext")
+	assert.NotContains(t, string(rawResponse), "get-workspace-ciphertext")
+	assert.NotContains(t, string(rawResponse), `"encrypted_secret_key":`)
+	assert.Contains(t, string(rawResponse), `"has_secret_key":true`)
+
 	var response struct {
 		Workspace domain.Workspace `json:"workspace"`
 	}
-	err := json.NewDecoder(w.Body).Decode(&response)
+	err := json.Unmarshal(rawResponse, &response)
 	require.NoError(t, err)
 	assert.Equal(t, expectedWorkspace.ID, response.Workspace.ID)
 	assert.Equal(t, expectedWorkspace.Name, response.Workspace.Name)
-	assert.Equal(t, expectedWorkspace.Settings, response.Workspace.Settings)
+	assert.Equal(t, expectedWorkspace.Settings.FileManager.Endpoint, response.Workspace.Settings.FileManager.Endpoint)
+	assert.True(t, response.Workspace.Settings.FileManager.HasSecretKey)
+	assert.Equal(t, "get-file-secret", expectedWorkspace.Settings.FileManager.SecretKey, "handler redaction must not mutate service state")
 }
 
 func TestWorkspaceHandler_List(t *testing.T) {
@@ -170,10 +190,13 @@ func TestWorkspaceHandler_List(t *testing.T) {
 				DefaultLanguage: "en",
 				Languages:       []string{"en"},
 				FileManager: domain.FileManagerSettings{
-					Endpoint:  "https://s3.amazonaws.com",
-					Bucket:    "my-bucket",
-					AccessKey: "AKIAIOSFODNN7EXAMPLE",
+					Endpoint:           "https://s3.amazonaws.com",
+					Bucket:             "my-bucket",
+					AccessKey:          "AKIAIOSFODNN7EXAMPLE",
+					SecretKey:          "list-file-secret",
+					EncryptedSecretKey: "list-file-ciphertext",
 				},
+				EncryptedSecretKey: "list-workspace-ciphertext",
 			},
 		},
 		{
@@ -209,10 +232,19 @@ func TestWorkspaceHandler_List(t *testing.T) {
 	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
 
+	rawResponse := w.Body.Bytes()
+	assert.NotContains(t, string(rawResponse), "list-file-secret")
+	assert.NotContains(t, string(rawResponse), "list-file-ciphertext")
+	assert.NotContains(t, string(rawResponse), "list-workspace-ciphertext")
+	assert.Contains(t, string(rawResponse), `"has_secret_key":true`)
+
 	var response []*domain.Workspace
-	err := json.NewDecoder(w.Body).Decode(&response)
+	err := json.Unmarshal(rawResponse, &response)
 	require.NoError(t, err)
-	assert.Equal(t, expectedWorkspaces, response)
+	require.Len(t, response, len(expectedWorkspaces))
+	assert.Equal(t, expectedWorkspaces[0].ID, response[0].ID)
+	assert.True(t, response[0].Settings.FileManager.HasSecretKey)
+	assert.Equal(t, "list-file-secret", expectedWorkspaces[0].Settings.FileManager.SecretKey, "handler redaction must not mutate service state")
 }
 
 func TestWorkspaceHandler_Update(t *testing.T) {

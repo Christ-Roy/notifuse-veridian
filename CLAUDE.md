@@ -295,6 +295,24 @@ sélectionnent explicitement le profil actif.
   `console/src/components/settings/Integrations.tsx`,
   `internal/service/workspace_service.go`, `internal/service/email_service.go`.
 
+### Redaction exhaustive des credentials workspace API (2026-08-05)
+
+Toutes les réponses qui embarquent un `Workspace` passent par
+`veridianRedactWorkspaceForAPI`. Le helper clone l'objet sans muter l'état runtime
+puis retire le secret workspace chiffré, les clés FileManager claires/chiffrées,
+les passwords IMAP clairs/chiffrés, les signatures Supabase claires/chiffrées,
+les clés LLM/Firecrawl claires/chiffrées et tous les secrets EmailProvider.
+
+- Les seuls états non sensibles ajoutés sont `file_manager.has_secret_key`, les
+  `has_signature_key` des deux hooks Supabase et les flags email déjà existants.
+- Les mises à jour avec un champ secret vide préservent le ciphertext stocké ;
+  les flags de réponse sont nettoyés avant persistance.
+- Le FileManager historique parle directement à S3 depuis le navigateur. Il ne
+  peut donc plus réutiliser une clé existante après redaction. Aucun workspace
+  PROD n'avait de FileManager configuré lors de la vérification live préalable ; la
+  remise en service future exige un proxy S3 backend (dette P1), pas le retour du
+  secret dans l'API.
+
 ### Custom tracking domain aligné au domaine d'envoi (Lot 5 cold outreach, 2026-06-15)
 
 Les liens de tracking (pixel ouverture `/t/`, redirect clic `/r/`) doivent vivre sur
@@ -909,11 +927,13 @@ Aucune fenêtre = envoi 24/7 (non-régression). Spec : ticket Lot WINDOWS.
 
 Salve de 6 lots (team-orchestration) sur le backlog cold + sécu + admin :
 
-- **Masquage secrets en sortie JSON** (🔴 sécu) : `IMAPSettings.MarshalJSON` +
-  `SMTPSettings.MarshalJSON` masquent les passwords/secrets EN CLAIR (le ciphertext
-  `Encrypted*` reste — il sert le blob DB via `Integration.Value`). Ferme la fuite
-  `workspaces.get` (IMAP) ET la fuite symétrique SMTP basic-auth. Fichiers veridian :
-  `internal/domain/veridian_imap_integration.go` + `internal/domain/email_provider_smtp.go`.
+- **Masquage secrets en sortie JSON** (🔴 sécu, historique) : les MarshalJSON IMAP
+  et SMTP protègent le clair pendant la persistance. Depuis le hardening du
+  2026-08-05, la couche HTTP workspace retire aussi tous les ciphertexts et les
+  autres familles de credentials avant réponse API ; voir la section dédiée plus
+  haut. Fichiers Veridian : `internal/http/veridian_workspace_redaction.go`,
+  `internal/domain/veridian_imap_integration.go` et
+  `internal/domain/email_provider_smtp.go`.
 - **Conformité mail cold** : multipart `text/plain + text/html` (au lieu de HTML-only) +
   retrait du header `X-Message-ID` sur le chemin SMTP. Helper `internal/service/veridian_html_to_text.go`
   (basé `golang.org/x/net/html`, best-effort → fallback HTML-only).

@@ -243,7 +243,12 @@ export const FileManager = (props: FileManagerProps) => {
   // Initialize or reinitialize S3 client when settings change
   useEffect(() => {
     // Don't initialize if settings are not provided or endpoint is empty/undefined
-    if (!props.settings || !props.settings.endpoint || props.settings.endpoint === '') {
+    if (
+      !props.settings ||
+      !props.settings.endpoint ||
+      props.settings.endpoint === '' ||
+      (!props.settings.secret_key && props.settings.has_secret_key)
+    ) {
       s3ClientRef.current = undefined
       return
     }

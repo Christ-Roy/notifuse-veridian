@@ -98,9 +98,9 @@ type IMAPSettings struct {
 // clair => sans ce masquage, le clair partait aussi DANS LE BLOB `integrations`
 // (secret au repos). Ce MarshalJSON ferme les deux fuites d'un coup.
 //
-// On garde EncryptedPassword (ciphertext AES, inexploitable sans la clé serveur)
-// car il EST le credential persisté : le strip casserait le round-trip DB
-// (password effacé au save). Seul le CLAIR est masqué.
+// On garde EncryptedPassword ici car le même MarshalJSON sert à la persistance
+// DB. La couche HTTP workspace clone ensuite l'objet et retire aussi ce
+// ciphertext avant toute réponse API.
 //
 // `type Alias IMAPSettings` casse la récursion (l'Alias n'hérite pas de la
 // méthode MarshalJSON). UnmarshalJSON n'est PAS affecté (décodage entrant

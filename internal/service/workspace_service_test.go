@@ -840,6 +840,45 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.Equal(t, expectedWorkspace.Settings, workspace.Settings)
 	})
 
+	t.Run("preserves redacted file manager secret", func(t *testing.T) {
+		settings := domain.WorkspaceSettings{
+			Timezone:        "UTC",
+			DefaultLanguage: "en",
+			Languages:       []string{"en"},
+			FileManager: domain.FileManagerSettings{
+				Provider: "s3", Endpoint: "https://s3.example.com", Bucket: "new-bucket", AccessKey: "new-access-id",
+				HasSecretKey: true,
+			},
+		}
+		existing := &domain.Workspace{
+			ID: workspaceID,
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC",
+				FileManager: domain.FileManagerSettings{
+					Provider: "s3", Endpoint: "https://s3.example.com", Bucket: "old-bucket", AccessKey: "old-access-id",
+					SecretKey: "runtime-secret", EncryptedSecretKey: "stored-ciphertext",
+				},
+			},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(ctx, &domain.User{ID: userID}, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).
+			Return(&domain.UserWorkspace{UserID: userID, WorkspaceID: workspaceID, Role: "owner"}, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existing, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, saved *domain.Workspace) error {
+			assert.Equal(t, "new-bucket", saved.Settings.FileManager.Bucket)
+			assert.Equal(t, "stored-ciphertext", saved.Settings.FileManager.EncryptedSecretKey)
+			assert.Empty(t, saved.Settings.FileManager.SecretKey)
+			assert.False(t, saved.Settings.FileManager.HasSecretKey, "response-only metadata must not be persisted")
+			return nil
+		})
+
+		workspace, err := service.UpdateWorkspace(ctx, workspaceID, "Updated Workspace", settings)
+		require.NoError(t, err)
+		assert.Equal(t, "stored-ciphertext", workspace.Settings.FileManager.EncryptedSecretKey)
+	})
+
 	t.Run("authentication error", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, nil, nil, assert.AnError)
 

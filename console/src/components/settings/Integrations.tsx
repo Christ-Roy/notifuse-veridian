@@ -1386,9 +1386,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           }
 
           if (integration.type === 'supabase') {
-            const hasAuthEmailHook = !!integration.supabase_settings?.auth_email_hook?.signature_key
+            const hasAuthEmailHook =
+              !!integration.supabase_settings?.auth_email_hook?.has_signature_key
             const hasBeforeUserCreatedHook =
-              !!integration.supabase_settings?.before_user_created_hook?.signature_key
+              !!integration.supabase_settings?.before_user_created_hook?.has_signature_key
             const addToLists =
               integration.supabase_settings?.before_user_created_hook?.add_user_to_lists || []
             const customJsonField =
