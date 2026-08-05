@@ -101,6 +101,11 @@ interface IntegrationsProps {
   isOwner: boolean
 }
 
+export function IntegrationOwnerNotice() {
+  const { t } = useLingui()
+  return <Alert type="warning" showIcon message={t`Only workspace owners can modify integrations`} />
+}
+
 // EmailIntegration component props
 interface EmailIntegrationProps {
   integration: {
@@ -143,16 +148,8 @@ const EmailIntegration = ({
   const [loadingWebhooks, setLoadingWebhooks] = useState(false)
   const [registrationInProgress, setRegistrationInProgress] = useState(false)
 
-  // Fetch webhook status when component mounts
-  useEffect(() => {
-    if (workspace?.id && integration?.id) {
-      fetchWebhookStatus()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchWebhookStatus is stable
-  }, [workspace?.id, integration?.id])
-
   // Function to fetch webhook status
-  const fetchWebhookStatus = async () => {
+  async function fetchWebhookStatus() {
     if (!workspace?.id || !integration?.id) return
 
     // Only fetch webhook status for non-SMTP providers
@@ -172,6 +169,15 @@ const EmailIntegration = ({
       setLoadingWebhooks(false)
     }
   }
+
+  // Fetch webhook status when component mounts
+  useEffect(() => {
+    if (workspace?.id && integration?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch synchronizes external webhook state
+      fetchWebhookStatus()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchWebhookStatus is stable
+  }, [workspace?.id, integration?.id])
 
   // Function to register webhooks
   const handleRegisterWebhooks = async () => {
@@ -1097,6 +1103,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Render the list of available integrations
   const renderAvailableIntegrations = () => {
+    if (!isOwner) {
+      return <IntegrationOwnerNotice />
+    }
+
     return (
       <>
         <Card className="mb-4" styles={{ body: { padding: 16 } }}>
