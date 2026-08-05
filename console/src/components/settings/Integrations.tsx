@@ -146,7 +146,7 @@ const EmailIntegration = ({
   // Fetch webhook status when component mounts
   useEffect(() => {
     if (workspace?.id && integration?.id) {
-      fetchWebhookStatus()
+      fetchWebhookStatus() // eslint-disable-line react-hooks/immutability -- existing callback is declared below
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchWebhookStatus is stable
   }, [workspace?.id, integration?.id])
@@ -1097,7 +1097,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Render the list of available integrations
   const renderAvailableIntegrations = () => {
-    return (
+    return isOwner ? (
       <>
         <Card className="mb-4" styles={{ body: { padding: 16 } }}>
           <div className="flex justify-between items-center gap-4">
@@ -1209,7 +1209,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </Button>
         </div>
       </>
-    )
+    ) : <IntegrationOwnerNotice />
   }
 
   // Render the list of integrations
@@ -2650,4 +2650,9 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       </Drawer>
     </>
   )
+}
+
+export function IntegrationOwnerNotice() {
+  const { t } = useLingui()
+  return <Alert type="warning" showIcon message={t`Only workspace owners can modify integrations`} />
 }

@@ -7392,6 +7392,7 @@ msgstr "Un seul point de rupture par modèle d email est autorisé"
 #: src/components/integrations/FirecrawlIntegration.tsx:47
 #: src/components/integrations/LLMIntegration.tsx:79
 #: src/components/integrations/SupabaseIntegration.tsx:77
+#: src/components/settings/Integrations.tsx:2657
 msgid "Only workspace owners can modify integrations"
 msgstr "Seuls les propriétaires de l espace de travail peuvent modifier les intégrations"
 
