@@ -53,3 +53,20 @@ func TestVeridianEmailProfileUsageService(t *testing.T) {
 	assert.Equal(t, 0, usageRepo.since.Hour(), "quota policy day starts at midnight UTC")
 	assert.Equal(t, result.Date, usageRepo.since.Format("2006-01-02"))
 }
+
+func TestNewVeridianEmailProfileUsageServiceRetainsDependencies(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	auth := mocks.NewMockAuthService(ctrl)
+	workspaces := mocks.NewMockWorkspaceRepository(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+	usageRepo := &emailProfileUsageRepoStub{}
+
+	svc := NewVeridianEmailProfileUsageService(usageRepo, workspaces, auth, log)
+	concrete, ok := svc.(*veridianEmailProfileUsageService)
+	require.True(t, ok)
+	assert.Same(t, usageRepo, concrete.repo)
+	assert.Same(t, workspaces, concrete.workspaceRepo)
+	assert.Same(t, auth, concrete.authService)
+	assert.Same(t, log, concrete.logger)
+}

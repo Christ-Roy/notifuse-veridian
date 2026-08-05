@@ -10,6 +10,7 @@ describe('emailProfilesUsageService', () => {
     vi.mocked(api.get).mockResolvedValue({
       date: '2026-08-05',
       total_used: 0,
+      total_accepted: 0,
       profiles: []
     })
 

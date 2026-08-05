@@ -81,9 +81,10 @@ describe('sending profiles overview', () => {
         usage={{
           integration_id: 'gmail-a',
           used: 12,
+          accepted_used: 12,
           cap: 30,
           remaining: 18,
-          by_provider_class: { google: 7, microsoft: 5, future_provider: 3 }
+          accepted_by_provider_class: { google: 7, microsoft: 5, future_provider: 3 }
         }}
         provider={{
           kind: 'smtp',
@@ -104,8 +105,8 @@ describe('sending profiles overview', () => {
     expect(screen.getByText('Corporate auto-hébergé')).toBeInTheDocument()
     expect(screen.getByText('0.5 / min')).toBeInTheDocument()
     expect(screen.getByText('10 / day')).toBeInTheDocument()
-    expect(screen.getByText('7 sent today')).toBeInTheDocument()
+    expect(screen.getByText('7 accepted today')).toBeInTheDocument()
     expect(screen.getByText('Unknown class: future_provider')).toBeInTheDocument()
-    expect(screen.getByText('3 sent today')).toBeInTheDocument()
+    expect(screen.getByText('3 accepted today')).toBeInTheDocument()
   })
 })

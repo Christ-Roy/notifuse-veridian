@@ -34,3 +34,14 @@ func TestVeridianEmailProfileUsageRepository(t *testing.T) {
 	assert.Equal(t, 4, rows[1].AcceptedUsed)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestNewVeridianEmailProfileUsageRepositoryRetainsWorkspaceRepository(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+
+	repo := NewVeridianEmailProfileUsageRepository(workspaceRepo)
+	concrete, ok := repo.(*veridianEmailProfileUsageRepository)
+	require.True(t, ok)
+	assert.Same(t, workspaceRepo, concrete.workspaceRepo)
+}

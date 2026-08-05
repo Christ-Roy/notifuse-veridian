@@ -44,20 +44,23 @@ vi.mock('../../services/api/veridian_email_profiles', async () => {
       get: vi.fn().mockResolvedValue({
         date: '2026-08-05',
         total_used: 12,
+        total_accepted: 12,
         profiles: [
           {
             integration_id: 'gmail-a',
             used: 12,
+            accepted_used: 12,
             cap: 30,
             remaining: 18,
-            by_provider_class: { google: 7, microsoft: 5 }
+            accepted_by_provider_class: { google: 7, microsoft: 5 }
           },
           {
             integration_id: 'gmail-b',
             used: 0,
+            accepted_used: 0,
             cap: 30,
             remaining: 30,
-            by_provider_class: {}
+            accepted_by_provider_class: {}
           }
         ]
       })
@@ -136,7 +139,7 @@ describe('Integrations Gmail sending profile wiring', () => {
     renderIntegrations(onSave)
 
     await waitFor(() => expect(emailProfilesUsageService.get).toHaveBeenCalledWith('ws-1'))
-    expect(await screen.findByText('12 / 30 sent today')).toBeInTheDocument()
+    expect(await screen.findByText('12 accepted, 12 / 30 quota used')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Add to rotation' }))
     await user.click(await screen.findByRole('button', { name: 'Yes' }))

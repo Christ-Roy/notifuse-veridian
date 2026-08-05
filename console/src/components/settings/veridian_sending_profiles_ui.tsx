@@ -120,7 +120,9 @@ export function SendingProfilesOverview({
                 ? t`Loading today's usage...`
                 : usageError || !usage
                   ? t`Today's usage is unavailable`
-                  : t`${usage.total_used} emails sent today (${usage.date})`}
+                  : usage.total_used === usage.total_accepted
+                    ? t`${usage.total_accepted} emails accepted today (${usage.date})`
+                    : t`${usage.total_accepted} accepted, ${usage.total_used} quota slots used today (${usage.date})`}
             </Text>
           </Space>
         </Col>
@@ -160,7 +162,7 @@ export function RecipientProviderPolicy({
   usage?: EmailProfileUsage
 }) {
   const { t } = useLingui()
-  const unknownUsageClasses = Object.entries(usage?.by_provider_class || {}).filter(
+  const unknownUsageClasses = Object.entries(usage?.accepted_by_provider_class || {}).filter(
     ([providerClass]) => !VERIDIAN_PROVIDER_CLASSES.includes(providerClass as VeridianProviderClass)
   )
   const items = [
@@ -214,7 +216,7 @@ export function RecipientProviderPolicy({
                       <Col xs={12} sm={5}>
                         <Text type="secondary" style={{ fontSize: 12 }}>
                           {usage
-                            ? t`${usage.by_provider_class?.[providerClass] || 0} sent today`
+                            ? t`${usage.accepted_by_provider_class?.[providerClass] || 0} accepted today`
                             : t`Usage unavailable`}
                         </Text>
                       </Col>
@@ -241,7 +243,7 @@ export function RecipientProviderPolicy({
                   </Col>
                   <Col xs={16} sm={5}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {t`${sent} sent today`}
+                      {t`${sent} accepted today`}
                     </Text>
                   </Col>
                   <Col xs={8} sm={5} className="sm:text-right">

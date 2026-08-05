@@ -56,21 +56,38 @@ msgstr "(unknown date)"
 msgid "{0, plural, one {# contact} other {# contacts}}"
 msgstr "{0, plural, one {# contact} other {# contacts}}"
 
-#. placeholder {0}: usage.used
-#. placeholder {1}: usage.cap
 #: src/components/settings/Integrations.tsx:402
-msgid "{0} / {1} sent today"
-msgstr "{0} / {1} sent today"
+#~ msgid "{0} / {1} sent today"
+#~ msgstr "{0} / {1} sent today"
 
 #. placeholder {0}: profileCap ?? workspaceCap
-#: src/components/settings/veridian_sending_profiles_ui.tsx:210
+#: src/components/settings/veridian_sending_profiles_ui.tsx:212
 msgid "{0} / day"
 msgstr "{0} / day"
 
 #. placeholder {0}: profileRate ?? workspaceRate
-#: src/components/settings/veridian_sending_profiles_ui.tsx:203
+#: src/components/settings/veridian_sending_profiles_ui.tsx:205
 msgid "{0} / min"
 msgstr "{0} / min"
+
+#. placeholder {0}: usage.accepted_by_provider_class?.[providerClass] || 0
+#: src/components/settings/veridian_sending_profiles_ui.tsx:219
+msgid "{0} accepted today"
+msgstr "{0} accepted today"
+
+#. placeholder {0}: usage.accepted_used
+#. placeholder {1}: usage.used
+#. placeholder {2}: usage.cap
+#: src/components/settings/Integrations.tsx:402
+msgid "{0} accepted, {1} / {2} quota used"
+msgstr "{0} accepted, {1} / {2} quota used"
+
+#. placeholder {0}: usage.total_accepted
+#. placeholder {1}: usage.total_used
+#. placeholder {2}: usage.date
+#: src/components/settings/veridian_sending_profiles_ui.tsx:125
+msgid "{0} accepted, {1} quota slots used today ({2})"
+msgstr "{0} accepted, {1} quota slots used today ({2})"
 
 #. placeholder {0}: r.bounced
 #: src/components/analytics/veridian_engagement_by_class.tsx:155
@@ -102,6 +119,12 @@ msgstr "{0} delivered"
 msgid "{0} emails / day"
 msgstr "{0} emails / day"
 
+#. placeholder {0}: usage.total_accepted
+#. placeholder {1}: usage.date
+#: src/components/settings/veridian_sending_profiles_ui.tsx:124
+msgid "{0} emails accepted today ({1})"
+msgstr "{0} emails accepted today ({1})"
+
 #. placeholder {0}: stats.count_bounced
 #: src/components/analytics/EmailMetricsChart.tsx:489
 msgid "{0} emails bounced back"
@@ -132,11 +155,9 @@ msgstr "{0} emails failed to send - Click to view details"
 msgid "{0} emails failed to send (hidden from chart)"
 msgstr "{0} emails failed to send (hidden from chart)"
 
-#. placeholder {0}: usage.total_used
-#. placeholder {1}: usage.date
 #: src/components/settings/veridian_sending_profiles_ui.tsx:123
-msgid "{0} emails sent today ({1})"
-msgstr "{0} emails sent today ({1})"
+#~ msgid "{0} emails sent today ({1})"
+#~ msgstr "{0} emails sent today ({1})"
 
 #. placeholder {0}: stats.count_delivered
 #: src/components/analytics/EmailMetricsChart.tsx:369
@@ -191,10 +212,9 @@ msgstr "{0} remaining"
 msgid "{0} senders · round-robin per class"
 msgstr "{0} senders · round-robin per class"
 
-#. placeholder {0}: usage.by_provider_class?.[providerClass] || 0
 #: src/components/settings/veridian_sending_profiles_ui.tsx:217
-msgid "{0} sent today"
-msgstr "{0} sent today"
+#~ msgid "{0} sent today"
+#~ msgstr "{0} sent today"
 
 #. placeholder {0}: stats.count_clicked
 #: src/components/analytics/EmailMetricsChart.tsx:423
@@ -367,9 +387,13 @@ msgstr "{selectedCount, plural, one {# contact selected} other {# contacts selec
 msgid "{selectedCount, plural, one {This will permanently delete # contact. This action cannot be undone.} other {This will permanently delete # contacts. This action cannot be undone.}}"
 msgstr "{selectedCount, plural, one {This will permanently delete # contact. This action cannot be undone.} other {This will permanently delete # contacts. This action cannot be undone.}}"
 
+#: src/components/settings/veridian_sending_profiles_ui.tsx:246
+msgid "{sent} accepted today"
+msgstr "{sent} accepted today"
+
 #: src/components/settings/veridian_sending_profiles_ui.tsx:244
-msgid "{sent} sent today"
-msgstr "{sent} sent today"
+#~ msgid "{sent} sent today"
+#~ msgstr "{sent} sent today"
 
 #: src/components/email_builder/panels/Preview.tsx:218
 msgid "// No test data yet..."
@@ -2362,7 +2386,7 @@ msgstr "Configure outgoing webhooks to receive real-time notifications when even
 msgid "Configure paths"
 msgstr "Configure paths"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:142
+#: src/components/settings/veridian_sending_profiles_ui.tsx:144
 msgid "Configure policy"
 msgstr "Configure policy"
 
@@ -5344,7 +5368,7 @@ msgstr "Global feed URL"
 msgid "Global feed URL is required when enabled"
 msgstr "Global feed URL is required when enabled"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:132
+#: src/components/settings/veridian_sending_profiles_ui.tsx:134
 msgid "Global sending window"
 msgstr "Global sending window"
 
@@ -5413,7 +5437,7 @@ msgstr "Google app password is required"
 msgid "Google Workspace / Gmail"
 msgstr "Google Workspace / Gmail"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:175
+#: src/components/settings/veridian_sending_profiles_ui.tsx:177
 msgid "Google, Microsoft and other mailbox networks"
 msgstr "Google, Microsoft and other mailbox networks"
 
@@ -5933,7 +5957,7 @@ msgstr "Inherit the workspace window"
 msgid "Inherit workspace"
 msgstr "Inherit workspace"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:223
+#: src/components/settings/veridian_sending_profiles_ui.tsx:225
 msgid "Inherited"
 msgstr "Inherited"
 
@@ -7112,7 +7136,7 @@ msgstr "No contacts match the current filters"
 msgid "No CSV data available"
 msgstr "No CSV data available"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:211
+#: src/components/settings/veridian_sending_profiles_ui.tsx:213
 msgid "No daily cap"
 msgstr "No daily cap"
 
@@ -7240,7 +7264,7 @@ msgstr "No provider class is excluded — all recipients are contacted."
 msgid "No published posts"
 msgstr "No published posts"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:204
+#: src/components/settings/veridian_sending_profiles_ui.tsx:206
 msgid "No rate cap"
 msgstr "No rate cap"
 
@@ -8465,7 +8489,7 @@ msgid "Processing was stopped before completion."
 msgstr "Processing was stopped before completion."
 
 #: src/components/settings/Integrations.tsx:398
-#: src/components/settings/veridian_sending_profiles_ui.tsx:223
+#: src/components/settings/veridian_sending_profiles_ui.tsx:225
 msgid "Profile"
 msgstr "Profile"
 
@@ -8477,7 +8501,7 @@ msgstr "Profile added to marketing rotation"
 msgid "Profile name"
 msgstr "Profile name"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:255
+#: src/components/settings/veridian_sending_profiles_ui.tsx:257
 msgid "Profile overrides take priority. Missing values inherit the global workspace policy."
 msgstr "Profile overrides take priority. Missing values inherit the global workspace policy."
 
@@ -8699,7 +8723,7 @@ msgstr "Recipient feed test completed successfully"
 msgid "Recipient provider class"
 msgstr "Recipient provider class"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:173
+#: src/components/settings/veridian_sending_profiles_ui.tsx:175
 msgid "Recipient-provider policy"
 msgstr "Recipient-provider policy"
 
@@ -9066,7 +9090,7 @@ msgstr "Resume Upload"
 msgid "Retry"
 msgstr "Retry"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:248
+#: src/components/settings/veridian_sending_profiles_ui.tsx:250
 msgid "Review mapping"
 msgstr "Review mapping"
 
@@ -11587,7 +11611,7 @@ msgstr "Undo (Ctrl+Z)"
 msgid "Unknown"
 msgstr "Unknown"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:240
+#: src/components/settings/veridian_sending_profiles_ui.tsx:242
 msgid "Unknown class: {providerClass}"
 msgstr "Unknown class: {providerClass}"
 
@@ -11637,7 +11661,7 @@ msgstr "Unpublish"
 msgid "Unpublish post"
 msgstr "Unpublish post"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:235
+#: src/components/settings/veridian_sending_profiles_ui.tsx:237
 msgid "Unrecognized backend classes"
 msgstr "Unrecognized backend classes"
 
@@ -11812,7 +11836,7 @@ msgstr "URL-friendly identifier (lowercase, hyphens only)"
 msgid "URL:"
 msgstr "URL:"
 
-#: src/components/settings/veridian_sending_profiles_ui.tsx:218
+#: src/components/settings/veridian_sending_profiles_ui.tsx:220
 msgid "Usage unavailable"
 msgstr "Usage unavailable"
 

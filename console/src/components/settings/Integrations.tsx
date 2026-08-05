@@ -399,7 +399,7 @@ const EmailIntegration = ({
         <Descriptions.Item label={t`Daily profile cap`}>
           {usage ? (
             <Space wrap>
-              <strong>{t`${usage.used} / ${usage.cap} sent today`}</strong>
+              <strong>{t`${usage.accepted_used} accepted, ${usage.used} / ${usage.cap} quota used`}</strong>
               <Tag color={usage.remaining > 0 ? 'blue' : 'red'}>
                 {t`${usage.remaining} remaining`}
               </Tag>
