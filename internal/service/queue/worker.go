@@ -644,9 +644,12 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		TemplateVersion: int64(entry.Payload.TemplateVersion),
 		Channel:         "email",
 		MessageData:     domain.MessageData{Data: entry.Payload.TemplateData}, // Include template data for logging
-		SentAt:          entry.CreatedAt,                                      // Use queue entry creation time (stable across retries)
-		CreatedAt:       entry.CreatedAt,
-		UpdatedAt:       now,
+		// sent_at is the source of truth for daily cold caps. It must reflect the
+		// actual SMTP attempt, not when the queue entry was created: an entry can
+		// legitimately wait overnight for the sending window to open.
+		SentAt:    now,
+		CreatedAt: entry.CreatedAt,
+		UpdatedAt: now,
 		// Veridian fork — anti-hash identique cold outbound : persiste le hash du
 		// rendu final (posé à l'enqueue) pour alimenter la fenêtre glissante de
 		// déduplication par classe. Vide pour les envois non-cold → stocké NULL.

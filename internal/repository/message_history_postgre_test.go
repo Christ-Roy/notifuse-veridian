@@ -196,6 +196,55 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 	})
 }
 
+func TestMessageHistoryRepository_UpsertRefreshesSentAtOnRetry(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	message := createSampleMessageHistory()
+	message.SentAt = message.SentAt.Add(24 * time.Hour)
+	message.UpdatedAt = message.SentAt
+
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	mock.ExpectExec(`(?s)INSERT INTO message_history.*ON CONFLICT \(id\) DO UPDATE SET.*sent_at = EXCLUDED.sent_at`).
+		WithArgs(
+			message.ID,
+			message.ExternalID,
+			message.ContactEmail,
+			message.BroadcastID,
+			message.AutomationID,
+			message.TransactionalNotificationID,
+			message.ListID,
+			message.TemplateID,
+			message.TemplateVersion,
+			message.Channel,
+			message.StatusInfo,
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			message.SentAt,
+			message.DeliveredAt,
+			message.FailedAt,
+			message.OpenedAt,
+			message.ClickedAt,
+			message.BouncedAt,
+			message.ComplainedAt,
+			message.UnsubscribedAt,
+			message.CreatedAt,
+			message.UpdatedAt,
+			message.VeridianContentHash,
+			message.VeridianSenderEmail,
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	require.NoError(t, repo.Upsert(ctx, workspaceID, testSecretKey, message))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestMessageHistoryRepository_Update(t *testing.T) {
 	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
 	defer cleanup()

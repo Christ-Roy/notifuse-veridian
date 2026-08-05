@@ -268,6 +268,7 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), '')
 		)
 		ON CONFLICT (id) DO UPDATE SET
+			sent_at = EXCLUDED.sent_at,
 			failed_at = EXCLUDED.failed_at,
 			status_info = EXCLUDED.status_info,
 			updated_at = EXCLUDED.updated_at,

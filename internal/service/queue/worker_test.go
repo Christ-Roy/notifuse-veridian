@@ -1485,6 +1485,34 @@ func TestEmailQueueWorker_ProcessEntry_StoresTemplateDataInMessageHistory(t *tes
 	worker.processEntry(workspace, entry)
 }
 
+func TestEmailQueueWorker_UpsertMessageHistory_UsesAttemptTimeForSentAt(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	historyRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	queuedAt := time.Now().UTC().Add(-12 * time.Hour)
+	entry := &domain.EmailQueueEntry{
+		ID:           "entry-overnight",
+		MessageID:    "message-overnight",
+		ContactEmail: "lead@example.com",
+		TemplateID:   "template-1",
+		CreatedAt:    queuedAt,
+	}
+
+	beforeAttempt := time.Now().UTC()
+	historyRepo.EXPECT().
+		Upsert(gomock.Any(), "workspace-1", "secret", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, message *domain.MessageHistory) error {
+			assert.Equal(t, queuedAt, message.CreatedAt, "created_at must preserve the enqueue time")
+			assert.False(t, message.SentAt.Before(beforeAttempt), "sent_at must use the actual attempt time")
+			assert.False(t, message.SentAt.Equal(queuedAt), "sent_at must not reuse the enqueue time")
+			return nil
+		})
+
+	worker := &EmailQueueWorker{messageHistoryRepo: historyRepo}
+	worker.upsertMessageHistory(context.Background(), "workspace-1", "secret", entry, nil)
+}
+
 func TestEmailQueueWorker_GetMinEmailRateLimit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
