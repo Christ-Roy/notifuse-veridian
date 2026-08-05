@@ -209,7 +209,8 @@ wait_for_sql() {
 
 ensure_sink
 log "provision du workspace jetable $WID"
-PROVISION="$(hmac /api/tenants/provision POST "{\"tenant_id\":\"$WID\",\"owner_email\":\"gmail-mp-${STAMP}@e2e.veridian.site\",\"plan\":\"free\"}")"
+OWNER_EMAIL="${WID}@e2e.veridian.site"
+PROVISION="$(hmac /api/tenants/provision POST "{\"tenant_id\":\"$WID\",\"owner_email\":\"$OWNER_EMAIL\",\"plan\":\"free\"}")"
 AUTO_URL="$(printf '%s' "$PROVISION" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("auto_login_url",""))')"
 [ -n "$AUTO_URL" ] || fatal "provision impossible: ${PROVISION:0:200}"
 OWNER_TOKEN="$(curl -fsS "$AUTO_URL" | grep -oP "setItem\('auth_token', \"\K[^\"]+" || true)"
@@ -222,7 +223,6 @@ PROFILE_A="$(create_profile gmail-profile-a "$SENDER_A" 30 "$closed_window")"
 PROFILE_B="$(create_profile gmail-profile-b "$SENDER_B" 30 "$open_window")"
 [ -n "$PROFILE_A" ] && [ -n "$PROFILE_B" ] || fatal "création des deux profils impossible"
 [ "$PROFILE_A" != "$PROFILE_B" ] || fatal "les deux profils ont le même integration ID"
-OWNER_EMAIL="gmail-mp-${STAMP}@e2e.veridian.site"
 verify_profile "$PROFILE_A" "$OWNER_EMAIL"
 verify_profile "$PROFILE_B" "$OWNER_EMAIL"
 ok "deux profils vérifiés par l'endpoint owner-bound, exclusivement via le sink"
@@ -302,23 +302,23 @@ api /api/templates.create "$TEMPLATE" >/dev/null
 log "phase fenêtre: A fermé demain seulement, B ouvert 24/7"
 create_list_with_contacts gmail-mp-window 2
 BID_WINDOW="$(fire_broadcast gmail-mp-window gmail-mp-window)"
-wait_for_sql "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND integration_id='$PROFILE_B'" 1 "historique profil B ouvert"
+wait_for_sql "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_B'" 1 "historique profil B ouvert"
 sleep 3
-[ "$(psqlq "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND integration_id='$PROFILE_A'")" = "0" ] \
+[ "$(psqlq "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_A'")" = "0" ] \
   || fatal "profil A fermé a envoyé hors fenêtre"
 wait_for_sql "SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW' AND integration_id='$PROFILE_A' AND status='pending'" 1 "queue figée sur profil A fermé"
 
 log "ouverture de A: l'entrée doit repartir sans changer de profil"
 update_profile "$PROFILE_A" gmail-profile-a "$SENDER_A" 30 "$open_window"
-wait_for_sql "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND integration_id='$PROFILE_A'" 1 "historique profil A après ouverture"
+wait_for_sql "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW' AND veridian_profile_id='$PROFILE_A'" 1 "historique profil A après ouverture"
 
 log "phase quota: cap abaissé à 3, avec déjà un envoi par profil aujourd'hui"
 update_profile "$PROFILE_A" gmail-profile-a "$SENDER_A" 3 "$open_window"
 update_profile "$PROFILE_B" gmail-profile-b "$SENDER_B" 3 "$open_window"
 create_list_with_contacts gmail-mp-cap 6
 BID_CAP="$(fire_broadcast gmail-mp-cap gmail-mp-cap)"
-wait_for_sql "SELECT count(*) FROM message_history WHERE integration_id='$PROFILE_A'" 3 "cap atomique profil A"
-wait_for_sql "SELECT count(*) FROM message_history WHERE integration_id='$PROFILE_B'" 3 "cap atomique profil B"
+wait_for_sql "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_A'" 3 "cap atomique profil A"
+wait_for_sql "SELECT count(*) FROM message_history WHERE veridian_profile_id='$PROFILE_B'" 3 "cap atomique profil B"
 sleep 3
 [ "$(psqlq "SELECT count(*) FROM message_history WHERE broadcast_id='$BID_CAP'")" = "4" ] \
   || fatal "le broadcast quota devait produire exactement 4 envois"
