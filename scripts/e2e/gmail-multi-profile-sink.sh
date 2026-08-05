@@ -91,7 +91,7 @@ api_get() {
 
 staging_alloc() {
   "$NOMAD_V" raw job allocs -json "$STAGING_JOB" 2>/dev/null \
-    | python3 -c 'import json,sys; a=json.load(sys.stdin); r=[x for x in a if x.get("ClientStatus")=="running"]; print(r[0]["ID"] if r else "")'
+    | python3 -c 'import json,sys; a=json.load(sys.stdin); r=[x for x in a if x.get("ClientStatus")=="running" and x.get("DesiredStatus")=="run"]; print(r[0]["ID"] if len(r)==1 else "")'
 }
 
 psqlq() {
@@ -119,7 +119,9 @@ sink_messages() {
   local alloc
   alloc="$(staging_alloc)"
   [ -n "$alloc" ] || return 1
-  "$NOMAD_V" raw alloc logs -task "$SINK_TASK" -tail -c 1048576 "$alloc" 2>&1 \
+  # La suite CI console utilise le même sink et peut produire >1 Mio pendant
+  # ce scénario. Lecture bornée à 8 Mio, puis filtrage immédiat sur le WID.
+  "$NOMAD_V" raw alloc logs -task "$SINK_TASK" -tail -c 8388608 "$alloc" 2>&1 \
     | RUN_WID="$WID" python3 -c '
 import os,re,sys
 data=sys.stdin.read()
@@ -130,8 +132,11 @@ for block in re.findall(r"---------- MESSAGE FOLLOWS ----------.*?------------ E
 }
 
 ensure_sink() {
-  local alloc state
+  local alloc state active_count
   assert_safe_target
+  active_count="$($NOMAD_V raw job allocs -json "$STAGING_JOB" 2>/dev/null \
+    | python3 -c 'import json,sys; a=json.load(sys.stdin); print(sum(x.get("ClientStatus")=="running" and x.get("DesiredStatus")=="run" for x in a))')"
+  [ "$active_count" = "1" ] || fatal "$STAGING_JOB instable: $active_count allocation(s) active(s), attendre la fin du rolling deploy"
   alloc="$(staging_alloc)"
   [ -n "$alloc" ] || fatal "allocation running de $STAGING_JOB introuvable"
   state="$($NOMAD_V raw alloc status -json "$alloc" 2>/dev/null \
@@ -151,8 +156,13 @@ cleanup() {
 trap cleanup EXIT
 
 open_window='{"days":[0,1,2,3,4,5,6],"start_hour":0,"end_hour":24,"timezone":"UTC"}'
-closed_day="$(date -u -d tomorrow +%w)"
-closed_window="{\"days\":[$closed_day],\"start_hour\":0,\"end_hour\":24,\"timezone\":\"UTC\"}"
+# Fenêtre valide mais certainement fermée pendant le test : même jour UTC,
+# créneau d'une heure commençant deux heures dans le futur (ou déjà passé si
+# le modulo franchit minuit). Cela évite toute ambiguïté de convention weekday.
+closed_day="$(date -u +%w)"
+closed_start=$(( (10#$(date -u +%H) + 2) % 24 ))
+closed_end=$((closed_start + 1))
+closed_window="{\"days\":[$closed_day],\"start_hour\":$closed_start,\"end_hour\":$closed_end,\"timezone\":\"UTC\"}"
 
 provider_json() {
   local sender="$1" cap="$2" window="$3"
@@ -308,7 +318,7 @@ api /api/workspaces.update "$SETTINGS_BODY" >/dev/null
 # CONTRAT GATE : sur la base auditée, les champs inconnus sont perdus ici. Le
 # script s'arrête donc avant template/list/broadcast et n'envoie strictement rien.
 WORKSPACE_JSON="$(api_get "/api/workspaces.get?id=$WID")"
-printf '%s' "$WORKSPACE_JSON" | PROFILE_A="$PROFILE_A" PROFILE_B="$PROFILE_B" SECRET_PROBE_ID="$SECRET_PROBE_ID" python3 -c '
+printf '%s' "$WORKSPACE_JSON" | PROFILE_A="$PROFILE_A" PROFILE_B="$PROFILE_B" SECRET_PROBE_ID="$SECRET_PROBE_ID" CLOSED_DAY="$closed_day" CLOSED_START="$closed_start" CLOSED_END="$closed_end" python3 -c '
 import json,os,sys
 w=json.load(sys.stdin)["workspace"]
 expected=[os.environ["PROFILE_A"],os.environ["PROFILE_B"]]
@@ -318,6 +328,9 @@ providers={i["id"]:i.get("email_provider",{}) for i in w.get("integrations",[]) 
 assert set(providers)==set(expected), "profils absents du workspace"
 assert all(p.get("veridian_profile_daily_cap")==30 for p in providers.values()), "veridian_profile_daily_cap=30 non persiste"
 assert all(p.get("smtp",{}).get("host")=="127.0.0.1" and p.get("smtp",{}).get("port")==1025 for p in providers.values()), "profil actif hors sink"
+window=providers[os.environ["PROFILE_A"]].get("veridian_sending_window",{})
+assert window.get("days")==[int(os.environ["CLOSED_DAY"])], f"jours fenêtre A altérés: {window}"
+assert window.get("start_hour")==int(os.environ["CLOSED_START"]) and window.get("end_hour")==int(os.environ["CLOSED_END"]), f"heures fenêtre A altérées: {window}"
 probe=next((i.get("email_provider",{}) for i in w.get("integrations",[]) if i.get("id")==os.environ["SECRET_PROBE_ID"]), None)
 assert probe is not None, "sonde write-only absente"
 smtp=probe.get("smtp",{})
@@ -337,7 +350,7 @@ PY
 )"
 api /api/templates.create "$TEMPLATE" >/dev/null
 
-log "phase fenêtre: A fermé demain seulement, B ouvert 24/7"
+log "phase fenêtre: A fermé sur le créneau UTC courant, B ouvert 24/7"
 create_list_with_contacts gmailmpwindow 40
 BID_WINDOW="$(fire_broadcast gmail-mp-window gmailmpwindow)"
 wait_for_sql "SELECT (SELECT count(*) FROM message_history WHERE broadcast_id='$BID_WINDOW') + (SELECT count(*) FROM email_queue WHERE source_id='$BID_WINDOW')" 40 "40 affectations figées"
