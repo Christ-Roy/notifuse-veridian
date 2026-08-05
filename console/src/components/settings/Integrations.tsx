@@ -71,9 +71,18 @@ import { v4 as uuidv4 } from 'uuid'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
 import {
   buildGmailAppPasswordProvider,
-  inferEmailProfileMode
+  GMAIL_PERSONAL_DEFAULT_DAILY_CAP,
+  GMAIL_PERSONAL_MAX_DAILY_CAP,
+  inferEmailProfileMode,
+  marketingProfileIds,
+  smtpSettingsForEdit,
+  smtpSettingsForRequest,
+  withMarketingProfileRotation
 } from './veridian_email_profiles'
 import type { EmailProfileMode } from './veridian_email_profiles'
+import { RecipientProviderPolicy, SendingProfilesOverview } from './veridian_sending_profiles_ui'
+import { useEmailProfilesUsage } from './veridian_email_profiles_usage_hook'
+import type { EmailProfileUsage } from '../../services/api/veridian_email_profiles'
 
 // Provider types that only support transactional emails, not marketing emails
 const transactionalEmailOnly: EmailProviderKind[] = []
@@ -119,6 +128,9 @@ interface EmailIntegrationProps {
   startEditEmailProvider: (integration: Integration) => void
   startTestEmailProvider: (integrationId: string) => void
   setIntegrationAsDefault: (id: string, purpose: 'marketing' | 'transactional') => Promise<void>
+  activeMarketingProfileIds: string[]
+  toggleMarketingProfile: (id: string, enabled: boolean) => Promise<void>
+  usage?: EmailProfileUsage
   deleteIntegration: (integrationId: string) => Promise<void>
 }
 
@@ -133,12 +145,20 @@ const EmailIntegration = ({
   startEditEmailProvider,
   startTestEmailProvider,
   setIntegrationAsDefault,
+  activeMarketingProfileIds,
+  toggleMarketingProfile,
+  usage,
   deleteIntegration
 }: EmailIntegrationProps) => {
   const { t } = useLingui()
   const provider = integration.email_provider
   const isGmailAppPassword = inferEmailProfileMode(provider) === 'gmail_app_password'
+  const hasSender = (provider.senders?.length || 0) > 0
+  const isConfigured = hasSender && !!provider.veridian_credentials_configured
+  const isTransportVerified = !!provider.veridian_transport_verified_at
   const purposes = getIntegrationPurpose(integration.id)
+  const isInMarketingRotation = activeMarketingProfileIds.includes(integration.id)
+  const isOnlyMarketingProfile = isInMarketingRotation && activeMarketingProfileIds.length === 1
   const [webhookStatus, setWebhookStatus] = useState<WebhookRegistrationStatus | null>(null)
   const [loadingWebhooks, setLoadingWebhooks] = useState(false)
   const [registrationInProgress, setRegistrationInProgress] = useState(false)
@@ -148,7 +168,7 @@ const EmailIntegration = ({
     if (workspace?.id && integration?.id) {
       fetchWebhookStatus() // eslint-disable-line react-hooks/immutability -- existing callback is declared below
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchWebhookStatus is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchWebhookStatus is stable
   }, [workspace?.id, integration?.id])
 
   // Function to fetch webhook status
@@ -304,6 +324,7 @@ const EmailIntegration = ({
                     type="text"
                     onClick={() => startEditEmailProvider(integration)}
                     size="small"
+                    aria-label={t`Edit ${integration.name}`}
                   >
                     <FontAwesomeIcon icon={faPenToSquare} />
                   </Button>
@@ -316,12 +337,16 @@ const EmailIntegration = ({
                   cancelText={t`No`}
                 >
                   <Tooltip title={t`Delete`}>
-                    <Button size="small" type="text">
+                    <Button size="small" type="text" aria-label={t`Delete ${integration.name}`}>
                       <FontAwesomeIcon icon={faTrashCan} />
                     </Button>
                   </Tooltip>
                 </Popconfirm>
-                <Button onClick={() => startTestEmailProvider(integration.id)} size="small">
+                <Button
+                  onClick={() => startTestEmailProvider(integration.id)}
+                  size="small"
+                  aria-label={t`Test ${integration.name}`}
+                >
                   {t`Test`}
                 </Button>
               </Space>
@@ -340,14 +365,30 @@ const EmailIntegration = ({
               <Tag bordered={false} color="geekblue">
                 {isGmailAppPassword
                   ? t`Gmail app password`
-                  : provider.kind === 'smtp' && provider.smtp?.auth_type === 'oauth2'
-                    ? provider.smtp.oauth2_provider === 'google'
-                      ? t`Gmail OAuth`
-                      : t`SMTP OAuth`
-                    : provider.kind === 'smtp'
-                      ? t`Custom SMTP`
-                      : provider.kind.toUpperCase()}
+                  : inferEmailProfileMode(provider) === 'gmail_oauth'
+                    ? t`Gmail OAuth`
+                    : provider.kind === 'smtp' && provider.smtp?.auth_type === 'oauth2'
+                      ? provider.smtp.oauth2_provider === 'google'
+                        ? t`Gmail OAuth`
+                        : t`SMTP OAuth`
+                      : provider.kind === 'smtp'
+                        ? t`Custom SMTP`
+                        : provider.kind.toUpperCase()}
               </Tag>
+              <Tag bordered={false} color={isConfigured ? 'green' : 'orange'}>
+                {isConfigured ? t`Credentials saved` : t`Credentials missing`}
+              </Tag>
+              <Tooltip
+                title={
+                  isTransportVerified
+                    ? t`Last verified ${provider.veridian_transport_verified_at}`
+                    : t`Send a test email before activating this profile.`
+                }
+              >
+                <Tag bordered={false} color={isTransportVerified ? 'blue' : 'default'}>
+                  {isTransportVerified ? t`Ready` : t`Not tested`}
+                </Tag>
+              </Tooltip>
             </Space>
           </Tooltip>
         </>
@@ -355,6 +396,23 @@ const EmailIntegration = ({
     >
       <Descriptions bordered size="small" column={1} className="mt-2">
         <Descriptions.Item label={t`Profile`}>{integration.name}</Descriptions.Item>
+        <Descriptions.Item label={t`Daily profile cap`}>
+          {usage ? (
+            <Space wrap>
+              <strong>{t`${usage.used} / ${usage.cap} sent today`}</strong>
+              <Tag color={usage.remaining > 0 ? 'blue' : 'red'}>
+                {t`${usage.remaining} remaining`}
+              </Tag>
+            </Space>
+          ) : provider.veridian_profile_daily_cap && provider.veridian_profile_daily_cap > 0 ? (
+            <Space wrap>
+              <strong>{t`${provider.veridian_profile_daily_cap} emails / day`}</strong>
+              {isGmailAppPassword && <Tag color="blue">{t`Gmail personal safety limit`}</Tag>}
+            </Space>
+          ) : (
+            <span>{t`Today's usage is unavailable`}</span>
+          )}
+        </Descriptions.Item>
         <Descriptions.Item label={t`Senders`}>
           {provider.senders && provider.senders.length > 0 ? (
             <div>
@@ -378,8 +436,8 @@ const EmailIntegration = ({
             {isIntegrationInUse(integration.id) ? (
               <>
                 {purposes.includes('Marketing Emails') && (
-                  <Tag bordered={false} color="blue">
-                    <FontAwesomeIcon icon={faPaperPlane} className="mr-1" /> {t`Marketing Emails`}
+                  <Tag bordered={false} color="green">
+                    <FontAwesomeIcon icon={faPaperPlane} className="mr-1" /> {t`Marketing rotation`}
                   </Tag>
                 )}
                 {purposes.includes('Transactional Emails') && (
@@ -400,31 +458,47 @@ const EmailIntegration = ({
             )}
             {isOwner && (
               <>
-                {!purposes.includes('Marketing Emails') &&
-                  !transactionalEmailOnly.includes(provider.kind) && (
-                    <Popconfirm
-                      title={t`Set as marketing email provider?`}
-                      description={t`All marketing emails (broadcasts, campaigns) will be sent through this provider from now on.`}
-                      onConfirm={() => setIntegrationAsDefault(integration.id, 'marketing')}
-                      okText={t`Yes`}
-                      cancelText={t`No`}
+                {!transactionalEmailOnly.includes(provider.kind) && (
+                  <Popconfirm
+                    title={
+                      isInMarketingRotation
+                        ? t`Remove this profile from marketing rotation?`
+                        : t`Add this profile to marketing rotation?`
+                    }
+                    description={
+                      !isTransportVerified
+                        ? t`Send a successful test email before adding this profile to rotation.`
+                        : isOnlyMarketingProfile
+                          ? t`At least one marketing profile must remain active.`
+                          : isInMarketingRotation
+                            ? t`Queued emails already assigned to this profile keep their assignment.`
+                            : t`New marketing emails can be distributed to this profile.`
+                    }
+                    onConfirm={() => toggleMarketingProfile(integration.id, !isInMarketingRotation)}
+                    disabled={!isTransportVerified || isOnlyMarketingProfile}
+                    okText={t`Yes`}
+                    cancelText={t`No`}
+                  >
+                    <Button
+                      size="small"
+                      className="mr-2 mt-2"
+                      type={isInMarketingRotation ? 'default' : 'primary'}
+                      disabled={!isTransportVerified || isOnlyMarketingProfile}
                     >
-                      <Button
-                        size="small"
-                        className="mr-2 mt-2"
-                        type={
-                          !workspace?.settings.marketing_email_provider_id ? 'primary' : undefined
-                        }
-                      >
-                        {t`Use for Marketing`}
-                      </Button>
-                    </Popconfirm>
-                  )}
+                      {isInMarketingRotation ? t`Remove from rotation` : t`Add to rotation`}
+                    </Button>
+                  </Popconfirm>
+                )}
                 {!purposes.includes('Transactional Emails') && (
                   <Popconfirm
                     title={t`Set as transactional email provider?`}
-                    description={t`All transactional emails (notifications, password resets, etc.) will be sent through this provider from now on.`}
+                    description={
+                      isTransportVerified
+                        ? t`All transactional emails (notifications, password resets, etc.) will be sent through this provider from now on.`
+                        : t`Send a successful test email before activating this profile.`
+                    }
                     onConfirm={() => setIntegrationAsDefault(integration.id, 'transactional')}
+                    disabled={!isTransportVerified}
                     okText={t`Yes`}
                     cancelText={t`No`}
                   >
@@ -434,6 +508,7 @@ const EmailIntegration = ({
                       type={
                         !workspace?.settings.transactional_email_provider_id ? 'primary' : undefined
                       }
+                      disabled={!isTransportVerified}
                     >
                       {t`Use for Transactional`}
                     </Button>
@@ -446,6 +521,9 @@ const EmailIntegration = ({
         {renderProviderSpecificDetails(provider)}
         {provider.kind !== 'smtp' && renderWebhookStatus()}
       </Descriptions>
+      <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50/60">
+        <RecipientProviderPolicy workspace={workspace} provider={provider} usage={usage} />
+      </div>
     </Card>
   )
 }
@@ -466,17 +544,22 @@ interface EmailProviderFormValues {
   type?: IntegrationType
   profile_mode?: EmailProfileMode
   gmail_sender_name?: string
+  gmail_profile_daily_cap?: number
 }
 
-const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailProvider => {
+const constructProviderFromForm = (
+  formValues: EmailProviderFormValues,
+  existingProvider?: EmailProvider
+): EmailProvider => {
   if (formValues.profile_mode === 'gmail_app_password') {
     return buildGmailAppPasswordProvider({
       email: formValues.smtp?.username || '',
       senderName: formValues.gmail_sender_name || '',
       appPassword: formValues.smtp?.password,
       rateLimitPerMinute: formValues.rate_limit_per_minute || 1,
+      profileDailyCap: formValues.gmail_profile_daily_cap,
       existingSenders: formValues.senders,
-      existingSMTP: formValues.smtp
+      existingProvider
     })
   }
 
@@ -490,7 +573,7 @@ const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailPr
   if (formValues.kind === 'ses' && formValues.ses) {
     provider.ses = formValues.ses
   } else if (formValues.kind === 'smtp' && formValues.smtp) {
-    provider.smtp = formValues.smtp
+    provider.smtp = smtpSettingsForRequest(formValues.smtp)
   } else if (formValues.kind === 'sparkpost' && formValues.sparkpost) {
     provider.sparkpost = formValues.sparkpost
   } else if (formValues.kind === 'postmark' && formValues.postmark) {
@@ -509,6 +592,7 @@ const constructProviderFromForm = (formValues: EmailProviderFormValues): EmailPr
 // Main Integrations component
 export function Integrations({ workspace, onSave, loading, isOwner }: IntegrationsProps) {
   const { t } = useLingui()
+  const profileUsage = useEmailProfilesUsage(workspace?.id)
   // State for providers
   const [emailProviderForm] = Form.useForm()
   const rateLimitPerMinute = Form.useWatch('rate_limit_per_minute', emailProviderForm)
@@ -547,7 +631,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const [testModalVisible, setTestModalVisible] = useState(false)
   const [testEmailAddress, setTestEmailAddress] = useState('')
   const [testingIntegrationId, setTestingIntegrationId] = useState<string | null>(null)
-  const [testingProvider, setTestingProvider] = useState<EmailProvider | null>(null)
   const [testingEmailLoading, setTestingEmailLoading] = useState(false)
 
   // Lists state for Supabase integration
@@ -558,7 +641,9 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     const fetchLists = async () => {
       if (!workspace) return
       try {
-        const listsResponse = await listsApi.list({ workspace_id: workspace.id })
+        const listsResponse = await listsApi.list({
+          workspace_id: workspace.id
+        })
         setLists(listsResponse.lists || [])
       } catch (error) {
         console.error('Failed to fetch lists:', error)
@@ -566,7 +651,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       }
     }
     fetchLists()
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- Only re-run on workspace change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only re-run on workspace change
   }, [workspace?.id])
 
   if (!workspace) {
@@ -581,7 +666,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   // Is the integration being used
   const isIntegrationInUse = (id: string): boolean => {
     return (
-      workspace.settings.marketing_email_provider_id === id ||
+      marketingProfileIds(workspace.settings).includes(id) ||
       workspace.settings.transactional_email_provider_id === id
     )
   }
@@ -590,7 +675,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const getIntegrationPurpose = (id: string): string[] => {
     const purposes: string[] = []
 
-    if (workspace.settings.marketing_email_provider_id === id) {
+    if (marketingProfileIds(workspace.settings).includes(id)) {
       purposes.push('Marketing Emails')
     }
 
@@ -603,6 +688,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Set integration as default for a purpose
   const setIntegrationAsDefault = async (id: string, purpose: 'marketing' | 'transactional') => {
+    const integration = getIntegrationById(id)
+    if (!integration?.email_provider?.veridian_transport_verified_at) {
+      message.error(t`Send a successful test email before activating this profile`)
+      return
+    }
+
     try {
       const updateData = {
         ...workspace,
@@ -620,10 +711,43 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       const response = await workspaceService.get(workspace.id)
       await onSave(response.workspace)
 
-      message.success(purpose === 'marketing' ? t`Set as default marketing email provider` : t`Set as default transactional email provider`)
+      message.success(
+        purpose === 'marketing'
+          ? t`Set as default marketing email provider`
+          : t`Set as default transactional email provider`
+      )
     } catch (error) {
       console.error('Error setting default provider', error)
       message.error(t`Failed to set default provider`)
+    }
+  }
+
+  const toggleMarketingProfile = async (id: string, enabled: boolean) => {
+    if (enabled) {
+      const integration = getIntegrationById(id)
+      if (!integration?.email_provider?.veridian_transport_verified_at) {
+        message.error(t`Send a successful test email before adding this profile to rotation`)
+        return
+      }
+    }
+
+    try {
+      const updateData = {
+        ...workspace,
+        settings: withMarketingProfileRotation(workspace.settings, id, enabled)
+      }
+
+      await workspaceService.update(updateData)
+      const response = await workspaceService.get(workspace.id)
+      await onSave(response.workspace)
+      message.success(
+        enabled
+          ? t`Profile added to marketing rotation`
+          : t`Profile removed from marketing rotation`
+      )
+    } catch (error) {
+      console.error('Error updating marketing profile rotation', error)
+      message.error(t`Failed to update marketing profile rotation`)
     }
   }
 
@@ -644,11 +768,15 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       name: integration.name,
       kind: integration.email_provider.kind,
       profile_mode: profileMode,
-      gmail_sender_name: integrationSenders.find((sender) => sender.is_default)?.name || integrationSenders[0]?.name,
+      gmail_sender_name:
+        integrationSenders.find((sender) => sender.is_default)?.name || integrationSenders[0]?.name,
       senders: integrationSenders,
       rate_limit_per_minute: integration.email_provider.rate_limit_per_minute || 25,
+      gmail_profile_daily_cap:
+        integration.email_provider.veridian_profile_daily_cap ||
+        (profileMode === 'gmail_app_password' ? GMAIL_PERSONAL_DEFAULT_DAILY_CAP : undefined),
       ses: integration.email_provider.ses,
-      smtp: integration.email_provider.smtp,
+      smtp: smtpSettingsForEdit(integration.email_provider.smtp),
       sparkpost: integration.email_provider.sparkpost,
       postmark: integration.email_provider.postmark
         ? {
@@ -739,7 +867,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     }
 
     setTestingIntegrationId(integrationId)
-    setTestingProvider(integration.email_provider)
     setTestEmailAddress('')
     setTestModalVisible(true)
   }
@@ -778,6 +905,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       name: t`Gmail sending profile`,
       profile_mode: 'gmail_app_password',
       rate_limit_per_minute: 1,
+      gmail_profile_daily_cap: GMAIL_PERSONAL_DEFAULT_DAILY_CAP,
       smtp: {
         host: 'smtp.gmail.com',
         port: 587,
@@ -966,7 +1094,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     }
 
     try {
-      const provider = constructProviderFromForm({ ...values, senders })
+      const existingProvider = editingIntegrationId
+        ? getIntegrationById(editingIntegrationId)?.email_provider
+        : undefined
+      const provider = constructProviderFromForm({ ...values, senders }, existingProvider)
       const name = values.name || provider.kind
       const type: IntegrationType = 'email'
 
@@ -996,22 +1127,8 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           provider
         }
 
-        const created = await workspaceService.createIntegration(createRequest)
-
-        // The first sending profile should immediately be usable for campaigns.
-        // Additional profiles remain explicit choices and can be promoted with
-        // the "Use for Marketing" action on their card.
-        if (!workspace.settings.marketing_email_provider_id) {
-          const latest = await workspaceService.get(workspace.id)
-          await workspaceService.update({
-            ...latest.workspace,
-            settings: {
-              ...latest.workspace.settings,
-              marketing_email_provider_id: created.integration_id
-            }
-          })
-        }
-        message.success(t`Integration created successfully`)
+        await workspaceService.createIntegration(createRequest)
+        message.success(t`Profile saved. Send a test email before activating it.`)
       }
 
       // Refresh workspace data
@@ -1051,39 +1168,40 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Handler for testing the email provider
   const handleTestProvider = async () => {
-    if (!workspace || !testingProvider || !testEmailAddress) return
+    if (!workspace || !testingIntegrationId || !testEmailAddress) return
 
     try {
       setTestingEmailLoading(true)
 
-      let providerToTest: EmailProvider
-
-      // If testing an existing integration
-      if (testingIntegrationId) {
-        const integration = getIntegrationById(testingIntegrationId)
-        if (!integration || integration.type !== 'email' || !integration.email_provider) {
-          message.error(t`Integration not found or not an email provider`)
-          return
-        }
-        providerToTest = integration.email_provider
-      } else {
-        // Testing a provider that hasn't been saved yet
-        if (!testingProvider) {
-          message.error(t`No provider configured for testing`)
-          return
-        }
-        providerToTest = testingProvider
+      const integration = getIntegrationById(testingIntegrationId)
+      if (!integration || integration.type !== 'email' || !integration.email_provider) {
+        message.error(t`Integration not found or not an email provider`)
+        return
       }
 
       const response = await emailService.testProvider(
         workspace.id,
-        providerToTest,
+        testingIntegrationId,
         testEmailAddress
       )
 
       if (response.success) {
         message.success(t`Test email sent successfully`)
         setTestModalVisible(false)
+
+        let refreshed = (await workspaceService.get(workspace.id)).workspace
+        if (marketingProfileIds(refreshed.settings).length === 0) {
+          await workspaceService.update({
+            ...refreshed,
+            settings: {
+              ...refreshed.settings,
+              marketing_email_provider_id: testingIntegrationId,
+              veridian_marketing_email_provider_ids: [testingIntegrationId]
+            }
+          })
+          refreshed = (await workspaceService.get(workspace.id)).workspace
+        }
+        await onSave(refreshed)
       } else {
         message.error(t`Failed to send test email: ${response.error}`)
       }
@@ -1100,7 +1218,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     return isOwner ? (
       <>
         <Card className="mb-4" styles={{ body: { padding: 16 } }}>
-          <div className="flex justify-between items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
             <div>
               <div className="font-semibold">{t`Gmail with an app password`}</div>
               <div className="text-sm text-gray-500 mt-1">
@@ -1110,6 +1228,21 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             <Button type="primary" onClick={handleSelectGmailAppPassword}>
               {t`Add Gmail profile`}
             </Button>
+          </div>
+        </Card>
+
+        <Card className="mb-4" styles={{ body: { padding: 16 } }}>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div>
+              <Space wrap>
+                <div className="font-semibold">Gmail OAuth</div>
+                <Tag>{t`Coming soon`}</Tag>
+              </Space>
+              <div className="text-sm text-gray-500 mt-1">
+                {t`The profile model is OAuth-ready. Connection will be enabled when the managed Google consent flow is available.`}
+              </div>
+            </div>
+            <Button disabled>{t`Connect with Google`}</Button>
           </div>
         </Card>
 
@@ -1209,7 +1342,9 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </Button>
         </div>
       </>
-    ) : <IntegrationOwnerNotice />
+    ) : (
+      <IntegrationOwnerNotice />
+    )
   }
 
   // Render the list of integrations
@@ -1226,7 +1361,11 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
               <div key={integration.id} className="mb-4">
                 <EmailIntegration
                   key={integration.id}
-                  integration={integration as Integration & { email_provider: EmailProvider }}
+                  integration={
+                    integration as Integration & {
+                      email_provider: EmailProvider
+                    }
+                  }
                   isOwner={isOwner}
                   workspace={workspace}
                   getIntegrationPurpose={getIntegrationPurpose}
@@ -1235,6 +1374,11 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                   startEditEmailProvider={startEditEmailProvider}
                   startTestEmailProvider={startTestEmailProvider}
                   setIntegrationAsDefault={setIntegrationAsDefault}
+                  activeMarketingProfileIds={marketingProfileIds(workspace.settings)}
+                  toggleMarketingProfile={toggleMarketingProfile}
+                  usage={profileUsage.data?.profiles.find(
+                    (profile) => profile.integration_id === integration.id
+                  )}
                   deleteIntegration={deleteIntegration}
                 />
               </div>
@@ -1715,6 +1859,30 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             </Form.Item>
 
             <Form.Item
+              name="gmail_profile_daily_cap"
+              label={t`Daily profile cap`}
+              extra={t`Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; Gmail personal profiles cannot exceed 50/day.`}
+              rules={[
+                { required: true, message: t`Daily profile cap is required` },
+                {
+                  type: 'number',
+                  min: 1,
+                  max: GMAIL_PERSONAL_MAX_DAILY_CAP,
+                  message: t`Enter a value between 1 and ${GMAIL_PERSONAL_MAX_DAILY_CAP}`
+                }
+              ]}
+            >
+              <InputNumber
+                min={1}
+                max={GMAIL_PERSONAL_MAX_DAILY_CAP}
+                precision={0}
+                addonAfter={t`emails / day`}
+                style={{ width: '100%' }}
+                disabled={!isOwner}
+              />
+            </Form.Item>
+
+            <Form.Item
               name={['smtp', 'password']}
               label={t`Google app password`}
               rules={
@@ -1729,7 +1897,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                       }
                     ]
                   : [
-                      { required: true, message: t`Google app password is required` },
+                      {
+                        required: true,
+                        message: t`Google app password is required`
+                      },
                       {
                         validator: async (_, value?: string) => {
                           if (value && value.replace(/\s/g, '').length !== 16) {
@@ -1748,6 +1919,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
               <Input.Password
                 placeholder="abcd efgh ijkl mnop"
                 autoComplete="new-password"
+                visibilityToggle={false}
                 disabled={!isOwner}
               />
             </Form.Item>
@@ -1766,12 +1938,20 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           <>
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item name={['smtp', 'host']} label={t`SMTP Host`} rules={[{ required: true }]}>
+                <Form.Item
+                  name={['smtp', 'host']}
+                  label={t`SMTP Host`}
+                  rules={[{ required: true }]}
+                >
                   <Input placeholder="smtp.yourdomain.com" disabled={!isOwner} />
                 </Form.Item>
               </Col>
               <Col span={6}>
-                <Form.Item name={['smtp', 'port']} label={t`SMTP Port`} rules={[{ required: true }]}>
+                <Form.Item
+                  name={['smtp', 'port']}
+                  label={t`SMTP Port`}
+                  rules={[{ required: true }]}
+                >
                   <InputNumber min={1} max={65535} placeholder="587" disabled={!isOwner} />
                 </Form.Item>
               </Col>
@@ -1813,7 +1993,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                       <Form.Item
                         name={['smtp', 'oauth2_provider']}
                         label={t`OAuth2 Provider`}
-                        rules={[{ required: true, message: t`Please select an OAuth2 provider` }]}
+                        rules={[
+                          {
+                            required: true,
+                            message: t`Please select an OAuth2 provider`
+                          }
+                        ]}
                       >
                         <Select placeholder={t`Select OAuth2 Provider`} disabled={!isOwner}>
                           <Select.Option value="microsoft">
@@ -1827,7 +2012,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                         name={['smtp', 'username']}
                         label={t`Email Address`}
                         rules={[
-                          { required: true, message: t`Email address is required for OAuth2` }
+                          {
+                            required: true,
+                            message: t`Email address is required for OAuth2`
+                          }
                         ]}
                         tooltip={t`The email address that will be used as the SMTP user for authentication`}
                       >
@@ -1865,7 +2053,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                                 <Form.Item
                                   name={['smtp', 'oauth2_client_id']}
                                   label="Application (Client) ID"
-                                  rules={[{ required: true, message: 'Client ID is required' }]}
+                                  rules={[
+                                    {
+                                      required: true,
+                                      message: 'Client ID is required'
+                                    }
+                                  ]}
                                   tooltip={t`Find this in Azure Portal > App registrations > Your App > Overview`}
                                 >
                                   <Input
@@ -1876,7 +2069,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                                 <Form.Item
                                   name={['smtp', 'oauth2_client_secret']}
                                   label="Client Secret"
-                                  rules={[{ required: true, message: 'Client Secret is required' }]}
+                                  rules={[
+                                    {
+                                      required: true,
+                                      message: 'Client Secret is required'
+                                    }
+                                  ]}
                                   tooltip={t`Create this in Azure Portal > App registrations > Your App > Certificates & secrets`}
                                 >
                                   <Input.Password
@@ -1894,7 +2092,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                                 <Form.Item
                                   name={['smtp', 'oauth2_client_id']}
                                   label="Client ID"
-                                  rules={[{ required: true, message: 'Client ID is required' }]}
+                                  rules={[
+                                    {
+                                      required: true,
+                                      message: 'Client ID is required'
+                                    }
+                                  ]}
                                   tooltip={t`Find this in Google Cloud Console > APIs & Services > Credentials`}
                                 >
                                   <Input placeholder="Client ID" disabled={!isOwner} />
@@ -1902,7 +2105,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                                 <Form.Item
                                   name={['smtp', 'oauth2_client_secret']}
                                   label="Client Secret"
-                                  rules={[{ required: true, message: 'Client Secret is required' }]}
+                                  rules={[
+                                    {
+                                      required: true,
+                                      message: 'Client Secret is required'
+                                    }
+                                  ]}
                                   tooltip={t`Find this in Google Cloud Console > APIs & Services > Credentials`}
                                 >
                                   <Input.Password placeholder="Client Secret" disabled={!isOwner} />
@@ -1970,7 +2178,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                 disabled={!isOwner}
                 options={[
                   { label: 'SparkPost US', value: 'https://api.sparkpost.com' },
-                  { label: 'SparkPost EU', value: 'https://api.eu.sparkpost.com' }
+                  {
+                    label: 'SparkPost EU',
+                    value: 'https://api.eu.sparkpost.com'
+                  }
                 ]}
               />
             </Form.Item>
@@ -2013,7 +2224,11 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             <Form.Item name={['mailgun', 'domain']} label={t`Domain`} rules={[{ required: true }]}>
               <Input placeholder="mail.yourdomain.com" disabled={!isOwner} />
             </Form.Item>
-            <Form.Item name={['mailgun', 'api_key']} label={t`API Key`} rules={[{ required: true }]}>
+            <Form.Item
+              name={['mailgun', 'api_key']}
+              label={t`API Key`}
+              rules={[{ required: true }]}
+            >
               <Input.Password placeholder="API Key" disabled={!isOwner} />
             </Form.Item>
             <Form.Item name={['mailgun', 'region']} label={t`Region`} initialValue="US">
@@ -2031,7 +2246,11 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
         {providerType === 'mailjet' && (
           <>
-            <Form.Item name={['mailjet', 'api_key']} label={t`API Key`} rules={[{ required: true }]}>
+            <Form.Item
+              name={['mailjet', 'api_key']}
+              label={t`API Key`}
+              rules={[{ required: true }]}
+            >
               <Input.Password placeholder="API Key" disabled={!isOwner} />
             </Form.Item>
             <Form.Item
@@ -2065,7 +2284,11 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
               label={t`Rate limit for marketing emails (emails per minute)`}
               rules={[
                 { required: true, message: 'Please enter a rate limit' },
-                { type: 'number', min: 1, message: 'Rate limit must be at least 1' }
+                {
+                  type: 'number',
+                  min: 1,
+                  message: 'Rate limit must be at least 1'
+                }
               ]}
               initialValue={25}
             >
@@ -2074,8 +2297,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
             {(rateLimitPerMinute || 25) > 0 && (
               <div className="text-xs text-gray-600 -mt-4 mb-4">
-                <div>≈ {((rateLimitPerMinute || 25) * 60).toLocaleString()} {t`emails per hour`}</div>
-                <div>≈ {((rateLimitPerMinute || 25) * 60 * 24).toLocaleString()} {t`emails per day`}</div>
+                <div>
+                  ≈ {((rateLimitPerMinute || 25) * 60).toLocaleString()} {t`emails per hour`}
+                </div>
+                <div>
+                  ≈ {((rateLimitPerMinute || 25) * 60 * 24).toLocaleString()} {t`emails per day`}
+                </div>
               </div>
             )}
           </>
@@ -2260,15 +2487,21 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           <>
             <div>{t`Maximum one email per minute`}</div>
             <div className="text-xs text-gray-600 mt-1">
-              {t`The campaign daily cap is configured separately.`}
+              {t`The daily profile cap is enforced separately.`}
             </div>
           </>
         ) : (
           <>
-            <div>{provider.rate_limit_per_minute} {t`emails per minute`}</div>
+            <div>
+              {provider.rate_limit_per_minute} {t`emails per minute`}
+            </div>
             <div className="text-xs text-gray-600 mt-1">
-              <div>≈ {(provider.rate_limit_per_minute * 60).toLocaleString()} {t`emails per hour`}</div>
-              <div>≈ {(provider.rate_limit_per_minute * 60 * 24).toLocaleString()} {t`emails per day`}</div>
+              <div>
+                ≈ {(provider.rate_limit_per_minute * 60).toLocaleString()} {t`emails per hour`}
+              </div>
+              <div>
+                ≈ {(provider.rate_limit_per_minute * 60 * 24).toLocaleString()} {t`emails per day`}
+              </div>
             </div>
           </>
         )}
@@ -2280,28 +2513,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
   // Render the drawer for configuring email providers
   const renderProviderDrawer = () => {
-    // Test provider from the drawer
-    const handleTestFromDrawer = () => {
-      // Validate form fields before proceeding
-      emailProviderForm
-        .validateFields()
-        .then((values) => {
-          // Create a temporary provider object from form values
-          const tempProvider = constructProviderFromForm({ ...values, senders })
-
-          // Open test modal with the temporary provider
-          setTestEmailAddress('')
-          setTestingIntegrationId(null) // No integration ID as this is a new provider
-          setTestingProvider(tempProvider)
-          setTestModalVisible(true)
-        })
-        .catch((error) => {
-          // Form validation failed
-          console.error('Validation failed:', error)
-          message.error('Please fill in all required fields before testing')
-        })
-    }
-
     return (
       <Drawer
         title={
@@ -2320,7 +2531,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           <div style={{ textAlign: 'right' }}>
             <Space>
               <Button onClick={closeProviderDrawer}>{t`Cancel`}</Button>
-              <Button onClick={handleTestFromDrawer}>{t`Test Integration`}</Button>
               <Button type="primary" onClick={() => emailProviderForm.submit()} loading={loading}>
                 {t`Save`}
               </Button>
@@ -2340,6 +2550,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             </Form.Item>
 
             {renderEmailProviderForm(selectedProviderType)}
+            <Alert
+              type="info"
+              showIcon
+              className="mt-4"
+              message={t`Save this profile, then send a test from its card before activating it.`}
+            />
           </Form>
         )}
       </Drawer>
@@ -2353,6 +2569,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       label: t`Gmail with an app password`,
       icon: <FontAwesomeIcon icon={faEnvelope} className="mr-1" />,
       onClick: () => handleSelectGmailAppPassword()
+    },
+    {
+      key: 'gmail-oauth',
+      label: t`Gmail OAuth (coming soon)`,
+      icon: <FontAwesomeIcon icon={faEnvelope} className="mr-1" />,
+      disabled: true
     },
     ...emailProviders.map((provider) => ({
       key: provider.kind,
@@ -2394,6 +2616,17 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         title={t`Sending profiles and integrations`}
         description={t`Add several sending profiles, test them, and choose which one is used for marketing or transactional email.`}
       />
+
+      {(workspace.integrations || []).some(
+        (integration) => integration.type === 'email' && !!integration.email_provider
+      ) && (
+        <SendingProfilesOverview
+          workspace={workspace}
+          usage={profileUsage.data}
+          usageLoading={profileUsage.loading}
+          usageError={profileUsage.error}
+        />
+      )}
 
       {isOwner && (workspace?.integrations?.length ?? 0) > 0 && (
         <div style={{ textAlign: 'right', marginBottom: 16 }}>
@@ -2654,5 +2887,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
 export function IntegrationOwnerNotice() {
   const { t } = useLingui()
-  return <Alert type="warning" showIcon message={t`Only workspace owners can modify integrations`} />
+  return (
+    <Alert type="warning" showIcon message={t`Only workspace owners can modify integrations`} />
+  )
 }
