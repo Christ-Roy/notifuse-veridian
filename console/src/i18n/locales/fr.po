@@ -1205,7 +1205,7 @@ msgstr "Êtes-vous sûr de vouloir supprimer ce header ?"
 msgid "Are you sure you want to delete this node?"
 msgstr "Êtes-vous sûr de vouloir supprimer ce nœud ?"
 
-#: src/pages/TemplatesPage.tsx:302
+#: src/pages/TemplatesPage.tsx:304
 msgid "Are you sure you want to delete this template?"
 msgstr "Êtes-vous sûr de vouloir supprimer ce modèle ?"
 
@@ -1926,7 +1926,7 @@ msgstr "Taille du bouton"
 #: src/pages/BroadcastsPage.tsx:888
 #: src/pages/BroadcastsPage.tsx:1428
 #: src/pages/ListsPage.tsx:318
-#: src/pages/TemplatesPage.tsx:310
+#: src/pages/TemplatesPage.tsx:312
 #: src/pages/TransactionalNotificationsPage.tsx:147
 msgid "Cancel"
 msgstr "Annuler"
@@ -1986,7 +1986,7 @@ msgstr "Catégories"
 #: src/components/blog/ThemeEditorDrawer.tsx:428
 #: src/components/blog/ThemePresetPreviewDrawer.tsx:75
 #: src/components/templates/CreateTemplateDrawer.tsx:720
-#: src/pages/TemplatesPage.tsx:175
+#: src/pages/TemplatesPage.tsx:177
 msgid "Category"
 msgstr "Catégorie"
 
@@ -2164,7 +2164,7 @@ msgid "Clone email template"
 msgstr "Cloner le modèle d email"
 
 #: src/components/templates/CreateTemplateDrawer.tsx:479
-#: src/pages/TemplatesPage.tsx:266
+#: src/pages/TemplatesPage.tsx:268
 msgid "Clone Template"
 msgstr "Cloner le modèle"
 
@@ -2193,7 +2193,7 @@ msgid "Closing time"
 msgstr ""
 
 #: src/components/email_builder/MjmlCodeEditor.tsx:662
-#: src/pages/TemplatesPage.tsx:168
+#: src/pages/TemplatesPage.tsx:170
 msgid "Code"
 msgstr ""
 
@@ -2783,7 +2783,7 @@ msgstr "Créez votre première notification pour commencer"
 msgid "Create Your First Post"
 msgstr "Créer votre premier article"
 
-#: src/pages/TemplatesPage.tsx:396
+#: src/pages/TemplatesPage.tsx:398
 msgid "Create your first template to get started"
 msgstr "Créez votre premier modèle pour commencer"
 
@@ -2793,7 +2793,7 @@ msgstr "créé"
 
 #: src/components/automations/config/TriggerConfigForm.tsx:58
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:403
-#: src/pages/TemplatesPage.tsx:219
+#: src/pages/TemplatesPage.tsx:221
 msgid "Created"
 msgstr "Créé"
 
@@ -3129,7 +3129,7 @@ msgid "Deduplication:"
 msgstr "Déduplication :"
 
 #: src/components/templates/SendTemplateModal.tsx:66
-#: src/pages/TemplatesPage.tsx:196
+#: src/pages/TemplatesPage.tsx:198
 msgid "default"
 msgstr "par défaut"
 
@@ -3319,11 +3319,11 @@ msgstr "Supprimer l article"
 msgid "Delete segment"
 msgstr "Supprimer le segment"
 
-#: src/pages/TemplatesPage.tsx:289
+#: src/pages/TemplatesPage.tsx:291
 msgid "Delete Template"
 msgstr "Supprimer le modèle"
 
-#: src/pages/TemplatesPage.tsx:299
+#: src/pages/TemplatesPage.tsx:301
 msgid "Delete template?"
 msgstr "Supprimer le modèle ?"
 
@@ -3794,7 +3794,7 @@ msgid "Edit sending profile"
 msgstr "Modifier le profil d'envoi"
 
 #: src/components/templates/CreateTemplateDrawer.tsx:479
-#: src/pages/TemplatesPage.tsx:244
+#: src/pages/TemplatesPage.tsx:246
 msgid "Edit Template"
 msgstr "Modifier le modèle"
 
@@ -7329,7 +7329,7 @@ msgid "No specific details provided."
 msgstr "Aucun détail spécifique fourni."
 
 #: src/components/templates/TemplateSelectorInput.tsx:244
-#: src/pages/TemplatesPage.tsx:394
+#: src/pages/TemplatesPage.tsx:396
 msgid "No templates found"
 msgstr "Aucun modèle trouvé"
 
@@ -7338,7 +7338,7 @@ msgstr "Aucun modèle trouvé"
 msgid "No templates found for {0} category"
 msgstr "Aucun modèle trouvé pour la catégorie {0}"
 
-#: src/pages/TemplatesPage.tsx:422
+#: src/pages/TemplatesPage.tsx:424
 msgid "No templates found for category \"{selectedCategory}\""
 msgstr "Aucun modèle trouvé pour la catégorie \"{selectedCategory}\""
 
@@ -7462,7 +7462,7 @@ msgstr ""
 msgid "Note: mj-raw components can only be placed directly in mj-body or mj-head, not inside mj-wrapper. Consider moving the mj-raw content outside the wrapper or converting it to appropriate MJML components."
 msgstr "Note : les composants mj-raw ne peuvent être placés que directement dans mj-body ou mj-head, pas à l intérieur de mj-wrapper. Envisagez de déplacer le contenu mj-raw en dehors du wrapper ou de le convertir en composants MJML appropriés."
 
-#: src/pages/TemplatesPage.tsx:304
+#: src/pages/TemplatesPage.tsx:306
 msgid "Note: The template will be hidden from your workspace but preserved to maintain the ability to preview previously sent broadcasts and messages that used this template."
 msgstr "Note : Le modèle sera masqué de votre espace de travail mais conservé pour maintenir la possibilité de prévisualiser les diffusions et messages précédemment envoyés qui utilisaient ce modèle."
 
@@ -7994,13 +7994,13 @@ msgstr ""
 msgid "pixel OFF by default"
 msgstr "pixel désactivé par défaut"
 
-#: src/components/transactional/ApiCommandModal.tsx:524
-msgid "Plain text (only safe behind a TLS-terminating proxy)"
-msgstr ""
-
 #: src/pages/TemplatesPage.tsx:168
 msgid "Plain text"
 msgstr "Texte brut"
+
+#: src/components/transactional/ApiCommandModal.tsx:524
+msgid "Plain text (only safe behind a TLS-terminating proxy)"
+msgstr ""
 
 #: src/components/settings/SettingsSidebar.tsx:124
 #: src/components/settings/veridian_plan_settings.tsx:57
@@ -8410,7 +8410,7 @@ msgid "Preview template"
 msgstr "Prévisualiser le modèle"
 
 #: src/pages/BroadcastsPage.tsx:850
-#: src/pages/TemplatesPage.tsx:330
+#: src/pages/TemplatesPage.tsx:332
 msgid "Preview Template"
 msgstr "Prévisualiser le modèle"
 
@@ -9006,7 +9006,7 @@ msgstr "Réinitialiser le formatage"
 msgid "Reset pixel to defaults"
 msgstr ""
 
-#: src/pages/TemplatesPage.tsx:427
+#: src/pages/TemplatesPage.tsx:429
 msgid "reset the filter"
 msgstr "réinitialiser le filtre"
 
@@ -9823,7 +9823,7 @@ msgstr "Envoyer un test"
 #: src/components/templates/SendTemplateModal.tsx:263
 #: src/components/templates/SendTemplateModal.tsx:277
 #: src/pages/BroadcastsPage.tsx:834
-#: src/pages/TemplatesPage.tsx:320
+#: src/pages/TemplatesPage.tsx:322
 msgid "Send Test Email"
 msgstr "Envoyer un email de test"
 
@@ -9838,7 +9838,7 @@ msgstr "Envoyez des notifications transactionnelles via le relais SMTP. Parfait 
 
 #: src/components/templates/CreateTemplateDrawer.tsx:775
 #: src/components/templates/SendTemplateModal.tsx:303
-#: src/pages/TemplatesPage.tsx:181
+#: src/pages/TemplatesPage.tsx:183
 msgid "Sender"
 msgstr "Expéditeur"
 
@@ -10467,7 +10467,7 @@ msgstr "Attributs de style"
 #: src/components/templates/TemplatePreviewDrawer.tsx:335
 #: src/components/templates/TemplateTranslationsTab.tsx:212
 #: src/pages/BroadcastsPage.tsx:719
-#: src/pages/TemplatesPage.tsx:202
+#: src/pages/TemplatesPage.tsx:204
 msgid "Subject"
 msgstr "Sujet"
 
@@ -10753,7 +10753,7 @@ msgid "Template:"
 msgstr "Modèle d'email :"
 
 #: src/layouts/WorkspaceLayout.tsx:288
-#: src/pages/TemplatesPage.tsx:348
+#: src/pages/TemplatesPage.tsx:350
 msgid "Templates"
 msgstr "Modèles d'email"
 
@@ -11204,7 +11204,7 @@ msgstr "Ce segment utilise des filtres de date relatifs et sera automatiquement 
 msgid "This template is already used in another variation"
 msgstr "Ce modèle est déjà utilisé dans une autre variation"
 
-#: src/pages/TemplatesPage.tsx:286
+#: src/pages/TemplatesPage.tsx:288
 msgid "This template is managed by an integration and cannot be deleted"
 msgstr "Ce modèle est géré par une intégration et ne peut pas être supprimé"
 
@@ -11529,7 +11529,7 @@ msgstr "Déclencher sur des modifications de champs spécifiques"
 msgid "Triggered rules ({0})"
 msgstr ""
 
-#: src/pages/TemplatesPage.tsx:425
+#: src/pages/TemplatesPage.tsx:427
 msgid "Try selecting a different category or"
 msgstr "Essayez de sélectionner une catégorie différente ou"
 
@@ -12424,7 +12424,7 @@ msgstr "Oui, effacer"
 msgid "Yes, delete"
 msgstr "Oui, supprimer"
 
-#: src/pages/TemplatesPage.tsx:308
+#: src/pages/TemplatesPage.tsx:310
 #: src/pages/TransactionalNotificationsPage.tsx:146
 msgid "Yes, Delete"
 msgstr "Oui, supprimer"
@@ -12488,10 +12488,10 @@ msgstr "Vous n'avez pas la permission d'écriture pour les contacts"
 msgid "You don't have write permission for lists"
 msgstr "Vous n'avez pas la permission d'écriture pour les listes"
 
-#: src/pages/TemplatesPage.tsx:243
-#: src/pages/TemplatesPage.tsx:265
-#: src/pages/TemplatesPage.tsx:288
-#: src/pages/TemplatesPage.tsx:353
+#: src/pages/TemplatesPage.tsx:245
+#: src/pages/TemplatesPage.tsx:267
+#: src/pages/TemplatesPage.tsx:290
+#: src/pages/TemplatesPage.tsx:355
 msgid "You don't have write permission for templates"
 msgstr "Vous n'avez pas la permission d'écriture pour les modèles"
 
@@ -12519,7 +12519,7 @@ msgid "You must configure a Custom Endpoint URL in General Settings above before
 msgstr "Vous devez configurer une URL d'endpoint personnalisée dans les paramètres généraux ci-dessus avant d'activer le blog."
 
 #: src/pages/BroadcastsPage.tsx:833
-#: src/pages/TemplatesPage.tsx:319
+#: src/pages/TemplatesPage.tsx:321
 msgid "You need read template and write contact permissions to send test emails"
 msgstr "Vous avez besoin des permissions de lecture des modèles et d'écriture des contacts pour envoyer des emails de test"
 
