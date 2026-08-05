@@ -37,7 +37,7 @@ func TestEmailQueueRepository_SetNextRetryContract(t *testing.T) {
 	// Compile-time guard for the transaction-bearing method retained by the
 	// embedded upstream contract.
 	var _ interface {
-		EnqueueTx(context.Context, *sql.Tx, []*EmailQueueEntry) error
+		EnqueueTx(context.Context, *sql.Tx, string, []*EmailQueueEntry) error
 	} = repo
 }
 
