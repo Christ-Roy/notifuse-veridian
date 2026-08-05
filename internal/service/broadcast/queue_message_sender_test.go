@@ -1317,11 +1317,14 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 			},
 		}
 
+		plain := "Bonjour {{ contact.name }}"
 		template := &domain.Template{
 			ID: "template-1",
 			Email: &domain.EmailTemplate{
 				SenderID:         emailSender.ID,
 				Subject:          "Hello {{ contact.name }}",
+				Text:             &plain,
+				PlainTextOnly:    true,
 				VisualEditorTree: createQueueValidTestTree(createQueueTestTextBlock("txt1", "Hello")),
 			},
 		}
@@ -1368,6 +1371,8 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 		assert.Equal(t, "Test Sender", entry.Payload.FromName)
 		assert.Contains(t, entry.Payload.Subject, "Hello")
 		assert.NotEmpty(t, entry.Payload.HTMLContent)
+		assert.Equal(t, "Bonjour John", entry.Payload.TextContent)
+		assert.True(t, entry.Payload.PlainTextOnly)
 		assert.Equal(t, 100, entry.Payload.RateLimitPerMinute)
 		assert.Equal(t, 3, entry.MaxAttempts)
 		// Anti-hash : sans dedup injecté → aucun hash posé (non-régression upstream).

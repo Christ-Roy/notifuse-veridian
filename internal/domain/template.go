@@ -284,6 +284,7 @@ type EmailTemplate struct {
 	CompiledPreview  string                   `json:"compiled_preview"` // compiled html
 	VisualEditorTree notifuse_mjml.EmailBlock `json:"visual_editor_tree"`
 	Text             *string                  `json:"text,omitempty"`
+	PlainTextOnly    bool                     `json:"plain_text_only,omitempty"`
 }
 
 // GetCodeModeMjmlSource returns MjmlSource if the template is in code mode, nil otherwise.
@@ -307,6 +308,9 @@ func (e *EmailTemplate) Validate(testData MapOfAny) error {
 	}
 	if len(e.Subject) > 255 {
 		return fmt.Errorf("invalid email template: subject length must be between 1 and 255")
+	}
+	if e.PlainTextOnly && (e.Text == nil || strings.TrimSpace(*e.Text) == "") {
+		return fmt.Errorf("invalid email template: text is required when plain_text_only is enabled")
 	}
 
 	// Code mode validation: require MjmlSource, skip visual editor tree validation

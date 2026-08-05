@@ -488,7 +488,12 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 	// est un tell anti-spam (HTML_IMAGE_ONLY / MIME_HTML_ONLY côté SpamAssassin).
 	// Best-effort : pas de texte dérivable → on reste HTML-only (non-régression,
 	// l'envoi n'échoue jamais pour cette raison).
-	if plain := veridianHTMLToText(request.Content); plain != "" {
+	if request.PlainTextOnly && strings.TrimSpace(request.TextContent) != "" {
+		msg.SetBodyString(mail.TypeTextPlain, request.TextContent)
+	} else if plain := strings.TrimSpace(request.TextContent); plain != "" {
+		msg.SetBodyString(mail.TypeTextPlain, plain)
+		msg.AddAlternativeString(mail.TypeTextHTML, request.Content)
+	} else if plain := veridianHTMLToText(request.Content); plain != "" {
 		msg.SetBodyString(mail.TypeTextPlain, plain)
 		msg.AddAlternativeString(mail.TypeTextHTML, request.Content)
 	} else {

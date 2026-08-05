@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -355,6 +356,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to get existing workspace")
 		return nil, err
 	}
+	policyChanged := veridianWorkspaceSendingPolicyChanged(existingWorkspace.Settings, settings)
 
 	existingWorkspace.Name = name
 	existingWorkspace.Settings.WebsiteURL = settings.WebsiteURL
@@ -466,10 +468,31 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
+	if policyChanged && s.emailIntegrationPolicyRepo != nil {
+		for _, integration := range existingWorkspace.GetIntegrationsByType(domain.IntegrationTypeEmail) {
+			if _, err := s.emailIntegrationPolicyRepo.WakePendingByIntegration(ctx, id, integration.ID); err != nil {
+				s.logger.WithField("workspace_id", id).
+					WithField("integration_id", integration.ID).
+					WithField("error", err.Error()).
+					Warn("Workspace sending policy updated but pending queue wake failed")
+			}
+		}
+	}
+
 	// Blog themes are now created by the frontend when enabling the blog
 	// No automatic theme creation in the backend
 
 	return existingWorkspace, nil
+}
+
+func veridianWorkspaceSendingPolicyChanged(before, after domain.WorkspaceSettings) bool {
+	return !reflect.DeepEqual(before.VeridianProviderClassRates, after.VeridianProviderClassRates) ||
+		!reflect.DeepEqual(before.VeridianProviderClassDailyCap, after.VeridianProviderClassDailyCap) ||
+		before.VeridianPerRecipientDailyCap != after.VeridianPerRecipientDailyCap ||
+		before.VeridianPerSenderDailyCap != after.VeridianPerSenderDailyCap ||
+		!reflect.DeepEqual(before.VeridianSendingWindow, after.VeridianSendingWindow) ||
+		before.VeridianJitterPct != after.VeridianJitterPct ||
+		!reflect.DeepEqual(before.VeridianExcludedProviderClasses, after.VeridianExcludedProviderClasses)
 }
 
 // DeleteWorkspace deletes a workspace if the user is an owner

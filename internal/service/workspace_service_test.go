@@ -849,6 +849,57 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		assert.Equal(t, expectedWorkspace.Settings, workspace.Settings)
 	})
 
+	t.Run("global sending policy wakes every email profile", func(t *testing.T) {
+		policyQueue := &emailIntegrationLifecycleRepoStub{}
+		service.SetEmailIntegrationLifecycleRepository(policyQueue)
+		settings := domain.WorkspaceSettings{
+			Timezone:        "UTC",
+			DefaultLanguage: "en",
+			Languages:       []string{"en"},
+			VeridianSendingWindow: &domain.VeridianSendingWindow{
+				Days: []int{1, 2, 3, 4, 5}, StartHour: 9, EndHour: 18, Timezone: "UTC",
+			},
+		}
+		existing := &domain.Workspace{
+			ID: workspaceID,
+			Settings: domain.WorkspaceSettings{
+				Timezone: "UTC", DefaultLanguage: "en", Languages: []string{"en"},
+			},
+			Integrations: []domain.Integration{
+				{
+					ID: "gmail-a", Name: "Gmail A", Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind:               domain.EmailProviderKindSMTP,
+						SMTP:               &domain.SMTPSettings{Host: "127.0.0.1", Port: 1025},
+						Senders:            []domain.EmailSender{domain.NewEmailSender("a@example.com", "A")},
+						RateLimitPerMinute: 60,
+					},
+				},
+				{
+					ID: "gmail-b", Name: "Gmail B", Type: domain.IntegrationTypeEmail,
+					EmailProvider: domain.EmailProvider{
+						Kind:               domain.EmailProviderKindSMTP,
+						SMTP:               &domain.SMTPSettings{Host: "127.0.0.1", Port: 1025},
+						Senders:            []domain.EmailSender{domain.NewEmailSender("b@example.com", "B")},
+						RateLimitPerMinute: 60,
+					},
+				},
+			},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(ctx, &domain.User{ID: userID}, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).
+			Return(&domain.UserWorkspace{UserID: userID, WorkspaceID: workspaceID, Role: "owner"}, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existing, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
+
+		_, err := service.UpdateWorkspace(ctx, workspaceID, "Workspace", settings)
+		require.NoError(t, err)
+		require.Equal(t, 2, policyQueue.wakeCalls)
+		require.Equal(t, "gmail-b", policyQueue.integrationID)
+	})
+
 	t.Run("preserves redacted file manager secret", func(t *testing.T) {
 		settings := domain.WorkspaceSettings{
 			Timezone:        "UTC",
@@ -1330,7 +1381,7 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 				Name: "Integration 1",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					Kind: domain.EmailProviderKindSMTP,
+					Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 60,
 				},
 			},
 			{
@@ -1338,7 +1389,7 @@ func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 				Name: "Integration 2",
 				Type: domain.IntegrationTypeEmail,
 				EmailProvider: domain.EmailProvider{
-					Kind: domain.EmailProviderKindSMTP,
+					Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 60,
 				},
 			},
 		}

@@ -220,6 +220,14 @@ func (s *EmailService) SendEmail(ctx context.Context, request domain.SendEmailPr
 	if err := request.Validate(); err != nil {
 		return fmt.Errorf("invalid request: %w", err)
 	}
+	if request.PlainTextOnly {
+		if strings.TrimSpace(request.TextContent) == "" {
+			return fmt.Errorf("invalid request: plain text content is required when plain_text_only is enabled")
+		}
+		if request.Provider.Kind != domain.EmailProviderKindSMTP {
+			return fmt.Errorf("plain_text_only is currently supported only by SMTP profiles")
+		}
+	}
 
 	// If fromAddress is not provided, use the first sender's email from the provider
 	if request.FromAddress == "" && len(request.Provider.Senders) > 0 {
@@ -471,6 +479,17 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 	}
 
 	htmlContent := *compiledTemplate.HTML
+	textContent := ""
+	if emailContent.Text != nil {
+		textContent, err = notifuse_mjml.ProcessLiquidTemplate(
+			*emailContent.Text,
+			request.MessageData.Data,
+			"email_text",
+		)
+		if err != nil {
+			return fmt.Errorf("failed to process plain text with Liquid: %w", err)
+		}
+	}
 
 	now := time.Now().UTC()
 
@@ -531,6 +550,8 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		To:            request.Contact.Email,
 		Subject:       subject,
 		Content:       htmlContent,
+		TextContent:   textContent,
+		PlainTextOnly: emailContent.PlainTextOnly,
 		Provider:      request.EmailProvider,
 		EmailOptions:  request.EmailOptions,
 	}

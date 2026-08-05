@@ -429,6 +429,8 @@ func TestEmailQueuePayload_ToSendEmailProviderRequest(t *testing.T) {
 			FromName:           "Test Sender",
 			Subject:            "Test Subject",
 			HTMLContent:        "<html><body>Test</body></html>",
+			TextContent:        "Test",
+			PlainTextOnly:      true,
 			RateLimitPerMinute: 100,
 			EmailOptions: EmailOptions{
 				ListUnsubscribeURL: "https://example.com/unsubscribe",
@@ -460,6 +462,8 @@ func TestEmailQueuePayload_ToSendEmailProviderRequest(t *testing.T) {
 		assert.Equal(t, "recipient@example.com", result.To)
 		assert.Equal(t, "Test Subject", result.Subject)
 		assert.Equal(t, "<html><body>Test</body></html>", result.Content)
+		assert.Equal(t, "Test", result.TextContent)
+		assert.True(t, result.PlainTextOnly)
 		assert.Equal(t, provider, result.Provider)
 		assert.Equal(t, "https://example.com/unsubscribe", result.EmailOptions.ListUnsubscribeURL)
 	})

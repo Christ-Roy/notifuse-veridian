@@ -100,6 +100,7 @@ func createValidMJMLTree(textBlock notifuse_mjml.EmailBlock) notifuse_mjml.Email
 
 // createTestTemplate creates a test template for email node tests
 func createTestTemplate() *domain.Template {
+	plain := "Bonjour {{ contact.email }}"
 	return &domain.Template{
 		ID:      "tpl123",
 		Name:    "Test Template",
@@ -108,6 +109,8 @@ func createTestTemplate() *domain.Template {
 		Email: &domain.EmailTemplate{
 			Subject:          "Test Subject",
 			SenderID:         "sender1",
+			Text:             &plain,
+			PlainTextOnly:    true,
 			VisualEditorTree: createValidMJMLTree(createTestTextBlock("txt1", "Test content")),
 		},
 	}
@@ -501,6 +504,8 @@ func TestEmailNodeExecutor_Execute_Success(t *testing.T) {
 		DoAndReturn(func(_ context.Context, _ string, entries []*domain.EmailQueueEntry) error {
 			require.Len(t, entries, 1)
 			assert.Equal(t, "list1", entries[0].Payload.ListID, "the final SMTP guard needs the automation list after enqueue")
+			assert.Equal(t, "Bonjour recipient@example.com", entries[0].Payload.TextContent)
+			assert.True(t, entries[0].Payload.PlainTextOnly)
 			return nil
 		})
 

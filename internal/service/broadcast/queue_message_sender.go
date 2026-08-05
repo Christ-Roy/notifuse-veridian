@@ -435,6 +435,14 @@ func (s *queueMessageSender) buildQueueEntry(
 		return nil, fmt.Errorf("%s", errMsg)
 	}
 	htmlContent := *compiledTemplate.HTML
+	textContent := ""
+	if emailContent.Text != nil {
+		textContent, err = notifuse_mjml.ProcessLiquidTemplate(*emailContent.Text, data, "email_text")
+		if err != nil {
+			return nil, fmt.Errorf("failed to process plain text: %w", err)
+		}
+		textContent = veridian_spintax.ResolveSpintax(textContent, email)
+	}
 
 	// Process subject line through Liquid templating
 	subject, err := notifuse_mjml.ProcessLiquidTemplate(
@@ -505,6 +513,8 @@ func (s *queueMessageSender) buildQueueEntry(
 			FromName:           sender.Name,
 			Subject:            subject,
 			HTMLContent:        htmlContent,
+			TextContent:        textContent,
+			PlainTextOnly:      emailContent.PlainTextOnly,
 			RateLimitPerMinute: emailProvider.RateLimitPerMinute,
 			EmailOptions: domain.EmailOptions{
 				ReplyTo: emailContent.ReplyTo,

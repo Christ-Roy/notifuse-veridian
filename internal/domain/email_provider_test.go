@@ -1415,6 +1415,18 @@ func TestSendEmailProviderRequest_Validate(t *testing.T) {
 	}
 }
 
+func TestSendEmailProviderRequest_PlainTextMetadata(t *testing.T) {
+	provider := &EmailProvider{Kind: EmailProviderKindSMTP, SMTP: &SMTPSettings{Host: "smtp.example.com", Port: 587}}
+	req := SendEmailProviderRequest{
+		WorkspaceID: "w", IntegrationID: "i", MessageID: "m", FromAddress: "from@example.com",
+		FromName: "From", To: "to@example.com", Subject: "Sujet", Content: "<p>fallback</p>",
+		TextContent: "Bonjour", PlainTextOnly: true, Provider: provider,
+	}
+	assert.NoError(t, req.Validate())
+	assert.Equal(t, "Bonjour", req.TextContent)
+	assert.True(t, req.PlainTextOnly)
+}
+
 func TestEmailOptions_FromNameField(t *testing.T) {
 	t.Run("EmailOptions with no from_name", func(t *testing.T) {
 		options := EmailOptions{

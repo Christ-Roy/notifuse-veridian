@@ -620,6 +620,16 @@ func TestEmailService_SendEmail(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported provider kind")
 	})
+
+	t.Run("plain text only rejects a non SMTP provider", func(t *testing.T) {
+		provider := domain.EmailProvider{Kind: domain.EmailProviderKindSES}
+		err := emailService.SendEmail(ctx, domain.SendEmailProviderRequest{
+			WorkspaceID: workspaceID, IntegrationID: "integration", MessageID: messageID,
+			FromAddress: fromAddress, FromName: fromName, To: toEmail, Subject: subject,
+			Content: content, TextContent: "Bonjour", PlainTextOnly: true, Provider: &provider,
+		}, false)
+		require.ErrorContains(t, err, "supported only by SMTP")
+	})
 }
 
 func TestEmailService_getProviderService(t *testing.T) {

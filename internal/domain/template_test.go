@@ -685,6 +685,22 @@ func TestWebTemplate_Scan_Value(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestEmailTemplate_PlainTextOnlyRequiresText(t *testing.T) {
+	source := "<mjml><mj-body><mj-section><mj-column><mj-text>fallback</mj-text></mj-column></mj-section></mj-body></mjml>"
+	template := &EmailTemplate{
+		EditorMode:      EditorModeCode,
+		MjmlSource:      &source,
+		Subject:         "Une maquette",
+		PlainTextOnly:   true,
+		CompiledPreview: source,
+	}
+
+	assert.ErrorContains(t, template.Validate(nil), "text is required")
+	text := "Bonjour, voici la maquette."
+	template.Text = &text
+	assert.NoError(t, template.Validate(nil))
+}
+
 func TestWebTemplate_UnmarshalJSON(t *testing.T) {
 	// Test WebTemplate.UnmarshalJSON - this was at 0% coverage
 	t.Run("valid JSON", func(t *testing.T) {

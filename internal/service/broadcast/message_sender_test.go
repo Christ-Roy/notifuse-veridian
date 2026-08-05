@@ -153,11 +153,14 @@ func TestSendToRecipientSuccess(t *testing.T) {
 		Senders: []domain.EmailSender{emailSender},
 		SMTP:    &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "user", Password: "pass", UseTLS: true},
 	}
+	plain := "Bonjour {{ contact.name }}"
 	template := &domain.Template{
 		ID: "template-123",
 		Email: &domain.EmailTemplate{
 			SenderID:         emailSender.ID,
 			Subject:          "Test Subject",
+			Text:             &plain,
+			PlainTextOnly:    true,
 			VisualEditorTree: createValidTestTree(createTestTextBlock("txt1", "Test content")),
 		},
 	}
@@ -168,7 +171,11 @@ func TestSendToRecipientSuccess(t *testing.T) {
 			gomock.Any(), // ctx
 			gomock.Any(), // SendEmailProviderRequest
 			gomock.Any(), // isMarketing
-		).Return(nil)
+		).DoAndReturn(func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+		assert.Equal(t, "Bonjour ", req.TextContent)
+		assert.True(t, req.PlainTextOnly)
+		return nil
+	})
 
 	// Create message sender
 	sender := NewMessageSender(

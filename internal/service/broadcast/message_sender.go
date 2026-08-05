@@ -374,6 +374,14 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 	// Veridian fork (cold outbound) — spintax du sujet (même graine que le corps).
 	// Rendu hors CompileTemplate, donc résolu explicitement ici.
 	processedSubject = veridian_spintax.ResolveSpintax(processedSubject, email)
+	textContent := ""
+	if emailContent.Text != nil {
+		textContent, err = notifuse_mjml.ProcessLiquidTemplate(*emailContent.Text, data, "email_text")
+		if err != nil {
+			return NewBroadcastError(ErrCodeTemplateCompile, "failed to process plain text with Liquid", true, err)
+		}
+		textContent = veridian_spintax.ResolveSpintax(textContent, email)
+	}
 
 	// Create SendEmailProviderRequest
 	emailRequest := domain.SendEmailProviderRequest{
@@ -385,6 +393,8 @@ func (s *messageSender) SendToRecipient(ctx context.Context, workspaceID string,
 		To:            email,
 		Subject:       processedSubject,
 		Content:       *compiledTemplate.HTML,
+		TextContent:   textContent,
+		PlainTextOnly: emailContent.PlainTextOnly,
 		Provider:      emailProvider,
 		EmailOptions: domain.EmailOptions{
 			ReplyTo: emailContent.ReplyTo,

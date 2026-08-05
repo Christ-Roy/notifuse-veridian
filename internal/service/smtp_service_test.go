@@ -565,6 +565,31 @@ func TestSMTPService_SendEmail_VeridianMultipartTextHTML(t *testing.T) {
 	assert.Less(t, idxPlain, idxHTML, "text/plain doit précéder text/html dans le MIME")
 }
 
+func TestSMTPService_SendEmail_VeridianPlainTextOnly(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID: "workspace-123", IntegrationID: "integration-123", MessageID: "plain-123",
+		FromAddress: "robert@example.com", FromName: "Robert", To: "prospect@example.com",
+		Subject: "Une maquette", Content: "<p>fallback html</p>",
+		TextContent: "Bonjour,\r\n\r\nJ'ai préparé une maquette.", PlainTextOnly: true,
+		Provider: &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{
+			Host: "127.0.0.1", Port: server.Port(), UseTLS: false,
+		}},
+	}
+
+	require.NoError(t, service.SendEmail(context.Background(), request))
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	raw := string(messages[0].data)
+	assert.Contains(t, raw, "Content-Type: text/plain")
+	assert.NotContains(t, raw, "multipart/alternative")
+	assert.NotContains(t, raw, "text/html")
+	assert.NotContains(t, raw, "fallback html")
+}
+
 // Non-régression : si le HTML ne produit aucun texte exploitable (cas dégénéré),
 // on retombe sur un envoi HTML-only sans planter (pas de multipart vide).
 func TestSMTPService_SendEmail_VeridianMultipartFallbackHTMLOnly(t *testing.T) {

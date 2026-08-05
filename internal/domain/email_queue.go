@@ -70,10 +70,12 @@ type EmailQueueEntry struct {
 // This is stored as JSONB in the database
 type EmailQueuePayload struct {
 	// Email content (compiled and ready to send)
-	FromAddress string `json:"from_address"`
-	FromName    string `json:"from_name"`
-	Subject     string `json:"subject"`
-	HTMLContent string `json:"html_content"`
+	FromAddress   string `json:"from_address"`
+	FromName      string `json:"from_name"`
+	Subject       string `json:"subject"`
+	HTMLContent   string `json:"html_content"`
+	TextContent   string `json:"text_content,omitempty"`
+	PlainTextOnly bool   `json:"plain_text_only,omitempty"`
 
 	// Options
 	EmailOptions EmailOptions `json:"email_options"`
@@ -152,6 +154,8 @@ func (p *EmailQueuePayload) ToSendEmailProviderRequest(workspaceID, integrationI
 		To:            toEmail,
 		Subject:       p.Subject,
 		Content:       p.HTMLContent,
+		TextContent:   p.TextContent,
+		PlainTextOnly: p.PlainTextOnly,
 		Provider:      provider,
 		EmailOptions:  p.EmailOptions,
 	}

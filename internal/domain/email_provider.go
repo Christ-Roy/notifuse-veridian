@@ -521,14 +521,16 @@ func (eo EmailOptions) ToChannelOptions() *ChannelOptions {
 
 // SendEmailProviderRequest encapsulates all parameters needed to send an email via a provider
 type SendEmailProviderRequest struct {
-	WorkspaceID   string         `validate:"required"`
-	IntegrationID string         `validate:"required"`
-	MessageID     string         `validate:"required"`
-	FromAddress   string         `validate:"required"`
-	FromName      string         `validate:"required"`
-	To            string         `validate:"required"`
-	Subject       string         `validate:"required"`
-	Content       string         `validate:"required"`
+	WorkspaceID   string `validate:"required"`
+	IntegrationID string `validate:"required"`
+	MessageID     string `validate:"required"`
+	FromAddress   string `validate:"required"`
+	FromName      string `validate:"required"`
+	To            string `validate:"required"`
+	Subject       string `validate:"required"`
+	Content       string `validate:"required"`
+	TextContent   string
+	PlainTextOnly bool
 	Provider      *EmailProvider `validate:"required"`
 	EmailOptions  EmailOptions
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
+	"github.com/Notifuse/notifuse/pkg/veridian_spintax"
 	"github.com/google/uuid"
 )
 
@@ -365,6 +366,14 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 		return nil, fmt.Errorf("%s", errMsg)
 	}
 	htmlContent := *compiledTemplate.HTML
+	textContent := ""
+	if emailContent.Text != nil {
+		textContent, err = notifuse_mjml.ProcessLiquidTemplate(*emailContent.Text, templateData, "email_text")
+		if err != nil {
+			return nil, fmt.Errorf("failed to process plain text: %w", err)
+		}
+		textContent = veridian_spintax.ResolveSpintax(textContent, params.ContactData.Email)
+	}
 
 	// 10. Process subject line through Liquid templating
 	subject, err := notifuse_mjml.ProcessLiquidTemplate(
@@ -399,6 +408,8 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 			FromName:           sender.Name,
 			Subject:            subject,
 			HTMLContent:        htmlContent,
+			TextContent:        textContent,
+			PlainTextOnly:      emailContent.PlainTextOnly,
 			RateLimitPerMinute: emailProvider.RateLimitPerMinute,
 			ListID:             params.Automation.ListID,
 			EmailOptions: domain.EmailOptions{
