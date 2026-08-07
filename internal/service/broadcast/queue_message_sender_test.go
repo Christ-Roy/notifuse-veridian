@@ -15,6 +15,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestProviderClassFromTemplateData(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]interface{}
+		want string
+	}{
+		{
+			name: "plain contact map is normalized",
+			data: map[string]interface{}{"contact": map[string]interface{}{"custom_string_5": " OVH "}},
+			want: "ovh",
+		},
+		{
+			name: "domain map is normalized",
+			data: map[string]interface{}{"contact": domain.MapOfAny{"custom_string_5": "Microsoft"}},
+			want: "microsoft",
+		},
+		{name: "missing proof stays empty", data: map[string]interface{}{"contact": map[string]interface{}{}}, want: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, providerClassFromTemplateData(test.data))
+		})
+	}
+}
+
 func TestNewQueueMessageSender(t *testing.T) {
 	t.Run("creates sender with all dependencies", func(t *testing.T) {
 		ctrl := gomock.NewController(t)

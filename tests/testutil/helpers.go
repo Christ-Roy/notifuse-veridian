@@ -366,8 +366,9 @@ func CleanupTestEnvironment() {
 	// Clean up the global connection pool to prevent connection leaks between tests
 	CleanupAllTestConnections()
 
-	os.Unsetenv("TEST_DB_HOST")
-	os.Unsetenv("TEST_DB_PORT")
+	// TEST_DB_HOST and TEST_DB_PORT are caller-owned. SetupTestEnvironment does
+	// not set them, so cleanup must not erase an externally selected database
+	// endpoint between integration tests (for example a Nomad-hosted Postgres).
 	os.Unsetenv("TEST_DB_USER")
 	os.Unsetenv("TEST_DB_PASSWORD")
 	os.Unsetenv("ENVIRONMENT")

@@ -774,6 +774,14 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		return err
 	}
 
+	// Cold-outreach workspaces must never bypass the queue guard. The queue is
+	// where global suppressions and durable caps are checked and reserved
+	// atomically immediately before provider delivery.
+	if workspace.Settings.VeridianColdSafetyEnabled {
+		s.logger.Warn("Blocked direct individual send because cold safety requires the guarded queue")
+		return fmt.Errorf("cold safety enabled: direct individual marketing sends are disabled")
+	}
+
 	// Check if workspace has a marketing email provider configured
 	emailProvider, integrationID, err := workspace.GetEmailProviderWithIntegrationID(true) // true for marketing emails
 	if err != nil {

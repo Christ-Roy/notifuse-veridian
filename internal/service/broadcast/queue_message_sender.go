@@ -5,6 +5,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -282,6 +283,7 @@ func (s *queueMessageSender) buildQueueEntry(
 			Subject:            subject,
 			HTMLContent:        htmlContent,
 			RateLimitPerMinute: emailProvider.RateLimitPerMinute,
+			ProviderClass:      providerClassFromTemplateData(data),
 			EmailOptions:       domain.EmailOptions{},
 			TemplateVersion:    int(template.Version),
 			ListID:             broadcast.Audience.List,
@@ -297,6 +299,32 @@ func (s *queueMessageSender) buildQueueEntry(
 	}
 
 	return entry, nil
+}
+
+func providerClassFromTemplateData(data map[string]interface{}) string {
+	contact, ok := data["contact"]
+	if !ok {
+		return ""
+	}
+	switch value := contact.(type) {
+	case map[string]interface{}:
+		providerClass, exists := value["custom_string_5"]
+		if !exists || providerClass == nil {
+			return ""
+		}
+		return strings.ToLower(strings.TrimSpace(fmt.Sprint(providerClass)))
+	case domain.MapOfAny:
+		providerClass, exists := value["custom_string_5"]
+		if !exists || providerClass == nil {
+			return ""
+		}
+		return strings.ToLower(strings.TrimSpace(fmt.Sprint(providerClass)))
+	case *domain.Contact:
+		if value.CustomString5 != nil && !value.CustomString5.IsNull {
+			return strings.ToLower(strings.TrimSpace(value.CustomString5.String))
+		}
+	}
+	return ""
 }
 
 // selectTemplate selects a template for sending

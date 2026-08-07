@@ -48,6 +48,7 @@ type EmailQueueWorker struct {
 	emailService       domain.EmailServiceInterface
 	messageHistoryRepo domain.MessageHistoryRepository
 	rateLimiter        *IntegrationRateLimiter
+	coldSafetyGuard    *ColdSafetyGuard
 	circuitBreaker     *IntegrationCircuitBreaker
 	errorClassifier    *emailerror.Classifier
 	config             *EmailQueueWorkerConfig
@@ -96,6 +97,7 @@ func NewEmailQueueWorker(
 		emailService:       emailService,
 		messageHistoryRepo: messageHistoryRepo,
 		rateLimiter:        NewIntegrationRateLimiter(),
+		coldSafetyGuard:    NewColdSafetyGuard(workspaceRepo),
 		circuitBreaker:     NewIntegrationCircuitBreaker(cbConfig),
 		errorClassifier:    emailerror.NewClassifier(),
 		config:             config,
@@ -282,6 +284,27 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 				"entry_id": entry.ID,
 				"error":    err.Error(),
 			}).Warn("Failed to set next retry for circuit breaker skip")
+		}
+		return
+	}
+
+	// The durable cold-safety reservation happens before attempts are incremented
+	// and before any provider-side operation. A red or unavailable gate only
+	// defers the entry; it can never fall back to sending.
+	decision := w.coldSafetyGuard.Reserve(w.ctx, workspace, entry)
+	if !decision.Allowed {
+		w.logger.WithFields(map[string]interface{}{
+			"entry_id":       entry.ID,
+			"workspace_id":   workspace.ID,
+			"provider_class": entry.Payload.ProviderClass,
+			"reason":         decision.Reason,
+			"retry_at":       decision.RetryAt,
+		}).Warn("Cold safety denied queued email")
+		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, decision.RetryAt); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Error("Failed to defer cold-safety denied email")
 		}
 		return
 	}

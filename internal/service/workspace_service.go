@@ -358,6 +358,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.CustomFieldLabels = settings.CustomFieldLabels
 	existingWorkspace.Settings.BlogEnabled = settings.BlogEnabled
 	existingWorkspace.Settings.BlogSettings = settings.BlogSettings
+	applyVeridianColdSafetyUpdate(&existingWorkspace.Settings, settings)
 
 	// Handle template blocks - preserve existing blocks if not provided in update
 	// Note: Template blocks should be managed via dedicated /api/templateBlocks.* endpoints
@@ -398,6 +399,25 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	// No automatic theme creation in the backend
 
 	return existingWorkspace, nil
+}
+
+// applyVeridianColdSafetyUpdate makes activation sticky. Older console or API
+// clients omit fields they do not know; treating that omission as false would
+// silently remove the last-line send guard during an unrelated settings save.
+// An enabled policy can still be tightened or corrected by submitting an
+// explicit enabled policy. Disabling it requires an audited operational change.
+func applyVeridianColdSafetyUpdate(current *domain.WorkspaceSettings, incoming domain.WorkspaceSettings) {
+	if current.VeridianColdSafetyEnabled && !incoming.VeridianColdSafetyEnabled {
+		return
+	}
+	current.VeridianColdSafetyEnabled = incoming.VeridianColdSafetyEnabled
+	current.VeridianProviderClassRates = incoming.VeridianProviderClassRates
+	current.VeridianProviderClassDailyCap = incoming.VeridianProviderClassDailyCap
+	current.VeridianWorkspaceDailyCap = incoming.VeridianWorkspaceDailyCap
+	current.VeridianPerSenderDailyCap = incoming.VeridianPerSenderDailyCap
+	current.VeridianRecipientDomainDailyCap = incoming.VeridianRecipientDomainDailyCap
+	current.VeridianPerRecipientDailyCap = incoming.VeridianPerRecipientDailyCap
+	current.VeridianExcludedProviderClasses = incoming.VeridianExcludedProviderClasses
 }
 
 // DeleteWorkspace deletes a workspace if the user is an owner

@@ -75,12 +75,17 @@ type EmailQueuePayload struct {
 	// Provider configuration (rate limit needed for worker)
 	RateLimitPerMinute int `json:"rate_limit_per_minute"`
 
+	// ProviderClass is the ODH recipient-infrastructure class (for example
+	// google, microsoft or ovh). Safety-enabled workspaces refuse a queue entry
+	// where this proof is missing or has no configured rate/cap.
+	ProviderClass string `json:"provider_class,omitempty"`
+
 	// Provider settings (encrypted, will be decrypted by worker)
 	ProviderSettings map[string]interface{} `json:"provider_settings"`
 
 	// Message history tracking fields
-	TemplateVersion int    `json:"template_version"`        // Needed for message_history
-	ListID          string `json:"list_id,omitempty"`       // For broadcasts
+	TemplateVersion int    `json:"template_version"`  // Needed for message_history
+	ListID          string `json:"list_id,omitempty"` // For broadcasts
 }
 
 // ToSendEmailProviderRequest converts the payload to a SendEmailProviderRequest

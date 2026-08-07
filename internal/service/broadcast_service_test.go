@@ -1198,6 +1198,31 @@ func TestBroadcastService_SendToIndividual_WorkspaceNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "workspace not found")
 }
 
+func TestBroadcastService_SendToIndividual_ColdSafetyBlocksDirectSend(t *testing.T) {
+	d := setupBroadcastSvc(t)
+	defer d.ctrl.Finish()
+
+	ctx := context.Background()
+	req := &domain.SendToIndividualRequest{WorkspaceID: "w1", BroadcastID: "b1", RecipientEmail: "test@example.com"}
+	authOK(d.authService, ctx, req.WorkspaceID)
+
+	workspace := &domain.Workspace{
+		ID: "w1",
+		Settings: domain.WorkspaceSettings{
+			MarketingEmailProviderID:  "mkt",
+			VeridianColdSafetyEnabled: true,
+		},
+		Integrations: domain.Integrations{
+			{ID: "mkt", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSMTP}},
+		},
+	}
+	d.workspaceRepo.EXPECT().GetByID(ctx, req.WorkspaceID).Return(workspace, nil)
+
+	err := d.svc.SendToIndividual(ctx, req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "direct individual marketing sends are disabled")
+}
+
 func TestBroadcastService_SendToIndividual_NoEmailProvider(t *testing.T) {
 	d := setupBroadcastSvc(t)
 	defer d.ctrl.Finish()

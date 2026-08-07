@@ -47,6 +47,14 @@ export interface WorkspaceSettings {
   custom_field_labels?: Record<string, string>
   blog_enabled?: boolean
   blog_settings?: BlogSettings
+  veridian_cold_safety_enabled?: boolean
+  veridian_provider_class_rates?: Record<string, number>
+  veridian_provider_class_daily_cap?: Record<string, number>
+  veridian_workspace_daily_cap?: number
+  veridian_per_sender_daily_cap?: number
+  veridian_recipient_domain_daily_cap?: number
+  veridian_per_recipient_daily_cap?: number
+  veridian_excluded_provider_classes?: string[]
 }
 
 export interface FileManagerSettings {

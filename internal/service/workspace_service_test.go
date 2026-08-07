@@ -881,6 +881,41 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 	})
 }
 
+func TestApplyVeridianColdSafetyUpdate_IsStickyAgainstOmittedFields(t *testing.T) {
+	current := validWorkspaceColdSafetySettings()
+	incoming := domain.WorkspaceSettings{Timezone: "Europe/Paris"}
+
+	applyVeridianColdSafetyUpdate(&current, incoming)
+
+	assert.True(t, current.VeridianColdSafetyEnabled)
+	assert.Equal(t, 20, current.VeridianWorkspaceDailyCap)
+	assert.Equal(t, map[string]float64{"ovh": 0.1}, current.VeridianProviderClassRates)
+}
+
+func TestApplyVeridianColdSafetyUpdate_AllowsExplicitEnabledPolicyChange(t *testing.T) {
+	current := validWorkspaceColdSafetySettings()
+	incoming := validWorkspaceColdSafetySettings()
+	incoming.VeridianWorkspaceDailyCap = 5
+
+	applyVeridianColdSafetyUpdate(&current, incoming)
+
+	assert.True(t, current.VeridianColdSafetyEnabled)
+	assert.Equal(t, 5, current.VeridianWorkspaceDailyCap)
+}
+
+func validWorkspaceColdSafetySettings() domain.WorkspaceSettings {
+	return domain.WorkspaceSettings{
+		Timezone:                        "Europe/Paris",
+		VeridianColdSafetyEnabled:       true,
+		VeridianProviderClassRates:      map[string]float64{"ovh": 0.1},
+		VeridianProviderClassDailyCap:   map[string]int{"ovh": 10},
+		VeridianWorkspaceDailyCap:       20,
+		VeridianPerSenderDailyCap:       15,
+		VeridianRecipientDomainDailyCap: 2,
+		VeridianPerRecipientDailyCap:    1,
+	}
+}
+
 func TestWorkspaceService_DeleteWorkspace(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

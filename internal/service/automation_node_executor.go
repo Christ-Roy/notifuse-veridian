@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -32,8 +33,8 @@ type NodeExecutionParams struct {
 	Contact          *domain.ContactAutomation
 	Node             *domain.AutomationNode
 	Automation       *domain.Automation
-	ContactData      *domain.Contact            // Full contact data for template rendering
-	ExecutionContext map[string]interface{}     // Reconstructed context from previous node executions
+	ContactData      *domain.Contact        // Full contact data for template rendering
+	ExecutionContext map[string]interface{} // Reconstructed context from previous node executions
 }
 
 // NodeExecutor executes a specific node type
@@ -265,6 +266,7 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 			Subject:            subject,
 			HTMLContent:        htmlContent,
 			RateLimitPerMinute: emailProvider.RateLimitPerMinute,
+			ProviderClass:      contactProviderClass(params.ContactData),
 			EmailOptions:       domain.EmailOptions{},
 		},
 		MaxAttempts: 3,
@@ -295,6 +297,13 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 			"queued":      true,
 		}),
 	}, nil
+}
+
+func contactProviderClass(contact *domain.Contact) string {
+	if contact == nil || contact.CustomString5 == nil || contact.CustomString5.IsNull {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(contact.CustomString5.String))
 }
 
 // parseEmailNodeConfig parses email node configuration from map
