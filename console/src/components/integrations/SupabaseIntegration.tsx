@@ -26,7 +26,7 @@ export const SupabaseIntegration: React.FC<SupabaseIntegrationProps> = ({
   // Expose form instance to parent via ref
   React.useEffect(() => {
     if (formRef) {
-      // eslint-disable-next-line react-hooks/immutability -- Intentionally exposing form to parent via ref
+       
       ;(formRef as React.MutableRefObject<{ submit: () => void } | null>).current = form
     }
   }, [form, formRef])

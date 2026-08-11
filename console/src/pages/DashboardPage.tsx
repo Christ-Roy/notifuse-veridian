@@ -6,7 +6,6 @@ import { MainLayout, MainLayoutSidebar } from '../layouts/MainLayout'
 import { isRootUser } from '../services/api/auth'
 import { useLingui } from '@lingui/react/macro'
 import { SystemSettingsDrawer } from '../components/settings/SystemSettingsDrawer'
-import { VeridianCrossAppCards } from '../components/veridian_cross_app_cards'
 
 const { Text } = Typography
 
@@ -97,7 +96,6 @@ export function DashboardPage() {
             ))}
           </div>
         )}
-        <VeridianCrossAppCards />
       </MainLayoutSidebar>
     </MainLayout>
   )
