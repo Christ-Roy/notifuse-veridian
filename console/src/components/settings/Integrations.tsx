@@ -166,7 +166,7 @@ const EmailIntegration = ({
   // Fetch webhook status when component mounts
   useEffect(() => {
     if (workspace?.id && integration?.id) {
-      fetchWebhookStatus() // eslint-disable-line react-hooks/immutability -- existing callback is declared below
+      fetchWebhookStatus()  
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchWebhookStatus is stable
   }, [workspace?.id, integration?.id])

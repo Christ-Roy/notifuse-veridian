@@ -55,7 +55,7 @@ const ButtonFilesSettings = (props: ButtonFilesSettingsProps) => {
         ? getProviderById(props.settings.provider)
         : null
       const resolvedProvider = existingProvider || getProviderById('other') || null
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize the modal from loaded workspace settings.
+       
       setSelectedProvider(resolvedProvider)
       setCurrentScreen('settings')
 
