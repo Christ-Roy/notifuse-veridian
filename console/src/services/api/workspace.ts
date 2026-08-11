@@ -56,6 +56,11 @@ export interface WorkspaceSettings {
   default_language: string
   languages: string[]
   // Veridian fork — cold outreach (tunnel de vente)
+  // V57 fail-closed delivery. Activation is sticky server-side: legacy clients
+  // that omit these fields cannot silently disable the guard.
+  veridian_cold_safety_enabled?: boolean
+  veridian_workspace_daily_cap?: number
+  veridian_recipient_domain_daily_cap?: number
   // Débits par classe de provider destinataire (emails/minute, fractions OK).
   veridian_provider_class_rates?: Record<VeridianProviderClass, number>
   // Politique du pixel d'ouverture par classe (true = pixel ON). Override du

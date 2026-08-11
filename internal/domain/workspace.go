@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -442,6 +443,14 @@ type WorkspaceSettings struct {
 	// exclusion (non-régression). Cf. veridian_excluded_classes.go.
 	VeridianExcludedProviderClasses []string `json:"veridian_excluded_provider_classes,omitempty"`
 
+	// Veridian cold safety is an explicit workspace kill-switch. Once enabled,
+	// every marketing delivery must pass the global suppression inventory and
+	// the durable cross-workspace reservation ledger immediately before SMTP.
+	// Omitted or incomplete policy is a hard deny, never a permissive fallback.
+	VeridianColdSafetyEnabled       bool `json:"veridian_cold_safety_enabled"`
+	VeridianWorkspaceDailyCap       int  `json:"veridian_workspace_daily_cap,omitempty"`
+	VeridianRecipientDomainDailyCap int  `json:"veridian_recipient_domain_daily_cap,omitempty"`
+
 	// decoded secret key, not stored in the database
 	SecretKey string `json:"-"`
 }
@@ -503,6 +512,10 @@ func (ws *WorkspaceSettings) Validate(passphrase string) error {
 		return fmt.Errorf("invalid custom field labels: %w", err)
 	}
 
+	if err := ws.ValidateVeridianColdSafety(); err != nil {
+		return err
+	}
+
 	// Validate default language is set
 	if ws.DefaultLanguage == "" {
 		return fmt.Errorf("default language is required")
@@ -539,6 +552,81 @@ func (ws *WorkspaceSettings) Validate(passphrase string) error {
 		return fmt.Errorf("default language %s must be in the languages list", ws.DefaultLanguage)
 	}
 
+	return nil
+}
+
+// ValidateVeridianColdSafety rejects partial policies. The worker re-runs this
+// immediately before delivery because persisted settings may predate the
+// current binary or may have been written by an older API client.
+func (ws *WorkspaceSettings) ValidateVeridianColdSafety() error {
+	if !ws.VeridianColdSafetyEnabled {
+		return nil
+	}
+	if ws.VeridianWorkspaceDailyCap <= 0 {
+		return fmt.Errorf("veridian cold safety: workspace daily cap must be greater than 0")
+	}
+	if ws.VeridianPerSenderDailyCap <= 0 {
+		return fmt.Errorf("veridian cold safety: per-sender daily cap must be greater than 0")
+	}
+	if ws.VeridianRecipientDomainDailyCap <= 0 {
+		return fmt.Errorf("veridian cold safety: recipient-domain daily cap must be greater than 0")
+	}
+	if ws.VeridianPerRecipientDailyCap <= 0 {
+		return fmt.Errorf("veridian cold safety: per-recipient daily cap must be greater than 0")
+	}
+	if ws.VeridianPerSenderDailyCap > ws.VeridianWorkspaceDailyCap {
+		return fmt.Errorf("veridian cold safety: per-sender daily cap cannot exceed workspace daily cap")
+	}
+	if ws.VeridianRecipientDomainDailyCap > ws.VeridianWorkspaceDailyCap {
+		return fmt.Errorf("veridian cold safety: recipient-domain daily cap cannot exceed workspace daily cap")
+	}
+	if ws.VeridianPerRecipientDailyCap > ws.VeridianRecipientDomainDailyCap {
+		return fmt.Errorf("veridian cold safety: per-recipient daily cap cannot exceed recipient-domain daily cap")
+	}
+	if len(ws.VeridianProviderClassRates) == 0 {
+		return fmt.Errorf("veridian cold safety: provider class rates are required")
+	}
+	for providerClass, rate := range ws.VeridianProviderClassRates {
+		normalized := strings.ToLower(strings.TrimSpace(providerClass))
+		if normalized == "" || normalized != providerClass {
+			return fmt.Errorf("veridian cold safety: provider class %q must be normalized", providerClass)
+		}
+		if !IsValidProviderClass(providerClass) {
+			return fmt.Errorf("veridian cold safety: invalid provider class %q", providerClass)
+		}
+		if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+			return fmt.Errorf("veridian cold safety: invalid rate for provider class %q", providerClass)
+		}
+	}
+	if len(ws.VeridianProviderClassDailyCap) == 0 {
+		return fmt.Errorf("veridian cold safety: provider class daily caps are required")
+	}
+	for providerClass, cap := range ws.VeridianProviderClassDailyCap {
+		normalized := strings.ToLower(strings.TrimSpace(providerClass))
+		if normalized == "" || normalized != providerClass || !IsValidProviderClass(providerClass) {
+			return fmt.Errorf("veridian cold safety: invalid provider class %q", providerClass)
+		}
+		if cap <= 0 {
+			return fmt.Errorf("veridian cold safety: invalid daily cap for provider class %q", providerClass)
+		}
+		if _, ok := ws.VeridianProviderClassRates[providerClass]; !ok {
+			return fmt.Errorf("veridian cold safety: missing rate for provider class %q", providerClass)
+		}
+		if cap > ws.VeridianWorkspaceDailyCap {
+			return fmt.Errorf("veridian cold safety: daily cap for provider class %q cannot exceed workspace daily cap", providerClass)
+		}
+	}
+	seenExcluded := make(map[string]struct{}, len(ws.VeridianExcludedProviderClasses))
+	for _, providerClass := range ws.VeridianExcludedProviderClasses {
+		normalized := strings.ToLower(strings.TrimSpace(providerClass))
+		if normalized == "" || normalized != providerClass || !IsValidProviderClass(providerClass) {
+			return fmt.Errorf("veridian cold safety: excluded provider class %q must be normalized and valid", providerClass)
+		}
+		if _, duplicate := seenExcluded[normalized]; duplicate {
+			return fmt.Errorf("veridian cold safety: excluded provider class %q is duplicated", providerClass)
+		}
+		seenExcluded[normalized] = struct{}{}
+	}
 	return nil
 }
 

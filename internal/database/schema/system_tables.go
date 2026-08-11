@@ -129,6 +129,33 @@ var TableDefinitions = []string{
 		seen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 		PRIMARY KEY (workspace_id, integration_id, folder, uid_validity, uid)
 	)`,
+	// V57 fail-closed delivery state. Existing installations receive these via
+	// the migration; fresh installs are stamped at the current version.
+	`CREATE TABLE IF NOT EXISTS veridian_global_suppressions (
+		email_sha256 CHAR(64) PRIMARY KEY,
+		status VARCHAR(20) NOT NULL,
+		source_workspace_id VARCHAR(255) NOT NULL,
+		first_observed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		last_observed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`CREATE TABLE IF NOT EXISTS veridian_send_reservations (
+		id BIGSERIAL PRIMARY KEY,
+		workspace_id VARCHAR(255) NOT NULL,
+		queue_entry_id VARCHAR(255) NOT NULL,
+		message_id VARCHAR(255) NOT NULL,
+		attempt INTEGER NOT NULL,
+		sender_email VARCHAR(255) NOT NULL,
+		provider_class VARCHAR(64) NOT NULL,
+		recipient_domain VARCHAR(255) NOT NULL,
+		recipient_sha256 CHAR(64) NOT NULL,
+		quota_date DATE NOT NULL,
+		reserved_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (workspace_id, queue_entry_id, attempt, quota_date)
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_veridian_send_reservations_workspace_date
+		ON veridian_send_reservations (workspace_id, quota_date)`,
+	`CREATE INDEX IF NOT EXISTS idx_veridian_send_reservations_provider_rate
+		ON veridian_send_reservations (workspace_id, provider_class, reserved_at DESC)`,
 }
 
 // MigrationStatements contains SQL statements to be run after table creation
@@ -181,4 +208,6 @@ var TableNames = []string{
 	"veridian_plan",
 	"veridian_frozen_members",
 	"veridian_imap_uid_seen",
+	"veridian_global_suppressions",
+	"veridian_send_reservations",
 }

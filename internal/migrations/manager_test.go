@@ -565,8 +565,9 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// — colonne supposée exister mais jamais déclarée ; cf. v54.go header).
 		// V55 : ledger atomique cap journalier + classe provider matérialisée.
 		// V56 : attribution durable integration/profile pour quotas et analytics.
+		// V57 : suppression globale + réservations fail-closed avant SMTP.
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("56"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("57"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 

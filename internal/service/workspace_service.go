@@ -356,7 +356,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to get existing workspace")
 		return nil, err
 	}
-	policyChanged := veridianWorkspaceSendingPolicyChanged(existingWorkspace.Settings, settings)
+	previousSendingPolicy := existingWorkspace.Settings
 
 	existingWorkspace.Name = name
 	existingWorkspace.Settings.WebsiteURL = settings.WebsiteURL
@@ -422,16 +422,13 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	// sinon l'UI Settings → Cold outreach sauve sans persister (bug vu en
 	// validation staging 2026-06-11). nil = la config est effacée (comportement
 	// attendu : vider l'UI revient au défaut tunnel).
-	existingWorkspace.Settings.VeridianProviderClassRates = settings.VeridianProviderClassRates
 	existingWorkspace.Settings.VeridianOpenPixelByClass = settings.VeridianOpenPixelByClass
-	existingWorkspace.Settings.VeridianProviderClassDailyCap = settings.VeridianProviderClassDailyCap
-	existingWorkspace.Settings.VeridianPerRecipientDailyCap = settings.VeridianPerRecipientDailyCap
-	existingWorkspace.Settings.VeridianPerSenderDailyCap = settings.VeridianPerSenderDailyCap
 	existingWorkspace.Settings.VeridianSendingWindow = settings.VeridianSendingWindow
 	existingWorkspace.Settings.VeridianJitterPct = settings.VeridianJitterPct
 	existingWorkspace.Settings.VeridianAntiHashEnabled = settings.VeridianAntiHashEnabled
 	existingWorkspace.Settings.VeridianAntiHashWindowHours = settings.VeridianAntiHashWindowHours
-	existingWorkspace.Settings.VeridianExcludedProviderClasses = settings.VeridianExcludedProviderClasses
+	applyVeridianColdSafetyUpdate(&existingWorkspace.Settings, settings)
+	policyChanged := veridianWorkspaceSendingPolicyChanged(previousSendingPolicy, existingWorkspace.Settings)
 
 	// Handle template blocks - preserve existing blocks if not provided in update
 	// Note: Template blocks should be managed via dedicated /api/templateBlocks.* endpoints
@@ -486,13 +483,34 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 }
 
 func veridianWorkspaceSendingPolicyChanged(before, after domain.WorkspaceSettings) bool {
-	return !reflect.DeepEqual(before.VeridianProviderClassRates, after.VeridianProviderClassRates) ||
+	return before.VeridianColdSafetyEnabled != after.VeridianColdSafetyEnabled ||
+		before.VeridianWorkspaceDailyCap != after.VeridianWorkspaceDailyCap ||
+		before.VeridianRecipientDomainDailyCap != after.VeridianRecipientDomainDailyCap ||
+		!reflect.DeepEqual(before.VeridianProviderClassRates, after.VeridianProviderClassRates) ||
 		!reflect.DeepEqual(before.VeridianProviderClassDailyCap, after.VeridianProviderClassDailyCap) ||
 		before.VeridianPerRecipientDailyCap != after.VeridianPerRecipientDailyCap ||
 		before.VeridianPerSenderDailyCap != after.VeridianPerSenderDailyCap ||
 		!reflect.DeepEqual(before.VeridianSendingWindow, after.VeridianSendingWindow) ||
 		before.VeridianJitterPct != after.VeridianJitterPct ||
 		!reflect.DeepEqual(before.VeridianExcludedProviderClasses, after.VeridianExcludedProviderClasses)
+}
+
+// applyVeridianColdSafetyUpdate makes activation sticky. Older console builds
+// omit the v57 fields; treating that omission as false would silently reopen a
+// direct SMTP path. Disabling an active guard therefore requires an explicit
+// operational migration rather than a generic workspace settings update.
+func applyVeridianColdSafetyUpdate(current *domain.WorkspaceSettings, incoming domain.WorkspaceSettings) {
+	if current.VeridianColdSafetyEnabled && !incoming.VeridianColdSafetyEnabled {
+		return
+	}
+	current.VeridianColdSafetyEnabled = incoming.VeridianColdSafetyEnabled
+	current.VeridianWorkspaceDailyCap = incoming.VeridianWorkspaceDailyCap
+	current.VeridianRecipientDomainDailyCap = incoming.VeridianRecipientDomainDailyCap
+	current.VeridianProviderClassRates = incoming.VeridianProviderClassRates
+	current.VeridianProviderClassDailyCap = incoming.VeridianProviderClassDailyCap
+	current.VeridianPerRecipientDailyCap = incoming.VeridianPerRecipientDailyCap
+	current.VeridianPerSenderDailyCap = incoming.VeridianPerSenderDailyCap
+	current.VeridianExcludedProviderClasses = incoming.VeridianExcludedProviderClasses
 }
 
 // DeleteWorkspace deletes a workspace if the user is an owner

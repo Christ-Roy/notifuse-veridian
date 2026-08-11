@@ -57,6 +57,7 @@ type EmailQueueWorker struct {
 	// Never nil after the constructor; replaceable in tests via the setter.
 	providerMXClassifier *domain.VeridianMXClassifier
 	dailyQuotaBackfilled sync.Map
+	coldSafetyGuard      *ColdSafetyGuard
 	circuitBreaker       *IntegrationCircuitBreaker
 	errorClassifier      *emailerror.Classifier
 	config               *EmailQueueWorkerConfig
@@ -126,6 +127,7 @@ func NewEmailQueueWorker(
 		rateLimiter:          NewIntegrationRateLimiter(),
 		providerClassLimiter: NewProviderClassRateLimiter(),
 		providerMXClassifier: domain.NewVeridianMXClassifier(nil), // default net resolver (8.8.8.8 / 1.1.1.1)
+		coldSafetyGuard:      NewColdSafetyGuard(workspaceRepo),
 		circuitBreaker:       NewIntegrationCircuitBreaker(cbConfig),
 		errorClassifier:      emailerror.NewClassifier(),
 		config:               config,
@@ -506,10 +508,46 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// V57 fail-closed guard. It runs after the queue claim so duplicate workers
+	// cannot reserve independently, and before the v55 ledger or SMTP. Disabled
+	// workspaces retain the v56 behavior without touching the system database.
+	coldSafetyDecision := ColdSafetyDecision{Allowed: true, Reason: "cold_safety_disabled"}
+	var coldSafetyLease *ColdSafetyLease
+	if workspace.Settings.VeridianColdSafetyEnabled {
+		if w.coldSafetyGuard == nil {
+			coldSafetyDecision = ColdSafetyDecision{
+				Allowed: false,
+				Reason:  "cold_safety_guard_unavailable",
+				RetryAt: time.Now().Add(coldSafetyRetryDelay),
+			}
+		} else {
+			coldSafetyDecision, coldSafetyLease = w.coldSafetyGuard.Authorize(w.ctx, workspace, entry)
+		}
+	}
+	if !coldSafetyDecision.Allowed {
+		w.logger.WithFields(map[string]interface{}{
+			"entry_id": entry.ID,
+			"reason":   coldSafetyDecision.Reason,
+		}).Warn("Cold safety denied marketing delivery before SMTP")
+		if err := w.queueRepo.SetNextRetryAndRefundAttempt(
+			w.ctx,
+			workspace.ID,
+			entry.ID,
+			coldSafetyDecision.RetryAt,
+		); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Error("Failed to reschedule cold safety denial")
+		}
+		return
+	}
+
 	// Atomic daily quota authorization is the LAST database gate before SMTP.
 	// Exclusions, prefilter, window and final automation checks never consume it.
 	quotaLeases, delay, capped := w.veridianReserveDailyQuota(workspace, &integration.EmailProvider, entry)
 	if capped {
+		w.veridianReleaseColdSafetyLease(coldSafetyLease, entry.ID)
 		nextRetry := time.Now().Add(delay)
 		if err := w.queueRepo.SetNextRetryAndRefundAttempt(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
 			w.logger.WithFields(map[string]interface{}{"entry_id": entry.ID, "error": err.Error()}).Error("Failed to reschedule atomic daily quota block")
@@ -533,6 +571,7 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		// Ambiguous post-DATA timeouts keep capacity consumed to avoid oversending.
 		if emailerror.IsBeforeAcceptance(err) {
 			w.veridianReleaseDailyQuotas(workspace.ID, quotaLeases)
+			w.veridianReleaseColdSafetyLease(coldSafetyLease, entry.ID)
 		}
 		// Classify the error
 		classifiedErr := w.errorClassifier.Classify(err, integration.EmailProvider.Kind)

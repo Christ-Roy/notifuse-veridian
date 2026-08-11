@@ -27,6 +27,7 @@ func (queueTestNXDOMAINResolver) LookupMXHosts(_ context.Context, _ string) ([]s
 type veridianThrottleTestEnv struct {
 	worker                 *EmailQueueWorker
 	mockQueueRepo          *mocks.MockEmailQueueRepository
+	mockWorkspaceRepo      *mocks.MockWorkspaceRepository
 	mockEmailService       *mocks.MockEmailServiceInterface
 	mockMessageHistoryRepo *mocks.MockMessageHistoryRepository
 }
@@ -66,6 +67,7 @@ func newVeridianThrottleTestEnv(t *testing.T) *veridianThrottleTestEnv {
 	return &veridianThrottleTestEnv{
 		worker:                 worker,
 		mockQueueRepo:          mockQueueRepo,
+		mockWorkspaceRepo:      mockWorkspaceRepo,
 		mockEmailService:       mockEmailService,
 		mockMessageHistoryRepo: mockMessageHistoryRepo,
 	}

@@ -59,6 +59,8 @@ func TestNewEmailQueueWorker(t *testing.T) {
 		// initialisé inconditionnellement (le gate est no-op sans config,
 		// mais un limiter nil paniquerait au premier broadcast configuré)
 		assert.NotNil(t, worker.providerClassLimiter)
+		require.NotNil(t, worker.coldSafetyGuard)
+		assert.Equal(t, mockWorkspaceRepo, worker.coldSafetyGuard.workspaceRepo)
 		assert.Empty(t, worker.GetProviderClassStats())
 	})
 

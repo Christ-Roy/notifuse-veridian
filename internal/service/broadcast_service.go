@@ -877,6 +877,11 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		s.logger.Error("Failed to get workspace for individual sending")
 		return err
 	}
+	if workspace.Settings.VeridianColdSafetyEnabled {
+		s.logger.WithField("workspace_id", request.WorkspaceID).
+			Warn("Cold safety blocked direct individual marketing send")
+		return fmt.Errorf("cold safety enabled: direct individual marketing sends are disabled")
+	}
 
 	// Check if workspace has a marketing email provider configured
 	emailProvider, integrationID, err := workspace.GetEmailProviderWithIntegrationID(true) // true for marketing emails

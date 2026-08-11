@@ -5438,3 +5438,13 @@ func TestWorkspaceSettings_VeridianMarketingEmailProviderIDsRoundTrip(t *testing
 	require.NoError(t, json.Unmarshal(raw, &decoded))
 	assert.Equal(t, settings.VeridianMarketingEmailProviderIDs, decoded.VeridianMarketingEmailProviderIDs)
 }
+
+func TestWorkspaceSettingsValidateIncludesColdSafetyPolicy(t *testing.T) {
+	settings := WorkspaceSettings{
+		Timezone:                  "UTC",
+		VeridianColdSafetyEnabled: true,
+	}
+
+	err := settings.Validate("")
+	require.ErrorContains(t, err, "workspace daily cap")
+}
