@@ -1,20 +1,46 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-08-13 04:26 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-08-13
+> **Dernier run** : 2026-08-14 04:26 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-08-14
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 0 (avant filtrage)
+> **CVE bruts détectés** : 2 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
-- 🔴 **0 HIGH** — action recommandée cette semaine
-- 🟡 **0 MEDIUM** — récap, pas urgent
+- 🔴 **1 HIGH** — action recommandée cette semaine
+- 🟡 **1 MEDIUM** — récap, pas urgent
 - 🟢 **0 NOISE** — annexe collapse
 
-✅ **Aucune action requise.** Rapport régénéré quotidiennement.
+
+---
+
+## 🔴 HIGH — 1 CVE en 1 groupe
+
+### 1. `stdlib` — v1.25.12 → **1.27.0-rc.3**
+
+- **CVE** : `CVE-2026-39821` (HIGH/Priv esc)
+- **Type** : Priv esc
+- **Score max** : 45
+- **Title** : golang.org/x/net/idna: golang: net/http: golang.org/x/net/idna: Privilege escalation via incorrect Punycode label processing
+- **Source** : `app/server`
+- **Fix** : `pnpm up stdlib` (jusqu'à >= `1.27.0-rc.3`)
+
+
+---
+
+## 🟡 MEDIUM — 1 CVE en 1 groupe
+
+### 1. `stdlib` — v1.25.12 → **1.27.0-rc.3**
+
+- **CVE** : `CVE-2026-46600` (HIGH/DoS)
+- **Type** : DoS
+- **Score max** : 15
+- **Title** : golang.org/x/net/dns/dnsmessage: golang.org/x/net/dns/dnsmessage: Denial of Service via invalid DNS record parsing
+- **Source** : `app/server`
+- **Fix** : `pnpm up stdlib` (jusqu'à >= `1.27.0-rc.3`)
 
 
 ---
