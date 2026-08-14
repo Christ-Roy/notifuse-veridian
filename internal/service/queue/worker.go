@@ -67,6 +67,9 @@ type EmailQueueWorker struct {
 	automationRepo   domain.AutomationRepository
 	contactListRepo  domain.ContactListRepository
 	contactReplyRepo domain.VeridianContactReplyRepository
+	// The upstream-compatible constructor is used directly by many unit tests.
+	// Production explicitly enables the last-mile guards through the setter.
+	finalSendGuardsConfigured bool
 
 	// Control
 	ctx     context.Context
@@ -91,6 +94,7 @@ func (w *EmailQueueWorker) SetAutomationSendGuard(
 	w.automationRepo = automationRepo
 	w.contactListRepo = contactListRepo
 	w.contactReplyRepo = contactReplyRepo
+	w.finalSendGuardsConfigured = true
 }
 
 // NewEmailQueueWorker creates a new EmailQueueWorker
@@ -492,6 +496,9 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// opening SMTP. This closes the race where the row was enqueued or even
 	// claimed before a reply, unsubscribe or automation pause was persisted.
 	if !w.veridianAutomationSendAllowed(workspace, entry) {
+		return
+	}
+	if !w.veridianBroadcastSendAllowed(workspace, entry) {
 		return
 	}
 

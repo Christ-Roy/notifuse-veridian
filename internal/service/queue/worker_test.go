@@ -60,6 +60,7 @@ func TestNewEmailQueueWorker(t *testing.T) {
 		// mais un limiter nil paniquerait au premier broadcast configuré)
 		assert.NotNil(t, worker.providerClassLimiter)
 		assert.Empty(t, worker.GetProviderClassStats())
+		assert.False(t, worker.finalSendGuardsConfigured)
 	})
 
 	t.Run("uses default config when nil provided", func(t *testing.T) {
@@ -2019,4 +2020,10 @@ func TestEmailQueueWorker_ProcessEntry_VeridianExcludedClass(t *testing.T) {
 	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
 	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, "e2").Return(nil)
 	worker.processEntry(workspace, newEntry("e2", "lead@gmail.com"))
+}
+
+// TestEmailQueueWorker_ProcessEntry_BroadcastFinalGuard pins the worker.go
+// call-site: the final broadcast guard must run before the SMTP provider call.
+func TestEmailQueueWorker_ProcessEntry_BroadcastFinalGuard(t *testing.T) {
+	TestBroadcastFinalGuard_StoppedContactNeverReachesSMTPSink(t)
 }
