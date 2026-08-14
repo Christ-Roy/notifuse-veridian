@@ -17,6 +17,9 @@ func (w *EmailQueueWorker) veridianBroadcastSendAllowed(workspace *domain.Worksp
 	if entry.SourceType != domain.EmailQueueSourceBroadcast {
 		return true
 	}
+	if !w.finalSendGuardsConfigured {
+		return true
+	}
 	if w.contactListRepo == nil || w.contactReplyRepo == nil {
 		w.retryBroadcastGuard(workspace.ID, entry, fmt.Errorf("broadcast final guard is not configured"))
 		return false

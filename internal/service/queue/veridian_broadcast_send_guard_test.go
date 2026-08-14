@@ -10,6 +10,14 @@ import (
 	"github.com/golang/mock/gomock"
 )
 
+func TestBroadcastFinalGuard_LegacyConstructorRemainsNoopUntilWired(t *testing.T) {
+	worker := &EmailQueueWorker{}
+	entry := &domain.EmailQueueEntry{SourceType: domain.EmailQueueSourceBroadcast}
+	if !worker.veridianBroadcastSendAllowed(&domain.Workspace{ID: "ws-1"}, entry) {
+		t.Fatal("a worker created through the legacy constructor must stay compatible until guards are explicitly wired")
+	}
+}
+
 func TestBroadcastFinalGuard_StoppedContactNeverReachesSMTPSink(t *testing.T) {
 	tests := []struct {
 		name       string

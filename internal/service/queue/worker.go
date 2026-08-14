@@ -67,6 +67,9 @@ type EmailQueueWorker struct {
 	automationRepo   domain.AutomationRepository
 	contactListRepo  domain.ContactListRepository
 	contactReplyRepo domain.VeridianContactReplyRepository
+	// The upstream-compatible constructor is used directly by many unit tests.
+	// Production explicitly enables the last-mile guards through the setter.
+	finalSendGuardsConfigured bool
 
 	// Control
 	ctx     context.Context
@@ -91,6 +94,7 @@ func (w *EmailQueueWorker) SetAutomationSendGuard(
 	w.automationRepo = automationRepo
 	w.contactListRepo = contactListRepo
 	w.contactReplyRepo = contactReplyRepo
+	w.finalSendGuardsConfigured = true
 }
 
 // NewEmailQueueWorker creates a new EmailQueueWorker

@@ -60,6 +60,7 @@ func TestNewEmailQueueWorker(t *testing.T) {
 		// mais un limiter nil paniquerait au premier broadcast configuré)
 		assert.NotNil(t, worker.providerClassLimiter)
 		assert.Empty(t, worker.GetProviderClassStats())
+		assert.False(t, worker.finalSendGuardsConfigured)
 	})
 
 	t.Run("uses default config when nil provided", func(t *testing.T) {
