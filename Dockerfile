@@ -41,7 +41,7 @@ COPY notification_center/ ./
 RUN npm run build
 
 # Stage 3: Build the Go binary (pure Go, no CGO needed)
-FROM golang:1.25.13-alpine AS backend-builder
+FROM golang:1.26.6-alpine AS backend-builder
 
 # Set working directory
 WORKDIR /build

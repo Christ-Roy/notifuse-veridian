@@ -55,7 +55,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: christ-roy/notifuse-veridian
-  GO_VERSION: '1.25.13'  # fixe GO-2026-6218/6091/6090/6089/6088/5972/5026 dans la stdlib
+  GO_VERSION: '1.26.6'  # fixe CVE-2026-46600 et les avis stdlib précédents
   # Force Node 24 pour les actions JavaScript (deadline 2026-06-02 GitHub).
   # Avant : warnings de deprecation Node 20 sur actions/checkout@v4,
   # setup-node@v4, setup-go@v5, upload-artifact@v4, docker/build-push-action@v6,
