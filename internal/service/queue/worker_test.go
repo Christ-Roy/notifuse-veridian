@@ -2020,3 +2020,9 @@ func TestEmailQueueWorker_ProcessEntry_VeridianExcludedClass(t *testing.T) {
 	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, "e2").Return(nil)
 	worker.processEntry(workspace, newEntry("e2", "lead@gmail.com"))
 }
+
+// TestEmailQueueWorker_ProcessEntry_BroadcastFinalGuard pins the worker.go
+// call-site: the final broadcast guard must run before the SMTP provider call.
+func TestEmailQueueWorker_ProcessEntry_BroadcastFinalGuard(t *testing.T) {
+	TestBroadcastFinalGuard_StoppedContactNeverReachesSMTPSink(t)
+}

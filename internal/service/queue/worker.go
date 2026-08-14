@@ -494,6 +494,9 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	if !w.veridianAutomationSendAllowed(workspace, entry) {
 		return
 	}
+	if !w.veridianBroadcastSendAllowed(workspace, entry) {
+		return
+	}
 
 	// Claim the queue row before reserving quota. This serializes duplicate
 	// workers for the same entry; the dedicated refund below returns a
