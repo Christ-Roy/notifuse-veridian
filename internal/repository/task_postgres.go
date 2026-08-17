@@ -750,6 +750,7 @@ func (r *TaskRepository) MarkAsRunningTx(ctx context.Context, tx *sql.Tx, worksp
 		Set("updated_at", now).
 		Set("last_run_at", now).
 		Set("timeout_after", timeoutAfter).
+		Set("error_message", nil).
 		Where(sq.And{
 			sq.Eq{"id": id},
 			sq.Eq{"workspace_id": workspace},

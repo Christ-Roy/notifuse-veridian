@@ -530,6 +530,7 @@ func TestTaskRepository_MarkAsRunning(t *testing.T) {
 			sqlmock.AnyArg(), // updated_at
 			sqlmock.AnyArg(), // last_run_at
 			timeoutAfter,
+			nil, // clear the previous interruption reason on claim
 			taskID,
 			workspace,
 			string(domain.TaskStatusPending), // status check in WHERE
@@ -552,6 +553,7 @@ func TestTaskRepository_MarkAsRunning(t *testing.T) {
 			sqlmock.AnyArg(), // updated_at
 			sqlmock.AnyArg(), // last_run_at
 			timeoutAfter,
+			nil, // clear the previous interruption reason on claim
 			taskID,
 			workspace,
 			string(domain.TaskStatusPending), // status check in WHERE
@@ -577,6 +579,7 @@ func TestTaskRepository_MarkAsRunning(t *testing.T) {
 			sqlmock.AnyArg(), // updated_at
 			sqlmock.AnyArg(), // last_run_at
 			timeoutAfter,
+			nil, // clear the previous interruption reason on claim
 			taskID,
 			workspace,
 			string(domain.TaskStatusPending), // status check in WHERE
@@ -614,6 +617,7 @@ func TestTaskRepository_MarkAsRunning_ConcurrentProtection(t *testing.T) {
 			sqlmock.AnyArg(), // updated_at
 			sqlmock.AnyArg(), // last_run_at
 			timeoutAfter,
+			nil, // clear the previous interruption reason on claim
 			taskID,
 			workspace,
 			string(domain.TaskStatusPending),
@@ -630,6 +634,40 @@ func TestTaskRepository_MarkAsRunning_ConcurrentProtection(t *testing.T) {
 	assert.ErrorAs(t, err, &alreadyRunningErr)
 	assert.Equal(t, taskID, alreadyRunningErr.TaskID)
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestTaskRepository_MarkAsRunning_ClearsErrorMessage(t *testing.T) {
+	var executed []string
+	db, mock, repo := setupTaskMockCapturingSQL(t, &executed)
+	defer func() { _ = db.Close() }()
+
+	workspace := "test-workspace"
+	taskID := uuid.New().String()
+	timeoutAfter := time.Now().UTC().Add(5 * time.Minute)
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE tasks SET").
+		WithArgs(
+			domain.TaskStatusRunning,
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			timeoutAfter,
+			nil,
+			taskID,
+			workspace,
+			string(domain.TaskStatusPending),
+			string(domain.TaskStatusPaused),
+			string(domain.TaskStatusRunning),
+			sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err := repo.MarkAsRunning(context.Background(), workspace, taskID, timeoutAfter)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+	require.Len(t, executed, 1)
+	assert.Contains(t, executed[0], "error_message")
 }
 
 func TestTaskRepository_MarkAsCompleted(t *testing.T) {
