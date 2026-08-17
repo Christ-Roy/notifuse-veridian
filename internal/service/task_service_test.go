@@ -16,6 +16,7 @@ import (
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTaskService_ExecuteTask(t *testing.T) {
@@ -2760,4 +2761,479 @@ func TestTaskService_ExecutePendingTasks_DoesNotFollowRedirect(t *testing.T) {
 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&dispatchHits), "dispatch endpoint should have been called exactly once")
 	assert.Equal(t, int32(0), atomic.LoadInt32(&loginHits), "login endpoint must not be reached — redirect must not be followed")
+}
+
+// TestTaskService_ExecuteTask_GraceDeadline covers the execution backstop that
+// lives inside ExecuteTask: the processor context carries a deadline of
+// timeoutAt+taskExecutionGrace regardless of entry path, a processor stuck in a
+// call that ignores that context is released at the deadline (task marked
+// failed, function returns), and a panicking processor fails its task instead
+// of crashing the process.
+func TestTaskService_ExecuteTask_GraceDeadline(t *testing.T) {
+	newService := func(t *testing.T) (*TaskService, *mocks.MockTaskRepository, *gomock.Controller) {
+		ctrl := gomock.NewController(t)
+		mockRepo := mocks.NewMockTaskRepository(ctrl)
+		mockSettingRepo := mocks.NewMockSettingRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		svc := NewTaskService(mockRepo, mockSettingRepo, mockLogger, nil, "http://localhost:8080")
+		svc.SetAutoExecuteImmediate(false)
+
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, fn func(*sql.Tx) error) error {
+				return fn(nil)
+			}).AnyTimes()
+
+		return svc, mockRepo, ctrl
+	}
+
+	registerProcessor := func(ctrl *gomock.Controller, svc *TaskService) *mocks.MockTaskProcessor {
+		mockProcessor := mocks.NewMockTaskProcessor(ctrl)
+		for _, supportedType := range getTaskTypes() {
+			mockProcessor.EXPECT().
+				CanProcess(supportedType).
+				Return(supportedType == "send_broadcast").
+				AnyTimes()
+		}
+		svc.RegisterProcessor(mockProcessor)
+		return mockProcessor
+	}
+
+	task := func() *domain.Task {
+		return &domain.Task{
+			ID:          "task123",
+			WorkspaceID: "workspace1",
+			Type:        "send_broadcast",
+			Status:      domain.TaskStatusPending,
+			MaxRuntime:  60,
+		}
+	}
+
+	t.Run("processor context carries the grace deadline", func(t *testing.T) {
+		svc, mockRepo, ctrl := newService(t)
+		defer ctrl.Finish()
+		mockProcessor := registerProcessor(ctrl, svc)
+
+		ctx := context.Background()
+		timeoutAt := time.Now().Add(60 * time.Second)
+		wantDeadline := timeoutAt.Add(taskExecutionGrace)
+
+		mockRepo.EXPECT().
+			GetTx(gomock.Any(), gomock.Any(), "workspace1", "task123").
+			Return(task(), nil)
+		// The stored lease must also carry the grace, so a re-dispatcher cannot
+		// reap this execution while it is still inside its grace window.
+		mockRepo.EXPECT().
+			MarkAsRunningTx(gomock.Any(), gomock.Any(), "workspace1", "task123", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ *sql.Tx, _, _ string, lease time.Time) error {
+				assert.WithinDuration(t, wantDeadline, lease, time.Second,
+					"lease must extend past the timeout by the grace")
+				return nil
+			})
+
+		var gotDeadline time.Time
+		var hadDeadline bool
+		mockProcessor.EXPECT().
+			Process(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(procCtx context.Context, _ *domain.Task, procTimeout time.Time) (bool, error) {
+				gotDeadline, hadDeadline = procCtx.Deadline()
+				// The processor's own budget parameter stays the raw timeout.
+				assert.WithinDuration(t, timeoutAt, procTimeout, time.Second)
+				return true, nil
+			})
+		mockRepo.EXPECT().
+			MarkAsCompleted(gomock.Any(), "workspace1", "task123", gomock.Any()).
+			Return(nil)
+
+		err := svc.ExecuteTask(ctx, "workspace1", "task123", timeoutAt)
+		require.NoError(t, err)
+		require.True(t, hadDeadline, "processor context must carry a deadline on every entry path")
+		assert.WithinDuration(t, wantDeadline, gotDeadline, time.Second)
+	})
+
+	t.Run("stuck processor is released at the deadline", func(t *testing.T) {
+		svc, mockRepo, ctrl := newService(t)
+		defer ctrl.Finish()
+		mockProcessor := registerProcessor(ctrl, svc)
+
+		ctx := context.Background()
+		// Deadline fires ~700ms after start: timeoutAt sits in the past so that
+		// timeoutAt+grace lands just ahead of now. This simulates a processor
+		// stuck in a call that ignores context cancellation entirely.
+		timeoutAt := time.Now().Add(-taskExecutionGrace).Add(700 * time.Millisecond)
+
+		block := make(chan struct{})
+		t.Cleanup(func() { close(block) }) // release the zombie goroutine
+
+		mockRepo.EXPECT().
+			GetTx(gomock.Any(), gomock.Any(), "workspace1", "task123").
+			Return(task(), nil)
+		mockRepo.EXPECT().
+			MarkAsRunningTx(gomock.Any(), gomock.Any(), "workspace1", "task123", gomock.Any()).
+			Return(nil)
+		mockProcessor.EXPECT().
+			Process(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, *domain.Task, time.Time) (bool, error) {
+				<-block // ignores ctx: only the select's ctx.Done case can save the caller
+				return false, nil
+			})
+		mockRepo.EXPECT().
+			MarkAsFailed(gomock.Any(), "workspace1", "task123", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, msg string) error {
+				assert.Contains(t, msg, "exceeded timeout and grace")
+				return nil
+			})
+
+		start := time.Now()
+		err := svc.ExecuteTask(ctx, "workspace1", "task123", timeoutAt)
+		elapsed := time.Since(start)
+
+		require.Error(t, err)
+		var taskExecError *domain.ErrTaskExecution
+		require.True(t, errors.As(err, &taskExecError))
+		assert.Equal(t, "execution exceeded timeout and grace", taskExecError.Reason)
+		assert.Less(t, elapsed, 5*time.Second,
+			"a stuck processor must not hold ExecuteTask past the deadline")
+	})
+
+	t.Run("panicking processor fails the task instead of crashing", func(t *testing.T) {
+		svc, mockRepo, ctrl := newService(t)
+		defer ctrl.Finish()
+		mockProcessor := registerProcessor(ctrl, svc)
+
+		ctx := context.Background()
+		timeoutAt := time.Now().Add(60 * time.Second)
+
+		mockRepo.EXPECT().
+			GetTx(gomock.Any(), gomock.Any(), "workspace1", "task123").
+			Return(task(), nil)
+		mockRepo.EXPECT().
+			MarkAsRunningTx(gomock.Any(), gomock.Any(), "workspace1", "task123", gomock.Any()).
+			Return(nil)
+		mockProcessor.EXPECT().
+			Process(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, *domain.Task, time.Time) (bool, error) {
+				panic("boom: nil map write in a processor")
+			})
+		mockRepo.EXPECT().
+			MarkAsFailed(gomock.Any(), "workspace1", "task123", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, msg string) error {
+				assert.Contains(t, msg, "processor panicked")
+				assert.Contains(t, msg, "boom")
+				return nil
+			})
+
+		var err error
+		require.NotPanics(t, func() {
+			err = svc.ExecuteTask(ctx, "workspace1", "task123", timeoutAt)
+		})
+		require.Error(t, err)
+		var taskExecError *domain.ErrTaskExecution
+		require.True(t, errors.As(err, &taskExecError))
+		assert.Equal(t, "processor panicked", taskExecError.Reason)
+	})
+}
+
+// TestDispatchTimeout_ScalesWithMaxRuntime pins the dispatch wait to the task's
+// own budget. The fixed 53s it replaced left only a 3s margin over a broadcast
+// slice — the gap the enqueue transaction was cancelled in — and silently
+// truncated every longer-running task type.
+func TestDispatchTimeout_ScalesWithMaxRuntime(t *testing.T) {
+	tests := []struct {
+		name       string
+		maxRuntime int
+		want       time.Duration
+	}{
+		{"broadcast slice", 50, 90 * time.Second},
+		{"segment recompute", 300, 340 * time.Second},
+		{"unset falls back to the default", 0, 90 * time.Second},
+		{"negative falls back to the default", -1, 90 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dispatchTimeout(&domain.Task{MaxRuntime: tt.maxRuntime})
+			assert.Equal(t, tt.want, got)
+			assert.Greater(t, got, time.Duration(tt.maxRuntime)*time.Second,
+				"the dispatcher must outlast the task it started")
+		})
+	}
+}
+
+// interruptingProcessor blocks until its context is cancelled, then reports the
+// cancellation the way a real processor does — wrapped, not bare.
+type interruptingProcessor struct {
+	taskType string
+	started  chan struct{}
+	wrap     func(error) error
+}
+
+func (p *interruptingProcessor) CanProcess(taskType string) bool { return taskType == p.taskType }
+
+func (p *interruptingProcessor) Process(ctx context.Context, _ *domain.Task, _ time.Time) (bool, error) {
+	select {
+	case p.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	if p.wrap != nil {
+		return false, p.wrap(ctx.Err())
+	}
+	return false, ctx.Err()
+}
+
+// TestTaskService_ExecuteTask_InterruptionDoesNotConsumeRetryBudget covers the
+// defect that turned one cancelled context into a dead broadcast: an execution
+// cut short by its parent going away was recorded as a failed attempt, so three
+// deploys (or three proxy timeouts) exhausted max_retries.
+func TestTaskService_ExecuteTask_InterruptionDoesNotConsumeRetryBudget(t *testing.T) {
+	setup := func(t *testing.T, wrap func(error) error) (*TaskService, *mocks.MockTaskRepository, *interruptingProcessor) {
+		t.Helper()
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		mockRepo := mocks.NewMockTaskRepository(ctrl)
+		mockSettingRepo := mocks.NewMockSettingRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		svc := NewTaskService(mockRepo, mockSettingRepo, mockLogger, nil, "http://localhost:8080")
+		svc.SetAutoExecuteImmediate(false)
+
+		proc := &interruptingProcessor{taskType: "generate_report", started: make(chan struct{}, 1), wrap: wrap}
+		svc.RegisterProcessor(proc)
+
+		task := &domain.Task{
+			ID:          "task-1",
+			WorkspaceID: "ws-1",
+			Type:        "generate_report",
+			Status:      domain.TaskStatusPending,
+			MaxRuntime:  50,
+			MaxRetries:  3,
+		}
+
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, fn func(*sql.Tx) error) error { return fn(nil) }).
+			AnyTimes()
+		mockRepo.EXPECT().GetTx(gomock.Any(), gomock.Any(), "ws-1", "task-1").Return(task, nil).AnyTimes()
+		mockRepo.EXPECT().MarkAsRunningTx(gomock.Any(), gomock.Any(), "ws-1", "task-1", gomock.Any()).Return(nil).AnyTimes()
+
+		return svc, mockRepo, proc
+	}
+
+	t.Run("releases instead of failing when the parent context is cancelled", func(t *testing.T) {
+		svc, mockRepo, proc := setup(t, nil)
+
+		released := make(chan time.Time, 1)
+		mockRepo.EXPECT().
+			ReleaseTask(gomock.Any(), "ws-1", "task-1", gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _, reason string, nextRunAfter time.Time) error {
+				assert.Contains(t, reason, "interrupted")
+				released <- nextRunAfter
+				return nil
+			}).
+			Times(1)
+		// The whole point: no attempt is recorded.
+		mockRepo.EXPECT().MarkAsFailed(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			<-proc.started
+			cancel()
+		}()
+
+		err := svc.ExecuteTask(ctx, "ws-1", "task-1", time.Now().Add(50*time.Second))
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.Canceled)
+
+		select {
+		case nextRunAfter := <-released:
+			assert.False(t, nextRunAfter.IsZero(), "the task must be re-queued")
+		case <-time.After(2 * time.Second):
+			t.Fatal("ReleaseTask was never called")
+		}
+	})
+
+	t.Run("still fails on a genuine processor error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockRepo := mocks.NewMockTaskRepository(ctrl)
+		mockSettingRepo := mocks.NewMockSettingRepository(ctrl)
+		mockLogger := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		svc := NewTaskService(mockRepo, mockSettingRepo, mockLogger, nil, "http://localhost:8080")
+		svc.SetAutoExecuteImmediate(false)
+		svc.RegisterProcessor(&failingProcessor{})
+
+		task := &domain.Task{
+			ID: "task-2", WorkspaceID: "ws-1", Type: "export_contacts",
+			Status: domain.TaskStatusPending, MaxRuntime: 50, MaxRetries: 3,
+		}
+		mockRepo.EXPECT().
+			WithTransaction(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, fn func(*sql.Tx) error) error { return fn(nil) }).
+			AnyTimes()
+		mockRepo.EXPECT().GetTx(gomock.Any(), gomock.Any(), "ws-1", "task-2").Return(task, nil).AnyTimes()
+		mockRepo.EXPECT().MarkAsRunningTx(gomock.Any(), gomock.Any(), "ws-1", "task-2", gomock.Any()).Return(nil).AnyTimes()
+		mockRepo.EXPECT().MarkAsFailed(gomock.Any(), "ws-1", "task-2", gomock.Any()).Return(nil).Times(1)
+		mockRepo.EXPECT().ReleaseTask(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		err := svc.ExecuteTask(context.Background(), "ws-1", "task-2", time.Now().Add(50*time.Second))
+		require.Error(t, err)
+	})
+}
+
+// failingProcessor returns an ordinary error, which must still consume a retry.
+type failingProcessor struct{}
+
+func (p *failingProcessor) CanProcess(taskType string) bool { return taskType == "export_contacts" }
+func (p *failingProcessor) Process(context.Context, *domain.Task, time.Time) (bool, error) {
+	return false, errors.New("processor blew up")
+}
+
+// TestNewDispatchRequest_CarriesTheTaskBudget pins the dispatch wiring, not just
+// the arithmetic: a request built without a deadline (the plain http.NewRequest
+// this replaced) leaves the shared client's timeout in charge, which is how a
+// 50s broadcast slice ended up cancelled by a 53s client.
+func TestNewDispatchRequest_CarriesTheTaskBudget(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := NewTaskService(
+		mocks.NewMockTaskRepository(ctrl),
+		mocks.NewMockSettingRepository(ctrl),
+		pkgmocks.NewMockLogger(ctrl),
+		nil,
+		"https://api.example.com",
+	)
+
+	for _, tc := range []struct {
+		name       string
+		maxRuntime int
+	}{
+		{"broadcast slice", 50},
+		{"segment recompute", 300},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			task := &domain.Task{ID: "task-1", WorkspaceID: "ws-1", MaxRuntime: tc.maxRuntime}
+
+			before := time.Now()
+			req, cancel, err := svc.newDispatchRequest(context.Background(), task, []byte(`{}`))
+			require.NoError(t, err)
+			defer cancel()
+
+			deadline, ok := req.Context().Deadline()
+			require.True(t, ok, "the dispatch must carry its own deadline")
+
+			budget := deadline.Sub(before)
+			assert.InDelta(t, dispatchTimeout(task).Seconds(), budget.Seconds(), 1.0)
+			assert.Greater(t, budget, time.Duration(tc.maxRuntime)*time.Second,
+				"the dispatcher must outlast the task it started")
+
+			assert.Equal(t, "https://api.example.com/api/tasks.execute", req.URL.String())
+			assert.Equal(t, "task-1", req.Header.Get("X-Task-ID"))
+		})
+	}
+}
+
+// TestNewDispatchHTTPClient_TimeoutNeverBinds guards the other half: the shared
+// client's timeout is a backstop, so it must stay above the longest budget any
+// task can ask for. Lowering it back to a fixed value silently truncates runs.
+func TestNewDispatchHTTPClient_TimeoutNeverBinds(t *testing.T) {
+	client := newDispatchHTTPClient()
+	longest := dispatchTimeout(&domain.Task{MaxRuntime: 300}) // segment recompute
+
+	assert.Greater(t, client.Timeout, longest,
+		"the shared client must never become the binding constraint")
+}
+
+// TestTaskService_ExecuteTask_InterruptionMaskedByTxDone covers the case the
+// error-only check missed: a cancellation that lands inside a transaction is
+// reported by database/sql as "transaction has already been committed or rolled
+// back", an error whose chain contains no context at all. The task must still be
+// re-queued rather than charged a failed attempt.
+func TestTaskService_ExecuteTask_InterruptionMaskedByTxDone(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockTaskRepository(ctrl)
+	mockSettingRepo := mocks.NewMockSettingRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	svc := NewTaskService(mockRepo, mockSettingRepo, mockLogger, nil, "http://localhost:8080")
+	svc.SetAutoExecuteImmediate(false)
+
+	// The processor waits for the cancellation, then reports it the way a rolled
+	// back transaction does — with the cancellation nowhere in the chain.
+	proc := &interruptingProcessor{
+		taskType: "generate_report",
+		started:  make(chan struct{}, 1),
+		wrap: func(error) error {
+			return errors.New("failed to commit transaction: sql: transaction has already been committed or rolled back")
+		},
+	}
+	svc.RegisterProcessor(proc)
+
+	task := &domain.Task{
+		ID: "task-1", WorkspaceID: "ws-1", Type: "generate_report",
+		Status: domain.TaskStatusPending, MaxRuntime: 50, MaxRetries: 3,
+	}
+	mockRepo.EXPECT().
+		WithTransaction(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, fn func(*sql.Tx) error) error { return fn(nil) }).
+		AnyTimes()
+	mockRepo.EXPECT().GetTx(gomock.Any(), gomock.Any(), "ws-1", "task-1").Return(task, nil).AnyTimes()
+	mockRepo.EXPECT().MarkAsRunningTx(gomock.Any(), gomock.Any(), "ws-1", "task-1", gomock.Any()).Return(nil).AnyTimes()
+
+	released := make(chan struct{}, 1)
+	mockRepo.EXPECT().
+		ReleaseTask(gomock.Any(), "ws-1", "task-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _, _ string, _ time.Time) error {
+			released <- struct{}{}
+			return nil
+		}).
+		Times(1)
+	mockRepo.EXPECT().MarkAsFailed(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-proc.started
+		cancel()
+	}()
+
+	err := svc.ExecuteTask(ctx, "ws-1", "task-1", time.Now().Add(50*time.Second))
+	require.Error(t, err)
+
+	select {
+	case <-released:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the task was never re-queued")
+	}
 }
