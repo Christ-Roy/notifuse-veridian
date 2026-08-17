@@ -1213,8 +1213,8 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		sql, args, err := qb.BuildSQL(tree)
 		require.NoError(t, err)
 
-		assert.Contains(t, sql, "ct.metadata->>'product_id' = $2")
-		assert.Equal(t, []interface{}{"purchase", "prod_123", 1}, args)
+		assert.Contains(t, sql, "ct.metadata->>$2 = $3")
+		assert.Equal(t, []interface{}{"purchase", "product_id", "prod_123", 1}, args)
 	})
 
 	t.Run("timeline with number metadata filter", func(t *testing.T) {
@@ -1242,8 +1242,35 @@ func TestQueryBuilder_ContactTimeline(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should cast JSONB field to numeric for comparison
-		assert.Contains(t, sql, "(ct.metadata->>'amount')::numeric >= $2")
-		assert.Equal(t, []interface{}{"purchase", 100.0, 1}, args)
+		assert.Contains(t, sql, "(ct.metadata->>$2)::numeric >= $3")
+		assert.Equal(t, []interface{}{"purchase", "amount", 100.0, 1}, args)
+	})
+
+	t.Run("timeline metadata field name is parameterized", func(t *testing.T) {
+		maliciousField := "product_id') = 'x' OR TRUE; DROP TABLE contacts; --"
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contact_timeline",
+				ContactTimeline: &domain.ContactTimelineCondition{
+					Kind:          "purchase",
+					CountOperator: "at_least",
+					CountValue:    1,
+					Filters: []*domain.DimensionFilter{{
+						FieldName:    maliciousField,
+						FieldType:    "string",
+						Operator:     "equals",
+						StringValues: []string{"prod_123"},
+					}},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "ct.metadata->>$2 = $3")
+		assert.NotContains(t, sql, maliciousField)
+		assert.Equal(t, []interface{}{"purchase", maliciousField, "prod_123", 1}, args)
 	})
 
 	t.Run("missing kind", func(t *testing.T) {

@@ -783,10 +783,16 @@ func (qb *QueryBuilder) parseTimelineFilter(filter *domain.DimensionFilter, argI
 	if filter == nil {
 		return "", nil, argIndex, fmt.Errorf("filter cannot be nil")
 	}
+	if filter.FieldName == "" {
+		return "", nil, argIndex, fmt.Errorf("filter must have 'field_name'")
+	}
 
-	// Timeline metadata is stored in JSONB, so we need to use JSON operators
-	// For now, support common timeline metadata fields
-	fieldPath := fmt.Sprintf("ct.metadata->>'%s'", filter.FieldName)
+	// Timeline metadata keys are workspace-controlled input. Bind the key instead
+	// of interpolating it into SQL, otherwise a crafted field_name can escape the
+	// JSONB lookup and alter the segment/automation query.
+	args := []interface{}{filter.FieldName}
+	fieldPath := fmt.Sprintf("ct.metadata->>$%d", argIndex)
+	argIndex++
 
 	// Validate operator
 	sqlOp, ok := qb.allowedOperators[filter.Operator]
@@ -796,7 +802,7 @@ func (qb *QueryBuilder) parseTimelineFilter(filter *domain.DimensionFilter, argI
 
 	// Handle operators that don't require values
 	if !sqlOp.requiresValue {
-		return fmt.Sprintf("%s %s", fieldPath, sqlOp.sql), nil, argIndex, nil
+		return fmt.Sprintf("%s %s", fieldPath, sqlOp.sql), args, argIndex, nil
 	}
 
 	// Get values based on field type
@@ -827,7 +833,11 @@ func (qb *QueryBuilder) parseTimelineFilter(filter *domain.DimensionFilter, argI
 	}
 
 	// Build SQL condition
-	return qb.buildCondition(fieldPath, filter.Operator, sqlOp, values, argIndex)
+	condition, valueArgs, newArgIndex, err := qb.buildCondition(fieldPath, filter.Operator, sqlOp, values, argIndex)
+	if err != nil {
+		return "", nil, argIndex, err
+	}
+	return condition, append(args, valueArgs...), newArgIndex, nil
 }
 
 // buildCondition builds the SQL condition with parameterized values
