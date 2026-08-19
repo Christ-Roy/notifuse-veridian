@@ -256,6 +256,34 @@ func (sm *ServerManager) StartLive(ctx context.Context) error {
 	return nil
 }
 
+// StartLiveDirect brings up the test server like Start(), then starts the real
+// scheduler and background workers while keeping APIEndpoint empty.
+//
+// That empty APIEndpoint is the switch that makes TaskService execute pending
+// tasks in-process instead of self-dispatching over HTTP. Tests use this variant
+// to exercise production's direct scheduler path with a cancellable ancestor
+// context, without tearing down the DB pool mid-assertion.
+func (sm *ServerManager) StartLiveDirect(ctx context.Context) error {
+	if sm.isStarted {
+		return nil
+	}
+
+	if err := sm.Start(); err != nil {
+		return err
+	}
+
+	if scheduler := sm.app.GetTaskScheduler(); scheduler != nil {
+		scheduler.Start(ctx)
+	}
+
+	if err := sm.StartBackgroundWorkers(ctx); err != nil {
+		_ = sm.Stop()
+		return fmt.Errorf("failed to start background workers: %w", err)
+	}
+
+	return nil
+}
+
 // StartBackgroundWorkers starts the email queue worker and other background services
 // Call this after Start() when you need workers to process queued items
 func (sm *ServerManager) StartBackgroundWorkers(ctx context.Context) error {
