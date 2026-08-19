@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"errors"
 	"net/url"
 	"testing"
 	"time"
@@ -9,6 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestTaskErrorSentinels(t *testing.T) {
+	require.Error(t, ErrTaskNotRunning)
+	assert.True(t, errors.Is(ErrTaskNotRunning, ErrTaskNotRunning))
+	assert.False(t, errors.Is(ErrTaskNotRunning, ErrTaskNotFound))
+	assert.Equal(t, "task is no longer running", ErrTaskNotRunning.Error())
+}
 
 func TestTaskState_Value(t *testing.T) {
 	t.Run("empty state", func(t *testing.T) {
@@ -1067,4 +1075,10 @@ func TestTask_RecurringFields(t *testing.T) {
 		assert.Nil(t, task.IntegrationID)
 		assert.False(t, task.IsRecurring())
 	})
+}
+
+func TestErrTaskNotRunning(t *testing.T) {
+	assert.EqualError(t, ErrTaskNotRunning, "task is no longer running")
+	assert.NotEqual(t, ErrTaskNotFound, ErrTaskNotRunning,
+		"a lost execution claim must stay distinguishable from a missing task")
 }

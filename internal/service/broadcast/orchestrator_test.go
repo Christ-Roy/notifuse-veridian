@@ -87,6 +87,57 @@ func TestBroadcastOrchestrator_CanProcess(t *testing.T) {
 	}
 }
 
+func TestBroadcastOrchestrator_GetTotalRecipientCountCancelledContextIsInterrupted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMessageSender := mocks.NewMockMessageSender(ctrl)
+	mockBroadcastRepository := domainmocks.NewMockBroadcastRepository(ctrl)
+	mockTemplateRepo := domainmocks.NewMockTemplateRepository(ctrl)
+	mockContactRepo := domainmocks.NewMockContactRepository(ctrl)
+	mockTaskRepo := domainmocks.NewMockTaskRepository(ctrl)
+	mockWorkspaceRepo := domainmocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockTimeProvider := mocks.NewMockTimeProvider(ctrl)
+	mockEventBus := domainmocks.NewMockEventBus(ctrl)
+
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	orchestrator := broadcast.NewBroadcastOrchestrator(
+		mockMessageSender,
+		mockBroadcastRepository,
+		mockTemplateRepo,
+		mockContactRepo,
+		mockTaskRepo,
+		mockWorkspaceRepo,
+		nil,
+		nil,
+		mockLogger,
+		nil,
+		mockTimeProvider,
+		"https://api.example.com",
+		mockEventBus,
+	)
+
+	mockBroadcastRepository.EXPECT().
+		GetBroadcast(gomock.Any(), "workspace-123", "broadcast-1").
+		Return(nil, context.Canceled).
+		Times(1)
+
+	_, err := orchestrator.GetTotalRecipientCount(context.Background(), "workspace-123", "broadcast-1")
+	require.Error(t, err)
+
+	var bErr *broadcast.BroadcastError
+	require.ErrorAs(t, err, &bErr)
+	assert.Equal(t, broadcast.ErrCodeInterrupted, bErr.Code)
+	assert.NotEqual(t, broadcast.ErrCodeBroadcastNotFound, bErr.Code)
+}
+
 func TestBroadcastOrchestrator_LoadTemplates(t *testing.T) {
 	// Setup
 	ctrl := gomock.NewController(t)
@@ -332,6 +383,18 @@ func TestBroadcastOrchestrator_GetTotalRecipientCount(t *testing.T) {
 	// Verify
 	require.NoError(t, err)
 	assert.Equal(t, 100, count)
+
+	// A cancelled lookup is an interruption, not a fictitious missing broadcast.
+	mockBroadcastRepository.EXPECT().
+		GetBroadcast(ctx, workspaceID, broadcastID).
+		Return(nil, context.Canceled)
+
+	count, err = orchestrator.GetTotalRecipientCount(ctx, workspaceID, broadcastID)
+	assert.Zero(t, count)
+	require.Error(t, err)
+	var broadcastErr *broadcast.BroadcastError
+	require.ErrorAs(t, err, &broadcastErr)
+	assert.Equal(t, broadcast.ErrCodeInterrupted, broadcastErr.Code)
 }
 
 func TestBroadcastOrchestrator_FetchBatch(t *testing.T) {
