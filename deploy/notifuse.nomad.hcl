@@ -21,7 +21,9 @@
 #    chantier infra séparé (backlog nomad-veridian). Ne PAS reschedule ce job stateful.
 variable "image_tag" {
   type        = string
-  default     = "v54.0-veridian.7ff43498"
+  # Recale sur ce qui tourne reellement en prod : le defaut retardait de
+  # deux versions majeures et un deploiement hors CI aurait retrograde Notifuse.
+  default     = "v56.0-veridian.d4fb2a4f"
   description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
 }
 
@@ -89,9 +91,33 @@ job "notifuse" {
     task "notifuse-db" {
       driver = "docker"
       config {
-        image   = "postgres:17-alpine"
+        # Image officielle postgres:17-alpine + pgBackRest epingle. La BASE est
+        # identique au bit pres : changer d'image de base changerait la
+        # collation (musl/glibc) et fausserait silencieusement les index.
+        image   = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine@sha256:11bfce0b681813d41af9e7495efc331f0a9914f9788ae8bb2ee652b80e2df798"
         command = "postgres"
-        args    = ["-c", "max_wal_size=1GB", "-c", "checkpoint_timeout=10min"]
+        args = [
+          "-c", "max_wal_size=1GB", "-c", "checkpoint_timeout=10min",
+          # --- Archivage continu des WAL vers le depot pgBackRest ---
+          # C'est CE reglage, et non la sauvegarde nocturne, qui borne la perte
+          # de donnees : chaque segment de journal part vers R2 des qu'il est
+          # clos. archive_timeout force cette cloture toutes les 5 minutes quand
+          # il y a eu de l'ecriture, donc RPO = 5 min.
+          # Modifier archive_mode exige un REDEMARRAGE de PostgreSQL (ce n'est
+          # pas rechargeable a chaud) : c'est la seule interruption qu'impose la
+          # mise en place.
+          # pgBackRest ne joint le cluster QUE par socket Unix ; il n'a aucune
+          # option de connexion TCP pour un cluster local. La tache annexe vit
+          # dans un autre espace de montage et ne voit donc pas
+          # /var/run/postgresql. On publie une seconde socket dans /alloc, le
+          # repertoire que Nomad partage entre les taches d'un meme groupe.
+          # L'ancienne reste en place : `docker exec ... psql` continue de marcher.
+          "-c", "unix_socket_directories=/var/run/postgresql,/alloc",
+          "-c", "archive_mode=on",
+          "-c", "archive_command=pgbackrest --stanza=notifuse archive-push %p",
+          "-c", "archive_timeout=300",
+          "-c", "wal_level=replica",
+        ]
         volumes = [
           "/opt/veridian-lab/notifuse/db:/var/lib/postgresql/data",
         ]
@@ -106,12 +132,120 @@ POSTGRES_DB=notifuse_system
 {{ with nomadVar "nomad/jobs/notifuse" }}
 POSTGRES_PASSWORD={{ .POSTGRES_PASSWORD }}
 {{ end }}
+# --- pgBackRest : configuration par variables d'environnement ---
+# Aucun fichier de configuration : les identifiants R2 et la phrase de
+# chiffrement ne sont jamais ecrits sur le disque de l'allocation. pgBackRest
+# lit toute option sous la forme PGBACKREST_<OPTION>.
+PGBACKREST_REPO1_TYPE=s3
+PGBACKREST_REPO1_PATH=/pgbackrest/notifuse
+PGBACKREST_REPO1_S3_REGION=auto
+# path : R2 accepte les deux styles, celui-ci ne depend pas d'un DNS par bucket.
+PGBACKREST_REPO1_S3_URI_STYLE=path
+PGBACKREST_REPO1_CIPHER_TYPE=aes-256-cbc
+PGBACKREST_COMPRESS_TYPE=zst
+PGBACKREST_COMPRESS_LEVEL=6
+PGBACKREST_REPO1_BUNDLE=y
+PGBACKREST_REPO1_BLOCK=y
+PGBACKREST_LOG_LEVEL_CONSOLE=info
+PGBACKREST_LOG_LEVEL_FILE=off
+PGBACKREST_PG1_PATH=/var/lib/postgresql/data
+PGBACKREST_PG1_PORT=5432
+PGBACKREST_PG1_USER=postgres
+PGBACKREST_PG1_DATABASE=notifuse_system
+{{ with nomadVar "nomad/jobs/notifuse" }}
+PGBACKREST_REPO1_S3_BUCKET={{ .R2_BUCKET }}
+PGBACKREST_REPO1_S3_ENDPOINT={{ .R2_ENDPOINT }}
+PGBACKREST_REPO1_S3_KEY={{ .R2_ACCESS_KEY_ID }}
+PGBACKREST_REPO1_S3_KEY_SECRET={{ .R2_SECRET_ACCESS_KEY }}
+# ATTENTION : PERDRE CETTE PHRASE = PERDRE TOUTES LES SAUVEGARDES. Copie de
+# secours dans ~/credentials/.all-creds.env (PGBACKREST_CIPHER_NOTIFUSE).
+PGBACKREST_REPO1_CIPHER_PASS={{ .PGBACKREST_CIPHER_PASS }}
+{{ end }}
 EOH
       }
       resources {
         cpu        = 300
         memory     = 384
         memory_max = 7000
+      }
+    }
+
+    # ---- pgBackRest : sauvegarde continue vers R2 ----
+    # Tache annexe du MEME groupe, donc : meme espace reseau (elle joint
+    # PostgreSQL par la socket publiee dans /alloc, authentification `trust`
+    # locale, aucun mot de passe a promener) et meme bind mount de PGDATA (elle
+    # lit les pages directement). Elle SUIT l'allocation : si Nomad replace le
+    # groupe, la sauvegarde repart sans qu'on touche a un script.
+    task "pgbackrest" {
+      driver = "docker"
+      config {
+        image      = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine@sha256:11bfce0b681813d41af9e7495efc331f0a9914f9788ae8bb2ee652b80e2df798"
+        entrypoint = ["/usr/local/bin/pgbackrest-scheduler"]
+        command    = ""
+        volumes = [
+          "/opt/veridian-lab/notifuse/db:/var/lib/postgresql/data",
+        ]
+      }
+      user = "postgres"
+
+      template {
+        destination = "secrets/pgbackrest.env"
+        env         = true
+        data        = <<EOH
+TZ=UTC
+PGBR_STANZA=notifuse
+# Socket partagee avec la tache postgres via le repertoire d'allocation.
+PGBACKREST_PG1_SOCKET_PATH=/alloc
+# Complete le dimanche, differentielle les autres jours, incrementale toutes les
+# 6 h. 30 : creneau propre a cette stanza pour ne pas taper R2 en meme
+# temps que les autres bases du parc.
+PGBR_FULL_DOW=0
+PGBR_DAILY_HOUR=3
+PGBR_DAILY_MINUTE=30
+PGBR_INCR_EVERY_H=6
+# Base de PRODUCTION cliente : 8 semaines de completes conservees. Les WAL
+# retenus couvrent la meme profondeur, donc on peut viser n'importe quelle
+# seconde des deux derniers mois.
+PGBACKREST_REPO1_RETENTION_FULL=8
+PGBACKREST_REPO1_RETENTION_DIFF=7
+PGBACKREST_PROCESS_MAX=2
+PGBACKREST_START_FAST=y
+# --- pgBackRest : configuration par variables d'environnement ---
+# Aucun fichier de configuration : les identifiants R2 et la phrase de
+# chiffrement ne sont jamais ecrits sur le disque de l'allocation. pgBackRest
+# lit toute option sous la forme PGBACKREST_<OPTION>.
+PGBACKREST_REPO1_TYPE=s3
+PGBACKREST_REPO1_PATH=/pgbackrest/notifuse
+PGBACKREST_REPO1_S3_REGION=auto
+# path : R2 accepte les deux styles, celui-ci ne depend pas d'un DNS par bucket.
+PGBACKREST_REPO1_S3_URI_STYLE=path
+PGBACKREST_REPO1_CIPHER_TYPE=aes-256-cbc
+PGBACKREST_COMPRESS_TYPE=zst
+PGBACKREST_COMPRESS_LEVEL=6
+PGBACKREST_REPO1_BUNDLE=y
+PGBACKREST_REPO1_BLOCK=y
+PGBACKREST_LOG_LEVEL_CONSOLE=info
+PGBACKREST_LOG_LEVEL_FILE=off
+PGBACKREST_PG1_PATH=/var/lib/postgresql/data
+PGBACKREST_PG1_PORT=5432
+PGBACKREST_PG1_USER=postgres
+PGBACKREST_PG1_DATABASE=notifuse_system
+{{ with nomadVar "nomad/jobs/notifuse" }}
+PGBACKREST_REPO1_S3_BUCKET={{ .R2_BUCKET }}
+PGBACKREST_REPO1_S3_ENDPOINT={{ .R2_ENDPOINT }}
+PGBACKREST_REPO1_S3_KEY={{ .R2_ACCESS_KEY_ID }}
+PGBACKREST_REPO1_S3_KEY_SECRET={{ .R2_SECRET_ACCESS_KEY }}
+# ATTENTION : PERDRE CETTE PHRASE = PERDRE TOUTES LES SAUVEGARDES. Copie de
+# secours dans ~/credentials/.all-creds.env (PGBACKREST_CIPHER_NOTIFUSE).
+PGBACKREST_REPO1_CIPHER_PASS={{ .PGBACKREST_CIPHER_PASS }}
+{{ end }}
+EOH
+      }
+
+      resources {
+        cpu        = 100
+        memory     = 64
+        memory_max = 512
       }
     }
 
