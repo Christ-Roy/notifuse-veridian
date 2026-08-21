@@ -94,7 +94,7 @@ job "notifuse" {
         # Image officielle postgres:17-alpine + pgBackRest epingle. La BASE est
         # identique au bit pres : changer d'image de base changerait la
         # collation (musl/glibc) et fausserait silencieusement les index.
-        image   = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine@sha256:11bfce0b681813d41af9e7495efc331f0a9914f9788ae8bb2ee652b80e2df798"
+        image   = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine@sha256:2b6c8861f48116efaf58ea786e78590f42afd9b06073683bf44ea99681dfc653"
         command = "postgres"
         args = [
           "-c", "max_wal_size=1GB", "-c", "checkpoint_timeout=10min",
@@ -179,7 +179,7 @@ EOH
     task "pgbackrest" {
       driver = "docker"
       config {
-        image      = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine@sha256:11bfce0b681813d41af9e7495efc331f0a9914f9788ae8bb2ee652b80e2df798"
+        image      = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine@sha256:2b6c8861f48116efaf58ea786e78590f42afd9b06073683bf44ea99681dfc653"
         entrypoint = ["/usr/local/bin/pgbackrest-scheduler"]
         command    = ""
         volumes = [
