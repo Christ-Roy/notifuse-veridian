@@ -1,48 +1,34 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-08-20 04:26 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-08-20
+> **Dernier run** : 2026-08-22 04:30 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-08-22
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 50 (avant filtrage)
+> **CVE bruts détectés** : 1 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
 - 🔴 **0 HIGH** — action recommandée cette semaine
-- 🟡 **7 MEDIUM** — récap, pas urgent
-- 🟢 **18 NOISE** — annexe collapse
+- 🟡 **1 MEDIUM** — récap, pas urgent
+- 🟢 **0 NOISE** — annexe collapse
 
 ✅ **Rien d'urgent.** Quelques items MEDIUM à voir quand t'as 5 min.
 
 
 ---
 
-## 🟡 MEDIUM — 7 CVE en 1 groupe
+## 🟡 MEDIUM — 1 CVE en 1 groupe
 
-### 1. `libpq` + `postgresql17-client` — 17.10-r0 → **17.11-r0** *(base image OS)*
+### 1. `echarts` — 5.6.0 → **6.1.0**
 
-- **CVE** : `CVE-2026-15741` (HIGH/SQL injection), `CVE-2026-14664` (HIGH/Memory corruption), `CVE-2026-14669` (HIGH/Memory corruption), `CVE-2026-14670` (HIGH/Memory corruption), `CVE-2026-14676` (HIGH/Memory corruption), `CVE-2026-14679` (HIGH/Memory corruption), `CVE-2026-19385` (HIGH/Memory corruption)
-- **Type** : Memory corruption, SQL injection
-- **Score max** : 22.5
-- **Title** : SQL injection in PostgreSQL EXTRACT() deparse allows an object owner t ...
-- **Source** : `ghcr.io/christ-roy/notifuse-veridian:latest (alpine 3.21.7)`
-- **Fix** : rebuild image avec base image patchée — `libpq` >= `17.11-r0`
-
-
----
-
-## 🟢 NOISE filtré (18 CVE)
-
-<details>
-<summary>Liste complète (1 groupe — clique pour déplier)</summary>
-
-| Package | Installed | Fix | CVE count | Max score |
-|---|---|---|---|---|
-| `libpq` | 17.10-r0 | 17.11-r0 | 18 | 7.5 |
-
-</details>
+- **CVE** : `CVE-2026-45249` (MEDIUM/XSS)
+- **Type** : XSS
+- **Score max** : 12
+- **Title** : Apache ECharts has a cross-site scripting (XSS) vulnerability
+- **Source** : `console/package-lock.json`
+- **Fix** : `pnpm up echarts` (jusqu'à >= `6.1.0`)
 
 
 ---
