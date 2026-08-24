@@ -1,34 +1,20 @@
 # 🔒 Veille CVE automatique — notifuse-veridian
 
 > **Généré par** : `veridian-infra/.github/workflows/cron-trivy.yml`
-> **Dernier run** : 2026-08-22 04:30 UTC
-> **Run URL** : local-cron@mail.mybigserveur.local:2026-08-22
+> **Dernier run** : 2026-08-24 04:25 UTC
+> **Run URL** : local-cron@mail.mybigserveur.local:2026-08-24
 > **Image scannée** : `ghcr.io/christ-roy/notifuse-veridian:latest`
-> **CVE bruts détectés** : 1 (avant filtrage)
+> **CVE bruts détectés** : 0 (avant filtrage)
 > **Scoring** : `veridian-infra/ci/trivy-scoring.yml`
 
 ## TL;DR
 
 - 🚨 **0 RED** — fix prioritaire
 - 🔴 **0 HIGH** — action recommandée cette semaine
-- 🟡 **1 MEDIUM** — récap, pas urgent
+- 🟡 **0 MEDIUM** — récap, pas urgent
 - 🟢 **0 NOISE** — annexe collapse
 
-✅ **Rien d'urgent.** Quelques items MEDIUM à voir quand t'as 5 min.
-
-
----
-
-## 🟡 MEDIUM — 1 CVE en 1 groupe
-
-### 1. `echarts` — 5.6.0 → **6.1.0**
-
-- **CVE** : `CVE-2026-45249` (MEDIUM/XSS)
-- **Type** : XSS
-- **Score max** : 12
-- **Title** : Apache ECharts has a cross-site scripting (XSS) vulnerability
-- **Source** : `console/package-lock.json`
-- **Fix** : `pnpm up echarts` (jusqu'à >= `6.1.0`)
+✅ **Aucune action requise.** Rapport régénéré quotidiennement.
 
 
 ---
