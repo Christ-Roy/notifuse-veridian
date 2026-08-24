@@ -23,7 +23,7 @@ variable "image_tag" {
   type        = string
   # Recale sur ce qui tourne reellement en prod : le defaut retardait de
   # deux versions majeures et un deploiement hors CI aurait retrograde Notifuse.
-  default     = "v56.0-veridian.d4fb2a4f"
+  default     = "v57.0-veridian.cc942a35"
   description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
 }
 
