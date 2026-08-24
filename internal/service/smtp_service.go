@@ -496,8 +496,18 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 	// TextContent fourni, et texte dérivé du HTML. Un corps qui s'ouvre sur un
 	// libellé interne placé avant la salutation fait ÉCHOUER l'envoi : on ne
 	// répare pas en douce un gabarit cassé, on refuse de l'expédier.
+	//
+	// Discriminant d'ORIGINE sur le chemin « dérivé du HTML » : la seule forme de
+	// la première ligne ne distingue pas une fuite d'un en-tête de marque
+	// légitime (« Céline Gaetan » puis « Bonjour, » a exactement la signature de
+	// l'incident). On n'y refuse donc l'envoi que si la ligne suspecte provient
+	// bien d'un nœud NON RENDU du HTML (ou du <title>) — cf.
+	// veridianHTMLHiddenTexts. Sur les deux chemins où le texte est fourni tel
+	// quel, il n'y a pas de HTML à interroger et aucune ambiguïté d'origine : le
+	// garde-fou s'applique sans condition.
 	plainOnly := request.PlainTextOnly && strings.TrimSpace(request.TextContent) != ""
 	var plainPart string
+	derivedFromHTML := false
 	switch {
 	case plainOnly:
 		plainPart = request.TextContent
@@ -505,13 +515,16 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 		plainPart = strings.TrimSpace(request.TextContent)
 	default:
 		plainPart = veridianHTMLToText(request.Content)
+		derivedFromHTML = true
 	}
 
 	if leak := veridianTemplateLabelLeak(plainPart); leak != "" {
-		return fmt.Errorf(
-			"veridian guard: envoi refusé — la première ligne du corps texte est un libellé de gabarit résiduel (%q) placé avant la salutation ; corrigez le gabarit (préheader/mj-preview) avant d'envoyer",
-			leak,
-		)
+		if !derivedFromHTML || veridianTextComesFromHiddenNode(leak, request.Content) {
+			return fmt.Errorf(
+				"veridian guard: envoi refusé — la première ligne du corps texte est un libellé de gabarit résiduel (%q) placé avant la salutation ; corrigez le gabarit (préheader/mj-preview) avant d'envoyer",
+				leak,
+			)
+		}
 	}
 
 	switch {

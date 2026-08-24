@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -137,4 +138,61 @@ func TestVeridianCSSZeroHelpers(t *testing.T) {
 	for _, v := range []string{"", "1", "0.5", "inherit"} {
 		assert.False(t, veridianCSSNumberIsZero(v), "%q ne doit pas être zéro", v)
 	}
+}
+
+// === Veridian — discriminant d'origine (audit prod 2026-08-24) ===
+//
+// L'audit de tous les gabarits de tous les workspaces prod a montré que le
+// garde-fou, appliqué sans discriminant au texte dérivé du HTML, aurait REFUSÉ
+// 5 campagnes clientes saines : leur mail s'ouvre sur un en-tête de marque
+// visible (« Céline Gaetan ») suivi de « Bonjour, » — signature textuelle
+// identique à celle de l'incident. Ces tests figent la frontière.
+
+// htmlBrandHeaderThenGreeting : en-tête de marque VISIBLE, puis salutation.
+// Reproduit la structure MJML compilée des gabarits `celinegaetan/camp-*`.
+const htmlBrandHeaderThenGreeting = `<!doctype html><html><head><title>camp-notaires</title></head><body>
+<div style="background:#1E2A38;padding:30px 0"><div style="text-align:center;color:#C9A15A;font-size:26px">Céline Gaetan</div>
+<div style="text-align:center;color:#E6DECF;font-size:12px">Conseillère en immobilier · Lyon</div></div>
+<div style="background:#FFFFFF;padding:38px 32px"><div>Bonjour Marie,</div>
+<div>Vos clients ont régulièrement besoin d'estimer un bien.</div></div>
+</body></html>`
+
+// htmlHiddenPreheaderThenGreeting : le préheader MJML masqué, tel que gomjml le
+// compile — c'est l'incident du 2026-08-24.
+const htmlHiddenPreheaderThenGreeting = `<!doctype html><html><head><title>Ouverture observation</title></head><body>
+<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Ouverture observation</div>
+<div>Bonjour Marie,</div><div>Je suis tombé sur votre boutique.</div>
+</body></html>`
+
+func TestVeridianTextComesFromHiddenNode(t *testing.T) {
+	t.Run("en-tête de marque visible → PAS une fuite", func(t *testing.T) {
+		text := veridianHTMLToText(htmlBrandHeaderThenGreeting)
+		leak := veridianTemplateLabelLeak(text)
+		if leak != "Céline Gaetan" {
+			t.Fatalf("le garde-fou seul devrait pointer l'en-tête (c'est justement l'ambiguïté à lever), obtenu %q", leak)
+		}
+		if veridianTextComesFromHiddenNode(leak, htmlBrandHeaderThenGreeting) {
+			t.Errorf("un en-tête de marque VISIBLE ne doit pas être vu comme venant d'un nœud masqué — une campagne cliente saine serait bloquée")
+		}
+	})
+
+	t.Run("préheader masqué → fuite reconnue", func(t *testing.T) {
+		// Le correctif de fond retire déjà le nœud masqué du texte : la première
+		// ligne redevient la salutation.
+		text := veridianHTMLToText(htmlHiddenPreheaderThenGreeting)
+		if got := strings.SplitN(text, "\n", 2)[0]; got != "Bonjour Marie," {
+			t.Fatalf("le préheader masqué ne doit plus remonter dans le texte, 1re ligne = %q", got)
+		}
+		// Et si une technique de masquage échappait au filtre, l'origine reste
+		// identifiable : le libellé est bien porté par un nœud non rendu.
+		if !veridianTextComesFromHiddenNode("Ouverture observation", htmlHiddenPreheaderThenGreeting) {
+			t.Errorf("le libellé du préheader doit être reconnu comme venant d'un nœud masqué")
+		}
+	})
+
+	t.Run("libellé absent du HTML", func(t *testing.T) {
+		if veridianTextComesFromHiddenNode("Relance J+3", htmlBrandHeaderThenGreeting) {
+			t.Errorf("un libellé absent du HTML ne vient d'aucun nœud masqué")
+		}
+	})
 }

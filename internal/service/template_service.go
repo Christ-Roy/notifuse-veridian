@@ -21,10 +21,45 @@ type TemplateService struct {
 }
 
 // updateEmailMetadataBlocks updates mj-title and mj-preview blocks in the email tree
-// based on template name and subject preview
+// based on template name and subject preview.
+//
+// === Veridian — CAUSE RACINE de l'incident préheader 2026-08-24 ===
+//
+// Cette fonction faisait défaut le PRÉHEADER (`mj-preview`) sur le NOM INTERNE du
+// gabarit quand `subject_preview` était vide. Or le préheader n'est pas une
+// métadonnée technique : c'est du TEXTE LU PAR LE DESTINATAIRE, affiché juste
+// après l'objet dans l'aperçu de sa boîte. Le défaut publiait donc le nom interne
+// du gabarit à tous les destinataires de tous les gabarits en code mode — audit
+// prod du 2026-08-24 : 48 gabarits sur 48 porteurs d'un `mj-preview` le
+// portaient (« Ouverture observation », « camp-notaires », « fgmc-panier-j1 »…).
+// C'est ce qui a alimenté la fuite constatée dans 215 mails cold.
+//
+// Le correctif de la chaîne HTML→texte (veridian_html_to_text.go) empêche ce
+// libellé de retomber dans le corps text/plain, mais il ne pouvait rien contre
+// l'aperçu de boîte : tant que le tag est écrit en base avec le nom interne, le
+// destinataire le lit. La correction doit donc être ICI.
+//
+// Règle retenue : **pas de préheader inventé**. Sans `subject_preview` explicite,
+// on n'écrit aucun `mj-preview` — le client mail retombe alors sur les premiers
+// mots du corps, ce qui est le comportement attendu d'un vrai mail écrit à la
+// main (et l'effet recherché en cold 1-to-1). `mj-title` continue de suivre le
+// nom du gabarit : c'est le `<title>` du document HTML, non affiché dans
+// l'aperçu de boîte, et c'est le comportement upstream.
+//
+// Conséquence volontaire : un `mj-preview` déjà présent en base n'est plus
+// écrasé quand `subject_preview` est vide — il devient donc RETIRABLE (avant ce
+// correctif, toute tentative de suppression était annulée par la sauvegarde
+// suivante). L'assainissement des gabarits existants est fait par
+// scripts/veridian/audit-template-text-leak.sh.
 func (s *TemplateService) updateEmailMetadataBlocks(template *domain.Template) {
 	if template.Email == nil {
 		return
+	}
+
+	// Préheader explicite uniquement — jamais de repli sur le nom du gabarit.
+	previewText := ""
+	if template.Email.SubjectPreview != nil {
+		previewText = *template.Email.SubjectPreview
 	}
 
 	// Code mode: override mj-title/mj-preview in the raw MJML source string
@@ -33,11 +68,9 @@ func (s *TemplateService) updateEmailMetadataBlocks(template *domain.Template) {
 			mjml := *template.Email.MjmlSource
 			mjml = overrideMjmlTag(mjml, "mj-title", template.Name)
 
-			previewText := template.Name
-			if template.Email.SubjectPreview != nil && *template.Email.SubjectPreview != "" {
-				previewText = *template.Email.SubjectPreview
+			if previewText != "" {
+				mjml = overrideMjmlTag(mjml, "mj-preview", previewText)
 			}
-			mjml = overrideMjmlTag(mjml, "mj-preview", previewText)
 
 			template.Email.MjmlSource = &mjml
 		}
@@ -51,11 +84,9 @@ func (s *TemplateService) updateEmailMetadataBlocks(template *domain.Template) {
 
 	s.updateBlockContentRecursively(template.Email.VisualEditorTree, notifuse_mjml.MJMLComponentMjTitle, template.Name)
 
-	previewText := template.Name
-	if template.Email.SubjectPreview != nil && *template.Email.SubjectPreview != "" {
-		previewText = *template.Email.SubjectPreview
+	if previewText != "" {
+		s.updateBlockContentRecursively(template.Email.VisualEditorTree, notifuse_mjml.MJMLComponentMjPreview, previewText)
 	}
-	s.updateBlockContentRecursively(template.Email.VisualEditorTree, notifuse_mjml.MJMLComponentMjPreview, previewText)
 }
 
 // updateBlockContentRecursively traverses the email block tree and updates content for blocks of the specified type

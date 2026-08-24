@@ -150,3 +150,28 @@ func veridianTemplateLabelLeak(text string) string {
 	}
 	return ""
 }
+
+// veridianTextComesFromHiddenNode dit si `label` correspond au texte d'un nœud
+// NON RENDU du HTML (ou de son <title>). C'est le discriminant d'origine du
+// garde-fou sur le chemin « corps texte dérivé du HTML » : il sépare une vraie
+// fuite de préheader d'un en-tête de marque visible qui aurait la même forme.
+//
+// Comparaison volontairement tolérante (casse et espaces normalisés, inclusion
+// acceptée) : le nœud masqué contient parfois le libellé accompagné de la
+// bourre de blancs que MJML ajoute après un mj-preview.
+func veridianTextComesFromHiddenNode(label string, htmlBody string) bool {
+	needle := veridianFoldForCompare(label)
+	if needle == "" {
+		return false
+	}
+	for _, hidden := range veridianHTMLHiddenTexts(htmlBody) {
+		if h := veridianFoldForCompare(hidden); h != "" && strings.Contains(h, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func veridianFoldForCompare(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(s), " "))
+}

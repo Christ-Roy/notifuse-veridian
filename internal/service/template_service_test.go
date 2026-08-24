@@ -1961,7 +1961,15 @@ func TestTemplateService_UpdateEmailMetadataBlocks_CodeMode(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("Code mode with no SubjectPreview uses template Name for mj-preview", func(t *testing.T) {
+	// === Veridian — CAUSE RACINE de l'incident préheader 2026-08-24 ===
+	// Ce cas figeait le défaut : sans subject_preview, le préheader était défaut
+	// sur le NOM INTERNE du gabarit. Le préheader est du texte LU par le
+	// destinataire dans l'aperçu de sa boîte ; le nom interne n'a rien à y faire.
+	// Le comportement attendu est désormais : PAS de préheader inventé — le
+	// client mail retombe sur les premiers mots du corps, comme pour un mail
+	// écrit à la main. mj-title (le <title> du document, non affiché dans
+	// l'aperçu) continue de suivre le nom du gabarit, comportement upstream.
+	t.Run("Code mode sans SubjectPreview n'invente PAS de mj-preview", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		svc, mockRepo, _, mockAuthService, _ := setupTemplateServiceTest(ctrl)
@@ -1992,7 +2000,9 @@ func TestTemplateService_UpdateEmailMetadataBlocks_CodeMode(t *testing.T) {
 				require.NotNil(t, tmplArg.Email)
 				require.NotNil(t, tmplArg.Email.MjmlSource)
 				assert.Contains(t, *tmplArg.Email.MjmlSource, "<mj-title>My Fallback Name</mj-title>")
-				assert.Contains(t, *tmplArg.Email.MjmlSource, "<mj-preview>My Fallback Name</mj-preview>")
+				assert.NotContains(t, *tmplArg.Email.MjmlSource, "<mj-preview>",
+					"aucun préheader ne doit être inventé quand subject_preview est vide — "+
+						"le nom interne du gabarit est lu par le destinataire dans l'aperçu de sa boîte")
 				return nil
 			},
 		)

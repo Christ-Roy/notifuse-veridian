@@ -229,3 +229,69 @@ func veridianNormalizeText(raw string) string {
 	out := strings.Join(cleaned, "\n")
 	return strings.TrimSpace(out)
 }
+
+// === Veridian — collecte du texte MASQUÉ (garde-fou du garde-fou) ===
+//
+// veridianHTMLHiddenTexts renvoie le texte porté par les sous-arbres que
+// veridianHTMLToText a écartés parce qu'ils ne sont pas rendus (display:none,
+// visibility:hidden, opacity:0, max-height:0, hidden, aria-hidden="true"), plus
+// le <title> du document.
+//
+// À quoi ça sert : le garde-fou « libellé de gabarit résiduel » ne peut pas, à
+// partir de la seule première ligne, distinguer une FUITE (libellé venu d'un
+// nœud masqué) d'un EN-TÊTE DE MARQUE parfaitement légitime — un mail de client
+// qui s'ouvre sur « Céline Gaetan » puis « Bonjour, » a exactement la même
+// signature textuelle que l'incident. Sans discriminant, le garde-fou refuserait
+// des campagnes clientes saines (constaté à l'audit prod du 2026-08-24 : 5
+// gabarits du workspace `celinegaetan` auraient été bloqués à tort).
+//
+// Le discriminant, c'est l'ORIGINE : sur le chemin « texte dérivé du HTML », on
+// ne refuse un envoi que si la ligne suspecte provient effectivement d'un nœud
+// masqué. Ça garde la détection pleine et entière pour toute technique de
+// masquage que veridianNodeIsInvisible ne connaîtrait pas encore (le texte
+// remonterait alors dans le corps ET serait retrouvé ici), sans jamais bloquer
+// du texte réellement affiché.
+func veridianHTMLHiddenTexts(htmlBody string) []string {
+	if strings.TrimSpace(htmlBody) == "" {
+		return nil
+	}
+	doc, err := html.Parse(strings.NewReader(htmlBody))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	veridianCollectHiddenText(doc, &out)
+	return out
+}
+
+func veridianCollectHiddenText(n *html.Node, out *[]string) {
+	if n.Type == html.ElementNode {
+		// <title> : jamais rendu dans le corps, mais c'est là que MJML recopie
+		// le nom du gabarit (<mj-title>) — donc une origine de fuite légitime à
+		// reconnaître.
+		if n.DataAtom == atom.Title || veridianNodeIsInvisible(n) {
+			var sb strings.Builder
+			veridianCollectAllText(n, &sb)
+			if t := veridianNormalizeText(sb.String()); t != "" {
+				*out = append(*out, t)
+			}
+			return
+		}
+		if _, skip := veridianSkipElements[n.DataAtom]; skip && n.DataAtom != atom.Head {
+			return
+		}
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		veridianCollectHiddenText(c, out)
+	}
+}
+
+func veridianCollectAllText(n *html.Node, sb *strings.Builder) {
+	if n.Type == html.TextNode {
+		sb.WriteString(n.Data)
+		return
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		veridianCollectAllText(c, sb)
+	}
+}
