@@ -2079,3 +2079,118 @@ func TestSendRawEmail_SkipTLSVerify_SelfSignedRelay(t *testing.T) {
 	assert.Contains(t, strings.ToLower(errStrict.Error()), "tls",
 		"l'erreur attendue est un échec TLS, got: %v", errStrict)
 }
+
+// === Incident préheader 2026-08-24 — bout en bout sur le chemin SMTP ===
+
+// Le HTML MJML compilé de l'incident ne doit plus produire de fuite : la partie
+// text/plain expédiée commence par la salutation, pas par le libellé du gabarit.
+func TestSMTPService_SendEmail_VeridianPreheaderNotInTextPart(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID: "coldtunnel", IntegrationID: "integration-123",
+		MessageID:   "44444444-5555-6666-7777-888888888888",
+		FromAddress: "cold@send.veridian.site", FromName: "Robert",
+		To: "prospect@acme.fr", Subject: "Votre boutique",
+		Content: veridianIncidentPreheaderHTML,
+		Provider: &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{
+			Host: "127.0.0.1", Port: server.Port(), UseTLS: false,
+		}},
+	}
+
+	require.NoError(t, service.SendEmail(context.Background(), request))
+
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	raw := string(messages[0].data)
+
+	// Le HTML original garde son préheader (c'est son rôle), mais la partie
+	// text/plain ne doit plus le contenir. On isole donc la partie texte.
+	idxPlain := strings.Index(raw, "text/plain")
+	idxHTML := strings.Index(raw, "text/html")
+	require.GreaterOrEqual(t, idxPlain, 0)
+	require.GreaterOrEqual(t, idxHTML, 0)
+	require.Less(t, idxPlain, idxHTML)
+	textPart := raw[idxPlain:idxHTML]
+
+	assert.NotContains(t, textPart, "Ouverture observation",
+		"le préheader (libellé interne du gabarit) a fuité dans le text/plain : %q", textPart)
+	assert.Contains(t, textPart, "Bonjour,")
+	// (encodage quoted-printable : on vise une sous-chaîne non coupée par un
+	// retour à la ligne souple)
+	assert.Contains(t, textPart, "votre boutique en ligne")
+}
+
+// Le garde-fou doit être VU en train de refuser sur le chemin plain_text_only
+// (corps texte fourni tel quel, que l'assainissement HTML→texte ne traverse pas).
+func TestSMTPService_SendEmail_VeridianGuardRejectsLabelLeak_PlainTextOnly(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID: "coldtunnel", IntegrationID: "integration-123", MessageID: "guard-plain-1",
+		FromAddress: "cold@send.veridian.site", FromName: "Robert",
+		To: "prospect@acme.fr", Subject: "Votre boutique",
+		Content:       "<p>Bonjour,</p>",
+		TextContent:   "Ouverture observation\r\nBonjour,\r\n\r\nJ'ai regardé votre boutique.",
+		PlainTextOnly: true,
+		Provider: &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{
+			Host: "127.0.0.1", Port: server.Port(), UseTLS: false,
+		}},
+	}
+
+	err := service.SendEmail(context.Background(), request)
+	require.Error(t, err, "le garde-fou devait refuser l'envoi")
+	assert.Contains(t, err.Error(), "veridian guard")
+	assert.Contains(t, err.Error(), "Ouverture observation")
+	assert.Empty(t, server.GetMessages(), "aucun mail ne doit avoir été expédié")
+}
+
+// Même refus sur le chemin TextContent fourni sans plain_text_only.
+func TestSMTPService_SendEmail_VeridianGuardRejectsLabelLeak_TextContent(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID: "coldtunnel", IntegrationID: "integration-123", MessageID: "guard-text-1",
+		FromAddress: "cold@send.veridian.site", FromName: "Robert",
+		To: "prospect@acme.fr", Subject: "Votre boutique",
+		Content:     "<p>Bonjour,</p><p>J'ai regardé votre boutique.</p>",
+		TextContent: "Relance J+3\nBonjour,\n\nJ'ai regardé votre boutique.",
+		Provider: &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{
+			Host: "127.0.0.1", Port: server.Port(), UseTLS: false,
+		}},
+	}
+
+	err := service.SendEmail(context.Background(), request)
+	require.Error(t, err, "le garde-fou devait refuser l'envoi")
+	assert.Contains(t, err.Error(), "Relance J+3")
+	assert.Empty(t, server.GetMessages())
+}
+
+// Non-régression : un corps sain — salutation en première ligne, Liquid déjà
+// rendu — passe le garde-fou et part normalement.
+func TestSMTPService_SendEmail_VeridianGuardAcceptsHealthyBody(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID: "coldtunnel", IntegrationID: "integration-123", MessageID: "guard-ok-1",
+		FromAddress: "cold@send.veridian.site", FromName: "Robert",
+		To: "prospect@acme.fr", Subject: "Votre boutique",
+		Content:     "<p>Bonjour Marie,</p><p>Votre boutique Acme fait 12 000 visites.</p>",
+		TextContent: "Bonjour Marie,\n\nVotre boutique Acme fait 12 000 visites.\n\nRobert",
+		Provider: &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{
+			Host: "127.0.0.1", Port: server.Port(), UseTLS: false,
+		}},
+	}
+
+	require.NoError(t, service.SendEmail(context.Background(), request))
+	require.Len(t, server.GetMessages(), 1)
+	assert.Contains(t, string(server.GetMessages()[0].data), "Bonjour Marie,")
+}

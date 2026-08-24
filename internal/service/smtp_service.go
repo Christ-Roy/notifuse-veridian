@@ -488,15 +488,39 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 	// est un tell anti-spam (HTML_IMAGE_ONLY / MIME_HTML_ONLY côté SpamAssassin).
 	// Best-effort : pas de texte dérivable → on reste HTML-only (non-régression,
 	// l'envoi n'échoue jamais pour cette raison).
-	if request.PlainTextOnly && strings.TrimSpace(request.TextContent) != "" {
-		msg.SetBodyString(mail.TypeTextPlain, request.TextContent)
-	} else if plain := strings.TrimSpace(request.TextContent); plain != "" {
-		msg.SetBodyString(mail.TypeTextPlain, plain)
+	//
+	// === Veridian (incident préheader 2026-08-24) ===
+	// Le corps texte est résolu D'ABORD, puis passé au garde-fou « libellé de
+	// gabarit résiduel » AVANT d'être posé sur le message — de sorte que les
+	// TROIS chemins soient couverts : plain_text_only (texte fourni tel quel),
+	// TextContent fourni, et texte dérivé du HTML. Un corps qui s'ouvre sur un
+	// libellé interne placé avant la salutation fait ÉCHOUER l'envoi : on ne
+	// répare pas en douce un gabarit cassé, on refuse de l'expédier.
+	plainOnly := request.PlainTextOnly && strings.TrimSpace(request.TextContent) != ""
+	var plainPart string
+	switch {
+	case plainOnly:
+		plainPart = request.TextContent
+	case strings.TrimSpace(request.TextContent) != "":
+		plainPart = strings.TrimSpace(request.TextContent)
+	default:
+		plainPart = veridianHTMLToText(request.Content)
+	}
+
+	if leak := veridianTemplateLabelLeak(plainPart); leak != "" {
+		return fmt.Errorf(
+			"veridian guard: envoi refusé — la première ligne du corps texte est un libellé de gabarit résiduel (%q) placé avant la salutation ; corrigez le gabarit (préheader/mj-preview) avant d'envoyer",
+			leak,
+		)
+	}
+
+	switch {
+	case plainOnly:
+		msg.SetBodyString(mail.TypeTextPlain, plainPart)
+	case plainPart != "":
+		msg.SetBodyString(mail.TypeTextPlain, plainPart)
 		msg.AddAlternativeString(mail.TypeTextHTML, request.Content)
-	} else if plain := veridianHTMLToText(request.Content); plain != "" {
-		msg.SetBodyString(mail.TypeTextPlain, plain)
-		msg.AddAlternativeString(mail.TypeTextHTML, request.Content)
-	} else {
+	default:
 		msg.SetBodyString(mail.TypeTextHTML, request.Content)
 	}
 

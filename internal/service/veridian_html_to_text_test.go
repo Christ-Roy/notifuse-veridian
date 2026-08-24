@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestVeridianHTMLToText(t *testing.T) {
@@ -120,4 +121,98 @@ func TestVeridianHTMLToText_MalformedNoPanic(t *testing.T) {
 		_ = veridianHTMLToText("<<<>>><p")
 		_ = veridianHTMLToText("&notanentity; &#xZZZ;")
 	})
+}
+
+// === Incident préheader 2026-08-24 ===
+//
+// Le gabarit Notifuse `ecom-t1-a` (workspace coldtunnel) portait
+// `<mj-preview>Ouverture observation</mj-preview>` — le préheader valait le NOM
+// INTERNE du gabarit. gomjml compile un mj-preview en exactement ce div (cf.
+// gomjml/mjml/components/head.go), premier nœud du <body>. Sans filtrage des
+// nœuds invisibles, le libellé devenait la première ligne du text/plain, avant
+// « Bonjour, » — parti dans 215 mails cold.
+const veridianIncidentPreheaderHTML = `<!doctype html><html><head><title>ecom-t1-a</title></head><body>` +
+	`<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Ouverture observation</div>` +
+	`<div style="background-color:#ffffff;"><table><tr><td>` +
+	`<p>Bonjour,</p>` +
+	`<p>J'ai regardé votre boutique en ligne et j'ai relevé deux points concrets.</p>` +
+	`<p>Robert</p>` +
+	`</td></tr></table></div></body></html>`
+
+func TestVeridianHTMLToText_IncidentPreheaderNeverLeaks(t *testing.T) {
+	got := veridianHTMLToText(veridianIncidentPreheaderHTML)
+
+	assert.NotContains(t, got, "Ouverture observation",
+		"le préheader (libellé interne du gabarit) ne doit JAMAIS remonter dans le text/plain")
+	assert.NotContains(t, got, "ecom-t1-a", "le <title> ne doit pas remonter non plus")
+
+	require.NotEmpty(t, got)
+	firstLine := strings.SplitN(got, "\n", 2)[0]
+	assert.Equal(t, "Bonjour,", firstLine,
+		"la première ligne du corps texte doit être la salutation, sortie=%q", got)
+
+	assert.Contains(t, got, "J'ai regardé votre boutique en ligne")
+	assert.Contains(t, got, "Robert")
+
+	// Le garde-fou ne doit rien avoir à refuser sur un texte ainsi assaini.
+	assert.Empty(t, veridianTemplateLabelLeak(got))
+}
+
+func TestVeridianHTMLToText_InvisibleNodesSkipped(t *testing.T) {
+	tests := []struct {
+		name string
+		html string
+	}{
+		{"display:none", `<div style="display:none;">Caché</div><p>Visible</p>`},
+		{"display:none !important", `<div style="display:none !important">Caché</div><p>Visible</p>`},
+		{"display: NONE majuscules", `<div style="DISPLAY: NONE">Caché</div><p>Visible</p>`},
+		{"visibility:hidden", `<span style="visibility:hidden">Caché</span><p>Visible</p>`},
+		{"visibility:collapse", `<table><tr style="visibility:collapse"><td>Caché</td></tr></table><p>Visible</p>`},
+		{"opacity:0", `<div style="opacity:0">Caché</div><p>Visible</p>`},
+		{"opacity:0.0", `<div style="opacity:0.0">Caché</div><p>Visible</p>`},
+		{"opacity:0%", `<div style="opacity:0%">Caché</div><p>Visible</p>`},
+		{"max-height:0", `<div style="max-height:0">Caché</div><p>Visible</p>`},
+		{"max-height:0px", `<div style="max-height:0px">Caché</div><p>Visible</p>`},
+		{"attribut hidden", `<div hidden>Caché</div><p>Visible</p>`},
+		{"attribut hidden=\"\"", `<div hidden="">Caché</div><p>Visible</p>`},
+		{"aria-hidden true", `<div aria-hidden="true">Caché</div><p>Visible</p>`},
+		{"aria-hidden TRUE", `<div aria-hidden="TRUE">Caché</div><p>Visible</p>`},
+		{"sous-arbre entier coupé", `<div style="display:none"><table><tr><td><span>Caché</span></td></tr></table></div><p>Visible</p>`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := veridianHTMLToText(tc.html)
+			assert.NotContains(t, got, "Caché", "nœud invisible remonté dans le texte : %q", got)
+			assert.Contains(t, got, "Visible", "le texte visible doit être conservé : %q", got)
+		})
+	}
+}
+
+// Non-régression : ce qui est VISIBLE doit le rester. Une opacité partielle, une
+// hauteur max non nulle, un aria-hidden="false", un font-size:0 de gouttière
+// (hack courant en mail HTML dont les enfants redéfinissent leur taille) ne
+// doivent jamais faire disparaître du texte affiché.
+func TestVeridianHTMLToText_VisibleNodesPreserved(t *testing.T) {
+	tests := []struct {
+		name string
+		html string
+	}{
+		{"opacity:0.5", `<div style="opacity:0.5">Visible</div>`},
+		{"opacity:1", `<div style="opacity:1">Visible</div>`},
+		{"max-height:100px", `<div style="max-height:100px">Visible</div>`},
+		{"display:block", `<div style="display:block">Visible</div>`},
+		{"visibility:visible", `<div style="visibility:visible">Visible</div>`},
+		{"aria-hidden false", `<div aria-hidden="false">Visible</div>`},
+		{"font-size:0 gouttière", `<div style="font-size:0px;line-height:0"><span style="font-size:14px">Visible</span></div>`},
+		{"style sans déclaration masquante", `<div style="color:#333;padding:10px">Visible</div>`},
+		{"attribut nommé hiddenfoo", `<div data-hiddenfoo="1">Visible</div>`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Contains(t, veridianHTMLToText(tc.html), "Visible",
+				"du texte visible a été supprimé à tort")
+		})
+	}
 }
