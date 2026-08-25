@@ -20,6 +20,9 @@
 
 import { defineConfig, devices } from '@playwright/test'
 
+const chromeExecutablePath = process.env.PLAYWRIGHT_CHROME_EXECUTABLE_PATH
+const disableVideo = process.env.PLAYWRIGHT_DISABLE_VIDEO === '1'
+
 export default defineConfig({
   testDir: './console-suite',
   // 240s : les tests UI peuvent attendre auto-login redirect (10s) + lazy
@@ -46,7 +49,7 @@ export default defineConfig({
     // un test qui passe (vérifier qu'on a vu le bon écran, pas un blank).
     trace: 'on',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: disableVideo ? 'off' : 'retain-on-failure',
     // Headless par défaut (CI). HEADED=1 pour debug local.
     headless: process.env.HEADED !== '1',
     // Viewport par défaut desktop. Les tests responsive override via test.use.
@@ -55,7 +58,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: chromeExecutablePath ? { executablePath: chromeExecutablePath } : undefined
+      }
     }
   ]
 })

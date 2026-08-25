@@ -64,6 +64,8 @@ jobs:
     env:
       NOTIFUSE_URL: https://notifuse.staging.veridian.site
       TARGET_SHA: ${{ github.sha }}
+      PLAYWRIGHT_CHROME_EXECUTABLE_PATH: /usr/bin/google-chrome
+      PLAYWRIGHT_DISABLE_VIDEO: '1'
       # Le secret partagé entre veridian-ci.yml jobs et ce workflow.
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
     steps:
@@ -121,10 +123,10 @@ jobs:
           cd tests/e2e-veridian
           npm ci --no-audit --no-fund
 
-      - name: Install Playwright Chromium
+      - name: Verify system Chrome
         run: |
-          cd tests/e2e-veridian
-          npx playwright install --with-deps chromium
+          test -x "$PLAYWRIGHT_CHROME_EXECUTABLE_PATH"
+          "$PLAYWRIGHT_CHROME_EXECUTABLE_PATH" --version
 
       - name: Run console-suite Playwright tests
         id: console-tests
