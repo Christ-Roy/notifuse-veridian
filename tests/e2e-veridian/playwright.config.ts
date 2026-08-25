@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const chromeExecutablePath = process.env.PLAYWRIGHT_CHROME_EXECUTABLE_PATH;
+
 export default defineConfig({
   testDir: './specs',
   // Filet anti-accumulation : GC des bases de test orphelines en fin de run
@@ -38,7 +40,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: chromeExecutablePath ? { executablePath: chromeExecutablePath } : undefined,
+      },
     },
   ],
 });
