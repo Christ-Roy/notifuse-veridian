@@ -46,6 +46,8 @@ done || true
 
 if [ -n "$REMOTE_SHA" ]; then
   BASE_REF="$REMOTE_SHA"
+elif [ -n "${BASE_REF:-}" ]; then
+  : # Explicit local/CI override (useful from a detached clean worktree).
 else
   CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
   BASE_REF="origin/${CURRENT_BRANCH}"
@@ -125,3 +127,7 @@ if git diff --name-only "$BASE_REF" HEAD 2>/dev/null | grep -q '^console/'; then
     exit 1
   fi
 fi
+
+# Contrat GitOps Nomad co-localisé : criticité, RTO/RPO, staging obligatoire
+# et images immuables sont vérifiés avant chaque push.
+scripts/ci/check-nomad-contract.sh
