@@ -11,7 +11,7 @@ error() { printf 'ERROR: %s\n' "$*" >&2; fail=1; }
 meta_value() {
   file="$1"; key="$2"
   sed -n '/# veridian-contract:start/,/# veridian-contract:end/p' "$file" |
-    awk -v wanted="\"$key\"" '$1 == wanted && $2 == "=" { gsub(/^"|"$/, "", $3); print $3; exit }'
+    awk -F= -v wanted="# $key" '$1 == wanted { print substr($0, index($0, "=") + 1); exit }'
 }
 
 require_meta() {

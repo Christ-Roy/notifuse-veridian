@@ -33,22 +33,20 @@ job "notifuse" {
   priority    = 80
 
 # veridian-contract:start
-  meta = {
-    "veridian.contract.version"  = "1"
-    "veridian.managed_by"        = "repo"
-    "veridian.environment"       = "production"
-    "veridian.tier"              = "saas-prod"
-    "veridian.criticality"       = "B"
-    "veridian.owner"             = "messaging"
-    "veridian.objective"         = "availability-99.9"
-    "veridian.rto_minutes"       = "5"
-    "veridian.rpo_minutes"       = "15"
-    "veridian.state"             = "local-state"
-    "veridian.mobility"          = "local-gap"
-    "veridian.preemptible"       = "false"
-    "veridian.staging_job"       = "notifuse-staging"
-    "veridian.promotion_policy"  = "staging-required"
-  }
+# veridian.contract.version=1
+# veridian.managed_by=repo
+# veridian.environment=production
+# veridian.tier=saas-prod
+# veridian.criticality=B
+# veridian.owner=messaging
+# veridian.objective=availability-99.9
+# veridian.rto_minutes=5
+# veridian.rpo_minutes=15
+# veridian.state=local-state
+# veridian.mobility=local-gap
+# veridian.preemptible=false
+# veridian.staging_job=notifuse-staging
+# veridian.promotion_policy=staging-required
 # veridian-contract:end
 
   group "stack" {
