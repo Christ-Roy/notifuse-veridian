@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const chromeExecutablePath = process.env.PLAYWRIGHT_CHROME_EXECUTABLE_PATH;
+const disableVideo = process.env.PLAYWRIGHT_DISABLE_VIDEO === '1';
 
 export default defineConfig({
   testDir: './specs',
@@ -35,7 +36,7 @@ export default defineConfig({
     baseURL: process.env.NOTIFUSE_URL || 'http://localhost:8080',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: disableVideo ? 'off' : 'retain-on-failure',
   },
   projects: [
     {

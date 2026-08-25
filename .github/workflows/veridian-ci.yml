@@ -839,6 +839,9 @@ jobs:
       # Le CDN Playwright refuse géographiquement le runner OVH (HTTP 403).
       # Utiliser le Chrome système versionné par apt évite tout téléchargement.
       PLAYWRIGHT_CHROME_EXECUTABLE_PATH: /usr/bin/google-chrome
+      # La vidéo requiert le FFmpeg privé de Playwright, servi par le même CDN.
+      # Les traces et captures d'échec restent actives et suffisent au diagnostic.
+      PLAYWRIGHT_DISABLE_VIDEO: '1'
       # HUB_URL retiré 2026-06-13 : plus aucune spec e2e-veridian ne tape le Hub
       # directement (la seule, MEGA-07 mail-gateway, supprimée au pivot stand-alone
       # 31/05). Les specs cross-app simulent le Hub vers Notifuse via HMAC
@@ -1075,6 +1078,7 @@ jobs:
     env:
       NOTIFUSE_URL: https://notifuse.app.veridian.site
       PLAYWRIGHT_CHROME_EXECUTABLE_PATH: /usr/bin/google-chrome
+      PLAYWRIGHT_DISABLE_VIDEO: '1'
       # HUB_URL retiré 2026-06-13 (cf. job e2e-staging) : aucune spec ne le lit.
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_PROD }}
       E2E_PROD_MODE: '1'
