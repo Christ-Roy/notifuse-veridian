@@ -1763,14 +1763,20 @@ poussés par la CI via `nomad job run` (plus de Dokploy, plus de `infra/compose/
 - **Jobs** : `deploy/notifuse.nomad.hcl` (prod, contabo-bastion) +
   `deploy/notifuse-staging.nomad.hcl` (ovh-dev, privé Tailscale + internal-only).
   Source de vérité gitops de l'app ; miroir infra : `~/nomad-veridian/jobs/`.
-- **Deploy — canon SSH-bastion** (décision Robert, cf `veridian-prospection/deploy/README.md`) :
-  CI `veridian-ci.yml` → `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → SSH vers le
-  bastion (clé dédiée CI), pré-pull image ghcr (auth du nœud), scp le HCL (qui déclare
-  `variable image_tag`), `nomad job run -var image_tag=<tag>` + `deployment status
-  -monitor`. **Le NOMAD_TOKEN ne quitte JAMAIS le bastion** (lu in situ). deploy-staging
-  = runner self-hosted (steps post-deploy tailnet) ; deploy-prod/rollback = ubuntu-latest.
-- **Rollback** : `nomad job revert notifuse <version-1>` via SSH-bastion (job `rollback`,
-  auto sur e2e-prod fail). Stanza `update{auto_revert=true}` = filet Nomad si deployment KO.
+- **Deploy — verbes contraints du bastion** (constat C4 de l'audit d'exposition,
+  contrat dans `~/veridian/secrets-migration/C4-CONTRAT-CI.md`) : CI `veridian-ci.yml`
+  → `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → trois appels SSH avec la clé dédiée
+  CI, `put-job <tier>` (le HCL du repo sur stdin), `deploy <tier> <tag>`, `cleanup <tier>`.
+  La clé porte une **commande forcée** `command="/usr/local/sbin/veridian-ci-deploy notifuse"`
+  côté bastion : plus de shell, plus de heredoc, et l'application est fixée dans la ligne
+  de la clé (ce dépôt ne peut pas déployer le Hub). Le pré-pull ghcr authentifié sur le
+  nœud, `validate`, `plan`, `run -detach -check-index` et le suivi du DeploymentID sont
+  **dans le script serveur** : ne jamais les redupliquer côté CI. **Le NOMAD_TOKEN ne
+  quitte JAMAIS le bastion** (sourcé in situ). deploy-staging = runner self-hosted
+  (steps post-deploy tailnet) ; deploy-prod/rollback = ubuntu-latest.
+- **Rollback** : verbe `revert prod` du bastion (job `rollback`, auto sur e2e-prod fail),
+  qui revient à la dernière version **stable** antérieure, pas bêtement à `version-1`.
+  Stanza `update{auto_revert=true}` = filet Nomad si deployment KO.
 - **Secrets CI** : `NOMAD_DEPLOY_SSH_KEY` (clé ed25519 dédiée notifuse, publique dans
   authorized_keys bastion) + `NOMAD_BASTION_HOST` + `NOMAD_BASTION_USER`. Secrets
   applicatifs = Nomad Variables `nomad/jobs/notifuse{,-staging}` (`template{env=true}`).
@@ -2217,12 +2223,15 @@ Adaptations Go pour ce repo :
    demander « je promeus ? » entre chaque. Une vague de team se termine par UNE
    promo groupée des lots mûrs + UN récap, pas par N demandes de GO. Le seul
    point d'arrêt est le tier 💀 ou un veto Robert.
-10. **Deploy via Nomad SSH-bastion** (Dokploy décommissionné 2026-07-10, canon
-    prospection) : `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → SSH bastion →
-    `nomad job run -var image_tag=<tag>`. Secrets CI : `NOMAD_DEPLOY_SSH_KEY` +
-    `NOMAD_BASTION_HOST` + `NOMAD_BASTION_USER`. Le token ne quitte pas le bastion.
-11. **Rollback prod auto** sur e2e-prod fail : `nomad job revert notifuse <version-1>`
-    via SSH-bastion → wait `/api/setup.status` → Telegram alert.
+10. **Deploy via les verbes contraints du bastion** (Dokploy décommissionné
+    2026-07-10 ; heredoc `bash -s` retiré au constat C4) :
+    `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → `put-job` / `deploy` / `cleanup`.
+    Secrets CI : `NOMAD_DEPLOY_SSH_KEY` + `NOMAD_BASTION_HOST` + `NOMAD_BASTION_USER`.
+    Le token ne quitte pas le bastion, et la clé n'y ouvre plus de shell.
+    ⚠️ Ne jamais réintroduire un `ssh … "bash -s" <<'REMOTE'` : la commande forcée
+    le refusera (code 64) et le déploiement cassera.
+11. **Rollback prod auto** sur e2e-prod fail : verbe `revert prod` (dernière version
+    stable antérieure) → wait `/api/setup.status` → Telegram alert.
 12. **Migrations Expand & Contract obligatoire**. Le tag Docker précédent doit
     tourner sur le schéma actuel. Versions majeures (V6, V7…) additives ;
     DROP COLUMN / NOT NULL sur table peuplée = 2 PRs sur 2 deploys.

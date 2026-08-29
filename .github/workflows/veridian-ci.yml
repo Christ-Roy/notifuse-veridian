@@ -717,11 +717,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # === GitOps Nomad SSH-bastion — scp le HCL (variable image_tag), pré-pull
-      # l'image sur ovh-dev (auth ghcr du nœud), `nomad job run -var image_tag`
-      # + deployment status -monitor. Le tag est passé en -var → pas de mutation
-      # du HCL, donc PAS de commit-bump (traçabilité via le git SHA = le tag).
-      - name: Deploy staging via SSH-bastion
+      # === GitOps Nomad — verbes contraints du bastion (constat C4) : `put-job`
+      # pousse le HCL du repo sur stdin, `deploy` fait le pré-pull authentifié sur
+      # ovh-dev, validate, plan, run -check-index et le suivi du déploiement ciblé,
+      # `cleanup` retire le matériel temporaire. La clé CI n'ouvre plus de shell.
+      # Le tag est passé en -var côté bastion → pas de mutation du HCL, donc PAS de
+      # commit-bump (traçabilité via le git SHA = le tag).
+      - name: Deploy staging via le bastion (verbes contraints)
         env:
           BUMP_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
@@ -1031,10 +1033,11 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      # === GitOps Nomad SSH-bastion — pré-pull l'image sur le bastion (auth ghcr
-      # local), scp le HCL (variable image_tag), `nomad job run -var image_tag`
-      # + deployment status -monitor (auto_revert Nomad si le deployment échoue).
-      - name: Deploy prod via SSH-bastion
+      # === GitOps Nomad — verbes contraints du bastion (constat C4) : `put-job`
+      # pousse le HCL du repo sur stdin, `deploy` fait le pré-pull authentifié sur
+      # ovh-prod, validate, plan, run -check-index et le suivi du déploiement ciblé
+      # (auto_revert Nomad si le deployment échoue), `cleanup` nettoie derrière.
+      - name: Deploy prod via le bastion (verbes contraints)
         env:
           BUMP_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
@@ -1116,29 +1119,29 @@ jobs:
       NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}
       NOMAD_BASTION_USER: ${{ secrets.NOMAD_BASTION_USER }}
     steps:
-      # === Rollback Nomad via SSH-bastion — revient à la version de job PRÉCÉDENTE
-      # (Nomad garde l'historique des versions avec leur image_tag figé). Atomique.
-      # Le revert tourne IN SITU sur le bastion (token n'en sort pas).
-      - name: Nomad job revert (version précédente) via SSH-bastion
+      # === Rollback Nomad via le verbe contraint `revert` du bastion — revient à
+      # la dernière version de job STABLE antérieure (Nomad garde l'historique des
+      # versions avec leur image_tag figé). Atomique.
+      #
+      # Le revert tourne IN SITU sur le bastion (le token n'en sort pas), et depuis
+      # le constat C4 la clé CI n'y ouvre plus de shell : elle porte une commande
+      # forcée qui n'accepte que les verbes du contrat. La recherche de la dernière
+      # version STABLE antérieure et le suivi du déploiement sont dans le script
+      # serveur, on ne les duplique pas ici. Au passage on y gagne : l'ancien
+      # heredoc prenait bêtement version-1, qui peut être une soumission échouée.
+      - name: Nomad job revert (dernière version stable) via le bastion
         run: |
           set -euo pipefail
           umask 077
           printf '%s\n' "$NOMAD_DEPLOY_SSH_KEY" > /tmp/nomad_ci_key
           chmod 600 /tmp/nomad_ci_key
+          trap 'rm -f /tmp/nomad_ci_key' EXIT
+          mkdir -p ~/.ssh
           ssh-keyscan -H "$NOMAD_BASTION_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh -i /tmp/nomad_ci_key -o StrictHostKeyChecking=accept-new \
-            "${NOMAD_BASTION_USER}@${NOMAD_BASTION_HOST}" 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          source ~/credentials/nomad-bastion.env
-          export NOMAD_ADDR NOMAD_TOKEN="$NOMAD_MGMT_TOKEN"
-          # Versions triées desc : [0]=courante (cassée), [1]=précédente (saine).
-          PREV=$(/usr/bin/nomad job history -json notifuse \
-                 | python3 -c 'import sys,json;v=sorted((x["Version"] for x in json.load(sys.stdin)),reverse=True);print(v[1] if len(v)>1 else "")')
-          [ -n "$PREV" ] || { echo "::error::Pas de version précédente pour notifuse"; exit 1; }
-          echo "▶ nomad job revert notifuse → version $PREV"
-          /usr/bin/nomad job revert notifuse "$PREV"
-          REMOTE
-          rm -f /tmp/nomad_ci_key
+          # Jamais de -t : la clé CI est en no-pty côté bastion.
+          ssh -n -i /tmp/nomad_ci_key -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            "${NOMAD_BASTION_USER}@${NOMAD_BASTION_HOST}" 'revert prod'
           # Attendre que prod re-serve la version saine (public)
           for i in $(seq 1 30); do
             if curl -sf https://notifuse.app.veridian.site/api/setup.status > /dev/null 2>&1; then
