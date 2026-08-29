@@ -5,6 +5,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -443,6 +444,14 @@ func (s *queueMessageSender) buildQueueEntry(
 		}
 		textContent = veridian_spintax.ResolveSpintax(textContent, email)
 	}
+	queueHTMLContent := htmlContent
+	if emailContent.PlainTextOnly && strings.TrimSpace(textContent) != "" {
+		// Veridian cold outreach: queued plain-text-only messages must not persist
+		// the compiled MJML/HTML body. The SMTP worker already sends only
+		// text/plain in this mode; keeping HTML in the queue confuses audits and
+		// can reintroduce pixel/HTML artefacts if another consumer reads payloads.
+		queueHTMLContent = textContent
+	}
 
 	// Process subject line through Liquid templating
 	subject, err := notifuse_mjml.ProcessLiquidTemplate(
@@ -512,7 +521,7 @@ func (s *queueMessageSender) buildQueueEntry(
 			FromAddress:        sender.Email,
 			FromName:           sender.Name,
 			Subject:            subject,
-			HTMLContent:        htmlContent,
+			HTMLContent:        queueHTMLContent,
 			TextContent:        textContent,
 			PlainTextOnly:      emailContent.PlainTextOnly,
 			RateLimitPerMinute: emailProvider.RateLimitPerMinute,
