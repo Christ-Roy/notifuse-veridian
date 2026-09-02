@@ -540,6 +540,22 @@ jobs:
           tags: ${{ steps.image_tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # === Veridian patch 2026-09-02 === le stage `runtime` (Dockerfile,
+          # `FROM alpine:3.21 AS runtime`) est EXCLU du cache de couches, et les
+          # images de base sont re-résolues à chaque build.
+          #
+          # Pourquoi : `RUN apk upgrade --no-cache` ne se réexécute jamais tant que
+          # sa clé de cache est stable, or elle l'est (le tag alpine:3.21 pointe sur
+          # le même digest pendant des semaines). Mesuré sur le run 33254429451 :
+          # `#24 [stage-3 2/7] RUN apk upgrade … CACHED`. Conséquence : l'image
+          # embarquait libpq 17.10-r0 (9 CVE HIGH d'exécution de code arbitraire)
+          # alors que le miroir Alpine servait déjà 17.11-r0, et le gate Trivy
+          # ci-dessous refusait de publier — donc aucun correctif ne pouvait passer.
+          #
+          # Le coût est de quelques secondes (apk upgrade sur alpine) ; tous les
+          # autres stages (Go, npm) restent cachés.
+          no-cache-filters: runtime
+          pull: true
           # === Veridian patch === BUILD_TAG/SHA/DATE injectes dans
           # internal/buildinfo via -ldflags pour /api/version (defense
           # anti-faux-positif post-deploy). VERSION garde l'ancien nom pour

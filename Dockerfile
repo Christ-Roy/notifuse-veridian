@@ -85,12 +85,21 @@ RUN go build \
 # === Veridian patch === bump 3.19 → 3.21 : alpine 3.19 EOL depuis 2025-11-01,
 # Trivy bloque via Constitution CI §13 (exit-on-eol). Alpine 3.21 supporté
 # jusqu'au 2026-11-01. Pas de pkg apk version-specific dans cette image.
-FROM alpine:3.21
+FROM alpine:3.21 AS runtime
 
 # Add necessary runtime packages
 # === Veridian patch === apk upgrade en amont pour récupérer les CVE patches
 # OS (ex: libpq 17.9→17.10 CVE-2026-6638 SQL injection). Sans upgrade, l'index
 # Alpine cache une version antérieure même si le repo a déjà le fix.
+#
+# === Veridian patch 2026-09-02 === le stage est NOMMÉ `runtime` pour que la CI
+# puisse l'exclure du cache de couches (`no-cache-filters: runtime`). `--no-cache`
+# est une option d'apk : elle ne désactive PAS le cache buildkit. Mesuré sur le
+# run 33254429451 : `#24 [stage-3 2/7] RUN apk upgrade … CACHED`, donc la couche
+# n'était pas exécutée et l'image rejouait un jeu de paquets figé (libpq 17.10-r0)
+# alors que le miroir servait le correctif (17.11-r0). Le gate Trivy refusait
+# alors de publier l'image qui aurait corrigé les CVE qu'il signalait.
+# Ne PAS retirer le nom du stage sans retirer aussi `no-cache-filters` du workflow.
 RUN apk upgrade --no-cache && \
     apk add --no-cache \
     ca-certificates \
