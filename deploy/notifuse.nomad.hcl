@@ -10,7 +10,8 @@
 # ⚠️ PLACEMENT : migré du bastion (contabo) vers ovh-prod le 2026-07-15 par l'infra
 #    (commit nomad-veridian 82a79dc, bastion saturé). La DB (données) vit sur
 #    ovh-prod:/opt/veridian-lab/notifuse — NE PAS remettre provider=contabo (la copie
-#    du bastion est FIGÉE au 07-15 → servir une DB périmée). memory_max=7000 = fusible 60% VM.
+#    du bastion est FIGÉE au 07-15 → servir une DB périmée). Les memory_max sont
+#    dimensionnés sur les pics Grafana 30 j avec une marge explicite.
 # ⚠️ DÉPLOIEMENT — canon SSH-bastion (cf veridian-prospection/deploy/README.md,
 #    décision Robert 2026-07-11) : la CI (`veridian-ci.yml` job deploy-prod →
 #    scripts/ci/nomad-ssh-deploy.sh) SSH vers le bastion, pré-pull l'image ghcr
@@ -190,7 +191,7 @@ EOH
       resources {
         cpu        = 300
         memory     = 384
-        memory_max = 7000
+        memory_max = 1536
       }
     }
 
@@ -344,9 +345,9 @@ SMTP_FROM_NAME={{ .SMTP_SENDER_NAME }}
 EOH
       }
       resources {
-        cpu        = 400
+        cpu        = 200
         memory     = 128
-        memory_max = 7000
+        memory_max = 512
       }
     }
   }
