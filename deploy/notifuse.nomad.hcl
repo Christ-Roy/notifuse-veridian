@@ -13,8 +13,10 @@
 #    du bastion est FIGÉE au 07-15 → servir une DB périmée). memory_max=7000 = fusible 60% VM.
 # ⚠️ DÉPLOIEMENT — canon SSH-bastion (cf veridian-prospection/deploy/README.md,
 #    décision Robert 2026-07-11) : la CI (`veridian-ci.yml` job deploy-prod →
-#    scripts/ci/nomad-ssh-deploy.sh) SSH vers le bastion, pré-pull l'image ghcr
-#    (auth du nœud), scp CE fichier, puis `nomad job run -var image_tag=<TAG>`.
+#    scripts/ci/nomad-ssh-deploy.sh) pousse CE fichier au bastion via le verbe
+#    `put-job prod`, puis `deploy prod <TAG>`. Le pré-pull ghcr authentifié sur
+#    ovh-prod et le `nomad job run -var image_tag=<TAG>` tournent côté bastion, sous
+#    commande forcée (constat C4 : la clé CI n'y ouvre plus de shell).
 #    Le NOMAD_TOKEN ne quitte JAMAIS le bastion. Déployer TOUJOURS depuis CE HCL
 #    (il déclare `variable image_tag`), jamais la copie ~/nomad-veridian/jobs/.
 # ⚠️ DB mono-instance sans HA (reschedule OFF, bind ovh-prod) — migration Patroni HA =

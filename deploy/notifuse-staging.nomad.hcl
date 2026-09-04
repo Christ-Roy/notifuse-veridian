@@ -8,10 +8,11 @@
 # provider=ovh-dev, PAS de reschedule. Secrets = Nomad Variable `nomad/jobs/notifuse-staging`.
 #
 # ⚠️ DÉPLOIEMENT — canon SSH-bastion (cf veridian-prospection/deploy/README.md) : la CI
-#    (job deploy-staging → scripts/ci/nomad-ssh-deploy.sh) SSH vers le bastion, pré-pull
-#    l'image sur ovh-dev (`ssh -n dev-pub docker pull`), scp CE fichier, puis
-#    `nomad job run -var image_tag=<TAG>`. Déployer TOUJOURS depuis CE HCL (variable
-#    image_tag), jamais la copie ~/nomad-veridian/jobs/.
+#    (job deploy-staging → scripts/ci/nomad-ssh-deploy.sh) pousse CE fichier au bastion
+#    via le verbe `put-job staging`, puis `deploy staging <TAG>`. Le pré-pull authentifié
+#    sur ovh-dev et le `nomad job run -var image_tag=<TAG>` tournent côté bastion, sous
+#    commande forcée. Déployer TOUJOURS depuis CE HCL (variable image_tag), jamais la
+#    copie ~/nomad-veridian/jobs/.
 variable "image_tag" {
   type        = string
   default     = "v57.0-veridian.cc942a35"

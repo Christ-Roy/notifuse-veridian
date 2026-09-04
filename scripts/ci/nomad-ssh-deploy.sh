@@ -1,12 +1,32 @@
 #!/usr/bin/env bash
-# nomad-ssh-deploy.sh — déploie notifuse (staging|prod) via SSH-bastion.
+# nomad-ssh-deploy.sh — déploie notifuse (staging|prod) via les verbes contraints
+# du bastion Nomad.
 #
-# Canon Veridian (décision Robert 2026-07-11, cf veridian-prospection/deploy/README.md) :
-# le NOMAD_TOKEN ne quitte JAMAIS le bastion. Ce script tourne sur le runner GitHub
-# (ubuntu-latest), ouvre une session SSH vers le bastion Nomad avec une clé DÉDIÉE CI,
-# y dépose le HCL DU REPO (qui déclare `variable image_tag`), pré-pull l'image ghcr
-# AVEC auth sur le nœud cible (le plugin docker de Nomad ne pull pas les images privées),
-# puis `nomad job run -var image_tag=<tag>` + `deployment status -monitor` (vérif ciblée).
+# Canon Veridian (décision Robert 2026-07-11) : le NOMAD_TOKEN ne quitte JAMAIS le
+# bastion. Constat C4 de l'audit d'exposition (2026-08) : ça ne suffisait pas. La
+# clé `notifuse-ci-deploy@github` ouvrait un shell sur un compte NOPASSWD:ALL du
+# groupe docker, donc n'importe quel heredoc envoyé par la CI pouvait simplement
+# lire ~/credentials/nomad-bastion.env — le jeton management, c'est-à-dire les
+# secrets de toutes les applications.
+#
+# Le correctif est côté serveur : la clé porte désormais une commande forcée
+#   command="/usr/local/sbin/veridian-ci-deploy notifuse",no-pty,no-*-forwarding
+# L'application est fixée DANS LA LIGNE DE LA CLÉ : ce dépôt ne peut déployer que
+# notifuse, jamais le Hub ni le CMS. La CI ne fournit plus qu'un verbe, un tier et
+# un tag, tous validés par motif strict côté bastion (refus = code 64).
+#
+# Ce script tourne donc sur le runner GitHub et ne fait plus que trois appels :
+#   put-job <tier>          ← le HCL DU REPO, poussé sur stdin
+#   deploy  <tier> <tag>
+#   cleanup <tier>
+#
+# Le pré-pull authentifié de l'image ghcr sur le nœud cible, le `nomad job
+# validate`, le `plan`, le `run -detach -check-index` et le suivi du DeploymentID
+# exact jusqu'à l'état terminal sont désormais DANS le script serveur. On ne les
+# duplique pas ici : aucune garantie n'est perdue, elles sont simplement passées
+# côté bastion, là où le jeton vit.
+#
+# Contrat complet : ~/veridian/secrets-migration/C4-CONTRAT-CI.md
 #
 # Usage : scripts/ci/nomad-ssh-deploy.sh <staging|prod> <image_tag>
 #
@@ -23,75 +43,48 @@ IMAGE_TAG="${2:-}"
 : "${NOMAD_BASTION_HOST:?secret NOMAD_BASTION_HOST manquant}"
 : "${NOMAD_BASTION_USER:?secret NOMAD_BASTION_USER manquant}"
 
-IMAGE_REPO="ghcr.io/christ-roy/notifuse-veridian"
+# Le job Nomad et le dépôt d'image ne sont plus décidés ici : la table serveur du
+# bastion les impose. On ne garde que le chemin du HCL du repo, qui est la seule
+# chose que la CI a le droit d'apporter (et que le bastion revalide : il refuse un
+# HCL qui ne déclare pas le job attendu pour ce couple app/tier).
 case "$ENV_TARGET" in
-  staging) JOB="notifuse-staging"; HCL="deploy/notifuse-staging.nomad.hcl" ;;
-  prod)    JOB="notifuse";         HCL="deploy/notifuse.nomad.hcl" ;;
+  staging) HCL="deploy/notifuse-staging.nomad.hcl" ;;
+  prod)    HCL="deploy/notifuse.nomad.hcl" ;;
   *) echo "✗ env invalide '$ENV_TARGET' (staging|prod)" >&2; exit 1 ;;
 esac
 [[ -f "$HCL" ]] || { echo "✗ HCL introuvable : $HCL" >&2; exit 1; }
-REMOTE_HCL="/tmp/notifuse-${ENV_TARGET}-${GITHUB_RUN_ID:-manual}.nomad.hcl"
-SSH="ssh -i /tmp/nomad_ci_key -o StrictHostKeyChecking=accept-new ${NOMAD_BASTION_USER}@${NOMAD_BASTION_HOST}"
 
-echo "▶ deploy $JOB ($ENV_TARGET) → ${IMAGE_REPO}:${IMAGE_TAG} via SSH-bastion"
+KEY_FILE=/tmp/nomad_ci_key
+# Jamais de -t : les clés CI sont en no-pty côté bastion. BatchMode=yes pour que
+# la moindre demande interactive échoue au lieu de faire poireauter le runner.
+SSH_OPTS=(-i "$KEY_FILE" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+BASTION="${NOMAD_BASTION_USER}@${NOMAD_BASTION_HOST}"
+
+echo "▶ deploy notifuse ($ENV_TARGET) → tag ${IMAGE_TAG} via les verbes contraints du bastion"
 
 # ── clé SSH dédiée CI + known_hosts ────────────────────────────────────────────
 umask 077
-printf '%s\n' "$NOMAD_DEPLOY_SSH_KEY" > /tmp/nomad_ci_key
-chmod 600 /tmp/nomad_ci_key
+printf '%s\n' "$NOMAD_DEPLOY_SSH_KEY" > "$KEY_FILE"
+chmod 600 "$KEY_FILE"
+# Le trap garantit que la clé privée ne survit pas au step, même si un verbe
+# échoue et que `set -e` coupe le script en cours de route.
+trap 'rm -f "$KEY_FILE"' EXIT
 mkdir -p ~/.ssh
 ssh-keyscan -H "$NOMAD_BASTION_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-# ── copie du HCL DU REPO (jamais la copie ~/nomad-veridian/jobs/ du bastion) ────
-scp -i /tmp/nomad_ci_key -o StrictHostKeyChecking=accept-new "$HCL" "${NOMAD_BASTION_USER}@${NOMAD_BASTION_HOST}:${REMOTE_HCL}"
+# ── put-job : le HCL DU REPO sur stdin ─────────────────────────────────────────
+# Jamais la copie ~/nomad-veridian/jobs/ du bastion, et plus de scp vers un chemin
+# choisi par le client : le bastion range le HCL lui-même, dans son propre
+# répertoire de travail à 0700.
+echo "== put-job ${ENV_TARGET} =="
+ssh "${SSH_OPTS[@]}" "$BASTION" "put-job ${ENV_TARGET}" < "$HCL"
 
-# ── pré-pull + validate + plan + run -detach + monitoring ciblé, IN SITU ───────
-# Tout tourne sur le bastion : le token est sourcé là, ne transite pas par la CI.
-# ENV_TARGET pilote le pré-pull : staging = nœud ovh-dev (ssh -n dev-pub) ; prod =
-# nœud bastion (docker pull local). `ssh -n` IMPÉRATIF (sinon avale le stdin heredoc).
-# shellcheck disable=SC2087
-$SSH "IMAGE_TAG='${IMAGE_TAG}' IMAGE_REPO='${IMAGE_REPO}' REMOTE_HCL='${REMOTE_HCL}' ENV_TARGET='${ENV_TARGET}' bash -s" <<'REMOTE'
-set -euo pipefail
-source ~/credentials/nomad-bastion.env
-export NOMAD_ADDR NOMAD_TOKEN="$NOMAD_MGMT_TOKEN"
-IMG="${IMAGE_REPO}:${IMAGE_TAG}"
+# ── deploy : pré-pull + validate + plan + run -check-index + suivi, côté bastion ─
+# -n : ce ssh ne doit pas consommer le stdin du step.
+echo "== deploy ${ENV_TARGET} ${IMAGE_TAG} =="
+ssh -n "${SSH_OPTS[@]}" "$BASTION" "deploy ${ENV_TARGET} ${IMAGE_TAG}"
 
-echo "== pré-pull authentifié de l'image sur le nœud cible ($ENV_TARGET) =="
-# -n IMPÉRATIF : sinon ce ssh lit le stdin du heredoc et avale les commandes nomad suivantes.
-if [ "$ENV_TARGET" = "staging" ]; then
-  ssh -n -o BatchMode=yes -o ConnectTimeout=15 dev-pub "docker pull '$IMG'"
-else
-  # prod = ovh-prod (migré du bastion le 2026-07-15, cf constraint provider=ovh-prod).
-  ssh -n -o BatchMode=yes -o ConnectTimeout=15 prod-pub "docker pull '$IMG'"
-fi
+# ── cleanup du matériel temporaire déposé sur le bastion ───────────────────────
+ssh -n "${SSH_OPTS[@]}" "$BASTION" "cleanup ${ENV_TARGET}" || true
 
-echo "== nomad job validate =="
-/usr/bin/nomad job validate -var "image_tag=${IMAGE_TAG}" "$REMOTE_HCL"
-
-echo "== nomad job plan (diff inoffensif ; exit 1 = allocs à créer, by design) =="
-/usr/bin/nomad job plan -var "image_tag=${IMAGE_TAG}" "$REMOTE_HCL" || true
-
-echo "== nomad job run -detach + monitoring du déploiement CIBLÉ =="
-# run -detach → Evaluation ID → DeploymentID de cet eval → deployment status -monitor.
-# Évite le faux positif du poll `job status | grep successful` (ancien deployment) ET
-# le faux négatif du `job run` bloquant (404 transitoire). Incident prospection 2026-07-11.
-EVAL=$(/usr/bin/nomad job run -detach -var "image_tag=${IMAGE_TAG}" "$REMOTE_HCL" | grep -oP 'Evaluation ID:\s+\K\S+')
-echo "eval: ${EVAL:-none}"
-DEP=""
-for i in $(seq 1 15); do
-  DEP=$(/usr/bin/nomad eval status -json "$EVAL" 2>/dev/null | python3 -c 'import sys,json;print(json.load(sys.stdin).get("DeploymentID") or "")' 2>/dev/null || true)
-  [ -n "$DEP" ] && break
-  sleep 2
-done
-if [ -z "$DEP" ]; then
-  echo "Pas de déploiement créé (job inchangé = no-op) → OK"
-else
-  echo "deployment: $DEP — monitoring jusqu'à terminal…"
-  /usr/bin/nomad deployment status -monitor "$DEP"
-fi
-REMOTE
-
-# ── cleanup du HCL temporaire sur le bastion ───────────────────────────────────
-$SSH "rm -f '${REMOTE_HCL}'" || true
-rm -f /tmp/nomad_ci_key
 echo "✓ deploy $ENV_TARGET soumis et vérifié"
