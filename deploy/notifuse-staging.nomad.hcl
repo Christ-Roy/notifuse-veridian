@@ -97,7 +97,7 @@ job "notifuse-staging" {
     }
 
     # ---- notifuse-staging-db (postgres:17, données staging migrées) ----
-    task "db" {
+    task "notifuse-staging-db" {
       driver = "docker"
       config {
         # Durcissement Unix : empeche un processus non privilegie d'elever ses
@@ -147,7 +147,7 @@ EOH
     }
 
     # ---- notifuse (Go, port 8081) ----
-    task "notifuse" {
+    task "notifuse-staging" {
       driver = "docker"
       config {
         # Durcissement Unix : empeche un processus non privilegie d'elever ses
@@ -226,7 +226,7 @@ EOH
     # Partage le namespace reseau du groupe avec Notifuse : les integrations de
     # test ciblent exclusivement 127.0.0.1:1025. aiosmtpd Debugging imprime le
     # message puis le jette, sans resolver ni contacter le MX du destinataire.
-    task "smtp-sink" {
+    task "notifuse-staging-smtp-sink" {
       driver = "docker"
       config {
         # Durcissement Unix : empeche un processus non privilegie d'elever ses
