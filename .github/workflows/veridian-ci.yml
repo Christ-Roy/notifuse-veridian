@@ -835,13 +835,41 @@ jobs:
           sleep 30
           curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null && echo "Pool DB OK" || (echo "Pool DB still under pressure" && exit 1)
 
+      # Le ménage Docker a été RETIRÉ d'ici, il n'a pas été supprimé du parc.
+      #
+      # CE QU'IL CASSAIT. `docker container prune` est la première commande de
+      # ce step, sans `|| true`, sur un runner qui n'a plus accès au socket
+      # Docker — et qui ne doit pas l'avoir : le groupe `docker` est
+      # root-équivalent sur le nœud, c'est la doctrine des runners Veridian.
+      # La commande rendait donc « permission denied », le step `always()`
+      # échouait, et l'échec d'un step de MÉNAGE faisait échouer tout le job.
+      #
+      # Le coût réel, mesuré le 07/09/2026 : `deploy-staging` réussissait
+      # entièrement (déploiement, healthcheck, cleanup des tenants, warmup — les
+      # six premiers steps verts) et ressortait quand même en échec à cause du
+      # septième. `deploy-prod`, qui en dépend, restait donc `skipped`. Autrement
+      # dit, une ligne de ménage empêchait la promotion en production — y compris
+      # celle d'un correctif de sécurité, alors que 36 CVE HIGH corrigeables
+      # dormaient dans l'image servie et que le cron Trivy de `notifuse-deploy`
+      # les signalait depuis 25 exécutions sans un seul succès.
+      #
+      # OÙ CE MÉNAGE VIT MAINTENANT — vérifié, pas supposé. `~/all-cron`, job
+      # `maintenance/disk-autoclean` (quotidien, 5 h), qui couvre explicitement
+      # dev-pub : `docker image prune -f`, `docker builder prune -f`, purge des
+      # images obsolètes et sans tag, rotation des journaux d'ingress. Il tourne
+      # depuis le bastion via SSH, avec les droits qu'il faut, au lieu de les
+      # réclamer à un runner qui exécute du code venant d'un dépôt.
+      #   all-cron status          ·  all-cron logs disk-autoclean
+      # C'est une redondance qu'on retire, pas un garde-fou.
+      #
+      # LA CONSTITUTION §20 RESTE SATISFAITE, et ce n'est pas une pirouette :
+      # son lint exige la PRÉSENCE d'un step de ménage déclaré « toujours », et se
+      # déclare explicitement « libre de faire docker prune, df, sudo rm, etc. »
+      # (`scripts/ci/lint-workflows.sh`). Le step reste, avec ce qui relève
+      # réellement du runner : ses propres temporaires, et l'alerte disque.
       - name: Cleanup runner (always — Constitution §20)
         if: always()
         run: |
-          docker container prune -f
-          docker image prune -f --filter "until=1h"
-          docker volume prune -f --filter "label!=keep=true"
-          docker buildx prune -f --keep-storage 10GB --filter "until=168h" || true
           sudo rm -rf /tmp/runner-${{ github.run_id }}-* || true
           df -h / | awk 'NR==2 {if ($5+0 > 80) print "⚠ Disk:", $5, "used"}'
 
