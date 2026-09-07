@@ -21,7 +21,10 @@ variable "image_tag" {
 job "notifuse-staging" {
   datacenters = ["veridian-eu"]
   type        = "service"
-  priority    = 50
+  priority    = 30 # bande 30 : staging, jetable sous contention. cf plan/POLICY-PRIORITES.md (nomad-veridian).
+  # 50 = valeur du defaut Nomad, donc le niveau d'un client payant : a 50 ce banc
+  # d'essai n'etait jamais preempte par la prod (Nomad ne preempte qu'a 10 points
+  # d'ecart). Corrige le 2026-09-07 (ROB-60).
 
 # veridian-contract:start
 # veridian.contract.version=1
