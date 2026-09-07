@@ -530,14 +530,31 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build & push image
-        id: push
+      - name: Build image (chargée en local, PAS publiée)
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          # === Veridian patch 2026-09-07 — PUBLIER APRÈS AVOIR SCANNÉ ===
+          # `push: true` ici publiait l'image AVANT le gate Trivy ci-dessous. Le
+          # gate refusait alors le DÉPLOIEMENT, mais l'image porteuse de CVE était
+          # déjà sur GHCR — et elle avait écrasé `:latest`. Mesuré le 2026-09-02 :
+          # `:latest` et `v57.0-veridian.4f7fa579` (l'image que le gate avait
+          # rejetée le 29/08) portaient le MÊME digest, sha256:0ebd70a2093b16e…
+          # Sur un registre public, `:latest` désignait donc une image que le
+          # contrôle de sécurité du dépôt avait explicitement refusée.
+          #
+          # L'image est maintenant chargée dans le démon local sous un nom qui
+          # N'EXISTE QUE LOCALEMENT, scannée, et poussée seulement ensuite.
+          # Le nom local est délibérément impossible à confondre avec une
+          # référence de registre : si Trivy allait chercher ailleurs, il
+          # échouerait au lieu de scanner silencieusement une image distante
+          # portant le même tag. C'est le piège « mesurer la bonne chose au bon
+          # endroit », traité par construction plutôt que par confiance.
+          push: false
+          load: true
           platforms: linux/amd64
-          tags: ${{ steps.image_tags.outputs.tags }}
+          tags: notifuse-a-scanner:${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # === Veridian patch 2026-09-02 === le stage `runtime` (Dockerfile,
@@ -566,6 +583,18 @@ jobs:
             BUILD_SHA=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
 
+      # Empreinte de CE QUI VA ÊTRE SCANNÉ. Relevée avant le scan, revérifiée
+      # avant le push : c'est ce qui interdit de scanner une image et d'en
+      # publier une autre.
+      - name: Empreinte de l'image construite
+        id: empreinte
+        run: |
+          set -euo pipefail
+          ID=$(docker image inspect -f '{{.Id}}' "notifuse-a-scanner:${{ github.run_id }}")
+          [ -n "$ID" ] || { echo "::error::image absente du démon local après le build"; exit 1; }
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          echo "image construite : $ID"
+
       # === Veridian patch === Scan CVE OS + libs systeme + libs upstream
       # bake dans l'image via Trivy. Constitution §13 étage 2.
       #
@@ -577,7 +606,7 @@ jobs:
       - name: Trivy scan image — HIGH/CRITICAL + SARIF
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          image-ref: notifuse-a-scanner:${{ github.run_id }}
           severity: 'CRITICAL,HIGH'
           format: 'sarif'
           output: 'trivy-image.sarif'
@@ -594,7 +623,7 @@ jobs:
       - name: Trivy fail on HIGH/CRITICAL + EOL
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          image-ref: notifuse-a-scanner:${{ github.run_id }}
           severity: 'CRITICAL,HIGH'
           format: 'table'
           exit-code: '1'
@@ -604,7 +633,7 @@ jobs:
       - name: Generate CycloneDX SBOM
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          image-ref: notifuse-a-scanner:${{ github.run_id }}
           scan-type: 'image'
           format: 'cyclonedx'
           output: 'sbom-cyclonedx.json'
@@ -616,6 +645,50 @@ jobs:
           name: sbom-cyclonedx-${{ steps.meta.outputs.tag }}
           path: 'sbom-cyclonedx.json'
           retention-days: 90
+
+      # === Veridian patch 2026-09-07 — LE PUSH, ET SEULEMENT MAINTENANT ===
+      # On arrive ici uniquement si l'étape « Trivy fail on HIGH/CRITICAL + EOL »
+      # a passé : toute étape en échec au-dessus interrompt le job, et ce push
+      # ne porte volontairement PAS de `if: always()`.
+      #
+      # L'empreinte relevée avant le scan est revérifiée ici. C'est l'autotest
+      # de l'ensemble : si l'image du démon local n'était plus celle qui a été
+      # scannée, on publierait une image dont personne n'a rien mesuré. Le cas
+      # ne devrait pas arriver — et c'est exactement pour ça qu'on l'assert.
+      - name: Push image (après que le gate Trivy a passé)
+        id: push
+        run: |
+          set -euo pipefail
+          LOCAL="notifuse-a-scanner:${{ github.run_id }}"
+          ATTENDU='${{ steps.empreinte.outputs.id }}'
+          ACTUEL=$(docker image inspect -f '{{.Id}}' "$LOCAL")
+          if [ "$ACTUEL" != "$ATTENDU" ]; then
+            echo "::error::l'image locale a changé entre le scan et le push"
+            echo "  scannée : $ATTENDU"
+            echo "  actuelle: $ACTUEL"
+            exit 1
+          fi
+          echo "✓ l'image publiée est bit pour bit celle qui a passé le gate : $ACTUEL"
+
+          DIGEST=""
+          while IFS= read -r TAG; do
+            [ -n "$TAG" ] || continue
+            echo "── push $TAG"
+            docker tag "$LOCAL" "$TAG"
+            SORTIE=$(docker push "$TAG" 2>&1)
+            printf '%s\n' "$SORTIE"
+            D=$(printf '%s' "$SORTIE" | grep -oE 'sha256:[0-9a-f]{64}' | tail -1 || true)
+            # `[ … ] && VAR=…` renverrait 1 quand D est vide, et `set -e` tuerait
+            # l'étape sur une variable manquante au lieu de la signaler.
+            if [ -n "$D" ]; then DIGEST="$D"; fi
+          done <<< '${{ steps.image_tags.outputs.tags }}'
+
+          if [ -z "$DIGEST" ]; then
+            echo "::error::aucun digest relevé après le push — on ne sait pas ce qui a été publié"
+            exit 1
+          fi
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "digest publié : $DIGEST"
 
       # === Cleanup dev-pub disk après chaque build self-hosted ===
       # Pattern choisi avec Robert 2026-05-24 : step CI au lieu de cron caché.
