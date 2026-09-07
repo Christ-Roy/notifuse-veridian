@@ -97,7 +97,7 @@ job "notifuse-staging" {
     }
 
     # ---- notifuse-staging-db (postgres:17, données staging migrées) ----
-    task "db" {
+    task "notifuse-staging-db" {
       driver = "docker"
       config {
         # Durcissement Unix : empeche un processus non privilegie d'elever ses
@@ -147,7 +147,7 @@ EOH
     }
 
     # ---- notifuse (Go, port 8081) ----
-    task "notifuse" {
+    task "notifuse-staging" {
       driver = "docker"
       config {
         # Durcissement Unix : empeche un processus non privilegie d'elever ses
