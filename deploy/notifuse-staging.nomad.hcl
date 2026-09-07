@@ -80,6 +80,12 @@ job "notifuse-staging" {
     task "db" {
       driver = "docker"
       config {
+        # Durcissement Unix : empeche un processus non privilegie d'elever ses
+        # droits via un binaire setuid. C'est le maillon entre « shell dans le
+        # conteneur » et « root sur l'hote ». N'affecte PAS un processus qui
+        # ABANDONNE ses droits au demarrage, seulement celui qui en gagne.
+        security_opt = ["no-new-privileges:true"]
+
         image = "postgres:17-alpine"
         volumes = [
           "/opt/veridian-staging/notifuse/db:/var/lib/postgresql/data",
@@ -110,6 +116,12 @@ EOH
     task "notifuse" {
       driver = "docker"
       config {
+        # Durcissement Unix : empeche un processus non privilegie d'elever ses
+        # droits via un binaire setuid. C'est le maillon entre « shell dans le
+        # conteneur » et « root sur l'hote ». N'affecte PAS un processus qui
+        # ABANDONNE ses droits au demarrage, seulement celui qui en gagne.
+        security_opt = ["no-new-privileges:true"]
+
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
         ports = ["http"]
       }
@@ -169,6 +181,12 @@ EOH
     task "smtp-sink" {
       driver = "docker"
       config {
+        # Durcissement Unix : empeche un processus non privilegie d'elever ses
+        # droits via un binaire setuid. C'est le maillon entre « shell dans le
+        # conteneur » et « root sur l'hote ». N'affecte PAS un processus qui
+        # ABANDONNE ses droits au demarrage, seulement celui qui en gagne.
+        security_opt = ["no-new-privileges:true"]
+
         image   = "python:3.12-alpine"
         command = "/bin/sh"
         args = [
