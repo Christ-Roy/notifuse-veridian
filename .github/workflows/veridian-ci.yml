@@ -835,15 +835,51 @@ jobs:
           sleep 30
           curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null && echo "Pool DB OK" || (echo "Pool DB still under pressure" && exit 1)
 
+      # === Veridian patch 2026-09-07 ===
+      # Cette étape ne mesure AUCUNE propriété du logiciel déployé : elle libère
+      # du disque. Elle ne doit donc jamais faire échouer le job — le job `build`
+      # porte déjà cette règle (`set +e  # never fail the build because of
+      # cleanup`), celle-ci ne l'avait pas.
+      #
+      # Ce qu'elle a coûté : le runner auto-hébergé n'a plus accès au socket
+      # Docker (doctrine « zéro socket Docker sur les runners »), donc le premier
+      # `docker container prune` sortait en « permission denied », `bash -e`
+      # tuait l'étape, le job `deploy-staging` rougissait ALORS QUE LE DÉPLOIEMENT
+      # AVAIT RÉUSSI (steps « Deploy staging via SSH-bastion » et « Wait for
+      # staging healthy » verts), et `e2e-staging` — donc toute la promotion vers
+      # la production — était sauté. Un nettoyage de disque bloquait la livraison
+      # d'un correctif de sécurité.
+      #
+      # ⚠️ Ce n'est PAS « rendre l'étape silencieuse ». Un nettoyage qui échoue
+      # sans le dire remplit le disque en silence, ce qui est exactement le piège
+      # d'en face. L'étape DIT ce qu'elle n'a pas pu faire, et le contrôle de
+      # remplissage du disque — qui, lui, est une vraie mesure — reste actif.
       - name: Cleanup runner (always — Constitution §20)
         if: always()
         run: |
-          docker container prune -f
-          docker image prune -f --filter "until=1h"
-          docker volume prune -f --filter "label!=keep=true"
-          docker buildx prune -f --keep-storage 10GB --filter "until=168h" || true
-          sudo rm -rf /tmp/runner-${{ github.run_id }}-* || true
-          df -h / | awk 'NR==2 {if ($5+0 > 80) print "⚠ Disk:", $5, "used"}'
+          set +e  # jamais faire échouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "⚠️  NETTOYAGE DOCKER NON ABOUTI — ce n'est PAS « rien à nettoyer »."
+            echo "   Le démon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, ce qui est le comportement attendu depuis la"
+            echo "   doctrine « zéro socket Docker sur les runners »)."
+            echo "   Conséquence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger côté hôte (all-cron, ou 'ssh <nœud>"
+            echo "   docker system prune'), ou retirer ces lignes si le nettoyage"
+            echo "   est désormais assuré ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "⚠️  Disque à", $5, "— au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
 
   e2e-staging:
     name: E2E headful Playwright (staging, BLOQUANT)
