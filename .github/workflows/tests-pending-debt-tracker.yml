@@ -31,20 +31,39 @@ jobs:
           set -euo pipefail
           if [ ! -f tests-pending.txt ]; then
             echo "::warning::tests-pending.txt absent — debt = 0 ou fichier renommé ?"
-            echo "count=0" >> $GITHUB_OUTPUT
-            echo "files=" >> $GITHUB_OUTPUT
-            exit 0
+            ACTIVE=''
+          else
+            # Exclude empty lines and comments (# ...)
+            ACTIVE=$(grep -vE '^[[:space:]]*(#|$)' tests-pending.txt || true)
           fi
-          # Exclude empty lines and comments (# ...)
-          ACTIVE=$(grep -vE '^\s*(#|$)' tests-pending.txt || true)
-          COUNT=$(echo "$ACTIVE" | grep -c . || echo 0)
-          echo "count=$COUNT" >> $GITHUB_OUTPUT
-          # Markdown bullet list pour insertion dans issue body
+
+          # === Veridian fix 2026-09-21 — le tracker mourait sur son succès ===
+          # `grep -c .` sur une entrée vide IMPRIME « 0 » **et sort en 1**. Le
+          # `COUNT=$(echo "$ACTIVE" | grep -c . || echo 0)` d'avant ajoutait donc
+          # un SECOND « 0 » derrière le premier : GITHUB_OUTPUT recevait
+          # « count=0 » puis une ligne « 0 » toute seule, d'où les deux erreurs
+          # `Invalid format '0'` + `Unable to process file command 'output'`.
+          # Le compteur ne cassait qu'une fois la dette SOLDÉE (ACTIVE vide),
+          # c'est-à-dire exactement le jour où le tracker avait gagné.
+          # On compte désormais sans grep : aucune branche ne peut sortir non nul.
+          if [ -z "$ACTIVE" ]; then
+            COUNT=0
+          else
+            COUNT=$(printf '%s\n' "$ACTIVE" | wc -l | tr -d '[:space:]')
+          fi
+
+          # Markdown bullet list pour insertion dans issue body.
+          # Délimiteur distinctif : `EOF` pouvait collider avec une ligne du fichier.
           {
-            echo 'files<<EOF'
-            echo "$ACTIVE" | sed 's/^/- `/' | sed 's/$/`/'
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
+            echo "count=$COUNT"
+            echo 'files<<TESTS_PENDING_EOF'
+            if [ "$COUNT" -eq 0 ]; then
+              echo '- _(aucun — dette soldée, Constitution §1 atteinte)_'
+            else
+              printf '%s\n' "$ACTIVE" | sed 's/^/- `/; s/$/`/'
+            fi
+            echo 'TESTS_PENDING_EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Find or create tracking issue
         env:
