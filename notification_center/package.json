@@ -42,7 +42,7 @@
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "happy-dom": "^20.8.9",
-    "js-yaml": "^4.3.0",
+    "js-yaml": "^4.3.2",
     "jsdom": "^25.0.1",
     "postcss": "^8.5.18",
     "tailwindcss": "^4.1.6",
