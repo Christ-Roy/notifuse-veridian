@@ -65,6 +65,23 @@ jobs:
             echo 'TESTS_PENDING_EOF'
           } >> "$GITHUB_OUTPUT"
 
+      # === Veridian ajout 2026-09-21 — le verdict atterrit TOUJOURS quelque part ===
+      # Le résumé de job est le seul canal qui ne peut pas être coupé par un
+      # réglage du dépôt. L'issue reste le canal principal quand elle existe.
+      - name: Snapshot dans le résumé de job (canal toujours disponible)
+        env:
+          COUNT: ${{ steps.count.outputs.count }}
+          FILES: ${{ steps.count.outputs.files }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Tests pending debt — $(date -u +'%Y-%m-%d')"
+            echo
+            echo "Count actuel : **$COUNT** (cible Constitution §1 : 0)"
+            echo
+            echo "$FILES"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Find or create tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,6 +91,29 @@ jobs:
           set -euo pipefail
           TITLE="📉 Tests pending debt tracker (Constitution §1)"
           LABEL="tests-pending-debt"
+
+          # === Veridian fix 2026-09-21 — le canal d'alerte est lui-même un contrôle ===
+          # Les issues sont DÉSACTIVÉES sur ce dépôt : `gh issue list` sortait en 1
+          # avec « the repository has disabled issues » et le job restait rouge même
+          # quand la mesure, elle, était bonne. Un rouge dont la cause est le tuyau
+          # et non la dette use le signal jusqu'à ce que plus personne ne le lise.
+          #
+          # On distingue donc trois états au lieu de deux :
+          #   - issues actives              -> canal nominal, on écrit l'issue ;
+          #   - issues coupées, dette = 0   -> rien à signaler, VERT (le résumé de
+          #                                    job porte déjà le snapshot) ;
+          #   - issues coupées, dette > 0   -> NON ABOUTI (sortie 2) : il y a
+          #                                    quelque chose à dire et aucun endroit
+          #                                    où le dire. Ça doit se voir.
+          HAS_ISSUES=$(gh repo view --json hasIssuesEnabled --jq '.hasIssuesEnabled')
+          if [ "$HAS_ISSUES" != "true" ]; then
+            if [ "$COUNT" -eq 0 ]; then
+              echo "::notice::Issues désactivées sur le dépôt, mais la dette vaut 0 : rien à tracker. Snapshot dans le résumé de job."
+              exit 0
+            fi
+            echo "::error::NON ABOUTI — dette = $COUNT mais les issues sont désactivées sur ce dépôt : le tracker n'a aucun canal pour publier son verdict. Réactiver les issues (Settings > Features > Issues) ou rebrancher ce workflow sur un autre canal."
+            exit 2
+          fi
 
           # S'assurer que le label existe (silencieux si déjà créé)
           gh label create "$LABEL" \
