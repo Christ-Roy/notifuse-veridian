@@ -151,11 +151,48 @@ jobs:
       - name: Cleanup runner (always — Constitution §20)
         if: always()
         run: |
-          docker container prune -f
-          docker image prune -f --filter "until=1h"
-          docker volume prune -f --filter "label!=keep=true"
-          docker buildx prune -f --keep-storage 10GB --filter "until=168h" || true
-          sudo rm -rf /tmp/runner-${{ github.run_id }}-* || true
+          set -uo pipefail
+
+          # === Veridian fix 2026-09-23 — ce job était rouge en permanence ===
+          # Mesure : ce step échouait sur `docker container prune -f` avec
+          # « permission denied … /var/run/docker.sock », déjà le 2026-09-07
+          # (job 101765830250) comme le 2026-09-21 (job 106379170879). Les
+          # tests Playwright, eux, sont en `continue-on-error` : le rouge du
+          # job venait donc UNIQUEMENT de ce nettoyage, jamais de la console.
+          #
+          # Ce n'est pas une panne, c'est le durcissement du parc : le runner
+          # auto-hébergé tourne SANS accès au socket Docker, par conception.
+          # Un nettoyage de disque qui exige un socket interdit ne peut pas
+          # réussir, et le laisser rougir chaque semaine use le signal jusqu'à
+          # ce que plus personne ne le lise — c'est exactement ce qui s'est
+          # passé pendant deux semaines.
+          #
+          # Ce step est de l'HYGIÈNE DISQUE, pas un détecteur : on ne bâillonne
+          # aucun gate ici. Mais il rend quand même trois états au lieu de deux,
+          # pour qu'une VRAIE panne Docker reste visible :
+          #   - socket inaccessible  -> attendu sur ce runner, notice, on passe ;
+          #   - socket accessible    -> on purge, et un échec de purge est un
+          #                             warning nommé (disque qui se remplit) ;
+          #   - nettoyage fichiers   -> toujours joué, c'est lui qui libère
+          #                             réellement le disque de ce job.
+          if docker info >/dev/null 2>&1; then
+            echo "Socket Docker accessible — purge des ressources du runner."
+            for cmd in \
+              "docker container prune -f" \
+              "docker image prune -f --filter until=1h" \
+              "docker volume prune -f --filter label!=keep=true" \
+              "docker buildx prune -f --keep-storage 10GB --filter until=168h"
+            do
+              $cmd || echo "::warning::purge Docker en échec : $cmd — surveiller le disque du runner."
+            done
+          else
+            echo "::notice::Socket Docker inaccessible pour l'utilisateur du runner (durcissement « zéro socket Docker » du parc). Purge Docker sans objet, nettoyage fichiers effectué."
+          fi
+
+          # Seul nettoyage que ce job doit vraiment à la machine : ses propres
+          # fichiers temporaires. Il ne dépend d'aucun socket.
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* || \
+            echo "::warning::suppression de /tmp/runner-${{ github.run_id }}-* en échec."
 
       # Notification Telegram en cas de fail uniquement (pas de spam vert).
       # Robert sait que vert = OK, rouge = à regarder dans la queue UI/UX.
