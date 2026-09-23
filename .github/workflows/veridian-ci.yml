@@ -135,6 +135,87 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # === Veridian ajout 2026-09-23 — la suite unitaire de console ne tournait NULLE PART ===
+  #
+  # Constat : `console/` porte 39 fichiers de tests (338 cas), et AUCUN job de
+  # CI ne les exécutait. Le seul test console de la chaîne était
+  # `e2e-console-prod-smoke`, qui est du Playwright sur le dist/. Donc
+  # `pages.smoke.test.tsx` et les 38 autres ne gardaient rien : ils ne
+  # pouvaient pas devenir rouges, donc ils ne prouvaient rien.
+  #
+  # Découvert en montant @tiptap/core 3.20.0 -> 3.31.3 pour deux CVE HIGH :
+  # les 68 fichiers de `components/blog_editor` n'avaient aucun test, et le
+  # test de montage écrit à cette occasion n'aurait lui non plus jamais tourné
+  # ici. Un garde-fou qui ne s'exécute pas est une intention, pas une mesure.
+  #
+  # BLOQUANT, et dans les `needs` de `build` : une console dont les tests
+  # échouent ne doit pas produire une image publiable. La suite est
+  # déterministe (jsdom + fetch mocké, aucun réseau), ~4 min.
+  console-unit:
+    name: Console — tests unitaires (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Pas de `exit 0` silencieux ici : si console/ ou son lockfile manquent,
+      # c'est l'arborescence qui a changé, pas une raison de rendre vert.
+      - name: Install console deps
+        run: |
+          set -euo pipefail
+          if [ ! -f console/package-lock.json ]; then
+            echo "::error::console/package-lock.json introuvable — l'arborescence a changé, ce job ne mesure plus rien."
+            exit 1
+          fi
+          cd console && npm ci --no-audit --no-fund
+
+      - name: Run vitest
+        run: |
+          set -euo pipefail
+          cd console
+          npx vitest run --reporter=json --outputFile=../vitest-console.json
+
+      # AUTOTEST — « une sortie vide n'est jamais une preuve ». Un vitest qui
+      # ne collecte aucun fichier sort en 0 : sans ce contrôle, un glob cassé
+      # ou un renommage de dossier rendrait ce job vert en n'ayant rien joué.
+      - name: Vérifier que des tests ont RÉELLEMENT tourné
+        if: always()
+        run: |
+          set -euo pipefail
+          f=vitest-console.json
+          if [ ! -s "$f" ]; then
+            echo "::error::$f absent ou vide — impossible de savoir ce qui a été exécuté."
+            exit 2
+          fi
+          total=$(jq -r '.numTotalTests // 0' "$f")
+          passed=$(jq -r '.numPassedTests // 0' "$f")
+          failed=$(jq -r '.numFailedTests // 0' "$f")
+          suites=$(jq -r '.numTotalTestSuites // 0' "$f")
+          echo "suites=$suites total=$total passed=$passed failed=$failed"
+          if [ "$total" -lt 1 ] || [ "$suites" -lt 1 ]; then
+            echo "::error::vitest n'a collecté AUCUN test ($suites suites, $total cas). Le job serait vert sans rien avoir mesuré — c'est un échec, pas un succès."
+            exit 2
+          fi
+          # Plancher grossier : la suite comptait 39 fichiers / 338 cas le
+          # 2026-09-23. On ne fige pas le chiffre exact (il doit pouvoir
+          # monter), mais un effondrement signale un glob cassé.
+          if [ "$suites" -lt 30 ]; then
+            echo "::error::seulement $suites fichiers de tests collectés contre 39 attendus — la découverte des tests est probablement cassée."
+            exit 2
+          fi
+          echo "✓ $passed/$total cas passés sur $suites fichiers."
+
+      - name: Upload rapport vitest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-console-report
+          path: vitest-console.json
+          if-no-files-found: warn
+          retention-days: 14
+
   # === Veridian patch — suite E2E « production-build smoke » (ticket 2026-05-22) ===
   #
   # Pourquoi cette couche en plus de `console-build` :
@@ -449,7 +530,7 @@ jobs:
 
   build:
     name: Build & push image (GitHub-hosted)
-    needs: [test-go, cve-scan, trivy-fs, gitleaks, console-build, e2e-console-prod-smoke]
+    needs: [test-go, cve-scan, trivy-fs, gitleaks, console-build, console-unit, e2e-console-prod-smoke]
     # Migré self-hosted (dev-pub) → ubuntu-latest le 2026-06-21 : dev-pub
     # (7.6G RAM / 72G disque, mutualisé staging 5 apps) saturait au build
     # (`no space left` / push GHCR `deadline exceeded`) → blocage total des promos.
