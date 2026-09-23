@@ -47,7 +47,7 @@ scp -i /tmp/nomad_ci_key -o StrictHostKeyChecking=accept-new "$HCL" "${NOMAD_BAS
 
 # ── pré-pull + validate + plan + run -detach + monitoring ciblé, IN SITU ───────
 # Tout tourne sur le bastion : le token est sourcé là, ne transite pas par la CI.
-# ENV_TARGET pilote le pré-pull : staging = nœud ovh-dev (ssh -n dev-pub) ; prod =
+# ENV_TARGET pilote le pré-pull : staging = nœud ovh-dev (ssh -n dev) ; prod =
 # nœud bastion (docker pull local). `ssh -n` IMPÉRATIF (sinon avale le stdin heredoc).
 # shellcheck disable=SC2087
 $SSH "IMAGE_TAG='${IMAGE_TAG}' IMAGE_REPO='${IMAGE_REPO}' REMOTE_HCL='${REMOTE_HCL}' ENV_TARGET='${ENV_TARGET}' bash -s" <<'REMOTE'
@@ -59,10 +59,24 @@ IMG="${IMAGE_REPO}:${IMAGE_TAG}"
 echo "== pré-pull authentifié de l'image sur le nœud cible ($ENV_TARGET) =="
 # -n IMPÉRATIF : sinon ce ssh lit le stdin du heredoc et avale les commandes nomad suivantes.
 if [ "$ENV_TARGET" = "staging" ]; then
-  ssh -n -o BatchMode=yes -o ConnectTimeout=15 dev-pub "docker pull '$IMG'"
+  ssh -n -o BatchMode=yes -o ConnectTimeout=15 dev "docker pull '$IMG'"
 else
   # prod = ovh-prod (migré du bastion le 2026-07-15, cf constraint provider=ovh-prod).
-  ssh -n -o BatchMode=yes -o ConnectTimeout=15 prod-pub "docker pull '$IMG'"
+  #
+  # 🔴 ALIAS TAILSCALE, PAS `-pub`. Mesure du 2026-09-23 : `prod-pub` vise l'IP
+  # publique 51.210.7.44, dont SSH a été FERMÉ par un durcissement. Depuis, ce
+  # pré-pull partait en « Connection timed out », et `set -euo pipefail` faisait
+  # échouer tout le déploiement prod. C'est ce qui a fait rater la promotion du
+  # run 35869299386 — proprement, avant toute mutation, mais elle n'a pas eu lieu.
+  #
+  # Le même jour, le même alias mort rendait `mesure-secrets-env.sh` aveugle
+  # depuis des semaines sans que personne le voie. Un alias `-pub` dans un script
+  # est un bug, pas une préférence : les alias Tailscale font foi.
+  #
+  # Vérifié depuis le bastion, en BatchMode comme ici : `prod-pub` → timeout,
+  # `prod` → OK. `dev-pub` répond encore (filtré par IP, pas fermé), mais on
+  # l'aligne quand même pour ne pas laisser une mine à retardement.
+  ssh -n -o BatchMode=yes -o ConnectTimeout=15 prod "docker pull '$IMG'"
 fi
 
 echo "== nomad job validate =="
