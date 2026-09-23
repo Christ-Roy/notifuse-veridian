@@ -1,4 +1,10 @@
 #!/usr/bin/env sh
+
+# Barriere trivy Veridian (CVE CRITICAL/HIGH avant push), logique partagee
+# avec guard-trivy-deploiement.py et le hook pre-push global. Ne PAS copier
+# la logique de scan ici : cette ligne suffit, elle importe le reste.
+python3 "$HOME/.claude/hooks/trivy-pre-push.py" "$@" || exit 1
+
 # Husky pre-push — Constitution CI §1 + §3 (Notifuse Veridian)
 #
 # Bloque le push si check-test-mapping.sh sort en erreur.
