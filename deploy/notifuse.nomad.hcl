@@ -23,7 +23,9 @@ variable "image_tag" {
   type        = string
   # Recale sur ce qui tourne reellement en prod : le defaut retardait de
   # deux versions majeures et un deploiement hors CI aurait retrograde Notifuse.
-  default     = "v57.0-veridian.cc942a35"
+  # Recale le 2026-09-24 (chantier durcissement conteneurs) : mesure sur le
+  # job Nomad vivant = v57.0-veridian.85717d9b, juste avant ce commit.
+  default     = "v57.0-veridian.85717d9b"
   description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
 }
 
@@ -317,6 +319,7 @@ EOH
     # ---- notifuse (Go, port 8081) ----
     task "notifuse" {
       driver         = "docker"
+      user           = "nobody"
       shutdown_delay = "10s"
       kill_timeout   = "30s"
       service {
@@ -341,7 +344,9 @@ EOH
         # droits via un binaire setuid. C'est le maillon entre « shell dans le
         # conteneur » et « root sur l'hote ». N'affecte PAS un processus qui
         # ABANDONNE ses droits au demarrage, seulement celui qui en gagne.
-        security_opt = ["no-new-privileges:true"]
+        security_opt    = ["no-new-privileges:true"]
+        readonly_rootfs = true
+        cap_drop        = ["ALL"]
 
         # Identification lisible du conteneur (2026-09-07). Nomad ne pose que
         # `com.hashicorp.nomad.alloc_id` : rien ne disait a quelle application
@@ -362,6 +367,18 @@ EOH
         volumes = [
           "/opt/veridian-lab/notifuse/data:/app/data",
         ]
+
+        # 🔴 L'image ne porte aucun utilisateur applicatif nomme (Alpine
+        # minimal, /etc/passwd = root/postgres/nobody). Tournait en root
+        # jusqu'ici. uid 65534 (nobody) choisi ; le dossier hote
+        # /opt/veridian-lab/notifuse/data a ete rechown en 65534:65534
+        # AVANT ce deploiement (verifie : contenu vide, aucune perte).
+        mount {
+          type     = "tmpfs"
+          target   = "/tmp"
+          readonly = false
+          tmpfs_options { size = 67108864 }
+        }
       }
       template {
         destination = "secrets/app.env"
