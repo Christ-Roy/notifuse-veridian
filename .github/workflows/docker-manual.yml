@@ -20,16 +20,23 @@ env:
 
 jobs:
   build:
+    # Cible arm64 retiree le 2026-09-28 (gitops-ci) : aucun runner arm64
+    # auto-heberge dans le parc (mesure : nomad-v state, aucun job
+    # "arm" hors swarmclaw), la prod ne consomme QUE linux/amd64 (le
+    # veritable pipeline de deploy, veridian-ci.yml job `build`, ne build
+    # jamais que amd64), et ce workflow pousse vers docker.io/notifuse/notifuse
+    # (namespace Docker Hub upstream, PAS le notre) sans secrets
+    # DOCKERHUB_USERNAME/DOCKERHUB_TOKEN configures sur ce depot (mesure :
+    # `gh secret list`) - il echouait deja avant migration, arm64 ou pas.
+    # Si un besoin arm64 reel apparait : buildx + QEMU sur ce meme runner x64
+    # (setup-qemu-action), pas un second runner.
     strategy:
       fail-fast: true
       matrix:
         include:
           - platform: linux/amd64
             arch: amd64
-            runner: ubuntu-latest
-          - platform: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: [self-hosted, linux, x64]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -110,7 +117,7 @@ jobs:
   merge:
     if: ${{ inputs.push }}
     needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read
       packages: write
@@ -180,3 +187,28 @@ jobs:
           echo "Docker image successfully built and pushed."
           echo "Registry: ${{ env.REGISTRY }}"
           echo "Image: ${{ env.IMAGE_NAME }}"
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0

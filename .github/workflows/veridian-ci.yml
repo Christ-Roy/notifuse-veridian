@@ -67,7 +67,7 @@ env:
 jobs:
   test-mapping:
     name: Constitution CI §1 (mapping source↔test)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -107,9 +107,34 @@ jobs:
   # React atomique). Un manualChunks mal découpé peut mettre la console morte
   # au boot, invisible pour les tests unitaires Vitest/jsdom. Ce job est en
   # `needs` de `build` → une console cassée bloque la construction de l'image.
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
   console-build:
     name: Console build & intégrité chunks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -151,9 +176,34 @@ jobs:
   # BLOQUANT, et dans les `needs` de `build` : une console dont les tests
   # échouent ne doit pas produire une image publiable. La suite est
   # déterministe (jsdom + fetch mocké, aucun réseau), ~4 min.
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
   console-unit:
     name: Console — tests unitaires (vitest)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -235,7 +285,7 @@ jobs:
   # Bloquant : si rouge, `build` (deploy staging) ne se déclenche pas.
   e2e-console-prod-smoke:
     name: E2E console — production-build smoke
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: console-build
     timeout-minutes: 15
     steps:
@@ -273,9 +323,34 @@ jobs:
           path: console/playwright-report-prod-smoke
           retention-days: 7
 
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
   compose-validate:
     name: Compose validate (staging + prod)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - name: Validate compose files
@@ -292,9 +367,34 @@ jobs:
   # CI-ARCHITECTURE.md §12. Override possible via `[safe-migration]` dans le
   # subject de commit pour les cas légitimes (ex: rollback ciblé).
   # Cf. todo/2026-05-19-ci-migration-safety-non-cable.md
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
   migration-safety:
     name: Constitution CI §12 (migrations Expand & Contract)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -326,9 +426,34 @@ jobs:
           fi
           scripts/ci/check-migration-safety.sh
 
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
   workflow-lint:
     name: Constitution CI §20 (self-hosted jobs cleanup always())
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - name: Lint workflows
@@ -344,7 +469,7 @@ jobs:
   # livres ou executes, et fail le pipeline avant build.
   cve-scan:
     name: CVE scan (npm audit)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -402,10 +527,35 @@ jobs:
           audit_lockfile console "console UI"
           audit_lockfile notification_center "notification center"
 
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
   test-go:
     name: Go tests (unit + Veridian patches)
     needs: [test-mapping, compose-validate, migration-safety]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # gitops-ci-allow-hosted: service postgres mappe host:5432 en collision mesuree avec un postgres deja actif sur le runner auto-heberge dev (ss -ltnp : 127.0.0.1:5432 occupe, 2026-09-28) ; le code de test a deux defauts de port incoherents (testutil/database.go=5433, connection_pool.go=5432 selon le cas) non elucides ici - remap risque de faire tourner les tests contre la mauvaise base plutot que de planter proprement. A refaire avec verification dediee du harnais de test, hors perimetre de cette bascule CI.
     services:
       postgres:
         image: postgres:17-alpine
@@ -461,7 +611,7 @@ jobs:
   govulncheck-summary:
     name: govulncheck summary (after Go tests)
     needs: test-go
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     if: always()
     steps:
       - name: Sentinelle (test-go embedde le scan, ce job sert juste d'ancre)
@@ -469,7 +619,7 @@ jobs:
 
   trivy-fs:
     name: Trivy fs scan (CVE + secret + misconfig + license, Constitution §13)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read
       security-events: write  # pour upload SARIF dans GitHub Security tab
@@ -511,7 +661,7 @@ jobs:
 
   gitleaks:
     name: Gitleaks (secrets dans le diff Git)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read
       security-events: write
@@ -528,6 +678,31 @@ jobs:
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
           GITLEAKS_ENABLE_SUMMARY: true
 
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
   build:
     name: Build & push image (GitHub-hosted)
     needs: [test-go, cve-scan, trivy-fs, gitleaks, console-build, console-unit, e2e-console-prod-smoke]
@@ -537,7 +712,7 @@ jobs:
     # Le build n'a AUCUNE dépendance dev-pub (context: ., cache type=gha, push
     # GHCR via token) → tourne sur runner GitHub (16G/14G, jamais saturé). Seuls
     # les jobs deploy-* restent self-hosted (ils SSH dans dev-pub, c'est leur rôle).
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # gitops-ci-allow-hosted: disque runner auto-heberge insuffisant (13G/72G libres mesure 2026-09-28, meme incident que le commentaire ci-dessus du 2026-06-21) ; depot PUBLIC (mesure 2026-09-28, pas prive) donc cout GH Actions nul ici.
     permissions:
       contents: read
       packages: write
@@ -1139,7 +1314,7 @@ jobs:
       && !contains(github.event.head_commit.message, '[risk:low]')
       && !contains(github.event.head_commit.message, '[skip-prod]')
       && !contains(github.event.head_commit.message, '[wip]')
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - name: Telegram notify (promotion prod attendue)
         env:
@@ -1164,6 +1339,31 @@ jobs:
 
   # Suite console plus large, séquencée après le gate staging afin que le
   # runner Tailscale unique ne bloque jamais le déploiement qu'il doit tester.
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0
   console-e2e-informative:
     name: Console E2E on-prem après staging
     needs: e2e-staging
@@ -1207,7 +1407,7 @@ jobs:
     # Runner ubuntu-latest (canon SSH-bastion prospection) : le deploy SSH vers
     # l'IP publique du bastion + le smoke prod (public) ne nécessitent PAS le
     # tailnet. Le NOMAD_TOKEN ne quitte jamais le bastion.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # gitops-ci-allow-hosted: isolation deliberee de la cle SSH prod (NOMAD_DEPLOY_SSH_KEY) sur runner ephemere plutot que le host auto-heberge partage ; depot PUBLIC (mesure 2026-09-28) donc cout nul.
     env:
       NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY }}
       NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}
@@ -1316,7 +1516,7 @@ jobs:
     if: failure() && needs.deploy-prod.result == 'success'
     # ubuntu-latest + SSH-bastion (canon) : le `nomad job revert` tourne sur le
     # bastion (token in situ), le curl prod est public.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # gitops-ci-allow-hosted: isolation deliberee de la cle SSH prod (NOMAD_DEPLOY_SSH_KEY) sur runner ephemere plutot que le host auto-heberge partage ; depot PUBLIC (mesure 2026-09-28) donc cout nul.
     env:
       NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY }}
       NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}

@@ -24,7 +24,7 @@ jobs:
     #   github.event.pull_request.user.login == 'new-developer' ||
     #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
     
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     permissions:
       contents: read
       pull-requests: read
@@ -58,3 +58,28 @@ jobs:
           # or https://docs.anthropic.com/en/docs/claude-code/sdk#command-line for available options
           claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
 
+      - name: Cleanup runner (always -- Constitution CI Sec.20)
+        if: always()
+        run: |
+          set +e  # jamais faire echouer le job sur du nettoyage
+          non_abouti=0
+          if docker info >/dev/null 2>&1; then
+            docker container prune -f
+            docker image prune -f --filter "until=1h"
+            docker volume prune -f --filter "label!=keep=true"
+            docker buildx prune -f --keep-storage 10GB --filter "until=168h"
+          else
+            non_abouti=1
+            echo "NETTOYAGE DOCKER NON ABOUTI -- ce n'est PAS rien a nettoyer."
+            echo "   Le demon Docker est injoignable depuis ce runner (socket non"
+            echo "   accessible, comportement attendu depuis la doctrine zero"
+            echo "   socket Docker sur les runners)."
+            echo "   Consequence : conteneurs, images et volumes s'accumulent sur"
+            echo "   ce runner sans que rien ne les purge."
+            echo "   Quoi faire : purger cote hote, ou retirer ces lignes si le"
+            echo "   nettoyage est desormais assure ailleurs."
+          fi
+          sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null
+          df -h / | awk 'NR==2 {if ($5+0 > 80) print "Disque a", $5, "-- au-dessus du seuil de 80 %"}'
+          [ "$non_abouti" -eq 1 ] && echo "::warning::nettoyage Docker non abouti sur ce runner (voir ci-dessus)"
+          exit 0

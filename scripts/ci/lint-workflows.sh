@@ -92,18 +92,50 @@ done
 echo
 echo "Total jobs analysés : $TOTAL_JOBS"
 echo "Self-hosted jobs    : $SELF_HOSTED_JOBS"
-echo "Violations          : $FAILED"
+echo "Violations Sec.20    : $FAILED"
 
-if [ "$FAILED" -gt 0 ]; then
+# --- Loi 7 (CLAUDE.md, rouge) : zero runner GitHub heberge -----------------
+# Un depassement de facturation Actions bloque le COMPTE ENTIER (incident
+# du 14/09 : une boutique n'a plus deploye pendant 5 jours). Toute ligne
+# `runs-on: ubuntu-*|macos-*|windows-*` est interdite, sauf exception
+# explicite et mesuree : marqueur `# gitops-ci-allow-hosted: <raison>` sur
+# la MEME ligne (ex: build docker limite par le disque du runner mesure a
+# 13G/72G libres, ou cle SSH prod isolee sur runner ephemere). Voir
+# docs/AUDIT-FORK-UPSTREAM-2026-09-28.md Sec.5 et les 4 exceptions marquees
+# dans veridian-ci.yml (build, deploy-prod, rollback, test-go).
+echo
+echo "${BLUE}-- Loi 7 : zero runner GitHub heberge (sauf exception explicite) --${NC}"
+HOSTED_VIOLATIONS=$(grep -rnE "runs-on:[[:space:]]*(\[[[:space:]]*)?['\"]?(ubuntu-|macos-|windows-)" "$WORKFLOWS_DIR" --include='*.yml' --include='*.yaml' | grep -v 'gitops-ci-allow-hosted' || true)
+HOSTED_FAILED=0
+if [ -n "$HOSTED_VIOLATIONS" ]; then
+  HOSTED_FAILED=$(echo "$HOSTED_VIOLATIONS" | grep -c .)
+  echo "${RED}✗ $HOSTED_FAILED runs-on sur runner GitHub heberge SANS exception :${NC}"
+  echo "$HOSTED_VIOLATIONS"
+else
+  echo "${GREEN}✓ Aucun runner GitHub heberge sans exception explicite${NC}"
+fi
+echo "Violations Loi 7     : $HOSTED_FAILED"
+
+TOTAL_FAILED=$((FAILED + HOSTED_FAILED))
+echo
+echo "Violations totales   : $TOTAL_FAILED"
+
+if [ "$TOTAL_FAILED" -gt 0 ]; then
   echo
-  echo "${RED}╔══════════════════════════════════════════════════════════════════╗${NC}"
-  echo "${RED}║ WORKFLOW LINT — $FAILED job(s) self-hosted sans cleanup always() ║${NC}"
-  echo "${RED}╚══════════════════════════════════════════════════════════════════╝${NC}"
-  echo "Constitution CI §20 : tout runner self-hosted DOIT avoir un step cleanup if: always()."
-  echo "Sinon le disk dev-pub se remplit et le runner crash silencieusement."
-  echo -e "Violations :\n$VIOLATIONS"
+  echo "${RED}╔════════════════════════════════════════════════════════════════════╗${NC}"
+  echo "${RED}║ WORKFLOW LINT -- $TOTAL_FAILED violation(s) (Sec.20 cleanup + Loi 7 runner)${NC}"
+  echo "${RED}╚════════════════════════════════════════════════════════════════════╝${NC}"
+  if [ "$FAILED" -gt 0 ]; then
+    echo "Constitution CI Sec.20 : tout runner self-hosted DOIT avoir un step cleanup if: always()."
+    echo "Sinon le disk dev-pub se remplit et le runner crash silencieusement."
+    echo -e "Violations Sec.20 :\n$VIOLATIONS"
+  fi
+  if [ "$HOSTED_FAILED" -gt 0 ]; then
+    echo "Loi 7 (CLAUDE.md) : aucun runner GitHub heberge sans exception mesuree et marquee."
+    echo -e "Violations Loi 7 :\n$HOSTED_VIOLATIONS"
+  fi
   exit 1
 fi
 
-echo "${GREEN}✓ Tous les jobs self-hosted ont un cleanup always() (Constitution §20)${NC}"
+echo "${GREEN}✓ Tous les jobs self-hosted ont un cleanup always() (Constitution Sec.20) et aucun runner GitHub heberge sans exception (Loi 7)${NC}"
 exit 0
