@@ -406,6 +406,37 @@ func TestVeridianMessageHistoryDecorator_CountSentSinceForDomainsAndSenderDomain
 	assert.Equal(t, 4, got)
 }
 
+// Veridian — correctif du 28/09 : CountSentSinceForClass est un pur passthrough
+// (lecture, aucun side-effect quota), comme les autres COUNT.
+func TestVeridianMessageHistoryDecorator_CountSentSinceForClass_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	upstream.EXPECT().CountSentSinceForClass(gomock.Any(), "ws", "other_hoster", since).
+		Return(20, nil).Times(1)
+	got, err := d.CountSentSinceForClass(context.Background(), "ws", "other_hoster", since)
+	require.NoError(t, err)
+	assert.Equal(t, 20, got)
+}
+
+func TestVeridianMessageHistoryDecorator_CountSentSinceForClassAndSenderDomain_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	upstream.EXPECT().
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws", "other_hoster", "nord-propre-1.fr", since).
+		Return(5, nil).Times(1)
+	got, err := d.CountSentSinceForClassAndSenderDomain(context.Background(), "ws", "other_hoster", "nord-propre-1.fr", since)
+	require.NoError(t, err)
+	assert.Equal(t, 5, got)
+}
+
 func TestVeridianMessageHistoryDecorator_FindContactEmailByMessageID_Passthrough(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

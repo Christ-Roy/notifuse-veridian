@@ -399,7 +399,7 @@ func TestHandleColdSimulate_ClassCapDecision_Validation400(t *testing.T) {
 	h := newColdSimulateHandler()
 	h.SetColdSimulate(&stubColdReplyProcessor{}, mocks.NewMockMessageHistoryRepository(gomock.NewController(t)), nil, "staging")
 	for _, req := range []veridianColdSimulateRequest{
-		{Mode: "class_cap_decision", WorkspaceID: "ws1", ClassCap: 1},                       // classe manquante
+		{Mode: "class_cap_decision", WorkspaceID: "ws1", ClassCap: 1},                          // classe manquante
 		{Mode: "class_cap_decision", WorkspaceID: "ws1", ProviderClass: "google", ClassCap: 0}, // cap non positif
 	} {
 		rec := postColdSimulate(t, h, req)
@@ -553,7 +553,7 @@ func TestHandleColdSimulate_PerSenderCapDecision_Validation400(t *testing.T) {
 	h := newColdSimulateHandler()
 	h.SetColdSimulate(&stubColdReplyProcessor{}, mocks.NewMockMessageHistoryRepository(gomock.NewController(t)), nil, "staging")
 	for _, req := range []veridianColdSimulateRequest{
-		{Mode: "per_sender_cap_decision", WorkspaceID: "ws1", PerSenderCap: 1},                   // sender manquant
+		{Mode: "per_sender_cap_decision", WorkspaceID: "ws1", PerSenderCap: 1},                        // sender manquant
 		{Mode: "per_sender_cap_decision", WorkspaceID: "ws1", SenderEmail: "b@a.fr", PerSenderCap: 0}, // cap non positif
 	} {
 		rec := postColdSimulate(t, h, req)

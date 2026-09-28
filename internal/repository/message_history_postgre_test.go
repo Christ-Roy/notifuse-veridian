@@ -2954,6 +2954,123 @@ func TestMessageHistoryRepository_CountSentSinceForDomainsAndSenderDomain(t *tes
 	})
 }
 
+// Veridian — correctif du 28/09 (incident workspace robertbrunon, 20 envois
+// other_hoster au-delà du plafond) : CountSentSinceForClass compte sur la
+// colonne message_history.veridian_provider_class PERSISTÉE (match exact),
+// PAS sur une dérivation par liste de domaines (VeridianDomainsForClass, qui
+// renvoie [] pour toute classe issue de la classification MX). Cette requête
+// fonctionne IDENTIQUEMENT quelle que soit la classe : "google" comme
+// "other_hoster".
+func TestMessageHistoryRepository_CountSentSinceForClass(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	since := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
+
+	t.Run("MX-derived class other_hoster returns count (the bug this fixes)", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE veridian_provider_class = \$1 AND sent_at >= \$2 AND failed_at IS NULL`).
+			WithArgs("other_hoster", since).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(20))
+
+		got, err := repo.CountSentSinceForClass(ctx, workspaceID, "other_hoster", since)
+		require.NoError(t, err)
+		assert.Equal(t, 20, got, "une classe MX se compte, contrairement à CountSentSinceForDomains qui renvoyait toujours 0")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("historical suffix class google returns count identically", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE veridian_provider_class = \$1 AND sent_at >= \$2 AND failed_at IS NULL`).
+			WithArgs("google", since).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(4))
+
+		got, err := repo.CountSentSinceForClass(ctx, workspaceID, "google", since)
+		require.NoError(t, err)
+		assert.Equal(t, 4, got)
+	})
+
+	t.Run("empty class → 0 without query", func(t *testing.T) {
+		got, err := repo.CountSentSinceForClass(ctx, workspaceID, "", since)
+		require.NoError(t, err)
+		assert.Zero(t, got)
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("no conn"))
+		_, err := repo.CountSentSinceForClass(ctx, workspaceID, "other_hoster", since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history`).
+			WithArgs("other_hoster", since).
+			WillReturnError(errors.New("boom"))
+		_, err := repo.CountSentSinceForClass(ctx, workspaceID, "other_hoster", since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "count messages sent to provider class")
+	})
+}
+
+// Veridian — jumeau PAR INFRA ÉMETTRICE (= par intégration) de
+// CountSentSinceForClass : deux intégrations distinctes frappant la même classe
+// MX ont des compteurs séparés (warm-up multi-domaine, cf. veridian_daily_cap.go).
+func TestMessageHistoryRepository_CountSentSinceForClassAndSenderDomain(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	since := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
+
+	t.Run("class + sender domain returns count for that integration only", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history\s+WHERE veridian_provider_class = \$1\s+AND sent_at >= \$2\s+AND failed_at IS NULL\s+AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\)`).
+			WithArgs("other_hoster", since, "nord-propre-1.fr").
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+		got, err := repo.CountSentSinceForClassAndSenderDomain(ctx, workspaceID, "other_hoster", "nord-propre-1.fr", since)
+		require.NoError(t, err)
+		assert.Equal(t, 5, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty class → 0 without query", func(t *testing.T) {
+		got, err := repo.CountSentSinceForClassAndSenderDomain(ctx, workspaceID, "", "nord-propre-1.fr", since)
+		require.NoError(t, err)
+		assert.Zero(t, got)
+	})
+
+	t.Run("empty sender domain → 0 without query", func(t *testing.T) {
+		got, err := repo.CountSentSinceForClassAndSenderDomain(ctx, workspaceID, "other_hoster", "", since)
+		require.NoError(t, err)
+		assert.Zero(t, got)
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("no conn"))
+		_, err := repo.CountSentSinceForClassAndSenderDomain(ctx, workspaceID, "other_hoster", "nord-propre-1.fr", since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history`).
+			WithArgs("other_hoster", since, "nord-propre-1.fr").
+			WillReturnError(errors.New("boom"))
+		_, err := repo.CountSentSinceForClassAndSenderDomain(ctx, workspaceID, "other_hoster", "nord-propre-1.fr", since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "count messages sent to provider class from sender domain")
+	})
+}
+
 func TestMessageHistoryRepository_ReserveDailyQuotaRejectsInvalidInput(t *testing.T) {
 	repo := NewMessageHistoryRepository(nil)
 	_, err := repo.ReserveDailyQuota(context.Background(), "ws", domain.VeridianDailyQuotaReservation{})

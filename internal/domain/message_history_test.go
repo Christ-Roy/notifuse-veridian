@@ -1587,8 +1587,16 @@ type veridianDailyCapFakeRepo struct {
 	// (cap-classe keyé par infra émettrice, 2026-06-18). Permet de prouver que le
 	// compteur de classe est bien SÉPARÉ par domaine émetteur.
 	sentByDomainAndSenderDomain map[string]map[string]int
-	gotSince                    time.Time
-	gotSenderDomain             string
+	// sentByClass / sentByClassAndSenderDomain : fixture du CORRECTIF 28/09
+	// (colonne veridian_provider_class persistée, match EXACT — cf.
+	// TestMessageHistoryRepository_DailyCapClassContract). Contrairement à
+	// sentByDomain*, une classe MX (other_hoster, ovh, …) fonctionne
+	// IDENTIQUEMENT à une classe à suffixe : pas de liste de domaines à
+	// dériver, juste une clé de map.
+	sentByClass                map[string]int
+	sentByClassAndSenderDomain map[string]map[string]int
+	gotSince                   time.Time
+	gotSenderDomain            string
 }
 
 func (f *veridianDailyCapFakeRepo) CountSentSinceForContact(_ context.Context, _ string, contactEmail string, since time.Time) (int, error) {
@@ -1606,6 +1614,18 @@ func (f *veridianDailyCapFakeRepo) CountSentSinceForDomainsAndSenderDomain(_ con
 		return 0, nil
 	}
 	return sumDomains(f.sentByDomainAndSenderDomain[senderDomain], domains, exclude), nil
+}
+
+func (f *veridianDailyCapFakeRepo) CountSentSinceForClass(_ context.Context, _ string, class string, _ time.Time) (int, error) {
+	return f.sentByClass[class], nil
+}
+
+func (f *veridianDailyCapFakeRepo) CountSentSinceForClassAndSenderDomain(_ context.Context, _ string, class string, senderDomain string, _ time.Time) (int, error) {
+	f.gotSenderDomain = senderDomain
+	if senderDomain == "" {
+		return 0, nil
+	}
+	return f.sentByClassAndSenderDomain[senderDomain][class], nil
 }
 
 // sumDomains additionne les envois des domaines destinataires matchant la classe
@@ -1703,6 +1723,62 @@ func TestMessageHistoryRepository_DailyCapPerInfraContract(t *testing.T) {
 
 	t.Run("empty sender domain returns 0 (no infra attribution)", func(t *testing.T) {
 		n, err := repo.CountSentSinceForDomainsAndSenderDomain(ctx, "ws", []string{"gmail.com"}, false, "", since)
+		require.NoError(t, err)
+		assert.Zero(t, n)
+	})
+}
+
+// Veridian — contrat de CountSentSinceForClass / CountSentSinceForClassAndSenderDomain
+// (correctif du 28/09, incident workspace robertbrunon) : le COUNT du cap-classe
+// compte désormais sur la colonne message_history.veridian_provider_class PERSISTÉE
+// (match exact de chaîne), pas sur une dérivation par liste de domaines. Preuve
+// spécifique du bug corrigé : une classe MX (other_hoster, sans aucune entrée dans
+// la table de suffixes statique) se compte IDENTIQUEMENT à une classe historique
+// (google) — avant le fix, VeridianDomainsForClass("other_hoster") renvoyait une
+// liste vide et le COUNT-par-domaine ne matchait jamais rien.
+func TestMessageHistoryRepository_DailyCapClassContract(t *testing.T) {
+	// compile-time : le fake satisfait bien l'interface étendue.
+	var _ MessageHistoryRepository = (*veridianDailyCapFakeRepo)(nil)
+
+	ctx := context.Background()
+	since := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
+
+	t.Run("MX-derived class counts exactly like a historical suffix class", func(t *testing.T) {
+		repo := &veridianDailyCapFakeRepo{
+			sentByClass: map[string]int{
+				"google":       12,
+				"other_hoster": 20, // la classe qui a fui le 28/09
+			},
+		}
+		nGoogle, err := repo.CountSentSinceForClass(ctx, "ws", "google", since)
+		require.NoError(t, err)
+		nOtherHoster, err := repo.CountSentSinceForClass(ctx, "ws", ProviderClassOtherHoster, since)
+		require.NoError(t, err)
+
+		assert.Equal(t, 12, nGoogle)
+		assert.Equal(t, 20, nOtherHoster, "une classe MX se compte exactement comme une classe à suffixe : plus de dégradation gracieuse")
+	})
+
+	t.Run("per infra: two integrations hitting the same MX class have independent counters", func(t *testing.T) {
+		repo := &veridianDailyCapFakeRepo{
+			sentByClassAndSenderDomain: map[string]map[string]int{
+				"nord-propre-1.fr":  {ProviderClassOtherHoster: 5},
+				"relai-agence-2.fr": {ProviderClassOtherHoster: 1},
+			},
+		}
+		nA, err := repo.CountSentSinceForClassAndSenderDomain(ctx, "ws", ProviderClassOtherHoster, "nord-propre-1.fr", since)
+		require.NoError(t, err)
+		nB, err := repo.CountSentSinceForClassAndSenderDomain(ctx, "ws", ProviderClassOtherHoster, "relai-agence-2.fr", since)
+		require.NoError(t, err)
+
+		assert.Equal(t, 5, nA, "nord-propre-1 a atteint son propre plafond other_hoster")
+		assert.Equal(t, 1, nB, "relai-agence-2 est indépendante, non affectée par nord-propre-1")
+		assert.Equal(t, "relai-agence-2.fr", repo.gotSenderDomain, "le domaine émetteur est transmis tel quel")
+	})
+
+	t.Run("empty sender domain returns 0 (no infra attribution, workspace-global fallback used instead)", func(t *testing.T) {
+		repo := &veridianDailyCapFakeRepo{}
+		n, err := repo.CountSentSinceForClassAndSenderDomain(ctx, "ws", ProviderClassOtherHoster, "", since)
 		require.NoError(t, err)
 		assert.Zero(t, n)
 	})
