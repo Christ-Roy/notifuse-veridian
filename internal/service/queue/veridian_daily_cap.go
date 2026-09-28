@@ -25,19 +25,21 @@ import (
 //  1. cap par DESTINATAIRE : max N envois/jour vers une MÊME adresse (anti-
 //     harcèlement). COUNT message_history WHERE contact_email=? AND sent_at>=minuit.
 //  2. cap par CLASSE : max N envois/jour vers toute une classe de provider
-//     (réputation). COUNT … WHERE classe(contact_email) AND sent_at>=minuit ;
-//     la classe n'étant pas en DB, le repo filtre par la liste de domaines de
-//     la classe (dérivée en Go).
+//     (réputation). COUNT … WHERE veridian_provider_class=? AND sent_at>=minuit —
+//     match EXACT sur la colonne persistée (V55), indépendant de la façon dont
+//     la classe a été obtenue (suffixe historique OU classification MX, Lot 4).
 //
 // ⚠️ Le cap par CLASSE est keyé PAR INFRA ÉMETTRICE (warm-up multi-domaine,
 // 2026-06-18) : la doctrine warm-up = « 1 infra (IP + domaine d'envoi) → 1 classe
 // destinataire = N/jour ». Le compteur de classe est donc filtré par le DOMAINE de
 // l'adresse FROM de l'entrée (veridian_sender_email, V53) → deux domaines d'envoi
 // frappant la même classe ne se marchent plus dessus, chacun a son propre plafond
-// vers cette classe. Si l'entrée n'a pas de FROM exploitable (legacy, pré-V53), on
-// retombe sur le COUNT workspace-global (toutes infras confondues) = non-régression
-// stricte. Le cap par DESTINATAIRE reste workspace-global (anti-harcèlement = ne
-// JAMAIS sur-solliciter une personne, peu importe l'infra qui envoie).
+// vers cette classe (= par INTÉGRATION en pratique, chaque intégration SMTP ayant
+// son propre domaine d'envoi). Si l'entrée n'a pas de FROM exploitable (legacy,
+// pré-V53), on retombe sur le COUNT workspace-global (toutes infras confondues) =
+// non-régression stricte. Le cap par DESTINATAIRE reste workspace-global
+// (anti-harcèlement = ne JAMAIS sur-solliciter une personne, peu importe l'infra
+// qui envoie).
 //
 // Résolution de la config (du plus spécifique au plus général), identique aux
 // rates : payload (copié à l'enqueue depuis broadcast.metadata) → infra
@@ -47,6 +49,18 @@ import (
 // V55 : une erreur DB bloque et replanifie l'entrée. Un plafond de réputation
 // n'est pas une métrique best-effort : sans preuve de capacité disponible, le
 // worker n'est pas autorisé à ouvrir SMTP.
+//
+// 🔴 Correctif du 28/09 (incident workspace robertbrunon, 20 envois other_hoster
+// au-delà du plafond) : le cap-classe comptait via CountSentSinceForDomains, qui
+// dérive la classe d'une LISTE DE DOMAINES statique (domain.VeridianDomainsForClass).
+// Cette liste est VIDE pour toute classe issue de la classification MX (ovh/
+// ionos/apple_icloud/security_gateway/other_hoster/corporate_selfhost, Lot 4) →
+// le COUNT ne matchait jamais rien, le plafond devenait un no-op PERMANENT pour
+// ces classes. Le COUNT compte désormais sur la colonne message_history.
+// veridian_provider_class PERSISTÉE (V55, déjà posée par worker.go avant ce gate)
+// via CountSentSinceForClass / CountSentSinceForClassAndSenderDomain : un match
+// exact de chaîne, robuste quelle que soit la façon dont la classe a été résolue.
+// Test de non-régression du bug : veridian_daily_cap_class_test.go.
 
 // veridianDailyCapRecheckInterval borne le report d'une entrée plafonnée.
 // Sémantiquement le compteur se réinitialise au prochain minuit, mais re-checker
@@ -182,16 +196,13 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 
 	// 2b. Cap par classe STATIQUE (réputation), uniquement HORS warmup. Dérivation de
 	//     la classe : tag contact (option B) sinon classification par MX RÉEL (Lot 4 :
-	//     suffixe connu sans lookup, inconnu via MX caché). ⚠️ Pour une classe MX
-	//     (ovh/ionos/…), VeridianDomainsForClass renvoie une liste vide → le COUNT par
-	//     domaine ne s'enforce pas (dégradation gracieuse documentée ; le throttle
-	//     minute protège la réputation sur le hot path). Le cap-classe reste pleinement
-	//     enforcé pour les classes adossées à un suffixe (google public, etc.).
+	//     suffixe connu sans lookup, inconnu via MX caché). Le COUNT compte sur la
+	//     colonne persistée (veridian_provider_class, match exact) : pleinement
+	//     enforcé pour TOUTE classe, suffixe historique ou MX (fix incident 28/09).
 	if len(classCaps) > 0 {
 		class := w.veridianClassifyRecipient(entry)
 		if classCap, ok := classCaps[class]; ok && classCap > 0 {
-			domains, exclude := domain.VeridianDomainsForClass(class)
-			count, err := w.veridianCountClassForInfra(workspaceID, domains, exclude, entry, since)
+			count, err := w.veridianCountClassForInfra(workspaceID, class, entry, since)
 			if err != nil {
 				w.logger.WithFields(map[string]interface{}{
 					"entry_id":       entry.ID,
@@ -210,25 +221,27 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 }
 
 // veridianCountClassForInfra compte les envois du jour vers une classe destinataire
-// (domains + exclude) en les attribuant à l'INFRA ÉMETTRICE de l'entrée courante
-// (warm-up multi-domaine, 2026-06-18). L'infra réputationnelle = le DOMAINE de
-// l'adresse FROM (les N adresses d'un même domaine partagent l'IP/réputation, donc
-// comptent ensemble) → on dérive senderDomain via veridianEmailDomain(FromAddress)
-// (helper partagé avec le pré-filtre, normalisation identique : lowercase, trim,
-// point FQDN retiré).
+// (match EXACT sur la colonne persistée veridian_provider_class, V55 — fix incident
+// 28/09, cf. en-tête de fichier) en les attribuant à l'INFRA ÉMETTRICE de l'entrée
+// courante (warm-up multi-domaine, 2026-06-18 ; en pratique = par INTÉGRATION, chaque
+// intégration SMTP ayant son propre domaine d'envoi). L'infra réputationnelle = le
+// DOMAINE de l'adresse FROM (les N adresses d'un même domaine partagent l'IP/
+// réputation, donc comptent ensemble) → on dérive senderDomain via
+// veridianEmailDomain(FromAddress) (helper partagé avec le pré-filtre, normalisation
+// identique : lowercase, trim, point FQDN retiré).
 //
 // Si l'entrée n'a pas de FROM exploitable (legacy / pré-V53 / sender inconnu), on
-// retombe sur le COUNT workspace-global (CountSentSinceForDomains) = comportement
+// retombe sur le COUNT workspace-global (CountSentSinceForClass) = comportement
 // strictement antérieur (non-régression). Toute la cascade de résolution du cap
 // reste inchangée ; seule la GRANULARITÉ DU COMPTEUR change (par infra au lieu de
 // par workspace) quand l'attribution est possible.
-func (w *EmailQueueWorker) veridianCountClassForInfra(workspaceID string, domains []string, exclude bool, entry *domain.EmailQueueEntry, since time.Time) (int, error) {
+func (w *EmailQueueWorker) veridianCountClassForInfra(workspaceID string, class string, entry *domain.EmailQueueEntry, since time.Time) (int, error) {
 	senderDomain := veridianEmailDomain(entry.Payload.FromAddress)
 	if senderDomain == "" {
 		// Pas d'attribution infra possible → compteur workspace-global (legacy).
-		return w.messageHistoryRepo.CountSentSinceForDomains(w.ctx, workspaceID, domains, exclude, since)
+		return w.messageHistoryRepo.CountSentSinceForClass(w.ctx, workspaceID, class, since)
 	}
-	return w.messageHistoryRepo.CountSentSinceForDomainsAndSenderDomain(w.ctx, workspaceID, domains, exclude, senderDomain, since)
+	return w.messageHistoryRepo.CountSentSinceForClassAndSenderDomain(w.ctx, workspaceID, class, senderDomain, since)
 }
 
 // veridianRescheduleCapped construit le délai de report d'une entrée plafonnée

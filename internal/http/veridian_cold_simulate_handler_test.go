@@ -352,15 +352,15 @@ func TestHandleColdSimulate_SeedSent_WithSenderEmail(t *testing.T) {
 	assert.Equal(t, 2, got.Seeded)
 }
 
-// === mode class_cap_decision : prédicat exact du cap CLASSE (CountSentSinceForDomains >= cap) ===
+// === mode class_cap_decision : prédicat exact du cap CLASSE (CountSentSinceForClass >= cap) ===
 
 func TestHandleColdSimulate_ClassCapDecision_AtCapBlocks(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	// google : domains non vides (gmail.com…), 1 envoi aujourd'hui, cap 1 → bloqué.
+	// google : 1 envoi aujourd'hui (match exact sur la colonne persistée), cap 1 → bloqué.
 	msgRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws1", "google", gomock.Any()).
 		Return(1, nil)
 
 	h := newColdSimulateHandler()
@@ -380,7 +380,7 @@ func TestHandleColdSimulate_ClassCapDecision_BelowCap(t *testing.T) {
 	defer ctrl.Finish()
 	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	msgRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws1", "google", gomock.Any()).
 		Return(0, nil)
 
 	h := newColdSimulateHandler()
@@ -408,14 +408,14 @@ func TestHandleColdSimulate_ClassCapDecision_Validation400(t *testing.T) {
 }
 
 // Sans sender_domain : le chemin reste le COUNT workspace-global (legacy) →
-// CountSentSinceForDomains, et per_infra = false (présent dans le JSON).
+// CountSentSinceForClass, et per_infra = false (présent dans le JSON).
 func TestHandleColdSimulate_ClassCapDecision_NoSenderDomainIsGlobal(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
-	// Chemin global EXACT : aucune attente sur CountSentSinceForDomainsAndSenderDomain.
+	// Chemin global EXACT : aucune attente sur CountSentSinceForClassAndSenderDomain.
 	msgRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws1", "google", gomock.Any()).
 		Return(0, nil)
 
 	h := newColdSimulateHandler()
@@ -432,7 +432,7 @@ func TestHandleColdSimulate_ClassCapDecision_NoSenderDomainIsGlobal(t *testing.T
 }
 
 // AVEC sender_domain : le COUNT est keyé PAR INFRA ÉMETTRICE →
-// CountSentSinceForDomainsAndSenderDomain reçoit le domaine émetteur, le COUNT
+// CountSentSinceForClassAndSenderDomain reçoit le domaine émetteur, le COUNT
 // global N'est PAS appelé. C'est le prédicat exact de veridianCountClassForInfra.
 func TestHandleColdSimulate_ClassCapDecision_PerInfraAtCapBlocks(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -440,7 +440,7 @@ func TestHandleColdSimulate_ClassCapDecision_PerInfraAtCapBlocks(t *testing.T) {
 	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	// infra-a.fr a déjà 1 envoi google aujourd'hui, cap 1 → bloqué pour CETTE infra.
 	msgRepo.EXPECT().
-		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), "infra-a.fr", gomock.Any()).
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws1", "google", "infra-a.fr", gomock.Any()).
 		Return(1, nil)
 
 	h := newColdSimulateHandler()
@@ -467,7 +467,7 @@ func TestHandleColdSimulate_ClassCapDecision_PerInfraIsolatedBelowCap(t *testing
 	defer ctrl.Finish()
 	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	msgRepo.EXPECT().
-		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), "infra-b.fr", gomock.Any()).
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws1", "google", "infra-b.fr", gomock.Any()).
 		Return(0, nil)
 
 	h := newColdSimulateHandler()
@@ -494,7 +494,7 @@ func TestHandleColdSimulate_ClassCapDecision_SenderDomainFromFullAddress(t *test
 	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
 	// "Bot1@Infra-A.FR" → domaine "infra-a.fr" passé au repo.
 	msgRepo.EXPECT().
-		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any(), "infra-a.fr", gomock.Any()).
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws1", "google", "infra-a.fr", gomock.Any()).
 		Return(0, nil)
 
 	h := newColdSimulateHandler()

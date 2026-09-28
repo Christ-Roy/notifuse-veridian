@@ -114,9 +114,9 @@ func TestVeridianDailyCapGate_ClassReached(t *testing.T) {
 	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 50}, 0)
 	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
 
-	// gmail.com → classe google → domaines non exclus, COUNT = 50 ≥ cap → skip.
+	// gmail.com → classe google, COUNT exact sur la classe persistée = 50 ≥ cap → skip.
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws-1", "google", gomock.Any()).
 		Return(50, nil)
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
@@ -130,7 +130,7 @@ func TestVeridianDailyCapGate_ClassUnderCapPasses(t *testing.T) {
 	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
 
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws-1", "google", gomock.Any()).
 		Return(49, nil)
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
@@ -138,20 +138,20 @@ func TestVeridianDailyCapGate_ClassUnderCapPasses(t *testing.T) {
 	assert.Zero(t, delay)
 }
 
-func TestVeridianDailyCapGate_CorporateUsesExclusion(t *testing.T) {
+func TestVeridianDailyCapGate_CorporateClassCountedExactly(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	ws := veridianTestWorkspaceWithCaps(map[string]int{"corporate": 10}, 0)
 	// Classe `corporate` portée explicitement (tag amont) : depuis le Lot 4, un
-	// domaine custom inconnu est classé par MX (→ corporate_selfhost) ; le chemin
-	// d'EXCLUSION par domaines connus reste spécifique à la classe HISTORIQUE
-	// `corporate`. On la pose donc via le tag pour couvrir exactement ce chemin.
+	// domaine custom inconnu est classé par MX (→ corporate_selfhost) ; la classe
+	// HISTORIQUE `corporate` reste un tag amont valide. Le COUNT est désormais un
+	// match EXACT sur la colonne persistée (fix 28/09) : plus de logique
+	// d'exclusion par liste de domaines, une classe = une chaîne, un compteur.
 	entry := veridianTestEntry("e1", "ceo@acme-corp.com", domain.EmailQueuePayload{
 		VeridianProviderClass: domain.ProviderClassCorporate,
 	})
 
-	// classe corporate → exclude=true sur la liste des domaines connus.
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), true, gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws-1", "corporate", gomock.Any()).
 		Return(10, nil)
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
@@ -186,7 +186,7 @@ func TestVeridianDailyCapGate_ClassCheckedWhenRecipientUnderCap(t *testing.T) {
 		CountSentSinceForContact(gomock.Any(), "ws-1", "lead@gmail.com", gomock.Any()).
 		Return(0, nil)
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws-1", "google", gomock.Any()).
 		Return(5, nil) // classe atteinte → skip
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
@@ -215,7 +215,7 @@ func TestVeridianDailyCapGate_CountErrorFailsClosed(t *testing.T) {
 		entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
 
 		env.mockMessageHistoryRepo.EXPECT().
-			CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+			CountSentSinceForClass(gomock.Any(), "ws-1", "google", gomock.Any()).
 			Return(0, errors.New("db down"))
 
 		delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
@@ -390,7 +390,7 @@ func TestVeridianDailyCapGate_PayloadTagDrivesClass(t *testing.T) {
 	})
 
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws-1", "microsoft", gomock.Any()).
 		Return(1, nil)
 
 	_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
@@ -410,11 +410,11 @@ func TestVeridianDailyCapGate_ClassPerInfra_UsesSenderDomainCount(t *testing.T) 
 	env := newVeridianThrottleTestEnv(t)
 	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1}, 0)
 	// Sender sur agences-veridian.fr : le cap-classe doit compter PAR CE DOMAINE,
-	// pas workspace-global. CountSentSinceForDomains (global) NE doit PAS être appelé.
+	// pas workspace-global. CountSentSinceForClass (global) NE doit PAS être appelé.
 	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot1@agences-veridian.fr", domain.EmailQueuePayload{})
 
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "agences-veridian.fr", gomock.Any()).
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "google", "agences-veridian.fr", gomock.Any()).
 		Return(1, nil) // cette infra a déjà atteint son quota google du jour → skip
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
@@ -432,7 +432,7 @@ func TestVeridianDailyCapGate_ClassPerInfra_TwoInfrasCappedIndependently(t *test
 		env := newVeridianThrottleTestEnv(t)
 		entry := veridianTestEntryFrom("eA", "lead@gmail.com", "a@infra-a.fr", domain.EmailQueuePayload{})
 		env.mockMessageHistoryRepo.EXPECT().
-			CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "infra-a.fr", gomock.Any()).
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "google", "infra-a.fr", gomock.Any()).
 			Return(1, nil) // 1 >= cap 1 → bloqué
 		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 		assert.True(t, capped, "infra-a au quota doit être bloquée")
@@ -442,7 +442,7 @@ func TestVeridianDailyCapGate_ClassPerInfra_TwoInfrasCappedIndependently(t *test
 		env := newVeridianThrottleTestEnv(t)
 		entry := veridianTestEntryFrom("eB", "lead@gmail.com", "b@infra-b.fr", domain.EmailQueuePayload{})
 		env.mockMessageHistoryRepo.EXPECT().
-			CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "infra-b.fr", gomock.Any()).
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "google", "infra-b.fr", gomock.Any()).
 			Return(0, nil) // 0 < cap 1 → passe, même si A est au quota
 		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 		assert.False(t, capped, "infra-b sous le quota ne doit PAS être bloquée par le quota de A")
@@ -459,7 +459,7 @@ func TestVeridianDailyCapGate_ClassPerInfra_SeveralAddressesSameDomainShareCount
 		entry := veridianTestEntryFrom("e", "lead@gmail.com", from, domain.EmailQueuePayload{})
 		// Quel que soit l'alias, la clé de COUNT est le domaine commun.
 		env.mockMessageHistoryRepo.EXPECT().
-			CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "agences-veridian.fr", gomock.Any()).
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "google", "agences-veridian.fr", gomock.Any()).
 			Return(5, nil) // domaine au quota → skip pour TOUTE adresse du domaine
 		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 		assert.True(t, capped, "toutes les adresses du domaine partagent le compteur de classe")
@@ -473,9 +473,9 @@ func TestVeridianDailyCapGate_ClassPerInfra_LegacyNoSenderFallsBackToGlobal(t *t
 	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
 
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomains(gomock.Any(), "ws-1", gomock.Any(), false, gomock.Any()).
+		CountSentSinceForClass(gomock.Any(), "ws-1", "google", gomock.Any()).
 		Return(1, nil)
-	// CountSentSinceForDomainsAndSenderDomain NE doit PAS être appelé (pas d'EXPECT).
+	// CountSentSinceForClassAndSenderDomain NE doit PAS être appelé (pas d'EXPECT).
 
 	_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
 	assert.True(t, capped)
@@ -487,7 +487,7 @@ func TestVeridianDailyCapGate_ClassPerInfra_CountErrorFailsClosed(t *testing.T) 
 	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@agences-veridian.fr", domain.EmailQueuePayload{})
 
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "agences-veridian.fr", gomock.Any()).
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "google", "agences-veridian.fr", gomock.Any()).
 		Return(0, errors.New("db down"))
 
 	delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
@@ -498,14 +498,14 @@ func TestVeridianDailyCapGate_ClassPerInfra_CountErrorFailsClosed(t *testing.T) 
 func TestVeridianCountClassForInfra_SenderDomainDerivation(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	since := veridianStartOfDayUTC(time.Now())
-	domains := []string{"gmail.com"}
+	const class = "google"
 
 	t.Run("derives lowercase domain from mixed-case FROM", func(t *testing.T) {
 		entry := veridianTestEntryFrom("e", "lead@gmail.com", "Bot@Agences-Veridian.FR", domain.EmailQueuePayload{})
 		env.mockMessageHistoryRepo.EXPECT().
-			CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", domains, false, "agences-veridian.fr", since).
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", class, "agences-veridian.fr", since).
 			Return(2, nil)
-		got, err := env.worker.veridianCountClassForInfra("ws-1", domains, false, entry, since)
+		got, err := env.worker.veridianCountClassForInfra("ws-1", class, entry, since)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, got)
 	})
@@ -513,10 +513,122 @@ func TestVeridianCountClassForInfra_SenderDomainDerivation(t *testing.T) {
 	t.Run("empty FROM → workspace-global count", func(t *testing.T) {
 		entry := veridianTestEntry("e", "lead@gmail.com", domain.EmailQueuePayload{})
 		env.mockMessageHistoryRepo.EXPECT().
-			CountSentSinceForDomains(gomock.Any(), "ws-1", domains, false, since).
+			CountSentSinceForClass(gomock.Any(), "ws-1", class, since).
 			Return(9, nil)
-		got, err := env.worker.veridianCountClassForInfra("ws-1", domains, false, entry, since)
+		got, err := env.worker.veridianCountClassForInfra("ws-1", class, entry, since)
 		assert.NoError(t, err)
 		assert.Equal(t, 9, got)
+	})
+}
+
+// TestVeridianDailyCapGate_MXClass_PerIntegrationRotation prouve le "et en plus
+// par intégration" demandé : deux intégrations (domaines d'envoi distincts)
+// frappant la MÊME classe dérivée du MX tournent chacune sur leur PROPRE
+// plafond, sans se marcher dessus ni se neutraliser.
+func TestVeridianDailyCapGate_MXClass_PerIntegrationRotation(t *testing.T) {
+	ws := veridianTestWorkspaceWithCaps(map[string]int{domain.ProviderClassOtherHoster: 5}, 0)
+
+	t.Run("integration nord-propre-1 au plafond -> bloquée", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryFrom("e1", "lead@custom-host.example", "bot@nord-propre-1.fr", domain.EmailQueuePayload{
+			VeridianProviderClass: domain.ProviderClassOtherHoster,
+		})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", domain.ProviderClassOtherHoster, "nord-propre-1.fr", gomock.Any()).
+			Return(5, nil)
+		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+		assert.True(t, capped, "nord-propre-1 a atteint son plafond other_hoster")
+	})
+
+	t.Run("integration relai-agence-2 sous son plafond -> passe (indépendant de nord-propre-1)", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryFrom("e2", "lead@custom-host.example", "bot@relai-agence-2.fr", domain.EmailQueuePayload{
+			VeridianProviderClass: domain.ProviderClassOtherHoster,
+		})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", domain.ProviderClassOtherHoster, "relai-agence-2.fr", gomock.Any()).
+			Return(2, nil)
+		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+		assert.False(t, capped, "relai-agence-2 est sous son propre plafond, non affectée par nord-propre-1")
+	})
+}
+
+// TestVeridianDailyCapGate_MXClass_ResumesNextDay prouve le "report au
+// lendemain, jamais abandonné" : le gate ne fait que REPORTER (reschedule),
+// jamais échouer/supprimer l'entrée ; et une fois le jour calendaire UTC changé
+// (minuit passé), le compteur "depuis since" repart de zéro pour la même classe.
+func TestVeridianDailyCapGate_MXClass_ResumesNextDay(t *testing.T) {
+	ws := veridianTestWorkspaceWithCaps(map[string]int{domain.ProviderClassOtherHoster: 3}, 0)
+
+	t.Run("plafond atteint aujourd'hui -> reporté (jamais abandonné)", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryFrom("e1", "lead@custom-host.example", "bot@send.fr", domain.EmailQueuePayload{
+			VeridianProviderClass: domain.ProviderClassOtherHoster,
+		})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", domain.ProviderClassOtherHoster, "send.fr", gomock.Any()).
+			Return(3, nil)
+		delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+		assert.True(t, capped, "le plafond atteint REPORTE l'entrée, il ne l'abandonne jamais")
+		assert.Equal(t, veridianDailyCapRecheckInterval, delay, "reprogrammation bornée, pas de suppression")
+	})
+
+	t.Run("nouveau jour calendaire UTC -> le compteur du jour repart de zéro", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryFrom("e2", "lead@custom-host.example", "bot@send.fr", domain.EmailQueuePayload{
+			VeridianProviderClass: domain.ProviderClassOtherHoster,
+		})
+		// Le gate calcule `since` = minuit UTC du jour COURANT à chaque appel
+		// (time.Now(), pas un état persistant) : le mock renvoie 0 pour simuler
+		// un jour neuf où rien n'a encore été envoyé depuis ce since.
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", domain.ProviderClassOtherHoster, "send.fr", gomock.Any()).
+			Return(0, nil)
+		_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+		assert.False(t, capped, "un nouveau jour calendaire UTC repart avec un compteur à zéro")
+	})
+}
+
+// TestVeridianStartOfDayUTC_MidnightEuropeParisEdge prouve le cas limite
+// explicitement demandé : le jour calendaire du plafond est TOUJOURS le jour UTC,
+// jamais le jour Europe/Paris. À l'été (CEST, UTC+2), 01h00 Paris = 23h00 UTC LA
+// VEILLE : ce n'est PAS encore un nouveau jour de plafond avant 02h00 Paris. En
+// hiver (CET, UTC+1), la bascule est à 01h00 Paris. Un opérateur qui suppose "le
+// plafond repart à minuit heure de Paris" se trompe de ±1-2h ; ce test fixe le
+// comportement réel pour que Robert (ou un futur agent) ne suppose pas l'inverse.
+func TestVeridianStartOfDayUTC_MidnightEuropeParisEdge(t *testing.T) {
+	paris, err := time.LoadLocation("Europe/Paris")
+	assert.NoError(t, err)
+
+	t.Run("été (CEST, UTC+2) : 01h00 Paris est ENCORE la veille en UTC", func(t *testing.T) {
+		// 2026-07-14 01:00 Europe/Paris = 2026-07-13 23:00 UTC.
+		parisTime := time.Date(2026, 7, 14, 1, 0, 0, 0, paris)
+		got := veridianStartOfDayUTC(parisTime)
+		assert.Equal(t, time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC), got,
+			"à 01h Paris l'été, le jour UTC (et donc le plafond) est encore celui de la veille")
+	})
+
+	t.Run("été (CEST, UTC+2) : 02h00 Paris bascule sur le nouveau jour UTC", func(t *testing.T) {
+		// 2026-07-14 02:00 Europe/Paris = 2026-07-14 00:00 UTC pile.
+		parisTime := time.Date(2026, 7, 14, 2, 0, 0, 0, paris)
+		got := veridianStartOfDayUTC(parisTime)
+		assert.Equal(t, time.Date(2026, 7, 14, 0, 0, 0, 0, time.UTC), got,
+			"à 02h Paris l'été, minuit UTC vient de sonner : nouveau jour de plafond")
+	})
+
+	t.Run("hiver (CET, UTC+1) : minuit Paris est encore la veille en UTC", func(t *testing.T) {
+		// 2026-01-14 00:30 Europe/Paris = 2026-01-13 23:30 UTC.
+		parisTime := time.Date(2026, 1, 14, 0, 30, 0, 0, paris)
+		got := veridianStartOfDayUTC(parisTime)
+		assert.Equal(t, time.Date(2026, 1, 13, 0, 0, 0, 0, time.UTC), got,
+			"à 00h30 Paris l'hiver, le jour UTC est encore celui de la veille")
+	})
+
+	t.Run("hiver (CET, UTC+1) : 01h00 Paris bascule sur le nouveau jour UTC", func(t *testing.T) {
+		// 2026-01-14 01:00 Europe/Paris = 2026-01-14 00:00 UTC pile.
+		parisTime := time.Date(2026, 1, 14, 1, 0, 0, 0, paris)
+		got := veridianStartOfDayUTC(parisTime)
+		assert.Equal(t, time.Date(2026, 1, 14, 0, 0, 0, 0, time.UTC), got,
+			"à 01h Paris l'hiver, minuit UTC vient de sonner : nouveau jour de plafond")
 	})
 }

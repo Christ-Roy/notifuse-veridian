@@ -102,12 +102,15 @@ type veridianColdSimulateRequest struct {
 	// La décision est le prédicat EXACT du gate veridian_daily_cap.go (cap classe).
 	// Deux variantes, selon que l'INFRA ÉMETTRICE est précisée :
 	//   - sans sender_domain → COUNT workspace-global (toutes infras confondues) :
-	//     CountSentSinceForDomains(domains de la classe) >= cap (legacy / fallback).
+	//     CountSentSinceForClass(class) >= cap (legacy / fallback).
 	//   - avec sender_domain → COUNT keyé PAR INFRA ÉMETTRICE (warm-up multi-domaine,
-	//     2026-06-18) : CountSentSinceForDomainsAndSenderDomain(domains, senderDomain)
+	//     2026-06-18) : CountSentSinceForClassAndSenderDomain(class, senderDomain)
 	//     >= cap, le prédicat EXACT de veridianCountClassForInfra. C'est ce chemin que
 	//     l'E2E 2-infras exerce : deux domaines émetteurs frappant la même classe ont
-	//     chacun leur propre compteur. ---
+	//     chacun leur propre compteur.
+	// Réutilisé par le mode seed_sent (V55+) : pose la colonne veridian_provider_class
+	// sur les entrées seedées, pour amener le compteur d'UNE CLASSE PRÉCISE (y compris
+	// une classe MX) à un niveau donné avant d'exercer class_cap_decision. ---
 	ProviderClass string `json:"provider_class,omitempty"`
 	ClassCap      int    `json:"class_cap,omitempty"`
 
@@ -259,7 +262,7 @@ func (h *VeridianHandler) coldSimulateInboundReply(
 
 	// 1. Seed l'envoi initial (notre mail) avec un id stable → le match fort le citera.
 	msgID := uuid.NewString()
-	if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, "", msgID, time.Now().UTC()); err != nil {
+	if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, "", "", msgID, time.Now().UTC()); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInternalError, "seed initial send failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
@@ -328,9 +331,10 @@ func (h *VeridianHandler) coldSimulateSeedSent(
 	}
 
 	sender := domain.VeridianNormalizeEmail(req.SenderEmail)
+	providerClass := strings.ToLower(strings.TrimSpace(req.ProviderClass))
 	now := time.Now().UTC()
 	for i := 0; i < req.Count; i++ {
-		if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, sender, uuid.NewString(), now); err != nil {
+		if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, sender, providerClass, uuid.NewString(), now); err != nil {
 			WriteJSONErrorCode(w, ErrCodeInternalError, "seed failed: "+err.Error(), http.StatusInternalServerError, nil)
 			return
 		}
@@ -408,46 +412,53 @@ func veridianColdSimulateStartOfDay(now time.Time) time.Time {
 
 // coldSimulateSeedOne pose UNE entrée message_history "sent" (sent_at=now,
 // failed_at=nil) via le VRAI repo Create. C'est la donnée exacte que lisent les
-// caps : contact_email + sent_at (cap destinataire), domaine (cap classe),
-// veridian_sender_email (cap per-sender), et que cite le match fort stop-on-reply
-// (id). `sender` vide = veridian_sender_email NULL (comme un envoi sans rotation).
+// caps : contact_email + sent_at (cap destinataire), veridian_provider_class (cap
+// classe, V55, match exact — fix 28/09), veridian_sender_email (cap per-sender),
+// et que cite le match fort stop-on-reply (id). `sender` vide = veridian_sender_email
+// NULL (comme un envoi sans rotation). `providerClass` vide = veridian_provider_class
+// NULL (comme un envoi antérieur à V55, ou hors chemin cold).
 func (h *VeridianHandler) coldSimulateSeedOne(
-	ctx context.Context, deps *veridianColdSimulateDeps, secretKey, workspaceID, contact, sender, msgID string, sentAt time.Time,
+	ctx context.Context, deps *veridianColdSimulateDeps, secretKey, workspaceID, contact, sender, providerClass, msgID string, sentAt time.Time,
 ) error {
 	msg := &domain.MessageHistory{
-		ID:                  msgID,
-		ContactEmail:        contact,
-		TemplateID:          "cold-simulate-e2e",
-		Channel:             "email",
-		MessageData:         domain.MessageData{Data: map[string]interface{}{"veridian_cold_simulate": true}},
-		SentAt:              sentAt,
-		CreatedAt:           sentAt,
-		UpdatedAt:           sentAt,
-		VeridianSenderEmail: sender,
+		ID:                    msgID,
+		ContactEmail:          contact,
+		TemplateID:            "cold-simulate-e2e",
+		Channel:               "email",
+		MessageData:           domain.MessageData{Data: map[string]interface{}{"veridian_cold_simulate": true}},
+		SentAt:                sentAt,
+		CreatedAt:             sentAt,
+		UpdatedAt:             sentAt,
+		VeridianSenderEmail:   sender,
+		VeridianProviderClass: providerClass,
 	}
 	return deps.messageHistoryRepo.Create(ctx, workspaceID, secretKey, msg)
 }
 
 // coldSimulateClassCapDecision renvoie la décision EXACTE du gate cap-CLASSE
-// (veridian_daily_cap.go §2) : COUNT des envois du jour vers les domaines de la
-// classe demandée vs le cap. would_be_capped = count >= class_cap.
+// (veridian_daily_cap.go §2b) : COUNT des envois du jour dont la classe
+// PERSISTÉE (veridian_provider_class, V55) matche exactement la classe demandée,
+// vs le cap. would_be_capped = count >= class_cap.
 //
 // Deux chemins, EXACTEMENT comme veridianCountClassForInfra du gate :
-//   - sender_domain VIDE → COUNT workspace-global CountSentSinceForDomains
+//   - sender_domain VIDE → COUNT workspace-global CountSentSinceForClass
 //     (toutes infras émettrices confondues ; chemin legacy / fallback).
-//   - sender_domain PRÉSENT → COUNT keyé PAR INFRA ÉMETTRICE
-//     CountSentSinceForDomainsAndSenderDomain (couple domaine-émetteur × classe).
-//     C'est le prédicat du nouveau cap par infra (warm-up multi-domaine) : deux
-//     domaines d'envoi frappant la même classe ont chacun leur propre compteur.
+//   - sender_domain PRÉSENT → COUNT keyé PAR INFRA ÉMETTRICE (= par intégration)
+//     CountSentSinceForClassAndSenderDomain (couple domaine-émetteur × classe).
+//     C'est le prédicat du cap par infra (warm-up multi-domaine) : deux domaines
+//     d'envoi frappant la même classe ont chacun leur propre compteur.
 //
 // Le sender_domain fourni est normalisé comme le gate (veridianEmailDomain) : on
 // accepte soit un domaine nu (`infra-a.fr`), soit une adresse complète
 // (`bot@infra-a.fr`) dont on extrait le domaine, puis lowercase/trim.
 //
-// ⚠️ Pour une classe MX (ovh/ionos/…), VeridianDomainsForClass renvoie une liste
-// vide → le COUNT ne s'enforce pas (dégradation gracieuse documentée) : la décision
-// reflète FIDÈLEMENT ce comportement (count 0 → jamais capé), ce que l'E2E doit
-// constater honnêtement.
+// 🔴 Correctif du 28/09 (incident workspace robertbrunon) : ce prédicat comptait
+// via CountSentSinceForDomains(VeridianDomainsForClass(class)), qui renvoie une
+// liste de domaines VIDE pour toute classe issue de la classification MX (ovh/
+// ionos/apple_icloud/security_gateway/other_hoster/corporate_selfhost) → le
+// COUNT ne matchait jamais rien, le dry-run mentait par omission (would_be_capped
+// toujours false). Il compte désormais sur la colonne persistée (match exact),
+// robuste à la façon dont la classe a été obtenue — même correctif que le gate.
 func (h *VeridianHandler) coldSimulateClassCapDecision(
 	w http.ResponseWriter, r *http.Request, deps *veridianColdSimulateDeps, req *veridianColdSimulateRequest,
 ) {
@@ -466,7 +477,6 @@ func (h *VeridianHandler) coldSimulateClassCapDecision(
 
 	ctx := r.Context()
 	since := veridianColdSimulateStartOfDay(time.Now().UTC())
-	domains, exclude := domain.VeridianDomainsForClass(req.ProviderClass)
 
 	senderDomain := veridianColdSimulateSenderDomain(req.SenderDomain)
 
@@ -476,12 +486,12 @@ func (h *VeridianHandler) coldSimulateClassCapDecision(
 	)
 	if senderDomain != "" {
 		// Chemin par infra émettrice : exactement le COUNT de veridianCountClassForInfra.
-		count, err = deps.messageHistoryRepo.CountSentSinceForDomainsAndSenderDomain(
-			ctx, req.WorkspaceID, domains, exclude, senderDomain, since)
+		count, err = deps.messageHistoryRepo.CountSentSinceForClassAndSenderDomain(
+			ctx, req.WorkspaceID, req.ProviderClass, senderDomain, since)
 	} else {
 		// Fallback workspace-global (legacy) : comportement antérieur strict.
-		count, err = deps.messageHistoryRepo.CountSentSinceForDomains(
-			ctx, req.WorkspaceID, domains, exclude, since)
+		count, err = deps.messageHistoryRepo.CountSentSinceForClass(
+			ctx, req.WorkspaceID, req.ProviderClass, since)
 	}
 	if err != nil {
 		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)

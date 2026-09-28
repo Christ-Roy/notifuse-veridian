@@ -1528,6 +1528,66 @@ func (r *MessageHistoryRepository) CountSentSinceForDomainsAndSenderDomain(ctx c
 	return count, nil
 }
 
+// CountSentSinceForClass compte les messages envoyés depuis `since` dont la
+// classe de provider destinataire PERSISTÉE (veridian_provider_class, V55) est
+// EXACTEMENT `class`. Contrairement à CountSentSinceForDomains, aucune
+// dérivation par liste de domaines : un match exact sur la colonne, posée par le
+// worker AVANT l'envoi (worker.go:processEntry) pour CHAQUE message (suffixe
+// connu ou classification MX, Lot 4). Fixe l'incident du 28/09 : les classes
+// MX (ovh/ionos/apple_icloud/security_gateway/other_hoster/corporate_selfhost)
+// n'ont pas de liste de domaines statique → CountSentSinceForDomains y renvoyait
+// toujours 0. Indexé (idx_message_history_provider_class_sender_sent_at, V55,
+// préfixe class). `class` vide = 0 sans requête (pas de classe = rien à
+// compter).
+func (r *MessageHistoryRepository) CountSentSinceForClass(ctx context.Context, workspaceID, class string, since time.Time) (int, error) {
+	if class == "" {
+		return 0, nil
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COUNT(*) FROM message_history WHERE veridian_provider_class = $1 AND sent_at >= $2 AND failed_at IS NULL`
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, class, since).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count messages sent to provider class since: %w", err)
+	}
+	return count, nil
+}
+
+// CountSentSinceForClassAndSenderDomain est le jumeau PAR INFRA ÉMETTRICE de
+// CountSentSinceForClass : compte les messages envoyés depuis `since` vers la
+// classe `class` (match exact, colonne persistée) ET depuis le domaine émetteur
+// `senderDomain` (lower(split_part(veridian_sender_email,'@',2)), comme
+// CountSentSinceForDomainsAndSenderDomain). C'est le COUNT du plafond journalier
+// par classe keyé PAR INTÉGRATION : chaque domaine d'envoi monte son propre
+// volume vers une classe indépendamment des autres intégrations du workspace.
+// `senderDomain` vide = 0 sans requête (l'appelant retombe sur
+// CountSentSinceForClass workspace-global).
+func (r *MessageHistoryRepository) CountSentSinceForClassAndSenderDomain(ctx context.Context, workspaceID, class, senderDomain string, since time.Time) (int, error) {
+	if class == "" || senderDomain == "" {
+		return 0, nil
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COUNT(*) FROM message_history
+		 WHERE veridian_provider_class = $1
+		   AND sent_at >= $2
+		   AND failed_at IS NULL
+		   AND lower(split_part(veridian_sender_email, '@', 2)) = lower($3)`
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, class, since, senderDomain).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count messages sent to provider class from sender domain since: %w", err)
+	}
+	return count, nil
+}
+
 // ReserveDailyQuota atomically and idempotently reserves one unit before SMTP.
 // The reservation row is inserted first, serializing concurrent attempts for
 // the same logical message; the counter UPDATE serializes distinct messages

@@ -279,6 +279,39 @@ type MessageHistoryRepository interface {
 	// veridian_daily_cap.go (résolution par infra émettrice).
 	CountSentSinceForDomainsAndSenderDomain(ctx context.Context, workspaceID string, domains []string, exclude bool, senderDomain string, since time.Time) (int, error)
 
+	// CountSentSinceForClass compte les messages envoyés depuis `since` dont la
+	// classe de provider destinataire RÉELLEMENT UTILISÉE À L'ENVOI (colonne
+	// message_history.veridian_provider_class, V55) est EXACTEMENT `class`.
+	//
+	// Incident du 28/09 (ticket todo/2026-09-28-daily-cap-mx-class-no-op.md) :
+	// CountSentSinceForDomains dérive la classe d'une liste de domaines connus
+	// (VeridianDomainsForClass), qui est VIDE pour les classes issues de la
+	// classification MX (ovh/ionos/apple_icloud/security_gateway/other_hoster/
+	// corporate_selfhost, Lot 4) → le plafond journalier par classe devenait un
+	// no-op PERMANENT pour ces classes (20 envois other_hoster en un jour contre
+	// un plafond configuré). Cette méthode contourne le problème à la racine : la
+	// classe est déjà résolue et gelée AVANT l'envoi (worker.go:processEntry) et
+	// persistée sur CHAQUE ligne — un match exact sur la colonne fonctionne
+	// IDENTIQUEMENT quelle que soit la façon dont la classe a été obtenue
+	// (suffixe historique ou MX réel). Indexé (idx_message_history_provider_class_
+	// sender_sent_at, V55, préfixe (veridian_provider_class, ...)). Remplace
+	// CountSentSinceForDomains comme chemin d'enforcement du cap-classe
+	// (veridian_daily_cap.go) ; CountSentSinceForDomains reste disponible pour ses
+	// autres appelants (anti-hash, cold-simulate) le temps de leur migration.
+	CountSentSinceForClass(ctx context.Context, workspaceID, class string, since time.Time) (int, error)
+
+	// CountSentSinceForClassAndSenderDomain est le jumeau PAR INFRA ÉMETTRICE de
+	// CountSentSinceForClass : compte les messages envoyés depuis `since` vers la
+	// classe `class` ET depuis le domaine émetteur `senderDomain` (colonne
+	// veridian_sender_email, V53). C'est le COUNT du plafond journalier par classe
+	// keyé PAR INTÉGRATION (chaque domaine d'envoi — donc en pratique chaque
+	// intégration SMTP — monte son propre volume vers une classe donnée,
+	// indépendamment des autres intégrations du workspace ; cf. warm-up
+	// multi-domaine, 2026-06-18). `senderDomain` vide = 0 sans requête (l'appelant
+	// retombe alors sur CountSentSinceForClass workspace-global). Cf.
+	// veridian_daily_cap.go.
+	CountSentSinceForClassAndSenderDomain(ctx context.Context, workspaceID, class, senderDomain string, since time.Time) (int, error)
+
 	// FindContactEmailByMessageID retourne le contact_email de l'envoi dont l'id
 	// (= message_history.id, posé comme local-part du Message-ID RFC822 à l'envoi)
 	// est `messageID`. found=false si aucun envoi ne porte cet id (le Message-ID

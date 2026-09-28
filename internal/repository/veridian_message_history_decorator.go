@@ -160,6 +160,16 @@ func (d *VeridianMessageHistoryDecorator) CountSentSinceForDomainsAndSenderDomai
 	return d.upstream.CountSentSinceForDomainsAndSenderDomain(ctx, workspaceID, domains, exclude, senderDomain, since)
 }
 
+// CountSentSinceForClass : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) CountSentSinceForClass(ctx context.Context, workspaceID, class string, since time.Time) (int, error) {
+	return d.upstream.CountSentSinceForClass(ctx, workspaceID, class, since)
+}
+
+// CountSentSinceForClassAndSenderDomain : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) CountSentSinceForClassAndSenderDomain(ctx context.Context, workspaceID, class, senderDomain string, since time.Time) (int, error) {
+	return d.upstream.CountSentSinceForClassAndSenderDomain(ctx, workspaceID, class, senderDomain, since)
+}
+
 // FindContactEmailByMessageID : pur passthrough (lecture, aucun side-effect quota).
 func (d *VeridianMessageHistoryDecorator) FindContactEmailByMessageID(ctx context.Context, workspaceID, messageID string) (string, bool, error) {
 	return d.upstream.FindContactEmailByMessageID(ctx, workspaceID, messageID)

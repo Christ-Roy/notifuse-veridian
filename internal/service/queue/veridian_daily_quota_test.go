@@ -150,7 +150,7 @@ func TestEmailQueueWorker_AtomicQuotaBlocksSMTPAndRefundsClaim(t *testing.T) {
 	// The legacy COUNT optimization sees spare capacity; only the authoritative
 	// atomic reservation observes the concurrent winner and blocks this worker.
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "send.test", gomock.Any()).
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "microsoft", "send.test", gomock.Any()).
 		Return(0, nil)
 	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", entry.ID).Return(nil)
 	env.mockQueueRepo.EXPECT().SetNextRetryAndRefundAttempt(gomock.Any(), "ws-1", entry.ID, gomock.Any()).Return(nil)
@@ -190,7 +190,7 @@ func TestEmailQueueWorker_PreAcceptanceSMTPFailureReleasesQuota(t *testing.T) {
 	entry := veridianTestEntryFrom("preaccept", "lead@outlook.com", "bot@send.test", domain.EmailQueuePayload{VeridianProviderClass: "microsoft"})
 
 	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForDomainsAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), false, "send.test", gomock.Any()).
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "microsoft", "send.test", gomock.Any()).
 		Return(0, nil)
 	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", entry.ID).Return(nil)
 	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).
