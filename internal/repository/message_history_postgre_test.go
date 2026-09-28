@@ -3110,4 +3110,46 @@ func TestMessageHistoryRepository_FindContactEmailByMessageID(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "workspace connection")
 	})
+
+	// Veridian fork (2026-09-28) : le Message-ID RFC822 envoyé n'expose plus que
+	// l'UUID nu (cf veridian_send_message_id.go) ; un prospect qui répond cite donc
+	// cet UUID nu dans In-Reply-To/References. message_history.id reste stocké
+	// `<workspace_id>_<uuid>` : le lookup doit reconstruire la forme complète
+	// AVANT la requête SQL exact-match — sinon toute réponse citant le nouveau
+	// Message-ID ne matcherait plus jamais (régression silencieuse du stop-on-reply).
+	t.Run("bare UUID reconstructs the stored workspace-prefixed id", func(t *testing.T) {
+		mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+		defer cleanup()
+
+		bareUUID := "fc75fbbd-05d3-4938-b722-59388edcf803"
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
+			WithArgs(workspaceID + "_" + bareUUID).
+			WillReturnRows(sqlmock.NewRows([]string{"contact_email"}).AddRow("prospect@acme.fr"))
+
+		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, bareUUID)
+		require.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, "prospect@acme.fr", email)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	// Une ligne écrite AVANT ce changement (ou tout appelant qui passerait déjà la
+	// forme complète) continue de matcher sans double-préfixage.
+	t.Run("already workspace-prefixed id is used as-is (legacy rows)", func(t *testing.T) {
+		mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+		defer cleanup()
+
+		fullID := workspaceID + "_fc75fbbd-05d3-4938-b722-59388edcf803"
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
+			WithArgs(fullID).
+			WillReturnRows(sqlmock.NewRows([]string{"contact_email"}).AddRow("legacy@acme.fr"))
+
+		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, fullID)
+		require.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, "legacy@acme.fr", email)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }

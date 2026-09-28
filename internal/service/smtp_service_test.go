@@ -518,6 +518,100 @@ func TestSMTPService_SendEmail_VeridianDeterministicMessageID(t *testing.T) {
 	assert.NotContains(t, data, "X-Message-ID")
 }
 
+// Veridian (empreinte Message-ID, constat Robert 28/09) : un envoi réel coldtunnel
+// a produit `Message-ID: <coldtunnel_fc75fbbd-...@agence-veridian.fr>` — le nom du
+// workspace en clair dans un header RFC822, un tell qu'aucun Thunderbird/Apple Mail
+// ne produit. Preuve bout-en-bout (via le vrai chemin SendEmail, pas seulement le
+// helper unitaire) que le header sortant n'expose plus que l'UUID nu.
+func TestSMTPService_SendEmail_VeridianMessageIDStripsWorkspacePrefix(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID:   "coldtunnel",
+		IntegrationID: "integration-123",
+		MessageID:     "coldtunnel_fc75fbbd-05d3-4938-b722-59388edcf803",
+		FromAddress:   "r.brunon@agence-veridian.fr",
+		FromName:      "Robert Brunon",
+		To:            "prospect@acme.fr",
+		Subject:       "Bonjour",
+		Content:       "<p>Hello</p>",
+		Provider: &domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false},
+		},
+		EmailOptions: domain.EmailOptions{},
+	}
+
+	require.NoError(t, service.SendEmail(context.Background(), request))
+
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	data := string(messages[0].data)
+	assert.Contains(t, data, "Message-ID: <fc75fbbd-05d3-4938-b722-59388edcf803@agence-veridian.fr>")
+	assert.NotContains(t, data, "coldtunnel", "le nom du workspace ne doit apparaître dans aucun header sortant")
+}
+
+// Veridian (empreinte Date, constat Robert 28/09) : un envoi réel a mesuré
+// `Date: Mon, 28 Sep 2026 08:22:16 +0000` — l'heure UTC du conteneur d'envoi, pas
+// celle d'une boîte française. Preuve que le Date header sortant porte désormais
+// l'offset Europe/Paris (+0100/+0200 selon la saison), jamais +0000.
+func TestSMTPService_SendEmail_VeridianDateHeaderParisTimezone(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID:   "workspace-123",
+		IntegrationID: "integration-123",
+		MessageID:     "11111111-2222-3333-4444-555555555555",
+		FromAddress:   "cold@send.veridian.site",
+		FromName:      "Cold Outreach",
+		To:            "prospect@acme.fr",
+		Subject:       "Bonjour",
+		Content:       "<p>Hello</p>",
+		Provider: &domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false},
+		},
+		EmailOptions: domain.EmailOptions{},
+	}
+
+	before := time.Now()
+	require.NoError(t, service.SendEmail(context.Background(), request))
+	after := time.Now()
+
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	data := string(messages[0].data)
+
+	loc, err := time.LoadLocation("Europe/Paris")
+	require.NoError(t, err)
+
+	var dateLine string
+	for _, line := range strings.Split(data, "\r\n") {
+		if strings.HasPrefix(line, "Date: ") {
+			dateLine = strings.TrimPrefix(line, "Date: ")
+			break
+		}
+	}
+	require.NotEmpty(t, dateLine, "Date header must be present")
+
+	parsed, err := time.Parse(time.RFC1123Z, dateLine)
+	require.NoError(t, err, "Date header must be RFC1123Z-formatted")
+
+	// L'offset posé doit être celui d'Europe/Paris à l'instant de l'envoi
+	// (+0100 hiver / +0200 été), jamais UTC (+0000) — le tell mesuré le 28/09.
+	_, wantOffset := time.Now().In(loc).Zone()
+	_, gotOffset := parsed.Zone()
+	assert.Equal(t, wantOffset, gotOffset, "Date header offset must match Europe/Paris, not UTC")
+
+	// L'instant lui-même doit tomber dans la fenêtre de l'envoi (RFC1123Z tronque
+	// les sous-secondes, d'où la marge de 2s).
+	assert.WithinDuration(t, before, parsed, after.Sub(before)+2*time.Second)
+}
+
 // Veridian (conformité client mail, 2026-06-15) : le chemin SMTP doit produire un
 // multipart/alternative (text/plain + text/html), comme un vrai client mail. Un
 // HTML-only est un tell anti-spam (HTML_IMAGE_ONLY / MIME_HTML_ONLY).

@@ -437,9 +437,20 @@ func (r *MessageHistoryRepository) FindContactEmailByMessageID(ctx context.Conte
 		return "", false, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
+	// Veridian fork (2026-09-28) : le Message-ID RFC822 qu'on envoie n'expose plus
+	// que l'UUID nu (domain.VeridianBareMessageUUID, cf veridian_send_message_id.go)
+	// — un client mail normal ne montre jamais le nom du workspace/tenant dans son
+	// Message-ID. La réponse du prospect cite donc cet UUID nu dans In-Reply-
+	// To/References. message_history.id reste stocké `<workspace_id>_<uuid>`
+	// (colonne existante, non touchée) : on reconstruit la forme complète avant le
+	// lookup exact-match. Idempotent avec les lignes écrites avant ce changement
+	// (déjà préfixées → inchangées) et avec tout appelant qui passerait encore la
+	// forme complète.
+	lookupID := domain.VeridianReconstructStoredMessageID(workspaceID, messageID)
+
 	var contactEmail string
 	err = workspaceDB.QueryRowContext(ctx,
-		`SELECT contact_email FROM message_history WHERE id = $1`, messageID,
+		`SELECT contact_email FROM message_history WHERE id = $1`, lookupID,
 	).Scan(&contactEmail)
 	if err != nil {
 		if err == sql.ErrNoRows {

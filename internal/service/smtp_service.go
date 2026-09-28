@@ -471,6 +471,19 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 		msg.SetMessageIDWithValue(mid)
 	}
 
+	// === Veridian cold (constat Robert 28/09, Date UTC mesurée sur un envoi
+	// coldtunnel réel) === go-mail pose sinon `Date:` au fuseau du SERVEUR au
+	// moment du WriteTo (UTC ici, un conteneur Docker) — un tell d'infra d'envoi,
+	// jamais l'heure d'un poste utilisateur. On la pose nous-mêmes en heure locale
+	// française (Europe/Paris), comme une boîte OVH/Gmail envoyée depuis la France.
+	// Best-effort : tzdata absent (LoadLocation échoue) retombe sur l'heure serveur
+	// — jamais d'échec d'envoi pour cette raison.
+	sendLoc, sendLocErr := time.LoadLocation("Europe/Paris")
+	if sendLocErr != nil {
+		sendLoc = time.Local
+	}
+	msg.SetDateWithValue(time.Now().In(sendLoc))
+
 	// Add RFC-8058 List-Unsubscribe headers for one-click unsubscribe
 	if request.EmailOptions.ListUnsubscribeURL != "" {
 		msg.SetGenHeader("List-Unsubscribe", fmt.Sprintf("<%s>", request.EmailOptions.ListUnsubscribeURL))

@@ -49,6 +49,16 @@ func TestVeridianMessageIDForSend(t *testing.T) {
 			fromAddress: "  a@b.io ",
 			want:        "id-1@b.io",
 		},
+		{
+			// Constat Robert 28/09 : Message-ID mesuré
+			// "coldtunnel_fc75fbbd-05d3-4938-b722-59388edcf803@agence-veridian.fr" —
+			// le nom du workspace fuitait dans le header RFC822. Le header sortant ne
+			// doit plus exposer que l'UUID nu.
+			name:        "workspace-prefixed message_history.id -> bare UUID in header (no workspace fingerprint)",
+			messageID:   "coldtunnel_fc75fbbd-05d3-4938-b722-59388edcf803",
+			fromAddress: "r.brunon@agence-veridian.fr",
+			want:        "fc75fbbd-05d3-4938-b722-59388edcf803@agence-veridian.fr",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

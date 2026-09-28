@@ -2,6 +2,8 @@ package service
 
 import (
 	"strings"
+
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 // Veridian fork — Message-ID RFC822 matchable à l'envoi (Lot 3 stop-on-reply, 2026-06-15).
@@ -25,6 +27,16 @@ import (
 // Idempotent / sûr : si messageID ou fromAddress sont vides/illisibles, on retourne ""
 // et le caller laisse go-mail générer son Message-ID aléatoire (comportement upstream,
 // non-régression — juste pas de match fort pour cet envoi).
+//
+// Empreinte (2026-09-28, constat Robert) : message_history.id est stocké comme
+// `<workspace_id>_<uuid>` (queue_message_sender.go / message_sender.go /
+// automation_node_executor.go), un artefact qui n'a jamais eu besoin de fuiter dans
+// le header RFC822 (le domaine n'a pas besoin du workspace pour matcher — seule la
+// local-part compte). Un Message-ID `coldtunnel_fc75fbbd-...@domaine` est un tell de
+// logiciel d'envoi de masse qu'aucun Thunderbird/Apple Mail ne produit. On n'expose
+// donc plus que l'UUID nu (domain.VeridianBareMessageUUID) ; le pendant réception
+// (FindContactEmailByMessageID) reconstruit la forme stockée avant le lookup — cf
+// internal/domain/veridian_message_id.go.
 
 // veridianMessageIDForSend construit la valeur du header Message-ID RFC822 (SANS les
 // chevrons, que go-mail ajoute) à partir de l'id de message et de l'adresse d'envoi.
@@ -34,11 +46,12 @@ func veridianMessageIDForSend(messageID, fromAddress string) string {
 	if id == "" {
 		return ""
 	}
-	domain := veridianHostFromEmail(fromAddress)
-	if domain == "" {
+	id = domain.VeridianBareMessageUUID(id)
+	hostDomain := veridianHostFromEmail(fromAddress)
+	if hostDomain == "" {
 		return ""
 	}
-	return id + "@" + domain
+	return id + "@" + hostDomain
 }
 
 // veridianHostFromEmail extrait le host (partie après le dernier '@') d'une adresse,
