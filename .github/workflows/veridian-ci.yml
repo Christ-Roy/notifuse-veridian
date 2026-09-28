@@ -310,7 +310,15 @@ jobs:
           echo "Contenu du dist/ :"
           ls console/dist/
       - name: Install Playwright Chromium
-        run: cd console && npx playwright install --with-deps chromium
+        # Sans --with-deps (mesure 2026-09-28) : le durcissement sudo du
+        # runner auto-heberge (NOPASSWD limite, plus de sudo apt-get large)
+        # fait echouer --with-deps a chaque fois ("sudo: a password is
+        # required"). Chromium + libs systeme deja presents sur ce runner
+        # (mesure : ~/.cache/ms-playwright, dpkg -l libnss3) donc le binaire
+        # seul suffit. Si ca casse plus tard (nouvelle version Playwright,
+        # lib manquante) : provisionner les deps une fois via all-cron/ops,
+        # pas en remettant --with-deps ici.
+        run: cd console && npx playwright install chromium
       - name: Run prod-smoke E2E (skip build, réutilise dist/)
         run: cd console && npm run test:prod-smoke:skip-build
         env:
