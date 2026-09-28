@@ -441,16 +441,29 @@ func (r *MessageHistoryRepository) FindContactEmailByMessageID(ctx context.Conte
 	// que l'UUID nu (domain.VeridianBareMessageUUID, cf veridian_send_message_id.go)
 	// — un client mail normal ne montre jamais le nom du workspace/tenant dans son
 	// Message-ID. La réponse du prospect cite donc cet UUID nu dans In-Reply-
-	// To/References. message_history.id reste stocké `<workspace_id>_<uuid>`
-	// (colonne existante, non touchée) : on reconstruit la forme complète avant le
-	// lookup exact-match. Idempotent avec les lignes écrites avant ce changement
-	// (déjà préfixées → inchangées) et avec tout appelant qui passerait encore la
-	// forme complète.
-	lookupID := domain.VeridianReconstructStoredMessageID(workspaceID, messageID)
+	// To/References.
+	//
+	// message_history.id N'A PAS un format unique : broadcast/automation
+	// (queue_message_sender.go, message_sender.go, automation_node_executor.go)
+	// le préfixent `<workspace_id>_<uuid>`, mais d'autres chemins l'écrivent en
+	// UUID NU (broadcast_service.go:958, et le seeding de
+	// veridian_cold_simulate_handler.go utilisé par l'E2E stop-on-reply). Un
+	// premier essai (E2E cold-lifecycle, 2026-09-28) qui reconstruisait
+	// aveuglément `<workspace_id>_<uuid>` cassait donc le match sur ces lignes
+	// non préfixées. On tente les DEUX candidats dans la même requête — la
+	// colonne `id` est la PK, `OR` ne peut matcher qu'une seule ligne au plus,
+	// aucune ambiguïté possible :
+	//   1. la valeur telle que citée (couvre un id déjà stocké nu, ou déjà
+	//      pleinement qualifié) ;
+	//   2. la forme reconstruite `<workspace_id>_<uuid>` (couvre les lignes
+	//      préfixées par les générateurs broadcast/automation).
+	asGiven := strings.TrimSpace(messageID)
+	reconstructed := domain.VeridianReconstructStoredMessageID(workspaceID, asGiven)
 
 	var contactEmail string
 	err = workspaceDB.QueryRowContext(ctx,
-		`SELECT contact_email FROM message_history WHERE id = $1`, lookupID,
+		`SELECT contact_email FROM message_history WHERE id = $1 OR id = $2 LIMIT 1`,
+		asGiven, reconstructed,
 	).Scan(&contactEmail)
 	if err != nil {
 		if err == sql.ErrNoRows {

@@ -3060,8 +3060,8 @@ func TestMessageHistoryRepository_FindContactEmailByMessageID(t *testing.T) {
 		defer cleanup()
 
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
-			WithArgs("msg-1").
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1 OR id = \$2`).
+			WithArgs("msg-1", "msg-1").
 			WillReturnRows(sqlmock.NewRows([]string{"contact_email"}).AddRow("prospect@acme.fr"))
 
 		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, "msg-1")
@@ -3076,8 +3076,8 @@ func TestMessageHistoryRepository_FindContactEmailByMessageID(t *testing.T) {
 		defer cleanup()
 
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
-			WithArgs("nope").
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1 OR id = \$2`).
+			WithArgs("nope", "nope").
 			WillReturnError(sql.ErrNoRows)
 
 		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, "nope")
@@ -3092,8 +3092,8 @@ func TestMessageHistoryRepository_FindContactEmailByMessageID(t *testing.T) {
 		defer cleanup()
 
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
-			WithArgs("x").
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1 OR id = \$2`).
+			WithArgs("x", "x").
 			WillReturnError(errors.New("db down"))
 
 		_, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, "x")
@@ -3113,24 +3113,48 @@ func TestMessageHistoryRepository_FindContactEmailByMessageID(t *testing.T) {
 
 	// Veridian fork (2026-09-28) : le Message-ID RFC822 envoyé n'expose plus que
 	// l'UUID nu (cf veridian_send_message_id.go) ; un prospect qui répond cite donc
-	// cet UUID nu dans In-Reply-To/References. message_history.id reste stocké
-	// `<workspace_id>_<uuid>` : le lookup doit reconstruire la forme complète
-	// AVANT la requête SQL exact-match — sinon toute réponse citant le nouveau
-	// Message-ID ne matcherait plus jamais (régression silencieuse du stop-on-reply).
-	t.Run("bare UUID reconstructs the stored workspace-prefixed id", func(t *testing.T) {
+	// cet UUID nu dans In-Reply-To/References. message_history.id N'A PAS UN
+	// FORMAT UNIQUE (constat E2E cold-lifecycle.spec.ts, 2026-09-28) : préfixé
+	// `<workspace_id>_<uuid>` sur les chemins broadcast/automation, mais UUID NU
+	// sur d'autres (broadcast_service.go:958, seeding de
+	// veridian_cold_simulate_handler.go). Le lookup tente donc les DEUX candidats
+	// dans la même requête (id = PK, OR sans ambiguïté possible).
+	t.Run("bare UUID tries both the as-given and the workspace-reconstructed id", func(t *testing.T) {
 		mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
 		defer cleanup()
 
 		bareUUID := "fc75fbbd-05d3-4938-b722-59388edcf803"
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
-			WithArgs(workspaceID + "_" + bareUUID).
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1 OR id = \$2`).
+			WithArgs(bareUUID, workspaceID+"_"+bareUUID).
 			WillReturnRows(sqlmock.NewRows([]string{"contact_email"}).AddRow("prospect@acme.fr"))
 
 		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, bareUUID)
 		require.NoError(t, err)
 		assert.True(t, found)
 		assert.Equal(t, "prospect@acme.fr", email)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	// Régression directe du raté CI (cold-lifecycle.spec.ts:195, run 36402062507,
+	// "le prospect doit être marqué replied") : un message_history seedé SANS
+	// préfixe workspace (comme /api/veridian/admin/cold-simulate mode
+	// inbound_reply, ou l'ancien broadcast_service.go:958) doit matcher sur le
+	// PREMIER candidat (id tel que cité), pas seulement sur la forme reconstruite.
+	t.Run("bare UUID matches a row stored without any workspace prefix", func(t *testing.T) {
+		mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+		defer cleanup()
+
+		bareUUID := "fc75fbbd-05d3-4938-b722-59388edcf803"
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1 OR id = \$2`).
+			WithArgs(bareUUID, workspaceID+"_"+bareUUID).
+			WillReturnRows(sqlmock.NewRows([]string{"contact_email"}).AddRow("prospect-non-prefixe@acme.fr"))
+
+		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, bareUUID)
+		require.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, "prospect-non-prefixe@acme.fr", email)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -3142,8 +3166,8 @@ func TestMessageHistoryRepository_FindContactEmailByMessageID(t *testing.T) {
 
 		fullID := workspaceID + "_fc75fbbd-05d3-4938-b722-59388edcf803"
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1`).
-			WithArgs(fullID).
+		mock.ExpectQuery(`SELECT contact_email FROM message_history WHERE id = \$1 OR id = \$2`).
+			WithArgs(fullID, fullID).
 			WillReturnRows(sqlmock.NewRows([]string{"contact_email"}).AddRow("legacy@acme.fr"))
 
 		email, found, err := repo.FindContactEmailByMessageID(ctx, workspaceID, fullID)
