@@ -220,6 +220,16 @@ func (e *AutomationExecutor) Execute(ctx context.Context, workspaceID string, co
 			return nil
 		}
 
+		// EXIT: Sending (email node parked, waiting for the queue worker's
+		// terminal callback - HandleEmailSent/HandleEmailFailed - to resolve it).
+		// MUST return here: CurrentNodeID was NOT advanced (EmailNodeExecutor
+		// points it back at itself), so looping again this tick would re-run the
+		// same email node and enqueue a duplicate message. Veridian fix
+		// 2026-09-29, cf. ContactAutomationStatusSending doc comment.
+		if contactAutomation.Status == domain.ContactAutomationStatusSending {
+			return nil
+		}
+
 		// EXIT: Delay node (ScheduledAt is in the future)
 		if result.ScheduledAt != nil && result.ScheduledAt.After(time.Now()) {
 			return nil
@@ -364,6 +374,135 @@ func (e *AutomationExecutor) markAsExited(ctx context.Context, workspaceID strin
 	e.createAutomationEndEvent(ctx, workspaceID, ca, reason)
 
 	return e.automationRepo.UpdateContactAutomation(ctx, workspaceID, ca)
+}
+
+// HandleEmailSent resolves a contact PARKED on an email node (status=sending,
+// cf. ContactAutomationStatusSending) once the email queue worker confirms the
+// SMTP send was truly accepted by our relay. Wired as the EmailQueueWorker's
+// onSent callback (see SetCallbacks in internal/app/app.go). No-op for
+// non-automation sources and for contacts that are not (or no longer) parked -
+// e.g. a late/duplicate callback after the contact was already advanced or the
+// automation was deleted/re-created underneath it.
+// Veridian fix 2026-09-29 (todo/2026-09-29-automation-advance-on-send-only.md).
+func (e *AutomationExecutor) HandleEmailSent(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID, contactEmail, messageID string) {
+	if sourceType != domain.EmailQueueSourceAutomation {
+		return
+	}
+	ctx := context.Background()
+
+	ca, err := e.automationRepo.GetContactAutomationByEmail(ctx, workspaceID, sourceID, contactEmail)
+	if err != nil {
+		e.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID, "automation_id": sourceID,
+			"contact_email": contactEmail, "message_id": messageID, "error": err.Error(),
+		}).Warn("HandleEmailSent: contact automation not found")
+		return
+	}
+	if ca.Status != domain.ContactAutomationStatusSending || ca.CurrentNodeID == nil {
+		// Already resolved by another callback, or never parked. Nothing to advance.
+		return
+	}
+
+	automation, err := e.automationRepo.GetByID(ctx, workspaceID, sourceID)
+	if err != nil {
+		e.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID, "automation_id": sourceID, "error": err.Error(),
+		}).Warn("HandleEmailSent: automation not found")
+		return
+	}
+	node := automation.GetNodeByID(*ca.CurrentNodeID)
+	if node == nil {
+		_ = e.markAsExited(ctx, workspaceID, ca, "automation_node_deleted")
+		return
+	}
+
+	// Log the email node as genuinely completed now that delivery is confirmed.
+	entry := e.createNodeExecution(ca, node, domain.NodeActionCompleted)
+	completedAt := time.Now().UTC()
+	entry.CompletedAt = &completedAt
+	entry.Output = buildNodeOutput(domain.NodeTypeEmail, map[string]interface{}{
+		"message_id": messageID,
+		"to":         contactEmail,
+		"sent":       true,
+	})
+	_ = e.automationRepo.CreateNodeExecution(ctx, workspaceID, entry)
+
+	if node.NextNodeID == nil {
+		_ = e.markAsCompleted(ctx, workspaceID, ca, "completed")
+		return
+	}
+
+	ca.CurrentNodeID = node.NextNodeID
+	ca.Status = domain.ContactAutomationStatusActive
+	now := time.Now().UTC()
+	ca.ScheduledAt = &now
+	if err := e.automationRepo.UpdateContactAutomation(ctx, workspaceID, ca); err != nil {
+		e.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID, "automation_id": sourceID,
+			"contact_email": contactEmail, "error": err.Error(),
+		}).Error("HandleEmailSent: failed to advance contact automation")
+	}
+}
+
+// HandleEmailFailed resolves a contact PARKED on an email node when the queue
+// worker gives up on the send. isPermanent=true covers both a definitive policy
+// rejection (excluded provider class, pre-filtered/invalid address, a
+// non-retryable SMTP rejection) AND a retryable SMTP error that has exhausted
+// its bounded retries (EmailQueueWorkerConfig.MaxRetries): either way the
+// contact EXITS the automation with the failure as exit_reason - it never
+// reaches a follow-up node. isPermanent=false (still retrying) is a deliberate
+// no-op: the contact stays parked, the queue's own backoff will call back again
+// on the next attempt. Wired as the EmailQueueWorker's onFailed callback (see
+// SetCallbacks in internal/app/app.go).
+// Veridian fix 2026-09-29 (todo/2026-09-29-automation-advance-on-send-only.md).
+func (e *AutomationExecutor) HandleEmailFailed(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID, contactEmail, messageID string, sendErr error, isPermanent bool) {
+	if sourceType != domain.EmailQueueSourceAutomation || !isPermanent {
+		return
+	}
+	ctx := context.Background()
+
+	ca, err := e.automationRepo.GetContactAutomationByEmail(ctx, workspaceID, sourceID, contactEmail)
+	if err != nil {
+		e.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID, "automation_id": sourceID,
+			"contact_email": contactEmail, "message_id": messageID, "error": err.Error(),
+		}).Warn("HandleEmailFailed: contact automation not found")
+		return
+	}
+	if ca.Status != domain.ContactAutomationStatusSending {
+		return
+	}
+
+	reason := "send_failed"
+	if sendErr != nil {
+		reason = sendErr.Error()
+	}
+
+	if ca.CurrentNodeID != nil {
+		if automation, aerr := e.automationRepo.GetByID(ctx, workspaceID, sourceID); aerr == nil {
+			if node := automation.GetNodeByID(*ca.CurrentNodeID); node != nil {
+				entry := e.createNodeExecution(ca, node, domain.NodeActionFailed)
+				completedAt := time.Now().UTC()
+				entry.CompletedAt = &completedAt
+				errCopy := reason
+				entry.Error = &errCopy
+				entry.Output = buildNodeOutput(domain.NodeTypeEmail, map[string]interface{}{
+					"message_id": messageID,
+					"to":         contactEmail,
+					"sent":       false,
+					"reason":     reason,
+				})
+				_ = e.automationRepo.CreateNodeExecution(ctx, workspaceID, entry)
+			}
+		}
+	}
+
+	if err := e.markAsExited(ctx, workspaceID, ca, reason); err != nil {
+		e.logger.WithFields(map[string]interface{}{
+			"workspace_id": workspaceID, "automation_id": sourceID,
+			"contact_email": contactEmail, "error": err.Error(),
+		}).Error("HandleEmailFailed: failed to exit contact automation")
+	}
 }
 
 // createNodeExecution creates a new node execution entry for logging

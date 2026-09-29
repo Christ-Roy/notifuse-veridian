@@ -95,6 +95,11 @@ func TestContactAutomationStatus_IsValid(t *testing.T) {
 		{"completed is valid", ContactAutomationStatusCompleted, true},
 		{"exited is valid", ContactAutomationStatusExited, true},
 		{"failed is valid", ContactAutomationStatusFailed, true},
+		// Veridian fix 2026-09-29 (todo/done/2026-09-29-automation-advance-on-send-only.md):
+		// a contact parked on an email node awaiting the queue worker's terminal
+		// callback (HandleEmailSent/HandleEmailFailed) before it is allowed to
+		// advance past it.
+		{"sending is valid", ContactAutomationStatusSending, true},
 		{"empty is invalid", ContactAutomationStatus(""), false},
 		{"unknown is invalid", ContactAutomationStatus("unknown"), false},
 	}

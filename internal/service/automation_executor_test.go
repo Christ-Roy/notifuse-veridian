@@ -2277,3 +2277,324 @@ func TestNewAutomationExecutor_RegistersReplyBranchExecutor(t *testing.T) {
 	// Et c'est bien LE MÊME objet que celui dans le map (pas une copie).
 	assert.Same(t, exec.replyBranchExecutor, exec.nodeExecutors[domain.NodeTypeReplyBranch])
 }
+
+// === Veridian fix 2026-09-29 -- regression suite ===
+// todo/2026-09-29-automation-advance-on-send-only.md
+//
+// Bug reproduit (RED, avant le fix) : un node email marquait le contact
+// "completed"/avance des l ENQUEUE, independamment du sort reel de l envoi. Un
+// gate qui REJETTE (classe exclue, blocklist) ou REPORTE (cap/warmup/fenetre) le
+// laissait quand meme filer vers le node de relance (j4) sans qu aucun message
+// n ait jamais ete reellement accepte par le relais SMTP.
+//
+// Fix (GREEN) : le node email PARQUE le contact (status=sending, current_node_id
+// inchange). HandleEmailSent/HandleEmailFailed -- branches comme callbacks du
+// EmailQueueWorker (cf. worker.go, app.go) -- resolvent le parcage : avance
+// uniquement sur envoi confirme, sort avec raison sur rejet definitif / retries
+// epuises, ne touche a rien tant que le gate reporte (retry borne en file, pas
+// de callback tant que ce n est pas terminal).
+
+func TestAutomationExecutor_Execute_EmailNode_ParksUntilDeliveryConfirmed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	nodeID := "j0a"
+	nextNodeID := "wait1" // would be the (wrong) j4 pre-fix if the contact wrongly advanced
+
+	// Mimics the real EmailNodeExecutor's post-fix contract: NextNodeID points
+	// back at itself, Status=Sending. The point of THIS test is the loop in
+	// AutomationExecutor.Execute, not EmailNodeExecutor itself (covered
+	// separately in automation_node_executor_test.go).
+	customExecutor := &testNodeExecutor{
+		nodeType: domain.NodeTypeEmail,
+		execute: func(ctx context.Context, params NodeExecutionParams) (*NodeExecutionResult, error) {
+			self := nodeID
+			return &NodeExecutionResult{
+				NextNodeID: &self,
+				Status:     domain.ContactAutomationStatusSending,
+				Output:     map[string]interface{}{"queued": true},
+			}, nil
+		},
+	}
+
+	executor := &AutomationExecutor{
+		automationRepo: mockAutomationRepo,
+		contactRepo:    mockContactRepo,
+		nodeExecutors: map[domain.NodeType]NodeExecutor{
+			domain.NodeTypeEmail: customExecutor,
+		},
+		logger: mockLogger,
+	}
+
+	workspaceID := "ws1"
+	contactAutomation := &domain.ContactAutomation{
+		ID:            "ca1",
+		AutomationID:  "auto1",
+		ContactEmail:  "test@example.com",
+		CurrentNodeID: &nodeID,
+		Status:        domain.ContactAutomationStatusActive,
+		MaxRetries:    3,
+	}
+
+	automation := &domain.Automation{
+		ID:     "auto1",
+		Name:   "Test Automation",
+		Status: domain.AutomationStatusLive,
+		Nodes: []*domain.AutomationNode{
+			{ID: nodeID, Type: domain.NodeTypeEmail, Config: map[string]interface{}{}, NextNodeID: &nextNodeID},
+			{ID: nextNodeID, Type: domain.NodeTypeDelay, Config: map[string]interface{}{"duration": 4, "unit": "days"}},
+		},
+	}
+
+	contact := &domain.Contact{Email: "test@example.com"}
+
+	mockAutomationRepo.EXPECT().GetByID(gomock.Any(), workspaceID, "auto1").Return(automation, nil)
+	mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, "test@example.com").Return(contact, nil)
+	mockAutomationRepo.EXPECT().CreateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().GetNodeExecutions(gomock.Any(), workspaceID, "ca1").Return([]*domain.NodeExecution{}, nil)
+	mockAutomationRepo.EXPECT().UpdateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, wsID string, ca *domain.ContactAutomation) error {
+			// RED (pre-fix) would have CurrentNodeID == &nextNodeID ("j4") here.
+			require.NotNil(t, ca.CurrentNodeID)
+			assert.Equal(t, nodeID, *ca.CurrentNodeID, "must stay parked on the email node, not advance to the follow-up")
+			assert.Equal(t, domain.ContactAutomationStatusSending, ca.Status)
+			return nil
+		})
+	// No IncrementAutomationStat, no timelineRepo.Create expected: the contact
+	// is neither completed nor exited while parked. gomock fails the test if
+	// either is unexpectedly called.
+
+	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
+	require.NoError(t, err)
+
+	require.NotNil(t, contactAutomation.CurrentNodeID)
+	assert.Equal(t, nodeID, *contactAutomation.CurrentNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusSending, contactAutomation.Status)
+}
+
+func TestAutomationExecutor_HandleEmailSent_AdvancesParkedContact(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	workspaceID := "ws1"
+	automationID := "auto1"
+	emailNodeID := "j0a"
+	nextNodeID := "wait1"
+
+	ca := &domain.ContactAutomation{
+		ID:            "ca1",
+		AutomationID:  automationID,
+		ContactEmail:  "test@example.com",
+		CurrentNodeID: &emailNodeID,
+		Status:        domain.ContactAutomationStatusSending,
+	}
+
+	automation := &domain.Automation{
+		ID:     automationID,
+		Status: domain.AutomationStatusLive,
+		Nodes: []*domain.AutomationNode{
+			{ID: emailNodeID, Type: domain.NodeTypeEmail, NextNodeID: &nextNodeID},
+			{ID: nextNodeID, Type: domain.NodeTypeDelay},
+		},
+	}
+
+	executor := &AutomationExecutor{automationRepo: mockAutomationRepo, logger: mockLogger}
+
+	mockAutomationRepo.EXPECT().GetContactAutomationByEmail(gomock.Any(), workspaceID, automationID, "test@example.com").Return(ca, nil)
+	mockAutomationRepo.EXPECT().GetByID(gomock.Any(), workspaceID, automationID).Return(automation, nil)
+	mockAutomationRepo.EXPECT().CreateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, wsID string, entry *domain.NodeExecution) error {
+			assert.Equal(t, domain.NodeActionCompleted, entry.Action)
+			assert.Equal(t, emailNodeID, entry.NodeID)
+			assert.Equal(t, true, entry.Output["sent"])
+			return nil
+		})
+	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, wsID string, updated *domain.ContactAutomation) error {
+			require.NotNil(t, updated.CurrentNodeID)
+			assert.Equal(t, nextNodeID, *updated.CurrentNodeID)
+			assert.Equal(t, domain.ContactAutomationStatusActive, updated.Status)
+			require.NotNil(t, updated.ScheduledAt)
+			return nil
+		})
+
+	executor.HandleEmailSent(workspaceID, domain.EmailQueueSourceAutomation, automationID, "test@example.com", "msg1")
+}
+
+func TestAutomationExecutor_HandleEmailSent_CompletesWhenNoNextNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockTimelineRepo := mocks.NewMockContactTimelineRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	workspaceID := "ws1"
+	automationID := "auto1"
+	emailNodeID := "j10"
+
+	ca := &domain.ContactAutomation{
+		ID:            "ca1",
+		AutomationID:  automationID,
+		ContactEmail:  "test@example.com",
+		CurrentNodeID: &emailNodeID,
+		Status:        domain.ContactAutomationStatusSending,
+	}
+
+	automation := &domain.Automation{
+		ID:     automationID,
+		Status: domain.AutomationStatusLive,
+		Nodes:  []*domain.AutomationNode{{ID: emailNodeID, Type: domain.NodeTypeEmail}}, // no NextNodeID: terminal
+	}
+
+	executor := &AutomationExecutor{automationRepo: mockAutomationRepo, timelineRepo: mockTimelineRepo, logger: mockLogger}
+
+	mockAutomationRepo.EXPECT().GetContactAutomationByEmail(gomock.Any(), workspaceID, automationID, "test@example.com").Return(ca, nil)
+	mockAutomationRepo.EXPECT().GetByID(gomock.Any(), workspaceID, automationID).Return(automation, nil)
+	mockAutomationRepo.EXPECT().CreateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().IncrementAutomationStat(gomock.Any(), workspaceID, automationID, "completed").Return(nil)
+	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, wsID string, updated *domain.ContactAutomation) error {
+			assert.Equal(t, domain.ContactAutomationStatusCompleted, updated.Status)
+			return nil
+		})
+
+	executor.HandleEmailSent(workspaceID, domain.EmailQueueSourceAutomation, automationID, "test@example.com", "msg1")
+}
+
+func TestAutomationExecutor_HandleEmailSent_NoopWhenContactNotParked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	workspaceID := "ws1"
+	automationID := "auto1"
+	nodeID := "j4"
+
+	// Already resolved (e.g. a duplicate/late callback racing a prior success).
+	ca := &domain.ContactAutomation{
+		ID: "ca1", AutomationID: automationID, ContactEmail: "test@example.com",
+		CurrentNodeID: &nodeID, Status: domain.ContactAutomationStatusActive,
+	}
+
+	executor := &AutomationExecutor{automationRepo: mockAutomationRepo, logger: mockLogger}
+
+	mockAutomationRepo.EXPECT().GetContactAutomationByEmail(gomock.Any(), workspaceID, automationID, "test@example.com").Return(ca, nil)
+	// No GetByID, no CreateNodeExecution, no UpdateContactAutomation expected:
+	// gomock fails the test if HandleEmailSent calls any of them.
+
+	executor.HandleEmailSent(workspaceID, domain.EmailQueueSourceAutomation, automationID, "test@example.com", "msg1")
+}
+
+func TestAutomationExecutor_HandleEmailSent_NoopForNonAutomationSource(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	executor := &AutomationExecutor{automationRepo: mockAutomationRepo, logger: mockLogger}
+
+	// Zero repo calls expected for a broadcast-sourced email.
+	executor.HandleEmailSent("ws1", domain.EmailQueueSourceBroadcast, "bcast1", "test@example.com", "msg1")
+}
+
+func TestAutomationExecutor_HandleEmailFailed_ExitsOnPermanentRejection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockTimelineRepo := mocks.NewMockContactTimelineRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	workspaceID := "ws1"
+	automationID := "auto1"
+	emailNodeID := "j0a"
+
+	ca := &domain.ContactAutomation{
+		ID:            "ca1",
+		AutomationID:  automationID,
+		ContactEmail:  "paris13@epiceriedemadagascar.com",
+		CurrentNodeID: &emailNodeID,
+		Status:        domain.ContactAutomationStatusSending,
+	}
+
+	automation := &domain.Automation{
+		ID:     automationID,
+		Status: domain.AutomationStatusLive,
+		Nodes:  []*domain.AutomationNode{{ID: emailNodeID, Type: domain.NodeTypeEmail}},
+	}
+
+	executor := &AutomationExecutor{automationRepo: mockAutomationRepo, timelineRepo: mockTimelineRepo, logger: mockLogger}
+
+	mockAutomationRepo.EXPECT().GetContactAutomationByEmail(gomock.Any(), workspaceID, automationID, "paris13@epiceriedemadagascar.com").Return(ca, nil)
+	mockAutomationRepo.EXPECT().GetByID(gomock.Any(), workspaceID, automationID).Return(automation, nil)
+	mockAutomationRepo.EXPECT().CreateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, wsID string, entry *domain.NodeExecution) error {
+			assert.Equal(t, domain.NodeActionFailed, entry.Action)
+			require.NotNil(t, entry.Error)
+			assert.Equal(t, "excluded_provider_class:ionos", *entry.Error)
+			return nil
+		})
+	mockAutomationRepo.EXPECT().IncrementAutomationStat(gomock.Any(), workspaceID, automationID, "exited").Return(nil)
+	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, wsID string, updated *domain.ContactAutomation) error {
+			// RED (pre-fix) would never reach here at all: the contact would
+			// already be sitting on j4 by the time the send fails.
+			assert.Equal(t, domain.ContactAutomationStatusExited, updated.Status)
+			require.NotNil(t, updated.ExitReason)
+			assert.Equal(t, "excluded_provider_class:ionos", *updated.ExitReason)
+			return nil
+		})
+
+	executor.HandleEmailFailed(
+		workspaceID, domain.EmailQueueSourceAutomation, automationID,
+		"paris13@epiceriedemadagascar.com", "msg1",
+		fmt.Errorf("excluded_provider_class:ionos"), true,
+	)
+}
+
+func TestAutomationExecutor_HandleEmailFailed_NoopWhileRetrying(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	executor := &AutomationExecutor{automationRepo: mockAutomationRepo, logger: mockLogger}
+
+	// isPermanent=false: the queue is still retrying (bounded backoff). The
+	// contact must stay parked untouched - zero repo calls, in particular no
+	// GetContactAutomationByEmail (short-circuited before any lookup).
+	executor.HandleEmailFailed(
+		"ws1", domain.EmailQueueSourceAutomation, "auto1",
+		"test@example.com", "msg1", fmt.Errorf("temporary smtp error"), false,
+	)
+}
+
+func TestAutomationExecutor_HandleEmailFailed_NoopForNonAutomationSource(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	executor := &AutomationExecutor{automationRepo: mockAutomationRepo, logger: mockLogger}
+
+	executor.HandleEmailFailed(
+		"ws1", domain.EmailQueueSourceBroadcast, "bcast1",
+		"test@example.com", "msg1", fmt.Errorf("rejected"), true,
+	)
+}

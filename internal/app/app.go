@@ -1057,6 +1057,14 @@ func (a *App) InitServices() error {
 	)
 	// Branche le checker stop-on-reply (Lot 3) sur le gate d'exit cold (Lot 9).
 	automationExecutor.SetColdReplyChecker(a.veridianReplyService)
+	// Veridian fix 2026-09-29 (todo/done/2026-09-29-automation-advance-on-send-only.md) :
+	// le noeud email ne fait plus avancer le contact a l'enqueue - il reste parque
+	// (status=sending) jusqu'a ce que le worker de la file confirme l'issue reelle
+	// de l'envoi. Ces callbacks ferment la boucle : avance seulement si le SMTP a
+	// vraiment accepte, sortie avec raison sur rejet definitif / retries epuises,
+	// aucun changement si le gate reporte (cap/warmup/fenetre) - le contact reste
+	// parque, la file retente seule en arriere-plan.
+	a.emailQueueWorker.SetCallbacks(automationExecutor.HandleEmailSent, automationExecutor.HandleEmailFailed)
 	a.automationScheduler = service.NewAutomationScheduler(
 		automationExecutor,
 		a.logger,

@@ -35,11 +35,15 @@ func DefaultWorkerConfig() *EmailQueueWorkerConfig {
 	}
 }
 
-// EmailSentCallback is called when an email is successfully sent
-type EmailSentCallback func(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID string, messageID string)
+// EmailSentCallback is called when an email is successfully sent.
+// Veridian fix 2026-09-29: contactEmail added so a caller (the automation
+// executor) can resolve which parked contact_automation to advance, without a
+// second lookup keyed only on messageID.
+type EmailSentCallback func(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID string, contactEmail string, messageID string)
 
-// EmailFailedCallback is called when an email fails to send
-type EmailFailedCallback func(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID string, messageID string, err error, isPermanent bool)
+// EmailFailedCallback is called when an email fails to send.
+// Veridian fix 2026-09-29: contactEmail added, same reason as EmailSentCallback.
+type EmailFailedCallback func(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID string, contactEmail string, messageID string, err error, isPermanent bool)
 
 // EmailQueueWorker processes queued emails
 type EmailQueueWorker struct {
@@ -607,7 +611,7 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 
 	// Call success callback
 	if w.onEmailSent != nil {
-		w.onEmailSent(workspace.ID, entry.SourceType, entry.SourceID, entry.MessageID)
+		w.onEmailSent(workspace.ID, entry.SourceType, entry.SourceID, entry.ContactEmail, entry.MessageID)
 	}
 }
 
@@ -657,7 +661,7 @@ func (w *EmailQueueWorker) handleError(workspace *domain.Workspace, entry *domai
 
 		// Call failure callback (isPermanent = true)
 		if w.onEmailFailed != nil {
-			w.onEmailFailed(workspace.ID, entry.SourceType, entry.SourceID, entry.MessageID, sendErr, true)
+			w.onEmailFailed(workspace.ID, entry.SourceType, entry.SourceID, entry.ContactEmail, entry.MessageID, sendErr, true)
 		}
 		return
 	}
@@ -673,7 +677,7 @@ func (w *EmailQueueWorker) handleError(workspace *domain.Workspace, entry *domai
 
 	// Call failure callback (isPermanent = false, will retry)
 	if w.onEmailFailed != nil {
-		w.onEmailFailed(workspace.ID, entry.SourceType, entry.SourceID, entry.MessageID, sendErr, false)
+		w.onEmailFailed(workspace.ID, entry.SourceType, entry.SourceID, entry.ContactEmail, entry.MessageID, sendErr, false)
 	}
 }
 

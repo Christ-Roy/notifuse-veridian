@@ -2089,3 +2089,251 @@ func TestEmailQueueWorker_ProcessEntry_VeridianExcludedClass(t *testing.T) {
 func TestEmailQueueWorker_ProcessEntry_BroadcastFinalGuard(t *testing.T) {
 	TestBroadcastFinalGuard_StoppedContactNeverReachesSMTPSink(t)
 }
+
+// === Veridian fix 2026-09-29 -- callback plumbing regression suite ===
+// todo/done/2026-09-29-automation-advance-on-send-only.md
+//
+// EmailSentCallback/EmailFailedCallback gained a contactEmail parameter so the
+// automation executor can resolve which parked contact_automation to
+// advance/exit without a second lookup keyed only on messageID. These tests
+// pin that the worker actually PASSES entry.ContactEmail through on all three
+// call sites (sent, permanent failure, retryable failure) -- SetCallbacks was
+// previously wired to nothing in production (dead code), so nothing exercised
+// this contract before.
+
+func TestEmailQueueWorker_ProcessEntry_OnEmailSentReceivesContactEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	const workspaceID = "workspace-1"
+	const integrationID = "integration-1"
+	const entryID = "entry-1"
+
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{{
+			ID: integrationID,
+			EmailProvider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSMTP,
+				RateLimitPerMinute: 100,
+			},
+		}},
+	}
+
+	entry := &domain.EmailQueueEntry{
+		ID:            entryID,
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: integrationID,
+		ContactEmail:  "lead@example.com",
+		MessageID:     "msg-1",
+		Payload: domain.EmailQueuePayload{
+			FromAddress:        "sender@example.com",
+			Subject:            "Test Subject",
+			HTMLContent:        "<p>Hello</p>",
+			RateLimitPerMinute: 100,
+		},
+		MaxAttempts: 3,
+	}
+
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
+	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, entryID).Return(nil)
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo, mockWorkspaceRepo, mockEmailService, mockMessageHistoryRepo,
+		DefaultWorkerConfig(), mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	var gotWorkspaceID, gotContactEmail, gotMessageID string
+	var gotSourceType domain.EmailQueueSourceType
+	var gotSourceID string
+	called := 0
+	worker.SetCallbacks(
+		func(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID, contactEmail, messageID string) {
+			called++
+			gotWorkspaceID, gotSourceType, gotSourceID, gotContactEmail, gotMessageID =
+				workspaceID, sourceType, sourceID, contactEmail, messageID
+		},
+		nil,
+	)
+
+	worker.processEntry(workspace, entry)
+
+	assert.Equal(t, 1, called, "onEmailSent must fire exactly once on a confirmed send")
+	assert.Equal(t, workspaceID, gotWorkspaceID)
+	assert.Equal(t, domain.EmailQueueSourceBroadcast, gotSourceType)
+	assert.Equal(t, "broadcast-1", gotSourceID)
+	assert.Equal(t, "lead@example.com", gotContactEmail, "onEmailSent must carry the recipient so a caller can resolve the parked contact_automation without a second lookup")
+	assert.Equal(t, "msg-1", gotMessageID)
+}
+
+func TestEmailQueueWorker_ProcessEntry_OnEmailFailedReceivesContactEmail_Permanent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	const workspaceID = "workspace-1"
+	const integrationID = "integration-1"
+	const entryID = "e1"
+
+	// microsoft excluded on this infra -> permanent, non-retryable rejection.
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{{
+			ID: integrationID,
+			EmailProvider: domain.EmailProvider{
+				Kind:                            domain.EmailProviderKindSMTP,
+				RateLimitPerMinute:              6000,
+				VeridianExcludedProviderClasses: []string{"microsoft"},
+			},
+		}},
+	}
+
+	entry := &domain.EmailQueueEntry{
+		ID:            entryID,
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: integrationID,
+		ContactEmail:  "prospect@hotmail.com",
+		MessageID:     "msg-e1",
+		Payload:       domain.EmailQueuePayload{RateLimitPerMinute: 6000},
+		MaxAttempts:   3,
+	}
+
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
+	mockQueueRepo.EXPECT().Delete(gomock.Any(), workspaceID, entryID).Return(nil)
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo, mockWorkspaceRepo, mockEmailService, mockMessageHistoryRepo,
+		DefaultWorkerConfig(), mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	var gotContactEmail string
+	var gotIsPermanent bool
+	called := 0
+	worker.SetCallbacks(nil, func(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID, contactEmail, messageID string, sendErr error, isPermanent bool) {
+		called++
+		gotContactEmail = contactEmail
+		gotIsPermanent = isPermanent
+	})
+
+	worker.processEntry(workspace, entry)
+
+	assert.Equal(t, 1, called, "onEmailFailed must fire exactly once on a permanent rejection")
+	assert.True(t, gotIsPermanent, "an excluded provider class is a definitive rejection, never retried")
+	assert.Equal(t, "prospect@hotmail.com", gotContactEmail)
+}
+
+func TestEmailQueueWorker_ProcessEntry_OnEmailFailedReceivesContactEmail_Retryable(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+	const workspaceID = "workspace-1"
+	const integrationID = "integration-1"
+	const entryID = "entry-1"
+
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{{
+			ID: integrationID,
+			EmailProvider: domain.EmailProvider{
+				Kind:               domain.EmailProviderKindSMTP,
+				RateLimitPerMinute: 100,
+			},
+		}},
+	}
+
+	entry := &domain.EmailQueueEntry{
+		ID:            entryID,
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: integrationID,
+		ContactEmail:  "lead@example.com",
+		MessageID:     "msg-1",
+		Payload: domain.EmailQueuePayload{
+			FromAddress:        "sender@example.com",
+			Subject:            "Test Subject",
+			HTMLContent:        "<p>Hello</p>",
+			RateLimitPerMinute: 100,
+		},
+		Attempts:    0,
+		MaxAttempts: 3,
+	}
+
+	sendErr := errors.New("SMTP connection failed")
+
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(sendErr)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
+	mockQueueRepo.EXPECT().MarkAsFailed(gomock.Any(), workspaceID, entryID, sendErr.Error(), gomock.Any()).Return(nil)
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo, mockWorkspaceRepo, mockEmailService, mockMessageHistoryRepo,
+		DefaultWorkerConfig(), mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	var gotContactEmail string
+	var gotIsPermanent bool
+	called := 0
+	worker.SetCallbacks(nil, func(workspaceID string, sourceType domain.EmailQueueSourceType, sourceID, contactEmail, messageID string, sendErr error, isPermanent bool) {
+		called++
+		gotContactEmail = contactEmail
+		gotIsPermanent = isPermanent
+	})
+
+	worker.processEntry(workspace, entry)
+
+	assert.Equal(t, 1, called, "onEmailFailed must fire on a transient SMTP failure too, so the caller can leave the contact parked")
+	assert.False(t, gotIsPermanent, "a transient SMTP error retries (bounded backoff), it must not be reported as permanent")
+	assert.Equal(t, "lead@example.com", gotContactEmail)
+}
