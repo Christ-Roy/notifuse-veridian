@@ -220,7 +220,7 @@ func TestMessageHistoryHandler_handleList_Success(t *testing.T) {
 			ContactEmail: "contact1",
 			TemplateID:   "template1",
 			Channel:      "email",
-			SentAt:       time.Now().Add(-time.Hour),
+			SentAt:       timePtr(time.Now().Add(-time.Hour)),
 			CreatedAt:    time.Now().Add(-time.Hour),
 			UpdatedAt:    time.Now().Add(-time.Hour),
 		},
@@ -800,3 +800,5 @@ func TestMessageHistoryHandler_handleBroadcastStats_Success(t *testing.T) {
 	assert.Equal(t, float64(30), statsMap["total_clicked"])
 	assert.Equal(t, float64(2), statsMap["total_unsubscribed"])
 }
+
+func timePtr(t time.Time) *time.Time { return &t }

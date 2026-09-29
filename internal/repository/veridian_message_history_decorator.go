@@ -155,6 +155,16 @@ func (d *VeridianMessageHistoryDecorator) CountSentSinceForSenderDomain(ctx cont
 	return d.upstream.CountSentSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
 }
 
+// CountHardBouncedSinceForSenderDomain : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) CountHardBouncedSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error) {
+	return d.upstream.CountHardBouncedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+}
+
+// CountComplainedSinceForSenderDomain : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) CountComplainedSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error) {
+	return d.upstream.CountComplainedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+}
+
 // CountSentSinceForDomainsAndSenderDomain : pur passthrough (lecture, aucun side-effect quota).
 func (d *VeridianMessageHistoryDecorator) CountSentSinceForDomainsAndSenderDomain(ctx context.Context, workspaceID string, domains []string, exclude bool, senderDomain string, since time.Time) (int, error) {
 	return d.upstream.CountSentSinceForDomainsAndSenderDomain(ctx, workspaceID, domains, exclude, senderDomain, since)

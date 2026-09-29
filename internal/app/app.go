@@ -1578,6 +1578,26 @@ func (a *App) InitHandlers() error {
 	)
 	veridianReplyStatsHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patch — fusible de réputation, API de lecture (2026-09-29) ===
+	// Endpoint POST+GET /api/veridian/messages.reputationStatus : signal
+	// "visible dans l'interface ou l'API" du fusible qui gèle automatiquement une
+	// infra dont le taux de bounce dur dépasse 3%/7j ou qui reçoit une plainte
+	// (cf. internal/service/queue/veridian_reputation_gate.go). Auth JWT console +
+	// permission message_history:read (gardien dans le service, même posture que
+	// le reply rate). Cf. internal/domain/veridian_reputation_status.go.
+	veridianReputationStatusService := service.NewVeridianReputationStatusService(
+		a.messageHistoryRepo,
+		a.workspaceRepo,
+		a.authService,
+		a.logger,
+	)
+	veridianReputationStatusHandler := httpHandler.NewVeridianReputationStatusHandler(
+		veridianReputationStatusService,
+		getJWTSecret,
+		a.logger,
+	)
+	veridianReputationStatusHandler.RegisterRoutes(a.mux)
+
 	// === Veridian patch — KPI engagement par classe de provider (dashboard cold, 2026-06-16) ===
 	// Endpoint POST+GET /api/veridian/messages.engagementByClass : agrège
 	// sent/delivered/bounced/opened/clicked PAR CLASSE de provider destinataire

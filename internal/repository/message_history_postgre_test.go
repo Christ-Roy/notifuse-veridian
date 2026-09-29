@@ -83,7 +83,7 @@ func createSampleMessageHistory() *domain.MessageHistory {
 		Channel:         "email",
 		StatusInfo:      nil,
 		MessageData:     messageData,
-		SentAt:          now,
+		SentAt:          &now,
 		DeliveredAt:     nil,
 		FailedAt:        nil,
 		OpenedAt:        nil,
@@ -206,8 +206,9 @@ func TestMessageHistoryRepository_UpsertRefreshesSentAtOnRetry(t *testing.T) {
 	ctx := context.Background()
 	workspaceID := "workspace-123"
 	message := createSampleMessageHistory()
-	message.SentAt = message.SentAt.Add(24 * time.Hour)
-	message.UpdatedAt = message.SentAt
+	refreshedSentAt := message.SentAt.Add(24 * time.Hour)
+	message.SentAt = &refreshedSentAt
+	message.UpdatedAt = refreshedSentAt
 
 	mockWorkspaceRepo.EXPECT().
 		GetConnection(gomock.Any(), workspaceID).
@@ -1651,7 +1652,7 @@ func TestMessageHistoryRepository_ListMessages(t *testing.T) {
 		Channel:         "email",
 		StatusInfo:      nil,
 		MessageData:     domain.MessageData{Data: map[string]interface{}{"subject": "Test 1"}},
-		SentAt:          twoHoursAgo,
+		SentAt:          &twoHoursAgo,
 		DeliveredAt:     &oneHourAgo,
 		CreatedAt:       twoHoursAgo,
 		UpdatedAt:       twoHoursAgo,
@@ -1666,7 +1667,7 @@ func TestMessageHistoryRepository_ListMessages(t *testing.T) {
 		Channel:         "sms",
 		StatusInfo:      nil,
 		MessageData:     domain.MessageData{Data: map[string]interface{}{"body": "Test SMS"}},
-		SentAt:          oneHourAgo,
+		SentAt:          &oneHourAgo,
 		DeliveredAt:     &now,
 		OpenedAt:        &now,
 		CreatedAt:       oneHourAgo,

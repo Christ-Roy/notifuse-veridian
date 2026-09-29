@@ -1031,6 +1031,9 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 				assert.Equal(t, messageData, msgHistory.MessageData)
 				// TransactionalNotificationID should be nil when not set in request
 				assert.Nil(t, msgHistory.TransactionalNotificationID)
+				// Correctif 2026-09-29 : sent_at n'est plus posé à la création,
+				// seulement après confirmation SMTP (cf. mock Update ci-dessous).
+				assert.Nil(t, msgHistory.SentAt, "sent_at must not be set before SMTP confirms acceptance")
 
 				return nil
 			})
@@ -1041,6 +1044,15 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 			).Return(nil)
+
+		// Correctif 2026-09-29 : un envoi accepté par SMTP déclenche un second
+		// appel, Update(), qui pose sent_at (cf. email_service.go SendEmailForTemplate).
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, msgHistory *domain.MessageHistory) error {
+				require.NotNil(t, msgHistory.SentAt, "a successful send must set sent_at")
+				return nil
+			})
 
 		// Call method under test
 		request := domain.SendEmailRequest{
@@ -1098,6 +1110,9 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			assert.Equal(t, "Override Test User", req.Subject)
 			return nil
 		})
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Return(nil)
 
 		// Call method under test with subject override
 		overrideSubject := "Override {{ name }}"
@@ -1158,6 +1173,9 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			assert.Equal(t, "Welcome to Our Service", req.Subject)
 			return nil
 		})
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Return(nil)
 
 		// Call method under test with empty subject override (should use template default)
 		emptySubject := ""
@@ -1216,6 +1234,9 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Setup email provider mock
 		mockSESService.EXPECT().
 			SendEmail(gomock.Any(), gomock.Any()).
+			Return(nil)
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
 			Return(nil)
 
 		// Call method under test with subject_preview override
@@ -1458,6 +1479,8 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 				// Verify message history error properties
 				assert.Equal(t, messageID, msgHistory.ID)
 				assert.NotNil(t, msgHistory.StatusInfo)
+				// Correctif 2026-09-29 : un échec SMTP ne doit jamais poser sent_at.
+				assert.Nil(t, msgHistory.SentAt, "sent_at must stay nil on a failed send")
 
 				return nil
 			})
@@ -1588,6 +1611,9 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			assert.Equal(t, emailSender.Email, req.FromAddress, "FromAddress should remain unchanged")
 			return nil
 		})
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Return(nil)
 
 		// Call method under test with from_name override
 		optionsWithOverride := domain.EmailOptions{
@@ -1651,6 +1677,9 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			assert.Equal(t, emailSender.Email, req.FromAddress, "FromAddress should remain unchanged")
 			return nil
 		})
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Return(nil)
 
 		// Call method under test without from_name override
 		optionsWithoutOverride := domain.EmailOptions{
@@ -1715,6 +1744,9 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			assert.Equal(t, emailSender.Name, req.FromName, "FromName should use default sender name when override is empty string")
 			return nil
 		})
+		mockMessageRepo.EXPECT().
+			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Return(nil)
 
 		// Call method under test with empty string from_name
 		optionsWithEmptyOverride := domain.EmailOptions{

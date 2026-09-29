@@ -872,7 +872,9 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 		return fmt.Errorf("failed to send test email: %w", err)
 	}
 
-	// record the message history
+	// record the message history. SendEmail above already returned nil (real,
+	// accepted send), so sent_at is legitimately "now" here.
+	sentAt := time.Now().UTC()
 	return s.messageHistoryRepo.Create(ctx, workspaceID, workspace.Settings.SecretKey, &domain.MessageHistory{
 		ID:              messageID,
 		ExternalID:      nil, // No external ID for test messages
@@ -884,8 +886,8 @@ func (s *TransactionalNotificationService) TestTemplate(ctx context.Context, wor
 			Data: messageData,
 		},
 		ChannelOptions: emailOptions.ToChannelOptions(),
-		SentAt:         time.Now().UTC(),
-		CreatedAt:      time.Now().UTC(),
-		UpdatedAt:      time.Now().UTC(),
+		SentAt:         &sentAt,
+		CreatedAt:      sentAt,
+		UpdatedAt:      sentAt,
 	})
 }

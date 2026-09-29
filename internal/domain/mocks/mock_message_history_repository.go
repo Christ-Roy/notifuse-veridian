@@ -81,6 +81,36 @@ func (mr *MockMessageHistoryRepositoryMockRecorder) CountSentSinceForSenderDomai
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountSentSinceForSenderDomain", reflect.TypeOf((*MockMessageHistoryRepository)(nil).CountSentSinceForSenderDomain), arg0, arg1, arg2, arg3)
 }
 
+// CountHardBouncedSinceForSenderDomain mocks base method.
+func (m *MockMessageHistoryRepository) CountHardBouncedSinceForSenderDomain(arg0 context.Context, arg1, arg2 string, arg3 time.Time) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountHardBouncedSinceForSenderDomain", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountHardBouncedSinceForSenderDomain indicates an expected call of CountHardBouncedSinceForSenderDomain.
+func (mr *MockMessageHistoryRepositoryMockRecorder) CountHardBouncedSinceForSenderDomain(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountHardBouncedSinceForSenderDomain", reflect.TypeOf((*MockMessageHistoryRepository)(nil).CountHardBouncedSinceForSenderDomain), arg0, arg1, arg2, arg3)
+}
+
+// CountComplainedSinceForSenderDomain mocks base method.
+func (m *MockMessageHistoryRepository) CountComplainedSinceForSenderDomain(arg0 context.Context, arg1, arg2 string, arg3 time.Time) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountComplainedSinceForSenderDomain", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountComplainedSinceForSenderDomain indicates an expected call of CountComplainedSinceForSenderDomain.
+func (mr *MockMessageHistoryRepositoryMockRecorder) CountComplainedSinceForSenderDomain(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountComplainedSinceForSenderDomain", reflect.TypeOf((*MockMessageHistoryRepository)(nil).CountComplainedSinceForSenderDomain), arg0, arg1, arg2, arg3)
+}
+
 // CountSentSinceForDomains mocks base method.
 func (m *MockMessageHistoryRepository) CountSentSinceForDomains(arg0 context.Context, arg1 string, arg2 []string, arg3 bool, arg4 time.Time) (int, error) {
 	m.ctrl.T.Helper()

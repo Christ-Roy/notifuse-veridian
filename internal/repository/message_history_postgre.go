@@ -1426,6 +1426,46 @@ func (r *MessageHistoryRepository) CountSentSinceForSenderDomain(ctx context.Con
 	return count, nil
 }
 
+// CountHardBouncedSinceForSenderDomain — cf. domain.MessageHistoryRepository.
+// Correctif 2026-09-29 : fusible de réputation, numérateur du taux de bounce dur.
+func (r *MessageHistoryRepository) CountHardBouncedSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error) {
+	if senderDomain == "" {
+		return 0, nil
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND bounced_at IS NOT NULL AND bounce_type = 'HardBounce' AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2)`
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, since, senderDomain).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count hard-bounced messages from sender domain since: %w", err)
+	}
+	return count, nil
+}
+
+// CountComplainedSinceForSenderDomain — cf. domain.MessageHistoryRepository.
+// Correctif 2026-09-29 : fusible de réputation, une seule plainte suffit à figer.
+func (r *MessageHistoryRepository) CountComplainedSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error) {
+	if senderDomain == "" {
+		return 0, nil
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND complained_at IS NOT NULL AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2)`
+	var count int
+	if err := workspaceDB.QueryRowContext(ctx, query, since, senderDomain).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count complained messages from sender domain since: %w", err)
+	}
+	return count, nil
+}
+
 // CountSentSinceForDomains compte les messages envoyés depuis `since` vers une
 // classe de provider concrète, identifiée par sa liste de domaines. Le domaine
 // destinataire est extrait à la lecture via split_part(contact_email,'@',2) :

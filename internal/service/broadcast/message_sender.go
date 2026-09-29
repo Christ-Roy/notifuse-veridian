@@ -714,7 +714,6 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, integ
 			MessageData: domain.MessageData{
 				Data: recipientData,
 			},
-			SentAt:    now,
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
@@ -723,6 +722,11 @@ func (s *messageSender) SendBatch(ctx context.Context, workspaceID string, integ
 			message.FailedAt = &now
 			errStr := fmt.Sprintf("%.255s", err.Error())
 			message.StatusInfo = &errStr
+		} else {
+			// sent_at only for a real, accepted SMTP send (cf. correctif 2026-09-29,
+			// incident robertbrunon : sent_at posé même sur échec faussait les stats
+			// et le webhook email.sent). Never set alongside FailedAt above.
+			message.SentAt = &now
 		}
 
 		// Record the message

@@ -193,7 +193,10 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			message_data JSONB NOT NULL,
 			channel_options JSONB,
 			attachments JSONB,
-			sent_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			-- Veridian fork (correctif 2026-09-29, v58) : nullable. Posé UNIQUEMENT par un
+			-- envoi SMTP réellement accepté (DATA -> 250) ; un rejet de gate, un échec SMTP
+			-- ou une entrée en attente ne doit jamais le porter (stats + webhook email.sent).
+			sent_at TIMESTAMP WITH TIME ZONE,
 			delivered_at TIMESTAMP WITH TIME ZONE,
 			failed_at TIMESTAMP WITH TIME ZONE,
 			opened_at TIMESTAMP WITH TIME ZONE,
@@ -1111,7 +1114,15 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			payload JSONB;
 		BEGIN
 			-- Detect which email event occurred
+			-- Veridian fork (correctif 2026-09-29, v58) : sent_at est désormais nullable
+			-- et n'est posé que par un envoi réellement accepté. Un INSERT dont sent_at
+			-- est NULL (rejet de gate / échec SMTP permanent, jamais retenté) ne doit pas
+			-- déclencher email.sent : ce serait un faux positif webhook pour un mail qui
+			-- n'a jamais quitté l'infra.
 			IF TG_OP = 'INSERT' THEN
+				IF NEW.sent_at IS NULL THEN
+					RETURN NEW;
+				END IF;
 				event_kind := 'email.sent';
 				event_timestamp := NEW.sent_at;
 			ELSIF TG_OP = 'UPDATE' THEN

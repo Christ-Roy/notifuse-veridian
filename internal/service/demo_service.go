@@ -1910,7 +1910,7 @@ func (s *DemoService) generateTransactionalMessageHistoryForContact(contact *dom
 		TemplateVersion: templateVersion,
 		Channel:         "email",
 		MessageData:     messageData,
-		SentAt:          sentTime,
+		SentAt:          &sentTime,
 		CreatedAt:       sentTime,
 		UpdatedAt:       sentTime,
 	}
@@ -1995,7 +1995,7 @@ func (s *DemoService) generateMessageHistoryForContact(contact *domain.Contact, 
 		TemplateVersion: templateVersion,
 		Channel:         "email",
 		MessageData:     messageData,
-		SentAt:          sentTime,
+		SentAt:          &sentTime,
 		CreatedAt:       sentTime,
 		UpdatedAt:       sentTime,
 	}

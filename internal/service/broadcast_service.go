@@ -1071,7 +1071,7 @@ func (s *BroadcastService) SendToIndividual(ctx context.Context, request *domain
 		MessageData: domain.MessageData{
 			Data: templateData,
 		},
-		SentAt:    now,
+		SentAt:    &now,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

@@ -329,7 +329,7 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user5@example.com",
 						TemplateID:   "template-3",
 						Channel:      "email",
-						SentAt:       twoHoursAgo.Add(time.Hour),
+						SentAt:       timePtr(twoHoursAgo.Add(time.Hour)),
 					},
 				}
 
@@ -353,7 +353,7 @@ func TestMessageHistoryService_ListMessages(t *testing.T) {
 						ContactEmail: "user5@example.com",
 						TemplateID:   "template-3",
 						Channel:      "email",
-						SentAt:       twoHoursAgo.Add(time.Hour),
+						SentAt:       timePtr(twoHoursAgo.Add(time.Hour)),
 					},
 				},
 				NextCursor: "",

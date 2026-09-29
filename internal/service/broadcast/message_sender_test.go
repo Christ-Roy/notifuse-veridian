@@ -1228,6 +1228,10 @@ func TestSendBatch_WithFailure(t *testing.T) {
 		// Verify list_id is populated from broadcast audience
 		assert.NotNil(t, msg.ListID)
 		assert.Equal(t, "list-1", *msg.ListID)
+		// Correctif 2026-09-29 (incident robertbrunon) : un envoi broadcast qui
+		// échoue au SMTP ne doit jamais poser sent_at, seulement FailedAt/StatusInfo.
+		assert.Nil(t, msg.SentAt, "sent_at must stay nil when SendToRecipient failed")
+		assert.NotNil(t, msg.FailedAt)
 	}).Return(nil)
 
 	// Create message sender

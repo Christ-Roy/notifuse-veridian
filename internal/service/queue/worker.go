@@ -361,6 +361,25 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Veridian fork (correctif 2026-09-29): REPUTATION FUSE (cold outbound).
+	// Native circuit breaker, not bolted on: freezes ALL sends for an infra
+	// (sender domain) the moment its 7-day hard-bounce rate reaches 3% or a
+	// single complaint (FBL) lands, regardless of daily-cap/warmup config.
+	// Same skip-and-reschedule contract as the throttle/cap gates, placed
+	// BEFORE them (a reputation problem outranks a warmup ramp). Fails CLOSED
+	// on a DB error: a reputation fuse that goes silent under load is not a
+	// fuse. Cf. veridian_reputation_gate.go.
+	if delay, frozen := w.veridianReputationGate(workspace, &integration.EmailProvider, entry); frozen {
+		nextRetry := time.Now().Add(delay)
+		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Warn("Failed to set next retry for reputation fuse freeze")
+		}
+		return
+	}
+
 	// Veridian fork: recipient provider-class throttle gate (cold outbound).
 	// Placed BEFORE MarkAsProcessing, like the circuit breaker check, so a
 	// throttled skip never burns a retry attempt. No-op without configuration.
@@ -677,10 +696,13 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		TemplateVersion: int64(entry.Payload.TemplateVersion),
 		Channel:         "email",
 		MessageData:     domain.MessageData{Data: entry.Payload.TemplateData}, // Include template data for logging
-		// sent_at is the source of truth for daily cold caps. It must reflect the
-		// actual SMTP attempt, not when the queue entry was created: an entry can
-		// legitimately wait overnight for the sending window to open.
-		SentAt:    now,
+		// sent_at is the source of truth for daily cold caps AND for every "messages
+		// envoyés" stat (SUM(sent_at IS NOT NULL), webhook email.sent trigger). It
+		// must be posed ONLY when sendErr == nil, i.e. the SMTP transaction was
+		// actually accepted (250 after DATA) — never for a gate rejection, a
+		// pre-filter skip or a real SMTP failure. Cf. incident robertbrunon 28-29/09
+		// (36 message_history rows with sent_at posé alongside failed_at, 0-3 réels
+		// sur les relais). Set conditionally below, after the failure branch.
 		CreatedAt: entry.CreatedAt,
 		UpdatedAt: now,
 		// Veridian fork — anti-hash identique cold outbound : persiste le hash du
@@ -716,8 +738,15 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 			errStr = errStr[:255]
 		}
 		message.StatusInfo = &errStr
+	} else {
+		// Only a real, accepted SMTP send sets sent_at. On UPSERT (ON CONFLICT DO
+		// UPDATE SET sent_at = EXCLUDED.sent_at), a permanently-failed message is
+		// deleted from the queue and never retried, so this branch never runs for
+		// it; a retried message that eventually succeeds reaches this branch on its
+		// successful attempt and correctly gets sent_at posed then, clearing the
+		// prior failure via FailedAt/StatusInfo staying nil.
+		message.SentAt = &now
 	}
-	// On success: FailedAt and StatusInfo remain nil, clearing any previous failure
 
 	// Upsert record (log errors but don't fail the send operation)
 	if err := w.messageHistoryRepo.Upsert(ctx, workspaceID, secretKey, message); err != nil {

@@ -426,7 +426,7 @@ func (h *VeridianHandler) coldSimulateSeedOne(
 		TemplateID:            "cold-simulate-e2e",
 		Channel:               "email",
 		MessageData:           domain.MessageData{Data: map[string]interface{}{"veridian_cold_simulate": true}},
-		SentAt:                sentAt,
+		SentAt:                &sentAt,
 		CreatedAt:             sentAt,
 		UpdatedAt:             sentAt,
 		VeridianSenderEmail:   sender,

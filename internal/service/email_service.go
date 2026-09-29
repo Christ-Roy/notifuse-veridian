@@ -496,7 +496,12 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 	// Convert email options to channel options for storage
 	channelOptions := request.EmailOptions.ToChannelOptions()
 
-	// Create message history record
+	// Create message history record. sent_at is intentionally left nil here: this
+	// row is created BEFORE the SMTP attempt (so a mid-crash retry still has a
+	// MessageID to dedupe against), and the SMTP call below can still fail. Only a
+	// real, accepted send (250 after DATA) may set sent_at — cf. correctif
+	// 2026-09-29, incident robertbrunon (sent_at posé avant tout envoi faussait
+	// les statistiques et le webhook email.sent pour toute notification échouée).
 	messageHistory := &domain.MessageHistory{
 		ID:                          request.MessageID,
 		ExternalID:                  request.ExternalID,
@@ -507,7 +512,6 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		Channel:                     "email",
 		MessageData:                 request.MessageData,
 		ChannelOptions:              channelOptions,
-		SentAt:                      now,
 		CreatedAt:                   now,
 		UpdatedAt:                   now,
 	}
@@ -585,6 +589,18 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		tracing.MarkSpanError(ctx, err)
 		tracing.AddAttribute(ctx, "email.error", err.Error())
 		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	// SMTP accepted the message: this is the only point allowed to pose sent_at.
+	sentAt := time.Now().UTC()
+	messageHistory.SentAt = &sentAt
+	messageHistory.UpdatedAt = sentAt
+	if updateErr := s.messageRepo.Update(ctx, request.WorkspaceID, messageHistory); updateErr != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":      updateErr.Error(),
+			"message_id": request.MessageID,
+		}).Error("Failed to update message history with sent status")
+		tracing.AddAttribute(ctx, "message_history.update_error", updateErr.Error())
 	}
 
 	s.logger.WithFields(map[string]interface{}{

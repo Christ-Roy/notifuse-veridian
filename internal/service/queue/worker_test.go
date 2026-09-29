@@ -301,6 +301,16 @@ func TestEmailQueueWorker_ProcessEntry_Success(t *testing.T) {
 		MaxAttempts: 3,
 	}
 
+	// Correctif 2026-09-29 : le fusible de réputation (veridianReputationGate)
+	// tourne pour toute entrée dont le FROM est résolvable, quel que soit le
+	// test — infra saine ici (aucune plainte, aucun volume sur la fenêtre).
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+
 	// Expect calls in order
 	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
 	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
@@ -416,6 +426,14 @@ func TestEmailQueueWorker_ProcessEntry_PersistsContentHash(t *testing.T) {
 		ExistsContentHashSince(gomock.Any(), workspaceID, hash, gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(false, nil)
 
+	// Correctif 2026-09-29 : fusible de réputation, infra saine dans ce test.
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+
 	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
 	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
 	// Capture le message persisté pour vérifier la propagation du hash.
@@ -474,6 +492,14 @@ func TestEmailQueueWorker_ProcessEntry_PersistsSenderEmail(t *testing.T) {
 		},
 		MaxAttempts: 3,
 	}
+
+	// Correctif 2026-09-29 : fusible de réputation, infra saine dans ce test.
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "send.fr", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "send.fr", gomock.Any()).
+		Return(0, nil)
 
 	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
 	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
@@ -683,10 +709,30 @@ func TestEmailQueueWorker_ProcessEntry_SendFailure(t *testing.T) {
 
 	sendErr := errors.New("SMTP connection failed")
 
+	// Correctif 2026-09-29 : fusible de réputation, infra saine dans ce test.
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+
 	// Expect calls in order
 	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
 	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(sendErr)
-	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
+	// Correctif 2026-09-29 (incident robertbrunon 28-29/09, automation ecomscale) :
+	// un échec SMTP réel ne doit JAMAIS poser sent_at, même si failed_at et
+	// status_info sont bien renseignés (visible + retry). Avant le correctif,
+	// upsertMessageHistory posait SentAt=now inconditionnellement : ce test est
+	// rouge sur le code non corrigé (msg.SentAt non-nil) et vert après.
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, msg *domain.MessageHistory) error {
+			require.NotNil(t, msg)
+			require.Nil(t, msg.SentAt, "un echec SMTP ne doit jamais poser sent_at")
+			require.NotNil(t, msg.FailedAt, "un echec SMTP doit rester visible via FailedAt")
+			require.NotNil(t, msg.StatusInfo, "un echec SMTP doit exposer l'erreur via StatusInfo")
+			return nil
+		}).Times(1)
 	// After failure, should schedule retry
 	mockQueueRepo.EXPECT().MarkAsFailed(gomock.Any(), workspaceID, entryID, sendErr.Error(), gomock.Any()).Return(nil)
 
@@ -757,6 +803,14 @@ func TestEmailQueueWorker_ProcessEntry_MaxAttemptsExceeded(t *testing.T) {
 	}
 
 	sendErr := errors.New("SMTP connection failed")
+
+	// Correctif 2026-09-29 : fusible de réputation, infra saine dans ce test.
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
 
 	// Expect calls in order
 	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
@@ -1443,6 +1497,14 @@ func TestEmailQueueWorker_ProcessEntry_StoresTemplateDataInMessageHistory(t *tes
 		Attempts:    0,
 		MaxAttempts: 3,
 	}
+
+	// Correctif 2026-09-29 : fusible de réputation, infra saine dans ce test.
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
 
 	// Expect calls in order
 	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)

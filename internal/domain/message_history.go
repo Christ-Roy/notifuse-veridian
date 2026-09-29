@@ -128,7 +128,14 @@ type MessageHistory struct {
 	Attachments                 []AttachmentMetadata `json:"attachments,omitempty"`
 
 	// Event timestamps
-	SentAt         time.Time  `json:"sent_at"`
+	// Veridian fork (correctif 2026-09-29, incident robertbrunon 28-29/09) : SentAt
+	// est nullable. Il ne doit être posé QUE par un envoi SMTP réellement accepté
+	// (DATA -> 250). Un message rejeté par un gate (cap/chauffe/classe/fenêtre), en
+	// attente de reprise, ou en échec SMTP ne doit JAMAIS porter SentAt — sinon il
+	// se compte à tort dans les statistiques d'envoi (SUM(sent_at IS NOT NULL)) et
+	// déclenche à tort le webhook email.sent (cf. trigger webhook_message_history_trigger,
+	// database/init.go + migrations/v57.go). Cf. queue/worker.go upsertMessageHistory.
+	SentAt         *time.Time `json:"sent_at,omitempty"`
 	DeliveredAt    *time.Time `json:"delivered_at,omitempty"`
 	FailedAt       *time.Time `json:"failed_at,omitempty"`
 	OpenedAt       *time.Time `json:"opened_at,omitempty"`
@@ -320,6 +327,24 @@ type MessageHistoryRepository interface {
 	// stop-on-reply (Lot 3) — confirmer qu'un In-Reply-To/References cité par un
 	// prospect correspond bien à un de NOS envois vers CE contact.
 	FindContactEmailByMessageID(ctx context.Context, workspaceID, messageID string) (email string, found bool, err error)
+
+	// CountHardBouncedSinceForSenderDomain compte, depuis `since`, les messages
+	// envoyés DEPUIS le domaine émetteur `senderDomain` dont bounce_type vaut
+	// EXACTEMENT "HardBounce" (colonne posée par SetStatusesIfNotSet, cf.
+	// domain.ClassifyBounce). Numérateur du fusible de réputation « taux de
+	// bounce dur » (veridian_reputation_gate.go) : un rebond mou (boîte pleine,
+	// greylisting) ne doit jamais figer la chauffe, seul un rebond permanent
+	// (adresse inconnue, domaine mort) compte. `senderDomain` vide = 0 sans
+	// requête (comportement de fallback identique à CountSentSinceForSenderDomain).
+	CountHardBouncedSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error)
+
+	// CountComplainedSinceForSenderDomain compte, depuis `since`, les messages
+	// envoyés DEPUIS le domaine émetteur `senderDomain` dont complained_at est
+	// renseigné (plainte FBL). Le fusible de réputation fige la chauffe dès QU'UNE
+	// SEULE plainte est comptée dans la fenêtre (pas de seuil, contrairement au
+	// bounce dur) — cf. veridian_reputation_gate.go. `senderDomain` vide = 0 sans
+	// requête (même fallback que les autres COUNT par infra).
+	CountComplainedSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error)
 
 	// ExistsContentHashSince retourne true s'il existe DÉJÀ un envoi portant le
 	// hash de contenu `contentHash` depuis `since` (fenêtre glissante anti-hash)

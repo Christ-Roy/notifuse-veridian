@@ -302,7 +302,7 @@ func (tdf *TestDataFactory) CreateMessageHistory(workspaceID string, opts ...Mes
 				"test": true,
 			},
 		},
-		SentAt:    now,
+		SentAt:    &now,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -1115,7 +1115,7 @@ func WithMessageBroadcast(broadcastID string) MessageHistoryOption {
 
 func WithMessageSentAt(sentAt time.Time) MessageHistoryOption {
 	return func(m *domain.MessageHistory) {
-		m.SentAt = sentAt
+		m.SentAt = &sentAt
 	}
 }
 

@@ -147,6 +147,14 @@ func TestEmailQueueWorker_AtomicQuotaBlocksSMTPAndRefundsClaim(t *testing.T) {
 	workspace := veridianTestWorkspaceWithCaps(map[string]int{"microsoft": 1}, 0)
 	entry := veridianTestEntryFrom("atomic-block", "lead@outlook.com", "bot@send.test", domain.EmailQueuePayload{VeridianProviderClass: "microsoft"})
 
+	// Correctif 2026-09-29 : fusible de réputation, infra saine dans ce test.
+	env.mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "send.test", gomock.Any()).
+		Return(0, nil)
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.test", gomock.Any()).
+		Return(0, nil)
+
 	// The legacy COUNT optimization sees spare capacity; only the authoritative
 	// atomic reservation observes the concurrent winner and blocks this worker.
 	env.mockMessageHistoryRepo.EXPECT().
@@ -188,6 +196,14 @@ func TestEmailQueueWorker_PreAcceptanceSMTPFailureReleasesQuota(t *testing.T) {
 	env.worker.messageHistoryRepo = repo
 	workspace := veridianTestWorkspaceWithCaps(map[string]int{"microsoft": 2}, 0)
 	entry := veridianTestEntryFrom("preaccept", "lead@outlook.com", "bot@send.test", domain.EmailQueuePayload{VeridianProviderClass: "microsoft"})
+
+	// Correctif 2026-09-29 : fusible de réputation, infra saine dans ce test.
+	env.mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "send.test", gomock.Any()).
+		Return(0, nil)
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.test", gomock.Any()).
+		Return(0, nil)
 
 	env.mockMessageHistoryRepo.EXPECT().
 		CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "microsoft", "send.test", gomock.Any()).

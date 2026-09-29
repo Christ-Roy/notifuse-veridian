@@ -427,7 +427,7 @@ func TestMessageHistory(t *testing.T) {
 					"utm_medium": "newsletter",
 				},
 			},
-			SentAt:      now,
+			SentAt:      timePtr(now),
 			DeliveredAt: &deliveredAt,
 			OpenedAt:    &openedAt,
 			ClickedAt:   &clickedAt,
@@ -443,7 +443,7 @@ func TestMessageHistory(t *testing.T) {
 		assert.Equal(t, int64(2), message.TemplateVersion)
 		assert.Equal(t, "email", message.Channel)
 		assert.Equal(t, "Delivered successfully", *message.StatusInfo)
-		assert.Equal(t, now, message.SentAt)
+		assert.Equal(t, timePtr(now), message.SentAt)
 		assert.Equal(t, deliveredAt, *message.DeliveredAt)
 		assert.Equal(t, openedAt, *message.OpenedAt)
 		assert.Equal(t, clickedAt, *message.ClickedAt)
@@ -476,7 +476,7 @@ func TestMessageHistory(t *testing.T) {
 					"message": "Hello!",
 				},
 			},
-			SentAt:    now,
+			SentAt:    timePtr(now),
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
@@ -518,7 +518,7 @@ func TestMessageHistory(t *testing.T) {
 			TemplateVersion: 3,
 			Channel:         "email",
 			MessageData:     MessageData{Data: map[string]interface{}{"test": "data"}},
-			SentAt:          sentAt,
+			SentAt:          timePtr(sentAt),
 			DeliveredAt:     &deliveredAt,
 			OpenedAt:        &openedAt,
 			ClickedAt:       &clickedAt,
@@ -530,7 +530,7 @@ func TestMessageHistory(t *testing.T) {
 			UpdatedAt:       now,
 		}
 
-		assert.Equal(t, sentAt, message.SentAt)
+		assert.Equal(t, timePtr(sentAt), message.SentAt)
 		assert.Equal(t, deliveredAt, *message.DeliveredAt)
 		assert.Equal(t, openedAt, *message.OpenedAt)
 		assert.Equal(t, clickedAt, *message.ClickedAt)
@@ -1251,7 +1251,7 @@ func TestMessageListResult(t *testing.T) {
 				TemplateID:   "template1",
 				Channel:      "email",
 				MessageData:  MessageData{Data: map[string]interface{}{"subject": "Test 1"}},
-				SentAt:       now,
+				SentAt:       timePtr(now),
 				CreatedAt:    now,
 				UpdatedAt:    now,
 			},
@@ -1261,7 +1261,7 @@ func TestMessageListResult(t *testing.T) {
 				TemplateID:   "template2",
 				Channel:      "sms",
 				MessageData:  MessageData{Data: map[string]interface{}{"message": "Test 2"}},
-				SentAt:       now.Add(time.Minute),
+				SentAt:       timePtr(now.Add(time.Minute)),
 				CreatedAt:    now.Add(time.Minute),
 				UpdatedAt:    now.Add(time.Minute),
 			},
