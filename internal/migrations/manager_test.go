@@ -566,8 +566,10 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// V55 : ledger atomique cap journalier + classe provider matérialisée.
 		// V56 : attribution durable integration/profile pour quotas et analytics.
 		// V57 : recompile les segments dont les cles metadata etaient interpolees.
+		// V58 : sent_at nullable (correctif 2026-09-29, sent_at ne se pose plus sur
+		// un envoi refuse/echoue) + trigger webhook_message_history corrige.
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("57"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("58"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 
