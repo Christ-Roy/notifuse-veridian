@@ -91,3 +91,19 @@
     workspace_postgres_test.go colocalisé car la suite serait
     monolithique (> 700 lignes) ; la séparation par responsabilité
     est plus maintenable.
+
+- sources:
+    - internal/domain/veridian_reputation_status.go
+  covered_by:
+    - internal/service/veridian_reputation_status_service_test.go
+    - internal/http/veridian_reputation_status_handler_test.go
+    - internal/service/queue/veridian_reputation_gate_test.go
+  reason: |
+    DTO pures (VeridianReputationIntegrationStatus, VeridianReputationStatusRequest/
+    Response) + interface VeridianReputationStatusService. Aucune logique
+    exécutable dans ce fichier. Le calcul réel vit dans
+    queue.VeridianComputeReputationStatus (testé dans veridian_reputation_gate_test.go,
+    même fichier que le gate pour ne jamais diverger) ; le service qui authentifie
+    + assemble la réponse par intégration est testé dans
+    veridian_reputation_status_service_test.go ; le transport HTTP (JSON in/out,
+    codes d'erreur, routing GET+POST) dans veridian_reputation_status_handler_test.go.

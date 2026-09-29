@@ -477,6 +477,9 @@ func TestDemoService_GenerateMessageHistoryForContact(t *testing.T) {
 	assert.Equal(t, "test-broadcast", *message.BroadcastID)
 	assert.Equal(t, "email", message.Channel)
 	assert.NotNil(t, message.MessageData)
+	// Correctif 2026-09-29 : SentAt est *time.Time ; une donnée démo doit
+	// toujours le poser (non-nil), jamais laisser un envoi démo "en attente".
+	assert.NotNil(t, message.SentAt, "sent_at doit être posé (donnée démo = envoi simulé réussi)")
 	assert.False(t, message.SentAt.IsZero())
 }
 
@@ -500,6 +503,9 @@ func TestDemoService_GenerateTransactionalMessageHistoryForContact(t *testing.T)
 	assert.Nil(t, message.BroadcastID) // Transactional messages have no broadcast ID
 	assert.Equal(t, "email", message.Channel)
 	assert.NotNil(t, message.MessageData)
+	// Correctif 2026-09-29 : SentAt est *time.Time ; une donnée démo doit
+	// toujours le poser (non-nil), jamais laisser un envoi démo "en attente".
+	assert.NotNil(t, message.SentAt, "sent_at doit être posé (donnée démo = envoi simulé réussi)")
 	assert.False(t, message.SentAt.IsZero())
 
 	// Check for password reset specific data

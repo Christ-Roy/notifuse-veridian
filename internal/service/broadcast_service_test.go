@@ -309,6 +309,9 @@ func TestBroadcastService_SendToIndividual_Success(t *testing.T) {
 			// Verify list_id is populated from broadcast audience
 			assert.NotNil(t, msg.ListID)
 			assert.Equal(t, b.Audience.List, *msg.ListID)
+			// Correctif 2026-09-29 : SentAt est *time.Time ; un envoi individuel
+			// réussi doit le poser (non-nil).
+			require.NotNil(t, msg.SentAt, "sent_at doit être posé sur un envoi réussi")
 		},
 	).Return(nil)
 
@@ -2362,6 +2365,9 @@ func TestBroadcastService_SendToIndividual_WithContact(t *testing.T) {
 			// Verify list_id is populated from broadcast audience
 			assert.NotNil(t, msg.ListID)
 			assert.Equal(t, b.Audience.List, *msg.ListID)
+			// Correctif 2026-09-29 : SentAt est *time.Time ; un envoi individuel
+			// réussi doit le poser (non-nil).
+			require.NotNil(t, msg.SentAt, "sent_at doit être posé sur un envoi réussi")
 		},
 	).Return(nil)
 
@@ -2439,6 +2445,9 @@ func TestBroadcastService_SendToIndividual_WithCustomEndpoint(t *testing.T) {
 			// Verify list_id is populated from broadcast audience
 			assert.NotNil(t, msg.ListID)
 			assert.Equal(t, b.Audience.List, *msg.ListID)
+			// Correctif 2026-09-29 : SentAt est *time.Time ; un envoi individuel
+			// réussi doit le poser (non-nil).
+			require.NotNil(t, msg.SentAt, "sent_at doit être posé sur un envoi réussi")
 		},
 	).Return(nil)
 
@@ -2764,6 +2773,9 @@ func TestBroadcastService_SendToIndividual_ContactToMapError(t *testing.T) {
 			// Verify list_id is populated from broadcast audience
 			assert.NotNil(t, msg.ListID)
 			assert.Equal(t, b.Audience.List, *msg.ListID)
+			// Correctif 2026-09-29 : SentAt est *time.Time ; un envoi individuel
+			// réussi doit le poser (non-nil).
+			require.NotNil(t, msg.SentAt, "sent_at doit être posé sur un envoi réussi")
 		},
 	).Return(nil)
 

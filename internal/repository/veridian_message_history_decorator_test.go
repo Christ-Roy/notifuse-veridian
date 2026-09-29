@@ -373,6 +373,36 @@ func TestVeridianMessageHistoryDecorator_CountSentSinceForSenderDomain_Passthrou
 	assert.Equal(t, 7, got)
 }
 
+// Correctif 2026-09-29 (fusible de réputation) : lecture pure, aucun side-effect
+// quota, mêmes garanties que les autres COUNT par infra émettrice ci-dessus.
+func TestVeridianMessageHistoryDecorator_CountHardBouncedSinceForSenderDomain_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	upstream.EXPECT().CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws", "agences-veridian.fr", since).
+		Return(2, nil).Times(1)
+	got, err := d.CountHardBouncedSinceForSenderDomain(context.Background(), "ws", "agences-veridian.fr", since)
+	require.NoError(t, err)
+	assert.Equal(t, 2, got)
+}
+
+func TestVeridianMessageHistoryDecorator_CountComplainedSinceForSenderDomain_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	upstream.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws", "agences-veridian.fr", since).
+		Return(1, nil).Times(1)
+	got, err := d.CountComplainedSinceForSenderDomain(context.Background(), "ws", "agences-veridian.fr", since)
+	require.NoError(t, err)
+	assert.Equal(t, 1, got)
+}
+
 func TestVeridianMessageHistoryDecorator_CountSentSinceForDomains_Passthrough(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

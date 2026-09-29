@@ -2837,6 +2837,103 @@ func TestMessageHistoryRepository_CountSentSinceForSenderDomain(t *testing.T) {
 	})
 }
 
+// Correctif 2026-09-29 (fusible de réputation) : CountHardBouncedSinceForSenderDomain
+// est le numérateur du taux de bounce dur ; même pattern SQL que
+// CountSentSinceForSenderDomain (dénominateur), avec le filtre bounce_type en plus.
+func TestMessageHistoryRepository_CountHardBouncedSinceForSenderDomain(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	const senderDomain = "agences-veridian.fr"
+	since := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+
+	t.Run("returns hard-bounce count for sender domain", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND bounced_at IS NOT NULL AND bounce_type = 'HardBounce' AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+			WithArgs(since, senderDomain).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+
+		got, err := repo.CountHardBouncedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		require.NoError(t, err)
+		assert.Equal(t, 3, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty sender domain → 0 without query", func(t *testing.T) {
+		got, err := repo.CountHardBouncedSinceForSenderDomain(ctx, workspaceID, "", since)
+		require.NoError(t, err)
+		assert.Zero(t, got)
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("no conn"))
+		_, err := repo.CountHardBouncedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND bounced_at IS NOT NULL AND bounce_type = 'HardBounce' AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+			WithArgs(since, senderDomain).
+			WillReturnError(errors.New("boom"))
+		_, err := repo.CountHardBouncedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "count hard-bounced messages")
+	})
+}
+
+// Correctif 2026-09-29 (fusible de réputation) : CountComplainedSinceForSenderDomain
+// est le déclencheur "plainte" du fusible — une seule ligne suffit à geler.
+func TestMessageHistoryRepository_CountComplainedSinceForSenderDomain(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	const senderDomain = "agences-veridian.fr"
+	since := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+
+	t.Run("returns complaint count for sender domain", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND complained_at IS NOT NULL AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+			WithArgs(since, senderDomain).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+		got, err := repo.CountComplainedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		require.NoError(t, err)
+		assert.Equal(t, 1, got)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty sender domain → 0 without query", func(t *testing.T) {
+		got, err := repo.CountComplainedSinceForSenderDomain(ctx, workspaceID, "", since)
+		require.NoError(t, err)
+		assert.Zero(t, got)
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).
+			Return(nil, errors.New("no conn"))
+		_, err := repo.CountComplainedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND complained_at IS NOT NULL AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+			WithArgs(since, senderDomain).
+			WillReturnError(errors.New("boom"))
+		_, err := repo.CountComplainedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "count complained messages")
+	})
+}
+
 func TestMessageHistoryRepository_CountSentSinceForDomains(t *testing.T) {
 	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
 	defer cleanup()

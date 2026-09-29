@@ -1968,7 +1968,12 @@ func TestTransactionalNotificationService_TestTemplate(t *testing.T) {
 	// Expect message history creation
 	mockMsgHistoryRepo.EXPECT().
 		Create(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
-		Return(nil)
+		DoAndReturn(func(_ context.Context, _ string, _ string, message *domain.MessageHistory) error {
+			// Correctif 2026-09-29 : SentAt est *time.Time ; TestTemplate n'appelle
+			// Create qu'APRÈS un SendEmail réussi, donc sent_at doit être posé.
+			require.NotNil(t, message.SentAt, "sent_at doit être posé (envoi réussi)")
+			return nil
+		})
 
 	// Call the method
 	err := service.TestTemplate(ctx, workspaceID, templateID, integrationID, senderID, recipientEmail, "", domain.EmailOptions{})
@@ -2152,6 +2157,8 @@ func TestTransactionalNotificationService_TestTemplate_WithChannelOptions(t *tes
 			assert.Equal(t, []string{"cc@example.com"}, message.ChannelOptions.CC)
 			assert.Equal(t, []string{"bcc@example.com"}, message.ChannelOptions.BCC)
 			assert.Equal(t, "reply@example.com", message.ChannelOptions.ReplyTo)
+			// Correctif 2026-09-29 : sent_at doit être posé (envoi réussi).
+			require.NotNil(t, message.SentAt, "sent_at doit être posé (envoi réussi)")
 			return nil
 		})
 

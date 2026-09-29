@@ -219,6 +219,9 @@ func TestHandleColdSimulate_SeedSent_CreatesNAndCounts(t *testing.T) {
 		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
 			assert.Equal(t, "p@corp.com", m.ContactEmail)
 			assert.Nil(t, m.FailedAt, "entrée 'sent' (pas failed)")
+			// Correctif 2026-09-29 : SentAt est *time.Time (nullable) ; une entrée
+			// "sent" seedée doit rester non-nil (le cap ne lit que sent_at posé).
+			require.NotNil(t, m.SentAt, "sent_at doit être posé (non-nil), pas juste non-zéro")
 			assert.False(t, m.SentAt.IsZero(), "sent_at posé (lu par le cap)")
 			return nil
 		}).Times(3)
