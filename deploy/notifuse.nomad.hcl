@@ -139,7 +139,7 @@ job "notifuse" {
         # Image officielle postgres:17-alpine + pgBackRest epingle. La BASE est
         # identique au bit pres : changer d'image de base changerait la
         # collation (musl/glibc) et fausserait silencieusement les index.
-        image   = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine@sha256:2b6c8861f48116efaf58ea786e78590f42afd9b06073683bf44ea99681dfc653"
+        image   = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine-gosu-20261002@sha256:5ec0bfd128c0b50720227a0caee1d2e2891509f67183cbad9795c35fb1ebb7f1"
         command = "postgres"
         args = [
           "-c", "max_wal_size=1GB", "-c", "checkpoint_timeout=10min",
@@ -211,7 +211,9 @@ EOH
       }
       resources {
         cpu        = 300
-        memory     = 384
+        # 384 -> 480 Mio (2026-10-02) : working set mesure sur 7 j = 363 Mio max (cAdvisor,
+        # sans page cache) x 1,3. memory_max inchange (fusible).
+        memory     = 480
         memory_max = 7000
       }
     }
@@ -245,7 +247,7 @@ EOH
           "site.veridian.tier"  = "saas-prod"
           "site.veridian.app"   = "notifuse"
         }
-        image      = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine@sha256:2b6c8861f48116efaf58ea786e78590f42afd9b06073683bf44ea99681dfc653"
+        image      = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine-gosu-20261002@sha256:5ec0bfd128c0b50720227a0caee1d2e2891509f67183cbad9795c35fb1ebb7f1"
         entrypoint = ["/usr/local/bin/pgbackrest-scheduler"]
         command    = ""
         volumes = [
