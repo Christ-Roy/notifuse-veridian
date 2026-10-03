@@ -2063,6 +2063,18 @@ func TestEmailProvider_WarmupFieldsJSONBlob(t *testing.T) {
 	})
 }
 
+func TestVeridianGmailHardMaxDailyCap(t *testing.T) {
+	// 2026-10-03, mission plafonds Gmail : le defaut (vide/'personal') reste
+	// sous le seuil reel Google (~500/jour) avec marge ; 'workspace' autorise
+	// un volume bien plus eleve (~2000/jour reel), toujours avec marge. La
+	// comparaison est insensible a la casse (EqualFold).
+	assert.Equal(t, VeridianGmailPersonalHardMaxDailyCap, VeridianGmailHardMaxDailyCap(""))
+	assert.Equal(t, VeridianGmailPersonalHardMaxDailyCap, VeridianGmailHardMaxDailyCap("personal"))
+	assert.Equal(t, VeridianGmailWorkspaceHardMaxDailyCap, VeridianGmailHardMaxDailyCap("workspace"))
+	assert.Equal(t, VeridianGmailWorkspaceHardMaxDailyCap, VeridianGmailHardMaxDailyCap("Workspace"))
+	assert.Equal(t, VeridianGmailPersonalHardMaxDailyCap, VeridianGmailHardMaxDailyCap("garbage"))
+}
+
 func TestEmailProvider_VeridianGmailProfileDailyCap(t *testing.T) {
 	gmail := EmailProvider{
 		Kind: EmailProviderKindSMTP,
