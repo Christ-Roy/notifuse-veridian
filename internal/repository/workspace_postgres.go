@@ -447,7 +447,11 @@ func (r *workspaceRepository) GetUserWorkspace(ctx context.Context, userID strin
 		&uw.UserID, &uw.WorkspaceID, &uw.Role, &uw.Permissions, &uw.CreatedAt, &uw.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("user is not a member of the workspace")
+		// === Veridian patch — mesure prod 2026-10-03 (mission "API & agents") ===
+		// Type dédié (au lieu d'un fmt.Errorf anonyme) pour qu'AuthenticateUserForWorkspace
+		// puisse le distinguer sans ambiguïté d'une vraie panne DB et le mapper
+		// en 403 HTTP (clé/valide session valide, mais pas membre de CE workspace).
+		return nil, &domain.ErrUserNotWorkspaceMember{UserID: userID, WorkspaceID: workspaceID}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user workspace: %w", err)

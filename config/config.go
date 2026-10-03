@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-const VERSION = "58.0"
+const VERSION = "59.0"
 
 type Config struct {
 	Server              ServerConfig
@@ -66,22 +66,29 @@ type Config struct {
 	HubBaseURL                  string
 	HubInvitationSecretNotifuse string
 
+	// AgentCLIBinaryPath : chemin local (dans l'image) du binaire/script CLI
+	// utilisateur `notifuse` à servir sur GET /agent/notifuse (mission
+	// "API & agents", 2026-10-03). Build séparé (skill notifuse-cli) — vide
+	// tant que l'image ne l'embarque pas encore : l'endpoint renvoie alors
+	// 503 plutôt que de planter.
+	AgentCLIBinaryPath string
+
 	// Track which values came from actual environment variables (not database, not generated)
 	EnvValues EnvValues
 }
 
 // EnvValues tracks configuration that came from actual environment variables
 type EnvValues struct {
-	RootEmail              string
-	APIEndpoint            string
-	SMTPHost               string
-	SMTPPort               int
-	SMTPUsername           string
-	SMTPPassword           string
-	SMTPFromEmail          string
-	SMTPFromName           string
-	SMTPUseTLS             string // "true", "false", or "" (empty = not set, defaults to true)
-	SMTPEHLOHostname       string
+	RootEmail               string
+	APIEndpoint             string
+	SMTPHost                string
+	SMTPPort                int
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFromEmail           string
+	SMTPFromName            string
+	SMTPUseTLS              string // "true", "false", or "" (empty = not set, defaults to true)
+	SMTPEHLOHostname        string
 	SMTPBridgeEnabled       string // "true", "false", or "" (empty = not set, allows setup wizard to configure)
 	SMTPBridgeDomain        string
 	SMTPBridgePort          int
@@ -210,19 +217,19 @@ type LoadOptions struct {
 
 // SystemSettings holds configuration loaded from database
 type SystemSettings struct {
-	IsInstalled            bool
-	RootEmail              string
-	APIEndpoint            string
-	SMTPHost               string
-	SMTPPort               int
-	SMTPUsername           string
-	SMTPPassword           string
-	SMTPFromEmail          string
-	SMTPFromName           string
-	SMTPUseTLS             bool
-	SMTPEHLOHostname       string
-	TelemetryEnabled       bool
-	CheckForUpdates        bool
+	IsInstalled             bool
+	RootEmail               string
+	APIEndpoint             string
+	SMTPHost                string
+	SMTPPort                int
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFromEmail           string
+	SMTPFromName            string
+	SMTPUseTLS              bool
+	SMTPEHLOHostname        string
+	TelemetryEnabled        bool
+	CheckForUpdates         bool
 	SMTPBridgeEnabled       bool
 	SMTPBridgeDomain        string
 	SMTPBridgePort          int
@@ -586,9 +593,9 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		SMTPPassword:            v.GetString("SMTP_PASSWORD"),
 		SMTPFromEmail:           v.GetString("SMTP_FROM_EMAIL"),
 		SMTPFromName:            v.GetString("SMTP_FROM_NAME"),
-		SMTPUseTLS:              smtpUseTLSStr,           // "true", "false", or "" (empty = not set, defaults to true)
+		SMTPUseTLS:              smtpUseTLSStr, // "true", "false", or "" (empty = not set, defaults to true)
 		SMTPEHLOHostname:        v.GetString("SMTP_EHLO_HOSTNAME"),
-		SMTPBridgeEnabled:       smtpBridgeEnabledStr,    // "true", "false", or "" (empty = not set)
+		SMTPBridgeEnabled:       smtpBridgeEnabledStr, // "true", "false", or "" (empty = not set)
 		SMTPBridgeDomain:        smtpBridgeDomain,
 		SMTPBridgePort:          smtpBridgePort,
 		SMTPBridgeTLSCertBase64: smtpBridgeTLSCertBase64,
@@ -796,8 +803,8 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 				KeyFile:  v.GetString("SSL_KEY_FILE"),
 			},
 		},
-		Database:  dbConfig,
-		SMTP:      smtpConfig,
+		Database:   dbConfig,
+		SMTP:       smtpConfig,
 		SMTPBridge: smtpBridgeConfig,
 		Security: SecurityConfig{
 			JWTSecret: jwtSecret,
@@ -864,11 +871,11 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		APIEndpoint:         apiEndpoint,
 		InternalAPIEndpoint: v.GetString("INTERNAL_API_ENDPOINT"),
 		WebhookEndpoint:     v.GetString("WEBHOOK_ENDPOINT"),
-		LogLevel:        v.GetString("LOG_LEVEL"),
-		Version:         v.GetString("VERSION"),
-		IsInstalled:     isInstalled,
-		MaxUsers:        v.GetInt("MAX_USERS"),
-		MaxWorkspaces:   v.GetInt("MAX_WORKSPACES"),
+		LogLevel:            v.GetString("LOG_LEVEL"),
+		Version:             v.GetString("VERSION"),
+		IsInstalled:         isInstalled,
+		MaxUsers:            v.GetInt("MAX_USERS"),
+		MaxWorkspaces:       v.GetInt("MAX_WORKSPACES"),
 
 		// === Veridian patches ===
 		HubAPISecret:                v.GetString("HUB_API_SECRET"),
@@ -877,8 +884,9 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		VeridianDefaultPlan:         v.GetString("VERIDIAN_DEFAULT_PLAN"),
 		HubBaseURL:                  v.GetString("HUB_BASE_URL"),
 		HubInvitationSecretNotifuse: v.GetString("HUB_INVITATION_SECRET_NOTIFUSE"),
+		AgentCLIBinaryPath:          v.GetString("AGENT_CLI_BINARY_PATH"),
 
-		EnvValues:       envVals, // Store env values for setup service
+		EnvValues: envVals, // Store env values for setup service
 	}
 
 	if config.WebhookEndpoint == "" {

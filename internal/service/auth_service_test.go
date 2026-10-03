@@ -824,3 +824,125 @@ func TestAuthService_InvalidateSecretCache(t *testing.T) {
 	// Since secretLoaded is private, we test behavior indirectly.
 	require.NotNil(t, service)
 }
+
+// === Veridian patch — mesure prod 2026-10-03 (mission "API & agents") ===
+//
+// Trois cas mesurés en prod avec une clé API scopée : révoquée (401),
+// utilisée sur un AUTRE workspace (403), et le garde-fou qu'une vraie panne
+// DB ne se fait PAS passer pour l'un des deux (reste 500 côté handler, cf.
+// internal/http/utils_test.go TestWriteAuthAwareError).
+
+func TestAuthService_AuthenticateUserForWorkspace_RevokedAPIKeyReturns401Shape(t *testing.T) {
+	mockAuthRepo, _, _, service := setupAuthTest(t)
+
+	userID := "revoked-api-key-user"
+	workspaceID := "workspace123"
+
+	// type=api_key, pas de session : AuthenticateUserFromContext appelle
+	// GetUserByID directement. sql.ErrNoRows = la clé a été supprimée
+	// (RevokeAPIKey) : AuthService.GetUserByID la traduit déjà en
+	// ErrUserNotFound (cf. ligne ~316) — AuthenticateUserForWorkspace doit la
+	// re-classer en *domain.ErrAuthenticationFailed, jamais en 500 générique.
+	ctx := context.WithValue(
+		context.WithValue(context.Background(), domain.UserIDKey, userID),
+		domain.UserTypeKey, string(domain.UserTypeAPIKey),
+	)
+
+	mockAuthRepo.EXPECT().GetUserByID(ctx, userID).Return(nil, sql.ErrNoRows)
+
+	_, user, uw, err := service.AuthenticateUserForWorkspace(ctx, workspaceID)
+	require.Error(t, err)
+	require.Nil(t, user)
+	require.Nil(t, uw)
+
+	var authErr *domain.ErrAuthenticationFailed
+	require.ErrorAs(t, err, &authErr, "une clé révoquée doit produire *domain.ErrAuthenticationFailed (401), pas une erreur générique")
+}
+
+func TestAuthService_AuthenticateUserForWorkspace_WrongWorkspaceReturns403Shape(t *testing.T) {
+	mockAuthRepo, mockWorkspaceRepo, _, service := setupAuthTest(t)
+
+	userID := "scoped-api-key-user"
+	otherWorkspaceID := "workspace-not-mine"
+	validUser := &domain.User{ID: userID, Type: domain.UserTypeAPIKey}
+
+	ctx := context.WithValue(
+		context.WithValue(context.Background(), domain.UserIDKey, userID),
+		domain.UserTypeKey, string(domain.UserTypeAPIKey),
+	)
+
+	// La clé est VALIDE (GetUserByID réussit) mais n'est pas membre de ce
+	// workspace : c'est exactement le cas mesuré en prod ("clé API scopée
+	// utilisée sur un AUTRE workspace"). GetByID du workspace réussit (il
+	// existe bel et bien, juste pas pour cette clé).
+	mockAuthRepo.EXPECT().GetUserByID(ctx, userID).Return(validUser, nil)
+	mockWorkspaceRepo.EXPECT().GetByID(ctx, otherWorkspaceID).Return(&domain.Workspace{ID: otherWorkspaceID}, nil)
+	mockWorkspaceRepo.EXPECT().GetUserWorkspace(ctx, userID, otherWorkspaceID).
+		Return(nil, &domain.ErrUserNotWorkspaceMember{UserID: userID, WorkspaceID: otherWorkspaceID})
+
+	_, user, uw, err := service.AuthenticateUserForWorkspace(ctx, otherWorkspaceID)
+	require.Error(t, err)
+	require.Nil(t, user)
+	require.Nil(t, uw)
+
+	var unauthorized *domain.ErrUnauthorized
+	require.ErrorAs(t, err, &unauthorized, "une clé valide mais hors-scope doit produire *domain.ErrUnauthorized (403), pas 401 ni 500")
+	// Jamais de fuite : le message ne doit pas distinguer "pas membre" de
+	// "workspace introuvable" (cf. test suivant).
+	require.Equal(t, "not authorized for this workspace", unauthorized.Error())
+}
+
+func TestAuthService_AuthenticateUserForWorkspace_UnknownWorkspaceAlsoReturns403NotLeaking404(t *testing.T) {
+	mockAuthRepo, mockWorkspaceRepo, _, service := setupAuthTest(t)
+
+	userID := "scoped-api-key-user"
+	unknownWorkspaceID := "workspace-does-not-exist"
+	validUser := &domain.User{ID: userID, Type: domain.UserTypeAPIKey}
+
+	ctx := context.WithValue(
+		context.WithValue(context.Background(), domain.UserIDKey, userID),
+		domain.UserTypeKey, string(domain.UserTypeAPIKey),
+	)
+
+	mockAuthRepo.EXPECT().GetUserByID(ctx, userID).Return(validUser, nil)
+	mockWorkspaceRepo.EXPECT().GetByID(ctx, unknownWorkspaceID).
+		Return(nil, &domain.ErrWorkspaceNotFound{WorkspaceID: unknownWorkspaceID})
+
+	_, _, _, err := service.AuthenticateUserForWorkspace(ctx, unknownWorkspaceID)
+	require.Error(t, err)
+
+	var unauthorized *domain.ErrUnauthorized
+	require.ErrorAs(t, err, &unauthorized)
+	require.Equal(t, "not authorized for this workspace", unauthorized.Error(),
+		"même message que 'pas membre' : un workspace inexistant ne doit pas se distinguer d'un accès refusé")
+}
+
+func TestAuthService_AuthenticateUserForWorkspace_GenuineDBFailureStays500Shaped(t *testing.T) {
+	mockAuthRepo, mockWorkspaceRepo, _, service := setupAuthTest(t)
+
+	userID := "scoped-api-key-user"
+	workspaceID := "workspace123"
+	validUser := &domain.User{ID: userID, Type: domain.UserTypeAPIKey}
+
+	ctx := context.WithValue(
+		context.WithValue(context.Background(), domain.UserIDKey, userID),
+		domain.UserTypeKey, string(domain.UserTypeAPIKey),
+	)
+
+	// Une VRAIE panne DB (ni ErrWorkspaceNotFound, ni ErrUserNotWorkspaceMember)
+	// ne doit JAMAIS être reclassée en 401/403 — elle doit rester une erreur
+	// générique que le handler traduira en 500 (cf. WriteAuthAwareError qui
+	// retombe sur son fallback pour tout ce qui n'est pas l'un des deux types).
+	mockAuthRepo.EXPECT().GetUserByID(ctx, userID).Return(validUser, nil)
+	mockWorkspaceRepo.EXPECT().GetByID(ctx, workspaceID).
+		Return(nil, errors.New("connection refused: dial tcp timeout"))
+
+	_, _, _, err := service.AuthenticateUserForWorkspace(ctx, workspaceID)
+	require.Error(t, err)
+
+	var unauthorized *domain.ErrUnauthorized
+	var authFailed *domain.ErrAuthenticationFailed
+	require.False(t, errors.As(err, &unauthorized), "une panne DB ne doit jamais ressembler à un 403")
+	require.False(t, errors.As(err, &authFailed), "une panne DB ne doit jamais ressembler à un 401")
+	require.Contains(t, err.Error(), "connection refused")
+}

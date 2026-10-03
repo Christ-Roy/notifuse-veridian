@@ -786,6 +786,33 @@ export const mockWorkspaceMembers = {
 }
 
 // ============================================
+// API & AGENTS (mission 2026-10-03)
+// ============================================
+
+export const mockAPIKeys = [
+  {
+    user_id: 'api-key-agent-1',
+    name: 'agent_ci',
+    masked_email: 'age***@notifuse.app',
+    created_at: '2026-09-15T10:00:00Z',
+    veridian_owned: false
+  }
+]
+
+export const mockCreateAPIKeyResponse = {
+  status: 'success',
+  token: 'e2e-mock-jwt-token-never-real',
+  email: 'my_agent@notifuse.app'
+}
+
+export const mockCreateAgentInstallTokenResponse = {
+  status: 'success',
+  install_token: 'e2e-mock-install-token-one-time',
+  expires_at: '2026-10-03T12:10:00Z',
+  expires_in_seconds: 600
+}
+
+// ============================================
 // API MUTATION RESPONSES
 // ============================================
 

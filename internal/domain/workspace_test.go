@@ -5438,3 +5438,71 @@ func TestWorkspaceSettings_VeridianMarketingEmailProviderIDsRoundTrip(t *testing
 	require.NoError(t, json.Unmarshal(raw, &decoded))
 	assert.Equal(t, settings.VeridianMarketingEmailProviderIDs, decoded.VeridianMarketingEmailProviderIDs)
 }
+
+// === Veridian patch — mission "API & agents" (2026-10-03) ===
+
+func TestErrUserNotWorkspaceMember_Error(t *testing.T) {
+	err := &ErrUserNotWorkspaceMember{UserID: "u1", WorkspaceID: "ws1"}
+	assert.Equal(t, "user is not a member of the workspace", err.Error())
+}
+
+func TestErrAuthenticationFailed_Error(t *testing.T) {
+	err := &ErrAuthenticationFailed{Message: "session expired"}
+	assert.Equal(t, "session expired", err.Error())
+}
+
+func TestRevokeAPIKeyRequest_Validate(t *testing.T) {
+	testCases := []struct {
+		name    string
+		request RevokeAPIKeyRequest
+		wantErr bool
+	}{
+		{
+			name:    "valid request",
+			request: RevokeAPIKeyRequest{WorkspaceID: "workspace-123", UserID: "user-456"},
+			wantErr: false,
+		},
+		{
+			name:    "missing workspace ID",
+			request: RevokeAPIKeyRequest{WorkspaceID: "", UserID: "user-456"},
+			wantErr: true,
+		},
+		{
+			name:    "missing user ID",
+			request: RevokeAPIKeyRequest{WorkspaceID: "workspace-123", UserID: ""},
+			wantErr: true,
+		},
+		{
+			name:    "missing both fields",
+			request: RevokeAPIKeyRequest{},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.request.Validate()
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAPIKeySummary_Fields(t *testing.T) {
+	now := time.Now()
+	summary := &APIKeySummary{
+		UserID:        "user-1",
+		Name:          "agent-ci",
+		MaskedEmail:   "age***@notifuse.app",
+		CreatedAt:     now,
+		VeridianOwned: false,
+	}
+	assert.Equal(t, "user-1", summary.UserID)
+	assert.Equal(t, "age***@notifuse.app", summary.MaskedEmail)
+	assert.Nil(t, summary.LastUsedAt)
+	assert.False(t, summary.VeridianOwned)
+	assert.Equal(t, now, summary.CreatedAt)
+}

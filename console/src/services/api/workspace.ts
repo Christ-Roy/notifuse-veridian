@@ -527,6 +527,41 @@ export interface RemoveMemberResponse {
   message: string
 }
 
+// === Veridian patch — mission "API & agents" (2026-10-03) ===
+
+export interface APIKeySummary {
+  user_id: string
+  name: string
+  masked_email: string
+  created_at: string
+  last_used_at?: string
+  veridian_owned: boolean
+}
+
+export interface ListAPIKeysResponse {
+  keys: APIKeySummary[]
+}
+
+export interface RevokeAPIKeyRequest {
+  workspace_id: string
+  user_id: string
+}
+
+export interface RevokeAPIKeyResponse {
+  status: string
+}
+
+export interface CreateAgentInstallTokenRequest {
+  workspace_id: string
+}
+
+export interface CreateAgentInstallTokenResponse {
+  status: string
+  install_token: string
+  expires_at: string
+  expires_in_seconds: number
+}
+
 export interface DeleteWorkspaceRequest {
   id: string
 }
@@ -745,6 +780,16 @@ export const workspaceService = {
 
   removeMember: (data: RemoveMemberRequest) =>
     api.post<RemoveMemberResponse>('/api/workspaces.removeMember', data),
+
+  // === Veridian patch — mission "API & agents" (2026-10-03) ===
+  listAPIKeys: (workspaceId: string) =>
+    api.get<ListAPIKeysResponse>(`/api/workspaces.listAPIKeys?workspace_id=${workspaceId}`),
+
+  revokeAPIKey: (data: RevokeAPIKeyRequest) =>
+    api.post<RevokeAPIKeyResponse>('/api/workspaces.revokeAPIKey', data),
+
+  createAgentInstallToken: (data: CreateAgentInstallTokenRequest) =>
+    api.post<CreateAgentInstallTokenResponse>('/api/workspaces.createAgentInstallToken', data),
 
   // Integration endpoints
   createIntegration: (data: CreateIntegrationRequest) =>

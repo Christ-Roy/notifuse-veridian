@@ -125,20 +125,21 @@ type App struct {
 	emailQueueRepo                domain.EmailQueueRepository
 
 	// === Veridian patches ===
-	veridianPlanRepo         domain.VeridianPlanRepository
-	veridianIdempotencyRepo  domain.VeridianIdempotencyRepository
-	veridianAPIKeyGraceRepo  domain.VeridianAPIKeyGraceRepository // Lot K — grace period rotate-api-key
-	veridianFrozenMemberRepo domain.VeridianFrozenMemberRepository // §5.21 — freeze member per-user
-	veridianIMAPUIDSeenRepo  domain.VeridianIMAPUIDSeenRepository  // Lot 1 cold — idempotence poller IMAP (V50)
-	veridianContactReplyRepo domain.VeridianContactReplyRepository // Lot 3 cold — signal durable stop-on-reply (V51)
-	veridianService          domain.VeridianService
-	veridianWebhookEmitter   domain.WebhookEmitter
-	veridianPaywallCache     *middleware.PaywallCache              // partage middleware paywall + handler invalidate
-	veridianFrozenCache      *middleware.FrozenMemberCache         // partage middleware frozen + handler freeze/unfreeze invalidate
-	veridianPricingSync      *service.VeridianPricingSyncService   // catalogue pricing Hub (lot O 2026-05-21)
+	veridianPlanRepo           domain.VeridianPlanRepository
+	veridianIdempotencyRepo    domain.VeridianIdempotencyRepository
+	veridianAPIKeyGraceRepo    domain.VeridianAPIKeyGraceRepository  // Lot K — grace period rotate-api-key
+	agentInstallTokenRepo      domain.AgentInstallTokenRepository    // mission "API & agents" (2026-10-03)
+	veridianFrozenMemberRepo   domain.VeridianFrozenMemberRepository // §5.21 — freeze member per-user
+	veridianIMAPUIDSeenRepo    domain.VeridianIMAPUIDSeenRepository  // Lot 1 cold — idempotence poller IMAP (V50)
+	veridianContactReplyRepo   domain.VeridianContactReplyRepository // Lot 3 cold — signal durable stop-on-reply (V51)
+	veridianService            domain.VeridianService
+	veridianWebhookEmitter     domain.WebhookEmitter
+	veridianPaywallCache       *middleware.PaywallCache                   // partage middleware paywall + handler invalidate
+	veridianFrozenCache        *middleware.FrozenMemberCache              // partage middleware frozen + handler freeze/unfreeze invalidate
+	veridianPricingSync        *service.VeridianPricingSyncService        // catalogue pricing Hub (lot O 2026-05-21)
 	veridianTestTenantsCleanup *service.VeridianTestTenantsCleanupService // cron auto-cleanup orphans staging (2026-05-24)
-	veridianIMAPPoller       *queue.VeridianIMAPPollerService      // Lot 1 cold — poller IMAP self-service (réception bounces/réponses)
-	veridianReplyService     *service.VeridianReplyService         // Lot 3 cold — détection réponse + exit séquence (stop-on-reply)
+	veridianIMAPPoller         *queue.VeridianIMAPPollerService           // Lot 1 cold — poller IMAP self-service (réception bounces/réponses)
+	veridianReplyService       *service.VeridianReplyService              // Lot 3 cold — détection réponse + exit séquence (stop-on-reply)
 
 	// Services
 	authService                      *service.AuthService
@@ -476,6 +477,11 @@ func (a *App) InitRepositories() error {
 	// VeridianAPIKeyGraceCleanupService.
 	a.veridianAPIKeyGraceRepo = repository.NewVeridianAPIKeyGraceRepository(a.db)
 
+	// === Veridian patch — mission "API & agents" (2026-10-03) === Repo pour
+	// la table agent_install_tokens (migration V59) : jetons d'installation
+	// à usage unique du parcours "Brancher mon agent".
+	a.agentInstallTokenRepo = repository.NewAgentInstallTokenRepository(a.db)
+
 	// === Veridian patch — Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
 	// Repo Postgres pour la table veridian_frozen_members (migration V47).
 	// Utilise par : (a) service.FreezeMember/UnfreezeMember, (b) middleware
@@ -529,12 +535,12 @@ func (a *App) InitServices() error {
 	a.rateLimiter = ratelimiter.NewRateLimiter()
 
 	// Configure policies for different use cases
-	a.rateLimiter.SetPolicy("signin", 5, 5*time.Minute)           // Strict auth
-	a.rateLimiter.SetPolicy("verify", 5, 5*time.Minute)           // Strict auth
-	a.rateLimiter.SetPolicy("smtp", 5, 1*time.Minute)             // SMTP bridge
-	a.rateLimiter.SetPolicy("subscribe:email", 10, 1*time.Minute)    // Public subscribe by email
+	a.rateLimiter.SetPolicy("signin", 5, 5*time.Minute)             // Strict auth
+	a.rateLimiter.SetPolicy("verify", 5, 5*time.Minute)             // Strict auth
+	a.rateLimiter.SetPolicy("smtp", 5, 1*time.Minute)               // SMTP bridge
+	a.rateLimiter.SetPolicy("subscribe:email", 10, 1*time.Minute)   // Public subscribe by email
 	a.rateLimiter.SetPolicy("subscribe:ip", 50, 1*time.Minute)      // Public subscribe by IP
-	a.rateLimiter.SetPolicy("preferences:email", 20, 1*time.Minute)  // Public preferences by email
+	a.rateLimiter.SetPolicy("preferences:email", 20, 1*time.Minute) // Public preferences by email
 	a.rateLimiter.SetPolicy("preferences:ip", 100, 1*time.Minute)   // Public preferences by IP
 
 	// Initialize user service
@@ -560,15 +566,15 @@ func (a *App) InitServices() error {
 	// Config tracks which values came from actual env vars (not database, not generated)
 	rootEmail, apiEndpoint, smtpHost, smtpUsername, smtpPassword, smtpFromEmail, smtpFromName, smtpPort, smtpUseTLS, smtpBridgeEnabled, smtpBridgeDomain, smtpBridgeTLSCertBase64, smtpBridgeTLSKeyBase64, smtpBridgePort := a.config.GetEnvValues()
 	envConfig := &service.EnvironmentConfig{
-		RootEmail:              rootEmail,
-		APIEndpoint:            apiEndpoint,
-		SMTPHost:               smtpHost,
-		SMTPPort:               smtpPort,
-		SMTPUsername:           smtpUsername,
-		SMTPPassword:           smtpPassword,
-		SMTPFromEmail:          smtpFromEmail,
-		SMTPFromName:           smtpFromName,
-		SMTPUseTLS:             smtpUseTLS,
+		RootEmail:               rootEmail,
+		APIEndpoint:             apiEndpoint,
+		SMTPHost:                smtpHost,
+		SMTPPort:                smtpPort,
+		SMTPUsername:            smtpUsername,
+		SMTPPassword:            smtpPassword,
+		SMTPFromEmail:           smtpFromEmail,
+		SMTPFromName:            smtpFromName,
+		SMTPUseTLS:              smtpUseTLS,
 		SMTPBridgeEnabled:       smtpBridgeEnabled,
 		SMTPBridgeDomain:        smtpBridgeDomain,
 		SMTPBridgePort:          smtpBridgePort,
@@ -868,6 +874,8 @@ func (a *App) InitServices() error {
 		a.blogService,
 	)
 	a.workspaceService.SetEmailIntegrationLifecycleRepository(a.emailQueueRepo)
+	// === Veridian patch — mission "API & agents" (2026-10-03) ===
+	a.workspaceService.SetAgentInstallTokenRepository(a.agentInstallTokenRepo)
 
 	// Initialize and register segment build processor
 	segmentBuildProcessor := service.NewSegmentBuildProcessor(
@@ -1258,6 +1266,19 @@ func (a *App) InitHandlers() error {
 		a.logger,
 		a.config.Security.SecretKey,
 	)
+	// === Veridian patch — mission "API & agents" (2026-10-03) === Routes
+	// publiques /agent/* (install.sh, CLI, skill) + échange de jeton
+	// d'installation. apiHost derive de APIEndpoint (jamais du Host client).
+	agentAPIHost := strings.TrimPrefix(strings.TrimPrefix(a.config.APIEndpoint, "https://"), "http://")
+	if idx := strings.Index(agentAPIHost, "/"); idx != -1 {
+		agentAPIHost = agentAPIHost[:idx]
+	}
+	agentHandler := httpHandler.NewAgentHandler(
+		a.workspaceService,
+		a.logger,
+		a.config.AgentCLIBinaryPath,
+		agentAPIHost,
+	)
 	contactHandler := httpHandler.NewContactHandler(a.contactService, getJWTSecret, a.logger)
 	listHandler := httpHandler.NewListHandler(a.listService, getJWTSecret, a.logger)
 	contactListHandler := httpHandler.NewContactListHandler(a.contactListService, getJWTSecret, a.logger)
@@ -1344,6 +1365,7 @@ func (a *App) InitHandlers() error {
 	settingsHandler.RegisterRoutes(a.mux)
 	userHandler.RegisterRoutes(a.mux)
 	workspaceHandler.RegisterRoutes(a.mux)
+	agentHandler.RegisterRoutes(a.mux)
 	rootHandler.RegisterRoutes(a.mux)
 	contactHandler.RegisterRoutes(a.mux)
 	listHandler.RegisterRoutes(a.mux)

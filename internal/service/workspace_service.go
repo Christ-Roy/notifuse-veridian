@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/mailer"
 	"github.com/asaskevich/govalidator"
@@ -38,6 +40,17 @@ type WorkspaceService struct {
 	blogService                   *BlogService
 	emailIntegrationLifecycleRepo domain.EmailIntegrationLifecycleRepository
 	emailIntegrationPolicyRepo    domain.EmailIntegrationPolicyQueueRepository
+	// === Veridian patch — mission "API & agents" (2026-10-03) ===
+	agentInstallTokenRepo domain.AgentInstallTokenRepository
+}
+
+// SetAgentInstallTokenRepository enables CreateAgentInstallToken/
+// ExchangeAgentInstallToken. Optional setter (same pattern as
+// SetEmailIntegrationLifecycleRepository) so the long NewWorkspaceService
+// constructor signature doesn't grow for an optional dependency: when unset,
+// both methods return a clear configuration error instead of panicking.
+func (s *WorkspaceService) SetAgentInstallTokenRepository(repo domain.AgentInstallTokenRepository) {
+	s.agentInstallTokenRepo = repo
 }
 
 func NewWorkspaceService(
@@ -999,6 +1012,16 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 		return "", "", &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
 	}
 
+	token, apiEmail, _, err := s.mintAPIKeyUser(ctx, workspaceID, emailPrefix)
+	return token, apiEmail, err
+}
+
+// mintAPIKeyUser creates an api_key-type user, adds it to the workspace with
+// full permissions, and returns its JWT token, technical email and user ID.
+// No authentication/authorization check here — callers (CreateAPIKey,
+// CreateAgentInstallToken) are responsible for checking who is allowed to
+// mint a key before calling this.
+func (s *WorkspaceService) mintAPIKeyUser(ctx context.Context, workspaceID string, emailPrefix string) (token string, apiEmail string, apiUserID string, err error) {
 	// Generate an API email using the prefix
 	// Extract domainName from API endpoint by removing any protocol prefix and path suffix
 	domainName := s.config.APIEndpoint
@@ -1010,7 +1033,7 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 	if idx := strings.Index(domainName, "/"); idx != -1 {
 		domainName = domainName[:idx]
 	}
-	apiEmail := emailPrefix + "@" + domainName
+	apiEmail = emailPrefix + "@" + domainName
 
 	// Create a user object for the API key
 	apiUser := &domain.User{
@@ -1027,10 +1050,10 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 		var userExistsErr *domain.ErrUserExists
 		if errors.As(err, &userExistsErr) {
 			s.logger.WithField("workspace_id", workspaceID).WithField("user_email", apiUser.Email).Error("API user already exists")
-			return "", "", fmt.Errorf("this user already exists")
+			return "", "", "", fmt.Errorf("this user already exists")
 		}
 		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiUser.ID).WithField("error", err.Error()).Error("Failed to create API user")
-		return "", "", err
+		return "", "", "", err
 	}
 
 	// Create full permissions for API key
@@ -1046,13 +1069,273 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 	err = s.repo.AddUserToWorkspace(ctx, newUserWorkspace)
 	if err != nil {
 		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiUser.ID).WithField("error", err.Error()).Error("Failed to add API user to workspace")
-		return "", "", err
+		return "", "", "", err
 	}
 
 	// Generate the token using the auth service
-	token := s.authService.GenerateAPIAuthToken(apiUser)
+	token = s.authService.GenerateAPIAuthToken(apiUser)
 
-	return token, apiEmail, nil
+	return token, apiEmail, apiUser.ID, nil
+}
+
+// CreateAgentInstallToken mints a fresh API key (same mechanism as
+// CreateAPIKey) AND a one-time, short-lived install token that the
+// `/agent/install.sh` script exchanges for it server-side — the raw key
+// never has to appear in the install command, so it never lands in shell
+// history. Restricted to the workspace owner or an admin-equivalent member
+// (see isWorkspaceAdminOrOwner), same gate as RevokeAPIKey.
+//
+// Returns the raw token (shown once, in the copy-paste install command) and
+// its metadata. The mint of the new sub-key happens UNCONDITIONALLY to this
+// call (as opposed to re-using an existing key) so a revoked/expired install
+// token never leaves a dangling orphan key: the caller (handler) is expected
+// to revoke the freshly-minted key if persisting the install token row fails.
+func (s *WorkspaceService) CreateAgentInstallToken(ctx context.Context, workspaceID string) (rawToken string, meta *domain.AgentInstallToken, err error) {
+	if s.agentInstallTokenRepo == nil {
+		return "", nil, fmt.Errorf("agent install tokens are not configured on this instance")
+	}
+
+	var requester *domain.User
+	ctx, requester, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, requester.ID, workspaceID)
+	if err != nil {
+		return "", nil, err
+	}
+	if !isWorkspaceAdminOrOwner(requesterWorkspace) {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", requester.ID).Error("Requester is neither owner nor admin of the workspace")
+		return "", nil, &domain.ErrUnauthorized{Message: "only the workspace owner or an admin can create an agent install token"}
+	}
+
+	// Préfixe unique et non-devinable (évite toute collision avec une clé
+	// nommée par l'utilisateur et toute énumération du nombre d'agents
+	// branchés).
+	suffix := make([]byte, 6)
+	if _, err = rand.Read(suffix); err != nil {
+		return "", nil, fmt.Errorf("failed to generate key suffix: %w", err)
+	}
+	emailPrefix := "agent-" + hex.EncodeToString(suffix)
+
+	apiKeyToken, _, apiUserID, err := s.mintAPIKeyUser(ctx, workspaceID, emailPrefix)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to mint api key for agent install: %w", err)
+	}
+
+	// Jeton brut : 256 bits d'entropie, jamais stocké tel quel (hash sha256
+	// en base). Même garantie de non-devinabilité que l'api_key elle-même.
+	rawBytes := make([]byte, 32)
+	if _, err = rand.Read(rawBytes); err != nil {
+		return "", nil, fmt.Errorf("failed to generate install token: %w", err)
+	}
+	rawToken = hex.EncodeToString(rawBytes)
+	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(rawToken)))
+
+	encryptedAPIKey, err := crypto.EncryptString(apiKeyToken, s.secretKey)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to encrypt api key for install token: %w", err)
+	}
+
+	now := time.Now().UTC()
+	expiresAt := now.Add(10 * time.Minute)
+
+	record := &domain.AgentInstallTokenRecord{
+		TokenHash:       tokenHash,
+		WorkspaceID:     workspaceID,
+		APIKeyUserID:    apiUserID,
+		EncryptedAPIKey: encryptedAPIKey,
+		CreatedBy:       requester.ID,
+		CreatedAt:       now,
+		ExpiresAt:       expiresAt,
+	}
+	if err = s.agentInstallTokenRepo.Insert(ctx, record); err != nil {
+		// La clé fraîchement mintée n'a plus d'utilité si le jeton ne peut
+		// pas être persisté : on la révoque pour ne pas laisser une api_key
+		// orpheline, invisible du client (il n'a jamais vu le jeton).
+		if revokeErr := s.RevokeAPIKey(ctx, workspaceID, apiUserID); revokeErr != nil {
+			s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiUserID).WithField("error", revokeErr.Error()).Error("Failed to revoke orphaned api key after install token insert failure")
+		}
+		return "", nil, fmt.Errorf("failed to persist install token: %w", err)
+	}
+
+	return rawToken, &domain.AgentInstallToken{
+		WorkspaceID:  workspaceID,
+		APIKeyUserID: apiUserID,
+		CreatedBy:    requester.ID,
+		CreatedAt:    now,
+		ExpiresAt:    expiresAt,
+	}, nil
+}
+
+// ExchangeAgentInstallToken consumes a one-time install token (public route:
+// the token itself IS the credential, like a magic link) and returns the
+// api_key it unlocks. Atomic: a reused or expired token is refused via the
+// typed domain errors (ErrAgentInstallTokenNotFound/Used/Expired) so the
+// HTTP handler can answer 404/410 without ambiguity.
+func (s *WorkspaceService) ExchangeAgentInstallToken(ctx context.Context, rawToken string) (*domain.AgentInstallCredentials, error) {
+	if s.agentInstallTokenRepo == nil {
+		return nil, fmt.Errorf("agent install tokens are not configured on this instance")
+	}
+	if rawToken == "" {
+		return nil, domain.ErrAgentInstallTokenNotFound
+	}
+
+	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(rawToken)))
+
+	rec, err := s.agentInstallTokenRepo.ClaimByHash(ctx, tokenHash, time.Now())
+	if err != nil {
+		return nil, err
+	}
+
+	apiKey, err := crypto.DecryptFromHexString(rec.EncryptedAPIKey, s.secretKey)
+	if err != nil {
+		s.logger.WithField("workspace_id", rec.WorkspaceID).WithField("error", err.Error()).Error("Failed to decrypt api key for install token exchange")
+		return nil, fmt.Errorf("failed to decrypt api key: %w", err)
+	}
+
+	return &domain.AgentInstallCredentials{
+		APIKey:      apiKey,
+		APIURL:      s.config.APIEndpoint,
+		WorkspaceID: rec.WorkspaceID,
+	}, nil
+}
+
+// maskAPIKeyEmail masks the local part of an api_key user's technical email
+// for display, keeping only a short, non-guessable prefix: "agent-ci@notifuse.app"
+// -> "age***@notifuse.app". Never logs or returns the full address.
+func maskAPIKeyEmail(email string) string {
+	at := strings.Index(email, "@")
+	if at <= 0 {
+		return "***"
+	}
+	local := email[:at]
+	domain := email[at:]
+	keep := 3
+	if len(local) < keep {
+		keep = len(local)
+	}
+	return local[:keep] + "***" + domain
+}
+
+// isWorkspaceAdminOrOwner reports whether requesterWorkspace is allowed to
+// manage API keys on behalf of the workspace: the owner, or any member
+// granted write access on the "workspace" resource. Notifuse core has no
+// literal "admin" role (UserWorkspace.Role is only ever "owner" or
+// "member") — write access on the workspace resource is the closest
+// equivalent and is what the console's "Admin" toggle actually grants.
+func isWorkspaceAdminOrOwner(uw *domain.UserWorkspace) bool {
+	if uw == nil {
+		return false
+	}
+	if uw.Role == "owner" {
+		return true
+	}
+	return uw.HasPermission(domain.PermissionResourceWorkspace, domain.PermissionTypeWrite)
+}
+
+// ListAPIKeys returns the api_key-type members of a workspace (Veridian-managed
+// Hub credentials excluded, same filter as GetWorkspaceMembersWithEmail), with
+// emails masked for display. Any workspace member with read access can list
+// keys; only revoke is restricted to owner/admin.
+func (s *WorkspaceService) ListAPIKeys(ctx context.Context, workspaceID string) ([]*domain.APIKeySummary, error) {
+	var user *domain.User
+	var err error
+	ctx, user, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	if _, err := s.repo.GetUserWorkspace(ctx, user.ID, workspaceID); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("Failed to get user workspace")
+		return nil, &domain.ErrUnauthorized{Message: "You do not have access to this workspace"}
+	}
+
+	members, err := s.repo.GetWorkspaceUsersWithEmail(ctx, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("error", err.Error()).Error("Failed to get workspace users with email")
+		return nil, err
+	}
+
+	keys := make([]*domain.APIKeySummary, 0, len(members))
+	for _, m := range members {
+		if m.Type != domain.UserTypeAPIKey || m.VeridianManaged {
+			continue
+		}
+		local := m.Email
+		if at := strings.Index(m.Email, "@"); at > 0 {
+			local = m.Email[:at]
+		}
+		keys = append(keys, &domain.APIKeySummary{
+			UserID:        m.UserID,
+			Name:          local,
+			MaskedEmail:   maskAPIKeyEmail(m.Email),
+			CreatedAt:     m.CreatedAt,
+			LastUsedAt:    nil, // non suivi : nécessiterait une colonne + écriture au hot-path auth, hors scope de cette mission
+			VeridianOwned: m.VeridianManaged,
+		})
+	}
+
+	return keys, nil
+}
+
+// RevokeAPIKey deletes an api_key-type workspace member: removed from the
+// workspace AND deleted outright (an api_key user has no other purpose).
+// Restricted to the workspace owner or an admin-equivalent member (write on
+// the "workspace" resource, see isWorkspaceAdminOrOwner). Refuses to touch a
+// human member (wrong type) or a Veridian Hub-managed credential, mirroring
+// the guard already in RemoveMember.
+func (s *WorkspaceService) RevokeAPIKey(ctx context.Context, workspaceID string, apiKeyUserID string) error {
+	var requester *domain.User
+	var err error
+	ctx, requester, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate user: %w", err)
+	}
+
+	requesterWorkspace, err := s.repo.GetUserWorkspace(ctx, requester.ID, workspaceID)
+	if err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiKeyUserID).WithField("requester_id", requester.ID).WithField("error", err.Error()).Error("Failed to get requester workspace")
+		return err
+	}
+
+	if !isWorkspaceAdminOrOwner(requesterWorkspace) {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiKeyUserID).WithField("requester_id", requester.ID).WithField("role", requesterWorkspace.Role).Error("Requester is neither owner nor admin of the workspace")
+		return &domain.ErrUnauthorized{Message: "only the workspace owner or an admin can revoke an API key"}
+	}
+
+	userDetails, err := s.userService.GetUserByID(ctx, apiKeyUserID)
+	if err != nil {
+		s.logger.WithField("user_id", apiKeyUserID).WithField("error", err.Error()).Error("Failed to get user details")
+		return err
+	}
+
+	if userDetails.Type != domain.UserTypeAPIKey {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiKeyUserID).Warn("Refused to revoke a non-api_key user via revokeAPIKey")
+		return fmt.Errorf("target user is not an API key")
+	}
+
+	if userDetails.VeridianManaged {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiKeyUserID).Warn("Refused revoke of veridian-managed user")
+		return &domain.ErrUnauthorized{Message: "cannot revoke a Veridian-managed integration credential"}
+	}
+
+	if err := s.repo.RemoveUserFromWorkspace(ctx, apiKeyUserID, workspaceID); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiKeyUserID).WithField("error", err.Error()).Error("Failed to remove API key from workspace")
+		return err
+	}
+
+	if err := s.userRepo.Delete(ctx, apiKeyUserID); err != nil {
+		s.logger.WithField("user_id", apiKeyUserID).WithField("error", err.Error()).Error("Failed to delete API key user")
+		// Continue: the key is already unlinked from the workspace, so even
+		// if the user row lingers it is no longer usable to call this
+		// workspace's API (AuthenticateUserForWorkspace requires membership).
+	} else {
+		s.logger.WithField("user_id", apiKeyUserID).Info("API key revoked successfully")
+	}
+
+	return nil
 }
 
 // GetInvitationByID retrieves a workspace invitation by its ID

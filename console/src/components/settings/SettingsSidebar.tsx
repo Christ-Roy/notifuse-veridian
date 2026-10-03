@@ -6,7 +6,8 @@ import {
   ExclamationCircleOutlined,
   MailOutlined,
   CreditCardOutlined,
-  SendOutlined
+  SendOutlined,
+  RobotOutlined
 } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 
@@ -20,6 +21,7 @@ export type SettingsSection =
   | 'blog'
   | 'plan'
   | 'cold-outreach'
+  | 'api-agents'
   | 'danger-zone'
 
 interface SettingsSidebarProps {
@@ -129,6 +131,12 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
       key: 'cold-outreach',
       icon: <SendOutlined />,
       label: t`Cold outreach`
+    },
+    {
+      // === Veridian patch — mission "API & agents" (2026-10-03) ===
+      key: 'api-agents',
+      icon: <RobotOutlined />,
+      label: t`API & agents`
     }
   ]
 

@@ -38,7 +38,10 @@ import {
   mockBlogPostCreateResponse,
   mockBlogCategoryCreateResponse,
   mockTestEmailResponse,
-  mockCompiledTemplate
+  mockCompiledTemplate,
+  mockAPIKeys,
+  mockCreateAPIKeyResponse,
+  mockCreateAgentInstallTokenResponse
 } from './mock-data'
 
 // Helper to create JSON response
@@ -111,6 +114,22 @@ async function setupApiMocks(page: Page, config: MockConfig = {}) {
     }
     if (url.includes('/api/workspace.members') || url.includes('/api/workspaces.members')) {
       return route.fulfill(jsonResponse(mockWorkspaceMembers))
+    }
+
+    // ============================================
+    // API & AGENTS (mission 2026-10-03)
+    // ============================================
+    if (url.includes('/api/workspaces.listAPIKeys')) {
+      return route.fulfill(jsonResponse({ keys: mockAPIKeys }))
+    }
+    if (url.includes('/api/workspaces.createAPIKey')) {
+      return route.fulfill(jsonResponse(mockCreateAPIKeyResponse))
+    }
+    if (url.includes('/api/workspaces.revokeAPIKey')) {
+      return route.fulfill(jsonResponse(mockSuccessResponse))
+    }
+    if (url.includes('/api/workspaces.createAgentInstallToken')) {
+      return route.fulfill(jsonResponse(mockCreateAgentInstallTokenResponse))
     }
 
     // ============================================

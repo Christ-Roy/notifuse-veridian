@@ -5,6 +5,7 @@ import { useLingui } from '@lingui/react/macro'
 import { workspaceService } from '../services/api/workspace'
 import { Workspace, WorkspaceMember } from '../services/api/types'
 import { WorkspaceMembers } from '../components/settings/WorkspaceMembers'
+import { ApiAgentsSettings } from '../components/settings/ApiAgentsSettings'
 import { GeneralSettings } from '../components/settings/GeneralSettings'
 import { SMTPBridgeSettings } from '../components/settings/SMTPBridgeSettings'
 import { Integrations } from '../components/settings/Integrations'
@@ -29,6 +30,10 @@ export function WorkspaceSettingsPage() {
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
+  // === Veridian patch — mission "API & agents" (2026-10-03) === "admin" au
+  // sens de ce fork : owner, ou member avec write sur la ressource
+  // "workspace" (il n'existe pas de rôle "admin" littéral côté backend).
+  const [canManageApiKeys, setCanManageApiKeys] = useState(false)
   const { refreshWorkspaces, user, workspaces } = useAuth()
   const navigate = useNavigate()
 
@@ -43,6 +48,7 @@ export function WorkspaceSettingsPage() {
     'blog',
     'plan',
     'cold-outreach',
+    'api-agents',
     'danger-zone'
   ]
 
@@ -81,7 +87,9 @@ export function WorkspaceSettingsPage() {
       // Check if current user is an owner
       if (user) {
         const currentUserMember = response.members.find((member) => member.user_id === user.id)
-        setIsOwner(currentUserMember?.role === 'owner')
+        const owner = currentUserMember?.role === 'owner'
+        setIsOwner(owner)
+        setCanManageApiKeys(owner || currentUserMember?.permissions?.workspace?.write === true)
       }
     } catch (error) {
       console.error(t`Failed to fetch workspace members`, error)
@@ -169,6 +177,8 @@ export function WorkspaceSettingsPage() {
             isOwner={isOwner}
           />
         )
+      case 'api-agents':
+        return <ApiAgentsSettings workspaceId={workspaceId} canManageKeys={canManageApiKeys} />
       case 'danger-zone':
         return workspace && isOwner ? (
           <DeleteWorkspaceSection workspace={workspace} onDeleteSuccess={handleWorkspaceDelete} />

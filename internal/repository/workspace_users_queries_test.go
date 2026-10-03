@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -118,4 +119,35 @@ func TestWorkspaceRepository_GetUserWorkspace(t *testing.T) {
 	_, err = repo.GetUserWorkspace(context.Background(), userID, workspaceID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get user workspace")
+}
+
+// === Veridian patch — mesure prod 2026-10-03 (mission "API & agents") ===
+// GetUserWorkspace doit renvoyer un type DÉDIÉ (domain.ErrUserNotWorkspaceMember)
+// sur sql.ErrNoRows — PAS un fmt.Errorf anonyme — pour que
+// AuthenticateUserForWorkspace puisse le distinguer sans ambiguïté d'une
+// vraie panne DB et le mapper en 403 HTTP (au lieu du 500 générique mesuré
+// en prod pour une clé API scopée sur un AUTRE workspace).
+func TestWorkspaceRepository_GetUserWorkspace_NotFoundReturnsTypedError(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+
+	dbConfig := &config.DatabaseConfig{Prefix: "notifuse"}
+	connMgr := newMockConnectionManager(db)
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key", connMgr)
+
+	userID := "user-not-a-member"
+	workspaceID := "workspace-elsewhere"
+
+	mock.ExpectQuery(`SELECT user_id, workspace_id, role, permissions, created_at, updated_at FROM user_workspaces WHERE user_id = \$1 AND workspace_id = \$2`).
+		WithArgs(userID, workspaceID).
+		WillReturnError(sql.ErrNoRows)
+
+	_, err := repo.GetUserWorkspace(context.Background(), userID, workspaceID)
+	require.Error(t, err)
+
+	var notMember *domain.ErrUserNotWorkspaceMember
+	require.ErrorAs(t, err, &notMember, "sql.ErrNoRows doit se traduire en *domain.ErrUserNotWorkspaceMember, pas en erreur anonyme")
+	assert.Equal(t, userID, notMember.UserID)
+	assert.Equal(t, workspaceID, notMember.WorkspaceID)
+	assert.Equal(t, "user is not a member of the workspace", notMember.Error())
 }

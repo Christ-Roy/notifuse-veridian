@@ -72,7 +72,13 @@ export type {
   VerifyInvitationTokenResponse,
   AcceptInvitationResponse,
   DeleteInvitationRequest,
-  DeleteInvitationResponse
+  DeleteInvitationResponse,
+  APIKeySummary,
+  ListAPIKeysResponse,
+  RevokeAPIKeyRequest,
+  RevokeAPIKeyResponse,
+  CreateAgentInstallTokenRequest,
+  CreateAgentInstallTokenResponse
 } from './workspace'
 
 // Re-export from list.ts

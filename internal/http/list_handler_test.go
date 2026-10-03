@@ -877,3 +877,46 @@ func TestListHandler_HandleSubscribe(t *testing.T) {
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 }
+
+// === Veridian patch — mesure prod 2026-10-03 (mission "API & agents") ===
+// `notifuse lists:list` est la commande la plus fréquente du CLI agent
+// distribué (cf. skill notifuse-cli). Une clé révoquée ou scopée sur un
+// autre workspace doit répondre 401/403, jamais le 500 générique mesuré en
+// prod avant ce correctif (fix à la source dans AuthenticateUserForWorkspace
+// + WriteAuthAwareError, exercé ici à l'échelle du handler HTTP réel).
+func TestListHandler_HandleList_AuthErrors(t *testing.T) {
+	testCases := []struct {
+		name           string
+		serviceErr     error
+		expectedStatus int
+	}{
+		{
+			name:           "revoked or unknown key -> 401",
+			serviceErr:     &domain.ErrAuthenticationFailed{Message: "user not found"},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "valid key but wrong workspace -> 403",
+			serviceErr:     &domain.ErrUnauthorized{Message: "not authorized for this workspace"},
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:           "genuine service failure stays 500",
+			serviceErr:     errors.New("database exploded"),
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockService, _, handler := setupListHandlerTest(t)
+			mockService.EXPECT().GetLists(gomock.Any(), "workspace123").Return(nil, tc.serviceErr)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/lists.list?workspace_id=workspace123", nil)
+			w := httptest.NewRecorder()
+			handler.handleList(w, req)
+
+			assert.Equal(t, tc.expectedStatus, w.Code)
+		})
+	}
+}

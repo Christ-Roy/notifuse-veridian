@@ -123,20 +123,56 @@ func (s *AuthService) AuthenticateUserForWorkspace(ctx context.Context, workspac
 		}
 	}
 
+	// === Veridian patch — mesure prod 2026-10-03 (mission "API & agents") ===
+	// Avant ce correctif, les trois erreurs ci-dessous remontaient telles
+	// quelles (sql.ErrNoRows nu, ErrUserNotFound, erreur repo brute) jusqu'au
+	// handler HTTP, qui ne les reconnaissait pas et retombait sur son 500
+	// générique. Zéro fuite de données (l'accès était bien bloqué), mais un
+	// agent/CLI scripté ne peut pas distinguer "clé révoquée" (401, il doit
+	// réémettre un jeton) de "pas les droits sur ce workspace" (403, inutile
+	// de réessayer) de "panne serveur réelle" (500, à remonter). On classe
+	// l'erreur UNE FOIS ICI, à la source : tout appelant (service puis
+	// handler HTTP, cf. internal/http/utils.go WriteAuthAwareError) en
+	// profite sans avoir à connaître les détails du repo.
 	user, err := s.AuthenticateUserFromContext(ctx)
 	if err != nil {
+		// Identité elle-même invalide : session expirée, clé API révoquée/
+		// supprimée (GetUserByID -> ErrUserNotFound), ou claims absents.
+		// -> 401. On ne reclasse QUE les erreurs attendues de ce chemin
+		// (sentinelles ErrUserNotFound/ErrSessionExpired) — une vraie panne
+		// DB pendant VerifyUserSession/GetUserByID reste une 500.
+		if errors.Is(err, ErrUserNotFound) || errors.Is(err, ErrSessionExpired) {
+			return ctx, nil, nil, &domain.ErrAuthenticationFailed{Message: err.Error()}
+		}
 		return ctx, nil, nil, err
 	}
 
-	// First check if the workspace exists - this will return ErrWorkspaceNotFound if it doesn't exist
+	// Le workspace n'existe pas. Ne jamais le distinguer de "pas membre" au
+	// client (sinon une clé scopée sur un AUTRE workspace peut sonder quels
+	// IDs existent) : même 403 "not authorized for this workspace" dans les
+	// deux cas. On ne reclasse QUE l'erreur typée "not found" — une vraie
+	// panne DB (connexion coupée, timeout) reste une 500, jamais masquée
+	// derrière un faux 403.
 	_, err = s.workspaceRepo.GetByID(ctx, workspaceID)
 	if err != nil {
+		var notFound *domain.ErrWorkspaceNotFound
+		if errors.As(err, &notFound) {
+			return ctx, nil, nil, &domain.ErrUnauthorized{Message: "not authorized for this workspace"}
+		}
 		return ctx, nil, nil, err
 	}
 
-	// Then check if the user is a member of the workspace
+	// Identité valide (clé API non révoquée, session active) mais PAS membre
+	// de CE workspace : c'est le cas mesuré en prod "clé scopée sur un autre
+	// workspace". -> 403, jamais 401 (l'authentification a réussi, c'est
+	// l'autorisation qui échoue). Même garde-fou : seule l'erreur typée
+	// "pas membre" est reclassée, une vraie panne DB reste une 500.
 	userWorkspace, err := s.workspaceRepo.GetUserWorkspace(ctx, user.ID, workspaceID)
 	if err != nil {
+		var notMember *domain.ErrUserNotWorkspaceMember
+		if errors.As(err, &notMember) {
+			return ctx, nil, nil, &domain.ErrUnauthorized{Message: "not authorized for this workspace"}
+		}
 		return ctx, nil, nil, err
 	}
 

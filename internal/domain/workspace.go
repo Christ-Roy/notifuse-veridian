@@ -1078,6 +1078,41 @@ func (e *ErrWorkspaceNotFound) Error() string {
 	return fmt.Sprintf("workspace not found: %s", e.WorkspaceID)
 }
 
+// ErrUserNotWorkspaceMember is returned when an authenticated user (or
+// api_key) is not a member of the workspace it is trying to act on. Distinct
+// from a generic repository error so that AuthenticateUserForWorkspace (and
+// anything calling GetUserWorkspace directly) can map it to HTTP 403
+// without accidentally reclassifying a real DB failure the same way.
+//
+// === Veridian patch — mesure prod 2026-10-03 (mission "API & agents") ===
+// Avant ce type, cette erreur était un fmt.Errorf anonyme : indistinguable
+// d'une panne DB réelle, donc toujours remontée en 500 générique côté HTTP
+// même quand le vrai cas était "clé API scopée sur un AUTRE workspace".
+type ErrUserNotWorkspaceMember struct {
+	UserID      string
+	WorkspaceID string
+}
+
+func (e *ErrUserNotWorkspaceMember) Error() string {
+	return "user is not a member of the workspace"
+}
+
+// ErrAuthenticationFailed is returned when the caller presents no valid
+// identity at all: expired session, or an api_key that no longer resolves
+// to a user (revoked/deleted). Distinct from ErrUnauthorized (valid
+// identity, insufficient rights) so the HTTP layer can answer 401 instead
+// of 403 — material for a scripted client (CLI/agent) deciding whether to
+// mint a new key (401) or stop retrying (403).
+//
+// === Veridian patch — mesure prod 2026-10-03 (mission "API & agents") ===
+type ErrAuthenticationFailed struct {
+	Message string
+}
+
+func (e *ErrAuthenticationFailed) Error() string {
+	return e.Message
+}
+
 // ErrTeamMemberLimitReached is returned when a workspace has reached its team member limit
 type ErrTeamMemberLimitReached struct {
 	Limit   int
@@ -1112,6 +1147,23 @@ type WorkspaceServiceInterface interface {
 	TransferOwnership(ctx context.Context, workspaceID string, newOwnerID string, currentOwnerID string) error
 	CreateAPIKey(ctx context.Context, workspaceID string, emailPrefix string) (string, string, error)
 	RemoveMember(ctx context.Context, workspaceID string, userIDToRemove string) error
+	// RevokeAPIKey revokes (deletes) an API key user. Unlike RemoveMember it is
+	// restricted to users of type api_key (returns an error on a human member)
+	// and is callable by the workspace owner OR any member with write access
+	// on the "workspace" resource (the closest equivalent to an "admin" role
+	// in this permission model — the app has no literal admin role, see
+	// console/src/pages/settings/AgentApiKeysPage.tsx for the UI gate).
+	RevokeAPIKey(ctx context.Context, workspaceID string, apiKeyUserID string) error
+	// ListAPIKeys returns the API-key-type members of a workspace, with
+	// masked email/prefix, suitable for display in the "API & agents" page.
+	ListAPIKeys(ctx context.Context, workspaceID string) ([]*APIKeySummary, error)
+	// CreateAgentInstallToken mints a fresh api_key + a one-time, short-lived
+	// install token exchanged by /agent/install.sh (the raw key never
+	// appears in the install command / shell history).
+	CreateAgentInstallToken(ctx context.Context, workspaceID string) (string, *AgentInstallToken, error)
+	// ExchangeAgentInstallToken consumes a one-time install token and
+	// returns the api_key it unlocks. Public route: the token IS the secret.
+	ExchangeAgentInstallToken(ctx context.Context, rawToken string) (*AgentInstallCredentials, error)
 
 	// Invitation management
 	GetInvitationByID(ctx context.Context, invitationID string) (*WorkspaceInvitation, error)
@@ -1144,6 +1196,34 @@ func (r *CreateAPIKeyRequest) Validate() error {
 		return errors.New("email prefix is required")
 	}
 	return nil
+}
+
+// RevokeAPIKeyRequest defines the request structure for revoking an API key
+type RevokeAPIKeyRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	UserID      string `json:"user_id"`
+}
+
+// Validate validates the revoke API key request
+func (r *RevokeAPIKeyRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return errors.New("workspace ID is required")
+	}
+	if r.UserID == "" {
+		return errors.New("user ID is required")
+	}
+	return nil
+}
+
+// APIKeySummary is the display-safe projection of an api_key-type workspace
+// member: no token, no raw email — a masked prefix only.
+type APIKeySummary struct {
+	UserID        string     `json:"user_id"`
+	Name          string     `json:"name"`
+	MaskedEmail   string     `json:"masked_email"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
+	VeridianOwned bool       `json:"veridian_owned"`
 }
 
 // CreateIntegrationRequest defines the request structure for creating an integration

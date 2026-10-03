@@ -15,6 +15,7 @@ import (
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/pkg/crypto"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 )
@@ -4116,5 +4117,382 @@ func TestWorkspaceService_CreateWorkspace_WorkspaceLimit(t *testing.T) {
 
 		var limitErr *domain.ErrWorkspaceLimitReached
 		assert.False(t, errors.As(err, &limitErr), "error should NOT be a workspace limit error")
+	})
+}
+
+// === Veridian patch — mission "API & agents" (2026-10-03) ===
+
+func newAgentAPITestService(ctrl *gomock.Controller) (
+	*WorkspaceService,
+	*mocks.MockWorkspaceRepository,
+	*mocks.MockUserRepository,
+	*mocks.MockUserServiceInterface,
+	*mocks.MockAuthService,
+	*pkgmocks.MockLogger,
+	*mocks.MockAgentInstallTokenRepository,
+) {
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockUserRepo := mocks.NewMockUserRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockUserService := mocks.NewMockUserServiceInterface(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockMailer := pkgmocks.NewMockMailer(ctrl)
+	mockConfig := &config.Config{RootEmail: "test@example.com", APIEndpoint: "https://notifuse.app.veridian.site"}
+	mockContactService := mocks.NewMockContactService(ctrl)
+	mockListService := mocks.NewMockListService(ctrl)
+	mockContactListService := mocks.NewMockContactListService(ctrl)
+	mockTemplateService := mocks.NewMockTemplateService(ctrl)
+	mockWebhookRegService := mocks.NewMockWebhookRegistrationService(ctrl)
+	mockInstallTokenRepo := mocks.NewMockAgentInstallTokenRepository(ctrl)
+
+	service := NewWorkspaceService(
+		mockRepo,
+		mockUserRepo,
+		mocks.NewMockTaskRepository(ctrl),
+		mockLogger,
+		mockUserService,
+		mockAuthService,
+		mockMailer,
+		mockConfig,
+		mockContactService,
+		mockListService,
+		mockContactListService,
+		mockTemplateService,
+		mockWebhookRegService,
+		"secret_key_for_tests_32_bytes_ok",
+		&SupabaseService{},
+		&DNSVerificationService{},
+		&BlogService{},
+	)
+	service.SetAgentInstallTokenRepository(mockInstallTokenRepo)
+
+	return service, mockRepo, mockUserRepo, mockUserService, mockAuthService, mockLogger, mockInstallTokenRepo
+}
+
+func TestWorkspaceService_SetAgentInstallTokenRepository(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	service, _, _, _, _, _, mockInstallRepo := newAgentAPITestService(ctrl)
+
+	// newAgentAPITestService already calls SetAgentInstallTokenRepository
+	// once; calling it again must simply replace the repo (idempotent),
+	// proven by exercising ExchangeAgentInstallToken right after — if the
+	// setter didn't actually wire the field, this would hit the "not
+	// configured" guard instead of reaching mockInstallRepo.
+	service.SetAgentInstallTokenRepository(mockInstallRepo)
+
+	mockInstallRepo.EXPECT().ClaimByHash(context.Background(), gomock.Any(), gomock.Any()).
+		Return(nil, domain.ErrAgentInstallTokenNotFound)
+
+	_, err := service.ExchangeAgentInstallToken(context.Background(), "some-token")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrAgentInstallTokenNotFound)
+}
+
+func TestWorkspaceService_ListAPIKeys(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	service, mockRepo, _, _, mockAuthService, mockLogger, _ := newAgentAPITestService(ctrl)
+
+	ctx := context.Background()
+	workspaceID := "ws-1"
+	user := &domain.User{ID: "user-1", Type: domain.UserTypeUser}
+
+	t.Run("returns only non-managed api_key members, masked", func(t *testing.T) {
+		userWorkspace := &domain.UserWorkspace{UserID: "user-1", WorkspaceID: workspaceID, Role: "member"}
+		now := time.Now()
+		members := []*domain.UserWorkspaceWithEmail{
+			{UserWorkspace: domain.UserWorkspace{UserID: "human-1", WorkspaceID: workspaceID, CreatedAt: now}, Email: "human@example.com", Type: domain.UserTypeUser},
+			{UserWorkspace: domain.UserWorkspace{UserID: "agent-1", WorkspaceID: workspaceID, CreatedAt: now}, Email: "agent-ci@notifuse.app.veridian.site", Type: domain.UserTypeAPIKey},
+			{UserWorkspace: domain.UserWorkspace{UserID: "hub-1", WorkspaceID: workspaceID, CreatedAt: now}, Email: "veridian-api-ws1@notifuse.app.veridian.site", Type: domain.UserTypeAPIKey, VeridianManaged: true},
+		}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, user, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, user.ID, workspaceID).Return(userWorkspace, nil)
+		mockRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, workspaceID).Return(members, nil)
+
+		keys, err := service.ListAPIKeys(ctx, workspaceID)
+		require.NoError(t, err)
+		require.Len(t, keys, 1)
+		assert.Equal(t, "agent-1", keys[0].UserID)
+		assert.Equal(t, "agent-ci", keys[0].Name)
+		assert.Equal(t, "age***@notifuse.app.veridian.site", keys[0].MaskedEmail)
+		assert.Nil(t, keys[0].LastUsedAt)
+		assert.False(t, keys[0].VeridianOwned)
+	})
+
+	t.Run("no access to workspace -> 403-shaped ErrUnauthorized", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, user, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, user.ID, workspaceID).Return(nil, errors.New("not found"))
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", user.ID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("error", "not found").Return(mockLogger)
+		mockLogger.EXPECT().Error("Failed to get user workspace")
+
+		_, err := service.ListAPIKeys(ctx, workspaceID)
+		require.Error(t, err)
+		assert.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("authentication failure propagates", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, nil, nil, errors.New("auth error"))
+
+		_, err := service.ListAPIKeys(ctx, workspaceID)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+}
+
+func TestWorkspaceService_RevokeAPIKey(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	service, mockRepo, mockUserRepo, mockUserService, mockAuthService, mockLogger, _ := newAgentAPITestService(ctrl)
+
+	ctx := context.Background()
+	workspaceID := "ws-1"
+	ownerID := "owner-1"
+	agentKeyID := "agent-key-1"
+
+	t.Run("owner revokes successfully", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{UserID: ownerID, WorkspaceID: workspaceID, Role: "owner"}
+		apiKeyUser := &domain.User{ID: agentKeyID, Type: domain.UserTypeAPIKey}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, agentKeyID).Return(apiKeyUser, nil)
+		mockRepo.EXPECT().RemoveUserFromWorkspace(ctx, agentKeyID, workspaceID).Return(nil)
+		mockUserRepo.EXPECT().Delete(ctx, agentKeyID).Return(nil)
+		mockLogger.EXPECT().WithField("user_id", agentKeyID).Return(mockLogger)
+		mockLogger.EXPECT().Info("API key revoked successfully")
+
+		err := service.RevokeAPIKey(ctx, workspaceID, agentKeyID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("admin (write on workspace resource, not owner) can revoke", func(t *testing.T) {
+		admin := &domain.User{ID: "admin-1", Type: domain.UserTypeUser}
+		adminWorkspace := &domain.UserWorkspace{
+			UserID: "admin-1", WorkspaceID: workspaceID, Role: "member",
+			Permissions: domain.UserPermissions{domain.PermissionResourceWorkspace: domain.ResourcePermissions{Read: true, Write: true}},
+		}
+		apiKeyUser := &domain.User{ID: agentKeyID, Type: domain.UserTypeAPIKey}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, admin, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, "admin-1", workspaceID).Return(adminWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, agentKeyID).Return(apiKeyUser, nil)
+		mockRepo.EXPECT().RemoveUserFromWorkspace(ctx, agentKeyID, workspaceID).Return(nil)
+		mockUserRepo.EXPECT().Delete(ctx, agentKeyID).Return(nil)
+		mockLogger.EXPECT().WithField("user_id", agentKeyID).Return(mockLogger)
+		mockLogger.EXPECT().Info("API key revoked successfully")
+
+		err := service.RevokeAPIKey(ctx, workspaceID, agentKeyID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("plain member refused (403)", func(t *testing.T) {
+		member := &domain.User{ID: "member-1", Type: domain.UserTypeUser}
+		memberWorkspace := &domain.UserWorkspace{UserID: "member-1", WorkspaceID: workspaceID, Role: "member"}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, member, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, "member-1", workspaceID).Return(memberWorkspace, nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", agentKeyID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("requester_id", "member-1").Return(mockLogger)
+		mockLogger.EXPECT().WithField("role", "member").Return(mockLogger)
+		mockLogger.EXPECT().Error("Requester is neither owner nor admin of the workspace")
+
+		err := service.RevokeAPIKey(ctx, workspaceID, agentKeyID)
+		require.Error(t, err)
+		assert.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("refuses to revoke a human member (wrong type)", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{UserID: ownerID, WorkspaceID: workspaceID, Role: "owner"}
+		humanUser := &domain.User{ID: "human-1", Type: domain.UserTypeUser}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, "human-1").Return(humanUser, nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", "human-1").Return(mockLogger)
+		mockLogger.EXPECT().Warn("Refused to revoke a non-api_key user via revokeAPIKey")
+
+		err := service.RevokeAPIKey(ctx, workspaceID, "human-1")
+		require.Error(t, err)
+		assert.Equal(t, "target user is not an API key", err.Error())
+	})
+
+	t.Run("refuses to revoke a veridian-managed key", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{UserID: ownerID, WorkspaceID: workspaceID, Role: "owner"}
+		hubKey := &domain.User{ID: "hub-1", Type: domain.UserTypeAPIKey, VeridianManaged: true}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserService.EXPECT().GetUserByID(ctx, "hub-1").Return(hubKey, nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", "hub-1").Return(mockLogger)
+		mockLogger.EXPECT().Warn("Refused revoke of veridian-managed user")
+
+		err := service.RevokeAPIKey(ctx, workspaceID, "hub-1")
+		require.Error(t, err)
+		assert.IsType(t, &domain.ErrUnauthorized{}, err)
+		assert.Contains(t, err.Error(), "Veridian-managed")
+	})
+
+	t.Run("authentication failure propagates", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, nil, nil, errors.New("auth error"))
+
+		err := service.RevokeAPIKey(ctx, workspaceID, agentKeyID)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to authenticate user")
+	})
+}
+
+func TestWorkspaceService_CreateAgentInstallToken(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	service, mockRepo, mockUserRepo, mockUserService, mockAuthService, mockLogger, mockInstallRepo := newAgentAPITestService(ctrl)
+
+	ctx := context.Background()
+	workspaceID := "ws-1"
+	ownerID := "owner-1"
+
+	t.Run("owner mints a token successfully", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{UserID: ownerID, WorkspaceID: workspaceID, Role: "owner"}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil)
+		mockUserRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil)
+		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
+		mockAuthService.EXPECT().GenerateAPIAuthToken(gomock.Any()).Return("minted-jwt-token")
+		mockInstallRepo.EXPECT().Insert(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, rec *domain.AgentInstallTokenRecord) error {
+			assert.Equal(t, workspaceID, rec.WorkspaceID)
+			assert.Equal(t, ownerID, rec.CreatedBy)
+			assert.NotEmpty(t, rec.TokenHash)
+			assert.NotEmpty(t, rec.EncryptedAPIKey)
+			assert.True(t, rec.ExpiresAt.After(rec.CreatedAt))
+			return nil
+		})
+
+		rawToken, meta, err := service.CreateAgentInstallToken(ctx, workspaceID)
+		require.NoError(t, err)
+		assert.NotEmpty(t, rawToken)
+		assert.Equal(t, workspaceID, meta.WorkspaceID)
+		assert.Equal(t, ownerID, meta.CreatedBy)
+		assert.WithinDuration(t, meta.CreatedAt.Add(10*time.Minute), meta.ExpiresAt, time.Second)
+	})
+
+	t.Run("plain member refused (403)", func(t *testing.T) {
+		member := &domain.User{ID: "member-1", Type: domain.UserTypeUser}
+		memberWorkspace := &domain.UserWorkspace{UserID: "member-1", WorkspaceID: workspaceID, Role: "member"}
+
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, member, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, "member-1", workspaceID).Return(memberWorkspace, nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
+		mockLogger.EXPECT().WithField("user_id", "member-1").Return(mockLogger)
+		mockLogger.EXPECT().Error("Requester is neither owner nor admin of the workspace")
+
+		_, _, err := service.CreateAgentInstallToken(ctx, workspaceID)
+		require.Error(t, err)
+		assert.IsType(t, &domain.ErrUnauthorized{}, err)
+	})
+
+	t.Run("revokes the freshly-minted key if the token insert fails", func(t *testing.T) {
+		owner := &domain.User{ID: ownerID, Type: domain.UserTypeUser}
+		ownerWorkspace := &domain.UserWorkspace{UserID: ownerID, WorkspaceID: workspaceID, Role: "owner"}
+		var mintedUserID string
+
+		// 1st AuthenticateUserForWorkspace/GetUserWorkspace: CreateAgentInstallToken's
+		// own authorization check. 2nd: the NESTED call it makes into
+		// RevokeAPIKey as cleanup once Insert fails below — RevokeAPIKey
+		// re-authenticates independently, it doesn't trust the caller's context.
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, owner, nil, nil).Times(2)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, ownerID, workspaceID).Return(ownerWorkspace, nil).Times(2)
+		mockUserRepo.EXPECT().CreateUser(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, u *domain.User) error {
+			mintedUserID = u.ID
+			return nil
+		})
+		mockRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil)
+		mockAuthService.EXPECT().GenerateAPIAuthToken(gomock.Any()).Return("minted-jwt-token")
+		mockInstallRepo.EXPECT().Insert(ctx, gomock.Any()).Return(errors.New("db down"))
+
+		// Cleanup path: RevokeAPIKey(ctx, workspaceID, mintedUserID) runs its
+		// own full authorization + type checks before deleting the orphan.
+		mockUserService.EXPECT().GetUserByID(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, userID string) (*domain.User, error) {
+			assert.Equal(t, mintedUserID, userID)
+			return &domain.User{ID: userID, Type: domain.UserTypeAPIKey}, nil
+		})
+		mockRepo.EXPECT().RemoveUserFromWorkspace(ctx, gomock.Any(), workspaceID).DoAndReturn(func(_ context.Context, userID, _ string) error {
+			assert.Equal(t, mintedUserID, userID)
+			return nil
+		})
+		mockUserRepo.EXPECT().Delete(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, userID string) error {
+			assert.Equal(t, mintedUserID, userID)
+			return nil
+		})
+		mockLogger.EXPECT().WithField("user_id", gomock.Any()).Return(mockLogger)
+		mockLogger.EXPECT().Info("API key revoked successfully")
+
+		_, _, err := service.CreateAgentInstallToken(ctx, workspaceID)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to persist install token")
+		assert.NotEmpty(t, mintedUserID)
+	})
+}
+
+func TestWorkspaceService_ExchangeAgentInstallToken(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	service, _, _, _, _, _, mockInstallRepo := newAgentAPITestService(ctrl)
+	ctx := context.Background()
+
+	t.Run("valid token returns decrypted credentials", func(t *testing.T) {
+		encrypted, err := crypto.EncryptString("jwt-token-value", "secret_key_for_tests_32_bytes_ok")
+		require.NoError(t, err)
+
+		mockInstallRepo.EXPECT().ClaimByHash(ctx, gomock.Any(), gomock.Any()).Return(&domain.AgentInstallTokenRecord{
+			WorkspaceID:     "ws-1",
+			EncryptedAPIKey: encrypted,
+		}, nil)
+
+		creds, err := service.ExchangeAgentInstallToken(ctx, "some-raw-token")
+		require.NoError(t, err)
+		assert.Equal(t, "jwt-token-value", creds.APIKey)
+		assert.Equal(t, "ws-1", creds.WorkspaceID)
+		assert.Equal(t, "https://notifuse.app.veridian.site", creds.APIURL)
+	})
+
+	t.Run("reused token refused", func(t *testing.T) {
+		mockInstallRepo.EXPECT().ClaimByHash(ctx, gomock.Any(), gomock.Any()).Return(nil, domain.ErrAgentInstallTokenUsed)
+
+		_, err := service.ExchangeAgentInstallToken(ctx, "already-used-token")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrAgentInstallTokenUsed)
+	})
+
+	t.Run("expired token refused", func(t *testing.T) {
+		mockInstallRepo.EXPECT().ClaimByHash(ctx, gomock.Any(), gomock.Any()).Return(nil, domain.ErrAgentInstallTokenExpired)
+
+		_, err := service.ExchangeAgentInstallToken(ctx, "expired-token")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrAgentInstallTokenExpired)
+	})
+
+	t.Run("unknown token refused", func(t *testing.T) {
+		mockInstallRepo.EXPECT().ClaimByHash(ctx, gomock.Any(), gomock.Any()).Return(nil, domain.ErrAgentInstallTokenNotFound)
+
+		_, err := service.ExchangeAgentInstallToken(ctx, "unknown-token")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrAgentInstallTokenNotFound)
+	})
+
+	t.Run("empty token refused without hitting the repo", func(t *testing.T) {
+		_, err := service.ExchangeAgentInstallToken(ctx, "")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrAgentInstallTokenNotFound)
 	})
 }

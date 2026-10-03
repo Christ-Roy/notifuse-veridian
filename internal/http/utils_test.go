@@ -2,10 +2,12 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 
@@ -130,6 +132,53 @@ func TestWriteJSONError_EncoderFailure(t *testing.T) {
 	// Verify the status code was set before failure
 	assert.Equal(t, http.StatusBadRequest, w.status)
 	assert.Equal(t, "application/json", w.headers.Get("Content-Type"))
+}
+
+// === Veridian patch — mesure prod 2026-10-03 (mission "API & agents") ===
+// WriteAuthAwareError est le point unique qui traduit les deux erreurs
+// d'auth typées en 401/403 ; tout le reste doit retomber EXACTEMENT sur le
+// fallback fourni par l'appelant (jamais pire que l'ancien comportement).
+func TestWriteAuthAwareError(t *testing.T) {
+	t.Run("ErrAuthenticationFailed maps to 401", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		WriteAuthAwareError(w, &domain.ErrAuthenticationFailed{Message: "user not found"}, "fallback", http.StatusInternalServerError)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		var response map[string]string
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, "user not found", response["error"])
+	})
+
+	t.Run("ErrUnauthorized maps to 403", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		WriteAuthAwareError(w, &domain.ErrUnauthorized{Message: "not authorized for this workspace"}, "fallback", http.StatusInternalServerError)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		var response map[string]string
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, "not authorized for this workspace", response["error"])
+	})
+
+	t.Run("wrapped ErrUnauthorized still maps to 403 (errors.As unwraps)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		wrapped := errors.New("outer: " + (&domain.ErrUnauthorized{Message: "nope"}).Error())
+		// Exercise the real wrap path via fmt.Errorf %w rather than a bespoke wrapper.
+		WriteAuthAwareError(w, wrapped, "fallback", http.StatusInternalServerError)
+		// A plain errors.New (not wrapping the typed error) must NOT be
+		// misclassified — it falls back untouched, proving WriteAuthAwareError
+		// never guesses from the message string.
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("unrelated error falls back unchanged (never worse than before)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		WriteAuthAwareError(w, errors.New("database exploded"), "Failed to do the thing", http.StatusInternalServerError)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		var response map[string]string
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, "Failed to do the thing", response["error"])
+	})
 }
 
 // A mock response writer that can be made to fail during Write

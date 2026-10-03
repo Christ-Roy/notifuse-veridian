@@ -80,6 +80,66 @@ func (mr *MockWorkspaceServiceInterfaceMockRecorder) CreateAPIKey(arg0, arg1, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAPIKey", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).CreateAPIKey), arg0, arg1, arg2)
 }
 
+// ListAPIKeys mocks base method.
+func (m *MockWorkspaceServiceInterface) ListAPIKeys(arg0 context.Context, arg1 string) ([]*domain.APIKeySummary, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAPIKeys", arg0, arg1)
+	ret0, _ := ret[0].([]*domain.APIKeySummary)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAPIKeys indicates an expected call of ListAPIKeys.
+func (mr *MockWorkspaceServiceInterfaceMockRecorder) ListAPIKeys(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAPIKeys", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).ListAPIKeys), arg0, arg1)
+}
+
+// RevokeAPIKey mocks base method.
+func (m *MockWorkspaceServiceInterface) RevokeAPIKey(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevokeAPIKey", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RevokeAPIKey indicates an expected call of RevokeAPIKey.
+func (mr *MockWorkspaceServiceInterfaceMockRecorder) RevokeAPIKey(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeAPIKey", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).RevokeAPIKey), arg0, arg1, arg2)
+}
+
+// CreateAgentInstallToken mocks base method.
+func (m *MockWorkspaceServiceInterface) CreateAgentInstallToken(arg0 context.Context, arg1 string) (string, *domain.AgentInstallToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateAgentInstallToken", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(*domain.AgentInstallToken)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// CreateAgentInstallToken indicates an expected call of CreateAgentInstallToken.
+func (mr *MockWorkspaceServiceInterfaceMockRecorder) CreateAgentInstallToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAgentInstallToken", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).CreateAgentInstallToken), arg0, arg1)
+}
+
+// ExchangeAgentInstallToken mocks base method.
+func (m *MockWorkspaceServiceInterface) ExchangeAgentInstallToken(arg0 context.Context, arg1 string) (*domain.AgentInstallCredentials, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExchangeAgentInstallToken", arg0, arg1)
+	ret0, _ := ret[0].(*domain.AgentInstallCredentials)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExchangeAgentInstallToken indicates an expected call of ExchangeAgentInstallToken.
+func (mr *MockWorkspaceServiceInterfaceMockRecorder) ExchangeAgentInstallToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExchangeAgentInstallToken", reflect.TypeOf((*MockWorkspaceServiceInterface)(nil).ExchangeAgentInstallToken), arg0, arg1)
+}
+
 // CreateIntegration mocks base method.
 func (m *MockWorkspaceServiceInterface) CreateIntegration(arg0 context.Context, arg1 domain.CreateIntegrationRequest) (string, error) {
 	m.ctrl.T.Helper()

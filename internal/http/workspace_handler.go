@@ -54,6 +54,9 @@ func (h *WorkspaceHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workspaces.members", requireAuth(http.HandlerFunc(h.handleMembers)))
 	mux.Handle("/api/workspaces.inviteMember", requireAuth(http.HandlerFunc(h.handleInviteMember)))
 	mux.Handle("/api/workspaces.createAPIKey", requireAuth(http.HandlerFunc(h.handleCreateAPIKey)))
+	mux.Handle("/api/workspaces.listAPIKeys", requireAuth(http.HandlerFunc(h.handleListAPIKeys)))
+	mux.Handle("/api/workspaces.revokeAPIKey", requireAuth(http.HandlerFunc(h.handleRevokeAPIKey)))
+	mux.Handle("/api/workspaces.createAgentInstallToken", requireAuth(http.HandlerFunc(h.handleCreateAgentInstallToken)))
 	mux.Handle("/api/workspaces.removeMember", requireAuth(http.HandlerFunc(h.handleRemoveMember)))
 	mux.Handle("/api/workspaces.deleteInvitation", requireAuth(http.HandlerFunc(h.handleDeleteInvitation)))
 	mux.Handle("/api/workspaces.setUserPermissions", requireAuth(http.HandlerFunc(h.handleSetUserPermissions)))
@@ -280,7 +283,7 @@ func (h *WorkspaceHandler) handleMembers(w http.ResponseWriter, r *http.Request)
 			WriteJSONError(w, "Workspace not found", http.StatusNotFound)
 			return
 		}
-		WriteJSONError(w, "Failed to get workspace members", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get workspace members", http.StatusInternalServerError)
 		return
 	}
 
@@ -317,7 +320,7 @@ func (h *WorkspaceHandler) handleInviteMember(w http.ResponseWriter, r *http.Req
 			return
 		}
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("email", req.Email).WithField("error", err.Error()).Error("Failed to invite member")
-		WriteJSONError(w, "Failed to invite member", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to invite member", http.StatusInternalServerError)
 		return
 	}
 
@@ -369,12 +372,8 @@ func (h *WorkspaceHandler) handleSetUserPermissions(w http.ResponseWriter, r *ht
 	// Call service to set user permissions
 	err := h.workspaceService.SetUserPermissions(r.Context(), req.WorkspaceID, req.UserID, req.Permissions)
 	if err != nil {
-		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			WriteJSONError(w, err.Error(), http.StatusForbidden)
-			return
-		}
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", req.UserID).WithField("error", err.Error()).Error("Failed to set user permissions")
-		WriteJSONError(w, "Failed to set user permissions", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to set user permissions", http.StatusInternalServerError)
 		return
 	}
 
@@ -408,13 +407,14 @@ func (h *WorkspaceHandler) handleCreateAPIKey(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Failed to create API key")
 
-		// Check if it's an authorization error
+		// Check if it's an authorization error (custom wording kept for
+		// backward-compat: existing clients/tests match on this message).
 		if _, ok := err.(*domain.ErrUnauthorized); ok {
 			WriteJSONError(w, "Only workspace owners can create API keys", http.StatusForbidden)
 			return
 		}
 
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -423,6 +423,112 @@ func (h *WorkspaceHandler) handleCreateAPIKey(w http.ResponseWriter, r *http.Req
 		"status": "success",
 		"token":  token,
 		"email":  apiEmail,
+	})
+}
+
+// handleListAPIKeys handles the request to list a workspace's API keys
+// (agent/integration credentials), masked for display.
+func (h *WorkspaceHandler) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	workspaceID := r.URL.Query().Get("workspace_id")
+	if workspaceID == "" {
+		WriteJSONError(w, "Missing workspace_id", http.StatusBadRequest)
+		return
+	}
+
+	keys, err := h.workspaceService.ListAPIKeys(r.Context(), workspaceID)
+	if err != nil {
+		h.logger.WithField("workspace_id", workspaceID).WithField("error", err.Error()).Error("Failed to list API keys")
+		WriteAuthAwareError(w, err, "Failed to list API keys", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"keys": keys,
+	})
+}
+
+// RevokeAPIKeyRequestBody mirrors domain.RevokeAPIKeyRequest for decoding.
+type RevokeAPIKeyRequestBody = domain.RevokeAPIKeyRequest
+
+// handleRevokeAPIKey handles the request to revoke (delete) an API key.
+// Restricted to the workspace owner or an admin-equivalent member.
+func (h *WorkspaceHandler) handleRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RevokeAPIKeyRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.workspaceService.RevokeAPIKey(r.Context(), req.WorkspaceID, req.UserID); err != nil {
+		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", req.UserID).WithField("error", err.Error()).Error("Failed to revoke API key")
+
+		if err.Error() == "target user is not an API key" {
+			WriteJSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		WriteAuthAwareError(w, err, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status": "success",
+	})
+}
+
+// CreateAgentInstallTokenRequest defines the request structure for minting
+// an agent install token (see domain/agent_install.go for the full flow).
+type CreateAgentInstallTokenRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+}
+
+// handleCreateAgentInstallToken handles the request to mint a one-time,
+// short-lived install token (+ a freshly-minted API key behind it) for the
+// "Brancher mon agent" console flow. Restricted to the workspace owner or
+// an admin-equivalent member (enforced service-side).
+func (h *WorkspaceHandler) handleCreateAgentInstallToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req CreateAgentInstallTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.WorkspaceID == "" {
+		WriteJSONError(w, "Missing workspace_id", http.StatusBadRequest)
+		return
+	}
+
+	rawToken, meta, err := h.workspaceService.CreateAgentInstallToken(r.Context(), req.WorkspaceID)
+	if err != nil {
+		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Failed to create agent install token")
+		WriteAuthAwareError(w, err, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":             "success",
+		"install_token":      rawToken,
+		"expires_at":         meta.ExpiresAt,
+		"expires_in_seconds": int(meta.ExpiresAt.Sub(meta.CreatedAt).Seconds()),
 	})
 }
 
@@ -467,12 +573,8 @@ func (h *WorkspaceHandler) handleRemoveMember(w http.ResponseWriter, r *http.Req
 	// Call service to remove the member
 	err := h.workspaceService.RemoveMember(r.Context(), req.WorkspaceID, req.UserID)
 	if err != nil {
-		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			WriteJSONError(w, err.Error(), http.StatusForbidden)
-			return
-		}
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", req.UserID).WithField("error", err.Error()).Error("Failed to remove member from workspace")
-		WriteJSONError(w, "Failed to remove member from workspace", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to remove member from workspace", http.StatusInternalServerError)
 		return
 	}
 
@@ -504,13 +606,7 @@ func (h *WorkspaceHandler) handleCreateIntegration(w http.ResponseWriter, r *htt
 	integrationID, err := h.workspaceService.CreateIntegration(r.Context(), req)
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Failed to create integration")
-
-		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			WriteJSONError(w, err.Error(), http.StatusForbidden)
-			return
-		}
-
-		WriteJSONError(w, "Failed to create integration", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to create integration", http.StatusInternalServerError)
 		return
 	}
 
@@ -541,13 +637,7 @@ func (h *WorkspaceHandler) handleUpdateIntegration(w http.ResponseWriter, r *htt
 	err := h.workspaceService.UpdateIntegration(r.Context(), req)
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to update integration")
-
-		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			WriteJSONError(w, err.Error(), http.StatusForbidden)
-			return
-		}
-
-		WriteJSONError(w, "Failed to update integration", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to update integration", http.StatusInternalServerError)
 		return
 	}
 
@@ -583,16 +673,12 @@ func (h *WorkspaceHandler) handleDeleteIntegration(w http.ResponseWriter, r *htt
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to delete integration")
 
-		if _, ok := err.(*domain.ErrUnauthorized); ok {
-			WriteJSONError(w, err.Error(), http.StatusForbidden)
-			return
-		}
 		if errors.Is(err, domain.ErrEmailIntegrationQueueActive) {
 			WriteJSONError(w, err.Error(), http.StatusConflict)
 			return
 		}
 
-		WriteJSONError(w, "Failed to delete integration", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to delete integration", http.StatusInternalServerError)
 		return
 	}
 

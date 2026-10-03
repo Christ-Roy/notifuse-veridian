@@ -428,6 +428,10 @@ msgstr ""
 msgid "1. Audience"
 msgstr "1. Zielgruppe"
 
+#: src/components/settings/ApiAgentsSettings.tsx:367
+msgid "1. Generate a one-time command"
+msgstr ""
+
 #: src/components/templates/CreateTemplateDrawer.tsx:646
 msgid "1. Settings"
 msgstr "1. Einstellungen"
@@ -435,6 +439,10 @@ msgstr "1. Einstellungen"
 #: src/components/email_builder/ui/FontStyleInput.tsx:111
 msgid "100 - Thin"
 msgstr "100 - Dünn"
+
+#: src/components/settings/ApiAgentsSettings.tsx:371
+msgid "2. Give it to your AI agent"
+msgstr ""
 
 #: src/components/templates/CreateTemplateDrawer.tsx:652
 msgid "2. Template"
@@ -459,6 +467,10 @@ msgstr ""
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:499
 msgid "3. Data Feeds"
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:375
+msgid "3. Done"
 msgstr ""
 
 #: src/components/templates/CreateTemplateDrawer.tsx:658
@@ -1029,6 +1041,10 @@ msgstr ""
 msgid "ANY"
 msgstr "BELIEBIG"
 
+#: src/components/settings/ApiAgentsSettings.tsx:195
+msgid "Any agent or integration using this key will stop working immediately. This cannot be undone."
+msgstr ""
+
 #: src/components/automations/config/TriggerConfigForm.tsx:318
 msgid "Any field change triggers automation"
 msgstr "Jede Feldänderung löst Automatisierung aus"
@@ -1043,6 +1059,11 @@ msgstr ""
 #: src/components/segment/input.tsx:763
 msgid "anytime"
 msgstr "jederzeit"
+
+#: src/components/settings/ApiAgentsSettings.tsx:220
+#: src/components/settings/SettingsSidebar.tsx:139
+msgid "API & agents"
+msgstr ""
 
 #: src/components/transactional/ApiCommandModal.tsx:976
 #: src/pages/TransactionalNotificationsPage.tsx:179
@@ -1075,10 +1096,12 @@ msgstr "API-Bezeichner"
 msgid "API Key"
 msgstr "API-Schlüssel"
 
+#: src/components/settings/ApiAgentsSettings.tsx:97
 #: src/components/settings/WorkspaceMembers.tsx:351
 msgid "API key created successfully"
 msgstr "API-Schlüssel erfolgreich erstellt"
 
+#: src/components/settings/ApiAgentsSettings.tsx:318
 #: src/components/settings/WorkspaceMembers.tsx:700
 msgid "API Key Created Successfully"
 msgstr "API-Schlüssel erfolgreich erstellt"
@@ -1087,6 +1110,15 @@ msgstr "API-Schlüssel erfolgreich erstellt"
 msgid "API Key Name"
 msgstr "API-Schlüssel-Name"
 
+#: src/components/settings/ApiAgentsSettings.tsx:111
+msgid "API key revoked"
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:244
+msgid "API keys"
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:325
 #: src/components/settings/WorkspaceMembers.tsx:707
 msgid "API Token"
 msgstr "API-Token"
@@ -1528,7 +1560,7 @@ msgstr "Blöcke"
 #: src/components/settings/BlogSettings.tsx:197
 #: src/components/settings/BlogSettings.tsx:205
 #: src/components/settings/BlogSettings.tsx:238
-#: src/components/settings/SettingsSidebar.tsx:102
+#: src/components/settings/SettingsSidebar.tsx:104
 #: src/layouts/WorkspaceLayout.tsx:360
 msgid "Blog"
 msgstr "Blog"
@@ -1862,6 +1894,8 @@ msgstr "Schaltflächengröße"
 #: src/components/segment/button_upsert.tsx:350
 #: src/components/segment/input_dimension_filters.tsx:162
 #: src/components/segment/input.tsx:385
+#: src/components/settings/ApiAgentsSettings.tsx:199
+#: src/components/settings/ApiAgentsSettings.tsx:281
 #: src/components/settings/BlogSettings.tsx:185
 #: src/components/settings/CustomFieldsConfiguration.tsx:273
 #: src/components/settings/EditPermissionsModal.tsx:121
@@ -2062,6 +2096,10 @@ msgstr "Feld leeren"
 msgid "Click"
 msgstr ""
 
+#: src/components/settings/ApiAgentsSettings.tsx:368
+msgid "Click \"Generate command\" below. It creates a secret, single-use link valid for 10 minutes — nobody can reuse it after you."
+msgstr ""
+
 #: src/components/segment/form_leaf.tsx:295
 #: src/components/segment/input.tsx:726
 msgid "Click email"
@@ -2133,6 +2171,8 @@ msgstr "Vorlage klonen"
 #: src/components/broadcasts/GlobalFeedSettings.tsx:137
 #: src/components/contacts/BulkActionProgressModal.tsx:65
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:825
+#: src/components/settings/ApiAgentsSettings.tsx:276
+#: src/components/settings/ApiAgentsSettings.tsx:347
 #: src/components/settings/WebhookCard.tsx:345
 #: src/components/settings/WorkspaceMembers.tsx:653
 #: src/components/transactional/ApiCommandModal.tsx:990
@@ -2165,7 +2205,7 @@ msgstr ""
 msgid "Code Editor"
 msgstr "Code-Editor"
 
-#: src/components/settings/SettingsSidebar.tsx:131
+#: src/components/settings/SettingsSidebar.tsx:133
 msgid "Cold outreach"
 msgstr ""
 
@@ -2200,6 +2240,10 @@ msgstr "Spaltenbreite (z.B. '50%', '300px', 'auto')"
 
 #: src/components/settings/Integrations.tsx:1245
 msgid "Coming soon"
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:406
+msgid "Command copied to clipboard"
 msgstr ""
 
 #: src/pages/SetupWizard.tsx:462
@@ -2392,6 +2436,12 @@ msgstr ""
 msgid "Connect IMAP inbox"
 msgstr ""
 
+#: src/components/settings/ApiAgentsSettings.tsx:230
+#: src/components/settings/ApiAgentsSettings.tsx:238
+#: src/components/settings/ApiAgentsSettings.tsx:341
+msgid "Connect my agent"
+msgstr ""
+
 #: src/components/settings/Integrations.tsx:1251
 msgid "Connect with Google"
 msgstr ""
@@ -2544,6 +2594,8 @@ msgstr ""
 msgid "Control how search engines index and follow links on your blog"
 msgstr "Steuern Sie, wie Suchmaschinen Ihren Blog indizieren und Links folgen"
 
+#: src/components/settings/ApiAgentsSettings.tsx:332
+#: src/components/settings/ApiAgentsSettings.tsx:408
 #: src/components/settings/Integrations.tsx:1484
 #: src/components/settings/Integrations.tsx:1521
 #: src/components/settings/WebhookCard.tsx:287
@@ -2575,6 +2627,10 @@ msgstr "Kernfelder"
 #: src/components/ai-assistant/AIAssistantChat.tsx:281
 msgid "Cost"
 msgstr "Kosten"
+
+#: src/components/settings/ApiAgentsSettings.tsx:125
+msgid "Could not copy to clipboard"
+msgstr ""
 
 #: src/components/templates/TemplatePreviewDrawer.tsx:596
 msgid "Could not score the template"
@@ -2619,11 +2675,18 @@ msgstr "E-Mail-Vorlage erstellen"
 msgid "Create and manage your blog content"
 msgstr "Blog-Inhalte erstellen und verwalten"
 
+#: src/components/settings/ApiAgentsSettings.tsx:247
+#: src/components/settings/ApiAgentsSettings.tsx:269
+#: src/components/settings/ApiAgentsSettings.tsx:284
 #: src/components/settings/WorkspaceMembers.tsx:582
 #: src/components/settings/WorkspaceMembers.tsx:646
 #: src/components/settings/WorkspaceMembers.tsx:666
 msgid "Create API Key"
 msgstr "API-Schlüssel erstellen"
+
+#: src/components/settings/ApiAgentsSettings.tsx:221
+msgid "Create API keys and connect AI agents (Claude Code or similar) to this workspace."
+msgstr ""
 
 #: src/components/automations/UpsertAutomationDrawer.tsx:129
 #: src/components/automations/UpsertAutomationDrawer.tsx:250
@@ -2744,6 +2807,7 @@ msgid "created"
 msgstr "erstellt"
 
 #: src/components/automations/config/TriggerConfigForm.tsx:58
+#: src/components/settings/ApiAgentsSettings.tsx:168
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:403
 #: src/pages/TemplatesPage.tsx:221
 msgid "Created"
@@ -2896,7 +2960,7 @@ msgstr "Benutzerdefiniertes Feldlabel erfolgreich gespeichert"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1136
 #: src/components/settings/CustomFieldsConfiguration.tsx:161
-#: src/components/settings/SettingsSidebar.tsx:107
+#: src/components/settings/SettingsSidebar.tsx:109
 msgid "Custom Fields"
 msgstr "Benutzerdefinierte Felder"
 
@@ -3034,7 +3098,7 @@ msgstr ""
 
 #: src/components/settings/BlogSettings.tsx:463
 #: src/components/settings/DeleteWorkspace.tsx:45
-#: src/components/settings/SettingsSidebar.tsx:140
+#: src/components/settings/SettingsSidebar.tsx:148
 msgid "Danger Zone"
 msgstr "Gefahrenzone"
 
@@ -4496,6 +4560,7 @@ msgstr "Abschließen der Einrichtung fehlgeschlagen"
 msgid "Failed to copy to clipboard"
 msgstr "Kopieren in Zwischenablage fehlgeschlagen"
 
+#: src/components/settings/ApiAgentsSettings.tsx:101
 #: src/components/settings/WorkspaceMembers.tsx:357
 msgid "Failed to create API key"
 msgstr "Erstellen des API-Schlüssels fehlgeschlagen"
@@ -4519,6 +4584,10 @@ msgstr "Erstellen der Kategorie fehlgeschlagen: {0}"
 #: src/components/file_manager/fileManager.tsx:383
 msgid "Failed to create folder: "
 msgstr "Erstellen des Ordners fehlgeschlagen: "
+
+#: src/components/settings/ApiAgentsSettings.tsx:148
+msgid "Failed to create install command"
+msgstr ""
 
 #: src/components/lists/ListDrawer.tsx:72
 msgid "Failed to create list: {error}"
@@ -4629,6 +4698,10 @@ msgstr "Exportieren von JSON fehlgeschlagen"
 msgid "Failed to export MJML"
 msgstr "Exportieren von MJML fehlgeschlagen"
 
+#: src/components/settings/ApiAgentsSettings.tsx:64
+msgid "Failed to fetch API keys"
+msgstr ""
+
 #. placeholder {0}: response.error
 #: src/components/broadcasts/GlobalFeedSettings.tsx:61
 msgid "Failed to fetch data: {0}"
@@ -4658,7 +4731,7 @@ msgstr "Abrufen der Objekte fehlgeschlagen: "
 msgid "Failed to fetch setup status"
 msgstr "Abrufen des Einrichtungsstatus fehlgeschlagen"
 
-#: src/pages/WorkspaceSettingsPage.tsx:87
+#: src/pages/WorkspaceSettingsPage.tsx:95
 msgid "Failed to fetch workspace members"
 msgstr "Abrufen der Arbeitsbereich-Mitglieder fehlgeschlagen"
 
@@ -4761,6 +4834,10 @@ msgstr "Magic-Code konnte nicht erneut gesendet werden"
 #: src/pages/BroadcastsPage.tsx:1222
 msgid "Failed to resume broadcast"
 msgstr "Fortsetzen der Kampagne fehlgeschlagen"
+
+#: src/components/settings/ApiAgentsSettings.tsx:115
+msgid "Failed to revoke API key"
+msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1843
 msgid "Failed to save anti-detection settings"
@@ -5279,7 +5356,7 @@ msgstr "Volle Breite auf Mobilgeräten"
 msgid "Fullscreen"
 msgstr "Vollbild"
 
-#: src/components/settings/SettingsSidebar.tsx:117
+#: src/components/settings/SettingsSidebar.tsx:119
 #: src/components/settings/SystemSettingsDrawer.tsx:228
 msgid "General"
 msgstr "Allgemein"
@@ -5294,6 +5371,14 @@ msgstr "Allgemeine Einstellungen"
 #: src/components/settings/GeneralSettings.tsx:160
 msgid "General settings for your workspace"
 msgstr "Allgemeine Einstellungen für Ihren Arbeitsbereich"
+
+#: src/components/settings/ApiAgentsSettings.tsx:235
+msgid "Generate a one-time install command. It installs the CLI, writes the key securely to disk, and never shows the key itself — not even to you."
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:388
+msgid "Generate command"
+msgstr ""
 
 #: src/components/integrations/SupabaseIntegration.tsx:149
 #: src/components/integrations/SupabaseIntegration.tsx:170
@@ -5605,6 +5690,10 @@ msgstr "z.B.: Willkommens-E-Mail"
 #: src/components/templates/CreateTemplateDrawer.tsx:713
 msgid "i.e: welcome-email"
 msgstr "z.B.: willkommens-email"
+
+#: src/components/settings/ApiAgentsSettings.tsx:357
+msgid "I'm not technical, explain this"
+msgstr ""
 
 #: src/components/settings/LogoInput.tsx:45
 msgid "Icon detected successfully"
@@ -5984,7 +6073,7 @@ msgstr "Integration nicht gefunden oder kein E-Mail-Anbieter"
 msgid "Integration updated successfully"
 msgstr "Integration erfolgreich aktualisiert"
 
-#: src/components/settings/SettingsSidebar.tsx:59
+#: src/components/settings/SettingsSidebar.tsx:61
 msgid "Integrations"
 msgstr "Integrationen"
 
@@ -6168,6 +6257,14 @@ msgstr "Zwischen 35-140 Zeichen halten"
 msgid "Keep it concise and descriptive"
 msgstr "Prägnant und beschreibend halten"
 
+#: src/components/settings/ApiAgentsSettings.tsx:162
+msgid "Key"
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:292
+msgid "Key name"
+msgstr ""
+
 #: src/components/segment/input_json_path.tsx:88
 msgid "key or index"
 msgstr "Schlüssel oder Index"
@@ -6236,6 +6333,10 @@ msgstr "Zuletzt geändert"
 #: src/pages/ContactsPage.tsx:670
 msgid "Last Name"
 msgstr "Nachname"
+
+#: src/components/settings/ApiAgentsSettings.tsx:174
+msgid "Last used"
+msgstr ""
 
 #. placeholder {0}: provider.veridian_transport_verified_at
 #: src/components/settings/Integrations.tsx:386
@@ -6902,6 +7003,7 @@ msgstr "N/V"
 #: src/components/file_manager/fileManager.tsx:873
 #: src/components/lists/ListDrawer.tsx:185
 #: src/components/segment/button_upsert.tsx:376
+#: src/components/settings/ApiAgentsSettings.tsx:156
 #: src/components/settings/Integrations.tsx:1458
 #: src/components/settings/Integrations.tsx:1617
 #: src/components/settings/Integrations.tsx:1682
@@ -7045,6 +7147,10 @@ msgstr "Kein {0}-Inhalt zur Vorschau"
 #: src/components/settings/WorkspaceMembers.tsx:155
 msgid "No Access"
 msgstr "Kein Zugriff"
+
+#: src/components/settings/ApiAgentsSettings.tsx:262
+msgid "No API keys yet"
+msgstr ""
 
 #: src/pages/AutomationsPage.tsx:180
 msgid "No automations yet"
@@ -7356,6 +7462,10 @@ msgstr "Normal"
 #: src/components/settings/Integrations.tsx:458
 msgid "Not assigned"
 msgstr "Nicht zugewiesen"
+
+#: src/components/settings/ApiAgentsSettings.tsx:182
+msgid "Not available"
+msgstr ""
 
 #: src/components/analytics/AnalyticsDashboard.tsx:162
 #: src/components/analytics/AnalyticsDashboard.tsx:186
@@ -7732,6 +7842,10 @@ msgstr "Passwort"
 msgid "Paste the 16-character password generated by Google. Spaces are removed automatically."
 msgstr ""
 
+#: src/components/settings/ApiAgentsSettings.tsx:372
+msgid "Paste the command into Claude Code (or your coding assistant's terminal) and ask it to run it. Your agent will set itself up automatically."
+msgstr ""
+
 #: src/components/blog_editor/components/youtube/YoutubeNodeView.tsx:340
 msgid "Paste YouTube URL..."
 msgstr "YouTube-URL einfügen..."
@@ -7908,7 +8022,7 @@ msgstr ""
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
 msgstr ""
 
-#: src/components/settings/SettingsSidebar.tsx:124
+#: src/components/settings/SettingsSidebar.tsx:126
 #: src/components/settings/veridian_plan_settings.tsx:57
 msgid "Plan"
 msgstr ""
@@ -7967,9 +8081,14 @@ msgstr "Bitte geben Sie einen Listennamen ein"
 msgid "Please enter a model name"
 msgstr ""
 
+#: src/components/settings/ApiAgentsSettings.tsx:294
 #: src/components/settings/WebhooksSettings.tsx:225
 msgid "Please enter a name"
 msgstr "Bitte geben Sie einen Namen ein"
+
+#: src/components/settings/ApiAgentsSettings.tsx:87
+msgid "Please enter a name for the key"
+msgstr ""
 
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:256
 msgid "Please enter a notification name"
@@ -9002,6 +9121,15 @@ msgstr ""
 msgid "Review mapping"
 msgstr ""
 
+#: src/components/settings/ApiAgentsSettings.tsx:197
+#: src/components/settings/ApiAgentsSettings.tsx:201
+msgid "Revoke"
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:194
+msgid "Revoke this key"
+msgstr ""
+
 #: src/components/email_builder/ui/BorderInput.tsx:61
 msgid "Ridge"
 msgstr "Rillig"
@@ -9961,7 +10089,7 @@ msgstr "Legt die Bildschirmbreite fest, unter der die E-Mail zum mobilen Layout 
 msgid "Setting up..."
 msgstr "Wird eingerichtet..."
 
-#: src/components/settings/SettingsSidebar.tsx:146
+#: src/components/settings/SettingsSidebar.tsx:154
 #: src/layouts/WorkspaceLayout.tsx:405
 msgid "Settings"
 msgstr "Einstellungen"
@@ -9998,6 +10126,10 @@ msgstr "Details anzeigen"
 #: src/components/blog/RecentThemesTable.tsx:264
 msgid "Show More ({0} remaining)"
 msgstr "Mehr anzeigen ({0} verbleibend)"
+
+#: src/components/settings/ApiAgentsSettings.tsx:357
+msgid "Show the technical command"
+msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:871
 msgid "Showing all 11 provider classes (incl. MX-resolved)"
@@ -10071,7 +10203,7 @@ msgstr "SMS"
 msgid "SMTP & bridge settings"
 msgstr ""
 
-#: src/components/settings/SettingsSidebar.tsx:112
+#: src/components/settings/SettingsSidebar.tsx:114
 #: src/components/settings/SMTPBridgeSettings.tsx:20
 #: src/components/settings/SystemSettingsDrawer.tsx:422
 msgid "SMTP Bridge"
@@ -10538,7 +10670,7 @@ msgstr "Aufgabenstatus"
 msgid "Task type:"
 msgstr "Aufgabentyp:"
 
-#: src/components/settings/SettingsSidebar.tsx:38
+#: src/components/settings/SettingsSidebar.tsx:40
 #: src/components/settings/WorkspaceMembers.tsx:576
 msgid "Team"
 msgstr "Team"
@@ -11014,6 +11146,15 @@ msgstr "Dies erscheint in Browser-Tabs beim Anzeigen der E-Mail in einem Webbrow
 msgid "This cannot be undone."
 msgstr "Dies kann nicht rückgängig gemacht werden."
 
+#. placeholder {0}: Math.round(installExpiresInSeconds / 60)
+#: src/components/settings/ApiAgentsSettings.tsx:396
+msgid "This command expires in {0} minutes and can only be used once."
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:383
+msgid "This command is valid once, for a short time, and never contains your real API key — only a one-time ticket exchanged securely by the installer. Give it to your agent (Claude Code or similar) as-is."
+msgstr ""
+
 #: src/components/contacts/ContactDetailsDrawer.tsx:1029
 msgid "This contact is not subscribed to any lists"
 msgstr "Dieser Kontakt ist für keine Listen angemeldet"
@@ -11037,6 +11178,10 @@ msgstr "Diese ID wird in URLs und API-Anfragen verwendet. Sie darf nur Kleinbuch
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:269
 msgid "This ID will be used when triggering the notification via API"
 msgstr "Diese ID wird beim Auslösen der Benachrichtigung über die API verwendet"
+
+#: src/components/settings/ApiAgentsSettings.tsx:181
+msgid "This instance does not track per-key usage yet"
+msgstr ""
 
 #: src/pages/AcceptInvitationPage.tsx:120
 msgid "This invitation link is invalid or has expired."
@@ -11090,6 +11235,7 @@ msgstr "Diese Vorlage wird von einer Integration verwaltet und kann nicht gelös
 msgid "This text appears in the email client's preview pane, typically after the subject line. Keep it concise and compelling (100-140 characters recommended)."
 msgstr "Dieser Text erscheint im Vorschaufenster des E-Mail-Clients, typischerweise nach der Betreffzeile. Halten Sie ihn prägnant und überzeugend (100-140 Zeichen empfohlen)."
 
+#: src/components/settings/ApiAgentsSettings.tsx:319
 #: src/components/settings/WorkspaceMembers.tsx:701
 msgid "This token will only be displayed once. Please save it in a secure location. It cannot be retrieved again."
 msgstr "Dieses Token wird nur einmal angezeigt. Bitte speichern Sie es an einem sicheren Ort. Es kann nicht erneut abgerufen werden."
@@ -11273,6 +11419,10 @@ msgstr "Wechseln Sie zwischen mobiler und Desktop-Ansicht, um zu sehen, wie Ihre
 #: src/components/blog_editor/toolbars/components/CodeBlockToolbar.tsx:244
 msgid "Toggle caption"
 msgstr "Bildunterschrift umschalten"
+
+#: src/components/settings/ApiAgentsSettings.tsx:330
+msgid "Token copied to clipboard"
+msgstr ""
 
 #: src/components/settings/Integrations.tsx:1688
 msgid "Tools"
@@ -12041,7 +12191,7 @@ msgstr "Webhook-URL"
 #: src/components/settings/Integrations.tsx:226
 #: src/components/settings/Integrations.tsx:234
 #: src/components/settings/Integrations.tsx:265
-#: src/components/settings/SettingsSidebar.tsx:81
+#: src/components/settings/SettingsSidebar.tsx:83
 #: src/components/settings/WebhooksSettings.tsx:169
 msgid "Webhooks"
 msgstr "Webhooks"
@@ -12404,6 +12554,10 @@ msgstr "Sie wurden eingeladen beizutreten"
 
 #: src/components/settings/WorkspaceMembers.tsx:314
 msgid "Your account is not yet linked to the Veridian Hub. Sign in once via the Hub to enable team invitations."
+msgstr ""
+
+#: src/components/settings/ApiAgentsSettings.tsx:376
+msgid "Your agent can now send emails, manage contacts and read stats on this workspace — without you ever seeing or handling the secret key."
 msgstr ""
 
 #: src/components/file_manager/buttonSettings.tsx:241

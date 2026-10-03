@@ -3051,3 +3051,293 @@ func TestWorkspaceHandler_HandleSetUserPermissions(t *testing.T) {
 		assert.Equal(t, "Failed to set user permissions", response["error"])
 	})
 }
+
+// === Veridian patch — mission "API & agents" (2026-10-03) ===
+
+func TestWorkspaceHandler_HandleListAPIKeys(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	now := time.Now()
+	workspaceSvc.EXPECT().
+		ListAPIKeys(gomock.Any(), "workspace-123").
+		Return([]*domain.APIKeySummary{
+			{UserID: "agent-1", Name: "agent-ci", MaskedEmail: "age***@notifuse.app", CreatedAt: now},
+		}, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.listAPIKeys?workspace_id=workspace-123", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response map[string]interface{}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+	keys, ok := response["keys"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, keys, 1)
+}
+
+func TestWorkspaceHandler_HandleListAPIKeys_MissingWorkspaceID(t *testing.T) {
+	handler, _, _, secretKey, _ := setupTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.listAPIKeys", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	handler.handleListAPIKeys(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestWorkspaceHandler_HandleListAPIKeys_MethodNotAllowed(t *testing.T) {
+	handler, _, _, secretKey, _ := setupTest(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.listAPIKeys", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	handler.handleListAPIKeys(w, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
+// === Veridian patch — mesure prod 2026-10-03 : une clé révoquée/inconnue sur
+// cette route répond désormais 401 (ErrAuthenticationFailed), pas 500.
+func TestWorkspaceHandler_HandleListAPIKeys_RevokedKeyReturns401(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		ListAPIKeys(gomock.Any(), "workspace-123").
+		Return(nil, &domain.ErrAuthenticationFailed{Message: "user not found"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.listAPIKeys?workspace_id=workspace-123", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	var response map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+	assert.Equal(t, "user not found", response["error"])
+}
+
+// === Veridian patch — mesure prod 2026-10-03 : une clé valide mais hors
+// scope (autre workspace) répond 403, pas 500.
+func TestWorkspaceHandler_HandleListAPIKeys_WrongWorkspaceReturns403(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		ListAPIKeys(gomock.Any(), "workspace-123").
+		Return(nil, &domain.ErrUnauthorized{Message: "not authorized for this workspace"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.listAPIKeys?workspace_id=workspace-123", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestWorkspaceHandler_HandleListAPIKeys_ServiceErrorStays500(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		ListAPIKeys(gomock.Any(), "workspace-123").
+		Return(nil, fmt.Errorf("database exploded"))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces.listAPIKeys?workspace_id=workspace-123", nil)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestWorkspaceHandler_HandleRevokeAPIKey(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		RevokeAPIKey(gomock.Any(), "workspace-123", "agent-1").
+		Return(nil)
+
+	reqBody := RevokeAPIKeyRequestBody{WorkspaceID: "workspace-123", UserID: "agent-1"}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.revokeAPIKey", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+	assert.Equal(t, "success", response["status"])
+}
+
+func TestWorkspaceHandler_HandleRevokeAPIKey_ValidationError(t *testing.T) {
+	_, _, mux, secretKey, _ := setupTest(t)
+
+	reqBody := RevokeAPIKeyRequestBody{WorkspaceID: "", UserID: ""}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.revokeAPIKey", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestWorkspaceHandler_HandleRevokeAPIKey_WrongTypeReturns400(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		RevokeAPIKey(gomock.Any(), "workspace-123", "human-1").
+		Return(fmt.Errorf("target user is not an API key"))
+
+	reqBody := RevokeAPIKeyRequestBody{WorkspaceID: "workspace-123", UserID: "human-1"}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.revokeAPIKey", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// === Veridian patch — mesure prod 2026-10-03 : révocation refusée pour un
+// non-owner/admin -> 403 (pas 500).
+func TestWorkspaceHandler_HandleRevokeAPIKey_ForbiddenReturns403(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		RevokeAPIKey(gomock.Any(), "workspace-123", "agent-1").
+		Return(&domain.ErrUnauthorized{Message: "only the workspace owner or an admin can revoke an API key"})
+
+	reqBody := RevokeAPIKeyRequestBody{WorkspaceID: "workspace-123", UserID: "agent-1"}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.revokeAPIKey", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// === Veridian patch — mesure prod 2026-10-03 : révocation avec une
+// identité révoquée/invalide -> 401 (pas 500).
+func TestWorkspaceHandler_HandleRevokeAPIKey_RevokedCallerReturns401(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		RevokeAPIKey(gomock.Any(), "workspace-123", "agent-1").
+		Return(&domain.ErrAuthenticationFailed{Message: "user not found"})
+
+	reqBody := RevokeAPIKeyRequestBody{WorkspaceID: "workspace-123", UserID: "agent-1"}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.revokeAPIKey", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestWorkspaceHandler_HandleCreateAgentInstallToken(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	now := time.Now()
+	expires := now.Add(10 * time.Minute)
+	workspaceSvc.EXPECT().
+		CreateAgentInstallToken(gomock.Any(), "workspace-123").
+		Return("raw-install-token", &domain.AgentInstallToken{
+			WorkspaceID: "workspace-123",
+			CreatedAt:   now,
+			ExpiresAt:   expires,
+		}, nil)
+
+	reqBody := CreateAgentInstallTokenRequest{WorkspaceID: "workspace-123"}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.createAgentInstallToken", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response map[string]interface{}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+	assert.Equal(t, "raw-install-token", response["install_token"])
+	assert.Equal(t, "success", response["status"])
+}
+
+func TestWorkspaceHandler_HandleCreateAgentInstallToken_MissingWorkspaceID(t *testing.T) {
+	handler, _, _, secretKey, _ := setupTest(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.createAgentInstallToken", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	handler.handleCreateAgentInstallToken(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestWorkspaceHandler_HandleCreateAgentInstallToken_ForbiddenReturns403(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		CreateAgentInstallToken(gomock.Any(), "workspace-123").
+		Return("", nil, &domain.ErrUnauthorized{Message: "only the workspace owner or an admin can create an agent install token"})
+
+	reqBody := CreateAgentInstallTokenRequest{WorkspaceID: "workspace-123"}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.createAgentInstallToken", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestWorkspaceHandler_HandleCreateAgentInstallToken_ServiceErrorStays500(t *testing.T) {
+	_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+
+	workspaceSvc.EXPECT().
+		CreateAgentInstallToken(gomock.Any(), "workspace-123").
+		Return("", nil, fmt.Errorf("database exploded"))
+
+	reqBody := CreateAgentInstallTokenRequest{WorkspaceID: "workspace-123"}
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.createAgentInstallToken", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
