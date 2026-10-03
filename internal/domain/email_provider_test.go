@@ -2085,8 +2085,19 @@ func TestEmailProvider_VeridianGmailProfileDailyCap(t *testing.T) {
 
 	gmail.VeridianProfileDailyCap = 50
 	assert.Equal(t, 50, gmail.VeridianEffectiveProfileDailyCap())
-	gmail.VeridianProfileDailyCap = 51
-	assert.ErrorContains(t, gmail.Validate("secret"), "must not exceed 50")
+	gmail.VeridianProfileDailyCap = VeridianGmailPersonalHardMaxDailyCap
+	assert.NoError(t, gmail.Validate("secret"))
+	gmail.VeridianProfileDailyCap = VeridianGmailPersonalHardMaxDailyCap + 1
+	assert.ErrorContains(t, gmail.Validate("secret"), "must not exceed 450")
+
+	// 2026-10-03 — compte Google Workspace déclaré : plafond bien plus haut
+	// autorisé (audace), toujours borné (pas d'illimité).
+	gmail.VeridianGmailAccountType = "workspace"
+	gmail.VeridianProfileDailyCap = VeridianGmailWorkspaceHardMaxDailyCap
+	assert.NoError(t, gmail.Validate("secret"))
+	gmail.VeridianProfileDailyCap = VeridianGmailWorkspaceHardMaxDailyCap + 1
+	assert.ErrorContains(t, gmail.Validate("secret"), "must not exceed 1800")
+	gmail.VeridianGmailAccountType = ""
 
 	oauth := EmailProvider{
 		Kind: EmailProviderKindSMTP,

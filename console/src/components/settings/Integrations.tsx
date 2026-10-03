@@ -73,6 +73,8 @@ import {
   buildGmailAppPasswordProvider,
   GMAIL_PERSONAL_DEFAULT_DAILY_CAP,
   GMAIL_PERSONAL_MAX_DAILY_CAP,
+  GMAIL_WORKSPACE_MAX_DAILY_CAP,
+  gmailAccountTypeMaxDailyCap,
   inferEmailProfileMode,
   marketingProfileIds,
   smtpSettingsForEdit,
@@ -545,6 +547,7 @@ interface EmailProviderFormValues {
   profile_mode?: EmailProfileMode
   gmail_sender_name?: string
   gmail_profile_daily_cap?: number
+  gmail_is_workspace?: boolean
 }
 
 const constructProviderFromForm = (
@@ -558,6 +561,7 @@ const constructProviderFromForm = (
       appPassword: formValues.smtp?.password,
       rateLimitPerMinute: formValues.rate_limit_per_minute || 1,
       profileDailyCap: formValues.gmail_profile_daily_cap,
+      accountType: formValues.gmail_is_workspace ? 'workspace' : 'personal',
       existingSenders: formValues.senders,
       existingProvider
     })
@@ -775,6 +779,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       gmail_profile_daily_cap:
         integration.email_provider.veridian_profile_daily_cap ||
         (profileMode === 'gmail_app_password' ? GMAIL_PERSONAL_DEFAULT_DAILY_CAP : undefined),
+      gmail_is_workspace: integration.email_provider.veridian_gmail_account_type === 'workspace',
       ses: integration.email_provider.ses,
       smtp: smtpSettingsForEdit(integration.email_provider.smtp),
       sparkpost: integration.email_provider.sparkpost,
@@ -906,6 +911,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
       profile_mode: 'gmail_app_password',
       rate_limit_per_minute: 1,
       gmail_profile_daily_cap: GMAIL_PERSONAL_DEFAULT_DAILY_CAP,
+      gmail_is_workspace: false,
       smtp: {
         host: 'smtp.gmail.com',
         port: 587,
@@ -1860,27 +1866,48 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             </Form.Item>
 
             <Form.Item
-              name="gmail_profile_daily_cap"
-              label={t`Daily profile cap`}
-              extra={t`Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; Gmail personal profiles cannot exceed 50/day.`}
-              rules={[
-                { required: true, message: t`Daily profile cap is required` },
-                {
-                  type: 'number',
-                  min: 1,
-                  max: GMAIL_PERSONAL_MAX_DAILY_CAP,
-                  message: t`Enter a value between 1 and ${GMAIL_PERSONAL_MAX_DAILY_CAP}`
-                }
-              ]}
+              name="gmail_is_workspace"
+              label={t`Google Workspace account`}
+              valuePropName="checked"
+              extra={t`Enable if this Gmail address is a paid Google Workspace account, not a free personal Gmail. Workspace tolerates a much higher daily volume (up to ${GMAIL_WORKSPACE_MAX_DAILY_CAP}/day vs ${GMAIL_PERSONAL_MAX_DAILY_CAP}/day for personal), per Google's own sending limits.`}
             >
-              <InputNumber
-                min={1}
-                max={GMAIL_PERSONAL_MAX_DAILY_CAP}
-                precision={0}
-                addonAfter={t`emails / day`}
-                style={{ width: '100%' }}
-                disabled={!isOwner}
-              />
+              <Switch disabled={!isOwner} />
+            </Form.Item>
+
+            <Form.Item shouldUpdate={(prev, cur) => prev.gmail_is_workspace !== cur.gmail_is_workspace}>
+              {({ getFieldValue }) => {
+                const isWorkspace = !!getFieldValue('gmail_is_workspace')
+                const maxCap = gmailAccountTypeMaxDailyCap(isWorkspace ? 'workspace' : 'personal')
+                return (
+                  <Form.Item
+                    name="gmail_profile_daily_cap"
+                    label={t`Daily profile cap`}
+                    extra={
+                      isWorkspace
+                        ? t`Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a declared Google Workspace account can go up to ${maxCap}/day once warmed up.`
+                        : t`Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a personal Gmail profile can go up to ${maxCap}/day once warmed up.`
+                    }
+                    rules={[
+                      { required: true, message: t`Daily profile cap is required` },
+                      {
+                        type: 'number',
+                        min: 1,
+                        max: maxCap,
+                        message: t`Enter a value between 1 and ${maxCap}`
+                      }
+                    ]}
+                  >
+                    <InputNumber
+                      min={1}
+                      max={maxCap}
+                      precision={0}
+                      addonAfter={t`emails / day`}
+                      style={{ width: '100%' }}
+                      disabled={!isOwner}
+                    />
+                  </Form.Item>
+                )
+              }}
             </Form.Item>
 
             <Form.Item

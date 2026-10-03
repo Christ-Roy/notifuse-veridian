@@ -116,8 +116,15 @@ describe('Gmail app-password email profiles', () => {
 
   it('enforces the Gmail personal daily safety ceiling', () => {
     expect(gmailPersonalDailyCap()).toBe(30)
-    expect(gmailPersonalDailyCap(50)).toBe(50)
-    expect(() => gmailPersonalDailyCap(51)).toThrow(/between 1 and 50/)
+    expect(gmailPersonalDailyCap(450)).toBe(450)
+    expect(() => gmailPersonalDailyCap(451)).toThrow(/between 1 and 450/)
+  })
+
+  it('raises the ceiling for a declared Google Workspace account', () => {
+    expect(gmailPersonalDailyCap(1800, 'workspace')).toBe(1800)
+    expect(() => gmailPersonalDailyCap(1801, 'workspace')).toThrow(/between 1 and 1800/)
+    // A personal account never inherits the Workspace ceiling.
+    expect(() => gmailPersonalDailyCap(1800)).toThrow(/between 1 and 450/)
   })
 
   it('uses the multi-profile pool with a legacy singleton fallback', () => {

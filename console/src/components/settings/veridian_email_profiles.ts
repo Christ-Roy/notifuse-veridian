@@ -8,7 +8,16 @@ import type {
 export type EmailProfileMode = 'gmail_app_password' | 'gmail_oauth' | 'smtp_advanced'
 
 export const GMAIL_PERSONAL_DEFAULT_DAILY_CAP = 30
-export const GMAIL_PERSONAL_MAX_DAILY_CAP = 50
+// Plafonds relevés le 2026-10-03 (mission plafonds Gmail) : Google documente
+// ~500 destinataires/jour pour un Gmail personnel et ~2000/jour pour un compte
+// Google Workspace. On reste sous ces seuils (marge de sécurité) tout en
+// laissant largement monter au-dessus de l'ancien plafond fixe (50) une fois
+// la chauffe établie. Le défaut (30/jour) ne change pas.
+export const GMAIL_PERSONAL_MAX_DAILY_CAP = 450
+export const GMAIL_WORKSPACE_MAX_DAILY_CAP = 1800
+export type GmailAccountType = 'personal' | 'workspace'
+export const gmailAccountTypeMaxDailyCap = (accountType?: GmailAccountType): number =>
+  accountType === 'workspace' ? GMAIL_WORKSPACE_MAX_DAILY_CAP : GMAIL_PERSONAL_MAX_DAILY_CAP
 
 export interface GmailAppPasswordProfileInput {
   email: string
@@ -16,6 +25,7 @@ export interface GmailAppPasswordProfileInput {
   appPassword?: string
   rateLimitPerMinute?: number
   profileDailyCap?: number
+  accountType?: GmailAccountType
   existingSenders?: Sender[]
   existingProvider?: EmailProvider
 }
@@ -47,12 +57,11 @@ export const inferEmailProfileMode = (provider?: EmailProvider): EmailProfileMod
   return 'smtp_advanced'
 }
 
-export const gmailPersonalDailyCap = (value?: number): number => {
+export const gmailPersonalDailyCap = (value?: number, accountType?: GmailAccountType): number => {
   const cap = value ?? GMAIL_PERSONAL_DEFAULT_DAILY_CAP
-  if (!Number.isInteger(cap) || cap < 1 || cap > GMAIL_PERSONAL_MAX_DAILY_CAP) {
-    throw new RangeError(
-      `Gmail personal daily cap must be between 1 and ${GMAIL_PERSONAL_MAX_DAILY_CAP}`
-    )
+  const max = gmailAccountTypeMaxDailyCap(accountType)
+  if (!Number.isInteger(cap) || cap < 1 || cap > max) {
+    throw new RangeError(`Gmail personal daily cap must be between 1 and ${max}`)
   }
   return cap
 }
@@ -129,6 +138,7 @@ export const buildGmailAppPasswordProvider = ({
   appPassword,
   rateLimitPerMinute = 1,
   profileDailyCap,
+  accountType,
   existingSenders = [],
   existingProvider
 }: GmailAppPasswordProfileInput): EmailProvider => {
@@ -165,6 +175,7 @@ export const buildGmailAppPasswordProvider = ({
       }
     ],
     rate_limit_per_minute: rateLimitPerMinute,
-    veridian_profile_daily_cap: gmailPersonalDailyCap(profileDailyCap)
+    veridian_profile_daily_cap: gmailPersonalDailyCap(profileDailyCap, accountType),
+    veridian_gmail_account_type: accountType
   }
 }

@@ -184,6 +184,17 @@ type EmailProvider struct {
 	VeridianWarmupStartedAt *time.Time `json:"veridian_warmup_started_at,omitempty"`
 	VeridianWarmupSchedule  []int      `json:"veridian_warmup_schedule,omitempty"`
 	VeridianWarmupStepDays  int        `json:"veridian_warmup_step_days,omitempty"`
+
+	// Veridian fork — un compte Google Workspace tolère un volume sortant bien
+	// plus elevé qu'un Gmail personnel cote cote (Google documente ~2000
+	// destinataires/jour Workspace contre ~500/jour personnel, 2026-10-03,
+	// mission plafonds Gmail). Le transport (smtp.gmail.com + mot de passe
+	// d'application) est identique dans les deux cas : seul ce champ, posé
+	// explicitement par l'operateur, change le PLAFOND MAXIMAL autorise en
+	// Validate(). Vide/'personal' = comportement historique inchange (non-
+	// regression stricte). Le plafond par defaut (30/jour) ne bouge PAS : on
+	// ouvre le PLAFOND, pas le demarrage, la montee reste progressive.
+	VeridianGmailAccountType string `json:"veridian_gmail_account_type,omitempty"`
 }
 
 // Validate validates the email provider settings
@@ -200,8 +211,8 @@ func (e *EmailProvider) Validate(passphrase string) error {
 		if e.VeridianProfileDailyCap == 0 {
 			e.VeridianProfileDailyCap = VeridianGmailDefaultDailyCap
 		}
-		if e.VeridianProfileDailyCap > VeridianGmailPersonalHardMaxDailyCap {
-			return fmt.Errorf("Gmail profile daily cap must not exceed %d", VeridianGmailPersonalHardMaxDailyCap)
+		if hardMax := VeridianGmailHardMaxDailyCap(e.VeridianGmailAccountType); e.VeridianProfileDailyCap > hardMax {
+			return fmt.Errorf("Gmail profile daily cap must not exceed %d", hardMax)
 		}
 		if e.SMTP.AuthType == "" || strings.EqualFold(e.SMTP.AuthType, "basic") {
 			e.SMTP.Password = strings.ReplaceAll(e.SMTP.Password, " ", "")
@@ -281,9 +292,28 @@ func (e *EmailProvider) Validate(passphrase string) error {
 }
 
 const (
-	VeridianGmailDefaultDailyCap         = 30
-	VeridianGmailPersonalHardMaxDailyCap = 50
+	VeridianGmailDefaultDailyCap = 30
+
+	// Plafonds releves le 2026-10-03 (mission plafonds Gmail) : Google documente
+	// ~500 destinataires/jour pour un Gmail personnel et ~2000/jour pour un
+	// compte Google Workspace authentifie par mot de passe d'application. On
+	// reste volontairement SOUS ces seuils (marge de securite, la reputation
+	// se degrade souvent avant le blocage dur de Google) tout en laissant
+	// l'operateur monter largement au-dessus de l'ancien plafond fixe (50) une
+	// fois la chauffe etablie — Robert, 03/10 : « de l'audace quand il y a
+	// beaucoup de leads ». Le defaut (30/jour) reste conservateur et inchange.
+	VeridianGmailPersonalHardMaxDailyCap  = 450
+	VeridianGmailWorkspaceHardMaxDailyCap = 1800
 )
+
+// VeridianGmailHardMaxDailyCap retourne le plafond maximal autorise pour ce
+// type de compte Gmail ('workspace' ou, par defaut, 'personal').
+func VeridianGmailHardMaxDailyCap(accountType string) int {
+	if strings.EqualFold(accountType, "workspace") {
+		return VeridianGmailWorkspaceHardMaxDailyCap
+	}
+	return VeridianGmailPersonalHardMaxDailyCap
+}
 
 // VeridianIsGmailProfile recognizes both the current Gmail SMTP app-password
 // transport and the existing Google OAuth/Gmail API transport. Keeping the

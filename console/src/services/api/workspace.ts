@@ -272,6 +272,11 @@ export interface EmailProvider {
   // Hard daily volume for this integration/profile across every sender and
   // recipient-provider class. Distinct from veridian_per_sender_daily_cap.
   veridian_profile_daily_cap?: number
+  // Un compte Google Workspace tolère un volume sortant bien plus élevé qu'un
+  // Gmail personnel (même transport smtp.gmail.com + mot de passe
+  // d'application) : ce champ change seulement le PLAFOND MAXIMAL autorisé
+  // par le backend (Validate()), jamais le défaut. Vide/'personal' = inchangé.
+  veridian_gmail_account_type?: 'personal' | 'workspace'
   // Read-only server metadata. These fields expose configuration/readiness
   // without returning any plaintext or encrypted credential to the console.
   veridian_credentials_configured?: boolean
