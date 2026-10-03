@@ -77,6 +77,21 @@ func (mr *MockAutomationServiceMockRecorder) Delete(arg0, arg1, arg2 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockAutomationService)(nil).Delete), arg0, arg1, arg2)
 }
 
+// ExitContact mocks base method.
+func (m *MockAutomationService) ExitContact(arg0 context.Context, arg1, arg2, arg3, arg4, arg5 string) (*domain.ContactAutomation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExitContact", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(*domain.ContactAutomation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExitContact indicates an expected call of ExitContact.
+func (mr *MockAutomationServiceMockRecorder) ExitContact(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExitContact", reflect.TypeOf((*MockAutomationService)(nil).ExitContact), arg0, arg1, arg2, arg3, arg4, arg5)
+}
+
 // Get mocks base method.
 func (m *MockAutomationService) Get(arg0 context.Context, arg1, arg2 string) (*domain.Automation, error) {
 	m.ctrl.T.Helper()
@@ -136,6 +151,21 @@ func (m *MockAutomationService) Pause(arg0 context.Context, arg1, arg2 string) e
 func (mr *MockAutomationServiceMockRecorder) Pause(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pause", reflect.TypeOf((*MockAutomationService)(nil).Pause), arg0, arg1, arg2)
+}
+
+// ResetContact mocks base method.
+func (m *MockAutomationService) ResetContact(arg0 context.Context, arg1, arg2, arg3, arg4 string) (*domain.ContactAutomation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetContact", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(*domain.ContactAutomation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResetContact indicates an expected call of ResetContact.
+func (mr *MockAutomationServiceMockRecorder) ResetContact(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetContact", reflect.TypeOf((*MockAutomationService)(nil).ResetContact), arg0, arg1, arg2, arg3, arg4)
 }
 
 // Update mocks base method.

@@ -716,3 +716,164 @@ func TestAutomationService_GetContactNodeExecutions(t *testing.T) {
 		assert.Nil(t, entries)
 	})
 }
+
+// TestAutomationService_ExitContact couvre /api/automations.exitContact
+// (Veridian 2026-10-03) : sortir UN SEUL contact, sans toucher les autres,
+// ni les automations.delete (tout le monde) ni enroll (refuse un actif) ne
+// le permettaient.
+func TestAutomationService_ExitContact(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	service := NewAutomationService(mockRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	automationID := "auto-123"
+	email := "test@example.com"
+	userWorkspace := &domain.UserWorkspace{WorkspaceID: workspaceID, Permissions: domain.FullPermissions}
+
+	t.Run("exits an active contact by automation_id+email, default reason manual", func(t *testing.T) {
+		ca := &domain.ContactAutomation{
+			ID: "ca-123", AutomationID: automationID, ContactEmail: email,
+			Status: domain.ContactAutomationStatusActive,
+		}
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+		mockRepo.EXPECT().GetContactAutomationByEmail(ctx, workspaceID, automationID, email).Return(ca, nil)
+		mockRepo.EXPECT().UpdateContactAutomation(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ string, updated *domain.ContactAutomation) error {
+				assert.Equal(t, domain.ContactAutomationStatusExited, updated.Status)
+				require.NotNil(t, updated.ExitReason)
+				assert.Equal(t, "manual", *updated.ExitReason)
+				return nil
+			})
+
+		out, err := service.ExitContact(ctx, workspaceID, automationID, email, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, domain.ContactAutomationStatusExited, out.Status)
+	})
+
+	t.Run("resolves by contact_automation_id and honors a custom reason", func(t *testing.T) {
+		ca := &domain.ContactAutomation{
+			ID: "ca-999", AutomationID: automationID, ContactEmail: email,
+			Status: domain.ContactAutomationStatusActive,
+		}
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+		mockRepo.EXPECT().GetContactAutomation(ctx, workspaceID, "ca-999").Return(ca, nil)
+		mockRepo.EXPECT().UpdateContactAutomation(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ string, updated *domain.ContactAutomation) error {
+				require.NotNil(t, updated.ExitReason)
+				assert.Equal(t, "stuck on gated node", *updated.ExitReason)
+				return nil
+			})
+
+		out, err := service.ExitContact(ctx, workspaceID, "", "", "ca-999", "stuck on gated node")
+		require.NoError(t, err)
+		assert.Equal(t, domain.ContactAutomationStatusExited, out.Status)
+	})
+
+	t.Run("idempotent: already exited is a no-op, not an error", func(t *testing.T) {
+		reason := "completed"
+		ca := &domain.ContactAutomation{
+			ID: "ca-123", AutomationID: automationID, ContactEmail: email,
+			Status: domain.ContactAutomationStatusExited, ExitReason: &reason,
+		}
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+		mockRepo.EXPECT().GetContactAutomationByEmail(ctx, workspaceID, automationID, email).Return(ca, nil)
+		// Pas d'UpdateContactAutomation attendu : no-op.
+
+		out, err := service.ExitContact(ctx, workspaceID, automationID, email, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "completed", *out.ExitReason)
+	})
+
+	t.Run("authentication failure", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, nil, errors.New("auth error"))
+
+		out, err := service.ExitContact(ctx, workspaceID, automationID, email, "", "")
+		assert.Error(t, err)
+		assert.Nil(t, out)
+	})
+
+	t.Run("neither contact_automation_id nor automation_id+email is an error", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+
+		out, err := service.ExitContact(ctx, workspaceID, "", "", "", "")
+		assert.Error(t, err)
+		assert.Nil(t, out)
+	})
+}
+
+// TestAutomationService_ResetContact couvre /api/automations.resetContact
+// (Veridian 2026-10-03) : remet UN contact au nœud de départ SANS effacer
+// l'historique des messages (node_execution/message_history intacts).
+func TestAutomationService_ResetContact(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	service := NewAutomationService(mockRepo, mockAuthService, mockLogger)
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	automationID := "auto-123"
+	email := "test@example.com"
+	userWorkspace := &domain.UserWorkspace{WorkspaceID: workspaceID, Permissions: domain.FullPermissions}
+
+	t.Run("resets an exited contact back to the root node", func(t *testing.T) {
+		exitReason := "manual"
+		currentNode := "node-stuck-3"
+		lastErr := "smtp timeout"
+		ca := &domain.ContactAutomation{
+			ID: "ca-123", AutomationID: automationID, ContactEmail: email,
+			Status: domain.ContactAutomationStatusExited, ExitReason: &exitReason,
+			CurrentNodeID: &currentNode, RetryCount: 4, LastError: &lastErr,
+		}
+		automation := createTestAutomationService(automationID, workspaceID)
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+		mockRepo.EXPECT().GetContactAutomationByEmail(ctx, workspaceID, automationID, email).Return(ca, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID, automationID).Return(automation, nil)
+		mockRepo.EXPECT().UpdateContactAutomation(ctx, workspaceID, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ string, updated *domain.ContactAutomation) error {
+				require.NotNil(t, updated.CurrentNodeID)
+				assert.Equal(t, automation.RootNodeID, *updated.CurrentNodeID)
+				assert.Equal(t, domain.ContactAutomationStatusActive, updated.Status)
+				assert.Nil(t, updated.ExitReason)
+				assert.Equal(t, 0, updated.RetryCount)
+				assert.Nil(t, updated.LastError)
+				require.NotNil(t, updated.ScheduledAt)
+				return nil
+			})
+
+		out, err := service.ResetContact(ctx, workspaceID, automationID, email, "")
+		require.NoError(t, err)
+		assert.Equal(t, domain.ContactAutomationStatusActive, out.Status)
+		assert.Equal(t, automation.RootNodeID, *out.CurrentNodeID)
+	})
+
+	t.Run("automation without root node is an error", func(t *testing.T) {
+		ca := &domain.ContactAutomation{ID: "ca-123", AutomationID: automationID, ContactEmail: email}
+		automation := createTestAutomationService(automationID, workspaceID)
+		automation.RootNodeID = ""
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+		mockRepo.EXPECT().GetContactAutomationByEmail(ctx, workspaceID, automationID, email).Return(ca, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID, automationID).Return(automation, nil)
+
+		out, err := service.ResetContact(ctx, workspaceID, automationID, email, "")
+		assert.Error(t, err)
+		assert.Nil(t, out)
+	})
+
+	t.Run("authentication failure", func(t *testing.T) {
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), workspaceID).Return(ctx, nil, nil, errors.New("auth error"))
+
+		out, err := service.ResetContact(ctx, workspaceID, automationID, email, "")
+		assert.Error(t, err)
+		assert.Nil(t, out)
+	})
+}

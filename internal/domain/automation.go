@@ -804,6 +804,13 @@ type AutomationService interface {
 
 	// Node executions/debugging
 	GetContactNodeExecutions(ctx context.Context, workspaceID, automationID, email string) (*ContactAutomation, []*NodeExecution, error)
+
+	// Single-contact lifecycle (Veridian 2026-10-03) — ni automations.delete
+	// (sort TOUT LE MONDE) ni automations.enroll (refuse un contact déjà
+	// actif) ne permettent de retirer ou relancer UN SEUL contact pendant
+	// que l'automation continue de tourner pour les autres.
+	ExitContact(ctx context.Context, workspaceID, automationID, email, contactAutomationID, reason string) (*ContactAutomation, error)
+	ResetContact(ctx context.Context, workspaceID, automationID, email, contactAutomationID string) (*ContactAutomation, error)
 }
 
 // HTTP Request/Response types for automation API
@@ -1017,6 +1024,51 @@ func (r *GetContactNodeExecutionsRequest) Validate() error {
 	}
 	if r.Email == "" {
 		return fmt.Errorf("email is required")
+	}
+	return nil
+}
+
+// ExitContactRequest exits ONE contact from an automation (manual removal),
+// identified either by contact_automation_id directly, or by the pair
+// (automation_id, email). Veridian 2026-10-03 : ni automations.delete (sort
+// tout le monde) ni une absence de route ne permettaient ce geste ciblé.
+type ExitContactRequest struct {
+	WorkspaceID         string `json:"workspace_id"`
+	AutomationID        string `json:"automation_id,omitempty"`
+	Email               string `json:"email,omitempty"`
+	ContactAutomationID string `json:"contact_automation_id,omitempty"`
+	Reason              string `json:"reason,omitempty"` // défaut "manual" si vide
+}
+
+// Validate validates the exit contact request
+func (r *ExitContactRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+	if r.ContactAutomationID == "" && (r.AutomationID == "" || r.Email == "") {
+		return fmt.Errorf("either contact_automation_id, or both automation_id and email, are required")
+	}
+	return nil
+}
+
+// ResetContactRequest puts ONE contact back at the automation's start node
+// (root_node_id), status active, scheduled_at=now — WITHOUT touching its
+// node_execution/message_history rows (no send/skip history is erased).
+// Identified either by contact_automation_id, or by (automation_id, email).
+type ResetContactRequest struct {
+	WorkspaceID         string `json:"workspace_id"`
+	AutomationID        string `json:"automation_id,omitempty"`
+	Email               string `json:"email,omitempty"`
+	ContactAutomationID string `json:"contact_automation_id,omitempty"`
+}
+
+// Validate validates the reset contact request
+func (r *ResetContactRequest) Validate() error {
+	if r.WorkspaceID == "" {
+		return fmt.Errorf("workspace_id is required")
+	}
+	if r.ContactAutomationID == "" && (r.AutomationID == "" || r.Email == "") {
+		return fmt.Errorf("either contact_automation_id, or both automation_id and email, are required")
 	}
 	return nil
 }

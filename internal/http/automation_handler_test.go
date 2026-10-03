@@ -450,3 +450,123 @@ func TestAutomationHandler_GetContactNodeExecutions(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }
+
+// TestAutomationHandler_ExitContact couvre /api/automations.exitContact
+// (Veridian 2026-10-03, mission "pilotage pixel").
+func TestAutomationHandler_ExitContact(t *testing.T) {
+	_, automationSvc, mux, secretKey := setupAutomationTest(t)
+
+	t.Run("successful exit", func(t *testing.T) {
+		reason := "manual"
+		ca := &domain.ContactAutomation{
+			ID: "ca-123", AutomationID: "auto-123", ContactEmail: "test@example.com",
+			Status: domain.ContactAutomationStatusExited, ExitReason: &reason,
+		}
+		automationSvc.EXPECT().ExitContact(gomock.Any(), "workspace-123", "auto-123", "test@example.com", "", "").Return(ca, nil)
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"workspace_id": "workspace-123", "automation_id": "auto-123", "email": "test@example.com",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/automations.exitContact", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response struct {
+			ContactAutomation *domain.ContactAutomation `json:"contact_automation"`
+		}
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, domain.ContactAutomationStatusExited, response.ContactAutomation.Status)
+	})
+
+	t.Run("validation error: neither contact_automation_id nor automation_id+email", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"workspace_id": "workspace-123"})
+		req := httptest.NewRequest(http.MethodPost, "/api/automations.exitContact", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("wrong method", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/automations.exitContact", nil)
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		automationSvc.EXPECT().ExitContact(gomock.Any(), "workspace-123", "auto-123", "notfound@example.com", "", "").Return(nil, errors.New("not found"))
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"workspace_id": "workspace-123", "automation_id": "auto-123", "email": "notfound@example.com",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/automations.exitContact", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+// TestAutomationHandler_ResetContact couvre /api/automations.resetContact
+// (Veridian 2026-10-03, mission "pilotage pixel").
+func TestAutomationHandler_ResetContact(t *testing.T) {
+	_, automationSvc, mux, secretKey := setupAutomationTest(t)
+
+	t.Run("successful reset", func(t *testing.T) {
+		root := "node-root"
+		ca := &domain.ContactAutomation{
+			ID: "ca-123", AutomationID: "auto-123", ContactEmail: "test@example.com",
+			Status: domain.ContactAutomationStatusActive, CurrentNodeID: &root,
+		}
+		automationSvc.EXPECT().ResetContact(gomock.Any(), "workspace-123", "auto-123", "test@example.com", "").Return(ca, nil)
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"workspace_id": "workspace-123", "automation_id": "auto-123", "email": "test@example.com",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/automations.resetContact", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response struct {
+			ContactAutomation *domain.ContactAutomation `json:"contact_automation"`
+		}
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, domain.ContactAutomationStatusActive, response.ContactAutomation.Status)
+		assert.Equal(t, "node-root", *response.ContactAutomation.CurrentNodeID)
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"workspace_id": "workspace-123"})
+		req := httptest.NewRequest(http.MethodPost, "/api/automations.resetContact", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("wrong method", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/automations.resetContact", nil)
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+}

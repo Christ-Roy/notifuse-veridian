@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -397,4 +398,105 @@ func (s *AutomationService) GetContactNodeExecutions(ctx context.Context, worksp
 	}
 
 	return contactAutomation, entries, nil
+}
+
+// resolveContactAutomation finds the ContactAutomation targeted by an
+// exit/reset request : directly by contact_automation_id when given, else
+// by the (automation_id, email) pair. Shared by ExitContact/ResetContact.
+func (s *AutomationService) resolveContactAutomation(ctx context.Context, workspaceID, automationID, email, contactAutomationID string) (*domain.ContactAutomation, error) {
+	if contactAutomationID != "" {
+		return s.repo.GetContactAutomation(ctx, workspaceID, contactAutomationID)
+	}
+	if automationID == "" || email == "" {
+		return nil, fmt.Errorf("either contact_automation_id, or both automation_id and email, are required")
+	}
+	return s.repo.GetContactAutomationByEmail(ctx, workspaceID, automationID, email)
+}
+
+// ExitContact manually exits ONE contact from an automation, leaving every
+// other contact's progress untouched (Veridian 2026-10-03). Idempotent : a
+// contact already exited is returned as-is, not an error — exiting twice is
+// not a failure. Default reason "manual" (cf domain.ContactAutomation.ExitReason
+// doc: completed/filter_rejected/automation_node_deleted/manual/unsubscribed).
+func (s *AutomationService) ExitContact(ctx context.Context, workspaceID, automationID, email, contactAutomationID, reason string) (*domain.ContactAutomation, error) {
+	ctx, _, userWorkspace, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate: %w", err)
+	}
+
+	if !userWorkspace.HasPermission(domain.PermissionResourceAutomations, domain.PermissionTypeWrite) {
+		return nil, domain.NewPermissionError(
+			domain.PermissionResourceAutomations,
+			domain.PermissionTypeWrite,
+			"Insufficient permissions: write access to automations required",
+		)
+	}
+
+	ca, err := s.resolveContactAutomation(ctx, workspaceID, automationID, email, contactAutomationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contact automation: %w", err)
+	}
+
+	if ca.Status == domain.ContactAutomationStatusExited {
+		return ca, nil // déjà sorti : idempotent, pas une erreur
+	}
+
+	if reason == "" {
+		reason = "manual"
+	}
+	ca.Status = domain.ContactAutomationStatusExited
+	ca.ExitReason = &reason
+
+	if err := s.repo.UpdateContactAutomation(ctx, workspaceID, ca); err != nil {
+		return nil, fmt.Errorf("failed to exit contact from automation: %w", err)
+	}
+	return ca, nil
+}
+
+// ResetContact puts ONE contact back at the automation's start node
+// (automation.RootNodeID), status active, scheduled_at=now so the scheduler
+// picks it up on its next tick exactly like a fresh enrollment — WITHOUT
+// touching node_execution/message_history (Veridian 2026-10-03 : no send or
+// skip history is erased, only the ContactAutomation pointer moves back).
+func (s *AutomationService) ResetContact(ctx context.Context, workspaceID, automationID, email, contactAutomationID string) (*domain.ContactAutomation, error) {
+	ctx, _, userWorkspace, err := s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate: %w", err)
+	}
+
+	if !userWorkspace.HasPermission(domain.PermissionResourceAutomations, domain.PermissionTypeWrite) {
+		return nil, domain.NewPermissionError(
+			domain.PermissionResourceAutomations,
+			domain.PermissionTypeWrite,
+			"Insufficient permissions: write access to automations required",
+		)
+	}
+
+	ca, err := s.resolveContactAutomation(ctx, workspaceID, automationID, email, contactAutomationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contact automation: %w", err)
+	}
+
+	automation, err := s.repo.GetByID(ctx, workspaceID, ca.AutomationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get automation: %w", err)
+	}
+	if automation.RootNodeID == "" {
+		return nil, fmt.Errorf("automation %s has no root node, cannot reset", automation.ID)
+	}
+
+	now := time.Now()
+	rootNodeID := automation.RootNodeID
+	ca.CurrentNodeID = &rootNodeID
+	ca.Status = domain.ContactAutomationStatusActive
+	ca.ExitReason = nil
+	ca.ScheduledAt = &now
+	ca.RetryCount = 0
+	ca.LastError = nil
+	ca.LastRetryAt = nil
+
+	if err := s.repo.UpdateContactAutomation(ctx, workspaceID, ca); err != nil {
+		return nil, fmt.Errorf("failed to reset contact: %w", err)
+	}
+	return ca, nil
 }

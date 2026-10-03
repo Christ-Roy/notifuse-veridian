@@ -43,6 +43,10 @@ func (h *AutomationHandler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Node executions/debugging
 	mux.Handle("/api/automations.nodeExecutions", requireAuth(http.HandlerFunc(h.handleGetContactNodeExecutions)))
+
+	// Single-contact lifecycle (Veridian 2026-10-03)
+	mux.Handle("/api/automations.exitContact", requireAuth(http.HandlerFunc(h.handleExitContact)))
+	mux.Handle("/api/automations.resetContact", requireAuth(http.HandlerFunc(h.handleResetContact)))
 }
 
 func (h *AutomationHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -293,5 +297,80 @@ func (h *AutomationHandler) handleGetContactNodeExecutions(w http.ResponseWriter
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"contact_automation": contactAutomation,
 		"node_executions":    nodeExecutions,
+	})
+}
+
+// handleExitContact exits ONE contact from an automation (manual removal),
+// leaving everyone else's progress untouched. Veridian 2026-10-03 : ni
+// automations.delete (sort tout le monde) ni une absence de route ne
+// permettaient ce geste ciblé (cf mission "pilotage pixel" 03/10).
+func (h *AutomationHandler) handleExitContact(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req domain.ExitContactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ca, err := h.service.ExitContact(r.Context(), req.WorkspaceID, req.AutomationID, req.Email, req.ContactAutomationID, req.Reason)
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to exit contact from automation")
+		if _, ok := err.(*domain.PermissionError); ok {
+			WriteJSONError(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		WriteJSONError(w, "Failed to exit contact from automation", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"contact_automation": ca,
+	})
+}
+
+// handleResetContact puts ONE contact back at the automation's start node,
+// WITHOUT erasing its node_execution/message_history (no send/skip history
+// is deleted — only the ContactAutomation pointer moves back to the root).
+func (h *AutomationHandler) handleResetContact(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req domain.ResetContactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to decode request body")
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ca, err := h.service.ResetContact(r.Context(), req.WorkspaceID, req.AutomationID, req.Email, req.ContactAutomationID)
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Error("Failed to reset contact in automation")
+		if _, ok := err.(*domain.PermissionError); ok {
+			WriteJSONError(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		WriteJSONError(w, "Failed to reset contact in automation", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"contact_automation": ca,
 	})
 }
