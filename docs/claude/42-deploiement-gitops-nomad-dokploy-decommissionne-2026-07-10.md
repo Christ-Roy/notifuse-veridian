@@ -8,16 +8,22 @@ poussés par la CI via `nomad job run` (plus de Dokploy, plus de `infra/compose/
 - **Jobs** : `deploy/notifuse.nomad.hcl` (prod, contabo-bastion) +
   `deploy/notifuse-staging.nomad.hcl` (ovh-dev, privé Tailscale + internal-only).
   Source de vérité gitops de l'app ; miroir infra : `~/nomad-veridian/jobs/`.
-- **Deploy — canon SSH-bastion** (décision Robert, cf `veridian-prospection/deploy/README.md`) :
-  CI `veridian-ci.yml` → `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → SSH vers le
-  bastion (clé dédiée CI), pré-pull image ghcr (auth du nœud), scp le HCL (qui déclare
-  `variable image_tag`), `nomad job run -var image_tag=<tag>` + `deployment status
-  -monitor`. **Le NOMAD_TOKEN ne quitte JAMAIS le bastion** (lu in situ). deploy-staging
-  = runner self-hosted (steps post-deploy tailnet) ; deploy-prod/rollback = ubuntu-latest.
-- **Rollback** : `nomad job revert notifuse <version-1>` via SSH-bastion (job `rollback`,
-  auto sur e2e-prod fail). Stanza `update{auto_revert=true}` = filet Nomad si deployment KO.
-- **Secrets CI** : `NOMAD_DEPLOY_SSH_KEY` (clé ed25519 dédiée notifuse, publique dans
-  authorized_keys bastion) + `NOMAD_BASTION_HOST` + `NOMAD_BASTION_USER`. Secrets
+- **Deploy — verbes contraints du bastion** (constat C4 ; contrat dans
+  `~/veridian/secrets-migration/C4-CONTRAT-CI.md`) : CI `veridian-ci.yml` →
+  `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → trois appels SSH : `put-job <tier>`
+  (le HCL du repo sur stdin), `deploy <tier> <tag>`, `cleanup <tier>`. La clé porte une
+  **commande forcée** `command="/usr/local/sbin/veridian-ci-deploy notifuse"` : plus de
+  shell, plus de heredoc, l'application est fixée côté serveur. Pré-pull ghcr
+  authentifié, `validate`, `plan`, `run -check-index` et suivi du DeploymentID sont
+  **dans le script serveur** : ne jamais les redupliquer côté CI. **Le NOMAD_TOKEN ne
+  quitte JAMAIS le bastion**. deploy-staging = runner self-hosted (steps post-deploy
+  tailnet) ; deploy-prod/rollback = ubuntu-latest.
+- **Rollback** : verbe `revert prod` (job `rollback`, auto sur e2e-prod fail) : dernière
+  version **stable** antérieure, pas `version-1`. Stanza `update{auto_revert=true}` =
+  filet Nomad si deployment KO.
+- **Secrets CI** : `NOMAD_DEPLOY_SSH_KEY_V2` (clé ed25519 `notifuse-ci-deploy-v2@github`,
+  à commande forcée ; exposée au script sous le nom d'env `NOMAD_DEPLOY_SSH_KEY`) +
+  `NOMAD_BASTION_HOST` + `NOMAD_BASTION_USER`. Secrets
   applicatifs = Nomad Variables `nomad/jobs/notifuse{,-staging}` (`template{env=true}`).
   ⚠️ Piège n°1 : Nomad ne pull pas les images privées ghcr → pré-pull authentifié +
   auth ghcr root sur les nœuds (bastion + ovh-dev, déjà posé).

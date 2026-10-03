@@ -71,12 +71,14 @@ Adaptations Go pour ce repo :
    demander « je promeus ? » entre chaque. Une vague de team se termine par UNE
    promo groupée des lots mûrs + UN récap, pas par N demandes de GO. Le seul
    point d'arrêt est le tier 💀 ou un veto Robert.
-10. **Deploy via Nomad SSH-bastion** (Dokploy décommissionné 2026-07-10, canon
-    prospection) : `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → SSH bastion →
-    `nomad job run -var image_tag=<tag>`. Secrets CI : `NOMAD_DEPLOY_SSH_KEY` +
-    `NOMAD_BASTION_HOST` + `NOMAD_BASTION_USER`. Le token ne quitte pas le bastion.
-11. **Rollback prod auto** sur e2e-prod fail : `nomad job revert notifuse <version-1>`
-    via SSH-bastion → wait `/api/setup.status` → Telegram alert.
+10. **Deploy via les verbes contraints du bastion** (heredoc `bash -s` retiré au
+    constat C4) : `scripts/ci/nomad-ssh-deploy.sh <env> <tag>` → `put-job` / `deploy` /
+    `cleanup`. Secrets CI : `NOMAD_DEPLOY_SSH_KEY_V2` + `NOMAD_BASTION_HOST` +
+    `NOMAD_BASTION_USER`. Le token ne quitte pas le bastion, la clé n'y ouvre plus de
+    shell. Ne jamais réintroduire `ssh … "bash -s" <<'REMOTE'` : la commande forcée
+    le refuse (code 64).
+11. **Rollback prod auto** sur e2e-prod fail : verbe `revert prod` (dernière version
+    stable antérieure) → wait `/api/setup.status` → Telegram alert.
 12. **Migrations Expand & Contract obligatoire**. Le tag Docker précédent doit
     tourner sur le schéma actuel. Versions majeures (V6, V7…) additives ;
     DROP COLUMN / NOT NULL sur table peuplée = 2 PRs sur 2 deploys.
