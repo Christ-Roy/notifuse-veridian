@@ -74,7 +74,7 @@ msgstr ""
 #. placeholder {0}: usage.accepted_used
 #. placeholder {1}: usage.used
 #. placeholder {2}: usage.cap
-#: src/components/settings/Integrations.tsx:402
+#: src/components/settings/Integrations.tsx:404
 msgid "{0} accepted, {1} / {2} quota used"
 msgstr ""
 
@@ -111,7 +111,7 @@ msgid "{0} delivered"
 msgstr ""
 
 #. placeholder {0}: provider.veridian_profile_daily_cap
-#: src/components/settings/Integrations.tsx:409
+#: src/components/settings/Integrations.tsx:411
 msgid "{0} emails / day"
 msgstr ""
 
@@ -195,7 +195,7 @@ msgid "{0} opened"
 msgstr ""
 
 #. placeholder {0}: usage.remaining
-#: src/components/settings/Integrations.tsx:404
+#: src/components/settings/Integrations.tsx:406
 msgid "{0} remaining"
 msgstr ""
 
@@ -555,7 +555,7 @@ msgstr "A/Bテスト"
 msgid "Accept Invitation"
 msgstr "招待を承諾"
 
-#: src/components/settings/Integrations.tsx:1792
+#: src/components/settings/Integrations.tsx:1798
 msgid "Access Key"
 msgstr "アクセスキー"
 
@@ -719,11 +719,11 @@ msgstr ""
 msgid "Add Custom Header"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1229
+#: src/components/settings/Integrations.tsx:1235
 msgid "Add Gmail profile"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2523
+#: src/components/settings/Integrations.tsx:2550
 msgid "Add Gmail sending profile"
 msgstr ""
 
@@ -744,7 +744,7 @@ msgstr "ノードを追加"
 msgid "Add notes about this version..."
 msgstr "このバージョンについてメモを追加..."
 
-#: src/components/settings/Integrations.tsx:2385
+#: src/components/settings/Integrations.tsx:2412
 msgid "Add one or more email senders. The first sender will be used as the default."
 msgstr "1つ以上のメール送信者を追加してください。最初の送信者がデフォルトとして使用されます。"
 
@@ -756,21 +756,21 @@ msgstr "パスを追加"
 msgid "Add Path"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2636
+#: src/components/settings/Integrations.tsx:2663
 msgid "Add profile or integration"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2344
-#: src/components/settings/Integrations.tsx:2400
-#: src/components/settings/Integrations.tsx:2680
+#: src/components/settings/Integrations.tsx:2371
+#: src/components/settings/Integrations.tsx:2427
+#: src/components/settings/Integrations.tsx:2707
 msgid "Add Sender"
 msgstr "送信者を追加"
 
-#: src/components/settings/Integrations.tsx:2526
+#: src/components/settings/Integrations.tsx:2553
 msgid "Add sending profile"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2618
+#: src/components/settings/Integrations.tsx:2645
 msgid "Add several sending profiles, test them, and choose which one is used for marketing or transactional email."
 msgstr ""
 
@@ -782,7 +782,7 @@ msgstr "ソーシャル要素を追加"
 msgid "Add social elements to this social block"
 msgstr "このソーシャルブロックにソーシャル要素を追加"
 
-#: src/components/settings/Integrations.tsx:466
+#: src/components/settings/Integrations.tsx:468
 msgid "Add this profile to marketing rotation?"
 msgstr ""
 
@@ -801,7 +801,7 @@ msgstr "リストに追加"
 msgid "Add to Lists"
 msgstr "リストに追加"
 
-#: src/components/settings/Integrations.tsx:488
+#: src/components/settings/Integrations.tsx:490
 msgid "Add to rotation"
 msgstr ""
 
@@ -843,8 +843,8 @@ msgstr "管理者メールアドレスは必須です"
 msgid "Advanced Settings"
 msgstr "詳細設定"
 
-#: src/components/settings/Integrations.tsx:1258
-#: src/components/settings/Integrations.tsx:2582
+#: src/components/settings/Integrations.tsx:1264
+#: src/components/settings/Integrations.tsx:2609
 msgid "Advanced SMTP"
 msgstr ""
 
@@ -947,7 +947,7 @@ msgstr "すべての投稿"
 msgid "All sides"
 msgstr "全辺"
 
-#: src/components/settings/Integrations.tsx:497
+#: src/components/settings/Integrations.tsx:499
 msgid "All transactional emails (notifications, password resets, etc.) will be sent through this provider from now on."
 msgstr "今後、すべてのトランザクションメール (通知、パスワードリセットなど) はこのプロバイダーを通じて送信されます。"
 
@@ -1049,8 +1049,8 @@ msgstr "いつでも"
 msgid "API Command"
 msgstr "APIコマンド"
 
-#: src/components/settings/Integrations.tsx:2174
-#: src/components/settings/Integrations.tsx:2451
+#: src/components/settings/Integrations.tsx:2201
+#: src/components/settings/Integrations.tsx:2478
 #: src/components/settings/SystemSettingsDrawer.tsx:245
 #: src/pages/SetupWizard.tsx:375
 msgid "API Endpoint"
@@ -1066,11 +1066,11 @@ msgstr "API識別子"
 
 #: src/components/integrations/FirecrawlIntegration.tsx:84
 #: src/components/integrations/LLMIntegration.tsx:137
-#: src/components/settings/Integrations.tsx:1626
-#: src/components/settings/Integrations.tsx:1677
-#: src/components/settings/Integrations.tsx:2230
-#: src/components/settings/Integrations.tsx:2252
-#: src/components/settings/Integrations.tsx:2276
+#: src/components/settings/Integrations.tsx:1632
+#: src/components/settings/Integrations.tsx:1683
+#: src/components/settings/Integrations.tsx:2257
+#: src/components/settings/Integrations.tsx:2279
+#: src/components/settings/Integrations.tsx:2303
 #: src/components/settings/WorkspaceMembers.tsx:114
 msgid "API Key"
 msgstr "APIキー"
@@ -1231,7 +1231,7 @@ msgstr "ブログの執筆をお手伝いします..."
 msgid "at least"
 msgstr "少なくとも"
 
-#: src/components/settings/Integrations.tsx:472
+#: src/components/settings/Integrations.tsx:474
 msgid "At least one marketing profile must remain active."
 msgstr ""
 
@@ -1258,7 +1258,7 @@ msgid "Auth Email"
 msgstr "認証メール"
 
 #: src/components/integrations/SupabaseIntegration.tsx:141
-#: src/components/settings/Integrations.tsx:1453
+#: src/components/settings/Integrations.tsx:1459
 msgid "Auth Email Hook"
 msgstr "認証メールフック"
 
@@ -1266,7 +1266,7 @@ msgstr "認証メールフック"
 msgid "Auth Email Hook Secret"
 msgstr "認証メールフックシークレット"
 
-#: src/components/settings/Integrations.tsx:2426
+#: src/components/settings/Integrations.tsx:2453
 msgid "Authentication"
 msgstr "認証"
 
@@ -1274,7 +1274,7 @@ msgstr "認証"
 msgid "Authentication email sent via Supabase"
 msgstr "Supabase経由で認証メールを送信しました"
 
-#: src/components/settings/Integrations.tsx:1973
+#: src/components/settings/Integrations.tsx:2000
 msgid "Authentication Type"
 msgstr "認証タイプ"
 
@@ -1307,7 +1307,7 @@ msgstr "自動"
 msgid "Auto-send Winner"
 msgstr "勝者を自動送信"
 
-#: src/components/settings/Integrations.tsx:1528
+#: src/components/settings/Integrations.tsx:1534
 msgid "Auto-subscribe to Lists"
 msgstr "リストへ自動登録"
 
@@ -1368,16 +1368,16 @@ msgstr "アバターURL"
 msgid "Avoid special characters that might not display properly"
 msgstr "正しく表示されない可能性のある特殊文字は避けてください"
 
-#: src/components/settings/Integrations.tsx:1789
+#: src/components/settings/Integrations.tsx:1795
 msgid "AWS Access Key"
 msgstr "AWSアクセスキー"
 
-#: src/components/settings/Integrations.tsx:1730
-#: src/components/settings/Integrations.tsx:2445
+#: src/components/settings/Integrations.tsx:1736
+#: src/components/settings/Integrations.tsx:2472
 msgid "AWS Region"
 msgstr "AWSリージョン"
 
-#: src/components/settings/Integrations.tsx:1794
+#: src/components/settings/Integrations.tsx:1800
 msgid "AWS Secret Key"
 msgstr "AWSシークレットキー"
 
@@ -1428,7 +1428,7 @@ msgid "Background Type"
 msgstr "背景タイプ"
 
 #: src/components/integrations/LLMIntegration.tsx:170
-#: src/components/settings/Integrations.tsx:1620
+#: src/components/settings/Integrations.tsx:1626
 msgid "Base URL"
 msgstr ""
 
@@ -1452,7 +1452,7 @@ msgstr ""
 msgid "Base64 encoded TLS private key. Run: cat privkey.pem | base64 -w 0"
 msgstr "Base64エンコードされたTLS秘密鍵。実行: cat privkey.pem | base64 -w 0"
 
-#: src/components/settings/Integrations.tsx:1978
+#: src/components/settings/Integrations.tsx:2005
 msgid "Basic Authentication (Username/Password)"
 msgstr "Basic認証 (ユーザー名/パスワード)"
 
@@ -1478,7 +1478,7 @@ msgstr "以前"
 msgid "before date"
 msgstr "日付以前"
 
-#: src/components/settings/Integrations.tsx:1490
+#: src/components/settings/Integrations.tsx:1496
 msgid "Before User Created Hook"
 msgstr "ユーザー作成前フック"
 
@@ -1619,7 +1619,7 @@ msgstr "左下"
 msgid "Bottom Right"
 msgstr "右下"
 
-#: src/components/settings/Integrations.tsx:240
+#: src/components/settings/Integrations.tsx:242
 msgid "bounce"
 msgstr "バウンス"
 
@@ -1865,12 +1865,12 @@ msgstr "ボタンサイズ"
 #: src/components/settings/BlogSettings.tsx:185
 #: src/components/settings/CustomFieldsConfiguration.tsx:273
 #: src/components/settings/EditPermissionsModal.tsx:121
-#: src/components/settings/Integrations.tsx:2534
-#: src/components/settings/Integrations.tsx:2685
-#: src/components/settings/Integrations.tsx:2720
-#: src/components/settings/Integrations.tsx:2767
-#: src/components/settings/Integrations.tsx:2815
-#: src/components/settings/Integrations.tsx:2862
+#: src/components/settings/Integrations.tsx:2561
+#: src/components/settings/Integrations.tsx:2712
+#: src/components/settings/Integrations.tsx:2747
+#: src/components/settings/Integrations.tsx:2794
+#: src/components/settings/Integrations.tsx:2842
+#: src/components/settings/Integrations.tsx:2889
 #: src/components/settings/SystemSettingsDrawer.tsx:148
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2227
 #: src/components/settings/WebhookCard.tsx:348
@@ -2198,7 +2198,7 @@ msgstr "列属性"
 msgid "Column width (e.g., '50%', '300px', 'auto')"
 msgstr "列幅 (例: '50%'、'300px'、'auto')"
 
-#: src/components/settings/Integrations.tsx:1239
+#: src/components/settings/Integrations.tsx:1245
 msgid "Coming soon"
 msgstr ""
 
@@ -2206,7 +2206,7 @@ msgstr ""
 msgid "Common ports: 587 (TLS), 465 (SSL), 25 (unencrypted)"
 msgstr "一般的なポート: 587 (TLS)、465 (SSL)、25 (暗号化なし)"
 
-#: src/components/settings/Integrations.tsx:1859
+#: src/components/settings/Integrations.tsx:1865
 msgid "Company or contact name"
 msgstr ""
 
@@ -2241,7 +2241,7 @@ msgstr "苦情メール"
 msgid "Complained"
 msgstr "苦情報告済み"
 
-#: src/components/settings/Integrations.tsx:244
+#: src/components/settings/Integrations.tsx:246
 msgid "complaint"
 msgstr "苦情"
 
@@ -2309,8 +2309,8 @@ msgstr "{nodeType}の設定はフェーズ2では利用できません"
 #: src/components/automations/nodes/RemoveFromListNode.tsx:51
 #: src/components/automations/nodes/TriggerNode.tsx:74
 #: src/components/automations/nodes/WebhookNode.tsx:54
-#: src/components/settings/Integrations.tsx:1270
-#: src/components/settings/Integrations.tsx:1318
+#: src/components/settings/Integrations.tsx:1276
+#: src/components/settings/Integrations.tsx:1324
 msgid "Configure"
 msgstr "設定"
 
@@ -2355,10 +2355,10 @@ msgstr "プロバイダーを設定"
 msgid "Configure styling and SEO settings for your blog. These settings will be applied to all blog pages."
 msgstr "ブログのスタイルとSEO設定を行います。これらの設定はすべてのブログページに適用されます。"
 
-#: src/components/settings/Integrations.tsx:1457
-#: src/components/settings/Integrations.tsx:1494
-#: src/components/settings/Integrations.tsx:1628
-#: src/components/settings/Integrations.tsx:1679
+#: src/components/settings/Integrations.tsx:1463
+#: src/components/settings/Integrations.tsx:1500
+#: src/components/settings/Integrations.tsx:1634
+#: src/components/settings/Integrations.tsx:1685
 #: src/components/settings/veridian_cold_outreach_settings.tsx:250
 msgid "Configured"
 msgstr "設定済み"
@@ -2392,7 +2392,7 @@ msgstr ""
 msgid "Connect IMAP inbox"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1245
+#: src/components/settings/Integrations.tsx:1251
 msgid "Connect with Google"
 msgstr ""
 
@@ -2400,11 +2400,11 @@ msgstr ""
 msgid "Connection Details"
 msgstr "接続詳細"
 
-#: src/components/settings/Integrations.tsx:2658
+#: src/components/settings/Integrations.tsx:2685
 msgid "Consider connecting a marketing email provider to send newsletters, promotional campaigns, and announcements to engage with your audience."
 msgstr "オーディエンスとのエンゲージメントのためにニュースレター、プロモーション、お知らせを送信するマーケティングメールプロバイダーの接続を検討してください。"
 
-#: src/components/settings/Integrations.tsx:2653
+#: src/components/settings/Integrations.tsx:2680
 msgid "Consider connecting a transactional email provider to be able to use transactional emails for account notifications, password resets, and other important system messages."
 msgstr "アカウント通知、パスワードリセット、その他の重要なシステムメッセージにトランザクションメールを使用するために、トランザクションメールプロバイダーの接続を検討してください。"
 
@@ -2544,8 +2544,8 @@ msgstr ""
 msgid "Control how search engines index and follow links on your blog"
 msgstr "検索エンジンがブログをインデックス・リンクフォローする方法を設定"
 
-#: src/components/settings/Integrations.tsx:1478
-#: src/components/settings/Integrations.tsx:1515
+#: src/components/settings/Integrations.tsx:1484
+#: src/components/settings/Integrations.tsx:1521
 #: src/components/settings/WebhookCard.tsx:287
 msgid "Copy"
 msgstr "コピー"
@@ -2563,8 +2563,8 @@ msgstr "クリップボードにコピー"
 msgid "Copy URL"
 msgstr "URLをコピー"
 
-#: src/components/settings/Integrations.tsx:1467
-#: src/components/settings/Integrations.tsx:1504
+#: src/components/settings/Integrations.tsx:1473
+#: src/components/settings/Integrations.tsx:1510
 msgid "Copy Webhook endpoint"
 msgstr "Webhookエンドポイントをコピー"
 
@@ -2690,7 +2690,7 @@ msgstr "通知を作成"
 msgid "Create Template"
 msgstr "テンプレートを作成"
 
-#: src/components/settings/Integrations.tsx:2079
+#: src/components/settings/Integrations.tsx:2106
 msgid "Create this in Azure Portal > App registrations > Your App > Certificates & secrets"
 msgstr "Azure Portal > アプリの登録 > アプリ > 証明書とシークレット で作成"
 
@@ -2762,11 +2762,11 @@ msgstr "作成日時"
 msgid "Created new version v{0}"
 msgstr "新しいバージョン v{0} を作成しました"
 
-#: src/components/settings/Integrations.tsx:379
+#: src/components/settings/Integrations.tsx:381
 msgid "Credentials missing"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:379
+#: src/components/settings/Integrations.tsx:381
 msgid "Credentials saved"
 msgstr ""
 
@@ -2982,7 +2982,7 @@ msgstr "カスタム送信者（トランザクションメールプロバイダ
 msgid "Custom sender name (optional)"
 msgstr "カスタム送信者名（任意）"
 
-#: src/components/settings/Integrations.tsx:375
+#: src/components/settings/Integrations.tsx:377
 msgid "Custom SMTP"
 msgstr ""
 
@@ -3023,12 +3023,12 @@ msgstr ""
 msgid "Daily cap (emails/day)"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:399
-#: src/components/settings/Integrations.tsx:1864
+#: src/components/settings/Integrations.tsx:401
+#: src/components/settings/Integrations.tsx:1884
 msgid "Daily profile cap"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1867
+#: src/components/settings/Integrations.tsx:1891
 msgid "Daily profile cap is required"
 msgstr ""
 
@@ -3086,7 +3086,7 @@ msgid "default"
 msgstr "デフォルト"
 
 #: src/components/email_builder/ui/FontStyleInput.tsx:232
-#: src/components/settings/Integrations.tsx:424
+#: src/components/settings/Integrations.tsx:426
 msgid "Default"
 msgstr "デフォルト"
 
@@ -3141,7 +3141,7 @@ msgstr "デフォルトはメタ説明文"
 msgid "Defaults to meta title"
 msgstr "デフォルトはメタタイトル"
 
-#: src/components/settings/Integrations.tsx:2165
+#: src/components/settings/Integrations.tsx:2192
 #: src/pages/SetupWizard.tsx:522
 msgid "Defaults to SMTP host"
 msgstr ""
@@ -3167,10 +3167,10 @@ msgstr "遅延"
 #: src/components/file_manager/fileManager.tsx:783
 #: src/components/file_manager/fileManager.tsx:956
 #: src/components/segment/input.tsx:383
-#: src/components/settings/Integrations.tsx:339
-#: src/components/settings/Integrations.tsx:1436
-#: src/components/settings/Integrations.tsx:1595
-#: src/components/settings/Integrations.tsx:1662
+#: src/components/settings/Integrations.tsx:341
+#: src/components/settings/Integrations.tsx:1442
+#: src/components/settings/Integrations.tsx:1601
+#: src/components/settings/Integrations.tsx:1668
 #: src/components/settings/WebhookCard.tsx:239
 #: src/pages/BroadcastsPage.tsx:1438
 #: src/pages/ContactsPage.tsx:934
@@ -3183,7 +3183,7 @@ msgid "DELETE"
 msgstr "削除"
 
 #. placeholder {0}: integration.name
-#: src/components/settings/Integrations.tsx:340
+#: src/components/settings/Integrations.tsx:342
 msgid "Delete {0}"
 msgstr ""
 
@@ -3283,14 +3283,14 @@ msgstr "テンプレートを削除しますか？"
 msgid "Delete the notification?"
 msgstr "通知を削除しますか？"
 
-#: src/components/settings/Integrations.tsx:333
-#: src/components/settings/Integrations.tsx:1430
-#: src/components/settings/Integrations.tsx:1589
-#: src/components/settings/Integrations.tsx:1656
+#: src/components/settings/Integrations.tsx:335
+#: src/components/settings/Integrations.tsx:1436
+#: src/components/settings/Integrations.tsx:1595
+#: src/components/settings/Integrations.tsx:1662
 msgid "Delete this integration?"
 msgstr "この連携を削除しますか？"
 
-#: src/components/settings/Integrations.tsx:2364
+#: src/components/settings/Integrations.tsx:2391
 msgid "Delete this sender?"
 msgstr "この送信者を削除しますか？"
 
@@ -3331,7 +3331,7 @@ msgstr ""
 msgid "Deliverability score"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:236
+#: src/components/settings/Integrations.tsx:238
 #: src/components/timeline/ContactTimeline.tsx:496
 msgid "delivered"
 msgstr "配信済み"
@@ -3409,7 +3409,7 @@ msgstr "Webhookを無効化"
 
 #: src/components/settings/BlogSettings.tsx:214
 #: src/components/settings/GeneralSettings.tsx:143
-#: src/components/settings/Integrations.tsx:1556
+#: src/components/settings/Integrations.tsx:1562
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1869
 #: src/components/templates/TemplateTranslationsTab.tsx:204
 msgid "Disabled"
@@ -3476,8 +3476,8 @@ msgstr "「{0}」をすぐに送信しますか、それとも後でスケジュ
 msgid "Documentation"
 msgstr "ドキュメント"
 
-#: src/components/settings/Integrations.tsx:2225
-#: src/components/settings/Integrations.tsx:2460
+#: src/components/settings/Integrations.tsx:2252
+#: src/components/settings/Integrations.tsx:2487
 #: src/pages/SetupWizard.tsx:601
 msgid "Domain"
 msgstr "ドメイン"
@@ -3628,10 +3628,10 @@ msgstr "編集"
 #: src/components/automations/UpsertAutomationDrawer.tsx:250
 #: src/components/blog/PostsTable.tsx:349
 #: src/components/email_builder/ui/ImportFontInput.tsx:209
-#: src/components/settings/Integrations.tsx:322
-#: src/components/settings/Integrations.tsx:1420
-#: src/components/settings/Integrations.tsx:1579
-#: src/components/settings/Integrations.tsx:1646
+#: src/components/settings/Integrations.tsx:324
+#: src/components/settings/Integrations.tsx:1426
+#: src/components/settings/Integrations.tsx:1585
+#: src/components/settings/Integrations.tsx:1652
 #: src/components/settings/WebhookCard.tsx:245
 #: src/pages/ContactsPage.tsx:928
 #: src/pages/TransactionalNotificationsPage.tsx:155
@@ -3639,7 +3639,7 @@ msgid "Edit"
 msgstr "編集"
 
 #. placeholder {0}: integration.name
-#: src/components/settings/Integrations.tsx:327
+#: src/components/settings/Integrations.tsx:329
 msgid "Edit {0}"
 msgstr ""
 
@@ -3694,7 +3694,7 @@ msgstr "メールテンプレートを編集"
 msgid "Edit Font Import"
 msgstr "フォントインポートを編集"
 
-#: src/components/settings/Integrations.tsx:2522
+#: src/components/settings/Integrations.tsx:2549
 msgid "Edit Gmail sending profile"
 msgstr ""
 
@@ -3737,11 +3737,11 @@ msgstr "投稿を編集"
 msgid "Edit segment"
 msgstr "セグメントを編集"
 
-#: src/components/settings/Integrations.tsx:2680
+#: src/components/settings/Integrations.tsx:2707
 msgid "Edit Sender"
 msgstr "送信者を編集"
 
-#: src/components/settings/Integrations.tsx:2525
+#: src/components/settings/Integrations.tsx:2552
 msgid "Edit sending profile"
 msgstr ""
 
@@ -3784,8 +3784,8 @@ msgstr "編集可能なマークアップ"
 msgid "Editor mode"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2162
-#: src/components/settings/Integrations.tsx:2438
+#: src/components/settings/Integrations.tsx:2189
+#: src/components/settings/Integrations.tsx:2465
 #: src/components/settings/SystemSettingsDrawer.tsx:399
 #: src/pages/SetupWizard.tsx:519
 msgid "EHLO Hostname"
@@ -3816,7 +3816,7 @@ msgstr "メール"
 #: src/components/contacts/ExportContactsModal.tsx:50
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:338
 #: src/components/messages/MessageHistoryTab.tsx:219
-#: src/components/settings/Integrations.tsx:2695
+#: src/components/settings/Integrations.tsx:2722
 #: src/components/settings/WorkspaceMembers.tsx:99
 #: src/components/timeline/ContactTimeline.tsx:505
 #: src/pages/ContactsPage.tsx:359
@@ -3831,12 +3831,12 @@ msgid "Email (Required)"
 msgstr "メール（必須）"
 
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:383
-#: src/components/settings/Integrations.tsx:2014
+#: src/components/settings/Integrations.tsx:2041
 #: src/components/settings/WorkspaceMembers.tsx:622
 msgid "Email Address"
 msgstr "メールアドレス"
 
-#: src/components/settings/Integrations.tsx:2018
+#: src/components/settings/Integrations.tsx:2045
 msgid "Email address is required for OAuth2"
 msgstr "OAuth2にはメールアドレスが必要です"
 
@@ -3900,7 +3900,7 @@ msgstr "メールオプション:"
 msgid "Email Preview"
 msgstr "メールプレビュー"
 
-#: src/components/settings/Integrations.tsx:2648
+#: src/components/settings/Integrations.tsx:2675
 msgid "Email Provider Configuration Needed"
 msgstr "メールプロバイダの設定が必要です"
 
@@ -3940,7 +3940,7 @@ msgstr "650pxを超える幅のメールは一部のメールクライアント�
 msgid "Email:"
 msgstr "メール:"
 
-#: src/components/settings/Integrations.tsx:1880
+#: src/components/settings/Integrations.tsx:1904
 msgid "emails / day"
 msgstr ""
 
@@ -3952,17 +3952,17 @@ msgstr ""
 msgid "Emails / sender / day"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2305
-#: src/components/settings/Integrations.tsx:2504
+#: src/components/settings/Integrations.tsx:2332
+#: src/components/settings/Integrations.tsx:2531
 msgid "emails per day"
 msgstr "メール/日"
 
-#: src/components/settings/Integrations.tsx:2302
-#: src/components/settings/Integrations.tsx:2501
+#: src/components/settings/Integrations.tsx:2329
+#: src/components/settings/Integrations.tsx:2528
 msgid "emails per hour"
 msgstr "メール/時間"
 
-#: src/components/settings/Integrations.tsx:2497
+#: src/components/settings/Integrations.tsx:2524
 msgid "emails per minute"
 msgstr ""
 
@@ -3974,7 +3974,7 @@ msgstr "絵文字候補"
 msgid "Empty column. Add text, button, or image content."
 msgstr "空のカラムです。テキスト、ボタン、または画像を追加してください。"
 
-#: src/components/settings/Integrations.tsx:1810
+#: src/components/settings/Integrations.tsx:1816
 msgid "Enable 2-Step Verification on the Google account, create a dedicated 16-character app password, then enter it below. The regular Gmail password will not work."
 msgstr ""
 
@@ -3994,6 +3994,10 @@ msgstr "ブログを有効化"
 #: src/components/blog_editor/components/youtube/YoutubeNodeView.tsx:404
 msgid "Enable closed captions by default"
 msgstr "デフォルトで字幕を有効化"
+
+#: src/components/settings/Integrations.tsx:1872
+msgid "Enable if this Gmail address is a paid Google Workspace account, not a free personal Gmail. Workspace tolerates a much higher daily volume (up to {GMAIL_WORKSPACE_MAX_DAILY_CAP}/day vs {GMAIL_PERSONAL_MAX_DAILY_CAP}/day for personal), per Google's own sending limits."
+msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1213
 msgid "Enable sending window"
@@ -4026,7 +4030,7 @@ msgstr "Webhookを有効化"
 
 #: src/components/settings/BlogSettings.tsx:209
 #: src/components/settings/GeneralSettings.tsx:138
-#: src/components/settings/Integrations.tsx:1552
+#: src/components/settings/Integrations.tsx:1558
 #: src/components/settings/SystemSettingsDrawer.tsx:426
 #: src/components/templates/TemplateTranslationsTab.tsx:203
 msgid "Enabled"
@@ -4061,7 +4065,7 @@ msgstr "{0}を入力"
 msgid "Enter a name for this block"
 msgstr "このブロックの名前を入力"
 
-#: src/components/settings/Integrations.tsx:1722
+#: src/components/settings/Integrations.tsx:1728
 msgid "Enter a name for this integration"
 msgstr "この連携の名前を入力"
 
@@ -4073,15 +4077,19 @@ msgstr "ワークスペース名を入力"
 msgid "Enter a unique alphanumeric ID"
 msgstr "一意の英数字IDを入力"
 
-#: src/components/settings/Integrations.tsx:1848
+#: src/components/settings/Integrations.tsx:1854
 msgid "Enter a valid email address"
 msgstr ""
 
 #: src/components/settings/Integrations.tsx:1872
-msgid "Enter a value between 1 and {GMAIL_PERSONAL_MAX_DAILY_CAP}"
+#~ msgid "Enter a value between 1 and {GMAIL_PERSONAL_MAX_DAILY_CAP}"
+#~ msgstr ""
+
+#: src/components/settings/Integrations.tsx:1896
+msgid "Enter a value between 1 and {maxCap}"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2733
+#: src/components/settings/Integrations.tsx:2760
 msgid "Enter an email address to receive a test email:"
 msgstr "テストメールを受け取るメールアドレスを入力:"
 
@@ -4560,7 +4568,7 @@ msgstr "コンタクトの削除に失敗しました"
 msgid "Failed to delete file: "
 msgstr "ファイルの削除に失敗しました: "
 
-#: src/components/settings/Integrations.tsx:1165
+#: src/components/settings/Integrations.tsx:1171
 msgid "Failed to delete integration"
 msgstr "連携の削除に失敗しました"
 
@@ -4726,7 +4734,7 @@ msgstr ""
 msgid "Failed to regenerate webhook secret"
 msgstr "Webhookシークレットの再生成に失敗しました"
 
-#: src/components/settings/Integrations.tsx:213
+#: src/components/settings/Integrations.tsx:215
 msgid "Failed to register webhooks"
 msgstr "Webhookの登録に失敗しました"
 
@@ -4778,7 +4786,7 @@ msgstr ""
 msgid "Failed to save field"
 msgstr "フィールドの保存に失敗しました"
 
-#: src/components/settings/Integrations.tsx:1066
+#: src/components/settings/Integrations.tsx:1072
 msgid "Failed to save Firecrawl integration"
 msgstr "Firecrawl連携の保存に失敗しました"
 
@@ -4793,11 +4801,11 @@ msgstr ""
 #: src/components/integrations/FirecrawlIntegration.tsx:69
 #: src/components/integrations/LLMIntegration.tsx:116
 #: src/components/integrations/SupabaseIntegration.tsx:125
-#: src/components/settings/Integrations.tsx:1142
+#: src/components/settings/Integrations.tsx:1148
 msgid "Failed to save integration"
 msgstr "連携の保存に失敗しました"
 
-#: src/components/settings/Integrations.tsx:1016
+#: src/components/settings/Integrations.tsx:1022
 msgid "Failed to save LLM integration"
 msgstr "LLM連携の保存に失敗しました"
 
@@ -4809,7 +4817,7 @@ msgstr ""
 msgid "Failed to save settings"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:963
+#: src/components/settings/Integrations.tsx:969
 msgid "Failed to save Supabase integration"
 msgstr "Supabase連携の保存に失敗しました"
 
@@ -4847,7 +4855,7 @@ msgstr "マジックコードの送信に失敗しました"
 
 #. placeholder {0}: response.error
 #. placeholder {0}: response.error || 'Unknown error'
-#: src/components/settings/Integrations.tsx:1206
+#: src/components/settings/Integrations.tsx:1212
 #: src/components/templates/SendTemplateModal.tsx:140
 msgid "Failed to send test email: {0}"
 msgstr "テストメールの送信に失敗しました: {0}"
@@ -4856,11 +4864,11 @@ msgstr "テストメールの送信に失敗しました: {0}"
 msgid "Failed to send test webhook"
 msgstr "テストWebhookの送信に失敗しました"
 
-#: src/components/settings/Integrations.tsx:721
+#: src/components/settings/Integrations.tsx:725
 msgid "Failed to set default provider"
 msgstr "デフォルトプロバイダの設定に失敗しました"
 
-#: src/components/settings/Integrations.tsx:1210
+#: src/components/settings/Integrations.tsx:1216
 msgid "Failed to test email provider"
 msgstr "メールプロバイダのテストに失敗しました"
 
@@ -4916,7 +4924,7 @@ msgstr "ファイルマネージャー設定の更新に失敗しました"
 msgid "Failed to update list: {error}"
 msgstr "リストの更新に失敗しました: {error}"
 
-#: src/components/settings/Integrations.tsx:750
+#: src/components/settings/Integrations.tsx:754
 msgid "Failed to update marketing profile rotation"
 msgstr ""
 
@@ -5081,20 +5089,20 @@ msgstr "フィルター"
 msgid "Filters:"
 msgstr "フィルター:"
 
-#: src/components/settings/Integrations.tsx:2063
+#: src/components/settings/Integrations.tsx:2090
 msgid "Find this in Azure Portal > App registrations > Your App > Overview"
 msgstr "Azure Portal > アプリの登録 > アプリ > 概要で確認できます"
 
-#: src/components/settings/Integrations.tsx:2047
+#: src/components/settings/Integrations.tsx:2074
 msgid "Find this in Azure Portal > Azure Active Directory > Overview"
 msgstr "Azure Portal > Azure Active Directory > 概要で確認できます"
 
-#: src/components/settings/Integrations.tsx:2102
-#: src/components/settings/Integrations.tsx:2115
+#: src/components/settings/Integrations.tsx:2129
+#: src/components/settings/Integrations.tsx:2142
 msgid "Find this in Google Cloud Console > APIs & Services > Credentials"
 msgstr "Google Cloud Console > APIとサービス > 認証情報で確認できます"
 
-#: src/components/settings/Integrations.tsx:1063
+#: src/components/settings/Integrations.tsx:1069
 msgid "Firecrawl integration saved successfully"
 msgstr "Firecrawl連携を保存しました"
 
@@ -5320,38 +5328,38 @@ msgstr "有効時はグローバルフィードのURLが必須です"
 msgid "Global sending window"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1845
+#: src/components/settings/Integrations.tsx:1851
 msgid "Gmail address"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1847
+#: src/components/settings/Integrations.tsx:1853
 msgid "Gmail address is required"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:367
+#: src/components/settings/Integrations.tsx:369
 msgid "Gmail app password"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:369
-#: src/components/settings/Integrations.tsx:372
+#: src/components/settings/Integrations.tsx:371
+#: src/components/settings/Integrations.tsx:374
 msgid "Gmail OAuth"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2576
+#: src/components/settings/Integrations.tsx:2603
 msgid "Gmail OAuth (coming soon)"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:410
+#: src/components/settings/Integrations.tsx:412
 msgid "Gmail personal safety limit"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:905
+#: src/components/settings/Integrations.tsx:910
 msgid "Gmail sending profile"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1223
-#: src/components/settings/Integrations.tsx:1806
-#: src/components/settings/Integrations.tsx:2570
+#: src/components/settings/Integrations.tsx:1229
+#: src/components/settings/Integrations.tsx:1812
+#: src/components/settings/Integrations.tsx:2597
 msgid "Gmail with an app password"
 msgstr ""
 
@@ -5373,17 +5381,21 @@ msgstr "ゴールタイプ"
 msgid "Goal:"
 msgstr "ゴール:"
 
-#: src/components/settings/Integrations.tsx:1888
+#: src/components/settings/Integrations.tsx:1915
 msgid "Google app password"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1903
+#: src/components/settings/Integrations.tsx:1930
 msgid "Google app password is required"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2008
+#: src/components/settings/Integrations.tsx:2035
 msgid "Google Workspace / Gmail"
 msgstr "Google Workspace / Gmail"
+
+#: src/components/settings/Integrations.tsx:1870
+msgid "Google Workspace account"
+msgstr ""
 
 #: src/components/settings/veridian_sending_profiles_ui.tsx:177
 msgid "Google, Microsoft and other mailbox networks"
@@ -5948,7 +5960,7 @@ msgstr "リンクを挿入"
 msgid "Inset"
 msgstr "インセット"
 
-#: src/components/settings/Integrations.tsx:1162
+#: src/components/settings/Integrations.tsx:1168
 msgid "Integration deleted successfully"
 msgstr "連携を削除しました"
 
@@ -5959,16 +5971,16 @@ msgstr "連携ID:"
 #: src/components/integrations/FirecrawlIntegration.tsx:76
 #: src/components/integrations/LLMIntegration.tsx:123
 #: src/components/integrations/SupabaseIntegration.tsx:132
-#: src/components/settings/Integrations.tsx:1715
+#: src/components/settings/Integrations.tsx:1721
 msgid "Integration Name"
 msgstr "連携名"
 
-#: src/components/settings/Integrations.tsx:865
-#: src/components/settings/Integrations.tsx:1178
+#: src/components/settings/Integrations.tsx:870
+#: src/components/settings/Integrations.tsx:1184
 msgid "Integration not found or not an email provider"
 msgstr "連携が見つからないか、メールプロバイダーではありません"
 
-#: src/components/settings/Integrations.tsx:1119
+#: src/components/settings/Integrations.tsx:1125
 msgid "Integration updated successfully"
 msgstr "連携を更新しました"
 
@@ -6226,7 +6238,7 @@ msgid "Last Name"
 msgstr "姓"
 
 #. placeholder {0}: provider.veridian_transport_verified_at
-#: src/components/settings/Integrations.tsx:384
+#: src/components/settings/Integrations.tsx:386
 msgid "Last verified {0}"
 msgstr ""
 
@@ -6238,7 +6250,7 @@ msgstr "リード"
 msgid "Learn how to enable SMTP bridge"
 msgstr "SMTPリレーを有効にする方法を学ぶ"
 
-#: src/components/settings/Integrations.tsx:1916
+#: src/components/settings/Integrations.tsx:1943
 msgid "Leave blank to keep the currently saved app password."
 msgstr ""
 
@@ -6441,7 +6453,7 @@ msgstr "リストを更新しました"
 msgid "Live"
 msgstr "ライブ"
 
-#: src/components/settings/Integrations.tsx:1013
+#: src/components/settings/Integrations.tsx:1019
 msgid "LLM integration saved successfully"
 msgstr "LLM連携を保存しました"
 
@@ -6488,7 +6500,7 @@ msgstr "Webhook配信を読み込み中..."
 msgid "Loading webhook events..."
 msgstr "Webhookイベントを読み込み中..."
 
-#: src/components/settings/Integrations.tsx:225
+#: src/components/settings/Integrations.tsx:227
 msgid "Loading webhook status..."
 msgstr "Webhookステータスを読み込み中..."
 
@@ -6606,7 +6618,7 @@ msgstr "マーケティングメールプロバイダーが必要です"
 msgid "Marketing Provider"
 msgstr "マーケティングプロバイダー"
 
-#: src/components/settings/Integrations.tsx:440
+#: src/components/settings/Integrations.tsx:442
 msgid "Marketing rotation"
 msgstr ""
 
@@ -6666,7 +6678,7 @@ msgstr ""
 msgid "Maximum number of posts to include in the RSS/JSON feed (1–20)"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2489
+#: src/components/settings/Integrations.tsx:2516
 msgid "Maximum one email per minute"
 msgstr ""
 
@@ -6694,8 +6706,8 @@ msgstr "メッセージ履歴とWebhookイベントは匿名化（メールア�
 msgid "Message ID"
 msgstr "メッセージID"
 
-#: src/components/settings/Integrations.tsx:2214
-#: src/components/settings/Integrations.tsx:2469
+#: src/components/settings/Integrations.tsx:2241
+#: src/components/settings/Integrations.tsx:2496
 msgid "Message Stream"
 msgstr ""
 
@@ -6716,7 +6728,7 @@ msgstr "メタ説明"
 msgid "Meta Title"
 msgstr "メタタイトル"
 
-#: src/components/settings/Integrations.tsx:2006
+#: src/components/settings/Integrations.tsx:2033
 msgid "Microsoft 365 / Office 365"
 msgstr "Microsoft 365 / Office 365"
 
@@ -6844,7 +6856,7 @@ msgstr ""
 
 #: src/components/integrations/LLMIntegration.tsx:151
 #: src/components/integrations/LLMIntegration.tsx:162
-#: src/components/settings/Integrations.tsx:1612
+#: src/components/settings/Integrations.tsx:1618
 msgid "Model"
 msgstr "モデル"
 
@@ -6890,10 +6902,10 @@ msgstr "N/A"
 #: src/components/file_manager/fileManager.tsx:873
 #: src/components/lists/ListDrawer.tsx:185
 #: src/components/segment/button_upsert.tsx:376
-#: src/components/settings/Integrations.tsx:1452
-#: src/components/settings/Integrations.tsx:1611
-#: src/components/settings/Integrations.tsx:1676
-#: src/components/settings/Integrations.tsx:2705
+#: src/components/settings/Integrations.tsx:1458
+#: src/components/settings/Integrations.tsx:1617
+#: src/components/settings/Integrations.tsx:1682
+#: src/components/settings/Integrations.tsx:2732
 #: src/components/settings/WebhooksSettings.tsx:224
 msgid "Name"
 msgstr "名前"
@@ -6903,7 +6915,7 @@ msgstr "名前"
 msgid "Name must be less than 255 characters"
 msgstr "名前は255文字未満である必要があります"
 
-#: src/components/settings/Integrations.tsx:1721
+#: src/components/settings/Integrations.tsx:1727
 msgid "Name this Gmail profile"
 msgstr ""
 
@@ -6943,7 +6955,7 @@ msgstr "新規フォルダ"
 msgid "New magic code sent to your email"
 msgstr "新しいマジックコードをメールに送信しました"
 
-#: src/components/settings/Integrations.tsx:475
+#: src/components/settings/Integrations.tsx:477
 msgid "New marketing emails can be distributed to this profile."
 msgstr ""
 
@@ -7005,14 +7017,14 @@ msgstr "次回実行"
 #: src/components/messages/MessageHistoryTab.tsx:189
 #: src/components/messages/MessageHistoryTab.tsx:205
 #: src/components/settings/CustomFieldsConfiguration.tsx:202
-#: src/components/settings/Integrations.tsx:294
-#: src/components/settings/Integrations.tsx:337
-#: src/components/settings/Integrations.tsx:480
-#: src/components/settings/Integrations.tsx:503
-#: src/components/settings/Integrations.tsx:1434
-#: src/components/settings/Integrations.tsx:1593
-#: src/components/settings/Integrations.tsx:1660
-#: src/components/settings/Integrations.tsx:2424
+#: src/components/settings/Integrations.tsx:296
+#: src/components/settings/Integrations.tsx:339
+#: src/components/settings/Integrations.tsx:482
+#: src/components/settings/Integrations.tsx:505
+#: src/components/settings/Integrations.tsx:1440
+#: src/components/settings/Integrations.tsx:1599
+#: src/components/settings/Integrations.tsx:1666
+#: src/components/settings/Integrations.tsx:2451
 #: src/components/settings/WebhookCard.tsx:193
 #: src/components/settings/WebhookCard.tsx:237
 #: src/components/settings/WebhookCard.tsx:279
@@ -7223,7 +7235,7 @@ msgstr "保存されたブロックがまだありません"
 msgid "No sender domain"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:431
+#: src/components/settings/Integrations.tsx:433
 msgid "No senders configured"
 msgstr "差出人が設定されていません"
 
@@ -7340,15 +7352,15 @@ msgstr ""
 msgid "Normal"
 msgstr "通常"
 
-#: src/components/settings/Integrations.tsx:450
-#: src/components/settings/Integrations.tsx:456
+#: src/components/settings/Integrations.tsx:452
+#: src/components/settings/Integrations.tsx:458
 msgid "Not assigned"
 msgstr "未割り当て"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:162
 #: src/components/analytics/AnalyticsDashboard.tsx:186
-#: src/components/settings/Integrations.tsx:1486
-#: src/components/settings/Integrations.tsx:1523
+#: src/components/settings/Integrations.tsx:1492
+#: src/components/settings/Integrations.tsx:1529
 #: src/components/settings/veridian_cold_outreach_settings.tsx:252
 msgid "Not configured"
 msgstr "未設定"
@@ -7374,7 +7386,7 @@ msgstr "リストに含まれない"
 msgid "Not set"
 msgstr "未設定"
 
-#: src/components/settings/Integrations.tsx:389
+#: src/components/settings/Integrations.tsx:391
 msgid "Not tested"
 msgstr ""
 
@@ -7433,11 +7445,11 @@ msgstr "カテゴリーページで1ページあたりに表示する投稿数"
 msgid "Number of posts to display per page on the homepage"
 msgstr "ホームページで1ページあたりに表示する投稿数"
 
-#: src/components/settings/Integrations.tsx:1980
+#: src/components/settings/Integrations.tsx:2007
 msgid "OAuth2 (Microsoft 365 / Google)"
 msgstr "OAuth2 (Microsoft 365 / Google)"
 
-#: src/components/settings/Integrations.tsx:1996
+#: src/components/settings/Integrations.tsx:2023
 msgid "OAuth2 Provider"
 msgstr "OAuth2プロバイダー"
 
@@ -7450,7 +7462,7 @@ msgstr "オブジェクトキー: {segment}"
 msgid "Oblique"
 msgstr "斜体"
 
-#: src/components/settings/Integrations.tsx:2128
+#: src/components/settings/Integrations.tsx:2155
 msgid "Obtain this using the OAuth2 playground or your own OAuth flow"
 msgstr "OAuth2プレイグラウンドまたは独自のOAuthフローで取得してください"
 
@@ -7512,7 +7524,7 @@ msgstr "メールテンプレートごとに1つのブレークポイントの�
 #: src/components/integrations/FirecrawlIntegration.tsx:47
 #: src/components/integrations/LLMIntegration.tsx:79
 #: src/components/integrations/SupabaseIntegration.tsx:79
-#: src/components/settings/Integrations.tsx:2892
+#: src/components/settings/Integrations.tsx:2919
 msgid "Only workspace owners can modify integrations"
 msgstr "ワークスペースオーナーのみが連携を変更できます"
 
@@ -7529,7 +7541,7 @@ msgstr "メール開封"
 msgid "Open email editor"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1821
+#: src/components/settings/Integrations.tsx:1827
 msgid "Open Google app passwords"
 msgstr ""
 
@@ -7716,7 +7728,7 @@ msgstr "親フレーム"
 msgid "Password"
 msgstr "パスワード"
 
-#: src/components/settings/Integrations.tsx:1917
+#: src/components/settings/Integrations.tsx:1944
 msgid "Paste the 16-character password generated by Google. Spaces are removed automatically."
 msgstr ""
 
@@ -7913,7 +7925,7 @@ msgstr "再生オプション"
 msgid "Please add at least one author"
 msgstr "著者を1人以上追加してください"
 
-#: src/components/settings/Integrations.tsx:1092
+#: src/components/settings/Integrations.tsx:1098
 msgid "Please add at least one sender before saving"
 msgstr "保存する前に送信者を1人以上追加してください"
 
@@ -8142,7 +8154,7 @@ msgstr "イベントタイプを選択してください"
 msgid "Please select an MJML file"
 msgstr "MJMLファイルを選択してください"
 
-#: src/components/settings/Integrations.tsx:2000
+#: src/components/settings/Integrations.tsx:2027
 msgid "Please select an OAuth2 provider"
 msgstr "OAuth2プロバイダーを選択してください"
 
@@ -8220,7 +8232,7 @@ msgstr "投稿を更新しました"
 msgid "Postcode"
 msgstr "郵便番号"
 
-#: src/components/settings/Integrations.tsx:2216
+#: src/components/settings/Integrations.tsx:2243
 msgid "Postmark Message Stream ID (e.g. \"outbound\" for transactional, \"broadcast\" for marketing)"
 msgstr ""
 
@@ -8388,16 +8400,16 @@ msgstr "処理を一時停止中"
 msgid "Processing was stopped before completion."
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:398
+#: src/components/settings/Integrations.tsx:400
 #: src/components/settings/veridian_sending_profiles_ui.tsx:225
 msgid "Profile"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:745
+#: src/components/settings/Integrations.tsx:749
 msgid "Profile added to marketing rotation"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1715
+#: src/components/settings/Integrations.tsx:1721
 msgid "Profile name"
 msgstr ""
 
@@ -8405,11 +8417,11 @@ msgstr ""
 msgid "Profile overrides take priority. Missing values inherit the global workspace policy."
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:746
+#: src/components/settings/Integrations.tsx:750
 msgid "Profile removed from marketing rotation"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1131
+#: src/components/settings/Integrations.tsx:1137
 msgid "Profile saved. Send a test email before activating it."
 msgstr ""
 
@@ -8482,7 +8494,7 @@ msgstr "購入"
 msgid "Push"
 msgstr "プッシュ"
 
-#: src/components/settings/Integrations.tsx:474
+#: src/components/settings/Integrations.tsx:476
 msgid "Queued emails already assigned to this profile keep their assignment."
 msgstr ""
 
@@ -8507,11 +8519,11 @@ msgstr ""
 msgid "Rate & volume"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2486
+#: src/components/settings/Integrations.tsx:2513
 msgid "Rate Limit for Marketing"
 msgstr "マーケティングのレート制限"
 
-#: src/components/settings/Integrations.tsx:2285
+#: src/components/settings/Integrations.tsx:2312
 msgid "Rate limit for marketing emails (emails per minute)"
 msgstr "マーケティングメールのレート制限（1分あたりのメール数）"
 
@@ -8543,7 +8555,7 @@ msgstr "生のペイロード:"
 msgid "Re-check"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:302
+#: src/components/settings/Integrations.tsx:304
 msgid "Re-register"
 msgstr "再登録"
 
@@ -8565,7 +8577,7 @@ msgstr "このブロードキャストの最新投稿を読む。"
 msgid "Reading Time"
 msgstr "読了時間"
 
-#: src/components/settings/Integrations.tsx:389
+#: src/components/settings/Integrations.tsx:391
 msgid "Ready"
 msgstr ""
 
@@ -8644,7 +8656,7 @@ msgstr ""
 msgid "Recommended"
 msgstr "おすすめ"
 
-#: src/components/settings/Integrations.tsx:1225
+#: src/components/settings/Integrations.tsx:1231
 msgid "Recommended fallback for a Gmail account. No Google Cloud project or OAuth test-user list is needed."
 msgstr ""
 
@@ -8701,21 +8713,21 @@ msgstr "再生成"
 msgid "Regenerate secret?"
 msgstr "シークレットを再生成しますか？"
 
-#: src/components/settings/Integrations.tsx:2235
-#: src/components/settings/Integrations.tsx:2463
+#: src/components/settings/Integrations.tsx:2262
+#: src/components/settings/Integrations.tsx:2490
 msgid "Region"
 msgstr "リージョン"
 
-#: src/components/settings/Integrations.tsx:255
-#: src/components/settings/Integrations.tsx:302
+#: src/components/settings/Integrations.tsx:257
+#: src/components/settings/Integrations.tsx:304
 msgid "Register Webhooks"
 msgstr "Webhookを登録"
 
-#: src/components/settings/Integrations.tsx:290
+#: src/components/settings/Integrations.tsx:292
 msgid "Register webhooks?"
 msgstr "Webhookを登録しますか？"
 
-#: src/components/settings/Integrations.tsx:1548
+#: src/components/settings/Integrations.tsx:1554
 msgid "Reject Disposable Email"
 msgstr "使い捨てメールを拒否"
 
@@ -8750,7 +8762,7 @@ msgstr ""
 msgid "Remove from List"
 msgstr "リストから削除"
 
-#: src/components/settings/Integrations.tsx:488
+#: src/components/settings/Integrations.tsx:490
 msgid "Remove from rotation"
 msgstr ""
 
@@ -8767,7 +8779,7 @@ msgstr "メンバーを削除"
 msgid "Remove this author?"
 msgstr "この著者を削除しますか？"
 
-#: src/components/settings/Integrations.tsx:465
+#: src/components/settings/Integrations.tsx:467
 msgid "Remove this profile from marketing rotation?"
 msgstr ""
 
@@ -9085,10 +9097,10 @@ msgstr "サンプル割合"
 msgid "Sample values"
 msgstr "サンプル値"
 
-#: src/components/settings/Integrations.tsx:2195
-#: src/components/settings/Integrations.tsx:2267
-#: src/components/settings/Integrations.tsx:2454
-#: src/components/settings/Integrations.tsx:2475
+#: src/components/settings/Integrations.tsx:2222
+#: src/components/settings/Integrations.tsx:2294
+#: src/components/settings/Integrations.tsx:2481
+#: src/components/settings/Integrations.tsx:2502
 msgid "Sandbox Mode"
 msgstr "サンドボックスモード"
 
@@ -9106,11 +9118,11 @@ msgstr "サンドボックスモード"
 #: src/components/file_manager/buttonSettings.tsx:343
 #: src/components/lists/ListDrawer.tsx:170
 #: src/components/settings/CustomFieldsConfiguration.tsx:275
-#: src/components/settings/Integrations.tsx:2536
-#: src/components/settings/Integrations.tsx:2688
-#: src/components/settings/Integrations.tsx:2775
-#: src/components/settings/Integrations.tsx:2823
-#: src/components/settings/Integrations.tsx:2870
+#: src/components/settings/Integrations.tsx:2563
+#: src/components/settings/Integrations.tsx:2715
+#: src/components/settings/Integrations.tsx:2802
+#: src/components/settings/Integrations.tsx:2850
+#: src/components/settings/Integrations.tsx:2897
 #: src/components/settings/SystemSettingsDrawer.tsx:217
 #: src/components/settings/veridian_cold_outreach_settings.tsx:510
 #: src/components/settings/WebhooksSettings.tsx:215
@@ -9191,7 +9203,7 @@ msgstr ""
 msgid "Save Theme"
 msgstr "テーマを保存"
 
-#: src/components/settings/Integrations.tsx:2558
+#: src/components/settings/Integrations.tsx:2585
 msgid "Save this profile, then send a test from its card before activating it."
 msgstr ""
 
@@ -9271,8 +9283,8 @@ msgstr "2番目の値は1番目の値より大きくする必要があります"
 msgid "Secret"
 msgstr "シークレット"
 
-#: src/components/settings/Integrations.tsx:1795
-#: src/components/settings/Integrations.tsx:2259
+#: src/components/settings/Integrations.tsx:1801
+#: src/components/settings/Integrations.tsx:2286
 msgid "Secret Key"
 msgstr "シークレットキー"
 
@@ -9284,7 +9296,7 @@ msgstr "シークレット:"
 msgid "Section Attributes"
 msgstr "セクション属性"
 
-#: src/components/settings/Integrations.tsx:1932
+#: src/components/settings/Integrations.tsx:1959
 msgid "Secure preset applied"
 msgstr ""
 
@@ -9427,7 +9439,7 @@ msgstr "イベントを選択..."
 msgid "Select Avatar"
 msgstr "アバターを選択"
 
-#: src/components/settings/Integrations.tsx:1731
+#: src/components/settings/Integrations.tsx:1737
 msgid "Select AWS Region"
 msgstr "AWSリージョンを選択"
 
@@ -9534,7 +9546,7 @@ msgstr "リストを選択（任意）"
 msgid "Select lists to add contacts to"
 msgstr "連絡先を追加するリストを選択"
 
-#: src/components/settings/Integrations.tsx:2004
+#: src/components/settings/Integrations.tsx:2031
 msgid "Select OAuth2 Provider"
 msgstr "OAuth2プロバイダーを選択"
 
@@ -9640,23 +9652,23 @@ msgstr "選択された勝者"
 msgid "Selected: {0}"
 msgstr "選択済み: {0}"
 
-#: src/components/settings/Integrations.tsx:693
+#: src/components/settings/Integrations.tsx:697
 msgid "Send a successful test email before activating this profile"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:498
+#: src/components/settings/Integrations.tsx:500
 msgid "Send a successful test email before activating this profile."
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:729
+#: src/components/settings/Integrations.tsx:733
 msgid "Send a successful test email before adding this profile to rotation"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:470
+#: src/components/settings/Integrations.tsx:472
 msgid "Send a successful test email before adding this profile to rotation."
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:385
+#: src/components/settings/Integrations.tsx:387
 msgid "Send a test email before activating this profile."
 msgstr ""
 
@@ -9705,7 +9717,7 @@ msgstr "ブロードキャストを送信または予約"
 msgid "Send Test"
 msgstr "テストを送信"
 
-#: src/components/settings/Integrations.tsx:2729
+#: src/components/settings/Integrations.tsx:2756
 #: src/components/templates/SendTemplateModal.tsx:263
 #: src/components/templates/SendTemplateModal.tsx:277
 #: src/pages/BroadcastsPage.tsx:834
@@ -9728,7 +9740,7 @@ msgstr "SMTPリレーを使用してトランザクション通知を送信。�
 msgid "Sender"
 msgstr "送信者"
 
-#: src/components/settings/Integrations.tsx:1856
+#: src/components/settings/Integrations.tsx:1862
 msgid "Sender name"
 msgstr ""
 
@@ -9737,12 +9749,12 @@ msgstr ""
 msgid "Sender Name"
 msgstr "送信者名"
 
-#: src/components/settings/Integrations.tsx:1857
+#: src/components/settings/Integrations.tsx:1863
 msgid "Sender name is required"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:416
-#: src/components/settings/Integrations.tsx:2383
+#: src/components/settings/Integrations.tsx:418
+#: src/components/settings/Integrations.tsx:2410
 msgid "Senders"
 msgstr "送信者"
 
@@ -9767,7 +9779,7 @@ msgstr ""
 msgid "Sending profile rotation"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2617
+#: src/components/settings/Integrations.tsx:2644
 msgid "Sending profiles and integrations"
 msgstr ""
 
@@ -9853,23 +9865,23 @@ msgstr ""
 msgid "Server restarted successfully! You can now sign in."
 msgstr "サーバーが正常に再起動されました！サインインできます。"
 
-#: src/components/settings/Integrations.tsx:2207
+#: src/components/settings/Integrations.tsx:2234
 msgid "Server Token"
 msgstr "サーバートークン"
 
-#: src/components/settings/Integrations.tsx:716
+#: src/components/settings/Integrations.tsx:720
 msgid "Set as default marketing email provider"
 msgstr "デフォルトのマーケティングメールプロバイダーに設定"
 
-#: src/components/settings/Integrations.tsx:2353
+#: src/components/settings/Integrations.tsx:2380
 msgid "Set as default sender"
 msgstr "デフォルトの送信者に設定"
 
-#: src/components/settings/Integrations.tsx:717
+#: src/components/settings/Integrations.tsx:721
 msgid "Set as default transactional email provider"
 msgstr "デフォルトのトランザクションメールプロバイダーに設定"
 
-#: src/components/settings/Integrations.tsx:494
+#: src/components/settings/Integrations.tsx:496
 msgid "Set as transactional email provider?"
 msgstr "トランザクションメールプロバイダーに設定しますか？"
 
@@ -10101,8 +10113,8 @@ msgstr ""
 msgid "SMTP domain"
 msgstr "SMTPドメイン"
 
-#: src/components/settings/Integrations.tsx:1944
-#: src/components/settings/Integrations.tsx:2417
+#: src/components/settings/Integrations.tsx:1971
+#: src/components/settings/Integrations.tsx:2444
 #: src/components/settings/SystemSettingsDrawer.tsx:284
 #: src/pages/SetupWizard.tsx:450
 msgid "SMTP Host"
@@ -10112,11 +10124,11 @@ msgstr "SMTPホスト"
 msgid "SMTP host is required"
 msgstr "SMTPホストは必須です"
 
-#: src/components/settings/Integrations.tsx:373
+#: src/components/settings/Integrations.tsx:375
 msgid "SMTP OAuth"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2152
+#: src/components/settings/Integrations.tsx:2179
 #: src/components/settings/SystemSettingsDrawer.tsx:351
 #: src/pages/SetupWizard.tsx:491
 msgid "SMTP Password"
@@ -10126,7 +10138,7 @@ msgstr "SMTPパスワード"
 msgid "SMTP port"
 msgstr "SMTPポート"
 
-#: src/components/settings/Integrations.tsx:1953
+#: src/components/settings/Integrations.tsx:1980
 #: src/components/settings/SystemSettingsDrawer.tsx:297
 #: src/pages/SetupWizard.tsx:459
 msgid "SMTP Port"
@@ -10148,15 +10160,15 @@ msgstr "SMTPプロバイダーは苦情Webhookをサポートしていないた�
 msgid "SMTP provider doesn't support delivery webhooks, so delivery status cannot be tracked"
 msgstr "SMTPプロバイダーは配信Webhookをサポートしていないため、配信ステータスを追跡できません"
 
-#: src/components/settings/Integrations.tsx:1933
+#: src/components/settings/Integrations.tsx:1960
 msgid "SMTP server smtp.gmail.com, port 587, TLS enabled. The credential is encrypted before it is stored."
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2420
+#: src/components/settings/Integrations.tsx:2447
 msgid "SMTP User"
 msgstr "SMTPユーザー"
 
-#: src/components/settings/Integrations.tsx:2147
+#: src/components/settings/Integrations.tsx:2174
 #: src/components/settings/SystemSettingsDrawer.tsx:338
 #: src/pages/SetupWizard.tsx:486
 msgid "SMTP Username"
@@ -10224,7 +10236,7 @@ msgstr "間隔"
 msgid "Spacer Attributes"
 msgstr "スペーサー属性"
 
-#: src/components/settings/Integrations.tsx:2189
+#: src/components/settings/Integrations.tsx:2216
 msgid "SparkPost API Key"
 msgstr "SparkPost APIキー"
 
@@ -10465,7 +10477,7 @@ msgstr "正常にサインインしました"
 msgid "Summary-only feed"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:960
+#: src/components/settings/Integrations.tsx:966
 msgid "Supabase integration saved successfully"
 msgstr "Supabase連携が正常に保存されました"
 
@@ -10639,7 +10651,7 @@ msgstr "テンプレート:"
 msgid "Templates"
 msgstr "テンプレート"
 
-#: src/components/settings/Integrations.tsx:2365
+#: src/components/settings/Integrations.tsx:2392
 msgid "Templates using this sender will need to be updated to use a different sender."
 msgstr "この送信者を使用しているテンプレートは、別の送信者を使用するように更新する必要があります。"
 
@@ -10654,13 +10666,13 @@ msgstr ""
 
 #: src/components/broadcasts/GlobalFeedSettings.tsx:122
 #: src/components/broadcasts/RecipientFeedSettings.tsx:130
-#: src/components/settings/Integrations.tsx:350
+#: src/components/settings/Integrations.tsx:352
 #: src/pages/TransactionalNotificationsPage.tsx:173
 msgid "Test"
 msgstr "テスト"
 
 #. placeholder {0}: integration.name
-#: src/components/settings/Integrations.tsx:348
+#: src/components/settings/Integrations.tsx:350
 msgid "Test {0}"
 msgstr ""
 
@@ -10685,11 +10697,11 @@ msgstr "テストデータが正常に更新されました"
 msgid "Test duration (hours)"
 msgstr "テスト期間（時間）"
 
-#: src/components/settings/Integrations.tsx:2715
+#: src/components/settings/Integrations.tsx:2742
 msgid "Test Email Provider"
 msgstr "メールプロバイダーをテスト"
 
-#: src/components/settings/Integrations.tsx:1189
+#: src/components/settings/Integrations.tsx:1195
 #: src/components/templates/SendTemplateModal.tsx:137
 msgid "Test email sent successfully"
 msgstr "テストメールが正常に送信されました"
@@ -10829,7 +10841,7 @@ msgstr "CSVファイルの1行目にはヘッダーが必要です。"
 msgid "The currently published theme will be unpublished automatically."
 msgstr "現在公開中のテーマは自動的に非公開になります。"
 
-#: src/components/settings/Integrations.tsx:2491
+#: src/components/settings/Integrations.tsx:2518
 msgid "The daily profile cap is enforced separately."
 msgstr ""
 
@@ -10842,7 +10854,7 @@ msgstr ""
 msgid "The default sending policy applied to every campaign and every sending infrastructure, unless overridden below."
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2021
+#: src/components/settings/Integrations.tsx:2048
 msgid "The email address that will be used as the SMTP user for authentication"
 msgstr "認証用のSMTPユーザーとして使用されるメールアドレス"
 
@@ -10858,12 +10870,12 @@ msgstr "メール本文には上記の形式に一致する有効なJSONを含�
 msgid "The following validation errors were found in your import:"
 msgstr "インポートで以下の検証エラーが見つかりました:"
 
-#: src/components/settings/Integrations.tsx:1895
-#: src/components/settings/Integrations.tsx:1908
+#: src/components/settings/Integrations.tsx:1922
+#: src/components/settings/Integrations.tsx:1935
 msgid "The Google app password must contain 16 characters"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2163
+#: src/components/settings/Integrations.tsx:2190
 #: src/pages/SetupWizard.tsx:520
 msgid "The hostname your server identifies itself as when connecting to the SMTP server. Defaults to the SMTP host value if empty."
 msgstr ""
@@ -10876,7 +10888,7 @@ msgstr "ブログのメインタイトル"
 msgid "The primary language for template content. Translations are stored for other languages."
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:1242
+#: src/components/settings/Integrations.tsx:1248
 msgid "The profile model is OAuth-ready. Connection will be enabled when the managed Google consent flow is available."
 msgstr ""
 
@@ -10968,10 +10980,10 @@ msgstr "これらのパラメータはブロードキャストのURLに自動的
 #: src/components/blog/DeletePostModal.tsx:36
 #: src/components/contacts/DeleteContactModal.tsx:54
 #: src/components/settings/DeleteWorkspace.tsx:45
-#: src/components/settings/Integrations.tsx:334
-#: src/components/settings/Integrations.tsx:1431
-#: src/components/settings/Integrations.tsx:1590
-#: src/components/settings/Integrations.tsx:1657
+#: src/components/settings/Integrations.tsx:336
+#: src/components/settings/Integrations.tsx:1437
+#: src/components/settings/Integrations.tsx:1596
+#: src/components/settings/Integrations.tsx:1663
 #: src/components/settings/WebhookCard.tsx:234
 msgid "This action cannot be undone."
 msgstr "この操作は元に戻せません。"
@@ -11042,7 +11054,7 @@ msgstr "これはコンテンツ構造ツリーです。ブロックをドラッ
 msgid "This is your visual email editor. Click on any element in your email to select it. Selected elements will be highlighted with a blue border and show editing options."
 msgstr "これはビジュアルメールエディターです。メール内の要素をクリックして選択できます。選択された要素は青い境界線でハイライトされ、編集オプションが表示されます。"
 
-#: src/components/settings/Integrations.tsx:1813
+#: src/components/settings/Integrations.tsx:1819
 msgid "This method does not use Google Cloud OAuth, so no test-user configuration is required."
 msgstr ""
 
@@ -11095,7 +11107,7 @@ msgstr "ワークスペース「{0}」とすべてのデータが完全に削除
 msgid "This will permanently remove the contact and their subscriptions."
 msgstr "コンタクトと購読が完全に削除されます。"
 
-#: src/components/settings/Integrations.tsx:291
+#: src/components/settings/Integrations.tsx:293
 msgid "This will register or update webhook endpoints for this email provider."
 msgstr "このメールプロバイダーのWebhookエンドポイントを登録または更新します。"
 
@@ -11103,7 +11115,7 @@ msgstr "このメールプロバイダーのWebhookエンドポイントを登�
 msgid "This will replace all content with the default language template. Continue?"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:2741
+#: src/components/settings/Integrations.tsx:2768
 msgid "This will send a real test email to the address provided."
 msgstr "指定されたアドレスに実際のテストメールが送信されます。"
 
@@ -11218,7 +11230,7 @@ msgstr "TLS証明書（Base64）"
 msgid "TLS certificate is required"
 msgstr "TLS証明書は必須です"
 
-#: src/components/settings/Integrations.tsx:2423
+#: src/components/settings/Integrations.tsx:2450
 msgid "TLS Enabled"
 msgstr "TLS有効"
 
@@ -11243,7 +11255,7 @@ msgstr "重複送信を防ぐため"
 msgid "To use the {0}, you need to configure the Anthropic integration in your workspace settings."
 msgstr "{0}を使用するには、ワークスペース設定でAnthropic連携を設定する必要があります。"
 
-#: src/components/settings/Integrations.tsx:413
+#: src/components/settings/Integrations.tsx:415
 #: src/components/settings/veridian_sending_profiles_ui.tsx:122
 msgid "Today's usage is unavailable"
 msgstr ""
@@ -11262,7 +11274,7 @@ msgstr "モバイルとデスクトップビューを切り替えて、異なる
 msgid "Toggle caption"
 msgstr "キャプションを切り替え"
 
-#: src/components/settings/Integrations.tsx:1682
+#: src/components/settings/Integrations.tsx:1688
 msgid "Tools"
 msgstr "ツール"
 
@@ -11311,9 +11323,17 @@ msgstr "添付ファイルの合計サイズが10MBの制限を超えていま�
 msgid "Total Contacts"
 msgstr "コンタクト総数"
 
-#: src/components/settings/Integrations.tsx:1865
-msgid "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; Gmail personal profiles cannot exceed 50/day."
+#: src/components/settings/Integrations.tsx:1887
+msgid "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a declared Google Workspace account can go up to {maxCap}/day once warmed up."
 msgstr ""
+
+#: src/components/settings/Integrations.tsx:1888
+msgid "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a personal Gmail profile can go up to {maxCap}/day once warmed up."
+msgstr ""
+
+#: src/components/settings/Integrations.tsx:1865
+#~ msgid "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; Gmail personal profiles cannot exceed 50/day."
+#~ msgstr ""
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:660
 msgid "Tracking (opens & clicks) must be enabled in workspace settings to use A/B testing features."
@@ -11343,7 +11363,7 @@ msgstr ""
 msgid "Transactional"
 msgstr "トランザクション"
 
-#: src/components/settings/Integrations.tsx:445
+#: src/components/settings/Integrations.tsx:447
 msgid "Transactional Emails"
 msgstr "トランザクションメール"
 
@@ -11727,7 +11747,7 @@ msgstr "別のメールを使用"
 msgid "Use Anyway"
 msgstr "そのまま使用"
 
-#: src/components/settings/Integrations.tsx:513
+#: src/components/settings/Integrations.tsx:515
 msgid "Use for Transactional"
 msgstr "トランザクションに使用"
 
@@ -11763,7 +11783,7 @@ msgstr "このcurlコマンドを使用してAPI経由でトランザクショ�
 msgid "Use This Theme"
 msgstr "このテーマを使用"
 
-#: src/components/settings/Integrations.tsx:1963
+#: src/components/settings/Integrations.tsx:1990
 #: src/components/settings/SystemSettingsDrawer.tsx:321
 #: src/pages/SetupWizard.tsx:476
 msgid "Use TLS"
@@ -11773,7 +11793,7 @@ msgstr "TLSを使用"
 msgid "Use workspace default"
 msgstr ""
 
-#: src/components/settings/Integrations.tsx:434
+#: src/components/settings/Integrations.tsx:436
 msgid "Used for"
 msgstr "用途"
 
@@ -11794,7 +11814,7 @@ msgstr "ユーザー作成フック"
 msgid "User Created Hook Secret"
 msgstr "ユーザー作成フックシークレット"
 
-#: src/components/settings/Integrations.tsx:1540
+#: src/components/settings/Integrations.tsx:1546
 msgid "User Metadata Field"
 msgstr "ユーザーメタデータフィールド"
 
@@ -11804,7 +11824,7 @@ msgstr "ユーザーメタデータフィールド"
 msgid "Username"
 msgstr "ユーザー名"
 
-#: src/components/settings/Integrations.tsx:2432
+#: src/components/settings/Integrations.tsx:2459
 msgid "Username and password"
 msgstr ""
 
@@ -11988,13 +12008,13 @@ msgstr "Webhook無効"
 msgid "Webhook enabled"
 msgstr "Webhook有効"
 
-#: src/components/settings/Integrations.tsx:1473
-#: src/components/settings/Integrations.tsx:1510
+#: src/components/settings/Integrations.tsx:1479
+#: src/components/settings/Integrations.tsx:1516
 msgid "Webhook endpoint copied to clipboard"
 msgstr "Webhookエンドポイントがクリップボードにコピーされました"
 
-#: src/components/settings/Integrations.tsx:1459
-#: src/components/settings/Integrations.tsx:1496
+#: src/components/settings/Integrations.tsx:1465
+#: src/components/settings/Integrations.tsx:1502
 msgid "Webhook endpoint:"
 msgstr "Webhookエンドポイント:"
 
@@ -12018,15 +12038,15 @@ msgstr "Webhookサブスクリプションが更新されました"
 msgid "Webhook URL"
 msgstr "Webhook URL"
 
-#: src/components/settings/Integrations.tsx:224
-#: src/components/settings/Integrations.tsx:232
-#: src/components/settings/Integrations.tsx:263
+#: src/components/settings/Integrations.tsx:226
+#: src/components/settings/Integrations.tsx:234
+#: src/components/settings/Integrations.tsx:265
 #: src/components/settings/SettingsSidebar.tsx:81
 #: src/components/settings/WebhooksSettings.tsx:169
 msgid "Webhooks"
 msgstr "Webhooks"
 
-#: src/components/settings/Integrations.tsx:210
+#: src/components/settings/Integrations.tsx:212
 msgid "Webhooks registered successfully"
 msgstr "Webhooksが正常に登録されました"
 
@@ -12241,14 +12261,14 @@ msgstr ""
 #: src/components/messages/MessageHistoryTab.tsx:188
 #: src/components/messages/MessageHistoryTab.tsx:204
 #: src/components/settings/CustomFieldsConfiguration.tsx:201
-#: src/components/settings/Integrations.tsx:293
-#: src/components/settings/Integrations.tsx:336
-#: src/components/settings/Integrations.tsx:479
-#: src/components/settings/Integrations.tsx:502
-#: src/components/settings/Integrations.tsx:1433
-#: src/components/settings/Integrations.tsx:1592
-#: src/components/settings/Integrations.tsx:1659
-#: src/components/settings/Integrations.tsx:2424
+#: src/components/settings/Integrations.tsx:295
+#: src/components/settings/Integrations.tsx:338
+#: src/components/settings/Integrations.tsx:481
+#: src/components/settings/Integrations.tsx:504
+#: src/components/settings/Integrations.tsx:1439
+#: src/components/settings/Integrations.tsx:1598
+#: src/components/settings/Integrations.tsx:1665
+#: src/components/settings/Integrations.tsx:2451
 #: src/components/settings/WebhookCard.tsx:192
 #: src/components/settings/WebhookCard.tsx:236
 #: src/components/settings/WebhookCard.tsx:278
