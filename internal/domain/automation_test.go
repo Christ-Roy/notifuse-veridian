@@ -1813,3 +1813,115 @@ func TestAutomation_HasReplyBranchNode(t *testing.T) {
 		assert.True(t, a.HasReplyBranchNode())
 	})
 }
+
+// TestExitContactRequest_Validate couvre la validation de la requête
+// d'/api/automations.exitContact (Veridian 2026-10-03, mission "pilotage
+// pixel") : workspace_id toujours requis, ET soit contact_automation_id,
+// soit la paire (automation_id, email).
+func TestExitContactRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     *ExitContactRequest
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid via contact_automation_id",
+			req:     &ExitContactRequest{WorkspaceID: "ws1", ContactAutomationID: "ca-1"},
+			wantErr: false,
+		},
+		{
+			name:    "valid via automation_id+email",
+			req:     &ExitContactRequest{WorkspaceID: "ws1", AutomationID: "auto-1", Email: "a@b.com"},
+			wantErr: false,
+		},
+		{
+			name:    "valid with explicit reason",
+			req:     &ExitContactRequest{WorkspaceID: "ws1", ContactAutomationID: "ca-1", Reason: "unsubscribed"},
+			wantErr: false,
+		},
+		{
+			name:    "missing workspace_id",
+			req:     &ExitContactRequest{ContactAutomationID: "ca-1"},
+			wantErr: true,
+			errMsg:  "workspace_id is required",
+		},
+		{
+			name:    "neither contact_automation_id nor automation_id+email",
+			req:     &ExitContactRequest{WorkspaceID: "ws1"},
+			wantErr: true,
+			errMsg:  "either contact_automation_id",
+		},
+		{
+			name:    "automation_id without email is not enough",
+			req:     &ExitContactRequest{WorkspaceID: "ws1", AutomationID: "auto-1"},
+			wantErr: true,
+			errMsg:  "either contact_automation_id",
+		},
+		{
+			name:    "email without automation_id is not enough",
+			req:     &ExitContactRequest{WorkspaceID: "ws1", Email: "a@b.com"},
+			wantErr: true,
+			errMsg:  "either contact_automation_id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestResetContactRequest_Validate couvre la validation de la requête
+// d'/api/automations.resetContact — même contrat que ExitContactRequest,
+// sans le champ reason (le reset n'en a pas besoin, il vide exit_reason).
+func TestResetContactRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     *ResetContactRequest
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid via contact_automation_id",
+			req:     &ResetContactRequest{WorkspaceID: "ws1", ContactAutomationID: "ca-1"},
+			wantErr: false,
+		},
+		{
+			name:    "valid via automation_id+email",
+			req:     &ResetContactRequest{WorkspaceID: "ws1", AutomationID: "auto-1", Email: "a@b.com"},
+			wantErr: false,
+		},
+		{
+			name:    "missing workspace_id",
+			req:     &ResetContactRequest{ContactAutomationID: "ca-1"},
+			wantErr: true,
+			errMsg:  "workspace_id is required",
+		},
+		{
+			name:    "neither contact_automation_id nor automation_id+email",
+			req:     &ResetContactRequest{WorkspaceID: "ws1"},
+			wantErr: true,
+			errMsg:  "either contact_automation_id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
