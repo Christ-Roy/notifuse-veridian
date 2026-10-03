@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -178,6 +179,33 @@ func TestWriteAuthAwareError(t *testing.T) {
 		var response map[string]string
 		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
 		assert.Equal(t, "Failed to do the thing", response["error"])
+	})
+
+	// Mission 2026-10-03 "401/403 partout" : domain.PermissionError rejoint
+	// la classification partagee (auparavant reclasse a la main dans
+	// veridian_contact_breakdown_handler.go via un errors.As duplique).
+	t.Run("PermissionError maps to 403", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		permErr := domain.NewPermissionError(domain.PermissionResourceContacts, domain.PermissionTypeRead, "read access to contacts required")
+		WriteAuthAwareError(w, permErr, "fallback", http.StatusInternalServerError)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		var response map[string]string
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, "read access to contacts required", response["error"])
+	})
+
+	// Preuve que la classification traverse N couches de %w (la forme reelle
+	// produite par le service layer : fmt.Errorf("failed to authenticate
+	// user: %w", err), parfois elle-meme re-wrappee par un service appelant
+	// un autre service). Un %v a la place casserait ce test.
+	t.Run("multi-layer %w wrap still classifies (the real service-layer shape)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		inner := &domain.ErrAuthenticationFailed{Message: "api key revoked"}
+		wrapped := fmt.Errorf("list service: %w", fmt.Errorf("failed to authenticate user: %w", inner))
+		WriteAuthAwareError(w, wrapped, "fallback", http.StatusInternalServerError)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
 

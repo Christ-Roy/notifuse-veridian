@@ -2,10 +2,12 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -249,3 +251,42 @@ func TestWriteJSONErrorCode_InvalidPlan_400(t *testing.T) {
 	require.NotNil(t, body.Details)
 	assert.Equal(t, "freemium", body.Details["plan"])
 	assert.NotNil(t, body.Details["allowed_plans"])}
+
+// WriteAuthAwareErrorCode est l'equivalent WriteJSONErrorCode de
+// WriteAuthAwareError : meme classification partagee (classifyAuthError),
+// forme machine-readable {code, error, message}. Mission 2026-10-03
+// "401/403 partout" : les handlers veridian_*.go (HMAC+admin) retombaient
+// sur ErrCodeInternalError/500 sur une cle revoquee ou sans droit.
+func TestWriteAuthAwareErrorCode(t *testing.T) {
+	t.Run("ErrAuthenticationFailed maps to 401/ErrCodeUnauthorized", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		WriteAuthAwareErrorCode(w, &domain.ErrAuthenticationFailed{Message: "api key revoked"}, ErrCodeInternalError, "fallback", http.StatusInternalServerError, nil)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		var response VeridianErrorResponse
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, ErrCodeUnauthorized, response.Code)
+		assert.Equal(t, "api key revoked", response.Error)
+	})
+
+	t.Run("ErrUnauthorized maps to 403/ErrCodeForbidden", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		WriteAuthAwareErrorCode(w, &domain.ErrUnauthorized{Message: "not authorized for this workspace"}, ErrCodeInternalError, "fallback", http.StatusInternalServerError, nil)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		var response VeridianErrorResponse
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, ErrCodeForbidden, response.Code)
+	})
+
+	t.Run("unrelated error falls back unchanged (never worse than before)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		WriteAuthAwareErrorCode(w, errors.New("db exploded"), ErrCodeInternalError, "fallback message", http.StatusInternalServerError, nil)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		var response VeridianErrorResponse
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+		assert.Equal(t, ErrCodeInternalError, response.Code)
+		assert.Equal(t, "fallback message", response.Error)
+	})
+}

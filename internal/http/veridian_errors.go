@@ -117,3 +117,26 @@ func WriteJSONErrorCode(w http.ResponseWriter, code, message string, statusCode 
 		Details: details,
 	})
 }
+
+// WriteAuthAwareErrorCode est l'equivalent WriteJSONErrorCode de
+// WriteAuthAwareError (internal/http/utils.go) : meme classification
+// partagee (classifyAuthError), mais forme de reponse machine-readable
+// {code, error, message, details} utilisee par les routes veridian/admin.
+//
+// === Veridian patch — mesure prod 2026-10-03 (mission "401/403 partout") ===
+// Les handlers veridian_*.go appelaient WriteJSONErrorCode(w,
+// ErrCodeInternalError, ..., http.StatusInternalServerError, nil) sans
+// jamais distinguer une cle revoquee (401) ou sans droit (403) d'une
+// vraie panne — ce correctif branche ces call sites sur la MEME
+// classification que les routes app, sans dupliquer la logique.
+func WriteAuthAwareErrorCode(w http.ResponseWriter, err error, fallbackCode, fallbackMessage string, fallbackStatus int, details map[string]interface{}) {
+	if message, status, ok := classifyAuthError(err); ok {
+		code := ErrCodeForbidden
+		if status == http.StatusUnauthorized {
+			code = ErrCodeUnauthorized
+		}
+		WriteJSONErrorCode(w, code, message, status, nil)
+		return
+	}
+	WriteJSONErrorCode(w, fallbackCode, fallbackMessage, fallbackStatus, details)
+}

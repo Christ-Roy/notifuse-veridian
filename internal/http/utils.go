@@ -39,17 +39,48 @@ func WriteJSONError(w http.ResponseWriter, message string, statusCode int) {
 // partout où un handler appelle ce chemin, sans toucher 46 fichiers à la
 // main.
 func WriteAuthAwareError(w http.ResponseWriter, err error, fallbackMessage string, fallbackStatus int) {
-	var authErr *domain.ErrAuthenticationFailed
-	if errors.As(err, &authErr) {
-		WriteJSONError(w, authErr.Error(), http.StatusUnauthorized)
-		return
-	}
-	var unauthorized *domain.ErrUnauthorized
-	if errors.As(err, &unauthorized) {
-		WriteJSONError(w, unauthorized.Error(), http.StatusForbidden)
+	if code, status, ok := classifyAuthError(err); ok {
+		WriteJSONError(w, code, status)
 		return
 	}
 	WriteJSONError(w, fallbackMessage, fallbackStatus)
+}
+
+// classifyAuthError is the SINGLE place that recognizes the auth/permission
+// error types produced by the service layer and maps them to the right HTTP
+// status + message. Both WriteAuthAwareError (JSON {"error":...} shape used
+// by the app-facing routes) and WriteAuthAwareErrorCode (machine-readable
+// {"code":...} shape used by the veridian/* HMAC+admin routes) delegate to
+// this one function, so a route never has to re-implement the classification
+// (no more string-matching like the old isAuthFailure helper).
+//
+// === Veridian patch — mesure prod 2026-10-03 (mission "401/403 partout") ===
+// Avant ce correctif, cette classification n'etait appliquee que dans
+// workspace_handler.go et list_handler.go : les ~44 autres handlers (toutes
+// les routes contacts/templates/broadcasts/segments/automations/
+// transactional/webhooks/analytics/veridian admin...) retombaient sur un 500
+// generique sur une cle API revoquee ou sans droit sur le workspace, alors
+// que le service layer renvoie deja le bon type d'erreur a travers tout le
+// chemin (verifie : CHAQUE wrap de AuthenticateUserForWorkspace dans
+// internal/service/*.go utilise fmt.Errorf("...: %w", err), jamais %v, donc
+// errors.As traverse la chaine entiere quel que soit le nombre de couches de
+// service). Ajoute aussi domain.PermissionError (403), jusqu'ici reclasse a
+// la main dans veridian_contact_breakdown_handler.go — desormais un seul
+// appel a WriteAuthAwareError couvre les trois cas.
+func classifyAuthError(err error) (message string, status int, ok bool) {
+	var authErr *domain.ErrAuthenticationFailed
+	if errors.As(err, &authErr) {
+		return authErr.Error(), http.StatusUnauthorized, true
+	}
+	var unauthorized *domain.ErrUnauthorized
+	if errors.As(err, &unauthorized) {
+		return unauthorized.Error(), http.StatusForbidden, true
+	}
+	var permErr *domain.PermissionError
+	if errors.As(err, &permErr) {
+		return permErr.Error(), http.StatusForbidden, true
+	}
+	return "", 0, false
 }
 
 // writeJSON writes a JSON response with the given status code and data.
