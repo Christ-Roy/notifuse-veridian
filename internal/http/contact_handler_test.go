@@ -207,6 +207,17 @@ func TestContactHandler_HandleCount(t *testing.T) {
 			expectedCount:  0,
 		},
 		{
+			// Mission 2026-10-03 "401/403 partout".
+			name:        "Count Contacts Auth Failure 401",
+			method:      http.MethodGet,
+			queryParams: "workspace_id=workspace123",
+			setupMock: func(m *mocks.MockContactService) {
+				m.EXPECT().CountContacts(gomock.Any(), "workspace123").Return(0, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedCount:  0,
+		},
+		{
 			name:        "Missing Workspace ID",
 			method:      http.MethodGet,
 			queryParams: "",

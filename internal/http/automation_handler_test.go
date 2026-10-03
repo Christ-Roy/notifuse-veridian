@@ -177,6 +177,21 @@ func TestAutomationHandler_Get(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
+
+	// Mission 2026-10-03 "401/403 partout" : une cle API revoquee ou sans
+	// droit sur ce workspace ne doit plus etre ecrasee en 500 generique.
+	t.Run("auth failure - 401 not 500", func(t *testing.T) {
+		automationSvc.EXPECT().Get(gomock.Any(), "workspace-123", "auto-123").
+			Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/automations.get?workspace_id=workspace-123&automation_id=auto-123", nil)
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
 }
 
 func TestAutomationHandler_List(t *testing.T) {

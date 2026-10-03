@@ -124,6 +124,26 @@ func TestVeridianReputationStatusHandler_ServiceError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
+// Mission 2026-10-03 "401/403 partout" : remplace l'ancien isAuthFailure
+// (matching par prefixe de message) par la classification partagee
+// (WriteAuthAwareError) -- preuve que cle revoquee -> 401, pas 500.
+func TestVeridianReputationStatusHandler_AuthFailure_401(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	h, svc := newReputationStatusHandler(ctrl)
+
+	svc.EXPECT().GetReputationStatus(gomock.Any(), gomock.Any()).
+		Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+
+	r := httptest.NewRequest(http.MethodGet, "/api/veridian/messages.reputationStatus?workspace_id=ws123", nil)
+	rec := httptest.NewRecorder()
+
+	h.handleReputationStatus(rec, r)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
 func TestVeridianReputationStatusHandler_RegisterRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

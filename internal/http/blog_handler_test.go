@@ -124,6 +124,27 @@ func TestBlogHandler_HandleListCategories(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
+
+	// Mission 2026-10-03 "401/403 partout" : revoked/scoped-wrong-workspace
+	// must not be masked as a generic 500.
+	t.Run("Auth failure - 401 not 500", func(t *testing.T) {
+		handler, mockService, mockLogger, ctrl := setupBlogHandler(t)
+		defer ctrl.Finish()
+
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		mockService.EXPECT().
+			ListCategories(gomock.Any()).
+			Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/blogCategories.list?workspace_id=ws-123", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleListCategories(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
 }
 
 func TestBlogHandler_HandleGetCategory(t *testing.T) {

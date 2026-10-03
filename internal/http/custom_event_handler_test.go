@@ -142,6 +142,20 @@ func TestCustomEventHandler_UpsertCustomEvent(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 		},
 		{
+			// Mission 2026-10-03 "401/403 partout".
+			name: "Auth Failure 401",
+			requestBody: domain.UpsertCustomEventRequest{
+				WorkspaceID: "workspace123",
+				Email:       "test@example.com",
+				EventName:   "purchase",
+				ExternalID:  "order-123",
+			},
+			setupMock: func(m *mocks.MockCustomEventService) {
+				m.EXPECT().UpsertEvent(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
 			name: "Permission Error",
 			requestBody: domain.UpsertCustomEventRequest{
 				WorkspaceID: "workspace123",

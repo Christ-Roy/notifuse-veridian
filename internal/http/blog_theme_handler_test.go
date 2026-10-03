@@ -162,6 +162,27 @@ func TestBlogThemeHandler_HandleCreate(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
+
+	// Mission 2026-10-03 "401/403 partout".
+	t.Run("Auth failure - 401 not 500", func(t *testing.T) {
+		handler, mockService, mockLogger, ctrl := setupBlogThemeHandler(t)
+		defer ctrl.Finish()
+
+		mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+		mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+
+		mockService.EXPECT().
+			CreateTheme(gomock.Any(), gomock.Any()).
+			Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+
+		body, _ := json.Marshal(map[string]interface{}{"files": map[string]interface{}{}})
+		req := httptest.NewRequest(http.MethodPost, "/api/blogThemes.create?workspace_id=ws-123", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		handler.HandleCreate(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
 }
 
 func TestBlogThemeHandler_HandleGet(t *testing.T) {

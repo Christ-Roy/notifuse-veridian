@@ -1,6 +1,9 @@
 package http
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -101,14 +104,35 @@ func TestAgentHandler_HandleInstallScript_MethodNotAllowed(t *testing.T) {
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
-func TestAgentHandler_HandleCLIBinary_NotConfigured503(t *testing.T) {
+// Mission 2026-10-03 "CLI distribue" : sans cliBinaryPath configure,
+// /agent/notifuse ne renvoie plus 503 -- il sert le CLI EMBARQUE au build
+// (agent_cli_embed.go), exactement comme /agent/skill.tar.gz sert le skill
+// embarque. AGENT_CLI_BINARY_PATH reste une bascule optionnelle, plus un
+// prerequis.
+func TestAgentHandler_HandleCLIBinary_EmbeddedByDefault(t *testing.T) {
 	_, _, mux := setupAgentHandlerTest(t, "")
 
 	req := httptest.NewRequest(http.MethodGet, "/agent/notifuse", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/gzip", w.Header().Get("Content-Type"))
+	assert.NotEmpty(t, w.Body.Bytes())
+
+	gz, err := gzip.NewReader(bytes.NewReader(w.Body.Bytes()))
+	require.NoError(t, err)
+	tr := tar.NewReader(gz)
+	names := map[string]bool{}
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			break
+		}
+		names[hdr.Name] = true
+	}
+	assert.True(t, names["notifuse"], "tarball must contain the notifuse entrypoint")
+	assert.True(t, names["notifuse_common.py"], "tarball must contain notifuse_common.py next to it")
 }
 
 func TestAgentHandler_HandleCLIBinary_ConfiguredButMissingFile503(t *testing.T) {
@@ -249,4 +273,23 @@ func TestAgentHandler_HandleExchangeToken_ServiceErrorStays500(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// Mission 2026-10-03 "401/403 partout" : si jamais ExchangeAgentInstallToken
+// finit par emprunter un chemin qui authentifie (ex. future evolution liant
+// le jeton a un contexte utilisateur) et renvoie une erreur typee auth, le
+// handler ne doit PAS l'ecraser en 500 generique -- WriteAuthAwareError (plutot
+// que l'ancien WriteJSONError nu) le garantit meme sur CETTE route par defaut.
+func TestAgentHandler_HandleExchangeToken_AuthErrorNot500(t *testing.T) {
+	_, workspaceSvc, mux := setupAgentHandlerTest(t, "")
+
+	workspaceSvc.EXPECT().
+		ExchangeAgentInstallToken(gomock.Any(), "x").
+		Return(nil, &domain.ErrAuthenticationFailed{Message: "caller identity invalid"})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agent.exchangeToken", strings.NewReader(`{"token":"x"}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

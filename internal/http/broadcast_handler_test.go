@@ -189,6 +189,24 @@ func TestHandleList(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 
+	// Mission 2026-10-03 "401/403 partout".
+	t.Run("AuthFailure_401", func(t *testing.T) {
+		mockLoggerWithField := pkgmocks.NewMockLogger(ctrl)
+		mockLogger.EXPECT().WithField("error", "api key revoked").Return(mockLoggerWithField)
+		mockLoggerWithField.EXPECT().Error("Failed to list broadcasts")
+
+		mockService.EXPECT().
+			ListBroadcasts(gomock.Any(), gomock.Any()).
+			Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/broadcasts.list?workspace_id=workspace123", nil)
+		w := httptest.NewRecorder()
+
+		handler.HandleList(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
 	// Test method not allowed
 	t.Run("MethodNotAllowed", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/broadcasts.list?workspace_id=workspace123", nil)

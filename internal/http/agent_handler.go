@@ -23,9 +23,11 @@ import (
 //     par construction (le jeton EST le secret,
 //     comme un lien magique), mais consommé
 //     atomiquement une seule fois
-//   - GET  /agent/notifuse        binaire/script CLI utilisateur (build
-//     séparé, skill notifuse-cli — 503 tant que
-//     AgentCLIBinaryPath n'est pas configuré)
+//   - GET  /agent/notifuse        CLI utilisateur (notifuse + notifuse_common.py,
+//     skill notifuse-cli), en tar.gz EMBARQUE au
+//     build (cf. agent_cli_embed.go) ; AgentCLIBinaryPath
+//     reste une bascule optionnelle vers un fichier
+//     local si jamais configure
 //   - GET  /agent/skill.tar.gz    skill + AGENTS.md distribués (embarqués au
 //     build, cf. agent_assets.go)
 //
@@ -38,9 +40,11 @@ type AgentHandler struct {
 	apiHost          string
 }
 
-// NewAgentHandler crée le handler. cliBinaryPath peut être vide (self-hosted
-// sans CLI publié encore) : /agent/notifuse renvoie alors 503 au lieu de
-// planter. apiHost est l'hôte (sans schéma) que le script d'installation
+// NewAgentHandler crée le handler. cliBinaryPath est vide par défaut : dans
+// ce cas /agent/notifuse sert le CLI EMBARQUÉ (agent_cli_embed.go), jamais
+// un 503 -- un chemin explicite reste possible pour une instance self-hosted
+// qui veut servir un build local à la place. apiHost est l'hôte (sans
+// schéma) que le script d'installation
 // doit appeler pour l'échange de jeton / le téléchargement du CLI et du
 // skill — dérivé de config.APIEndpoint, PAS du header Host de la requête
 // (un Host usurpé ne doit jamais se retrouver dans un script qu'on fait
@@ -80,33 +84,53 @@ func (h *AgentHandler) handleInstallScript(w http.ResponseWriter, r *http.Reques
 	_, _ = w.Write([]byte(script))
 }
 
-// handleCLIBinary serves the user-scoped CLI (built separately, skill
-// notifuse-cli — not this mission's to build, only to distribute). Returns
-// 503 with a clear body when AgentCLIBinaryPath isn't configured, instead
-// of a confusing 404 or a panic on a missing file.
+// handleCLIBinary serves the user-scoped CLI (notifuse + notifuse_common.py,
+// skill notifuse-cli) as a tar.gz -- EMBEDDED in the binary by default (see
+// agent_cli_embed.go), so this route no longer depends on a filesystem path
+// or an env var that could be forgotten at deploy time (that WAS the cause
+// of the permanent 503 in prod before this mission: AGENT_CLI_BINARY_PATH
+// was simply never set). AgentCLIBinaryPath, if explicitly configured,
+// still overrides the embedded copy with a local file -- kept as an escape
+// hatch for a self-hosted instance that wants to pin a different build --
+// but the embedded tarball is what ships by default and is what prod now
+// serves.
 func (h *AgentHandler) handleCLIBinary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		WriteJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.cliBinaryPath == "" {
-		WriteJSONError(w, "agent CLI binary not yet published on this instance", http.StatusServiceUnavailable)
+
+	if h.cliBinaryPath != "" {
+		f, err := os.Open(h.cliBinaryPath)
+		if err != nil {
+			if h.logger != nil {
+				h.logger.WithField("path", h.cliBinaryPath).WithField("error", err.Error()).Error("agent CLI binary configured but unreadable")
+			}
+			WriteJSONError(w, "agent CLI binary not yet published on this instance", http.StatusServiceUnavailable)
+			return
+		}
+		defer func() { _ = f.Close() }()
+
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="notifuse"`)
+		w.Header().Set("Cache-Control", "no-store")
+		http.ServeContent(w, r, "notifuse", fileModTimeOrZero(h.cliBinaryPath), f)
 		return
 	}
-	f, err := os.Open(h.cliBinaryPath)
+
+	data, err := buildAgentCLITarball()
 	if err != nil {
 		if h.logger != nil {
-			h.logger.WithField("path", h.cliBinaryPath).WithField("error", err.Error()).Error("agent CLI binary configured but unreadable")
+			h.logger.WithField("error", err.Error()).Error("failed to build agent CLI tarball")
 		}
-		WriteJSONError(w, "agent CLI binary not yet published on this instance", http.StatusServiceUnavailable)
+		WriteAuthAwareError(w, err, "agent CLI not available on this instance", http.StatusInternalServerError)
 		return
 	}
-	defer func() { _ = f.Close() }()
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", `attachment; filename="notifuse"`)
-	w.Header().Set("Cache-Control", "no-store")
-	http.ServeContent(w, r, "notifuse", fileModTimeOrZero(h.cliBinaryPath), f)
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", `attachment; filename="notifuse.tar.gz"`)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 func fileModTimeOrZero(path string) time.Time {
@@ -262,14 +286,28 @@ if ! grep -q '^NOTIFUSE_API_KEY=' "$ENV_FILE"; then
   exit 1
 fi
 
+# NOTIFUSE_STRICT=1 : refuse tout repli sur une super cle (mode operateur)
+# si jamais NOTIFUSE_API_KEY etait absente -- c'est le mode a donner a un
+# client, jamais le mode bastion.
+printf 'NOTIFUSE_STRICT=1\n' >> "$ENV_FILE"
+
 echo "Credentials written to $ENV_FILE (chmod 600). Never printed." >&2
 
 echo "Installing notifuse CLI..." >&2
-mkdir -p "$HOME/bin"
-if curl -fsS "https://${API_HOST}/agent/notifuse" -o "$HOME/bin/notifuse" 2>/dev/null; then
-  chmod +x "$HOME/bin/notifuse"
-  echo "notifuse CLI installed to $HOME/bin/notifuse" >&2
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+TMP_CLI_TAR=$(mktemp)
+if curl -fsS "https://${API_HOST}/agent/notifuse" -o "$TMP_CLI_TAR" 2>/dev/null; then
+  tar -xzf "$TMP_CLI_TAR" -C "$BIN_DIR"
+  chmod +x "$BIN_DIR/notifuse"
+  rm -f "$TMP_CLI_TAR"
+  echo "notifuse CLI installed to $BIN_DIR/notifuse" >&2
+  case ":$PATH:" in
+    *":$BIN_DIR:"*) ;;
+    *) echo "NOTE: $BIN_DIR is not on your PATH -- add it (export PATH=\"$BIN_DIR:\$PATH\") or call it by full path." >&2 ;;
+  esac
 else
+  rm -f "$TMP_CLI_TAR"
   echo "notifuse CLI not available yet on this instance — skipping (credentials are installed, retry later for the CLI)." >&2
 fi
 

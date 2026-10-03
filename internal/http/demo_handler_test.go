@@ -10,6 +10,7 @@ import (
 	"github.com/Notifuse/notifuse/config"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/domain/mocks"
 
 	"github.com/Notifuse/notifuse/internal/service"
 
@@ -30,6 +31,43 @@ func createTestDemoService(cfg *config.Config, serviceLogger logger.Logger) *ser
 		cfg,
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
+}
+
+// createTestDemoServiceWithWorkspaceRepo is createTestDemoService but lets the
+// caller inject a workspaceRepo mock -- used to prove that an error surfaced
+// early in ResetDemo (deleteAllWorkspaces -> workspaceRepo.List) is classified
+// 401/403 by the HTTP layer instead of masked as a generic 500 (mission
+// 2026-10-03 "401/403 partout"). ResetDemo itself has no workspace_id / caller
+// identity of its own, so this is a defensive, not a load-bearing, fix -- but
+// WriteAuthAwareError must still behave correctly here like everywhere else.
+func createTestDemoServiceWithWorkspaceRepo(cfg *config.Config, serviceLogger logger.Logger, workspaceRepo domain.WorkspaceRepository) *service.DemoService {
+	return service.NewDemoService(
+		serviceLogger,
+		cfg,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		workspaceRepo,
+		nil, nil, nil, nil, nil, nil,
+	)
+}
+
+func TestDemoHandler_ResetDemo_AuthFailure401(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cfg := &config.Config{RootEmail: "test@example.com", Security: config.SecurityConfig{SecretKey: "test-secret"}}
+	mockLogger := logger.NewLoggerWithLevel("disabled")
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockRepo.EXPECT().List(gomock.Any()).Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+
+	svc := createTestDemoServiceWithWorkspaceRepo(cfg, mockLogger, mockRepo)
+	handler := NewDemoHandler(svc, mockLogger)
+
+	hmac := domain.ComputeEmailHMAC(cfg.RootEmail, cfg.Security.SecretKey)
+	req := httptest.NewRequest(http.MethodGet, "/api/demo.reset?hmac="+hmac, nil)
+	w := httptest.NewRecorder()
+	handler.handleResetDemo(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestNewDemoHandler(t *testing.T) {

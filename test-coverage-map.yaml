@@ -107,3 +107,16 @@
     + assemble la réponse par intégration est testé dans
     veridian_reputation_status_service_test.go ; le transport HTTP (JSON in/out,
     codes d'erreur, routing GET+POST) dans veridian_reputation_status_handler_test.go.
+
+- sources:
+    - internal/http/agent_cli_embed.go
+  covered_by:
+    - internal/http/agent_handler_test.go
+  reason: |
+    buildAgentCLITarball() n'a pas de logique propre a isoler : c'est le
+    meme patron que agent_assets.go (deja couvert via handleSkillTarball),
+    go:embed + tar.gz, sync.Once. Exerce par
+    TestAgentHandler_HandleCLIBinary_EmbeddedByDefault (mission 2026-10-03
+    "CLI distribue") qui appelle la vraie route /agent/notifuse, decompresse
+    le tar.gz recu et verifie la presence des deux fichiers (notifuse +
+    notifuse_common.py) a plat dans l'archive.

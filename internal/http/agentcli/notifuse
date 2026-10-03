@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""notifuse — CLI UTILISATEUR Notifuse Veridian, scopé à UN workspace.
+
+Point d'entrée USER du module partagé `notifuse_common.py` (même fichier
+que `notifuse-admin` — AUCUNE logique dupliquée, cf mission Robert
+2026-10-03 "CLI admin root + CLI user scopé").
+
+N'utilise QUE NOTIFUSE_API_KEY (variable d'environnement du PROCESS, ou
+--key) : jamais le secret Hub (NOTIFUSE_HUB_API_SECRET), jamais la clé
+admin de ~/credentials/.all-creds.env. Refuse côté client toute commande
+admin/HMAC/owner cross-workspace (liste WORKSPACE_COMMANDS) et tout
+--workspace différent de NOTIFUSE_WORKSPACE quand cette variable est posée.
+
+Compatibilité : les signatures `notifuse <cmd> <workspace>` existantes
+(skills, scripts) sont inchangées.
+
+Mode opérateur : si aucune clé scopée n'est fournie et que la super clé
+Hub est disponible (contexte bastion), le CLI continue de fonctionner en
+l'affichant clairement ("mode opérateur (super clé)"). NOTIFUSE_STRICT=1
+interdit ce repli — c'est le mode à donner à un client.
+
+Détail : ~/.claude/skills/notifuse-cli/SKILL.md
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from notifuse_common import main  # noqa: E402
+
+if __name__ == "__main__":
+    main(mode="user")

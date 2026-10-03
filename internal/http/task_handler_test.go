@@ -212,6 +212,38 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	})
 
+	t.Run("Task execution error - auth failure not 500", func(t *testing.T) {
+		// Mission 2026-10-03 "401/403 partout" : ErrTaskExecution.Err enveloppe
+		// une erreur typee auth -- WriteAuthAwareError doit la retrouver via
+		// errors.As (ErrTaskExecution implemente Unwrap) et repondre 401, pas 500.
+		reqBody := domain.ExecuteTaskRequest{
+			WorkspaceID: "workspace1",
+			ID:          "task123",
+		}
+
+		reqJSON, _ := json.Marshal(reqBody)
+
+		execErr := &domain.ErrTaskExecution{
+			TaskID: reqBody.ID,
+			Reason: "processing failed",
+			Err:    &domain.ErrAuthenticationFailed{Message: "api key revoked"},
+		}
+		mockTaskService.EXPECT().
+			GetTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			Return(&domain.Task{MaxRuntime: 60}, nil)
+		mockTaskService.EXPECT().
+			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID, gomock.Any()).
+			Return(execErr)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.execute", bytes.NewBuffer(reqJSON))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		handler.ExecuteTask(rec, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
 	t.Run("Task timeout error", func(t *testing.T) {
 		// Setup
 		reqBody := domain.ExecuteTaskRequest{
@@ -242,6 +274,30 @@ func TestTaskHandler_ExecuteTask(t *testing.T) {
 
 		// Verify response has correct status code for timeout
 		assert.Equal(t, http.StatusGatewayTimeout, rec.Code)
+	})
+
+	t.Run("Generic auth failure error - 401 not 500 (switch default branch)", func(t *testing.T) {
+		reqBody := domain.ExecuteTaskRequest{
+			WorkspaceID: "workspace1",
+			ID:          "task123",
+		}
+
+		reqJSON, _ := json.Marshal(reqBody)
+
+		mockTaskService.EXPECT().
+			GetTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID).
+			Return(&domain.Task{MaxRuntime: 60}, nil)
+		mockTaskService.EXPECT().
+			ExecuteTask(gomock.Any(), reqBody.WorkspaceID, reqBody.ID, gomock.Any()).
+			Return(&domain.ErrUnauthorized{Message: "not authorized for this workspace"})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/tasks.execute", bytes.NewBuffer(reqJSON))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		handler.ExecuteTask(rec, req)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code)
 	})
 }
 

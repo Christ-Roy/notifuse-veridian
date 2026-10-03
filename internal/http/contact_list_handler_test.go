@@ -129,6 +129,16 @@ func TestContactListHandler_HandleGetByIDs(t *testing.T) {
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
+		{
+			// Mission 2026-10-03 "401/403 partout".
+			name:        "Auth Failure 401",
+			method:      http.MethodGet,
+			queryParams: "workspace_id=workspace123&email=test@example.com&list_id=list123",
+			setupMock: func(m *mocks.MockContactListService) {
+				m.EXPECT().GetContactListByIDs(gomock.Any(), "workspace123", "test@example.com", "list123").Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
 	}
 
 	for _, tt := range tests {

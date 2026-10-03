@@ -236,6 +236,22 @@ func TestInboundWebhookEventHandler_handleList_ServiceError(t *testing.T) {
 	assert.Equal(t, "Failed to list inbound webhook events", response["error"])
 }
 
+
+// Mission 2026-10-03 "401/403 partout".
+func TestInboundWebhookEventHandler_handleList_AuthFailure401(t *testing.T) {
+	handler, mockService, _ := setupInboundWebhookEventHandlerTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/inboundWebhookEvents.list?workspace_id=ws123", nil)
+	w := httptest.NewRecorder()
+
+	mockService.EXPECT().
+		ListEvents(gomock.Any(), "ws123", gomock.Any()).
+		Return(nil, &domain.ErrAuthenticationFailed{Message: "api key revoked"})
+
+	handler.handleList(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
 func TestInboundWebhookEventHandler_handleList_Success(t *testing.T) {
 	handler, mockService, _ := setupInboundWebhookEventHandlerTest(t)
 
