@@ -2,5 +2,9 @@
 # Garde-fou central Veridian (trivy, secrets, palier « rapide » de
 # scripts/ci/controles.tsv). La mécanique ne vit pas ici :
 # ~/nomad-veridian/standards/controles-portables/ — `gardes --help`.
-G="$(command -v gardes || echo "$HOME/nomad-veridian/standards/controles-portables/gardes")"
+G="$(command -v gardes 2>/dev/null || echo "$HOME/nomad-veridian/standards/controles-portables/gardes")"
+if [ ! -x "$G" ]; then
+  echo "gardes — NON ABOUTI : introuvable sur cette machine ($G). Push accepté SANS garde." >&2
+  exit 0
+fi
 exec "$G" pre-push "$@"
