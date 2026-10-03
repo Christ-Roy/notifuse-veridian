@@ -58,7 +58,7 @@ func (h *CustomEventHandler) UpsertCustomEvent(w http.ResponseWriter, r *http.Re
 			WriteJSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		WriteJSONError(w, "Failed to upsert custom event", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to upsert custom event", http.StatusInternalServerError)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (h *CustomEventHandler) ImportCustomEvents(w http.ResponseWriter, r *http.R
 			WriteJSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		WriteJSONError(w, "Failed to import custom events", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to import custom events", http.StatusInternalServerError)
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *CustomEventHandler) ListCustomEvents(w http.ResponseWriter, r *http.Req
 			WriteJSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		WriteJSONError(w, "Failed to list custom events", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list custom events", http.StatusInternalServerError)
 		return
 	}
 

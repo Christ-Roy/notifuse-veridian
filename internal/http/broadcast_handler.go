@@ -89,7 +89,7 @@ func (h *BroadcastHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	response, err := h.service.ListBroadcasts(r.Context(), params)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to list broadcasts")
-		WriteJSONError(w, "Failed to list broadcasts", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list broadcasts", http.StatusInternalServerError)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (h *BroadcastHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get broadcast")
-		WriteJSONError(w, "Failed to get broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -175,7 +175,7 @@ func (h *BroadcastHandler) HandleCreate(w http.ResponseWriter, r *http.Request) 
 	broadcast, err := h.service.CreateBroadcast(r.Context(), &req)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to create broadcast")
-		WriteJSONError(w, "Failed to create broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to create broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -206,7 +206,7 @@ func (h *BroadcastHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get existing broadcast")
-		WriteJSONError(w, "Failed to get existing broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get existing broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *BroadcastHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) 
 	updatedBroadcast, err := h.service.UpdateBroadcast(r.Context(), &req)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to update broadcast")
-		WriteJSONError(w, "Failed to update broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to update broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -254,7 +254,7 @@ func (h *BroadcastHandler) HandleSchedule(w http.ResponseWriter, r *http.Request
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to schedule broadcast")
-		WriteJSONError(w, "Failed to schedule broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to schedule broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -289,7 +289,7 @@ func (h *BroadcastHandler) HandlePause(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to pause broadcast")
-		WriteJSONError(w, "Failed to pause broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to pause broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -324,7 +324,7 @@ func (h *BroadcastHandler) HandleResume(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to resume broadcast")
-		WriteJSONError(w, "Failed to resume broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to resume broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -359,7 +359,7 @@ func (h *BroadcastHandler) HandleCancel(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to cancel broadcast")
-		WriteJSONError(w, "Failed to cancel broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to cancel broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -394,7 +394,7 @@ func (h *BroadcastHandler) HandleSendToIndividual(w http.ResponseWriter, r *http
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to send broadcast to individual")
-		WriteJSONError(w, "Failed to send broadcast to individual", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to send broadcast to individual", http.StatusInternalServerError)
 		return
 	}
 
@@ -429,7 +429,7 @@ func (h *BroadcastHandler) HandleDelete(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to delete broadcast")
-		WriteJSONError(w, "Failed to delete broadcast", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to delete broadcast", http.StatusInternalServerError)
 		return
 	}
 
@@ -463,7 +463,7 @@ func (h *BroadcastHandler) HandleGetTestResults(w http.ResponseWriter, r *http.R
 			"broadcast_id": req.ID,
 			"error":        err.Error(),
 		}).Error("Failed to get test results")
-		WriteJSONError(w, "Failed to get test results", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get test results", http.StatusInternalServerError)
 		return
 	}
 
@@ -497,7 +497,7 @@ func (h *BroadcastHandler) HandleSelectWinner(w http.ResponseWriter, r *http.Req
 			"template_id":  req.TemplateID,
 			"error":        err.Error(),
 		}).Error("Failed to select winner")
-		WriteJSONError(w, "Failed to select winner", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to select winner", http.StatusInternalServerError)
 		return
 	}
 
@@ -533,7 +533,7 @@ func (h *BroadcastHandler) HandleRefreshGlobalFeed(w http.ResponseWriter, r *htt
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to refresh global feed")
-		WriteJSONError(w, "Failed to refresh global feed", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to refresh global feed", http.StatusInternalServerError)
 		return
 	}
 
@@ -571,7 +571,7 @@ func (h *BroadcastHandler) HandleTestRecipientFeed(w http.ResponseWriter, r *htt
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to test recipient feed")
-		WriteJSONError(w, "Failed to test recipient feed", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to test recipient feed", http.StatusInternalServerError)
 		return
 	}
 

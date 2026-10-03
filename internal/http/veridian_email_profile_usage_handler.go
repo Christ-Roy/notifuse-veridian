@@ -2,7 +2,6 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	nethttp "net/http"
 
@@ -49,17 +48,8 @@ func (h *VeridianEmailProfileUsageHandler) handle(w nethttp.ResponseWriter, r *n
 	}
 	result, err := h.service.GetEmailProfilesUsage(r.Context(), workspaceID)
 	if err != nil {
-		var permissionErr *domain.PermissionError
-		if errors.As(err, &permissionErr) {
-			WriteJSONError(w, permissionErr.Error(), nethttp.StatusForbidden)
-			return
-		}
-		if isAuthFailure(err) {
-			WriteJSONError(w, "Unauthorized", nethttp.StatusUnauthorized)
-			return
-		}
 		h.logger.WithField("error", err.Error()).Error("Failed to compute email profile usage")
-		WriteJSONError(w, "Failed to compute email profile usage", nethttp.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to compute email profile usage", nethttp.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, nethttp.StatusOK, result)

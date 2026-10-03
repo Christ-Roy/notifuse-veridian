@@ -98,7 +98,7 @@ func (h *VeridianHandler) runDiscovery(w http.ResponseWriter, r *http.Request, r
 		h.logError("discovery_by_email", err, map[string]interface{}{
 			"email_len": len(email),
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 

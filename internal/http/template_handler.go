@@ -55,7 +55,7 @@ func (h *TemplateHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	templates, err := h.service.GetTemplates(r.Context(), req.WorkspaceID, req.Category, req.Channel)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get templates")
-		WriteJSONError(w, "Failed to get templates", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get templates", http.StatusInternalServerError)
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *TemplateHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get template")
-		WriteJSONError(w, "Failed to get template", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get template", http.StatusInternalServerError)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (h *TemplateHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		WriteJSONError(w, "Failed to create template", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to create template", http.StatusInternalServerError)
 		return
 	}
 
@@ -157,7 +157,7 @@ func (h *TemplateHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to update template")
-		WriteJSONError(w, "Failed to update template", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to update template", http.StatusInternalServerError)
 		return
 	}
 
@@ -191,7 +191,7 @@ func (h *TemplateHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to delete template")
-		WriteJSONError(w, "Failed to delete template", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to delete template", http.StatusInternalServerError)
 		return
 	}
 

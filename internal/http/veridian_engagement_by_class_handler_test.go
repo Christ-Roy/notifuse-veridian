@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -131,7 +132,7 @@ func TestVeridianEngagementByClassHandler_AuthFailure(t *testing.T) {
 
 	h, svc := newEngagementByClassHandler(ctrl)
 	svc.EXPECT().GetEngagementByClass(gomock.Any(), gomock.Any()).
-		Return(nil, errors.New("failed to authenticate user: not a member"))
+		Return(nil, fmt.Errorf("failed to authenticate user: %w", &domain.ErrAuthenticationFailed{Message: "not a member"}))
 
 	r := httptest.NewRequest(http.MethodGet, "/api/veridian/messages.engagementByClass?workspace_id=ws123", nil)
 	rec := httptest.NewRecorder()

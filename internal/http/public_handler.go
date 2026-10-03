@@ -96,7 +96,7 @@ func (h *NotificationCenterHandler) handleGetPreferences(w http.ResponseWriter, 
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get contact preferences")
-		WriteJSONError(w, "Failed to get contact preferences", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get contact preferences", http.StatusInternalServerError)
 		return
 	}
 
@@ -139,7 +139,7 @@ func (h *NotificationCenterHandler) handleUpdatePreferences(w http.ResponseWrite
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to update contact preferences")
-		WriteJSONError(w, "Failed to update contact preferences", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to update contact preferences", http.StatusInternalServerError)
 		return
 	}
 
@@ -197,7 +197,7 @@ func (h *NotificationCenterHandler) handleSubscribe(w http.ResponseWriter, r *ht
 			return
 		}
 
-		WriteJSONError(w, "Failed to subscribe to lists", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to subscribe to lists", http.StatusInternalServerError)
 		return
 	}
 
@@ -237,7 +237,7 @@ func (h *NotificationCenterHandler) handleUnsubscribeOneClick(w http.ResponseWri
 
 	if err := h.listService.UnsubscribeFromLists(r.Context(), &req, fromBearerToken); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to unsubscribe from lists")
-		WriteJSONError(w, "Failed to unsubscribe from lists", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to unsubscribe from lists", http.StatusInternalServerError)
 		return
 	}
 
@@ -256,7 +256,7 @@ func (h *NotificationCenterHandler) handleHealth(w http.ResponseWriter, r *http.
 	connManager, err := pkgDatabase.GetConnectionManager()
 	if err != nil {
 		h.logger.Error("Failed to get connection manager")
-		WriteJSONError(w, "Internal server error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -355,7 +355,7 @@ func (h *NotificationCenterHandler) HandleDetectFavicon(w http.ResponseWriter, r
 	// Fetch the webpage using SSRF-safe client
 	resp, err := h.httpClient.Get(req.URL)
 	if err != nil {
-		http.Error(w, "Error fetching URL", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Error fetching URL", http.StatusInternalServerError)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -363,7 +363,7 @@ func (h *NotificationCenterHandler) HandleDetectFavicon(w http.ResponseWriter, r
 	// Parse HTML with a body size limit to prevent resource exhaustion
 	doc, err := goquery.NewDocumentFromReader(io.LimitReader(resp.Body, 5*1024*1024))
 	if err != nil {
-		http.Error(w, "Error parsing HTML", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Error parsing HTML", http.StatusInternalServerError)
 		return
 	}
 

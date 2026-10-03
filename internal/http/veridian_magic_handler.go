@@ -84,7 +84,7 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 			"api_user_id": apiUserID,
 			"error":       err.Error(),
 		}).Error("magic link: failed to load workspaces for api key")
-		WriteJSONErrorCode(w, ErrCodeInternalError, "failed to resolve workspace", http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "failed to resolve workspace", http.StatusInternalServerError, nil)
 		return
 	}
 	if len(uws) == 0 {
@@ -129,7 +129,7 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 			"email":        input.UserEmail,
 			"error":        err.Error(),
 		}).Error("magic link: generation failed")
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 

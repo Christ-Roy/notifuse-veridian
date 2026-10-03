@@ -57,7 +57,7 @@ func (h *ContactListHandler) handleGetByIDs(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get contact list")
-		WriteJSONError(w, "Failed to get contact list", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get contact list", http.StatusInternalServerError)
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h *ContactListHandler) handleGetContactsByList(w http.ResponseWriter, r *h
 	contactLists, err := h.service.GetContactsByListID(r.Context(), req.WorkspaceID, req.ListID)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get contacts by list")
-		WriteJSONError(w, "Failed to get contacts by list", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get contacts by list", http.StatusInternalServerError)
 		return
 	}
 
@@ -107,7 +107,7 @@ func (h *ContactListHandler) handleGetListsByContact(w http.ResponseWriter, r *h
 	contactLists, err := h.service.GetListsByEmail(r.Context(), req.WorkspaceID, req.Email)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get lists by contact")
-		WriteJSONError(w, "Failed to get lists by contact", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get lists by contact", http.StatusInternalServerError)
 		return
 	}
 
@@ -143,7 +143,7 @@ func (h *ContactListHandler) handleUpdateStatus(w http.ResponseWriter, r *http.R
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to update contact list status")
-		WriteJSONError(w, "Internal server error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *ContactListHandler) handleRemoveContact(w http.ResponseWriter, r *http.
 			WriteJSONError(w, "contact list not found", http.StatusNotFound)
 			return
 		}
-		WriteJSONError(w, "Failed to remove contact from list", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to remove contact from list", http.StatusInternalServerError)
 		return
 	}
 

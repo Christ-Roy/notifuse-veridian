@@ -104,7 +104,7 @@ func (h *WebhookSubscriptionHandler) handleList(w http.ResponseWriter, r *http.R
 	subs, err := h.service.List(r.Context(), workspaceID)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to list webhook subscriptions")
-		WriteJSONError(w, "Failed to list webhook subscriptions", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list webhook subscriptions", http.StatusInternalServerError)
 		return
 	}
 
@@ -215,7 +215,7 @@ func (h *WebhookSubscriptionHandler) handleDelete(w http.ResponseWriter, r *http
 
 	if err := h.service.Delete(r.Context(), req.WorkspaceID, req.ID); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to delete webhook subscription")
-		WriteJSONError(w, "Failed to delete webhook subscription", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to delete webhook subscription", http.StatusInternalServerError)
 		return
 	}
 
@@ -254,7 +254,7 @@ func (h *WebhookSubscriptionHandler) handleToggle(w http.ResponseWriter, r *http
 	sub, err := h.service.Toggle(r.Context(), req.WorkspaceID, req.ID, req.Enabled)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to toggle webhook subscription")
-		WriteJSONError(w, "Failed to toggle webhook subscription", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to toggle webhook subscription", http.StatusInternalServerError)
 		return
 	}
 
@@ -292,7 +292,7 @@ func (h *WebhookSubscriptionHandler) handleRegenerateSecret(w http.ResponseWrite
 	sub, err := h.service.RegenerateSecret(r.Context(), req.WorkspaceID, req.ID)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to regenerate webhook secret")
-		WriteJSONError(w, "Failed to regenerate webhook secret", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to regenerate webhook secret", http.StatusInternalServerError)
 		return
 	}
 
@@ -340,7 +340,7 @@ func (h *WebhookSubscriptionHandler) handleGetDeliveries(w http.ResponseWriter, 
 	deliveries, total, err := h.service.GetDeliveries(r.Context(), workspaceID, subscriptionIDPtr, limit, offset)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get webhook deliveries")
-		WriteJSONError(w, "Failed to get webhook deliveries", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get webhook deliveries", http.StatusInternalServerError)
 		return
 	}
 

@@ -72,17 +72,8 @@ func (h *VeridianEngagementByClassHandler) handleEngagementByClass(w http.Respon
 
 	result, err := h.service.GetEngagementByClass(r.Context(), req)
 	if err != nil {
-		var permErr *domain.PermissionError
-		if errors.As(err, &permErr) {
-			WriteJSONError(w, permErr.Error(), http.StatusForbidden)
-			return
-		}
-		if isAuthFailure(err) {
-			WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
 		h.logger.WithField("error", err.Error()).Error("Failed to compute engagement by class")
-		WriteJSONError(w, "Failed to compute engagement by class", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to compute engagement by class", http.StatusInternalServerError)
 		return
 	}
 

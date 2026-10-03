@@ -64,7 +64,7 @@ func (h *DemoHandler) handleResetDemo(w http.ResponseWriter, r *http.Request) {
 	// Reset demo data
 	if err := h.service.ResetDemo(r.Context()); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to reset demo data")
-		WriteJSONError(w, "Failed to reset demo data", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to reset demo data", http.StatusInternalServerError)
 		return
 	}
 

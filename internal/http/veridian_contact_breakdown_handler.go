@@ -22,7 +22,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
@@ -67,20 +66,14 @@ func (h *VeridianContactBreakdownHandler) handleProviderBreakdown(w http.Respons
 
 	breakdown, err := h.service.GetProviderBreakdown(r.Context(), req)
 	if err != nil {
-		var permErr *domain.PermissionError
-		if errors.As(err, &permErr) {
-			WriteJSONError(w, permErr.Error(), http.StatusForbidden)
-			return
-		}
-		// Échec d'authentification (user non membre / token invalide pour ce
-		// workspace) → 401, pas 500. Le wrapping vient du service
-		// ("failed to authenticate user: ...").
-		if isAuthFailure(err) {
-			WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+		// === Veridian patch 2026-10-03 (mission "401/403 partout") ===
+		// Remplace l'ancien double classement a la main (errors.As PermissionError
+		// + isAuthFailure par prefixe de message) par la classification UNIQUE
+		// partagee (classifyAuthError, internal/http/utils.go) : ErrAuthenticationFailed
+		// -> 401, ErrUnauthorized/PermissionError -> 403, sinon le fallback 500
+		// inchange. errors.As traverse tout fmt.Errorf("...: %w", err) du service.
 		h.logger.WithField("error", err.Error()).Error("Failed to compute provider breakdown")
-		WriteJSONError(w, "Failed to compute provider breakdown", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to compute provider breakdown", http.StatusInternalServerError)
 		return
 	}
 
@@ -118,13 +111,3 @@ func (h *VeridianContactBreakdownHandler) parseRequest(r *http.Request) (*domain
 	return req, nil
 }
 
-// isAuthFailure détecte un échec d'authentification workspace remonté par le
-// service (message wrappé "failed to authenticate user"). Heuristique sobre :
-// le service n'a pas de type d'erreur dédié pour l'auth (il propage l'erreur de
-// AuthenticateUserForWorkspace), on matche donc le préfixe stable.
-func isAuthFailure(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "failed to authenticate user")
-}

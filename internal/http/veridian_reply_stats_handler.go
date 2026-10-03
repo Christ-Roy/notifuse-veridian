@@ -76,17 +76,8 @@ func (h *VeridianReplyStatsHandler) handleReplyStats(w http.ResponseWriter, r *h
 
 	stats, err := h.service.GetReplyStats(r.Context(), req)
 	if err != nil {
-		var permErr *domain.PermissionError
-		if errors.As(err, &permErr) {
-			WriteJSONError(w, permErr.Error(), http.StatusForbidden)
-			return
-		}
-		if isAuthFailure(err) {
-			WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
 		h.logger.WithField("error", err.Error()).Error("Failed to compute reply stats")
-		WriteJSONError(w, "Failed to compute reply stats", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to compute reply stats", http.StatusInternalServerError)
 		return
 	}
 

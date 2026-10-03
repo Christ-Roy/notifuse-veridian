@@ -73,7 +73,7 @@ func (h *TransactionalNotificationHandler) handleList(w http.ResponseWriter, r *
 	)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to list transactional notifications")
-		WriteJSONError(w, "Failed to list notifications", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list notifications", http.StatusInternalServerError)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *TransactionalNotificationHandler) handleGet(w http.ResponseWriter, r *h
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get transactional notification")
-		WriteJSONError(w, "Failed to get notification", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get notification", http.StatusInternalServerError)
 		return
 	}
 
@@ -138,7 +138,7 @@ func (h *TransactionalNotificationHandler) handleCreate(w http.ResponseWriter, r
 			return
 		}
 
-		WriteJSONError(w, "Failed to create notification", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to create notification", http.StatusInternalServerError)
 		return
 	}
 
@@ -176,7 +176,7 @@ func (h *TransactionalNotificationHandler) handleUpdate(w http.ResponseWriter, r
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to update transactional notification")
-		WriteJSONError(w, "Failed to update notification", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to update notification", http.StatusInternalServerError)
 		return
 	}
 
@@ -209,7 +209,7 @@ func (h *TransactionalNotificationHandler) handleDelete(w http.ResponseWriter, r
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to delete transactional notification")
-		WriteJSONError(w, "Failed to delete notification", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to delete notification", http.StatusInternalServerError)
 		return
 	}
 
@@ -247,7 +247,7 @@ func (h *TransactionalNotificationHandler) handleSend(w http.ResponseWriter, r *
 			return
 		}
 
-		WriteJSONError(w, "Failed to send notification", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to send notification", http.StatusInternalServerError)
 		return
 	}
 

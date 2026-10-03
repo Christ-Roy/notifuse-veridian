@@ -72,7 +72,7 @@ func (h *BlogThemeHandler) HandleCreate(w http.ResponseWriter, r *http.Request) 
 			WriteJSONError(w, permErr.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -280,7 +280,7 @@ func (h *BlogThemeHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, permErr.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

@@ -97,7 +97,7 @@ func (h *VeridianAnalyticsHandler) handleQuery(w http.ResponseWriter, r *http.Re
 	response, err := h.service.Query(r.Context(), req.WorkspaceID, req.Query)
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Analytics query failed")
-		WriteJSONError(w, fmt.Sprintf("Query failed: %v", err), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, fmt.Sprintf("Query failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -123,7 +123,7 @@ func (h *VeridianAnalyticsHandler) handleGetSchemas(w http.ResponseWriter, r *ht
 	schemas, err := h.service.GetSchemas(r.Context(), req.WorkspaceID)
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Failed to get analytics schemas")
-		WriteJSONError(w, fmt.Sprintf("Failed to get schemas: %v", err), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, fmt.Sprintf("Failed to get schemas: %v", err), http.StatusInternalServerError)
 		return
 	}
 

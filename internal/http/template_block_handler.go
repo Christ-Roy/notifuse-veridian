@@ -52,7 +52,7 @@ func (h *TemplateBlockHandler) handleList(w http.ResponseWriter, r *http.Request
 	blocks, err := h.service.ListTemplateBlocks(r.Context(), req.WorkspaceID)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to list template blocks")
-		WriteJSONError(w, "Failed to list template blocks", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list template blocks", http.StatusInternalServerError)
 		return
 	}
 
@@ -80,7 +80,7 @@ func (h *TemplateBlockHandler) handleGet(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get template block")
-		WriteJSONError(w, "Failed to get template block", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get template block", http.StatusInternalServerError)
 		return
 	}
 
@@ -116,7 +116,7 @@ func (h *TemplateBlockHandler) handleCreate(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		WriteJSONError(w, "Failed to create template block", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to create template block", http.StatusInternalServerError)
 		return
 	}
 
@@ -150,7 +150,7 @@ func (h *TemplateBlockHandler) handleUpdate(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to update template block")
-		WriteJSONError(w, "Failed to update template block", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to update template block", http.StatusInternalServerError)
 		return
 	}
 
@@ -184,7 +184,7 @@ func (h *TemplateBlockHandler) handleDelete(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to delete template block")
-		WriteJSONError(w, "Failed to delete template block", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to delete template block", http.StatusInternalServerError)
 		return
 	}
 

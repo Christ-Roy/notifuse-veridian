@@ -68,17 +68,8 @@ func (h *VeridianDeliverabilityScoreHandler) handleScore(w http.ResponseWriter, 
 
 	result, err := h.service.Score(r.Context(), req)
 	if err != nil {
-		var permErr *domain.PermissionError
-		if errors.As(err, &permErr) {
-			WriteJSONError(w, permErr.Error(), http.StatusForbidden)
-			return
-		}
-		if isAuthFailure(err) {
-			WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
 		h.logger.WithField("error", err.Error()).Error("Failed to score template deliverability")
-		WriteJSONError(w, "Failed to score template deliverability", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to score template deliverability", http.StatusInternalServerError)
 		return
 	}
 

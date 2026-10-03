@@ -87,7 +87,7 @@ func (h *UserHandler) SignIn(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// For all other errors, return 500
-		WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, err.Error(), http.StatusInternalServerError)
 		h.tracer.MarkSpanError(ctx, err)
 		return
 	}
@@ -259,7 +259,7 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	h.tracer.AddAttribute(ctx, "operation", "ListWorkspaces")
 	workspaces, err := h.workspaceService.ListWorkspaces(ctx)
 	if err != nil {
-		WriteJSONError(w, "Failed to retrieve workspaces", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to retrieve workspaces", http.StatusInternalServerError)
 		span.SetStatus(trace.Status{
 			Code:    trace.StatusCodeInternal,
 			Message: "Failed to retrieve workspaces",
@@ -302,7 +302,7 @@ func (h *UserHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Logout user - delete all sessions
 	err := h.userService.Logout(ctx, userID)
 	if err != nil {
-		WriteJSONError(w, "Failed to logout", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to logout", http.StatusInternalServerError)
 		h.tracer.MarkSpanError(ctx, err)
 		return
 	}
@@ -361,7 +361,7 @@ func (h *UserHandler) UpdateLanguage(w http.ResponseWriter, r *http.Request) {
 			h.tracer.MarkSpanError(ctx, err)
 			return
 		}
-		WriteJSONError(w, "Failed to update language", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to update language", http.StatusInternalServerError)
 		h.tracer.MarkSpanError(ctx, err)
 		return
 	}

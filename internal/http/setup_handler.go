@@ -102,7 +102,7 @@ func (h *SetupHandler) Status(w http.ResponseWriter, r *http.Request) {
 	isInstalled, err := h.settingService.IsInstalled(ctx)
 	if err != nil {
 		h.logger.WithField("error", err).Error("Failed to check installation status")
-		WriteJSONError(w, "Failed to check installation status", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to check installation status", http.StatusInternalServerError)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 	isInstalled, err := h.settingService.IsInstalled(ctx)
 	if err != nil {
 		h.logger.WithField("error", err).Error("Failed to check installation status")
-		WriteJSONError(w, "Failed to check installation status", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to check installation status", http.StatusInternalServerError)
 		return
 	}
 
@@ -240,7 +240,7 @@ func (h *SetupHandler) TestSMTP(w http.ResponseWriter, r *http.Request) {
 	isInstalled, err := h.settingService.IsInstalled(ctx)
 	if err != nil {
 		h.logger.WithField("error", err).Error("Failed to check installation status")
-		WriteJSONError(w, "Failed to check installation status", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to check installation status", http.StatusInternalServerError)
 		return
 	}
 

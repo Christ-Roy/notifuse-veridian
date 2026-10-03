@@ -20,7 +20,6 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 
@@ -80,17 +79,8 @@ func (h *VeridianReputationStatusHandler) handleReputationStatus(w http.Response
 
 	status, err := h.service.GetReputationStatus(r.Context(), &domain.VeridianReputationStatusRequest{WorkspaceID: workspaceID})
 	if err != nil {
-		var permErr *domain.PermissionError
-		if errors.As(err, &permErr) {
-			WriteJSONError(w, permErr.Error(), http.StatusForbidden)
-			return
-		}
-		if isAuthFailure(err) {
-			WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
 		h.logger.WithField("error", err.Error()).Error("Failed to compute reputation status")
-		WriteJSONError(w, "Failed to compute reputation status", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to compute reputation status", http.StatusInternalServerError)
 		return
 	}
 

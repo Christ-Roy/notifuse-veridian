@@ -160,7 +160,7 @@ func TestVeridianAutomationEnrollHandler_AuthFailure_401(t *testing.T) {
 	ctx := context.Background()
 
 	authSvc.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").
-		Return(ctx, nil, nil, errors.New("not a member of workspace"))
+		Return(ctx, nil, nil, &domain.ErrAuthenticationFailed{Message: "not a member of workspace"})
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"workspace_id":   "ws1",

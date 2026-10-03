@@ -121,7 +121,7 @@ func (h *SettingsHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	sysConfig, err := h.settingService.GetSystemConfig(ctx, h.secretKey)
 	if err != nil {
 		h.logger.WithField("error", err).Error("Failed to load system config")
-		WriteJSONError(w, "Failed to load system settings", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to load system settings", http.StatusInternalServerError)
 		return
 	}
 
@@ -188,7 +188,7 @@ func (h *SettingsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	currentConfig, err := h.settingService.GetSystemConfig(ctx, h.secretKey)
 	if err != nil {
 		h.logger.WithField("error", err).Error("Failed to load current system config")
-		WriteJSONError(w, "Failed to load current settings", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to load current settings", http.StatusInternalServerError)
 		return
 	}
 
@@ -233,7 +233,7 @@ func (h *SettingsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.settingService.SetSystemConfig(ctx, newConfig, h.secretKey); err != nil {
 		h.logger.WithField("error", err).Error("Failed to save system settings")
-		WriteJSONError(w, fmt.Sprintf("Failed to save settings: %v", err), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, fmt.Sprintf("Failed to save settings: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -289,7 +289,7 @@ func (h *SettingsHandler) handleTestSMTP(w http.ResponseWriter, r *http.Request)
 		currentConfig, err := h.settingService.GetSystemConfig(r.Context(), h.secretKey)
 		if err != nil {
 			h.logger.WithField("error", err).Error("Failed to load current config for SMTP test")
-			WriteJSONError(w, "Failed to load current settings", http.StatusInternalServerError)
+			WriteAuthAwareError(w, err, "Failed to load current settings", http.StatusInternalServerError)
 			return
 		}
 		smtpPassword = currentConfig.SMTPPassword

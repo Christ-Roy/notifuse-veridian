@@ -278,7 +278,7 @@ func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request
 			WriteJSONErrorCode(w, ErrCodeOwnerMismatch, err.Error(), http.StatusConflict, nil)
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -348,7 +348,7 @@ func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Reques
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -387,7 +387,7 @@ func (h *VeridianHandler) handleSuspend(w http.ResponseWriter, r *http.Request) 
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -425,7 +425,7 @@ func (h *VeridianHandler) handleResume(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -464,7 +464,7 @@ func (h *VeridianHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -522,7 +522,7 @@ func (h *VeridianHandler) handleSoftDelete(w http.ResponseWriter, r *http.Reques
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -573,7 +573,7 @@ func (h *VeridianHandler) handleRestore(w http.ResponseWriter, r *http.Request) 
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -674,7 +674,7 @@ func (h *VeridianHandler) handleTouch(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -699,7 +699,7 @@ func (h *VeridianHandler) handleUsageSummary(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		h.logError("usage_summary", err, map[string]interface{}{"tenant_id": tenantID})
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -724,7 +724,7 @@ func (h *VeridianHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logError("get_status", err, map[string]interface{}{"tenant_id": tenantID})
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -816,7 +816,7 @@ func (h *VeridianHandler) handleWipeTestTenants(w http.ResponseWriter, r *http.R
 			"prefix":     input.Prefix,
 			"tenant_ids": len(input.TenantIDs),
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -870,7 +870,7 @@ func (h *VeridianHandler) handleListTenants(w http.ResponseWriter, r *http.Reque
 			"prefix":          input.Prefix,
 			"include_orphans": input.IncludeOrphans,
 		})
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -956,7 +956,7 @@ func (h *VeridianHandler) handleAttachOwner(w http.ResponseWriter, r *http.Reque
 			})
 			return
 		}
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -989,7 +989,7 @@ func (h *VeridianHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logError("health", err, map[string]interface{}{"tenant_id": tenantID})
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -1045,7 +1045,7 @@ func (h *VeridianHandler) handleLimits(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logError("limits", err, map[string]interface{}{"tenant_id": tenantID})
-		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return
 	}
 

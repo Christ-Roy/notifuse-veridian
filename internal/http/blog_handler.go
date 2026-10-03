@@ -75,7 +75,7 @@ func (h *BlogHandler) HandleListCategories(w http.ResponseWriter, r *http.Reques
 	response, err := h.service.ListCategories(ctx)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to list categories")
-		WriteJSONError(w, "Failed to list categories", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list categories", http.StatusInternalServerError)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *BlogHandler) HandleGetCategory(w http.ResponseWriter, r *http.Request) 
 
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get category")
-		WriteJSONError(w, "Failed to get category", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get category", http.StatusInternalServerError)
 		return
 	}
 
@@ -259,7 +259,7 @@ func (h *BlogHandler) HandleListPosts(w http.ResponseWriter, r *http.Request) {
 	response, err := h.service.ListPosts(ctx, &params)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to list posts")
-		WriteJSONError(w, "Failed to list posts", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list posts", http.StatusInternalServerError)
 		return
 	}
 
@@ -307,7 +307,7 @@ func (h *BlogHandler) HandleGetPost(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get post")
-		WriteJSONError(w, "Failed to get post", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get post", http.StatusInternalServerError)
 		return
 	}
 

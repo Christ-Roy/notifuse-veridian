@@ -129,7 +129,7 @@ func (h *AgentHandler) handleSkillTarball(w http.ResponseWriter, r *http.Request
 		if h.logger != nil {
 			h.logger.WithField("error", err.Error()).Error("failed to build agent skill tarball")
 		}
-		WriteJSONError(w, "failed to build skill archive", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "failed to build skill archive", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/gzip")
@@ -182,7 +182,7 @@ func (h *AgentHandler) handleExchangeToken(w http.ResponseWriter, r *http.Reques
 			if h.logger != nil {
 				h.logger.WithField("error", err.Error()).Error("failed to exchange agent install token")
 			}
-			WriteJSONError(w, "failed to exchange install token", http.StatusInternalServerError)
+			WriteAuthAwareError(w, err, "failed to exchange install token", http.StatusInternalServerError)
 		}
 		return
 	}

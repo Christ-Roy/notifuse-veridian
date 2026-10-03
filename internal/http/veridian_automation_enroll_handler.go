@@ -18,7 +18,6 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 
@@ -85,17 +84,8 @@ func (h *VeridianAutomationEnrollHandler) handleEnroll(w http.ResponseWriter, r 
 
 	resp, err := h.service.Enroll(r.Context(), req.WorkspaceID, req.AutomationID, emails)
 	if err != nil {
-		var permErr *domain.PermissionError
-		if errors.As(err, &permErr) {
-			WriteJSONError(w, permErr.Error(), http.StatusForbidden)
-			return
-		}
-		if isAuthFailure(err) {
-			WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
 		h.logger.WithField("error", err.Error()).Error("Failed to enroll contacts into automation")
-		WriteJSONError(w, "Failed to enroll contacts", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to enroll contacts", http.StatusInternalServerError)
 		return
 	}
 

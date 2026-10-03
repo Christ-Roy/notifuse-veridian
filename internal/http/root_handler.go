@@ -334,7 +334,7 @@ func (h *RootHandler) serveBlogHome(w http.ResponseWriter, r *http.Request, work
 		}
 		// Fallback for unexpected errors
 		h.logger.WithField("error", err.Error()).Error("Failed to render blog home page")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -409,7 +409,7 @@ func (h *RootHandler) serveBlogCategory(w http.ResponseWriter, r *http.Request, 
 		}
 		// Fallback for unexpected errors
 		h.logger.WithField("error", err.Error()).Error("Failed to render blog category page")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -482,7 +482,7 @@ func (h *RootHandler) serveBlogPost(w http.ResponseWriter, r *http.Request, work
 		}
 		// Fallback for unexpected errors
 		h.logger.WithField("error", err.Error()).Error("Failed to render blog post page")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -527,7 +527,7 @@ func (h *RootHandler) serveBlogSitemap(w http.ResponseWriter, r *http.Request, w
 	response, err := h.blogService.ListPublicPosts(ctx, params)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to list posts for sitemap")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -612,7 +612,7 @@ func (h *RootHandler) serveBlogFeed(w http.ResponseWriter, r *http.Request, work
 	maxUpdatedAt, etag, err := h.blogService.GetFeedFingerprint(r.Context(), workspace.ID, categorySlug)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Feed: fingerprint failed")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -639,7 +639,7 @@ func (h *RootHandler) serveBlogFeed(w http.ResponseWriter, r *http.Request, work
 	feed, err := h.blogService.BuildFeed(r.Context(), workspace.ID, categorySlug)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Feed: build failed")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -662,7 +662,7 @@ func (h *RootHandler) serveBlogFeed(w http.ResponseWriter, r *http.Request, work
 	}
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Feed: render failed")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 

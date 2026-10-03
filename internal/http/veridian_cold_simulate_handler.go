@@ -256,14 +256,14 @@ func (h *VeridianHandler) coldSimulateInboundReply(
 
 	secretKey, err := h.coldSimulateSecretKey(ctx, deps, req.WorkspaceID)
 	if err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
 	// 1. Seed l'envoi initial (notre mail) avec un id stable → le match fort le citera.
 	msgID := uuid.NewString()
 	if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, "", "", msgID, time.Now().UTC()); err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, "seed initial send failed: "+err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "seed initial send failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -283,14 +283,14 @@ func (h *VeridianHandler) coldSimulateInboundReply(
 	}
 	if err := deps.replyProcessor.ProcessInboundMessage(ctx, msg); err != nil {
 		// Best-effort côté service mais on remonte l'erreur ici (test = veut savoir).
-		WriteJSONErrorCode(w, ErrCodeInternalError, "process inbound failed: "+err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "process inbound failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
 	// 4. Source de vérité : le contact est-il marqué 'replied' ?
 	hasReplied, err := deps.replyProcessor.HasReplied(ctx, req.WorkspaceID, contact)
 	if err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, "has-replied check failed: "+err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "has-replied check failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *VeridianHandler) coldSimulateSeedSent(
 
 	secretKey, err := h.coldSimulateSecretKey(ctx, deps, req.WorkspaceID)
 	if err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -335,14 +335,14 @@ func (h *VeridianHandler) coldSimulateSeedSent(
 	now := time.Now().UTC()
 	for i := 0; i < req.Count; i++ {
 		if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, sender, providerClass, uuid.NewString(), now); err != nil {
-			WriteJSONErrorCode(w, ErrCodeInternalError, "seed failed: "+err.Error(), http.StatusInternalServerError, nil)
+			WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "seed failed: "+err.Error(), http.StatusInternalServerError, nil)
 			return
 		}
 	}
 
 	count, err := deps.messageHistoryRepo.CountSentSinceForContact(ctx, req.WorkspaceID, contact, veridianColdSimulateStartOfDay(now))
 	if err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -379,7 +379,7 @@ func (h *VeridianHandler) coldSimulateDailyCapDecision(
 
 	count, err := deps.messageHistoryRepo.CountSentSinceForContact(ctx, req.WorkspaceID, contact, veridianColdSimulateStartOfDay(now))
 	if err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -494,7 +494,7 @@ func (h *VeridianHandler) coldSimulateClassCapDecision(
 			ctx, req.WorkspaceID, req.ProviderClass, since)
 	}
 	if err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -552,7 +552,7 @@ func (h *VeridianHandler) coldSimulatePerSenderCapDecision(
 	sender := domain.VeridianNormalizeEmail(req.SenderEmail)
 	count, err := deps.messageHistoryRepo.CountSentSinceForSender(ctx, req.WorkspaceID, sender, veridianColdSimulateStartOfDay(now))
 	if err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -608,7 +608,7 @@ func (h *VeridianHandler) coldSimulateWarmupCapDecision(
 
 	count, err := deps.messageHistoryRepo.CountSentSinceForSenderDomain(ctx, req.WorkspaceID, senderDomain, since)
 	if err != nil {
-		WriteJSONErrorCode(w, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
+		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "count failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
 

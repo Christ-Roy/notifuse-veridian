@@ -82,7 +82,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.taskService.CreateTask(r.Context(), createRequest.WorkspaceID, task); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to create task")
-		WriteJSONError(w, "Failed to create task", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to create task", http.StatusInternalServerError)
 		return
 	}
 
@@ -110,7 +110,7 @@ func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, "Task not found", http.StatusNotFound)
 		} else {
 			h.logger.WithField("error", err.Error()).Error("Failed to get task")
-			WriteJSONError(w, "Failed to get task", http.StatusInternalServerError)
+			WriteAuthAwareError(w, err, "Failed to get task", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -138,7 +138,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	response, err := h.taskService.ListTasks(r.Context(), listRequest.WorkspaceID, filter)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to list tasks")
-		WriteJSONError(w, "Failed to list tasks", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list tasks", http.StatusInternalServerError)
 		return
 	}
 
@@ -163,7 +163,7 @@ func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, "Task not found", http.StatusNotFound)
 		} else {
 			h.logger.WithField("error", err.Error()).Error("Failed to delete task")
-			WriteJSONError(w, "Failed to delete task", http.StatusInternalServerError)
+			WriteAuthAwareError(w, err, "Failed to delete task", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -325,7 +325,7 @@ func (h *TaskHandler) ExecuteTask(w http.ResponseWriter, r *http.Request) {
 					"reason":       e.Reason,
 					"error":        err.Error(),
 				}).Error("Task execution failed")
-				WriteJSONError(w, "Task execution failed: "+e.Reason, http.StatusInternalServerError)
+				WriteAuthAwareError(w, err, "Task execution failed: "+e.Reason, http.StatusInternalServerError)
 			}
 		case *domain.ErrTaskTimeout:
 			WriteJSONError(w, e.Error(), http.StatusGatewayTimeout)
@@ -335,7 +335,7 @@ func (h *TaskHandler) ExecuteTask(w http.ResponseWriter, r *http.Request) {
 				"workspace_id": executeRequest.WorkspaceID,
 				"error":        err.Error(),
 			}).Error("Failed to execute task")
-			WriteJSONError(w, "Failed to execute task", http.StatusInternalServerError)
+			WriteAuthAwareError(w, err, "Failed to execute task", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -356,7 +356,7 @@ func (h *TaskHandler) GetCronStatus(w http.ResponseWriter, r *http.Request) {
 	lastRun, err := h.taskService.GetLastCronRun(r.Context())
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to get last cron run")
-		WriteJSONError(w, "Failed to get cron status", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get cron status", http.StatusInternalServerError)
 		return
 	}
 

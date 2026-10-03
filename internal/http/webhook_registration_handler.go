@@ -74,7 +74,7 @@ func (h *WebhookRegistrationHandler) handleRegister(w http.ResponseWriter, r *ht
 			WithField("workspace_id", req.WorkspaceID).
 			WithField("integration_id", req.IntegrationID).
 			Error("Failed to register webhooks")
-		WriteJSONError(w, "Failed to register webhooks: "+err.Error(), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to register webhooks: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *WebhookRegistrationHandler) handleStatus(w http.ResponseWriter, r *http
 			WithField("workspace_id", req.WorkspaceID).
 			WithField("integration_id", req.IntegrationID).
 			Error("Failed to get webhook status")
-		WriteJSONError(w, "Failed to get webhook status: "+err.Error(), http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get webhook status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

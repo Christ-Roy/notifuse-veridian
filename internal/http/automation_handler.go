@@ -73,7 +73,7 @@ func (h *AutomationHandler) handleCreate(w http.ResponseWriter, r *http.Request)
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to create automation", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to create automation", http.StatusInternalServerError)
 		return
 	}
 
@@ -101,7 +101,7 @@ func (h *AutomationHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to get automation", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get automation", http.StatusInternalServerError)
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *AutomationHandler) handleList(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to list automations", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list automations", http.StatusInternalServerError)
 		return
 	}
 
@@ -163,7 +163,7 @@ func (h *AutomationHandler) handleUpdate(w http.ResponseWriter, r *http.Request)
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to update automation", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to update automation", http.StatusInternalServerError)
 		return
 	}
 
@@ -196,7 +196,7 @@ func (h *AutomationHandler) handleDelete(w http.ResponseWriter, r *http.Request)
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to delete automation", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to delete automation", http.StatusInternalServerError)
 		return
 	}
 
@@ -229,7 +229,7 @@ func (h *AutomationHandler) handleActivate(w http.ResponseWriter, r *http.Reques
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to activate automation", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to activate automation", http.StatusInternalServerError)
 		return
 	}
 
@@ -262,7 +262,7 @@ func (h *AutomationHandler) handlePause(w http.ResponseWriter, r *http.Request) 
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to pause automation", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to pause automation", http.StatusInternalServerError)
 		return
 	}
 
@@ -290,7 +290,7 @@ func (h *AutomationHandler) handleGetContactNodeExecutions(w http.ResponseWriter
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to get contact node executions", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get contact node executions", http.StatusInternalServerError)
 		return
 	}
 
@@ -329,7 +329,7 @@ func (h *AutomationHandler) handleExitContact(w http.ResponseWriter, r *http.Req
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to exit contact from automation", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to exit contact from automation", http.StatusInternalServerError)
 		return
 	}
 
@@ -366,7 +366,7 @@ func (h *AutomationHandler) handleResetContact(w http.ResponseWriter, r *http.Re
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		WriteJSONError(w, "Failed to reset contact in automation", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to reset contact in automation", http.StatusInternalServerError)
 		return
 	}
 

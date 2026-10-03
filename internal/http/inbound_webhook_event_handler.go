@@ -115,7 +115,7 @@ func (h *InboundWebhookEventHandler) handleList(w http.ResponseWriter, r *http.R
 		h.logger.WithField("error", err.Error()).
 			WithField("workspace_id", params.WorkspaceID).
 			Error("Failed to list inbound webhook events")
-		WriteJSONError(w, "Failed to list inbound webhook events", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to list inbound webhook events", http.StatusInternalServerError)
 		return
 	}
 

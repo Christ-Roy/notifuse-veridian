@@ -64,7 +64,7 @@ func (h *ContactHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	response, err := h.service.GetContacts(r.Context(), domainReq)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("Failed to get contacts: %v", err))
-		http.Error(w, "Failed to get contacts", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get contacts", http.StatusInternalServerError)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (h *ContactHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		h.logger.Error(fmt.Sprintf("Failed to encode response: %v", err))
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 }
@@ -93,7 +93,7 @@ func (h *ContactHandler) handleCount(w http.ResponseWriter, r *http.Request) {
 	count, err := h.service.CountContacts(r.Context(), workspaceID)
 	if err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to count contacts")
-		WriteJSONError(w, "Failed to count contacts", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to count contacts", http.StatusInternalServerError)
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *ContactHandler) handleGetByEmail(w http.ResponseWriter, r *http.Request
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get contact by email")
-		WriteJSONError(w, "Failed to get contact by email", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get contact by email", http.StatusInternalServerError)
 		return
 	}
 
@@ -161,7 +161,7 @@ func (h *ContactHandler) handleGetByExternalID(w http.ResponseWriter, r *http.Re
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to get contact by external ID")
-		WriteJSONError(w, "Failed to get contact by external ID", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to get contact by external ID", http.StatusInternalServerError)
 		return
 	}
 
@@ -194,7 +194,7 @@ func (h *ContactHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.WithField("error", err.Error()).Error("Failed to delete contact")
-		WriteJSONError(w, "Failed to delete contact", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to delete contact", http.StatusInternalServerError)
 		return
 	}
 
@@ -241,7 +241,7 @@ func (h *ContactHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(result); err != nil {
-		WriteJSONError(w, "Failed to encode response", http.StatusInternalServerError)
+		WriteAuthAwareError(w, err, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 }
