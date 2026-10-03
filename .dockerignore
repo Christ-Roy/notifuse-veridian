@@ -68,6 +68,15 @@ Makefile
 !console/certificates/key.pem
 !console/certificates/cert.pem
 
+# --- Exception : skill distribue embarque via go:embed (mission "API &
+# agents", 2026-10-03). internal/http/agent_assets.go fait
+# //go:embed agentskill/SKILL.md agentskill/AGENTS.md pour servir
+# GET /agent/skill.tar.gz -- sans cette exception, le go build de l'image
+# echoue ("pattern agentskill/AGENTS.md: no matching files found"), le
+# **/*.md ci-dessus les exclurait comme n'importe quelle doc.
+!internal/http/agentskill/SKILL.md
+!internal/http/agentskill/AGENTS.md
+
 # --- Divers IDE / OS ---
 .vscode
 .idea
