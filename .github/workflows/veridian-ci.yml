@@ -486,6 +486,9 @@ jobs:
 
       - name: npm audit (all lockfiles)
         run: |
+          # 2026-10-03 : bloquant sur les deps EMBARQUEES (--omit=dev). Les devDependencies
+          # (outillage de build/test) ne sont jamais dans l'image ; 7 HIGH sans correctif publie
+          # (braces) bloquaient TOUTE mise en prod. Elles restent signalees par l'etape suivante.
           # --audit-level=high : bloque sur high/critical, ignore moderate/low
           # (sinon CI fail tout le temps sur deps transitives non-actionnables).
           # Une erreur reseau/registre ou un JSON invalide est aussi bloquante :
@@ -497,7 +500,7 @@ jobs:
             audit_json=$(mktemp)
             audit_stderr=$(mktemp)
 
-            if (cd "$directory" && npm audit --audit-level=high --json >"$audit_json" 2>"$audit_stderr"); then
+            if (cd "$directory" && npm audit --omit=dev --audit-level=high --json >"$audit_json" 2>"$audit_stderr"); then
               audit_status=0
             else
               audit_status=$?
@@ -534,6 +537,18 @@ jobs:
           audit_lockfile tests/e2e-veridian "e2e tests"
           audit_lockfile console "console UI"
           audit_lockfile notification_center "notification center"
+
+      - name: npm audit devDependencies (signal, non bloquant)
+        if: always()
+        run: |
+          for lock in $(git ls-files '**/package-lock.json' 'package-lock.json'); do
+            d=$(dirname "$lock")
+            n=$(cd "$d" && npm audit --audit-level=high --json 2>/dev/null | jq -r '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)')
+            if [ "${n:-0}" -gt 0 ]; then
+              echo "::warning::${d} : ${n} CVE high/critical dans les devDependencies (non bloquant, hors image)"
+            fi
+          done
+          exit 0
 
       - name: Cleanup runner (always -- Constitution CI Sec.20)
         if: always()
