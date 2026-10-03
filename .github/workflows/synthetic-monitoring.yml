@@ -21,6 +21,14 @@ on:
     # Toutes les 5 minutes — granularité minimale GH Actions.
     - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      force_target_url:
+        description: >-
+          Surcharge NOTIFUSE_URL (preuve manuelle que le controle rougit sur
+          une cible volontairement fausse). Laisser vide = cron normal contre
+          prod.
+        required: false
+        default: ''
 
 # Une seule instance à la fois — évite que 2 runs se marchent dessus
 # si un run dépasse 5 min (timeout théorique 5 min, mais setup-node +
@@ -39,7 +47,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 5
     env:
-      NOTIFUSE_URL: https://notifuse.app.veridian.site
+      NOTIFUSE_URL: ${{ inputs.force_target_url != '' && inputs.force_target_url || 'https://notifuse.app.veridian.site' }}
       HUB_URL: https://app.veridian.site
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_PROD }}
       E2E_PROD_MODE: '1'
@@ -53,15 +61,26 @@ jobs:
           cache-dependency-path: tests/e2e-veridian/package-lock.json
 
       - name: Install deps + chromium
+        # Sans --with-deps (meme mesure que veridian-ci.yml, 2026-09-28 puis
+        # reverifiee le 2026-10-03 sur ce runner precis avec CE playwright
+        # 1.49.x : le durcissement sudo du runner auto-heberge (ci-runner,
+        # NOPASSWD limite, pas de sudo apt-get large) fait echouer
+        # --with-deps a chaque fois ("sudo: a password is required"). Les
+        # libs systeme (libnss3, libgbm1, libxkbcommon0) sont deja presentes
+        # sur ce runner (dpkg -l) et un lancement reel de chromium contre
+        # prod a ete mesure OK sans elles manquer. Si ca casse plus tard
+        # (nouvelle version Playwright, lib manquante) : provisionner les
+        # deps UNE FOIS via sudo sur dev-server (ubuntu a NOPASSWD ALL), pas
+        # en remettant --with-deps ici (ci-runner n'a et n'aura pas sudo).
         working-directory: tests/e2e-veridian
         run: |
           npm ci
-          npx playwright install chromium --with-deps
+          npx playwright install chromium
 
-      - name: Healthcheck prod /api/setup.status (fail fast si prod down)
+      - name: Healthcheck /api/setup.status (fail fast si la cible est down)
         run: |
-          if ! curl -sf --max-time 10 https://notifuse.app.veridian.site/api/setup.status > /dev/null; then
-            echo "::error::Prod /api/setup.status unreachable — abort synthetic run"
+          if ! curl -sf --max-time 10 "$NOTIFUSE_URL/api/setup.status" > /dev/null; then
+            echo "::error::$NOTIFUSE_URL/api/setup.status unreachable — abort synthetic run"
             exit 1
           fi
 
