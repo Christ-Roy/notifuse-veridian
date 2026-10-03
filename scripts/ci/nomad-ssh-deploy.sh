@@ -31,7 +31,7 @@
 # Usage : scripts/ci/nomad-ssh-deploy.sh <staging|prod> <image_tag>
 #
 # Secrets requis (env, fournis par le workflow depuis les secrets GH partagés cross-app) :
-#   NOMAD_DEPLOY_SSH_KEY   clé privée ed25519 dédiée CI (publique dans authorized_keys bastion)
+#   NOMAD_DEPLOY_SSH_KEY   clé privée ed25519 à commande forcée (le workflow la tire du secret GH NOMAD_DEPLOY_SSH_KEY_V2)
 #   NOMAD_BASTION_HOST     IP/hostname public du bastion Contabo
 #   NOMAD_BASTION_USER     user SSH sur le bastion (brunon5)
 set -euo pipefail

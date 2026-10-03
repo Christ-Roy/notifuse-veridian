@@ -1079,7 +1079,7 @@ jobs:
     env:
       # Secrets SSH partagés cross-app (canon prospection) — le NOMAD_TOKEN ne
       # quitte JAMAIS le bastion (lu in situ dans la session SSH).
-      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY }}
+      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY_V2 }}  # clé V2 à commande forcée (C4) ; le nom de la variable d'env reste celui attendu par le script
       NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}
       NOMAD_BASTION_USER: ${{ secrets.NOMAD_BASTION_USER }}
     steps:
@@ -1434,7 +1434,7 @@ jobs:
     # tailnet. Le NOMAD_TOKEN ne quitte jamais le bastion.
     runs-on: ubuntu-latest  # gitops-ci-allow-hosted: isolation deliberee de la cle SSH prod (NOMAD_DEPLOY_SSH_KEY) sur runner ephemere plutot que le host auto-heberge partage ; depot PUBLIC (mesure 2026-09-28) donc cout nul.
     env:
-      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY }}
+      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY_V2 }}  # clé V2 à commande forcée (C4) ; le nom de la variable d'env reste celui attendu par le script
       NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}
       NOMAD_BASTION_USER: ${{ secrets.NOMAD_BASTION_USER }}
     steps:
@@ -1544,7 +1544,7 @@ jobs:
     # bastion (token in situ), le curl prod est public.
     runs-on: ubuntu-latest  # gitops-ci-allow-hosted: isolation deliberee de la cle SSH prod (NOMAD_DEPLOY_SSH_KEY) sur runner ephemere plutot que le host auto-heberge partage ; depot PUBLIC (mesure 2026-09-28) donc cout nul.
     env:
-      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY }}
+      NOMAD_DEPLOY_SSH_KEY: ${{ secrets.NOMAD_DEPLOY_SSH_KEY_V2 }}  # clé V2 à commande forcée (C4) ; le nom de la variable d'env reste celui attendu par le script
       NOMAD_BASTION_HOST: ${{ secrets.NOMAD_BASTION_HOST }}
       NOMAD_BASTION_USER: ${{ secrets.NOMAD_BASTION_USER }}
     steps:
