@@ -128,6 +128,7 @@ job "notifuse-staging" {
       }
       template {
         destination = "secrets/pg.env"
+        perms       = "600"
         env         = true
         data        = <<EOH
 TZ=UTC
@@ -176,6 +177,7 @@ EOH
       }
       template {
         destination = "secrets/app.env"
+        perms       = "600"
         env         = true
         data        = <<EOH
 SERVER_PORT=8081
