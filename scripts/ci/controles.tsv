@@ -1,0 +1,12 @@
+# =============================================================================
+# controles.tsv — ce que notifuse-veridian contrôle lui-même. Six colonnes, tabulation.
+# Standard : ~/nomad-veridian/standards/controles-portables/CLAUDE.md
+# Joué au push par `gardes pre-push` (palier rapide), à la main par
+# `gardes verifier <palier>`. Trivy et les secrets du diff sortant sont joués
+# par gardes lui-même, ils ne se déclarent pas ici.
+# Palier rapide = l'ancien .husky/pre-push (4 étapes, même ordre, mêmes conditions), migré le 03/10/2026.
+# =============================================================================
+rapide	mapping-test	.	BASE_REF="${BASE_REF:-origin/veridian}" scripts/ci/check-test-mapping.sh	-	Constitution CI §1 : un fichier critique modifié a son test colocalisé (mapping 1-pour-1 Go, routes API couvertes).
+rapide	rate-limit-global	.	scripts/ci/check-rate-limit-coverage.sh	-	Le middleware VeridianAPIRateLimitMiddleware reste câblé dans app.go, sinon toute l'API authentifiée perd son rate-limit (OWASP API4).
+rapide	console-boote	.	if git diff --name-only "${BASE_REF:-origin/veridian}" HEAD | grep -q '^console/'; then scripts/ci/check-console-build.sh; fi	-	Seulement si console/ change : intégrité des chunks du build (incident 22/05/2026, console prod morte au boot, invisible des tests unitaires).
+rapide	contrat-nomad	.	scripts/ci/check-nomad-contract.sh	-	Contrat GitOps Nomad co-localisé : criticité, RTO/RPO, staging obligatoire et images immuables.
