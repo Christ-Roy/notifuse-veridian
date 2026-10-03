@@ -437,11 +437,26 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 		"template_id":   config.TemplateID,
 		"contact_email": params.ContactData.Email,
 		"message_id":    messageID,
-	}).Info("Email node executed - email enqueued")
+	}).Info("Email node executed - email enqueued, waiting for delivery confirmation")
 
+	// Veridian fix 2026-09-29 (todo/2026-09-29-automation-advance-on-send-only.md):
+	// park the contact on THIS node (NextNodeID points back at the current node,
+	// not params.Node.NextNodeID) with Status=Sending instead of advancing
+	// immediately. The email is only ENQUEUED here - it may still be deferred
+	// (daily cap / warmup / sending window), permanently rejected (excluded
+	// class, blocklist, invalid address) or retried on transient SMTP failure.
+	// HandleEmailSent/HandleEmailFailed on AutomationExecutor - wired as the
+	// EmailQueueWorker's onSent/onFailed callbacks - resolve the parked contact:
+	// advance to params.Node.NextNodeID only once the send is truly confirmed,
+	// exit with reason on permanent rejection/exhausted retries, or leave it
+	// parked while the queue's own bounded retry keeps trying. Status=Sending
+	// (not Active) is deliberate: GetScheduledContactAutomations only selects
+	// status='active', so the scheduler will not re-run this node and enqueue a
+	// duplicate email on its next 10s tick.
+	currentNodeID := params.Node.ID
 	return &NodeExecutionResult{
-		NextNodeID: params.Node.NextNodeID,
-		Status:     domain.ContactAutomationStatusActive,
+		NextNodeID: &currentNodeID,
+		Status:     domain.ContactAutomationStatusSending,
 		Output: buildNodeOutput(domain.NodeTypeEmail, map[string]interface{}{
 			"template_id": config.TemplateID,
 			"message_id":  messageID,

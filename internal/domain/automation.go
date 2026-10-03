@@ -127,13 +127,27 @@ const (
 	ContactAutomationStatusCompleted ContactAutomationStatus = "completed"
 	ContactAutomationStatusExited    ContactAutomationStatus = "exited"
 	ContactAutomationStatusFailed    ContactAutomationStatus = "failed"
+	// ContactAutomationStatusSending marks a contact PARKED on an email node
+	// while the message is enqueued but not yet resolved by the email queue
+	// worker. Excluded from GetScheduledContactAutomations (status='active'
+	// only) so the scheduler never re-runs the email node and double-sends.
+	// Veridian fix 2026-09-29 (todo/2026-09-29-automation-advance-on-send-only.md):
+	// the node used to mark itself "completed" (and advance) at ENQUEUE time,
+	// regardless of whether the SMTP send was ever accepted - a paused/gated/
+	// rejected send still pushed the contact to the next node. Now the email
+	// node parks here; HandleEmailSent/HandleEmailFailed (automation_executor.go),
+	// wired as the queue worker's onSent/onFailed callbacks, resolve it: advance
+	// only on a confirmed send, exit with reason on permanent rejection, leave
+	// parked (queue's own bounded retry/backoff keeps trying) otherwise.
+	ContactAutomationStatusSending ContactAutomationStatus = "sending"
 )
 
 // IsValid checks if the contact automation status is valid
 func (s ContactAutomationStatus) IsValid() bool {
 	switch s {
 	case ContactAutomationStatusActive, ContactAutomationStatusCompleted,
-		ContactAutomationStatusExited, ContactAutomationStatusFailed:
+		ContactAutomationStatusExited, ContactAutomationStatusFailed,
+		ContactAutomationStatusSending:
 		return true
 	default:
 		return false

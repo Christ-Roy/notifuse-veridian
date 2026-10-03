@@ -537,8 +537,8 @@ func TestEmailNodeExecutor_Execute_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	assert.Equal(t, "next_node", *result.NextNodeID)
-	assert.Equal(t, domain.ContactAutomationStatusActive, result.Status)
+	assert.Equal(t, "email_node1", *result.NextNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusSending, result.Status)
 	assert.Equal(t, "email", result.Output["node_type"])
 	assert.Equal(t, "tpl123", result.Output["template_id"])
 	assert.Equal(t, "recipient@example.com", result.Output["to"])
@@ -976,8 +976,8 @@ func TestEmailNodeExecutor_Execute_WithIntegrationOverride(t *testing.T) {
 	result, err := executor.Execute(context.Background(), params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "next_node", *result.NextNodeID)
-	assert.Equal(t, domain.ContactAutomationStatusActive, result.Status)
+	assert.Equal(t, "email_node1", *result.NextNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusSending, result.Status)
 }
 
 func TestEmailNodeExecutor_Execute_IntegrationOverrideNotFound(t *testing.T) {
@@ -1312,7 +1312,7 @@ func TestEmailNodeExecutor_Execute_NoListID_StillWorks(t *testing.T) {
 	result, err := executor.Execute(context.Background(), params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "next_node", *result.NextNodeID)
+	assert.Equal(t, "email_node1", *result.NextNodeID)
 }
 
 func TestEmailNodeExecutor_Execute_ListRepoError(t *testing.T) {
@@ -1593,8 +1593,8 @@ func TestEmailNodeExecutor_Execute_MarketingEmail_ActiveContact(t *testing.T) {
 	result, err := executor.Execute(context.Background(), params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "next_node", *result.NextNodeID)
-	assert.Equal(t, domain.ContactAutomationStatusActive, result.Status)
+	assert.Equal(t, "email_node1", *result.NextNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusSending, result.Status)
 	assert.Nil(t, result.ExitReason)
 	assert.Equal(t, true, result.Output["queued"])
 }
@@ -1640,8 +1640,8 @@ func TestEmailNodeExecutor_Execute_MarketingEmail_ContactNotInList(t *testing.T)
 	result, err := executor.Execute(context.Background(), params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "next_node", *result.NextNodeID)
-	assert.Equal(t, domain.ContactAutomationStatusActive, result.Status)
+	assert.Equal(t, "email_node1", *result.NextNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusSending, result.Status)
 	assert.Equal(t, true, result.Output["queued"])
 }
 
@@ -1682,8 +1682,8 @@ func TestEmailNodeExecutor_Execute_MarketingEmail_NoListID(t *testing.T) {
 	result, err := executor.Execute(context.Background(), params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "next_node", *result.NextNodeID)
-	assert.Equal(t, domain.ContactAutomationStatusActive, result.Status)
+	assert.Equal(t, "email_node1", *result.NextNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusSending, result.Status)
 }
 
 func TestEmailNodeExecutor_Execute_TransactionalEmail_UnsubscribedContact(t *testing.T) {
@@ -1725,8 +1725,8 @@ func TestEmailNodeExecutor_Execute_TransactionalEmail_UnsubscribedContact(t *tes
 	result, err := executor.Execute(context.Background(), params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "next_node", *result.NextNodeID)
-	assert.Equal(t, domain.ContactAutomationStatusActive, result.Status)
+	assert.Equal(t, "email_node1", *result.NextNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusSending, result.Status)
 	assert.Equal(t, true, result.Output["queued"])
 }
 
@@ -1769,7 +1769,7 @@ func TestEmailNodeExecutor_Execute_UnsubscribeCategoryEmail_UnsubscribedContact(
 	result, err := executor.Execute(context.Background(), params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "next_node", *result.NextNodeID)
+	assert.Equal(t, "email_node1", *result.NextNodeID)
 	assert.Equal(t, true, result.Output["queued"])
 }
 

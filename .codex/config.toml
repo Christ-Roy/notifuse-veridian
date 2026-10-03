@@ -1,0 +1,12 @@
+# Codex equivalent of notifuse-veridian/.claude/settings.json.
+# Runs the safe formatting/lint checks after edits without relying on
+# Claude-specific hook payload variables.
+
+[[hooks.PostToolUse]]
+matcher = "Edit|Write|apply_patch"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "bash /home/brunon5/Bureau/veridian-platform/.codex/hooks/post-tool-use-format.sh"
+timeout = 120
+statusMessage = "Notifuse format/lint checks"
