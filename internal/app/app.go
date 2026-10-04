@@ -462,7 +462,15 @@ func (a *App) InitRepositories() error {
 	// Create trigger generator for automation repository
 	queryBuilder := service.NewQueryBuilder()
 	triggerGenerator := service.NewAutomationTriggerGenerator(queryBuilder)
-	a.automationRepo = repository.NewAutomationRepository(a.workspaceRepo, triggerGenerator)
+	// Veridian fork — durcissement 2026-10-04 (audit sécurité, budget de
+	// connexions) : le scheduler d'automations ne doit plus pouvoir, à lui
+	// seul, ouvrir une connexion par tenant à chaque tick dans le MÊME
+	// budget partagé que les requêtes API. DefaultMaxWorkspacesPerGlobalTick
+	// dérive un plafond conservateur (~1/4 du nombre de pools workspace
+	// pouvant coexister) depuis la MÊME config que le ConnectionManager.
+	maxWorkspacesPerGlobalTick := repository.DefaultMaxWorkspacesPerGlobalTick(
+		a.config.Database.MaxConnections, a.config.Database.MaxConnectionsPerDB)
+	a.automationRepo = repository.NewAutomationRepository(a.workspaceRepo, triggerGenerator, maxWorkspacesPerGlobalTick)
 
 	// Initialize email queue repository
 	a.emailQueueRepo = repository.NewEmailQueueRepository(a.workspaceRepo)

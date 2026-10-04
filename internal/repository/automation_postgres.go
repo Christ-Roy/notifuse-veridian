@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -18,14 +19,68 @@ type AutomationRepository struct {
 	workspaceRepo    domain.WorkspaceRepository
 	db               *sql.DB // Used for testing with sqlmock
 	triggerGenerator *service.AutomationTriggerGenerator
+
+	// Veridian fork — durcissement 2026-10-04 (audit sécurité, "budget de
+	// connexions"). GetScheduledContactAutomationsGlobal ouvrait une
+	// connexion par tenant à CHAQUE tick, dans le MÊME budget partagé
+	// maxConnections que les requêtes API (pkg/database/connection_manager.go) :
+	// un parc de tenants nombreux pouvait épuiser ce budget à lui seul et
+	// évincer des pools actifs servant des requêtes API légitimes (LRU
+	// eviction côté ConnectionManager). maxWorkspacesPerGlobalTick borne
+	// combien de workspaces DIFFÉRENTS un seul appel touche (donc combien de
+	// NOUVELLES connexions il peut faire naître d'un coup) ; 0 = pas de
+	// limite (comportement upstream inchangé, non-régression par défaut).
+	// globalScheduleCursor fait tourner un ROUND-ROBIN entre les appels
+	// successifs (un par tick du scheduler) : tous les workspaces finissent
+	// couverts au fil du temps, jamais tous d'un coup.
+	globalScheduleMu           sync.Mutex
+	globalScheduleCursor       int
+	maxWorkspacesPerGlobalTick int
 }
 
-// NewAutomationRepository creates a new AutomationRepository using workspace repository
-func NewAutomationRepository(workspaceRepo domain.WorkspaceRepository, triggerGenerator *service.AutomationTriggerGenerator) domain.AutomationRepository {
+// NewAutomationRepository creates a new AutomationRepository using workspace repository.
+// maxWorkspacesPerGlobalTick bounds GetScheduledContactAutomationsGlobal's
+// connection footprint per call (0 = unlimited, upstream behavior) — see the
+// struct doc comment above. Use DefaultMaxWorkspacesPerGlobalTick to derive
+// a sane value from the shared connection budget config.
+func NewAutomationRepository(workspaceRepo domain.WorkspaceRepository, triggerGenerator *service.AutomationTriggerGenerator, maxWorkspacesPerGlobalTick int) domain.AutomationRepository {
 	return &AutomationRepository{
-		workspaceRepo:    workspaceRepo,
-		triggerGenerator: triggerGenerator,
+		workspaceRepo:              workspaceRepo,
+		triggerGenerator:           triggerGenerator,
+		maxWorkspacesPerGlobalTick: maxWorkspacesPerGlobalTick,
 	}
+}
+
+// DefaultMaxWorkspacesPerGlobalTick derives a conservative per-tick cap for
+// the automation scheduler's global pass from the SAME connection budget
+// config the ConnectionManager enforces (pkg/database/connection_manager.go):
+// roughly how many DISTINCT workspace pools can coexist
+// (maxConnections / maxConnectionsPerDB), with the background scheduler
+// reserved at most a QUARTER of that pool-count budget — the rest stays
+// free for interactive/API traffic. Returns 0 (no limit) when the inputs
+// can't yield a sane budget, matching the previous unbounded behavior
+// rather than guessing.
+func DefaultMaxWorkspacesPerGlobalTick(maxConnections, maxConnectionsPerDB int) int {
+	if maxConnectionsPerDB <= 0 {
+		return 0
+	}
+	totalPoolSlots := maxConnections / maxConnectionsPerDB
+	if totalPoolSlots <= 0 {
+		return 1
+	}
+	reserved := totalPoolSlots / 4
+	if reserved < 1 {
+		reserved = 1
+	}
+	return reserved
+}
+
+// SetMaxWorkspacesPerGlobalTick overrides the per-tick cap after construction
+// (tests, or a runtime config reload). 0 disables the limit.
+func (r *AutomationRepository) SetMaxWorkspacesPerGlobalTick(n int) {
+	r.globalScheduleMu.Lock()
+	defer r.globalScheduleMu.Unlock()
+	r.maxWorkspacesPerGlobalTick = n
 }
 
 // NewAutomationRepositoryWithDB creates a new AutomationRepository with a direct DB connection (for testing)
@@ -904,8 +959,15 @@ func (r *AutomationRepository) GetScheduledContactAutomations(ctx context.Contex
 	return cas, nil
 }
 
-// GetScheduledContactAutomationsGlobal retrieves contacts from all workspaces using round-robin
-// to prevent starvation of any single workspace
+// GetScheduledContactAutomationsGlobal retrieves contacts from a BOUNDED
+// window of workspaces per call, round-robin across SUCCESSIVE calls (one
+// per scheduler tick — see Veridian fork comment on
+// AutomationRepository.maxWorkspacesPerGlobalTick for why this window
+// exists: protecting the shared connection budget). Within a single call,
+// the selected workspaces are still served round-robin (equal amounts each)
+// exactly as before — only WHICH workspaces get touched in this one call is
+// new. When the limit is 0/unset or covers every workspace, behavior is
+// identical to the pre-fix code (every workspace, every call).
 func (r *AutomationRepository) GetScheduledContactAutomationsGlobal(ctx context.Context, beforeTime time.Time, limit int) ([]*domain.ContactAutomationWithWorkspace, error) {
 	if r.workspaceRepo == nil {
 		return nil, fmt.Errorf("workspace repository is required for global scheduling")
@@ -921,8 +983,10 @@ func (r *AutomationRepository) GetScheduledContactAutomationsGlobal(ctx context.
 		return nil, nil
 	}
 
-	// Round-robin: fetch equal amounts from each workspace
-	perWorkspace := (limit / len(workspaces)) + 1
+	batch := r.selectGlobalScheduleBatch(workspaces)
+
+	// Round-robin: fetch equal amounts from each workspace IN THE BATCH
+	perWorkspace := (limit / len(batch)) + 1
 	if perWorkspace < 1 {
 		perWorkspace = 1
 	}
@@ -930,7 +994,7 @@ func (r *AutomationRepository) GetScheduledContactAutomationsGlobal(ctx context.
 	var allContacts []*domain.ContactAutomationWithWorkspace
 
 	// First pass: get perWorkspace from each
-	for _, ws := range workspaces {
+	for _, ws := range batch {
 		contacts, err := r.GetScheduledContactAutomations(ctx, ws.ID, beforeTime, perWorkspace)
 		if err != nil {
 			// Log error but continue with other workspaces
@@ -957,6 +1021,39 @@ func (r *AutomationRepository) GetScheduledContactAutomationsGlobal(ctx context.
 	}
 
 	return allContacts, nil
+}
+
+// selectGlobalScheduleBatch returns the round-robin window of workspaces
+// this call is allowed to touch, and advances the cursor for the NEXT call.
+// Thread-safe: the scheduler ticks sequentially in practice, but this
+// guards against any concurrent caller too.
+func (r *AutomationRepository) selectGlobalScheduleBatch(workspaces []*domain.Workspace) []*domain.Workspace {
+	r.globalScheduleMu.Lock()
+	windowSize := r.maxWorkspacesPerGlobalTick
+	if windowSize <= 0 || windowSize >= len(workspaces) {
+		r.globalScheduleMu.Unlock()
+		return workspaces
+	}
+	offset := r.globalScheduleCursor % len(workspaces)
+	r.globalScheduleCursor = (r.globalScheduleCursor + windowSize) % len(workspaces)
+	r.globalScheduleMu.Unlock()
+
+	return roundRobinWindow(workspaces, offset, windowSize)
+}
+
+// roundRobinWindow returns n consecutive items from ws starting at offset,
+// wrapping around the slice. Pure helper, no locking — callers serialize
+// access to the cursor themselves.
+func roundRobinWindow(ws []*domain.Workspace, offset, n int) []*domain.Workspace {
+	total := len(ws)
+	if n <= 0 || n > total {
+		n = total
+	}
+	out := make([]*domain.Workspace, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, ws[(offset+i)%total])
+	}
+	return out
 }
 
 // Node execution logging
