@@ -55,9 +55,15 @@ func NewWebhookDeliveryWorker(
 	httpClient *http.Client,
 ) *WebhookDeliveryWorker {
 	if httpClient == nil {
-		httpClient = &http.Client{
-			Timeout: 30 * time.Second,
-		}
+		// Veridian fork — durcissement 2026-10-04 (audit sécurité, SSRF
+		// webhooks sortants) : le client PAR DÉFAUT (celui qui envoie tous les
+		// webhooks réels en production) dial exclusivement via
+		// ssrfSafeDialContext, qui revérifie l'IP de destination à CHAQUE
+		// connexion (y compris sur une redirection) et rejette
+		// loopback/RFC1918/CGNAT/lien-local/DNS-rebinding. Un appelant qui a
+		// une vraie raison de bypasser (tests) passe explicitement son propre
+		// *http.Client.
+		httpClient = newSSRFSafeHTTPClient(30 * time.Second)
 	}
 
 	return &WebhookDeliveryWorker{

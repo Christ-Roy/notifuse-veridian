@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -68,27 +67,11 @@ func generateWebhookID() string {
 	return strings.ReplaceAll(uuid.New().String(), "-", "")[:32]
 }
 
-// validateURL validates the webhook URL
-func validateURL(rawURL string) error {
-	if rawURL == "" {
-		return fmt.Errorf("URL is required")
-	}
-
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
-	}
-
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("URL must use http or https scheme")
-	}
-
-	if parsed.Host == "" {
-		return fmt.Errorf("URL must have a host")
-	}
-
-	return nil
-}
+// Veridian fork — durcissement 2026-10-04 (audit sécurité, SSRF webhooks
+// sortants) : validateURL se limitait au schéma/host, voir
+// webhook_ssrf_guard.go (validateWebhookURL) pour la vérification de
+// destination (loopback/RFC1918/CGNAT/lien-local/DNS) et le DialContext qui
+// la refait à chaque envoi réel contre le DNS rebinding.
 
 // validateEventTypes validates that all event types are valid
 func validateEventTypes(eventTypes []string) error {
@@ -117,7 +100,7 @@ func (s *WebhookSubscriptionService) Create(ctx context.Context, workspaceID str
 		return nil, fmt.Errorf("name is required")
 	}
 
-	if err := validateURL(webhookURL); err != nil {
+	if err := validateWebhookURL(ctx, webhookURL); err != nil {
 		return nil, err
 	}
 
@@ -187,7 +170,7 @@ func (s *WebhookSubscriptionService) Update(ctx context.Context, workspaceID str
 		return nil, fmt.Errorf("name is required")
 	}
 
-	if err := validateURL(webhookURL); err != nil {
+	if err := validateWebhookURL(ctx, webhookURL); err != nil {
 		return nil, err
 	}
 

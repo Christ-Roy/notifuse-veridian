@@ -75,7 +75,7 @@ func TestWebhookDeliveryWorker_Start(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	t.Run("stops when context is cancelled", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.pollInterval = 50 * time.Millisecond // Speed up for testing
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -121,7 +121,7 @@ func TestWebhookDeliveryWorker_processDeliveries(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successfully processes deliveries for multiple workspaces", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.lastCleanupTime = time.Now() // Prevent cleanup from running during this test
 
 		workspaces := []*domain.Workspace{
@@ -137,7 +137,7 @@ func TestWebhookDeliveryWorker_processDeliveries(t *testing.T) {
 	})
 
 	t.Run("handles workspace list error", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.lastCleanupTime = time.Now() // Prevent cleanup from running during this test
 
 		mockWorkspaceRepo.EXPECT().List(ctx).Return(nil, errors.New("database error"))
@@ -147,7 +147,7 @@ func TestWebhookDeliveryWorker_processDeliveries(t *testing.T) {
 	})
 
 	t.Run("continues processing other workspaces on error", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.lastCleanupTime = time.Now() // Prevent cleanup from running during this test
 
 		workspaces := []*domain.Workspace{
@@ -182,7 +182,7 @@ func TestWebhookDeliveryWorker_processWorkspaceDeliveries(t *testing.T) {
 	workspaceID := "workspace1"
 
 	t.Run("returns error when getting pending deliveries fails", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		mockDeliveryRepo.EXPECT().GetPendingForWorkspace(ctx, workspaceID, 100).
 			Return(nil, errors.New("database error"))
@@ -193,7 +193,7 @@ func TestWebhookDeliveryWorker_processWorkspaceDeliveries(t *testing.T) {
 	})
 
 	t.Run("returns nil when no pending deliveries", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		mockDeliveryRepo.EXPECT().GetPendingForWorkspace(ctx, workspaceID, 100).
 			Return([]*domain.WebhookDelivery{}, nil)
@@ -203,7 +203,7 @@ func TestWebhookDeliveryWorker_processWorkspaceDeliveries(t *testing.T) {
 	})
 
 	t.Run("skips delivery when subscription not found", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		delivery := &domain.WebhookDelivery{
 			ID:             "delivery1",
@@ -224,7 +224,7 @@ func TestWebhookDeliveryWorker_processWorkspaceDeliveries(t *testing.T) {
 	})
 
 	t.Run("skips delivery when subscription is disabled", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		delivery := &domain.WebhookDelivery{
 			ID:             "delivery1",
@@ -252,7 +252,7 @@ func TestWebhookDeliveryWorker_processWorkspaceDeliveries(t *testing.T) {
 	})
 
 	t.Run("returns on context cancellation", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
@@ -275,7 +275,7 @@ func TestWebhookDeliveryWorker_processWorkspaceDeliveries(t *testing.T) {
 	})
 
 	t.Run("caches subscriptions to avoid repeated lookups", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		// Create a test server that will receive the webhooks
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -363,7 +363,7 @@ func TestWebhookDeliveryWorker_deliverWebhook(t *testing.T) {
 		}))
 		defer server.Close()
 
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		delivery := &domain.WebhookDelivery{
 			ID:             "delivery1",
@@ -394,7 +394,7 @@ func TestWebhookDeliveryWorker_deliverWebhook(t *testing.T) {
 		}))
 		defer server.Close()
 
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		delivery := &domain.WebhookDelivery{
 			ID:             "delivery1",
@@ -422,7 +422,7 @@ func TestWebhookDeliveryWorker_deliverWebhook(t *testing.T) {
 	})
 
 	t.Run("handles network error", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		delivery := &domain.WebhookDelivery{
 			ID:             "delivery1",
@@ -455,7 +455,7 @@ func TestWebhookDeliveryWorker_deliverWebhook(t *testing.T) {
 		}))
 		defer server.Close()
 
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 		delivery := &domain.WebhookDelivery{
 			ID:             "delivery1",
@@ -721,7 +721,7 @@ func TestWebhookDeliveryWorker_retryScheduling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+			worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 
 			delivery := &domain.WebhookDelivery{
 				ID:             "delivery1",
@@ -771,7 +771,7 @@ func TestWebhookDeliveryWorker_handleDeliverySuccess(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
-	worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+	worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 	ctx := context.Background()
 	workspaceID := "workspace1"
 
@@ -823,7 +823,7 @@ func TestWebhookDeliveryWorker_handleDeliveryFailure(t *testing.T) {
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 
-	worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+	worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 	ctx := context.Background()
 	workspaceID := "workspace1"
 
@@ -921,7 +921,7 @@ func TestWebhookDeliveryWorker_SendTestWebhook(t *testing.T) {
 	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	mockLogger := pkgmocks.NewMockLogger(ctrl)
 
-	worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+	worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 	ctx := context.Background()
 	workspaceID := "workspace1"
 
@@ -1113,7 +1113,7 @@ func TestWebhookDeliveryWorker_cleanupOldDeliveries(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("skips cleanup when interval has not passed", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.lastCleanupTime = time.Now() // Set to now so interval hasn't passed
 
 		// Should not call List or CleanupOldDeliveries
@@ -1121,7 +1121,7 @@ func TestWebhookDeliveryWorker_cleanupOldDeliveries(t *testing.T) {
 	})
 
 	t.Run("runs cleanup when interval has passed", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.lastCleanupTime = time.Now().Add(-2 * time.Hour) // Set to 2 hours ago
 
 		workspaces := []*domain.Workspace{
@@ -1140,7 +1140,7 @@ func TestWebhookDeliveryWorker_cleanupOldDeliveries(t *testing.T) {
 	})
 
 	t.Run("handles workspace list error", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.lastCleanupTime = time.Now().Add(-2 * time.Hour)
 
 		mockWorkspaceRepo.EXPECT().List(ctx).Return(nil, errors.New("database error"))
@@ -1150,7 +1150,7 @@ func TestWebhookDeliveryWorker_cleanupOldDeliveries(t *testing.T) {
 	})
 
 	t.Run("continues cleanup for other workspaces on error", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.lastCleanupTime = time.Now().Add(-2 * time.Hour)
 
 		workspaces := []*domain.Workspace{
@@ -1166,7 +1166,7 @@ func TestWebhookDeliveryWorker_cleanupOldDeliveries(t *testing.T) {
 	})
 
 	t.Run("does not log when no records deleted", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		worker.lastCleanupTime = time.Now().Add(-2 * time.Hour)
 
 		workspaces := []*domain.Workspace{
@@ -1181,7 +1181,7 @@ func TestWebhookDeliveryWorker_cleanupOldDeliveries(t *testing.T) {
 	})
 
 	t.Run("runs on first call (zero lastCleanupTime)", func(t *testing.T) {
-		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, nil)
+		worker := NewWebhookDeliveryWorker(mockSubRepo, mockDeliveryRepo, mockWorkspaceRepo, mockLogger, &http.Client{})
 		// lastCleanupTime is zero value
 
 		workspaces := []*domain.Workspace{
