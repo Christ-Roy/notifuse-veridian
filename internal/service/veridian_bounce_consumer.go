@@ -138,7 +138,11 @@ func (c *VeridianBounceConsumer) OnNewMessage(msg *domain.VeridianIMAPMessage) e
 		return err
 	}
 
-	if err := c.webhookService.ProcessWebhook(ctx, msg.WorkspaceID, smtpIntegrationID, rawPayload); err != nil {
+	// Veridian fork — appel interne direct en Go (jamais HTTP) : exempt de la
+	// porte d'authentification du handler /webhooks/email (durcissement
+	// 2026-10-04). Internal:true est l'unique façon de la contourner ; voir
+	// domain.InboundWebhookAuth.
+	if err := c.webhookService.ProcessWebhook(ctx, msg.WorkspaceID, smtpIntegrationID, rawPayload, domain.InboundWebhookAuth{Internal: true}); err != nil {
 		log.WithFields(map[string]interface{}{
 			"error":     err.Error(),
 			"recipient": parsed.Recipient,

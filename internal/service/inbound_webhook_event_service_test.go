@@ -17,6 +17,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testWebhookSecret is the shared per-integration webhook secret used across
+// this file's fixtures so ProcessWebhook's auth gate (durcissement 2026-10-04)
+// lets legitimate test payloads through, exactly like the real secret issued
+// at integration creation does in production.
+const testWebhookSecret = "test-webhook-secret-0123456789abcdef"
+
 func TestProcessWebhook_Success(t *testing.T) {
 	// Setup
 	ctrl := gomock.NewController(t)
@@ -51,6 +57,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 			Integrations: []domain.Integration{
 				{
 					ID: integrationID,
+					WebhookSecret: testWebhookSecret,
 					EmailProvider: domain.EmailProvider{
 						Kind: domain.EmailProviderKindSES,
 						SES: &domain.AmazonSESSettings{
@@ -120,7 +127,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 		}
 
 		// Call method
-		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 
 		// Assert
 		assert.NoError(t, err)
@@ -150,6 +157,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 			Integrations: []domain.Integration{
 				{
 					ID: integrationID,
+					WebhookSecret: testWebhookSecret,
 					EmailProvider: domain.EmailProvider{
 						Kind: domain.EmailProviderKindMailgun,
 						Mailgun: &domain.MailgunSettings{
@@ -190,7 +198,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 		}
 
 		// Call method
-		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 
 		// Assert
 		assert.NoError(t, err)
@@ -221,11 +229,13 @@ func TestProcessWebhook_Success(t *testing.T) {
 		}
 
 		// Call method
-		err := service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err := service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 
-		// Assert
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unsupported email provider kind")
+		// Assert — an unknown integration has no configured webhook secret, so
+		// the auth gate rejects it (fail-closed) before ever reaching the
+		// provider switch. This is the hardened behavior: we no longer leak
+		// "integration not found" vs. "bad secret" to the caller.
+		assert.ErrorIs(t, err, domain.ErrWebhookUnauthorized)
 	})
 
 	// Test storage error case
@@ -243,6 +253,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 			Integrations: []domain.Integration{
 				{
 					ID: integrationID,
+					WebhookSecret: testWebhookSecret,
 					EmailProvider: domain.EmailProvider{
 						Kind: domain.EmailProviderKindSES,
 						SES: &domain.AmazonSESSettings{
@@ -271,7 +282,7 @@ func TestProcessWebhook_Success(t *testing.T) {
 		}
 
 		// Call method
-		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 
 		// Assert
 		assert.Error(t, err)
@@ -316,11 +327,84 @@ func TestProcessWebhook_WorkspaceNotFound(t *testing.T) {
 	}
 
 	// Call method
-	err := service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+	err := service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 
 	// Assert
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get workspace")
+}
+
+// TestProcessWebhook_ForgedRequest_RejectedUnauthorized reproduces the exact
+// 2026-10-04 audit finding: a forged POST to /webhooks/email with
+// ?provider=smtp&workspace_id=...&integration_id=... and NO authentication
+// used to be processed and PERSISTED unconditionally (MarkEmailsAsBounced
+// flipped contacts to bounced with zero verification of who sent the
+// request). It must now be rejected, fail-closed, before any repository is
+// touched — gomock proves "rien n'est persisté" by failing loudly the
+// instant StoreEvents/SetStatusesIfNotSet/MarkEmailsAsBounced is called,
+// since none of them have an EXPECT() set up below.
+func TestProcessWebhook_ForgedRequest_RejectedUnauthorized(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockInboundWebhookEventRepository(ctrl)
+	authService := mocks.NewMockAuthService(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
+	log.EXPECT().WithFields(gomock.Any()).Return(log).AnyTimes()
+	log.EXPECT().Warn(gomock.Any()).AnyTimes()
+	log.EXPECT().Error(gomock.Any()).AnyTimes()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	contactRepo := mocks.NewMockContactRepository(ctrl)
+	messageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+
+	workspaceID := "secutest-ws"
+	integrationID := "secutest-int"
+
+	// Matches the real production shape today (checked live, 2026-10-04:
+	// every "smtp" integration in prod has no webhook secret yet, since none
+	// has been re-saved since this hardening): an SMTP integration with no
+	// WebhookSecret configured.
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{
+			{
+				ID: integrationID,
+				EmailProvider: domain.EmailProvider{
+					Kind: domain.EmailProviderKindSMTP,
+				},
+			},
+		},
+	}
+	workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil).Times(2)
+
+	// The forged payload from the audit: a crafted bounce for an arbitrary
+	// recipient, no authentication material at all.
+	forged := domain.SMTPWebhookPayload{
+		Event:     "bounce",
+		Timestamp: "2026-10-04T00:00:00Z",
+		MessageID: "forged-message-id",
+		Recipient: "victim@example.com",
+	}
+	rawPayload, err := json.Marshal(forged)
+	require.NoError(t, err)
+
+	service := &InboundWebhookEventService{
+		repo:               repo,
+		authService:        authService,
+		logger:             log,
+		workspaceRepo:      workspaceRepo,
+		messageHistoryRepo: messageHistoryRepo,
+		contactRepo:        contactRepo,
+	}
+
+	// No secret at all (the literal audit reproduction).
+	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: ""})
+	require.ErrorIs(t, err, domain.ErrWebhookUnauthorized)
+
+	// A guessed/incorrect secret must fail identically — no oracle.
+	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: "guessed-secret"})
+	require.ErrorIs(t, err, domain.ErrWebhookUnauthorized)
 }
 
 func TestNewInboundWebhookEventService(t *testing.T) {
@@ -2331,6 +2415,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 			Integrations: []domain.Integration{
 				{
 					ID: integrationID,
+					WebhookSecret: testWebhookSecret,
 					EmailProvider: domain.EmailProvider{
 						Kind: domain.EmailProviderKindSES,
 					},
@@ -2352,7 +2437,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 		contactRepo.EXPECT().MarkEmailsAsBounced(gomock.Any(), workspaceID, []string{"test@example.com"}, gomock.Any()).Return(nil)
 
 		// Call method
-		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 		assert.NoError(t, err)
 	})
 
@@ -2371,6 +2456,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 			Integrations: []domain.Integration{
 				{
 					ID: integrationID,
+					WebhookSecret: testWebhookSecret,
 					EmailProvider: domain.EmailProvider{
 						Kind: domain.EmailProviderKindSES,
 					},
@@ -2390,7 +2476,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 			})
 
 		// Call method
-		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 		assert.NoError(t, err)
 	})
 
@@ -2408,6 +2494,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 			Integrations: []domain.Integration{
 				{
 					ID: integrationID,
+					WebhookSecret: testWebhookSecret,
 					EmailProvider: domain.EmailProvider{
 						Kind: domain.EmailProviderKindSES,
 					},
@@ -2427,7 +2514,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 			})
 
 		// Call method
-		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 		assert.NoError(t, err)
 	})
 
@@ -2445,6 +2532,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 			Integrations: []domain.Integration{
 				{
 					ID: integrationID,
+					WebhookSecret: testWebhookSecret,
 					EmailProvider: domain.EmailProvider{
 						Kind: domain.EmailProviderKindSES,
 					},
@@ -2458,7 +2546,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 		messageHistoryRepo.EXPECT().SetStatusesIfNotSet(gomock.Any(), workspaceID, gomock.Any()).Return(errors.New("message history error"))
 
 		// Call method
-		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to update message status")
 	})
@@ -2479,6 +2567,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 			Integrations: []domain.Integration{
 				{
 					ID: integrationID,
+					WebhookSecret: testWebhookSecret,
 					EmailProvider: domain.EmailProvider{
 						Kind: domain.EmailProviderKindSES,
 					},
@@ -2503,7 +2592,7 @@ func TestProcessWebhook_AdditionalScenarios(t *testing.T) {
 		messageHistoryRepo.EXPECT().SetStatusesIfNotSet(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
 		// Call method - this should work normally
-		err = customService.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+		err = customService.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 		assert.NoError(t, err)
 	})
 }
@@ -2544,6 +2633,7 @@ func TestProcessWebhook_UpdatesMessageHistory(t *testing.T) {
 		Integrations: []domain.Integration{
 			{
 				ID: integrationID,
+				WebhookSecret: testWebhookSecret,
 				EmailProvider: domain.EmailProvider{
 					Kind: domain.EmailProviderKindPostmark,
 				},
@@ -2587,7 +2677,7 @@ func TestProcessWebhook_UpdatesMessageHistory(t *testing.T) {
 	})
 
 	// Call the method
-	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 
 	// Verify
 	assert.NoError(t, err)
@@ -2630,6 +2720,7 @@ func TestProcessWebhook_UpdatesMessageHistoryWithMultipleEvents(t *testing.T) {
 		Integrations: []domain.Integration{
 			{
 				ID: integrationID,
+				WebhookSecret: testWebhookSecret,
 				EmailProvider: domain.EmailProvider{
 					Kind: domain.EmailProviderKindSparkPost,
 				},
@@ -2704,7 +2795,7 @@ func TestProcessWebhook_UpdatesMessageHistoryWithMultipleEvents(t *testing.T) {
 	contactRepo.EXPECT().MarkEmailsAsBounced(gomock.Any(), workspaceID, []string{"test2@example.com"}, gomock.Any()).Return(nil)
 
 	// Call the method
-	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload)
+	err = service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret})
 
 	// Verify
 	assert.NoError(t, err)
@@ -2755,6 +2846,7 @@ func sesWorkspace(workspaceID, integrationID string) *domain.Workspace {
 		Integrations: []domain.Integration{
 			{
 				ID: integrationID,
+				WebhookSecret: testWebhookSecret,
 				EmailProvider: domain.EmailProvider{
 					Kind: domain.EmailProviderKindSES,
 				},
@@ -2780,7 +2872,7 @@ func TestProcessWebhook_SES_Permanent_HardBounce(t *testing.T) {
 	// Hard bounce: no count query, direct escalation.
 	contactRepo.EXPECT().MarkEmailsAsBounced(gomock.Any(), workspaceID, []string{"hard@example.com"}, gomock.Any()).Return(nil)
 
-	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload))
+	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret}))
 }
 
 func TestProcessWebhook_SES_TransientGeneral_BelowThreshold(t *testing.T) {
@@ -2808,7 +2900,7 @@ func TestProcessWebhook_SES_TransientGeneral_BelowThreshold(t *testing.T) {
 		Return(map[string]int{"soft@example.com": 2}, nil)
 	// MarkEmailsAsBounced must NOT be called — no EXPECT.
 
-	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload))
+	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret}))
 	_ = contactRepo
 }
 
@@ -2832,7 +2924,7 @@ func TestProcessWebhook_SES_TransientGeneral_AtThreshold(t *testing.T) {
 		Return(map[string]int{"chronic@example.com": domain.DefaultSoftBounceThreshold}, nil)
 	contactRepo.EXPECT().MarkEmailsAsBounced(gomock.Any(), workspaceID, []string{"chronic@example.com"}, gomock.Any()).Return(nil)
 
-	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload))
+	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret}))
 }
 
 func TestProcessWebhook_SES_TransientGeneral_RetryExhausted(t *testing.T) {
@@ -2854,7 +2946,7 @@ func TestProcessWebhook_SES_TransientGeneral_RetryExhausted(t *testing.T) {
 	// (No repo.EXPECT() for it.)
 	contactRepo.EXPECT().MarkEmailsAsBounced(gomock.Any(), workspaceID, []string{"expired@example.com"}, gomock.Any()).Return(nil)
 
-	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload))
+	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret}))
 }
 
 func TestProcessWebhook_SES_MessageTooLarge_NoOp(t *testing.T) {
@@ -2873,7 +2965,7 @@ func TestProcessWebhook_SES_MessageTooLarge_NoOp(t *testing.T) {
 	messageHistoryRepo.EXPECT().SetStatusesIfNotSet(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 	// SoftIgnore: no count query, no escalation. (No EXPECT for either.)
 
-	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload))
+	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret}))
 	_ = contactRepo
 }
 
@@ -2914,7 +3006,7 @@ func TestProcessWebhook_BatchedMixedClassifications(t *testing.T) {
 	workspace := &domain.Workspace{
 		ID: workspaceID,
 		Integrations: []domain.Integration{
-			{ID: integrationID, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSparkPost}},
+			{ID: integrationID, WebhookSecret: testWebhookSecret, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSparkPost}},
 		},
 	}
 	workspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
@@ -2941,7 +3033,7 @@ func TestProcessWebhook_BatchedMixedClassifications(t *testing.T) {
 			return nil
 		})
 
-	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload))
+	require.NoError(t, service.ProcessWebhook(context.Background(), workspaceID, integrationID, rawPayload, domain.InboundWebhookAuth{Secret: testWebhookSecret}))
 }
 
 // TestListEvents tests the ListEvents method of WebhookEventService

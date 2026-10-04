@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -46,7 +47,21 @@ func NewInboundWebhookEventService(
 }
 
 // ProcessWebhook processes a webhook event from an email provider
-func (s *InboundWebhookEventService) ProcessWebhook(ctx context.Context, workspaceID string, integrationID string, rawPayload []byte) error {
+//
+// Veridian fork — durcissement 2026-10-04 (audit sécurité, "webhooks entrants
+// non authentifiés") : AVANT ce correctif, ce point d'entrée traitait et
+// PERSISTAIT n'importe quel POST forgé (preuve d'audit : ?provider=smtp&
+// workspace_id=...&integration_id=... faisait basculer des contacts en
+// bounced via MarkEmailsAsBounced, sans jamais vérifier qui parlait). auth
+// est maintenant vérifié ICI, avant tout parsing provider et avant tout
+// accès au repo d'événements — voir authenticateInboundWebhook. Un échec
+// d'auth renvoie domain.ErrWebhookUnauthorized sans avoir touché au repo.
+//
+// L'appelant interne (VeridianBounceConsumer, relais Postfix / poller IMAP)
+// appelle cette méthode directement en Go — jamais par HTTP — et passe
+// InboundWebhookAuth{Internal: true} : il n'est jamais exposé au réseau et
+// continue de fonctionner à l'identique après ce durcissement.
+func (s *InboundWebhookEventService) ProcessWebhook(ctx context.Context, workspaceID string, integrationID string, rawPayload []byte, auth domain.InboundWebhookAuth) error {
 	// codecov:ignore:start
 	ctx, span := tracing.StartServiceSpan(ctx, "InboundWebhookEventService", "ProcessWebhook")
 	defer tracing.EndSpan(span, nil)
@@ -69,6 +84,18 @@ func (s *InboundWebhookEventService) ProcessWebhook(ctx context.Context, workspa
 			break
 		}
 	}
+
+	// Authentication gate — BEFORE any provider parsing, BEFORE any
+	// persistence. A missing/invalid secret (or an unknown integration,
+	// which carries no secret) is rejected identically, so a forged request
+	// cannot distinguish "wrong secret" from "integration does not exist".
+	if err := authenticateInboundWebhook(integration, auth); err != nil {
+		// codecov:ignore:start
+		tracing.MarkSpanError(ctx, err)
+		// codecov:ignore:end
+		return err
+	}
+
 	var events []*domain.InboundWebhookEvent
 
 	switch integration.EmailProvider.Kind {
@@ -234,6 +261,26 @@ func dedupeStrings(in []string) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// authenticateInboundWebhook enforces the inbound webhook auth gate
+// (durcissement 2026-10-04). Internal in-process callers (the Postfix relay /
+// IMAP bounce consumer) bypass it entirely via auth.Internal. Every other
+// caller — i.e. every real HTTP request hitting /webhooks/email — MUST
+// present the exact per-integration secret, compared in constant time.
+// Fail-closed: an integration without a configured secret (never issued one,
+// or not an email integration) is rejected, never silently accepted.
+func authenticateInboundWebhook(integration domain.Integration, auth domain.InboundWebhookAuth) error {
+	if auth.Internal {
+		return nil
+	}
+	if integration.WebhookSecret == "" || auth.Secret == "" {
+		return domain.ErrWebhookUnauthorized
+	}
+	if subtle.ConstantTimeCompare([]byte(auth.Secret), []byte(integration.WebhookSecret)) != 1 {
+		return domain.ErrWebhookUnauthorized
+	}
+	return nil
 }
 
 // extractXMessageIDFromHeaders searches for the X-Message-ID header in SES mail headers.

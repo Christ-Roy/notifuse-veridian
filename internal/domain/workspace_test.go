@@ -3968,6 +3968,68 @@ func TestIntegration_AfterLoad_SupabaseIntegration(t *testing.T) {
 	assert.Equal(t, "user-created-secret", integration.SupabaseSettings.BeforeUserCreatedHook.SignatureKey)
 }
 
+// TestIntegration_WebhookSecret_RoundTrip reproduces, at the domain layer,
+// the generate -> encrypt -> persist -> decrypt cycle the hardening of
+// 2026-10-04 relies on: an email integration gets a webhook secret the
+// first time it's saved, it round-trips through encryption intact, it is
+// STABLE across repeated saves (never rotated silently, so a provider-side
+// webhook URL issued once keeps working), and it never appears in clear in
+// a JSON response (API leak check).
+func TestIntegration_WebhookSecret_RoundTrip(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	integration := Integration{
+		ID:   "email-1",
+		Name: "My SMTP",
+		Type: IntegrationTypeEmail,
+		EmailProvider: EmailProvider{
+			Kind: EmailProviderKindSMTP,
+			SMTP: &SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p"},
+		},
+	}
+	require.Empty(t, integration.WebhookSecret, "no secret before the first save")
+
+	require.NoError(t, integration.BeforeSave(passphrase))
+	require.NotEmpty(t, integration.EncryptedWebhookSecret, "a secret must be generated and persisted (ciphertext)")
+	firstSecretPlaintext := integration.WebhookSecret
+
+	require.NoError(t, integration.AfterLoad(passphrase))
+	assert.Equal(t, firstSecretPlaintext, integration.WebhookSecret, "decrypts back to the same secret")
+
+	// Saving again (e.g. an unrelated settings:update) must NOT rotate the
+	// secret's VALUE — a provider webhook URL issued once must keep working.
+	// The ciphertext bytes may legitimately change (AES-GCM uses a fresh
+	// nonce per encryption) but must decrypt back to the same plaintext.
+	require.NoError(t, integration.BeforeSave(passphrase))
+	resaved := integration
+	require.NoError(t, resaved.AfterLoad(passphrase))
+	assert.Equal(t, firstSecretPlaintext, resaved.WebhookSecret, "re-save must not rotate the secret's value")
+
+	// Never leaks in clear via JSON (API responses, logs via %+v of the struct, etc.)
+	raw, err := json.Marshal(integration)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), firstSecretPlaintext, "clear webhook secret must never be serialized")
+	assert.Contains(t, string(raw), "encrypted_webhook_secret", "ciphertext must still round-trip for persistence")
+}
+
+// TestIntegration_WebhookSecret_NonEmailIntegrationUntouched verifies the
+// webhook secret machinery is scoped to email integrations only (an IMAP or
+// Supabase integration never receives/needs one).
+func TestIntegration_WebhookSecret_NonEmailIntegrationUntouched(t *testing.T) {
+	integration := Integration{
+		ID:   "supabase-2",
+		Name: "My Supabase",
+		Type: IntegrationTypeSupabase,
+		SupabaseSettings: &SupabaseIntegrationSettings{
+			AuthEmailHook:         SupabaseAuthEmailHookSettings{SignatureKey: "a"},
+			BeforeUserCreatedHook: SupabaseUserCreatedHookSettings{SignatureKey: "b"},
+		},
+	}
+	require.NoError(t, integration.BeforeSave("test-passphrase"))
+	assert.Empty(t, integration.WebhookSecret)
+	assert.Empty(t, integration.EncryptedWebhookSecret)
+}
+
 func TestIntegration_BeforeAfterSave_EmailIntegrationStillWorks(t *testing.T) {
 	passphrase := "test-passphrase"
 

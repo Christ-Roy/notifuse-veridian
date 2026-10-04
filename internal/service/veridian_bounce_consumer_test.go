@@ -75,8 +75,8 @@ func TestVeridianBounceConsumer_HardBounce_TriggersSuppression(t *testing.T) {
 	// ProcessWebhook doit être appelé avec l'ID de l'intégration SMTP (PAS l'IMAP)
 	// et un payload SMTP bounce correctement formé (recipient + code DSN).
 	webhookSvc.EXPECT().
-		ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any()).
-		DoAndReturn(func(_ context.Context, _, _ string, raw []byte) error {
+		ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, raw []byte, _ domain.InboundWebhookAuth) error {
 			var p domain.SMTPWebhookPayload
 			require.NoError(t, json.Unmarshal(raw, &p))
 			assert.Equal(t, "bounce", p.Event)
@@ -139,7 +139,7 @@ func TestVeridianBounceConsumer_Idempotent_SameNDRTwice(t *testing.T) {
 	// status NOT IN ('complained','bounced')). On valide ici que le consumer est
 	// stable et déterministe sur un rejeu.
 	wsRepo.EXPECT().GetByID(gomock.Any(), wsID).Return(workspaceWithSMTP(wsID, smtpID), nil).Times(2)
-	webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any()).Return(nil).Times(2)
+	webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	c := NewVeridianBounceConsumer(webhookSvc, wsRepo, logger.NewLogger())
 	msg := &domain.VeridianIMAPMessage{
@@ -213,7 +213,7 @@ func TestVeridianBounceConsumer_ProcessWebhookError_Propagated(t *testing.T) {
 	const wsID = "ws-cold-1"
 	const smtpID = "smtp-1"
 	wsRepo.EXPECT().GetByID(gomock.Any(), wsID).Return(workspaceWithSMTP(wsID, smtpID), nil)
-	webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any()).Return(errors.New("store failed"))
+	webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any(), gomock.Any()).Return(errors.New("store failed"))
 
 	c := NewVeridianBounceConsumer(webhookSvc, wsRepo, logger.NewLogger())
 	msg := &domain.VeridianIMAPMessage{
@@ -238,8 +238,8 @@ func TestVeridianBounceConsumer_TransientWebhookErrorSucceedsOnReplay(t *testing
 	sentinel := errors.New("temporary webhook store outage")
 
 	wsRepo.EXPECT().GetByID(gomock.Any(), wsID).Return(workspaceWithSMTP(wsID, smtpID), nil).Times(2)
-	first := webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any()).Return(sentinel)
-	webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any()).Return(nil).After(first)
+	first := webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any(), gomock.Any()).Return(sentinel)
+	webhookSvc.EXPECT().ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any(), gomock.Any()).Return(nil).After(first)
 
 	consumer := NewVeridianBounceConsumer(webhookSvc, wsRepo, logger.NewLogger())
 	msg := &domain.VeridianIMAPMessage{
@@ -280,8 +280,8 @@ func TestVeridianBounceConsumer_SoftBounce_StillProcessed(t *testing.T) {
 		"Diagnostic-Code: smtp;452 4.2.2 over quota\r\n--S--\r\n"
 
 	webhookSvc.EXPECT().
-		ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any()).
-		DoAndReturn(func(_ context.Context, _, _ string, raw []byte) error {
+		ProcessWebhook(gomock.Any(), wsID, smtpID, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, raw []byte, _ domain.InboundWebhookAuth) error {
 			var p domain.SMTPWebhookPayload
 			require.NoError(t, json.Unmarshal(raw, &p))
 			assert.Equal(t, "plein@contoso.com", p.Recipient)

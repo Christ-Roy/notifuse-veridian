@@ -3,7 +3,9 @@ package domain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -227,10 +229,38 @@ type InboundWebhookEventListResult struct {
 	HasMore    bool                   `json:"has_more"`
 }
 
+// ErrWebhookUnauthorized is returned by ProcessWebhook when the inbound
+// request failed to authenticate (missing/invalid per-integration secret,
+// or an invalid provider signature). The HTTP handler maps it to 401 and
+// never calls the repository: nothing is persisted on this path.
+var ErrWebhookUnauthorized = errors.New("inbound webhook authentication failed")
+
+// InboundWebhookAuth carries the material needed to authenticate an inbound
+// webhook delivery BEFORE any provider payload is parsed or persisted.
+//
+// Internal is set by trusted in-process callers that invoke ProcessWebhook
+// directly in Go — never over HTTP — such as VeridianBounceConsumer (the
+// Postfix relay / IMAP poller bounce path). Those calls never cross the
+// network boundary this struct protects, so they are exempt by design and
+// keep working unchanged after this hardening (2026-10-04 audit).
+//
+// Secret is the `?secret=` query parameter from the real HTTP request, compared
+// in constant time against the per-integration webhook secret
+// (Integration.WebhookSecret). Headers is the raw request header set, used
+// for providers with an official signature scheme carried in a header
+// (kept for future use; today only Secret and the Mailgun/SES in-body
+// signatures are checked).
+type InboundWebhookAuth struct {
+	Internal bool
+	Secret   string
+	Headers  http.Header
+}
+
 // InboundWebhookEventServiceInterface defines the interface for inbound webhook event service
 type InboundWebhookEventServiceInterface interface {
-	// ProcessWebhook processes a webhook event from an email provider
-	ProcessWebhook(ctx context.Context, workspaceID, integrationID string, rawPayload []byte) error
+	// ProcessWebhook processes a webhook event from an email provider. auth
+	// MUST be checked before any persistence — see ErrWebhookUnauthorized.
+	ProcessWebhook(ctx context.Context, workspaceID, integrationID string, rawPayload []byte, auth InboundWebhookAuth) error
 
 	// ListEvents retrieves all inbound webhook events for a workspace
 	ListEvents(ctx context.Context, workspaceID string, params InboundWebhookEventListParams) (*InboundWebhookEventListResult, error)

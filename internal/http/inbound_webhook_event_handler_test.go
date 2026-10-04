@@ -30,6 +30,7 @@ func setupInboundWebhookEventHandlerTest(t *testing.T) (*InboundWebhookEventHand
 	// Set up logger mock expectations
 	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
 
 	// Create key pair for testing
@@ -127,12 +128,12 @@ func TestInboundWebhookEventHandler_handleIncomingWebhook_ProcessError(t *testin
 
 	// Create a valid request
 	payload := []byte(`{"event": "test"}`)
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=ses&workspace_id=ws123&integration_id=int123", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=ses&workspace_id=ws123&integration_id=int123&secret=s3cr3t", bytes.NewReader(payload))
 	w := httptest.NewRecorder()
 
 	// Mock service to return an error
 	mockService.EXPECT().
-		ProcessWebhook(gomock.Any(), "ws123", "int123", payload).
+		ProcessWebhook(gomock.Any(), "ws123", "int123", payload, domain.InboundWebhookAuth{Secret: "s3cr3t", Headers: req.Header}).
 		Return(errors.New("processing error"))
 
 	// Call the handler
@@ -152,12 +153,12 @@ func TestInboundWebhookEventHandler_handleIncomingWebhook_Success(t *testing.T) 
 
 	// Create a valid request
 	payload := []byte(`{"event": "test"}`)
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=ses&workspace_id=ws123&integration_id=int123", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=ses&workspace_id=ws123&integration_id=int123&secret=s3cr3t", bytes.NewReader(payload))
 	w := httptest.NewRecorder()
 
 	// Mock service to return success
 	mockService.EXPECT().
-		ProcessWebhook(gomock.Any(), "ws123", "int123", payload).
+		ProcessWebhook(gomock.Any(), "ws123", "int123", payload, domain.InboundWebhookAuth{Secret: "s3cr3t", Headers: req.Header}).
 		Return(nil)
 
 	// Call the handler
@@ -170,6 +171,33 @@ func TestInboundWebhookEventHandler_handleIncomingWebhook_Success(t *testing.T) 
 	err := json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Equal(t, true, response["success"])
+}
+
+// TestInboundWebhookEventHandler_handleIncomingWebhook_Unauthorized reproduces
+// the 2026-10-04 audit finding at the HTTP layer: a forged POST with no
+// (or wrong) secret must get 401, and the handler must distinguish
+// domain.ErrWebhookUnauthorized from any other processing error — mapping it
+// to "Unauthorized" rather than the generic "Failed to process webhook".
+func TestInboundWebhookEventHandler_handleIncomingWebhook_Unauthorized(t *testing.T) {
+	handler, mockService, _ := setupInboundWebhookEventHandlerTest(t)
+
+	// Exact shape of the audit's forged request: provider=smtp, no secret at all.
+	payload := []byte(`{"event":"bounce"}`)
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/email?provider=smtp&workspace_id=ws123&integration_id=int123", bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+
+	mockService.EXPECT().
+		ProcessWebhook(gomock.Any(), "ws123", "int123", payload, domain.InboundWebhookAuth{Secret: "", Headers: req.Header}).
+		Return(domain.ErrWebhookUnauthorized)
+
+	handler.handleIncomingWebhook(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	var response map[string]string
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "Unauthorized", response["error"])
 }
 
 // Tests for handleList

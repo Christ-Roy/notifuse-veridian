@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"io"
 	"net/http"
 
@@ -61,7 +62,21 @@ func (h *InboundWebhookEventHandler) handleIncomingWebhook(w http.ResponseWriter
 		return
 	}
 
-	// Log the incoming webhook
+	// Veridian fork — durcissement 2026-10-04 (audit sécurité) : ce point
+	// d'entrée est PUBLIC et recevait n'importe quel POST forgé sans aucune
+	// vérification (preuve d'audit : ?provider=smtp&workspace_id=...&
+	// integration_id=... basculait des contacts en bounced via
+	// MarkEmailsAsBounced). L'authentification (secret par intégration,
+	// comparé en temps constant, + signature officielle du fournisseur
+	// quand elle est vérifiable) vit dans le service, AVANT tout parsing
+	// provider et AVANT toute écriture : voir
+	// InboundWebhookEventService.ProcessWebhook / authenticateInboundWebhook.
+	// L'appelant INTERNE (relais Postfix / poller IMAP, cf
+	// VeridianBounceConsumer) appelle ProcessWebhook directement en Go,
+	// jamais par HTTP : il n'est pas concerné par cette porte et continue de
+	// fonctionner à l'identique.
+	secret := r.URL.Query().Get("secret")
+
 	h.logger.WithField("provider", provider).
 		WithField("workspace_id", workspaceID).
 		WithField("integration_id", integrationID).
@@ -75,8 +90,21 @@ func (h *InboundWebhookEventHandler) handleIncomingWebhook(w http.ResponseWriter
 		return
 	}
 
-	// Process the webhook event
-	err = h.service.ProcessWebhook(r.Context(), workspaceID, integrationID, body)
+	// Process the webhook event (authentication happens first, inside the service)
+	err = h.service.ProcessWebhook(r.Context(), workspaceID, integrationID, body, domain.InboundWebhookAuth{
+		Secret:  secret,
+		Headers: r.Header,
+	})
+	if errors.Is(err, domain.ErrWebhookUnauthorized) {
+		// Pas de détail (quelle partie a échoué, quel secret était attendu) :
+		// une 401 bavarde aiderait à deviner le bon secret par essais.
+		h.logger.WithField("workspace_id", workspaceID).
+			WithField("integration_id", integrationID).
+			WithField("provider", provider).
+			Warn("Rejected unauthenticated inbound webhook")
+		WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if err != nil {
 		h.logger.WithField("error", err.Error()).
 			WithField("workspace_id", workspaceID).

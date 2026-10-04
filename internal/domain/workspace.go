@@ -3,8 +3,10 @@ package domain
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,16 @@ import (
 	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/asaskevich/govalidator"
 )
+
+// generateWebhookSecret returns a fresh random 32-byte (256-bit) hex-encoded
+// secret used to authenticate inbound provider webhooks for one integration.
+func generateWebhookSecret() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := cryptorand.Read(buf); err != nil {
+		return "", fmt.Errorf("failed to generate webhook secret: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
+}
 
 // PermissionResource defines the different resources that can have permissions
 type PermissionResource string
@@ -140,6 +152,28 @@ type Integration struct {
 	IMAPSettings *IMAPSettings `json:"imap_settings,omitempty"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
+
+	// Veridian fork — secret d'authentification des webhooks ENTRANTS
+	// (/webhooks/email?...&secret=...), un par intégration email. Jamais
+	// stocké en clair : EncryptedWebhookSecret est le ciphertext persisté,
+	// WebhookSecret le clair runtime (généré à la volée si absent, chiffré
+	// par BeforeSave, déchiffré par AfterLoad). Comparé en temps constant par
+	// le handler HTTP avant tout traitement (durcissement 2026-10-04, audit
+	// webhook forgeable : POST ?provider=smtp&workspace_id=...&integration_id=...
+	// sans aucune vérification faisait basculer des contacts en bounced).
+	EncryptedWebhookSecret string `json:"encrypted_webhook_secret,omitempty"`
+	WebhookSecret          string `json:"webhook_secret,omitempty"`
+}
+
+// MarshalJSON masque le secret webhook EN CLAIR à toute sérialisation JSON
+// sortante (symétrie avec SMTPSettings.MarshalJSON / IMAPSettings.MarshalJSON) :
+// le ciphertext EncryptedWebhookSecret reste (c'est lui le round-trip DB), le
+// clair WebhookSecret ne doit jamais fuiter par une réponse API.
+func (i Integration) MarshalJSON() ([]byte, error) {
+	type Alias Integration
+	clone := Alias(i)
+	clone.WebhookSecret = ""
+	return json.Marshal(clone)
 }
 
 // Validate validates the integration
@@ -204,6 +238,20 @@ func (i *Integration) Validate(passphrase string) error {
 
 // BeforeSave prepares an Integration for saving by encrypting secrets
 func (i *Integration) BeforeSave(secretkey string) error {
+	// Veridian fork — garantit un secret webhook ENTRANT pour toute
+	// intégration email avant persistance (généré une seule fois, stable
+	// ensuite), puis le chiffre. Fail-closed par construction : un secret
+	// absent est traité comme une auth refusée par le handler HTTP, jamais
+	// comme un bypass.
+	if i.Type == IntegrationTypeEmail {
+		if err := i.EnsureWebhookSecret(); err != nil {
+			return fmt.Errorf("failed to generate webhook secret: %w", err)
+		}
+		if err := i.EncryptWebhookSecret(secretkey); err != nil {
+			return fmt.Errorf("failed to encrypt webhook secret: %w", err)
+		}
+	}
+
 	// Encrypt based on integration type
 	switch i.Type {
 	case IntegrationTypeEmail:
@@ -242,6 +290,17 @@ func (i *Integration) BeforeSave(secretkey string) error {
 
 // AfterLoad processes an Integration after loading by decrypting secrets
 func (i *Integration) AfterLoad(secretkey string) error {
+	// Veridian fork — déchiffre le secret webhook entrant pour comparaison
+	// runtime (handler HTTP). Intégration créée avant ce durcissement (pas
+	// encore de ciphertext) : WebhookSecret reste vide, EnsureWebhookSecret
+	// le comblera au prochain save (settings:update, etc.) ; en attendant,
+	// le handler refuse (fail-closed) plutôt que d'accepter sans secret.
+	if i.Type == IntegrationTypeEmail && i.EncryptedWebhookSecret != "" {
+		if err := i.DecryptWebhookSecret(secretkey); err != nil {
+			return fmt.Errorf("failed to decrypt webhook secret: %w", err)
+		}
+	}
+
 	// Decrypt based on integration type
 	switch i.Type {
 	case IntegrationTypeEmail:
@@ -275,6 +334,47 @@ func (i *Integration) AfterLoad(secretkey string) error {
 		}
 	}
 
+	return nil
+}
+
+// EnsureWebhookSecret generates a random webhook secret if none is set yet.
+// Idempotent: a secret already present (clear or still only as ciphertext
+// pending decryption) is left untouched so the provider-side webhook URL
+// never needs to be reconfigured once issued.
+func (i *Integration) EnsureWebhookSecret() error {
+	if i.WebhookSecret != "" || i.EncryptedWebhookSecret != "" {
+		return nil
+	}
+	secret, err := generateWebhookSecret()
+	if err != nil {
+		return err
+	}
+	i.WebhookSecret = secret
+	return nil
+}
+
+// EncryptWebhookSecret encrypts the clear WebhookSecret into
+// EncryptedWebhookSecret for persistence. No-op if there is nothing to do.
+func (i *Integration) EncryptWebhookSecret(passphrase string) error {
+	if i.WebhookSecret == "" {
+		return nil
+	}
+	encrypted, err := crypto.EncryptString(i.WebhookSecret, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt webhook secret: %w", err)
+	}
+	i.EncryptedWebhookSecret = encrypted
+	return nil
+}
+
+// DecryptWebhookSecret decrypts EncryptedWebhookSecret into the clear
+// runtime field used for constant-time comparison against inbound requests.
+func (i *Integration) DecryptWebhookSecret(passphrase string) error {
+	secret, err := crypto.DecryptFromHexString(i.EncryptedWebhookSecret, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt webhook secret: %w", err)
+	}
+	i.WebhookSecret = secret
 	return nil
 }
 
