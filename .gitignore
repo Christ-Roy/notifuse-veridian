@@ -33,3 +33,5 @@ console/.claude/settings.local.json
 service.test
 
 integration.test
+__pycache__/
+*.pyc

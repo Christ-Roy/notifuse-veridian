@@ -26,23 +26,31 @@ func NewVeridianIdempotencyRepository(systemDB *sql.DB) domain.VeridianIdempoten
 // Get recupere une entree par cle. Retourne sql.ErrNoRows si absent OU si
 // expire (expires_at < NOW) — le cron DeleteExpired n'a pas encore tourne
 // pour cette ligne mais on la traite deja comme inexistante.
-func (r *veridianIdempotencyRepository) Get(ctx context.Context, key string) (*domain.VeridianIdempotencyEntry, error) {
+// === Veridian patch 2026-10-04 (audit backend, V60) ===
+// Scope desormais par (key, tenantID) : key = $1 AND tenant_id = $2 OU, si
+// tenantID est vide (appel sans tenant identifiable), tenant_id IS NULL.
+// Avant ce correctif : WHERE key = $1 seul -- deux appelants avec la meme
+// valeur de cle (mais des tenants differents) se rejouaient mutuellement
+// leurs reponses cachees.
+func (r *veridianIdempotencyRepository) Get(ctx context.Context, key string, tenantID string) (*domain.VeridianIdempotencyEntry, error) {
 	const q = `
 		SELECT key, endpoint, tenant_id, request_hash, response_status, response_body,
 		       created_at, expires_at
 		FROM veridian_idempotency_keys
-		WHERE key = $1 AND expires_at > NOW()
+		WHERE key = $1
+		  AND ( ($2 = '' AND tenant_id IS NULL) OR tenant_id = $2 )
+		  AND expires_at > NOW()
 	`
 	var e domain.VeridianIdempotencyEntry
-	var tenantID sql.NullString
-	if err := r.systemDB.QueryRowContext(ctx, q, key).Scan(
-		&e.Key, &e.Endpoint, &tenantID, &e.RequestHash, &e.ResponseStatus, &e.ResponseBody,
+	var tenantIDCol sql.NullString
+	if err := r.systemDB.QueryRowContext(ctx, q, key, tenantID).Scan(
+		&e.Key, &e.Endpoint, &tenantIDCol, &e.RequestHash, &e.ResponseStatus, &e.ResponseBody,
 		&e.CreatedAt, &e.ExpiresAt,
 	); err != nil {
 		return nil, err
 	}
-	if tenantID.Valid {
-		e.TenantID = tenantID.String
+	if tenantIDCol.Valid {
+		e.TenantID = tenantIDCol.String
 	}
 	return &e, nil
 }

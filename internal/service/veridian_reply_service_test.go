@@ -479,3 +479,77 @@ func TestVeridianReply_resolveRepliedAt(t *testing.T) {
 	got = m.svc.resolveRepliedAt(time.Now().Add(72 * time.Hour))
 	assert.WithinDuration(t, time.Now().UTC(), got, 5*time.Second)
 }
+
+
+func TestVeridianReply_Process_StatIncrementFailsButProcessingSucceeds(t *testing.T) {
+	// Mission 2026-10-04 (audit backend) : un echec de IncrementAutomationStat
+	// (bookkeeping stats, veridian_reply_service.go ~L312) ne doit pas faire
+	// echouer le traitement de la reponse inbound elle-meme (deja persistee).
+	m, ctrl := newReplyTestMocks(t)
+	defer ctrl.Finish()
+
+	repliedDate := time.Date(2026, 6, 15, 9, 0, 0, 0, time.UTC)
+	msg := &domain.VeridianIMAPMessage{
+		WorkspaceID: replyWS,
+		From:        "prospect@acme.fr",
+		Subject:     "Re: proposition",
+		InReplyTo:   "<sent-uuid-1@send.veridian.site>",
+		Date:        repliedDate,
+	}
+
+	// Détection match fort.
+	m.messageRepo.EXPECT().
+		FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-1").
+		Return("prospect@acme.fr", true, nil)
+	// Pas encore replied.
+	m.replyRepo.EXPECT().HasReplied(gomock.Any(), replyWS, "prospect@acme.fr").Return(false, nil)
+	// Signal posé.
+	m.replyRepo.EXPECT().
+		MarkReplied(gomock.Any(), replyWS, gomock.AssignableToTypeOf(&domain.VeridianContactReply{})).
+		DoAndReturn(func(_ context.Context, _ string, r *domain.VeridianContactReply) error {
+			assert.Equal(t, "prospect@acme.fr", r.ContactEmail)
+			assert.Equal(t, domain.VeridianReplyMatchMessageID, r.MatchType)
+			assert.Equal(t, "sent-uuid-1", r.MatchedMessageID)
+			assert.Equal(t, repliedDate, r.RepliedAt)
+			return nil
+		})
+	// Timeline email.replied.
+	m.timelineRepo.EXPECT().
+		Create(gomock.Any(), replyWS, gomock.AssignableToTypeOf(&domain.ContactTimelineEntry{})).
+		DoAndReturn(func(_ context.Context, _ string, e *domain.ContactTimelineEntry) error {
+			assert.Equal(t, "email.replied", e.Kind)
+			assert.Equal(t, "prospect@acme.fr", e.Email)
+			return nil
+		})
+	// Exit actif : 1 automation active trouvée → exitée avec reason replied.
+	activeCA := &domain.ContactAutomation{
+		ID:           "ca1",
+		AutomationID: "auto1",
+		ContactEmail: "prospect@acme.fr",
+		Status:       domain.ContactAutomationStatusActive,
+	}
+	m.autoRepo.EXPECT().
+		ListContactAutomations(gomock.Any(), replyWS, gomock.Any()).
+		Return([]*domain.ContactAutomation{activeCA}, 1, nil)
+	m.autoRepo.EXPECT().
+		UpdateContactAutomation(gomock.Any(), replyWS, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, ca *domain.ContactAutomation) error {
+			assert.Equal(t, domain.ContactAutomationStatusExited, ca.Status)
+			require.NotNil(t, ca.ExitReason)
+			assert.Equal(t, domain.ExitReasonReplied, *ca.ExitReason)
+			assert.Nil(t, ca.CurrentNodeID)
+			assert.Nil(t, ca.ScheduledAt)
+			return nil
+		})
+	m.autoRepo.EXPECT().IncrementAutomationStat(gomock.Any(), replyWS, "auto1", "exited").Return(errors.New("stats db down"))
+	// automation.end timeline event lors de l'exit.
+	m.timelineRepo.EXPECT().
+		Create(gomock.Any(), replyWS, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, e *domain.ContactTimelineEntry) error {
+			assert.Equal(t, "automation.end", e.Kind)
+			return nil
+		})
+
+	err := m.svc.ProcessInboundMessage(context.Background(), msg)
+	require.NoError(t, err)
+}

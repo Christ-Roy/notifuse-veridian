@@ -2203,6 +2203,24 @@ func TestVerifyEmailHMAC(t *testing.T) {
 		result := VerifyEmailHMAC(email, validHMAC, differentKey)
 		assert.False(t, result)
 	})
+
+	// Mission 2026-10-04 (audit secu) : VerifyEmailHMAC comparait par == (duree
+	// variable) sur des routes PUBLIQUES non authentifiees (/preferences,
+	// /subscribe, /unsubscribe-oneclick) -- bascule sur hmac.Equal (temps
+	// constant). Ce test fige le comportement FONCTIONNEL (une comparaison en
+	// temps constant doit rendre EXACTEMENT le meme verdict qu'une comparaison
+	// naive, seule la duree change -- non mesurable par un test unitaire, donc
+	// non pretendu ici) : une longueur differente ne doit ni paniquer ni
+	// renvoyer un faux positif.
+	t.Run("HMAC of different length never matches (hmac.Equal, pas de panic)", func(t *testing.T) {
+		shortHMAC := validHMAC[:len(validHMAC)-4]
+		result := VerifyEmailHMAC(email, shortHMAC, secretKey)
+		assert.False(t, result)
+
+		longHMAC := validHMAC + "extra"
+		result = VerifyEmailHMAC(email, longHMAC, secretKey)
+		assert.False(t, result)
+	})
 }
 
 // TestFromJSON_AllTypesParser tests the FromJSON function with all possible input types

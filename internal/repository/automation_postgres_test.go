@@ -1662,3 +1662,79 @@ func TestAutomationRepository_EnrollContact(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
+
+// Mission 2026-10-04 (audit backend) : IncrementAutomationStat n'avait aucun
+// test colocalise malgre 6 call-sites en prod (automation_executor.go,
+// veridian_reply_service.go) -- ajoute ici en meme temps que
+// DecrementAutomationStat (ResetContact, meme fichier).
+func TestAutomationRepository_IncrementAutomationStat_Success(t *testing.T) {
+	db, mock, repo := setupAutomationMock(t)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE automations
+		SET stats = COALESCE(stats, '{}'::jsonb) ||
+			jsonb_build_object('exited', COALESCE((stats->>'exited')::int, 0) + 1),
+			updated_at = $1
+		WHERE id = $2 AND workspace_id = $3
+	`)).WithArgs(sqlmock.AnyArg(), "auto-123", "ws-1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.IncrementAutomationStat(context.Background(), "ws-1", "auto-123", "exited")
+	require.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAutomationRepository_IncrementAutomationStat_InvalidStatName(t *testing.T) {
+	db, _, repo := setupAutomationMock(t)
+	defer db.Close()
+
+	err := repo.IncrementAutomationStat(context.Background(), "ws-1", "auto-123", "bogus")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid stat name")
+}
+
+func TestAutomationRepository_DecrementAutomationStat_Success(t *testing.T) {
+	db, mock, repo := setupAutomationMock(t)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE automations
+		SET stats = COALESCE(stats, '{}'::jsonb) ||
+			jsonb_build_object('exited', GREATEST(COALESCE((stats->>'exited')::int, 0) - 1, 0)),
+			updated_at = $1
+		WHERE id = $2 AND workspace_id = $3
+	`)).WithArgs(sqlmock.AnyArg(), "auto-123", "ws-1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.DecrementAutomationStat(context.Background(), "ws-1", "auto-123", "exited")
+	require.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAutomationRepository_DecrementAutomationStat_InvalidStatName(t *testing.T) {
+	db, _, repo := setupAutomationMock(t)
+	defer db.Close()
+
+	err := repo.DecrementAutomationStat(context.Background(), "ws-1", "auto-123", "bogus")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid stat name")
+}
+
+func TestAutomationRepository_DecrementAutomationStat_DBError(t *testing.T) {
+	db, mock, repo := setupAutomationMock(t)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE automations
+		SET stats = COALESCE(stats, '{}'::jsonb) ||
+			jsonb_build_object('completed', GREATEST(COALESCE((stats->>'completed')::int, 0) - 1, 0)),
+			updated_at = $1
+		WHERE id = $2 AND workspace_id = $3
+	`)).WithArgs(sqlmock.AnyArg(), "auto-123", "ws-1").
+		WillReturnError(errors.New("db down"))
+
+	err := repo.DecrementAutomationStat(context.Background(), "ws-1", "auto-123", "completed")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to decrement automation stat")
+}

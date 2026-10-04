@@ -785,6 +785,12 @@ type AutomationRepository interface {
 	UpdateAutomationStats(ctx context.Context, workspaceID, automationID string, stats *AutomationStats) error
 	UpdateAutomationStatsTx(ctx context.Context, tx *sql.Tx, workspaceID, automationID string, stats *AutomationStats) error
 	IncrementAutomationStat(ctx context.Context, workspaceID, automationID, statName string) error
+	// DecrementAutomationStat -- mission 2026-10-04 (audit backend) :
+	// ResetContact doit decrementer le compteur de l'etat terminal quitte
+	// (exited/completed) pour eviter le double comptage quand le contact
+	// retraverse l'automation et re-termine plus tard. Plancher a 0 (jamais
+	// negatif) cote SQL.
+	DecrementAutomationStat(ctx context.Context, workspaceID, automationID, statName string) error
 }
 
 //go:generate mockgen -destination mocks/mock_automation_service.go -package mocks github.com/Notifuse/notifuse/internal/domain AutomationService

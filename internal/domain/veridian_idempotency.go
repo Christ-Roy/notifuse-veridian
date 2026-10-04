@@ -27,14 +27,17 @@ type VeridianIdempotencyEntry struct {
 
 // VeridianIdempotencyRepository gere la table veridian_idempotency_keys.
 //
-// Get : lookup par PK (key). Retourne sql.ErrNoRows si absent.
-// Save : INSERT. Conflit sur PK (race) → erreur (le caller doit catch
-//
-//	avec errors.Is et fallback en GET).
+// Get : lookup par (key, tenantID). Retourne sql.ErrNoRows si absent.
+// tenantID vide = scope "pas de tenant identifiable" (NULL cote colonne),
+// cf. migration V60 (audit backend 2026-10-04) : avant V60, le lookup etait
+// par key SEUL, globalement -- deux appelants choisissant par coincidence
+// la meme valeur de cle se rejouaient mutuellement leurs reponses, cross-
+// tenant. Save : INSERT. Conflit sur PK (race) → erreur (le caller doit
+// catch avec errors.Is et fallback en GET).
 //
 // DeleteExpired : cron, retourne le nombre de lignes supprimees.
 type VeridianIdempotencyRepository interface {
-	Get(ctx context.Context, key string) (*VeridianIdempotencyEntry, error)
+	Get(ctx context.Context, key string, tenantID string) (*VeridianIdempotencyEntry, error)
 	Save(ctx context.Context, entry *VeridianIdempotencyEntry) error
 	DeleteExpired(ctx context.Context) (int64, error)
 }

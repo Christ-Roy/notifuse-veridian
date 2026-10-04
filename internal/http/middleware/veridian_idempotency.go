@@ -80,8 +80,13 @@ func VeridianIdempotencyMiddleware(repo domain.VeridianIdempotencyRepository, lo
 			r.ContentLength = int64(len(body))
 
 			requestHash := hashRequest(r.Method, r.URL.Path, body)
+			// Mission 2026-10-04 (audit backend, V60) : extrait AVANT le Get
+			// (et non plus seulement au Save) pour scoper le lookup par tenant
+			// -- sinon deux appelants avec la meme valeur de cle se rejouent
+			// mutuellement leurs reponses, cross-tenant.
+			tenantID := extractTenantIDFromBody(body)
 
-			existing, getErr := repo.Get(r.Context(), key)
+			existing, getErr := repo.Get(r.Context(), key, tenantID)
 			if getErr != nil && !errors.Is(getErr, sql.ErrNoRows) {
 				if log != nil {
 					log.WithFields(map[string]interface{}{
@@ -125,7 +130,7 @@ func VeridianIdempotencyMiddleware(repo domain.VeridianIdempotencyRepository, lo
 			entry := &domain.VeridianIdempotencyEntry{
 				Key:            key,
 				Endpoint:       r.URL.Path,
-				TenantID:       extractTenantIDFromBody(body),
+				TenantID:       tenantID,
 				RequestHash:    requestHash,
 				ResponseStatus: capture.statusCode,
 				ResponseBody:   capture.body.Bytes(),

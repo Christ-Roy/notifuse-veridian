@@ -450,6 +450,20 @@ func (s *AutomationService) ExitContact(ctx context.Context, workspaceID, automa
 	if err := s.repo.UpdateContactAutomation(ctx, workspaceID, ca); err != nil {
 		return nil, fmt.Errorf("failed to exit contact from automation: %w", err)
 	}
+
+	// Mission 2026-10-04 (audit backend) : ExitContact (sortie MANUELLE, API/
+	// console) est le SEUL chemin de sortie qui n'incrementait pas le compteur
+	// "exited" -- l'executor (automation_executor.go:214/372) et le service de
+	// reply (veridian_reply_service.go:312) le font deja pour la sortie
+	// AUTOMATIQUE. Sans cette ligne, un contact sorti a la main par un
+	// operateur disparaissait des stats (enrolled != active+completed+exited+
+	// failed).
+	if incErr := s.repo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "exited"); incErr != nil {
+		s.logger.WithField("workspace_id", workspaceID).
+			WithField("automation_id", ca.AutomationID).
+			WithField("error", incErr.Error()).
+			Warn("Failed to increment automation stat \"exited\" after manual ExitContact")
+	}
 	return ca, nil
 }
 
@@ -485,6 +499,14 @@ func (s *AutomationService) ResetContact(ctx context.Context, workspaceID, autom
 		return nil, fmt.Errorf("automation %s has no root node, cannot reset", automation.ID)
 	}
 
+	// Mission 2026-10-04 (audit backend) : capture l'etat TERMINAL quitte AVANT
+	// de le muter -- ResetContact doit decrementer "exited"/"completed" pour
+	// eviter le double comptage (le contact va re-traverser l'automation et
+	// re-incrementer l'un des deux a sa prochaine sortie). "failed" n'est PAS
+	// decremente : le fait qu'il ait echoue reste un fait historique vrai,
+	// independant du reset.
+	previousStatus := ca.Status
+
 	now := time.Now()
 	rootNodeID := automation.RootNodeID
 	ca.CurrentNodeID = &rootNodeID
@@ -497,6 +519,22 @@ func (s *AutomationService) ResetContact(ctx context.Context, workspaceID, autom
 
 	if err := s.repo.UpdateContactAutomation(ctx, workspaceID, ca); err != nil {
 		return nil, fmt.Errorf("failed to reset contact: %w", err)
+	}
+
+	var statToDecrement string
+	switch previousStatus {
+	case domain.ContactAutomationStatusExited:
+		statToDecrement = "exited"
+	case domain.ContactAutomationStatusCompleted:
+		statToDecrement = "completed"
+	}
+	if statToDecrement != "" {
+		if decErr := s.repo.DecrementAutomationStat(ctx, workspaceID, ca.AutomationID, statToDecrement); decErr != nil {
+			s.logger.WithField("workspace_id", workspaceID).
+				WithField("automation_id", ca.AutomationID).
+				WithField("error", decErr.Error()).
+				Warn("Failed to decrement automation stat after ResetContact")
+		}
 	}
 	return ca, nil
 }

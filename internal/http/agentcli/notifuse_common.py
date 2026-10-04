@@ -86,6 +86,7 @@ Toute commande sort un JSON lisible (jq-friendly) + exit code != 0 si l'API
 renvoie une erreur (401/403/404/400/409/5xx) — donc scriptable/testable.
 """
 import argparse
+import csv
 import html
 import hashlib
 import hmac as hmaclib
@@ -236,6 +237,14 @@ EXISTING_COMMAND_ROUTES = {
     "webhooks:regenerateSecret": ["/api/webhookSubscriptions.regenerateSecret"],
     "webhooks:deliveries": ["/api/webhookSubscriptions.deliveries"],
     "keys:provision": ["/api/workspaces.createAPIKey"],
+    # Mission 2026-10-04 (audit CLI, coverage Go=199 vs CLI=195) : keys:list/
+    # keys:revoke appelaient workspaces.members/removeMember (generique,
+    # couverts par ailleurs via members:list/members:remove) -- bascules sur
+    # les routes DEDIEES posees par la mission "API & agents" (page console
+    # "API & agents"), plus sures (revokeAPIKey refuse un user qui n'est pas
+    # une api_key, removeMember etait generique a tout type de membre).
+    "keys:list": ["/api/workspaces.listAPIKeys"],
+    "keys:revoke": ["/api/workspaces.revokeAPIKey"],
     "integrations:create-smtp": ["/api/workspaces.createIntegration"],
     "integrations:delete": ["/api/workspaces.deleteIntegration"],
     "integrations:update": ["/api/workspaces.updateIntegration"],
@@ -1028,9 +1037,12 @@ def cmd_breakdown(a):
 
 # ---- keys ----
 def cmd_keys_list(a):
-    # api_keys = membres api_key du workspace ; on lit via workspaces.members (owner).
+    # Mission 2026-10-04 : route dediee (listAPIKeys) plutot que de filtrer
+    # workspaces.members a la main -- meme info, moins de bruit (pas les
+    # membres humains), et couvre la route posee par la page console
+    # "API & agents" au lieu de la laisser sans commande CLI.
     jwt = owner_jwt(a.env, a.workspace)
-    out(*call_jwt(a.env, "GET", "/api/workspaces.members", jwt, params={"id": a.workspace}))
+    out(*call_jwt(a.env, "GET", "/api/workspaces.listAPIKeys", jwt, params={"workspace_id": a.workspace}))
 
 
 def cmd_keys_provision(a):
@@ -1126,9 +1138,11 @@ def cmd_keys_mint(a):
 
 
 def cmd_keys_revoke(a):
-    """keys:revoke — retire le membre api_key du workspace. Côté serveur
-    (workspace_service.RemoveMember) : supprime le USER complètement quand
-    son type est api_key -> le token est aussitôt refusé (401) partout."""
+    """keys:revoke — révoque une api_key via la route DEDIEE revokeAPIKey
+    (mission 2026-10-04 : coverage Go=199 vs CLI=195, cette route posee par
+    la page console "API & agents" n'avait pas de commande). Plus sur que
+    l'ancien removeMember generique : le serveur refuse explicitement
+    ("target user is not an API key") si la cible n'est pas une clé API."""
     jwt = owner_jwt(a.env, a.workspace)
     user_id = a.user_id
     if not user_id:
@@ -1138,7 +1152,7 @@ def cmd_keys_revoke(a):
         if not m:
             die(f"aucun membre avec l'email {a.email} dans {a.workspace}.")
         user_id = m.get("user_id") or m.get("id")
-    out(*call_jwt(a.env, "POST", "/api/workspaces.removeMember", jwt,
+    out(*call_jwt(a.env, "POST", "/api/workspaces.revokeAPIKey", jwt,
                    body={"workspace_id": a.workspace, "user_id": user_id}))
 
 
@@ -1968,14 +1982,77 @@ def cmd_contacts_upsert(a):
     out(*app_call(a.env, "contacts.upsert", a.workspace, body=body, method="POST"))
 
 
+# Patch 2026-10-04 (audit skill distribue) : le skill AGENTS.md distribue
+# documentait `contacts:import --file contacts.csv --list-id <id>` -- deux
+# flags qui n'ont JAMAIS existe (la vraie commande attendait --data JSON +
+# --lists). Plutot que de corriger juste la doc, on ajoute le CSV reel cote
+# CLI : plus naturel pour un client qui exporte depuis un tableur, et
+# borne en lots pour ne pas timeout / payload-trop-gros sur un import de
+# 100 000 lignes (cf mission "fournisseur destinataire a l'import").
+_CONTACTS_IMPORT_BATCH_SIZE = 500
+
+
+def _read_contacts_csv(path):
+    """Lit un CSV (premiere ligne = en-tetes) et retourne une liste de dicts.
+    Colonne 'email' obligatoire (au moins une ligne non vide). Toutes les
+    autres colonnes sont transmises telles quelles -- c'est l'API qui valide
+    les champs reconnus, pas le CLI."""
+    try:
+        f = open(path, "r", encoding="utf-8-sig", newline="")
+    except OSError as e:
+        die(f"impossible de lire {path} : {e}")
+    with f:
+        reader = csv.DictReader(f)
+        if not reader.fieldnames or "email" not in reader.fieldnames:
+            die(f"{path} : en-tete 'email' manquant (colonnes trouvees : {reader.fieldnames}).")
+        rows = []
+        for i, row in enumerate(reader, start=2):  # 1 = en-tete
+            email = (row.get("email") or "").strip()
+            if not email:
+                continue  # ligne vide / sans email : ignoree silencieusement
+            contact = {k: v for k, v in row.items() if v not in (None, "")}
+            contact["email"] = email
+            rows.append(contact)
+        return rows
+
+
 def cmd_contacts_import(a):
+    csv_path = getattr(a, "file", None)
+    if csv_path and a.data:
+        die("--file et --data sont exclusifs (un seul mode d'import à la fois).")
+    if not csv_path and not a.data:
+        die("il faut --data (tableau JSON) ou --file (CSV avec en-tete email,...).")
+
+    lists = getattr(a, "lists", None)
+    subscribe_to_lists = [l.strip() for l in lists.split(",") if l.strip()] if lists else None
+
+    if csv_path:
+        all_contacts = _read_contacts_csv(csv_path)
+        if not all_contacts:
+            die(f"{csv_path} : aucune ligne avec un email non vide.")
+        total_imported, total_failed, batches = 0, 0, 0
+        last_status, last_body = 200, {}
+        for i in range(0, len(all_contacts), _CONTACTS_IMPORT_BATCH_SIZE):
+            chunk = all_contacts[i:i + _CONTACTS_IMPORT_BATCH_SIZE]
+            body = {"workspace_id": a.workspace, "contacts": chunk}
+            if subscribe_to_lists:
+                body["subscribe_to_lists"] = subscribe_to_lists
+            last_status, last_body = app_call(a.env, "contacts.import", a.workspace, body=body, method="POST")
+            batches += 1
+            if isinstance(last_body, dict):
+                total_imported += last_body.get("imported", len(chunk))
+                total_failed += len(last_body.get("errors", []) or [])
+        out(last_status, {"batches": batches, "total_rows": len(all_contacts),
+                           "imported": total_imported, "failed": total_failed,
+                           "last_batch_response": last_body})
+        return
+
     contacts = _json_arg(a.data)
     if not isinstance(contacts, list):
         die("--data doit être un tableau JSON de contacts (ou @file.json).")
     body = {"workspace_id": a.workspace, "contacts": contacts}
-    lists = getattr(a, "lists", None)
-    if lists:
-        body["subscribe_to_lists"] = [l.strip() for l in lists.split(",") if l.strip()]
+    if subscribe_to_lists:
+        body["subscribe_to_lists"] = subscribe_to_lists
     out(*app_call(a.env, "contacts.import", a.workspace, body=body, method="POST"))
 
 
@@ -2385,6 +2462,13 @@ def cmd_generic_rv(a):
 # ---- long tail : routes RAW (chemin direct, pas resource.verb), placeholders
 # {id}/{tenantId} substitués depuis --id/--tenant-id. auth: hmac|owner|none.
 RAW_ROUTES = [
+    # Mission 2026-10-04 (audit CLI, coverage Go=199 vs CLI=195) : cette
+    # route de la mission "API & agents" n'avait aucune commande dediee.
+    # createAgentInstallToken exige le JWT owner du workspace cible.
+    # (agent:exchange-token est a part, bespoke : voir cmd_agent_exchange_token
+    # -- reponse text/plain KEY=VALUE, pas JSON, incompatible avec
+    # cmd_raw_generic qui json.loads() sans condition.)
+    ("agent:install-token", "POST", "/api/workspaces.createAgentInstallToken", "owner", []),
     ("tenants:update-plan", "POST", "/api/tenants/update-plan", "hmac", []),
     ("tenants:suspend", "POST", "/api/tenants/suspend", "hmac", []),
     ("tenants:resume", "POST", "/api/tenants/resume", "hmac", []),
@@ -2467,6 +2551,39 @@ def cmd_raw_generic(a):
             out(*call_jwt(a.env, "GET", path, jwt, params=params))
         else:
             out(*call_jwt(a.env, "POST", path, jwt, body=body or {}))
+
+
+def cmd_agent_exchange_token(a):
+    """agent:exchange-token -- POST /api/agent.exchangeToken, PUBLIC (le
+    jeton EST le secret). Reponse reelle text/plain KEY=VALUE (PAS JSON :
+    install.sh la parse avec `read`/IFS sans dependance jq, cf
+    agent_handler.go handleExchangeToken) -- traitee ici a part de
+    cmd_raw_generic qui suppose du JSON partout.
+    Mission 2026-10-04 (audit CLI, coverage Go=199 vs CLI=195)."""
+    token = _json_arg(a.data).get("token") if a.data else None
+    if not token:
+        die("--data '{\"token\":\"<jeton>\"}' requis.")
+    url = BASES[a.env] + "/api/agent.exchangeToken"
+    req = urllib.request.Request(
+        url, data=json.dumps({"token": token}).encode(), method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=40) as r:
+            raw = r.read().decode()
+            status = r.status
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode()
+        status = e.code
+    except Exception as e:
+        die(f"Erreur réseau ({url}) : {e}")
+        return
+    parsed = {}
+    for line in raw.splitlines():
+        k, _, v = line.partition("=")
+        if k:
+            parsed[k] = v
+    out(status, parsed or {"raw": raw})
 
 
 # ================================================================ config
@@ -2846,7 +2963,7 @@ def build_parser():
     sp = sub.add_parser("campaign:audit",
         help="VERDICT AVANT ENVOI : authentification des domaines, reverse DNS,\n"
              "plafonds, recouvrement de contenu, vivier. Sort en 2 si BLOQUANT.")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_campaign_audit)
 
     sp = sub.add_parser("doctor", help="self-test health + HMAC + cold-simulate")
@@ -2866,7 +2983,7 @@ def build_parser():
 
     for name in ("verify", "dry-run"):
         sp = sub.add_parser(name, help="DRY-RUN cold : gates bloqueraient-ils ? ZÉRO mail (staging)")
-        sp.add_argument("workspace")
+        sp.add_argument("workspace", nargs="?", default=None)
         sp.add_argument("--cap", type=int, help="cap testé (défaut 1)")
         sp.add_argument("--contact", help="adresse destinataire testée (daily_cap)")
         sp.add_argument("--cls", help="classe testée (class_cap, défaut google)")
@@ -2876,25 +2993,25 @@ def build_parser():
         sp.set_defaults(func=cmd_verify)
 
     sp = sub.add_parser("status", help="état consolidé d'un workspace")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_status)
 
     sp = sub.add_parser("breakdown", help="contacts par classe de provider")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--list", help="filtre liste")
     sp.set_defaults(func=cmd_breakdown)
 
     sp = sub.add_parser("keys:list", help="membres/api_keys du workspace (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_keys_list)
 
     sp = sub.add_parser("keys:provision", help="émet une api_key (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--prefix", help="email_prefix de l'api_key (défaut cli) → <prefix>@api.<ws>")
     sp.set_defaults(func=cmd_keys_provision)
 
     sp = sub.add_parser("keys:mint", help="(ADMIN) mint une clé SCOPÉE à un workspace, pour un client")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--role", default="member", choices=["member", "readonly"],
                      help="member (défaut, complet sur ce workspace) | readonly")
     sp.add_argument("--name", help="base de l'email_prefix (slug auto)")
@@ -2903,14 +3020,14 @@ def build_parser():
     sp.set_defaults(func=cmd_keys_mint)
 
     sp = sub.add_parser("keys:revoke", help="(ADMIN) révoque une clé API (removeMember, supprime le user api_key)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--user-id", dest="user_id")
     sp.add_argument("--email", help="alternative à --user-id : résolu via workspaces.members")
     sp.set_defaults(func=cmd_keys_revoke)
 
     # integrations
     sp = sub.add_parser("integrations:list", help="intégrations + config cold par infra")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_integrations_list)
 
     sp = sub.add_parser("integrations:plan", help="IAC cold : diff déclaré↔réel")
@@ -2923,7 +3040,7 @@ def build_parser():
     sp.set_defaults(func=cmd_integrations_apply)
 
     sp = sub.add_parser("integrations:cold", help="pose rates/caps/exclusion/tracking/pixel sur une infra (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--id", required=True, help="integration id")
     sp.add_argument("--rates", help='JSON map classe→emails/min, ex \'{"google":0.5}\'')
     sp.add_argument("--daily-cap", dest="daily_cap", help='JSON map classe→envois/jour')
@@ -2934,7 +3051,7 @@ def build_parser():
     sp.set_defaults(func=cmd_integrations_cold)
 
     sp = sub.add_parser("integrations:create-smtp", help="crée une intégration SMTP d'envoi (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--name", required=True)
     sp.add_argument("--host", required=True)
     sp.add_argument("--port", type=int, required=True)
@@ -2950,7 +3067,7 @@ def build_parser():
     sp.set_defaults(func=cmd_integrations_create_smtp)
 
     sp = sub.add_parser("integrations:create-imap", help="crée une boîte IMAP de retour (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--name", required=True)
     sp.add_argument("--host", required=True)
     sp.add_argument("--port", type=int, required=True)
@@ -2966,7 +3083,7 @@ def build_parser():
 
     sp = sub.add_parser("integrations:create-supabase",
                         help="crée une intégration Supabase (auth hooks, owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--name", required=True)
     sp.add_argument("--email-hook-key", dest="email_hook_key",
                     help="signature_key du Send Email Hook (chiffrée)")
@@ -2981,7 +3098,7 @@ def build_parser():
 
     sp = sub.add_parser("integrations:create-firecrawl",
                         help="crée une intégration Firecrawl (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--name", required=True)
     sp.add_argument("--api-key", dest="api_key", required=True)
     sp.add_argument("--base-url", dest="base_url", help="endpoint self-hosted (optionnel)")
@@ -2989,7 +3106,7 @@ def build_parser():
 
     sp = sub.add_parser("integrations:create-llm",
                         help="crée une intégration LLM anthropic|openai (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--name", required=True)
     sp.add_argument("--provider", required=True, choices=["anthropic", "openai"])
     sp.add_argument("--api-key", dest="api_key", required=True)
@@ -2998,16 +3115,16 @@ def build_parser():
     sp.set_defaults(func=cmd_integrations_create_llm)
 
     sp = sub.add_parser("integrations:get", help="détail d'une intégration")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_integrations_get)
 
     sp = sub.add_parser("integrations:delete", help="supprime une intégration (owner)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_integrations_delete)
 
     sp = sub.add_parser("integrations:update",
                         help="update générique d'une intégration par type (owner, préserve secrets)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--name", help="renomme (sinon name actuel préservé)")
     sp.add_argument("--settings", help="bloc type-spécifique brut JSON (ou @file) — échappatoire")
     sp.add_argument("--api-key", dest="api_key", help="firecrawl/llm : nouvelle clé")
@@ -3020,19 +3137,19 @@ def build_parser():
 
     # settings
     sp = sub.add_parser("settings:get", help="dump des settings du workspace (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--key", help="ne sortir qu'une clé")
     sp.set_defaults(func=cmd_settings_get)
 
     sp = sub.add_parser("settings:set", help="patche UNE clé de settings (merge+update, owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("key", help="clé éditable (voir settings:keys via --help)")
     sp.add_argument("value", help="valeur (JSON pour objets/listes ; true/false ; nombre ; texte)")
     sp.set_defaults(func=cmd_settings_set)
 
     sp = sub.add_parser("settings:update",
                         help="merge un objet settings (--file/--data) sur l'existant (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--file", help="fichier JSON de settings (patch partiel)")
     sp.add_argument("--data", help="JSON inline de settings (patch partiel)")
     sp.add_argument("--force", action="store_true",
@@ -3041,54 +3158,54 @@ def build_parser():
 
     # broadcasts
     sp = sub.add_parser("broadcasts:list", help="liste les broadcasts")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--param", action="append", help="filtre k=v (status, limit…)")
     sp.set_defaults(func=cmd_list, resource="broadcasts")
 
     sp = sub.add_parser("broadcasts:get", help="détail d'un broadcast")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_get, resource="broadcasts")
 
     sp = sub.add_parser("broadcasts:create", help="crée un broadcast (--data @file.json)")
-    sp.add_argument("workspace"); sp.add_argument("--data", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--data", required=True)
     sp.set_defaults(func=cmd_broadcasts_create)
 
     for act in ("cancel", "pause", "resume", "delete"):
         sp = sub.add_parser(f"broadcasts:{act}", help=f"{act} un broadcast")
-        sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+        sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
         sp.set_defaults(func=cmd_broadcasts_action, action=act)
 
     sp = sub.add_parser("broadcasts:schedule", help="planifie un broadcast")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--at", help="ISO datetime ; absent = send_now")
     sp.set_defaults(func=cmd_broadcasts_schedule)
 
     sp = sub.add_parser("broadcasts:send-test", help="envoi de test (VRAI mail, --real-send)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--email", required=True)
     sp.add_argument("--real-send", dest="real_send", action="store_true")
     sp.set_defaults(func=cmd_broadcasts_send_test)
 
     # templates
     sp = sub.add_parser("templates:list", help="liste les templates")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--param", action="append", help="filtre k=v")
     sp.set_defaults(func=cmd_list, resource="templates")
 
     sp = sub.add_parser("templates:get", help="détail d'un template")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_get, resource="templates")
 
     sp = sub.add_parser("templates:create", help="crée un template (--data @file.json)")
-    sp.add_argument("workspace"); sp.add_argument("--data", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--data", required=True)
     sp.set_defaults(func=cmd_templates_create)
 
     sp = sub.add_parser("templates:delete", help="supprime un template")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_delete, resource="templates")
 
     sp = sub.add_parser("templates:compile", help="compile un MJML tree → HTML (preview, zéro envoi)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--id", help="template_id (récupère son visual_editor_tree)")
     sp.add_argument("--tree", help="visual_editor_tree MJML inline JSON ou @file")
     sp.add_argument("--data", help="test_data Liquid JSON (ou @file)")
@@ -3097,7 +3214,7 @@ def build_parser():
 
     sp = sub.add_parser("templates:push",
                         help="create/update depuis un fichier texte brut, MJML ou HTML")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     source = sp.add_mutually_exclusive_group(required=True)
     source.add_argument("--file", help="fichier .mjml ou .html (contenu réel)")
     source.add_argument("--plain-text-file", dest="plain_text_file",
@@ -3122,49 +3239,51 @@ def build_parser():
 
     # contacts
     sp = sub.add_parser("contacts:list", help="liste les contacts")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--param", action="append", help="filtre k=v (limit…)")
     sp.set_defaults(func=cmd_list, resource="contacts")
 
     sp = sub.add_parser("contacts:count", help="nombre de contacts")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_contacts_count)
 
     sp = sub.add_parser("contacts:get", help="contact par email")
-    sp.add_argument("workspace"); sp.add_argument("--email", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True)
     sp.set_defaults(func=cmd_contacts_get)
 
     sp = sub.add_parser("contacts:upsert", help="upsert un contact")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--email"); sp.add_argument("--data", help="objet contact JSON (ou @file)")
     sp.set_defaults(func=cmd_contacts_upsert)
 
-    sp = sub.add_parser("contacts:import", help="import batch (--data tableau JSON)")
-    sp.add_argument("workspace"); sp.add_argument("--data", required=True)
+    sp = sub.add_parser("contacts:import", help="import batch (--data tableau JSON, ou --file CSV)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--data", help="tableau JSON de contacts (ou @file.json) -- exclusif avec --file")
+    sp.add_argument("--file", help="CSV avec en-tete 'email' (+ colonnes libres) -- exclusif avec --data, importe par lots de %d" % _CONTACTS_IMPORT_BATCH_SIZE)
     sp.add_argument("--lists", help="list_ids séparés par virgule à abonner (subscribe_to_lists)")
     sp.set_defaults(func=cmd_contacts_import)
 
     sp = sub.add_parser("contacts:delete", help="supprime un contact")
-    sp.add_argument("workspace"); sp.add_argument("--email", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True)
     sp.set_defaults(func=cmd_contacts_delete)
 
     sp = sub.add_parser("lists:subscribe", help="abonne un contact à des listes")
-    sp.add_argument("workspace"); sp.add_argument("--email", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True)
     sp.add_argument("--lists", required=True, help="list_ids séparés par virgule")
     sp.add_argument("--data", help="champs contact supplémentaires JSON")
     sp.set_defaults(func=cmd_lists_subscribe)
 
     sp = sub.add_parser("lists:list", help="liste les listes de contacts")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--param", action="append", help="filtre k=v")
     sp.set_defaults(func=cmd_list, resource="lists")
 
     sp = sub.add_parser("lists:get", help="détail d'une liste")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_get, resource="lists")
 
     sp = sub.add_parser("lists:create", help="crée une liste")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--id", help="id de la liste")
     sp.add_argument("--name", help="nom de la liste")
     sp.add_argument("--description")
@@ -3174,53 +3293,53 @@ def build_parser():
     sp.set_defaults(func=cmd_lists_create)
 
     sp = sub.add_parser("lists:update", help="met à jour une liste")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--name")
     sp.add_argument("--data", help="objet liste JSON (échappatoire)")
     sp.set_defaults(func=cmd_lists_update)
 
     sp = sub.add_parser("lists:delete", help="supprime une liste")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_delete, resource="lists")
 
     sp = sub.add_parser("lists:stats", help="stats d'abonnement d'une liste")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_lists_stats)
 
     # segments
     sp = sub.add_parser("segments:list", help="liste les segments")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--param", action="append", help="filtre k=v")
     sp.set_defaults(func=cmd_list, resource="segments")
 
     sp = sub.add_parser("segments:get", help="détail d'un segment")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_get, resource="segments")
 
     sp = sub.add_parser("segments:create", help="crée un segment (--data @file : id,name,color,tree,timezone)")
-    sp.add_argument("workspace"); sp.add_argument("--data", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--data", required=True)
     sp.set_defaults(func=cmd_segments_create)
 
     sp = sub.add_parser("segments:delete", help="supprime un segment")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_delete, resource="segments")
 
     sp = sub.add_parser("segments:contacts", help="contacts d'un segment")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_segments_contacts)
 
     sp = sub.add_parser("segments:rebuild", help="recalcule un segment")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_segments_rebuild)
 
     # members / team
     sp = sub.add_parser("members:list", help="membres du workspace + leurs permissions (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_members_list)
 
     sp = sub.add_parser("members:get-permissions",
                         help="affiche les permissions d'un membre — read-only (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--user-id", dest="user_id", help="user_id précis (défaut: tous les membres)")
     sp.add_argument("--email", help="filtre par email au lieu du user_id")
     sp.set_defaults(func=cmd_members_get_permissions)
@@ -3230,7 +3349,7 @@ def build_parser():
     # serveur crée un membre SANS permission → dashboard cassé ("insufficient perms").
     sp = sub.add_parser("members:invite",
                         help="invite un membre — PLEINS DROITS par défaut (owner)")
-    sp.add_argument("workspace"); sp.add_argument("--email", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True)
     sp.add_argument("--read-only", dest="read_only", action="store_true",
                     help="droits en lecture seule sur les 10 ressources")
     sp.add_argument("--resources", help="restreint aux ressources CSV (ex: contacts,lists,broadcasts)")
@@ -3238,12 +3357,12 @@ def build_parser():
     sp.set_defaults(func=cmd_members_invite)
 
     sp = sub.add_parser("members:remove", help="retire un membre (owner)")
-    sp.add_argument("workspace"); sp.add_argument("--user-id", dest="user_id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--user-id", dest="user_id", required=True)
     sp.set_defaults(func=cmd_members_remove)
 
     sp = sub.add_parser("members:permissions",
                         help="(re)définit les permissions d'un membre — PLEINS DROITS par défaut (owner)")
-    sp.add_argument("workspace"); sp.add_argument("--user-id", dest="user_id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--user-id", dest="user_id", required=True)
     sp.add_argument("--read-only", dest="read_only", action="store_true",
                     help="droits en lecture seule sur les 10 ressources")
     sp.add_argument("--resources", help="restreint aux ressources CSV (ex: contacts,lists,broadcasts)")
@@ -3251,86 +3370,86 @@ def build_parser():
     sp.set_defaults(func=cmd_members_permissions)
 
     sp = sub.add_parser("magic-link", help="génère un magic link de connexion (owner)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--email", help="email cible (défaut owner)")
     sp.set_defaults(func=cmd_magic_link)
 
     # customEvents
     sp = sub.add_parser("events:list", help="liste les custom events")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--param", action="append", help="filtre k=v")
     sp.set_defaults(func=cmd_list, resource="customEvents")
 
     sp = sub.add_parser("events:get", help="détail d'un custom event")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_get, resource="customEvents")
 
     sp = sub.add_parser("events:upsert", help="upsert un custom event (--data @file)")
-    sp.add_argument("workspace"); sp.add_argument("--data", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--data", required=True)
     sp.set_defaults(func=cmd_events_upsert)
 
     # analytics / messages
     sp = sub.add_parser("analytics:query", help="exécute une requête analytics (--query @file)")
-    sp.add_argument("workspace"); sp.add_argument("--query", required=True,
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--query", required=True,
                     help="objet Query JSON (ou @file)")
     sp.set_defaults(func=cmd_analytics_query)
 
     sp = sub.add_parser("analytics:schemas", help="schémas analytics disponibles")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_analytics_schemas)
 
     sp = sub.add_parser("messages:list", help="historique des messages envoyés")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--param", action="append", help="filtre k=v (limit, channel…)")
     sp.set_defaults(func=cmd_messages_list)
 
     # automations
     sp = sub.add_parser("automations:list", help="liste les automations")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--param", action="append", help="filtre k=v (status, list_id…)")
     sp.set_defaults(func=cmd_list, resource="automations")
 
     sp = sub.add_parser("automations:get", help="détail d'une automation")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_get, resource="automations")
 
     sp = sub.add_parser("automations:create", help="crée une automation (--data @file)")
-    sp.add_argument("workspace"); sp.add_argument("--data", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--data", required=True)
     sp.set_defaults(func=cmd_automations_create)
 
     for act in ("activate", "pause", "delete"):
         sp = sub.add_parser(f"automations:{act}", help=f"{act} une automation")
-        sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+        sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
         sp.set_defaults(func=cmd_automations_action, action=act)
 
     sp = sub.add_parser("automations:update", help="met à jour une automation (--data @file)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True); sp.add_argument("--data", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True); sp.add_argument("--data", required=True)
     sp.set_defaults(func=cmd_automations_update)
 
     sp = sub.add_parser("automations:enroll", help="enrôle des contacts dans une automation live")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--emails", required=True, help="emails séparés par virgule")
     sp.set_defaults(func=cmd_automations_enroll)
 
     # transactional
     sp = sub.add_parser("transactional:list", help="liste les transactional notifications")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_list, resource="transactional")
 
     sp = sub.add_parser("transactional:get", help="détail d'une notification")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_get, resource="transactional")
 
     sp = sub.add_parser("transactional:create", help="crée une notification (--data @file)")
-    sp.add_argument("workspace"); sp.add_argument("--data", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--data", required=True)
     sp.set_defaults(func=cmd_transactional_create)
 
     sp = sub.add_parser("transactional:delete", help="supprime une notification")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_delete, resource="transactional")
 
     sp = sub.add_parser("transactional:send", help="envoie un mail transactionnel (VRAI mail, --real-send)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True, help="notification id")
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True, help="notification id")
     sp.add_argument("--email", required=True)
     sp.add_argument("--data", help="variables Liquid JSON")
     sp.add_argument("--real-send", dest="real_send", action="store_true")
@@ -3338,26 +3457,26 @@ def build_parser():
 
     # webhooks
     sp = sub.add_parser("webhooks:list", help="liste les webhook subscriptions")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_list, resource="webhookSubscriptions")
 
     sp = sub.add_parser("webhooks:get", help="détail d'un webhook")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_get, resource="webhookSubscriptions")
 
     sp = sub.add_parser("webhooks:create", help="crée un webhook subscription")
-    sp.add_argument("workspace"); sp.add_argument("--name", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--name", required=True)
     sp.add_argument("--url", required=True)
     sp.add_argument("--events", required=True, help="event_types séparés par virgule")
     sp.set_defaults(func=cmd_webhooks_create)
 
     for act in ("delete", "test", "toggle", "regenerateSecret"):
         sp = sub.add_parser(f"webhooks:{act}", help=f"{act} un webhook")
-        sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+        sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
         sp.set_defaults(func=cmd_webhooks_action, action=act)
 
     sp = sub.add_parser("webhooks:deliveries", help="livraisons d'un webhook")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_webhooks_deliveries)
 
     # admin
@@ -3381,7 +3500,7 @@ def build_parser():
     sp.set_defaults(func=cmd_admin_stats)
 
     sp = sub.add_parser("admin:cold-simulate", help="frappe un prédicat de gate cold (HMAC, staging)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--mode", required=True,
                     help="inbound_reply|seed_sent|daily_cap_decision|class_cap_decision|"
                          "per_sender_cap_decision|warmup_cap_decision|sending_window_decision")
@@ -3391,58 +3510,58 @@ def build_parser():
     # ============================================================ couverture
     # totale (mission 2026-10-03) — priorité prospection, puis long tail.
     sp = sub.add_parser("contactLists:getByIDs", help="statut d'un contact dans une liste précise")
-    sp.add_argument("workspace"); sp.add_argument("--email", required=True); sp.add_argument("--id", required=True, help="list_id")
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True); sp.add_argument("--id", required=True, help="list_id")
     sp.set_defaults(func=cmd_contactlists_get_by_ids, _routes=["/api/contactLists.getByIDs"])
 
     sp = sub.add_parser("contactLists:getContactsByList", help="contacts d'une liste (avec statut)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True, help="list_id")
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True, help="list_id")
     sp.set_defaults(func=cmd_contactlists_by_list, _routes=["/api/contactLists.getContactsByList"])
 
     sp = sub.add_parser("contactLists:getListsByContact", help="listes d'un contact (avec statut)")
-    sp.add_argument("workspace"); sp.add_argument("--email", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True)
     sp.set_defaults(func=cmd_contactlists_by_contact, _routes=["/api/contactLists.getListsByContact"])
 
     sp = sub.add_parser("contactLists:updateStatus", help="change le statut d'un contact sur une liste")
-    sp.add_argument("workspace"); sp.add_argument("--email", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True)
     sp.add_argument("--id", required=True, help="list_id")
     sp.add_argument("--status", required=True, help="active|unsubscribed|bounced|complained...")
     sp.set_defaults(func=cmd_contactlists_update_status, _routes=["/api/contactLists.updateStatus"])
 
     sp = sub.add_parser("contactLists:removeContact", help="retire un contact d'une liste")
-    sp.add_argument("workspace"); sp.add_argument("--email", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True)
     sp.add_argument("--id", required=True, help="list_id")
     sp.set_defaults(func=cmd_contactlists_remove, _routes=["/api/contactLists.removeContact"])
 
     sp = sub.add_parser("automations:nodeExecutions", help="où un contact est bloqué dans l'automation (par nœud)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True, help="automation_id")
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True, help="automation_id")
     sp.add_argument("--email", required=True)
     sp.set_defaults(func=cmd_automations_node_executions, _routes=["/api/automations.nodeExecutions"])
 
     sp = sub.add_parser("templates:update", help="patch direct d'un template (--data @file, sans repasser par templates:push)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--data", required=True, help="champs à modifier JSON (ou @file)")
     sp.set_defaults(func=cmd_templates_update, _routes=["/api/templates.update"])
 
     sp = sub.add_parser("segments:update", help="met à jour un segment (--data @file : name/color/tree/timezone)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--data", required=True)
     sp.set_defaults(func=cmd_segments_update, _routes=["/api/segments.update"])
 
     sp = sub.add_parser("segments:preview", help="prévisualise un arbre de segment SANS le créer (--tree @file)")
-    sp.add_argument("workspace"); sp.add_argument("--tree", required=True, help="TreeNode JSON (ou @file)")
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--tree", required=True, help="TreeNode JSON (ou @file)")
     sp.add_argument("--limit", type=int)
     sp.set_defaults(func=cmd_segments_preview, _routes=["/api/segments.preview"])
 
     sp = sub.add_parser("messages:broadcastStats", help="stats d'envoi d'un broadcast précis")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True, help="broadcast_id")
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True, help="broadcast_id")
     sp.set_defaults(func=cmd_messages_broadcast_stats, _routes=["/api/messages.broadcastStats"])
 
     sp = sub.add_parser("integrations:test-smtp", help="teste le SMTP d'une intégration du WORKSPACE (settings.testSmtp)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True, help="integration_id")
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True, help="integration_id")
     sp.set_defaults(func=cmd_workspace_test_smtp, _routes=["/api/settings.testSmtp"])
 
     sp = sub.add_parser("webhooks:update", help="met à jour un webhook subscription")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--name"); sp.add_argument("--url")
     sp.add_argument("--events", help="event_types CSV")
     sp.add_argument("--enabled", type=lambda v: v.lower() in ("1", "true", "yes"))
@@ -3450,26 +3569,26 @@ def build_parser():
     sp.set_defaults(func=cmd_webhooks_update, _routes=["/api/webhookSubscriptions.update"])
 
     sp = sub.add_parser("webhooks:eventTypes", help="liste les event_types disponibles pour un webhook")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_webhooks_event_types, _routes=["/api/webhookSubscriptions.eventTypes"])
 
     sp = sub.add_parser("events:import", help="import batch de custom events (--data tableau JSON ou --file)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     grp = sp.add_mutually_exclusive_group(required=True)
     grp.add_argument("--data"); grp.add_argument("--file")
     sp.set_defaults(func=cmd_events_import, _routes=["/api/customEvents.import"])
 
     sp = sub.add_parser("contacts:get-by-external-id", help="contact par external_id")
-    sp.add_argument("workspace"); sp.add_argument("--external-id", dest="external_id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--external-id", dest="external_id", required=True)
     sp.set_defaults(func=cmd_contacts_get_by_external_id, _routes=["/api/contacts.getByExternalID"])
 
     sp = sub.add_parser("transactional:update", help="met à jour une notification transactionnelle (--data champs à changer)")
-    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.add_argument("--data", required=True, help="objet 'updates' JSON (ou @file)")
     sp.set_defaults(func=cmd_transactional_update, _routes=["/api/transactional.update"])
 
     sp = sub.add_parser("transactional:testTemplate", help="envoie un test de template transactional (VRAI mail)")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--template-id", dest="template_id", required=True)
     sp.add_argument("--integration-id", dest="integration_id", required=True)
     sp.add_argument("--sender-id", dest="sender_id", required=True)
@@ -3482,7 +3601,7 @@ def build_parser():
     for rv, method, name, needs_ws in GENERIC_RESOURCE_ROUTES:
         sp = sub.add_parser(name, help=f"{rv} ({method}, générique couverture totale)")
         if needs_ws:
-            sp.add_argument("workspace")
+            sp.add_argument("workspace", nargs="?", default=None)
         else:
             sp.add_argument("--workspace", help="workspace de référence (JWT owner) si la route en a besoin")
         sp.add_argument("--id", help="id de la ressource visée (si applicable)")
@@ -3490,6 +3609,12 @@ def build_parser():
         sp.add_argument("--set", action="append", help="champ body k=v simple (POST)")
         sp.add_argument("--data", help="body JSON complet (ou @file) — prioritaire sur --set")
         sp.set_defaults(func=cmd_generic_rv, _rv=rv, _method=method, _routes=[f"/api/{rv}"])
+
+    # ---- agent.exchangeToken : bespoke (reponse text/plain, pas JSON) ----
+    sp = sub.add_parser("agent:exchange-token",
+        help="/api/agent.exchangeToken (POST, PUBLIC -- le jeton EST le secret)")
+    sp.add_argument("--data", required=True, help="""body JSON '{"token":"<jeton>"}' """)
+    sp.set_defaults(func=cmd_agent_exchange_token, _routes=["/api/agent.exchangeToken"])
 
     # ---- long tail générique (chemin brut, placeholders {id}/{tenantId}) ----
     for name, method, path, auth, placeholders in RAW_ROUTES:
@@ -3505,7 +3630,7 @@ def build_parser():
 
     # ---- notifuse config <workspace> : config complète pixel ----
     sp = sub.add_parser("config", help="configuration COMPLÈTE d'un workspace, lisible (+ --json), avec PLAFONDS EFFECTIFS")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--json", action="store_true", help="sortie JSON brute au lieu du texte lisible")
     sp.add_argument("--no-queue-check", dest="no_queue_check", action="store_true",
                     help="saute le comptage des messages en file aux plafonds figés (psql, lecture seule)")
@@ -3513,7 +3638,7 @@ def build_parser():
 
     # ---- notifuse env <workspace> : exports shell pour scripts bulk ----
     sp = sub.add_parser("env", help="imprime des 'export NOTIFUSE_...' pour scripter en bulk (eval \"$(notifuse env ws)\")")
-    sp.add_argument("workspace")
+    sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--mint-new-key", dest="mint_new_key", action="store_true",
                     help="⚠ MUTATION réelle : émet une VRAIE nouvelle api_key (+1 membre). "
                          "Sans ce flag : lecture seule (NOTIFUSE_API_KEY existante, sinon JWT owner).")
@@ -3587,6 +3712,19 @@ def _setup_scoped_mode(args):
         die(f"refusé côté client : clé scopée pour le workspace '{home_ws}', "
             f"commande demandée sur '{requested_ws}'. Mint une clé pour ce "
             f"workspace avec `notifuse-admin keys:mint {requested_ws}`.")
+    # === Patch 2026-10-04 (audit skill distribué) ===
+    # Le positional `workspace` est desormais optionnel (nargs="?") sur toutes
+    # les WORKSPACE_COMMANDS : un client dont la cle est scopee a UN seul
+    # workspace (le cas normal, `NOTIFUSE_WORKSPACE` ecrit par install.sh) n'a
+    # pas a le retaper a chaque commande. `notifuse lists:list` marche
+    # desormais aussitot apres l'install, sans positional -- c'etait
+    # l'exemple meme du skill AGENTS.md distribue (rc=2 avant ce correctif).
+    if requested_ws in (None, "") and hasattr(args, "workspace"):
+        if home_ws:
+            args.workspace = home_ws
+        else:
+            die("workspace manquant : passe-le en argument, ou exporte "
+                "NOTIFUSE_WORKSPACE (ecrit automatiquement par install.sh).")
 
 
 def main(mode="admin"):
@@ -3599,6 +3737,15 @@ def main(mode="admin"):
             die(f"commande '{args.cmd}' refusée par `notifuse` (CLI utilisateur scopé) : "
                 f"admin, HMAC ou cross-workspace. Utilise `notifuse-admin {args.cmd}`.")
         _setup_scoped_mode(args)
+    elif getattr(args, "workspace", None) in (None, ""):
+        # Mode admin (super clé) : AUCUN fallback implicite sur NOTIFUSE_WORKSPACE
+        # -- une super clé agit cross-workspace, deviner la cible serait
+        # dangereux. Le positional reste donc strictement requis ici (c'est
+        # le mode user, scopé a UN SEUL workspace par construction, qui
+        # beneficie du fallback -- cf. _setup_scoped_mode).
+        if hasattr(args, "workspace"):
+            die(f"commande '{args.cmd}' : workspace requis en argument "
+                f"(pas de fallback implicite en mode admin/super-clé).")
 
     try:
         args.func(args)

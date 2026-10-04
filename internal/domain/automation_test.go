@@ -1925,3 +1925,20 @@ func TestResetContactRequest_Validate(t *testing.T) {
 		})
 	}
 }
+
+// Mission 2026-10-04 (audit backend) : AutomationRepository gagne
+// DecrementAutomationStat (ResetContact doit decrementer l'etat terminal
+// quitte -- exited/completed -- pour eviter le double comptage). Pas de
+// nouvelle logique dans le package domain lui-meme (interface pure), mais
+// ce test fige les 4 valeurs de ContactAutomationStatus que la bascule
+// exited/completed -> active (internal/service/automation_service.go
+// ResetContact) et IncrementAutomationStat/DecrementAutomationStat
+// (internal/repository/automation_postgres.go, cote Postgres validStats)
+// doivent rester synchronisees avec.
+func TestContactAutomationStatus_Values(t *testing.T) {
+	assert.Equal(t, ContactAutomationStatus("active"), ContactAutomationStatusActive)
+	assert.Equal(t, ContactAutomationStatus("completed"), ContactAutomationStatusCompleted)
+	assert.Equal(t, ContactAutomationStatus("exited"), ContactAutomationStatusExited)
+	assert.Equal(t, ContactAutomationStatus("failed"), ContactAutomationStatusFailed)
+}
+

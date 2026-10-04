@@ -480,6 +480,81 @@ func TestAutomationExecutor_Execute_TerminalNode(t *testing.T) {
 	assert.Equal(t, domain.ContactAutomationStatusCompleted, contactAutomation.Status)
 }
 
+// Mission 2026-10-04 (audit backend) : les 6 call-sites IncrementAutomationStat
+// de ce fichier ignoraient l'erreur (`_ = ...`) sans meme logger -- desormais
+// un Warn (deja permissif via setupMockLogger AnyTimes). Ce test prouve le
+// comportement qui compte : un echec de l'INCREMENT (bookkeeping stats) ne
+// doit JAMAIS faire echouer l'execution de l'automation elle-meme (l'envoi/
+// l'action du noeud a deja reussi).
+func TestAutomationExecutor_Execute_TerminalNode_StatIncrementFailsButExecutionSucceeds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAutomationRepo := mocks.NewMockAutomationRepository(ctrl)
+	mockContactRepo := mocks.NewMockContactRepository(ctrl)
+	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
+	mockTimelineRepo := mocks.NewMockContactTimelineRepository(ctrl)
+	mockLogger := setupMockLogger(ctrl)
+
+	executor := &AutomationExecutor{
+		automationRepo:  mockAutomationRepo,
+		contactRepo:     mockContactRepo,
+		contactListRepo: mockContactListRepo,
+		timelineRepo:    mockTimelineRepo,
+		nodeExecutors: map[domain.NodeType]NodeExecutor{
+			domain.NodeTypeAddToList: NewAddToListNodeExecutor(mockContactListRepo),
+		},
+		logger: mockLogger,
+	}
+
+	workspaceID := "ws1"
+	nodeID := "terminal_node"
+
+	contactAutomation := &domain.ContactAutomation{
+		ID:            "ca1",
+		AutomationID:  "auto1",
+		ContactEmail:  "test@example.com",
+		CurrentNodeID: &nodeID,
+		Status:        domain.ContactAutomationStatusActive,
+	}
+
+	terminalNode := &domain.AutomationNode{
+		ID:         nodeID,
+		Type:       domain.NodeTypeAddToList,
+		NextNodeID: nil,
+		Config: map[string]interface{}{
+			"list_id": "list1",
+			"status":  "active",
+		},
+	}
+
+	automation := &domain.Automation{
+		ID:     "auto1",
+		Name:   "Test Automation",
+		Status: domain.AutomationStatusLive,
+		Nodes:  []*domain.AutomationNode{terminalNode},
+	}
+
+	contact := &domain.Contact{Email: "test@example.com"}
+
+	mockAutomationRepo.EXPECT().GetByID(gomock.Any(), workspaceID, "auto1").Return(automation, nil)
+	mockContactRepo.EXPECT().GetContactByEmail(gomock.Any(), workspaceID, "test@example.com").Return(contact, nil)
+	mockAutomationRepo.EXPECT().CreateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().GetNodeExecutions(gomock.Any(), workspaceID, "ca1").Return([]*domain.NodeExecution{}, nil)
+	mockContactListRepo.EXPECT().AddContactToList(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	mockAutomationRepo.EXPECT().UpdateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+	// L'increment echoue (DB blip) -- Execute doit malgre tout reussir.
+	mockAutomationRepo.EXPECT().IncrementAutomationStat(gomock.Any(), workspaceID, "auto1", "completed").Return(errors.New("stats db down"))
+	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+
+	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
+	require.NoError(t, err, "un echec de l'increment stat ne doit pas faire echouer l'execution")
+
+	assert.Nil(t, contactAutomation.CurrentNodeID)
+	assert.Equal(t, domain.ContactAutomationStatusCompleted, contactAutomation.Status)
+}
+
 func TestAutomationExecutor_Execute_MaxRetriesExceeded(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

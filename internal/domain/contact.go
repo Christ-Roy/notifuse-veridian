@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"crypto/hmac"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -101,11 +102,21 @@ func (c *Contact) Validate() error {
 	return nil
 }
 
-// VerifyEmailHMAC verifies if the provided HMAC for an email is valid
+// VerifyEmailHMAC verifies if the provided HMAC for an email is valid.
+//
+// === Veridian patch 2026-10-04 (audit secu) ===
+// Comparait par == (duree variable selon le prefixe commun) sur les routes
+// PUBLIQUES et non authentifiees /preferences, /subscribe,
+// /unsubscribe-oneclick -- un attaquant mesurant le temps de reponse peut
+// retrouver le HMAC attendu octet par octet (timing attack classique sur un
+// secret). hmac.Equal compare en temps constant. Seule fonction du depot a
+// comparer un HMAC par == (cf grep repo entier, 2026-10-04) ; tout le reste
+// (user_service.go, veridian_token.go, middleware/veridian_hmac.go,
+// pkg/crypto/crypto.go) utilisait deja hmac.Equal.
 func VerifyEmailHMAC(email string, providedHMAC string, secretKey string) bool {
 	// Use the crypto package to verify the HMAC
 	computedHMAC := ComputeEmailHMAC(email, secretKey)
-	return computedHMAC == providedHMAC
+	return hmac.Equal([]byte(computedHMAC), []byte(providedHMAC))
 }
 
 // ComputeEmailHMAC computes an HMAC for an email address using the workspace secret key

@@ -25,7 +25,7 @@ systématiquement :
 
 ```bash
 notifuse lists:list
-notifuse contacts:import --file contacts.csv --list-id <id>
+notifuse contacts:import --file contacts.csv --lists <list_id1>,<list_id2>
 notifuse config
 ```
 

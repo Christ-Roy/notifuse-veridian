@@ -121,6 +121,20 @@ func (mr *MockAutomationRepositoryMockRecorder) CreateTx(arg0, arg1, arg2, arg3 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTx", reflect.TypeOf((*MockAutomationRepository)(nil).CreateTx), arg0, arg1, arg2, arg3)
 }
 
+// DecrementAutomationStat mocks base method.
+func (m *MockAutomationRepository) DecrementAutomationStat(arg0 context.Context, arg1, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DecrementAutomationStat", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DecrementAutomationStat indicates an expected call of DecrementAutomationStat.
+func (mr *MockAutomationRepositoryMockRecorder) DecrementAutomationStat(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementAutomationStat", reflect.TypeOf((*MockAutomationRepository)(nil).DecrementAutomationStat), arg0, arg1, arg2, arg3)
+}
+
 // Delete mocks base method.
 func (m *MockAutomationRepository) Delete(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()

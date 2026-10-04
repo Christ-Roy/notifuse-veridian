@@ -51,18 +51,18 @@ func (mr *MockVeridianIdempotencyRepositoryMockRecorder) DeleteExpired(arg0 inte
 }
 
 // Get mocks base method.
-func (m *MockVeridianIdempotencyRepository) Get(arg0 context.Context, arg1 string) (*domain.VeridianIdempotencyEntry, error) {
+func (m *MockVeridianIdempotencyRepository) Get(arg0 context.Context, arg1, arg2 string) (*domain.VeridianIdempotencyEntry, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0, arg1)
+	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.VeridianIdempotencyEntry)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockVeridianIdempotencyRepositoryMockRecorder) Get(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockVeridianIdempotencyRepositoryMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockVeridianIdempotencyRepository)(nil).Get), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockVeridianIdempotencyRepository)(nil).Get), arg0, arg1, arg2)
 }
 
 // Save mocks base method.

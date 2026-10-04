@@ -750,6 +750,9 @@ func TestAutomationService_ExitContact(t *testing.T) {
 				assert.Equal(t, "manual", *updated.ExitReason)
 				return nil
 			})
+		// Mission 2026-10-04 (audit backend) : la sortie manuelle doit compter
+		// comme une sortie automatique.
+		mockRepo.EXPECT().IncrementAutomationStat(ctx, workspaceID, automationID, "exited").Return(nil)
 
 		out, err := service.ExitContact(ctx, workspaceID, automationID, email, "", "")
 		require.NoError(t, err)
@@ -769,6 +772,7 @@ func TestAutomationService_ExitContact(t *testing.T) {
 				assert.Equal(t, "stuck on gated node", *updated.ExitReason)
 				return nil
 			})
+		mockRepo.EXPECT().IncrementAutomationStat(ctx, workspaceID, automationID, "exited").Return(nil)
 
 		out, err := service.ExitContact(ctx, workspaceID, "", "", "ca-999", "stuck on gated node")
 		require.NoError(t, err)
@@ -849,6 +853,10 @@ func TestAutomationService_ResetContact(t *testing.T) {
 				require.NotNil(t, updated.ScheduledAt)
 				return nil
 			})
+		// Mission 2026-10-04 (audit backend) : ca.Status etait "exited" avant
+		// reset -- le compteur "exited" doit redescendre pour eviter le double
+		// comptage a la prochaine sortie de ce meme contact.
+		mockRepo.EXPECT().DecrementAutomationStat(ctx, workspaceID, automationID, "exited").Return(nil)
 
 		out, err := service.ResetContact(ctx, workspaceID, automationID, email, "")
 		require.NoError(t, err)

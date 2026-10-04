@@ -81,10 +81,48 @@ func (d *VeridianMessageHistoryDecorator) Create(ctx context.Context, workspaceI
 	return nil
 }
 
-// Upsert : pas d'increment (retry handling — l'envoi a deja ete compte au
-// Create initial, cf. design note en tete de fichier).
+// Upsert : incremente la quota a la PREMIERE transition reussie vers "sent"
+// -- idempotent (une fois par message), jamais sur un echec.
+//
+// === Veridian patch 2026-10-04 (audit backend) ===
+// La note de design d'origine ci-dessus supposait qu'Upsert ne servait qu'aux
+// RETRIES d'un message deja compte au Create initial. Faux pour le chemin
+// reel : internal/service/queue/worker.go (EmailQueueWorker.processEntry,
+// ~L756) ecrit CHAQUE envoi broadcast/automation (100% du volume cold et
+// scheduled) via Upsert directement -- Create n'est jamais appele sur ce
+// chemin. Resultat mesure avant ce correctif : emails_sent_this_month/
+// lifetime restaient figes a 0 pour toute la prospection, le paywall ne
+// pouvait jamais bloquer sur le quota mensuel pour ces workspaces.
+//
+// Detection "premiere transition reussie" : on lit l'etat PRECEDENT du
+// message (upstream.Get) avant l'upsert -- si la ligne n'existait pas encore
+// OU que son sent_at etait nil, et que CE message porte un sent_at non-nil
+// (vrai succes SMTP, cf worker.go), alors c'est la premiere fois que ce
+// message compte comme envoye : on incremente. Un message qui echoue
+// (SentAt nil) n'incremente jamais. Un ré-upsert d'un message DEJA marque
+// sent_at (ex. mise a jour ulterieure delivered_at/opened_at via webhook) ne
+// re-incremente pas -- idempotent par construction.
 func (d *VeridianMessageHistoryDecorator) Upsert(ctx context.Context, workspaceID string, secretKey string, message *domain.MessageHistory) error {
-	return d.upstream.Upsert(ctx, workspaceID, secretKey, message)
+	// Echec d'envoi (SentAt nil) : rien a decider, zero lecture supplementaire
+	// -- c'est le cas le PLUS frequent en cold (soft bounces, rate-limit,
+	// erreurs transitoires), donc on evite le Get() inutile sur ce chemin.
+	if message.SentAt == nil {
+		return d.upstream.Upsert(ctx, workspaceID, secretKey, message)
+	}
+
+	wasAlreadySent := false
+	if existing, err := d.upstream.Get(ctx, workspaceID, secretKey, message.ID); err == nil && existing != nil && existing.SentAt != nil {
+		wasAlreadySent = true
+	}
+
+	if err := d.upstream.Upsert(ctx, workspaceID, secretKey, message); err != nil {
+		return err
+	}
+
+	if !wasAlreadySent {
+		d.incrementQuota(ctx, workspaceID, 1)
+	}
+	return nil
 }
 
 func (d *VeridianMessageHistoryDecorator) Update(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {

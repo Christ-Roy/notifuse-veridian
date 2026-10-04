@@ -17,7 +17,9 @@ const idempGetSQL = `
 		SELECT key, endpoint, tenant_id, request_hash, response_status, response_body,
 		       created_at, expires_at
 		FROM veridian_idempotency_keys
-		WHERE key = $1 AND expires_at > NOW()
+		WHERE key = $1
+		  AND ( ($2 = '' AND tenant_id IS NULL) OR tenant_id = $2 )
+		  AND expires_at > NOW()
 	`
 
 const idempSaveSQL = `
@@ -46,6 +48,43 @@ func TestNewVeridianIdempotencyRepository_Constructor(t *testing.T) {
 	var _ domain.VeridianIdempotencyRepository = repo
 }
 
+// Mission 2026-10-04 (audit backend, V60) : preuve que deux tenants avec la
+// MEME valeur de cle ne se rejouent plus mutuellement leurs reponses --
+// avant ce correctif le lookup etait WHERE key = $1 seul, sans scoper par
+// tenant_id.
+func TestVeridianIdempotencyRepository_Get_ScopedByTenant(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("same key, different tenant -> not found (pas de rejeu cross-tenant)", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianIdempotencyRepository(db)
+
+		// tenant "ws-a" n'a pas de ligne pour la cle "shared-key" (elle
+		// appartient a "ws-b") -> la requete scopee ne la trouve pas.
+		mock.ExpectQuery(idempGetSQL).WithArgs("shared-key", "ws-a").WillReturnError(sql.ErrNoRows)
+
+		_, err := repo.Get(ctx, "shared-key", "ws-a")
+		assert.ErrorIs(t, err, sql.ErrNoRows)
+	})
+
+	t.Run("same key, matching tenant -> found", func(t *testing.T) {
+		db, mock := newMockSystemDB(t)
+		repo := NewVeridianIdempotencyRepository(db)
+
+		now := time.Now().UTC()
+		rows := sqlmock.NewRows([]string{
+			"key", "endpoint", "tenant_id", "request_hash", "response_status",
+			"response_body", "created_at", "expires_at",
+		}).AddRow("shared-key", "/api/tenants/provision", "ws-b", "hash", 200, []byte(`{}`), now, now.Add(time.Hour))
+
+		mock.ExpectQuery(idempGetSQL).WithArgs("shared-key", "ws-b").WillReturnRows(rows)
+
+		e, err := repo.Get(ctx, "shared-key", "ws-b")
+		require.NoError(t, err)
+		assert.Equal(t, "ws-b", e.TenantID)
+	})
+}
+
 func TestVeridianIdempotencyRepository_Get(t *testing.T) {
 	ctx := context.Background()
 
@@ -62,9 +101,9 @@ func TestVeridianIdempotencyRepository_Get(t *testing.T) {
 			"response_body", "created_at", "expires_at",
 		}).AddRow("k1", "/api/tenants/provision", "ws-1", "hash123", 200, body, now, expires)
 
-		mock.ExpectQuery(idempGetSQL).WithArgs("k1").WillReturnRows(rows)
+		mock.ExpectQuery(idempGetSQL).WithArgs("k1", "ws-1").WillReturnRows(rows)
 
-		e, err := repo.Get(ctx, "k1")
+		e, err := repo.Get(ctx, "k1", "ws-1")
 		require.NoError(t, err)
 		assert.Equal(t, "k1", e.Key)
 		assert.Equal(t, "/api/tenants/provision", e.Endpoint)
@@ -84,9 +123,9 @@ func TestVeridianIdempotencyRepository_Get(t *testing.T) {
 			"response_body", "created_at", "expires_at",
 		}).AddRow("k2", "/api/veridian/admin/wipe-test-tenants", nil, "h", 200, []byte(`{}`), now, now.Add(time.Hour))
 
-		mock.ExpectQuery(idempGetSQL).WithArgs("k2").WillReturnRows(rows)
+		mock.ExpectQuery(idempGetSQL).WithArgs("k2", "").WillReturnRows(rows)
 
-		e, err := repo.Get(ctx, "k2")
+		e, err := repo.Get(ctx, "k2", "")
 		require.NoError(t, err)
 		assert.Empty(t, e.TenantID)
 	})
@@ -95,9 +134,9 @@ func TestVeridianIdempotencyRepository_Get(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianIdempotencyRepository(db)
 
-		mock.ExpectQuery(idempGetSQL).WithArgs("missing").WillReturnError(sql.ErrNoRows)
+		mock.ExpectQuery(idempGetSQL).WithArgs("missing", "").WillReturnError(sql.ErrNoRows)
 
-		_, err := repo.Get(ctx, "missing")
+		_, err := repo.Get(ctx, "missing", "")
 		assert.ErrorIs(t, err, sql.ErrNoRows)
 	})
 
@@ -108,9 +147,9 @@ func TestVeridianIdempotencyRepository_Get(t *testing.T) {
 		db, mock := newMockSystemDB(t)
 		repo := NewVeridianIdempotencyRepository(db)
 
-		mock.ExpectQuery(idempGetSQL).WithArgs("expired").WillReturnError(sql.ErrNoRows)
+		mock.ExpectQuery(idempGetSQL).WithArgs("expired", "").WillReturnError(sql.ErrNoRows)
 
-		_, err := repo.Get(ctx, "expired")
+		_, err := repo.Get(ctx, "expired", "")
 		assert.ErrorIs(t, err, sql.ErrNoRows, "entry expiree → traite comme absente")
 	})
 }

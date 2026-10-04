@@ -204,14 +204,18 @@ func (e *AutomationExecutor) Execute(ctx context.Context, workspaceID string, co
 
 		// EXIT: Completed (terminal node reached)
 		if contactAutomation.Status == domain.ContactAutomationStatusCompleted {
-			_ = e.automationRepo.IncrementAutomationStat(ctx, workspaceID, automation.ID, "completed")
+			if statErr := e.automationRepo.IncrementAutomationStat(ctx, workspaceID, automation.ID, "completed"); statErr != nil {
+				e.logger.WithField("error", statErr.Error()).Warn("Failed to increment automation stat \"completed\"")
+			}
 			e.createAutomationEndEvent(ctx, workspaceID, contactAutomation, "completed")
 			return nil
 		}
 
 		// EXIT: Exited (filter/branch exit)
 		if contactAutomation.Status == domain.ContactAutomationStatusExited {
-			_ = e.automationRepo.IncrementAutomationStat(ctx, workspaceID, automation.ID, "exited")
+			if statErr := e.automationRepo.IncrementAutomationStat(ctx, workspaceID, automation.ID, "exited"); statErr != nil {
+				e.logger.WithField("error", statErr.Error()).Warn("Failed to increment automation stat \"exited\"")
+			}
 			reason := "exited"
 			if contactAutomation.ExitReason != nil {
 				reason = *contactAutomation.ExitReason
@@ -291,7 +295,9 @@ func (e *AutomationExecutor) handleError(ctx context.Context, workspaceID string
 
 	if ca.RetryCount >= ca.MaxRetries {
 		ca.Status = domain.ContactAutomationStatusFailed
-		_ = e.automationRepo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "failed")
+		if statErr := e.automationRepo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "failed"); statErr != nil {
+			e.logger.WithField("error", statErr.Error()).Warn("Failed to increment automation stat \"failed\"")
+		}
 
 		e.createAutomationEndEvent(ctx, workspaceID, ca, "failed")
 
@@ -349,7 +355,9 @@ func (e *AutomationExecutor) markAsCompleted(ctx context.Context, workspaceID st
 		"reason":        reason,
 	}).Info("Contact automation completed")
 
-	_ = e.automationRepo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "completed")
+	if statErr := e.automationRepo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "completed"); statErr != nil {
+		e.logger.WithField("error", statErr.Error()).Warn("Failed to increment automation stat \"completed\"")
+	}
 
 	e.createAutomationEndEvent(ctx, workspaceID, ca, reason)
 
@@ -369,7 +377,9 @@ func (e *AutomationExecutor) markAsExited(ctx context.Context, workspaceID strin
 		"reason":        reason,
 	}).Info("Contact automation exited")
 
-	_ = e.automationRepo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "exited")
+	if statErr := e.automationRepo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "exited"); statErr != nil {
+		e.logger.WithField("error", statErr.Error()).Warn("Failed to increment automation stat \"exited\"")
+	}
 
 	e.createAutomationEndEvent(ctx, workspaceID, ca, reason)
 

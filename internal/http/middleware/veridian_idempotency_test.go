@@ -68,7 +68,7 @@ func TestVeridianIdempotencyMiddleware_MissExecutesAndSaves(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mocks.NewMockVeridianIdempotencyRepository(ctrl)
 
-	repo.EXPECT().Get(gomock.Any(), "k1").Return(nil, sql.ErrNoRows).Times(1)
+	repo.EXPECT().Get(gomock.Any(), "k1", "ws-1").Return(nil, sql.ErrNoRows).Times(1)
 	repo.EXPECT().Save(gomock.Any(), gomock.AssignableToTypeOf(&domain.VeridianIdempotencyEntry{})).
 		DoAndReturn(func(_ context.Context, e *domain.VeridianIdempotencyEntry) error {
 			assert.Equal(t, "k1", e.Key)
@@ -104,7 +104,7 @@ func TestVeridianIdempotencyMiddleware_HitReplaysCached(t *testing.T) {
 	requestBody := []byte(`{"tenant_id":"ws-1"}`)
 	hash := hashRequest("POST", "/api/tenants/provision", requestBody)
 
-	repo.EXPECT().Get(gomock.Any(), "k1").Return(&domain.VeridianIdempotencyEntry{
+	repo.EXPECT().Get(gomock.Any(), "k1", "ws-1").Return(&domain.VeridianIdempotencyEntry{
 		Key:            "k1",
 		Endpoint:       "/api/tenants/provision",
 		TenantID:       "ws-1",
@@ -136,7 +136,7 @@ func TestVeridianIdempotencyMiddleware_HashMismatchReturns422(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mocks.NewMockVeridianIdempotencyRepository(ctrl)
 
-	repo.EXPECT().Get(gomock.Any(), "k1").Return(&domain.VeridianIdempotencyEntry{
+	repo.EXPECT().Get(gomock.Any(), "k1", "ws-2").Return(&domain.VeridianIdempotencyEntry{
 		Key:            "k1",
 		Endpoint:       "/api/tenants/provision",
 		RequestHash:    "different_hash",
@@ -168,7 +168,7 @@ func TestVeridianIdempotencyMiddleware_DBFailureFailOpen(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mocks.NewMockVeridianIdempotencyRepository(ctrl)
 
-	repo.EXPECT().Get(gomock.Any(), "k1").Return(nil, errors.New("db down")).Times(1)
+	repo.EXPECT().Get(gomock.Any(), "k1", "ws-1").Return(nil, errors.New("db down")).Times(1)
 	// PAS de Save attendu.
 
 	mw := VeridianIdempotencyMiddleware(repo, nil)
@@ -190,7 +190,7 @@ func TestVeridianIdempotencyMiddleware_5xxNotCached(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mocks.NewMockVeridianIdempotencyRepository(ctrl)
 
-	repo.EXPECT().Get(gomock.Any(), "k1").Return(nil, sql.ErrNoRows).Times(1)
+	repo.EXPECT().Get(gomock.Any(), "k1", "ws-1").Return(nil, sql.ErrNoRows).Times(1)
 	// PAS de Save attendu : 500 n'est pas cachee.
 
 	mw := VeridianIdempotencyMiddleware(repo, nil)
@@ -212,7 +212,7 @@ func TestVeridianIdempotencyMiddleware_4xxIsCached(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mocks.NewMockVeridianIdempotencyRepository(ctrl)
 
-	repo.EXPECT().Get(gomock.Any(), "k1").Return(nil, sql.ErrNoRows).Times(1)
+	repo.EXPECT().Get(gomock.Any(), "k1", "").Return(nil, sql.ErrNoRows).Times(1)
 	repo.EXPECT().Save(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 	mw := VeridianIdempotencyMiddleware(repo, nil)

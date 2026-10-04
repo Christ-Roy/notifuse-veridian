@@ -137,6 +137,9 @@ func TestVeridianMessageHistoryDecorator_Create_IncrementOtherError_WarnLog(t *t
 	require.NoError(t, err)
 }
 
+// TestVeridianMessageHistoryDecorator_Upsert_NoIncrement couvre le cas
+// FREQUENT en cold : SentAt nil = echec d'envoi. Jamais d'increment, et
+// surtout jamais de lecture upstream.Get() superflue sur ce chemin chaud.
 func TestVeridianMessageHistoryDecorator_Upsert_NoIncrement(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -146,13 +149,68 @@ func TestVeridianMessageHistoryDecorator_Upsert_NoIncrement(t *testing.T) {
 	log := pkgmocks.NewMockLogger(ctrl)
 
 	ctx := context.Background()
-	msg := &domain.MessageHistory{ID: "msg-5"}
+	msg := &domain.MessageHistory{ID: "msg-5"} // SentAt nil = echec
 
 	upstream.EXPECT().Upsert(ctx, "ws-5", "secret", msg).Return(nil).Times(1)
-	// Pas d'increment attendu sur Upsert (retry handling, design note).
+	// Pas de Get() attendu (court-circuit sur SentAt nil) ni d'increment.
 
 	d := NewVeridianMessageHistoryDecorator(upstream, planRepo, log)
 	err := d.Upsert(ctx, "ws-5", "secret", msg)
+	require.NoError(t, err)
+}
+
+// === Veridian patch 2026-10-04 (audit backend) ===
+// Avant ce correctif, Upsert n'incrementait JAMAIS la quota, sous l'hypothese
+// (fausse pour le chemin reel) qu'Upsert ne servait qu'aux retries d'un
+// message deja compte au Create initial. internal/service/queue/worker.go
+// ecrit 100% des envois broadcast/automation via Upsert directement (jamais
+// Create) -- sans ce correctif, emails_sent_this_month restait figé a 0 pour
+// toute la prospection cold.
+func TestVeridianMessageHistoryDecorator_Upsert_FirstSuccessfulSend_Increments(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	planRepo := domainmocks.NewMockVeridianPlanRepository(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+
+	ctx := context.Background()
+	sentAt := time.Now()
+	msg := &domain.MessageHistory{ID: "msg-6", SentAt: &sentAt}
+
+	// Pas de ligne existante (premier write de ce message) -> upstream.Get
+	// echoue "not found".
+	upstream.EXPECT().Get(ctx, "ws-6", "secret", "msg-6").Return(nil, errors.New("message history with id msg-6 not found")).Times(1)
+	upstream.EXPECT().Upsert(ctx, "ws-6", "secret", msg).Return(nil).Times(1)
+	planRepo.EXPECT().IncrementEmailsSent(ctx, "ws-6", int64(1)).Return(nil).Times(1)
+
+	d := NewVeridianMessageHistoryDecorator(upstream, planRepo, log)
+	err := d.Upsert(ctx, "ws-6", "secret", msg)
+	require.NoError(t, err)
+}
+
+// Un message DEJA marque sent_at (ex. un webhook delivered_at qui re-upsert
+// le meme message plus tard) ne doit JAMAIS re-incrementer : idempotence.
+func TestVeridianMessageHistoryDecorator_Upsert_AlreadySent_NoDoubleIncrement(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	planRepo := domainmocks.NewMockVeridianPlanRepository(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+
+	ctx := context.Background()
+	sentAt := time.Now()
+	msg := &domain.MessageHistory{ID: "msg-7", SentAt: &sentAt}
+	existing := &domain.MessageHistory{ID: "msg-7", SentAt: &sentAt}
+
+	upstream.EXPECT().Get(ctx, "ws-7", "secret", "msg-7").Return(existing, nil).Times(1)
+	upstream.EXPECT().Upsert(ctx, "ws-7", "secret", msg).Return(nil).Times(1)
+	// IncrementEmailsSent ne doit JAMAIS etre appele ici (deja compte au
+	// premier passage) : gomock fait echouer le test sur un appel non-expected.
+
+	d := NewVeridianMessageHistoryDecorator(upstream, planRepo, log)
+	err := d.Upsert(ctx, "ws-7", "secret", msg)
 	require.NoError(t, err)
 }
 

@@ -1214,3 +1214,49 @@ func (r *AutomationRepository) IncrementAutomationStat(ctx context.Context, work
 
 	return nil
 }
+
+// DecrementAutomationStat -- mission 2026-10-04 (audit backend). Meme forme
+// que IncrementAutomationStat, plancher GREATEST(...,0) cote SQL : un
+// decrement ne doit jamais faire passer un compteur sous zero (ex. race entre
+// deux resets concurrents du meme contact).
+func (r *AutomationRepository) DecrementAutomationStat(ctx context.Context, workspaceID, automationID, statName string) error {
+	db, err := r.getDB(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get database connection: %w", err)
+	}
+
+	// Validate stat name
+	validStats := map[string]bool{
+		"enrolled":  true,
+		"completed": true,
+		"exited":    true,
+		"failed":    true,
+	}
+	if !validStats[statName] {
+		return fmt.Errorf("invalid stat name: %s", statName)
+	}
+
+	// Use JSONB update to increment the specific stat
+	query := fmt.Sprintf(`
+		UPDATE automations
+		SET stats = COALESCE(stats, '{}'::jsonb) ||
+			jsonb_build_object('%s', GREATEST(COALESCE((stats->>'%s')::int, 0) - 1, 0)),
+			updated_at = $1
+		WHERE id = $2 AND workspace_id = $3
+	`, statName, statName)
+
+	result, err := db.ExecContext(ctx, query, time.Now().UTC(), automationID, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to decrement automation stat: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("automation not found: %s", automationID)
+	}
+
+	return nil
+}

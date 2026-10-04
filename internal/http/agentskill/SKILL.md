@@ -99,9 +99,9 @@ exacte) font partie de la même logique anti-spam que les plafonds.
 ## 3. Import en masse (CSV, listes, segments)
 
 ```bash
-notifuse contacts:import --file contacts.csv --list-id <list_id>
+notifuse contacts:import <workspace> --file contacts.csv --lists <list_id1>,<list_id2>
 notifuse lists:create --name "Prospects Q4" --id prospects-q4
-notifuse lists:stats --list-id prospects-q4
+notifuse lists:stats <workspace> --id prospects-q4
 notifuse segments:create <workspace> --data @segment.json   # filtre dynamique
 notifuse segments:contacts --id <segment_id>
 ```
@@ -122,16 +122,18 @@ un bug, pas une fonctionnalité.
 ```bash
 notifuse automations:create <workspace> --data @sequence.json
 notifuse automations:activate <workspace> --id <automation_id>
-notifuse automations:enroll <workspace> --id <automation_id> --segment-id <segment_id>
+notifuse automations:enroll <workspace> --id <automation_id> --emails <email1>,<email2>
 
 # Un contact répond ou ne doit plus être relancé : le sortir immédiatement
-notifuse automations:exitContact <workspace> --id <automation_id> --contact-email <email>
+# (mission 2026-10-04 : exit-contact/reset-contact, pas exitContact/resetContact camelCase —
+# ce sont des commandes CLI hyphénées, distinctes du nom de route HTTP automations.exitContact)
+notifuse automations:exit-contact <workspace> --data '{"automation_id":"<automation_id>","email":"<email>"}'
 
 # Repartir de zéro pour un contact (reset du parcours)
-notifuse automations:resetContact <workspace> --id <automation_id> --contact-email <email>
+notifuse automations:reset-contact <workspace> --data '{"automation_id":"<automation_id>","email":"<email>"}'
 
-# Diagnostiquer où un lot de contacts est bloqué dans le parcours
-notifuse automations:nodeExecutions <workspace> --id <automation_id>
+# Diagnostiquer où un lot de contacts est bloqué dans le parcours (--email requis)
+notifuse automations:nodeExecutions <workspace> --id <automation_id> --email <email>
 ```
 
 Structure recommandée pour une séquence de prospection :
@@ -190,7 +192,7 @@ Autres leviers de diagnostic :
 
 ```bash
 notifuse messages:list <workspace> --param limit=50       # historique des envois récents
-notifuse lists:stats --list-id <id>                        # taux d'ouverture/clic/désabonnement d'une liste
+notifuse lists:stats <workspace> --id <id>                        # taux d'ouverture/clic/désabonnement d'une liste
 notifuse webhooks:deliveries <workspace> --id <webhook_id>  # évènements delivery/bounce/complaint livrés
 ```
 

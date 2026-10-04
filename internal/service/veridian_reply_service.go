@@ -309,7 +309,9 @@ func (s *VeridianReplyService) exitActiveAutomations(ctx context.Context, worksp
 			}).Warn("VeridianReply: exit automation failed, gate Lot 9 will catch up")
 			continue
 		}
-		_ = s.automationRepo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "exited")
+		if statErr := s.automationRepo.IncrementAutomationStat(ctx, workspaceID, ca.AutomationID, "exited"); statErr != nil {
+			s.logger.WithField("error", statErr.Error()).Warn("Failed to increment automation stat \"exited\"")
+		}
 		s.createAutomationEndEvent(ctx, workspaceID, ca, reason)
 	}
 }

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -42,4 +43,26 @@ func TestVeridianIdempotencyEntry_OptionalTenantID(t *testing.T) {
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 	}
 	assert.Empty(t, entry.TenantID, "TenantID optional (NULL en DB)")
+}
+
+// Mission 2026-10-04 (audit backend, V60) : Get gagne un second paramètre
+// tenantID (scope le lookup, cf. commentaire sur l'interface -- avant V60,
+// deux appelants avec la meme cle se rejouaient mutuellement leurs
+// reponses, cross-tenant). Fige la FORME de l'interface : tout type qui
+// pretend l'implementer doit porter ce second paramètre.
+type fakeIdempotencyRepo struct {
+	lastTenantID string
+}
+
+func (f *fakeIdempotencyRepo) Get(_ context.Context, _ string, tenantID string) (*VeridianIdempotencyEntry, error) {
+	f.lastTenantID = tenantID
+	return nil, nil
+}
+func (f *fakeIdempotencyRepo) Save(_ context.Context, _ *VeridianIdempotencyEntry) error { return nil }
+func (f *fakeIdempotencyRepo) DeleteExpired(_ context.Context) (int64, error)            { return 0, nil }
+
+func TestVeridianIdempotencyRepository_InterfaceShape(t *testing.T) {
+	var repo VeridianIdempotencyRepository = &fakeIdempotencyRepo{}
+	_, _ = repo.Get(context.Background(), "k", "tenant-x")
+	assert.Equal(t, "tenant-x", repo.(*fakeIdempotencyRepo).lastTenantID)
 }
