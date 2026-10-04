@@ -1,5 +1,7 @@
 package middleware
 
+// (Mission 2026-10-04 : scoping tenant_id de Get -- voir veridian_idempotency.go)
+
 import (
 	"bytes"
 	"context"

@@ -45,8 +45,8 @@ func TestVeridianIdempotencyEntry_OptionalTenantID(t *testing.T) {
 	assert.Empty(t, entry.TenantID, "TenantID optional (NULL en DB)")
 }
 
-// Mission 2026-10-04 (audit backend, V60) : Get gagne un second paramètre
-// tenantID (scope le lookup, cf. commentaire sur l'interface -- avant V60,
+// Mission 2026-10-04 (audit backend) : Get gagne un second paramètre
+// tenantID (scope le lookup, cf. commentaire sur l'interface -- avant ce correctif,
 // deux appelants avec la meme cle se rejouaient mutuellement leurs
 // reponses, cross-tenant). Fige la FORME de l'interface : tout type qui
 // pretend l'implementer doit porter ce second paramètre.

@@ -48,7 +48,7 @@ func TestNewVeridianIdempotencyRepository_Constructor(t *testing.T) {
 	var _ domain.VeridianIdempotencyRepository = repo
 }
 
-// Mission 2026-10-04 (audit backend, V60) : preuve que deux tenants avec la
+// Mission 2026-10-04 (audit backend) : preuve que deux tenants avec la
 // MEME valeur de cle ne se rejouent plus mutuellement leurs reponses --
 // avant ce correctif le lookup etait WHERE key = $1 seul, sans scoper par
 // tenant_id.

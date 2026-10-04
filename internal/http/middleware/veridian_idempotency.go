@@ -80,9 +80,9 @@ func VeridianIdempotencyMiddleware(repo domain.VeridianIdempotencyRepository, lo
 			r.ContentLength = int64(len(body))
 
 			requestHash := hashRequest(r.Method, r.URL.Path, body)
-			// Mission 2026-10-04 (audit backend, V60) : extrait AVANT le Get
-			// (et non plus seulement au Save) pour scoper le lookup par tenant
-			// -- sinon deux appelants avec la meme valeur de cle se rejouent
+			// Mission 2026-10-04 (audit backend) : extrait AVANT le Get (et non
+			// plus seulement au Save) pour scoper le lookup par tenant --
+			// sinon deux appelants avec la meme valeur de cle se rejouent
 			// mutuellement leurs reponses, cross-tenant.
 			tenantID := extractTenantIDFromBody(body)
 

@@ -28,12 +28,23 @@ type VeridianIdempotencyEntry struct {
 // VeridianIdempotencyRepository gere la table veridian_idempotency_keys.
 //
 // Get : lookup par (key, tenantID). Retourne sql.ErrNoRows si absent.
-// tenantID vide = scope "pas de tenant identifiable" (NULL cote colonne),
-// cf. migration V60 (audit backend 2026-10-04) : avant V60, le lookup etait
-// par key SEUL, globalement -- deux appelants choisissant par coincidence
-// la meme valeur de cle se rejouaient mutuellement leurs reponses, cross-
-// tenant. Save : INSERT. Conflit sur PK (race) → erreur (le caller doit
-// catch avec errors.Is et fallback en GET).
+// tenantID vide = scope "pas de tenant identifiable" (NULL cote colonne).
+//
+// === Veridian patch 2026-10-04 (audit backend) ===
+// Avant ce correctif, le lookup etait WHERE key = $1 SEUL, globalement :
+// deux appelants (tenants differents) choisissant par coincidence la meme
+// valeur de cle se rejouaient mutuellement leurs reponses cachees -- un
+// rejeu cross-tenant. Pas de migration/index necessaire : key reste la PK,
+// Postgres localise la ligne UNIQUE par cle avant meme d'evaluer le filtre
+// tenant_id (0 ou 1 ligne), donc aucun index composite n'apporte quoi que
+// ce soit. Meme raisonnement que V41 (veridian_api_key_grace) : une table
+// petite/transiente (TTL 24h) n'a pas besoin d'un index que CREATE INDEX
+// CONCURRENTLY ne peut de toute facon pas poser depuis cette migration
+// (executeMigration wrappe UpdateSystem en BEGIN/COMMIT, CONCURRENTLY est
+// interdit en transaction -- cf check-migration-safety.sh §12).
+//
+// Save : INSERT. Conflit sur PK (race) → erreur (le caller doit catch
+// avec errors.Is et fallback en GET).
 //
 // DeleteExpired : cron, retourne le nombre de lignes supprimees.
 type VeridianIdempotencyRepository interface {

@@ -26,12 +26,14 @@ func NewVeridianIdempotencyRepository(systemDB *sql.DB) domain.VeridianIdempoten
 // Get recupere une entree par cle. Retourne sql.ErrNoRows si absent OU si
 // expire (expires_at < NOW) — le cron DeleteExpired n'a pas encore tourne
 // pour cette ligne mais on la traite deja comme inexistante.
-// === Veridian patch 2026-10-04 (audit backend, V60) ===
+// === Veridian patch 2026-10-04 (audit backend) ===
 // Scope desormais par (key, tenantID) : key = $1 AND tenant_id = $2 OU, si
 // tenantID est vide (appel sans tenant identifiable), tenant_id IS NULL.
 // Avant ce correctif : WHERE key = $1 seul -- deux appelants avec la meme
 // valeur de cle (mais des tenants differents) se rejouaient mutuellement
-// leurs reponses cachees.
+// leurs reponses cachees. Pas de migration/index requis (voir domain/
+// veridian_idempotency.go) : key reste PK, 0/1 ligne avant meme le filtre
+// tenant_id.
 func (r *veridianIdempotencyRepository) Get(ctx context.Context, key string, tenantID string) (*domain.VeridianIdempotencyEntry, error) {
 	const q = `
 		SELECT key, endpoint, tenant_id, request_hash, response_status, response_body,
