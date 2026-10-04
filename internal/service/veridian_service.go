@@ -1248,6 +1248,20 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 // n'arrive pas a creer une session tenant (pre-feature owner-natif, ou
 // erreur transitoire).
 func (s *veridianService) wipeOneTenant(ctx, rootCtx context.Context, tid string) error {
+	// 0. Veridian fork — durcissement 2026-10-04 (audit securite, race
+	// wipe/recreation). Verrou nomme sur tid, PARTAGE avec
+	// EnsureWorkspaceDatabaseExists cote creation (meme cle, meme base
+	// systeme) : tant qu'il est tenu, aucun CreateWorkspace pour ce MEME id
+	// ne peut avancer, et inversement un wipe ne peut pas demarrer pendant
+	// qu'une creation est en cours. Liberer en TOUT DERNIER (apres le
+	// force-drop et le HardDelete du plan) : c'est tout l'intervalle
+	// destructeur qu'il faut couvrir.
+	releaseLock, lockErr := s.acquireWorkspaceWipeLock(ctx, tid)
+	if lockErr != nil {
+		return fmt.Errorf("wipe one tenant: %w", lockErr)
+	}
+	defer releaseLock()
+
 	// 1. Resoudre l'owner du workspace via repo direct (pas de check auth).
 	// Le workspace a maintenant le tenant user comme seul owner (root a ete
 	// retire par Provision via TransferOwnership). DeleteWorkspace exige que

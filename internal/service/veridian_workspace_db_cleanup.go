@@ -20,6 +20,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
@@ -38,6 +39,37 @@ type veridianForceDropper interface {
 // raté sur la race. Implémentée par *repository.workspaceRepository.
 type veridianDBExistenceChecker interface {
 	VeridianWorkspaceDBExists(ctx context.Context, workspaceID string) (bool, error)
+}
+
+// veridianWorkspaceLocker : capacité (optionnelle) de prendre le MÊME
+// advisory lock Postgres nommé que EnsureWorkspaceDatabaseExists côté
+// création (internal/database/workspace_lock.go) — durcissement 2026-10-04,
+// audit "race entre wipe et recréation". Implémentée par
+// *repository.workspaceRepository (méthode dans veridian_workspace_drop.go).
+type veridianWorkspaceLocker interface {
+	VeridianAcquireWorkspaceLock(ctx context.Context, workspaceID string) (release func(), err error)
+}
+
+// acquireWorkspaceWipeLock prend le verrou nommé sur workspaceID AVANT toute
+// opération destructrice de wipeOneTenant (suppression du record système,
+// DeleteWorkspace, force-drop). Contrairement aux autres helpers de ce
+// fichier, ce n'EST PAS best-effort côté échec d'acquisition : si la
+// capacité est présente (repo réel) mais que prendre le verrou échoue
+// (base système injoignable, etc.), on NE SAIT PLUS dire si un
+// CreateWorkspace concurrent est en train de (re)créer ce même workspace —
+// continuer sans verrou serait exactement la situation que ce correctif
+// ferme. Capacité absente (type de repo qui ne l'implémente pas, ex. un
+// double de test) → no-op (comportement inchangé, non-régression).
+func (s *veridianService) acquireWorkspaceWipeLock(ctx context.Context, workspaceID string) (func(), error) {
+	locker, ok := s.workspaceRepo.(veridianWorkspaceLocker)
+	if !ok {
+		return func() {}, nil
+	}
+	release, err := locker.VeridianAcquireWorkspaceLock(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire workspace wipe lock: %w", err)
+	}
+	return release, nil
 }
 
 // veridianSystemRecordDeleter : capacité (optionnelle) de supprimer les ROWS

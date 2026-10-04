@@ -175,6 +175,50 @@ func (r *workspaceRepository) VeridianDeleteWorkspaceSystemRecord(ctx context.Co
 	return nil
 }
 
+// veridianWorkspaceLockKeyPrefix DOIT rester identique, caractere pour
+// caractere, a workspaceLockKeyPrefix dans internal/database/workspace_lock.go
+// (cote CreateWorkspace). hashtext() est calcule par POSTGRES a partir de ce
+// texte : les deux cotes n'ont besoin d'aucun code Go partage, seulement de
+// produire exactement la meme chaine avant de la passer a hashtext().
+const veridianWorkspaceLockKeyPrefix = "veridian_workspace_lock:"
+
+// VeridianAcquireWorkspaceLock prend le MEME advisory lock Postgres nomme
+// que EnsureWorkspaceDatabaseExists (internal/database/workspace_lock.go),
+// sur une connexion dediee a r.systemDB (notifuse_system) — la base
+// systeme, jamais "postgres" : les advisory locks Postgres sont scoppes PAR
+// BASE (verifie empiriquement le 2026-10-04), donc un lock pris ailleurs ne
+// serialiserait rien contre la creation. Consomme par wipeOneTenant pour
+// fermer la race "wipe + recreation du meme workspace id" (audit
+// 2026-10-04) : tant que ce verrou est tenu, aucun CreateWorkspace pour le
+// MEME id ne peut avancer au-dela de son propre acquireWorkspaceLock, et
+// vice-versa.
+func (r *workspaceRepository) VeridianAcquireWorkspaceLock(ctx context.Context, workspaceID string) (release func(), err error) {
+	if r.systemDB == nil {
+		return nil, fmt.Errorf("veridian acquire workspace lock: nil systemDB")
+	}
+	conn, err := r.systemDB.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("veridian acquire workspace lock: %w", err)
+	}
+
+	lockKey := veridianWorkspaceLockKeyPrefix + workspaceID
+	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock(hashtext($1))", lockKey); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("veridian acquire workspace lock: %w", err)
+	}
+
+	released := false
+	release = func() {
+		if released {
+			return
+		}
+		released = true
+		_, _ = conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock(hashtext($1))", lockKey)
+		_ = conn.Close()
+	}
+	return release, nil
+}
+
 // VeridianWorkspaceDBExists indique si la base physique d'un workspace est encore
 // présente dans pg_database. Sert au wipe à confirmer qu'un DROP FORCE de
 // rattrapage a réellement supprimé la base quand le DROP upstream a raté sur la
