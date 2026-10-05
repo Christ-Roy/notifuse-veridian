@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"errors"
+	"net/http"
 	"net/url"
 	"testing"
 	"time"
@@ -430,4 +432,47 @@ func TestInboundWebhookEventListResult(t *testing.T) {
 	assert.Len(t, result.Events, 2)
 	assert.Equal(t, "next-cursor", result.NextCursor)
 	assert.True(t, result.HasMore)
+}
+
+
+// TestInboundWebhookAuth_FailClosedByDefault reproduces the durcissement
+// 2026-10-04 contract at the domain level: the ZERO VALUE of
+// InboundWebhookAuth (what a caller gets if it forgets to set anything)
+// must be Internal=false — i.e. treated as an untrusted HTTP request,
+// never as the trusted in-process bypass. A zero-value auth with no
+// secret is exactly the forged-webhook shape from the audit.
+func TestInboundWebhookAuth_FailClosedByDefault(t *testing.T) {
+	var auth InboundWebhookAuth
+	assert.False(t, auth.Internal, "zero-value InboundWebhookAuth must NOT bypass authentication")
+	assert.Empty(t, auth.Secret)
+	assert.Nil(t, auth.Headers)
+
+	// Explicit construction from HTTP request material (the real path: the
+	// handler builds this from r.URL.Query().Get("secret") and r.Header).
+	h := http.Header{}
+	h.Set("User-Agent", "forged-client")
+	forged := InboundWebhookAuth{Secret: "", Headers: h}
+	assert.False(t, forged.Internal)
+	assert.Empty(t, forged.Secret, "a forged request carries no secret")
+}
+
+// TestErrWebhookUnauthorized_IsADistinctStableSentinel verifies
+// ErrWebhookUnauthorized behaves like every other sentinel error in this
+// package: comparable via errors.Is, stable identity (not reconstructed
+// per call), and carries a message that never leaks WHY auth failed (no
+// secret, wrong integration, etc.) — the handler maps it to a single,
+// uninformative 401 so a forged request cannot be used as an oracle to
+// guess a valid secret.
+func TestErrWebhookUnauthorized_IsADistinctStableSentinel(t *testing.T) {
+	require.Error(t, ErrWebhookUnauthorized)
+	assert.True(t, errors.Is(ErrWebhookUnauthorized, ErrWebhookUnauthorized))
+
+	wrapped := errors.New("outer: " + ErrWebhookUnauthorized.Error())
+	assert.False(t, errors.Is(wrapped, ErrWebhookUnauthorized),
+		"a merely similarly-worded error must NOT satisfy errors.Is — identity matters, not text")
+
+	assert.NotEqual(t, ErrWebhookUnauthorized.Error(), "",
+		"must have a human-readable message")
+	assert.NotContains(t, ErrWebhookUnauthorized.Error(), "secret",
+		"the sentinel's own message must not leak auth internals")
 }

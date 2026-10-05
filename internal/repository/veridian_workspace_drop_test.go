@@ -281,3 +281,88 @@ func TestWorkspaceRepository_VeridianWorkspaceDBExists(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, exists)
 }
+
+
+// === Durcissement 2026-10-04 (audit sécurité, race wipe/recréation) ===
+//
+// VeridianAcquireWorkspaceLock prend le MÊME advisory lock Postgres nommé
+// que acquireWorkspaceLock côté création (internal/database/workspace_lock.go) :
+// sérialise wipeOneTenant contre un CreateWorkspace concurrent sur le même id.
+
+func TestWorkspaceRepository_VeridianAcquireWorkspaceLock_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &workspaceRepository{systemDB: db}
+
+	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_lock(hashtext($1))`)).
+		WithArgs("veridian_workspace_lock:tst123").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_unlock(hashtext($1))`)).
+		WithArgs("veridian_workspace_lock:tst123").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	release, err := repo.VeridianAcquireWorkspaceLock(context.Background(), "tst123")
+	require.NoError(t, err)
+	require.NotNil(t, release)
+
+	release()
+	// Idempotent release: calling it again must not re-issue the unlock or panic.
+	release()
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestWorkspaceRepository_VeridianAcquireWorkspaceLock_NilSystemDB(t *testing.T) {
+	repo := &workspaceRepository{systemDB: nil}
+	release, err := repo.VeridianAcquireWorkspaceLock(context.Background(), "tst123")
+	require.Error(t, err)
+	assert.Nil(t, release)
+	assert.Contains(t, err.Error(), "nil systemDB")
+}
+
+func TestWorkspaceRepository_VeridianAcquireWorkspaceLock_ExecFails(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &workspaceRepository{systemDB: db}
+
+	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_lock(hashtext($1))`)).
+		WithArgs("veridian_workspace_lock:tst123").
+		WillReturnError(errors.New("connection refused"))
+
+	release, err := repo.VeridianAcquireWorkspaceLock(context.Background(), "tst123")
+	require.Error(t, err)
+	assert.Nil(t, release)
+	assert.Contains(t, err.Error(), "connection refused")
+}
+
+// TestWorkspaceRepository_VeridianAcquireWorkspaceLock_KeyFormatMatchesCreateSide
+// is the anti-drift canary: the lock key text MUST be byte-identical to
+// workspaceLockKeyPrefix in internal/database/workspace_lock.go
+// ("veridian_workspace_lock:<id>") — two different Go packages, no shared
+// code possible without an import cycle, so Postgres computing hashtext()
+// on the SAME literal text is the only thing keeping them in sync. This
+// test fails loudly the moment someone edits one prefix without the other.
+func TestWorkspaceRepository_VeridianAcquireWorkspaceLock_KeyFormatMatchesCreateSide(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &workspaceRepository{systemDB: db}
+
+	const canonicalKey = "veridian_workspace_lock:" + "driftcanary1"
+	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_lock(hashtext($1))`)).
+		WithArgs(canonicalKey).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`SELECT pg_advisory_unlock(hashtext($1))`)).
+		WithArgs(canonicalKey).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	release, err := repo.VeridianAcquireWorkspaceLock(context.Background(), "driftcanary1")
+	require.NoError(t, err, "VeridianAcquireWorkspaceLock must use EXACTLY the canonical key format expected by sqlmock's WithArgs above")
+	release()
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

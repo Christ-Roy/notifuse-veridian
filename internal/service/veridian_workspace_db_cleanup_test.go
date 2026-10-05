@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -59,6 +60,64 @@ func (f *fakeSystemRecordDeleterRepo) VeridianDeleteWorkspaceSystemRecord(ctx co
 	f.called++
 	f.lastWSID = workspaceID
 	return f.returnErr
+}
+
+// fakeWorkspaceLockerRepo embed WorkspaceRepository (nil) et implémente
+// VeridianAcquireWorkspaceLock → satisfait veridianWorkspaceLocker. Durcissement
+// 2026-10-04 (audit sécurité, race wipe/recréation).
+type fakeWorkspaceLockerRepo struct {
+	domain.WorkspaceRepository
+	acquireCalls  int
+	lastWSID      string
+	acquireErr    error
+	releaseCalled bool
+}
+
+func (f *fakeWorkspaceLockerRepo) VeridianAcquireWorkspaceLock(ctx context.Context, workspaceID string) (func(), error) {
+	f.acquireCalls++
+	f.lastWSID = workspaceID
+	if f.acquireErr != nil {
+		return nil, f.acquireErr
+	}
+	return func() { f.releaseCalled = true }, nil
+}
+
+func TestAcquireWorkspaceWipeLock_NoCapability_ReturnsNoopNilError(t *testing.T) {
+	// Repo sans la capacité (ex. double de test minimal) → no-op, pas d'erreur :
+	// comportement inchangé pour un repo qui n'implémente pas le verrou.
+	s := &veridianService{workspaceRepo: &repoWithoutDropCapability{}}
+	release, err := s.acquireWorkspaceWipeLock(context.Background(), "tst123")
+	assert.NoError(t, err)
+	require.NotNil(t, release)
+	assert.NotPanics(t, release)
+}
+
+func TestAcquireWorkspaceWipeLock_CapabilityPresent_AcquiresAndReleases(t *testing.T) {
+	repo := &fakeWorkspaceLockerRepo{}
+	s := &veridianService{workspaceRepo: repo}
+
+	release, err := s.acquireWorkspaceWipeLock(context.Background(), "tst123")
+	require.NoError(t, err)
+	assert.Equal(t, 1, repo.acquireCalls)
+	assert.Equal(t, "tst123", repo.lastWSID)
+
+	release()
+	assert.True(t, repo.releaseCalled, "release() returned by acquireWorkspaceWipeLock must call through to the repo's release func")
+}
+
+func TestAcquireWorkspaceWipeLock_AcquireFails_PropagatesError(t *testing.T) {
+	// Contrairement aux autres helpers best-effort de ce fichier, un échec
+	// d'acquisition du verrou de wipe DOIT remonter une erreur : on ne sait
+	// plus dire si un CreateWorkspace concurrent est en cours sur le même
+	// id, et continuer sans verrou serait exactement la race que ce
+	// durcissement ferme (audit 2026-10-04).
+	repo := &fakeWorkspaceLockerRepo{acquireErr: errors.New("system db unreachable")}
+	s := &veridianService{workspaceRepo: repo}
+
+	release, err := s.acquireWorkspaceWipeLock(context.Background(), "tst123")
+	require.Error(t, err)
+	assert.Nil(t, release)
+	assert.Contains(t, err.Error(), "system db unreachable")
 }
 
 func TestDeleteWorkspaceSystemRecordBestEffort_CutsRecord(t *testing.T) {

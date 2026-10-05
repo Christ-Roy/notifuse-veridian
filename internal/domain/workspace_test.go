@@ -4030,6 +4030,73 @@ func TestIntegration_WebhookSecret_NonEmailIntegrationUntouched(t *testing.T) {
 	assert.Empty(t, integration.EncryptedWebhookSecret)
 }
 
+// TestIntegration_MarshalJSON_MasksWebhookSecret tests the MarshalJSON
+// override directly (not just as a side assertion inside another test):
+// whatever WebhookSecret clear value is set, it must never appear in the
+// JSON output, while EncryptedWebhookSecret (ciphertext) round-trips
+// untouched, and every other field is unaffected.
+func TestIntegration_MarshalJSON_MasksWebhookSecret(t *testing.T) {
+	integration := Integration{
+		ID:                     "email-2",
+		Name:                   "Masking test",
+		Type:                   IntegrationTypeEmail,
+		WebhookSecret:          "super-secret-clear-value",
+		EncryptedWebhookSecret: "deadbeef-ciphertext",
+	}
+
+	raw, err := json.Marshal(integration)
+	require.NoError(t, err)
+
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+
+	assert.NotContains(t, string(raw), "super-secret-clear-value")
+	// json tag is "webhook_secret,omitempty" and MarshalJSON blanks it to "",
+	// which omitempty then drops entirely from the output.
+	_, present := decoded["webhook_secret"]
+	assert.False(t, present, "webhook_secret must be entirely absent (blanked + omitempty), not just empty")
+
+	assert.Equal(t, "deadbeef-ciphertext", decoded["encrypted_webhook_secret"], "ciphertext must still round-trip")
+	assert.Equal(t, "email-2", decoded["id"])
+	assert.Equal(t, "Masking test", decoded["name"])
+}
+
+// TestIntegration_EncryptDecryptWebhookSecret_Direct exercises
+// EncryptWebhookSecret / DecryptWebhookSecret directly (not only indirectly
+// through BeforeSave/AfterLoad), including their no-op edge cases.
+func TestIntegration_EncryptDecryptWebhookSecret_Direct(t *testing.T) {
+	passphrase := "test-passphrase"
+
+	t.Run("encrypts a set clear secret", func(t *testing.T) {
+		integration := &Integration{WebhookSecret: "plaintext-secret"}
+		require.NoError(t, integration.EncryptWebhookSecret(passphrase))
+		assert.NotEmpty(t, integration.EncryptedWebhookSecret)
+		assert.NotEqual(t, "plaintext-secret", integration.EncryptedWebhookSecret)
+	})
+
+	t.Run("encrypting an empty secret is a no-op", func(t *testing.T) {
+		integration := &Integration{}
+		require.NoError(t, integration.EncryptWebhookSecret(passphrase))
+		assert.Empty(t, integration.EncryptedWebhookSecret, "nothing to encrypt -> nothing produced")
+	})
+
+	t.Run("decrypts back to the exact original value", func(t *testing.T) {
+		integration := &Integration{WebhookSecret: "round-trip-me"}
+		require.NoError(t, integration.EncryptWebhookSecret(passphrase))
+		integration.WebhookSecret = "" // simulate a fresh load: only ciphertext present
+		require.NoError(t, integration.DecryptWebhookSecret(passphrase))
+		assert.Equal(t, "round-trip-me", integration.WebhookSecret)
+	})
+
+	t.Run("decrypting with the wrong passphrase fails", func(t *testing.T) {
+		integration := &Integration{WebhookSecret: "secret"}
+		require.NoError(t, integration.EncryptWebhookSecret(passphrase))
+		integration.WebhookSecret = ""
+		err := integration.DecryptWebhookSecret("wrong-passphrase")
+		require.Error(t, err)
+	})
+}
+
 func TestIntegration_BeforeAfterSave_EmailIntegrationStillWorks(t *testing.T) {
 	passphrase := "test-passphrase"
 

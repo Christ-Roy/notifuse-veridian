@@ -2680,3 +2680,60 @@ func TestVeridianService_New_FrozenMemberRepoUnconfigured(t *testing.T) {
 	concrete := svc.(*veridianService)
 	assert.Nil(t, concrete.frozenMemberRepo, "frozenMemberRepo doit rester nil sortie constructor (freeze opt-in via ConfigureFrozenMemberSupport)")
 }
+
+
+// === Durcissement 2026-10-04 (audit sécurité, race wipe/recréation) ===
+//
+// fakeWipeLockFailingRepo embed WorkspaceRepository (nil) et implémente
+// UNIQUEMENT VeridianAcquireWorkspaceLock (échec forcé) + un espion sur
+// GetWorkspaceUsersWithEmail (le tout premier appel destructeur après le
+// verrou dans wipeOneTenant). Prouve que l'étape 0 (acquisition du verrou)
+// coupe TOUT le reste quand elle échoue : aucune résolution d'owner,
+// aucune suppression de record, aucun DROP.
+type fakeWipeLockFailingRepo struct {
+	domain.WorkspaceRepository
+	lockErr        error
+	getUsersCalled bool
+}
+
+func (f *fakeWipeLockFailingRepo) VeridianAcquireWorkspaceLock(ctx context.Context, workspaceID string) (func(), error) {
+	return nil, f.lockErr
+}
+
+func (f *fakeWipeLockFailingRepo) GetWorkspaceUsersWithEmail(ctx context.Context, workspaceID string) ([]*domain.UserWorkspaceWithEmail, error) {
+	f.getUsersCalled = true
+	return nil, nil
+}
+
+func TestWipeOneTenant_LockAcquisitionFails_AbortsBeforeAnyDestructiveOp(t *testing.T) {
+	repo := &fakeWipeLockFailingRepo{lockErr: errors.New("system db unreachable")}
+	s := &veridianService{workspaceRepo: repo, logger: logger.NewLogger()}
+
+	ctx := context.Background()
+	err := s.wipeOneTenant(ctx, ctx, "tst123")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "system db unreachable")
+	assert.False(t, repo.getUsersCalled,
+		"wipeOneTenant must abort at the lock step — no owner resolution, no record delete, no DROP — when the wipe lock cannot be acquired")
+}
+
+// TestWipeOneTenant_LockCapabilityAbsent_ProceedsAsBefore proves a
+// workspaceRepo that does NOT implement veridianWorkspaceLocker (e.g. test
+// doubles across the existing wipe test suite above, all built on
+// *mocks.MockWorkspaceRepository) is unaffected by this hardening: the
+// lock step is a no-op and wipeOneTenant proceeds exactly as pre-fix.
+func TestWipeOneTenant_LockCapabilityAbsent_ProceedsAsBefore(t *testing.T) {
+	svc, m := newVeridianService(t)
+
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(gomock.Any(), "tst123").
+		Return(nil, errors.New("no members")).AnyTimes()
+	m.workspace.EXPECT().DeleteWorkspace(gomock.Any(), "tst123").
+		Return(errors.New("not found")).AnyTimes()
+	m.planRepo.EXPECT().HardDelete(gomock.Any(), "tst123").Return(nil).AnyTimes()
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantDeleted, "tst123", gomock.Any()).AnyTimes()
+
+	ctx := context.Background()
+	err := svc.wipeOneTenant(ctx, ctx, "tst123")
+	require.NoError(t, err, "a repo without the lock capability must behave exactly as before this hardening")
+}
