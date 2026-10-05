@@ -79,7 +79,33 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 		return 0, false
 	}
 
-	if w.providerClassLimiter.Allow(entry.IntegrationID, class, ratePerMinute) {
+	// Veridian fork (correctif 2026-10-05) — AMORÇAGE DURABLE : ce limiter est
+	// en mémoire pure et perd son état à chaque redémarrage du worker. Sans
+	// amorçage, le premier appel pour une clé {intégration, classe} après un
+	// redémarrage reçoit TOUJOURS le jeton de burst, même si un envoi pour
+	// cette même clé a eu lieu, durablement, il y a quelques secondes — un
+	// redémarrage proche de l'ouverture de la fenêtre d'envoi (8h) peut ainsi
+	// regranter un jeton gratuit par classe à chaque restart, multipliant le
+	// débit observé dans l'heure qui suit (incident robertbrunon 05/10 : 181
+	// envois entre 8h et 9h pour un débit nominal combiné d'environ 54/h).
+	// recentlySent interroge la source de vérité DÉJÀ utilisée par le cap
+	// journalier (message_history) pour cette même clé — aucune nouvelle
+	// requête, aucun nouveau champ. Cf. AllowSeeded.
+	senderDomain := veridianEmailDomain(entry.Payload.FromAddress)
+	recentlySent := func() bool {
+		if senderDomain == "" || w.messageHistoryRepo == nil {
+			return false
+		}
+		workspaceID := ""
+		if workspace != nil {
+			workspaceID = workspace.ID
+		}
+		interval := time.Duration(60.0 / ratePerMinute * float64(time.Second))
+		since := time.Now().Add(-interval)
+		count, err := w.messageHistoryRepo.CountSentSinceForClassAndSenderDomain(w.ctx, workspaceID, class, senderDomain, since)
+		return err == nil && count > 0
+	}
+	if w.providerClassLimiter.AllowSeeded(entry.IntegrationID, class, ratePerMinute, recentlySent) {
 		return 0, false
 	}
 

@@ -291,7 +291,9 @@ func (w *EmailQueueWorker) processWorkspace(workspace *domain.Workspace) {
 
 // processEntry processes a single queue entry
 func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *domain.EmailQueueEntry) {
-	// Get the integration to retrieve the email provider (needed for circuit breaker check)
+	// Get the ASSIGNED integration (resolved at enqueue). It may be replaced
+	// below by a sibling from the rotation pool if it has no room — cf. the
+	// pool failover block right after recipient classification.
 	integration := workspace.GetIntegrationByID(entry.IntegrationID)
 	if integration == nil {
 		// Mark as processing first to increment attempts, then handle error
@@ -312,37 +314,26 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		entry.Payload.VeridianProviderClass = w.veridianClassifyRecipient(entry)
 	}
 
-	// Check circuit breaker BEFORE MarkAsProcessing to avoid incrementing attempts
-	if w.circuitBreaker.IsOpen(entry.IntegrationID) {
-		w.logger.WithFields(map[string]interface{}{
-			"entry_id":       entry.ID,
-			"integration_id": entry.IntegrationID,
-		}).Debug("Circuit breaker open, scheduling retry without incrementing attempts")
+	// Veridian fork (correctif 2026-10-05, incident robertbrunon 05/10) — POOL
+	// FAILOVER AT SEND TIME. The circuit breaker check and every coarse policy
+	// gate below (exclusion, reputation, class throttle, daily cap, per-sender
+	// cap, sending window) used to run ONCE against the integration frozen at
+	// enqueue: a capped/unavailable integration simply rescheduled the entry
+	// to tomorrow, even when a sibling in the workspace's rotation pool
+	// (VeridianMarketingEmailProviderIDs) had room. They now run PER CANDIDATE,
+	// in priority order (sequence continuity for automation relances, then the
+	// assigned integration, then the rest of the pool) via
+	// veridianSelectSendableIntegration — same gates, same thresholds, just
+	// replayed for each pool member until one accepts. No pool configured =
+	// exactly one candidate (the assigned integration): strict non-regression.
+	// Cf. veridian_pool_failover.go.
+	selection := w.veridianSelectSendableIntegration(workspace, entry, integration)
 
-		// Schedule for retry after cooldown WITHOUT incrementing attempts
-		nextRetry := time.Now().Add(w.circuitBreaker.GetConfig().CooldownPeriod)
-		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"entry_id": entry.ID,
-				"error":    err.Error(),
-			}).Warn("Failed to set next retry for circuit breaker skip")
-		}
-		return
-	}
-
-	// Veridian fork: recipient provider-class EXCLUSION gate (cold outbound).
-	// Placed BEFORE the throttle minute gate — pointless to reserve a rate token
-	// for a class we are going to skip — and after the circuit breaker. An
-	// excluded class is a POLICY decision (e.g. "don't touch microsoft on a fresh
-	// IP"), not a transient throttle: the entry goes to PERMANENT failure (skip
-	// SMTP, no bounce, never re-tried), via the same path as the pre-filter
-	// (MarkAsProcessing then handleError with a non-retryable recipient error).
-	// The circuit breaker is NOT tripped (recipient-type error). No-op without an
-	// exclusion list (strict non-regression). Cf. veridian_excluded_class_gate.go.
-	if class, excluded := w.veridianExcludedClassGate(workspace, &integration.EmailProvider, entry); excluded {
-		// MarkAsProcessing first (increments attempts) so handleError, which
-		// assumes the attempt counter has advanced, deletes the entry as a
-		// permanent failure instead of leaving it half-processed.
+	if selection.Permanent {
+		// Every reachable pool member excludes this recipient's class: same
+		// permanent-failure contract as before (MarkAsProcessing first so
+		// handleError, which assumes the attempt counter has advanced, deletes
+		// the entry instead of leaving it half-processed).
 		if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
 			w.logger.WithFields(map[string]interface{}{
 				"entry_id": entry.ID,
@@ -353,10 +344,10 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		w.logger.WithFields(map[string]interface{}{
 			"entry_id":       entry.ID,
 			"recipient":      entry.ContactEmail,
-			"provider_class": class,
-		}).Info("Excluded provider class, skipping SMTP and failing permanently")
+			"provider_class": selection.ExcludedClass,
+		}).Info("Excluded provider class on every reachable pool member, skipping SMTP and failing permanently")
 		excludedErr := &emailerror.ClassifiedError{
-			Original:  fmt.Errorf("excluded_provider_class:%s", class),
+			Original:  fmt.Errorf("excluded_provider_class:%s", selection.ExcludedClass),
 			Type:      emailerror.ErrorTypeRecipient,
 			Provider:  string(integration.EmailProvider.Kind),
 			Retryable: false,
@@ -365,90 +356,49 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
-	// Veridian fork (correctif 2026-09-29): REPUTATION FUSE (cold outbound).
-	// Native circuit breaker, not bolted on: freezes ALL sends for an infra
-	// (sender domain) the moment its 7-day hard-bounce rate reaches 3% or a
-	// single complaint (FBL) lands, regardless of daily-cap/warmup config.
-	// Same skip-and-reschedule contract as the throttle/cap gates, placed
-	// BEFORE them (a reputation problem outranks a warmup ramp). Fails CLOSED
-	// on a DB error: a reputation fuse that goes silent under load is not a
-	// fuse. Cf. veridian_reputation_gate.go.
-	if delay, frozen := w.veridianReputationGate(workspace, &integration.EmailProvider, entry); frozen {
-		nextRetry := time.Now().Add(delay)
+	if selection.Candidate == nil {
+		// No pool member currently has room for this entry (every gate, or the
+		// circuit breaker, rejected every reachable candidate). Reschedule
+		// WITHOUT incrementing attempts, same contract as every coarse gate
+		// this fork replaced — the shortest delay observed across candidates
+		// is used so the next re-check happens as soon as the most promising
+		// one might open up.
+		w.logger.WithFields(map[string]interface{}{
+			"entry_id":       entry.ID,
+			"integration_id": entry.IntegrationID,
+			"retry_in":       selection.RetryDelay.String(),
+		}).Debug("No pool member has room for this entry, rescheduling without attempt increment")
+		nextRetry := time.Now().Add(selection.RetryDelay)
 		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
 			w.logger.WithFields(map[string]interface{}{
 				"entry_id": entry.ID,
 				"error":    err.Error(),
-			}).Warn("Failed to set next retry for reputation fuse freeze")
+			}).Warn("Failed to set next retry for pool failover skip")
 		}
 		return
 	}
 
-	// Veridian fork: recipient provider-class throttle gate (cold outbound).
-	// Placed BEFORE MarkAsProcessing, like the circuit breaker check, so a
-	// throttled skip never burns a retry attempt. No-op without configuration.
-	// Cf. veridian_provider_throttle.go.
-	if delay, throttled := w.veridianProviderClassGate(workspace, &integration.EmailProvider, entry); throttled {
-		nextRetry := time.Now().Add(delay)
-		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"entry_id": entry.ID,
-				"error":    err.Error(),
-			}).Warn("Failed to set next retry for provider class throttle skip")
-		}
-		return
+	// A pool member accepted this entry: commit it. Rewriting Payload.FromAddress
+	// also rewrites, downstream, the Message-ID host (veridianMessageIDForSend
+	// derives it from FromAddress) and the DKIM signature applied by THIS
+	// integration's own relay — integration, sender, Message-ID domain and DKIM
+	// domain move together, exactly the fix for the bug this fork closes.
+	chosen := selection.Candidate
+	if chosen.IntegrationID != entry.IntegrationID {
+		w.logger.WithFields(map[string]interface{}{
+			"entry_id":                entry.ID,
+			"assigned_integration_id": entry.IntegrationID,
+			"failover_integration_id": chosen.IntegrationID,
+			"recipient":               entry.ContactEmail,
+		}).Info("Pool failover: rerouting entry to a sibling integration with room")
 	}
-
-	// Veridian fork: recipient/class DAILY CAP gate (cold outbound). Durable
-	// daily ceiling backed by message_history (survives worker restarts, unlike
-	// the in-memory minute throttle above). Same skip-and-reschedule contract,
-	// also placed BEFORE MarkAsProcessing. No-op without configuration.
-	// Cf. veridian_daily_cap.go.
-	if delay, capped := w.veridianDailyCapGate(workspace, &integration.EmailProvider, entry); capped {
-		nextRetry := time.Now().Add(delay)
-		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"entry_id": entry.ID,
-				"error":    err.Error(),
-			}).Warn("Failed to set next retry for daily cap skip")
-		}
-		return
+	entry.IntegrationID = chosen.IntegrationID
+	entry.Payload.FromAddress = chosen.FromAddress
+	entry.Payload.FromName = chosen.FromName
+	if resolved := workspace.GetIntegrationByID(chosen.IntegrationID); resolved != nil {
+		integration = resolved
 	}
-
-	// Veridian fork: PER-SENDER DAILY CAP gate (warmup IP, cold outbound). Twin of
-	// the daily cap gate above but keyed on the SENDER (FROM address) instead of the
-	// recipient/class: caps how many mails a given sending mailbox emits per day,
-	// so a fresh IP/domain ramps its own volume (warmup). Durable, backed by
-	// message_history.veridian_sender_email (V53). Same skip-and-reschedule contract,
-	// also BEFORE MarkAsProcessing. No-op without config or without a known FROM.
-	// Cf. veridian_per_sender_cap.go.
-	if delay, capped := w.veridianPerSenderCapGate(workspace, &integration.EmailProvider, entry); capped {
-		nextRetry := time.Now().Add(delay)
-		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"entry_id": entry.ID,
-				"error":    err.Error(),
-			}).Warn("Failed to set next retry for per-sender cap skip")
-		}
-		return
-	}
-
-	// Veridian fork: SENDING WINDOW gate (cold outbound). Only allows sends
-	// within configured business hours/days (e.g. 9h-18h, Mon-Fri, workspace
-	// timezone). Outside the window the entry is rescheduled to the next opening
-	// via SetNextRetry WITHOUT incrementing attempts (same skip-and-reschedule
-	// contract as the throttle/cap gates). No window configured = 24/7 sending
-	// (strict non-regression). Cf. veridian_sending_window_gate.go.
-	if delay, closed := w.veridianSendingWindowGate(workspace, &integration.EmailProvider, entry); closed {
-		nextRetry := time.Now().Add(delay)
-		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"entry_id": entry.ID,
-				"error":    err.Error(),
-			}).Warn("Failed to set next retry for sending window skip")
-		}
-		return
-	}
+	entry.ProviderKind = integration.EmailProvider.Kind
 
 	// Veridian fork (Lot 7): PRE-FILTER gate (cold outbound). Skips addresses we
 	// KNOW are dead (invalid syntax / disposable domain / DNS-undeliverable)

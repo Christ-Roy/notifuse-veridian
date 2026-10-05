@@ -65,6 +65,45 @@ func (prl *ProviderClassRateLimiter) Allow(integrationID, class string, ratePerM
 	return limiter.Allow()
 }
 
+// AllowSeeded is Allow, but when a key is touched for the FIRST TIME since
+// process start, consults recentlySent before granting the fresh burst
+// token.
+//
+// Veridian fork (correctif 2026-10-05, incident robertbrunon : 181 envois
+// entre 8h et 9h malgré un débit par classe réglé pour ~27/h par infra). Ce
+// limiter est EN MÉMOIRE PURE (cf. tête de fichier) : chaque redémarrage du
+// worker (déploiement, crash, OOM — le job notifuse s'est redéployé plusieurs
+// fois par jour début octobre, cf. `nomad-v raw job history notifuse`) lui
+// fait perdre tout son état et regrant un token "gratuit" par clé
+// {intégration, classe} dès le premier appel. Juste au moment où la fenêtre
+// d'envoi (8h) libère tout le backlog accumulé dans la nuit, un redémarrage
+// proche de cet instant fait repartir TOUTES les clés à burst plein en même
+// temps : 11 classes × 2 intégrations = 22 jetons gratuits d'un coup, répétés
+// à chaque redémarrage de la fenêtre — largement assez pour expliquer un
+// multiple du débit nominal combiné (~54/h) observé en une heure.
+//
+// recentlySent répond "un envoi DURABLE (message_history) existe déjà pour
+// cette clé dans l'intervalle nominal (60/ratePerMinute secondes)". Si oui,
+// le jeton initial est immédiatement consommé (le process vient de perdre la
+// mémoire d'un envoi qui, lui, a réellement eu lieu il y a moins d'un
+// intervalle) : pas de jeton gratuit en plus. Si non (clé vraiment neuve,
+// ou rien envoyé récemment), le comportement est inchangé (burst normal).
+// recentlySent n'est appelé QUE sur un premier contact avec cette clé — coût
+// borné au nombre de clés distinctes, jamais par appel.
+func (prl *ProviderClassRateLimiter) AllowSeeded(integrationID, class string, ratePerMinute float64, recentlySent func() bool) bool {
+	key := providerClassKey(integrationID, class)
+	_, alreadyTouched := prl.limiters.Load(key)
+	limiter := prl.GetOrCreateLimiter(integrationID, class, ratePerMinute)
+	if !alreadyTouched && recentlySent != nil && recentlySent() {
+		// Consomme le jeton de démarrage sans l'accorder à CET appel : un
+		// envoi durable a déjà eu lieu dans l'intervalle, celui-ci doit
+		// attendre comme n'importe quel appel qui suit un envoi récent.
+		limiter.Allow()
+		return false
+	}
+	return limiter.Allow()
+}
+
 // GetStats returns statistics about all provider-class rate limiters,
 // keyed by "integrationID|class".
 func (prl *ProviderClassRateLimiter) GetStats() map[string]RateLimiterStats {
