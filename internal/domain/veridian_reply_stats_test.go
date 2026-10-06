@@ -32,9 +32,9 @@ func TestVeridianReplyStatsService_InterfaceSatisfied(t *testing.T) {
 // attend exactement {"replied": N}). On pin la forme JSON pour qu'un renommage de
 // champ casse ici plutôt que silencieusement à l'exécution (la carte KPI lirait 0).
 func TestVeridianReplyStats_JSONShape(t *testing.T) {
-	out, err := json.Marshal(VeridianReplyStats{Replied: 42})
+	out, err := json.Marshal(VeridianReplyStats{Replied: 42, RepliedHuman: 5})
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"replied":42}`, string(out))
+	assert.JSONEq(t, `{"replied":42,"replied_human":5}`, string(out))
 
 	// Round-trip : un payload backend se relit en struct sans perte.
 	var back VeridianReplyStats

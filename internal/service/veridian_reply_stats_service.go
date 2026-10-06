@@ -67,5 +67,11 @@ func (s *veridianReplyStatsService) GetReplyStats(
 		return nil, fmt.Errorf("failed to fetch reply stats: %w", err)
 	}
 
-	return &domain.VeridianReplyStats{Replied: replied}, nil
+	repliedHuman, err := s.repo.CountHumanRepliedSince(ctx, req.WorkspaceID, req.Since, req.Until)
+	if err != nil {
+		s.logger.WithField("error", err.Error()).Error("Failed to count human replied contacts")
+		return nil, fmt.Errorf("failed to fetch reply stats: %w", err)
+	}
+
+	return &domain.VeridianReplyStats{Replied: replied, RepliedHuman: repliedHuman}, nil
 }

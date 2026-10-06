@@ -302,6 +302,28 @@ func TestClassifyBounce(t *testing.T) {
 			expected: BounceClassificationSoftCount,
 		},
 
+		// Veridian fork 06/10/2026 : classement fin des 5.x.x.
+		{
+			name:     "SMTP NDR 5.1.10 dead address is Hard",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.1.10"},
+			expected: BounceClassificationHard,
+		},
+		{
+			name:     "SMTP NDR 5.7.133 policy refusal is not Hard",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.7.133"},
+			expected: BounceClassificationPolicyRefusal,
+		},
+		{
+			name:     "SMTP NDR 5.2.2 mailbox full is SoftCount",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.2.2"},
+			expected: BounceClassificationSoftCount,
+		},
+		{
+			name:     "SMTP NDR 5.4.14 routing is SoftCount",
+			in:       BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Diagnostic: "smtp; 554 5.4.14 Hop count exceeded"},
+			expected: BounceClassificationSoftCount,
+		},
+
 		// ---- Empty / unknown defaults ----
 		{
 			name:     "Empty input defaults to SoftCount",
@@ -358,6 +380,7 @@ func TestDefaultSoftBounceThreshold(t *testing.T) {
 func TestClassifyDSNCode(t *testing.T) {
 	hard := BounceClassificationHard
 	soft := BounceClassificationSoftCount
+	policy := BounceClassificationPolicyRefusal
 	cases := []struct {
 		in   string
 		want *BounceClassification
@@ -366,11 +389,19 @@ func TestClassifyDSNCode(t *testing.T) {
 		{"no code at all", nil},
 		{"5.1.1", &hard},
 		{"4.2.2", &soft},
-		{"smtp; 550 5.7.1 blocked", &hard},
+		{"smtp; 550 5.7.1 blocked", &policy},
 		{"smtp; 421 4.4.1 connection timed out", &soft},
 		{"Status: 5.0.0", &hard},
 		{"2.0.0 success-looking but not a bounce class", nil}, // 2.x is not 4/5
 		{"prefix 4.7.28 throttled suffix", &soft},
+		// 06/10/2026 : les quatre rejets reels de la campagne.
+		{"5.1.10", &hard},                   // cotentin : adresse morte
+		{"5.7.133", &policy},                // gizeh : refus de politique
+		{"5.2.2", &soft},                    // abh : boite pleine
+		{"5.4.14", &soft},                   // dallmayr : routage
+		{"smtp; 550 5.2.1 disabled", &hard}, // autre 5.x.x : inchange, hard
+		{"5.5.0", &hard},
+		{"5.2.20", &hard}, // 5.2.2x != 5.2.2
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {

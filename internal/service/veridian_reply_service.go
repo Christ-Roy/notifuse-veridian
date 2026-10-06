@@ -135,17 +135,19 @@ func (s *VeridianReplyService) DetectReply(ctx context.Context, msg *domain.Veri
 		// destinataire de cet envoi : c'est bien CE prospect qui répond à CE mail.
 		// Si From est absent/illisible, on fait confiance au Message-ID (signal le
 		// plus fort) et on retient le contact de l'envoi.
+		//
+		// Correctif 2026-10-06 : un Message-ID cite qui correspond a NOTRE envoi vaut
+		// reponse du contact de cet envoi, meme si le From differe (collegue qui
+		// repond depuis une autre adresse, alias, secretariat). L'ancien `continue`
+		// ratait de vraies reponses (ph.levy@ pour acamas@, msauel@hotmail pour ag@
+		// rayonsvertsbio) et laissait la cadence relancer le prospect.
 		matchedContact := domain.VeridianNormalizeEmail(contactEmail)
-		if fromEmail != "" && fromEmail != matchedContact {
-			// Message-ID à nous mais expéditeur différent (transfert, thread tiers) :
-			// pas une réponse de notre prospect. On continue de chercher.
-			continue
-		}
 		return domain.VeridianReplyDetection{
 			IsReply:          true,
 			MatchType:        domain.VeridianReplyMatchMessageID,
 			ContactEmail:     matchedContact,
 			MatchedMessageID: id,
+			ReplyType:        domain.VeridianClassifyReplyType(msg),
 		}, nil
 	}
 
@@ -172,6 +174,7 @@ func (s *VeridianReplyService) DetectReply(ctx context.Context, msg *domain.Veri
 		IsReply:      true,
 		MatchType:    domain.VeridianReplyMatchSenderFallback,
 		ContactEmail: fromEmail,
+		ReplyType:    domain.VeridianClassifyReplyType(msg),
 	}, nil
 }
 
@@ -211,6 +214,7 @@ func (s *VeridianReplyService) ProcessInboundMessage(ctx context.Context, msg *d
 		RepliedAt:        repliedAt,
 		MatchType:        detection.MatchType,
 		MatchedMessageID: detection.MatchedMessageID,
+		ReplyType:        detection.ReplyType,
 	}); err != nil {
 		// Échec du signal : on log et on s'arrête là (sans signal, le gate Lot 9 ne
 		// verra rien ; l'exit actif sans signal serait incohérent). Le message sera
@@ -221,6 +225,18 @@ func (s *VeridianReplyService) ProcessInboundMessage(ctx context.Context, msg *d
 			"error":        err.Error(),
 		}).Warn("VeridianReply: MarkReplied failed")
 		return err
+	}
+
+	// Veridian fork (2026-10-06) : seul un humain sort de sequence. Un auto-repondeur
+	// ou un defi/filtre anti-spam est enregistre (type dans veridian_contact_reply)
+	// mais ne declenche ni exit, ni timeline, ni score email.replied.
+	if detection.ReplyType != "" && detection.ReplyType != domain.VeridianReplyTypeHuman {
+		s.logger.WithFields(map[string]interface{}{
+			"workspace_id": msg.WorkspaceID,
+			"contact":      detection.ContactEmail,
+			"reply_type":   string(detection.ReplyType),
+		}).Info("VeridianReply: automatic reply recorded, cadence NOT stopped")
+		return nil
 	}
 
 	s.logger.WithFields(map[string]interface{}{

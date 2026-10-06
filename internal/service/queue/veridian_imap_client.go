@@ -224,5 +224,10 @@ func (c *emersionIMAPClient) toDomainMessage(buf *imapclient.FetchMessageBuffer)
 		}
 	}
 
+	// Veridian fork (2026-10-06) : l'enveloppe IMAP ne porte pas References, que le
+	// reply-detection exploite (thread ou In-Reply-To a ete reecrit par un relai). Le
+	// FETCH ramene le RFC822 borne, en-tetes compris : on les lit depuis RawBody.
+	msg.References = domain.VeridianReferencesFromRaw(msg.RawBody)
+
 	return msg
 }

@@ -50,6 +50,9 @@ type VeridianContactReply struct {
 	MatchType VeridianReplyMatchType `json:"match_type"`
 	// MatchedMessageID : l'id message_history de l'envoi cité (vide en fallback).
 	MatchedMessageID string `json:"matched_message_id,omitempty"`
+	// ReplyType : human / auto / challenge (migration V60). Vide = human (lignes
+	// anterieures et appelants historiques).
+	ReplyType VeridianReplyType `json:"reply_type,omitempty"`
 }
 
 // VeridianContactReplyRepository persiste et interroge le signal 'replied' (table
@@ -60,9 +63,17 @@ type VeridianContactReplyRepository interface {
 	// CONFLICT (contact_email) DO NOTHING : le premier signal gagne, re-poser ne
 	// fait rien. Une erreur remonte au poller : l'UID reste non acquitté et sera
 	// rejoué, ce qui rend le signal résilient aux pannes DB transitoires.
+	//
+	// Veridian fork (2026-10-06) : une ligne auto/challenge ne bloque pas une reponse
+	// humaine ulterieure. Le conflit est resolu par promotion : si la ligne existante
+	// n'est pas humaine et que la nouvelle l'est, elle la remplace ; sinon le premier
+	// signal gagne.
 	MarkReplied(ctx context.Context, workspaceID string, reply *VeridianContactReply) error
 
-	// HasReplied retourne true si le contact `email` a déjà été marqué 'replied'.
+	// HasReplied retourne true si le contact `email` a déjà répondu EN HUMAIN
+	// (reply_type = 'human'). Un auto-repondeur ou un defi anti-spam ne compte pas :
+	// c'est ce qui evite de sortir de sequence un prospect qui n'a rien repondu.
+	// (Ancien libelle : « déjà été marqué 'replied' ».)
 	// Consommé par le ColdReplyChecker du Lot 9 (gate d'exit) ET par le consumer pour
 	// court-circuiter un re-dispatch (fast-path idempotent). `email` est normalisé
 	// lowercase par le caller.
@@ -80,4 +91,8 @@ type VeridianContactReplyRepository interface {
 	// ajouter un index (replied_at) en migration additive — pas avant mesure
 	// (même posture que le daily cap V49).
 	CountRepliedSince(ctx context.Context, workspaceID string, since, until time.Time) (int, error)
+
+	// CountHumanRepliedSince : comme CountRepliedSince, restreint aux reponses
+	// humaines (reply_type = 'human'). Numerateur du taux de reponse affiche.
+	CountHumanRepliedSince(ctx context.Context, workspaceID string, since, until time.Time) (int, error)
 }

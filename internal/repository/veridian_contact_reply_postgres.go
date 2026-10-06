@@ -49,16 +49,30 @@ func (r *veridianContactReplyRepository) MarkReplied(ctx context.Context, worksp
 		matchedMessageID = sql.NullString{String: reply.MatchedMessageID, Valid: true}
 	}
 
+	replyType := string(reply.ReplyType)
+	if replyType == "" {
+		replyType = string(domain.VeridianReplyTypeHuman)
+	}
+
+	// Premier signal gagne (ON CONFLICT), SAUF promotion : une ligne auto/challenge
+	// existante est remplacee par une reponse humaine (sinon un auto-repondeur arrive
+	// en premier masquerait pour toujours la vraie reponse).
 	query := `
-		INSERT INTO veridian_contact_reply (contact_email, replied_at, match_type, matched_message_id)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (contact_email) DO NOTHING
+		INSERT INTO veridian_contact_reply (contact_email, replied_at, match_type, matched_message_id, reply_type)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (contact_email) DO UPDATE SET
+			replied_at = EXCLUDED.replied_at,
+			match_type = EXCLUDED.match_type,
+			matched_message_id = EXCLUDED.matched_message_id,
+			reply_type = EXCLUDED.reply_type
+		WHERE veridian_contact_reply.reply_type <> 'human' AND EXCLUDED.reply_type = 'human'
 	`
 	if _, err := workspaceDB.ExecContext(ctx, query,
 		email,
 		reply.RepliedAt,
 		string(reply.MatchType),
 		matchedMessageID,
+		replyType,
 	); err != nil {
 		return fmt.Errorf("failed to mark contact replied: %w", err)
 	}
@@ -80,7 +94,7 @@ func (r *veridianContactReplyRepository) HasReplied(ctx context.Context, workspa
 	}
 
 	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM veridian_contact_reply WHERE contact_email = $1)`
+	query := `SELECT EXISTS(SELECT 1 FROM veridian_contact_reply WHERE contact_email = $1 AND reply_type = 'human')`
 	if err := workspaceDB.QueryRowContext(ctx, query, normalized).Scan(&exists); err != nil {
 		return false, fmt.Errorf("failed to check contact replied: %w", err)
 	}
@@ -97,6 +111,24 @@ func (r *veridianContactReplyRepository) CountRepliedSince(
 	workspaceID string,
 	since, until time.Time,
 ) (int, error) {
+	return r.countRepliedSince(ctx, workspaceID, since, until, false)
+}
+
+// CountHumanRepliedSince : meme fenetre, restreinte a reply_type = 'human'.
+func (r *veridianContactReplyRepository) CountHumanRepliedSince(
+	ctx context.Context,
+	workspaceID string,
+	since, until time.Time,
+) (int, error) {
+	return r.countRepliedSince(ctx, workspaceID, since, until, true)
+}
+
+func (r *veridianContactReplyRepository) countRepliedSince(
+	ctx context.Context,
+	workspaceID string,
+	since, until time.Time,
+	humanOnly bool,
+) (int, error) {
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
@@ -104,6 +136,9 @@ func (r *veridianContactReplyRepository) CountRepliedSince(
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sb := psql.Select("COUNT(*)").From("veridian_contact_reply")
+	if humanOnly {
+		sb = sb.Where(sq.Eq{"reply_type": string(domain.VeridianReplyTypeHuman)})
+	}
 	if !since.IsZero() {
 		sb = sb.Where(sq.GtOrEq{"replied_at": since})
 	}

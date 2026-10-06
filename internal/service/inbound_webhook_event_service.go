@@ -161,7 +161,7 @@ func (s *InboundWebhookEventService) ProcessWebhook(ctx context.Context, workspa
 			switch class {
 			case domain.BounceClassificationHard:
 				hardEmails = append(hardEmails, event.RecipientEmail)
-				if event.MessageID != nil && *event.MessageID != "" {
+				if targetID := s.bounceTargetMessageID(ctx, workspaceID, integration.EmailProvider.Kind, event); targetID != "" {
 					reason := fmt.Sprintf("%s %s %s", event.BounceType, event.BounceCategory, event.BounceDiagnostic)
 					if len(reason) > 255 {
 						reason = reason[:255]
@@ -172,13 +172,36 @@ func (s *InboundWebhookEventService) ProcessWebhook(ctx context.Context, workspa
 					// path sets bounced_at, so this is where the typed label lives.
 					bounceType := domain.VeridianBounceTypeLabel(class)
 					updates = append(updates, domain.MessageEventUpdate{
-						ID:         *event.MessageID,
+						ID:         targetID,
 						Event:      domain.MessageEventBounced,
 						Timestamp:  event.Timestamp,
 						StatusInfo: &reason,
 						BounceType: &bounceType,
 					})
 				}
+
+			case domain.BounceClassificationPolicyRefusal:
+				// Veridian fork (2026-10-06) : refus de politique (DSN 5.7.x). Le contact
+				// n'est PAS supprime (la boite existe), mais le refus est inscrit sur
+				// l'envoi (bounce_type PolicyBounce, bounced_at laisse NULL) pour que le
+				// fusible de reputation de l'expediteur le compte.
+				if targetID := s.bounceTargetMessageID(ctx, workspaceID, integration.EmailProvider.Kind, event); targetID != "" {
+					reason := fmt.Sprintf("%s %s %s", event.BounceType, event.BounceCategory, event.BounceDiagnostic)
+					if len(reason) > 255 {
+						reason = reason[:255]
+					}
+					bounceType := domain.VeridianBounceTypeLabel(class)
+					updates = append(updates, domain.MessageEventUpdate{
+						ID:         targetID,
+						Event:      domain.MessageEventPolicyRefused,
+						Timestamp:  event.Timestamp,
+						StatusInfo: &reason,
+						BounceType: &bounceType,
+					})
+				}
+				s.logger.WithField("recipient_email", event.RecipientEmail).
+					WithField("bounce_category", event.BounceCategory).
+					Info("policy refusal recorded for sender reputation, contact not suppressed")
 
 			case domain.BounceClassificationSoftCount:
 				softCountEmails = append(softCountEmails, event.RecipientEmail)
@@ -243,6 +266,33 @@ func (s *InboundWebhookEventService) ProcessWebhook(ctx context.Context, workspa
 	}
 
 	return nil
+}
+
+// bounceTargetMessageID retourne l'id message_history auquel rattacher un rebond.
+// Hors SMTP : l'id du webhook tel quel (comportement upstream). SMTP (NDR du relai
+// Postfix, Veridian fork, 2026-10-06) : le NDR cite le Message-ID RFC822 brut
+// `uuid@domaine` alors que message_history.id vaut `<workspace_id>_<uuid>`, donc on
+// resout via le repository (nu / prefixe, puis repli sur le dernier envoi au
+// destinataire dont bounced_at est vide). "" si rien ne correspond.
+func (s *InboundWebhookEventService) bounceTargetMessageID(ctx context.Context, workspaceID string, kind domain.EmailProviderKind, event *domain.InboundWebhookEvent) string {
+	raw := ""
+	if event.MessageID != nil {
+		raw = *event.MessageID
+	}
+	if kind != domain.EmailProviderKindSMTP {
+		return raw
+	}
+	id, found, err := s.messageHistoryRepo.ResolveBounceTargetMessageID(ctx, workspaceID, raw, event.RecipientEmail)
+	if err != nil {
+		s.logger.WithField("recipient_email", event.RecipientEmail).
+			WithField("error", err.Error()).
+			Warn("could not resolve bounce target message id, bounce not attached to a message")
+		return ""
+	}
+	if !found {
+		return ""
+	}
+	return id
 }
 
 // dedupeStrings returns a new slice with duplicates removed, preserving the

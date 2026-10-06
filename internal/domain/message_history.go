@@ -29,6 +29,12 @@ const (
 	MessageEventBounced      MessageEvent = "bounced"
 	MessageEventComplained   MessageEvent = "complained"
 	MessageEventUnsubscribed MessageEvent = "unsubscribed"
+	// MessageEventPolicyRefused (Veridian fork, 2026-10-06) : refus de politique du
+	// serveur destinataire (DSN 5.7.x). N'est PAS un rebond terminal : on pose
+	// bounce_type='PolicyBounce' sans bounced_at, donc le contact n'est jamais
+	// supprime par le trigger message_history, mais le refus compte pour la
+	// reputation de l'expediteur (CountHardBouncedSinceForSenderDomain).
+	MessageEventPolicyRefused MessageEvent = "policy_refused"
 )
 
 // MessageEventUpdate represents a status update for a message
@@ -327,6 +333,16 @@ type MessageHistoryRepository interface {
 	// stop-on-reply (Lot 3) — confirmer qu'un In-Reply-To/References cité par un
 	// prospect correspond bien à un de NOS envois vers CE contact.
 	FindContactEmailByMessageID(ctx context.Context, workspaceID, messageID string) (email string, found bool, err error)
+
+	// ResolveBounceTargetMessageID retrouve l'id message_history auquel rattacher un
+	// NDR (Veridian fork, 2026-10-06). Le NDR cite le Message-ID RFC822 brut
+	// `uuid@domaine`, alors que message_history.id vaut `<workspace_id>_<uuid>` (ou
+	// l'UUID nu) : l'ancien rapprochement exact ne trouvait rien et bounced_at
+	// restait vide. Ordre : (1) le Message-ID cite, sans `@domaine`, nu ou
+	// reconstruit `<workspace_id>_<uuid>` ; (2) en repli, le dernier message envoye
+	// a `recipient` dont bounced_at est vide (NDR sans Message-ID exploitable).
+	// found=false si rien ne correspond (jamais une erreur).
+	ResolveBounceTargetMessageID(ctx context.Context, workspaceID, rawMessageID, recipient string) (id string, found bool, err error)
 
 	// CountHardBouncedSinceForSenderDomain compte, depuis `since`, les messages
 	// envoyés DEPUIS le domaine émetteur `senderDomain` dont bounce_type vaut

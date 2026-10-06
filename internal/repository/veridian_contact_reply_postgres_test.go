@@ -50,7 +50,7 @@ func TestVeridianContactReplyRepository_MarkReplied(t *testing.T) {
 
 		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
 		mock.ExpectExec(`INSERT INTO veridian_contact_reply`).
-			WithArgs("prospect@acme.fr", now, "message_id", sql.NullString{String: "msg-1", Valid: true}).
+			WithArgs("prospect@acme.fr", now, "message_id", sql.NullString{String: "msg-1", Valid: true}, "human").
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := repo.MarkReplied(ctx, ws, &domain.VeridianContactReply{
@@ -69,7 +69,7 @@ func TestVeridianContactReplyRepository_MarkReplied(t *testing.T) {
 
 		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
 		mock.ExpectExec(`INSERT INTO veridian_contact_reply`).
-			WithArgs("a@b.io", now, "sender_fallback", sql.NullString{}).
+			WithArgs("a@b.io", now, "sender_fallback", sql.NullString{}, "human").
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := repo.MarkReplied(ctx, ws, &domain.VeridianContactReply{
@@ -87,7 +87,7 @@ func TestVeridianContactReplyRepository_MarkReplied(t *testing.T) {
 
 		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
 		mock.ExpectExec(`INSERT INTO veridian_contact_reply`).
-			WithArgs("a@b.io", now, "message_id", sql.NullString{String: "x", Valid: true}).
+			WithArgs("a@b.io", now, "message_id", sql.NullString{String: "x", Valid: true}, "human").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err := repo.MarkReplied(ctx, ws, &domain.VeridianContactReply{
@@ -95,6 +95,27 @@ func TestVeridianContactReplyRepository_MarkReplied(t *testing.T) {
 			RepliedAt:        now,
 			MatchType:        domain.VeridianReplyMatchMessageID,
 			MatchedMessageID: "x",
+		})
+		require.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("auto reply stored with its type, promotion clause present", func(t *testing.T) {
+		wsRepo, repo, mock, db, cleanup := setupContactReplyTest(t)
+		defer cleanup()
+
+		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
+		// Le conflit n'ecrase la ligne existante que pour PROMOUVOIR auto/challenge en human.
+		mock.ExpectExec(`ON CONFLICT \(contact_email\) DO UPDATE SET .* WHERE veridian_contact_reply\.reply_type <> 'human' AND EXCLUDED\.reply_type = 'human'`).
+			WithArgs("a@b.io", now, "message_id", sql.NullString{String: "x", Valid: true}, "auto").
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		err := repo.MarkReplied(ctx, ws, &domain.VeridianContactReply{
+			ContactEmail:     "a@b.io",
+			RepliedAt:        now,
+			MatchType:        domain.VeridianReplyMatchMessageID,
+			MatchedMessageID: "x",
+			ReplyType:        domain.VeridianReplyTypeAuto,
 		})
 		require.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -135,7 +156,8 @@ func TestVeridianContactReplyRepository_HasReplied(t *testing.T) {
 		defer cleanup()
 
 		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
-		mock.ExpectQuery(`SELECT EXISTS`).
+		// Seule une reponse HUMAINE compte : un auto-repondeur ne sort pas de sequence.
+		mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM veridian_contact_reply WHERE contact_email = \$1 AND reply_type = 'human'\)`).
 			WithArgs("prospect@acme.fr").
 			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
@@ -199,6 +221,21 @@ func TestVeridianContactReplyRepository_CountRepliedSince(t *testing.T) {
 		n, err := repo.CountRepliedSince(ctx, ws, since, until)
 		require.NoError(t, err)
 		assert.Equal(t, 7, n)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("human only -> reply_type predicate added", func(t *testing.T) {
+		wsRepo, repo, mock, db, cleanup := setupContactReplyTest(t)
+		defer cleanup()
+
+		wsRepo.EXPECT().GetConnection(ctx, ws).Return(db, nil)
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM veridian_contact_reply WHERE reply_type = \$1 AND replied_at >= \$2 AND replied_at < \$3`).
+			WithArgs("human", since, until).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+		n, err := repo.CountHumanRepliedSince(ctx, ws, since, until)
+		require.NoError(t, err)
+		assert.Equal(t, 5, n)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 

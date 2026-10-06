@@ -528,6 +528,7 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			replied_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 			match_type         TEXT NOT NULL,
 			matched_message_id TEXT,
+			reply_type         TEXT NOT NULL DEFAULT 'human',
 			created_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 			PRIMARY KEY (contact_email)
 		)`,

@@ -1418,7 +1418,7 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 		// Expect batch query for bounced status updates (1 message). Veridian
 		// fork — the bounced group now carries a 4th VALUES column bounce_type
 		// (COALESCE keeps existing value), powering the KPI count_bounced_hard.
-		mock.ExpectExec(`UPDATE message_history SET bounced_at = updates\.timestamp, status_info = COALESCE\(LEFT\(updates\.status_info, 255\), message_history\.status_info\), bounce_type = COALESCE\(message_history\.bounce_type, updates\.bounce_type\), updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE, \$4, \$5\)\) AS updates\(id, timestamp, status_info, bounce_type\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET bounced_at = updates\.timestamp, status_info = COALESCE\(LEFT\(updates\.status_info, 255\), message_history\.status_info\), bounce_type = CASE WHEN message_history\.bounce_type = 'PolicyBounce' THEN updates\.bounce_type ELSE COALESCE\(message_history\.bounce_type, updates\.bounce_type\) END, updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE, \$4, \$5\)\) AS updates\(id, timestamp, status_info, bounce_type\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
 			WithArgs(
 				sqlmock.AnyArg(), // updated_at timestamp
 				"msg-789",
@@ -1584,7 +1584,7 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 		// Expect batch query for bounced status updates (1 message with status_info).
 		// Veridian fork — 4th VALUES column bounce_type (nil here: this update
 		// carries no typed classification).
-		mock.ExpectExec(`UPDATE message_history SET bounced_at = updates\.timestamp, status_info = COALESCE\(LEFT\(updates\.status_info, 255\), message_history\.status_info\), bounce_type = COALESCE\(message_history\.bounce_type, updates\.bounce_type\), updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE, \$4, \$5\)\) AS updates\(id, timestamp, status_info, bounce_type\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET bounced_at = updates\.timestamp, status_info = COALESCE\(LEFT\(updates\.status_info, 255\), message_history\.status_info\), bounce_type = CASE WHEN message_history\.bounce_type = 'PolicyBounce' THEN updates\.bounce_type ELSE COALESCE\(message_history\.bounce_type, updates\.bounce_type\) END, updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE, \$4, \$5\)\) AS updates\(id, timestamp, status_info, bounce_type\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
 			WithArgs(
 				sqlmock.AnyArg(), // updated_at timestamp
 				"msg-123",
@@ -1615,7 +1615,7 @@ func TestMessageHistoryRepository_SetStatusesIfNotSet(t *testing.T) {
 			GetConnection(gomock.Any(), workspaceID).
 			Return(db, nil)
 
-		mock.ExpectExec(`UPDATE message_history SET bounced_at = updates\.timestamp, status_info = COALESCE\(LEFT\(updates\.status_info, 255\), message_history\.status_info\), bounce_type = COALESCE\(message_history\.bounce_type, updates\.bounce_type\), updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE, \$4, \$5\)\) AS updates\(id, timestamp, status_info, bounce_type\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
+		mock.ExpectExec(`UPDATE message_history SET bounced_at = updates\.timestamp, status_info = COALESCE\(LEFT\(updates\.status_info, 255\), message_history\.status_info\), bounce_type = CASE WHEN message_history\.bounce_type = 'PolicyBounce' THEN updates\.bounce_type ELSE COALESCE\(message_history\.bounce_type, updates\.bounce_type\) END, updated_at = \$1::TIMESTAMP WITH TIME ZONE FROM \(VALUES \(\$2, \$3::TIMESTAMP WITH TIME ZONE, \$4, \$5\)\) AS updates\(id, timestamp, status_info, bounce_type\) WHERE message_history\.id = updates\.id AND bounced_at IS NULL`).
 			WithArgs(
 				sqlmock.AnyArg(), // updated_at timestamp
 				"msg-hard",
@@ -2851,7 +2851,7 @@ func TestMessageHistoryRepository_CountHardBouncedSinceForSenderDomain(t *testin
 
 	t.Run("returns hard-bounce count for sender domain", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND bounced_at IS NOT NULL AND bounce_type = 'HardBounce' AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND \(\(bounced_at IS NOT NULL AND bounce_type = 'HardBounce'\) OR bounce_type = 'PolicyBounce'\) AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
 			WithArgs(since, senderDomain).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
 
@@ -2877,7 +2877,7 @@ func TestMessageHistoryRepository_CountHardBouncedSinceForSenderDomain(t *testin
 
 	t.Run("query error propagated", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
-		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND bounced_at IS NOT NULL AND bounce_type = 'HardBounce' AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM message_history WHERE sent_at >= \$1 AND \(\(bounced_at IS NOT NULL AND bounce_type = 'HardBounce'\) OR bounce_type = 'PolicyBounce'\) AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\)`).
 			WithArgs(since, senderDomain).
 			WillReturnError(errors.New("boom"))
 		_, err := repo.CountHardBouncedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)

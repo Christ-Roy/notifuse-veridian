@@ -431,6 +431,51 @@ func (r *MessageHistoryRepository) Get(ctx context.Context, workspaceID string, 
 // found=false (sans erreur) si l'id n'existe pas : un Message-ID cité par un
 // prospect peut ne PAS venir de nous (autre expéditeur dans le thread). Sert le
 // match fort du stop-on-reply (Lot 3). Cf. internal/domain/message_history.go.
+// ResolveBounceTargetMessageID - cf. domain.MessageHistoryRepository.
+// Correctif 2026-10-06 : le NDR cite `uuid@domaine`, message_history.id vaut
+// `<workspace_id>_<uuid>` ; on retire le `@domaine` et on teste les formes nue et
+// prefixee (meme motif que FindContactEmailByMessageID). Repli : dernier message
+// envoye au destinataire dont bounced_at est vide.
+func (r *MessageHistoryRepository) ResolveBounceTargetMessageID(ctx context.Context, workspaceID, rawMessageID, recipient string) (string, bool, error) {
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	if parts := domain.VeridianExtractMessageIDLocalParts(rawMessageID, nil); len(parts) > 0 {
+		bare := parts[0]
+		reconstructed := domain.VeridianReconstructStoredMessageID(workspaceID, bare)
+		var id string
+		err := workspaceDB.QueryRowContext(ctx,
+			`SELECT id FROM message_history WHERE id = $1 OR id = $2 LIMIT 1`,
+			bare, reconstructed,
+		).Scan(&id)
+		if err == nil {
+			return id, true, nil
+		}
+		if err != sql.ErrNoRows {
+			return "", false, fmt.Errorf("failed to resolve bounce target by message id: %w", err)
+		}
+	}
+
+	email := strings.ToLower(strings.TrimSpace(recipient))
+	if email == "" {
+		return "", false, nil
+	}
+	var id string
+	err = workspaceDB.QueryRowContext(ctx,
+		`SELECT id FROM message_history WHERE lower(contact_email) = $1 AND bounced_at IS NULL AND sent_at IS NOT NULL ORDER BY sent_at DESC LIMIT 1`,
+		email,
+	).Scan(&id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to resolve bounce target by recipient: %w", err)
+	}
+	return id, true, nil
+}
+
 func (r *MessageHistoryRepository) FindContactEmailByMessageID(ctx context.Context, workspaceID, messageID string) (string, bool, error) {
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
@@ -661,6 +706,32 @@ func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, work
 
 	// Process each status group with a single query
 	for messageEvent, groupUpdates := range messageEventGroups {
+		// Veridian fork (2026-10-06) : refus de politique (DSN 5.7.x). On pose
+		// bounce_type='PolicyBounce' + status_info SANS toucher bounced_at, pour que le
+		// trigger message_history ne supprime pas le contact. Une seule requete,
+		// idempotente (WHERE bounced_at IS NULL AND bounce_type IS NULL).
+		if messageEvent == domain.MessageEventPolicyRefused {
+			policyParts := make([]string, len(groupUpdates))
+			policyArgs := []interface{}{now}
+			for i, update := range groupUpdates {
+				policyParts[i] = fmt.Sprintf("($%d, $%d, $%d)", len(policyArgs)+1, len(policyArgs)+2, len(policyArgs)+3)
+				policyArgs = append(policyArgs, update.ID, update.StatusInfo, update.BounceType)
+			}
+			policyQuery := fmt.Sprintf(`
+				UPDATE message_history
+				SET bounce_type = updates.bounce_type,
+					status_info = COALESCE(LEFT(updates.status_info, 255), message_history.status_info),
+					updated_at = $1::TIMESTAMP WITH TIME ZONE
+				FROM (VALUES %s) AS updates(id, status_info, bounce_type)
+				WHERE message_history.id = updates.id AND message_history.bounced_at IS NULL AND message_history.bounce_type IS NULL
+			`, strings.Join(policyParts, ", "))
+			if _, err = workspaceDB.ExecContext(ctx, policyQuery, policyArgs...); err != nil {
+				tracing.MarkSpanError(ctx, err)
+				return fmt.Errorf("failed to record policy refusals: %w", err)
+			}
+			continue
+		}
+
 		// Determine which field to check and update based on status
 		var field string
 		switch messageEvent {
@@ -714,7 +785,7 @@ func (r *MessageHistoryRepository) SetStatusesIfNotSet(ctx context.Context, work
 				UPDATE message_history
 				SET %s = updates.timestamp,
 					status_info = COALESCE(LEFT(updates.status_info, 255), message_history.status_info),
-					bounce_type = COALESCE(message_history.bounce_type, updates.bounce_type),
+					bounce_type = CASE WHEN message_history.bounce_type = 'PolicyBounce' THEN updates.bounce_type ELSE COALESCE(message_history.bounce_type, updates.bounce_type) END,
 					updated_at = $1::TIMESTAMP WITH TIME ZONE
 				FROM (VALUES %s) AS updates(id, timestamp, status_info, bounce_type)
 				WHERE message_history.id = updates.id AND %s IS NULL
@@ -1438,7 +1509,7 @@ func (r *MessageHistoryRepository) CountHardBouncedSinceForSenderDomain(ctx cont
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND bounced_at IS NOT NULL AND bounce_type = 'HardBounce' AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2)`
+	const query = `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND ((bounced_at IS NOT NULL AND bounce_type = 'HardBounce') OR bounce_type = 'PolicyBounce') AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2)`
 	var count int
 	if err := workspaceDB.QueryRowContext(ctx, query, since, senderDomain).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count hard-bounced messages from sender domain since: %w", err)

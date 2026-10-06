@@ -223,6 +223,11 @@ func (d *VeridianMessageHistoryDecorator) FindContactEmailByMessageID(ctx contex
 	return d.upstream.FindContactEmailByMessageID(ctx, workspaceID, messageID)
 }
 
+// ResolveBounceTargetMessageID : pur passthrough (lecture).
+func (d *VeridianMessageHistoryDecorator) ResolveBounceTargetMessageID(ctx context.Context, workspaceID, rawMessageID, recipient string) (string, bool, error) {
+	return d.upstream.ResolveBounceTargetMessageID(ctx, workspaceID, rawMessageID, recipient)
+}
+
 // ExistsContentHashSince : pur passthrough (lecture, aucun side-effect quota).
 func (d *VeridianMessageHistoryDecorator) ExistsContentHashSince(ctx context.Context, workspaceID, contentHash string, domains []string, exclude bool, since time.Time) (bool, error) {
 	return d.upstream.ExistsContentHashSince(ctx, workspaceID, contentHash, domains, exclude, since)

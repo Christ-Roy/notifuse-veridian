@@ -64,6 +64,9 @@ type VeridianReplyDetection struct {
 	// MatchedMessageID : l'id message_history (local-part) qui a matché, si match
 	// fort. Vide en fallback. Sert d'audit (quel envoi a déclenché la réponse).
 	MatchedMessageID string
+	// ReplyType : qui a repondu (human / auto / challenge), cf. veridian_reply_type.go.
+	// Seul "human" sort le contact de sequence.
+	ReplyType VeridianReplyType
 }
 
 // VeridianExtractMessageIDLocalParts extrait les "local-parts" candidates des headers

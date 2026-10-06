@@ -91,28 +91,99 @@ func TestVeridianReply_Detect_MatchByReferences(t *testing.T) {
 	assert.Equal(t, "sent-uuid-2", det.MatchedMessageID)
 }
 
-func TestVeridianReply_Detect_MessageIDOursButDifferentSender_NoMatch_FallbackTried(t *testing.T) {
+// Correctif 06/10/2026 : un Message-ID cité qui correspond à notre envoi vaut réponse
+// du contact de CET envoi, même si le From diffère (collègue, alias, secrétariat).
+// Cas réels manqués : ph.levy@acamas.fr pour acamas@acamas.fr, msauel@hotmail.com pour
+// ag@rayonsvertsbio.fr.
+func TestVeridianReply_Detect_MessageIDOursButDifferentSender_IsReplyOfTheSentContact(t *testing.T) {
 	m, ctrl := newReplyTestMocks(t)
 	defer ctrl.Finish()
 
 	msg := &domain.VeridianIMAPMessage{
 		WorkspaceID: replyWS,
-		From:        "someone-else@other.com", // transfert / thread tiers
-		Subject:     "Fwd: une offre",
+		From:        "Philippe Levy <ph.levy@acamas.fr>",
+		Subject:     "Re: question sur acamas.fr",
 		InReplyTo:   "<sent-uuid-3@send.veridian.site>",
 	}
-	// Notre envoi, mais vers un AUTRE contact que l'expéditeur actuel.
 	m.messageRepo.EXPECT().
 		FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-3").
-		Return("original-prospect@acme.fr", true, nil)
-	// Match fort écarté (sender ≠) → fallback : someone-else n'est pas un contact connu.
-	m.contactRepo.EXPECT().
-		GetContactByEmail(gomock.Any(), replyWS, "someone-else@other.com").
-		Return(nil, errors.New("not found"))
+		Return("acamas@acamas.fr", true, nil)
 
 	det, err := m.svc.DetectReply(context.Background(), msg)
 	require.NoError(t, err)
-	assert.False(t, det.IsReply)
+	assert.True(t, det.IsReply)
+	assert.Equal(t, domain.VeridianReplyMatchMessageID, det.MatchType)
+	assert.Equal(t, "acamas@acamas.fr", det.ContactEmail, "le signal se pose sur le contact de l'envoi, pas sur l'expéditeur")
+	assert.Equal(t, domain.VeridianReplyTypeHuman, det.ReplyType)
+}
+
+func TestVeridianReply_Detect_ReferencesFromRawHeadersAreUsable(t *testing.T) {
+	m, ctrl := newReplyTestMocks(t)
+	defer ctrl.Finish()
+
+	raw := []byte("From: x@acme.fr\r\nReferences: <sent-uuid-9@send.veridian.site>\r\nSubject: Re: a\r\n\r\ncorps")
+	msg := &domain.VeridianIMAPMessage{
+		WorkspaceID: replyWS,
+		From:        "x@acme.fr",
+		Subject:     "Re: a",
+		References:  domain.VeridianReferencesFromRaw(raw),
+		RawBody:     raw,
+	}
+	m.messageRepo.EXPECT().
+		FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-9").
+		Return("x@acme.fr", true, nil)
+
+	det, err := m.svc.DetectReply(context.Background(), msg)
+	require.NoError(t, err)
+	assert.True(t, det.IsReply)
+}
+
+func TestVeridianReply_Detect_AutoReplyIsTypedAuto(t *testing.T) {
+	m, ctrl := newReplyTestMocks(t)
+	defer ctrl.Finish()
+
+	raw := []byte("From: a.messian@technicaps.fr\r\nAuto-Submitted: auto-generated\r\nSubject: Réponse automatique : question\r\n\r\nabsent")
+	msg := &domain.VeridianIMAPMessage{
+		WorkspaceID: replyWS,
+		From:        "a.messian@technicaps.fr",
+		Subject:     "Réponse automatique : question",
+		InReplyTo:   "<sent-uuid-4@send.veridian.site>",
+		RawBody:     raw,
+	}
+	m.messageRepo.EXPECT().
+		FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-4").
+		Return("a.messian@technicaps.fr", true, nil)
+
+	det, err := m.svc.DetectReply(context.Background(), msg)
+	require.NoError(t, err)
+	assert.True(t, det.IsReply)
+	assert.Equal(t, domain.VeridianReplyTypeAuto, det.ReplyType)
+}
+
+// Un auto-répondeur est enregistré (type auto) mais ne sort PAS le contact de séquence :
+// ni exit, ni timeline, ni email.replied.
+func TestVeridianReply_Process_AutoReply_RecordedButCadenceNotStopped(t *testing.T) {
+	m, ctrl := newReplyTestMocks(t)
+	defer ctrl.Finish()
+
+	raw := []byte("From: a@technicaps.fr\r\nAuto-Submitted: auto-replied\r\nSubject: Absence\r\n\r\nabsent")
+	msg := &domain.VeridianIMAPMessage{
+		WorkspaceID: replyWS, From: "a@technicaps.fr", Subject: "Absence",
+		InReplyTo: "<sent-uuid-5@send.veridian.site>", RawBody: raw,
+	}
+	m.messageRepo.EXPECT().
+		FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-5").
+		Return("a@technicaps.fr", true, nil)
+	m.replyRepo.EXPECT().HasReplied(gomock.Any(), replyWS, "a@technicaps.fr").Return(false, nil)
+	m.replyRepo.EXPECT().
+		MarkReplied(gomock.Any(), replyWS, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, r *domain.VeridianContactReply) error {
+			assert.Equal(t, domain.VeridianReplyTypeAuto, r.ReplyType)
+			return nil
+		})
+	// Aucun appel attendu sur autoRepo / timelineRepo (gomock échoue sinon).
+
+	require.NoError(t, m.svc.ProcessInboundMessage(context.Background(), msg))
 }
 
 func TestVeridianReply_Detect_FallbackBySender_KnownContact(t *testing.T) {

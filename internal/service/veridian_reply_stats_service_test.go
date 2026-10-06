@@ -56,6 +56,7 @@ func TestNewVeridianReplyStatsService(t *testing.T) {
 	authSvc.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws-wire").
 		Return(context.Background(), &domain.User{}, replyStatsReadWorkspace(), nil)
 	repo.EXPECT().CountRepliedSince(gomock.Any(), "ws-wire", gomock.Any(), gomock.Any()).Return(0, nil)
+	repo.EXPECT().CountHumanRepliedSince(gomock.Any(), "ws-wire", gomock.Any(), gomock.Any()).Return(0, nil)
 
 	got, err := svc.GetReplyStats(context.Background(), &domain.VeridianReplyStatsRequest{WorkspaceID: "ws-wire"})
 	require.NoError(t, err)
@@ -75,6 +76,7 @@ func TestGetReplyStats(t *testing.T) {
 		authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
 			Return(ctx, &domain.User{}, replyStatsReadWorkspace(), nil)
 		repo.EXPECT().CountRepliedSince(ctx, workspaceID, since, until).Return(12, nil)
+		repo.EXPECT().CountHumanRepliedSince(ctx, workspaceID, since, until).Return(5, nil)
 
 		got, err := svc.GetReplyStats(ctx, &domain.VeridianReplyStatsRequest{
 			WorkspaceID: workspaceID,
@@ -83,6 +85,7 @@ func TestGetReplyStats(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, 12, got.Replied)
+		assert.Equal(t, 5, got.RepliedHuman, "le taux de reponse se calcule sur les reponses humaines")
 	})
 
 	t.Run("no window -> zero bounds forwarded (whole history)", func(t *testing.T) {
@@ -92,6 +95,7 @@ func TestGetReplyStats(t *testing.T) {
 		authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
 			Return(ctx, &domain.User{}, replyStatsReadWorkspace(), nil)
 		repo.EXPECT().CountRepliedSince(ctx, workspaceID, time.Time{}, time.Time{}).Return(5, nil)
+		repo.EXPECT().CountHumanRepliedSince(ctx, workspaceID, time.Time{}, time.Time{}).Return(5, nil)
 
 		got, err := svc.GetReplyStats(ctx, &domain.VeridianReplyStatsRequest{WorkspaceID: workspaceID})
 		require.NoError(t, err)

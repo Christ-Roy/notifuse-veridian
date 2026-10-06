@@ -230,6 +230,22 @@ func (mr *MockMessageHistoryRepositoryMockRecorder) FindContactEmailByMessageID(
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindContactEmailByMessageID", reflect.TypeOf((*MockMessageHistoryRepository)(nil).FindContactEmailByMessageID), arg0, arg1, arg2)
 }
 
+// ResolveBounceTargetMessageID mocks base method.
+func (m *MockMessageHistoryRepository) ResolveBounceTargetMessageID(arg0 context.Context, arg1, arg2, arg3 string) (string, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResolveBounceTargetMessageID", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ResolveBounceTargetMessageID indicates an expected call of ResolveBounceTargetMessageID.
+func (mr *MockMessageHistoryRepositoryMockRecorder) ResolveBounceTargetMessageID(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveBounceTargetMessageID", reflect.TypeOf((*MockMessageHistoryRepository)(nil).ResolveBounceTargetMessageID), arg0, arg1, arg2, arg3)
+}
+
 // Get mocks base method.
 func (m *MockMessageHistoryRepository) Get(arg0 context.Context, arg1, arg2, arg3 string) (*domain.MessageHistory, error) {
 	m.ctrl.T.Helper()

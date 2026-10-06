@@ -32,6 +32,11 @@ const (
 	// VeridianBounceTypeSoft is written for a transient/soft bounce. Matched by
 	// analytics measure count_bounced_soft (bounce_type ILIKE 'soft%').
 	VeridianBounceTypeSoft = "SoftBounce"
+	// VeridianBounceTypePolicy is written for a policy refusal (RFC 3463 5.7.x):
+	// the message was refused (spam filter, reputation, authentication) but the
+	// mailbox exists. Written WITHOUT bounced_at, so the contact is never
+	// suppressed by the message_history trigger; counted by the reputation gate.
+	VeridianBounceTypePolicy = "PolicyBounce"
 )
 
 // VeridianBounceTypeLabel maps a BounceClassification to the canonical literal
@@ -43,6 +48,8 @@ func VeridianBounceTypeLabel(class BounceClassification) string {
 		return VeridianBounceTypeHard
 	case BounceClassificationSoftCount, BounceClassificationSoftIgnore:
 		return VeridianBounceTypeSoft
+	case BounceClassificationPolicyRefusal:
+		return VeridianBounceTypePolicy
 	default:
 		return ""
 	}

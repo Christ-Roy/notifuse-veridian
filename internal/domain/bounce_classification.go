@@ -29,7 +29,9 @@
 //     80/100 → SoftCount.
 //   - SendGrid   — `bounce` or category "invalid address" → Hard.
 //     `blocked`/`dropped` and the documented temporary categories → SoftCount.
-//   - SMTP       — `hardbounce` → Hard, otherwise SoftCount.
+//   - SMTP       — `hardbounce` → Hard, otherwise SoftCount. Cold Veridian
+//     (NDR du relai Postfix) : classement par code DSN, voir classifyDSNCode
+//     (5.1.x Hard, 5.2.2 et 5.4.x SoftCount, 5.7.x PolicyRefusal).
 //
 // Unknown/empty inputs default to SoftCount: the threshold check still gives
 // repeated failures a chance to escalate, but we do not unilaterally mark a
@@ -56,6 +58,14 @@ const (
 	// with the message (too large, content rejected, …) and must not count
 	// against the recipient.
 	BounceClassificationSoftIgnore
+	// BounceClassificationPolicyRefusal (Veridian fork, 2026-10-06) means the
+	// receiving server refused the message for a POLICY reason (RFC 3463 class
+	// 5.7.x : spam filter, sender reputation, authentication, relay denied).
+	// The mailbox is not dead: the contact must NOT be suppressed, but the
+	// refusal says something about OUR sender reputation, so it is recorded on
+	// message_history (bounce_type "PolicyBounce", bounced_at left NULL) and
+	// counted by the reputation gate.
+	BounceClassificationPolicyRefusal
 )
 
 // DefaultSoftBounceThreshold is the fallback consecutive-soft-bounce count
@@ -79,12 +89,22 @@ var retryExhaustedRe = regexp.MustCompile(`\b4\.4\.7\b`)
 // dsnEnhancedCodeRe matches an RFC 3463 enhanced status code (e.g. "5.1.1",
 // "4.2.2") anywhere in a string. Used by the Veridian SMTP path to classify
 // Postfix NDR diagnostics that carry no hardbounce/softbounce label.
-var dsnEnhancedCodeRe = regexp.MustCompile(`\b([45])\.\d{1,3}\.\d{1,3}\b`)
+var dsnEnhancedCodeRe = regexp.MustCompile(`\b([45])\.(\d{1,3})\.(\d{1,3})\b`)
 
-// classifyDSNCode extracts an enhanced DSN status code from s and maps its
-// class digit to a bounce classification: 5 -> Hard (permanent), 4 -> SoftCount
-// (transient). Returns nil when no code is present (caller falls through to the
-// safe default). Veridian fork — Lot 2 cold bounce loop.
+// classifyDSNCode extracts an enhanced DSN status code from s and maps it to a
+// bounce classification. Veridian fork, cold bounce loop; refined 2026-10-06
+// after three contacts (gizeh 5.7.133, abh 5.2.2, dallmayr 5.4.14) were
+// suppressed although their mailbox was fine (only cotentin, 5.1.10, was a
+// really dead address):
+//
+//	4.x.x       SoftCount (transient)
+//	5.1.x       Hard (bad destination address: unknown user, bad domain)
+//	5.2.2       SoftCount (mailbox full)
+//	5.4.x       SoftCount (routing / network problem on the recipient side)
+//	5.7.x       PolicyRefusal (policy rejection: reputation event, no suppression)
+//	other 5.x.x Hard (unchanged behaviour: permanent failure)
+//
+// Returns nil when no code is present (caller falls through to the safe default).
 func classifyDSNCode(s string) *BounceClassification {
 	if s == "" {
 		return nil
@@ -95,10 +115,21 @@ func classifyDSNCode(s string) *BounceClassification {
 	}
 	var c BounceClassification
 	switch m[1] {
-	case "5":
-		c = BounceClassificationHard
 	case "4":
 		c = BounceClassificationSoftCount
+	case "5":
+		switch {
+		case m[2] == "1":
+			c = BounceClassificationHard
+		case m[2] == "2" && m[3] == "2":
+			c = BounceClassificationSoftCount
+		case m[2] == "4":
+			c = BounceClassificationSoftCount
+		case m[2] == "7":
+			c = BounceClassificationHard
+		default:
+			c = BounceClassificationHard
+		}
 	default:
 		return nil
 	}

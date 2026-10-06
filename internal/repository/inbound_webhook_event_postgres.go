@@ -354,6 +354,7 @@ SELECT e.recipient_email, COUNT(*)::int
    AND e.type = 'bounce'
    AND lower(coalesce(e.bounce_category, '')) NOT IN
         ('messagetoolarge','contentrejected','attachmentrejected')
+   AND coalesce(e.bounce_category, '') NOT LIKE '%5.7.%'
    AND e.timestamp > COALESCE(d.ts, 'epoch'::timestamptz)
  GROUP BY e.recipient_email`
 

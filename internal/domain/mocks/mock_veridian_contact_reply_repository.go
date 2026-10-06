@@ -51,6 +51,21 @@ func (mr *MockVeridianContactReplyRepositoryMockRecorder) CountRepliedSince(arg0
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountRepliedSince", reflect.TypeOf((*MockVeridianContactReplyRepository)(nil).CountRepliedSince), arg0, arg1, arg2, arg3)
 }
 
+// CountHumanRepliedSince mocks base method.
+func (m *MockVeridianContactReplyRepository) CountHumanRepliedSince(arg0 context.Context, arg1 string, arg2, arg3 time.Time) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountHumanRepliedSince", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountHumanRepliedSince indicates an expected call of CountHumanRepliedSince.
+func (mr *MockVeridianContactReplyRepositoryMockRecorder) CountHumanRepliedSince(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountHumanRepliedSince", reflect.TypeOf((*MockVeridianContactReplyRepository)(nil).CountHumanRepliedSince), arg0, arg1, arg2, arg3)
+}
+
 // HasReplied mocks base method.
 func (m *MockVeridianContactReplyRepository) HasReplied(arg0 context.Context, arg1, arg2 string) (bool, error) {
 	m.ctrl.T.Helper()

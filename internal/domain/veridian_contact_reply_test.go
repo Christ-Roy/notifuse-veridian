@@ -31,6 +31,9 @@ func (s *stubReplyRepo) HasReplied(_ context.Context, _ string, _ string) (bool,
 func (s *stubReplyRepo) CountRepliedSince(_ context.Context, _ string, _, _ time.Time) (int, error) {
 	return s.repliedCount, nil
 }
+func (s *stubReplyRepo) CountHumanRepliedSince(_ context.Context, _ string, _, _ time.Time) (int, error) {
+	return s.repliedCount, nil
+}
 
 func TestVeridianContactReplyRepository_InterfaceSatisfied(t *testing.T) {
 	var _ VeridianContactReplyRepository = (*stubReplyRepo)(nil)

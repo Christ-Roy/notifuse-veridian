@@ -40,6 +40,9 @@ import (
 type VeridianReplyStats struct {
 	// Replied : nombre de contacts ayant répondu (replied_at dans la fenêtre).
 	Replied int `json:"replied"`
+	// RepliedHuman : sous-ensemble de Replied dont le type est human (hors
+	// auto-repondeurs et defis anti-spam). Numerateur du taux de reponse.
+	RepliedHuman int `json:"replied_human"`
 }
 
 // VeridianReplyStatsRequest porte les paramètres de la requête de reply stats.
