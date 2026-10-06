@@ -327,8 +327,10 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 	candidates := w.veridianBuildFailoverCandidates(workspace, entry, assignedIntegration)
 
 	savedFrom, savedName := entry.Payload.FromAddress, entry.Payload.FromName
+	savedIntegrationID := entry.IntegrationID
 	defer func() {
 		entry.Payload.FromAddress, entry.Payload.FromName = savedFrom, savedName
+		entry.IntegrationID = savedIntegrationID
 	}()
 
 	reachable := 0
@@ -360,6 +362,14 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 
 		entry.Payload.FromAddress = cand.FromAddress
 		entry.Payload.FromName = cand.FromName
+		// Correctif 2026-10-06 : les gates qui tiennent un etat PAR INTEGRATION
+		// (limiter de debit par classe, cle {integration, classe}) doivent voir
+		// le CANDIDAT, pas l'integration assignee a l'enqueue. Sinon le seau de
+		// nord est consomme puis relu pour relai, qui parait toujours bride :
+		// sous debit etale nord n'atteint jamais son plafond, la bascule ne se
+		// declenchait jamais et relai n'envoyait rien. Restaure par le defer ;
+		// l'appelant committe IntegrationID sur le gagnant.
+		entry.IntegrationID = cand.IntegrationID
 
 		if class, excluded := w.veridianExcludedClassGate(workspace, cand.Provider, entry); excluded {
 			excludedCount++

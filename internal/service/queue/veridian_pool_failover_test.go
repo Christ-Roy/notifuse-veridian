@@ -511,3 +511,85 @@ func TestEmailQueueWorker_ProcessEntry_ExcludedOnEveryCandidateFailsPermanently(
 
 	env.worker.processEntry(workspace, entry)
 }
+
+// === 5. Repartition sous DEBIT de classe (incident 06/10) ===
+//
+// Constat : avec un debit de classe etale (~0,45/min par integration), nord
+// n'atteint jamais son plafond journalier ; la bascule vers un autre membre
+// du pool ne se declenchait donc jamais. Cause : veridianProviderClassGate
+// indexait le limiter de debit sur entry.IntegrationID (l'integration
+// ASSIGNEE) et non sur le candidat evalue : le seau de nord etait consomme
+// puis relu pour relai, qui paraissait donc toujours bride.
+
+// poolThrottleTestRepo : comme poolCapTestRepo, mais le comptage "recent" par
+// classe (graine du limiter, fenetre = intervalle de debit) renvoie 0 : dans
+// la simulation, l'horloge a avance d'un intervalle entre deux ticks.
+type poolThrottleTestRepo struct{ *poolCapTestRepo }
+
+func (r *poolThrottleTestRepo) CountSentSinceForClassAndSenderDomain(context.Context, string, string, string, time.Time) (int, error) {
+	return 0, nil
+}
+
+func TestEmailQueueWorker_ProcessEntry_PoolSplitsLoadUnderClassThrottle(t *testing.T) {
+	const perInfraCap = 300
+	const totalDue = 600
+
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	relai := veridianTestPoolIntegration("relai", "hello@relai-agence.example")
+	workspace := veridianTestPoolWorkspace(
+		[]string{"nord", "relai"},
+		[]domain.Integration{nord, relai},
+		map[string]int{"google": perInfraCap},
+	)
+	workspace.Settings.VeridianProviderClassRates = map[string]float64{"google": 0.45}
+
+	env := newVeridianThrottleTestEnv(t)
+	env.worker.messageHistoryRepo = &poolThrottleTestRepo{newPoolCapTestRepo(perInfraCap)}
+
+	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", gomock.Any()).Return(nil).AnyTimes()
+	env.mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), "ws-1", gomock.Any()).Return(nil).AnyTimes()
+	env.mockQueueRepo.EXPECT().SetNextRetry(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	env.mockQueueRepo.EXPECT().SetNextRetryAndRefundAttempt(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	sentCount := map[string]int{}
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).DoAndReturn(
+		func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+			sentCount[req.IntegrationID]++
+			return nil
+		}).AnyTimes()
+
+	pending := make([]*domain.EmailQueueEntry, 0, totalDue)
+	for i := 0; i < totalDue; i++ {
+		id := fmt.Sprintf("e%d", i)
+		entry := veridianTestEntry(id, "lead@gmail.com", domain.EmailQueuePayload{})
+		entry.IntegrationID = "nord"
+		entry.Payload.FromAddress = "hello@nord-propre.example"
+		entry.MessageID = "msg-" + id
+		pending = append(pending, entry)
+	}
+
+	// Une journee simulee : chaque tick = un intervalle de debit (le seau de
+	// chaque integration a recupere son jeton). Le worker voit 2 entrees dues
+	// par tick (une par integration de debit disponible).
+	const ticks = 300
+	for tick := 0; tick < ticks && len(pending) > 0; tick++ {
+		env.worker.providerClassLimiter.Clear()
+		attempts := 2
+		if attempts > len(pending) {
+			attempts = len(pending)
+		}
+		var still []*domain.EmailQueueEntry
+		for _, entry := range pending[:attempts] {
+			before := sentCount["nord"] + sentCount["relai"]
+			env.worker.processEntry(workspace, entry)
+			if sentCount["nord"]+sentCount["relai"] == before {
+				still = append(still, entry)
+			}
+		}
+		pending = append(still, pending[attempts:]...)
+	}
+
+	assert.Equal(t, perInfraCap, sentCount["nord"], "nord envoie a son debit, jusqu'a son plafond")
+	assert.Equal(t, perInfraCap, sentCount["relai"], "relai envoie aussi a son propre debit : le debit de nord ne doit pas le brider")
+	assert.Equal(t, 0, len(pending), "les 600 messages dus partent dans la journee simulee")
+}
