@@ -4,13 +4,11 @@ import { useLingui } from '@lingui/react/macro'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faPaperPlane,
-  faCircleCheck,
-  faEye,
   faCircleXmark,
   faFaceFrown
 } from '@fortawesome/free-regular-svg-icons'
 import {
-  faArrowPointer,
+  faFilterCircleXmark,
   faTriangleExclamation,
   faBan,
   faComments
@@ -43,14 +41,18 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   // Veridian — KPI taux de RÉPONSE (cold outbound). Le signal reply vit dans une
   // table séparée (veridian_contact_reply, stop-on-reply Lot 3), donc un endpoint
   // dédié, pas une mesure du moteur analytics message_history.
+  // `replied` = total tous types (humain + automatique) ; `repliedHuman` = réponses
+  // humaines seules (champ replied_human, absent sur un backend ancien => null).
   const [replied, setReplied] = useState<number>(0)
+  const [repliedHuman, setRepliedHuman] = useState<number | null>(null)
+  // Veridian — Échecs = exclusions volontaires (pre-filter, classe exclue) + échecs
+  // réels (SMTP). Mesure `count_failed_excluded` fournie par le backend ; null tant
+  // qu'elle n'existe pas (la répartition est alors indisponible, jamais inventée).
+  const [failedExcluded, setFailedExcluded] = useState<number | null>(null)
 
   // State to track which chart lines are visible
   const [visibleLines, setVisibleLines] = useState<Record<string, boolean>>({
     count_sent: true,
-    count_delivered: true,
-    count_opened: true,
-    count_clicked: true,
     count_bounced: true,
     count_complained: true,
     count_unsubscribed: true,
@@ -69,11 +71,8 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
     // Only include measures that are visible
     const visibleMeasures = [
       'count_sent',
-      'count_delivered',
       'count_bounced',
       'count_complained',
-      'count_opened',
-      'count_clicked',
       'count_unsubscribed',
       'count_failed'
     ].filter((measure) => visibleLines[measure])
@@ -111,6 +110,14 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
     return baseQuery
   }
 
+  // Requête annexe : uniquement la mesure d'exclusions volontaires. Best-effort
+  // (voir fetchData) : tant que le backend ne l'expose pas, elle échoue et la
+  // répartition Exclus / Échec réel reste indisponible.
+  const buildExcludedQuery = (filter: MessageTypeFilter): AnalyticsQuery => ({
+    ...buildStatsQuery(filter),
+    measures: ['count_failed_excluded']
+  })
+
   const buildStatsQuery = (filter: MessageTypeFilter): AnalyticsQuery => {
     // Stats query should always include all measures regardless of visibility.
     // Veridian — count_bounced_hard / count_bounced_soft split the Bounced KPI
@@ -120,13 +127,10 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
       schema: 'message_history',
       measures: [
         'count_sent',
-        'count_delivered',
         'count_bounced',
         'count_bounced_hard',
         'count_bounced_soft',
         'count_complained',
-        'count_opened',
-        'count_clicked',
         'count_unsubscribed',
         'count_failed'
       ],
@@ -170,20 +174,31 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
       // contact-level (pas message-level), donc PAS filtré par broadcast/transactional :
       // on le compte sur la même fenêtre temporelle uniquement. Best-effort : un échec
       // de l'endpoint reply ne casse pas le dashboard (replied reste à 0).
-      const [chartResponse, statsResponse, replyResponse] = await Promise.all([
+      const [chartResponse, statsResponse, replyResponse, excludedResponse] = await Promise.all([
         analyticsService.query(buildQuery(filter), workspace.id),
         analyticsService.query(buildStatsQuery(filter), workspace.id),
         replyStatsApi
           .get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] })
           .catch((replyErr) => {
             console.error('Failed to fetch reply stats:', replyErr)
-            return { replied: 0 }
-          })
+            return { replied: 0, replied_human: undefined }
+          }),
+        analyticsService
+          .query(buildExcludedQuery(filter), workspace.id)
+          .catch(() => null)
       ])
 
       setData(chartResponse)
       setStatsData(statsResponse)
       setReplied(replyResponse.replied)
+      setRepliedHuman(
+        typeof replyResponse.replied_human === 'number' ? replyResponse.replied_human : null
+      )
+      setFailedExcluded(
+        excludedResponse?.data
+          ? excludedResponse.data.reduce((acc, row) => acc + toNumber(row.count_failed_excluded), 0)
+          : null
+      )
     } catch (err) {
       console.error('Failed to fetch email metrics:', err)
       setError(err instanceof Error ? err.message : t`Failed to fetch email metrics`)
@@ -205,9 +220,6 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   // Define the stats type
   interface EmailStats {
     count_sent: number
-    count_delivered: number
-    count_opened: number
-    count_clicked: number
     count_bounced: number
     // Veridian — split hard/soft du bounce (KPI cold). Hard = adresse morte
     // (réputation), soft = transitoire. Voir le tooltip de la carte Bounced.
@@ -231,9 +243,6 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   // Extract and aggregate stats from the stats response (sum up all daily values)
   const emptyStats: EmailStats = {
     count_sent: 0,
-    count_delivered: 0,
-    count_opened: 0,
-    count_clicked: 0,
     count_bounced: 0,
     count_bounced_hard: 0,
     count_bounced_soft: 0,
@@ -246,9 +255,6 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
     statsData?.data?.reduce<EmailStats>(
       (acc, row) => ({
         count_sent: acc.count_sent + toNumber(row.count_sent),
-        count_delivered: acc.count_delivered + toNumber(row.count_delivered),
-        count_opened: acc.count_opened + toNumber(row.count_opened),
-        count_clicked: acc.count_clicked + toNumber(row.count_clicked),
         count_bounced: acc.count_bounced + toNumber(row.count_bounced),
         count_bounced_hard: acc.count_bounced_hard + toNumber(row.count_bounced_hard),
         count_bounced_soft: acc.count_bounced_soft + toNumber(row.count_bounced_soft),
@@ -268,12 +274,16 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
     return `${percentage.toFixed(1)}%`
   }
 
+  // Réponses : taux sur les réponses HUMAINES (replied_human, sinon replied) ;
+  // les réponses automatiques (replied - replied_human) sont affichées à part.
+  const humanReplies = repliedHuman ?? replied
+  const autoReplies = Math.max(0, replied - humanReplies)
+  // Échec réel = échecs totaux - exclusions volontaires (jamais négatif).
+  const realFailed = Math.max(0, stats.count_failed - (failedExcluded ?? 0))
+
   // Define colors that match the icon colors in the statistics cards
   const chartColors = {
     count_sent: '#3b82f6', // blue-500
-    count_delivered: '#10b981', // green-500
-    count_opened: '#8b5cf6', // purple-500
-    count_clicked: '#06b6d4', // cyan-500
     count_bounced: '#f97316', // orange-500
     count_complained: '#f97316', // orange-500
     count_unsubscribed: '#f97316', // orange-500
@@ -283,13 +293,10 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   // Define measure titles for tooltip display
   const measureTitles = {
     count_sent: t`Sent`,
-    count_delivered: t`Delivered`,
-    count_opened: t`Opens`,
-    count_clicked: t`Clicks`,
     count_bounced: t`Bounced`,
     count_complained: t`Complaints`,
     count_unsubscribed: t`Unsubscribes`,
-    count_failed: t`Failed`
+    count_failed: t`Failed (excluded + real)`
   }
 
   return (
@@ -335,6 +342,15 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
         />
       )}
 
+      {/* Veridian — mails cold en texte brut : ni pixel ni lien suivi, donc les
+          ouvertures et clics n'existent pas. On l'affiche, au lieu de zéros. */}
+      <Alert
+        type="info"
+        showIcon
+        message={t`Opens and clicks are not tracked: plain-text emails, no pixel or tracked link`}
+        style={{ marginBottom: 16 }}
+      />
+
       {/* Stats Row */}
       <Row gutter={[16, 16]} wrap className="flex-nowrap overflow-x-auto">
         <Col span={3}>
@@ -364,87 +380,6 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             </div>
           </Tooltip>
         </Col>
-        <Col span={3}>
-          <Tooltip
-            title={!visibleLines.count_delivered ? t`${stats.count_delivered} emails successfully delivered (hidden from chart)` : t`${stats.count_delivered} emails successfully delivered`}
-          >
-            <div
-              className="p-2 cursor-pointer hover:bg-gray-50 rounded transition-colors"
-              style={{ opacity: visibleLines.count_delivered ? 1 : 0.5 }}
-              onClick={() => toggleLineVisibility('count_delivered')}
-            >
-              <Statistic
-                title={
-                  <Space className="font-medium">
-                    <FontAwesomeIcon
-                      icon={faCircleCheck}
-                      style={{ opacity: 0.7 }}
-                      className="text-green-500"
-                    />{' '}
-                    {t`Delivered`}
-                  </Space>
-                }
-                value={getRate(stats.count_delivered, stats.count_sent)}
-                valueStyle={{ fontSize: '16px' }}
-                loading={statsLoading}
-              />
-            </div>
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip
-            title={!visibleLines.count_opened ? t`${stats.count_opened} total opens (hidden from chart)` : t`${stats.count_opened} total opens`}
-          >
-            <div
-              className="p-2 cursor-pointer hover:bg-gray-50 rounded transition-colors"
-              style={{ opacity: visibleLines.count_opened ? 1 : 0.5 }}
-              onClick={() => toggleLineVisibility('count_opened')}
-            >
-              <Statistic
-                title={
-                  <Space className="font-medium">
-                    <FontAwesomeIcon
-                      icon={faEye}
-                      style={{ opacity: 0.7 }}
-                      className="text-purple-500"
-                    />{' '}
-                    {t`Opens`}
-                  </Space>
-                }
-                value={getRate(stats.count_opened, stats.count_sent)}
-                valueStyle={{ fontSize: '16px' }}
-                loading={statsLoading}
-              />
-            </div>
-          </Tooltip>
-        </Col>
-        <Col span={3}>
-          <Tooltip
-            title={!visibleLines.count_clicked ? t`${stats.count_clicked} total clicks (hidden from chart)` : t`${stats.count_clicked} total clicks`}
-          >
-            <div
-              className="p-2 cursor-pointer hover:bg-gray-50 rounded transition-colors"
-              style={{ opacity: visibleLines.count_clicked ? 1 : 0.5 }}
-              onClick={() => toggleLineVisibility('count_clicked')}
-            >
-              <Statistic
-                title={
-                  <Space className="font-medium">
-                    <FontAwesomeIcon
-                      icon={faArrowPointer}
-                      style={{ opacity: 0.7 }}
-                      className="text-cyan-500 mr-1"
-                    />{' '}
-                    {t`Clicks`}
-                  </Space>
-                }
-                value={getRate(stats.count_clicked, stats.count_sent)}
-                valueStyle={{ fontSize: '16px' }}
-                loading={statsLoading}
-              />
-            </div>
-          </Tooltip>
-        </Col>
         {/* Veridian — Reply rate : LE KPI #1 du cold outreach (conversion réelle).
             replied = contacts uniques ayant répondu sur la fenêtre ; ratio approx.
             replies / sent (un contact peut avoir reçu plusieurs envois).
@@ -454,7 +389,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             2026-06-17-reply-kpi-ignore-message-type-filter.md, option 1). */}
         <Col span={3}>
           <Tooltip
-            title={t`${replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI). All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter.`}
+            title={t`${humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter.`}
           >
             <div className="p-2 rounded">
               <Statistic
@@ -468,10 +403,15 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                     {t`Replies`}
                   </Space>
                 }
-                value={getRate(replied, stats.count_sent)}
+                value={getRate(humanReplies, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
                 loading={statsLoading}
               />
+              {autoReplies > 0 && (
+                <div className="text-xs text-gray-500" data-testid="auto-replies">
+                  {t`+${autoReplies} automatic replies`}
+                </div>
+              )}
             </div>
           </Tooltip>
         </Col>
@@ -571,7 +511,40 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
         </Col>
         <Col span={3}>
           <Tooltip
-            title={!visibleLines.count_failed ? t`${stats.count_failed} emails failed to send (hidden from chart)` : t`${stats.count_failed} emails failed to send`}
+            title={
+              failedExcluded === null
+                ? t`Deliberate exclusions (invalid address, excluded provider class): breakdown unavailable, total failures: ${stats.count_failed}`
+                : t`${failedExcluded} recipients deliberately excluded before sending (invalid address, excluded provider class). Not a delivery problem.`
+            }
+          >
+            <div className="p-2 rounded">
+              <Statistic
+                title={
+                  <Space className="font-medium">
+                    <FontAwesomeIcon
+                      icon={faFilterCircleXmark}
+                      style={{ opacity: 0.7 }}
+                      className="text-gray-500"
+                    />{' '}
+                    {t`Deliberately excluded`}
+                  </Space>
+                }
+                value={failedExcluded === null ? '-' : failedExcluded}
+                valueStyle={{ fontSize: '16px' }}
+                loading={statsLoading}
+              />
+            </div>
+          </Tooltip>
+        </Col>
+        <Col span={3}>
+          <Tooltip
+            title={
+              failedExcluded === null
+                ? t`${stats.count_failed} total failures (deliberate exclusions not yet separated)`
+                : !visibleLines.count_failed
+                  ? t`${realFailed} emails really failed to send (hidden from chart, the chart line shows all failures)`
+                  : t`${realFailed} emails really failed to send (the chart line shows all failures)`
+            }
           >
             <div
               className="p-2 cursor-pointer hover:bg-gray-50 rounded transition-colors"
@@ -586,10 +559,10 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                       style={{ opacity: 0.7 }}
                       className="text-red-500"
                     />{' '}
-                    {t`Failed`}
+                    {failedExcluded === null ? t`Failed` : t`Real failures`}
                   </Space>
                 }
-                value={getRate(stats.count_failed, stats.count_sent)}
+                value={getRate(failedExcluded === null ? stats.count_failed : realFailed, stats.count_sent)}
                 valueStyle={{ fontSize: '16px' }}
                 loading={statsLoading}
               />

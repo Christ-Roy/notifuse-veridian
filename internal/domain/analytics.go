@@ -125,6 +125,18 @@ var PredefinedSchemas = map[string]analytics.SchemaDefinition{
 					{SQL: "failed_at IS NOT NULL"},
 				},
 			},
+			// Veridian fork (2026-10-06) : echecs volontaires (exclusions du tunnel cold,
+			// motifs ecrits par queue/worker.go dans status_info), a separer des echecs reels.
+			"count_failed_excluded": {
+				Type:        "count",
+				Title:       "Excluded on purpose",
+				SQL:         "*",
+				Description: "Failed messages that are deliberate exclusions, not delivery failures",
+				Filters: []analytics.MeasureFilter{
+					{SQL: "failed_at IS NOT NULL"},
+					{SQL: "(status_info LIKE 'pre-filtered recipient:%' OR status_info LIKE 'excluded_provider_class:%')"},
+				},
+			},
 			"count_sent_emails": {
 				Type:        "count",
 				Title:       "Sent Emails",

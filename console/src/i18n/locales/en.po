@@ -122,7 +122,7 @@ msgid "{0} emails accepted today ({1})"
 msgstr "{0} emails accepted today ({1})"
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:489
+#: src/components/analytics/EmailMetricsChart.tsx:429
 msgid "{0} emails bounced back"
 msgstr "{0} emails bounced back"
 
@@ -132,39 +132,35 @@ msgid "{0} emails bounced back - Click to view details"
 msgstr "{0} emails bounced back - Click to view details"
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:488
+#: src/components/analytics/EmailMetricsChart.tsx:428
 msgid "{0} emails bounced back (hidden from chart)"
 msgstr "{0} emails bounced back (hidden from chart)"
 
-#. placeholder {0}: stats.count_failed
 #: src/components/analytics/EmailMetricsChart.tsx:574
-msgid "{0} emails failed to send"
-msgstr "{0} emails failed to send"
+#~ msgid "{0} emails failed to send"
+#~ msgstr "{0} emails failed to send"
 
 #. placeholder {0}: stats.total_failed
 #: src/components/broadcasts/BroadcastStats.tsx:228
 msgid "{0} emails failed to send - Click to view details"
 msgstr "{0} emails failed to send - Click to view details"
 
-#. placeholder {0}: stats.count_failed
 #: src/components/analytics/EmailMetricsChart.tsx:574
-msgid "{0} emails failed to send (hidden from chart)"
-msgstr "{0} emails failed to send (hidden from chart)"
+#~ msgid "{0} emails failed to send (hidden from chart)"
+#~ msgstr "{0} emails failed to send (hidden from chart)"
 
-#. placeholder {0}: stats.count_delivered
 #: src/components/analytics/EmailMetricsChart.tsx:369
-msgid "{0} emails successfully delivered"
-msgstr "{0} emails successfully delivered"
+#~ msgid "{0} emails successfully delivered"
+#~ msgstr "{0} emails successfully delivered"
 
 #. placeholder {0}: stats.total_delivered
 #: src/components/broadcasts/BroadcastStats.tsx:150
 msgid "{0} emails successfully delivered - Click to view details"
 msgstr "{0} emails successfully delivered - Click to view details"
 
-#. placeholder {0}: stats.count_delivered
 #: src/components/analytics/EmailMetricsChart.tsx:369
-msgid "{0} emails successfully delivered (hidden from chart)"
-msgstr "{0} emails successfully delivered (hidden from chart)"
+#~ msgid "{0} emails successfully delivered (hidden from chart)"
+#~ msgstr "{0} emails successfully delivered (hidden from chart)"
 
 #. placeholder {0}: rates[c]
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:81
@@ -204,23 +200,21 @@ msgstr "{0} remaining"
 msgid "{0} senders · round-robin per class"
 msgstr "{0} senders · round-robin per class"
 
-#. placeholder {0}: stats.count_clicked
 #: src/components/analytics/EmailMetricsChart.tsx:423
-msgid "{0} total clicks"
-msgstr "{0} total clicks"
+#~ msgid "{0} total clicks"
+#~ msgstr "{0} total clicks"
 
 #. placeholder {0}: stats.total_clicked
 #: src/components/broadcasts/BroadcastStats.tsx:204
 msgid "{0} total clicks - Click to view details"
 msgstr "{0} total clicks - Click to view details"
 
-#. placeholder {0}: stats.count_clicked
 #: src/components/analytics/EmailMetricsChart.tsx:423
-msgid "{0} total clicks (hidden from chart)"
-msgstr "{0} total clicks (hidden from chart)"
+#~ msgid "{0} total clicks (hidden from chart)"
+#~ msgstr "{0} total clicks (hidden from chart)"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:520
+#: src/components/analytics/EmailMetricsChart.tsx:460
 msgid "{0} total complaints"
 msgstr "{0} total complaints"
 
@@ -230,12 +224,12 @@ msgid "{0} total complaints - Click to view details"
 msgstr "{0} total complaints - Click to view details"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:520
+#: src/components/analytics/EmailMetricsChart.tsx:460
 msgid "{0} total complaints (hidden from chart)"
 msgstr "{0} total complaints (hidden from chart)"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:342
+#: src/components/analytics/EmailMetricsChart.tsx:358
 msgid "{0} total emails sent"
 msgstr "{0} total emails sent"
 
@@ -245,27 +239,30 @@ msgid "{0} total emails sent - Click to view details"
 msgstr "{0} total emails sent - Click to view details"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:342
+#: src/components/analytics/EmailMetricsChart.tsx:358
 msgid "{0} total emails sent (hidden from chart)"
 msgstr "{0} total emails sent (hidden from chart)"
 
-#. placeholder {0}: stats.count_opened
+#. placeholder {0}: stats.count_failed
+#: src/components/analytics/EmailMetricsChart.tsx:543
+msgid "{0} total failures (deliberate exclusions not yet separated)"
+msgstr "{0} total failures (deliberate exclusions not yet separated)"
+
 #: src/components/analytics/EmailMetricsChart.tsx:396
-msgid "{0} total opens"
-msgstr "{0} total opens"
+#~ msgid "{0} total opens"
+#~ msgstr "{0} total opens"
 
 #. placeholder {0}: stats.total_opened
 #: src/components/broadcasts/BroadcastStats.tsx:180
 msgid "{0} total opens - Click to view details"
 msgstr "{0} total opens - Click to view details"
 
-#. placeholder {0}: stats.count_opened
 #: src/components/analytics/EmailMetricsChart.tsx:396
-msgid "{0} total opens (hidden from chart)"
-msgstr "{0} total opens (hidden from chart)"
+#~ msgid "{0} total opens (hidden from chart)"
+#~ msgstr "{0} total opens (hidden from chart)"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:547
+#: src/components/analytics/EmailMetricsChart.tsx:487
 msgid "{0} total unsubscribes"
 msgstr "{0} total unsubscribes"
 
@@ -275,7 +272,7 @@ msgid "{0} total unsubscribes - Click to view details"
 msgstr "{0} total unsubscribes - Click to view details"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:547
+#: src/components/analytics/EmailMetricsChart.tsx:487
 msgid "{0} total unsubscribes (hidden from chart)"
 msgstr "{0} total unsubscribes (hidden from chart)"
 
@@ -306,6 +303,14 @@ msgstr "{cap} / day"
 #: src/pages/BroadcastsPage.tsx:805
 msgid "{clicks} clicks out of {recipients} recipients"
 msgstr "{clicks} clicks out of {recipients} recipients"
+
+#: src/components/analytics/EmailMetricsChart.tsx:517
+msgid "{failedExcluded} recipients deliberately excluded before sending (invalid address, excluded provider class). Not a delivery problem."
+msgstr "{failedExcluded} recipients deliberately excluded before sending (invalid address, excluded provider class). Not a delivery problem."
+
+#: src/components/analytics/EmailMetricsChart.tsx:392
+msgid "{humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
+msgstr "{humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
 
 #: src/components/settings/WebhookCard.tsx:143
 msgid "{label} copied to clipboard"
@@ -347,9 +352,17 @@ msgstr "{propertyCount} properties"
 msgid "{rate} / min"
 msgstr "{rate} / min"
 
+#: src/components/analytics/EmailMetricsChart.tsx:545
+msgid "{realFailed} emails really failed to send (hidden from chart, the chart line shows all failures)"
+msgstr "{realFailed} emails really failed to send (hidden from chart, the chart line shows all failures)"
+
+#: src/components/analytics/EmailMetricsChart.tsx:546
+msgid "{realFailed} emails really failed to send (the chart line shows all failures)"
+msgstr "{realFailed} emails really failed to send (the chart line shows all failures)"
+
 #: src/components/analytics/EmailMetricsChart.tsx:457
-msgid "{replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI). All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
-msgstr "{replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI). All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
+#~ msgid "{replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI). All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
+#~ msgstr "{replied} contacts replied (reply rate = replies / sent — the #1 cold outreach KPI). All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
 
 #: src/components/contacts/ExportContactsModal.tsx:115
 msgid "{seconds} second"
@@ -402,6 +415,10 @@ msgstr "+ add from name, CC, BCC, reply-to, attachments"
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:813
 msgid "+ Add variation"
 msgstr "+ Add variation"
+
+#: src/components/analytics/EmailMetricsChart.tsx:412
+msgid "+{autoReplies} automatic replies"
+msgstr "+{autoReplies} automatic replies"
 
 #. placeholder {0}: Math.round(jitter * 100)
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1870
@@ -928,7 +945,7 @@ msgstr "Align to top"
 msgid "Alignment"
 msgstr "Alignment"
 
-#: src/components/analytics/EmailMetricsChart.tsx:303
+#: src/components/analytics/EmailMetricsChart.tsx:310
 #: src/pages/TemplatesPage.tsx:77
 msgid "All"
 msgstr "All"
@@ -1679,8 +1696,8 @@ msgstr "Bounce email"
 msgid "Bounce Type"
 msgstr "Bounce Type"
 
-#: src/components/analytics/EmailMetricsChart.tsx:289
-#: src/components/analytics/EmailMetricsChart.tsx:508
+#: src/components/analytics/EmailMetricsChart.tsx:296
+#: src/components/analytics/EmailMetricsChart.tsx:448
 #: src/components/automations/config/TriggerConfigForm.tsx:71
 #: src/components/automations/config/TriggerConfigForm.tsx:93
 #: src/components/broadcasts/BroadcastStats.tsx:275
@@ -1798,7 +1815,7 @@ msgstr "Broadcast name"
 msgid "Broadcast updated successfully"
 msgstr "Broadcast updated successfully"
 
-#: src/components/analytics/EmailMetricsChart.tsx:304
+#: src/components/analytics/EmailMetricsChart.tsx:311
 #: src/layouts/WorkspaceLayout.tsx:297
 #: src/pages/BroadcastsPage.tsx:1286
 msgid "Broadcasts"
@@ -2141,8 +2158,6 @@ msgstr "Clicked"
 msgid "clicks"
 msgstr "clicks"
 
-#: src/components/analytics/EmailMetricsChart.tsx:288
-#: src/components/analytics/EmailMetricsChart.tsx:438
 #: src/components/broadcasts/BroadcastStats.tsx:217
 #: src/pages/BroadcastsPage.tsx:782
 msgid "Clicks"
@@ -2294,8 +2309,8 @@ msgstr "complaint"
 msgid "Complaint"
 msgstr "Complaint"
 
-#: src/components/analytics/EmailMetricsChart.tsx:290
-#: src/components/analytics/EmailMetricsChart.tsx:535
+#: src/components/analytics/EmailMetricsChart.tsx:297
+#: src/components/analytics/EmailMetricsChart.tsx:475
 #: src/components/broadcasts/BroadcastStats.tsx:309
 #: src/components/lists/ListStats.tsx:150
 msgid "Complaints"
@@ -2344,8 +2359,8 @@ msgstr "Conditions"
 msgid "Configuration for {nodeType} is not available in Phase 2"
 msgstr "Configuration for {nodeType} is not available in Phase 2"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:164
-#: src/components/analytics/AnalyticsDashboard.tsx:188
+#: src/components/analytics/AnalyticsDashboard.tsx:172
+#: src/components/analytics/AnalyticsDashboard.tsx:196
 #: src/components/automations/NodeConfigPanel.tsx:162
 #: src/components/automations/nodes/ABTestNode.tsx:59
 #: src/components/automations/nodes/AddToListNode.tsx:53
@@ -3383,6 +3398,15 @@ msgstr "Deleted {deletedCount} item(s)"
 msgid "Deleted {deletedCount}, failed {failedCount}"
 msgstr "Deleted {deletedCount}, failed {failedCount}"
 
+#. placeholder {0}: stats.count_failed
+#: src/components/analytics/EmailMetricsChart.tsx:516
+msgid "Deliberate exclusions (invalid address, excluded provider class): breakdown unavailable, total failures: {0}"
+msgstr "Deliberate exclusions (invalid address, excluded provider class): breakdown unavailable, total failures: {0}"
+
+#: src/components/analytics/EmailMetricsChart.tsx:529
+msgid "Deliberately excluded"
+msgstr "Deliberately excluded"
+
 #: src/components/templates/TemplatePreviewDrawer.tsx:264
 msgid "Deliverability"
 msgstr "Deliverability"
@@ -3400,8 +3424,6 @@ msgstr "Deliverability score"
 msgid "delivered"
 msgstr "delivered"
 
-#: src/components/analytics/EmailMetricsChart.tsx:286
-#: src/components/analytics/EmailMetricsChart.tsx:384
 #: src/components/analytics/veridian_engagement_by_class.tsx:139
 #: src/components/automations/config/TriggerConfigForm.tsx:90
 #: src/components/broadcasts/BroadcastStats.tsx:169
@@ -3946,7 +3968,7 @@ msgstr "Email mapping is missing or invalid"
 msgid "Email mapping required"
 msgstr "Email mapping required"
 
-#: src/components/analytics/EmailMetricsChart.tsx:297
+#: src/components/analytics/EmailMetricsChart.tsx:304
 msgid "Email Metrics"
 msgstr "Email Metrics"
 
@@ -4505,8 +4527,7 @@ msgstr "External ID"
 msgid "failed"
 msgstr "failed"
 
-#: src/components/analytics/EmailMetricsChart.tsx:292
-#: src/components/analytics/EmailMetricsChart.tsx:589
+#: src/components/analytics/EmailMetricsChart.tsx:562
 #: src/components/automations/AutomationCard.tsx:281
 #: src/components/automations/nodes/StatNode.tsx:116
 #: src/components/automations/nodes/StatNode.tsx:180
@@ -4527,6 +4548,10 @@ msgstr "failed"
 #: src/pages/TransactionalNotificationsPage.tsx:232
 msgid "Failed"
 msgstr "Failed"
+
+#: src/components/analytics/EmailMetricsChart.tsx:299
+msgid "Failed (excluded + real)"
+msgstr "Failed (excluded + real)"
 
 #: src/pages/AcceptInvitationPage.tsx:86
 msgid "Failed to accept invitation"
@@ -4707,7 +4732,7 @@ msgstr "Failed to fetch API keys"
 msgid "Failed to fetch data: {0}"
 msgstr "Failed to fetch data: {0}"
 
-#: src/components/analytics/EmailMetricsChart.tsx:189
+#: src/components/analytics/EmailMetricsChart.tsx:204
 msgid "Failed to fetch email metrics"
 msgstr "Failed to fetch email metrics"
 
@@ -5521,7 +5546,7 @@ msgstr "Hard daily limit per SENDING address (FROM), counted from message histor
 
 #. placeholder {0}: stats.count_bounced_hard
 #. placeholder {1}: stats.count_bounced_soft
-#: src/components/analytics/EmailMetricsChart.tsx:491
+#: src/components/analytics/EmailMetricsChart.tsx:431
 msgid "Hard: {0} (dead address) · Soft: {1} (transient)"
 msgstr "Hard: {0} (dead address) · Soft: {1} (transient)"
 
@@ -5920,9 +5945,17 @@ msgstr "Imported {0} contacts"
 msgid "Imported {0} contacts ({1} failed, see details below)"
 msgstr "Imported {0} contacts ({1} failed, see details below)"
 
+#: src/components/analytics/AnalyticsDashboard.tsx:127
+msgid "Imported contacts (stock)"
+msgstr "Imported contacts (stock)"
+
 #: src/components/email_builder/ui/FontStyleInput.tsx:87
 msgid "Imported Fonts"
 msgstr "Imported Fonts"
+
+#: src/components/analytics/AnalyticsDashboard.tsx:126
+msgid "Imported stock, not the audience actually contacted."
+msgstr "Imported stock, not the audience actually contacted."
 
 #: src/components/file_manager/fileManager.tsx:1091
 msgid "Importing files..."
@@ -6715,7 +6748,7 @@ msgstr "Marketing"
 msgid "Marketing Email Provider Required"
 msgstr "Marketing Email Provider Required"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:174
+#: src/components/analytics/AnalyticsDashboard.tsx:182
 msgid "Marketing Provider"
 msgstr "Marketing Provider"
 
@@ -7042,8 +7075,8 @@ msgid "New Category"
 msgstr "New Category"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:138
-msgid "New Contacts"
-msgstr "New Contacts"
+#~ msgid "New Contacts"
+#~ msgstr "New Contacts"
 
 #: src/components/ai-assistant/AIAssistantChat.tsx:268
 msgid "New conversation"
@@ -7052,6 +7085,10 @@ msgstr "New conversation"
 #: src/components/file_manager/fileManager.tsx:771
 msgid "New folder"
 msgstr "New folder"
+
+#: src/components/analytics/AnalyticsDashboard.tsx:144
+msgid "New imported contacts"
+msgstr "New imported contacts"
 
 #: src/pages/SignInPage.tsx:122
 msgid "New magic code sent to your email"
@@ -7086,6 +7123,10 @@ msgstr "New Window"
 #: src/pages/CreateWorkspacePage.tsx:194
 msgid "New workspace"
 msgstr "New workspace"
+
+#: src/components/analytics/AnalyticsDashboard.tsx:143
+msgid "Newly imported contacts, not the audience actually contacted."
+msgstr "Newly imported contacts, not the audience actually contacted."
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:334
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:344
@@ -7467,8 +7508,8 @@ msgstr "Not assigned"
 msgid "Not available"
 msgstr "Not available"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:162
-#: src/components/analytics/AnalyticsDashboard.tsx:186
+#: src/components/analytics/AnalyticsDashboard.tsx:170
+#: src/components/analytics/AnalyticsDashboard.tsx:194
 #: src/components/settings/Integrations.tsx:1492
 #: src/components/settings/Integrations.tsx:1529
 #: src/components/settings/veridian_cold_outreach_settings.tsx:252
@@ -7718,12 +7759,14 @@ msgstr "Opening time"
 msgid "opens"
 msgstr "opens"
 
-#: src/components/analytics/EmailMetricsChart.tsx:287
-#: src/components/analytics/EmailMetricsChart.tsx:411
 #: src/components/broadcasts/BroadcastStats.tsx:193
 #: src/pages/BroadcastsPage.tsx:751
 msgid "Opens"
 msgstr "Opens"
+
+#: src/components/analytics/EmailMetricsChart.tsx:350
+msgid "Opens and clicks are not tracked: plain-text emails, no pixel or tracked link"
+msgstr "Opens and clicks are not tracked: plain-text emails, no pixel or tracked link"
 
 #: src/components/contacts/BulkActionProgressModal.tsx:121
 msgid "Operation cancelled"
@@ -8712,6 +8755,10 @@ msgstr "Ready to sign in"
 msgid "Ready to use"
 msgstr "Ready to use"
 
+#: src/components/analytics/EmailMetricsChart.tsx:562
+msgid "Real failures"
+msgstr "Real failures"
+
 #: src/pages/BroadcastsPage.tsx:996
 msgid "Reason:"
 msgstr "Reason:"
@@ -8943,7 +8990,7 @@ msgstr "Repeat Y"
 msgid "Replied"
 msgstr "Replied"
 
-#: src/components/analytics/EmailMetricsChart.tsx:468
+#: src/components/analytics/EmailMetricsChart.tsx:403
 msgid "Replies"
 msgstr "Replies"
 
@@ -9113,7 +9160,7 @@ msgstr "Resume Previous Upload"
 msgid "Resume Upload"
 msgstr "Resume Upload"
 
-#: src/components/analytics/EmailMetricsChart.tsx:328
+#: src/components/analytics/EmailMetricsChart.tsx:335
 msgid "Retry"
 msgstr "Retry"
 
@@ -9939,8 +9986,8 @@ msgstr "Sends from @{senderDomain}"
 msgid "sent"
 msgstr "sent"
 
-#: src/components/analytics/EmailMetricsChart.tsx:285
-#: src/components/analytics/EmailMetricsChart.tsx:357
+#: src/components/analytics/EmailMetricsChart.tsx:295
+#: src/components/analytics/EmailMetricsChart.tsx:373
 #: src/components/analytics/veridian_engagement_by_class.tsx:131
 #: src/components/automations/config/TriggerConfigForm.tsx:89
 #: src/components/broadcasts/BroadcastStats.tsx:135
@@ -10977,7 +11024,7 @@ msgstr "The currently published theme will be unpublished automatically."
 msgid "The daily profile cap is enforced separately."
 msgstr "The daily profile cap is enforced separately."
 
-#: src/components/analytics/EmailMetricsChart.tsx:319
+#: src/components/analytics/EmailMetricsChart.tsx:326
 msgid "The dashboard could not load your email metrics. This is usually temporary — please try again."
 msgstr "The dashboard could not load your email metrics. This is usually temporary — please try again."
 
@@ -11470,8 +11517,8 @@ msgid "Total attachments size exceeds 10MB limit"
 msgstr "Total attachments size exceeds 10MB limit"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:125
-msgid "Total Contacts"
-msgstr "Total Contacts"
+#~ msgid "Total Contacts"
+#~ msgstr "Total Contacts"
 
 #: src/components/settings/Integrations.tsx:1887
 msgid "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a declared Google Workspace account can go up to {maxCap}/day once warmed up."
@@ -11506,7 +11553,7 @@ msgstr "Tracking domain saved"
 msgid "Tracking links (open pixel, click redirects) point to Notifuse by default. For cold outreach, a tracking link on a domain different from your sending domain is an anti-spam signal. Set a custom tracking domain aligned with each sending domain (e.g. send from agences-veridian.fr → track on track.agences-veridian.fr) — it must be a CNAME/A record pointing to Notifuse. Leave empty to fall back to the workspace/global endpoint."
 msgstr "Tracking links (open pixel, click redirects) point to Notifuse by default. For cold outreach, a tracking link on a domain different from your sending domain is an anti-spam signal. Set a custom tracking domain aligned with each sending domain (e.g. send from agences-veridian.fr → track on track.agences-veridian.fr) — it must be a CNAME/A record pointing to Notifuse. Leave empty to fall back to the workspace/global endpoint."
 
-#: src/components/analytics/EmailMetricsChart.tsx:305
+#: src/components/analytics/EmailMetricsChart.tsx:312
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:408
 #: src/layouts/WorkspaceLayout.tsx:335
 #: src/pages/TemplatesPage.tsx:79
@@ -11529,7 +11576,7 @@ msgstr "Transactional notification deleted successfully"
 msgid "Transactional Notifications"
 msgstr "Transactional Notifications"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:150
+#: src/components/analytics/AnalyticsDashboard.tsx:158
 msgid "Transactional Provider"
 msgstr "Transactional Provider"
 
@@ -11617,7 +11664,7 @@ msgstr "Unable to add this member. Please contact your administrator."
 msgid "Unable to create workspace. Please contact your administrator."
 msgstr "Unable to create workspace. Please contact your administrator."
 
-#: src/components/analytics/EmailMetricsChart.tsx:316
+#: src/components/analytics/EmailMetricsChart.tsx:323
 msgid "Unable to load email metrics"
 msgstr "Unable to load email metrics"
 
@@ -11727,7 +11774,7 @@ msgstr "Unsaved draft found."
 msgid "Unsub"
 msgstr "Unsub"
 
-#: src/components/analytics/EmailMetricsChart.tsx:562
+#: src/components/analytics/EmailMetricsChart.tsx:502
 #: src/components/broadcasts/BroadcastStats.tsx:333
 msgid "Unsub."
 msgstr "Unsub."
@@ -11764,7 +11811,7 @@ msgstr "Unsubscribed"
 msgid "Unsubscribed from list"
 msgstr "Unsubscribed from list"
 
-#: src/components/analytics/EmailMetricsChart.tsx:291
+#: src/components/analytics/EmailMetricsChart.tsx:298
 msgid "Unsubscribes"
 msgstr "Unsubscribes"
 

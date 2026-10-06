@@ -27,6 +27,11 @@ export interface VeridianReplyStatsResponse {
   // contacts UNIQUES ayant répondu). Le ratio replied/sent est calculé côté UI
   // avec le count_sent déjà chargé par le dashboard.
   replied: number
+  // Contacts uniques ayant répondu HUMAINEMENT (hors réponses automatiques :
+  // absence, accusé de réception, etc.). Optionnel : un backend plus ancien ne
+  // l'envoie pas, le front retombe alors sur `replied`. Les réponses
+  // automatiques = replied - replied_human.
+  replied_human?: number
 }
 
 export const replyStatsApi = {

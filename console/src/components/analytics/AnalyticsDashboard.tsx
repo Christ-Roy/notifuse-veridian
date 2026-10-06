@@ -1,5 +1,5 @@
 import React from 'react'
-import { Row, Col, Statistic, Button } from 'antd'
+import { Row, Col, Statistic, Button, Tooltip } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
@@ -122,7 +122,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         <Col xs={24} sm={12} md={6}>
           <div className="p-4 rounded-lg bg-gray-100" style={{ height: '110px' }}>
             <Statistic
-              title={t`Total Contacts`}
+              title={
+                <Tooltip title={t`Imported stock, not the audience actually contacted.`}>
+                  <span>{t`Imported contacts (stock)`}</span>
+                </Tooltip>
+              }
               value={totalContacts as number}
               valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
               loading={totalContactsLoading}
@@ -135,7 +139,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         <Col xs={24} sm={12} md={6}>
           <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
             <Statistic
-              title={t`New Contacts`}
+              title={
+                <Tooltip title={t`Newly imported contacts, not the audience actually contacted.`}>
+                  <span>{t`New imported contacts`}</span>
+                </Tooltip>
+              }
               value={newContactsCount as number}
               valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
               loading={newContactsLoading}

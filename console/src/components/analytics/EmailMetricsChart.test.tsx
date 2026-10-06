@@ -107,4 +107,69 @@ describe('EmailMetricsChart', () => {
     expect(queryMock.mock.calls.length).toBeGreaterThan(callsBefore)
     expect(screen.queryByText('Unable to load email metrics')).toBeNull()
   })
+  it('drops Delivered/Opens/Clicks cards and shows the untracked note', async () => {
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockResolvedValue(okResponse)
+    renderChart()
+    await waitFor(() => expect(screen.getByText('Sent')).toBeInTheDocument())
+    expect(screen.queryByText('Delivered')).toBeNull()
+    expect(screen.queryByText('Opens')).toBeNull()
+    expect(screen.queryByText('Clicks')).toBeNull()
+    expect(
+      screen.getByText('Opens and clicks are not tracked: plain-text emails, no pixel or tracked link')
+    ).toBeInTheDocument()
+  })
+
+  it('uses replied_human for the rate and shows automatic replies aside', async () => {
+    ;(replyStatsApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      replied: 10,
+      replied_human: 4
+    })
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [{ count_sent: 100, count_failed: 0 }],
+      meta: { total: 1, query: '', params: [] }
+    })
+    renderChart()
+    await waitFor(() => expect(screen.getByText('4.0%')).toBeInTheDocument())
+    expect(screen.getByTestId('auto-replies').textContent).toContain('6')
+  })
+
+  it('falls back to replied when replied_human is absent, no auto note', async () => {
+    ;(replyStatsApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ replied: 10 })
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [{ count_sent: 100, count_failed: 0 }],
+      meta: { total: 1, query: '', params: [] }
+    })
+    renderChart()
+    await waitFor(() => expect(screen.getByText('10%')).toBeInTheDocument())
+    expect(screen.queryByTestId('auto-replies')).toBeNull()
+  })
+
+  it('splits deliberate exclusions from real failures when the measure exists', async () => {
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(
+      async (q: { measures: string[] }) =>
+        q.measures.length === 1 && q.measures[0] === 'count_failed_excluded'
+          ? { data: [{ count_failed_excluded: 170 }], meta: { total: 1, query: '', params: [] } }
+          : { data: [{ count_sent: 1000, count_failed: 171 }], meta: { total: 1, query: '', params: [] } }
+    )
+    renderChart()
+    await waitFor(() => expect(screen.getByText('Deliberately excluded')).toBeInTheDocument())
+    expect(screen.getByText('Real failures')).toBeInTheDocument()
+    expect(screen.getByText('170')).toBeInTheDocument()
+    expect(screen.getByText('0.1%')).toBeInTheDocument()
+  })
+
+  it('keeps a single Failed card when the exclusion measure is unavailable', async () => {
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(
+      async (q: { measures: string[] }) => {
+        if (q.measures.length === 1 && q.measures[0] === 'count_failed_excluded') {
+          throw new Error('unknown measure')
+        }
+        return { data: [{ count_sent: 1000, count_failed: 171 }], meta: { total: 1, query: '', params: [] } }
+      }
+    )
+    renderChart()
+    await waitFor(() => expect(screen.getByText('Failed')).toBeInTheDocument())
+    expect(screen.getByText('Deliberately excluded')).toBeInTheDocument()
+    expect(screen.queryByText('Real failures')).toBeNull()
+  })
 })
