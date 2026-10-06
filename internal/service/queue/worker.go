@@ -75,6 +75,10 @@ type EmailQueueWorker struct {
 	// Production explicitly enables the last-mile guards through the setter.
 	finalSendGuardsConfigured bool
 
+	// Veridian fork: re-rend le contenu des entrees d'automation au depilage
+	// (cf. veridian_render_at_send.go). nil = comportement upstream.
+	queuedEmailRenderer QueuedEmailRenderer
+
 	// Control
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -433,6 +437,14 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 			Retryable: false,
 		}
 		w.handleError(workspace, entry, prefilterErr, prefilterErr)
+		return
+	}
+
+	// Veridian fork: RENDU AU DEPILAGE. Le contenu (sujet, texte, html) est
+	// re-rendu depuis le modele COURANT et le contact COURANT juste avant
+	// l'envoi ; un echec de rendu = le message ne part pas (echec lisible).
+	// Cf. veridian_render_at_send.go.
+	if !w.veridianRenderAtSend(workspace, entry) {
 		return
 	}
 

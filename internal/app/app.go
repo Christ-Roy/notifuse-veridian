@@ -1017,6 +1017,15 @@ func (a *App) InitServices() error {
 		a.veridianContactReplyRepo,
 	)
 
+	// Veridian: rendu au depilage (le contenu des automations suit le modele courant).
+	a.emailQueueWorker.SetQueuedEmailRenderer(service.NewVeridianQueueEmailRenderer(
+		a.templateRepo,
+		a.listRepo,
+		a.contactRepo,
+		a.automationRepo,
+		a.config.APIEndpoint,
+	))
+
 	// Initialize automation service
 	a.automationService = service.NewAutomationService(
 		a.automationRepo,

@@ -12,8 +12,6 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
-	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
-	"github.com/Notifuse/notifuse/pkg/veridian_spintax"
 	"github.com/google/uuid"
 )
 
@@ -294,24 +292,7 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 	// 5. Generate message ID
 	messageID := fmt.Sprintf("%s_%s", params.WorkspaceID, uuid.New().String())
 
-	// 6. Setup tracking settings
-	endpoint := e.apiEndpoint
-	if workspace.Settings.CustomEndpointURL != nil && *workspace.Settings.CustomEndpointURL != "" {
-		endpoint = *workspace.Settings.CustomEndpointURL
-	}
-
-	trackingSettings := notifuse_mjml.TrackingSettings{
-		Endpoint:       endpoint,
-		EnableTracking: workspace.Settings.EmailTrackingEnabled,
-		UTMSource:      "automation",
-		UTMMedium:      "email",
-		UTMCampaign:    params.Automation.Name,
-		UTMContent:     config.TemplateID,
-		WorkspaceID:    params.WorkspaceID,
-		MessageID:      messageID,
-	}
-
-	// 7. Build template data using shared domain.BuildTemplateData
+	// 6. List (name needed by the template data)
 	var listID, listName string
 	if params.Automation.ListID != "" {
 		list, err := e.listRepo.GetListByID(ctx, params.WorkspaceID, params.Automation.ListID)
@@ -322,71 +303,31 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 		listName = list.Name
 	}
 
-	templateData, err := domain.BuildTemplateData(domain.TemplateDataRequest{
-		WorkspaceID:         params.WorkspaceID,
-		WorkspaceSecretKey:  workspace.Settings.SecretKey,
-		WorkspaceWebsiteURL: workspace.Settings.WebsiteURL,
-		ContactWithList:     domain.ContactWithList{Contact: params.ContactData, ListID: listID, ListName: listName},
-		MessageID:           messageID,
-		TrackingSettings:    trackingSettings,
-		ProvidedData: domain.MapOfAny{
-			"automation_id":   params.Automation.ID,
-			"automation_name": params.Automation.Name,
-		},
+	// 7-10. Render (tracking, template data, language variant, MJML, text,
+	// subject). Veridian: shared with the queue worker, which re-renders at send
+	// time (cf. veridian_automation_email_render.go).
+	rendered, err := renderAutomationEmail(automationEmailRenderInput{
+		Template:       template,
+		Workspace:      workspace,
+		APIEndpoint:    e.apiEndpoint,
+		AutomationID:   params.Automation.ID,
+		AutomationName: params.Automation.Name,
+		ListID:         listID,
+		ListName:       listName,
+		TemplateID:     config.TemplateID,
+		MessageID:      messageID,
+		Contact:        params.ContactData,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to build template data: %w", err)
+		return nil, err
 	}
-
-	// 8. Resolve language variant based on contact's language
-	contactLang := ""
-	if params.ContactData.Language != nil && !params.ContactData.Language.IsNull {
-		contactLang = params.ContactData.Language.String
-	}
-	emailContent := template.ResolveEmailContent(contactLang, workspace.Settings.DefaultLanguage)
-
-	// 9. Compile template
-	compileReq := notifuse_mjml.CompileTemplateRequest{
-		WorkspaceID:      params.WorkspaceID,
-		MessageID:        messageID,
-		VisualEditorTree: emailContent.VisualEditorTree,
-		TemplateData:     notifuse_mjml.MapOfAny(templateData),
-		TrackingSettings: trackingSettings,
-	}
-	compileReq.MjmlSource = emailContent.GetCodeModeMjmlSource()
-	compiledTemplate, err := notifuse_mjml.CompileTemplate(compileReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile template: %w", err)
-	}
-	if !compiledTemplate.Success || compiledTemplate.HTML == nil {
-		errMsg := "template compilation failed"
-		if compiledTemplate.Error != nil {
-			errMsg = compiledTemplate.Error.Message
-		}
-		return nil, fmt.Errorf("%s", errMsg)
-	}
-	htmlContent := *compiledTemplate.HTML
-	textContent := ""
-	if emailContent.Text != nil {
-		textContent, err = notifuse_mjml.ProcessLiquidTemplate(*emailContent.Text, templateData, "email_text")
-		if err != nil {
-			return nil, fmt.Errorf("failed to process plain text: %w", err)
-		}
-		textContent = veridian_spintax.ResolveSpintax(textContent, params.ContactData.Email)
-	}
-
-	// 10. Process subject line through Liquid templating
-	subject, err := notifuse_mjml.ProcessLiquidTemplate(
-		emailContent.Subject,
-		templateData,
-		"email_subject",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to process subject: %w", err)
-	}
+	templateData := rendered.TemplateData
+	htmlContent := rendered.HTML
+	textContent := rendered.Text
+	subject := rendered.Subject
 
 	// 11. Get sender
-	sender := emailProvider.GetSender(emailContent.SenderID)
+	sender := emailProvider.GetSender(rendered.SenderID)
 	if sender == nil {
 		return nil, fmt.Errorf("no sender configured for email provider")
 	}
@@ -409,11 +350,11 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 			Subject:            subject,
 			HTMLContent:        htmlContent,
 			TextContent:        textContent,
-			PlainTextOnly:      emailContent.PlainTextOnly,
+			PlainTextOnly:      rendered.PlainTextOnly,
 			RateLimitPerMinute: emailProvider.RateLimitPerMinute,
 			ListID:             params.Automation.ListID,
 			EmailOptions: domain.EmailOptions{
-				ReplyTo: emailContent.ReplyTo,
+				ReplyTo: rendered.ReplyTo,
 			},
 		},
 		MaxAttempts: 3,

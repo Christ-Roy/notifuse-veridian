@@ -151,3 +151,4 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 - `35` KPI dashboard cold
 - `36` FIX P0 — dashboard 500 `bounce_type` absent
 - `37` wrapper veridian analytics — error-shape standardisé
+- `52` rendu au dépilage des emails d automation (le modèle courant fait foi)
