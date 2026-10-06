@@ -114,3 +114,12 @@ func TestVeridianReferencesFromRaw(t *testing.T) {
 	assert.Empty(t, VeridianReferencesFromRaw(nil))
 	assert.Empty(t, VeridianReferencesFromRaw(rawMsg("From: x@y.fr", "corps")))
 }
+
+func TestVeridianParseRawHeaders(t *testing.T) {
+	hdr := VeridianParseRawHeaders(rawMsg("Auto-Submitted: auto-replied\r\nSubject: s", "corps"))
+	assert.Equal(t, "auto-replied", hdr.Get("Auto-Submitted"))
+	assert.Equal(t, "s", hdr.Get("Subject"))
+	// Entree vide ou illisible : jamais nil, jamais de panique.
+	assert.NotNil(t, VeridianParseRawHeaders(nil))
+	assert.Empty(t, VeridianParseRawHeaders([]byte("pas un en-tete")).Get("Subject"))
+}

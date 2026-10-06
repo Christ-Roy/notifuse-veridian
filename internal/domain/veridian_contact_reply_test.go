@@ -81,3 +81,10 @@ func TestVeridianContactReplyRepository_RetryKeepsFirstSignal(t *testing.T) {
 	assert.Same(t, first, stub.marked, "an IMAP replay must not replace the first reply signal")
 	assert.True(t, stub.replied)
 }
+
+func TestVeridianContactReply_ReplyTypeDefaultsToEmpty(t *testing.T) {
+	// Vide = human cote repository (lignes anterieures et appelants historiques).
+	assert.Equal(t, VeridianReplyType(""), (&VeridianContactReply{}).ReplyType)
+	r := &VeridianContactReply{ContactEmail: "a@b.fr", ReplyType: VeridianReplyTypeChallenge}
+	assert.Equal(t, VeridianReplyTypeChallenge, r.ReplyType)
+}
