@@ -141,3 +141,16 @@ func TestVeridianIMAPFetchOptions_BodyIsBounded(t *testing.T) {
 	assert.True(t, opts.UID, "UID demandé (clé d'idempotence)")
 	assert.True(t, opts.Envelope, "Envelope demandé (headers de matching)")
 }
+
+// L'enveloppe IMAP ne porte pas References : on la lit depuis les en-tetes du RFC822 brut.
+func TestEmersionIMAPClient_ToDomainMessage_ReadsReferencesFromRawHeaders(t *testing.T) {
+	c := &emersionIMAPClient{uidValidity: 1, folder: "INBOX"}
+	raw := []byte("From: a@b.fr\r\nReferences: <root@x.fr> <sent-1@agence-veridian.fr>\r\nSubject: Re: q\r\n\r\ncorps")
+	buf := &imapclient.FetchMessageBuffer{
+		UID:         imap.UID(8),
+		BodySection: []imapclient.FetchBodySectionBuffer{{Bytes: raw}},
+	}
+	msg := c.toDomainMessage(buf)
+	assert.Equal(t, []string{"<root@x.fr> <sent-1@agence-veridian.fr>"}, msg.References)
+	assert.Equal(t, []string{"root", "sent-1"}, domain.VeridianExtractMessageIDLocalParts("", msg.References))
+}

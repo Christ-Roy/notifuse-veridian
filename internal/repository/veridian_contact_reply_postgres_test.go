@@ -289,3 +289,18 @@ func TestVeridianContactReplyRepository_CountRepliedSince(t *testing.T) {
 		assert.Equal(t, 0, n)
 	})
 }
+
+func TestVeridianContactReplyRepository_CountHumanRepliedSince(t *testing.T) {
+	ctx := context.Background()
+	wsRepo, repo, mock, db, cleanup := setupContactReplyTest(t)
+	defer cleanup()
+
+	wsRepo.EXPECT().GetConnection(ctx, "ws1").Return(db, nil)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM veridian_contact_reply WHERE reply_type = \$1$`).
+		WithArgs("human").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+	n, err := repo.CountHumanRepliedSince(ctx, "ws1", time.Time{}, time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+}

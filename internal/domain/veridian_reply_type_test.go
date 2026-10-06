@@ -114,10 +114,3 @@ func TestVeridianReferencesFromRaw(t *testing.T) {
 	assert.Empty(t, VeridianReferencesFromRaw(nil))
 	assert.Empty(t, VeridianReferencesFromRaw(rawMsg("From: x@y.fr", "corps")))
 }
-
-func TestVeridianBounceTypeLabel_PolicyRefusal(t *testing.T) {
-	assert.Equal(t, VeridianBounceTypePolicy, VeridianBounceTypeLabel(BounceClassificationPolicyRefusal))
-	assert.Equal(t, "PolicyBounce", VeridianBounceTypePolicy)
-	// Le refus de politique n'est ni Hard ni Soft pour le KPI : libelle dedie.
-	assert.NotEqual(t, VeridianBounceTypeHard, VeridianBounceTypeLabel(BounceClassificationPolicyRefusal))
-}

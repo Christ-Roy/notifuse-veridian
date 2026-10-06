@@ -607,3 +607,17 @@ func TestVeridianMessageHistoryDecorator_ProviderClassBackfillPassthrough(t *tes
 	require.NoError(t, decorator.SetMessageProviderClassIfEmpty(context.Background(), "ws", "msg", "microsoft"))
 	assert.Equal(t, "microsoft", upstream.setClass)
 }
+
+func TestVeridianMessageHistoryDecorator_ResolveBounceTargetMessageID_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	upstream.EXPECT().ResolveBounceTargetMessageID(gomock.Any(), "ws", "uuid@d.fr", "a@b.fr").
+		Return("ws_uuid", true, nil).Times(1)
+	id, found, err := d.ResolveBounceTargetMessageID(context.Background(), "ws", "uuid@d.fr", "a@b.fr")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "ws_uuid", id)
+}

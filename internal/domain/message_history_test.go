@@ -1824,3 +1824,9 @@ func TestMessageHistory_VeridianProfileIDJSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(raw), `"veridian_profile_id":"gmail-profile-1"`)
 }
+
+func TestMessageEventPolicyRefused(t *testing.T) {
+	// Evenement distinct de bounced : il ne pose pas bounced_at (le contact n'est pas supprime).
+	assert.Equal(t, MessageEvent("policy_refused"), MessageEventPolicyRefused)
+	assert.NotEqual(t, MessageEventBounced, MessageEventPolicyRefused)
+}

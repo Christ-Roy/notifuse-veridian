@@ -27,3 +27,10 @@ func TestVeridianBounceTypeLabel(t *testing.T) {
 	assert.Equal(t, "HardBounce", VeridianBounceTypeHard)
 	assert.Equal(t, "SoftBounce", VeridianBounceTypeSoft)
 }
+
+func TestVeridianBounceTypeLabel_PolicyRefusal(t *testing.T) {
+	assert.Equal(t, VeridianBounceTypePolicy, VeridianBounceTypeLabel(BounceClassificationPolicyRefusal))
+	assert.Equal(t, "PolicyBounce", VeridianBounceTypePolicy)
+	// Le refus de politique n'est ni Hard ni Soft pour le KPI : libelle dedie.
+	assert.NotEqual(t, VeridianBounceTypeHard, VeridianBounceTypeLabel(BounceClassificationPolicyRefusal))
+}

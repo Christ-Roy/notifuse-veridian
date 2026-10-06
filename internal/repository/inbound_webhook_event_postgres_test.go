@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -745,4 +746,10 @@ func TestCountConsecutiveSoftBounces_WorkspaceConnectionError(t *testing.T) {
 	_, err := repo.CountConsecutiveSoftBounces(context.Background(), "ws-123", []string{"a@example.com"})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get workspace connection")
+}
+
+// 5.7.x = refus de politique : il ne compte pas vers le seuil de soft bounces
+// (la boite existe, ce n'est pas un echec de la destination).
+func TestCountConsecutiveSoftBouncesSQL_ExcludesPolicyRefusals(t *testing.T) {
+	assert.True(t, strings.Contains(countConsecutiveSoftBouncesSQL, "NOT LIKE '%5.7.%'"))
 }

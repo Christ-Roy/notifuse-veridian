@@ -111,3 +111,10 @@ func TestVeridianReplyMatchTypeConstants(t *testing.T) {
 	assert.Equal(t, VeridianReplyMatchType("message_id"), VeridianReplyMatchMessageID)
 	assert.Equal(t, VeridianReplyMatchType("sender_fallback"), VeridianReplyMatchSenderFallback)
 }
+
+func TestVeridianReplyDetection_CarriesReplyType(t *testing.T) {
+	det := VeridianReplyDetection{IsReply: true, ReplyType: VeridianReplyTypeAuto}
+	assert.Equal(t, VeridianReplyTypeAuto, det.ReplyType)
+	// Zero value : pas de type pose (le service retombe sur human cote repository).
+	assert.Equal(t, VeridianReplyType(""), VeridianReplyDetection{}.ReplyType)
+}
