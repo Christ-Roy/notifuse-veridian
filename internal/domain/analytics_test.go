@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Notifuse/notifuse/pkg/analytics"
@@ -391,4 +392,17 @@ func TestMessageHistoryBounceHardSoftMeasures(t *testing.T) {
 // Helper functions
 func intPtr(i int) *int {
 	return &i
+}
+
+func TestMessageHistorySchema_CountFailedExcluded(t *testing.T) {
+	m, ok := PredefinedSchemas["message_history"].Measures["count_failed_excluded"]
+	assert.True(t, ok, "mesure des exclusions volontaires attendue par la console")
+	var sqls []string
+	for _, f := range m.Filters {
+		sqls = append(sqls, f.SQL)
+	}
+	joined := strings.Join(sqls, " ")
+	assert.Contains(t, joined, "failed_at IS NOT NULL")
+	assert.Contains(t, joined, "pre-filtered recipient:")
+	assert.Contains(t, joined, "excluded_provider_class:")
 }
