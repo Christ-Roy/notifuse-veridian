@@ -126,7 +126,7 @@ func classifyDSNCode(s string) *BounceClassification {
 		case m[2] == "4":
 			c = BounceClassificationSoftCount
 		case m[2] == "7":
-			c = BounceClassificationHard
+			c = BounceClassificationPolicyRefusal
 		default:
 			c = BounceClassificationHard
 		}
