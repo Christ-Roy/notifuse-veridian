@@ -3828,3 +3828,73 @@ func TestReplyBranchNodeExecutor_Execute_InvalidConfig(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid reply_branch node config")
 }
+
+// Veridian — le noeud email et le rendu au depilage partagent renderAutomationEmail :
+// ce que le noeud met en file (sujet, texte, plain_text_only, reply-to) est exactement
+// le rendu du modele, et un modele sans contenu email n'enfile rien.
+func TestEmailNodeExecutor_Execute_PayloadMatchesSharedRender(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockListRepo := mocks.NewMockListRepository(ctrl)
+	executor := NewEmailNodeExecutor(mockEmailQueueRepo, mockTemplateRepo, mockWorkspaceRepo, mockListRepo,
+		mocks.NewMockContactListRepository(ctrl), "https://api.example.com", setupMockLoggerForNodeExecutor(ctrl))
+
+	template := createTestTemplate()
+	template.Email.ReplyTo = "reponses@example.com"
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "ws1").Return(createTestWorkspaceWithEmailProvider(), nil)
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "ws1", "tpl123", int64(0)).Return(template, nil)
+	mockListRepo.EXPECT().GetListByID(gomock.Any(), "ws1", "list1").Return(&domain.List{ID: "list1", Name: "L"}, nil)
+	mockEmailQueueRepo.EXPECT().Enqueue(gomock.Any(), "ws1", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, entries []*domain.EmailQueueEntry) error {
+			p := entries[0].Payload
+			assert.Equal(t, "Test Subject", p.Subject)
+			assert.Equal(t, "Bonjour recipient@example.com", p.TextContent)
+			assert.NotEmpty(t, p.HTMLContent)
+			assert.Equal(t, "reponses@example.com", p.EmailOptions.ReplyTo)
+			assert.Equal(t, "sender@example.com", p.FromAddress)
+			assert.Equal(t, "tpl123", entries[0].TemplateID, "le template_id permet le rendu au depilage")
+			return nil
+		})
+
+	_, err := executor.Execute(context.Background(), NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node:        &domain.AutomationNode{ID: "n1", Type: domain.NodeTypeEmail, Config: map[string]interface{}{"template_id": "tpl123"}},
+		Contact:     &domain.ContactAutomation{ID: "ca1", ContactEmail: "recipient@example.com"},
+		ContactData: &domain.Contact{Email: "recipient@example.com"},
+		Automation:  &domain.Automation{ID: "auto1", Name: "A", ListID: "list1"},
+	})
+	require.NoError(t, err)
+}
+
+func TestEmailNodeExecutor_Execute_TemplateWithoutEmailContentEnqueuesNothing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockListRepo := mocks.NewMockListRepository(ctrl)
+	executor := NewEmailNodeExecutor(mockEmailQueueRepo, mockTemplateRepo, mockWorkspaceRepo, mockListRepo,
+		mocks.NewMockContactListRepository(ctrl), "https://api.example.com", setupMockLoggerForNodeExecutor(ctrl))
+
+	template := createTestTemplate()
+	template.Email = nil
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "ws1").Return(createTestWorkspaceWithEmailProvider(), nil)
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "ws1", "tpl123", int64(0)).Return(template, nil)
+	mockListRepo.EXPECT().GetListByID(gomock.Any(), "ws1", "list1").Return(&domain.List{ID: "list1", Name: "L"}, nil)
+	mockEmailQueueRepo.EXPECT().Enqueue(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	_, err := executor.Execute(context.Background(), NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node:        &domain.AutomationNode{ID: "n1", Type: domain.NodeTypeEmail, Config: map[string]interface{}{"template_id": "tpl123"}},
+		Contact:     &domain.ContactAutomation{ID: "ca1", ContactEmail: "recipient@example.com"},
+		ContactData: &domain.Contact{Email: "recipient@example.com"},
+		Automation:  &domain.Automation{ID: "auto1", Name: "A", ListID: "list1"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no email content")
+}

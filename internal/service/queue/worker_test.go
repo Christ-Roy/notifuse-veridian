@@ -2337,3 +2337,49 @@ func TestEmailQueueWorker_ProcessEntry_OnEmailFailedReceivesContactEmail_Retryab
 	assert.False(t, gotIsPermanent, "a transient SMTP error retries (bounded backoff), it must not be reported as permanent")
 	assert.Equal(t, "lead@example.com", gotContactEmail)
 }
+
+// Veridian — rendu au depilage : apres une panne transitoire du rendu, la
+// relance envoie le contenu COURANT du modele, jamais le contenu fige a l'enqueue.
+type flakyQueuedEmailRenderer struct {
+	calls int
+}
+
+func (f *flakyQueuedEmailRenderer) RenderQueuedEmail(context.Context, *domain.Workspace, *domain.EmailQueueEntry) (*RenderedQueuedEmail, error) {
+	f.calls++
+	if f.calls == 1 {
+		return nil, &RenderError{Reason: "contact illisible", Err: errors.New("connection reset")}
+	}
+	return &RenderedQueuedEmail{Subject: "Sujet courant", HTMLContent: "<p>courant</p>", TextContent: "texte courant"}, nil
+}
+
+func TestEmailQueueWorker_RenderAtSend_RetryAfterTransientFailureSendsCurrentContent(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	veridianAllowAutomationSend(t, env, "auto-1", "lead@gmail.com")
+	veridianExpectHealthyReputation(env, "ws-1", "agence.example")
+	renderer := &flakyQueuedEmailRenderer{}
+	env.worker.SetQueuedEmailRenderer(renderer)
+
+	entry := renderAtSendEntry()
+	workspace := renderAtSendWorkspace()
+
+	// Tentative 1 : rendu en panne, rien ne part, retry programme.
+	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", "e1").Return(nil).Times(2)
+	env.mockQueueRepo.EXPECT().MarkAsFailed(gomock.Any(), "ws-1", "e1", gomock.Any(), gomock.Any()).Return(nil)
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil).Times(2)
+	env.worker.processEntry(workspace, entry)
+	assert.Equal(t, "ANCIEN sujet", entry.Payload.Subject, "un rendu en echec ne remplace rien")
+
+	// Tentative 2 : rendu OK, le message part avec le contenu courant.
+	var sent domain.SendEmailProviderRequest
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).
+		DoAndReturn(func(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+			sent = req
+			return nil
+		})
+	env.mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), "ws-1", "e1").Return(nil)
+	env.worker.processEntry(workspace, entry)
+
+	assert.Equal(t, 2, renderer.calls)
+	assert.Equal(t, "Sujet courant", sent.Subject)
+	assert.Equal(t, "texte courant", sent.TextContent)
+}
