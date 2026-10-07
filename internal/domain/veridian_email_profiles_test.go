@@ -96,13 +96,21 @@ func TestWorkspaceVeridianProfileUsageOf(t *testing.T) {
 	assert.Equal(t, VeridianProfileUsageUnassigned, nilWorkspace.VeridianProfileUsageOf("c1"))
 }
 
-func TestWorkspaceVeridianUsageConflictsAndExclusivity(t *testing.T) {
+func TestWorkspaceVeridianUsageConflicts(t *testing.T) {
 	ok := &Workspace{Settings: WorkspaceSettings{TransactionalEmailProviderID: "tx", VeridianMarketingEmailProviderIDs: []string{"c1"}}}
 	assert.Empty(t, ok.VeridianUsageConflicts())
+	bad := &Workspace{Settings: WorkspaceSettings{TransactionalEmailProviderID: "c1", VeridianMarketingEmailProviderIDs: []string{"c0", "c1"}}}
+	assert.Equal(t, []string{"c1"}, bad.VeridianUsageConflicts())
+	var nilWorkspace *Workspace
+	assert.Empty(t, nilWorkspace.VeridianUsageConflicts())
+	assert.Empty(t, (&Workspace{Settings: WorkspaceSettings{VeridianMarketingEmailProviderIDs: []string{"c1"}}}).VeridianUsageConflicts(), "sans profil transactionnel, aucun conflit")
+}
+
+func TestWorkspaceValidateVeridianUsageExclusivity(t *testing.T) {
+	ok := &Workspace{Settings: WorkspaceSettings{TransactionalEmailProviderID: "tx", VeridianMarketingEmailProviderIDs: []string{"c1"}}}
 	assert.NoError(t, ok.ValidateVeridianUsageExclusivity())
 
 	bad := &Workspace{Settings: WorkspaceSettings{TransactionalEmailProviderID: "c1", VeridianMarketingEmailProviderIDs: []string{"c0", "c1"}}}
-	assert.Equal(t, []string{"c1"}, bad.VeridianUsageConflicts())
 	err := bad.ValidateVeridianUsageExclusivity()
 	require.Error(t, err)
 	var validation ValidationError
@@ -110,8 +118,6 @@ func TestWorkspaceVeridianUsageConflictsAndExclusivity(t *testing.T) {
 	assert.Contains(t, validation.Message, "c1")
 	assert.Contains(t, validation.Message, "both in the commercial rotation pool and the transactional profile")
 
-	var nilWorkspace *Workspace
-	assert.Empty(t, nilWorkspace.VeridianUsageConflicts())
 	assert.NoError(t, (&Workspace{}).ValidateVeridianUsageExclusivity())
 }
 
