@@ -649,3 +649,34 @@ func TestVeridianDailyCapGate_ClassCapDividedByReputationFactor(t *testing.T) {
 	_, capped = env.worker.veridianDailyCapGate(ws, nil, entry())
 	assert.True(t, capped, "plafond ÷4 = 2, 3 envois : plafonne")
 }
+
+// Lot 2 : la porte lit ses plafonds dans la resolution partagee (veridianResolveCapLimits),
+// ralentissement du fusible de reputation compris : 8 / 4 = 2 envois vers google.
+func TestVeridianDailyCapGate_UsesSharedLimitsWithReputationSlowdown(t *testing.T) {
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 8}, 0)
+	entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@agences-veridian.fr", domain.EmailQueuePayload{VeridianProviderClass: "google"})
+
+	for _, tc := range []struct {
+		name   string
+		factor int
+		sent   int
+		capped bool
+	}{
+		{"sans ralentissement, 7 sur 8 : passe", 1, 7, false},
+		{"sans ralentissement, 8 sur 8 : plafonne", 1, 8, true},
+		{"÷4, 1 sur 2 : passe", 4, 1, false},
+		{"÷4, 2 sur 2 : plafonne", 4, 2, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newVeridianThrottleTestEnv(t)
+			if tc.factor > 1 {
+				env.worker.reputationFactors.set("ws-1", "agences-veridian.fr", "google", tc.factor)
+			}
+			env.mockMessageHistoryRepo.EXPECT().
+				CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "google", "agences-veridian.fr", gomock.Any()).
+				Return(tc.sent, nil)
+			_, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+			assert.Equal(t, tc.capped, capped)
+		})
+	}
+}

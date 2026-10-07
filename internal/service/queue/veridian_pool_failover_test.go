@@ -599,3 +599,87 @@ func TestEmailQueueWorker_ProcessEntry_PoolSplitsLoadUnderClassThrottle(t *testi
 	assert.Equal(t, perInfraCap, sentCount["relai"], "relai envoie aussi a son propre debit : le debit de nord ne doit pas le brider")
 	assert.Equal(t, 0, len(pending), "les 600 messages dus partent dans la journee simulee")
 }
+
+// --- Pause d'un profil (veridian_paused) : respectée par la sélection du worker ---
+
+func planPauseWorkspace(pausedIDs ...string) *domain.Workspace {
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	relai := veridianTestPoolIntegration("relai", "hello@relai-agence.example")
+	for _, id := range pausedIDs {
+		if id == "nord" {
+			nord.EmailProvider.VeridianPaused = true
+		}
+		if id == "relai" {
+			relai.EmailProvider.VeridianPaused = true
+		}
+	}
+	return veridianTestPoolWorkspace([]string{"nord", "relai"}, []domain.Integration{nord, relai}, nil)
+}
+
+func TestVeridianSelectSendable_PausedProfileFailsOverToNextPoolMember(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := planPauseWorkspace("nord")
+	veridianExpectHealthyReputation(env, "ws-1", "relai-agence.example")
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+	entry.IntegrationID = "nord"
+	entry.Payload.FromAddress = "hello@nord-propre.example"
+
+	sel := env.worker.veridianSelectSendableIntegration(ws, entry, ws.GetIntegrationByID("nord"))
+	require.NotNil(t, sel.Candidate)
+	assert.Equal(t, "relai", sel.Candidate.IntegrationID, "le profil en pause ne reçoit rien, le suivant du pool prend")
+	assert.False(t, sel.Permanent)
+}
+
+func TestVeridianSelectSendable_AllProfilesPaused_EntryWaitsNotFails(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := planPauseWorkspace("nord", "relai")
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+	entry.IntegrationID = "nord"
+	entry.Payload.FromAddress = "hello@nord-propre.example"
+
+	sel := env.worker.veridianSelectSendableIntegration(ws, entry, ws.GetIntegrationByID("nord"))
+	assert.Nil(t, sel.Candidate)
+	assert.False(t, sel.Permanent, "une pause n'est pas une exclusion : l'entrée attend, elle n'échoue pas")
+	assert.Equal(t, veridianDailyCapRecheckInterval, sel.RetryDelay)
+	assert.Equal(t, "nord", entry.IntegrationID, "l'entrée garde son intégration pour la reprise")
+}
+
+func TestVeridianSelectSendable_UnpausedProfileIsUsedAgain(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := planPauseWorkspace()
+	veridianExpectHealthyReputation(env, "ws-1", "nord-propre.example")
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+	entry.IntegrationID = "nord"
+	entry.Payload.FromAddress = "hello@nord-propre.example"
+	sel := env.worker.veridianSelectSendableIntegration(ws, entry, ws.GetIntegrationByID("nord"))
+	require.NotNil(t, sel.Candidate)
+	assert.Equal(t, "nord", sel.Candidate.IntegrationID)
+}
+
+func TestVeridianBuildFailoverCandidates_PausedSequenceAnchorOpensFailover(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := planPauseWorkspace("nord")
+	sentAt := time.Now().Add(-72 * time.Hour)
+	automationID := "auto-1"
+	env.mockMessageHistoryRepo.EXPECT().
+		GetByContact(gomock.Any(), "ws-1", gomock.Any(), "lead@gmail.com", gomock.Any(), gomock.Any()).
+		Return([]*domain.MessageHistory{{
+			ID: "m0", AutomationID: &automationID, SentAt: &sentAt,
+			VeridianProfileID: "nord", VeridianSenderEmail: "hello@nord-propre.example",
+		}}, 1, nil).AnyTimes()
+	// Le premier envoi date de 72 h mais le domaine a envoyé récemment : sans la
+	// pause, l'ancre serait disponible et seule candidate.
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "nord-propre.example", gomock.Any()).Return(5, nil).AnyTimes()
+
+	entry := veridianTestEntry("e2", "lead@gmail.com", domain.EmailQueuePayload{})
+	entry.SourceType = domain.EmailQueueSourceAutomation
+	entry.SourceID = automationID
+	entry.IntegrationID = "nord"
+	entry.Payload.FromAddress = "hello@nord-propre.example"
+
+	candidates := env.worker.veridianBuildFailoverCandidates(ws, entry, ws.GetIntegrationByID("nord"))
+	require.Len(t, candidates, 2)
+	assert.Equal(t, "relai", candidates[0].IntegrationID, "ancre en pause : la relance bascule tout de suite")
+	assert.Equal(t, "nord", candidates[1].IntegrationID, "l'ancre reste en dernier recours (sera sautée tant qu'elle est en pause)")
+}

@@ -238,3 +238,22 @@ func TestVeridianReserveDailyQuota_ClassCapDividedByReputationFactor(t *testing.
 		require.Equal(t, tc.wantCap, repo.specs[0].Cap, "facteur %d : plafond 8 -> %d", tc.factor, tc.wantCap)
 	}
 }
+
+// Lot 2 : la reservation atomique lit la MEME resolution que la porte de plafond
+// journalier : le plafond reserve est celui de la classe divise par le facteur.
+func TestVeridianReserveDailyQuota_ReservesTheSlowedClassCap(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	repo := &quotaTestRepository{outcomes: map[string]quotaTestOutcome{
+		domain.VeridianDailyQuotaKindProviderClass: {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
+	}}
+	env.worker.messageHistoryRepo = repo
+	workspace := veridianTestWorkspaceWithCaps(map[string]int{"microsoft": 8}, 0)
+	entry := veridianTestEntryFrom("slowed", "lead@corp.test", "bot@send.test", domain.EmailQueuePayload{VeridianProviderClass: "microsoft"})
+	env.worker.reputationFactors.set(workspace.ID, "send.test", "microsoft", 4)
+
+	_, _, blocked := env.worker.veridianReserveDailyQuota(workspace, nil, entry)
+	require.False(t, blocked)
+	require.Len(t, repo.specs, 1)
+	require.Equal(t, 2, repo.specs[0].Cap, "8 ÷ 4")
+	require.Equal(t, "send.test", repo.specs[0].Key.SenderDomain)
+}

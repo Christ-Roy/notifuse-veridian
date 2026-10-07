@@ -441,3 +441,22 @@ func TestVeridianProviderClassGate_RateDividedByReputationFactor(t *testing.T) {
 	got = repLimiterRate(t, env2, "int-1", "ionos")
 	assert.InDelta(t, 1.0, got, 1e-9, "sans ralentissement : 60/min inchange")
 }
+
+// Lot 2 : la porte de debit applique veridianEffectiveClassRate, la fonction que
+// partage EffectivePlan. Le debit du limiter egale celui du plan pour chaque facteur.
+func TestVeridianProviderClassGate_UsesSharedEffectiveClassRate(t *testing.T) {
+	rates := map[string]float64{"ionos": 60}
+	for _, factor := range []int{1, 2, 4} {
+		env := newVeridianThrottleTestEnv(t)
+		ws := veridianTestWorkspace(rates, 6000)
+		entry := veridianTestEntryFrom("e1", "lead@ionos.example", "r@"+repTestDomain, domain.EmailQueuePayload{VeridianProviderClass: "ionos"})
+		entry.IntegrationID = "int-1"
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForClassAndSenderDomain(gomock.Any(), gomock.Any(), "ionos", repTestDomain, gomock.Any()).Return(0, nil).AnyTimes()
+		if factor > 1 {
+			env.worker.reputationFactors.set(ws.ID, repTestDomain, "ionos", factor)
+		}
+		_, _ = env.worker.veridianProviderClassGate(ws, nil, entry)
+		assert.InDelta(t, veridianEffectiveClassRate(rates, "ionos", factor)/60.0, repLimiterRate(t, env, "int-1", "ionos"), 1e-9, "facteur %d", factor)
+	}
+}
