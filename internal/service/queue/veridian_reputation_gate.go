@@ -36,7 +36,8 @@ import (
 
 // veridianHardBounceRateFreezeThreshold est le seuil (proportion, pas %) de
 // bounces durs sur la fenêtre au-delà duquel l'infra est gelée. 0.03 = 3%.
-const veridianHardBounceRateFreezeThreshold = 0.03
+// Surchargeable par profil (EmailProvider.VeridianHardBounceFreezeThreshold, 2026-10-07).
+const veridianHardBounceRateFreezeThreshold = domain.VeridianDefaultHardBounceFreezeThreshold
 
 // veridianReputationWindow est la fenêtre glissante sur laquelle le taux de
 // bounce dur et la présence d'une plainte sont évalués.
@@ -110,7 +111,8 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 	}
 
 	rate := float64(hardBounces) / float64(sentCount)
-	if rate >= veridianHardBounceRateFreezeThreshold {
+	threshold := provider.VeridianEffectiveHardBounceFreezeThreshold()
+	if rate >= threshold {
 		w.logger.WithFields(map[string]interface{}{
 			"entry_id":         entry.ID,
 			"integration_id":   entry.IntegrationID,
@@ -118,7 +120,7 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 			"hard_bounces_7d":  hardBounces,
 			"sent_7d":          sentCount,
 			"hard_bounce_rate": rate,
-			"threshold":        veridianHardBounceRateFreezeThreshold,
+			"threshold":        threshold,
 			"fuse":             "hard_bounce_rate",
 		}).Warn("Reputation fuse tripped: hard bounce rate over threshold, freezing infra")
 		return veridianDailyCapRecheckInterval, true
@@ -133,15 +135,16 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 // repository methods over the exact same window and applies the exact same
 // threshold as the gate to decide Frozen.
 type VeridianReputationStatus struct {
-	SenderDomain   string  `json:"sender_domain"`
-	WindowDays     int     `json:"window_days"`
-	Sent7d         int     `json:"sent_7d"`
-	HardBounces7d  int     `json:"hard_bounces_7d"`
-	HardBounceRate float64 `json:"hard_bounce_rate"`
-	Threshold      float64 `json:"hard_bounce_rate_threshold"`
-	Complaints7d   int     `json:"complaints_7d"`
-	Frozen         bool    `json:"frozen"`
-	FrozenReason   string  `json:"frozen_reason,omitempty"`
+	SenderDomain    string  `json:"sender_domain"`
+	WindowDays      int     `json:"window_days"`
+	Sent7d          int     `json:"sent_7d"`
+	HardBounces7d   int     `json:"hard_bounces_7d"`
+	HardBounceRate  float64 `json:"hard_bounce_rate"`
+	Threshold       float64 `json:"hard_bounce_rate_threshold"`
+	ThresholdCustom bool    `json:"hard_bounce_rate_threshold_custom"`
+	Complaints7d    int     `json:"complaints_7d"`
+	Frozen          bool    `json:"frozen"`
+	FrozenReason    string  `json:"frozen_reason,omitempty"`
 }
 
 // VeridianComputeReputationStatus computes the live reputation status for one
@@ -151,12 +154,14 @@ func VeridianComputeReputationStatus(
 	ctx context.Context,
 	repo domain.MessageHistoryRepository,
 	workspaceID, senderDomain string,
+	provider *domain.EmailProvider,
 	now time.Time,
 ) (VeridianReputationStatus, error) {
 	status := VeridianReputationStatus{
-		SenderDomain: senderDomain,
-		WindowDays:   int(veridianReputationWindow / (24 * time.Hour)),
-		Threshold:    veridianHardBounceRateFreezeThreshold,
+		SenderDomain:    senderDomain,
+		WindowDays:      int(veridianReputationWindow / (24 * time.Hour)),
+		Threshold:       provider.VeridianEffectiveHardBounceFreezeThreshold(),
+		ThresholdCustom: provider.VeridianHasCustomHardBounceFreezeThreshold(),
 	}
 	since := now.UTC().Add(-veridianReputationWindow)
 
@@ -186,7 +191,7 @@ func VeridianComputeReputationStatus(
 	case complaints > 0:
 		status.Frozen = true
 		status.FrozenReason = "complaint"
-	case status.HardBounceRate >= veridianHardBounceRateFreezeThreshold:
+	case status.HardBounceRate >= status.Threshold:
 		status.Frozen = true
 		status.FrozenReason = "hard_bounce_rate"
 	}

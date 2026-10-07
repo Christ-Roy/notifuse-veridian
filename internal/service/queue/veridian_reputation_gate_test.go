@@ -156,10 +156,82 @@ func TestVeridianComputeReputationStatus_MatchesGateDecision(t *testing.T) {
 		CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws-1", "agence-veridian.fr", gomock.Any()).
 		Return(5, nil)
 
-	status, err := VeridianComputeReputationStatus(env.worker.ctx, env.mockMessageHistoryRepo, "ws-1", "agence-veridian.fr", time.Now())
+	status, err := VeridianComputeReputationStatus(env.worker.ctx, env.mockMessageHistoryRepo, "ws-1", "agence-veridian.fr", nil, time.Now())
 	assert.NoError(t, err)
 	assert.True(t, status.Frozen)
 	assert.Equal(t, "hard_bounce_rate", status.FrozenReason)
 	assert.InDelta(t, 0.1667, status.HardBounceRate, 0.001)
 	assert.Equal(t, 7, status.WindowDays)
+}
+
+// Seuil par profil (decision 2026-10-07) : un MEME taux de 6% gele au defaut 3%
+// et ne gele pas a 8%. La plainte, elle, gele toujours.
+func veridianExpectRate(env *veridianThrottleTestEnv, domainName string, complaints, sent, hard int) {
+	env.mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(complaints, nil)
+	if complaints > 0 {
+		return
+	}
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(sent, nil)
+	env.mockMessageHistoryRepo.EXPECT().
+		CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(hard, nil)
+}
+
+func TestVeridianReputationGate_SameRate6pct_FrozenAtDefault3_NotAtProfile8(t *testing.T) {
+	ws := &domain.Workspace{ID: "ws-1"}
+	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
+
+	// 6/100 = 6%, profil sans seuil : defaut 3% -> gele.
+	env := newVeridianThrottleTestEnv(t)
+	veridianExpectRate(env, "messagerie-nord-776.fr", 0, 100, 6)
+	_, frozen := env.worker.veridianReputationGate(ws, &domain.EmailProvider{}, entry)
+	assert.True(t, frozen, "6%% doit geler au seuil par defaut de 3%%")
+
+	// Meme taux, profil a 0.08 -> libre.
+	env = newVeridianThrottleTestEnv(t)
+	veridianExpectRate(env, "messagerie-nord-776.fr", 0, 100, 6)
+	_, frozen = env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, entry)
+	assert.False(t, frozen, "6%% ne doit PAS geler un profil a 8%%")
+
+	// A 8% pile, le fusible reste atteint (>=).
+	env = newVeridianThrottleTestEnv(t)
+	veridianExpectRate(env, "messagerie-nord-776.fr", 0, 100, 8)
+	_, frozen = env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, entry)
+	assert.True(t, frozen, "8%% atteint le seuil 8%%")
+
+	// 16% (agences en chauffe) reste gele a 8%.
+	env = newVeridianThrottleTestEnv(t)
+	veridianExpectRate(env, "messagerie-nord-776.fr", 0, 31, 5)
+	_, frozen = env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, entry)
+	assert.True(t, frozen, "16%% doit rester gele a 8%%")
+}
+
+func TestVeridianReputationGate_ComplaintFreezesEvenWithRelaxedThreshold(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := &domain.Workspace{ID: "ws-1"}
+	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
+	veridianExpectRate(env, "messagerie-nord-776.fr", 1, 0, 0)
+	_, frozen := env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.15}, entry)
+	assert.True(t, frozen, "une plainte gele toujours, quel que soit le seuil bounce")
+}
+
+func TestVeridianComputeReputationStatus_ExposesEffectiveThreshold(t *testing.T) {
+	// 6% au defaut -> gele, seuil expose 0.03 non custom.
+	env := newVeridianThrottleTestEnv(t)
+	veridianExpectRate(env, "agence-veridian.fr", 0, 216, 13)
+	st, err := VeridianComputeReputationStatus(env.worker.ctx, env.mockMessageHistoryRepo, "ws-1", "agence-veridian.fr", &domain.EmailProvider{}, time.Now())
+	assert.NoError(t, err)
+	assert.True(t, st.Frozen)
+	assert.InDelta(t, 0.03, st.Threshold, 1e-9)
+	assert.False(t, st.ThresholdCustom)
+
+	// Meme mesure, profil a 0.08 -> libre, seuil custom expose.
+	env = newVeridianThrottleTestEnv(t)
+	veridianExpectRate(env, "agence-veridian.fr", 0, 216, 13)
+	st, err = VeridianComputeReputationStatus(env.worker.ctx, env.mockMessageHistoryRepo, "ws-1", "agence-veridian.fr", &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, time.Now())
+	assert.NoError(t, err)
+	assert.False(t, st.Frozen)
+	assert.InDelta(t, 0.08, st.Threshold, 1e-9)
+	assert.True(t, st.ThresholdCustom)
 }

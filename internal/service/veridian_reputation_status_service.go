@@ -94,7 +94,7 @@ func (s *veridianReputationStatusService) GetReputationStatus(
 			continue
 		}
 
-		status, err := queue.VeridianComputeReputationStatus(ctx, s.messageHistoryRepo, workspace.ID, senderDomain, now)
+		status, err := queue.VeridianComputeReputationStatus(ctx, s.messageHistoryRepo, workspace.ID, senderDomain, &integration.EmailProvider, now)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"workspace_id":   workspace.ID,
@@ -113,6 +113,7 @@ func (s *veridianReputationStatusService) GetReputationStatus(
 			HardBounces7d:   status.HardBounces7d,
 			HardBounceRate:  status.HardBounceRate,
 			Threshold:       status.Threshold,
+			ThresholdCustom: status.ThresholdCustom,
 			Complaints7d:    status.Complaints7d,
 			Frozen:          status.Frozen,
 			FrozenReason:    status.FrozenReason,

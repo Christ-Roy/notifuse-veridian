@@ -23,9 +23,11 @@ type VeridianReputationIntegrationStatus struct {
 	HardBounces7d   int     `json:"hard_bounces_7d"`
 	HardBounceRate  float64 `json:"hard_bounce_rate"`
 	Threshold       float64 `json:"hard_bounce_rate_threshold"`
-	Complaints7d    int     `json:"complaints_7d"`
-	Frozen          bool    `json:"frozen"`
-	FrozenReason    string  `json:"frozen_reason,omitempty"`
+	// ThresholdCustom : true si le seuil vient du profil (veridian_hard_bounce_freeze_threshold), false = defaut 0.03.
+	ThresholdCustom bool   `json:"hard_bounce_rate_threshold_custom"`
+	Complaints7d    int    `json:"complaints_7d"`
+	Frozen          bool   `json:"frozen"`
+	FrozenReason    string `json:"frozen_reason,omitempty"`
 }
 
 // VeridianReputationStatusRequest est la requête du endpoint.

@@ -195,6 +195,15 @@ type EmailProvider struct {
 	// regression stricte). Le plafond par defaut (30/jour) ne bouge PAS : on
 	// ouvre le PLAFOND, pas le demarrage, la montee reste progressive.
 	VeridianGmailAccountType string `json:"veridian_gmail_account_type,omitempty"`
+
+	// Veridian fork — SEUIL DU FUSIBLE DE REPUTATION par profil (decision Robert
+	// 2026-10-07, mandat agressif du 30/09 : les domaines jetables peuvent etre
+	// grilles). Proportion (0.08 = 8%) de bounces durs sur 7 jours glissants au-dela
+	// de laquelle l'infra est gelee. Vide/0 = defaut 0.03 : aucun changement pour
+	// les profils qui n'ont rien configure. Borne [0.01 ; 0.15] (Validate). Ne touche
+	// PAS le fusible plainte : une plainte gele toujours. Persiste dans le blob
+	// integrations (omitempty), sans migration. Cf. veridian_reputation_threshold.go.
+	VeridianHardBounceFreezeThreshold float64 `json:"veridian_hard_bounce_freeze_threshold,omitempty"`
 }
 
 // Validate validates the email provider settings
@@ -206,6 +215,9 @@ func (e *EmailProvider) Validate(passphrase string) error {
 
 	if e.VeridianProfileDailyCap < 0 {
 		return fmt.Errorf("profile daily cap must be greater than or equal to 0")
+	}
+	if err := e.ValidateVeridianHardBounceFreezeThreshold(); err != nil {
+		return err
 	}
 	if e.VeridianIsGmailProfile() {
 		if e.VeridianProfileDailyCap == 0 {
