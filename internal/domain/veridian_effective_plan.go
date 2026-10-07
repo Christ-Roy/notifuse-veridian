@@ -60,6 +60,12 @@ type VeridianPlanClass struct {
 	Factor  int    `json:"slowdown_factor"`
 	Reason  string `json:"slowdown_reason,omitempty"`
 	Stopped bool   `json:"stopped"`
+	// SlowdownRate : taux (0 a 1) qui a declenche le ralentissement, selon la
+	// raison : rejets durs ou refus de politique 5.7.x sur 7 jours. 0 pour une
+	// plainte ou un refus en bloc. Sent7d : envois du couple sur 7 jours. Lot 3 :
+	// l ecran affiche la raison en clair (ex. 9,9 % de rejets).
+	SlowdownRate float64 `json:"slowdown_rate,omitempty"`
+	Sent7d       int     `json:"sent_7d,omitempty"`
 	// SendableNow : le worker enverrait un message vers cette classe maintenant.
 	SendableNow bool   `json:"sendable_now"`
 	BlockedBy   string `json:"blocked_by,omitempty"`

@@ -30,6 +30,9 @@ type planParityWorld struct {
 	senderSent      map[string]int
 	domainClassSent map[string]map[string]int
 	complaints      map[string]int
+	// classCounts : comptes 7 jours par classe (rejets durs, refus 5.7.x), pour le
+	// ralentissement par couple.
+	classCounts map[string]domain.VeridianReputationCounts
 }
 
 func (w planParityWorld) observed(profileID string) domain.VeridianPlanObserved {
@@ -81,7 +84,12 @@ func planParityArmRepo(env *veridianThrottleTestEnv, world planParityWorld) {
 		DoAndReturn(func(_ context.Context, _, d string, _ time.Time) (int, error) { return world.domainSent[d], nil }).AnyTimes()
 	m.EXPECT().CountHardBouncedSinceForSenderDomain(gomock.Any(), planParityWorkspaceID, gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
 	m.EXPECT().ReputationCountsByClassSinceForSenderDomain(gomock.Any(), planParityWorkspaceID, gomock.Any(), gomock.Any()).
-		Return(map[string]domain.VeridianReputationCounts{}, nil).AnyTimes()
+		DoAndReturn(func(context.Context, string, string, time.Time) (map[string]domain.VeridianReputationCounts, error) {
+			if world.classCounts == nil {
+				return map[string]domain.VeridianReputationCounts{}, nil
+			}
+			return world.classCounts, nil
+		}).AnyTimes()
 	m.EXPECT().RecentClassOutcomesForSenderDomain(gomock.Any(), planParityWorkspaceID, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(0, 0, nil).AnyTimes()
 	m.EXPECT().CountSentSinceForClassAndSenderDomain(gomock.Any(), planParityWorkspaceID, gomock.Any(), gomock.Any(), gomock.Any()).
@@ -387,6 +395,34 @@ func TestVeridianEffectivePlan_SlowdownFactorAndReasonPerCouple(t *testing.T) {
 	assert.False(t, google.Stopped, "une plainte ralentit, ne stoppe jamais")
 	assert.True(t, google.SendableNow)
 	assert.Equal(t, "profile", plan.ClassRatesSource)
+}
+
+// Lot 3 : l ecran affiche la raison du ralentissement en clair (« 9,9 % de
+// rejets »), donc le plan porte le taux qui l a declenche et le volume du couple.
+func TestVeridianEffectivePlan_SlowdownCarriesTheTriggeringRate(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	world := planParityWorld{classCounts: map[string]domain.VeridianReputationCounts{
+		"security_gateway": {Sent: 101, HardBounces: 10},
+		"google":           {Sent: 100, PolicyRefusals: 6},
+		"microsoft":        {Sent: 100, HardBounces: 0},
+	}}
+	ws := planParityWorkspace(domain.EmailProvider{VeridianProviderClassRates: map[string]float64{"google": 8}}, domain.WorkspaceSettings{})
+	planParityArmRepo(env, world)
+	plan := planParityPlan(env, ws, world)
+
+	gateway := planClass(plan, "security_gateway")
+	assert.Equal(t, "hard_bounce_rate", gateway.Reason)
+	assert.Greater(t, gateway.Factor, 1)
+	assert.InDelta(t, 10.0/101.0, gateway.SlowdownRate, 0.0001)
+	assert.Equal(t, 101, gateway.Sent7d)
+
+	google := planClass(plan, "google")
+	assert.Equal(t, "policy_refusal_rate", google.Reason)
+	assert.InDelta(t, 0.06, google.SlowdownRate, 0.0001)
+
+	healthy := planClass(plan, "microsoft")
+	assert.Equal(t, 1, healthy.Factor)
+	assert.Zero(t, healthy.SlowdownRate, "pas de taux affiché sans ralentissement")
 }
 
 func TestVeridianEffectivePlan_TransactionalProfileHasNoCommercialGates(t *testing.T) {

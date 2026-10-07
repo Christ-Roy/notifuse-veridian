@@ -2,14 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// Garde-fou i18n (console assumée, lot 1, 07/10/2026) : un message de l'écran
-// Intégrations (Integrations.tsx, veridian_*.tsx) ou de la sidebar
+// Garde-fou i18n (console assumée, lots 1 et 3, 07-08/10/2026) : un message de l'écran
+// Intégrations (Integrations.tsx, veridian_*.tsx et .ts), de la page Profils d'envoi
+// (SendingProfilesPage.tsx, components/sending_profiles/veridian_*) ou de la sidebar
 // (WorkspaceLayout.tsx) dont le msgstr français est vide s'affiche en
 // anglais ou, pire, vide. Ce test échoue dès qu'une telle clé existe.
 // Après avoir ajouté un t`...` dans ces fichiers : `npm run lingui:extract`,
 // traduire dans fr.po, puis `npm run lingui:compile`.
 
-const SCOPE = /(^|\/)(Integrations|WorkspaceLayout|veridian_[A-Za-z0-9_]+)\.tsx$/
+const SCOPE = /(^|\/)(Integrations|WorkspaceLayout|SendingProfilesPage|veridian_[A-Za-z0-9_]+)\.tsx?$/
 
 interface PoEntry {
   refs: string[]
@@ -77,6 +78,30 @@ describe('complétude du catalogue français (écran Intégrations et sidebar)',
   it('couvre bien des messages de ces écrans (la portée n est pas vide)', () => {
     const inScope = entries.filter((e) => e.refs.some((r) => SCOPE.test(r.split(':')[0])))
     expect(inScope.length).toBeGreaterThan(200)
+  })
+
+  it("couvre la page Profils d'envoi (la portée n'est pas vide)", () => {
+    const inScope = entries.filter((e) =>
+      e.refs.some((r) => /(SendingProfilesPage|sending_profiles\/veridian_[A-Za-z0-9_]+)\.tsx?/.test(r.split(':')[0]))
+    )
+    expect(inScope.length).toBeGreaterThan(150)
+    expect(inScope.some((e) => e.msgid === 'Warmup, day {day}/{of}' && e.msgstr === 'Chauffe, jour {day}/{of}')).toBe(true)
+  })
+
+  it("traduit les messages-clés de la page Profils d'envoi, variables conservées", () => {
+    const fr = new Map(entries.map((e) => [e.msgid, e.msgstr]))
+    expect(fr.get('{name}: rate ÷{factor}, {reason}')).toBe('{name} : débit ÷{factor}, {reason}')
+    expect(fr.get('Window closed until {time}')).toBe("Fenêtre fermée jusqu'à {time}")
+    expect(fr.get('Sending profiles')).toBe("Profils d'envoi")
+    expect(fr.get('Anti-spam gateways')).toBe('Passerelles anti-spam')
+    expect(fr.get('Soon')).toBe('Bientôt')
+    // chaque variable {x} du message source existe dans la traduction
+    for (const e of entries) {
+      if (!e.refs.some((r) => /sending_profiles\//.test(r)) || e.msgstr === '') continue
+      const vars = (e.msgid.match(/\{[A-Za-z0-9_]+\}/g) ?? []).sort()
+      const varsFr = (e.msgstr.match(/\{[A-Za-z0-9_]+\}/g) ?? []).sort()
+      expect(varsFr, e.msgid).toEqual(vars)
+    }
   })
 
   it("n'a aucun msgstr français vide pour ces écrans", () => {

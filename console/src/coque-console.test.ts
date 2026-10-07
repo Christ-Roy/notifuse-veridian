@@ -18,6 +18,10 @@ describe('coque de la console : routes', () => {
     expect(paths).toContain('/console/workspace/$workspaceId/analytics')
   })
 
+  it("sert la page Profils d'envoi (lot 3)", () => {
+    expect(paths).toContain('/console/workspace/$workspaceId/sending-profiles')
+  })
+
   it('ne sert plus ni /blog ni /debug-segment', () => {
     expect(paths.some((p) => p.includes('/blog'))).toBe(false)
     expect(paths.some((p) => p.includes('debug-segment'))).toBe(false)
@@ -41,6 +45,13 @@ describe('coque de la console : sidebar et réglages', () => {
     expect(layout).toMatch(/makeGroup\('sending'/)
   })
 
+  it("range « Profils d'envoi » dans le groupe Envoi, avant le journal, et le sélectionne sur sa route", () => {
+    expect(layout).toMatch(/key: 'sending-profiles'/)
+    expect(layout).toMatch(/to="\/console\/workspace\/\$workspaceId\/sending-profiles"/)
+    expect(layout).toMatch(/makeGroup\('sending', t`Sending`, \['sending-profiles', 'logs'\]\)/)
+    expect(layout).toMatch(/currentPath\.includes\('\/sending-profiles'\)/)
+  })
+
   it("n'a plus de section Blog dans les réglages", () => {
     expect(settingsSidebar).not.toMatch(/'blog'/)
     expect(settingsPage).not.toMatch(/'blog'/)
@@ -53,8 +64,31 @@ describe('coque de la console : sidebar et réglages', () => {
     expect(integrations).not.toMatch(/emails per hour/)
     expect(integrations).not.toMatch(/emails per day/)
     expect(integrations).not.toMatch(/Rate Limit for Marketing/)
-    // Le champ reste éditable, replié, avec le libellé « frein technique ».
-    expect(integrations).toMatch(/SMTP technical brake \(messages\/minute\)/)
+    // Le champ reste éditable, replié dans les réglages avancés du profil, libellé « frein technique ».
+    const advanced = read('./components/sending_profiles/veridian_profile_advanced.tsx')
+    expect(advanced).toMatch(/SMTP technical brake \(messages\/minute\)/)
+    const card = read('./components/sending_profiles/veridian_profile_card.tsx')
+    expect(card).not.toMatch(/native_rate_per_min|rate_limit_per_minute/)
+  })
+
+  it("Réglages > Intégrations ne porte plus ni profils d'envoi ni boîtes IMAP, et renvoie vers la page", () => {
+    const integrations = read('./components/settings/Integrations.tsx')
+    expect(integrations).not.toMatch(/EmailIntegration|handleSelectGmailAppPassword|handleSelectProviderType/)
+    expect(integrations).not.toMatch(/renderEmailProviderForm|constructProviderFromForm|toggleMarketingProfile/)
+    expect(integrations).not.toMatch(/Type: \$\{integration\.type\}/)
+    expect(integrations).not.toMatch(/emailProviders/)
+    expect(integrations).toMatch(/sending-profiles/)
+  })
+
+  it("la page Profils d'envoi n'affiche aucun secret et ne relit jamais un mot de passe", () => {
+    for (const file of [
+      './pages/SendingProfilesPage.tsx',
+      './components/sending_profiles/veridian_profile_card.tsx',
+      './components/sending_profiles/veridian_profile_wizard.tsx'
+    ]) {
+      const source = read(file)
+      expect(source).not.toMatch(/encrypted_password|has_password/)
+    }
   })
 
   it('ne propose plus Supabase, LLM ni Firecrawl à la création', () => {

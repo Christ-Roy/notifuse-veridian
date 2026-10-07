@@ -219,6 +219,13 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 		}
 		if cs, ok := classStatus[class]; ok {
 			pc.Reason, pc.Stopped = cs.Reason, cs.Stopped
+			pc.Sent7d = cs.Sent7d
+			switch cs.Reason {
+			case "hard_bounce_rate":
+				pc.SlowdownRate = cs.HardBounceRate
+			case "policy_refusal_rate":
+				pc.SlowdownRate = cs.PolicyRefusalRate
+			}
 		} else if pc.Factor > 1 {
 			pc.Reason = "complaint"
 		}

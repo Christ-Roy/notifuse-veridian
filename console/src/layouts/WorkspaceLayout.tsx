@@ -31,6 +31,7 @@ import {
   SettingOutlined,
   DownOutlined,
   MenuOutlined,
+  MailOutlined,
   GlobalOutlined
 } from '@ant-design/icons'
 // === Veridian patch === co-brand léger (header link, footer) + bandeau
@@ -162,6 +163,8 @@ export function WorkspaceLayout() {
     selectedKey = ''
   } else if (currentPath.includes('/transactional-notifications')) {
     selectedKey = 'transactional-notifications'
+  } else if (currentPath.includes('/sending-profiles')) {
+    selectedKey = 'sending-profiles'
   } else if (currentPath.includes('/logs')) {
     selectedKey = 'logs'
   } else if (currentPath.includes('/broadcasts')) {
@@ -335,6 +338,15 @@ export function WorkspaceLayout() {
       )
     },
     hasAccess('message_history') && {
+      key: 'sending-profiles',
+      icon: <MailOutlined />,
+      label: (
+        <Link to="/console/workspace/$workspaceId/sending-profiles" params={{ workspaceId }}>
+          {t`Sending profiles`}
+        </Link>
+      )
+    },
+    hasAccess('message_history') && {
       key: 'logs',
       icon: <FontAwesomeIcon icon={faBarsStaggered} size="sm" style={{ opacity: 0.7 }} />,
       label: (
@@ -373,7 +385,7 @@ export function WorkspaceLayout() {
       'automations'
     ]),
     ...makeGroup('transactional', t`Transactional`, ['transactional-notifications']),
-    ...makeGroup('sending', t`Sending`, ['logs']),
+    ...makeGroup('sending', t`Sending`, ['sending-profiles', 'logs']),
     ...pick(['settings'])
   ]
 

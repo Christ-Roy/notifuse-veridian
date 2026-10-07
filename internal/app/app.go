@@ -1690,6 +1690,13 @@ func (a *App) InitHandlers() error {
 		veridianEmailProfileOverviewService, getJWTSecret, a.logger,
 	).RegisterRoutes(a.mux)
 
+	// Lot 3 « page Profils d envoi » (08/10/2026) : POST /api/veridian/emailProfiles.create,
+	// profil SMTP (+ IMAP lie) cree en une seule ecriture, reserve au proprietaire.
+	httpHandler.NewVeridianEmailProfileCreateHandler(
+		service.NewVeridianEmailProfileCreateService(a.workspaceRepo, a.authService, a.config.Security.SecretKey, a.logger),
+		getJWTSecret, a.logger,
+	).RegisterRoutes(a.mux)
+
 	// === Veridian patch — linter de délivrabilité (spam score) cold (2026-06-15) ===
 	// Endpoint POST+GET /api/veridian/templates.deliverabilityScore : score 0-10
 	// (façon SpamAssassin) + règles déclenchées avec poids, sur un template cold

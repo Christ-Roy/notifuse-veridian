@@ -1,7 +1,13 @@
 import { useEffect, lazy, Suspense } from 'react'
 import type { ComponentType } from 'react'
 import { Spin } from 'antd'
-import { createRootRoute, createRoute, useParams, useNavigate } from '@tanstack/react-router'
+import {
+  createRootRoute,
+  createRoute,
+  useParams,
+  useNavigate,
+  type RouteComponent
+} from '@tanstack/react-router'
 import { RootLayout } from './layouts/RootLayout'
 import { WorkspaceLayout } from './layouts/WorkspaceLayout'
 import { SignInPage } from './pages/SignInPage'
@@ -67,6 +73,10 @@ const TransactionalNotificationsPage = veridianLazyPage(
   'TransactionalNotificationsPage'
 )
 const LogsPage = veridianLazyPage(() => import('./pages/LogsPage'), 'LogsPage')
+const SendingProfilesPage = veridianLazyPage(
+  () => import('./pages/SendingProfilesPage'),
+  'SendingProfilesPage'
+)
 const AutomationsPage = veridianLazyPage(() => import('./pages/AutomationsPage'), 'AutomationsPage')
 const AnalyticsPage = veridianLazyPage(() => import('./pages/AnalyticsPage'), 'AnalyticsPage')
 const TemplatesPage = veridianLazyPage(() => import('./pages/TemplatesPage'), 'TemplatesPage')
@@ -198,6 +208,12 @@ const workspaceTransactionalNotificationsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/transactional-notifications',
   component: TransactionalNotificationsPage
+})
+
+const workspaceSendingProfilesRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/sending-profiles',
+  component: SendingProfilesPage as RouteComponent
 })
 
 const workspaceLogsRoute = createRoute({
@@ -335,6 +351,7 @@ const routeTree = rootRoute.addChildren([
     workspaceListsRoute,
     workspaceTransactionalNotificationsRoute,
     workspaceLogsRoute,
+    workspaceSendingProfilesRoute,
     workspaceFileManagerRoute,
     workspaceSettingsRedirectRoute,
     workspaceSettingsRoute,

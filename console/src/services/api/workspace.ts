@@ -287,6 +287,14 @@ export interface EmailProvider {
   // (lot 3) les expose. Conservés tels quels quand la console renvoie le profil.
   veridian_return_imap_integration_id?: string
   veridian_paused?: boolean
+  // Chauffe progressive du profil (lot 3) : date de début (ISO), paliers de
+  // plafond journalier, durée d un palier en jours. Calculée à la lecture par le worker.
+  veridian_warmup_started_at?: string
+  veridian_warmup_schedule?: number[]
+  veridian_warmup_step_days?: number
+  // Seuil du fusible de réputation (proportion de rejets durs sur 7 jours,
+  // 0.01 à 0.15). Vide = 0.03.
+  veridian_hard_bounce_freeze_threshold?: number
 
   // Veridian fork — config cold outbound PAR INFRA d'envoi (R2 + Lot 5/8). Une
   // infra (= cette intégration EmailProvider, son host/IP/relai SMTP + senders)
