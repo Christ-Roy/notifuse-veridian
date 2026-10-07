@@ -1537,6 +1537,64 @@ func (r *MessageHistoryRepository) CountComplainedSinceForSenderDomain(ctx conte
 	return count, nil
 }
 
+// ReputationCountsByClassSinceForSenderDomain — cf. domain.MessageHistoryRepository.
+// Gel par couple (domaine émetteur, classe destinataire) du fusible de réputation
+// (2026-10-07) : UNE requête groupée par classe persistée (veridian_provider_class),
+// rejets durs et refus de politique séparés. Même fenêtre/filtres que
+// CountSentSinceForSenderDomain (failed_at IS NULL) pour le dénominateur.
+func (r *MessageHistoryRepository) ReputationCountsByClassSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (map[string]domain.VeridianReputationCounts, error) {
+	out := map[string]domain.VeridianReputationCounts{}
+	if senderDomain == "" {
+		return out, nil
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COALESCE(veridian_provider_class, ''), COUNT(*), COUNT(*) FILTER (WHERE bounced_at IS NOT NULL AND bounce_type = 'HardBounce'), COUNT(*) FILTER (WHERE bounce_type = 'PolicyBounce') FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2) GROUP BY 1`
+	rows, err := workspaceDB.QueryContext(ctx, query, since, senderDomain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count reputation by class for sender domain since: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var class string
+		var c domain.VeridianReputationCounts
+		if err := rows.Scan(&class, &c.Sent, &c.HardBounces, &c.PolicyRefusals); err != nil {
+			return nil, fmt.Errorf("failed to scan reputation counts by class: %w", err)
+		}
+		out[class] = c
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate reputation counts by class: %w", err)
+	}
+	return out, nil
+}
+
+// RecentClassOutcomesForSenderDomain — cf. domain.MessageHistoryRepository.
+// Refus en bloc d'un fournisseur (2026-10-07) : sur les `lastN` derniers envois
+// du couple (domaine émetteur, classe persistée), combien portent un refus de
+// politique 5.7.x.
+func (r *MessageHistoryRepository) RecentClassOutcomesForSenderDomain(ctx context.Context, workspaceID, senderDomain, class string, lastN int, since time.Time) (int, int, error) {
+	if senderDomain == "" || class == "" || lastN <= 0 {
+		return 0, 0, nil
+	}
+
+	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	const query = `SELECT COUNT(*), COUNT(*) FILTER (WHERE bounce_type = 'PolicyBounce') FROM (SELECT bounce_type FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND veridian_provider_class = $2 AND lower(split_part(veridian_sender_email, '@', 2)) = lower($3) ORDER BY sent_at DESC LIMIT $4) recent`
+	var sent, policy int
+	if err := workspaceDB.QueryRowContext(ctx, query, since, class, senderDomain, lastN).Scan(&sent, &policy); err != nil {
+		return 0, 0, fmt.Errorf("failed to read recent class outcomes for sender domain: %w", err)
+	}
+	return sent, policy, nil
+}
+
 // CountSentSinceForDomains compte les messages envoyés depuis `since` vers une
 // classe de provider concrète, identifiée par sa liste de domaines. Le domaine
 // destinataire est extrait à la lecture via split_part(contact_email,'@',2) :

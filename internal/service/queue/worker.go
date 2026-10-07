@@ -55,6 +55,10 @@ type EmailQueueWorker struct {
 	// Veridian fork: second rate-limiting stage, keyed by recipient provider
 	// class (cf. veridian_provider_throttle.go). No-op without configuration.
 	providerClassLimiter *ProviderClassRateLimiter
+	// Veridian fork (2026-10-07): facteur de ralentissement par couple (domaine
+	// émetteur, classe), posé par le fusible de réputation et lu par les gates de
+	// débit et de plafond (cf. veridian_reputation_gate.go).
+	reputationFactors veridianReputationFactors
 	// Veridian fork (Lot 4): classifies the recipient provider by REAL MX
 	// (cf. domain.VeridianMXClassifier). Suffix-known domains resolve with zero
 	// I/O; unknown domains do a cached MX lookup (best-effort, short timeout).

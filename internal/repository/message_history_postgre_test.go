@@ -2886,6 +2886,113 @@ func TestMessageHistoryRepository_CountHardBouncedSinceForSenderDomain(t *testin
 	})
 }
 
+// Gel par couple (2026-10-07) : ReputationCountsByClassSinceForSenderDomain ventile
+// envois / rejets durs / refus de politique par classe destinataire persistee.
+func TestMessageHistoryRepository_ReputationCountsByClassSinceForSenderDomain(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	const senderDomain = "agences-veridian.fr"
+	since := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+	const q = `SELECT COALESCE\(veridian_provider_class, ''\), COUNT\(\*\), COUNT\(\*\) FILTER \(WHERE bounced_at IS NOT NULL AND bounce_type = 'HardBounce'\), COUNT\(\*\) FILTER \(WHERE bounce_type = 'PolicyBounce'\) FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\) GROUP BY 1`
+
+	t.Run("groups counts by class", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(q).WithArgs(since, senderDomain).
+			WillReturnRows(sqlmock.NewRows([]string{"class", "sent", "hard", "policy"}).
+				AddRow("ionos", 30, 6, 2).AddRow("ovh", 60, 1, 0).AddRow("", 4, 0, 0))
+
+		got, err := repo.ReputationCountsByClassSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		require.NoError(t, err)
+		assert.Equal(t, domain.VeridianReputationCounts{Sent: 30, HardBounces: 6, PolicyRefusals: 2}, got["ionos"])
+		assert.Equal(t, domain.VeridianReputationCounts{Sent: 60, HardBounces: 1}, got["ovh"])
+		assert.Equal(t, 4, got[""].Sent)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty sender domain gives empty map without query", func(t *testing.T) {
+		got, err := repo.ReputationCountsByClassSinceForSenderDomain(ctx, workspaceID, "", since)
+		require.NoError(t, err)
+		assert.Empty(t, got)
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(nil, errors.New("no conn"))
+		_, err := repo.ReputationCountsByClassSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(q).WithArgs(since, senderDomain).WillReturnError(errors.New("boom"))
+		_, err := repo.ReputationCountsByClassSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "count reputation by class")
+	})
+
+	t.Run("scan error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(q).WithArgs(since, senderDomain).
+			WillReturnRows(sqlmock.NewRows([]string{"class", "sent", "hard", "policy"}).AddRow("ionos", "x", 0, 0))
+		_, err := repo.ReputationCountsByClassSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "scan reputation counts")
+	})
+}
+
+// Refus en bloc (2026-10-07) : RecentClassOutcomesForSenderDomain lit les N derniers
+// envois d'un couple et compte les refus de politique 5.7.x.
+func TestMessageHistoryRepository_RecentClassOutcomesForSenderDomain(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	const senderDomain = "agences-veridian.fr"
+	since := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+	const q = `SELECT COUNT\(\*\), COUNT\(\*\) FILTER \(WHERE bounce_type = 'PolicyBounce'\) FROM \(SELECT bounce_type FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND veridian_provider_class = \$2 AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\) ORDER BY sent_at DESC LIMIT \$4\) recent`
+
+	t.Run("returns sent and policy refusals of the last N", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(q).WithArgs(since, "ionos", senderDomain, 20).
+			WillReturnRows(sqlmock.NewRows([]string{"sent", "policy"}).AddRow(20, 12))
+		sent, policy, err := repo.RecentClassOutcomesForSenderDomain(ctx, workspaceID, senderDomain, "ionos", 20, since)
+		require.NoError(t, err)
+		assert.Equal(t, 20, sent)
+		assert.Equal(t, 12, policy)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("empty domain, class or N gives zero without query", func(t *testing.T) {
+		for _, c := range []struct {
+			d, cl string
+			n     int
+		}{{"", "ionos", 20}, {senderDomain, "", 20}, {senderDomain, "ionos", 0}} {
+			sent, policy, err := repo.RecentClassOutcomesForSenderDomain(ctx, workspaceID, c.d, c.cl, c.n, since)
+			require.NoError(t, err)
+			assert.Zero(t, sent+policy)
+		}
+	})
+
+	t.Run("connection error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(nil, errors.New("no conn"))
+		_, _, err := repo.RecentClassOutcomesForSenderDomain(ctx, workspaceID, senderDomain, "ionos", 20, since)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace connection")
+	})
+
+	t.Run("query error propagated", func(t *testing.T) {
+		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
+		mock.ExpectQuery(q).WithArgs(since, "ionos", senderDomain, 20).WillReturnError(errors.New("boom"))
+		_, _, err := repo.RecentClassOutcomesForSenderDomain(ctx, workspaceID, senderDomain, "ionos", 20, since)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "recent class outcomes")
+	})
+}
+
 // Correctif 2026-09-29 (fusible de réputation) : CountComplainedSinceForSenderDomain
 // est le déclencheur "plainte" du fusible — une seule ligne suffit à geler.
 func TestMessageHistoryRepository_CountComplainedSinceForSenderDomain(t *testing.T) {

@@ -114,13 +114,20 @@ func (s *veridianReputationStatusService) GetReputationStatus(
 			HardBounceRate:  status.HardBounceRate,
 			Threshold:       status.Threshold,
 			ThresholdCustom: status.ThresholdCustom,
+			MinSent:         status.MinSent,
 			Complaints7d:    status.Complaints7d,
-			Frozen:          status.Frozen,
-			FrozenReason:    status.FrozenReason,
+			Alert:           status.Alert,
+			DomainFactor:    status.DomainFactor,
+			Classes:         status.Classes,
+			SlowedClasses:   status.SlowedClasses,
+			StoppedClasses:  status.StoppedClasses,
 		}
 		resp.Integrations = append(resp.Integrations, entry)
-		if entry.Frozen {
-			resp.AnyFrozen = true
+		if len(entry.StoppedClasses) > 0 {
+			resp.AnyStopped = true
+		}
+		if len(entry.SlowedClasses) > 0 || entry.DomainFactor > 1 {
+			resp.AnySlowed = true
 		}
 	}
 

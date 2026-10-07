@@ -78,6 +78,9 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 		// laisser filer le corporate.
 		return 0, false
 	}
+	// Fusible de réputation proportionné (07/10) : le débit de ce couple (domaine
+	// émetteur, classe) est divisé par le facteur de ralentissement (1, 2 ou 4).
+	ratePerMinute /= float64(w.veridianSlowdownFactor(workspace, entry, class))
 
 	// Veridian fork (correctif 2026-10-05) — AMORÇAGE DURABLE : ce limiter est
 	// en mémoire pure et perd son état à chaque redémarrage du worker. Sans

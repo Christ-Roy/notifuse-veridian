@@ -29,7 +29,8 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 
 	classCap := 0
 	if configured, ok := classCaps[class]; ok && configured > 0 {
-		classCap = configured
+		// Fusible de réputation proportionné (07/10) : plafond ÷ facteur.
+		classCap = veridianSlowCap(configured, w.veridianSlowdownFactor(workspace, entry, class))
 	}
 	if classCap <= 0 && warmupCap <= 0 && profileCap <= 0 {
 		return nil, 0, false

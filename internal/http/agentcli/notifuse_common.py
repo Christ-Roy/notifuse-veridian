@@ -43,7 +43,7 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
 
   notifuse integrations:list|get <ws>     intégrations (5 types) + config cold par infra
   notifuse integrations:plan|apply [--env]  IAC cold (délègue notifuse-iac.sh)
-  notifuse integrations:cold <ws> --id I  pose rates/caps/exclusion/window/pixel/tracking sur une infra (owner)
+  notifuse integrations:cold <ws> --id I  pose rates/caps/exclusion/window/pixel/tracking/--bounce-freeze-threshold sur une infra (owner)
   notifuse integrations:create-smtp|create-imap <ws> --name N --host H --port P --user U --password-env VAR ...
   notifuse integrations:create-supabase <ws> --name N [--email-hook-key K] [--user-hook-key K] (owner)
   notifuse integrations:create-firecrawl <ws> --name N --api-key K (owner)
@@ -304,6 +304,13 @@ WORKSPACE_COMMANDS = frozenset({
     # messages / analytics
     "messages:list", "messages:broadcastStats",
     "analytics:query", "analytics:schemas",
+    # KPI reponses (GET /api/veridian/messages.replyStats, auth JWT/api_key du
+    # workspace + permission contacts:read cote service : aucune route admin/HMAC).
+    # Ajoute le 06/10/2026 : la commande etait refusee par le CLI scope.
+    "veridian:reply-stats",
+    # Fusible de reputation PAR COUPLE (domaine emetteur x classe destinataire),
+    # GET /api/veridian/messages.reputationStatus (JWT workspace + message_history:read).
+    "veridian:reputation-status",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -1421,6 +1428,15 @@ def cmd_integrations_cold(a):
         prov["veridian_tracking_domain"] = a.tracking_domain
     if a.pixel:
         prov["veridian_open_pixel_by_class"] = json.loads(a.pixel)
+    thr = getattr(a, "bounce_freeze_threshold", None)
+    if thr is not None:
+        # Seuil du fusible de réputation (bounce dur 7 j) PAR PROFIL. 0 = retour au défaut 0.03.
+        if thr != 0 and not (0.01 <= thr <= 0.15):
+            die("--bounce-freeze-threshold doit être 0 (défaut 0.03) ou entre 0.01 et 0.15 (proportion : 0.08 = 8 %).")
+        if thr == 0:
+            prov.pop("veridian_hard_bounce_freeze_threshold", None)
+        else:
+            prov["veridian_hard_bounce_freeze_threshold"] = thr
     body = {"workspace_id": a.workspace, "integration_id": a.id,
             "name": integ.get("name"), "provider": prov}
     out(*call_jwt(a.env, "POST", "/api/workspaces.updateIntegration", jwt, body=body))
@@ -1456,6 +1472,8 @@ def cmd_integrations_create_imap(a):
             "polling_interval_seconds": a.interval or 60,
         },
     }
+    if getattr(a, "tls_server_name", None):
+        body["imap_settings"]["tls_server_name"] = a.tls_server_name
     out(*call_jwt(a.env, "POST", "/api/workspaces.createIntegration", jwt, body=body))
 
 
@@ -1630,7 +1648,7 @@ SETTINGS_KEYS = {
     "veridian_provider_class_daily_cap": "json", "veridian_per_recipient_daily_cap": int,
     "veridian_per_sender_daily_cap": int, "veridian_sending_window": "json",
     "veridian_jitter_pct": float, "veridian_anti_hash_enabled": bool,
-    "veridian_anti_hash_window_hours": int, "veridian_excluded_provider_classes": "json",
+    "veridian_anti_hash_window_hours": int, "veridian_excluded_provider_classes": "json", "veridian_marketing_email_provider_ids": "json",
 }
 
 
@@ -2596,7 +2614,21 @@ def cmd_agent_exchange_token(a):
 #   - internal/domain/veridian_warmup.go                 (VeridianWarmupCapForDay)
 #   - internal/service/queue/veridian_sending_window_gate.go (fenêtre, jour Go Sunday=0)
 PROD_DB_HOST = "prod"
-PROD_DB_CONTAINER = "notifuse-db-a8c8db20-b8c5-34bd-c277-f7e803062ecd"
+# Mission 2026-10-04 : le nom du conteneur DB prod change a CHAQUE redeploy
+# Dokploy (suffixe = hash du projet compose, regenere) -- un nom en dur
+# devient faux silencieusement (mesure : "No such container" en prod,
+# _queue_staleness jamais mesure sans que personne ne le voie). Resolu
+# dynamiquement via `docker ps` plutot que mis a jour a la main.
+_PROD_DB_CONTAINER_CACHE = {}
+
+
+def _prod_db_container():
+    if "name" in _PROD_DB_CONTAINER_CACHE:
+        return _PROD_DB_CONTAINER_CACHE["name"]
+    rc, out_, err = _ssh(PROD_DB_HOST, "docker ps --format '{{.Names}}' | grep '^notifuse-db-'")
+    name = out_.strip().splitlines()[0].strip() if rc == 0 and out_.strip() else None
+    _PROD_DB_CONTAINER_CACHE["name"] = name
+    return name
 
 
 def _mask_secret(v):
@@ -2705,6 +2737,9 @@ def _effective_caps_for_integration(ws_settings, integ, now):
         "integration_id": integ.get("id"), "name": integ.get("name"),
         "per_recipient_daily_cap": {"value": per_recip, "source": per_recip_src},
         "per_sender_daily_cap": {"value": per_sender, "source": per_sender_src},
+        "bounce_freeze_threshold": ({"value": prov["veridian_hard_bounce_freeze_threshold"], "source": "intégration"}
+                                    if prov.get("veridian_hard_bounce_freeze_threshold") else
+                                    {"value": 0.03, "source": "défaut fork"}),
         "provider_class_daily_cap": {"value": class_caps, "source": class_src},
         "warmup": {"active": warm_active, "cap_today": warm_cap,
                    "started_at": prov.get("veridian_warmup_started_at"),
@@ -2730,10 +2765,17 @@ def _queue_staleness(env, workspace, integrations):
     (le conteneur DB staging n'est pas le même nom) ; voir --no-queue-check."""
     if env != "prod":
         return {"mesuré": False, "raison": "queue-check implémenté PROD seulement (--no-queue-check pour staging)"}
+    # 04/10 (audit) : workspace etait interpole tel quel dans une commande shell
+    # distante sur l hote DB prod -> injection. Les ids Notifuse sont alphanumeriques.
+    if not re.fullmatch(r"[A-Za-z0-9_]{1,64}", workspace or ""):
+        return {"mesuré": False, "raison": "id de workspace invalide (alphanumerique attendu), contrôle de file non lancé"}
+    container = _prod_db_container()
+    if not container:
+        return {"mesuré": False, "raison": "conteneur DB prod introuvable (docker ps) -- redeploy Dokploy recent ? nom non resolu."}
     db = f"notifuse_ws_{workspace}"
     rc, out_, err = _ssh(
         PROD_DB_HOST,
-        f"docker exec {PROD_DB_CONTAINER} psql -U postgres -d {db} -tAc "
+        f"docker exec {container} psql -U postgres -d {db} -tAc "
         f"\"SELECT integration_id, payload->>'veridian_per_sender_daily_cap' AS sc, "
         f"payload->>'veridian_per_recipient_daily_cap' AS rc, "
         f"payload->>'veridian_provider_class_daily_cap' AS cc, count(*) "
@@ -2824,6 +2866,12 @@ def cmd_config(a):
     else:
         queue = _queue_staleness(a.env, a.workspace, caps)
 
+    # Etat LIVE du fusible de reputation par couple (domaine emetteur, classe
+    # destinataire) : meme calcul que le gate d'envoi (route reputationStatus).
+    rep_code, reputation = call_jwt(a.env, "GET", "/api/veridian/messages.reputationStatus", jwt, params={"workspace_id": a.workspace})
+    if rep_code != 200 or not isinstance(reputation, dict):
+        reputation = {"mesuré": False, "raison": f"reputationStatus HTTP {rep_code}"}
+
     veridian_keys = {k: v for k, v in settings.items() if k.startswith("veridian_")}
     safe_integrations = []
     for i in integrations:
@@ -2851,6 +2899,7 @@ def cmd_config(a):
         "integrations": safe_integrations,
         "plafonds_effectifs": caps,
         "file_attente": queue,
+        "reputation_par_couple": reputation,
         "listes": lists_view,
         "segments": segments.get("segments") if isinstance(segments, dict) else segments,
         "templates": templates_view,
@@ -2883,6 +2932,7 @@ def cmd_config(a):
         print(f"\n  Intégration {c['name']} [{c['integration_id'][:8]}]")
         print(f"    per_recipient_daily_cap = {c['per_recipient_daily_cap']['value']}  (source: {c['per_recipient_daily_cap']['source']})")
         print(f"    per_sender_daily_cap    = {c['per_sender_daily_cap']['value']}  (source: {c['per_sender_daily_cap']['source']})")
+        print(f"    fusible réputation (ralentissement ÷2 dès ce taux, ÷4 dès 2x, par couple domaine x classe, sur rejets durs OU refus politique 7j) = {c['bounce_freeze_threshold']['value']}  (source: {c['bounce_freeze_threshold']['source']}) ; plainte = domaine ralenti ÷4, jamais gelé")
         print(f"    provider_class_daily_cap (source: {c['provider_class_daily_cap']['source']}) = "
               f"{json.dumps(c['provider_class_daily_cap']['value'], ensure_ascii=False)}")
         print(f"    warmup actif={c['warmup']['active']}  cap_du_jour={c['warmup']['cap_today']} "
@@ -2893,6 +2943,24 @@ def cmd_config(a):
         if c['per_sender_daily_cap']['source'].startswith("workspace"):
             print("    ⚠️  le per-sender vient du WORKSPACE (invisible sur l'écran intégration) : "
                   "un changement ici impacte TOUTES les infras qui n'ont pas leur propre override.")
+    print("\n### FUSIBLE RÉPUTATION PAR COUPLE (domaine émetteur x classe destinataire, 7 j glissants) ###")
+    print("  Ralentissement progressif (débit de la classe ÷2 puis ÷4), jamais d'arrêt du domaine ; arrêt d'un couple seulement si le fournisseur refuse en bloc (>50 % de 5.7.x sur les 20 derniers envois).")
+    if reputation.get("mesuré") is False:
+        print(f"  non mesuré : {reputation.get('raison')}")
+    for r in (reputation.get("integrations") or []):
+        alerte = f" ; ALERTE plainte ({r.get('complaints_7d')}) : domaine ralenti ÷{r.get('domain_slowdown_factor')}" if r.get("alert") else ""
+        print(f"\n  {r.get('integration_name')} [{str(r.get('integration_id'))[:8]}] {r.get('sender_domain')} : "
+              f"envoyés 7j={r.get('sent_7d')} ; seuil={r.get('hard_bounce_rate_threshold')} "
+              f"(réaction dès {r.get('min_sent_for_reaction')} envois par couple){alerte}")
+        for c in (r.get("classes") or []):
+            if c.get("stopped"):
+                etat = f"ARRÊTÉ ({c.get('reason')}, {c.get('recent_policy_refusals')}/{c.get('recent_sent')} derniers en 5.7.x)"
+            elif (c.get("slowdown_factor") or 1) > 1:
+                etat = f"débit ÷{c.get('slowdown_factor')} ({c.get('reason')})"
+            else:
+                etat = "normal"
+            print(f"      {str(c.get('class')):<20} envoyés={c.get('sent_7d'):<5} "
+                  f"durs={c.get('hard_bounce_rate', 0) * 100:5.1f}% politique={c.get('policy_refusal_rate', 0) * 100:5.1f}% -> {etat}")
     print(f"\n### FILE D'ATTENTE (plafonds figés au moment de l'enqueue) ###")
     if queue.get("mesuré"):
         print(f"  {queue['pending_total']} messages en attente, {queue['stale_total']} avec un plafond figé "
@@ -3048,6 +3116,8 @@ def build_parser():
     sp.add_argument("--exclude", help="classes exclues séparées par virgule")
     sp.add_argument("--tracking-domain", dest="tracking_domain")
     sp.add_argument("--pixel", help='JSON map classe→bool')
+    sp.add_argument("--bounce-freeze-threshold", dest="bounce_freeze_threshold", type=float,
+                    help="seuil du fusible de réputation (proportion de bounces durs sur 7 j, 0.01-0.15, ex 0.08). 0 = défaut 0.03. La plainte gèle toujours.")
     sp.set_defaults(func=cmd_integrations_cold)
 
     sp = sub.add_parser("integrations:create-smtp", help="crée une intégration SMTP d'envoi (owner)")
@@ -3079,6 +3149,8 @@ def build_parser():
     sp.add_argument("--folder")
     sp.add_argument("--interval", type=int)
     sp.add_argument("--no-tls", dest="no_tls", action="store_true")
+    sp.add_argument("--tls-server-name", dest="tls_server_name",
+                    help="nom du certificat à vérifier quand --host est une IP privée (Tailscale)")
     sp.set_defaults(func=cmd_integrations_create_imap)
 
     sp = sub.add_parser("integrations:create-supabase",

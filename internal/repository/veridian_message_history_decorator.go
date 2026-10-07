@@ -312,3 +312,13 @@ func isWorkspaceNotFoundErr(err error) bool {
 // Compile-time check: decorator satisfait l'interface upstream.
 var _ domain.MessageHistoryRepository = (*VeridianMessageHistoryDecorator)(nil)
 var _ domain.VeridianDailyQuotaRepository = (*VeridianMessageHistoryDecorator)(nil)
+
+// ReputationCountsByClassSinceForSenderDomain : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) ReputationCountsByClassSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (map[string]domain.VeridianReputationCounts, error) {
+	return d.upstream.ReputationCountsByClassSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
+}
+
+// RecentClassOutcomesForSenderDomain : pur passthrough (lecture, aucun side-effect quota).
+func (d *VeridianMessageHistoryDecorator) RecentClassOutcomesForSenderDomain(ctx context.Context, workspaceID, senderDomain, class string, lastN int, since time.Time) (int, int, error) {
+	return d.upstream.RecentClassOutcomesForSenderDomain(ctx, workspaceID, senderDomain, class, lastN, since)
+}

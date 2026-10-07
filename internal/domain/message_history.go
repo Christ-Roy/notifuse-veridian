@@ -362,6 +362,25 @@ type MessageHistoryRepository interface {
 	// requête (même fallback que les autres COUNT par infra).
 	CountComplainedSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (int, error)
 
+	// ReputationCountsByClassSinceForSenderDomain (Veridian, 2026-10-07) ventile,
+	// depuis `since`, les envois d'un DOMAINE émetteur PAR CLASSE de fournisseur
+	// destinataire (colonne persistée veridian_provider_class ; NULL regroupé sous
+	// la clé ""), avec pour chaque classe le total envoyé, les rejets durs
+	// (bounced_at posé ET bounce_type = 'HardBounce') et les refus de politique
+	// (bounce_type = 'PolicyBounce', 5.7.x) comptés SÉPARÉMENT. Base du gel par
+	// couple (domaine émetteur, classe destinataire) du fusible de réputation
+	// (veridian_reputation_gate.go). `senderDomain` vide = map vide sans requête.
+	ReputationCountsByClassSinceForSenderDomain(ctx context.Context, workspaceID, senderDomain string, since time.Time) (map[string]VeridianReputationCounts, error)
+
+	// RecentClassOutcomesForSenderDomain (Veridian, 2026-10-07) regarde les `lastN`
+	// DERNIERS envois (depuis `since`) du couple (domaine émetteur, classe
+	// destinataire) et renvoie combien il y en a (`sent`, au plus lastN) et
+	// combien portent un refus de politique 5.7.x (bounce_type = 'PolicyBounce').
+	// Sert à détecter un fournisseur qui REFUSE EN BLOC (plus de 50 % de 5.7.x sur
+	// les 20 derniers envois) : seul cas où le fusible de réputation arrête un
+	// couple au lieu de le ralentir. `senderDomain` ou `class` vide = (0, 0, nil).
+	RecentClassOutcomesForSenderDomain(ctx context.Context, workspaceID, senderDomain, class string, lastN int, since time.Time) (sent int, policyRefusals int, err error)
+
 	// ExistsContentHashSince retourne true s'il existe DÉJÀ un envoi portant le
 	// hash de contenu `contentHash` depuis `since` (fenêtre glissante anti-hash)
 	// vers la même CLASSE de provider destinataire, identifiée par sa liste de
@@ -584,4 +603,13 @@ type MessageListResult struct {
 	Messages   []*MessageHistory `json:"messages"`
 	NextCursor string            `json:"next_cursor,omitempty"`
 	HasMore    bool              `json:"has_more"`
+}
+
+// VeridianReputationCounts est le triplet de comptes d'un couple (domaine
+// émetteur, classe destinataire) sur la fenêtre glissante du fusible de
+// réputation : envois, rejets durs, refus de politique (5.7.x).
+type VeridianReputationCounts struct {
+	Sent           int `json:"sent_7d"`
+	HardBounces    int `json:"hard_bounces_7d"`
+	PolicyRefusals int `json:"policy_refusals_7d"`
 }

@@ -39,9 +39,11 @@ func TestVeridianReputationStatusHandler_GET(t *testing.T) {
 	svc.EXPECT().GetReputationStatus(gomock.Any(), &domain.VeridianReputationStatusRequest{WorkspaceID: "ws123"}).
 		Return(&domain.VeridianReputationStatusResponse{
 			Integrations: []domain.VeridianReputationIntegrationStatus{
-				{IntegrationID: "agence", SenderDomain: "agence-veridian.fr", Frozen: true, FrozenReason: "hard_bounce_rate", HardBounceRate: 0.167, Threshold: 0.03},
+				{IntegrationID: "agence", SenderDomain: "agence-veridian.fr", HardBounceRate: 0.167, Threshold: 0.03,
+					StoppedClasses: []string{"ionos"}, SlowedClasses: []string{"ovh"},
+					Classes: []domain.VeridianReputationClassStatus{{Class: "ionos", Factor: 4, Reason: "bulk_policy_refusal", Stopped: true}}},
 			},
-			AnyFrozen: true,
+			AnyStopped: true, AnySlowed: true,
 		}, nil)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/veridian/messages.reputationStatus?workspace_id=ws123", nil)
@@ -52,10 +54,13 @@ func TestVeridianReputationStatusHandler_GET(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.VeridianReputationStatusResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.True(t, resp.AnyFrozen)
+	assert.True(t, resp.AnyStopped)
+	assert.True(t, resp.AnySlowed)
 	require.Len(t, resp.Integrations, 1)
 	assert.Equal(t, "agence", resp.Integrations[0].IntegrationID)
-	assert.True(t, resp.Integrations[0].Frozen)
+	assert.Equal(t, []string{"ionos"}, resp.Integrations[0].StoppedClasses)
+	assert.True(t, resp.Integrations[0].Classes[0].Stopped)
+	assert.Equal(t, 4, resp.Integrations[0].Classes[0].Factor)
 }
 
 func TestVeridianReputationStatusHandler_POST(t *testing.T) {

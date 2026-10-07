@@ -1,237 +1,413 @@
 package queue
 
 import (
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 )
 
-// Fusible de réputation (correctif 2026-09-29, mission "fusibles natifs de
-// réputation") : ces tests PROVOQUENT chaque seuil pour prouver que le gate
-// fige réellement l'infra, et prouvent aussi la non-régression (infra saine,
-// pas de FROM exploitable) pour ne jamais bloquer plus qu'il ne faut.
+// Fusible de réputation PROPORTIONNÉ (07/10/2026) : ces tests provoquent chaque
+// palier pour prouver que le gate RALENTIT (÷2, ÷4) au lieu d'arrêter, qu'une
+// plainte seule n'arrête rien, et que seul un refus en bloc (>50 % de 5.7.x sur
+// les 20 derniers envois) arrête un couple (le failover prend alors le relais).
+
+const repTestDomain = "messagerie-nord-776.fr"
 
 func veridianReputationTestEntry(fromAddress string) *domain.EmailQueueEntry {
+	return veridianReputationTestEntryClass(fromAddress, "")
+}
+
+// veridianReputationTestEntryClass fixe la classe du destinataire dans le payload
+// (sinon le classifier MX de test rend corporate_selfhost).
+func veridianReputationTestEntryClass(fromAddress, class string) *domain.EmailQueueEntry {
 	return veridianTestEntry("rep-e1", "victim@example.com", domain.EmailQueuePayload{
-		FromAddress: fromAddress,
+		FromAddress:           fromAddress,
+		VeridianProviderClass: class,
 	})
+}
+
+// veridianExpectRepCounts arme les lectures du fusible pour un domaine émetteur :
+// plaintes, envois du domaine, ventilation par classe. Les lectures sont AnyTimes
+// (le nombre d'appels dépend de l'ordre d'essai des candidats).
+func veridianExpectRepCounts(env *veridianThrottleTestEnv, domainName string, complaints, sent int, byClass map[string]domain.VeridianReputationCounts) {
+	env.mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(complaints, nil).AnyTimes()
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(sent, nil).AnyTimes()
+	env.mockMessageHistoryRepo.EXPECT().
+		CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(0, nil).AnyTimes()
+	env.mockMessageHistoryRepo.EXPECT().
+		ReputationCountsByClassSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(byClass, nil).AnyTimes()
+}
+
+// veridianExpectRecent arme la lecture des N derniers envois d'un couple.
+func veridianExpectRecent(env *veridianThrottleTestEnv, domainName, class string, sent, policy int) {
+	env.mockMessageHistoryRepo.EXPECT().
+		RecentClassOutcomesForSenderDomain(gomock.Any(), "ws-1", domainName, class, veridianBlockLastN, gomock.Any()).
+		Return(sent, policy, nil).AnyTimes()
+}
+
+func repFactor(env *veridianThrottleTestEnv, domainName, class string) int {
+	return env.worker.reputationFactors.get("ws-1", domainName, class)
 }
 
 func TestVeridianReputationGate_NoSenderDomainIsNoop(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("") // pas de FROM exploitable
-
-	// Aucune attribution d'infra possible : aucun COUNT appelé (ctrl.Finish
-	// refuserait un appel non déclaré), jamais gelé.
-	delay, frozen := env.worker.veridianReputationGate(ws, nil, entry)
-	assert.False(t, frozen)
+	// Aucune attribution d'infra possible : aucun COUNT appelé (gomock refuserait).
+	delay, stopped := env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntry(""))
+	assert.False(t, stopped)
 	assert.Zero(t, delay)
 }
 
-func TestVeridianReputationGate_HealthyInfraNotFrozen(t *testing.T) {
+func TestVeridianReputationGate_HealthyCoupleRunsAtFullRate(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
+	veridianExpectRepCounts(env, repTestDomain, 0, 100, map[string]domain.VeridianReputationCounts{"ovh": {Sent: 100, HardBounces: 2}}) // 2% < 3%
 
-	env.mockMessageHistoryRepo.EXPECT().
-		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(0, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(100, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(2, nil) // 2/100 = 2% < 3%
-
-	delay, frozen := env.worker.veridianReputationGate(ws, nil, entry)
-	assert.False(t, frozen, "2%% de bounce dur est SOUS le seuil de 3%%, ne doit pas geler")
-	assert.Zero(t, delay)
+	_, stopped := env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ovh"))
+	assert.False(t, stopped)
+	assert.Equal(t, 1, repFactor(env, repTestDomain, "ovh"))
 }
 
-func TestVeridianReputationGate_HardBounceRateAtThresholdFreezes(t *testing.T) {
-	env := newVeridianThrottleTestEnv(t)
+// Paliers de ralentissement d'un couple : <seuil = normal, [seuil ; 2 x seuil[ = ÷2,
+// >= 2 x seuil = ÷4. Jamais d'arrêt, quel que soit le taux de rejets durs.
+func TestVeridianReputationGate_ProgressiveSlowdown_Halves_ThenQuarters_NeverStops(t *testing.T) {
 	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
+	p8 := &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}
 
-	env.mockMessageHistoryRepo.EXPECT().
-		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(0, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(100, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(3, nil) // 3/100 = exactement 3% → PROVOQUE le seuil
+	cases := []struct {
+		name   string
+		sent   int
+		hard   int
+		policy int
+		prov   *domain.EmailProvider
+		factor int
+	}{
+		{"5% sous 8% : normal", 20, 1, 0, p8, 1},
+		{"10% (1 a 2 x 8%) : ÷2", 20, 2, 0, p8, 2},
+		{"15% juste sous 2 x 8% : ÷2", 20, 3, 0, p8, 2},
+		{"20% (>= 2 x 8%) : ÷4", 20, 4, 0, p8, 4},
+		{"100% de rejets durs : ÷4, PAS d'arret", 40, 40, 0, p8, 4},
+		{"defaut 3% : 5% = ÷2", 20, 1, 0, &domain.EmailProvider{}, 2},
+		{"defaut 3% : 10% = ÷4", 20, 2, 0, &domain.EmailProvider{}, 4},
+		{"refus de politique 10% a 8% : ÷2", 20, 0, 2, p8, 2},
+		{"refus de politique 20% a 8% : ÷4", 20, 0, 4, p8, 4},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newVeridianThrottleTestEnv(t)
+			veridianExpectRepCounts(env, repTestDomain, 0, tc.sent, map[string]domain.VeridianReputationCounts{
+				"ionos": {Sent: tc.sent, HardBounces: tc.hard, PolicyRefusals: tc.policy},
+			})
+			delay, stopped := env.worker.veridianReputationGate(ws, tc.prov, veridianReputationTestEntryClass("r@"+repTestDomain, "ionos"))
+			assert.False(t, stopped, "un taux de rejets ralentit, il n'arrete jamais")
+			assert.Zero(t, delay)
+			assert.Equal(t, tc.factor, repFactor(env, repTestDomain, "ionos"))
+		})
+	}
+}
 
-	delay, frozen := env.worker.veridianReputationGate(ws, nil, entry)
-	assert.True(t, frozen, "3%% de bounce dur ATTEINT le seuil, doit geler l'infra")
+// Minimum de volume avant toute reaction : 1 rejet sur 3, 19 rejets sur 19.
+func TestVeridianReputationGate_MinimumSendsBeforeAnyReaction(t *testing.T) {
+	ws := &domain.Workspace{ID: "ws-1"}
+	for _, c := range []domain.VeridianReputationCounts{
+		{Sent: 3, HardBounces: 1},
+		{Sent: 19, HardBounces: 19},
+		{Sent: 19, PolicyRefusals: 19},
+	} {
+		env := newVeridianThrottleTestEnv(t)
+		veridianExpectRepCounts(env, repTestDomain, 0, c.Sent, map[string]domain.VeridianReputationCounts{"ionos": c})
+		_, stopped := env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, veridianReputationTestEntryClass("r@"+repTestDomain, "ionos"))
+		assert.False(t, stopped)
+		assert.Equal(t, 1, repFactor(env, repTestDomain, "ionos"), "sous 20 envois : aucune reaction (%+v)", c)
+	}
+}
+
+// Une plainte seule n'arrete RIEN : tout le domaine ralentit ÷4 (toutes classes,
+// même sans envois), une alerte est levée (log + état exposé).
+func TestVeridianReputationGate_ComplaintAloneNeverStops_SlowsWholeDomainBy4(t *testing.T) {
+	ws := &domain.Workspace{ID: "ws-1"}
+	for _, class := range []string{"ovh", "ionos", "microsoft"} {
+		env := newVeridianThrottleTestEnv(t)
+		veridianExpectRepCounts(env, repTestDomain, 1, 50, map[string]domain.VeridianReputationCounts{"ovh": {Sent: 50}})
+		delay, stopped := env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.15}, veridianReputationTestEntryClass("r@"+repTestDomain, class))
+		assert.False(t, stopped, "une plainte n'arrete pas (%s)", class)
+		assert.Zero(t, delay)
+		assert.Equal(t, 4, repFactor(env, repTestDomain, class), "plainte : ÷4 sur la classe %s", class)
+	}
+
+	// Plainte sur un domaine sans aucun envoi : ralenti aussi, jamais arrete.
+	env := newVeridianThrottleTestEnv(t)
+	veridianExpectRepCounts(env, repTestDomain, 1, 0, nil)
+	_, stopped := env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ovh"))
+	assert.False(t, stopped)
+	assert.Equal(t, 4, repFactor(env, repTestDomain, "ovh"))
+}
+
+// Refus en bloc : seul cas d'arret. >50 % de 5.7.x sur les 20 derniers envois.
+func TestVeridianReputationGate_BulkRefusalStopsOnlyThatCouple(t *testing.T) {
+	ws := &domain.Workspace{ID: "ws-1"}
+	byClass := map[string]domain.VeridianReputationCounts{
+		"ionos": {Sent: 40, PolicyRefusals: 16},
+		"ovh":   {Sent: 60, PolicyRefusals: 1},
+	}
+
+	env := newVeridianThrottleTestEnv(t)
+	veridianExpectRepCounts(env, repTestDomain, 0, 100, byClass)
+	veridianExpectRecent(env, repTestDomain, "ionos", 20, 12) // 60 % > 50 %
+	delay, stopped := env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ionos"))
+	assert.True(t, stopped, "ionos refuse en bloc (12/20 en 5.7.x) : couple arrete")
 	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
+
+	_, stopped = env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ovh"))
+	assert.False(t, stopped, "ovh du MEME profil continue (ralentie ou non, jamais arretee)")
+
+	// Exactement 50 % : pas "plus de 50 %" -> pas d'arret, mais ralenti.
+	env = newVeridianThrottleTestEnv(t)
+	veridianExpectRepCounts(env, repTestDomain, 0, 100, byClass)
+	veridianExpectRecent(env, repTestDomain, "ionos", 20, 10)
+	_, stopped = env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ionos"))
+	assert.False(t, stopped)
+	assert.Equal(t, 4, repFactor(env, repTestDomain, "ionos"))
+
+	// Moins de 20 envois recents : pas assez de preuve pour arreter.
+	env = newVeridianThrottleTestEnv(t)
+	veridianExpectRepCounts(env, repTestDomain, 0, 100, byClass)
+	veridianExpectRecent(env, repTestDomain, "ionos", 12, 12)
+	_, stopped = env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ionos"))
+	assert.False(t, stopped)
+
+	// Trop peu de 5.7.x sur 7 jours pour atteindre 50 % de 20 : la lecture des 20
+	// derniers n'est meme pas demandee (gomock refuserait l'appel).
+	env = newVeridianThrottleTestEnv(t)
+	veridianExpectRepCounts(env, repTestDomain, 0, 100, map[string]domain.VeridianReputationCounts{"ionos": {Sent: 100, PolicyRefusals: 10}})
+	_, stopped = env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ionos"))
+	assert.False(t, stopped)
 }
 
-func TestVeridianReputationGate_HardBounceRateAboveThresholdFreezes(t *testing.T) {
+// Une plainte ET un refus en bloc : le refus en bloc arrete ce couple seulement.
+func TestVeridianReputationGate_ComplaintPlusBulkRefusal_OnlyBulkStops(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("r.brunon@agence-veridian.fr")
-
-	env.mockMessageHistoryRepo.EXPECT().
-		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "agence-veridian.fr", gomock.Any()).
-		Return(0, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "agence-veridian.fr", gomock.Any()).
-		Return(30, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws-1", "agence-veridian.fr", gomock.Any()).
-		Return(5, nil) // 5/30 = 16.7% >> 3%
-
-	delay, frozen := env.worker.veridianReputationGate(ws, nil, entry)
-	assert.True(t, frozen)
-	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
+	veridianExpectRepCounts(env, repTestDomain, 1, 100, map[string]domain.VeridianReputationCounts{
+		"ionos": {Sent: 40, PolicyRefusals: 30}, "ovh": {Sent: 60},
+	})
+	veridianExpectRecent(env, repTestDomain, "ionos", 20, 18)
+	_, stopped := env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ionos"))
+	assert.True(t, stopped)
+	_, stopped = env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ovh"))
+	assert.False(t, stopped)
+	assert.Equal(t, 4, repFactor(env, repTestDomain, "ovh"))
 }
 
-func TestVeridianReputationGate_SingleComplaintFreezesImmediately(t *testing.T) {
+// Une erreur de lecture n'arrete rien (ce fusible ne stoppe plus que sur preuve).
+func TestVeridianReputationGate_ReadErrorDoesNotStop(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
-
-	// Une SEULE plainte suffit : le gate n'a même pas besoin d'interroger le
-	// volume envoyé ni les bounces (court-circuit avant), contrairement au
-	// bounce dur qui a besoin d'un dénominateur.
-	env.mockMessageHistoryRepo.EXPECT().
-		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(1, nil)
-
-	delay, frozen := env.worker.veridianReputationGate(ws, nil, entry)
-	assert.True(t, frozen, "une seule plainte doit geler l'infra, sans seuil")
-	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
+	env.mockMessageHistoryRepo.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", repTestDomain, gomock.Any()).Return(0, assert.AnError)
+	env.mockMessageHistoryRepo.EXPECT().CountSentSinceForSenderDomain(gomock.Any(), "ws-1", repTestDomain, gomock.Any()).Return(0, assert.AnError)
+	_, stopped := env.worker.veridianReputationGate(ws, nil, veridianReputationTestEntry("r@"+repTestDomain))
+	assert.False(t, stopped)
 }
 
-func TestVeridianReputationGate_NoVolumeYetIsNotFrozen(t *testing.T) {
+// === Failover : seul un couple ARRETE bascule ; un couple RALENTI reste sur son profil ===
+
+func TestVeridianSelectSendable_StoppedCoupleFailsOverToOtherProfile(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
-	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	relai := veridianTestPoolIntegration("relai", "hello@relai-agence.example")
+	ws := veridianTestPoolWorkspace([]string{"nord", "relai"}, []domain.Integration{nord, relai}, nil)
 
-	env.mockMessageHistoryRepo.EXPECT().
-		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(0, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(0, nil) // aucun envoi cette semaine : aucun taux calculable
+	veridianExpectRepCounts(env, "nord-propre.example", 0, 100, map[string]domain.VeridianReputationCounts{
+		"ionos": {Sent: 40, PolicyRefusals: 30}, "ovh": {Sent: 60, HardBounces: 1},
+	})
+	veridianExpectRecent(env, "nord-propre.example", "ionos", 20, 15)
+	veridianExpectRepCounts(env, "relai-agence.example", 0, 100, map[string]domain.VeridianReputationCounts{
+		"ionos": {Sent: 25}, "ovh": {Sent: 60, HardBounces: 1},
+	})
 
-	delay, frozen := env.worker.veridianReputationGate(ws, nil, entry)
-	assert.False(t, frozen)
-	assert.Zero(t, delay)
+	ionos := veridianTestEntry("e-ionos", "lead@ionos.example", domain.EmailQueuePayload{FromAddress: "hello@nord-propre.example", VeridianProviderClass: "ionos"})
+	ionos.IntegrationID = "nord"
+	res := env.worker.veridianSelectSendableIntegration(ws, ionos, &nord)
+	require.NotNil(t, res.Candidate, "ionos refuse en bloc chez nord : bascule sur relai")
+	assert.Equal(t, "relai", res.Candidate.IntegrationID)
+	assert.Equal(t, "nord", ionos.IntegrationID, "la selection ne committe pas : restaure par le defer")
+
+	ovh := veridianTestEntry("e-ovh", "lead@ovh.example", domain.EmailQueuePayload{FromAddress: "hello@nord-propre.example", VeridianProviderClass: "ovh"})
+	ovh.IntegrationID = "nord"
+	res = env.worker.veridianSelectSendableIntegration(ws, ovh, &nord)
+	require.NotNil(t, res.Candidate)
+	assert.Equal(t, "nord", res.Candidate.IntegrationID, "ovh n'est pas arretee chez nord : reste sur son profil")
 }
 
-func TestVeridianReputationGate_DBErrorFailsClosed(t *testing.T) {
+func TestVeridianSelectSendable_SlowedCoupleStaysOnItsProfile(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
-	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	relai := veridianTestPoolIntegration("relai", "hello@relai-agence.example")
+	ws := veridianTestPoolWorkspace([]string{"nord", "relai"}, []domain.Integration{nord, relai}, nil)
 
-	// Un fusible de réputation qui devient silencieux sous erreur DB n'est pas
-	// un fusible : il doit bloquer, pas laisser passer.
-	env.mockMessageHistoryRepo.EXPECT().
-		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "messagerie-nord-776.fr", gomock.Any()).
-		Return(0, errors.New("db down"))
+	// 30 % de rejets durs chez nord pour ionos : ralenti ÷4, jamais arrete.
+	veridianExpectRepCounts(env, "nord-propre.example", 0, 100, map[string]domain.VeridianReputationCounts{"ionos": {Sent: 40, HardBounces: 12}})
+	veridianExpectRepCounts(env, "relai-agence.example", 0, 100, map[string]domain.VeridianReputationCounts{"ionos": {Sent: 25}})
 
-	delay, frozen := env.worker.veridianReputationGate(ws, nil, entry)
-	assert.True(t, frozen, "une erreur DB doit fermer le fusible (fail closed), jamais l'ouvrir")
-	assert.Equal(t, veridianDailyCapRecheckInterval, delay)
+	ionos := veridianTestEntry("e-ionos", "lead@ionos.example", domain.EmailQueuePayload{FromAddress: "hello@nord-propre.example", VeridianProviderClass: "ionos"})
+	ionos.IntegrationID = "nord"
+	res := env.worker.veridianSelectSendableIntegration(ws, ionos, &nord)
+	require.NotNil(t, res.Candidate)
+	assert.Equal(t, "nord", res.Candidate.IntegrationID, "un couple ralenti n'est pas ecarte")
+	assert.Equal(t, 4, repFactor(env, "nord-propre.example", "ionos"))
 }
 
-func TestVeridianComputeReputationStatus_MatchesGateDecision(t *testing.T) {
+func TestVeridianSelectSendable_AllCouplesStopped_EntryWaits_OtherClassGoes(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	relai := veridianTestPoolIntegration("relai", "hello@relai-agence.example")
+	ws := veridianTestPoolWorkspace([]string{"nord", "relai"}, []domain.Integration{nord, relai}, nil)
 
+	stopped := map[string]domain.VeridianReputationCounts{"ionos": {Sent: 40, PolicyRefusals: 30}, "ovh": {Sent: 60}}
+	veridianExpectRepCounts(env, "nord-propre.example", 0, 100, stopped)
+	veridianExpectRepCounts(env, "relai-agence.example", 0, 100, stopped)
+	veridianExpectRecent(env, "nord-propre.example", "ionos", 20, 15)
+	veridianExpectRecent(env, "relai-agence.example", "ionos", 20, 15)
+
+	ionos := veridianTestEntry("e-ionos", "lead@ionos.example", domain.EmailQueuePayload{FromAddress: "hello@nord-propre.example", VeridianProviderClass: "ionos"})
+	ionos.IntegrationID = "nord"
+	res := env.worker.veridianSelectSendableIntegration(ws, ionos, &nord)
+	assert.Nil(t, res.Candidate, "ionos arretee chez tous les profils : l'entree attend")
+	assert.False(t, res.Permanent, "attente, pas un rejet definitif")
+	assert.Equal(t, veridianDailyCapRecheckInterval, res.RetryDelay)
+
+	ovh := veridianTestEntry("e-ovh", "lead@ovh.example", domain.EmailQueuePayload{FromAddress: "hello@nord-propre.example", VeridianProviderClass: "ovh"})
+	ovh.IntegrationID = "nord"
+	res = env.worker.veridianSelectSendableIntegration(ws, ovh, &nord)
+	require.NotNil(t, res.Candidate, "ovh part pendant que ionos attend")
+}
+
+// === Application du facteur par les gates de débit et de plafond ===
+
+func TestVeridianSlowCap(t *testing.T) {
+	assert.Equal(t, 300, veridianSlowCap(300, 1))
+	assert.Equal(t, 150, veridianSlowCap(300, 2))
+	assert.Equal(t, 75, veridianSlowCap(300, 4))
+	assert.Equal(t, 1, veridianSlowCap(3, 4), "plancher a 1")
+	assert.Equal(t, 0, veridianSlowCap(0, 4), "pas de plafond configure : inchange")
+}
+
+func TestVeridianReputationFactorCache_ExpiresAndDefaultsToOne(t *testing.T) {
+	var f veridianReputationFactors
+	assert.Equal(t, 1, f.get("ws", "d.fr", "ovh"))
+	f.set("ws", "d.fr", "ovh", 4)
+	assert.Equal(t, 4, f.get("ws", "d.fr", "ovh"))
+	assert.Equal(t, 1, f.get("ws", "d.fr", "ionos"), "autre classe : non ralentie")
+	f.m.Store(veridianReputationFactorKey("ws", "d.fr", "ovh"), veridianReputationFactorEntry{factor: 4, at: time.Now().Add(-2 * veridianReputationFactorTTL)})
+	assert.Equal(t, 1, f.get("ws", "d.fr", "ovh"), "facteur perime : retour au debit normal")
+}
+
+// repLimiterRate lit le débit (jetons/seconde) du limiter {intégration, classe}
+// SANS le modifier (GetOrCreateLimiter, lui, réécrit le débit).
+func repLimiterRate(t *testing.T, env *veridianThrottleTestEnv, integrationID, class string) float64 {
+	t.Helper()
+	v, ok := env.worker.providerClassLimiter.limiters.Load(providerClassKey(integrationID, class))
+	require.True(t, ok, "limiter {integration, classe} absent")
+	return float64(v.(*rate.Limiter).Limit())
+}
+
+func TestVeridianProviderClassGate_RateDividedByReputationFactor(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(map[string]float64{"ionos": 60}, 6000)
+	entry := veridianTestEntryFrom("e1", "lead@ionos.example", "r@"+repTestDomain, domain.EmailQueuePayload{VeridianProviderClass: "ionos"})
+	entry.IntegrationID = "int-1"
 	env.mockMessageHistoryRepo.EXPECT().
-		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "agence-veridian.fr", gomock.Any()).
-		Return(0, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "agence-veridian.fr", gomock.Any()).
-		Return(30, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws-1", "agence-veridian.fr", gomock.Any()).
-		Return(5, nil)
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), gomock.Any(), "ionos", repTestDomain, gomock.Any()).Return(0, nil).AnyTimes()
+
+	env.worker.reputationFactors.set(ws.ID, repTestDomain, "ionos", 4)
+	_, _ = env.worker.veridianProviderClassGate(ws, nil, entry)
+	got := repLimiterRate(t, env, "int-1", "ionos")
+	assert.InDelta(t, 15.0/60.0, got, 1e-9, "60/min ÷ 4 = 15/min")
+
+	env2 := newVeridianThrottleTestEnv(t)
+	env2.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), gomock.Any(), "ionos", repTestDomain, gomock.Any()).Return(0, nil).AnyTimes()
+	_, _ = env2.worker.veridianProviderClassGate(ws, nil, entry)
+	got = repLimiterRate(t, env2, "int-1", "ionos")
+	assert.InDelta(t, 1.0, got, 1e-9, "sans ralentissement : 60/min inchange")
+}
+
+func TestVeridianDailyCapGate_ClassCapDividedByReputationFactor(t *testing.T) {
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"ionos": 8}, 0)
+	entry := func() *domain.EmailQueueEntry {
+		return veridianTestEntryFrom("e1", "lead@ionos.example", "r@"+repTestDomain, domain.EmailQueuePayload{VeridianProviderClass: "ionos"})
+	}
+
+	// 3 envois du jour : sous le plafond 8, mais au-dessus de 8 ÷ 4 = 2.
+	env := newVeridianThrottleTestEnv(t)
+	env.mockMessageHistoryRepo.EXPECT().CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "ionos", repTestDomain, gomock.Any()).Return(3, nil).AnyTimes()
+	_, capped := env.worker.veridianDailyCapGate(ws, nil, entry())
+	assert.False(t, capped, "plafond normal 8, 3 envois : libre")
+
+	env.worker.reputationFactors.set("ws-1", repTestDomain, "ionos", 4)
+	_, capped = env.worker.veridianDailyCapGate(ws, nil, entry())
+	assert.True(t, capped, "plafond ÷4 = 2, 3 envois : plafonne")
+}
+
+func TestVeridianComputeReputationStatus_PerCoupleFactorAndReason(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	veridianExpectRepCounts(env, "agence-veridian.fr", 0, 100, map[string]domain.VeridianReputationCounts{
+		"ionos": {Sent: 40, PolicyRefusals: 30},
+		"ovh":   {Sent: 60, HardBounces: 3},  // 5 % : ÷2 au defaut 3 %
+		"other": {Sent: 10, HardBounces: 10}, // sous le minimum
+		"":      {Sent: 5, HardBounces: 5},   // sans classe : jamais un couple
+		"micro": {Sent: 30, HardBounces: 3},  // 10 % : ÷4 au defaut 3 %
+	})
+	veridianExpectRecent(env, "agence-veridian.fr", "ionos", 20, 14)
 
 	status, err := VeridianComputeReputationStatus(env.worker.ctx, env.mockMessageHistoryRepo, "ws-1", "agence-veridian.fr", nil, time.Now())
-	assert.NoError(t, err)
-	assert.True(t, status.Frozen)
-	assert.Equal(t, "hard_bounce_rate", status.FrozenReason)
-	assert.InDelta(t, 0.1667, status.HardBounceRate, 0.001)
-	assert.Equal(t, 7, status.WindowDays)
-}
-
-// Seuil par profil (decision 2026-10-07) : un MEME taux de 6% gele au defaut 3%
-// et ne gele pas a 8%. La plainte, elle, gele toujours.
-func veridianExpectRate(env *veridianThrottleTestEnv, domainName string, complaints, sent, hard int) {
-	env.mockMessageHistoryRepo.EXPECT().
-		CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(complaints, nil)
-	if complaints > 0 {
-		return
+	require.NoError(t, err)
+	assert.False(t, status.Alert)
+	assert.Equal(t, 1, status.DomainFactor)
+	assert.Equal(t, veridianReputationMinSent, status.MinSent)
+	assert.Equal(t, []string{"ionos"}, status.StoppedClasses)
+	assert.Equal(t, []string{"micro", "ovh"}, status.SlowedClasses)
+	byName := map[string]domain.VeridianReputationClassStatus{}
+	for _, c := range status.Classes {
+		byName[c.Class] = c
 	}
-	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(sent, nil)
-	env.mockMessageHistoryRepo.EXPECT().
-		CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws-1", domainName, gomock.Any()).Return(hard, nil)
+	assert.True(t, byName["ionos"].Stopped)
+	assert.Equal(t, "bulk_policy_refusal", byName["ionos"].Reason)
+	assert.Equal(t, 20, byName["ionos"].RecentSent)
+	assert.Equal(t, 2, byName["ovh"].Factor)
+	assert.Equal(t, "hard_bounce_rate", byName["ovh"].Reason)
+	assert.Equal(t, 4, byName["micro"].Factor)
+	assert.Equal(t, 1, byName["other"].Factor)
+	assert.Equal(t, 1, byName["unclassified"].Factor)
+	assert.Equal(t, 7, status.WindowDays)
+
+	// Coherence avec le gate sur les memes donnees.
+	gws := &domain.Workspace{ID: "ws-1"}
+	_, stopped := env.worker.veridianReputationGate(gws, nil, veridianReputationTestEntryClass("a@agence-veridian.fr", "ionos"))
+	assert.True(t, stopped)
+	_, stopped = env.worker.veridianReputationGate(gws, nil, veridianReputationTestEntryClass("a@agence-veridian.fr", "ovh"))
+	assert.False(t, stopped)
+	assert.Equal(t, 2, repFactor(env, "agence-veridian.fr", "ovh"))
 }
 
-func TestVeridianReputationGate_SameRate6pct_FrozenAtDefault3_NotAtProfile8(t *testing.T) {
-	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
-
-	// 6/100 = 6%, profil sans seuil : defaut 3% -> gele.
+func TestVeridianComputeReputationStatus_ComplaintIsAlertNotStop(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
-	veridianExpectRate(env, "messagerie-nord-776.fr", 0, 100, 6)
-	_, frozen := env.worker.veridianReputationGate(ws, &domain.EmailProvider{}, entry)
-	assert.True(t, frozen, "6%% doit geler au seuil par defaut de 3%%")
-
-	// Meme taux, profil a 0.08 -> libre.
-	env = newVeridianThrottleTestEnv(t)
-	veridianExpectRate(env, "messagerie-nord-776.fr", 0, 100, 6)
-	_, frozen = env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, entry)
-	assert.False(t, frozen, "6%% ne doit PAS geler un profil a 8%%")
-
-	// A 8% pile, le fusible reste atteint (>=).
-	env = newVeridianThrottleTestEnv(t)
-	veridianExpectRate(env, "messagerie-nord-776.fr", 0, 100, 8)
-	_, frozen = env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, entry)
-	assert.True(t, frozen, "8%% atteint le seuil 8%%")
-
-	// 16% (agences en chauffe) reste gele a 8%.
-	env = newVeridianThrottleTestEnv(t)
-	veridianExpectRate(env, "messagerie-nord-776.fr", 0, 31, 5)
-	_, frozen = env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, entry)
-	assert.True(t, frozen, "16%% doit rester gele a 8%%")
-}
-
-func TestVeridianReputationGate_ComplaintFreezesEvenWithRelaxedThreshold(t *testing.T) {
-	env := newVeridianThrottleTestEnv(t)
-	ws := &domain.Workspace{ID: "ws-1"}
-	entry := veridianReputationTestEntry("robert@messagerie-nord-776.fr")
-	veridianExpectRate(env, "messagerie-nord-776.fr", 1, 0, 0)
-	_, frozen := env.worker.veridianReputationGate(ws, &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.15}, entry)
-	assert.True(t, frozen, "une plainte gele toujours, quel que soit le seuil bounce")
-}
-
-func TestVeridianComputeReputationStatus_ExposesEffectiveThreshold(t *testing.T) {
-	// 6% au defaut -> gele, seuil expose 0.03 non custom.
-	env := newVeridianThrottleTestEnv(t)
-	veridianExpectRate(env, "agence-veridian.fr", 0, 216, 13)
-	st, err := VeridianComputeReputationStatus(env.worker.ctx, env.mockMessageHistoryRepo, "ws-1", "agence-veridian.fr", &domain.EmailProvider{}, time.Now())
-	assert.NoError(t, err)
-	assert.True(t, st.Frozen)
-	assert.InDelta(t, 0.03, st.Threshold, 1e-9)
-	assert.False(t, st.ThresholdCustom)
-
-	// Meme mesure, profil a 0.08 -> libre, seuil custom expose.
-	env = newVeridianThrottleTestEnv(t)
-	veridianExpectRate(env, "agence-veridian.fr", 0, 216, 13)
-	st, err = VeridianComputeReputationStatus(env.worker.ctx, env.mockMessageHistoryRepo, "ws-1", "agence-veridian.fr", &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, time.Now())
-	assert.NoError(t, err)
-	assert.False(t, st.Frozen)
-	assert.InDelta(t, 0.08, st.Threshold, 1e-9)
+	veridianExpectRepCounts(env, "agence-veridian.fr", 2, 100, map[string]domain.VeridianReputationCounts{"ovh": {Sent: 100}})
+	st, err := VeridianComputeReputationStatus(env.worker.ctx, env.mockMessageHistoryRepo, "ws-1", "agence-veridian.fr", &domain.EmailProvider{VeridianHardBounceFreezeThreshold: 0.08}, time.Now())
+	require.NoError(t, err)
+	assert.True(t, st.Alert)
+	assert.Equal(t, 4, st.DomainFactor)
+	assert.Empty(t, st.StoppedClasses, "une plainte n'arrete aucune classe")
+	assert.Equal(t, []string{"ovh"}, st.SlowedClasses)
+	assert.Equal(t, 4, st.Classes[0].Factor)
+	assert.Equal(t, "complaint", st.Classes[0].Reason)
 	assert.True(t, st.ThresholdCustom)
+	assert.InDelta(t, 0.08, st.Threshold, 1e-9)
 }

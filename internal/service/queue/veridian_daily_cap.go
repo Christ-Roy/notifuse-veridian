@@ -202,6 +202,8 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 	if len(classCaps) > 0 {
 		class := w.veridianClassifyRecipient(entry)
 		if classCap, ok := classCaps[class]; ok && classCap > 0 {
+			// Fusible de réputation proportionné (07/10) : plafond ÷ facteur.
+			classCap = veridianSlowCap(classCap, w.veridianSlowdownFactor(workspace, entry, class))
 			count, err := w.veridianCountClassForInfra(workspaceID, class, entry, since)
 			if err != nil {
 				w.logger.WithFields(map[string]interface{}{

@@ -423,3 +423,34 @@ func (mr *MockMessageHistoryRepositoryMockRecorder) Upsert(arg0, arg1, arg2, arg
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockMessageHistoryRepository)(nil).Upsert), arg0, arg1, arg2, arg3)
 }
+
+// ReputationCountsByClassSinceForSenderDomain mocks base method.
+func (m *MockMessageHistoryRepository) ReputationCountsByClassSinceForSenderDomain(arg0 context.Context, arg1, arg2 string, arg3 time.Time) (map[string]domain.VeridianReputationCounts, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReputationCountsByClassSinceForSenderDomain", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(map[string]domain.VeridianReputationCounts)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReputationCountsByClassSinceForSenderDomain indicates an expected call of ReputationCountsByClassSinceForSenderDomain.
+func (mr *MockMessageHistoryRepositoryMockRecorder) ReputationCountsByClassSinceForSenderDomain(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReputationCountsByClassSinceForSenderDomain", reflect.TypeOf((*MockMessageHistoryRepository)(nil).ReputationCountsByClassSinceForSenderDomain), arg0, arg1, arg2, arg3)
+}
+
+// RecentClassOutcomesForSenderDomain mocks base method.
+func (m *MockMessageHistoryRepository) RecentClassOutcomesForSenderDomain(arg0 context.Context, arg1, arg2, arg3 string, arg4 int, arg5 time.Time) (int, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecentClassOutcomesForSenderDomain", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// RecentClassOutcomesForSenderDomain indicates an expected call of RecentClassOutcomesForSenderDomain.
+func (mr *MockMessageHistoryRepositoryMockRecorder) RecentClassOutcomesForSenderDomain(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecentClassOutcomesForSenderDomain", reflect.TypeOf((*MockMessageHistoryRepository)(nil).RecentClassOutcomesForSenderDomain), arg0, arg1, arg2, arg3, arg4, arg5)
+}

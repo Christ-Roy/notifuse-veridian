@@ -241,6 +241,12 @@ func (r *poolCapTestRepo) CountSentSinceForSenderDomain(_ context.Context, _ str
 func (r *poolCapTestRepo) CountHardBouncedSinceForSenderDomain(context.Context, string, string, time.Time) (int, error) {
 	return 0, nil
 }
+func (r *poolCapTestRepo) ReputationCountsByClassSinceForSenderDomain(context.Context, string, string, time.Time) (map[string]domain.VeridianReputationCounts, error) {
+	return map[string]domain.VeridianReputationCounts{}, nil
+}
+func (r *poolCapTestRepo) RecentClassOutcomesForSenderDomain(context.Context, string, string, string, int, time.Time) (int, int, error) {
+	return 0, 0, nil
+}
 func (r *poolCapTestRepo) ListUnclassifiedSuccessfulMessagesSince(context.Context, string, time.Time) ([]domain.VeridianUnclassifiedSuccessfulMessage, error) {
 	return nil, nil
 }
