@@ -82,3 +82,29 @@ func TestVeridianEmailProfileCreateHandler(t *testing.T) {
 		assert.NotContains(t, rec.Body.String(), "abcdefgh")
 	})
 }
+
+func TestVeridianEmailProfileCreateHandlerRegistersPostRouteOnly(t *testing.T) {
+	h := newCreateHandlerForTest(t, &emailProfileCreateServiceStub{})
+	mux := nethttp.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	_, pattern := mux.Handler(httptest.NewRequest(nethttp.MethodPost, "/api/veridian/emailProfiles.create", nil))
+	assert.Equal(t, "POST /api/veridian/emailProfiles.create", pattern)
+	_, pattern = mux.Handler(httptest.NewRequest(nethttp.MethodGet, "/api/veridian/emailProfiles.create", nil))
+	assert.Empty(t, pattern, "une écriture ne se déclenche pas en GET")
+
+	// Sans jeton, l'accès est refusé : la route n'est pas publique.
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(nethttp.MethodPost, "/api/veridian/emailProfiles.create", strings.NewReader("{}")))
+	assert.Equal(t, nethttp.StatusUnauthorized, rec.Code)
+}
+
+func TestNewVeridianEmailProfileCreateHandlerRetainsDependencies(t *testing.T) {
+	svc := &emailProfileCreateServiceStub{}
+	h := newCreateHandlerForTest(t, svc)
+	assert.Same(t, svc, h.service)
+	require.NotNil(t, h.getJWTSecret)
+	secret, err := h.getJWTSecret()
+	require.NoError(t, err)
+	assert.Equal(t, []byte("secret"), secret)
+}

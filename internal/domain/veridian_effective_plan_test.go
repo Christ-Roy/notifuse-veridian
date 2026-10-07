@@ -51,3 +51,24 @@ func TestVeridianPlanGateAndBlockNamesAreStable(t *testing.T) {
 	assert.Equal(t, "window_closed", VeridianPlanBlockWindowClosed)
 	assert.Equal(t, "reputation_stopped", VeridianPlanBlockReputationStopped)
 }
+
+// Lot 3 : l'ecran « Profils d'envoi » affiche « Passerelles anti-spam : debit ÷2,
+// 9,9 % de rejets ». Le taux et le volume du couple font partie du contrat.
+func TestVeridianPlanClassSlowdownRateJSONContract(t *testing.T) {
+	raw, err := json.Marshal(VeridianPlanClass{
+		Class: "security_gateway", Factor: 2, Reason: "hard_bounce_rate", SlowdownRate: 0.099, Sent7d: 101,
+	})
+	require.NoError(t, err)
+	var generic map[string]any
+	require.NoError(t, json.Unmarshal(raw, &generic))
+	assert.InDelta(t, 0.099, generic["slowdown_rate"], 0.0001)
+	assert.EqualValues(t, 101, generic["sent_7d"])
+	assert.EqualValues(t, 2, generic["slowdown_factor"])
+	assert.Equal(t, "hard_bounce_rate", generic["slowdown_reason"])
+
+	// Une classe saine n'embarque pas de taux inutile.
+	raw, err = json.Marshal(VeridianPlanClass{Class: "google", Factor: 1})
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "slowdown_rate")
+	assert.NotContains(t, string(raw), "sent_7d")
+}

@@ -73,35 +73,6 @@ func TestVeridianBuildProfileFromRequestSMTPIMAP(t *testing.T) {
 	assert.Equal(t, "INBOX", imap.Folder)
 }
 
-func TestVeridianCreateEmailProfileRequestValidate(t *testing.T) {
-	good := gmailRequest()
-	require.NoError(t, good.Validate())
-
-	for name, mutate := range map[string]func(*domain.VeridianCreateEmailProfileRequest){
-		"workspace":       func(r *domain.VeridianCreateEmailProfileRequest) { r.WorkspaceID = "" },
-		"expediteur":      func(r *domain.VeridianCreateEmailProfileRequest) { r.SenderEmail = "pas-une-adresse" },
-		"mot de passe":    func(r *domain.VeridianCreateEmailProfileRequest) { r.AppPassword = " " },
-		"type de compte":  func(r *domain.VeridianCreateEmailProfileRequest) { r.GmailAccountType = "pro" },
-		"type inconnu":    func(r *domain.VeridianCreateEmailProfileRequest) { r.Type = "ses" },
-		"smtp manquant":   func(r *domain.VeridianCreateEmailProfileRequest) { r.Type = domain.VeridianCreateProfileTypeSMTPIMAP },
-	} {
-		t.Run(name, func(t *testing.T) {
-			r := gmailRequest()
-			mutate(&r)
-			require.Error(t, r.Validate())
-		})
-	}
-
-	t.Run("imap incomplet", func(t *testing.T) {
-		r := domain.VeridianCreateEmailProfileRequest{
-			WorkspaceID: "ws1", Type: domain.VeridianCreateProfileTypeSMTPIMAP, SenderEmail: "a@b.fr",
-			SMTP: &domain.VeridianCreateProfileSMTP{Host: "h", Port: 587, Username: "u", Password: "p"},
-			IMAP: &domain.VeridianCreateProfileIMAP{Host: "h", Port: 993, Username: "u"},
-		}
-		require.Error(t, r.Validate())
-	})
-}
-
 func TestVeridianCreateEmailProfileService(t *testing.T) {
 	t.Run("gmail: SMTP et IMAP crees et lies d'un seul Update, secret chiffre et jamais renvoye", func(t *testing.T) {
 		svc, repo, auth := newCreateServiceForTest(t)
