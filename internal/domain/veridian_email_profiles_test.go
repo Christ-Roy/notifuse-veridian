@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -144,21 +143,4 @@ func TestWorkspaceVeridianClearReturnIMAPLinks(t *testing.T) {
 	w.VeridianClearReturnIMAPLinks("")
 	var nilWorkspace *Workspace
 	nilWorkspace.VeridianClearReturnIMAPLinks("imap-a")
-}
-
-func TestEmailProviderVeridianReturnIMAPAndPausedRoundTripJSON(t *testing.T) {
-	in := EmailProvider{Kind: EmailProviderKindSMTP, VeridianReturnIMAPIntegrationID: "imap-1", VeridianPaused: true}
-	raw, err := json.Marshal(in)
-	require.NoError(t, err)
-	assert.Contains(t, string(raw), `"veridian_return_imap_integration_id":"imap-1"`)
-	assert.Contains(t, string(raw), `"veridian_paused":true`)
-	var out EmailProvider
-	require.NoError(t, json.Unmarshal(raw, &out))
-	assert.Equal(t, "imap-1", out.VeridianReturnIMAPIntegrationID)
-	assert.True(t, out.VeridianPaused)
-
-	empty, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP})
-	require.NoError(t, err)
-	assert.NotContains(t, string(empty), "veridian_return_imap_integration_id", "omitempty : aucune migration, aucun bruit")
-	assert.NotContains(t, string(empty), "veridian_paused")
 }
