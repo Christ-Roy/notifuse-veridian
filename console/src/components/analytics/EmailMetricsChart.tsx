@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Segmented, Alert, Row, Col, Statistic, Space, Tooltip, Card, Button } from 'antd'
-import { useLingui } from '@lingui/react/macro'
+import { useLingui, Plural } from '@lingui/react/macro'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faPaperPlane,
@@ -15,6 +15,14 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { ChartVisualization } from './ChartVisualization'
 import { analyticsService, AnalyticsQuery, AnalyticsResponse } from '../../services/api/analytics'
+import {
+  EMAIL_SERIES,
+  EXCLUDED_SERIES,
+  MERGED_TIME_DIMENSION,
+  MessageTypeFilter,
+  buildSeriesQuery,
+  mergeSeries
+} from './email_metrics_series'
 import { replyStatsApi } from '../../services/api/veridian_reply_stats'
 import { Workspace } from '../../services/api/types'
 
@@ -24,8 +32,6 @@ interface EmailMetricsChartProps {
   timezone?: string
 }
 
-type MessageTypeFilter = 'all' | 'broadcasts' | 'transactional'
-
 export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   workspace,
   timeRange = ['2024-01-01', '2024-12-31'],
@@ -34,7 +40,6 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   const { t } = useLingui()
   const [messageTypeFilter, setMessageTypeFilter] = useState<MessageTypeFilter>('all')
   const [data, setData] = useState<AnalyticsResponse | null>(null)
-  const [statsData, setStatsData] = useState<AnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -67,102 +72,25 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
     }))
   }
 
-  const buildQuery = (filter: MessageTypeFilter): AnalyticsQuery => {
-    // Only include measures that are visible
-    const visibleMeasures = [
+  const effectiveTimezone = timezone || workspace.settings.timezone || 'UTC'
+
+  // Requête SYNTHÉTIQUE décrivant la série fusionnée (voir email_metrics_series.ts :
+  // chaque mesure est groupée sur sa propre date d'événement). Sert uniquement à
+  // ChartVisualization (mesures visibles + colonne temporelle).
+  const buildChartQuery = (): AnalyticsQuery => ({
+    schema: 'message_history',
+    measures: [
       'count_sent',
       'count_bounced',
       'count_complained',
       'count_unsubscribed',
       'count_failed'
-    ].filter((measure) => visibleLines[measure])
-
-    const baseQuery: AnalyticsQuery = {
-      schema: 'message_history',
-      measures: visibleMeasures,
-      dimensions: [],
-      timezone: timezone || workspace.settings.timezone || 'UTC',
-      timeDimensions: [
-        {
-          dimension: 'created_at',
-          granularity: 'day',
-          dateRange: timeRange
-        }
-      ],
-      filters: []
-    }
-
-    // Add broadcast_id filter if not 'all'
-    if (filter === 'broadcasts') {
-      baseQuery.filters?.push({
-        member: 'broadcast_id',
-        operator: 'set',
-        values: []
-      })
-    } else if (filter === 'transactional') {
-      baseQuery.filters?.push({
-        member: 'broadcast_id',
-        operator: 'notSet',
-        values: []
-      })
-    }
-
-    return baseQuery
-  }
-
-  // Requête annexe : uniquement la mesure d'exclusions volontaires. Best-effort
-  // (voir fetchData) : tant que le backend ne l'expose pas, elle échoue et la
-  // répartition Exclus / Échec réel reste indisponible.
-  const buildExcludedQuery = (filter: MessageTypeFilter): AnalyticsQuery => ({
-    ...buildStatsQuery(filter),
-    measures: ['count_failed_excluded']
+    ].filter((measure) => visibleLines[measure]),
+    dimensions: [],
+    timezone: effectiveTimezone,
+    timeDimensions: [{ dimension: MERGED_TIME_DIMENSION, granularity: 'day', dateRange: timeRange }],
+    filters: []
   })
-
-  const buildStatsQuery = (filter: MessageTypeFilter): AnalyticsQuery => {
-    // Stats query should always include all measures regardless of visibility.
-    // Veridian — count_bounced_hard / count_bounced_soft split the Bounced KPI
-    // (hard = dead address / reputation grilling, soft = transient). Surfaced in
-    // the Bounced card tooltip. Cf. 2026-06-16-kpi-bounce-hard-soft-dashboard.md.
-    const baseQuery: AnalyticsQuery = {
-      schema: 'message_history',
-      measures: [
-        'count_sent',
-        'count_bounced',
-        'count_bounced_hard',
-        'count_bounced_soft',
-        'count_complained',
-        'count_unsubscribed',
-        'count_failed'
-      ],
-      dimensions: [],
-      timezone: timezone || workspace.settings.timezone || 'UTC',
-      timeDimensions: [
-        {
-          dimension: 'created_at',
-          granularity: 'day', // We need granularity, but we'll aggregate the results
-          dateRange: timeRange
-        }
-      ],
-      filters: []
-    }
-
-    // Add broadcast_id filter if not 'all'
-    if (filter === 'broadcasts') {
-      baseQuery.filters?.push({
-        member: 'broadcast_id',
-        operator: 'set',
-        values: []
-      })
-    } else if (filter === 'transactional') {
-      baseQuery.filters?.push({
-        member: 'broadcast_id',
-        operator: 'notSet',
-        values: []
-      })
-    }
-
-    return baseQuery
-  }
 
   const fetchData = async (filter: MessageTypeFilter) => {
     try {
@@ -170,13 +98,18 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
       setStatsLoading(true)
       setError(null)
 
-      // Fetch chart data, stats data, and reply count in parallel. Le reply est
-      // contact-level (pas message-level), donc PAS filtré par broadcast/transactional :
-      // on le compte sur la même fenêtre temporelle uniquement. Best-effort : un échec
-      // de l'endpoint reply ne casse pas le dashboard (replied reste à 0).
-      const [chartResponse, statsResponse, replyResponse, excludedResponse] = await Promise.all([
-        analyticsService.query(buildQuery(filter), workspace.id),
-        analyticsService.query(buildStatsQuery(filter), workspace.id),
+      // Une requête par famille de mesures (chacune sur sa date d'événement), plus
+      // le reply (contact-level, donc PAS filtré par broadcast/transactional : on le
+      // compte sur la même fenêtre uniquement) et les exclusions volontaires.
+      // Best-effort : un échec du reply ou des exclusions ne casse pas le dashboard.
+      const [seriesResponses, replyResponse, excludedResponse] = await Promise.all([
+        Promise.all(
+          EMAIL_SERIES.map((def) =>
+            analyticsService
+              .query(buildSeriesQuery(def, filter, timeRange, effectiveTimezone), workspace.id)
+              .then((response) => ({ def, response }))
+          )
+        ),
         replyStatsApi
           .get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] })
           .catch((replyErr) => {
@@ -184,12 +117,11 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             return { replied: 0, replied_human: undefined }
           }),
         analyticsService
-          .query(buildExcludedQuery(filter), workspace.id)
+          .query(buildSeriesQuery(EXCLUDED_SERIES, filter, timeRange, effectiveTimezone), workspace.id)
           .catch(() => null)
       ])
 
-      setData(chartResponse)
-      setStatsData(statsResponse)
+      setData(mergeSeries(seriesResponses))
       setReplied(replyResponse.replied)
       setRepliedHuman(
         typeof replyResponse.replied_human === 'number' ? replyResponse.replied_human : null
@@ -211,7 +143,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   useEffect(() => {
     fetchData(messageTypeFilter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.id, messageTypeFilter, timeRange, visibleLines])
+  }, [workspace.id, messageTypeFilter, timeRange, timezone])
 
   const handleFilterChange = (value: MessageTypeFilter) => {
     setMessageTypeFilter(value)
@@ -252,7 +184,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   }
 
   const stats: EmailStats =
-    statsData?.data?.reduce<EmailStats>(
+    data?.data?.reduce<EmailStats>(
       (acc, row) => ({
         count_sent: acc.count_sent + toNumber(row.count_sent),
         count_bounced: acc.count_bounced + toNumber(row.count_bounced),
@@ -409,7 +341,11 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
               />
               {autoReplies > 0 && (
                 <div className="text-xs text-gray-500" data-testid="auto-replies">
-                  {t`+${autoReplies} automatic replies`}
+                  <Plural
+                    value={autoReplies}
+                    one="+# automatic reply"
+                    other="+# automatic replies"
+                  />
                 </div>
               )}
             </div>
@@ -575,7 +511,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
       <ChartVisualization
         data={data}
         chartType="line"
-        query={buildQuery(messageTypeFilter)}
+        query={buildChartQuery()}
         loading={loading}
         error={error}
         height={220}

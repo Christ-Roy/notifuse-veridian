@@ -159,8 +159,8 @@ func TestSQLBuilder_BuildSQL(t *testing.T) {
 					DateRange:   &[2]string{"2024-01-01", "2024-12-31"},
 				}},
 			},
-			expectedSQL:  "SELECT (COUNT(*)) AS count, (DATE_TRUNC('day', created_at)) AS created_at_day FROM message_history WHERE created_at >= $1 AND created_at <= $2 GROUP BY created_at_day",
-			expectedArgs: []interface{}{"2024-01-01", "2024-12-31"},
+			expectedSQL:  "SELECT (COUNT(*)) AS count, (DATE_TRUNC('day', created_at)) AS created_at_day FROM message_history WHERE created_at >= $1 AND created_at < $2 GROUP BY created_at_day",
+			expectedArgs: []interface{}{"2024-01-01", "2025-01-01"},
 		},
 		{
 			name: "query with order by",
@@ -205,8 +205,8 @@ func TestSQLBuilder_BuildSQL(t *testing.T) {
 				},
 				Limit: intPtr(100),
 			},
-			expectedSQL:  "SELECT (COUNT(*)) AS count, (COUNT(*) FILTER (WHERE sent_at IS NOT NULL)) AS count_sent, contact_email AS contact_email, (DATE_TRUNC('day', created_at)) AS created_at_day FROM message_history WHERE broadcast_id <> $1 AND created_at >= $2 AND created_at <= $3 GROUP BY contact_email, created_at_day ORDER BY created_at DESC LIMIT 100",
-			expectedArgs: []interface{}{"test-broadcast", "2024-01-01", "2024-12-31"},
+			expectedSQL:  "SELECT (COUNT(*)) AS count, (COUNT(*) FILTER (WHERE sent_at IS NOT NULL)) AS count_sent, contact_email AS contact_email, (DATE_TRUNC('day', created_at)) AS created_at_day FROM message_history WHERE broadcast_id <> $1 AND created_at >= $2 AND created_at < $3 GROUP BY contact_email, created_at_day ORDER BY created_at DESC LIMIT 100",
+			expectedArgs: []interface{}{"test-broadcast", "2024-01-01", "2025-01-01"},
 		},
 		{
 			name: "invalid measure",
@@ -314,8 +314,8 @@ func TestSQLBuilder_BuildSQL(t *testing.T) {
 					Values:   []string{"2024-01-01", "2024-03-31"},
 				}},
 			},
-			expectedSQL:  "SELECT (COUNT(*)) AS count FROM message_history WHERE (created_at >= $1 AND created_at <= $2)",
-			expectedArgs: []interface{}{"2024-01-01", "2024-03-31"},
+			expectedSQL:  "SELECT (COUNT(*)) AS count FROM message_history WHERE (created_at >= $1 AND created_at < $2)",
+			expectedArgs: []interface{}{"2024-01-01", "2024-04-01"},
 		},
 		{
 			name: "query with beforeDate filter",
@@ -682,8 +682,8 @@ func TestSQLBuilder_buildFilterCondition(t *testing.T) {
 				Operator: "inDateRange",
 				Values:   []string{"2024-01-01", "2024-12-31"},
 			},
-			expectedSQL:  "(created_at >= ? AND created_at <= ?)",
-			expectedArgs: []interface{}{"2024-01-01", "2024-12-31"},
+			expectedSQL:  "(created_at >= ? AND created_at < ?)",
+			expectedArgs: []interface{}{"2024-01-01", "2025-01-01"},
 		},
 		{
 			name:      "not in date range",
@@ -692,8 +692,8 @@ func TestSQLBuilder_buildFilterCondition(t *testing.T) {
 				Operator: "notInDateRange",
 				Values:   []string{"2024-06-01", "2024-06-30"},
 			},
-			expectedSQL:  "(created_at < ? OR created_at > ?)",
-			expectedArgs: []interface{}{"2024-06-01", "2024-06-30"},
+			expectedSQL:  "(created_at < ? OR created_at >= ?)",
+			expectedArgs: []interface{}{"2024-06-01", "2024-07-01"},
 		},
 		{
 			name:      "before date",
@@ -2697,5 +2697,20 @@ func TestBuildMeasureSQL_EdgeCases(t *testing.T) {
 			result := builder.buildMeasureSQL(tt.measureType, tt.sql, tt.filters)
 			assert.Equal(t, tt.expected, result, tt.description)
 		})
+	}
+}
+
+// Regression : une date de fin nue est INCLUSIVE (la journee de fin compte).
+func TestUpperBoundCondition_DateOnlyIsInclusive(t *testing.T) {
+	sql, args, err := upperBoundCondition("sent_at", "2026-10-07").ToSql()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sql != "sent_at < ?" || len(args) != 1 || args[0] != "2026-10-08" {
+		t.Fatalf("date nue: attendu 'sent_at < ?' [2026-10-08], obtenu %q %v", sql, args)
+	}
+	sql, args, _ = upperBoundCondition("sent_at", "2026-10-07T12:00:00Z").ToSql()
+	if sql != "sent_at <= ?" || args[0] != "2026-10-07T12:00:00Z" {
+		t.Fatalf("timestamp: borne inchangee attendue, obtenu %q %v", sql, args)
 	}
 }

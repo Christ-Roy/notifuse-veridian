@@ -6,68 +6,39 @@ import {
   engagementByClassApi,
   VeridianClassEngagement
 } from '../../services/api/veridian_engagement_by_class'
-import {
-  VERIDIAN_PROVIDER_CLASSES,
-  VeridianProviderClass
-} from '../../services/api/workspace'
+import { VERIDIAN_PROVIDER_CLASSES } from '../../services/api/workspace'
 import { Workspace } from '../../services/api/types'
 
-// Veridian — tableau d'ENGAGEMENT (sent/delivered/bounced/opened/clicked) PAR
-// CLASSE de provider destinataire, sur la fenêtre du dashboard. Permet de
-// repérer une classe qui se dégrade (bounce rate Microsoft qui monte = signal
-// d'arrêt AVANT de griller le domaine). Cf.
-// todo/2026-06-16-kpi-engagement-par-classe-provider.md.
+// Veridian — tableau d'ENGAGEMENT PAR CLASSE de provider destinataire, sur la
+// fenêtre du dashboard : envoyés, taux de rejet, taux de réponses humaines. Permet
+// de repérer une classe qui se dégrade (rejets Microsoft qui montent = signal
+// d'arrêt AVANT de griller le domaine).
 //
-// ⚠️ La classification backend est par SUFFIXE de domaine (pas MX, zéro lookup
-// sur un dashboard de masse) → les classes MX (ovh/ionos/…) tombent en
-// `corporate` ici. Dégradation gracieuse assumée (l'enforcement réputation
-// utilise bien le MX à l'envoi). Une note le dit dans le tooltip du titre.
+// La classe vient de la colonne persistée message_history.veridian_provider_class
+// (résolution MX faite à l'envoi), pas d'un découpage par suffixe de domaine.
+// Pas de colonnes Livré / Open / Click : mails texte brut, aucun accusé de
+// livraison renvoyé par le relais (le bandeau des métriques le dit).
 
 interface VeridianEngagementByClassProps {
   workspace: Workspace
   timeRange?: [string, string]
 }
 
-// Libellés LITTÉRAUX (noms propres → pas de `t` : piège Lingui d'extraction de
-// `t` paramétré hors composant, cf. memory feedback_lingui_t_param_hors_composant).
-function classLabel(c: VeridianProviderClass): string {
-  switch (c) {
-    case 'google':
-      return 'Google (Gmail / Workspace)'
-    case 'microsoft':
-      return 'Microsoft (Outlook / Microsoft 365)'
-    case 'yahoo_aol':
-      return 'Yahoo / AOL'
-    case 'freemail_fr':
-      return 'French ISPs (Orange, SFR, Free…)'
-    case 'corporate':
-      return 'Corporate (unknown by suffix)'
-    case 'ovh':
-      return 'OVH (MX-resolved)'
-    case 'ionos':
-      return 'IONOS / 1&1 (MX-resolved)'
-    case 'apple_icloud':
-      return 'Apple iCloud (MX-resolved)'
-    case 'security_gateway':
-      return 'Anti-spam gateway (Vade, Mailinblack, Proofpoint…)'
-    case 'other_hoster':
-      return 'Other hosters (Infomaniak, Gandi, Zoho…)'
-    case 'corporate_selfhost':
-      return 'Corporate self-hosted (MX unknown)'
-  }
-}
+// Messages sans classe persistée (antérieurs à la classification).
+const UNCLASSIFIED = 'unclassified'
 
 interface ClassRow extends VeridianClassEngagement {
   key: string
-  class: VeridianProviderClass
+  class: string
 }
 
-const EMPTY: VeridianClassEngagement = {
-  sent: 0,
-  delivered: 0,
-  bounced: 0,
-  opened: 0,
-  clicked: 0
+const EMPTY: VeridianClassEngagement = { sent: 0, bounced: 0, replied_human: 0 }
+
+// Taux affiché modulo dénominateur 0 (— si rien envoyé).
+export const formatRate = (num: number, denom: number): string => {
+  if (denom === 0) return '—'
+  const pct = (num / denom) * 100
+  return pct === 0 || pct >= 10 ? `${Math.round(pct)}%` : `${pct.toFixed(1)}%`
 }
 
 export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps> = ({
@@ -94,7 +65,9 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
       } catch (err) {
         if (!cancelled) {
           console.error('Failed to fetch engagement by class:', err)
-          setError(err instanceof Error ? err.message : t`Failed to fetch engagement by provider class`)
+          setError(
+            err instanceof Error ? err.message : t`Failed to fetch engagement by provider class`
+          )
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -106,19 +79,41 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
     }
   }, [workspace.id, timeRange, t])
 
-  // Taux affiché modulo dénominateur 0 (— si rien envoyé).
-  const rate = (num: number, denom: number): string => {
-    if (denom === 0) return '—'
-    const pct = (num / denom) * 100
-    return pct === 0 || pct >= 10 ? `${Math.round(pct)}%` : `${pct.toFixed(1)}%`
+  const classLabel = (c: string): string => {
+    switch (c) {
+      case 'google':
+        return t`Google (Gmail / Workspace)`
+      case 'microsoft':
+        return t`Microsoft (Outlook / Microsoft 365)`
+      case 'yahoo_aol':
+        return t`Yahoo / AOL`
+      case 'freemail_fr':
+        return t`French ISPs (Orange, SFR, Free…)`
+      case 'corporate':
+        return t`Corporate (host unknown)`
+      case 'ovh':
+        return t`OVH`
+      case 'ionos':
+        return t`IONOS / 1&1`
+      case 'apple_icloud':
+        return t`Apple iCloud`
+      case 'security_gateway':
+        return t`Anti-spam gateway (Vade, Mailinblack, Proofpoint…)`
+      case 'other_hoster':
+        return t`Other hosters (Infomaniak, Gandi, Zoho…)`
+      case 'corporate_selfhost':
+        return t`Corporate self-hosted`
+      default:
+        return t`Unclassified`
+    }
   }
 
-  // Une ligne par classe canonique, même hors data (compteurs à 0) pour une
-  // grille stable. On masque les classes 100% vides pour ne pas noyer le signal.
-  const rows: ClassRow[] = VERIDIAN_PROVIDER_CLASSES.map((c) => {
-    const e = byClass[c] || EMPTY
-    return { key: c, class: c, ...e }
-  }).filter((r) => r.sent > 0 || r.delivered > 0 || r.bounced > 0 || r.opened > 0 || r.clicked > 0)
+  // Une ligne par classe ayant de l'activité (les classes 100 % vides sont
+  // masquées pour ne pas noyer le signal), triées par envois décroissants.
+  const rows: ClassRow[] = [...VERIDIAN_PROVIDER_CLASSES, UNCLASSIFIED]
+    .map((c) => ({ key: c, class: c, ...(byClass[c] || EMPTY) }))
+    .filter((r) => r.sent > 0 || r.bounced > 0 || r.replied_human > 0)
+    .sort((a, b) => b.sent - a.sent)
 
   const columns: ColumnsType<ClassRow> = [
     {
@@ -132,16 +127,7 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
       dataIndex: 'sent',
       key: 'sent',
       align: 'right',
-      sorter: (a, b) => a.sent - b.sent,
-      defaultSortOrder: 'descend'
-    },
-    {
-      title: t`Delivered`,
-      key: 'delivered',
-      align: 'right',
-      render: (_: unknown, r: ClassRow) => (
-        <Tooltip title={t`${r.delivered} delivered`}>{rate(r.delivered, r.sent)}</Tooltip>
-      )
+      render: (_: unknown, r: ClassRow) => r.sent.toLocaleString()
     },
     {
       title: t`Bounce`,
@@ -149,31 +135,25 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
       align: 'right',
       render: (_: unknown, r: ClassRow) => {
         const pct = r.sent === 0 ? 0 : (r.bounced / r.sent) * 100
-        // Rouge si le bounce dépasse 5% (seuil de vigilance réputation cold).
+        // Rouge si le rejet dépasse 5% (seuil de vigilance réputation cold).
         const danger = pct >= 5
         return (
           <Tooltip title={t`${r.bounced} bounced`}>
             <span style={danger ? { color: '#ef4444', fontWeight: 600 } : undefined}>
-              {rate(r.bounced, r.sent)}
+              {formatRate(r.bounced, r.sent)}
             </span>
           </Tooltip>
         )
       }
     },
     {
-      title: t`Open`,
-      key: 'opened',
+      title: t`Human replies`,
+      key: 'replied_human',
       align: 'right',
       render: (_: unknown, r: ClassRow) => (
-        <Tooltip title={t`${r.opened} opened`}>{rate(r.opened, r.sent)}</Tooltip>
-      )
-    },
-    {
-      title: t`Click`,
-      key: 'clicked',
-      align: 'right',
-      render: (_: unknown, r: ClassRow) => (
-        <Tooltip title={t`${r.clicked} clicked`}>{rate(r.clicked, r.sent)}</Tooltip>
+        <Tooltip title={t`${r.replied_human} human replies`}>
+          <span>{formatRate(r.replied_human, r.sent)}</span>
+        </Tooltip>
       )
     }
   ]
@@ -182,7 +162,7 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
     <Card
       title={
         <Tooltip
-          title={t`Recipients are grouped by their mailbox provider (Google, Microsoft, French ISPs…). Watch the bounce rate per class: a rising bounce rate on one provider is an early signal to slow down BEFORE the domain reputation is burned. Note: classes are derived by domain suffix here (not a live MX lookup), so custom domains hosted on Google/Microsoft/OVH fall under "Corporate"; the sending engine still uses the real MX to throttle.`}
+          title={t`Recipients are grouped by their mailbox provider class, resolved at send time (OVH, IONOS, anti-spam gateways, Google, Microsoft…). Watch the bounce rate per class: a rising rate on one class is an early signal to slow down BEFORE the domain reputation is burned. Sends are counted on their send date, bounces on their bounce date, human replies on their reply date.`}
         >
           <span>{t`Engagement by provider class`}</span>
         </Tooltip>

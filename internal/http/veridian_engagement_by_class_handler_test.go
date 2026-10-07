@@ -31,9 +31,9 @@ func newEngagementByClassHandler(ctrl *gomock.Controller) (*VeridianEngagementBy
 func sampleEngagement() *domain.VeridianEngagementByClass {
 	return &domain.VeridianEngagementByClass{
 		ByClass: map[string]domain.VeridianClassEngagement{
-			domain.ProviderClassGoogle: {Sent: 10, Delivered: 9, Bounced: 1, Opened: 4, Clicked: 1},
+			domain.ProviderClassGoogle: {Sent: 10, Bounced: 1},
 		},
-		Total: domain.VeridianClassEngagement{Sent: 10, Delivered: 9, Bounced: 1, Opened: 4, Clicked: 1},
+		Total: domain.VeridianClassEngagement{Sent: 10, Bounced: 1},
 	}
 }
 

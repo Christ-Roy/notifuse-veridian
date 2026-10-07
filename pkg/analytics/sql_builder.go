@@ -128,7 +128,7 @@ func (sb *SQLBuilder) BuildSQL(query Query, schema SchemaDefinition) (string, []
 			}
 
 			selectBuilder = selectBuilder.Where(squirrel.GtOrEq{dimensionSQL: timeDim.DateRange[0]})
-			selectBuilder = selectBuilder.Where(squirrel.LtOrEq{dimensionSQL: timeDim.DateRange[1]})
+			selectBuilder = selectBuilder.Where(upperBoundCondition(dimensionSQL, timeDim.DateRange[1]))
 		}
 	}
 
@@ -193,6 +193,36 @@ func (sb *SQLBuilder) BuildSQL(query Query, schema SchemaDefinition) (string, []
 	}
 
 	return sql, args, nil
+}
+
+// nextDay renvoie le lendemain d'une date nue (YYYY-MM-DD). ok=false si la
+// valeur n'est pas une date nue (timestamp complet : borne inchangee).
+func nextDay(v string) (string, bool) {
+	t, err := time.Parse("2006-01-02", v)
+	if err != nil {
+		return "", false
+	}
+	return t.AddDate(0, 0, 1).Format("2006-01-02"), true
+}
+
+// upperBoundCondition borne haute d'une plage. Une date nue est INCLUSIVE
+// (le dashboard passe [debut, fin] en dates) : "<= '2026-10-08'" comparerait a
+// minuit et exclurait toute la journee de fin (bug : aujourd'hui absent des
+// courbes et des cartes). On borne donc au lendemain exclu. Un timestamp complet
+// garde le "<=" d'origine.
+func upperBoundCondition(col, v string) squirrel.Sqlizer {
+	if next, ok := nextDay(v); ok {
+		return squirrel.Lt{col: next}
+	}
+	return squirrel.LtOrEq{col: v}
+}
+
+// notUpperBoundCondition est le complement de upperBoundCondition.
+func notUpperBoundCondition(col, v string) squirrel.Sqlizer {
+	if next, ok := nextDay(v); ok {
+		return squirrel.GtOrEq{col: next}
+	}
+	return squirrel.Gt{col: v}
 }
 
 // buildTimeDimensionSQL generates SQL for time dimension grouping based on granularity
@@ -305,7 +335,7 @@ func (sb *SQLBuilder) buildFilterCondition(memberSQL string, filter Filter) (squ
 		}
 		return squirrel.And{
 			squirrel.GtOrEq{memberSQL: filter.Values[0]},
-			squirrel.LtOrEq{memberSQL: filter.Values[1]},
+			upperBoundCondition(memberSQL, filter.Values[1]),
 		}, nil
 	case "notInDateRange":
 		if len(filter.Values) != 2 {
@@ -313,7 +343,7 @@ func (sb *SQLBuilder) buildFilterCondition(memberSQL string, filter Filter) (squ
 		}
 		return squirrel.Or{
 			squirrel.Lt{memberSQL: filter.Values[0]},
-			squirrel.Gt{memberSQL: filter.Values[1]},
+			notUpperBoundCondition(memberSQL, filter.Values[1]),
 		}, nil
 	case "beforeDate":
 		if len(filter.Values) != 1 {

@@ -60,9 +60,9 @@ func (s *veridianEngagementByClassService) GetEngagementByClass(
 		)
 	}
 
-	rows, err := s.repo.GetEngagementByDomain(ctx, req.WorkspaceID, req.Since, req.Until)
+	rows, err := s.repo.GetEngagementByClass(ctx, req.WorkspaceID, req.Since, req.Until)
 	if err != nil {
-		s.logger.WithField("error", err.Error()).Error("Failed to fetch engagement by domain")
+		s.logger.WithField("error", err.Error()).Error("Failed to fetch engagement by class")
 		return nil, fmt.Errorf("failed to fetch engagement by class: %w", err)
 	}
 

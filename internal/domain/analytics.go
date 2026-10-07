@@ -209,6 +209,32 @@ var PredefinedSchemas = map[string]analytics.SchemaDefinition{
 				SQL:         "sent_at",
 				Description: "Message sent timestamp",
 			},
+			// Veridian : une serie se groupe sur SA date d'evenement, pas sur created_at
+			// (date de mise en file). Envoyes -> sent_at, rejets -> bounced_at, etc.
+			"bounced_at": {
+				Type:        "time",
+				Title:       "Bounced At",
+				SQL:         "bounced_at",
+				Description: "Message bounce timestamp",
+			},
+			"complained_at": {
+				Type:        "time",
+				Title:       "Complained At",
+				SQL:         "complained_at",
+				Description: "Message complaint timestamp",
+			},
+			"unsubscribed_at": {
+				Type:        "time",
+				Title:       "Unsubscribed At",
+				SQL:         "unsubscribed_at",
+				Description: "Message unsubscribe timestamp",
+			},
+			"failed_at": {
+				Type:        "time",
+				Title:       "Failed At",
+				SQL:         "failed_at",
+				Description: "Message failure timestamp",
+			},
 			"contact_email": {
 				Type:        "string",
 				Title:       "Contact Email",

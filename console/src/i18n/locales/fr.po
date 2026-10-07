@@ -86,14 +86,13 @@ msgid "{0} accepted, {1} quota slots used today ({2})"
 msgstr ""
 
 #. placeholder {0}: r.bounced
-#: src/components/analytics/veridian_engagement_by_class.tsx:155
+#: src/components/analytics/veridian_engagement_by_class.tsx:141
 msgid "{0} bounced"
-msgstr ""
+msgstr "{0} rejetés"
 
-#. placeholder {0}: r.clicked
 #: src/components/analytics/veridian_engagement_by_class.tsx:176
-msgid "{0} clicked"
-msgstr ""
+#~ msgid "{0} clicked"
+#~ msgstr ""
 
 #. placeholder {0}: previewResponse.total_count
 #: src/components/segment/button_upsert.tsx:606
@@ -105,10 +104,9 @@ msgstr "{0} contacts"
 msgid "{0} contacts will be skipped"
 msgstr ""
 
-#. placeholder {0}: r.delivered
 #: src/components/analytics/veridian_engagement_by_class.tsx:143
-msgid "{0} delivered"
-msgstr ""
+#~ msgid "{0} delivered"
+#~ msgstr ""
 
 #. placeholder {0}: provider.veridian_profile_daily_cap
 #: src/components/settings/Integrations.tsx:411
@@ -122,7 +120,7 @@ msgid "{0} emails accepted today ({1})"
 msgstr ""
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:429
+#: src/components/analytics/EmailMetricsChart.tsx:365
 msgid "{0} emails bounced back"
 msgstr "{0} emails rejetés"
 
@@ -132,7 +130,7 @@ msgid "{0} emails bounced back - Click to view details"
 msgstr "{0} emails rejetés - Cliquez pour voir les détails"
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:428
+#: src/components/analytics/EmailMetricsChart.tsx:364
 msgid "{0} emails bounced back (hidden from chart)"
 msgstr "{0} emails rejetés (masqués du graphique)"
 
@@ -172,6 +170,11 @@ msgstr "{0} emails/min"
 msgid "{0} excluded"
 msgstr ""
 
+#. placeholder {0}: r.replied_human
+#: src/components/analytics/veridian_engagement_by_class.tsx:154
+msgid "{0} human replies"
+msgstr "{0} réponses humaines"
+
 #. placeholder {0}: dayjs(dateString).format('lll')
 #. placeholder {1}: currentWorkspace?.settings.timezone || 'UTC'
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:338
@@ -185,10 +188,9 @@ msgstr "{0} dans {1}"
 msgid "{0} of {1}"
 msgstr "{0} sur {1}"
 
-#. placeholder {0}: r.opened
 #: src/components/analytics/veridian_engagement_by_class.tsx:168
-msgid "{0} opened"
-msgstr ""
+#~ msgid "{0} opened"
+#~ msgstr ""
 
 #. placeholder {0}: usage.remaining
 #: src/components/settings/Integrations.tsx:406
@@ -214,7 +216,7 @@ msgstr "{0} clics au total - Cliquez pour voir les détails"
 #~ msgstr "{0} clics au total (masqués du graphique)"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:460
+#: src/components/analytics/EmailMetricsChart.tsx:396
 msgid "{0} total complaints"
 msgstr "{0} plaintes au total"
 
@@ -224,12 +226,12 @@ msgid "{0} total complaints - Click to view details"
 msgstr "{0} plaintes au total - Cliquez pour voir les détails"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:460
+#: src/components/analytics/EmailMetricsChart.tsx:396
 msgid "{0} total complaints (hidden from chart)"
 msgstr "{0} plaintes au total (masqués du graphique)"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:358
+#: src/components/analytics/EmailMetricsChart.tsx:290
 msgid "{0} total emails sent"
 msgstr "{0} emails envoyés au total"
 
@@ -239,12 +241,12 @@ msgid "{0} total emails sent - Click to view details"
 msgstr "{0} emails envoyés au total - Cliquez pour voir les détails"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:358
+#: src/components/analytics/EmailMetricsChart.tsx:290
 msgid "{0} total emails sent (hidden from chart)"
 msgstr "{0} emails envoyés au total (masqués du graphique)"
 
 #. placeholder {0}: stats.count_failed
-#: src/components/analytics/EmailMetricsChart.tsx:543
+#: src/components/analytics/EmailMetricsChart.tsx:479
 msgid "{0} total failures (deliberate exclusions not yet separated)"
 msgstr "{0} échecs au total (exclusions volontaires pas encore séparées)"
 
@@ -262,7 +264,7 @@ msgstr "{0} ouvertures au total - Cliquez pour voir les détails"
 #~ msgstr "{0} ouvertures au total (masqués du graphique)"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:487
+#: src/components/analytics/EmailMetricsChart.tsx:423
 msgid "{0} total unsubscribes"
 msgstr "{0} désinscriptions au total"
 
@@ -272,7 +274,7 @@ msgid "{0} total unsubscribes - Click to view details"
 msgstr "{0} désinscriptions au total - Cliquez pour voir les détails"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:487
+#: src/components/analytics/EmailMetricsChart.tsx:423
 msgid "{0} total unsubscribes (hidden from chart)"
 msgstr "{0} désinscriptions au total (masqués du graphique)"
 
@@ -296,6 +298,10 @@ msgstr ""
 msgid "{activeCount} active profiles"
 msgstr ""
 
+#: src/components/analytics/EmailMetricsChart.tsx:344
+msgid "{autoReplies, plural, one {+# automatic reply} other {+# automatic replies}}"
+msgstr "{autoReplies, plural, one {+# réponse automatique} other {+# réponses automatiques}}"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2339
 msgid "{cap} / day"
 msgstr ""
@@ -304,11 +310,11 @@ msgstr ""
 msgid "{clicks} clicks out of {recipients} recipients"
 msgstr "{clicks} clics sur {recipients} destinataires"
 
-#: src/components/analytics/EmailMetricsChart.tsx:517
+#: src/components/analytics/EmailMetricsChart.tsx:453
 msgid "{failedExcluded} recipients deliberately excluded before sending (invalid address, excluded provider class). Not a delivery problem."
 msgstr "{failedExcluded} destinataires exclus volontairement avant l'envoi (adresse invalide, classe de fournisseur exclue). Ce n'est pas un problème de délivrabilité."
 
-#: src/components/analytics/EmailMetricsChart.tsx:392
+#: src/components/analytics/EmailMetricsChart.tsx:324
 msgid "{humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
 msgstr "{humanReplies} contacts ont répondu humainement (taux de réponse = réponses humaines / envoyés, le KPI n°1 de la prospection froide). Les réponses automatiques (absence, accusé de réception) ne comptent pas dans le taux. Toutes campagnes confondues : le signal de réponse n'est pas rattaché à un envoi précis, cette carte ignore donc le filtre Tous/Diffusions/Transactionnel."
 
@@ -352,11 +358,11 @@ msgstr "{propertyCount} propriétés"
 msgid "{rate} / min"
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:545
+#: src/components/analytics/EmailMetricsChart.tsx:481
 msgid "{realFailed} emails really failed to send (hidden from chart, the chart line shows all failures)"
 msgstr "{realFailed} emails réellement en échec (masqués du graphique, la courbe montre tous les échecs)"
 
-#: src/components/analytics/EmailMetricsChart.tsx:546
+#: src/components/analytics/EmailMetricsChart.tsx:482
 msgid "{realFailed} emails really failed to send (the chart line shows all failures)"
 msgstr "{realFailed} emails réellement en échec (la courbe montre tous les échecs)"
 
@@ -417,8 +423,8 @@ msgid "+ Add variation"
 msgstr "+ Ajouter une variation"
 
 #: src/components/analytics/EmailMetricsChart.tsx:412
-msgid "+{autoReplies} automatic replies"
-msgstr "+{autoReplies} réponses automatiques"
+#~ msgid "+{autoReplies} automatic replies"
+#~ msgstr "+{autoReplies} réponses automatiques"
 
 #. placeholder {0}: Math.round(jitter * 100)
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1870
@@ -945,7 +951,7 @@ msgstr "Aligner en haut"
 msgid "Alignment"
 msgstr "Alignement"
 
-#: src/components/analytics/EmailMetricsChart.tsx:310
+#: src/components/analytics/EmailMetricsChart.tsx:242
 #: src/pages/TemplatesPage.tsx:77
 msgid "All"
 msgstr "Tout"
@@ -1054,6 +1060,10 @@ msgstr ""
 msgid "Anti-hash window hours {idSuffix}"
 msgstr ""
 
+#: src/components/analytics/veridian_engagement_by_class.tsx:101
+msgid "Anti-spam gateway (Vade, Mailinblack, Proofpoint…)"
+msgstr "Passerelle antispam (Vade, Mailinblack, Proofpoint…)"
+
 #: src/components/segment/input.tsx:885
 msgid "ANY"
 msgstr "N IMPORTE"
@@ -1139,6 +1149,10 @@ msgstr "Clés API"
 #: src/components/settings/WorkspaceMembers.tsx:707
 msgid "API Token"
 msgstr "Jeton API"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:99
+msgid "Apple iCloud"
+msgstr "Apple iCloud"
 
 #: src/components/messages/MessageHistoryTab.tsx:548
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2226
@@ -1432,7 +1446,7 @@ msgstr "Clé secrète AWS"
 
 #: src/pages/AnalyticsPage.tsx:74
 msgid "Back to workspaces"
-msgstr ""
+msgstr "Retour aux espaces de travail"
 
 #: src/components/blog_editor/components/colors/ColorGrid.tsx:62
 #: src/components/blog_editor/toolbars/components/ColorPicker.tsx:135
@@ -1672,7 +1686,7 @@ msgstr "Bas droite"
 msgid "bounce"
 msgstr "rebond"
 
-#: src/components/analytics/veridian_engagement_by_class.tsx:147
+#: src/components/analytics/veridian_engagement_by_class.tsx:133
 #: src/components/timeline/ContactTimeline.tsx:574
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:72
 #: src/pages/TemplatesPage.tsx:83
@@ -1696,8 +1710,8 @@ msgstr "Email de rebond"
 msgid "Bounce Type"
 msgstr "Type de rebond"
 
-#: src/components/analytics/EmailMetricsChart.tsx:296
-#: src/components/analytics/EmailMetricsChart.tsx:448
+#: src/components/analytics/EmailMetricsChart.tsx:228
+#: src/components/analytics/EmailMetricsChart.tsx:384
 #: src/components/automations/config/TriggerConfigForm.tsx:71
 #: src/components/automations/config/TriggerConfigForm.tsx:93
 #: src/components/broadcasts/BroadcastStats.tsx:275
@@ -1815,7 +1829,7 @@ msgstr "Nom de la diffusion"
 msgid "Broadcast updated successfully"
 msgstr "Newsletter mise à jour avec succès"
 
-#: src/components/analytics/EmailMetricsChart.tsx:311
+#: src/components/analytics/EmailMetricsChart.tsx:243
 #: src/layouts/WorkspaceLayout.tsx:297
 #: src/pages/BroadcastsPage.tsx:1286
 msgid "Broadcasts"
@@ -2110,8 +2124,8 @@ msgid "Clear field"
 msgstr "Effacer le champ"
 
 #: src/components/analytics/veridian_engagement_by_class.tsx:172
-msgid "Click"
-msgstr ""
+#~ msgid "Click"
+#~ msgstr ""
 
 #: src/components/settings/ApiAgentsSettings.tsx:368
 msgid "Click \"Generate command\" below. It creates a secret, single-use link valid for 10 minutes — nobody can reuse it after you."
@@ -2309,8 +2323,8 @@ msgstr "plainte"
 msgid "Complaint"
 msgstr "Plainte"
 
-#: src/components/analytics/EmailMetricsChart.tsx:297
-#: src/components/analytics/EmailMetricsChart.tsx:475
+#: src/components/analytics/EmailMetricsChart.tsx:229
+#: src/components/analytics/EmailMetricsChart.tsx:411
 #: src/components/broadcasts/BroadcastStats.tsx:309
 #: src/components/lists/ListStats.tsx:150
 msgid "Complaints"
@@ -2638,6 +2652,14 @@ msgstr "Copier le point d accès webhook"
 #: src/components/automations/config/TriggerConfigForm.tsx:105
 msgid "Core Fields"
 msgstr "Champs principaux"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:93
+msgid "Corporate (host unknown)"
+msgstr "Entreprise (hébergeur inconnu)"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:105
+msgid "Corporate self-hosted"
+msgstr "Entreprise auto-hébergée"
 
 #: src/components/ai-assistant/AIAssistantChat.tsx:281
 msgid "Cost"
@@ -3399,11 +3421,11 @@ msgid "Deleted {deletedCount}, failed {failedCount}"
 msgstr "{deletedCount} supprimé(s), {failedCount} échoué(s)"
 
 #. placeholder {0}: stats.count_failed
-#: src/components/analytics/EmailMetricsChart.tsx:516
+#: src/components/analytics/EmailMetricsChart.tsx:452
 msgid "Deliberate exclusions (invalid address, excluded provider class): breakdown unavailable, total failures: {0}"
 msgstr "Exclusions volontaires (adresse invalide, classe de fournisseur exclue) : répartition indisponible, échecs au total : {0}"
 
-#: src/components/analytics/EmailMetricsChart.tsx:529
+#: src/components/analytics/EmailMetricsChart.tsx:465
 msgid "Deliberately excluded"
 msgstr "Exclus volontairement"
 
@@ -3424,7 +3446,6 @@ msgstr ""
 msgid "delivered"
 msgstr "livré"
 
-#: src/components/analytics/veridian_engagement_by_class.tsx:139
 #: src/components/automations/config/TriggerConfigForm.tsx:90
 #: src/components/broadcasts/BroadcastStats.tsx:169
 #: src/components/messages/MessageHistoryTab.tsx:114
@@ -3968,7 +3989,7 @@ msgstr "Le mappage email est manquant ou invalide"
 msgid "Email mapping required"
 msgstr "Mappage email requis"
 
-#: src/components/analytics/EmailMetricsChart.tsx:304
+#: src/components/analytics/EmailMetricsChart.tsx:236
 msgid "Email Metrics"
 msgstr "Métriques email"
 
@@ -4130,9 +4151,9 @@ msgstr "terminé"
 msgid "Endpoint URL"
 msgstr "URL du point d accès"
 
-#: src/components/analytics/veridian_engagement_by_class.tsx:187
+#: src/components/analytics/veridian_engagement_by_class.tsx:167
 msgid "Engagement by provider class"
-msgstr ""
+msgstr "Engagement par classe de fournisseur"
 
 #: src/components/automations/AutomationCard.tsx:260
 msgid "Enrolled"
@@ -4338,7 +4359,7 @@ msgstr "ID de l entité :"
 #: src/components/analytics/ChartVisualization.tsx:393
 #: src/components/analytics/FailedMessagesTable.tsx:68
 #: src/components/analytics/NewContactsTable.tsx:208
-#: src/components/analytics/veridian_engagement_by_class.tsx:193
+#: src/components/analytics/veridian_engagement_by_class.tsx:173
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:930
 #: src/components/messages/MessageHistoryTable.tsx:134
 #: src/components/messages/MessageHistoryTable.tsx:322
@@ -4527,7 +4548,7 @@ msgstr "ID externe"
 msgid "failed"
 msgstr "échoué"
 
-#: src/components/analytics/EmailMetricsChart.tsx:562
+#: src/components/analytics/EmailMetricsChart.tsx:498
 #: src/components/automations/AutomationCard.tsx:281
 #: src/components/automations/nodes/StatNode.tsx:116
 #: src/components/automations/nodes/StatNode.tsx:180
@@ -4549,7 +4570,7 @@ msgstr "échoué"
 msgid "Failed"
 msgstr "Échoué"
 
-#: src/components/analytics/EmailMetricsChart.tsx:299
+#: src/components/analytics/EmailMetricsChart.tsx:231
 msgid "Failed (excluded + real)"
 msgstr "Échecs (exclus + réels)"
 
@@ -4732,13 +4753,13 @@ msgstr "Impossible de récupérer les clés API"
 msgid "Failed to fetch data: {0}"
 msgstr "Échec de la récupération des données : {0}"
 
-#: src/components/analytics/EmailMetricsChart.tsx:204
+#: src/components/analytics/EmailMetricsChart.tsx:136
 msgid "Failed to fetch email metrics"
 msgstr "Échec de la récupération des métriques email"
 
-#: src/components/analytics/veridian_engagement_by_class.tsx:97
+#: src/components/analytics/veridian_engagement_by_class.tsx:69
 msgid "Failed to fetch engagement by provider class"
-msgstr ""
+msgstr "Impossible de charger l'engagement par classe de fournisseur"
 
 #: src/components/analytics/FailedMessagesTable.tsx:39
 msgid "Failed to fetch failed messages data"
@@ -5321,6 +5342,10 @@ msgstr "{0} adresses email trouvées"
 msgid "Found unsaved changes from {0}"
 msgstr "Modifications non enregistrées trouvées depuis {0}"
 
+#: src/components/analytics/veridian_engagement_by_class.tsx:91
+msgid "French ISPs (Orange, SFR, Free…)"
+msgstr "FAI français (Orange, SFR, Free…)"
+
 #: src/components/automations/AutomationCard.tsx:307
 #: src/components/automations/config/TriggerConfigForm.tsx:328
 msgid "Frequency"
@@ -5491,6 +5516,10 @@ msgstr "Types d objectifs"
 msgid "Goal:"
 msgstr "Objectif :"
 
+#: src/components/analytics/veridian_engagement_by_class.tsx:85
+msgid "Google (Gmail / Workspace)"
+msgstr "Google (Gmail / Workspace)"
+
 #: src/components/settings/Integrations.tsx:1915
 msgid "Google app password"
 msgstr "Mot de passe d'application Google"
@@ -5546,9 +5575,9 @@ msgstr ""
 
 #. placeholder {0}: stats.count_bounced_hard
 #. placeholder {1}: stats.count_bounced_soft
-#: src/components/analytics/EmailMetricsChart.tsx:431
+#: src/components/analytics/EmailMetricsChart.tsx:367
 msgid "Hard: {0} (dead address) · Soft: {1} (transient)"
-msgstr ""
+msgstr "Définitifs : {0} (adresse morte) · Temporaires : {1} (transitoire)"
 
 #: src/components/messages/MessageHistoryTab.tsx:232
 msgid "Has Error"
@@ -5703,6 +5732,10 @@ msgstr "https://exemple.com ou {{ url }}"
 #: src/components/email_builder/ui/ImportFontInput.tsx:141
 msgid "https://fonts.googleapis.com/css?family=... or {{ font_url }}"
 msgstr "https://fonts.googleapis.com/css?family=... ou {{ font_url }}"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:150
+msgid "Human replies"
+msgstr "Réponses humaines"
 
 #: src/components/segment/button_upsert.tsx:395
 msgid "i.e: Big spenders..."
@@ -6215,6 +6248,10 @@ msgstr ""
 #: src/components/settings/WorkspaceMembers.tsx:607
 msgid "Invite Member"
 msgstr "Inviter un membre"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:97
+msgid "IONOS / 1&1"
+msgstr "IONOS / 1&1"
 
 #: src/components/file_manager/context.tsx:201
 #: src/components/segment/form_leaf.tsx:614
@@ -6862,6 +6899,10 @@ msgstr "Méta description"
 msgid "Meta Title"
 msgstr "Méta titre"
 
+#: src/components/analytics/veridian_engagement_by_class.tsx:87
+msgid "Microsoft (Outlook / Microsoft 365)"
+msgstr "Microsoft (Outlook / Microsoft 365)"
+
 #: src/components/settings/Integrations.tsx:2033
 msgid "Microsoft 365 / Office 365"
 msgstr "Microsoft 365 / Office 365"
@@ -7395,9 +7436,9 @@ msgstr ""
 msgid "No sending window — emails go out 24/7."
 msgstr ""
 
-#: src/components/analytics/veridian_engagement_by_class.tsx:201
+#: src/components/analytics/veridian_engagement_by_class.tsx:181
 msgid "No sends in this period yet."
-msgstr ""
+msgstr "Aucun envoi sur cette période."
 
 #: src/components/email_builder/blocks/MjAttributesBlock.tsx:15
 msgid "No settings available for the attributes container."
@@ -7680,8 +7721,8 @@ msgid "Only workspace owners can modify integrations"
 msgstr "Seuls les propriétaires de l espace de travail peuvent modifier les intégrations"
 
 #: src/components/analytics/veridian_engagement_by_class.tsx:164
-msgid "Open"
-msgstr ""
+#~ msgid "Open"
+#~ msgstr ""
 
 #: src/components/segment/form_leaf.tsx:294
 #: src/components/segment/input.tsx:725
@@ -7764,7 +7805,7 @@ msgstr "ouvertures"
 msgid "Opens"
 msgstr "Ouvertures"
 
-#: src/components/analytics/EmailMetricsChart.tsx:350
+#: src/components/analytics/EmailMetricsChart.tsx:282
 msgid "Opens and clicks are not tracked: plain-text emails, no pixel or tracked link"
 msgstr "Ouvertures et clics non suivis : mails en texte brut, sans pixel ni lien suivi"
 
@@ -7820,6 +7861,10 @@ msgstr "Ou sélectionnez une police Google populaire"
 msgid "Other"
 msgstr "Autre"
 
+#: src/components/analytics/veridian_engagement_by_class.tsx:103
+msgid "Other hosters (Infomaniak, Gandi, Zoho…)"
+msgstr "Autres hébergeurs (Infomaniak, Gandi, Zoho…)"
+
 #: src/pages/LogsPage.tsx:49
 msgid "Outgoing Webhooks"
 msgstr "Webhooks sortants"
@@ -7856,6 +7901,10 @@ msgstr ""
 #: src/components/settings/veridian_cold_outreach_settings.tsx:961
 msgid "Overrides the workspace window for this infra (e.g. a fresh IP kept to 10am–4pm). Disabled = inherit the workspace window."
 msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:95
+msgid "OVH"
+msgstr "OVH"
 
 #: src/components/email_builder/blocks/MjColumnBlock.tsx:144
 #: src/components/email_builder/blocks/MjDividerBlock.tsx:107
@@ -8595,10 +8644,10 @@ msgstr "Progression"
 msgid "Provider"
 msgstr "Fournisseur"
 
-#: src/components/analytics/veridian_engagement_by_class.tsx:125
+#: src/components/analytics/veridian_engagement_by_class.tsx:120
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1016
 msgid "Provider class"
-msgstr ""
+msgstr "Classe de fournisseur"
 
 #: src/components/lists/ListDrawer.tsx:214
 #: src/pages/ListsPage.tsx:273
@@ -8755,7 +8804,7 @@ msgstr ""
 msgid "Ready to use"
 msgstr "Prêt à utiliser"
 
-#: src/components/analytics/EmailMetricsChart.tsx:562
+#: src/components/analytics/EmailMetricsChart.tsx:498
 msgid "Real failures"
 msgstr "Échec réel"
 
@@ -8810,8 +8859,12 @@ msgid "recipient@example.com"
 msgstr "destinataire@exemple.com"
 
 #: src/components/analytics/veridian_engagement_by_class.tsx:185
-msgid "Recipients are grouped by their mailbox provider (Google, Microsoft, French ISPs…). Watch the bounce rate per class: a rising bounce rate on one provider is an early signal to slow down BEFORE the domain reputation is burned. Note: classes are derived by domain suffix here (not a live MX lookup), so custom domains hosted on Google/Microsoft/OVH fall under \"Corporate\"; the sending engine still uses the real MX to throttle."
-msgstr ""
+#~ msgid "Recipients are grouped by their mailbox provider (Google, Microsoft, French ISPs…). Watch the bounce rate per class: a rising bounce rate on one provider is an early signal to slow down BEFORE the domain reputation is burned. Note: classes are derived by domain suffix here (not a live MX lookup), so custom domains hosted on Google/Microsoft/OVH fall under \"Corporate\"; the sending engine still uses the real MX to throttle."
+#~ msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:165
+msgid "Recipients are grouped by their mailbox provider class, resolved at send time (OVH, IONOS, anti-spam gateways, Google, Microsoft…). Watch the bounce rate per class: a rising rate on one class is an early signal to slow down BEFORE the domain reputation is burned. Sends are counted on their send date, bounces on their bounce date, human replies on their reply date."
+msgstr "Les destinataires sont regroupés par classe de fournisseur de messagerie, résolue à l'envoi (OVH, IONOS, passerelles antispam, Google, Microsoft…). Surveillez le taux de rejet par classe : une hausse sur une classe est un signal pour ralentir AVANT que la réputation du domaine soit grillée. Les envois sont comptés à leur date d'envoi, les rejets à leur date de rejet, les réponses humaines à leur date de réponse."
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2189
 msgid "Recipients are grouped by their mailbox provider. Two independent limits protect your reputation: the per-minute rate caps the SPEED of sending toward each group, while the daily cap limits the TOTAL VOLUME sent to that group in a single day (e.g. \"1 email/day toward Google\" — impossible to express as a per-minute rate). Both apply together, and the stricter one wins. The per-recipient daily cap (top of this section) limits how many emails a single address can receive per day to avoid harassing the same contact. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
@@ -8990,9 +9043,9 @@ msgstr "Répéter Y"
 msgid "Replied"
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:403
+#: src/components/analytics/EmailMetricsChart.tsx:335
 msgid "Replies"
-msgstr ""
+msgstr "Réponses"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2449
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2697
@@ -9160,9 +9213,9 @@ msgstr "Reprendre le téléversement précédent"
 msgid "Resume Upload"
 msgstr "Reprendre le téléversement"
 
-#: src/components/analytics/EmailMetricsChart.tsx:335
+#: src/components/analytics/EmailMetricsChart.tsx:267
 msgid "Retry"
-msgstr ""
+msgstr "Réessayer"
 
 #: src/components/settings/veridian_sending_profiles_ui.tsx:250
 msgid "Review mapping"
@@ -9986,9 +10039,9 @@ msgstr ""
 msgid "sent"
 msgstr "envoyé"
 
-#: src/components/analytics/EmailMetricsChart.tsx:295
-#: src/components/analytics/EmailMetricsChart.tsx:373
-#: src/components/analytics/veridian_engagement_by_class.tsx:131
+#: src/components/analytics/EmailMetricsChart.tsx:227
+#: src/components/analytics/EmailMetricsChart.tsx:305
+#: src/components/analytics/veridian_engagement_by_class.tsx:126
 #: src/components/automations/config/TriggerConfigForm.tsx:89
 #: src/components/broadcasts/BroadcastStats.tsx:135
 #: src/components/messages/MessageHistoryTab.tsx:101
@@ -11024,9 +11077,9 @@ msgstr "Le thème actuellement publié sera automatiquement dépublié."
 msgid "The daily profile cap is enforced separately."
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:326
+#: src/components/analytics/EmailMetricsChart.tsx:258
 msgid "The dashboard could not load your email metrics. This is usually temporary — please try again."
-msgstr ""
+msgstr "Le tableau de bord n'a pas pu charger vos métriques email. C'est généralement temporaire : réessayez."
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2263
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2603
@@ -11553,7 +11606,7 @@ msgstr ""
 msgid "Tracking links (open pixel, click redirects) point to Notifuse by default. For cold outreach, a tracking link on a domain different from your sending domain is an anti-spam signal. Set a custom tracking domain aligned with each sending domain (e.g. send from agences-veridian.fr → track on track.agences-veridian.fr) — it must be a CNAME/A record pointing to Notifuse. Leave empty to fall back to the workspace/global endpoint."
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:312
+#: src/components/analytics/EmailMetricsChart.tsx:244
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:408
 #: src/layouts/WorkspaceLayout.tsx:335
 #: src/pages/TemplatesPage.tsx:79
@@ -11664,9 +11717,9 @@ msgstr ""
 msgid "Unable to create workspace. Please contact your administrator."
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:323
+#: src/components/analytics/EmailMetricsChart.tsx:255
 msgid "Unable to load email metrics"
-msgstr ""
+msgstr "Impossible de charger les métriques email"
 
 #: src/components/blog/PostsTable.tsx:168
 msgid "Uncategorized"
@@ -11675,6 +11728,10 @@ msgstr "Non catégorisé"
 #: src/components/settings/veridian_cold_outreach_settings.tsx:355
 msgid "Unchanged"
 msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:107
+msgid "Unclassified"
+msgstr "Non classé"
 
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx:328
 #: src/components/email_builder/ui/FontStyleInput.tsx:137
@@ -11774,7 +11831,7 @@ msgstr ""
 msgid "Unsub"
 msgstr "Désab."
 
-#: src/components/analytics/EmailMetricsChart.tsx:502
+#: src/components/analytics/EmailMetricsChart.tsx:438
 #: src/components/broadcasts/BroadcastStats.tsx:333
 msgid "Unsub."
 msgstr "Désab."
@@ -11811,7 +11868,7 @@ msgstr "Désabonné"
 msgid "Unsubscribed from list"
 msgstr "Désabonné de la liste"
 
-#: src/components/analytics/EmailMetricsChart.tsx:298
+#: src/components/analytics/EmailMetricsChart.tsx:230
 msgid "Unsubscribes"
 msgstr "Désabonnements"
 
@@ -12437,6 +12494,10 @@ msgstr "Écriture"
 #: src/components/email_builder/blocks/MjLiquidBlock.tsx:33
 msgid "Write MJML markup with Liquid template tags. This content is injected directly into the email and processed by the Liquid engine before MJML compilation. Use for-loops, conditionals, and variables to generate dynamic structural content."
 msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:89
+msgid "Yahoo / AOL"
+msgstr "Yahoo / AOL"
 
 #: src/components/automations/nodes/FilterNode.tsx:82
 #: src/components/blog/AuthorsTable.tsx:106

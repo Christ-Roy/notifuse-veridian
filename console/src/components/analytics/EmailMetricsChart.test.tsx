@@ -15,7 +15,9 @@ i18n.loadAndActivate({ locale: 'en', messages: {} })
 // ces tests d'états (loading/error/data) — on le neutralise pour éviter le bruit
 // ResizeObserver/canvas en jsdom.
 vi.mock('./ChartVisualization', () => ({
-  ChartVisualization: () => <div data-testid="chart-viz" />
+  ChartVisualization: ({ data }: { data: { data: unknown[] } | null }) => (
+    <div data-testid="chart-viz" data-rows={JSON.stringify(data?.data ?? [])} />
+  )
 }))
 
 vi.mock('../../services/api/analytics', () => ({
@@ -30,6 +32,38 @@ const okResponse = {
   data: [],
   meta: { total: 0, query: '', params: [] }
 }
+
+type Q = {
+  measures: string[]
+  timeDimensions?: { dimension: string; dateRange?: [string, string] }[]
+}
+
+// Simule le moteur analytics : une ligne par jour pour la dimension temporelle
+// demandee, avec les mesures demandees. `byDimension` donne, par dimension, les
+// lignes {day, ...mesures} que la base renverrait.
+const engine =
+  (byDimension: Record<string, Array<Record<string, unknown>>>) => async (q: Q) => {
+    const dim = q.timeDimensions?.[0]?.dimension ?? ''
+    const rows = (byDimension[dim] ?? []).map((r) => {
+      const out: Record<string, unknown> = { [`${dim}_day`]: r.day }
+      for (const m of q.measures) out[m] = r[m] ?? 0
+      return out
+    })
+    return { data: rows, meta: { total: rows.length, query: '', params: [] } }
+  }
+
+// Une seule ligne de totaux (sent_at, failed_at) : suffit aux tests de cartes.
+const totals = (v: Record<string, number>) =>
+  engine({
+    sent_at: [{ day: '2024-06-01T00:00:00Z', count_sent: v.count_sent ?? 0 }],
+    failed_at: [
+      {
+        day: '2024-06-01T00:00:00Z',
+        count_failed: v.count_failed ?? 0,
+        count_failed_excluded: v.count_failed_excluded ?? 0
+      }
+    ]
+  })
 
 const workspace = {
   id: 'ws-test',
@@ -124,10 +158,9 @@ describe('EmailMetricsChart', () => {
       replied: 10,
       replied_human: 4
     })
-    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: [{ count_sent: 100, count_failed: 0 }],
-      meta: { total: 1, query: '', params: [] }
-    })
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(
+      totals({ count_sent: 100 })
+    )
     renderChart()
     await waitFor(() => expect(screen.getByText('4.0%')).toBeInTheDocument())
     expect(screen.getByTestId('auto-replies').textContent).toContain('6')
@@ -135,10 +168,9 @@ describe('EmailMetricsChart', () => {
 
   it('falls back to replied when replied_human is absent, no auto note', async () => {
     ;(replyStatsApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ replied: 10 })
-    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: [{ count_sent: 100, count_failed: 0 }],
-      meta: { total: 1, query: '', params: [] }
-    })
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(
+      totals({ count_sent: 100 })
+    )
     renderChart()
     await waitFor(() => expect(screen.getByText('10%')).toBeInTheDocument())
     expect(screen.queryByTestId('auto-replies')).toBeNull()
@@ -146,10 +178,7 @@ describe('EmailMetricsChart', () => {
 
   it('splits deliberate exclusions from real failures when the measure exists', async () => {
     ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(
-      async (q: { measures: string[] }) =>
-        q.measures.length === 1 && q.measures[0] === 'count_failed_excluded'
-          ? { data: [{ count_failed_excluded: 170 }], meta: { total: 1, query: '', params: [] } }
-          : { data: [{ count_sent: 1000, count_failed: 171 }], meta: { total: 1, query: '', params: [] } }
+      totals({ count_sent: 1000, count_failed: 171, count_failed_excluded: 170 })
     )
     renderChart()
     await waitFor(() => expect(screen.getByText('Deliberately excluded')).toBeInTheDocument())
@@ -159,17 +188,71 @@ describe('EmailMetricsChart', () => {
   })
 
   it('keeps a single Failed card when the exclusion measure is unavailable', async () => {
-    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(
-      async (q: { measures: string[] }) => {
-        if (q.measures.length === 1 && q.measures[0] === 'count_failed_excluded') {
-          throw new Error('unknown measure')
-        }
-        return { data: [{ count_sent: 1000, count_failed: 171 }], meta: { total: 1, query: '', params: [] } }
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(async (q: Q) => {
+      if (q.measures.length === 1 && q.measures[0] === 'count_failed_excluded') {
+        throw new Error('unknown measure')
       }
-    )
+      return totals({ count_sent: 1000, count_failed: 171 })(q)
+    })
     renderChart()
     await waitFor(() => expect(screen.getByText('Failed')).toBeInTheDocument())
     expect(screen.getByText('Deliberately excluded')).toBeInTheDocument()
     expect(screen.queryByText('Real failures')).toBeNull()
+  })
+  // Regression : la courbe etait groupee sur created_at (date de mise en file).
+  // Un message cree le 30/09 et envoye le 06/10 doit compter le 06/10.
+  it('plots sends on their sent_at day, not on created_at (queued 30/09, sent 06/10)', async () => {
+    const calls: Q[] = []
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(async (q: Q) => {
+      calls.push(q)
+      return engine({
+        // Ce que renverrait l'ANCIEN groupement : tout le volume le jour de creation.
+        created_at: [
+          { day: '2026-09-30T00:00:00Z', count_sent: 800 },
+          { day: '2026-10-06T00:00:00Z', count_sent: 0 }
+        ],
+        sent_at: [
+          { day: '2026-09-30T00:00:00Z', count_sent: 5 },
+          { day: '2026-10-05T00:00:00Z', count_sent: 300 },
+          { day: '2026-10-06T00:00:00Z', count_sent: 273 }
+        ],
+        bounced_at: [{ day: '2026-10-06T00:00:00Z', count_bounced: 14 }]
+      })(q)
+    })
+    render(
+      <I18nProvider i18n={i18n}>
+        <App>
+          <EmailMetricsChart workspace={workspace} timeRange={['2026-09-24', '2026-10-08']} />
+        </App>
+      </I18nProvider>
+    )
+    await waitFor(() => expect(screen.getByTestId('chart-viz').getAttribute('data-rows')).not.toBe('[]'))
+    const rows = JSON.parse(screen.getByTestId('chart-viz').getAttribute('data-rows') as string)
+    const byDay = Object.fromEntries(rows.map((r: Record<string, unknown>) => [String(r.event_date_day).slice(0, 10), r]))
+    expect(byDay['2026-10-05'].count_sent).toBe(300)
+    expect(byDay['2026-10-06'].count_sent).toBe(273)
+    expect(byDay['2026-09-30'].count_sent).toBe(5)
+    // Les rejets restent sur leur propre date.
+    expect(byDay['2026-10-06'].count_bounced).toBe(14)
+    // Aucune requete de mesure d'evenement ne groupe sur created_at.
+    expect(calls.every((q) => q.timeDimensions?.[0]?.dimension !== 'created_at')).toBe(true)
+    expect(calls.find((q) => q.measures.includes('count_sent'))?.timeDimensions?.[0]?.dimension).toBe('sent_at')
+    expect(calls.find((q) => q.measures.includes('count_bounced'))?.timeDimensions?.[0]?.dimension).toBe('bounced_at')
+    // La carte Envoye = somme des envois de la fenetre (5+300+273).
+    await waitFor(() => expect(screen.getByText('578')).toBeInTheDocument())
+  })
+
+  it('pluralises automatic replies (1 reponse / N reponses)', async () => {
+    ;(replyStatsApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ replied: 3, replied_human: 2 })
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(totals({ count_sent: 100 }))
+    renderChart()
+    await waitFor(() => expect(screen.getByTestId('auto-replies').textContent).toBe('+1 automatic reply'))
+  })
+
+  it('pluralises many automatic replies', async () => {
+    ;(replyStatsApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ replied: 6, replied_human: 2 })
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(totals({ count_sent: 100 }))
+    renderChart()
+    await waitFor(() => expect(screen.getByTestId('auto-replies').textContent).toBe('+4 automatic replies'))
   })
 })

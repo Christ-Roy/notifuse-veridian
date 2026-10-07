@@ -45,7 +45,7 @@ func TestNewVeridianEngagementByClassService(t *testing.T) {
 	// Câblage : un appel passe par AuthenticateUserForWorkspace (DP branchée).
 	authSvc.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws-wire").
 		Return(context.Background(), &domain.User{}, contactsReadWorkspace(), nil)
-	repo.EXPECT().GetEngagementByDomain(gomock.Any(), "ws-wire", gomock.Any(), gomock.Any()).Return(nil, nil)
+	repo.EXPECT().GetEngagementByClass(gomock.Any(), "ws-wire", gomock.Any(), gomock.Any()).Return(nil, nil)
 
 	got, err := svc.GetEngagementByClass(context.Background(), &domain.VeridianEngagementByClassRequest{WorkspaceID: "ws-wire"})
 	require.NoError(t, err)
@@ -64,10 +64,10 @@ func TestGetEngagementByClass(t *testing.T) {
 
 		authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
 			Return(ctx, &domain.User{}, contactsReadWorkspace(), nil)
-		repo.EXPECT().GetEngagementByDomain(ctx, workspaceID, since, until).
-			Return([]domain.VeridianDomainEngagementRow{
-				{Domain: "gmail.com", Sent: 10, Delivered: 9, Bounced: 1, Opened: 4, Clicked: 1},
-				{Domain: "outlook.com", Sent: 5, Delivered: 5, Bounced: 0, Opened: 2, Clicked: 0},
+		repo.EXPECT().GetEngagementByClass(ctx, workspaceID, since, until).
+			Return([]domain.VeridianClassEngagementRow{
+				{Class: domain.ProviderClassGoogle, Sent: 10, Bounced: 1},
+				{Class: domain.ProviderClassMicrosoft, Sent: 5},
 			}, nil)
 
 		got, err := svc.GetEngagementByClass(ctx, &domain.VeridianEngagementByClassRequest{
@@ -140,7 +140,7 @@ func TestGetEngagementByClass(t *testing.T) {
 
 		authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
 			Return(ctx, &domain.User{}, contactsReadWorkspace(), nil)
-		repo.EXPECT().GetEngagementByDomain(ctx, workspaceID, gomock.Any(), gomock.Any()).
+		repo.EXPECT().GetEngagementByClass(ctx, workspaceID, gomock.Any(), gomock.Any()).
 			Return(nil, errors.New("db down"))
 
 		got, err := svc.GetEngagementByClass(ctx, &domain.VeridianEngagementByClassRequest{WorkspaceID: workspaceID})

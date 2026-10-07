@@ -36,17 +36,17 @@ func (m *MockVeridianEngagementByClassRepository) EXPECT() *MockVeridianEngageme
 	return m.recorder
 }
 
-// GetEngagementByDomain mocks base method.
-func (m *MockVeridianEngagementByClassRepository) GetEngagementByDomain(arg0 context.Context, arg1 string, arg2, arg3 time.Time) ([]domain.VeridianDomainEngagementRow, error) {
+// GetEngagementByClass mocks base method.
+func (m *MockVeridianEngagementByClassRepository) GetEngagementByClass(arg0 context.Context, arg1 string, arg2, arg3 time.Time) ([]domain.VeridianClassEngagementRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEngagementByDomain", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].([]domain.VeridianDomainEngagementRow)
+	ret := m.ctrl.Call(m, "GetEngagementByClass", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].([]domain.VeridianClassEngagementRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetEngagementByDomain indicates an expected call of GetEngagementByDomain.
-func (mr *MockVeridianEngagementByClassRepositoryMockRecorder) GetEngagementByDomain(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// GetEngagementByClass indicates an expected call of GetEngagementByClass.
+func (mr *MockVeridianEngagementByClassRepositoryMockRecorder) GetEngagementByClass(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEngagementByDomain", reflect.TypeOf((*MockVeridianEngagementByClassRepository)(nil).GetEngagementByDomain), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEngagementByClass", reflect.TypeOf((*MockVeridianEngagementByClassRepository)(nil).GetEngagementByClass), arg0, arg1, arg2, arg3)
 }

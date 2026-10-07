@@ -7,20 +7,16 @@ import { api } from './client'
 //   internal/service/veridian_engagement_by_class_service.go
 //   internal/repository/veridian_engagement_by_class_postgres.go
 //
-// La classe n'est PAS une dimension de message_history (décision Lot 4) → le
-// backend agrège par DOMAINE puis mappe domaine → classe en Go. La
-// classification est par SUFFIXE (pas MX) : les classes MX (ovh/ionos/…)
-// tombent en `corporate` ici (dégradation gracieuse assumée, cf. CLAUDE.md).
-//
-// But : repérer une classe qui se dégrade (bounce rate Microsoft qui monte =
-// signal d'arrêt AVANT de griller le domaine) — le tableau de bord du warm-up.
+// La classe est celle PERSISTÉE sur message_history.veridian_provider_class
+// (posée à l'envoi, MX résolu : ovh, ionos, security_gateway…). Chaque compteur
+// est borné sur SA date : envois sur sent_at, rejets sur bounced_at, réponses
+// humaines sur replied_at. Pas de livraison / ouverture / clic : mails texte
+// brut et le relais ne renvoie aucun accusé de livraison.
 
 export interface VeridianClassEngagement {
   sent: number
-  delivered: number
   bounced: number
-  opened: number
-  clicked: number
+  replied_human: number
 }
 
 export interface VeridianEngagementByClassRequest {
@@ -33,8 +29,8 @@ export interface VeridianEngagementByClassRequest {
 }
 
 export interface VeridianEngagementByClassResponse {
-  // Une entrée par classe canonique (les 11 classes sont toujours présentes,
-  // compteurs à 0 si vide) + le total agrégé.
+  // Une entrée par classe canonique + "unclassified" (messages sans classe
+  // persistée), compteurs à 0 si vide, + le total agrégé.
   by_class: Record<string, VeridianClassEngagement>
   total: VeridianClassEngagement
 }
