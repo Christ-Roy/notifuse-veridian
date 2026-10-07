@@ -426,7 +426,10 @@ EOH
       }
       resources {
         cpu        = 400
-        memory     = 128
+        # Pic 30j (obs-nomad pic, 2026-10-07) : 58 Mo pour une reservation de
+        # 128 Mo (ratio 45%, >2x le pic). Rapproche a 100 Mo (ratio ~1.7x,
+        # toujours sain) pour liberer de la marge SCHED sur ovh-prod (I07).
+        memory     = 100
         memory_max = 7000
       }
     }
