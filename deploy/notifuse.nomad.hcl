@@ -25,9 +25,11 @@ variable "image_tag" {
   type        = string
   # Recale sur ce qui tourne reellement en prod : le defaut retardait de
   # deux versions majeures et un deploiement hors CI aurait retrograde Notifuse.
-  # Recale le 2026-09-24 (chantier durcissement conteneurs) : mesure sur le
-  # job Nomad vivant = v57.0-veridian.85717d9b, juste avant ce commit.
-  default     = "v57.0-veridian.85717d9b"
+  # Recale le 2026-10-07 (calibrage memoire I07) : mesure sur le job Nomad
+  # vivant = v60.0-veridian.9449a2e7, juste avant ce commit (nomad job
+  # inspect notifuse). Le defaut precedent (v57.0) aurait retrograde l'image
+  # si deploye hors CI avec ce commit.
+  default     = "v60.0-veridian.9449a2e7"
   description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
 }
 
