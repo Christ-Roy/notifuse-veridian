@@ -344,9 +344,10 @@ describe('LanguageSwitcher component', () => {
     await waitFor(() => {
       expect(screen.getByText('English')).toBeInTheDocument()
       expect(screen.getByText('Français')).toBeInTheDocument()
-      expect(screen.getByText('Español')).toBeInTheDocument()
-      expect(screen.getByText('Deutsch')).toBeInTheDocument()
-      expect(screen.getByText('Català')).toBeInTheDocument()
+      // Console assumée : seules fr et en sont proposées (catalogues des autres langues non maintenus).
+      expect(screen.queryByText('Español')).not.toBeInTheDocument()
+      expect(screen.queryByText('Deutsch')).not.toBeInTheDocument()
+      expect(screen.queryByText('Català')).not.toBeInTheDocument()
     })
   })
 

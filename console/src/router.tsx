@@ -67,15 +67,10 @@ const TransactionalNotificationsPage = veridianLazyPage(
   'TransactionalNotificationsPage'
 )
 const LogsPage = veridianLazyPage(() => import('./pages/LogsPage'), 'LogsPage')
-const DebugSegmentPage = veridianLazyPage(
-  () => import('./pages/DebugSegmentPage'),
-  'DebugSegmentPage'
-)
 const AutomationsPage = veridianLazyPage(() => import('./pages/AutomationsPage'), 'AutomationsPage')
 const AnalyticsPage = veridianLazyPage(() => import('./pages/AnalyticsPage'), 'AnalyticsPage')
 const TemplatesPage = veridianLazyPage(() => import('./pages/TemplatesPage'), 'TemplatesPage')
 const BroadcastsPage = veridianLazyPage(() => import('./pages/BroadcastsPage'), 'BroadcastsPage')
-const BlogPage = veridianLazyPage(() => import('./pages/BlogPage'), 'BlogPage')
 
 export interface ContactsSearch {
   email?: string
@@ -98,11 +93,6 @@ export interface SignInSearch {
 
 export interface AcceptInvitationSearch {
   token?: string
-}
-
-export interface BlogSearch {
-  status?: string
-  category_id?: string
 }
 
 export interface FileManagerSearch {
@@ -305,26 +295,27 @@ const workspaceTemplatesRoute = createRoute({
   component: TemplatesPage
 })
 
+// Doublon pur de l'index : /analytics redirige vers l'index (liens anciens).
+// eslint-disable-next-line react-refresh/only-export-components -- Internal redirect component
+const WorkspaceAnalyticsRedirect = () => {
+  const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId/analytics' })
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    navigate({
+      to: '/console/workspace/$workspaceId',
+      params: { workspaceId },
+      replace: true
+    })
+  }, [workspaceId, navigate])
+
+  return null
+}
+
 const workspaceAnalyticsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/analytics',
-  component: AnalyticsPage
-})
-
-const workspaceNewSegmentRoute = createRoute({
-  getParentRoute: () => workspaceRoute,
-  path: '/debug-segment',
-  component: DebugSegmentPage
-})
-
-const workspaceBlogRoute = createRoute({
-  getParentRoute: () => workspaceRoute,
-  path: '/blog',
-  component: BlogPage,
-  validateSearch: (search: Record<string, unknown>): BlogSearch => ({
-    status: search.status as string | undefined,
-    category_id: search.category_id as string | undefined
-  })
+  component: WorkspaceAnalyticsRedirect
 })
 
 // Create the router
@@ -348,9 +339,7 @@ const routeTree = rootRoute.addChildren([
     workspaceSettingsRedirectRoute,
     workspaceSettingsRoute,
     workspaceTemplatesRoute,
-    workspaceAnalyticsRoute,
-    workspaceNewSegmentRoute,
-    workspaceBlogRoute
+    workspaceAnalyticsRoute
   ])
 ])
 

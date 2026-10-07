@@ -21,7 +21,8 @@ import {
   Tooltip,
   Row,
   Col,
-  Table
+  Table,
+  Collapse
 } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 
@@ -63,7 +64,7 @@ import {
 import { emailProviders } from '../integrations/EmailProviders'
 import { SupabaseIntegration } from '../integrations/SupabaseIntegration'
 import { LLMIntegration } from '../integrations/LLMIntegration'
-import { llmProviders, getLLMProviderIcon, getLLMProviderName } from '../integrations/LLMProviders'
+import { getLLMProviderIcon, getLLMProviderName } from '../integrations/LLMProviders'
 import { FirecrawlIntegration } from '../integrations/FirecrawlIntegration'
 import { firecrawlProvider } from '../integrations/FirecrawlProviders'
 import { LLMProviderKind } from '../../services/api/types'
@@ -599,7 +600,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
   const profileUsage = useEmailProfilesUsage(workspace?.id)
   // State for providers
   const [emailProviderForm] = Form.useForm()
-  const rateLimitPerMinute = Form.useWatch('rate_limit_per_minute', emailProviderForm)
   const [selectedProviderType, setSelectedProviderType] = useState<EmailProviderKind | null>(null)
   const [emailProfileMode, setEmailProfileMode] = useState<EmailProfileMode>('smtp_advanced')
   const [editingIntegrationId, setEditingIntegrationId] = useState<string | null>(null)
@@ -923,12 +923,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     setProviderDrawerVisible(true)
   }
 
-  // Handle Supabase selection
-  const handleSelectSupabase = () => {
-    setEditingSupabaseIntegration(null)
-    setSupabaseDrawerVisible(true)
-  }
-
   // Start editing a Supabase integration
   const startEditSupabaseIntegration = (integration: Integration) => {
     setEditingSupabaseIntegration(integration)
@@ -971,13 +965,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     } finally {
       setSupabaseSaving(false)
     }
-  }
-
-  // Handle LLM provider selection
-  const handleSelectLLMProvider = (kind: LLMProviderKind) => {
-    setSelectedLLMProvider(kind)
-    setEditingLLMIntegration(null)
-    setLLMDrawerVisible(true)
   }
 
   // Start editing an LLM integration
@@ -1024,12 +1011,6 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     } finally {
       setLLMSaving(false)
     }
-  }
-
-  // Handle Firecrawl selection
-  const handleSelectFirecrawl = () => {
-    setEditingFirecrawlIntegration(null)
-    setFirecrawlDrawerVisible(true)
   }
 
   // Start editing a Firecrawl integration
@@ -1278,75 +1259,8 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
           </div>
         ))}
 
-        {/* Supabase Integration */}
-        <div
-          key="supabase"
-          onClick={() => handleSelectSupabase()}
-          className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-all cursor-pointer mb-4 relative"
-        >
-          <div className="flex items-center">
-            <img src="/console/supabase.png" alt="Supabase" style={{ height: 13 }} />
-            <span className="ml-3 font-medium">Supabase</span>
-          </div>
-          <Button
-            type="primary"
-            ghost
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleSelectSupabase()
-            }}
-          >
-            Configure
-          </Button>
-        </div>
-
-        {/* LLM Providers */}
-        {llmProviders.map((provider) => (
-          <div
-            key={`${provider.type}-${provider.kind}`}
-            onClick={() => handleSelectLLMProvider(provider.kind)}
-            className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-all cursor-pointer mb-4 relative"
-          >
-            <div className="flex items-center">
-              {provider.getIcon('', 'large')}
-              <span className="ml-3 font-medium">{provider.name}</span>
-            </div>
-            <Button
-              type="primary"
-              ghost
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleSelectLLMProvider(provider.kind)
-              }}
-            >
-              {t`Configure`}
-            </Button>
-          </div>
-        ))}
-
-        {/* Firecrawl */}
-        <div
-          onClick={() => handleSelectFirecrawl()}
-          className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-all cursor-pointer mb-4 relative"
-        >
-          <div className="flex items-center">
-            {firecrawlProvider.getIcon('', 'large')}
-            <span className="ml-3 font-medium">{firecrawlProvider.name}</span>
-          </div>
-          <Button
-            type="primary"
-            ghost
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleSelectFirecrawl()
-            }}
-          >
-            Configure
-          </Button>
-        </div>
+        {/* Supabase, LLM, Firecrawl : masqués à la création (console assumée, lot 1, 07/10/2026).
+            Les intégrations déjà présentes restent affichées et modifiables. */}
       </>
     ) : (
       <IntegrationOwnerNotice />
@@ -2172,12 +2086,12 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
                   <Row gutter={16}>
                     <Col span={12}>
                       <Form.Item name={['smtp', 'username']} label={t`SMTP Username`}>
-                        <Input placeholder="Username (optional)" disabled={!isOwner} />
+                        <Input placeholder={t`Username (optional)`} disabled={!isOwner} />
                       </Form.Item>
                     </Col>
                     <Col span={12}>
                       <Form.Item name={['smtp', 'password']} label={t`SMTP Password`}>
-                        <Input.Password placeholder="Password (optional)" disabled={!isOwner} />
+                        <Input.Password placeholder={t`Password (optional)`} disabled={!isOwner} />
                       </Form.Item>
                     </Col>
                   </Row>
@@ -2202,7 +2116,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
               rules={[{ required: true }]}
             >
               <Select
-                placeholder="Select SparkPost endpoint"
+                placeholder={t`Select SparkPost endpoint`}
                 disabled={!isOwner}
                 options={[
                   { label: 'SparkPost US', value: 'https://api.sparkpost.com' },
@@ -2261,7 +2175,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             </Form.Item>
             <Form.Item name={['mailgun', 'region']} label={t`Region`} initialValue="US">
               <Select
-                placeholder="Select Mailgun Region"
+                placeholder={t`Select Mailgun Region`}
                 disabled={!isOwner}
                 options={[
                   { label: 'US', value: 'US' },
@@ -2307,32 +2221,41 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
 
         {emailProfileMode !== 'gmail_app_password' && (
           <>
-            <Form.Item
-              name="rate_limit_per_minute"
-              label={t`Rate limit for marketing emails (emails per minute)`}
-              rules={[
-                { required: true, message: 'Please enter a rate limit' },
+            <Collapse
+              ghost
+              size="small"
+              className="-mx-4 mb-2"
+              items={[
                 {
-                  type: 'number',
-                  min: 1,
-                  message: 'Rate limit must be at least 1'
+                  key: 'advanced',
+                  label: t`Advanced settings`,
+                  forceRender: true,
+                  children: (
+                    <Form.Item
+                      name="rate_limit_per_minute"
+                      label={t`SMTP technical brake (messages/minute)`}
+                      tooltip={t`Technical brake applied by the sender. It is not the sending capacity, which is set by the profile daily cap.`}
+                      rules={[
+                        { required: true, message: t`Please enter a value` },
+                        {
+                          type: 'number',
+                          min: 1,
+                          message: t`The value must be at least 1`
+                        }
+                      ]}
+                      initialValue={25}
+                    >
+                      <InputNumber
+                        min={1}
+                        placeholder="25"
+                        disabled={!isOwner}
+                        style={{ width: '100%' }}
+                      />
+                    </Form.Item>
+                  )
                 }
               ]}
-              initialValue={25}
-            >
-              <InputNumber min={1} placeholder="25" disabled={!isOwner} style={{ width: '100%' }} />
-            </Form.Item>
-
-            {(rateLimitPerMinute || 25) > 0 && (
-              <div className="text-xs text-gray-600 -mt-4 mb-4">
-                <div>
-                  ≈ {((rateLimitPerMinute || 25) * 60).toLocaleString()} {t`emails per hour`}
-                </div>
-                <div>
-                  ≈ {((rateLimitPerMinute || 25) * 60 * 24).toLocaleString()} {t`emails per day`}
-                </div>
-              </div>
-            )}
+            />
           </>
         )}
 
@@ -2379,7 +2302,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
               {!record.is_default && (
                 <Tooltip title={t`Set as default sender`}>
                   <Button size="small" type="text" onClick={() => setDefaultSender(index)}>
-                    <span className="text-blue-500">Default</span>
+                    <span className="text-blue-500">{t`Default`}</span>
                   </Button>
                 </Tooltip>
               )}
@@ -2500,41 +2423,10 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
     } else if (provider.kind === 'mailjet' && provider.mailjet) {
       items.push(
         <Descriptions.Item key="sandbox" label={t`Sandbox Mode`}>
-          {provider.mailjet.sandbox_mode ? 'Enabled' : 'Disabled'}
+          {provider.mailjet.sandbox_mode ? t`Enabled` : t`Disabled`}
         </Descriptions.Item>
       )
     }
-
-    const gmailAppPassword = inferEmailProfileMode(provider) === 'gmail_app_password'
-
-    // Gmail keeps a conservative technical cadence. Campaign-level daily caps
-    // are configured separately and must not be inferred from this value.
-    items.push(
-      <Descriptions.Item key="rate_limit" label={t`Rate Limit for Marketing`}>
-        {gmailAppPassword ? (
-          <>
-            <div>{t`Maximum one email per minute`}</div>
-            <div className="text-xs text-gray-600 mt-1">
-              {t`The daily profile cap is enforced separately.`}
-            </div>
-          </>
-        ) : (
-          <>
-            <div>
-              {provider.rate_limit_per_minute} {t`emails per minute`}
-            </div>
-            <div className="text-xs text-gray-600 mt-1">
-              <div>
-                ≈ {(provider.rate_limit_per_minute * 60).toLocaleString()} {t`emails per hour`}
-              </div>
-              <div>
-                ≈ {(provider.rate_limit_per_minute * 60 * 24).toLocaleString()} {t`emails per day`}
-              </div>
-            </div>
-          </>
-        )}
-      </Descriptions.Item>
-    )
 
     return items
   }
@@ -2611,31 +2503,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
         provider.getIcon('h-6 w-12 object-contain mr-1') as React.ReactElement
       ),
       onClick: () => handleSelectProviderType(provider.kind)
-    })),
-    {
-      key: 'supabase',
-      label: 'Supabase',
-      icon: (
-        <img src="/console/supabase.png" alt="Supabase" style={{ height: 10, marginRight: 8 }} />
-      ),
-      onClick: () => handleSelectSupabase()
-    },
-    ...llmProviders.map((provider) => ({
-      key: `llm-${provider.kind}`,
-      label: provider.name,
-      icon: React.cloneElement(
-        provider.getIcon('h-6 w-12 object-contain mr-1') as React.ReactElement
-      ),
-      onClick: () => handleSelectLLMProvider(provider.kind)
-    })),
-    {
-      key: 'firecrawl',
-      label: 'Firecrawl',
-      icon: React.cloneElement(
-        firecrawlProvider.getIcon('h-6 w-12 object-contain mr-1') as React.ReactElement
-      ),
-      onClick: () => handleSelectFirecrawl()
-    }
+    }))
   ]
 
   return (
@@ -2732,7 +2600,7 @@ export function Integrations({ workspace, onSave, loading, isOwner }: Integratio
             label={t`Name`}
             rules={[{ required: true, message: 'Name is required' }]}
           >
-            <Input placeholder="Sender Name" disabled={!isOwner} />
+            <Input placeholder={t`Sender Name`} disabled={!isOwner} />
           </Form.Item>
         </Form>
       </Modal>

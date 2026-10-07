@@ -10,7 +10,6 @@ import { GeneralSettings } from '../components/settings/GeneralSettings'
 import { SMTPBridgeSettings } from '../components/settings/SMTPBridgeSettings'
 import { Integrations } from '../components/settings/Integrations'
 import { CustomFieldsConfiguration } from '../components/settings/CustomFieldsConfiguration'
-import { BlogSettings } from '../components/settings/BlogSettings'
 import { WebhooksSettings } from '../components/settings/WebhooksSettings'
 import { useAuth } from '../contexts/AuthContext'
 import { DeleteWorkspaceSection } from '../components/settings/DeleteWorkspace'
@@ -45,7 +44,6 @@ export function WorkspaceSettingsPage() {
     'custom-fields',
     'smtp-bridge',
     'general',
-    'blog',
     'plan',
     'cold-outreach',
     'api-agents',
@@ -152,14 +150,6 @@ export function WorkspaceSettingsPage() {
       case 'general':
         return (
           <GeneralSettings
-            workspace={workspace}
-            onWorkspaceUpdate={handleWorkspaceUpdate}
-            isOwner={isOwner}
-          />
-        )
-      case 'blog':
-        return (
-          <BlogSettings
             workspace={workspace}
             onWorkspaceUpdate={handleWorkspaceUpdate}
             isOwner={isOwner}

@@ -203,34 +203,6 @@ test.describe('Protected Pages Load', () => {
     expect(errors).toHaveLength(0)
   })
 
-  test('DebugSegmentPage loads correctly', async ({ authenticatedPage }) => {
-    const page = authenticatedPage
-    const errors = setupConsoleErrorTracking(page)
-
-    await page.goto(`/console/workspace/${WORKSPACE_ID}/debug-segment`)
-    await waitForPageLoad(page)
-
-    // Should show debug segment content
-    await expect(page.locator('body')).toBeVisible()
-
-    // Check for critical console errors
-    expect(errors).toHaveLength(0)
-  })
-
-  test('BlogPage loads correctly', async ({ authenticatedPage }) => {
-    const page = authenticatedPage
-    const errors = setupConsoleErrorTracking(page)
-
-    await page.goto(`/console/workspace/${WORKSPACE_ID}/blog`)
-    await waitForPageLoad(page)
-
-    // Should show blog content
-    await expect(page.locator('body')).toBeVisible()
-
-    // Check for critical console errors
-    expect(errors).toHaveLength(0)
-  })
-
   test('CreateWorkspacePage loads correctly', async ({ authenticatedPage }) => {
     const page = authenticatedPage
     const errors = setupConsoleErrorTracking(page)

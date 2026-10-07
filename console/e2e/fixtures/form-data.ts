@@ -4,31 +4,6 @@
  */
 
 // ============================================
-// SEO Settings (shared across Blog Post & Category)
-// ============================================
-export interface SEOFormData {
-  meta_title?: string
-  meta_description?: string
-  keywords?: string[]
-  meta_robots?: string
-  canonical_url?: string
-  og_title?: string
-  og_description?: string
-  og_image?: string
-}
-
-export const testSEOData: SEOFormData = {
-  meta_title: 'Test SEO Title for Search Engines',
-  meta_description: 'This is a comprehensive meta description for testing SEO settings persistence in e2e tests.',
-  keywords: ['test', 'e2e', 'seo', 'playwright'],
-  meta_robots: 'index,follow',
-  canonical_url: 'https://example.com/canonical-url',
-  og_title: 'Test Open Graph Title',
-  og_description: 'Open Graph description for social media sharing',
-  og_image: 'https://example.com/og-image.jpg'
-}
-
-// ============================================
 // Contact Form Data
 // ============================================
 export interface ContactFormData {
@@ -247,60 +222,6 @@ export const testTransactionalData: TransactionalFormData = {
   tracking_enabled: true,
   tracking_opens: true,
   tracking_clicks: true
-}
-
-// ============================================
-// Blog Author
-// ============================================
-export interface BlogAuthorFormData {
-  name: string
-  avatar_url?: string
-}
-
-export const testBlogAuthorData: BlogAuthorFormData = {
-  name: 'Test Author',
-  avatar_url: 'https://example.com/avatar.jpg'
-}
-
-// ============================================
-// Blog Post Form Data
-// ============================================
-export interface BlogPostFormData {
-  title: string
-  slug: string
-  category_id?: string
-  excerpt?: string
-  featured_image_url?: string
-  authors: BlogAuthorFormData[]
-  reading_time_minutes: number
-  seo: SEOFormData
-}
-
-export const testBlogPostData: BlogPostFormData = {
-  title: 'E2E Test Blog Post with Full SEO Settings',
-  slug: 'e2e-test-blog-post-with-seo',
-  excerpt: 'This is a comprehensive test excerpt for the blog post. It tests the excerpt field persistence along with all other fields.',
-  featured_image_url: 'https://example.com/featured-image.jpg',
-  authors: [testBlogAuthorData],
-  reading_time_minutes: 5,
-  seo: testSEOData
-}
-
-// ============================================
-// Blog Category Form Data
-// ============================================
-export interface BlogCategoryFormData {
-  name: string
-  slug: string
-  description?: string
-  seo: SEOFormData
-}
-
-export const testBlogCategoryData: BlogCategoryFormData = {
-  name: 'E2E Test Category',
-  slug: 'e2e-test-category',
-  description: 'A test category created by e2e tests to verify all form fields including SEO settings.',
-  seo: testSEOData
 }
 
 // ============================================

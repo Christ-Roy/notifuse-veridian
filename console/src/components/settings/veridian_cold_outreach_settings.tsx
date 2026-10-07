@@ -1107,19 +1107,21 @@ function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsC
 // { days:[1..5], start_hour, start_minute, end_hour (exclusif), end_minute, timezone }.
 
 // Jours de la semaine, convention Go time.Weekday (0=dimanche … 6=samedi).
-// ⚠️ Libellés LITTÉRAUX (pas `t`...``) : un `t` passé en paramètre / utilisé hors
-// composant React n'est PAS capté par l'extracteur statique Lingui → clé absente
-// du catalogue → libellé VIDE en runtime (bug P0 vécu 2026-06-14). Les noms de
-// jours sont fixes en français pour le tunnel FR ; littéral = zéro risque de vide.
-const WEEKDAY_OPTIONS: { value: number; label: string }[] = [
-  { value: 1, label: 'Lundi' },
-  { value: 2, label: 'Mardi' },
-  { value: 3, label: 'Mercredi' },
-  { value: 4, label: 'Jeudi' },
-  { value: 5, label: 'Vendredi' },
-  { value: 6, label: 'Samedi' },
-  { value: 0, label: 'Dimanche' }
-]
+// Libellés générés par Intl selon la locale active (pas de `t` hors composant :
+// il renvoie vide). Le 1er janvier 2023 est un dimanche.
+const WEEKDAY_VALUES = [1, 2, 3, 4, 5, 6, 0]
+function weekdayOptions(locale: string): { value: number; label: string }[] {
+  let fmt: Intl.DateTimeFormat
+  try {
+    fmt = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' })
+  } catch {
+    fmt = new Intl.DateTimeFormat('fr', { weekday: 'long', timeZone: 'UTC' })
+  }
+  return WEEKDAY_VALUES.map((value) => {
+    const name = fmt.format(new Date(Date.UTC(2023, 0, 1 + value)))
+    return { value, label: name.charAt(0).toUpperCase() + name.slice(1) }
+  })
+}
 
 // Timezones cold courantes. Littéraux (identifiants IANA, jamais traduits).
 const TIMEZONE_OPTIONS: string[] = [
@@ -1175,7 +1177,8 @@ function SendingWindowEditor({
   fallbackTimezone,
   offHint
 }: SendingWindowEditorProps) {
-  const { t } = useLingui()
+  const { t, i18n } = useLingui()
+  const WEEKDAY_OPTIONS = weekdayOptions(i18n.locale)
 
   const enabled = !!value
   const days = value?.days ?? [1, 2, 3, 4, 5]
@@ -1452,7 +1455,8 @@ function SendingWindowCard({
   onWorkspaceUpdate,
   presetSignal = NO_PRESET_SIGNAL
 }: SendingWindowCardProps) {
-  const { t } = useLingui()
+  const { t, i18n } = useLingui()
+  const WEEKDAY_OPTIONS = weekdayOptions(i18n.locale)
   const { message } = App.useApp()
   const [saving, setSaving] = useState(false)
 
@@ -1534,7 +1538,7 @@ function SendingWindowCard({
       ? existing.days
           .map((d) => WEEKDAY_OPTIONS.find((o) => o.value === d)?.label || String(d))
           .join(', ')
-      : 'Every day'
+      : t`Every day`
   const summaryText = existing
     ? `${summaryDaysLabel} · ${minutesToHHMM(
         (existing.start_hour ?? 0) * 60 + (existing.start_minute ?? 0)

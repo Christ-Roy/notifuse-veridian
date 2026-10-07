@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
-import { i18n, loadLocale, getInitialLocale, Locale, locales, localeNames } from '../i18n'
+import { i18n, loadLocale, getInitialLocale, Locale, locales, selectableLocales, localeNames } from '../i18n'
 import { AuthContext } from './AuthContext'
 
 interface LocaleContextType {
@@ -49,7 +49,7 @@ export function LocaleProvider({ children }: LocaleProviderProps) {
   // still mount without an AuthProvider above it.
   const userLanguage = useContext(AuthContext)?.user?.language
   useEffect(() => {
-    if (!userLanguage || !locales.includes(userLanguage as Locale)) return
+    if (!userLanguage || !selectableLocales.includes(userLanguage as Locale)) return
     void setLocale(userLanguage as Locale)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLanguage])

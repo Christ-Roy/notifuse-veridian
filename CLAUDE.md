@@ -20,6 +20,9 @@ ligne dans l'index ci-dessous — jamais un pavé de plus ici.
 2. **Ne jamais patcher un fichier upstream Notifuse.** Tout code Veridian vit dans des
    fichiers `veridian_*.go` au même niveau que l'upstream (flat, jamais de
    sous-dossier). Un handler à étendre se wrappe, il ne se modifie pas en place. → `02`
+   **Exception, décision du 07/10/2026 : la console React (`console/`) est la nôtre.** On
+   ne fusionne plus `console/` depuis l'upstream (blog retiré, sidebar regroupée) ; on suit
+   l'upstream côté Go seulement. Nouvelles pages dans des `veridian_*.tsx`.
 3. **Zéro mail cold réel en test.** Les preuves passent par l'endpoint
    `cold-simulate` (staging-only, 503 hors staging) ou un sink SMTP local
    (`smtp-sink`) — jamais un vrai envoi sans le flag `--real-send` et le GO explicite

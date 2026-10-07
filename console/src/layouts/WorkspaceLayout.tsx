@@ -4,7 +4,6 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLingui } from '@lingui/react/macro'
 import md5 from 'blueimp-md5'
 import {
-  faImage,
   faPaperPlane,
   faFileLines,
   faQuestionCircle
@@ -71,7 +70,7 @@ export function WorkspaceLayout() {
   // Use useMatches to determine the current route path
   const matches = useMatches()
   const currentPath = matches[matches.length - 1]?.pathname || ''
-  const isSettingsPage = currentPath.includes('/settings') || currentPath.includes('/blog')
+  const isSettingsPage = currentPath.includes('/settings')
 
   // Fetch user permissions for the current workspace
   useEffect(() => {
@@ -156,12 +155,11 @@ export function WorkspaceLayout() {
     selectedKey = 'lists'
   } else if (currentPath.includes('/templates')) {
     selectedKey = 'templates'
-  } else if (currentPath.includes('/blog')) {
-    selectedKey = 'blog'
   } else if (currentPath.includes('/contacts')) {
     selectedKey = 'contacts'
   } else if (currentPath.includes('/file-manager')) {
-    selectedKey = 'file-manager'
+    // Entrée masquée de la sidebar (le gestionnaire reste atteignable par le sélecteur d'images)
+    selectedKey = ''
   } else if (currentPath.includes('/transactional-notifications')) {
     selectedKey = 'transactional-notifications'
   } else if (currentPath.includes('/logs')) {
@@ -215,7 +213,7 @@ export function WorkspaceLayout() {
     }
   }
 
-  const menuItems = [
+  const flatMenuItems = [
     hasAccess('message_history') && {
       key: 'analytics',
       // icon: <FontAwesomeIcon icon={faChartLine} size="sm" style={{ opacity: 0.7 }} />,
@@ -336,64 +334,12 @@ export function WorkspaceLayout() {
         </Link>
       )
     },
-    hasAccess('workspace') && {
-      key: 'blog',
-      icon: (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="lucide lucide-pen-line-icon lucide-pen-line"
-        >
-          <path d="M13 21h8" />
-          <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
-        </svg>
-      ),
-      label: (
-        <Link to="/console/workspace/$workspaceId/blog" params={{ workspaceId }}>
-          {t`Blog`}
-        </Link>
-      )
-    },
-    hasAccess('workspace') && {
-      key: 'file-manager',
-      icon: <FontAwesomeIcon icon={faImage} size="sm" style={{ opacity: 0.6 }} />,
-      // icon: (
-      //   <svg
-      //     xmlns="http://www.w3.org/2000/svg"
-      //     width="16"
-      //     height="16"
-      //     viewBox="0 0 24 24"
-      //     fill="none"
-      //     stroke="currentColor"
-      //     strokeWidth="2"
-      //     strokeLinecap="round"
-      //     strokeLinejoin="round"
-      //     className="lucide lucide-image-icon lucide-image opacity-70"
-      //   >
-      //     <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-      //     <circle cx="9" cy="9" r="2" />
-      //     <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-      //   </svg>
-      // ),
-      label: (
-        <Link to="/console/workspace/$workspaceId/file-manager" params={{ workspaceId }}>
-          {t`File Manager`}
-        </Link>
-      )
-    },
     hasAccess('message_history') && {
       key: 'logs',
       icon: <FontAwesomeIcon icon={faBarsStaggered} size="sm" style={{ opacity: 0.7 }} />,
       label: (
         <Link to="/console/workspace/$workspaceId/logs" params={{ workspaceId }}>
-          {t`Logs`}
+          {t`Sending log`}
         </Link>
       )
     },
@@ -407,6 +353,29 @@ export function WorkspaceLayout() {
       )
     }
   ].filter((item) => Boolean(item)) as Array<{ key: string; icon: React.ReactNode; label: React.ReactNode }>
+
+  // Sidebar en groupes (Lot 1 console assumée, 07/10/2026). Les pages restent celles d'avant.
+  // Emplacement réservé : la future entrée « Profils d'envoi » (lot 3) ira dans le groupe
+  // « Envoi », avant le Journal d'envoi. Aucune page vide en attendant.
+  const menuByKey = Object.fromEntries(flatMenuItems.map((item) => [item.key, item]))
+  const pick = (keys: string[]) => keys.map((key) => menuByKey[key]).filter(Boolean)
+  const makeGroup = (key: string, label: string, keys: string[]) => {
+    const children = pick(keys)
+    return children.length > 0 ? [{ type: 'group' as const, key: `group-${key}`, label, children }] : []
+  }
+  const menuItems = [
+    ...pick(['analytics']),
+    ...makeGroup('prospection', t`Prospection`, [
+      'contacts',
+      'lists',
+      'templates',
+      'broadcasts',
+      'automations'
+    ]),
+    ...makeGroup('transactional', t`Transactional`, ['transactional-notifications']),
+    ...makeGroup('sending', t`Sending`, ['logs']),
+    ...pick(['settings'])
+  ]
 
   // Wordmark + Menu items (réutilisé par le Sider desktop et le Drawer mobile)
   const sidebarMenu = (

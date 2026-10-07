@@ -503,7 +503,7 @@ describe('VeridianColdOutreachSettings', () => {
     })
     expect(screen.getByText('Sending window (business hours)')).toBeInTheDocument()
     // Résumé littéral : jours + plage + timezone (libellés littéraux, pas de t``)
-    expect(screen.getByText(/Lundi.*09:00.*18:00.*Europe\/Paris/)).toBeInTheDocument()
+    expect(screen.getByText(/Monday.*09:00.*18:00.*Europe\/Paris/)).toBeInTheDocument()
     // pas de bouton de save en lecture seule
     expect(screen.queryByRole('button', { name: /Save sending window/i })).not.toBeInTheDocument()
   })

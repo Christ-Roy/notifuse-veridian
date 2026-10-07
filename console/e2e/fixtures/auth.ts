@@ -24,9 +24,6 @@ import {
   mockEmptyFiles,
   mockTotalContacts,
   mockAnalyticsData,
-  mockBlogPostsResponse,
-  mockBlogCategoriesResponse,
-  mockBlogThemesResponse,
   mockSuccessResponse,
   mockContactUpsertResponse,
   mockContactImportResponse,
@@ -35,8 +32,6 @@ import {
   mockBroadcastCreateResponse,
   mockSegmentCreateResponse,
   mockTransactionalCreateResponse,
-  mockBlogPostCreateResponse,
-  mockBlogCategoryCreateResponse,
   mockTestEmailResponse,
   mockCompiledTemplate,
   mockAPIKeys,
@@ -354,73 +349,6 @@ async function setupApiMocks(page: Page, config: MockConfig = {}) {
     }
     if (url.includes('/api/transactional.send_test')) {
       return route.fulfill(jsonResponse(mockTestEmailResponse))
-    }
-
-    // ============================================
-    // BLOG (supports blogPosts.*, blog.post.*, and blog_post.* patterns)
-    // ============================================
-    if (url.includes('/api/blogPosts.list') || url.includes('/api/blog.post.list') || url.includes('/api/blog_post.list')) {
-      return route.fulfill(jsonResponse(mockBlogPostsResponse))
-    }
-    if (url.includes('/api/blogPosts.get') || url.includes('/api/blog.post.get') || url.includes('/api/blog_post.get')) {
-      return route.fulfill(jsonResponse({ post: mockBlogPostsResponse.posts[0] }))
-    }
-    if (url.includes('/api/blogPosts.create') || url.includes('/api/blog.post.create') || url.includes('/api/blog_post.create')) {
-      return route.fulfill(jsonResponse(mockBlogPostCreateResponse))
-    }
-    if (url.includes('/api/blogPosts.update') || url.includes('/api/blog.post.update') || url.includes('/api/blog_post.update')) {
-      return route.fulfill(jsonResponse(mockBlogPostCreateResponse))
-    }
-    if (url.includes('/api/blogPosts.delete') || url.includes('/api/blog.post.delete') || url.includes('/api/blog_post.delete')) {
-      return route.fulfill(jsonResponse(mockSuccessResponse))
-    }
-    if (url.includes('/api/blogPosts.publish') || url.includes('/api/blog.post.publish') || url.includes('/api/blog_post.publish')) {
-      return route.fulfill(
-        jsonResponse({
-          post: { ...mockBlogPostsResponse.posts[0], status: 'published' }
-        })
-      )
-    }
-    if (url.includes('/api/blogPosts.unpublish') || url.includes('/api/blog.post.unpublish') || url.includes('/api/blog_post.unpublish')) {
-      return route.fulfill(
-        jsonResponse({
-          post: { ...mockBlogPostsResponse.posts[0], status: 'draft' }
-        })
-      )
-    }
-
-    if (url.includes('/api/blogCategories.list') || url.includes('/api/blog.category.list') || url.includes('/api/blog_category.list')) {
-      return route.fulfill(jsonResponse(mockBlogCategoriesResponse))
-    }
-    if (url.includes('/api/blogCategories.get') || url.includes('/api/blog.category.get') || url.includes('/api/blog_category.get')) {
-      return route.fulfill(jsonResponse({ category: mockBlogCategoriesResponse.categories[0] }))
-    }
-    if (url.includes('/api/blogCategories.create') || url.includes('/api/blog.category.create') || url.includes('/api/blog_category.create')) {
-      return route.fulfill(jsonResponse(mockBlogCategoryCreateResponse))
-    }
-    if (url.includes('/api/blogCategories.update') || url.includes('/api/blog.category.update') || url.includes('/api/blog_category.update')) {
-      return route.fulfill(jsonResponse(mockBlogCategoryCreateResponse))
-    }
-    if (url.includes('/api/blogCategories.delete') || url.includes('/api/blog.category.delete') || url.includes('/api/blog_category.delete')) {
-      return route.fulfill(jsonResponse(mockSuccessResponse))
-    }
-
-    if (url.includes('/api/blogThemes.list') || url.includes('/api/blog.theme.list') || url.includes('/api/blog_theme.list')) {
-      return route.fulfill(jsonResponse(mockBlogThemesResponse))
-    }
-    if (url.includes('/api/blogThemes.get') || url.includes('/api/blogThemes.getPublished') || url.includes('/api/blog.theme.get') || url.includes('/api/blog_theme.get')) {
-      return route.fulfill(jsonResponse({ theme: mockBlogThemesResponse.themes[0] }))
-    }
-    if (url.includes('/api/blogThemes.update') || url.includes('/api/blog.theme.update') || url.includes('/api/blog_theme.update')) {
-      return route.fulfill(jsonResponse({ theme: mockBlogThemesResponse.themes[0] }))
-    }
-    if (url.includes('/api/blogThemes.publish') || url.includes('/api/blog.theme.publish') || url.includes('/api/blog_theme.publish')) {
-      return route.fulfill(jsonResponse(mockSuccessResponse))
-    }
-
-    // Generic blog routes
-    if (url.includes('/api/blog')) {
-      return route.fulfill(jsonResponse(mockBlogPostsResponse))
     }
 
     // ============================================

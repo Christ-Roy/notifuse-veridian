@@ -233,18 +233,6 @@ vi.mock('../services/api/files', () => ({
   }
 }))
 
-// Mock blog API
-vi.mock('../services/api/blog', () => ({
-  blogApi: {
-    list: vi.fn().mockResolvedValue({ posts: [] }),
-    get: vi.fn().mockResolvedValue({ post: null }),
-    create: vi.fn().mockResolvedValue({}),
-    update: vi.fn().mockResolvedValue({}),
-    delete: vi.fn().mockResolvedValue({}),
-    listCategories: vi.fn().mockResolvedValue({ categories: [] })
-  }
-}))
-
 // Mock email integration API
 vi.mock('../services/api/email_integration', () => ({
   emailIntegrationApi: {
@@ -323,8 +311,6 @@ import { TransactionalNotificationsPage } from '../pages/TransactionalNotificati
 import { LogsPage } from '../pages/LogsPage'
 import { WorkspaceSettingsPage } from '../pages/WorkspaceSettingsPage'
 import { FileManagerPage } from '../pages/FileManagerPage'
-import { BlogPage } from '../pages/BlogPage'
-import { DebugSegmentPage } from '../pages/DebugSegmentPage'
 
 // Create a wrapper with all required providers
 function createWrapper() {
@@ -484,22 +470,6 @@ describe('Page Smoke Tests', () => {
     it('FileManagerPage renders without error', async () => {
       const Wrapper = createWrapper()
       expect(() => render(<FileManagerPage />, { wrapper: Wrapper })).not.toThrow()
-      await waitFor(() => {
-        expect(document.body).toBeTruthy()
-      })
-    })
-
-    it('BlogPage renders without error', async () => {
-      const Wrapper = createWrapper()
-      expect(() => render(<BlogPage />, { wrapper: Wrapper })).not.toThrow()
-      await waitFor(() => {
-        expect(document.body).toBeTruthy()
-      })
-    })
-
-    it('DebugSegmentPage renders without error', async () => {
-      const Wrapper = createWrapper()
-      expect(() => render(<DebugSegmentPage />, { wrapper: Wrapper })).not.toThrow()
       await waitFor(() => {
         expect(document.body).toBeTruthy()
       })

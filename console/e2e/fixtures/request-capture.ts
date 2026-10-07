@@ -118,17 +118,6 @@ export const API_PATTERNS = {
   TRANSACTIONAL_UPDATE: 'transactional.update',
   TRANSACTIONAL_DELETE: 'transactional.delete',
 
-  // Blog Posts
-  BLOG_POST_CREATE: 'blog.post.create',
-  BLOG_POST_UPDATE: 'blog.post.update',
-  BLOG_POST_DELETE: 'blog.post.delete',
-  BLOG_POST_PUBLISH: 'blog.post.publish',
-
-  // Blog Categories
-  BLOG_CATEGORY_CREATE: 'blog.category.create',
-  BLOG_CATEGORY_UPDATE: 'blog.category.update',
-  BLOG_CATEGORY_DELETE: 'blog.category.delete',
-
   // Workspace
   WORKSPACE_UPDATE: 'workspace.update'
 } as const
@@ -218,31 +207,6 @@ export function getPatternFromUrl(url: string): ApiPattern | null {
   }
   if (url.includes('/api/transactional.delete')) {
     return API_PATTERNS.TRANSACTIONAL_DELETE
-  }
-
-  // Blog post endpoints
-  if (url.includes('/api/blog.post.create') || url.includes('/api/blog_post.create')) {
-    return API_PATTERNS.BLOG_POST_CREATE
-  }
-  if (url.includes('/api/blog.post.update') || url.includes('/api/blog_post.update')) {
-    return API_PATTERNS.BLOG_POST_UPDATE
-  }
-  if (url.includes('/api/blog.post.delete') || url.includes('/api/blog_post.delete')) {
-    return API_PATTERNS.BLOG_POST_DELETE
-  }
-  if (url.includes('/api/blog.post.publish') || url.includes('/api/blog_post.publish')) {
-    return API_PATTERNS.BLOG_POST_PUBLISH
-  }
-
-  // Blog category endpoints
-  if (url.includes('/api/blog.category.create') || url.includes('/api/blog_category.create')) {
-    return API_PATTERNS.BLOG_CATEGORY_CREATE
-  }
-  if (url.includes('/api/blog.category.update') || url.includes('/api/blog_category.update')) {
-    return API_PATTERNS.BLOG_CATEGORY_UPDATE
-  }
-  if (url.includes('/api/blog.category.delete') || url.includes('/api/blog_category.delete')) {
-    return API_PATTERNS.BLOG_CATEGORY_DELETE
   }
 
   // Workspace endpoints

@@ -1,11 +1,11 @@
 import { Dropdown, Button } from 'antd'
 import { useLocale } from '../contexts/LocaleContext'
 import { authService } from '../services/api/auth'
-import type { Locale } from '../i18n'
+import { selectableLocales, type Locale } from '../i18n'
 import type { MenuProps } from 'antd'
 
 export function LanguageSwitcher() {
-  const { locale, setLocale, locales, localeNames } = useLocale()
+  const { locale, setLocale, localeNames } = useLocale()
 
   const handleSelect = (l: Locale) => {
     void setLocale(l)
@@ -17,7 +17,7 @@ export function LanguageSwitcher() {
     })
   }
 
-  const items: MenuProps['items'] = locales.map((l) => ({
+  const items: MenuProps['items'] = selectableLocales.map((l) => ({
     key: l,
     label: localeNames[l],
     onClick: () => handleSelect(l)

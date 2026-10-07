@@ -287,19 +287,6 @@ test.describe('Workspace Settings Feature', () => {
     })
   })
 
-  test.describe('Blog Settings', () => {
-    test('loads blog settings page', async ({ authenticatedPageWithData }) => {
-      const page = authenticatedPageWithData
-
-      await page.goto(`/console/workspace/${WORKSPACE_ID}/settings/blog`)
-      await waitForLoading(page)
-
-      // Page should load
-      await expect(page.locator('body')).toBeVisible()
-      await expect(page).toHaveURL(/settings\/blog/)
-    })
-  })
-
   test.describe('Danger Zone', () => {
     test('loads danger zone page for owners', async ({ authenticatedPageWithData }) => {
       const page = authenticatedPageWithData
@@ -333,7 +320,7 @@ test.describe('Workspace Settings Feature', () => {
       await expect(
         settingsSidebar.locator('.ant-menu-item').filter({ hasText: 'Integrations' })
       ).toBeVisible()
-      await expect(settingsSidebar.locator('.ant-menu-item').filter({ hasText: 'Blog' })).toBeVisible()
+      await expect(settingsSidebar.locator('.ant-menu-item').filter({ hasText: 'Blog' })).toHaveCount(0)
       await expect(
         settingsSidebar.locator('.ant-menu-item').filter({ hasText: 'Custom Fields' })
       ).toBeVisible()

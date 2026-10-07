@@ -8,6 +8,10 @@ export type Locale = "en" | "fr" | "es" | "de" | "ca" | "pt-BR" | "ja" | "it"
 
 export const locales: Locale[] = ["en", "fr", "es", "de", "ca", "pt-BR", "ja", "it"]
 
+// Console assumée (07/10/2026) : seules fr et en sont maintenues (les autres
+// catalogues ont ~589 trous chacun). Le sélecteur ne propose que celles-ci.
+export const selectableLocales: Locale[] = ["fr", "en"]
+
 export const localeNames: Record<Locale, string> = {
   en: "English",
   fr: "Français",

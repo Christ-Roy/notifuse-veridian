@@ -11,11 +11,7 @@ import type {
   TemplateFormData,
   BroadcastFormData,
   SegmentFormData,
-  TransactionalFormData,
-  BlogPostFormData,
-  BlogCategoryFormData,
-  SEOFormData,
-  BlogAuthorFormData
+  TransactionalFormData
 } from './form-data'
 
 // ============================================
@@ -192,47 +188,6 @@ async function setCheckboxByLabel(page: Page, labelText: string, checked: boolea
   const isChecked = await input.isChecked()
   if (isChecked !== checked) {
     await checkbox.click()
-  }
-}
-
-// ============================================
-// SEO Settings Filler (used by Blog Post & Category)
-// ============================================
-
-/**
- * Fill all SEO settings fields
- */
-export async function fillSEOSettings(page: Page, seo: SEOFormData): Promise<void> {
-  if (seo.meta_title) {
-    await fillByLabel(page, 'Meta Title', seo.meta_title)
-  }
-
-  if (seo.meta_description) {
-    await fillByLabel(page, 'Meta Description', seo.meta_description)
-  }
-
-  if (seo.keywords && seo.keywords.length > 0) {
-    await fillTagsByLabel(page, 'Keywords', seo.keywords)
-  }
-
-  if (seo.meta_robots) {
-    await selectByLabel(page, 'Search Engine Indexing', seo.meta_robots === 'index,follow' ? 'Index and follow links' : seo.meta_robots)
-  }
-
-  if (seo.canonical_url) {
-    await fillByLabel(page, 'Canonical URL', seo.canonical_url)
-  }
-
-  if (seo.og_title) {
-    await fillByLabel(page, 'Social Share Title', seo.og_title)
-  }
-
-  if (seo.og_description) {
-    await fillByLabel(page, 'Social Share Description', seo.og_description)
-  }
-
-  if (seo.og_image) {
-    await fillByLabel(page, 'Social Share Image', seo.og_image)
   }
 }
 
@@ -572,111 +527,5 @@ export async function fillTransactionalForm(page: Page, data: Partial<Transactio
   }
   if (data.tracking_clicks !== undefined) {
     await setCheckboxByLabel(page, 'Track Clicks', data.tracking_clicks)
-  }
-}
-
-// ============================================
-// Blog Author Filler Helper
-// ============================================
-
-async function fillBlogAuthor(page: Page, author: BlogAuthorFormData, index: number): Promise<void> {
-  // Find the author row by index
-  const authorRows = page.locator('.ant-table-row, [data-testid="author-row"]')
-  const row = authorRows.nth(index)
-
-  if ((await row.count()) > 0) {
-    const nameInput = row.locator('input').first()
-    if ((await nameInput.count()) > 0) {
-      await nameInput.fill(author.name)
-    }
-
-    if (author.avatar_url) {
-      const avatarInput = row.locator('input').nth(1)
-      if ((await avatarInput.count()) > 0) {
-        await avatarInput.fill(author.avatar_url)
-      }
-    }
-  }
-}
-
-// ============================================
-// Blog Post Form Filler
-// ============================================
-
-export async function fillBlogPostForm(page: Page, data: Partial<BlogPostFormData>): Promise<void> {
-  // Basic fields
-  if (data.title) {
-    await fillByLabel(page, 'Title', data.title)
-  }
-
-  // Slug is usually auto-generated from title, but can be manually set
-  if (data.slug) {
-    const slugInput = page.getByLabel('Slug', { exact: false })
-    if ((await slugInput.count()) > 0 && await slugInput.isEnabled()) {
-      await slugInput.fill(data.slug)
-    }
-  }
-
-  // Category selection
-  if (data.category_id) {
-    await selectByLabel(page, 'Category', data.category_id)
-  }
-
-  // Reading time
-  if (data.reading_time_minutes !== undefined) {
-    await fillNumberByLabel(page, 'Reading Time', data.reading_time_minutes)
-  }
-
-  // Authors - need to add author first
-  if (data.authors && data.authors.length > 0) {
-    // Click add author button if available
-    const addAuthorBtn = page.getByRole('button', { name: /add author/i })
-    if ((await addAuthorBtn.count()) > 0) {
-      for (let i = 0; i < data.authors.length; i++) {
-        if (i > 0) {
-          await addAuthorBtn.click()
-          await page.waitForTimeout(200)
-        }
-        await fillBlogAuthor(page, data.authors[i], i)
-      }
-    }
-  }
-
-  // Excerpt
-  if (data.excerpt) {
-    await fillByLabel(page, 'Excerpt', data.excerpt)
-  }
-
-  // Featured image
-  if (data.featured_image_url) {
-    await fillByLabel(page, 'Featured Image', data.featured_image_url)
-  }
-
-  // SEO Settings - this is the critical part that was broken!
-  if (data.seo) {
-    await fillSEOSettings(page, data.seo)
-  }
-}
-
-// ============================================
-// Blog Category Form Filler
-// ============================================
-
-export async function fillBlogCategoryForm(page: Page, data: Partial<BlogCategoryFormData>): Promise<void> {
-  if (data.name) {
-    await fillByLabel(page, 'Name', data.name)
-  }
-
-  if (data.slug) {
-    await fillByLabel(page, 'Slug', data.slug)
-  }
-
-  if (data.description) {
-    await fillByLabel(page, 'Description', data.description)
-  }
-
-  // SEO Settings
-  if (data.seo) {
-    await fillSEOSettings(page, data.seo)
   }
 }
