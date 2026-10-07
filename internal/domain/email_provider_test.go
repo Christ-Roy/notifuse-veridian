@@ -2170,3 +2170,34 @@ func TestEmailProvider_VeridianOpenPixelByClassJSONBlob(t *testing.T) {
 		assert.NotContains(t, string(raw), "veridian_open_pixel_by_class")
 	})
 }
+
+// Seuil du fusible de reputation par profil (2026-10-07) : Validate refuse hors bornes,
+// accepte vide, et le champ survit au round-trip JSON (blob integrations, sans migration).
+func TestEmailProvider_VeridianHardBounceFreezeThreshold(t *testing.T) {
+	t.Run("hors bornes refuse par Validate, avant tout autre controle SMTP", func(t *testing.T) {
+		for _, v := range []float64{0.005, 0.2, 0.5, -0.03} {
+			p := EmailProvider{Kind: EmailProviderKindSMTP, VeridianHardBounceFreezeThreshold: v}
+			err := p.Validate("passphrase")
+			require.Error(t, err, "v=%v", v)
+			assert.Contains(t, err.Error(), "veridian_hard_bounce_freeze_threshold")
+		}
+	})
+	t.Run("vide ou dans les bornes : pas d'erreur de seuil", func(t *testing.T) {
+		for _, v := range []float64{0, 0.01, 0.03, 0.08, 0.15} {
+			p := EmailProvider{VeridianHardBounceFreezeThreshold: v}
+			assert.NoError(t, p.ValidateVeridianHardBounceFreezeThreshold(), "v=%v", v)
+		}
+	})
+	t.Run("round-trip JSON et omitempty", func(t *testing.T) {
+		raw, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 600})
+		require.NoError(t, err)
+		assert.NotContains(t, string(raw), "veridian_hard_bounce_freeze_threshold")
+
+		raw, err = json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP, VeridianHardBounceFreezeThreshold: 0.08})
+		require.NoError(t, err)
+		var back EmailProvider
+		require.NoError(t, json.Unmarshal(raw, &back))
+		assert.Equal(t, 0.08, back.VeridianHardBounceFreezeThreshold)
+		assert.Equal(t, 0.08, back.VeridianEffectiveHardBounceFreezeThreshold())
+	})
+}

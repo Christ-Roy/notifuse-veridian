@@ -177,3 +177,42 @@ func TestGetReputationStatus_RepositoryErrorPropagates(t *testing.T) {
 	_, err := svc.GetReputationStatus(ctx, &domain.VeridianReputationStatusRequest{WorkspaceID: "ws1"})
 	require.Error(t, err)
 }
+
+// Seuil par profil (2026-10-07) : un MEME taux de 6% est gele sur un profil au defaut 3%,
+// libre sur un profil a 0.08, et l'API expose le seuil effectif et son origine.
+func TestGetReputationStatus_PerProfileThreshold(t *testing.T) {
+	ctrl, svc, msgRepo, wsRepo, authSvc := newReputationStatusTestService(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	authSvc.EXPECT().AuthenticateUserForWorkspace(ctx, "ws1").
+		Return(ctx, &domain.User{}, reputationReadWorkspace(), nil)
+	wsRepo.EXPECT().GetByID(ctx, "ws1").Return(&domain.Workspace{
+		ID: "ws1",
+		Integrations: []domain.Integration{
+			{ID: "defaut", Name: "profil-defaut", EmailProvider: domain.EmailProvider{
+				Kind: domain.EmailProviderKindSMTP, Senders: []domain.EmailSender{{Email: "a@defaut-veridian.fr"}}}},
+			{ID: "relache", Name: "profil-8pct", EmailProvider: domain.EmailProvider{
+				Kind: domain.EmailProviderKindSMTP, VeridianHardBounceFreezeThreshold: 0.08,
+				Senders: []domain.EmailSender{{Email: "a@relache-veridian.fr"}}}},
+		},
+	}, nil)
+	for _, d := range []string{"defaut-veridian.fr", "relache-veridian.fr"} {
+		msgRepo.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws1", d, gomock.Any()).Return(0, nil)
+		msgRepo.EXPECT().CountSentSinceForSenderDomain(gomock.Any(), "ws1", d, gomock.Any()).Return(100, nil)
+		msgRepo.EXPECT().CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws1", d, gomock.Any()).Return(6, nil) // 6%
+	}
+
+	got, err := svc.GetReputationStatus(ctx, &domain.VeridianReputationStatusRequest{WorkspaceID: "ws1"})
+	require.NoError(t, err)
+	require.Len(t, got.Integrations, 2)
+
+	assert.True(t, got.Integrations[0].Frozen)
+	assert.InDelta(t, 0.03, got.Integrations[0].Threshold, 1e-9)
+	assert.False(t, got.Integrations[0].ThresholdCustom)
+
+	assert.False(t, got.Integrations[1].Frozen, "6%% ne gele pas un profil a 8%%")
+	assert.InDelta(t, 0.08, got.Integrations[1].Threshold, 1e-9)
+	assert.True(t, got.Integrations[1].ThresholdCustom)
+	assert.True(t, got.AnyFrozen)
+}
