@@ -359,3 +359,31 @@ func TestIntegration_IMAP_AfterLoad_NilSettingsSafe(t *testing.T) {
 	assert.NoError(t, integ.AfterLoad(testIMAPPassphrase))
 	assert.NoError(t, integ.BeforeSave(testIMAPPassphrase))
 }
+
+func TestIMAPSettings_GetTLSServerName(t *testing.T) {
+	assert.Equal(t, "imap.example.com", (&IMAPSettings{Host: "imap.example.com"}).GetTLSServerName(), "default: Host")
+	assert.Equal(t, "smtp.example.com", (&IMAPSettings{Host: "100.64.0.1", TLSServerName: " smtp.example.com "}).GetTLSServerName(), "override trimmed")
+	var nilSettings *IMAPSettings
+	assert.Equal(t, "", nilSettings.GetTLSServerName())
+}
+
+func TestIMAPSettings_Validate_TLSServerName(t *testing.T) {
+	base := func(n string) *IMAPSettings {
+		return &IMAPSettings{Host: "100.64.0.1", Port: 993, Username: "u", Password: "p", UseTLS: true, TLSServerName: n}
+	}
+	require.NoError(t, base("smtp.example.com").Validate("passphrase"))
+	require.NoError(t, base("").Validate("passphrase"))
+	for _, bad := range []string{"imaps://x.fr", "a b", "x.fr:993", "u@x.fr", "x.fr/path"} {
+		assert.Error(t, base(bad).Validate("passphrase"), bad)
+	}
+}
+
+func TestIMAPSettings_TLSServerName_JSONRoundtrip(t *testing.T) {
+	in := IMAPSettings{Host: "100.64.0.1", Port: 993, Username: "u", UseTLS: true, TLSServerName: "smtp.example.com", EncryptedPassword: "x"}
+	raw, err := json.Marshal(in)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"tls_server_name":"smtp.example.com"`)
+	var out IMAPSettings
+	require.NoError(t, json.Unmarshal(raw, &out))
+	assert.Equal(t, "smtp.example.com", out.TLSServerName)
+}

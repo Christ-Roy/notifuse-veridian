@@ -84,7 +84,7 @@ func (d *emersionIMAPDialer) Dial(ctx context.Context, settings *domain.IMAPSett
 	dialer := &net.Dialer{Timeout: veridianIMAPDialTimeout}
 	options := &imapclient.Options{
 		Dialer:    dialer,
-		TLSConfig: &tls.Config{ServerName: settings.Host, MinVersion: tls.VersionTLS12},
+		TLSConfig: &tls.Config{ServerName: settings.GetTLSServerName(), MinVersion: tls.VersionTLS12},
 	}
 
 	var (

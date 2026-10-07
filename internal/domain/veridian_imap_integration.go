@@ -76,6 +76,12 @@ type IMAPSettings struct {
 	UseTLS      bool   `json:"use_tls"`
 	Folder      string `json:"folder,omitempty"`
 
+	// TLSServerName : nom attendu dans le certificat du serveur (SNI + vérif).
+	// Vide => Host. Sert à joindre une boîte par une adresse privée (IP
+	// Tailscale) tout en vérifiant le certificat émis pour son nom DNS public :
+	// la vérification TLS reste COMPLÈTE, jamais désactivée.
+	TLSServerName string `json:"tls_server_name,omitempty"`
+
 	// PollingIntervalSeconds : période de scrutation pour CETTE boîte. 0 =>
 	// DefaultIMAPPollingInterval. Borné en bas par minIMAPPollingInterval.
 	PollingIntervalSeconds int `json:"polling_interval_seconds,omitempty"`
@@ -136,6 +142,17 @@ func (s *IMAPSettings) GetPollingInterval() time.Duration {
 	return d
 }
 
+// GetTLSServerName retourne le nom utilisé pour vérifier le certificat (Host par défaut).
+func (s *IMAPSettings) GetTLSServerName() string {
+	if s == nil {
+		return ""
+	}
+	if n := strings.TrimSpace(s.TLSServerName); n != "" {
+		return n
+	}
+	return s.Host
+}
+
 // Address retourne "host:port" pour le dial.
 func (s *IMAPSettings) Address() string {
 	return fmt.Sprintf("%s:%d", s.Host, s.Port)
@@ -177,6 +194,9 @@ func (s *IMAPSettings) Validate(passphrase string) error {
 	}
 	if strings.TrimSpace(s.Username) == "" {
 		return fmt.Errorf("username is required for IMAP configuration")
+	}
+	if n := strings.TrimSpace(s.TLSServerName); n != "" && strings.ContainsAny(n, " /:@\t\r\n") {
+		return fmt.Errorf("tls_server_name must be a bare hostname")
 	}
 	// Le mot de passe est obligatoire à la création (pas d'IMAP anonyme dans
 	// notre cas d'usage). On accepte un Password vide UNIQUEMENT si un
