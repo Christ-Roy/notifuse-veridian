@@ -281,6 +281,12 @@ export interface EmailProvider {
   // without returning any plaintext or encrypted credential to the console.
   veridian_credentials_configured?: boolean
   veridian_transport_verified_at?: string
+  // Lot 2 (08/10/2026) : boîte IMAP de retour liée à ce profil (ID d'une
+  // intégration imap du même workspace) et pause du profil (le worker bascule
+  // sur le reste du pool). Lus et écrits par l'API ; la page Profils d'envoi
+  // (lot 3) les expose. Conservés tels quels quand la console renvoie le profil.
+  veridian_return_imap_integration_id?: string
+  veridian_paused?: boolean
 
   // Veridian fork — config cold outbound PAR INFRA d'envoi (R2 + Lot 5/8). Une
   // infra (= cette intégration EmailProvider, son host/IP/relai SMTP + senders)

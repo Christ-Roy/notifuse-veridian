@@ -130,14 +130,21 @@ func veridianWarmupCap(provider *domain.EmailProvider, now time.Time) int {
 // l'entrée doit être re-planifiée, (0, false) si elle peut partir (aucun cap
 // atteint) ou si aucun cap ne s'applique. No-op strict sans configuration.
 func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
-	classCaps, perRecipientCap := veridianResolveDailyCaps(workspace, provider, entry)
+	// Lot 2 (08/10) : les plafonds viennent de la résolution UNIQUE partagée avec
+	// la réservation atomique et EffectivePlan (veridian_gate_limits.go). La porte
+	// ne fait plus que comparer ses compteurs à ces plafonds.
+	lim := veridianResolveCapLimits(workspace, provider, entry,
+		func() string { return w.veridianClassifyRecipient(entry) },
+		func(class string) int { return w.veridianSlowdownFactor(workspace, entry, class) },
+		time.Now())
+	perRecipientCap := lim.PerRecipient
 
 	// Rampe de warmup : si l'infra est en warmup, son cap courant est un plafond
 	// TOTAL de l'infra (toutes classes confondues) qui PRIME sur le cap-classe
 	// statique. 0 = pas de warmup actif. Cf. veridianWarmupTotalCount plus bas.
-	warmupCap := veridianWarmupCap(provider, time.Now())
+	warmupCap := lim.Warmup
 
-	if len(classCaps) == 0 && perRecipientCap <= 0 && warmupCap <= 0 {
+	if lim.ClassBase <= 0 && perRecipientCap <= 0 && warmupCap <= 0 {
 		return 0, false
 	}
 
@@ -199,11 +206,12 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 	//     suffixe connu sans lookup, inconnu via MX caché). Le COUNT compte sur la
 	//     colonne persistée (veridian_provider_class, match exact) : pleinement
 	//     enforcé pour TOUTE classe, suffixe historique ou MX (fix incident 28/09).
-	if len(classCaps) > 0 {
-		class := w.veridianClassifyRecipient(entry)
-		if classCap, ok := classCaps[class]; ok && classCap > 0 {
-			// Fusible de réputation proportionné (07/10) : plafond ÷ facteur.
-			classCap = veridianSlowCap(classCap, w.veridianSlowdownFactor(workspace, entry, class))
+	if lim.ClassBase > 0 {
+		class := lim.Class
+		{
+			// Fusible de réputation proportionné (07/10) : plafond ÷ facteur
+			// (déjà appliqué par veridianResolveCapLimits).
+			classCap := lim.ClassCap
 			count, err := w.veridianCountClassForInfra(workspaceID, class, entry, since)
 			if err != nil {
 				w.logger.WithFields(map[string]interface{}{

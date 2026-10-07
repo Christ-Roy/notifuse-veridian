@@ -747,6 +747,16 @@ func (w *Workspace) Validate(passphrase string) error {
 	if err := w.ValidateVeridianMarketingEmailProfiles(); err != nil {
 		return fmt.Errorf("invalid marketing email profile pool: %w", err)
 	}
+	// Veridian fork (lot 2) : un lien profil vers une boite IMAP ne peut pas
+	// pendre dans le vide.
+	for i := range w.Integrations {
+		if w.Integrations[i].Type != IntegrationTypeEmail {
+			continue
+		}
+		if err := w.ValidateVeridianReturnIMAPLink(&w.Integrations[i].EmailProvider); err != nil {
+			return fmt.Errorf("invalid email profile (%s): %w", w.Integrations[i].ID, err)
+		}
+	}
 
 	return nil
 }

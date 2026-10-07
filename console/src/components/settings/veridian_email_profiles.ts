@@ -132,6 +132,27 @@ export const smtpSettingsForRequest = (smtp?: SMTPSettings): SMTPSettings | unde
   }
 }
 
+/**
+ * Lot 2 (08/10/2026) : la pause d'un profil et son lien vers la boîte IMAP de
+ * retour sont posés par l'API et le CLI, pas par ce formulaire. Un enregistrement
+ * du formulaire (qui reconstruit le profil à neuf pour les fournisseurs non Gmail)
+ * ne doit pas les effacer en silence : on les reporte depuis le profil existant.
+ */
+export const preserveProfileRuntimeFields = (
+  provider: EmailProvider,
+  existingProvider?: EmailProvider
+): EmailProvider => {
+  if (!existingProvider) return provider
+  const next = { ...provider }
+  if (existingProvider.veridian_return_imap_integration_id) {
+    next.veridian_return_imap_integration_id = existingProvider.veridian_return_imap_integration_id
+  }
+  if (existingProvider.veridian_paused) {
+    next.veridian_paused = true
+  }
+  return next
+}
+
 export const buildGmailAppPasswordProvider = ({
   email,
   senderName,

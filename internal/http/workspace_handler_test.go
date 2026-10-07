@@ -3341,3 +3341,40 @@ func TestWorkspaceHandler_HandleCreateAgentInstallToken_ServiceErrorStays500(t *
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
+
+// Lot 2 : une ValidationError du service (lien IMAP invalide) sort en 400 avec
+// son message, pas en 500 generique.
+func TestWorkspaceHandler_IntegrationWrites_MapServiceValidationErrorTo400(t *testing.T) {
+	provider := domain.EmailProvider{
+		Kind:               domain.EmailProviderKindMailgun,
+		RateLimitPerMinute: 25,
+		Senders:            []domain.EmailSender{domain.NewEmailSender("test@example.com", "Test Sender")},
+		Mailgun:            &domain.MailgunSettings{Domain: "test.com", APIKey: "api-key-example"},
+	}
+	linkErr := domain.NewValidationError("return inbox must be an imap integration of this workspace: fantome")
+
+	t.Run("updateIntegration", func(t *testing.T) {
+		_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+		workspaceSvc.EXPECT().UpdateIntegration(gomock.Any(), gomock.Any()).Return(linkErr)
+		body, err := json.Marshal(domain.UpdateIntegrationRequest{WorkspaceID: "workspace-123", IntegrationID: "integration-123", Name: "x", Provider: provider})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/workspaces.updateIntegration", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "return inbox must be an imap integration")
+	})
+
+	t.Run("createIntegration", func(t *testing.T) {
+		_, workspaceSvc, mux, secretKey, _ := setupTest(t)
+		workspaceSvc.EXPECT().CreateIntegration(gomock.Any(), gomock.Any()).Return("", linkErr)
+		body, err := json.Marshal(domain.CreateIntegrationRequest{WorkspaceID: "workspace-123", Name: "x", Type: domain.IntegrationTypeEmail, Provider: provider})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/workspaces.createIntegration", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+}

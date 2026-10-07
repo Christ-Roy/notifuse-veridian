@@ -606,6 +606,11 @@ func (h *WorkspaceHandler) handleCreateIntegration(w http.ResponseWriter, r *htt
 	integrationID, err := h.workspaceService.CreateIntegration(r.Context(), req)
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Error("Failed to create integration")
+		var validationErr domain.ValidationError
+		if errors.As(err, &validationErr) {
+			WriteJSONError(w, validationErr.Message, http.StatusBadRequest)
+			return
+		}
 		WriteAuthAwareError(w, err, "Failed to create integration", http.StatusInternalServerError)
 		return
 	}
@@ -637,6 +642,11 @@ func (h *WorkspaceHandler) handleUpdateIntegration(w http.ResponseWriter, r *htt
 	err := h.workspaceService.UpdateIntegration(r.Context(), req)
 	if err != nil {
 		h.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to update integration")
+		var validationErr domain.ValidationError
+		if errors.As(err, &validationErr) {
+			WriteJSONError(w, validationErr.Message, http.StatusBadRequest)
+			return
+		}
 		WriteAuthAwareError(w, err, "Failed to update integration", http.StatusInternalServerError)
 		return
 	}

@@ -201,9 +201,24 @@ type EmailProvider struct {
 	// grilles). Proportion (0.08 = 8%) de bounces durs sur 7 jours glissants au-dela
 	// de laquelle l'infra est gelee. Vide/0 = defaut 0.03 : aucun changement pour
 	// les profils qui n'ont rien configure. Borne [0.01 ; 0.15] (Validate). Ne touche
-	// PAS le fusible plainte : une plainte gele toujours. Persiste dans le blob
-	// integrations (omitempty), sans migration. Cf. veridian_reputation_threshold.go.
+	// PAS le ralentissement sur plainte (÷4 pendant 7 jours, sans arret). Persiste
+	// dans le blob integrations (omitempty), sans migration. Cf.
+	// veridian_reputation_threshold.go.
 	VeridianHardBounceFreezeThreshold float64 `json:"veridian_hard_bounce_freeze_threshold,omitempty"`
+
+	// Veridian fork — lot 2 « verite d'un profil » (08/10/2026). Boite IMAP de
+	// retour (reponses et rejets) rattachee a ce profil : ID d'une integration
+	// de type imap du MEME workspace. Sert l'affichage et la sante par profil ;
+	// la detection de reponse et de rejet reste globale au workspace (aucun effet
+	// sur le worker). Un IMAP peut etre lie a plusieurs profils. omitempty, sans
+	// migration. Cf. veridian_email_profiles.go (validation).
+	VeridianReturnIMAPIntegrationID string `json:"veridian_return_imap_integration_id,omitempty"`
+
+	// Veridian fork — PAUSE du profil : tant que true, le worker n'envoie rien
+	// par ce profil (il bascule sur les autres membres du pool, ou l'entree
+	// attend si le pool n'a plus de membre actif). Les entrees en file sont
+	// conservees. omitempty, sans migration. Cf. veridian_pool_failover.go.
+	VeridianPaused bool `json:"veridian_paused,omitempty"`
 }
 
 // Validate validates the email provider settings

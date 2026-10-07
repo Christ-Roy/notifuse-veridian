@@ -5,6 +5,7 @@ import {
   gmailPersonalDailyCap,
   inferEmailProfileMode,
   marketingProfileIds,
+  preserveProfileRuntimeFields,
   smtpSettingsForEdit,
   smtpSettingsForRequest,
   withMarketingProfileRotation
@@ -225,5 +226,32 @@ describe('Gmail app-password email profiles', () => {
     expect(serialized).not.toContain('password')
     expect(serialized).not.toContain('has_')
     expect(serialized).not.toContain('encrypted_')
+  })
+})
+
+describe('profile runtime fields (lot 2)', () => {
+  const rebuilt = {
+    kind: 'smtp',
+    senders: [],
+    rate_limit_per_minute: 25
+  } as unknown as Parameters<typeof preserveProfileRuntimeFields>[0]
+
+  it('keeps the pause and the linked return inbox when the form rebuilds a profile', () => {
+    const existing = {
+      ...rebuilt,
+      veridian_paused: true,
+      veridian_return_imap_integration_id: 'imap-1'
+    }
+    expect(preserveProfileRuntimeFields(rebuilt, existing)).toMatchObject({
+      veridian_paused: true,
+      veridian_return_imap_integration_id: 'imap-1'
+    })
+  })
+
+  it('adds nothing for a new profile or one without pause or link', () => {
+    expect(preserveProfileRuntimeFields(rebuilt)).toEqual(rebuilt)
+    const result = preserveProfileRuntimeFields(rebuilt, rebuilt)
+    expect(result).not.toHaveProperty('veridian_paused')
+    expect(result).not.toHaveProperty('veridian_return_imap_integration_id')
   })
 })

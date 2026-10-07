@@ -370,6 +370,8 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 	policyChanged := veridianWorkspaceSendingPolicyChanged(existingWorkspace.Settings, settings)
+	poolBefore := append([]string(nil), existingWorkspace.Settings.VeridianMarketingEmailProviderIDs...)
+	transactionalBefore := existingWorkspace.Settings.TransactionalEmailProviderID
 
 	existingWorkspace.Name = name
 	existingWorkspace.Settings.WebsiteURL = settings.WebsiteURL
@@ -475,6 +477,15 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to validate workspace")
 		return nil, err
 	}
+	// Veridian fork (lot 2) : exclusivite commercial / transactionnel. Verifiee
+	// seulement si cette ecriture change le pool ou le profil transactionnel :
+	// un workspace qui viole deja la regle reste modifiable pour tout le reste.
+	if veridianUsageSettingsChanged(poolBefore, transactionalBefore, existingWorkspace.Settings) {
+		if err := existingWorkspace.ValidateVeridianUsageExclusivity(); err != nil {
+			s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Warn("Refused workspace update: profile usage exclusivity")
+			return nil, err
+		}
+	}
 
 	if err := s.repo.Update(ctx, existingWorkspace); err != nil {
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to update workspace")
@@ -496,6 +507,13 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	// No automatic theme creation in the backend
 
 	return existingWorkspace, nil
+}
+
+// veridianUsageSettingsChanged dit si une ecriture de settings touche le pool
+// commercial ou le profil transactionnel (declenche la validation d'exclusivite).
+func veridianUsageSettingsChanged(poolBefore []string, transactionalBefore string, after domain.WorkspaceSettings) bool {
+	return transactionalBefore != after.TransactionalEmailProviderID ||
+		!reflect.DeepEqual(poolBefore, after.VeridianMarketingEmailProviderIDs)
 }
 
 func veridianWorkspaceSendingPolicyChanged(before, after domain.WorkspaceSettings) bool {
@@ -1625,6 +1643,11 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to validate integration")
 		return "", err
 	}
+	if integration.Type == domain.IntegrationTypeEmail {
+		if err := workspace.ValidateVeridianReturnIMAPLink(&integration.EmailProvider); err != nil {
+			return "", err
+		}
+	}
 
 	// Add the integration to the workspace
 	workspace.AddIntegration(integration)
@@ -1836,6 +1859,11 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to validate updated integration")
 		return err
 	}
+	if updatedIntegration.Type == domain.IntegrationTypeEmail {
+		if err := workspace.ValidateVeridianReturnIMAPLink(&updatedIntegration.EmailProvider); err != nil {
+			return err
+		}
+	}
 
 	// Update the integration in the workspace
 	workspace.AddIntegration(updatedIntegration) // This will replace the existing one
@@ -1951,6 +1979,7 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 			workspace.Settings.TransactionalEmailProviderID = ""
 		}
 		veridianRemoveEmailProfileReference(&workspace.Settings, integrationID)
+		workspace.VeridianClearReturnIMAPLinks(integrationID)
 
 		// Save the updated workspace
 		if err := s.repo.Update(ctx, workspace); err != nil {

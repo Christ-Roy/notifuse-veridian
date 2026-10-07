@@ -78,6 +78,7 @@ import {
   gmailAccountTypeMaxDailyCap,
   inferEmailProfileMode,
   marketingProfileIds,
+  preserveProfileRuntimeFields,
   smtpSettingsForEdit,
   smtpSettingsForRequest,
   withMarketingProfileRotation
@@ -591,7 +592,7 @@ const constructProviderFromForm = (
     provider.sendgrid = formValues.sendgrid
   }
 
-  return provider
+  return preserveProfileRuntimeFields(provider, existingProvider)
 }
 
 // Main Integrations component

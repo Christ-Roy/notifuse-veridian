@@ -63,7 +63,11 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse segments:list|get|create|delete|contacts|rebuild <ws> ...
   notifuse events:list|get|upsert <ws> ...   (customEvents : champs top-level, external_id requis)
   notifuse members:list|invite|remove|permissions <ws> ...   (Team Settings, owner)
-  notifuse magic-link <ws> [--email e]    génère un lien de connexion (mint api_key)
+  notifuse magic-link <ws> [--email e]    génère un lien de connexion (clé éphémère, révoquée aussitôt)
+  notifuse profiles:overview [ws] [--json]  VÉRITÉ des profils d'envoi : plafond du jour + porte limitante, reste,
+                                          fusible par couple, fenêtre, classes exclues, pause, IMAP lié (lecture, clé scopée OK)
+  notifuse profiles:link-imap <ws> --id P (--imap I | --none)   lie un profil à sa boîte IMAP de retour (owner)
+  notifuse profiles:pause|resume <ws> --id P                    met en pause / relance un profil (owner, effet immédiat au worker)
   notifuse analytics:query <ws> --query @q.json    (analytics:schemas pour les schémas)
   notifuse messages:list <ws> [--param limit=50]   historique des envois
   notifuse automations:list|get|create|update|delete|activate|pause|enroll <ws> ...
@@ -148,7 +152,8 @@ GET_VERBS = {
     "templateBlocks.list", "templateBlocks.get", "tasks.list", "tasks.get",
     "workspaces.list", "workspaces.acceptInvitation", "workspaces.verifyInvitationToken",
     "user.updateLanguage", "setup.status", "webhooks.status",
-    "veridian/emailProfiles.usage", "veridian/hub-discovery/me", "veridian/mode",
+    "veridian/emailProfiles.usage", "veridian/emailProfiles.overview",
+    "veridian/hub-discovery/me", "veridian/mode",
 }
 
 # ---------------------------------------------------------------------------
@@ -311,6 +316,9 @@ WORKSPACE_COMMANDS = frozenset({
     # Fusible de reputation PAR COUPLE (domaine emetteur x classe destinataire),
     # GET /api/veridian/messages.reputationStatus (JWT workspace + message_history:read).
     "veridian:reputation-status",
+    # Lot 2 (08/10/2026) : vérité d'un profil, GET /api/veridian/emailProfiles.overview
+    # (JWT / clé API du workspace + message_history:read côté service). Lecture seule.
+    "profiles:overview",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -1301,27 +1309,95 @@ def cmd_members_get_permissions(a):
     out(200, {"workspace": a.workspace, "members": result})
 
 
+MAGICLINK_PREFIX = "magiclink"
+MAGICLINK_STALE_AFTER = 600  # secondes : au-delà, une clé "magiclink*" est une fuite à balayer
+
+
+def _revoke_api_key_by_email(env, workspace, owner_token, email):
+    """Révoque une clé API par son email technique. Renvoie (ok, détail)."""
+    m = _find_member(env, workspace, owner_token, email=email)
+    if not m:
+        return False, "membre introuvable dans workspaces.members"
+    uid = m.get("user_id") or m.get("id")
+    st, p = call_jwt(env, "POST", "/api/workspaces.revokeAPIKey", owner_token,
+                     body={"workspace_id": workspace, "user_id": uid})
+    return st in (200, 201), f"HTTP {st}"
+
+
+def _sweep_stale_magiclink_keys(env, workspace, owner_token, now=None):
+    """Balaye les clés "magiclink*" laissées par d'anciens appels (avant le
+    correctif du 08/10/2026 chaque magic-link en laissait une, 15 à la main le 07/10).
+    Ne touche que celles de plus de MAGICLINK_STALE_AFTER secondes : un appel
+    concurrent en cours garde sa clé. Renvoie le nombre révoqué."""
+    st, data = call_jwt(env, "GET", "/api/workspaces.listAPIKeys", owner_token, params={"workspace_id": workspace})
+    if st != 200 or not isinstance(data, dict):
+        return 0
+    rows = data.get("api_keys") or data.get("keys") or data.get("data") or []
+    now = now or datetime.now(timezone.utc)
+    revoked = 0
+    for k in rows:
+        if not isinstance(k, dict) or not str(k.get("name", "")).startswith(MAGICLINK_PREFIX):
+            continue
+        try:
+            created = datetime.fromisoformat(str(k.get("created_at", "")).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if (now - created).total_seconds() < MAGICLINK_STALE_AFTER:
+            continue
+        rst, _ = call_jwt(env, "POST", "/api/workspaces.revokeAPIKey", owner_token,
+                          body={"workspace_id": workspace, "user_id": k.get("user_id")})
+        if rst in (200, 201):
+            revoked += 1
+    return revoked
+
+
 def cmd_magic_link(a):
     """workspaces.generateMagicLink EXIGE un token API KEY (pas owner JWT, pas
     HMAC) et infère le workspace depuis cette clé ; le body ne porte que
-    user_email. On mint donc une api_key fraîche via createAPIKey (owner) puis on
-    l'utilise comme Bearer. NOTIFUSE_API_KEY est privilégiée si fournie."""
+    user_email. Si NOTIFUSE_API_KEY n'est pas fournie, on mint une clé
+    ÉPHÉMÈRE via createAPIKey (owner), on l'utilise comme Bearer, puis on la
+    RÉVOQUE dans tous les cas (finally) : le lien magique ne laisse plus aucun
+    membre api_key persistant. Bug corrigé le 08/10/2026 : chaque appel laissait
+    un membre "magiclink…" dans le workspace (15 révoqués à la main le 07/10).
+    Les restes d'anciens appels sont balayés au passage."""
     email = a.email or "robert@veridian.site"
     api_key = get_key(APIKEY_VAR, required=False)
-    if not api_key:
-        owner = owner_jwt(a.env, a.workspace)
-        st, p = call_jwt(a.env, "POST", "/api/workspaces.createAPIKey", owner,
-                         body={"workspace_id": a.workspace,
-                              "email_prefix": "magiclink" + hashlib.sha256(
-                                  f"{time.time_ns()}:{os.getpid()}".encode()
-                              ).hexdigest()[:10]})
-        if st not in (200, 201):
-            die(f"impossible de minter une api_key pour magic-link (HTTP {st}) : {p}")
-        api_key = p.get("token") or p.get("api_key")
+    minted_email = None
+    owner = None
+    result = None
+    try:
         if not api_key:
-            die("createAPIKey n'a pas renvoyé de token api_key.")
-    out(*call_jwt(a.env, "POST", "/api/workspaces.generateMagicLink", api_key,
-                  body={"user_email": email}))
+            owner = owner_jwt(a.env, a.workspace)
+            try:
+                swept = _sweep_stale_magiclink_keys(a.env, a.workspace, owner)
+                if swept:
+                    print(f"ℹ️  {swept} ancienne(s) clé(s) magiclink* balayée(s).", file=sys.stderr)
+            except Exception as e:  # le balayage ne doit jamais empêcher le lien
+                print(f"⚠️  balayage des anciennes clés magiclink* ignoré : {e}", file=sys.stderr)
+            st, p = call_jwt(a.env, "POST", "/api/workspaces.createAPIKey", owner,
+                             body={"workspace_id": a.workspace,
+                                   "email_prefix": MAGICLINK_PREFIX + hashlib.sha256(
+                                       f"{time.time_ns()}:{os.getpid()}".encode()
+                                   ).hexdigest()[:10]})
+            if st not in (200, 201):
+                die(f"impossible de minter une api_key pour magic-link (HTTP {st}) : {p}")
+            api_key = p.get("token") or p.get("api_key")
+            minted_email = p.get("email")
+            if not api_key:
+                die("createAPIKey n'a pas renvoyé de token api_key.")
+        result = call_jwt(a.env, "POST", "/api/workspaces.generateMagicLink", api_key,
+                          body={"user_email": email})
+    finally:
+        if minted_email:
+            try:
+                ok, detail = _revoke_api_key_by_email(a.env, a.workspace, owner, minted_email)
+            except BaseException as e:  # noqa: BLE001 — jamais masquer l'erreur d'origine
+                ok, detail = False, f"{type(e).__name__}: {e}"
+            if not ok:
+                print(f"⚠️  clé éphémère {minted_email} NON révoquée ({detail}). "
+                      f"À la main : notifuse-admin keys:revoke {a.workspace} --email {minted_email}",
+                      file=sys.stderr)
+    out(*result)
 
 
 # ---- customEvents ----
@@ -1615,6 +1691,183 @@ def cmd_integrations_update(a):
     else:
         die(f"type d'intégration inconnu/non géré : {itype}. Utilise --settings @file.json.")
     out(*call_jwt(a.env, "POST", "/api/workspaces.updateIntegration", jwt, body=body))
+
+
+# ---- profils d'envoi : vérité (lot 2, 08/10/2026) ----
+def _fmt_classes_line(c):
+    parts = [f"{c['class']:<18}"]
+    if c.get("excluded"):
+        parts.append("EXCLUE")
+    if c.get("stopped"):
+        parts.append("ARRÊTÉE (le fournisseur refuse en bloc)")
+    if c.get("slowdown_factor", 1) > 1:
+        parts.append(f"ralentie ÷{c['slowdown_factor']} ({c.get('slowdown_reason') or '?'})")
+    if c.get("rate_configured"):
+        parts.append(f"débit {c['rate_per_min']:g}/min" + (f" (configuré {c['rate_configured']:g})" if c['rate_per_min'] != c['rate_configured'] else ""))
+    if c.get("daily_cap") is not None:
+        cap = c["daily_cap"]
+        base = c.get("daily_cap_configured")
+        parts.append(f"plafond {cap}" + (f" (configuré {base})" if base != cap else "")
+                     + f", envoyés {c.get('sent_today', 0)}"
+                     + (f", reste {c['remaining']}" if c.get("remaining") is not None else ""))
+    elif c.get("sent_today"):
+        parts.append(f"envoyés {c['sent_today']}")
+    if not c.get("sendable_now") and c.get("blocked_by") and not c.get("excluded") and not c.get("stopped"):
+        parts.append(f"BLOQUÉE : {c['blocked_by']}")
+    return "    " + " · ".join(parts)
+
+
+def _class_is_notable(c):
+    return bool(c.get("excluded") or c.get("stopped") or c.get("slowdown_factor", 1) > 1
+                or c.get("rate_configured") or c.get("daily_cap") is not None or c.get("sent_today"))
+
+
+BLOCK_LABELS = {
+    "paused": "profil en pause", "not_in_rotation": "hors rotation", "unverified": "transport non vérifié",
+    "window_closed": "fenêtre d'envoi fermée", "excluded_class": "classe exclue",
+    "reputation_stopped": "fournisseur arrête (refus en bloc)", "warmup": "plafond de chauffe atteint",
+    "profile_cap": "plafond du profil atteint", "per_sender": "plafond par expéditeur atteint",
+    "class_cap": "plafond de la classe atteint",
+}
+GATE_LABELS = {"warmup": "chauffe", "profile_cap": "plafond du profil", "per_sender": "plafond par expéditeur",
+               "class_cap": "plafonds par classe", "none": "aucune"}
+
+
+def format_profiles_overview(d):
+    """Rendu lisible de /api/veridian/emailProfiles.overview (fonction pure, testée)."""
+    L = []
+    t = d.get("totals") or {}
+    cap = t.get("commercial_capacity_today")
+    L.append(f"Profils d'envoi, jour {d.get('date')} (UTC), fuseau {d.get('timezone') or 'non défini'}")
+    L.append(f"  commercial : {t.get('commercial_sent_today', 0)} envoyés"
+             + (f" sur {cap} de capacité" if cap is not None else " (capacité totale inconnue : un profil actif n'a aucun plafond)")
+             + f", {t.get('active_commercial_profiles', 0)} profil(s) actif(s), {t.get('paused_profiles', 0)} en pause"
+             + f" · transactionnel : {t.get('transactional_sent_today', 0)} envoyés")
+    for c in d.get("usage_conflicts") or []:
+        L.append(f"  ⚠️  VIOLATION : le profil {c} est à la fois dans la rotation commerciale ET transactionnel")
+    for p in d.get("profiles") or []:
+        pl = p.get("plan") or {}
+        usage = {"commercial": "commercial", "transactional": "transactionnel"}.get(p.get("usage"), "non assigné")
+        flags = [usage, p.get("type") or p.get("kind")]
+        if p.get("usage") == "commercial":
+            flags.append("en rotation" if p.get("in_rotation") else "HORS rotation")
+        flags.append(f"vérifié {str(p.get('verified_at'))[:10]}" if p.get("verified") else "NON vérifié")
+        if p.get("paused"):
+            flags.append("EN PAUSE")
+        L.append("")
+        L.append(f"● {p.get('name')}  [{' · '.join(str(x) for x in flags)}]  id {p.get('integration_id')}")
+        senders = ", ".join(x["email"] + (" (défaut)" if x.get("is_default") else "") for x in p.get("senders") or [])
+        L.append(f"    expéditeurs : {senders or 'aucun'}")
+        ib = p.get("return_inbox")
+        L.append("    IMAP lié    : " + (f"{ib['name']} ({ib['address']}, id {ib['integration_id']})"
+                                          + (f", partagé avec {len(ib['linked_profiles']) - 1} autre(s) profil(s)" if len(ib.get('linked_profiles') or []) > 1 else "")
+                                          if ib else "aucun (retours détectés par les boîtes globales du workspace)"))
+        if not pl.get("applicable"):
+            L.append(f"    envoyés aujourd'hui : {pl.get('sent_today', 0)}"
+                     + ("  (transactionnel : aucune porte commerciale, jamais plafonné par le worker)" if p.get("usage") == "transactional" else ""))
+            continue
+        dc = pl.get("daily_cap_today")
+        L.append("    plafond du jour : " + (f"{dc}  (porte limitante : {GATE_LABELS.get(pl.get('limiting_gate'), pl.get('limiting_gate'))}"
+                                            + (f", {pl['limiting_detail']}" if pl.get("limiting_detail") else "") + ")"
+                                            if dc is not None else "aucun plafond configuré"))
+        rem = pl.get("remaining_today")
+        L.append(f"    envoyés {pl.get('sent_today', 0)} · réservés {pl.get('reserved_today', 0)}"
+                 + (f" · reste {rem} (porte la plus proche : {GATE_LABELS.get(pl.get('remaining_gate'), pl.get('remaining_gate'))})" if rem is not None else ""))
+        for g in pl.get("gates") or []:
+            L.append(f"      - {GATE_LABELS.get(g['name'], g['name'])}: {g['used']}/{g['cap']} ({g.get('detail', '')})")
+        w = pl.get("window") or {}
+        if w.get("configured"):
+            days = ",".join(str(x) for x in (w.get("days") or []))
+            L.append(f"    fenêtre : {'ouverte' if w.get('open_now') else 'FERMÉE'} (jours {days}, {w.get('start_hour')}h-{w.get('end_hour')}h {w.get('timezone')}, source {w.get('source')})"
+                     + ("" if w.get("open_now") else f", réouverture {w.get('next_open_at')}"))
+        else:
+            L.append("    fenêtre : aucune (envoi 24/7)")
+        wu = pl.get("warmup") or {}
+        if wu.get("active"):
+            L.append(f"    chauffe : jour {wu.get('day')}/{wu.get('of')}, plafond {wu.get('cap_today')}")
+        if pl.get("excluded_classes"):
+            L.append(f"    classes exclues : {', '.join(pl['excluded_classes'])}")
+        if pl.get("complaints_7d"):
+            L.append(f"    fusible : {pl['complaints_7d']} plainte(s) sur 7 j, domaine ralenti ÷{pl.get('domain_slowdown_factor')} (jamais arrêté)")
+        L.append(f"    origine des tables : plafonds par classe = {pl.get('class_caps_source')}, débits par classe = {pl.get('class_rates_source')}; "
+                 f"cadence technique {pl.get('native_rate_per_min')}/min")
+        notable = [c for c in pl.get("classes") or [] if _class_is_notable(c)]
+        if notable:
+            L.append("    par classe :")
+            L.extend(_fmt_classes_line(c) for c in notable)
+        if pl.get("sendable_now"):
+            ok = sum(1 for c in pl.get("classes") or [] if c.get("sendable_now"))
+            L.append(f"    ▶ envoie maintenant : oui ({ok} classe(s) ouvertes)")
+        else:
+            why = ", ".join(BLOCK_LABELS.get(b, b) for b in pl.get("blocked_by") or []) or "toutes les classes bloquées"
+            L.append(f"    ▶ envoie maintenant : NON ({why})")
+    gi = d.get("global_inboxes") or []
+    if gi:
+        L.append("")
+        L.append("Boîtes de retour globales du workspace (liées à aucun profil) :")
+        for ib in gi:
+            L.append(f"  - {ib['name']} ({ib['address']}, id {ib['integration_id']})")
+    return "\n".join(L)
+
+
+def _fetch_overview(a):
+    jwt = apikey_for(a.env, a.workspace)
+    return call_jwt(a.env, "GET", "/api/veridian/emailProfiles.overview", jwt, params={"workspace_id": a.workspace})
+
+
+def cmd_profiles_overview(a):
+    st, data = _fetch_overview(a)
+    if st != 200 or not isinstance(data, dict):
+        out(st, data)
+        return
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+    else:
+        print(format_profiles_overview(data))
+
+
+def _patch_email_profile(a, mutate):
+    """Lit l'intégration email, applique mutate(provider), renvoie le provider COMPLET
+    (updateIntegration remplace tout, comme integrations:cold). OWNER-ONLY."""
+    jwt = owner_jwt(a.env, a.workspace)
+    _, wsd = call_jwt(a.env, "GET", "/api/workspaces.get", jwt, params={"id": a.workspace})
+    w = wsd.get("workspace", wsd)
+    integ = next((i for i in (w.get("integrations") or []) if i.get("id") == a.id), None)
+    if not integ:
+        die(f"intégration {a.id} introuvable dans {a.workspace}")
+    if integ.get("type") != "email":
+        die(f"{a.id} n'est pas un profil d'envoi (type {integ.get('type')}).")
+    prov = dict(integ.get("email_provider") or integ.get("provider") or {})
+    mutate(prov, w)
+    body = {"workspace_id": a.workspace, "integration_id": a.id, "name": integ.get("name"), "provider": prov}
+    out(*call_jwt(a.env, "POST", "/api/workspaces.updateIntegration", jwt, body=body))
+
+
+def cmd_profiles_link_imap(a):
+    if bool(a.imap) == bool(a.none):
+        die("donne --imap <id de l'intégration IMAP> OU --none pour retirer le lien.")
+
+    def mutate(prov, w):
+        if a.none:
+            prov.pop("veridian_return_imap_integration_id", None)
+            return
+        target = next((i for i in (w.get("integrations") or []) if i.get("id") == a.imap), None)
+        if not target or target.get("type") != "imap":
+            die(f"{a.imap} n'est pas une intégration IMAP de {a.workspace} (le serveur refuserait en 400).")
+        prov["veridian_return_imap_integration_id"] = a.imap
+    _patch_email_profile(a, mutate)
+
+
+def cmd_profiles_pause(a):
+    def mutate(prov, w):
+        prov["veridian_paused"] = True
+    _patch_email_profile(a, mutate)
+
+
+def cmd_profiles_resume(a):
+    def mutate(prov, w):
+        prov.pop("veridian_paused", None)
+    _patch_email_profile(a, mutate)
 
 
 # ---- generic resource CRUD helpers ----
@@ -2872,6 +3125,13 @@ def cmd_config(a):
     if rep_code != 200 or not isinstance(reputation, dict):
         reputation = {"mesuré": False, "raison": f"reputationStatus HTTP {rep_code}"}
 
+    # Lot 2 (08/10) : la VÉRITÉ des plafonds est celle du serveur (même fonction que
+    # le worker). `plafonds_effectifs` ci-dessous est l'ancien port Python, gardé pour
+    # `_queue_staleness` seulement : en cas d'écart, le serveur a raison.
+    ov_code, ov = call_jwt(a.env, "GET", "/api/veridian/emailProfiles.overview", jwt, params={"workspace_id": a.workspace})
+    if ov_code != 200 or not isinstance(ov, dict):
+        ov = {"mesuré": False, "raison": f"emailProfiles.overview HTTP {ov_code}"}
+
     veridian_keys = {k: v for k, v in settings.items() if k.startswith("veridian_")}
     safe_integrations = []
     for i in integrations:
@@ -2897,6 +3157,7 @@ def cmd_config(a):
                                "default_language": settings.get("default_language"),
                                "languages": settings.get("languages"), "veridian": veridian_keys},
         "integrations": safe_integrations,
+        "profils_verite_serveur": ov,
         "plafonds_effectifs": caps,
         "file_attente": queue,
         "reputation_par_couple": reputation,
@@ -3117,8 +3378,32 @@ def build_parser():
     sp.add_argument("--tracking-domain", dest="tracking_domain")
     sp.add_argument("--pixel", help='JSON map classe→bool')
     sp.add_argument("--bounce-freeze-threshold", dest="bounce_freeze_threshold", type=float,
-                    help="seuil du fusible de réputation (proportion de bounces durs sur 7 j, 0.01-0.15, ex 0.08). 0 = défaut 0.03. La plainte gèle toujours.")
+                    help="seuil du fusible de réputation (proportion de bounces durs sur 7 j, 0.01-0.15, ex 0.08). 0 = défaut 0.03. Une plainte ne gèle pas : elle ralentit le domaine ÷4 pendant 7 jours, sans arrêt.")
     sp.set_defaults(func=cmd_integrations_cold)
+
+    # profils d'envoi : vérité, lien IMAP, pause (lot 2, 08/10/2026)
+    sp = sub.add_parser("profiles:overview",
+                        help="vérité des profils d'envoi : plafond du jour et porte limitante, reste, fusible, fenêtre, pause, IMAP lié")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute (contrat de l'API)")
+    sp.set_defaults(func=cmd_profiles_overview, _routes=["/api/veridian/emailProfiles.overview"])
+
+    sp = sub.add_parser("profiles:link-imap", help="lie un profil d'envoi à sa boîte IMAP de retour (owner)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--id", required=True, help="id du profil d'envoi")
+    sp.add_argument("--imap", help="id de l'intégration IMAP à lier")
+    sp.add_argument("--none", action="store_true", help="retire le lien")
+    sp.set_defaults(func=cmd_profiles_link_imap, _routes=["/api/workspaces.updateIntegration"])
+
+    sp = sub.add_parser("profiles:pause", help="met un profil en pause : le worker bascule sur le reste du pool (owner)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--id", required=True, help="id du profil d'envoi")
+    sp.set_defaults(func=cmd_profiles_pause, _routes=["/api/workspaces.updateIntegration"])
+
+    sp = sub.add_parser("profiles:resume", help="relance un profil en pause (owner)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--id", required=True, help="id du profil d'envoi")
+    sp.set_defaults(func=cmd_profiles_resume, _routes=["/api/workspaces.updateIntegration"])
 
     sp = sub.add_parser("integrations:create-smtp", help="crée une intégration SMTP d'envoi (owner)")
     sp.add_argument("workspace", nargs="?", default=None)

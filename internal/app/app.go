@@ -1679,6 +1679,17 @@ func (a *App) InitHandlers() error {
 	)
 	veridianEmailProfileUsageHandler.RegisterRoutes(a.mux)
 
+	// Lot 2 « verite d'un profil » (08/10/2026) : GET|POST
+	// /api/veridian/emailProfiles.overview. Tous les profils email (commerciaux et
+	// transactionnels) avec EffectivePlan, la fonction partagee avec le worker.
+	veridianEmailProfileOverviewRepo := repository.NewVeridianEmailProfileOverviewRepository(a.workspaceRepo)
+	veridianEmailProfileOverviewService := service.NewVeridianEmailProfileOverviewService(
+		veridianEmailProfileOverviewRepo, a.messageHistoryRepo, a.workspaceRepo, a.authService, a.logger,
+	)
+	httpHandler.NewVeridianEmailProfileOverviewHandler(
+		veridianEmailProfileOverviewService, getJWTSecret, a.logger,
+	).RegisterRoutes(a.mux)
+
 	// === Veridian patch — linter de délivrabilité (spam score) cold (2026-06-15) ===
 	// Endpoint POST+GET /api/veridian/templates.deliverabilityScore : score 0-10
 	// (façon SpamAssassin) + règles déclenchées avec poids, sur un template cold

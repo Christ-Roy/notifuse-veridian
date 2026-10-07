@@ -5635,3 +5635,31 @@ func TestAPIKeySummary_Fields(t *testing.T) {
 	assert.False(t, summary.VeridianOwned)
 	assert.Equal(t, now, summary.CreatedAt)
 }
+
+func TestWorkspace_Validate_RejectsDanglingReturnIMAPLink(t *testing.T) {
+	base := func(link string) Workspace {
+		return Workspace{
+			ID: "test123", Name: "Test Workspace",
+			Settings: WorkspaceSettings{
+				WebsiteURL: "https://example.com", LogoURL: "https://example.com/logo.png",
+				Timezone: "UTC", DefaultLanguage: "en", Languages: []string{"en"},
+			},
+			Integrations: []Integration{{
+				ID: "p", Name: "p", Type: IntegrationTypeEmail,
+				EmailProvider: EmailProvider{
+					Kind: EmailProviderKindSMTP, RateLimitPerMinute: 10,
+					SMTP:                            &SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p"},
+					Senders:                         []EmailSender{NewEmailSender("a@example.com", "A")},
+					VeridianReturnIMAPIntegrationID: link,
+				},
+			}},
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}
+	}
+	valid := base("")
+	require.NoError(t, valid.Validate("test-passphrase"))
+	dangling := base("fantome")
+	err := dangling.Validate("test-passphrase")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "return inbox must be an imap integration")
+}

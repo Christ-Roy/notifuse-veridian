@@ -4496,3 +4496,182 @@ func TestWorkspaceService_ExchangeAgentInstallToken(t *testing.T) {
 		assert.ErrorIs(t, err, domain.ErrAgentInstallTokenNotFound)
 	})
 }
+
+// --- Lot 2 « vérité d'un profil » : exclusivité commercial / transactionnel,
+// lien profil -> IMAP ---
+
+func newLot2WorkspaceService(t *testing.T) (*WorkspaceService, *mocks.MockWorkspaceRepository, *mocks.MockAuthService) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockAuthService := mocks.NewMockAuthService(ctrl)
+	service := NewWorkspaceService(
+		mockRepo, mocks.NewMockUserRepository(ctrl), mocks.NewMockTaskRepository(ctrl), mockLogger,
+		mocks.NewMockUserServiceInterface(ctrl), mockAuthService, pkgmocks.NewMockMailer(ctrl),
+		&config.Config{RootEmail: "test@example.com"}, mocks.NewMockContactService(ctrl), mocks.NewMockListService(ctrl),
+		mocks.NewMockContactListService(ctrl), mocks.NewMockTemplateService(ctrl), mocks.NewMockWebhookRegistrationService(ctrl),
+		"secret_key", &SupabaseService{}, &DNSVerificationService{}, &BlogService{},
+	)
+	service.SetEmailIntegrationLifecycleRepository(&emailIntegrationLifecycleRepoStub{})
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	return service, mockRepo, mockAuthService
+}
+
+func lot2ExpectOwner(ctx context.Context, repo *mocks.MockWorkspaceRepository, auth *mocks.MockAuthService, workspaceID string) {
+	auth.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{ID: "owner"}, nil, nil)
+	repo.EXPECT().GetUserWorkspace(ctx, "owner", workspaceID).Return(&domain.UserWorkspace{UserID: "owner", WorkspaceID: workspaceID, Role: "owner"}, nil)
+}
+
+func lot2SMTPIntegration(id string) domain.Integration {
+	return domain.Integration{
+		ID: id, Name: id, Type: domain.IntegrationTypeEmail,
+		EmailProvider: domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP, RateLimitPerMinute: 25,
+			SMTP:    &domain.SMTPSettings{Host: "smtp.example.com", Port: 587, Username: "u", Password: "p", UseTLS: true},
+			Senders: []domain.EmailSender{domain.NewEmailSender("hello@example.com", "Sender")},
+		},
+	}
+}
+
+func lot2Settings(transactionalID string, pool ...string) domain.WorkspaceSettings {
+	return domain.WorkspaceSettings{
+		Timezone: "UTC", DefaultLanguage: "en", Languages: []string{"en"},
+		TransactionalEmailProviderID:      transactionalID,
+		VeridianMarketingEmailProviderIDs: pool,
+	}
+}
+
+func TestWorkspaceService_UpdateWorkspace_RefusesProfileBothCommercialAndTransactional(t *testing.T) {
+	ctx := context.Background()
+	service, repo, auth := newLot2WorkspaceService(t)
+	verified := time.Now().Add(-time.Hour)
+	a, b := lot2SMTPIntegration("a"), lot2SMTPIntegration("b")
+	a.EmailProvider.VeridianTransportVerifiedAt, b.EmailProvider.VeridianTransportVerifiedAt = &verified, &verified
+	existing := &domain.Workspace{ID: "ws", Name: "W", Settings: lot2Settings("b", "a"), Integrations: []domain.Integration{a, b}}
+
+	lot2ExpectOwner(ctx, repo, auth, "ws")
+	repo.EXPECT().GetByID(ctx, "ws").Return(existing, nil)
+	// Aucun Update : la règle bloque avant l'écriture.
+
+	// On tente de mettre le profil transactionnel "b" dans le pool commercial.
+	_, err := service.UpdateWorkspace(ctx, "ws", "W", lot2Settings("b", "a", "b"))
+	require.Error(t, err)
+	var validation domain.ValidationError
+	require.ErrorAs(t, err, &validation, "doit sortir en 400")
+	assert.Contains(t, validation.Message, "b")
+}
+
+func TestWorkspaceService_UpdateWorkspace_RefusesTransactionalProfileAlreadyInPool(t *testing.T) {
+	ctx := context.Background()
+	service, repo, auth := newLot2WorkspaceService(t)
+	verified := time.Now().Add(-time.Hour)
+	a, b := lot2SMTPIntegration("a"), lot2SMTPIntegration("b")
+	a.EmailProvider.VeridianTransportVerifiedAt, b.EmailProvider.VeridianTransportVerifiedAt = &verified, &verified
+	existing := &domain.Workspace{ID: "ws", Name: "W", Settings: lot2Settings("", "a", "b"), Integrations: []domain.Integration{a, b}}
+
+	lot2ExpectOwner(ctx, repo, auth, "ws")
+	repo.EXPECT().GetByID(ctx, "ws").Return(existing, nil)
+
+	_, err := service.UpdateWorkspace(ctx, "ws", "W", lot2Settings("a", "a", "b"))
+	var validation domain.ValidationError
+	require.ErrorAs(t, err, &validation)
+}
+
+func TestWorkspaceService_UpdateWorkspace_AllowsDisjointUsages(t *testing.T) {
+	ctx := context.Background()
+	service, repo, auth := newLot2WorkspaceService(t)
+	verified := time.Now().Add(-time.Hour)
+	a, b := lot2SMTPIntegration("a"), lot2SMTPIntegration("b")
+	a.EmailProvider.VeridianTransportVerifiedAt, b.EmailProvider.VeridianTransportVerifiedAt = &verified, &verified
+	existing := &domain.Workspace{ID: "ws", Name: "W", Settings: lot2Settings("", "a"), Integrations: []domain.Integration{a, b}}
+
+	lot2ExpectOwner(ctx, repo, auth, "ws")
+	repo.EXPECT().GetByID(ctx, "ws").Return(existing, nil)
+	repo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
+
+	_, err := service.UpdateWorkspace(ctx, "ws", "W", lot2Settings("b", "a"))
+	require.NoError(t, err)
+}
+
+func TestWorkspaceService_UpdateWorkspace_ExistingViolationDoesNotBlockUnrelatedChanges(t *testing.T) {
+	ctx := context.Background()
+	service, repo, auth := newLot2WorkspaceService(t)
+	verified := time.Now().Add(-time.Hour)
+	a := lot2SMTPIntegration("a")
+	a.EmailProvider.VeridianTransportVerifiedAt = &verified
+	// Workspace deja en violation : "a" est dans le pool ET transactionnel.
+	existing := &domain.Workspace{ID: "ws", Name: "W", Settings: lot2Settings("a", "a"), Integrations: []domain.Integration{a}}
+
+	lot2ExpectOwner(ctx, repo, auth, "ws")
+	repo.EXPECT().GetByID(ctx, "ws").Return(existing, nil)
+	repo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
+
+	changed := lot2Settings("a", "a")
+	changed.WebsiteURL = "https://example.com"
+	_, err := service.UpdateWorkspace(ctx, "ws", "W renomme", changed)
+	require.NoError(t, err, "un autre réglage reste modifiable : la violation est listée par l'overview, pas imposée ici")
+}
+
+func TestWorkspaceService_UpdateIntegration_ReturnIMAPLink(t *testing.T) {
+	ctx := context.Background()
+	imap := domain.Integration{ID: "imap", Name: "Return", Type: domain.IntegrationTypeIMAP, IMAPSettings: &domain.IMAPSettings{Host: "imap.example.com", Port: 993, Username: "r@example.com", EncryptedPassword: "x", UseTLS: true}}
+
+	newReq := func(link string, paused bool) domain.UpdateIntegrationRequest {
+		provider := lot2SMTPIntegration("p").EmailProvider
+		provider.VeridianReturnIMAPIntegrationID = link
+		provider.VeridianPaused = paused
+		return domain.UpdateIntegrationRequest{WorkspaceID: "ws", IntegrationID: "p", Name: "p", Provider: provider}
+	}
+
+	t.Run("lien vers un IMAP du workspace : accepté et persisté, pause persistée", func(t *testing.T) {
+		service, repo, auth := newLot2WorkspaceService(t)
+		lot2ExpectOwner(ctx, repo, auth, "ws")
+		repo.EXPECT().GetByID(ctx, "ws").Return(&domain.Workspace{ID: "ws", Integrations: []domain.Integration{lot2SMTPIntegration("p"), imap}}, nil)
+		repo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, w *domain.Workspace) error {
+			saved := w.GetIntegrationByID("p")
+			assert.Equal(t, "imap", saved.EmailProvider.VeridianReturnIMAPIntegrationID)
+			assert.True(t, saved.EmailProvider.VeridianPaused)
+			return nil
+		})
+		require.NoError(t, service.UpdateIntegration(ctx, newReq("imap", true)))
+	})
+
+	t.Run("lien vers une intégration inexistante : 400", func(t *testing.T) {
+		service, repo, auth := newLot2WorkspaceService(t)
+		lot2ExpectOwner(ctx, repo, auth, "ws")
+		repo.EXPECT().GetByID(ctx, "ws").Return(&domain.Workspace{ID: "ws", Integrations: []domain.Integration{lot2SMTPIntegration("p"), imap}}, nil)
+		err := service.UpdateIntegration(ctx, newReq("fantome", false))
+		var validation domain.ValidationError
+		require.ErrorAs(t, err, &validation)
+	})
+
+	t.Run("lien vers un profil d'envoi (pas un IMAP) : 400", func(t *testing.T) {
+		service, repo, auth := newLot2WorkspaceService(t)
+		lot2ExpectOwner(ctx, repo, auth, "ws")
+		repo.EXPECT().GetByID(ctx, "ws").Return(&domain.Workspace{ID: "ws", Integrations: []domain.Integration{lot2SMTPIntegration("p"), lot2SMTPIntegration("q")}}, nil)
+		err := service.UpdateIntegration(ctx, newReq("q", false))
+		var validation domain.ValidationError
+		require.ErrorAs(t, err, &validation)
+	})
+}
+
+func TestWorkspaceService_DeleteIntegration_ClearsReturnIMAPLinks(t *testing.T) {
+	ctx := context.Background()
+	service, repo, auth := newLot2WorkspaceService(t)
+	linked := lot2SMTPIntegration("p")
+	linked.EmailProvider.VeridianReturnIMAPIntegrationID = "imap"
+	imap := domain.Integration{ID: "imap", Name: "Return", Type: domain.IntegrationTypeIMAP, IMAPSettings: &domain.IMAPSettings{Host: "imap.example.com", Port: 993, Username: "r@example.com", UseTLS: true}}
+
+	lot2ExpectOwner(ctx, repo, auth, "ws")
+	repo.EXPECT().GetByID(ctx, "ws").Return(&domain.Workspace{ID: "ws", Settings: lot2Settings(""), Integrations: []domain.Integration{linked, imap}}, nil)
+	repo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, w *domain.Workspace) error {
+		require.Len(t, w.Integrations, 1)
+		assert.Empty(t, w.GetIntegrationByID("p").EmailProvider.VeridianReturnIMAPIntegrationID, "pas de lien pendant vers une boite supprimée")
+		return nil
+	})
+	require.NoError(t, service.DeleteIntegration(ctx, "ws", "imap"))
+}

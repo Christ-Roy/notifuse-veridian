@@ -17,21 +17,22 @@ type veridianDailyQuotaLease struct {
 // earlier COUNT gate remains a cheap skip optimization, but only this database
 // reservation authorizes SMTP.
 func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) ([]*veridianDailyQuotaLease, time.Duration, bool) {
-	classCaps, _ := veridianResolveDailyCaps(workspace, provider, entry)
 	now := time.Now().UTC()
-	warmupCap := veridianWarmupCap(provider, now)
-	profileCap := provider.VeridianEffectiveProfileDailyCap()
 	class := entry.Payload.VeridianProviderClass
 	if class == "" {
 		class = w.veridianClassifyRecipient(entry)
 		entry.Payload.VeridianProviderClass = class
 	}
-
-	classCap := 0
-	if configured, ok := classCaps[class]; ok && configured > 0 {
-		// Fusible de réputation proportionné (07/10) : plafond ÷ facteur.
-		classCap = veridianSlowCap(configured, w.veridianSlowdownFactor(workspace, entry, class))
-	}
+	// Lot 2 (08/10) : résolution UNIQUE des plafonds (veridian_gate_limits.go),
+	// la même que la porte de plafond journalier et EffectivePlan. Le plafond de
+	// classe est déjà divisé par le facteur du fusible de réputation (07/10).
+	lim := veridianResolveCapLimits(workspace, provider, entry,
+		func() string { return class },
+		func(c string) int { return w.veridianSlowdownFactor(workspace, entry, c) },
+		now)
+	warmupCap := lim.Warmup
+	profileCap := lim.Profile
+	classCap := lim.ClassCap
 	if classCap <= 0 && warmupCap <= 0 && profileCap <= 0 {
 		return nil, 0, false
 	}

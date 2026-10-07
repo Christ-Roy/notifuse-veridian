@@ -22,16 +22,18 @@ ligne dans l'index ci-dessous — jamais un pavé de plus ici.
    sous-dossier). Un handler à étendre se wrappe, il ne se modifie pas en place. → `02`
    **Exception, décision du 07/10/2026 : la console React (`console/`) est la nôtre.** On
    ne fusionne plus `console/` depuis l'upstream (blog retiré, sidebar regroupée) ; on suit
-   l'upstream côté Go seulement. Nouvelles pages dans des `veridian_*.tsx`.
+   l'upstream côté Go seulement. Nouvelles pages dans des `veridian_*.tsx`. → `53`
 3. **Zéro mail cold réel en test.** Les preuves passent par l'endpoint
    `cold-simulate` (staging-only, 503 hors staging) ou un sink SMTP local
    (`smtp-sink`) — jamais un vrai envoi sans le flag `--real-send` et le GO explicite
    du lead. → `05`, `13`, `14`
 4. **La cascade de protection réputation est un empilement de gates dans le worker**
-   (circuit breaker → exclusion → throttle minute → daily cap → per-sender cap →
+   (pause profil → circuit breaker → exclusion → throttle minute → daily cap → per-sender cap →
    sending window → pré-filtre → anti-hash), résolue `broadcast → infra → workspace →
    défaut`. Retirer ou réordonner un gate sans relire toute la cascade grille un
-   domaine d'envoi. → `03,04,08,19,21,22,23,25,27,28,29,30,31,32,38`
+   domaine d'envoi. Les plafonds se résolvent UNE fois (`veridianResolveCapLimits`),
+   partagée avec `VeridianEffectivePlan` (API `emailProfiles.overview`) : ne pas les
+   recalculer ailleurs. → `03,04,08,19,21,22,23,25,27,28,29,30,31,32,38,54`
 5. **`DROP DATABASE` toujours `WITH (FORCE)`, et le record système supprimé AVANT la
    base (record-first).** Sinon la base workspace se recrée toute seule dans la
    seconde (le worker ré-élit un record encore vivant). Staging uniquement ;
@@ -142,6 +144,10 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 - `20` pré-filtrage d'envoi — skip adresses invalides
 - `14` batterie E2E on-premise — garde-fous anti-cramage de domaine
 - `24` vague hygiène/conformité cold
+
+**Console assumée, vérité d'un profil**
+- `53` console assumée : inventaire, spécification de la page Profils d'envoi, plan en 5 lots
+- `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause, lien IMAP, exclusivité
 
 **Cold outbound — UI console & self-service**
 - `06` UI console — section Settings « Cold outreach »

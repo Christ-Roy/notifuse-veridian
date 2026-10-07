@@ -241,6 +241,14 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidates(
 
 	anchorID, anchorDomain, anchorFound := w.veridianSequenceAnchor(workspace, entry)
 	anchorAvailable := anchorFound && w.veridianAnchorAvailable(workspace.ID, anchorDomain, time.Now())
+	// Lot 2 : une ancre en pause n'est plus disponible, la relance bascule tout de
+	// suite sur un autre profil (une pause est une décision de l'opérateur, pas
+	// un plafond du jour).
+	if anchorFound && anchorAvailable {
+		if anchorIntegration := workspace.GetIntegrationByID(anchorID); anchorIntegration != nil && anchorIntegration.EmailProvider.VeridianPaused {
+			anchorAvailable = false
+		}
+	}
 
 	orderedIDs := veridianFailoverCandidateIDs(veridianPoolProfileIDs(profiles), entry.IntegrationID, anchorID, anchorFound, anchorAvailable)
 
@@ -342,6 +350,14 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 	for i := range candidates {
 		cand := candidates[i]
 		if cand.Provider == nil {
+			continue
+		}
+		// Lot 2 (08/10) : profil en PAUSE (veridian_paused). Il ne reçoit rien ;
+		// l'entrée bascule sur les autres membres du pool, ou attend (file
+		// conservée) s'il n'en reste aucun. Ni « atteignable » (une pause n'est pas
+		// une exclusion de classe), ni circuit ouvert. La levée de la pause réveille
+		// la file (UpdateIntegration -> WakePendingByIntegration).
+		if cand.Provider.VeridianPaused {
 			continue
 		}
 		// Un FromAddress vide est une base de décision valable pour

@@ -71,16 +71,16 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 	// RÉEL (suffixe connu = sans lookup ; inconnu = MX caché best-effort).
 	class := w.veridianClassifyRecipient(entry)
 
-	ratePerMinute, ok := rates[class]
-	if !ok || ratePerMinute <= 0 {
+	// Fusible de réputation proportionné (07/10) : le débit de ce couple (domaine
+	// émetteur, classe) est divisé par le facteur de ralentissement (1, 2 ou 4).
+	// Lot 2 : calcul partagé avec EffectivePlan (veridianEffectiveClassRate).
+	ratePerMinute := veridianEffectiveClassRate(rates, class, w.veridianSlowdownFactor(workspace, entry, class))
+	if ratePerMinute <= 0 {
 		// Classe sans débit configuré = non throttlée (seul l'étage émetteur
 		// s'applique). Permet de ne contraindre que gmail/microsoft et de
 		// laisser filer le corporate.
 		return 0, false
 	}
-	// Fusible de réputation proportionné (07/10) : le débit de ce couple (domaine
-	// émetteur, classe) est divisé par le facteur de ralentissement (1, 2 ou 4).
-	ratePerMinute /= float64(w.veridianSlowdownFactor(workspace, entry, class))
 
 	// Veridian fork (correctif 2026-10-05) — AMORÇAGE DURABLE : ce limiter est
 	// en mémoire pure et perd son état à chaque redémarrage du worker. Sans
