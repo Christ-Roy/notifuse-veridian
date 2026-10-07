@@ -181,6 +181,13 @@ describe('exclusivité commercial / transactionnel et rotation', () => {
     expect(canRemoveFromRotation(a, [a, t])).toEqual({ allowed: false, reason: 'last_profile' })
   })
 
+  it('un profil non affecté (créé, hors rotation) se range avec le commercial et peut rejoindre la rotation', () => {
+    const fresh = profile('g', { usage: 'unassigned', in_rotation: false })
+    expect(groupProfiles([fresh]).commercial).toHaveLength(1)
+    expect(groupProfiles([fresh]).transactional).toHaveLength(0)
+    expect(canAddToRotation(fresh)).toEqual({ allowed: true })
+  })
+
   it('un profil n\'est jamais dans les deux groupes', () => {
     const a = profile('a')
     const b = profile('b', { in_rotation: false })

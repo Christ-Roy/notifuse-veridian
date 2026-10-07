@@ -33,7 +33,8 @@ export const emailProfilesUsageService = {
 // veridian_effective_plan.go. Aucun secret ne transite par ces types.
 
 export type EmailProfileType = 'smtp' | 'gmail_app_password' | 'gmail_oauth' | string
-export type EmailProfileUsageKind = 'commercial' | 'transactional'
+// unassigned : créé, ni dans la rotation ni transactionnel (traité comme commercial hors rotation).
+export type EmailProfileUsageKind = 'commercial' | 'transactional' | 'unassigned'
 
 // Portes de plafond journalier (VeridianPlanGate*).
 export type EmailProfilePlanGate =

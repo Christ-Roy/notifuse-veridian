@@ -46,7 +46,10 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
   const { t } = useLingui()
   const labels = useProfileLabels()
   const plan = profile.plan
-  const commercial = profile.usage === 'commercial'
+  // Un profil « non affecté » (créé, ni en rotation ni transactionnel) est un profil commercial hors
+  // rotation : aucune porte commerciale ne s'applique tant qu'il n'y est pas (plan.applicable = false).
+  const commercial = profile.usage !== 'transactional'
+  const gated = commercial && plan.applicable
   const blockers = profileBlockers(profile, now)
   const reputation = reputationIssues(plan)
   const excluded = excludedClassesOf(plan)
@@ -60,6 +63,7 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
   const rotationRemove = canRemoveFromRotation(profile, all)
   const inbox = profile.return_inbox
   const disabled = !isOwner || !!busy
+  const canPause = commercial && profile.in_rotation
 
   const rotationBlockedText = (() => {
     if (profile.in_rotation) {
@@ -88,6 +92,7 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
           )}
           {profile.paused && <Tag color="red">{t`Paused`}</Tag>}
           {commercial && profile.in_rotation && <Tag color="blue">{t`In rotation`}</Tag>}
+          {commercial && !profile.in_rotation && <Tag>{t`Out of rotation`}</Tag>}
         </Space>
       }
     >
@@ -105,7 +110,7 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
         )}
       </div>
 
-      {commercial ? (
+      {gated ? (
         <div data-testid="today-block" style={{ marginBottom: 8 }}>
           <Text strong>{t`Today`}</Text>
           <div>
@@ -142,12 +147,16 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
         <div data-testid="today-block" style={{ marginBottom: 8 }}>
           <Text strong>{t`Today`}</Text>
           <div>
-            <Text>{t`${sentLabel} sent. Transactional mail has no daily cap and no commercial gate.`}</Text>
+            {commercial ? (
+              <Text>{t`${sentLabel} sent. Out of the rotation: no cap or rule applies until it joins.`}</Text>
+            ) : (
+              <Text>{t`${sentLabel} sent. Transactional mail has no daily cap and no commercial gate.`}</Text>
+            )}
           </div>
         </div>
       )}
 
-      {commercial && (
+      {gated && (
         <div data-testid="reputation-block" style={{ marginBottom: 8 }}>
           <Text strong>{t`Reputation by recipient provider`}</Text>
           {reputation.length === 0 ? (
@@ -204,9 +213,9 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
               okText={t`Pause`}
               cancelText={t`Cancel`}
               onConfirm={() => onAction('pause', profile)}
-              disabled={!commercial}
+              disabled={!canPause}
             >
-              <Button size="small" disabled={!!busy || !commercial} loading={busy === 'pause'}>
+              <Button size="small" disabled={!!busy || !canPause} loading={busy === 'pause'}>
                 {t`Pause`}
               </Button>
             </Popconfirm>

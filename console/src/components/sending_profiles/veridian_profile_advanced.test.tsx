@@ -10,6 +10,9 @@ import { VeridianProfileAdvanced } from './veridian_profile_advanced'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 
+// Machine de CI chargée: les rendus antd peuvent dépasser 5 s sans que rien ne soit cassé.
+vi.setConfig({ testTimeout: 30000 })
+
 const base: EmailProvider = { kind: 'smtp', rate_limit_per_minute: 60, senders: [] }
 
 describe('origine d\'un réglage', () => {

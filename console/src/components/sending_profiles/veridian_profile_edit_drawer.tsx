@@ -64,7 +64,7 @@ export function VeridianProfileEditDrawer({ open, workspace, profile, onClose, o
     const provider = integration.email_provider
     setName(integration.name)
     setDraft({ ...provider, smtp: smtpSettingsForEdit(provider.smtp) })
-    setUsageState(profile?.usage ?? 'commercial')
+    setUsageState(profile?.usage === 'transactional' ? 'transactional' : 'commercial')
     setInboxId(provider.veridian_return_imap_integration_id ?? '')
     setError(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seule l'ouverture et l'identité du profil réinitialisent
@@ -109,7 +109,8 @@ export function VeridianProfileEditDrawer({ open, workspace, profile, onClose, o
         name: name.trim() || integration.name,
         provider: () => provider
       })
-      if (usage !== profile.usage) await setUsage(workspace.id, profile.integration_id, usage)
+      const currentUsage: Usage = profile.usage === 'transactional' ? 'transactional' : 'commercial'
+      if (usage !== currentUsage) await setUsage(workspace.id, profile.integration_id, usage)
       onSaved()
       onClose()
     } catch (err) {

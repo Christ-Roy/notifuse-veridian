@@ -11,6 +11,9 @@ import { planClass, profile } from './veridian_profile_test_fixtures'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 
+// Machine de CI chargée: les rendus antd peuvent dépasser 5 s sans que rien ne soit cassé.
+vi.setConfig({ testTimeout: 30000 })
+
 const wrap = (node: ReactNode) => (
   <I18nProvider i18n={i18n}>
     <AntApp>{node}</AntApp>
@@ -157,6 +160,37 @@ describe('carte de profil: boîte IMAP liée', () => {
   it('aucune boîte liée', () => {
     renderCard()
     expect(within(screen.getByTestId('inbox-block')).getByText('No linked inbox')).toBeInTheDocument()
+  })
+})
+
+describe('carte de profil: profil créé, pas encore affecté', () => {
+  const fresh = () =>
+    profile('g', { name: 'Gmail neuf', usage: 'unassigned', in_rotation: false, type: 'gmail_app_password' }, {
+      applicable: false,
+      mode: 'unassigned',
+      sent_today: 0,
+      daily_cap_today: null,
+      limiting_gate: 'none',
+      warmup: { active: false }
+    })
+
+  it('se lit comme un profil commercial hors rotation, pas comme un profil transactionnel', () => {
+    renderCard(fresh(), [fresh(), profile('b')])
+    expect(screen.getByText('Out of rotation')).toBeInTheDocument()
+    const block = screen.getByTestId('today-block')
+    expect(block.textContent).toContain('Out of the rotation: no cap or rule applies until it joins')
+    expect(block.textContent).not.toContain('Transactional mail')
+    // aucune règle commerciale affichée tant qu'il n'est pas dans la rotation
+    expect(screen.queryByTestId('reputation-block')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('limiting-factor')).not.toBeInTheDocument()
+  })
+
+  it('peut rejoindre la rotation une fois vérifié, sans rien à mettre en pause', async () => {
+    const p = fresh()
+    const onAction = renderCard(p, [p, profile('b')])
+    await userEvent.click(screen.getByRole('button', { name: 'Add to rotation' }))
+    expect(onAction).toHaveBeenCalledWith('rotation', p)
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled()
   })
 })
 

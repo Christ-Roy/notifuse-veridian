@@ -265,7 +265,7 @@ export function VeridianProfileWizard({ open, workspaceId, ownerEmail, onClose, 
         style={{ marginBottom: 16 }}
         message={t`Create a Gmail app password in 3 steps`}
         description={
-          <ol style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+          <ol style={{ paddingLeft: 20, margin: '8px 0 0', listStyle: 'decimal' }}>
             <li>
               {t`Turn on 2-step verification on the Google account.`}{' '}
               <Link href={GMAIL_TWO_STEP_URL} target="_blank" rel="noopener noreferrer">
