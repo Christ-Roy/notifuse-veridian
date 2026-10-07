@@ -632,3 +632,20 @@ func TestVeridianStartOfDayUTC_MidnightEuropeParisEdge(t *testing.T) {
 			"à 01h Paris l'hiver, minuit UTC vient de sonner : nouveau jour de plafond")
 	})
 }
+
+func TestVeridianDailyCapGate_ClassCapDividedByReputationFactor(t *testing.T) {
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"ionos": 8}, 0)
+	entry := func() *domain.EmailQueueEntry {
+		return veridianTestEntryFrom("e1", "lead@ionos.example", "r@"+repTestDomain, domain.EmailQueuePayload{VeridianProviderClass: "ionos"})
+	}
+
+	// 3 envois du jour : sous le plafond 8, mais au-dessus de 8 ÷ 4 = 2.
+	env := newVeridianThrottleTestEnv(t)
+	env.mockMessageHistoryRepo.EXPECT().CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "ionos", repTestDomain, gomock.Any()).Return(3, nil).AnyTimes()
+	_, capped := env.worker.veridianDailyCapGate(ws, nil, entry())
+	assert.False(t, capped, "plafond normal 8, 3 envois : libre")
+
+	env.worker.reputationFactors.set("ws-1", repTestDomain, "ionos", 4)
+	_, capped = env.worker.veridianDailyCapGate(ws, nil, entry())
+	assert.True(t, capped, "plafond ÷4 = 2, 3 envois : plafonne")
+}

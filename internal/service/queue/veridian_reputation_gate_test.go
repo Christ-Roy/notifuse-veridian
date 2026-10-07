@@ -318,44 +318,6 @@ func repLimiterRate(t *testing.T, env *veridianThrottleTestEnv, integrationID, c
 	return float64(v.(*rate.Limiter).Limit())
 }
 
-func TestVeridianProviderClassGate_RateDividedByReputationFactor(t *testing.T) {
-	env := newVeridianThrottleTestEnv(t)
-	ws := veridianTestWorkspace(map[string]float64{"ionos": 60}, 6000)
-	entry := veridianTestEntryFrom("e1", "lead@ionos.example", "r@"+repTestDomain, domain.EmailQueuePayload{VeridianProviderClass: "ionos"})
-	entry.IntegrationID = "int-1"
-	env.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForClassAndSenderDomain(gomock.Any(), gomock.Any(), "ionos", repTestDomain, gomock.Any()).Return(0, nil).AnyTimes()
-
-	env.worker.reputationFactors.set(ws.ID, repTestDomain, "ionos", 4)
-	_, _ = env.worker.veridianProviderClassGate(ws, nil, entry)
-	got := repLimiterRate(t, env, "int-1", "ionos")
-	assert.InDelta(t, 15.0/60.0, got, 1e-9, "60/min ÷ 4 = 15/min")
-
-	env2 := newVeridianThrottleTestEnv(t)
-	env2.mockMessageHistoryRepo.EXPECT().
-		CountSentSinceForClassAndSenderDomain(gomock.Any(), gomock.Any(), "ionos", repTestDomain, gomock.Any()).Return(0, nil).AnyTimes()
-	_, _ = env2.worker.veridianProviderClassGate(ws, nil, entry)
-	got = repLimiterRate(t, env2, "int-1", "ionos")
-	assert.InDelta(t, 1.0, got, 1e-9, "sans ralentissement : 60/min inchange")
-}
-
-func TestVeridianDailyCapGate_ClassCapDividedByReputationFactor(t *testing.T) {
-	ws := veridianTestWorkspaceWithCaps(map[string]int{"ionos": 8}, 0)
-	entry := func() *domain.EmailQueueEntry {
-		return veridianTestEntryFrom("e1", "lead@ionos.example", "r@"+repTestDomain, domain.EmailQueuePayload{VeridianProviderClass: "ionos"})
-	}
-
-	// 3 envois du jour : sous le plafond 8, mais au-dessus de 8 ÷ 4 = 2.
-	env := newVeridianThrottleTestEnv(t)
-	env.mockMessageHistoryRepo.EXPECT().CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "ionos", repTestDomain, gomock.Any()).Return(3, nil).AnyTimes()
-	_, capped := env.worker.veridianDailyCapGate(ws, nil, entry())
-	assert.False(t, capped, "plafond normal 8, 3 envois : libre")
-
-	env.worker.reputationFactors.set("ws-1", repTestDomain, "ionos", 4)
-	_, capped = env.worker.veridianDailyCapGate(ws, nil, entry())
-	assert.True(t, capped, "plafond ÷4 = 2, 3 envois : plafonne")
-}
-
 func TestVeridianComputeReputationStatus_PerCoupleFactorAndReason(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	veridianExpectRepCounts(env, "agence-veridian.fr", 0, 100, map[string]domain.VeridianReputationCounts{

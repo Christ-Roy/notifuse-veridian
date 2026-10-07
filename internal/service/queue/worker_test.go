@@ -2383,3 +2383,12 @@ func TestEmailQueueWorker_RenderAtSend_RetryAfterTransientFailureSendsCurrentCon
 	assert.Equal(t, "Sujet courant", sent.Subject)
 	assert.Equal(t, "texte courant", sent.TextContent)
 }
+
+// Fusible de réputation proportionné (07/10) : un worker neuf n'a AUCUN
+// ralentissement en mémoire (facteur 1 pour tout couple, débit normal).
+func TestNewEmailQueueWorker_ReputationFactorsStartAtNormalRate(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	entry := veridianTestEntryFrom("fresh", "lead@corp.test", "bot@send.test", domain.EmailQueuePayload{})
+	require.Equal(t, 1, env.worker.veridianSlowdownFactor(&domain.Workspace{ID: "ws-1"}, entry, "ovh"))
+	require.Equal(t, 1, env.worker.veridianSlowdownFactor(nil, veridianTestEntry("nofrom", "lead@corp.test", domain.EmailQueuePayload{}), "ovh"), "sans FROM exploitable : jamais ralenti")
+}

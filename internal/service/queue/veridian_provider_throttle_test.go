@@ -420,3 +420,24 @@ func (f *fakeQueueMXResolver) LookupMXHosts(_ context.Context, domainName string
 	}
 	return nil, fmt.Errorf("no MX (test)")
 }
+
+func TestVeridianProviderClassGate_RateDividedByReputationFactor(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(map[string]float64{"ionos": 60}, 6000)
+	entry := veridianTestEntryFrom("e1", "lead@ionos.example", "r@"+repTestDomain, domain.EmailQueuePayload{VeridianProviderClass: "ionos"})
+	entry.IntegrationID = "int-1"
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), gomock.Any(), "ionos", repTestDomain, gomock.Any()).Return(0, nil).AnyTimes()
+
+	env.worker.reputationFactors.set(ws.ID, repTestDomain, "ionos", 4)
+	_, _ = env.worker.veridianProviderClassGate(ws, nil, entry)
+	got := repLimiterRate(t, env, "int-1", "ionos")
+	assert.InDelta(t, 15.0/60.0, got, 1e-9, "60/min ÷ 4 = 15/min")
+
+	env2 := newVeridianThrottleTestEnv(t)
+	env2.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForClassAndSenderDomain(gomock.Any(), gomock.Any(), "ionos", repTestDomain, gomock.Any()).Return(0, nil).AnyTimes()
+	_, _ = env2.worker.veridianProviderClassGate(ws, nil, entry)
+	got = repLimiterRate(t, env2, "int-1", "ionos")
+	assert.InDelta(t, 1.0, got, 1e-9, "sans ralentissement : 60/min inchange")
+}

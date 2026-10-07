@@ -217,3 +217,24 @@ func TestEmailQueueWorker_PreAcceptanceSMTPFailureReleasesQuota(t *testing.T) {
 	env.worker.processEntry(workspace, entry)
 	require.Equal(t, []string{domain.VeridianDailyQuotaKindProviderClass}, repo.released)
 }
+
+// Fusible de réputation proportionné (07/10) : la RÉSERVATION ATOMIQUE (autorité
+// finale) applique le même plafond divisé que le gate de comptage, sinon un
+// couple ralenti ÷4 pourrait quand même consommer tout son plafond normal.
+func TestVeridianReserveDailyQuota_ClassCapDividedByReputationFactor(t *testing.T) {
+	for _, tc := range []struct{ factor, wantCap int }{{1, 8}, {2, 4}, {4, 2}} {
+		env := newVeridianThrottleTestEnv(t)
+		repo := &quotaTestRepository{outcomes: map[string]quotaTestOutcome{
+			domain.VeridianDailyQuotaKindProviderClass: {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
+		}}
+		env.worker.messageHistoryRepo = repo
+		workspace := veridianTestWorkspaceWithCaps(map[string]int{"microsoft": 8}, 0)
+		entry := veridianTestEntryFrom("slowed", "lead@corp.test", "bot@send.test", domain.EmailQueuePayload{VeridianProviderClass: "microsoft"})
+		env.worker.reputationFactors.set(workspace.ID, "send.test", "microsoft", tc.factor)
+
+		_, _, blocked := env.worker.veridianReserveDailyQuota(workspace, nil, entry)
+		require.False(t, blocked)
+		require.Len(t, repo.specs, 1)
+		require.Equal(t, tc.wantCap, repo.specs[0].Cap, "facteur %d : plafond 8 -> %d", tc.factor, tc.wantCap)
+	}
+}

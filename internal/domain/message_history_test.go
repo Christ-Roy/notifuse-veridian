@@ -1830,3 +1830,11 @@ func TestMessageEventPolicyRefused(t *testing.T) {
 	assert.Equal(t, MessageEvent("policy_refused"), MessageEventPolicyRefused)
 	assert.NotEqual(t, MessageEventBounced, MessageEventPolicyRefused)
 }
+
+// Fusible de réputation par couple (07/10) : le triplet de comptes est exposé tel
+// quel par reputation-status, ses clés JSON sont donc un contrat.
+func TestVeridianReputationCounts_JSONContract(t *testing.T) {
+	b, err := json.Marshal(VeridianReputationCounts{Sent: 30, HardBounces: 6, PolicyRefusals: 2})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"sent_7d":30,"hard_bounces_7d":6,"policy_refusals_7d":2}`, string(b))
+}

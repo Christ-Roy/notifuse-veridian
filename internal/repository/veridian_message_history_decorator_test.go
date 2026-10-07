@@ -621,3 +621,33 @@ func TestVeridianMessageHistoryDecorator_ResolveBounceTargetMessageID_Passthroug
 	assert.True(t, found)
 	assert.Equal(t, "ws_uuid", id)
 }
+
+func TestVeridianMessageHistoryDecorator_ReputationCountsByClassSinceForSenderDomain_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	want := map[string]domain.VeridianReputationCounts{"ionos": {Sent: 30, HardBounces: 6, PolicyRefusals: 2}}
+	upstream.EXPECT().ReputationCountsByClassSinceForSenderDomain(gomock.Any(), "ws", "agences-veridian.fr", since).
+		Return(want, nil).Times(1)
+	got, err := d.ReputationCountsByClassSinceForSenderDomain(context.Background(), "ws", "agences-veridian.fr", since)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestVeridianMessageHistoryDecorator_RecentClassOutcomesForSenderDomain_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, nil, nil)
+
+	since := time.Now()
+	upstream.EXPECT().RecentClassOutcomesForSenderDomain(gomock.Any(), "ws", "agences-veridian.fr", "ionos", 20, since).
+		Return(20, 12, nil).Times(1)
+	sent, policy, err := d.RecentClassOutcomesForSenderDomain(context.Background(), "ws", "agences-veridian.fr", "ionos", 20, since)
+	require.NoError(t, err)
+	assert.Equal(t, 20, sent)
+	assert.Equal(t, 12, policy)
+}
