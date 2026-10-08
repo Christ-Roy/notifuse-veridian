@@ -100,7 +100,7 @@ msgstr ""
 #~ msgstr ""
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:365
+#: src/components/analytics/EmailMetricsChart.tsx:361
 msgid "{0} emails bounced back"
 msgstr "{0} email respinte"
 
@@ -110,7 +110,7 @@ msgid "{0} emails bounced back - Click to view details"
 msgstr "{0} email respinte - Clicca per vedere i dettagli"
 
 #. placeholder {0}: stats.count_bounced
-#: src/components/analytics/EmailMetricsChart.tsx:364
+#: src/components/analytics/EmailMetricsChart.tsx:360
 msgid "{0} emails bounced back (hidden from chart)"
 msgstr "{0} email respinte (nascoste dal grafico)"
 
@@ -167,7 +167,7 @@ msgid "{0} total clicks - Click to view details"
 msgstr "{0} click totali - Clicca per vedere i dettagli"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:396
+#: src/components/analytics/EmailMetricsChart.tsx:392
 msgid "{0} total complaints"
 msgstr "{0} reclami totali"
 
@@ -177,12 +177,12 @@ msgid "{0} total complaints - Click to view details"
 msgstr "{0} reclami totali - Clicca per vedere i dettagli"
 
 #. placeholder {0}: stats.count_complained
-#: src/components/analytics/EmailMetricsChart.tsx:396
+#: src/components/analytics/EmailMetricsChart.tsx:392
 msgid "{0} total complaints (hidden from chart)"
 msgstr "{0} reclami totali (nascosti dal grafico)"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:290
+#: src/components/analytics/EmailMetricsChart.tsx:284
 msgid "{0} total emails sent"
 msgstr "{0} email inviate totali"
 
@@ -192,12 +192,12 @@ msgid "{0} total emails sent - Click to view details"
 msgstr "{0} email inviate totali - Clicca per vedere i dettagli"
 
 #. placeholder {0}: stats.count_sent
-#: src/components/analytics/EmailMetricsChart.tsx:290
+#: src/components/analytics/EmailMetricsChart.tsx:284
 msgid "{0} total emails sent (hidden from chart)"
 msgstr "{0} email inviate totali (nascoste dal grafico)"
 
 #. placeholder {0}: stats.count_failed
-#: src/components/analytics/EmailMetricsChart.tsx:479
+#: src/components/analytics/EmailMetricsChart.tsx:475
 msgid "{0} total failures (deliberate exclusions not yet separated)"
 msgstr ""
 
@@ -207,7 +207,7 @@ msgid "{0} total opens - Click to view details"
 msgstr "{0} aperture totali - Clicca per vedere i dettagli"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:423
+#: src/components/analytics/EmailMetricsChart.tsx:419
 msgid "{0} total unsubscribes"
 msgstr "{0} disiscrizioni totali"
 
@@ -217,7 +217,7 @@ msgid "{0} total unsubscribes - Click to view details"
 msgstr "{0} disiscrizioni totali - Clicca per vedere i dettagli"
 
 #. placeholder {0}: stats.count_unsubscribed
-#: src/components/analytics/EmailMetricsChart.tsx:423
+#: src/components/analytics/EmailMetricsChart.tsx:419
 msgid "{0} total unsubscribes (hidden from chart)"
 msgstr "{0} disiscrizioni totali (nascoste dal grafico)"
 
@@ -241,7 +241,7 @@ msgstr "{0}-{1} di {total} broadcast"
 #~ msgid "{activeCount} active profiles"
 #~ msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:344
+#: src/components/analytics/EmailMetricsChart.tsx:339
 msgid "{autoReplies, plural, one {+# automatic reply} other {+# automatic replies}}"
 msgstr ""
 
@@ -253,13 +253,17 @@ msgstr ""
 msgid "{clicks} clicks out of {recipients} recipients"
 msgstr "{clicks} click su {recipients} destinatari"
 
-#: src/components/analytics/EmailMetricsChart.tsx:453
+#: src/components/analytics/EmailMetricsChart.tsx:449
 msgid "{failedExcluded} recipients deliberately excluded before sending (invalid address, excluded provider class). Not a delivery problem."
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:324
-msgid "{humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
+#: src/components/analytics/EmailMetricsChart.tsx:319
+msgid "{humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns and sequences combined: the reply signal is not tied to a specific send."
 msgstr ""
+
+#: src/components/analytics/EmailMetricsChart.tsx:324
+#~ msgid "{humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
+#~ msgstr ""
 
 #: src/components/settings/WebhookCard.tsx:143
 msgid "{label} copied to clipboard"
@@ -317,11 +321,11 @@ msgstr ""
 msgid "{rate} policy refusals"
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:481
+#: src/components/analytics/EmailMetricsChart.tsx:477
 msgid "{realFailed} emails really failed to send (hidden from chart, the chart line shows all failures)"
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:482
+#: src/components/analytics/EmailMetricsChart.tsx:478
 msgid "{realFailed} emails really failed to send (the chart line shows all failures)"
 msgstr ""
 
@@ -357,13 +361,17 @@ msgstr ""
 msgid "{sentLabel} sent, no daily cap"
 msgstr ""
 
+#: src/components/sending_profiles/veridian_profile_card.tsx:153
+msgid "{sentLabel} sent. No commercial limit: a transactional mail always goes out."
+msgstr ""
+
 #: src/components/sending_profiles/veridian_profile_card.tsx:151
 msgid "{sentLabel} sent. Out of the rotation: no cap or rule applies until it joins."
 msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_card.tsx:153
-msgid "{sentLabel} sent. Transactional mail has no daily cap and no commercial gate."
-msgstr ""
+#~ msgid "{sentLabel} sent. Transactional mail has no daily cap and no commercial gate."
+#~ msgstr ""
 
 #: src/components/email_builder/panels/Preview.tsx:218
 msgid "// No test data yet..."
@@ -813,7 +821,7 @@ msgstr "Aggiungi alla lista"
 msgid "Add to Lists"
 msgstr "Aggiungi alle liste"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:232
+#: src/components/sending_profiles/veridian_profile_card.tsx:234
 msgid "Add to rotation"
 msgstr ""
 
@@ -918,8 +926,7 @@ msgstr "Allinea in alto"
 msgid "Alignment"
 msgstr "Allineamento"
 
-#: src/components/analytics/EmailMetricsChart.tsx:242
-#: src/pages/TemplatesPage.tsx:77
+#: src/pages/TemplatesPage.tsx:88
 msgid "All"
 msgstr "Tutti"
 
@@ -1056,12 +1063,12 @@ msgid "anytime"
 msgstr "in qualsiasi momento"
 
 #: src/components/settings/ApiAgentsSettings.tsx:220
-#: src/components/settings/SettingsSidebar.tsx:117
+#: src/components/settings/SettingsSidebar.tsx:110
 msgid "API & agents"
 msgstr ""
 
 #: src/components/transactional/ApiCommandModal.tsx:976
-#: src/pages/TransactionalNotificationsPage.tsx:179
+#: src/pages/TransactionalNotificationsPage.tsx:181
 msgid "API Command"
 msgstr "Comando API"
 
@@ -1122,7 +1129,7 @@ msgstr ""
 msgid "Apple iCloud"
 msgstr ""
 
-#: src/components/messages/MessageHistoryTab.tsx:548
+#: src/components/messages/MessageHistoryTab.tsx:565
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2230
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2235
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:307
@@ -1188,7 +1195,7 @@ msgstr ""
 msgid "Are you sure you want to delete this node?"
 msgstr "Sei sicuro di voler eliminare questo nodo?"
 
-#: src/pages/TemplatesPage.tsx:304
+#: src/pages/TemplatesPage.tsx:321
 msgid "Are you sure you want to delete this template?"
 msgstr "Sei sicuro di voler eliminare questo template?"
 
@@ -1345,7 +1352,7 @@ msgstr "Automazione aggiornata con successo"
 msgid "Automation:"
 msgstr "Automazione:"
 
-#: src/layouts/WorkspaceLayout.tsx:324
+#: src/layouts/WorkspaceLayout.tsx:326
 #: src/pages/AutomationsPage.tsx:153
 msgid "Automations"
 msgstr "Automazioni"
@@ -1379,7 +1386,7 @@ msgstr "Evita caratteri speciali che potrebbero non essere visualizzati corretta
 msgid "Back"
 msgstr ""
 
-#: src/pages/AnalyticsPage.tsx:74
+#: src/pages/AnalyticsPage.tsx:78
 msgid "Back to workspaces"
 msgstr ""
 
@@ -1508,7 +1515,7 @@ msgstr "Pannello impostazioni blocco"
 msgid "Block type:"
 msgstr "Tipo di blocco:"
 
-#: src/pages/TemplatesPage.tsx:84
+#: src/pages/TemplatesPage.tsx:94
 msgid "Blocklist"
 msgstr "Blacklist"
 
@@ -1585,7 +1592,7 @@ msgstr "Destra inferiore"
 #: src/components/analytics/veridian_engagement_by_class.tsx:133
 #: src/components/timeline/ContactTimeline.tsx:574
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:72
-#: src/pages/TemplatesPage.tsx:83
+#: src/pages/TemplatesPage.tsx:93
 msgid "Bounce"
 msgstr "Bounce"
 
@@ -1606,18 +1613,18 @@ msgstr "Email bounce"
 msgid "Bounce Type"
 msgstr "Tipo di bounce"
 
-#: src/components/analytics/EmailMetricsChart.tsx:228
-#: src/components/analytics/EmailMetricsChart.tsx:384
+#: src/components/analytics/EmailMetricsChart.tsx:231
+#: src/components/analytics/EmailMetricsChart.tsx:380
 #: src/components/automations/config/TriggerConfigForm.tsx:71
 #: src/components/automations/config/TriggerConfigForm.tsx:93
 #: src/components/broadcasts/BroadcastStats.tsx:275
 #: src/components/contacts/ContactDetailsDrawer.tsx:584
 #: src/components/lists/ListStats.tsx:126
-#: src/components/messages/MessageHistoryTab.tsx:166
-#: src/components/messages/MessageHistoryTab.tsx:171
+#: src/components/messages/MessageHistoryTab.tsx:175
+#: src/components/messages/MessageHistoryTab.tsx:180
 #: src/components/messages/MessageHistoryTable.tsx:298
 #: src/pages/ContactsPage.tsx:385
-#: src/pages/TransactionalNotificationsPage.tsx:249
+#: src/pages/TransactionalNotificationsPage.tsx:251
 msgid "Bounced"
 msgstr "Respinte"
 
@@ -1692,7 +1699,7 @@ msgstr "Invio broadcast \"{0}\" avviato"
 msgid "Broadcast created successfully"
 msgstr "Broadcast creato con successo"
 
-#: src/components/messages/MessageHistoryTab.tsx:229
+#: src/components/messages/MessageHistoryTab.tsx:238
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:104
 msgid "Broadcast ID"
 msgstr "ID broadcast"
@@ -1709,8 +1716,7 @@ msgstr "Nome broadcast"
 msgid "Broadcast updated successfully"
 msgstr "Broadcast aggiornato con successo"
 
-#: src/components/analytics/EmailMetricsChart.tsx:243
-#: src/layouts/WorkspaceLayout.tsx:298
+#: src/layouts/WorkspaceLayout.tsx:300
 #: src/pages/BroadcastsPage.tsx:1286
 msgid "Broadcasts"
 msgstr "Broadcast"
@@ -1794,8 +1800,8 @@ msgstr "Dimensione pulsante"
 #: src/components/segment/button_upsert.tsx:350
 #: src/components/segment/input_dimension_filters.tsx:162
 #: src/components/segment/input.tsx:385
-#: src/components/sending_profiles/veridian_profile_card.tsx:214
-#: src/components/sending_profiles/veridian_profile_card.tsx:245
+#: src/components/sending_profiles/veridian_profile_card.tsx:216
+#: src/components/sending_profiles/veridian_profile_card.tsx:247
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:203
 #: src/components/settings/ApiAgentsSettings.tsx:199
 #: src/components/settings/ApiAgentsSettings.tsx:281
@@ -1820,8 +1826,8 @@ msgstr "Dimensione pulsante"
 #: src/pages/BroadcastsPage.tsx:1428
 #: src/pages/ListsPage.tsx:318
 #: src/pages/SendingProfilesPage.tsx:159
-#: src/pages/TemplatesPage.tsx:312
-#: src/pages/TransactionalNotificationsPage.tsx:147
+#: src/pages/TemplatesPage.tsx:329
+#: src/pages/TransactionalNotificationsPage.tsx:149
 msgid "Cancel"
 msgstr "Annulla"
 
@@ -1867,7 +1873,7 @@ msgid "Capitalize"
 msgstr "Maiuscola iniziale"
 
 #: src/components/templates/CreateTemplateDrawer.tsx:720
-#: src/pages/TemplatesPage.tsx:177
+#: src/pages/TemplatesPage.tsx:194
 msgid "Category"
 msgstr "Categoria"
 
@@ -1920,7 +1926,7 @@ msgstr "Cambia stato per {0}"
 msgid "Changing the transport clears the verification: send a new test afterwards."
 msgstr ""
 
-#: src/components/messages/MessageHistoryTab.tsx:217
+#: src/components/messages/MessageHistoryTab.tsx:226
 msgid "Channel"
 msgstr "Canale"
 
@@ -1945,13 +1951,13 @@ msgstr ""
 #: src/components/contacts/InlineEditableField.tsx:308
 #: src/components/email_builder/ui/ImportFontInput.tsx:169
 #: src/components/filters/Filter.tsx:193
-#: src/components/messages/MessageHistoryTab.tsx:553
+#: src/components/messages/MessageHistoryTab.tsx:570
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:312
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:322
 msgid "Clear"
 msgstr "Cancella"
 
-#: src/components/messages/MessageHistoryTab.tsx:591
+#: src/components/messages/MessageHistoryTab.tsx:608
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:328
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:338
 msgid "Clear All"
@@ -1992,8 +1998,8 @@ msgid "clicked"
 msgstr "cliccato"
 
 #: src/components/automations/config/TriggerConfigForm.tsx:92
-#: src/components/messages/MessageHistoryTab.tsx:153
-#: src/components/messages/MessageHistoryTab.tsx:155
+#: src/components/messages/MessageHistoryTab.tsx:162
+#: src/components/messages/MessageHistoryTab.tsx:164
 #: src/components/messages/MessageHistoryTable.tsx:290
 msgid "Clicked"
 msgstr "Cliccato"
@@ -2021,7 +2027,7 @@ msgid "Clone email template"
 msgstr "Clona template email"
 
 #: src/components/templates/CreateTemplateDrawer.tsx:479
-#: src/pages/TemplatesPage.tsx:268
+#: src/pages/TemplatesPage.tsx:285
 msgid "Clone Template"
 msgstr "Clona template"
 
@@ -2050,7 +2056,7 @@ msgid "Closing time"
 msgstr ""
 
 #: src/components/email_builder/MjmlCodeEditor.tsx:662
-#: src/pages/TemplatesPage.tsx:170
+#: src/pages/TemplatesPage.tsx:187
 msgid "Code"
 msgstr ""
 
@@ -2062,7 +2068,7 @@ msgstr ""
 msgid "Code Editor"
 msgstr "Editor di codice"
 
-#: src/components/settings/SettingsSidebar.tsx:111
+#: src/components/settings/SettingsSidebar.tsx:104
 msgid "Cold outreach"
 msgstr ""
 
@@ -2071,7 +2077,7 @@ msgid "Cold outreach settings saved"
 msgstr ""
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
-#: src/layouts/WorkspaceLayout.tsx:486
+#: src/layouts/WorkspaceLayout.tsx:497
 msgid "Collapse"
 msgstr "Comprimi"
 
@@ -2103,6 +2109,8 @@ msgid "Command copied to clipboard"
 msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:215
+#: src/pages/AnalyticsPage.tsx:101
+#: src/pages/LogsPage.tsx:42
 #: src/pages/SendingProfilesPage.tsx:263
 msgid "Commercial"
 msgstr ""
@@ -2147,8 +2155,8 @@ msgstr "Email di reclamo"
 #: src/components/automations/config/TriggerConfigForm.tsx:72
 #: src/components/automations/config/TriggerConfigForm.tsx:94
 #: src/components/contacts/ContactDetailsDrawer.tsx:585
-#: src/components/messages/MessageHistoryTab.tsx:182
-#: src/components/messages/MessageHistoryTab.tsx:184
+#: src/components/messages/MessageHistoryTab.tsx:191
+#: src/components/messages/MessageHistoryTab.tsx:193
 #: src/components/messages/MessageHistoryTable.tsx:306
 #: src/pages/ContactsPage.tsx:386
 msgid "Complained"
@@ -2163,8 +2171,8 @@ msgstr "Ha reclamato"
 msgid "Complaint"
 msgstr "Reclamo"
 
-#: src/components/analytics/EmailMetricsChart.tsx:229
-#: src/components/analytics/EmailMetricsChart.tsx:411
+#: src/components/analytics/EmailMetricsChart.tsx:232
+#: src/components/analytics/EmailMetricsChart.tsx:407
 #: src/components/broadcasts/BroadcastStats.tsx:309
 #: src/components/lists/ListStats.tsx:150
 msgid "Complaints"
@@ -2213,8 +2221,7 @@ msgstr ""
 msgid "Configuration for {nodeType} is not available in Phase 2"
 msgstr "Configurazione per {nodeType} non disponibile in Fase 2"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:172
-#: src/components/analytics/AnalyticsDashboard.tsx:196
+#: src/components/analytics/AnalyticsDashboard.tsx:189
 #: src/components/automations/NodeConfigPanel.tsx:162
 #: src/components/automations/nodes/ABTestNode.tsx:59
 #: src/components/automations/nodes/AddToListNode.tsx:53
@@ -2351,7 +2358,7 @@ msgstr "Contatto eliminato con successo"
 msgid "Contact Details"
 msgstr "Dettagli contatto"
 
-#: src/components/messages/MessageHistoryTab.tsx:224
+#: src/components/messages/MessageHistoryTab.tsx:233
 #: src/components/messages/MessageHistoryTable.tsx:129
 #: src/components/messages/MessageHistoryTable.tsx:348
 msgid "Contact Email"
@@ -2395,7 +2402,7 @@ msgstr "Il contatto rientra ogni volta che l'evento si verifica"
 msgid "Contact updated successfully"
 msgstr "Contatto aggiornato con successo"
 
-#: src/layouts/WorkspaceLayout.tsx:253
+#: src/layouts/WorkspaceLayout.tsx:238
 #: src/pages/ContactsPage.tsx:988
 msgid "Contacts"
 msgstr "Contatti"
@@ -2622,8 +2629,8 @@ msgid "Create New Template"
 msgstr "Crea nuovo template"
 
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:192
-#: src/pages/TransactionalNotificationsPage.tsx:405
-#: src/pages/TransactionalNotificationsPage.tsx:457
+#: src/pages/TransactionalNotificationsPage.tsx:430
+#: src/pages/TransactionalNotificationsPage.tsx:482
 msgid "Create Notification"
 msgstr "Crea notifica"
 
@@ -2660,11 +2667,11 @@ msgstr "Crea il tuo primo broadcast per iniziare"
 msgid "Create your first list to get started"
 msgstr "Crea la tua prima lista per iniziare"
 
-#: src/pages/TransactionalNotificationsPage.tsx:444
+#: src/pages/TransactionalNotificationsPage.tsx:469
 msgid "Create your first notification to get started"
 msgstr "Crea la tua prima notifica per iniziare"
 
-#: src/pages/TemplatesPage.tsx:398
+#: src/pages/TemplatesPage.tsx:419
 msgid "Create your first template to get started"
 msgstr "Crea il tuo primo template per iniziare"
 
@@ -2675,7 +2682,7 @@ msgstr "creato"
 #: src/components/automations/config/TriggerConfigForm.tsx:58
 #: src/components/settings/ApiAgentsSettings.tsx:168
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:403
-#: src/pages/TemplatesPage.tsx:221
+#: src/pages/TemplatesPage.tsx:238
 msgid "Created"
 msgstr "Creato"
 
@@ -2687,7 +2694,7 @@ msgstr "Creato"
 msgid "Created At"
 msgstr "Creato il"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:242
+#: src/components/sending_profiles/veridian_profile_card.tsx:244
 msgid "Credentials are erased. Refused while messages are still queued."
 msgstr ""
 
@@ -2821,7 +2828,7 @@ msgstr "Etichetta campo personalizzato salvata con successo"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1136
 #: src/components/settings/CustomFieldsConfiguration.tsx:161
-#: src/components/settings/SettingsSidebar.tsx:87
+#: src/components/settings/SettingsSidebar.tsx:85
 msgid "Custom Fields"
 msgstr "Campi personalizzati"
 
@@ -2982,12 +2989,12 @@ msgstr ""
 #~ msgstr ""
 
 #: src/components/settings/DeleteWorkspace.tsx:45
-#: src/components/settings/SettingsSidebar.tsx:126
+#: src/components/settings/SettingsSidebar.tsx:119
 msgid "Danger Zone"
 msgstr "Zona di pericolo"
 
-#: src/layouts/WorkspaceLayout.tsx:226
-#: src/pages/AnalyticsPage.tsx:84
+#: src/layouts/WorkspaceLayout.tsx:211
+#: src/pages/AnalyticsPage.tsx:88
 msgid "Dashboard"
 msgstr "Dashboard"
 
@@ -3032,7 +3039,7 @@ msgid "Deduplication:"
 msgstr "Deduplicazione:"
 
 #: src/components/templates/SendTemplateModal.tsx:66
-#: src/pages/TemplatesPage.tsx:198
+#: src/pages/TemplatesPage.tsx:215
 msgid "default"
 msgstr "predefinito"
 
@@ -3101,8 +3108,8 @@ msgstr "Ritardo"
 #: src/components/file_manager/fileManager.tsx:783
 #: src/components/file_manager/fileManager.tsx:956
 #: src/components/segment/input.tsx:383
-#: src/components/sending_profiles/veridian_profile_card.tsx:243
-#: src/components/sending_profiles/veridian_profile_card.tsx:249
+#: src/components/sending_profiles/veridian_profile_card.tsx:245
+#: src/components/sending_profiles/veridian_profile_card.tsx:251
 #: src/components/settings/Integrations.tsx:332
 #: src/components/settings/Integrations.tsx:491
 #: src/components/settings/Integrations.tsx:558
@@ -3199,15 +3206,15 @@ msgstr "Elimina nodo"
 msgid "Delete segment"
 msgstr "Elimina segment"
 
-#: src/pages/TemplatesPage.tsx:291
+#: src/pages/TemplatesPage.tsx:308
 msgid "Delete Template"
 msgstr "Elimina template"
 
-#: src/pages/TemplatesPage.tsx:301
+#: src/pages/TemplatesPage.tsx:318
 msgid "Delete template?"
 msgstr "Eliminare template?"
 
-#: src/pages/TransactionalNotificationsPage.tsx:143
+#: src/pages/TransactionalNotificationsPage.tsx:145
 msgid "Delete the notification?"
 msgstr "Eliminare la notifica?"
 
@@ -3217,7 +3224,7 @@ msgstr "Eliminare la notifica?"
 msgid "Delete this integration?"
 msgstr "Eliminare questa integrazione?"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:241
+#: src/components/sending_profiles/veridian_profile_card.tsx:243
 msgid "Delete this profile?"
 msgstr ""
 
@@ -3255,11 +3262,11 @@ msgid "Deleted {deletedCount}, failed {failedCount}"
 msgstr "Eliminati {deletedCount}, falliti {failedCount}"
 
 #. placeholder {0}: stats.count_failed
-#: src/components/analytics/EmailMetricsChart.tsx:452
+#: src/components/analytics/EmailMetricsChart.tsx:448
 msgid "Deliberate exclusions (invalid address, excluded provider class): breakdown unavailable, total failures: {0}"
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:465
+#: src/components/analytics/EmailMetricsChart.tsx:461
 msgid "Deliberately excluded"
 msgstr ""
 
@@ -3281,15 +3288,15 @@ msgstr "consegnato"
 
 #: src/components/automations/config/TriggerConfigForm.tsx:90
 #: src/components/broadcasts/BroadcastStats.tsx:169
-#: src/components/messages/MessageHistoryTab.tsx:114
-#: src/components/messages/MessageHistoryTab.tsx:116
+#: src/components/messages/MessageHistoryTab.tsx:123
+#: src/components/messages/MessageHistoryTab.tsx:125
 #: src/components/messages/MessageHistoryTable.tsx:266
 #: src/components/settings/WebhookCard.tsx:308
 #: src/components/timeline/ContactTimeline.tsx:573
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:67
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:78
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:230
-#: src/pages/TransactionalNotificationsPage.tsx:215
+#: src/pages/TransactionalNotificationsPage.tsx:217
 msgid "Delivered"
 msgstr "Consegnato"
 
@@ -3301,7 +3308,7 @@ msgstr "ID consegna:"
 #: src/components/lists/ListDrawer.tsx:206
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:299
 #: src/pages/ListsPage.tsx:269
-#: src/pages/TransactionalNotificationsPage.tsx:264
+#: src/pages/TransactionalNotificationsPage.tsx:266
 msgid "Description"
 msgstr "Descrizione"
 
@@ -3387,7 +3394,7 @@ msgstr "Vuoi eliminare definitivamente questo file dal tuo storage?"
 msgid "Do you want to send \"{0}\" immediately or schedule it for later?"
 msgstr "Vuoi inviare \"{0}\" immediatamente o programmarlo per dopo?"
 
-#: src/layouts/WorkspaceLayout.tsx:624
+#: src/layouts/WorkspaceLayout.tsx:635
 msgid "Documentation"
 msgstr "Documentazione"
 
@@ -3517,14 +3524,14 @@ msgstr "modifica"
 
 #: src/components/automations/UpsertAutomationDrawer.tsx:250
 #: src/components/email_builder/ui/ImportFontInput.tsx:209
-#: src/components/sending_profiles/veridian_profile_card.tsx:238
+#: src/components/sending_profiles/veridian_profile_card.tsx:240
 #: src/components/settings/Integrations.tsx:316
 #: src/components/settings/Integrations.tsx:475
 #: src/components/settings/Integrations.tsx:542
 #: src/components/settings/WebhookCard.tsx:245
 #: src/pages/ContactsPage.tsx:928
 #: src/pages/SendingProfilesPage.tsx:316
-#: src/pages/TransactionalNotificationsPage.tsx:155
+#: src/pages/TransactionalNotificationsPage.tsx:157
 msgid "Edit"
 msgstr "Modifica"
 
@@ -3623,7 +3630,7 @@ msgstr "Modifica segment"
 #~ msgstr ""
 
 #: src/components/templates/CreateTemplateDrawer.tsx:479
-#: src/pages/TemplatesPage.tsx:246
+#: src/pages/TemplatesPage.tsx:263
 msgid "Edit Template"
 msgstr "Modifica template"
 
@@ -3689,7 +3696,7 @@ msgstr "email"
 #: src/components/contacts/ContactUpsertDrawer.tsx:515
 #: src/components/contacts/ExportContactsModal.tsx:50
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:338
-#: src/components/messages/MessageHistoryTab.tsx:219
+#: src/components/messages/MessageHistoryTab.tsx:228
 #: src/components/settings/WorkspaceMembers.tsx:99
 #: src/components/timeline/ContactTimeline.tsx:505
 #: src/pages/ContactsPage.tsx:359
@@ -3754,7 +3761,7 @@ msgstr "La mappatura email è mancante o non valida"
 msgid "Email mapping required"
 msgstr "Mappatura email richiesta"
 
-#: src/components/analytics/EmailMetricsChart.tsx:236
+#: src/components/analytics/EmailMetricsChart.tsx:239
 msgid "Email Metrics"
 msgstr "Metriche email"
 
@@ -4071,7 +4078,7 @@ msgid "Entity ID:"
 msgstr "ID Entità:"
 
 #: src/components/analytics/ChartVisualization.tsx:393
-#: src/components/analytics/FailedMessagesTable.tsx:68
+#: src/components/analytics/FailedMessagesTable.tsx:70
 #: src/components/analytics/NewContactsTable.tsx:208
 #: src/components/analytics/veridian_engagement_by_class.tsx:173
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:930
@@ -4085,10 +4092,10 @@ msgstr "Errore"
 msgid "Error loading automations"
 msgstr "Errore nel caricamento delle automation"
 
-#: src/components/messages/MessageHistoryTab.tsx:603
+#: src/components/messages/MessageHistoryTab.tsx:620
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:492
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:433
-#: src/pages/TransactionalNotificationsPage.tsx:371
+#: src/pages/TransactionalNotificationsPage.tsx:377
 msgid "Error loading data"
 msgstr "Errore nel caricamento dei dati"
 
@@ -4256,7 +4263,7 @@ msgstr "Esportazione di tutti i contatti"
 #: src/components/contacts/ContactDetailsDrawer.tsx:452
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:90
 #: src/components/contacts/ExportContactsModal.tsx:53
-#: src/components/messages/MessageHistoryTab.tsx:226
+#: src/components/messages/MessageHistoryTab.tsx:235
 #: src/components/messages/MessageHistoryTable.tsx:128
 #: src/components/messages/MessageHistoryTable.tsx:154
 #: src/pages/ContactsPage.tsx:360
@@ -4267,7 +4274,7 @@ msgstr "ID Esterno"
 msgid "failed"
 msgstr "fallito"
 
-#: src/components/analytics/EmailMetricsChart.tsx:498
+#: src/components/analytics/EmailMetricsChart.tsx:494
 #: src/components/automations/AutomationCard.tsx:281
 #: src/components/automations/nodes/StatNode.tsx:116
 #: src/components/automations/nodes/StatNode.tsx:180
@@ -4277,19 +4284,19 @@ msgstr "fallito"
 #: src/components/contacts/BulkActionProgressModal.tsx:146
 #: src/components/contacts/BulkUpdateDrawer.tsx:704
 #: src/components/contacts/BulkUpdateDrawer.tsx:743
-#: src/components/messages/MessageHistoryTab.tsx:127
-#: src/components/messages/MessageHistoryTab.tsx:129
+#: src/components/messages/MessageHistoryTab.tsx:136
+#: src/components/messages/MessageHistoryTab.tsx:138
 #: src/components/messages/MessageHistoryTable.tsx:274
 #: src/components/settings/WebhookCard.tsx:311
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:80
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:242
 #: src/pages/BroadcastsPage.tsx:346
 #: src/pages/BroadcastsPage.tsx:413
-#: src/pages/TransactionalNotificationsPage.tsx:232
+#: src/pages/TransactionalNotificationsPage.tsx:234
 msgid "Failed"
 msgstr "Fallito"
 
-#: src/components/analytics/EmailMetricsChart.tsx:231
+#: src/components/analytics/EmailMetricsChart.tsx:234
 msgid "Failed (excluded + real)"
 msgstr ""
 
@@ -4399,7 +4406,7 @@ msgstr "Impossibile eliminare l'invito"
 msgid "Failed to delete list"
 msgstr "Impossibile eliminare la lista"
 
-#: src/pages/TransactionalNotificationsPage.tsx:354
+#: src/pages/TransactionalNotificationsPage.tsx:360
 msgid "Failed to delete notification"
 msgstr "Impossibile eliminare la notifica"
 
@@ -4407,7 +4414,7 @@ msgstr "Impossibile eliminare la notifica"
 msgid "Failed to delete segment"
 msgstr "Impossibile eliminare il segmento"
 
-#: src/pages/TemplatesPage.tsx:123
+#: src/pages/TemplatesPage.tsx:133
 msgid "Failed to delete template: {errorMsg}"
 msgstr "Impossibile eliminare il template: {errorMsg}"
 
@@ -4453,7 +4460,7 @@ msgstr ""
 msgid "Failed to fetch data: {0}"
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:136
+#: src/components/analytics/EmailMetricsChart.tsx:143
 msgid "Failed to fetch email metrics"
 msgstr "Impossibile recuperare le metriche email"
 
@@ -4461,7 +4468,7 @@ msgstr "Impossibile recuperare le metriche email"
 msgid "Failed to fetch engagement by provider class"
 msgstr ""
 
-#: src/components/analytics/FailedMessagesTable.tsx:39
+#: src/components/analytics/FailedMessagesTable.tsx:41
 msgid "Failed to fetch failed messages data"
 msgstr "Impossibile recuperare i dati dei messaggi falliti"
 
@@ -4477,7 +4484,7 @@ msgstr "Impossibile recuperare gli oggetti: "
 msgid "Failed to fetch setup status"
 msgstr "Impossibile recuperare lo stato della configurazione"
 
-#: src/pages/WorkspaceSettingsPage.tsx:93
+#: src/pages/WorkspaceSettingsPage.tsx:91
 msgid "Failed to fetch workspace members"
 msgstr "Impossibile recuperare i membri dello spazio di lavoro"
 
@@ -4745,7 +4752,7 @@ msgstr "Impossibile aggiornare il template: {0}"
 msgid "Failed to update workspace settings"
 msgstr "Impossibile aggiornare le impostazioni dello spazio di lavoro"
 
-#: src/layouts/WorkspaceLayout.tsx:215
+#: src/layouts/WorkspaceLayout.tsx:200
 msgid "Failed to update workspace settings: {errorMessage}"
 msgstr "Impossibile aggiornare le impostazioni dello spazio di lavoro: {errorMessage}"
 
@@ -4858,7 +4865,7 @@ msgstr "Filtra per: {0}"
 msgid "Filter Conditions"
 msgstr "Condizioni di Filtro"
 
-#: src/components/messages/MessageHistoryTab.tsx:586
+#: src/components/messages/MessageHistoryTab.tsx:603
 msgid "Filters"
 msgstr "Filtri"
 
@@ -5057,7 +5064,7 @@ msgstr "Larghezza Completa"
 msgid "Full width on mobile"
 msgstr "Larghezza completa su mobile"
 
-#: src/components/settings/SettingsSidebar.tsx:97
+#: src/components/settings/SettingsSidebar.tsx:90
 #: src/components/settings/SystemSettingsDrawer.tsx:228
 msgid "General"
 msgstr "Generale"
@@ -5247,11 +5254,11 @@ msgstr ""
 
 #. placeholder {0}: stats.count_bounced_hard
 #. placeholder {1}: stats.count_bounced_soft
-#: src/components/analytics/EmailMetricsChart.tsx:367
+#: src/components/analytics/EmailMetricsChart.tsx:363
 msgid "Hard: {0} (dead address) · Soft: {1} (transient)"
 msgstr ""
 
-#: src/components/messages/MessageHistoryTab.tsx:232
+#: src/components/messages/MessageHistoryTab.tsx:241
 msgid "Has Error"
 msgstr "Ha Errori"
 
@@ -5287,8 +5294,8 @@ msgstr "Altezza"
 
 #: src/components/email_builder/MjmlCodeEditor.tsx:702
 #: src/components/templates/CreateTemplateDrawer.tsx:136
-#: src/layouts/WorkspaceLayout.tsx:637
-#: src/layouts/WorkspaceLayout.tsx:659
+#: src/layouts/WorkspaceLayout.tsx:648
+#: src/layouts/WorkspaceLayout.tsx:670
 msgid "Help"
 msgstr "Aiuto"
 
@@ -5433,7 +5440,7 @@ msgstr "Stile Icona"
 #: src/components/messages/MessageHistoryTable.tsx:211
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:355
 #: src/pages/ListsPage.tsx:267
-#: src/pages/TransactionalNotificationsPage.tsx:262
+#: src/pages/TransactionalNotificationsPage.tsx:264
 msgid "ID"
 msgstr "ID"
 
@@ -5450,7 +5457,7 @@ msgstr "L'ID può contenere solo lettere minuscole, numeri e underscore"
 msgid "ID doesn't match"
 msgstr "L'ID non corrisponde"
 
-#: src/pages/TemplatesPage.tsx:164
+#: src/pages/TemplatesPage.tsx:181
 msgid "ID for API:"
 msgstr "ID per API:"
 
@@ -5648,7 +5655,7 @@ msgstr "Importati {0} contatti"
 msgid "Imported {0} contacts ({1} failed, see details below)"
 msgstr "Importati {0} contatti ({1} falliti, vedi dettagli sotto)"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:127
+#: src/components/analytics/AnalyticsDashboard.tsx:120
 msgid "Imported contacts (stock)"
 msgstr ""
 
@@ -5656,7 +5663,7 @@ msgstr ""
 msgid "Imported Fonts"
 msgstr "Font Importati"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:126
+#: src/components/analytics/AnalyticsDashboard.tsx:119
 msgid "Imported stock, not the audience actually contacted."
 msgstr ""
 
@@ -5713,7 +5720,7 @@ msgstr ""
 msgid "Include a clear call-to-action"
 msgstr "Includi una call-to-action chiara"
 
-#: src/pages/LogsPage.tsx:42
+#: src/pages/LogsPage.tsx:67
 msgid "Incoming Webhooks"
 msgstr "Webhook in Entrata"
 
@@ -5810,7 +5817,7 @@ msgstr "Nome Integrazione"
 #~ msgstr "Integrazione aggiornata con successo"
 
 #: src/components/settings/Integrations.tsx:611
-#: src/components/settings/SettingsSidebar.tsx:60
+#: src/components/settings/SettingsSidebar.tsx:58
 msgid "Integrations"
 msgstr "Integrazioni"
 
@@ -6234,7 +6241,7 @@ msgid "List created successfully"
 msgstr "Lista creata con successo"
 
 #: src/components/lists/ListDrawer.tsx:196
-#: src/components/messages/MessageHistoryTab.tsx:227
+#: src/components/messages/MessageHistoryTab.tsx:236
 msgid "List ID"
 msgstr "ID Lista"
 
@@ -6274,7 +6281,7 @@ msgid "List:"
 msgstr "Lista:"
 
 #: src/components/analytics/NewContactsTable.tsx:73
-#: src/layouts/WorkspaceLayout.tsx:263
+#: src/layouts/WorkspaceLayout.tsx:248
 #: src/pages/ContactsPage.tsx:414
 #: src/pages/ContactsPage.tsx:534
 #: src/pages/ListsPage.tsx:155
@@ -6336,7 +6343,7 @@ msgstr "Caricamento eventi webhook..."
 #~ msgid "Loading webhook status..."
 #~ msgstr "Caricamento stato webhook..."
 
-#: src/components/messages/MessageHistoryTab.tsx:610
+#: src/components/messages/MessageHistoryTab.tsx:627
 #: src/components/templates/TemplateSelectorInput.tsx:131
 #: src/components/timeline/ContactTimeline.tsx:823
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:499
@@ -6345,10 +6352,10 @@ msgstr "Caricamento eventi webhook..."
 #: src/pages/ContactsPage.tsx:521
 #: src/pages/ContactsPage.tsx:1146
 #: src/pages/ListsPage.tsx:149
-#: src/pages/LogsPage.tsx:18
+#: src/pages/LogsPage.tsx:23
 #: src/pages/SendingProfilesPage.tsx:88
-#: src/pages/TemplatesPage.tsx:147
-#: src/pages/TransactionalNotificationsPage.tsx:381
+#: src/pages/TemplatesPage.tsx:164
+#: src/pages/TransactionalNotificationsPage.tsx:387
 msgid "Loading..."
 msgstr "Caricamento..."
 
@@ -6370,13 +6377,13 @@ msgstr "Anteprima Logo"
 msgid "Logo URL"
 msgstr "URL Logo"
 
-#: src/layouts/WorkspaceLayout.tsx:685
+#: src/layouts/WorkspaceLayout.tsx:696
 msgid "Logout"
 msgstr "Esci"
 
 #: src/pages/LogsPage.tsx:28
-msgid "Logs"
-msgstr "Log"
+#~ msgid "Logs"
+#~ msgstr "Log"
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:407
 msgid "Logs two messages with the same rendered content sent to the same provider within the window."
@@ -6429,7 +6436,7 @@ msgstr "Gestisci i membri del tuo spazio di lavoro"
 
 #. placeholder {0}: integration.name
 #. placeholder {1}: integration.type
-#: src/pages/TransactionalNotificationsPage.tsx:132
+#: src/pages/TransactionalNotificationsPage.tsx:134
 msgid "Managed by {0} ({1} integration)"
 msgstr "Gestito da {0} (integrazione {1})"
 
@@ -6446,7 +6453,7 @@ msgstr "Mappa le colonne del tuo CSV ai campi contatto. Il"
 msgid "Marked as spam"
 msgstr "Contrassegnato come spam"
 
-#: src/pages/TemplatesPage.tsx:78
+#: src/pages/TemplatesPage.tsx:89
 msgid "Marketing"
 msgstr "Marketing"
 
@@ -6455,8 +6462,8 @@ msgid "Marketing Email Provider Required"
 msgstr "Provider Email di Marketing Richiesto"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:182
-msgid "Marketing Provider"
-msgstr "Provider Marketing"
+#~ msgid "Marketing Provider"
+#~ msgstr "Provider Marketing"
 
 #: src/components/settings/Integrations.tsx:444
 #~ msgid "Marketing rotation"
@@ -6522,7 +6529,7 @@ msgstr "Membro rimosso con successo"
 msgid "Message"
 msgstr "Messaggio"
 
-#: src/pages/LogsPage.tsx:37
+#: src/pages/LogsPage.tsx:62
 msgid "Message History"
 msgstr "Cronologia Messaggi"
 
@@ -6530,7 +6537,7 @@ msgstr "Cronologia Messaggi"
 msgid "Message history and webhook events will be anonymized (email addresses redacted) but retained for analytics."
 msgstr "La cronologia dei messaggi e gli eventi webhook verranno anonimizzati (indirizzi email oscurati) ma conservati per le analisi."
 
-#: src/components/messages/MessageHistoryTab.tsx:225
+#: src/components/messages/MessageHistoryTab.tsx:234
 #: src/components/messages/MessageHistoryTable.tsx:127
 #: src/components/messages/MessageHistoryTable.tsx:141
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:102
@@ -6679,7 +6686,7 @@ msgstr "Modello"
 msgid "Monday"
 msgstr ""
 
-#: src/pages/LogsPage.tsx:29
+#: src/pages/LogsPage.tsx:36
 msgid "Monitor message delivery status and webhook events"
 msgstr "Monitora lo stato di consegna dei messaggi e gli eventi webhook"
 
@@ -6731,7 +6738,7 @@ msgstr "Nome:"
 msgid "Native lint of the rendered HTML before sending. Score 0-10 (above 5 = high spam risk). Pick a recipient provider class to see the strict profile (Google/Microsoft penalize links, tracking and HTML heavily) vs the lenient one (smaller providers tolerate light HTML)."
 msgstr ""
 
-#: src/layouts/WorkspaceLayout.tsx:503
+#: src/layouts/WorkspaceLayout.tsx:514
 msgid "Navigation menu"
 msgstr ""
 
@@ -6751,7 +6758,7 @@ msgstr "Nuova conversazione"
 msgid "New folder"
 msgstr "Nuova cartella"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:144
+#: src/components/analytics/AnalyticsDashboard.tsx:135
 msgid "New imported contacts"
 msgstr ""
 
@@ -6784,12 +6791,12 @@ msgstr "Nuovo segmento"
 msgid "New Window"
 msgstr "Nuova Finestra"
 
-#: src/layouts/WorkspaceLayout.tsx:596
+#: src/layouts/WorkspaceLayout.tsx:607
 #: src/pages/CreateWorkspacePage.tsx:194
 msgid "New workspace"
 msgstr "Nuovo spazio di lavoro"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:143
+#: src/components/analytics/AnalyticsDashboard.tsx:134
 msgid "Newly imported contacts, not the audience actually contacted."
 msgstr ""
 
@@ -6812,14 +6819,14 @@ msgstr "Prossima Esecuzione"
 #: src/components/contacts/ContactUpsertDrawer.tsx:540
 #: src/components/contacts/SegmentsFilter.tsx:134
 #: src/components/contacts/SegmentsFilter.tsx:149
-#: src/components/messages/MessageHistoryTab.tsx:108
-#: src/components/messages/MessageHistoryTab.tsx:121
-#: src/components/messages/MessageHistoryTab.tsx:134
-#: src/components/messages/MessageHistoryTab.tsx:147
-#: src/components/messages/MessageHistoryTab.tsx:160
-#: src/components/messages/MessageHistoryTab.tsx:176
-#: src/components/messages/MessageHistoryTab.tsx:189
-#: src/components/messages/MessageHistoryTab.tsx:205
+#: src/components/messages/MessageHistoryTab.tsx:117
+#: src/components/messages/MessageHistoryTab.tsx:130
+#: src/components/messages/MessageHistoryTab.tsx:143
+#: src/components/messages/MessageHistoryTab.tsx:156
+#: src/components/messages/MessageHistoryTab.tsx:169
+#: src/components/messages/MessageHistoryTab.tsx:185
+#: src/components/messages/MessageHistoryTab.tsx:198
+#: src/components/messages/MessageHistoryTab.tsx:214
 #: src/components/settings/CustomFieldsConfiguration.tsx:202
 #: src/components/settings/Integrations.tsx:330
 #: src/components/settings/Integrations.tsx:489
@@ -6918,7 +6925,7 @@ msgstr "Nessuna integrazione email disponibile. Configurane una nelle Impostazio
 msgid "No errors"
 msgstr ""
 
-#: src/components/messages/MessageHistoryTab.tsx:235
+#: src/components/messages/MessageHistoryTab.tsx:244
 msgid "No Errors"
 msgstr "Nessun Errore"
 
@@ -7066,7 +7073,7 @@ msgid "No specific details provided."
 msgstr "Nessun dettaglio specifico fornito."
 
 #: src/components/templates/TemplateSelectorInput.tsx:244
-#: src/pages/TemplatesPage.tsx:396
+#: src/pages/TemplatesPage.tsx:417
 msgid "No templates found"
 msgstr "Nessun template trovato"
 
@@ -7075,7 +7082,7 @@ msgstr "Nessun template trovato"
 msgid "No templates found for {0} category"
 msgstr "Nessun template trovato per la categoria {0}"
 
-#: src/pages/TemplatesPage.tsx:424
+#: src/pages/TemplatesPage.tsx:445
 msgid "No templates found for category \"{selectedCategory}\""
 msgstr "Nessun template trovato per la categoria \"{selectedCategory}\""
 
@@ -7088,7 +7095,7 @@ msgstr ""
 msgid "No timeline events found for this contact"
 msgstr "Nessun evento della cronologia trovato per questo contatto"
 
-#: src/pages/TransactionalNotificationsPage.tsx:442
+#: src/pages/TransactionalNotificationsPage.tsx:467
 msgid "No transactional notifications found"
 msgstr "Nessuna notifica transazionale trovata"
 
@@ -7162,8 +7169,7 @@ msgstr "Normale"
 msgid "Not available"
 msgstr ""
 
-#: src/components/analytics/AnalyticsDashboard.tsx:170
-#: src/components/analytics/AnalyticsDashboard.tsx:194
+#: src/components/analytics/AnalyticsDashboard.tsx:187
 #: src/components/settings/Integrations.tsx:382
 #: src/components/settings/Integrations.tsx:419
 #: src/components/settings/veridian_cold_outreach_settings.tsx:252
@@ -7209,7 +7215,7 @@ msgstr ""
 msgid "Note: mj-raw components can only be placed directly in mj-body or mj-head, not inside mj-wrapper. Consider moving the mj-raw content outside the wrapper or converting it to appropriate MJML components."
 msgstr "Nota: i componenti mj-raw possono essere posizionati solo direttamente in mj-body o mj-head, non all'interno di mj-wrapper. Considera di spostare il contenuto mj-raw fuori dal wrapper o convertirlo in componenti MJML appropriati."
 
-#: src/pages/TemplatesPage.tsx:306
+#: src/pages/TemplatesPage.tsx:323
 msgid "Note: The template will be hidden from your workspace but preserved to maintain the ability to preview previously sent broadcasts and messages that used this template."
 msgstr "Nota: il template sarà nascosto dal tuo spazio di lavoro ma conservato per mantenere la possibilità di visualizzare in anteprima broadcast e messaggi precedentemente inviati che hanno utilizzato questo template."
 
@@ -7326,7 +7332,7 @@ msgstr "Sono consentiti solo caratteri alfanumerici minuscoli, underscore e trat
 msgid "Only one breakpoint per email template is allowed"
 msgstr "È consentito solo un breakpoint per template email"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:254
+#: src/components/sending_profiles/veridian_profile_card.tsx:256
 msgid "Only the workspace owner can change profiles"
 msgstr ""
 
@@ -7362,7 +7368,7 @@ msgstr ""
 msgid "Open in a window"
 msgstr "Apri in una finestra"
 
-#: src/layouts/WorkspaceLayout.tsx:557
+#: src/layouts/WorkspaceLayout.tsx:568
 msgid "Open navigation menu"
 msgstr ""
 
@@ -7398,8 +7404,8 @@ msgid "opened"
 msgstr "aperto"
 
 #: src/components/automations/config/TriggerConfigForm.tsx:91
-#: src/components/messages/MessageHistoryTab.tsx:140
-#: src/components/messages/MessageHistoryTab.tsx:142
+#: src/components/messages/MessageHistoryTab.tsx:149
+#: src/components/messages/MessageHistoryTab.tsx:151
 #: src/components/messages/MessageHistoryTable.tsx:282
 msgid "Opened"
 msgstr "Aperto"
@@ -7418,7 +7424,7 @@ msgstr "aperture"
 msgid "Opens"
 msgstr "Aperture"
 
-#: src/components/analytics/EmailMetricsChart.tsx:282
+#: src/components/analytics/EmailMetricsChart.tsx:275
 msgid "Opens and clicks are not tracked: plain-text emails, no pixel or tracked link"
 msgstr ""
 
@@ -7434,7 +7440,7 @@ msgstr ""
 msgid "Operation Complete"
 msgstr "Operazione Completata"
 
-#: src/pages/TemplatesPage.tsx:81
+#: src/pages/TemplatesPage.tsx:91
 msgid "Opt-in"
 msgstr "Opt-in"
 
@@ -7469,7 +7475,7 @@ msgid "Or select a popular Google Font"
 msgstr "Oppure seleziona un Google Font popolare"
 
 #: src/components/settings/WebhooksSettings.tsx:305
-#: src/pages/TemplatesPage.tsx:85
+#: src/pages/TemplatesPage.tsx:95
 msgid "Other"
 msgstr "Altro"
 
@@ -7489,7 +7495,7 @@ msgstr ""
 msgid "Outgoing server (SMTP)"
 msgstr ""
 
-#: src/pages/LogsPage.tsx:49
+#: src/pages/LogsPage.tsx:74
 msgid "Outgoing Webhooks"
 msgstr "Webhook in Uscita"
 
@@ -7588,8 +7594,8 @@ msgstr "Accesso path-style"
 #: src/components/contacts/BulkActionProgressModal.tsx:50
 #: src/components/contacts/BulkUpdateDrawer.tsx:574
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:802
-#: src/components/sending_profiles/veridian_profile_card.tsx:213
-#: src/components/sending_profiles/veridian_profile_card.tsx:219
+#: src/components/sending_profiles/veridian_profile_card.tsx:215
+#: src/components/sending_profiles/veridian_profile_card.tsx:221
 msgid "Pause"
 msgstr "Pausa"
 
@@ -7609,7 +7615,7 @@ msgstr "Metti in Pausa Broadcast"
 msgid "Pause broadcast?"
 msgstr "Mettere in pausa il broadcast?"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:211
+#: src/components/sending_profiles/veridian_profile_card.tsx:213
 msgid "Pause this profile?"
 msgstr ""
 
@@ -7773,7 +7779,7 @@ msgstr ""
 msgid "pixel OFF by default"
 msgstr ""
 
-#: src/pages/TemplatesPage.tsx:168
+#: src/pages/TemplatesPage.tsx:185
 msgid "Plain text"
 msgstr ""
 
@@ -7781,7 +7787,7 @@ msgstr ""
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
 msgstr ""
 
-#: src/components/settings/SettingsSidebar.tsx:104
+#: src/components/settings/SettingsSidebar.tsx:97
 #: src/components/settings/veridian_plan_settings.tsx:57
 msgid "Plan"
 msgstr ""
@@ -8086,12 +8092,12 @@ msgstr "Modalità Anteprima Richiesta"
 msgid "Preview Results"
 msgstr "Anteprima Risultati"
 
-#: src/pages/TransactionalNotificationsPage.tsx:83
+#: src/pages/TransactionalNotificationsPage.tsx:85
 msgid "Preview template"
 msgstr "Anteprima template"
 
 #: src/pages/BroadcastsPage.tsx:850
-#: src/pages/TemplatesPage.tsx:332
+#: src/pages/TemplatesPage.tsx:349
 msgid "Preview Template"
 msgstr "Anteprima Template"
 
@@ -8237,6 +8243,10 @@ msgstr ""
 #~ msgid "Profile saved. Send a test email before activating it."
 #~ msgstr ""
 
+#: src/components/analytics/AnalyticsDashboard.tsx:148
+msgid "Profiles in rotation"
+msgstr ""
+
 #: src/pages/SendingProfilesPage.tsx:264
 msgid "Profiles used by campaigns and sequences. Those in the rotation share the volume."
 msgstr ""
@@ -8245,7 +8255,7 @@ msgstr ""
 msgid "Progress"
 msgstr "Progresso"
 
-#: src/layouts/WorkspaceLayout.tsx:380
+#: src/layouts/WorkspaceLayout.tsx:398
 msgid "Prospection"
 msgstr ""
 
@@ -8275,7 +8285,7 @@ msgstr ""
 msgid "Purchase"
 msgstr "Acquisto"
 
-#: src/components/messages/MessageHistoryTab.tsx:221
+#: src/components/messages/MessageHistoryTab.tsx:230
 msgid "Push"
 msgstr "Push"
 
@@ -8366,7 +8376,7 @@ msgstr ""
 msgid "Ready to use"
 msgstr "Pronto all'uso"
 
-#: src/components/analytics/EmailMetricsChart.tsx:498
+#: src/components/analytics/EmailMetricsChart.tsx:494
 msgid "Real failures"
 msgstr ""
 
@@ -8382,7 +8392,7 @@ msgstr "Ricostruisci"
 msgid "Rebuild segment"
 msgstr "Ricostruisci segmento"
 
-#: src/components/analytics/FailedMessagesTable.tsx:65
+#: src/components/analytics/FailedMessagesTable.tsx:67
 msgid "Recent Failed Messages"
 msgstr "Messaggi Falliti Recenti"
 
@@ -8522,7 +8532,7 @@ msgstr ""
 msgid "Remove from List"
 msgstr "Rimuovi dalla Lista"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:232
+#: src/components/sending_profiles/veridian_profile_card.tsx:234
 msgid "Remove from rotation"
 msgstr ""
 
@@ -8572,7 +8582,7 @@ msgstr "Ripeti Y"
 msgid "Replied"
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:335
+#: src/components/analytics/EmailMetricsChart.tsx:330
 msgid "Replies"
 msgstr ""
 
@@ -8688,7 +8698,7 @@ msgstr "Reimposta"
 msgid "Reset pixel to defaults"
 msgstr ""
 
-#: src/pages/TemplatesPage.tsx:429
+#: src/pages/TemplatesPage.tsx:450
 msgid "reset the filter"
 msgstr "reimposta il filtro"
 
@@ -8746,7 +8756,7 @@ msgstr ""
 #: src/components/contacts/BulkUpdateDrawer.tsx:584
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:375
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:807
-#: src/components/sending_profiles/veridian_profile_card.tsx:207
+#: src/components/sending_profiles/veridian_profile_card.tsx:209
 msgid "Resume"
 msgstr "Riprendi"
 
@@ -8770,7 +8780,7 @@ msgstr "Riprendi Caricamento Precedente"
 msgid "Resume Upload"
 msgstr "Riprendi Caricamento"
 
-#: src/components/analytics/EmailMetricsChart.tsx:267
+#: src/components/analytics/EmailMetricsChart.tsx:259
 msgid "Retry"
 msgstr ""
 
@@ -9323,7 +9333,7 @@ msgstr "Seleziona ora"
 
 #: src/components/broadcasts/SendOrScheduleModal.tsx:276
 #: src/components/contacts/ContactUpsertDrawer.tsx:430
-#: src/pages/AnalyticsPage.tsx:93
+#: src/pages/AnalyticsPage.tsx:112
 msgid "Select timezone"
 msgstr "Seleziona fuso orario"
 
@@ -9359,7 +9369,7 @@ msgstr "Seleziona a quale segmento si applica questo trigger"
 msgid "Select Winner"
 msgstr "Seleziona vincitore"
 
-#: src/layouts/WorkspaceLayout.tsx:568
+#: src/layouts/WorkspaceLayout.tsx:579
 #: src/pages/DashboardPage.tsx:31
 msgid "Select workspace"
 msgstr "Seleziona workspace"
@@ -9455,7 +9465,7 @@ msgstr "Invia test"
 #: src/components/templates/SendTemplateModal.tsx:263
 #: src/components/templates/SendTemplateModal.tsx:277
 #: src/pages/BroadcastsPage.tsx:834
-#: src/pages/TemplatesPage.tsx:322
+#: src/pages/TemplatesPage.tsx:339
 msgid "Send Test Email"
 msgstr "Invia email di test"
 
@@ -9470,7 +9480,7 @@ msgstr "Invia notifiche transazionali utilizzando relay SMTP. Perfetto per l'int
 
 #: src/components/templates/CreateTemplateDrawer.tsx:775
 #: src/components/templates/SendTemplateModal.tsx:303
-#: src/pages/TemplatesPage.tsx:183
+#: src/pages/TemplatesPage.tsx:200
 msgid "Sender"
 msgstr "Mittente"
 
@@ -9501,11 +9511,19 @@ msgid "SendGrid"
 msgstr ""
 
 #: src/layouts/WorkspaceLayout.tsx:388
-msgid "Sending"
-msgstr ""
+#~ msgid "Sending"
+#~ msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1576
 msgid "Sending 24/7"
+msgstr ""
+
+#: src/pages/TransactionalNotificationsPage.tsx:403
+msgid "Sending API"
+msgstr ""
+
+#: src/layouts/WorkspaceLayout.tsx:338
+msgid "Sending API / SMTP Bridge"
 msgstr ""
 
 #: src/components/broadcasts/SendingProgress.tsx:56
@@ -9517,7 +9535,8 @@ msgstr "Invio email..."
 msgid "Sending infrastructures"
 msgstr ""
 
-#: src/layouts/WorkspaceLayout.tsx:354
+#: src/layouts/WorkspaceLayout.tsx:360
+#: src/pages/LogsPage.tsx:34
 msgid "Sending log"
 msgstr ""
 
@@ -9529,7 +9548,7 @@ msgstr ""
 #~ msgid "Sending profile rotation"
 #~ msgstr ""
 
-#: src/layouts/WorkspaceLayout.tsx:345
+#: src/layouts/WorkspaceLayout.tsx:347
 #: src/pages/SendingProfilesPage.tsx:204
 msgid "Sending profiles"
 msgstr ""
@@ -9582,17 +9601,29 @@ msgstr ""
 msgid "sent"
 msgstr "inviato"
 
-#: src/components/analytics/EmailMetricsChart.tsx:227
-#: src/components/analytics/EmailMetricsChart.tsx:305
+#: src/components/analytics/EmailMetricsChart.tsx:230
+#: src/components/analytics/EmailMetricsChart.tsx:299
 #: src/components/analytics/veridian_engagement_by_class.tsx:126
 #: src/components/automations/config/TriggerConfigForm.tsx:89
 #: src/components/broadcasts/BroadcastStats.tsx:135
-#: src/components/messages/MessageHistoryTab.tsx:101
-#: src/components/messages/MessageHistoryTab.tsx:103
+#: src/components/messages/MessageHistoryTab.tsx:110
+#: src/components/messages/MessageHistoryTab.tsx:112
 #: src/components/messages/MessageHistoryTable.tsx:258
-#: src/pages/TransactionalNotificationsPage.tsx:198
+#: src/pages/TransactionalNotificationsPage.tsx:200
 msgid "Sent"
 msgstr "Inviato"
+
+#: src/components/analytics/AnalyticsDashboard.tsx:198
+msgid "Sent today"
+msgstr ""
+
+#: src/components/analytics/AnalyticsDashboard.tsx:160
+msgid "Sent today / capacity"
+msgstr ""
+
+#: src/components/analytics/AnalyticsDashboard.tsx:159
+msgid "Sent today by the rotation profiles, over today's capacity."
+msgstr ""
 
 #: src/components/email_builder/ui/BorderInput.tsx:352
 msgid "Separate sides"
@@ -9715,8 +9746,8 @@ msgstr "Imposta la larghezza schermo sotto la quale l'email passerà al layout m
 msgid "Setting up..."
 msgstr "Configurazione in corso..."
 
-#: src/components/settings/SettingsSidebar.tsx:132
-#: src/layouts/WorkspaceLayout.tsx:363
+#: src/components/settings/SettingsSidebar.tsx:125
+#: src/layouts/WorkspaceLayout.tsx:382
 msgid "Settings"
 msgstr "Impostazioni"
 
@@ -9806,7 +9837,7 @@ msgstr "Dimensione"
 msgid "Skipped"
 msgstr "Saltato"
 
-#: src/components/messages/MessageHistoryTab.tsx:220
+#: src/components/messages/MessageHistoryTab.tsx:229
 msgid "SMS"
 msgstr "SMS"
 
@@ -9822,9 +9853,9 @@ msgstr ""
 msgid "SMTP + IMAP"
 msgstr ""
 
-#: src/components/settings/SettingsSidebar.tsx:92
 #: src/components/settings/SMTPBridgeSettings.tsx:20
 #: src/components/settings/SystemSettingsDrawer.tsx:422
+#: src/pages/TransactionalNotificationsPage.tsx:404
 msgid "SMTP Bridge"
 msgstr "Relay SMTP"
 
@@ -10054,7 +10085,7 @@ msgid "State"
 msgstr "Stato"
 
 #: src/components/contacts/ContactDetailsDrawer.tsx:981
-#: src/components/messages/MessageHistoryTab.tsx:580
+#: src/components/messages/MessageHistoryTab.tsx:597
 #: src/components/settings/veridian_plan_settings.tsx:72
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:76
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:363
@@ -10096,7 +10127,7 @@ msgstr "Attributi stile"
 #: src/components/templates/TemplatePreviewDrawer.tsx:335
 #: src/components/templates/TemplateTranslationsTab.tsx:212
 #: src/pages/BroadcastsPage.tsx:719
-#: src/pages/TemplatesPage.tsx:204
+#: src/pages/TemplatesPage.tsx:221
 msgid "Subject"
 msgstr "Oggetto"
 
@@ -10269,7 +10300,7 @@ msgstr "Stato attività"
 msgid "Task type:"
 msgstr "Tipo di attività:"
 
-#: src/components/settings/SettingsSidebar.tsx:39
+#: src/components/settings/SettingsSidebar.tsx:37
 #: src/components/settings/WorkspaceMembers.tsx:576
 msgid "Team"
 msgstr "Team"
@@ -10292,7 +10323,7 @@ msgstr ""
 #: src/components/messages/MessageHistoryTable.tsx:172
 #: src/pages/BroadcastsPage.tsx:714
 #: src/pages/BroadcastsPage.tsx:716
-#: src/pages/TemplatesPage.tsx:152
+#: src/pages/TemplatesPage.tsx:169
 msgid "Template"
 msgstr "Template"
 
@@ -10332,11 +10363,11 @@ msgstr "Dati template"
 msgid "Template Data & Liquid Templating"
 msgstr "Dati template e Liquid Templating"
 
-#: src/pages/TemplatesPage.tsx:117
+#: src/pages/TemplatesPage.tsx:127
 msgid "Template deleted successfully"
 msgstr "Template eliminato con successo"
 
-#: src/components/messages/MessageHistoryTab.tsx:228
+#: src/components/messages/MessageHistoryTab.tsx:237
 msgid "Template ID"
 msgstr "ID template"
 
@@ -10377,8 +10408,8 @@ msgstr "Variabili template:"
 msgid "Template:"
 msgstr "Template:"
 
-#: src/layouts/WorkspaceLayout.tsx:289
-#: src/pages/TemplatesPage.tsx:350
+#: src/layouts/WorkspaceLayout.tsx:278
+#: src/pages/TemplatesPage.tsx:368
 msgid "Templates"
 msgstr "Template"
 
@@ -10398,7 +10429,7 @@ msgstr ""
 #: src/components/broadcasts/GlobalFeedSettings.tsx:122
 #: src/components/broadcasts/RecipientFeedSettings.tsx:130
 #: src/components/sending_profiles/veridian_profile_card.tsx:203
-#: src/pages/TransactionalNotificationsPage.tsx:173
+#: src/pages/TransactionalNotificationsPage.tsx:175
 msgid "Test"
 msgstr "Test"
 
@@ -10579,7 +10610,7 @@ msgstr "Il file CSV deve avere una colonna contenente gli indirizzi email"
 msgid "The CSV file should have headers in the first row."
 msgstr "Il file CSV deve avere le intestazioni nella prima riga."
 
-#: src/components/analytics/EmailMetricsChart.tsx:258
+#: src/components/analytics/EmailMetricsChart.tsx:250
 msgid "The dashboard could not load your email metrics. This is usually temporary — please try again."
 msgstr ""
 
@@ -10629,7 +10660,7 @@ msgstr ""
 msgid "the provider refuses in bulk"
 msgstr ""
 
-#: src/pages/AnalyticsPage.tsx:71
+#: src/pages/AnalyticsPage.tsx:75
 msgid "The requested workspace could not be found."
 msgstr "Il workspace richiesto non è stato trovato."
 
@@ -10637,7 +10668,7 @@ msgstr "Il workspace richiesto non è stato trovato."
 msgid "The rotation must keep at least one profile"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:212
+#: src/components/sending_profiles/veridian_profile_card.tsx:214
 msgid "The rotation switches to the other profiles. Queued messages are kept."
 msgstr ""
 
@@ -10721,6 +10752,10 @@ msgstr ""
 msgid "These defaults apply when a campaign does not set its own per-class rates or caps. A campaign can still override them from its own settings."
 msgstr ""
 
+#: src/components/analytics/AnalyticsDashboard.tsx:208
+msgid "These emails are subject to no cap: a transactional email always goes out."
+msgstr ""
+
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:612
 msgid "These parameters are automatically added to the URL of the broadcast. They are used by web analytics tools to analyze the performance of your campaign."
 msgstr "Questi parametri vengono aggiunti automaticamente all'URL del broadcast. Sono utilizzati dagli strumenti di web analytics per analizzare le prestazioni della tua campagna."
@@ -10757,7 +10792,7 @@ msgstr "Questa azione cancellerà l'iscrizione di {0} contatto/i"
 msgid "This appears in browser tabs when viewing the email in a web browser and in some email clients. It's typically the same as or related to your email subject line."
 msgstr "Questo appare nelle schede del browser quando si visualizza l'email in un browser web e in alcuni client email. Di solito è uguale o correlato all'oggetto dell'email."
 
-#: src/pages/TransactionalNotificationsPage.tsx:144
+#: src/pages/TransactionalNotificationsPage.tsx:146
 msgid "This cannot be undone."
 msgstr "Questa azione non può essere annullata."
 
@@ -10842,7 +10877,7 @@ msgstr "Questo segmento utilizza filtri di date relative e verrà ricalcolato au
 msgid "This template is already used in another variation"
 msgstr "Questo template è già utilizzato in un'altra variante"
 
-#: src/pages/TemplatesPage.tsx:288
+#: src/pages/TemplatesPage.tsx:305
 msgid "This template is managed by an integration and cannot be deleted"
 msgstr "Questo template è gestito da un'integrazione e non può essere eliminato"
 
@@ -11102,13 +11137,12 @@ msgstr ""
 msgid "Tracking links (open pixel, click redirects) point to Notifuse by default. For cold outreach, a tracking link on a domain different from your sending domain is an anti-spam signal. Set a custom tracking domain aligned with each sending domain (e.g. send from agences-veridian.fr → track on track.agences-veridian.fr) — it must be a CNAME/A record pointing to Notifuse. Leave empty to fall back to the workspace/global endpoint."
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:244
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:216
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:408
-#: src/layouts/WorkspaceLayout.tsx:336
-#: src/layouts/WorkspaceLayout.tsx:387
+#: src/layouts/WorkspaceLayout.tsx:399
+#: src/pages/AnalyticsPage.tsx:102
+#: src/pages/LogsPage.tsx:43
 #: src/pages/SendingProfilesPage.tsx:269
-#: src/pages/TemplatesPage.tsx:79
 msgid "Transactional"
 msgstr "Transazionale"
 
@@ -11120,20 +11154,34 @@ msgstr "Transazionale"
 msgid "Transactional ID"
 msgstr "ID transazionale"
 
-#: src/pages/TransactionalNotificationsPage.tsx:348
+#: src/layouts/WorkspaceLayout.tsx:373
+#: src/pages/LogsPage.tsx:34
+msgid "Transactional log"
+msgstr ""
+
+#: src/pages/TransactionalNotificationsPage.tsx:354
 msgid "Transactional notification deleted successfully"
 msgstr "Notifica transazionale eliminata con successo"
 
-#: src/pages/TransactionalNotificationsPage.tsx:387
+#: src/pages/TransactionalNotificationsPage.tsx:412
 msgid "Transactional Notifications"
 msgstr "Notifiche transazionali"
 
+#: src/components/analytics/AnalyticsDashboard.tsx:175
+msgid "Transactional profile"
+msgstr ""
+
 #: src/components/analytics/AnalyticsDashboard.tsx:158
-msgid "Transactional Provider"
-msgstr "Provider transazionale"
+#~ msgid "Transactional Provider"
+#~ msgstr "Provider transazionale"
 
 #: src/pages/SendingProfilesPage.tsx:234
 msgid "Transactional sent today"
+msgstr ""
+
+#: src/layouts/WorkspaceLayout.tsx:291
+#: src/pages/TemplatesPage.tsx:368
+msgid "Transactional templates"
 msgstr ""
 
 #: src/components/email_builder/blocks/MjDividerBlock.tsx:103
@@ -11168,7 +11216,7 @@ msgstr "Attiva su modifiche di campi specifici"
 msgid "Triggered rules ({0})"
 msgstr ""
 
-#: src/pages/TemplatesPage.tsx:427
+#: src/pages/TemplatesPage.tsx:448
 msgid "Try selecting a different category or"
 msgstr "Prova a selezionare una categoria diversa o"
 
@@ -11223,7 +11271,7 @@ msgstr ""
 msgid "Unable to create workspace. Please contact your administrator."
 msgstr ""
 
-#: src/components/analytics/EmailMetricsChart.tsx:255
+#: src/components/analytics/EmailMetricsChart.tsx:247
 msgid "Unable to load email metrics"
 msgstr ""
 
@@ -11266,7 +11314,7 @@ msgstr "Sconosciuto"
 msgid "Unknown date"
 msgstr "Data sconosciuta"
 
-#: src/layouts/WorkspaceLayout.tsx:214
+#: src/layouts/WorkspaceLayout.tsx:199
 msgid "Unknown error"
 msgstr "Errore sconosciuto"
 
@@ -11320,12 +11368,12 @@ msgstr ""
 msgid "Unsub"
 msgstr "Disiscritti"
 
-#: src/components/analytics/EmailMetricsChart.tsx:438
+#: src/components/analytics/EmailMetricsChart.tsx:434
 #: src/components/broadcasts/BroadcastStats.tsx:333
 msgid "Unsub."
 msgstr "Disiscritti"
 
-#: src/pages/TemplatesPage.tsx:82
+#: src/pages/TemplatesPage.tsx:92
 msgid "Unsubscribe"
 msgstr "Disiscrizione"
 
@@ -11345,8 +11393,8 @@ msgstr "Disiscriviti dalla lista"
 #: src/components/automations/config/TriggerConfigForm.tsx:68
 #: src/components/automations/config/TriggerConfigForm.tsx:95
 #: src/components/contacts/ContactDetailsDrawer.tsx:583
-#: src/components/messages/MessageHistoryTab.tsx:195
-#: src/components/messages/MessageHistoryTab.tsx:200
+#: src/components/messages/MessageHistoryTab.tsx:204
+#: src/components/messages/MessageHistoryTab.tsx:209
 #: src/components/messages/MessageHistoryTable.tsx:314
 #: src/pages/ContactsPage.tsx:384
 msgid "Unsubscribed"
@@ -11357,7 +11405,7 @@ msgstr "Disiscritto"
 msgid "Unsubscribed from list"
 msgstr "Disiscritto dalla lista"
 
-#: src/components/analytics/EmailMetricsChart.tsx:230
+#: src/components/analytics/EmailMetricsChart.tsx:233
 msgid "Unsubscribes"
 msgstr "Disiscrizioni"
 
@@ -11677,7 +11725,7 @@ msgstr "Visualizza statistiche flusso"
 msgid "View Logs"
 msgstr "Visualizza log"
 
-#: src/components/analytics/FailedMessagesTable.tsx:60
+#: src/components/analytics/FailedMessagesTable.tsx:62
 #: src/components/analytics/NewContactsTable.tsx:200
 msgid "View more"
 msgstr "Vedi altro"
@@ -11782,7 +11830,7 @@ msgstr "Sottoscrizione webhook aggiornata"
 msgid "Webhook URL"
 msgstr "URL webhook"
 
-#: src/components/settings/SettingsSidebar.tsx:82
+#: src/components/settings/SettingsSidebar.tsx:80
 #: src/components/settings/WebhooksSettings.tsx:169
 msgid "Webhooks"
 msgstr "Webhook"
@@ -11810,7 +11858,7 @@ msgstr ""
 msgid "Weight"
 msgstr "Peso"
 
-#: src/pages/TemplatesPage.tsx:80
+#: src/pages/TemplatesPage.tsx:90
 msgid "Welcome"
 msgstr "Benvenuto"
 
@@ -11894,7 +11942,7 @@ msgstr "Vincitore selezionato con successo! Il broadcast verrà inviato ai desti
 msgid "Winning metric"
 msgstr "Metrica vincente"
 
-#: src/components/messages/MessageHistoryTab.tsx:234
+#: src/components/messages/MessageHistoryTab.tsx:243
 msgid "With Errors"
 msgstr "Con errori"
 
@@ -11961,8 +12009,8 @@ msgstr "Nome workspace"
 msgid "Workspace name must be at least 3 characters long"
 msgstr "Il nome del workspace deve essere di almeno 3 caratteri"
 
-#: src/layouts/WorkspaceLayout.tsx:193
-#: src/pages/AnalyticsPage.tsx:70
+#: src/layouts/WorkspaceLayout.tsx:178
+#: src/pages/AnalyticsPage.tsx:74
 #: src/pages/FileManagerPage.tsx:56
 msgid "Workspace not found"
 msgstr "Workspace non trovato"
@@ -11972,7 +12020,7 @@ msgid "Workspace return inboxes"
 msgstr ""
 
 #: src/components/settings/GeneralSettings.tsx:80
-#: src/layouts/WorkspaceLayout.tsx:211
+#: src/layouts/WorkspaceLayout.tsx:196
 msgid "Workspace settings updated successfully"
 msgstr "Impostazioni workspace aggiornate con successo"
 
@@ -12006,14 +12054,14 @@ msgstr ""
 #: src/components/contacts/ContactUpsertDrawer.tsx:539
 #: src/components/contacts/SegmentsFilter.tsx:133
 #: src/components/contacts/SegmentsFilter.tsx:148
-#: src/components/messages/MessageHistoryTab.tsx:107
-#: src/components/messages/MessageHistoryTab.tsx:120
-#: src/components/messages/MessageHistoryTab.tsx:133
-#: src/components/messages/MessageHistoryTab.tsx:146
-#: src/components/messages/MessageHistoryTab.tsx:159
-#: src/components/messages/MessageHistoryTab.tsx:175
-#: src/components/messages/MessageHistoryTab.tsx:188
-#: src/components/messages/MessageHistoryTab.tsx:204
+#: src/components/messages/MessageHistoryTab.tsx:116
+#: src/components/messages/MessageHistoryTab.tsx:129
+#: src/components/messages/MessageHistoryTab.tsx:142
+#: src/components/messages/MessageHistoryTab.tsx:155
+#: src/components/messages/MessageHistoryTab.tsx:168
+#: src/components/messages/MessageHistoryTab.tsx:184
+#: src/components/messages/MessageHistoryTab.tsx:197
+#: src/components/messages/MessageHistoryTab.tsx:213
 #: src/components/settings/CustomFieldsConfiguration.tsx:201
 #: src/components/settings/Integrations.tsx:329
 #: src/components/settings/Integrations.tsx:488
@@ -12043,8 +12091,8 @@ msgstr "Si, cancella"
 msgid "Yes, delete"
 msgstr "Si, elimina"
 
-#: src/pages/TemplatesPage.tsx:310
-#: src/pages/TransactionalNotificationsPage.tsx:146
+#: src/pages/TemplatesPage.tsx:327
+#: src/pages/TransactionalNotificationsPage.tsx:148
 msgid "Yes, Delete"
 msgstr "Si, elimina"
 
@@ -12107,15 +12155,15 @@ msgstr "Non hai i permessi di scrittura per i contatti"
 msgid "You don't have write permission for lists"
 msgstr "Non hai i permessi di scrittura per le liste"
 
-#: src/pages/TemplatesPage.tsx:245
-#: src/pages/TemplatesPage.tsx:267
-#: src/pages/TemplatesPage.tsx:290
-#: src/pages/TemplatesPage.tsx:355
+#: src/pages/TemplatesPage.tsx:262
+#: src/pages/TemplatesPage.tsx:284
+#: src/pages/TemplatesPage.tsx:307
+#: src/pages/TemplatesPage.tsx:374
 msgid "You don't have write permission for templates"
 msgstr "Non hai i permessi di scrittura per i template"
 
-#: src/pages/TransactionalNotificationsPage.tsx:398
-#: src/pages/TransactionalNotificationsPage.tsx:450
+#: src/pages/TransactionalNotificationsPage.tsx:423
+#: src/pages/TransactionalNotificationsPage.tsx:475
 msgid "You don't have write permission for transactional notifications"
 msgstr "Non hai i permessi di scrittura per le notifiche transazionali"
 
@@ -12129,7 +12177,7 @@ msgid "You have unsaved changes. Are you sure you want to close?"
 msgstr "Hai modifiche non salvate. Sei sicuro di voler chiudere?"
 
 #: src/pages/BroadcastsPage.tsx:833
-#: src/pages/TemplatesPage.tsx:321
+#: src/pages/TemplatesPage.tsx:338
 msgid "You need read template and write contact permissions to send test emails"
 msgstr "Hai bisogno dei permessi di lettura template e scrittura contatti per inviare email di test"
 
