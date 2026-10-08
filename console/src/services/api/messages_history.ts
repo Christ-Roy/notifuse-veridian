@@ -45,6 +45,12 @@ export interface MessageHistory {
   updated_at: string
 }
 
+/**
+ * Famille d un message : commercial (campagnes et sequences) ou transactionnel
+ * (API d envoi et SMTP Bridge). Filtre cote serveur via `message_type`.
+ */
+export type MessageType = 'commercial' | 'transactional'
+
 export interface MessageListParams {
   cursor?: string
   limit?: number
@@ -54,6 +60,7 @@ export interface MessageListParams {
   external_id?: string
   list_id?: string
   channel?: string
+  message_type?: MessageType
   contact_email?: string
   broadcast_id?: string
   template_id?: string
@@ -98,6 +105,7 @@ export function listMessages(
   if (params.external_id) queryParams.append('external_id', params.external_id)
   if (params.list_id) queryParams.append('list_id', params.list_id)
   if (params.channel) queryParams.append('channel', params.channel)
+  if (params.message_type) queryParams.append('message_type', params.message_type)
   if (params.contact_email) queryParams.append('contact_email', params.contact_email)
   if (params.broadcast_id) queryParams.append('broadcast_id', params.broadcast_id)
   if (params.template_id) queryParams.append('template_id', params.template_id)

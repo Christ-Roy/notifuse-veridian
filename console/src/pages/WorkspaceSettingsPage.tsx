@@ -7,7 +7,6 @@ import { Workspace, WorkspaceMember } from '../services/api/types'
 import { WorkspaceMembers } from '../components/settings/WorkspaceMembers'
 import { ApiAgentsSettings } from '../components/settings/ApiAgentsSettings'
 import { GeneralSettings } from '../components/settings/GeneralSettings'
-import { SMTPBridgeSettings } from '../components/settings/SMTPBridgeSettings'
 import { Integrations } from '../components/settings/Integrations'
 import { CustomFieldsConfiguration } from '../components/settings/CustomFieldsConfiguration'
 import { WebhooksSettings } from '../components/settings/WebhooksSettings'
@@ -42,7 +41,6 @@ export function WorkspaceSettingsPage() {
     'integrations',
     'webhooks',
     'custom-fields',
-    'smtp-bridge',
     'general',
     'plan',
     'cold-outreach',
@@ -145,8 +143,6 @@ export function WorkspaceSettingsPage() {
             isOwner={isOwner}
           />
         )
-      case 'smtp-bridge':
-        return <SMTPBridgeSettings />
       case 'general':
         return (
           <GeneralSettings

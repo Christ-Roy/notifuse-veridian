@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Typography,
@@ -31,6 +31,7 @@ import dayjs from '../lib/dayjs'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import SendTemplateModal from '../components/templates/SendTemplateModal'
 import { useLingui } from '@lingui/react/macro'
+import { templatesFamilyFromSearch } from '../layouts/veridian_sidebar_model'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -47,6 +48,8 @@ const getIntegrationIcon = (integrationType: string) => {
 // Define search params interface
 interface TemplatesSearch {
   category?: string
+  // Famille ouverte depuis la sidebar : modeles commerciaux ou transactionnels (lot 4)
+  family?: 'commercial' | 'transactional'
 }
 
 export function TemplatesPage() {
@@ -59,8 +62,16 @@ export function TemplatesPage() {
   const { workspaces } = useAuth()
   const { permissions } = useWorkspacePermissions(workspaceId)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  // Famille : une seule page, deux entrees de sidebar. Transactionnel = categorie transactional ;
+  // commercial = toutes les autres categories.
+  const family = templatesFamilyFromSearch(search)
+  const isTransactionalFamily = family === 'transactional'
   // Derive selectedCategory from search params, default to 'all'
-  const selectedCategory = search.category || 'all'
+  const selectedCategory = isTransactionalFamily
+    ? 'transactional'
+    : search.category && search.category !== 'transactional'
+      ? search.category
+      : 'all'
   // Add state for the test template modal
   const [testModalOpen, setTestModalOpen] = useState(false)
   const [templateToTest, setTemplateToTest] = useState<Template | null>(null)
@@ -76,7 +87,6 @@ export function TemplatesPage() {
   const categories = [
     { label: t`All`, value: 'all' },
     { label: t`Marketing`, value: 'marketing' },
-    { label: t`Transactional`, value: 'transactional' },
     { label: t`Welcome`, value: 'welcome' },
     { label: t`Opt-in`, value: 'opt_in' },
     { label: t`Unsubscribe`, value: 'unsubscribe' },
@@ -98,7 +108,7 @@ export function TemplatesPage() {
 
   const { data, isLoading } = useQuery({
     // Use selectedCategory from search params in queryKey
-    queryKey: ['templates', workspaceId, selectedCategory],
+    queryKey: ['templates', workspaceId, family, selectedCategory],
     queryFn: () => {
       const params: { workspace_id: string; category?: string; channel?: string } = {
         workspace_id: workspaceId,
@@ -116,7 +126,7 @@ export function TemplatesPage() {
     onSuccess: () => {
       message.success(t`Template deleted successfully`)
       // Use selectedCategory from search params in invalidation
-      queryClient.invalidateQueries({ queryKey: ['templates', workspaceId, selectedCategory] })
+      queryClient.invalidateQueries({ queryKey: ['templates', workspaceId] })
     },
     onError: (error: Error & { response?: { data?: { error?: string } } }) => {
       const errorMsg = error?.response?.data?.error || error.message
@@ -128,7 +138,14 @@ export function TemplatesPage() {
     deleteMutation.mutate({ workspace_id: workspaceId!, id: templateId })
   }
 
-  const hasTemplates = !isLoading && data?.templates && data.templates.length > 0
+  // Famille commerciale : jamais de modele transactionnel dans la liste
+  const templates = useMemo(() => {
+    const all = data?.templates
+    if (!all) return all
+    return isTransactionalFamily ? all : all.filter((tpl) => tpl.category !== 'transactional')
+  }, [data, isTransactionalFamily])
+
+  const hasTemplates = !isLoading && templates && templates.length > 0
 
   // Add function to handle testing a template
   const handleTestTemplate = (template: Template) => {
@@ -347,8 +364,10 @@ export function TemplatesPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <div className="text-2xl font-medium">{t`Templates`}</div>
-        {workspace && data?.templates && data.templates.length > 0 && (
+        <div className="text-2xl font-medium">
+          {isTransactionalFamily ? t`Transactional templates` : t`Templates`}
+        </div>
+        {workspace && templates && templates.length > 0 && (
           <Tooltip
             title={
               !permissions?.templates?.write
@@ -368,29 +387,31 @@ export function TemplatesPage() {
         )}
       </div>
 
-      <div className="mb-4">
-        <Segmented
-          options={categories}
-          // Use selectedCategory from search params as value
-          value={selectedCategory}
-          // Update search params on change
-          onChange={(value) => setSelectedCategory(value as string)}
-        />
-      </div>
+      {!isTransactionalFamily && (
+        <div className="mb-4">
+          <Segmented
+            options={categories}
+            // Use selectedCategory from search params as value
+            value={selectedCategory}
+            // Update search params on change
+            onChange={(value) => setSelectedCategory(value as string)}
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <Table columns={columns} dataSource={[]} loading={true} rowKey="id" />
       ) : hasTemplates ? (
         <Table
           columns={columns}
-          dataSource={data.templates}
+          dataSource={templates}
           rowKey="id"
           pagination={{ hideOnSinglePage: true }}
           className="border border-gray-200 rounded-md"
         />
       ) : (
         <div className="text-center py-12">
-          {selectedCategory === 'all' ? (
+          {selectedCategory === 'all' || isTransactionalFamily ? (
             <>
               <Title level={4} type="secondary">
                 {t`No templates found`}

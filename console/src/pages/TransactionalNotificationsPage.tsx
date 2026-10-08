@@ -13,9 +13,10 @@ import {
   Spin,
   Segmented,
   Descriptions,
-  Divider
+  Divider,
+  Tabs
 } from 'antd'
-import { useParams } from '@tanstack/react-router'
+import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
 import { useLingui } from '@lingui/react/macro'
 import {
   transactionalNotificationsApi,
@@ -41,6 +42,7 @@ import { templatesApi } from '../services/api/template'
 import { Workspace, UserPermissions } from '../services/api/types'
 import { ApiCommandModal } from '../components/transactional/ApiCommandModal'
 import { analyticsService } from '../services/api/analytics'
+import { SMTPBridgeSettings } from '../components/settings/SMTPBridgeSettings'
 
 const { Title, Paragraph } = Typography
 
@@ -271,6 +273,10 @@ const TransactionalNotificationCard: React.FC<{
 export function TransactionalNotificationsPage() {
   const { t } = useLingui()
   const { workspaceId } = useParams({ strict: false })
+  // Onglet : API d'envoi (notifications) ou SMTP Bridge, porte par le parametre de recherche `tab`
+  const tabSearch = useSearch({ strict: false }) as { tab?: string }
+  const navigate = useNavigate()
+  const activeTab = tabSearch.tab === 'smtp-bridge' ? 'smtp-bridge' : 'notifications'
   const { workspaces } = useAuth()
   const { permissions } = useWorkspacePermissions(workspaceId as string)
   const queryClient = useQueryClient()
@@ -383,6 +389,25 @@ export function TransactionalNotificationsPage() {
 
   return (
     <div className="p-6">
+      <Tabs
+        activeKey={activeTab}
+        onChange={(key) =>
+          navigate({
+            search: (prev: Record<string, unknown>) => ({
+              ...prev,
+              tab: key === 'smtp-bridge' ? 'smtp-bridge' : undefined
+            })
+          } as never)
+        }
+        items={[
+          { key: 'notifications', label: t`Sending API` },
+          { key: 'smtp-bridge', label: t`SMTP Bridge` }
+        ]}
+      />
+      {activeTab === 'smtp-bridge' ? (
+        <SMTPBridgeSettings />
+      ) : (
+    <div>
       <div className="flex justify-between items-center mb-6">
         <div className="text-2xl font-medium">{t`Transactional Notifications`}</div>
         {currentWorkspace && hasNotifications && (
@@ -492,6 +517,8 @@ export function TransactionalNotificationsPage() {
           workspace={currentWorkspace || null}
           withCCAndBCC={true}
         />
+      )}
+    </div>
       )}
     </div>
   )

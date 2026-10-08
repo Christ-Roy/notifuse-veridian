@@ -4,7 +4,6 @@ import {
   TagsOutlined,
   SettingOutlined,
   ExclamationCircleOutlined,
-  MailOutlined,
   CreditCardOutlined,
   SendOutlined,
   RobotOutlined
@@ -16,7 +15,6 @@ export type SettingsSection =
   | 'integrations'
   | 'webhooks'
   | 'custom-fields'
-  | 'smtp-bridge'
   | 'general'
   | 'plan'
   | 'cold-outreach'
@@ -85,11 +83,6 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
       key: 'custom-fields',
       icon: <TagsOutlined />,
       label: t`Custom Fields`
-    },
-    {
-      key: 'smtp-bridge',
-      icon: <MailOutlined />,
-      label: t`SMTP Bridge`
     },
     {
       key: 'general',
