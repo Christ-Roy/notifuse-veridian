@@ -206,7 +206,36 @@ describe('carte de profil: exclusivité et actions', () => {
     expect(screen.queryByRole('button', { name: 'Add to rotation' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Remove from rotation' })).not.toBeInTheDocument()
     expect(screen.queryByTestId('reputation-block')).not.toBeInTheDocument()
-    expect(screen.getByTestId('today-block').textContent).toContain('no daily cap and no commercial gate')
+    expect(screen.getByTestId('today-block').textContent).toContain(
+      'No commercial limit: a transactional mail always goes out'
+    )
+  })
+
+  it('un profil transactionnel n a pas de bouton Pause ni Reprendre, ni plafond, chauffe ou fenetre', () => {
+    const t = profile('t', { usage: 'transactional', in_rotation: false }, {
+      applicable: false,
+      mode: 'transactional',
+      sent_today: 7,
+      daily_cap_today: null
+    })
+    renderCard(t, [t, profile('a')])
+    expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('limiting-factor')).not.toBeInTheDocument()
+    const block = screen.getByTestId('today-block').textContent ?? ''
+    expect(block).not.toContain('Limited by')
+    expect(block).not.toContain('reserved')
+  })
+
+  it('un profil transactionnel marque en pause cote donnees n affiche toujours pas Reprendre', () => {
+    const t = profile('t', { usage: 'transactional', in_rotation: false, paused: true }, {
+      applicable: false,
+      mode: 'transactional',
+      sent_today: 0,
+      daily_cap_today: null
+    })
+    renderCard(t, [t, profile('a')])
+    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument()
   })
 
   it('profil commercial hors rotation: Ajouter à la rotation actif', async () => {

@@ -1,7 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
 import { Typography, Space, Button, Select, Input, Popover, Tooltip, Radio } from 'antd'
-import { listMessages, MessageHistory } from '../../services/api/messages_history'
+import {
+  listMessages,
+  MessageHistory,
+  type MessageType
+} from '../../services/api/messages_history'
 import { useAuth } from '../../contexts/AuthContext'
 import React, { useState, useMemo, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -73,9 +77,14 @@ interface Filter {
 
 interface MessageHistoryTabProps {
   workspaceId: string
+  // Journal commercial (defaut) ou transactionnel : envoye au serveur en `message_type`
+  messageType?: MessageType
 }
 
-export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceId }) => {
+export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({
+  workspaceId,
+  messageType = 'commercial'
+}) => {
   const { t } = useLingui()
   const { workspaces } = useAuth()
   const [currentCursor, setCurrentCursor] = useState<string | undefined>(undefined)
@@ -365,6 +374,13 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
   React.useEffect(() => {
     const searchParams = new URLSearchParams()
 
+    // Le type de journal et l'onglet viennent de la route : on les conserve dans l'URL
+    const current = new URLSearchParams(window.location.search)
+    for (const key of ['type', 'tab']) {
+      const value = current.get(key)
+      if (value) searchParams.set(key, value)
+    }
+
     activeFilters.forEach((filter) => {
       searchParams.set(filter.field, filter.value)
     })
@@ -381,10 +397,11 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
     isLoading,
     error
   } = useQuery({
-    queryKey: ['messages-history', workspaceId, apiFilters, currentCursor],
+    queryKey: ['messages-history', workspaceId, messageType, apiFilters, currentCursor],
     queryFn: async () => {
       return listMessages(workspaceId, {
         ...apiFilters,
+        message_type: messageType,
         limit: 20,
         cursor: currentCursor
       })
@@ -398,7 +415,7 @@ export const MessageHistoryTab: React.FC<MessageHistoryTabProps> = ({ workspaceI
     setAllMessages([])
     setCurrentCursor(undefined)
     queryClient.resetQueries({ queryKey: ['messages-history', workspaceId] })
-  }, [apiFilters, workspaceId, queryClient])
+  }, [apiFilters, workspaceId, messageType, queryClient])
 
   // Update allMessages when data changes
   React.useEffect(() => {

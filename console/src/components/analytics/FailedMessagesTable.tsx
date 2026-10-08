@@ -23,7 +23,9 @@ export const FailedMessagesTable: React.FC<FailedMessagesTableProps> = ({ worksp
 
   const buildParams = (): MessageListParams => ({
     limit: 5,
-    is_failed: true
+    is_failed: true,
+    // Tableau des echecs : vue commerciale seulement
+    message_type: 'commercial'
   })
 
   const fetchData = async () => {
@@ -46,7 +48,7 @@ export const FailedMessagesTable: React.FC<FailedMessagesTableProps> = ({ worksp
     navigate({
       to: '/console/workspace/$workspaceId/logs',
       params: { workspaceId: workspace.id },
-      search: { is_failed: 'true' }
+      search: { is_failed: 'true', type: 'commercial' }
     })
   }
 

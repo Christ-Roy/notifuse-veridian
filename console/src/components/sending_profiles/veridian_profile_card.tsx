@@ -150,7 +150,7 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
             {commercial ? (
               <Text>{t`${sentLabel} sent. Out of the rotation: no cap or rule applies until it joins.`}</Text>
             ) : (
-              <Text>{t`${sentLabel} sent. Transactional mail has no daily cap and no commercial gate.`}</Text>
+              <Text>{t`${sentLabel} sent. No commercial limit: a transactional mail always goes out.`}</Text>
             )}
           </div>
         </div>
@@ -202,7 +202,9 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
           <Button size="small" disabled={!!busy} loading={busy === 'test'} onClick={() => onAction('test', profile)}>
             {t`Test`}
           </Button>
-          {profile.paused ? (
+          {/* Un profil transactionnel n a pas de pause : le serveur la refuse (400) */}
+          {commercial &&
+            (profile.paused ? (
             <Button size="small" disabled={!!busy} loading={busy === 'resume'} onClick={() => onAction('resume', profile)}>
               {t`Resume`}
             </Button>
@@ -219,7 +221,7 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
                 {t`Pause`}
               </Button>
             </Popconfirm>
-          )}
+          ))}
           {commercial && (
             <Tooltip title={rotationBlockedText}>
               <span>

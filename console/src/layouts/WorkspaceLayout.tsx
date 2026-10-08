@@ -41,6 +41,11 @@ import { VeridianBrandHeaderLink } from '../components/veridian_brand_header_lin
 import { VeridianBrandFooter } from '../components/veridian_brand_footer'
 import { VeridianSoftDeleteBanner } from '../components/veridian_soft_delete_banner'
 import { VeridianLogo } from '../components/veridian_logo'
+import {
+  SIDEBAR_GROUP_KEYS,
+  selectedSidebarKey,
+  type SidebarSearch
+} from './veridian_sidebar_model'
 
 const { Content, Sider, Header } = Layout
 
@@ -148,30 +153,10 @@ export function WorkspaceLayout() {
     return permissions?.read || permissions?.write || false
   }
 
-  // Determine which key should be selected based on the current path
-  let selectedKey = 'analytics' // Default to analytics/dashboard
-  if (currentPath.includes('/settings')) {
-    selectedKey = 'settings'
-  } else if (currentPath.includes('/lists')) {
-    selectedKey = 'lists'
-  } else if (currentPath.includes('/templates')) {
-    selectedKey = 'templates'
-  } else if (currentPath.includes('/contacts')) {
-    selectedKey = 'contacts'
-  } else if (currentPath.includes('/file-manager')) {
-    // Entrée masquée de la sidebar (le gestionnaire reste atteignable par le sélecteur d'images)
-    selectedKey = ''
-  } else if (currentPath.includes('/transactional-notifications')) {
-    selectedKey = 'transactional-notifications'
-  } else if (currentPath.includes('/sending-profiles')) {
-    selectedKey = 'sending-profiles'
-  } else if (currentPath.includes('/logs')) {
-    selectedKey = 'logs'
-  } else if (currentPath.includes('/broadcasts')) {
-    selectedKey = 'broadcasts'
-  } else if (currentPath.includes('/automations')) {
-    selectedKey = 'automations'
-  }
+  // Cle selectionnee : la route ET son parametre de recherche (Modeles et Journal sont la meme
+  // page ouverte sur deux familles, commerciale ou transactionnelle). Voir veridian_sidebar_model.ts.
+  const currentSearch = (matches[matches.length - 1]?.search || {}) as SidebarSearch
+  const selectedKey = selectedSidebarKey(currentPath, currentSearch)
 
   const handleWorkspaceChange = (workspaceId: string) => {
     if (workspaceId === 'new-workspace') {
@@ -285,8 +270,25 @@ export function WorkspaceLayout() {
         </svg>
       ),
       label: (
-        <Link to="/console/workspace/$workspaceId/templates" params={{ workspaceId }}>
+        <Link
+          to="/console/workspace/$workspaceId/templates"
+          params={{ workspaceId }}
+          search={{ family: 'commercial' }}
+        >
           {t`Templates`}
+        </Link>
+      )
+    },
+    hasAccess('templates') && {
+      key: 'templates-transactional',
+      icon: <FontAwesomeIcon icon={faFileLines} size="sm" style={{ opacity: 0.7 }} />,
+      label: (
+        <Link
+          to="/console/workspace/$workspaceId/templates"
+          params={{ workspaceId }}
+          search={{ family: 'transactional' }}
+        >
+          {t`Transactional templates`}
         </Link>
       )
     },
@@ -333,7 +335,7 @@ export function WorkspaceLayout() {
           to="/console/workspace/$workspaceId/transactional-notifications"
           params={{ workspaceId }}
         >
-          {t`Transactional`}
+          {t`Sending API / SMTP Bridge`}
         </Link>
       )
     },
@@ -350,8 +352,25 @@ export function WorkspaceLayout() {
       key: 'logs',
       icon: <FontAwesomeIcon icon={faBarsStaggered} size="sm" style={{ opacity: 0.7 }} />,
       label: (
-        <Link to="/console/workspace/$workspaceId/logs" params={{ workspaceId }}>
+        <Link
+          to="/console/workspace/$workspaceId/logs"
+          params={{ workspaceId }}
+          search={{ type: 'commercial' }}
+        >
           {t`Sending log`}
+        </Link>
+      )
+    },
+    hasAccess('message_history') && {
+      key: 'logs-transactional',
+      icon: <FontAwesomeIcon icon={faBarsStaggered} size="sm" style={{ opacity: 0.7 }} />,
+      label: (
+        <Link
+          to="/console/workspace/$workspaceId/logs"
+          params={{ workspaceId }}
+          search={{ type: 'transactional' }}
+        >
+          {t`Transactional log`}
         </Link>
       )
     },
@@ -366,26 +385,18 @@ export function WorkspaceLayout() {
     }
   ].filter((item) => Boolean(item)) as Array<{ key: string; icon: React.ReactNode; label: React.ReactNode }>
 
-  // Sidebar en groupes (Lot 1 console assumée, 07/10/2026). Les pages restent celles d'avant.
-  // Emplacement réservé : la future entrée « Profils d'envoi » (lot 3) ira dans le groupe
-  // « Envoi », avant le Journal d'envoi. Aucune page vide en attendant.
+  // Sidebar en deux groupes (lot 4, 07/10/2026) : Prospection (tout le commercial, profils
+  // d envoi compris) et Transactionnel (modeles, API d envoi + SMTP Bridge, journal).
   const menuByKey = Object.fromEntries(flatMenuItems.map((item) => [item.key, item]))
-  const pick = (keys: string[]) => keys.map((key) => menuByKey[key]).filter(Boolean)
-  const makeGroup = (key: string, label: string, keys: string[]) => {
+  const pick = (keys: readonly string[]) => keys.map((key) => menuByKey[key]).filter(Boolean)
+  const makeGroup = (key: string, label: string, keys: readonly string[]) => {
     const children = pick(keys)
     return children.length > 0 ? [{ type: 'group' as const, key: `group-${key}`, label, children }] : []
   }
   const menuItems = [
     ...pick(['analytics']),
-    ...makeGroup('prospection', t`Prospection`, [
-      'contacts',
-      'lists',
-      'templates',
-      'broadcasts',
-      'automations'
-    ]),
-    ...makeGroup('transactional', t`Transactional`, ['transactional-notifications']),
-    ...makeGroup('sending', t`Sending`, ['sending-profiles', 'logs']),
+    ...makeGroup('prospection', t`Prospection`, SIDEBAR_GROUP_KEYS.prospection),
+    ...makeGroup('transactional', t`Transactional`, SIDEBAR_GROUP_KEYS.transactional),
     ...pick(['settings'])
   ]
 

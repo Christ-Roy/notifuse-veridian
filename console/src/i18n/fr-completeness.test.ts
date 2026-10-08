@@ -112,3 +112,43 @@ describe('complétude du catalogue français (écran Intégrations et sidebar)',
     expect(empty).toEqual([])
   })
 })
+
+// Lot 4 (08/10/2026) : séparation transactionnel / commercial. Chaque chaîne ajoutée par ce
+// lot a sa traduction française ET anglaise (pages hors de la portée ci-dessus : Modèles,
+// Journal, API d'envoi, tableau de bord).
+describe('complétude fr + en des chaînes du lot 4', () => {
+  const LOT4 = [
+    'Transactional templates',
+    'Sending API / SMTP Bridge',
+    'Sending API',
+    'Transactional log',
+    'Sending log',
+    'Profiles in rotation',
+    'Sent today / capacity',
+    'Sent today',
+    "Sent today by the rotation profiles, over today's capacity.",
+    'Transactional profile',
+    'These emails are subject to no cap: a transactional email always goes out.',
+    '{sentLabel} sent. No commercial limit: a transactional mail always goes out.',
+    'Commercial',
+    'Transactional',
+    'SMTP Bridge'
+  ]
+  for (const locale of ['fr', 'en']) {
+    const entries = parsePo(readFileSync(resolve(__dirname, `locales/${locale}.po`), 'utf8'))
+    it(`${locale} : aucune chaîne du lot 4 vide`, () => {
+      for (const msgid of LOT4) {
+        const entry = entries.find((e) => e.msgid === msgid)
+        expect(entry, `${locale}: « ${msgid} » absente du catalogue`).toBeDefined()
+        expect(entry!.msgstr, `${locale}: « ${msgid} » vide`).not.toBe('')
+      }
+    })
+  }
+
+  it('fr : aucun tiret cadratin entouré d\'espaces dans les chaînes du lot 4', () => {
+    const entries = parsePo(readFileSync(resolve(__dirname, 'locales/fr.po'), 'utf8'))
+    for (const msgid of LOT4) {
+      expect(entries.find((e) => e.msgid === msgid)!.msgstr).not.toMatch(/ — /)
+    }
+  })
+})

@@ -9,7 +9,9 @@ import type { AnalyticsQuery, AnalyticsResponse } from '../../services/api/analy
 // failed_at. Le moteur analytics n'accepte qu'une dimension temporelle par
 // requête : une requête par famille, fusionnées ensuite par jour.
 
-export type MessageTypeFilter = 'all' | 'broadcasts' | 'transactional'
+// Lot 4 : deux familles qui n ont pas les memes regles, jamais additionnees (plus de Tous).
+// Le schema analytics message_history expose la dimension message_type (commercial|transactional).
+export type MessageTypeFilter = 'commercial' | 'transactional'
 
 export interface EmailSeriesDef {
   dimension: string
@@ -52,11 +54,7 @@ export const buildSeriesQuery = (
     timeDimensions: [{ dimension: def.dimension, granularity: 'day', dateRange: timeRange }],
     filters: []
   }
-  if (filter === 'broadcasts') {
-    query.filters?.push({ member: 'broadcast_id', operator: 'set', values: [] })
-  } else if (filter === 'transactional') {
-    query.filters?.push({ member: 'broadcast_id', operator: 'notSet', values: [] })
-  }
+  query.filters?.push({ member: 'message_type', operator: 'equals', values: [filter] })
   return query
 }
 

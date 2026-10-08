@@ -39,17 +39,32 @@ describe('coque de la console : sidebar et réglages', () => {
     expect(layout).not.toMatch(/\/blog/)
   })
 
-  it('regroupe la sidebar : Prospection, Transactionnel, Envoi', () => {
+  it("regroupe la sidebar en deux groupes : Prospection et Transactionnel, plus de groupe Envoi", () => {
     expect(layout).toMatch(/makeGroup\('prospection'/)
     expect(layout).toMatch(/makeGroup\('transactional'/)
-    expect(layout).toMatch(/makeGroup\('sending'/)
+    expect(layout).not.toMatch(/makeGroup\('sending'/)
   })
 
-  it("range « Profils d'envoi » dans le groupe Envoi, avant le journal, et le sélectionne sur sa route", () => {
+  it("range « Profils d'envoi » dans Prospection, avant le journal, et le sélectionne sur sa route", () => {
     expect(layout).toMatch(/key: 'sending-profiles'/)
     expect(layout).toMatch(/to="\/console\/workspace\/\$workspaceId\/sending-profiles"/)
-    expect(layout).toMatch(/makeGroup\('sending', t`Sending`, \['sending-profiles', 'logs'\]\)/)
-    expect(layout).toMatch(/currentPath\.includes\('\/sending-profiles'\)/)
+    const model = read('./layouts/veridian_sidebar_model.ts')
+    expect(model).toMatch(/'sending-profiles',\s*'logs'\s*\]/)
+    expect(model).toMatch(/pathname\.includes\('\/sending-profiles'\)/)
+  })
+
+  it("le groupe Transactionnel porte trois entrées : modèles, API d'envoi / SMTP Bridge, journal", () => {
+    expect(layout).toMatch(/key: 'templates-transactional'/)
+    expect(layout).toMatch(/key: 'logs-transactional'/)
+    expect(layout).toMatch(/search=\{\{ family: 'transactional' \}\}/)
+    expect(layout).toMatch(/search=\{\{ type: 'transactional' \}\}/)
+  })
+
+  it("SMTP Bridge a quitté les réglages et vit sur la page API d'envoi", () => {
+    expect(settingsSidebar).not.toMatch(/smtp-bridge/)
+    expect(settingsPage).not.toMatch(/smtp-bridge|SMTPBridgeSettings/)
+    const page = read('./pages/TransactionalNotificationsPage.tsx')
+    expect(page).toMatch(/SMTPBridgeSettings/)
   })
 
   it("n'a plus de section Blog dans les réglages", () => {

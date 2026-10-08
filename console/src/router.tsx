@@ -6,6 +6,7 @@ import {
   createRoute,
   useParams,
   useNavigate,
+  redirect,
   type RouteComponent
 } from '@tanstack/react-router'
 import { RootLayout } from './layouts/RootLayout'
@@ -173,7 +174,10 @@ const workspaceRoute = createRoute({
 const workspaceIndexRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/',
-  component: AnalyticsPage
+  component: AnalyticsPage,
+  validateSearch: (search: Record<string, unknown>): { view?: 'transactional' } => ({
+    view: search.view === 'transactional' ? 'transactional' : undefined
+  })
 })
 
 // Create workspace child routes
@@ -204,10 +208,32 @@ export const workspaceFileManagerRoute = createRoute({
   })
 })
 
-const workspaceTransactionalNotificationsRoute = createRoute({
+export interface TransactionalNotificationsSearch {
+  tab?: 'notifications' | 'smtp-bridge'
+}
+
+// Lot 4 : la page accueille l API d envoi (notifications) et le SMTP Bridge en deux onglets.
+export const workspaceTransactionalNotificationsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/transactional-notifications',
-  component: TransactionalNotificationsPage
+  component: TransactionalNotificationsPage,
+  validateSearch: (search: Record<string, unknown>): TransactionalNotificationsSearch => ({
+    tab: search.tab === 'smtp-bridge' ? 'smtp-bridge' : undefined
+  })
+})
+
+// Ancienne URL Reglages > SMTP Bridge (liens, marque-pages) : renvoie vers le nouvel onglet.
+export const workspaceSmtpBridgeRedirectRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/settings/smtp-bridge',
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: '/console/workspace/$workspaceId/transactional-notifications',
+      params: { workspaceId: params.workspaceId },
+      search: { tab: 'smtp-bridge' },
+      replace: true
+    })
+  }
 })
 
 const workspaceSendingProfilesRoute = createRoute({
@@ -216,10 +242,22 @@ const workspaceSendingProfilesRoute = createRoute({
   component: SendingProfilesPage as RouteComponent
 })
 
-const workspaceLogsRoute = createRoute({
+// `type` choisit le journal : commercial (defaut) ou transactionnel. Les autres parametres
+// (filtres du tableau, onglet) passent tels quels.
+export interface LogsSearch {
+  type?: 'commercial' | 'transactional'
+  tab?: string
+  [key: string]: unknown
+}
+
+export const workspaceLogsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/logs',
-  component: LogsPage
+  component: LogsPage,
+  validateSearch: (search: Record<string, unknown>): LogsSearch => ({
+    ...search,
+    type: search.type === 'transactional' ? 'transactional' : search.type === 'commercial' ? 'commercial' : undefined
+  })
 })
 
 export const workspaceContactsRoute = createRoute({
@@ -305,10 +343,26 @@ const workspaceSettingsRoute = createRoute({
   component: WorkspaceSettingsPage
 })
 
-const workspaceTemplatesRoute = createRoute({
+// `family` choisit la famille de modeles (commerciaux ou transactionnels) ; `category` affine
+// a l interieur de la famille commerciale.
+export interface TemplatesSearch {
+  category?: string
+  family?: 'commercial' | 'transactional'
+}
+
+export const workspaceTemplatesRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/templates',
-  component: TemplatesPage
+  component: TemplatesPage,
+  validateSearch: (search: Record<string, unknown>): TemplatesSearch => ({
+    category: typeof search.category === 'string' ? search.category : undefined,
+    family:
+      search.family === 'transactional'
+        ? 'transactional'
+        : search.family === 'commercial'
+          ? 'commercial'
+          : undefined
+  })
 })
 
 // Doublon pur de l'index : /analytics redirige vers l'index (liens anciens).
@@ -354,6 +408,7 @@ const routeTree = rootRoute.addChildren([
     workspaceSendingProfilesRoute,
     workspaceFileManagerRoute,
     workspaceSettingsRedirectRoute,
+    workspaceSmtpBridgeRedirectRoute,
     workspaceSettingsRoute,
     workspaceTemplatesRoute,
     workspaceAnalyticsRoute
