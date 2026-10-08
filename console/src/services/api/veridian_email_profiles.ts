@@ -223,3 +223,42 @@ export const emailProfilesCreateService = {
   create: (request: CreateEmailProfileRequest) =>
     api.post<CreateEmailProfileResponse>('/api/veridian/emailProfiles.create', request)
 }
+
+// Lot 4 : usage et pause passent par une API dediee. Le serveur valide l exclusivite
+// (un profil est commercial OU transactionnel) et applique tout en une ecriture ; un
+// refus est un 400 {"error": "message lisible"} que ApiError porte tel quel.
+export interface SetEmailProfileUsageRequest {
+  workspace_id: string
+  integration_id: string
+  usage: EmailProfileUsageKind
+}
+
+export interface SetEmailProfileUsageResponse {
+  integration_id: string
+  usage: EmailProfileUsageKind
+  in_rotation: boolean
+  paused: boolean
+  // Identifiants du pool commercial apres l ecriture
+  rotation: string[]
+  // Profil transactionnel apres l ecriture ; vide s il n y en a pas
+  transactional_integration_id: string
+}
+
+export interface EmailProfilePauseRequest {
+  workspace_id: string
+  integration_id: string
+}
+
+export interface EmailProfilePauseResponse {
+  integration_id: string
+  paused: boolean
+}
+
+export const emailProfilesStateService = {
+  setUsage: (request: SetEmailProfileUsageRequest) =>
+    api.post<SetEmailProfileUsageResponse>('/api/veridian/emailProfiles.setUsage', request),
+  pause: (request: EmailProfilePauseRequest) =>
+    api.post<EmailProfilePauseResponse>('/api/veridian/emailProfiles.pause', request),
+  resume: (request: EmailProfilePauseRequest) =>
+    api.post<EmailProfilePauseResponse>('/api/veridian/emailProfiles.resume', request)
+}

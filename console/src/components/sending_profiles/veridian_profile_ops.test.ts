@@ -16,8 +16,22 @@ vi.mock('../../services/api/workspace', async () => {
   }
 })
 vi.mock('../../services/api/email', () => ({ emailService: { testProvider: vi.fn() } }))
+vi.mock('../../services/api/veridian_email_profiles', async () => {
+  const actual = await vi.importActual<typeof import('../../services/api/veridian_email_profiles')>(
+    '../../services/api/veridian_email_profiles'
+  )
+  return {
+    ...actual,
+    emailProfilesStateService: {
+      setUsage: vi.fn().mockResolvedValue({}),
+      pause: vi.fn().mockResolvedValue({ integration_id: 'a', paused: true }),
+      resume: vi.fn().mockResolvedValue({ integration_id: 'a', paused: false })
+    }
+  }
+})
 
 import { workspaceService } from '../../services/api/workspace'
+import { emailProfilesStateService } from '../../services/api/veridian_email_profiles'
 import {
   linkInbox,
   ProfileOperationError,
@@ -80,21 +94,33 @@ describe('écritures de la page Profils d\'envoi', () => {
     expect(out.veridian_hard_bounce_freeze_threshold).toBe(0.08)
   })
 
-  it('pause: pose le drapeau et garde tous les autres réglages', async () => {
+  it('pause: appelle emailProfiles.pause, et plus updateIntegration', async () => {
     load(workspaceWith([integration('a', provider())]))
     await setPaused('ws-1', 'a', true)
-    const request = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
-    expect(request.integration_id).toBe('a')
-    expect(request.provider?.veridian_paused).toBe(true)
-    expect(request.provider?.veridian_warmup_schedule).toEqual([20, 40])
-    expect(request.provider?.veridian_transport_verified_at).toBeUndefined()
+    expect(emailProfilesStateService.pause).toHaveBeenCalledWith({ workspace_id: 'ws-1', integration_id: 'a' })
+    expect(emailProfilesStateService.resume).not.toHaveBeenCalled()
+    expect(workspaceService.updateIntegration).not.toHaveBeenCalled()
+    expect(workspaceService.update).not.toHaveBeenCalled()
   })
 
-  it('reprise: retire le drapeau', async () => {
+  it('reprise: appelle emailProfiles.resume, et plus updateIntegration', async () => {
     load(workspaceWith([integration('a', provider(true, { veridian_paused: true }))]))
     await setPaused('ws-1', 'a', false)
-    const request = vi.mocked(workspaceService.updateIntegration).mock.calls[0][0]
-    expect(request.provider).not.toHaveProperty('veridian_paused')
+    expect(emailProfilesStateService.resume).toHaveBeenCalledWith({ workspace_id: 'ws-1', integration_id: 'a' })
+    expect(emailProfilesStateService.pause).not.toHaveBeenCalled()
+    expect(workspaceService.updateIntegration).not.toHaveBeenCalled()
+  })
+
+  it("pause: un profil transactionnel est refusé avant même l'appel (le serveur répond 400)", async () => {
+    load(workspaceWith([integration('a', provider()), integration('t', provider())], { transactional_email_provider_id: 't' }))
+    await expect(setPaused('ws-1', 't', true)).rejects.toMatchObject({ code: 'transactional' })
+    expect(emailProfilesStateService.pause).not.toHaveBeenCalled()
+  })
+
+  it('pause: le refus du serveur remonte tel quel', async () => {
+    load(workspaceWith([integration('a', provider())]))
+    vi.mocked(emailProfilesStateService.pause).mockRejectedValueOnce(new Error('Profil transactionnel : pause impossible'))
+    await expect(setPaused('ws-1', 'a', true)).rejects.toThrow('Profil transactionnel : pause impossible')
   })
 
   it('lien IMAP: pose puis retire', async () => {
@@ -115,65 +141,104 @@ describe('écritures de la page Profils d\'envoi', () => {
   })
 
   describe('rotation', () => {
-    it('ajoute un profil vérifié', async () => {
+    it("ajoute un profil vérifié: usage commercial par l'API dédiée", async () => {
       load(workspaceWith([integration('a', provider()), integration('b', provider())], { marketing_email_provider_id: 'a', veridian_marketing_email_provider_ids: ['a'] }))
       await setRotation('ws-1', 'b', true)
-      const request = vi.mocked(workspaceService.update).mock.calls[0][0]
-      expect(request.settings?.veridian_marketing_email_provider_ids).toEqual(['a', 'b'])
-      expect(request.name).toBe('Atelier')
+      expect(emailProfilesStateService.setUsage).toHaveBeenCalledWith({
+        workspace_id: 'ws-1',
+        integration_id: 'b',
+        usage: 'commercial'
+      })
+      expect(workspaceService.update).not.toHaveBeenCalled()
+      expect(workspaceService.updateIntegration).not.toHaveBeenCalled()
     })
 
     it('refuse un profil non vérifié', async () => {
       load(workspaceWith([integration('a', provider()), integration('b', provider(false))], { veridian_marketing_email_provider_ids: ['a'] }))
       await expect(setRotation('ws-1', 'b', true)).rejects.toMatchObject({ code: 'unverified' })
-      expect(workspaceService.update).not.toHaveBeenCalled()
+      expect(emailProfilesStateService.setUsage).not.toHaveBeenCalled()
     })
 
     it('refuse le profil transactionnel (exclusivité)', async () => {
       load(workspaceWith([integration('a', provider()), integration('t', provider())], { veridian_marketing_email_provider_ids: ['a'], transactional_email_provider_id: 't' }))
       await expect(setRotation('ws-1', 't', true)).rejects.toMatchObject({ code: 'transactional' })
-      expect(workspaceService.update).not.toHaveBeenCalled()
+      expect(emailProfilesStateService.setUsage).not.toHaveBeenCalled()
     })
 
     it('refuse de vider la rotation', async () => {
       load(workspaceWith([integration('a', provider())], { veridian_marketing_email_provider_ids: ['a'], marketing_email_provider_id: 'a' }))
       await expect(setRotation('ws-1', 'a', false)).rejects.toBeInstanceOf(ProfileOperationError)
-      expect(workspaceService.update).not.toHaveBeenCalled()
+      expect(emailProfilesStateService.setUsage).not.toHaveBeenCalled()
     })
 
-    it('retire un profil quand il en reste un autre', async () => {
+    it('retire un profil quand il en reste un autre: hors service', async () => {
       load(workspaceWith([integration('a', provider()), integration('b', provider())], { veridian_marketing_email_provider_ids: ['a', 'b'], marketing_email_provider_id: 'a' }))
       await setRotation('ws-1', 'a', false)
-      expect(vi.mocked(workspaceService.update).mock.calls[0][0].settings?.veridian_marketing_email_provider_ids).toEqual(['b'])
+      expect(emailProfilesStateService.setUsage).toHaveBeenCalledWith({
+        workspace_id: 'ws-1',
+        integration_id: 'a',
+        usage: 'unassigned'
+      })
+    })
+
+    it('le refus du serveur remonte tel quel', async () => {
+      load(workspaceWith([integration('a', provider()), integration('b', provider())], { veridian_marketing_email_provider_ids: ['a'] }))
+      vi.mocked(emailProfilesStateService.setUsage).mockRejectedValueOnce(new Error('Profil non vérifié côté serveur'))
+      await expect(setRotation('ws-1', 'b', true)).rejects.toThrow('Profil non vérifié côté serveur')
     })
   })
 
   describe('usage exclusif', () => {
-    it('transactionnel: sort le profil de la rotation et le pose en transactionnel', async () => {
+    it("transactionnel: un seul appel setUsage, pas d'écriture du workspace", async () => {
       load(workspaceWith([integration('a', provider()), integration('b', provider())], { veridian_marketing_email_provider_ids: ['a', 'b'], marketing_email_provider_id: 'a' }))
       await setUsage('ws-1', 'b', 'transactional')
-      const settings = vi.mocked(workspaceService.update).mock.calls[0][0].settings
-      expect(settings?.veridian_marketing_email_provider_ids).toEqual(['a'])
-      expect(settings?.transactional_email_provider_id).toBe('b')
+      expect(emailProfilesStateService.setUsage).toHaveBeenCalledTimes(1)
+      expect(emailProfilesStateService.setUsage).toHaveBeenCalledWith({
+        workspace_id: 'ws-1',
+        integration_id: 'b',
+        usage: 'transactional'
+      })
+      expect(workspaceService.update).not.toHaveBeenCalled()
+      expect(workspaceService.updateIntegration).not.toHaveBeenCalled()
     })
 
     it('transactionnel: refuse de prendre le seul profil de la rotation', async () => {
       load(workspaceWith([integration('a', provider())], { veridian_marketing_email_provider_ids: ['a'], marketing_email_provider_id: 'a' }))
       await expect(setUsage('ws-1', 'a', 'transactional')).rejects.toMatchObject({ code: 'last_profile' })
-      expect(workspaceService.update).not.toHaveBeenCalled()
+      expect(emailProfilesStateService.setUsage).not.toHaveBeenCalled()
     })
 
     it('transactionnel: refuse un profil non vérifié', async () => {
       load(workspaceWith([integration('a', provider()), integration('b', provider(false))], { veridian_marketing_email_provider_ids: ['a'] }))
       await expect(setUsage('ws-1', 'b', 'transactional')).rejects.toMatchObject({ code: 'unverified' })
+      expect(emailProfilesStateService.setUsage).not.toHaveBeenCalled()
     })
 
-    it('commercial: libère le profil transactionnel, hors rotation', async () => {
+    it('commercial: appelle setUsage commercial (le serveur le remet en rotation)', async () => {
       load(workspaceWith([integration('a', provider()), integration('t', provider())], { veridian_marketing_email_provider_ids: ['a'], transactional_email_provider_id: 't' }))
       await setUsage('ws-1', 't', 'commercial')
-      const settings = vi.mocked(workspaceService.update).mock.calls[0][0].settings
-      expect(settings?.transactional_email_provider_id).toBe('')
-      expect(settings?.veridian_marketing_email_provider_ids).toEqual(['a'])
+      expect(emailProfilesStateService.setUsage).toHaveBeenCalledWith({
+        workspace_id: 'ws-1',
+        integration_id: 't',
+        usage: 'commercial'
+      })
+      expect(workspaceService.update).not.toHaveBeenCalled()
+    })
+
+    it('hors service: appelle setUsage unassigned', async () => {
+      load(workspaceWith([integration('a', provider()), integration('t', provider())], { transactional_email_provider_id: 't' }))
+      await setUsage('ws-1', 't', 'unassigned')
+      expect(emailProfilesStateService.setUsage).toHaveBeenCalledWith({
+        workspace_id: 'ws-1',
+        integration_id: 't',
+        usage: 'unassigned'
+      })
+    })
+
+    it('le message du serveur est affiché tel quel quand il refuse', async () => {
+      load(workspaceWith([integration('a', provider()), integration('b', provider())], { veridian_marketing_email_provider_ids: ['a', 'b'] }))
+      vi.mocked(emailProfilesStateService.setUsage).mockRejectedValueOnce(new Error('Refus du serveur : domaine partagé'))
+      await expect(setUsage('ws-1', 'b', 'transactional')).rejects.toThrow('Refus du serveur : domaine partagé')
     })
   })
 

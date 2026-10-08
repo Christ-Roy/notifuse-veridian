@@ -5,12 +5,12 @@
 
 import { workspaceService, type IMAPSettings } from '../../services/api/workspace'
 import { emailService } from '../../services/api/email'
-import type { EmailProvider, Integration, Workspace } from '../../services/api/types'
 import {
-  marketingProfileIds,
-  smtpSettingsForRequest,
-  withMarketingProfileRotation
-} from '../settings/veridian_email_profiles'
+  emailProfilesStateService,
+  type EmailProfileUsageKind
+} from '../../services/api/veridian_email_profiles'
+import type { EmailProvider, Integration, Workspace } from '../../services/api/types'
+import { marketingProfileIds, smtpSettingsForRequest } from '../settings/veridian_email_profiles'
 
 export class ProfileOperationError extends Error {
   constructor(
@@ -61,17 +61,33 @@ export async function updateProfile(
   })
 }
 
-export function setPaused(workspaceId: string, integrationId: string, paused: boolean) {
-  return updateProfile(workspaceId, integrationId, {
-    provider: (current) => {
-      const next = { ...current }
-      if (paused) next.veridian_paused = true
-      else delete next.veridian_paused
-      return next
-    }
+// Lot 4 : pause, rotation et usage passent par l API dediee (emailProfiles.pause / resume /
+// setUsage), plus par updateIntegration ni workspaces.update. Le serveur valide l exclusivite
+// et applique tout en une ecriture. On garde en amont une doublure de validation (message
+// immediat, sans aller-retour) ; si le serveur refuse quand meme, son message lisible
+// remonte tel quel (ApiError.message).
+
+export async function setPaused(workspaceId: string, integrationId: string, paused: boolean) {
+  const workspace = await loadWorkspace(workspaceId)
+  findEmailIntegration(workspace, integrationId)
+  // Un profil transactionnel ne se met pas en pause : un mail transactionnel part toujours.
+  if (paused && workspace.settings.transactional_email_provider_id === integrationId) {
+    throw new ProfileOperationError('A transactional profile cannot be paused', 'transactional')
+  }
+  const request = { workspace_id: workspaceId, integration_id: integrationId }
+  return paused ? emailProfilesStateService.pause(request) : emailProfilesStateService.resume(request)
+}
+
+function applyUsage(workspaceId: string, integrationId: string, usage: EmailProfileUsageKind) {
+  return emailProfilesStateService.setUsage({
+    workspace_id: workspaceId,
+    integration_id: integrationId,
+    usage
   })
 }
 
+// Entrer dans la rotation = usage commercial ; en sortir = hors service (ni rotation ni
+// transactionnel).
 export async function setRotation(
   workspaceId: string,
   integrationId: string,
@@ -89,39 +105,29 @@ export async function setRotation(
   } else if (marketingProfileIds(workspace.settings).filter((id) => id !== integrationId).length === 0) {
     throw new ProfileOperationError('The rotation must keep at least one profile', 'last_profile')
   }
-  await workspaceService.update({
-    id: workspace.id,
-    name: workspace.name,
-    settings: withMarketingProfileRotation(workspace.settings, integrationId, enabled)
-  })
+  await applyUsage(workspaceId, integrationId, enabled ? 'commercial' : 'unassigned')
 }
 
-// Usage exclusif : un profil est commercial OU transactionnel, jamais les deux.
-// Passer en transactionnel le sort de la rotation et remplace le profil
-// transactionnel actuel (qui redevient un profil commercial hors rotation).
+// Usage exclusif : un profil est commercial (en rotation), transactionnel (LE profil
+// transactionnel, l ancien passe hors service) ou hors service.
 export async function setUsage(
   workspaceId: string,
   integrationId: string,
-  usage: 'commercial' | 'transactional'
+  usage: 'commercial' | 'transactional' | 'unassigned'
 ): Promise<void> {
   const workspace = await loadWorkspace(workspaceId)
   const integration = findEmailIntegration(workspace, integrationId)
-  const settings = { ...workspace.settings }
+  const verified = !!integration.email_provider?.veridian_transport_verified_at
   if (usage === 'transactional') {
-    if (!integration.email_provider?.veridian_transport_verified_at) {
-      throw new ProfileOperationError('Send a successful test first', 'unverified')
-    }
-    const remaining = marketingProfileIds(settings).filter((id) => id !== integrationId)
-    if (marketingProfileIds(settings).includes(integrationId) && remaining.length === 0) {
+    if (!verified) throw new ProfileOperationError('Send a successful test first', 'unverified')
+    const pool = marketingProfileIds(workspace.settings)
+    if (pool.includes(integrationId) && pool.filter((id) => id !== integrationId).length === 0) {
       throw new ProfileOperationError('The rotation must keep at least one profile', 'last_profile')
     }
-    settings.veridian_marketing_email_provider_ids = remaining
-    settings.marketing_email_provider_id = remaining[0] ?? ''
-    settings.transactional_email_provider_id = integrationId
-  } else if (settings.transactional_email_provider_id === integrationId) {
-    settings.transactional_email_provider_id = ''
+  } else if (usage === 'commercial' && !verified) {
+    throw new ProfileOperationError('Send a successful test first', 'unverified')
   }
-  await workspaceService.update({ id: workspace.id, name: workspace.name, settings })
+  await applyUsage(workspaceId, integrationId, usage)
 }
 
 export function deleteProfile(workspaceId: string, integrationId: string) {
