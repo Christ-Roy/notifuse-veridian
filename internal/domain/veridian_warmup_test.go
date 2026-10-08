@@ -151,9 +151,18 @@ func TestVeridianWarmupCapForDay_AdvancesByAccountDay(t *testing.T) {
 	dstStart := time.Date(2026, 3, 28, 12, 0, 0, 0, paris)
 	assert.Equal(t, 2, VeridianWarmupCapForDay(&dstStart, schedule, 1, time.Date(2026, 3, 29, 0, 0, 0, 0, paris), paris))
 	assert.Equal(t, 5, VeridianWarmupCapForDay(&dstStart, schedule, 1, time.Date(2026, 3, 30, 0, 0, 0, 0, paris), paris))
+}
 
-	// Le palier affiche (Step) suit la meme regle.
-	cur, total := VeridianWarmupStep(&started, schedule, 1, time.Date(2026, 6, 11, 0, 0, 0, 0, paris), paris)
+// Le palier affiche (« jour N/M ») suit la meme regle que le plafond.
+func TestVeridianWarmupStep_AdvancesByAccountDay(t *testing.T) {
+	paris, err := time.LoadLocation("Europe/Paris")
+	assert.NoError(t, err)
+	schedule := []int{1, 2, 5, 10}
+	started := time.Date(2026, 6, 10, 18, 0, 0, 0, paris)
+	cur, total := VeridianWarmupStep(&started, schedule, 1, time.Date(2026, 6, 10, 23, 59, 0, 0, paris), paris)
+	assert.Equal(t, 1, cur)
+	assert.Equal(t, 4, total)
+	cur, total = VeridianWarmupStep(&started, schedule, 1, time.Date(2026, 6, 11, 0, 0, 0, 0, paris), paris)
 	assert.Equal(t, 2, cur)
 	assert.Equal(t, 4, total)
 }

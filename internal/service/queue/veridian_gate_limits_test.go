@@ -55,3 +55,28 @@ func TestVeridianResolveCapLimits_WarmupPerRecipientAndCascade(t *testing.T) {
 	// Fonction pure : un provider nil ne panique pas.
 	assert.NotPanics(t, func() { veridianResolveCapLimits(nil, nil, &domain.EmailQueueEntry{}, nil, nil, time.Now()) })
 }
+
+// Lot 5 (08/10/2026) : la chauffe avance par JOUR DE COMPTE du profil (date civile du fuseau de
+// sa fenetre d'envoi), la meme frontiere que les compteurs du jour. Un warmup demarre a 18h Paris
+// passe au palier suivant a minuit Paris. Echec demontre en revenant a « 24 h ecoulees » : le
+// palier restait a 1 jusqu'a 18h le lendemain.
+func TestVeridianResolveCapLimits_WarmupStepFollowsTheAccountDayOfTheProfile(t *testing.T) {
+	paris, err := time.LoadLocation("Europe/Paris")
+	assert.NoError(t, err)
+	started := time.Date(2026, 6, 10, 18, 0, 0, 0, paris)
+	window := &domain.VeridianSendingWindow{Days: []int{1, 2, 3, 4, 5}, StartHour: 8, EndHour: 19, Timezone: "Europe/Paris"}
+	provider := &domain.EmailProvider{
+		VeridianWarmupStartedAt: &started, VeridianWarmupSchedule: []int{1, 2, 5}, VeridianSendingWindow: window,
+	}
+	ws := &domain.Workspace{ID: "ws-1", Settings: domain.WorkspaceSettings{Timezone: "Europe/Paris"}}
+
+	// 00h30 Paris le 11 : six heures et demie apres le debut, mais deja le jour de compte suivant.
+	afterMidnight := time.Date(2026, 6, 11, 0, 30, 0, 0, paris)
+	assert.Equal(t, 2, veridianResolveCapLimits(ws, provider, &domain.EmailQueueEntry{}, nil, nil, afterMidnight).Warmup)
+	// 23h59 Paris le 10 : encore le jour de depart.
+	beforeMidnight := time.Date(2026, 6, 10, 23, 59, 0, 0, paris)
+	assert.Equal(t, 1, veridianResolveCapLimits(ws, provider, &domain.EmailQueueEntry{}, nil, nil, beforeMidnight).Warmup)
+	// 17h59 Paris le 11 : moins de 24 h apres le debut, mais le jour 1 depuis minuit.
+	nextAfternoon := time.Date(2026, 6, 11, 17, 59, 0, 0, paris)
+	assert.Equal(t, 2, veridianResolveCapLimits(ws, provider, &domain.EmailQueueEntry{}, nil, nil, nextAfternoon).Warmup)
+}

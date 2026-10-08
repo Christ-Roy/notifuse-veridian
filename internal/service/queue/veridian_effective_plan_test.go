@@ -500,3 +500,27 @@ func TestVeridianEffectivePlan_ReputationIsReadPerProfileBeforeDomain(t *testing
 	assert.False(t, plan.ReputationAlert, "le verdict du profil prime sur celui du domaine partage")
 	assert.Equal(t, 1, plan.DomainSlowdownFactor)
 }
+
+// Lot 5 (08/10/2026) : le jour de chauffe affiche par le plan est celui que lit la porte du worker,
+// le jour de compte du profil (minuit Europe/Paris), pas un compte de 24 h ecoulees.
+func TestVeridianEffectivePlan_WarmupDayFollowsTheAccountDay(t *testing.T) {
+	paris, err := time.LoadLocation("Europe/Paris")
+	require.NoError(t, err)
+	started := time.Date(2026, 6, 10, 18, 0, 0, 0, paris)
+	ws := planParityWorkspace(domain.EmailProvider{
+		VeridianWarmupStartedAt: &started, VeridianWarmupSchedule: []int{1, 2, 5},
+		VeridianSendingWindow: &domain.VeridianSendingWindow{Days: []int{1, 2, 3, 4, 5}, StartHour: 8, EndHour: 19, Timezone: "Europe/Paris"},
+	}, domain.WorkspaceSettings{Timezone: "Europe/Paris"})
+
+	plan := func(now time.Time) domain.VeridianEffectivePlan {
+		return VeridianEffectivePlan(VeridianPlanInput{Workspace: ws, IntegrationID: "prof", Now: now})
+	}
+	sameDay := plan(time.Date(2026, 6, 10, 23, 0, 0, 0, paris))
+	assert.Equal(t, 1, sameDay.Warmup.Day)
+	assert.Equal(t, 1, sameDay.Warmup.CapToday)
+
+	nextDay := plan(time.Date(2026, 6, 11, 9, 0, 0, 0, paris)) // 15 h apres le debut
+	assert.Equal(t, 2, nextDay.Warmup.Day, "le lendemain de la date de depart est le jour 2")
+	assert.Equal(t, 2, nextDay.Warmup.CapToday)
+	assert.Equal(t, 3, nextDay.Warmup.Of)
+}

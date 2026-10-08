@@ -37,7 +37,10 @@ func TestVeridianEvaluateTransactionalWatch(t *testing.T) {
 			assert.ElementsMatch(t, append([]string{}, c.codes...), got)
 		})
 	}
+}
 
+// Une mesure impossible n'est jamais presentee comme saine (trois etats, jamais deux).
+func TestVeridianUnknownTransactionalWatch(t *testing.T) {
 	w := VeridianUnknownTransactionalWatch("tx", "T", "boom")
 	assert.Equal(t, VeridianWatchLevelUnknown, w.Level)
 	assert.NotEqual(t, VeridianWatchLevelOK, w.Level)
