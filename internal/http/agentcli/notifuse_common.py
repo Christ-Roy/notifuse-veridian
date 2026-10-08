@@ -67,7 +67,9 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse profiles:overview [ws] [--json]  VÉRITÉ des profils d'envoi : plafond du jour + porte limitante, reste,
                                           fusible par couple, fenêtre, classes exclues, pause, IMAP lié (lecture, clé scopée OK)
   notifuse profiles:link-imap <ws> --id P (--imap I | --none)   lie un profil à sa boîte IMAP de retour (owner)
-  notifuse profiles:pause|resume <ws> --id P                    met en pause / relance un profil (owner, effet immédiat au worker)
+  notifuse profiles:set-usage <ws> --id P --usage commercial|transactional|unassigned
+                                                              usage EXCLUSIF d'un profil : rotation commerciale, profil transactionnel réservé, ou hors service (serveur : exclusivité, rotation jamais vidée, profil vérifié)
+  notifuse profiles:pause|resume <ws> --id P                    met en pause / relance un profil commercial (workspace:write, effet immédiat au worker ; refusé sur un transactionnel)
   notifuse analytics:query <ws> --query @q.json    (analytics:schemas pour les schémas)
   notifuse messages:list <ws> [--param limit=50]   historique des envois
   notifuse automations:list|get|create|update|delete|activate|pause|enroll <ws> ...
@@ -319,6 +321,10 @@ WORKSPACE_COMMANDS = frozenset({
     # Lot 2 (08/10/2026) : vérité d'un profil, GET /api/veridian/emailProfiles.overview
     # (JWT / clé API du workspace + message_history:read côté service). Lecture seule.
     "profiles:overview",
+    # Lot 4 (08/10/2026) : usage et pause d'un profil par l'API dédiée
+    # POST /api/veridian/emailProfiles.setUsage|pause|resume (JWT / clé API du
+    # workspace + workspace:write côté service). Exclusivité validée par le serveur.
+    "profiles:set-usage", "profiles:pause", "profiles:resume",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -1858,16 +1864,25 @@ def cmd_profiles_link_imap(a):
     _patch_email_profile(a, mutate)
 
 
+def _profile_admin_call(a, route, extra=None):
+    """Lot 4 : usage et pause passent par l'API dédiée (une écriture, règles côté
+    serveur), plus par updateIntegration. Droit requis : workspace:write."""
+    jwt = apikey_for(a.env, a.workspace)
+    body = {"workspace_id": a.workspace, "integration_id": a.id}
+    body.update(extra or {})
+    out(*call_jwt(a.env, "POST", route, jwt, body=body))
+
+
+def cmd_profiles_set_usage(a):
+    _profile_admin_call(a, "/api/veridian/emailProfiles.setUsage", {"usage": a.usage})
+
+
 def cmd_profiles_pause(a):
-    def mutate(prov, w):
-        prov["veridian_paused"] = True
-    _patch_email_profile(a, mutate)
+    _profile_admin_call(a, "/api/veridian/emailProfiles.pause")
 
 
 def cmd_profiles_resume(a):
-    def mutate(prov, w):
-        prov.pop("veridian_paused", None)
-    _patch_email_profile(a, mutate)
+    _profile_admin_call(a, "/api/veridian/emailProfiles.resume")
 
 
 # ---- generic resource CRUD helpers ----
@@ -3395,15 +3410,22 @@ def build_parser():
     sp.add_argument("--none", action="store_true", help="retire le lien")
     sp.set_defaults(func=cmd_profiles_link_imap, _routes=["/api/workspaces.updateIntegration"])
 
-    sp = sub.add_parser("profiles:pause", help="met un profil en pause : le worker bascule sur le reste du pool (owner)")
+    sp = sub.add_parser("profiles:set-usage",
+                        help="usage exclusif d'un profil : commercial (rotation) | transactional (profil réservé) | unassigned (hors service)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--id", required=True, help="id du profil d'envoi")
-    sp.set_defaults(func=cmd_profiles_pause, _routes=["/api/workspaces.updateIntegration"])
+    sp.add_argument("--usage", required=True, choices=["commercial", "transactional", "unassigned"])
+    sp.set_defaults(func=cmd_profiles_set_usage, _routes=["/api/veridian/emailProfiles.setUsage"])
 
-    sp = sub.add_parser("profiles:resume", help="relance un profil en pause (owner)")
+    sp = sub.add_parser("profiles:pause", help="met un profil commercial en pause : le worker bascule sur le reste du pool (refusé sur un transactionnel)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--id", required=True, help="id du profil d'envoi")
-    sp.set_defaults(func=cmd_profiles_resume, _routes=["/api/workspaces.updateIntegration"])
+    sp.set_defaults(func=cmd_profiles_pause, _routes=["/api/veridian/emailProfiles.pause"])
+
+    sp = sub.add_parser("profiles:resume", help="relance un profil en pause")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--id", required=True, help="id du profil d'envoi")
+    sp.set_defaults(func=cmd_profiles_resume, _routes=["/api/veridian/emailProfiles.resume"])
 
     sp = sub.add_parser("integrations:create-smtp", help="crée une intégration SMTP d'envoi (owner)")
     sp.add_argument("workspace", nargs="?", default=None)

@@ -93,6 +93,12 @@ type VeridianPlanWindow struct {
 // VeridianEffectivePlan est la vérité d'un profil d'envoi à un instant donné.
 type VeridianEffectivePlan struct {
 	Date string `json:"date"`
+	// DayTimezone, DayStart, DayEnd : le jour de compte de ce profil (lot 4). Le
+	// jour suit le fuseau de la fenêtre d'envoi du profil, pas minuit UTC ; un jour de
+	// changement d'heure dure 23 h ou 25 h.
+	DayTimezone string    `json:"day_timezone,omitempty"`
+	DayStart    time.Time `json:"day_start,omitempty"`
+	DayEnd      time.Time `json:"day_end,omitempty"`
 	// Applicable false : profil transactionnel (aucune porte commerciale ne
 	// s'applique, le worker n'en passe aucune) ou profil non assigné.
 	Applicable bool   `json:"applicable"`

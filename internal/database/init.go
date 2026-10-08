@@ -215,7 +215,8 @@ func InitializeWorkspaceDatabase(db *sql.DB) error {
 			veridian_content_hash CHAR(32),
 			veridian_sender_email VARCHAR(255),
 			veridian_provider_class VARCHAR(64),
-			veridian_profile_id VARCHAR(255)
+			veridian_profile_id VARCHAR(255),
+			veridian_message_type VARCHAR(16)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_contact_email ON message_history(contact_email)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_history_broadcast_id ON message_history(broadcast_id) WHERE broadcast_id IS NOT NULL`,

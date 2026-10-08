@@ -19,13 +19,20 @@ import (
 type overviewRepoStub struct {
 	rows     []domain.VeridianPlanObservationRow
 	counters []domain.VeridianPlanCounterRow
-	since    time.Time
+	days     []domain.VeridianDay
 	err      error
 }
 
-func (s *overviewRepoStub) GetPlanObservations(_ context.Context, _ string, since time.Time) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow, error) {
-	s.since = since
+func (s *overviewRepoStub) GetPlanObservations(_ context.Context, _ string, day domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow, error) {
+	s.days = append(s.days, day)
 	return s.rows, s.counters, s.err
+}
+
+// observeAll rend les memes observations quel que soit le jour de compte.
+func observeAll(rows []domain.VeridianPlanObservationRow, counters []domain.VeridianPlanCounterRow) func(domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow) {
+	return func(domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow) {
+		return rows, counters
+	}
 }
 
 func overviewTestWorkspace() *domain.Workspace {
@@ -75,7 +82,7 @@ func TestBuildVeridianEmailProfilesOverview(t *testing.T) {
 	counters := []domain.VeridianPlanCounterRow{{Kind: domain.VeridianDailyQuotaKindProfile, Scope: "nord", Used: 12}}
 	now := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
 
-	out := buildVeridianEmailProfilesOverview(ws, rows, counters, map[string]queue.VeridianReputationStatus{}, now)
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(rows, counters), map[string]queue.VeridianReputationStatus{}, now)
 
 	require.Len(t, out.Profiles, 4)
 	byID := map[string]domain.VeridianEmailProfileOverview{}
@@ -139,7 +146,7 @@ func TestBuildVeridianEmailProfilesOverview(t *testing.T) {
 func TestBuildVeridianEmailProfilesOverview_ReportsExclusivityViolationWithoutBreaking(t *testing.T) {
 	ws := overviewTestWorkspace()
 	ws.Settings.TransactionalEmailProviderID = "nord" // viole la règle : nord est dans le pool
-	out := buildVeridianEmailProfilesOverview(ws, nil, nil, nil, time.Now())
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, time.Now())
 	assert.Equal(t, []string{"nord"}, out.UsageConflicts)
 	assert.Len(t, out.Profiles, 4, "la lecture ne casse pas")
 }
@@ -151,7 +158,7 @@ func TestBuildVeridianEmailProfilesOverview_CapacitySumsWhenEveryActiveProfileIs
 			ws.Integrations[i].EmailProvider.VeridianProfileDailyCap = 25
 		}
 	}
-	out := buildVeridianEmailProfilesOverview(ws, nil, nil, nil, time.Now())
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, time.Now())
 	require.NotNil(t, out.Totals.CommercialCapacityToday)
 	assert.Equal(t, 50, *out.Totals.CommercialCapacityToday, "relai en pause ne compte pas")
 }
@@ -211,7 +218,14 @@ func TestVeridianEmailProfileOverviewService(t *testing.T) {
 		out, err := svc.GetEmailProfilesOverview(context.Background(), "ws1")
 		require.NoError(t, err)
 		require.Len(t, out.Profiles, 4)
-		assert.Equal(t, 0, repo.since.Hour(), "le jour de politique commence à minuit UTC")
+		require.NotEmpty(t, repo.days)
+		for _, day := range repo.days {
+			// Lot 4 : le workspace est en Europe/Paris, le jour de compte commence à minuit
+			// heure de Paris (22h00 ou 23h00 UTC), plus à minuit UTC.
+			assert.Equal(t, "Europe/Paris", day.Location)
+			assert.Contains(t, []int{22, 23}, day.Start.UTC().Hour(), "le jour de compte commence à minuit Paris")
+		}
+		assert.Len(t, repo.days, 1, "une seule lecture quand tous les profils partagent le même jour de compte")
 		for _, p := range out.Profiles {
 			if p.IntegrationID == "nord" {
 				assert.True(t, p.Plan.ReputationAlert, "la plainte vient du même calcul que le fusible")

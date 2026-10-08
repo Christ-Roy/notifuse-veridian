@@ -15,8 +15,14 @@ const (
 // persisted even though every tenant currently has its own database: this
 // keeps the key safe if tenant storage is consolidated later.
 type VeridianDailyQuotaKey struct {
-	WorkspaceID   string
+	WorkspaceID string
+	// Day est le LIBELLE du jour de compte : minuit UTC de la date civile locale du
+	// profil (cf. VeridianDay.Label). DayStart/DayEnd en donnent les bornes exactes
+	// (lot 4, 08/10/2026) : le jour suit le fuseau de la fenetre d envoi, pas minuit
+	// UTC. Zero = jour UTC de Day (appelants et tests anterieurs au lot 4).
 	Day           time.Time
+	DayStart      time.Time
+	DayEnd        time.Time
 	Kind          string
 	SenderDomain  string
 	ProfileID     string

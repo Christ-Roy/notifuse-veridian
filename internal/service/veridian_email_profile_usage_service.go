@@ -36,7 +36,9 @@ func (s *veridianEmailProfileUsageService) GetEmailProfilesUsage(ctx context.Con
 		return nil, fmt.Errorf("failed to load workspace: %w", err)
 	}
 	now := time.Now().UTC()
-	since := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	// Lot 4 : « aujourd'hui » = le jour de compte du workspace (fuseau de sa fenetre
+	// d'envoi, sinon son fuseau), plus minuit UTC.
+	since := domain.VeridianDayFor(workspace, nil, now).Start
 	rows, err := s.repo.GetEmailProfileUsage(ctx, workspaceID, since)
 	if err != nil {
 		s.logger.WithField("error", err.Error()).Error("Failed to fetch email profile usage")

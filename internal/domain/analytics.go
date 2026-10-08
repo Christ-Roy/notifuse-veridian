@@ -271,6 +271,16 @@ var PredefinedSchemas = map[string]analytics.SchemaDefinition{
 				SQL:         "transactional_notification_id",
 				Description: "Transactional notification identifier",
 			},
+			// Veridian lot 4 (08/10/2026) : le tableau de bord separe le commercial du
+			// transactionnel. Le filtre "broadcast_id notSet" qui tenait lieu de
+			// "transactionnel" y rangeait aussi les sequences (automation_id) : il est
+			// remplace par cette dimension, meme definition que les compteurs et le journal.
+			"message_type": {
+				Type:        "string",
+				Title:       "Message Type",
+				SQL:         "(CASE WHEN veridian_message_type = 'transactional' OR transactional_notification_id IS NOT NULL THEN 'transactional' ELSE 'commercial' END)",
+				Description: "commercial (campagnes, sequences) or transactional (send API, SMTP relay, transactional templates)",
+			},
 		},
 	},
 	"contacts": {

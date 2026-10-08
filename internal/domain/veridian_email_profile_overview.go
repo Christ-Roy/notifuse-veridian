@@ -102,7 +102,11 @@ type VeridianPlanObservationRow struct {
 	ProfileID     string
 	SenderEmail   string
 	ProviderClass string
-	Accepted      int
+	// MessageType : "transactional" pour un mail transactionnel (lot 4), vide pour le
+	// commercial. Un transactionnel compte sur son profil, jamais dans les compteurs
+	// d'adresse, de domaine ou de classe de la chauffe et des plafonds.
+	MessageType string
+	Accepted    int
 }
 
 // VeridianPlanCounterRow : une ligne de veridian_daily_quota_counters du jour.
@@ -114,9 +118,11 @@ type VeridianPlanCounterRow struct {
 }
 
 type VeridianEmailProfileOverviewRepository interface {
-	// GetPlanObservations lit les compteurs du jour UTC (depuis `since`) : envois
-	// acceptés (message_history) et réservations atomiques.
-	GetPlanObservations(ctx context.Context, workspaceID string, since time.Time) ([]VeridianPlanObservationRow, []VeridianPlanCounterRow, error)
+	// GetPlanObservations lit les compteurs du JOUR DE COMPTE `day` (lot 4 : le jour
+	// civil du fuseau de la fenêtre d'envoi du profil, plus minuit UTC) : envois
+	// acceptés (message_history, de day.Start inclus à day.End exclu) et
+	// réservations atomiques (compteurs de la date civile day.Label).
+	GetPlanObservations(ctx context.Context, workspaceID string, day VeridianDay) ([]VeridianPlanObservationRow, []VeridianPlanCounterRow, error)
 }
 
 type VeridianEmailProfileOverviewService interface {
@@ -137,6 +143,9 @@ func VeridianBuildPlanObserved(profileID string, rows []VeridianPlanObservationR
 	for _, r := range rows {
 		if r.ProfileID == profileID && profileID != "" {
 			obs.ProfileAccepted += r.Accepted
+		}
+		if r.MessageType == VeridianMessageTypeTransactional {
+			continue // le transactionnel ne compte dans aucun compteur d'adresse, de domaine ou de classe
 		}
 		email := strings.ToLower(strings.TrimSpace(r.SenderEmail))
 		if email == "" {

@@ -68,9 +68,11 @@ import (
 // de journée sans laisser l'entrée endormie jusqu'au lendemain.
 const veridianDailyCapRecheckInterval = time.Hour
 
-// veridianStartOfDayUTC retourne minuit UTC du jour de `now`. Le compteur
-// journalier raisonne en jour calendaire UTC (cohérent avec sent_at stocké en
-// TIMESTAMPTZ et le now() serveur des conteneurs, en UTC).
+// veridianStartOfDayUTC retourne minuit UTC du jour de `now`. Historique : avant
+// le lot 4 (08/10/2026) le compteur journalier raisonnait en jour calendaire UTC.
+// Il suit désormais le fuseau de la fenêtre d'envoi du profil
+// (domain.VeridianDayFor, cf. domain/veridian_day.go). Cette fonction ne sert plus
+// qu'aux appelants sans profil.
 func veridianStartOfDayUTC(now time.Time) time.Time {
 	u := now.UTC()
 	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
@@ -152,7 +154,9 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 	if workspace != nil {
 		workspaceID = workspace.ID
 	}
-	since := veridianStartOfDayUTC(time.Now())
+	// Lot 4 (08/10/2026) : le jour de compte suit le fuseau de la fenêtre d'envoi du
+	// profil candidat (Europe/Paris ici), plus minuit UTC.
+	since := domain.VeridianDayFor(workspace, provider, veridianNow()).Start
 
 	// 1. Cap par destinataire (le plus net, indexé). Le plus restrictif gagne :
 	//    on le teste en premier car il borne le harcèlement d'un même contact

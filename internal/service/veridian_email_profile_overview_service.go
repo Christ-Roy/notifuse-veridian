@@ -58,16 +58,36 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 	}
 
 	now := time.Now().UTC()
-	since := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	rows, counters, err := s.repo.GetPlanObservations(ctx, workspaceID, since)
-	if err != nil {
-		s.logger.WithField("error", err.Error()).Error("Failed to read email profile observations")
-		return nil, fmt.Errorf("failed to read email profile observations: %w", err)
+
+	// Lot 4 : chaque profil compte « aujourd'hui » dans le fuseau de sa fenetre
+	// d'envoi. On lit une fois par jour de compte distinct (un seul le plus souvent).
+	type observation struct {
+		rows     []domain.VeridianPlanObservationRow
+		counters []domain.VeridianPlanCounterRow
+	}
+	observed := map[string]observation{}
+	for i := range workspace.Integrations {
+		integration := &workspace.Integrations[i]
+		if integration.Type != domain.IntegrationTypeEmail || integration.EmailProvider.Kind == "" {
+			continue
+		}
+		day := domain.VeridianDayFor(workspace, &integration.EmailProvider, now)
+		key := veridianOverviewDayKey(day)
+		if _, done := observed[key]; done {
+			continue
+		}
+		rows, counters, err := s.repo.GetPlanObservations(ctx, workspaceID, day)
+		if err != nil {
+			s.logger.WithField("error", err.Error()).Error("Failed to read email profile observations")
+			return nil, fmt.Errorf("failed to read email profile observations: %w", err)
+		}
+		observed[key] = observation{rows: rows, counters: counters}
 	}
 
-	// Réputation par domaine émetteur des profils commerciaux : même calcul que le
-	// fusible du worker (queue.VeridianComputeReputationStatus). Une erreur de
-	// lecture fait échouer l'appel : un plan « sain » faute de mesure serait faux.
+	// Réputation PAR PROFIL des profils commerciaux : même calcul que le fusible du
+	// worker (queue.VeridianComputeReputationStatus, contexte du profil, messages
+	// transactionnels écartés). Une erreur de lecture fait échouer l'appel : un plan
+	// « sain » faute de mesure serait faux.
 	reputation := map[string]queue.VeridianReputationStatus{}
 	for i := range workspace.Integrations {
 		integration := &workspace.Integrations[i]
@@ -85,31 +105,38 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 		if senderDomain == "" {
 			continue
 		}
-		if _, done := reputation[senderDomain]; done {
-			continue
-		}
-		status, err := queue.VeridianComputeReputationStatus(ctx, s.messageHistoryRepo, workspace.ID, senderDomain, &integration.EmailProvider, now)
+		scoped := domain.WithVeridianReputationProfile(ctx, integration.ID)
+		status, err := queue.VeridianComputeReputationStatus(scoped, s.messageHistoryRepo, workspace.ID, senderDomain, &integration.EmailProvider, now)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{"workspace_id": workspaceID, "sender_domain": senderDomain, "error": err.Error()}).Error("Failed to compute reputation for overview")
 			return nil, fmt.Errorf("failed to compute reputation status: %w", err)
 		}
-		reputation[senderDomain] = status
+		reputation[integration.ID] = status
 	}
 
-	return buildVeridianEmailProfilesOverview(workspace, rows, counters, reputation, now), nil
+	return buildVeridianEmailProfilesOverview(workspace, func(day domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow) {
+		o := observed[veridianOverviewDayKey(day)]
+		return o.rows, o.counters
+	}, reputation, now), nil
+}
+
+// veridianOverviewDayKey identifie un jour de compte (date civile + début exact).
+func veridianOverviewDayKey(day domain.VeridianDay) string {
+	return day.LabelDate() + "|" + day.Start.Format(time.RFC3339)
 }
 
 // buildVeridianEmailProfilesOverview assemble la réponse. Fonction pure (aucun
 // I/O) : testée sans base.
 func buildVeridianEmailProfilesOverview(
 	workspace *domain.Workspace,
-	rows []domain.VeridianPlanObservationRow,
-	counters []domain.VeridianPlanCounterRow,
+	observe func(day domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow),
 	reputation map[string]queue.VeridianReputationStatus,
 	now time.Time,
 ) *domain.VeridianEmailProfilesOverview {
 	out := &domain.VeridianEmailProfilesOverview{
-		Date:           now.UTC().Format("2006-01-02"),
+		// Lot 4 : la date du workspace est son jour de compte par défaut (fuseau de la
+		// fenêtre d'envoi du workspace, sinon son fuseau) ; chaque profil porte la sienne.
+		Date:           domain.VeridianDayFor(workspace, nil, now).LabelDate(),
 		GeneratedAt:    now.UTC(),
 		Timezone:       workspace.Settings.Timezone,
 		Profiles:       []domain.VeridianEmailProfileOverview{},
@@ -153,6 +180,7 @@ func buildVeridianEmailProfilesOverview(
 			continue
 		}
 		provider := &integration.EmailProvider
+		rows, counters := observe(domain.VeridianDayFor(workspace, provider, now))
 		obs := domain.VeridianBuildPlanObserved(integration.ID, rows, counters)
 		plan := queue.VeridianEffectivePlan(queue.VeridianPlanInput{
 			Workspace: workspace, IntegrationID: integration.ID, Now: now,

@@ -299,6 +299,13 @@ func (w *EmailQueueWorker) processWorkspace(workspace *domain.Workspace) {
 
 // processEntry processes a single queue entry
 func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *domain.EmailQueueEntry) {
+	// Veridian fork (lot 4, 08/10/2026) : un mail transactionnel de sequence part par
+	// le seul profil transactionnel reserve, sans aucune porte commerciale. Sans
+	// profil reserve, l'entree suit le chemin commercial ci-dessous, comme avant.
+	// Cf. veridian_transactional_entry.go.
+	if w.veridianProcessTransactionalEntry(workspace, entry) {
+		return
+	}
 	// Get the ASSIGNED integration (resolved at enqueue). It may be replaced
 	// below by a sibling from the rotation pool if it has no room — cf. the
 	// pool failover block right after recipient classification.
@@ -688,6 +695,15 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		VeridianProviderClass: entry.Payload.VeridianProviderClass,
 		// V56: exact integration/profile attribution for daily caps and usage.
 		VeridianProfileID: entry.IntegrationID,
+	}
+
+	// Lot 4 : un mail transactionnel n'est pas attribue a une adresse emettrice ni a
+	// une classe de destinataire (aucun compteur commercial ne doit le voir), et
+	// porte son type pour les metriques separees.
+	if entry.Payload.VeridianTransactional {
+		message.VeridianMessageType = domain.VeridianMessageTypeTransactional
+		message.VeridianSenderEmail = ""
+		message.VeridianProviderClass = ""
 	}
 
 	// Set source (broadcast or automation)

@@ -570,8 +570,10 @@ func TestManager_RunMigrations_AdditionalCoverage(t *testing.T) {
 		// un envoi refuse/echoue) + trigger webhook_message_history corrige.
 		// V59 : table systeme agent_install_tokens (jetons d'installation agent
 		// a usage unique, mission "API & agents" 2026-10-03 ; cf. v59.go header).
+		// V60 : veridian_contact_reply.reply_type. V61 : message_history.veridian_message_type
+		// (lot 4, separation transactionnel / commercial).
 		mock.ExpectQuery("SELECT value FROM settings WHERE key = 'db_version'").
-			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("60"))
+			WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("61"))
 
 		err = manager.RunMigrations(context.Background(), cfg, db)
 

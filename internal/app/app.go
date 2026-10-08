@@ -1697,6 +1697,16 @@ func (a *App) InitHandlers() error {
 		getJWTSecret, a.logger,
 	).RegisterRoutes(a.mux)
 
+	// Lot 4 « separation transactionnel / commercial » (08/10/2026) : POST
+	// /api/veridian/emailProfiles.setUsage|pause|resume. L'usage d'un profil
+	// (commercial en rotation, transactionnel, hors service) et sa pause, valides
+	// cote serveur et ecrits en une fois. Droit : ecriture sur le workspace.
+	veridianProfilePolicyRepo, _ := a.emailQueueRepo.(domain.EmailIntegrationPolicyQueueRepository)
+	httpHandler.NewVeridianEmailProfileAdminHandler(
+		service.NewVeridianEmailProfileAdminService(a.workspaceRepo, a.authService, veridianProfilePolicyRepo, a.logger),
+		getJWTSecret, a.logger,
+	).RegisterRoutes(a.mux)
+
 	// === Veridian patch — linter de délivrabilité (spam score) cold (2026-06-15) ===
 	// Endpoint POST+GET /api/veridian/templates.deliverabilityScore : score 0-10
 	// (façon SpamAssassin) + règles déclenchées avec poids, sur un template cold

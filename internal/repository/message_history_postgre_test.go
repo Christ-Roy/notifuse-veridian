@@ -139,6 +139,7 @@ func TestMessageHistoryRepository_Create(t *testing.T) {
 				message.VeridianSenderEmail,
 				message.VeridianProviderClass,
 				message.VeridianProfileID,
+				message.VeridianMessageType,
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -244,6 +245,7 @@ func TestMessageHistoryRepository_UpsertRefreshesSentAtOnRetry(t *testing.T) {
 			message.VeridianSenderEmail,
 			message.VeridianProviderClass,
 			message.VeridianProfileID,
+			message.VeridianMessageType,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -2896,7 +2898,7 @@ func TestMessageHistoryRepository_ReputationCountsByClassSinceForSenderDomain(t 
 	workspaceID := "workspace-123"
 	const senderDomain = "agences-veridian.fr"
 	since := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
-	const q = `SELECT COALESCE\(veridian_provider_class, ''\), COUNT\(\*\), COUNT\(\*\) FILTER \(WHERE bounced_at IS NOT NULL AND bounce_type = 'HardBounce'\), COUNT\(\*\) FILTER \(WHERE bounce_type = 'PolicyBounce'\) FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\) GROUP BY 1`
+	const q = `SELECT COALESCE\(veridian_provider_class, ''\), COUNT\(\*\), COUNT\(\*\) FILTER \(WHERE bounced_at IS NOT NULL AND bounce_type = 'HardBounce'\), COUNT\(\*\) FILTER \(WHERE bounce_type = 'PolicyBounce'\) FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$2\) AND veridian_message_type IS DISTINCT FROM 'transactional' AND transactional_notification_id IS NULL GROUP BY 1`
 
 	t.Run("groups counts by class", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)
@@ -2953,7 +2955,7 @@ func TestMessageHistoryRepository_RecentClassOutcomesForSenderDomain(t *testing.
 	workspaceID := "workspace-123"
 	const senderDomain = "agences-veridian.fr"
 	since := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
-	const q = `SELECT COUNT\(\*\), COUNT\(\*\) FILTER \(WHERE bounce_type = 'PolicyBounce'\) FROM \(SELECT bounce_type FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND veridian_provider_class = \$2 AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\) ORDER BY sent_at DESC LIMIT \$4\) recent`
+	const q = `SELECT COUNT\(\*\), COUNT\(\*\) FILTER \(WHERE bounce_type = 'PolicyBounce'\) FROM \(SELECT bounce_type FROM message_history WHERE sent_at >= \$1 AND failed_at IS NULL AND veridian_provider_class = \$2 AND lower\(split_part\(veridian_sender_email, '@', 2\)\) = lower\(\$3\) AND veridian_message_type IS DISTINCT FROM 'transactional' AND transactional_notification_id IS NULL ORDER BY sent_at DESC LIMIT \$4\) recent`
 
 	t.Run("returns sent and policy refusals of the last N", func(t *testing.T) {
 		mockWorkspaceRepo.EXPECT().GetConnection(gomock.Any(), workspaceID).Return(db, nil)

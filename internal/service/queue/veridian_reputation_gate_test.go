@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -52,8 +53,21 @@ func veridianExpectRecent(env *veridianThrottleTestEnv, domainName, class string
 		Return(sent, policy, nil).AnyTimes()
 }
 
+// repFactor lit le facteur posé par le gate pour ce couple. Depuis le lot 4 le
+// facteur est propre au profil candidat (clé ws|profil|domaine|classe) : on prend le
+// plus haut facteur vivant de toutes les clés qui portent ce domaine et cette classe.
 func repFactor(env *veridianThrottleTestEnv, domainName, class string) int {
-	return env.worker.reputationFactors.get("ws-1", domainName, class)
+	best := env.worker.reputationFactors.get("ws-1", domainName, class)
+	env.worker.reputationFactors.m.Range(func(k, _ interface{}) bool {
+		key := k.(string)
+		if strings.HasPrefix(key, "ws-1|") && strings.HasSuffix(key, "|"+domainName+"|"+class) {
+			if f := env.worker.reputationFactors.load(key); f > best {
+				best = f
+			}
+		}
+		return true
+	})
+	return best
 }
 
 func TestVeridianReputationGate_NoSenderDomainIsNoop(t *testing.T) {

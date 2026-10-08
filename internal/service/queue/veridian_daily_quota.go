@@ -17,7 +17,7 @@ type veridianDailyQuotaLease struct {
 // earlier COUNT gate remains a cheap skip optimization, but only this database
 // reservation authorizes SMTP.
 func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) ([]*veridianDailyQuotaLease, time.Duration, bool) {
-	now := time.Now().UTC()
+	now := veridianNow().UTC()
 	class := entry.Payload.VeridianProviderClass
 	if class == "" {
 		class = w.veridianClassifyRecipient(entry)
@@ -37,6 +37,11 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 		return nil, 0, false
 	}
 
+	// Lot 4 : jour de compte = jour civil du fuseau de la fenêtre d'envoi du profil.
+	// Label = date civile (clé du compteur), Start/End = bornes exactes (23 h ou 25 h
+	// les jours de changement d'heure).
+	day := domain.VeridianDayFor(workspace, provider, now)
+
 	senderDomain := veridianEmailDomain(entry.Payload.FromAddress)
 	if senderDomain == "" && (classCap > 0 || warmupCap > 0) {
 		// V55 keys every reputation quota by the actual sender domain. Falling
@@ -51,7 +56,7 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 		return nil, veridianDailyCapRecheckInterval, true
 	}
 	if classCap > 0 {
-		if err := w.veridianBackfillDailyProviderClasses(quotaRepo, workspace.ID, now); err != nil {
+		if err := w.veridianBackfillDailyProviderClasses(quotaRepo, workspace.ID, day); err != nil {
 			w.logger.WithFields(map[string]interface{}{"entry_id": entry.ID, "error": err.Error()}).Error("Daily quota provider-class backfill failed; SMTP blocked")
 			return nil, veridianDailyCapRecheckInterval, true
 		}
@@ -68,7 +73,9 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 			Cap:       profileCap,
 			Key: domain.VeridianDailyQuotaKey{
 				WorkspaceID: workspace.ID,
-				Day:         veridianStartOfDayUTC(now),
+				Day:         day.Label,
+				DayStart:    day.Start,
+				DayEnd:      day.End,
 				Kind:        domain.VeridianDailyQuotaKindProfile,
 				ProfileID:   entry.IntegrationID,
 			},
@@ -78,14 +85,14 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 		specs = append(specs, domain.VeridianDailyQuotaReservation{
 			MessageID: messageID,
 			Cap:       classCap,
-			Key:       domain.VeridianDailyQuotaKey{WorkspaceID: workspace.ID, Day: veridianStartOfDayUTC(now), Kind: domain.VeridianDailyQuotaKindProviderClass, SenderDomain: senderDomain, ProviderClass: class},
+			Key:       domain.VeridianDailyQuotaKey{WorkspaceID: workspace.ID, Day: day.Label, DayStart: day.Start, DayEnd: day.End, Kind: domain.VeridianDailyQuotaKindProviderClass, SenderDomain: senderDomain, ProviderClass: class},
 		})
 	}
 	if warmupCap > 0 {
 		specs = append(specs, domain.VeridianDailyQuotaReservation{
 			MessageID: messageID,
 			Cap:       warmupCap,
-			Key:       domain.VeridianDailyQuotaKey{WorkspaceID: workspace.ID, Day: veridianStartOfDayUTC(now), Kind: domain.VeridianDailyQuotaKindWarmup, SenderDomain: senderDomain},
+			Key:       domain.VeridianDailyQuotaKey{WorkspaceID: workspace.ID, Day: day.Label, DayStart: day.Start, DayEnd: day.End, Kind: domain.VeridianDailyQuotaKindWarmup, SenderDomain: senderDomain},
 		})
 	}
 
@@ -111,12 +118,13 @@ func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace
 	return leases, 0, false
 }
 
-func (w *EmailQueueWorker) veridianBackfillDailyProviderClasses(repo domain.VeridianDailyQuotaRepository, workspaceID string, now time.Time) error {
-	cacheKey := fmt.Sprintf("%s:%s", workspaceID, now.Format("2006-01-02"))
+func (w *EmailQueueWorker) veridianBackfillDailyProviderClasses(repo domain.VeridianDailyQuotaRepository, workspaceID string, day domain.VeridianDay) error {
+	// Clé = date civile locale ET début du jour : deux fuseaux ne partagent pas un cache.
+	cacheKey := fmt.Sprintf("%s:%s:%d", workspaceID, day.LabelDate(), day.Start.Unix())
 	if _, done := w.dailyQuotaBackfilled.Load(cacheKey); done {
 		return nil
 	}
-	messages, err := repo.ListUnclassifiedSuccessfulMessagesSince(w.ctx, workspaceID, veridianStartOfDayUTC(now))
+	messages, err := repo.ListUnclassifiedSuccessfulMessagesSince(w.ctx, workspaceID, day.Start)
 	if err != nil {
 		return err
 	}

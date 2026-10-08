@@ -1073,6 +1073,31 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("lot 4 : un envoi de l'API d'envoi est type transactionnel et attribue au profil", func(t *testing.T) {
+		workspace := &domain.Workspace{ID: workspaceID, Settings: domain.WorkspaceSettings{}}
+		mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), workspaceID).Return(workspace, nil)
+		mockTemplateService.EXPECT().GetTemplateByID(gomock.Any(), workspaceID, templateConfig.TemplateID, int64(0)).Return(emailTemplate, nil)
+		mockTemplateService.EXPECT().CompileTemplate(gomock.Any(), gomock.Any()).Return(compileResult, nil)
+		var created *domain.MessageHistory
+		mockMessageRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error { created = m; return nil })
+		mockSESService.EXPECT().SendEmail(gomock.Any(), gomock.Any()).Return(nil)
+		mockMessageRepo.EXPECT().Update(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+
+		notificationID := "notif-1"
+		err := emailService.SendEmailForTemplate(ctx, domain.SendEmailRequest{
+			WorkspaceID: workspaceID, IntegrationID: "tx-profile", MessageID: messageID,
+			TransactionalNotificationID: &notificationID,
+			Contact:                     contact, TemplateConfig: templateConfig, MessageData: messageData,
+			TrackingSettings: trackingSettings, EmailProvider: emailProvider, EmailOptions: options,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, created)
+		assert.Equal(t, domain.VeridianMessageTypeTransactional, created.VeridianMessageType)
+		assert.Equal(t, "tx-profile", created.VeridianProfileID)
+		assert.Empty(t, created.VeridianSenderEmail, "aucune adresse emettrice : hors compteurs commerciaux")
+	})
+
 	t.Run("sends email with subject override processed through Liquid", func(t *testing.T) {
 		// Setup workspace mock
 		workspace := &domain.Workspace{

@@ -175,6 +175,12 @@ type MessageHistory struct {
 	// Stable sending integration/profile selected at enqueue. V56 makes daily
 	// profile quotas and per-profile provider analytics exact across restarts.
 	VeridianProfileID string `json:"veridian_profile_id,omitempty"`
+
+	// Type du message, lot 4 (08/10/2026) : "transactional" pour un mail transactionnel
+	// (API d'envoi, relais SMTP, modele transactionnel envoye par une sequence),
+	// vide pour le commercial (colonne nullable, V61). Les compteurs commerciaux
+	// (plafonds, chauffe, fusible de reputation) l'ignorent. Cf. veridian_message_type.go.
+	VeridianMessageType string `json:"veridian_message_type,omitempty"`
 }
 
 type MessageHistoryStatusSum struct {
@@ -429,6 +435,10 @@ type MessageListParams struct {
 	IsBounced      *bool  `json:"is_bounced,omitempty"`      // filter messages that are bounced
 	IsComplained   *bool  `json:"is_complained,omitempty"`   // filter messages that are complained
 	IsUnsubscribed *bool  `json:"is_unsubscribed,omitempty"` // filter messages that are unsubscribed
+	// MessageType (lot 4, 08/10/2026) : "commercial" ou "transactional". Vide = tous.
+	// Le journal et le tableau de bord separent les deux familles, qui n'ont pas les
+	// memes regles. Cf. veridian_message_type.go.
+	MessageType string `json:"message_type,omitempty"`
 	// Time range filters
 	SentAfter     *time.Time `json:"sent_after,omitempty"`
 	SentBefore    *time.Time `json:"sent_before,omitempty"`
@@ -447,6 +457,7 @@ func (p *MessageListParams) FromQuery(query url.Values) error {
 	p.ContactEmail = query.Get("contact_email")
 	p.BroadcastID = query.Get("broadcast_id")
 	p.TemplateID = query.Get("template_id")
+	p.MessageType = query.Get("message_type")
 
 	// Parse limit
 	if limitStr := query.Get("limit"); limitStr != "" {
@@ -555,6 +566,12 @@ func parseTimeParam(query url.Values, paramName string, target **time.Time) erro
 }
 
 func (p *MessageListParams) Validate() error {
+	// Veridian lot 4 : type de message (commercial, transactional) ou vide.
+	switch p.MessageType {
+	case "", VeridianMessageTypeCommercial, VeridianMessageTypeTransactional:
+	default:
+		return fmt.Errorf("invalid message_type: %s (expected commercial or transactional)", p.MessageType)
+	}
 	// Validate limit
 	if p.Limit < 0 {
 		return fmt.Errorf("limit cannot be negative")

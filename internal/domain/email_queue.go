@@ -36,6 +36,11 @@ const (
 // Default priority for marketing emails (broadcasts and automations)
 const EmailQueuePriorityMarketing = 5
 
+// EmailQueuePriorityTransactional : un mail transactionnel de sequence passe avant
+// toute campagne en file (priority ASC) : il n'attend pas derriere des milliers de
+// messages commerciaux. Lot 4, 08/10/2026.
+const EmailQueuePriorityTransactional = 1
+
 // EmailQueueEntry represents a single email in the queue
 type EmailQueueEntry struct {
 	ID            string               `json:"id"`
@@ -96,6 +101,12 @@ type EmailQueuePayload struct {
 	// Vides = comportement upstream inchangé. Cf. domain/veridian_provider_class.go.
 	VeridianProviderClass      string             `json:"veridian_provider_class,omitempty"`
 	VeridianProviderClassRates map[string]float64 `json:"veridian_provider_class_rates,omitempty"`
+
+	// Veridian fork, lot 4 (08/10/2026) : mail TRANSACTIONNEL de sequence (modele de
+	// categorie transactional, workspace avec un profil transactionnel reserve).
+	// Pose a la mise en file ; le worker l'envoie par le seul profil transactionnel,
+	// sans aucune porte commerciale. Cf. queue/veridian_transactional_entry.go.
+	VeridianTransactional bool `json:"veridian_transactional,omitempty"`
 
 	// Veridian fork — plafonds JOURNALIERS (cold outbound). Distincts du débit
 	// par minute ci-dessus : ce sont des volumes maximaux par jour calendaire

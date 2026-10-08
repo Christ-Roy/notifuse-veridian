@@ -514,6 +514,14 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		ChannelOptions:              channelOptions,
 		CreatedAt:                   now,
 		UpdatedAt:                   now,
+		// Lot 4 (08/10/2026) : attribution au profil d'envoi et type du message. Un mail
+		// de l'API d'envoi / du relais SMTP est transactionnel : il ne compte dans aucun
+		// compteur commercial (plafond, chauffe, fusible) et l'overview montre son
+		// volume sur le profil transactionnel.
+		VeridianProfileID: request.IntegrationID,
+	}
+	if request.TransactionalNotificationID != nil {
+		messageHistory.VeridianMessageType = domain.VeridianMessageTypeTransactional
 	}
 
 	// Save to message history

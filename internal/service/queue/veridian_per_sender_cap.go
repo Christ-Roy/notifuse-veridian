@@ -73,7 +73,7 @@ func (w *EmailQueueWorker) veridianPerSenderCapGate(workspace *domain.Workspace,
 	if workspace != nil {
 		workspaceID = workspace.ID
 	}
-	since := veridianStartOfDayUTC(time.Now())
+	since := domain.VeridianDayFor(workspace, provider, veridianNow()).Start
 
 	count, err := w.messageHistoryRepo.CountSentSinceForSender(w.ctx, workspaceID, sender, since)
 	if err != nil {

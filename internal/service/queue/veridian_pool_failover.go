@@ -231,7 +231,10 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidates(
 
 	profiles := workspace.VeridianMarketingEmailProfiles()
 	if len(profiles) == 0 {
-		return []veridianFailoverCandidate{veridianCandidateFromIntegration(assigned, assignedFrom, assignedName)}
+		// Lot 4 : si l'integration assignee est le profil transactionnel reserve, la
+		// liste est vide (l'entree attend un profil commercial, elle ne part pas par lui).
+		return veridianDropReservedFromCandidates(workspace,
+			[]veridianFailoverCandidate{veridianCandidateFromIntegration(assigned, assignedFrom, assignedName)})
 	}
 
 	byID := make(map[string]domain.VeridianEmailProfile, len(profiles))
@@ -240,6 +243,11 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidates(
 	}
 
 	anchorID, anchorDomain, anchorFound := w.veridianSequenceAnchor(workspace, entry)
+	// Lot 4 : une ancre qui est le profil transactionnel reserve n'ancre rien, la
+	// rotation commerciale ne l'emprunte jamais.
+	if reserved := workspace.VeridianReservedTransactionalProfileID(); anchorFound && reserved != "" && anchorID == reserved {
+		anchorFound = false
+	}
 	anchorAvailable := anchorFound && w.veridianAnchorAvailable(workspace.ID, anchorDomain, time.Now())
 	// Lot 2 : une ancre en pause n'est plus disponible, la relance bascule tout de
 	// suite sur un autre profil (une pause est une décision de l'opérateur, pas
@@ -279,7 +287,7 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidates(
 			candidates = append(candidates, veridianCandidateFromIntegration(integ, fallbackFrom, fallbackName))
 		}
 	}
-	return candidates
+	return veridianDropReservedFromCandidates(workspace, candidates)
 }
 
 func veridianSenderFromProvider(provider *domain.EmailProvider) string {

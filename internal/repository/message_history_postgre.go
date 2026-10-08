@@ -178,12 +178,12 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 			id, external_id, contact_email, broadcast_id, automation_id, transactional_notification_id, list_id, template_id, template_version,
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
-			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email, veridian_provider_class, veridian_profile_id
+			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email, veridian_provider_class, veridian_profile_id, veridian_message_type
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, LEFT($11, 255), $12, $13, $14, $15, $16,
 			$17, $18, $19, $20, $21,
-			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), ''), NULLIF(lower($27), ''), NULLIF($28, '')
+			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), ''), NULLIF(lower($27), ''), NULLIF($28, ''), NULLIF($29, '')
 		)
 	`
 
@@ -218,6 +218,7 @@ func (r *MessageHistoryRepository) Create(ctx context.Context, workspaceID strin
 		message.VeridianSenderEmail,
 		message.VeridianProviderClass,
 		message.VeridianProfileID,
+		message.VeridianMessageType,
 	)
 
 	if err != nil {
@@ -262,12 +263,12 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 			id, external_id, contact_email, broadcast_id, automation_id, transactional_notification_id, list_id, template_id, template_version,
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
-			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email, veridian_provider_class, veridian_profile_id
+			unsubscribed_at, created_at, updated_at, veridian_content_hash, veridian_sender_email, veridian_provider_class, veridian_profile_id, veridian_message_type
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, LEFT($11, 255), $12, $13, $14, $15, $16,
 			$17, $18, $19, $20, $21,
-			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), ''), NULLIF(lower($27), ''), NULLIF($28, '')
+			$22, $23, $24, NULLIF($25, ''), NULLIF(lower($26), ''), NULLIF(lower($27), ''), NULLIF($28, ''), NULLIF($29, '')
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			sent_at = EXCLUDED.sent_at,
@@ -277,7 +278,8 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 			veridian_content_hash = COALESCE(message_history.veridian_content_hash, EXCLUDED.veridian_content_hash),
 			veridian_sender_email = COALESCE(message_history.veridian_sender_email, EXCLUDED.veridian_sender_email),
 			veridian_provider_class = COALESCE(EXCLUDED.veridian_provider_class, message_history.veridian_provider_class),
-			veridian_profile_id = COALESCE(EXCLUDED.veridian_profile_id, message_history.veridian_profile_id)
+			veridian_profile_id = COALESCE(EXCLUDED.veridian_profile_id, message_history.veridian_profile_id),
+			veridian_message_type = COALESCE(EXCLUDED.veridian_message_type, message_history.veridian_message_type)
 	`
 
 	_, err = workspaceDB.ExecContext(
@@ -311,6 +313,7 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 		message.VeridianSenderEmail,
 		message.VeridianProviderClass,
 		message.VeridianProfileID,
+		message.VeridianMessageType,
 	)
 
 	if err != nil {
@@ -936,6 +939,14 @@ func (r *MessageHistoryRepository) ListMessages(ctx context.Context, workspaceID
 		queryBuilder = queryBuilder.Where(sq.Eq{"template_id": params.TemplateID})
 	}
 
+	// Lot 4 : filtre par type de message (meme definition que les compteurs).
+	switch params.MessageType {
+	case domain.VeridianMessageTypeTransactional:
+		queryBuilder = queryBuilder.Where("(veridian_message_type = 'transactional' OR transactional_notification_id IS NOT NULL)")
+	case domain.VeridianMessageTypeCommercial:
+		queryBuilder = queryBuilder.Where("(veridian_message_type IS DISTINCT FROM 'transactional' AND transactional_notification_id IS NULL)")
+	}
+
 	if params.IsSent != nil {
 		if *params.IsSent {
 			queryBuilder = queryBuilder.Where(sq.NotEq{"sent_at": nil})
@@ -1436,7 +1447,7 @@ func (r *MessageHistoryRepository) CountSentSinceForContact(ctx context.Context,
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COUNT(*) FROM message_history WHERE contact_email = $1 AND sent_at >= $2 AND failed_at IS NULL`
+	const query = `SELECT COUNT(*) FROM message_history WHERE contact_email = $1 AND sent_at >= $2 AND failed_at IS NULL` + veridianCommercialRowSQL
 	var count int
 	if err := workspaceDB.QueryRowContext(ctx, query, contactEmail, since).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count messages sent to contact since: %w", err)
@@ -1456,7 +1467,7 @@ func (r *MessageHistoryRepository) CountSentSinceForSender(ctx context.Context, 
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COUNT(*) FROM message_history WHERE veridian_sender_email = lower($1) AND sent_at >= $2 AND failed_at IS NULL`
+	const query = `SELECT COUNT(*) FROM message_history WHERE veridian_sender_email = lower($1) AND sent_at >= $2 AND failed_at IS NULL` + veridianCommercialRowSQL
 	var count int
 	if err := workspaceDB.QueryRowContext(ctx, query, senderEmail, since).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count messages sent from sender since: %w", err)
@@ -1489,9 +1500,10 @@ func (r *MessageHistoryRepository) CountSentSinceForSenderDomain(ctx context.Con
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2)`
+	scope, extra := veridianSenderScopeSQL(ctx, 2, 3)
+	query := `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND ` + scope + veridianCommercialRowSQL
 	var count int
-	if err := workspaceDB.QueryRowContext(ctx, query, since, senderDomain).Scan(&count); err != nil {
+	if err := workspaceDB.QueryRowContext(ctx, query, append([]interface{}{since, senderDomain}, extra...)...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count messages sent from sender domain since: %w", err)
 	}
 	return count, nil
@@ -1509,9 +1521,10 @@ func (r *MessageHistoryRepository) CountHardBouncedSinceForSenderDomain(ctx cont
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND ((bounced_at IS NOT NULL AND bounce_type = 'HardBounce') OR bounce_type = 'PolicyBounce') AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2)`
+	scope, extra := veridianSenderScopeSQL(ctx, 2, 3)
+	query := `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND ((bounced_at IS NOT NULL AND bounce_type = 'HardBounce') OR bounce_type = 'PolicyBounce') AND ` + scope + veridianCommercialRowSQL
 	var count int
-	if err := workspaceDB.QueryRowContext(ctx, query, since, senderDomain).Scan(&count); err != nil {
+	if err := workspaceDB.QueryRowContext(ctx, query, append([]interface{}{since, senderDomain}, extra...)...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count hard-bounced messages from sender domain since: %w", err)
 	}
 	return count, nil
@@ -1529,9 +1542,10 @@ func (r *MessageHistoryRepository) CountComplainedSinceForSenderDomain(ctx conte
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND complained_at IS NOT NULL AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2)`
+	scope, extra := veridianSenderScopeSQL(ctx, 2, 3)
+	query := `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND complained_at IS NOT NULL AND ` + scope + veridianCommercialRowSQL
 	var count int
-	if err := workspaceDB.QueryRowContext(ctx, query, since, senderDomain).Scan(&count); err != nil {
+	if err := workspaceDB.QueryRowContext(ctx, query, append([]interface{}{since, senderDomain}, extra...)...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count complained messages from sender domain since: %w", err)
 	}
 	return count, nil
@@ -1553,8 +1567,9 @@ func (r *MessageHistoryRepository) ReputationCountsByClassSinceForSenderDomain(c
 		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COALESCE(veridian_provider_class, ''), COUNT(*), COUNT(*) FILTER (WHERE bounced_at IS NOT NULL AND bounce_type = 'HardBounce'), COUNT(*) FILTER (WHERE bounce_type = 'PolicyBounce') FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND lower(split_part(veridian_sender_email, '@', 2)) = lower($2) GROUP BY 1`
-	rows, err := workspaceDB.QueryContext(ctx, query, since, senderDomain)
+	scope, extra := veridianSenderScopeSQL(ctx, 2, 3)
+	query := `SELECT COALESCE(veridian_provider_class, ''), COUNT(*), COUNT(*) FILTER (WHERE bounced_at IS NOT NULL AND bounce_type = 'HardBounce'), COUNT(*) FILTER (WHERE bounce_type = 'PolicyBounce') FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND ` + scope + veridianCommercialRowSQL + ` GROUP BY 1`
+	rows, err := workspaceDB.QueryContext(ctx, query, append([]interface{}{since, senderDomain}, extra...)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count reputation by class for sender domain since: %w", err)
 	}
@@ -1587,9 +1602,10 @@ func (r *MessageHistoryRepository) RecentClassOutcomesForSenderDomain(ctx contex
 		return 0, 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COUNT(*), COUNT(*) FILTER (WHERE bounce_type = 'PolicyBounce') FROM (SELECT bounce_type FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND veridian_provider_class = $2 AND lower(split_part(veridian_sender_email, '@', 2)) = lower($3) ORDER BY sent_at DESC LIMIT $4) recent`
+	scope, extra := veridianSenderScopeSQL(ctx, 3, 5)
+	query := `SELECT COUNT(*), COUNT(*) FILTER (WHERE bounce_type = 'PolicyBounce') FROM (SELECT bounce_type FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND veridian_provider_class = $2 AND ` + scope + veridianCommercialRowSQL + ` ORDER BY sent_at DESC LIMIT $4) recent`
 	var sent, policy int
-	if err := workspaceDB.QueryRowContext(ctx, query, since, class, senderDomain, lastN).Scan(&sent, &policy); err != nil {
+	if err := workspaceDB.QueryRowContext(ctx, query, append([]interface{}{since, class, senderDomain, lastN}, extra...)...).Scan(&sent, &policy); err != nil {
 		return 0, 0, fmt.Errorf("failed to read recent class outcomes for sender domain: %w", err)
 	}
 	return sent, policy, nil
@@ -1627,7 +1643,7 @@ func (r *MessageHistoryRepository) CountSentSinceForDomains(ctx context.Context,
 		op = "<> ALL"
 	}
 	query := fmt.Sprintf(
-		`SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND lower(split_part(contact_email, '@', 2)) %s($2)`,
+		`SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND failed_at IS NULL AND lower(split_part(contact_email, '@', 2)) %s($2)`+veridianCommercialRowSQL,
 		op,
 	)
 
@@ -1686,7 +1702,7 @@ func (r *MessageHistoryRepository) CountSentSinceForDomainsAndSenderDomain(ctx c
 		 WHERE sent_at >= $1
 		   AND failed_at IS NULL
 		   AND lower(split_part(contact_email, '@', 2)) %s($2)
-		   AND lower(split_part(veridian_sender_email, '@', 2)) = lower($3)`,
+		   AND lower(split_part(veridian_sender_email, '@', 2)) = lower($3)`+veridianCommercialRowSQL,
 		op,
 	)
 
@@ -1718,7 +1734,7 @@ func (r *MessageHistoryRepository) CountSentSinceForClass(ctx context.Context, w
 		return 0, fmt.Errorf("failed to get workspace connection: %w", err)
 	}
 
-	const query = `SELECT COUNT(*) FROM message_history WHERE veridian_provider_class = $1 AND sent_at >= $2 AND failed_at IS NULL`
+	const query = `SELECT COUNT(*) FROM message_history WHERE veridian_provider_class = $1 AND sent_at >= $2 AND failed_at IS NULL` + veridianCommercialRowSQL
 	var count int
 	if err := workspaceDB.QueryRowContext(ctx, query, class, since).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count messages sent to provider class since: %w", err)
@@ -1749,7 +1765,7 @@ func (r *MessageHistoryRepository) CountSentSinceForClassAndSenderDomain(ctx con
 		 WHERE veridian_provider_class = $1
 		   AND sent_at >= $2
 		   AND failed_at IS NULL
-		   AND lower(split_part(veridian_sender_email, '@', 2)) = lower($3)`
+		   AND lower(split_part(veridian_sender_email, '@', 2)) = lower($3)` + veridianCommercialRowSQL
 	var count int
 	if err := workspaceDB.QueryRowContext(ctx, query, class, since, senderDomain).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count messages sent to provider class from sender domain since: %w", err)
@@ -1792,7 +1808,15 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 	if key.Kind == domain.VeridianDailyQuotaKindProfile {
 		counterScope = key.ProfileID
 	}
+	// Lot 4 (08/10/2026) : Day est le libelle (date civile locale du profil), DayStart
+	// et DayEnd les bornes exactes du jour local (23 h / 25 h les jours d heure d ete).
+	// Sans bornes (appelants anterieurs), jour UTC de 24 h comme avant.
 	day := key.Day.UTC().Truncate(24 * time.Hour)
+	dayStart, dayEnd := key.DayStart.UTC(), key.DayEnd.UTC()
+	if key.DayStart.IsZero() || key.DayEnd.IsZero() || !dayEnd.After(dayStart) {
+		dayStart, dayEnd = day, day.Add(24*time.Hour)
+	}
+	dayParam := day.Format("2006-01-02")
 
 	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
@@ -1811,7 +1835,7 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (workspace_id, message_id, quota_kind) DO NOTHING
 		RETURNING 1
-	`, workspaceID, reservation.MessageID, key.Kind, day, counterScope, key.ProviderClass).Scan(&inserted)
+	`, workspaceID, reservation.MessageID, key.Kind, dayParam, counterScope, key.ProviderClass).Scan(&inserted)
 	if err != nil && err != sql.ErrNoRows {
 		return result, fmt.Errorf("insert daily quota reservation: %w", err)
 	}
@@ -1850,15 +1874,17 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 			INSERT INTO veridian_daily_quota_reservations
 				(workspace_id, message_id, quota_kind, quota_day, sender_domain, provider_class)
 			VALUES ($1, $2, $3, $4, $5, $6)
-		`, workspaceID, reservation.MessageID, key.Kind, day, counterScope, key.ProviderClass); err != nil {
+		`, workspaceID, reservation.MessageID, key.Kind, dayParam, counterScope, key.ProviderClass); err != nil {
 			return result, fmt.Errorf("rotate stale daily quota reservation: %w", err)
 		}
 	}
 
 	// Seed a newly created counter from accepted historical sends only. Failed
 	// pre-SMTP policy rows carry sent_at in legacy data and must not consume cap.
-	initialCountSQL := `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND sent_at < $1 + INTERVAL '1 day' AND failed_at IS NULL`
-	args := []interface{}{day, counterScope}
+	// Le debut/fin du jour local bornent le comptage (lot 4) : un jour d heure d ete
+	// dure 23 h, un jour d heure d hiver 25 h.
+	initialCountSQL := `SELECT COUNT(*) FROM message_history WHERE sent_at >= $1 AND sent_at < $3 AND failed_at IS NULL` + veridianCommercialRowSQL
+	args := []interface{}{dayStart, counterScope, dayEnd}
 	if key.Kind == domain.VeridianDailyQuotaKindProfile {
 		initialCountSQL += ` AND veridian_profile_id = $2`
 	} else {
@@ -1878,7 +1904,7 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 			(workspace_id, quota_day, quota_kind, sender_domain, provider_class, used)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (workspace_id, quota_day, quota_kind, sender_domain, provider_class) DO NOTHING
-	`, workspaceID, day, key.Kind, counterScope, key.ProviderClass, initialUsed); err != nil {
+	`, workspaceID, dayParam, key.Kind, counterScope, key.ProviderClass, initialUsed); err != nil {
 		return result, fmt.Errorf("initialize daily quota counter: %w", err)
 	}
 
@@ -1888,13 +1914,13 @@ func (r *MessageHistoryRepository) ReserveDailyQuota(ctx context.Context, worksp
 		WHERE workspace_id=$1 AND quota_day=$2 AND quota_kind=$3
 		  AND sender_domain=$4 AND provider_class=$5 AND used < $6
 		RETURNING used
-	`, workspaceID, day, key.Kind, counterScope, key.ProviderClass, reservation.Cap).Scan(&result.Used)
+	`, workspaceID, dayParam, key.Kind, counterScope, key.ProviderClass, reservation.Cap).Scan(&result.Used)
 	if err == sql.ErrNoRows {
 		_ = tx.QueryRowContext(ctx, `
 			SELECT used FROM veridian_daily_quota_counters
 			WHERE workspace_id=$1 AND quota_day=$2 AND quota_kind=$3
 			  AND sender_domain=$4 AND provider_class=$5
-		`, workspaceID, day, key.Kind, counterScope, key.ProviderClass).Scan(&result.Used)
+		`, workspaceID, dayParam, key.Kind, counterScope, key.ProviderClass).Scan(&result.Used)
 		return result, nil // rollback removes the provisional reservation
 	}
 	if err != nil {
@@ -1936,7 +1962,7 @@ func (r *MessageHistoryRepository) ReleaseDailyQuota(ctx context.Context, worksp
 		SET used=GREATEST(used-1, 0), updated_at=NOW()
 		WHERE workspace_id=$1 AND quota_day=$2 AND quota_kind=$3
 		  AND sender_domain=$4 AND provider_class=$5
-	`, workspaceID, day, quotaKind, senderDomain, providerClass); err != nil {
+	`, workspaceID, day.UTC().Format("2006-01-02"), quotaKind, senderDomain, providerClass); err != nil {
 		return fmt.Errorf("decrement daily quota counter: %w", err)
 	}
 	if err := tx.Commit(); err != nil {

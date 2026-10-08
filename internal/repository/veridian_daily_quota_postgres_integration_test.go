@@ -34,7 +34,8 @@ func TestVeridianDailyQuotaRepository_PostgresConcurrency(t *testing.T) {
 		CREATE TABLE message_history (
 			id VARCHAR(255) PRIMARY KEY, contact_email VARCHAR(255) NOT NULL,
 			sent_at TIMESTAMPTZ NOT NULL, failed_at TIMESTAMPTZ,
-			veridian_sender_email VARCHAR(255), veridian_provider_class VARCHAR(64), veridian_profile_id VARCHAR(255)
+			veridian_sender_email VARCHAR(255), veridian_provider_class VARCHAR(64), veridian_profile_id VARCHAR(255),
+			transactional_notification_id VARCHAR(32), veridian_message_type VARCHAR(16)
 		);
 		CREATE TABLE veridian_daily_quota_counters (
 			workspace_id VARCHAR(255) NOT NULL, quota_day DATE NOT NULL, quota_kind VARCHAR(32) NOT NULL,
@@ -163,6 +164,102 @@ func TestVeridianDailyQuotaRepository_PostgresConcurrency(t *testing.T) {
 		require.False(t, first.AlreadyReserved)
 		require.True(t, second.Reserved)
 		require.True(t, second.AlreadyReserved)
+	})
+
+	// Lot 4 (08/10/2026) : le jour de compte suit le fuseau de la fenetre d'envoi du
+	// profil. Ici Europe/Paris, avec un vrai PostgreSQL : bornes du jour, graine du
+	// compteur, transactionnel ecarte, bascule de minuit, jours de changement d'heure.
+	t.Run("paris day: seed window, transactional excluded, midnight flip, no double count", func(t *testing.T) {
+		_, err := db.Exec(`TRUNCATE veridian_daily_quota_reservations, veridian_daily_quota_counters, message_history`)
+		require.NoError(t, err)
+		paris, err := time.LoadLocation("Europe/Paris")
+		require.NoError(t, err)
+		insert := func(id string, at time.Time, messageType string) {
+			_, err := db.Exec(`INSERT INTO message_history(id, contact_email, sent_at, veridian_profile_id, veridian_message_type) VALUES($1,'lead@example.com',$2,'p1',NULLIF($3,''))`, id, at, messageType)
+			require.NoError(t, err)
+		}
+		// 8 octobre 2026 a Paris = du 7 a 22h00 UTC (inclus) au 8 a 22h00 UTC (exclu).
+		insert("before-midnight", time.Date(2026, 10, 7, 21, 59, 59, 0, time.UTC), "") // 7 octobre 23:59:59 Paris
+		insert("first-second", time.Date(2026, 10, 7, 22, 0, 0, 0, time.UTC), "")      // 8 octobre 00:00:00 Paris
+		insert("noon", time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC), "")
+		insert("noon-transactional", time.Date(2026, 10, 8, 12, 30, 0, 0, time.UTC), "transactional")
+		insert("last-second", time.Date(2026, 10, 8, 21, 59, 59, 0, time.UTC), "")
+		insert("next-day", time.Date(2026, 10, 8, 22, 0, 0, 0, time.UTC), "") // 9 octobre 00:00:00 Paris
+
+		parisDay := func(at time.Time) domain.VeridianDay { return domain.VeridianDayAt(at, paris) }
+		reserveDay := func(messageID string, d domain.VeridianDay, cap int) domain.VeridianDailyQuotaReservationResult {
+			result, err := repo.ReserveDailyQuota(ctx, "ws", domain.VeridianDailyQuotaReservation{
+				MessageID: messageID, Cap: cap,
+				Key: domain.VeridianDailyQuotaKey{Day: d.Label, DayStart: d.Start, DayEnd: d.End, Kind: domain.VeridianDailyQuotaKindProfile, ProfileID: "p1"},
+			})
+			require.NoError(t, err)
+			return result
+		}
+		oct8 := parisDay(time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC))
+		// Graine = 3 (first-second, noon, last-second) : ni la veille, ni le lendemain, ni le transactionnel.
+		first := reserveDay("m-1", oct8, 4)
+		require.True(t, first.Reserved)
+		require.Equal(t, 4, first.Used, "3 envois du jour de Paris + 1 reservation")
+		require.False(t, reserveDay("m-2", oct8, 4).Reserved, "plafond exact : 4 maximum")
+		// Retour du meme message : idempotent, aucun double compte.
+		again := reserveDay("m-1", oct8, 4)
+		require.True(t, again.AlreadyReserved)
+		var used int
+		require.NoError(t, db.QueryRow(`SELECT used FROM veridian_daily_quota_counters WHERE quota_day='2026-10-08'`).Scan(&used))
+		require.Equal(t, 4, used)
+
+		// Bascule de minuit a Paris : le meme message retente le 9 change de compteur
+		// (reservation du 8 remplacee), le compteur du 8 reste intact, celui du 9 est seme
+		// avec le seul envoi "next-day".
+		oct9 := parisDay(time.Date(2026, 10, 8, 22, 30, 0, 0, time.UTC))
+		require.Equal(t, "2026-10-09", oct9.LabelDate())
+		rotated := reserveDay("m-1", oct9, 4)
+		require.True(t, rotated.Reserved)
+		require.False(t, rotated.AlreadyReserved)
+		require.Equal(t, 2, rotated.Used, "1 envoi du 9 + la reservation")
+		require.NoError(t, db.QueryRow(`SELECT used FROM veridian_daily_quota_counters WHERE quota_day='2026-10-08'`).Scan(&used))
+		require.Equal(t, 4, used, "le compteur de la veille n'est pas touche")
+		var reservations int
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM veridian_daily_quota_reservations WHERE message_id='m-1'`).Scan(&reservations))
+		require.Equal(t, 1, reservations)
+	})
+
+	t.Run("paris daylight saving days last 25 and 23 hours", func(t *testing.T) {
+		_, err := db.Exec(`TRUNCATE veridian_daily_quota_reservations, veridian_daily_quota_counters, message_history`)
+		require.NoError(t, err)
+		paris, err := time.LoadLocation("Europe/Paris")
+		require.NoError(t, err)
+		insert := func(id string, at time.Time) {
+			_, err := db.Exec(`INSERT INTO message_history(id, contact_email, sent_at, veridian_profile_id) VALUES($1,'lead@example.com',$2,'p1')`, id, at)
+			require.NoError(t, err)
+		}
+		reserveDay := func(messageID string, d domain.VeridianDay, cap int) domain.VeridianDailyQuotaReservationResult {
+			result, err := repo.ReserveDailyQuota(ctx, "ws", domain.VeridianDailyQuotaReservation{
+				MessageID: messageID, Cap: cap,
+				Key: domain.VeridianDailyQuotaKey{Day: d.Label, DayStart: d.Start, DayEnd: d.End, Kind: domain.VeridianDailyQuotaKindProfile, ProfileID: "p1"},
+			})
+			require.NoError(t, err)
+			return result
+		}
+		// 25 octobre 2026 (retour a l'heure d'hiver) : de 22h00 UTC le 24 a 23h00 UTC le 25.
+		insert("a-0000", time.Date(2026, 10, 24, 22, 0, 0, 0, time.UTC))    // 00:00 Paris (UTC+2)
+		insert("a-2230z", time.Date(2026, 10, 25, 22, 59, 59, 0, time.UTC)) // 23:59:59 Paris (UTC+1) : dans le jour de 25 h
+		insert("a-next", time.Date(2026, 10, 25, 23, 0, 0, 0, time.UTC))    // 26 octobre 00:00 Paris
+		autumn := domain.VeridianDayAt(time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC), paris)
+		require.Equal(t, 25*time.Hour, autumn.End.Sub(autumn.Start))
+		r := reserveDay("autumn", autumn, 10)
+		require.True(t, r.Reserved)
+		require.Equal(t, 3, r.Used, "2 envois dans les 25 h + la reservation, rien du 26")
+
+		// 29 mars 2026 (passage a l'heure d'ete) : de 23h00 UTC le 28 a 22h00 UTC le 29 (23 h).
+		insert("s-0000", time.Date(2026, 3, 28, 23, 0, 0, 0, time.UTC))
+		insert("s-last", time.Date(2026, 3, 29, 21, 59, 59, 0, time.UTC))
+		insert("s-next", time.Date(2026, 3, 29, 22, 0, 0, 0, time.UTC))
+		spring := domain.VeridianDayAt(time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC), paris)
+		require.Equal(t, 23*time.Hour, spring.End.Sub(spring.Start))
+		r = reserveDay("spring", spring, 10)
+		require.True(t, r.Reserved)
+		require.Equal(t, 3, r.Used)
 	})
 
 	t.Run("historical seed ignores failed rows", func(t *testing.T) {

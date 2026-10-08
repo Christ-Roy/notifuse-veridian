@@ -64,6 +64,11 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 		return plan
 	}
 	provider := &integration.EmailProvider
+	// Lot 4 : « aujourd'hui » = le jour de compte du profil (fuseau de sa fenetre
+	// d'envoi), la meme frontiere que les portes du worker et la reservation atomique.
+	day := domain.VeridianDayFor(ws, provider, now)
+	plan.Date = day.LabelDate()
+	plan.DayTimezone, plan.DayStart, plan.DayEnd = day.Location, day.Start, day.End
 	plan.Mode = ws.VeridianProfileUsageOf(in.IntegrationID)
 	plan.Paused = provider.VeridianPaused
 	plan.NativeRatePerMin = provider.VeridianEffectiveRateLimit()
@@ -101,7 +106,12 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 	entry := &domain.EmailQueueEntry{}
 
 	// --- fusible de réputation (domaine émetteur principal) ---
-	rep, haveRep := in.Reputation[primaryDomain]
+	// Lot 4 : le fusible se compte par profil ; a defaut (appelant sans profil), par
+	// domaine emetteur comme avant.
+	rep, haveRep := in.Reputation[in.IntegrationID]
+	if !haveRep {
+		rep, haveRep = in.Reputation[primaryDomain]
+	}
 	if haveRep {
 		plan.Complaints7d = rep.Complaints7d
 		plan.ReputationAlert = rep.Alert

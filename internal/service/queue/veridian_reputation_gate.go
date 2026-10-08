@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,18 +148,55 @@ func veridianReputationFactorKey(workspaceID, senderDomain, class string) string
 	return workspaceID + "|" + senderDomain + "|" + class
 }
 
+// veridianReputationProfileFactorKey : clé d'un facteur PROPRE À UN PROFIL (lot 4,
+// 08/10/2026). Deux profils d'un même domaine émetteur ne partagent plus leur
+// ralentissement : chacun répond de ses propres rejets.
+func veridianReputationProfileFactorKey(workspaceID, profileID, senderDomain, class string) string {
+	return workspaceID + "|" + profileID + "|" + senderDomain + "|" + class
+}
+
 func (f *veridianReputationFactors) set(workspaceID, senderDomain, class string, factor int) {
 	f.m.Store(veridianReputationFactorKey(workspaceID, senderDomain, class), veridianReputationFactorEntry{factor: factor, at: time.Now()})
 }
 
-func (f *veridianReputationFactors) get(workspaceID, senderDomain, class string) int {
-	if v, ok := f.m.Load(veridianReputationFactorKey(workspaceID, senderDomain, class)); ok {
+func (f *veridianReputationFactors) load(key string) int {
+	if v, ok := f.m.Load(key); ok {
 		e := v.(veridianReputationFactorEntry)
 		if e.factor > 1 && time.Since(e.at) <= veridianReputationFactorTTL {
 			return e.factor
 		}
 	}
 	return 1
+}
+
+func (f *veridianReputationFactors) get(workspaceID, senderDomain, class string) int {
+	return f.load(veridianReputationFactorKey(workspaceID, senderDomain, class))
+}
+
+// setFor pose le facteur du couple (profil, domaine, classe). Sans profil, c'est le
+// facteur historique par domaine.
+func (f *veridianReputationFactors) setFor(workspaceID, profileID, senderDomain, class string, factor int) {
+	if profileID == "" {
+		f.set(workspaceID, senderDomain, class, factor)
+		return
+	}
+	f.m.Store(veridianReputationProfileFactorKey(workspaceID, profileID, senderDomain, class), veridianReputationFactorEntry{factor: factor, at: time.Now()})
+}
+
+// getFor lit le facteur du profil ; à défaut le facteur par domaine (valeur posée
+// avant le lot 4 ou par un appelant sans profil).
+func (f *veridianReputationFactors) getFor(workspaceID, profileID, senderDomain, class string) int {
+	if profileID != "" {
+		if factor := f.load(veridianReputationProfileFactorKey(workspaceID, profileID, senderDomain, class)); factor > 1 {
+			return factor
+		}
+		// Le profil a son propre verdict : un facteur de domaine ne le remplace pas
+		// quand le gate vient de rendre sain (clé profil présente avec 1).
+		if _, ok := f.m.Load(veridianReputationProfileFactorKey(workspaceID, profileID, senderDomain, class)); ok {
+			return 1
+		}
+	}
+	return f.get(workspaceID, senderDomain, class)
 }
 
 // veridianSlowdownFactor est le facteur de ralentissement que le gate de
@@ -175,7 +213,7 @@ func (w *EmailQueueWorker) veridianSlowdownFactor(workspace *domain.Workspace, e
 	if workspace != nil {
 		workspaceID = workspace.ID
 	}
-	return w.reputationFactors.get(workspaceID, senderDomain, class)
+	return w.reputationFactors.getFor(workspaceID, strings.TrimSpace(entry.IntegrationID), senderDomain, class)
 }
 
 // veridianSlowCap divise un plafond journalier par le facteur (plancher à 1).
@@ -221,7 +259,15 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 		}).Error("Reputation fuse: " + step + " failed; no slowdown applied")
 	}
 
-	complaints, err := w.messageHistoryRepo.CountComplainedSinceForSenderDomain(w.ctx, workspaceID, senderDomain, since)
+	// Lot 4 (08/10/2026) : le fusible se compte PAR PROFIL (le candidat en cours
+	// d'essai, entry.IntegrationID) et par type de message (les envois
+	// transactionnels sont écartés par le repository). Deux profils d'un même domaine
+	// émetteur ne mélangent plus leurs rejets, un transactionnel ne gèle pas le
+	// commercial et inversement.
+	profileID := strings.TrimSpace(entry.IntegrationID)
+	ctx := domain.WithVeridianReputationProfile(w.ctx, profileID)
+
+	complaints, err := w.messageHistoryRepo.CountComplainedSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
 	if err != nil {
 		logErr("complaint count", err)
 		complaints = 0
@@ -238,11 +284,11 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 	}
 
 	var counts domain.VeridianReputationCounts
-	sentCount, err := w.messageHistoryRepo.CountSentSinceForSenderDomain(w.ctx, workspaceID, senderDomain, since)
+	sentCount, err := w.messageHistoryRepo.CountSentSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
 	if err != nil {
 		logErr("sent count", err)
 	} else if sentCount > 0 {
-		byClass, err := w.messageHistoryRepo.ReputationCountsByClassSinceForSenderDomain(w.ctx, workspaceID, senderDomain, since)
+		byClass, err := w.messageHistoryRepo.ReputationCountsByClassSinceForSenderDomain(ctx, workspaceID, senderDomain, since)
 		if err != nil {
 			logErr("per-class counts", err)
 		} else {
@@ -252,7 +298,7 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 
 	recentSent, recentPolicy := 0, 0
 	if veridianNeedsBulkCheck(counts) {
-		recentSent, recentPolicy, err = w.messageHistoryRepo.RecentClassOutcomesForSenderDomain(w.ctx, workspaceID, senderDomain, class, veridianBlockLastN, now.Add(-veridianBlockLookback))
+		recentSent, recentPolicy, err = w.messageHistoryRepo.RecentClassOutcomesForSenderDomain(ctx, workspaceID, senderDomain, class, veridianBlockLastN, now.Add(-veridianBlockLookback))
 		if err != nil {
 			logErr("recent class outcomes", err)
 			recentSent, recentPolicy = 0, 0
@@ -260,7 +306,7 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 	}
 
 	verdict := veridianEvaluateCouple(complaints, counts, recentSent, recentPolicy, threshold)
-	w.reputationFactors.set(workspaceID, senderDomain, class, verdict.Factor)
+	w.reputationFactors.setFor(workspaceID, profileID, senderDomain, class, verdict.Factor)
 
 	if verdict.Stopped {
 		w.logger.WithFields(map[string]interface{}{

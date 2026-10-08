@@ -233,7 +233,11 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 			return nil, fmt.Errorf("failed to get email provider: %w", err)
 		}
 	}
-	if emailProvider == nil {
+	// Veridian (lot 4) : sans profil marketing, la sequence peut quand meme partir si
+	// le workspace reserve un profil transactionnel et que le modele est transactionnel
+	// (controle apres la lecture du modele). Sans profil reserve : refus immediat, comme
+	// avant.
+	if emailProvider == nil && workspace.VeridianReservedTransactionalProfileID() == "" {
 		return nil, fmt.Errorf("no email provider configured for workspace")
 	}
 
@@ -241,6 +245,17 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 	template, err := e.templateRepo.GetTemplateByID(ctx, params.WorkspaceID, config.TemplateID, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get template: %w", err)
+	}
+
+	// Veridian fork (lot 4, 08/10/2026) : un modele de categorie transactionnelle part
+	// par le profil transactionnel reserve du workspace, quel que soit le profil
+	// commercial du noeud. Sans profil reserve, rien ne change. Le controle "aucun
+	// profil" vient APRES : un workspace purement transactionnel n'a pas de profil
+	// marketing.
+	var veridianTransactional bool
+	emailProvider, integrationID, veridianTransactional = veridianRouteTransactionalEmailNode(workspace, template.Category, emailProvider, integrationID)
+	if emailProvider == nil {
+		return nil, fmt.Errorf("no email provider configured for workspace")
 	}
 
 	// 4b. Check subscription status for marketing/blog emails
@@ -333,10 +348,14 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 	}
 
 	// 12. Create queue entry
+	queuePriority := domain.EmailQueuePriorityMarketing
+	if veridianTransactional {
+		queuePriority = domain.EmailQueuePriorityTransactional
+	}
 	entry := &domain.EmailQueueEntry{
 		ID:            uuid.New().String(),
 		Status:        domain.EmailQueueStatusPending,
-		Priority:      domain.EmailQueuePriorityMarketing,
+		Priority:      queuePriority,
 		SourceType:    domain.EmailQueueSourceAutomation,
 		SourceID:      params.Automation.ID,
 		IntegrationID: integrationID,
@@ -345,14 +364,15 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 		MessageID:     messageID,
 		TemplateID:    config.TemplateID,
 		Payload: domain.EmailQueuePayload{
-			FromAddress:        sender.Email,
-			FromName:           sender.Name,
-			Subject:            subject,
-			HTMLContent:        htmlContent,
-			TextContent:        textContent,
-			PlainTextOnly:      rendered.PlainTextOnly,
-			RateLimitPerMinute: emailProvider.RateLimitPerMinute,
-			ListID:             params.Automation.ListID,
+			FromAddress:           sender.Email,
+			FromName:              sender.Name,
+			Subject:               subject,
+			HTMLContent:           htmlContent,
+			TextContent:           textContent,
+			PlainTextOnly:         rendered.PlainTextOnly,
+			RateLimitPerMinute:    emailProvider.RateLimitPerMinute,
+			ListID:                params.Automation.ListID,
+			VeridianTransactional: veridianTransactional,
 			EmailOptions: domain.EmailOptions{
 				ReplyTo: rendered.ReplyTo,
 			},
