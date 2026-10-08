@@ -1838,3 +1838,16 @@ func TestVeridianReputationCounts_JSONContract(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"sent_7d":30,"hard_bounces_7d":6,"policy_refusals_7d":2}`, string(b))
 }
+
+// Lot 4 (08/10/2026) : filtre par type de message du journal.
+func TestMessageListParamsMessageType(t *testing.T) {
+	for _, ok := range []string{"", VeridianMessageTypeCommercial, VeridianMessageTypeTransactional} {
+		var p MessageListParams
+		require.NoError(t, p.FromQuery(url.Values{"message_type": {ok}}), "type %q", ok)
+		assert.Equal(t, ok, p.MessageType)
+	}
+	var p MessageListParams
+	err := p.FromQuery(url.Values{"message_type": {"newsletter"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "message_type")
+}

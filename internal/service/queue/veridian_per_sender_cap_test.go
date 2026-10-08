@@ -1,8 +1,10 @@
 package queue
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/golang/mock/gomock"
@@ -149,4 +151,22 @@ func TestVeridianPerSenderCapGate_PayloadCapApplied(t *testing.T) {
 
 	_, capped := env.worker.veridianPerSenderCapGate(ws, nil, entry)
 	assert.True(t, capped)
+}
+
+// Lot 4 (08/10/2026) : le plafond par adresse se compte depuis minuit heure de Paris.
+func TestVeridianPerSenderCapGate_CountsSinceParisMidnight(t *testing.T) {
+	withFixedClock(t, time.Date(2026, 10, 8, 22, 30, 0, 0, time.UTC)) // 00h30 le 9 octobre a Paris
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithSenderCap(3)
+	provider := parisWindowProvider()
+	entry := veridianTestEntryWithSender("e", "lead@gmail.com", "bot@envoi.example", domain.EmailQueuePayload{})
+
+	var since time.Time
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSender(gomock.Any(), "ws-1", "bot@envoi.example", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, s time.Time) (int, error) { since = s; return 3, nil })
+
+	_, capped := env.worker.veridianPerSenderCapGate(ws, provider, entry)
+	assert.True(t, capped)
+	assert.Equal(t, time.Date(2026, 10, 8, 22, 0, 0, 0, time.UTC), since)
 }

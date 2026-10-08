@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -679,4 +680,26 @@ func TestVeridianDailyCapGate_UsesSharedLimitsWithReputationSlowdown(t *testing.
 			assert.Equal(t, tc.capped, capped)
 		})
 	}
+}
+
+// Lot 4 (08/10/2026) : le plafond de chauffe d'un domaine se compte depuis minuit
+// heure de Paris quand la fenetre du profil est a Paris.
+func TestVeridianDailyCapGate_WarmupCountsSinceParisMidnight(t *testing.T) {
+	withFixedClock(t, time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)) // jour de passage a l'heure d'ete
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 60)
+	provider := parisWindowProvider()
+	started := time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)
+	provider.VeridianWarmupStartedAt = &started
+	provider.VeridianWarmupSchedule = []int{5}
+	entry := veridianTestEntryFrom("e", "lead@gmail.com", "hello@envoi.example", domain.EmailQueuePayload{})
+
+	var since time.Time
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "envoi.example", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, s time.Time) (int, error) { since = s; return 5, nil })
+
+	_, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
+	assert.True(t, capped, "5 envois du jour pour un palier de 5")
+	assert.Equal(t, time.Date(2026, 3, 28, 23, 0, 0, 0, time.UTC), since, "minuit Paris le 29 mars 2026 (UTC+1) = 23h00 UTC la veille")
 }

@@ -33,3 +33,13 @@ func TestVeridianDailyQuotaProfileKeyUsesExactIntegrationID(t *testing.T) {
 	assert.Equal(t, "integration-uuid-1", key.ProfileID)
 	assert.Empty(t, key.SenderDomain)
 }
+
+// Lot 4 (08/10/2026) : la cle du compteur porte le libelle du jour local et ses bornes exactes.
+func TestVeridianDailyQuotaKeyCarriesTheLocalDayBounds(t *testing.T) {
+	paris, err := time.LoadLocation("Europe/Paris")
+	require.NoError(t, err)
+	day := VeridianDayAt(time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC), paris)
+	key := VeridianDailyQuotaKey{Day: day.Label, DayStart: day.Start, DayEnd: day.End}
+	assert.Equal(t, "2026-10-25", key.Day.Format("2006-01-02"))
+	assert.Equal(t, 25*time.Hour, key.DayEnd.Sub(key.DayStart), "retour a l'heure d'hiver : 25 h")
+}

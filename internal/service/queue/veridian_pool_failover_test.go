@@ -683,3 +683,32 @@ func TestVeridianBuildFailoverCandidates_PausedSequenceAnchorOpensFailover(t *te
 	assert.Equal(t, "relai", candidates[0].IntegrationID, "ancre en pause : la relance bascule tout de suite")
 	assert.Equal(t, "nord", candidates[1].IntegrationID, "l'ancre reste en dernier recours (sera sautée tant qu'elle est en pause)")
 }
+
+// Lot 4 (08/10/2026) : le profil transactionnel reserve n'est jamais un candidat commercial,
+// ni comme profil assigne, ni comme ancre de sequence.
+func TestVeridianBuildFailoverCandidates_NeverContainsTheReservedTransactionalProfile(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := transactionalTestWorkspace(true)
+
+	entry := veridianTestEntry("c1", "lead@gmail.com", domain.EmailQueuePayload{FromAddress: "no-reply@tx.example"})
+	entry.IntegrationID = "tx"
+	candidates := env.worker.veridianBuildFailoverCandidates(ws, entry, &ws.Integrations[1])
+	require.Len(t, candidates, 1)
+	assert.Equal(t, "nord", candidates[0].IntegrationID)
+
+	// Sequence dont le premier envoi est parti par le profil reserve : l'ancre ne l'impose pas.
+	automationID := "auto-1"
+	sentAt := time.Now().Add(-time.Hour)
+	env.mockMessageHistoryRepo.EXPECT().
+		GetByContact(gomock.Any(), "ws-1", gomock.Any(), "lead@gmail.com", gomock.Any(), gomock.Any()).
+		Return([]*domain.MessageHistory{{ID: "old", AutomationID: &automationID, SentAt: &sentAt, VeridianProfileID: "tx", VeridianSenderEmail: "no-reply@tx.example"}}, 1, nil)
+	followUp := veridianTestEntry("c2", "lead@gmail.com", domain.EmailQueuePayload{})
+	followUp.SourceType = domain.EmailQueueSourceAutomation
+	followUp.SourceID = automationID
+	followUp.IntegrationID = "nord"
+	candidates = env.worker.veridianBuildFailoverCandidates(ws, followUp, &ws.Integrations[0])
+	for _, c := range candidates {
+		assert.NotEqual(t, "tx", c.IntegrationID)
+	}
+	require.NotEmpty(t, candidates)
+}

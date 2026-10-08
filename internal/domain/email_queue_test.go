@@ -558,3 +558,19 @@ func TestEmailQueuePayload_VeridianExcludedProviderClassesRoundTrip(t *testing.T
 	require.NoError(t, err)
 	assert.NotContains(t, string(rawEmpty), "veridian_excluded_provider_classes")
 }
+
+// Lot 4 (08/10/2026) : marqueur transactionnel d'une entree de file.
+func TestEmailQueuePayloadVeridianTransactionalMarker(t *testing.T) {
+	assert.Less(t, EmailQueuePriorityTransactional, EmailQueuePriorityMarketing, "priority ASC : le transactionnel passe devant toute campagne")
+
+	raw, err := json.Marshal(EmailQueuePayload{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "veridian_transactional", "absent par defaut : les payloads existants ne changent pas")
+
+	raw, err = json.Marshal(EmailQueuePayload{VeridianTransactional: true})
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"veridian_transactional":true`)
+	var back EmailQueuePayload
+	require.NoError(t, json.Unmarshal(raw, &back))
+	assert.True(t, back.VeridianTransactional)
+}

@@ -56,3 +56,17 @@ func TestNewVeridianEmailProfileOverviewRepositoryRetainsWorkspaceRepository(t *
 	require.True(t, ok)
 	assert.Same(t, workspaceRepo, concrete.workspaceRepo)
 }
+
+func TestVeridianEmailProfileOverviewRepositoryPropagatesQueryErrors(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws1").Return(db, nil)
+	mock.ExpectQuery(`FROM message_history`).WillReturnError(assert.AnError)
+	repo := NewVeridianEmailProfileOverviewRepository(workspaceRepo)
+	_, _, err := repo.GetPlanObservations(context.Background(), "ws1", domain.VeridianDayAt(time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC), nil))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "plan observations")
+}

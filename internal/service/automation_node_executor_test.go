@@ -3898,3 +3898,94 @@ func TestEmailNodeExecutor_Execute_TemplateWithoutEmailContentEnqueuesNothing(t 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no email content")
 }
+
+// Lot 4 (08/10/2026) : un modele de categorie transactionnelle part par le profil
+// transactionnel reserve, marque pour le worker, en priorite sur les campagnes.
+func TestEmailNodeExecutor_Execute_TransactionalTemplateUsesTheReservedProfile(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockListRepo := mocks.NewMockListRepository(ctrl)
+	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
+	mockLogger := setupMockLoggerForNodeExecutor(ctrl)
+	executor := NewEmailNodeExecutor(mockEmailQueueRepo, mockTemplateRepo, mockWorkspaceRepo, mockListRepo, mockContactListRepo, "https://api.example.com", mockLogger)
+
+	workspace := createTestWorkspaceWithEmailProvider()
+	tx := workspace.Integrations[0]
+	tx.ID = "tx-profile"
+	tx.Name = "Transactionnel"
+	tx.EmailProvider.Senders = []domain.EmailSender{{ID: "sender1", Email: "no-reply@tx.example", Name: "Notifications", IsDefault: true}}
+	workspace.Integrations = append(workspace.Integrations, tx)
+	workspace.Settings.TransactionalEmailProviderID = "tx-profile"
+
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "ws1").Return(workspace, nil).Times(2)
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "ws1", "tpl123", int64(0)).Return(createTestTemplateWithCategory("transactional"), nil).Times(2)
+	mockListRepo.EXPECT().GetListByID(gomock.Any(), "ws1", "list1").Return(&domain.List{ID: "list1", Name: "L"}, nil).Times(2)
+	var entries []*domain.EmailQueueEntry
+	mockEmailQueueRepo.EXPECT().Enqueue(gomock.Any(), "ws1", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, e []*domain.EmailQueueEntry) error { entries = append(entries, e...); return nil }).Times(2)
+
+	params := NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node:        &domain.AutomationNode{ID: "email_node1", Type: domain.NodeTypeEmail, NextNodeID: strPtr("next"), Config: map[string]interface{}{"template_id": "tpl123"}},
+		Contact:     &domain.ContactAutomation{ID: "ca1", ContactEmail: "recipient@example.com"},
+		ContactData: &domain.Contact{Email: "recipient@example.com"},
+		Automation:  &domain.Automation{ID: "auto1", Name: "Commande", ListID: "list1"},
+	}
+	_, err := executor.Execute(context.Background(), params)
+	require.NoError(t, err)
+	// Meme avec un noeud regle sur le profil commercial, le transactionnel part par le profil reserve.
+	override := params
+	override.Node = &domain.AutomationNode{ID: "email_node2", Type: domain.NodeTypeEmail, NextNodeID: strPtr("next"),
+		Config: map[string]interface{}{"template_id": "tpl123", "integration_id": "integration123"}}
+	_, err = executor.Execute(context.Background(), override)
+	require.NoError(t, err)
+
+	require.Len(t, entries, 2)
+	for _, e := range entries {
+		assert.Equal(t, "tx-profile", e.IntegrationID)
+		assert.True(t, e.Payload.VeridianTransactional)
+		assert.Equal(t, domain.EmailQueuePriorityTransactional, e.Priority)
+		assert.Equal(t, "no-reply@tx.example", e.Payload.FromAddress)
+	}
+}
+
+func TestEmailNodeExecutor_Execute_MarketingTemplateKeepsTheCommercialProfileEvenWithAReservedOne(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockListRepo := mocks.NewMockListRepository(ctrl)
+	mockContactListRepo := mocks.NewMockContactListRepository(ctrl)
+	mockLogger := setupMockLoggerForNodeExecutor(ctrl)
+	executor := NewEmailNodeExecutor(mockEmailQueueRepo, mockTemplateRepo, mockWorkspaceRepo, mockListRepo, mockContactListRepo, "https://api.example.com", mockLogger)
+
+	workspace := createTestWorkspaceWithEmailProvider()
+	tx := workspace.Integrations[0]
+	tx.ID = "tx-profile"
+	workspace.Integrations = append(workspace.Integrations, tx)
+	workspace.Settings.TransactionalEmailProviderID = "tx-profile"
+
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "ws1").Return(workspace, nil)
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "ws1", "tpl123", int64(0)).Return(createTestTemplateWithCategory("marketing"), nil)
+	mockListRepo.EXPECT().GetListByID(gomock.Any(), "ws1", "list1").Return(&domain.List{ID: "list1", Name: "L"}, nil)
+	mockContactListRepo.EXPECT().GetContactListByIDs(gomock.Any(), "ws1", "recipient@example.com", "list1").Return(&domain.ContactList{Status: domain.ContactListStatusActive}, nil)
+	mockEmailQueueRepo.EXPECT().Enqueue(gomock.Any(), "ws1", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, e []*domain.EmailQueueEntry) error {
+			assert.Equal(t, "integration123", e[0].IntegrationID)
+			assert.False(t, e[0].Payload.VeridianTransactional)
+			assert.Equal(t, domain.EmailQueuePriorityMarketing, e[0].Priority)
+			return nil
+		})
+	_, err := executor.Execute(context.Background(), NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node:        &domain.AutomationNode{ID: "n", Type: domain.NodeTypeEmail, NextNodeID: strPtr("next"), Config: map[string]interface{}{"template_id": "tpl123"}},
+		Contact:     &domain.ContactAutomation{ID: "ca1", ContactEmail: "recipient@example.com"},
+		ContactData: &domain.Contact{Email: "recipient@example.com"},
+		Automation:  &domain.Automation{ID: "auto1", Name: "Prospection", ListID: "list1"},
+	})
+	require.NoError(t, err)
+}

@@ -406,3 +406,14 @@ func TestMessageHistorySchema_CountFailedExcluded(t *testing.T) {
 	assert.Contains(t, joined, "pre-filtered recipient:")
 	assert.Contains(t, joined, "excluded_provider_class:")
 }
+
+// Lot 4 (08/10/2026) : le tableau de bord separe le commercial du transactionnel avec
+// la meme definition que les compteurs et le journal.
+func TestMessageHistorySchemaHasMessageTypeDimension(t *testing.T) {
+	dim, ok := PredefinedSchemas["message_history"].Dimensions["message_type"]
+	require.True(t, ok, "la dimension message_type doit exister")
+	assert.Equal(t, "string", dim.Type)
+	assert.Contains(t, dim.SQL, "veridian_message_type = 'transactional'")
+	assert.Contains(t, dim.SQL, "transactional_notification_id IS NOT NULL")
+	assert.Contains(t, dim.SQL, "ELSE 'commercial'")
+}

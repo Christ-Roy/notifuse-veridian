@@ -477,3 +477,26 @@ func TestVeridianEffectivePlan_UnverifiedProfileIsOutOfRotation(t *testing.T) {
 	assert.Contains(t, plan.BlockedBy, domain.VeridianPlanBlockUnverified)
 	assert.False(t, plan.SendableNow)
 }
+
+// Lot 4 (08/10/2026) : la reputation est lue PAR PROFIL ; a defaut, par domaine emetteur.
+func TestVeridianEffectivePlan_ReputationIsReadPerProfileBeforeDomain(t *testing.T) {
+	ws := veridianTestWorkspace(nil, 60)
+	ws.Settings.VeridianMarketingEmailProviderIDs = []string{"int-1"}
+	ws.Integrations[0].Type = domain.IntegrationTypeEmail
+	ws.Integrations[0].EmailProvider = *parisWindowProvider()
+	ws.Integrations[0].EmailProvider.Senders = []domain.EmailSender{{ID: "s", Email: "hello@envoi.example", IsDefault: true}}
+	now := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
+
+	byDomain := VeridianPlanInput{Workspace: ws, IntegrationID: "int-1", Now: now,
+		Reputation: map[string]VeridianReputationStatus{"envoi.example": {Complaints7d: 1, Alert: true, DomainFactor: 4}}}
+	assert.True(t, VeridianEffectivePlan(byDomain).ReputationAlert, "repli sur le domaine")
+
+	both := byDomain
+	both.Reputation = map[string]VeridianReputationStatus{
+		"envoi.example": {Complaints7d: 1, Alert: true, DomainFactor: 4},
+		"int-1":         {DomainFactor: 1},
+	}
+	plan := VeridianEffectivePlan(both)
+	assert.False(t, plan.ReputationAlert, "le verdict du profil prime sur celui du domaine partage")
+	assert.Equal(t, 1, plan.DomainSlowdownFactor)
+}

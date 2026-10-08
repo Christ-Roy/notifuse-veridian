@@ -70,3 +70,22 @@ func TestNewVeridianEmailProfileUsageServiceRetainsDependencies(t *testing.T) {
 	assert.Same(t, auth, concrete.authService)
 	assert.Same(t, log, concrete.logger)
 }
+
+// Lot 4 (08/10/2026) : « aujourd'hui » suit le fuseau du workspace, plus minuit UTC.
+func TestVeridianEmailProfileUsageService_TodayFollowsTheWorkspaceTimezone(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	auth := mocks.NewMockAuthService(ctrl)
+	workspaces := mocks.NewMockWorkspaceRepository(ctrl)
+	log := pkgmocks.NewMockLogger(ctrl)
+	membership := &domain.UserWorkspace{Permissions: domain.UserPermissions{domain.PermissionResourceMessageHistory: {Read: true}}}
+	auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").Return(context.Background(), &domain.User{}, membership, nil)
+	workspaces.EXPECT().GetByID(gomock.Any(), "ws1").Return(&domain.Workspace{
+		ID: "ws1", Settings: domain.WorkspaceSettings{Timezone: "Europe/Paris"},
+	}, nil)
+	usageRepo := &emailProfileUsageRepoStub{}
+	svc := NewVeridianEmailProfileUsageService(usageRepo, workspaces, auth, log)
+	_, err := svc.GetEmailProfilesUsage(context.Background(), "ws1")
+	require.NoError(t, err)
+	assert.Contains(t, []int{22, 23}, usageRepo.since.UTC().Hour(), "le jour commence a minuit heure de Paris (22h ou 23h UTC)")
+}

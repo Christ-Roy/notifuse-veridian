@@ -48,3 +48,18 @@ func TestVeridianBuildPlanObserved(t *testing.T) {
 	assert.Equal(t, 11, obs.DomainReserved["envoi.example"])
 	assert.Equal(t, 8, obs.DomainClassReserved["envoi.example"]["google"])
 }
+
+// Lot 4 (08/10/2026) : un mail transactionnel compte sur son profil, jamais dans les
+// compteurs d'adresse, de domaine ou de classe de la chauffe et des plafonds.
+func TestVeridianBuildPlanObservedKeepsTransactionalOutOfCommercialCounters(t *testing.T) {
+	rows := []VeridianPlanObservationRow{
+		{ProfileID: "nord", SenderEmail: "hello@nord.example", ProviderClass: "google", Accepted: 7},
+		{ProfileID: "tx", SenderEmail: "no-reply@nord.example", ProviderClass: "google", MessageType: VeridianMessageTypeTransactional, Accepted: 40},
+	}
+	commercial := VeridianBuildPlanObserved("nord", rows, nil)
+	assert.Equal(t, 7, commercial.ProfileAccepted)
+	assert.Equal(t, 7, commercial.DomainSent["nord.example"], "le transactionnel du meme domaine ne gonfle pas la chauffe")
+	assert.Equal(t, 7, commercial.DomainClassSent["nord.example"]["google"])
+	transactional := VeridianBuildPlanObserved("tx", rows, nil)
+	assert.Equal(t, 40, transactional.ProfileAccepted, "le volume transactionnel se lit sur son profil")
+}

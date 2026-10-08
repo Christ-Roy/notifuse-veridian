@@ -72,3 +72,13 @@ func TestVeridianPlanClassSlowdownRateJSONContract(t *testing.T) {
 	assert.NotContains(t, string(raw), "slowdown_rate")
 	assert.NotContains(t, string(raw), "sent_7d")
 }
+
+// Lot 4 (08/10/2026) : le plan dit de quel jour de compte il parle.
+func TestVeridianEffectivePlanExposesTheDayOfTheProfile(t *testing.T) {
+	raw, err := json.Marshal(VeridianEffectivePlan{Date: "2026-10-09", DayTimezone: "Europe/Paris"})
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"date":"2026-10-09"`)
+	assert.Contains(t, string(raw), `"day_timezone":"Europe/Paris"`)
+	assert.Contains(t, string(raw), `"day_start"`)
+	assert.Contains(t, string(raw), `"day_end"`)
+}

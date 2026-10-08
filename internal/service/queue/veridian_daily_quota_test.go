@@ -257,3 +257,29 @@ func TestVeridianReserveDailyQuota_ReservesTheSlowedClassCap(t *testing.T) {
 	require.Equal(t, 2, repo.specs[0].Cap, "8 ÷ 4")
 	require.Equal(t, "send.test", repo.specs[0].Key.SenderDomain)
 }
+
+// Lot 4 (08/10/2026) : les compteurs de classe et de chauffe partagent le jour de Paris du profil.
+func TestVeridianReserveDailyQuota_ClassAndWarmupKeysShareTheParisDay(t *testing.T) {
+	withFixedClock(t, time.Date(2026, 10, 8, 22, 30, 0, 0, time.UTC)) // 9 octobre a Paris
+	env := newVeridianThrottleTestEnv(t)
+	repo := &quotaTestRepository{outcomes: map[string]quotaTestOutcome{
+		domain.VeridianDailyQuotaKindProviderClass: {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
+		domain.VeridianDailyQuotaKindWarmup:        {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
+	}}
+	env.worker.messageHistoryRepo = repo
+	provider := parisWindowProvider()
+	started := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	provider.VeridianWarmupStartedAt = &started
+	provider.VeridianWarmupSchedule = []int{10}
+	workspace := veridianTestWorkspaceWithCaps(map[string]int{"google": 5}, 0)
+	entry := veridianTestEntryFrom("q", "lead@gmail.com", "hello@envoi.example", domain.EmailQueuePayload{})
+
+	_, _, blocked := env.worker.veridianReserveDailyQuota(workspace, provider, entry)
+	require.False(t, blocked)
+	require.Len(t, repo.specs, 3, "profil, classe, chauffe")
+	for _, spec := range repo.specs {
+		require.Equal(t, "2026-10-09", spec.Key.Day.Format("2006-01-02"), spec.Key.Kind)
+		require.Equal(t, time.Date(2026, 10, 8, 22, 0, 0, 0, time.UTC), spec.Key.DayStart, spec.Key.Kind)
+		require.Equal(t, time.Date(2026, 10, 9, 22, 0, 0, 0, time.UTC), spec.Key.DayEnd, spec.Key.Kind)
+	}
+}

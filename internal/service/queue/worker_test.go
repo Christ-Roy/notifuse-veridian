@@ -2392,3 +2392,32 @@ func TestNewEmailQueueWorker_ReputationFactorsStartAtNormalRate(t *testing.T) {
 	require.Equal(t, 1, env.worker.veridianSlowdownFactor(&domain.Workspace{ID: "ws-1"}, entry, "ovh"))
 	require.Equal(t, 1, env.worker.veridianSlowdownFactor(nil, veridianTestEntry("nofrom", "lead@corp.test", domain.EmailQueuePayload{}), "ovh"), "sans FROM exploitable : jamais ralenti")
 }
+
+// Lot 4 (08/10/2026) : la ligne d'historique d'un mail transactionnel est typee et ne
+// porte ni adresse emettrice ni classe, donc aucun compteur commercial ne la voit.
+func TestEmailQueueWorker_UpsertMessageHistory_TransactionalEntryIsTypedAndUnattributed(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	entry := veridianTestEntry("t1", "client@gmail.com", domain.EmailQueuePayload{
+		FromAddress: "no-reply@tx.example", VeridianProviderClass: "google", VeridianTransactional: true,
+	})
+	entry.IntegrationID = "tx"
+	var row *domain.MessageHistory
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error { row = m; return nil })
+	env.worker.upsertMessageHistory(context.Background(), "ws-1", "secret", entry, nil)
+	require.NotNil(t, row)
+	assert.Equal(t, domain.VeridianMessageTypeTransactional, row.VeridianMessageType)
+	assert.Equal(t, "tx", row.VeridianProfileID)
+	assert.Empty(t, row.VeridianSenderEmail)
+	assert.Empty(t, row.VeridianProviderClass)
+
+	// Commercial : attribue comme avant.
+	commercial := veridianTestEntry("c1", "lead@gmail.com", domain.EmailQueuePayload{FromAddress: "hello@nord.example", VeridianProviderClass: "google"})
+	commercial.IntegrationID = "nord"
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error { row = m; return nil })
+	env.worker.upsertMessageHistory(context.Background(), "ws-1", "secret", commercial, nil)
+	assert.Empty(t, row.VeridianMessageType)
+	assert.Equal(t, "hello@nord.example", row.VeridianSenderEmail)
+	assert.Equal(t, "google", row.VeridianProviderClass)
+}
