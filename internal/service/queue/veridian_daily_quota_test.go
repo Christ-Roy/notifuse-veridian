@@ -263,6 +263,7 @@ func TestVeridianReserveDailyQuota_ClassAndWarmupKeysShareTheParisDay(t *testing
 	withFixedClock(t, time.Date(2026, 10, 8, 22, 30, 0, 0, time.UTC)) // 9 octobre a Paris
 	env := newVeridianThrottleTestEnv(t)
 	repo := &quotaTestRepository{outcomes: map[string]quotaTestOutcome{
+		domain.VeridianDailyQuotaKindProfile:       {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
 		domain.VeridianDailyQuotaKindProviderClass: {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
 		domain.VeridianDailyQuotaKindWarmup:        {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
 	}}

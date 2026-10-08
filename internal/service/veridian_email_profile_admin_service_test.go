@@ -101,6 +101,15 @@ func TestAdminService_RefusesWithoutWritePermissionAndSurfacesRuleErrors(t *test
 	})
 }
 
+func TestNewVeridianEmailProfileAdminServiceRetainsDependencies(t *testing.T) {
+	svc, repo, auth, wake := newAdminServiceForTest(t)
+	concrete, ok := svc.(*veridianEmailProfileAdminService)
+	require.True(t, ok)
+	assert.Same(t, repo, concrete.repo)
+	assert.Same(t, auth, concrete.auth)
+	assert.Same(t, wake, concrete.policyRepo)
+}
+
 func TestAdminService_PauseAndResume(t *testing.T) {
 	svc, repo, auth, wake := newAdminServiceForTest(t)
 	auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").Return(context.Background(), &domain.User{}, writer(), nil).Times(2)
