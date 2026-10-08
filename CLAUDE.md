@@ -150,6 +150,7 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 - `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause, lien IMAP, exclusivité
 - `55` page Profils d'envoi (lot 3) : carte, assistant, `emailProfiles.create`
 - `56` séparation transactionnel / commercial (lot 4) : `setUsage|pause|resume`, profil réservé, isolation worker, compteurs par type (V61), fusible par profil, jour de compte au fuseau de la fenêtre
+- `57` tableau de bord de prospection (lot 5) : `prospection.stats` (avancement des séquences, réponses par séquence et liste, stock), dimension analytics `veridian_profile_id`, surveillance du profil transactionnel (`transactional_watch`, jamais bloquante), chauffe par jour de compte, `notifuse profiles:create`
 
 **Cold outbound — UI console & self-service**
 - `06` UI console — section Settings « Cold outreach »
