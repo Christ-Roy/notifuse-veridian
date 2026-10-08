@@ -20,3 +20,9 @@ Go : `queue/veridian_transactional_entry_test.go` (envoi par le seul profil rés
 ## Pas fait ici (lot 5)
 
 Garde-fou de volume transactionnel (alerte sur une boucle côté client, jamais un blocage), alerte lisible sur la réputation du profil transactionnel (mesurée, non bloquante), refus par défaut de deux profils de types différents sur le même domaine d'envoi, palier de chauffe qui avance par 24 h écoulées (`VeridianWarmupCapForDay`) et non par jour de compte, `emailProfiles.create` sans commande CLI (`coverage_test.sh` rouge depuis le lot 3), tableau de bord de prospection (lot 5 du plan 53).
+
+## Preuve en production (08/10/2026, image `v61.0-veridian.baa015ff`)
+
+Workspace jetable `lot4asd042558` (supprimé, base `notifuse_ws_lot4asd042558` retirée, aucune écriture sur `robertbrunon`), deux profils SMTP vers un puits local du bastion (aucun mail réel). Fenêtre commerciale fermée, chauffe à 1 par jour, plafond de profil 5. Résultats : `transactional:send` part par le profil transactionnel (puits :2526) fenêtre fermée ; une séquence au modèle transactionnel part aussi par lui ; la campagne reste en file jusqu'à l'ouverture de la fenêtre puis 1 mail seulement part (chauffe 1/1) par le profil commercial (:2527) ; les compteurs du jour comptent 1 commercial et 2 transactionnels séparément (`veridian_daily_quota_counters` : profil et chauffe à 1, aucun compteur transactionnel) ; `messages:list` et l'analytics filtrent par `message_type` (1 commercial, 2 transactionnels) ; `setUsage` par clé scopée, refus 400 de la pause d'un transactionnel et de la rotation vidée.
+
+`robertbrunon`, lecture seule à 06h20 UTC : les envois ont repris à 06h00 dans la fenêtre ; l'overview, `message_history` et `veridian_daily_quota_counters` concordent (7, 6 et 5 envoyés par profil, jour de compte Europe/Paris du 07/10 22h00 UTC au 08/10 22h00 UTC).
