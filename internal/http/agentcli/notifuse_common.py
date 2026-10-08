@@ -69,6 +69,11 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse profiles:link-imap <ws> --id P (--imap I | --none)   lie un profil à sa boîte IMAP de retour (owner)
   notifuse profiles:set-usage <ws> --id P --usage commercial|transactional|unassigned
                                                               usage EXCLUSIF d'un profil : rotation commerciale, profil transactionnel réservé, ou hors service (serveur : exclusivité, rotation jamais vidée, profil vérifié)
+  notifuse profiles:create <ws> --type smtp|gmail-app-password --name N --from-email E (--secret-stdin | --secret-file F) ...
+                                                              crée un profil d'envoi (+ boîte IMAP liée), atomique, owner. Le secret se lit sur stdin ou dans un
+                                                              fichier, JAMAIS en argument, jamais affiché ni loggé. Gmail : https://myaccount.google.com/apppasswords
+  notifuse prospection:stats <ws> [--start AAAA-MM-JJ] [--end AAAA-MM-JJ]   agrégats du tableau de bord de prospection (réponses par séquence et liste,
+                                                              avancement J0/J+4/J+10, sorties par raison, stock par liste ; lecture, clé scopée OK)
   notifuse profiles:pause|resume <ws> --id P                    met en pause / relance un profil commercial (workspace:write, effet immédiat au worker ; refusé sur un transactionnel)
   notifuse analytics:query <ws> --query @q.json    (analytics:schemas pour les schémas)
   notifuse messages:list <ws> [--param limit=50]   historique des envois
@@ -93,6 +98,7 @@ renvoie une erreur (401/403/404/400/409/5xx) — donc scriptable/testable.
 """
 import argparse
 import csv
+import getpass
 import html
 import hashlib
 import hmac as hmaclib
@@ -325,6 +331,9 @@ WORKSPACE_COMMANDS = frozenset({
     # POST /api/veridian/emailProfiles.setUsage|pause|resume (JWT / clé API du
     # workspace + workspace:write côté service). Exclusivité validée par le serveur.
     "profiles:set-usage", "profiles:pause", "profiles:resume",
+    # Lot 5 (08/10/2026) : création d'un profil par l'API dédiée (propriétaire ; secret
+    # sur stdin ou fichier) et agrégats du tableau de bord de prospection (lecture).
+    "profiles:create", "prospection:stats",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -1885,6 +1894,96 @@ def cmd_profiles_resume(a):
     _profile_admin_call(a, "/api/veridian/emailProfiles.resume")
 
 
+GMAIL_APP_PASSWORD_URL = "https://myaccount.google.com/apppasswords"
+
+
+def read_secret_input(secret_file=None, from_stdin=False, label="secret"):
+    """Lit un secret sur stdin ou dans un fichier. Jamais en argument de ligne de commande
+    (visible dans `ps` et l'historique du shell). Retire seulement le saut de ligne final.
+    Sur un terminal, la saisie est masquée (getpass). Le secret n'est ni affiché ni loggé."""
+    if secret_file and from_stdin:
+        die(f"{label} : --secret-stdin et --secret-file sont exclusifs.")
+    if secret_file:
+        path = Path(secret_file).expanduser()
+        try:
+            if os.name == "posix" and path.stat().st_mode & 0o077:
+                print(f"⚠ {path} est lisible par d'autres utilisateurs (chmod 600 recommandé).", file=sys.stderr)
+            value = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            die(f"{label} : fichier illisible ({exc.strerror or 'erreur'}).")
+    elif from_stdin:
+        if sys.stdin.isatty():
+            value = getpass.getpass(f"{label} (saisie masquée) : ")
+        else:
+            value = sys.stdin.read()
+    else:
+        die(f"{label} : --secret-stdin ou --secret-file est requis (jamais en argument).")
+    value = value.rstrip("\r\n")
+    if not value:
+        die(f"{label} vide.")
+    return value
+
+
+def redact_secrets(payload, secrets):
+    """Masque toute occurrence d'un secret dans une réponse avant affichage."""
+    text = json.dumps(payload, ensure_ascii=False)
+    for secret in secrets:
+        if secret:
+            text = text.replace(json.dumps(secret, ensure_ascii=False)[1:-1], "***")
+    return json.loads(text)
+
+
+def build_profile_create_body(a, secret, imap_secret=None):
+    """Corps de POST /api/veridian/emailProfiles.create. Pur : testable sans réseau."""
+    if a.type == "gmail-app-password":
+        body = {
+            "workspace_id": a.workspace, "type": "gmail_app_password", "name": a.name,
+            "sender_email": a.from_email, "sender_name": a.from_name or a.from_email,
+            # Google affiche le mot de passe d'application en quatre groupes séparés par des espaces.
+            "app_password": "".join(secret.split()),
+            "gmail_account_type": a.account_type or "personal",
+        }
+        if a.daily_cap:
+            body["profile_daily_cap"] = a.daily_cap
+        return body
+    if not (a.host and a.user):
+        die("--type smtp exige --host et --user (et --port, 587 par défaut).")
+    body = {
+        "workspace_id": a.workspace, "type": "smtp_imap", "name": a.name,
+        "sender_email": a.from_email, "sender_name": a.from_name or a.from_email,
+        "smtp": {"host": a.host, "port": a.port or 587, "use_tls": not a.no_tls,
+                 "username": a.user, "password": secret},
+    }
+    if a.imap_host:
+        body["imap"] = {"host": a.imap_host, "port": a.imap_port or 993, "use_tls": True,
+                        "username": a.imap_user or a.user,
+                        "password": imap_secret if imap_secret else secret,
+                        "folder": a.imap_folder or "INBOX"}
+    return body
+
+
+def cmd_profiles_create(a):
+    """Crée un profil d'envoi (et sa boîte IMAP de retour) en une seule écriture serveur."""
+    secret = read_secret_input(a.secret_file, a.secret_stdin, "secret du profil")
+    imap_secret = None
+    if getattr(a, "imap_secret_file", None):
+        imap_secret = read_secret_input(a.imap_secret_file, False, "secret IMAP")
+    body = build_profile_create_body(a, secret, imap_secret)
+    secrets = [secret, imap_secret, body.get("app_password")]
+    if a.dry_run:
+        print(json.dumps(redact_secrets(body, secrets), indent=2, ensure_ascii=False))
+        return
+    jwt = owner_jwt(a.env, a.workspace)
+    status, payload = call_jwt(a.env, "POST", "/api/veridian/emailProfiles.create", jwt, body=body)
+    out(status, redact_secrets(payload, secrets))
+
+
+def cmd_prospection_stats(a):
+    jwt = apikey_for(a.env, a.workspace)
+    out(*call_jwt(a.env, "GET", "/api/veridian/prospection.stats", jwt,
+                  params={"workspace_id": a.workspace, "start": a.start, "end": a.end}))
+
+
 # ---- generic resource CRUD helpers ----
 def _json_arg(s):
     if not s:
@@ -3416,6 +3515,51 @@ def build_parser():
     sp.add_argument("--id", required=True, help="id du profil d'envoi")
     sp.add_argument("--usage", required=True, choices=["commercial", "transactional", "unassigned"])
     sp.set_defaults(func=cmd_profiles_set_usage, _routes=["/api/veridian/emailProfiles.setUsage"])
+
+    sp = sub.add_parser(
+        "profiles:create",
+        help="crée un profil d'envoi (SMTP + IMAP de retour, ou Gmail avec mot de passe d'application), atomique (owner)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Crée un profil d'envoi. Il naît HORS rotation et non vérifié : "
+            "profiles:set-usage l'y fait entrer après vérification.\n"
+            "Le secret (mot de passe SMTP, ou mot de passe d'application Gmail) se lit sur stdin ou dans un "
+            "fichier, jamais en argument, et n'est ni affiché ni loggé."),
+        epilog=(
+            "Gmail : générez le mot de passe d'application (16 caractères) sur " + GMAIL_APP_PASSWORD_URL + "\n"
+            "  (validation en deux étapes requise sur le compte ; Gmail impose smtp.gmail.com:587 et imap.gmail.com:993).\n\n"
+            "Exemples :\n"
+            "  printf '%s' \"$MOT_DE_PASSE\" | notifuse profiles:create ws --type smtp --name relais-1 --from-email hello@x.fr "
+            "--host smtp.x.fr --port 587 --user hello@x.fr --secret-stdin --imap-host imap.x.fr\n"
+            "  notifuse profiles:create ws --type gmail-app-password --name gmail-1 --from-email moi@gmail.com "
+            "--secret-file ~/.secrets/gmail-1 --daily-cap 30"))
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--type", required=True, choices=["smtp", "gmail-app-password"])
+    sp.add_argument("--name", required=True, help="nom du profil")
+    sp.add_argument("--from-email", required=True, help="adresse d'expédition")
+    sp.add_argument("--from-name", help="nom d'expéditeur (défaut : l'adresse)")
+    sp.add_argument("--secret-stdin", action="store_true", help="lit le secret sur stdin (masqué sur un terminal)")
+    sp.add_argument("--secret-file", help="lit le secret dans ce fichier (chmod 600)")
+    sp.add_argument("--host", help="smtp : hôte SMTP")
+    sp.add_argument("--port", type=int, help="smtp : port SMTP (défaut 587)")
+    sp.add_argument("--user", help="smtp : identifiant SMTP")
+    sp.add_argument("--no-tls", action="store_true", help="smtp : sans TLS")
+    sp.add_argument("--imap-host", help="smtp : crée aussi la boîte IMAP de retour liée (même identifiant et même secret par défaut)")
+    sp.add_argument("--imap-port", type=int, help="imap : port (défaut 993)")
+    sp.add_argument("--imap-user", help="imap : identifiant si différent du SMTP")
+    sp.add_argument("--imap-folder", help="imap : dossier (défaut INBOX)")
+    sp.add_argument("--imap-secret-file", help="imap : secret différent de celui du SMTP, dans ce fichier")
+    sp.add_argument("--account-type", choices=["personal", "workspace"], help="gmail : compte personnel (défaut) ou Workspace")
+    sp.add_argument("--daily-cap", type=int, help="gmail : plafond journalier du profil (défaut serveur 30)")
+    sp.add_argument("--dry-run", action="store_true", help="affiche le corps de la requête, secrets masqués, sans rien envoyer")
+    sp.set_defaults(func=cmd_profiles_create, _routes=["/api/veridian/emailProfiles.create"])
+
+    sp = sub.add_parser("prospection:stats",
+                        help="agrégats du tableau de bord de prospection : réponses par séquence et par liste, avancement des séquences, stock")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--start", help="début de fenêtre AAAA-MM-JJ (défaut : tout l'historique)")
+    sp.add_argument("--end", help="fin de fenêtre AAAA-MM-JJ, jour inclus")
+    sp.set_defaults(func=cmd_prospection_stats, _routes=["/api/veridian/prospection.stats"])
 
     sp = sub.add_parser("profiles:pause", help="met un profil commercial en pause : le worker bascule sur le reste du pool (refusé sur un transactionnel)")
     sp.add_argument("workspace", nargs="?", default=None)
