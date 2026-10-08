@@ -2714,3 +2714,36 @@ func TestUpperBoundCondition_DateOnlyIsInclusive(t *testing.T) {
 		t.Fatalf("timestamp: borne inchangee attendue, obtenu %q %v", sql, args)
 	}
 }
+
+// Lot 5 : une requete par jour ET par dimension rend toutes les combinaisons, sans en perdre. Echec
+// demontre contre l'ancien remplissage, qui indexait les lignes par creneau et n'en gardait qu'une.
+func TestFillTimeSeriesGaps_KeepsEveryDimensionValuePerSlot(t *testing.T) {
+	query := Query{
+		Schema:     "message_history",
+		Measures:   []string{"count_sent"},
+		Dimensions: []string{"veridian_profile_id"},
+		TimeDimensions: []TimeDimension{{
+			Dimension: "sent_at", Granularity: "day", DateRange: &[2]string{"2026-10-06", "2026-10-08"},
+		}},
+	}
+	data := []map[string]interface{}{
+		{"sent_at_day": "2026-10-07T00:00:00Z", "veridian_profile_id": "a", "count_sent": 10},
+		{"sent_at_day": "2026-10-07T00:00:00Z", "veridian_profile_id": "b", "count_sent": 20},
+		{"sent_at_day": "2026-10-08T00:00:00Z", "veridian_profile_id": "a", "count_sent": 5},
+	}
+	out, err := fillTimeSeriesGaps(data, query)
+	require.NoError(t, err)
+	// 3 lignes reelles (dont DEUX relais le 07) plus le zero du 06, jamais de ligne perdue
+	require.Len(t, out, 4)
+	assert.Equal(t, 10, out[1]["count_sent"])
+	assert.Equal(t, "a", out[1]["veridian_profile_id"])
+	assert.Equal(t, 20, out[2]["count_sent"])
+	assert.Equal(t, "b", out[2]["veridian_profile_id"])
+	assert.Equal(t, 5, out[3]["count_sent"])
+
+	// Sans dimension, le remplissage des jours manquants reste actif.
+	query.Dimensions = nil
+	filled, err := fillTimeSeriesGaps([]map[string]interface{}{{"sent_at_day": "2026-10-07T00:00:00Z", "count_sent": 10}}, query)
+	require.NoError(t, err)
+	assert.Greater(t, len(filled), 1)
+}

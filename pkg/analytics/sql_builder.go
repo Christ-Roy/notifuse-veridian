@@ -594,12 +594,15 @@ func fillTimeSeriesGaps(data []map[string]interface{}, query Query) ([]map[strin
 		return data, nil
 	}
 
-	// Create a map of existing data by time dimension
-	existingData := make(map[string]map[string]interface{})
+	// Create a map of existing data by time dimension. Veridian lot 5 (08/10/2026) : avec des
+	// dimensions (envois par jour ET par relais), un creneau porte PLUSIEURS lignes, une par valeur
+	// de dimension. L'ancienne table (un creneau, une ligne) en gardait une seule et perdait
+	// silencieusement les autres relais : on garde toutes les lignes de chaque creneau.
+	existingData := make(map[string][]map[string]interface{})
 	for _, row := range data {
 		if timeVal, exists := row[timeDimColumn]; exists {
 			if timeStr, ok := timeVal.(string); ok {
-				existingData[timeStr] = row
+				existingData[timeStr] = append(existingData[timeStr], row)
 			}
 		}
 	}
@@ -607,9 +610,9 @@ func fillTimeSeriesGaps(data []map[string]interface{}, query Query) ([]map[strin
 	// Fill gaps
 	result := make([]map[string]interface{}, 0, len(timeRange))
 	for _, timeStr := range timeRange {
-		if existingRow, exists := existingData[timeStr]; exists {
-			// Use existing data
-			result = append(result, existingRow)
+		if existingRows, exists := existingData[timeStr]; exists {
+			// Use existing data (toutes les lignes du creneau)
+			result = append(result, existingRows...)
 		} else {
 			// Create zero-value row
 			zeroRow := make(map[string]interface{})
