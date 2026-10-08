@@ -46,6 +46,11 @@ func VeridianWarmupActive(startedAt *time.Time, schedule []int) bool {
 //   - stepDays  : durée d'un palier en jours (<=0 → défaut 1 = un palier par jour ;
 //     2 = on reste 2 jours à chaque valeur de la courbe).
 //   - now       : instant de référence (le worker passe time.Now()).
+//   - loc       : fuseau du jour de compte du profil (domain.VeridianDayLocation).
+//     Lot 5 (08/10/2026) : le palier avance par JOUR DE COMPTE (date civile de ce
+//     fuseau), comme les plafonds et leurs compteurs, et plus par tranche de 24 h
+//     écoulées : un warmup démarré à 18h passe au palier suivant à minuit, pas à
+//     18h le lendemain, en plein milieu du jour de compte. nil = UTC.
 //
 // Retourne 0 si le warmup n'est pas applicable (pas de date / courbe vide) →
 // l'appelant DOIT alors retomber sur le cap statique (0 = « pas de cap warmup »,
@@ -53,7 +58,7 @@ func VeridianWarmupActive(startedAt *time.Time, schedule []int) bool {
 // le palier courant, clampé au dernier palier (plein régime) une fois la courbe
 // épuisée. Le tout-premier jour (elapsed négatif si startedAt dans le futur, ou
 // elapsed 0) → palier 0 (premier cap, le plus conservateur).
-func VeridianWarmupCapForDay(startedAt *time.Time, schedule []int, stepDays int, now time.Time) int {
+func VeridianWarmupCapForDay(startedAt *time.Time, schedule []int, stepDays int, now time.Time, loc *time.Location) int {
 	if !VeridianWarmupActive(startedAt, schedule) {
 		return 0
 	}
@@ -61,14 +66,8 @@ func VeridianWarmupCapForDay(startedAt *time.Time, schedule []int, stepDays int,
 		stepDays = 1
 	}
 
-	// Jours calendaires écoulés depuis le début du warmup, en UTC (cohérent avec le
-	// raisonnement « jour » du daily-cap, qui compte sent_at >= minuit UTC).
-	start := startedAt.UTC()
-	elapsedDays := int(now.UTC().Sub(start).Hours() / 24)
-	if elapsedDays < 0 {
-		// Warmup programmé dans le futur : on reste au palier le plus conservateur.
-		elapsedDays = 0
-	}
+	// Jours de compte écoulés depuis le début du warmup (dates civiles du fuseau).
+	elapsedDays := veridianWarmupElapsedDays(*startedAt, now, loc)
 
 	idx := elapsedDays / stepDays
 	if idx >= len(schedule) {
@@ -88,21 +87,36 @@ func VeridianWarmupCapForDay(startedAt *time.Time, schedule []int, stepDays int,
 // VeridianWarmupStep retourne le palier courant (1-indexé pour l'affichage) et le
 // nombre total de paliers de la courbe, pour l'UI (« Warmup jour N/total »). Pur.
 // Retourne (0, 0) si le warmup n'est pas actif.
-func VeridianWarmupStep(startedAt *time.Time, schedule []int, stepDays int, now time.Time) (current, total int) {
+func VeridianWarmupStep(startedAt *time.Time, schedule []int, stepDays int, now time.Time, loc *time.Location) (current, total int) {
 	if !VeridianWarmupActive(startedAt, schedule) {
 		return 0, 0
 	}
 	if stepDays <= 0 {
 		stepDays = 1
 	}
-	start := startedAt.UTC()
-	elapsedDays := int(now.UTC().Sub(start).Hours() / 24)
-	if elapsedDays < 0 {
-		elapsedDays = 0
-	}
+	elapsedDays := veridianWarmupElapsedDays(*startedAt, now, loc)
 	idx := elapsedDays / stepDays
 	if idx >= len(schedule) {
 		idx = len(schedule) - 1
 	}
 	return idx + 1, len(schedule)
+}
+
+// veridianWarmupElapsedDays compte les jours de compte entre le début du warmup et
+// `now` : différence de dates civiles dans le fuseau `loc` (nil = UTC), donc 23 h ou
+// 25 h les jours de changement d'heure, jamais « 24 h écoulées ». Un début dans le
+// futur donne 0 (palier le plus conservateur).
+func veridianWarmupElapsedDays(startedAt, now time.Time, loc *time.Location) int {
+	if loc == nil {
+		loc = time.UTC
+	}
+	sy, sm, sd := startedAt.In(loc).Date()
+	ny, nm, nd := now.In(loc).Date()
+	start := time.Date(sy, sm, sd, 0, 0, 0, 0, time.UTC)
+	today := time.Date(ny, nm, nd, 0, 0, 0, 0, time.UTC)
+	days := int(today.Sub(start).Hours() / 24)
+	if days < 0 {
+		return 0
+	}
+	return days
 }

@@ -249,12 +249,12 @@ func veridianWarmupTestProvider(startedAt time.Time, schedule []int, stepDays in
 
 func TestVeridianWarmupCap(t *testing.T) {
 	base := time.Now().UTC()
-	assert.Equal(t, 0, veridianWarmupCap(nil, base), "nil provider = no warmup")
-	assert.Equal(t, 0, veridianWarmupCap(&domain.EmailProvider{}, base), "no warmup config = 0")
+	assert.Equal(t, 0, veridianWarmupCap(nil, nil, base), "nil provider = no warmup")
+	assert.Equal(t, 0, veridianWarmupCap(nil, &domain.EmailProvider{}, base), "no warmup config = 0")
 
 	// Démarré aujourd'hui, courbe [1,2,5], palier 1 jour → jour 0 = 1.
 	p := veridianWarmupTestProvider(base, []int{1, 2, 5}, 1)
-	assert.Equal(t, 1, veridianWarmupCap(p, base))
+	assert.Equal(t, 1, veridianWarmupCap(nil, p, base))
 }
 
 func TestVeridianDailyCapGate_WarmupOverridesStaticClassCap(t *testing.T) {

@@ -157,7 +157,7 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 	plan.PerRecipientDailyCap = base.PerRecipient
 	plan.PerSenderDailyCap = base.PerSender
 
-	step, of := domain.VeridianWarmupStep(provider.VeridianWarmupStartedAt, provider.VeridianWarmupSchedule, provider.VeridianWarmupStepDays, now)
+	step, of := domain.VeridianWarmupStep(provider.VeridianWarmupStartedAt, provider.VeridianWarmupSchedule, provider.VeridianWarmupStepDays, now, domain.VeridianDayLocation(ws, provider))
 	plan.Warmup = domain.VeridianPlanWarmup{Active: base.Warmup > 0, Day: step, Of: of, CapToday: base.Warmup, Started: provider.VeridianWarmupStartedAt}
 
 	// --- fenêtre d'envoi ---

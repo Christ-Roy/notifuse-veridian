@@ -45,7 +45,7 @@ func veridianResolveCapLimits(
 	lim := veridianCapLimits{Factor: 1}
 	classCaps, perRecipient := veridianResolveDailyCaps(workspace, provider, entry)
 	lim.PerRecipient = perRecipient
-	lim.Warmup = veridianWarmupCap(provider, now)
+	lim.Warmup = veridianWarmupCap(workspace, provider, now)
 	lim.Profile = provider.VeridianEffectiveProfileDailyCap()
 	lim.PerSender = veridianResolvePerSenderCap(workspace, provider, entry)
 	if len(classCaps) > 0 && classOf != nil {

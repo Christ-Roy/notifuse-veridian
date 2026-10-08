@@ -115,7 +115,7 @@ func veridianResolveDailyCaps(workspace *domain.Workspace, provider *domain.Emai
 // filtre classe). Le warmup se règle PAR INFRA uniquement (l'objet d'une rampe est une
 // IP/un domaine d'envoi, pas un workspace) : pas de niveau broadcast/workspace ici.
 // Cf. veridian_warmup.go.
-func veridianWarmupCap(provider *domain.EmailProvider, now time.Time) int {
+func veridianWarmupCap(ws *domain.Workspace, provider *domain.EmailProvider, now time.Time) int {
 	if provider == nil {
 		return 0
 	}
@@ -124,6 +124,7 @@ func veridianWarmupCap(provider *domain.EmailProvider, now time.Time) int {
 		provider.VeridianWarmupSchedule,
 		provider.VeridianWarmupStepDays,
 		now,
+		domain.VeridianDayLocation(ws, provider),
 	)
 }
 
