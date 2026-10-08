@@ -33,7 +33,7 @@ ligne dans l'index ci-dessous — jamais un pavé de plus ici.
    défaut`. Retirer ou réordonner un gate sans relire toute la cascade grille un
    domaine d'envoi. Les plafonds se résolvent UNE fois (`veridianResolveCapLimits`),
    partagée avec `VeridianEffectivePlan` (API `emailProfiles.overview`) : ne pas les
-   recalculer ailleurs. → `03,04,08,19,21,22,23,25,27,28,29,30,31,32,38,54`
+   recalculer ailleurs. → `03,04,08,19,21,22,23,25,27,28,29,30,31,32,38,54,56`
 5. **`DROP DATABASE` toujours `WITH (FORCE)`, et le record système supprimé AVANT la
    base (record-first).** Sinon la base workspace se recrée toute seule dans la
    seconde (le worker ré-élit un record encore vivant). Staging uniquement ;
@@ -148,6 +148,8 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 **Console assumée, vérité d'un profil**
 - `53` console assumée : inventaire, spécification de la page Profils d'envoi, plan en 5 lots
 - `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause, lien IMAP, exclusivité
+- `55` page Profils d'envoi (lot 3) : carte, assistant, `emailProfiles.create`
+- `56` séparation transactionnel / commercial (lot 4) : `setUsage|pause|resume`, profil réservé, isolation worker, compteurs par type (V61), fusible par profil, jour de compte au fuseau de la fenêtre
 
 **Cold outbound — UI console & self-service**
 - `06` UI console — section Settings « Cold outreach »
