@@ -114,10 +114,42 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 		reputation[integration.ID] = status
 	}
 
-	return buildVeridianEmailProfilesOverview(workspace, func(day domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow) {
+	overview := buildVeridianEmailProfilesOverview(workspace, func(day domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow) {
 		o := observed[veridianOverviewDayKey(day)]
 		return o.rows, o.counters
-	}, reputation, now), nil
+	}, reputation, now)
+	overview.TransactionalWatch = s.transactionalWatch(ctx, workspace, overview, now)
+	return overview, nil
+}
+
+// transactionalWatch mesure le volume et la réputation du profil transactionnel
+// (lot 5). Mesurée et jamais bloquante : une lecture qui échoue donne le niveau
+// « unknown » (jamais « ok »), sans faire échouer l'overview ni toucher à l'envoi.
+func (s *veridianEmailProfileOverviewService) transactionalWatch(ctx context.Context, workspace *domain.Workspace, overview *domain.VeridianEmailProfilesOverview, now time.Time) *domain.VeridianTransactionalWatch {
+	for i := range overview.Profiles {
+		profile := overview.Profiles[i]
+		if profile.Usage != domain.VeridianProfileUsageTransactional {
+			continue
+		}
+		var provider *domain.EmailProvider
+		for j := range workspace.Integrations {
+			if workspace.Integrations[j].ID == profile.IntegrationID {
+				provider = &workspace.Integrations[j].EmailProvider
+			}
+		}
+		day := domain.VeridianDayFor(workspace, provider, now)
+		loc := domain.VeridianDayLocation(workspace, provider)
+		previousStart := day.Start.In(loc).AddDate(0, 0, -7).UTC()
+		input, err := s.repo.GetTransactionalWatchInput(ctx, workspace.ID, profile.IntegrationID, day, previousStart, now.AddDate(0, 0, -7))
+		if err != nil {
+			s.logger.WithField("error", err.Error()).Error("Failed to measure transactional profile watch")
+			w := domain.VeridianUnknownTransactionalWatch(profile.IntegrationID, profile.Name, "measure failed")
+			return &w
+		}
+		w := domain.VeridianEvaluateTransactionalWatch(profile.IntegrationID, profile.Name, input)
+		return &w
+	}
+	return nil
 }
 
 // veridianOverviewDayKey identifie un jour de compte (date civile + début exact).

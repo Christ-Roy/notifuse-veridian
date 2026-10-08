@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 )
@@ -69,4 +70,41 @@ func (r *veridianEmailProfileOverviewRepository) GetPlanObservations(ctx context
 		return nil, nil, fmt.Errorf("iterate plan quota counters: %w", err)
 	}
 	return rows, counters, nil
+}
+
+// veridianTransactionalRowSQL : les messages transactionnels (même définition que la
+// dimension analytics message_type et que les compteurs, à l'inverse de
+// veridianCommercialRowSQL).
+const veridianTransactionalRowSQL = ` AND (veridian_message_type = 'transactional' OR transactional_notification_id IS NOT NULL)`
+
+// GetTransactionalWatchInput : un seul balayage de message_history pour le profil.
+// Les rejets durs se comptent comme ceux du fusible commercial (bounced_at posé et
+// bounce_type dur), les refus de politique par bounce_type = 'PolicyBounce'. Un envoi
+// compte s'il est parti (sent_at) et n'a pas échoué (failed_at IS NULL).
+func (r *veridianEmailProfileOverviewRepository) GetTransactionalWatchInput(ctx context.Context, workspaceID, profileID string, day domain.VeridianDay, previousStart, rollingStart time.Time) (domain.VeridianTransactionalWatchInput, error) {
+	var in domain.VeridianTransactionalWatchInput
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return in, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+	earliest := previousStart
+	if rollingStart.Before(earliest) {
+		earliest = rollingStart
+	}
+	err = db.QueryRowContext(ctx, `
+		SELECT
+		  COUNT(*) FILTER (WHERE sent_at >= $2 AND sent_at < $3),
+		  COUNT(*) FILTER (WHERE sent_at >= $4 AND sent_at < $2),
+		  COUNT(*) FILTER (WHERE sent_at >= $5),
+		  COUNT(*) FILTER (WHERE sent_at >= $5 AND bounced_at IS NOT NULL AND bounce_type ILIKE 'hard%'),
+		  COUNT(*) FILTER (WHERE sent_at >= $5 AND complained_at IS NOT NULL),
+		  COUNT(*) FILTER (WHERE sent_at >= $5 AND bounce_type = 'PolicyBounce')
+		FROM message_history
+		WHERE veridian_profile_id = $1 AND sent_at >= $6 AND failed_at IS NULL`+veridianTransactionalRowSQL,
+		profileID, day.Start.UTC(), day.End.UTC(), previousStart.UTC(), rollingStart.UTC(), earliest.UTC(),
+	).Scan(&in.SentToday, &in.SentPrevious7Days, &in.Sent7d, &in.HardBounces7d, &in.Complaints7d, &in.PolicyRefusals7d)
+	if err != nil {
+		return in, fmt.Errorf("query transactional watch: %w", err)
+	}
+	return in, nil
 }

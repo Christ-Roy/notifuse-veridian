@@ -21,6 +21,15 @@ type overviewRepoStub struct {
 	counters []domain.VeridianPlanCounterRow
 	days     []domain.VeridianDay
 	err      error
+	// Surveillance du profil transactionnel (lot 5)
+	watchInput domain.VeridianTransactionalWatchInput
+	watchErr   error
+	watchCalls []string
+}
+
+func (s *overviewRepoStub) GetTransactionalWatchInput(_ context.Context, _ string, profileID string, _ domain.VeridianDay, _, _ time.Time) (domain.VeridianTransactionalWatchInput, error) {
+	s.watchCalls = append(s.watchCalls, profileID)
+	return s.watchInput, s.watchErr
 }
 
 func (s *overviewRepoStub) GetPlanObservations(_ context.Context, _ string, day domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow, error) {
@@ -232,6 +241,53 @@ func TestVeridianEmailProfileOverviewService(t *testing.T) {
 				assert.Equal(t, 4, p.Plan.DomainSlowdownFactor)
 			}
 		}
+	})
+
+	t.Run("surveillance du profil transactionnel : mesuree, jamais bloquante", func(t *testing.T) {
+		readOnly := &domain.UserWorkspace{Permissions: domain.UserPermissions{domain.PermissionResourceMessageHistory: {Read: true}}}
+		auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").Return(context.Background(), &domain.User{}, readOnly, nil)
+		workspaces.EXPECT().GetByID(gomock.Any(), "ws1").Return(overviewTestWorkspace(), nil)
+		history.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().CountSentSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().ReputationCountsByClassSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(map[string]domain.VeridianReputationCounts{}, nil).AnyTimes()
+		// Une boucle cote client : 900 mails aujourd'hui contre 10 par jour d'habitude, et 6 % de rejets durs.
+		watched := &overviewRepoStub{watchInput: domain.VeridianTransactionalWatchInput{SentToday: 900, SentPrevious7Days: 70, Sent7d: 1000, HardBounces7d: 60}}
+		out, err := NewVeridianEmailProfileOverviewService(watched, history, workspaces, auth, log).GetEmailProfilesOverview(context.Background(), "ws1")
+		require.NoError(t, err)
+		require.Equal(t, []string{"tx"}, watched.watchCalls, "seul le profil transactionnel est mesure")
+		require.NotNil(t, out.TransactionalWatch)
+		assert.Equal(t, "tx", out.TransactionalWatch.ProfileID)
+		assert.Equal(t, domain.VeridianWatchLevelAlert, out.TransactionalWatch.Level)
+		assert.False(t, out.TransactionalWatch.Blocking)
+		codes := []string{}
+		for _, a := range out.TransactionalWatch.Alerts {
+			codes = append(codes, a.Code)
+		}
+		assert.ElementsMatch(t, []string{domain.VeridianWatchCodeVolume, domain.VeridianWatchCodeHardBounce}, codes)
+		// L'alerte ne change AUCUN plan : le transactionnel reste sans plafond ni porte.
+		for _, p := range out.Profiles {
+			if p.IntegrationID == "tx" {
+				assert.Equal(t, domain.VeridianProfileUsageTransactional, p.Usage)
+				assert.Nil(t, p.Plan.DailyCapToday)
+			}
+		}
+	})
+
+	t.Run("surveillance illisible : unknown, l'overview reste servi", func(t *testing.T) {
+		readOnly := &domain.UserWorkspace{Permissions: domain.UserPermissions{domain.PermissionResourceMessageHistory: {Read: true}}}
+		auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").Return(context.Background(), &domain.User{}, readOnly, nil)
+		workspaces.EXPECT().GetByID(gomock.Any(), "ws1").Return(overviewTestWorkspace(), nil)
+		history.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().CountSentSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().ReputationCountsByClassSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(map[string]domain.VeridianReputationCounts{}, nil).AnyTimes()
+		broken := &overviewRepoStub{watchErr: errors.New("timeout")}
+		out, err := NewVeridianEmailProfileOverviewService(broken, history, workspaces, auth, log).GetEmailProfilesOverview(context.Background(), "ws1")
+		require.NoError(t, err)
+		require.Len(t, out.Profiles, 4)
+		require.NotNil(t, out.TransactionalWatch)
+		assert.Equal(t, domain.VeridianWatchLevelUnknown, out.TransactionalWatch.Level, "une mesure ratee n'est jamais presentee comme ok")
 	})
 
 	t.Run("erreur de lecture des compteurs", func(t *testing.T) {

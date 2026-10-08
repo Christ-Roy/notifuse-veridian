@@ -95,6 +95,9 @@ type VeridianEmailProfilesOverview struct {
 	// transactionnels (règle d'exclusivité violée). Vide en régime normal.
 	UsageConflicts []string                            `json:"usage_conflicts"`
 	Totals         VeridianEmailProfilesOverviewTotals `json:"totals"`
+	// TransactionalWatch : surveillance (lot 5) du profil transactionnel, volume et
+	// réputation. Mesurée et jamais bloquante. Nil sans profil transactionnel.
+	TransactionalWatch *VeridianTransactionalWatch `json:"transactional_watch"`
 }
 
 // VeridianPlanObservationRow : envois acceptés du jour, groupés.
@@ -123,6 +126,11 @@ type VeridianEmailProfileOverviewRepository interface {
 	// acceptés (message_history, de day.Start inclus à day.End exclu) et
 	// réservations atomiques (compteurs de la date civile day.Label).
 	GetPlanObservations(ctx context.Context, workspaceID string, day VeridianDay) ([]VeridianPlanObservationRow, []VeridianPlanCounterRow, error)
+	// GetTransactionalWatchInput lit, pour la surveillance du profil transactionnel
+	// (lot 5), les envois et les rejets des mails transactionnels de CE profil :
+	// aujourd'hui (day), les 7 jours de compte précédents (previousStart inclus,
+	// day.Start exclu) et les 7 jours glissants jusqu'à `now` (rollingStart inclus).
+	GetTransactionalWatchInput(ctx context.Context, workspaceID, profileID string, day VeridianDay, previousStart, rollingStart time.Time) (VeridianTransactionalWatchInput, error)
 }
 
 type VeridianEmailProfileOverviewService interface {

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -69,4 +70,49 @@ func TestVeridianEmailProfileOverviewRepositoryPropagatesQueryErrors(t *testing.
 	_, _, err := repo.GetPlanObservations(context.Background(), "ws1", domain.VeridianDayAt(time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC), nil))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "plan observations")
+}
+
+func TestVeridianEmailProfileOverviewRepository_GetTransactionalWatchInput(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws1").Return(db, nil)
+
+	paris, err := time.LoadLocation("Europe/Paris")
+	require.NoError(t, err)
+	now := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
+	day := domain.VeridianDayAt(now, paris)
+	previousStart := day.Start.In(paris).AddDate(0, 0, -7).UTC()
+	rollingStart := now.AddDate(0, 0, -7)
+
+	// Uniquement les mails transactionnels de CE profil, partis et non echoues.
+	mock.ExpectQuery(`(?s)FROM message_history\s+WHERE veridian_profile_id = \$1 AND sent_at >= \$6 AND failed_at IS NULL AND \(veridian_message_type = 'transactional' OR transactional_notification_id IS NOT NULL\)`).
+		WithArgs("tx", day.Start.UTC(), day.End.UTC(), previousStart, rollingStart, previousStart).
+		WillReturnRows(sqlmock.NewRows([]string{"today", "prev", "d7", "hard", "compl", "policy"}).AddRow(31, 70, 250, 4, 1, 2))
+
+	in, err := NewVeridianEmailProfileOverviewRepository(workspaceRepo).GetTransactionalWatchInput(context.Background(), "ws1", "tx", day, previousStart, rollingStart)
+	require.NoError(t, err)
+	assert.Equal(t, domain.VeridianTransactionalWatchInput{SentToday: 31, SentPrevious7Days: 70, Sent7d: 250, HardBounces7d: 4, Complaints7d: 1, PolicyRefusals7d: 2}, in)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVeridianEmailProfileOverviewRepository_GetTransactionalWatchInputErrors(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	day := domain.VeridianDayAt(time.Now(), nil)
+
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws1").Return(nil, errors.New("no db"))
+	_, err := NewVeridianEmailProfileOverviewRepository(workspaceRepo).GetTransactionalWatchInput(context.Background(), "ws1", "tx", day, time.Now(), time.Now())
+	require.Error(t, err)
+
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	workspaceRepo = mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws1").Return(db, nil)
+	mock.ExpectQuery(`FROM message_history`).WillReturnError(errors.New("boom"))
+	_, err = NewVeridianEmailProfileOverviewRepository(workspaceRepo).GetTransactionalWatchInput(context.Background(), "ws1", "tx", day, time.Now(), time.Now())
+	require.Error(t, err)
 }
