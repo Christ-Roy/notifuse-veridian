@@ -57,7 +57,7 @@ export const VeridianProspectionReputation: React.FC<Props> = ({ overview, loadi
             render: (_: unknown, row) => <Text type="secondary">{row.issue.sent7d}</Text>
           },
           {
-            title: t`Rate`,
+            title: t`Triggering rate`,
             key: 'rate',
             align: 'right',
             render: (_: unknown, row) => (row.issue.rate === null ? '-' : formatPercent(row.issue.rate))

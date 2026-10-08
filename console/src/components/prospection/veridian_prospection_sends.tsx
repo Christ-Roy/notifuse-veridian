@@ -60,8 +60,12 @@ export const SendsStackedBars: React.FC<{ series: SendsSeries; height?: number }
     })
     const onResize = () => chart.resize()
     window.addEventListener('resize', onResize)
+    // Le conteneur peut changer de largeur sans fenetre qui bouge (barre laterale, defilement)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize)
+    observer?.observe(ref.current)
     return () => {
       window.removeEventListener('resize', onResize)
+      observer?.disconnect()
       chart.dispose()
     }
   }, [series])

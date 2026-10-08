@@ -6248,7 +6248,7 @@ msgstr "Plus léger"
 msgid "Limited by"
 msgstr "Limité par"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:204
+#: src/components/prospection/veridian_prospection_sends.tsx:208
 msgid "Limiting gate"
 msgstr "Porte limitante"
 
@@ -7283,7 +7283,7 @@ msgstr "Non connecté"
 msgid "Not in List"
 msgstr "Pas dans la liste"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:216
+#: src/components/prospection/veridian_prospection_sends.tsx:220
 #: src/components/sending_profiles/veridian_profile_labels.ts:123
 msgid "Not in the rotation"
 msgstr "Hors rotation"
@@ -7769,11 +7769,11 @@ msgstr "En attente de confirmation"
 msgid "per day"
 msgstr "par jour"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:165
+#: src/components/prospection/veridian_prospection_sends.tsx:169
 msgid "Per day"
 msgstr "Par jour"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:166
+#: src/components/prospection/veridian_prospection_sends.tsx:170
 msgid "Per hour"
 msgstr "Par heure"
 
@@ -8431,7 +8431,6 @@ msgstr "Push"
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr ""
 
-#: src/components/prospection/veridian_prospection_reputation.tsx:60
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2327
 msgid "Rate"
 msgstr "Débit"
@@ -8499,7 +8498,7 @@ msgstr "Lecture"
 #~ msgid "Ready"
 #~ msgstr "Prêt"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:218
+#: src/components/prospection/veridian_prospection_sends.tsx:222
 #: src/components/templates/ImportExportButton.tsx:423
 msgid "Ready to send"
 msgstr "Prêt à envoyer"
@@ -8658,7 +8657,7 @@ msgid "Rel"
 msgstr "Rel"
 
 #: src/components/prospection/veridian_prospection_reputation.tsx:34
-#: src/components/prospection/veridian_prospection_sends.tsx:183
+#: src/components/prospection/veridian_prospection_sends.tsx:187
 msgid "Relay"
 msgstr "Relais"
 
@@ -9778,7 +9777,7 @@ msgstr "Fenêtre d'envoi enregistrée"
 msgid "Sends from @{senderDomain}"
 msgstr "Envoie depuis @{senderDomain}"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:146
+#: src/components/prospection/veridian_prospection_sends.tsx:150
 msgid "Sends per relay"
 msgstr "Envois par relais"
 
@@ -9803,12 +9802,12 @@ msgstr "Envoyé"
 msgid "Sent over 7 days"
 msgstr "Envoyés sur 7 jours"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:142
+#: src/components/prospection/veridian_prospection_sends.tsx:146
 msgid "Sent over the period"
 msgstr "Envoyés sur la période"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:112
-#: src/components/prospection/veridian_prospection_sends.tsx:142
+#: src/components/prospection/veridian_prospection_sends.tsx:146
 msgid "Sent today"
 msgstr "Envoyés aujourd'hui"
 
@@ -9828,7 +9827,7 @@ msgstr "Envoyés aujourd'hui / plafond effectif"
 msgid "Sent today by the rotation profiles, over today's effective capacity."
 msgstr "Envoyés aujourd'hui par les profils de la rotation, sur la capacité effective du jour."
 
-#: src/components/prospection/veridian_prospection_sends.tsx:142
+#: src/components/prospection/veridian_prospection_sends.tsx:146
 msgid "Sent yesterday"
 msgstr "Envoyés hier"
 
@@ -10322,7 +10321,7 @@ msgstr "STARTTLS requis"
 #: src/components/contacts/ContactDetailsDrawer.tsx:447
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:100
 #: src/components/prospection/veridian_prospection_reputation.tsx:37
-#: src/components/prospection/veridian_prospection_sends.tsx:210
+#: src/components/prospection/veridian_prospection_sends.tsx:214
 msgid "State"
 msgstr "État"
 
@@ -11308,13 +11307,13 @@ msgstr "Pour utiliser le {0}, vous devez configurer l'intégration Anthropic dan
 msgid "To watch"
 msgstr "À surveiller"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:155
+#: src/components/prospection/veridian_prospection_sends.tsx:159
 #: src/components/sending_profiles/veridian_profile_card.tsx:115
 #: src/components/sending_profiles/veridian_profile_card.tsx:148
 msgid "Today"
 msgstr "Aujourd'hui"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:186
+#: src/components/prospection/veridian_prospection_sends.tsx:190
 msgid "Today / effective cap"
 msgstr "Aujourd'hui / plafond effectif"
 
@@ -11489,6 +11488,10 @@ msgstr "Déclencher sur des modifications de champs spécifiques"
 msgid "Triggered rules ({0})"
 msgstr ""
 
+#: src/components/prospection/veridian_prospection_reputation.tsx:60
+msgid "Triggering rate"
+msgstr "Taux déclencheur"
+
 #: src/pages/TemplatesPage.tsx:448
 msgid "Try selecting a different category or"
 msgstr "Essayez de sélectionner une catégorie différente ou"
@@ -11557,11 +11560,11 @@ msgstr "Impossible de charger les chiffres de prospection"
 msgid "Unable to load the rejections"
 msgstr "Impossible de charger les rejets"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:172
+#: src/components/prospection/veridian_prospection_sends.tsx:176
 msgid "Unable to load the sends"
 msgstr "Impossible de charger les envois"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:106
+#: src/components/prospection/veridian_prospection_sends.tsx:110
 msgid "Unassigned (older messages)"
 msgstr "Non attribué (anciens messages)"
 
@@ -12409,7 +12412,7 @@ msgstr "Oui, reprendre"
 msgid "Yes, Select Winner"
 msgstr "Oui, sélectionner le gagnant"
 
-#: src/components/prospection/veridian_prospection_sends.tsx:156
+#: src/components/prospection/veridian_prospection_sends.tsx:160
 msgid "Yesterday"
 msgstr "Hier"
 
