@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from '@tanstack/react-router'
+import { useParams, useNavigate, useSearch } from '@tanstack/react-router'
 import { Segmented, Select, Space, Result, Button } from 'antd'
 import dayjs from 'dayjs'
 import { useAuth } from '../contexts/AuthContext'
@@ -7,6 +7,7 @@ import { AnalyticsDashboard } from '../components/analytics/AnalyticsDashboard'
 import { TIMEZONE_OPTIONS } from '../lib/timezones'
 import { getBrowserTimezone } from '../lib/timezoneNormalizer'
 import { useLingui } from '@lingui/react/macro'
+import type { MessageTypeFilter } from '../components/analytics/email_metrics_series'
 
 type TimePeriod = '7D' | '14D' | '30D' | '90D'
 
@@ -15,6 +16,9 @@ export function AnalyticsPage() {
   const navigate = useNavigate()
   const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId' })
   const { workspaces } = useAuth()
+  // Vue Commercial | Transactionnel, memorisee dans la route (?view=transactional)
+  const viewSearch = useSearch({ strict: false }) as { view?: string }
+  const messageType: MessageTypeFilter = viewSearch.view === 'transactional' ? 'transactional' : 'commercial'
 
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('14D')
   const [selectedTimezone, setSelectedTimezone] = useState<string>('')
@@ -83,6 +87,21 @@ export function AnalyticsPage() {
       <div className="flex justify-between items-center mb-6">
         <div className="text-2xl font-medium">{t`Dashboard`}</div>
         <Space>
+          <Segmented
+            value={messageType}
+            onChange={(value) =>
+              navigate({
+                search: ((prev: Record<string, unknown>) => ({
+                  ...prev,
+                  view: value === 'transactional' ? 'transactional' : undefined
+                })) as never
+              })
+            }
+            options={[
+              { label: t`Commercial`, value: 'commercial' },
+              { label: t`Transactional`, value: 'transactional' }
+            ]}
+          />
           <Select
             value={selectedTimezone}
             onChange={handleTimezoneChange}
@@ -108,7 +127,12 @@ export function AnalyticsPage() {
           />
         </Space>
       </div>
-      <AnalyticsDashboard workspace={workspace} timeRange={timeRange} timezone={selectedTimezone} />
+      <AnalyticsDashboard
+        workspace={workspace}
+        timeRange={timeRange}
+        timezone={selectedTimezone}
+        messageType={messageType}
+      />
     </div>
   )
 }

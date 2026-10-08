@@ -174,7 +174,10 @@ const workspaceRoute = createRoute({
 const workspaceIndexRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/',
-  component: AnalyticsPage
+  component: AnalyticsPage,
+  validateSearch: (search: Record<string, unknown>): { view?: 'transactional' } => ({
+    view: search.view === 'transactional' ? 'transactional' : undefined
+  })
 })
 
 // Create workspace child routes

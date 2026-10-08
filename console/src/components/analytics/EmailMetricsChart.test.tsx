@@ -242,6 +242,36 @@ describe('EmailMetricsChart', () => {
     await waitFor(() => expect(screen.getByText('578')).toBeInTheDocument())
   })
 
+  it('vue transactionnelle : filtre message_type, aucun appel reply, ni carte Replies ni note texte brut', async () => {
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockResolvedValue(okResponse)
+    render(
+      <I18nProvider i18n={i18n}>
+        <App>
+          <EmailMetricsChart
+            workspace={workspace}
+            timeRange={['2024-01-01', '2024-12-31']}
+            messageType="transactional"
+          />
+        </App>
+      </I18nProvider>
+    )
+    await waitFor(() => expect(analyticsService.query).toHaveBeenCalled())
+    const filters = (analyticsService.query as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => JSON.stringify(c[0].filters)
+    )
+    expect(filters.every((f) => f.includes('"message_type"') && f.includes('transactional'))).toBe(true)
+    expect(replyStatsApi.get).not.toHaveBeenCalled()
+    expect(screen.queryByText('Replies')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Opens and clicks are not tracked/)).not.toBeInTheDocument()
+  })
+
+  it('vue commerciale : appelle reply et montre la carte Replies', async () => {
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockResolvedValue(okResponse)
+    renderChart()
+    await waitFor(() => expect(replyStatsApi.get).toHaveBeenCalled())
+    expect(screen.getByText('Replies')).toBeInTheDocument()
+  })
+
   it('pluralises automatic replies (1 reponse / N reponses)', async () => {
     ;(replyStatsApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ replied: 3, replied_human: 2 })
     ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(totals({ count_sent: 100 }))

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Segmented, Alert, Row, Col, Statistic, Space, Tooltip, Card, Button } from 'antd'
+import { Alert, Row, Col, Statistic, Space, Tooltip, Card, Button } from 'antd'
 import { useLingui, Plural } from '@lingui/react/macro'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -30,15 +30,19 @@ interface EmailMetricsChartProps {
   workspace: Workspace
   timeRange?: [string, string]
   timezone?: string
+  // Famille affichee, choisie par le tableau de bord (commercial par defaut)
+  messageType?: MessageTypeFilter
 }
 
 export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   workspace,
   timeRange = ['2024-01-01', '2024-12-31'],
-  timezone
+  timezone,
+  messageType = 'commercial'
 }) => {
   const { t } = useLingui()
-  const [messageTypeFilter, setMessageTypeFilter] = useState<MessageTypeFilter>('all')
+  const messageTypeFilter: MessageTypeFilter = messageType
+  const isCommercial = messageType === 'commercial'
   const [data, setData] = useState<AnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -110,12 +114,15 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
               .then((response) => ({ def, response }))
           )
         ),
-        replyStatsApi
-          .get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] })
-          .catch((replyErr) => {
-            console.error('Failed to fetch reply stats:', replyErr)
-            return { replied: 0, replied_human: undefined }
-          }),
+        // Pas de « reponses » pour le transactionnel : aucun appel
+        filter === 'transactional'
+          ? Promise.resolve({ replied: 0, replied_human: undefined })
+          : replyStatsApi
+              .get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] })
+              .catch((replyErr) => {
+                console.error('Failed to fetch reply stats:', replyErr)
+                return { replied: 0, replied_human: undefined }
+              }),
         analyticsService
           .query(buildSeriesQuery(EXCLUDED_SERIES, filter, timeRange, effectiveTimezone), workspace.id)
           .catch(() => null)
@@ -144,10 +151,6 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
     fetchData(messageTypeFilter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id, messageTypeFilter, timeRange, timezone])
-
-  const handleFilterChange = (value: MessageTypeFilter) => {
-    setMessageTypeFilter(value)
-  }
 
   // Define the stats type
   interface EmailStats {
@@ -234,17 +237,6 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   return (
     <Card
       title={t`Email Metrics`}
-      extra={
-        <Segmented
-          value={messageTypeFilter}
-          onChange={handleFilterChange}
-          options={[
-            { label: t`All`, value: 'all' },
-            { label: t`Broadcasts`, value: 'broadcasts' },
-            { label: t`Transactional`, value: 'transactional' }
-          ]}
-        />
-      }
     >
       {/* Error Alert — état d'erreur PROPRE : message lisible + retry. On ne
           montre JAMAIS une valeur brute non parlante (ex: "true") à l'écran :
@@ -276,12 +268,14 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
 
       {/* Veridian — mails cold en texte brut : ni pixel ni lien suivi, donc les
           ouvertures et clics n'existent pas. On l'affiche, au lieu de zéros. */}
-      <Alert
-        type="info"
-        showIcon
-        message={t`Opens and clicks are not tracked: plain-text emails, no pixel or tracked link`}
-        style={{ marginBottom: 16 }}
-      />
+      {isCommercial && (
+        <Alert
+          type="info"
+          showIcon
+          message={t`Opens and clicks are not tracked: plain-text emails, no pixel or tracked link`}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* Stats Row */}
       <Row gutter={[16, 16]} wrap className="flex-nowrap overflow-x-auto">
@@ -316,12 +310,13 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             replied = contacts uniques ayant répondu sur la fenêtre ; ratio approx.
             replies / sent (un contact peut avoir reçu plusieurs envois).
             ⚠️ Le signal reply est CONTACT-level (table veridian_contact_reply, pas
-            rattaché à un envoi) → il IGNORE le filtre All/Broadcasts/Transactional :
+            rattaché à un envoi) → il est commercial seulement (la carte disparait en vue transactionnelle) :
             tooltip explicite pour lever la confusion (ticket
             2026-06-17-reply-kpi-ignore-message-type-filter.md, option 1). */}
+        {isCommercial && (
         <Col span={3}>
           <Tooltip
-            title={t`${humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter.`}
+            title={t`${humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns and sequences combined: the reply signal is not tied to a specific send.`}
           >
             <div className="p-2 rounded">
               <Statistic
@@ -351,6 +346,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             </div>
           </Tooltip>
         </Col>
+        )}
         <Col span={3}>
           {/* Veridian — la carte Bounced reste le TOTAL ; le split hard/soft est
               révélé au survol. Hard = adresse morte (réputation grillée, suppression

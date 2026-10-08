@@ -16,6 +16,9 @@ vi.mock('./veridian_engagement_by_class', () => ({ VeridianEngagementByClass: ()
 vi.mock('./FailedMessagesTable', () => ({ FailedMessagesTable: () => <div /> }))
 vi.mock('./NewContactsTable', () => ({ NewContactsTable: () => <div /> }))
 vi.mock('../../services/api/analytics', () => ({ analyticsService: { query: vi.fn() } }))
+vi.mock('../../services/api/veridian_email_profiles', () => ({
+  emailProfilesOverviewService: { get: vi.fn().mockResolvedValue({ totals: {}, profiles: [] }) }
+}))
 
 const workspace = { id: 'ws-test', name: 'Test', settings: {}, integrations: [] } as unknown as Workspace
 

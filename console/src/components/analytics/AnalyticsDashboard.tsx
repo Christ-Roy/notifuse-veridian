@@ -7,25 +7,30 @@ import numbro from 'numbro'
 import { EmailMetricsChart } from './EmailMetricsChart'
 import { VeridianEngagementByClass } from './veridian_engagement_by_class'
 // import { NewContactsTable } from './NewContactsTable'
-import { Workspace, Integration } from '../../services/api/types'
+import { Workspace } from '../../services/api/types'
 import { FailedMessagesTable } from './FailedMessagesTable'
 import { NewContactsTable } from './NewContactsTable'
-import { emailProviders } from '../integrations/EmailProviders'
 import { analyticsService } from '../../services/api/analytics'
+import { emailProfilesOverviewService } from '../../services/api/veridian_email_profiles'
+import type { MessageTypeFilter } from './email_metrics_series'
 
 interface AnalyticsDashboardProps {
   workspace: Workspace
   timeRange: [string, string]
   timezone?: string
+  // Vue affichee : commercial (defaut) ou transactionnel, jamais additionnees
+  messageType?: MessageTypeFilter
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   workspace,
   timeRange,
-  timezone
+  timezone,
+  messageType = 'commercial'
 }) => {
   const { t } = useLingui()
   const navigate = useNavigate()
+  const isCommercial = messageType === 'commercial'
 
   // Use timeRange and timezone as refresh key to update components when they change
   const refreshKey = `${timeRange[0]}-${timeRange[1]}-${timezone || ''}`
@@ -70,35 +75,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     refetchInterval: 60000 // Refetch every minute
   })
 
-  // Get provider information
-  const transactionalProvider = workspace.settings.transactional_email_provider_id
-    ? workspace.integrations?.find(
-        (i) => i.id === workspace.settings.transactional_email_provider_id
-      )
-    : null
-
-  const marketingProvider = workspace.settings.marketing_email_provider_id
-    ? workspace.integrations?.find((i) => i.id === workspace.settings.marketing_email_provider_id)
-    : null
-
-  const getProviderInfo = (provider: Integration | null | undefined) => {
-    if (!provider) return null
-    return emailProviders.find((p) => p.kind === provider.email_provider?.kind)
-  }
-
-  const transactionalProviderInfo = getProviderInfo(transactionalProvider)
-  const marketingProviderInfo = getProviderInfo(marketingProvider)
-
-  const getDefaultSender = (provider: Integration | null | undefined) => {
-    if (!provider?.email_provider?.senders) return null
-    return (
-      provider.email_provider.senders.find((s) => s.is_default) ||
-      provider.email_provider.senders[0]
-    )
-  }
-
-  const transactionalSender = getDefaultSender(transactionalProvider)
-  const marketingSender = getDefaultSender(marketingProvider)
+  // Profils d'envoi : totaux du jour et profil transactionnel (emailProfiles.overview)
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ['analytics', 'profiles-overview', workspace.id],
+    queryFn: () => emailProfilesOverviewService.get(workspace.id),
+    refetchInterval: 60000
+  })
+  const totals = overview?.totals
+  const transactionalProfile = overview?.profiles.find((p) => p.usage === 'transactional')
+  const transactionalSender =
+    transactionalProfile?.senders.find((sender) => sender.is_default) ?? transactionalProfile?.senders[0]
 
   // Calculate totals
   const totalContacts = totalContactsData?.data?.[0]?.['count'] || 0
@@ -107,99 +93,122 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   // Number formatter for statistics (loading state handled by Statistic's `loading` prop)
   const formatStat = (value: number | string) => numbro(value).format({ thousandSeparated: true })
 
-  const handleNavigateToSettings = () => {
+  const handleNavigateToProfiles = () => {
     navigate({
-      to: '/console/workspace/$workspaceId/settings/$section',
-      params: { workspaceId: workspace.id, section: 'integrations' }
+      to: '/console/workspace/$workspaceId/sending-profiles',
+      params: { workspaceId: workspace.id }
     })
   }
 
+  const capacity = totals?.commercial_capacity_today
+  const commercialSent = formatStat(totals?.commercial_sent_today ?? 0)
+  const sentVersusCapacity =
+    capacity === null || capacity === undefined
+      ? commercialSent
+      : `${commercialSent} / ${formatStat(capacity)}`
+
   return (
     <div>
-      {/* Statistics Row - 4 columns */}
-      <Row gutter={[16, 16]} className="mb-8">
-        {/* Total Contacts */}
-        <Col xs={24} sm={12} md={6}>
-          <div className="p-4 rounded-lg bg-gray-100" style={{ height: '110px' }}>
-            <Statistic
-              title={
-                <Tooltip title={t`Imported stock, not the audience actually contacted.`}>
-                  <span>{t`Imported contacts (stock)`}</span>
-                </Tooltip>
-              }
-              value={totalContacts as number}
-              valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
-              loading={totalContactsLoading}
-              formatter={(value) => formatStat(value as number)}
-            />
-          </div>
-        </Col>
-
-        {/* New Contacts */}
-        <Col xs={24} sm={12} md={6}>
-          <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
-            <Statistic
-              title={
-                <Tooltip title={t`Newly imported contacts, not the audience actually contacted.`}>
-                  <span>{t`New imported contacts`}</span>
-                </Tooltip>
-              }
-              value={newContactsCount as number}
-              valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
-              loading={newContactsLoading}
-              formatter={(value) => formatStat(value as number)}
-            />
-          </div>
-        </Col>
-
-        {/* Transactional Email Provider */}
-        <Col xs={24} sm={12} md={6}>
-          <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
-            <div className="text-gray-500 text-sm mb-2">{t`Transactional Provider`}</div>
-            {transactionalProvider ? (
-              <div>
-                <div className="mb-1">
-                  <span className="font-medium">{transactionalProviderInfo?.name}</span>
-                </div>
-                {transactionalSender && (
-                  <div className="text-sm text-gray-600">{transactionalSender.email}</div>
+      {/* Cartes du haut : une vue = une famille, jamais de melange */}
+      {isCommercial ? (
+        <Row gutter={[16, 16]} className="mb-8" data-testid="cards-commercial">
+          <Col xs={24} sm={12} md={6}>
+            <div className="p-4 rounded-lg bg-gray-100" style={{ height: '110px' }}>
+              <Statistic
+                title={
+                  <Tooltip title={t`Imported stock, not the audience actually contacted.`}>
+                    <span>{t`Imported contacts (stock)`}</span>
+                  </Tooltip>
+                }
+                value={totalContacts as number}
+                valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
+                loading={totalContactsLoading}
+                formatter={(value) => formatStat(value as number)}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
+              <Statistic
+                title={
+                  <Tooltip title={t`Newly imported contacts, not the audience actually contacted.`}>
+                    <span>{t`New imported contacts`}</span>
+                  </Tooltip>
+                }
+                value={newContactsCount as number}
+                valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
+                loading={newContactsLoading}
+                formatter={(value) => formatStat(value as number)}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
+              <Statistic
+                title={t`Profiles in rotation`}
+                value={totals?.active_commercial_profiles ?? 0}
+                valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
+                loading={overviewLoading}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
+              <Statistic
+                title={
+                  <Tooltip title={t`Sent today by the rotation profiles, over today's capacity.`}>
+                    <span>{t`Sent today / capacity`}</span>
+                  </Tooltip>
+                }
+                value={sentVersusCapacity}
+                valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
+                loading={overviewLoading}
+              />
+            </div>
+          </Col>
+        </Row>
+      ) : (
+        <>
+          <Row gutter={[16, 16]} className="mb-4" data-testid="cards-transactional">
+            <Col xs={24} sm={12}>
+              <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
+                <div className="text-gray-500 text-sm mb-2">{t`Transactional profile`}</div>
+                {transactionalProfile ? (
+                  <div>
+                    <div className="mb-1">
+                      <span className="font-medium">{transactionalProfile.name}</span>
+                    </div>
+                    {transactionalSender && (
+                      <div className="text-sm text-gray-600">{transactionalSender.email}</div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <div className="text-gray-400 mb-2">{t`Not configured`}</div>
+                    <Button size="small" type="primary" onClick={handleNavigateToProfiles}>
+                      {t`Configure`}
+                    </Button>
+                  </div>
                 )}
               </div>
-            ) : (
-              <div>
-                <div className="text-gray-400 mb-2">{t`Not configured`}</div>
-                <Button size="small" type="primary" onClick={handleNavigateToSettings}>
-                  {t`Configure`}
-                </Button>
+            </Col>
+            <Col xs={24} sm={12}>
+              <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
+                <Statistic
+                  title={t`Sent today`}
+                  value={totals?.transactional_sent_today ?? 0}
+                  valueStyle={{ fontSize: '24px', fontWeight: 'bold' }}
+                  loading={overviewLoading}
+                  formatter={(value) => formatStat(value as number)}
+                />
               </div>
-            )}
+            </Col>
+          </Row>
+          <div className="mb-8 text-sm text-gray-600" data-testid="transactional-no-cap">
+            {t`These emails are subject to no cap: a transactional email always goes out.`}
           </div>
-        </Col>
-
-        {/* Marketing Email Provider */}
-        <Col xs={24} sm={12} md={6}>
-          <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }}>
-            <div className="text-gray-500 text-sm mb-2">{t`Marketing Provider`}</div>
-            {marketingProvider ? (
-              <div>
-                <div className="mb-1">
-                  <span className="font-medium">{marketingProviderInfo?.name}</span>
-                </div>
-                {marketingSender && (
-                  <div className="text-sm text-gray-600">{marketingSender.email}</div>
-                )}
-              </div>
-            ) : (
-              <div>
-                <div className="text-gray-400 mb-2">{t`Not configured`}</div>
-                <Button size="small" type="primary" onClick={handleNavigateToSettings}>
-                  {t`Configure`}
-                </Button>
-              </div>
-            )}
-          </div>
-        </Col>
-      </Row>
+        </>
+      )}
 
       {/* Email Metrics Chart - Full Width */}
       <EmailMetricsChart
@@ -207,8 +216,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         workspace={workspace}
         timeRange={timeRange}
         timezone={timezone}
+        messageType={messageType}
       />
 
+      {/* Engagement par classe, nouveaux contacts et echecs : vue commerciale seulement */}
+      {isCommercial && (
+        <>
       {/* Veridian — engagement par classe de provider destinataire (KPI cold :
           repérer une classe qui se dégrade). Cf.
           2026-06-16-kpi-engagement-par-classe-provider.md. */}
@@ -225,6 +238,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       <div className="mt-8">
         <FailedMessagesTable key={`failed-messages-${refreshKey}`} workspace={workspace} />
       </div>
+        </>
+      )}
     </div>
   )
 }
