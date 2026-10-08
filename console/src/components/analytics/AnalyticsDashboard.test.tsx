@@ -1,21 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AnalyticsDashboard } from './AnalyticsDashboard'
-import { analyticsService } from '../../services/api/analytics'
 import type { Workspace } from '../../services/api/types'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
 vi.mock('./EmailMetricsChart', () => ({ EmailMetricsChart: () => <div data-testid="email-chart" /> }))
-vi.mock('./veridian_engagement_by_class', () => ({ VeridianEngagementByClass: () => <div /> }))
+vi.mock('../prospection/veridian_prospection_dashboard', () => ({
+  VeridianProspectionDashboard: () => <div data-testid="prospection-dashboard" />
+}))
 vi.mock('./FailedMessagesTable', () => ({ FailedMessagesTable: () => <div /> }))
 vi.mock('./NewContactsTable', () => ({ NewContactsTable: () => <div /> }))
-vi.mock('../../services/api/analytics', () => ({ analyticsService: { query: vi.fn() } }))
 vi.mock('../../services/api/veridian_email_profiles', () => ({
   emailProfilesOverviewService: { get: vi.fn().mockResolvedValue({ totals: {}, profiles: [] }) }
 }))
@@ -40,22 +40,9 @@ describe('AnalyticsDashboard', () => {
     vi.clearAllMocks()
   })
 
-  it('labels contact counts as imported stock and shows the counts', async () => {
-    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: [{ count: 1234 }],
-      meta: { total: 1, query: '', params: [] }
-    })
+  it('la vue par défaut est le tableau de bord de prospection (une seule page)', () => {
     renderDash()
-    expect(screen.getByText('Imported contacts (stock)')).toBeInTheDocument()
-    expect(screen.getByText('New imported contacts')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getAllByText('1,234').length).toBeGreaterThan(0))
-    expect(screen.queryByText('Total Contacts')).not.toBeInTheDocument()
-  })
-
-  it('still renders the dashboard when the contact queries fail', async () => {
-    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'))
-    renderDash()
-    expect(screen.getByTestId('email-chart')).toBeInTheDocument()
-    expect(screen.getByText('Imported contacts (stock)')).toBeInTheDocument()
+    expect(screen.getByTestId('prospection-dashboard')).toBeInTheDocument()
+    expect(screen.queryByTestId('cards-transactional')).not.toBeInTheDocument()
   })
 })

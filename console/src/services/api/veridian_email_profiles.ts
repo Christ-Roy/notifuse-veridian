@@ -168,6 +168,35 @@ export interface EmailProfileOverview {
   plan: EmailProfilePlan
 }
 
+// Lot 5 : surveillance du profil transactionnel (volume et réputation), mesurée et jamais
+// bloquante. Miroir de internal/domain/veridian_transactional_watch.go.
+export type TransactionalWatchLevel = 'ok' | 'watch' | 'alert' | 'unknown'
+
+export interface TransactionalWatchAlert {
+  // volume_spike | hard_bounce_rate | complaint_rate | policy_refusal_rate
+  code: string
+  level: 'watch' | 'alert'
+  value: number
+  watch_threshold: number
+  alert_threshold: number
+  message: string
+}
+
+export interface TransactionalWatch {
+  profile_id: string
+  profile_name: string
+  level: TransactionalWatchLevel
+  blocking: false
+  sent_today: number
+  baseline_per_day: number
+  sent_7d: number
+  hard_bounce_rate_7d: number
+  complaint_rate_7d: number
+  policy_refusal_rate_7d: number
+  alerts: TransactionalWatchAlert[]
+  error?: string
+}
+
 export interface EmailProfilesOverview {
   date: string
   generated_at: string
@@ -182,6 +211,8 @@ export interface EmailProfilesOverview {
     active_commercial_profiles: number
     paused_profiles: number
   }
+  // Absent d'un serveur plus ancien ; null sans profil transactionnel.
+  transactional_watch?: TransactionalWatch | null
 }
 
 export interface CreateEmailProfileRequest {

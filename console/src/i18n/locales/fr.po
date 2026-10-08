@@ -309,6 +309,10 @@ msgstr "{perSenderCap} / jour"
 msgid "{propertyCount} properties"
 msgstr "{propertyCount} propriétés"
 
+#: src/components/prospection/veridian_prospection_sequences.tsx:35
+msgid "{queued} in the queue, {waiting} waiting, {left} left after"
+msgstr "{queued} en file, {waiting} en attente, {left} sortis après"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2331
 msgid "{rate} / min"
 msgstr "{rate} / min"
@@ -328,6 +332,10 @@ msgstr "{realFailed} emails réellement en échec (masqués du graphique, la cou
 #: src/components/analytics/EmailMetricsChart.tsx:478
 msgid "{realFailed} emails really failed to send (the chart line shows all failures)"
 msgstr "{realFailed} emails réellement en échec (la courbe montre tous les échecs)"
+
+#: src/components/prospection/veridian_prospection_sequences.tsx:92
+msgid "{replied} replied, {rejected} rejected, {unsubscribed} unsubscribed, {excluded} excluded"
+msgstr "{replied} réponses, {rejected} rejets, {unsubscribed} désinscriptions, {excluded} exclusions"
 
 #: src/components/sending_profiles/veridian_profile_card.tsx:123
 msgid "{reservedExtra} reserved, in flight"
@@ -527,6 +535,10 @@ msgstr "Une brève description de l objectif de cette notification"
 msgid "A bulk action is already running"
 msgstr ""
 
+#: src/components/prospection/veridian_prospection_replies.tsx:89
+msgid "A contact enrolled in two sequences counts in both: the rows do not add up."
+msgstr "Un contact inscrit dans deux séquences compte dans les deux : les lignes ne s'additionnent pas."
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2212
 msgid "A preset is a named, coherent set of cold-sending values (rates, daily caps, sending window, jitter, content dedup and provider exclusions). Applying one fills the fields below as a starting point — review and adjust them, then click \"Save changes\" (and the Save button on the Sending window / Excluded classes / Anti-detection cards). Nothing is saved until you do."
 msgstr "Un préréglage est un jeu nommé et cohérent de valeurs d'envoi à froid (débits, plafonds quotidiens, fenêtre d'envoi, jitter, dédoublonnage de contenu et exclusions de fournisseurs). L'appliquer remplit les champs ci-dessous comme point de départ : vérifiez et ajustez, puis cliquez sur « Enregistrer les modifications » (et sur le bouton Enregistrer des cartes Fenêtre d'envoi / Classes exclues / Anti-détection). Rien n'est enregistré tant que vous ne le faites pas."
@@ -623,6 +635,18 @@ msgstr "Activer l automation ?"
 #: src/pages/ContactsPage.tsx:382
 msgid "Active"
 msgstr "Actif"
+
+#: src/components/prospection/veridian_prospection_replies.tsx:104
+msgid "Active contacts"
+msgstr "Contacts actifs"
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:131
+msgid "Active contacts who have not been sent any mail yet, all segments."
+msgstr "Contacts actifs à qui aucun mail n'est encore parti, tous segments confondus."
+
+#: src/components/prospection/veridian_prospection_replies.tsx:111
+msgid "Active contacts who have not been sent any mail yet."
+msgstr "Contacts actifs à qui aucun mail n'est encore parti."
 
 #: src/components/contacts/ExportContactsModal.tsx:330
 msgid "Active filters"
@@ -904,6 +928,10 @@ msgstr "Agrégat"
 #: src/components/ai-assistant/AIAssistantChat.tsx:102
 msgid "AI Assistant Not Configured"
 msgstr "Assistant IA non configuré"
+
+#: src/components/prospection/veridian_watch_texts.ts:40
+msgid "Alert"
+msgstr "Alerte"
 
 #: src/components/email_builder/blocks/MjImageBlock.tsx:74
 msgid "Align"
@@ -1315,6 +1343,12 @@ msgstr "Envoyer automatiquement le gagnant"
 #: src/components/settings/Integrations.tsx:424
 msgid "Auto-subscribe to Lists"
 msgstr "Inscription automatique aux listes"
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:121
+#: src/components/prospection/veridian_prospection_replies.tsx:79
+#: src/components/prospection/veridian_prospection_replies.tsx:138
+msgid "Automatic replies"
+msgstr "Réponses automatiques"
 
 #: src/components/integrations/SupabaseIntegration.tsx:185
 msgid "Automatically add new users to the selected lists"
@@ -2175,6 +2209,7 @@ msgstr "Plainte"
 #: src/components/analytics/EmailMetricsChart.tsx:407
 #: src/components/broadcasts/BroadcastStats.tsx:309
 #: src/components/lists/ListStats.tsx:150
+#: src/components/prospection/veridian_prospection_rejections.tsx:64
 msgid "Complaints"
 msgstr "Plaintes"
 
@@ -2221,7 +2256,7 @@ msgstr ""
 msgid "Configuration for {nodeType} is not available in Phase 2"
 msgstr "La configuration pour {nodeType} n est pas disponible en Phase 2"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:189
+#: src/components/analytics/AnalyticsDashboard.tsx:103
 #: src/components/automations/NodeConfigPanel.tsx:162
 #: src/components/automations/nodes/ABTestNode.tsx:59
 #: src/components/automations/nodes/AddToListNode.tsx:53
@@ -2415,9 +2450,22 @@ msgstr "Les contacts correspondant à ces conditions suivront le chemin \"Oui\".
 msgid "Contacts of an excluded class are skipped by this profile."
 msgstr "Les contacts d'une classe exclue sont ignorés par ce profil."
 
+#: src/components/prospection/veridian_prospection_replies.tsx:53
+#: src/components/prospection/veridian_prospection_replies.tsx:120
+msgid "Contacts reached"
+msgstr "Contacts joints"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1698
 msgid "Contacts that will be skipped"
 msgstr "Contacts qui seront ignorés"
+
+#: src/components/prospection/veridian_prospection_sequences.tsx:75
+msgid "Contacts who left the sequence, by reason."
+msgstr "Contacts sortis de la séquence, par raison."
+
+#: src/components/prospection/veridian_prospection_rejections.tsx:63
+msgid "Contacts who unsubscribed."
+msgstr "Contacts qui se sont désinscrits."
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1026
 msgid "Contacts will be added to these lists on import (optional)"
@@ -3022,6 +3070,10 @@ msgstr "Jours"
 msgid "Days per step"
 msgstr "Jours par palier"
 
+#: src/components/prospection/veridian_prospection_rejections.tsx:55
+msgid "Dead address: the contact is removed from the sequences."
+msgstr "Adresse morte : le contact sort des séquences."
+
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:443
 msgid "Decide later"
 msgstr "Décider plus tard"
@@ -3348,6 +3400,10 @@ msgstr "Désactivé"
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:347
 msgid "Display name"
 msgstr "Nom affiché"
+
+#: src/components/prospection/veridian_prospection_replies.tsx:52
+msgid "Distinct contacts who were sent a mail during the period."
+msgstr "Contacts distincts à qui un mail est parti pendant la période."
 
 #: src/components/automations/config/ABTestConfigForm.tsx:169
 msgid "Distribute evenly"
@@ -3896,6 +3952,7 @@ msgid "Engagement by provider class"
 msgstr "Engagement par classe de fournisseur"
 
 #: src/components/automations/AutomationCard.tsx:260
+#: src/components/prospection/veridian_prospection_sequences.tsx:71
 msgid "Enrolled"
 msgstr "Inscrit"
 
@@ -4227,6 +4284,10 @@ msgstr "sorti"
 #: src/components/automations/AutomationCard.tsx:274
 msgid "Exited"
 msgstr "Sorti"
+
+#: src/components/prospection/veridian_prospection_sequences.tsx:76
+msgid "Exits"
+msgstr "Sorties"
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
 msgid "Expand"
@@ -5240,6 +5301,14 @@ msgstr "fenêtre en h"
 msgid "happened"
 msgstr "s est produit"
 
+#: src/components/prospection/veridian_prospection_rejections.tsx:55
+msgid "Hard bounces"
+msgstr "Rejets durs"
+
+#: src/components/prospection/veridian_watch_texts.ts:19
+msgid "Hard bounces: {rate} over 7 days"
+msgstr "Rejets durs : {rate} sur 7 jours"
+
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:169
 msgid "Hard ceiling of messages per day for this profile, all senders and providers together. 0 means no profile cap."
 msgstr "Plafond dur de messages par jour pour ce profil, toutes adresses et tous fournisseurs confondus. 0 : pas de plafond de profil."
@@ -5281,6 +5350,10 @@ msgstr "Valeur du header"
 #: src/components/broadcasts/HeadersEditor.tsx:116
 msgid "Header value is required"
 msgstr "La valeur du header est requise"
+
+#: src/components/prospection/veridian_watch_texts.ts:36
+msgid "Healthy"
+msgstr "Sain"
 
 #: src/components/email_builder/blocks/MjButtonBlock.tsx:362
 #: src/components/email_builder/blocks/MjGroupBlock.tsx:68
@@ -5401,8 +5474,19 @@ msgid "https://fonts.googleapis.com/css?family=... or {{ font_url }}"
 msgstr "https://fonts.googleapis.com/css?family=... ou {{ font_url }}"
 
 #: src/components/analytics/veridian_engagement_by_class.tsx:150
+#: src/components/prospection/veridian_prospection_dashboard.tsx:114
+#: src/components/prospection/veridian_prospection_replies.tsx:61
+#: src/components/prospection/veridian_prospection_replies.tsx:126
 msgid "Human replies"
 msgstr "Réponses humaines"
+
+#: src/components/prospection/veridian_prospection_replies.tsx:68
+msgid "Human replies over contacts reached during the period."
+msgstr "Réponses humaines sur les contacts joints pendant la période."
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:117
+msgid "Human replies over the period, and reply rate over the mails sent during the period."
+msgstr "Réponses humaines de la période, et taux de réponse sur les mails envoyés pendant la période."
 
 #: src/components/segment/button_upsert.tsx:395
 msgid "i.e: Big spenders..."
@@ -5656,16 +5740,16 @@ msgid "Imported {0} contacts ({1} failed, see details below)"
 msgstr "{0} contacts importés ({1} échoués, voir détails ci-dessous)"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:120
-msgid "Imported contacts (stock)"
-msgstr "Contacts importés (stock)"
+#~ msgid "Imported contacts (stock)"
+#~ msgstr "Contacts importés (stock)"
 
 #: src/components/email_builder/ui/FontStyleInput.tsx:87
 msgid "Imported Fonts"
 msgstr "Polices importées"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:119
-msgid "Imported stock, not the audience actually contacted."
-msgstr "Stock importé, pas l'audience réellement contactée."
+#~ msgid "Imported stock, not the audience actually contacted."
+#~ msgstr "Stock importé, pas l'audience réellement contactée."
 
 #: src/components/file_manager/fileManager.tsx:1091
 msgid "Importing files..."
@@ -6164,6 +6248,10 @@ msgstr "Plus léger"
 msgid "Limited by"
 msgstr "Limité par"
 
+#: src/components/prospection/veridian_prospection_sends.tsx:204
+msgid "Limiting gate"
+msgstr "Porte limitante"
+
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:910
 msgid "Line"
 msgstr "Ligne"
@@ -6293,6 +6381,8 @@ msgid "Lists refreshed"
 msgstr "Listes actualisées"
 
 #: src/components/automations/AutomationCard.tsx:65
+#: src/components/prospection/veridian_prospection_replies.tsx:24
+#: src/components/prospection/veridian_prospection_sequences.tsx:67
 msgid "Live"
 msgstr "En direct"
 
@@ -6759,8 +6849,8 @@ msgid "New folder"
 msgstr "Nouveau dossier"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:135
-msgid "New imported contacts"
-msgstr "Nouveaux contacts importés"
+#~ msgid "New imported contacts"
+#~ msgstr "Nouveaux contacts importés"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:282
 msgid "New inbox"
@@ -6797,8 +6887,8 @@ msgid "New workspace"
 msgstr "Nouvel espace de travail"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:134
-msgid "Newly imported contacts, not the audience actually contacted."
-msgstr "Contacts nouvellement importés, pas l'audience réellement contactée."
+#~ msgid "Newly imported contacts, not the audience actually contacted."
+#~ msgstr "Contacts nouvellement importés, pas l'audience réellement contactée."
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:334
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:344
@@ -7006,6 +7096,10 @@ msgstr "Pas de propriétés"
 msgid "No provider class is excluded — all recipients are contacted."
 msgstr "Aucune classe de fournisseur n'est exclue : tous les destinataires sont contactés."
 
+#: src/components/prospection/veridian_prospection_reputation.tsx:31
+msgid "No provider is slowed or stopped."
+msgstr "Aucun fournisseur n'est ralenti ou arrêté."
+
 #: src/components/sending_profiles/veridian_profile_card.tsx:164
 msgid "No provider slowed or stopped"
 msgstr "Aucun fournisseur ralenti ni arrêté"
@@ -7107,6 +7201,10 @@ msgstr "Aucun déclencheur configuré"
 msgid "No unlinked inbox"
 msgstr "Aucune boîte non liée"
 
+#: src/components/prospection/veridian_transactional_watch.tsx:67
+msgid "No unusual volume and no reputation signal over the last 7 days."
+msgstr "Aucun volume inhabituel ni signal de réputation sur les 7 derniers jours."
+
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:457
 msgid "No webhook deliveries found"
 msgstr "Aucune livraison webhook trouvée"
@@ -7169,7 +7267,7 @@ msgstr "Normal"
 msgid "Not available"
 msgstr "Non disponible"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:187
+#: src/components/analytics/AnalyticsDashboard.tsx:101
 #: src/components/settings/Integrations.tsx:382
 #: src/components/settings/Integrations.tsx:419
 #: src/components/settings/veridian_cold_outreach_settings.tsx:252
@@ -7185,9 +7283,14 @@ msgstr "Non connecté"
 msgid "Not in List"
 msgstr "Pas dans la liste"
 
+#: src/components/prospection/veridian_prospection_sends.tsx:216
 #: src/components/sending_profiles/veridian_profile_labels.ts:123
 msgid "Not in the rotation"
 msgstr "Hors rotation"
+
+#: src/components/prospection/veridian_watch_texts.ts:42
+msgid "Not measured"
+msgstr "Non mesuré"
 
 #: src/components/contacts/InlineEditableField.tsx:144
 #: src/components/settings/GeneralSettings.tsx:111
@@ -7491,6 +7594,14 @@ msgstr "Autres hébergeurs (Infomaniak, Gandi, Zoho…)"
 msgid "Out of rotation"
 msgstr "Hors rotation"
 
+#: src/components/prospection/veridian_prospection_replies.tsx:78
+msgid "Out-of-office and acknowledgements: counted apart, never in the rate."
+msgstr "Absences et accusés de réception : comptés à part, jamais dans le taux."
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:124
+msgid "Out-of-office and acknowledgements: counted apart, never in the reply rate."
+msgstr "Absences et accusés de réception : comptés à part, jamais dans le taux de réponse."
+
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:350
 msgid "Outgoing server (SMTP)"
 msgstr "Serveur d'envoi (SMTP)"
@@ -7620,6 +7731,8 @@ msgid "Pause this profile?"
 msgstr "Mettre ce profil en pause ?"
 
 #: src/components/automations/AutomationCard.tsx:67
+#: src/components/prospection/veridian_prospection_replies.tsx:25
+#: src/components/prospection/veridian_prospection_sequences.tsx:67
 #: src/components/sending_profiles/veridian_profile_card.tsx:93
 #: src/components/sending_profiles/veridian_profile_labels.ts:119
 #: src/pages/BroadcastsPage.tsx:350
@@ -7655,6 +7768,14 @@ msgstr "En attente de confirmation"
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:149
 msgid "per day"
 msgstr "par jour"
+
+#: src/components/prospection/veridian_prospection_sends.tsx:165
+msgid "Per day"
+msgstr "Par jour"
+
+#: src/components/prospection/veridian_prospection_sends.tsx:166
+msgid "Per hour"
+msgstr "Par heure"
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:149
 msgid "per minute"
@@ -8012,6 +8133,14 @@ msgstr "Veuillez sélectionner un opérateur"
 msgid "Please upload a CSV file with email addresses"
 msgstr "Veuillez téléverser un fichier CSV avec des adresses email"
 
+#: src/components/prospection/veridian_prospection_rejections.tsx:59
+msgid "Policy refusals"
+msgstr "Refus de politique"
+
+#: src/components/prospection/veridian_watch_texts.ts:27
+msgid "Policy refusals: {rate} over 7 days"
+msgstr "Refus de politique : {rate} sur 7 jours"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:370
 msgid "Polling interval (seconds)"
 msgstr "Intervalle de consultation (secondes)"
@@ -8243,7 +8372,7 @@ msgstr "Profil repris"
 #~ msgid "Profile saved. Send a test email before activating it."
 #~ msgstr "Profil enregistré. Envoyez un email de test avant de l'activer."
 
-#: src/components/analytics/AnalyticsDashboard.tsx:148
+#: src/components/prospection/veridian_prospection_dashboard.tsx:135
 msgid "Profiles in rotation"
 msgstr "Profils en rotation"
 
@@ -8259,6 +8388,7 @@ msgstr "Progression"
 msgid "Prospection"
 msgstr "Prospection"
 
+#: src/components/prospection/veridian_prospection_reputation.tsx:35
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:344
 msgid "Provider"
 msgstr "Fournisseur"
@@ -8267,6 +8397,10 @@ msgstr "Fournisseur"
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1016
 msgid "Provider class"
 msgstr "Classe de fournisseur"
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:141
+msgid "Providers slowed or stopped"
+msgstr "Fournisseurs ralentis ou arrêtés"
 
 #: src/components/lists/ListDrawer.tsx:214
 #: src/pages/ListsPage.tsx:273
@@ -8297,6 +8431,7 @@ msgstr "Push"
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr ""
 
+#: src/components/prospection/veridian_prospection_reputation.tsx:60
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2327
 msgid "Rate"
 msgstr "Débit"
@@ -8364,6 +8499,7 @@ msgstr "Lecture"
 #~ msgid "Ready"
 #~ msgstr "Prêt"
 
+#: src/components/prospection/veridian_prospection_sends.tsx:218
 #: src/components/templates/ImportExportButton.tsx:423
 msgid "Ready to send"
 msgstr "Prêt à envoyer"
@@ -8379,6 +8515,10 @@ msgstr "Prêt à utiliser"
 #: src/components/analytics/EmailMetricsChart.tsx:494
 msgid "Real failures"
 msgstr "Échec réel"
+
+#: src/components/prospection/veridian_prospection_reputation.tsx:49
+msgid "Reason"
+msgstr "Raison"
 
 #: src/pages/BroadcastsPage.tsx:996
 msgid "Reason:"
@@ -8505,9 +8645,31 @@ msgstr "Rejeter les emails jetables"
 msgid "Reject Disposable Email Addresses"
 msgstr "Rejeter les adresses email jetables"
 
+#: src/components/prospection/veridian_prospection_replies.tsx:144
+msgid "Rejected"
+msgstr "Rejetés"
+
+#: src/components/prospection/veridian_prospection_rejections.tsx:52
+msgid "Rejections, unsubscribes and complaints"
+msgstr "Rejets, désinscriptions et plaintes"
+
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx:392
 msgid "Rel"
 msgstr "Rel"
+
+#: src/components/prospection/veridian_prospection_reputation.tsx:34
+#: src/components/prospection/veridian_prospection_sends.tsx:183
+msgid "Relay"
+msgstr "Relais"
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:144
+msgid "Relay and recipient provider pairs slowed or stopped by the reputation fuse. In brackets, how many are stopped."
+msgstr "Couples relais et fournisseur destinataire ralentis ou arrêtés par le fusible de réputation. Entre parenthèses, ceux qui sont arrêtés."
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:128
+#: src/components/prospection/veridian_prospection_replies.tsx:112
+msgid "Remaining stock"
+msgstr "Stock restant"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:252
 msgid "Remove"
@@ -8595,6 +8757,10 @@ msgstr "Réponses et rejets"
 msgid "Replies and bounces will no longer be read from {0}."
 msgstr "Les réponses et les rejets ne seront plus lus depuis {0}."
 
+#: src/components/prospection/veridian_prospection_replies.tsx:31
+msgid "Replies by sequence"
+msgstr "Réponses par séquence"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2453
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2701
 msgid "Reply & bounce inbox"
@@ -8608,6 +8774,11 @@ msgstr "Boîte de réponses et rebonds (IMAP)"
 #: src/components/automations/nodes/StatNode.tsx:61
 msgid "Reply Branch"
 msgstr ""
+
+#: src/components/prospection/veridian_prospection_replies.tsx:69
+#: src/components/prospection/veridian_prospection_replies.tsx:132
+msgid "Reply rate"
+msgstr "Taux de réponse"
 
 #: src/components/templates/CreateTemplateDrawer.tsx:819
 #: src/components/templates/TemplatePreviewDrawer.tsx:319
@@ -8627,6 +8798,7 @@ msgstr "Répondre à"
 msgid "Reputation"
 msgstr "Réputation"
 
+#: src/components/prospection/veridian_prospection_reputation.tsx:24
 #: src/components/sending_profiles/veridian_profile_card.tsx:161
 msgid "Reputation by recipient provider"
 msgstr "Réputation par fournisseur destinataire"
@@ -9087,9 +9259,14 @@ msgstr "Sécurité"
 msgid "See docs for:"
 msgstr "Voir la doc pour :"
 
+#: src/components/prospection/veridian_transactional_watch.tsx:45
+msgid "See the transactional dashboard"
+msgstr "Voir le tableau de bord transactionnel"
+
 #: src/components/automations/config/TriggerConfigForm.tsx:79
 #: src/components/automations/config/TriggerConfigForm.tsx:277
 #: src/components/contacts/ExportContactsModal.tsx:89
+#: src/components/prospection/veridian_prospection_replies.tsx:102
 #: src/components/segment/button_upsert.tsx:102
 #: src/components/timeline/ContactTimeline.tsx:482
 msgid "Segment"
@@ -9109,6 +9286,10 @@ msgstr "Reconstruction du segment démarrée avec succès"
 #: src/pages/ContactsPage.tsx:615
 msgid "Segments"
 msgstr "Segments"
+
+#: src/components/prospection/veridian_prospection_replies.tsx:93
+msgid "Segments (lists): replies and remaining stock"
+msgstr "Segments (listes) : réponses et stock restant"
 
 #: src/components/automations/nodes/EmailNode.tsx:48
 #: src/components/file_manager/fileManager.tsx:981
@@ -9597,6 +9778,11 @@ msgstr "Fenêtre d'envoi enregistrée"
 msgid "Sends from @{senderDomain}"
 msgstr "Envoie depuis @{senderDomain}"
 
+#: src/components/prospection/veridian_prospection_sends.tsx:146
+msgid "Sends per relay"
+msgstr "Envois par relais"
+
+#: src/components/prospection/veridian_prospection_sequences.tsx:32
 #: src/components/timeline/ContactTimeline.tsx:494
 msgid "sent"
 msgstr "envoyé"
@@ -9613,21 +9799,55 @@ msgstr "envoyé"
 msgid "Sent"
 msgstr "Envoyé"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:198
+#: src/components/prospection/veridian_prospection_reputation.tsx:54
+msgid "Sent over 7 days"
+msgstr "Envoyés sur 7 jours"
+
+#: src/components/prospection/veridian_prospection_sends.tsx:142
+msgid "Sent over the period"
+msgstr "Envoyés sur la période"
+
+#: src/components/analytics/AnalyticsDashboard.tsx:112
+#: src/components/prospection/veridian_prospection_sends.tsx:142
 msgid "Sent today"
 msgstr "Envoyés aujourd'hui"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:160
-msgid "Sent today / capacity"
-msgstr "Envoyés aujourd'hui / capacité du jour"
+#~ msgid "Sent today / capacity"
+#~ msgstr "Envoyés aujourd'hui / capacité du jour"
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:107
+msgid "Sent today / effective cap"
+msgstr "Envoyés aujourd'hui / plafond effectif"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:159
-msgid "Sent today by the rotation profiles, over today's capacity."
-msgstr "Envoyés aujourd'hui par les profils en rotation, sur la capacité du jour."
+#~ msgid "Sent today by the rotation profiles, over today's capacity."
+#~ msgstr "Envoyés aujourd'hui par les profils en rotation, sur la capacité du jour."
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx:110
+msgid "Sent today by the rotation profiles, over today's effective capacity."
+msgstr "Envoyés aujourd'hui par les profils de la rotation, sur la capacité effective du jour."
+
+#: src/components/prospection/veridian_prospection_sends.tsx:142
+msgid "Sent yesterday"
+msgstr "Envoyés hier"
+
+#: src/components/prospection/veridian_prospection_sequences.tsx:102
+msgid "Sent: contacts who were sent this mail. Excluded: left before any mail was sent (provider excluded on purpose, address filtered out)."
+msgstr "Envoyés : contacts à qui ce mail est parti. Exclusions : sortis avant tout envoi (fournisseur exclu volontairement, adresse écartée)."
 
 #: src/components/email_builder/ui/BorderInput.tsx:352
 msgid "Separate sides"
 msgstr "Séparer les côtés"
+
+#: src/components/prospection/veridian_prospection_replies.tsx:42
+#: src/components/prospection/veridian_prospection_sequences.tsx:62
+msgid "Sequence"
+msgstr "Séquence"
+
+#: src/components/prospection/veridian_prospection_sequences.tsx:51
+msgid "Sequence progress"
+msgstr "Avancement des séquences"
 
 #: src/pages/SetupWizard.tsx:188
 msgid "Server is restarting with new configuration..."
@@ -9837,6 +10057,14 @@ msgstr "Taille"
 msgid "Skipped"
 msgstr "Ignoré"
 
+#: src/components/prospection/veridian_prospection_reputation.tsx:43
+#~ msgid "Slowed ÷{0}"
+#~ msgstr ""
+
+#: src/components/prospection/veridian_prospection_reputation.tsx:44
+msgid "Slowed ÷{factor}"
+msgstr "Ralenti ÷{factor}"
+
 #: src/components/messages/MessageHistoryTab.tsx:229
 msgid "SMS"
 msgstr "SMS"
@@ -9971,6 +10199,10 @@ msgstr "Icône de réseau social"
 msgid "Social Network"
 msgstr "Réseau social"
 
+#: src/components/prospection/veridian_prospection_rejections.tsx:56
+msgid "Soft bounces"
+msgstr "Rejets mous"
+
 #: src/components/email_builder/blocks/MjDividerBlock.tsx:61
 #: src/components/email_builder/ui/BorderInput.tsx:56
 msgid "Solid"
@@ -10008,6 +10240,14 @@ msgstr "Attributs de l'espaceur"
 #: src/components/sending_profiles/veridian_profile_labels.ts:145
 msgid "spam complaint received"
 msgstr "plainte pour spam reçue"
+
+#: src/components/prospection/veridian_prospection_rejections.tsx:64
+msgid "Spam complaints reported by the recipient."
+msgstr "Plaintes pour spam signalées par le destinataire."
+
+#: src/components/prospection/veridian_watch_texts.ts:23
+msgid "Spam complaints: {rate} over 7 days"
+msgstr "Plaintes pour spam : {rate} sur 7 jours"
 
 #: src/components/sending_profiles/veridian_profile_labels.ts:36
 msgid "SparkPost"
@@ -10081,6 +10321,8 @@ msgstr "STARTTLS requis"
 #: src/components/automations/config/TriggerConfigForm.tsx:122
 #: src/components/contacts/ContactDetailsDrawer.tsx:447
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:100
+#: src/components/prospection/veridian_prospection_reputation.tsx:37
+#: src/components/prospection/veridian_prospection_sends.tsx:210
 msgid "State"
 msgstr "État"
 
@@ -10101,6 +10343,10 @@ msgstr "statut modifié"
 #: src/pages/ContactsPage.tsx:575
 msgid "Status unknown"
 msgstr "Statut inconnu"
+
+#: src/components/prospection/veridian_prospection_reputation.tsx:42
+msgid "Stopped"
+msgstr "Arrêté"
 
 #: src/components/file_manager/fileManager.tsx:692
 msgid "Storage settings"
@@ -10644,6 +10890,11 @@ msgstr "Les erreurs de validation suivantes ont été trouvées dans votre impor
 msgid "The hostname your server identifies itself as when connecting to the SMTP server. Defaults to the SMTP host value if empty."
 msgstr "Le nom d'hôte sous lequel votre serveur s'identifie en se connectant au serveur SMTP. Par défaut, la valeur de l'hôte SMTP si le champ est vide."
 
+#: src/components/prospection/veridian_transactional_watch.tsx:39
+#: src/components/prospection/veridian_transactional_watch.tsx:69
+msgid "The measure could not be made. Nothing is blocked."
+msgstr "La mesure n'a pas pu être faite. Rien n'est bloqué."
+
 #: src/components/settings/GeneralSettings.tsx:219
 msgid "The primary language for template content. Translations are stored for other languages."
 msgstr ""
@@ -10683,6 +10934,10 @@ msgstr "Le segment a été mis à jour !"
 #: src/components/file_manager/context.tsx:201
 msgid "The selected file"
 msgstr "Le fichier sélectionné"
+
+#: src/components/prospection/veridian_prospection_rejections.tsx:60
+msgid "The server refused the message for policy reasons (5.7.x: spam filter, reputation, authentication). Dated on the send date."
+msgstr "Le serveur a refusé le message pour une raison de politique (5.7.x : filtre anti-spam, réputation, authentification). Daté du jour d'envoi."
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:452
 msgid "The server refused the test message."
@@ -10752,7 +11007,7 @@ msgstr ""
 msgid "These defaults apply when a campaign does not set its own per-class rates or caps. A campaign can still override them from its own settings."
 msgstr "Ces valeurs par défaut s'appliquent quand une campagne ne définit pas ses propres débits ou plafonds par classe. Une campagne peut toujours les remplacer depuis ses propres réglages."
 
-#: src/components/analytics/AnalyticsDashboard.tsx:208
+#: src/components/analytics/AnalyticsDashboard.tsx:122
 msgid "These emails are subject to no cap: a transactional email always goes out."
 msgstr "Ces mails ne sont soumis à aucun plafond : un mail transactionnel part toujours."
 
@@ -10889,6 +11144,10 @@ msgstr "Ce texte apparaît dans le volet d'aperçu du client email, généraleme
 #: src/components/settings/WorkspaceMembers.tsx:701
 msgid "This token will only be displayed once. Please save it in a secure location. It cannot be retrieved again."
 msgstr "Ce jeton ne sera affiché qu'une seule fois. Veuillez le sauvegarder dans un endroit sécurisé. Il ne pourra pas être récupéré à nouveau."
+
+#: src/components/prospection/veridian_transactional_watch.tsx:76
+msgid "This watch only informs: a transactional email is never held back, delayed or refused because of it."
+msgstr "Cette surveillance informe seulement : un mail transactionnel n'est jamais retenu, retardé ni refusé à cause d'elle."
 
 #: src/components/settings/WebhookCard.tsx:276
 msgid "This will invalidate the current secret. You'll need to update your webhook receiver."
@@ -11045,10 +11304,19 @@ msgstr "pour éviter les envois en double"
 msgid "To use the {0}, you need to configure the Anthropic integration in your workspace settings."
 msgstr "Pour utiliser le {0}, vous devez configurer l'intégration Anthropic dans les paramètres de votre espace de travail."
 
+#: src/components/prospection/veridian_watch_texts.ts:38
+msgid "To watch"
+msgstr "À surveiller"
+
+#: src/components/prospection/veridian_prospection_sends.tsx:155
 #: src/components/sending_profiles/veridian_profile_card.tsx:115
 #: src/components/sending_profiles/veridian_profile_card.tsx:148
 msgid "Today"
 msgstr "Aujourd'hui"
+
+#: src/components/prospection/veridian_prospection_sends.tsx:186
+msgid "Today / effective cap"
+msgstr "Aujourd'hui / plafond effectif"
 
 #: src/components/settings/Integrations.tsx:417
 #: src/components/settings/veridian_sending_profiles_ui.tsx:122
@@ -11167,7 +11435,8 @@ msgstr "Notification transactionnelle supprimée avec succès"
 msgid "Transactional Notifications"
 msgstr "Notifications transactionnelles"
 
-#: src/components/analytics/AnalyticsDashboard.tsx:175
+#: src/components/analytics/AnalyticsDashboard.tsx:89
+#: src/components/prospection/veridian_transactional_watch.tsx:34
 msgid "Transactional profile"
 msgstr "Profil transactionnel"
 
@@ -11183,6 +11452,10 @@ msgstr "Envoyés aujourd'hui (transactionnel)"
 #: src/pages/TemplatesPage.tsx:368
 msgid "Transactional templates"
 msgstr "Modèles transactionnels"
+
+#: src/components/prospection/veridian_prospection_rejections.tsx:56
+msgid "Transient failure (full mailbox, greylisting)."
+msgstr "Échec transitoire (boîte pleine, greylisting)."
 
 #: src/components/email_builder/blocks/MjDividerBlock.tsx:103
 #: src/components/email_builder/blocks/MjSpacerBlock.tsx:54
@@ -11274,6 +11547,23 @@ msgstr ""
 #: src/components/analytics/EmailMetricsChart.tsx:247
 msgid "Unable to load email metrics"
 msgstr "Impossible de charger les métriques email"
+
+#: src/components/prospection/veridian_prospection_replies.tsx:32
+#: src/components/prospection/veridian_prospection_sequences.tsx:52
+msgid "Unable to load the prospection figures"
+msgstr "Impossible de charger les chiffres de prospection"
+
+#: src/components/prospection/veridian_prospection_rejections.tsx:53
+msgid "Unable to load the rejections"
+msgstr "Impossible de charger les rejets"
+
+#: src/components/prospection/veridian_prospection_sends.tsx:172
+msgid "Unable to load the sends"
+msgstr "Impossible de charger les envois"
+
+#: src/components/prospection/veridian_prospection_sends.tsx:106
+msgid "Unassigned (older messages)"
+msgstr "Non attribué (anciens messages)"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:355
 msgid "Unchanged"
@@ -11396,6 +11686,7 @@ msgstr "Désabonner de la liste"
 #: src/components/messages/MessageHistoryTab.tsx:204
 #: src/components/messages/MessageHistoryTab.tsx:209
 #: src/components/messages/MessageHistoryTable.tsx:314
+#: src/components/prospection/veridian_prospection_replies.tsx:150
 #: src/pages/ContactsPage.tsx:384
 msgid "Unsubscribed"
 msgstr "Désabonné"
@@ -11406,12 +11697,17 @@ msgid "Unsubscribed from list"
 msgstr "Désabonné de la liste"
 
 #: src/components/analytics/EmailMetricsChart.tsx:233
+#: src/components/prospection/veridian_prospection_rejections.tsx:63
 msgid "Unsubscribes"
 msgstr "Désabonnements"
 
 #: src/pages/BroadcastsPage.tsx:688
 msgid "Untitled"
 msgstr "Sans titre"
+
+#: src/components/prospection/veridian_watch_texts.ts:15
+msgid "Unusual volume: {sent} mails today, {average} per day on average over the previous 7 days"
+msgstr "Volume inhabituel : {sent} mails aujourd'hui, {average} par jour en moyenne sur les 7 jours précédents"
 
 #: src/components/contacts/SegmentsFilter.tsx:122
 #: src/components/email_builder/ui/BlockToolbar.tsx:209
@@ -11749,6 +12045,10 @@ msgstr ""
 #: src/components/templates/CreateTemplateDrawer.tsx:1094
 msgid "Visual Email Editor"
 msgstr "Éditeur d'email visuel"
+
+#: src/components/prospection/veridian_transactional_watch.tsx:60
+msgid "Volume and reputation watch"
+msgstr "Surveillance du volume et de la réputation"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2560
 msgid "Volume limit: how many emails total toward this provider in a single day."
@@ -12108,6 +12408,10 @@ msgstr "Oui, reprendre"
 #: src/pages/BroadcastsPage.tsx:887
 msgid "Yes, Select Winner"
 msgstr "Oui, sélectionner le gagnant"
+
+#: src/components/prospection/veridian_prospection_sends.tsx:156
+msgid "Yesterday"
+msgstr "Hier"
 
 #: src/components/veridian_welcome_toast.tsx:62
 msgid "You are now signed in via Veridian."

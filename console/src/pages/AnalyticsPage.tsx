@@ -132,6 +132,11 @@ export function AnalyticsPage() {
         timeRange={timeRange}
         timezone={selectedTimezone}
         messageType={messageType}
+        onOpenTransactional={() =>
+          navigate({
+            search: ((prev: Record<string, unknown>) => ({ ...prev, view: 'transactional' })) as never
+          })
+        }
       />
     </div>
   )

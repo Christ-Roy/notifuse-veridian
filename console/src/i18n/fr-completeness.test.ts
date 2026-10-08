@@ -124,9 +124,7 @@ describe('complétude fr + en des chaînes du lot 4', () => {
     'Transactional log',
     'Sending log',
     'Profiles in rotation',
-    'Sent today / capacity',
     'Sent today',
-    "Sent today by the rotation profiles, over today's capacity.",
     'Transactional profile',
     'These emails are subject to no cap: a transactional email always goes out.',
     '{sentLabel} sent. No commercial limit: a transactional mail always goes out.',
@@ -150,5 +148,74 @@ describe('complétude fr + en des chaînes du lot 4', () => {
     for (const msgid of LOT4) {
       expect(entries.find((e) => e.msgid === msgid)!.msgstr).not.toMatch(/ — /)
     }
+  })
+})
+
+// Lot 5 (08/10/2026) : tableau de bord de prospection et surveillance du profil
+// transactionnel. TOUT msgid des fichiers du lot (components/prospection/, AnalyticsDashboard)
+// a sa traduction française ET anglaise, variables conservées, sans tiret cadratin entouré
+// d'espaces. Une chaîne ajoutée sans `lingui extract` + traduction fait échouer ce test.
+describe('complétude fr + en du tableau de bord de prospection (lot 5)', () => {
+  const LOT5_SCOPE = /(components\/prospection\/|components\/analytics\/AnalyticsDashboard)/
+  const MUST_EXIST = [
+    'Sends per relay',
+    'Per day',
+    'Per hour',
+    'Sequence progress',
+    'Replies by sequence',
+    'Segments (lists): replies and remaining stock',
+    'Rejections, unsubscribes and complaints',
+    'Policy refusals',
+    'Reputation by recipient provider',
+    'Remaining stock',
+    'Automatic replies',
+    'Volume and reputation watch',
+    '{queued} in the queue, {waiting} waiting, {left} left after',
+    'Unusual volume: {sent} mails today, {average} per day on average over the previous 7 days',
+    'Slowed ÷{factor}'
+  ]
+
+  for (const locale of ['fr', 'en']) {
+    const entries = parsePo(readFileSync(resolve(__dirname, `locales/${locale}.po`), 'utf8'))
+    const inScope = entries.filter((e) => e.refs.some((r) => LOT5_SCOPE.test(r.split(':')[0])))
+
+    it(`${locale} : la portée du lot 5 n'est pas vide (le test sait la lire)`, () => {
+      expect(inScope.length).toBeGreaterThan(60)
+    })
+
+    it(`${locale} : aucune chaîne du lot 5 sans traduction`, () => {
+      const empty = inScope.filter((e) => e.msgid !== '' && e.msgstr === '').map((e) => e.msgid.slice(0, 80))
+      expect(empty).toEqual([])
+    })
+
+    it(`${locale} : les chaînes clés du lot 5 existent`, () => {
+      for (const msgid of MUST_EXIST) {
+        const entry = entries.find((e) => e.msgid === msgid)
+        expect(entry, `${locale}: « ${msgid} » absente du catalogue`).toBeDefined()
+        expect(entry!.msgstr, `${locale}: « ${msgid} » vide`).not.toBe('')
+      }
+    })
+
+    it(`${locale} : variables conservées dans chaque traduction du lot 5`, () => {
+      for (const e of inScope) {
+        if (e.msgstr === '') continue
+        const vars = (e.msgid.match(/\{[A-Za-z0-9_]+\}/g) ?? []).sort()
+        const varsOut = (e.msgstr.match(/\{[A-Za-z0-9_]+\}/g) ?? []).sort()
+        expect(varsOut, e.msgid).toEqual(vars)
+      }
+    })
+  }
+
+  it('fr : aucun tiret cadratin entouré d\'espaces, des vraies traductions françaises', () => {
+    const entries = parsePo(readFileSync(resolve(__dirname, 'locales/fr.po'), 'utf8'))
+    const fr = new Map(entries.map((e) => [e.msgid, e.msgstr]))
+    for (const e of entries.filter((x) => x.refs.some((r) => LOT5_SCOPE.test(r.split(':')[0])))) {
+      expect(e.msgstr, e.msgid).not.toMatch(/ — /)
+    }
+    expect(fr.get('Sends per relay')).toBe('Envois par relais')
+    expect(fr.get('Sequence progress')).toBe('Avancement des séquences')
+    expect(fr.get('Remaining stock')).toBe('Stock restant')
+    expect(fr.get('Automatic replies')).toBe('Réponses automatiques')
+    expect(fr.get('Slowed ÷{factor}')).toBe('Ralenti ÷{factor}')
   })
 })

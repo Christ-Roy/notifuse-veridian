@@ -158,5 +158,5 @@ export function useProfileLabels() {
     return t`${name}: rate ÷${factor}, ${reason}`
   }
 
-  return { typeLabel, classLabel, weekdayLabel, factorText, blockerText, reputationText }
+  return { typeLabel, classLabel, weekdayLabel, factorText, blockerText, reasonText, reputationText }
 }
