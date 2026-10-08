@@ -1,9 +1,11 @@
 package domain
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEmailProviderVeridianProfileType(t *testing.T) {
@@ -62,4 +64,35 @@ func TestVeridianBuildPlanObservedKeepsTransactionalOutOfCommercialCounters(t *t
 	assert.Equal(t, 7, commercial.DomainClassSent["nord.example"]["google"])
 	transactional := VeridianBuildPlanObserved("tx", rows, nil)
 	assert.Equal(t, 40, transactional.ProfileAccepted, "le volume transactionnel se lit sur son profil")
+}
+
+// Lot 5 : l'overview porte la surveillance du profil transactionnel. Contrat avec la console
+// (transactional_watch, null sans profil transactionnel) : un renommage casse ici, pas en
+// silence dans un bandeau qui n'apparaitrait plus.
+func TestVeridianEmailProfilesOverview_TransactionalWatchJSONShape(t *testing.T) {
+	without, err := json.Marshal(VeridianEmailProfilesOverview{})
+	require.NoError(t, err)
+	assert.Contains(t, string(without), `"transactional_watch":null`)
+
+	watch := VeridianEvaluateTransactionalWatch("tx", "asd-transactionnel", VeridianTransactionalWatchInput{SentToday: 900, SentPrevious7Days: 70, Sent7d: 970})
+	with, err := json.Marshal(VeridianEmailProfilesOverview{TransactionalWatch: &watch})
+	require.NoError(t, err)
+	var decoded struct {
+		Watch struct {
+			ProfileID string `json:"profile_id"`
+			Level     string `json:"level"`
+			Blocking  bool   `json:"blocking"`
+			SentToday int    `json:"sent_today"`
+			Alerts    []struct {
+				Code string `json:"code"`
+			} `json:"alerts"`
+		} `json:"transactional_watch"`
+	}
+	require.NoError(t, json.Unmarshal(with, &decoded))
+	assert.Equal(t, "tx", decoded.Watch.ProfileID)
+	assert.Equal(t, VeridianWatchLevelAlert, decoded.Watch.Level)
+	assert.False(t, decoded.Watch.Blocking)
+	assert.Equal(t, 900, decoded.Watch.SentToday)
+	require.Len(t, decoded.Watch.Alerts, 1)
+	assert.Equal(t, VeridianWatchCodeVolume, decoded.Watch.Alerts[0].Code)
 }
