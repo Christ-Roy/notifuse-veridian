@@ -1625,6 +1625,21 @@ func (a *App) InitHandlers() error {
 	)
 	veridianReplyStatsHandler.RegisterRoutes(a.mux)
 
+	// === Veridian patch, lot 5 (08/10/2026) : agrégats du tableau de bord de prospection ===
+	// GET|POST /api/veridian/prospection.stats : réponses par séquence et par liste,
+	// avancement des séquences, stock par liste. Lecture seule (contacts:read et
+	// message_history:read vérifiés dans le service).
+	veridianProspectionStatsService := service.NewVeridianProspectionStatsService(
+		repository.NewVeridianProspectionStatsRepository(a.workspaceRepo),
+		a.authService,
+		a.logger,
+	)
+	httpHandler.NewVeridianProspectionStatsHandler(
+		veridianProspectionStatsService,
+		getJWTSecret,
+		a.logger,
+	).RegisterRoutes(a.mux)
+
 	// === Veridian patch — fusible de réputation, API de lecture (2026-09-29) ===
 	// Endpoint POST+GET /api/veridian/messages.reputationStatus : signal
 	// "visible dans l'interface ou l'API" du fusible qui gèle automatiquement une

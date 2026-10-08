@@ -137,6 +137,19 @@ var PredefinedSchemas = map[string]analytics.SchemaDefinition{
 					{SQL: "(status_info LIKE 'pre-filtered recipient:%' OR status_info LIKE 'excluded_provider_class:%')"},
 				},
 			},
+			// Veridian lot 5 (08/10/2026) : refus de politique (RFC 3463 5.7.x : filtre
+			// anti-spam, reputation, authentification). La boite existe, le message est
+			// refuse ; ecrit SANS bounced_at (le contact n'est pas supprime), donc la
+			// serie se groupe sur sent_at et jamais sur bounced_at.
+			"count_policy_refused": {
+				Type:        "count",
+				Title:       "Policy refusals",
+				SQL:         "*",
+				Description: "Messages refused by the recipient server for policy reasons (5.7.x), grouped on sent_at",
+				Filters: []analytics.MeasureFilter{
+					{SQL: "bounce_type = 'PolicyBounce'"},
+				},
+			},
 			"count_sent_emails": {
 				Type:        "count",
 				Title:       "Sent Emails",
@@ -275,6 +288,15 @@ var PredefinedSchemas = map[string]analytics.SchemaDefinition{
 			// transactionnel. Le filtre "broadcast_id notSet" qui tenait lieu de
 			// "transactionnel" y rangeait aussi les sequences (automation_id) : il est
 			// remplace par cette dimension, meme definition que les compteurs et le journal.
+			// Veridian lot 5 : le relais (profil d'envoi) qui a emis le message, pour les
+			// envois par jour et par heure et par relais du tableau de bord de prospection.
+			// NULL (lignes anterieures a V56) : regroupe sous la valeur vide.
+			"veridian_profile_id": {
+				Type:        "string",
+				Title:       "Sending profile",
+				SQL:         "COALESCE(veridian_profile_id, '')",
+				Description: "Sending profile (integration id) that emitted the message",
+			},
 			"message_type": {
 				Type:        "string",
 				Title:       "Message Type",

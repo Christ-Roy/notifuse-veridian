@@ -417,3 +417,35 @@ func TestMessageHistorySchemaHasMessageTypeDimension(t *testing.T) {
 	assert.Contains(t, dim.SQL, "transactional_notification_id IS NOT NULL")
 	assert.Contains(t, dim.SQL, "ELSE 'commercial'")
 }
+
+// Lot 5 (08/10/2026) : envois par jour et par heure, PAR RELAIS, et refus de politique,
+// avec le moteur analytics existant (aucun second calcul). Le test construit le SQL
+// reel : une dimension ou une mesure mal definie ferait echouer BuildSQL.
+func TestMessageHistorySchema_SendsPerHourPerProfileAndPolicyRefusals(t *testing.T) {
+	schema := PredefinedSchemas["message_history"]
+	dim, ok := schema.Dimensions["veridian_profile_id"]
+	require.True(t, ok, "la dimension veridian_profile_id doit exister")
+	assert.Contains(t, dim.SQL, "veridian_profile_id")
+	measure, ok := schema.Measures["count_policy_refused"]
+	require.True(t, ok)
+	require.Len(t, measure.Filters, 1)
+	assert.Equal(t, "bounce_type = 'PolicyBounce'", measure.Filters[0].SQL)
+
+	tz := "Europe/Paris"
+	query := analytics.Query{
+		Schema:     "message_history",
+		Measures:   []string{"count_sent", "count_policy_refused"},
+		Dimensions: []string{"veridian_profile_id"},
+		Timezone:   &tz,
+		TimeDimensions: []analytics.TimeDimension{
+			{Dimension: "sent_at", Granularity: "hour", DateRange: &[2]string{"2026-10-08", "2026-10-09"}},
+		},
+		Filters: []analytics.Filter{{Member: "message_type", Operator: "equals", Values: []string{"commercial"}}},
+	}
+	sqlText, _, err := analytics.NewSQLBuilder().BuildSQL(query, schema)
+	require.NoError(t, err)
+	assert.Contains(t, sqlText, "DATE_TRUNC('hour', sent_at AT TIME ZONE 'Europe/Paris')")
+	assert.Contains(t, sqlText, "COALESCE(veridian_profile_id, '')")
+	assert.Contains(t, sqlText, "bounce_type = 'PolicyBounce'")
+	assert.Contains(t, sqlText, "transactional_notification_id IS NOT NULL", "le filtre de type commercial s'applique")
+}
