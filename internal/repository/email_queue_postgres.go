@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -16,6 +17,10 @@ import (
 type EmailQueueRepository struct {
 	workspaceRepo domain.WorkspaceRepository
 	db            *sql.DB // Used for testing with sqlmock
+
+	// fairRotation makes the round robin of FetchPending open with a different
+	// source at each call (cf. domain.VeridianSelectFairBatch).
+	fairRotation atomic.Uint64
 }
 
 // NewEmailQueueRepository creates a new EmailQueueRepository using workspace repository
@@ -205,50 +210,86 @@ func (r *EmailQueueRepository) WithIntegrationQueueIdle(ctx context.Context, wor
 	return nil
 }
 
-// FetchPending retrieves pending emails for processing
-// Uses FOR UPDATE SKIP LOCKED for safe concurrent worker access
+// fetchPendingFairQuery lists the due entries, bounded to the `limit` best
+// candidates of each (priority, source, tier) bucket, plus their tier.
+//
+// Veridian fork (10/10/2026, fiche 58): the historical query ordered every due
+// row by (priority, created_at) and cut at LIMIT, so the oldest rows of the
+// largest segment (re-planned in a loop by the caps) starved follow-ups and
+// younger segments. The bucket bound keeps the candidate set small and sound;
+// the final choice (follow-ups first, round robin between sources) is made by
+// domain.VeridianSelectFairBatch. The due predicate is UNCHANGED.
+//
+// is_followup: the contact already received a mail of the SAME automation.
+// The entry's own message id is excluded (a failed first attempt is not a
+// previous mail), and only delivered rows (sent_at set, not failed) count.
+const fetchPendingFairQuery = `
+	WITH due AS (
+		SELECT q.id, q.priority, q.source_id, q.created_at,
+		       COALESCE(q.next_retry_at, q.created_at) AS examined_at,
+		       EXISTS (
+		           SELECT 1 FROM message_history mh
+		           WHERE mh.contact_email = q.contact_email
+		             AND mh.automation_id = q.source_id
+		             AND mh.id <> q.message_id
+		             AND mh.sent_at IS NOT NULL
+		             AND mh.failed_at IS NULL
+		       ) AS is_followup
+		FROM email_queue q
+		WHERE (q.status = 'pending' AND (q.next_retry_at IS NULL OR q.next_retry_at <= NOW()))
+		   OR (q.status = 'failed' AND q.attempts < q.max_attempts AND q.next_retry_at <= NOW())
+		   OR (q.status = 'processing' AND q.updated_at < NOW() - INTERVAL '2 minutes')
+	), ranked AS (
+		SELECT id, is_followup,
+		       ROW_NUMBER() OVER (
+		           PARTITION BY priority, source_id, is_followup
+		           ORDER BY examined_at, created_at, id
+		       ) AS rn
+		FROM due
+	)
+	SELECT e.id, e.status, e.priority, e.source_type, e.source_id, e.integration_id, e.provider_kind,
+	       e.contact_email, e.message_id, e.template_id, e.payload, e.attempts, e.max_attempts,
+	       e.last_error, e.next_retry_at, e.created_at, e.updated_at, e.processed_at,
+	       r.is_followup
+	FROM email_queue e
+	JOIN ranked r ON r.id = e.id
+	WHERE r.rn <= $1
+	FOR UPDATE OF e SKIP LOCKED
+`
+
+// FetchPending retrieves pending emails for processing, fairly: explicit
+// priority first, then follow-ups before first contacts, then a round robin
+// between sources (automations / broadcasts), least recently examined first.
+// Uses FOR UPDATE SKIP LOCKED for safe concurrent worker access.
+// Includes failed emails that are ready for retry and stuck processing entries
+// (>2 minutes old) for recovery after a worker crash.
 func (r *EmailQueueRepository) FetchPending(ctx context.Context, workspaceID string, limit int) ([]*domain.EmailQueueEntry, error) {
 	db, err := r.getDB(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database connection: %w", err)
 	}
 
-	// Fetch pending emails ordered by priority (lower = higher priority), then by creation time
-	// Include failed emails that are ready for retry
-	// Include stuck processing entries (>2 minutes old) for recovery after worker crash
-	query := `
-		SELECT id, status, priority, source_type, source_id, integration_id, provider_kind,
-		       contact_email, message_id, template_id, payload, attempts, max_attempts,
-		       last_error, next_retry_at, created_at, updated_at, processed_at
-		FROM email_queue
-		WHERE (status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= NOW()))
-		   OR (status = 'failed' AND attempts < max_attempts AND next_retry_at <= NOW())
-		   OR (status = 'processing' AND updated_at < NOW() - INTERVAL '2 minutes')
-		ORDER BY priority ASC, created_at ASC
-		LIMIT $1
-		FOR UPDATE SKIP LOCKED
-	`
-
-	rows, err := db.QueryContext(ctx, query, limit)
+	rows, err := db.QueryContext(ctx, fetchPendingFairQuery, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query pending emails: %w", err)
 	}
 	defer rows.Close()
 
-	var entries []*domain.EmailQueueEntry
+	var cands []domain.VeridianFairCandidate
 	for rows.Next() {
-		entry, err := scanEmailQueueEntry(rows)
+		entry, followup, err := scanEmailQueueEntryTier(rows)
 		if err != nil {
 			return nil, err
 		}
-		entries = append(entries, entry)
+		cands = append(cands, domain.VeridianFairCandidate{Entry: entry, IsFollowup: followup})
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	return entries, nil
+	rotation := r.fairRotation.Add(1)
+	return domain.VeridianSelectFairBatch(cands, limit, rotation), nil
 }
 
 // MarkAsProcessing atomically marks an entry as processing
@@ -588,19 +629,31 @@ func (r *EmailQueueRepository) DeleteBySourceTx(ctx context.Context, tx *sql.Tx,
 }
 
 // scanEmailQueueEntry scans a row into an EmailQueueEntry
+// scanEmailQueueEntryTier scans the 18 queue columns followed by is_followup.
+func scanEmailQueueEntryTier(rows *sql.Rows) (*domain.EmailQueueEntry, bool, error) {
+	var followup bool
+	entry, err := scanEmailQueueEntryWith(rows, &followup)
+	return entry, followup, err
+}
+
 func scanEmailQueueEntry(rows *sql.Rows) (*domain.EmailQueueEntry, error) {
+	return scanEmailQueueEntryWith(rows)
+}
+
+func scanEmailQueueEntryWith(rows *sql.Rows, extra ...any) (*domain.EmailQueueEntry, error) {
 	var entry domain.EmailQueueEntry
 	var payloadJSON []byte
 	var lastError sql.NullString
 	var nextRetryAt sql.NullTime
 	var processedAt sql.NullTime
 
-	err := rows.Scan(
+	dest := []any{
 		&entry.ID, &entry.Status, &entry.Priority, &entry.SourceType, &entry.SourceID,
 		&entry.IntegrationID, &entry.ProviderKind, &entry.ContactEmail, &entry.MessageID,
 		&entry.TemplateID, &payloadJSON, &entry.Attempts, &entry.MaxAttempts,
 		&lastError, &nextRetryAt, &entry.CreatedAt, &entry.UpdatedAt, &processedAt,
-	)
+	}
+	err := rows.Scan(append(dest, extra...)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan email queue entry: %w", err)
 	}

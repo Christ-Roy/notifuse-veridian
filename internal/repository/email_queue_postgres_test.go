@@ -182,8 +182,15 @@ func TestEmailQueueRepository_Enqueue(t *testing.T) {
 	})
 }
 
+var fetchPendingCols = []string{
+	"id", "status", "priority", "source_type", "source_id", "integration_id", "provider_kind",
+	"contact_email", "message_id", "template_id", "payload", "attempts", "max_attempts",
+	"last_error", "next_retry_at", "created_at", "updated_at", "processed_at", "is_followup",
+}
+
 func TestEmailQueueRepository_FetchPending(t *testing.T) {
 	ctx := context.Background()
+	const fairQuery = `WITH due AS .+ROW_NUMBER\(\) OVER .+PARTITION BY priority, source_id, is_followup.+WHERE r.rn <= \$1.+FOR UPDATE OF e SKIP LOCKED`
 
 	t.Run("returns pending entries ordered by priority", func(t *testing.T) {
 		db, mock, cleanup := testutil.SetupMockDB(t)
@@ -195,29 +202,63 @@ func TestEmailQueueRepository_FetchPending(t *testing.T) {
 		payload := domain.EmailQueuePayload{FromAddress: "sender@example.com"}
 		payloadJSON, _ := json.Marshal(payload)
 
-		rows := sqlmock.NewRows([]string{
-			"id", "status", "priority", "source_type", "source_id", "integration_id", "provider_kind",
-			"contact_email", "message_id", "template_id", "payload", "attempts", "max_attempts",
-			"last_error", "next_retry_at", "created_at", "updated_at", "processed_at",
-		}).AddRow(
-			"entry-1", "pending", 1, "broadcast", "bcast-1", "integ-1", "smtp",
-			"user@example.com", "msg-1", "tpl-1", payloadJSON, 0, 3,
-			nil, nil, now, now, nil,
-		).AddRow(
+		rows := sqlmock.NewRows(fetchPendingCols).AddRow(
 			"entry-2", "pending", 5, "automation", "auto-1", "integ-2", "ses",
 			"user2@example.com", "msg-2", "tpl-2", payloadJSON, 0, 3,
-			nil, nil, now, now, nil,
+			nil, nil, now, now, nil, false,
+		).AddRow(
+			"entry-1", "pending", 1, "broadcast", "bcast-1", "integ-1", "smtp",
+			"user@example.com", "msg-1", "tpl-1", payloadJSON, 0, 3,
+			nil, nil, now, now, nil, false,
 		)
 
-		mock.ExpectQuery(`SELECT .+ FROM email_queue WHERE`).
+		mock.ExpectQuery(fairQuery).
 			WithArgs(10).
 			WillReturnRows(rows)
 
 		entries, err := repo.FetchPending(ctx, "workspace-123", 10)
 		require.NoError(t, err)
 		assert.Len(t, entries, 2)
+		// The SQL returned priority 5 first: the explicit priority still wins.
 		assert.Equal(t, "entry-1", entries[0].ID)
 		assert.Equal(t, 1, entries[0].Priority)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("follow-ups first then round robin between automations", func(t *testing.T) {
+		db, mock, cleanup := testutil.SetupMockDB(t)
+		defer cleanup()
+
+		repo := NewEmailQueueRepositoryWithDB(db)
+
+		t0 := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
+		payloadJSON, _ := json.Marshal(domain.EmailQueuePayload{FromAddress: "s@example.com"})
+		rows := sqlmock.NewRows(fetchPendingCols)
+		// Legacy order (created_at): three oldest are "devenir" J0, then the
+		// other segments and the follow-up, which the old code never reached.
+		add := func(id, source string, age time.Duration, followup bool) {
+			rows.AddRow(id, "pending", 5, "automation", source, "integ", "smtp",
+				id+"@example.com", "msg-"+id, "tpl", payloadJSON, 0, 3,
+				nil, nil, t0.Add(age), t0.Add(age), nil, followup)
+		}
+		add("dev-1", "devenir", 0, false)
+		add("dev-2", "devenir", time.Second, false)
+		add("dev-3", "devenir", 2*time.Second, false)
+		add("vet-1", "vetuste", time.Hour, false)
+		add("sca-1", "scale", 2*time.Hour, false)
+		add("rel-1", "devenir", 3*time.Hour, true)
+
+		mock.ExpectQuery(fairQuery).WithArgs(4).WillReturnRows(rows)
+
+		entries, err := repo.FetchPending(ctx, "workspace-123", 4)
+		require.NoError(t, err)
+		require.Len(t, entries, 4)
+		assert.Equal(t, "rel-1", entries[0].ID, "relance en tete")
+		got := map[string]bool{}
+		for _, e := range entries[1:] {
+			got[e.SourceID] = true
+		}
+		assert.Len(t, got, 3, "un tour = une entree par automation (devenir, vetuste, scale)")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -227,15 +268,9 @@ func TestEmailQueueRepository_FetchPending(t *testing.T) {
 
 		repo := NewEmailQueueRepositoryWithDB(db)
 
-		rows := sqlmock.NewRows([]string{
-			"id", "status", "priority", "source_type", "source_id", "integration_id", "provider_kind",
-			"contact_email", "message_id", "template_id", "payload", "attempts", "max_attempts",
-			"last_error", "next_retry_at", "created_at", "updated_at", "processed_at",
-		})
-
-		mock.ExpectQuery(`SELECT .+ FROM email_queue WHERE`).
+		mock.ExpectQuery(fairQuery).
 			WithArgs(10).
-			WillReturnRows(rows)
+			WillReturnRows(sqlmock.NewRows(fetchPendingCols))
 
 		entries, err := repo.FetchPending(ctx, "workspace-123", 10)
 		require.NoError(t, err)
@@ -248,7 +283,7 @@ func TestEmailQueueRepository_FetchPending(t *testing.T) {
 
 		repo := NewEmailQueueRepositoryWithDB(db)
 
-		mock.ExpectQuery(`SELECT .+ FROM email_queue WHERE`).
+		mock.ExpectQuery(fairQuery).
 			WithArgs(10).
 			WillReturnError(errors.New("database error"))
 
@@ -718,18 +753,14 @@ func TestEmailQueueRepository_FetchPending_StuckProcessing(t *testing.T) {
 		payloadJSON, _ := json.Marshal(payload)
 
 		// Return a stuck processing entry
-		rows := sqlmock.NewRows([]string{
-			"id", "status", "priority", "source_type", "source_id", "integration_id", "provider_kind",
-			"contact_email", "message_id", "template_id", "payload", "attempts", "max_attempts",
-			"last_error", "next_retry_at", "created_at", "updated_at", "processed_at",
-		}).AddRow(
+		rows := sqlmock.NewRows(fetchPendingCols).AddRow(
 			"stuck-entry", "processing", 1, "broadcast", "bcast-1", "integ-1", "smtp",
 			"user@example.com", "msg-1", "tpl-1", payloadJSON, 1, 3,
-			"previous error", nil, stuckTime, stuckTime, nil,
+			"previous error", nil, stuckTime, stuckTime, nil, false,
 		)
 
 		// The query should include the stuck processing condition
-		mock.ExpectQuery(`SELECT .+ FROM email_queue WHERE .+ OR \(status = 'processing' AND updated_at < NOW\(\) - INTERVAL '2 minutes'\)`).
+		mock.ExpectQuery(`FROM email_queue q WHERE .+ OR \(q.status = 'processing' AND q.updated_at < NOW\(\) - INTERVAL '2 minutes'\)`).
 			WithArgs(10).
 			WillReturnRows(rows)
 
