@@ -580,7 +580,7 @@ msgstr "A value is required..."
 
 #: src/components/automations/nodes/ABTestNode.tsx:47
 #: src/components/automations/nodes/StatNode.tsx:59
-#: src/components/automations/nodes/StatNode.tsx:245
+#: src/components/automations/nodes/StatNode.tsx:254
 #: src/pages/BroadcastsPage.tsx:1047
 msgid "A/B Test"
 msgstr "A/B Test"
@@ -588,6 +588,10 @@ msgstr "A/B Test"
 #: src/pages/AcceptInvitationPage.tsx:167
 msgid "Accept Invitation"
 msgstr "Accept Invitation"
+
+#: src/pages/SendQueuePage.tsx:119
+msgid "Access denied"
+msgstr "Access denied"
 
 #: src/components/settings/Integrations.tsx:1713
 #~ msgid "Access Key"
@@ -1285,6 +1289,7 @@ msgstr "at most"
 msgid "Attachments"
 msgstr "Attachments"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:132
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:369
 msgid "Attempts"
 msgstr "Attempts"
@@ -1358,7 +1363,9 @@ msgstr "Automatically add new users to the selected lists"
 msgid "Automatically send winner"
 msgstr "Automatically send winner"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:124
 #: src/components/timeline/ContactTimeline.tsx:743
+#: src/pages/SendQueuePage.tsx:134
 msgid "Automation"
 msgstr "Automation"
 
@@ -1374,6 +1381,10 @@ msgstr "Automation created successfully"
 msgid "Automation deleted successfully"
 msgstr "Automation deleted successfully"
 
+#: src/components/send_queue/veridian_queue_labels.ts:46
+msgid "Automation paused"
+msgstr "Automation paused"
+
 #: src/pages/AutomationsPage.tsx:99
 msgid "Automation paused successfully"
 msgstr "Automation paused successfully"
@@ -1386,7 +1397,7 @@ msgstr "Automation updated successfully"
 msgid "Automation:"
 msgstr "Automation:"
 
-#: src/layouts/WorkspaceLayout.tsx:326
+#: src/layouts/WorkspaceLayout.tsx:327
 #: src/pages/AutomationsPage.tsx:153
 msgid "Automations"
 msgstr "Automations"
@@ -1548,6 +1559,11 @@ msgstr "Block Settings Panel"
 #: src/components/email_builder/ui/BlockToolbar.tsx:218
 msgid "Block type:"
 msgstr "Block type:"
+
+#: src/components/send_queue/veridian_queue_labels.ts:102
+#: src/components/send_queue/veridian_queue_labels.ts:117
+msgid "Blocked"
+msgstr "Blocked"
 
 #: src/pages/TemplatesPage.tsx:94
 msgid "Blocklist"
@@ -1750,7 +1766,7 @@ msgstr "Broadcast name"
 msgid "Broadcast updated successfully"
 msgstr "Broadcast updated successfully"
 
-#: src/layouts/WorkspaceLayout.tsx:300
+#: src/layouts/WorkspaceLayout.tsx:301
 #: src/pages/BroadcastsPage.tsx:1286
 msgid "Broadcasts"
 msgstr "Broadcasts"
@@ -1796,6 +1812,10 @@ msgstr "Button Padding"
 msgid "Button Size"
 msgstr "Button Size"
 
+#: src/pages/SendQueuePage.tsx:225
+msgid "By reason"
+msgstr "By reason"
+
 #: src/components/automations/AutomationCard.tsx:157
 #: src/components/automations/AutomationCard.tsx:213
 #: src/components/automations/AutomationCard.tsx:237
@@ -1834,6 +1854,9 @@ msgstr "Button Size"
 #: src/components/segment/button_upsert.tsx:350
 #: src/components/segment/input_dimension_filters.tsx:162
 #: src/components/segment/input.tsx:385
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:151
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:161
+#: src/components/send_queue/veridian_queue_groups.tsx:106
 #: src/components/sending_profiles/veridian_profile_card.tsx:216
 #: src/components/sending_profiles/veridian_profile_card.tsx:247
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:203
@@ -1977,6 +2000,11 @@ msgstr "Check for Updates"
 msgid "Choose a saved block to update"
 msgstr "Choose a saved block to update"
 
+#: src/components/send_queue/veridian_queue_labels.ts:36
+#: src/components/send_queue/veridian_queue_labels.ts:123
+msgid "Circuit open"
+msgstr "Circuit open"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1752
 msgid "Classes to never contact"
 msgstr "Classes to never contact"
@@ -2111,7 +2139,7 @@ msgid "Cold outreach settings saved"
 msgstr "Cold outreach settings saved"
 
 #: src/components/email_builder/ui/CodePreview.tsx:61
-#: src/layouts/WorkspaceLayout.tsx:497
+#: src/layouts/WorkspaceLayout.tsx:507
 msgid "Collapse"
 msgstr "Collapse"
 
@@ -2226,13 +2254,17 @@ msgid "completed"
 msgstr "completed"
 
 #: src/components/automations/AutomationCard.tsx:267
-#: src/components/automations/nodes/StatNode.tsx:110
-#: src/components/automations/nodes/StatNode.tsx:175
-#: src/components/automations/nodes/StatNode.tsx:257
+#: src/components/automations/nodes/StatNode.tsx:119
+#: src/components/automations/nodes/StatNode.tsx:184
+#: src/components/automations/nodes/StatNode.tsx:266
 #: src/pages/BroadcastsPage.tsx:344
 #: src/pages/BroadcastsPage.tsx:985
 msgid "Completed"
 msgstr "Completed"
+
+#: src/pages/SendQueuePage.tsx:222
+msgid "Computed at"
+msgstr "Computed at"
 
 #: src/components/automations/nodes/FilterNode.tsx:66
 #: src/components/automations/nodes/FilterNode.tsx:76
@@ -2368,6 +2400,8 @@ msgid "Consider using the same text as your subject line"
 msgstr "Consider using the same text as your subject line"
 
 #: src/components/automations/config/TriggerConfigForm.tsx:56
+#: src/components/send_queue/veridian_queue_decisions.tsx:96
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:122
 #: src/components/timeline/ContactTimeline.tsx:381
 #: src/components/timeline/ContactTimeline.tsx:450
 msgid "Contact"
@@ -2393,6 +2427,10 @@ msgstr "Contact deleted successfully"
 msgid "Contact Details"
 msgstr "Contact Details"
 
+#: src/components/send_queue/veridian_queue_decisions.tsx:130
+msgid "Contact e-mail"
+msgstr "Contact e-mail"
+
 #: src/components/messages/MessageHistoryTab.tsx:233
 #: src/components/messages/MessageHistoryTable.tsx:129
 #: src/components/messages/MessageHistoryTable.tsx:348
@@ -2406,6 +2444,10 @@ msgstr "Contact email (leave empty for random)"
 #: src/components/transactional/ApiCommandModal.tsx:558
 msgid "Contact Email:"
 msgstr "Contact Email:"
+
+#: src/components/send_queue/veridian_queue_labels.ts:142
+msgid "Contact exited"
+msgstr "Contact exited"
 
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx:48
 msgid "Contact has \"active\" subscription status"
@@ -2433,11 +2475,15 @@ msgstr "Contact property"
 msgid "Contact re-enters each time the event occurs"
 msgstr "Contact re-enters each time the event occurs"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:92
+msgid "Contact removed from the automation"
+msgstr "Contact removed from the automation"
+
 #: src/components/contacts/ContactUpsertDrawer.tsx:330
 msgid "Contact updated successfully"
 msgstr "Contact updated successfully"
 
-#: src/layouts/WorkspaceLayout.tsx:238
+#: src/layouts/WorkspaceLayout.tsx:239
 #: src/pages/ContactsPage.tsx:988
 msgid "Contacts"
 msgstr "Contacts"
@@ -2573,9 +2619,23 @@ msgstr "Could not copy to clipboard"
 msgid "Could not create the profile"
 msgstr "Could not create the profile"
 
+#: src/components/send_queue/veridian_queue_decisions.tsx:70
+#: src/components/send_queue/veridian_queue_decisions.tsx:88
+msgid "Could not load the decisions"
+msgstr "Could not load the decisions"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:49
+msgid "Could not load the entry"
+msgstr "Could not load the entry"
+
 #: src/pages/SendingProfilesPage.tsx:60
 msgid "Could not load the profiles"
 msgstr "Could not load the profiles"
+
+#: src/pages/SendQueuePage.tsx:69
+#: src/pages/SendQueuePage.tsx:181
+msgid "Could not load the send queue"
+msgstr "Could not load the send queue"
 
 #: src/components/sending_profiles/veridian_inbox_drawer.tsx:74
 msgid "Could not save the inbox"
@@ -2728,6 +2788,7 @@ msgid "created"
 msgstr "created"
 
 #: src/components/automations/config/TriggerConfigForm.tsx:58
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:135
 #: src/components/settings/ApiAgentsSettings.tsx:168
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:403
 #: src/pages/TemplatesPage.tsx:238
@@ -2999,6 +3060,7 @@ msgstr "Custom tracking domain (per sending infrastructure)"
 msgid "Customize for this profile (copies the workspace values)"
 msgstr "Customize for this profile (copies the workspace values)"
 
+#: src/components/send_queue/veridian_queue_labels.ts:87
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2353
 msgid "Daily cap"
 msgstr "Daily cap"
@@ -3023,6 +3085,10 @@ msgstr "Daily cap per recipient"
 msgid "Daily cap per sending address"
 msgstr "Daily cap per sending address"
 
+#: src/components/send_queue/veridian_queue_labels.ts:24
+msgid "Daily capacity reached"
+msgstr "Daily capacity reached"
+
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:228
 msgid "Daily caps by step"
 msgstr "Daily caps by step"
@@ -3041,7 +3107,7 @@ msgstr "Daily caps by step"
 msgid "Danger Zone"
 msgstr "Danger Zone"
 
-#: src/layouts/WorkspaceLayout.tsx:211
+#: src/layouts/WorkspaceLayout.tsx:212
 #: src/pages/AnalyticsPage.tsx:88
 msgid "Dashboard"
 msgstr "Dashboard"
@@ -3077,6 +3143,14 @@ msgstr "Dead address: the contact is removed from the sequences."
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:443
 msgid "Decide later"
 msgstr "Decide later"
+
+#: src/components/send_queue/veridian_queue_trace.tsx:89
+msgid "Decision"
+msgstr "Decision"
+
+#: src/pages/SendQueuePage.tsx:267
+msgid "Decision log"
+msgstr "Decision log"
 
 #: src/pages/AcceptInvitationPage.tsx:172
 msgid "Decline"
@@ -3142,12 +3216,29 @@ msgstr "Default sender"
 msgid "Defaults to SMTP host"
 msgstr "Defaults to SMTP host"
 
+#: src/components/send_queue/veridian_queue_labels.ts:136
+msgid "Deferred"
+msgstr "Deferred"
+
+#: src/components/send_queue/veridian_queue_labels.ts:50
+msgid "Deferred (reason not recorded)"
+msgstr "Deferred (reason not recorded)"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:139
+msgid "Deferred at"
+msgstr "Deferred at"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:140
+msgid "Deferred until"
+msgstr "Deferred until"
+
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:307
 msgid "Define UTM parameters for links in your email for better campaign tracking."
 msgstr "Define UTM parameters for links in your email for better campaign tracking."
 
 #: src/components/automations/nodes/DelayNode.tsx:45
 #: src/components/automations/nodes/StatNode.tsx:53
+#: src/components/send_queue/veridian_queue_trace.tsx:33
 msgid "Delay"
 msgstr "Delay"
 
@@ -3368,6 +3459,10 @@ msgstr "Description"
 msgid "Desktop view (100%)"
 msgstr "Desktop view (100%)"
 
+#: src/pages/SendQueuePage.tsx:232
+msgid "Detail by automation, node, reason and profile"
+msgstr "Detail by automation, node, reason and profile"
+
 #: src/components/settings/LogoInput.tsx:90
 msgid "Detect from website URL"
 msgstr "Detect from website URL"
@@ -3394,6 +3489,10 @@ msgstr "Disable webhook"
 #: src/components/templates/TemplateTranslationsTab.tsx:204
 msgid "Disabled"
 msgstr "Disabled"
+
+#: src/components/send_queue/veridian_queue_labels.ts:140
+msgid "Discarded"
+msgstr "Discarded"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:234
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:296
@@ -3450,7 +3549,7 @@ msgstr "Do you want to permanently delete this file from your storage?"
 msgid "Do you want to send \"{0}\" immediately or schedule it for later?"
 msgstr "Do you want to send \"{0}\" immediately or schedule it for later?"
 
-#: src/layouts/WorkspaceLayout.tsx:635
+#: src/layouts/WorkspaceLayout.tsx:645
 msgid "Documentation"
 msgstr "Documentation"
 
@@ -3939,6 +4038,10 @@ msgstr "Enable webhook"
 msgid "Enabled"
 msgstr "Enabled"
 
+#: src/components/send_queue/veridian_queue_decisions.tsx:176
+msgid "End of the log"
+msgstr "End of the log"
+
 #: src/components/timeline/ContactTimeline.tsx:734
 msgid "ended"
 msgstr "ended"
@@ -4134,6 +4237,24 @@ msgstr "Enter workspace name"
 msgid "Entity ID:"
 msgstr "Entity ID:"
 
+#: src/components/send_queue/veridian_queue_groups.tsx:60
+#: src/components/send_queue/veridian_queue_reasons.tsx:36
+msgid "Entries"
+msgstr "Entries"
+
+#: src/pages/SendQueuePage.tsx:220
+msgid "Entries in queue"
+msgstr "Entries in queue"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:73
+#: src/pages/SendQueuePage.tsx:98
+msgid "Entries recomputed: {recomputed}"
+msgstr "Entries recomputed: {recomputed}"
+
+#: src/components/send_queue/veridian_queue_decisions.tsx:119
+msgid "Entry"
+msgstr "Entry"
+
 #: src/components/analytics/ChartVisualization.tsx:393
 #: src/components/analytics/FailedMessagesTable.tsx:70
 #: src/components/analytics/NewContactsTable.tsx:208
@@ -4251,6 +4372,15 @@ msgstr "Exclude Unsubscribed"
 msgid "Exclude unsubscribed, bounced & complained recipients"
 msgstr "Exclude unsubscribed, bounced & complained recipients"
 
+#: src/components/send_queue/veridian_queue_labels.ts:119
+msgid "Excluded"
+msgstr "Excluded"
+
+#: src/components/send_queue/veridian_queue_labels.ts:30
+#: src/components/send_queue/veridian_queue_labels.ts:81
+msgid "Excluded class"
+msgstr "Excluded class"
+
 #: src/components/sending_profiles/veridian_profile_card.tsx:175
 msgid "Excluded classes"
 msgstr "Excluded classes"
@@ -4337,9 +4467,9 @@ msgstr "failed"
 
 #: src/components/analytics/EmailMetricsChart.tsx:494
 #: src/components/automations/AutomationCard.tsx:281
-#: src/components/automations/nodes/StatNode.tsx:116
-#: src/components/automations/nodes/StatNode.tsx:180
-#: src/components/automations/nodes/StatNode.tsx:263
+#: src/components/automations/nodes/StatNode.tsx:125
+#: src/components/automations/nodes/StatNode.tsx:189
+#: src/components/automations/nodes/StatNode.tsx:272
 #: src/components/broadcasts/BroadcastStats.tsx:241
 #: src/components/contacts/BulkActionProgressModal.tsx:106
 #: src/components/contacts/BulkActionProgressModal.tsx:146
@@ -4348,6 +4478,8 @@ msgstr "failed"
 #: src/components/messages/MessageHistoryTab.tsx:136
 #: src/components/messages/MessageHistoryTab.tsx:138
 #: src/components/messages/MessageHistoryTable.tsx:274
+#: src/components/send_queue/veridian_queue_labels.ts:138
+#: src/components/send_queue/veridian_queue_labels.ts:157
 #: src/components/settings/WebhookCard.tsx:311
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:80
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:242
@@ -4813,7 +4945,7 @@ msgstr "Failed to update template: {0}"
 msgid "Failed to update workspace settings"
 msgstr "Failed to update workspace settings"
 
-#: src/layouts/WorkspaceLayout.tsx:200
+#: src/layouts/WorkspaceLayout.tsx:201
 msgid "Failed to update workspace settings: {errorMessage}"
 msgstr "Failed to update workspace settings: {errorMessage}"
 
@@ -4905,7 +5037,7 @@ msgstr "File storage settings"
 
 #: src/components/automations/nodes/FilterNode.tsx:48
 #: src/components/automations/nodes/StatNode.tsx:56
-#: src/components/automations/nodes/StatNode.tsx:163
+#: src/components/automations/nodes/StatNode.tsx:172
 msgid "Filter"
 msgstr "Filter"
 
@@ -4951,6 +5083,10 @@ msgstr "Filters:"
 msgid "Firecrawl integration saved successfully"
 msgstr "Firecrawl integration saved successfully"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:137
+msgid "First examined"
+msgstr "First examined"
+
 #: src/components/automations/config/TriggerConfigForm.tsx:107
 #: src/components/contacts/ContactDetailsDrawer.tsx:440
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:91
@@ -4995,6 +5131,10 @@ msgstr "Folder name"
 #: src/components/file_manager/fileManager.tsx:653
 msgid "folder with all its content?"
 msgstr "folder with all its content?"
+
+#: src/components/send_queue/veridian_queue_labels.ts:38
+msgid "Follow-up waiting for its original sender"
+msgstr "Follow-up waiting for its original sender"
 
 #: src/components/email_builder/blocks/MjFontBlock.tsx:30
 msgid "Font Attributes"
@@ -5129,6 +5269,10 @@ msgstr "Full width on mobile"
 #: src/components/sending_profiles/veridian_profile_labels.ts:75
 msgid "Gandi"
 msgstr "Gandi"
+
+#: src/components/send_queue/veridian_queue_trace.tsx:19
+msgid "Gate"
+msgstr "Gate"
 
 #: src/components/settings/SettingsSidebar.tsx:90
 #: src/components/settings/SystemSettingsDrawer.tsx:228
@@ -5289,6 +5433,10 @@ msgstr "gpt-4.1, gpt-5.4, o4-mini, or custom model name"
 msgid "Groove"
 msgstr "Groove"
 
+#: src/components/send_queue/veridian_queue_groups.tsx:58
+msgid "Group"
+msgstr "Group"
+
 #: src/components/email_builder/blocks/MjGroupBlock.tsx:144
 msgid "Group (drag columns here)"
 msgstr "Group (drag columns here)"
@@ -5372,8 +5520,8 @@ msgstr "Height"
 
 #: src/components/email_builder/MjmlCodeEditor.tsx:702
 #: src/components/templates/CreateTemplateDrawer.tsx:136
-#: src/layouts/WorkspaceLayout.tsx:648
-#: src/layouts/WorkspaceLayout.tsx:670
+#: src/layouts/WorkspaceLayout.tsx:658
+#: src/layouts/WorkspaceLayout.tsx:680
 msgid "Help"
 msgstr "Help"
 
@@ -5818,9 +5966,9 @@ msgstr "Include a clear call-to-action"
 msgid "Incoming Webhooks"
 msgstr "Incoming Webhooks"
 
-#: src/components/automations/nodes/StatNode.tsx:105
-#: src/components/automations/nodes/StatNode.tsx:170
-#: src/components/automations/nodes/StatNode.tsx:252
+#: src/components/automations/nodes/StatNode.tsx:107
+#: src/components/automations/nodes/StatNode.tsx:179
+#: src/components/automations/nodes/StatNode.tsx:261
 msgid "Inflight"
 msgstr "Inflight"
 
@@ -6146,6 +6294,18 @@ msgstr "Last 24 hours"
 msgid "Last 7 days"
 msgstr "Last 7 days"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:173
+msgid "Last decision"
+msgstr "Last decision"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:142
+msgid "Last error"
+msgstr "Last error"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:138
+msgid "Last examined"
+msgstr "Last examined"
+
 #: src/components/broadcasts/GlobalFeedSettings.tsx:153
 msgid "Last fetched:"
 msgstr "Last fetched:"
@@ -6258,6 +6418,10 @@ msgstr "Lifetime — included with your Veridian website"
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx:286
 msgid "Lighter"
 msgstr "Lighter"
+
+#: src/components/send_queue/veridian_queue_trace.tsx:31
+msgid "Limit"
+msgstr "Limit"
 
 #: src/components/sending_profiles/veridian_profile_card.tsx:135
 msgid "Limited by"
@@ -6384,7 +6548,7 @@ msgid "List:"
 msgstr "List:"
 
 #: src/components/analytics/NewContactsTable.tsx:73
-#: src/layouts/WorkspaceLayout.tsx:248
+#: src/layouts/WorkspaceLayout.tsx:249
 #: src/pages/ContactsPage.tsx:414
 #: src/pages/ContactsPage.tsx:534
 #: src/pages/ListsPage.tsx:155
@@ -6404,6 +6568,10 @@ msgstr "Live"
 #: src/components/settings/Integrations.tsx:197
 msgid "LLM integration saved successfully"
 msgstr "LLM integration saved successfully"
+
+#: src/components/send_queue/veridian_queue_decisions.tsx:173
+msgid "Load more"
+msgstr "Load more"
 
 #: src/components/messages/MessageHistoryTable.tsx:444
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:554
@@ -6459,6 +6627,7 @@ msgstr "Loading webhook events..."
 #: src/pages/ListsPage.tsx:149
 #: src/pages/LogsPage.tsx:23
 #: src/pages/SendingProfilesPage.tsx:88
+#: src/pages/SendQueuePage.tsx:116
 #: src/pages/TemplatesPage.tsx:164
 #: src/pages/TransactionalNotificationsPage.tsx:387
 msgid "Loading..."
@@ -6482,7 +6651,7 @@ msgstr "Logo Preview"
 msgid "Logo URL"
 msgstr "Logo URL"
 
-#: src/layouts/WorkspaceLayout.tsx:696
+#: src/layouts/WorkspaceLayout.tsx:706
 msgid "Logout"
 msgstr "Logout"
 
@@ -6823,6 +6992,7 @@ msgstr "N/A"
 #: src/components/file_manager/fileManager.tsx:873
 #: src/components/lists/ListDrawer.tsx:185
 #: src/components/segment/button_upsert.tsx:376
+#: src/components/send_queue/veridian_queue_trace.tsx:38
 #: src/components/sending_profiles/veridian_inbox_drawer.tsx:89
 #: src/components/settings/ApiAgentsSettings.tsx:156
 #: src/components/settings/Integrations.tsx:348
@@ -6848,13 +7018,18 @@ msgstr "Name:"
 msgid "Native lint of the rendered HTML before sending. Score 0-10 (above 5 = high spam risk). Pick a recipient provider class to see the strict profile (Google/Microsoft penalize links, tracking and HTML heavily) vs the lenient one (smaller providers tolerate light HTML)."
 msgstr "Native lint of the rendered HTML before sending. Score 0-10 (above 5 = high spam risk). Pick a recipient provider class to see the strict profile (Google/Microsoft penalize links, tracking and HTML heavily) vs the lenient one (smaller providers tolerate light HTML)."
 
-#: src/layouts/WorkspaceLayout.tsx:514
+#: src/layouts/WorkspaceLayout.tsx:524
 msgid "Navigation menu"
 msgstr "Navigation menu"
 
 #: src/components/templates/TemplatePreviewDrawer.tsx:556
 msgid "Neutral profile (no recipient class)"
 msgstr "Neutral profile (no recipient class)"
+
+#: src/components/send_queue/veridian_queue_groups.tsx:66
+#: src/components/send_queue/veridian_queue_reasons.tsx:48
+msgid "Never examined"
+msgstr "Never examined"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:162
 msgid "New app password"
@@ -6901,7 +7076,7 @@ msgstr "New segment"
 msgid "New Window"
 msgstr "New Window"
 
-#: src/layouts/WorkspaceLayout.tsx:607
+#: src/layouts/WorkspaceLayout.tsx:617
 #: src/pages/CreateWorkspacePage.tsx:194
 msgid "New workspace"
 msgstr "New workspace"
@@ -6917,6 +7092,12 @@ msgstr "New workspace"
 #: src/components/templates/CreateTemplateDrawer.tsx:529
 msgid "Next"
 msgstr "Next"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:136
+#: src/components/send_queue/veridian_queue_groups.tsx:73
+#: src/components/send_queue/veridian_queue_reasons.tsx:55
+msgid "Next attempt"
+msgstr "Next attempt"
 
 #: src/pages/BroadcastsPage.tsx:369
 msgid "Next Run"
@@ -6974,6 +7155,10 @@ msgstr "No automations yet"
 msgid "No broadcasts found"
 msgstr "No broadcasts found"
 
+#: src/components/send_queue/veridian_queue_trace.tsx:67
+msgid "No candidate profile was evaluated."
+msgstr "No candidate profile was evaluated."
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:937
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2319
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2359
@@ -7015,6 +7200,14 @@ msgstr "No data available"
 msgid "No data returned"
 msgstr "No data returned"
 
+#: src/components/send_queue/veridian_queue_decisions.tsx:154
+msgid "No decision matches these filters"
+msgstr "No decision matches these filters"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:175
+msgid "No decision recorded for this entry yet."
+msgstr "No decision recorded for this entry yet."
+
 #: src/components/templates/TemplatePreviewDrawer.tsx:310
 msgid "No default sender configured"
 msgstr "No default sender configured"
@@ -7042,6 +7235,10 @@ msgstr "No Errors"
 #: src/components/file_manager/fileManager.tsx:538
 msgid "No files selected"
 msgstr "No files selected"
+
+#: src/components/send_queue/veridian_queue_trace.tsx:82
+msgid "No gate recorded"
+msgstr "No gate recorded"
 
 #: src/components/templates/ImportExportButton.tsx:326
 msgid "No HTML content to export"
@@ -7088,6 +7285,10 @@ msgstr "No messages found"
 msgid "No MJML content to export"
 msgstr "No MJML content to export"
 
+#: src/components/send_queue/veridian_queue_groups.tsx:41
+msgid "No node"
+msgstr "No node"
+
 #: src/components/automations/AutomationFlowViewer.tsx:260
 msgid "No nodes in this automation"
 msgstr "No nodes in this automation"
@@ -7104,9 +7305,17 @@ msgstr "No preview available or template is empty."
 msgid "No preview available..."
 msgstr "No preview available..."
 
+#: src/components/send_queue/veridian_queue_groups.tsx:53
+msgid "No profile"
+msgstr "No profile"
+
 #: src/pages/SendingProfilesPage.tsx:183
 msgid "No profile here yet"
 msgstr "No profile here yet"
+
+#: src/components/send_queue/veridian_queue_labels.ts:34
+msgid "No profile in the pool"
+msgstr "No profile in the pool"
 
 #: src/components/timeline/ContactTimeline.tsx:290
 msgid "No properties"
@@ -7124,9 +7333,17 @@ msgstr "No provider is slowed or stopped."
 msgid "No provider slowed or stopped"
 msgstr "No provider slowed or stopped"
 
+#: src/pages/SendQueuePage.tsx:213
+msgid "No queue entry matches these filters"
+msgstr "No queue entry matches these filters"
+
 #: src/components/settings/veridian_sending_profiles_ui.tsx:206
 #~ msgid "No rate cap"
 #~ msgstr "No rate cap"
+
+#: src/components/send_queue/veridian_queue_labels.ts:52
+msgid "No reason"
+msgstr "No reason"
 
 #: src/components/email_builder/ui/BackgroundInput.tsx:97
 msgid "No Repeat"
@@ -7209,6 +7426,10 @@ msgstr "No throttle"
 msgid "No timeline events found for this contact"
 msgstr "No timeline events found for this contact"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:187
+msgid "No trace was recorded for this decision."
+msgstr "No trace was recorded for this decision."
+
 #: src/pages/TransactionalNotificationsPage.tsx:467
 msgid "No transactional notifications found"
 msgstr "No transactional notifications found"
@@ -7240,6 +7461,16 @@ msgstr "No webhook subscriptions configured"
 #: src/pages/DashboardPage.tsx:48
 msgid "No workspaces"
 msgstr "No workspaces"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:125
+#: src/pages/SendQueuePage.tsx:143
+#: src/pages/SendQueuePage.tsx:203
+msgid "Node"
+msgstr "Node"
+
+#: src/components/send_queue/veridian_queue_groups.tsx:41
+msgid "Node {node}"
+msgstr "Node {node}"
 
 #: src/components/automations/NodePalette.tsx:21
 msgid "Nodes"
@@ -7297,6 +7528,10 @@ msgstr "Not configured"
 #: src/components/automations/nodes/BaseNode.tsx:32
 msgid "Not connected"
 msgstr "Not connected"
+
+#: src/components/send_queue/veridian_queue_labels.ts:20
+msgid "Not examined yet"
+msgstr "Not examined yet"
 
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx:45
 #: src/components/automations/nodes/ListStatusBranchNode.tsx:58
@@ -7431,6 +7666,11 @@ msgstr "Off (plaintext)"
 msgid "OK"
 msgstr "OK"
 
+#: src/components/send_queue/veridian_queue_groups.tsx:71
+#: src/components/send_queue/veridian_queue_reasons.tsx:53
+msgid "Oldest"
+msgstr "Oldest"
+
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:109
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:417
 #: src/components/settings/veridian_cold_outreach_settings.tsx:312
@@ -7496,7 +7736,7 @@ msgstr "Open Google app passwords"
 msgid "Open in a window"
 msgstr "Open in a window"
 
-#: src/layouts/WorkspaceLayout.tsx:568
+#: src/layouts/WorkspaceLayout.tsx:578
 msgid "Open navigation menu"
 msgstr "Open navigation menu"
 
@@ -7610,6 +7850,18 @@ msgstr "or"
 msgid "Or select a popular Google Font"
 msgstr "Or select a popular Google Font"
 
+#: src/components/send_queue/veridian_queue_trace.tsx:53
+msgid "Original sender available"
+msgstr "Original sender available"
+
+#: src/components/send_queue/veridian_queue_trace.tsx:53
+msgid "Original sender unavailable"
+msgstr "Original sender unavailable"
+
+#: src/pages/SendQueuePage.tsx:198
+msgid "Orphan contacts: {orphanCount} parked in sending with no queue entry"
+msgstr "Orphan contacts: {orphanCount} parked in sending with no queue entry"
+
 #: src/components/settings/WebhooksSettings.tsx:305
 #: src/pages/TemplatesPage.tsx:95
 msgid "Other"
@@ -7634,6 +7886,11 @@ msgstr "Out-of-office and acknowledgements: counted apart, never in the rate."
 #: src/components/prospection/veridian_prospection_dashboard.tsx:124
 msgid "Out-of-office and acknowledgements: counted apart, never in the reply rate."
 msgstr "Out-of-office and acknowledgements: counted apart, never in the reply rate."
+
+#: src/components/send_queue/veridian_queue_decisions.tsx:98
+#: src/components/send_queue/veridian_queue_decisions.tsx:144
+msgid "Outcome"
+msgstr "Outcome"
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:350
 msgid "Outgoing server (SMTP)"
@@ -7699,6 +7956,10 @@ msgstr "Padding Settings"
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx:384
 msgid "Parent Frame"
 msgstr "Parent Frame"
+
+#: src/components/send_queue/veridian_queue_labels.ts:100
+msgid "Pass"
+msgstr "Pass"
 
 #: src/components/sending_profiles/veridian_inbox_drawer.tsx:108
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:367
@@ -7766,6 +8027,7 @@ msgstr "Pause this profile?"
 #: src/components/automations/AutomationCard.tsx:67
 #: src/components/prospection/veridian_prospection_replies.tsx:25
 #: src/components/prospection/veridian_prospection_sequences.tsx:67
+#: src/components/send_queue/veridian_queue_labels.ts:121
 #: src/components/sending_profiles/veridian_profile_card.tsx:93
 #: src/components/sending_profiles/veridian_profile_labels.ts:133
 #: src/pages/BroadcastsPage.tsx:350
@@ -7785,6 +8047,7 @@ msgstr "Payload:"
 #: src/components/automations/config/TriggerConfigForm.tsx:73
 #: src/components/contacts/ContactDetailsDrawer.tsx:582
 #: src/components/lists/ListStats.tsx:82
+#: src/components/send_queue/veridian_queue_labels.ts:153
 #: src/components/settings/WorkspaceMembers.tsx:137
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:79
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:236
@@ -7836,6 +8099,10 @@ msgstr "Per-infrastructure overrides"
 msgid "Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns."
 msgstr "Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns."
 
+#: src/components/send_queue/veridian_queue_labels.ts:68
+msgid "Per-recipient cap"
+msgstr "Per-recipient cap"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2297
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2506
 msgid "Per-recipient daily cap"
@@ -7861,6 +8128,10 @@ msgstr "Per-recipient feed URL"
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:409
 msgid "Per-recipient feed URL is required when enabled"
 msgstr "Per-recipient feed URL is required when enabled"
+
+#: src/components/send_queue/veridian_queue_labels.ts:70
+msgid "Per-sender cap"
+msgstr "Per-sender cap"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:929
 msgid "Per-sender daily cap (warmup, this infra)"
@@ -8319,6 +8590,10 @@ msgstr "Processed {0} contacts: {1} successful, {2} failed"
 msgid "Processed {successful} contacts successfully, {failed} failed"
 msgstr "Processed {successful} contacts successfully, {failed} failed"
 
+#: src/components/send_queue/veridian_queue_labels.ts:155
+msgid "Processing"
+msgstr "Processing"
+
 #. placeholder {0}: currentRow.toLocaleString()
 #. placeholder {1}: totalRows.toLocaleString()
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:867
@@ -8343,10 +8618,11 @@ msgstr "Processing paused"
 msgid "Processing was stopped before completion."
 msgstr "Processing was stopped before completion."
 
-#: src/components/settings/Integrations.tsx:402
-#: src/components/settings/veridian_sending_profiles_ui.tsx:225
-#~ msgid "Profile"
-#~ msgstr "Profile"
+#: src/components/send_queue/veridian_queue_decisions.tsx:111
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:126
+#: src/pages/SendQueuePage.tsx:161
+msgid "Profile"
+msgstr "Profile"
 
 #: src/components/settings/Integrations.tsx:750
 #~ msgid "Profile added to marketing rotation"
@@ -8385,6 +8661,7 @@ msgstr "Profile name"
 #~ msgid "Profile overrides take priority. Missing values inherit the global workspace policy."
 #~ msgstr "Profile overrides take priority. Missing values inherit the global workspace policy."
 
+#: src/components/send_queue/veridian_queue_labels.ts:32
 #: src/pages/SendingProfilesPage.tsx:118
 msgid "Profile paused"
 msgstr "Profile paused"
@@ -8417,7 +8694,7 @@ msgstr "Profiles used by campaigns and sequences. Those in the rotation share th
 msgid "Progress"
 msgstr "Progress"
 
-#: src/layouts/WorkspaceLayout.tsx:398
+#: src/layouts/WorkspaceLayout.tsx:408
 msgid "Prospection"
 msgstr "Prospection"
 
@@ -8430,6 +8707,14 @@ msgstr "Provider"
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1030
 msgid "Provider class"
 msgstr "Provider class"
+
+#: src/components/send_queue/veridian_queue_labels.ts:66
+msgid "Provider class cap"
+msgstr "Provider class cap"
+
+#: src/components/send_queue/veridian_queue_labels.ts:85
+msgid "Provider rate"
+msgstr "Provider rate"
 
 #: src/components/prospection/veridian_prospection_dashboard.tsx:141
 msgid "Providers slowed or stopped"
@@ -8456,6 +8741,18 @@ msgstr "Purchase"
 msgid "Push"
 msgstr "Push"
 
+#: src/pages/SendQueuePage.tsx:264
+msgid "Queue"
+msgstr "Queue"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:106
+msgid "Queue entry"
+msgstr "Queue entry"
+
+#: src/components/automations/nodes/StatNode.tsx:113
+msgid "Queued"
+msgstr "Queued"
+
 #: src/components/settings/Integrations.tsx:478
 #~ msgid "Queued emails already assigned to this profile keep their assignment."
 #~ msgstr "Queued emails already assigned to this profile keep their assignment."
@@ -8463,6 +8760,10 @@ msgstr "Push"
 #: src/pages/BroadcastsPage.tsx:563
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr "Queued emails will not be sent. In-flight sends will complete."
+
+#: src/components/send_queue/veridian_queue_labels.ts:40
+msgid "Quota denied"
+msgstr "Quota denied"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2341
 msgid "Rate"
@@ -8509,6 +8810,10 @@ msgstr "Raw JSON"
 msgid "Raw Payload:"
 msgstr "Raw Payload:"
 
+#: src/components/send_queue/veridian_queue_trace.tsx:105
+msgid "Raw trace (JSON)"
+msgstr "Raw trace (JSON)"
+
 #: src/components/templates/TemplatePreviewDrawer.tsx:596
 msgid "Re-check"
 msgstr "Re-check"
@@ -8549,6 +8854,11 @@ msgid "Real failures"
 msgstr "Real failures"
 
 #: src/components/prospection/veridian_prospection_reputation.tsx:49
+#: src/components/send_queue/veridian_queue_decisions.tsx:103
+#: src/components/send_queue/veridian_queue_decisions.tsx:136
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:128
+#: src/components/send_queue/veridian_queue_reasons.tsx:27
+#: src/pages/SendQueuePage.tsx:151
 msgid "Reason"
 msgstr "Reason"
 
@@ -8576,6 +8886,12 @@ msgstr "Recent New Contacts"
 msgid "Recipient"
 msgstr "Recipient"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:127
+#: src/components/send_queue/veridian_queue_trace.tsx:49
+#: src/pages/SendQueuePage.tsx:169
+msgid "Recipient class"
+msgstr "Recipient class"
+
 #: src/components/templates/SendTemplateModal.tsx:316
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:101
 msgid "Recipient Email"
@@ -8588,6 +8904,10 @@ msgstr "Recipient feed test completed successfully"
 #: src/components/templates/TemplatePreviewDrawer.tsx:587
 msgid "Recipient provider class"
 msgstr "Recipient provider class"
+
+#: src/components/send_queue/veridian_queue_labels.ts:26
+msgid "Recipient provider rate limit"
+msgstr "Recipient provider rate limit"
 
 #: src/components/settings/veridian_sending_profiles_ui.tsx:175
 #~ msgid "Recipient-provider policy"
@@ -8618,6 +8938,25 @@ msgstr "Recommended"
 msgid "Recommended Winner"
 msgstr "Recommended Winner"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:150
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:154
+#: src/components/send_queue/veridian_queue_groups.tsx:105
+#: src/components/send_queue/veridian_queue_groups.tsx:110
+msgid "Recompute"
+msgstr "Recompute"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:148
+msgid "Recompute this entry?"
+msgstr "Recompute this entry?"
+
+#: src/components/send_queue/veridian_queue_groups.tsx:103
+msgid "Recompute this group?"
+msgstr "Recompute this group?"
+
+#: src/components/send_queue/veridian_queue_labels.ts:144
+msgid "Recomputed"
+msgstr "Recomputed"
+
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:505
 msgid "Redo"
 msgstr "Redo"
@@ -8626,12 +8965,18 @@ msgstr "Redo"
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Redo (Ctrl+Shift+Z)"
 
+#: src/components/send_queue/veridian_queue_trace.tsx:63
+msgid "Reduced trace: only the gates that decided are recorded."
+msgstr "Reduced trace: only the gates that decided are recorded."
+
 #: src/components/contacts/ContactDetailsDrawer.tsx:629
 #: src/components/messages/MessageHistoryTable.tsx:360
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:113
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:429
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:414
 #: src/pages/ContactsPage.tsx:900
 #: src/pages/ListsPage.tsx:158
+#: src/pages/SendQueuePage.tsx:256
 msgid "Refresh"
 msgstr "Refresh"
 
@@ -8743,6 +9088,18 @@ msgstr "Remove member"
 msgid "Remove secret"
 msgstr "Remove secret"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:159
+msgid "Remove the contact"
+msgstr "Remove the contact"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:165
+msgid "Remove this contact"
+msgstr "Remove this contact"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:157
+msgid "Remove this contact from the automation?"
+msgstr "Remove this contact from the automation?"
+
 #: src/components/settings/Integrations.tsx:469
 #~ msgid "Remove this profile from marketing rotation?"
 #~ msgstr "Remove this profile from marketing rotation?"
@@ -8758,6 +9115,10 @@ msgstr "removed"
 #: src/components/automations/config/TriggerConfigForm.tsx:74
 msgid "Removed"
 msgstr "Removed"
+
+#: src/components/send_queue/veridian_queue_labels.ts:42
+msgid "Render failed"
+msgstr "Render failed"
 
 #: src/components/automations/AutomationFlowEditor.tsx:403
 msgid "Reorganize layout"
@@ -8842,6 +9203,14 @@ msgstr "Reputation by recipient provider"
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:441
 msgid "Reputation circuit breaker threshold"
 msgstr "Reputation circuit breaker threshold"
+
+#: src/components/send_queue/veridian_queue_labels.ts:83
+msgid "Reputation fuse"
+msgstr "Reputation fuse"
+
+#: src/components/send_queue/veridian_queue_labels.ts:28
+msgid "Reputation fuse tripped"
+msgstr "Reputation fuse tripped"
 
 #: src/components/sending_profiles/veridian_profile_labels.ts:163
 msgid "reputation signal"
@@ -8989,6 +9358,7 @@ msgid "Resume Upload"
 msgstr "Resume Upload"
 
 #: src/components/analytics/EmailMetricsChart.tsx:259
+#: src/pages/SendQueuePage.tsx:185
 msgid "Retry"
 msgstr "Retry"
 
@@ -9085,6 +9455,10 @@ msgstr "S3 region"
 msgid "S3 secret key"
 msgstr "S3 secret key"
 
+#: src/components/send_queue/veridian_queue_labels.ts:44
+msgid "Safety check, retrying"
+msgstr "Safety check, retrying"
+
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:463
 msgid "Safety pacing of the transport, not the capacity of the profile. The daily cap and the rules above set the capacity."
 msgstr "Safety pacing of the transport, not the capacity of the profile. The daily cap and the rules above set the capacity."
@@ -9101,6 +9475,10 @@ msgstr "Same password as SMTP"
 msgid "Same Window"
 msgstr "Same Window"
 
+#: src/components/send_queue/veridian_queue_groups.tsx:81
+msgid "Sample"
+msgstr "Sample"
+
 #: src/pages/BroadcastsPage.tsx:1049
 msgid "Sample Percentage"
 msgstr "Sample Percentage"
@@ -9108,6 +9486,10 @@ msgstr "Sample Percentage"
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:1166
 msgid "Sample values"
 msgstr "Sample values"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:182
+msgid "Sampled"
+msgstr "Sampled"
 
 #: src/components/settings/Integrations.tsx:2137
 #: src/components/settings/Integrations.tsx:2209
@@ -9595,7 +9977,7 @@ msgstr "Select which segment this trigger applies to"
 msgid "Select Winner"
 msgstr "Select Winner"
 
-#: src/layouts/WorkspaceLayout.tsx:579
+#: src/layouts/WorkspaceLayout.tsx:589
 #: src/pages/DashboardPage.tsx:31
 msgid "Select workspace"
 msgstr "Select workspace"
@@ -9603,6 +9985,10 @@ msgstr "Select workspace"
 #: src/components/file_manager/buttonSettings.tsx:190
 msgid "Select your storage provider to pre-fill the configuration:"
 msgstr "Select your storage provider to pre-fill the configuration:"
+
+#: src/components/send_queue/veridian_queue_labels.ts:115
+msgid "Selected"
+msgstr "Selected"
 
 #: src/pages/BroadcastsPage.tsx:1083
 msgid "Selected Winner"
@@ -9663,6 +10049,10 @@ msgstr "Send a transactional notification using Python:"
 msgid "Send a transactional notification using TypeScript/JavaScript:"
 msgstr "Send a transactional notification using TypeScript/JavaScript:"
 
+#: src/components/send_queue/veridian_queue_labels.ts:48
+msgid "Send error"
+msgstr "Send error"
+
 #: src/components/settings/WorkspaceMembers.tsx:616
 msgid "Send Invitation"
 msgstr "Send Invitation"
@@ -9682,6 +10072,11 @@ msgstr "Send or Schedule"
 #: src/components/broadcasts/SendOrScheduleModal.tsx:164
 msgid "Send or Schedule Broadcast"
 msgstr "Send or Schedule Broadcast"
+
+#: src/layouts/WorkspaceLayout.tsx:370
+#: src/pages/SendQueuePage.tsx:251
+msgid "Send queue"
+msgstr "Send queue"
 
 #: src/components/settings/WebhookCard.tsx:214
 #: src/components/settings/WebhookCard.tsx:355
@@ -9713,6 +10108,10 @@ msgstr "Sender"
 #: src/components/sending_profiles/veridian_profile_wizard.tsx:342
 msgid "Sender address"
 msgstr "Sender address"
+
+#: src/components/send_queue/veridian_queue_labels.ts:89
+msgid "Sender cap"
+msgstr "Sender cap"
 
 #: src/components/settings/Integrations.tsx:1777
 #~ msgid "Sender name"
@@ -9748,7 +10147,7 @@ msgstr "Sending 24/7"
 msgid "Sending API"
 msgstr "Sending API"
 
-#: src/layouts/WorkspaceLayout.tsx:338
+#: src/layouts/WorkspaceLayout.tsx:339
 msgid "Sending API / SMTP Bridge"
 msgstr "Sending API / SMTP Bridge"
 
@@ -9761,7 +10160,7 @@ msgstr "Sending emails..."
 msgid "Sending infrastructures"
 msgstr "Sending infrastructures"
 
-#: src/layouts/WorkspaceLayout.tsx:360
+#: src/layouts/WorkspaceLayout.tsx:361
 #: src/pages/LogsPage.tsx:34
 msgid "Sending log"
 msgstr "Sending log"
@@ -9774,7 +10173,7 @@ msgstr "Sending policy presets"
 #~ msgid "Sending profile rotation"
 #~ msgstr "Sending profile rotation"
 
-#: src/layouts/WorkspaceLayout.tsx:347
+#: src/layouts/WorkspaceLayout.tsx:348
 #: src/pages/SendingProfilesPage.tsx:204
 msgid "Sending profiles"
 msgstr "Sending profiles"
@@ -9799,6 +10198,7 @@ msgstr "Sending stopped for at least one provider"
 msgid "Sending test webhook..."
 msgstr "Sending test webhook..."
 
+#: src/components/send_queue/veridian_queue_labels.ts:91
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:247
 msgid "Sending window"
 msgstr "Sending window"
@@ -9811,6 +10211,7 @@ msgstr "Sending window (business hours)"
 msgid "Sending window (this infra)"
 msgstr "Sending window (this infra)"
 
+#: src/components/send_queue/veridian_queue_labels.ts:22
 #: src/components/sending_profiles/veridian_profile_labels.ts:142
 msgid "Sending window closed"
 msgstr "Sending window closed"
@@ -9836,10 +10237,13 @@ msgstr "sent"
 #: src/components/analytics/EmailMetricsChart.tsx:299
 #: src/components/analytics/veridian_engagement_by_class.tsx:140
 #: src/components/automations/config/TriggerConfigForm.tsx:89
+#: src/components/automations/nodes/StatNode.tsx:119
 #: src/components/broadcasts/BroadcastStats.tsx:135
 #: src/components/messages/MessageHistoryTab.tsx:110
 #: src/components/messages/MessageHistoryTab.tsx:112
 #: src/components/messages/MessageHistoryTable.tsx:258
+#: src/components/send_queue/veridian_queue_labels.ts:134
+#: src/components/send_queue/veridian_queue_labels.ts:159
 #: src/pages/TransactionalNotificationsPage.tsx:200
 msgid "Sent"
 msgstr "Sent"
@@ -10012,7 +10416,7 @@ msgid "Setting up..."
 msgstr "Setting up..."
 
 #: src/components/settings/SettingsSidebar.tsx:125
-#: src/layouts/WorkspaceLayout.tsx:382
+#: src/layouts/WorkspaceLayout.tsx:392
 msgid "Settings"
 msgstr "Settings"
 
@@ -10023,6 +10427,10 @@ msgstr "Setup"
 #: src/pages/SetupWizard.tsx:322
 msgid "Setup Complete!"
 msgstr "Setup Complete!"
+
+#: src/components/send_queue/veridian_queue_reasons.tsx:42
+msgid "Share"
+msgstr "Share"
 
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx:117
 msgid "Share link"
@@ -10103,8 +10511,14 @@ msgstr "Size"
 #: src/components/contacts/BulkActionProgressModal.tsx:102
 #: src/components/contacts/BulkActionProgressModal.tsx:140
 #: src/components/contacts/BulkUpdateDrawer.tsx:736
+#: src/components/send_queue/veridian_queue_labels.ts:106
+#: src/components/send_queue/veridian_queue_labels.ts:125
 msgid "Skipped"
 msgstr "Skipped"
+
+#: src/components/send_queue/veridian_queue_labels.ts:104
+msgid "Slowed"
+msgstr "Slowed"
 
 #: src/components/prospection/veridian_prospection_reputation.tsx:43
 #~ msgid "Slowed ÷{0}"
@@ -10377,6 +10791,7 @@ msgstr "State"
 
 #: src/components/contacts/ContactDetailsDrawer.tsx:981
 #: src/components/messages/MessageHistoryTab.tsx:597
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:123
 #: src/components/settings/veridian_plan_settings.tsx:72
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:76
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:363
@@ -10703,7 +11118,7 @@ msgstr "Template Variables:"
 msgid "Template:"
 msgstr "Template:"
 
-#: src/layouts/WorkspaceLayout.tsx:278
+#: src/layouts/WorkspaceLayout.tsx:279
 #: src/pages/TemplatesPage.tsx:368
 msgid "Templates"
 msgstr "Templates"
@@ -10850,8 +11265,11 @@ msgstr "Text Transform"
 msgid "The"
 msgstr "The"
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:77
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:96
 #: src/pages/SendingProfilesPage.tsx:97
 #: src/pages/SendingProfilesPage.tsx:169
+#: src/pages/SendQueuePage.tsx:101
 msgid "The action failed"
 msgstr "The action failed"
 
@@ -10888,6 +11306,10 @@ msgstr "The cap climbs step by step from the start date. While active it replace
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1504
 msgid "The closing time must be after the opening time."
 msgstr "The closing time must be after the opening time."
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:158
+msgid "The contact leaves this automation only. Other contacts are not touched."
+msgstr "The contact leaves this automation only. Other contacts are not touched."
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:185
 msgid "The credentials of this provider are managed through the API or the CLI. Name, senders, usage and rules are editable here."
@@ -10944,6 +11366,10 @@ msgstr "The hostname your server identifies itself as when connecting to the SMT
 msgid "The measure could not be made. Nothing is blocked."
 msgstr "The measure could not be made. Nothing is blocked."
 
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:149
+msgid "The next attempt and the recorded reason are cleared. Nothing is deleted and no attempt is consumed."
+msgstr "The next attempt and the recorded reason are cleared. Nothing is deleted and no attempt is consumed."
+
 #: src/components/settings/GeneralSettings.tsx:219
 msgid "The primary language for template content. Translations are stored for other languages."
 msgstr "The primary language for template content. Translations are stored for other languages."
@@ -10983,6 +11409,10 @@ msgstr "The segment has been updated!"
 #: src/components/file_manager/context.tsx:201
 msgid "The selected file"
 msgstr "The selected file"
+
+#: src/pages/SendQueuePage.tsx:213
+msgid "The send queue is empty"
+msgstr "The send queue is empty"
 
 #: src/components/prospection/veridian_prospection_rejections.tsx:60
 msgid "The server refused the message for policy reasons (5.7.x: spam filter, reputation, authentication). Dated on the send date."
@@ -11116,6 +11546,10 @@ msgstr "This contact is not subscribed to any lists"
 #: src/pages/SetupWizard.tsx:368
 msgid "This email will be used for the root administrator account"
 msgstr "This email will be used for the root administrator account"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:42
+msgid "This entry no longer exists."
+msgstr "This entry no longer exists."
 
 #: src/components/broadcasts/RecipientFeedSettings.tsx:99
 msgid "This feature makes an HTTP request for each recipient before sending their email. This can significantly slow down broadcast processing. If the feed request fails after retries, the broadcast will pause automatically."
@@ -11254,6 +11688,10 @@ msgstr "Timeline"
 #: src/components/segment/input.tsx:755
 msgid "times"
 msgstr "times"
+
+#: src/components/send_queue/veridian_queue_entry_drawer.tsx:141
+msgid "Times deferred"
+msgstr "Times deferred"
 
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:419
 msgid "Timestamp"
@@ -11456,7 +11894,7 @@ msgstr "Tracking links (open pixel, click redirects) point to Notifuse by defaul
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:216
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:408
-#: src/layouts/WorkspaceLayout.tsx:399
+#: src/layouts/WorkspaceLayout.tsx:409
 #: src/pages/AnalyticsPage.tsx:102
 #: src/pages/LogsPage.tsx:43
 #: src/pages/SendingProfilesPage.tsx:269
@@ -11471,7 +11909,7 @@ msgstr "Transactional"
 msgid "Transactional ID"
 msgstr "Transactional ID"
 
-#: src/layouts/WorkspaceLayout.tsx:373
+#: src/layouts/WorkspaceLayout.tsx:383
 #: src/pages/LogsPage.tsx:34
 msgid "Transactional log"
 msgstr "Transactional log"
@@ -11497,7 +11935,7 @@ msgstr "Transactional profile"
 msgid "Transactional sent today"
 msgstr "Transactional sent today"
 
-#: src/layouts/WorkspaceLayout.tsx:291
+#: src/layouts/WorkspaceLayout.tsx:292
 #: src/pages/TemplatesPage.tsx:368
 msgid "Transactional templates"
 msgstr "Transactional templates"
@@ -11657,7 +12095,7 @@ msgstr "Unknown"
 msgid "Unknown date"
 msgstr "Unknown date"
 
-#: src/layouts/WorkspaceLayout.tsx:199
+#: src/layouts/WorkspaceLayout.tsx:200
 msgid "Unknown error"
 msgstr "Unknown error"
 
@@ -11754,6 +12192,14 @@ msgstr "Unsubscribed from list"
 msgid "Unsubscribes"
 msgstr "Unsubscribes"
 
+#: src/components/send_queue/veridian_queue_trace.tsx:94
+msgid "until"
+msgstr "until"
+
+#: src/components/send_queue/veridian_queue_decisions.tsx:112
+msgid "Until"
+msgstr "Until"
+
 #: src/pages/BroadcastsPage.tsx:688
 msgid "Untitled"
 msgstr "Untitled"
@@ -11761,6 +12207,10 @@ msgstr "Untitled"
 #: src/components/prospection/veridian_watch_texts.ts:15
 msgid "Unusual volume: {sent} mails today, {average} per day on average over the previous 7 days"
 msgstr "Unusual volume: {sent} mails today, {average} per day on average over the previous 7 days"
+
+#: src/components/send_queue/veridian_queue_groups.tsx:104
+msgid "Up to 5000 entries get their next attempt and recorded reason cleared. Nothing is deleted and no attempt is consumed."
+msgstr "Up to 5000 entries get their next attempt and recorded reason cleared. Nothing is deleted and no attempt is consumed."
 
 #: src/components/contacts/SegmentsFilter.tsx:122
 #: src/components/email_builder/ui/BlockToolbar.tsx:209
@@ -12008,6 +12458,7 @@ msgstr "Validation Error"
 
 #: src/components/broadcasts/HeadersEditor.tsx:40
 #: src/components/segment/form_leaf.tsx:634
+#: src/components/send_queue/veridian_queue_trace.tsx:30
 msgid "Value"
 msgstr "Value"
 
@@ -12027,6 +12478,10 @@ msgstr "Variant name"
 #: src/pages/BroadcastsPage.tsx:663
 msgid "Variations"
 msgstr "Variations"
+
+#: src/components/send_queue/veridian_queue_trace.tsx:24
+msgid "Verdict"
+msgstr "Verdict"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2273
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2488
@@ -12122,6 +12577,10 @@ msgstr "Waiting for server restart..."
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2131
 msgid "Warm-up (cautious)"
 msgstr "Warm-up (cautious)"
+
+#: src/components/send_queue/veridian_queue_labels.ts:64
+msgid "Warm-up cap"
+msgstr "Warm-up cap"
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:182
 msgid "Warmup"
@@ -12238,6 +12697,10 @@ msgstr "Welcome, {0}"
 msgid "What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults."
 msgstr "What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults."
 
+#: src/components/send_queue/veridian_queue_decisions.tsx:95
+msgid "When"
+msgstr "When"
+
 #: src/components/settings/GeneralSettings.tsx:234
 msgid "When enabled, links in the email will be tracked for opens and clicks"
 msgstr "When enabled, links in the email will be tracked for opens and clicks"
@@ -12261,6 +12724,10 @@ msgstr "When enabled, user creation will be rejected if a disposable email addre
 #: src/components/templates/CreateTemplateDrawer.tsx:1103
 msgid "When you select a block, its settings appear here. Modify colors, text, spacing, alignment, and other properties to customize your email design."
 msgstr "When you select a block, its settings appear here. Modify colors, text, spacing, alignment, and other properties to customize your email design."
+
+#: src/pages/SendQueuePage.tsx:253
+msgid "Why mails are waiting, and what the last decision was for each."
+msgstr "Why mails are waiting, and what the last decision was for each."
 
 #: src/components/email_builder/blocks/MjBodyBlock.tsx:44
 #: src/components/email_builder/blocks/MjButtonBlock.tsx:344
@@ -12371,7 +12838,7 @@ msgstr "Workspace Name"
 msgid "Workspace name must be at least 3 characters long"
 msgstr "Workspace name must be at least 3 characters long"
 
-#: src/layouts/WorkspaceLayout.tsx:178
+#: src/layouts/WorkspaceLayout.tsx:179
 #: src/pages/AnalyticsPage.tsx:74
 #: src/pages/FileManagerPage.tsx:56
 msgid "Workspace not found"
@@ -12382,7 +12849,7 @@ msgid "Workspace return inboxes"
 msgstr "Workspace return inboxes"
 
 #: src/components/settings/GeneralSettings.tsx:80
-#: src/layouts/WorkspaceLayout.tsx:196
+#: src/layouts/WorkspaceLayout.tsx:197
 msgid "Workspace settings updated successfully"
 msgstr "Workspace settings updated successfully"
 
@@ -12541,6 +13008,10 @@ msgstr "You have unsaved changes. Are you sure you want to close this drawer?"
 #: src/components/automations/UpsertAutomationDrawer.tsx:85
 msgid "You have unsaved changes. Are you sure you want to close?"
 msgstr "You have unsaved changes. Are you sure you want to close?"
+
+#: src/pages/SendQueuePage.tsx:119
+msgid "You need read access to automations to see the send queue."
+msgstr "You need read access to automations to see the send queue."
 
 #: src/pages/BroadcastsPage.tsx:833
 #: src/pages/TemplatesPage.tsx:338

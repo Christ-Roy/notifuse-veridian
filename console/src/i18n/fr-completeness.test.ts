@@ -222,7 +222,7 @@ describe('complétude fr + en du tableau de bord de prospection (lot 5)', () => 
 
 // LOT 1 (10/10/2026) : page File d'envoi et compteurs du noeud email. Chaque chaine a sa
 // traduction française ET anglaise, sans tiret cadratin entouré d'espaces.
-describe('complétude fr + en des chaînes du lot 1 (File d'envoi)', () => {
+describe("complétude fr + en des chaînes du lot 1 (File d'envoi)", () => {
   const LOT1: Record<string, string> = {
     'Send queue': "File d'envoi",
     'Not examined yet': 'Jamais examinée',
@@ -231,7 +231,7 @@ describe('complétude fr + en des chaînes du lot 1 (File d'envoi)', () => {
     'Recipient provider rate limit': 'Débit du fournisseur destinataire',
     'Reputation fuse tripped': 'Fusible de réputation déclenché',
     'Excluded class': 'Classe exclue',
-    'Profile paused': 'Profil en pause',
+    'Profile paused': 'Profil mis en pause',
     'No profile in the pool': 'Aucun profil dans le pool',
     'Circuit open': 'Circuit ouvert',
     'Follow-up waiting for its original sender': "La relance attend son expéditeur d'origine",
@@ -265,7 +265,7 @@ describe('complétude fr + en des chaînes du lot 1 (File d'envoi)', () => {
     })
   }
 
-  it('fr : traductions attendues, variables conservées, aucun tiret cadratin entouré d'espaces', () => {
+  it("fr : traductions attendues, variables conservées, aucun tiret cadratin entouré d'espaces", () => {
     const entries = parsePo(readFileSync(resolve(__dirname, 'locales/fr.po'), 'utf8'))
     for (const [msgid, expected] of Object.entries(LOT1)) {
       const entry = entries.find((e) => e.msgid === msgid)!

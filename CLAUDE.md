@@ -154,6 +154,7 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 - `57` tableau de bord de prospection (lot 5) : `prospection.stats` (avancement des séquences, réponses par séquence et liste, stock), dimension analytics `veridian_profile_id`, surveillance du profil transactionnel (`transactional_watch`, jamais bloquante), chauffe par jour de compte, `notifuse profiles:create`
 - `58` dépilage équitable de `email_queue` (famine du 10/10) : relances avant J0, tourniquet entre automations, entrée repoussée par un gate cède la tête (`domain.VeridianSelectFairBatch`, `FetchPending`), aucune reprise manuelle
 - `59` automations observables (conception) : rails de politique, graphe vivant, explorateur de file, parcours contact, journal des décisions d envoi, plan en 7 lots (document seul, rien d implémenté)
+- `62` « pourquoi ça n'envoie pas » (lot 1 de 59, V62) : raison de report persistée sur `email_queue`, verdicts de gates (valeur, limite), journal des décisions borné, `queue.explain` / `decisions.list` / `queue.recompute`, CLI `queue:explain` `logs:decisions`, page File d'envoi, « completed » honnête, orphelins `sending`
 
 **Cold outbound — UI console & self-service**
 - `06` UI console — section Settings « Cold outreach »
