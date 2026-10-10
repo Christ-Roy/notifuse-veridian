@@ -5,6 +5,8 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Les tests de ce fichier réutilisent le harness du pré-filtre
@@ -152,4 +154,64 @@ func TestExcludedClassGate_FiresBeforeThrottle(t *testing.T) {
 	})
 	env.expectPermanentSkip(t, "e1")
 	env.worker.processEntry(prefilterWorkspace(), entry)
+}
+
+// --- Fiche 62 : variante structurée veridianExcludedClassVerdict ---
+
+func TestVeridianExcludedClassVerdict_BlockedCarriesClassAndSortedExclusionList(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000)
+	ws.Settings.VeridianExcludedProviderClasses = []string{"microsoft", "google"} // ordre volontairement non trié
+	entry := veridianTestEntry("e1", "prospect@hotmail.com", domain.EmailQueuePayload{})
+
+	v := env.worker.veridianExcludedClassVerdict(ws, nil, entry)
+	require.True(t, v.Blocked())
+	assert.Equal(t, domain.VeridianGateExcluded, v.Gate)
+	assert.Equal(t, domain.VeridianVerdictBlock, v.Verdict)
+	assert.Equal(t, "microsoft", v.Value, "valeur = classe du destinataire")
+	assert.Equal(t, "microsoft", v.Class)
+	assert.Equal(t, []string{"google", "microsoft"}, v.Limit, "limite = classes exclues, en ordre stable")
+	assert.Equal(t, domain.VeridianReasonExcludedClass, v.Reason)
+	assert.Zero(t, v.Delay, "une exclusion est permanente : pas de délai de re-planification")
+}
+
+func TestVeridianExcludedClassVerdict_NonExcludedClassPassesAndStillReportsWhatWasCompared(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000)
+	ws.Settings.VeridianExcludedProviderClasses = []string{"microsoft"}
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+
+	v := env.worker.veridianExcludedClassVerdict(ws, nil, entry)
+	assert.False(t, v.Blocked())
+	assert.Equal(t, domain.VeridianVerdictPass, v.Verdict)
+	assert.Equal(t, "google", v.Value, "la classe du destinataire est tracée même quand elle passe")
+	assert.Equal(t, []string{"microsoft"}, v.Limit)
+	assert.Empty(t, v.Class, "Class n'est renseignée que pour un blocage")
+	assert.Empty(t, v.Reason)
+}
+
+func TestVeridianExcludedClassVerdict_NoExclusionConfiguredIsStrictNoopWithoutClassification(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000)
+	entry := veridianTestEntry("e1", "lead@hotmail.com", domain.EmailQueuePayload{})
+
+	v := env.worker.veridianExcludedClassVerdict(ws, nil, entry)
+	assert.False(t, v.Blocked())
+	assert.Nil(t, v.Value, "aucune classification (pas de lookup MX) quand rien n'est exclu")
+	assert.Nil(t, v.Limit)
+	assert.Equal(t, "no exclusion configured", v.Detail)
+}
+
+func TestVeridianExcludedClassGate_WrapperMatchesVerdict(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000)
+	ws.Settings.VeridianExcludedProviderClasses = []string{"microsoft"}
+
+	class, excluded := env.worker.veridianExcludedClassGate(ws, nil, veridianTestEntry("e1", "p@hotmail.com", domain.EmailQueuePayload{}))
+	assert.True(t, excluded)
+	assert.Equal(t, "microsoft", class)
+
+	class, excluded = env.worker.veridianExcludedClassGate(ws, nil, veridianTestEntry("e2", "p@gmail.com", domain.EmailQueuePayload{}))
+	assert.False(t, excluded)
+	assert.Empty(t, class)
 }

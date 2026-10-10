@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -125,4 +126,43 @@ func TestProviderClassRateLimiter_GetStatsAndClear(t *testing.T) {
 
 	prl.Clear()
 	assert.Empty(t, prl.GetStats())
+}
+
+// --- Fiche 62 : PeekSeeded doit toujours répondre comme AllowSeeded SANS rien changer ---
+
+func TestProviderClassRateLimiter_PeekSeededAgreesWithAllowSeededInEveryState(t *testing.T) {
+	recent := func() bool { return true }
+	for _, tc := range []struct {
+		name  string
+		setup func(prl *ProviderClassRateLimiter)
+		seed  func() bool
+		want  bool
+	}{
+		{"jamais touché, aucun envoi récent", func(*ProviderClassRateLimiter) {}, nil, true},
+		{"jamais touché, envoi récent durable", func(*ProviderClassRateLimiter) {}, recent, false},
+		{"touché, jeton disponible, l'amorce est ignorée", func(prl *ProviderClassRateLimiter) { prl.GetOrCreateLimiter("i", "google", 0.5) }, recent, true},
+		{"touché, jeton consommé", func(prl *ProviderClassRateLimiter) { prl.Allow("i", "google", 0.5) }, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			peeker, taker := NewProviderClassRateLimiter(), NewProviderClassRateLimiter()
+			tc.setup(peeker)
+			tc.setup(taker)
+
+			peek := peeker.PeekSeeded("i", "google", 0.5, tc.seed)
+			allow := taker.AllowSeeded("i", "google", 0.5, tc.seed)
+			assert.Equal(t, tc.want, peek)
+			assert.Equal(t, allow, peek, "le peek doit prédire exactement la décision de l'appel réel")
+		})
+	}
+}
+
+func TestProviderClassRateLimiter_PeekSeededSeesTheRefillAndNeverConsumesIt(t *testing.T) {
+	prl := NewProviderClassRateLimiter()
+	require.True(t, prl.Allow("i", "google", 1200)) // 20 jetons/s, burst 1
+	require.False(t, prl.PeekSeeded("i", "google", 1200, nil), "jeton vide juste après l'envoi")
+
+	time.Sleep(120 * time.Millisecond) // 50 ms suffisent au réapprovisionnement
+	assert.True(t, prl.PeekSeeded("i", "google", 1200, nil), "le jeton est revenu")
+	assert.True(t, prl.PeekSeeded("i", "google", 1200, nil), "le peek ne l'a pas consommé")
+	assert.True(t, prl.Allow("i", "google", 1200), "le vrai appel obtient encore son jeton")
 }

@@ -996,3 +996,75 @@ func TestEmailQueueRepository_DeleteBySourceTx(t *testing.T) {
 		assert.Equal(t, int64(6), n)
 	})
 }
+
+func TestEmailQueueRepository_SetDeferral(t *testing.T) {
+	ctx := context.Background()
+	until := time.Now().UTC().Add(90 * time.Minute)
+
+	newRepo := func(t *testing.T) (domain.EmailQueueDeferralRepository, sqlmock.Sqlmock) {
+		db, mock, cleanup := testutil.SetupMockDB(t)
+		t.Cleanup(cleanup)
+		repo, ok := NewEmailQueueRepositoryWithDB(db).(domain.EmailQueueDeferralRepository)
+		require.True(t, ok, "le depot de file doit implementer EmailQueueDeferralRepository")
+		return repo, mock
+	}
+
+	t.Run("report simple: raison, detail, profil, horodatages d'examen, une seule requete", func(t *testing.T) {
+		repo, mock := newRepo(t)
+		// $1 until, $2 raison, $3 detail, $4 profil, $5 last_error, $6 logged, $7 id.
+		// Sans remboursement, attempts reste inchange ; une entree en pause reste en pause.
+		mock.ExpectExec(`(?s)UPDATE email_queue\s+SET next_retry_at = \$1,\s+status = CASE WHEN status = 'paused' THEN 'paused' ELSE 'pending' END,\s+attempts = attempts,.*defer_reason = \$2, defer_detail = NULLIF\(\$3, ''\), defer_profile = NULLIF\(\$4, ''\),.*defer_count = COALESCE\(defer_count, 0\) \+ 1,\s+first_examined_at = COALESCE\(first_examined_at, NOW\(\)\), last_examined_at = NOW\(\),.*WHERE id = \$7`).
+			WithArgs(until, "window_closed", "sending_window", "profile-1", "", false, "entry-1").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		require.NoError(t, repo.SetDeferral(ctx, "ws", "entry-1", domain.EmailQueueDeferral{
+			Reason: "window_closed", Detail: "sending_window", Profile: "profile-1", Until: until,
+		}))
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("RefundAttempt: la tentative est remboursee, jamais sous zero", func(t *testing.T) {
+		repo, mock := newRepo(t)
+		mock.ExpectExec(`(?s)attempts = GREATEST\(attempts - 1, 0\),`).
+			WithArgs(until, "provider_class", "", "", "", false, "entry-2").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		require.NoError(t, repo.SetDeferral(ctx, "ws", "entry-2", domain.EmailQueueDeferral{
+			Reason: "provider_class", Until: until, RefundAttempt: true,
+		}))
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("sans RefundAttempt la requete ne touche pas aux tentatives", func(t *testing.T) {
+		repo, mock := newRepo(t)
+		// Une requete qui rembourserait quand meme ne correspondrait pas a ce motif.
+		mock.ExpectExec(`(?s)attempts = attempts,`).
+			WithArgs(until, "r", "", "", "", false, "e").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		require.NoError(t, repo.SetDeferral(ctx, "ws", "e", domain.EmailQueueDeferral{Reason: "r", Until: until}))
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("last_error et journal: transmis dans les bons parametres", func(t *testing.T) {
+		repo, mock := newRepo(t)
+		mock.ExpectExec(`(?s)last_error = COALESCE\(NULLIF\(\$5, ''\), last_error\),\s+decision_logged_at = CASE WHEN \$6 THEN NOW\(\) ELSE decision_logged_at END`).
+			WithArgs(until, "final_guard", "", "", "smtp 451", true, "entry-3").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		require.NoError(t, repo.SetDeferral(ctx, "ws", "entry-3", domain.EmailQueueDeferral{
+			Reason: "final_guard", Until: until, LastError: "smtp 451", Logged: true,
+		}))
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("erreur SQL -> enveloppee", func(t *testing.T) {
+		repo, mock := newRepo(t)
+		boom := errors.New("connection reset")
+		mock.ExpectExec(`UPDATE email_queue`).WillReturnError(boom)
+
+		err := repo.SetDeferral(ctx, "ws", "entry-4", domain.EmailQueueDeferral{Reason: "r", Until: until})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to set deferral")
+		assert.ErrorIs(t, err, boom)
+	})
+}

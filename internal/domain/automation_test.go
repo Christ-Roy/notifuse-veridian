@@ -120,6 +120,7 @@ func TestNodeAction_IsValid(t *testing.T) {
 		{"entered is valid", NodeActionEntered, true},
 		{"processing is valid", NodeActionProcessing, true},
 		{"completed is valid", NodeActionCompleted, true},
+		{"queued is valid", NodeActionQueued, true},
 		{"failed is valid", NodeActionFailed, true},
 		{"skipped is valid", NodeActionSkipped, true},
 		{"empty is invalid", NodeAction(""), false},

@@ -4006,4 +4006,36 @@ func TestWebhookNodeExecutor_SetSecretKey(t *testing.T) {
 	assert.Empty(t, e.secretKey)
 	e.SetSecretKey("passphrase")
 	assert.Equal(t, "passphrase", e.secretKey)
+
+// Fiche 62 : l'entree de file porte le noeud qui l'a produite, sinon l'explorateur de file
+// ne sait pas regrouper les mails en attente par noeud.
+func TestEmailNodeExecutor_Execute_EnqueuedEntryCarriesNodeID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockEmailQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockTemplateRepo := mocks.NewMockTemplateRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockListRepo := mocks.NewMockListRepository(ctrl)
+	executor := NewEmailNodeExecutor(mockEmailQueueRepo, mockTemplateRepo, mockWorkspaceRepo, mockListRepo,
+		mocks.NewMockContactListRepository(ctrl), "https://api.example.com", setupMockLoggerForNodeExecutor(ctrl))
+
+	mockWorkspaceRepo.EXPECT().GetByID(gomock.Any(), "ws1").Return(createTestWorkspaceWithEmailProvider(), nil)
+	mockTemplateRepo.EXPECT().GetTemplateByID(gomock.Any(), "ws1", "tpl123", int64(0)).Return(createTestTemplate(), nil)
+	mockListRepo.EXPECT().GetListByID(gomock.Any(), "ws1", "list1").Return(&domain.List{ID: "list1", Name: "L"}, nil)
+	mockEmailQueueRepo.EXPECT().Enqueue(gomock.Any(), "ws1", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, entries []*domain.EmailQueueEntry) error {
+			require.Len(t, entries, 1)
+			assert.Equal(t, "j4_relance", entries[0].NodeID)
+			return nil
+		})
+
+	_, err := executor.Execute(context.Background(), NodeExecutionParams{
+		WorkspaceID: "ws1",
+		Node:        &domain.AutomationNode{ID: "j4_relance", Type: domain.NodeTypeEmail, Config: map[string]interface{}{"template_id": "tpl123"}},
+		Contact:     &domain.ContactAutomation{ID: "ca1", ContactEmail: "recipient@example.com"},
+		ContactData: &domain.Contact{Email: "recipient@example.com"},
+		Automation:  &domain.Automation{ID: "auto1", Name: "A", ListID: "list1"},
+	})
+	require.NoError(t, err)
 }

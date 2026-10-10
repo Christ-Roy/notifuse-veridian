@@ -9,6 +9,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Réutilise les helpers du package (newVeridianThrottleTestEnv, veridianTestEntry)
@@ -169,4 +170,93 @@ func TestVeridianPerSenderCapGate_CountsSinceParisMidnight(t *testing.T) {
 	_, capped := env.worker.veridianPerSenderCapGate(ws, provider, entry)
 	assert.True(t, capped)
 	assert.Equal(t, time.Date(2026, 10, 8, 22, 0, 0, 0, time.UTC), since)
+}
+
+// --- Fiche 62 : variante structurée veridianPerSenderCapVerdict ---
+
+func TestVeridianPerSenderCapVerdict_BlockedCarriesCountAndCap(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithSenderCap(5)
+	entry := veridianTestEntryWithSender("e1", "a@gmail.com", "warmup@send.fr", domain.EmailQueuePayload{})
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSender(gomock.Any(), "ws-1", "warmup@send.fr", gomock.Any()).Return(7, nil)
+
+	v := env.worker.veridianPerSenderCapVerdict(ws, nil, entry)
+	require.True(t, v.Blocked())
+	assert.Equal(t, domain.VeridianGateSenderCap, v.Gate, "la porte est sender_cap, pas daily_cap")
+	assert.Equal(t, domain.VeridianVerdictBlock, v.Verdict)
+	assert.Equal(t, 7, v.Value)
+	assert.Equal(t, 5, v.Limit)
+	assert.Equal(t, "per_sender", v.Name)
+	assert.Equal(t, domain.VeridianReasonCapacity, v.Reason)
+	assert.Equal(t, veridianDailyCapRecheckInterval, v.Delay)
+}
+
+func TestVeridianPerSenderCapVerdict_BoundaryAndPass(t *testing.T) {
+	for _, tc := range []struct {
+		count   int
+		blocked bool
+	}{{4, false}, {5, true}, {6, true}} {
+		env := newVeridianThrottleTestEnv(t)
+		ws := veridianTestWorkspaceWithSenderCap(5)
+		entry := veridianTestEntryWithSender("e1", "a@gmail.com", "warmup@send.fr", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForSender(gomock.Any(), "ws-1", "warmup@send.fr", gomock.Any()).Return(tc.count, nil)
+
+		v := env.worker.veridianPerSenderCapVerdict(ws, nil, entry)
+		assert.Equal(t, tc.blocked, v.Blocked(), "count=%d cap=5", tc.count)
+		assert.Equal(t, tc.count, v.Value)
+		assert.Equal(t, 5, v.Limit)
+		assert.Equal(t, "per_sender", v.Name)
+		if !tc.blocked {
+			assert.Equal(t, domain.VeridianVerdictPass, v.Verdict)
+			assert.Zero(t, v.Delay)
+		}
+	}
+}
+
+func TestVeridianPerSenderCapVerdict_NoConfigNoSenderAndCountErrorPassWithTheirOwnExplanation(t *testing.T) {
+	t.Run("no cap", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		v := env.worker.veridianPerSenderCapVerdict(veridianTestWorkspaceWithSenderCap(0), nil,
+			veridianTestEntryWithSender("e1", "a@gmail.com", "bot@send.fr", domain.EmailQueuePayload{}))
+		assert.False(t, v.Blocked())
+		assert.Nil(t, v.Value)
+		assert.Nil(t, v.Limit)
+		assert.Contains(t, v.Detail, "no per-sender cap")
+	})
+	t.Run("no sender address: cap known, not enforced", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		v := env.worker.veridianPerSenderCapVerdict(veridianTestWorkspaceWithSenderCap(3), nil,
+			veridianTestEntryWithSender("e1", "a@gmail.com", "", domain.EmailQueuePayload{}))
+		assert.False(t, v.Blocked())
+		assert.Nil(t, v.Value)
+		assert.Equal(t, 3, v.Limit)
+		assert.Contains(t, v.Detail, "not enforced")
+	})
+	t.Run("count error: allowed but flagged degraded", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		entry := veridianTestEntryWithSender("e1", "a@gmail.com", "bot@send.fr", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForSender(gomock.Any(), "ws-1", "bot@send.fr", gomock.Any()).Return(0, errors.New("db down"))
+		v := env.worker.veridianPerSenderCapVerdict(veridianTestWorkspaceWithSenderCap(3), nil, entry)
+		assert.False(t, v.Blocked(), "une erreur de COUNT ne bloque jamais (différent du plafond journalier)")
+		assert.Nil(t, v.Value)
+		assert.Equal(t, 3, v.Limit)
+		assert.Contains(t, v.Detail, "degraded")
+	})
+}
+
+func TestVeridianPerSenderCapGate_WrapperMatchesVerdict(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithSenderCap(1)
+	entry := veridianTestEntryWithSender("e1", "a@gmail.com", "bot@send.fr", domain.EmailQueuePayload{})
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSender(gomock.Any(), "ws-1", "bot@send.fr", gomock.Any()).Return(1, nil).Times(2)
+
+	v := env.worker.veridianPerSenderCapVerdict(ws, nil, entry)
+	delay, capped := env.worker.veridianPerSenderCapGate(ws, nil, entry)
+	assert.True(t, capped)
+	assert.Equal(t, v.Blocked(), capped)
+	assert.Equal(t, v.Delay, delay)
 }

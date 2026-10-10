@@ -4675,3 +4675,44 @@ func TestWorkspaceService_DeleteIntegration_ClearsReturnIMAPLinks(t *testing.T) 
 	})
 	require.NoError(t, service.DeleteIntegration(ctx, "ws", "imap"))
 }
+
+// Fiche 62 : le niveau du journal des decisions n'est pas dans le formulaire de la console.
+// Une sauvegarde qui ne le porte pas ne doit PAS le remettre a zero ; une valeur portee est
+// normalisee (inconnu -> "transitions").
+func TestWorkspaceService_UpdateWorkspace_VeridianDecisionLogLevel(t *testing.T) {
+	cases := []struct {
+		name     string
+		existing string
+		sent     string
+		want     string
+	}{
+		{"absent de la sauvegarde -> le niveau existant est conserve", domain.VeridianDecisionLogAll, "", domain.VeridianDecisionLogAll},
+		{"absent, niveau off conserve", domain.VeridianDecisionLogOff, "", domain.VeridianDecisionLogOff},
+		{"porte -> remplace", domain.VeridianDecisionLogTransitions, domain.VeridianDecisionLogAll, domain.VeridianDecisionLogAll},
+		{"porte off -> off", domain.VeridianDecisionLogAll, domain.VeridianDecisionLogOff, domain.VeridianDecisionLogOff},
+		{"valeur inconnue -> normalisee en transitions", domain.VeridianDecisionLogAll, "verbose", domain.VeridianDecisionLogTransitions},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			service, repo, auth := newLot2WorkspaceService(t)
+			existing := &domain.Workspace{ID: "ws", Name: "W", Settings: domain.WorkspaceSettings{
+				Timezone: "UTC", VeridianDecisionLogLevel: tc.existing,
+			}}
+			lot2ExpectOwner(ctx, repo, auth, "ws")
+			repo.EXPECT().GetByID(ctx, "ws").Return(existing, nil)
+			var saved *domain.Workspace
+			repo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(
+				func(_ context.Context, w *domain.Workspace) error { saved = w; return nil })
+
+			settings := domain.WorkspaceSettings{
+				Timezone: "UTC", DefaultLanguage: "en", Languages: []string{"en"},
+				VeridianDecisionLogLevel: tc.sent,
+			}
+			_, err := service.UpdateWorkspace(ctx, "ws", "W", settings)
+			require.NoError(t, err)
+			require.NotNil(t, saved)
+			assert.Equal(t, tc.want, saved.Settings.VeridianDecisionLogLevel)
+		})
+	}
+}

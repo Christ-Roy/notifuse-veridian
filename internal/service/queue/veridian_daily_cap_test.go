@@ -9,6 +9,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Réutilise les helpers du package (newVeridianThrottleTestEnv, veridianTestEntry)
@@ -702,4 +703,177 @@ func TestVeridianDailyCapGate_WarmupCountsSinceParisMidnight(t *testing.T) {
 	_, capped := env.worker.veridianDailyCapGate(ws, provider, entry)
 	assert.True(t, capped, "5 envois du jour pour un palier de 5")
 	assert.Equal(t, time.Date(2026, 3, 28, 23, 0, 0, 0, time.UTC), since, "minuit Paris le 29 mars 2026 (UTC+1) = 23h00 UTC la veille")
+}
+
+// --- Fiche 62 : variante structurée veridianDailyCapVerdict (valeur, limite, verdict) ---
+
+func TestVeridianDailyCapVerdict_BlockedCarriesObservedValueLimitAndSubCap(t *testing.T) {
+	t.Run("per_recipient", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		ws := veridianTestWorkspaceWithCaps(nil, 2)
+		entry := veridianTestEntry("e1", "victim@gmail.com", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForContact(gomock.Any(), "ws-1", "victim@gmail.com", gomock.Any()).Return(3, nil)
+
+		v := env.worker.veridianDailyCapVerdict(ws, nil, entry)
+		require.True(t, v.Blocked())
+		assert.Equal(t, domain.VeridianGateDailyCap, v.Gate)
+		assert.Equal(t, domain.VeridianVerdictBlock, v.Verdict)
+		assert.Equal(t, 3, v.Value, "la valeur est le compteur observé, pas le plafond")
+		assert.Equal(t, 2, v.Limit)
+		assert.Equal(t, "per_recipient", v.Name)
+		assert.Equal(t, domain.VeridianReasonCapacity, v.Reason)
+		assert.Equal(t, veridianDailyCapRecheckInterval, v.Delay)
+	})
+
+	t.Run("provider_class", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 50}, 0)
+		entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForClass(gomock.Any(), "ws-1", "google", gomock.Any()).Return(57, nil)
+
+		v := env.worker.veridianDailyCapVerdict(ws, nil, entry)
+		require.True(t, v.Blocked())
+		assert.Equal(t, 57, v.Value)
+		assert.Equal(t, 50, v.Limit)
+		assert.Equal(t, "provider_class", v.Name)
+		assert.Contains(t, v.Detail, "class=google")
+		assert.Equal(t, domain.VeridianReasonCapacity, v.Reason)
+	})
+
+	t.Run("warmup", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		ws := veridianTestWorkspaceWithCaps(nil, 0)
+		provider := veridianWarmupTestProvider(time.Now().UTC(), []int{2, 5}, 1) // jour 0 : plafond 2
+		entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@send.fr", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.fr", gomock.Any()).Return(2, nil)
+
+		v := env.worker.veridianDailyCapVerdict(ws, provider, entry)
+		require.True(t, v.Blocked(), "exactement au plafond = bloqué (>=)")
+		assert.Equal(t, 2, v.Value)
+		assert.Equal(t, 2, v.Limit)
+		assert.Equal(t, "warmup", v.Name)
+	})
+}
+
+func TestVeridianDailyCapVerdict_PassCarriesTheSubCapActuallyEvaluated(t *testing.T) {
+	t.Run("per_recipient under cap", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		ws := veridianTestWorkspaceWithCaps(nil, 3)
+		entry := veridianTestEntry("e1", "ok@gmail.com", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForContact(gomock.Any(), "ws-1", "ok@gmail.com", gomock.Any()).Return(1, nil)
+
+		v := env.worker.veridianDailyCapVerdict(ws, nil, entry)
+		assert.False(t, v.Blocked())
+		assert.Equal(t, domain.VeridianVerdictPass, v.Verdict)
+		assert.Equal(t, 1, v.Value)
+		assert.Equal(t, 3, v.Limit)
+		assert.Equal(t, "per_recipient", v.Name)
+		assert.Zero(t, v.Delay)
+		assert.Empty(t, v.Reason, "un passage ne porte pas de raison de blocage")
+	})
+
+	t.Run("class under cap reports the class sub-cap, the most specific one", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 50}, 5)
+		entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForContact(gomock.Any(), "ws-1", "lead@gmail.com", gomock.Any()).Return(0, nil)
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForClass(gomock.Any(), "ws-1", "google", gomock.Any()).Return(4, nil)
+
+		v := env.worker.veridianDailyCapVerdict(ws, nil, entry)
+		assert.False(t, v.Blocked())
+		assert.Equal(t, 4, v.Value)
+		assert.Equal(t, 50, v.Limit)
+		assert.Equal(t, "provider_class", v.Name)
+	})
+
+	t.Run("warmup governs and is reported", func(t *testing.T) {
+		env := newVeridianThrottleTestEnv(t)
+		ws := veridianTestWorkspaceWithCaps(map[string]int{"google": 1000}, 0)
+		provider := veridianWarmupTestProvider(time.Now().UTC(), []int{2, 5}, 1)
+		entry := veridianTestEntryFrom("e1", "lead@gmail.com", "bot@send.fr", domain.EmailQueuePayload{})
+		env.mockMessageHistoryRepo.EXPECT().
+			CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.fr", gomock.Any()).Return(1, nil)
+
+		v := env.worker.veridianDailyCapVerdict(ws, provider, entry)
+		assert.False(t, v.Blocked())
+		assert.Equal(t, 1, v.Value)
+		assert.Equal(t, 2, v.Limit, "le plafond reporté est celui du warmup, pas la classe statique (1000)")
+		assert.Equal(t, "warmup", v.Name)
+	})
+}
+
+func TestVeridianDailyCapVerdict_NoCapConfiguredPassesWithoutValueNorLimit(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithCaps(nil, 0)
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
+
+	v := env.worker.veridianDailyCapVerdict(ws, nil, entry)
+	assert.False(t, v.Blocked())
+	assert.Equal(t, domain.VeridianGateDailyCap, v.Gate)
+	assert.Nil(t, v.Value, "rien n'a été compté : pas de valeur inventée")
+	assert.Nil(t, v.Limit)
+	assert.Equal(t, "no cap configured", v.Detail)
+}
+
+func TestVeridianDailyCapVerdict_CountErrorBlocksAndSaysSo(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspaceWithCaps(nil, 2)
+	entry := veridianTestEntry("e1", "victim@gmail.com", domain.EmailQueuePayload{})
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForContact(gomock.Any(), "ws-1", "victim@gmail.com", gomock.Any()).Return(0, errors.New("db down"))
+
+	v := env.worker.veridianDailyCapVerdict(ws, nil, entry)
+	require.True(t, v.Blocked(), "une erreur de comptage bloque (fail closed)")
+	assert.Equal(t, "per_recipient", v.Name, "le suffixe _count_error est retiré du nom de sous-plafond")
+	assert.Contains(t, v.Detail, "count query failed")
+	assert.Equal(t, 0, v.Value)
+	assert.Equal(t, 2, v.Limit)
+	assert.Equal(t, domain.VeridianReasonCapacity, v.Reason)
+}
+
+// Le wrapper historique (délai, bool) ne doit jamais diverger de la variante Verdict.
+func TestVeridianDailyCapGate_WrapperMatchesVerdict(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		count int
+	}{{"bloqué", 2}, {"passant", 1}} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newVeridianThrottleTestEnv(t)
+			ws := veridianTestWorkspaceWithCaps(nil, 2)
+			entry := veridianTestEntry("e1", "victim@gmail.com", domain.EmailQueuePayload{})
+			env.mockMessageHistoryRepo.EXPECT().
+				CountSentSinceForContact(gomock.Any(), "ws-1", "victim@gmail.com", gomock.Any()).Return(tc.count, nil).Times(2)
+
+			v := env.worker.veridianDailyCapVerdict(ws, nil, entry)
+			delay, capped := env.worker.veridianDailyCapGate(ws, nil, entry)
+			assert.Equal(t, v.Blocked(), capped)
+			assert.Equal(t, v.Delay, delay)
+			assert.Equal(t, tc.count >= 2, capped)
+		})
+	}
+}
+
+// veridianCapVerdict sert aussi la porte « plafond par adresse » : la porte appelante
+// est portée telle quelle, et un détail de classe n'est ajouté que si une classe existe.
+func TestVeridianCapVerdict_GateAndClassDetail(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
+
+	v := env.worker.veridianCapVerdict(domain.VeridianGateSenderCap, entry, "per_sender", 7, 5, "")
+	assert.Equal(t, domain.VeridianGateSenderCap, v.Gate)
+	assert.Equal(t, "per_sender", v.Name)
+	assert.Equal(t, 7, v.Value)
+	assert.Equal(t, 5, v.Limit)
+	assert.Empty(t, v.Detail)
+	assert.True(t, v.Blocked())
+
+	v = env.worker.veridianCapVerdict(domain.VeridianGateDailyCap, entry, "provider_class_count_error", 0, 9, "microsoft")
+	assert.Equal(t, "provider_class", v.Name)
+	assert.Equal(t, "count query failed, SMTP blocked; class=microsoft", v.Detail)
 }

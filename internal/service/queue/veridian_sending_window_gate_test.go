@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -161,4 +163,124 @@ func TestVeridianResolveSendingWindow_Cascade(t *testing.T) {
 		entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
 		assert.Nil(t, veridianResolveSendingWindow(ws, nil, entry))
 	})
+}
+
+// --- Fiche 62 : variante structurée veridianSendingWindowVerdict + description de fenêtre ---
+
+func TestVeridianDescribeWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		window   *domain.VeridianSendingWindow
+		fallback string
+		want     string
+	}{
+		{"jours ouvrés, fuseau propre", &domain.VeridianSendingWindow{Days: []int{1, 2, 3, 4, 5}, StartHour: 8, EndHour: 19, Timezone: "Europe/Paris"}, "UTC", "lun,mar,mer,jeu,ven 08:00-19:00 Europe/Paris"},
+		{"tous les jours, minutes, fuseau du workspace", &domain.VeridianSendingWindow{StartHour: 8, StartMinute: 30, EndHour: 19, EndMinute: 5}, "Europe/Paris", "tous les jours 08:30-19:05 Europe/Paris"},
+		{"aucun fuseau nulle part = UTC", &domain.VeridianSendingWindow{Days: []int{0, 6}, StartHour: 9, EndHour: 12}, "", "dim,sam 09:00-12:00 UTC"},
+		{"jour hors plage ignoré", &domain.VeridianSendingWindow{Days: []int{1, 9, -1}, StartHour: 9, EndHour: 12, Timezone: "UTC"}, "", "lun 09:00-12:00 UTC"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, veridianDescribeWindow(tc.window, tc.fallback))
+		})
+	}
+}
+
+func TestVeridianSendingWindowVerdict_OpenWindowPassesWithLocalTimeAndLimit(t *testing.T) {
+	skipNearMidnight(t)
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000)
+	ws.Settings.VeridianSendingWindow = windowAround(-1*time.Hour, 1*time.Hour)
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
+
+	v := env.worker.veridianSendingWindowVerdict(ws, nil, entry)
+	assert.False(t, v.Blocked())
+	assert.Equal(t, domain.VeridianVerdictPass, v.Verdict)
+	assert.Equal(t, domain.VeridianGateWindow, v.Gate)
+	assert.Regexp(t, regexp.MustCompile(`^(dim|lun|mar|mer|jeu|ven|sam) \d\d:\d\d$`), v.Value)
+	assert.Equal(t, veridianDescribeWindow(ws.Settings.VeridianSendingWindow, ""), v.Limit)
+	assert.Zero(t, v.Delay)
+	assert.Empty(t, v.Reason)
+}
+
+func TestVeridianSendingWindowVerdict_NoWindowConfiguredIsNoop(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	v := env.worker.veridianSendingWindowVerdict(veridianTestWorkspace(nil, 6000), nil,
+		veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{}))
+	assert.False(t, v.Blocked())
+	assert.Nil(t, v.Value)
+	assert.Nil(t, v.Limit)
+	assert.Equal(t, "no window configured", v.Detail)
+}
+
+func TestVeridianSendingWindowVerdict_UsesWorkspaceTimezoneWhenWindowHasNone(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000)
+	ws.Settings.Timezone = "Asia/Tokyo"
+	win := closedWindow()
+	win.Timezone = ""
+	ws.Settings.VeridianSendingWindow = win
+
+	v := env.worker.veridianSendingWindowVerdict(ws, nil, veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{}))
+	require.True(t, v.Blocked())
+	assert.True(t, strings.HasSuffix(v.Limit.(string), "Asia/Tokyo"), "fuseau de repli du workspace : %v", v.Limit)
+}
+
+// Fenêtre fermée jusqu'à un jour précis (ici : 2 jours plus tard, donc plus de 24 h).
+// Prouve : le délai est borné à 24 h comme avant, mais la RÉOUVERTURE réelle est tracée
+// (« reopens= ») et tombe le bon jour à l'heure d'ouverture. Le cas du samedi 10/10
+// (réouverture lundi) est la même mécanique : voir le test sur Saturday ci-dessous.
+func TestVeridianSendingWindowVerdict_ClosedUntilLaterDay_DelayBoundedButReopeningIsExact(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000)
+	openDay := (int(time.Now().UTC().Weekday()) + 2) % 7
+	ws.Settings.VeridianSendingWindow = &domain.VeridianSendingWindow{
+		Days: []int{openDay}, StartHour: 8, EndHour: 19, Timezone: "UTC",
+	}
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
+
+	before := time.Now()
+	v := env.worker.veridianSendingWindowVerdict(ws, nil, entry)
+	require.True(t, v.Blocked())
+	assert.Equal(t, domain.VeridianReasonWindowClosed, v.Reason)
+	assert.Equal(t, veridianSendingWindowMaxRetryDelay, v.Delay, "réouverture dans plus de 24 h : le délai est borné")
+
+	require.True(t, strings.HasPrefix(v.Detail, "reopens="), v.Detail)
+	opening, err := time.Parse(time.RFC3339, strings.TrimPrefix(v.Detail, "reopens="))
+	require.NoError(t, err)
+	assert.Equal(t, time.Weekday(openDay), opening.UTC().Weekday())
+	assert.Equal(t, 8, opening.UTC().Hour())
+	assert.Equal(t, 0, opening.UTC().Minute())
+	assert.True(t, opening.After(before.Add(veridianSendingWindowMaxRetryDelay)), "la vraie réouverture est au-delà du délai borné")
+
+	// Valeur = jour et heure locaux de l'évaluation, limite = la fenêtre lisible.
+	assert.Regexp(t, regexp.MustCompile(`^(dim|lun|mar|mer|jeu|ven|sam) \d\d:\d\d$`), v.Value)
+	assert.Equal(t, veridianDescribeWindow(ws.Settings.VeridianSendingWindow, ""), v.Limit)
+}
+
+// Cas mesuré le samedi 10/10/2026 : fenêtre lun-ven 08:00-19:00, samedi midi = fermée,
+// réouverture lundi 08:00. La porte s'appuie sur window.IsWithinWindow / NextOpening :
+// on les éprouve sur ce samedi précis (le gate lit l'horloge réelle, d'où le test du
+// calcul qu'il consomme et, plus haut, du gate lui-même avec une réouverture lointaine).
+func TestVeridianSendingWindow_SaturdayClosed_ReopensMonday0800(t *testing.T) {
+	win := &domain.VeridianSendingWindow{Days: []int{1, 2, 3, 4, 5}, StartHour: 8, EndHour: 19, Timezone: "UTC"}
+	saturdayNoon := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	require.Equal(t, time.Saturday, saturdayNoon.Weekday())
+
+	assert.False(t, win.IsWithinWindow(saturdayNoon, ""), "samedi : fenêtre fermée")
+	assert.Equal(t, time.Date(2026, 10, 12, 8, 0, 0, 0, time.UTC), win.NextOpening(saturdayNoon, "").UTC(), "réouverture lundi 08:00")
+	assert.True(t, win.IsWithinWindow(time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC), ""), "lundi 09:00 : ouverte")
+	assert.Equal(t, "lun,mar,mer,jeu,ven 08:00-19:00 UTC", veridianDescribeWindow(win, ""))
+}
+
+func TestVeridianSendingWindowGate_WrapperMatchesVerdict(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000)
+	ws.Settings.VeridianSendingWindow = closedWindow()
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
+
+	v := env.worker.veridianSendingWindowVerdict(ws, nil, entry)
+	delay, closed := env.worker.veridianSendingWindowGate(ws, nil, entry)
+	assert.True(t, closed)
+	assert.Equal(t, v.Blocked(), closed)
+	assert.InDelta(t, v.Delay.Seconds(), delay.Seconds(), 2)
 }

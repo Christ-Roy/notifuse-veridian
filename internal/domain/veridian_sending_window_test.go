@@ -219,3 +219,25 @@ func TestVeridianParseWeekdayList(t *testing.T) {
 	// Valeurs hors borne et non-numériques ignorées.
 	assert.Equal(t, []int{0, 6}, veridianParseWeekdayList("0,7,abc,6,-1"))
 }
+
+func TestVeridianSendingWindow_Location(t *testing.T) {
+	paris, err := time.LoadLocation("Europe/Paris")
+	require.NoError(t, err)
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	require.NoError(t, err)
+
+	// Précédence : fuseau de la fenêtre > repli de l'appelant > UTC.
+	assert.Equal(t, paris.String(), businessHours().Location("Asia/Tokyo").String())
+	assert.Equal(t, tokyo.String(), (&VeridianSendingWindow{}).Location("Asia/Tokyo").String())
+	assert.Equal(t, "UTC", (&VeridianSendingWindow{}).Location("").String())
+	// Nom invalide : retombe sur le repli, puis sur UTC.
+	assert.Equal(t, tokyo.String(), (&VeridianSendingWindow{Timezone: "Nope/Nada"}).Location("Asia/Tokyo").String())
+	assert.Equal(t, "UTC", (&VeridianSendingWindow{Timezone: "Nope/Nada"}).Location("Nope/Zilch").String())
+
+	// Cohérence avec la décision : l'heure locale lue via Location est celle que
+	// IsWithinWindow utilise (lundi 8h UTC = 10h Paris en été => dans la fenêtre).
+	w := businessHours()
+	now := time.Date(2026, 7, 6, 8, 0, 0, 0, time.UTC)
+	assert.Equal(t, 10, now.In(w.Location("")).Hour())
+	assert.True(t, w.IsWithinWindow(now, ""))
+}

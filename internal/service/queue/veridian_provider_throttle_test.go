@@ -460,3 +460,74 @@ func TestVeridianProviderClassGate_UsesSharedEffectiveClassRate(t *testing.T) {
 		assert.InDelta(t, veridianEffectiveClassRate(rates, "ionos", factor)/60.0, repLimiterRate(t, env, "int-1", "ionos"), 1e-9, "facteur %d", factor)
 	}
 }
+
+// --- Fiche 62 : variante structurée veridianProviderClassGateVerdict (consume / peek) ---
+
+func TestVeridianProviderClassGateVerdict_ConsumeTrueMatchesLegacyGateAndDescribesTheBucket(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(map[string]float64{"google": 0.5}, 6000)
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
+
+	first := env.worker.veridianProviderClassGateVerdict(ws, nil, entry, true)
+	assert.False(t, first.Blocked())
+	assert.Equal(t, domain.VeridianGateClassRate, first.Gate)
+	assert.Equal(t, "1 jeton", first.Value)
+	assert.Equal(t, "0.5/min", first.Limit)
+	assert.Equal(t, "class=google", first.Detail)
+
+	second := env.worker.veridianProviderClassGateVerdict(ws, nil, entry, true)
+	require.True(t, second.Blocked(), "le jeton du premier appel a été consommé")
+	assert.Equal(t, "0 jeton", second.Value)
+	assert.Equal(t, "0.5/min", second.Limit)
+	assert.Equal(t, domain.VeridianReasonClassRate, second.Reason)
+	assert.GreaterOrEqual(t, second.Delay, time.Second)
+	assert.LessOrEqual(t, second.Delay, veridianMaxProviderClassRetryDelay)
+
+	// Le wrapper historique voit le même état (limiter partagé) et rend le même couple.
+	delay, throttled := env.worker.veridianProviderClassGate(ws, nil, entry)
+	assert.True(t, throttled)
+	assert.GreaterOrEqual(t, delay, time.Second)
+}
+
+func TestVeridianProviderClassGateVerdict_PeekNeverConsumesNorCreatesTheLimiter(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(map[string]float64{"google": 1}, 6000)
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{})
+
+	for i := 0; i < 5; i++ {
+		v := env.worker.veridianProviderClassGateVerdict(ws, nil, entry, false)
+		assert.False(t, v.Blocked(), "peek %d : le seau est intact", i)
+	}
+	assert.Empty(t, env.worker.GetProviderClassStats(), "peek ne crée aucun limiter")
+
+	// Les cinq peeks n'ont rien débité : le vrai passage obtient SON jeton...
+	real := env.worker.veridianProviderClassGateVerdict(ws, nil, entry, true)
+	assert.False(t, real.Blocked())
+	// ... et un peek après consommation voit le blocage sans rien modifier.
+	before := env.worker.GetProviderClassStats()["int-1|google"].TokensAvailable
+	peek := env.worker.veridianProviderClassGateVerdict(ws, nil, entry, false)
+	assert.True(t, peek.Blocked())
+	assert.Equal(t, "0 jeton", peek.Value)
+	assert.Equal(t, domain.VeridianReasonClassRate, peek.Reason)
+	after := env.worker.GetProviderClassStats()["int-1|google"].TokensAvailable
+	assert.InDelta(t, before, after, 0.05, "un peek bloquant ne débite pas non plus")
+}
+
+func TestVeridianProviderClassGateVerdict_PassWithoutThrottleExplainsWhy(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+
+	// Aucune config de débit.
+	v := env.worker.veridianProviderClassGateVerdict(veridianTestWorkspace(nil, 6000), nil,
+		veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{}), true)
+	assert.False(t, v.Blocked())
+	assert.Nil(t, v.Value)
+	assert.Nil(t, v.Limit)
+	assert.Equal(t, "no class rate configured", v.Detail)
+
+	// Config pour microsoft seulement : un destinataire gmail n'est pas throttlé.
+	v = env.worker.veridianProviderClassGateVerdict(veridianTestWorkspace(map[string]float64{"microsoft": 1}, 6000), nil,
+		veridianTestEntry("e2", "a@gmail.com", domain.EmailQueuePayload{}), true)
+	assert.False(t, v.Blocked())
+	assert.Equal(t, "class=google not throttled", v.Detail)
+	assert.Empty(t, env.worker.GetProviderClassStats(), "classe non throttlée : aucun limiter créé")
+}

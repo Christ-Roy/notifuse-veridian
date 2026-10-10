@@ -5663,3 +5663,25 @@ func TestWorkspace_Validate_RejectsDanglingReturnIMAPLink(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "return inbox must be an imap integration")
 }
+
+func TestWorkspaceSettings_VeridianDecisionLogLevel_JSON(t *testing.T) {
+	// Vide = défaut : la clé n'est pas émise (pas de bruit dans les workspaces existants).
+	b, err := json.Marshal(WorkspaceSettings{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), "veridian_decision_log_level")
+
+	b, err = json.Marshal(WorkspaceSettings{VeridianDecisionLogLevel: VeridianDecisionLogAll})
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"veridian_decision_log_level":"all"`)
+
+	var s WorkspaceSettings
+	require.NoError(t, json.Unmarshal([]byte(`{"veridian_decision_log_level":"off"}`), &s))
+	assert.Equal(t, VeridianDecisionLogOff, VeridianNormalizeDecisionLogLevel(s.VeridianDecisionLogLevel))
+
+	// Absent ou inconnu => défaut « transitions » une fois normalisé.
+	var empty WorkspaceSettings
+	require.NoError(t, json.Unmarshal([]byte(`{}`), &empty))
+	assert.Equal(t, VeridianDecisionLogTransitions, VeridianNormalizeDecisionLogLevel(empty.VeridianDecisionLogLevel))
+	require.NoError(t, json.Unmarshal([]byte(`{"veridian_decision_log_level":"bogus"}`), &empty))
+	assert.Equal(t, VeridianDecisionLogTransitions, VeridianNormalizeDecisionLogLevel(empty.VeridianDecisionLogLevel))
+}

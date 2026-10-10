@@ -574,3 +574,69 @@ func TestEmailQueuePayloadVeridianTransactionalMarker(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &back))
 	assert.True(t, back.VeridianTransactional)
 }
+
+func TestEmailQueueEntry_VeridianDeferralFieldsJSON(t *testing.T) {
+	// Entrée jamais examinée : aucun champ d'observabilité ne fuit dans le JSON.
+	b, err := json.Marshal(EmailQueueEntry{ID: "e1"})
+	require.NoError(t, err)
+	for _, k := range []string{"node_id", "defer_reason", "defer_detail", "defer_profile",
+		"deferred_at", "defer_count", "first_examined_at", "last_examined_at", "decision_logged_at"} {
+		assert.NotContains(t, string(b), `"`+k+`"`, k)
+	}
+
+	now := time.Date(2026, 10, 10, 8, 0, 0, 0, time.UTC)
+	in := EmailQueueEntry{
+		ID: "e1", NodeID: "n1", DeferReason: VeridianReasonClassRate, DeferDetail: "gmail",
+		DeferProfile: "p1", DeferredAt: &now, DeferCount: 3,
+		FirstExaminedAt: &now, LastExaminedAt: &now, DecisionLoggedAt: &now,
+	}
+	b, err = json.Marshal(in)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"defer_reason":"class_rate"`)
+	assert.Contains(t, string(b), `"defer_count":3`)
+
+	var out EmailQueueEntry
+	require.NoError(t, json.Unmarshal(b, &out))
+	assert.Equal(t, in.NodeID, out.NodeID)
+	assert.Equal(t, in.DeferReason, out.DeferReason)
+	assert.Equal(t, in.DeferDetail, out.DeferDetail)
+	assert.Equal(t, in.DeferProfile, out.DeferProfile)
+	assert.Equal(t, 3, out.DeferCount)
+	require.NotNil(t, out.DecisionLoggedAt)
+	assert.True(t, now.Equal(*out.DecisionLoggedAt))
+	require.NotNil(t, out.FirstExaminedAt)
+	require.NotNil(t, out.LastExaminedAt)
+	require.NotNil(t, out.DeferredAt)
+}
+
+type deferralOnlyRepo struct {
+	EmailQueueRepository
+	got EmailQueueDeferral
+	ws  string
+	id  string
+}
+
+func (r *deferralOnlyRepo) SetDeferral(_ context.Context, ws, id string, d EmailQueueDeferral) error {
+	r.ws, r.id, r.got = ws, id, d
+	return nil
+}
+
+func TestEmailQueueDeferralRepository_OptionalInterface(t *testing.T) {
+	// Le dépôt de base (que tant de tests simulent) ne l'implémente PAS : le worker
+	// doit pouvoir le détecter par assertion de type et retomber sur SetNextRetry.
+	var base interface{} = &setNextRetryContractRepo{}
+	_, ok := base.(EmailQueueDeferralRepository)
+	assert.False(t, ok)
+
+	var withDeferral interface{} = &deferralOnlyRepo{}
+	repo, ok := withDeferral.(EmailQueueDeferralRepository)
+	require.True(t, ok)
+
+	until := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	d := EmailQueueDeferral{Reason: VeridianReasonWindowClosed, Detail: "window", Profile: "p", Until: until, RefundAttempt: true, Logged: true}
+	require.NoError(t, repo.SetDeferral(context.Background(), "ws", "e1", d))
+	fake := withDeferral.(*deferralOnlyRepo)
+	assert.Equal(t, "ws", fake.ws)
+	assert.Equal(t, "e1", fake.id)
+	assert.Equal(t, d, fake.got)
+}

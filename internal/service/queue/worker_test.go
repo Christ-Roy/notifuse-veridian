@@ -2421,3 +2421,153 @@ func TestEmailQueueWorker_UpsertMessageHistory_TransactionalEntryIsTypedAndUnatt
 	assert.Equal(t, "hello@nord.example", row.VeridianSenderEmail)
 	assert.Equal(t, "google", row.VeridianProviderClass)
 }
+
+// --- Fiche 62 : journal des décisions branché sur le worker (SetDecisionLog, envoi, échec, quota) ---
+
+func TestEmailQueueWorker_SetDecisionLog_PlugsAndUnplugsTheJournal(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	assert.Nil(t, env.worker.decisionLog, "par défaut : pas de journal")
+
+	log := &fakeDecisionLog{}
+	env.worker.SetDecisionLog(log)
+	assert.Same(t, log, env.worker.decisionLog)
+
+	env.worker.veridianRecordTerminal(&domain.Workspace{ID: "ws-1"}, veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{}),
+		domain.VeridianOutcomeSent, "", "", "int-1", nil)
+	assert.Len(t, log.rows, 1, "le journal branché reçoit la décision")
+
+	env.worker.SetDecisionLog(nil)
+	assert.Nil(t, env.worker.decisionLog)
+	env.worker.veridianRecordTerminal(&domain.Workspace{ID: "ws-1"}, veridianTestEntry("e2", "a@gmail.com", domain.EmailQueuePayload{}),
+		domain.VeridianOutcomeSent, "", "", "int-1", nil)
+	assert.Len(t, log.rows, 1, "débranché : plus aucune écriture, et pas de panique")
+}
+
+// poolSendEnv prépare un envoi qui PART (quota réservé, SMTP accepte).
+func poolSendEnv(t *testing.T, reserved bool) (*veridianThrottleTestEnv, *deferralQueueRepo, *fakeDecisionLog, *domain.Workspace, *domain.EmailQueueEntry) {
+	env, repo, log := recorderEnv(t)
+	env.worker.messageHistoryRepo = &quotaTestRepository{
+		MessageHistoryRepository: env.mockMessageHistoryRepo,
+		outcomes: map[string]quotaTestOutcome{
+			domain.VeridianDailyQuotaKindProviderClass: {result: domain.VeridianDailyQuotaReservationResult{Reserved: reserved, Used: 1}},
+		},
+	}
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"microsoft": 2}, 0)
+	entry := veridianTestEntryFrom("e1", "lead@outlook.com", "bot@send.test", domain.EmailQueuePayload{VeridianProviderClass: "microsoft"})
+	env.mockMessageHistoryRepo.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "send.test", gomock.Any()).Return(0, nil).AnyTimes()
+	env.mockMessageHistoryRepo.EXPECT().CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.test", gomock.Any()).Return(0, nil).AnyTimes()
+	env.mockMessageHistoryRepo.EXPECT().CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "microsoft", "send.test", gomock.Any()).Return(0, nil).AnyTimes()
+	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", "e1").Return(nil)
+	return env, repo, log, ws, entry
+}
+
+func TestEmailQueueWorker_ProcessEntry_AcceptedSend_IsJournaledWithTheGatesThatLetItThrough(t *testing.T) {
+	env, repo, log, ws, entry := poolSendEnv(t, true)
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil)
+	env.mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), "ws-1", "e1").Return(nil)
+
+	env.worker.processEntry(ws, entry)
+
+	assert.Empty(t, repo.got, "un envoi n'enregistre aucun report")
+	require.Len(t, log.rows, 1)
+	row := log.rows[0]
+	assert.Equal(t, domain.VeridianOutcomeSent, row.Outcome)
+	assert.Equal(t, "int-1", row.ProfileID)
+	assert.Equal(t, "e1", row.EntryID)
+	assert.Equal(t, "lead@outlook.com", row.ContactEmail)
+	assert.Empty(t, row.Reason)
+	require.NotNil(t, row.Trace)
+	require.NotEmpty(t, row.Trace.Candidates, "la trace garde l'examen des portes")
+	assert.Equal(t, "selected", row.Trace.Candidates[0].Outcome)
+}
+
+func TestEmailQueueWorker_ProcessEntry_AcceptedSend_LevelOffWritesNothingButStillSends(t *testing.T) {
+	env, _, log, ws, entry := poolSendEnv(t, true)
+	ws.Settings.VeridianDecisionLogLevel = domain.VeridianDecisionLogOff
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil)
+	env.mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), "ws-1", "e1").Return(nil)
+
+	env.worker.processEntry(ws, entry)
+	assert.Empty(t, log.rows, "niveau off : aucune ligne, l'envoi n'est pas affecté")
+}
+
+func TestEmailQueueWorker_ProcessEntry_AcceptedSend_JournalFailureNeverBlocksTheSend(t *testing.T) {
+	env, _, log, ws, entry := poolSendEnv(t, true)
+	log.err = errors.New("journal indisponible")
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil)
+	env.mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), "ws-1", "e1").Return(nil) // gomock exige que l'envoi aille au bout
+
+	env.worker.processEntry(ws, entry)
+	assert.Empty(t, log.rows)
+}
+
+func TestEmailQueueWorker_ProcessEntry_QuotaDenied_DefersWithQuotaReasonRefundAndJournal(t *testing.T) {
+	env, repo, log, ws, entry := poolSendEnv(t, false)
+	// Pas d'EXPECT sur SendEmail : tout appel SMTP ferait échouer le test.
+
+	env.worker.processEntry(ws, entry)
+
+	require.Len(t, repo.got, 1)
+	d := repo.got[0]
+	assert.Equal(t, domain.VeridianReasonQuotaDenied, d.Reason)
+	assert.True(t, d.RefundAttempt, "l'entrée était déjà en traitement : la tentative est remboursée")
+	assert.Equal(t, "int-1", d.Profile)
+	assert.True(t, d.Until.After(time.Now()), "report dans le futur")
+	assert.WithinDuration(t, time.Now().Add(veridianDailyCapRecheckInterval), d.Until, 5*time.Second)
+
+	require.Len(t, log.rows, 1)
+	assert.Equal(t, domain.VeridianOutcomeDeferred, log.rows[0].Outcome)
+	assert.Equal(t, domain.VeridianReasonQuotaDenied, log.rows[0].Reason)
+	assert.NotNil(t, log.rows[0].Until)
+}
+
+func TestEmailQueueWorker_HandleError_JournalsPermanentFailureWithClassifiedReason(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		err        error
+		wantReason string
+	}{
+		{"classe exclue", errors.New("excluded_provider_class: microsoft"), domain.VeridianReasonExcludedClass},
+		{"destinataire pré-filtré", errors.New("pre-filtered recipient: no MX"), "invalid_recipient"},
+		{"rendu impossible", errors.New("render_at_send: template cassé"), domain.VeridianReasonRenderFailed},
+		{"autre erreur", errors.New("550 mailbox unknown"), domain.VeridianReasonSendError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env, _, log := recorderEnv(t)
+			ws := &domain.Workspace{ID: "ws-1"}
+			entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+			entry.Attempts, entry.MaxAttempts = 2, 3 // handleError incrémente : 3 >= 3 = définitif
+			env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil)
+			env.mockQueueRepo.EXPECT().Delete(gomock.Any(), "ws-1", "e1").Return(nil)
+
+			env.worker.handleError(ws, entry, tc.err, nil)
+
+			require.Len(t, log.rows, 1)
+			assert.Equal(t, domain.VeridianOutcomeFailed, log.rows[0].Outcome)
+			assert.Equal(t, tc.wantReason, log.rows[0].Reason)
+			assert.Equal(t, tc.err.Error(), log.rows[0].Detail)
+			assert.Equal(t, "int-1", log.rows[0].ProfileID)
+		})
+	}
+}
+
+// Une tentative qui sera REJOUÉE est journalisée en send_error, même si le texte de
+// l'erreur ressemble à un échec définitif : le motif « définitif » ne vaut que si la
+// ligne de file est effectivement supprimée.
+func TestEmailQueueWorker_HandleError_RetryableAttemptIsJournaledAsSendError(t *testing.T) {
+	env, _, log := recorderEnv(t)
+	ws := &domain.Workspace{ID: "ws-1"}
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{})
+	entry.Attempts, entry.MaxAttempts = 0, 3
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil)
+	env.mockQueueRepo.EXPECT().MarkAsFailed(gomock.Any(), "ws-1", "e1", gomock.Any(), gomock.Any()).Return(nil)
+
+	env.worker.handleError(ws, entry, errors.New("excluded_provider_class: microsoft"), nil)
+
+	require.Len(t, log.rows, 1)
+	assert.Equal(t, domain.VeridianOutcomeFailed, log.rows[0].Outcome)
+	assert.Equal(t, domain.VeridianReasonSendError, log.rows[0].Reason)
+}

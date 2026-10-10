@@ -387,3 +387,73 @@ func TestVeridianComputeReputationStatus_ComplaintIsAlertNotStop(t *testing.T) {
 	assert.True(t, st.ThresholdCustom)
 	assert.InDelta(t, 0.08, st.Threshold, 1e-9)
 }
+
+// --- Fiche 62 : variante structurée veridianReputationGateVerdict ---
+
+func TestVeridianReputationGateVerdict_StoppedCoupleCarriesRefusalShareAndThreshold(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := &domain.Workspace{ID: "ws-1"}
+	veridianExpectRepCounts(env, repTestDomain, 0, 100, map[string]domain.VeridianReputationCounts{"ionos": {Sent: 40, PolicyRefusals: 16}})
+	veridianExpectRecent(env, repTestDomain, "ionos", 20, 12)
+
+	v := env.worker.veridianReputationGateVerdict(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ionos"))
+	require.True(t, v.Blocked())
+	assert.Equal(t, domain.VeridianGateReputation, v.Gate)
+	assert.Equal(t, domain.VeridianVerdictBlock, v.Verdict)
+	assert.InDelta(t, 0.6, v.Value, 1e-9, "valeur = 12 refus 5.7.x sur 20 derniers envois")
+	assert.Equal(t, veridianBlockShare, v.Limit)
+	assert.Equal(t, domain.VeridianReasonReputationStop, v.Reason)
+	assert.Equal(t, "provider_class=ionos", v.Detail)
+	assert.NotEmpty(t, v.Name, "le code de raison du fusible est conservé")
+	assert.Equal(t, veridianDailyCapRecheckInterval, v.Delay)
+}
+
+func TestVeridianReputationGateVerdict_SlowedCoupleIsNotBlockedButSaysSo(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := &domain.Workspace{ID: "ws-1"}
+	veridianExpectRepCounts(env, repTestDomain, 1, 0, nil) // une plainte : ralentissement ÷4
+
+	v := env.worker.veridianReputationGateVerdict(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ovh"))
+	assert.False(t, v.Blocked(), "un ralentissement ne bloque jamais")
+	assert.Equal(t, domain.VeridianVerdictSlowed, v.Verdict)
+	assert.Equal(t, 4, v.Value, "valeur = facteur de ralentissement")
+	var nilProvider *domain.EmailProvider
+	assert.Equal(t, nilProvider.VeridianEffectiveHardBounceFreezeThreshold(), v.Limit)
+	assert.Zero(t, v.Delay)
+	assert.Empty(t, v.Reason)
+	assert.Equal(t, 4, repFactor(env, repTestDomain, "ovh"), "le facteur est toujours posé pour les portes de débit")
+}
+
+func TestVeridianReputationGateVerdict_HealthyCouplePassesAtFactorOne(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := &domain.Workspace{ID: "ws-1"}
+	veridianExpectRepCounts(env, repTestDomain, 0, 100, map[string]domain.VeridianReputationCounts{"ovh": {Sent: 100, HardBounces: 2}})
+
+	v := env.worker.veridianReputationGateVerdict(ws, nil, veridianReputationTestEntryClass("r@"+repTestDomain, "ovh"))
+	assert.False(t, v.Blocked())
+	assert.Equal(t, domain.VeridianVerdictPass, v.Verdict)
+	assert.Equal(t, 1, v.Value)
+	assert.Equal(t, "provider_class=ovh", v.Detail)
+}
+
+func TestVeridianReputationGateVerdict_NoSenderDomainPassesWithoutReadingAnything(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	v := env.worker.veridianReputationGateVerdict(&domain.Workspace{ID: "ws-1"}, nil, veridianReputationTestEntry(""))
+	assert.False(t, v.Blocked())
+	assert.Nil(t, v.Value)
+	assert.Equal(t, "no sender domain", v.Detail)
+}
+
+func TestVeridianReputationGate_WrapperMatchesVerdictOnStop(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := &domain.Workspace{ID: "ws-1"}
+	veridianExpectRepCounts(env, repTestDomain, 0, 100, map[string]domain.VeridianReputationCounts{"ionos": {Sent: 40, PolicyRefusals: 16}})
+	veridianExpectRecent(env, repTestDomain, "ionos", 20, 12)
+	entry := veridianReputationTestEntryClass("r@"+repTestDomain, "ionos")
+
+	v := env.worker.veridianReputationGateVerdict(ws, nil, entry)
+	delay, stopped := env.worker.veridianReputationGate(ws, nil, entry)
+	assert.True(t, stopped)
+	assert.Equal(t, v.Blocked(), stopped)
+	assert.Equal(t, v.Delay, delay)
+}

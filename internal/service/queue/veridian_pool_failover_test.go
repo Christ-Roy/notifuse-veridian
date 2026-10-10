@@ -712,3 +712,190 @@ func TestVeridianBuildFailoverCandidates_NeverContainsTheReservedTransactionalPr
 	}
 	require.NotEmpty(t, candidates)
 }
+
+// --- Fiche 62 : évaluation complète d'un candidat, ancre de séquence, raison de report ---
+
+func poolCandidate(t *testing.T, env *veridianThrottleTestEnv, ws *domain.Workspace, entry *domain.EmailQueueEntry, id string) veridianFailoverCandidate {
+	t.Helper()
+	for _, c := range env.worker.veridianBuildFailoverCandidates(ws, entry, ws.GetIntegrationByID("nord")) {
+		if c.IntegrationID == id {
+			return c
+		}
+	}
+	t.Fatalf("candidat %s absent", id)
+	return veridianFailoverCandidate{}
+}
+
+func gatesByName(ev veridianCandidateEvaluation) map[string]veridianGateVerdict {
+	m := map[string]veridianGateVerdict{}
+	for _, g := range ev.Gates {
+		m[g.Gate] = g
+	}
+	return m
+}
+
+func TestVeridianEvaluateCandidate_OpenCandidateIsSelectedAndConsumesItsToken(t *testing.T) {
+	env, ws, entry := paritySituation{}.setup(t)
+	cand := poolCandidate(t, env, ws, entry, "nord")
+
+	ev := env.worker.veridianEvaluateCandidate(ws, entry, cand)
+	assert.Equal(t, "selected", ev.Outcome)
+	assert.Nil(t, ev.Dominant)
+	assert.Zero(t, ev.BlockedDelay)
+	require.Len(t, ev.Gates, 6, "les six portes sont toutes évaluées et tracées")
+	for _, g := range ev.Gates {
+		assert.False(t, g.Blocked(), g.Gate)
+	}
+	assert.Contains(t, env.worker.GetProviderClassStats(), "nord|google", "tout ouvert : le jeton de débit est consommé (le candidat va envoyer)")
+}
+
+func TestVeridianEvaluateCandidate_BlockedByCapPeeksTheRateLimiterAndPicksLongestDelayAsDominant(t *testing.T) {
+	// nord : plafond de classe atteint (1 h) ET fenêtre fermée (jusqu'à 24 h) : la vraie
+	// raison est la fenêtre, et le débit n'est ni débité ni amorcé.
+	env, ws, entry := paritySituation{
+		capped:       map[string]bool{"nord": true},
+		windowClosed: map[string]bool{"nord": true},
+	}.setup(t)
+	cand := poolCandidate(t, env, ws, entry, "nord")
+
+	ev := env.worker.veridianEvaluateCandidate(ws, entry, cand)
+	assert.Equal(t, "blocked", ev.Outcome)
+	g := gatesByName(ev)
+	require.True(t, g[domain.VeridianGateDailyCap].Blocked())
+	require.True(t, g[domain.VeridianGateWindow].Blocked())
+	assert.False(t, g[domain.VeridianGateClassRate].Blocked(), "débit lu en peek : le seau est plein")
+	assert.Empty(t, env.worker.GetProviderClassStats(), "aucun jeton gaspillé pour un envoi qui n'aura pas lieu")
+
+	require.NotNil(t, ev.Dominant)
+	assert.Equal(t, domain.VeridianGateWindow, ev.Dominant.Gate)
+	assert.Equal(t, g[domain.VeridianGateWindow].Delay, ev.BlockedDelay)
+	assert.Greater(t, ev.BlockedDelay, veridianDailyCapRecheckInterval, "le plus long des délais, pas le premier refus")
+
+	// Valeur et limite du plafond de classe dans la trace : 1 envoi pour un plafond de 1.
+	assert.Equal(t, 1, g[domain.VeridianGateDailyCap].Value)
+	assert.Equal(t, 1, g[domain.VeridianGateDailyCap].Limit)
+}
+
+func TestVeridianEvaluateCandidate_ExcludedClassSkipsEveryOtherGate(t *testing.T) {
+	env, ws, entry := paritySituation{}.setup(t)
+	ws.Settings.VeridianExcludedProviderClasses = []string{"google"}
+	cand := poolCandidate(t, env, ws, entry, "nord")
+
+	ev := env.worker.veridianEvaluateCandidate(ws, entry, cand)
+	assert.Equal(t, "excluded", ev.Outcome)
+	assert.Equal(t, "google", ev.ExcludedClass)
+	require.Len(t, ev.Gates, 6)
+	g := gatesByName(ev)
+	assert.True(t, g[domain.VeridianGateExcluded].Blocked())
+	for _, name := range []string{domain.VeridianGateReputation, domain.VeridianGateClassRate, domain.VeridianGateDailyCap, domain.VeridianGateSenderCap, domain.VeridianGateWindow} {
+		assert.Equal(t, domain.VeridianVerdictSkipped, g[name].Verdict, name)
+	}
+	assert.Empty(t, env.worker.GetProviderClassStats())
+}
+
+func TestVeridianSelectSendable_EarliestReopeningCandidateGivesTheReasonProfileAndDelay(t *testing.T) {
+	// nord : fenêtre fermée (long). relai : seulement plafond de classe (1 h).
+	// Entre candidats bloqués, le plus tôt gagne : raison = capacité chez relai.
+	env, ws, entry := paritySituation{
+		windowClosed: map[string]bool{"nord": true},
+		capped:       map[string]bool{"relai": true},
+	}.setup(t)
+
+	sel := env.worker.veridianSelectSendableIntegration(ws, entry, ws.GetIntegrationByID("nord"))
+	require.Nil(t, sel.Candidate)
+	assert.False(t, sel.Permanent)
+	assert.Equal(t, domain.VeridianReasonCapacity, sel.Reason)
+	assert.Equal(t, "provider_class", sel.ReasonDetail)
+	assert.Equal(t, "relai", sel.ReasonProfile)
+	assert.Equal(t, veridianDailyCapRecheckInterval, sel.RetryDelay)
+	require.Len(t, sel.Evaluations, 2)
+	assert.Equal(t, "blocked", sel.Evaluations[0].Outcome)
+	assert.Equal(t, "blocked", sel.Evaluations[1].Outcome)
+}
+
+func TestVeridianSelectSendable_EveryReachableCandidateExcluded_IsPermanentWithClassAsReason(t *testing.T) {
+	env, ws, entry := paritySituation{}.setup(t)
+	ws.Settings.VeridianExcludedProviderClasses = []string{"google"}
+
+	sel := env.worker.veridianSelectSendableIntegration(ws, entry, ws.GetIntegrationByID("nord"))
+	assert.Nil(t, sel.Candidate)
+	assert.True(t, sel.Permanent)
+	assert.Equal(t, "google", sel.ExcludedClass)
+	assert.Equal(t, domain.VeridianReasonExcludedClass, sel.Reason)
+	assert.Equal(t, "google", sel.ReasonDetail)
+}
+
+func TestVeridianSelectSendable_RetryDelayIsAtLeastOneSecondAndTheSelectionRestoresTheEntry(t *testing.T) {
+	env, ws, entry := paritySituation{windowClosed: map[string]bool{"nord": true, "relai": true}}.setup(t)
+	entry.Payload.FromName = "Nom d'origine"
+
+	sel := env.worker.veridianSelectSendableIntegration(ws, entry, ws.GetIntegrationByID("nord"))
+	require.Nil(t, sel.Candidate)
+	assert.GreaterOrEqual(t, sel.RetryDelay, time.Second)
+	assert.Equal(t, "nord", entry.IntegrationID)
+	assert.Equal(t, "hello@nord-propre.example", entry.Payload.FromAddress)
+	assert.Equal(t, "Nom d'origine", entry.Payload.FromName)
+	assert.Equal(t, "google", sel.Class, "la classe du destinataire est conservée pour la trace")
+}
+
+func TestVeridianBuildFailoverCandidatesWithAnchor_NoPoolNoAnchor(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := veridianTestWorkspace(nil, 6000) // pas de pool explicite
+	entry := veridianTestEntry("e1", "lead@gmail.com", domain.EmailQueuePayload{FromAddress: "x@y.example"})
+
+	cands, anchor := env.worker.veridianBuildFailoverCandidatesWithAnchor(ws, entry, ws.GetIntegrationByID("int-1"))
+	assert.Equal(t, veridianAnchorInfo{}, anchor)
+	assert.Equal(t, cands, env.worker.veridianBuildFailoverCandidates(ws, entry, ws.GetIntegrationByID("int-1")), "le wrapper rend la même liste")
+}
+
+func anchorEnv(t *testing.T, sentAgo time.Duration, anchorStillSending bool) (*veridianThrottleTestEnv, *domain.Workspace, *domain.EmailQueueEntry) {
+	env := newVeridianThrottleTestEnv(t)
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	relai := veridianTestPoolIntegration("relai", "hello@relai-agence.example")
+	ws := veridianTestPoolWorkspace([]string{"nord", "relai"}, []domain.Integration{nord, relai}, nil)
+	entry := veridianTestAutomationEntry("relance1", "automation-1", "lead@gmail.com", "hello@nord-propre.example")
+	env.mockMessageHistoryRepo.EXPECT().
+		GetByContact(gomock.Any(), "ws-1", gomock.Any(), "lead@gmail.com", gomock.Any(), 0).
+		Return(veridianTestSequenceHistory("automation-1", "lead@gmail.com", "nord", "hello@nord-propre.example", time.Now().Add(-sentAgo)), 1, nil)
+	n := 0
+	if anchorStillSending {
+		n = 1
+	}
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "nord-propre.example", gomock.Any()).Return(n, nil).AnyTimes()
+	return env, ws, entry
+}
+
+func TestVeridianBuildFailoverCandidatesWithAnchor_AvailableAnchorIsOnlyCandidate(t *testing.T) {
+	env, ws, entry := anchorEnv(t, 4*24*time.Hour, true)
+	cands, anchor := env.worker.veridianBuildFailoverCandidatesWithAnchor(ws, entry, ws.GetIntegrationByID("nord"))
+	assert.Equal(t, veridianAnchorInfo{Found: true, ID: "nord", Available: true, Only: true}, anchor)
+	require.Len(t, cands, 1)
+	assert.Equal(t, "nord", cands[0].IntegrationID)
+}
+
+func TestVeridianBuildFailoverCandidatesWithAnchor_UnavailableAnchorOpensTheFailover(t *testing.T) {
+	env, ws, entry := anchorEnv(t, 10*24*time.Hour, false)
+	cands, anchor := env.worker.veridianBuildFailoverCandidatesWithAnchor(ws, entry, ws.GetIntegrationByID("nord"))
+	assert.Equal(t, veridianAnchorInfo{Found: true, ID: "nord", Available: false, Only: false}, anchor, "Only est faux : le failover est ouvert")
+	require.Len(t, cands, 2)
+	assert.Equal(t, "relai", cands[0].IntegrationID)
+	assert.Equal(t, "nord", cands[1].IntegrationID, "l'ancre reste essayée en dernier recours")
+}
+
+// Une relance liée à son ancre dont le débit de classe est épuisé : la raison est « attend
+// son expéditeur d'origine », avec le vrai blocage en détail ; mais si c'est la fenêtre
+// (qui vaut pour tous), la raison reste window_closed.
+func TestVeridianSelectSendable_AnchoredFollowUp_WindowClosedStaysWindowClosed(t *testing.T) {
+	env, ws, entry := anchorEnv(t, 4*24*time.Hour, true)
+	ws.GetIntegrationByID("nord").EmailProvider.VeridianSendingWindow = closedWindow()
+	env.mockMessageHistoryRepo.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "nord-propre.example", gomock.Any()).Return(0, nil).AnyTimes()
+	env.mockMessageHistoryRepo.EXPECT().ReputationCountsByClassSinceForSenderDomain(gomock.Any(), "ws-1", "nord-propre.example", gomock.Any()).
+		Return(map[string]domain.VeridianReputationCounts{}, nil).AnyTimes()
+
+	sel := env.worker.veridianSelectSendableIntegration(ws, entry, ws.GetIntegrationByID("nord"))
+	require.Nil(t, sel.Candidate)
+	assert.True(t, sel.Anchor.Only)
+	assert.Equal(t, domain.VeridianReasonWindowClosed, sel.Reason, "la fenêtre vaut pour tous les profils : pas « attend l'ancre »")
+	assert.Equal(t, "nord", sel.ReasonProfile)
+}

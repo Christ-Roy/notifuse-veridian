@@ -2688,4 +2688,75 @@ func TestAutomationExecutor_SetWebhookSecretKey(t *testing.T) {
 	assert.Equal(t, "passphrase", w.secretKey)
 	// Sans exécuteur webhook enregistré : sans effet, sans panique.
 	assert.NotPanics(t, func() { (&AutomationExecutor{nodeExecutors: map[domain.NodeType]NodeExecutor{}}).SetWebhookSecretKey("x") })
+
+// Fiche 62 : un noeud email qui parque son contact en « sending » n'a RIEN envoye. Le
+// journal d'execution doit dire « queued » (le « completed » viendra de HandleEmailSent),
+// sinon l'historique affiche des envois qui n'ont pas eu lieu.
+func TestAutomationExecutor_Execute_ParkedEmailNode_LogsQueuedNotCompleted(t *testing.T) {
+	run := func(t *testing.T, status domain.ContactAutomationStatus, nodeType domain.NodeType) domain.NodeAction {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		repo := mocks.NewMockAutomationRepository(ctrl)
+		contactRepo := mocks.NewMockContactRepository(ctrl)
+
+		nodeID := "j0a"
+		self := nodeID
+		exec := &AutomationExecutor{
+			automationRepo: repo, contactRepo: contactRepo, logger: setupMockLogger(ctrl),
+			nodeExecutors: map[domain.NodeType]NodeExecutor{
+				nodeType: &testNodeExecutor{nodeType: nodeType, execute: func(context.Context, NodeExecutionParams) (*NodeExecutionResult, error) {
+					future := time.Now().Add(time.Hour) // un delai en cours arrete la boucle du tick
+					return &NodeExecutionResult{NextNodeID: &self, Status: status, ScheduledAt: &future, Output: map[string]interface{}{"queued": true}}, nil
+				}},
+			},
+		}
+		ca := &domain.ContactAutomation{ID: "ca1", AutomationID: "auto1", ContactEmail: "t@example.com",
+			CurrentNodeID: &nodeID, Status: domain.ContactAutomationStatusActive, MaxRetries: 3}
+		auto := &domain.Automation{ID: "auto1", Status: domain.AutomationStatusLive,
+			Nodes: []*domain.AutomationNode{{ID: nodeID, Type: nodeType, Config: map[string]interface{}{}}}}
+
+		var got domain.NodeAction
+		repo.EXPECT().GetByID(gomock.Any(), "ws1", "auto1").Return(auto, nil)
+		contactRepo.EXPECT().GetContactByEmail(gomock.Any(), "ws1", "t@example.com").Return(&domain.Contact{Email: "t@example.com"}, nil)
+		repo.EXPECT().CreateNodeExecution(gomock.Any(), "ws1", gomock.Any()).Return(nil)
+		repo.EXPECT().GetNodeExecutions(gomock.Any(), "ws1", "ca1").Return([]*domain.NodeExecution{}, nil)
+		repo.EXPECT().UpdateNodeExecution(gomock.Any(), "ws1", gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, ne *domain.NodeExecution) error {
+				got = ne.Action
+				return nil
+			})
+		repo.EXPECT().UpdateContactAutomation(gomock.Any(), "ws1", gomock.Any()).Return(nil)
+		require.NoError(t, exec.Execute(context.Background(), "ws1", ca))
+		return got
+	}
+
+	t.Run("contact parque en sending -> queued", func(t *testing.T) {
+		assert.Equal(t, domain.NodeActionQueued, run(t, domain.ContactAutomationStatusSending, domain.NodeTypeEmail))
+	})
+	t.Run("contact reste active -> completed (non-regression)", func(t *testing.T) {
+		assert.Equal(t, domain.NodeActionCompleted, run(t, domain.ContactAutomationStatusActive, domain.NodeTypeDelay))
+	})
+}
+
+// Fiche 62 : chaque tick du planificateur (ProcessBatch) reconcilie les contacts parques
+// sans entree de file, AVANT de traiter les contacts dus.
+func TestAutomationExecutor_ProcessBatch_RunsOrphanReconciliation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := &orphanRepoFake{MockAutomationRepository: mocks.NewMockAutomationRepository(ctrl)}
+	var order []string
+	repo.list = func() []domain.VeridianParkedContact { order = append(order, "reconcile:"+repo.gotWS); return nil }
+	repo.EXPECT().GetScheduledContactAutomationsGlobal(gomock.Any(), gomock.Any(), 10).
+		DoAndReturn(func(context.Context, time.Time, int) ([]*domain.ContactAutomationWithWorkspace, error) {
+			order = append(order, "scheduled")
+			return nil, nil
+		})
+	wsRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	wsRepo.EXPECT().List(gomock.Any()).Return([]*domain.Workspace{{ID: "wsA"}}, nil)
+	exec := &AutomationExecutor{automationRepo: repo, workspaceRepo: wsRepo, logger: setupMockLogger(ctrl)}
+
+	_, err := exec.ProcessBatch(context.Background(), 10)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"reconcile:wsA", "scheduled"}, order)
 }
