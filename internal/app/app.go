@@ -765,7 +765,8 @@ func (a *App) InitServices() error {
 	)
 
 	// Initialize data feed fetcher for external data in broadcasts
-	a.dataFeedFetcher = broadcast.NewDataFeedFetcher(a.logger)
+	// Veridian lot 0 : l'URL du flux est choisie par le locataire -> client gardé SSRF.
+	a.dataFeedFetcher = broadcast.NewDataFeedFetcherWithClient(a.logger, service.NewTenantOutboundClient(30*time.Second))
 
 	// Initialize broadcast service
 	a.broadcastService = service.NewBroadcastService(
@@ -1034,6 +1035,7 @@ func (a *App) InitServices() error {
 		service.AutomationLifecycleDependencies{
 			WorkspaceRepo:  a.workspaceRepo,
 			EmailQueueRepo: a.emailQueueRepo,
+			SecretKey:      a.config.Security.SecretKey,
 		},
 	)
 
@@ -1082,6 +1084,8 @@ func (a *App) InitServices() error {
 	)
 	// Branche le checker stop-on-reply (Lot 3) sur le gate d'exit cold (Lot 9).
 	automationExecutor.SetColdReplyChecker(a.veridianReplyService)
+	// Veridian lot 0 : le nœud webhook déchiffre son secret avec la passphrase serveur.
+	automationExecutor.SetWebhookSecretKey(a.config.Security.SecretKey)
 	// Veridian fix 2026-09-29 (todo/done/2026-09-29-automation-advance-on-send-only.md) :
 	// le noeud email ne fait plus avancer le contact a l'enqueue - il reste parque
 	// (status=sending) jusqu'a ce que le worker de la file confirme l'issue reelle

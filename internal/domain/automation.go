@@ -699,10 +699,17 @@ func (c ABTestNodeConfig) Validate() error {
 	return nil
 }
 
-// WebhookNodeConfig configures a webhook node
+// WebhookNodeConfig configures a webhook node.
+//
+// Veridian fork — lot 0 (2026-10-10) : HTTPS uniquement ; le secret n'est
+// jamais stocké en clair (SecretEncrypted) ni renvoyé par l'API (HasSecret).
+// Chaque appel est signé HMAC-SHA256 (Standard Webhooks : webhook-id,
+// webhook-timestamp, webhook-signature), cf docs/claude/61-*.md.
 type WebhookNodeConfig struct {
-	URL    string  `json:"url"`
-	Secret *string `json:"secret,omitempty"` // Optional: becomes Authorization: Bearer <secret>
+	URL             string  `json:"url"`
+	Secret          *string `json:"secret,omitempty"`           // entrée seulement (clair), jamais persisté
+	SecretEncrypted string  `json:"secret_encrypted,omitempty"` // stockage seulement
+	HasSecret       bool    `json:"has_secret,omitempty"`       // sortie seulement
 }
 
 // Validate validates the webhook node config
@@ -710,9 +717,9 @@ func (c WebhookNodeConfig) Validate() error {
 	if c.URL == "" {
 		return fmt.Errorf("url is required")
 	}
-	// Basic URL validation - check it's not empty and has valid scheme
-	if !strings.HasPrefix(c.URL, "http://") && !strings.HasPrefix(c.URL, "https://") {
-		return fmt.Errorf("url must start with http:// or https://")
+	// HTTPS uniquement (la garde SSRF du client sortant revalide la destination).
+	if !strings.HasPrefix(c.URL, "https://") {
+		return fmt.Errorf("url must start with https://")
 	}
 	return nil
 }

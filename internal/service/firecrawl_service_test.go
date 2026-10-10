@@ -45,6 +45,7 @@ func TestFirecrawlService_Scrape(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -68,6 +69,7 @@ func TestFirecrawlService_Scrape(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -85,6 +87,7 @@ func TestFirecrawlService_Scrape(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -103,6 +106,7 @@ func TestFirecrawlService_Scrape(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "invalid-key",
 			BaseURL: server.URL,
@@ -122,6 +126,7 @@ func TestFirecrawlService_Scrape(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -141,6 +146,7 @@ func TestFirecrawlService_Scrape(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -177,6 +183,7 @@ func TestFirecrawlService_Scrape(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -215,6 +222,7 @@ func TestFirecrawlService_Scrape(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -257,6 +265,7 @@ func TestFirecrawlService_Search(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -281,6 +290,7 @@ func TestFirecrawlService_Search(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -301,6 +311,7 @@ func TestFirecrawlService_Search(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -319,6 +330,7 @@ func TestFirecrawlService_Search(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "invalid-key",
 			BaseURL: server.URL,
@@ -338,6 +350,7 @@ func TestFirecrawlService_Search(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -357,6 +370,7 @@ func TestFirecrawlService_Search(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,
@@ -383,6 +397,7 @@ func TestFirecrawlService_Search(t *testing.T) {
 		defer server.Close()
 
 		svc := NewFirecrawlService(log)
+		svc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		settings := &domain.FirecrawlSettings{
 			APIKey:  "test-api-key",
 			BaseURL: server.URL,

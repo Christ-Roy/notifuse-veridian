@@ -16,6 +16,7 @@ import (
 func TestServerSideToolRegistry_GetAvailableTools(t *testing.T) {
 	log := logger.NewLogger()
 	firecrawlSvc := NewFirecrawlService(log)
+	firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 	registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 	tools := registry.GetAvailableTools()
@@ -54,6 +55,7 @@ func TestServerSideToolRegistry_GetAvailableTools(t *testing.T) {
 func TestServerSideToolRegistry_IsServerSideTool(t *testing.T) {
 	log := logger.NewLogger()
 	firecrawlSvc := NewFirecrawlService(log)
+	firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 	registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 	tests := []struct {
@@ -96,6 +98,7 @@ func TestServerSideToolRegistry_ExecuteTool_ScrapeURL(t *testing.T) {
 		defer server.Close()
 
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{
@@ -114,6 +117,7 @@ func TestServerSideToolRegistry_ExecuteTool_ScrapeURL(t *testing.T) {
 
 	t.Run("missing url parameter", func(t *testing.T) {
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{APIKey: "test"}
@@ -125,6 +129,7 @@ func TestServerSideToolRegistry_ExecuteTool_ScrapeURL(t *testing.T) {
 
 	t.Run("empty url parameter", func(t *testing.T) {
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{APIKey: "test"}
@@ -159,6 +164,7 @@ func TestServerSideToolRegistry_ExecuteTool_ScrapeURL(t *testing.T) {
 		defer server.Close()
 
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{
@@ -186,6 +192,7 @@ func TestServerSideToolRegistry_ExecuteTool_ScrapeURL(t *testing.T) {
 		defer server.Close()
 
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{
@@ -224,6 +231,7 @@ func TestServerSideToolRegistry_ExecuteTool_ScrapeURL(t *testing.T) {
 		defer server.Close()
 
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{
@@ -263,6 +271,7 @@ func TestServerSideToolRegistry_ExecuteTool_ScrapeURL(t *testing.T) {
 		defer server.Close()
 
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{
@@ -297,6 +306,7 @@ func TestServerSideToolRegistry_ExecuteTool_SearchWeb(t *testing.T) {
 		defer server.Close()
 
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{
@@ -318,6 +328,7 @@ func TestServerSideToolRegistry_ExecuteTool_SearchWeb(t *testing.T) {
 
 	t.Run("missing query parameter", func(t *testing.T) {
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{APIKey: "test"}
@@ -338,6 +349,7 @@ func TestServerSideToolRegistry_ExecuteTool_SearchWeb(t *testing.T) {
 		defer server.Close()
 
 		firecrawlSvc := NewFirecrawlService(log)
+		firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 		registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 		settings := &domain.FirecrawlSettings{
@@ -358,6 +370,7 @@ func TestServerSideToolRegistry_ExecuteTool_SearchWeb(t *testing.T) {
 func TestServerSideToolRegistry_ExecuteTool_UnknownTool(t *testing.T) {
 	log := logger.NewLogger()
 	firecrawlSvc := NewFirecrawlService(log)
+	firecrawlSvc.httpClient = &http.Client{} // serveur de test local: hors garde SSRF
 	registry := NewServerSideToolRegistry(firecrawlSvc, log)
 
 	settings := &domain.FirecrawlSettings{APIKey: "test"}

@@ -1387,7 +1387,7 @@ func TestAutomationExecutor_Execute_WebhookNode_Success(t *testing.T) {
 	// Create a test HTTP server that simulates an external webhook endpoint
 	webhookCalled := false
 	var receivedPayload map[string]interface{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		webhookCalled = true
 		// Verify request method and headers
 		assert.Equal(t, "POST", r.Method)
@@ -1463,6 +1463,7 @@ func TestAutomationExecutor_Execute_WebhookNode_Success(t *testing.T) {
 	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
 	// Execute
+	trustWebhookTestServer(executor, server)
 	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
 	require.NoError(t, err)
 
@@ -1492,7 +1493,7 @@ func TestAutomationExecutor_Execute_WebhookNode_WithSecret(t *testing.T) {
 
 	// Create a test HTTP server that verifies the Authorization header
 	var receivedAuthHeader string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedAuthHeader = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"ok": true}`))
@@ -1549,11 +1550,12 @@ func TestAutomationExecutor_Execute_WebhookNode_WithSecret(t *testing.T) {
 	mockAutomationRepo.EXPECT().IncrementAutomationStat(gomock.Any(), workspaceID, "auto1", "completed").Return(nil)
 	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
+	trustWebhookTestServer(executor, server)
 	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
 	require.NoError(t, err)
 
-	// Verify Authorization header was sent
-	assert.Equal(t, "Bearer my-api-secret-token", receivedAuthHeader)
+	// Le secret ne voyage plus en clair dans Authorization
+	assert.Empty(t, receivedAuthHeader)
 }
 
 func TestAutomationExecutor_Execute_WebhookNode_ServerError_TriggersRetry(t *testing.T) {
@@ -1565,7 +1567,7 @@ func TestAutomationExecutor_Execute_WebhookNode_ServerError_TriggersRetry(t *tes
 	mockLogger := setupMockLogger(ctrl)
 
 	// Create a test HTTP server that returns 500 error
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"error": "internal server error"}`))
 	}))
@@ -1620,6 +1622,7 @@ func TestAutomationExecutor_Execute_WebhookNode_ServerError_TriggersRetry(t *tes
 	mockAutomationRepo.EXPECT().CreateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
+	trustWebhookTestServer(executor, server)
 	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
 	require.NoError(t, err) // Error is handled internally, returns nil
 
@@ -1640,7 +1643,7 @@ func TestAutomationExecutor_Execute_WebhookNode_ClientError_TriggersRetry(t *tes
 	mockLogger := setupMockLogger(ctrl)
 
 	// Create a test HTTP server that returns 400 error
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`{"error": "bad request"}`))
 	}))
@@ -1695,6 +1698,7 @@ func TestAutomationExecutor_Execute_WebhookNode_ClientError_TriggersRetry(t *tes
 	mockAutomationRepo.EXPECT().CreateNodeExecution(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 	mockAutomationRepo.EXPECT().UpdateContactAutomation(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
+	trustWebhookTestServer(executor, server)
 	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
 	require.NoError(t, err)
 
@@ -1715,7 +1719,7 @@ func TestAutomationExecutor_Execute_WebhookNode_TerminalNode(t *testing.T) {
 	mockLogger := setupMockLogger(ctrl)
 
 	// Create a test HTTP server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"success": true}`))
 	}))
@@ -1770,6 +1774,7 @@ func TestAutomationExecutor_Execute_WebhookNode_TerminalNode(t *testing.T) {
 	mockAutomationRepo.EXPECT().IncrementAutomationStat(gomock.Any(), workspaceID, "auto1", "completed").Return(nil)
 	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
+	trustWebhookTestServer(executor, server)
 	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
 	require.NoError(t, err)
 
@@ -1788,7 +1793,7 @@ func TestAutomationExecutor_Execute_WebhookNode_ResponseStoredInContext(t *testi
 	mockLogger := setupMockLogger(ctrl)
 
 	// Create a test HTTP server that returns data
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1854,6 +1859,7 @@ func TestAutomationExecutor_Execute_WebhookNode_ResponseStoredInContext(t *testi
 	mockAutomationRepo.EXPECT().IncrementAutomationStat(gomock.Any(), workspaceID, "auto1", "completed").Return(nil)
 	mockTimelineRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
 
+	trustWebhookTestServer(executor, server)
 	err := executor.Execute(context.Background(), workspaceID, contactAutomation)
 	require.NoError(t, err)
 

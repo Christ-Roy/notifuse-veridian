@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -541,6 +543,16 @@ func TestProcessSESWebhook(t *testing.T) {
 		rawPayload, err := json.Marshal(payload)
 		require.NoError(t, err)
 
+		// Veridian lot 0 : la confirmation passe par le client gardé SSRF ; le test
+		// remplace son transport (aucun accès réseau réel).
+		origClient := snsConfirmClient
+		var confirmed string
+		snsConfirmClient = &http.Client{Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			confirmed = r.URL.String()
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Header: http.Header{}}, nil
+		})}
+		defer func() { snsConfirmClient = origClient }()
+
 		// Call method
 		events, err := service.processSESWebhook(integrationID, rawPayload)
 
@@ -548,6 +560,7 @@ func TestProcessSESWebhook(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, events)
 		assert.Len(t, events, 0)
+		assert.Equal(t, payload.SubscribeURL, confirmed)
 	})
 
 	t.Run("Unsubscribe Confirmation", func(t *testing.T) {

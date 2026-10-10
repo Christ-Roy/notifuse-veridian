@@ -1320,8 +1320,8 @@ msgstr "Supabase経由で認証メールを送信しました"
 #~ msgstr "認証タイプ"
 
 #: src/components/automations/config/WebhookConfigForm.tsx:47
-msgid "Authorization Secret"
-msgstr "認証シークレット"
+#~ msgid "Authorization Secret"
+#~ msgstr "認証シークレット"
 
 #: src/components/email_builder/blocks/MjGroupBlock.tsx:72
 msgid "auto"
@@ -7554,16 +7554,24 @@ msgid "Optional"
 msgstr ""
 
 #: src/components/automations/config/WebhookConfigForm.tsx:53
-msgid "Optional bearer token"
-msgstr "任意のBearerトークン"
+#~ msgid "Optional bearer token"
+#~ msgstr "任意のBearerトークン"
+
+#: src/components/automations/config/WebhookConfigForm.tsx:59
+msgid "Optional signing secret"
+msgstr ""
+
+#: src/components/automations/config/WebhookConfigForm.tsx:52
+msgid "Optional. Each request is signed (HMAC-SHA256, webhook-signature header). The secret is never shown again once saved."
+msgstr ""
 
 #: src/components/integrations/LLMIntegration.tsx:172
 msgid "Optional. For OpenAI-compatible providers (Ollama, vLLM, LiteLLM, Azure, etc.). Leave empty for the default OpenAI endpoint."
 msgstr ""
 
 #: src/components/automations/config/WebhookConfigForm.tsx:48
-msgid "Optional. If provided, sent as Authorization: Bearer <secret>"
-msgstr "任意。指定すると Authorization: Bearer <secret> として送信"
+#~ msgid "Optional. If provided, sent as Authorization: Bearer <secret>"
+#~ msgstr "任意。指定すると Authorization: Bearer <secret> として送信"
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:544
 msgid "Optionally filter contacts by segments within the selected lists"
@@ -8706,6 +8714,10 @@ msgstr "リンクを削除"
 msgid "Remove member"
 msgstr "メンバーを削除"
 
+#: src/components/automations/config/WebhookConfigForm.tsx:64
+msgid "Remove secret"
+msgstr ""
+
 #: src/components/settings/Integrations.tsx:469
 #~ msgid "Remove this profile from marketing rotation?"
 #~ msgstr ""
@@ -9237,6 +9249,10 @@ msgstr "シークレット"
 #: src/components/settings/Integrations.tsx:2201
 #~ msgid "Secret Key"
 #~ msgstr "シークレットキー"
+
+#: src/components/automations/config/WebhookConfigForm.tsx:59
+msgid "Secret saved (hidden). Leave empty to keep it."
+msgstr ""
 
 #: src/components/settings/WebhookCard.tsx:262
 msgid "Secret:"
@@ -10030,6 +10046,10 @@ msgstr ""
 #: src/pages/LogoutPage.tsx:29
 msgid "Signing out..."
 msgstr "サインアウト中..."
+
+#: src/components/automations/config/WebhookConfigForm.tsx:51
+msgid "Signing Secret"
+msgstr ""
 
 #: src/components/settings/WebhooksSettings.tsx:302
 msgid "Signup"
@@ -10966,7 +10986,7 @@ msgstr "URLは公開アクセス可能である必要があります。ブロー
 msgid "The URL must use HTTPS. A POST request will be sent with contact information for each recipient."
 msgstr "URLはHTTPSを使用する必要があります。各受信者のコンタクト情報を含むPOSTリクエストが送信されます。"
 
-#: src/components/automations/config/WebhookConfigForm.tsx:37
+#: src/components/automations/config/WebhookConfigForm.tsx:41
 msgid "The URL to send the POST request to"
 msgstr "POSTリクエストを送信するURL"
 
@@ -11801,8 +11821,12 @@ msgid "URL is required"
 msgstr "URLは必須です"
 
 #: src/components/automations/config/WebhookConfigForm.tsx:35
-msgid "URL must start with http:// or https://"
-msgstr "URLはhttp://またはhttps://で始まる必要があります"
+#~ msgid "URL must start with http:// or https://"
+#~ msgstr "URLはhttp://またはhttps://で始まる必要があります"
+
+#: src/components/automations/config/WebhookConfigForm.tsx:40
+msgid "URL must start with https://"
+msgstr ""
 
 #: src/components/file_manager/buttonSettings.tsx:318
 msgid "URL of the CDN that caches your files"
@@ -12129,7 +12153,7 @@ msgstr "Webhookサブスクリプションが削除されました"
 msgid "Webhook subscription updated"
 msgstr "Webhookサブスクリプションが更新されました"
 
-#: src/components/automations/config/WebhookConfigForm.tsx:31
+#: src/components/automations/config/WebhookConfigForm.tsx:37
 msgid "Webhook URL"
 msgstr "Webhook URL"
 

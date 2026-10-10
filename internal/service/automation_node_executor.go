@@ -3,11 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -1012,18 +1014,32 @@ func parseABTestNodeConfig(config map[string]interface{}) (*domain.ABTestNodeCon
 	return &c, nil
 }
 
-// WebhookNodeExecutor executes webhook nodes
+// WebhookNodeExecutor executes webhook nodes.
+//
+// Veridian fork — lot 0 (2026-10-10) : l'URL est choisie par le locataire, donc
+// l'appel passe par le client sortant gardé (HTTPS seul, IP internes refusées,
+// DNS épinglé, redirections revalidées, délai 10 s, réponse 10 Ko) et il est
+// signé HMAC-SHA256 au format Standard Webhooks quand le nœud a un secret.
 type WebhookNodeExecutor struct {
 	httpClient *http.Client
 	logger     logger.Logger
+	secretKey  string // passphrase serveur qui déchiffre secret_encrypted
 }
+
+// webhookNodeMaxResponseBytes borne la lecture de la réponse du receveur.
+const webhookNodeMaxResponseBytes = 10 * 1024
 
 // NewWebhookNodeExecutor creates a new webhook node executor
 func NewWebhookNodeExecutor(log logger.Logger) *WebhookNodeExecutor {
 	return &WebhookNodeExecutor{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: NewTenantOutboundClient(TenantOutboundTimeout),
 		logger:     log,
 	}
+}
+
+// SetSecretKey fournit la passphrase serveur (config.Security.SecretKey).
+func (e *WebhookNodeExecutor) SetSecretKey(key string) {
+	e.secretKey = key
 }
 
 // NodeType returns the node type this executor handles
@@ -1038,6 +1054,10 @@ func (e *WebhookNodeExecutor) Execute(ctx context.Context, params NodeExecutionP
 	if err != nil {
 		return nil, fmt.Errorf("invalid webhook node config: %w", err)
 	}
+	target, err := validateTenantURLShape(config.URL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid webhook node config: %w", err)
+	}
 
 	// 2. Build payload with contact data
 	payload := buildWebhookPayload(params.ContactData, params.Automation, params.Node.ID)
@@ -1047,16 +1067,31 @@ func (e *WebhookNodeExecutor) Execute(ctx context.Context, params NodeExecutionP
 		return nil, fmt.Errorf("failed to marshal webhook payload: %w", err)
 	}
 
-	// 3. Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.URL, bytes.NewReader(payloadBytes))
+	secret, err := domain.ResolveWebhookNodeSecret(params.Node.Config, e.secretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Create HTTP request (délai global borné, indépendant du contexte appelant)
+	reqCtx, cancel := context.WithTimeout(ctx, TenantOutboundTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, config.URL, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webhook request: %w", err)
 	}
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	if config.Secret != nil && *config.Secret != "" {
-		req.Header.Set("Authorization", "Bearer "+*config.Secret)
+	if secret != "" {
+		var idRaw [12]byte
+		if _, err := rand.Read(idRaw[:]); err != nil {
+			return nil, fmt.Errorf("failed to generate webhook id: %w", err)
+		}
+		msgID := "msg_" + hex.EncodeToString(idRaw[:])
+		ts := time.Now().Unix()
+		req.Header.Set("webhook-id", msgID)
+		req.Header.Set("webhook-timestamp", strconv.FormatInt(ts, 10))
+		req.Header.Set("webhook-signature", signPayload(msgID, ts, payloadBytes, []byte(secret)))
 	}
 
 	// 4. Make HTTP POST request
@@ -1067,7 +1102,7 @@ func (e *WebhookNodeExecutor) Execute(ctx context.Context, params NodeExecutionP
 	defer resp.Body.Close()
 
 	// Read response body (limit to 10KB)
-	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024))
+	bodyBytes, err := readBounded(resp.Body, webhookNodeMaxResponseBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read webhook response: %w", err)
 	}
@@ -1096,8 +1131,9 @@ func (e *WebhookNodeExecutor) Execute(ctx context.Context, params NodeExecutionP
 	e.logger.WithFields(map[string]interface{}{
 		"workspace_id":  params.WorkspaceID,
 		"automation_id": params.Automation.ID,
-		"url":           config.URL,
+		"host":          target.Host, // l'URL complète peut porter un jeton en query
 		"status_code":   resp.StatusCode,
+		"signed":        secret != "",
 	}).Info("Webhook node executed successfully")
 
 	return &NodeExecutionResult{

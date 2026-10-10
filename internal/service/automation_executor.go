@@ -85,6 +85,14 @@ func NewAutomationExecutor(
 	}
 }
 
+// SetWebhookSecretKey fournit au nœud webhook la passphrase serveur qui
+// déchiffre les secrets au repos (config.Security.SecretKey).
+func (e *AutomationExecutor) SetWebhookSecretKey(key string) {
+	if w, ok := e.nodeExecutors[domain.NodeTypeWebhook].(*WebhookNodeExecutor); ok {
+		w.SetSecretKey(key)
+	}
+}
+
 // Execute processes a contact through their automation nodes until a delay or completion.
 // It loops through multiple nodes in a single tick for efficiency, persisting state after each node.
 func (e *AutomationExecutor) Execute(ctx context.Context, workspaceID string, contactAutomation *domain.ContactAutomation) error {

@@ -78,9 +78,8 @@ type FirecrawlService struct {
 func NewFirecrawlService(log logger.Logger) *FirecrawlService {
 	return &FirecrawlService{
 		logger: log,
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		// Veridian lot 0 : le BaseURL personnalisé est choisi par le locataire.
+		httpClient: NewTenantOutboundClient(60 * time.Second),
 	}
 }
 

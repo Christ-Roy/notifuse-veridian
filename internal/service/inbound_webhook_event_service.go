@@ -361,7 +361,7 @@ func (s *InboundWebhookEventService) processSESWebhook(integrationID string, raw
 			Info("Processing SNS subscription confirmation")
 
 		// Make a GET request to the SubscribeURL to confirm the subscription
-		resp, err := http.Get(snsPayload.SubscribeURL)
+		resp, err := confirmSNSSubscription(snsPayload.SubscribeURL)
 		if err != nil {
 			s.logger.WithField("error", err.Error()).
 				WithField("integration_id", integrationID).
@@ -1182,4 +1182,24 @@ func (s *InboundWebhookEventService) ListEvents(ctx context.Context, workspaceID
 	}
 
 	return result, nil
+}
+
+
+// snsConfirmClient est le client gardé SSRF de la confirmation d'abonnement SNS.
+var snsConfirmClient = NewTenantOutboundClient(TenantOutboundTimeout)
+
+// confirmSNSSubscription confirme un abonnement SNS. Veridian lot 0
+// (2026-10-10) : SubscribeURL vient du corps d'un webhook entrant, donc d'un
+// tiers ; avant ce correctif http.Get le suivait sans aucun contrôle (SSRF
+// aveugle). Désormais : HTTPS, hôte *.amazonaws.com(.cn) et client gardé.
+func confirmSNSSubscription(rawURL string) (*http.Response, error) {
+	u, err := ValidateTenantOutboundURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	host := strings.ToLower(u.Hostname())
+	if !strings.HasSuffix(host, ".amazonaws.com") && !strings.HasSuffix(host, ".amazonaws.com.cn") {
+		return nil, fmt.Errorf("SubscribeURL host %q is not an AWS SNS endpoint", host)
+	}
+	return snsConfirmClient.Get(u.String())
 }

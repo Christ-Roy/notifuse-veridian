@@ -17,6 +17,7 @@ type AutomationService struct {
 	workspaceRepo  domain.WorkspaceRepository
 	emailQueueRepo domain.EmailQueueRepository
 	logger         logger.Logger
+	secretKey      string // passphrase serveur : chiffre les secrets des nœuds webhook
 }
 
 // AutomationLifecycleDependencies enables the atomic production lifecycle.
@@ -25,6 +26,9 @@ type AutomationService struct {
 type AutomationLifecycleDependencies struct {
 	WorkspaceRepo  domain.WorkspaceRepository
 	EmailQueueRepo domain.EmailQueueRepository
+	// SecretKey est la passphrase serveur (config.Security.SecretKey) qui
+	// chiffre au repos les secrets des nœuds webhook (lot 0, 2026-10-10).
+	SecretKey string
 }
 
 // NewAutomationService creates a new AutomationService
@@ -42,6 +46,7 @@ func NewAutomationService(
 	if len(lifecycle) > 0 {
 		service.workspaceRepo = lifecycle[0].WorkspaceRepo
 		service.emailQueueRepo = lifecycle[0].EmailQueueRepo
+		service.secretKey = lifecycle[0].SecretKey
 	}
 	return service
 }
@@ -80,11 +85,55 @@ func (s *AutomationService) Create(ctx context.Context, workspaceID string, auto
 		return fmt.Errorf("invalid automation: %w", err)
 	}
 
+	if err := s.prepareWebhookNodes(ctx, workspaceID, automation, false); err != nil {
+		return err
+	}
+
 	if err := s.repo.Create(ctx, workspaceID, automation); err != nil {
 		s.logger.WithField("automation_id", automation.ID).Error(fmt.Sprintf("failed to create automation: %v", err))
 		return fmt.Errorf("failed to create automation: %w", err)
 	}
 
+	// La réponse de l'API ne doit jamais porter un secret (chiffré ou non).
+	domain.RedactWebhookNodeSecretsForAPI(automation.Nodes)
+
+	return nil
+}
+
+// prepareWebhookNodes valide l'URL des nœuds webhook (HTTPS, pas d'IP interne
+// littérale) et chiffre leur secret avant persistance. Un secret absent
+// conserve l'ancien : l'état déjà persisté n'est lu que s'il y a un nœud
+// webhook à traiter.
+func (s *AutomationService) prepareWebhookNodes(ctx context.Context, workspaceID string, automation *domain.Automation, isUpdate bool) error {
+	hasWebhook := false
+	for _, n := range automation.Nodes {
+		if n == nil || n.Type != domain.NodeTypeWebhook {
+			continue
+		}
+		hasWebhook = true
+		if u, ok := n.Config["url"].(string); ok && u != "" {
+			if _, err := ValidateTenantOutboundURL(u); err != nil {
+				return fmt.Errorf("invalid webhook node %s: %w", n.ID, err)
+			}
+		}
+	}
+	if !hasWebhook {
+		return nil
+	}
+
+	var existing []*domain.AutomationNode
+	if isUpdate {
+		current, err := s.repo.GetByID(ctx, workspaceID, automation.ID)
+		if err != nil {
+			return fmt.Errorf("failed to load current automation: %w", err)
+		}
+		if current != nil {
+			existing = current.Nodes
+		}
+	}
+	if err := domain.ApplyWebhookNodeSecretsOnSave(automation.Nodes, existing, s.secretKey); err != nil {
+		return fmt.Errorf("invalid automation: %w", err)
+	}
 	return nil
 }
 
@@ -108,6 +157,8 @@ func (s *AutomationService) Get(ctx context.Context, workspaceID, automationID s
 		return nil, fmt.Errorf("failed to get automation: %w", err)
 	}
 
+	domain.RedactWebhookNodeSecretsForAPI(automation.Nodes)
+
 	return automation, nil
 }
 
@@ -129,6 +180,12 @@ func (s *AutomationService) List(ctx context.Context, workspaceID string, filter
 	automations, count, err := s.repo.List(ctx, workspaceID, filter)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list automations: %w", err)
+	}
+
+	for _, a := range automations {
+		if a != nil {
+			domain.RedactWebhookNodeSecretsForAPI(a.Nodes)
+		}
 	}
 
 	return automations, count, nil
@@ -160,10 +217,16 @@ func (s *AutomationService) Update(ctx context.Context, workspaceID string, auto
 		}
 	}
 
+	if err := s.prepareWebhookNodes(ctx, workspaceID, automation, true); err != nil {
+		return err
+	}
+
 	if err := s.repo.Update(ctx, workspaceID, automation); err != nil {
 		s.logger.WithField("automation_id", automation.ID).Error(fmt.Sprintf("failed to update automation: %v", err))
 		return fmt.Errorf("failed to update automation: %w", err)
 	}
+
+	domain.RedactWebhookNodeSecretsForAPI(automation.Nodes)
 
 	return nil
 }

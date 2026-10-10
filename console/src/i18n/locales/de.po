@@ -1320,8 +1320,8 @@ msgstr "Authentifizierungs-E-Mail über Supabase gesendet"
 #~ msgstr "Authentifizierungstyp"
 
 #: src/components/automations/config/WebhookConfigForm.tsx:47
-msgid "Authorization Secret"
-msgstr "Autorisierungsgeheimnis"
+#~ msgid "Authorization Secret"
+#~ msgstr "Autorisierungsgeheimnis"
 
 #: src/components/email_builder/blocks/MjGroupBlock.tsx:72
 msgid "auto"
@@ -7554,16 +7554,24 @@ msgid "Optional"
 msgstr ""
 
 #: src/components/automations/config/WebhookConfigForm.tsx:53
-msgid "Optional bearer token"
-msgstr "Optionales Bearer-Token"
+#~ msgid "Optional bearer token"
+#~ msgstr "Optionales Bearer-Token"
+
+#: src/components/automations/config/WebhookConfigForm.tsx:59
+msgid "Optional signing secret"
+msgstr ""
+
+#: src/components/automations/config/WebhookConfigForm.tsx:52
+msgid "Optional. Each request is signed (HMAC-SHA256, webhook-signature header). The secret is never shown again once saved."
+msgstr ""
 
 #: src/components/integrations/LLMIntegration.tsx:172
 msgid "Optional. For OpenAI-compatible providers (Ollama, vLLM, LiteLLM, Azure, etc.). Leave empty for the default OpenAI endpoint."
 msgstr ""
 
 #: src/components/automations/config/WebhookConfigForm.tsx:48
-msgid "Optional. If provided, sent as Authorization: Bearer <secret>"
-msgstr "Optional. Falls angegeben, wird als Authorization: Bearer <secret> gesendet"
+#~ msgid "Optional. If provided, sent as Authorization: Bearer <secret>"
+#~ msgstr "Optional. Falls angegeben, wird als Authorization: Bearer <secret> gesendet"
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:544
 msgid "Optionally filter contacts by segments within the selected lists"
@@ -8706,6 +8714,10 @@ msgstr "Link entfernen"
 msgid "Remove member"
 msgstr "Mitglied entfernen"
 
+#: src/components/automations/config/WebhookConfigForm.tsx:64
+msgid "Remove secret"
+msgstr ""
+
 #: src/components/settings/Integrations.tsx:469
 #~ msgid "Remove this profile from marketing rotation?"
 #~ msgstr ""
@@ -9237,6 +9249,10 @@ msgstr "Geheimnis"
 #: src/components/settings/Integrations.tsx:2201
 #~ msgid "Secret Key"
 #~ msgstr "Geheimschlüssel"
+
+#: src/components/automations/config/WebhookConfigForm.tsx:59
+msgid "Secret saved (hidden). Leave empty to keep it."
+msgstr ""
 
 #: src/components/settings/WebhookCard.tsx:262
 msgid "Secret:"
@@ -10030,6 +10046,10 @@ msgstr ""
 #: src/pages/LogoutPage.tsx:29
 msgid "Signing out..."
 msgstr "Wird abgemeldet..."
+
+#: src/components/automations/config/WebhookConfigForm.tsx:51
+msgid "Signing Secret"
+msgstr ""
 
 #: src/components/settings/WebhooksSettings.tsx:302
 msgid "Signup"
@@ -10966,7 +10986,7 @@ msgstr "Die URL muss öffentlich zugänglich sein. Eine POST-Anfrage wird mit Br
 msgid "The URL must use HTTPS. A POST request will be sent with contact information for each recipient."
 msgstr "Die URL muss HTTPS verwenden. Eine POST-Anfrage wird mit Kontaktinformationen für jeden Empfänger gesendet."
 
-#: src/components/automations/config/WebhookConfigForm.tsx:37
+#: src/components/automations/config/WebhookConfigForm.tsx:41
 msgid "The URL to send the POST request to"
 msgstr "Die URL, an die die POST-Anfrage gesendet wird"
 
@@ -11801,8 +11821,12 @@ msgid "URL is required"
 msgstr "URL ist erforderlich"
 
 #: src/components/automations/config/WebhookConfigForm.tsx:35
-msgid "URL must start with http:// or https://"
-msgstr "URL muss mit http:// oder https:// beginnen"
+#~ msgid "URL must start with http:// or https://"
+#~ msgstr "URL muss mit http:// oder https:// beginnen"
+
+#: src/components/automations/config/WebhookConfigForm.tsx:40
+msgid "URL must start with https://"
+msgstr ""
 
 #: src/components/file_manager/buttonSettings.tsx:318
 msgid "URL of the CDN that caches your files"
@@ -12129,7 +12153,7 @@ msgstr "Webhook-Abonnement gelöscht"
 msgid "Webhook subscription updated"
 msgstr "Webhook-Abonnement aktualisiert"
 
-#: src/components/automations/config/WebhookConfigForm.tsx:31
+#: src/components/automations/config/WebhookConfigForm.tsx:37
 msgid "Webhook URL"
 msgstr "Webhook-URL"
 

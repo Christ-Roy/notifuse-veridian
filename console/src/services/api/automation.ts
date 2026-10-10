@@ -155,7 +155,9 @@ export interface ABTestNodeConfig {
 
 export interface WebhookNodeConfig {
   url: string
-  secret?: string // Optional Authorization Bearer token
+  secret?: string // Input only: new signing secret (never returned by the API)
+  has_secret?: boolean // Output only: a secret is stored (the value is never sent back)
+  clear_secret?: boolean // Input only: remove the stored secret
 }
 
 // Union type for node configs

@@ -18,13 +18,13 @@ import (
 // de livraison s'y connectait sans aucun filtre.
 //
 // Deux couches, défense en profondeur :
-//   1. validateWebhookURL (création/update) résout le host et rejette si
-//      UNE SEULE des IP résolues tombe dans une plage bloquée.
-//   2. ssrfSafeDialContext (chaque envoi réel) refait la résolution ET
-//      vérifie l'IP sur laquelle la connexion TCP va RÉELLEMENT s'établir,
-//      puis épingle cette IP précise pour le Dial — ce qui neutralise le DNS
-//      rebinding (la réponse DNS peut changer entre la validation à la
-//      création et l'envoi, des heures ou des mois plus tard).
+//  1. validateWebhookURL (création/update) résout le host et rejette si
+//     UNE SEULE des IP résolues tombe dans une plage bloquée.
+//  2. ssrfSafeDialContext (chaque envoi réel) refait la résolution ET
+//     vérifie l'IP sur laquelle la connexion TCP va RÉELLEMENT s'établir,
+//     puis épingle cette IP précise pour le Dial — ce qui neutralise le DNS
+//     rebinding (la réponse DNS peut changer entre la validation à la
+//     création et l'envoi, des heures ou des mois plus tard).
 //
 // cgnatBlock est posé une fois (100.64.0.0/10, RFC 6598 — c'est aussi la
 // plage Tailscale de la flotte Veridian, cf CLAUDE.md §8).
@@ -43,6 +43,59 @@ var thisNetworkBlock = func() *net.IPNet {
 	}
 	return n
 }()
+
+// Veridian fork — lot 0 (2026-10-10, location de Notifuse à des clients) :
+// plages réservées supplémentaires, refusées à leur tour. Une plage oubliée
+// ici est un trou SSRF, donc la liste est explicite et testée adresse par
+// adresse (webhook_ssrf_guard_test.go).
+var extraBlockedCIDRs = func() []*net.IPNet {
+	cidrs := []string{
+		"192.0.0.0/24",    // IETF protocol assignments
+		"192.0.2.0/24",    // TEST-NET-1
+		"198.18.0.0/15",   // benchmarking
+		"198.51.100.0/24", // TEST-NET-2
+		"203.0.113.0/24",  // TEST-NET-3
+		"240.0.0.0/4",     // réservé + broadcast 255.255.255.255
+		"::/96",           // IPv4-compatible déprécié (::7f00:1 = 127.0.0.1)
+		"fec0::/10",       // site-local IPv6 déprécié
+		"100::/64",        // discard-only
+		"2001:db8::/32",   // documentation IPv6
+	}
+	out := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			panic(err) // literal constant, cannot fail
+		}
+		out = append(out, n)
+	}
+	return out
+}()
+
+// embeddedIPv4 extrait l'IPv4 cachée dans une adresse IPv6 de transition
+// (NAT64 64:ff9b::/96 et 6to4 2002::/16) : sans ça, 64:ff9b::7f00:1 ou
+// 2002:7f00:1:: passeraient pour des adresses publiques alors qu'elles
+// aboutissent sur 127.0.0.1 derrière une passerelle de transition.
+func embeddedIPv4(ip net.IP) net.IP {
+	if len(ip) != net.IPv6len {
+		return nil
+	}
+	if ip[0] == 0x00 && ip[1] == 0x64 && ip[2] == 0xff && ip[3] == 0x9b {
+		allZero := true
+		for _, b := range ip[4:12] {
+			if b != 0 {
+				allZero = false
+			}
+		}
+		if allZero {
+			return net.IPv4(ip[12], ip[13], ip[14], ip[15])
+		}
+	}
+	if ip[0] == 0x20 && ip[1] == 0x02 {
+		return net.IPv4(ip[2], ip[3], ip[4], ip[5])
+	}
+	return nil
+}
 
 // isBlockedWebhookIP reports whether ip must never be reached by an
 // outbound webhook: loopback, link-local (v4 169.254.0.0/16 and v6
@@ -66,7 +119,18 @@ func isBlockedWebhookIP(ip net.IP) bool {
 		ip.IsMulticast() {
 		return true
 	}
-	return cgnatBlock.Contains(ip) || thisNetworkBlock.Contains(ip)
+	if cgnatBlock.Contains(ip) || thisNetworkBlock.Contains(ip) {
+		return true
+	}
+	for _, n := range extraBlockedCIDRs {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	if inner := embeddedIPv4(ip); inner != nil {
+		return isBlockedWebhookIP(inner)
+	}
+	return false
 }
 
 // lookupIPAddrFn resolves a hostname to its IP addresses. It is a package
@@ -161,8 +225,16 @@ func ssrfSafeDialContext(base *net.Dialer) func(ctx context.Context, network, ad
 			return nil, fmt.Errorf("refusing to connect to %q: resolves only to internal/private/link-local addresses", host)
 		}
 
-		return base.DialContext(ctx, network, net.JoinHostPort(allowed.String(), port))
+		return ssrfFinalDial(ctx, base, network, net.JoinHostPort(allowed.String(), port))
 	}
+}
+
+// ssrfFinalDial ouvre la connexion TCP vers l'adresse DÉJÀ validée et
+// épinglée. Variable de paquet uniquement pour que les tests puissent
+// rediriger la connexion vers un serveur local APRÈS que la garde a fait son
+// travail (résolution, refus, épinglage) : la production ne la change jamais.
+var ssrfFinalDial = func(ctx context.Context, base *net.Dialer, network, addr string) (net.Conn, error) {
+	return base.DialContext(ctx, network, addr)
 }
 
 // maxWebhookRedirects caps how many redirects the outbound webhook client

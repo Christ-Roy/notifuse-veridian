@@ -3357,7 +3357,7 @@ func TestWebhookNodeExecutor_Execute_Success(t *testing.T) {
 		"success": true,
 		"id":      "webhook_123",
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
@@ -3368,6 +3368,7 @@ func TestWebhookNodeExecutor_Execute_Success(t *testing.T) {
 	defer server.Close()
 
 	executor := NewWebhookNodeExecutor(mockLogger)
+	executor.httpClient = server.Client()
 
 	params := NodeExecutionParams{
 		WorkspaceID: "ws1",
@@ -3411,8 +3412,10 @@ func TestWebhookNodeExecutor_Execute_WithSecret(t *testing.T) {
 	mockLogger := setupMockLoggerForNodeExecutor(ctrl)
 
 	// Create test server that verifies the Authorization header
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "Bearer my-secret-token", r.Header.Get("Authorization"))
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Empty(t, r.Header.Get("Authorization"), "plus de secret en clair dans Authorization")
+		assert.NotEmpty(t, r.Header.Get("webhook-signature"))
+		assert.NotEmpty(t, r.Header.Get("webhook-timestamp"))
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"ok": true}`))
@@ -3420,6 +3423,7 @@ func TestWebhookNodeExecutor_Execute_WithSecret(t *testing.T) {
 	defer server.Close()
 
 	executor := NewWebhookNodeExecutor(mockLogger)
+	executor.httpClient = server.Client()
 
 	secret := "my-secret-token"
 	params := NodeExecutionParams{
@@ -3459,13 +3463,14 @@ func TestWebhookNodeExecutor_Execute_4xxError(t *testing.T) {
 	mockLogger := setupMockLoggerForNodeExecutor(ctrl)
 
 	// Create test server that returns 400
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`{"error": "bad request"}`))
 	}))
 	defer server.Close()
 
 	executor := NewWebhookNodeExecutor(mockLogger)
+	executor.httpClient = server.Client()
 
 	params := NodeExecutionParams{
 		WorkspaceID: "ws1",
@@ -3503,13 +3508,14 @@ func TestWebhookNodeExecutor_Execute_5xxError(t *testing.T) {
 	mockLogger := setupMockLoggerForNodeExecutor(ctrl)
 
 	// Create test server that returns 500
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"error": "internal server error"}`))
 	}))
 	defer server.Close()
 
 	executor := NewWebhookNodeExecutor(mockLogger)
+	executor.httpClient = server.Client()
 
 	params := NodeExecutionParams{
 		WorkspaceID: "ws1",
@@ -3547,13 +3553,14 @@ func TestWebhookNodeExecutor_Execute_NonJSONResponse(t *testing.T) {
 	mockLogger := setupMockLoggerForNodeExecutor(ctrl)
 
 	// Create test server that returns plain text
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK - webhook received"))
 	}))
 	defer server.Close()
 
 	executor := NewWebhookNodeExecutor(mockLogger)
+	executor.httpClient = server.Client()
 
 	params := NodeExecutionParams{
 		WorkspaceID: "ws1",
@@ -3629,12 +3636,13 @@ func TestWebhookNodeExecutor_Execute_EmptyResponse(t *testing.T) {
 	mockLogger := setupMockLoggerForNodeExecutor(ctrl)
 
 	// Create test server that returns 204 No Content
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
 
 	executor := NewWebhookNodeExecutor(mockLogger)
+	executor.httpClient = server.Client()
 
 	params := NodeExecutionParams{
 		WorkspaceID: "ws1",

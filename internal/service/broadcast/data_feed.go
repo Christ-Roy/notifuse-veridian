@@ -63,6 +63,15 @@ func NewDataFeedFetcher(log logger.Logger) DataFeedFetcher {
 	}
 }
 
+// NewDataFeedFetcherWithClient crée un fetcher avec un client HTTP imposé.
+// Veridian lot 0 (2026-10-10) : l'URL du flux est choisie par le locataire,
+// la production DOIT passer ici le client gardé contre le SSRF
+// (service.NewTenantOutboundClient) ; NewDataFeedFetcher (client nu) ne sert
+// plus qu'aux tests. Le paquet service importe broadcast, d'où l'injection.
+func NewDataFeedFetcherWithClient(log logger.Logger, client *http.Client) DataFeedFetcher {
+	return &dataFeedFetcher{httpClient: client, logger: log}
+}
+
 // FetchGlobal fetches global data from a configured endpoint
 func (f *dataFeedFetcher) FetchGlobal(ctx context.Context, settings *domain.GlobalFeedSettings,
 	payload *domain.GlobalFeedRequestPayload) (map[string]interface{}, error) {

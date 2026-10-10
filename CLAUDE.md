@@ -105,6 +105,7 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 **Sécurité & API**
 - `10` redaction exhaustive des credentials workspace API
 - `44` rate-limit global de l'API (OWASP API4:2023)
+- `61` nœud webhook des automations : garde SSRF (`NewTenantOutboundClient`), secret chiffré, signature HMAC
 
 **Base de données workspace**
 - `39` DROP DATABASE WITH (FORCE) — wipe orphelin + GC
