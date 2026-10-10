@@ -902,3 +902,23 @@ func TestAutomationService_Update_WebhookNodesReadPersistedState(t *testing.T) {
 		require.Error(t, svc.Update(context.Background(), "ws1", a))
 	})
 }
+
+// Lot 0 (fiche 61) : une URL de webhook refusée est une erreur de validation
+// (400 côté API avec la raison), sur Create comme sur Update, sans écriture en base.
+func TestAutomationService_WebhookURLRefused_IsValidationError(t *testing.T) {
+	for _, op := range []string{"create", "update"} {
+		t.Run(op, func(t *testing.T) {
+			svc, _ := newSecretAutomationService(t) // aucune attente sur le repo : toute écriture ferait échouer le test
+			a := automationWithWebhook(map[string]interface{}{"url": "https://169.254.169.254/latest/meta-data/"})
+			var err error
+			if op == "create" {
+				err = svc.Create(context.Background(), "ws1", a)
+			} else {
+				err = svc.Update(context.Background(), "ws1", a)
+			}
+			var verr domain.ValidationError
+			require.ErrorAs(t, err, &verr)
+			assert.Contains(t, verr.Message, "169.254.169.254")
+		})
+	}
+}
