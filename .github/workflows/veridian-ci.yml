@@ -48,9 +48,35 @@ on:
         required: false
         default: 'false'
 
+# === Veridian fix 2026-10-10 — un run qui déploie la prod n'est JAMAIS annulé ===
+# Sémantique GitHub : annuler un run annule TOUS ses jobs, quel que soit le
+# `concurrency` posé au niveau du job. Un groupe au niveau job ne protège donc
+# pas deploy-prod / e2e-prod / rollback d'une annulation du run parent (le run
+# 38047355027 a été annulé ainsi entre « Deploy prod » et « E2E prod »). Pire,
+# un groupe de job avec cancel-in-progress:false annule le job EN ATTENTE le plus
+# ancien du groupe. La seule protection réelle est au niveau WORKFLOW : le run
+# qui va déployer la prod (même condition que le `if:` de deploy-prod) vit dans
+# son propre groupe `veridian-ci-prod-<ref>` avec cancel-in-progress:false.
+#   - un push ordinaire (groupe veridian-ci-<ref>) annule les autres runs ordinaires
+#     encore en vérification, mais ne touche jamais un run prod (autre groupe) ;
+#   - un second run prod n'annule pas le premier : il attend (sérialisation).
+#     Limite connue : GitHub ne garde qu'UN run en attente par groupe, un 3e run
+#     prod remplace le 2e encore en file (qui n'a rien déployé).
+#   - les écritures concurrentes sur le runner unique restent sérialisées par le
+#     runner lui-même (un job à la fois).
 concurrency:
-  group: veridian-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ (github.ref == 'refs/heads/veridian'
+    && ((github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
+      || (github.event_name == 'push'
+        && contains(github.event.head_commit.message, '[risk:low]')
+        && !contains(github.event.head_commit.message, '[skip-prod]')
+        && !contains(github.event.head_commit.message, '[wip]')))) && format('veridian-ci-prod-{0}', github.ref) || format('veridian-ci-{0}', github.ref) }}
+  cancel-in-progress: ${{ !(github.ref == 'refs/heads/veridian'
+    && ((github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
+      || (github.event_name == 'push'
+        && contains(github.event.head_commit.message, '[risk:low]')
+        && !contains(github.event.head_commit.message, '[skip-prod]')
+        && !contains(github.event.head_commit.message, '[wip]')))) }}
 
 env:
   REGISTRY: ghcr.io
@@ -1391,7 +1417,14 @@ jobs:
           exit 0
   console-e2e-informative:
     name: Console E2E on-prem après staging
-    needs: e2e-staging
+    # === Veridian fix 2026-10-10 === runner auto-hébergé unique, ~13 min : la suite
+    # informative passait avant « E2E prod (BLOQUANT) » qui conditionne le rollback,
+    # alors que la prod tournait déjà la nouvelle image. Elle attend donc e2e-prod
+    # quand un déploiement prod a lieu. Sans prod (e2e-prod skipped) elle part comme
+    # avant ; si e2e-prod échoue (rollback) elle ne part pas. `!cancelled()` est
+    # nécessaire car un `needs` skipped saute sinon le job.
+    needs: [e2e-staging, e2e-prod]
+    if: ${{ !cancelled() && needs.e2e-staging.result == 'success' && (needs.e2e-prod.result == 'success' || needs.e2e-prod.result == 'skipped') }}
     uses: ./.github/workflows/notifuse-console-e2e.yml
     with:
       wait_for_staging_deploy: true
