@@ -80,3 +80,18 @@ func TestVeridianResolveCapLimits_WarmupStepFollowsTheAccountDayOfTheProfile(t *
 	nextAfternoon := time.Date(2026, 6, 11, 17, 59, 0, 0, paris)
 	assert.Equal(t, 2, veridianResolveCapLimits(ws, provider, &domain.EmailQueueEntry{}, nil, nil, nextAfternoon).Warmup)
 }
+
+// Une classe fine sans réglage propre est bridée comme other_hoster (débit et
+// plafond), pas illimitée ; une entrée propre l'emporte ; google reste non bridée.
+func TestVeridianGateLimits_FineClassInheritsOtherHoster(t *testing.T) {
+	rates := map[string]float64{"other_hoster": 0.12, "gandi": 0.03}
+	assert.InDelta(t, 0.12, veridianEffectiveClassRate(rates, "lws", 1), 1e-9)
+	assert.InDelta(t, 0.06, veridianEffectiveClassRate(rates, "lws", 2), 1e-9, "le fusible ÷2 s'applique à l'hérité")
+	assert.InDelta(t, 0.03, veridianEffectiveClassRate(rates, "gandi", 1), 1e-9)
+	assert.Zero(t, veridianEffectiveClassRate(rates, "google", 1))
+
+	provider := &domain.EmailProvider{VeridianProviderClassDailyCap: map[string]int{"other_hoster": 150}}
+	lim := veridianResolveCapLimits(&domain.Workspace{ID: "ws-1"}, provider, &domain.EmailQueueEntry{},
+		func() string { return "o2switch" }, nil, time.Now())
+	assert.Equal(t, 150, lim.ClassBase, "plafond hérité d'other_hoster")
+}

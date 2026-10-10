@@ -589,3 +589,42 @@ func TestVeridianApplyProviderThrottle_PropagatesExcludedClasses(t *testing.T) {
 		assert.Nil(t, entry.Payload.VeridianExcludedProviderClasses)
 	})
 }
+
+// Classes fines (10/10) : héritage des réglages d'other_hoster. Une classe fine
+// sans entrée propre n'est JAMAIS non bridée si other_hoster est bridée.
+func TestVeridianParentClass(t *testing.T) {
+	for _, c := range []string{ProviderClassInfomaniak, ProviderClassGandi, ProviderClassHostinger,
+		ProviderClassO2switch, ProviderClassLWS, ProviderClassScaleway, ProviderClassWebsiteBuilder} {
+		assert.Equal(t, ProviderClassOtherHoster, VeridianParentClass(c), c)
+	}
+	for _, c := range []string{ProviderClassGoogle, ProviderClassOVH, ProviderClassOtherHoster,
+		ProviderClassSecurityGateway, ProviderClassIonos, "", "inconnue"} {
+		assert.Empty(t, VeridianParentClass(c), c)
+	}
+}
+
+func TestVeridianRateForClass(t *testing.T) {
+	rates := map[string]float64{ProviderClassOtherHoster: 0.12, ProviderClassGandi: 0.05}
+	r, ok := VeridianRateForClass(rates, ProviderClassGandi)
+	assert.True(t, ok)
+	assert.InDelta(t, 0.05, r, 1e-9, "l'entrée propre l'emporte")
+	r, ok = VeridianRateForClass(rates, ProviderClassLWS)
+	assert.True(t, ok)
+	assert.InDelta(t, 0.12, r, 1e-9, "hérite d'other_hoster")
+	_, ok = VeridianRateForClass(rates, ProviderClassGoogle)
+	assert.False(t, ok, "classe sans parent et sans entrée : non bridée")
+	_, ok = VeridianRateForClass(nil, ProviderClassLWS)
+	assert.False(t, ok)
+}
+
+func TestVeridianCapForClass(t *testing.T) {
+	caps := map[string]int{ProviderClassOtherHoster: 150, ProviderClassO2switch: 20}
+	c, ok := VeridianCapForClass(caps, ProviderClassO2switch)
+	assert.True(t, ok)
+	assert.Equal(t, 20, c)
+	c, ok = VeridianCapForClass(caps, ProviderClassInfomaniak)
+	assert.True(t, ok)
+	assert.Equal(t, 150, c)
+	_, ok = VeridianCapForClass(caps, ProviderClassMicrosoft)
+	assert.False(t, ok)
+}

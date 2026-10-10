@@ -125,3 +125,20 @@ func TestVeridianApplyProviderThrottlePropagatesExclusion(t *testing.T) {
 		assert.Nil(t, entry.Payload.VeridianExcludedProviderClasses)
 	})
 }
+
+// Exclure other_hoster exclut aussi ses classes filles (10/10) ; l'inverse non.
+func TestVeridianResolveExcludedClasses_ChildrenFollowOtherHoster(t *testing.T) {
+	p := &EmailProvider{VeridianExcludedProviderClasses: []string{ProviderClassOtherHoster}}
+	got := VeridianResolveExcludedClasses(nil, p, nil)
+	for _, c := range []string{ProviderClassOtherHoster, ProviderClassInfomaniak, ProviderClassGandi,
+		ProviderClassHostinger, ProviderClassO2switch, ProviderClassLWS, ProviderClassScaleway,
+		ProviderClassWebsiteBuilder} {
+		assert.True(t, got[c], c)
+	}
+	assert.False(t, got[ProviderClassOVH])
+
+	only := VeridianResolveExcludedClasses(nil, &EmailProvider{VeridianExcludedProviderClasses: []string{ProviderClassGandi}}, nil)
+	assert.True(t, only[ProviderClassGandi])
+	assert.False(t, only[ProviderClassOtherHoster], "exclure une fille n'exclut pas le parent")
+	assert.False(t, only[ProviderClassLWS])
+}

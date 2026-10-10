@@ -299,3 +299,18 @@ func TestVeridianDefaultOpenPixel_MXClasses(t *testing.T) {
 		}
 	}
 }
+
+// Les classes fines (10/10) gardent le défaut d'other_hoster (pixel ON) et
+// n'ont jamais de trou dans la table de défauts.
+func TestVeridianDefaultOpenPixel_FineClassesEqualOtherHoster(t *testing.T) {
+	for _, c := range VeridianAllProviderClasses() {
+		_, ok := veridianDefaultOpenPixelByClass[c]
+		if !ok {
+			t.Fatalf("classe %q absente de la table de défauts du pixel", c)
+		}
+		if VeridianParentClass(c) == ProviderClassOtherHoster &&
+			veridianDefaultOpenPixelByClass[c] != veridianDefaultOpenPixelByClass[ProviderClassOtherHoster] {
+			t.Fatalf("classe fine %q : défaut pixel différent d'other_hoster", c)
+		}
+	}
+}

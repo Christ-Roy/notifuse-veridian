@@ -524,3 +524,16 @@ func TestVeridianEffectivePlan_WarmupDayFollowsTheAccountDay(t *testing.T) {
 	assert.Equal(t, 2, nextDay.Warmup.CapToday)
 	assert.Equal(t, 3, nextDay.Warmup.Of)
 }
+
+// Le plan affiche le débit d'une classe fine tel que le worker l'applique : hérité d'other_hoster.
+func TestVeridianEffectivePlan_FineClassShowsInheritedRate(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	world := planParityWorld{}
+	ws := planParityWorkspace(domain.EmailProvider{VeridianProviderClassRates: map[string]float64{"other_hoster": 6}}, domain.WorkspaceSettings{})
+	planParityArmRepo(env, world)
+	plan := planParityPlan(env, ws, world)
+	gandi := planClass(plan, "gandi")
+	assert.InDelta(t, 6.0, gandi.RateConfigured, 0.0001)
+	assert.InDelta(t, 6.0, gandi.RatePerMin, 0.0001)
+	assert.Zero(t, planClass(plan, "google").RatePerMin, "google n'hérite de rien")
+}
