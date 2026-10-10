@@ -1,6 +1,6 @@
 module github.com/Notifuse/notifuse
 
-go 1.26.6
+go 1.26.9
 
 require (
 	contrib.go.opencensus.io/exporter/aws v0.0.0-20230502192102-15967c811cec
