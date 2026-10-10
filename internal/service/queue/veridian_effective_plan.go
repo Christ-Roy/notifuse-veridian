@@ -223,7 +223,7 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 		pc := domain.VeridianPlanClass{
 			Class:          class,
 			Excluded:       excluded[class],
-			RateConfigured: rates[class],
+			RateConfigured: veridianRateConfigured(rates, class),
 			RatePerMin:     veridianEffectiveClassRate(rates, class, factorOf(class)),
 			Factor:         factorOf(class),
 		}

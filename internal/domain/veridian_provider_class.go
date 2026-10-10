@@ -46,6 +46,19 @@ const (
 	ProviderClassSecurityGateway   = "security_gateway"   // passerelle anti-spam pro → débit ULTRA-prudent
 	ProviderClassOtherHoster       = "other_hoster"       // hébergeurs propres (infomaniak/gandi/hostinger/zoho/proton/…)
 	ProviderClassCorporateSelfhost = "corporate_selfhost" // vrai self-hosted / MX inconnu — fallback prudent
+
+	// Classes fines (2026-10-10) : hébergeurs mail qui pèsent dans le stock
+	// prospectable, sortis du fourre-tout other_hoster pour que les plafonds et
+	// débits se calibrent par famille réputationnelle (une réputation chez
+	// Infomaniak ne dit rien de celle chez Gandi). Valeurs par défaut des profils
+	// = celles d'other_hoster, qui reste la classe du reste de la longue traîne.
+	ProviderClassInfomaniak     = "infomaniak"      // Infomaniak (Suisse)
+	ProviderClassGandi          = "gandi"           // Gandi Mail
+	ProviderClassHostinger      = "hostinger"       // Hostinger + Titan (leur messagerie)
+	ProviderClassO2switch       = "o2switch"        // o2switch
+	ProviderClassLWS            = "lws"             // LWS
+	ProviderClassScaleway       = "scaleway"        // Scaleway / Online.net / BookMyName
+	ProviderClassWebsiteBuilder = "website_builder" // mail packagé avec un site (Webador, Jimdo, Webmo, Wix…)
 )
 
 // VeridianProviderClassRatesMetadataKey est la clé de broadcast.Metadata
@@ -96,6 +109,14 @@ var veridianProviderClassSet = map[string]struct{}{
 	ProviderClassSecurityGateway:   {},
 	ProviderClassOtherHoster:       {},
 	ProviderClassCorporateSelfhost: {},
+	// Classes fines (2026-10-10).
+	ProviderClassInfomaniak:     {},
+	ProviderClassGandi:          {},
+	ProviderClassHostinger:      {},
+	ProviderClassO2switch:       {},
+	ProviderClassLWS:            {},
+	ProviderClassScaleway:       {},
+	ProviderClassWebsiteBuilder: {},
 }
 
 // VeridianAllProviderClasses retourne la liste ORDONNÉE de toutes les classes
@@ -115,7 +136,55 @@ func VeridianAllProviderClasses() []string {
 		ProviderClassSecurityGateway,
 		ProviderClassOtherHoster,
 		ProviderClassCorporateSelfhost,
+		ProviderClassInfomaniak,
+		ProviderClassGandi,
+		ProviderClassHostinger,
+		ProviderClassO2switch,
+		ProviderClassLWS,
+		ProviderClassScaleway,
+		ProviderClassWebsiteBuilder,
 	}
+}
+
+// VeridianParentClass donne la classe dont une classe fine hérite ses
+// réglages quand elle n'en a pas de propres. Les 7 classes fines (10/10) sont
+// sorties d'other_hoster : un profil dont les débits, plafonds et exclusions
+// ont été posés avant leur existence ne doit PAS les laisser sans frein (une
+// classe absente de la table de débits = non bridée). Sans entrée propre, elles
+// héritent donc d'other_hoster. Retourne "" pour toute autre classe.
+func VeridianParentClass(class string) string {
+	switch class {
+	case ProviderClassInfomaniak, ProviderClassGandi, ProviderClassHostinger,
+		ProviderClassO2switch, ProviderClassLWS, ProviderClassScaleway,
+		ProviderClassWebsiteBuilder:
+		return ProviderClassOtherHoster
+	}
+	return ""
+}
+
+// VeridianRateForClass lit le débit d'une classe : son entrée propre, sinon
+// celle de sa classe parente. ok=false : aucune entrée (classe non bridée).
+func VeridianRateForClass(rates map[string]float64, class string) (float64, bool) {
+	if v, ok := rates[class]; ok {
+		return v, true
+	}
+	if parent := VeridianParentClass(class); parent != "" {
+		v, ok := rates[parent]
+		return v, ok
+	}
+	return 0, false
+}
+
+// VeridianCapForClass : même héritage pour les plafonds journaliers.
+func VeridianCapForClass(caps map[string]int, class string) (int, bool) {
+	if v, ok := caps[class]; ok {
+		return v, true
+	}
+	if parent := VeridianParentClass(class); parent != "" {
+		v, ok := caps[parent]
+		return v, ok
+	}
+	return 0, false
 }
 
 // veridianProviderDomainTable mappe les domaines destinataires connus vers

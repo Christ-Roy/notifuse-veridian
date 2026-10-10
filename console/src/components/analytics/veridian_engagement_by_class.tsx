@@ -101,6 +101,20 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
         return t`Anti-spam gateway (Vade, Mailinblack, Proofpoint…)`
       case 'other_hoster':
         return t`Other hosters (Infomaniak, Gandi, Zoho…)`
+      case 'infomaniak':
+        return t`Infomaniak`
+      case 'gandi':
+        return t`Gandi`
+      case 'hostinger':
+        return t`Hostinger / Titan`
+      case 'o2switch':
+        return t`o2switch`
+      case 'lws':
+        return t`LWS`
+      case 'scaleway':
+        return t`Scaleway / Online`
+      case 'website_builder':
+        return t`Website builders`
       case 'corporate_selfhost':
         return t`Corporate self-hosted`
       default:

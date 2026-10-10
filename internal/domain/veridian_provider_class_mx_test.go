@@ -2,9 +2,12 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -99,12 +102,25 @@ func TestClassifyMXHost(t *testing.T) {
 		{"messagelabs", "cluster.eu.messagelabs.com", ProviderClassSecurityGateway},
 
 		// Other hosters
-		{"infomaniak", "mta-gw.infomaniak.ch", ProviderClassOtherHoster},
-		{"gandi", "spool.mail.gandi.net", ProviderClassOtherHoster},
-		{"hostinger", "mx1.hostinger.com", ProviderClassOtherHoster},
 		{"zoho", "mx.zoho.eu", ProviderClassOtherHoster},
 		{"proton", "mail.protonmail.ch", ProviderClassOtherHoster},
-		{"online scaleway", "mx.online.net", ProviderClassOtherHoster},
+		{"amen", "mx1.amen.fr", ProviderClassOtherHoster},
+
+		// Classes fines (2026-10-10), sorties d'other_hoster
+		{"infomaniak", "mta-gw.infomaniak.ch", ProviderClassInfomaniak},
+		{"gandi", "spool.mail.gandi.net", ProviderClassGandi},
+		{"gandi fb", "fb.mail.gandi.net", ProviderClassGandi},
+		{"hostinger", "mx1.hostinger.com", ProviderClassHostinger},
+		{"titan (hostinger)", "mx1.titan.email", ProviderClassHostinger},
+		{"o2switch", "mx.o2switch.net", ProviderClassO2switch},
+		{"lws", "mx1.lws.fr", ProviderClassLWS},
+		{"online scaleway", "mx.online.net", ProviderClassScaleway},
+		{"webador", "mx.webador.com", ProviderClassWebsiteBuilder},
+		{"webmo", "mx.webmo.fr", ProviderClassWebsiteBuilder},
+		{"jimdo", "mx.jimdo.com", ProviderClassWebsiteBuilder},
+		{"gateway: altospam.net", "mx1.altospam.net", ProviderClassSecurityGateway},
+		{"gateway: proofpoint essentials", "mx1-eu1.ppe-hosted.com", ProviderClassSecurityGateway},
+		{"gateway: cisco ironport", "esa1.x.iphmx.com", ProviderClassSecurityGateway},
 
 		// Unknown → no match (caller falls back to corporate_selfhost)
 		{"unknown self-host", "mail.cabinet-dupont.fr", ""},
@@ -283,7 +299,7 @@ func TestMXClassifier_NilResolverUsesNetDefault(t *testing.T) {
 // oubli d'ajout dans le set ou la liste).
 func TestVeridianAllProviderClasses_Canonical(t *testing.T) {
 	all := VeridianAllProviderClasses()
-	require.Len(t, all, 11, "11 classes attendues (5 historiques + 6 MX)")
+	require.Len(t, all, 18, "18 classes attendues (5 historiques + 6 MX + 7 classes fines)")
 	seen := map[string]bool{}
 	for _, c := range all {
 		assert.True(t, IsValidProviderClass(c), "classe %q non valide", c)
@@ -490,4 +506,75 @@ func TestVeridianMXNotFound(t *testing.T) {
 	// IsNotFound + IsTemporary simultané → on reste prudent (pas décisif).
 	tempNotFound := &net.DNSError{Err: "x", IsNotFound: true, IsTemporary: true}
 	assert.False(t, veridianMXNotFound(tempNotFound), "not-found temporaire = pas décisif")
+}
+
+// TestFineClasses_ParityWithOtherHoster : les 7 classes fines (2026-10-10) sont
+// sorties d'other_hoster SANS changer de politique : même pixel par défaut, même
+// mode de linter, classe canonique, et le tag contact custom_string_5 est lu
+// tel quel (donc utilisé sans attendre un premier envoi ni un lookup MX).
+func TestFineClasses_ParityWithOtherHoster(t *testing.T) {
+	fine := []string{
+		ProviderClassInfomaniak, ProviderClassGandi, ProviderClassHostinger,
+		ProviderClassO2switch, ProviderClassLWS, ProviderClassScaleway,
+		ProviderClassWebsiteBuilder,
+	}
+	for _, c := range fine {
+		assert.True(t, IsValidProviderClass(c), "classe %q non canonique", c)
+		assert.Equal(t, veridianDefaultOpenPixelByClass[ProviderClassOtherHoster], veridianDefaultOpenPixelByClass[c],
+			"pixel par défaut de %q doit égaler other_hoster", c)
+		contact := &Contact{Email: "x@custom.fr", CustomString5: &NullableString{String: " " + strings.ToUpper(c) + " "}}
+		assert.Equal(t, c, VeridianContactProviderClass(contact), "tag %q lu sans lookup", c)
+		d, ex := VeridianDomainsForClass(c)
+		assert.Empty(t, d)
+		assert.False(t, ex)
+	}
+}
+
+// TestFineClasses_InheritOtherHosterLimits : une classe fine sans réglage propre
+// hérite du débit, du plafond et de l'exclusion d'other_hoster (jamais illimitée,
+// jamais à zéro par accident). Une entrée propre l'emporte.
+func TestFineClasses_InheritOtherHosterLimits(t *testing.T) {
+	rates := map[string]float64{ProviderClassOtherHoster: 3}
+	caps := map[string]int{ProviderClassOtherHoster: 40}
+	for _, c := range VeridianAllProviderClasses() {
+		if VeridianParentClass(c) == "" {
+			continue
+		}
+		r, ok := VeridianRateForClass(rates, c)
+		assert.True(t, ok, c)
+		assert.Equal(t, 3.0, r, c)
+		k, ok := VeridianCapForClass(caps, c)
+		assert.True(t, ok, c)
+		assert.Equal(t, 40, k, c)
+	}
+	r, _ := VeridianRateForClass(map[string]float64{ProviderClassOtherHoster: 3, ProviderClassGandi: 1}, ProviderClassGandi)
+	assert.Equal(t, 1.0, r)
+	_, ok := VeridianRateForClass(rates, ProviderClassGoogle)
+	assert.False(t, ok)
+	ex := VeridianResolveExcludedClasses(nil, &EmailProvider{VeridianExcludedProviderClasses: []string{ProviderClassOtherHoster}}, nil)
+	assert.True(t, ex[ProviderClassOtherHoster])
+	assert.True(t, ex[ProviderClassGandi])
+	assert.True(t, ex[ProviderClassWebsiteBuilder])
+	assert.False(t, ex[ProviderClassOVH])
+}
+
+// TestMXClassParityFixture : la table MX -> classe de testdata/ est partagée avec
+// l'acquisition (Python). Si ce test change, le fixture change, et le test Python
+// de batch/test_provider_class.py doit suivre (copie contrôlée par sha).
+func TestMXClassParityFixture(t *testing.T) {
+	raw, err := os.ReadFile("testdata/veridian_mx_class_parity.json")
+	require.NoError(t, err)
+	var fx struct {
+		Cases []struct {
+			MX    string `json:"mx"`
+			Class string `json:"class"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &fx))
+	require.NotEmpty(t, fx.Cases)
+	for _, c := range fx.Cases {
+		got, ok := classifyMXHost(c.MX)
+		assert.True(t, ok, c.MX)
+		assert.Equal(t, c.Class, got, c.MX)
+	}
 }

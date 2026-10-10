@@ -518,12 +518,12 @@ func TestVeridianDomainsForClass(t *testing.T) {
 	})
 }
 
-// TestVeridianAllProviderClasses : la liste énumère EXACTEMENT les 11 classes
-// canoniques (5 historiques + 6 MX), toutes valides, sans doublon, et les 5
+// TestVeridianAllProviderClasses : la liste énumère EXACTEMENT les 18 classes
+// canoniques (5 historiques + 6 MX + 7 classes fines), toutes valides, sans doublon, et les 5
 // historiques en tête (ordre déterministe pour un rendu reproductible).
 func TestVeridianAllProviderClasses(t *testing.T) {
 	all := VeridianAllProviderClasses()
-	require.Len(t, all, 11)
+	require.Len(t, all, 18)
 
 	seen := map[string]bool{}
 	for _, c := range all {

@@ -67,7 +67,8 @@ func VeridianModeForClass(class string) Mode {
 		// Apple iCloud est aussi très strict en réputation → profil strict.
 		return ModeStrict
 	case "yahoo_aol", "freemail_fr", "corporate", "ovh", "ionos",
-		"security_gateway", "other_hoster", "corporate_selfhost":
+		"security_gateway", "other_hoster", "corporate_selfhost",
+		"infomaniak", "gandi", "hostinger", "o2switch", "lws", "scaleway", "website_builder":
 		return ModeLenient
 	default:
 		return ModeDefault

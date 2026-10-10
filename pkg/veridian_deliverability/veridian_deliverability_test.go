@@ -255,6 +255,13 @@ func TestScore_ModeFromProviderClass(t *testing.T) {
 		{"security_gateway", ModeLenient},
 		{"other_hoster", ModeLenient},
 		{"corporate_selfhost", ModeLenient},
+		{"infomaniak", ModeLenient},
+		{"gandi", ModeLenient},
+		{"hostinger", ModeLenient},
+		{"o2switch", ModeLenient},
+		{"lws", ModeLenient},
+		{"scaleway", ModeLenient},
+		{"website_builder", ModeLenient},
 		{"", ModeDefault},
 		{"unknown_bogus", ModeDefault},
 		{"  GOOGLE  ", ModeStrict}, // trim + lower

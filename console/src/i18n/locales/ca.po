@@ -12551,3 +12551,31 @@ msgstr ""
 #: src/components/file_manager/fileManager.tsx:789
 msgid "Zip"
 msgstr "Codi postal"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:119
+msgid "Infomaniak"
+msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:121
+msgid "Gandi"
+msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:123
+msgid "Hostinger / Titan"
+msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:125
+msgid "o2switch"
+msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:127
+msgid "LWS"
+msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:129
+msgid "Scaleway / Online"
+msgstr ""
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:131
+msgid "Website builders"
+msgstr ""

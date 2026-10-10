@@ -69,6 +69,20 @@ export function useProfileLabels() {
         return t`Anti-spam gateways`
       case 'other_hoster':
         return t`Other hosters`
+      case 'infomaniak':
+        return t`Infomaniak`
+      case 'gandi':
+        return t`Gandi`
+      case 'hostinger':
+        return t`Hostinger / Titan`
+      case 'o2switch':
+        return t`o2switch`
+      case 'lws':
+        return t`LWS`
+      case 'scaleway':
+        return t`Scaleway / Online`
+      case 'website_builder':
+        return t`Website builders`
       case 'corporate_selfhost':
         return t`Self-hosted corporate`
       default:

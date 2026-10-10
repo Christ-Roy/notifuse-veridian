@@ -55,7 +55,7 @@ func veridianResolveCapLimits(
 				lim.Factor = f
 			}
 		}
-		if configured, ok := classCaps[lim.Class]; ok && configured > 0 {
+		if configured, ok := domain.VeridianCapForClass(classCaps, lim.Class); ok && configured > 0 {
 			lim.ClassBase = configured
 			lim.ClassCap = veridianSlowCap(configured, lim.Factor)
 		}
@@ -66,7 +66,7 @@ func veridianResolveCapLimits(
 // veridianEffectiveClassRate donne le débit par minute d'une classe après le
 // ralentissement du fusible. 0 = classe non bridée (aucun débit configuré).
 func veridianEffectiveClassRate(rates map[string]float64, class string, factor int) float64 {
-	base, ok := rates[class]
+	base, ok := domain.VeridianRateForClass(rates, class)
 	if !ok || base <= 0 {
 		return 0
 	}
@@ -74,4 +74,11 @@ func veridianEffectiveClassRate(rates map[string]float64, class string, factor i
 		factor = 1
 	}
 	return base / float64(factor)
+}
+
+// veridianRateConfigured : débit brut configuré pour la classe (héritage des
+// classes filles inclus), 0 si aucune entrée. Sert à l'affichage du plan.
+func veridianRateConfigured(rates map[string]float64, class string) float64 {
+	v, _ := domain.VeridianRateForClass(rates, class)
+	return v
 }

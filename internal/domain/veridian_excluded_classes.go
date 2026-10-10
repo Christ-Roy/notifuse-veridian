@@ -128,6 +128,15 @@ func VeridianResolveExcludedClasses(workspace *Workspace, provider *EmailProvide
 			set[class] = true
 		}
 	}
+	// Une exclusion d'other_hoster couvre ses classes filles (10/10) : un profil
+	// qui l'excluait avant leur création ne doit pas se mettre à les contacter.
+	if set[ProviderClassOtherHoster] {
+		for _, c := range VeridianAllProviderClasses() {
+			if VeridianParentClass(c) == ProviderClassOtherHoster {
+				set[c] = true
+			}
+		}
+	}
 	if len(set) == 0 {
 		return nil
 	}

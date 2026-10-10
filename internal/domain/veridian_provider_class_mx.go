@@ -115,6 +115,17 @@ var veridianMXPatternTable = []veridianMXPatternEntry{
 	{".barracudanetworks.com", ProviderClassSecurityGateway},
 	{".cudasvc.com", ProviderClassSecurityGateway}, // Barracuda
 	{".altospam.com", ProviderClassSecurityGateway},
+	{".altospam.net", ProviderClassSecurityGateway},
+	{".ppe-hosted.com", ProviderClassSecurityGateway}, // Proofpoint Essentials
+	{".iphmx.com", ProviderClassSecurityGateway},      // Cisco IronPort
+	{".barracuda.com", ProviderClassSecurityGateway},
+	{".mailspamprotection.com", ProviderClassSecurityGateway}, // SpamExperts
+	{".antispamcloud.com", ProviderClassSecurityGateway},      // SpamExperts
+	{".mxthunder.com", ProviderClassSecurityGateway},
+	{".mailanyone.net", ProviderClassSecurityGateway},
+	{".clean-mailbox.com", ProviderClassSecurityGateway},
+	{".fireeyecloud.com", ProviderClassSecurityGateway},
+	{".mailprotect.be", ProviderClassSecurityGateway},
 
 	// --- Google (Gmail public + Workspace). ---
 	{".google.com", ProviderClassGoogle},     // aspmx.l.google.com, alt*.aspmx.l.google.com, smtp.google.com
@@ -156,25 +167,42 @@ var veridianMXPatternTable = []veridianMXPatternEntry{
 	{".icloud.com", ProviderClassAppleICloud},
 	{".apple.com", ProviderClassAppleICloud},
 
+	// --- Hébergeurs mail à classe propre (2026-10-10) : chacun pèse assez dans
+	// le stock pour que son débit se règle seul. Suffixes vus dans la
+	// cartographie ODH (derive_mail_provider.MX_PROVIDER). ---
+	{".infomaniak.ch", ProviderClassInfomaniak}, // mta-gw.infomaniak.ch
+	{".infomaniak.com", ProviderClassInfomaniak},
+	{".ik.me", ProviderClassInfomaniak},
+	{".hostinger.com", ProviderClassHostinger},
+	{".hostinger.fr", ProviderClassHostinger},
+	{".hostinger.in", ProviderClassHostinger},
+	{".titan.email", ProviderClassHostinger}, // Titan = messagerie de Hostinger
+	{".mail.gandi.net", ProviderClassGandi},  // spool.mail.gandi.net
+	{".gandi.net", ProviderClassGandi},
+	{".o2switch.net", ProviderClassO2switch},
+	{".lws.fr", ProviderClassLWS},
+	{".lwspanel.com", ProviderClassLWS},
+	{".lwsdns.com", ProviderClassLWS},
+	{".online.net", ProviderClassScaleway}, // Scaleway/Online
+	{".scaleway.com", ProviderClassScaleway},
+	{".bookmyname.com", ProviderClassScaleway}, // BookMyName appartient à Scaleway
+	{".webador.com", ProviderClassWebsiteBuilder},
+	{".webmo.fr", ProviderClassWebsiteBuilder},
+	{".jimdo.com", ProviderClassWebsiteBuilder},
+	{".wixdns.net", ProviderClassWebsiteBuilder},
+	{".sitew.fr", ProviderClassWebsiteBuilder},
+	{".sitew.com", ProviderClassWebsiteBuilder},
+	{".webnode.com", ProviderClassWebsiteBuilder},
+	{".editmysite.com", ProviderClassWebsiteBuilder},
+
 	// --- Autres hébergeurs propres (other_hoster : débit standard, providers à
-	// part entière mais sans politique aussi sensible que Google/MS). ---
-	{".infomaniak.ch", ProviderClassOtherHoster}, // mta-gw.infomaniak.ch
-	{".infomaniak.com", ProviderClassOtherHoster},
-	{".hostinger.com", ProviderClassOtherHoster},
-	{".hostinger.fr", ProviderClassOtherHoster},
-	{".mail.gandi.net", ProviderClassOtherHoster}, // spool.mail.gandi.net
-	{".gandi.net", ProviderClassOtherHoster},
+	// part entière mais sans politique aussi sensible que Google/MS, et trop
+	// petits pour une classe à eux). ---
 	{".zoho.eu", ProviderClassOtherHoster},
 	{".zoho.com", ProviderClassOtherHoster},
 	{".zoho.in", ProviderClassOtherHoster},
-	{".online.net", ProviderClassOtherHoster}, // Scaleway/Online
-	{".scaleway.com", ProviderClassOtherHoster},
-	{".titan.email", ProviderClassOtherHoster},
-	{".webador.com", ProviderClassOtherHoster},
-	{".webmo.fr", ProviderClassOtherHoster},
-	{".o2switch.net", ProviderClassOtherHoster},
 	{".amen.fr", ProviderClassOtherHoster},
-	{".protonmail.ch", ProviderClassOtherHoster}, // Proton (rangé other_hoster, pas de classe dédiée V1)
+	{".protonmail.ch", ProviderClassOtherHoster}, // Proton (rangé other_hoster, pas de classe dédiée)
 	{".proton.me", ProviderClassOtherHoster},
 	{".mail.com", ProviderClassOtherHoster},
 	{".one.com", ProviderClassOtherHoster},

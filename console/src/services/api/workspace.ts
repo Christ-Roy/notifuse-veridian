@@ -144,6 +144,13 @@ export type VeridianProviderClass =
   | 'security_gateway'
   | 'other_hoster'
   | 'corporate_selfhost'
+  | 'infomaniak'
+  | 'gandi'
+  | 'hostinger'
+  | 'o2switch'
+  | 'lws'
+  | 'scaleway'
+  | 'website_builder'
 
 export const VERIDIAN_PROVIDER_CLASSES: VeridianProviderClass[] = [
   'google',
@@ -156,7 +163,14 @@ export const VERIDIAN_PROVIDER_CLASSES: VeridianProviderClass[] = [
   'apple_icloud',
   'security_gateway',
   'other_hoster',
-  'corporate_selfhost'
+  'corporate_selfhost',
+  'infomaniak',
+  'gandi',
+  'hostinger',
+  'o2switch',
+  'lws',
+  'scaleway',
+  'website_builder'
 ]
 
 // Défaut tunnel du pixel d'ouverture (miroir de veridianDefaultOpenPixelByClass
@@ -173,7 +187,14 @@ export const VERIDIAN_DEFAULT_OPEN_PIXEL: Record<VeridianProviderClass, boolean>
   apple_icloud: false,
   security_gateway: false,
   other_hoster: true,
-  corporate_selfhost: true
+  corporate_selfhost: true,
+  infomaniak: true,
+  gandi: true,
+  hostinger: true,
+  o2switch: true,
+  lws: true,
+  scaleway: true,
+  website_builder: true
 }
 
 // Veridian fork — PRESET « Mode warmup » (cold outbound, ticket 2026-06-16). Set

@@ -12551,3 +12551,31 @@ msgstr "Votre espace de travail a été supprimé le {0}."
 #: src/components/file_manager/fileManager.tsx:789
 msgid "Zip"
 msgstr "Zip"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:119
+msgid "Infomaniak"
+msgstr "Infomaniak"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:121
+msgid "Gandi"
+msgstr "Gandi"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:123
+msgid "Hostinger / Titan"
+msgstr "Hostinger / Titan"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:125
+msgid "o2switch"
+msgstr "o2switch"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:127
+msgid "LWS"
+msgstr "LWS"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:129
+msgid "Scaleway / Online"
+msgstr "Scaleway / Online"
+
+#: src/components/analytics/veridian_engagement_by_class.tsx:131
+msgid "Website builders"
+msgstr "Créateurs de sites (Webador, Jimdo, Webmo…)"

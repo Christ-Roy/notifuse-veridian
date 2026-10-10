@@ -48,6 +48,20 @@ function classLabel(c: VeridianProviderClass): string {
       return 'Anti-spam GW'
     case 'other_hoster':
       return 'Other hosters'
+    case 'infomaniak':
+      return 'Infomaniak'
+    case 'gandi':
+      return 'Gandi'
+    case 'hostinger':
+      return 'Hostinger / Titan'
+    case 'o2switch':
+      return 'o2switch'
+    case 'lws':
+      return 'LWS'
+    case 'scaleway':
+      return 'Scaleway / Online'
+    case 'website_builder':
+      return 'Website builders'
     case 'corporate_selfhost':
       return 'Corporate self-host'
   }

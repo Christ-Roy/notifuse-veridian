@@ -1,0 +1,27 @@
+{
+  "_doc": "Parite hote MX -> classe d'envoi. Go (classifyMXHost) et Python (ODH derive_mail_provider.classify_host + acquisition batch/provider_class.map_class) doivent donner la MEME classe. Copie dans acquisition-emailing/batch/mx_class_parity.json, controlee par batch/test_provider_class.py.",
+  "cases": [
+    {"mx": "aspmx.l.google.com", "class": "google"},
+    {"mx": "alt1.aspmx.l.google.com", "class": "google"},
+    {"mx": "veridian-site.mail.protection.outlook.com", "class": "microsoft"},
+    {"mx": "mx0.mail.ovh.net", "class": "ovh"},
+    {"mx": "mx00.ionos.fr", "class": "ionos"},
+    {"mx": "mta-gw.infomaniak.ch", "class": "infomaniak"},
+    {"mx": "spool.mail.gandi.net", "class": "gandi"},
+    {"mx": "fb.mail.gandi.net", "class": "gandi"},
+    {"mx": "mx1.hostinger.com", "class": "hostinger"},
+    {"mx": "mx1.titan.email", "class": "hostinger"},
+    {"mx": "mx.o2switch.net", "class": "o2switch"},
+    {"mx": "mx1.lws.fr", "class": "lws"},
+    {"mx": "mx.online.net", "class": "scaleway"},
+    {"mx": "mx.webador.com", "class": "website_builder"},
+    {"mx": "mx.jimdo.com", "class": "website_builder"},
+    {"mx": "mx.webmo.fr", "class": "website_builder"},
+    {"mx": "mx1.altospam.net", "class": "security_gateway"},
+    {"mx": "mx1-eu1.ppe-hosted.com", "class": "security_gateway"},
+    {"mx": "esa1.x.iphmx.com", "class": "security_gateway"},
+    {"mx": "mx.zoho.eu", "class": "other_hoster"},
+    {"mx": "mail.protonmail.ch", "class": "other_hoster"},
+    {"mx": "mx1.amen.fr", "class": "other_hoster"}
+  ]
+}

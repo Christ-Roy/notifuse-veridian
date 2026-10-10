@@ -48,6 +48,14 @@ var veridianDefaultOpenPixelByClass = map[string]bool{
 	ProviderClassSecurityGateway:   false, // anti-spam pro → surtout pas de pixel
 	ProviderClassOtherHoster:       true,
 	ProviderClassCorporateSelfhost: true,
+	// Classes fines (2026-10-10) : issues d'other_hoster, même défaut (ON).
+	ProviderClassInfomaniak:     true,
+	ProviderClassGandi:          true,
+	ProviderClassHostinger:      true,
+	ProviderClassO2switch:       true,
+	ProviderClassLWS:            true,
+	ProviderClassScaleway:       true,
+	ProviderClassWebsiteBuilder: true,
 }
 
 // VeridianOpenPixelByClassFromMetadata extrait la map {classe: bool} d'un

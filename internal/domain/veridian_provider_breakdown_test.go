@@ -118,7 +118,7 @@ func TestVeridianAggregateProviderBreakdownCounts(t *testing.T) {
 			want[c] = 0
 		}
 		assert.Equal(t, want, got.Breakdown)
-		assert.Len(t, got.Breakdown, 11, "11 classes attendues dans le breakdown")
+		assert.Len(t, got.Breakdown, 18, "18 classes attendues dans le breakdown")
 	})
 
 	t.Run("comptage mixte par classe (counts pré-agrégés)", func(t *testing.T) {

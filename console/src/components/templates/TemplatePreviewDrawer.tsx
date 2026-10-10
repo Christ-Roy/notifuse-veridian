@@ -494,7 +494,14 @@ const DELIVERABILITY_CLASS_LABELS: Record<VeridianProviderClass, string> = {
   apple_icloud: 'Apple iCloud — strict',
   security_gateway: 'Anti-spam gateway (Vade, Mailinblack…)',
   other_hoster: 'Other hosters (Infomaniak, Gandi, Zoho…)',
-  corporate_selfhost: 'Corporate self-hosted'
+  corporate_selfhost: 'Corporate self-hosted',
+  infomaniak: 'Infomaniak',
+  gandi: 'Gandi',
+  hostinger: 'Hostinger / Titan',
+  o2switch: 'o2switch',
+  lws: 'LWS',
+  scaleway: 'Scaleway / Online',
+  website_builder: 'Website builders'
 }
 
 interface DeliverabilityPanelProps {
