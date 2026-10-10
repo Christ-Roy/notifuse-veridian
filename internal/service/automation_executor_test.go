@@ -2679,3 +2679,13 @@ func TestAutomationExecutor_HandleEmailFailed_NoopForNonAutomationSource(t *test
 		"test@example.com", "msg1", fmt.Errorf("rejected"), true,
 	)
 }
+
+// Lot 0 (fiche 61) : l'exécuteur transmet la passphrase au nœud webhook.
+func TestAutomationExecutor_SetWebhookSecretKey(t *testing.T) {
+	w := &WebhookNodeExecutor{}
+	e := &AutomationExecutor{nodeExecutors: map[domain.NodeType]NodeExecutor{domain.NodeTypeWebhook: w}}
+	e.SetWebhookSecretKey("passphrase")
+	assert.Equal(t, "passphrase", w.secretKey)
+	// Sans exécuteur webhook enregistré : sans effet, sans panique.
+	assert.NotPanics(t, func() { (&AutomationExecutor{nodeExecutors: map[domain.NodeType]NodeExecutor{}}).SetWebhookSecretKey("x") })
+}

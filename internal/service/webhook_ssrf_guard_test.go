@@ -204,3 +204,36 @@ func TestNewWebhookDeliveryWorker_DefaultClientIsSSRFSafe(t *testing.T) {
 	require.True(t, ok, "default client must use *http.Transport so DialContext applies")
 	require.NotNil(t, transport.DialContext, "default client must carry the SSRF-guarded DialContext")
 }
+
+// Lot 0 (fiche 61) : plages ajoutées et IPv4 cachée dans les adresses de transition.
+func TestIsBlockedWebhookIP_ExtraRangesAndEmbeddedIPv4(t *testing.T) {
+	for _, s := range []string{"192.0.0.8", "198.19.255.255", "240.0.0.1", "255.255.255.255", "2001:db8::1", "100::1", "64:ff9b::a00:1", "2002:c0a8:1::"} {
+		assert.True(t, isBlockedWebhookIP(net.ParseIP(s)), "%s doit être refusée", s)
+	}
+	// Contrôle positif : la garde ne bloque pas tout (NAT64 vers une IP publique).
+	assert.False(t, isBlockedWebhookIP(net.ParseIP("64:ff9b::808:808")))
+	assert.False(t, isBlockedWebhookIP(net.ParseIP("2002:808:808::")))
+	assert.Nil(t, embeddedIPv4(net.ParseIP("2606:4700:4700::1111")))
+	assert.Equal(t, "10.0.0.1", embeddedIPv4(net.ParseIP("64:ff9b::a00:1")).String())
+}
+
+// La connexion finale n'est ouverte QUE vers une IP validée : refus = aucun dial.
+func TestSsrfFinalDial_NotReachedWhenRefused_ReachedWhenPublic(t *testing.T) {
+	orig := ssrfFinalDial
+	t.Cleanup(func() { ssrfFinalDial = orig })
+	var dialed []string
+	ssrfFinalDial = func(_ context.Context, _ *net.Dialer, _, addr string) (net.Conn, error) {
+		dialed = append(dialed, addr)
+		return nil, fmt.Errorf("stub")
+	}
+	withResolverOverride(t, map[string][]net.IP{
+		"evil.test": {net.ParseIP("169.254.169.254")},
+		"ok.test":   {net.ParseIP("93.184.216.34")},
+	})
+	dial := ssrfSafeDialContext(&net.Dialer{Timeout: time.Second})
+	_, err := dial(context.Background(), "tcp", "evil.test:443")
+	require.Error(t, err)
+	assert.Empty(t, dialed, "aucune connexion vers une IP refusée")
+	_, _ = dial(context.Background(), "tcp", "ok.test:443")
+	assert.Equal(t, []string{"93.184.216.34:443"}, dialed, "connexion épinglée sur l'IP validée")
+}

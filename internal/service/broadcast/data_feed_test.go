@@ -3,6 +3,7 @@ package broadcast
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -1003,3 +1004,40 @@ func TestDataFeedFetcher_FetchRecipient_RetryOn429(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Equal(t, true, result["_success"])
 }
+
+// Lot 0 (fiche 61) : le client imposé est bien celui qui sert (c'est lui qui porte la garde SSRF).
+func TestNewDataFeedFetcherWithClient_UsesInjectedClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	var used bool
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		used = true
+		return http.DefaultTransport.RoundTrip(r)
+	})}
+	f := NewDataFeedFetcherWithClient(mockLogger, client)
+	_, err := f.FetchGlobal(context.Background(), &domain.GlobalFeedSettings{Enabled: true, URL: server.URL}, &domain.GlobalFeedRequestPayload{})
+	require.NoError(t, err)
+	assert.True(t, used, "le client injecté doit servir")
+
+	refusing := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return nil, errors.New("refused by guard")
+	})}
+	_, err = NewDataFeedFetcherWithClient(mockLogger, refusing).FetchGlobal(context.Background(), &domain.GlobalFeedSettings{Enabled: true, URL: server.URL}, &domain.GlobalFeedRequestPayload{})
+	assert.Error(t, err, "un client qui refuse doit faire échouer le flux")
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

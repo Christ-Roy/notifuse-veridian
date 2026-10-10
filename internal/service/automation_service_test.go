@@ -885,3 +885,20 @@ func TestAutomationService_ResetContact(t *testing.T) {
 		assert.Nil(t, out)
 	})
 }
+
+// Lot 0 (fiche 61) : l'état persisté n'est relu que s'il y a un nœud webhook,
+// et une erreur de lecture bloque l'écriture (pas de secret écrasé à l'aveugle).
+func TestAutomationService_Update_WebhookNodesReadPersistedState(t *testing.T) {
+	t.Run("sans nœud webhook: pas de relecture", func(t *testing.T) {
+		svc, repo := newSecretAutomationService(t)
+		repo.EXPECT().Update(gomock.Any(), "ws1", gomock.Any()).Return(nil)
+		a := createTestAutomationService("auto-1", "ws1")
+		require.NoError(t, svc.Update(context.Background(), "ws1", a))
+	})
+	t.Run("lecture en échec: Update jamais appelé", func(t *testing.T) {
+		svc, repo := newSecretAutomationService(t)
+		repo.EXPECT().GetByID(gomock.Any(), "ws1", "auto-1").Return(nil, errors.New("db down"))
+		a := automationWithWebhook(map[string]interface{}{"url": "https://h.example.com/x", "secret": "s"})
+		require.Error(t, svc.Update(context.Background(), "ws1", a))
+	})
+}

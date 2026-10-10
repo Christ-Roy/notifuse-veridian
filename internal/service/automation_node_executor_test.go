@@ -3997,3 +3997,13 @@ func TestEmailNodeExecutor_Execute_MarketingTemplateKeepsTheCommercialProfileEve
 	})
 	require.NoError(t, err)
 }
+
+// Lot 0 (fiche 61) : la passphrase injectée déchiffre le secret et sert à signer.
+func TestWebhookNodeExecutor_SetSecretKey(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	e := NewWebhookNodeExecutor(setupMockLoggerForNodeExecutor(ctrl))
+	assert.Empty(t, e.secretKey)
+	e.SetSecretKey("passphrase")
+	assert.Equal(t, "passphrase", e.secretKey)
+}

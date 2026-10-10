@@ -95,10 +95,3 @@ func TestRedactWebhookNodeSecretsForAPI(t *testing.T) {
 	RedactWebhookNodeSecretsForAPI([]*AutomationNode{none})
 	assert.Equal(t, false, none.Config["has_secret"])
 }
-
-func TestWebhookNodeConfig_HTTPSOnly(t *testing.T) {
-	assert.NoError(t, WebhookNodeConfig{URL: "https://example.com/x"}.Validate())
-	assert.Error(t, WebhookNodeConfig{URL: "http://example.com/x"}.Validate())
-	assert.Error(t, WebhookNodeConfig{URL: "ftp://example.com/x"}.Validate())
-	assert.Error(t, WebhookNodeConfig{}.Validate())
-}

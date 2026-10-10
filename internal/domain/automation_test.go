@@ -1942,3 +1942,11 @@ func TestContactAutomationStatus_Values(t *testing.T) {
 	assert.Equal(t, ContactAutomationStatus("failed"), ContactAutomationStatusFailed)
 }
 
+
+// Veridian lot 0 (fiche 61) : le nœud webhook n'accepte plus http://.
+func TestWebhookNodeConfig_HTTPSOnly(t *testing.T) {
+	assert.NoError(t, WebhookNodeConfig{URL: "https://example.com/x"}.Validate())
+	assert.Error(t, WebhookNodeConfig{URL: "http://example.com/x"}.Validate())
+	assert.Error(t, WebhookNodeConfig{URL: "ftp://example.com/x"}.Validate())
+	assert.Error(t, WebhookNodeConfig{}.Validate())
+}
