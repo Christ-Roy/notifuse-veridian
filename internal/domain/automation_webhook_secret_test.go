@@ -95,3 +95,25 @@ func TestRedactWebhookNodeSecretsForAPI(t *testing.T) {
 	RedactWebhookNodeSecretsForAPI([]*AutomationNode{none})
 	assert.Equal(t, false, none.Config["has_secret"])
 }
+
+func TestResolveWebhookNodeSecret(t *testing.T) {
+	n := whNode("wh1", map[string]interface{}{"url": "https://h.example.com", "secret": "s3cret-clair"})
+	require.NoError(t, ApplyWebhookNodeSecretsOnSave([]*AutomationNode{n}, nil, webhookTestPassphrase))
+
+	got, err := ResolveWebhookNodeSecret(n.Config, webhookTestPassphrase)
+	require.NoError(t, err)
+	assert.Equal(t, "s3cret-clair", got, "aller-retour chiffrement")
+
+	_, err = ResolveWebhookNodeSecret(n.Config, "")
+	assert.Error(t, err, "pas de passphrase: refus plutôt que signer avec rien")
+	_, err = ResolveWebhookNodeSecret(n.Config, "mauvaise-passphrase-de-32-caracteres")
+	assert.Error(t, err, "mauvaise passphrase: refus")
+
+	none, err := ResolveWebhookNodeSecret(map[string]interface{}{"url": "https://h.example.com"}, webhookTestPassphrase)
+	require.NoError(t, err)
+	assert.Empty(t, none)
+
+	legacy, err := ResolveWebhookNodeSecret(map[string]interface{}{"secret": "ancien-clair"}, "")
+	require.NoError(t, err)
+	assert.Equal(t, "ancien-clair", legacy, "ancien format lisible jusqu'au prochain enregistrement")
+}
