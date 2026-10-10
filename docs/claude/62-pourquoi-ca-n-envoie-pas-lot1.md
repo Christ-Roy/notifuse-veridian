@@ -60,7 +60,28 @@ Colocalisés (mapping 1-pour-1 contrôlé par `scripts/ci/check-test-mapping.sh`
 
 ## Preuves en production
 
-(complétées après déploiement)
+Déployé : `v62.0-veridian.9a8a24a8` (run CI 38063025610 : Deploy prod et E2E prod verts). V62 appliquée sur `robertbrunon`.
+
+**`queue:explain` sur `robertbrunon`** (10/10 16h24 UTC, samedi) : 24 739 entrées. Les relances J+4 (nœud `j4`, 346 entrées) sont reportées pour `window_closed`, détail `reopens=2026-10-12T06:00:00Z`. Détail d'une relance (entrée `4df3cf5c`) : sur les trois profils, `excluded`, `reputation`, `class_rate`, `daily_cap(warmup 0/300)` et `sender_cap` passent ; seule `window` bloque (valeur `sam 17:40`, limite `lun,mar,mer,jeu,ven 08:00-19:00 Europe/Paris`, délai 1j00h). Le masquage par le débit de classe (5 min) a disparu : le ré-examen passe de toutes les 5 minutes à une fois par jour, jusqu'à la réouverture du lundi 08h Paris.
+
+**`logs:decisions`** : 50 décisions `deferred window_closed` sur les deux dernières heures, avec entrée, nœud (`-` pour les entrées créées avant V62, dont le nœud n'est pas encore posé : l'explorateur le déduit par jointure), profil et échéance.
+
+**Explorateur** : capture headless de `/console/workspace/robertbrunon/send-queue` en lecture seule (aucune requête non GET) : `~/captures/lot62/send-queue-fr.png`. Total 24 745, par raison : automatisation en pause 22 433, fenêtre fermée 2 311, report ancien 1.
+
+**Volume du journal** : 2 292 lignes en 48 minutes (un premier report par entrée due), 4,4 Mo. Ensuite une ligne par entrée et par jour au plus (le report dure 24 h tant que la fenêtre est fermée), soit de l'ordre de 2 300 à 3 000 lignes par jour pour `robertbrunon`, très en dessous des 345 000 par jour d'un journal exhaustif. À remesurer le lundi.
+
+**Orphelins `sending`** (écriture dans `robertbrunon`, par la réconciliation au déploiement, sans autre intervention) :
+
+| | Avant (10/10 14h57 Paris) | Après (18h25 Paris) |
+|---|---|---|
+| contacts `sending` sans entrée de file | 89 (51 `j0a`, 38 `j0b`) | 0 |
+| sortis, désinscrits entre-temps (nœud rejoué, `skip_reason: unsubscribed`, aucun mail) | | 56 |
+| sortis, échec définitif déjà enregistré (`orphan_send_failed`) | | 1 |
+| remis en file par le nœud (jamais contactés, rien de parti), reportés `window_closed` | | 32 |
+
+Contrôle `message_history` avant d'agir : 0 des 89 n'avait de `sent_at`. Après : 0 mail envoyé depuis le déploiement. Rien d'autre n'a été modifié dans `robertbrunon`. Aucun workspace jetable n'a été créé : la preuve s'est faite sur la donnée réelle, que le chantier autorisait à réparer.
+
+**Limite connue** : le test de la porte fenêtre lit l'horloge réelle ; le cas du samedi est couvert sur `IsWithinWindow` / `NextOpening`, et la preuve du samedi est la mesure de production ci-dessus.
 
 ## Pièges
 
