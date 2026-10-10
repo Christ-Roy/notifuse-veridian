@@ -164,3 +164,37 @@ export function reputationCouples(overview: EmailProfilesOverview | undefined): 
 export function nonReplyExits(exits: { rejected: number; unsubscribed: number; excluded: number; other: number }): number {
   return exits.rejected + exits.unsubscribed + exits.excluded + exits.other
 }
+
+// Fuseau par défaut du tableau de bord (lot 6) : celui du workspace s'il est vraiment posé,
+// sinon celui de la fenêtre d'envoi des profils en rotation, sinon celui du navigateur.
+// « UTC » est la valeur de création d'un workspace : tant qu'on n'a pas choisi, il compte
+// comme non posé (sinon un workspace français s'afficherait en UTC malgré sa fenêtre 8h-19h Paris).
+export function pickDashboardTimezone(input: {
+  workspaceTimezone?: string
+  overview?: EmailProfilesOverview
+  browserTimezone?: string
+}): string {
+  const workspaceTz = (input.workspaceTimezone ?? '').trim()
+  if (workspaceTz && workspaceTz.toUpperCase() !== 'UTC') return workspaceTz
+  const windowTz = input.overview?.profiles
+    .filter((p) => p.in_rotation && p.usage === 'commercial')
+    .map((p) => p.plan?.window?.timezone ?? '')
+    .find((tz) => tz.trim() !== '')
+  if (windowTz) return windowTz
+  return (input.browserTimezone ?? '').trim() || workspaceTz || 'UTC'
+}
+
+// Sous ce nombre de contacts joints, un taux de réponse ne dit rien (2 sur 2 = 100 %).
+export const LOW_BASE_CONTACTS = 30
+
+export function isLowBase(contactsReached: number | null | undefined): boolean {
+  return (contactsReached ?? 0) < LOW_BASE_CONTACTS
+}
+
+// Réponses humaines que le total global compte et qu'aucune séquence vivante ne porte
+// (contacts de séquences supprimées, rattachement par expéditeur). Jamais négatif : un
+// contact inscrit dans deux séquences compte dans les deux lignes, la somme peut dépasser.
+export function unattachedReplies(totalHuman: number, rows: Array<{ replies_human: number }>): number {
+  const sum = rows.reduce((acc, r) => acc + (r.replies_human ?? 0), 0)
+  return Math.max(0, totalHuman - sum)
+}

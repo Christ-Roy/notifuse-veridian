@@ -1,3 +1,4 @@
+import { formatDate } from '../../components/sending_profiles/veridian_profile_labels'
 import { useState, useEffect, useCallback } from 'react'
 import {
   Table,
@@ -168,7 +169,7 @@ export function ApiAgentsSettings({ workspaceId, canManageKeys }: ApiAgentsSetti
       title: t`Created`,
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleDateString()
+      render: (date: string) => formatDate(date)
     },
     {
       title: t`Last used`,
@@ -176,7 +177,7 @@ export function ApiAgentsSettings({ workspaceId, canManageKeys }: ApiAgentsSetti
       key: 'last_used_at',
       render: (date: string | undefined) =>
         date ? (
-          new Date(date).toLocaleDateString()
+          formatDate(date)
         ) : (
           <Tooltip title={t`This instance does not track per-key usage yet`}>
             <Tag>{t`Not available`}</Tag>

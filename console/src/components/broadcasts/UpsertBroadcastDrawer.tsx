@@ -1,3 +1,4 @@
+import { formatNumber } from '../sending_profiles/veridian_profile_labels'
 import { useState, useEffect } from 'react'
 import {
   Button,
@@ -565,7 +566,7 @@ export function UpsertBroadcastDrawer({
                               {segment.name}
                               {segment.users_count !== undefined && (
                                 <span className="ml-1">
-                                  ({segment.users_count.toLocaleString()})
+                                  ({formatNumber(segment.users_count)})
                                 </span>
                               )}
                             </Tag>
@@ -586,7 +587,7 @@ export function UpsertBroadcastDrawer({
                               {segment.name}
                               {segment.users_count !== undefined && (
                                 <span className="ml-1">
-                                  ({segment.users_count.toLocaleString()})
+                                  ({formatNumber(segment.users_count)})
                                 </span>
                               )}
                             </Tag>

@@ -1,3 +1,4 @@
+import { formatNumber } from '../sending_profiles/veridian_profile_labels'
 import { useQuery } from '@tanstack/react-query'
 import { Row, Col, Statistic, Space } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -61,6 +62,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_active}
           valueStyle={{ fontSize: '16px' }}
+          formatter={(v) => formatNumber(Number(v))}
           loading={isLoading}
         />
       </Col>
@@ -85,6 +87,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_pending}
           valueStyle={{ fontSize: '16px' }}
+          formatter={(v) => formatNumber(Number(v))}
           loading={isLoading}
         />
       </Col>
@@ -105,6 +108,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_unsubscribed}
           valueStyle={{ fontSize: '16px' }}
+          formatter={(v) => formatNumber(Number(v))}
           loading={isLoading}
         />
       </Col>
@@ -129,6 +133,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_bounced}
           valueStyle={{ fontSize: '16px' }}
+          formatter={(v) => formatNumber(Number(v))}
           loading={isLoading}
         />
       </Col>
@@ -153,6 +158,7 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
           }
           value={stats.total_complained}
           valueStyle={{ fontSize: '16px' }}
+          formatter={(v) => formatNumber(Number(v))}
           loading={isLoading}
         />
       </Col>

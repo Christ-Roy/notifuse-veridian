@@ -1,3 +1,4 @@
+import { formatDate } from '../components/sending_profiles/veridian_profile_labels'
 import { Form, Button, Card, App, Spin, Typography, Result } from 'antd'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, useSearch } from '@tanstack/react-router'
@@ -151,7 +152,7 @@ export function AcceptInvitationPage() {
             </div>
             <div>
               <Text strong>{t`Expires:`}</Text>{' '}
-              {new Date(invitationData.invitation.expires_at).toLocaleDateString()}
+              {formatDate(invitationData.invitation.expires_at)}
             </div>
           </div>
 

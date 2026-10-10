@@ -6,8 +6,6 @@ import { useLingui } from '@lingui/react/macro'
 import numbro from 'numbro'
 import { EmailMetricsChart } from './EmailMetricsChart'
 import { Workspace } from '../../services/api/types'
-import { FailedMessagesTable } from './FailedMessagesTable'
-import { NewContactsTable } from './NewContactsTable'
 import { emailProfilesOverviewService } from '../../services/api/veridian_email_profiles'
 import { VeridianProspectionDashboard } from '../prospection/veridian_prospection_dashboard'
 import { VeridianTransactionalWatchCard } from '../prospection/veridian_transactional_watch'
@@ -60,8 +58,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     })
   }
 
-  // Vue commerciale : le tableau de bord de prospection (lot 5), puis les echecs recents
-  // et les derniers contacts importes.
+  // Vue commerciale : le tableau de bord de prospection (lot 5) seul. Les listes natives des
+  // derniers contacts importes et des echecs recents (bruit pour un commercial) n'y sont plus ;
+  // les echecs se lisent dans Journaux, et les rejets sont au tableau de bord.
   if (isCommercial) {
     return (
       <div>
@@ -71,12 +70,6 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           timezone={timezone}
           onOpenTransactional={onOpenTransactional}
         />
-        <div className="mt-8">
-          <NewContactsTable key={`new-contacts-${refreshKey}`} workspace={workspace} />
-        </div>
-        <div className="mt-8">
-          <FailedMessagesTable key={`failed-messages-${refreshKey}`} workspace={workspace} />
-        </div>
       </div>
     )
   }

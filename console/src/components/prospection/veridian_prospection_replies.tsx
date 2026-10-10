@@ -4,6 +4,7 @@ import { useLingui } from '@lingui/react/macro'
 
 import type { ProspectionSegment, ProspectionSequence, ProspectionStats } from '../../services/api/veridian_prospection'
 import { formatNumber, formatPercent } from '../sending_profiles/veridian_profile_labels'
+import { isLowBase, unattachedReplies } from './veridian_prospection_rules'
 
 const { Text } = Typography
 
@@ -11,15 +12,57 @@ interface Props {
   stats?: ProspectionStats
   loading: boolean
   error: boolean
+  // Totaux globaux de la fenêtre (messages.replyStats) : ils servent à la ligne « Non rattachées »
+  totalHuman?: number
+  totalAuto?: number
 }
 
-const rateText = (rate: number | null): string => (rate === null ? '-' : formatPercent(rate))
+// Ligne du tableau par séquence : une séquence vivante, ou la ligne « Non rattachées »
+type SequenceRow = Pick<ProspectionSequence, 'automation_id' | 'name' | 'status' | 'replies_human' | 'replies_auto'> & {
+  sent_contacts: number | null
+  reply_rate_human: number | null
+  unattached?: boolean
+}
 
 // Réponses humaines et taux de réponse par séquence, puis par segment (liste), avec le
 // stock restant. Les réponses automatiques (absence, accusé de réception) sont comptées
 // à part et n'entrent jamais dans le taux.
-export const VeridianProspectionReplies: React.FC<Props> = ({ stats, loading, error }) => {
+export const VeridianProspectionReplies: React.FC<Props> = ({ stats, loading, error, totalHuman, totalAuto }) => {
   const { t } = useLingui()
+
+  // Un taux sur une petite base ne dit rien (2 sur 2 = 100 %) : grisé, avec « base faible »
+  // sous 30 contacts joints. Le chiffre reste affiché, il ne se lit pas comme un résultat.
+  const rateCell = (rate: number | null, reached: number | null) => {
+    if (rate === null) return '-'
+    if (!isLowBase(reached)) return formatPercent(rate)
+    return (
+      <Tooltip title={t`Fewer than 30 contacts reached: the rate is not significant.`}>
+        <span data-testid="low-base-rate">
+          <Text type="secondary">{formatPercent(rate)}</Text>{' '}
+          <Tag>{t`low base`}</Tag>
+        </span>
+      </Tooltip>
+    )
+  }
+
+  const sequenceRows: SequenceRow[] = [...(stats?.sequences ?? [])]
+  if (stats && totalHuman !== undefined) {
+    const human = unattachedReplies(totalHuman, stats.sequences)
+    const auto = unattachedReplies(totalAuto ?? 0, stats.sequences.map((s) => ({ replies_human: s.replies_auto })))
+    if (human > 0 || auto > 0) {
+      sequenceRows.push({
+        automation_id: '__unattached',
+        name: t`Unattached`,
+        status: '',
+        replies_human: human,
+        replies_auto: auto,
+        sent_contacts: null,
+        reply_rate_human: null,
+        unattached: true
+      })
+    }
+  }
+
   const statusTag = (status: string) => {
     if (status === 'live') return <Tag color="green">{t`Live`}</Tag>
     if (status === 'paused') return <Tag color="orange">{t`Paused`}</Tag>
@@ -30,22 +73,29 @@ export const VeridianProspectionReplies: React.FC<Props> = ({ stats, loading, er
     <>
       <Card title={t`Replies by sequence`} style={{ marginBottom: 24 }}>
         {error && <Alert type="error" showIcon message={t`Unable to load the prospection figures`} style={{ marginBottom: 12 }} />}
-        <Table<ProspectionSequence>
+        <Table<SequenceRow>
           size="small"
           pagination={false}
           loading={loading}
           rowKey="automation_id"
-          dataSource={stats?.sequences ?? []}
+          dataSource={sequenceRows}
           scroll={{ x: true }}
           columns={[
             {
               title: t`Sequence`,
               key: 'name',
-              render: (_: unknown, row) => (
-                <span>
-                  {row.name} {statusTag(row.status)}
-                </span>
-              )
+              render: (_: unknown, row) =>
+                row.unattached ? (
+                  <Tooltip title={t`Replies counted in the total that no live sequence carries (contacts of deleted sequences, matching by sender).`}>
+                    <span data-testid="replies-unattached">
+                      <Text italic>{row.name}</Text>
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span>
+                    {row.name} {statusTag(row.status)}
+                  </span>
+                )
             },
             {
               title: (
@@ -55,7 +105,7 @@ export const VeridianProspectionReplies: React.FC<Props> = ({ stats, loading, er
               ),
               dataIndex: 'sent_contacts',
               align: 'right',
-              render: (v: number) => formatNumber(v)
+              render: (v: number | null) => (v === null ? '-' : formatNumber(v))
             },
             {
               title: t`Human replies`,
@@ -71,7 +121,7 @@ export const VeridianProspectionReplies: React.FC<Props> = ({ stats, loading, er
               ),
               dataIndex: 'reply_rate_human',
               align: 'right',
-              render: (v: number | null) => rateText(v)
+              render: (v: number | null, row) => rateCell(v, row.sent_contacts)
             },
             {
               title: (
@@ -132,7 +182,7 @@ export const VeridianProspectionReplies: React.FC<Props> = ({ stats, loading, er
               title: t`Reply rate`,
               dataIndex: 'reply_rate_human',
               align: 'right',
-              render: (v: number | null) => rateText(v)
+              render: (v: number | null, row) => rateCell(v, row.sent_contacts)
             },
             {
               title: t`Automatic replies`,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Alert, Row, Col, Statistic, Space, Tooltip, Card, Button } from 'antd'
 import { useLingui, Plural } from '@lingui/react/macro'
+import { formatNumber, formatRatePercent } from '../sending_profiles/veridian_profile_labels'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faPaperPlane,
@@ -203,10 +204,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   const getRate = (numerator: number, denominator: number) => {
     if (denominator === 0) return '-'
     const percentage = (numerator / denominator) * 100
-    if (percentage === 0 || percentage >= 10) {
-      return `${Math.round(percentage)}%`
-    }
-    return `${percentage.toFixed(1)}%`
+    return formatRatePercent(percentage)
   }
 
   // Réponses : taux sur les réponses HUMAINES (replied_human, sinon replied) ;
@@ -300,6 +298,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
                   </Space>
                 }
                 value={stats.count_sent}
+                formatter={(v) => formatNumber(Number(v))}
                 valueStyle={{ fontSize: '16px' }}
                 loading={statsLoading}
               />

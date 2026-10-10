@@ -1,3 +1,4 @@
+import { formatNumber } from '../sending_profiles/veridian_profile_labels'
 import React from 'react'
 import { useLingui } from '@lingui/react/macro'
 import { Timeline, Empty, Spin, Button, Tag, Tooltip, Typography, Popover, Collapse } from 'antd'
@@ -419,7 +420,7 @@ export function ContactTimeline({
                       <Tag color={value ? 'green' : 'red'}>{value ? 'true' : 'false'}</Tag>
                     )
                   } else if (typeof value === 'number') {
-                    displayValue = <Text strong>{value.toLocaleString()}</Text>
+                    displayValue = <Text strong>{formatNumber(Number(value))}</Text>
                   } else if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}T/)) {
                     // Likely a date string
                     displayValue = (

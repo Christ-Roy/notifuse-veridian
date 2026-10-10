@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate, useSearch } from '@tanstack/react-router'
-import { Segmented, Select, Space, Result, Button } from 'antd'
+import { Segmented, Select, Space, Result, Button, Spin } from 'antd'
+import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useAuth } from '../contexts/AuthContext'
 import { AnalyticsDashboard } from '../components/analytics/AnalyticsDashboard'
 import { TIMEZONE_OPTIONS } from '../lib/timezones'
 import { getBrowserTimezone } from '../lib/timezoneNormalizer'
 import { useLingui } from '@lingui/react/macro'
+import { emailProfilesOverviewService } from '../services/api/veridian_email_profiles'
+import { pickDashboardTimezone } from '../components/prospection/veridian_prospection_rules'
 import type { MessageTypeFilter } from '../components/analytics/email_metrics_series'
 
 type TimePeriod = '7D' | '14D' | '30D' | '90D'
@@ -21,16 +24,24 @@ export function AnalyticsPage() {
   const messageType: MessageTypeFilter = viewSearch.view === 'transactional' ? 'transactional' : 'commercial'
 
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('14D')
-  const [selectedTimezone, setSelectedTimezone] = useState<string>('')
+  // Fuseau choisi à la main ; tant qu'il est null, on prend celui du workspace, sinon celui de la
+  // fenêtre d'envoi des profils, sinon celui du navigateur (jamais un fuseau arbitraire).
+  const [userTimezone, setUserTimezone] = useState<string | null>(null)
 
   const workspace = workspaces.find((w) => w.id === workspaceId)
 
-  // Get browser timezone on component mount (normalized to canonical IANA name)
-  useEffect(() => {
-    const browserTimezone = getBrowserTimezone()
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSelectedTimezone(browserTimezone)
-  }, [])
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ['analytics', 'profiles-overview', workspaceId],
+    queryFn: () => emailProfilesOverviewService.get(workspaceId),
+    enabled: !!workspace,
+    refetchInterval: 60000
+  })
+  const defaultTimezone = pickDashboardTimezone({
+    workspaceTimezone: workspace?.settings?.timezone,
+    overview,
+    browserTimezone: getBrowserTimezone()
+  })
+  const selectedTimezone = userTimezone ?? defaultTimezone
 
   // Calculate time range based on selected period
   const getTimeRangeFromPeriod = (period: TimePeriod): [string, string] => {
@@ -64,7 +75,7 @@ export function AnalyticsPage() {
   }
 
   const handleTimezoneChange = (value: string) => {
-    setSelectedTimezone(value)
+    setUserTimezone(value)
   }
 
   if (!workspace) {
@@ -127,17 +138,23 @@ export function AnalyticsPage() {
           />
         </Space>
       </div>
-      <AnalyticsDashboard
-        workspace={workspace}
-        timeRange={timeRange}
-        timezone={selectedTimezone}
-        messageType={messageType}
-        onOpenTransactional={() =>
-          navigate({
-            search: ((prev: Record<string, unknown>) => ({ ...prev, view: 'transactional' })) as never
-          })
-        }
-      />
+      {overviewLoading && userTimezone === null ? (
+        <div className="flex justify-center py-16">
+          <Spin />
+        </div>
+      ) : (
+        <AnalyticsDashboard
+          workspace={workspace}
+          timeRange={timeRange}
+          timezone={selectedTimezone}
+          messageType={messageType}
+          onOpenTransactional={() =>
+            navigate({
+              search: ((prev: Record<string, unknown>) => ({ ...prev, view: 'transactional' })) as never
+            })
+          }
+        />
+      )}
     </div>
   )
 }

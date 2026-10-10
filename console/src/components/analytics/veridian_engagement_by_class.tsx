@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Card, Table, Alert, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useLingui } from '@lingui/react/macro'
+import { formatNumber, formatRatePercent } from '../sending_profiles/veridian_profile_labels'
 import {
   engagementByClassApi,
   VeridianClassEngagement
@@ -38,7 +39,7 @@ const EMPTY: VeridianClassEngagement = { sent: 0, bounced: 0, replied_human: 0 }
 export const formatRate = (num: number, denom: number): string => {
   if (denom === 0) return '—'
   const pct = (num / denom) * 100
-  return pct === 0 || pct >= 10 ? `${Math.round(pct)}%` : `${pct.toFixed(1)}%`
+  return formatRatePercent(pct)
 }
 
 export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps> = ({
@@ -141,7 +142,7 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
       dataIndex: 'sent',
       key: 'sent',
       align: 'right',
-      render: (_: unknown, r: ClassRow) => r.sent.toLocaleString()
+      render: (_: unknown, r: ClassRow) => formatNumber(r.sent)
     },
     {
       title: t`Bounce`,

@@ -123,7 +123,7 @@ export function VeridianQueueEntryDrawer({ workspaceId, entryId, canWrite, onClo
             <Descriptions.Item label={t`Status`}>{labels.entryStatusLabel(entry.status)}</Descriptions.Item>
             <Descriptions.Item label={t`Automation`}>{entry.automation_name || entry.automation_id}</Descriptions.Item>
             <Descriptions.Item label={t`Node`}>{entry.node_id || '—'}</Descriptions.Item>
-            <Descriptions.Item label={t`Profile`}>{entry.profile_name || '—'}</Descriptions.Item>
+            <Descriptions.Item label={t`Nominal profile (the rotation picks at send time)`}>{entry.profile_name || '—'}</Descriptions.Item>
             <Descriptions.Item label={t`Recipient class`}>{entry.class || '—'}</Descriptions.Item>
             <Descriptions.Item label={t`Reason`}>
               {entry.reason ? labels.reasonLabel(entry.reason) : '—'}

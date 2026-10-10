@@ -282,3 +282,59 @@ describe("complétude fr + en des chaînes du lot 1 (File d'envoi)", () => {
     }
   })
 })
+
+// Lot 6 (10/10/2026) : parcours de TOUTE la console en français. Le catalogue entier est
+// couvert, plus seulement les écrans des lots 1 à 5 : aucun msgstr vide, aucune apostrophe
+// perdue (« l email » au lieu de « l'email », 251 chaînes trouvées le 10/10), variables
+// conservées, et les chaînes ajoutées par ce lot.
+describe('complétude du catalogue français entier (lot 6)', () => {
+  const entries = parsePo(readFileSync(resolve(__dirname, 'locales/fr.po'), 'utf8'))
+  const real = entries.filter((e) => e.msgid !== '')
+
+  it('aucun msgstr français vide dans toute la console', () => {
+    expect(real.filter((e) => e.msgstr === '').map((e) => e.msgid.slice(0, 80))).toEqual([])
+  })
+
+  // Épreuve du détecteur : il doit voir une apostrophe perdue
+  const LOST_APOSTROPHE = /(?<![A-Za-zÀ-ÿ0-9'{}_./-])(?<!\d )(d|l|n|s|j|m|c|qu|jusqu|lorsqu|puisqu) (?=[A-Za-zÀ-ÿ])/i
+  it("reconnaît une apostrophe perdue (épreuve du détecteur)", () => {
+    expect(LOST_APOSTROPHE.test('Accepter l invitation')).toBe(true)
+    expect(LOST_APOSTROPHE.test("Accepter l'invitation")).toBe(false)
+    expect(LOST_APOSTROPHE.test('Minimum 30 s pour ne pas')).toBe(false)
+  })
+
+  it("aucune apostrophe perdue dans les traductions françaises", () => {
+    const bad = real.filter((e) => LOST_APOSTROPHE.test(e.msgstr)).map((e) => e.msgstr.slice(0, 80))
+    expect(bad).toEqual([])
+  })
+
+  it('variables {x} conservées dans toute traduction non vide', () => {
+    for (const e of real) {
+      if (e.msgstr === '') continue
+      const vars = (e.msgid.match(/\{[A-Za-z0-9_]+\}/g) ?? []).sort()
+      const varsFr = (e.msgstr.match(/\{[A-Za-z0-9_]+\}/g) ?? []).sort()
+      expect(varsFr, e.msgid).toEqual(vars)
+    }
+  })
+
+  it('les chaînes du lot 6 sont traduites', () => {
+    const fr = new Map(entries.map((e) => [e.msgid, e.msgstr]))
+    expect(fr.get('Unattached')).toBe('Non rattachées')
+    expect(fr.get('low base')).toBe('base faible')
+    expect(fr.get('French ISPs (Orange, SFR, Free…)')).toBe('FAI français (Orange, SFR, Free…)')
+    expect(fr.get('Supported Languages')).toBe('Langues prises en charge')
+    expect(fr.get('Free — unlimited access during your 15-day trial')).not.toBe('')
+  })
+})
+
+// Fiche 62, ajout du 11/10 : la colonne « Profil » de la File d'envoi est le profil NOMINAL
+// de l'entrée ; la rotation choisit à l'envoi. Le libellé doit le dire, sinon un client croit
+// que deux profils sur trois sont morts.
+describe("File d'envoi : profil nominal", () => {
+  const fr = new Map(parsePo(readFileSync(resolve(__dirname, 'locales/fr.po'), 'utf8')).map((e) => [e.msgid, e.msgstr]))
+  it('les libellés disent « nominal » et « rotation »', () => {
+    expect(fr.get('Nominal profile')).toBe('Profil nominal')
+    expect(fr.get('Nominal profile (the rotation picks at send time)')).toBe("Profil nominal (la rotation choisit à l'envoi)")
+    expect(fr.get('Nominal profile (the rotation picks the sender at send time)')).toContain('rotation')
+  })
+})

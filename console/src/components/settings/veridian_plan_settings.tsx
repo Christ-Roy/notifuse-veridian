@@ -39,8 +39,8 @@ const VERIDIAN_HUB_URL = 'https://app.veridian.site/dashboard'
 // catalogue → `t` renvoie VIDE en runtime (libellé de plan vide dans
 // Settings → Plan). Les noms de plan sont des noms propres Veridian (Pro =
 // Pro partout) qui ne se traduisent pas ; littéral = zéro risque de vide.
-function planLabel(plan: string | undefined): string {
-  if (!plan || plan === 'free') return 'Free — unlimited access during your 15-day trial'
+function planLabel(plan: string | undefined, freeLabel: string): string {
+  if (!plan || plan === 'free') return freeLabel
   if (plan === 'pro') return 'Pro'
   if (plan === 'business') return 'Business'
   if (plan === 'enterprise') return 'Enterprise'
@@ -65,7 +65,7 @@ export function VeridianPlanSettings({ workspaceId }: Props) {
             <Descriptions column={1} colon={false}>
               <Descriptions.Item label={t`Current plan`}>
                 <Space size="small">
-                  <Text strong>{planLabel(data?.plan)}</Text>
+                  <Text strong>{planLabel(data?.plan, t`Free — unlimited access during your 15-day trial`)}</Text>
                   <VeridianPlanSourceBadge planSource={data?.plan_source} />
                 </Space>
               </Descriptions.Item>

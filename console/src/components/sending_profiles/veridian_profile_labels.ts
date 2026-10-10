@@ -15,6 +15,24 @@ export function formatPercent(rate: number): string {
   }).format(rate)
 }
 
+// Taux déjà en pour cent (2,6 ; 12), dans la langue active : « 2,6 % » en français, « 2.6% »
+// en anglais. Une décimale sous 10 %, aucune au-dessus.
+export function formatRatePercent(pct: number): string {
+  return new Intl.NumberFormat(i18n.locale || 'en', {
+    style: 'percent',
+    minimumFractionDigits: pct === 0 || pct >= 10 ? 0 : 1,
+    maximumFractionDigits: pct === 0 || pct >= 10 ? 0 : 1
+  }).format(pct / 100)
+}
+
+// Date seule, fuseau Europe/Paris (jamais UTC ni celui de la machine), dans la langue active.
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return new Intl.DateTimeFormat(i18n.locale || 'en', { dateStyle: 'medium', timeZone: 'Europe/Paris' }).format(d)
+}
+
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat(i18n.locale || 'en').format(value)
 }

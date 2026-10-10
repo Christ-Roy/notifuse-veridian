@@ -1,3 +1,4 @@
+import { formatDate } from '../../components/sending_profiles/veridian_profile_labels'
 import { useState } from 'react'
 import {
   Table,
@@ -177,7 +178,7 @@ export function WorkspaceMembers({
       title: t`Since`,
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleDateString()
+      render: (date: string) => formatDate(date)
     },
     // Only add the action column if the user is an owner
     ...(isOwner

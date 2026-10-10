@@ -1,4 +1,5 @@
 import { i18n } from "@lingui/core"
+import { setDayjsLocale } from "../lib/dayjs"
 
 // Keep this list in sync with the backend's canonical set:
 // domain.SupportedUILanguages (internal/domain/languages.go) and the
@@ -30,6 +31,7 @@ export async function loadLocale(locale: Locale): Promise<void> {
   try {
     const { messages } = await import(`./locales/${locale}.po`)
     i18n.load(locale, messages)
+    setDayjsLocale(locale)
     i18n.activate(locale)
     localStorage.setItem("locale", locale)
   } catch (error) {

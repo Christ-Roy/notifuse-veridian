@@ -158,7 +158,7 @@ export function SendQueuePage() {
           allowClear
           showSearch
           optionFilterProp="label"
-          placeholder={t`Profile`}
+          placeholder={t`Nominal profile`}
           style={{ width: 200 }}
           value={filters.profile_id}
           onChange={(v) => setFilter('profile_id', v)}
@@ -229,7 +229,15 @@ export function SendQueuePage() {
               onPickReason={(reason) => setFilter('reason', reason)}
             />
           </Card>
-          <Card size="small" title={t`Detail by automation, node, reason and profile`}>
+          <Card size="small" title={t`Detail by automation, node, reason and nominal profile`}>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              data-testid="nominal-profile-note"
+              message={t`Nominal profile (the rotation picks the sender at send time)`}
+              description={t`The profile shown here is the one recorded on the entry when it was queued. At send time, the rotation chooses among the whole pool of profiles, so several profiles send even if every entry shows the same nominal profile. The real split is in the sending history.`}
+            />
             <VeridianQueueGroups
               groups={groups}
               canWrite={canWrite}

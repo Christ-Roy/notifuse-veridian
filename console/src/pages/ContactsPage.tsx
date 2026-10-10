@@ -1,3 +1,4 @@
+import { formatDate } from '../components/sending_profiles/veridian_profile_labels'
 import { useQuery, useQueryClient, useMutation, keepPreviousData } from '@tanstack/react-query'
 import { Table, Tag, Button, Space, Tooltip, message, Dropdown } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -799,7 +800,7 @@ export function ContactsPage() {
       dataIndex: 'custom_datetime_1',
       key: 'custom_datetime_1',
       render: (_: unknown, record: Contact) =>
-        record.custom_datetime_1 ? new Date(record.custom_datetime_1).toLocaleDateString() : '-',
+        record.custom_datetime_1 ? formatDate(record.custom_datetime_1) : '-',
       hidden: !visibleColumns.custom_datetime_1
     },
     {
@@ -807,7 +808,7 @@ export function ContactsPage() {
       dataIndex: 'custom_datetime_2',
       key: 'custom_datetime_2',
       render: (_: unknown, record: Contact) =>
-        record.custom_datetime_2 ? new Date(record.custom_datetime_2).toLocaleDateString() : '-',
+        record.custom_datetime_2 ? formatDate(record.custom_datetime_2) : '-',
       hidden: !visibleColumns.custom_datetime_2
     },
     {
@@ -815,7 +816,7 @@ export function ContactsPage() {
       dataIndex: 'custom_datetime_3',
       key: 'custom_datetime_3',
       render: (_: unknown, record: Contact) =>
-        record.custom_datetime_3 ? new Date(record.custom_datetime_3).toLocaleDateString() : '-',
+        record.custom_datetime_3 ? formatDate(record.custom_datetime_3) : '-',
       hidden: !visibleColumns.custom_datetime_3
     },
     {
@@ -823,7 +824,7 @@ export function ContactsPage() {
       dataIndex: 'custom_datetime_4',
       key: 'custom_datetime_4',
       render: (_: unknown, record: Contact) =>
-        record.custom_datetime_4 ? new Date(record.custom_datetime_4).toLocaleDateString() : '-',
+        record.custom_datetime_4 ? formatDate(record.custom_datetime_4) : '-',
       hidden: !visibleColumns.custom_datetime_4
     },
     {
@@ -831,7 +832,7 @@ export function ContactsPage() {
       dataIndex: 'custom_datetime_5',
       key: 'custom_datetime_5',
       render: (_: unknown, record: Contact) =>
-        record.custom_datetime_5 ? new Date(record.custom_datetime_5).toLocaleDateString() : '-',
+        record.custom_datetime_5 ? formatDate(record.custom_datetime_5) : '-',
       hidden: !visibleColumns.custom_datetime_5
     },
     {

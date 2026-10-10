@@ -1,3 +1,4 @@
+import { formatNumber } from '../sending_profiles/veridian_profile_labels'
 import React, { useState, useRef, useEffect } from 'react'
 import {
   Button,
@@ -966,7 +967,7 @@ export function ContactsCsvUploadDrawer({
             <div style={{ marginBottom: 24 }}>
               <Text strong>{t`File`}: </Text>
               <Text>{fileName}</Text>
-              <Text style={{ marginLeft: 8 }}>({csvData.rows.length.toLocaleString()} {t`rows`})</Text>
+              <Text style={{ marginLeft: 8 }}>({formatNumber(csvData.rows.length)} {t`rows`})</Text>
               {currentRow > 0 && (
                 <Text type="success" style={{ marginLeft: 8 }}>
                   {t`Will resume from row ${currentRow.toLocaleString()}`}

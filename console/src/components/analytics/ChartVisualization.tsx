@@ -1,3 +1,5 @@
+import { formatNumber } from '../sending_profiles/veridian_profile_labels'
+import { i18n } from '@lingui/core'
 import React, { useEffect, useRef } from 'react'
 import { Table, Skeleton, Alert } from 'antd'
 import { useLingui } from '@lingui/react/macro'
@@ -57,7 +59,7 @@ export const ChartVisualization: React.FC<ChartVisualizationProps> = ({
     if (!dateString) return dateString
     try {
       const date = new Date(dateString)
-      return date.toLocaleDateString('en-US', {
+      return date.toLocaleDateString(i18n.locale || 'en', {
         month: 'short',
         day: 'numeric',
         year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
@@ -135,7 +137,7 @@ export const ChartVisualization: React.FC<ChartVisualizationProps> = ({
               result += `<div style="display: flex; align-items: center; margin: 2px 0;">
                 <span style="display: inline-block; width: 10px; height: 10px; background-color: ${color}; border-radius: 50%; margin-right: 8px;"></span>
                 <span style="font-weight: 500;">${title}:</span>
-                <span style="margin-left: 8px; font-weight: 600;">${value.toLocaleString()}</span>
+                <span style="margin-left: 8px; font-weight: 600;">${formatNumber(Number(value))}</span>
               </div>`
             })
 
@@ -205,7 +207,7 @@ export const ChartVisualization: React.FC<ChartVisualizationProps> = ({
               result += `<div style="display: flex; align-items: center; margin: 2px 0;">
                 <span style="display: inline-block; width: 10px; height: 10px; background-color: ${color}; border-radius: 50%; margin-right: 8px;"></span>
                 <span style="font-weight: 500;">${title}:</span>
-                <span style="margin-left: 8px; font-weight: 600;">${value.toLocaleString()}</span>
+                <span style="margin-left: 8px; font-weight: 600;">${formatNumber(Number(value))}</span>
               </div>`
             })
 

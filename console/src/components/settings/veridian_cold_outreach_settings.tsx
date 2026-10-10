@@ -34,6 +34,7 @@ import { App, Alert, Button, Card, Col, Collapse, Form, Input, InputNumber, Popc
 import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, InfoCircleOutlined, InboxOutlined, LinkOutlined, RocketOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
+import { formatNumber } from '../sending_profiles/veridian_profile_labels'
 import { Workspace, EmailProvider, IMAPSettings, Integration } from '../../services/api/types'
 import { workspaceService } from '../../services/api/workspace'
 import {
@@ -73,52 +74,51 @@ interface Props {
 const BIG_PROVIDERS: VeridianProviderClass[] = ['google', 'microsoft', 'security_gateway']
 
 // Libellé lisible d'une classe (les values restent canoniques côté code/API).
-//
-// ⚠️ Libellés LITTÉRAUX (pas `t`...``) : ce sont des noms propres de providers
-// (Google = Google partout) qui ne se traduisent pas. Surtout, passer un `t`
-// en paramètre d'une fonction HORS composant casse l'extracteur statique Lingui
-// (il ne capte pas les `t`...`` ainsi placés) → clés absentes du catalogue →
-// `t` renvoie VIDE en runtime. Bug P0 vécu en prod 2026-06-14 (5 cartes de
-// classe sans nom dans Settings → Cold outreach). Littéral = zéro dépendance
-// i18n = zéro risque de vide.
-function classLabel(c: VeridianProviderClass): string {
-  switch (c) {
-    case 'google':
-      return 'Google (Gmail / Workspace)'
-    case 'microsoft':
-      return 'Microsoft (Outlook / Microsoft 365)'
-    case 'yahoo_aol':
-      return 'Yahoo / AOL'
-    case 'freemail_fr':
-      return 'French ISPs (Orange, SFR, Free…)'
-    case 'corporate':
-      return 'Corporate (unknown by suffix)'
-    case 'ovh':
-      return 'OVH (MX-resolved)'
-    case 'ionos':
-      return 'IONOS / 1&1 (MX-resolved)'
-    case 'apple_icloud':
-      return 'Apple iCloud (MX-resolved)'
-    case 'security_gateway':
-      return 'Anti-spam gateway (Vade, Mailinblack, Proofpoint…)'
-    case 'other_hoster':
-      return 'Other hosters (Infomaniak, Gandi, Zoho…)'
-    case 'infomaniak':
-      return 'Infomaniak'
-    case 'gandi':
-      return 'Gandi'
-    case 'hostinger':
-      return 'Hostinger / Titan'
-    case 'o2switch':
-      return 'o2switch'
-    case 'lws':
-      return 'LWS'
-    case 'scaleway':
-      return 'Scaleway / Online'
-    case 'website_builder':
-      return 'Website builders'
-    case 'corporate_selfhost':
-      return 'Corporate self-hosted (MX unknown)'
+// Les noms propres (Google, Microsoft, Yahoo / AOL) restent littéraux, les autres se
+// traduisent. Le `t` vient de useLingui DANS un hook : passé en paramètre d'une fonction
+// hors composant, l'extracteur Lingui ne le capte pas et il rend VIDE (bug P0 vécu en prod
+// le 14/06/2026, cartes de classe sans nom).
+function useClassLabel(): (c: VeridianProviderClass) => string {
+  const { t } = useLingui()
+  return (c) => {
+    switch (c) {
+      case 'google':
+        return 'Google (Gmail / Workspace)'
+      case 'microsoft':
+        return 'Microsoft (Outlook / Microsoft 365)'
+      case 'yahoo_aol':
+        return 'Yahoo / AOL'
+      case 'freemail_fr':
+        return t`French ISPs (Orange, SFR, Free…)`
+      case 'corporate':
+        return t`Corporate (unknown by suffix)`
+      case 'ovh':
+        return t`OVH (MX-resolved)`
+      case 'ionos':
+        return t`IONOS / 1&1 (MX-resolved)`
+      case 'apple_icloud':
+        return t`Apple iCloud (MX-resolved)`
+      case 'security_gateway':
+        return t`Anti-spam gateway (Vade, Mailinblack, Proofpoint…)`
+      case 'other_hoster':
+        return t`Other hosters (Infomaniak, Gandi, Zoho…)`
+      case 'corporate_selfhost':
+        return t`Corporate self-hosted (MX unknown)`
+      case 'infomaniak':
+        return 'Infomaniak'
+      case 'gandi':
+        return 'Gandi'
+      case 'hostinger':
+        return 'Hostinger / Titan'
+      case 'o2switch':
+        return 'o2switch'
+      case 'lws':
+        return 'LWS'
+      case 'scaleway':
+        return 'Scaleway / Online'
+      case 'website_builder':
+        return t`Website builders`
+    }
   }
 }
 
@@ -566,6 +566,7 @@ const INFRA_PRIMARY_CLASSES: VeridianProviderClass[] = [
 
 function InfraLimitsCard({ workspace, isOwner, onWorkspaceUpdate }: InfraLimitsCardProps) {
   const { t } = useLingui()
+  const classLabel = useClassLabel()
   const { message } = App.useApp()
   const [savingId, setSavingId] = useState<string | null>(null)
   // Affiche les 11 classes (dont les 6 MX) ou seulement les 5 principales.
@@ -1634,6 +1635,7 @@ function ExcludedClassesCard({
   presetSignal = NO_PRESET_SIGNAL
 }: ExcludedClassesCardProps) {
   const { t } = useLingui()
+  const classLabel = useClassLabel()
   const { message } = App.useApp()
   const [saving, setSaving] = useState(false)
 
@@ -2006,6 +2008,7 @@ function ScopeBanner({
 
 export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isOwner }: Props) {
   const { t } = useLingui()
+  const classLabel = useClassLabel()
   const [saving, setSaving] = useState(false)
   const [touched, setTouched] = useState(false)
   // Signal du preset appliqué : incrémenté à chaque clic « Apply », propagé aux
@@ -2184,8 +2187,9 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
   // Petit badge "X contacts" affiché sur chaque carte de classe.
   const contactBadge = (c: VeridianProviderClass) => {
     if (breakdownLoading) return null
-    const n = contactCount(c)
-    if (n === undefined) return null
+    const count = contactCount(c)
+    if (count === undefined) return null
+    const n = formatNumber(count)
     return (
       <Tag icon={<TeamOutlined />} color="blue" style={{ marginInlineEnd: 0 }}>
         {t`${n} contacts`}

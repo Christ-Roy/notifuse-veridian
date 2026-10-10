@@ -91,7 +91,7 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
     <Col xs={12} md={8} xl={4} key={testId}>
       <Tooltip title={hint}>
         <div className="bg-gray-100 p-4 rounded-lg" style={{ height: '110px' }} data-testid={testId}>
-          <Statistic title={title} value={value as string | number} valueStyle={{ fontSize: '22px', fontWeight: 'bold' }} loading={loading} />
+          <Statistic title={title} value={value as string | number} valueStyle={{ fontSize: '22px', fontWeight: 'bold' }} loading={loading} formatter={(v) => String(v)} />
         </div>
       </Tooltip>
     </Col>
@@ -166,7 +166,13 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
 
       <div className="mt-8">
         <VeridianProspectionSequences stats={statsQuery.data} loading={statsQuery.isLoading} error={statsQuery.isError} />
-        <VeridianProspectionReplies stats={statsQuery.data} loading={statsQuery.isLoading} error={statsQuery.isError} />
+        <VeridianProspectionReplies
+          stats={statsQuery.data}
+          loading={statsQuery.isLoading}
+          error={statsQuery.isError}
+          totalHuman={repliesQuery.data ? humanReplies : undefined}
+          totalAuto={repliesQuery.data ? autoReplies : undefined}
+        />
         <VeridianProspectionRejections
           key={`rejections-${refreshKey}`}
           workspace={workspace}

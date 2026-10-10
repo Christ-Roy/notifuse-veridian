@@ -7,10 +7,13 @@ import {
   dayInTimezone,
   daySlots,
   hourSlots,
+  isLowBase,
   nonReplyExits,
+  pickDashboardTimezone,
   rejectionTotals,
   reputationCouples,
-  sumMeasure
+  sumMeasure,
+  unattachedReplies
 } from './veridian_prospection_rules'
 import { basePlan, overviewOf, planClass, profile } from '../sending_profiles/veridian_profile_test_fixtures'
 
@@ -151,5 +154,40 @@ describe('reputationCouples', () => {
 describe('sorties de séquence', () => {
   it('somme les sorties qui ne sont pas des réponses', () => {
     expect(nonReplyExits({ rejected: 1, unsubscribed: 2, excluded: 3, other: 4 })).toBe(10)
+  })
+})
+
+describe('fuseau par défaut du tableau de bord (lot 6)', () => {
+  const withWindow = (tz: string) =>
+    overviewOf([profile('p1', {}, { window: { configured: true, open_now: false, source: 'profile', timezone: tz } })])
+
+  it('prend le fuseau du workspace quand il est posé', () => {
+    expect(pickDashboardTimezone({ workspaceTimezone: 'Europe/Lisbon', overview: withWindow('Europe/Paris'), browserTimezone: 'Europe/Berlin' })).toBe('Europe/Lisbon')
+  })
+
+  it("UTC (valeur de création) compte comme non posé : fenêtre d'envoi, Europe/Paris pour robertbrunon", () => {
+    expect(pickDashboardTimezone({ workspaceTimezone: 'UTC', overview: withWindow('Europe/Paris'), browserTimezone: 'Europe/Berlin' })).toBe('Europe/Paris')
+  })
+
+  it('sans workspace ni fenêtre : le navigateur, jamais Europe/Berlin en dur', () => {
+    expect(pickDashboardTimezone({ workspaceTimezone: 'UTC', overview: undefined, browserTimezone: 'Asia/Tokyo' })).toBe('Asia/Tokyo')
+    expect(pickDashboardTimezone({ workspaceTimezone: '', overview: withWindow(''), browserTimezone: 'America/Lima' })).toBe('America/Lima')
+  })
+})
+
+describe('base faible et réponses non rattachées (lot 6)', () => {
+  it('sous 30 contacts joints, la base est faible (2 sur 2 = 100 % ne dit rien)', () => {
+    expect(isLowBase(2)).toBe(true)
+    expect(isLowBase(29)).toBe(true)
+    expect(isLowBase(30)).toBe(false)
+    expect(isLowBase(1847)).toBe(false)
+    expect(isLowBase(null)).toBe(true)
+  })
+
+  it('non rattachées : 23 au total, 21 portées par les séquences, donc 2 ; jamais négatif', () => {
+    const rows = [{ replies_human: 17 }, { replies_human: 3 }, { replies_human: 1 }]
+    expect(unattachedReplies(23, rows)).toBe(2)
+    expect(unattachedReplies(21, rows)).toBe(0)
+    expect(unattachedReplies(5, rows)).toBe(0)
   })
 })

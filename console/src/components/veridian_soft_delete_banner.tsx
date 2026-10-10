@@ -1,3 +1,4 @@
+import { i18n } from '@lingui/core'
 /**
  * Veridian — bandeau soft-delete persistant.
  *
@@ -31,7 +32,8 @@ const VERIDIAN_HUB_DASHBOARD = 'https://app.veridian.site/dashboard'
 function formatDate(iso: string | undefined): string {
   if (!iso) return ''
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
+    return new Date(iso).toLocaleDateString(i18n.locale || 'en', {
+      timeZone: 'Europe/Paris',
       year: 'numeric',
       month: 'short',
       day: 'numeric'

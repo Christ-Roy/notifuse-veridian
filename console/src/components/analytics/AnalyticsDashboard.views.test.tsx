@@ -90,11 +90,11 @@ describe('AnalyticsDashboard : vue Commercial | Transactionnel', () => {
     ;(emailProfilesOverviewService.get as ReturnType<typeof vi.fn>).mockResolvedValue(overview)
   })
 
-  it('vue commerciale par defaut : le tableau de bord de prospection, puis contacts importes et echecs', () => {
+  it('vue commerciale par defaut : le tableau de bord de prospection seul (ni contacts importes ni echecs natifs)', () => {
     renderDash()
     expect(screen.getByTestId('prospection-dashboard')).toBeInTheDocument()
-    expect(screen.getByTestId('new-contacts-table')).toBeInTheDocument()
-    expect(screen.getByTestId('failed-table')).toBeInTheDocument()
+    expect(screen.queryByTestId('new-contacts-table')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('failed-table')).not.toBeInTheDocument()
     expect(screen.queryByTestId('cards-transactional')).not.toBeInTheDocument()
     // la vue commerciale ne lit pas l'overview elle-meme : le tableau de bord de prospection a la sienne
     expect(emailProfilesOverviewService.get).not.toHaveBeenCalled()

@@ -173,8 +173,8 @@ describe('VeridianColdOutreachSettings', () => {
     await waitFor(() => expect(contactsApi.providerBreakdown).toHaveBeenCalled())
     // Le breakdown mocké pose 1240 (google) et 1502 (corporate)
     await waitFor(() => {
-      expect(screen.getByText(/1240 contacts/)).toBeInTheDocument()
-      expect(screen.getByText(/1502 contacts/)).toBeInTheDocument()
+      expect(screen.getByText(/1[,\s\u202f\u00a0]?240 contacts/)).toBeInTheDocument()
+      expect(screen.getByText(/1[,\s\u202f\u00a0]?502 contacts/)).toBeInTheDocument()
     })
   })
 
