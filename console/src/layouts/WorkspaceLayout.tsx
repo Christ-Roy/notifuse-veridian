@@ -32,7 +32,8 @@ import {
   DownOutlined,
   MenuOutlined,
   MailOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  InboxOutlined
 } from '@ant-design/icons'
 // === Veridian patch === co-brand léger (header link, footer) + bandeau
 // soft-delete. Composants event-driven / query-driven, dégradent
@@ -358,6 +359,15 @@ export function WorkspaceLayout() {
           search={{ type: 'commercial' }}
         >
           {t`Sending log`}
+        </Link>
+      )
+    },
+    hasAccess('automations') && {
+      key: 'send-queue',
+      icon: <InboxOutlined />,
+      label: (
+        <Link to="/console/workspace/$workspaceId/send-queue" params={{ workspaceId }}>
+          {t`Send queue`}
         </Link>
       )
     },

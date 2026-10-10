@@ -235,10 +235,18 @@ func veridianSlowCap(cap, factor int) int {
 // ralentissement lu par les gates de débit. Une erreur DB n'arrête rien (ce
 // fusible ne stoppe plus que sur preuve) : elle est loguée en ERROR.
 func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
+	v := w.veridianReputationGateVerdict(workspace, provider, entry)
+	return v.Delay, v.Blocked()
+}
+
+// veridianReputationGateVerdict est la variante structurée de la porte (fiche 62) : valeur
+// = part de refus de politique sur les derniers envois du couple (arrêt) ou facteur de
+// ralentissement, limite = seuil. La fonction historique en est un wrapper.
+func (w *EmailQueueWorker) veridianReputationGateVerdict(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) veridianGateVerdict {
 	senderDomain := veridianEmailDomain(entry.Payload.FromAddress)
 	if senderDomain == "" {
 		// Pas d'attribution infra possible : best-effort, on ne ralentit pas.
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateReputation, nil, nil, "", "no sender domain")
 	}
 
 	workspaceID := ""
@@ -319,7 +327,16 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 			"policy_refusals_7d": counts.PolicyRefusals,
 			"fuse":               verdict.Reason,
 		}).Warn("Reputation fuse: provider refuses in bulk (>50% 5.7.x on last 20 sends), this couple is stopped; failover to another profile applies")
-		return veridianDailyCapRecheckInterval, true
+		share := 0.0
+		if recentSent > 0 {
+			share = float64(recentPolicy) / float64(recentSent)
+		}
+		return veridianGateVerdict{
+			Gate: domain.VeridianGateReputation, Verdict: domain.VeridianVerdictBlock,
+			Value: share, Limit: veridianBlockShare, Name: verdict.Reason,
+			Detail: "provider_class=" + class, Delay: veridianDailyCapRecheckInterval,
+			Reason: domain.VeridianReasonReputationStop,
+		}
 	}
 	if verdict.Factor > 1 {
 		w.logger.WithFields(map[string]interface{}{
@@ -335,7 +352,14 @@ func (w *EmailQueueWorker) veridianReputationGate(workspace *domain.Workspace, p
 			"fuse":               verdict.Reason,
 		}).Debug("Reputation fuse: couple slowed")
 	}
-	return 0, false
+	if verdict.Factor > 1 {
+		return veridianGateVerdict{
+			Gate: domain.VeridianGateReputation, Verdict: domain.VeridianVerdictSlowed,
+			Value: verdict.Factor, Limit: threshold, Name: verdict.Reason,
+			Detail: "provider_class=" + class,
+		}
+	}
+	return veridianPassVerdict(domain.VeridianGateReputation, verdict.Factor, threshold, "", "provider_class="+class)
 }
 
 // VeridianReputationStatus is the read model shared by the gate above and the

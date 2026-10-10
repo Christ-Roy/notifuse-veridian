@@ -298,6 +298,8 @@ export interface AutomationNodeStats {
   node_type: NodeType
   entered: number
   completed: number
+  // LOT 1 : mails mis en file (count_queued). Pour un noeud email, completed = envoye reellement.
+  queued: number
   failed: number
   skipped: number
 }
@@ -367,7 +369,7 @@ export const automationApi = {
     const response = await analyticsService.query(
       {
         schema: 'automation_node_executions',
-        measures: ['count_entered', 'count_completed', 'count_failed', 'count_skipped'],
+        measures: ['count_entered', 'count_completed', 'count_queued', 'count_failed', 'count_skipped'],
         dimensions: ['node_id', 'node_type'],
         filters: [
           {
@@ -389,6 +391,7 @@ export const automationApi = {
         node_type: row.node_type as NodeType,
         entered: (row.count_entered as number) || 0,
         completed: (row.count_completed as number) || 0,
+        queued: (row.count_queued as number) || 0,
         failed: (row.count_failed as number) || 0,
         skipped: (row.count_skipped as number) || 0
       }

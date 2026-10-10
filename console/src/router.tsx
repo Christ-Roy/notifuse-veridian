@@ -78,6 +78,7 @@ const SendingProfilesPage = veridianLazyPage(
   () => import('./pages/SendingProfilesPage'),
   'SendingProfilesPage'
 )
+const SendQueuePage = veridianLazyPage(() => import('./pages/SendQueuePage'), 'SendQueuePage')
 const AutomationsPage = veridianLazyPage(() => import('./pages/AutomationsPage'), 'AutomationsPage')
 const AnalyticsPage = veridianLazyPage(() => import('./pages/AnalyticsPage'), 'AnalyticsPage')
 const TemplatesPage = veridianLazyPage(() => import('./pages/TemplatesPage'), 'TemplatesPage')
@@ -240,6 +241,13 @@ const workspaceSendingProfilesRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: '/sending-profiles',
   component: SendingProfilesPage as RouteComponent
+})
+
+// LOT 1 (10/10/2026) : « File d'envoi », pourquoi ça n'envoie pas (queue.explain).
+const workspaceSendQueueRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/send-queue',
+  component: SendQueuePage as RouteComponent
 })
 
 // `type` choisit le journal : commercial (defaut) ou transactionnel. Les autres parametres
@@ -406,6 +414,7 @@ const routeTree = rootRoute.addChildren([
     workspaceTransactionalNotificationsRoute,
     workspaceLogsRoute,
     workspaceSendingProfilesRoute,
+    workspaceSendQueueRoute,
     workspaceFileManagerRoute,
     workspaceSettingsRedirectRoute,
     workspaceSmtpBridgeRedirectRoute,

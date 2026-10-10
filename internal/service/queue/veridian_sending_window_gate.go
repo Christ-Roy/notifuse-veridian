@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -52,9 +54,43 @@ func veridianResolveSendingWindow(workspace *domain.Workspace, provider *domain.
 // ou si aucune fenêtre ne s'applique (no-op strict). Le timezone de fallback est
 // celui du workspace (la fenêtre peut le surcharger).
 func (w *EmailQueueWorker) veridianSendingWindowGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
+	v := w.veridianSendingWindowVerdict(workspace, provider, entry)
+	return v.Delay, v.Blocked()
+}
+
+var veridianWeekdayLabels = [7]string{"dim", "lun", "mar", "mer", "jeu", "ven", "sam"}
+
+// veridianDescribeWindow rend la fenêtre en une ligne lisible pour la trace
+// (« lun,mar,mer,jeu,ven 08:00-19:00 Europe/Paris »).
+func veridianDescribeWindow(window *domain.VeridianSendingWindow, fallbackTZ string) string {
+	days := "tous les jours"
+	if len(window.Days) > 0 {
+		labels := make([]string, 0, len(window.Days))
+		for _, d := range window.Days {
+			if d >= 0 && d <= 6 {
+				labels = append(labels, veridianWeekdayLabels[d])
+			}
+		}
+		days = strings.Join(labels, ",")
+	}
+	tz := window.Timezone
+	if tz == "" {
+		tz = fallbackTZ
+	}
+	if tz == "" {
+		tz = "UTC"
+	}
+	return fmt.Sprintf("%s %02d:%02d-%02d:%02d %s", days, window.StartHour, window.StartMinute, window.EndHour, window.EndMinute, tz)
+}
+
+// veridianSendingWindowVerdict est la variante structurée de la porte (fiche 62) :
+// valeur = jour et heure locaux, limite = la fenêtre, délai = jusqu'à la réouverture
+// (borné à 24 h comme avant), détail = réouverture exacte. La fonction historique en
+// est un wrapper.
+func (w *EmailQueueWorker) veridianSendingWindowVerdict(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) veridianGateVerdict {
 	window := veridianResolveSendingWindow(workspace, provider, entry)
 	if window == nil {
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateWindow, nil, nil, "", "no window configured")
 	}
 
 	fallbackTZ := ""
@@ -63,9 +99,13 @@ func (w *EmailQueueWorker) veridianSendingWindowGate(workspace *domain.Workspace
 	}
 
 	now := time.Now()
+	loc := window.Location(fallbackTZ)
+	localNow := fmt.Sprintf("%s %s", veridianWeekdayLabels[now.In(loc).Weekday()], now.In(loc).Format("15:04"))
+	limit := veridianDescribeWindow(window, fallbackTZ)
 	if window.IsWithinWindow(now, fallbackTZ) {
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateWindow, localNow, limit, "", "")
 	}
+	opening := window.NextOpening(now, fallbackTZ)
 
 	// Hors fenêtre : reporter à la prochaine ouverture, bornée à 24h pour
 	// re-checker la config régulièrement.
@@ -90,5 +130,9 @@ func (w *EmailQueueWorker) veridianSendingWindowGate(workspace *domain.Workspace
 		"retry_in":       delay.String(),
 	}).Debug("Outside sending window, rescheduling without attempt increment")
 
-	return delay, true
+	return veridianGateVerdict{
+		Gate: domain.VeridianGateWindow, Verdict: domain.VeridianVerdictBlock,
+		Value: localNow, Limit: limit, Delay: delay, Reason: domain.VeridianReasonWindowClosed,
+		Detail: "reopens=" + opening.UTC().Format(time.RFC3339),
+	}
 }

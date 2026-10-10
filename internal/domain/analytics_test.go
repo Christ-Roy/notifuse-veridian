@@ -228,7 +228,7 @@ func TestAutomationNodeExecutionsSchema(t *testing.T) {
 	schema := PredefinedSchemas["automation_node_executions"]
 
 	// Test measures
-	requiredMeasures := []string{"count", "count_entered", "count_completed", "count_failed", "count_skipped"}
+	requiredMeasures := []string{"count", "count_entered", "count_completed", "count_queued", "count_failed", "count_skipped"}
 	for _, measure := range requiredMeasures {
 		assert.Contains(t, schema.Measures, measure, "automation_node_executions should have measure %s", measure)
 	}
@@ -302,7 +302,7 @@ func TestPredefinedSchemasWithFilters(t *testing.T) {
 			name:     "automation_node_executions - count completed",
 			schema:   "automation_node_executions",
 			measure:  "count_completed",
-			expected: "COUNT(*) FILTER (WHERE action = 'completed')",
+			expected: "COUNT(*) FILTER (WHERE action = 'completed' AND COALESCE(output->>'queued', '') <> 'true')",
 		},
 	}
 

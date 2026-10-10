@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -133,6 +134,14 @@ func veridianWarmupCap(ws *domain.Workspace, provider *domain.EmailProvider, now
 // l'entrée doit être re-planifiée, (0, false) si elle peut partir (aucun cap
 // atteint) ou si aucun cap ne s'applique. No-op strict sans configuration.
 func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
+	v := w.veridianDailyCapVerdict(workspace, provider, entry)
+	return v.Delay, v.Blocked()
+}
+
+// veridianDailyCapVerdict est la variante structurée de la porte (fiche 62) : valeur =
+// envois comptés aujourd'hui, limite = plafond appliqué, nom = sous-plafond
+// (per_recipient, warmup, provider_class). La fonction historique en est un wrapper.
+func (w *EmailQueueWorker) veridianDailyCapVerdict(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) veridianGateVerdict {
 	// Lot 2 (08/10) : les plafonds viennent de la résolution UNIQUE partagée avec
 	// la réservation atomique et EffectivePlan (veridian_gate_limits.go). La porte
 	// ne fait plus que comparer ses compteurs à ces plafonds.
@@ -148,7 +157,7 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 	warmupCap := lim.Warmup
 
 	if lim.ClassBase <= 0 && perRecipientCap <= 0 && warmupCap <= 0 {
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateDailyCap, nil, nil, "", "no cap configured")
 	}
 
 	workspaceID := ""
@@ -158,21 +167,26 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 	// Lot 4 (08/10/2026) : le jour de compte suit le fuseau de la fenêtre d'envoi du
 	// profil candidat (Europe/Paris ici), plus minuit UTC.
 	since := domain.VeridianDayFor(workspace, provider, veridianNow()).Start
+	// Valeur / limite de la sous-porte la plus spécifique réellement évaluée, pour la
+	// trace d'un passage (fiche 62).
+	var passValue, passLimit interface{}
+	passName := ""
 
 	// 1. Cap par destinataire (le plus net, indexé). Le plus restrictif gagne :
 	//    on le teste en premier car il borne le harcèlement d'un même contact
 	//    indépendamment de la classe.
 	if perRecipientCap > 0 {
 		count, err := w.messageHistoryRepo.CountSentSinceForContact(w.ctx, workspaceID, entry.ContactEmail, since)
+		passValue, passLimit, passName = count, perRecipientCap, "per_recipient"
 		if err != nil {
 			w.logger.WithFields(map[string]interface{}{
 				"entry_id":     entry.ID,
 				"workspace_id": workspaceID,
 				"error":        err.Error(),
 			}).Error("Daily per-recipient cap count failed; SMTP blocked")
-			return w.veridianRescheduleCapped(entry, "per_recipient_count_error", 0, perRecipientCap, "")
+			return w.veridianCapVerdict(domain.VeridianGateDailyCap, entry, "per_recipient_count_error", 0, perRecipientCap, "")
 		} else if count >= perRecipientCap {
-			return w.veridianRescheduleCapped(entry, "per_recipient", count, perRecipientCap, "")
+			return w.veridianCapVerdict(domain.VeridianGateDailyCap, entry, "per_recipient", count, perRecipientCap, "")
 		}
 	}
 
@@ -189,6 +203,7 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 		senderDomain := veridianEmailDomain(entry.Payload.FromAddress)
 		if senderDomain != "" {
 			count, err := w.messageHistoryRepo.CountSentSinceForSenderDomain(w.ctx, workspaceID, senderDomain, since)
+			passValue, passLimit, passName = count, warmupCap, "warmup"
 			if err != nil {
 				w.logger.WithFields(map[string]interface{}{
 					"entry_id":      entry.ID,
@@ -196,14 +211,14 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 					"sender_domain": senderDomain,
 					"error":         err.Error(),
 				}).Error("Daily warmup cap count failed; SMTP blocked")
-				return w.veridianRescheduleCapped(entry, "warmup_count_error", 0, warmupCap, "")
+				return w.veridianCapVerdict(domain.VeridianGateDailyCap, entry, "warmup_count_error", 0, warmupCap, "")
 			} else if count >= warmupCap {
-				return w.veridianRescheduleCapped(entry, "warmup", count, warmupCap, "")
+				return w.veridianCapVerdict(domain.VeridianGateDailyCap, entry, "warmup", count, warmupCap, "")
 			}
 		}
 		// Warmup actif → il GOUVERNE le plafond de l'infra. On ne retombe PAS sur le
 		// cap-classe statique (le warmup est le plafond effectif pendant la rampe).
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateDailyCap, passValue, passLimit, passName, "")
 	}
 
 	// 2b. Cap par classe STATIQUE (réputation), uniquement HORS warmup. Dérivation de
@@ -218,6 +233,7 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 			// (déjà appliqué par veridianResolveCapLimits).
 			classCap := lim.ClassCap
 			count, err := w.veridianCountClassForInfra(workspaceID, class, entry, since)
+			passValue, passLimit, passName = count, classCap, "provider_class"
 			if err != nil {
 				w.logger.WithFields(map[string]interface{}{
 					"entry_id":       entry.ID,
@@ -225,14 +241,14 @@ func (w *EmailQueueWorker) veridianDailyCapGate(workspace *domain.Workspace, pro
 					"provider_class": class,
 					"error":          err.Error(),
 				}).Error("Daily provider-class cap count failed; SMTP blocked")
-				return w.veridianRescheduleCapped(entry, "provider_class_count_error", 0, classCap, class)
+				return w.veridianCapVerdict(domain.VeridianGateDailyCap, entry, "provider_class_count_error", 0, classCap, class)
 			} else if count >= classCap {
-				return w.veridianRescheduleCapped(entry, "provider_class", count, classCap, class)
+				return w.veridianCapVerdict(domain.VeridianGateDailyCap, entry, "provider_class", count, classCap, class)
 			}
 		}
 	}
 
-	return 0, false
+	return veridianPassVerdict(domain.VeridianGateDailyCap, passValue, passLimit, passName, "")
 }
 
 // veridianCountClassForInfra compte les envois du jour vers une classe destinataire
@@ -264,6 +280,14 @@ func (w *EmailQueueWorker) veridianCountClassForInfra(workspaceID string, class 
 // (re-check horaire) : suffisant pour absorber un changement de cap sans
 // attendre le prochain minuit, négligeable en charge.
 func (w *EmailQueueWorker) veridianRescheduleCapped(entry *domain.EmailQueueEntry, capKind string, count, cap int, class string) (time.Duration, bool) {
+	v := w.veridianCapVerdict(domain.VeridianGateDailyCap, entry, capKind, count, cap, class)
+	return v.Delay, true
+}
+
+// veridianCapVerdict construit le verdict de blocage d'un plafond (porte plafond
+// journalier ou plafond par adresse) et logge le motif. Un compteur en erreur bloque
+// aussi (le détail le dit).
+func (w *EmailQueueWorker) veridianCapVerdict(gate string, entry *domain.EmailQueueEntry, capKind string, count, cap int, class string) veridianGateVerdict {
 	w.logger.WithFields(map[string]interface{}{
 		"entry_id":       entry.ID,
 		"integration_id": entry.IntegrationID,
@@ -274,5 +298,19 @@ func (w *EmailQueueWorker) veridianRescheduleCapped(entry *domain.EmailQueueEntr
 		"retry_in":       veridianDailyCapRecheckInterval.String(),
 	}).Debug("Daily cap reached, rescheduling without attempt increment")
 
-	return veridianDailyCapRecheckInterval, true
+	name, detail := capKind, ""
+	if strings.HasSuffix(capKind, "_count_error") {
+		name, detail = strings.TrimSuffix(capKind, "_count_error"), "count query failed, SMTP blocked"
+	}
+	if class != "" {
+		if detail != "" {
+			detail += "; "
+		}
+		detail += "class=" + class
+	}
+	return veridianGateVerdict{
+		Gate: gate, Verdict: domain.VeridianVerdictBlock, Value: count, Limit: cap,
+		Name: name, Detail: detail, Delay: veridianDailyCapRecheckInterval,
+		Reason: domain.VeridianReasonCapacity,
+	}
 }

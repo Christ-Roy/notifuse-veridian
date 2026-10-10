@@ -23,7 +23,8 @@ describe('groupes de la sidebar (lot 4)', () => {
       'broadcasts',
       'automations',
       'sending-profiles',
-      'logs'
+      'logs',
+      'send-queue'
     ])
     expect(Object.keys(SIDEBAR_GROUP_KEYS)).toEqual(['prospection', 'transactional'])
   })

@@ -69,6 +69,21 @@ type EmailQueueEntry struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	ProcessedAt *time.Time `json:"processed_at,omitempty"`
+
+	// Veridian fork (fiche 62, lot 1 « pourquoi ça n'envoie pas ») : POURQUOI l'entrée
+	// attend. Posés par le worker dans le MÊME UPDATE que le report
+	// (EmailQueueDeferralRepository.SetDeferral), jamais relus pour décider d'un
+	// envoi : pure observabilité. NodeID : nœud email de l'automation, posé à la
+	// mise en file (vide pour l'historique et les broadcasts).
+	NodeID           string     `json:"node_id,omitempty"`
+	DeferReason      string     `json:"defer_reason,omitempty"`
+	DeferDetail      string     `json:"defer_detail,omitempty"`
+	DeferProfile     string     `json:"defer_profile,omitempty"`
+	DeferredAt       *time.Time `json:"deferred_at,omitempty"`
+	DeferCount       int        `json:"defer_count,omitempty"`
+	FirstExaminedAt  *time.Time `json:"first_examined_at,omitempty"`
+	LastExaminedAt   *time.Time `json:"last_examined_at,omitempty"`
+	DecisionLoggedAt *time.Time `json:"decision_logged_at,omitempty"`
 }
 
 // EmailQueuePayload contains all data needed to send the email
@@ -261,6 +276,29 @@ type EmailIntegrationLifecycleRepository interface {
 // edit (window, rate or cap) is re-evaluated immediately by the worker.
 type EmailIntegrationPolicyQueueRepository interface {
 	WakePendingByIntegration(ctx context.Context, workspaceID, integrationID string) (int64, error)
+}
+
+// EmailQueueDeferral décrit un report d'entrée AVEC sa raison (fiche 62).
+type EmailQueueDeferral struct {
+	Reason  string    // code stable (domain.VeridianReason*)
+	Detail  string    // détail court (nom de la porte : warmup, provider_class...)
+	Profile string    // profil candidat le plus prometteur
+	Until   time.Time // prochaine tentative (next_retry_at)
+	// RefundAttempt : l'entrée a été réclamée (processing) avant d'être refusée ;
+	// la tentative est remboursée, comme SetNextRetryAndRefundAttempt.
+	RefundAttempt bool
+	// LastError, si non vide, remplace last_error (garde finale en echec transitoire).
+	LastError string
+	// Logged : une ligne du journal des decisions accompagne ce report (pose
+	// decision_logged_at, qui borne le rythme des battements).
+	Logged bool
+}
+
+// EmailQueueDeferralRepository persiste un report avec sa raison. Interface
+// OPTIONNELLE (le worker retombe sur SetNextRetry si le dépôt ne l'implémente pas) :
+// elle ne change pas le contrat EmailQueueRepository que tant de tests simulent.
+type EmailQueueDeferralRepository interface {
+	SetDeferral(ctx context.Context, workspaceID, entryID string, d EmailQueueDeferral) error
 }
 
 // getEmailQueueRetryBase returns the base retry interval for exponential backoff.

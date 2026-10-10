@@ -45,11 +45,22 @@ import (
 // provider est l'infra d'envoi (intégration EmailProvider) déjà en main du worker
 // au call-site (peut être nil en legacy → niveau infra de la cascade sauté).
 func (w *EmailQueueWorker) veridianExcludedClassGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (string, bool) {
+	v := w.veridianExcludedClassVerdict(workspace, provider, entry)
+	if v.Blocked() {
+		return v.Class, true
+	}
+	return "", false
+}
+
+// veridianExcludedClassVerdict est la variante structurée de la porte (fiche 62) :
+// valeur = classe du destinataire, limite = classes exclues. Même logique que la
+// fonction historique, qui en est désormais un wrapper.
+func (w *EmailQueueWorker) veridianExcludedClassVerdict(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) veridianGateVerdict {
 	excluded := domain.VeridianResolveExcludedClasses(workspace, provider, entry)
 	if len(excluded) == 0 {
 		// No-op strict : aucune exclusion configurée (cascade vide). On NE classe
 		// PAS le destinataire (pas de lookup MX inutile) — comportement upstream.
-		return "", false
+		return veridianPassVerdict(domain.VeridianGateExcluded, nil, nil, "", "no exclusion configured")
 	}
 
 	// Classe du destinataire : tag amont (payload) sinon classification par MX
@@ -58,7 +69,11 @@ func (w *EmailQueueWorker) veridianExcludedClassGate(workspace *domain.Workspace
 	// au throttle l'est ici aussi).
 	class := w.veridianClassifyRecipient(entry)
 	if excluded[class] {
-		return class, true
+		return veridianGateVerdict{
+			Gate: domain.VeridianGateExcluded, Verdict: domain.VeridianVerdictBlock,
+			Value: class, Limit: veridianSortedKeys(excluded), Class: class,
+			Reason: domain.VeridianReasonExcludedClass,
+		}
 	}
-	return "", false
+	return veridianPassVerdict(domain.VeridianGateExcluded, class, veridianSortedKeys(excluded), "", "")
 }

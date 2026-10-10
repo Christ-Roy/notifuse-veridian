@@ -194,6 +194,10 @@ Autres leviers de diagnostic :
 notifuse messages:list <workspace> --param limit=50       # historique des envois récents
 notifuse lists:stats <workspace> --id <id>                        # taux d'ouverture/clic/désabonnement d'une liste
 notifuse webhooks:deliveries <workspace> --id <webhook_id>  # évènements delivery/bounce/complaint livrés
+notifuse queue:explain <workspace>                        # pourquoi des mails sont en file : groupes par raison, jamais examinés, prochaine tentative
+notifuse queue:explain <workspace> --entry <id>           # une entrée et sa dernière décision, porte par porte
+notifuse logs:decisions <workspace> --email a@b.fr --since 2h --trace   # ce que le worker a décidé pour un contact
+notifuse queue:recompute <workspace> --automation <id> --limit 100      # dry-run ; ajoute --yes pour remettre ces entrées au recalcul
 ```
 
 Un débit bas a presque toujours une cause visible dans `notifuse config` :

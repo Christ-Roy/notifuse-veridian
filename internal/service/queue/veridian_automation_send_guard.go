@@ -34,7 +34,11 @@ func (w *EmailQueueWorker) veridianAutomationSendAllowed(workspace *domain.Works
 		return false
 	}
 	if automation.Status != domain.AutomationStatusLive {
-		w.discardAutomationEntry(workspace.ID, entry, "automation_not_live")
+		// Fiche 62 : une automation en pause ne perd PAS ses mails en vol. Supprimer la
+		// ligne sans prevenir l'executeur laissait le contact parque en « sending » a
+		// jamais (89 orphelins du 29/09). Le mail ne part pas, la ligne attend la
+		// reprise (ResumeBySource / reactivation) et le contact reste gele, comme prevu.
+		w.veridianDeferAutomationNotLive(workspace, entry)
 		return false
 	}
 
@@ -74,6 +78,11 @@ func (w *EmailQueueWorker) veridianAutomationSendAllowed(workspace *domain.Works
 }
 
 func (w *EmailQueueWorker) discardAutomationEntry(workspaceID string, entry *domain.EmailQueueEntry, reason string) {
+	if reason == "automation_not_live" {
+		// Jamais de suppression pour une pause (cf. veridianDeferAutomationNotLive).
+		w.veridianDeferAutomationNotLive(&domain.Workspace{ID: workspaceID}, entry)
+		return
+	}
 	if err := w.queueRepo.Delete(w.ctx, workspaceID, entry.ID); err != nil {
 		w.logger.WithFields(map[string]interface{}{
 			"entry_id": entry.ID,
@@ -88,6 +97,28 @@ func (w *EmailQueueWorker) discardAutomationEntry(workspaceID string, entry *dom
 		"recipient":     entry.ContactEmail,
 		"reason":        reason,
 	}).Info("Automation final guard blocked SMTP and discarded stale queue row")
+
+	// Fiche 62 : la suppression de la ligne DOIT etre notifiee a l'executeur, sinon le
+	// contact reste parque en « sending » sans entree en file (cause des 89 orphelins).
+	// Echec definitif cote automation : le contact sort avec la raison.
+	if w.onEmailFailed != nil {
+		w.onEmailFailed(workspaceID, entry.SourceType, entry.SourceID, entry.ContactEmail, entry.MessageID, errors.New(reason), true)
+	}
+	w.veridianRecordTerminal(&domain.Workspace{ID: workspaceID}, entry, domain.VeridianOutcomeDiscarded, reason, "", entry.IntegrationID, nil)
+}
+
+// veridianAutomationNotLiveRetry : re-examen d'une ligne dont l'automation est en pause.
+const veridianAutomationNotLiveRetry = 10 * time.Minute
+
+// veridianDeferAutomationNotLive laisse la ligne en file, reportee, avec la raison.
+func (w *EmailQueueWorker) veridianDeferAutomationNotLive(workspace *domain.Workspace, entry *domain.EmailQueueEntry) {
+	w.veridianDeferEntry(workspace, entry, veridianDeferral{
+		Reason:  domain.VeridianReasonAutomationPaused,
+		Profile: entry.IntegrationID,
+		Delay:   veridianAutomationNotLiveRetry,
+	}, nil, func() error {
+		return w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, time.Now().Add(veridianAutomationNotLiveRetry))
+	})
 }
 
 func (w *EmailQueueWorker) retryAutomationGuard(workspaceID string, entry *domain.EmailQueueEntry, guardErr error) {

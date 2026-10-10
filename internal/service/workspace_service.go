@@ -443,6 +443,11 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.VeridianPerRecipientDailyCap = settings.VeridianPerRecipientDailyCap
 	existingWorkspace.Settings.VeridianPerSenderDailyCap = settings.VeridianPerSenderDailyCap
 	existingWorkspace.Settings.VeridianSendingWindow = settings.VeridianSendingWindow
+	// Fiche 62 : le niveau du journal des decisions n'est pas dans le formulaire de la
+	// console ; une sauvegarde qui ne le porte pas ne doit pas le remettre a zero.
+	if settings.VeridianDecisionLogLevel != "" {
+		existingWorkspace.Settings.VeridianDecisionLogLevel = domain.VeridianNormalizeDecisionLogLevel(settings.VeridianDecisionLogLevel)
+	}
 	existingWorkspace.Settings.VeridianJitterPct = settings.VeridianJitterPct
 	existingWorkspace.Settings.VeridianAntiHashEnabled = settings.VeridianAntiHashEnabled
 	existingWorkspace.Settings.VeridianAntiHashWindowHours = settings.VeridianAntiHashWindowHours

@@ -38,7 +38,8 @@ export const SIDEBAR_GROUP_KEYS = {
     'broadcasts',
     'automations',
     'sending-profiles',
-    'logs'
+    'logs',
+    'send-queue'
   ],
   transactional: ['templates-transactional', 'transactional-notifications', 'logs-transactional']
 } as const
@@ -59,6 +60,7 @@ export function selectedSidebarKey(pathname: string, search?: SidebarSearch): st
   if (pathname.includes('/file-manager')) return ''
   if (pathname.includes('/transactional-notifications')) return 'transactional-notifications'
   if (pathname.includes('/sending-profiles')) return 'sending-profiles'
+  if (pathname.includes('/send-queue')) return 'send-queue'
   if (pathname.includes('/logs')) {
     return messageTypeFromSearch(search) === 'transactional' ? 'logs-transactional' : 'logs'
   }

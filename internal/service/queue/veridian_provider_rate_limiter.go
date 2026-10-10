@@ -104,6 +104,18 @@ func (prl *ProviderClassRateLimiter) AllowSeeded(integrationID, class string, ra
 	return limiter.Allow()
 }
 
+// PeekSeeded répond comme AllowSeeded SANS rien consommer ni créer : un limiter
+// jamais touché n'est pas amorcé (le vrai appel le fera), un limiter existant n'est
+// pas débité. Sert aux explications de la fiche 62 : lire le débit d'une entrée
+// qu'une autre porte bloque déjà ne doit pas priver une entrée qui, elle, enverra.
+func (prl *ProviderClassRateLimiter) PeekSeeded(integrationID, class string, ratePerMinute float64, recentlySent func() bool) bool {
+	v, touched := prl.limiters.Load(providerClassKey(integrationID, class))
+	if !touched {
+		return recentlySent == nil || !recentlySent()
+	}
+	return v.(*rate.Limiter).Tokens() >= 1
+}
+
 // GetStats returns statistics about all provider-class rate limiters,
 // keyed by "integrationID|class".
 func (prl *ProviderClassRateLimiter) GetStats() map[string]RateLimiterStats {

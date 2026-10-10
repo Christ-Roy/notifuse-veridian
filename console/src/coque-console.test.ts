@@ -49,7 +49,7 @@ describe('coque de la console : sidebar et réglages', () => {
     expect(layout).toMatch(/key: 'sending-profiles'/)
     expect(layout).toMatch(/to="\/console\/workspace\/\$workspaceId\/sending-profiles"/)
     const model = read('./layouts/veridian_sidebar_model.ts')
-    expect(model).toMatch(/'sending-profiles',\s*'logs'\s*\]/)
+    expect(model).toMatch(/'sending-profiles',\s*'logs',\s*'send-queue'\s*\]/)
     expect(model).toMatch(/pathname\.includes\('\/sending-profiles'\)/)
   })
 

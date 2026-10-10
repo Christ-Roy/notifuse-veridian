@@ -161,6 +161,9 @@ const (
 	NodeActionEntered    NodeAction = "entered"
 	NodeActionProcessing NodeAction = "processing"
 	NodeActionCompleted  NodeAction = "completed"
+	// NodeActionQueued (fiche 62) : le noeud email a mis le mail en file. Ce n'est PAS un
+	// envoi : « completed » d'un noeud email veut dire envoye (ou echec definitif).
+	NodeActionQueued NodeAction = "queued"
 	NodeActionFailed     NodeAction = "failed"
 	NodeActionSkipped    NodeAction = "skipped"
 )
@@ -168,7 +171,7 @@ const (
 // IsValid checks if the node action is valid
 func (a NodeAction) IsValid() bool {
 	switch a {
-	case NodeActionEntered, NodeActionProcessing, NodeActionCompleted,
+	case NodeActionEntered, NodeActionProcessing, NodeActionCompleted, NodeActionQueued,
 		NodeActionFailed, NodeActionSkipped:
 		return true
 	default:

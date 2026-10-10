@@ -10,7 +10,7 @@ import { resolve } from 'node:path'
 // Après avoir ajouté un t`...` dans ces fichiers : `npm run lingui:extract`,
 // traduire dans fr.po, puis `npm run lingui:compile`.
 
-const SCOPE = /(^|\/)(Integrations|WorkspaceLayout|SendingProfilesPage|veridian_[A-Za-z0-9_]+)\.tsx?$/
+const SCOPE = /(^|\/)(Integrations|WorkspaceLayout|SendingProfilesPage|SendQueuePage|StatNode|veridian_[A-Za-z0-9_]+)\.tsx?$/
 
 interface PoEntry {
   refs: string[]
@@ -217,5 +217,68 @@ describe('complétude fr + en du tableau de bord de prospection (lot 5)', () => 
     expect(fr.get('Remaining stock')).toBe('Stock restant')
     expect(fr.get('Automatic replies')).toBe('Réponses automatiques')
     expect(fr.get('Slowed ÷{factor}')).toBe('Ralenti ÷{factor}')
+  })
+})
+
+// LOT 1 (10/10/2026) : page File d'envoi et compteurs du noeud email. Chaque chaine a sa
+// traduction française ET anglaise, sans tiret cadratin entouré d'espaces.
+describe('complétude fr + en des chaînes du lot 1 (File d'envoi)', () => {
+  const LOT1: Record<string, string> = {
+    'Send queue': "File d'envoi",
+    'Not examined yet': 'Jamais examinée',
+    'Sending window closed': "Fenêtre d'envoi fermée",
+    'Daily capacity reached': 'Capacité du jour atteinte',
+    'Recipient provider rate limit': 'Débit du fournisseur destinataire',
+    'Reputation fuse tripped': 'Fusible de réputation déclenché',
+    'Excluded class': 'Classe exclue',
+    'Profile paused': 'Profil en pause',
+    'No profile in the pool': 'Aucun profil dans le pool',
+    'Circuit open': 'Circuit ouvert',
+    'Follow-up waiting for its original sender': "La relance attend son expéditeur d'origine",
+    'Quota denied': 'Quota refusé',
+    'Render failed': 'Rendu en échec',
+    'Safety check, retrying': 'Garde-fou, nouvelle tentative',
+    'Automation paused': 'Automatisation en pause',
+    'Send error': "Erreur d'envoi",
+    'Deferred (reason not recorded)': 'Reporté (raison non enregistrée)',
+    'Warm-up cap': 'Plafond de chauffe',
+    'Provider class cap': 'Plafond de la classe de fournisseur',
+    'Per-recipient cap': 'Plafond par destinataire',
+    'Per-sender cap': 'Plafond par expéditeur',
+    'Pass': 'Passe',
+    'Slowed': 'Ralentie',
+    'Recompute': 'Recalculer',
+    'Remove this contact': 'Sortir ce contact',
+    'Decision log': 'Journal des décisions',
+    'Raw trace (JSON)': 'Trace brute (JSON)',
+    'Queued': 'En file',
+    'Sent': 'Envoyé'
+  }
+  for (const locale of ['fr', 'en']) {
+    const entries = parsePo(readFileSync(resolve(__dirname, `locales/${locale}.po`), 'utf8'))
+    it(`${locale} : aucune chaîne du lot 1 vide`, () => {
+      for (const msgid of Object.keys(LOT1)) {
+        const entry = entries.find((e) => e.msgid === msgid)
+        expect(entry, `${locale}: « ${msgid} » absente du catalogue`).toBeDefined()
+        expect(entry!.msgstr, `${locale}: « ${msgid} » vide`).not.toBe('')
+      }
+    })
+  }
+
+  it('fr : traductions attendues, variables conservées, aucun tiret cadratin entouré d'espaces', () => {
+    const entries = parsePo(readFileSync(resolve(__dirname, 'locales/fr.po'), 'utf8'))
+    for (const [msgid, expected] of Object.entries(LOT1)) {
+      const entry = entries.find((e) => e.msgid === msgid)!
+      if (msgid !== 'Sent') expect(entry.msgstr).toBe(expected)
+      expect(entry.msgstr).not.toMatch(/ — /)
+    }
+    const mine = entries.filter((e) => e.refs.some((r) => /send_queue\/|SendQueuePage/.test(r)))
+    expect(mine.length).toBeGreaterThan(60)
+    for (const e of mine) {
+      const vars = (e.msgid.match(/\{[A-Za-z0-9_]+\}/g) ?? []).sort()
+      const varsFr = (e.msgstr.match(/\{[A-Za-z0-9_]+\}/g) ?? []).sort()
+      expect(varsFr, e.msgid).toEqual(vars)
+      expect(e.msgstr, e.msgid).not.toMatch(/ — /)
+    }
   })
 })

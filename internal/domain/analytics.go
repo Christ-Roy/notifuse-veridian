@@ -797,9 +797,18 @@ var PredefinedSchemas = map[string]analytics.SchemaDefinition{
 				Type:        "count",
 				Title:       "Completed",
 				SQL:         "*",
-				Description: "Successfully completed executions",
+				Description: "Successfully completed executions (an email node counts a mail only once actually sent; mails merely queued are count_queued)",
 				Filters: []analytics.MeasureFilter{
-					{SQL: "action = 'completed'"},
+					{SQL: "action = 'completed' AND COALESCE(output->>'queued', '') <> 'true'"},
+				},
+			},
+			"count_queued": {
+				Type:        "count",
+				Title:       "Queued",
+				SQL:         "*",
+				Description: "Email node executions that put a mail in the send queue (not yet sent). Includes legacy rows recorded as completed with output.queued=true",
+				Filters: []analytics.MeasureFilter{
+					{SQL: "(action = 'queued' OR (action = 'completed' AND COALESCE(output->>'queued', '') = 'true'))"},
 				},
 			},
 			"count_failed": {

@@ -57,16 +57,23 @@ func veridianResolvePerSenderCap(workspace *domain.Workspace, provider *domain.E
 // re-planifiée, (0, false) si elle peut partir. No-op strict sans configuration
 // OU sans adresse FROM exploitable (entry.Payload.FromAddress vide).
 func (w *EmailQueueWorker) veridianPerSenderCapGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
+	v := w.veridianPerSenderCapVerdict(workspace, provider, entry)
+	return v.Delay, v.Blocked()
+}
+
+// veridianPerSenderCapVerdict est la variante structurée de la porte (fiche 62) :
+// valeur = envois du jour depuis cette adresse, limite = plafond par adresse.
+func (w *EmailQueueWorker) veridianPerSenderCapVerdict(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) veridianGateVerdict {
 	cap := veridianResolvePerSenderCap(workspace, provider, entry)
 	if cap <= 0 {
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateSenderCap, nil, nil, "", "no per-sender cap configured")
 	}
 
 	// Sans adresse FROM connue, le COUNT par sender n'a pas de clé : on ne peut pas
 	// attribuer l'envoi à une boîte → on n'enforce pas (best-effort, non-régression).
 	sender := entry.Payload.FromAddress
 	if sender == "" {
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateSenderCap, nil, cap, "per_sender", "no sender address, cap not enforced")
 	}
 
 	workspaceID := ""
@@ -84,13 +91,13 @@ func (w *EmailQueueWorker) veridianPerSenderCapGate(workspace *domain.Workspace,
 			"sender":       sender,
 			"error":        err.Error(),
 		}).Warn("Daily per-sender cap count failed, allowing send (degraded)")
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateSenderCap, nil, cap, "per_sender", "count failed, allowed (degraded)")
 	}
 	if count >= cap {
 		// Réutilise le reschedule du daily cap (même délai borné, même contrat).
 		// capKind "per_sender" pour la traçabilité du motif dans les logs.
-		return w.veridianRescheduleCapped(entry, "per_sender", count, cap, "")
+		return w.veridianCapVerdict(domain.VeridianGateSenderCap, entry, "per_sender", count, cap, "")
 	}
 
-	return 0, false
+	return veridianPassVerdict(domain.VeridianGateSenderCap, count, cap, "per_sender", "")
 }

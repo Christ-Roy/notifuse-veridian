@@ -225,7 +225,8 @@ func TestTransactionalEntry_ContactReplyDoesNotStopIt_ButADeadSequenceDoes(t *te
 			Return(&domain.Automation{ID: "auto-1", Status: domain.AutomationStatusPaused}, nil)
 		env.worker.SetAutomationSendGuard(automations, nil, nil)
 		entry := transactionalTestEntry("tx")
-		env.mockQueueRepo.EXPECT().Delete(gomock.Any(), "ws-1", "t1").Return(nil)
+		// Fiche 62 : une sequence en pause garde sa ligne (reportee), elle n'est pas supprimee.
+		env.mockQueueRepo.EXPECT().SetNextRetry(gomock.Any(), "ws-1", "t1", gomock.Any()).Return(nil)
 		env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 		env.worker.processEntry(ws, entry)
 	})

@@ -227,6 +227,27 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidates(
 	entry *domain.EmailQueueEntry,
 	assigned *domain.Integration,
 ) []veridianFailoverCandidate {
+	cands, _ := w.veridianBuildFailoverCandidatesWithAnchor(workspace, entry, assigned)
+	return cands
+}
+
+// veridianAnchorInfo décrit l'ancre de séquence (fiche 62) : sert à la trace et à la
+// raison « la relance attend son expéditeur d'origine » (Only = la liste de candidats
+// se réduit à l'ancre).
+type veridianAnchorInfo struct {
+	Found     bool
+	ID        string
+	Available bool
+	Only      bool
+}
+
+// veridianBuildFailoverCandidatesWithAnchor : même liste que
+// veridianBuildFailoverCandidates, plus l'ancre de séquence retenue.
+func (w *EmailQueueWorker) veridianBuildFailoverCandidatesWithAnchor(
+	workspace *domain.Workspace,
+	entry *domain.EmailQueueEntry,
+	assigned *domain.Integration,
+) ([]veridianFailoverCandidate, veridianAnchorInfo) {
 	assignedFrom, assignedName := entry.Payload.FromAddress, entry.Payload.FromName
 
 	profiles := workspace.VeridianMarketingEmailProfiles()
@@ -234,7 +255,7 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidates(
 		// Lot 4 : si l'integration assignee est le profil transactionnel reserve, la
 		// liste est vide (l'entree attend un profil commercial, elle ne part pas par lui).
 		return veridianDropReservedFromCandidates(workspace,
-			[]veridianFailoverCandidate{veridianCandidateFromIntegration(assigned, assignedFrom, assignedName)})
+			[]veridianFailoverCandidate{veridianCandidateFromIntegration(assigned, assignedFrom, assignedName)}), veridianAnchorInfo{}
 	}
 
 	byID := make(map[string]domain.VeridianEmailProfile, len(profiles))
@@ -287,7 +308,8 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidates(
 			candidates = append(candidates, veridianCandidateFromIntegration(integ, fallbackFrom, fallbackName))
 		}
 	}
-	return veridianDropReservedFromCandidates(workspace, candidates)
+	return veridianDropReservedFromCandidates(workspace, candidates),
+		veridianAnchorInfo{Found: anchorFound, ID: anchorID, Available: anchorAvailable, Only: anchorFound && anchorAvailable}
 }
 
 func veridianSenderFromProvider(provider *domain.EmailProvider) string {
@@ -316,14 +338,72 @@ func veridianSenderNameFromProvider(provider *domain.EmailProvider) string {
 //     IntegrationID/ProviderKind côté appelant).
 //   - Candidate nil, Permanent true : TOUS les candidats joignables excluent
 //     la classe de ce destinataire (politique, jamais retenté).
-//   - Candidate nil, Permanent false : aucun candidat n'a de marge maintenant
-//     ; RetryDelay est le délai le plus court observé (recheck le plus tôt
-//     possible plutôt que d'attendre arbitrairement le pire délai du lot).
+//   - Candidate nil, Permanent false : aucun candidat n'a de marge maintenant.
+//     RetryDelay est le délai du candidat le plus prometteur (celui qui peut
+//     rouvrir le plus tôt) ; Reason/ReasonDetail/ReasonProfile disent POURQUOI
+//     (fiche 62), et Evaluations garde l'examen complet de chaque candidat.
 type veridianSelectionResult struct {
 	Candidate     *veridianFailoverCandidate
 	Permanent     bool
 	ExcludedClass string
 	RetryDelay    time.Duration
+
+	// Fiche 62 : explication de la décision (observabilité pure, jamais relue pour
+	// décider).
+	Reason        string
+	ReasonDetail  string
+	ReasonProfile string
+	Evaluations   []veridianCandidateEvaluation
+	Anchor        veridianAnchorInfo
+	Class         string
+}
+
+// veridianEvaluateCandidate évalue TOUTES les portes d'un candidat, sans
+// court-circuit, pour expliquer la décision (fiche 62). La décision elle-même ne
+// change pas : un candidat n'est retenu que si aucune porte ne bloque. Les portes
+// sans effet de bord (exclusion, réputation, plafonds, fenêtre) passent d'abord ;
+// la porte de débit de classe, seule à consommer un jeton, passe EN DERNIER et ne
+// consomme que si tout le reste est ouvert (sinon elle est lue sans débiter : un
+// jeton gaspillé pour un envoi qui n'aura pas lieu priverait une entrée qui, elle,
+// partira). L'ordre d'évaluation n'a pas d'autre effet : « tout est ouvert » reste
+// la seule condition d'envoi.
+//
+// entry.Payload.FromAddress/FromName et entry.IntegrationID doivent déjà porter ceux
+// du candidat (cf. veridianSelectSendableIntegration).
+func (w *EmailQueueWorker) veridianEvaluateCandidate(
+	workspace *domain.Workspace,
+	entry *domain.EmailQueueEntry,
+	cand veridianFailoverCandidate,
+) veridianCandidateEvaluation {
+	ev := veridianCandidateEvaluation{Candidate: cand}
+
+	excl := w.veridianExcludedClassVerdict(workspace, cand.Provider, entry)
+	ev.Gates = append(ev.Gates, excl)
+	if excl.Blocked() {
+		ev.Outcome = "excluded"
+		ev.ExcludedClass = excl.Class
+		for _, g := range []string{domain.VeridianGateReputation, domain.VeridianGateClassRate, domain.VeridianGateDailyCap, domain.VeridianGateSenderCap, domain.VeridianGateWindow} {
+			ev.Gates = append(ev.Gates, veridianSkippedVerdict(g, "class excluded on this profile"))
+		}
+		return ev
+	}
+
+	rep := w.veridianReputationGateVerdict(workspace, cand.Provider, entry)
+	daily := w.veridianDailyCapVerdict(workspace, cand.Provider, entry)
+	sender := w.veridianPerSenderCapVerdict(workspace, cand.Provider, entry)
+	window := w.veridianSendingWindowVerdict(workspace, cand.Provider, entry)
+	othersOpen := !rep.Blocked() && !daily.Blocked() && !sender.Blocked() && !window.Blocked()
+	class := w.veridianProviderClassGateVerdict(workspace, cand.Provider, entry, othersOpen)
+	ev.Gates = append(ev.Gates, rep, class, daily, sender, window)
+
+	if dominant, longest := veridianDominantBlock(ev.Gates); dominant != nil {
+		ev.Outcome = "blocked"
+		ev.Dominant = dominant
+		ev.BlockedDelay = longest
+		return ev
+	}
+	ev.Outcome = "selected"
+	return ev
 }
 
 // veridianSelectSendableIntegration essaie, dans l'ordre de priorité résolu
@@ -335,12 +415,19 @@ type veridianSelectionResult struct {
 // fois par l'appelant sur le gagnant : c'est l'autorité finale, ces gates ne
 // sont qu'une présélection bon marché (même contrat que documenté dans
 // veridian_daily_quota.go).
+//
+// Fiche 62 : chaque candidat est évalué sur TOUTES ses portes (cf.
+// veridianEvaluateCandidate) pour que la raison persistée soit la vraie. Le report
+// n'est plus plafonné à 1 h : un candidat bloqué ne peut pas envoyer avant que
+// toutes ses portes bloquantes se rouvrent, donc son délai est le plus long des
+// leurs (fenêtre fermée tout le week-end = report jusqu'à l'ouverture, borné à 24 h
+// par la porte fenêtre elle-même) ; entre candidats, le plus tôt gagne.
 func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 	workspace *domain.Workspace,
 	entry *domain.EmailQueueEntry,
 	assignedIntegration *domain.Integration,
 ) veridianSelectionResult {
-	candidates := w.veridianBuildFailoverCandidates(workspace, entry, assignedIntegration)
+	candidates, anchor := w.veridianBuildFailoverCandidatesWithAnchor(workspace, entry, assignedIntegration)
 
 	savedFrom, savedName := entry.Payload.FromAddress, entry.Payload.FromName
 	savedIntegrationID := entry.IntegrationID
@@ -349,11 +436,13 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 		entry.IntegrationID = savedIntegrationID
 	}()
 
+	result := veridianSelectionResult{Anchor: anchor, Class: w.veridianClassifyRecipient(entry)}
 	reachable := 0
 	excludedCount := 0
+	pausedCount := 0
 	anyCircuitOpen := false
 	excludedClass := ""
-	minDelay := veridianDailyCapRecheckInterval
+	var best *veridianCandidateEvaluation
 
 	for i := range candidates {
 		cand := candidates[i]
@@ -366,6 +455,8 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 		// une exclusion de classe), ni circuit ouvert. La levée de la pause réveille
 		// la file (UpdateIntegration -> WakePendingByIntegration).
 		if cand.Provider.VeridianPaused {
+			pausedCount++
+			result.Evaluations = append(result.Evaluations, veridianCandidateEvaluation{Candidate: cand, Outcome: "paused"})
 			continue
 		}
 		// Un FromAddress vide est une base de décision valable pour
@@ -376,10 +467,12 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 		// d'expédition résolue produirait un From vide sur une infra qu'on
 		// vient juste de choisir — jamais une base de décision.
 		if cand.IntegrationID != entry.IntegrationID && cand.FromAddress == "" {
+			result.Evaluations = append(result.Evaluations, veridianCandidateEvaluation{Candidate: cand, Outcome: "skipped"})
 			continue
 		}
 		if w.circuitBreaker.IsOpen(cand.IntegrationID) {
 			anyCircuitOpen = true
+			result.Evaluations = append(result.Evaluations, veridianCandidateEvaluation{Candidate: cand, Outcome: "circuit_open"})
 			continue
 		}
 		reachable++
@@ -395,44 +488,69 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 		// l'appelant committe IntegrationID sur le gagnant.
 		entry.IntegrationID = cand.IntegrationID
 
-		if class, excluded := w.veridianExcludedClassGate(workspace, cand.Provider, entry); excluded {
+		ev := w.veridianEvaluateCandidate(workspace, entry, cand)
+		result.Evaluations = append(result.Evaluations, ev)
+		switch ev.Outcome {
+		case "excluded":
 			excludedCount++
-			excludedClass = class
+			excludedClass = ev.ExcludedClass
 			continue
-		}
-		if delay, frozen := w.veridianReputationGate(workspace, cand.Provider, entry); frozen {
-			minDelay = veridianMinDuration(minDelay, delay)
-			continue
-		}
-		if delay, throttled := w.veridianProviderClassGate(workspace, cand.Provider, entry); throttled {
-			minDelay = veridianMinDuration(minDelay, delay)
-			continue
-		}
-		if delay, capped := w.veridianDailyCapGate(workspace, cand.Provider, entry); capped {
-			minDelay = veridianMinDuration(minDelay, delay)
-			continue
-		}
-		if delay, capped := w.veridianPerSenderCapGate(workspace, cand.Provider, entry); capped {
-			minDelay = veridianMinDuration(minDelay, delay)
-			continue
-		}
-		if delay, closed := w.veridianSendingWindowGate(workspace, cand.Provider, entry); closed {
-			minDelay = veridianMinDuration(minDelay, delay)
+		case "blocked":
+			evCopy := result.Evaluations[len(result.Evaluations)-1]
+			if best == nil || evCopy.BlockedDelay < best.BlockedDelay {
+				best = &evCopy
+			}
 			continue
 		}
 
 		won := cand
 		savedFrom, savedName = cand.FromAddress, cand.FromName // commit : le defer réappliquera ces valeurs (no-op)
-		return veridianSelectionResult{Candidate: &won}
+		result.Candidate = &won
+		return result
 	}
 
 	if reachable > 0 && excludedCount == reachable {
-		return veridianSelectionResult{Permanent: true, ExcludedClass: excludedClass}
+		result.Permanent = true
+		result.ExcludedClass = excludedClass
+		result.Reason = domain.VeridianReasonExcludedClass
+		result.ReasonDetail = excludedClass
+		return result
 	}
-	if reachable == 0 && anyCircuitOpen {
-		minDelay = veridianMinDuration(minDelay, w.circuitBreaker.GetConfig().CooldownPeriod)
+
+	retry := veridianDailyCapRecheckInterval
+	switch {
+	case best != nil:
+		retry = best.BlockedDelay
+		result.Reason = best.Dominant.Reason
+		result.ReasonDetail = best.Dominant.Name
+		if result.ReasonDetail == "" {
+			result.ReasonDetail = best.Dominant.Detail
+		}
+		result.ReasonProfile = best.Candidate.IntegrationID
+		// Une relance liée à son expéditeur d'origine attend CELUI-CI : si la seule
+		// porte qui la retient est un plafond ou un débit (pas la fenêtre, qui vaut
+		// pour tous), la vraie raison est « l'ancre n'a pas de place ».
+		if anchor.Only && best.Candidate.IntegrationID == anchor.ID && result.Reason != domain.VeridianReasonWindowClosed {
+			result.ReasonDetail = result.Reason
+			result.Reason = domain.VeridianReasonAnchorWait
+		}
+	case reachable == 0 && anyCircuitOpen:
+		result.Reason = domain.VeridianReasonCircuitOpen
+	case reachable == 0 && pausedCount > 0:
+		result.Reason = domain.VeridianReasonProfilePaused
+	default:
+		result.Reason = domain.VeridianReasonNoProfile
 	}
-	return veridianSelectionResult{RetryDelay: minDelay}
+	// Un circuit ouvert se referme tout seul après son cooldown : ne pas dormir plus
+	// longtemps que lui quand un candidat attend seulement ça.
+	if anyCircuitOpen {
+		retry = veridianMinDuration(retry, w.circuitBreaker.GetConfig().CooldownPeriod)
+	}
+	if retry < time.Second {
+		retry = time.Second
+	}
+	result.RetryDelay = retry
+	return result
 }
 
 func veridianMinDuration(a, b time.Duration) time.Duration {

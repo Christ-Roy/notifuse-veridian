@@ -60,7 +60,7 @@ func TestEmailQueueRepository_Enqueue(t *testing.T) {
 				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-				sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
@@ -144,7 +144,7 @@ func TestEmailQueueRepository_Enqueue(t *testing.T) {
 				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 				3, // max_attempts default
-				sqlmock.AnyArg(), sqlmock.AnyArg(),
+				sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
@@ -185,7 +185,9 @@ func TestEmailQueueRepository_Enqueue(t *testing.T) {
 var fetchPendingCols = []string{
 	"id", "status", "priority", "source_type", "source_id", "integration_id", "provider_kind",
 	"contact_email", "message_id", "template_id", "payload", "attempts", "max_attempts",
-	"last_error", "next_retry_at", "created_at", "updated_at", "processed_at", "is_followup",
+	"last_error", "next_retry_at", "created_at", "updated_at", "processed_at",
+	"node_id", "defer_reason", "defer_detail", "defer_profile", "deferred_at", "defer_count",
+	"first_examined_at", "last_examined_at", "decision_logged_at", "is_followup",
 }
 
 func TestEmailQueueRepository_FetchPending(t *testing.T) {
@@ -205,11 +207,11 @@ func TestEmailQueueRepository_FetchPending(t *testing.T) {
 		rows := sqlmock.NewRows(fetchPendingCols).AddRow(
 			"entry-2", "pending", 5, "automation", "auto-1", "integ-2", "ses",
 			"user2@example.com", "msg-2", "tpl-2", payloadJSON, 0, 3,
-			nil, nil, now, now, nil, false,
+			nil, nil, now, now, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, false,
 		).AddRow(
 			"entry-1", "pending", 1, "broadcast", "bcast-1", "integ-1", "smtp",
 			"user@example.com", "msg-1", "tpl-1", payloadJSON, 0, 3,
-			nil, nil, now, now, nil, false,
+			nil, nil, now, now, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, false,
 		)
 
 		mock.ExpectQuery(fairQuery).
@@ -239,7 +241,7 @@ func TestEmailQueueRepository_FetchPending(t *testing.T) {
 		add := func(id, source string, age time.Duration, followup bool) {
 			rows.AddRow(id, "pending", 5, "automation", source, "integ", "smtp",
 				id+"@example.com", "msg-"+id, "tpl", payloadJSON, 0, 3,
-				nil, nil, t0.Add(age), t0.Add(age), nil, followup)
+				nil, nil, t0.Add(age), t0.Add(age), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, followup)
 		}
 		add("dev-1", "devenir", 0, false)
 		add("dev-2", "devenir", time.Second, false)
@@ -481,7 +483,7 @@ func TestEmailQueueRepository_WakePendingByIntegration(t *testing.T) {
 	policyRepo, ok := repo.(domain.EmailIntegrationPolicyQueueRepository)
 	require.True(t, ok)
 
-	mock.ExpectExec(`(?s)UPDATE email_queue\s+SET next_retry_at = NULL, updated_at = NOW\(\)\s+WHERE integration_id = \$1\s+AND status = 'pending'\s+AND next_retry_at IS NOT NULL`).
+	mock.ExpectExec(`(?s)UPDATE email_queue\s+SET next_retry_at = NULL, updated_at = NOW\(\),\s+defer_reason = NULL, defer_detail = NULL, defer_profile = NULL\s+WHERE integration_id = \$1\s+AND status = 'pending'\s+AND next_retry_at IS NOT NULL`).
 		WithArgs("profile-1").
 		WillReturnResult(sqlmock.NewResult(0, 3))
 
@@ -756,7 +758,7 @@ func TestEmailQueueRepository_FetchPending_StuckProcessing(t *testing.T) {
 		rows := sqlmock.NewRows(fetchPendingCols).AddRow(
 			"stuck-entry", "processing", 1, "broadcast", "bcast-1", "integ-1", "smtp",
 			"user@example.com", "msg-1", "tpl-1", payloadJSON, 1, 3,
-			"previous error", nil, stuckTime, stuckTime, nil, false,
+			"previous error", nil, stuckTime, stuckTime, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, false,
 		)
 
 		// The query should include the stuck processing condition
@@ -890,7 +892,7 @@ func TestEmailQueueRepository_ResumeBySource(t *testing.T) {
 
 		repo := NewEmailQueueRepositoryWithDB(db)
 
-		mock.ExpectExec(`UPDATE email_queue\s+SET status = 'pending', next_retry_at = NULL, updated_at = NOW\(\)\s+WHERE source_type = \$1 AND source_id = \$2\s+AND status = 'paused'`).
+		mock.ExpectExec(`UPDATE email_queue\s+SET status = 'pending', next_retry_at = NULL, updated_at = NOW\(\),\s+defer_reason = NULL, defer_detail = NULL, defer_profile = NULL\s+WHERE source_type = \$1 AND source_id = \$2\s+AND status = 'paused'`).
 			WithArgs(domain.EmailQueueSourceBroadcast, "broadcast-1").
 			WillReturnResult(sqlmock.NewResult(0, 4))
 

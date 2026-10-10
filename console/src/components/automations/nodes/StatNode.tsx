@@ -64,7 +64,9 @@ export const StatNode: React.FC<StatNodeProps> = ({ data }) => {
   const nodeLabel = label || nodeLabels[nodeType]
 
   // Use 0 values when no stats available
-  const nodeStats = stats || { entered: 0, completed: 0, failed: 0, skipped: 0 }
+  const nodeStats = stats || { entered: 0, completed: 0, queued: 0, failed: 0, skipped: 0 }
+  // LOT 1 : sur un noeud email, « complete » = envoye reellement ; les mises en file ont leur compteur
+  const isEmail = nodeType === 'email'
 
   // Calculate percentages for email and webhook nodes
   const showFailedRate = nodeType === 'email' || nodeType === 'webhook'
@@ -106,8 +108,15 @@ export const StatNode: React.FC<StatNodeProps> = ({ data }) => {
               value={nodeStats.entered}
               valueStyle={{ fontSize: 14, color: '#374151' }}
             />
+            {isEmail && (
+              <Statistic
+                title={t`Queued`}
+                value={nodeStats.queued ?? 0}
+                valueStyle={{ fontSize: 14, color: '#2563eb' }}
+              />
+            )}
             <Statistic
-              title={t`Completed`}
+              title={isEmail ? t`Sent` : t`Completed`}
               value={nodeStats.completed}
               valueStyle={{ fontSize: 14, color: '#16a34a' }}
             />

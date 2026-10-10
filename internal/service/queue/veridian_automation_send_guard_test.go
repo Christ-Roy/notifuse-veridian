@@ -71,14 +71,35 @@ func TestAutomationFinalGuard_QueuedRowNeverReachesSMTPSink(t *testing.T) {
 					Email: "lead@gmail.com", ListID: "list-1", Status: tc.listStatus,
 				}, nil)
 			}
-			queueRepo.EXPECT().Delete(gomock.Any(), "ws-1", entry.ID).Return(nil)
+			// Fiche 62 : une automation en PAUSE garde sa ligne (reportee, jamais supprimee
+			// en silence : le contact resterait parque en « sending » a jamais) ; tous les
+			// autres cas suppriment la ligne ET previennent l'executeur.
+			paused := tc.lookupErr == nil && tc.status == domain.AutomationStatusPaused
+			if paused {
+				queueRepo.EXPECT().SetNextRetry(gomock.Any(), "ws-1", entry.ID, gomock.Any()).Return(nil)
+			} else {
+				queueRepo.EXPECT().Delete(gomock.Any(), "ws-1", entry.ID).Return(nil)
+			}
+			var failedCalls []string
 			// No SendEmail expectation is registered on emailSink. Any SMTP sink
 			// call is therefore an immediate test failure.
 
 			worker := NewEmailQueueWorker(queueRepo, workspaceRepo, emailSink, historyRepo, DefaultWorkerConfig(), log)
 			worker.ctx = context.Background()
 			worker.SetAutomationSendGuard(automationRepo, contactListRepo, replyRepo)
+			worker.SetCallbacks(nil, func(_ string, _ domain.EmailQueueSourceType, _ string, _ string, _ string, err error, permanent bool) {
+				if permanent {
+					failedCalls = append(failedCalls, err.Error())
+				}
+			})
 			worker.processEntry(workspace, entry)
+			if paused {
+				if len(failedCalls) != 0 {
+					t.Fatalf("a paused automation must not fail its contact, got %v", failedCalls)
+				}
+			} else if len(failedCalls) != 1 {
+				t.Fatalf("the executor must be told the row was discarded (else the contact stays parked in sending), got %v", failedCalls)
+			}
 		})
 	}
 }

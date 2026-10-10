@@ -365,6 +365,7 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 		ContactEmail:  params.ContactData.Email,
 		MessageID:     messageID,
 		TemplateID:    config.TemplateID,
+		NodeID:        params.Node.ID,
 		Payload: domain.EmailQueuePayload{
 			FromAddress:           sender.Email,
 			FromName:              sender.Name,

@@ -83,6 +83,10 @@ type EmailQueueWorker struct {
 	// (cf. veridian_render_at_send.go). nil = comportement upstream.
 	queuedEmailRenderer QueuedEmailRenderer
 
+	// Veridian fork (fiche 62) : journal des decisions d'envoi. nil = pas de journal
+	// (la raison de report reste posee sur l'entree de file).
+	decisionLog domain.VeridianSendDecisionRepository
+
 	// Control
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -383,13 +387,16 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 			"integration_id": entry.IntegrationID,
 			"retry_in":       selection.RetryDelay.String(),
 		}).Debug("No pool member has room for this entry, rescheduling without attempt increment")
-		nextRetry := time.Now().Add(selection.RetryDelay)
-		if err := w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"entry_id": entry.ID,
-				"error":    err.Error(),
-			}).Warn("Failed to set next retry for pool failover skip")
-		}
+		// Fiche 62 : le report porte desormais sa RAISON (la vraie : toutes les portes
+		// ont ete evaluees) et la decision est journalisee selon le niveau du workspace.
+		w.veridianDeferEntry(workspace, entry, veridianDeferral{
+			Reason:  selection.Reason,
+			Detail:  selection.ReasonDetail,
+			Profile: selection.ReasonProfile,
+			Delay:   selection.RetryDelay,
+		}, &selection, func() error {
+			return w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, time.Now().Add(selection.RetryDelay))
+		})
 		return
 	}
 
@@ -513,10 +520,14 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// Exclusions, prefilter, window and final automation checks never consume it.
 	quotaLeases, delay, capped := w.veridianReserveDailyQuota(workspace, &integration.EmailProvider, entry)
 	if capped {
-		nextRetry := time.Now().Add(delay)
-		if err := w.queueRepo.SetNextRetryAndRefundAttempt(w.ctx, workspace.ID, entry.ID, nextRetry); err != nil {
-			w.logger.WithFields(map[string]interface{}{"entry_id": entry.ID, "error": err.Error()}).Error("Failed to reschedule atomic daily quota block")
-		}
+		w.veridianDeferEntry(workspace, entry, veridianDeferral{
+			Reason:        domain.VeridianReasonQuotaDenied,
+			Profile:       entry.IntegrationID,
+			Delay:         delay,
+			RefundAttempt: true,
+		}, &selection, func() error {
+			return w.queueRepo.SetNextRetryAndRefundAttempt(w.ctx, workspace.ID, entry.ID, time.Now().Add(delay))
+		})
 		return
 	}
 
@@ -572,6 +583,9 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// Upsert message history (success - clears any previous failure)
 	w.upsertMessageHistory(w.ctx, workspace.ID, workspace.Settings.SecretKey, entry, nil)
 
+	// Fiche 62 : journal des decisions, l'envoi accepte avec les portes qui l'ont laisse passer.
+	w.veridianRecordTerminal(workspace, entry, domain.VeridianOutcomeSent, "", "", entry.IntegrationID, &selection)
+
 	w.logger.WithFields(map[string]interface{}{
 		"entry_id":       entry.ID,
 		"integration_id": entry.IntegrationID,
@@ -615,6 +629,13 @@ func (w *EmailQueueWorker) handleError(workspace *domain.Workspace, entry *domai
 
 	// Upsert message history with failure info
 	w.upsertMessageHistory(w.ctx, workspace.ID, workspace.Settings.SecretKey, entry, sendErr)
+
+	// Fiche 62 : journal des decisions (echec definitif, ou tentative qui sera rejouee).
+	failReason := veridianFailureReason(sendErr)
+	if !isPermanent {
+		failReason = domain.VeridianReasonSendError
+	}
+	w.veridianRecordTerminal(workspace, entry, domain.VeridianOutcomeFailed, failReason, sendErr.Error(), entry.IntegrationID, nil)
 
 	if isPermanent {
 		// Permanent failure - delete the queue entry

@@ -33,6 +33,10 @@ type AutomationExecutor struct {
 	// pour pouvoir lui injecter le coldReplyChecker via SetColdReplyChecker (le map des
 	// executors est construit avant l'injection du checker). nil si non construit.
 	replyBranchExecutor *ReplyBranchNodeExecutor
+
+	// orphanState : tourniquet de la reconciliation des contacts parques sans entree de
+	// file (fiche 62, veridian_orphan_reconcile.go).
+	orphanState veridianOrphanState
 }
 
 // NewAutomationExecutor creates a new AutomationExecutor
@@ -204,6 +208,13 @@ func (e *AutomationExecutor) Execute(ctx context.Context, workspaceID string, co
 		// Update node execution to completed
 		duration := time.Since(nodeStartTime).Milliseconds()
 		nodeExecution.Action = domain.NodeActionCompleted
+		if contactAutomation.Status == domain.ContactAutomationStatusSending {
+			// Fiche 62 : un noeud email parque son contact en « sending » apres avoir mis
+			// le mail EN FILE. Ce n'est pas un envoi : l'action est « queued ». Le
+			// « completed » du noeud est ecrit par HandleEmailSent (envoye) ou
+			// HandleEmailFailed (echec).
+			nodeExecution.Action = domain.NodeActionQueued
+		}
 		completedAt := time.Now().UTC()
 		nodeExecution.CompletedAt = &completedAt
 		nodeExecution.DurationMs = &duration
@@ -257,6 +268,10 @@ func (e *AutomationExecutor) Execute(ctx context.Context, workspaceID string, co
 
 // ProcessBatch processes a batch of scheduled contacts
 func (e *AutomationExecutor) ProcessBatch(ctx context.Context, limit int) (int, error) {
+	// Fiche 62 : remet en etat coherent les contacts parques en « sending » dont l'entree
+	// de file a disparu (un workspace par tick, borne, sans tache planifiee).
+	e.veridianReconcileOneWorkspace(ctx)
+
 	// Get scheduled contacts globally
 	now := time.Now().UTC()
 	contacts, err := e.automationRepo.GetScheduledContactAutomationsGlobal(ctx, now, limit)

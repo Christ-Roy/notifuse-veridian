@@ -34,7 +34,7 @@ const VeridianSendingWindowMetadataKey = "veridian_sending_window"
 //	EndHour  : heure de fermeture EXCLUSIVE (0-24), minute EndMinute (0-59).
 //	           24h00 = fin de journée (minuit du lendemain non inclus).
 //	Timezone : nom IANA (ex. "Europe/Paris"). Vide = fallback résolu par
-//	           l'appelant (timezone workspace, sinon UTC).
+//	           l appelant (timezone workspace, sinon UTC).
 //
 // Une fenêtre où Start == End (et StartMinute == EndMinute) est considérée
 // INVALIDE (plage vide) et traitée comme "pas de fenêtre" par la cascade : on
@@ -98,7 +98,7 @@ func (w *VeridianSendingWindow) allowsDay(d time.Weekday) bool {
 }
 
 // resolveLocation retourne la *time.Location de la fenêtre. Précédence :
-// Timezone de la fenêtre → fallback fourni par l'appelant → UTC. Un nom IANA
+// Timezone de la fenêtre → fallback fourni par l appelant → UTC. Un nom IANA
 // invalide retombe sur le fallback (best-effort, jamais d'erreur).
 func (w *VeridianSendingWindow) resolveLocation(fallbackTZ string) *time.Location {
 	for _, tz := range []string{w.Timezone, fallbackTZ} {
@@ -238,4 +238,10 @@ func veridianParseWeekdayList(csv string) []int {
 		out = append(out, v)
 	}
 	return out
+}
+
+// Location expose le fuseau effectif de la fenêtre (fenêtre -> repli de l'appelant
+// -> UTC) aux explications de la fiche 62 (jour et heure locaux dans la trace).
+func (w *VeridianSendingWindow) Location(fallbackTZ string) *time.Location {
+	return w.resolveLocation(fallbackTZ)
 }

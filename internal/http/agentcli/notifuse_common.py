@@ -74,6 +74,13 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
                                                               fichier, JAMAIS en argument, jamais affiché ni loggé. Gmail : https://myaccount.google.com/apppasswords
   notifuse prospection:stats <ws> [--start AAAA-MM-JJ] [--end AAAA-MM-JJ]   agrégats du tableau de bord de prospection (réponses par séquence et liste,
                                                               avancement J0/J+4/J+10, sorties par raison, stock par liste ; lecture, clé scopée OK)
+  notifuse queue:explain <ws> [--group-by node,reason,profile,class,automation] [--automation X] [--node N] [--reason R] [--profile P] [--class C] [--status S] [--entry ID] [--json]
+                                                              pourquoi les mails sont en file : tableau groupé (count, jamais examinés, plus ancienne, prochaine tentative) + orphelins ;
+                                                              --entry ID = détail de l'entrée et sa dernière décision gate par gate (lecture, clé scopée OK)
+  notifuse logs:decisions <ws> [--email E] [--automation X] [--node N] [--entry ID] [--reason R] [--outcome sent|deferred|failed|discarded|exited|recomputed]
+                               [--since 2h|7d|RFC3339] [--limit N] [--trace] [--all] [--json]    journal des décisions du worker (--all : jusqu'à 5 pages ; lecture)
+  notifuse queue:recompute <ws> --automation X [--node N] [--reason R] [--profile P] [--entry ID ...] --limit N [--yes]
+                                                              remet des entrées au recalcul (next_retry_at et raison effacés, rien supprimé) ; SANS --yes : affiche le corps et ne fait rien
   notifuse profiles:pause|resume <ws> --id P                    met en pause / relance un profil commercial (workspace:write, effet immédiat au worker ; refusé sur un transactionnel)
   notifuse analytics:query <ws> --query @q.json    (analytics:schemas pour les schémas)
   notifuse messages:list <ws> [--param limit=50]   historique des envois
@@ -334,6 +341,9 @@ WORKSPACE_COMMANDS = frozenset({
     # Lot 5 (08/10/2026) : création d'un profil par l'API dédiée (propriétaire ; secret
     # sur stdin ou fichier) et agrégats du tableau de bord de prospection (lecture).
     "profiles:create", "prospection:stats",
+    # Lot 1 (10/10/2026) : pourquoi un mail n'est pas parti. queue:explain et logs:decisions en
+    # lecture (automations:read) ; queue:recompute en écriture (automations:write, --yes requis).
+    "queue:explain", "logs:decisions", "queue:recompute",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -1984,6 +1994,238 @@ def cmd_prospection_stats(a):
                   params={"workspace_id": a.workspace, "start": a.start, "end": a.end}))
 
 
+# ---- Lot 1 (10/10/2026) : « pourquoi ce mail n'est pas parti » -------------
+# queue:explain  = GET  /api/veridian/queue.explain    (automations:read)
+# logs:decisions = GET  /api/veridian/decisions.list   (automations:read)
+# queue:recompute = POST /api/veridian/queue.recompute (automations:write, --yes requis)
+_OUTCOMES = ("sent", "deferred", "failed", "discarded", "exited", "recomputed")
+_GROUP_BY = ("automation", "node", "reason", "profile", "class")
+_SINCE_DURATION = re.compile(r"^\d+[smhd]$")
+
+
+def parse_since(value):
+    """--since : durée (30m, 2h, 7d) ou date RFC3339. Renvoie la valeur validée, telle quelle
+    pour le serveur (qui accepte les deux). Une valeur incompréhensible = erreur 1, pas d'appel."""
+    if value is None:
+        return None
+    v = value.strip()
+    if _SINCE_DURATION.match(v):
+        return v
+    try:
+        datetime.fromisoformat(v.replace("Z", "+00:00"))
+        return v
+    except ValueError:
+        die(f"--since '{value}' invalide : durée (30m, 2h, 7d) ou date RFC3339 (2026-10-10T08:00:00Z).")
+
+
+def _ts(v):
+    """Horodatage ISO -> 'AAAA-MM-JJ HH:MM' (UTC). Vide -> '-'."""
+    if not v:
+        return "-"
+    return str(v).replace("T", " ")[:16]
+
+
+def _fmt_delay(sec):
+    if sec in (None, ""):
+        return "-"
+    try:
+        s = int(sec)
+    except (TypeError, ValueError):
+        return str(sec)
+    if s >= 86400:
+        return f"{s // 86400}j{(s % 86400) // 3600:02d}h"
+    if s >= 3600:
+        return f"{s // 3600}h{(s % 3600) // 60:02d}"
+    if s >= 60:
+        return f"{s // 60}min"
+    return f"{s}s"
+
+
+def _j(v):
+    return "-" if v is None else (v if isinstance(v, str) else json.dumps(v, ensure_ascii=False))
+
+
+def _table(rows, header):
+    widths = [max(len(str(x)) for x in col) for col in zip(header, *rows)] if rows else [len(h) for h in header]
+    fmt = lambda r: "  ".join(str(c).ljust(w) for c, w in zip(r, widths)).rstrip()
+    return [fmt(header)] + [fmt(r) for r in rows]
+
+
+def format_trace(trace):
+    """Trace de décision, un gate par ligne : gate  verdict  valeur  limite  délai (fonction pure, testée)."""
+    if not trace:
+        return ["(aucune trace : décision hors échantillon ou niveau réduit)"]
+    L = [f"classe {trace.get('class') or '-'} · niveau {trace.get('level') or '-'}"]
+    anc = trace.get("anchor")
+    if anc:
+        L.append(f"ancre : profil {anc.get('profile')} ({'disponible' if anc.get('available') else 'indisponible'})")
+    for c in trace.get("candidates") or []:
+        L.append(f"profil {c.get('profile_name') or c.get('profile')} <{c.get('from') or '-'}> : {c.get('outcome')}")
+        rows = []
+        for g in c.get("gates") or []:
+            name = g.get("gate", "?") + (f"({g['name']})" if g.get("name") else "")
+            rows.append((name, g.get("verdict", "-"), _j(g.get("value")), _j(g.get("limit")), _fmt_delay(g.get("delay_s"))))
+        if rows:
+            L += ["  " + ln for ln in _table(rows, ("gate", "verdict", "valeur", "limite", "délai"))]
+    d = trace.get("decision") or {}
+    if d:
+        L.append(f"décision : {d.get('outcome')} {d.get('reason') or ''}"
+                 + (f" ({d['detail']})" if d.get("detail") else "")
+                 + (f" jusqu'à {_ts(d['until'])} (délai {_fmt_delay(d.get('delay_s'))})" if d.get("until") else ""))
+    return L
+
+
+def format_queue_groups(data):
+    """Tableau groupé de queue.explain (fonction pure, testée)."""
+    L = [f"{data.get('total', 0)} entrée(s) en file · workspace {data.get('workspace_id')} · {_ts(data.get('generated_at'))} UTC"]
+    rows = []
+    for g in data.get("groups") or []:
+        reason = g.get("reason") or "-"
+        if g.get("reason_detail"):
+            reason += f"/{g['reason_detail']}"
+        nxt = "-"
+        if g.get("next_attempt_min"):
+            nxt = _ts(g["next_attempt_min"])
+            if g.get("next_attempt_max") and g["next_attempt_max"] != g["next_attempt_min"]:
+                nxt += " .. " + _ts(g["next_attempt_max"])
+        rows.append((g.get("automation_name") or g.get("automation_id") or "-", g.get("node_id") or "-", reason,
+                     g.get("profile_name") or g.get("profile_id") or "-", g.get("class") or "-",
+                     g.get("count", 0), g.get("never_examined", 0), _ts(g.get("oldest_created_at")), nxt))
+    if rows:
+        L += _table(rows, ("automation", "nœud", "raison", "profil", "classe", "count", "jamais examinés", "plus ancienne", "prochaine tentative"))
+    else:
+        L.append("(aucun groupe)")
+    o = data.get("orphans") or {}
+    L.append(f"orphelins : {o.get('count', 0)}"
+             + "".join(f" · {b.get('automation_name') or b.get('automation_id')}/{b.get('node_id') or '-'} : {b.get('count')}"
+                       for b in o.get("by_node") or []))
+    return L
+
+
+def format_queue_entry(e, decision=None):
+    """Détail d'une entrée + dernière décision gate par gate (fonction pure, testée)."""
+    L = [f"entrée {e.get('id')} · {e.get('status')} · {e.get('contact_email') or '-'}",
+         f"  automation {e.get('automation_name') or e.get('automation_id')} · nœud {e.get('node_id') or '-'} · "
+         f"profil {e.get('profile_name') or '-'} · classe {e.get('class') or '-'}",
+         f"  créée {_ts(e.get('created_at'))} · tentatives {e.get('attempts')}/{e.get('max_attempts')} · prochaine {_ts(e.get('next_retry_at'))}",
+         f"  raison {e.get('reason') or '-'}" + (f" ({e['reason_detail']})" if e.get("reason_detail") else "")
+         + f" · reportée {_ts(e.get('deferred_at'))} jusqu'à {_ts(e.get('defer_until'))} ({e.get('defer_count') or 0} report(s))",
+         f"  examinée la 1re fois {_ts(e.get('first_examined_at'))}, la dernière {_ts(e.get('last_examined_at'))}"]
+    if e.get("last_error"):
+        L.append(f"  dernière erreur : {e['last_error']}")
+    if decision:
+        L.append(f"dernière décision {_ts(decision.get('at'))} : {decision.get('outcome')} {decision.get('reason') or ''}"
+                 + (f" ({decision['detail']})" if decision.get("detail") else ""))
+        L += ["  " + ln for ln in format_trace(decision.get("trace"))]
+    else:
+        L.append("dernière décision : aucune enregistrée")
+    return L
+
+
+def cmd_queue_explain(a):
+    jwt = apikey_for(a.env, a.workspace)
+    group_by = None
+    if a.group_by:
+        parts = [p.strip() for p in a.group_by.split(",") if p.strip()]
+        bad = [p for p in parts if p not in _GROUP_BY]
+        if bad:
+            die(f"--group-by : valeur(s) inconnue(s) {', '.join(bad)} (permis : {', '.join(_GROUP_BY)}).")
+        group_by = ",".join(parts)
+    params = {"workspace_id": a.workspace, "group_by": group_by, "automation_id": a.automation,
+              "node_id": a.node, "reason": a.reason, "profile_id": a.profile, "class": a.klass,
+              "status": a.status, "entry_id": a.entry}
+    st, data = call_jwt(a.env, "GET", "/api/veridian/queue.explain", jwt, params=params)
+    if st != 200 or not isinstance(data, dict):
+        out(st, data)
+        return
+    entry = data.get("entry")
+    decision = None
+    if a.entry and entry:
+        decision = entry.get("last_decision")
+        if not decision or not decision.get("trace"):
+            st2, d2 = call_jwt(a.env, "GET", "/api/veridian/decisions.list", jwt,
+                               params={"workspace_id": a.workspace, "entry_id": a.entry, "trace": "1", "limit": 1})
+            if st2 != 200:
+                out(st2, d2)
+                return
+            found = (d2 or {}).get("decisions") or []
+            decision = found[0] if found else decision
+            entry["last_decision"] = decision
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+    elif a.entry:
+        if not entry:
+            die(f"entrée {a.entry} introuvable dans {a.workspace}.")
+        print("\n".join(format_queue_entry(entry, decision)))
+    else:
+        print("\n".join(format_queue_groups(data)))
+
+
+def format_decisions(decisions, trace=False):
+    L = []
+    for d in decisions:
+        reason = d.get("reason") or ""
+        if d.get("detail"):
+            reason += f" ({d['detail']})"
+        L.append(f"{_ts(d.get('at'))}  {d.get('outcome', '-'):<10} {reason or '-'}  {d.get('contact_email') or '-'}  "
+                 f"{d.get('automation_id') or '-'}/{d.get('node_id') or '-'}  profil {d.get('profile_name') or d.get('profile_id') or '-'}"
+                 + (f"  jusqu'à {_ts(d['until'])}" if d.get("until") else "")
+                 + f"  entrée {d.get('entry_id') or '-'}")
+        if trace:
+            L += ["    " + ln for ln in format_trace(d.get("trace"))]
+    return L
+
+
+def cmd_logs_decisions(a):
+    jwt = apikey_for(a.env, a.workspace)
+    since = parse_since(a.since)
+    params = {"workspace_id": a.workspace, "email": a.email, "automation_id": a.automation, "node_id": a.node,
+              "entry_id": a.entry, "reason": a.reason, "outcome": a.outcome, "since": since,
+              "limit": a.limit, "trace": "1" if a.trace else None}
+    decisions, cursor, level, pages = [], None, None, 0
+    max_pages = 5 if a.all else 1
+    while pages < max_pages:
+        p = dict(params)
+        if cursor:
+            p["cursor"] = cursor
+        st, data = call_jwt(a.env, "GET", "/api/veridian/decisions.list", jwt, params=p)
+        if st != 200 or not isinstance(data, dict):
+            out(st, data)
+            return
+        pages += 1
+        decisions += data.get("decisions") or []
+        level = data.get("level", level)
+        cursor = data.get("next_cursor") or None
+        if not cursor:
+            break
+    if a.json:
+        print(json.dumps({"decisions": decisions, "next_cursor": cursor or "", "level": level}, indent=2, ensure_ascii=False))
+        return
+    print("\n".join(format_decisions(decisions, a.trace)) if decisions else "(aucune décision)")
+    if cursor:
+        print(f"… suite disponible : next_cursor={cursor}"
+              + (" (limite de 5 pages atteinte)" if a.all else " (relance avec --all pour suivre jusqu'à 5 pages)"),
+              file=sys.stderr)
+
+
+def cmd_queue_recompute(a):
+    if not a.automation and not a.entry:
+        die("queue:recompute exige --automation X ou --entry ID (jamais « tout le workspace »).")
+    if not 1 <= a.limit <= 5000:
+        die("--limit doit être compris entre 1 et 5000.")
+    body = {"workspace_id": a.workspace, "automation_id": a.automation, "node_id": a.node, "reason": a.reason,
+            "profile_id": a.profile, "entry_ids": a.entry or None, "limit": a.limit}
+    body = {k: v for k, v in body.items() if v is not None}
+    if not a.yes:
+        print("DRY-RUN (rien n'est envoyé) : POST /api/veridian/queue.recompute")
+        print(json.dumps(body, indent=2, ensure_ascii=False))
+        print("Effet : next_retry_at remis à NULL et raison effacée sur les entrées pending/failed du filtre ; "
+              "rien n'est supprimé, aucune tentative consommée. Ajoute --yes pour l'exécuter.", file=sys.stderr)
+        return
+    jwt = apikey_for(a.env, a.workspace)
+    out(*call_jwt(a.env, "POST", "/api/veridian/queue.recompute", jwt, body=body))
+
+
 # ---- generic resource CRUD helpers ----
 def _json_arg(s):
     if not s:
@@ -3560,6 +3802,48 @@ def build_parser():
     sp.add_argument("--start", help="début de fenêtre AAAA-MM-JJ (défaut : tout l'historique)")
     sp.add_argument("--end", help="fin de fenêtre AAAA-MM-JJ, jour inclus")
     sp.set_defaults(func=cmd_prospection_stats, _routes=["/api/veridian/prospection.stats"])
+
+    sp = sub.add_parser("queue:explain",
+                        help="pourquoi les mails sont en file : groupes par automation, nœud, raison, profil ; --entry ID pour une entrée et sa dernière décision gate par gate")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--group-by", help="liste séparée par des virgules parmi automation,node,reason,profile,class (défaut serveur : automation,node,reason,profile)")
+    sp.add_argument("--automation", help="filtre : id d'automation")
+    sp.add_argument("--node", help="filtre : id de nœud")
+    sp.add_argument("--reason", help="filtre : code de raison (window_closed, capacity, class_rate, not_examined…)")
+    sp.add_argument("--profile", help="filtre : id de profil d'envoi")
+    sp.add_argument("--class", dest="klass", help="filtre : classe du fournisseur destinataire (ovh, google…)")
+    sp.add_argument("--status", help="filtre : statut de l'entrée")
+    sp.add_argument("--entry", help="détail d'UNE entrée et sa dernière décision, gate par gate")
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute")
+    sp.set_defaults(func=cmd_queue_explain, _routes=["/api/veridian/queue.explain", "/api/veridian/decisions.list"])
+
+    sp = sub.add_parser("logs:decisions",
+                        help="journal des décisions du worker (envoyé, reporté, échoué, écarté, sorti, recalculé) ; --trace pour les portes")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--email", help="filtre : e-mail du contact")
+    sp.add_argument("--automation", help="filtre : id d'automation")
+    sp.add_argument("--node", help="filtre : id de nœud")
+    sp.add_argument("--entry", help="filtre : id d'entrée de file")
+    sp.add_argument("--reason", help="filtre : code de raison")
+    sp.add_argument("--outcome", choices=list(_OUTCOMES), help="filtre : issue de la décision")
+    sp.add_argument("--since", help="durée (30m, 2h, 7d) ou date RFC3339")
+    sp.add_argument("--limit", type=int, help="nombre de décisions par page (défaut serveur 50, max 200)")
+    sp.add_argument("--trace", action="store_true", help="inclut la trace gate par gate")
+    sp.add_argument("--all", action="store_true", help="suit next_cursor jusqu'à 5 pages")
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute")
+    sp.set_defaults(func=cmd_logs_decisions, _routes=["/api/veridian/decisions.list"])
+
+    sp = sub.add_parser("queue:recompute",
+                        help="remet des entrées en file au recalcul (next_retry_at et raison effacés) ; sans --yes : affiche et ne fait rien")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--automation", help="id d'automation (obligatoire sauf si --entry)")
+    sp.add_argument("--node", help="filtre : id de nœud")
+    sp.add_argument("--reason", help="filtre : code de raison")
+    sp.add_argument("--profile", help="filtre : id de profil d'envoi")
+    sp.add_argument("--entry", action="append", help="id d'entrée (répétable)")
+    sp.add_argument("--limit", type=int, required=True, help="nombre maximal d'entrées touchées (1..5000)")
+    sp.add_argument("--yes", action="store_true", help="exécute réellement (sans lui : dry-run)")
+    sp.set_defaults(func=cmd_queue_recompute, _routes=["/api/veridian/queue.recompute"])
 
     sp = sub.add_parser("profiles:pause", help="met un profil commercial en pause : le worker bascule sur le reste du pool (refusé sur un transactionnel)")
     sp.add_argument("workspace", nargs="?", default=None)

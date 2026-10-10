@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -62,9 +63,19 @@ func veridianResolveProviderClassRates(workspace *domain.Workspace, provider *do
 // alors été consommé) ou si aucun throttle classe ne s'applique. provider est
 // l'infra d'envoi (intégration EmailProvider) déjà en main du worker au call-site.
 func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) (time.Duration, bool) {
+	v := w.veridianProviderClassGateVerdict(workspace, provider, entry, true)
+	return v.Delay, v.Blocked()
+}
+
+// veridianProviderClassGateVerdict est la variante structurée de la porte (fiche 62).
+// consume=true : comportement historique, un jeton est consommé quand l'entrée passe.
+// consume=false (« peek ») : même verdict SANS consommer de jeton ni amorcer le
+// limiter ; sert à expliquer le débit d'une entrée qu'une autre porte bloque déjà
+// (consommer un jeton pour un envoi qui n'aura pas lieu priverait une autre entrée).
+func (w *EmailQueueWorker) veridianProviderClassGateVerdict(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry, consume bool) veridianGateVerdict {
 	rates := veridianResolveProviderClassRates(workspace, provider, entry)
 	if len(rates) == 0 {
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateClassRate, nil, nil, "", "no class rate configured")
 	}
 
 	// Classe du destinataire : tag amont (payload) sinon classification par MX
@@ -79,7 +90,7 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 		// Classe sans débit configuré = non throttlée (seul l'étage émetteur
 		// s'applique). Permet de ne contraindre que gmail/microsoft et de
 		// laisser filer le corporate.
-		return 0, false
+		return veridianPassVerdict(domain.VeridianGateClassRate, nil, nil, "", "class="+class+" not throttled")
 	}
 
 	// Veridian fork (correctif 2026-10-05) — AMORÇAGE DURABLE : ce limiter est
@@ -108,8 +119,14 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 		count, err := w.messageHistoryRepo.CountSentSinceForClassAndSenderDomain(w.ctx, workspaceID, class, senderDomain, since)
 		return err == nil && count > 0
 	}
-	if w.providerClassLimiter.AllowSeeded(entry.IntegrationID, class, ratePerMinute, recentlySent) {
-		return 0, false
+	var allowed bool
+	if consume {
+		allowed = w.providerClassLimiter.AllowSeeded(entry.IntegrationID, class, ratePerMinute, recentlySent)
+	} else {
+		allowed = w.providerClassLimiter.PeekSeeded(entry.IntegrationID, class, ratePerMinute, recentlySent)
+	}
+	if allowed {
+		return veridianPassVerdict(domain.VeridianGateClassRate, "1 jeton", fmt.Sprintf("%.3g/min", ratePerMinute), "", "class="+class)
 	}
 
 	// Pas de token : estimer l'arrivée du prochain (60/rate secondes).
@@ -137,7 +154,11 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 		"retry_in":       delay.String(),
 	}).Debug("Provider class throttled (jittered), rescheduling without attempt increment")
 
-	return delay, true
+	return veridianGateVerdict{
+		Gate: domain.VeridianGateClassRate, Verdict: domain.VeridianVerdictBlock,
+		Value: "0 jeton", Limit: fmt.Sprintf("%.3g/min", ratePerMinute),
+		Detail: "class=" + class, Delay: delay, Reason: domain.VeridianReasonClassRate,
+	}
 }
 
 // GetProviderClassStats expose les stats des limiters par classe

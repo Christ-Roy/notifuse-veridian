@@ -1027,6 +1027,10 @@ func (a *App) InitServices() error {
 		a.config.APIEndpoint,
 	))
 
+	// Veridian (fiche 62, lot 1) : journal des decisions d'envoi (niveau par workspace,
+	// "transitions" par defaut). Best-effort, retention opportuniste, aucune tache planifiee.
+	a.emailQueueWorker.SetDecisionLog(repository.NewVeridianSendDecisionRepository(a.workspaceRepo))
+
 	// Initialize automation service
 	a.automationService = service.NewAutomationService(
 		a.automationRepo,
@@ -1640,6 +1644,23 @@ func (a *App) InitHandlers() error {
 	)
 	httpHandler.NewVeridianProspectionStatsHandler(
 		veridianProspectionStatsService,
+		getJWTSecret,
+		a.logger,
+	).RegisterRoutes(a.mux)
+
+	// === Veridian patch, fiche 62 lot 1 (10/10/2026) : « pourquoi ca n'envoie pas » ===
+	// GET|POST /api/veridian/queue.explain (entrees de file groupees par automation, noeud,
+	// raison, profil ; --entry = detail gate par gate), GET|POST /api/veridian/decisions.list
+	// (journal des decisions), POST /api/veridian/queue.recompute (remise a zero bornee).
+	// Permissions automations:read / automations:write verifiees dans le service.
+	httpHandler.NewVeridianQueueExplainHandler(
+		service.NewVeridianQueueExplainService(
+			repository.NewVeridianQueueExplainRepository(a.workspaceRepo),
+			repository.NewVeridianSendDecisionRepository(a.workspaceRepo),
+			a.workspaceRepo,
+			a.authService,
+			a.logger,
+		),
 		getJWTSecret,
 		a.logger,
 	).RegisterRoutes(a.mux)

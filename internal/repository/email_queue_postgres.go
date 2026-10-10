@@ -118,7 +118,7 @@ func (r *EmailQueueRepository) EnqueueTx(ctx context.Context, tx *sql.Tx, worksp
 			"id", "status", "priority", "source_type", "source_id",
 			"integration_id", "provider_kind", "contact_email", "message_id",
 			"template_id", "payload", "attempts", "max_attempts",
-			"created_at", "updated_at",
+			"created_at", "updated_at", "node_id",
 		)
 
 	for _, entry := range entries {
@@ -150,7 +150,7 @@ func (r *EmailQueueRepository) EnqueueTx(ctx context.Context, tx *sql.Tx, worksp
 			entry.ID, entry.Status, entry.Priority, entry.SourceType, entry.SourceID,
 			entry.IntegrationID, entry.ProviderKind, entry.ContactEmail, entry.MessageID,
 			entry.TemplateID, payloadJSON, entry.Attempts, entry.MaxAttempts,
-			entry.CreatedAt, entry.UpdatedAt,
+			entry.CreatedAt, entry.UpdatedAt, sql.NullString{String: entry.NodeID, Valid: entry.NodeID != ""},
 		)
 	}
 
@@ -250,6 +250,8 @@ const fetchPendingFairQuery = `
 	SELECT e.id, e.status, e.priority, e.source_type, e.source_id, e.integration_id, e.provider_kind,
 	       e.contact_email, e.message_id, e.template_id, e.payload, e.attempts, e.max_attempts,
 	       e.last_error, e.next_retry_at, e.created_at, e.updated_at, e.processed_at,
+	       e.node_id, e.defer_reason, e.defer_detail, e.defer_profile, e.deferred_at,
+	       e.defer_count, e.first_examined_at, e.last_examined_at, e.decision_logged_at,
 	       r.is_followup
 	FROM email_queue e
 	JOIN ranked r ON r.id = e.id
@@ -401,6 +403,37 @@ func (r *EmailQueueRepository) SetNextRetry(ctx context.Context, workspaceID str
 	return nil
 }
 
+// SetDeferral reporte une entree AVEC sa raison (fiche 62), dans le MEME UPDATE :
+// prochaine tentative, raison, detail, profil candidat, compteur de reports et
+// horodatages d'examen. Ne ressuscite jamais une entree en pause (status 'paused'
+// est conserve), et rembourse la tentative si l'entree avait ete reclamee.
+func (r *EmailQueueRepository) SetDeferral(ctx context.Context, workspaceID string, entryID string, d domain.EmailQueueDeferral) error {
+	db, err := r.getDB(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get database connection: %w", err)
+	}
+	attempts := "attempts"
+	if d.RefundAttempt {
+		attempts = "GREATEST(attempts - 1, 0)"
+	}
+	query := `
+		UPDATE email_queue
+		SET next_retry_at = $1,
+		    status = CASE WHEN status = 'paused' THEN 'paused' ELSE 'pending' END,
+		    attempts = ` + attempts + `,
+		    updated_at = NOW(),
+		    defer_reason = $2, defer_detail = NULLIF($3, ''), defer_profile = NULLIF($4, ''),
+		    deferred_at = NOW(), defer_count = COALESCE(defer_count, 0) + 1,
+		    first_examined_at = COALESCE(first_examined_at, NOW()), last_examined_at = NOW(),
+		    last_error = COALESCE(NULLIF($5, ''), last_error),
+		    decision_logged_at = CASE WHEN $6 THEN NOW() ELSE decision_logged_at END
+		WHERE id = $7`
+	if _, err := db.ExecContext(ctx, query, d.Until, d.Reason, d.Detail, d.Profile, d.LastError, d.Logged, entryID); err != nil {
+		return fmt.Errorf("failed to set deferral: %w", err)
+	}
+	return nil
+}
+
 // WakePendingByIntegration clears deferred retries for one sending profile.
 // Paused, failed and processing rows deliberately remain untouched.
 func (r *EmailQueueRepository) WakePendingByIntegration(ctx context.Context, workspaceID, integrationID string) (int64, error) {
@@ -410,7 +443,8 @@ func (r *EmailQueueRepository) WakePendingByIntegration(ctx context.Context, wor
 	}
 	result, err := db.ExecContext(ctx, `
 		UPDATE email_queue
-		SET next_retry_at = NULL, updated_at = NOW()
+		SET next_retry_at = NULL, updated_at = NOW(),
+		    defer_reason = NULL, defer_detail = NULL, defer_profile = NULL
 		WHERE integration_id = $1
 		  AND status = 'pending'
 		  AND next_retry_at IS NOT NULL
@@ -543,7 +577,8 @@ const pauseBySourceSQL = `
 
 const resumeBySourceSQL = `
 	UPDATE email_queue
-	SET status = 'pending', next_retry_at = NULL, updated_at = NOW()
+	SET status = 'pending', next_retry_at = NULL, updated_at = NOW(),
+	    defer_reason = NULL, defer_detail = NULL, defer_profile = NULL
 	WHERE source_type = $1 AND source_id = $2
 	  AND status = 'paused'
 `
@@ -632,8 +667,30 @@ func (r *EmailQueueRepository) DeleteBySourceTx(ctx context.Context, tx *sql.Tx,
 // scanEmailQueueEntryTier scans the 18 queue columns followed by is_followup.
 func scanEmailQueueEntryTier(rows *sql.Rows) (*domain.EmailQueueEntry, bool, error) {
 	var followup bool
-	entry, err := scanEmailQueueEntryWith(rows, &followup)
-	return entry, followup, err
+	var nodeID, reason, detail, profile sql.NullString
+	var deferredAt, firstAt, lastAt, loggedAt sql.NullTime
+	var deferCount sql.NullInt64
+	entry, err := scanEmailQueueEntryWith(rows, &nodeID, &reason, &detail, &profile, &deferredAt,
+		&deferCount, &firstAt, &lastAt, &loggedAt, &followup)
+	if err != nil {
+		return nil, false, err
+	}
+	entry.NodeID, entry.DeferReason, entry.DeferDetail, entry.DeferProfile =
+		nodeID.String, reason.String, detail.String, profile.String
+	entry.DeferCount = int(deferCount.Int64)
+	if deferredAt.Valid {
+		entry.DeferredAt = &deferredAt.Time
+	}
+	if firstAt.Valid {
+		entry.FirstExaminedAt = &firstAt.Time
+	}
+	if lastAt.Valid {
+		entry.LastExaminedAt = &lastAt.Time
+	}
+	if loggedAt.Valid {
+		entry.DecisionLoggedAt = &loggedAt.Time
+	}
+	return entry, followup, nil
 }
 
 func scanEmailQueueEntry(rows *sql.Rows) (*domain.EmailQueueEntry, error) {

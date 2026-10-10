@@ -520,6 +520,11 @@ type WorkspaceSettings struct {
 	// Cf. veridian_sending_window.go.
 	VeridianSendingWindow *VeridianSendingWindow `json:"veridian_sending_window,omitempty"`
 
+	// Veridian fork (fiche 62) : NIVEAU du journal des decisions d'envoi :
+	// "off" (compteurs seuls), "transitions" (defaut), "all" (chaque examen, pour
+	// deboguer un cas). Vide = defaut. Cf. veridian_decision_recorder.go.
+	VeridianDecisionLogLevel string `json:"veridian_decision_log_level,omitempty"`
+
 	// Veridian fork — JITTER TEMPOREL par défaut du workspace (cold outbound).
 	// Amplitude (±) de dispersion du délai de re-planification du throttle minute,
 	// en fraction du pas nominal. Niveau le plus général de la cascade (broadcast
