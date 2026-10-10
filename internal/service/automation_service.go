@@ -113,7 +113,8 @@ func (s *AutomationService) prepareWebhookNodes(ctx context.Context, workspaceID
 		hasWebhook = true
 		if u, ok := n.Config["url"].(string); ok && u != "" {
 			if _, err := ValidateTenantOutboundURL(u); err != nil {
-				return fmt.Errorf("invalid webhook node %s: %w", n.ID, err)
+				// ValidationError : le handler la renvoie en 400 avec la raison lisible.
+				return domain.NewValidationError(fmt.Sprintf("webhook node %s: %v", n.ID, err))
 			}
 		}
 	}

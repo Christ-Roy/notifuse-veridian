@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -69,6 +70,11 @@ func (h *AutomationHandler) handleCreate(w http.ResponseWriter, r *http.Request)
 
 	if err := h.service.Create(r.Context(), req.WorkspaceID, req.Automation); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to create automation")
+		var validationErr domain.ValidationError
+		if errors.As(err, &validationErr) {
+			WriteJSONError(w, validationErr.Message, http.StatusBadRequest)
+			return
+		}
 		if _, ok := err.(*domain.PermissionError); ok {
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return
@@ -159,6 +165,11 @@ func (h *AutomationHandler) handleUpdate(w http.ResponseWriter, r *http.Request)
 
 	if err := h.service.Update(r.Context(), req.WorkspaceID, req.Automation); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Failed to update automation")
+		var validationErr domain.ValidationError
+		if errors.As(err, &validationErr) {
+			WriteJSONError(w, validationErr.Message, http.StatusBadRequest)
+			return
+		}
 		if _, ok := err.(*domain.PermissionError); ok {
 			WriteJSONError(w, err.Error(), http.StatusForbidden)
 			return

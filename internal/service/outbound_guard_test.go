@@ -577,7 +577,9 @@ func TestAutomationService_WebhookURL_RefusedAtSave(t *testing.T) {
 			svc, _ := newSecretAutomationService(t) // aucune attente sur repo.Create : un appel ferait échouer le test
 			err := svc.Create(context.Background(), "ws1", automationWithWebhook(map[string]interface{}{"url": bad}))
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "invalid webhook node")
+			var verr domain.ValidationError
+			require.ErrorAs(t, err, &verr, "raison lisible, renvoyée en 400 par le handler")
+			assert.Contains(t, verr.Message, "webhook node wh1")
 		})
 	}
 }

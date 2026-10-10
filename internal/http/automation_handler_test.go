@@ -585,3 +585,31 @@ func TestAutomationHandler_ResetContact(t *testing.T) {
 		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 	})
 }
+
+// Lot 0 (fiche 61) : une URL de webhook refusée par la garde SSRF revient en 400
+// avec la raison lisible (et pas en 500 générique), à la création comme à la mise à jour.
+func TestAutomationHandler_WebhookURLRefused_Is400WithReason(t *testing.T) {
+	_, automationSvc, mux, secretKey := setupAutomationTest(t)
+	refused := domain.NewValidationError("webhook node wh: url targets a disallowed address (127.0.0.1): internal/private/link-local destinations are not permitted")
+
+	for _, route := range []string{"create", "update"} {
+		t.Run(route, func(t *testing.T) {
+			automation := createTestAutomation("auto-123", "workspace-123")
+			var body []byte
+			if route == "create" {
+				automationSvc.EXPECT().Create(gomock.Any(), "workspace-123", gomock.Any()).Return(refused)
+				body, _ = json.Marshal(domain.CreateAutomationRequest{WorkspaceID: "workspace-123", Automation: automation})
+			} else {
+				automationSvc.EXPECT().Update(gomock.Any(), "workspace-123", gomock.Any()).Return(refused)
+				body, _ = json.Marshal(domain.UpdateAutomationRequest{WorkspaceID: "workspace-123", Automation: automation})
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/automations."+route, bytes.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+createTestToken(t, secretKey, "test-user"))
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "disallowed address")
+		})
+	}
+}

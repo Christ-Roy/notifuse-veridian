@@ -16,7 +16,7 @@ Réutilise `ssrfSafeDialContext` / `isBlockedWebhookIP` des abonnements webhook 
 - Résolution UNE fois par connexion, refus si plage interne, connexion épinglée sur l'IP vérifiée (pas de rebinding). Réponse DNS mixte public + interne : seule l'IP publique sert.
 - Chaque redirection ouvre une nouvelle connexion, donc repasse par la garde.
 - Plages refusées : loopback, RFC1918, link-local (169.254/16 dont 169.254.169.254, fe80::/10), CGNAT 100.64/10, 0/8, multicast, ULA fc00::/7, et (ajout lot 0) 192.0.0/24, TEST-NET 1/2/3, 198.18/15, 240/4 (broadcast), ::/96, fec0::/10, 100::/64, 2001:db8::/32, plus l'IPv4 cachée dans NAT64 64:ff9b::/96 et 6to4 2002::/16, plus IPv4-mappé.
-- `ValidateTenantOutboundURL` à l'enregistrement : https, hôte, pas d'identifiants dans l'URL, IP littérale interne refusée. Pas de DNS à l'enregistrement (périmé à l'envoi) : la connexion tranche.
+- `ValidateTenantOutboundURL` à l'enregistrement : https, hôte, pas d'identifiants dans l'URL, IP littérale interne refusée. Le refus remonte en **400 avec la raison** (`domain.ValidationError`, handler `automations.create/update`), plus en 500 générique « Failed to create automation » (constaté en prod le 10/10 avant correction). Pas de DNS à l'enregistrement (périmé à l'envoi) : la connexion tranche.
 - Réponse lue sur 10 Ko au plus (`webhookNodeMaxResponseBytes`).
 
 ### Autres appels sortants pilotés par un locataire (trouvés au passage)
@@ -74,3 +74,21 @@ Seams de test : `ssrfFinalDial` et `outboundTLSConfig` (la garde tourne en vrai,
 - Un client HTTP nu pour une URL choisie par un tiers est une faille : toute nouvelle URL locataire passe par `NewTenantOutboundClient`.
 - `httpClient` injecté = garde contournée : réservé aux tests.
 - `http://` est désormais refusé (nœud webhook, flux de données, Firecrawl).
+
+## Preuves en prod (10/10/2026, workspace jetable `lot0wh<ts>`, supprimé ensuite)
+
+Mesurées sur l'image `v61.0-veridian.e47a95a4` (workspace créé par `notifuse-admin --env prod provision`, `NOTIFUSE_OWNER_EMAIL=robert@veridian.site` obligatoire sinon `owner_mismatch`). Récepteur public sans compte : un jeton anonyme `webhook.site` (`POST /token`), lu via `/token/<uuid>/requests`.
+
+| Essai | Résultat |
+|---|---|
+| `http://169.254.169.254/latest/meta-data/`, `https://169.254.169.254/...`, `https://127.0.0.1/`, `http://127.0.0.1/` à l'enregistrement | refusés (avant correctif du 400 : « Failed to create automation » ; après : raison lisible) |
+| `https://169.254.169.254.nip.io/...` (DNS public → métadonnées), `https://localtest.me/` (DNS public → 127.0.0.1) à l'exécution | `last_error` : `refusing to connect to "localtest.me": resolves only to internal/private/link-local addresses`, visible par `automations:nodeExecutions` |
+| `https://webhook.site/<jeton>` avec secret | complété ; `webhook-id/timestamp/signature` reçus ; HMAC recalculé côté receveur **valide**, mauvais secret rejeté ; pas d'`Authorization` ; secret absent du corps |
+| Réponses `automations.create/get/list` | `has_secret: true`, ni `secret` ni `secret_encrypted` |
+| Base du workspace | `secret_encrypted` présent (102 car.), le secret de test en clair absent |
+
+La redirection vers l'interne n'est PAS prouvée en prod (aucun redirecteur public libre : httpbingo n'autorise que 4 destinations) : prouvée par `TestWebhookNode_SSRF_RedirectRevalidated` et la mutation.
+
+## Piège CLI
+
+`notifuse-admin` re-provisionne avec `NOTIFUSE_OWNER_EMAIL` (défaut `robert.brunon@veridian.site`) : sur un workspace jetable créé avec un autre owner, toute commande sort en `owner_mismatch` (409).
