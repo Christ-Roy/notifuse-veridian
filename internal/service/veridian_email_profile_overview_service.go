@@ -114,10 +114,32 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 		reputation[integration.ID] = status
 	}
 
+	// Stock dû aujourd'hui (lot 6) : file + séquences, par classe. Mesuré une fois pour le
+	// pool entier. Une lecture qui échoue donne un stock INCONNU (nil), jamais un stock
+	// vide : la capacité utile n'est alors pas affichée comme mesurée.
+	var stock map[string]int
+	horizon := time.Time{}
+	for i := range workspace.Integrations {
+		integration := &workspace.Integrations[i]
+		if integration.Type != domain.IntegrationTypeEmail || integration.EmailProvider.Kind == "" {
+			continue
+		}
+		if end := domain.VeridianDayFor(workspace, &integration.EmailProvider, now).End; end.After(horizon) {
+			horizon = end
+		}
+	}
+	if !horizon.IsZero() {
+		if rows, err := s.repo.GetDueStock(ctx, workspaceID, horizon); err != nil {
+			s.logger.WithField("error", err.Error()).Error("Failed to measure due stock for overview")
+		} else {
+			stock = domain.VeridianStockByClass(rows)
+		}
+	}
+
 	overview := buildVeridianEmailProfilesOverview(workspace, func(day domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow) {
 		o := observed[veridianOverviewDayKey(day)]
 		return o.rows, o.counters
-	}, reputation, now)
+	}, reputation, stock, now)
 	overview.TransactionalWatch = s.transactionalWatch(ctx, workspace, overview, now)
 	return overview, nil
 }
@@ -163,6 +185,7 @@ func buildVeridianEmailProfilesOverview(
 	workspace *domain.Workspace,
 	observe func(day domain.VeridianDay) ([]domain.VeridianPlanObservationRow, []domain.VeridianPlanCounterRow),
 	reputation map[string]queue.VeridianReputationStatus,
+	stock map[string]int,
 	now time.Time,
 ) *domain.VeridianEmailProfilesOverview {
 	out := &domain.VeridianEmailProfilesOverview{
@@ -204,20 +227,49 @@ func buildVeridianEmailProfilesOverview(
 		}
 	}
 
-	var capacity int
-	capacityKnown := true
+	planFor := func(integration *domain.Integration, share map[string]int) domain.VeridianEffectivePlan {
+		rows, counters := observe(domain.VeridianDayFor(workspace, &integration.EmailProvider, now))
+		obs := domain.VeridianBuildPlanObserved(integration.ID, rows, counters)
+		return queue.VeridianEffectivePlan(queue.VeridianPlanInput{
+			Workspace: workspace, IntegrationID: integration.ID, Now: now,
+			Observed: obs, Reputation: reputation, StockShare: share,
+		})
+	}
+
+	// Stock du pool partagé entre les profils qui l'envoient (en rotation, hors pause) :
+	// première passe sans stock pour savoir ce que chacun peut absorber par classe, puis
+	// répartition au prorata (queue.VeridianAllocateStock), puis le plan définitif.
+	var shares map[string]map[string]int
+	if stock != nil {
+		absorb := map[string]map[string]*int{}
+		for i := range workspace.Integrations {
+			integration := &workspace.Integrations[i]
+			if integration.Type != domain.IntegrationTypeEmail || integration.EmailProvider.Kind == "" {
+				continue
+			}
+			if workspace.VeridianProfileUsageOf(integration.ID) != domain.VeridianProfileUsageCommercial ||
+				integration.EmailProvider.VeridianPaused || !veridianProfileInRotation(workspace, integration.ID) {
+				continue
+			}
+			first := planFor(integration, nil)
+			perClass := map[string]*int{}
+			for _, c := range first.Classes {
+				perClass[c.Class] = c.CapacityRemaining
+			}
+			absorb[integration.ID] = perClass
+		}
+		shares = queue.VeridianAllocateStock(stock, absorb)
+	}
+
+	var capacity, usefulCapacity int
+	capacityKnown, usefulKnown := true, true
 	for i := range workspace.Integrations {
 		integration := &workspace.Integrations[i]
 		if integration.Type != domain.IntegrationTypeEmail || integration.EmailProvider.Kind == "" {
 			continue
 		}
 		provider := &integration.EmailProvider
-		rows, counters := observe(domain.VeridianDayFor(workspace, provider, now))
-		obs := domain.VeridianBuildPlanObserved(integration.ID, rows, counters)
-		plan := queue.VeridianEffectivePlan(queue.VeridianPlanInput{
-			Workspace: workspace, IntegrationID: integration.ID, Now: now,
-			Observed: obs, Reputation: reputation,
-		})
+		plan := planFor(integration, shares[integration.ID])
 		profile := domain.VeridianEmailProfileOverview{
 			IntegrationID:         integration.ID,
 			Name:                  integration.Name,
@@ -248,10 +300,17 @@ func buildVeridianEmailProfilesOverview(
 				out.Totals.PausedProfiles++
 			} else if profile.InRotation {
 				out.Totals.ActiveCommercialProfiles++
-				if plan.DailyCapToday == nil {
+				// Lot 6 : la capacité du pool est la somme des capacités des profils (somme
+				// des classes bornée par les portes de profil), plus le plafond plat.
+				if plan.Capacity.Configured == nil {
 					capacityKnown = false
 				} else {
-					capacity += *plan.DailyCapToday
+					capacity += *plan.Capacity.Configured
+				}
+				if plan.Capacity.Useful == nil {
+					usefulKnown = false
+				} else {
+					usefulCapacity += *plan.Capacity.Useful
 				}
 			}
 		case domain.VeridianProfileUsageTransactional:
@@ -263,6 +322,9 @@ func buildVeridianEmailProfilesOverview(
 	}
 	if capacityKnown && out.Totals.ActiveCommercialProfiles > 0 {
 		out.Totals.CommercialCapacityToday = &capacity
+	}
+	if usefulKnown && stock != nil && out.Totals.ActiveCommercialProfiles > 0 {
+		out.Totals.CommercialUsefulCapacityToday = &usefulCapacity
 	}
 	for _, id := range inboxOrder {
 		if len(inboxes[id].LinkedProfiles) == 0 {

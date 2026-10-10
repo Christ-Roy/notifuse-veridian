@@ -116,3 +116,42 @@ func TestVeridianEmailProfileOverviewRepository_GetTransactionalWatchInputErrors
 	_, err = NewVeridianEmailProfileOverviewRepository(workspaceRepo).GetTransactionalWatchInput(context.Background(), "ws1", "tx", day, time.Now(), time.Now())
 	require.Error(t, err)
 }
+
+func TestVeridianEmailProfileOverviewRepository_GetDueStock(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws1").Return(db, nil)
+	until := time.Date(2026, 10, 8, 17, 0, 0, 0, time.UTC)
+	// Même prédicat « dû » que FetchPending, sans les entrées en pause, plus les séquences.
+	mock.ExpectQuery(`(?s)FROM email_queue q.*q\.status = 'pending'.*q\.status = 'failed' AND q\.attempts < q\.max_attempts.*q\.status = 'processing'.*next_retry_at IS NULL OR q\.next_retry_at < \$1.*UNION ALL.*FROM contact_automations ca.*a\.status = 'live'.*IN \('email', 'delay'\)`).
+		WithArgs(until).
+		WillReturnRows(sqlmock.NewRows([]string{"tag", "domain", "n"}).
+			AddRow("ovh", "client.fr", 3).
+			AddRow("", "gmail.com", 2).
+			AddRow("", "inconnu.example", 4))
+	repo := NewVeridianEmailProfileOverviewRepository(workspaceRepo)
+	rows, err := repo.GetDueStock(context.Background(), "ws1", until)
+	require.NoError(t, err)
+	require.Len(t, rows, 3)
+	byClass := domain.VeridianStockByClass(rows)
+	assert.Equal(t, 3, byClass["ovh"], "étiquette canonique")
+	assert.Equal(t, 2, byClass["google"], "sans étiquette : classification par suffixe")
+	assert.Equal(t, 4, byClass["corporate"], "sans étiquette ni suffixe connu")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVeridianEmailProfileOverviewRepository_GetDueStockPropagatesErrors(t *testing.T) {
+	db, mock, cleanup := setupMockDB(t)
+	defer cleanup()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws1").Return(db, nil)
+	mock.ExpectQuery(`FROM email_queue`).WillReturnError(assert.AnError)
+	_, err := NewVeridianEmailProfileOverviewRepository(workspaceRepo).GetDueStock(context.Background(), "ws1", time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "due stock")
+}

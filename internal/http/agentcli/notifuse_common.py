@@ -1758,6 +1758,47 @@ GATE_LABELS = {"warmup": "chauffe", "profile_cap": "plafond du profil", "per_sen
                "class_cap": "plafonds par classe", "none": "aucune"}
 
 
+CAPACITY_LIMIT_LABELS = {"warmup": "chauffe", "profile_cap": "plafond plat du profil", "per_sender": "plafond par expéditeur",
+                         "class_caps": "plafonds journaliers des classes", "class_rates": "débits des classes",
+                         "window_closed": "fenêtre fermée pour le reste du jour", "classes_blocked": "toutes les classes exclues ou arrêtées",
+                         "none": "aucune limite"}
+CAPACITY_LIMITER_LABELS = {"class_cap": "plafond", "rate": "débit", "excluded": "exclue", "reputation_stopped": "arrêtée (fusible)",
+                           "window_closed": "fenêtre fermée", "none": "sans limite"}
+
+
+def _fmt_capacity(pl):
+    """Capacité du jour (lot 6) : somme des classes bornée par les portes de profil, configurée et utile."""
+    c = pl.get("capacity") or {}
+    if not c.get("applicable"):
+        return []
+    cfg, use = c.get("configured"), c.get("useful")
+    out = []
+    head = f"    capacité du jour : {cfg if cfg is not None else 'illimitée'}"
+    if cfg is not None:
+        head += f" (envoyés {c.get('sent', 0)} + reste {c.get('remaining_configured')})"
+    if c.get("stock_known") and use is not None and cfg is not None and use != cfg:
+        head += f" · utile {use} (stock dû insuffisant, {c.get('unusable')} inutilisables"
+        head += f", surtout {c['stock_limiting_class']})" if c.get("stock_limiting_class") else ")"
+    elif not c.get("stock_known"):
+        head += " · stock dû non mesuré"
+    out.append(head)
+    lim = CAPACITY_LIMIT_LABELS.get(c.get("limiting"), c.get("limiting"))
+    out.append(f"      limite : {lim}" + (f" (surtout {c['limiting_class']})" if c.get("limiting_class") else "")
+               + (f" · somme des classes {c.get('sum_remaining')} restant" if c.get("sum_remaining") is not None else "")
+               + (f" · plafond plat {c['flat_cap']} (facultatif)" if c.get("flat_cap") else " · aucun plafond plat"))
+    if c.get("window_minutes_left") is not None and (pl.get("window") or {}).get("configured"):
+        out.append(f"      fenêtre : {c['window_minutes_left']} min restantes sur {c.get('window_minutes_full')}"
+                   + (f" · journée type {c['full_day_configured']}" if c.get("full_day_configured") is not None else ""))
+    out.append("      par fournisseur : configuré / utile / envoyé / reste · limite")
+    for k in sorted(pl.get("classes") or [], key=lambda x: -(x.get("capacity_configured") if x.get("capacity_configured") is not None else 10**9)):
+        cc, cu = k.get("capacity_configured"), k.get("capacity_useful")
+        rest = None if cu is None else max(0, cu - k.get("sent_today", 0))
+        out.append(f"        {k['class']:<19} {'∞' if cc is None else cc:>5} / {'∞' if cu is None else cu:>5} / {k.get('sent_today', 0):>4} / {'∞' if rest is None else rest:>4}"
+                   f" · {CAPACITY_LIMITER_LABELS.get(k.get('capacity_limiter'), k.get('capacity_limiter') or '')}"
+                   + (f" · stock {k['stock']}" if k.get("stock") is not None else ""))
+    return out
+
+
 def format_profiles_overview(d):
     """Rendu lisible de /api/veridian/emailProfiles.overview (fonction pure, testée)."""
     L = []
@@ -1766,6 +1807,7 @@ def format_profiles_overview(d):
     L.append(f"Profils d'envoi, jour {d.get('date')} (UTC), fuseau {d.get('timezone') or 'non défini'}")
     L.append(f"  commercial : {t.get('commercial_sent_today', 0)} envoyés"
              + (f" sur {cap} de capacité" if cap is not None else " (capacité totale inconnue : un profil actif n'a aucun plafond)")
+             + (f", dont {t['commercial_useful_capacity_today']} utiles (stock dû)" if t.get("commercial_useful_capacity_today") is not None else "")
              + f", {t.get('active_commercial_profiles', 0)} profil(s) actif(s), {t.get('paused_profiles', 0)} en pause"
              + f" · transactionnel : {t.get('transactional_sent_today', 0)} envoyés")
     for c in d.get("usage_conflicts") or []:
@@ -1791,6 +1833,7 @@ def format_profiles_overview(d):
             L.append(f"    envoyés aujourd'hui : {pl.get('sent_today', 0)}"
                      + ("  (transactionnel : aucune porte commerciale, jamais plafonné par le worker)" if p.get("usage") == "transactional" else ""))
             continue
+        L.extend(_fmt_capacity(pl))
         dc = pl.get("daily_cap_today")
         L.append("    plafond du jour : " + (f"{dc}  (porte limitante : {GATE_LABELS.get(pl.get('limiting_gate'), pl.get('limiting_gate'))}"
                                             + (f", {pl['limiting_detail']}" if pl.get("limiting_detail") else "") + ")"

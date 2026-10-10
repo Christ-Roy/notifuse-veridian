@@ -6,7 +6,7 @@ import { useLingui } from '@lingui/react/macro'
 import { i18n } from '@lingui/core'
 
 import type { EmailProfileType } from '../../services/api/veridian_email_profiles'
-import type { Blocker, LimitingFactor, ReputationIssue } from './veridian_profile_rules'
+import type { Blocker, CapacityLimit, LimitingFactor, ReputationIssue } from './veridian_profile_rules'
 
 export function formatPercent(rate: number): string {
   return new Intl.NumberFormat(i18n.locale || 'en', {
@@ -127,6 +127,59 @@ export function useProfileLabels() {
     }
   }
 
+  // Lot 6 : ce qui borne la capacité du jour, en clair, classe nommée.
+  const capacityLimitText = (limit: CapacityLimit): string => {
+    switch (limit.kind) {
+      case 'warmup': {
+        const day = limit.day
+        const of = limit.of
+        return t`Warmup, day ${day}/${of}`
+      }
+      case 'profile_cap': {
+        const cap = formatNumber(limit.cap)
+        return t`Profile safety cap (${cap})`
+      }
+      case 'per_sender':
+        return t`Per sending address cap`
+      case 'class_rates': {
+        const name = classLabel(limit.class)
+        return t`Sending rates of the providers (mostly ${name})`
+      }
+      case 'class_caps': {
+        const name = classLabel(limit.class)
+        return t`Daily caps of the providers (mostly ${name})`
+      }
+      case 'window_closed':
+        return t`Sending window closed for the rest of the day`
+      case 'classes_blocked':
+        return t`Every provider is excluded or stopped`
+      default:
+        return t`No limit`
+    }
+  }
+
+  const stockLimitText = (cls: string): string => {
+    const name = classLabel(cls)
+    return t`Not enough contacts due for ${name}`
+  }
+
+  const limiterText = (limiter: string): string => {
+    switch (limiter) {
+      case 'class_cap':
+        return t`Daily cap`
+      case 'rate':
+        return t`Sending rate`
+      case 'excluded':
+        return t`Excluded`
+      case 'reputation_stopped':
+        return t`Stopped by the safety fuse`
+      case 'window_closed':
+        return t`Window closed`
+      default:
+        return t`No limit`
+    }
+  }
+
   const blockerText = (blocker: Blocker): string => {
     switch (blocker.kind) {
       case 'paused':
@@ -172,5 +225,16 @@ export function useProfileLabels() {
     return t`${name}: rate ÷${factor}, ${reason}`
   }
 
-  return { typeLabel, classLabel, weekdayLabel, factorText, blockerText, reasonText, reputationText }
+  return {
+    typeLabel,
+    classLabel,
+    weekdayLabel,
+    factorText,
+    capacityLimitText,
+    stockLimitText,
+    limiterText,
+    blockerText,
+    reasonText,
+    reputationText
+  }
 }

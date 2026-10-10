@@ -27,6 +27,10 @@ type overviewRepoStub struct {
 	watchCalls []string
 }
 
+func (s *overviewRepoStub) GetDueStock(context.Context, string, time.Time) ([]domain.VeridianStockRow, error) {
+	return nil, nil
+}
+
 func (s *overviewRepoStub) GetTransactionalWatchInput(_ context.Context, _ string, profileID string, _ domain.VeridianDay, _, _ time.Time) (domain.VeridianTransactionalWatchInput, error) {
 	s.watchCalls = append(s.watchCalls, profileID)
 	return s.watchInput, s.watchErr
@@ -91,7 +95,7 @@ func TestBuildVeridianEmailProfilesOverview(t *testing.T) {
 	counters := []domain.VeridianPlanCounterRow{{Kind: domain.VeridianDailyQuotaKindProfile, Scope: "nord", Used: 12}}
 	now := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
 
-	out := buildVeridianEmailProfilesOverview(ws, observeAll(rows, counters), map[string]queue.VeridianReputationStatus{}, now)
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(rows, counters), map[string]queue.VeridianReputationStatus{}, nil, now)
 
 	require.Len(t, out.Profiles, 4)
 	byID := map[string]domain.VeridianEmailProfileOverview{}
@@ -155,7 +159,7 @@ func TestBuildVeridianEmailProfilesOverview(t *testing.T) {
 func TestBuildVeridianEmailProfilesOverview_ReportsExclusivityViolationWithoutBreaking(t *testing.T) {
 	ws := overviewTestWorkspace()
 	ws.Settings.TransactionalEmailProviderID = "nord" // viole la règle : nord est dans le pool
-	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, time.Now())
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, nil, time.Now())
 	assert.Equal(t, []string{"nord"}, out.UsageConflicts)
 	assert.Len(t, out.Profiles, 4, "la lecture ne casse pas")
 }
@@ -167,7 +171,7 @@ func TestBuildVeridianEmailProfilesOverview_CapacitySumsWhenEveryActiveProfileIs
 			ws.Integrations[i].EmailProvider.VeridianProfileDailyCap = 25
 		}
 	}
-	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, time.Now())
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, nil, time.Now())
 	require.NotNil(t, out.Totals.CommercialCapacityToday)
 	assert.Equal(t, 50, *out.Totals.CommercialCapacityToday, "relai en pause ne compte pas")
 }
@@ -314,4 +318,72 @@ func TestNewVeridianEmailProfileOverviewServiceRetainsDependencies(t *testing.T)
 	assert.Same(t, history, concrete.messageHistoryRepo)
 	assert.Same(t, workspaces, concrete.workspaceRepo)
 	assert.Same(t, auth, concrete.authService)
+}
+
+// --- Lot 6 : stock du pool partagé entre les profils ---
+
+func overviewStockWorkspace() *domain.Workspace {
+	ws := overviewTestWorkspace()
+	// Deux profils actifs identiques en rotation : nord et relai2 (relai est en pause).
+	for i := range ws.Integrations {
+		p := &ws.Integrations[i].EmailProvider
+		if ws.Integrations[i].Type != domain.IntegrationTypeEmail {
+			continue
+		}
+		p.VeridianProfileDailyCap = 0
+		p.VeridianProviderClassDailyCap = map[string]int{}
+		p.VeridianProviderClassRates = map[string]float64{}
+		for _, class := range domain.VeridianAllProviderClasses() {
+			p.VeridianProviderClassDailyCap[class] = 100
+			p.VeridianProviderClassRates[class] = 1
+		}
+	}
+	return ws
+}
+
+func TestBuildVeridianEmailProfilesOverview_StockSharedBetweenActiveProfiles(t *testing.T) {
+	ws := overviewStockWorkspace()
+	now := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
+	stock := map[string]int{"ovh": 30, "google": 500}
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, stock, now)
+
+	byID := map[string]domain.VeridianEmailProfileOverview{}
+	for _, p := range out.Profiles {
+		byID[p.IntegrationID] = p
+	}
+	nord, relai2, relai := byID["nord"].Plan, byID["relai2"].Plan, byID["relai"].Plan
+	require.True(t, nord.Capacity.StockKnown)
+	// Le stock d'ovh (30) est PARTAGÉ : la somme des parts ne dépasse pas 30.
+	assert.Equal(t, 30, *planClassOf(nord, "ovh").Stock+*planClassOf(relai2, "ovh").Stock)
+	assert.Equal(t, 15, *planClassOf(nord, "ovh").Stock)
+	// Google : 500 de stock, soit 250 de part, au-dessus du plafond de classe (100) : la capacité utile reste à 100.
+	assert.Equal(t, 250, *planClassOf(nord, "google").Stock)
+	// Le profil en pause ne reçoit aucune part et son utile n'est pas réduit par le stock des autres.
+	assert.False(t, relai.Capacity.StockKnown)
+	// Capacité utile des totaux = somme des utiles des profils actifs.
+	require.NotNil(t, out.Totals.CommercialUsefulCapacityToday)
+	require.NotNil(t, nord.Capacity.Useful)
+	assert.Equal(t, *nord.Capacity.Useful+*relai2.Capacity.Useful, *out.Totals.CommercialUsefulCapacityToday)
+	// La capacité configurée du pool est la somme des capacités configurées.
+	require.NotNil(t, out.Totals.CommercialCapacityToday)
+	assert.Equal(t, *nord.Capacity.Configured+*relai2.Capacity.Configured, *out.Totals.CommercialCapacityToday)
+}
+
+func TestBuildVeridianEmailProfilesOverview_UnknownStockIsNotZero(t *testing.T) {
+	ws := overviewStockWorkspace()
+	now := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, nil, now)
+	for _, p := range out.Profiles {
+		assert.False(t, p.Plan.Capacity.StockKnown, p.IntegrationID)
+	}
+	assert.Nil(t, out.Totals.CommercialUsefulCapacityToday, "stock non mesuré : pas de capacité utile inventée")
+}
+
+func planClassOf(plan domain.VeridianEffectivePlan, class string) domain.VeridianPlanClass {
+	for _, c := range plan.Classes {
+		if c.Class == class {
+			return c
+		}
+	}
+	return domain.VeridianPlanClass{}
 }

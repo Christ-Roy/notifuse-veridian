@@ -3,6 +3,7 @@ import { useLingui } from '@lingui/react/macro'
 import { i18n } from '@lingui/core'
 
 import type { EmailProfileOverview } from '../../services/api/veridian_email_profiles'
+import { VeridianCapacityBlock } from './veridian_capacity_block'
 import { formatNumber, useProfileLabels } from './veridian_profile_labels'
 import {
   canAddToRotation,
@@ -113,28 +114,36 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
       {gated ? (
         <div data-testid="today-block" style={{ marginBottom: 8 }}>
           <Text strong>{t`Today`}</Text>
-          <div>
-            {progress.cap === null ? (
-              <Text>{t`${sentLabel} sent, no daily cap`}</Text>
-            ) : (
-              <Text>{t`${sentLabel} / ${capLabel} sent`}</Text>
-            )}
-            {reservedExtra > 0 && (
-              <Text type="secondary"> ({t`${reservedExtra} reserved, in flight`})</Text>
-            )}
-          </div>
-          {progress.percent !== null && (
-            <Progress
-              percent={progress.percent}
-              size="small"
-              showInfo={false}
-              status={progress.percent >= 100 ? 'exception' : 'normal'}
-            />
+          {plan.capacity ? (
+            <VeridianCapacityBlock plan={plan} />
+          ) : (
+            <>
+              <div>
+                {progress.cap === null ? (
+                  <Text>{t`${sentLabel} sent, no daily cap`}</Text>
+                ) : (
+                  <Text>{t`${sentLabel} / ${capLabel} sent`}</Text>
+                )}
+              </div>
+              {progress.percent !== null && (
+                <Progress
+                  percent={progress.percent}
+                  size="small"
+                  showInfo={false}
+                  status={progress.percent >= 100 ? 'exception' : 'normal'}
+                />
+              )}
+              <div data-testid="limiting-factor">
+                <Text type="secondary">{t`Limited by`}: </Text>
+                <Text>{labels.factorText(factor)}</Text>
+              </div>
+            </>
           )}
-          <div data-testid="limiting-factor">
-            <Text type="secondary">{t`Limited by`}: </Text>
-            <Text>{labels.factorText(factor)}</Text>
-          </div>
+          {reservedExtra > 0 && (
+            <div>
+              <Text type="secondary">{t`${reservedExtra} reserved, in flight`}</Text>
+            </div>
+          )}
           {blockers.map((blocker) => (
             <div key={blocker.kind}>
               <Tag color={blocker.kind === 'window_closed' ? 'gold' : 'orange'}>

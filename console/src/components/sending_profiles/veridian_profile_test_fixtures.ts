@@ -4,6 +4,7 @@
 import type {
   EmailProfileOverview,
   EmailProfilePlan,
+  EmailProfilePlanCapacity,
   EmailProfilePlanClass,
   EmailProfilesOverview
 } from '../../services/api/veridian_email_profiles'
@@ -93,5 +94,67 @@ export const overviewOf = (
     active_commercial_profiles: 3,
     paused_profiles: 0
   },
+  ...overrides
+})
+
+// Lot 6 : capacité du jour. Profil de Robert: ovh 79 (débit), google 34, une classe exclue,
+// stock de 30 contacts dus pour ovh seulement. Chauffe à 300 : la somme (229 ici) reste dessous.
+export const capacityClass = (cls: string, overrides: Partial<EmailProfilePlanClass> = {}): EmailProfilePlanClass =>
+  planClass(cls, {
+    sent_today: 0,
+    capacity_remaining: 79,
+    capacity_configured: 79,
+    capacity_useful: 79,
+    stock: 500,
+    capacity_limiter: 'rate',
+    ...overrides
+  })
+
+export const baseCapacity = (overrides: Partial<EmailProfilePlanCapacity> = {}): EmailProfilePlanCapacity => ({
+  applicable: true,
+  sent: 20,
+  configured: 120,
+  remaining_configured: 100,
+  useful: 70,
+  remaining_useful: 50,
+  unusable: 50,
+  stock_known: true,
+  limiting: 'class_rates',
+  limiting_class: 'ovh',
+  stock_limiting_class: 'google',
+  profile_bound: 280,
+  profile_bound_gate: 'warmup',
+  sum_remaining: 100,
+  flat_cap: 0,
+  window_minutes_left: 300,
+  window_minutes_full: 660,
+  full_day_configured: 229,
+  full_day_limiting: 'class_rates',
+  ...overrides
+})
+
+export const planWithCapacity = (
+  capacity: Partial<EmailProfilePlanCapacity> = {},
+  overrides: Partial<EmailProfilePlan> = {}
+): Partial<EmailProfilePlan> => ({
+  capacity: baseCapacity(capacity),
+  classes: [
+    capacityClass('ovh', { sent_today: 20, capacity_configured: 99, capacity_useful: 70, capacity_remaining: 79, stock: 50 }),
+    capacityClass('google', {
+      capacity_configured: 41,
+      capacity_useful: 0,
+      capacity_remaining: 41,
+      stock: 0,
+      capacity_limiter: 'class_cap'
+    }),
+    capacityClass('ionos', {
+      excluded: true,
+      capacity_configured: 0,
+      capacity_useful: 0,
+      capacity_remaining: 0,
+      stock: 0,
+      capacity_limiter: 'excluded'
+    })
+  ],
   ...overrides
 })

@@ -85,6 +85,38 @@ export interface EmailProfilePlanClass {
   stopped: boolean
   sendable_now: boolean
   blocked_by?: EmailProfilePlanBlock
+  // Lot 6 : capacité du jour de la classe (envois du jour, envoyés compris). null = sans limite.
+  capacity_remaining?: number | null
+  capacity_configured?: number | null
+  capacity_useful?: number | null
+  // Part du stock dû aujourd'hui attribuée à ce profil, null = stock non mesuré.
+  stock?: number | null
+  // class_cap | rate | excluded | reputation_stopped | window_closed | none
+  capacity_limiter?: string
+}
+
+// Lot 6 : capacité du jour d'un profil commercial = somme des classes, bornée par les portes de profil.
+export interface EmailProfilePlanCapacity {
+  applicable: boolean
+  sent: number
+  configured: number | null
+  remaining_configured: number | null
+  useful: number | null
+  remaining_useful: number | null
+  unusable: number | null
+  stock_known: boolean
+  // warmup | profile_cap | per_sender | class_caps | class_rates | window_closed | classes_blocked | none
+  limiting: string
+  limiting_class?: string
+  stock_limiting_class?: string
+  profile_bound: number | null
+  profile_bound_gate: string
+  sum_remaining: number | null
+  flat_cap: number
+  window_minutes_left: number
+  window_minutes_full: number
+  full_day_configured: number | null
+  full_day_limiting: string
 }
 
 export interface EmailProfilePlanWindow {
@@ -133,6 +165,8 @@ export interface EmailProfilePlan {
   complaints_7d: number
   reputation_alert: boolean
   classes: EmailProfilePlanClass[]
+  // Absent d'un serveur plus ancien.
+  capacity?: EmailProfilePlanCapacity
   sendable_now: boolean
   blocked_by: EmailProfilePlanBlock[]
 }
@@ -208,6 +242,8 @@ export interface EmailProfilesOverview {
     commercial_sent_today: number
     transactional_sent_today: number
     commercial_capacity_today: number | null
+    // Lot 6 : capacité utile (limitée par le stock dû), null si le stock n'est pas mesuré.
+    commercial_useful_capacity_today?: number | null
     active_commercial_profiles: number
     paused_profiles: number
   }

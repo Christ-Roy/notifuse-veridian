@@ -79,9 +79,12 @@ type VeridianEmailProfilesOverviewTotals struct {
 	TransactionalSentToday int `json:"transactional_sent_today"`
 	// CommercialCapacityToday : somme des plafonds du jour des profils commerciaux
 	// actifs ; nil dès qu'un profil actif n'a aucun plafond.
-	CommercialCapacityToday  *int `json:"commercial_capacity_today"`
-	ActiveCommercialProfiles int  `json:"active_commercial_profiles"`
-	PausedProfiles           int  `json:"paused_profiles"`
+	CommercialCapacityToday *int `json:"commercial_capacity_today"`
+	// CommercialUsefulCapacityToday : somme des capacités UTILES (limitées par le stock dû
+	// aujourd'hui) ; nil si le stock n'a pas pu être mesuré.
+	CommercialUsefulCapacityToday *int `json:"commercial_useful_capacity_today"`
+	ActiveCommercialProfiles      int  `json:"active_commercial_profiles"`
+	PausedProfiles                int  `json:"paused_profiles"`
 }
 
 type VeridianEmailProfilesOverview struct {
@@ -120,6 +123,29 @@ type VeridianPlanCounterRow struct {
 	Used          int
 }
 
+// VeridianStockRow : contacts dus, groupés par étiquette de classe (contacts.custom_string_5
+// ou payload de la file) et domaine du destinataire.
+type VeridianStockRow struct {
+	Tag    string
+	Domain string
+	Count  int
+}
+
+// VeridianStockByClass range le stock par classe de destinataire : l'étiquette quand elle
+// est canonique (posée par l'export en amont, MX résolu), sinon la classification par
+// suffixe du domaine (le worker ferait une recherche MX).
+func VeridianStockByClass(rows []VeridianStockRow) map[string]int {
+	out := map[string]int{}
+	for _, r := range rows {
+		class := strings.ToLower(strings.TrimSpace(r.Tag))
+		if !IsValidProviderClass(class) {
+			class = ClassifyProviderClass("x@" + r.Domain)
+		}
+		out[class] += r.Count
+	}
+	return out
+}
+
 type VeridianEmailProfileOverviewRepository interface {
 	// GetPlanObservations lit les compteurs du JOUR DE COMPTE `day` (lot 4 : le jour
 	// civil du fuseau de la fenêtre d'envoi du profil, plus minuit UTC) : envois
@@ -130,6 +156,11 @@ type VeridianEmailProfileOverviewRepository interface {
 	// (lot 5), les envois et les rejets des mails transactionnels de CE profil :
 	// aujourd'hui (day), les 7 jours de compte précédents (previousStart inclus,
 	// day.Start exclu) et les 7 jours glissants jusqu'à `now` (rollingStart inclus).
+	// GetDueStock (lot 6) mesure le stock réellement dû avant `until` : entrées de file
+	// (en attente, à rejouer, en cours, échéance passée ou nulle) et contacts actifs en
+	// séquence dont la prochaine étape (envoi ou attente) échoit avant `until`. Une ligne
+	// par (étiquette de classe, domaine du destinataire).
+	GetDueStock(ctx context.Context, workspaceID string, until time.Time) ([]VeridianStockRow, error)
 	GetTransactionalWatchInput(ctx context.Context, workspaceID, profileID string, day VeridianDay, previousStart, rollingStart time.Time) (VeridianTransactionalWatchInput, error)
 }
 

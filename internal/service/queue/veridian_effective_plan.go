@@ -39,6 +39,10 @@ type VeridianPlanInput struct {
 	// Reputation : état du fusible par domaine émetteur (VeridianComputeReputationStatus).
 	// Absent pour un domaine = aucun envoi observé, couples sains.
 	Reputation map[string]VeridianReputationStatus
+	// StockShare : part du stock dû aujourd'hui (classe -> contacts) attribuée à ce
+	// profil par VeridianAllocateStock. nil = stock non mesuré (lot 6 : la capacité
+	// utile égale alors la capacité configurée et StockKnown reste faux).
+	StockShare map[string]int
 }
 
 // VeridianEffectivePlan calcule la vérité d'un profil. Un profil introuvable ou
@@ -57,6 +61,10 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 		ClassCapsSource:      "none",
 		ClassRatesSource:     "none",
 		Window:               domain.VeridianPlanWindow{Source: "none", OpenNow: true},
+		Capacity: domain.VeridianPlanCapacity{
+			Limiting: domain.VeridianCapacityLimitNone, ProfileBoundGate: domain.VeridianPlanGateNone,
+			FullDayLimiting: domain.VeridianCapacityLimitNone,
+		},
 	}
 	ws := in.Workspace
 	integration := ws.GetIntegrationByID(in.IntegrationID)
@@ -180,6 +188,21 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 		}
 	}
 
+	// --- minutes d'ouverture de la fenêtre (lot 6) ---
+	win := veridianResolveSendingWindow(ws, provider, entry)
+	minutesLeft := day.End.Sub(now).Minutes()
+	minutesFull := day.End.Sub(day.Start).Minutes()
+	if win != nil {
+		minutesLeft = win.OpenMinutes(now, day.End, ws.Settings.Timezone)
+		minutesFull = win.FullDayMinutes()
+	}
+	if minutesLeft < 0 {
+		minutesLeft = 0
+	}
+	windowClosedForDay := win != nil && minutesLeft <= 0
+	var fullRemaining []*int
+	var fullLimiters []string
+
 	// --- classes ---
 	domainSent := in.Observed.DomainSent[primaryDomain]
 	if r := in.Observed.DomainReserved[primaryDomain]; r > domainSent {
@@ -277,6 +300,13 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 		}
 		pc.Remaining = remaining
 
+		// Lot 6 : ce que la classe peut absorber aujourd'hui (plafond de classe, débit x
+		// minutes d'ouverture restantes), puis sur une journée d'ouverture type.
+		pc.CapacityRemaining, pc.CapacityLimiter = veridianClassCapacityRemaining(pc, lim, classSent, minutesLeft, windowClosedForDay)
+		fullRem, fullLimiter := veridianClassCapacityRemaining(pc, lim, 0, minutesFull, false)
+		fullRemaining = append(fullRemaining, fullRem)
+		fullLimiters = append(fullLimiters, fullLimiter)
+
 		// Raison de blocage dans l'ordre des portes du worker.
 		blocked := ""
 		switch {
@@ -323,6 +353,27 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 	if allClassesCapped && classCapTotal > 0 {
 		addGate(domain.VeridianPlanGateClassCap, classCapTotal, classUsedTotal, classRemainingTotal, "somme des plafonds des classes")
 	}
+
+	// --- capacité du jour (lot 6) : somme des classes, bornée par les portes de profil ---
+	var bounds, fullBounds []veridianBound
+	if base.Warmup > 0 {
+		bounds = append(bounds, veridianBound{domain.VeridianPlanGateWarmup, base.Warmup - domainSent})
+		fullBounds = append(fullBounds, veridianBound{domain.VeridianPlanGateWarmup, base.Warmup})
+	}
+	if base.Profile > 0 {
+		bounds = append(bounds, veridianBound{domain.VeridianPlanGateProfileCap, base.Profile - profileUsed})
+		fullBounds = append(fullBounds, veridianBound{domain.VeridianPlanGateProfileCap, base.Profile})
+	}
+	if base.PerSender > 0 && len(senders) > 0 {
+		bounds = append(bounds, veridianBound{domain.VeridianPlanGatePerSender, perSenderRemaining})
+		fullBounds = append(fullBounds, veridianBound{domain.VeridianPlanGatePerSender, base.PerSender * len(senders)})
+	}
+	plan.Capacity = veridianBuildCapacity(veridianCapacityInput{
+		Classes: plan.Classes, FullRemaining: fullRemaining, FullLimiter: fullLimiters,
+		Sent: plan.SentToday, Bounds: bounds, FullBounds: fullBounds, FlatCap: base.Profile,
+		MinutesLeft: minutesLeft, MinutesFull: minutesFull, WindowConfigured: win != nil,
+		StockShare: in.StockShare,
+	})
 
 	plan.LimitingGate = domain.VeridianPlanGateNone
 	plan.RemainingGate = domain.VeridianPlanGateNone

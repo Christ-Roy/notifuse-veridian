@@ -229,6 +229,13 @@ export function SendingProfilesPage() {
               value={totals.commercial_capacity_today === null ? t`No cap` : totals.commercial_capacity_today}
               formatter={(value) => (typeof value === 'number' ? formatNumber(value) : String(value))}
             />
+            {totals.commercial_useful_capacity_today !== undefined && totals.commercial_useful_capacity_today !== null && (
+              <Statistic
+                title={t`Usable with the contacts due today`}
+                value={totals.commercial_useful_capacity_today}
+                formatter={(value) => formatNumber(Number(value))}
+              />
+            )}
             <Statistic title={t`Paused profiles`} value={totals.paused_profiles} />
             <Statistic
               title={t`Transactional sent today`}

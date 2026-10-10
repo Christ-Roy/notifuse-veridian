@@ -108,3 +108,52 @@ func (r *veridianEmailProfileOverviewRepository) GetTransactionalWatchInput(ctx 
 	}
 	return in, nil
 }
+
+// GetDueStock : le stock dû avant `until`, en lecture seule. Deux sources, la file (même
+// prédicat « dû » que FetchPending : en attente, à rejouer, en cours, échéance passée ou
+// nulle ; les entrées en pause sont écartées) et les contacts actifs d'une automation
+// vivante dont la prochaine étape (envoi ou attente) échoit avant `until`. Un contact qui a
+// répondu n'est plus dû (sortie sur réponse).
+func (r *veridianEmailProfileOverviewRepository) GetDueStock(ctx context.Context, workspaceID string, until time.Time) ([]domain.VeridianStockRow, error) {
+	db, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT COALESCE(NULLIF(q.payload->>'veridian_provider_class', ''), NULLIF(lower(c.custom_string_5), ''), ''),
+		       lower(split_part(q.contact_email, '@', 2)), COUNT(*)
+		FROM email_queue q
+		LEFT JOIN contacts c ON c.email = q.contact_email
+		WHERE q.source_type IN ('broadcast', 'automation')
+		  AND (q.status = 'pending' OR (q.status = 'failed' AND q.attempts < q.max_attempts) OR q.status = 'processing')
+		  AND (q.next_retry_at IS NULL OR q.next_retry_at < $1)
+		  AND NOT EXISTS (SELECT 1 FROM veridian_contact_reply rp WHERE rp.contact_email = q.contact_email)
+		GROUP BY 1, 2
+		UNION ALL
+		SELECT COALESCE(NULLIF(lower(c.custom_string_5), ''), ''), lower(split_part(ca.contact_email, '@', 2)), COUNT(*)
+		FROM contact_automations ca
+		JOIN automations a ON a.id = ca.automation_id AND a.status = 'live' AND a.deleted_at IS NULL
+		LEFT JOIN contacts c ON c.email = ca.contact_email
+		WHERE ca.status = 'active' AND ca.scheduled_at IS NOT NULL AND ca.scheduled_at < $1
+		  AND EXISTS (SELECT 1 FROM jsonb_array_elements(a.nodes) n
+		              WHERE n->>'id' = ca.current_node_id AND n->>'type' IN ('email', 'delay'))
+		  AND NOT EXISTS (SELECT 1 FROM veridian_contact_reply rp WHERE rp.contact_email = ca.contact_email)
+		GROUP BY 1, 2
+	`, until.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("query due stock: %w", err)
+	}
+	defer rows.Close()
+	out := []domain.VeridianStockRow{}
+	for rows.Next() {
+		var row domain.VeridianStockRow
+		if err := rows.Scan(&row.Tag, &row.Domain, &row.Count); err != nil {
+			return nil, fmt.Errorf("scan due stock: %w", err)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate due stock: %w", err)
+	}
+	return out, nil
+}

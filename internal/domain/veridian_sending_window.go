@@ -245,3 +245,47 @@ func veridianParseWeekdayList(csv string) []int {
 func (w *VeridianSendingWindow) Location(fallbackTZ string) *time.Location {
 	return w.resolveLocation(fallbackTZ)
 }
+
+// OpenMinutes compte les minutes où la fenêtre est ouverte dans [from, to[ (lot 6,
+// 10/10/2026 : capacité du jour = débit x minutes d ouverture restantes). C est le
+// MÊME test que IsWithinWindow (jour autorisé, heure dans [début, fin[), intégré sur
+// l intervalle ; le test de parité compte les minutes une à une avec IsWithinWindow
+// et exige le même nombre. Une fenêtre invalide laisse tout passer (24 h sur 24),
+// comme IsWithinWindow.
+func (w *VeridianSendingWindow) OpenMinutes(from, to time.Time, fallbackTZ string) float64 {
+	if !to.After(from) {
+		return 0
+	}
+	if !w.IsValid() {
+		return to.Sub(from).Minutes()
+	}
+	loc := w.resolveLocation(fallbackTZ)
+	local := from.In(loc)
+	total := 0.0
+	for day := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc); day.Before(to); day = time.Date(day.Year(), day.Month(), day.Day()+1, 0, 0, 0, 0, loc) {
+		if !w.allowsDay(day.Weekday()) {
+			continue
+		}
+		start := time.Date(day.Year(), day.Month(), day.Day(), w.StartHour, w.StartMinute, 0, 0, loc)
+		end := time.Date(day.Year(), day.Month(), day.Day(), w.EndHour, w.EndMinute, 0, 0, loc)
+		if start.Before(from) {
+			start = from
+		}
+		if end.After(to) {
+			end = to
+		}
+		if end.After(start) {
+			total += end.Sub(start).Minutes()
+		}
+	}
+	return total
+}
+
+// FullDayMinutes : durée d une journée d ouverture type (fin moins début), pour la
+// capacité d un jour ouvré typique quand la fenêtre est fermée aujourd hui.
+func (w *VeridianSendingWindow) FullDayMinutes() float64 {
+	if !w.IsValid() {
+		return 24 * 60
+	}
+	return float64(w.endMinutes() - w.startMinutes())
+}

@@ -8,6 +8,7 @@
 // paramètre d'une fonction hors composant rend une chaîne vide).
 
 import type {
+  EmailProfilePlanCapacity,
   EmailProfileOverview,
   EmailProfilePlan,
   EmailProfilePlanClass,
@@ -211,4 +212,104 @@ export function groupProfiles(profiles: EmailProfileOverview[]): ProfileGroups {
     .filter((p) => p.usage === 'transactional')
     .sort((a, b) => a.name.localeCompare(b.name))
   return { commercial, transactional }
+}
+
+// ---- Lot 6 : capacité du jour -------------------------------------------------------
+
+export interface CapacityBar {
+  sent: number
+  // Ce qui peut encore partir ET qui a du stock.
+  remaining: number
+  // Ce que les réglages permettraient mais qui restera vide faute de contacts dus.
+  unusable: number
+  // Capacité configurée du jour (envoyés compris).
+  total: number
+  // Capacité utile : envoyés + restant.
+  useful: number
+  stockKnown: boolean
+}
+
+// null quand le serveur ne donne pas la capacité (serveur plus ancien) ou qu'elle est illimitée.
+export function capacityBar(plan: EmailProfilePlan): CapacityBar | null {
+  const c: EmailProfilePlanCapacity | undefined = plan.capacity
+  if (!c || !c.applicable || c.configured === null) return null
+  const remaining = c.remaining_useful ?? 0
+  const unusable = c.unusable ?? 0
+  return {
+    sent: c.sent,
+    remaining,
+    unusable,
+    total: c.configured,
+    useful: c.useful ?? c.sent + remaining,
+    stockKnown: c.stock_known
+  }
+}
+
+export type CapacityLimit =
+  | { kind: 'warmup'; day: number; of: number }
+  | { kind: 'profile_cap'; cap: number }
+  | { kind: 'per_sender' }
+  | { kind: 'class_rates'; class: string }
+  | { kind: 'class_caps'; class: string }
+  | { kind: 'window_closed' }
+  | { kind: 'classes_blocked' }
+  | { kind: 'none' }
+
+// Ce qui borne la capacité configurée, lu dans le plan serveur (jamais recalculé ici).
+export function capacityLimit(plan: EmailProfilePlan): CapacityLimit {
+  const c = plan.capacity
+  if (!c) return { kind: 'none' }
+  switch (c.limiting) {
+    case 'warmup':
+      return { kind: 'warmup', day: plan.warmup.day ?? 1, of: plan.warmup.of ?? 1 }
+    case 'profile_cap':
+      return { kind: 'profile_cap', cap: c.flat_cap }
+    case 'per_sender':
+      return { kind: 'per_sender' }
+    case 'class_rates':
+      return { kind: 'class_rates', class: c.limiting_class ?? '' }
+    case 'class_caps':
+      return { kind: 'class_caps', class: c.limiting_class ?? '' }
+    case 'window_closed':
+      return { kind: 'window_closed' }
+    case 'classes_blocked':
+      return { kind: 'classes_blocked' }
+    default:
+      return { kind: 'none' }
+  }
+}
+
+export interface CapacityRow {
+  class: string
+  excluded: boolean
+  sent: number
+  // null = aucune limite de volume pour cette classe.
+  configured: number | null
+  useful: number | null
+  remaining: number | null
+  unusable: number | null
+  stock: number | null
+  limiter: string
+}
+
+// Détail par fournisseur, trié par capacité décroissante (les classes sans limite d'abord).
+export function capacityRows(plan: EmailProfilePlan): CapacityRow[] {
+  const rows = plan.classes.map((c: EmailProfilePlanClass): CapacityRow => {
+    const configured = c.capacity_configured ?? null
+    const useful = c.capacity_useful ?? null
+    const remaining = useful === null ? null : Math.max(0, useful - c.sent_today)
+    const unusable = configured !== null && useful !== null ? Math.max(0, configured - useful) : null
+    return {
+      class: c.class,
+      excluded: c.excluded,
+      sent: c.sent_today,
+      configured,
+      useful,
+      remaining,
+      unusable,
+      stock: c.stock ?? null,
+      limiter: c.capacity_limiter ?? 'none'
+    }
+  })
+  return rows.sort((a, b) => (b.configured ?? Infinity) - (a.configured ?? Infinity) || a.class.localeCompare(b.class))
 }

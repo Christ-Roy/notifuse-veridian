@@ -69,6 +69,83 @@ type VeridianPlanClass struct {
 	// SendableNow : le worker enverrait un message vers cette classe maintenant.
 	SendableNow bool   `json:"sendable_now"`
 	BlockedBy   string `json:"blocked_by,omitempty"`
+
+	// Lot 6 (10/10/2026) : capacité du jour de la classe. Tous les entiers sont des
+	// NOMBRES D ENVOIS DU JOUR (déjà partis compris), nil = aucune limite de volume.
+	//   - CapacityRemaining : ce que la classe peut encore absorber aujourd hui =
+	//     min(plafond de classe restant, débit effectif x minutes d ouverture restantes).
+	//     0 si la classe est exclue, arrêtée par le fusible ou si la fenêtre est close.
+	//   - CapacityConfigured : SentToday + CapacityRemaining.
+	//   - Stock : part du stock dû aujourd hui (file + séquences) attribuée à ce profil
+	//     pour la classe ; nil = stock non mesuré.
+	//   - CapacityUseful : SentToday + min(CapacityRemaining, Stock).
+	//   - CapacityLimiter : ce qui borne la classe (class_cap, rate, excluded,
+	//     reputation_stopped, window_closed, none).
+	CapacityRemaining  *int   `json:"capacity_remaining"`
+	CapacityConfigured *int   `json:"capacity_configured"`
+	CapacityUseful     *int   `json:"capacity_useful"`
+	Stock              *int   `json:"stock"`
+	CapacityLimiter    string `json:"capacity_limiter"`
+}
+
+// Limites d une capacité de profil (VeridianPlanCapacity.Limiting).
+const (
+	VeridianCapacityLimitClassCaps  = "class_caps"
+	VeridianCapacityLimitClassRates = "class_rates"
+	VeridianCapacityLimitWindow     = "window_closed"
+	VeridianCapacityLimitNone       = "none"
+	VeridianCapacityLimitBlocked    = "classes_blocked"
+	VeridianCapacityLimiterClassCap = "class_cap"
+	VeridianCapacityLimiterRate     = "rate"
+	VeridianCapacityLimiterExcluded = "excluded"
+	VeridianCapacityLimiterStopped  = "reputation_stopped"
+	VeridianCapacityLimiterWindow   = "window_closed"
+	VeridianCapacityLimiterNone     = "none"
+)
+
+// VeridianPlanCapacity : la capacité du jour d un profil commercial (lot 6). Elle
+// remplace le plafond plat comme LIMITE de référence : c est la somme, sur les
+// classes de destinataire, de ce que chaque classe peut absorber (plafond de classe,
+// débit x minutes d ouverture restantes, fusible), bornée par les seules portes de
+// profil (chauffe, plafond par expéditeur et, s il est posé, plafond plat).
+// Calculée par VeridianEffectivePlan, jamais recalculée ailleurs.
+type VeridianPlanCapacity struct {
+	Applicable bool `json:"applicable"`
+	Sent       int  `json:"sent"`
+	// Configured : envoyés + ce que les réglages permettent d envoyer encore. nil =
+	// illimité (une classe sans plafond ni débit et aucune porte de profil).
+	Configured          *int `json:"configured"`
+	RemainingConfigured *int `json:"remaining_configured"`
+	// Useful : envoyés + min(reste configuré, stock dû). Égal à Configured quand le stock
+	// n est pas mesuré (StockKnown false).
+	Useful          *int `json:"useful"`
+	RemainingUseful *int `json:"remaining_useful"`
+	// Unusable : Configured - Useful, la part qui restera vide faute de stock.
+	Unusable   *int `json:"unusable"`
+	StockKnown bool `json:"stock_known"`
+	// Limiting : ce qui borne Configured (warmup, profile_cap, per_sender, class_caps,
+	// class_rates, window_closed, none). LimitingClass : la classe qui pèse le plus
+	// dans cette borne (classes), vide pour une porte de profil.
+	Limiting       string `json:"limiting"`
+	LimitingClass  string `json:"limiting_class,omitempty"`
+	LimitingDetail string `json:"limiting_detail,omitempty"`
+	// StockLimitingClass : classe où le stock manque le plus (vide si le stock suffit).
+	StockLimitingClass string `json:"stock_limiting_class,omitempty"`
+	// ProfileBound : ce que les portes de profil laissent envoyer encore ; ProfileBoundGate
+	// la porte la plus basse. Somme des classes au-dessus de la borne = SumRemaining.
+	ProfileBound     *int   `json:"profile_bound"`
+	ProfileBoundGate string `json:"profile_bound_gate"`
+	SumRemaining     *int   `json:"sum_remaining"`
+	// FlatCap : plafond plat posé (0 = aucun, il est facultatif).
+	FlatCap int `json:"flat_cap"`
+	// Minutes d ouverture restantes aujourd hui, et durée d une journée d ouverture type.
+	WindowMinutesLeft int `json:"window_minutes_left"`
+	WindowMinutesFull int `json:"window_minutes_full"`
+	// FullDayConfigured : capacité d une journée d ouverture type (compteurs à zéro),
+	// même formule. Sert quand la fenêtre est fermée aujourd hui (week-end) et à comparer
+	// à l ancien plafond plat. nil = illimité.
+	FullDayConfigured *int   `json:"full_day_configured"`
+	FullDayLimiting   string `json:"full_day_limiting"`
 }
 
 type VeridianPlanWarmup struct {
@@ -141,6 +218,9 @@ type VeridianEffectivePlan struct {
 	ReputationAlert      bool     `json:"reputation_alert"`
 
 	Classes []VeridianPlanClass `json:"classes"`
+
+	// Capacity : capacité du jour (lot 6), somme des classes bornée par la chauffe.
+	Capacity VeridianPlanCapacity `json:"capacity"`
 
 	// SendableNow : au moins une classe partirait maintenant. BlockedBy : raisons
 	// valables pour le profil entier (pause, fenêtre, hors rotation...).
