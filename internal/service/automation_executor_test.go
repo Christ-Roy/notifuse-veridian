@@ -2687,7 +2687,10 @@ func TestAutomationExecutor_SetWebhookSecretKey(t *testing.T) {
 	e.SetWebhookSecretKey("passphrase")
 	assert.Equal(t, "passphrase", w.secretKey)
 	// Sans exécuteur webhook enregistré : sans effet, sans panique.
-	assert.NotPanics(t, func() { (&AutomationExecutor{nodeExecutors: map[domain.NodeType]NodeExecutor{}}).SetWebhookSecretKey("x") })
+	assert.NotPanics(t, func() {
+		(&AutomationExecutor{nodeExecutors: map[domain.NodeType]NodeExecutor{}}).SetWebhookSecretKey("x")
+	})
+}
 
 // Fiche 62 : un noeud email qui parque son contact en « sending » n'a RIEN envoye. Le
 // journal d'execution doit dire « queued » (le « completed » viendra de HandleEmailSent),

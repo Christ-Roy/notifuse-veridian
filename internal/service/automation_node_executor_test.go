@@ -3933,7 +3933,10 @@ func TestEmailNodeExecutor_Execute_TransactionalTemplateUsesTheReservedProfile(t
 	mockListRepo.EXPECT().GetListByID(gomock.Any(), "ws1", "list1").Return(&domain.List{ID: "list1", Name: "L"}, nil).Times(2)
 	var entries []*domain.EmailQueueEntry
 	mockEmailQueueRepo.EXPECT().Enqueue(gomock.Any(), "ws1", gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ string, e []*domain.EmailQueueEntry) error { entries = append(entries, e...); return nil }).Times(2)
+		DoAndReturn(func(_ context.Context, _ string, e []*domain.EmailQueueEntry) error {
+			entries = append(entries, e...)
+			return nil
+		}).Times(2)
 
 	params := NodeExecutionParams{
 		WorkspaceID: "ws1",
@@ -4006,6 +4009,7 @@ func TestWebhookNodeExecutor_SetSecretKey(t *testing.T) {
 	assert.Empty(t, e.secretKey)
 	e.SetSecretKey("passphrase")
 	assert.Equal(t, "passphrase", e.secretKey)
+}
 
 // Fiche 62 : l'entree de file porte le noeud qui l'a produite, sinon l'explorateur de file
 // ne sait pas regrouper les mails en attente par noeud.
