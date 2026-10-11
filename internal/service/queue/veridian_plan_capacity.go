@@ -282,6 +282,18 @@ func VeridianAllocateStock(stock map[string]int, absorb map[string]map[string]*i
 			weights[i] = w
 			sum += w
 		}
+		if total > 0 && sum <= 0 && len(ids) > 0 {
+			// Aucun profil ne peut absorber la classe AUJOURD'HUI (fenêtre close, dimanche) :
+			// le stock existe quand même, il est montré tel quel (réparti à parts égales,
+			// restes aux premiers identifiants). La capacité utile reste 0 : min(reste 0, stock).
+			for i, id := range ids {
+				out[id][class] = total / len(ids)
+				if i < total%len(ids) {
+					out[id][class]++
+				}
+			}
+			continue
+		}
 		if total <= 0 || sum <= 0 {
 			for _, id := range ids {
 				out[id][class] = 0

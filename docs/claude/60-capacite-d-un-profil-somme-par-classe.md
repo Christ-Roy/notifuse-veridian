@@ -18,6 +18,8 @@ Pour une classe, sur la journée de compte du profil :
 - Fusible proportionné : une plainte ÷4 divise les plafonds ET les débits, la capacité suit.
 - Le journal des décisions de la fiche 62 n'est pas branché ici : la capacité est un calcul d'avance, pas une trace. `queue:explain` répond à « pourquoi CE mail n'est pas parti », la capacité à « combien peut partir ».
 
+- **Fenêtre close pour tous** (dimanche, hors horaires) : aucun profil n'absorbe rien, donc le prorata n'avait aucun poids et le stock s'affichait à 0 alors que la file en portait 2 322 (trouvé par la mesure en prod le 11/10, dimanche). `VeridianAllocateStock` répartit alors le stock à parts égales : il reste visible, la capacité utile reste 0 (min(reste 0, stock)).
+
 ## Exposition
 
 - API : `emailProfiles.overview` (`plan.capacity` + champs par classe `capacity_configured|useful`, `capacity_limiter`, `stock`; totaux `commercial_capacity_today`, `commercial_useful_capacity_today`).

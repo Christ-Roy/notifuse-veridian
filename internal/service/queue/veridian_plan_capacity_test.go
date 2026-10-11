@@ -585,6 +585,16 @@ func TestVeridianAllocateStock(t *testing.T) {
 		)
 		assert.Equal(t, 40, shares["a"]["ovh"]+shares["b"]["ovh"])
 	})
+	t.Run("fenêtre close pour tous (capacité 0 partout) : le stock reste montré, réparti sans perte", func(t *testing.T) {
+		shares := VeridianAllocateStock(
+			map[string]int{"ovh": 11},
+			map[string]map[string]*int{"a": {"ovh": &zero}, "b": {"ovh": &zero}, "c": {"ovh": &zero}},
+		)
+		assert.Equal(t, 11, shares["a"]["ovh"]+shares["b"]["ovh"]+shares["c"]["ovh"], "le stock existe : on ne le fait pas disparaître")
+		assert.Equal(t, 4, shares["a"]["ovh"])
+		assert.Equal(t, 4, shares["b"]["ovh"])
+		assert.Equal(t, 3, shares["c"]["ovh"])
+	})
 	t.Run("aucun stock : zéro partout", func(t *testing.T) {
 		shares := VeridianAllocateStock(map[string]int{}, map[string]map[string]*int{"a": {"ovh": &seventy}})
 		assert.Equal(t, 0, shares["a"]["ovh"])
