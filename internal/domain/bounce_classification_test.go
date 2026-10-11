@@ -324,6 +324,33 @@ func TestClassifyBounce(t *testing.T) {
 			expected: BounceClassificationSoftCount,
 		},
 
+		// 5.4.1 d'Exchange Online (directory based edge blocking) : l'adresse n'existe pas.
+		// Vraies DSN du 08 et 09/10/2026 (adresses anonymisees).
+		{
+			name: "SMTP NDR 5.4.1 EXO Recipient address rejected (adresse inexistante) is Hard",
+			in: BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.4.1",
+				Diagnostic: "SMTP; 550 5.4.1 Recipient address rejected: Access denied. For more information see https://aka.ms/EXOSmtpErrors [AB1CD000000.EUROP000.PROD.OUTLOOK.COM 2026-10-08T09:39:04.918Z 08DF22E5AF864A8F]"},
+			expected: BounceClassificationHard,
+		},
+		{
+			name: "SMTP NDR 5.4.1 sans libelle d'adresse reste SoftCount",
+			in: BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.4.1",
+				Diagnostic: "smtp; 550 5.4.1 Relay access denied"},
+			expected: BounceClassificationSoftCount,
+		},
+		{
+			name: "SMTP NDR 5.1.10 RecipientNotFound is Hard",
+			in: BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.1.10",
+				Diagnostic: "smtp;550 5.1.10 RESOLVER.ADR.RecipientNotFound; Recipient user@example.test not found by SMTP address lookup"},
+			expected: BounceClassificationHard,
+		},
+		{
+			name: "SMTP NDR 5.7.1 reste un refus de politique",
+			in: BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.7.1",
+				Diagnostic: "smtp; 550 5.7.1 Service unavailable, client host blocked"},
+			expected: BounceClassificationPolicyRefusal,
+		},
+
 		// ---- Empty / unknown defaults ----
 		{
 			name:     "Empty input defaults to SoftCount",

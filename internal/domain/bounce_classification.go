@@ -136,6 +136,17 @@ func classifyDSNCode(s string) *BounceClassification {
 	return &c
 }
 
+// isRecipientRejected541 : code 5.4.1 (dans le sous-type ou le diagnostic) ET libelle
+// « recipient address rejected » dans le diagnostic.
+func isRecipientRejected541(subtype, diagnostic string) bool {
+	if !strings.Contains(strings.ToLower(diagnostic), "recipient address rejected") {
+		return false
+	}
+	return dsn541Re.MatchString(subtype) || dsn541Re.MatchString(diagnostic)
+}
+
+var dsn541Re = regexp.MustCompile(`\b5\.4\.1\b`)
+
 // isRetryExhaustedDiagnostic reports whether the SMTP diagnostic indicates
 // SES retry exhaustion (effectively undeliverable).
 func isRetryExhaustedDiagnostic(diagnostic string) bool {
@@ -250,6 +261,13 @@ func ClassifyBounce(in BounceInput) BounceClassification {
 		// puis dans le diagnostic : 5.x.x = permanent (Hard), 4.x.x = temporaire
 		// (SoftCount). Indispensable pour qu'un hard bounce supprime le contact
 		// IMMÉDIATEMENT (réputation cold #1), sans attendre le seuil soft.
+		// Exchange Online (directory based edge blocking) refuse une adresse INEXISTANTE
+		// par « 550 5.4.1 Recipient address rejected: Access denied » : malgre le 5.4.x
+		// (routage, SoftCount), c'est une adresse morte (08 et 09/10/2026 : deux contacts
+		// restes actifs et re-mailes). Hard, sans toucher aux autres 5.4.x (5.4.14 = boucle).
+		if isRecipientRejected541(subtype, in.Diagnostic) {
+			return BounceClassificationHard
+		}
 		if c := classifyDSNCode(subtype); c != nil {
 			return *c
 		}
