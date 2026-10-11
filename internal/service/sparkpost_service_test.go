@@ -12,6 +12,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
@@ -3129,4 +3130,25 @@ func TestSparkPostService_MissingConfig(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "configuration is missing or invalid")
 	})
+}
+
+// Fiche 64 : le constructeur de production envoie via le client gardé. Un endpoint
+// SparkPost choisi par le locataire qui vise l'interne est refusé avant toute requête.
+func TestNewGuardedSparkPostService_RefusesInternalEndpoint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warn(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+
+	svc := service.NewGuardedSparkPostService(nil, mockLogger)
+	for _, ep := range []string{"https://127.0.0.1:1", "https://169.254.169.254", "https://10.1.2.3"} {
+		_, err := svc.ListWebhooks(context.Background(), domain.SparkPostSettings{Endpoint: ep, APIKey: "k"})
+		require.Error(t, err, ep)
+		assert.Contains(t, err.Error(), "refusing to connect", ep)
+	}
 }

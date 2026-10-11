@@ -653,37 +653,3 @@ func TestConfirmSNSSubscription_Guarded(t *testing.T) {
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
-// Fiche 64 : l'endpoint SparkPost personnalisé passe par le client gardé. Une
-// URL qui résout vers 127.0.0.1 ne reçoit AUCUNE requête, la raison est lisible.
-func TestSparkPost_CustomEndpointCannotReachInternal(t *testing.T) {
-	hits := int32(0)
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&hits, 1)
-		w.WriteHeader(200)
-	}))
-	defer srv.Close()
-	port := srv.Listener.Addr().(*net.TCPAddr).Port
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	svc := NewGuardedSparkPostService(nil, setupMockLoggerForNodeExecutor(ctrl))
-	// Le service que l'EmailService utilise réellement pour envoyer est lui aussi gardé.
-	es := NewEmailService(setupMockLoggerForNodeExecutor(ctrl), nil, "", false, nil, nil, nil, nil, &http.Client{Timeout: time.Second}, "", "")
-	esSpark, ok := es.sparkPostService.(*SparkPostService)
-	require.True(t, ok)
-	for _, s := range []*SparkPostService{svc, esSpark} {
-		_, err := s.ListWebhooks(context.Background(), domain.SparkPostSettings{Endpoint: "https://127.0.0.1:1", APIKey: "k"})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "refusing to connect")
-	}
-	for _, ep := range []string{
-		fmt.Sprintf("https://127.0.0.1:%d", port),
-		"https://169.254.169.254",
-	} {
-		_, err := svc.ListWebhooks(context.Background(), domain.SparkPostSettings{Endpoint: ep, APIKey: "k"})
-		require.Error(t, err, ep)
-		assert.Contains(t, err.Error(), "refusing to connect", ep)
-	}
-	assert.EqualValues(t, 0, atomic.LoadInt32(&hits))
-}

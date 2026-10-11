@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Notifuse/notifuse/pkg/netguard"
 )
 
 // TestMain overrides lookupIPAddrFn for the WHOLE service package test
@@ -236,4 +238,17 @@ func TestSsrfFinalDial_NotReachedWhenRefused_ReachedWhenPublic(t *testing.T) {
 	assert.Empty(t, dialed, "aucune connexion vers une IP refusée")
 	_, _ = dial(context.Background(), "tcp", "ok.test:443")
 	assert.Equal(t, []string{"93.184.216.34:443"}, dialed, "connexion épinglée sur l'IP validée")
+}
+
+// Fiche 64 : la définition de « adresse interdite » du garde webhook est celle de
+// pkg/netguard (une seule liste pour webhook, SMTP et IMAP), pas une copie.
+func TestIsBlockedWebhookIP_IsTheSharedNetguardDefinition(t *testing.T) {
+	for _, s := range []string{
+		"127.0.0.1", "10.0.0.1", "169.254.169.254", "100.88.202.29", "::1", "fd00::1",
+		"64:ff9b::7f00:1", "::ffff:127.0.0.1", "8.8.8.8", "37.187.199.185", "2a00:1450:400c:c06::6c",
+	} {
+		ip := net.ParseIP(s)
+		assert.Equal(t, netguard.IsBlockedIP(ip), isBlockedWebhookIP(ip), s)
+	}
+	assert.Equal(t, "10.0.0.1", embeddedIPv4(net.ParseIP("64:ff9b::a00:1")).String())
 }
