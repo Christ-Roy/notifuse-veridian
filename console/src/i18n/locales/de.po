@@ -285,11 +285,11 @@ msgstr "{minutes}m {remainingSeconds}s"
 msgid "{n} contacts"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:172
+#: src/components/sending_profiles/veridian_profile_labels.ts:225
 msgid "{name}: rate ÷{factor}, {reason}"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:170
+#: src/components/sending_profiles/veridian_profile_labels.ts:223
 msgid "{name}: sending stopped, {reason}"
 msgstr ""
 
@@ -317,11 +317,11 @@ msgstr ""
 msgid "{rate} / min"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:155
+#: src/components/sending_profiles/veridian_profile_labels.ts:208
 msgid "{rate} bounces"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:157
+#: src/components/sending_profiles/veridian_profile_labels.ts:210
 msgid "{rate} policy refusals"
 msgstr ""
 
@@ -337,7 +337,7 @@ msgstr ""
 msgid "{replied} replied, {rejected} rejected, {unsubscribed} unsubscribed, {excluded} excluded"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:123
+#: src/components/sending_profiles/veridian_profile_card.tsx:144
 msgid "{reservedExtra} reserved, in flight"
 msgstr ""
 
@@ -361,25 +361,41 @@ msgstr ""
 #~ msgid "{sent} accepted today"
 #~ msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:120
+#: src/components/sending_profiles/veridian_profile_card.tsx:125
 msgid "{sentLabel} / {capLabel} sent"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:118
+#: src/components/sending_profiles/veridian_capacity_block.tsx:41
+msgid "{sentLabel} sent / {totalLabel} capacity today"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:53
+msgid "{sentLabel} sent, {remainingLabel} still to send, {unusableLabel} unusable for lack of contacts"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:43
+msgid "{sentLabel} sent, no capacity limit"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_card.tsx:123
 msgid "{sentLabel} sent, no daily cap"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:153
+#: src/components/sending_profiles/veridian_profile_card.tsx:162
 msgid "{sentLabel} sent. No commercial limit: a transactional mail always goes out."
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:151
+#: src/components/sending_profiles/veridian_profile_card.tsx:160
 msgid "{sentLabel} sent. Out of the rotation: no cap or rule applies until it joins."
 msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_card.tsx:153
 #~ msgid "{sentLabel} sent. Transactional mail has no daily cap and no commercial gate."
 #~ msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:46
+msgid "{usefulLabel} usable with the contacts due today"
+msgstr ""
 
 #: src/components/email_builder/panels/Preview.tsx:218
 msgid "// No test data yet..."
@@ -539,6 +555,10 @@ msgstr ""
 msgid "A contact enrolled in two sequences counts in both: the rows do not add up."
 msgstr ""
 
+#: src/components/sending_profiles/veridian_capacity_block.tsx:93
+msgid "A normal open day: {fullDay} sends"
+msgstr ""
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2226
 msgid "A preset is a named, coherent set of cold-sending values (rates, daily caps, sending window, jitter, content dedup and provider exclusions). Applying one fills the fields below as a starting point — review and adjust them, then click \"Save changes\" (and the Save button on the Sending window / Excluded classes / Anti-detection cards). Nothing is saved until you do."
 msgstr ""
@@ -687,7 +707,7 @@ msgid "Add a filter"
 msgstr "Filter hinzufügen"
 
 #: src/pages/SendingProfilesPage.tsx:211
-#: src/pages/SendingProfilesPage.tsx:254
+#: src/pages/SendingProfilesPage.tsx:261
 msgid "Add a profile"
 msgstr ""
 
@@ -703,7 +723,7 @@ msgstr ""
 msgid "Add a sending profile"
 msgstr ""
 
-#: src/pages/SendingProfilesPage.tsx:284
+#: src/pages/SendingProfilesPage.tsx:291
 msgid "Add an inbox"
 msgstr ""
 
@@ -849,7 +869,7 @@ msgstr "Zur Liste hinzufügen"
 msgid "Add to Lists"
 msgstr "Zu Listen hinzufügen"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:234
+#: src/components/sending_profiles/veridian_profile_card.tsx:243
 msgid "Add to rotation"
 msgstr ""
 
@@ -1857,8 +1877,8 @@ msgstr ""
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx:151
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx:161
 #: src/components/send_queue/veridian_queue_groups.tsx:106
-#: src/components/sending_profiles/veridian_profile_card.tsx:216
-#: src/components/sending_profiles/veridian_profile_card.tsx:247
+#: src/components/sending_profiles/veridian_profile_card.tsx:225
+#: src/components/sending_profiles/veridian_profile_card.tsx:256
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:203
 #: src/components/settings/ApiAgentsSettings.tsx:199
 #: src/components/settings/ApiAgentsSettings.tsx:281
@@ -2173,7 +2193,7 @@ msgstr ""
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:215
 #: src/pages/AnalyticsPage.tsx:101
 #: src/pages/LogsPage.tsx:42
-#: src/pages/SendingProfilesPage.tsx:263
+#: src/pages/SendingProfilesPage.tsx:270
 msgid "Commercial"
 msgstr ""
 
@@ -2483,10 +2503,19 @@ msgstr ""
 msgid "Contact updated successfully"
 msgstr "Kontakt erfolgreich aktualisiert"
 
+#: src/components/sending_profiles/veridian_capacity_block.tsx:82
 #: src/layouts/WorkspaceLayout.tsx:239
 #: src/pages/ContactsPage.tsx:988
 msgid "Contacts"
 msgstr "Kontakte"
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:126
+msgid "Contacts due"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:88
+msgid "Contacts due today: not measured"
+msgstr ""
 
 #: src/components/automations/config/FilterConfigForm.tsx:61
 msgid "Contacts matching these conditions will follow the 'Yes' path. Others will follow 'No'."
@@ -2803,7 +2832,7 @@ msgstr "Erstellt"
 msgid "Created At"
 msgstr "Erstellt am"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:244
+#: src/components/sending_profiles/veridian_profile_card.tsx:253
 msgid "Credentials are erased. Refused while messages are still queued."
 msgstr ""
 
@@ -3061,6 +3090,7 @@ msgid "Customize for this profile (copies the workspace values)"
 msgstr ""
 
 #: src/components/send_queue/veridian_queue_labels.ts:87
+#: src/components/sending_profiles/veridian_profile_labels.ts:169
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2353
 msgid "Daily cap"
 msgstr ""
@@ -3091,6 +3121,10 @@ msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx:228
 msgid "Daily caps by step"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:150
+msgid "Daily caps of the providers (mostly {name})"
 msgstr ""
 
 #: src/components/settings/Integrations.tsx:403
@@ -3251,8 +3285,8 @@ msgstr "Verzögerung"
 #: src/components/file_manager/fileManager.tsx:783
 #: src/components/file_manager/fileManager.tsx:956
 #: src/components/segment/input.tsx:383
-#: src/components/sending_profiles/veridian_profile_card.tsx:245
-#: src/components/sending_profiles/veridian_profile_card.tsx:251
+#: src/components/sending_profiles/veridian_profile_card.tsx:254
+#: src/components/sending_profiles/veridian_profile_card.tsx:260
 #: src/components/settings/Integrations.tsx:332
 #: src/components/settings/Integrations.tsx:491
 #: src/components/settings/Integrations.tsx:558
@@ -3261,7 +3295,7 @@ msgstr "Verzögerung"
 #: src/pages/ContactsPage.tsx:934
 #: src/pages/ListsPage.tsx:328
 #: src/pages/SendingProfilesPage.tsx:157
-#: src/pages/SendingProfilesPage.tsx:319
+#: src/pages/SendingProfilesPage.tsx:326
 msgid "Delete"
 msgstr "Löschen"
 
@@ -3367,7 +3401,7 @@ msgstr "Benachrichtigung löschen?"
 msgid "Delete this integration?"
 msgstr "Diese Integration löschen?"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:243
+#: src/components/sending_profiles/veridian_profile_card.tsx:252
 msgid "Delete this profile?"
 msgstr ""
 
@@ -3461,6 +3495,10 @@ msgstr "Desktop-Ansicht (100%)"
 
 #: src/pages/SendQueuePage.tsx:232
 msgid "Detail by automation, node, reason and profile"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:102
+msgid "Detail by provider"
 msgstr ""
 
 #: src/components/settings/LogoInput.tsx:90
@@ -3679,13 +3717,13 @@ msgstr "bearbeiten"
 
 #: src/components/automations/UpsertAutomationDrawer.tsx:250
 #: src/components/email_builder/ui/ImportFontInput.tsx:209
-#: src/components/sending_profiles/veridian_profile_card.tsx:240
+#: src/components/sending_profiles/veridian_profile_card.tsx:249
 #: src/components/settings/Integrations.tsx:316
 #: src/components/settings/Integrations.tsx:475
 #: src/components/settings/Integrations.tsx:542
 #: src/components/settings/WebhookCard.tsx:245
 #: src/pages/ContactsPage.tsx:928
-#: src/pages/SendingProfilesPage.tsx:316
+#: src/pages/SendingProfilesPage.tsx:323
 #: src/pages/TransactionalNotificationsPage.tsx:157
 msgid "Edit"
 msgstr "Bearbeiten"
@@ -4349,6 +4387,10 @@ msgstr ""
 msgid "Every lever below can either INHERIT the workspace default or OVERRIDE it for this infrastructure only. The open-tracking pixel is per class: \"Inherit\" follows the workspace policy (then the tunnel default), \"On\"/\"Off\" forces it for this infra — useful to cut the pixel everywhere on a brand-new IP during warm-up."
 msgstr ""
 
+#: src/components/sending_profiles/veridian_profile_labels.ts:155
+msgid "Every provider is excluded or stopped"
+msgstr ""
+
 #: src/pages/SendingProfilesPage.tsx:206
 msgid "Every sender account, its rules for today, its reputation and its return inbox."
 msgstr ""
@@ -4373,6 +4415,7 @@ msgid "Exclude unsubscribed, bounced & complained recipients"
 msgstr ""
 
 #: src/components/send_queue/veridian_queue_labels.ts:119
+#: src/components/sending_profiles/veridian_profile_labels.ts:173
 msgid "Excluded"
 msgstr ""
 
@@ -4381,7 +4424,7 @@ msgstr ""
 msgid "Excluded class"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:175
+#: src/components/sending_profiles/veridian_profile_card.tsx:184
 msgid "Excluded classes"
 msgstr ""
 
@@ -5931,7 +5974,7 @@ msgstr "im Datumsbereich"
 msgid "in recipients timezone"
 msgstr "in Empfänger-Zeitzone"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:94
+#: src/components/sending_profiles/veridian_profile_card.tsx:95
 msgid "In rotation"
 msgstr ""
 
@@ -5954,7 +5997,7 @@ msgstr "Posteingang"
 msgid "Inbox deleted"
 msgstr ""
 
-#: src/pages/SendingProfilesPage.tsx:290
+#: src/pages/SendingProfilesPage.tsx:297
 msgid "Inboxes linked to no profile. Replies and bounces are read from every inbox of the workspace."
 msgstr ""
 
@@ -6420,10 +6463,12 @@ msgid "Lighter"
 msgstr "Leichter"
 
 #: src/components/send_queue/veridian_queue_trace.tsx:31
+#: src/components/sending_profiles/veridian_capacity_block.tsx:131
 msgid "Limit"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:135
+#: src/components/sending_profiles/veridian_capacity_block.tsx:77
+#: src/components/sending_profiles/veridian_profile_card.tsx:137
 msgid "Limited by"
 msgstr ""
 
@@ -7260,7 +7305,12 @@ msgstr "Keine Probleme"
 msgid "No items selected"
 msgstr "Keine Elemente ausgewählt"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:195
+#: src/components/sending_profiles/veridian_profile_labels.ts:157
+#: src/components/sending_profiles/veridian_profile_labels.ts:179
+msgid "No limit"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_card.tsx:204
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:271
 msgid "No linked inbox"
 msgstr ""
@@ -7329,7 +7379,7 @@ msgstr ""
 msgid "No provider is slowed or stopped."
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:164
+#: src/components/sending_profiles/veridian_profile_card.tsx:173
 msgid "No provider slowed or stopped"
 msgstr ""
 
@@ -7375,7 +7425,7 @@ msgstr ""
 msgid "No sending integration configured yet. Add an email provider in Settings → Integrations first."
 msgstr ""
 
-#: src/pages/SendingProfilesPage.tsx:251
+#: src/pages/SendingProfilesPage.tsx:258
 msgid "No sending profile yet"
 msgstr ""
 
@@ -7438,7 +7488,7 @@ msgstr "Keine transaktionalen Benachrichtigungen gefunden"
 msgid "No trigger configured"
 msgstr "Kein Auslöser konfiguriert"
 
-#: src/pages/SendingProfilesPage.tsx:294
+#: src/pages/SendingProfilesPage.tsx:301
 msgid "No unlinked inbox"
 msgstr ""
 
@@ -7481,7 +7531,7 @@ msgstr "Knoten"
 msgid "Non-Active"
 msgstr "Nicht aktiv"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:102
+#: src/components/sending_profiles/veridian_profile_card.tsx:103
 msgid "none"
 msgstr ""
 
@@ -7529,6 +7579,10 @@ msgstr "Nicht konfiguriert"
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
+#: src/components/sending_profiles/veridian_profile_labels.ts:163
+msgid "Not enough contacts due for {name}"
+msgstr ""
+
 #: src/components/send_queue/veridian_queue_labels.ts:20
 msgid "Not examined yet"
 msgstr ""
@@ -7539,7 +7593,7 @@ msgid "Not in List"
 msgstr "Nicht in Liste"
 
 #: src/components/prospection/veridian_prospection_sends.tsx:220
-#: src/components/sending_profiles/veridian_profile_labels.ts:137
+#: src/components/sending_profiles/veridian_profile_labels.ts:190
 msgid "Not in the rotation"
 msgstr ""
 
@@ -7561,11 +7615,11 @@ msgstr "Nicht festgelegt"
 #~ msgid "Not tested"
 #~ msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:91
+#: src/components/sending_profiles/veridian_profile_card.tsx:92
 msgid "Not verified"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:135
+#: src/components/sending_profiles/veridian_profile_labels.ts:188
 msgid "Not verified: send a test first"
 msgstr ""
 
@@ -7700,7 +7754,7 @@ msgstr "Nur Kleinbuchstaben, Zahlen, Unterstrich und Bindestrich sind erlaubt."
 msgid "Only one breakpoint per email template is allowed"
 msgstr "Nur ein Breakpoint pro E-Mail-Vorlage ist erlaubt"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:256
+#: src/components/sending_profiles/veridian_profile_card.tsx:265
 msgid "Only the workspace owner can change profiles"
 msgstr ""
 
@@ -7715,7 +7769,7 @@ msgstr "Nur Arbeitsbereich-Inhaber können Integrationen ändern"
 msgid "Open 2-step verification"
 msgstr ""
 
-#: src/pages/SendingProfilesPage.tsx:246
+#: src/pages/SendingProfilesPage.tsx:253
 msgid "Open Edit on each of them and pick a single usage."
 msgstr ""
 
@@ -7875,7 +7929,7 @@ msgstr ""
 msgid "Other hosters (Infomaniak, Gandi, Zoho…)"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:95
+#: src/components/sending_profiles/veridian_profile_card.tsx:96
 msgid "Out of rotation"
 msgstr ""
 
@@ -7999,8 +8053,8 @@ msgstr "Pfadstil-Zugriff"
 #: src/components/contacts/BulkActionProgressModal.tsx:50
 #: src/components/contacts/BulkUpdateDrawer.tsx:574
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:802
-#: src/components/sending_profiles/veridian_profile_card.tsx:215
-#: src/components/sending_profiles/veridian_profile_card.tsx:221
+#: src/components/sending_profiles/veridian_profile_card.tsx:224
+#: src/components/sending_profiles/veridian_profile_card.tsx:230
 msgid "Pause"
 msgstr "Pausieren"
 
@@ -8020,7 +8074,7 @@ msgstr "Kampagne pausieren"
 msgid "Pause broadcast?"
 msgstr "Kampagne pausieren?"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:213
+#: src/components/sending_profiles/veridian_profile_card.tsx:222
 msgid "Pause this profile?"
 msgstr ""
 
@@ -8028,14 +8082,14 @@ msgstr ""
 #: src/components/prospection/veridian_prospection_replies.tsx:25
 #: src/components/prospection/veridian_prospection_sequences.tsx:67
 #: src/components/send_queue/veridian_queue_labels.ts:121
-#: src/components/sending_profiles/veridian_profile_card.tsx:93
-#: src/components/sending_profiles/veridian_profile_labels.ts:133
+#: src/components/sending_profiles/veridian_profile_card.tsx:94
+#: src/components/sending_profiles/veridian_profile_labels.ts:186
 #: src/pages/BroadcastsPage.tsx:350
 #: src/pages/BroadcastsPage.tsx:991
 msgid "Paused"
 msgstr "Pausiert"
 
-#: src/pages/SendingProfilesPage.tsx:232
+#: src/pages/SendingProfilesPage.tsx:239
 msgid "Paused profiles"
 msgstr ""
 
@@ -8082,6 +8136,7 @@ msgid "Per provider caps"
 msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_labels.ts:122
+#: src/components/sending_profiles/veridian_profile_labels.ts:143
 msgid "Per sending address cap"
 msgstr ""
 
@@ -8678,6 +8733,10 @@ msgstr ""
 msgid "Profile resumed"
 msgstr ""
 
+#: src/components/sending_profiles/veridian_profile_labels.ts:140
+msgid "Profile safety cap ({cap})"
+msgstr ""
+
 #: src/components/settings/Integrations.tsx:1119
 #~ msgid "Profile saved. Send a test email before activating it."
 #~ msgstr ""
@@ -8686,7 +8745,7 @@ msgstr ""
 msgid "Profiles in rotation"
 msgstr ""
 
-#: src/pages/SendingProfilesPage.tsx:264
+#: src/pages/SendingProfilesPage.tsx:271
 msgid "Profiles used by campaigns and sequences. Those in the rotation share the volume."
 msgstr ""
 
@@ -8699,6 +8758,7 @@ msgid "Prospection"
 msgstr ""
 
 #: src/components/prospection/veridian_prospection_reputation.tsx:35
+#: src/components/sending_profiles/veridian_capacity_block.tsx:111
 #: src/components/webhooks/InboundWebhookEventsTab.tsx:344
 msgid "Provider"
 msgstr "Anbieter"
@@ -9071,7 +9131,7 @@ msgstr ""
 msgid "Remove from List"
 msgstr "Aus Liste entfernen"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:234
+#: src/components/sending_profiles/veridian_profile_card.tsx:243
 msgid "Remove from rotation"
 msgstr ""
 
@@ -9145,7 +9205,7 @@ msgstr ""
 msgid "Replies"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:190
+#: src/components/sending_profiles/veridian_profile_card.tsx:199
 msgid "Replies and bounces"
 msgstr ""
 
@@ -9196,7 +9256,7 @@ msgid "Reputation"
 msgstr ""
 
 #: src/components/prospection/veridian_prospection_reputation.tsx:24
-#: src/components/sending_profiles/veridian_profile_card.tsx:161
+#: src/components/sending_profiles/veridian_profile_card.tsx:170
 msgid "Reputation by recipient provider"
 msgstr ""
 
@@ -9212,7 +9272,7 @@ msgstr ""
 msgid "Reputation fuse tripped"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:163
+#: src/components/sending_profiles/veridian_profile_labels.ts:216
 msgid "reputation signal"
 msgstr ""
 
@@ -9262,7 +9322,7 @@ msgstr "Einladung erneut senden"
 msgid "Reserve for transactional mail"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:74
+#: src/components/sending_profiles/veridian_profile_card.tsx:75
 msgid "Reserved for transactional: change its usage in Edit"
 msgstr ""
 
@@ -9333,7 +9393,7 @@ msgstr ""
 #: src/components/contacts/BulkUpdateDrawer.tsx:584
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:375
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx:807
-#: src/components/sending_profiles/veridian_profile_card.tsx:209
+#: src/components/sending_profiles/veridian_profile_card.tsx:218
 msgid "Resume"
 msgstr "Fortsetzen"
 
@@ -9362,7 +9422,7 @@ msgstr "Upload fortsetzen"
 msgid "Retry"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:183
+#: src/components/sending_profiles/veridian_profile_card.tsx:192
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:263
 msgid "Return inbox"
 msgstr ""
@@ -10005,7 +10065,7 @@ msgstr "Ausgewählt: {0}"
 msgid "Self-hosted corporate"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:75
+#: src/components/sending_profiles/veridian_profile_card.tsx:76
 msgid "Send a successful test before adding it to the rotation"
 msgstr ""
 
@@ -10126,7 +10186,7 @@ msgstr "Absendername"
 #~ msgid "Sender name is required"
 #~ msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:100
+#: src/components/sending_profiles/veridian_profile_card.tsx:101
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:220
 msgid "Senders"
 msgstr "Absender"
@@ -10187,10 +10247,15 @@ msgid "Sending profiles and return inboxes have their own page."
 msgstr ""
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx:90
+#: src/components/sending_profiles/veridian_profile_labels.ts:171
 msgid "Sending rate"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:139
+#: src/components/sending_profiles/veridian_profile_labels.ts:146
+msgid "Sending rates of the providers (mostly {name})"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:192
 msgid "Sending stopped for at least one provider"
 msgstr ""
 
@@ -10212,8 +10277,12 @@ msgid "Sending window (this infra)"
 msgstr ""
 
 #: src/components/send_queue/veridian_queue_labels.ts:22
-#: src/components/sending_profiles/veridian_profile_labels.ts:142
+#: src/components/sending_profiles/veridian_profile_labels.ts:195
 msgid "Sending window closed"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:153
+msgid "Sending window closed for the rest of the day"
 msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1519
@@ -10244,6 +10313,8 @@ msgstr "gesendet"
 #: src/components/messages/MessageHistoryTable.tsx:258
 #: src/components/send_queue/veridian_queue_labels.ts:134
 #: src/components/send_queue/veridian_queue_labels.ts:159
+#: src/components/sending_profiles/veridian_capacity_block.tsx:69
+#: src/components/sending_profiles/veridian_capacity_block.tsx:112
 #: src/pages/TransactionalNotificationsPage.tsx:200
 msgid "Sent"
 msgstr "Gesendet"
@@ -10258,6 +10329,7 @@ msgstr ""
 
 #: src/components/analytics/AnalyticsDashboard.tsx:112
 #: src/components/prospection/veridian_prospection_sends.tsx:146
+#: src/components/sending_profiles/veridian_capacity_block.tsx:56
 msgid "Sent today"
 msgstr ""
 
@@ -10671,7 +10743,7 @@ msgstr ""
 msgid "Solid"
 msgstr "Durchgehend"
 
-#: src/pages/SendingProfilesPage.tsx:245
+#: src/pages/SendingProfilesPage.tsx:252
 msgid "Some profiles are both in the commercial rotation and transactional"
 msgstr ""
 
@@ -10700,7 +10772,7 @@ msgstr "Leerzeichen"
 msgid "Spacer Attributes"
 msgstr "Abstandhalter-Attribute"
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:159
+#: src/components/sending_profiles/veridian_profile_labels.ts:212
 msgid "spam complaint received"
 msgstr ""
 
@@ -10808,8 +10880,18 @@ msgstr "Status geändert"
 msgid "Status unknown"
 msgstr "Status unbekannt"
 
+#: src/components/sending_profiles/veridian_capacity_block.tsx:59
+#: src/components/sending_profiles/veridian_capacity_block.tsx:71
+#: src/components/sending_profiles/veridian_capacity_block.tsx:114
+msgid "Still to send"
+msgstr ""
+
 #: src/components/prospection/veridian_prospection_reputation.tsx:42
 msgid "Stopped"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:175
+msgid "Stopped by the safety fuse"
 msgstr ""
 
 #: src/components/file_manager/fileManager.tsx:692
@@ -11138,7 +11220,7 @@ msgstr ""
 
 #: src/components/broadcasts/GlobalFeedSettings.tsx:122
 #: src/components/broadcasts/RecipientFeedSettings.tsx:130
-#: src/components/sending_profiles/veridian_profile_card.tsx:203
+#: src/components/sending_profiles/veridian_profile_card.tsx:212
 #: src/pages/TransactionalNotificationsPage.tsx:175
 msgid "Test"
 msgstr "Testen"
@@ -11378,11 +11460,11 @@ msgstr ""
 #~ msgid "The profile model is OAuth-ready. Connection will be enabled when the managed Google consent flow is available."
 #~ msgstr ""
 
-#: src/pages/SendingProfilesPage.tsx:270
+#: src/pages/SendingProfilesPage.tsx:277
 msgid "The profile reserved for mail sent from your applications. It has no commercial rule."
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:161
+#: src/components/sending_profiles/veridian_profile_labels.ts:214
 msgid "the provider refuses in bulk"
 msgstr ""
 
@@ -11390,11 +11472,11 @@ msgstr ""
 msgid "The requested workspace could not be found."
 msgstr "Der angeforderte Arbeitsbereich konnte nicht gefunden werden."
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:70
+#: src/components/sending_profiles/veridian_profile_card.tsx:71
 msgid "The rotation must keep at least one profile"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:214
+#: src/components/sending_profiles/veridian_profile_card.tsx:223
 msgid "The rotation switches to the other profiles. Queued messages are kept."
 msgstr ""
 
@@ -11796,8 +11878,8 @@ msgid "To watch"
 msgstr ""
 
 #: src/components/prospection/veridian_prospection_sends.tsx:159
-#: src/components/sending_profiles/veridian_profile_card.tsx:115
-#: src/components/sending_profiles/veridian_profile_card.tsx:148
+#: src/components/sending_profiles/veridian_profile_card.tsx:116
+#: src/components/sending_profiles/veridian_profile_card.tsx:157
 msgid "Today"
 msgstr ""
 
@@ -11897,7 +11979,7 @@ msgstr ""
 #: src/layouts/WorkspaceLayout.tsx:409
 #: src/pages/AnalyticsPage.tsx:102
 #: src/pages/LogsPage.tsx:43
-#: src/pages/SendingProfilesPage.tsx:269
+#: src/pages/SendingProfilesPage.tsx:276
 msgid "Transactional"
 msgstr "Transaktional"
 
@@ -11931,7 +12013,7 @@ msgstr ""
 #~ msgid "Transactional Provider"
 #~ msgstr "Transaktions-Anbieter"
 
-#: src/pages/SendingProfilesPage.tsx:234
+#: src/pages/SendingProfilesPage.tsx:241
 msgid "Transactional sent today"
 msgstr ""
 
@@ -12204,6 +12286,15 @@ msgstr ""
 msgid "Untitled"
 msgstr "Unbenannt"
 
+#: src/components/sending_profiles/veridian_capacity_block.tsx:73
+#: src/components/sending_profiles/veridian_capacity_block.tsx:120
+msgid "Unusable"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:62
+msgid "Unusable: no contact due for these providers"
+msgstr ""
+
 #: src/components/prospection/veridian_watch_texts.ts:15
 msgid "Unusual volume: {sent} mails today, {average} per day on average over the previous 7 days"
 msgstr ""
@@ -12315,6 +12406,10 @@ msgstr "URL des CDN, das Ihre Dateien zwischenspeichert"
 #: src/components/settings/WebhookCard.tsx:256
 msgid "URL:"
 msgstr "URL:"
+
+#: src/pages/SendingProfilesPage.tsx:234
+msgid "Usable with the contacts due today"
+msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:213
 msgid "Usage"
@@ -12500,7 +12595,7 @@ msgstr ""
 msgid "Veridian Hub is unreachable. The app is in read-only mode — please try again in {retryHours}h."
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_card.tsx:89
+#: src/components/sending_profiles/veridian_profile_card.tsx:90
 msgid "Verified {verifiedAt}"
 msgstr ""
 
@@ -12587,6 +12682,7 @@ msgid "Warmup"
 msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_labels.ts:117
+#: src/components/sending_profiles/veridian_profile_labels.ts:136
 msgid "Warmup, day {day}/{of}"
 msgstr ""
 
@@ -12751,11 +12847,15 @@ msgstr "Wird ab Zeile {0} fortgesetzt"
 msgid "Window (hours)"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:146
+#: src/components/sending_profiles/veridian_profile_labels.ts:177
+msgid "Window closed"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:199
 msgid "Window closed until {day} {time}"
 msgstr ""
 
-#: src/components/sending_profiles/veridian_profile_labels.ts:144
+#: src/components/sending_profiles/veridian_profile_labels.ts:197
 msgid "Window closed until {time}"
 msgstr ""
 
@@ -12844,7 +12944,7 @@ msgstr "Arbeitsbereichsname muss mindestens 3 Zeichen lang sein"
 msgid "Workspace not found"
 msgstr "Arbeitsbereich nicht gefunden"
 
-#: src/pages/SendingProfilesPage.tsx:280
+#: src/pages/SendingProfilesPage.tsx:287
 msgid "Workspace return inboxes"
 msgstr ""
 
@@ -13081,91 +13181,3 @@ msgstr ""
 #: src/components/file_manager/fileManager.tsx:789
 msgid "Zip"
 msgstr "PLZ"
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:41
-msgid "{sentLabel} sent / {totalLabel} capacity today"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:53
-msgid "{sentLabel} sent, {remainingLabel} still to send, {unusableLabel} unusable for lack of contacts"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:43
-msgid "{sentLabel} sent, no capacity limit"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:46
-msgid "{usefulLabel} usable with the contacts due today"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:93
-msgid "A normal open day: {fullDay} sends"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:126
-msgid "Contacts due"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:88
-msgid "Contacts due today: not measured"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:136
-msgid "Daily caps of the providers (mostly {name})"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:102
-msgid "Detail by provider"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:141
-msgid "Every provider is excluded or stopped"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:143
-#: src/components/sending_profiles/veridian_profile_labels.ts:165
-msgid "No limit"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:149
-msgid "Not enough contacts due for {name}"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:126
-msgid "Profile safety cap ({cap})"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:132
-msgid "Sending rates of the providers (mostly {name})"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:139
-msgid "Sending window closed for the rest of the day"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:59
-#: src/components/sending_profiles/veridian_capacity_block.tsx:71
-#: src/components/sending_profiles/veridian_capacity_block.tsx:114
-msgid "Still to send"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:161
-msgid "Stopped by the safety fuse"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:73
-#: src/components/sending_profiles/veridian_capacity_block.tsx:120
-msgid "Unusable"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_capacity_block.tsx:62
-msgid "Unusable: no contact due for these providers"
-msgstr ""
-
-#: src/pages/SendingProfilesPage.tsx:234
-msgid "Usable with the contacts due today"
-msgstr ""
-
-#: src/components/sending_profiles/veridian_profile_labels.ts:163
-msgid "Window closed"
-msgstr ""
