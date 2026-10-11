@@ -131,7 +131,24 @@ type VeridianProspectionStats struct {
 	// Totals : sommes sans doublon des lignes qui peuvent se sommer (stock restant,
 	// contacts en file J0). Les réponses ne se somment pas (voir l'en-tête).
 	Totals VeridianProspectionTotals `json:"totals"`
+	// RecentHumanReplies : les dernières réponses humaines de la fenêtre (10 au plus),
+	// de la plus récente à la plus ancienne. Remplace les listes natives « derniers
+	// contacts importés » et « échecs récents » de la vue commerciale (fiche 57).
+	RecentHumanReplies []VeridianRecentReply `json:"recent_human_replies"`
 }
+
+// VeridianRecentReply : une réponse humaine récente. Company est le nom d'entreprise
+// SIRENE du contact (custom_string_1), vide s'il manque ; Sequence est la séquence la
+// plus récente du contact, vide s'il n'en a aucune vivante.
+type VeridianRecentReply struct {
+	ContactEmail string    `json:"contact_email"`
+	Company      string    `json:"company"`
+	RepliedAt    time.Time `json:"replied_at"`
+	Sequence     string    `json:"sequence"`
+}
+
+// VeridianRecentRepliesLimit : nombre de réponses rendues.
+const VeridianRecentRepliesLimit = 10
 
 type VeridianProspectionTotals struct {
 	StockRemaining int `json:"stock_remaining"`
@@ -200,6 +217,7 @@ type VeridianProspectionRaw struct {
 	Lists             []VeridianProspectionListRow
 	ListReplies       []VeridianProspectionReplyRow
 	ListSent          []VeridianProspectionKeyCount
+	RecentReplies     []VeridianRecentReply
 }
 
 type VeridianProspectionStatsRepository interface {
@@ -327,6 +345,8 @@ func VeridianBuildProspectionStats(raw *VeridianProspectionRaw, since, until, no
 		GeneratedAt: now.UTC(),
 		Sequences:   []VeridianSequenceStats{},
 		Segments:    []VeridianSegmentStats{},
+
+		RecentHumanReplies: []VeridianRecentReply{},
 	}
 	if !since.IsZero() {
 		s := since.UTC()
@@ -338,6 +358,15 @@ func VeridianBuildProspectionStats(raw *VeridianProspectionRaw, since, until, no
 	}
 	if raw == nil {
 		return out
+	}
+	// Déjà triées du plus récent au plus ancien par le repository ; on borne et on
+	// ne rend jamais null (le front itère dessus).
+	for i, r := range raw.RecentReplies {
+		if i >= VeridianRecentRepliesLimit {
+			break
+		}
+		r.RepliedAt = r.RepliedAt.UTC()
+		out.RecentHumanReplies = append(out.RecentHumanReplies, r)
 	}
 
 	replies := map[string]VeridianProspectionReplyRow{}

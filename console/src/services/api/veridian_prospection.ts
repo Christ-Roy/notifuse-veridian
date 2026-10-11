@@ -65,6 +65,15 @@ export interface ProspectionSegment {
   reply_rate_human: number | null
 }
 
+export interface ProspectionRecentReply {
+  contact_email: string
+  // Nom d'entreprise SIRENE du contact ; vide s'il manque
+  company: string
+  replied_at: string
+  // Séquence la plus récente du contact ; vide s'il n'en a aucune vivante
+  sequence: string
+}
+
 export interface ProspectionStats {
   generated_at: string
   since: string | null
@@ -72,6 +81,8 @@ export interface ProspectionStats {
   sequences: ProspectionSequence[]
   segments: ProspectionSegment[]
   totals: { stock_remaining: number; queued_first_mail: number }
+  // Les 10 dernières réponses humaines de la fenêtre, la plus récente d'abord
+  recent_human_replies?: ProspectionRecentReply[]
 }
 
 export interface ProspectionStatsRequest {

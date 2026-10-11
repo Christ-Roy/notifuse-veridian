@@ -651,7 +651,7 @@ msgstr "アクティブ"
 msgid "Active contacts"
 msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:131
+#: src/components/prospection/veridian_prospection_dashboard.tsx:132
 msgid "Active contacts who have not been sent any mail yet, all segments."
 msgstr ""
 
@@ -1343,7 +1343,7 @@ msgstr "勝者を自動送信"
 msgid "Auto-subscribe to Lists"
 msgstr "リストへ自動登録"
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:121
+#: src/components/prospection/veridian_prospection_dashboard.tsx:122
 #: src/components/prospection/veridian_prospection_replies.tsx:129
 #: src/components/prospection/veridian_prospection_replies.tsx:188
 msgid "Automatic replies"
@@ -2176,6 +2176,10 @@ msgstr ""
 msgid "Common ports: 587 (TLS), 465 (SSL), 25 (unencrypted)"
 msgstr "一般的なポート: 587 (TLS)、465 (SSL)、25 (暗号化なし)"
 
+#: src/components/prospection/veridian_prospection_recent_replies.tsx:37
+msgid "Company"
+msgstr ""
+
 #~ msgid "Company or contact name"
 #~ msgstr ""
 
@@ -2381,6 +2385,7 @@ msgid "Consider using the same text as your subject line"
 msgstr "件名と同じテキストを使用することを検討してください"
 
 #: src/components/automations/config/TriggerConfigForm.tsx:56
+#: src/components/prospection/veridian_prospection_recent_replies.tsx:41
 #: src/components/send_queue/veridian_queue_decisions.tsx:96
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx:122
 #: src/components/timeline/ContactTimeline.tsx:382
@@ -5613,7 +5618,7 @@ msgid "https://fonts.googleapis.com/css?family=... or {{ font_url }}"
 msgstr "https://fonts.googleapis.com/css?family=... または {{ font_url }}"
 
 #: src/components/analytics/veridian_engagement_by_class.tsx:165
-#: src/components/prospection/veridian_prospection_dashboard.tsx:114
+#: src/components/prospection/veridian_prospection_dashboard.tsx:115
 #: src/components/prospection/veridian_prospection_replies.tsx:111
 #: src/components/prospection/veridian_prospection_replies.tsx:176
 msgid "Human replies"
@@ -5623,7 +5628,7 @@ msgstr ""
 msgid "Human replies over contacts reached during the period."
 msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:117
+#: src/components/prospection/veridian_prospection_dashboard.tsx:118
 msgid "Human replies over the period, and reply rate over the mails sent during the period."
 msgstr ""
 
@@ -6309,6 +6314,10 @@ msgstr ""
 
 #~ msgid "Last verified {0}"
 #~ msgstr ""
+
+#: src/components/prospection/veridian_prospection_recent_replies.tsx:25
+msgid "Latest human replies"
+msgstr ""
 
 #: src/components/settings/WebhooksSettings.tsx:301
 msgid "Lead"
@@ -7214,6 +7223,10 @@ msgstr ""
 msgid "No HTML content to export"
 msgstr "エクスポートするHTMLコンテンツがありません"
 
+#: src/components/prospection/veridian_prospection_recent_replies.tsx:34
+msgid "No human reply on this period"
+msgstr ""
+
 #: src/components/settings/LogoInput.tsx:47
 msgid "No icon found"
 msgstr "アイコンが見つかりません"
@@ -7865,7 +7878,7 @@ msgstr ""
 msgid "Out-of-office and acknowledgements: counted apart, never in the rate."
 msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:124
+#: src/components/prospection/veridian_prospection_dashboard.tsx:125
 msgid "Out-of-office and acknowledgements: counted apart, never in the reply rate."
 msgstr ""
 
@@ -8661,7 +8674,7 @@ msgstr ""
 #~ msgid "Profile saved. Send a test email before activating it."
 #~ msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:135
+#: src/components/prospection/veridian_prospection_dashboard.tsx:136
 msgid "Profiles in rotation"
 msgstr ""
 
@@ -8696,7 +8709,7 @@ msgstr ""
 msgid "Provider rate"
 msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:141
+#: src/components/prospection/veridian_prospection_dashboard.tsx:142
 msgid "Providers slowed or stopped"
 msgstr ""
 
@@ -9009,11 +9022,11 @@ msgstr "Rel属性"
 msgid "Relay"
 msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:144
+#: src/components/prospection/veridian_prospection_dashboard.tsx:145
 msgid "Relay and recipient provider pairs slowed or stopped by the reputation fuse. In brackets, how many are stopped."
 msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:128
+#: src/components/prospection/veridian_prospection_dashboard.tsx:129
 #: src/components/prospection/veridian_prospection_replies.tsx:162
 msgid "Remaining stock"
 msgstr ""
@@ -9107,6 +9120,7 @@ msgstr "Y軸で繰り返し"
 
 #: src/components/automations/config/ReplyBranchConfigForm.tsx:42
 #: src/components/automations/nodes/ReplyBranchNode.tsx:42
+#: src/components/prospection/veridian_prospection_recent_replies.tsx:44
 msgid "Replied"
 msgstr ""
 
@@ -10226,14 +10240,14 @@ msgstr ""
 #~ msgid "Sent today / capacity"
 #~ msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:107
+#: src/components/prospection/veridian_prospection_dashboard.tsx:108
 msgid "Sent today / effective cap"
 msgstr ""
 
 #~ msgid "Sent today by the rotation profiles, over today's capacity."
 #~ msgstr ""
 
-#: src/components/prospection/veridian_prospection_dashboard.tsx:110
+#: src/components/prospection/veridian_prospection_dashboard.tsx:111
 msgid "Sent today by the rotation profiles, over today's effective capacity."
 msgstr ""
 
@@ -10249,6 +10263,7 @@ msgstr ""
 msgid "Separate sides"
 msgstr "各辺を個別設定"
 
+#: src/components/prospection/veridian_prospection_recent_replies.tsx:42
 #: src/components/prospection/veridian_prospection_replies.tsx:85
 #: src/components/prospection/veridian_prospection_sequences.tsx:62
 msgid "Sequence"
@@ -11984,6 +11999,7 @@ msgstr ""
 msgid "Unable to load email metrics"
 msgstr ""
 
+#: src/components/prospection/veridian_prospection_recent_replies.tsx:26
 #: src/components/prospection/veridian_prospection_replies.tsx:75
 #: src/components/prospection/veridian_prospection_sequences.tsx:52
 msgid "Unable to load the prospection figures"
@@ -12036,6 +12052,10 @@ msgstr "不明"
 
 #~ msgid "Unknown class: {providerClass}"
 #~ msgstr ""
+
+#: src/components/prospection/veridian_prospection_recent_replies.tsx:39
+msgid "Unknown company"
+msgstr ""
 
 #: src/components/analytics/NewContactsTable.tsx:125
 #: src/pages/ContactsPage.tsx:587

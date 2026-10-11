@@ -14,6 +14,7 @@ import { buildSeriesQuery, EMAIL_SERIES } from '../analytics/email_metrics_serie
 import { formatNumber, formatPercent } from '../sending_profiles/veridian_profile_labels'
 import { VeridianProspectionSends } from './veridian_prospection_sends'
 import { VeridianProspectionReplies } from './veridian_prospection_replies'
+import { VeridianProspectionRecentReplies } from './veridian_prospection_recent_replies'
 import { VeridianProspectionSequences } from './veridian_prospection_sequences'
 import { VeridianProspectionRejections } from './veridian_prospection_rejections'
 import { VeridianProspectionReputation } from './veridian_prospection_reputation'
@@ -40,7 +41,7 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
   onOpenTransactional
 }) => {
   const { t } = useLingui()
-  const tz = timezone || workspace.settings?.timezone || 'UTC'
+  const tz = timezone || workspace.settings?.timezone || 'Europe/Paris'
   const refreshKey = `${timeRange[0]}-${timeRange[1]}-${tz}`
 
   const overviewQuery = useQuery({
@@ -173,6 +174,7 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
           totalHuman={repliesQuery.data ? humanReplies : undefined}
           totalAuto={repliesQuery.data ? autoReplies : undefined}
         />
+        <VeridianProspectionRecentReplies stats={statsQuery.data} loading={statsQuery.isLoading} error={statsQuery.isError} timezone={tz} />
         <VeridianProspectionRejections
           key={`rejections-${refreshKey}`}
           workspace={workspace}

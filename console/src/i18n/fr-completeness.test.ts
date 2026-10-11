@@ -320,6 +320,8 @@ describe('complétude du catalogue français entier (lot 6)', () => {
   it('les chaînes du lot 6 sont traduites', () => {
     const fr = new Map(entries.map((e) => [e.msgid, e.msgstr]))
     expect(fr.get('Unattached')).toBe('Non rattachées')
+    expect(fr.get('Latest human replies')).toBe('Dernières réponses humaines')
+    expect(fr.get('Unknown company')).toBe('Entreprise inconnue')
     expect(fr.get('low base')).toBe('base faible')
     expect(fr.get('French ISPs (Orange, SFR, Free…)')).toBe('FAI français (Orange, SFR, Free…)')
     expect(fr.get('Supported Languages')).toBe('Langues prises en charge')

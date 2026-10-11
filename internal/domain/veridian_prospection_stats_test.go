@@ -158,6 +158,16 @@ func TestVeridianBuildProspectionStats_SegmentsAndStock(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(body), `"sequences":[]`)
 	assert.Contains(t, string(body), `"segments":[]`)
+	assert.Contains(t, string(body), `"recent_human_replies":[]`)
+
+	// Les dernieres reponses sont bornees a 10 et rendues en UTC.
+	var recent []VeridianRecentReply
+	for i := 0; i < 15; i++ {
+		recent = append(recent, VeridianRecentReply{ContactEmail: "c@x.fr", RepliedAt: time.Date(2026, 10, 8, 14, 0, 0, 0, time.FixedZone("p", 7200))})
+	}
+	capped := VeridianBuildProspectionStats(&VeridianProspectionRaw{RecentReplies: recent}, time.Time{}, time.Time{}, time.Now())
+	require.Len(t, capped.RecentHumanReplies, VeridianRecentRepliesLimit)
+	assert.Equal(t, 12, capped.RecentHumanReplies[0].RepliedAt.Hour())
 }
 
 func TestVeridianProspectionStatsRequest_JSONShape(t *testing.T) {

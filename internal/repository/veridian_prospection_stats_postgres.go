@@ -71,6 +71,20 @@ const veridianProspectionAutomationSentSQL = `
 	WHERE automation_id IS NOT NULL AND sent_at >= $1 AND sent_at < $2` + veridianCommercialRowSQL + `
 	GROUP BY 1`
 
+// Dernières réponses humaines : le nom d'entreprise SIRENE du contact et sa séquence la
+// plus récente. Lecture seule, bornée par LIMIT.
+const veridianProspectionRecentRepliesSQL = `
+	SELECT r.contact_email, COALESCE(c.custom_string_1, ''), r.replied_at,
+	       COALESCE((SELECT a.name FROM contact_automations ca
+	                 JOIN automations a ON a.id = ca.automation_id AND a.deleted_at IS NULL
+	                 WHERE lower(ca.contact_email) = r.contact_email
+	                 ORDER BY ca.entered_at DESC LIMIT 1), '')
+	FROM veridian_contact_reply r
+	LEFT JOIN contacts c ON lower(c.email) = r.contact_email
+	WHERE r.reply_type = 'human' AND r.replied_at >= $1 AND r.replied_at < $2
+	ORDER BY r.replied_at DESC
+	LIMIT 10`
+
 const veridianProspectionListsSQL = `
 	SELECT l.id, l.name,
 	       COUNT(*) FILTER (WHERE cl.status = 'active'),
@@ -183,6 +197,22 @@ func (r *veridianProspectionStatsRepository) GetProspectionRaw(ctx context.Conte
 	}
 	if raw.ListSent, err = queryProspectionCounts(ctx, tx, veridianProspectionListSentSQL, from, to); err != nil {
 		return nil, err
+	}
+
+	rows, err = tx.QueryContext(ctx, veridianProspectionRecentRepliesSQL, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("query recent human replies: %w", err)
+	}
+	for rows.Next() {
+		var rr domain.VeridianRecentReply
+		if err := rows.Scan(&rr.ContactEmail, &rr.Company, &rr.RepliedAt, &rr.Sequence); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("scan recent human reply: %w", err)
+		}
+		raw.RecentReplies = append(raw.RecentReplies, rr)
+	}
+	if err := veridianCloseRows(rows); err != nil {
+		return nil, fmt.Errorf("iterate recent human replies: %w", err)
 	}
 	return raw, nil
 }

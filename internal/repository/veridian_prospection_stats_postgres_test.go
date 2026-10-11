@@ -51,6 +51,11 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 	mock.ExpectQuery(`(?s)FROM message_history mh\s+JOIN contact_lists cl ON cl.email = mh.contact_email`).
 		WithArgs(since, until).
 		WillReturnRows(sqlmock.NewRows([]string{"l", "n"}).AddRow("list1", 40))
+	// Dernieres reponses humaines : plus recentes d'abord, societe SIRENE et sequence.
+	replied := time.Date(2026, 10, 8, 14, 30, 0, 0, time.UTC)
+	mock.ExpectQuery(`(?s)FROM veridian_contact_reply r\s+LEFT JOIN contacts c ON lower\(c.email\) = r.contact_email\s+WHERE r.reply_type = 'human' AND r.replied_at >= \$1 AND r.replied_at < \$2\s+ORDER BY r.replied_at DESC\s+LIMIT 10`).
+		WithArgs(since, until).
+		WillReturnRows(sqlmock.NewRows([]string{"email", "company", "at", "seq"}).AddRow("a@x.fr", "ACME SARL", replied, "Sequence"))
 	mock.ExpectRollback() // lecture seule : jamais de commit
 
 	repo := NewVeridianProspectionStatsRepository(workspaceRepo)
@@ -67,6 +72,8 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 	assert.Equal(t, 60, raw.Lists[0].NeverContacted)
 	assert.Equal(t, "list1", raw.ListReplies[0].Key)
 	assert.Equal(t, 40, raw.ListSent[0].Count)
+	require.Len(t, raw.RecentReplies, 1)
+	assert.Equal(t, domain.VeridianRecentReply{ContactEmail: "a@x.fr", Company: "ACME SARL", RepliedAt: replied, Sequence: "Sequence"}, raw.RecentReplies[0])
 	assert.NoError(t, mock.ExpectationsWereMet())
 
 	// Le resultat se transforme sans I/O supplementaire.
@@ -74,6 +81,8 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 	require.Len(t, stats.Sequences, 1)
 	assert.Equal(t, 5, stats.Sequences[0].Stages[0].Queued)
 	assert.Equal(t, 2, stats.Sequences[0].Exits.Replied)
+	require.Len(t, stats.RecentHumanReplies, 1)
+	assert.Equal(t, "ACME SARL", stats.RecentHumanReplies[0].Company)
 }
 
 func TestVeridianProspectionBounds(t *testing.T) {

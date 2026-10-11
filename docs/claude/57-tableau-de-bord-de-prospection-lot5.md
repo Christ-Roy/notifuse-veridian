@@ -59,3 +59,11 @@ Les envois ont continué après le déploiement : dernier envoi de chaque profil
 - Refus par défaut de deux profils de types différents sur le même domaine d'envoi.
 - Boîte de réception depuis la console (hors lots).
 - Les ouvertures et clics restent non suivis (texte brut) : le bloc « engagement par classe » est conservé, il mesure envois, rejets et réponses humaines, pas des ouvertures.
+
+## Finitions (11/10/2026)
+
+- **Fuseau** : celui du workspace s'il est vraiment posé (« UTC » est la valeur de création, donc non posé), sinon celui de la fenêtre d'envoi des profils en rotation, sinon celui du navigateur, sinon Europe/Paris. Plus de Berlin ni d'UTC par défaut. Les dates de la console (file d'envoi, membres, contacts) sont rendues en Europe/Paris.
+- **Dates relatives** : dayjs suit la langue de la console (« il y a 3 jours », jamais « days ago »). Nombres et taux passent par `formatNumber` / `formatRatePercent` (espace insécable des milliers, virgule décimale).
+- **Dernières réponses humaines** remplace les listes natives « derniers contacts importés » et « échecs récents » (les échecs se lisent dans Journaux). Nouveau champ `recent_human_replies` de `prospection.stats` (10 au plus, plus récente d'abord : entreprise SIRENE `custom_string_1`, e-mail, séquence la plus récente, date). Lecture seule, une requête bornée par `LIMIT 10` dans la même transaction.
+- **Non rattachées** : ligne du tableau des réponses par séquence (total global moins la somme des séquences vivantes). **Base faible** : taux grisé sous 30 contacts joints.
+- **Fiche 62** : la colonne « Profil » de la File d'envoi est le profil NOMINAL de l'entrée ; la rotation choisit à l'envoi. Libellés « Profil nominal (la rotation choisit à l'envoi) » et bandeau explicatif.
