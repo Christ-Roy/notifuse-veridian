@@ -241,3 +241,37 @@ func TestVeridianSendingWindow_Location(t *testing.T) {
 	assert.Equal(t, 10, now.In(w.Location("")).Hour())
 	assert.True(t, w.IsWithinWindow(now, ""))
 }
+
+// Lot 6 : OpenMinutes compte les minutes ouvertes ; il doit donner le même nombre que le
+// test IsWithinWindow minute par minute (la capacité du jour en dépend).
+func TestVeridianSendingWindow_OpenMinutes(t *testing.T) {
+	w := businessHours()
+	loc, _ := time.LoadLocation("Europe/Paris")
+	// mercredi 7 octobre 2026
+	from := time.Date(2026, 10, 7, 8, 0, 0, 0, loc)
+	to := time.Date(2026, 10, 8, 0, 0, 0, 0, loc)
+	assert.Equal(t, float64(9*60), w.OpenMinutes(from, to, ""))
+	// départ au milieu de la fenêtre
+	assert.Equal(t, float64(3*60), w.OpenMinutes(time.Date(2026, 10, 7, 15, 0, 0, 0, loc), to, ""))
+	// samedi : fermé
+	sat := time.Date(2026, 10, 10, 0, 0, 0, 0, loc)
+	assert.Equal(t, float64(0), w.OpenMinutes(sat, sat.Add(24*time.Hour), ""))
+	// intervalle vide ou inversé
+	assert.Equal(t, float64(0), w.OpenMinutes(to, from, ""))
+	// parité avec IsWithinWindow, minute par minute, sur trois jours dont un week-end
+	start := time.Date(2026, 10, 9, 0, 0, 0, 0, loc)
+	end := start.Add(72 * time.Hour)
+	count := 0.0
+	for m := start; m.Before(end); m = m.Add(time.Minute) {
+		if w.IsWithinWindow(m, "") {
+			count++
+		}
+	}
+	assert.Equal(t, count, w.OpenMinutes(start, end, ""))
+	assert.Greater(t, count, float64(0))
+}
+
+func TestVeridianSendingWindow_FullDayMinutes(t *testing.T) {
+	assert.Equal(t, float64(9*60), businessHours().FullDayMinutes())
+	assert.Equal(t, float64(24*60), (&VeridianSendingWindow{}).FullDayMinutes(), "fenêtre invalide : 24 h sur 24")
+}

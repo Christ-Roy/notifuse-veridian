@@ -537,3 +537,37 @@ func TestVeridianEffectivePlan_FineClassShowsInheritedRate(t *testing.T) {
 	assert.InDelta(t, 6.0, gandi.RatePerMin, 0.0001)
 	assert.Zero(t, planClass(plan, "google").RatePerMin, "google n'hérite de rien")
 }
+
+// Lot 6 : le plan porte la capacité du jour, et les classes fines du 10/10 y figurent avec
+// le débit hérité d'other_hoster (sans quoi la somme sous-estimerait ce que le worker admet).
+func TestVeridianEffectivePlan_CapacityIncludesFineClassesInheritingOtherHoster(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := planParityWorkspace(capRobertProvider(), domain.WorkspaceSettings{})
+	world := newCapWorld()
+	planParityArmRepo(env, *world)
+
+	plan := capPlan(env, ws, world, capWednesdayOpening, nil)
+	require.True(t, plan.Capacity.Applicable)
+	hoster := planClass(plan, "other_hoster")
+	require.NotNil(t, hoster.CapacityRemaining)
+	for _, fine := range []string{"infomaniak", "gandi", "hostinger", "o2switch", "lws", "scaleway", "website_builder"} {
+		c := planClass(plan, fine)
+		require.NotNil(t, c.CapacityRemaining, fine)
+		assert.Equal(t, *hoster.CapacityRemaining, *c.CapacityRemaining, fine)
+		assert.Equal(t, domain.VeridianCapacityLimiterRate, c.CapacityLimiter, fine)
+	}
+	sum := 0
+	for _, c := range plan.Classes {
+		if c.CapacityRemaining != nil {
+			sum += *c.CapacityRemaining
+		}
+	}
+	require.NotNil(t, plan.Capacity.SumRemaining)
+	assert.Equal(t, sum, *plan.Capacity.SumRemaining)
+	// Une exclusion posée sur other_hoster coupe aussi les classes fines.
+	p := capRobertProvider()
+	p.VeridianExcludedProviderClasses = []string{"ionos", "other_hoster"}
+	plan2 := capPlan(env, planParityWorkspace(p, domain.WorkspaceSettings{}), world, capWednesdayOpening, nil)
+	assert.Equal(t, 0, *planClass(plan2, "gandi").CapacityRemaining)
+	assert.Equal(t, domain.VeridianCapacityLimiterExcluded, planClass(plan2, "gandi").CapacityLimiter)
+}

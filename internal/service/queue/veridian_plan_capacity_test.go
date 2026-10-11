@@ -125,6 +125,9 @@ func capPlan(env *veridianThrottleTestEnv, ws *domain.Workspace, world *planPari
 
 func TestVeridianCapacity_ParityWithWorkerDecisions(t *testing.T) {
 	startedToday := time.Now().UTC().Add(-time.Hour)
+	// nc : toutes les classes (11 historiques + 7 classes fines du 10/10, qui ont chacune
+	// leur compteur et leur plafond dans capAllClasses).
+	nc := len(domain.VeridianAllProviderClasses())
 	cases := []struct {
 		name     string
 		provider domain.EmailProvider
@@ -138,22 +141,22 @@ func TestVeridianCapacity_ParityWithWorkerDecisions(t *testing.T) {
 		{
 			name:     "plafonds de classe seuls : la somme des classes",
 			provider: domain.EmailProvider{VeridianProviderClassDailyCap: capAllClasses(3)},
-			want:     33, limiting: domain.VeridianCapacityLimitClassCaps,
+			want:     3 * nc, limiting: domain.VeridianCapacityLimitClassCaps,
 		},
 		{
-			name:     "plafond plat sous la somme : le plat borne (11 x 5 = 55, plat 20)",
+			name:     "plafond plat sous la somme : le plat borne (18 x 5 = 90, plat 20)",
 			provider: domain.EmailProvider{VeridianProviderClassDailyCap: capAllClasses(5), VeridianProfileDailyCap: 20},
 			want:     20, limiting: domain.VeridianPlanGateProfileCap,
 		},
 		{
 			name:     "plafond plat AU-DESSUS de la somme : la somme des classes borne (le plat n'est plus la limite)",
 			provider: domain.EmailProvider{VeridianProviderClassDailyCap: capAllClasses(2), VeridianProfileDailyCap: 500},
-			want:     22, limiting: domain.VeridianCapacityLimitClassCaps,
+			want:     2 * nc, limiting: domain.VeridianCapacityLimitClassCaps,
 		},
 		{
 			name:     "sans plafond plat : la somme des classes seule",
 			provider: domain.EmailProvider{VeridianProviderClassDailyCap: capAllClasses(4)},
-			want:     44, limiting: domain.VeridianCapacityLimitClassCaps,
+			want:     4 * nc, limiting: domain.VeridianCapacityLimitClassCaps,
 		},
 		{
 			name:     "chauffe sous la somme : la chauffe borne",
@@ -173,12 +176,12 @@ func TestVeridianCapacity_ParityWithWorkerDecisions(t *testing.T) {
 				w.complaints = map[string]int{"envoi.example": 1}
 				return w
 			},
-			want: 22, limiting: domain.VeridianCapacityLimitClassCaps,
+			want: 2 * nc, limiting: domain.VeridianCapacityLimitClassCaps,
 		},
 		{
 			name:     "classe exclue : sa capacite est nulle, la somme baisse d'une classe",
 			provider: domain.EmailProvider{VeridianProviderClassDailyCap: capAllClasses(4), VeridianExcludedProviderClasses: []string{"microsoft", "ionos"}},
-			want:     36, limiting: domain.VeridianCapacityLimitClassCaps,
+			want:     4 * (nc - 2), limiting: domain.VeridianCapacityLimitClassCaps,
 		},
 		{
 			name:     "envois deja faits : la capacite restante est ce qui reste",
@@ -191,12 +194,12 @@ func TestVeridianCapacity_ParityWithWorkerDecisions(t *testing.T) {
 				w.domainClassSent["envoi.example"] = map[string]int{"google": 4, "microsoft": 1}
 				return w
 			},
-			want: 44, limiting: domain.VeridianCapacityLimitClassCaps,
+			want: 4 * nc, limiting: domain.VeridianCapacityLimitClassCaps,
 		},
 		{
 			name:     "plafonds de classe du workspace herites",
 			settings: domain.WorkspaceSettings{VeridianProviderClassDailyCap: capAllClasses(3)},
-			want:     33, limiting: domain.VeridianCapacityLimitClassCaps,
+			want:     3 * nc, limiting: domain.VeridianCapacityLimitClassCaps,
 		},
 		{
 			name:     "classes sans plafond + plafond plat : le plat borne seul",
@@ -300,6 +303,11 @@ func TestVeridianCapacity_RateTimesRemainingWindow(t *testing.T) {
 		"google": 34, "microsoft": 34, "corporate": 34, // 0,053 x 660 = 34,98
 		"yahoo_aol": 17, "freemail_fr": 17, "apple_icloud": 17, "security_gateway": 17, // 0,027 x 660 = 17,82
 		"ionos": 0, // exclue
+	}
+	// Les 7 classes fines (10/10) héritent du débit d'other_hoster tant qu'elles n'ont pas
+	// d'entrée propre : 7 x 79 de plus (héritage : domain.VeridianRateForClass).
+	for _, fine := range []string{"infomaniak", "gandi", "hostinger", "o2switch", "lws", "scaleway", "website_builder"} {
+		want[fine] = 79
 	}
 	sum := 0
 	for class, w := range want {
@@ -518,7 +526,7 @@ func TestVeridianCapacity_ProfileGatesBoundTheSum(t *testing.T) {
 
 	plan := capPlan(env, ws, world, capWednesdayOpening, nil)
 	require.NotNil(t, plan.Capacity.SumRemaining)
-	assert.Equal(t, 407, *plan.Capacity.SumRemaining) // 3x79 + 3x34 + 4x17, ionos exclu
+	assert.Equal(t, 960, *plan.Capacity.SumRemaining) // 3x79 + 3x34 + 4x17 (ionos exclu) + 7x79 classes fines héritées d'other_hoster
 	require.NotNil(t, plan.Capacity.Configured)
 	assert.Equal(t, 300, *plan.Capacity.Configured)
 	assert.Equal(t, domain.VeridianPlanGateWarmup, plan.Capacity.Limiting, "chauffe et plat à 300 : la chauffe passe en premier")

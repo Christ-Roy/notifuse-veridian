@@ -96,3 +96,19 @@ func TestVeridianEmailProfilesOverview_TransactionalWatchJSONShape(t *testing.T)
 	require.Len(t, decoded.Watch.Alerts, 1)
 	assert.Equal(t, VeridianWatchCodeVolume, decoded.Watch.Alerts[0].Code)
 }
+
+// Lot 6 : le stock dû se range par classe. Une étiquette canonique gagne ; une étiquette
+// inconnue retombe sur la classification du domaine ; les lignes d'une classe s'additionnent.
+func TestVeridianStockByClass(t *testing.T) {
+	got := VeridianStockByClass([]VeridianStockRow{
+		{Tag: "ovh", Domain: "exemple.fr", Count: 10},
+		{Tag: " OVH ", Domain: "autre.fr", Count: 5},
+		{Tag: "infomaniak", Domain: "x.ch", Count: 7},
+		{Tag: "", Domain: "gmail.com", Count: 3},
+		{Tag: "classe-inconnue", Domain: "gmail.com", Count: 4},
+	})
+	assert.Equal(t, 15, got["ovh"], "étiquette canonique, casse et espaces ignorés, lignes additionnées")
+	assert.Equal(t, 7, got["infomaniak"], "classe fine du 10/10 reconnue")
+	assert.Equal(t, 7, got[ProviderClassGoogle], "sans étiquette valide : classification du domaine")
+	assert.Empty(t, VeridianStockByClass(nil))
+}

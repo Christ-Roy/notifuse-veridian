@@ -82,3 +82,30 @@ func TestVeridianEffectivePlanExposesTheDayOfTheProfile(t *testing.T) {
 	assert.Contains(t, string(raw), `"day_start"`)
 	assert.Contains(t, string(raw), `"day_end"`)
 }
+
+// Lot 6 : le contrat JSON de la capacité du jour. Les clés sont lues par la console et le
+// CLI agent ; une valeur absente (illimité) sort en null, jamais en 0.
+func TestVeridianPlanCapacityJSONContract(t *testing.T) {
+	configured := 120
+	plan := VeridianEffectivePlan{Capacity: VeridianPlanCapacity{
+		Applicable: true, Sent: 10, Configured: &configured, Limiting: VeridianCapacityLimitClassRates,
+		StockKnown: true, ProfileBoundGate: VeridianPlanGateNone,
+	}, Classes: []VeridianPlanClass{{Class: "ovh", CapacityLimiter: VeridianCapacityLimiterRate}}}
+	raw, err := json.Marshal(plan)
+	require.NoError(t, err)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(raw, &got))
+	capacity := got["capacity"].(map[string]any)
+	assert.Equal(t, float64(120), capacity["configured"])
+	assert.Nil(t, capacity["useful"], "capacité utile inconnue = null, pas 0")
+	assert.Equal(t, "class_rates", capacity["limiting"])
+	for _, key := range []string{"applicable", "sent", "remaining_configured", "stock_known", "profile_bound", "profile_bound_gate",
+		"sum_remaining", "flat_cap", "window_minutes_left", "window_minutes_full", "full_day_configured", "full_day_limiting"} {
+		assert.Contains(t, capacity, key)
+	}
+	class := got["classes"].([]any)[0].(map[string]any)
+	for _, key := range []string{"capacity_remaining", "capacity_configured", "capacity_useful", "stock", "capacity_limiter"} {
+		assert.Contains(t, class, key)
+	}
+	assert.Equal(t, "rate", class["capacity_limiter"])
+}

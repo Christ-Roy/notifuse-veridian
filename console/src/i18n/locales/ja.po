@@ -13081,3 +13081,91 @@ msgstr ""
 #: src/components/file_manager/fileManager.tsx:789
 msgid "Zip"
 msgstr "郵便番号"
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:41
+msgid "{sentLabel} sent / {totalLabel} capacity today"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:53
+msgid "{sentLabel} sent, {remainingLabel} still to send, {unusableLabel} unusable for lack of contacts"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:43
+msgid "{sentLabel} sent, no capacity limit"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:46
+msgid "{usefulLabel} usable with the contacts due today"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:93
+msgid "A normal open day: {fullDay} sends"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:126
+msgid "Contacts due"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:88
+msgid "Contacts due today: not measured"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:136
+msgid "Daily caps of the providers (mostly {name})"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:102
+msgid "Detail by provider"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:141
+msgid "Every provider is excluded or stopped"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:143
+#: src/components/sending_profiles/veridian_profile_labels.ts:165
+msgid "No limit"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:149
+msgid "Not enough contacts due for {name}"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:126
+msgid "Profile safety cap ({cap})"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:132
+msgid "Sending rates of the providers (mostly {name})"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:139
+msgid "Sending window closed for the rest of the day"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:59
+#: src/components/sending_profiles/veridian_capacity_block.tsx:71
+#: src/components/sending_profiles/veridian_capacity_block.tsx:114
+msgid "Still to send"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:161
+msgid "Stopped by the safety fuse"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:73
+#: src/components/sending_profiles/veridian_capacity_block.tsx:120
+msgid "Unusable"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_capacity_block.tsx:62
+msgid "Unusable: no contact due for these providers"
+msgstr ""
+
+#: src/pages/SendingProfilesPage.tsx:234
+msgid "Usable with the contacts due today"
+msgstr ""
+
+#: src/components/sending_profiles/veridian_profile_labels.ts:163
+msgid "Window closed"
+msgstr ""
