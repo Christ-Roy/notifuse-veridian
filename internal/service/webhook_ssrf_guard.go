@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/Notifuse/notifuse/pkg/netguard"
 )
 
 // Veridian fork — durcissement 2026-10-04 (audit sécurité, "SSRF sur les
@@ -26,112 +28,14 @@ import (
 //     rebinding (la réponse DNS peut changer entre la validation à la
 //     création et l'envoi, des heures ou des mois plus tard).
 //
-// cgnatBlock est posé une fois (100.64.0.0/10, RFC 6598 — c'est aussi la
-// plage Tailscale de la flotte Veridian, cf CLAUDE.md §8).
-var cgnatBlock = func() *net.IPNet {
-	_, n, err := net.ParseCIDR("100.64.0.0/10")
-	if err != nil {
-		panic(err) // literal constant, cannot fail
-	}
-	return n
-}()
+// La définition de « adresse interdite » vit dans pkg/netguard (fiche 64),
+// partagée avec SMTP et IMAP : une seule liste, pas une copie par protocole.
 
-var thisNetworkBlock = func() *net.IPNet {
-	_, n, err := net.ParseCIDR("0.0.0.0/8")
-	if err != nil {
-		panic(err)
-	}
-	return n
-}()
+// embeddedIPv4 : voir netguard.EmbeddedIPv4.
+func embeddedIPv4(ip net.IP) net.IP { return netguard.EmbeddedIPv4(ip) }
 
-// Veridian fork — lot 0 (2026-10-10, location de Notifuse à des clients) :
-// plages réservées supplémentaires, refusées à leur tour. Une plage oubliée
-// ici est un trou SSRF, donc la liste est explicite et testée adresse par
-// adresse (webhook_ssrf_guard_test.go).
-var extraBlockedCIDRs = func() []*net.IPNet {
-	cidrs := []string{
-		"192.0.0.0/24",    // IETF protocol assignments
-		"192.0.2.0/24",    // TEST-NET-1
-		"198.18.0.0/15",   // benchmarking
-		"198.51.100.0/24", // TEST-NET-2
-		"203.0.113.0/24",  // TEST-NET-3
-		"240.0.0.0/4",     // réservé + broadcast 255.255.255.255
-		"::/96",           // IPv4-compatible déprécié (::7f00:1 = 127.0.0.1)
-		"fec0::/10",       // site-local IPv6 déprécié
-		"100::/64",        // discard-only
-		"2001:db8::/32",   // documentation IPv6
-	}
-	out := make([]*net.IPNet, 0, len(cidrs))
-	for _, c := range cidrs {
-		_, n, err := net.ParseCIDR(c)
-		if err != nil {
-			panic(err) // literal constant, cannot fail
-		}
-		out = append(out, n)
-	}
-	return out
-}()
-
-// embeddedIPv4 extrait l'IPv4 cachée dans une adresse IPv6 de transition
-// (NAT64 64:ff9b::/96 et 6to4 2002::/16) : sans ça, 64:ff9b::7f00:1 ou
-// 2002:7f00:1:: passeraient pour des adresses publiques alors qu'elles
-// aboutissent sur 127.0.0.1 derrière une passerelle de transition.
-func embeddedIPv4(ip net.IP) net.IP {
-	if len(ip) != net.IPv6len {
-		return nil
-	}
-	if ip[0] == 0x00 && ip[1] == 0x64 && ip[2] == 0xff && ip[3] == 0x9b {
-		allZero := true
-		for _, b := range ip[4:12] {
-			if b != 0 {
-				allZero = false
-			}
-		}
-		if allZero {
-			return net.IPv4(ip[12], ip[13], ip[14], ip[15])
-		}
-	}
-	if ip[0] == 0x20 && ip[1] == 0x02 {
-		return net.IPv4(ip[2], ip[3], ip[4], ip[5])
-	}
-	return nil
-}
-
-// isBlockedWebhookIP reports whether ip must never be reached by an
-// outbound webhook: loopback, link-local (v4 169.254.0.0/16 and v6
-// fe80::/10), RFC1918 + IPv6 ULA (net.IP.IsPrivate covers both since Go
-// 1.17), CGNAT/Tailscale 100.64.0.0/10, "this network" 0.0.0.0/8,
-// unspecified (0.0.0.0 / ::) and multicast. IPv4-mapped IPv6 addresses
-// (::ffff:127.0.0.1) are normalized via To4() first so they cannot be used
-// to smuggle a blocked IPv4 address past the v6-shaped checks.
-func isBlockedWebhookIP(ip net.IP) bool {
-	if ip == nil {
-		return true
-	}
-	if v4 := ip.To4(); v4 != nil {
-		ip = v4
-	}
-	if ip.IsLoopback() ||
-		ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() ||
-		ip.IsUnspecified() ||
-		ip.IsPrivate() ||
-		ip.IsMulticast() {
-		return true
-	}
-	if cgnatBlock.Contains(ip) || thisNetworkBlock.Contains(ip) {
-		return true
-	}
-	for _, n := range extraBlockedCIDRs {
-		if n.Contains(ip) {
-			return true
-		}
-	}
-	if inner := embeddedIPv4(ip); inner != nil {
-		return isBlockedWebhookIP(inner)
-	}
-	return false
-}
+// isBlockedWebhookIP : voir netguard.IsBlockedIP.
+func isBlockedWebhookIP(ip net.IP) bool { return netguard.IsBlockedIP(ip) }
 
 // lookupIPAddrFn resolves a hostname to its IP addresses. It is a package
 // variable (not a hardcoded net.DefaultResolver call) purely so unit tests

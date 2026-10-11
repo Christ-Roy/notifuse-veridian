@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -79,9 +78,11 @@ func newDispatchHTTPClient() *http.Client {
 			MaxIdleConns:        100,
 			MaxIdleConnsPerHost: 100,
 			IdleConnTimeout:     90 * time.Second,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+			// Fiche 64 : plus d'InsecureSkipVerify. Mesuré le 11/10 : la prod
+			// appelle INTERNAL_API_ENDPOINT=http://localhost:8081 (HTTP clair,
+			// la vérification TLS n'y intervient pas) et, à défaut, l'endpoint
+			// public à certificat valide. Le drapeau ne servait aucun appel
+			// légitime et exposait l'appel à un MITM.
 		},
 	}
 }

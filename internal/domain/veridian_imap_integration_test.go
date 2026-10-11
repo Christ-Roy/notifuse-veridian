@@ -368,6 +368,8 @@ func TestIMAPSettings_GetTLSServerName(t *testing.T) {
 }
 
 func TestIMAPSettings_Validate_TLSServerName(t *testing.T) {
+	// 100.64.0.1 est une IP interne : exception explicite posée pour ce test.
+	t.Setenv("NOTIFUSE_OUTBOUND_INTERNAL_ALLOW", "100.64.0.1:993")
 	base := func(n string) *IMAPSettings {
 		return &IMAPSettings{Host: "100.64.0.1", Port: 993, Username: "u", Password: "p", UseTLS: true, TLSServerName: n}
 	}
@@ -386,4 +388,24 @@ func TestIMAPSettings_TLSServerName_JSONRoundtrip(t *testing.T) {
 	var out IMAPSettings
 	require.NoError(t, json.Unmarshal(raw, &out))
 	assert.Equal(t, "smtp.example.com", out.TLSServerName)
+}
+
+// Fiche 64 : une IP littérale interne est refusée à l'enregistrement, avec une
+// raison lisible ; les relais de la liste d'exceptions et les noms passent.
+func TestIMAPSettings_Validate_RefusesInternalLiteralHosts(t *testing.T) {
+	t.Setenv("NOTIFUSE_OUTBOUND_INTERNAL_ALLOW", "")
+	mk := func(h string, p int) *IMAPSettings {
+		return &IMAPSettings{Host: h, Port: p, Username: "u", Password: "p", UseTLS: true}
+	}
+	for _, h := range []string{"127.0.0.1", "169.254.169.254", "10.0.0.1", "192.168.1.1", "100.64.0.1", "::1", "[::1]"} {
+		err := mk(h, 993).Validate("passphrase")
+		require.Error(t, err, h)
+		assert.Contains(t, err.Error(), "disallowed address", h)
+	}
+	// Relais Veridian (IMAP 993) : légitimes, ne doivent PAS casser.
+	for _, h := range []string{"100.88.202.29", "100.92.215.42", "100.85.160.17"} {
+		require.NoError(t, mk(h, 993).Validate("passphrase"), h)
+	}
+	require.Error(t, mk("100.88.202.29", 25).Validate("passphrase"), "autre port")
+	require.NoError(t, mk("imap.gmail.com", 993).Validate("passphrase"))
 }

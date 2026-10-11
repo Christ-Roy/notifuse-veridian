@@ -9,6 +9,7 @@ export default defineConfig({
   // (un test crashé saute son afterAll → tenant+base restent → pool DB sature →
   // chaos-provisioning/anti-regression flakent). Best-effort, staging-only.
   // cf. todo/2026-06-20-e2e-sature-staging-provisioning-pic.md
+  globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   // 180s : certains tests attendent le cache TTL paywall (60s) entre suspend
   // et envoi pour valider le 402, donc 90s est trop court.

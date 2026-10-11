@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
+	"github.com/Notifuse/notifuse/pkg/netguard"
 )
 
 //go:generate mockgen -destination mocks/mock_veridian_imap_uid_seen_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain VeridianIMAPUIDSeenRepository
@@ -191,6 +192,12 @@ func (s *IMAPSettings) Validate(passphrase string) error {
 	}
 	if s.Port <= 0 || s.Port > 65535 {
 		return fmt.Errorf("invalid port number for IMAP configuration: %d", s.Port)
+	}
+	// Fiche 64 : une IP littérale interne (hors relais de la liste
+	// d'exceptions) est refusée tout de suite avec sa raison ; un nom est
+	// tranché à la connexion, après résolution.
+	if err := netguard.ValidateHost(strings.TrimSpace(s.Host), s.Port, netguard.DefaultAllowlist()); err != nil {
+		return fmt.Errorf("IMAP configuration: %w", err)
 	}
 	if strings.TrimSpace(s.Username) == "" {
 		return fmt.Errorf("username is required for IMAP configuration")

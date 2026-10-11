@@ -65,7 +65,9 @@ func NewEmailService(
 	// Initialize provider services
 	smtpService := NewSMTPServiceWithOAuth2(logger, oauth2TokenService)
 	sesService := NewSESService(authService, logger)
-	sparkPostService := NewSparkPostService(httpClient, authService, logger)
+	// Fiche 64 : l'endpoint SparkPost est choisi par le locataire, donc client
+	// HTTPS gardé (pas de IP interne, pas de redirection vers l'interne).
+	sparkPostService := NewGuardedSparkPostService(authService, logger)
 	postmarkService := NewPostmarkService(httpClient, authService, logger)
 	mailgunService := NewMailgunService(httpClient, authService, logger, webhookEndpoint)
 	mailjetService := NewMailjetService(httpClient, authService, logger)

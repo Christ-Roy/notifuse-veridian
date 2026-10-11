@@ -3,8 +3,11 @@ package domain
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
+	"github.com/Notifuse/notifuse/pkg/netguard"
 )
 
 //go:generate mockgen -destination mocks/mock_sparkpost_service.go -package mocks github.com/Notifuse/notifuse/internal/domain SparkPostServiceInterface
@@ -98,6 +101,17 @@ func (s *SparkPostSettings) EncryptAPIKey(passphrase string) error {
 func (s *SparkPostSettings) Validate(passphrase string) error {
 	if s.Endpoint == "" {
 		return fmt.Errorf("endpoint is required for SparkPost configuration")
+	}
+
+	// Fiche 64 : l'endpoint est choisi par le locataire. HTTPS, hôte présent,
+	// pas d'identifiants, pas d'IP littérale interne ; la connexion (client
+	// gardé, résolution puis refus) tranche pour les noms.
+	u, err := url.Parse(strings.TrimSpace(s.Endpoint))
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
+		return fmt.Errorf("SparkPost endpoint must be an https URL with a host and no credentials")
+	}
+	if err := netguard.ValidateHost(u.Hostname(), 443, nil); err != nil {
+		return fmt.Errorf("SparkPost endpoint: %w", err)
 	}
 
 	// Encrypt API key if it's not empty

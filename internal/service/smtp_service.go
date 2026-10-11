@@ -17,6 +17,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/emailerror"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/netguard"
 	"github.com/wneessen/go-mail"
 )
 
@@ -143,7 +144,11 @@ func sendRawEmailWithSettings(settings *domain.SMTPSettings, from string, to []s
 	addr := net.JoinHostPort(settings.Host, fmt.Sprintf("%d", settings.Port))
 
 	// Connect to SMTP server with configurable timeout
-	dialer := &net.Dialer{Timeout: getSMTPDialTimeout()}
+	// Fiche 64 : l'hôte SMTP est saisi par le locataire. La garde réseau
+	// partagée (pkg/netguard) refuse toute IP interne APRÈS résolution, au
+	// moment de la connexion ; seuls nos relais de la liste d'exceptions
+	// explicite passent.
+	dialer := netguard.GuardDialer(&net.Dialer{Timeout: getSMTPDialTimeout()}, smtpDialAllowlist())
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
 		return preAcceptance(fmt.Errorf("failed to connect: %w", err))
@@ -614,3 +619,8 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 
 	return nil
 }
+
+// smtpDialAllowlist donne les exceptions de la garde réseau pour la connexion
+// SMTP. Variable de paquet uniquement pour que les tests joignent un faux
+// serveur local explicitement autorisé ; la production ne la change jamais.
+var smtpDialAllowlist = netguard.DefaultAllowlist

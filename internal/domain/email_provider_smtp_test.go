@@ -137,6 +137,8 @@ func TestSMTPSettings_PassphraseEdgeCases(t *testing.T) {
 }
 
 func TestSMTPSettings_Validate(t *testing.T) {
+	// Relai interne de la flotte joint en Tailscale : exception explicite.
+	t.Setenv("NOTIFUSE_OUTBOUND_INTERNAL_ALLOW", "100.92.215.42:587")
 	passphrase := "test-passphrase"
 
 	tests := []struct {
@@ -713,4 +715,19 @@ func TestSMTPSettings_APIConfiguredFlagsJSON(t *testing.T) {
 	assert.Contains(t, string(raw), `"has_password":true`)
 	assert.Contains(t, string(raw), `"has_oauth2_client_secret":true`)
 	assert.Contains(t, string(raw), `"has_oauth2_refresh_token":true`)
+}
+
+// Fiche 64 : l'hôte SMTP saisi par le locataire ne peut pas être une IP
+// littérale interne (127.0.0.1:25, métadonnées, RFC1918...), raison lisible.
+func TestSMTPSettings_Validate_RefusesInternalLiteralHosts(t *testing.T) {
+	t.Setenv("NOTIFUSE_OUTBOUND_INTERNAL_ALLOW", "")
+	for _, h := range []string{"127.0.0.1", "169.254.169.254", "10.0.0.1", "172.16.0.9", "192.168.0.1", "100.64.0.1", "::1", "fd00::1"} {
+		s := domain.SMTPSettings{Host: h, Port: 25, AuthType: "basic"}
+		err := s.Validate("passphrase")
+		if assert.Error(t, err, h) {
+			assert.Contains(t, err.Error(), "disallowed address", h)
+		}
+	}
+	ok := domain.SMTPSettings{Host: "smtp.example.com", Port: 587, AuthType: "basic"}
+	assert.NoError(t, ok.Validate("passphrase"))
 }

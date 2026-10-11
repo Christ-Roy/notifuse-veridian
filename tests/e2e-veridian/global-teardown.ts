@@ -1,4 +1,5 @@
 import * as crypto from 'crypto'
+import { prodResidueTeardown } from './prod-residue'
 
 // globalTeardown Playwright — filet de sécurité anti-accumulation de bases de test.
 //
@@ -13,6 +14,8 @@ import * as crypto from 'crypto'
 // (le résultat des tests prime ; le GC est de l'hygiène). Staging-only par
 // construction (l'endpoint renvoie 503 hors staging → no-op silencieux en prod).
 async function globalTeardown() {
+  // Prod : aucun tenant ne doit rester du run (fiche 64). Ne casse jamais le run.
+  await prodResidueTeardown().catch((e) => console.log(`[prod-residue] échec ignoré : ${(e as Error).message}`))
   const NOTIFUSE_URL = process.env.NOTIFUSE_URL
   const HUB_API_SECRET = process.env.HUB_API_SECRET
   if (!NOTIFUSE_URL || !HUB_API_SECRET) {

@@ -45,6 +45,8 @@ func TestVeridianIsPrivateSMTPHost(t *testing.T) {
 
 func TestSMTPSettings_Validate_SkipTLSVerifyGuard(t *testing.T) {
 	t.Run("skip autorisé vers host privé Tailscale", func(t *testing.T) {
+		// Fiche 64 : un host privé n'est joignable que par exception explicite.
+		t.Setenv("NOTIFUSE_OUTBOUND_INTERNAL_ALLOW", "100.92.215.42:587")
 		s := &SMTPSettings{Host: "100.92.215.42", Port: 587, UseTLS: true, SkipTLSVerify: true}
 		if err := s.Validate(""); err != nil {
 			t.Fatalf("attendu OK pour host privé, got: %v", err)

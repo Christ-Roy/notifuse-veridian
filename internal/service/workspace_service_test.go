@@ -871,7 +871,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 					ID: "gmail-a", Name: "Gmail A", Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
 						Kind:               domain.EmailProviderKindSMTP,
-						SMTP:               &domain.SMTPSettings{Host: "127.0.0.1", Port: 1025},
+						SMTP:               &domain.SMTPSettings{Host: "smtp.example.com", Port: 1025},
 						Senders:            []domain.EmailSender{domain.NewEmailSender("a@example.com", "A")},
 						RateLimitPerMinute: 60,
 					},
@@ -880,7 +880,7 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 					ID: "gmail-b", Name: "Gmail B", Type: domain.IntegrationTypeEmail,
 					EmailProvider: domain.EmailProvider{
 						Kind:               domain.EmailProviderKindSMTP,
-						SMTP:               &domain.SMTPSettings{Host: "127.0.0.1", Port: 1025},
+						SMTP:               &domain.SMTPSettings{Host: "smtp.example.com", Port: 1025},
 						Senders:            []domain.EmailSender{domain.NewEmailSender("b@example.com", "B")},
 						RateLimitPerMinute: 60,
 					},

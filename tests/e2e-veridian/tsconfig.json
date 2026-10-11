@@ -13,6 +13,8 @@
     "specs/**/*.ts",
     "console-suite/**/*.ts",
     "playwright.config.ts",
+    "global-setup.ts",
+    "prod-residue.ts",
     "playwright.console-suite.config.ts"
   ]
 }

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -18,6 +19,14 @@ type SparkPostService struct {
 	httpClient  domain.HTTPClient
 	authService domain.AuthService
 	logger      logger.Logger
+}
+
+// NewGuardedSparkPostService est le constructeur de PRODUCTION (fiche 64) :
+// l'endpoint SparkPost est choisi par le locataire, donc le client HTTP est le
+// client gardé (HTTPS seul, aucune IP interne, redirections revalidées). Les
+// tests injectent leur propre client via NewSparkPostService.
+func NewGuardedSparkPostService(authService domain.AuthService, logger logger.Logger) *SparkPostService {
+	return NewSparkPostService(NewTenantOutboundClient(30*time.Second), authService, logger)
 }
 
 // NewSparkPostService creates a new instance of SparkPostService

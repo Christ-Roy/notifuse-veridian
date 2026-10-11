@@ -3,8 +3,10 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
+	"github.com/Notifuse/notifuse/pkg/netguard"
 )
 
 // SMTPWebhookPayload represents an SMTP webhook payload
@@ -185,6 +187,13 @@ func (s *SMTPSettings) Validate(passphrase string) error {
 
 	if s.Port <= 0 || s.Port > 65535 {
 		return fmt.Errorf("invalid port number for SMTP configuration: %d", s.Port)
+	}
+
+	// Fiche 64 : une IP littérale interne (hors relais de la liste d'exceptions)
+	// est refusée à l'enregistrement avec sa raison ; un nom est tranché à la
+	// connexion, après résolution (pkg/netguard).
+	if err := netguard.ValidateHost(strings.TrimSpace(s.Host), s.Port, netguard.DefaultAllowlist()); err != nil {
+		return fmt.Errorf("SMTP configuration: %w", err)
 	}
 
 	// Veridian fork — garde-fou SkipTLSVerify : on n'autorise à désactiver la

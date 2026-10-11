@@ -314,3 +314,15 @@ func TestEmailProvider_WithSparkPostSettings(t *testing.T) {
 		assert.Contains(t, err.Error(), "endpoint is required")
 	})
 }
+
+// Fiche 64 : endpoint choisi par le locataire.
+func TestSparkPostSettings_Validate_EndpointGuard(t *testing.T) {
+	for _, ep := range []string{"http://api.sparkpost.com", "https://127.0.0.1", "https://169.254.169.254/latest", "https://10.0.0.1", "https://user:pw@api.sparkpost.com", "ftp://x.com", "https://"} {
+		s := domain.SparkPostSettings{Endpoint: ep}
+		assert.Error(t, s.Validate("passphrase"), ep)
+	}
+	for _, ep := range []string{"https://api.sparkpost.com", "https://api.eu.sparkpost.com"} {
+		s := domain.SparkPostSettings{Endpoint: ep}
+		assert.NoError(t, s.Validate("passphrase"), ep)
+	}
+}

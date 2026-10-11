@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/netguard"
 	imap "github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 )
@@ -81,7 +82,11 @@ func (d *emersionIMAPDialer) Dial(ctx context.Context, settings *domain.IMAPSett
 		return nil, fmt.Errorf("imap password not decrypted (empty)")
 	}
 
-	dialer := &net.Dialer{Timeout: veridianIMAPDialTimeout}
+	// Fiche 64 : l'hôte IMAP est saisi par le locataire. La garde réseau
+	// partagée (pkg/netguard) refuse toute IP interne APRÈS résolution, au
+	// moment de la connexion ; seuls nos relais de la liste d'exceptions
+	// explicite (IMAP 993 des boîtes de rejet en Tailscale) passent.
+	dialer := netguard.GuardDialer(&net.Dialer{Timeout: veridianIMAPDialTimeout}, imapDialAllowlist())
 	options := &imapclient.Options{
 		Dialer:    dialer,
 		TLSConfig: &tls.Config{ServerName: settings.GetTLSServerName(), MinVersion: tls.VersionTLS12},
@@ -231,3 +236,8 @@ func (c *emersionIMAPClient) toDomainMessage(buf *imapclient.FetchMessageBuffer)
 
 	return msg
 }
+
+// imapDialAllowlist donne les exceptions de la garde réseau pour la connexion
+// IMAP. Variable de paquet uniquement pour que les tests joignent un faux
+// serveur local explicitement autorisé ; la production ne la change jamais.
+var imapDialAllowlist = netguard.DefaultAllowlist
