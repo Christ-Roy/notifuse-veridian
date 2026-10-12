@@ -96,9 +96,9 @@ func decryptMessageData(data domain.MessageData, secretKey string) (domain.Messa
 // scanMessage scans a message history row including attachments and channel options
 func scanMessage(scanner interface {
 	Scan(dest ...interface{}) error
-}, message *domain.MessageHistory) error {
+}, message *domain.MessageHistory, extra ...interface{}) error {
 	var attachmentsJSON []byte
-	err := scanner.Scan(
+	dest := []interface{}{
 		&message.ID,
 		&message.ExternalID,
 		&message.ContactEmail,
@@ -123,7 +123,8 @@ func scanMessage(scanner interface {
 		&message.UnsubscribedAt,
 		&message.CreatedAt,
 		&message.UpdatedAt,
-	)
+	}
+	err := scanner.Scan(append(dest, extra...)...)
 
 	if err != nil {
 		return err
@@ -145,6 +146,27 @@ func messageHistorySelectFields() string {
 			channel, status_info, message_data, channel_options, attachments, sent_at, delivered_at,
 			failed_at, opened_at, clicked_at, bounced_at, complained_at,
 			unsubscribed_at, created_at, updated_at`
+}
+
+// messageHistorySelectFieldsWithVeridian ajoute les trois colonnes Veridian (nullables, donc
+// COALESCE) a la liste commune : adresse emettrice, profil d'envoi, type de message.
+//
+// Constat du 12/10/2026 : GetByContact ne les lisait pas. Tout ce qui s'appuie sur elles pour
+// un contact (l'ancre de sequence du pool, qui garde le meme expediteur pour une relance, et le
+// fil des relances) voyait donc des chaines vides et ne trouvait JAMAIS le premier mail : 151
+// relances sur 332 sont parties d'une autre adresse que J0 le 12/10. Les tests passaient parce
+// qu'ils simulent le depot.
+func messageHistorySelectFieldsWithVeridian() string {
+	return messageHistorySelectFields() +
+		`, COALESCE(veridian_sender_email, ''), COALESCE(veridian_profile_id, ''), COALESCE(veridian_message_type, '')`
+}
+
+// scanMessageWithVeridian lit une ligne produite par messageHistorySelectFieldsWithVeridian.
+func scanMessageWithVeridian(scanner interface {
+	Scan(dest ...interface{}) error
+}, message *domain.MessageHistory) error {
+	return scanMessage(scanner, message,
+		&message.VeridianSenderEmail, &message.VeridianProfileID, &message.VeridianMessageType)
 }
 
 // Create adds a new message history record
@@ -582,7 +604,7 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 		WHERE contact_email = $1
 		ORDER BY sent_at DESC
 		LIMIT $2 OFFSET $3
-	`, messageHistorySelectFields())
+	`, messageHistorySelectFieldsWithVeridian())
 
 	rows, err := workspaceDB.QueryContext(ctx, query, contactEmail, limit, offset)
 	if err != nil {
@@ -593,7 +615,7 @@ func (r *MessageHistoryRepository) GetByContact(ctx context.Context, workspaceID
 	var messages []*domain.MessageHistory
 	for rows.Next() {
 		var message domain.MessageHistory
-		if err := scanMessage(rows, &message); err != nil {
+		if err := scanMessageWithVeridian(rows, &message); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan message history: %w", err)
 		}
 

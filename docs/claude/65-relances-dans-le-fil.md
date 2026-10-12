@@ -13,6 +13,14 @@ dans la même conversation que le premier mail, depuis la même adresse.
   8 h (61 h) : tous les lundis matin, toutes les relances dues basculaient sur le pool libre.
   La limite est maintenant de 7 jours.
 
+## Cause racine de la dérive d expéditeur (trouvée à l essai sur prod, 12/10)
+
+`MessageHistoryRepository.GetByContact` ne sélectionnait pas `veridian_sender_email`, `veridian_profile_id`
+ni `veridian_message_type`. L ancre de séquence (`veridianSequenceAnchor`, 05/10) exige un `VeridianProfileID`
+non vide : elle ne trouvait donc JAMAIS le premier mail, quel que soit le délai (les tests passaient, ils simulent le
+dépôt). Correctif : `messageHistorySelectFieldsWithVeridian` (COALESCE) + `scanMessageWithVeridian`, utilisés par
+`GetByContact` seulement. Le fil des relances lit les mêmes colonnes.
+
 ## Mécanisme
 
 Réglage du workspace `veridian_thread_followups` (booléen, absent ou faux = comportement
