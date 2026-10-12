@@ -1851,3 +1851,21 @@ func TestMessageListParamsMessageType(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "message_type")
 }
+
+// Veridian (12/10/2026) : BounceType est lu par GetByContact pour savoir si le premier mail d'une
+// sequence a ete livre (queue/veridian_first_mail_gate.go). Les trois libelles ecrits par le
+// webhook doivent rester ceux que le worker compare.
+func TestMessageHistory_BounceTypeLabelsAreTheOnesTheWorkerReads(t *testing.T) {
+	assert.Equal(t, "HardBounce", VeridianBounceTypeLabel(BounceClassificationHard))
+	assert.Equal(t, "SoftBounce", VeridianBounceTypeLabel(BounceClassificationSoftCount))
+	assert.Equal(t, "PolicyBounce", VeridianBounceTypeLabel(BounceClassificationPolicyRefusal))
+
+	m := MessageHistory{ID: "m1", BounceType: VeridianBounceTypePolicy}
+	b, err := json.Marshal(m)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"bounce_type":"PolicyBounce"`)
+
+	empty, err := json.Marshal(MessageHistory{ID: "m2"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(empty), "bounce_type", "omitempty : aucun changement pour les reponses d'API existantes")
+}

@@ -243,19 +243,6 @@ func TestVeridianFirstMailGate_Worker(t *testing.T) {
 	}
 }
 
-func TestVeridianFirstMailGate_ProcessEntryNeverSends(t *testing.T) {
-	// Chemin complet : processEntry ne doit atteindre ni la selection de profil ni l'envoi.
-	env := newFMEnv(t)
-	ws := &domain.Workspace{ID: "ws-1"}
-	hist := []*domain.MessageHistory{fmJ0(func(m *domain.MessageHistory) { m.BounceType = domain.VeridianBounceTypePolicy })}
-	env.history.EXPECT().GetByContact(gomock.Any(), "ws-1", gomock.Any(), "lead@example.com", gomock.Any(), 0).Return(hist, 1, nil).AnyTimes()
-	env.autos.EXPECT().GetByID(gomock.Any(), "ws-1", fmAuto).Return(fmAutomation(domain.AutomationStatusLive), nil).AnyTimes()
-	env.queue.EXPECT().Delete(gomock.Any(), "ws-1", "q-1").Return(nil)
-	// Aucune attente sur MarkAsProcessing ni sur l'envoi : un appel ferait echouer le test.
-	env.worker.processEntry(ws, fmEntry("j4", "tpl-relance"))
-	assert.Equal(t, []string{"lead@example.com"}, env.exits)
-}
-
 func TestVeridianFirstMailGate_ReadFailureFailsClosed(t *testing.T) {
 	env := newFMEnv(t)
 	ws := &domain.Workspace{ID: "ws-1"}

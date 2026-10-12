@@ -256,3 +256,24 @@ func TestVeridianDecisionInterfaces_Satisfiable(t *testing.T) {
 	var _ VeridianQueueExplainRepository = fakeExplainRepo{}
 	var _ VeridianQueueExplainService = fakeExplainService{}
 }
+
+// Les raisons de sortie « premier mail non livre » sont des codes stables du journal (fiche 66) :
+// distincts entre eux, differents des raisons d'attente, et jamais dans la liste d'attente.
+func TestVeridianFirstMailExitReasons_StableAndNotWaitingReasons(t *testing.T) {
+	exit := []string{
+		VeridianReasonFirstMailFailed, VeridianReasonFirstMailBounced, VeridianReasonFirstMailRefused,
+		VeridianReasonFirstMailNotSent, VeridianReasonFirstMailMissing,
+	}
+	assert.Equal(t, []string{
+		"first_mail_failed", "first_mail_bounced", "first_mail_policy_refused", "first_mail_not_sent", "first_mail_missing",
+	}, exit)
+	seen := map[string]bool{}
+	for _, r := range exit {
+		assert.False(t, seen[r], "doublon %s", r)
+		seen[r] = true
+		for _, w := range VeridianQueueReasons {
+			assert.NotEqual(t, w, r, "une raison de sortie n'est pas une raison d'attente")
+		}
+	}
+	assert.True(t, VeridianValidOutcome(VeridianOutcomeExited))
+}
