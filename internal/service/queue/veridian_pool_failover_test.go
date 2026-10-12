@@ -899,3 +899,25 @@ func TestVeridianSelectSendable_AnchoredFollowUp_WindowClosedStaysWindowClosed(t
 	assert.Equal(t, domain.VeridianReasonWindowClosed, sel.Reason, "la fenêtre vaut pour tous les profils : pas « attend l'ancre »")
 	assert.Equal(t, "nord", sel.ReasonProfile)
 }
+
+// Garde-fou : un week-end (fenêtre d'envoi fermée du vendredi 19h au lundi 8h, soit ~61h)
+// ne doit JAMAIS faire croire que l'expéditeur de J0 est indisponible. Le 12/10, 151
+// relances sur 332 sont parties d'une autre adresse que J0 parce que la limite était de 48h.
+func TestVeridianSequenceAnchorUnavailableAfter_SurvivesAWeekendAndLongHolidays(t *testing.T) {
+	weekend := 61 * time.Hour
+	assert.Greater(t, veridianSequenceAnchorUnavailableAfter, weekend)
+	assert.GreaterOrEqual(t, veridianSequenceAnchorUnavailableAfter, 7*24*time.Hour)
+
+	// Et la fenêtre réellement interrogée est bien celle-là : un expéditeur qui a envoyé le
+	// vendredi soir est encore disponible le lundi matin, la relance ne change pas d'adresse.
+	env := newVeridianThrottleTestEnv(t)
+	var since time.Time
+	env.mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "nord-propre.example", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, s time.Time) (int, error) {
+			since = s
+			return 1, nil
+		})
+	assert.True(t, env.worker.veridianAnchorAvailable("ws-1", "nord-propre.example", time.Now()))
+	assert.WithinDuration(t, time.Now().Add(-7*24*time.Hour), since, time.Minute)
+}

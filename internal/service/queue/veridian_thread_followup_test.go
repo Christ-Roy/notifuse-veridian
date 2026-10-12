@@ -236,37 +236,6 @@ func TestEmailQueueWorker_ApplyThreading_SenderMismatchIsTracedNotBlocking(t *te
 	assert.Equal(t, "Re: Premier", entry.Payload.Subject, "l'écart d'expéditeur est tracé (log), il ne bloque pas l'envoi")
 }
 
-// L'objet réellement envoyé est consigné dans l'historique (clé veridian_subject) : c'est lui
-// que les relances reprendront. Seulement pour les automations, seulement sur succès.
-func TestEmailQueueWorker_UpsertMessageHistory_RecordsSentSubject(t *testing.T) {
-	env := newVeridianThrottleTestEnv(t)
-	entry := veridianTestAutomationEntry("j0", "auto-1", "lead@exemple.fr", threadSender)
-	entry.Payload.Subject = "La vente en ligne chez Acme"
-
-	var saved *domain.MessageHistory
-	env.mockMessageHistoryRepo.EXPECT().
-		Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
-			saved = m
-			return nil
-		})
-	env.worker.upsertMessageHistory(context.Background(), "ws-1", "secret", entry, nil)
-	require.NotNil(t, saved)
-	assert.Equal(t, "La vente en ligne chez Acme", saved.MessageData.Metadata[veridianMetadataSubjectKey])
-
-	// Échec d'envoi : rien à consigner.
-	saved = nil
-	env.mockMessageHistoryRepo.EXPECT().
-		Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
-			saved = m
-			return nil
-		})
-	env.worker.upsertMessageHistory(context.Background(), "ws-1", "secret", entry, errors.New("smtp 421"))
-	require.NotNil(t, saved)
-	assert.Nil(t, saved.MessageData.Metadata)
-}
-
 type threadFakeRenderer struct {
 	subject      string
 	templateSeen string
@@ -275,13 +244,4 @@ type threadFakeRenderer struct {
 func (f *threadFakeRenderer) RenderQueuedEmail(_ context.Context, _ *domain.Workspace, e *domain.EmailQueueEntry) (*RenderedQueuedEmail, error) {
 	f.templateSeen = e.TemplateID
 	return &RenderedQueuedEmail{Subject: f.subject}, nil
-}
-
-// Garde-fou : un week-end (fenêtre d'envoi fermée du vendredi 19h au lundi 8h, soit ~61h)
-// ne doit JAMAIS faire croire que l'expéditeur de J0 est indisponible. Le 12/10, 151
-// relances sur 332 sont parties d'une autre adresse que J0 parce que la limite était de 48h.
-func TestVeridianSequenceAnchorUnavailableAfter_SurvivesAWeekendAndLongHolidays(t *testing.T) {
-	weekend := 61 * time.Hour
-	assert.Greater(t, veridianSequenceAnchorUnavailableAfter, weekend)
-	assert.GreaterOrEqual(t, veridianSequenceAnchorUnavailableAfter, 7*24*time.Hour)
 }

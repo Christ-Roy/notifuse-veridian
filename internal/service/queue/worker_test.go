@@ -2571,3 +2571,34 @@ func TestEmailQueueWorker_HandleError_RetryableAttemptIsJournaledAsSendError(t *
 	assert.Equal(t, domain.VeridianOutcomeFailed, log.rows[0].Outcome)
 	assert.Equal(t, domain.VeridianReasonSendError, log.rows[0].Reason)
 }
+
+// L'objet réellement envoyé est consigné dans l'historique (clé veridian_subject) : c'est lui
+// que les relances reprendront. Seulement pour les automations, seulement sur succès.
+func TestEmailQueueWorker_UpsertMessageHistory_RecordsSentSubject(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	entry := veridianTestAutomationEntry("j0", "auto-1", "lead@exemple.fr", threadSender)
+	entry.Payload.Subject = "La vente en ligne chez Acme"
+
+	var saved *domain.MessageHistory
+	env.mockMessageHistoryRepo.EXPECT().
+		Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			saved = m
+			return nil
+		})
+	env.worker.upsertMessageHistory(context.Background(), "ws-1", "secret", entry, nil)
+	require.NotNil(t, saved)
+	assert.Equal(t, "La vente en ligne chez Acme", saved.MessageData.Metadata[veridianMetadataSubjectKey])
+
+	// Échec d'envoi : rien à consigner.
+	saved = nil
+	env.mockMessageHistoryRepo.EXPECT().
+		Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			saved = m
+			return nil
+		})
+	env.worker.upsertMessageHistory(context.Background(), "ws-1", "secret", entry, errors.New("smtp 421"))
+	require.NotNil(t, saved)
+	assert.Nil(t, saved.MessageData.Metadata)
+}
