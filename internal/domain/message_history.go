@@ -181,6 +181,12 @@ type MessageHistory struct {
 	// vide pour le commercial (colonne nullable, V61). Les compteurs commerciaux
 	// (plafonds, chauffe, fusible de reputation) l'ignorent. Cf. veridian_message_type.go.
 	VeridianMessageType string `json:"veridian_message_type,omitempty"`
+
+	// Classement du rebond ou du refus du serveur destinataire (colonne bounce_type) :
+	// HardBounce, SoftBounce ou PolicyBounce (cf. veridian_bounce_type.go). Lu seulement par
+	// GetByContact, pour que le worker sache si le premier mail d une sequence a ete
+	// livre (queue/veridian_first_mail_gate.go). Jamais ecrit par Create.
+	BounceType string `json:"bounce_type,omitempty"`
 }
 
 type MessageHistoryStatusSum struct {

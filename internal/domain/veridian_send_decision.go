@@ -34,6 +34,18 @@ const (
 	VeridianReasonOrphanParked     = "orphan_parked"      // contact parqué en envoi sans entrée en file
 )
 
+// Raisons de SORTIE d'une relance dont le premier mail (J0) n'a pas été livré
+// (décision « exited » du journal, relance supprimée de la file, contact sorti de la
+// séquence). Cf. queue/veridian_first_mail_gate.go. Pas des raisons d'attente : absentes
+// de VeridianQueueReasons.
+const (
+	VeridianReasonFirstMailFailed  = "first_mail_failed"         // J0 : échec d'envoi définitif (failed_at)
+	VeridianReasonFirstMailBounced = "first_mail_bounced"        // J0 : rebond dur (bounced_at, 5.1.x, 5.4.1 Exchange...)
+	VeridianReasonFirstMailRefused = "first_mail_policy_refused" // J0 : refus de politique du serveur (5.7.x)
+	VeridianReasonFirstMailNotSent = "first_mail_not_sent"       // J0 : jamais parti (aucun envoi accepté)
+	VeridianReasonFirstMailMissing = "first_mail_missing"        // aucun J0 trouvé pour ce contact dans cette automation
+)
+
 // VeridianQueueReasons liste les codes d'attente (ordre d'affichage).
 var VeridianQueueReasons = []string{
 	VeridianReasonNotExamined, VeridianReasonWindowClosed, VeridianReasonCapacity,

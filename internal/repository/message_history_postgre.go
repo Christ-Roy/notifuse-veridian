@@ -149,7 +149,8 @@ func messageHistorySelectFields() string {
 }
 
 // messageHistorySelectFieldsWithVeridian ajoute les trois colonnes Veridian (nullables, donc
-// COALESCE) a la liste commune : adresse emettrice, profil d'envoi, type de message.
+// COALESCE) a la liste commune : adresse emettrice, profil d'envoi, type de message, et le classement
+// du rebond (bounce_type : HardBounce, SoftBounce, PolicyBounce).
 //
 // Constat du 12/10/2026 : GetByContact ne les lisait pas. Tout ce qui s'appuie sur elles pour
 // un contact (l'ancre de sequence du pool, qui garde le meme expediteur pour une relance, et le
@@ -158,7 +159,7 @@ func messageHistorySelectFields() string {
 // qu'ils simulent le depot.
 func messageHistorySelectFieldsWithVeridian() string {
 	return messageHistorySelectFields() +
-		`, COALESCE(veridian_sender_email, ''), COALESCE(veridian_profile_id, ''), COALESCE(veridian_message_type, '')`
+		`, COALESCE(veridian_sender_email, ''), COALESCE(veridian_profile_id, ''), COALESCE(veridian_message_type, ''), COALESCE(bounce_type, '')`
 }
 
 // scanMessageWithVeridian lit une ligne produite par messageHistorySelectFieldsWithVeridian.
@@ -166,7 +167,7 @@ func scanMessageWithVeridian(scanner interface {
 	Scan(dest ...interface{}) error
 }, message *domain.MessageHistory) error {
 	return scanMessage(scanner, message,
-		&message.VeridianSenderEmail, &message.VeridianProfileID, &message.VeridianMessageType)
+		&message.VeridianSenderEmail, &message.VeridianProfileID, &message.VeridianMessageType, &message.BounceType)
 }
 
 // Create adds a new message history record

@@ -62,7 +62,10 @@ func TestAutomationFinalGuard_QueuedRowNeverReachesSMTPSink(t *testing.T) {
 			if tc.lookupErr == nil {
 				automation = &domain.Automation{ID: "auto-1", Status: tc.status, ListID: "list-1"}
 			}
-			automationRepo.EXPECT().GetByID(gomock.Any(), "ws-1", "auto-1").Return(automation, tc.lookupErr)
+			// La porte « premier mail livre » lit aussi l'historique et l'automation avant la
+			// garde finale : historique vide, automation sans noeud (pas une relance), elle laisse passer.
+			historyRepo.EXPECT().GetByContact(gomock.Any(), "ws-1", gomock.Any(), "lead@gmail.com", gomock.Any(), gomock.Any()).Return(nil, 0, nil).AnyTimes()
+			automationRepo.EXPECT().GetByID(gomock.Any(), "ws-1", "auto-1").Return(automation, tc.lookupErr).AnyTimes()
 			if tc.lookupErr == nil && tc.status == domain.AutomationStatusLive {
 				replyRepo.EXPECT().HasReplied(gomock.Any(), "ws-1", "lead@gmail.com").Return(tc.replied, nil)
 			}

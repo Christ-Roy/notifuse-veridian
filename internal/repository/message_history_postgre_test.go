@@ -612,7 +612,7 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 			"channel", "status_info", "message_data", "channel_options", "attachments", "sent_at", "delivered_at",
 			"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 			"unsubscribed_at", "created_at", "updated_at",
-			"veridian_sender_email", "veridian_profile_id", "veridian_message_type",
+			"veridian_sender_email", "veridian_profile_id", "veridian_message_type", "bounce_type",
 		}).AddRow(
 			message.ID,
 			message.ExternalID,
@@ -640,7 +640,8 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 			message.UpdatedAt,
 			"robert.brunon@messagerie-nord-776.fr", // veridian_sender_email
 			"5eb51181-7321-4b63-8c9c-bf2df154a889", // veridian_profile_id
-			"", // veridian_message_type (NULL -> chaine vide par COALESCE)
+			"",                                     // veridian_message_type (NULL -> chaine vide par COALESCE)
+			"PolicyBounce",                         // bounce_type : le worker en tire « premier mail refuse »
 		)
 
 		mock.ExpectQuery(`SELECT .* FROM message_history WHERE contact_email = \$1 ORDER BY sent_at DESC LIMIT \$2 OFFSET \$3`).
@@ -659,6 +660,7 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 		assert.Equal(t, "robert.brunon@messagerie-nord-776.fr", results[0].VeridianSenderEmail)
 		assert.Equal(t, "5eb51181-7321-4b63-8c9c-bf2df154a889", results[0].VeridianProfileID)
 		assert.Equal(t, "", results[0].VeridianMessageType)
+		assert.Equal(t, "PolicyBounce", results[0].BounceType)
 	})
 
 	t.Run("workspace connection error", func(t *testing.T) {
@@ -757,7 +759,7 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 				"channel", "status_info", "message_data", "channel_options", "attachments", "sent_at", "delivered_at",
 				"failed_at", "opened_at", "clicked_at", "bounced_at", "complained_at",
 				"unsubscribed_at", "created_at", "updated_at",
-			"veridian_sender_email", "veridian_profile_id", "veridian_message_type",
+				"veridian_sender_email", "veridian_profile_id", "veridian_message_type", "bounce_type",
 			}).AddRow(
 				message.ID,
 				message.ExternalID,
@@ -785,7 +787,8 @@ func TestMessageHistoryRepository_GetByContact(t *testing.T) {
 				message.UpdatedAt,
 				"robert.brunon@messagerie-nord-776.fr", // veridian_sender_email
 				"5eb51181-7321-4b63-8c9c-bf2df154a889", // veridian_profile_id
-				"", // veridian_message_type (NULL -> chaine vide par COALESCE)
+				"",                                     // veridian_message_type (NULL -> chaine vide par COALESCE)
+				"",                                     // bounce_type
 			))
 
 		// Call with negative limit and offset
@@ -3514,7 +3517,6 @@ func TestMessageHistoryRepository_FindContactEmailByMessageID(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
-
 
 // Constat 06/10/2026 : le NDR cite `uuid@domaine`, message_history.id vaut
 // `robertbrunon_<uuid>`. Le rapprochement exact ne trouvait rien et bounced_at restait

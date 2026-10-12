@@ -32,6 +32,12 @@ func veridianAllowAutomationSend(t *testing.T, env *veridianThrottleTestEnv, aut
 		Return(&domain.Automation{ID: automationID, Status: domain.AutomationStatusLive}, nil).
 		AnyTimes()
 	replyRepo.EXPECT().HasReplied(gomock.Any(), "ws-1", contactEmail).Return(false, nil).AnyTimes()
+	// Porte « premier mail livre » (veridian_first_mail_gate.go) : lit l'historique du contact.
+	// Repli declare EN DERNIER (gomock prend la premiere attente non epuisee) : un test qui
+	// attend un historique precis doit declarer le sien AVANT d'appeler ce helper, en AnyTimes.
+	env.mockMessageHistoryRepo.EXPECT().
+		GetByContact(gomock.Any(), "ws-1", gomock.Any(), contactEmail, gomock.Any(), gomock.Any()).
+		Return(nil, 0, nil).AnyTimes()
 	env.worker.SetAutomationSendGuard(automationRepo, contactListRepo, replyRepo)
 }
 
@@ -355,12 +361,12 @@ func TestEmailQueueWorker_SequenceContinuity_KeepsAnchorWhenAvailable_EvenIfCapp
 	)
 
 	entry := veridianTestAutomationEntry("relance1", "automation-1", "lead@gmail.com", "hello@nord-propre.example")
-	veridianAllowAutomationSend(t, env, "automation-1", "lead@gmail.com")
 
 	j0SentAt := time.Now().Add(-4 * 24 * time.Hour)
 	env.mockMessageHistoryRepo.EXPECT().
 		GetByContact(gomock.Any(), "ws-1", gomock.Any(), "lead@gmail.com", gomock.Any(), 0).
-		Return(veridianTestSequenceHistory("automation-1", "lead@gmail.com", "nord", "hello@nord-propre.example", j0SentAt), 1, nil)
+		Return(veridianTestSequenceHistory("automation-1", "lead@gmail.com", "nord", "hello@nord-propre.example", j0SentAt), 1, nil).AnyTimes()
+	veridianAllowAutomationSend(t, env, "automation-1", "lead@gmail.com")
 
 	// L'ancre (nord) a encore envoyé il y a moins de 48h → disponible.
 	env.mockMessageHistoryRepo.EXPECT().
@@ -396,12 +402,12 @@ func TestEmailQueueWorker_SequenceContinuity_SwitchesWhenAnchorUnavailable48h(t 
 	)
 
 	entry := veridianTestAutomationEntry("relance1", "automation-1", "lead@gmail.com", "hello@nord-propre.example")
-	veridianAllowAutomationSend(t, env, "automation-1", "lead@gmail.com")
 
 	j0SentAt := time.Now().Add(-10 * 24 * time.Hour)
 	env.mockMessageHistoryRepo.EXPECT().
 		GetByContact(gomock.Any(), "ws-1", gomock.Any(), "lead@gmail.com", gomock.Any(), 0).
-		Return(veridianTestSequenceHistory("automation-1", "lead@gmail.com", "nord", "hello@nord-propre.example", j0SentAt), 1, nil)
+		Return(veridianTestSequenceHistory("automation-1", "lead@gmail.com", "nord", "hello@nord-propre.example", j0SentAt), 1, nil).AnyTimes()
+	veridianAllowAutomationSend(t, env, "automation-1", "lead@gmail.com")
 
 	// nord n'a RIEN envoyé depuis plus de 48h → indisponible.
 	env.mockMessageHistoryRepo.EXPECT().

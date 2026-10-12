@@ -311,6 +311,13 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	if w.veridianProcessTransactionalEntry(workspace, entry) {
 		return
 	}
+	// Veridian fork (12/10/2026) : une relance ne part pas si le premier mail (J0) de la
+	// meme automation n'a jamais ete livre a ce contact (echec, rebond dur, refus de
+	// politique, aucun J0). Le contact sort de la sequence, la raison est journalisee.
+	// Un rebond mou ne sort personne. Cf. veridian_first_mail_gate.go.
+	if !w.veridianFirstMailGate(workspace, entry) {
+		return
+	}
 	// Get the ASSIGNED integration (resolved at enqueue). It may be replaced
 	// below by a sibling from the rotation pool if it has no room — cf. the
 	// pool failover block right after recipient classification.
