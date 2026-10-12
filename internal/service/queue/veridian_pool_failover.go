@@ -53,7 +53,7 @@ import (
 // domaine. 48h : largement plus qu'un simple plafond journalier (qui se lève
 // au prochain minuit), mais assez court pour ne pas laisser une séquence
 // bloquée des jours sur une infra réellement morte.
-const veridianSequenceAnchorUnavailableAfter = 48 * time.Hour
+const veridianSequenceAnchorUnavailableAfter = 7 * 24 * time.Hour
 
 // veridianSequenceAnchorLookupLimit borne l'historique du contact scanné pour
 // retrouver le premier envoi de l'automation courante. Une séquence cold a au

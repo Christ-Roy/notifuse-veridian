@@ -540,6 +540,13 @@ type WorkspaceSettings struct {
 	VeridianAntiHashEnabled     *bool `json:"veridian_anti_hash_enabled,omitempty"`
 	VeridianAntiHashWindowHours int   `json:"veridian_anti_hash_window_hours,omitempty"`
 
+	// Veridian fork (12/10/2026) — RELANCES DANS LE FIL. Quand vrai, chaque email
+	// d'automation qui suit un premier envoi au meme contact dans la meme sequence part
+	// avec In-Reply-To (Message-ID du mail precedent), References (chaine complete),
+	// l'objet "Re: <objet du premier mail>". Pointeur : nil ou false = comportement
+	// upstream (mails independants). Cf. internal/service/queue/veridian_thread_followup.go.
+	VeridianThreadFollowups *bool `json:"veridian_thread_followups,omitempty"`
+
 	// Veridian fork — EXCLUSION de classes de provider destinataire par défaut du
 	// workspace (cold outbound). Liste de classes à NE PAS contacter, fallback
 	// quand ni le broadcast ni l'infra ne posent d'exclusion. Niveau le plus

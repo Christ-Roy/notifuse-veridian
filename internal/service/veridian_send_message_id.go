@@ -42,30 +42,40 @@ import (
 // chevrons, que go-mail ajoute) à partir de l'id de message et de l'adresse d'envoi.
 // Retourne "" si non constructible (→ fallback go-mail aléatoire).
 func veridianMessageIDForSend(messageID, fromAddress string) string {
-	id := strings.TrimSpace(messageID)
-	if id == "" {
-		return ""
-	}
-	id = domain.VeridianBareMessageUUID(id)
-	hostDomain := veridianHostFromEmail(fromAddress)
-	if hostDomain == "" {
-		return ""
-	}
-	return id + "@" + hostDomain
+	return domain.VeridianRFCMessageID(messageID, fromAddress)
 }
 
 // veridianHostFromEmail extrait le host (partie après le dernier '@') d'une adresse,
 // en tolérant un format "Display Name <addr@host>". Retourne "" si pas de host.
 func veridianHostFromEmail(raw string) string {
-	s := strings.TrimSpace(raw)
-	if lt := strings.LastIndexByte(s, '<'); lt >= 0 {
-		if gt := strings.IndexByte(s[lt:], '>'); gt >= 0 {
-			s = s[lt+1 : lt+gt]
-		}
-	}
-	at := strings.LastIndexByte(s, '@')
-	if at < 0 || at == len(s)-1 {
+	return domain.VeridianHostFromEmail(raw)
+}
+
+// veridianNormalizeMessageIDHeader met un Message-ID entre chevrons (forme RFC 5322
+// des en-tetes In-Reply-To / References). Retourne "" si la valeur est vide ou
+// contient un espace ou un saut de ligne (jamais d'injection d'en-tete).
+func veridianNormalizeMessageIDHeader(id string) string {
+	id = strings.TrimSpace(id)
+	id = strings.TrimPrefix(id, "<")
+	id = strings.TrimSuffix(id, ">")
+	if id == "" || strings.ContainsAny(id, " \t\r\n<>") {
 		return ""
 	}
-	return strings.TrimSpace(s[at+1:])
+	return "<" + id + ">"
+}
+
+// veridianReferencesHeader assemble la chaine References (identifiants separes par un
+// espace, dans l'ordre donne, sans doublon). Retourne "" si aucun identifiant valide.
+func veridianReferencesHeader(ids []string) string {
+	seen := make(map[string]bool, len(ids))
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		n := veridianNormalizeMessageIDHeader(id)
+		if n == "" || seen[n] {
+			continue
+		}
+		seen[n] = true
+		parts = append(parts, n)
+	}
+	return strings.Join(parts, " ")
 }

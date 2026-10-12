@@ -5685,3 +5685,18 @@ func TestWorkspaceSettings_VeridianDecisionLogLevel_JSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"veridian_decision_log_level":"bogus"}`), &empty))
 	assert.Equal(t, VeridianDecisionLogTransitions, VeridianNormalizeDecisionLogLevel(empty.VeridianDecisionLogLevel))
 }
+
+func TestWorkspaceSettings_VeridianThreadFollowups_JSONRoundTrip(t *testing.T) {
+	on := true
+	raw, err := json.Marshal(WorkspaceSettings{Timezone: "UTC", VeridianThreadFollowups: &on})
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"veridian_thread_followups":true`)
+	var decoded WorkspaceSettings
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	require.NotNil(t, decoded.VeridianThreadFollowups)
+	assert.True(t, *decoded.VeridianThreadFollowups)
+
+	raw, err = json.Marshal(WorkspaceSettings{Timezone: "UTC"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "veridian_thread_followups")
+}

@@ -75,3 +75,37 @@ func VeridianReconstructStoredMessageID(workspaceID, messageID string) string {
 	}
 	return workspaceID + "_" + messageID
 }
+
+// VeridianRFCMessageID reconstruit la valeur du header Message-ID RFC822 d'un envoi
+// (SANS chevrons) a partir de l'id de message_history et de l'adresse emettrice :
+// `<uuid nu>@<domaine de l'adresse>`. C'est la regle UNIQUE de l'envoi
+// (internal/service.veridianMessageIDForSend la delegue ici) et du fil des relances
+// (queue.veridianThreadContext, qui retrouve le Message-ID d'un mail deja parti sans
+// avoir a le stocker a part). Retourne "" si l'id ou le domaine manque.
+func VeridianRFCMessageID(messageID, fromAddress string) string {
+	id := strings.TrimSpace(messageID)
+	if id == "" {
+		return ""
+	}
+	host := VeridianHostFromEmail(fromAddress)
+	if host == "" {
+		return ""
+	}
+	return VeridianBareMessageUUID(id) + "@" + host
+}
+
+// VeridianHostFromEmail extrait le host (partie apres le dernier '@') d'une adresse,
+// en tolerant un format "Display Name <addr@host>". Retourne "" si pas de host.
+func VeridianHostFromEmail(raw string) string {
+	s := strings.TrimSpace(raw)
+	if lt := strings.LastIndexByte(s, '<'); lt >= 0 {
+		if gt := strings.IndexByte(s[lt:], '>'); gt >= 0 {
+			s = s[lt+1 : lt+gt]
+		}
+	}
+	at := strings.LastIndexByte(s, '@')
+	if at < 0 || at == len(s)-1 {
+		return ""
+	}
+	return strings.TrimSpace(s[at+1:])
+}

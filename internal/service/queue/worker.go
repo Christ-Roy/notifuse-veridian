@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -466,6 +467,12 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
+	// Veridian fork (12/10/2026) : une relance de sequence part DANS LE FIL du premier
+	// mail (In-Reply-To, References, "Re: <objet du premier mail>"), quand le workspace
+	// l'a demande. Apres le rendu (qui fixe l'objet) et le choix du profil (qui fixe
+	// l'expediteur). Cf. veridian_thread_followup.go.
+	w.veridianApplyThreading(workspace, entry)
+
 	// Veridian fork: ANTI-HASH residual net (cold outbound). Best-effort,
 	// LOG-ONLY filet : la variété est garantie à l'enqueue (re-spin) ; ce gate ne
 	// fait que CONSTATER + TRACER une collision résiduelle (template sans spintax)
@@ -716,6 +723,15 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		VeridianProviderClass: entry.Payload.VeridianProviderClass,
 		// V56: exact integration/profile attribution for daily caps and usage.
 		VeridianProfileID: entry.IntegrationID,
+	}
+
+	// Veridian fork (12/10/2026) : l'objet reellement envoye est consigne pour que les
+	// relances d'une sequence puissent reprendre "Re: <objet du premier mail>" sans
+	// re-rendre un modele qui aurait pu changer. Automations seulement.
+	if entry.SourceType == domain.EmailQueueSourceAutomation && sendErr == nil && strings.TrimSpace(entry.Payload.Subject) != "" {
+		message.MessageData.Metadata = map[string]interface{}{
+			veridianMetadataSubjectKey: entry.Payload.Subject,
+		}
 	}
 
 	// Lot 4 : un mail transactionnel n'est pas attribue a une adresse emettrice ni a

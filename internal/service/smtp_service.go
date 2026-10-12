@@ -456,6 +456,17 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 		}
 	}
 
+	// === Veridian (12/10/2026) === FIL DE CONVERSATION des relances de sequence.
+	// In-Reply-To = Message-ID du mail precedent envoye a ce contact, References = la
+	// chaine complete. Sans eux, le client du prospect (Gmail, Outlook, Apple Mail)
+	// range chaque relance dans une conversation separee. Vides = rien n'est pose.
+	if irt := veridianNormalizeMessageIDHeader(request.EmailOptions.InReplyTo); irt != "" {
+		msg.SetGenHeader("In-Reply-To", irt)
+	}
+	if refs := veridianReferencesHeader(request.EmailOptions.References); refs != "" {
+		msg.SetGenHeader("References", refs)
+	}
+
 	// === Veridian cold (conformité client mail, 2026-06-15) ===
 	// Pas de header custom X-Message-ID sur le chemin SMTP : un vrai client mail
 	// (Thunderbird/Apple Mail) n'en pose pas — c'est un tell de machine. Le

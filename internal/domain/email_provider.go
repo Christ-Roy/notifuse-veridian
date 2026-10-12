@@ -547,6 +547,15 @@ type EmailOptions struct {
 	ReplyTo            string       `json:"reply_to,omitempty"`
 	Attachments        []Attachment `json:"attachments,omitempty"`
 	ListUnsubscribeURL string       `json:"list_unsubscribe_url,omitempty"` // RFC-8058 one-click unsubscribe URL
+
+	// Veridian fork (12/10/2026) : fil de conversation d'une relance de sequence.
+	// InReplyTo = Message-ID RFC822 (avec chevrons) du mail precedent envoye a ce
+	// contact dans la meme sequence ; References = la chaine complete, du premier
+	// mail au precedent. Vides = pas de fil (comportement upstream). Pose par le
+	// worker de file (cf. internal/service/queue/veridian_thread_followup.go), lu
+	// par le transport SMTP uniquement.
+	InReplyTo  string   `json:"in_reply_to,omitempty"`
+	References []string `json:"references,omitempty"`
 }
 
 // IsEmpty returns true if no email options are set
@@ -556,7 +565,9 @@ func (eo EmailOptions) IsEmpty() bool {
 		eo.SubjectPreview == nil &&
 		len(eo.CC) == 0 &&
 		len(eo.BCC) == 0 &&
-		eo.ReplyTo == ""
+		eo.ReplyTo == "" &&
+		eo.InReplyTo == "" &&
+		len(eo.References) == 0
 }
 
 // ToChannelOptions converts EmailOptions to ChannelOptions for storage

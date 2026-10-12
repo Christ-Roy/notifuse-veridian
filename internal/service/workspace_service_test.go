@@ -1285,6 +1285,48 @@ func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
 		// Cold outreach sauve l'exclusion sans la persister).
 		assert.Equal(t, []string{"microsoft"}, saved.Settings.VeridianExcludedProviderClasses)
 	})
+
+	// Relances dans le fil (12/10/2026) : le reglage est persiste quand il est fourni, et une
+	// sauvegarde de la console qui ne le porte pas ne le remet pas a zero.
+	t.Run("persists and preserves veridian thread followups", func(t *testing.T) {
+		on := true
+		existing := &domain.Workspace{
+			ID:       workspaceID,
+			Name:     "WS",
+			Settings: domain.WorkspaceSettings{Timezone: "UTC", VeridianThreadFollowups: &on},
+		}
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(ctx, &domain.User{ID: userID}, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).
+			Return(&domain.UserWorkspace{UserID: userID, WorkspaceID: workspaceID, Role: "owner"}, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existing, nil)
+		var saved *domain.Workspace
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(
+			func(_ context.Context, w *domain.Workspace) error { saved = w; return nil })
+
+		_, err := service.UpdateWorkspace(ctx, workspaceID, "WS", domain.WorkspaceSettings{
+			Timezone: "UTC", DefaultLanguage: "en", Languages: []string{"en"},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, saved.Settings.VeridianThreadFollowups)
+		assert.True(t, *saved.Settings.VeridianThreadFollowups, "absent de la requete = inchange")
+
+		off := false
+		existing2 := &domain.Workspace{ID: workspaceID, Name: "WS", Settings: domain.WorkspaceSettings{Timezone: "UTC", VeridianThreadFollowups: &on}}
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).
+			Return(ctx, &domain.User{ID: userID}, nil, nil)
+		mockRepo.EXPECT().GetUserWorkspace(ctx, userID, workspaceID).
+			Return(&domain.UserWorkspace{UserID: userID, WorkspaceID: workspaceID, Role: "owner"}, nil)
+		mockRepo.EXPECT().GetByID(ctx, workspaceID).Return(existing2, nil)
+		mockRepo.EXPECT().Update(ctx, gomock.Any()).DoAndReturn(
+			func(_ context.Context, w *domain.Workspace) error { saved = w; return nil })
+		_, err = service.UpdateWorkspace(ctx, workspaceID, "WS", domain.WorkspaceSettings{
+			Timezone: "UTC", DefaultLanguage: "en", Languages: []string{"en"}, VeridianThreadFollowups: &off,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, saved.Settings.VeridianThreadFollowups)
+		assert.False(t, *saved.Settings.VeridianThreadFollowups, "false explicite = desactive")
+	})
 }
 
 func TestWorkspaceService_DeleteWorkspace(t *testing.T) {

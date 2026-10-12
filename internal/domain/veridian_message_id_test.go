@@ -123,3 +123,18 @@ func TestVeridianMessageIDRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestVeridianRFCMessageID(t *testing.T) {
+	const u = "fc75fbbd-05d3-4938-b722-59388edcf803"
+	assert.Equal(t, u+"@messagerie-nord-776.fr", VeridianRFCMessageID("coldtunnel_"+u, "robert.brunon@messagerie-nord-776.fr"))
+	assert.Equal(t, u+"@agence-veridian.fr", VeridianRFCMessageID(u, `"Robert" <r.brunon@agence-veridian.fr>`))
+	assert.Equal(t, "", VeridianRFCMessageID("", "a@b.fr"))
+	assert.Equal(t, "", VeridianRFCMessageID(u, "sans-arobase"))
+}
+
+func TestVeridianHostFromEmail(t *testing.T) {
+	assert.Equal(t, "exemple.fr", VeridianHostFromEmail(" a@exemple.fr "))
+	assert.Equal(t, "exemple.fr", VeridianHostFromEmail("Nom <a@exemple.fr>"))
+	assert.Equal(t, "", VeridianHostFromEmail("a@"))
+	assert.Equal(t, "", VeridianHostFromEmail(""))
+}

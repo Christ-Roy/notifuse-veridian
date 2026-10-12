@@ -2218,3 +2218,9 @@ func TestEmailProviderVeridianReturnIMAPAndPausedRoundTripJSON(t *testing.T) {
 	assert.NotContains(t, string(empty), "veridian_return_imap_integration_id", "omitempty : aucune migration, aucun bruit")
 	assert.NotContains(t, string(empty), "veridian_paused")
 }
+
+func TestEmailOptions_IsEmpty_ThreadHeaders(t *testing.T) {
+	assert.True(t, EmailOptions{}.IsEmpty())
+	assert.False(t, EmailOptions{InReplyTo: "a@b.fr"}.IsEmpty())
+	assert.False(t, EmailOptions{References: []string{"a@b.fr"}}.IsEmpty())
+}

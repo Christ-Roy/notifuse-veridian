@@ -74,3 +74,16 @@ func TestVeridianHostFromEmail(t *testing.T) {
 	assert.Equal(t, "", veridianHostFromEmail("user@"))
 	assert.Equal(t, "", veridianHostFromEmail(""))
 }
+
+func TestVeridianNormalizeMessageIDHeader(t *testing.T) {
+	assert.Equal(t, "<a@b.fr>", veridianNormalizeMessageIDHeader("a@b.fr"))
+	assert.Equal(t, "<a@b.fr>", veridianNormalizeMessageIDHeader(" <a@b.fr> "))
+	assert.Equal(t, "", veridianNormalizeMessageIDHeader(""))
+	assert.Equal(t, "", veridianNormalizeMessageIDHeader("a@b.fr\r\nBcc: x@y.fr"), "jamais d'injection d'en-tete")
+	assert.Equal(t, "", veridianNormalizeMessageIDHeader("deux mots"))
+}
+
+func TestVeridianReferencesHeader(t *testing.T) {
+	assert.Equal(t, "<a@b.fr> <c@d.fr>", veridianReferencesHeader([]string{"a@b.fr", "<c@d.fr>", "a@b.fr", "", "x y"}))
+	assert.Equal(t, "", veridianReferencesHeader(nil))
+}

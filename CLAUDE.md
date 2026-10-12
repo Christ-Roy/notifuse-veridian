@@ -157,6 +157,7 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 - `60` capacité d'un profil (lot 6) : somme des capacités par classe destinataire bornée par chauffe et stock, barre empilée console, CLI agent
 - `62` « pourquoi ça n'envoie pas » (lot 1 de 59, V62) : raison de report persistée sur `email_queue`, verdicts de gates (valeur, limite), journal des décisions borné, `queue.explain` / `decisions.list` / `queue.recompute`, CLI `queue:explain` `logs:decisions`, page File d'envoi, « completed » honnête, orphelins `sending`
 - `64` garde réseau partagée (`pkg/netguard`) pour SMTP, IMAP, endpoint SparkPost ; liste d'exceptions explicite (relais IMAP 993 en Tailscale) ; `InsecureSkipVerify` des tâches retiré ; garde `prod-residue` de l'E2E prod
+- `65` relances dans le fil du premier mail : réglage workspace `veridian_thread_followups`, In-Reply-To / References / `Re: <objet du premier mail>`, ancre d expéditeur tenue 7 jours (le week-end la lâchait), objet consigné dans `message_data.metadata`
 
 **Cold outbound — UI console & self-service**
 - `06` UI console — section Settings « Cold outreach »

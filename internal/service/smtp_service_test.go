@@ -2377,3 +2377,52 @@ func TestSMTPSend_AllowlistedRelayIsReached(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "refusing to connect")
 }
+
+// Veridian (12/10/2026) : une relance de sequence porte In-Reply-To et References, sinon le
+// client du prospect la range dans une conversation separee.
+func TestSMTPService_SendEmail_VeridianThreadHeaders(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID:   "workspace-123",
+		IntegrationID: "integration-123",
+		MessageID:     "44444444-4444-4444-4444-444444444444",
+		FromAddress:   "robert.brunon@messagerie-nord-776.fr",
+		FromName:      "Robert Brunon",
+		To:            "prospect@acme.fr",
+		Subject:       "Re: Une question",
+		Content:       "<p>Hello</p>",
+		Provider: &domain.EmailProvider{
+			Kind: domain.EmailProviderKindSMTP,
+			SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false},
+		},
+		EmailOptions: domain.EmailOptions{
+			InReplyTo: "22222222-2222-2222-2222-222222222222@messagerie-nord-776.fr",
+			References: []string{
+				"11111111-1111-1111-1111-111111111111@messagerie-nord-776.fr",
+				"<22222222-2222-2222-2222-222222222222@messagerie-nord-776.fr>",
+			},
+		},
+	}
+	require.NoError(t, service.SendEmail(context.Background(), request))
+
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	// go-mail replie les en-tetes longs (RFC 5322 : retour a la ligne + espace) : on les remet
+	// a plat avant de comparer.
+	data := strings.Join(strings.Fields(string(messages[0].data)), " ")
+	assert.Contains(t, data, "In-Reply-To: <22222222-2222-2222-2222-222222222222@messagerie-nord-776.fr>")
+	assert.Contains(t, data, "References: <11111111-1111-1111-1111-111111111111@messagerie-nord-776.fr> <22222222-2222-2222-2222-222222222222@messagerie-nord-776.fr>")
+	assert.Contains(t, data, "Subject: Re: Une question")
+	assert.Contains(t, data, "Message-ID: <44444444-4444-4444-4444-444444444444@messagerie-nord-776.fr>")
+
+	// Premier mail : aucun des deux en-tetes.
+	request.EmailOptions = domain.EmailOptions{}
+	require.NoError(t, service.SendEmail(context.Background(), request))
+	messages = server.GetMessages()
+	last := strings.Join(strings.Fields(string(messages[len(messages)-1].data)), " ")
+	assert.NotContains(t, last, "In-Reply-To:")
+	assert.NotContains(t, last, "References:")
+}

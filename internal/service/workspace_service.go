@@ -451,6 +451,11 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.VeridianJitterPct = settings.VeridianJitterPct
 	existingWorkspace.Settings.VeridianAntiHashEnabled = settings.VeridianAntiHashEnabled
 	existingWorkspace.Settings.VeridianAntiHashWindowHours = settings.VeridianAntiHashWindowHours
+	// Relances dans le fil (12/10/2026) : absent de la console, une sauvegarde qui ne le
+	// porte pas ne doit pas le remettre a zero.
+	if settings.VeridianThreadFollowups != nil {
+		existingWorkspace.Settings.VeridianThreadFollowups = settings.VeridianThreadFollowups
+	}
 	existingWorkspace.Settings.VeridianExcludedProviderClasses = settings.VeridianExcludedProviderClasses
 
 	// Handle template blocks - preserve existing blocks if not provided in update
