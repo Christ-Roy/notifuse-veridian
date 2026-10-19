@@ -48,14 +48,17 @@ func veridianResolveCapLimits(
 	lim.Warmup = veridianWarmupCap(workspace, provider, now)
 	lim.Profile = provider.VeridianEffectiveProfileDailyCap()
 	lim.PerSender = veridianResolvePerSenderCap(workspace, provider, entry)
-	if len(classCaps) > 0 && classOf != nil {
+	// 19/10 : plus de garde sur la table (aucune classe sans plafond, cf.
+	// domain/veridian_class_defaults.go) ; la classification n'est évitée que si la
+	// porte n'a pas de classe à fournir (classOf nil).
+	if (veridianClassDefaultsEnabled || len(classCaps) > 0) && classOf != nil {
 		lim.Class = classOf()
 		if factorOf != nil {
 			if f := factorOf(lim.Class); f > 1 {
 				lim.Factor = f
 			}
 		}
-		if configured, ok := domain.VeridianCapForClass(classCaps, lim.Class); ok && configured > 0 {
+		if configured, ok := veridianCapForClass(classCaps, lim.Class); ok && configured > 0 {
 			lim.ClassBase = configured
 			lim.ClassCap = veridianSlowCap(configured, lim.Factor)
 		}
@@ -66,7 +69,7 @@ func veridianResolveCapLimits(
 // veridianEffectiveClassRate donne le débit par minute d'une classe après le
 // ralentissement du fusible. 0 = classe non bridée (aucun débit configuré).
 func veridianEffectiveClassRate(rates map[string]float64, class string, factor int) float64 {
-	base, ok := domain.VeridianRateForClass(rates, class)
+	base, ok := veridianRateForClass(rates, class)
 	if !ok || base <= 0 {
 		return 0
 	}
@@ -79,6 +82,6 @@ func veridianEffectiveClassRate(rates map[string]float64, class string, factor i
 // veridianRateConfigured : débit brut configuré pour la classe (héritage des
 // classes filles inclus), 0 si aucune entrée. Sert à l'affichage du plan.
 func veridianRateConfigured(rates map[string]float64, class string) float64 {
-	v, _ := domain.VeridianRateForClass(rates, class)
+	v, _ := veridianRateForClass(rates, class)
 	return v
 }

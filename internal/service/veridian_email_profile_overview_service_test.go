@@ -145,7 +145,10 @@ func TestBuildVeridianEmailProfilesOverview(t *testing.T) {
 	assert.Equal(t, 50, out.Totals.TransactionalSentToday)
 	assert.Equal(t, 1, out.Totals.PausedProfiles)
 	assert.Equal(t, 2, out.Totals.ActiveCommercialProfiles)
-	assert.Nil(t, out.Totals.CommercialCapacityToday, "relai2 n'a aucun plafond : la capacité totale est inconnue, pas 40")
+	// 19/10 : aucune classe n'est sans plafond (défauts serveur), relai2 a donc une capacité
+	// connue (somme des plafonds de classe par défaut) : le total n'est plus « inconnu ».
+	require.NotNil(t, out.Totals.CommercialCapacityToday, "relai2 est borné par les plafonds de classe par défaut")
+	assert.Greater(t, *out.Totals.CommercialCapacityToday, 40)
 	assert.Empty(t, out.UsageConflicts)
 	assert.Equal(t, "2026-10-08", out.Date)
 

@@ -118,6 +118,10 @@ function useClassLabel(): (c: VeridianProviderClass) => string {
         return 'Scaleway / Online'
       case 'website_builder':
         return t`Website builders`
+      case 'zoho':
+        return t`Zoho Mail`
+      case 'proton':
+        return t`Proton Mail`
     }
   }
 }

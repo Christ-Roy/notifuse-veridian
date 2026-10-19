@@ -126,6 +126,23 @@ var veridianMXPatternTable = []veridianMXPatternEntry{
 	{".clean-mailbox.com", ProviderClassSecurityGateway},
 	{".fireeyecloud.com", ProviderClassSecurityGateway},
 	{".mailprotect.be", ProviderClassSecurityGateway},
+	// Passerelles ajoutées le 19/10/2026 (observées sur les ~3 550 domaines du
+	// workspace alliancequalipro + noms usuels du marché).
+	{".antispameurope.com", ProviderClassSecurityGateway}, // Retarus / Hornetsecurity EU
+	{".iantispam.one-system.fr", ProviderClassSecurityGateway},
+	{".antispam.xefi.fr", ProviderClassSecurityGateway},
+	{".xefi.fr", ProviderClassSecurityGateway},    // MX XEFI = filtre anti-spam hébergé
+	{".xsalto.net", ProviderClassSecurityGateway}, // grey-mx.xsalto.net
+	{".ipgarde.com", ProviderClassSecurityGateway},
+	{".cleanmail.eu", ProviderClassSecurityGateway},
+	{".iantispam.fr", ProviderClassSecurityGateway},
+	{".neptune.fr", ProviderClassSecurityGateway},      // pmg*.neptune.fr (Proxmox Mail Gateway)
+	{".mailcontrol.com", ProviderClassSecurityGateway}, // Forcepoint
+	{".fortimailcloud.com", ProviderClassSecurityGateway},
+	{".mailguard.com.au", ProviderClassSecurityGateway},
+	{".spamh.com", ProviderClassSecurityGateway}, // SpamHero
+	{".proofpoint.eu", ProviderClassSecurityGateway},
+	{".agari.com", ProviderClassSecurityGateway},
 
 	// --- Google (Gmail public + Workspace). ---
 	{".google.com", ProviderClassGoogle},     // aspmx.l.google.com, alt*.aspmx.l.google.com, smtp.google.com
@@ -150,10 +167,14 @@ var veridianMXPatternTable = []veridianMXPatternEntry{
 	{".ionos.co.uk", ProviderClassIonos},
 	{".kundenserver.de", ProviderClassIonos}, // 1&1/IONOS historique
 	{".1and1.com", ProviderClassIonos},
+	{".1and1.fr", ProviderClassIonos},
+	{".perfora.net", ProviderClassIonos}, // IONOS / 1&1 (mx00.1and1.fr -> perfora.net selon l'époque)
 	{".1und1.de", ProviderClassIonos},
 
 	// --- Yahoo / AOL. ---
 	{".yahoodns.net", ProviderClassYahooAol}, // mta*.am0.yahoodns.net
+	{".yahoo.com", ProviderClassYahooAol},
+	{".aol.com", ProviderClassYahooAol},
 
 	// --- FAI / freemail français (host MX, pas le suffixe d'adresse). ---
 	{".orange.fr", ProviderClassFreemailFR}, // smtp-in.orange.fr
@@ -161,6 +182,13 @@ var veridianMXPatternTable = []veridianMXPatternEntry{
 	{".free.fr", ProviderClassFreemailFR}, // mx1.free.fr
 	{".laposte.net", ProviderClassFreemailFR},
 	{".bbox.fr", ProviderClassFreemailFR},
+	{".wanadoo.fr", ProviderClassFreemailFR}, // Orange historique
+	{".orange-business.com", ProviderClassFreemailFR},
+	{".neuf.fr", ProviderClassFreemailFR},
+	{".numericable.fr", ProviderClassFreemailFR},
+	{".laposte.fr", ProviderClassFreemailFR},
+	{".sfr.net", ProviderClassFreemailFR},
+	{".altice.net", ProviderClassFreemailFR},
 
 	// --- iCloud / Apple. ---
 	{".mail.icloud.com", ProviderClassAppleICloud}, // mx0*.mail.icloud.com
@@ -198,14 +226,56 @@ var veridianMXPatternTable = []veridianMXPatternEntry{
 	// --- Autres hébergeurs propres (other_hoster : débit standard, providers à
 	// part entière mais sans politique aussi sensible que Google/MS, et trop
 	// petits pour une classe à eux). ---
-	{".zoho.eu", ProviderClassOtherHoster},
-	{".zoho.com", ProviderClassOtherHoster},
-	{".zoho.in", ProviderClassOtherHoster},
+	{".zoho.eu", ProviderClassZoho},
+	{".zoho.com", ProviderClassZoho},
+	{".zoho.in", ProviderClassZoho},
+	{".zohomail.eu", ProviderClassZoho},
+	{".zohomail.com", ProviderClassZoho},
 	{".amen.fr", ProviderClassOtherHoster},
-	{".protonmail.ch", ProviderClassOtherHoster}, // Proton (rangé other_hoster, pas de classe dédiée)
-	{".proton.me", ProviderClassOtherHoster},
+	{".protonmail.ch", ProviderClassProton},
+	{".proton.me", ProviderClassProton},
 	{".mail.com", ProviderClassOtherHoster},
 	{".one.com", ProviderClassOtherHoster},
+	// Longue traîne observée le 19/10/2026 (mesure sur ~3 550 domaines B2B FR).
+	{".alwaysdata.com", ProviderClassOtherHoster},
+	{".alwaysdata.net", ProviderClassOtherHoster},
+	{".ouvaton.coop", ProviderClassOtherHoster},
+	{".privianet.com", ProviderClassOtherHoster},
+	{".mailo.com", ProviderClassOtherHoster},
+	{".gmx.net", ProviderClassOtherHoster},
+	{".gmx.de", ProviderClassOtherHoster},
+	{".gmx.com", ProviderClassOtherHoster},
+	{".mx.cloudflare.net", ProviderClassOtherHoster}, // Cloudflare Email Routing (redirection)
+	{".privateemail.com", ProviderClassOtherHoster},  // Namecheap
+	{".planethoster.net", ProviderClassOtherHoster},
+	{".mailgun.org", ProviderClassOtherHoster},
+	{".wordpress.com", ProviderClassWebsiteBuilder},
+	{".mymail.eu.com", ProviderClassOtherHoster},
+	{".one-system.fr", ProviderClassOtherHoster},
+	{".lerelaisinternet.com", ProviderClassOtherHoster},
+	{".kyxar.fr", ProviderClassOtherHoster},
+	{".monarobase.net", ProviderClassOtherHoster},
+	{".hosteam.fr", ProviderClassOtherHoster},
+	{".kalitys.fr", ProviderClassOtherHoster},
+	{".galae.net", ProviderClassOtherHoster},
+	{".renater.fr", ProviderClassOtherHoster},
+	{".rzone.de", ProviderClassOtherHoster}, // Strato
+	{".hosteurope.de", ProviderClassOtherHoster},
+	{".stackmail.com", ProviderClassOtherHoster},
+	{".oxcs.net", ProviderClassOtherHoster}, // Open-Xchange cloud
+	{".domainoo.fr", ProviderClassOtherHoster},
+	{".ex-hebergement.fr", ProviderClassOtherHoster},
+	{".mailjet.com", ProviderClassOtherHoster},
+	{".secureserver.net", ProviderClassOtherHoster}, // GoDaddy
+	{".register.it", ProviderClassOtherHoster},
+	{".registrar-servers.com", ProviderClassOtherHoster}, // Namecheap
+	{".yandex.net", ProviderClassOtherHoster},
+	{".yandex.ru", ProviderClassOtherHoster},
+	{".squarespace.com", ProviderClassWebsiteBuilder},
+	{".wix.com", ProviderClassWebsiteBuilder},
+	{".wixmail.com", ProviderClassWebsiteBuilder},
+	{".shopify.com", ProviderClassWebsiteBuilder},
+	{".strikingly.com", ProviderClassWebsiteBuilder},
 }
 
 // classifyMXHost mappe un hostname MX à une classe via la table de patterns
@@ -258,6 +328,8 @@ type VeridianMXClassifier struct {
 	mu    sync.RWMutex
 	cache map[string]veridianMXCacheEntry
 
+	transientFailures atomic.Int64
+
 	now func() time.Time // injectable pour tester l'expiration du cache
 }
 
@@ -305,31 +377,63 @@ func (c *VeridianMXClassifier) ClassifyDomain(ctx context.Context, domain string
 	}
 
 	// 3. Résolution MX, bornée par timeout. Best-effort : tout échec dégrade.
-	class := c.resolveMX(ctx, domain)
+	class, transient := c.resolveMXDetailed(ctx, domain)
 
 	// 4. Mémorise le résultat (y compris le fallback corporate_selfhost : un
 	//    domaine sans MX reconnu ne doit pas re-déclencher un lookup à chaque
-	//    envoi — il restera corporate_selfhost jusqu'au TTL).
-	c.cacheSet(domain, class)
+	//    envoi — il restera corporate_selfhost jusqu'au TTL). 19/10/2026 : un
+	//    ÉCHEC TRANSITOIRE (timeout, SERVFAIL, resolver injoignable) n'est plus
+	//    figé 7 jours : un domaine Google Workspace classé corporate_selfhost à
+	//    cause d'un timeout aurait échappé 7 jours au débit et au plafond de la
+	//    classe google. Il est mémorisé seulement veridianMXTransientTTL.
+	if transient {
+		c.cacheSetTTL(domain, class, veridianMXTransientTTL)
+		c.transientFailures.Add(1)
+	} else {
+		c.cacheSet(domain, class)
+	}
 	return class
 }
+
+// veridianMXTransientTTL : durée de mémorisation d'une classification issue d'un
+// échec DNS transitoire (le domaine sera re-résolu rapidement).
+const veridianMXTransientTTL = 5 * time.Minute
+
+// TransientFailures retourne le nombre d'échecs DNS transitoires rencontrés depuis
+// le démarrage (métrique de santé du classifieur, lue par les logs/observabilité).
+func (c *VeridianMXClassifier) TransientFailures() int64 { return c.transientFailures.Load() }
 
 // resolveMX fait le lookup MX (avec timeout) et mappe le résultat. Best-effort
 // STRICT : NXDOMAIN / timeout / pas de MX / aucun pattern reconnu →
 // corporate_selfhost. Ne retourne JAMAIS d'erreur (le contrat throttle Veridian
 // interdit de bloquer un envoi sur une lecture).
 func (c *VeridianMXClassifier) resolveMX(ctx context.Context, domain string) string {
+	class, _ := c.resolveMXDetailed(ctx, domain)
+	return class
+}
+
+// resolveMXDetailed : comme resolveMX, et dit si le repli est dû à un échec DNS
+// transitoire (donc à ne pas mémoriser longtemps). NXDOMAIN, « pas de MX » et MX
+// non reconnu sont DÉFINITIFS.
+func (c *VeridianMXClassifier) resolveMXDetailed(ctx context.Context, domain string) (string, bool) {
 	lookupCtx, cancel := context.WithTimeout(ctx, veridianMXLookupTimeout)
 	defer cancel()
 
 	hosts, err := c.resolver.LookupMXHosts(lookupCtx, domain)
-	if err != nil || len(hosts) == 0 {
-		return ProviderClassCorporateSelfhost
+	if err != nil {
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+			return ProviderClassCorporateSelfhost, false
+		}
+		return ProviderClassCorporateSelfhost, true
+	}
+	if len(hosts) == 0 {
+		return ProviderClassCorporateSelfhost, false
 	}
 	if class, ok := classifyMXHosts(hosts); ok {
-		return class
+		return class, false
 	}
-	return ProviderClassCorporateSelfhost
+	return ProviderClassCorporateSelfhost, false
 }
 
 func (c *VeridianMXClassifier) cacheGet(domain string) (string, bool) {
@@ -347,6 +451,10 @@ func (c *VeridianMXClassifier) cacheGet(domain string) (string, bool) {
 }
 
 func (c *VeridianMXClassifier) cacheSet(domain, class string) {
+	c.cacheSetTTL(domain, class, c.ttl)
+}
+
+func (c *VeridianMXClassifier) cacheSetTTL(domain, class string, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -362,7 +470,7 @@ func (c *VeridianMXClassifier) cacheSet(domain, class string) {
 		}
 	}
 
-	c.cache[domain] = veridianMXCacheEntry{class: class, expiresAt: c.now().Add(c.ttl)}
+	c.cache[domain] = veridianMXCacheEntry{class: class, expiresAt: c.now().Add(ttl)}
 }
 
 // evictExpiredLocked supprime toutes les entrées dont le TTL est dépassé.

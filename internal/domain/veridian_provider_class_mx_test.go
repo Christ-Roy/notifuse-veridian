@@ -102,8 +102,8 @@ func TestClassifyMXHost(t *testing.T) {
 		{"messagelabs", "cluster.eu.messagelabs.com", ProviderClassSecurityGateway},
 
 		// Other hosters
-		{"zoho", "mx.zoho.eu", ProviderClassOtherHoster},
-		{"proton", "mail.protonmail.ch", ProviderClassOtherHoster},
+		{"zoho", "mx.zoho.eu", ProviderClassZoho},
+		{"proton", "mail.protonmail.ch", ProviderClassProton},
 		{"amen", "mx1.amen.fr", ProviderClassOtherHoster},
 
 		// Classes fines (2026-10-10), sorties d'other_hoster
@@ -299,7 +299,7 @@ func TestMXClassifier_NilResolverUsesNetDefault(t *testing.T) {
 // oubli d'ajout dans le set ou la liste).
 func TestVeridianAllProviderClasses_Canonical(t *testing.T) {
 	all := VeridianAllProviderClasses()
-	require.Len(t, all, 18, "18 classes attendues (5 historiques + 6 MX + 7 classes fines)")
+	require.Len(t, all, 20, "20 classes attendues (5 historiques + 6 MX + 9 classes fines)")
 	seen := map[string]bool{}
 	for _, c := range all {
 		assert.True(t, IsValidProviderClass(c), "classe %q non valide", c)
@@ -549,8 +549,9 @@ func TestFineClasses_InheritOtherHosterLimits(t *testing.T) {
 	}
 	r, _ := VeridianRateForClass(map[string]float64{ProviderClassOtherHoster: 3, ProviderClassGandi: 1}, ProviderClassGandi)
 	assert.Equal(t, 1.0, r)
-	_, ok := VeridianRateForClass(rates, ProviderClassGoogle)
-	assert.False(t, ok)
+	g, ok := VeridianRateForClass(rates, ProviderClassGoogle)
+	assert.True(t, ok)
+	assert.Equal(t, VeridianDefaultRateForClass(ProviderClassGoogle), g, "classe sans entrée : défaut serveur")
 	ex := VeridianResolveExcludedClasses(nil, &EmailProvider{VeridianExcludedProviderClasses: []string{ProviderClassOtherHoster}}, nil)
 	assert.True(t, ex[ProviderClassOtherHoster])
 	assert.True(t, ex[ProviderClassGandi])

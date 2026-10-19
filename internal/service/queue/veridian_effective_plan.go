@@ -147,12 +147,16 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 		plan.ClassRatesSource = "profile"
 	case len(ws.Settings.VeridianProviderClassRates) > 0:
 		plan.ClassRatesSource = "workspace"
+	default:
+		plan.ClassRatesSource = "default"
 	}
 	switch {
 	case len(provider.VeridianProviderClassDailyCap) > 0:
 		plan.ClassCapsSource = "profile"
 	case len(ws.Settings.VeridianProviderClassDailyCap) > 0:
 		plan.ClassCapsSource = "workspace"
+	default:
+		plan.ClassCapsSource = "default"
 	}
 	excluded := domain.VeridianResolveExcludedClasses(ws, provider, entry)
 	for class := range excluded {

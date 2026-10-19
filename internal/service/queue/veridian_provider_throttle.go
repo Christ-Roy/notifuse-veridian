@@ -74,7 +74,9 @@ func (w *EmailQueueWorker) veridianProviderClassGate(workspace *domain.Workspace
 // (consommer un jeton pour un envoi qui n'aura pas lieu priverait une autre entrée).
 func (w *EmailQueueWorker) veridianProviderClassGateVerdict(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry, consume bool) veridianGateVerdict {
 	rates := veridianResolveProviderClassRates(workspace, provider, entry)
-	if len(rates) == 0 {
+	// 19/10 : une table vide n'est plus un no-op, la classe reçoit son débit par
+	// défaut serveur (veridianRateForClass), sauf dans le TestMain historique.
+	if len(rates) == 0 && !veridianClassDefaultsEnabled {
 		return veridianPassVerdict(domain.VeridianGateClassRate, nil, nil, "", "no class rate configured")
 	}
 
@@ -195,5 +197,13 @@ func (w *EmailQueueWorker) veridianClassifyRecipient(entry *domain.EmailQueueEnt
 	if w.providerMXClassifier != nil {
 		return w.providerMXClassifier.ClassifyEmail(w.ctx, entry.ContactEmail)
 	}
+	// Repli suffixe seul : les domaines custom (Google Workspace, M365, OVH...) tombent
+	// en « corporate » et échappent à leur vraie classe. Le constructeur de prod installe
+	// toujours un classifieur MX ; ce chemin n'existe que si on l'a retiré. On le rend
+	// VISIBLE (log d'erreur une fois, puis compteur) au lieu de dégrader en silence.
+	w.mxFallbackCount.Add(1)
+	w.mxFallbackWarnOnce.Do(func() {
+		w.logger.Error("Veridian: no MX classifier on the worker, falling back to suffix-only recipient classification (custom domains hosted on Google/M365/OVH are misclassified)")
+	})
 	return domain.ClassifyProviderClass(entry.ContactEmail)
 }

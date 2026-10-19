@@ -59,6 +59,10 @@ const (
 	ProviderClassLWS            = "lws"             // LWS
 	ProviderClassScaleway       = "scaleway"        // Scaleway / Online.net / BookMyName
 	ProviderClassWebsiteBuilder = "website_builder" // mail packagé avec un site (Webador, Jimdo, Webmo, Wix…)
+
+	// Classes fines (2026-10-19) : fournisseurs nommés par Robert, sortis d'other_hoster.
+	ProviderClassZoho   = "zoho"   // Zoho Mail
+	ProviderClassProton = "proton" // Proton Mail (domaines pro)
 )
 
 // VeridianProviderClassRatesMetadataKey est la clé de broadcast.Metadata
@@ -117,6 +121,9 @@ var veridianProviderClassSet = map[string]struct{}{
 	ProviderClassLWS:            {},
 	ProviderClassScaleway:       {},
 	ProviderClassWebsiteBuilder: {},
+	// Classes fines (2026-10-19).
+	ProviderClassZoho:   {},
+	ProviderClassProton: {},
 }
 
 // VeridianAllProviderClasses retourne la liste ORDONNÉE de toutes les classes
@@ -143,6 +150,8 @@ func VeridianAllProviderClasses() []string {
 		ProviderClassLWS,
 		ProviderClassScaleway,
 		ProviderClassWebsiteBuilder,
+		ProviderClassZoho,
+		ProviderClassProton,
 	}
 }
 
@@ -156,7 +165,7 @@ func VeridianParentClass(class string) string {
 	switch class {
 	case ProviderClassInfomaniak, ProviderClassGandi, ProviderClassHostinger,
 		ProviderClassO2switch, ProviderClassLWS, ProviderClassScaleway,
-		ProviderClassWebsiteBuilder:
+		ProviderClassWebsiteBuilder, ProviderClassZoho, ProviderClassProton:
 		return ProviderClassOtherHoster
 	}
 	return ""
@@ -164,25 +173,51 @@ func VeridianParentClass(class string) string {
 
 // VeridianRateForClass lit le débit d'une classe : son entrée propre, sinon
 // celle de sa classe parente. ok=false : aucune entrée (classe non bridée).
+//
+// 2026-10-19 : AUCUNE classe n'est sans frein. Une classe absente de la table
+// (ou posée à 0) reçoit le débit PAR DÉFAUT serveur (veridian_class_defaults.go) ;
+// la table du workspace/profil n'est qu'une surcharge facultative. ok est donc
+// toujours vrai et la valeur toujours > 0.
 func VeridianRateForClass(rates map[string]float64, class string) (float64, bool) {
-	if v, ok := rates[class]; ok {
+	if v, ok := VeridianConfiguredRateForClass(rates, class); ok {
+		return v, true
+	}
+	return VeridianDefaultRateForClass(class), true
+}
+
+// VeridianConfiguredRateForClass : la surcharge SEULE (entrée propre, sinon celle de la
+// classe parente), sans défaut serveur. ok=false si aucune surcharge > 0.
+func VeridianConfiguredRateForClass(rates map[string]float64, class string) (float64, bool) {
+	if v, ok := rates[class]; ok && v > 0 {
 		return v, true
 	}
 	if parent := VeridianParentClass(class); parent != "" {
-		v, ok := rates[parent]
-		return v, ok
+		if v, ok := rates[parent]; ok && v > 0 {
+			return v, true
+		}
 	}
 	return 0, false
 }
 
 // VeridianCapForClass : même héritage pour les plafonds journaliers.
+// Même règle : absent ou <= 0 → plafond PAR DÉFAUT serveur, jamais « sans plafond ».
 func VeridianCapForClass(caps map[string]int, class string) (int, bool) {
-	if v, ok := caps[class]; ok {
+	if v, ok := VeridianConfiguredCapForClass(caps, class); ok {
+		return v, true
+	}
+	return VeridianDefaultCapForClass(class), true
+}
+
+// VeridianConfiguredCapForClass : la surcharge SEULE (entrée propre, sinon classe parente),
+// sans défaut serveur. ok=false si aucune surcharge > 0.
+func VeridianConfiguredCapForClass(caps map[string]int, class string) (int, bool) {
+	if v, ok := caps[class]; ok && v > 0 {
 		return v, true
 	}
 	if parent := VeridianParentClass(class); parent != "" {
-		v, ok := caps[parent]
-		return v, ok
+		if v, ok := caps[parent]; ok && v > 0 {
+			return v, true
+		}
 	}
 	return 0, false
 }

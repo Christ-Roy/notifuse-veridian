@@ -523,7 +523,7 @@ func TestVeridianDomainsForClass(t *testing.T) {
 // historiques en tête (ordre déterministe pour un rendu reproductible).
 func TestVeridianAllProviderClasses(t *testing.T) {
 	all := VeridianAllProviderClasses()
-	require.Len(t, all, 18)
+	require.Len(t, all, 20)
 
 	seen := map[string]bool{}
 	for _, c := range all {
@@ -611,10 +611,15 @@ func TestVeridianRateForClass(t *testing.T) {
 	r, ok = VeridianRateForClass(rates, ProviderClassLWS)
 	assert.True(t, ok)
 	assert.InDelta(t, 0.12, r, 1e-9, "hérite d'other_hoster")
-	_, ok = VeridianRateForClass(rates, ProviderClassGoogle)
-	assert.False(t, ok, "classe sans parent et sans entrée : non bridée")
-	_, ok = VeridianRateForClass(nil, ProviderClassLWS)
-	assert.False(t, ok)
+	// 19/10 : plus de classe non bridée, le défaut serveur s'applique.
+	r, ok = VeridianRateForClass(rates, ProviderClassGoogle)
+	assert.True(t, ok, "classe sans entrée : débit par défaut serveur")
+	assert.InDelta(t, VeridianDefaultRateForClass(ProviderClassGoogle), r, 1e-9)
+	r, ok = VeridianRateForClass(nil, ProviderClassLWS)
+	assert.True(t, ok)
+	assert.InDelta(t, VeridianDefaultRateForClass(ProviderClassLWS), r, 1e-9)
+	r, _ = VeridianRateForClass(map[string]float64{ProviderClassGoogle: 0}, ProviderClassGoogle)
+	assert.InDelta(t, VeridianDefaultRateForClass(ProviderClassGoogle), r, 1e-9, "0 explicite = défaut, jamais sans frein")
 }
 
 func TestVeridianCapForClass(t *testing.T) {
@@ -625,6 +630,9 @@ func TestVeridianCapForClass(t *testing.T) {
 	c, ok = VeridianCapForClass(caps, ProviderClassInfomaniak)
 	assert.True(t, ok)
 	assert.Equal(t, 150, c)
-	_, ok = VeridianCapForClass(caps, ProviderClassMicrosoft)
-	assert.False(t, ok)
+	c, ok = VeridianCapForClass(caps, ProviderClassMicrosoft)
+	assert.True(t, ok, "classe sans entrée : plafond par défaut serveur")
+	assert.Equal(t, VeridianDefaultCapForClass(ProviderClassMicrosoft), c)
+	c, _ = VeridianCapForClass(map[string]int{ProviderClassMicrosoft: 0}, ProviderClassMicrosoft)
+	assert.Equal(t, VeridianDefaultCapForClass(ProviderClassMicrosoft), c, "0 explicite = défaut, jamais sans plafond")
 }

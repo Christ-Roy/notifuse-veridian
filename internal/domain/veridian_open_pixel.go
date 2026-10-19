@@ -56,6 +56,9 @@ var veridianDefaultOpenPixelByClass = map[string]bool{
 	ProviderClassLWS:            true,
 	ProviderClassScaleway:       true,
 	ProviderClassWebsiteBuilder: true,
+	// Classes fines (2026-10-19) : issues d'other_hoster, même défaut (ON).
+	ProviderClassZoho:   true,
+	ProviderClassProton: true,
 }
 
 // VeridianOpenPixelByClassFromMetadata extrait la map {classe: bool} d'un

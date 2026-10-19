@@ -306,7 +306,7 @@ func TestVeridianCapacity_RateTimesRemainingWindow(t *testing.T) {
 	}
 	// Les 7 classes fines (10/10) héritent du débit d'other_hoster tant qu'elles n'ont pas
 	// d'entrée propre : 7 x 79 de plus (héritage : domain.VeridianRateForClass).
-	for _, fine := range []string{"infomaniak", "gandi", "hostinger", "o2switch", "lws", "scaleway", "website_builder"} {
+	for _, fine := range []string{"infomaniak", "gandi", "hostinger", "o2switch", "lws", "scaleway", "website_builder", "zoho", "proton"} {
 		want[fine] = 79
 	}
 	sum := 0
@@ -526,7 +526,7 @@ func TestVeridianCapacity_ProfileGatesBoundTheSum(t *testing.T) {
 
 	plan := capPlan(env, ws, world, capWednesdayOpening, nil)
 	require.NotNil(t, plan.Capacity.SumRemaining)
-	assert.Equal(t, 960, *plan.Capacity.SumRemaining) // 3x79 + 3x34 + 4x17 (ionos exclu) + 7x79 classes fines héritées d'other_hoster
+	assert.Equal(t, 1118, *plan.Capacity.SumRemaining) // 3x79 + 3x34 + 4x17 (ionos exclu) + 9x79 classes fines héritées d'other_hoster
 	require.NotNil(t, plan.Capacity.Configured)
 	assert.Equal(t, 300, *plan.Capacity.Configured)
 	assert.Equal(t, domain.VeridianPlanGateWarmup, plan.Capacity.Limiting, "chauffe et plat à 300 : la chauffe passe en premier")

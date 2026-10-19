@@ -62,6 +62,10 @@ function classLabel(c: VeridianProviderClass): string {
       return 'Scaleway / Online'
     case 'website_builder':
       return 'Website builders'
+    case 'zoho':
+      return 'Zoho Mail'
+    case 'proton':
+      return 'Proton Mail'
     case 'corporate_selfhost':
       return 'Corporate self-host'
   }

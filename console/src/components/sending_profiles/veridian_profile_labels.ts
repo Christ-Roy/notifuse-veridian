@@ -101,6 +101,10 @@ export function useProfileLabels() {
         return t`Scaleway / Online`
       case 'website_builder':
         return t`Website builders`
+      case 'zoho':
+        return t`Zoho Mail`
+      case 'proton':
+        return t`Proton Mail`
       case 'corporate_selfhost':
         return t`Self-hosted corporate`
       default:

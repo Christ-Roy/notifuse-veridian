@@ -501,7 +501,9 @@ const DELIVERABILITY_CLASS_LABELS: Record<VeridianProviderClass, string> = {
   o2switch: 'o2switch',
   lws: 'LWS',
   scaleway: 'Scaleway / Online',
-  website_builder: 'Website builders'
+  website_builder: 'Website builders',
+  zoho: 'Zoho Mail',
+  proton: 'Proton Mail'
 }
 
 interface DeliverabilityPanelProps {

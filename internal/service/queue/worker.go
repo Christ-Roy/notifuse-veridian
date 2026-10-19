@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -65,6 +66,10 @@ type EmailQueueWorker struct {
 	// I/O; unknown domains do a cached MX lookup (best-effort, short timeout).
 	// Never nil after the constructor; replaceable in tests via the setter.
 	providerMXClassifier *domain.VeridianMXClassifier
+	// mxFallbackCount / mxFallbackWarnOnce : visibilité du repli suffixe quand le
+	// classifieur MX est absent (cf. veridianClassifyRecipient).
+	mxFallbackCount      atomic.Int64
+	mxFallbackWarnOnce   sync.Once
 	dailyQuotaBackfilled sync.Map
 	circuitBreaker       *IntegrationCircuitBreaker
 	errorClassifier      *emailerror.Classifier
@@ -175,6 +180,7 @@ func (w *EmailQueueWorker) Start(ctx context.Context) error {
 		"worker_count":  w.config.WorkerCount,
 		"poll_interval": w.config.PollInterval.String(),
 		"batch_size":    w.config.BatchSize,
+		"mx_classifier": w.providerMXClassifier != nil,
 	}).Info("Starting email queue worker")
 
 	// Start the main processing loop

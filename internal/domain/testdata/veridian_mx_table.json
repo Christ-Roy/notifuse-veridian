@@ -1,0 +1,643 @@
+{
+  "_doc": "Table MX -\u003e classe d'envoi, ORDRE SIGNIFICATIF (premier suffixe qui matche gagne). Générée depuis internal/domain/veridian_provider_class_mx.go ; ne pas éditer à la main (UPDATE_MX_TABLE=1 go test ./internal/domain -run TestMXTableExport).",
+  "classes": [
+    "google",
+    "microsoft",
+    "yahoo_aol",
+    "freemail_fr",
+    "corporate",
+    "ovh",
+    "ionos",
+    "apple_icloud",
+    "security_gateway",
+    "other_hoster",
+    "corporate_selfhost",
+    "infomaniak",
+    "gandi",
+    "hostinger",
+    "o2switch",
+    "lws",
+    "scaleway",
+    "website_builder",
+    "zoho",
+    "proton"
+  ],
+  "rules": [
+    {
+      "suffix": ".vadesecure.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".vadesecure.net",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mailinblack.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".proofpoint.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".pphosted.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mimecast.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mimecast.co.za",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".hornetsecurity.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".securemail.pro",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".security-mail.net",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".sophos.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".retarus.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".trendmicro.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".trendmicro.eu",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".messagelabs.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".barracudanetworks.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".cudasvc.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".altospam.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".altospam.net",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".ppe-hosted.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".iphmx.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".barracuda.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mailspamprotection.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".antispamcloud.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mxthunder.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mailanyone.net",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".clean-mailbox.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".fireeyecloud.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mailprotect.be",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".antispameurope.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".iantispam.one-system.fr",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".antispam.xefi.fr",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".xefi.fr",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".xsalto.net",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".ipgarde.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".cleanmail.eu",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".iantispam.fr",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".neptune.fr",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mailcontrol.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".fortimailcloud.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".mailguard.com.au",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".spamh.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".proofpoint.eu",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".agari.com",
+      "class": "security_gateway"
+    },
+    {
+      "suffix": ".google.com",
+      "class": "google"
+    },
+    {
+      "suffix": ".googlemail.com",
+      "class": "google"
+    },
+    {
+      "suffix": ".psmtp.com",
+      "class": "google"
+    },
+    {
+      "suffix": ".protection.outlook.com",
+      "class": "microsoft"
+    },
+    {
+      "suffix": ".outlook.com",
+      "class": "microsoft"
+    },
+    {
+      "suffix": ".office365.com",
+      "class": "microsoft"
+    },
+    {
+      "suffix": ".microsoft.com",
+      "class": "microsoft"
+    },
+    {
+      "suffix": ".ovh.net",
+      "class": "ovh"
+    },
+    {
+      "suffix": ".ovh.com",
+      "class": "ovh"
+    },
+    {
+      "suffix": ".ionos.fr",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".ionos.com",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".ionos.de",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".ionos.es",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".ionos.co.uk",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".kundenserver.de",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".1and1.com",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".1and1.fr",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".perfora.net",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".1und1.de",
+      "class": "ionos"
+    },
+    {
+      "suffix": ".yahoodns.net",
+      "class": "yahoo_aol"
+    },
+    {
+      "suffix": ".yahoo.com",
+      "class": "yahoo_aol"
+    },
+    {
+      "suffix": ".aol.com",
+      "class": "yahoo_aol"
+    },
+    {
+      "suffix": ".orange.fr",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".sfr.fr",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".free.fr",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".laposte.net",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".bbox.fr",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".wanadoo.fr",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".orange-business.com",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".neuf.fr",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".numericable.fr",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".laposte.fr",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".sfr.net",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".altice.net",
+      "class": "freemail_fr"
+    },
+    {
+      "suffix": ".mail.icloud.com",
+      "class": "apple_icloud"
+    },
+    {
+      "suffix": ".icloud.com",
+      "class": "apple_icloud"
+    },
+    {
+      "suffix": ".apple.com",
+      "class": "apple_icloud"
+    },
+    {
+      "suffix": ".infomaniak.ch",
+      "class": "infomaniak"
+    },
+    {
+      "suffix": ".infomaniak.com",
+      "class": "infomaniak"
+    },
+    {
+      "suffix": ".ik.me",
+      "class": "infomaniak"
+    },
+    {
+      "suffix": ".hostinger.com",
+      "class": "hostinger"
+    },
+    {
+      "suffix": ".hostinger.fr",
+      "class": "hostinger"
+    },
+    {
+      "suffix": ".hostinger.in",
+      "class": "hostinger"
+    },
+    {
+      "suffix": ".titan.email",
+      "class": "hostinger"
+    },
+    {
+      "suffix": ".mail.gandi.net",
+      "class": "gandi"
+    },
+    {
+      "suffix": ".gandi.net",
+      "class": "gandi"
+    },
+    {
+      "suffix": ".o2switch.net",
+      "class": "o2switch"
+    },
+    {
+      "suffix": ".lws.fr",
+      "class": "lws"
+    },
+    {
+      "suffix": ".lwspanel.com",
+      "class": "lws"
+    },
+    {
+      "suffix": ".lwsdns.com",
+      "class": "lws"
+    },
+    {
+      "suffix": ".online.net",
+      "class": "scaleway"
+    },
+    {
+      "suffix": ".scaleway.com",
+      "class": "scaleway"
+    },
+    {
+      "suffix": ".bookmyname.com",
+      "class": "scaleway"
+    },
+    {
+      "suffix": ".webador.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".webmo.fr",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".jimdo.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".wixdns.net",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".sitew.fr",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".sitew.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".webnode.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".editmysite.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".zoho.eu",
+      "class": "zoho"
+    },
+    {
+      "suffix": ".zoho.com",
+      "class": "zoho"
+    },
+    {
+      "suffix": ".zoho.in",
+      "class": "zoho"
+    },
+    {
+      "suffix": ".zohomail.eu",
+      "class": "zoho"
+    },
+    {
+      "suffix": ".zohomail.com",
+      "class": "zoho"
+    },
+    {
+      "suffix": ".amen.fr",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".protonmail.ch",
+      "class": "proton"
+    },
+    {
+      "suffix": ".proton.me",
+      "class": "proton"
+    },
+    {
+      "suffix": ".mail.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".one.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".alwaysdata.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".alwaysdata.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".ouvaton.coop",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".privianet.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".mailo.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".gmx.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".gmx.de",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".gmx.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".mx.cloudflare.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".privateemail.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".planethoster.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".mailgun.org",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".wordpress.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".mymail.eu.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".one-system.fr",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".lerelaisinternet.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".kyxar.fr",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".monarobase.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".hosteam.fr",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".kalitys.fr",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".galae.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".renater.fr",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".rzone.de",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".hosteurope.de",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".stackmail.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".oxcs.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".domainoo.fr",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".ex-hebergement.fr",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".mailjet.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".secureserver.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".register.it",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".registrar-servers.com",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".yandex.net",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".yandex.ru",
+      "class": "other_hoster"
+    },
+    {
+      "suffix": ".squarespace.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".wix.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".wixmail.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".shopify.com",
+      "class": "website_builder"
+    },
+    {
+      "suffix": ".strikingly.com",
+      "class": "website_builder"
+    }
+  ]
+}

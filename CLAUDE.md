@@ -156,6 +156,7 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 - `59` automations observables (conception) : rails de politique, graphe vivant, explorateur de file, parcours contact, journal des décisions d envoi, plan en 7 lots (document seul, rien d implémenté)
 - `60` capacité d'un profil (lot 6) : somme des capacités par classe destinataire bornée par chauffe et stock, barre empilée console, CLI agent
 - `62` « pourquoi ça n'envoie pas » (lot 1 de 59, V62) : raison de report persistée sur `email_queue`, verdicts de gates (valeur, limite), journal des décisions borné, `queue.explain` / `decisions.list` / `queue.recompute`, CLI `queue:explain` `logs:decisions`, page File d'envoi, « completed » honnête, orphelins `sending`
+- `69` plafonds et débits PAR DÉFAUT pour les 20 classes, table MX -> classe source unique (export pour ODH), échec DNS transitoire non figé
 - `64` garde réseau partagée (`pkg/netguard`) pour SMTP, IMAP, endpoint SparkPost ; liste d'exceptions explicite (relais IMAP 993 en Tailscale) ; `InsecureSkipVerify` des tâches retiré ; garde `prod-residue` de l'E2E prod
 - `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only inviteMember/deleteInvitation, route admin `email-integration.verify`
 - `68` self-service owner : audit UI/API/CLI (tableau), boutons d ajout LLM/Firecrawl/Supabase, invitation avec repli local, limites (S3, lists.create 409)

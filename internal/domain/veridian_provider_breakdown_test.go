@@ -118,7 +118,7 @@ func TestVeridianAggregateProviderBreakdownCounts(t *testing.T) {
 			want[c] = 0
 		}
 		assert.Equal(t, want, got.Breakdown)
-		assert.Len(t, got.Breakdown, 18, "18 classes attendues dans le breakdown")
+		assert.Len(t, got.Breakdown, 20, "20 classes attendues dans le breakdown")
 	})
 
 	t.Run("comptage mixte par classe (counts pré-agrégés)", func(t *testing.T) {
@@ -143,7 +143,7 @@ func TestVeridianAggregateProviderBreakdownCounts(t *testing.T) {
 
 	t.Run("override custom_string_5 reclasse le compte agrégé", func(t *testing.T) {
 		counts := []VeridianContactProviderCount{
-			{Domain: "gmail.com", Count: 1},                              // google
+			{Domain: "gmail.com", Count: 1},                                     // google
 			{Domain: "gmail.com", CustomString5: strPtr("corporate"), Count: 1}, // forcé corporate (groupe SQL distinct)
 			{Domain: "acme.io", CustomString5: strPtr("google"), Count: 1},      // forcé google
 		}
@@ -156,8 +156,8 @@ func TestVeridianAggregateProviderBreakdownCounts(t *testing.T) {
 	t.Run("count <= 0 ignoré (robustesse)", func(t *testing.T) {
 		counts := []VeridianContactProviderCount{
 			{Domain: "gmail.com", Count: 3},
-			{Domain: "outlook.com", Count: 0},  // ignoré
-			{Domain: "yahoo.com", Count: -5},   // ignoré (best-effort)
+			{Domain: "outlook.com", Count: 0}, // ignoré
+			{Domain: "yahoo.com", Count: -5},  // ignoré (best-effort)
 		}
 		got := VeridianAggregateProviderBreakdownCounts(counts)
 		assert.Equal(t, 3, got.Total)
