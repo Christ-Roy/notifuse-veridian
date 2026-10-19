@@ -13,6 +13,7 @@ package http
 // rattachee a un user de type api_key membre d'un seul workspace).
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -29,6 +30,14 @@ type VeridianMagicHandler struct {
 	workspaceRepo domain.WorkspaceRepository
 	getJWTSecret  func() ([]byte, error)
 	logger        logger.Logger
+	// isManagedKey dit si la cle API appelante est une cle geree par le Hub
+	// (users.veridian_managed). nil => refus (fail-closed). Fiche 67.
+	isManagedKey func(ctx context.Context, userID string) (bool, error)
+}
+
+// SetManagedKeyChecker injecte la verification « cle geree par le Hub ».
+func (h *VeridianMagicHandler) SetManagedKeyChecker(f func(ctx context.Context, userID string) (bool, error)) {
+	h.isManagedKey = f
 }
 
 // NewVeridianMagicHandler construit le handler.
@@ -98,6 +107,23 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 		return
 	}
 	workspaceID := uws[0].WorkspaceID
+
+	// Fiche 67 : seule une cle geree par le Hub peut demander un lien de
+	// connexion. Une cle member ordinaire pouvait obtenir le lien du owner.
+	managed := false
+	if h.isManagedKey != nil {
+		var mErr error
+		managed, mErr = h.isManagedKey(r.Context(), apiUserID)
+		if mErr != nil {
+			h.logger.WithFields(map[string]interface{}{"api_user_id": apiUserID, "error": mErr.Error()}).Error("magic link: managed-key lookup failed")
+			WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+			return
+		}
+	}
+	if !managed {
+		WriteJSONErrorCode(w, ErrCodeForbidden, "this endpoint requires a Hub-managed API key", http.StatusForbidden, nil)
+		return
+	}
 
 	// Borne le body (OWASP API4:2023 — Unrestricted Resource Consumption).
 	// Cet endpoint JWT (API key) ne passe PAS par le middleware HMAC (qui

@@ -35,6 +35,7 @@ func newMagicHandler(svc domain.VeridianService, repo domain.WorkspaceRepository
 		workspaceRepo: repo,
 		getJWTSecret:  func() ([]byte, error) { return []byte("test-jwt-secret"), nil },
 		logger:        logger.NewLogger(),
+		isManagedKey:  func(context.Context, string) (bool, error) { return true, nil },
 	}
 }
 
@@ -456,4 +457,39 @@ func TestVeridianMagicLink_RegisterRoutes(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.generateMagicLink", nil)
 	_, pattern := mux.Handler(req)
 	assert.NotEmpty(t, pattern, "POST /api/workspaces.generateMagicLink should be mounted")
+}
+
+// Fiche 67 : une cle member ordinaire (non geree par le Hub) ne peut pas
+// demander le lien de connexion d'un utilisateur (owner compris).
+func TestVeridianMagicLink_UnmanagedKeyForbidden(t *testing.T) {
+	for name, checker := range map[string]func(context.Context, string) (bool, error){
+		"non geree":      func(context.Context, string) (bool, error) { return false, nil },
+		"checker absent": nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			svc := mocks.NewMockVeridianService(ctrl) // GenerateMagicLink jamais attendu
+			repo := mocks.NewMockWorkspaceRepository(ctrl)
+			repo.EXPECT().GetUserWorkspaces(gomock.Any(), "k").Return([]*domain.UserWorkspace{{UserID: "k", WorkspaceID: "ws-1"}}, nil)
+			h := newMagicHandler(svc, repo)
+			h.isManagedKey = checker
+			rec := httptest.NewRecorder()
+			h.handleGenerateMagicLink(rec, reqWithAuthCtx(t, `{"user_email":"owner@x.test"}`, string(domain.UserTypeAPIKey), "k"))
+			assert.Equal(t, http.StatusForbidden, rec.Code)
+			assert.Contains(t, rec.Body.String(), "Hub-managed")
+		})
+	}
+}
+
+func TestVeridianMagicLink_ManagedLookupError_500(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "k").Return([]*domain.UserWorkspace{{UserID: "k", WorkspaceID: "ws-1"}}, nil)
+	h := newMagicHandler(mocks.NewMockVeridianService(ctrl), repo)
+	h.isManagedKey = func(context.Context, string) (bool, error) { return false, errors.New("db down") }
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, reqWithAuthCtx(t, `{"user_email":"o@x.test"}`, string(domain.UserTypeAPIKey), "k"))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }

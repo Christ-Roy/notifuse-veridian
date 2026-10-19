@@ -1563,6 +1563,13 @@ func (a *App) InitHandlers() error {
 		getJWTSecret,
 		a.logger,
 	)
+	veridianMagicHandler.SetManagedKeyChecker(func(ctx context.Context, userID string) (bool, error) {
+		u, err := a.userService.GetUserByID(ctx, userID)
+		if err != nil || u == nil {
+			return false, err
+		}
+		return u.VeridianManaged, nil
+	})
 	veridianMagicHandler.RegisterRoutes(a.mux)
 
 	// === Veridian patch === Endpoint /veridian/auto-login (token HMAC dans URL).

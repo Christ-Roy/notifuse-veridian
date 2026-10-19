@@ -46,9 +46,9 @@ create/update/deleteIntegration, emailProfiles création. Volontairement laissé
 Lecture seule : `listAPIKeys`, `members` (e-mails masqués).
 `settings.*` : réservé au root. `webhooks.register/status` (webhooks des fournisseurs) : authentifiés, membre.
 
-À arbitrer, NON modifié : `workspaces.generateMagicLink` (clé API -> lien de connexion pour un utilisateur du workspace).
-C'est le flux Hub ; une clé member pourrait demander le lien du owner. Il faudrait restreindre aux clés
-`VeridianManaged` : à décider avec le propriétaire du Hub avant de toucher.
+`workspaces.generateMagicLink` : restreint aux clés gérées par le Hub (`users.veridian_managed`), 403 sinon (fail-closed).
+Avant, toute clé member pouvait obtenir le lien de connexion du owner. Conséquence : `notifuse-admin magic-link`, qui
+mint une clé éphémère NON gérée, reçoit 403 ; utiliser `sso:issue-magic-link` (HMAC) ou `hub open`.
 
 Conséquence CLI : `notifuse webhooks:create|update|delete|toggle|regenerate|test` avec une clé scopée member rend
 maintenant 403 (owner / notifuse-admin seulement). Lectures inchangées.
