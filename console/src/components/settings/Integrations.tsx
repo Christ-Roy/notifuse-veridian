@@ -62,6 +62,12 @@ interface IntegrationsProps {
 // boîtes IMAP vivent dans la page « Profils d'envoi ». Cet écran ne garde que les
 // autres intégrations (Supabase, LLM, Firecrawl) déjà présentes.
 
+// Detail lisible d'une erreur serveur (garde reseau, validation...) pour le message utilisateur.
+const errorDetail = (error: unknown): string => {
+  const msg = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  return msg ? `: ${msg}` : ''
+}
+
 // Main Integrations component
 export function Integrations({ workspace, onSave, isOwner }: IntegrationsProps) {
   const { t } = useLingui()
@@ -151,7 +157,7 @@ export function Integrations({ workspace, onSave, isOwner }: IntegrationsProps) 
       message.success(t`Supabase integration saved successfully`)
     } catch (error) {
       console.error('Error saving Supabase integration:', error)
-      message.error(t`Failed to save Supabase integration`)
+      message.error(`${t`Failed to save Supabase integration`}${errorDetail(error)}`)
       throw error
     } finally {
       setSupabaseSaving(false)
@@ -197,7 +203,7 @@ export function Integrations({ workspace, onSave, isOwner }: IntegrationsProps) 
       message.success(t`LLM integration saved successfully`)
     } catch (error) {
       console.error('Error saving LLM integration:', error)
-      message.error(t`Failed to save LLM integration`)
+      message.error(`${t`Failed to save LLM integration`}${errorDetail(error)}`)
       throw error
     } finally {
       setLLMSaving(false)
@@ -241,7 +247,7 @@ export function Integrations({ workspace, onSave, isOwner }: IntegrationsProps) 
       message.success(t`Firecrawl integration saved successfully`)
     } catch (error) {
       console.error('Error saving Firecrawl integration:', error)
-      message.error(t`Failed to save Firecrawl integration`)
+      message.error(`${t`Failed to save Firecrawl integration`}${errorDetail(error)}`)
       throw error
     } finally {
       setFirecrawlSaving(false)
@@ -628,6 +634,48 @@ export function Integrations({ workspace, onSave, isOwner }: IntegrationsProps) 
       />
 
       {!isOwner && <IntegrationOwnerNotice />}
+
+      {isOwner && (
+        <div
+          data-testid="add-integration-buttons"
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}
+        >
+          <Button
+            onClick={() => {
+              setEditingLLMIntegration(null)
+              setSelectedLLMProvider('anthropic')
+              setLLMDrawerVisible(true)
+            }}
+          >
+            {t`Add Anthropic (Claude)`}
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingLLMIntegration(null)
+              setSelectedLLMProvider('openai')
+              setLLMDrawerVisible(true)
+            }}
+          >
+            {t`Add OpenAI`}
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingFirecrawlIntegration(null)
+              setFirecrawlDrawerVisible(true)
+            }}
+          >
+            {t`Add Firecrawl`}
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingSupabaseIntegration(null)
+              setSupabaseDrawerVisible(true)
+            }}
+          >
+            {t`Add Supabase`}
+          </Button>
+        </div>
+      )}
 
       {!hasOtherIntegrations && (
         <div style={{ color: '#8c8c8c', marginBottom: 16 }}>{t`No other integration is connected.`}</div>

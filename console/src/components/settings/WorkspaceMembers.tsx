@@ -39,6 +39,19 @@ interface WorkspaceMembersProps {
   isOwner: boolean
 }
 
+const RESEND_DEFAULT_PERMISSIONS: UserPermissions = {
+  contacts: { read: true, write: true },
+  lists: { read: true, write: true },
+  templates: { read: true, write: true },
+  broadcasts: { read: true, write: true },
+  transactional: { read: true, write: true },
+  workspace: { read: true, write: true },
+  message_history: { read: true, write: true },
+  blog: { read: true, write: true },
+  automations: { read: true, write: true },
+  llm: { read: true, write: true }
+}
+
 export function WorkspaceMembers({
   workspaceId,
   members,
@@ -276,12 +289,8 @@ export function WorkspaceMembers({
       // unifie + magic link auto-loggue). En self-hosted, comportement
       // upstream (invitation locale notifuse_invitations + email Notifuse).
       if (isManagedMode) {
-        await workspaceService.inviteMemberViaHub({
-          workspace_id: workspaceId,
-          email: inviteEmail,
-          role: 'member'
-        })
-        message.success(t`Invitation sent to ${inviteEmail} via Veridian Hub`)
+        await inviteViaHubOrLocal(inviteEmail, invitePermissions)
+        message.success(t`Invitation sent to ${inviteEmail}`)
       } else {
         // Call the API to invite the user with permissions
         await workspaceService.inviteMember({
@@ -410,6 +419,25 @@ export function WorkspaceMembers({
     }
   }
 
+  // Fiche 67 : en mode managed, l'invitation passe par le Hub ; si le Hub n'est pas
+  // configure cote Notifuse (503 hub invitation flow disabled), le owner ne doit pas
+  // rester bloque : repli sur l'invitation locale (email Notifuse, owner seulement).
+  const inviteViaHubOrLocal = async (email: string, permissions: UserPermissions) => {
+    try {
+      await workspaceService.inviteMemberViaHub({
+        workspace_id: workspaceId,
+        email,
+        role: 'member'
+      })
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 503) {
+        await workspaceService.inviteMember({ workspace_id: workspaceId, email, permissions })
+        return
+      }
+      throw error
+    }
+  }
+
   const handleResendInvitation = async (email: string) => {
     if (!email) return
 
@@ -419,31 +447,14 @@ export function WorkspaceMembers({
       // (reused=true reemmet le mail d'invitation). En self-hosted, l'API
       // upstream upsert via inviteMember.
       if (isManagedMode) {
-        await workspaceService.inviteMemberViaHub({
-          workspace_id: workspaceId,
-          email: email,
-          role: 'member'
-        })
+        await inviteViaHubOrLocal(email, RESEND_DEFAULT_PERMISSIONS)
       } else {
         // Reuse the inviteMember API which will update the existing invitation due to UPSERT logic
         // Use default permissions for resending
-        const defaultPermissions: UserPermissions = {
-          contacts: { read: true, write: true },
-          lists: { read: true, write: true },
-          templates: { read: true, write: true },
-          broadcasts: { read: true, write: true },
-          transactional: { read: true, write: true },
-          workspace: { read: true, write: true },
-          message_history: { read: true, write: true },
-          blog: { read: true, write: true },
-          automations: { read: true, write: true },
-          llm: { read: true, write: true }
-        }
-
         await workspaceService.inviteMember({
           workspace_id: workspaceId,
           email: email,
-          permissions: defaultPermissions
+          permissions: RESEND_DEFAULT_PERMISSIONS
         })
       }
 

@@ -158,6 +158,7 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 - `62` « pourquoi ça n'envoie pas » (lot 1 de 59, V62) : raison de report persistée sur `email_queue`, verdicts de gates (valeur, limite), journal des décisions borné, `queue.explain` / `decisions.list` / `queue.recompute`, CLI `queue:explain` `logs:decisions`, page File d'envoi, « completed » honnête, orphelins `sending`
 - `64` garde réseau partagée (`pkg/netguard`) pour SMTP, IMAP, endpoint SparkPost ; liste d'exceptions explicite (relais IMAP 993 en Tailscale) ; `InsecureSkipVerify` des tâches retiré ; garde `prod-residue` de l'E2E prod
 - `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only inviteMember/deleteInvitation, route admin `email-integration.verify`
+- `68` self-service owner : audit UI/API/CLI (tableau), boutons d ajout LLM/Firecrawl/Supabase, invitation avec repli local, limites (S3, lists.create 409)
 - `65` relances dans le fil du premier mail : réglage workspace `veridian_thread_followups`, In-Reply-To / References / `Re: <objet du premier mail>`, ancre d expéditeur tenue 7 jours (le week-end la lâchait), objet consigné dans `message_data.metadata`
 - `66` une relance ne part pas si le premier mail (J0) n a pas été livré : échec, rebond dur, refus de politique 5.7.x ou aucun J0 → le contact sort, raison `first_mail_*` au journal ; le rebond mou ne sort personne
 

@@ -721,6 +721,10 @@ msgstr "Ajouter un champ optionnel"
 #~ msgid "Add another profile to spread marketing volume across independent Gmail accounts."
 #~ msgstr "Ajoutez un autre profil pour répartir le volume commercial sur plusieurs comptes Gmail indépendants."
 
+#: src/components/settings/Integrations.tsx:650
+msgid "Add Anthropic (Claude)"
+msgstr "Ajouter Anthropic (Claude)"
+
 #: src/components/email_builder/panels/TreePanel.tsx:146
 msgid "Add block"
 msgstr "Ajouter un bloc"
@@ -782,6 +786,10 @@ msgstr "Ajouter un header personnalisé"
 msgid "Add Custom Header"
 msgstr "Ajouter un header personnalisé"
 
+#: src/components/settings/Integrations.tsx:667
+msgid "Add Firecrawl"
+msgstr "Ajouter Firecrawl"
+
 #~ msgid "Add Gmail profile"
 #~ msgstr "Ajouter un profil Gmail"
 
@@ -798,6 +806,10 @@ msgstr "Ajouter un nœud"
 
 #~ msgid "Add one or more email senders. The first sender will be used as the default."
 #~ msgstr "Ajoutez un ou plusieurs expéditeurs d email. Le premier expéditeur sera utilisé par défaut."
+
+#: src/components/settings/Integrations.tsx:659
+msgid "Add OpenAI"
+msgstr "Ajouter OpenAI"
 
 #: src/components/segment/input_json_path.tsx:110
 msgid "Add path"
@@ -826,6 +838,10 @@ msgstr "Ajouter un élément social"
 #: src/components/email_builder/blocks/MjSocialBlock.tsx:112
 msgid "Add social elements to this social block"
 msgstr "Ajouter des éléments sociaux à ce bloc social"
+
+#: src/components/settings/Integrations.tsx:675
+msgid "Add Supabase"
+msgstr "Ajouter Supabase"
 
 #~ msgid "Add this profile to marketing rotation?"
 #~ msgstr "Ajouter ce profil à la rotation commerciale ?"
@@ -1113,23 +1129,23 @@ msgstr "Identifiant API"
 
 #: src/components/integrations/FirecrawlIntegration.tsx:84
 #: src/components/integrations/LLMIntegration.tsx:137
-#: src/components/settings/Integrations.tsx:522
-#: src/components/settings/Integrations.tsx:573
-#: src/components/settings/WorkspaceMembers.tsx:115
+#: src/components/settings/Integrations.tsx:528
+#: src/components/settings/Integrations.tsx:579
+#: src/components/settings/WorkspaceMembers.tsx:128
 msgid "API Key"
 msgstr "Clé API"
 
 #: src/components/settings/ApiAgentsSettings.tsx:98
-#: src/components/settings/WorkspaceMembers.tsx:352
+#: src/components/settings/WorkspaceMembers.tsx:361
 msgid "API key created successfully"
 msgstr "Clé API créée avec succès"
 
 #: src/components/settings/ApiAgentsSettings.tsx:319
-#: src/components/settings/WorkspaceMembers.tsx:701
+#: src/components/settings/WorkspaceMembers.tsx:712
 msgid "API Key Created Successfully"
 msgstr "Clé API créée avec succès"
 
-#: src/components/settings/WorkspaceMembers.tsx:675
+#: src/components/settings/WorkspaceMembers.tsx:686
 msgid "API Key Name"
 msgstr "Nom de la clé API"
 
@@ -1142,7 +1158,7 @@ msgid "API keys"
 msgstr "Clés API"
 
 #: src/components/settings/ApiAgentsSettings.tsx:326
-#: src/components/settings/WorkspaceMembers.tsx:708
+#: src/components/settings/WorkspaceMembers.tsx:719
 msgid "API Token"
 msgstr "Jeton API"
 
@@ -1203,7 +1219,7 @@ msgid "Are you sure you want to delete the broadcast \"{0}\"?"
 msgstr "Êtes-vous sûr de vouloir supprimer la diffusion \"{0}\" ?"
 
 #. placeholder {0}: record.email
-#: src/components/settings/WorkspaceMembers.tsx:233
+#: src/components/settings/WorkspaceMembers.tsx:246
 msgid "Are you sure you want to delete the invitation for {0}?"
 msgstr "Êtes-vous sûr de vouloir supprimer l'invitation pour {0} ?"
 
@@ -1236,7 +1252,7 @@ msgstr "Êtes-vous sûr de vouloir reconstruire \"{0}\" ? L'appartenance au segm
 
 #. placeholder {0}: record.email
 #. placeholder {1}: record.type === 'api_key' ? ' This API key will be permanently deleted.' : ''
-#: src/components/settings/WorkspaceMembers.tsx:213
+#: src/components/settings/WorkspaceMembers.tsx:226
 msgid "Are you sure you want to remove {0}?{1}"
 msgstr "Êtes-vous sûr de vouloir supprimer {0} ?{1}"
 
@@ -1301,7 +1317,7 @@ msgid "Auth Email"
 msgstr "Email d'authentification"
 
 #: src/components/integrations/SupabaseIntegration.tsx:141
-#: src/components/settings/Integrations.tsx:349
+#: src/components/settings/Integrations.tsx:355
 msgid "Auth Email Hook"
 msgstr "Hook d'email d'authentification"
 
@@ -1339,7 +1355,7 @@ msgstr "Auto"
 msgid "Auto-send Winner"
 msgstr "Envoyer automatiquement le gagnant"
 
-#: src/components/settings/Integrations.tsx:424
+#: src/components/settings/Integrations.tsx:430
 msgid "Auto-subscribe to Lists"
 msgstr "Inscription automatique aux listes"
 
@@ -1461,7 +1477,7 @@ msgid "Background Type"
 msgstr "Type d'arrière-plan"
 
 #: src/components/integrations/LLMIntegration.tsx:170
-#: src/components/settings/Integrations.tsx:516
+#: src/components/settings/Integrations.tsx:522
 msgid "Base URL"
 msgstr "URL de base"
 
@@ -1510,7 +1526,7 @@ msgstr "avant"
 msgid "before date"
 msgstr "avant la date"
 
-#: src/components/settings/Integrations.tsx:386
+#: src/components/settings/Integrations.tsx:392
 msgid "Before User Created Hook"
 msgstr "Hook avant création utilisateur"
 
@@ -1852,15 +1868,15 @@ msgstr "Par raison"
 #: src/components/settings/ApiAgentsSettings.tsx:282
 #: src/components/settings/CustomFieldsConfiguration.tsx:273
 #: src/components/settings/EditPermissionsModal.tsx:121
-#: src/components/settings/Integrations.tsx:658
 #: src/components/settings/Integrations.tsx:706
-#: src/components/settings/Integrations.tsx:753
+#: src/components/settings/Integrations.tsx:754
+#: src/components/settings/Integrations.tsx:801
 #: src/components/settings/SystemSettingsDrawer.tsx:148
 #: src/components/settings/veridian_cold_outreach_settings.tsx:2249
 #: src/components/settings/WebhookCard.tsx:348
 #: src/components/settings/WebhooksSettings.tsx:213
-#: src/components/settings/WorkspaceMembers.tsx:614
-#: src/components/settings/WorkspaceMembers.tsx:659
+#: src/components/settings/WorkspaceMembers.tsx:625
+#: src/components/settings/WorkspaceMembers.tsx:670
 #: src/components/templates/CreateTemplateDrawer.tsx:523
 #: src/components/templates/SendTemplateModal.tsx:268
 #: src/components/templates/TemplateTranslationsTab.tsx:254
@@ -2087,7 +2103,7 @@ msgstr "Cloner le modèle"
 #: src/components/settings/ApiAgentsSettings.tsx:277
 #: src/components/settings/ApiAgentsSettings.tsx:348
 #: src/components/settings/WebhookCard.tsx:345
-#: src/components/settings/WorkspaceMembers.tsx:654
+#: src/components/settings/WorkspaceMembers.tsx:665
 #: src/components/transactional/ApiCommandModal.tsx:990
 msgid "Close"
 msgstr "Fermer"
@@ -2320,10 +2336,10 @@ msgstr "Configurer les chemins"
 msgid "Configure Provider"
 msgstr "Configurer le fournisseur"
 
-#: src/components/settings/Integrations.tsx:353
-#: src/components/settings/Integrations.tsx:390
-#: src/components/settings/Integrations.tsx:524
-#: src/components/settings/Integrations.tsx:575
+#: src/components/settings/Integrations.tsx:359
+#: src/components/settings/Integrations.tsx:396
+#: src/components/settings/Integrations.tsx:530
+#: src/components/settings/Integrations.tsx:581
 #: src/components/settings/veridian_cold_outreach_settings.tsx:264
 msgid "Configured"
 msgstr "Configuré"
@@ -2370,7 +2386,7 @@ msgstr "Brancher mon agent"
 msgid "Connection Details"
 msgstr "Détails de connexion"
 
-#: src/components/settings/Integrations.tsx:612
+#: src/components/settings/Integrations.tsx:618
 msgid "Connections to other services."
 msgstr "Connexions à d'autres services."
 
@@ -2554,8 +2570,8 @@ msgstr "Continuer avec Microsoft"
 
 #: src/components/settings/ApiAgentsSettings.tsx:333
 #: src/components/settings/ApiAgentsSettings.tsx:409
-#: src/components/settings/Integrations.tsx:374
-#: src/components/settings/Integrations.tsx:411
+#: src/components/settings/Integrations.tsx:380
+#: src/components/settings/Integrations.tsx:417
 #: src/components/settings/WebhookCard.tsx:287
 msgid "Copy"
 msgstr "Copier"
@@ -2577,8 +2593,8 @@ msgstr "Copier dans le presse-papiers"
 msgid "Copy URL"
 msgstr "Copier l'URL"
 
-#: src/components/settings/Integrations.tsx:363
-#: src/components/settings/Integrations.tsx:400
+#: src/components/settings/Integrations.tsx:369
+#: src/components/settings/Integrations.tsx:406
 msgid "Copy Webhook endpoint"
 msgstr "Copier le point d'accès webhook"
 
@@ -2696,9 +2712,9 @@ msgstr "Créer et tester"
 #: src/components/settings/ApiAgentsSettings.tsx:248
 #: src/components/settings/ApiAgentsSettings.tsx:270
 #: src/components/settings/ApiAgentsSettings.tsx:285
-#: src/components/settings/WorkspaceMembers.tsx:583
-#: src/components/settings/WorkspaceMembers.tsx:647
-#: src/components/settings/WorkspaceMembers.tsx:667
+#: src/components/settings/WorkspaceMembers.tsx:594
+#: src/components/settings/WorkspaceMembers.tsx:658
+#: src/components/settings/WorkspaceMembers.tsx:678
 msgid "Create API Key"
 msgstr "Créer une clé API"
 
@@ -3254,9 +3270,9 @@ msgstr "Délai"
 #: src/components/segment/input.tsx:383
 #: src/components/sending_profiles/veridian_profile_card.tsx:254
 #: src/components/sending_profiles/veridian_profile_card.tsx:260
-#: src/components/settings/Integrations.tsx:332
-#: src/components/settings/Integrations.tsx:491
-#: src/components/settings/Integrations.tsx:558
+#: src/components/settings/Integrations.tsx:338
+#: src/components/settings/Integrations.tsx:497
+#: src/components/settings/Integrations.tsx:564
 #: src/components/settings/WebhookCard.tsx:239
 #: src/pages/BroadcastsPage.tsx:1438
 #: src/pages/ContactsPage.tsx:935
@@ -3330,8 +3346,8 @@ msgstr "Supprimer le dossier (mode lecture seule)"
 msgid "Delete header"
 msgstr "Supprimer le header"
 
-#: src/components/settings/WorkspaceMembers.tsx:232
-#: src/components/settings/WorkspaceMembers.tsx:239
+#: src/components/settings/WorkspaceMembers.tsx:245
+#: src/components/settings/WorkspaceMembers.tsx:252
 msgid "Delete invitation"
 msgstr "Supprimer l'invitation"
 
@@ -3361,9 +3377,9 @@ msgstr "Supprimer le modèle ?"
 msgid "Delete the notification?"
 msgstr "Supprimer la notification ?"
 
-#: src/components/settings/Integrations.tsx:326
-#: src/components/settings/Integrations.tsx:485
-#: src/components/settings/Integrations.tsx:552
+#: src/components/settings/Integrations.tsx:332
+#: src/components/settings/Integrations.tsx:491
+#: src/components/settings/Integrations.tsx:558
 msgid "Delete this integration?"
 msgstr "Supprimer cette intégration ?"
 
@@ -3490,7 +3506,7 @@ msgid "Disable webhook"
 msgstr "Désactiver le webhook"
 
 #: src/components/settings/GeneralSettings.tsx:143
-#: src/components/settings/Integrations.tsx:452
+#: src/components/settings/Integrations.tsx:458
 #: src/components/settings/veridian_cold_outreach_settings.tsx:1889
 #: src/components/templates/TemplateTranslationsTab.tsx:204
 msgid "Disabled"
@@ -3686,9 +3702,9 @@ msgstr "modifier"
 #: src/components/automations/UpsertAutomationDrawer.tsx:250
 #: src/components/email_builder/ui/ImportFontInput.tsx:209
 #: src/components/sending_profiles/veridian_profile_card.tsx:249
-#: src/components/settings/Integrations.tsx:316
-#: src/components/settings/Integrations.tsx:475
-#: src/components/settings/Integrations.tsx:542
+#: src/components/settings/Integrations.tsx:322
+#: src/components/settings/Integrations.tsx:481
+#: src/components/settings/Integrations.tsx:548
 #: src/components/settings/WebhookCard.tsx:245
 #: src/pages/ContactsPage.tsx:929
 #: src/pages/SendingProfilesPage.tsx:323
@@ -3767,7 +3783,7 @@ msgstr "Modifier la notification"
 msgid "Edit Notification"
 msgstr "Modifier la notification"
 
-#: src/components/settings/WorkspaceMembers.tsx:201
+#: src/components/settings/WorkspaceMembers.tsx:214
 msgid "Edit permissions"
 msgstr "Modifier les permissions"
 
@@ -3854,7 +3870,7 @@ msgstr "email"
 #: src/components/contacts/ExportContactsModal.tsx:50
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:338
 #: src/components/messages/MessageHistoryTab.tsx:228
-#: src/components/settings/WorkspaceMembers.tsx:100
+#: src/components/settings/WorkspaceMembers.tsx:113
 #: src/components/timeline/ContactTimeline.tsx:506
 #: src/pages/ContactsPage.tsx:360
 #: src/pages/ContactsPage.tsx:527
@@ -3868,7 +3884,7 @@ msgid "Email (Required)"
 msgstr "Email (requis)"
 
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx:383
-#: src/components/settings/WorkspaceMembers.tsx:623
+#: src/components/settings/WorkspaceMembers.tsx:634
 msgid "Email Address"
 msgstr "Adresse email"
 
@@ -4029,7 +4045,7 @@ msgid "Enable webhook"
 msgstr "Activer le webhook"
 
 #: src/components/settings/GeneralSettings.tsx:138
-#: src/components/settings/Integrations.tsx:448
+#: src/components/settings/Integrations.tsx:454
 #: src/components/settings/SystemSettingsDrawer.tsx:426
 #: src/components/templates/TemplateTranslationsTab.tsx:203
 msgid "Enabled"
@@ -4142,7 +4158,7 @@ msgid "Enter duration"
 msgstr "Entrez la durée"
 
 #: src/components/contacts/ContactUpsertDrawer.tsx:521
-#: src/components/settings/WorkspaceMembers.tsx:628
+#: src/components/settings/WorkspaceMembers.tsx:639
 msgid "Enter email address"
 msgstr "Entrez l'adresse email"
 
@@ -4524,7 +4540,7 @@ msgid "Failed to copy to clipboard"
 msgstr "Échec de la copie dans le presse-papiers"
 
 #: src/components/settings/ApiAgentsSettings.tsx:102
-#: src/components/settings/WorkspaceMembers.tsx:358
+#: src/components/settings/WorkspaceMembers.tsx:367
 msgid "Failed to create API key"
 msgstr "Échec de la création de la clé API"
 
@@ -4585,11 +4601,11 @@ msgstr "Échec de la suppression du contact"
 msgid "Failed to delete file: "
 msgstr "Échec de la suppression du fichier : "
 
-#: src/components/settings/Integrations.tsx:271
+#: src/components/settings/Integrations.tsx:277
 msgid "Failed to delete integration"
 msgstr "Échec de la suppression de l'intégration"
 
-#: src/components/settings/WorkspaceMembers.tsx:407
+#: src/components/settings/WorkspaceMembers.tsx:416
 msgid "Failed to delete invitation"
 msgstr "Échec de la suppression de l'invitation"
 
@@ -4687,7 +4703,7 @@ msgstr "Échec de l'importation du modèle MJML. Veuillez vérifier la syntaxe M
 msgid "Failed to import template. Please check the file format."
 msgstr "Échec de l'importation du modèle. Veuillez vérifier le format du fichier."
 
-#: src/components/settings/WorkspaceMembers.tsx:323
+#: src/components/settings/WorkspaceMembers.tsx:332
 msgid "Failed to invite member"
 msgstr "Échec de l'invitation du membre"
 
@@ -4750,11 +4766,11 @@ msgstr "Échec de la régénération du secret webhook"
 msgid "Failed to remove custom field label"
 msgstr "Échec de la suppression de l'étiquette de champ personnalisé"
 
-#: src/components/settings/WorkspaceMembers.tsx:388
+#: src/components/settings/WorkspaceMembers.tsx:397
 msgid "Failed to remove member"
 msgstr "Échec de la suppression du membre"
 
-#: src/components/settings/WorkspaceMembers.tsx:454
+#: src/components/settings/WorkspaceMembers.tsx:465
 msgid "Failed to resend invitation"
 msgstr "Échec du renvoi de l'invitation"
 
@@ -4794,7 +4810,7 @@ msgstr "Échec de l'enregistrement des classes de fournisseurs exclues"
 msgid "Failed to save field"
 msgstr "Échec de l'enregistrement du champ"
 
-#: src/components/settings/Integrations.tsx:244
+#: src/components/settings/Integrations.tsx:250
 msgid "Failed to save Firecrawl integration"
 msgstr "Échec de l'enregistrement de l'intégration Firecrawl"
 
@@ -4812,7 +4828,7 @@ msgstr "Échec de l'enregistrement des limites de l'infrastructure"
 msgid "Failed to save integration"
 msgstr "Échec de l'enregistrement de l'intégration"
 
-#: src/components/settings/Integrations.tsx:200
+#: src/components/settings/Integrations.tsx:206
 msgid "Failed to save LLM integration"
 msgstr "Échec de l'enregistrement de l'intégration LLM"
 
@@ -4824,7 +4840,7 @@ msgstr "Échec de l'enregistrement de la fenêtre d'envoi"
 msgid "Failed to save settings"
 msgstr "Impossible d'enregistrer les réglages"
 
-#: src/components/settings/Integrations.tsx:154
+#: src/components/settings/Integrations.tsx:160
 msgid "Failed to save Supabase integration"
 msgstr "Échec de l'enregistrement de l'intégration Supabase"
 
@@ -5073,7 +5089,7 @@ msgstr "Filtres :"
 #~ msgid "Find this in Google Cloud Console > APIs & Services > Credentials"
 #~ msgstr "Trouvez ceci dans Google Cloud Console > API et services > Identifiants"
 
-#: src/components/settings/Integrations.tsx:241
+#: src/components/settings/Integrations.tsx:247
 msgid "Firecrawl integration saved successfully"
 msgstr "Intégration Firecrawl enregistrée avec succès"
 
@@ -5243,8 +5259,8 @@ msgstr "Nom de l'expéditeur (remplacement)"
 msgid "From:"
 msgstr "De :"
 
-#: src/components/settings/WorkspaceMembers.tsx:135
-#: src/components/settings/WorkspaceMembers.tsx:162
+#: src/components/settings/WorkspaceMembers.tsx:148
+#: src/components/settings/WorkspaceMembers.tsx:175
 msgid "Full Access"
 msgstr "Accès complet"
 
@@ -6023,7 +6039,7 @@ msgstr "Insérer un lien"
 msgid "Inset"
 msgstr "Encart"
 
-#: src/components/settings/Integrations.tsx:268
+#: src/components/settings/Integrations.tsx:274
 msgid "Integration deleted successfully"
 msgstr "Intégration supprimée avec succès"
 
@@ -6043,7 +6059,7 @@ msgstr "Nom de l'intégration"
 #~ msgid "Integration updated successfully"
 #~ msgstr "Intégration mise à jour avec succès"
 
-#: src/components/settings/Integrations.tsx:611
+#: src/components/settings/Integrations.tsx:617
 #: src/components/settings/SettingsSidebar.tsx:58
 msgid "Integrations"
 msgstr "Intégrations"
@@ -6125,28 +6141,29 @@ msgstr "Format d'URL invalide. Utilisez une URL valide ou une expression liquid 
 msgid "Invitation accepted successfully! Welcome to the workspace."
 msgstr "Invitation acceptée avec succès ! Bienvenue dans l'espace de travail."
 
-#: src/components/settings/WorkspaceMembers.tsx:403
+#: src/components/settings/WorkspaceMembers.tsx:412
 msgid "Invitation deleted successfully"
 msgstr "Invitation supprimée avec succès"
 
-#: src/components/settings/WorkspaceMembers.tsx:450
+#: src/components/settings/WorkspaceMembers.tsx:461
 msgid "Invitation resent to {email}"
 msgstr "Invitation renvoyée à {email}"
 
-#: src/components/settings/WorkspaceMembers.tsx:120
+#: src/components/settings/WorkspaceMembers.tsx:133
 msgid "Invitation sent"
 msgstr "Invitation envoyée"
 
-#: src/components/settings/WorkspaceMembers.tsx:292
+#: src/components/settings/WorkspaceMembers.tsx:293
+#: src/components/settings/WorkspaceMembers.tsx:301
 msgid "Invitation sent to {inviteEmail}"
 msgstr "Invitation envoyée à {inviteEmail}"
 
 #: src/components/settings/WorkspaceMembers.tsx:284
-msgid "Invitation sent to {inviteEmail} via Veridian Hub"
-msgstr "Invitation envoyée à {inviteEmail} via Veridian Hub"
+#~ msgid "Invitation sent to {inviteEmail} via Veridian Hub"
+#~ msgstr "Invitation envoyée à {inviteEmail} via Veridian Hub"
 
-#: src/components/settings/WorkspaceMembers.tsx:586
-#: src/components/settings/WorkspaceMembers.tsx:608
+#: src/components/settings/WorkspaceMembers.tsx:597
+#: src/components/settings/WorkspaceMembers.tsx:619
 msgid "Invite Member"
 msgstr "Inviter un membre"
 
@@ -6557,7 +6574,7 @@ msgstr "Listes actualisées"
 msgid "Live"
 msgstr "En direct"
 
-#: src/components/settings/Integrations.tsx:197
+#: src/components/settings/Integrations.tsx:203
 msgid "LLM integration saved successfully"
 msgstr "Intégration LLM enregistrée avec succès"
 
@@ -6702,7 +6719,7 @@ msgstr "Fait en sorte que le wrapper s'étende sur toute la largeur de la fenêt
 msgid "Manage subscription"
 msgstr "Gérer l'abonnement"
 
-#: src/components/settings/WorkspaceMembers.tsx:577
+#: src/components/settings/WorkspaceMembers.tsx:588
 msgid "Manage your workspace members"
 msgstr "Gérer les membres de votre espace de travail"
 
@@ -6790,7 +6807,7 @@ msgstr "Nombre maximal d'emails par JOUR vers ce fournisseur (VOLUME), compté d
 msgid "Maximum emails per MINUTE toward this provider (SPEED). Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class rate."
 msgstr "Nombre maximal d'emails par MINUTE vers ce fournisseur (VITESSE). Les fractions sont permises (0,5 = un email toutes les 2 minutes). Laissez vide pour aucun débit par classe."
 
-#: src/components/settings/WorkspaceMembers.tsx:384
+#: src/components/settings/WorkspaceMembers.tsx:393
 msgid "Member removed successfully"
 msgstr "Membre supprimé avec succès"
 
@@ -6944,7 +6961,7 @@ msgstr "mode : {0}"
 
 #: src/components/integrations/LLMIntegration.tsx:151
 #: src/components/integrations/LLMIntegration.tsx:162
-#: src/components/settings/Integrations.tsx:508
+#: src/components/settings/Integrations.tsx:514
 msgid "Model"
 msgstr "Modèle"
 
@@ -6982,9 +6999,9 @@ msgstr "N/A"
 #: src/components/send_queue/veridian_queue_trace.tsx:38
 #: src/components/sending_profiles/veridian_inbox_drawer.tsx:89
 #: src/components/settings/ApiAgentsSettings.tsx:157
-#: src/components/settings/Integrations.tsx:348
-#: src/components/settings/Integrations.tsx:507
-#: src/components/settings/Integrations.tsx:572
+#: src/components/settings/Integrations.tsx:354
+#: src/components/settings/Integrations.tsx:513
+#: src/components/settings/Integrations.tsx:578
 #: src/components/settings/WebhooksSettings.tsx:224
 msgid "Name"
 msgstr "Nom"
@@ -7102,16 +7119,16 @@ msgstr "Prochaine exécution"
 #: src/components/messages/MessageHistoryTab.tsx:198
 #: src/components/messages/MessageHistoryTab.tsx:214
 #: src/components/settings/CustomFieldsConfiguration.tsx:202
-#: src/components/settings/Integrations.tsx:330
-#: src/components/settings/Integrations.tsx:489
-#: src/components/settings/Integrations.tsx:556
+#: src/components/settings/Integrations.tsx:336
+#: src/components/settings/Integrations.tsx:495
+#: src/components/settings/Integrations.tsx:562
 #: src/components/settings/WebhookCard.tsx:193
 #: src/components/settings/WebhookCard.tsx:237
 #: src/components/settings/WebhookCard.tsx:279
-#: src/components/settings/WorkspaceMembers.tsx:216
-#: src/components/settings/WorkspaceMembers.tsx:236
-#: src/components/settings/WorkspaceMembers.tsx:494
-#: src/components/settings/WorkspaceMembers.tsx:502
+#: src/components/settings/WorkspaceMembers.tsx:229
+#: src/components/settings/WorkspaceMembers.tsx:249
+#: src/components/settings/WorkspaceMembers.tsx:505
+#: src/components/settings/WorkspaceMembers.tsx:513
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:148
 #: src/pages/BroadcastsPage.tsx:566
 msgid "No"
@@ -7122,7 +7139,7 @@ msgstr "Non"
 msgid "No {0} content to preview"
 msgstr "Pas de contenu {0} à prévisualiser"
 
-#: src/components/settings/WorkspaceMembers.tsx:156
+#: src/components/settings/WorkspaceMembers.tsx:169
 msgid "No Access"
 msgstr "Pas d'accès"
 
@@ -7265,7 +7282,7 @@ msgstr "Pas de liste"
 msgid "No lists found"
 msgstr "Aucune liste trouvée"
 
-#: src/components/settings/WorkspaceMembers.tsx:602
+#: src/components/settings/WorkspaceMembers.tsx:613
 msgid "No members found"
 msgstr "Aucun membre trouvé"
 
@@ -7285,7 +7302,7 @@ msgstr "Aucun nœud"
 msgid "No nodes in this automation"
 msgstr "Aucun nœud dans cette automation"
 
-#: src/components/settings/Integrations.tsx:633
+#: src/components/settings/Integrations.tsx:681
 msgid "No other integration is connected."
 msgstr "Aucune autre intégration n'est connectée."
 
@@ -7519,8 +7536,8 @@ msgid "Not available"
 msgstr "Non disponible"
 
 #: src/components/analytics/AnalyticsDashboard.tsx:94
-#: src/components/settings/Integrations.tsx:382
-#: src/components/settings/Integrations.tsx:419
+#: src/components/settings/Integrations.tsx:388
+#: src/components/settings/Integrations.tsx:425
 #: src/components/settings/veridian_cold_outreach_settings.tsx:266
 msgid "Not configured"
 msgstr "Non configuré"
@@ -7707,7 +7724,7 @@ msgstr "Seul le propriétaire du workspace peut modifier les profils"
 #: src/components/integrations/FirecrawlIntegration.tsx:47
 #: src/components/integrations/LLMIntegration.tsx:79
 #: src/components/integrations/SupabaseIntegration.tsx:79
-#: src/components/settings/Integrations.tsx:784
+#: src/components/settings/Integrations.tsx:832
 msgid "Only workspace owners can modify integrations"
 msgstr "Seuls les propriétaires de l'espace de travail peuvent modifier les intégrations"
 
@@ -7751,7 +7768,7 @@ msgstr "Pixel d'ouverture"
 msgid "Open Rate"
 msgstr "Taux d'ouverture"
 
-#: src/components/settings/Integrations.tsx:625
+#: src/components/settings/Integrations.tsx:631
 msgid "Open Sending profiles"
 msgstr "Ouvrir les profils d'envoi"
 
@@ -8049,7 +8066,7 @@ msgstr "Payload :"
 #: src/components/contacts/ContactDetailsDrawer.tsx:582
 #: src/components/lists/ListStats.tsx:84
 #: src/components/send_queue/veridian_queue_labels.ts:153
-#: src/components/settings/WorkspaceMembers.tsx:138
+#: src/components/settings/WorkspaceMembers.tsx:151
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:79
 #: src/components/webhooks/OutgoingWebhooksTab.tsx:236
 #: src/pages/BroadcastsPage.tsx:340
@@ -8157,13 +8174,13 @@ msgstr "En pourcentage. 0 désactive la dispersion. Vide : défaut de 30 %."
 msgid "Periodically check for new Veridian Mail versions and security updates. A popup will list new versions available."
 msgstr "Vérifier régulièrement les nouvelles versions de Veridian Mail et les mises à jour de sécurité. Une fenêtre listera les versions disponibles."
 
-#: src/components/settings/WorkspaceMembers.tsx:152
-#: src/components/settings/WorkspaceMembers.tsx:167
+#: src/components/settings/WorkspaceMembers.tsx:165
+#: src/components/settings/WorkspaceMembers.tsx:180
 msgid "Permission Details"
 msgstr "Détails des permissions"
 
-#: src/components/settings/WorkspaceMembers.tsx:131
-#: src/components/settings/WorkspaceMembers.tsx:634
+#: src/components/settings/WorkspaceMembers.tsx:144
+#: src/components/settings/WorkspaceMembers.tsx:645
 msgid "Permissions"
 msgstr "Permissions"
 
@@ -8311,8 +8328,8 @@ msgstr "Veuillez entrer un nom d'espace de travail"
 msgid "Please enter an API identifier"
 msgstr "Veuillez entrer un identifiant API"
 
-#: src/components/settings/WorkspaceMembers.tsx:333
-#: src/components/settings/WorkspaceMembers.tsx:677
+#: src/components/settings/WorkspaceMembers.tsx:342
+#: src/components/settings/WorkspaceMembers.tsx:688
 msgid "Please enter an API key name"
 msgstr "Veuillez entrer un nom de clé API"
 
@@ -8321,8 +8338,8 @@ msgstr "Veuillez entrer un nom de clé API"
 msgid "Please enter an automation name"
 msgstr "Veuillez entrer un nom d'automation"
 
-#: src/components/settings/WorkspaceMembers.tsx:269
-#: src/components/settings/WorkspaceMembers.tsx:625
+#: src/components/settings/WorkspaceMembers.tsx:282
+#: src/components/settings/WorkspaceMembers.tsx:636
 msgid "Please enter an email address"
 msgstr "Veuillez entrer une adresse email"
 
@@ -8826,8 +8843,8 @@ msgid "Re-run deliverability score"
 msgstr "Relancer le score de délivrabilité"
 
 #: src/components/settings/EditPermissionsModal.tsx:86
-#: src/components/settings/WorkspaceMembers.tsx:494
-#: src/components/settings/WorkspaceMembers.tsx:548
+#: src/components/settings/WorkspaceMembers.tsx:505
+#: src/components/settings/WorkspaceMembers.tsx:559
 msgid "Read"
 msgstr "Lecture"
 
@@ -9005,7 +9022,7 @@ msgstr "Régénérer le secret ?"
 #~ msgid "Register webhooks?"
 #~ msgstr "Enregistrer les webhooks ?"
 
-#: src/components/settings/Integrations.tsx:444
+#: src/components/settings/Integrations.tsx:450
 msgid "Reject Disposable Email"
 msgstr "Rejeter les emails jetables"
 
@@ -9070,8 +9087,8 @@ msgstr "Retirer de la rotation"
 msgid "Remove Link"
 msgstr "Supprimer le lien"
 
-#: src/components/settings/WorkspaceMembers.tsx:212
-#: src/components/settings/WorkspaceMembers.tsx:219
+#: src/components/settings/WorkspaceMembers.tsx:225
+#: src/components/settings/WorkspaceMembers.tsx:232
 msgid "Remove member"
 msgstr "Retirer le membre"
 
@@ -9249,7 +9266,7 @@ msgstr "Nécessite un espacement"
 msgid "Resend code"
 msgstr "Renvoyer le code"
 
-#: src/components/settings/WorkspaceMembers.tsx:247
+#: src/components/settings/WorkspaceMembers.tsx:260
 msgid "Resend invitation"
 msgstr "Renvoyer l'invitation"
 
@@ -9279,7 +9296,7 @@ msgid "Reset translation"
 msgstr "Réinitialiser la traduction"
 
 #: src/components/settings/EditPermissionsModal.tsx:80
-#: src/components/settings/WorkspaceMembers.tsx:542
+#: src/components/settings/WorkspaceMembers.tsx:553
 msgid "Resource"
 msgstr "Ressource"
 
@@ -9389,7 +9406,7 @@ msgstr "Droite"
 msgid "Right to Left"
 msgstr "De droite à gauche"
 
-#: src/components/settings/WorkspaceMembers.tsx:108
+#: src/components/settings/WorkspaceMembers.tsx:121
 msgid "Role"
 msgstr "Rôle"
 
@@ -9503,9 +9520,9 @@ msgstr "samedi"
 #: src/components/sending_profiles/veridian_inbox_drawer.tsx:119
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx:200
 #: src/components/settings/CustomFieldsConfiguration.tsx:275
-#: src/components/settings/Integrations.tsx:666
 #: src/components/settings/Integrations.tsx:714
-#: src/components/settings/Integrations.tsx:761
+#: src/components/settings/Integrations.tsx:762
+#: src/components/settings/Integrations.tsx:809
 #: src/components/settings/SystemSettingsDrawer.tsx:217
 #: src/components/settings/veridian_cold_outreach_settings.tsx:524
 #: src/components/settings/WebhooksSettings.tsx:215
@@ -10030,7 +10047,7 @@ msgstr "Envoyer une notification transactionnelle avec TypeScript/JavaScript :"
 msgid "Send error"
 msgstr "Erreur d'envoi"
 
-#: src/components/settings/WorkspaceMembers.tsx:617
+#: src/components/settings/WorkspaceMembers.tsx:628
 msgid "Send Invitation"
 msgstr "Envoyer l'invitation"
 
@@ -10154,7 +10171,7 @@ msgstr "Profils d'envoi"
 #~ msgid "Sending profiles and integrations"
 #~ msgstr "Profils d'envoi et intégrations"
 
-#: src/components/settings/Integrations.tsx:619
+#: src/components/settings/Integrations.tsx:625
 msgid "Sending profiles and return inboxes have their own page."
 msgstr "Les profils d'envoi et les boîtes de retour ont leur propre page."
 
@@ -10476,7 +10493,7 @@ msgid "Simulate for"
 msgstr "Simuler pour"
 
 #: src/components/analytics/NewContactsTable.tsx:184
-#: src/components/settings/WorkspaceMembers.tsx:178
+#: src/components/settings/WorkspaceMembers.tsx:191
 msgid "Since"
 msgstr "Depuis"
 
@@ -10936,7 +10953,7 @@ msgstr "Connexion réussie"
 msgid "Sunday"
 msgstr "dimanche"
 
-#: src/components/settings/Integrations.tsx:151
+#: src/components/settings/Integrations.tsx:157
 msgid "Supabase integration saved successfully"
 msgstr "Intégration Supabase enregistrée avec succès"
 
@@ -10994,7 +11011,7 @@ msgid "Task type:"
 msgstr "Type de tâche :"
 
 #: src/components/settings/SettingsSidebar.tsx:37
-#: src/components/settings/WorkspaceMembers.tsx:577
+#: src/components/settings/WorkspaceMembers.tsx:588
 msgid "Team"
 msgstr "Équipe"
 
@@ -11441,7 +11458,7 @@ msgstr "Le champ user_metadata dans Supabase sera enregistré dans ce champ JSON
 #~ msgid "The value must be at least 1"
 #~ msgstr "La valeur doit être au moins 1"
 
-#: src/components/settings/WorkspaceMembers.tsx:320
+#: src/components/settings/WorkspaceMembers.tsx:329
 msgid "The Veridian Hub is temporarily unavailable. Please try again in a moment."
 msgstr "Le Veridian Hub est momentanément indisponible. Réessayez dans un instant."
 
@@ -11480,9 +11497,9 @@ msgstr "Ces paramètres sont automatiquement ajoutés à l'URL de la diffusion. 
 #: src/components/automations/AutomationCard.tsx:153
 #: src/components/contacts/DeleteContactModal.tsx:54
 #: src/components/settings/DeleteWorkspace.tsx:45
-#: src/components/settings/Integrations.tsx:327
-#: src/components/settings/Integrations.tsx:486
-#: src/components/settings/Integrations.tsx:553
+#: src/components/settings/Integrations.tsx:333
+#: src/components/settings/Integrations.tsx:492
+#: src/components/settings/Integrations.tsx:559
 #: src/components/settings/WebhookCard.tsx:234
 msgid "This action cannot be undone."
 msgstr "Cette action est irréversible."
@@ -11606,7 +11623,7 @@ msgid "This text appears in the email client's preview pane, typically after the
 msgstr "Ce texte apparaît dans le volet d'aperçu du client email, généralement après la ligne d'objet. Gardez-le concis et accrocheur (100-140 caractères recommandés)."
 
 #: src/components/settings/ApiAgentsSettings.tsx:320
-#: src/components/settings/WorkspaceMembers.tsx:702
+#: src/components/settings/WorkspaceMembers.tsx:713
 msgid "This token will only be displayed once. Please save it in a secure location. It cannot be retrieved again."
 msgstr "Ce jeton ne sera affiché qu'une seule fois. Veuillez le sauvegarder dans un endroit sécurisé. Il ne pourra pas être récupéré à nouveau."
 
@@ -11799,7 +11816,7 @@ msgstr "Basculez entre les vues mobile et bureau pour voir comment votre email a
 msgid "Token copied to clipboard"
 msgstr "Jeton copié dans le presse-papiers"
 
-#: src/components/settings/Integrations.tsx:578
+#: src/components/settings/Integrations.tsx:584
 msgid "Tools"
 msgstr "Outils"
 
@@ -12000,7 +12017,7 @@ msgstr "Saisissez {selectedCount} pour confirmer :"
 msgid "Type:"
 msgstr "Type :"
 
-#: src/components/settings/WorkspaceMembers.tsx:306
+#: src/components/settings/WorkspaceMembers.tsx:315
 msgid "Unable to add this member. Please contact your administrator."
 msgstr "Impossible d'ajouter ce membre. Contactez votre administrateur."
 
@@ -12394,7 +12411,7 @@ msgstr "Hook de création d'utilisateur"
 msgid "User Created Hook Secret"
 msgstr "Secret du hook de création d'utilisateur"
 
-#: src/components/settings/Integrations.tsx:436
+#: src/components/settings/Integrations.tsx:442
 msgid "User Metadata Field"
 msgstr "Champ de métadonnées utilisateur"
 
@@ -12604,13 +12621,13 @@ msgstr "Webhook désactivé"
 msgid "Webhook enabled"
 msgstr "Webhook activé"
 
-#: src/components/settings/Integrations.tsx:369
-#: src/components/settings/Integrations.tsx:406
+#: src/components/settings/Integrations.tsx:375
+#: src/components/settings/Integrations.tsx:412
 msgid "Webhook endpoint copied to clipboard"
 msgstr "Endpoint du webhook copié dans le presse-papiers"
 
-#: src/components/settings/Integrations.tsx:355
-#: src/components/settings/Integrations.tsx:392
+#: src/components/settings/Integrations.tsx:361
+#: src/components/settings/Integrations.tsx:398
 msgid "Webhook endpoint:"
 msgstr "Endpoint du webhook :"
 
@@ -12854,8 +12871,8 @@ msgid "Wrapper Attributes"
 msgstr "Attributs du wrapper"
 
 #: src/components/settings/EditPermissionsModal.tsx:99
-#: src/components/settings/WorkspaceMembers.tsx:502
-#: src/components/settings/WorkspaceMembers.tsx:561
+#: src/components/settings/WorkspaceMembers.tsx:513
+#: src/components/settings/WorkspaceMembers.tsx:572
 msgid "Write"
 msgstr "Écriture"
 
@@ -12884,14 +12901,14 @@ msgstr "Yahoo / AOL"
 #: src/components/messages/MessageHistoryTab.tsx:197
 #: src/components/messages/MessageHistoryTab.tsx:213
 #: src/components/settings/CustomFieldsConfiguration.tsx:201
-#: src/components/settings/Integrations.tsx:329
-#: src/components/settings/Integrations.tsx:488
-#: src/components/settings/Integrations.tsx:555
+#: src/components/settings/Integrations.tsx:335
+#: src/components/settings/Integrations.tsx:494
+#: src/components/settings/Integrations.tsx:561
 #: src/components/settings/WebhookCard.tsx:192
 #: src/components/settings/WebhookCard.tsx:236
 #: src/components/settings/WebhookCard.tsx:278
-#: src/components/settings/WorkspaceMembers.tsx:215
-#: src/components/settings/WorkspaceMembers.tsx:235
+#: src/components/settings/WorkspaceMembers.tsx:228
+#: src/components/settings/WorkspaceMembers.tsx:248
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:147
 msgid "Yes"
 msgstr "Oui"
@@ -13019,7 +13036,7 @@ msgstr "Vous continuez une session de téléversement précédente de \"{fileNam
 msgid "You've been invited to join"
 msgstr "Vous avez été invité à rejoindre"
 
-#: src/components/settings/WorkspaceMembers.tsx:315
+#: src/components/settings/WorkspaceMembers.tsx:324
 msgid "Your account is not yet linked to the Veridian Hub. Sign in once via the Hub to enable team invitations."
 msgstr "Votre compte n'est pas encore relié au Veridian Hub. Connectez-vous une fois via le Hub pour activer les invitations d'équipe."
 
