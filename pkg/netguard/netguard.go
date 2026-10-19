@@ -107,6 +107,9 @@ func IsBlockedIP(ip net.IP) bool {
 type AllowEntry struct {
 	IP   net.IP
 	Port int
+	// Net, si non nil, autorise tout le CIDR (tous ports). Réservé à
+	// TrustedHostsEnv (messagerie seulement) : ParseAllowlist n'en produit pas.
+	Net *net.IPNet
 }
 
 // Allowlist est la liste d'exceptions pour NOS propres relais. Une adresse
@@ -117,6 +120,12 @@ type Allowlist []AllowEntry
 // Allows indique si (ip, port) figure dans la liste.
 func (a Allowlist) Allows(ip net.IP, port int) bool {
 	for _, e := range a {
+		if e.Net != nil {
+			if e.Net.Contains(ip) {
+				return true
+			}
+			continue
+		}
 		if (e.Port == port || e.Port == 0) && e.IP.Equal(ip) {
 			return true
 		}
@@ -159,11 +168,53 @@ var internalRelays = Allowlist{
 	{IP: net.ParseIP("100.85.160.17"), Port: 993},
 }
 
-// DefaultAllowlist = relais intégrés + InternalRelayEnv (entrée invalide
-// ignorée : une exception mal écrite ne doit jamais ouvrir plus).
+// TrustedHostsEnv : liste d'IP et/ou CIDR séparés par des virgules (tous
+// ports) autorisés pour les intégrations de MESSAGERIE (IMAP, SMTP) seulement.
+// Vide par défaut : comportement inchangé (fail-closed). Les webhooks et les
+// autres sorties n'utilisent jamais cette liste (ils appellent IsBlockedIP
+// sans Allowlist ou NewTenantOutboundClient).
+const TrustedHostsEnv = "NOTIFUSE_TRUSTED_INTERNAL_HOSTS"
+
+// ParseTrustedHosts lit « ip,cidr,... ». Toute entrée invalide fait échouer
+// l'ensemble (l'appelant ignore alors toute la liste).
+func ParseTrustedHosts(spec string) (Allowlist, error) {
+	var out Allowlist
+	for _, raw := range strings.Split(spec, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if strings.Contains(raw, "/") {
+			_, n, err := net.ParseCIDR(raw)
+			if err != nil {
+				return nil, fmt.Errorf("trusted host %q: %w", raw, err)
+			}
+			out = append(out, AllowEntry{Net: n})
+			continue
+		}
+		ip := net.ParseIP(strings.Trim(raw, "[]"))
+		if ip == nil {
+			return nil, fmt.Errorf("trusted host %q: need a literal ip or cidr", raw)
+		}
+		bits := 8 * net.IPv6len
+		if v4 := ip.To4(); v4 != nil {
+			ip, bits = v4, 8*net.IPv4len
+		}
+		out = append(out, AllowEntry{Net: &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)}})
+	}
+	return out, nil
+}
+
+// DefaultAllowlist = relais intégrés + InternalRelayEnv + TrustedHostsEnv
+// (entrée invalide ignorée : une exception mal écrite ne doit jamais ouvrir
+// plus). Utilisée UNIQUEMENT par SMTP et IMAP, à l'enregistrement ET à chaque
+// connexion (anti DNS-rebinding).
 func DefaultAllowlist() Allowlist {
 	out := append(Allowlist{}, internalRelays...)
 	if extra, err := ParseAllowlist(os.Getenv(InternalRelayEnv)); err == nil {
+		out = append(out, extra...)
+	}
+	if extra, err := ParseTrustedHosts(os.Getenv(TrustedHostsEnv)); err == nil {
 		out = append(out, extra...)
 	}
 	return out

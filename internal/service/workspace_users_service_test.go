@@ -691,7 +691,7 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 
 		mockAuthSvc.EXPECT().
 			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: inviterID}, nil, nil)
+			Return(ctx, &domain.User{ID: inviterID}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 		mockRepo.EXPECT().
 			GetByID(ctx, workspaceID).
@@ -766,7 +766,7 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 
 		mockAuthSvc.EXPECT().
 			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: inviterID}, nil, nil)
+			Return(ctx, &domain.User{ID: inviterID}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 		mockRepo.EXPECT().
 			GetByID(ctx, workspaceID).
@@ -814,7 +814,7 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 		// Mock authentication - this should be called before email validation
 		mockAuthSvc.EXPECT().
 			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: inviterID}, nil, nil)
+			Return(ctx, &domain.User{ID: inviterID}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 		invitation, token, err := service.InviteMember(ctx, workspaceID, "invalid-email", domain.UserPermissions{})
 		require.Error(t, err)
@@ -838,7 +838,7 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 	t.Run("workspace not found", func(t *testing.T) {
 		mockAuthSvc.EXPECT().
 			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: inviterID}, nil, nil)
+			Return(ctx, &domain.User{ID: inviterID}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 		mockRepo.EXPECT().
 			GetByID(ctx, workspaceID).
@@ -854,7 +854,7 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 	t.Run("inviter not a member", func(t *testing.T) {
 		mockAuthSvc.EXPECT().
 			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: inviterID}, nil, nil)
+			Return(ctx, &domain.User{ID: inviterID}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 		mockRepo.EXPECT().
 			GetByID(ctx, workspaceID).
@@ -882,7 +882,7 @@ func TestWorkspaceService_InviteMember(t *testing.T) {
 
 		mockAuthSvc.EXPECT().
 			AuthenticateUserForWorkspace(ctx, workspaceID).
-			Return(ctx, &domain.User{ID: inviterID}, nil, nil)
+			Return(ctx, &domain.User{ID: inviterID}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 		mockRepo.EXPECT().
 			GetByID(ctx, workspaceID).

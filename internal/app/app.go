@@ -1504,6 +1504,8 @@ func (a *App) InitHandlers() error {
 	if gcRunner, ok := a.veridianService.(httpHandler.VeridianOrphanDBGCRunner); ok {
 		veridianHandler.SetOrphanDBGC(gcRunner, a.config.Environment)
 	}
+	// Route admin email-integration.verify (HMAC) : transport reel vers un 'to' libre.
+	veridianHandler.SetEmailIntegrationVerifier(a.emailService)
 
 	// === Veridian patch — Lot 1 sprint cold (2026-06-15) — poller IMAP ===
 	// BRIQUE FONDATRICE. Poll les boîtes IMAP configurées (Integration de type

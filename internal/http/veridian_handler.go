@@ -52,6 +52,8 @@ type VeridianHandler struct {
 	// (2026-06-18). nil (prod / self-hosted) → handleGCOrphanWorkspaceDBs renvoie
 	// 503. Staging-only. Cf. veridian_orphan_db_gc_handler.go.
 	orphanDBGC *veridianOrphanDBGCDeps
+	// emailVerifier : route admin email-integration.verify (chantier 2026-10-19).
+	emailVerifier VeridianEmailIntegrationVerifier
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -208,6 +210,8 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// veridian_orphan_db_gc_handler.go + todo/2026-06-17-orphan-workspaces-...md.
 	mux.Handle("POST /api/veridian/admin/gc-orphan-workspace-dbs", writeRoute(h.handleGCOrphanWorkspaceDBs))
 	mux.Handle("GET /api/veridian/admin/gc-orphan-workspace-dbs", hmac(http.HandlerFunc(h.handleGCOrphanWorkspaceDBs)))
+	// Verification admin d'un profil d'envoi (transport reel vers `to` libre). HMAC.
+	mux.Handle("POST /api/veridian/admin/email-integration.verify", writeRoute(h.handleEmailIntegrationVerify))
 	// === Veridian patch V37 === Limites + dimensions feature d'un tenant
 	// (lot 7 ticket pricing-plans-implementation). Source de verite pour la
 	// console UI (widgets quota) et le paywall middleware. Auth HMAC.

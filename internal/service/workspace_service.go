@@ -739,10 +739,15 @@ func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID st
 // InviteMember creates an invitation for a user to join a workspace
 func (s *WorkspaceService) InviteMember(ctx context.Context, workspaceID, email string, permissions domain.UserPermissions) (*domain.WorkspaceInvitation, string, error) {
 	var inviter *domain.User
+	var inviterWorkspace *domain.UserWorkspace
 	var err error
-	ctx, inviter, _, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
+	ctx, inviter, inviterWorkspace, err = s.authService.AuthenticateUserForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to authenticate user: %w", err)
+	}
+	// Veridian patch (fiche 67) : seul le owner humain invite.
+	if err := veridianRequireOwner(inviter, inviterWorkspace, "invite members"); err != nil {
+		return nil, "", err
 	}
 
 	// Validate email format
@@ -1506,10 +1511,14 @@ func (s *WorkspaceService) DeleteInvitation(ctx context.Context, invitationID st
 	}
 
 	// Check if the user is a member of the workspace that the invitation belongs to
-	_, err = s.repo.GetUserWorkspace(ctx, user.ID, invitation.WorkspaceID)
+	deleterWorkspace, err := s.repo.GetUserWorkspace(ctx, user.ID, invitation.WorkspaceID)
 	if err != nil {
 		s.logger.WithField("workspace_id", invitation.WorkspaceID).WithField("user_id", user.ID).WithField("error", err.Error()).Error("User does not have access to this workspace")
 		return &domain.ErrUnauthorized{Message: "You do not have access to this workspace"}
+	}
+	// Veridian patch (fiche 67) : seul le owner humain supprime une invitation.
+	if err := veridianRequireOwner(user, deleterWorkspace, "delete invitations"); err != nil {
+		return err
 	}
 
 	// Delete the invitation

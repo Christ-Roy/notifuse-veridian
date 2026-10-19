@@ -98,3 +98,50 @@ func TestControlOnRealDialer(t *testing.T) {
 	require.NoError(t, err)
 	c.Close()
 }
+
+func TestTrustedHostsEnv(t *testing.T) {
+	t.Setenv(InternalRelayEnv, "")
+	t.Setenv(TrustedHostsEnv, "")
+	// refusé par défaut
+	d := DefaultAllowlist()
+	assert.False(t, d.Allows(net.ParseIP("100.108.136.89"), 993))
+	assert.Error(t, ValidateHost("100.108.136.89", 993, d))
+
+	// IP seule : autorisée sur tous les ports, voisin toujours refusé
+	t.Setenv(TrustedHostsEnv, "100.108.136.89")
+	d = DefaultAllowlist()
+	assert.NoError(t, ValidateHost("100.108.136.89", 993, d))
+	assert.NoError(t, ValidateHost("100.108.136.89", 587, d))
+	assert.NoError(t, CheckAddr("100.108.136.89:993", d))
+	assert.Error(t, ValidateHost("100.108.136.90", 993, d), "voisin non listé")
+	assert.Error(t, CheckAddr("100.108.136.90:993", d))
+	assert.Error(t, ValidateHost("127.0.0.1", 993, d))
+	assert.Error(t, CheckAddr("169.254.169.254:80", d))
+
+	// CIDR + IPv6, avec espaces
+	t.Setenv(TrustedHostsEnv, " 100.108.136.0/24 , fd7a:115c:a1e0::223b:885a")
+	d = DefaultAllowlist()
+	assert.NoError(t, CheckAddr("100.108.136.200:25", d))
+	assert.Error(t, CheckAddr("100.108.137.1:25", d))
+	assert.NoError(t, CheckAddr("[fd7a:115c:a1e0::223b:885a]:993", d))
+	assert.Error(t, CheckAddr("[fd7a:115c:a1e0::223b:885b]:993", d))
+
+	// entrée invalide : tout est ignoré, relais intégrés conservés
+	t.Setenv(TrustedHostsEnv, "100.108.136.89,garbage")
+	d = DefaultAllowlist()
+	assert.Len(t, d, 3)
+	assert.Error(t, CheckAddr("100.108.136.89:993", d))
+
+	// la liste ne rend jamais joignable via IsBlockedIP (webhooks) : inchangé
+	assert.True(t, IsBlockedIP(net.ParseIP("100.108.136.89")))
+}
+
+func TestControlHonoursTrustedHosts(t *testing.T) {
+	t.Setenv(InternalRelayEnv, "")
+	t.Setenv(TrustedHostsEnv, "")
+	err := Control(DefaultAllowlist())("tcp", "127.0.0.1:993", nil)
+	assert.Error(t, err)
+	t.Setenv(TrustedHostsEnv, "127.0.0.0/8")
+	assert.NoError(t, Control(DefaultAllowlist())("tcp", "127.0.0.1:993", nil), "revérifié à la connexion avec la même liste")
+	assert.Error(t, Control(DefaultAllowlist())("tcp", "10.0.0.1:993", nil))
+}

@@ -3401,7 +3401,7 @@ func TestWorkspaceService_DeleteInvitation(t *testing.T) {
 			Return(&domain.UserWorkspace{
 				UserID:      userID,
 				WorkspaceID: workspaceID,
-				Role:        "member",
+				Role:        "owner",
 			}, nil)
 
 		mockRepo.EXPECT().
@@ -3488,7 +3488,7 @@ func TestWorkspaceService_DeleteInvitation(t *testing.T) {
 			Return(&domain.UserWorkspace{
 				UserID:      userID,
 				WorkspaceID: workspaceID,
-				Role:        "member",
+				Role:        "owner",
 			}, nil)
 
 		mockRepo.EXPECT().
@@ -3810,7 +3810,7 @@ func TestWorkspaceService_InviteMember_TeamMemberLimit(t *testing.T) {
 		inviter := &domain.User{ID: inviterID}
 		mockAuthService.EXPECT().
 			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
-			Return(context.Background(), inviter, nil, nil)
+			Return(context.Background(), inviter, &domain.UserWorkspace{Role: "owner"}, nil)
 		mockRepo.EXPECT().
 			GetByID(gomock.Any(), workspaceID).
 			Return(&domain.Workspace{ID: workspaceID}, nil)
@@ -3836,7 +3836,7 @@ func TestWorkspaceService_InviteMember_TeamMemberLimit(t *testing.T) {
 		inviter := &domain.User{ID: inviterID}
 		mockAuthService.EXPECT().
 			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
-			Return(context.Background(), inviter, nil, nil)
+			Return(context.Background(), inviter, &domain.UserWorkspace{Role: "owner"}, nil)
 		mockRepo.EXPECT().
 			GetByID(gomock.Any(), workspaceID).
 			Return(&domain.Workspace{ID: workspaceID}, nil)
@@ -3873,7 +3873,7 @@ func TestWorkspaceService_InviteMember_TeamMemberLimit(t *testing.T) {
 		inviter := &domain.User{ID: inviterID}
 		mockAuthService.EXPECT().
 			AuthenticateUserForWorkspace(gomock.Any(), workspaceID).
-			Return(context.Background(), inviter, nil, nil)
+			Return(context.Background(), inviter, &domain.UserWorkspace{Role: "owner"}, nil)
 		mockRepo.EXPECT().
 			GetByID(gomock.Any(), workspaceID).
 			Return(&domain.Workspace{ID: workspaceID}, nil)

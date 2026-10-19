@@ -96,7 +96,7 @@ func TestVeridianInviteMember_OK_201Reused(t *testing.T) {
 	owner := &domain.User{ID: "user-local-1", Type: domain.UserTypeUser, Email: "owner@example.com"}
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-42").
-		Return(context.Background(), owner, &domain.UserWorkspace{WorkspaceID: "ws-42"}, nil)
+		Return(context.Background(), owner, &domain.UserWorkspace{WorkspaceID: "ws-42", Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		result: &service.HubInvitationResult{
@@ -149,7 +149,7 @@ func TestVeridianInviteMember_PrefersUserStructHubUserID(t *testing.T) {
 	}
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-7").
-		Return(context.Background(), owner, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), owner, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		result: &service.HubInvitationResult{InvitationID: "i", ExpiresAt: time.Now()},
@@ -177,7 +177,7 @@ func TestVeridianInviteMember_FallbackEmptyHubUserID_UsesLocalID(t *testing.T) {
 	owner := &domain.User{ID: "user-local-99", Type: domain.UserTypeUser, Email: "legacy@x.com"}
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), owner, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), owner, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		result: &service.HubInvitationResult{
@@ -207,7 +207,7 @@ func TestVeridianInviteMember_DefaultRoleMember(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@o.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@o.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{result: &service.HubInvitationResult{InvitationID: "i", ExpiresAt: time.Now()}}
 	h := newInviteHandler(t, hubStub, authSvc, &stubHubUserIDResolver{hubUserID: "hub-uid"}, true)
@@ -303,7 +303,7 @@ func TestVeridianInviteMember_APIKeyCannotInvite_403(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "k", Type: domain.UserTypeAPIKey, Email: "api@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "k", Type: domain.UserTypeAPIKey, Email: "api@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	h := newInviteHandler(t, &stubHubClient{}, authSvc, &stubHubUserIDResolver{}, true)
 	req := buildInviteReq(t, `{"workspace_id":"ws-1","email":"e@e.com"}`)
@@ -319,7 +319,7 @@ func TestVeridianInviteMember_SelfInvite_400(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "me@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "me@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	h := newInviteHandler(t, &stubHubClient{}, authSvc, &stubHubUserIDResolver{}, true)
 	req := buildInviteReq(t, `{"workspace_id":"ws-1","email":"me@x.com"}`)
@@ -337,7 +337,7 @@ func TestVeridianInviteMember_HubUnreachable_502(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		err: &service.HubInvitationError{HubStatus: 0, Code: "hub_unreachable", Message: "dial tcp: timeout"},
@@ -356,7 +356,7 @@ func TestVeridianInviteMember_HubInviterNotFound_422(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		err: &service.HubInvitationError{HubStatus: 404, Code: "inviter_not_found", Message: "unknown user"},
@@ -376,7 +376,7 @@ func TestVeridianInviteMember_HubUnauthorizedHMAC_502(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		err: &service.HubInvitationError{HubStatus: 401, Code: "unauthorized", Message: "invalid signature"},
@@ -394,7 +394,7 @@ func TestVeridianInviteMember_HubInvalidPayload_400(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		err: &service.HubInvitationError{HubStatus: 400, Code: "invalid_payload", Message: "role enum violated"},
@@ -412,7 +412,7 @@ func TestVeridianInviteMember_HubRateLimited_429(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		err: &service.HubInvitationError{HubStatus: 429, Code: "rate_limited", Message: "60req/min"},
@@ -432,7 +432,7 @@ func TestVeridianInviteMember_HubSelfInvitation_400(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "owner@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "owner@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{
 		err: &service.HubInvitationError{HubStatus: 422, Code: "self_invitation", Message: "same email"},
@@ -453,7 +453,7 @@ func TestVeridianInviteMember_HubDisabled_503(t *testing.T) {
 	authSvc := mocks.NewMockAuthService(ctrl)
 	authSvc.EXPECT().
 		AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
-		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{}, nil)
+		Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
 
 	hubStub := &stubHubClient{err: service.ErrHubInvitationDisabled}
 	h := newInviteHandler(t, hubStub, authSvc, &stubHubUserIDResolver{hubUserID: "hub-x"}, true)
@@ -490,4 +490,29 @@ func TestVeridianInviteMember_RegisterRoutes_RequiresAuth(t *testing.T) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "body=%s", body)
+}
+
+// Fiche 67 : un membre (cle API de role member, FullPermissions, Type vide
+// comme mesure en prod) ne peut PAS inviter : 403 et ZERO appel Hub.
+func TestVeridianInviteMember_MemberRoleForbidden_403(t *testing.T) {
+	for name, user := range map[string]*domain.User{
+		"human member":      {ID: "m", Type: domain.UserTypeUser, Email: "m@x.com"},
+		"api key type vide": {ID: "k", Email: "api@x.com"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			authSvc := mocks.NewMockAuthService(ctrl)
+			authSvc.EXPECT().
+				AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
+				Return(context.Background(), user, &domain.UserWorkspace{Role: "member", Permissions: domain.FullPermissions}, nil)
+			hub := &stubHubClient{}
+			h := newInviteHandler(t, hub, authSvc, &stubHubUserIDResolver{}, true)
+			rec := httptest.NewRecorder()
+			h.handleInvite(rec, buildInviteReq(t, `{"workspace_id":"ws-1","email":"e@e.com"}`))
+			assert.Equal(t, http.StatusForbidden, rec.Code)
+			assert.Contains(t, rec.Body.String(), "owner")
+			assert.Equal(t, 0, hub.called, "aucune invitation creee")
+		})
+	}
 }

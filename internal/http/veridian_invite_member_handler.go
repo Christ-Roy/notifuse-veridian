@@ -164,7 +164,7 @@ func (h *VeridianInviteMemberHandler) handleInvite(w http.ResponseWriter, r *htt
 	// workspace (sinon n'importe qui pourrait inviter chez un workspace tiers).
 	// Note : on accepte tous les membres avec un JWT user-type. Le Hub fera
 	// l'audit de qui invite qui via inviter_email/inviter_user_id.
-	ctx, user, _, err := h.authService.AuthenticateUserForWorkspace(r.Context(), req.WorkspaceID)
+	ctx, user, userWorkspace, err := h.authService.AuthenticateUserForWorkspace(r.Context(), req.WorkspaceID)
 	if err != nil {
 		WriteJSONError(w, "Forbidden: not a member of this workspace", http.StatusForbidden)
 		return
@@ -173,6 +173,13 @@ func (h *VeridianInviteMemberHandler) handleInvite(w http.ResponseWriter, r *htt
 	// Refuse les API key (type api_key) — seul un humain peut inviter.
 	if user.Type == domain.UserTypeAPIKey {
 		WriteJSONError(w, "API key users cannot invite members", http.StatusForbidden)
+		return
+	}
+
+	// Seul le owner invite (fiche 67) : un membre, meme avec toutes les
+	// permissions, recoit 403 explicite.
+	if userWorkspace == nil || userWorkspace.Role != "owner" {
+		WriteJSONError(w, "Forbidden: only the workspace owner can invite members", http.StatusForbidden)
 		return
 	}
 
