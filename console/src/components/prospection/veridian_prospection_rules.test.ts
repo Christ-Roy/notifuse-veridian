@@ -191,3 +191,12 @@ describe('base faible et réponses non rattachées (lot 6)', () => {
     expect(unattachedReplies(5, rows)).toBe(0)
   })
 })
+
+// Tete cassee 19/10 : overview sans `profiles` (reponse partielle) faisait planter le tableau de bord.
+describe('pickDashboardTimezone : overview incomplet', () => {
+  it('overview sans profiles : repli navigateur, pas d exception', () => {
+    expect(
+      pickDashboardTimezone({ workspaceTimezone: 'UTC', overview: {} as never, browserTimezone: 'Europe/Berlin' })
+    ).toBe('Europe/Berlin')
+  })
+})
