@@ -203,3 +203,19 @@ func TestStreamChatOpenAI_StreamError(t *testing.T) {
 	})
 	require.Error(t, err)
 }
+
+// Le client utilise pour un endpoint choisi par le locataire refuse les destinations
+// internes (le test de flux ci-dessus remplace ce client par un client local).
+func TestStreamChatOpenAI_ProductionClientRefusesInternalEndpoint(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+	}))
+	defer srv.Close()
+	resp, err := prodOpenAIClient().Get(srv.URL)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&hits))
+}

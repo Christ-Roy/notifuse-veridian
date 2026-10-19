@@ -258,3 +258,10 @@ func TestUpdateIntegrationRequest_Firecrawl_Validate(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid firecrawl settings")
 	})
 }
+
+func TestFirecrawlSettings_Validate_RefusesInternalBaseURL(t *testing.T) {
+	err := (&FirecrawlSettings{APIKey: "fc-x", BaseURL: "http://169.254.169.254/"}).Validate("test-passphrase-32-chars-long!!")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "internal/private/link-local/metadata")
+	assert.NoError(t, (&FirecrawlSettings{APIKey: "fc-x", BaseURL: "https://fc.example.com"}).Validate("test-passphrase-32-chars-long!!"))
+}

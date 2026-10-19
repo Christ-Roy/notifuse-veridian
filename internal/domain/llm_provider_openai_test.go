@@ -113,3 +113,10 @@ func TestOpenAISettings_Validate(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestOpenAISettings_Validate_RefusesInternalBaseURL(t *testing.T) {
+	err := (&domain.OpenAISettings{APIKey: "k", Model: "m", BaseURL: "http://127.0.0.1:11434/v1"}).Validate("test-passphrase")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "internal/private/link-local/metadata")
+	assert.NoError(t, (&domain.OpenAISettings{APIKey: "k", Model: "m", BaseURL: "https://api.example.com/v1"}).Validate("test-passphrase"))
+}
