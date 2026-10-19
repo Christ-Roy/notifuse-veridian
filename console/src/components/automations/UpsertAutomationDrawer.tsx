@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
+  Alert,
+  Grid,
   Button,
   Drawer,
   Form,
@@ -36,6 +38,7 @@ interface UpsertAutomationDrawerProps {
 
 // Inner component that uses the context
 function DrawerContent({ onCloseDrawer }: { onCloseDrawer: () => void }) {
+  const isMobileViewport = !Grid.useBreakpoint().md
   const { t } = useLingui()
   const {
     isEditing,
@@ -123,8 +126,8 @@ function DrawerContent({ onCloseDrawer }: { onCloseDrawer: () => void }) {
   return (
     <>
       {/* Header with title and actions */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-        <Space>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-200">
+        <Space wrap>
           <span className="text-lg font-medium">
             {isEditing ? t`Edit Automation` : t`Create Automation`}
           </span>
@@ -132,7 +135,7 @@ function DrawerContent({ onCloseDrawer }: { onCloseDrawer: () => void }) {
             <Badge status="warning" text={t`Unsaved changes`} />
           )}
         </Space>
-        <Space>
+        <Space wrap>
           <Tooltip title={t`Undo (Ctrl+Z)`}>
             <Button
               type="text"
@@ -162,11 +165,20 @@ function DrawerContent({ onCloseDrawer }: { onCloseDrawer: () => void }) {
 
       {/* Form Header */}
       <div className="p-4 border-b border-gray-200 bg-white">
-        <Form layout="inline">
+        {isMobileViewport && (
+          <Alert
+            type="info"
+            showIcon
+            data-testid="automation-mobile-notice"
+            style={{ marginBottom: 12 }}
+            message={t`Building a sequence is easier on a wider screen. On a phone you can read it, rename it and edit each step's settings.`}
+          />
+        )}
+        <Form layout={isMobileViewport ? 'vertical' : 'inline'}>
           <Form.Item
             label={t`Name`}
             required
-            style={{ marginBottom: 0, minWidth: 300 }}
+            style={{ marginBottom: isMobileViewport ? 12 : 0, minWidth: isMobileViewport ? 0 : 300 }}
           >
             <Input
               placeholder={t`Enter automation name`}
@@ -176,7 +188,7 @@ function DrawerContent({ onCloseDrawer }: { onCloseDrawer: () => void }) {
           </Form.Item>
           <Form.Item
             label={t`List`}
-            style={{ marginBottom: 0, minWidth: 250 }}
+            style={{ marginBottom: 0, minWidth: isMobileViewport ? 0 : 250 }}
           >
             <Select
               placeholder={t`Select list`}
@@ -193,7 +205,7 @@ function DrawerContent({ onCloseDrawer }: { onCloseDrawer: () => void }) {
       </div>
 
       {/* Flow Editor */}
-      <div className="flex-1" style={{ height: 'calc(100vh - 180px)' }}>
+      <div className="flex-1" style={{ minHeight: 0, height: isMobileViewport ? '60vh' : 'calc(100vh - 180px)' }}>
         <AutomationFlowEditor />
       </div>
     </>

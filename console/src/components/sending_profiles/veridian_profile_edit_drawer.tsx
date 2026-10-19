@@ -264,7 +264,7 @@ export function VeridianProfileEditDrawer({ open, workspace, profile, onClose, o
           <div style={{ margin: '8px 0 16px' }}>
             <Space wrap>
               <Select
-                style={{ width: 300 }}
+                style={{ width: 300, maxWidth: '100%' }}
                 value={inboxId}
                 onChange={setInboxId}
                 options={[

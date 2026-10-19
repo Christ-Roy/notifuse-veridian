@@ -42,6 +42,7 @@ import { VeridianBrandHeaderLink } from '../components/veridian_brand_header_lin
 import { VeridianBrandFooter } from '../components/veridian_brand_footer'
 import { VeridianSoftDeleteBanner } from '../components/veridian_soft_delete_banner'
 import { VeridianLogo } from '../components/veridian_logo'
+import { useVeridianDocumentTitle, useVeridianAccessibleNames } from '../components/veridian_a11y'
 import {
   SIDEBAR_GROUP_KEYS,
   selectedSidebarKey,
@@ -78,6 +79,8 @@ export function WorkspaceLayout() {
   const matches = useMatches()
   const currentPath = matches[matches.length - 1]?.pathname || ''
   const isSettingsPage = currentPath.includes('/settings')
+  useVeridianDocumentTitle(currentPath)
+  useVeridianAccessibleNames()
 
   // Fetch user permissions for the current workspace
   useEffect(() => {

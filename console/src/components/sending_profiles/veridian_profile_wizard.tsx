@@ -70,6 +70,8 @@ interface Props {
   onChanged: () => void
 }
 
+const WIZARD_FORM_ID = 'veridian-profile-wizard-form'
+
 export function VeridianProfileWizard({ open, workspaceId, ownerEmail, onClose, onChanged }: Props) {
   const { t } = useLingui()
   const [form] = Form.useForm<FormValues>()
@@ -460,6 +462,7 @@ export function VeridianProfileWizard({ open, workspaceId, ownerEmail, onClose, 
     }
     return (
       <Form
+        id={WIZARD_FORM_ID}
         form={form}
         layout="vertical"
         onFinish={submit}
@@ -469,14 +472,6 @@ export function VeridianProfileWizard({ open, workspaceId, ownerEmail, onClose, 
       >
         {choice === 'gmail_app_password' ? gmailForm : smtpForm}
         {error && <Alert type="error" showIcon message={error} style={{ margin: '12px 0' }} />}
-        <Space style={{ marginTop: 16 }}>
-          <Button onClick={() => setStage('choose')} disabled={submitting}>
-            {t`Back`}
-          </Button>
-          <Button type="primary" htmlType="submit" loading={submitting}>
-            {t`Create and test`}
-          </Button>
-        </Space>
       </Form>
     )
   })()
@@ -489,6 +484,18 @@ export function VeridianProfileWizard({ open, workspaceId, ownerEmail, onClose, 
       destroyOnClose
       title={t`Add a sending profile`}
       maskClosable={!submitting && stage !== 'testing'}
+      footer={
+        stage === 'form' ? (
+          <Space>
+            <Button onClick={() => setStage('choose')} disabled={submitting}>
+              {t`Back`}
+            </Button>
+            <Button type="primary" htmlType="submit" form={WIZARD_FORM_ID} loading={submitting}>
+              {t`Create and test`}
+            </Button>
+          </Space>
+        ) : null
+      }
     >
       {stage === 'result' && error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
       {body}

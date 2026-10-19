@@ -13,7 +13,7 @@ import {
   BackgroundVariant
 } from '@xyflow/react'
 import { LayoutGrid } from 'lucide-react'
-import { Tooltip } from 'antd'
+import { Tooltip, Grid } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 import { TriggerNode, DelayNode, EmailNode, ABTestNode, AddToListNode, RemoveFromListNode, FilterNode, BranchNode, WebhookNode, ListStatusBranchNode, ReplyBranchNode } from './nodes'
 import { PlaceholderNode } from './nodes/PlaceholderNode'
@@ -84,6 +84,7 @@ const FloatingAddButton: React.FC<{
 
 // Inner component that uses useReactFlow hook
 const AutomationFlowEditorInner: React.FC = () => {
+  const isMobileViewport = !Grid.useBreakpoint().md
   const { t } = useLingui()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [buttonPositions, setButtonPositions] = useState<Map<string, { x: number; y: number }>>(new Map())
@@ -372,7 +373,7 @@ const AutomationFlowEditorInner: React.FC = () => {
 
   return (
     <div className="h-full flex">
-      <NodePalette hasListSelected={hasListSelected} />
+      {!isMobileViewport && <NodePalette hasListSelected={hasListSelected} />}
       <div className="flex-1 relative" ref={reactFlowWrapper}>
         <ReactFlow
         nodes={nodesWithPlaceholders}
@@ -397,7 +398,8 @@ const AutomationFlowEditorInner: React.FC = () => {
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        <Controls position="top-left" showInteractive={false} />
+        {!isMobileViewport && <Controls position="top-left" showInteractive={false} />}
+        {!isMobileViewport && (
         <Panel position="top-left" style={{ marginTop: 120 }}>
           <div className="bg-white border border-gray-200 rounded shadow-sm">
             <Tooltip title={t`Reorganize layout`} placement="right">
@@ -410,16 +412,19 @@ const AutomationFlowEditorInner: React.FC = () => {
             </Tooltip>
           </div>
         </Panel>
+        )}
+        {!isMobileViewport && (
         <Panel position="bottom-left">
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
             <div className="text-xs text-gray-500 px-2 py-2 border-b border-gray-200">{t`Minimap`}</div>
             <MiniMap position="top-left" bgColor="white" maskColor="transparent" style={{ position: 'relative', margin: 0 }} />
           </div>
         </Panel>
+        )}
       </ReactFlow>
 
       {/* Floating Add Buttons - OUTSIDE ReactFlow */}
-      {unconnectedOutputs.map((output) => {
+      {!(isMobileViewport && selectedNode) && unconnectedOutputs.map((output) => {
         const key = `${output.nodeId}-${output.handleId || 'default'}`
         const position = buttonPositions.get(key)
         if (!position) return null
@@ -442,11 +447,16 @@ const AutomationFlowEditorInner: React.FC = () => {
       {selectedNode && (
         <div
           className={`absolute bg-white border border-gray-200 rounded-lg shadow-lg ${
-            selectedNode.data.nodeType === 'filter' ? 'w-[640px]' : 'w-[480px]'
+            isMobileViewport
+              ? ''
+              : selectedNode.data.nodeType === 'filter'
+                ? 'w-[640px]'
+                : 'w-[480px]'
           }`}
           style={{
-            top: 16,
-            right: 16,
+            top: isMobileViewport ? 8 : 16,
+            right: isMobileViewport ? 8 : 16,
+            ...(isMobileViewport ? { left: 8 } : {}),
             maxHeight: 'calc(100% - 32px)',
             overflow: 'auto',
             zIndex: 50

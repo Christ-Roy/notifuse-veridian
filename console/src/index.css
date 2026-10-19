@@ -182,3 +182,63 @@ th.ant-table-cell.contacts-fixed-col {
   font-family: inherit;
 }
 
+
+/* === Veridian — tiroirs : classe de defaut (audit UI 19/10/2026, B1/B2/A5) ===
+ * Un tiroir n est jamais plus large que l ecran ; sous 768 px il prend tout l ecran.
+ * .drawer-sticky-actions : rangee d actions collee en bas du corps du tiroir (reste atteignable
+ * sans defiler, ne recouvre rien car elle est dans le flux avec un fond opaque). */
+.ant-drawer-content-wrapper { max-width: 100vw; }
+@media (max-width: 767px) {
+  .ant-drawer-content-wrapper { width: 100vw !important; }
+}
+.drawer-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  margin: 16px -24px -24px;
+  padding: 12px 24px;
+}
+.ant-drawer-footer { flex-wrap: wrap; }
+
+/* === Veridian — mobile : onglets d en-tete de tiroir, plus de position absolue sous 768 px === */
+@media (max-width: 767px) {
+  .tabs-in-header {
+    position: static;
+    width: 100%;
+    height: auto;
+    left: auto;
+    right: auto;
+  }
+  .ant-drawer-extra .ant-space { flex-wrap: wrap; justify-content: flex-end; }
+  .ant-drawer-header-title { min-width: 0; }
+  .ant-drawer-title { white-space: normal; }
+}
+
+/* === Veridian — accessibilite : focus clavier visible partout (F1) === */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="menuitem"]:focus-visible,
+.ant-menu-item:focus-visible,
+.ant-menu-item a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #5b46d6;
+  outline-offset: 2px;
+}
+.ant-menu-item:focus-within { box-shadow: inset 0 0 0 2px #5b46d6; }
+
+/* === Veridian — mobile : plus de debordement horizontal des pages (audit A4/A2) ===
+ * Classe de defaut : sous 768 px, le contenu ne depasse jamais l ecran ; les en-tetes de page
+ * en flex passent a la ligne (le bouton principal reste visible) ; les tables defilent dans leur
+ * propre conteneur ; les groupes segmentes defilent au lieu de pousser la page. */
+@media (max-width: 767px) {
+  .ant-layout-content { min-width: 0; max-width: 100vw; overflow-x: hidden; }
+  .ant-layout-content .flex.justify-between,
+  .ant-layout-content .flex.items-center.justify-between { flex-wrap: wrap; gap: 8px; }
+  .ant-layout-content .ant-table-wrapper { max-width: 100%; overflow-x: auto; }
+}
+.ant-segmented { max-width: 100%; overflow-x: auto; }

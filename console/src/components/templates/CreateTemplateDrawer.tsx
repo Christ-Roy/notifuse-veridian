@@ -3,6 +3,8 @@ import { useLingui } from '@lingui/react/macro'
 import {
   Button,
   Drawer,
+  Alert,
+  Grid,
   Form,
   Input,
   Select,
@@ -170,6 +172,8 @@ export function CreateTemplateDrawer({
   forceCategory
 }: CreateTemplateDrawerProps) {
   const { t } = useLingui()
+  const screens = Grid.useBreakpoint()
+  const isMobileViewport = !screens.md
   const [isOpen, setIsOpen] = useState(false)
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
@@ -486,7 +490,11 @@ export function CreateTemplateDrawer({
 
   const goNext = () => {
     if (tab === 'settings') {
-      setTab('template')
+      // B4 : l'etape 1 se valide avant d'avancer (les erreurs s'affichent sur les champs).
+      form
+        .validateFields(['name', 'id', 'category', ['email', 'subject'], ['email', 'subject_preview']])
+        .then(() => setTab('template'))
+        .catch(() => undefined)
     } else if (tab === 'template' && showTranslationsTab) {
       setTab('translations')
     }
@@ -705,9 +713,9 @@ export function CreateTemplateDrawer({
             </div>
             <div className="relative">
               <div style={{ display: tab === 'settings' ? 'block' : 'none' }}>
-                <div className="p-8">
+                <div className="p-4 md:p-8">
                   <Row gutter={24}>
-                    <Col span={6}>
+                    <Col xs={24} md={12} lg={6}>
                       <Form.Item name="name" label={t`Template name`} rules={[{ required: true }]}>
                         <Input
                           placeholder={t`i.e: Welcome Email`}
@@ -721,7 +729,7 @@ export function CreateTemplateDrawer({
                         />
                       </Form.Item>
                     </Col>
-                    <Col span={6}>
+                    <Col xs={24} md={12} lg={6}>
                       <Form.Item
                         name="id"
                         label={t`Template ID (utm_content)`}
@@ -755,7 +763,7 @@ export function CreateTemplateDrawer({
                         />
                       </Form.Item>
                     </Col>
-                    <Col span={6}>
+                    <Col xs={24} md={12} lg={6}>
                       <Form.Item
                         name="category"
                         label={t`Category`}
@@ -797,7 +805,7 @@ export function CreateTemplateDrawer({
                         />
                       </Form.Item>
                     </Col>
-                    <Col span={6}>
+                    <Col xs={24} md={12} lg={6}>
                       <Form.Item label={t`Editor mode`}>
                         <Radio.Group
                           value={editorMode}
@@ -816,7 +824,7 @@ export function CreateTemplateDrawer({
 
                   <div className="text-lg my-8 font-bold">{t`Sender`}</div>
                   <Row gutter={24}>
-                    <Col span={12}>
+                    <Col xs={24} lg={12}>
                       <Form.Item
                         name={['email', 'subject']}
                         label={showTranslationsTab ? t`Email subject (${workspace.settings.default_language})` : t`Email subject`}
@@ -855,7 +863,7 @@ export function CreateTemplateDrawer({
                       </Form.Item>
 
                       <Row gutter={24}>
-                        <Col span={12}>
+                        <Col xs={24} lg={12}>
                           <Form.Item
                             name={['email', 'reply_to']}
                             label={t`Reply to`}
@@ -864,7 +872,7 @@ export function CreateTemplateDrawer({
                             <Input />
                           </Form.Item>
                         </Col>
-                        <Col span={12}>
+                        <Col xs={24} lg={12}>
                           <Form.Item
                             name={['email', 'sender_id']}
                             label={categoryValue === 'marketing' ? t`Custom sender (marketing email provider)` : t`Custom sender (transactional email provider)`}
@@ -881,8 +889,8 @@ export function CreateTemplateDrawer({
                         </Col>
                       </Row>
                     </Col>
-                    <Col span={12}>
-                      <div className="flex justify-center">
+                    <Col xs={24} lg={12}>
+                      <div className="flex justify-center" style={{ maxWidth: '100%', overflow: 'hidden' }}>
                         <IphoneEmailPreview
                           sender={emailSender?.name || t`Sender Name`}
                           subject={emailSubject || t`Email Subject`}
@@ -912,6 +920,27 @@ export function CreateTemplateDrawer({
                             autoSize={{ minRows: 16 }}
                             placeholder={t`Plain text body. Liquid variables allowed, e.g. {{ contact.first_name }}`}
                             style={{ fontFamily: 'monospace' }}
+                          />
+                        </div>
+                      )
+                    }
+
+                    if (editorMode === 'code' && isMobileViewport) {
+                      // A5 : l'editeur MJML (deux panneaux) n'est pas utilisable a 390 px.
+                      return (
+                        <div style={{ padding: 16 }} data-testid="mjml-mobile-notice">
+                          <Alert
+                            type="info"
+                            showIcon
+                            message={t`The code editor needs a wider screen. Here you can read the source; to edit it, use a computer or a tablet.`}
+                            style={{ marginBottom: 12 }}
+                          />
+                          <Input.TextArea
+                            readOnly
+                            value={mjmlSource}
+                            autoSize={{ minRows: 8, maxRows: 20 }}
+                            style={{ fontFamily: 'monospace', fontSize: 12 }}
+                            aria-label={t`MJML source (read only)`}
                           />
                         </div>
                       )

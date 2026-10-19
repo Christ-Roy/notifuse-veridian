@@ -11,7 +11,7 @@
  *   2. Raccourci CTA "Manage subscription" → Stripe Billing portal côté Hub
  *
  * Choix UX (à valider en session calme Robert) :
- *   - Texte gris (#9ca3af tailwind gray-400) small (11px)
+ *   - Texte gris (#4b5563 tailwind gray-400) small (11px)
  *   - Centré horizontalement
  *   - Padding vertical modeste (8px) pour ne pas voler de l'espace
  *   - Lien "Manage subscription" → app.veridian.site/dashboard
@@ -47,8 +47,8 @@ export function VeridianBrandFooter() {
       style={{
         textAlign: 'center',
         padding: '8px 16px',
-        fontSize: 11,
-        color: '#9ca3af'
+        fontSize: 12,
+        color: '#4b5563'
       }}
     >
       {t`Powered by Veridian`}
@@ -57,7 +57,7 @@ export function VeridianBrandFooter() {
         href={hubUrl}
         target="_blank"
         rel="noreferrer"
-        style={{ color: '#9ca3af', textDecoration: 'underline' }}
+        style={{ color: '#4b5563', textDecoration: 'underline' }}
       >
         {t`Manage subscription`}
       </a>
