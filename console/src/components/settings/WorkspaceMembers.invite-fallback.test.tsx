@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
+import { App } from 'antd'
 import { WorkspaceMembers } from './WorkspaceMembers'
 import { ApiError } from '../../services/api/client'
 
@@ -29,13 +30,15 @@ async function openAndSend(email: string) {
   render(
     <QueryClientProvider client={qc}>
       <I18nProvider i18n={i18n}>
-        <WorkspaceMembers
-          workspaceId="ws1"
-          members={[]}
-          loading={false}
-          onMembersChange={vi.fn()}
-          isOwner={true}
-        />
+        <App>
+          <WorkspaceMembers
+            workspaceId="ws1"
+            members={[]}
+            loading={false}
+            onMembersChange={vi.fn()}
+            isOwner={true}
+          />
+        </App>
       </I18nProvider>
     </QueryClientProvider>
   )
@@ -57,6 +60,7 @@ describe('WorkspaceMembers: invitation when the Hub flow is not configured', () 
     await openAndSend('nouveau@example.com')
     await waitFor(() => expect(inviteLocal).toHaveBeenCalledTimes(1))
     expect(inviteLocal.mock.calls[0][0]).toMatchObject({ workspace_id: 'ws1', email: 'nouveau@example.com' })
+    expect(await screen.findByText('Invitation sent to nouveau@example.com')).toBeInTheDocument()
   })
 
   it('uses the Hub only when it answers (no local invitation)', async () => {
@@ -64,12 +68,15 @@ describe('WorkspaceMembers: invitation when the Hub flow is not configured', () 
     await openAndSend('autre@example.com')
     await waitFor(() => expect(inviteViaHub).toHaveBeenCalledTimes(1))
     expect(inviteLocal).not.toHaveBeenCalled()
+    expect(await screen.findByText('Invitation sent to autre@example.com')).toBeInTheDocument()
   })
 
   it('does not fall back on another error (502 Hub down stays an error)', async () => {
     inviteViaHub.mockRejectedValue(new ApiError('bad gateway', 502))
     await openAndSend('x@example.com')
-    await waitFor(() => expect(inviteViaHub).toHaveBeenCalledTimes(1))
+    expect(
+      await screen.findByText('The Veridian Hub is temporarily unavailable. Please try again in a moment.')
+    ).toBeInTheDocument()
     expect(inviteLocal).not.toHaveBeenCalled()
   })
 })
