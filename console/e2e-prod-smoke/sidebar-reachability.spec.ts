@@ -78,6 +78,16 @@ for (const [width, height] of SIZES) {
       }
       const root = mobile ? '.ant-drawer-content' : '.ant-layout-sider'
       await expect(page.locator(`${root} li.ant-menu-item`).first()).toBeVisible({ timeout: 15000 })
+      if (mobile) {
+        // Le Drawer glisse depuis la gauche : tant que l animation n est pas finie les elements
+        // sont hors ecran (elementFromPoint = null). Rouge en CI sur runner partage le 19/10.
+        await expect
+          .poll(async () => Math.round((await page.locator(root).boundingBox())?.x ?? -9999), {
+            timeout: 15000
+          })
+          .toBeGreaterThanOrEqual(0)
+        await page.waitForTimeout(400)
+      }
 
       if (collapsed) {
         await page.locator(`${root} button`).last().click({ force: true })

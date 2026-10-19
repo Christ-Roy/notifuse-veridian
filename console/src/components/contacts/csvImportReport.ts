@@ -55,15 +55,42 @@ export function reconcileBatch(
     }
   }
 
+  // Reponse REELLE du serveur (mesuree en prod le 19/10) : un contact invalide revient avec
+  // email "" et « invalid contact at index N: ... » ou N est la position dans le lot envoye.
+  // On rattache ces operations a leur ligne par N, puis on les retire du rapprochement par adresse.
+  const failures: CsvImportFailure[] = []
+  const byIndex = new Set<number>()
+  const serverIndex = (op: CsvBatchOperation): number => {
+    const m = /at index (\d+)/i.exec(op.error || '')
+    return m ? Number(m[1]) : -1
+  }
+  const isAnonymousError = (op: CsvBatchOperation): boolean =>
+    op.action === 'error' && !norm(op.email) && serverIndex(op) >= 0
+  for (const op of operations.filter(isAnonymousError)) {
+    const idx = serverIndex(op)
+    if (idx < sent.length && !byIndex.has(idx)) {
+      byIndex.add(idx)
+      const row = sent[idx]
+      const reason = stripServerIndex(op.error || 'Unknown error')
+      failures.push({
+        line: row.line,
+        email: row.email,
+        error: /^email is required$/i.test(reason) && norm(row.email) ? 'invalid email address' : reason
+      })
+    }
+  }
+  const sentKept = sent.filter((_, i) => !byIndex.has(i))
+  const operationsKept = operations.filter((op) => !isAnonymousError(op))
+
   const linesByEmail = new Map<string, CsvSentRow[]>()
-  for (const row of sent) {
+  for (const row of sentKept) {
     const key = norm(row.email)
     const list = linesByEmail.get(key) || []
     list.push(row)
     linesByEmail.set(key, list)
   }
   const opsByEmail = new Map<string, CsvBatchOperation[]>()
-  for (const op of operations) {
+  for (const op of operationsKept) {
     const key = norm(op.email)
     const list = opsByEmail.get(key) || []
     list.push(op)
@@ -71,7 +98,6 @@ export function reconcileBatch(
   }
 
   let succeeded = 0
-  const failures: CsvImportFailure[] = []
 
   for (const [key, rows] of linesByEmail) {
     const ops = opsByEmail.get(key) || []

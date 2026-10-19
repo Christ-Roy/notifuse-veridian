@@ -39,6 +39,23 @@ describe('reconcileBatch', () => {
     expect(r.failures).toEqual([{ line: 2, email: 'a@example.com', error: DUPLICATE_IN_BATCH_ERROR }])
   })
 
+  it('reponse reelle du serveur : invalide rendu avec email vide et index dans le lot', () => {
+    const rows = [
+      { line: 2, email: 'ok1@example.com' },
+      { line: 3, email: 'mauvais-email' },
+      { line: 4, email: 'ok2@example.com' },
+      { line: 6, email: 'ok3@example.com' }
+    ]
+    const r = reconcileBatch(rows, [
+      { email: '', action: 'error', error: 'invalid contact at index 1: email is required' },
+      { email: 'ok1@example.com', action: 'update' },
+      { email: 'ok2@example.com', action: 'update' },
+      { email: 'ok3@example.com', action: 'update' }
+    ])
+    expect(r.succeeded).toBe(3)
+    expect(r.failures).toEqual([{ line: 3, email: 'mauvais-email', error: 'invalid email address' }])
+  })
+
   it("une erreur de lot entier est rapportee ligne par ligne", () => {
     const r = reconcileBatch(sent, [], 'Insufficient permissions')
     expect(r.succeeded).toBe(0)
