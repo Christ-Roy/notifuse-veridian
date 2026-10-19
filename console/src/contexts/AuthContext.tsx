@@ -3,6 +3,15 @@ import { authService } from '../services/api/auth'
 import { workspaceService } from '../services/api/workspace'
 import { Workspace, UserPermissions } from '../services/api/types'
 import { isRootUser } from '../services/api/auth'
+import { ApiError } from '../services/api/client'
+
+// Backoff des reessais de user.me sur erreur transitoire (total ~2 min).
+const AUTH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000, 30000, 60000]
+
+// Vrai seulement si le serveur a refuse le jeton (401). 429, 5xx et erreurs reseau : faux.
+function isSessionRejected(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401
+}
 
 export interface User {
   id: string
@@ -29,26 +38,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const checkAuth = useCallback(async () => {
-    // console.log('checkAuth')
-    try {
-      // Check if a token exists in localStorage
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
+    // Seul un 401 (jeton refuse par le serveur) deconnecte. Un 429, un 5xx ou une
+    // coupure reseau est transitoire : on garde le jeton et on reessaie avec backoff
+    // (audit UI 19/10/2026, E2). Pendant les reessais, `loading` reste vrai.
+    const token = localStorage.getItem('auth_token')
+    if (!token) {
+      setLoading(false)
+      return
+    }
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const { user, workspaces } = await authService.getCurrentUser()
+        setUser(user)
+        setWorkspaces(workspaces)
         setLoading(false)
         return
+      } catch (error) {
+        if (isSessionRejected(error)) {
+          localStorage.removeItem('auth_token')
+          setUser(null)
+          setWorkspaces([])
+          setLoading(false)
+          return
+        }
+        if (attempt >= AUTH_RETRY_DELAYS_MS.length) {
+          // Backoff epuise : on rend la main sans effacer le jeton (un rechargement
+          // de la page retentera avec la meme session).
+          setUser(null)
+          setWorkspaces([])
+          setLoading(false)
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, AUTH_RETRY_DELAYS_MS[attempt]))
       }
-
-      // Token exists, fetch current user data
-      const { user, workspaces } = await authService.getCurrentUser()
-      setUser(user)
-      setWorkspaces(workspaces)
-      setLoading(false)
-    } catch {
-      // If there's an error (like an expired token), clear the storage
-      localStorage.removeItem('auth_token')
-      setUser(null)
-      setWorkspaces([])
-      setLoading(false)
     }
   }, [])
 
