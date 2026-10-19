@@ -416,7 +416,13 @@ export function WorkspaceLayout() {
       mode="inline"
       selectedKeys={[selectedKey]}
       style={{
-        height: isMobile ? 'auto' : 'calc(100% - 120px)',
+        // Desktop : le menu occupe l espace restant de la colonne flex et SCROLLE seul
+        // (plus de hauteur calculee en dur : le pied de sidebar n est plus superpose).
+        height: isMobile ? 'auto' : undefined,
+        flex: isMobile ? undefined : '1 1 auto',
+        minHeight: 0,
+        overflowY: isMobile ? undefined : 'auto',
+        overflowX: 'hidden',
         borderRight: 0,
         backgroundColor: '#F9F9F9',
         fontSize: '13px',
@@ -452,7 +458,7 @@ export function WorkspaceLayout() {
                 height: '100vh',
                 left: 0,
                 top: 0,
-                overflow: 'auto',
+                overflow: 'hidden',
                 zIndex: 10,
                 backgroundColor: '#F9F9F9'
               }}
@@ -461,51 +467,56 @@ export function WorkspaceLayout() {
               trigger={null}
               className="border-r border-gray-200"
             >
+              {/* Colonne flex pleine hauteur : logo (fixe) / menu (scroll) / pied (fixe, dans le flux).
+                  Aucun position fixed : le pied ne peut recouvrir aucune entree, a aucune hauteur. */}
               <div
-                style={{
-                  height: '64px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  paddingLeft: collapsed ? 0 : 24,
-                  borderBottom: '1px solid #f0f0f0'
-                }}
-              >
-                {/* === Veridian patch — wordmark veridian.mail (ticket DA 2026-05-22) */}
-                <VeridianLogo collapsed={collapsed} size={19} />
-              </div>
-              {sidebarMenu}
-              <div
-                style={{
-                  position: 'fixed',
-                  bottom: 0,
-                  left: 0,
-                  width: collapsed ? '80px' : '249px',
-                  padding: '16px',
-                  zIndex: 1
-                }}
+                data-testid="sidebar-column"
+                style={{ display: 'flex', flexDirection: 'column', height: '100vh', minHeight: 0 }}
               >
                 <div
                   style={{
-                    borderBottom: '1px solid #f0f0f0',
-                    textAlign: 'center',
-                    fontSize: '9px',
-                    color: '#000',
-                    opacity: 0.7,
-                    marginBottom: '8px',
-                    paddingBottom: '8px'
+                    height: '64px',
+                    flex: '0 0 64px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                    paddingLeft: collapsed ? 0 : 24,
+                    borderBottom: '1px solid #f0f0f0'
                   }}
                 >
-                  v{window.VERSION || '1.0'}
+                  {/* === Veridian patch — wordmark veridian.mail (ticket DA 2026-05-22) */}
+                  <VeridianLogo collapsed={collapsed} size={19} />
                 </div>
-                <Button
-                  type="text"
-                  block
-                  icon={<FontAwesomeIcon icon={collapsed ? faAngleRight : faAngleLeft} />}
-                  onClick={() => setCollapsed(!collapsed)}
+                {sidebarMenu}
+                <div
+                  data-testid="sidebar-footer"
+                  style={{
+                    flex: '0 0 auto',
+                    padding: '8px 16px 16px',
+                    borderTop: '1px solid #f0f0f0',
+                    backgroundColor: '#F9F9F9'
+                  }}
                 >
-                  {!collapsed && t`Collapse`}
-                </Button>
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      fontSize: '9px',
+                      color: '#000',
+                      opacity: 0.7,
+                      marginBottom: '8px'
+                    }}
+                  >
+                    v{window.VERSION || '1.0'}
+                  </div>
+                  <Button
+                    type="text"
+                    block
+                    icon={<FontAwesomeIcon icon={collapsed ? faAngleRight : faAngleLeft} />}
+                    onClick={() => setCollapsed(!collapsed)}
+                  >
+                    {!collapsed && t`Collapse`}
+                  </Button>
+                </div>
               </div>
             </Sider>
           )}
