@@ -42,6 +42,10 @@ func (o *OpenAISettings) Validate(passphrase string) error {
 		return fmt.Errorf("model is required for OpenAI configuration")
 	}
 
+	if err := ValidateTenantBaseURL(o.BaseURL); err != nil {
+		return fmt.Errorf("invalid OpenAI configuration: %w", err)
+	}
+
 	// Encrypt API key if it's not empty
 	if o.APIKey != "" {
 		if err := o.EncryptAPIKey(passphrase); err != nil {

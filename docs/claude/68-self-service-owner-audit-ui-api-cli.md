@@ -59,3 +59,16 @@ cross-workspace ; `generateMagicLink` réservé aux clés gérées par le Hub.
   enregistrée : il faut un proxy S3 côté serveur (URLs présignées). Chantier à part, aucun workspace prod n'a de
   FileManager configuré.
 - `lists.create` renvoie 500 « Failed to create list » sur un identifiant déjà pris (devrait être un 409 lisible).
+
+## Correctif trouvé par l'audit en prod : URL de base Firecrawl / OpenAI
+
+Mesure en prod (19/10) : une intégration Firecrawl avec base_url `http://169.254.169.254/` était ACCEPTÉE (201) :
+le client Firecrawl était déjà gardé à l'usage, mais le refus arrivait tard et en silence, et le client OpenAI
+(endpoint compatible, `base_url` du locataire) n'était pas gardé du tout. Corrigé : `domain.ValidateTenantBaseURL`
+(http/https, pas d'identifiants, IP interne refusée avec la raison) appelé par `FirecrawlSettings.Validate` et
+`OpenAISettings.Validate` ; le flux OpenAI passe par `NewTenantOutboundClient` quand une base_url est posée.
+Anthropic n'a pas de base_url. Tests : `veridian_outbound_base_url_test.go`, `llm_service_openai_netguard_test.go`.
+
+Mesure invitation en prod (UI headless) : 503 de la route Hub puis 200 de `/api/workspaces.inviteMember` (repli).
+Suppression du workspace par l'UI : parcours de confirmation non joué (sélecteur) ; le jetable est effacé par
+`notifuse-admin wipe`.

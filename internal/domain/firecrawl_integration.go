@@ -48,6 +48,10 @@ func (f *FirecrawlSettings) Validate(passphrase string) error {
 		return fmt.Errorf("API key is required for Firecrawl configuration")
 	}
 
+	if err := ValidateTenantBaseURL(f.BaseURL); err != nil {
+		return fmt.Errorf("invalid Firecrawl configuration: %w", err)
+	}
+
 	// Encrypt API key if it's not empty
 	if f.APIKey != "" {
 		if err := f.EncryptAPIKey(passphrase); err != nil {

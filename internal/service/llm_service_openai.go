@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 
@@ -11,6 +12,10 @@ import (
 	openaiopt "github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/shared"
 )
+
+// openaiTenantHTTPClient : client HTTP garde pour un endpoint choisi par le locataire.
+// Variable pour que les tests de flux parlent a un serveur local httptest.
+var openaiTenantHTTPClient = func() *http.Client { return NewTenantOutboundClient(0) }
 
 // streamChatOpenAI implements streaming chat with OpenAI or OpenAI-compatible APIs
 func (s *LLMService) streamChatOpenAI(
@@ -42,6 +47,9 @@ func (s *LLMService) streamChatOpenAI(
 	opts := []openaiopt.RequestOption{openaiopt.WithAPIKey(apiKey)}
 	if settings.BaseURL != "" {
 		opts = append(opts, openaiopt.WithBaseURL(settings.BaseURL))
+		// Fiche 67/68 : URL choisie par le locataire, appelee par le serveur : client garde
+		// (IP interne refusee a la connexion, redirections revalidees).
+		opts = append(opts, openaiopt.WithHTTPClient(openaiTenantHTTPClient()))
 	}
 	client := openai.NewClient(opts...)
 
