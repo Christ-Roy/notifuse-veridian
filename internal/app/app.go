@@ -1909,6 +1909,18 @@ func (a *App) Start() error {
 		return a.config.Security.JWTSecret, nil
 	}
 	handler = httpHandler.VeridianWorkspaceAuthzMiddleware(a.authService, authzJWTSecret)(handler)
+	// Journal d'acces API (une ligne JSON par requete /api/*, stdout -> Loki).
+	handler = httpHandler.VeridianAccessLogMiddleware(a.logger, func(ctx context.Context, userID string) ([]string, error) {
+		uws, err := a.workspaceRepo.GetUserWorkspaces(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		ids := make([]string, 0, len(uws))
+		for _, uw := range uws {
+			ids = append(ids, uw.WorkspaceID)
+		}
+		return ids, nil
+	})(handler)
 
 	// Apply graceful shutdown middleware first (outermost)
 	handler = a.gracefulShutdownMiddleware(handler)
