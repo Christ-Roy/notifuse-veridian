@@ -1138,9 +1138,10 @@ func (s *WorkspaceService) CreateAgentInstallToken(ctx context.Context, workspac
 	if err != nil {
 		return "", nil, err
 	}
-	if !isWorkspaceAdminOrOwner(requesterWorkspace) {
-		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", requester.ID).Error("Requester is neither owner nor admin of the workspace")
-		return "", nil, &domain.ErrUnauthorized{Message: "only the workspace owner or an admin can create an agent install token"}
+	// Veridian patch (fiche 67) : owner humain seul (une cle API a FullPermissions).
+	if err := veridianRequireOwner(requester, requesterWorkspace, "create an agent install token"); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", requester.ID).Error("Requester is not the workspace owner")
+		return "", nil, err
 	}
 
 	// Préfixe unique et non-devinable (évite toute collision avec une clé
@@ -1333,9 +1334,10 @@ func (s *WorkspaceService) RevokeAPIKey(ctx context.Context, workspaceID string,
 		return err
 	}
 
-	if !isWorkspaceAdminOrOwner(requesterWorkspace) {
-		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiKeyUserID).WithField("requester_id", requester.ID).WithField("role", requesterWorkspace.Role).Error("Requester is neither owner nor admin of the workspace")
-		return &domain.ErrUnauthorized{Message: "only the workspace owner or an admin can revoke an API key"}
+	// Veridian patch (fiche 67) : owner humain seul.
+	if err := veridianRequireOwner(requester, requesterWorkspace, "revoke an API key"); err != nil {
+		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", apiKeyUserID).WithField("requester_id", requester.ID).WithField("role", requesterWorkspace.Role).Error("Requester is not the workspace owner")
+		return err
 	}
 
 	userDetails, err := s.userService.GetUserByID(ctx, apiKeyUserID)

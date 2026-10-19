@@ -66,3 +66,28 @@ func TestWorkspaceService_DeleteInvitation_MemberForbidden(t *testing.T) {
 	var unauth *domain.ErrUnauthorized
 	require.True(t, errors.As(err, &unauth), "%v", err)
 }
+
+// Fiche 67 : une cle a ecriture sur la ressource workspace ne revoque pas de
+// cle et ne frappe pas de jeton d'installation (avant : isWorkspaceAdminOrOwner).
+func TestWorkspaceService_RevokeAPIKey_MemberWithWriteForbidden(t *testing.T) {
+	s, repo, auth := newOwnerGuardWorkspaceService(t)
+	auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws").
+		Return(context.Background(), &domain.User{ID: "k"}, nil, nil)
+	repo.EXPECT().GetUserWorkspace(gomock.Any(), "k", "ws").
+		Return(&domain.UserWorkspace{Role: "member", Permissions: domain.FullPermissions}, nil)
+	err := s.RevokeAPIKey(context.Background(), "ws", "other-key")
+	var unauth *domain.ErrUnauthorized
+	require.True(t, errors.As(err, &unauth), "%v", err)
+}
+
+func TestWorkspaceService_CreateAgentInstallToken_MemberWithWriteForbidden(t *testing.T) {
+	s, repo, auth := newOwnerGuardWorkspaceService(t)
+	s.agentInstallTokenRepo = mocks.NewMockAgentInstallTokenRepository(gomock.NewController(t))
+	auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws").
+		Return(context.Background(), &domain.User{ID: "k"}, nil, nil)
+	repo.EXPECT().GetUserWorkspace(gomock.Any(), "k", "ws").
+		Return(&domain.UserWorkspace{Role: "member", Permissions: domain.FullPermissions}, nil)
+	_, _, err := s.CreateAgentInstallToken(context.Background(), "ws")
+	var unauth *domain.ErrUnauthorized
+	require.True(t, errors.As(err, &unauth), "%v", err)
+}

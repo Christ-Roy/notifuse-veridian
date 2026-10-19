@@ -4312,24 +4312,23 @@ func TestWorkspaceService_RevokeAPIKey(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("admin (write on workspace resource, not owner) can revoke", func(t *testing.T) {
+	t.Run("admin (write on workspace resource, not owner) is refused (fiche 67)", func(t *testing.T) {
 		admin := &domain.User{ID: "admin-1", Type: domain.UserTypeUser}
 		adminWorkspace := &domain.UserWorkspace{
 			UserID: "admin-1", WorkspaceID: workspaceID, Role: "member",
 			Permissions: domain.UserPermissions{domain.PermissionResourceWorkspace: domain.ResourcePermissions{Read: true, Write: true}},
 		}
-		apiKeyUser := &domain.User{ID: agentKeyID, Type: domain.UserTypeAPIKey}
 
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, admin, nil, nil)
 		mockRepo.EXPECT().GetUserWorkspace(ctx, "admin-1", workspaceID).Return(adminWorkspace, nil)
-		mockUserService.EXPECT().GetUserByID(ctx, agentKeyID).Return(apiKeyUser, nil)
-		mockRepo.EXPECT().RemoveUserFromWorkspace(ctx, agentKeyID, workspaceID).Return(nil)
-		mockUserRepo.EXPECT().Delete(ctx, agentKeyID).Return(nil)
+		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
 		mockLogger.EXPECT().WithField("user_id", agentKeyID).Return(mockLogger)
-		mockLogger.EXPECT().Info("API key revoked successfully")
+		mockLogger.EXPECT().WithField("requester_id", "admin-1").Return(mockLogger)
+		mockLogger.EXPECT().WithField("role", "member").Return(mockLogger)
+		mockLogger.EXPECT().Error("Requester is not the workspace owner")
 
 		err := service.RevokeAPIKey(ctx, workspaceID, agentKeyID)
-		assert.NoError(t, err)
+		assert.IsType(t, &domain.ErrUnauthorized{}, err)
 	})
 
 	t.Run("plain member refused (403)", func(t *testing.T) {
@@ -4342,7 +4341,7 @@ func TestWorkspaceService_RevokeAPIKey(t *testing.T) {
 		mockLogger.EXPECT().WithField("user_id", agentKeyID).Return(mockLogger)
 		mockLogger.EXPECT().WithField("requester_id", "member-1").Return(mockLogger)
 		mockLogger.EXPECT().WithField("role", "member").Return(mockLogger)
-		mockLogger.EXPECT().Error("Requester is neither owner nor admin of the workspace")
+		mockLogger.EXPECT().Error("Requester is not the workspace owner")
 
 		err := service.RevokeAPIKey(ctx, workspaceID, agentKeyID)
 		require.Error(t, err)
@@ -4436,7 +4435,7 @@ func TestWorkspaceService_CreateAgentInstallToken(t *testing.T) {
 		mockRepo.EXPECT().GetUserWorkspace(ctx, "member-1", workspaceID).Return(memberWorkspace, nil)
 		mockLogger.EXPECT().WithField("workspace_id", workspaceID).Return(mockLogger)
 		mockLogger.EXPECT().WithField("user_id", "member-1").Return(mockLogger)
-		mockLogger.EXPECT().Error("Requester is neither owner nor admin of the workspace")
+		mockLogger.EXPECT().Error("Requester is not the workspace owner")
 
 		_, _, err := service.CreateAgentInstallToken(ctx, workspaceID)
 		require.Error(t, err)

@@ -1893,6 +1893,16 @@ func (a *App) Start() error {
 		)(handler)
 	}
 
+	// === Veridian (fiche 67) : autorisation workspace des routes sans garde
+	// (webhookSubscriptions.*, segments.*, timeline.list). Au plus pres du mux.
+	authzJWTSecret := func() ([]byte, error) {
+		if len(a.config.Security.JWTSecret) == 0 {
+			return nil, fmt.Errorf("JWT secret not configured")
+		}
+		return a.config.Security.JWTSecret, nil
+	}
+	handler = httpHandler.VeridianWorkspaceAuthzMiddleware(a.authService, authzJWTSecret)(handler)
+
 	// Apply graceful shutdown middleware first (outermost)
 	handler = a.gracefulShutdownMiddleware(handler)
 	a.logger.Info("Graceful shutdown middleware enabled")

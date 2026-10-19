@@ -25,12 +25,33 @@ non api_key, sinon `ErrUnauthorized` (403). Appelé dans `WorkspaceService.Invit
 et dans `veridian_invite_member_handler.go` (rôle lu sur le `UserWorkspace` retourné par l'auth).
 Le chemin Hub -> Notifuse (`attach-member`, provision, HMAC) ne passe pas par là.
 
-Routes sœurs vues et NON corrigées (volontairement) : `workspaces.revokeAPIKey` et
-`workspaces.createAgentInstallToken` (owner OU « admin » = écriture sur la ressource workspace, or une
-clé API a FullPermissions : une clé peut donc révoquer des clés / en frapper une nouvelle) ;
-`workspaces.listAPIKeys` et `workspaces.members` (lecture, e-mails masqués pour les clés).
-Déjà owner-only : createAPIKey, removeMember, setUserPermissions, update/delete workspace,
-create/update/deleteIntegration.
+### 3bis. La classe : routes de gestion ouvertes à une clé (relevé complet du routeur, 19/10)
+
+Corrigées (owner humain seul, 403 sinon) :
+- `workspaces.inviteMember`, `workspaces.deleteInvitation`, `veridian/workspaces.inviteMember` (3)
+- `workspaces.revokeAPIKey`, `workspaces.createAgentInstallToken` (avant : owner OU écriture sur la ressource workspace, que toute clé API possède)
+- `webhookSubscriptions.{create,update,delete,toggle,regenerateSecret,test}` (6)
+
+TROU PLUS GRAVE trouvé en relevant : `webhookSubscriptions.*`, `segments.*` et `timeline.list` n'avaient AUCUN
+contrôle d'appartenance au workspace (le service stocke `authService` sans jamais l'appeler, upstream compris :
+`git show origin/main` = 0 appel). Tout JWT valide d'un autre workspace pouvait lire/créer/supprimer des abonnements
+webhook et lire/reconstruire des segments d'un tenant tiers. Fermé par UN middleware devant le mux
+(`veridian_workspace_authz.go`, table `VeridianWorkspaceAuthzRoutes` = liste qui fait foi) : membre du workspace pour
+les lectures et `segments.*`, owner pour la gestion des webhooks. Un test vérifie que chaque route de la table est
+montée (un renommage amont rendrait la garde muette).
+
+Déjà owner-only avant : createAPIKey, removeMember, setUserPermissions, workspaces.update/delete,
+create/update/deleteIntegration, emailProfiles création. Volontairement laissées à une clé en écriture :
+`emailProfiles.setUsage/pause/resume` (écriture workspace), listes, contacts, templates, automations, broadcasts.
+Lecture seule : `listAPIKeys`, `members` (e-mails masqués).
+`settings.*` : réservé au root. `webhooks.register/status` (webhooks des fournisseurs) : authentifiés, membre.
+
+À arbitrer, NON modifié : `workspaces.generateMagicLink` (clé API -> lien de connexion pour un utilisateur du workspace).
+C'est le flux Hub ; une clé member pourrait demander le lien du owner. Il faudrait restreindre aux clés
+`VeridianManaged` : à décider avec le propriétaire du Hub avant de toucher.
+
+Conséquence CLI : `notifuse webhooks:create|update|delete|toggle|regenerate|test` avec une clé scopée member rend
+maintenant 403 (owner / notifuse-admin seulement). Lectures inchangées.
 
 ## 4. Vérification admin d'un profil d'envoi
 
