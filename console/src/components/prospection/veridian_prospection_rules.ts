@@ -177,7 +177,7 @@ export function pickDashboardTimezone(input: {
   const workspaceTz = (input.workspaceTimezone ?? '').trim()
   if (workspaceTz && workspaceTz.toUpperCase() !== 'UTC') return workspaceTz
   const windowTz = input.overview?.profiles
-    .filter((p) => p.in_rotation && p.usage === 'commercial')
+    ?.filter((p) => p.in_rotation && p.usage === 'commercial')
     .map((p) => p.plan?.window?.timezone ?? '')
     .find((tz) => tz.trim() !== '')
   if (windowTz) return windowTz

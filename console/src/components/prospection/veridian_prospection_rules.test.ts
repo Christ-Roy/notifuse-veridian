@@ -173,6 +173,10 @@ describe('fuseau par défaut du tableau de bord (lot 6)', () => {
     expect(pickDashboardTimezone({ workspaceTimezone: 'UTC', overview: undefined, browserTimezone: 'Asia/Tokyo' })).toBe('Asia/Tokyo')
     expect(pickDashboardTimezone({ workspaceTimezone: '', overview: withWindow(''), browserTimezone: 'America/Lima' })).toBe('America/Lima')
   })
+
+  it('une reponse sans profiles (corps vide) ne plante pas et retombe sur le navigateur', () => {
+    expect(pickDashboardTimezone({ workspaceTimezone: 'UTC', overview: {} as never, browserTimezone: 'Asia/Tokyo' })).toBe('Asia/Tokyo')
+  })
 })
 
 describe('base faible et réponses non rattachées (lot 6)', () => {
