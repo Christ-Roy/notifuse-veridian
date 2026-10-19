@@ -72,7 +72,9 @@ export function WorkspaceLayout() {
   // Sous sm : actions Header (Help, Language) compactées dans le menu Avatar.
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md
-  const isCompactTopbar = !screens.sm
+  // Topbar compacte sous lg (992px) : avec la sidebar de 250px il ne reste que 570 a 740px
+  // d en-tete, Help + langue + utilisateur n y tiennent pas (ils passent dans le menu Avatar).
+  const isCompactTopbar = !screens.lg
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   // Use useMatches to determine the current route path
@@ -727,11 +729,26 @@ export function WorkspaceLayout() {
                 trigger={['click']}
                 placement="bottomRight"
               >
-                <Button type="text" data-testid="user-menu-toggle">
+                <Button type="text" data-testid="user-menu-toggle" title={user?.email}>
                   <Space size="small">
                     <Avatar src={getGravatarUrl(user?.email)} size={24} />
-                    {/* Email caché sous sm (480px) pour éviter le clipping */}
-                    {!isCompactTopbar && user?.email}
+                    {/* Email visible seulement des xl (1200px) : en dessous (tablette, fenetre
+                        reduite, zoom) il debordait de l en-tete ; l adresse reste en infobulle.
+                        Plafonne et tronque au-dela pour ne jamais pousser l en-tete. */}
+                    {screens.xl && (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          maxWidth: 220,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          verticalAlign: 'middle'
+                        }}
+                      >
+                        {user?.email}
+                      </span>
+                    )}
                     <DownOutlined style={{ fontSize: '10px' }} />
                   </Space>
                 </Button>

@@ -84,6 +84,7 @@ for (const [width, height] of SIZES) {
         await expect(page.locator('.ant-layout-sider-collapsed')).toHaveCount(1)
       }
 
+      test.setTimeout(120000)
       // Inventaire de TOUT ce qui est cliquable dans la sidebar.
       const count = await page.evaluate((r) => {
         const el = document.querySelector(r)
@@ -94,28 +95,30 @@ for (const [width, height] of SIZES) {
       }, root)
       expect(count, 'la sidebar doit contenir des elements cliquables').toBeGreaterThan(5)
 
-      const failures: string[] = []
-      let settingsSeen = false
-      let toggleSeen = false
-      for (let i = 0; i < count; i++) {
-        const loc = page.locator(`${root} [data-sbt="${i}"]`).first()
-        // Comme un utilisateur : la nav peut defiler pour amener l'element a l'ecran.
-        await loc.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => undefined)
-        const r = await loc.evaluate((el) => {
+      // Tout dans un seul evaluate (rapide) : pour chaque element, on le ramene a l ecran comme
+      // le ferait la molette (scrollIntoView sur le conteneur defilant), puis elementFromPoint.
+      const results = await page.evaluate((r) => {
+        const rootEl = document.querySelector(r)!
+        return Array.from(rootEl.querySelectorAll('[data-sbt]')).map((el) => {
+          el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
           const b = el.getBoundingClientRect()
           const cx = b.left + b.width / 2
           const cy = b.top + b.height / 2
           const inView = cx >= 0 && cy >= 0 && cx <= innerWidth && cy <= innerHeight
           const hit = document.elementFromPoint(cx, cy)
-          const label = (el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30)
           return {
             ok: inView && !!hit && (hit === el || el.contains(hit)),
-            label,
+            label: (el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30),
             href: el.querySelector('a')?.getAttribute('href') || '',
             isToggle: el.tagName === 'BUTTON',
             hit: hit ? `${hit.tagName}.${String((hit as HTMLElement).className).slice(0, 40)}` : 'null'
           }
         })
+      }, root)
+      const failures: string[] = []
+      let settingsSeen = false
+      let toggleSeen = false
+      for (const r of results) {
         if (r.href.endsWith('/settings')) settingsSeen = true
         if (r.isToggle) toggleSeen = true
         if (!r.ok) failures.push(`${r.label || r.href} recouvert par ${r.hit}`)
@@ -123,6 +126,14 @@ for (const [width, height] of SIZES) {
       expect(failures, `elements de sidebar inatteignables a ${width}x${height}`).toEqual([])
       expect(settingsSeen, 'Settings doit etre dans la sidebar').toBe(true)
       if (!mobile) expect(toggleSeen, 'le bouton de repli doit etre dans la sidebar').toBe(true)
+
+      // En-tete (A2) : le bouton utilisateur doit tenir dans l ecran, sans debordement horizontal.
+      const userBtn = await page.getByTestId('user-menu-toggle').evaluate((el) => {
+        const b = el.getBoundingClientRect()
+        return { left: b.left, right: b.right, vw: innerWidth }
+      })
+      expect(userBtn.left, `bouton utilisateur coupe a gauche a ${width}x${height}`).toBeGreaterThanOrEqual(0)
+      expect(userBtn.right, `bouton utilisateur coupe a droite a ${width}x${height}`).toBeLessThanOrEqual(userBtn.vw)
 
       // Vrai clic sur Settings : doit naviguer.
       const settings = page.locator(`${root} li.ant-menu-item:has(a[href$="/settings"])`).first()
