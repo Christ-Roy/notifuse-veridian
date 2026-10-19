@@ -2,6 +2,11 @@
 # Garde-fou central Veridian (trivy, secrets, palier « rapide » de
 # scripts/ci/controles.tsv). La mécanique ne vit pas ici :
 # ~/nomad-veridian/standards/controles-portables/ — `gardes --help`.
+# Catalogues i18n a jour (une chaine t`...` non extraite casse la CI : check-console-build.sh etape 6).
+# Seulement si le push touche console/src ; un echec bloque, un « non abouti » (rc 2) previent sans bloquer.
+if ! git diff --quiet "@{upstream}" -- console/src 2>/dev/null || [ -n "$(git diff --name-only HEAD~1 -- console/src 2>/dev/null)" ]; then
+  scripts/ci/check-i18n-extracted.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
+fi
 G="$(command -v gardes 2>/dev/null || echo "$HOME/nomad-veridian/standards/controles-portables/gardes")"
 if [ ! -x "$G" ]; then
   echo "gardes — NON ABOUTI : introuvable sur cette machine ($G). Push accepté SANS garde." >&2
