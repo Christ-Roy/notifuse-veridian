@@ -36,6 +36,15 @@ const { Option } = Select
 const { Dragger } = Upload
 
 // Batch size for processing
+import {
+  reconcileBatch,
+  trimTrailingBlankRows,
+  isBlankRow,
+  DUPLICATE_IN_BATCH_ERROR,
+  type CsvSentRow,
+  type CsvImportFailure
+} from './csvImportReport'
+
 const BATCH_SIZE = 100
 const PREVIEW_ROWS = 15
 const PROGRESS_SAVE_INTERVAL = 10000 // 10 seconds
@@ -334,7 +343,8 @@ export function ContactsCsvUploadDrawer({
       complete: (results: ParseResult<string[]>) => {
         if (results.data && results.data.length > 0) {
           const headers = results.data[0]
-          const rows = results.data.slice(1)
+          // La ligne vide finale (saut de ligne terminal) n'est pas un contact
+          const rows = trimTrailingBlankRows(results.data.slice(1))
           const preview = rows.slice(0, PREVIEW_ROWS)
 
           const csvDataObj = {
@@ -576,8 +586,23 @@ export function ContactsCsvUploadDrawer({
           return contact
         })
 
-        // Filter out contacts without email
-        const validContacts = contacts.filter((contact) => contact.email)
+        // Chaque ligne du fichier finit « importee » ou « ignoree avec sa raison et son
+        // numero de ligne » : rien ne disparait en silence (E1, audit UI 19/10/2026).
+        const lineOf = (k: number) => rowIndex + k + 2 // l'en-tete est la ligne 1
+        const preFailures: CsvImportFailure[] = []
+        const sentRows: CsvSentRow[] = []
+        const validContacts: Partial<Contact>[] = []
+        contacts.forEach((contact, k) => {
+          const email = String(contact.email ?? '').trim()
+          if (isBlankRow(batchRows[k])) {
+            preFailures.push({ line: lineOf(k), email: '', error: t`Empty line` })
+          } else if (!email) {
+            preFailures.push({ line: lineOf(k), email: '', error: t`Email address is missing` })
+          } else {
+            sentRows.push({ line: lineOf(k), email })
+            validContacts.push(contact)
+          }
+        })
 
         // Check if paused before processing
         while (uploadRef.current.isPaused && !processingCancelled) {
@@ -590,71 +615,56 @@ export function ContactsCsvUploadDrawer({
           return
         }
 
-        try {
-          // Use batch import API for both cases (with or without lists)
-          const batchResult = await contactsApi.batchImport({
-            workspace_id: workspaceId,
-            contacts: validContacts,
-            subscribe_to_lists:
-              selectedListIds && selectedListIds.length > 0 ? selectedListIds : undefined
-          })
-
-          // Process results from batch operation
-          if (batchResult.error) {
-            // Batch-level error - mark all contacts as failed
-            failureCount += validContacts.length
-            setFailureCount(failureCount)
-
-            validContacts.forEach((contact, i) => {
-              if (errors.length < 100) {
-                errors.push({
-                  line: rowIndex + i + 2,
-                  email: contact.email || 'Unknown',
-                  error: batchResult.error || 'Batch operation failed'
-                })
-              }
-            })
-            setErrorDetails(errors)
-          } else {
-            // Process per-contact results
-            batchResult.operations.forEach((operation, i) => {
-              const csvLineNumber = rowIndex + i + 2
-
-              if (operation.action === 'error') {
-                failureCount++
-                if (errors.length < 100) {
-                  errors.push({
-                    line: csvLineNumber,
-                    email: operation.email || validContacts[i]?.email || 'Unknown',
-                    error: operation.error || 'Unknown error'
-                  })
-                }
-              } else {
-                successCount++
-              }
-            })
-
-            setSuccessCount(successCount)
-            setFailureCount(failureCount)
-            setErrorDetails(errors)
-          }
-        } catch (error) {
-          console.error('Error processing batch:', error)
-          // Mark all contacts in this batch as failed
-          failureCount += validContacts.length
-          setFailureCount(failureCount)
-
-          validContacts.forEach((contact, i) => {
-            if (errors.length < 100) {
-              errors.push({
-                line: rowIndex + i + 2,
-                email: contact.email || 'Unknown',
-                error: error instanceof Error ? error.message : 'Unknown error'
-              })
-            }
-          })
-          setErrorDetails(errors)
+        let reconciled: { succeeded: number; failures: CsvImportFailure[] } = {
+          succeeded: 0,
+          failures: []
         }
+        if (validContacts.length > 0) {
+          try {
+            // Use batch import API for both cases (with or without lists)
+            const batchResult = await contactsApi.batchImport({
+              workspace_id: workspaceId,
+              contacts: validContacts,
+              subscribe_to_lists:
+                selectedListIds && selectedListIds.length > 0 ? selectedListIds : undefined
+            })
+            reconciled = reconcileBatch(
+              sentRows,
+              batchResult.operations || [],
+              batchResult.error || undefined
+            )
+          } catch (error) {
+            console.error('Error processing batch:', error)
+            reconciled = reconcileBatch(
+              sentRows,
+              [],
+              error instanceof Error ? error.message : 'Unknown error'
+            )
+          }
+        }
+
+        const friendly = (raw: string): string => {
+          if (raw === DUPLICATE_IN_BATCH_ERROR) {
+            return t`Duplicate: a later line has the same email address (that one is imported)`
+          }
+          const low = raw.toLowerCase()
+          if (low.includes('email is required')) return t`Email address is missing`
+          if (low.includes('invalid email') || (low.includes('email') && low.includes('invalid'))) {
+            return t`Invalid email address`
+          }
+          return raw
+        }
+        const batchFailures = [...preFailures, ...reconciled.failures]
+          .map((f) => ({ ...f, error: friendly(f.error) }))
+          .sort((x, y) => x.line - y.line)
+        successCount += reconciled.succeeded
+        failureCount += batchFailures.length
+        for (const f of batchFailures) {
+          if (errors.length < 100) errors.push(f)
+        }
+        setSuccessCount(successCount)
+        setFailureCount(failureCount)
+        setErrorDetails([...errors])
 
         rowIndex = end
         setCurrentRow(rowIndex)
@@ -887,7 +897,7 @@ export function ContactsCsvUploadDrawer({
         <div style={{ marginTop: 24, marginBottom: 24 }}>
           <Alert
             message={t`Upload Complete`}
-            description={t`Processed ${totalRows.toLocaleString()} contacts: ${successCount.toLocaleString()} successful, ${failureCount.toLocaleString()} failed`}
+            description={t`${totalRows.toLocaleString()} lines read: ${successCount.toLocaleString()} imported, ${failureCount.toLocaleString()} skipped (reason and line number below)`}
             type={failureCount === 0 ? 'success' : 'warning'}
             showIcon
             style={{ marginBottom: 24 }}
@@ -896,7 +906,7 @@ export function ContactsCsvUploadDrawer({
           {failureCount > 0 && (
             <>
               <Typography.Title level={4}>
-                {t`Errors (${Math.min(failureCount, 100)} of ${failureCount.toLocaleString()} shown)`}
+                {t`Skipped lines (${Math.min(failureCount, 100)} of ${failureCount.toLocaleString()} shown)`}
               </Typography.Title>
               <div style={{ overflowY: 'auto', maxHeight: '400px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>

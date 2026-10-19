@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Menu, Divider } from 'antd'
 import {
   TeamOutlined,
@@ -6,7 +7,8 @@ import {
   ExclamationCircleOutlined,
   CreditCardOutlined,
   SendOutlined,
-  RobotOutlined
+  RobotOutlined,
+  ToolOutlined
 } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 
@@ -27,10 +29,21 @@ interface SettingsSidebarProps {
   isOwner: boolean
 }
 
+// Reglages d'ingenieur : replies sous « Avancé » (rien n'est retire, un clic suffit).
+// Un client non technicien ne voit que Equipe, Integrations, General, Plan.
+export const ADVANCED_SETTINGS_SECTIONS: SettingsSection[] = [
+  'webhooks',
+  'custom-fields',
+  'cold-outreach',
+  'api-agents'
+]
+
 export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: SettingsSidebarProps) {
   const { t } = useLingui()
+  // La section avancee est ouverte d'office quand la page affichee en fait partie
+  const [advancedOpen, setAdvancedOpen] = useState(ADVANCED_SETTINGS_SECTIONS.includes(activeSection))
 
-  const menuItems = [
+  const allItems = [
     {
       key: 'team',
       icon: <TeamOutlined />,
@@ -77,12 +90,12 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
           <path d="m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8" />
         </svg>
       ),
-      label: t`Webhooks`
+      label: t`Event notifications (webhooks)`
     },
     {
       key: 'custom-fields',
       icon: <TagsOutlined />,
-      label: t`Custom Fields`
+      label: t`Custom contact fields`
     },
     {
       key: 'general',
@@ -101,24 +114,35 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
       // classe de provider). Cf. veridian_cold_outreach_settings.tsx.
       key: 'cold-outreach',
       icon: <SendOutlined />,
-      label: t`Cold outreach`
+      label: t`Sending limits`
     },
     {
       // === Veridian patch — mission "API & agents" (2026-10-03) ===
       key: 'api-agents',
       icon: <RobotOutlined />,
-      label: t`API & agents`
+      label: t`API keys & AI agents`
     }
   ]
 
-  // Add danger zone only for owners
-  if (isOwner) {
-    menuItems.push({
-      key: 'danger-zone',
-      icon: <ExclamationCircleOutlined />,
-      label: t`Danger Zone`
-    })
-  }
+  const menuItems = [
+    ...allItems.filter((i) => !ADVANCED_SETTINGS_SECTIONS.includes(i.key as SettingsSection)),
+    {
+      key: 'advanced',
+      icon: <ToolOutlined />,
+      label: t`Advanced`,
+      children: allItems.filter((i) => ADVANCED_SETTINGS_SECTIONS.includes(i.key as SettingsSection))
+    },
+    // Danger zone only for owners
+    ...(isOwner
+      ? [
+          {
+            key: 'danger-zone',
+            icon: <ExclamationCircleOutlined />,
+            label: t`Danger Zone`
+          }
+        ]
+      : [])
+  ]
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -127,6 +151,8 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
       <Menu
         mode="inline"
         selectedKeys={[activeSection]}
+        openKeys={advancedOpen || ADVANCED_SETTINGS_SECTIONS.includes(activeSection) ? ['advanced'] : []}
+        onOpenChange={(keys) => setAdvancedOpen(keys.includes('advanced'))}
         items={menuItems}
         onClick={({ key }) => onSectionChange(key as SettingsSection)}
         style={{ borderRight: 0, backgroundColor: '#F9F9F9' }}

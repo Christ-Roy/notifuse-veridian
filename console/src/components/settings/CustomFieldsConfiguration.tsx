@@ -158,8 +158,8 @@ export function CustomFieldsConfiguration({
   return (
     <>
       <SettingsSectionHeader
-        title={t`Custom Fields`}
-        description={t`Set friendly display names for contact custom fields.`}
+        title={t`Custom contact fields`}
+        description={t`Advanced setting. Each contact has spare fields (custom_string_1, custom_number_1...) that you can use to store your own information. Give them a readable name here, for example "Sector" or "Last quote".`}
       />
 
       {isOwner && (

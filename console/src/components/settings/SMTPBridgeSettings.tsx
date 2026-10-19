@@ -17,8 +17,8 @@ export function SMTPBridgeSettings() {
   return (
     <>
       <SettingsSectionHeader
-        title={t`SMTP Bridge`}
-        description={t`SMTP bridge server for forwarding transactional emails`}
+        title={t`SMTP relay`}
+        description={t`Advanced setting, for technical users. Lets another application (an online shop, a CRM...) send its emails through this workspace using standard SMTP credentials. You do not need this to send prospecting emails.`}
       />
 
       {window.SMTP_BRIDGE_ENABLED ? (

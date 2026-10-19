@@ -166,8 +166,8 @@ export function WebhooksSettings({ workspaceId }: WebhooksSettingsProps) {
   return (
     <>
       <SettingsSectionHeader
-        title={t`Webhooks`}
-        description={t`Configure outgoing webhooks to receive real-time notifications when events occur in your workspace.`}
+        title={t`Event notifications (webhooks)`}
+        description={t`Advanced setting, for technical users. A webhook sends a message to another application each time something happens here (email opened, contact added...). You do not need this to send emails.`}
       />
 
       {subscriptions.length === 0 && !loading ? (

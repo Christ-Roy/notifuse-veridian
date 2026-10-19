@@ -96,7 +96,7 @@ describe('VeridianColdOutreachSettings', () => {
 
   it('shows the section header and the provider classes', () => {
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
-    expect(screen.getByText('Veridian — Cold outreach')).toBeInTheDocument()
+    expect(screen.getByText('Sending limits')).toBeInTheDocument()
     expect(screen.getByText(/Google \(Gmail/)).toBeInTheDocument()
     expect(screen.getByText(/Microsoft \(Outlook/)).toBeInTheDocument()
     expect(screen.getByText(/Yahoo \/ AOL/)).toBeInTheDocument()

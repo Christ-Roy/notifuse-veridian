@@ -140,6 +140,13 @@ msgstr "{0} human replies"
 msgid "{0} in {1}"
 msgstr "{0} in {1}"
 
+#. placeholder {0}: totalRows.toLocaleString()
+#. placeholder {1}: successCount.toLocaleString()
+#. placeholder {2}: failureCount.toLocaleString()
+#: src/components/contacts/ContactsCsvUploadDrawer.tsx
+msgid "{0} lines read: {1} imported, {2} skipped (reason and line number below)"
+msgstr "{0} lines read: {1} imported, {2} skipped (reason and line number below)"
+
 #. placeholder {0}: processed.toLocaleString()
 #. placeholder {1}: enqueuedCount.toLocaleString()
 #: src/components/broadcasts/SendingProgress.tsx
@@ -454,6 +461,10 @@ msgstr "1. Settings"
 msgid "100 - Thin"
 msgstr "100 - Thin"
 
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
+msgid "2. Content"
+msgstr "2. Content"
+
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "2. Give it to your AI agent"
 msgstr "2. Give it to your AI agent"
@@ -468,8 +479,8 @@ msgid "2. Template ({0})"
 msgstr "2. Template ({0})"
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
-msgid "2. Web Analytics"
-msgstr "2. Web Analytics"
+#~ msgid "2. Web Analytics"
+#~ msgstr "2. Web Analytics"
 
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "200 - Extra Light"
@@ -480,8 +491,8 @@ msgid "24/7 (no window)"
 msgstr "24/7 (no window)"
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
-msgid "3. Data Feeds"
-msgstr "3. Data Feeds"
+#~ msgid "3. Data Feeds"
+#~ msgstr "3. Data Feeds"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "3. Done"
@@ -500,8 +511,8 @@ msgid "300 - Light"
 msgstr "300 - Light"
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
-msgid "4. Content"
-msgstr "4. Content"
+#~ msgid "4. Content"
+#~ msgstr "4. Content"
 
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "400 - Normal"
@@ -908,6 +919,35 @@ msgstr "Admin email & public URL"
 msgid "Admin email is required"
 msgstr "Admin email is required"
 
+#: src/components/settings/SettingsSidebar.tsx
+msgid "Advanced"
+msgstr "Advanced"
+
+#: src/components/templates/CreateTemplateDrawer.tsx
+msgid "Advanced options"
+msgstr "Advanced options"
+
+#: src/components/settings/WebhooksSettings.tsx
+msgid "Advanced setting, for technical users. A webhook sends a message to another application each time something happens here (email opened, contact added...). You do not need this to send emails."
+msgstr "Advanced setting, for technical users. A webhook sends a message to another application each time something happens here (email opened, contact added...). You do not need this to send emails."
+
+#: src/components/settings/ApiAgentsSettings.tsx
+msgid "Advanced setting, for technical users. API keys let another program (or an AI agent such as Claude Code) read and manage this workspace on your behalf. You do not need this to send emails."
+msgstr "Advanced setting, for technical users. API keys let another program (or an AI agent such as Claude Code) read and manage this workspace on your behalf. You do not need this to send emails."
+
+#: src/components/settings/SMTPBridgeSettings.tsx
+msgid "Advanced setting, for technical users. Lets another application (an online shop, a CRM...) send its emails through this workspace using standard SMTP credentials. You do not need this to send prospecting emails."
+msgstr "Advanced setting, for technical users. Lets another application (an online shop, a CRM...) send its emails through this workspace using standard SMTP credentials. You do not need this to send prospecting emails."
+
+#: src/components/settings/CustomFieldsConfiguration.tsx
+msgid "Advanced setting. Each contact has spare fields (custom_string_1, custom_number_1...) that you can use to store your own information. Give them a readable name here, for example \"Sector\" or \"Last quote\"."
+msgstr "Advanced setting. Each contact has spare fields (custom_string_1, custom_number_1...) that you can use to store your own information. Give them a readable name here, for example \"Sector\" or \"Last quote\"."
+
+#: src/components/settings/veridian_cold_outreach_settings.tsx
+#: src/components/settings/veridian_cold_outreach_settings.tsx
+msgid "Advanced setting. The defaults protect your sender reputation and suit most cases: change them only if you know why. Per-provider sending rates, daily caps and open-tracking policy for prospecting campaigns."
+msgstr "Advanced setting. The defaults protect your sender reputation and suit most cases: change them only if you know why. Per-provider sending rates, daily caps and open-tracking policy for prospecting campaigns."
+
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 msgid "Advanced settings"
 msgstr "Advanced settings"
@@ -918,6 +958,18 @@ msgstr "Advanced Settings"
 
 #~ msgid "Advanced SMTP"
 #~ msgstr "Advanced SMTP"
+
+#: src/components/file_manager/fileManager.tsx
+msgid "Advanced: connect your own file storage (S3)"
+msgstr "Advanced: connect your own file storage (S3)"
+
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
+msgid "Advanced: data feeds (optional)"
+msgstr "Advanced: data feeds (optional)"
+
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
+msgid "Advanced: web analytics (optional)"
+msgstr "Advanced: web analytics (optional)"
 
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx
 msgid "Affects how columns stack on mobile devices"
@@ -1114,8 +1166,8 @@ msgstr "anytime"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/SettingsSidebar.tsx
-msgid "API & agents"
-msgstr "API & agents"
+#~ msgid "API & agents"
+#~ msgstr "API & agents"
 
 #: src/components/transactional/ApiCommandModal.tsx
 #: src/pages/TransactionalNotificationsPage.tsx
@@ -1164,6 +1216,11 @@ msgstr "API key revoked"
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "API keys"
 msgstr "API keys"
+
+#: src/components/settings/ApiAgentsSettings.tsx
+#: src/components/settings/SettingsSidebar.tsx
+msgid "API keys & AI agents"
+msgstr "API keys & AI agents"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/WorkspaceMembers.tsx
@@ -1546,6 +1603,10 @@ msgstr "Belonging to at least one of the following segments"
 #: src/components/email_builder/blocks/MjTitleBlock.tsx
 msgid "Best practices:"
 msgstr "Best practices:"
+
+#: src/components/templates/CreateTemplateDrawer.tsx
+msgid "Best regards,"
+msgstr "Best regards,"
 
 #: src/components/segment/input.tsx
 #: src/components/segment/input.tsx
@@ -2153,8 +2214,8 @@ msgid "Code Editor"
 msgstr "Code Editor"
 
 #: src/components/settings/SettingsSidebar.tsx
-msgid "Cold outreach"
-msgstr "Cold outreach"
+#~ msgid "Cold outreach"
+#~ msgstr "Cold outreach"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Cold outreach settings saved"
@@ -2340,12 +2401,12 @@ msgid "Configure Integration"
 msgstr "Configure Integration"
 
 #: src/components/file_manager/fileManager.tsx
-msgid "Configure now"
-msgstr "Configure now"
+#~ msgid "Configure now"
+#~ msgstr "Configure now"
 
 #: src/components/settings/WebhooksSettings.tsx
-msgid "Configure outgoing webhooks to receive real-time notifications when events occur in your workspace."
-msgstr "Configure outgoing webhooks to receive real-time notifications when events occur in your workspace."
+#~ msgid "Configure outgoing webhooks to receive real-time notifications when events occur in your workspace."
+#~ msgstr "Configure outgoing webhooks to receive real-time notifications when events occur in your workspace."
 
 #: src/components/automations/nodes/BranchNode.tsx
 msgid "Configure paths"
@@ -2355,9 +2416,12 @@ msgstr "Configure paths"
 #~ msgstr "Configure policy"
 
 #: src/components/broadcasts/SendOrScheduleModal.tsx
-#: src/pages/BroadcastsPage.tsx
 msgid "Configure Provider"
 msgstr "Configure Provider"
+
+#: src/components/file_manager/fileManager.tsx
+msgid "Configure storage"
+msgstr "Configure storage"
 
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/Integrations.tsx
@@ -2738,6 +2802,14 @@ msgstr "Create a Gmail app password in 3 steps"
 msgid "Create a notification"
 msgstr "Create a notification"
 
+#: src/pages/BroadcastsPage.tsx
+msgid "Create a sending profile"
+msgstr "Create a sending profile"
+
+#: src/pages/BroadcastsPage.tsx
+msgid "Create a sending profile first: it is the mailbox your emails are sent from."
+msgstr "Create a sending profile first: it is the mailbox your emails are sent from."
+
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "Create an email template"
 msgstr "Create an email template"
@@ -2756,8 +2828,8 @@ msgid "Create API Key"
 msgstr "Create API Key"
 
 #: src/components/settings/ApiAgentsSettings.tsx
-msgid "Create API keys and connect AI agents (Claude Code or similar) to this workspace."
-msgstr "Create API keys and connect AI agents (Claude Code or similar) to this workspace."
+#~ msgid "Create API keys and connect AI agents (Claude Code or similar) to this workspace."
+#~ msgstr "Create API keys and connect AI agents (Claude Code or similar) to this workspace."
 
 #: src/components/automations/UpsertAutomationDrawer.tsx
 #: src/components/automations/UpsertAutomationDrawer.tsx
@@ -2921,6 +2993,11 @@ msgstr "Custom (%)"
 msgid "Custom (px)"
 msgstr "Custom (px)"
 
+#: src/components/settings/CustomFieldsConfiguration.tsx
+#: src/components/settings/SettingsSidebar.tsx
+msgid "Custom contact fields"
+msgstr "Custom contact fields"
+
 #: src/components/email_builder/blocks/MjColumnBlock.tsx
 #: src/components/email_builder/blocks/MjGroupBlock.tsx
 #: src/components/email_builder/blocks/MjRawBlock.tsx
@@ -2989,8 +3066,6 @@ msgid "Custom field label saved successfully"
 msgstr "Custom field label saved successfully"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
-#: src/components/settings/CustomFieldsConfiguration.tsx
-#: src/components/settings/SettingsSidebar.tsx
 msgid "Custom Fields"
 msgstr "Custom Fields"
 
@@ -3670,6 +3745,10 @@ msgstr "Drag to move this block in the tree"
 msgid "Drop files here to upload"
 msgstr "Drop files here to upload"
 
+#: src/components/contacts/ContactsCsvUploadDrawer.tsx
+msgid "Duplicate: a later line has the same email address (that one is imported)"
+msgstr "Duplicate: a later line has the same email address (that one is imported)"
+
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx
 msgid "e.g. cta_button"
 msgstr "e.g. cta_button"
@@ -3936,6 +4015,11 @@ msgstr "Email (Required)"
 msgid "Email Address"
 msgstr "Email Address"
 
+#: src/components/contacts/ContactsCsvUploadDrawer.tsx
+#: src/components/contacts/ContactsCsvUploadDrawer.tsx
+msgid "Email address is missing"
+msgstr "Email address is missing"
+
 #~ msgid "Email address is required for OAuth2"
 #~ msgstr "Email address is required for OAuth2"
 
@@ -4003,8 +4087,8 @@ msgstr "Email Preview"
 #~ msgstr "Email Provider Configuration Needed"
 
 #: src/pages/BroadcastsPage.tsx
-msgid "Email Provider Required"
-msgstr "Email Provider Required"
+#~ msgid "Email Provider Required"
+#~ msgstr "Email Provider Required"
 
 #: src/components/templates/CreateTemplateDrawer.tsx
 #: src/components/templates/TemplateTranslationsTab.tsx
@@ -4052,6 +4136,10 @@ msgstr "Emails / sender / day"
 #: src/components/email_builder/blocks/MjColumnBlock.tsx
 msgid "Empty column. Add text, button, or image content."
 msgstr "Empty column. Add text, button, or image content."
+
+#: src/components/contacts/ContactsCsvUploadDrawer.tsx
+msgid "Empty line"
+msgstr "Empty line"
 
 #~ msgid "Enable 2-Step Verification on the Google account, create a dedicated 16-character app password, then enter it below. The regular Gmail password will not work."
 #~ msgstr "Enable 2-Step Verification on the Google account, create a dedicated 16-character app password, then enter it below. The regular Gmail password will not work."
@@ -4368,11 +4456,9 @@ msgstr "Error: {0}"
 msgid "Errors"
 msgstr "Errors"
 
-#. placeholder {0}: Math.min(failureCount, 100)
-#. placeholder {1}: failureCount.toLocaleString()
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
-msgid "Errors ({0} of {1} shown)"
-msgstr "Errors ({0} of {1} shown)"
+#~ msgid "Errors ({0} of {1} shown)"
+#~ msgstr "Errors ({0} of {1} shown)"
 
 #: src/components/timeline/ContactTimeline.tsx
 #: src/components/webhooks/OutgoingWebhooksTab.tsx
@@ -4386,6 +4472,11 @@ msgstr "Event Name"
 #: src/components/settings/WebhooksSettings.tsx
 msgid "Event Names"
 msgstr "Event Names"
+
+#: src/components/settings/SettingsSidebar.tsx
+#: src/components/settings/WebhooksSettings.tsx
+msgid "Event notifications (webhooks)"
+msgstr "Event notifications (webhooks)"
 
 #: src/components/webhooks/InboundWebhookEventsTab.tsx
 msgid "Event Type"
@@ -5096,8 +5187,12 @@ msgid "File manager settings updated successfully"
 msgstr "File manager settings updated successfully"
 
 #: src/components/file_manager/fileManager.tsx
-msgid "File storage is not configured."
-msgstr "File storage is not configured."
+#~ msgid "File storage is not configured."
+#~ msgstr "File storage is not configured."
+
+#: src/components/file_manager/fileManager.tsx
+msgid "File storage is not set up."
+msgstr "File storage is not set up."
 
 #: src/components/file_manager/buttonSettings.tsx
 msgid "File storage settings"
@@ -5235,6 +5330,10 @@ msgstr "Font Styling"
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "for deduplication - notifications with the same external_id won't be sent twice."
 msgstr "for deduplication - notifications with the same external_id won't be sent twice."
+
+#: src/components/file_manager/fileManager.tsx
+msgid "For technical users: connect an S3-compatible storage (Amazon S3, Google Cloud Storage, MinIO...) to upload and keep your files here."
+msgstr "For technical users: connect an S3-compatible storage (Amazon S3, Google Cloud Storage, MinIO...) to upload and keep your files here."
 
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "for template variables"
@@ -5574,6 +5673,10 @@ msgstr "Healthy"
 #: src/components/email_builder/ui/HeightInput.tsx
 msgid "Height"
 msgstr "Height"
+
+#: src/components/templates/CreateTemplateDrawer.tsx
+msgid "Hello"
+msgstr "Hello"
 
 #: src/components/email_builder/MjmlCodeEditor.tsx
 #: src/components/templates/CreateTemplateDrawer.tsx
@@ -6128,6 +6231,10 @@ msgstr "Internal Veridian account"
 #: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Invalid email"
 msgstr "Invalid email"
+
+#: src/components/contacts/ContactsCsvUploadDrawer.tsx
+msgid "Invalid email address"
+msgstr "Invalid email address"
 
 #: src/pages/SetupWizard.tsx
 #: src/pages/SetupWizard.tsx
@@ -7153,8 +7260,6 @@ msgstr "New workspace"
 #~ msgid "Newly imported contacts, not the audience actually contacted."
 #~ msgstr "Newly imported contacts, not the audience actually contacted."
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #: src/components/templates/CreateTemplateDrawer.tsx
 #: src/components/templates/CreateTemplateDrawer.tsx
@@ -8183,8 +8288,8 @@ msgstr "Per-infrastructure overrides"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
-msgid "Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns."
-msgstr "Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns."
+#~ msgid "Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns."
+#~ msgstr "Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns."
 
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Per-recipient cap"
@@ -8302,6 +8407,10 @@ msgstr "Plain text (only safe behind a TLS-terminating proxy)"
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "Plain text body. Liquid variables allowed, e.g. {liquidFirstName}"
 msgstr "Plain text body. Liquid variables allowed, e.g. {liquidFirstName}"
+
+#: src/components/templates/CreateTemplateDrawer.tsx
+msgid "Plain text: the best choice for a prospecting email. It looks like a message typed by hand."
+msgstr "Plain text: the best choice for a prospecting email. It looks like a message typed by hand."
 
 #: src/components/settings/SettingsSidebar.tsx
 #: src/components/settings/veridian_plan_settings.tsx
@@ -8643,8 +8752,6 @@ msgid "Preview Your Email"
 msgstr "Preview Your Email"
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #: src/components/templates/CreateTemplateDrawer.tsx
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "Previous"
@@ -8663,13 +8770,9 @@ msgid "Processed"
 msgstr "Processed"
 
 #. placeholder {0}: progress.total
-#. placeholder {0}: totalRows.toLocaleString()
 #. placeholder {1}: progress.successful
-#. placeholder {1}: successCount.toLocaleString()
-#. placeholder {2}: failureCount.toLocaleString()
 #. placeholder {2}: progress.failed
 #: src/components/contacts/BulkUpdateDrawer.tsx
-#: src/components/contacts/ContactsCsvUploadDrawer.tsx
 msgid "Processed {0} contacts: {1} successful, {2} failed"
 msgstr "Processed {0} contacts: {1} successful, {2} failed"
 
@@ -10184,7 +10287,6 @@ msgstr "Send to all (none excluded)"
 msgid "Send transactional notifications using SMTP bridge. Perfect for integrating with existing email systems or applications that support SMTP."
 msgstr "Send transactional notifications using SMTP bridge. Perfect for integrating with existing email systems or applications that support SMTP."
 
-#: src/components/templates/CreateTemplateDrawer.tsx
 #: src/components/templates/SendTemplateModal.tsx
 #: src/pages/TemplatesPage.tsx
 msgid "Sender"
@@ -10242,6 +10344,12 @@ msgstr "Sending emails..."
 msgid "Sending infrastructures"
 msgstr "Sending infrastructures"
 
+#: src/components/settings/SettingsSidebar.tsx
+#: src/components/settings/veridian_cold_outreach_settings.tsx
+#: src/components/settings/veridian_cold_outreach_settings.tsx
+msgid "Sending limits"
+msgstr "Sending limits"
+
 #: src/components/veridian_a11y.ts
 #: src/layouts/WorkspaceLayout.tsx
 #: src/pages/LogsPage.tsx
@@ -10251,6 +10359,10 @@ msgstr "Sending log"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Sending policy presets"
 msgstr "Sending policy presets"
+
+#: src/pages/BroadcastsPage.tsx
+msgid "Sending profile required"
+msgstr "Sending profile required"
 
 #~ msgid "Sending profile rotation"
 #~ msgstr "Sending profile rotation"
@@ -10440,8 +10552,8 @@ msgid "Set content"
 msgstr "Set content"
 
 #: src/components/settings/CustomFieldsConfiguration.tsx
-msgid "Set friendly display names for contact custom fields."
-msgstr "Set friendly display names for contact custom fields."
+#~ msgid "Set friendly display names for contact custom fields."
+#~ msgstr "Set friendly display names for contact custom fields."
 
 #: src/components/email_builder/blocks/MjGroupBlock.tsx
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx
@@ -10606,6 +10718,12 @@ msgstr "Size"
 msgid "Skipped"
 msgstr "Skipped"
 
+#. placeholder {0}: Math.min(failureCount, 100)
+#. placeholder {1}: failureCount.toLocaleString()
+#: src/components/contacts/ContactsCsvUploadDrawer.tsx
+msgid "Skipped lines ({0} of {1} shown)"
+msgstr "Skipped lines ({0} of {1} shown)"
+
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Slowed"
 msgstr "Slowed"
@@ -10633,7 +10751,6 @@ msgstr "SMTP & bridge settings"
 msgid "SMTP + IMAP"
 msgstr "SMTP + IMAP"
 
-#: src/components/settings/SMTPBridgeSettings.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/pages/TransactionalNotificationsPage.tsx
 msgid "SMTP Bridge"
@@ -10652,8 +10769,8 @@ msgid "SMTP bridge port is required"
 msgstr "SMTP bridge port is required"
 
 #: src/components/settings/SMTPBridgeSettings.tsx
-msgid "SMTP bridge server for forwarding transactional emails"
-msgstr "SMTP bridge server for forwarding transactional emails"
+#~ msgid "SMTP bridge server for forwarding transactional emails"
+#~ msgstr "SMTP bridge server for forwarding transactional emails"
 
 #: src/pages/SetupWizard.tsx
 msgid "SMTP Configuration"
@@ -10716,6 +10833,10 @@ msgstr "SMTP provider doesn't support complaint webhooks, so spam complaints can
 #: src/components/broadcasts/BroadcastStats.tsx
 msgid "SMTP provider doesn't support delivery webhooks, so delivery status cannot be tracked"
 msgstr "SMTP provider doesn't support delivery webhooks, so delivery status cannot be tracked"
+
+#: src/components/settings/SMTPBridgeSettings.tsx
+msgid "SMTP relay"
+msgstr "SMTP relay"
 
 #~ msgid "SMTP server smtp.gmail.com, port 587, TLS enabled. The credential is encrypted before it is stored."
 #~ msgstr "SMTP server smtp.gmail.com, port 587, TLS enabled. The credential is encrypted before it is stored."
@@ -11898,9 +12019,17 @@ msgstr "TLS private key is required"
 msgid "to"
 msgstr "to"
 
+#: src/components/file_manager/fileManager.tsx
+msgid "To add an image to an email, simply paste the address (URL) of an image that is already online: no storage is needed."
+msgstr "To add an image to an email, simply paste the address (URL) of an image that is already online: no storage is needed."
+
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "to prevent duplicate sends"
 msgstr "to prevent duplicate sends"
+
+#: src/pages/BroadcastsPage.tsx
+msgid "To send a broadcast you need a sending profile: the mailbox your emails are sent from. It takes two minutes to create one."
+msgstr "To send a broadcast you need a sending profile: the mailbox your emails are sent from. It takes two minutes to create one."
 
 #. placeholder {0}: config.title
 #: src/components/ai-assistant/AIAssistantChat.tsx
@@ -12613,8 +12742,8 @@ msgstr "Verdict"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
-msgid "Veridian — Cold outreach"
-msgstr "Veridian — Cold outreach"
+#~ msgid "Veridian — Cold outreach"
+#~ msgstr "Veridian — Cold outreach"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx
 msgid "Veridian cold outreach — per-provider settings for this campaign"
@@ -12782,8 +12911,8 @@ msgstr "Webhook URL"
 
 #: src/components/settings/SettingsSidebar.tsx
 #: src/components/settings/WebhooksSettings.tsx
-msgid "Webhooks"
-msgstr "Webhooks"
+#~ msgid "Webhooks"
+#~ msgstr "Webhooks"
 
 #~ msgid "Webhooks registered successfully"
 #~ msgstr "Webhooks registered successfully"
@@ -13089,7 +13218,6 @@ msgid "You can only upload CSV files!"
 msgstr "You can only upload CSV files!"
 
 #: src/components/broadcasts/SendOrScheduleModal.tsx
-#: src/pages/BroadcastsPage.tsx
 msgid "You don't have a marketing email provider configured. Please set up an email provider in your workspace settings to send broadcasts."
 msgstr "You don't have a marketing email provider configured. Please set up an email provider in your workspace settings to send broadcasts."
 

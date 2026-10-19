@@ -16,6 +16,7 @@ import {
   Tag,
   Dropdown,
   Radio,
+  Collapse,
   MenuProps
 } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -193,12 +194,25 @@ export function CreateTemplateDrawer({
     if (fromTemplate?.email?.plain_text_only) return 'text'
     if (template?.email?.editor_mode === 'code') return 'code'
     if (fromTemplate?.email?.editor_mode === 'code') return 'code'
+    // Un nouveau modele demarre en mode Texte (le bon choix pour un mail de prospection)
+    if (!template && !fromTemplate) return 'text'
     return 'visual'
   })
+  // Corps de depart d'un nouveau modele Texte (variables Liquid, aucune marque)
+  const starterText = () => `${t`Hello`} {{ contact.first_name }},\n\n\n\n${t`Best regards,`}`
   // Mode « Texte » : corps texte brut (variables Liquid), enregistre plain_text_only=true.
   const [textSource, setTextSource] = useState<string>(
-    () => template?.email?.text || fromTemplate?.email?.text || ''
+    () => template?.email?.text || fromTemplate?.email?.text || (template || fromTemplate ? '' : starterText())
   )
+  // Identifiants de modeles deja pris : un seul appel a l'ouverture, plus un GET (404) a chaque frappe
+  const [existingTemplateIds, setExistingTemplateIds] = useState<Set<string>>(new Set())
+  const uniqueTemplateId = (name: string): string => {
+    const base = kebabCase(name)
+    if (!base) return base
+    let candidate = base
+    for (let i = 2; existingTemplateIds.has(candidate); i++) candidate = `${base}-${i}`
+    return candidate
+  }
   const [mjmlSource, setMjmlSource] = useState<string>(() => {
     if (template?.email?.mjml_source) return template.email.mjml_source
     if (fromTemplate?.email?.mjml_source) return fromTemplate.email.mjml_source
@@ -338,6 +352,12 @@ export function CreateTemplateDrawer({
   }
 
   const showDrawer = () => {
+    if (!template) {
+      templatesApi
+        .list({ workspace_id: workspace.id })
+        .then((r) => setExistingTemplateIds(new Set((r.templates || []).map((x) => x.id))))
+        .catch(() => undefined)
+    }
     if (template) {
       // Set editor mode from existing template
       setEditorMode(
@@ -424,7 +444,8 @@ export function CreateTemplateDrawer({
     setIsOpen(false)
     form.resetFields()
     setTab('settings')
-    setEditorMode('visual')
+    setEditorMode('text')
+    setTextSource(starterText())
     setMjmlSource(STARTER_TEMPLATE)
     setTranslationsState({})
     if (onClose) {
@@ -583,6 +604,10 @@ export function CreateTemplateDrawer({
             layout="vertical"
             onFinish={(values) => {
               setLoading(true)
+              // Apercu du sujet facultatif : on n'envoie rien plutot qu'une chaine vide
+              if (!values.email?.subject_preview) {
+                values.email = { ...values.email, subject_preview: undefined }
+              }
               if (editorMode === 'text') {
                 if (!textSource.trim()) {
                   message.error(t`The text body is required in Text mode`)
@@ -674,7 +699,7 @@ export function CreateTemplateDrawer({
             }}
             initialValues={{
               'email.visual_editor_tree': visualEditorTree,
-              category: forceCategory || undefined,
+              category: forceCategory || 'marketing',
               test_data: defaultTestData
             }}
           >
@@ -716,192 +741,170 @@ export function CreateTemplateDrawer({
               <div style={{ display: tab === 'settings' ? 'block' : 'none' }}>
                 <div className="p-4 md:p-8">
                   <Row gutter={24}>
-                    <Col xs={24} md={12} lg={6}>
-                      <Form.Item name="name" label={t`Template name`} rules={[{ required: true }]}>
+                    <Col xs={24} lg={12}>
+                      <Form.Item
+                        name="name"
+                        label={t`Template name`}
+                        rules={[{ required: true, whitespace: true }]}
+                      >
                         <Input
                           placeholder={t`i.e: Welcome Email`}
                           onChange={(e) => {
                             if (!template) {
-                              const id = kebabCase(e.target.value)
-                              form.setFieldsValue({ id: id })
-                              form.validateFields(['id'])
+                              form.setFieldsValue({ id: uniqueTemplateId(e.target.value) })
                             }
                           }}
                         />
                       </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12} lg={6}>
                       <Form.Item
-                        name="id"
-                        label={t`Template ID (utm_content)`}
-                        tooltip={t`This is the ID that will be used as the utm_content parameter in the links URL to track the template`}
+                        name={['email', 'subject']}
+                        label={showTranslationsTab ? t`Email subject (${workspace.settings.default_language})` : t`Email subject`}
                         rules={[
+                          { required: true, type: 'string', whitespace: true },
                           {
-                            required: true,
-                            type: 'string',
-                            pattern: /^[a-z0-9_-]+$/,
-                            message:
-                              t`ID must contain only lowercase letters, numbers, underscores, and hyphens`
-                          },
-                          {
-                            validator: async (_rule, value) => {
-                              if (value && !template) {
-                                // Unicite testee sur la liste (une requete mise en cache 5 s) et non
-                                // par un GET par frappe : chaque id libre renvoyait un 404 (audit
-                                // UI 19/10/2026, E3). Liste indisponible : le serveur tranchera.
-                                let ids: string[] | null = null
-                                try {
-                                  ids = await queryClient.fetchQuery({
-                                    queryKey: ['template-ids', workspace.id],
-                                    queryFn: async () =>
-                                      (await templatesApi.list({ workspace_id: workspace.id })).templates.map(
-                                        (tpl) => tpl.id
-                                      ),
-                                    staleTime: 5000
-                                  })
-                                } catch {
-                                  return Promise.resolve()
-                                }
-                                if (ids.includes(value)) {
-                                  return Promise.reject(new Error(t`Template ID already exists`))
-                                }
+                            validator: (_, value) => {
+                              const validation = validateLiquidTags(value)
+                              if (!validation.isValid) {
+                                return Promise.reject(new Error(validation.error))
                               }
                               return Promise.resolve()
                             }
                           }
                         ]}
                       >
-                        <Input
-                          disabled={template ? true : false}
-                          placeholder={t`i.e: welcome-email`}
-                        />
+                        <Input placeholder={t`Templating markup allowed`} />
                       </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12} lg={6}>
                       <Form.Item
-                        name="category"
-                        label={t`Category`}
-                        rules={[{ required: true, type: 'string' }]}
+                        label={t`Editor mode`}
+                        extra={
+                          editorMode === 'text'
+                            ? t`Plain text: the best choice for a prospecting email. It looks like a message typed by hand.`
+                            : undefined
+                        }
                       >
-                        <Select
-                          placeholder={t`Select category`}
-                          disabled={forceCategory ? true : false}
-                          options={[
-                            {
-                              value: 'marketing',
-                              label: renderCategoryTag('marketing')
-                            },
-                            {
-                              value: 'transactional',
-                              label: renderCategoryTag('transactional')
-                            },
-                            {
-                              value: 'welcome',
-                              label: renderCategoryTag('welcome')
-                            },
-                            {
-                              value: 'opt_in',
-                              label: renderCategoryTag('opt_in')
-                            },
-                            {
-                              value: 'unsubscribe',
-                              label: renderCategoryTag('unsubscribe')
-                            },
-                            {
-                              value: 'bounce',
-                              label: renderCategoryTag('bounce')
-                            },
-                            {
-                              value: 'blocklist',
-                              label: renderCategoryTag('blocklist')
-                            }
-                          ]}
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12} lg={6}>
-                      <Form.Item label={t`Editor mode`}>
                         <Radio.Group
+                          data-testid="template-editor-mode"
                           value={editorMode}
                           onChange={(e) => setEditorMode(e.target.value as 'visual' | 'code' | 'text')}
                           optionType="button"
                           disabled={!!(template || fromTemplate)}
                           options={[
+                            { label: t`Text`, value: 'text' },
                             { label: t`Visual`, value: 'visual' },
-                            { label: t`Code (MJML)`, value: 'code' },
-                            { label: t`Text`, value: 'text' }
+                            { label: t`Code (MJML)`, value: 'code' }
                           ]}
                         />
                       </Form.Item>
-                    </Col>
-                  </Row>
 
-                  <div className="text-lg my-8 font-bold">{t`Sender`}</div>
-                  <Row gutter={24}>
-                    <Col xs={24} lg={12}>
-                      <Form.Item
-                        name={['email', 'subject']}
-                        label={showTranslationsTab ? t`Email subject (${workspace.settings.default_language})` : t`Email subject`}
-                        rules={[
-                          { required: true, type: 'string' },
+                      <Collapse
+                        ghost
+                        data-testid="template-advanced-options"
+                        items={[
                           {
-                            validator: (_, value) => {
-                              const validation = validateLiquidTags(value)
-                              if (!validation.isValid) {
-                                return Promise.reject(new Error(validation.error))
-                              }
-                              return Promise.resolve()
-                            }
+                            key: 'advanced',
+                            forceRender: true,
+                            label: t`Advanced options`,
+                            children: (
+                              <>
+                                <Row gutter={16}>
+                                  <Col span={12}>
+                                    <Form.Item
+                                      name="id"
+                                      label={t`Template ID (utm_content)`}
+                                      tooltip={t`This is the ID that will be used as the utm_content parameter in the links URL to track the template`}
+                                      rules={[
+                                        {
+                                          required: true,
+                                          type: 'string',
+                                          pattern: /^[a-z0-9_-]+$/,
+                                          message:
+                                            t`ID must contain only lowercase letters, numbers, underscores, and hyphens`
+                                        },
+                                        {
+                                          validator: (_rule, value) =>
+                                            value && !template && existingTemplateIds.has(value)
+                                              ? Promise.reject(t`Template ID already exists`)
+                                              : Promise.resolve()
+                                        }
+                                      ]}
+                                    >
+                                      <Input
+                                        disabled={template ? true : false}
+                                        placeholder={t`i.e: welcome-email`}
+                                      />
+                                    </Form.Item>
+                                  </Col>
+                                  <Col span={12}>
+                                    <Form.Item
+                                      name="category"
+                                      label={t`Category`}
+                                      rules={[{ required: true, type: 'string' }]}
+                                    >
+                                      <Select
+                                        placeholder={t`Select category`}
+                                        disabled={forceCategory ? true : false}
+                                        options={[
+                                          { value: 'marketing', label: renderCategoryTag('marketing') },
+                                          { value: 'transactional', label: renderCategoryTag('transactional') },
+                                          { value: 'welcome', label: renderCategoryTag('welcome') },
+                                          { value: 'opt_in', label: renderCategoryTag('opt_in') },
+                                          { value: 'unsubscribe', label: renderCategoryTag('unsubscribe') },
+                                          { value: 'bounce', label: renderCategoryTag('bounce') },
+                                          { value: 'blocklist', label: renderCategoryTag('blocklist') }
+                                        ]}
+                                      />
+                                    </Form.Item>
+                                  </Col>
+                                </Row>
+                                <Form.Item
+                                  name={['email', 'subject_preview']}
+                                  label={showTranslationsTab ? t`Subject preview (${workspace.settings.default_language})` : t`Subject preview`}
+                                  rules={[
+                                    { required: false, type: 'string' },
+                                    {
+                                      validator: (_, value) => {
+                                        const validation = validateLiquidTags(value)
+                                        if (!validation.isValid) {
+                                          return Promise.reject(new Error(validation.error))
+                                        }
+                                        return Promise.resolve()
+                                      }
+                                    }
+                                  ]}
+                                >
+                                  <Input placeholder={t`Templating markup allowed`} />
+                                </Form.Item>
+                                <Row gutter={16}>
+                                  <Col span={12}>
+                                    <Form.Item
+                                      name={['email', 'reply_to']}
+                                      label={t`Reply to`}
+                                      rules={[{ required: false, type: 'email' }]}
+                                    >
+                                      <Input />
+                                    </Form.Item>
+                                  </Col>
+                                  <Col span={12}>
+                                    <Form.Item
+                                      name={['email', 'sender_id']}
+                                      label={categoryValue === 'marketing' ? t`Custom sender (marketing email provider)` : t`Custom sender (transactional email provider)`}
+                                      rules={[{ required: false, type: 'string' }]}
+                                    >
+                                      <Select
+                                        options={emailProvider?.email_provider?.senders.map((sender) => ({
+                                          value: sender.id,
+                                          label: `${sender.name} <${sender.email}>`
+                                        }))}
+                                        allowClear={true}
+                                      />
+                                    </Form.Item>
+                                  </Col>
+                                </Row>
+                              </>
+                            )
                           }
                         ]}
-                      >
-                        <Input placeholder={t`Templating markup allowed`} />
-                      </Form.Item>
-                      <Form.Item
-                        name={['email', 'subject_preview']}
-                        label={showTranslationsTab ? t`Subject preview (${workspace.settings.default_language})` : t`Subject preview`}
-                        rules={[
-                          { required: true, type: 'string' },
-                          {
-                            validator: (_, value) => {
-                              const validation = validateLiquidTags(value)
-                              if (!validation.isValid) {
-                                return Promise.reject(new Error(validation.error))
-                              }
-                              return Promise.resolve()
-                            }
-                          }
-                        ]}
-                      >
-                        <Input placeholder={t`Templating markup allowed`} />
-                      </Form.Item>
-
-                      <Row gutter={24}>
-                        <Col xs={24} lg={12}>
-                          <Form.Item
-                            name={['email', 'reply_to']}
-                            label={t`Reply to`}
-                            rules={[{ required: false, type: 'email' }]}
-                          >
-                            <Input />
-                          </Form.Item>
-                        </Col>
-                        <Col xs={24} lg={12}>
-                          <Form.Item
-                            name={['email', 'sender_id']}
-                            label={categoryValue === 'marketing' ? t`Custom sender (marketing email provider)` : t`Custom sender (transactional email provider)`}
-                            rules={[{ required: false, type: 'string' }]}
-                          >
-                            <Select
-                              options={emailProvider?.email_provider?.senders.map((sender) => ({
-                                value: sender.id,
-                                label: `${sender.name} <${sender.email}>`
-                              }))}
-                              allowClear={true}
-                            />
-                          </Form.Item>
-                        </Col>
-                      </Row>
+                      />
                     </Col>
                     <Col xs={24} lg={12}>
                       <div className="flex justify-center" style={{ maxWidth: '100%', overflow: 'hidden' }}>

@@ -77,6 +77,30 @@ export const marketingProfileIds = (
   return settings.marketing_email_provider_id ? [settings.marketing_email_provider_id] : []
 }
 
+/**
+ * Vrai quand le workspace a au moins un profil d'envoi marketing UTILISABLE : declare
+ * (rotation Veridian ou fournisseur marketing historique) ET dont l'integration existe,
+ * avec un fournisseur et au moins un expediteur. Sert a la banniere et au bouton d'envoi
+ * des diffusions : une seule notion, celle des profils d'envoi.
+ */
+export const hasUsableMarketingProfile = (
+  workspace?: {
+    settings?: Pick<
+      WorkspaceSettings,
+      'veridian_marketing_email_provider_ids' | 'marketing_email_provider_id'
+    >
+    integrations?: { id: string; email_provider?: EmailProvider }[]
+  } | null
+): boolean => {
+  if (!workspace?.settings) return false
+  const ids = marketingProfileIds(workspace.settings)
+  return ids.some((id) => {
+    const integration = workspace.integrations?.find((i) => i.id === id)
+    const provider = integration?.email_provider
+    return !!provider?.kind && (provider.senders?.length ?? 0) > 0
+  })
+}
+
 export const withMarketingProfileRotation = (
   settings: WorkspaceSettings,
   integrationId: string,

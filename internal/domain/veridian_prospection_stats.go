@@ -218,6 +218,10 @@ type VeridianProspectionRaw struct {
 	ListReplies       []VeridianProspectionReplyRow
 	ListSent          []VeridianProspectionKeyCount
 	RecentReplies     []VeridianRecentReply
+	// StockDistinct : nombre de PERSONNES actives jamais contactees (distinctes sur toutes
+	// les listes). Un contact present dans deux listes compte une fois. nil = non mesure :
+	// on retombe sur la somme des lignes par liste (ancien comportement, tests existants).
+	StockDistinct *int
 }
 
 type VeridianProspectionStatsRepository interface {
@@ -494,6 +498,11 @@ func VeridianBuildProspectionStats(raw *VeridianProspectionRaw, since, until, no
 		seg.ReplyRateHuman = veridianReplyRate(seg.RepliesHuman, seg.SentContacts)
 		out.Segments = append(out.Segments, seg)
 		out.Totals.StockRemaining += l.NeverContacted
+	}
+	// Le total « stock restant » compte des personnes, pas des abonnements : la somme des
+	// lignes par liste compte deux fois un contact inscrit a deux listes (101 pour 51 contacts).
+	if raw.StockDistinct != nil {
+		out.Totals.StockRemaining = *raw.StockDistinct
 	}
 	return out
 }

@@ -218,8 +218,8 @@ export function ApiAgentsSettings({ workspaceId, canManageKeys }: ApiAgentsSetti
   return (
     <>
       <SettingsSectionHeader
-        title={t`API & agents`}
-        description={t`Create API keys and connect AI agents (Claude Code or similar) to this workspace.`}
+        title={t`API keys & AI agents`}
+        description={t`Advanced setting, for technical users. API keys let another program (or an AI agent such as Claude Code) read and manage this workspace on your behalf. You do not need this to send emails.`}
       />
 
       {canManageKeys && (

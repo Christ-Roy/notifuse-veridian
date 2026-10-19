@@ -45,6 +45,8 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"a", "n"}).AddRow("seq1", 40))
 	mock.ExpectQuery(`(?s)NOT EXISTS.*FROM lists l\s+LEFT JOIN contact_lists cl ON cl.list_id = l.id AND cl.deleted_at IS NULL`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "active", "bounced", "unsub", "complained", "never"}).AddRow("list1", "Liste", 100, 3, 4, 0, 60))
+	mock.ExpectQuery(`(?s)SELECT COUNT\(DISTINCT lower\(cl.email\)\)\s+FROM contact_lists cl`).
+		WillReturnRows(sqlmock.NewRows([]string{"n"}).AddRow(58))
 	mock.ExpectQuery(`(?s)FROM veridian_contact_reply r\s+JOIN contact_lists cl ON cl.email = r.contact_email`).
 		WithArgs(since, until).
 		WillReturnRows(sqlmock.NewRows([]string{"l", "human", "auto"}).AddRow("list1", 2, 0))

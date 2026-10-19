@@ -170,6 +170,24 @@ func TestVeridianBuildProspectionStats_SegmentsAndStock(t *testing.T) {
 	assert.Equal(t, 12, capped.RecentHumanReplies[0].RepliedAt.Hour())
 }
 
+// E4 (audit UI 19/10/2026) : « Stock restant » = 101 pour 51 contacts. Un contact inscrit a
+// deux listes etait compte deux fois par la somme des lignes par liste. Le total doit etre
+// le nombre de PERSONNES distinctes fourni par le depot, les lignes par liste restent par liste.
+func TestVeridianBuildProspectionStats_StockCountsPeopleNotSubscriptions(t *testing.T) {
+	people := 51
+	raw := &VeridianProspectionRaw{
+		Lists: []VeridianProspectionListRow{
+			{ID: "a", Name: "A", Active: 51, NeverContacted: 51},
+			{ID: "b", Name: "B", Active: 50, NeverContacted: 50}, // 50 des 51 sont aussi dans A
+		},
+		StockDistinct: &people,
+	}
+	out := VeridianBuildProspectionStats(raw, time.Time{}, time.Time{}, time.Now())
+	assert.Equal(t, 51, out.Totals.StockRemaining, "51 personnes, pas 101 abonnements")
+	assert.Equal(t, 51, out.Segments[0].NeverContacted)
+	assert.Equal(t, 50, out.Segments[1].NeverContacted)
+}
+
 func TestVeridianProspectionStatsRequest_JSONShape(t *testing.T) {
 	out, err := json.Marshal(VeridianProspectionStatsRequest{WorkspaceID: "ws", Since: time.Now(), Until: time.Now()})
 	require.NoError(t, err)

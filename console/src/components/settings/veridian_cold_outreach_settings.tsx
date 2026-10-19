@@ -2278,8 +2278,8 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
     return (
       <>
         <SettingsSectionHeader
-          title={t`Veridian — Cold outreach`}
-          description={t`Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns.`}
+          title={t`Sending limits`}
+          description={t`Advanced setting. The defaults protect your sender reputation and suit most cases: change them only if you know why. Per-provider sending rates, daily caps and open-tracking policy for prospecting campaigns.`}
         />
         {explainer}
 
@@ -2493,8 +2493,8 @@ export function VeridianColdOutreachSettings({ workspace, onWorkspaceUpdate, isO
   return (
     <>
       <SettingsSectionHeader
-        title={t`Veridian — Cold outreach`}
-        description={t`Per-provider sending rates, daily caps and open-tracking policy for outbound campaigns.`}
+        title={t`Sending limits`}
+        description={t`Advanced setting. The defaults protect your sender reputation and suit most cases: change them only if you know why. Per-provider sending rates, daily caps and open-tracking policy for prospecting campaigns.`}
       />
       {explainer}
       {presetCard}

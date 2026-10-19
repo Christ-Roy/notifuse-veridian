@@ -62,6 +62,7 @@ import { Workspace, UserPermissions } from '../services/api/types'
 import { Template } from '../services/api/template'
 import { Template as BroadcastTemplate } from '../services/api/broadcast'
 import Subtitle from '../components/common/subtitle'
+import { hasUsableMarketingProfile } from '../components/settings/veridian_email_profiles'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -597,7 +598,9 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                 title={
                   !permissions?.broadcasts?.write
                     ? t`You don't have write permission for broadcasts`
-                    : undefined
+                    : !hasUsableMarketingProfile(currentWorkspace)
+                      ? t`Create a sending profile first: it is the mailbox your emails are sent from.`
+                      : undefined
                 }
               >
                 <Button
@@ -606,7 +609,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
                   ghost
                   disabled={
                     !permissions?.broadcasts?.write ||
-                    !currentWorkspace?.settings?.marketing_email_provider_id
+                    !hasUsableMarketingProfile(currentWorkspace)
                   }
                   onClick={() => onSchedule(broadcast)}
                 >
@@ -1281,7 +1284,7 @@ export function BroadcastsPage() {
   }
 
   const hasBroadcasts = !isLoading && data?.broadcasts && data.broadcasts.length > 0
-  const hasMarketingEmailProvider = currentWorkspace?.settings?.marketing_email_provider_id
+  const hasMarketingEmailProvider = hasUsableMarketingProfile(currentWorkspace)
 
   return (
     <div className="p-6">
@@ -1314,8 +1317,9 @@ export function BroadcastsPage() {
 
       {!hasMarketingEmailProvider && (
         <Alert
-          message={t`Email Provider Required`}
-          description={t`You don't have a marketing email provider configured. Please set up an email provider in your workspace settings to send broadcasts.`}
+          data-testid="broadcasts-no-profile-banner"
+          message={t`Sending profile required`}
+          description={t`To send a broadcast you need a sending profile: the mailbox your emails are sent from. It takes two minutes to create one.`}
           type="warning"
           showIcon
           className="!mb-6"
@@ -1323,9 +1327,9 @@ export function BroadcastsPage() {
             <Button
               type="primary"
               size="small"
-              href={`/console/workspace/${workspaceId}/settings/integrations`}
+              href={`/console/workspace/${workspaceId}/sending-profiles`}
             >
-              {t`Configure Provider`}
+              {t`Create a sending profile`}
             </Button>
           }
         />

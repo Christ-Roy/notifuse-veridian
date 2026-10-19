@@ -299,7 +299,7 @@ export function UpsertBroadcastDrawer({
     if (!isValid) return
 
     // If validation passes, proceed to next tab
-    const tabOrder = ['audience', 'email', 'datafeed', 'content']
+    const tabOrder = ['audience', 'content', 'email', 'datafeed']
     const currentIndex = tabOrder.indexOf(tab)
     if (currentIndex < tabOrder.length - 1) {
       setTab(tabOrder[currentIndex + 1])
@@ -308,7 +308,7 @@ export function UpsertBroadcastDrawer({
 
   const handleTabChange = async (newTab: string) => {
     // Only validate if moving forward (not backward)
-    const tabOrder = ['audience', 'email', 'datafeed', 'content']
+    const tabOrder = ['audience', 'content', 'email', 'datafeed']
     const currentIndex = tabOrder.indexOf(tab)
     const newIndex = tabOrder.indexOf(newTab)
 
@@ -336,31 +336,13 @@ export function UpsertBroadcastDrawer({
             </Button>
           )}
 
-          {tab === 'email' && (
+          {tab !== 'audience' && (
             <>
-              <Button type="primary" ghost onClick={() => handleTabChange('audience')}>
-                {t`Previous`}
-              </Button>
-              <Button type="primary" onClick={goNext}>
-                {t`Next`}
-              </Button>
-            </>
-          )}
-
-          {tab === 'datafeed' && (
-            <>
-              <Button type="primary" ghost onClick={() => handleTabChange('email')}>
-                {t`Previous`}
-              </Button>
-              <Button type="primary" onClick={goNext}>
-                {t`Next`}
-              </Button>
-            </>
-          )}
-
-          {tab === 'content' && (
-            <>
-              <Button type="primary" ghost onClick={() => handleTabChange('datafeed')}>
+              <Button
+                type="primary"
+                ghost
+                onClick={() => handleTabChange(tab === 'content' ? 'audience' : 'content')}
+              >
                 {t`Previous`}
               </Button>
               <Button
@@ -492,16 +474,17 @@ export function UpsertBroadcastDrawer({
                     label: t`1. Audience`
                   },
                   {
+                    key: 'content',
+                    label: t`2. Content`
+                  },
+                  {
+                    // Reglages d'ingenieur, facultatifs : apres le contenu, clairement marques
                     key: 'email',
-                    label: t`2. Web Analytics`
+                    label: t`Advanced: web analytics (optional)`
                   },
                   {
                     key: 'datafeed',
-                    label: t`3. Data Feeds`
-                  },
-                  {
-                    key: 'content',
-                    label: t`4. Content`
+                    label: t`Advanced: data feeds (optional)`
                   }
                 ]}
               />

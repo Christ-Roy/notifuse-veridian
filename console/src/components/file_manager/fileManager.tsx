@@ -1,6 +1,7 @@
 import React from 'react'
 import {
   Alert,
+  Collapse,
   App,
   Button,
   Form,
@@ -620,15 +621,31 @@ export const FileManager = (props: FileManagerProps) => {
     return (
       <Alert
         style={styles.marginBottomSmall}
-        message={
+        message={t`File storage is not set up.`}
+        description={
           <>
-            {t`File storage is not configured.`}
-            <ButtonFilesSettings
-              settings={props.settings}
-              onUpdateSettings={props.onUpdateSettings}
-            >
-              <Button type="link">{t`Configure now`}</Button>
-            </ButtonFilesSettings>
+            {t`To add an image to an email, simply paste the address (URL) of an image that is already online: no storage is needed.`}
+            <Collapse
+              ghost
+              style={{ marginTop: 8 }}
+              items={[
+                {
+                  key: 'advanced',
+                  label: t`Advanced: connect your own file storage (S3)`,
+                  children: (
+                    <>
+                      <p>{t`For technical users: connect an S3-compatible storage (Amazon S3, Google Cloud Storage, MinIO...) to upload and keep your files here.`}</p>
+                      <ButtonFilesSettings
+                        settings={props.settings}
+                        onUpdateSettings={props.onUpdateSettings}
+                      >
+                        <Button>{t`Configure storage`}</Button>
+                      </ButtonFilesSettings>
+                    </>
+                  )
+                }
+              ]}
+            />
           </>
         }
         type="warning"

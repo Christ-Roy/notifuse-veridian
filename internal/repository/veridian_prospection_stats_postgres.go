@@ -100,6 +100,17 @@ const veridianProspectionListsSQL = `
 	GROUP BY l.id, l.name
 	ORDER BY l.name, l.id`
 
+// Stock restant en PERSONNES : actifs jamais contactes, distincts sur toutes les listes
+// (un contact dans deux listes compte une fois). Meme definition de « contacte » que la
+// requete par liste ci-dessus.
+const veridianProspectionStockDistinctSQL = `
+	SELECT COUNT(DISTINCT lower(cl.email))
+	FROM contact_lists cl
+	JOIN lists l ON l.id = cl.list_id AND l.deleted_at IS NULL
+	WHERE cl.deleted_at IS NULL AND cl.status = 'active' AND NOT EXISTS (
+	    SELECT 1 FROM message_history mh
+	    WHERE mh.contact_email = cl.email AND mh.sent_at IS NOT NULL AND mh.veridian_message_type IS DISTINCT FROM 'transactional' AND mh.transactional_notification_id IS NULL)`
+
 const veridianProspectionListRepliesSQL = `
 	SELECT cl.list_id,
 	       COUNT(DISTINCT r.contact_email) FILTER (WHERE r.reply_type = 'human'),
@@ -191,6 +202,12 @@ func (r *veridianProspectionStatsRepository) GetProspectionRaw(ctx context.Conte
 	if err := veridianCloseRows(rows); err != nil {
 		return nil, fmt.Errorf("iterate prospection lists: %w", err)
 	}
+
+	var stockDistinct int
+	if err := tx.QueryRowContext(ctx, veridianProspectionStockDistinctSQL).Scan(&stockDistinct); err != nil {
+		return nil, fmt.Errorf("query distinct prospection stock: %w", err)
+	}
+	raw.StockDistinct = &stockDistinct
 
 	if raw.ListReplies, err = queryProspectionReplies(ctx, tx, veridianProspectionListRepliesSQL, from, to); err != nil {
 		return nil, err
