@@ -68,3 +68,7 @@ et `text` à jour (avant : le drawer ne portait ni l'un ni l'autre, donc chaque 
 Un corps vide ou un tag Liquid invalide est refusé côté client. L'arbre visuel envoyé reste un arbre valide (le serveur
 l'exige) mais n'est jamais émis. Test : `console/e2e/features/template-text-mode.spec.ts` (3 cas, vu échouer sur
 l'ancien drawer). Les e2e du dépôt mockent l'API ; la relecture réelle par API reste à faire après déploiement.
+
+## 6. Journal d acces API (19/10)
+
+Trou constate : aucune trace de requete (ni app, ni Traefik), donc impossible de dater un abus. Le middleware veridian_access_log.go emet une ligne JSON par requete /api/* sur stdout (message veridian_access) : method, route (sans query), workspace_req (query ou workspace_id du corps), token_type (jwt_user, api_key, hmac, none), token_user_id (opaque), token_workspace (cles API), status, duration_ms. Jamais corps, query, en-tetes, jeton, cle, e-mail. LogQL : obs logs notifuse --regex veridian_access. Exposition avant le 19/10 : routes sans controle depuis leur creation amont (webhooks 2025-10-02, segments 2025-10-04), aucun journal pour trancher ; DB : 1 webhook (robertbrunon, 04/08, Tunnel CRM Robert), segments uniquement chez alliancequalipro 8, animalsd 6, avsemonetique 9, arnaudcapitaine07 1.
