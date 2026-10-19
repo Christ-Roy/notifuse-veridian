@@ -2322,3 +2322,15 @@ func TestVeridianHandler_RegisterRoutes_ColdSimulate(t *testing.T) {
 	assert.NotEqual(t, http.StatusMethodNotAllowed, rec.Code, "cold-simulate route must accept POST")
 	assert.NotEqual(t, http.StatusOK, rec.Code, "sans HMAC valide on ne doit jamais voir 200 (fall-through SPA)")
 }
+
+// La route admin email-integration.verify est montee sur le mux Veridian
+// (HMAC : un POST non signe est refuse avant le handler, cf.
+// TestVeridianEmailIntegrationVerify_RequiresHMAC).
+func TestVeridianHandler_RegisterRoutes_MountsEmailIntegrationVerify(t *testing.T) {
+	h := &VeridianHandler{logger: logger.NewLogger()}
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret")
+	req := httptest.NewRequest(http.MethodPost, "/api/veridian/admin/email-integration.verify", nil)
+	_, pattern := mux.Handler(req)
+	assert.Equal(t, "POST /api/veridian/admin/email-integration.verify", pattern)
+}
