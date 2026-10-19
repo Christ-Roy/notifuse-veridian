@@ -16,7 +16,9 @@ i18n.loadAndActivate({ locale: 'en', messages: {} })
 // chargée) le défaut vitest de 5s suffit en isolation mais flake en suite
 // complète. On élargit les timeouts POUR CE FICHIER uniquement (intégration UI
 // lourde), sans toucher au défaut global qui masquerait de vrais hangs ailleurs.
-vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 })
+// delay: null (userEvent sans setTimeout par frappe) : sur le runner partage chaque frappe attendait un tick,
+// un test depassait 30 s et ses frappes fuyaient dans le test suivant (texte entrelace "rBeotuunrcness@ex").
+vi.setConfig({ testTimeout: 60000, hookTimeout: 60000 })
 
 vi.mock('../../services/api/workspace', async () => {
   const actual = await vi.importActual<typeof import('../../services/api/workspace')>(
@@ -127,7 +129,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('saves only positive rates and omits empty ones, with pixel booleans', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const onUpdate = vi.fn()
     renderCmp({
       workspace: makeWorkspace({
@@ -179,7 +181,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('persists positive daily caps and per-recipient cap, omits zeros', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
     // Champ per-recipient (premier spinbutton de la page).
@@ -214,7 +216,7 @@ describe('VeridianColdOutreachSettings', () => {
   // ── IMAP inbox (self-service bounce/reply) ──────────────────────────────────
 
   it('creates a new IMAP integration when none exists (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
     expect(screen.getByText('Reply & bounce inbox (IMAP)')).toBeInTheDocument()
@@ -245,7 +247,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('updates an existing IMAP integration without resending the password (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const imapIntegration = {
       id: 'imap-1',
       name: 'Cold reply inbox',
@@ -311,7 +313,7 @@ describe('VeridianColdOutreachSettings', () => {
   // ── Custom tracking domain per sending infra ────────────────────────────────
 
   it('saves a custom tracking domain on the email provider, preserving senders (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const emailIntegration = {
       id: 'email-1',
       name: 'Cold relay',
@@ -361,7 +363,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('persists a sending window with the Go-shaped payload when enabled (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
     // Le switch enable de la carte, ciblé par son aria-label dédié (la carte
@@ -389,7 +391,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('removes the sending window (24/7) when disabled and saved (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({
       workspace: makeWorkspace({
         veridian_sending_window: {
@@ -418,7 +420,7 @@ describe('VeridianColdOutreachSettings', () => {
   // ── Per-infrastructure limits (R2) ──────────────────────────────────────────
 
   it('saves per-infra rates and caps on the email provider, preserving senders/rate_limit (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const emailIntegration = {
       id: 'email-1',
       name: 'Cold relay',
@@ -517,7 +519,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('round-trips a persisted workspace exclusion on save (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({
       workspace: makeWorkspace({ veridian_excluded_provider_classes: ['microsoft'] }),
       isOwner: true
@@ -532,7 +534,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('omits the exclusion key when the list is cleared and saved (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({
       workspace: makeWorkspace({ veridian_excluded_provider_classes: ['microsoft'] }),
       isOwner: true
@@ -580,7 +582,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('saves per-infra excluded classes on the email provider, preserving senders (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const emailIntegration = {
       id: 'email-1',
       name: 'Cold relay',
@@ -621,7 +623,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('applying the warmup preset fills caps/per-recipient WITHOUT touching per-sender (doctrine 2026-06-18), then Save persists', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
     // 1) Clic preset Warm-up → Popconfirm → Apply. Rien n'est persisté à ce stade.
@@ -674,7 +676,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('renders the per-sender daily cap field (owner) and persists it', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
     const senderInput = screen.getByLabelText(/Emails \/ sender \/ day/i)
@@ -706,7 +708,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('applying the Cruise preset fills caps/rates without auto-saving, then Save persists', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
     // Clic « Apply » sur la carte Cruise → Popconfirm → Apply.
@@ -729,7 +731,7 @@ describe('VeridianColdOutreachSettings', () => {
   // ── Jitter & anti-hash (workspace) ──────────────────────────────────────────
 
   it('renders the anti-detection card and saves an explicit jitter override (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
     expect(screen.getByText('Anti-detection (jitter & content dedup)')).toBeInTheDocument()
@@ -745,7 +747,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('saves anti-hash forced OFF as an explicit false (not omitted) (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
 
     // Le Select anti-hash workspace → "Forced OFF". antd s'ouvre au mousedown ;
@@ -770,7 +772,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('omits jitter/anti-hash when left on inherit/default (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     renderCmp({ workspace: makeWorkspace(), isOwner: true })
     // Sauver sans toucher aux contrôles → tri-état "non configuré" = undefined.
     await user.click(screen.getByRole('button', { name: /Save anti-detection settings/i }))
@@ -816,7 +818,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('saves a per-infra sending window on the email provider, preserving senders (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const emailIntegration = {
       id: 'email-1',
       name: 'Cold relay',
@@ -855,7 +857,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('saves a per-infra jitter override on the email provider (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const emailIntegration = {
       id: 'email-1',
       name: 'Cold relay',
@@ -883,7 +885,7 @@ describe('VeridianColdOutreachSettings', () => {
   // ── Pixel d'ouverture PAR INFRA (override tri-état, 2026-06-17) ──────────────
 
   it('saves a per-infra open-pixel override on the email provider, preserving senders (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const emailIntegration = {
       id: 'email-1',
       name: 'Cold relay',
@@ -925,7 +927,7 @@ describe('VeridianColdOutreachSettings', () => {
   })
 
   it('renders a persisted per-infra pixel override and omits no key when left on inherit (owner)', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const emailIntegration = {
       id: 'email-1',
       name: 'Cold relay',

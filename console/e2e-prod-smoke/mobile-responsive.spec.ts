@@ -91,12 +91,13 @@ async function stubAuthAndWorkspace(page: Page): Promise<void> {
         })
       })
     }
-    // Toute autre route : réponse vide JSON (suffit pour ne pas faire
-    // crasher les widgets enfants qui font des fetches optionnels).
+    // Toute autre route : 500 propre. Un corps `{}` fait planter les widgets du tableau de bord
+    // (CI 19/10 : « Something went wrong », TypeError .filter de undefined, Sider jamais rendu).
+    // Un 500 est gere par les widgets ; meme choix que sidebar-reachability.spec.ts, vert en CI.
     return route.fulfill({
-      status: 200,
+      status: 500,
       contentType: 'application/json',
-      body: '{}'
+      body: JSON.stringify({ error: 'stub' })
     })
   })
 
@@ -187,7 +188,7 @@ test.describe('Mobile responsive Lot 1 — WorkspaceLayout', () => {
     await expect(hamburger).toHaveCount(0)
 
     const sider = page.locator('.ant-layout-sider').first()
-    await expect(sider).toBeVisible({ timeout: 10000 })
+    await expect(sider).toBeVisible({ timeout: 15000 })
 
     expect(
       errors,
@@ -207,11 +208,12 @@ test.describe('Mobile responsive Lot 1 — WorkspaceLayout', () => {
     // …puis resize à tablette, le hamburger doit disparaître et le Sider
     // apparaître (Antd Grid.useBreakpoint reagit aux changements).
     await page.setViewportSize({ width: 1024, height: 768 })
+    // Timeouts larges : le runner self-hosted est partage entre agents (flaky mesure 19/10).
     await expect(page.getByTestId('mobile-menu-toggle')).toHaveCount(0, {
-      timeout: 5000
+      timeout: 15000
     })
     await expect(page.locator('.ant-layout-sider').first()).toBeVisible({
-      timeout: 5000
+      timeout: 15000
     })
   })
 })
