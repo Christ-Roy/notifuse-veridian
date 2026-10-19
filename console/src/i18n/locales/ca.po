@@ -259,7 +259,7 @@ msgstr ""
 msgid "{label} copied to clipboard"
 msgstr "{label} copiat al porta-retalls"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:574
+#: src/components/templates/CreateTemplateDrawer.tsx:615
 msgid "{langName} translation is missing required fields (subject and preview)"
 msgstr ""
 
@@ -446,7 +446,7 @@ msgstr "1. Audiència"
 msgid "1. Generate a one-time command"
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:646
+#: src/components/templates/CreateTemplateDrawer.tsx:687
 msgid "1. Settings"
 msgstr "1. Configuració"
 
@@ -458,12 +458,12 @@ msgstr "100 - Fi"
 msgid "2. Give it to your AI agent"
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:652
+#: src/components/templates/CreateTemplateDrawer.tsx:693
 msgid "2. Template"
 msgstr "2. Plantilla"
 
 #. placeholder {0}: workspace.settings.default_language
-#: src/components/templates/CreateTemplateDrawer.tsx:651
+#: src/components/templates/CreateTemplateDrawer.tsx:692
 msgid "2. Template ({0})"
 msgstr ""
 
@@ -487,7 +487,7 @@ msgstr ""
 msgid "3. Done"
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:658
+#: src/components/templates/CreateTemplateDrawer.tsx:699
 msgid "3. Translations"
 msgstr ""
 
@@ -1541,7 +1541,7 @@ msgstr "Nom del bloc"
 msgid "Block saved as \"{0}\""
 msgstr "Bloc desat com a \"{0}\""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1101
+#: src/components/templates/CreateTemplateDrawer.tsx:1158
 msgid "Block Settings Panel"
 msgstr "Panell de configuració del bloc"
 
@@ -1861,7 +1861,7 @@ msgstr ""
 #: src/components/settings/WebhooksSettings.tsx:213
 #: src/components/settings/WorkspaceMembers.tsx:614
 #: src/components/settings/WorkspaceMembers.tsx:659
-#: src/components/templates/CreateTemplateDrawer.tsx:503
+#: src/components/templates/CreateTemplateDrawer.tsx:523
 #: src/components/templates/SendTemplateModal.tsx:268
 #: src/components/templates/TemplateTranslationsTab.tsx:254
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:173
@@ -1917,7 +1917,7 @@ msgstr ""
 msgid "Capitalize"
 msgstr "Capitalitzar"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:720
+#: src/components/templates/CreateTemplateDrawer.tsx:761
 #: src/pages/TemplatesPage.tsx:194
 msgid "Category"
 msgstr "Categoria"
@@ -2072,11 +2072,11 @@ msgstr "Clonar"
 msgid "Clone Block"
 msgstr "Clonar bloc"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:488
+#: src/components/templates/CreateTemplateDrawer.tsx:508
 msgid "Clone email template"
 msgstr "Clonar plantilla de correu"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:479
+#: src/components/templates/CreateTemplateDrawer.tsx:499
 #: src/pages/TemplatesPage.tsx:285
 msgid "Clone Template"
 msgstr "Clonar plantilla"
@@ -2110,7 +2110,7 @@ msgstr ""
 msgid "Code"
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:768
+#: src/components/templates/CreateTemplateDrawer.tsx:809
 msgid "Code (MJML)"
 msgstr ""
 
@@ -2540,7 +2540,7 @@ msgstr "Farciment del contenidor"
 msgid "Content dedup (anti-hash)"
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1087
+#: src/components/templates/CreateTemplateDrawer.tsx:1144
 msgid "Content Structure Tree"
 msgstr "Arbre d'estructura del contingut"
 
@@ -2685,7 +2685,7 @@ msgstr ""
 msgid "Create a notification"
 msgstr "Crear una notificació"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:489
+#: src/components/templates/CreateTemplateDrawer.tsx:509
 msgid "Create an email template"
 msgstr "Crear una plantilla de correu"
 
@@ -2745,7 +2745,7 @@ msgstr "Crear nova plantilla"
 msgid "Create Notification"
 msgstr "Crear notificació"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:479
+#: src/components/templates/CreateTemplateDrawer.tsx:499
 msgid "Create Template"
 msgstr "Crear plantilla"
 
@@ -3011,11 +3011,11 @@ msgstr "Número personalitzat 5"
 msgid "Custom Number Fields"
 msgstr "Camps de número personalitzats"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:828
+#: src/components/templates/CreateTemplateDrawer.tsx:870
 msgid "Custom sender (marketing email provider)"
 msgstr "Remitent personalitzat (proveïdor de correu de màrqueting)"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:828
+#: src/components/templates/CreateTemplateDrawer.tsx:870
 msgid "Custom sender (transactional email provider)"
 msgstr "Remitent personalitzat (proveïdor de correu transaccional)"
 
@@ -3734,7 +3734,7 @@ msgstr "Editar CSS"
 msgid "Edit Custom Field Label"
 msgstr "Editar etiqueta de camp personalitzat"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:486
+#: src/components/templates/CreateTemplateDrawer.tsx:506
 msgid "Edit email template"
 msgstr "Editar plantilla de correu"
 
@@ -3786,7 +3786,7 @@ msgstr "Editar segment"
 #~ msgid "Edit sending profile"
 #~ msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:479
+#: src/components/templates/CreateTemplateDrawer.tsx:499
 #: src/pages/TemplatesPage.tsx:263
 msgid "Edit Template"
 msgstr "Editar plantilla"
@@ -3820,7 +3820,7 @@ msgstr "Editar webhook"
 msgid "Editable markup"
 msgstr "Marcatge editable"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:760
+#: src/components/templates/CreateTemplateDrawer.tsx:801
 msgid "Editor mode"
 msgstr ""
 
@@ -3942,18 +3942,18 @@ msgstr "Previsualització del correu"
 msgid "Email Provider Required"
 msgstr "Proveïdor de correu obligatori"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:780
+#: src/components/templates/CreateTemplateDrawer.tsx:822
 #: src/components/templates/TemplateTranslationsTab.tsx:216
 msgid "Email subject"
 msgstr "Assumpte del correu"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:846
+#: src/components/templates/CreateTemplateDrawer.tsx:888
 #: src/components/templates/TemplateTranslationsTab.tsx:272
 msgid "Email Subject"
 msgstr "Assumpte del correu"
 
 #. placeholder {0}: workspace.settings.default_language
-#: src/components/templates/CreateTemplateDrawer.tsx:780
+#: src/components/templates/CreateTemplateDrawer.tsx:822
 msgid "Email subject ({0})"
 msgstr ""
 
@@ -4274,8 +4274,8 @@ msgstr "Error en carregar les dades"
 msgid "Error loading preview"
 msgstr "Error en carregar la previsualització"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:226
-#: src/components/templates/CreateTemplateDrawer.tsx:384
+#: src/components/templates/CreateTemplateDrawer.tsx:232
+#: src/components/templates/CreateTemplateDrawer.tsx:404
 msgid "Error loading template: Invalid template data"
 msgstr "Error en carregar la plantilla: Dades de plantilla invàlides"
 
@@ -4561,7 +4561,7 @@ msgid "Failed to create segment"
 msgstr "No s'ha pogut crear el segment"
 
 #. placeholder {0}: error.message
-#: src/components/templates/CreateTemplateDrawer.tsx:281
+#: src/components/templates/CreateTemplateDrawer.tsx:287
 msgid "Failed to create template: {0}"
 msgstr "No s'ha pogut crear la plantilla: {0}"
 
@@ -4828,7 +4828,7 @@ msgstr ""
 msgid "Failed to save Supabase integration"
 msgstr "No s'ha pogut desar la integració de Supabase"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:463
+#: src/components/templates/CreateTemplateDrawer.tsx:483
 msgid "Failed to save template block"
 msgstr "No s'ha pogut desar el bloc de plantilla"
 
@@ -4931,7 +4931,7 @@ msgid "Failed to update status: {error}"
 msgstr "No s'ha pogut actualitzar l'estat: {error}"
 
 #. placeholder {0}: error.message
-#: src/components/templates/CreateTemplateDrawer.tsx:281
+#: src/components/templates/CreateTemplateDrawer.tsx:287
 msgid "Failed to update template: {0}"
 msgstr "No s'ha pogut actualitzar la plantilla: {0}"
 
@@ -5636,11 +5636,11 @@ msgstr ""
 msgid "i.e: Big spenders..."
 msgstr "p. ex.: Grans compradors..."
 
-#: src/components/templates/CreateTemplateDrawer.tsx:672
+#: src/components/templates/CreateTemplateDrawer.tsx:713
 msgid "i.e: Welcome Email"
 msgstr "p. ex.: Correu de benvinguda"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:713
+#: src/components/templates/CreateTemplateDrawer.tsx:754
 msgid "i.e: welcome-email"
 msgstr "p. ex.: correu-benvinguda"
 
@@ -5701,7 +5701,7 @@ msgstr "L'ID ha de ser alfanumèric"
 msgid "ID must be less than 32 characters"
 msgstr "L'ID ha de tenir menys de 32 caràcters"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:694
+#: src/components/templates/CreateTemplateDrawer.tsx:735
 msgid "ID must contain only lowercase letters, numbers, underscores, and hyphens"
 msgstr "L'ID només pot contenir lletres minúscules, números, guions baixos i guions"
 
@@ -5819,7 +5819,7 @@ msgstr "Importar"
 msgid "Import / Export"
 msgstr "Importar / Exportar"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1130
+#: src/components/templates/CreateTemplateDrawer.tsx:1187
 msgid "Import & Export Templates"
 msgstr "Importar i exportar plantilles"
 
@@ -6090,6 +6090,10 @@ msgstr "Token d'invitació invàlid o caducat"
 #: src/components/templates/TemplatePreviewDrawer.tsx:133
 msgid "Invalid template structure data."
 msgstr "Dades d'estructura de plantilla invàlides."
+
+#: src/components/templates/CreateTemplateDrawer.tsx:585
+msgid "Invalid templating markup"
+msgstr ""
 
 #: src/components/templates/ImportExportButton.tsx:97
 msgid "Invalid tree structure: children must be an array"
@@ -6385,7 +6389,7 @@ msgstr "Esquerra"
 msgid "Left to Right"
 msgstr "Esquerra a dreta"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1083
+#: src/components/templates/CreateTemplateDrawer.tsx:1140
 msgid "Let's take a quick tour to help you get started with building beautiful emails using MJML."
 msgstr "Fem un ràpid recorregut per ajudar-vos a començar a construir correus bonics utilitzant MJML."
 
@@ -6917,7 +6921,7 @@ msgstr "Plantilla MJML importada i convertida correctament"
 msgid "MJML Validation Failed"
 msgstr "La validació MJML ha fallat"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1115
+#: src/components/templates/CreateTemplateDrawer.tsx:1172
 msgid "Mobile & Desktop Preview"
 msgstr "Previsualització mòbil i escriptori"
 
@@ -7067,8 +7071,8 @@ msgstr "Nou espai de treball"
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:335
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:345
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:356
-#: src/components/templates/CreateTemplateDrawer.tsx:508
-#: src/components/templates/CreateTemplateDrawer.tsx:529
+#: src/components/templates/CreateTemplateDrawer.tsx:528
+#: src/components/templates/CreateTemplateDrawer.tsx:549
 msgid "Next"
 msgstr "Següent"
 
@@ -7596,7 +7600,7 @@ msgstr "Notificació actualitzada correctament"
 msgid "Notifuse polls this mailbox to detect bounce reports (failed deliveries reported back by your SMTP relay) and human replies from prospects. Detecting a reply automatically stops the cold sequence for that contact; detecting a bounce suppresses the address. Use the IMAP credentials of the address your campaigns send from (or its dedicated return mailbox)."
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:848
+#: src/components/templates/CreateTemplateDrawer.tsx:890
 #: src/components/templates/TemplateTranslationsTab.tsx:274
 msgid "Now"
 msgstr "Ara"
@@ -8210,6 +8214,10 @@ msgstr ""
 msgid "Plain text (only safe behind a TLS-terminating proxy)"
 msgstr ""
 
+#: src/components/templates/CreateTemplateDrawer.tsx:913
+msgid "Plain text body. Liquid variables allowed, e.g. {{ contact.first_name }}"
+msgstr ""
+
 #: src/components/settings/SettingsSidebar.tsx:97
 #: src/components/settings/veridian_plan_settings.tsx:57
 msgid "Plan"
@@ -8536,7 +8544,7 @@ msgstr ""
 msgid "Preview Text Settings"
 msgstr "Configuració del text de vista prèvia"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:847
+#: src/components/templates/CreateTemplateDrawer.tsx:889
 #: src/components/templates/TemplateTranslationsTab.tsx:273
 msgid "Preview text will appear here..."
 msgstr "El text de vista prèvia apareixerà aquí..."
@@ -8545,15 +8553,15 @@ msgstr "El text de vista prèvia apareixerà aquí..."
 msgid "Preview will appear here after compilation"
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1108
+#: src/components/templates/CreateTemplateDrawer.tsx:1165
 msgid "Preview Your Email"
 msgstr "Previsualitza el teu correu"
 
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:342
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:353
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx:364
-#: src/components/templates/CreateTemplateDrawer.tsx:513
-#: src/components/templates/CreateTemplateDrawer.tsx:534
+#: src/components/templates/CreateTemplateDrawer.tsx:533
+#: src/components/templates/CreateTemplateDrawer.tsx:554
 msgid "Previous"
 msgstr "Anterior"
 
@@ -9164,7 +9172,7 @@ msgstr ""
 msgid "Reply rate"
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:819
+#: src/components/templates/CreateTemplateDrawer.tsx:861
 #: src/components/templates/TemplatePreviewDrawer.tsx:319
 msgid "Reply to"
 msgstr "Respondre a"
@@ -9501,8 +9509,8 @@ msgstr ""
 #: src/components/settings/SystemSettingsDrawer.tsx:217
 #: src/components/settings/veridian_cold_outreach_settings.tsx:524
 #: src/components/settings/WebhooksSettings.tsx:215
-#: src/components/templates/CreateTemplateDrawer.tsx:524
-#: src/components/templates/CreateTemplateDrawer.tsx:545
+#: src/components/templates/CreateTemplateDrawer.tsx:544
+#: src/components/templates/CreateTemplateDrawer.tsx:565
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx:182
 msgid "Save"
 msgstr "Desar"
@@ -9789,7 +9797,7 @@ msgstr "Seleccioneu un esdeveniment..."
 msgid "Select Block to Update"
 msgstr "Seleccionar bloc per actualitzar"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:724
+#: src/components/templates/CreateTemplateDrawer.tsx:765
 msgid "Select category"
 msgstr "Seleccionar categoria"
 
@@ -10068,7 +10076,7 @@ msgstr ""
 msgid "Send transactional notifications using SMTP bridge. Perfect for integrating with existing email systems or applications that support SMTP."
 msgstr "Envieu notificacions transaccionals mitjançant relay SMTP. Perfecte per integrar amb sistemes de correu existents o aplicacions que suporten SMTP."
 
-#: src/components/templates/CreateTemplateDrawer.tsx:775
+#: src/components/templates/CreateTemplateDrawer.tsx:817
 #: src/components/templates/SendTemplateModal.tsx:303
 #: src/pages/TemplatesPage.tsx:200
 msgid "Sender"
@@ -10085,7 +10093,7 @@ msgstr ""
 #~ msgid "Sender name"
 #~ msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:845
+#: src/components/templates/CreateTemplateDrawer.tsx:887
 #: src/components/templates/TemplateTranslationsTab.tsx:271
 msgid "Sender Name"
 msgstr "Nom del remitent"
@@ -10817,14 +10825,14 @@ msgid "Subject"
 msgstr "Assumpte"
 
 #: src/components/email_builder/blocks/MjPreviewBlock.tsx:33
-#: src/components/templates/CreateTemplateDrawer.tsx:798
+#: src/components/templates/CreateTemplateDrawer.tsx:840
 #: src/components/templates/TemplatePreviewDrawer.tsx:340
 #: src/components/templates/TemplateTranslationsTab.tsx:220
 msgid "Subject preview"
 msgstr "Vista prèvia de l'assumpte"
 
 #. placeholder {0}: workspace.settings.default_language
-#: src/components/templates/CreateTemplateDrawer.tsx:798
+#: src/components/templates/CreateTemplateDrawer.tsx:840
 msgid "Subject preview ({0})"
 msgstr ""
 
@@ -10944,7 +10952,7 @@ msgstr ""
 msgid "Supports reply_to, cc, bcc, and attachments"
 msgstr "Suporta reply_to, cc, bcc i fitxers adjunts"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1110
+#: src/components/templates/CreateTemplateDrawer.tsx:1167
 msgid "Switch to Preview mode to see how your email will look to recipients. This shows the final rendered version with all styling applied."
 msgstr "Canvieu al mode de vista prèvia per veure com es veurà el vostre correu als destinataris. Això mostra la versió final renderitzada amb tots els estils aplicats."
 
@@ -11017,24 +11025,24 @@ msgid "Template {0}"
 msgstr "Plantilla {0}"
 
 #. placeholder {0}: existingBlock?.name || nameOrId
-#: src/components/templates/CreateTemplateDrawer.tsx:449
+#: src/components/templates/CreateTemplateDrawer.tsx:469
 msgid "Template block \"{0}\" deleted successfully"
 msgstr "Bloc de plantilla \"{0}\" eliminat correctament"
 
 #. placeholder {0}: existingBlock.name
-#: src/components/templates/CreateTemplateDrawer.tsx:441
+#: src/components/templates/CreateTemplateDrawer.tsx:461
 msgid "Template block \"{0}\" updated successfully"
 msgstr "Bloc de plantilla \"{0}\" actualitzat correctament"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:427
+#: src/components/templates/CreateTemplateDrawer.tsx:447
 msgid "Template block \"{nameOrId}\" saved successfully"
 msgstr "Bloc de plantilla \"{nameOrId}\" desat correctament"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:432
+#: src/components/templates/CreateTemplateDrawer.tsx:452
 msgid "Template block not found"
 msgstr "Bloc de plantilla no trobat"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:275
+#: src/components/templates/CreateTemplateDrawer.tsx:281
 msgid "Template created successfully"
 msgstr "Plantilla creada correctament"
 
@@ -11043,7 +11051,7 @@ msgstr "Plantilla creada correctament"
 msgid "Template Data"
 msgstr "Dades de la plantilla"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1122
+#: src/components/templates/CreateTemplateDrawer.tsx:1179
 msgid "Template Data & Liquid Templating"
 msgstr "Dades de plantilla i plantilles Liquid"
 
@@ -11055,11 +11063,11 @@ msgstr "Plantilla eliminada correctament"
 msgid "Template ID"
 msgstr "ID de plantilla"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:686
+#: src/components/templates/CreateTemplateDrawer.tsx:727
 msgid "Template ID (utm_content)"
 msgstr "ID de plantilla (utm_content)"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:701
+#: src/components/templates/CreateTemplateDrawer.tsx:742
 msgid "Template ID already exists"
 msgstr "L'ID de plantilla ja existeix"
 
@@ -11067,7 +11075,7 @@ msgstr "L'ID de plantilla ja existeix"
 msgid "Template imported successfully"
 msgstr "Plantilla importada correctament"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:670
+#: src/components/templates/CreateTemplateDrawer.tsx:711
 msgid "Template name"
 msgstr "Nom de la plantilla"
 
@@ -11079,7 +11087,7 @@ msgstr "Conjunt de plantilles"
 msgid "Template structure data is missing or invalid."
 msgstr "Les dades d'estructura de la plantilla falten o no són vàlides."
 
-#: src/components/templates/CreateTemplateDrawer.tsx:275
+#: src/components/templates/CreateTemplateDrawer.tsx:281
 msgid "Template updated successfully"
 msgstr "Plantilla actualitzada correctament"
 
@@ -11100,8 +11108,8 @@ msgstr "Plantilles"
 #~ msgid "Templates using this sender will need to be updated to use a different sender."
 #~ msgstr "Les plantilles que utilitzen aquest remitent hauran de ser actualitzades per utilitzar un remitent diferent."
 
-#: src/components/templates/CreateTemplateDrawer.tsx:794
-#: src/components/templates/CreateTemplateDrawer.tsx:812
+#: src/components/templates/CreateTemplateDrawer.tsx:836
+#: src/components/templates/CreateTemplateDrawer.tsx:854
 msgid "Templating markup allowed"
 msgstr "Marcatge de plantilles permès"
 
@@ -11191,6 +11199,7 @@ msgstr "Provant feed..."
 
 #: src/components/email_builder/blocks/MjButtonBlock.tsx:198
 #: src/components/email_builder/blocks/MjTextBlock.tsx:45
+#: src/components/templates/CreateTemplateDrawer.tsx:810
 msgid "Text"
 msgstr "Text"
 
@@ -11409,6 +11418,10 @@ msgstr ""
 msgid "The test message was refused"
 msgstr ""
 
+#: src/components/templates/CreateTemplateDrawer.tsx:579
+msgid "The text body is required in Text mode"
+msgstr ""
+
 #: src/components/broadcasts/GlobalFeedSettings.tsx:99
 msgid "The URL must be publicly accessible. A POST request will be sent with broadcast and list information."
 msgstr "L'URL ha de ser accessible públicament. S'enviarà una sol·licitud POST amb informació del broadcast i la llista."
@@ -11545,15 +11558,15 @@ msgstr ""
 msgid "This invitation link is invalid or has expired."
 msgstr "Aquest enllaç d'invitació no és vàlid o ha caducat."
 
-#: src/components/templates/CreateTemplateDrawer.tsx:687
+#: src/components/templates/CreateTemplateDrawer.tsx:728
 msgid "This is the ID that will be used as the utm_content parameter in the links URL to track the template"
 msgstr "Aquest és l'ID que s'utilitzarà com a paràmetre utm_content a l'URL dels enllaços per rastrejar la plantilla"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1089
+#: src/components/templates/CreateTemplateDrawer.tsx:1146
 msgid "This is your content structure tree. You can drag and drop blocks to reorganize your email layout. Click the + buttons to add new blocks, or drag blocks from one section to another."
 msgstr "Aquest és el vostre arbre d'estructura de contingut. Podeu arrossegar i deixar anar blocs per reorganitzar el disseny del correu. Feu clic als botons + per afegir nous blocs, o arrossegueu blocs d'una secció a una altra."
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1096
+#: src/components/templates/CreateTemplateDrawer.tsx:1153
 msgid "This is your visual email editor. Click on any element in your email to select it. Selected elements will be highlighted with a blue border and show editing options."
 msgstr "Aquest és el vostre editor visual de correu. Feu clic a qualsevol element del vostre correu per seleccionar-lo. Els elements seleccionats es ressaltaran amb una vora blava i mostraran opcions d'edició."
 
@@ -11778,7 +11791,7 @@ msgstr ""
 msgid "TODO"
 msgstr "PENDENT"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1117
+#: src/components/templates/CreateTemplateDrawer.tsx:1174
 msgid "Toggle between mobile and desktop views to see how your email appears on different devices. Mobile view shows a 400px width while desktop shows the full width."
 msgstr "Canvieu entre les vistes mòbil i escriptori per veure com es mostra el vostre correu en diferents dispositius. La vista mòbil mostra una amplada de 400px mentre que l'escriptori mostra l'amplada completa."
 
@@ -12340,11 +12353,11 @@ msgstr ""
 msgid "Use the save button in the block toolbar to save blocks"
 msgstr "Utilitzeu el botó de desar a la barra d'eines del bloc per desar blocs"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1124
+#: src/components/templates/CreateTemplateDrawer.tsx:1181
 msgid "Use the Template Data tab to define dynamic content for your emails. Add variables like {{ name }} or {{ company }} in your email content, then define their values here. The Liquid templating engine supports conditionals, loops, and filters for powerful personalization."
 msgstr "Utilitzeu la pestanya Dades de plantilla per definir contingut dinàmic per als vostres correus. Afegiu variables com {{ name }} o {{ company }} al contingut del correu, després definiu els seus valors aquí. El motor de plantilles Liquid suporta condicionals, bucles i filtres per a una personalització potent."
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1132
+#: src/components/templates/CreateTemplateDrawer.tsx:1189
 msgid "Use this button to import saved email templates or export your finished emails. You can import JSON/MJML templates or export as HTML, MJML, or JSON for future use."
 msgstr "Utilitzeu aquest botó per importar plantilles de correu desades o exportar els vostres correus acabats. Podeu importar plantilles JSON/MJML o exportar com a HTML, MJML o JSON per a ús futur."
 
@@ -12524,11 +12537,11 @@ msgstr "Veure documentació i guia de configuració del relay SMTP"
 msgid "Visibility"
 msgstr "Visibilitat"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:767
+#: src/components/templates/CreateTemplateDrawer.tsx:808
 msgid "Visual"
 msgstr ""
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1094
+#: src/components/templates/CreateTemplateDrawer.tsx:1151
 msgid "Visual Email Editor"
 msgstr "Editor visual de correu"
 
@@ -12658,7 +12671,7 @@ msgstr "Pes"
 msgid "Welcome"
 msgstr "Benvingut"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1081
+#: src/components/templates/CreateTemplateDrawer.tsx:1138
 msgid "Welcome to Email Builder!"
 msgstr "Benvingut a l'Editor de correu!"
 
@@ -12696,7 +12709,7 @@ msgstr "Quan està habilitat, aquests estils s'afegiran com a atributs d'estil e
 msgid "When enabled, user creation will be rejected if a disposable email address is detected"
 msgstr "Quan està habilitat, la creació d'usuari es rebutjarà si es detecta una adreça de correu d'un sol ús"
 
-#: src/components/templates/CreateTemplateDrawer.tsx:1103
+#: src/components/templates/CreateTemplateDrawer.tsx:1160
 msgid "When you select a block, its settings appear here. Modify colors, text, spacing, alignment, and other properties to customize your email design."
 msgstr "Quan seleccioneu un bloc, la seva configuració apareix aquí. Modifiqueu colors, text, espaiat, alineació i altres propietats per personalitzar el disseny del vostre correu."
 
