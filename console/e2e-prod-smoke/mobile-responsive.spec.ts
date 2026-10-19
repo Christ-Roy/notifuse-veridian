@@ -187,7 +187,7 @@ test.describe('Mobile responsive Lot 1 — WorkspaceLayout', () => {
     await expect(hamburger).toHaveCount(0)
 
     const sider = page.locator('.ant-layout-sider').first()
-    await expect(sider).toBeVisible({ timeout: 10000 })
+    await expect(sider).toBeVisible({ timeout: 30000 })
 
     expect(
       errors,
@@ -207,11 +207,12 @@ test.describe('Mobile responsive Lot 1 — WorkspaceLayout', () => {
     // …puis resize à tablette, le hamburger doit disparaître et le Sider
     // apparaître (Antd Grid.useBreakpoint reagit aux changements).
     await page.setViewportSize({ width: 1024, height: 768 })
+    // Timeouts larges : le runner self-hosted est partage entre agents (flaky mesure 19/10).
     await expect(page.getByTestId('mobile-menu-toggle')).toHaveCount(0, {
-      timeout: 5000
+      timeout: 30000
     })
     await expect(page.locator('.ant-layout-sider').first()).toBeVisible({
-      timeout: 5000
+      timeout: 30000
     })
   })
 })

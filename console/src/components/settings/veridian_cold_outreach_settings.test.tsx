@@ -16,7 +16,8 @@ i18n.loadAndActivate({ locale: 'en', messages: {} })
 // chargée) le défaut vitest de 5s suffit en isolation mais flake en suite
 // complète. On élargit les timeouts POUR CE FICHIER uniquement (intégration UI
 // lourde), sans toucher au défaut global qui masquerait de vrais hangs ailleurs.
-vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 })
+// 90 s : ces tests tapent de longues chaines avec userEvent ; sur le runner partage (charge 10) 30 s ne suffit pas (flaky mesure 19/10, meme sur 9c19e72f).
+vi.setConfig({ testTimeout: 90000, hookTimeout: 90000 })
 
 vi.mock('../../services/api/workspace', async () => {
   const actual = await vi.importActual<typeof import('../../services/api/workspace')>(
