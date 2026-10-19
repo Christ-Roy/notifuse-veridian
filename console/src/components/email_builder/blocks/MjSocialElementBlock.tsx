@@ -32,6 +32,7 @@ import {
   faSquareXTwitter
 } from '@fortawesome/free-brands-svg-icons'
 import { faGlobe } from '@fortawesome/free-solid-svg-icons'
+import { liquidUrl } from '../../../i18n/liquid'
 
 // Networks that have share URL templates in gomjml.
 // When name is plain (e.g. "facebook"), gomjml wraps href in share URL.
@@ -132,7 +133,7 @@ const MjSocialElementSettingsPanel: React.FC<MjSocialElementSettingsPanelProps> 
         <StringPopoverInput
           value={currentAttributes.href || ''}
           onChange={(value) => onUpdate({ href: value || undefined })}
-          placeholder={t`https://example.com or {{ url }}`}
+          placeholder={t`https://example.com or ${liquidUrl}`}
           buttonText={t`Set link URL`}
           validateUri={true}
         />

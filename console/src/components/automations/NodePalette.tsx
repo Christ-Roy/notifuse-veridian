@@ -1,7 +1,7 @@
 import React from 'react'
 import { Tooltip } from 'antd'
 import { useLingui } from '@lingui/react/macro'
-import { ADD_NODE_MENU_ITEMS } from './AddNodeButton'
+import { ADD_NODE_MENU_ITEMS, useNodeTypeLabel } from './AddNodeButton'
 import type { NodeType } from '../../services/api/automation'
 
 interface NodePaletteProps {
@@ -10,6 +10,7 @@ interface NodePaletteProps {
 
 export const NodePalette: React.FC<NodePaletteProps> = ({ hasListSelected }) => {
   const { t } = useLingui()
+  const nodeTypeLabel = useNodeTypeLabel()
 
   const onDragStart = (event: React.DragEvent, nodeType: NodeType) => {
     event.dataTransfer.setData('application/reactflow', nodeType)
@@ -33,7 +34,7 @@ export const NodePalette: React.FC<NodePaletteProps> = ({ hasListSelected }) => 
             onDragStart={(e) => !isDisabled && onDragStart(e, item.key)}
           >
             {item.icon}
-            <span>{item.label}</span>
+            <span>{nodeTypeLabel(item.key)}</span>
           </div>
         )
         return isDisabled ? (

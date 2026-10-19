@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useLingui } from '@lingui/react/macro'
+import { useFriendlyServerError } from '../../lib/serverErrors'
 import { Modal, Button, Input, Select, Typography, Form, App, Upload, Space, Tag } from 'antd'
 import { UploadOutlined, DeleteOutlined } from '@ant-design/icons'
 import { Workspace, Template, Integration } from '../../services/api/types'
@@ -31,6 +32,7 @@ export default function SendTemplateModal({
   withCCAndBCC = false
 }: SendTemplateModalProps) {
   const { t } = useLingui()
+  const friendlyError = useFriendlyServerError()
   const [email, setEmail] = useState('')
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string>('')
   const [selectedSenderId, setSelectedSenderId] = useState<string>('')
@@ -137,7 +139,9 @@ export default function SendTemplateModal({
         message.success(t`Test email sent successfully`)
         onClose()
       } else {
-        message.error(t`Failed to send test email: ${response.error || 'Unknown error'}`)
+        console.error('Test email failed:', response.error)
+        const friendly = friendlyError(response.error)
+        message.error(t`Failed to send test email: ${friendly?.text || t`Unknown error`}`)
       }
     } catch (error) {
       const err = error as {
@@ -148,7 +152,8 @@ export default function SendTemplateModal({
         err?.response?.status === 400 && err?.response?.data?.message
           ? err.response.data.message
           : err?.message || t`Something went wrong`
-      message.error(t`Error: ${errorMessage}`)
+      console.error('Test email failed:', errorMessage)
+      message.error(t`Error: ${friendlyError(errorMessage)?.text ?? errorMessage}`)
     } finally {
       setSendLoading(false)
     }

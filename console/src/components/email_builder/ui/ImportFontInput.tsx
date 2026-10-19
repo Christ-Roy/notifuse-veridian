@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Input, Popover, Button, Select } from 'antd'
 import { useLingui } from '@lingui/react/macro'
+import { liquidFontUrl, liquidVariable } from '../../../i18n/liquid'
 
 interface ImportFontInputProps {
   value?: {
@@ -138,12 +139,12 @@ const ImportFontInput: React.FC<ImportFontInputProps> = ({
           size="small"
           value={inputValues.href}
           onChange={(e) => setInputValues((prev) => ({ ...prev, href: e.target.value }))}
-          placeholder={t`https://fonts.googleapis.com/css?family=... or {{ font_url }}`}
+          placeholder={t`https://fonts.googleapis.com/css?family=... or ${liquidFontUrl}`}
           status={inputValues.href && !isValidUrl(inputValues.href) ? 'error' : undefined}
         />
         {inputValues.href && !isValidUrl(inputValues.href) && (
           <div className="text-xs text-red-500 mt-1">
-            {t`Invalid URL format. Use a valid URL or liquid expression like {{ variable }}`}
+            {t`Invalid URL format. Use a valid URL or liquid expression like ${liquidVariable}`}
           </div>
         )}
       </div>

@@ -43,6 +43,7 @@ import { SUPPORTED_LANGUAGES } from '../../lib/languages'
 import TemplateTranslationsTab from './TemplateTranslationsTab'
 import type { TranslationEditorState } from './TemplateTranslationsTab'
 import type { TemplateTranslation } from '../../services/api/template'
+import { liquidCompany, liquidFirstName, liquidName } from '../../i18n/liquid'
 
 /**
  * Validates liquid template tags in a string to ensure they are properly closed
@@ -745,11 +746,24 @@ export function CreateTemplateDrawer({
                           {
                             validator: async (_rule, value) => {
                               if (value && !template) {
+                                // Unicite testee sur la liste (une requete mise en cache 5 s) et non
+                                // par un GET par frappe : chaque id libre renvoyait un 404 (audit
+                                // UI 19/10/2026, E3). Liste indisponible : le serveur tranchera.
+                                let ids: string[] | null = null
                                 try {
-                                  await templatesApi.get({ workspace_id: workspace.id, id: value })
-                                  return Promise.reject(t`Template ID already exists`)
+                                  ids = await queryClient.fetchQuery({
+                                    queryKey: ['template-ids', workspace.id],
+                                    queryFn: async () =>
+                                      (await templatesApi.list({ workspace_id: workspace.id })).templates.map(
+                                        (tpl) => tpl.id
+                                      ),
+                                    staleTime: 5000
+                                  })
                                 } catch {
                                   return Promise.resolve()
+                                }
+                                if (ids.includes(value)) {
+                                  return Promise.reject(new Error(t`Template ID already exists`))
                                 }
                               }
                               return Promise.resolve()
@@ -918,7 +932,7 @@ export function CreateTemplateDrawer({
                             value={textSource}
                             onChange={(e) => setTextSource(e.target.value)}
                             autoSize={{ minRows: 16 }}
-                            placeholder={t`Plain text body. Liquid variables allowed, e.g. {{ contact.first_name }}`}
+                            placeholder={t`Plain text body. Liquid variables allowed, e.g. ${liquidFirstName}`}
                             style={{ fontFamily: 'monospace' }}
                           />
                         </div>
@@ -1207,7 +1221,7 @@ export function CreateTemplateDrawer({
               {
                 title: t`Template Data & Liquid Templating`,
                 description:
-                  t`Use the Template Data tab to define dynamic content for your emails. Add variables like {{ name }} or {{ company }} in your email content, then define their values here. The Liquid templating engine supports conditionals, loops, and filters for powerful personalization.`,
+                  t`Use the Template Data tab to define dynamic content for your emails. Add variables like ${liquidName} or ${liquidCompany} in your email content, then define their values here. The Liquid templating engine supports conditionals, loops, and filters for powerful personalization.`,
                 target: () =>
                   (templateDataRef.current?.getTemplateDataTabRef() as HTMLElement) || null,
                 placement: 'top' as const

@@ -22,6 +22,7 @@ import {
 } from 'antd'
 import { useParams } from '@tanstack/react-router'
 import { useLingui } from '@lingui/react/macro'
+import { useFriendlyServerError } from '../lib/serverErrors'
 import { broadcastApi, Broadcast, TestResultsResponse } from '../services/api/broadcast'
 import { listsApi } from '../services/api/list'
 import { taskApi } from '../services/api/task'
@@ -418,7 +419,9 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
         {task.error_message && (
           <div className="mb-2">
             <div className="font-medium text-gray-500">{t`Error`}</div>
-            <div className="text-red-500 text-sm">{task.error_message}</div>
+            <div className="text-red-500 text-sm" title={task.error_message}>
+              {friendlyError(task.error_message)?.text ?? task.error_message}
+            </div>
           </div>
         )}
 

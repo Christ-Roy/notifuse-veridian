@@ -22,6 +22,7 @@ import BorderRadiusInput from '../ui/BorderRadiusInput'
 import FileSrc from '../ui/FileSrc'
 import PanelLayout from '../panels/PanelLayout'
 import WidthPxInput from '../ui/WidthPxInput'
+import { liquidUrl } from '../../../i18n/liquid'
 
 // Functional component for settings panel with i18n support
 interface MjImageSettingsPanelProps {
@@ -57,7 +58,7 @@ const MjImageSettingsPanel: React.FC<MjImageSettingsPanelProps> = ({
         <StringPopoverInput
           value={currentAttributes.href || ''}
           onChange={(value) => onUpdate({ href: value || undefined })}
-          placeholder={t`Enter link URL or {{ url }}`}
+          placeholder={t`Enter link URL or ${liquidUrl}`}
           buttonText={t`Set link`}
           validateUri={true}
         />

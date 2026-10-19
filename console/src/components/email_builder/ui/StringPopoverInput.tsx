@@ -3,6 +3,7 @@ import { Input, Popover, Button } from 'antd'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons'
 import { useLingui } from '@lingui/react/macro'
+import { liquidVariable } from '../../../i18n/liquid'
 
 interface StringPopoverInputProps {
   value?: string
@@ -87,7 +88,7 @@ const StringPopoverInput: React.FC<StringPopoverInputProps> = ({
       />
       {validateUri && inputValue && !isCurrentValueValid && (
         <div className="text-xs text-red-500 mt-1">
-          {t`Invalid URL format. Use a valid URL or liquid expression like {{ variable }}`}
+          {t`Invalid URL format. Use a valid URL or liquid expression like ${liquidVariable}`}
         </div>
       )}
       <div className="flex justify-end gap-2 mt-2">

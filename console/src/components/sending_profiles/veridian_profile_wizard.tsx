@@ -17,6 +17,7 @@ import {
   Typography
 } from 'antd'
 import { useLingui } from '@lingui/react/macro'
+import { useFriendlyServerError } from '../../lib/serverErrors'
 
 import {
   emailProfilesCreateService,
@@ -74,6 +75,7 @@ const WIZARD_FORM_ID = 'veridian-profile-wizard-form'
 
 export function VeridianProfileWizard({ open, workspaceId, ownerEmail, onClose, onChanged }: Props) {
   const { t } = useLingui()
+  const friendlyError = useFriendlyServerError()
   const [form] = Form.useForm<FormValues>()
   const [stage, setStage] = useState<Stage>('choose')
   const [choice, setChoice] = useState<Choice | null>(null)
@@ -451,7 +453,21 @@ export function VeridianProfileWizard({ open, workspaceId, ownerEmail, onClose, 
         <Result
           status="warning"
           title={t`Profile created, but the test failed`}
-          subTitle={testError || t`The server refused the test message.`}
+          subTitle={(() => {
+            const f = friendlyError(testError)
+            if (!f) return t`The server refused the test message.`
+            return (
+              <>
+                <div data-testid="profile-test-error">{f.text}</div>
+                {f.detail && (
+                  <details style={{ marginTop: 8, textAlign: 'left' }}>
+                    <summary>{t`Technical details`}</summary>
+                    <code style={{ wordBreak: 'break-word' }}>{f.detail}</code>
+                  </details>
+                )}
+              </>
+            )
+          })()}
           extra={
             <Button type="primary" onClick={close}>
               {t`Close, then edit or retry the test from the card`}

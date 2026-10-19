@@ -21,6 +21,7 @@ import {
   UserAddOutlined
 } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
+import { useFriendlyServerError } from '../../lib/serverErrors'
 import type { UploadProps } from 'antd'
 import Papa from 'papaparse'
 import type { ParseResult } from 'papaparse'
@@ -81,6 +82,7 @@ export function ContactsCsvUploadDrawer({
   onClose
 }: ContactsCsvUploadDrawerProps) {
   const { t } = useLingui()
+  const friendlyError = useFriendlyServerError()
   // Get workspace for custom field labels
   const { workspaces } = useAuth()
   const currentWorkspace = workspaces.find((workspace) => workspace.id === workspaceId)
@@ -942,7 +944,7 @@ export function ContactsCsvUploadDrawer({
                           {error.email}
                         </td>
                         <td style={{ border: '1px solid #f0f0f0', padding: '8px' }}>
-                          {error.error}
+                          <span title={error.error}>{friendlyError(error.error)?.text ?? error.error}</span>
                         </td>
                       </tr>
                     ))}

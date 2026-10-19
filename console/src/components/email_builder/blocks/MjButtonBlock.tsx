@@ -19,6 +19,7 @@ import AlignSelector from '../ui/AlignSelector'
 import PanelLayout from '../panels/PanelLayout'
 import BorderRadiusInput from '../ui/BorderRadiusInput'
 import { TiptapInlineEditor } from '../ui/tiptap'
+import { liquidUrl } from '../../../i18n/liquid'
 
 // Local state management for button content to prevent unnecessary re-renders
 const useButtonContentState = (
@@ -174,7 +175,7 @@ const MjButtonSettingsPanel: React.FC<MjButtonSettingsPanelProps> = ({
         <StringPopoverInput
           value={currentAttributes.href || ''}
           onChange={(value) => onUpdate({ href: value || undefined })}
-          placeholder={t`Enter button link URL or {{ url }}`}
+          placeholder={t`Enter button link URL or ${liquidUrl}`}
           buttonText={t`Set link`}
           validateUri={true}
         />

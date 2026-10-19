@@ -22,8 +22,11 @@ export const ADD_NODE_MENU_ITEMS: { key: NodeType; label: string; icon: React.Re
   { key: 'webhook', label: 'Webhook', icon: <Globe size={14} style={{ color: '#9254de' }} /> }
 ]
 
-// Helper to get translated label for a node type
-export const getNodeTypeLabel = (key: NodeType, t: (str: TemplateStringsArray) => string): string => {
+// Libelles traduits des types de noeuds. Hook (et non fonction recevant `t`) : la macro
+// Lingui ne transforme t`...` que dans la portee du useLingui() qui le declare, sinon le
+// libelle reste en anglais et n'est pas extrait (audit UI 19/10/2026, D1).
+export const useNodeTypeLabel = (): ((key: NodeType) => string) => {
+  const { t } = useLingui()
   const labels: Record<NodeType, string> = {
     trigger: t`Trigger`,
     delay: t`Delay`,
@@ -37,7 +40,7 @@ export const getNodeTypeLabel = (key: NodeType, t: (str: TemplateStringsArray) =
     branch: t`Branch`,
     reply_branch: t`Reply Branch`
   }
-  return labels[key] || key
+  return (key) => labels[key] || key
 }
 
 interface AddNodeButtonProps {
@@ -62,6 +65,7 @@ export const AddNodeButton: React.FC<AddNodeButtonProps> = ({
   className = ''
 }) => {
   const { t } = useLingui()
+  const nodeTypeLabel = useNodeTypeLabel()
   // Use controlled or uncontrolled menu state
   const [internalMenuOpen, setInternalMenuOpen] = useState(false)
   const isControlled = controlledMenuOpen !== undefined
@@ -93,7 +97,7 @@ export const AddNodeButton: React.FC<AddNodeButtonProps> = ({
     <div className="py-1 min-w-[180px]">
       {ADD_NODE_MENU_ITEMS.map((item) => {
         const isDisabled = item.key === 'email' && !hasListSelected
-        const translatedLabel = getNodeTypeLabel(item.key, t)
+        const translatedLabel = nodeTypeLabel(item.key)
         const button = (
           <button
             key={item.key}
