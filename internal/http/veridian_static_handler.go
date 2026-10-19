@@ -86,9 +86,18 @@ func VeridianStaticAssetsFilter(log logger.Logger) func(http.Handler) http.Handl
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Console hors /assets/ (index.html, repli SPA, config.js...) : toujours
+			// revalider. Sans Cache-Control le navigateur garde un index.html perime
+			// qui pointe vers des chunks supprimes par le deploiement suivant
+			// (« Failed to fetch dynamically imported module », 19/10/2026).
+			if strings.HasPrefix(r.URL.Path, "/console") && !strings.HasPrefix(r.URL.Path, "/console/assets/") {
+				w.Header().Set("Cache-Control", "no-cache")
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Seuls les assets de la console nous interessent. Tout le
-			// reste (API, blog, notification-center, index.html SPA)
-			// passe direct.
+			// reste (API, blog, notification-center) passe direct.
 			if !strings.HasPrefix(r.URL.Path, "/console/assets/") {
 				next.ServeHTTP(w, r)
 				return
@@ -96,38 +105,40 @@ func VeridianStaticAssetsFilter(log logger.Logger) func(http.Handler) http.Handl
 
 			ext := veridianExtOf(r.URL.Path)
 
-			// 1. Cache-Control long sur les assets au nom hashe : le hash
-			// change a chaque rebuild, donc l'URL est cache-bustable —
-			// le navigateur peut les garder un an.
-			if veridianHashedAssetRe.MatchString(r.URL.Path) {
-				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-			}
-
-			// 2. Compression gzip a la volee si applicable. Sinon, on
-			// laisse le FileServer upstream servir le fichier brut.
-			if !veridianCompressibleExt[ext] || !veridianClientAcceptsGzip(r) {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Cache hit : on a deja la version gzippee de cet asset.
-			if gz, ok := cache.get(r.URL.Path); ok {
+			// On capture toujours la reponse : un asset absent ne doit JAMAIS etre
+			// repondu par le repli SPA (200 + index.html, qui plus est marque
+			// immutable : le navigateur le garderait un an comme s'il etait du JS).
+			if gz, ok := cache.get(r.URL.Path); ok && veridianClientAcceptsGzip(r) {
+				veridianSetImmutableIfHashed(w, r.URL.Path)
 				veridianWriteGzip(w, gz)
 				return
 			}
-
-			// Cache miss : on capture la reponse du handler upstream,
-			// on la gzippe, on la met en cache et on la sert.
 			rec := &veridianResponseRecorder{
 				header: make(http.Header),
 				status: http.StatusOK,
 			}
 			next.ServeHTTP(rec, r)
 
-			// Si le handler upstream n'a pas renvoye un 200 (ex : 404
-			// fallback SPA, 405), on relaie la reponse telle quelle sans
-			// compresser — ne pas masquer une erreur.
+			// Repli SPA (text/html sur un chemin d'asset) ou erreur : 404 net,
+			// sans cache, jamais le HTML de l'index.
 			if rec.status != http.StatusOK {
+				veridianReplayRecorded(w, rec)
+				return
+			}
+			if strings.HasPrefix(rec.header.Get("Content-Type"), "text/html") {
+				status := http.StatusNotFound
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.Header().Set("Cache-Control", "no-store")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte("asset not found\n"))
+				return
+			}
+
+			// 1. Cache-Control long uniquement sur un asset hashe qui existe.
+			veridianSetImmutableIfHashed(w, r.URL.Path)
+
+			// 2. Compression gzip a la volee si applicable.
+			if !veridianCompressibleExt[ext] || !veridianClientAcceptsGzip(r) {
 				veridianReplayRecorded(w, rec)
 				return
 			}
@@ -135,7 +146,6 @@ func VeridianStaticAssetsFilter(log logger.Logger) func(http.Handler) http.Handl
 			var buf bytes.Buffer
 			gzw := gzip.NewWriter(&buf)
 			if _, err := gzw.Write(rec.body.Bytes()); err != nil {
-				// Compression ratee : on sert le brut, pas de cache.
 				log.WithField("path", r.URL.Path).WithField("error", err).
 					Warn("veridian static: gzip write failed, serving uncompressed")
 				veridianReplayRecorded(w, rec)
@@ -157,6 +167,13 @@ func VeridianStaticAssetsFilter(log logger.Logger) func(http.Handler) http.Handl
 			}
 			veridianWriteGzip(w, gz)
 		})
+	}
+}
+
+// veridianSetImmutableIfHashed pose le cache d'un an sur un asset au nom hashe.
+func veridianSetImmutableIfHashed(w http.ResponseWriter, path string) {
+	if veridianHashedAssetRe.MatchString(path) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	}
 }
 

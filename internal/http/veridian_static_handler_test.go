@@ -196,3 +196,47 @@ func TestVeridianHashedAssetRe(t *testing.T) {
 		assert.False(t, veridianHashedAssetRe.MatchString(p), "%q ne doit PAS matcher", p)
 	}
 }
+
+// Incident 19/10/2026 : un chunk supprime par un deploiement recevait le repli SPA
+// (200, text/html, immutable), garde un an par le navigateur comme s'il etait du JS.
+func TestVeridianStaticAssetsFilter_MissingAssetIs404NotSPAFallback(t *testing.T) {
+	// Le handler upstream repond le repli SPA : 200 + index.html.
+	next, _ := nextHandlerSpy(http.StatusOK, "text/html; charset=utf-8", "<!doctype html><div id=root></div>")
+	filter := VeridianStaticAssetsFilter(logger.NewLogger())(next)
+
+	for _, gz := range []bool{false, true} {
+		req := httptest.NewRequest(http.MethodGet, "/console/assets/WorkspaceSettingsPage-BmrvABSH.js", nil)
+		if gz {
+			req.Header.Set("Accept-Encoding", "gzip")
+		}
+		rec := httptest.NewRecorder()
+		filter.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.NotContains(t, rec.Header().Get("Content-Type"), "text/html")
+		assert.NotContains(t, rec.Header().Get("Cache-Control"), "immutable")
+		assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+		assert.NotContains(t, rec.Body.String(), "<!doctype")
+	}
+}
+
+func TestVeridianStaticAssetsFilter_ExistingHashedAssetStaysImmutable(t *testing.T) {
+	next, _ := nextHandlerSpy(http.StatusOK, "application/javascript", "export default 1")
+	filter := VeridianStaticAssetsFilter(logger.NewLogger())(next)
+	req := httptest.NewRequest(http.MethodGet, "/console/assets/WorkspaceSettingsPage-BmrvABSH.js", nil)
+	rec := httptest.NewRecorder()
+	filter.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "public, max-age=31536000, immutable", rec.Header().Get("Cache-Control"))
+}
+
+func TestVeridianStaticAssetsFilter_ConsoleIndexAndSPAFallbackAreNoCache(t *testing.T) {
+	next, _ := nextHandlerSpy(http.StatusOK, "text/html; charset=utf-8", "<!doctype html>")
+	filter := VeridianStaticAssetsFilter(logger.NewLogger())(next)
+	for _, path := range []string{"/console", "/console/", "/console/workspace/x/settings/general"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		filter.ServeHTTP(rec, req)
+		assert.Equal(t, "no-cache", rec.Header().Get("Cache-Control"), path)
+	}
+}
