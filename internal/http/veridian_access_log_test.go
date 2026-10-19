@@ -96,3 +96,12 @@ func TestVeridianAccessLog(t *testing.T) {
 		assert.Nil(t, runAccessLog(t, "GET", "/api/health", "", "", 200, nil, nil))
 	})
 }
+
+// Le statut journalise est celui reellement ecrit par le handler (WriteHeader).
+func TestVeridianAccessLog_StatusIsTheWrittenOne(t *testing.T) {
+	for _, code := range []int{200, 403, 502} {
+		f := runAccessLog(t, "GET", "/api/segments.list?workspace_id=w", "", "", code, nil, nil)
+		require.NotNil(t, f)
+		assert.Equal(t, code, f["status"])
+	}
+}
