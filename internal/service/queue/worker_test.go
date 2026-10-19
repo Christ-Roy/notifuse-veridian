@@ -2617,3 +2617,19 @@ func TestVeridianFirstMailGate_ProcessEntryNeverSends(t *testing.T) {
 	env.worker.processEntry(ws, fmEntry("j4", "tpl-relance"))
 	assert.Equal(t, []string{"lead@example.com"}, env.exits)
 }
+
+// Le worker de production naît avec un classifieur MX (sinon repli suffixe silencieux).
+func TestNewEmailQueueWorker_ProdWorkerHasMXClassifierAndNoFallback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	worker := NewEmailQueueWorker(
+		mocks.NewMockEmailQueueRepository(ctrl),
+		mocks.NewMockWorkspaceRepository(ctrl),
+		mocks.NewMockEmailServiceInterface(ctrl),
+		mocks.NewMockMessageHistoryRepository(ctrl),
+		nil,
+		pkgmocks.NewMockLogger(ctrl),
+	)
+	require.NotNil(t, worker.providerMXClassifier, "classifieur MX absent du worker de prod")
+	assert.Equal(t, int64(0), worker.mxFallbackCount.Load())
+}

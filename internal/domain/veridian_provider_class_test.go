@@ -636,3 +636,34 @@ func TestVeridianCapForClass(t *testing.T) {
 	c, _ = VeridianCapForClass(map[string]int{ProviderClassMicrosoft: 0}, ProviderClassMicrosoft)
 	assert.Equal(t, VeridianDefaultCapForClass(ProviderClassMicrosoft), c, "0 explicite = défaut, jamais sans plafond")
 }
+
+// La surcharge SEULE (sans défaut serveur) : entrée propre, sinon classe parente, sinon absente.
+func TestVeridianConfiguredRateForClass_OverrideOnly(t *testing.T) {
+	rates := map[string]float64{ProviderClassOtherHoster: 0.12, ProviderClassGandi: 0.05, ProviderClassOVH: 0}
+	r, ok := VeridianConfiguredRateForClass(rates, ProviderClassGandi)
+	assert.True(t, ok)
+	assert.InDelta(t, 0.05, r, 1e-9)
+	r, ok = VeridianConfiguredRateForClass(rates, ProviderClassZoho)
+	assert.True(t, ok, "zoho hérite d'other_hoster")
+	assert.InDelta(t, 0.12, r, 1e-9)
+	_, ok = VeridianConfiguredRateForClass(rates, ProviderClassGoogle)
+	assert.False(t, ok, "aucune surcharge : l'appelant applique le défaut serveur")
+	_, ok = VeridianConfiguredRateForClass(rates, ProviderClassOVH)
+	assert.False(t, ok, "0 explicite n'est pas une surcharge")
+	_, ok = VeridianConfiguredRateForClass(nil, ProviderClassGandi)
+	assert.False(t, ok)
+}
+
+func TestVeridianConfiguredCapForClass_OverrideOnly(t *testing.T) {
+	caps := map[string]int{ProviderClassOtherHoster: 150, ProviderClassProton: 3, ProviderClassOVH: 0}
+	c, ok := VeridianConfiguredCapForClass(caps, ProviderClassProton)
+	assert.True(t, ok)
+	assert.Equal(t, 3, c)
+	c, ok = VeridianConfiguredCapForClass(caps, ProviderClassScaleway)
+	assert.True(t, ok)
+	assert.Equal(t, 150, c)
+	_, ok = VeridianConfiguredCapForClass(caps, ProviderClassMicrosoft)
+	assert.False(t, ok)
+	_, ok = VeridianConfiguredCapForClass(caps, ProviderClassOVH)
+	assert.False(t, ok, "0 explicite n'est pas une surcharge")
+}

@@ -531,3 +531,21 @@ func TestVeridianProviderClassGateVerdict_PassWithoutThrottleExplainsWhy(t *test
 	assert.Equal(t, "class=google not throttled", v.Detail)
 	assert.Empty(t, env.worker.GetProviderClassStats(), "classe non throttlée : aucun limiter créé")
 }
+
+// Sans classifieur MX, le repli suffixe est compté et ne casse rien (visibilité du repli).
+func TestVeridianClassifyRecipient_NoMXClassifierFallsBackAndCounts(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	env.worker.providerMXClassifier = nil
+	entry := veridianTestEntry("e1", "x@client-inconnu.example", domain.EmailQueuePayload{})
+	assert.Equal(t, domain.ProviderClassCorporate, env.worker.veridianClassifyRecipient(entry))
+	assert.Equal(t, domain.ProviderClassGoogle, env.worker.veridianClassifyRecipient(veridianTestEntry("e2", "x@gmail.com", domain.EmailQueuePayload{})))
+	assert.Equal(t, int64(2), env.worker.mxFallbackCount.Load())
+}
+
+// Un tag non canonique posé en amont est ignoré, le MX décide.
+func TestVeridianClassifyRecipient_NonCanonicalPayloadTagUsesMX(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	env.worker.SetVeridianMXClassifier(domain.NewVeridianMXClassifier(veridianMapMXResolver{"boite.example": {"mx1.mail.ovh.net"}}))
+	entry := veridianTestEntry("e1", "x@boite.example", domain.EmailQueuePayload{VeridianProviderClass: "godaddy"})
+	assert.Equal(t, domain.ProviderClassOVH, env.worker.veridianClassifyRecipient(entry))
+}

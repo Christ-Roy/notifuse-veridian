@@ -95,3 +95,28 @@ func TestVeridianGateLimits_FineClassInheritsOtherHoster(t *testing.T) {
 		func() string { return "o2switch" }, nil, time.Now())
 	assert.Equal(t, 150, lim.ClassBase, "plafond hérité d'other_hoster")
 }
+
+// 19/10 : sans aucune table, la classe reçoit le plafond par défaut serveur (et la
+// classification est bien demandée : plus de no-op quand la table est vide).
+func TestVeridianResolveCapLimits_DefaultCapWhenNoTable(t *testing.T) {
+	enableVeridianClassDefaults(t)
+	asked := 0
+	lim := veridianResolveCapLimits(&domain.Workspace{ID: "ws-1"}, nil, &domain.EmailQueueEntry{},
+		func() string { asked++; return "ovh" }, func(string) int { return 2 }, time.Now())
+	assert.Equal(t, 1, asked)
+	assert.Equal(t, domain.VeridianDefaultCapForClass("ovh"), lim.ClassBase)
+	assert.Equal(t, domain.VeridianDefaultCapForClass("ovh")/2, lim.ClassCap, "le fusible divise aussi le défaut")
+	// Une surcharge prime toujours sur le défaut.
+	over := veridianResolveCapLimits(&domain.Workspace{ID: "ws-1", Settings: domain.WorkspaceSettings{VeridianProviderClassDailyCap: map[string]int{"ovh": 3}}},
+		nil, &domain.EmailQueueEntry{}, func() string { return "ovh" }, nil, time.Now())
+	assert.Equal(t, 3, over.ClassBase)
+}
+
+func TestVeridianRateForClass_DefaultsGatedByFlag(t *testing.T) {
+	_, ok := veridianRateForClass(nil, "google")
+	assert.False(t, ok, "défauts coupés (suite historique) : pas de débit sans table")
+	enableVeridianClassDefaults(t)
+	r, ok := veridianRateForClass(nil, "google")
+	assert.True(t, ok)
+	assert.InDelta(t, domain.VeridianDefaultRateForClass("google"), r, 1e-9)
+}

@@ -579,3 +579,18 @@ func TestMXClassParityFixture(t *testing.T) {
 		assert.Equal(t, c.Class, got, c.MX)
 	}
 }
+
+// Le compteur d'échecs DNS transitoires ne bouge que sur les échecs transitoires
+// (observabilité du classifieur : un domaine mal classé par timeout se voit).
+func TestMXClassifier_TransientFailuresCounter(t *testing.T) {
+	res := &flipResolver{err: errors.New("i/o timeout")}
+	c := NewVeridianMXClassifier(res)
+	assert.Equal(t, int64(0), c.TransientFailures())
+	c.ClassifyDomain(context.Background(), "un.example")
+	c.ClassifyDomain(context.Background(), "deux.example")
+	c.ClassifyDomain(context.Background(), "un.example") // en cache : pas de nouvel échec
+	assert.Equal(t, int64(2), c.TransientFailures())
+	res.err, res.hosts = nil, []string{"mx1.mail.ovh.net"}
+	assert.Equal(t, ProviderClassOVH, c.ClassifyDomain(context.Background(), "trois.example"))
+	assert.Equal(t, int64(2), c.TransientFailures(), "un succès ne compte pas")
+}

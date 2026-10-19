@@ -571,3 +571,36 @@ func TestVeridianEffectivePlan_CapacityIncludesFineClassesInheritingOtherHoster(
 	assert.Equal(t, 0, *planClass(plan2, "gandi").CapacityRemaining)
 	assert.Equal(t, domain.VeridianCapacityLimiterExcluded, planClass(plan2, "gandi").CapacityLimiter)
 }
+
+// 19/10 : sans AUCUNE table, le plan et le worker appliquent les mêmes plafonds par défaut.
+// Le plan dit « default » et la décision de l'un égale celle de l'autre au plafond exact.
+func TestVeridianEffectivePlan_DefaultCapsParityWithWorker(t *testing.T) {
+	enableVeridianClassDefaults(t)
+	def := domain.VeridianDefaultCapForClass(domain.ProviderClassGoogle)
+	for _, sent := range []int{def - 1, def} {
+		env := newVeridianThrottleTestEnv(t)
+		world := planParityWorld{domainClassSent: map[string]map[string]int{"envoi.example": {"google": sent}}}
+		// Débit surchargé très haut : le double « CountSent... » du test ignore la fenêtre de temps et
+		// ferait croire à un envoi récent (amorçage du limiter). On isole donc le PLAFOND par défaut.
+		ws := planParityWorkspace(domain.EmailProvider{}, domain.WorkspaceSettings{VeridianProviderClassRates: map[string]float64{"google": 6000}})
+		planParityArmRepo(env, world)
+		plan := planParityPlan(env, ws, world)
+		assert.Equal(t, "default", plan.ClassCapsSource)
+		assert.Equal(t, "workspace", plan.ClassRatesSource)
+		google := planClass(plan, "google")
+		require.NotNil(t, google.DailyCap)
+		assert.Equal(t, def, *google.DailyCap)
+		// Les deux portes de plafond du worker (comptage puis réservation atomique) : exactement ce
+		// que processEntry exécute avant SMTP, sans la porte de débit (isolée ci-dessus).
+		integration := ws.GetIntegrationByID("prof")
+		entry := veridianTestEntry("e-default", "lead@gmail.com", domain.EmailQueuePayload{})
+		entry.IntegrationID = "prof"
+		entry.Payload.FromAddress = "hello@envoi.example"
+		entry.Payload.VeridianProviderClass = env.worker.veridianClassifyRecipient(entry)
+		_, gateCapped := env.worker.veridianDailyCapGate(ws, &integration.EmailProvider, entry)
+		_, _, reserveCapped := env.worker.veridianReserveDailyQuota(ws, &integration.EmailProvider, entry)
+		assert.Equal(t, sent >= def, gateCapped, "porte de comptage, envoyés %d", sent)
+		assert.Equal(t, sent >= def, reserveCapped, "réservation atomique, envoyés %d", sent)
+		assert.Equal(t, sent < def, google.SendableNow, "plan, envoyés %d", sent)
+	}
+}

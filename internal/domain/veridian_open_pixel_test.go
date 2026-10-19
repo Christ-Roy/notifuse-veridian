@@ -314,3 +314,16 @@ func TestVeridianDefaultOpenPixel_FineClassesEqualOtherHoster(t *testing.T) {
 		}
 	}
 }
+
+// Zoho et Proton (19/10/2026) : classes fines issues d'other_hoster, pixel ON comme lui.
+func TestVeridianDefaultOpenPixel_ZohoProtonFollowOtherHoster(t *testing.T) {
+	for _, c := range []string{ProviderClassZoho, ProviderClassProton} {
+		v, ok := veridianDefaultOpenPixelByClass[c]
+		if !ok {
+			t.Fatalf("classe %q absente de la table de défauts du pixel", c)
+		}
+		if v != veridianDefaultOpenPixelByClass[ProviderClassOtherHoster] {
+			t.Fatalf("classe %q : défaut pixel %v différent d'other_hoster", c, v)
+		}
+	}
+}
