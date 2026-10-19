@@ -59,3 +59,12 @@ maintenant 403 (owner / notifuse-admin seulement). Lectures inchangées.
 idempotency, jamais JWT). `EmailService.VeridianAdminVerifyEmailIntegration` fait le vrai test de
 transport vers `to` puis pose `VeridianTransportVerifiedAt` seulement si le transport accepte. Échec :
 502 générique, NON vérifié, aucun secret. CLI : `notifuse-admin integrations:verify <ws> --id I --to E`.
+
+## 5. Console : mode « Texte » des modèles (19/10)
+
+`console/src/components/templates/CreateTemplateDrawer.tsx` : 3e mode d'éditeur « Text » (Visual / Code MJML / Text).
+Un modèle `plain_text_only` s'ouvre en mode Text (textarea, variables Liquid), un Save envoie `plain_text_only=true`
+et `text` à jour (avant : le drawer ne portait ni l'un ni l'autre, donc chaque Save basculait le modèle en HTML).
+Un corps vide ou un tag Liquid invalide est refusé côté client. L'arbre visuel envoyé reste un arbre valide (le serveur
+l'exige) mais n'est jamais émis. Test : `console/e2e/features/template-text-mode.spec.ts` (3 cas, vu échouer sur
+l'ancien drawer). Les e2e du dépôt mockent l'API ; la relecture réelle par API reste à faire après déploiement.

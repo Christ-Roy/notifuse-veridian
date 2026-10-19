@@ -183,11 +183,17 @@ export function CreateTemplateDrawer({
   const [emailBuilderHeight, setEmailBuilderHeight] = useState<string>(
     `calc(100vh - ${HEADER_HEIGHT}px)`
   )
-  const [editorMode, setEditorMode] = useState<'visual' | 'code'>(() => {
+  const [editorMode, setEditorMode] = useState<'visual' | 'code' | 'text'>(() => {
+    if (template?.email?.plain_text_only) return 'text'
+    if (fromTemplate?.email?.plain_text_only) return 'text'
     if (template?.email?.editor_mode === 'code') return 'code'
     if (fromTemplate?.email?.editor_mode === 'code') return 'code'
     return 'visual'
   })
+  // Mode « Texte » : corps texte brut (variables Liquid), enregistre plain_text_only=true.
+  const [textSource, setTextSource] = useState<string>(
+    () => template?.email?.text || fromTemplate?.email?.text || ''
+  )
   const [mjmlSource, setMjmlSource] = useState<string>(() => {
     if (template?.email?.mjml_source) return template.email.mjml_source
     if (fromTemplate?.email?.mjml_source) return fromTemplate.email.mjml_source
@@ -329,7 +335,14 @@ export function CreateTemplateDrawer({
   const showDrawer = () => {
     if (template) {
       // Set editor mode from existing template
-      setEditorMode(template.email?.editor_mode === 'code' ? 'code' : 'visual')
+      setEditorMode(
+        template.email?.plain_text_only
+          ? 'text'
+          : template.email?.editor_mode === 'code'
+            ? 'code'
+            : 'visual'
+      )
+      setTextSource(template.email?.text || '')
       if (template.email?.editor_mode === 'code' && template.email?.mjml_source) {
         setMjmlSource(template.email.mjml_source)
       }
@@ -350,7 +363,14 @@ export function CreateTemplateDrawer({
       loadTranslations(template.translations)
     } else if (fromTemplate) {
       // Clone template functionality - lock to source template's editor mode
-      setEditorMode(fromTemplate.email?.editor_mode === 'code' ? 'code' : 'visual')
+      setEditorMode(
+        fromTemplate.email?.plain_text_only
+          ? 'text'
+          : fromTemplate.email?.editor_mode === 'code'
+            ? 'code'
+            : 'visual'
+      )
+      setTextSource(fromTemplate.email?.text || '')
       if (fromTemplate.email?.editor_mode === 'code' && fromTemplate.email?.mjml_source) {
         setMjmlSource(fromTemplate.email.mjml_source)
       }
@@ -554,7 +574,28 @@ export function CreateTemplateDrawer({
             layout="vertical"
             onFinish={(values) => {
               setLoading(true)
-              if (editorMode === 'code') {
+              if (editorMode === 'text') {
+                if (!textSource.trim()) {
+                  message.error(t`The text body is required in Text mode`)
+                  setLoading(false)
+                  return
+                }
+                const textValidation = validateLiquidTags(textSource)
+                if (!textValidation.isValid) {
+                  message.error(textValidation.error || t`Invalid templating markup`)
+                  setLoading(false)
+                  return
+                }
+                // Texte brut : plain_text_only + text. L'arbre visuel reste un arbre
+                // valide minimal (le serveur l'exige) mais n'est jamais envoye.
+                values.email.editor_mode = 'visual'
+                values.email.plain_text_only = true
+                values.email.text = textSource
+                values.email.visual_editor_tree =
+                  visualEditorTree?.type === 'mjml' && visualEditorTree.children
+                    ? visualEditorTree
+                    : createDefaultBlocks()
+              } else if (editorMode === 'code') {
                 values.email.editor_mode = 'code'
                 values.email.mjml_source = mjmlSource
                 // Code mode doesn't use visual_editor_tree
@@ -760,12 +801,13 @@ export function CreateTemplateDrawer({
                       <Form.Item label={t`Editor mode`}>
                         <Radio.Group
                           value={editorMode}
-                          onChange={(e) => setEditorMode(e.target.value as 'visual' | 'code')}
+                          onChange={(e) => setEditorMode(e.target.value as 'visual' | 'code' | 'text')}
                           optionType="button"
                           disabled={!!(template || fromTemplate)}
                           options={[
                             { label: t`Visual`, value: 'visual' },
-                            { label: t`Code (MJML)`, value: 'code' }
+                            { label: t`Code (MJML)`, value: 'code' },
+                            { label: t`Text`, value: 'text' }
                           ]}
                         />
                       </Form.Item>
@@ -859,6 +901,21 @@ export function CreateTemplateDrawer({
                   {(form) => {
                     const testData = form.getFieldValue('test_data')
                     const templateId = form.getFieldValue('id')
+
+                    if (editorMode === 'text') {
+                      return (
+                        <div style={{ maxWidth: 900, margin: '24px auto' }}>
+                          <Input.TextArea
+                            data-testid="template-text-body"
+                            value={textSource}
+                            onChange={(e) => setTextSource(e.target.value)}
+                            autoSize={{ minRows: 16 }}
+                            placeholder={t`Plain text body. Liquid variables allowed, e.g. {{ contact.first_name }}`}
+                            style={{ fontFamily: 'monospace' }}
+                          />
+                        </div>
+                      )
+                    }
 
                     if (editorMode === 'code') {
                       return (
@@ -1011,7 +1068,7 @@ export function CreateTemplateDrawer({
                 <div style={{ display: tab === 'translations' ? 'block' : 'none' }}>
                   <TemplateTranslationsTab
                     workspace={workspace}
-                    editorMode={editorMode}
+                    editorMode={editorMode === 'code' ? 'code' : 'visual'}
                     translationsState={translationsState}
                     onTranslationsStateChange={setTranslationsState}
                     defaultSubject={emailSubject}
@@ -1149,7 +1206,7 @@ export function CreateTemplateDrawer({
 
           {/* AI Email Assistant - persists across tab switches, hidden in code mode */}
           <EmailAIAssistant
-              hidden={tab !== 'template' || editorMode === 'code'}
+              hidden={tab !== 'template' || editorMode !== 'visual'}
               workspace={workspace}
               currentSubject={emailSubject}
               currentPreviewText={emailPreview}
