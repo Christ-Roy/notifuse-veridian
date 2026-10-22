@@ -310,7 +310,7 @@ mutationDescribe('@cold Cold outreach config — persistance réelle (staging)',
 
   test('04. Breakdown contacts par classe : JSON cohérent (5 classes canoniques + total)', async () => {
     // Importe quelques contacts répartis sur des providers connus pour vérifier
-    // la classification par suffixe (Google/Microsoft/freemail_fr/corporate).
+    // la classification par suffixe (Google/Microsoft/Orange/corporate).
     const importRes = await bearerFetch('/api/contacts.import', jwt, 'POST', {
       workspace_id: tid,
       contacts: [
@@ -332,15 +332,15 @@ mutationDescribe('@cold Cold outreach config — persistance réelle (staging)',
     expect(r.status, rb.raw).toBe(200);
     const data = rb.json();
     // 5 classes canoniques toujours présentes.
-    for (const c of ['google', 'microsoft', 'yahoo_aol', 'freemail_fr', 'corporate']) {
+    for (const c of ['google', 'microsoft', 'yahoo_aol', 'freemail_fr', 'corporate', 'orange', 'sfr_altice', 'free', 'laposte', 'bouygues']) {
       expect(typeof data.breakdown[c]).toBe('number');
     }
     expect(typeof data.total).toBe('number');
     // Les 4 contacts importés se retrouvent dans le total (au moins).
     expect(data.total).toBeGreaterThanOrEqual(4);
-    // gmail → google, outlook → microsoft, orange.fr → freemail_fr.
+    // gmail → google, outlook → microsoft, orange.fr → orange (freemail_fr éclaté en FAI le 22/10, fiche 69).
     expect(data.breakdown.google).toBeGreaterThanOrEqual(1);
     expect(data.breakdown.microsoft).toBeGreaterThanOrEqual(1);
-    expect(data.breakdown.freemail_fr).toBeGreaterThanOrEqual(1);
+    expect(data.breakdown.orange).toBeGreaterThanOrEqual(1);
   });
 });
