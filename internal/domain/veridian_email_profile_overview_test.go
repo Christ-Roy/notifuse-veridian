@@ -112,3 +112,20 @@ func TestVeridianStockByClass(t *testing.T) {
 	assert.Equal(t, 7, got[ProviderClassGoogle], "sans étiquette valide : classification du domaine")
 	assert.Empty(t, VeridianStockByClass(nil))
 }
+
+// Scission de freemail_fr (22/10, fiche 69) : le stock tagué freemail_fr est rangé chez son FAI.
+func TestVeridianStockByClass_LegacyFreemailTagSplitByFAI(t *testing.T) {
+	got := VeridianStockByClass([]VeridianStockRow{
+		{Tag: "freemail_fr", Domain: "orange.fr", Count: 5},
+		{Tag: "freemail_fr", Domain: "wanadoo.fr", Count: 2},
+		{Tag: "freemail_fr", Domain: "free.fr", Count: 3},
+		{Tag: "freemail_fr", Domain: "cabinet-pro.fr", Count: 1},
+		{Tag: "", Domain: "sfr.fr", Count: 4},
+		{Tag: "google", Domain: "orange.fr", Count: 1},
+	})
+	assert.Equal(t, map[string]int{
+		ProviderClassOrange: 7, ProviderClassFree: 3, ProviderClassFreemailFR: 1,
+		ProviderClassSFRAltice: 4, ProviderClassGoogle: 1,
+	}, got)
+}
+

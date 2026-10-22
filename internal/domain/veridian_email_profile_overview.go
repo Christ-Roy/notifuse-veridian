@@ -140,6 +140,9 @@ func VeridianStockByClass(rows []VeridianStockRow) map[string]int {
 		class := strings.ToLower(strings.TrimSpace(r.Tag))
 		if !IsValidProviderClass(class) {
 			class = ClassifyProviderClass("x@" + r.Domain)
+		} else {
+			// Tag historique freemail_fr : rangé chez son FAI comme à l'envoi (fiche 69, 22/10).
+			class = VeridianRefineLegacyFreemailDomain(class, r.Domain)
 		}
 		out[class] += r.Count
 	}
