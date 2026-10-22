@@ -120,6 +120,16 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
         return t`Zoho Mail`
       case 'proton':
         return t`Proton Mail`
+      case 'orange':
+        return 'Orange'
+      case 'sfr_altice':
+        return 'SFR / Altice'
+      case 'free':
+        return 'Free'
+      case 'laposte':
+        return 'La Poste'
+      case 'bouygues':
+        return 'Bouygues Telecom'
       case 'corporate_selfhost':
         return t`Corporate self-hosted`
       default:

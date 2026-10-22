@@ -104,7 +104,8 @@ func VeridianClassifyContactProviderClass(row VeridianContactProviderRow) string
 // dérivé de l'email. Domaine inconnu/vide → corporate (comme ClassifyProviderClass).
 func VeridianClassifyDomainProviderClass(domain string, customString5 *NullableString) string {
 	if override := veridianProviderClassFromTag(customString5); override != "" {
-		return override
+		// Tag historique freemail_fr : éclaté par le domaine, comme à l'envoi.
+		return VeridianRefineLegacyFreemailDomain(override, domain)
 	}
 	if class, ok := classifyBySuffix(strings.ToLower(strings.TrimSpace(domain))); ok {
 		return class

@@ -33,11 +33,23 @@ func TestClassifyProviderClass(t *testing.T) {
 		{"ymail", "a@ymail.com", ProviderClassYahooAol},
 
 		// Freemail FR
-		{"orange", "a@orange.fr", ProviderClassFreemailFR},
-		{"wanadoo", "a@wanadoo.fr", ProviderClassFreemailFR},
-		{"free", "a@free.fr", ProviderClassFreemailFR},
-		{"sfr", "a@sfr.fr", ProviderClassFreemailFR},
-		{"laposte", "a@laposte.net", ProviderClassFreemailFR},
+		// FAI : une classe par fournisseur (22/10, fiche 69)
+		{"orange", "a@orange.fr", ProviderClassOrange},
+		{"wanadoo", "a@wanadoo.fr", ProviderClassOrange},
+		{"orange business", "a@orange-business.com", ProviderClassOrange},
+		{"free", "a@free.fr", ProviderClassFree},
+		{"aliceadsl", "a@aliceadsl.fr", ProviderClassFree},
+		{"sfr", "a@sfr.fr", ProviderClassSFRAltice},
+		{"neuf", "a@neuf.fr", ProviderClassSFRAltice},
+		{"numericable", "a@numericable.fr", ProviderClassSFRAltice},
+		{"sfr net", "a@sfr.net", ProviderClassSFRAltice},
+		{"altice", "a@altice.net", ProviderClassSFRAltice},
+		{"laposte net", "a@laposte.net", ProviderClassLaPoste},
+		{"laposte fr", "a@laposte.fr", ProviderClassLaPoste},
+		{"bbox", "a@bbox.fr", ProviderClassBouygues},
+		// Résidu : pas de famille FAI propre, classe historique conservée
+		{"gmx fr stays freemail_fr", "a@gmx.fr", ProviderClassFreemailFR},
+		{"dartybox stays freemail_fr", "a@dartybox.com", ProviderClassFreemailFR},
 
 		// Corporate fallback
 		{"corporate fr", "contact@boitepro.fr", ProviderClassCorporate},
@@ -523,7 +535,7 @@ func TestVeridianDomainsForClass(t *testing.T) {
 // historiques en tête (ordre déterministe pour un rendu reproductible).
 func TestVeridianAllProviderClasses(t *testing.T) {
 	all := VeridianAllProviderClasses()
-	require.Len(t, all, 20)
+	require.Len(t, all, 25)
 
 	seen := map[string]bool{}
 	for _, c := range all {

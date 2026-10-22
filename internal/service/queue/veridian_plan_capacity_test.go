@@ -309,6 +309,10 @@ func TestVeridianCapacity_RateTimesRemainingWindow(t *testing.T) {
 	for _, fine := range []string{"infomaniak", "gandi", "hostinger", "o2switch", "lws", "scaleway", "website_builder", "zoho", "proton"} {
 		want[fine] = 79
 	}
+	// Les 5 FAI (22/10, fiche 69) héritent du débit posé sur freemail_fr : 5 x 17 de plus.
+	for _, fai := range []string{"orange", "sfr_altice", "free", "laposte", "bouygues"} {
+		want[fai] = 17
+	}
 	sum := 0
 	for class, w := range want {
 		c := planClass(plan, class)
@@ -526,7 +530,7 @@ func TestVeridianCapacity_ProfileGatesBoundTheSum(t *testing.T) {
 
 	plan := capPlan(env, ws, world, capWednesdayOpening, nil)
 	require.NotNil(t, plan.Capacity.SumRemaining)
-	assert.Equal(t, 1118, *plan.Capacity.SumRemaining) // 3x79 + 3x34 + 4x17 (ionos exclu) + 9x79 classes fines héritées d'other_hoster
+	assert.Equal(t, 1203, *plan.Capacity.SumRemaining) // 3x79 + 3x34 + 4x17 (ionos exclu) + 9x79 classes fines héritées d'other_hoster + 5x17 FAI hérités de freemail_fr
 	require.NotNil(t, plan.Capacity.Configured)
 	assert.Equal(t, 300, *plan.Capacity.Configured)
 	assert.Equal(t, domain.VeridianPlanGateWarmup, plan.Capacity.Limiting, "chauffe et plat à 300 : la chauffe passe en premier")

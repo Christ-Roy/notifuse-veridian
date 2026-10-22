@@ -66,6 +66,16 @@ function classLabel(c: VeridianProviderClass): string {
       return 'Zoho Mail'
     case 'proton':
       return 'Proton Mail'
+    case 'orange':
+      return 'Orange'
+    case 'sfr_altice':
+      return 'SFR / Altice'
+    case 'free':
+      return 'Free'
+    case 'laposte':
+      return 'La Poste'
+    case 'bouygues':
+      return 'Bouygues Telecom'
     case 'corporate_selfhost':
       return 'Corporate self-host'
   }

@@ -42,9 +42,17 @@
     {"mx": "world-323.fr.planethoster.net", "class": "other_hoster"},
     {"mx": "mxb.mailgun.org", "class": "other_hoster"},
     {"mx": "mta5.am0.yahoodns.net", "class": "yahoo_aol"},
-    {"mx": "smtp-in.orange.fr", "class": "freemail_fr"},
-    {"mx": "mx1.free.fr", "class": "freemail_fr"},
-    {"mx": "mx1.laposte.net", "class": "freemail_fr"},
+    {"mx": "smtp-in.orange.fr", "class": "orange"},
+    {"mx": "smtp-in2.orange.fr", "class": "orange"},
+    {"mx": "mx.mailbox.orange-business.com", "class": "orange"},
+    {"mx": "smtp-in.sfr.fr", "class": "sfr_altice"},
+    {"mx": "smtp1.sfr.com", "class": "sfr_altice"},
+    {"mx": "mx.gva.net.altice.net", "class": "sfr_altice"},
+    {"mx": "mx1.free.fr", "class": "free"},
+    {"mx": "mx-g19.proxad.net", "class": "free"},
+    {"mx": "mx1.laposte.net", "class": "laposte"},
+    {"mx": "rpi0i691.laposte.fr", "class": "laposte"},
+    {"mx": "mx.bbox.fr", "class": "bouygues"},
     {"mx": "mx0.mail.icloud.com", "class": "apple_icloud"}
   ]
 }

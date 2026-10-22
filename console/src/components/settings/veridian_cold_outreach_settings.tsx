@@ -122,6 +122,16 @@ function useClassLabel(): (c: VeridianProviderClass) => string {
         return t`Zoho Mail`
       case 'proton':
         return t`Proton Mail`
+      case 'orange':
+        return 'Orange'
+      case 'sfr_altice':
+        return 'SFR / Altice'
+      case 'free':
+        return 'Free'
+      case 'laposte':
+        return 'La Poste'
+      case 'bouygues':
+        return 'Bouygues Telecom'
     }
   }
 }

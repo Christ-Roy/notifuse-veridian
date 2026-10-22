@@ -19,7 +19,8 @@ type veridianDailyQuotaLease struct {
 func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) ([]*veridianDailyQuotaLease, time.Duration, bool) {
 	now := veridianNow().UTC()
 	class := entry.Payload.VeridianProviderClass
-	if class == "" {
+	// freemail_fr (tag historique) est ré-éclaté en FAI avant de réserver (fiche 69, 22/10).
+	if class == "" || class == domain.ProviderClassFreemailFR {
 		class = w.veridianClassifyRecipient(entry)
 		entry.Payload.VeridianProviderClass = class
 	}

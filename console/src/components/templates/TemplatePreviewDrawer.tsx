@@ -503,7 +503,12 @@ const DELIVERABILITY_CLASS_LABELS: Record<VeridianProviderClass, string> = {
   scaleway: 'Scaleway / Online',
   website_builder: 'Website builders',
   zoho: 'Zoho Mail',
-  proton: 'Proton Mail'
+  proton: 'Proton Mail',
+  orange: 'Orange',
+  sfr_altice: 'SFR / Altice',
+  free: 'Free',
+  laposte: 'La Poste',
+  bouygues: 'Bouygues Telecom'
 }
 
 interface DeliverabilityPanelProps {

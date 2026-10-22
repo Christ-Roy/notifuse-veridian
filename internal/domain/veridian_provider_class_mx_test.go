@@ -86,8 +86,20 @@ func TestClassifyMXHost(t *testing.T) {
 		{"yahoodns", "mta5.am0.yahoodns.net", ProviderClassYahooAol},
 
 		// Freemail FR (host MX)
-		{"orange smtp-in", "smtp-in.orange.fr", ProviderClassFreemailFR},
-		{"free mx", "mx1.free.fr", ProviderClassFreemailFR},
+		{"orange smtp-in", "smtp-in.orange.fr", ProviderClassOrange},
+		{"orange smtp-in2", "smtp-in2.orange.fr", ProviderClassOrange},
+		{"orange business", "mx.mailbox.orange-business.com", ProviderClassOrange},
+		{"orange groupe", "smtp-ina.orange.com", ProviderClassOrange},
+		{"france telecom", "relais-ias241.francetelecom.com", ProviderClassOrange},
+		{"sfr smtp-in", "smtp-in.sfr.fr", ProviderClassSFRAltice},
+		{"sfr pro", "smtp1.sfr.com", ProviderClassSFRAltice},
+		{"altice geneve", "mx.gva.net.altice.net", ProviderClassSFRAltice},
+		{"free mx", "mx1.free.fr", ProviderClassFree},
+		{"free proxad", "mx-g19.proxad.net", ProviderClassFree},
+		{"laposte net", "smtpz4.laposte.net", ProviderClassLaPoste},
+		{"laposte fr", "rpi0i691.laposte.fr", ProviderClassLaPoste},
+		{"bbox", "mx.bbox.fr", ProviderClassBouygues},
+		{"bbox b", "mx-b.bbox.fr", ProviderClassBouygues},
 
 		// Apple iCloud
 		{"icloud mail", "mx01.mail.icloud.com", ProviderClassAppleICloud},
@@ -173,7 +185,7 @@ func TestMXClassifier_SuffixKnownNoLookup(t *testing.T) {
 	}{
 		{"jean@gmail.com", ProviderClassGoogle},
 		{"a@outlook.fr", ProviderClassMicrosoft},
-		{"a@orange.fr", ProviderClassFreemailFR},
+		{"a@orange.fr", ProviderClassOrange},
 		{"a@yahoo.com", ProviderClassYahooAol},
 	} {
 		assert.Equal(t, tc.want, c.ClassifyEmail(context.Background(), tc.email))
@@ -299,7 +311,7 @@ func TestMXClassifier_NilResolverUsesNetDefault(t *testing.T) {
 // oubli d'ajout dans le set ou la liste).
 func TestVeridianAllProviderClasses_Canonical(t *testing.T) {
 	all := VeridianAllProviderClasses()
-	require.Len(t, all, 20, "20 classes attendues (5 historiques + 6 MX + 9 classes fines)")
+	require.Len(t, all, 25, "25 classes attendues (5 historiques + 6 MX + 9 classes fines + 5 FAI)")
 	seen := map[string]bool{}
 	for _, c := range all {
 		assert.True(t, IsValidProviderClass(c), "classe %q non valide", c)
@@ -537,7 +549,7 @@ func TestFineClasses_InheritOtherHosterLimits(t *testing.T) {
 	rates := map[string]float64{ProviderClassOtherHoster: 3}
 	caps := map[string]int{ProviderClassOtherHoster: 40}
 	for _, c := range VeridianAllProviderClasses() {
-		if VeridianParentClass(c) == "" {
+		if VeridianParentClass(c) != ProviderClassOtherHoster {
 			continue
 		}
 		r, ok := VeridianRateForClass(rates, c)

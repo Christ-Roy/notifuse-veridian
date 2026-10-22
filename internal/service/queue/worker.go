@@ -343,7 +343,8 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// Resolve once and freeze the final class used by every policy gate and by
 	// message_history. Payload tags remain authoritative; otherwise this is the
 	// cached real-MX classification.
-	if entry.Payload.VeridianProviderClass == "" {
+	// Exception (22/10, fiche 69) : le tag historique freemail_fr est ré-éclaté en FAI.
+	if entry.Payload.VeridianProviderClass == "" || entry.Payload.VeridianProviderClass == domain.ProviderClassFreemailFR {
 		entry.Payload.VeridianProviderClass = w.veridianClassifyRecipient(entry)
 	}
 

@@ -68,7 +68,8 @@ func VeridianModeForClass(class string) Mode {
 		return ModeStrict
 	case "yahoo_aol", "freemail_fr", "corporate", "ovh", "ionos",
 		"security_gateway", "other_hoster", "corporate_selfhost",
-		"infomaniak", "gandi", "hostinger", "o2switch", "lws", "scaleway", "website_builder", "zoho", "proton":
+		"infomaniak", "gandi", "hostinger", "o2switch", "lws", "scaleway", "website_builder", "zoho", "proton",
+		"orange", "sfr_altice", "free", "laposte", "bouygues":
 		return ModeLenient
 	default:
 		return ModeDefault

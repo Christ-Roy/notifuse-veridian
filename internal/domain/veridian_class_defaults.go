@@ -39,6 +39,13 @@ var veridianDefaultClassDailyCap = map[string]int{
 	ProviderClassWebsiteBuilder:    20,
 	ProviderClassZoho:              20,
 	ProviderClassProton:            10,
+	// FAI français (22/10, fiche 69) : partis de freemail_fr (20/jour). Aucun n'augmente ;
+	// Orange, le plus sévère sur le cold, descend à 10 comme Yahoo.
+	ProviderClassOrange:    10,
+	ProviderClassSFRAltice: 20,
+	ProviderClassFree:      20,
+	ProviderClassLaPoste:   20,
+	ProviderClassBouygues:  20,
 }
 
 // veridianDefaultClassRatePerMin : débit max (emails / minute) par (intégration x classe).
@@ -63,6 +70,12 @@ var veridianDefaultClassRatePerMin = map[string]float64{
 	ProviderClassWebsiteBuilder:    0.2,
 	ProviderClassZoho:              0.2,
 	ProviderClassProton:            0.1,
+	// FAI français (22/10) : partis de freemail_fr (0,2/min), Orange à 0,1/min.
+	ProviderClassOrange:    0.1,
+	ProviderClassSFRAltice: 0.2,
+	ProviderClassFree:      0.2,
+	ProviderClassLaPoste:   0.2,
+	ProviderClassBouygues:  0.2,
 }
 
 // VeridianDefaultCapForClass : plafond journalier par défaut (toujours > 0).

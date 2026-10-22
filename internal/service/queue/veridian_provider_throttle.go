@@ -190,8 +190,16 @@ func (w *EmailQueueWorker) SetVeridianMXClassifier(c *domain.VeridianMXClassifie
 //
 // Utilisé par les DEUX gates (throttle minute + cap journalier) pour une
 // classification unique et cohérente du destinataire.
+//
+// Classe historique freemail_fr (22/10, fiche 69) : un tag posé par ODH avant la
+// scission des FAI, ou une entrée de file figée à l'enqueue, porte encore
+// freemail_fr. Elle est ré-éclatée ici (suffixe, puis MX en cache), jamais
+// relâchée : si rien ne la rattache à un FAI, elle reste freemail_fr, bridée.
 func (w *EmailQueueWorker) veridianClassifyRecipient(entry *domain.EmailQueueEntry) string {
 	if class := entry.Payload.VeridianProviderClass; domain.IsValidProviderClass(class) {
+		if class == domain.ProviderClassFreemailFR {
+			return w.veridianRefineLegacyFreemail(entry)
+		}
 		return class
 	}
 	if w.providerMXClassifier != nil {

@@ -137,6 +137,16 @@ func VeridianResolveExcludedClasses(workspace *Workspace, provider *EmailProvide
 			}
 		}
 	}
+	// Idem pour freemail_fr (22/10) : exclure les FAI en bloc exclut chacun d'eux.
+	// Sans cela, un contact taggé freemail_fr et désormais classé orange/free/...
+	// passerait une exclusion posée avant la scission.
+	if set[ProviderClassFreemailFR] {
+		for _, c := range VeridianAllProviderClasses() {
+			if VeridianParentClass(c) == ProviderClassFreemailFR {
+				set[c] = true
+			}
+		}
+	}
 	if len(set) == 0 {
 		return nil
 	}

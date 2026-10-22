@@ -59,6 +59,28 @@ var veridianDefaultOpenPixelByClass = map[string]bool{
 	// Classes fines (2026-10-19) : issues d'other_hoster, même défaut (ON).
 	ProviderClassZoho:   true,
 	ProviderClassProton: true,
+	// FAI français (2026-10-22) : issus de freemail_fr, même défaut (ON).
+	ProviderClassOrange:    true,
+	ProviderClassSFRAltice: true,
+	ProviderClassFree:      true,
+	ProviderClassLaPoste:   true,
+	ProviderClassBouygues:  true,
+}
+
+// veridianPixelLookup lit la politique pixel d'une classe : son entrée propre, sinon
+// celle de sa classe parente (les FAI héritent des surcharges posées sur freemail_fr).
+func veridianPixelLookup(m map[string]bool, class string) (bool, bool) {
+	if b, ok := m[class]; ok {
+		return b, true
+	}
+	// Limité à la famille freemail_fr : les autres classes filles n'héritaient pas du
+	// pixel de leur parent, on ne change pas leur comportement.
+	if VeridianParentClass(class) == ProviderClassFreemailFR {
+		if b, ok := m[ProviderClassFreemailFR]; ok {
+			return b, true
+		}
+	}
+	return false, false
 }
 
 // VeridianOpenPixelByClassFromMetadata extrait la map {classe: bool} d'un
@@ -172,17 +194,17 @@ func VeridianResolveOpenPixel(contact *Contact, email string, broadcast *Broadca
 
 	// Politique par classe : broadcast > INFRA > workspace > défaut tunnel.
 	if broadcastPixel != nil {
-		if b, ok := broadcastPixel[class]; ok {
+		if b, ok := veridianPixelLookup(broadcastPixel, class); ok {
 			return &b
 		}
 	}
 	if infraPixel != nil {
-		if b, ok := infraPixel[class]; ok {
+		if b, ok := veridianPixelLookup(infraPixel, class); ok {
 			return &b
 		}
 	}
 	if workspacePixel != nil {
-		if b, ok := workspacePixel[class]; ok {
+		if b, ok := veridianPixelLookup(workspacePixel, class); ok {
 			return &b
 		}
 	}

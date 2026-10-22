@@ -20,7 +20,12 @@
     "scaleway",
     "website_builder",
     "zoho",
-    "proton"
+    "proton",
+    "orange",
+    "sfr_altice",
+    "free",
+    "laposte",
+    "bouygues"
   ],
   "rules": [
     {
@@ -289,51 +294,67 @@
     },
     {
       "suffix": ".orange.fr",
-      "class": "freemail_fr"
-    },
-    {
-      "suffix": ".sfr.fr",
-      "class": "freemail_fr"
-    },
-    {
-      "suffix": ".free.fr",
-      "class": "freemail_fr"
-    },
-    {
-      "suffix": ".laposte.net",
-      "class": "freemail_fr"
-    },
-    {
-      "suffix": ".bbox.fr",
-      "class": "freemail_fr"
+      "class": "orange"
     },
     {
       "suffix": ".wanadoo.fr",
-      "class": "freemail_fr"
+      "class": "orange"
     },
     {
       "suffix": ".orange-business.com",
-      "class": "freemail_fr"
+      "class": "orange"
+    },
+    {
+      "suffix": ".orange.com",
+      "class": "orange"
+    },
+    {
+      "suffix": ".francetelecom.com",
+      "class": "orange"
+    },
+    {
+      "suffix": ".sfr.fr",
+      "class": "sfr_altice"
     },
     {
       "suffix": ".neuf.fr",
-      "class": "freemail_fr"
+      "class": "sfr_altice"
     },
     {
       "suffix": ".numericable.fr",
-      "class": "freemail_fr"
-    },
-    {
-      "suffix": ".laposte.fr",
-      "class": "freemail_fr"
+      "class": "sfr_altice"
     },
     {
       "suffix": ".sfr.net",
-      "class": "freemail_fr"
+      "class": "sfr_altice"
     },
     {
       "suffix": ".altice.net",
-      "class": "freemail_fr"
+      "class": "sfr_altice"
+    },
+    {
+      "suffix": ".sfr.com",
+      "class": "sfr_altice"
+    },
+    {
+      "suffix": ".free.fr",
+      "class": "free"
+    },
+    {
+      "suffix": ".proxad.net",
+      "class": "free"
+    },
+    {
+      "suffix": ".laposte.net",
+      "class": "laposte"
+    },
+    {
+      "suffix": ".laposte.fr",
+      "class": "laposte"
+    },
+    {
+      "suffix": ".bbox.fr",
+      "class": "bouygues"
     },
     {
       "suffix": ".mail.icloud.com",

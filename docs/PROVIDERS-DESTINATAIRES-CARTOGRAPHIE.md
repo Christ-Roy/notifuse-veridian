@@ -75,7 +75,8 @@ ne peut pas envoyer en masse aux self-hosted comme si c'était neutre.
 | `google` | Gmail public + Workspace | `.google.com`, `.googlemail.com`, `.psmtp.com` |
 | `microsoft` | Outlook + M365 | `.protection.outlook.com`, `.outlook.com`, `.office365.com` |
 | `yahoo_aol` | Yahoo/AOL | `.yahoodns.net` |
-| `freemail_fr` | FAI FR (host MX) | `.orange.fr`, `.sfr.fr`, `.free.fr`, `.laposte.net`, `.bbox.fr` |
+| `orange` / `sfr_altice` / `free` / `laposte` / `bouygues` | FAI FR (host MX), une classe par fournisseur depuis le 22/10 (fiche 69) | `.orange.fr` / `.sfr.fr` / `.free.fr` / `.laposte.net` / `.bbox.fr` |
+| `freemail_fr` | classe historique et résidu (gmx.fr, dartybox.com), ré-éclatée en FAI à l'envoi | tags déjà posés |
 | `corporate` | suffixe inconnu AVANT MX (rétrocompat) | — (jamais retourné par le MX, gardé pour les configs/tags existants) |
 | `ovh` | nébuleuse FR ~17% | `.ovh.net`, `.ovh.com` |
 | `ionos` | IONOS / 1&1 ~6% | `.ionos.*`, `.kundenserver.de`, `.1and1.com` |

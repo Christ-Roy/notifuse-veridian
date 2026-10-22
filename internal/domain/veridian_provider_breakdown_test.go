@@ -30,9 +30,9 @@ func TestVeridianClassifyContactProviderClass(t *testing.T) {
 			want: ProviderClassYahooAol,
 		},
 		{
-			name: "orange.fr suffix -> freemail_fr",
+			name: "orange.fr suffix -> orange",
 			row:  VeridianContactProviderRow{Email: "y@orange.fr"},
-			want: ProviderClassFreemailFR,
+			want: ProviderClassOrange,
 		},
 		{
 			name: "unknown domain -> corporate",
@@ -91,7 +91,13 @@ func TestVeridianClassifyDomainProviderClass(t *testing.T) {
 		{"gmail.com", nil, ProviderClassGoogle},
 		{"outlook.fr", nil, ProviderClassMicrosoft},
 		{"yahoo.com", nil, ProviderClassYahooAol},
-		{"orange.fr", nil, ProviderClassFreemailFR},
+		{"orange.fr", nil, ProviderClassOrange},
+		// Tag historique freemail_fr : éclaté par le domaine (22/10), résidu inchangé.
+		{"orange.fr", strPtr("freemail_fr"), ProviderClassOrange},
+		{"sfr.fr", strPtr("freemail_fr"), ProviderClassSFRAltice},
+		{"free.fr", strPtr("freemail_fr"), ProviderClassFree},
+		{"acme-corp.io", strPtr("freemail_fr"), ProviderClassFreemailFR},
+		{"gmx.fr", strPtr("freemail_fr"), ProviderClassFreemailFR},
 		{"acme-corp.io", nil, ProviderClassCorporate},
 		{"", nil, ProviderClassCorporate}, // domaine vide (email invalide en SQL)
 		{"gmail.com", strPtr("corporate"), ProviderClassCorporate},
@@ -118,7 +124,7 @@ func TestVeridianAggregateProviderBreakdownCounts(t *testing.T) {
 			want[c] = 0
 		}
 		assert.Equal(t, want, got.Breakdown)
-		assert.Len(t, got.Breakdown, 20, "20 classes attendues dans le breakdown")
+		assert.Len(t, got.Breakdown, 25, "25 classes attendues dans le breakdown")
 	})
 
 	t.Run("comptage mixte par classe (counts pré-agrégés)", func(t *testing.T) {
@@ -137,7 +143,8 @@ func TestVeridianAggregateProviderBreakdownCounts(t *testing.T) {
 		assert.Equal(t, 2, got.Breakdown[ProviderClassGoogle])
 		assert.Equal(t, 1, got.Breakdown[ProviderClassMicrosoft])
 		assert.Equal(t, 1, got.Breakdown[ProviderClassYahooAol])
-		assert.Equal(t, 1, got.Breakdown[ProviderClassFreemailFR])
+		assert.Equal(t, 1, got.Breakdown[ProviderClassFree])
+		assert.Equal(t, 0, got.Breakdown[ProviderClassFreemailFR])
 		assert.Equal(t, 2, got.Breakdown[ProviderClassCorporate]) // acme.io + unknown
 	})
 

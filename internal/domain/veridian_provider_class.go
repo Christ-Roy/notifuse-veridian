@@ -63,6 +63,18 @@ const (
 	// Classes fines (2026-10-19) : fournisseurs nommés par Robert, sortis d'other_hoster.
 	ProviderClassZoho   = "zoho"   // Zoho Mail
 	ProviderClassProton = "proton" // Proton Mail (domaines pro)
+
+	// Classes fines (2026-10-22, fiche 69) : les FAI français, sortis de freemail_fr.
+	// Chaque fournisseur a sa politique anti-spam et sa réputation ; débit, plafond
+	// journalier et fusible étant par couple (domaine émetteur x classe), un refus
+	// d'Orange ne doit plus ralentir SFR, Free, La Poste ni Bouygues.
+	// freemail_fr reste une classe valide : classe historique (tags déjà posés par
+	// ODH, entrées de file figées, configs de profil) et résidu (gmx.fr, dartybox.com).
+	ProviderClassOrange    = "orange"     // orange.fr, wanadoo.fr, orange-business.com (+ MX Orange)
+	ProviderClassSFRAltice = "sfr_altice" // sfr.fr, neuf.fr, numericable.fr, sfr.net, altice.net
+	ProviderClassFree      = "free"       // free.fr (+ aliceadsl.fr, MX mx*.free.fr)
+	ProviderClassLaPoste   = "laposte"    // laposte.net, laposte.fr
+	ProviderClassBouygues  = "bouygues"   // bbox.fr
 )
 
 // VeridianProviderClassRatesMetadataKey est la clé de broadcast.Metadata
@@ -124,6 +136,12 @@ var veridianProviderClassSet = map[string]struct{}{
 	// Classes fines (2026-10-19).
 	ProviderClassZoho:   {},
 	ProviderClassProton: {},
+	// Classes fines (2026-10-22) : FAI français.
+	ProviderClassOrange:    {},
+	ProviderClassSFRAltice: {},
+	ProviderClassFree:      {},
+	ProviderClassLaPoste:   {},
+	ProviderClassBouygues:  {},
 }
 
 // VeridianAllProviderClasses retourne la liste ORDONNÉE de toutes les classes
@@ -152,6 +170,11 @@ func VeridianAllProviderClasses() []string {
 		ProviderClassWebsiteBuilder,
 		ProviderClassZoho,
 		ProviderClassProton,
+		ProviderClassOrange,
+		ProviderClassSFRAltice,
+		ProviderClassFree,
+		ProviderClassLaPoste,
+		ProviderClassBouygues,
 	}
 }
 
@@ -167,6 +190,12 @@ func VeridianParentClass(class string) string {
 		ProviderClassO2switch, ProviderClassLWS, ProviderClassScaleway,
 		ProviderClassWebsiteBuilder, ProviderClassZoho, ProviderClassProton:
 		return ProviderClassOtherHoster
+	case ProviderClassOrange, ProviderClassSFRAltice, ProviderClassFree,
+		ProviderClassLaPoste, ProviderClassBouygues:
+		// 22/10 : les FAI sortis de freemail_fr héritent des SURCHARGES posées sur
+		// freemail_fr (débits, plafonds, pixel, exclusions) tant qu'ils n'ont pas les
+		// leurs : un profil réglé avant la scission ne doit pas les voir lâchées.
+		return ProviderClassFreemailFR
 	}
 	return ""
 }
@@ -265,23 +294,53 @@ var veridianProviderDomainTable = map[string]string{
 	"aol.com":        ProviderClassYahooAol,
 	"aol.fr":         ProviderClassYahooAol,
 
-	// Freemail / FAI français
-	"orange.fr":        ProviderClassFreemailFR,
-	"wanadoo.fr":       ProviderClassFreemailFR,
-	"free.fr":          ProviderClassFreemailFR,
-	"sfr.fr":           ProviderClassFreemailFR,
-	"neuf.fr":          ProviderClassFreemailFR,
-	"laposte.net":      ProviderClassFreemailFR,
-	"bbox.fr":          ProviderClassFreemailFR,
-	"numericable.fr":   ProviderClassFreemailFR,
-	"numericable.com":  ProviderClassFreemailFR,
-	"club-internet.fr": ProviderClassFreemailFR,
-	"aliceadsl.fr":     ProviderClassFreemailFR,
-	"cegetel.net":      ProviderClassFreemailFR,
-	"dartybox.com":     ProviderClassFreemailFR,
-	"gmx.fr":           ProviderClassFreemailFR,
-	"9online.fr":       ProviderClassFreemailFR,
-	"noos.fr":          ProviderClassFreemailFR,
+	// FAI français, une classe par fournisseur (22/10, fiche 69). Les MX ont été
+	// relevés au dig le 22/10 : orange.fr/wanadoo.fr -> smtp-in*.orange.fr ;
+	// sfr.fr/neuf.fr/numericable.*/sfr.net/club-internet.fr/cegetel.net/noos.fr/
+	// 9online.fr -> smtp-in.sfr.fr ; free.fr/aliceadsl.fr -> mx1/mx2.free.fr.
+	"orange.fr":           ProviderClassOrange,
+	"wanadoo.fr":          ProviderClassOrange,
+	"orange-business.com": ProviderClassOrange,
+	"sfr.fr":              ProviderClassSFRAltice,
+	"neuf.fr":             ProviderClassSFRAltice,
+	"numericable.fr":      ProviderClassSFRAltice,
+	"numericable.com":     ProviderClassSFRAltice,
+	"sfr.net":             ProviderClassSFRAltice,
+	"altice.net":          ProviderClassSFRAltice,
+	"club-internet.fr":    ProviderClassSFRAltice,
+	"cegetel.net":         ProviderClassSFRAltice,
+	"noos.fr":             ProviderClassSFRAltice,
+	"9online.fr":          ProviderClassSFRAltice,
+	"free.fr":             ProviderClassFree,
+	"aliceadsl.fr":        ProviderClassFree,
+	"laposte.net":         ProviderClassLaPoste,
+	"laposte.fr":          ProviderClassLaPoste,
+	"bbox.fr":             ProviderClassBouygues,
+	// Résidu de freemail_fr : pas de famille FAI à eux (gmx.fr -> mx00.gmx.net,
+	// dartybox.com -> hotmail). Ils gardent la classe historique, mêmes plafonds.
+	"dartybox.com": ProviderClassFreemailFR,
+	"gmx.fr":       ProviderClassFreemailFR,
+}
+
+// VeridianRefineLegacyFreemailDomain traduit la classe historique freemail_fr en
+// classe fine d'après le DOMAINE (suffixe connu, zéro I/O). Retourne
+// ProviderClassFreemailFR si le domaine n'est pas rattaché à un FAI précis (il
+// faudra alors le MX, côté worker) ou si la classe n'est pas freemail_fr.
+func VeridianRefineLegacyFreemailDomain(class, domain string) string {
+	if class != ProviderClassFreemailFR {
+		return class
+	}
+	d := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
+	if fine, ok := veridianProviderDomainTable[d]; ok && VeridianParentClass(fine) == ProviderClassFreemailFR {
+		return fine
+	}
+	return ProviderClassFreemailFR
+}
+
+// VeridianIsFreemailFamily : vrai pour la classe historique freemail_fr et ses
+// classes fines (FAI français).
+func VeridianIsFreemailFamily(class string) bool {
+	return class == ProviderClassFreemailFR || VeridianParentClass(class) == ProviderClassFreemailFR
 }
 
 // IsValidProviderClass retourne true si s est une classe canonique.
@@ -566,6 +625,12 @@ func VeridianContactProviderClass(contact *Contact) string {
 	class := strings.ToLower(strings.TrimSpace(contact.CustomString5.String))
 	if !IsValidProviderClass(class) {
 		return ""
+	}
+	// Tag historique freemail_fr (posé par ODH avant la scission du 22/10) :
+	// re-résolu côté serveur par le domaine, sans toucher au contact. Un domaine
+	// custom hébergé chez un FAI reste freemail_fr ici ; le worker l'affine par MX.
+	if class == ProviderClassFreemailFR {
+		return VeridianRefineLegacyFreemailDomain(class, veridianDomainFromEmail(contact.Email))
 	}
 	return class
 }

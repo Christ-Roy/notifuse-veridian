@@ -176,19 +176,28 @@ var veridianMXPatternTable = []veridianMXPatternEntry{
 	{".yahoo.com", ProviderClassYahooAol},
 	{".aol.com", ProviderClassYahooAol},
 
-	// --- FAI / freemail français (host MX, pas le suffixe d'adresse). ---
-	{".orange.fr", ProviderClassFreemailFR}, // smtp-in.orange.fr
-	{".sfr.fr", ProviderClassFreemailFR},
-	{".free.fr", ProviderClassFreemailFR}, // mx1.free.fr
-	{".laposte.net", ProviderClassFreemailFR},
-	{".bbox.fr", ProviderClassFreemailFR},
-	{".wanadoo.fr", ProviderClassFreemailFR}, // Orange historique
-	{".orange-business.com", ProviderClassFreemailFR},
-	{".neuf.fr", ProviderClassFreemailFR},
-	{".numericable.fr", ProviderClassFreemailFR},
-	{".laposte.fr", ProviderClassFreemailFR},
-	{".sfr.net", ProviderClassFreemailFR},
-	{".altice.net", ProviderClassFreemailFR},
+	// --- FAI français (host MX, pas le suffixe d'adresse), une classe par fournisseur
+	// (22/10, fiche 69). Hôtes relevés au dig le 22/10 : smtp-in*.orange.fr,
+	// smtp-in.sfr.fr, mx1/mx2.free.fr, smtpz4.laposte.net, rpi0i*.laposte.fr,
+	// mx.bbox.fr, mx.mailbox.orange-business.com, mx.{gva,zrh}.net.altice.net,
+	// smtp-ina/b.orange.com, relais-ias*.francetelecom.com, smtp1/2.sfr.com,
+	// mx-g19.proxad.net. ---
+	{".orange.fr", ProviderClassOrange},  // smtp-in.orange.fr
+	{".wanadoo.fr", ProviderClassOrange}, // Orange historique
+	{".orange-business.com", ProviderClassOrange},
+	{".orange.com", ProviderClassOrange},        // smtp-ina.orange.com (messagerie du groupe)
+	{".francetelecom.com", ProviderClassOrange}, // relais-ias*.francetelecom.com
+	{".sfr.fr", ProviderClassSFRAltice},         // smtp-in.sfr.fr (sfr, neuf, numericable, cegetel, club-internet...)
+	{".neuf.fr", ProviderClassSFRAltice},
+	{".numericable.fr", ProviderClassSFRAltice},
+	{".sfr.net", ProviderClassSFRAltice},
+	{".altice.net", ProviderClassSFRAltice},
+	{".sfr.com", ProviderClassSFRAltice}, // smtp1.sfr.com (SFR pro)
+	{".free.fr", ProviderClassFree},      // mx1.free.fr (free, aliceadsl, online.fr, infonie, libertysurf...)
+	{".proxad.net", ProviderClassFree},   // mx-g19.proxad.net (Free historique)
+	{".laposte.net", ProviderClassLaPoste},
+	{".laposte.fr", ProviderClassLaPoste},
+	{".bbox.fr", ProviderClassBouygues}, // mx.bbox.fr, mx-b.bbox.fr
 
 	// --- iCloud / Apple. ---
 	{".mail.icloud.com", ProviderClassAppleICloud}, // mx0*.mail.icloud.com

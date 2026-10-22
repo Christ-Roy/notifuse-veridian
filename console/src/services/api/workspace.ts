@@ -153,6 +153,11 @@ export type VeridianProviderClass =
   | 'website_builder'
   | 'zoho'
   | 'proton'
+  | 'orange'
+  | 'sfr_altice'
+  | 'free'
+  | 'laposte'
+  | 'bouygues'
 
 export const VERIDIAN_PROVIDER_CLASSES: VeridianProviderClass[] = [
   'google',
@@ -174,7 +179,12 @@ export const VERIDIAN_PROVIDER_CLASSES: VeridianProviderClass[] = [
   'scaleway',
   'website_builder',
   'zoho',
-  'proton'
+  'proton',
+  'orange',
+  'sfr_altice',
+  'free',
+  'laposte',
+  'bouygues'
 ]
 
 // Défaut tunnel du pixel d'ouverture (miroir de veridianDefaultOpenPixelByClass
@@ -200,7 +210,12 @@ export const VERIDIAN_DEFAULT_OPEN_PIXEL: Record<VeridianProviderClass, boolean>
   scaleway: true,
   website_builder: true,
   zoho: true,
-  proton: true
+  proton: true,
+  orange: true,
+  sfr_altice: true,
+  free: true,
+  laposte: true,
+  bouygues: true
 }
 
 // Veridian fork — PRESET « Mode warmup » (cold outbound, ticket 2026-06-16). Set
