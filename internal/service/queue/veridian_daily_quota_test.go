@@ -10,6 +10,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/emailerror"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -282,5 +283,29 @@ func TestVeridianReserveDailyQuota_ClassAndWarmupKeysShareTheParisDay(t *testing
 		require.Equal(t, "2026-10-09", spec.Key.Day.Format("2006-01-02"), spec.Key.Kind)
 		require.Equal(t, time.Date(2026, 10, 8, 22, 0, 0, 0, time.UTC), spec.Key.DayStart, spec.Key.Kind)
 		require.Equal(t, time.Date(2026, 10, 9, 22, 0, 0, 0, time.UTC), spec.Key.DayEnd, spec.Key.Kind)
+	}
+}
+
+// La réservation atomique (autorité du plafond) compte sous la classe fine, pas sous freemail_fr,
+// même quand l'entrée arrive avec le tag historique et que la classe n'a pas été refigée avant.
+func TestVeridianReserveDailyQuota_LegacyFreemailTagReservesUnderFAI(t *testing.T) {
+	enableVeridianClassDefaults(t)
+	for email, want := range map[string]string{
+		"lead@orange.fr": domain.ProviderClassOrange,
+		"lead@sfr.fr":    domain.ProviderClassSFRAltice,
+		"lead@free.fr":   domain.ProviderClassFree,
+	} {
+		env := newVeridianThrottleTestEnv(t)
+		repo := &quotaTestRepository{outcomes: map[string]quotaTestOutcome{
+			domain.VeridianDailyQuotaKindProviderClass: {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
+		}}
+		env.worker.messageHistoryRepo = repo
+		entry := veridianTestEntryFrom("legacy", email, "bot@send.test", domain.EmailQueuePayload{VeridianProviderClass: domain.ProviderClassFreemailFR})
+
+		_, _, blocked := env.worker.veridianReserveDailyQuota(veridianTestWorkspaceWithCaps(nil, 0), nil, entry)
+		require.False(t, blocked)
+		require.Len(t, repo.specs, 1, email)
+		assert.Equal(t, want, repo.specs[0].Key.ProviderClass, email)
+		assert.Equal(t, domain.VeridianDefaultCapForClass(want), repo.specs[0].Cap, email)
 	}
 }

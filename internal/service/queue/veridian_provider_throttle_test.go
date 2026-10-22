@@ -549,3 +549,50 @@ func TestVeridianClassifyRecipient_NonCanonicalPayloadTagUsesMX(t *testing.T) {
 	entry := veridianTestEntry("e1", "x@boite.example", domain.EmailQueuePayload{VeridianProviderClass: "godaddy"})
 	assert.Equal(t, domain.ProviderClassOVH, env.worker.veridianClassifyRecipient(entry))
 }
+
+// Scission de freemail_fr (22/10/2026, fiche 69). Un contact déjà étiqueté freemail_fr
+// par ODH, ou une entrée de file figée avec ce tag, doit être classé chez son vrai FAI
+// à l'envoi, sans migration. Si rien ne le rattache à un FAI, il reste freemail_fr.
+func TestVeridianClassify_LegacyFreemailTagIsSplitByFAI(t *testing.T) {
+	worker, _ := newVeridianDailyCapFakeEnv(t)
+	worker.SetVeridianMXClassifier(domain.NewVeridianMXClassifier(veridianMapMXResolver{
+		"cabinet-orange.fr":  {"smtp-in.orange.fr"},
+		"cabinet-sfr.fr":     {"smtp-in.sfr.fr"},
+		"cabinet-free.fr":    {"mx1.free.fr", "mx2.free.fr"},
+		"cabinet-poste.fr":   {"smtpz4.laposte.net"},
+		"cabinet-bbox.fr":    {"mx.bbox.fr"},
+		"cabinet-google.fr":  {"aspmx.l.google.com"},
+		"cabinet-ovh.fr":     {"mx1.mail.ovh.net"},
+		"cabinet-inconnu.fr": {"mail.perso-inconnu.example"},
+	}))
+	for _, tc := range []struct {
+		email string
+		want  string
+	}{
+		// suffixe d'adresse : zéro DNS
+		{"a@orange.fr", domain.ProviderClassOrange},
+		{"a@wanadoo.fr", domain.ProviderClassOrange},
+		{"a@sfr.fr", domain.ProviderClassSFRAltice},
+		{"a@neuf.fr", domain.ProviderClassSFRAltice},
+		{"a@free.fr", domain.ProviderClassFree},
+		{"a@laposte.net", domain.ProviderClassLaPoste},
+		{"a@bbox.fr", domain.ProviderClassBouygues},
+		// domaine pro hébergé chez le FAI : le MX tranche
+		{"a@cabinet-orange.fr", domain.ProviderClassOrange},
+		{"a@cabinet-sfr.fr", domain.ProviderClassSFRAltice},
+		{"a@cabinet-free.fr", domain.ProviderClassFree},
+		{"a@cabinet-poste.fr", domain.ProviderClassLaPoste},
+		{"a@cabinet-bbox.fr", domain.ProviderClassBouygues},
+		// rien ne le rattache à un FAI : la classe historique reste, bridée par ses défauts
+		{"a@cabinet-inconnu.fr", domain.ProviderClassFreemailFR},
+		{"a@sans-dns.example", domain.ProviderClassFreemailFR},
+		{"a@gmx.fr", domain.ProviderClassFreemailFR},
+		// un tag périmé ne fait pas basculer le contact hors de la famille FAI
+		{"a@cabinet-google.fr", domain.ProviderClassFreemailFR},
+		{"a@cabinet-ovh.fr", domain.ProviderClassFreemailFR},
+	} {
+		entry := veridianTestEntryFrom("t-"+tc.email, tc.email, "bot@send.fr",
+			domain.EmailQueuePayload{VeridianProviderClass: domain.ProviderClassFreemailFR})
+		assert.Equal(t, tc.want, worker.veridianClassifyRecipient(entry), tc.email)
+	}
+}

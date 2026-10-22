@@ -2633,3 +2633,32 @@ func TestNewEmailQueueWorker_ProdWorkerHasMXClassifierAndNoFallback(t *testing.T
 	require.NotNil(t, worker.providerMXClassifier, "classifieur MX absent du worker de prod")
 	assert.Equal(t, int64(0), worker.mxFallbackCount.Load())
 }
+
+// Scission de freemail_fr (22/10, fiche 69) : une entrée qui arrive avec le tag historique freemail_fr est
+// classée chez son FAI avant les portes, et c'est cette classe qui est consignée sur message_history.
+func TestEmailQueueWorker_ProcessEntry_LegacyFreemailTagIsPersistedAsFAI(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	env.worker.messageHistoryRepo = &quotaTestRepository{
+		MessageHistoryRepository: env.mockMessageHistoryRepo,
+		outcomes: map[string]quotaTestOutcome{
+			domain.VeridianDailyQuotaKindProviderClass: {result: domain.VeridianDailyQuotaReservationResult{Reserved: true, Used: 1}},
+		},
+	}
+	ws := veridianTestWorkspaceWithCaps(map[string]int{"orange": 5}, 0)
+	entry := veridianTestEntryFrom("e1", "lead@orange.fr", "bot@send.test", domain.EmailQueuePayload{VeridianProviderClass: domain.ProviderClassFreemailFR})
+	env.mockMessageHistoryRepo.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws-1", "send.test", gomock.Any()).Return(0, nil).AnyTimes()
+	env.mockMessageHistoryRepo.EXPECT().CountSentSinceForSenderDomain(gomock.Any(), "ws-1", "send.test", gomock.Any()).Return(0, nil).AnyTimes()
+	// Les portes interrogent la classe FAI, jamais freemail_fr : un appel sur freemail_fr serait inattendu.
+	env.mockMessageHistoryRepo.EXPECT().CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", "orange", "send.test", gomock.Any()).Return(0, nil).AnyTimes()
+	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", "e1").Return(nil)
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			assert.Equal(t, domain.ProviderClassOrange, m.VeridianProviderClass)
+			return nil
+		})
+	env.mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), "ws-1", "e1").Return(nil)
+
+	env.worker.processEntry(ws, entry)
+	assert.Equal(t, domain.ProviderClassOrange, entry.Payload.VeridianProviderClass)
+}

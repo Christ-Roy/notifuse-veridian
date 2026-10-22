@@ -17,19 +17,6 @@ var veridianFAIClasses = []string{
 	ProviderClassLaPoste, ProviderClassBouygues,
 }
 
-// Chaque FAI a ses défauts, jamais au-dessus de ceux de freemail_fr ; Orange est le plus bas.
-func TestFAIClasses_DefaultsNeverAboveLegacyFreemail(t *testing.T) {
-	legacyCap := VeridianDefaultCapForClass(ProviderClassFreemailFR)
-	legacyRate := VeridianDefaultRateForClass(ProviderClassFreemailFR)
-	for _, c := range veridianFAIClasses {
-		assert.True(t, IsValidProviderClass(c), c)
-		assert.LessOrEqual(t, VeridianDefaultCapForClass(c), legacyCap, c)
-		assert.LessOrEqual(t, VeridianDefaultRateForClass(c), legacyRate+1e-9, c)
-	}
-	assert.Less(t, VeridianDefaultCapForClass(ProviderClassOrange), legacyCap)
-	assert.Less(t, VeridianDefaultRateForClass(ProviderClassOrange), legacyRate)
-}
-
 // Domaine -> FAI, MX -> FAI : la famille complète de la demande de Robert.
 func TestFAIClasses_SuffixAndMXMapping(t *testing.T) {
 	for domainName, want := range map[string]string{
@@ -92,27 +79,6 @@ func TestFAIClasses_InheritFreemailOverrides(t *testing.T) {
 	// et ne déborde pas sur les classes d'autres familles
 	k, _ = VeridianCapForClass(caps, ProviderClassGoogle)
 	assert.Equal(t, VeridianDefaultCapForClass(ProviderClassGoogle), k)
-	// pixel : l'override freemail_fr vaut pour les FAI, pas pour other_hoster -> ses filles
-	pix := map[string]bool{ProviderClassFreemailFR: false, ProviderClassOtherHoster: false}
-	b, ok := veridianPixelLookup(pix, ProviderClassOrange)
-	assert.True(t, ok)
-	assert.False(t, b)
-	_, ok = veridianPixelLookup(pix, ProviderClassGandi)
-	assert.False(t, ok, "comportement des classes filles d'other_hoster inchangé")
-}
-
-// Une exclusion de freemail_fr (politique pilote) exclut les FAI : sans cela, un contact
-// tagué freemail_fr et désormais classé orange passerait l'exclusion.
-func TestFAIClasses_ExclusionOfFreemailCoversFAI(t *testing.T) {
-	ex := VeridianResolveExcludedClasses(nil, &EmailProvider{VeridianExcludedProviderClasses: []string{ProviderClassFreemailFR}}, nil)
-	assert.True(t, ex[ProviderClassFreemailFR])
-	for _, c := range veridianFAIClasses {
-		assert.True(t, ex[c], c)
-	}
-	ex = VeridianResolveExcludedClasses(nil, &EmailProvider{VeridianExcludedProviderClasses: []string{ProviderClassOrange}}, nil)
-	assert.True(t, ex[ProviderClassOrange])
-	assert.False(t, ex[ProviderClassFree])
-	assert.False(t, ex[ProviderClassFreemailFR])
 }
 
 // Les domaines de chaque classe (compte journalier par domaine) sont disjoints ; le

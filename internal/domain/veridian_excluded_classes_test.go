@@ -142,3 +142,17 @@ func TestVeridianResolveExcludedClasses_ChildrenFollowOtherHoster(t *testing.T) 
 	assert.False(t, only[ProviderClassOtherHoster], "exclure une fille n'exclut pas le parent")
 	assert.False(t, only[ProviderClassLWS])
 }
+
+// Une exclusion de freemail_fr (politique pilote) exclut les FAI : sans cela, un contact
+// tagué freemail_fr et désormais classé orange passerait l'exclusion.
+func TestFAIClasses_ExclusionOfFreemailCoversFAI(t *testing.T) {
+	ex := VeridianResolveExcludedClasses(nil, &EmailProvider{VeridianExcludedProviderClasses: []string{ProviderClassFreemailFR}}, nil)
+	assert.True(t, ex[ProviderClassFreemailFR])
+	for _, c := range veridianFAIClasses {
+		assert.True(t, ex[c], c)
+	}
+	ex = VeridianResolveExcludedClasses(nil, &EmailProvider{VeridianExcludedProviderClasses: []string{ProviderClassOrange}}, nil)
+	assert.True(t, ex[ProviderClassOrange])
+	assert.False(t, ex[ProviderClassFree])
+	assert.False(t, ex[ProviderClassFreemailFR])
+}

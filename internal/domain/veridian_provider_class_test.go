@@ -679,3 +679,27 @@ func TestVeridianConfiguredCapForClass_OverrideOnly(t *testing.T) {
 	_, ok = VeridianConfiguredCapForClass(caps, ProviderClassOVH)
 	assert.False(t, ok, "0 explicite n'est pas une surcharge")
 }
+
+func TestVeridianRefineLegacyFreemailDomain(t *testing.T) {
+	for dom, want := range map[string]string{
+		"orange.fr": ProviderClassOrange, "WANADOO.FR": ProviderClassOrange, " sfr.fr. ": ProviderClassSFRAltice,
+		"free.fr": ProviderClassFree, "laposte.net": ProviderClassLaPoste, "bbox.fr": ProviderClassBouygues,
+		"gmx.fr": ProviderClassFreemailFR, "cabinet-pro.fr": ProviderClassFreemailFR, "": ProviderClassFreemailFR,
+		// jamais hors de la famille FAI
+		"gmail.com": ProviderClassFreemailFR, "outlook.fr": ProviderClassFreemailFR,
+	} {
+		assert.Equal(t, want, VeridianRefineLegacyFreemailDomain(ProviderClassFreemailFR, dom), dom)
+	}
+	// une autre classe passe telle quelle
+	assert.Equal(t, ProviderClassGoogle, VeridianRefineLegacyFreemailDomain(ProviderClassGoogle, "orange.fr"))
+	assert.Equal(t, ProviderClassFree, VeridianRefineLegacyFreemailDomain(ProviderClassFree, "orange.fr"))
+}
+
+func TestVeridianIsFreemailFamily(t *testing.T) {
+	for _, c := range []string{ProviderClassFreemailFR, ProviderClassOrange, ProviderClassSFRAltice, ProviderClassFree, ProviderClassLaPoste, ProviderClassBouygues} {
+		assert.True(t, VeridianIsFreemailFamily(c), c)
+	}
+	for _, c := range []string{ProviderClassGoogle, ProviderClassMicrosoft, ProviderClassYahooAol, ProviderClassCorporate, ProviderClassOtherHoster, ProviderClassGandi, ""} {
+		assert.False(t, VeridianIsFreemailFamily(c), c)
+	}
+}

@@ -152,3 +152,16 @@ func TestMXTableExport(t *testing.T) {
 	sort.Strings(shadowed)
 	assert.Empty(t, shadowed, "règles masquées par une règle précédente : %s", strings.Join(shadowed, ", "))
 }
+
+// Chaque FAI a ses défauts, jamais au-dessus de ceux de freemail_fr ; Orange est le plus bas.
+func TestFAIClasses_DefaultsNeverAboveLegacyFreemail(t *testing.T) {
+	legacyCap := VeridianDefaultCapForClass(ProviderClassFreemailFR)
+	legacyRate := VeridianDefaultRateForClass(ProviderClassFreemailFR)
+	for _, c := range veridianFAIClasses {
+		assert.True(t, IsValidProviderClass(c), c)
+		assert.LessOrEqual(t, VeridianDefaultCapForClass(c), legacyCap, c)
+		assert.LessOrEqual(t, VeridianDefaultRateForClass(c), legacyRate+1e-9, c)
+	}
+	assert.Less(t, VeridianDefaultCapForClass(ProviderClassOrange), legacyCap)
+	assert.Less(t, VeridianDefaultRateForClass(ProviderClassOrange), legacyRate)
+}

@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func strPtr(s string) *NullableString { return &NullableString{String: s, IsNull: false} }
 
@@ -326,4 +330,21 @@ func TestVeridianDefaultOpenPixel_ZohoProtonFollowOtherHoster(t *testing.T) {
 			t.Fatalf("classe %q : défaut pixel %v différent d'other_hoster", c, v)
 		}
 	}
+}
+
+// Scission de freemail_fr (22/10, fiche 69) : une politique pixel posée sur freemail_fr vaut pour
+// chaque FAI qui n'a pas la sienne ; les filles d'other_hoster gardent leur comportement.
+func TestVeridianPixelLookup_FAIInheritFreemailOverride(t *testing.T) {
+	pix := map[string]bool{ProviderClassFreemailFR: false, ProviderClassOtherHoster: false}
+	for _, c := range []string{ProviderClassOrange, ProviderClassSFRAltice, ProviderClassFree, ProviderClassLaPoste, ProviderClassBouygues} {
+		b, ok := veridianPixelLookup(pix, c)
+		assert.True(t, ok, c)
+		assert.False(t, b, c)
+		assert.True(t, veridianDefaultOpenPixelByClass[c], "défaut tunnel ON comme freemail_fr : "+c)
+	}
+	b, ok := veridianPixelLookup(map[string]bool{ProviderClassFreemailFR: false, ProviderClassOrange: true}, ProviderClassOrange)
+	assert.True(t, ok)
+	assert.True(t, b, "l'entrée propre prime")
+	_, ok = veridianPixelLookup(pix, ProviderClassGandi)
+	assert.False(t, ok, "classes filles d'other_hoster : comportement inchangé")
 }
