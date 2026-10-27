@@ -651,3 +651,18 @@ func TestVeridianMessageHistoryDecorator_RecentClassOutcomesForSenderDomain_Pass
 	assert.Equal(t, 20, sent)
 	assert.Equal(t, 12, policy)
 }
+
+// TestVeridianMessageHistoryDecorator_UpdateForwardsSecretKey verrouille que le
+// décorateur transmet secretKey à Update, sans lequel message_data ne peut pas
+// être chiffré à l'écriture (défaut lot 0).
+func TestVeridianMessageHistoryDecorator_UpdateForwardsSecretKey(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	upstream := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	planRepo := domainmocks.NewMockVeridianPlanRepository(ctrl)
+	d := NewVeridianMessageHistoryDecorator(upstream, planRepo, pkgmocks.NewMockLogger(ctrl))
+
+	msg := &domain.MessageHistory{ID: "msg-u-key"}
+	upstream.EXPECT().Update(gomock.Any(), "ws", "key-42", msg).Return(nil).Times(1)
+	require.NoError(t, d.Update(context.Background(), "ws", "key-42", msg))
+}

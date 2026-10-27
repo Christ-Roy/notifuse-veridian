@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
@@ -1868,4 +1869,16 @@ func TestMessageHistory_BounceTypeLabelsAreTheOnesTheWorkerReads(t *testing.T) {
 	empty, err := json.Marshal(MessageHistory{ID: "m2"})
 	require.NoError(t, err)
 	assert.NotContains(t, string(empty), "bounce_type", "omitempty : aucun changement pour les reponses d'API existantes")
+}
+
+// TestMessageHistoryRepository_UpdateSignatureTakesSecretKey verrouille la
+// signature Update(ctx, workspaceID, secretKey, message) : sans secretKey, le
+// dépôt ne peut pas chiffrer message_data à l'écriture (défaut lot 0).
+func TestMessageHistoryRepository_UpdateSignatureTakesSecretKey(t *testing.T) {
+	m, ok := reflect.TypeOf((*MessageHistoryRepository)(nil)).Elem().MethodByName("Update")
+	require.True(t, ok, "MessageHistoryRepository doit exposer Update")
+	// Le type de méthode d'une interface n'a pas de receveur : ctx, workspaceID, secretKey, message.
+	require.Equal(t, 4, m.Type.NumIn())
+	assert.Equal(t, "string", m.Type.In(2).Kind().String(), "le 3e argument doit être secretKey (string)")
+	assert.Equal(t, reflect.TypeOf(&MessageHistory{}), m.Type.In(3))
 }
