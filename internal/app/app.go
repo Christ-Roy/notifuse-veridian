@@ -1657,6 +1657,18 @@ func (a *App) InitHandlers() error {
 		a.logger,
 	).RegisterRoutes(a.mux)
 
+	// === Veridian — lecture des inscriptions d'automation (27/10/2026) ===
+	// GET /api/automations.enrollments : contacts inscrits, statut, noeud courant, prochaine date (curseur).
+	httpHandler.NewVeridianAutomationEnrollmentsListHandler(
+		service.NewVeridianAutomationEnrollmentService(
+			repository.NewVeridianAutomationEnrollmentRepository(a.workspaceRepo),
+			a.authService,
+			a.logger,
+		),
+		getJWTSecret,
+		a.logger,
+	).RegisterRoutes(a.mux)
+
 	// === Veridian patch, fiche 62 lot 1 (10/10/2026) : « pourquoi ca n'envoie pas » ===
 	// GET|POST /api/veridian/queue.explain (entrees de file groupees par automation, noeud,
 	// raison, profil ; --entry = detail gate par gate), GET|POST /api/veridian/decisions.list

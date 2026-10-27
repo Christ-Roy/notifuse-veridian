@@ -145,7 +145,7 @@ OWNER_ONLY = {"workspaces.createIntegration", "workspaces.updateIntegration",
               "workspaces.createAPIKey", "workspaces.create", "workspaces.delete"}
 # Routes app servies en GET (query params, pas de body).
 GET_VERBS = {
-    "automations.get", "automations.list", "automations.nodeExecutions",
+    "automations.get", "automations.list", "automations.nodeExecutions", "automations.enrollments",
     "broadcasts.get", "broadcasts.getTestResults", "broadcasts.list",
     "contacts.count", "contacts.getByEmail", "contacts.getByExternalID", "contacts.list",
     "templates.get", "templates.list",
@@ -201,6 +201,7 @@ EXISTING_COMMAND_ROUTES = {
     "automations:delete": ["/api/automations.delete"],
     "automations:update": ["/api/automations.update"],
     "automations:enroll": ["/api/automations.enroll"],
+    "automations:enrollments": ["/api/automations.enrollments"],
     "broadcasts:list": ["/api/broadcasts.list"],
     "broadcasts:get": ["/api/broadcasts.get"],
     "broadcasts:create": ["/api/broadcasts.create"],
@@ -306,7 +307,7 @@ WORKSPACE_COMMANDS = frozenset({
     "automations:list", "automations:get", "automations:create",
     "automations:activate", "automations:pause", "automations:delete",
     "automations:update", "automations:enroll", "automations:exit-contact",
-    "automations:reset-contact", "automations:nodeExecutions",
+    "automations:reset-contact", "automations:nodeExecutions", "automations:enrollments",
     # broadcasts
     "broadcasts:list", "broadcasts:get", "broadcasts:create", "broadcasts:update",
     "broadcasts:delete", "broadcasts:schedule", "broadcasts:cancel",
@@ -2929,6 +2930,17 @@ def cmd_automations_node_executions(a):
     out(*call_jwt(a.env, "GET", "/api/automations.nodeExecutions", jwt, params=params))
 
 
+# ---- automations:enrollments (qui est inscrit, statut, noeud courant, prochaine date ; curseur)
+def cmd_automations_enrollments(a):
+    jwt = apikey_for(a.env, a.workspace)
+    params = {"workspace_id": a.workspace, "automation_id": a.id, "limit": str(a.limit)}
+    if a.status:
+        params["status"] = a.status
+    if a.cursor:
+        params["cursor"] = a.cursor
+    out(*call_jwt(a.env, "GET", "/api/automations.enrollments", jwt, params=params))
+
+
 # ---- templates.update direct (sans repasser par tout le contenu, cf templates:push)
 def cmd_templates_update(a):
     body = _json_arg(a.data) or {}
@@ -4386,6 +4398,13 @@ def build_parser():
     sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True, help="automation_id")
     sp.add_argument("--email", required=True)
     sp.set_defaults(func=cmd_automations_node_executions, _routes=["/api/automations.nodeExecutions"])
+
+    sp = sub.add_parser("automations:enrollments", help="contacts inscrits à une automation (statut, nœud courant, prochaine date) ; pagination par curseur")
+    sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True, help="automation_id")
+    sp.add_argument("--status", choices=["active", "completed", "exited", "failed"], help="active = en cours (active + sending)")
+    sp.add_argument("--limit", type=int, default=50, help="taille de page (1 à 500, défaut 50)")
+    sp.add_argument("--cursor", help="next_cursor de la page précédente (vide = première page)")
+    sp.set_defaults(func=cmd_automations_enrollments, _routes=["/api/automations.enrollments"])
 
     sp = sub.add_parser("templates:update", help="patch direct d'un template (--data @file, sans repasser par templates:push)")
     sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
