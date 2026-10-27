@@ -202,6 +202,8 @@ EXISTING_COMMAND_ROUTES = {
     "automations:update": ["/api/automations.update"],
     "automations:enroll": ["/api/automations.enroll"],
     "automations:enrollments": ["/api/automations.enrollments"],
+    "queue:entries": ["/api/veridian/queue.entries"],
+    "queue:cancel": ["/api/veridian/queue.cancel"],
     "broadcasts:list": ["/api/broadcasts.list"],
     "broadcasts:get": ["/api/broadcasts.get"],
     "broadcasts:create": ["/api/broadcasts.create"],
@@ -347,7 +349,7 @@ WORKSPACE_COMMANDS = frozenset({
     "profiles:create", "prospection:stats",
     # Lot 1 (10/10/2026) : pourquoi un mail n'est pas parti. queue:explain et logs:decisions en
     # lecture (automations:read) ; queue:recompute en écriture (automations:write, --yes requis).
-    "queue:explain", "logs:decisions", "queue:recompute",
+    "queue:explain", "logs:decisions", "queue:recompute", "queue:entries", "queue:cancel",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -2933,6 +2935,33 @@ def cmd_automations_node_executions(a):
     out(*call_jwt(a.env, "GET", "/api/automations.nodeExecutions", jwt, params=params))
 
 
+# ---- queue:entries / queue:cancel (file d'envoi : lister, annuler avec motif et journal)
+def cmd_queue_entries(a):
+    jwt = apikey_for(a.env, a.workspace)
+    params = {"workspace_id": a.workspace, "automation_id": a.automation, "node_id": a.node,
+              "profile_id": a.profile, "class": a.klass, "status": a.status, "cursor": a.cursor,
+              "limit": str(a.limit)}
+    params = {k: v for k, v in params.items() if v not in (None, "")}
+    out(*call_jwt(a.env, "GET", "/api/veridian/queue.entries", jwt, params=params))
+
+
+def cmd_queue_cancel(a):
+    if not a.automation and not a.entry:
+        die("queue:cancel exige --automation X ou --entry ID (jamais toute la file).")
+    if not a.reason or not a.reason.strip():
+        die("queue:cancel exige --reason (il entre dans le journal).")
+    if not 1 <= a.limit <= 500:
+        die("--limit doit être compris entre 1 et 500.")
+    body = {"workspace_id": a.workspace, "automation_id": a.automation, "node_id": a.node,
+            "profile_id": a.profile, "class": a.klass, "status": a.status, "entry_ids": a.entry or None,
+            "reason": a.reason, "limit": a.limit, "dry_run": not a.yes}
+    body = {k: v for k, v in body.items() if v is not None}
+    jwt = apikey_for(a.env, a.workspace)
+    if not a.yes:
+        print("DRY-RUN : aucune entrée supprimée (dry_run=true). Relancer avec --yes pour annuler.", file=sys.stderr)
+    out(*call_jwt(a.env, "POST", "/api/veridian/queue.cancel", jwt, body=body))
+
+
 # ---- automations:enrollments (qui est inscrit, statut, noeud courant, prochaine date ; curseur)
 def cmd_automations_enrollments(a):
     jwt = apikey_for(a.env, a.workspace)
@@ -4408,6 +4437,30 @@ def build_parser():
     sp.add_argument("--limit", type=int, default=50, help="taille de page (1 à 500, défaut 50)")
     sp.add_argument("--cursor", help="next_cursor de la page précédente (vide = première page)")
     sp.set_defaults(func=cmd_automations_enrollments, _routes=["/api/automations.enrollments"])
+
+    sp = sub.add_parser("queue:entries", help="entrées de file d'une automation (statut, classe, profil, nœud) ; curseur")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--automation", required=True, help="automation_id")
+    sp.add_argument("--node", help="filtre : id de nœud")
+    sp.add_argument("--profile", help="filtre : id de profil d'envoi")
+    sp.add_argument("--class", dest="klass", help="filtre : classe du fournisseur destinataire (google, microsoft...)")
+    sp.add_argument("--status", choices=["pending", "processing", "failed", "paused"])
+    sp.add_argument("--cursor", help="next_cursor de la page précédente")
+    sp.add_argument("--limit", type=int, default=50, help="taille de page (1 à 500)")
+    sp.set_defaults(func=cmd_queue_entries, _routes=["/api/veridian/queue.entries"])
+
+    sp = sub.add_parser("queue:cancel", help="annule des entrées de file (motif obligatoire, journalisé ; ne sort PAS le contact de son automation, cf automations:exit-contact) ; sans --yes : dry-run")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--automation", help="périmètre : id d'automation (obligatoire sauf si --entry)")
+    sp.add_argument("--entry", action="append", help="id d'entrée (répétable)")
+    sp.add_argument("--node", help="filtre : id de nœud")
+    sp.add_argument("--profile", help="filtre : id de profil d'envoi")
+    sp.add_argument("--class", dest="klass", help="filtre : classe du fournisseur destinataire")
+    sp.add_argument("--status", choices=["pending", "failed", "paused"], help="filtre : statut (processing n'est jamais annulé)")
+    sp.add_argument("--reason", required=True, help="motif (entre dans le journal, 120 caractères max)")
+    sp.add_argument("--limit", type=int, default=100, help="nombre maximal d'entrées (1 à 500)")
+    sp.add_argument("--yes", action="store_true", help="exécute l'annulation ; sans ce drapeau, dry-run")
+    sp.set_defaults(func=cmd_queue_cancel, _routes=["/api/veridian/queue.cancel"])
 
     sp = sub.add_parser("templates:update", help="patch direct d'un template (--data @file, sans repasser par templates:push)")
     sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)

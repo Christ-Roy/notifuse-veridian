@@ -70,7 +70,7 @@ const (
 func VeridianValidOutcome(o string) bool {
 	switch o {
 	case VeridianOutcomeSent, VeridianOutcomeDeferred, VeridianOutcomeFailed,
-		VeridianOutcomeDiscarded, VeridianOutcomeExited, VeridianOutcomeRecomputed:
+		VeridianOutcomeDiscarded, VeridianOutcomeExited, VeridianOutcomeRecomputed, VeridianOutcomeCancelled:
 		return true
 	}
 	return false

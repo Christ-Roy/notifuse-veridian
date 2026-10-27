@@ -277,3 +277,14 @@ func TestVeridianFirstMailExitReasons_StableAndNotWaitingReasons(t *testing.T) {
 	}
 	assert.True(t, VeridianValidOutcome(VeridianOutcomeExited))
 }
+
+// L'annulation opérateur (file d'envoi) écrit une issue « cancelled » dans le journal :
+// elle doit être reconnue, sinon decisions.list la filtre comme inconnue.
+func TestVeridianValidOutcome_CancelledIsKnown(t *testing.T) {
+	if !VeridianValidOutcome(VeridianOutcomeCancelled) {
+		t.Fatal("l'issue cancelled doit etre reconnue par le journal")
+	}
+	if VeridianValidOutcome("annule_en_silence") {
+		t.Fatal("une issue inconnue doit etre refusee")
+	}
+}

@@ -1669,6 +1669,18 @@ func (a *App) InitHandlers() error {
 		a.logger,
 	).RegisterRoutes(a.mux)
 
+	// === Veridian — file d'envoi : lister et annuler (27/10/2026) ===
+	// GET /api/veridian/queue.entries, POST /api/veridian/queue.cancel (journal decisions.list).
+	httpHandler.NewVeridianQueueEntriesHandler(
+		service.NewVeridianQueueEntriesService(
+			repository.NewVeridianQueueEntriesRepository(a.workspaceRepo, nil),
+			a.authService,
+			a.logger,
+		),
+		getJWTSecret,
+		a.logger,
+	).RegisterRoutes(a.mux)
+
 	// === Veridian patch, fiche 62 lot 1 (10/10/2026) : « pourquoi ca n'envoie pas » ===
 	// GET|POST /api/veridian/queue.explain (entrees de file groupees par automation, noeud,
 	// raison, profil ; --entry = detail gate par gate), GET|POST /api/veridian/decisions.list
