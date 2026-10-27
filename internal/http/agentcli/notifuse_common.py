@@ -270,6 +270,7 @@ EXISTING_COMMAND_ROUTES = {
     "keys:revoke": ["/api/workspaces.revokeAPIKey"],
     "integrations:create-smtp": ["/api/workspaces.createIntegration"],
     "integrations:delete": ["/api/workspaces.deleteIntegration"],
+    "integrations:verify": ["/api/veridian/admin/email-integration.verify"],
     "integrations:update": ["/api/workspaces.updateIntegration"],
     "integrations:list": ["/api/workspaces.get"],
     "settings:set": ["/api/workspaces.update"],
@@ -517,9 +518,12 @@ def _scoped_jwt_or_fallback(env, tenant_id, want_owner):
     global _SCOPED_OPERATOR_WARNED
     if _SCOPED_JWT:
         return _SCOPED_JWT
-    if os.environ.get("NOTIFUSE_STRICT") == "1":
-        die("NOTIFUSE_STRICT=1 : aucune clé scopée (NOTIFUSE_API_KEY / --key) fournie, "
-            "repli super-clé interdit. Mint une clé avec `notifuse-admin keys:mint`.")
+    # Défaut STRICT (27/10/2026, incident ws-test : sans clé scopée, le CLI utilisateur
+    # créait/relisait un tenant avec la super clé). Le repli n'a lieu que si l'opérateur
+    # le demande explicitement (bastion) : NOTIFUSE_OPERATOR=1.
+    if os.environ.get("NOTIFUSE_OPERATOR") != "1":
+        die("aucune clé scopée (NOTIFUSE_API_KEY / --key) fournie : repli super-clé refusé par défaut. "
+            "Mint une clé avec `notifuse-admin keys:mint`, ou NOTIFUSE_OPERATOR=1 pour le repli opérateur (bastion).")
     # Repli opérateur : seulement possible si le secret HMAC est dispo (bastion).
     if not _SCOPED_OPERATOR_WARNED:
         print("⚠️  mode opérateur (super clé) : aucune NOTIFUSE_API_KEY scopée fournie, "
@@ -732,6 +736,20 @@ def _integration_daily_cap(integration):
     return provider_total
 
 
+# Domaines dont la signature DKIM est faite par le fournisseur lui-meme avec un selecteur qui tourne (mesure du 27/10/2026 :
+# un mail sorti du SMTP Gmail portait dkim=pass header.i=@gmail.com header.s=20251104, alors que `mail._domainkey.gmail.com`
+# n'existe pas). Sonder le seul selecteur `mail` rendait un faux « sans cle DKIM » BLOQUANT sur tout profil Gmail.
+_DKIM_SIGNE_PAR_LE_FOURNISSEUR = {"gmail.com", "googlemail.com"}
+
+
+def _dkim_publie(domaine):
+    """Cles DKIM trouvees pour un domaine d'envoi ; pour Gmail, la signature est celle de Google (non sondable)."""
+    cles = _dns_txt(f"mail._domainkey.{domaine}")
+    if not cles and domaine.lower() in _DKIM_SIGNE_PAR_LE_FOURNISSEUR:
+        return ["signe par le fournisseur (d=" + domaine.lower() + ")"]
+    return cles
+
+
 def cmd_campaign_audit(a):
     """Verdict AVANT envoi : est-ce qu'on peut lancer sans se cramer ?
 
@@ -797,7 +815,7 @@ def cmd_campaign_audit(a):
             blocking.append(f"{d} liste sur la DBL Spamhaus ({dbl[0]}) — tout envoi "
                             "portant ce domaine sera rejete, delistage a demander")
         spf = [t for t in _dns_txt(d) if t.startswith("v=spf1")]
-        dkim = _dns_txt(f"mail._domainkey.{d}")
+        dkim = _dkim_publie(d)
         dmarc = [t for t in _dns_txt(f"_dmarc.{d}") if t.startswith("v=DMARC1")]
         ok = lambda b: "✓" if b else "✗"
         P(f"  {d:<34} SPF {ok(spf)}  DKIM {ok(dkim)}  DMARC {ok(dmarc)}")
@@ -1431,6 +1449,23 @@ def cmd_magic_link(a):
     out(*result)
 
 
+def _hub_user_id_for(email):
+    """Identifiant Hub d'un utilisateur, par le CLI `hub tenant <email>` (la
+    route SSO l'exige). Échec explicite si le Hub ne le connaît pas."""
+    import shutil
+    import subprocess
+    if not shutil.which("hub"):
+        die("CLI `hub` introuvable : passe --hub-user-id <id> (hub tenant <email> le donne).")
+    try:
+        r = subprocess.run(["hub", "tenant", email], capture_output=True, text=True, timeout=60)
+        uid = (json.loads(r.stdout).get("user") or {}).get("id")
+    except Exception as e:  # noqa: BLE001
+        die(f"impossible de lire l'identifiant Hub de {email} via `hub tenant` : {e}")
+    if not uid:
+        die(f"{email} est inconnu du Hub : pas de lien de connexion possible (hub user {email}).")
+    return uid
+
+
 # ---- customEvents ----
 def cmd_events_upsert(a):
     # UpsertCustomEventRequest = champs AU TOP-LEVEL (email, event_name,
@@ -1544,6 +1579,18 @@ def cmd_integrations_cold(a):
             prov.pop("veridian_hard_bounce_freeze_threshold", None)
         else:
             prov["veridian_hard_bounce_freeze_threshold"] = thr
+    # Chauffe progressive de l'infra (veridian_warmup.go) : plafond TOTAL du jour = schedule[jour // step_days],
+    # le dernier palier tient ensuite. Il PRIME sur les plafonds par classe. Depart = --warmup-start (defaut : maintenant).
+    if getattr(a, "warmup_off", False):
+        for k in ("veridian_warmup_started_at", "veridian_warmup_schedule", "veridian_warmup_step_days"):
+            prov.pop(k, None)
+    elif getattr(a, "warmup_schedule", None):
+        sched = json.loads(a.warmup_schedule)
+        if not (isinstance(sched, list) and sched and all(isinstance(x, int) and x > 0 for x in sched)):
+            die("--warmup-schedule doit etre une liste JSON d'entiers > 0, ex [20,35,50]")
+        prov["veridian_warmup_schedule"] = sched
+        prov["veridian_warmup_step_days"] = a.warmup_step_days or 1
+        prov["veridian_warmup_started_at"] = a.warmup_start or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     body = {"workspace_id": a.workspace, "integration_id": a.id,
             "name": integ.get("name"), "provider": prov}
     out(*call_jwt(a.env, "POST", "/api/workspaces.updateIntegration", jwt, body=body))
@@ -1655,6 +1702,13 @@ def cmd_integrations_delete(a):
     jwt = owner_jwt(a.env, a.workspace)
     body = {"workspace_id": a.workspace, "integration_id": a.id}
     out(*call_jwt(a.env, "POST", "/api/workspaces.deleteIntegration", jwt, body=body))
+
+
+def cmd_integrations_verify(a):
+    """Vérifie un profil d'envoi (transport réel vers --to) puis pose
+    VeridianTransportVerifiedAt. HMAC admin, jamais le JWT owner."""
+    body = {"workspace_id": a.workspace, "integration_id": a.id, "to": a.to}
+    out(*call_hmac(a.env, "POST", "/api/veridian/admin/email-integration.verify", body))
 
 
 def cmd_integrations_update(a):
@@ -2307,6 +2361,7 @@ SETTINGS_KEYS = {
     "veridian_per_sender_daily_cap": int, "veridian_sending_window": "json",
     "veridian_jitter_pct": float, "veridian_anti_hash_enabled": bool,
     "veridian_anti_hash_window_hours": int, "veridian_excluded_provider_classes": "json", "veridian_marketing_email_provider_ids": "json",
+    "veridian_thread_followups": bool,
 }
 
 
@@ -2688,6 +2743,14 @@ def _read_contacts_csv(path):
                 continue  # ligne vide / sans email : ignoree silencieusement
             contact = {k: v for k, v in row.items() if v not in (None, "")}
             contact["email"] = email
+            # custom_json_1..5 : un CSV ne porte que du texte ; l'API attend un OBJET. Sans ce parse, le segment
+            # écrit par `odh export notifuse` (boucle empirique ODH-0183) arrivait en chaîne et était perdu (24/10).
+            for k in list(contact):
+                if k.startswith("custom_json_"):
+                    try:
+                        contact[k] = json.loads(contact[k])
+                    except (TypeError, ValueError) as e:
+                        die(f"{path} ligne {i} : {k} n'est pas du JSON valide ({e}) : {contact[k]!r}")
             rows.append(contact)
         return rows
 
@@ -3253,6 +3316,10 @@ def cmd_raw_generic(a):
             k, _, v = kv.partition("=")
             params[k] = v
     if a._auth == "hmac":
+        # 19/10/2026 : les --param d'une route HMAC en GET étaient lus puis jetés
+        # (users:by-email répondait « email is required »). Ils partent en query.
+        if a._method == "GET" and params:
+            path = path + "?" + urllib.parse.urlencode(params)
         out(*call_hmac(a.env, a._method, path, body))
     elif a._auth == "none":
         out(*call_anon(a.env, a._method, path, body=body, params=params))
@@ -3822,6 +3889,10 @@ def build_parser():
     sp.add_argument("--pixel", help='JSON map classe→bool')
     sp.add_argument("--bounce-freeze-threshold", dest="bounce_freeze_threshold", type=float,
                     help="seuil du fusible de réputation (proportion de bounces durs sur 7 j, 0.01-0.15, ex 0.08). 0 = défaut 0.03. Une plainte ne gèle pas : elle ralentit le domaine ÷4 pendant 7 jours, sans arrêt.")
+    sp.add_argument("--warmup-schedule", dest="warmup_schedule", help="chauffe : liste JSON des plafonds TOTAUX par jour, ex '[20,35,50,100]' (le dernier tient ensuite)")
+    sp.add_argument("--warmup-step-days", dest="warmup_step_days", type=int, help="jours par palier (defaut 1, jours CIVILS : le week-end avance l'index)")
+    sp.add_argument("--warmup-start", dest="warmup_start", help="debut de la chauffe, ISO UTC (defaut : maintenant)")
+    sp.add_argument("--warmup-off", dest="warmup_off", action="store_true", help="retire la chauffe de l'infra")
     sp.set_defaults(func=cmd_integrations_cold)
 
     # profils d'envoi : vérité, lien IMAP, pause (lot 2, 08/10/2026)
@@ -4015,6 +4086,12 @@ def build_parser():
     sp = sub.add_parser("integrations:delete", help="supprime une intégration (owner)")
     sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--id", required=True)
     sp.set_defaults(func=cmd_integrations_delete)
+
+    sp = sub.add_parser("integrations:verify",
+                        help="vérifie un profil d'envoi par un VRAI envoi vers --to (HMAC admin, notifuse-admin seulement)")
+    sp.add_argument("workspace"); sp.add_argument("--id", required=True)
+    sp.add_argument("--to", required=True, help="destinataire du mail de test (envoi réel !)")
+    sp.set_defaults(func=cmd_integrations_verify)
 
     sp = sub.add_parser("integrations:update",
                         help="update générique d'une intégration par type (owner, préserve secrets)")
