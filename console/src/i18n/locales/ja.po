@@ -9826,6 +9826,7 @@ msgstr "URLをスクレイピングしてマークダウン形式でコンテン
 msgid "Screen width below which mobile layout is activated. Common values: 480px, 600px, 768px"
 msgstr "モバイルレイアウトが有効になる画面幅。一般的な値: 480px、600px、768px"
 
+#: src/components/contacts/SegmentsFilter.tsx
 #: src/components/veridian_a11y.ts
 msgid "Search"
 msgstr ""
@@ -9899,6 +9900,7 @@ msgid "Segment rebuild started successfully"
 msgstr "セグメントの再構築が正常に開始されました"
 
 #: src/components/contacts/SegmentsFilter.tsx
+#: src/components/contacts/SegmentsFilter.tsx
 #: src/pages/BroadcastsPage.tsx
 #: src/pages/ContactsPage.tsx
 #: src/pages/ContactsPage.tsx
@@ -9963,6 +9965,7 @@ msgstr "モデルを選択"
 msgid "Select a popular Google Font"
 msgstr "人気のGoogle Fontを選択"
 
+#: src/components/automations/config/TriggerConfigForm.tsx
 #: src/components/automations/config/TriggerConfigForm.tsx
 msgid "Select a segment..."
 msgstr "セグメントを選択..."
@@ -10086,6 +10089,7 @@ msgstr "連絡先を追加するリストを選択"
 #~ msgid "Select OAuth2 Provider"
 #~ msgstr "OAuth2プロバイダーを選択"
 
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 msgid "Select segments (optional)"
 msgstr "セグメントを選択（任意）"

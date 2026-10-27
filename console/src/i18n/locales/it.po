@@ -9826,6 +9826,7 @@ msgstr "Estrae un URL e restituisce il suo contenuto come markdown"
 msgid "Screen width below which mobile layout is activated. Common values: 480px, 600px, 768px"
 msgstr "Larghezza schermo sotto la quale viene attivato il layout mobile. Valori comuni: 480px, 600px, 768px"
 
+#: src/components/contacts/SegmentsFilter.tsx
 #: src/components/veridian_a11y.ts
 msgid "Search"
 msgstr ""
@@ -9899,6 +9900,7 @@ msgid "Segment rebuild started successfully"
 msgstr "Ricostruzione segmento avviata con successo"
 
 #: src/components/contacts/SegmentsFilter.tsx
+#: src/components/contacts/SegmentsFilter.tsx
 #: src/pages/BroadcastsPage.tsx
 #: src/pages/ContactsPage.tsx
 #: src/pages/ContactsPage.tsx
@@ -9963,6 +9965,7 @@ msgstr "Seleziona un modello"
 msgid "Select a popular Google Font"
 msgstr "Seleziona un Google Font popolare"
 
+#: src/components/automations/config/TriggerConfigForm.tsx
 #: src/components/automations/config/TriggerConfigForm.tsx
 msgid "Select a segment..."
 msgstr "Seleziona un segmento..."
@@ -10086,6 +10089,7 @@ msgstr "Seleziona liste a cui aggiungere contatti"
 #~ msgid "Select OAuth2 Provider"
 #~ msgstr "Seleziona provider OAuth2"
 
+#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 msgid "Select segments (optional)"
 msgstr "Seleziona segmenti (opzionale)"
