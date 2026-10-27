@@ -100,3 +100,16 @@ describe('filtre des segments: dossiers', () => {
     expect(screen.queryByRole('button', { name: /1 Priorité/ })).not.toBeInTheDocument()
   })
 })
+
+describe('filtre des segments: accessibilité des dossiers', () => {
+  it('le bouton du dossier pointe vers le conteneur de ses enfants quand il est ouvert', async () => {
+    const user = userEvent.setup()
+    renderFilter(NESTED)
+    const cibles = screen.getByRole('button', { name: /2 Cibles/ })
+    expect(cibles).not.toHaveAttribute('aria-controls')
+    await user.click(cibles)
+    const panelId = cibles.getAttribute('aria-controls')
+    expect(panelId).toBeTruthy()
+    expect(document.getElementById(panelId as string)).toHaveTextContent('Grossistes')
+  })
+})

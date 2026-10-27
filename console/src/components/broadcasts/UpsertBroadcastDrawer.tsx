@@ -1,5 +1,5 @@
 import { formatNumber } from '../sending_profiles/veridian_profile_labels'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Button,
   Drawer,
@@ -14,10 +14,8 @@ import {
   InputNumber,
   Popconfirm,
   Alert,
-  Tag,
   Tabs,
-  Tooltip,
-  TreeSelect
+  Tooltip
 } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -29,11 +27,7 @@ import {
 } from '../../services/api/broadcast'
 import type { Workspace } from '../../services/api/types'
 import TemplateSelectorInput from '../templates/TemplateSelectorInput'
-import {
-  buildSegmentTree,
-  hasFolders,
-  toTreeSelectData
-} from '../segment/veridian_segment_folders'
+import { VeridianSegmentPicker } from '../segment/veridian_segment_picker'
 import { DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import React from 'react'
 import extractTLD from '../../lib/tld'
@@ -103,9 +97,6 @@ export function UpsertBroadcastDrawer({
   const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const { message, modal } = App.useApp()
-  // Dossiers de segments (nom « Dossier / Segment »). Sans dossier : Select d'origine.
-  const segmentTree = useMemo(() => buildSegmentTree(segments), [segments])
-  const segmentsNested = hasFolders(segmentTree)
   const [formTouched, setFormTouched] = useState(false)
   const [tab, setTab] = useState<string>('audience')
   const [globalFeed, setGlobalFeed] = useState<GlobalFeedSettings>({
@@ -542,93 +533,12 @@ export function UpsertBroadcastDrawer({
                         </span>
                       }
                     >
-                      {segmentsNested ? (
-                        <TreeSelect
-                          multiple
-                          showSearch
-                          treeNodeFilterProp="title"
-                          placeholder={t`Select segments (optional)`}
-                          treeData={toTreeSelectData(segmentTree)}
-                          treeTitleRender={(node) => {
-                            const segment = segments.find((s) => s.id === node.value)
-                            if (!segment) return node.title
-                            return (
-                              <Tag color={segment.color} bordered={false}>
-                                {node.title}
-                                {segment.users_count !== undefined && (
-                                  <span className="ml-1">({formatNumber(segment.users_count)})</span>
-                                )}
-                              </Tag>
-                            )
-                          }}
-                          tagRender={(props) => {
-                            const segment = segments.find((s) => s.id === props.value)
-                            if (!segment) return <Tag {...props}>{props.label}</Tag>
-
-                            return (
-                              <Tag
-                                color={segment.color}
-                                bordered={false}
-                                closable={props.closable}
-                                onClose={props.onClose}
-                                style={{ marginRight: 3 }}
-                              >
-                                {segment.name}
-                                {segment.users_count !== undefined && (
-                                  <span className="ml-1">
-                                    ({formatNumber(segment.users_count)})
-                                  </span>
-                                )}
-                              </Tag>
-                            )
-                          }}
-                        />
-                      ) : (
-                        <Select
-                          mode="multiple"
-                          placeholder={t`Select segments (optional)`}
-                          options={segments.map((segment) => ({
-                            value: segment.id,
-                            label: segment.name
-                          }))}
-                          optionRender={(option) => {
-                            const segment = segments.find((s) => s.id === option.value)
-                            if (!segment) return option.label
-
-                            return (
-                              <Tag color={segment.color} bordered={false}>
-                                {segment.name}
-                                {segment.users_count !== undefined && (
-                                  <span className="ml-1">
-                                    ({formatNumber(segment.users_count)})
-                                  </span>
-                                )}
-                              </Tag>
-                            )
-                          }}
-                          tagRender={(props) => {
-                            const segment = segments.find((s) => s.id === props.value)
-                            if (!segment) return <Tag {...props}>{props.label}</Tag>
-
-                            return (
-                              <Tag
-                                color={segment.color}
-                                bordered={false}
-                                closable={props.closable}
-                                onClose={props.onClose}
-                                style={{ marginRight: 3 }}
-                              >
-                                {segment.name}
-                                {segment.users_count !== undefined && (
-                                  <span className="ml-1">
-                                    ({formatNumber(segment.users_count)})
-                                  </span>
-                                )}
-                              </Tag>
-                            )
-                          }}
-                        />
-                      )}
+                      <VeridianSegmentPicker
+                        multiple
+                        segments={segments}
+                        placeholder={t`Select segments (optional)`}
+                        formatNumber={formatNumber}
+                      />
                     </Form.Item>
 
                     <Form.Item

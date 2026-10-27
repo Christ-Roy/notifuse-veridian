@@ -9827,6 +9827,7 @@ msgid "Screen width below which mobile layout is activated. Common values: 480px
 msgstr "Largeur d'écran en dessous de laquelle la disposition mobile est activée. Valeurs courantes : 480px, 600px, 768px"
 
 #: src/components/contacts/SegmentsFilter.tsx
+#: src/components/contacts/SegmentsFilter.tsx
 #: src/components/veridian_a11y.ts
 msgid "Search"
 msgstr "Rechercher"
@@ -9966,7 +9967,6 @@ msgid "Select a popular Google Font"
 msgstr "Sélectionner une police Google populaire"
 
 #: src/components/automations/config/TriggerConfigForm.tsx
-#: src/components/automations/config/TriggerConfigForm.tsx
 msgid "Select a segment..."
 msgstr "Sélectionner un segment..."
 
@@ -10089,7 +10089,6 @@ msgstr "Sélectionner les listes auxquelles ajouter les contacts"
 #~ msgid "Select OAuth2 Provider"
 #~ msgstr "Sélectionner le fournisseur OAuth2"
 
-#: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 msgid "Select segments (optional)"
 msgstr "Sélectionner les segments (optionnel)"

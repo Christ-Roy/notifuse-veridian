@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSegmentTree,
   filterSegmentTree,
-  folderKeys,
   folderKeysContaining,
   hasFolders,
   parseSegmentPath,
@@ -96,7 +95,7 @@ describe('buildSegmentTree', () => {
     expect(names(cibles.children)).toEqual(['[Animaleries]', 'Animaleries'])
     const animaleries = folder(cibles.children, 'Animaleries')
     expect(names(animaleries.children)).toEqual(['Cibles'])
-    const keys = folderKeys(tree)
+    const keys = [folder(tree, 'Cibles').key, folder(folder(tree, 'Cibles').children, 'Animaleries').key]
     expect(new Set(keys).size).toBe(keys.length)
   })
 
@@ -111,9 +110,24 @@ describe('buildSegmentTree', () => {
     expect(names(tree)).toEqual(['[1 Début]', '[2 Milieu]', '[10 Fin]', '[Autre]', 'Vrac'])
   })
 
-  it('garde les segments d un même dossier dans leur ordre reçu', () => {
-    const tree = buildSegmentTree([seg('a', 'D / Zulu'), seg('b', 'D / Alpha')])
-    expect(names(folder(tree, 'D').children)).toEqual(['Zulu', 'Alpha'])
+  it('trie naturellement les segments d un dossier (P1, P2, P3, P4)', () => {
+    const tree = buildSegmentTree([
+      seg('a', 'D / P4 · bas de file'),
+      seg('b', 'D / P1 · à contacter en premier'),
+      seg('c', 'D / P3 · second rang'),
+      seg('d', 'D / P2 · à contacter ensuite')
+    ])
+    expect(names(folder(tree, 'D').children)).toEqual([
+      'P1 · à contacter en premier',
+      'P2 · à contacter ensuite',
+      'P3 · second rang',
+      'P4 · bas de file'
+    ])
+  })
+
+  it('garde l ordre reçu des segments à la racine', () => {
+    const tree = buildSegmentTree([seg('a', 'Zulu'), seg('b', 'Alpha'), seg('c', 'D / X')])
+    expect(names(tree)).toEqual(['[D]', 'Zulu', 'Alpha'])
   })
 
   it('un nom vide ou blanc devient une feuille à la racine sans planter', () => {

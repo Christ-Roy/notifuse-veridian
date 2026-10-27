@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useId, useMemo, useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { Space, Dropdown, Modal, Badge, Tag, Popover, message, Progress, Button, Input } from 'antd'
 import { FolderOutlined, FolderOpenOutlined, DownOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
@@ -176,7 +176,11 @@ function SegmentButton({
             <Badge status={statusBadge.status as "success" | "processing" | "error" | "default" | "warning"} />
           </span>
         </Popover>
-        <Tag bordered={false} color={segment.color} style={{ margin: 0 }}>
+        <Tag
+          bordered={false}
+          color={segment.color}
+          style={{ margin: 0, opacity: segment.users_count === 0 ? 0.5 : undefined }}
+        >
           {label ?? segment.name}
           {segment.users_count !== undefined && (
             <span style={{ marginLeft: '4px', opacity: 0.8 }}>
@@ -238,6 +242,8 @@ export function SegmentsFilter({
 
   // Dossiers : l'arbre est dérivé du nom (voir veridian_segment_folders.ts).
   const [query, setQuery] = useState('')
+  const panelPrefix = useId()
+  const panelId = (key: string) => `${panelPrefix}-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`
   // Choix explicite de l'utilisateur par dossier. Sinon : ouvert si un segment sélectionné s'y trouve.
   const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map())
   const tree = useMemo(() => buildSegmentTree(segments), [segments])
@@ -284,7 +290,9 @@ export function SegmentsFilter({
         ghost={selectedInside > 0}
         icon={open ? <FolderOpenOutlined /> : <FolderOutlined />}
         onClick={() => toggleFolder(folderNode.key)}
+        disabled={searching}
         aria-expanded={open}
+        aria-controls={open ? panelId(folderNode.key) : undefined}
       >
         <Space size={4}>
           {folderNode.label}
@@ -316,6 +324,7 @@ export function SegmentsFilter({
           .map((folderNode) => (
             <div
               key={`${folderNode.key}:children`}
+              id={panelId(folderNode.key)}
               className="ml-2 pl-3 border-l-2"
               style={{ borderColor: 'var(--ant-color-border, #d9d9d9)' }}
             >
@@ -360,6 +369,7 @@ export function SegmentsFilter({
             size="small"
             prefix={<SearchOutlined />}
             placeholder={t`Search`}
+            aria-label={t`Search`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ width: 240 }}

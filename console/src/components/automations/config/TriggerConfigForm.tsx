@@ -1,15 +1,11 @@
 import React, { useMemo } from 'react'
-import { Form, Select, Input, Cascader, ConfigProvider, TreeSelect } from 'antd'
+import { Form, Select, Input, Cascader, ConfigProvider } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
 import { listsApi } from '../../../services/api/list'
 import { listSegments } from '../../../services/api/segment'
 import { OptionSelector } from '../../ui/OptionSelector'
-import {
-  buildSegmentTree,
-  hasFolders,
-  toTreeSelectData
-} from '../../segment/veridian_segment_folders'
+import { VeridianSegmentPicker } from '../../segment/veridian_segment_picker'
 import type { Workspace } from '../../../services/api/types'
 
 // Event kind cascader options are built inside the component to support i18n
@@ -184,12 +180,6 @@ export const TriggerConfigForm: React.FC<TriggerConfigFormProps> = ({ config, on
     queryFn: () => listSegments({ workspace_id: workspaceId }),
     enabled: !!workspaceId && config.event_kind?.startsWith('segment.')
   })
-  // Dossiers de segments (nom « Dossier / Segment »). Sans dossier : Select d'origine.
-  const segmentTree = useMemo(
-    () => buildSegmentTree(segmentsData?.segments || []),
-    [segmentsData]
-  )
-  const segmentsNested = hasFolders(segmentTree)
 
   const handleEventKindChange = (value: (string | number)[]) => {
     // Cascader returns array, we want the last value (the actual event kind)
@@ -289,30 +279,14 @@ export const TriggerConfigForm: React.FC<TriggerConfigFormProps> = ({ config, on
           required
           extra={t`Select which segment this trigger applies to`}
         >
-          {segmentsNested ? (
-            <TreeSelect
-              showSearch
-              treeNodeFilterProp="title"
-              placeholder={t`Select a segment...`}
-              value={config.segment_id}
-              onChange={handleSegmentIdChange}
-              style={{ width: '100%' }}
-              treeData={toTreeSelectData(segmentTree)}
-              loading={!segmentsData}
-            />
-          ) : (
-            <Select
-              placeholder={t`Select a segment...`}
-              value={config.segment_id}
-              onChange={handleSegmentIdChange}
-              style={{ width: '100%' }}
-              options={segmentsData?.segments?.map((segment) => ({
-                label: segment.name,
-                value: segment.id
-              })) || []}
-              loading={!segmentsData}
-            />
-          )}
+          <VeridianSegmentPicker
+            segments={segmentsData?.segments || []}
+            value={config.segment_id}
+            onChange={(value) => handleSegmentIdChange(value as string)}
+            placeholder={t`Select a segment...`}
+            loading={!segmentsData}
+            formatNumber={(n) => String(n)}
+          />
         </Form.Item>
       )}
 

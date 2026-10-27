@@ -70,13 +70,18 @@ function finalizeFolder<T extends SegmentLike>(folder: MutableFolder<T>): Segmen
         children
       }
     })
-  // Dossiers d'abord (triés naturellement), puis segments dans l'ordre reçu.
-  const leaves: SegmentLeafNode<T>[] = folder.leaves.map((leaf) => ({
-    kind: 'segment',
-    key: `segment:${leaf.segment.id}`,
-    label: leaf.label,
-    segment: leaf.segment
-  }))
+  // Dossiers d'abord (triés naturellement), puis segments. Dans un dossier, les
+  // segments sont triés naturellement (P1, P2, P3, P4) ; à la racine, ordre reçu
+  // (une liste sans dossier reste identique à l'ancienne).
+  const sortLeaves = folder.path.length > 0
+  const leaves: SegmentLeafNode<T>[] = folder.leaves
+    .map((leaf) => ({
+      kind: 'segment' as const,
+      key: `segment:${leaf.segment.id}`,
+      label: leaf.label,
+      segment: leaf.segment
+    }))
+    .sort((a, b) => (sortLeaves ? naturalCollator.compare(a.label, b.label) : 0))
   return [...subfolders, ...leaves]
 }
 
@@ -114,12 +119,6 @@ export function hasFolders<T extends SegmentLike>(nodes: SegmentTreeNode<T>[]): 
 
 export function segmentsIn<T extends SegmentLike>(nodes: SegmentTreeNode<T>[]): T[] {
   return nodes.flatMap((node) => (node.kind === 'segment' ? [node.segment] : segmentsIn(node.children)))
-}
-
-export function folderKeys<T extends SegmentLike>(nodes: SegmentTreeNode<T>[]): string[] {
-  return nodes.flatMap((node) =>
-    node.kind === 'folder' ? [node.key, ...folderKeys(node.children)] : []
-  )
 }
 
 // Clés de tous les dossiers qui contiennent (à n'importe quelle profondeur) un segment de la liste.
