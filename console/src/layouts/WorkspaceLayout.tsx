@@ -1,4 +1,4 @@
-import { Layout, Menu, Select, Space, Button, Dropdown, message, Avatar, Grid, Drawer } from 'antd'
+import { Layout, Menu, Select, Space, Button, Dropdown, message, Avatar, Grid, Drawer, ConfigProvider } from 'antd'
 import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLingui } from '@lingui/react/macro'
@@ -76,6 +76,15 @@ export function WorkspaceLayout() {
   // d en-tete, Help + langue + utilisateur n y tiennent pas (ils passent dans le menu Avatar).
   const isCompactTopbar = !screens.lg
   const [drawerOpen, setDrawerOpen] = useState(false)
+  // Écran court (1366x768, 1280x720) : à 40 px par entrée, les 13 entrées ne tiennent pas
+  // sous le logo et le pied, et Réglages restait caché (mesuré en prod). Sous 800 px de
+  // haut, entrées à 32 px : le menu tient sans défilement.
+  const [shortScreen, setShortScreen] = useState(() => window.innerHeight < 800)
+  useEffect(() => {
+    const onResize = () => setShortScreen(window.innerHeight < 800)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // Use useMatches to determine the current route path
   const matches = useMatches()
@@ -417,29 +426,31 @@ export function WorkspaceLayout() {
 
   // Wordmark + Menu items (réutilisé par le Sider desktop et le Drawer mobile)
   const sidebarMenu = (
-    <Menu
-      mode="inline"
-      selectedKeys={[selectedKey]}
-      style={{
-        // Desktop : le menu occupe l espace restant de la colonne flex et SCROLLE seul
-        // (plus de hauteur calculee en dur : le pied de sidebar n est plus superpose).
-        height: isMobile ? 'auto' : undefined,
-        flex: isMobile ? undefined : '1 1 auto',
-        minHeight: 0,
-        overflowY: isMobile ? undefined : 'auto',
-        overflowX: 'hidden',
-        borderRight: 0,
-        backgroundColor: '#F9F9F9',
-        fontSize: '13px',
-        fontWeight: 600
-      }}
-      items={loadingPermissions ? [] : menuItems}
-      theme="light"
-      onClick={() => {
-        // En mobile, refermer le Drawer quand l'utilisateur navigue
-        if (isMobile) setDrawerOpen(false)
-      }}
-    />
+    <ConfigProvider theme={{ components: { Menu: { itemHeight: !isMobile && shortScreen ? 32 : 40 } } }}>
+      <Menu
+        mode="inline"
+        selectedKeys={[selectedKey]}
+        style={{
+          // Desktop : le menu occupe l espace restant de la colonne flex et SCROLLE seul
+          // (plus de hauteur calculee en dur : le pied de sidebar n est plus superpose).
+          height: isMobile ? 'auto' : undefined,
+          flex: isMobile ? undefined : '1 1 auto',
+          minHeight: 0,
+          overflowY: isMobile ? undefined : 'auto',
+          overflowX: 'hidden',
+          borderRight: 0,
+          backgroundColor: '#F9F9F9',
+          fontSize: '13px',
+          fontWeight: 600
+        }}
+        items={loadingPermissions ? [] : menuItems}
+        theme="light"
+        onClick={() => {
+          // En mobile, refermer le Drawer quand l'utilisateur navigue
+          if (isMobile) setDrawerOpen(false)
+        }}
+      />
+    </ConfigProvider>
   )
 
   // Marge gauche du Content : 0 en mobile (Drawer overlay), sinon largeur Sider
