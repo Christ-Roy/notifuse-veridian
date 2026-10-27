@@ -245,8 +245,8 @@ func TestVeridianMessageHistoryDecorator_Update_Passthrough(t *testing.T) {
 	d := NewVeridianMessageHistoryDecorator(upstream, planRepo, pkgmocks.NewMockLogger(ctrl))
 
 	msg := &domain.MessageHistory{ID: "msg-u"}
-	upstream.EXPECT().Update(gomock.Any(), "ws", msg).Return(errors.New("up err")).Times(1)
-	err := d.Update(context.Background(), "ws", msg)
+	upstream.EXPECT().Update(gomock.Any(), "ws", "secret", msg).Return(errors.New("up err")).Times(1)
+	err := d.Update(context.Background(), "ws", "secret", msg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "up err")
 }

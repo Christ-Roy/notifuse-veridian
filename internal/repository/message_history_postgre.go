@@ -347,11 +347,19 @@ func (r *MessageHistoryRepository) Upsert(ctx context.Context, workspaceID strin
 }
 
 // Update updates an existing message history record
-func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
+func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID string, secretKey string, message *domain.MessageHistory) error {
 	// Get the workspace database connection
 	workspaceDB, err := r.workspaceRepo.GetConnection(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to get workspace connection: %w", err)
+	}
+
+	// Encrypt message data before storage, as Create and Upsert do. Without this,
+	// the template variables (magic codes, tokens) were rewritten in clear text
+	// after each send attempt.
+	encryptedMessageData, err := encryptMessageData(message.MessageData, secretKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt message data: %w", err)
 	}
 
 	// Serialize attachments to JSON for storage
@@ -401,7 +409,7 @@ func (r *MessageHistoryRepository) Update(ctx context.Context, workspaceID strin
 		message.TemplateVersion,
 		message.Channel,
 		message.StatusInfo,
-		message.MessageData,
+		encryptedMessageData,
 		message.ChannelOptions,
 		attachmentsJSON,
 		message.SentAt,

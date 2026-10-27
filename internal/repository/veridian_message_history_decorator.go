@@ -125,8 +125,8 @@ func (d *VeridianMessageHistoryDecorator) Upsert(ctx context.Context, workspaceI
 	return nil
 }
 
-func (d *VeridianMessageHistoryDecorator) Update(ctx context.Context, workspaceID string, message *domain.MessageHistory) error {
-	return d.upstream.Update(ctx, workspaceID, message)
+func (d *VeridianMessageHistoryDecorator) Update(ctx context.Context, workspaceID string, secretKey string, message *domain.MessageHistory) error {
+	return d.upstream.Update(ctx, workspaceID, secretKey, message)
 }
 
 func (d *VeridianMessageHistoryDecorator) Get(ctx context.Context, workspaceID string, secretKey string, id string) (*domain.MessageHistory, error) {

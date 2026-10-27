@@ -209,8 +209,9 @@ type MessageHistoryRepository interface {
 	// On conflict, updates failed_at, status_info, and updated_at fields
 	Upsert(ctx context.Context, workspaceID string, secretKey string, message *MessageHistory) error
 
-	// Update updates an existing message history record
-	Update(ctx context.Context, workspaceID string, message *MessageHistory) error
+	// Update updates an existing message history record.
+	// message_data is encrypted with secretKey, as in Create and Upsert.
+	Update(ctx context.Context, workspaceID string, secretKey string, message *MessageHistory) error
 
 	// Get retrieves a message history by ID
 	Get(ctx context.Context, workspaceID string, secretKey string, id string) (*MessageHistory, error)

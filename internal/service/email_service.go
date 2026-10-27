@@ -580,7 +580,7 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 		messageHistory.StatusInfo = &errorMsg
 
 		// Attempt to update the message history record
-		updateErr := s.messageRepo.Update(ctx, request.WorkspaceID, messageHistory)
+		updateErr := s.messageRepo.Update(ctx, request.WorkspaceID, workspace.Settings.SecretKey, messageHistory)
 		if updateErr != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"error":      updateErr.Error(),
@@ -605,7 +605,7 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 	sentAt := time.Now().UTC()
 	messageHistory.SentAt = &sentAt
 	messageHistory.UpdatedAt = sentAt
-	if updateErr := s.messageRepo.Update(ctx, request.WorkspaceID, messageHistory); updateErr != nil {
+	if updateErr := s.messageRepo.Update(ctx, request.WorkspaceID, workspace.Settings.SecretKey, messageHistory); updateErr != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"error":      updateErr.Error(),
 			"message_id": request.MessageID,

@@ -1054,8 +1054,8 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		// Correctif 2026-09-29 : un envoi accepté par SMTP déclenche un second
 		// appel, Update(), qui pose sent_at (cf. email_service.go SendEmailForTemplate).
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
-			DoAndReturn(func(_ context.Context, _ string, msgHistory *domain.MessageHistory) error {
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, _ string, msgHistory *domain.MessageHistory) error {
 				require.NotNil(t, msgHistory.SentAt, "a successful send must set sent_at")
 				return nil
 			})
@@ -1088,7 +1088,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 		mockMessageRepo.EXPECT().Create(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error { created = m; return nil })
 		mockSESService.EXPECT().SendEmail(gomock.Any(), gomock.Any()).Return(nil)
-		mockMessageRepo.EXPECT().Update(gomock.Any(), workspaceID, gomock.Any()).Return(nil)
+		mockMessageRepo.EXPECT().Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
 
 		notificationID := "notif-1"
 		err := emailService.SendEmailForTemplate(ctx, domain.SendEmailRequest{
@@ -1142,7 +1142,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			return nil
 		})
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
 			Return(nil)
 
 		// Call method under test with subject override
@@ -1205,7 +1205,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			return nil
 		})
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
 			Return(nil)
 
 		// Call method under test with empty subject override (should use template default)
@@ -1267,7 +1267,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			SendEmail(gomock.Any(), gomock.Any()).
 			Return(nil)
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
 			Return(nil)
 
 		// Call method under test with subject_preview override
@@ -1505,8 +1505,8 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 
 		// Setup message repository mock to update with error status
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
-			DoAndReturn(func(_ context.Context, wsID string, msgHistory *domain.MessageHistory) error {
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, wsID string, _ string, msgHistory *domain.MessageHistory) error {
 				// Verify message history error properties
 				assert.Equal(t, messageID, msgHistory.ID)
 				assert.NotNil(t, msgHistory.StatusInfo)
@@ -1575,7 +1575,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 
 		// Setup message repository mock to fail updating with error status
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
 			Return(assert.AnError)
 
 		// Logger should log both errors
@@ -1643,7 +1643,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			return nil
 		})
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
 			Return(nil)
 
 		// Call method under test with from_name override
@@ -1709,7 +1709,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			return nil
 		})
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
 			Return(nil)
 
 		// Call method under test without from_name override
@@ -1776,7 +1776,7 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 			return nil
 		})
 		mockMessageRepo.EXPECT().
-			Update(gomock.Any(), workspaceID, gomock.Any()).
+			Update(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).
 			Return(nil)
 
 		// Call method under test with empty string from_name

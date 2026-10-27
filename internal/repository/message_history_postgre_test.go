@@ -294,7 +294,7 @@ func TestMessageHistoryRepository_Update(t *testing.T) {
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
-		err := repo.Update(ctx, workspaceID, message)
+		err := repo.Update(ctx, workspaceID, testSecretKey, message)
 		require.NoError(t, err)
 	})
 
@@ -303,7 +303,7 @@ func TestMessageHistoryRepository_Update(t *testing.T) {
 			GetConnection(gomock.Any(), workspaceID).
 			Return(nil, errors.New("connection error"))
 
-		err := repo.Update(ctx, workspaceID, message)
+		err := repo.Update(ctx, workspaceID, testSecretKey, message)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to get workspace connection")
 	})
@@ -341,10 +341,83 @@ func TestMessageHistoryRepository_Update(t *testing.T) {
 			).
 			WillReturnError(errors.New("execution error"))
 
-		err := repo.Update(ctx, workspaceID, message)
+		err := repo.Update(ctx, workspaceID, testSecretKey, message)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to update message history")
 	})
+}
+
+// plaintextAbsent matches a message_data argument that must NOT carry the
+// clear-text template variables (magic codes, tokens) and must be encrypted.
+type plaintextAbsent struct {
+	t         *testing.T
+	forbidden string
+}
+
+func (p plaintextAbsent) Match(v driver.Value) bool {
+	var raw string
+	switch x := v.(type) {
+	case []byte:
+		raw = string(x)
+	case string:
+		raw = x
+	default:
+		return false
+	}
+	return !strings.Contains(raw, p.forbidden) && strings.Contains(raw, "_encrypted")
+}
+
+// TestMessageHistoryRepository_UpdateEncryptsMessageData verrouille le défaut
+// message_data : Create et Upsert chiffrent, Update écrivait les variables du
+// template (codes magiques, jetons) en clair après l'envoi.
+func TestMessageHistoryRepository_UpdateEncryptsMessageData(t *testing.T) {
+	mockWorkspaceRepo, repo, mock, db, cleanup := setupMessageHistoryTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	workspaceID := "workspace-123"
+	message := createSampleMessageHistory()
+	message.MessageData = domain.MessageData{
+		Data: map[string]interface{}{"code": "738291"},
+	}
+
+	mockWorkspaceRepo.EXPECT().
+		GetConnection(gomock.Any(), workspaceID).
+		Return(db, nil)
+
+	mock.ExpectExec(`UPDATE message_history SET`).
+		WithArgs(
+			message.ID,
+			message.ExternalID,
+			message.ContactEmail,
+			message.BroadcastID,
+			message.AutomationID,
+			message.TransactionalNotificationID,
+			message.ListID,
+			message.TemplateID,
+			message.TemplateVersion,
+			message.Channel,
+			message.StatusInfo,
+			plaintextAbsent{t: t, forbidden: "738291"}, // message_data
+			sqlmock.AnyArg(),                           // channel_options
+			sqlmock.AnyArg(),                           // attachments
+			message.SentAt,
+			message.DeliveredAt,
+			message.FailedAt,
+			message.OpenedAt,
+			message.ClickedAt,
+			message.BouncedAt,
+			message.ComplainedAt,
+			message.UnsubscribedAt,
+			sqlmock.AnyArg(), // updated_at
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err := repo.Update(ctx, workspaceID, testSecretKey, message)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+	// Le message en mémoire de l'appelant reste en clair (copie chiffrée uniquement en écriture).
+	assert.Equal(t, "738291", message.MessageData.Data["code"])
 }
 
 func TestMessageHistoryRepository_Get(t *testing.T) {
