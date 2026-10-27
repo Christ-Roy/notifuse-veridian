@@ -294,6 +294,9 @@ WORKSPACE_COMMANDS = frozenset({
     # lists
     "lists:list", "lists:get", "lists:create", "lists:update", "lists:delete",
     "lists:stats", "lists:subscribe",
+    # desabonnement (obligation legale) : statut d un contact sur une liste, cle du workspace.
+    # Scope workspace verifie cote serveur (AuthenticateUserForWorkspace : une cle d un autre workspace = 403).
+    "contactLists:updateStatus",
     # contacts
     "contacts:list", "contacts:count", "contacts:get", "contacts:upsert",
     "contacts:import", "contacts:delete", "contacts:get-by-external-id",

@@ -353,3 +353,23 @@ func TestContactListService_RemoveContactFromList(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+// Une cle API liee au workspace A ne doit JAMAIS desabonner un contact du workspace B :
+// l'auth de workspace refuse, et ni la lecture ni l'ecriture du statut ne sont tentees.
+// gomock echoue sur tout appel non attendu : l'absence d'EXPECT sur le repository est
+// la preuve que rien n'est touche.
+func TestContactListService_UpdateContactListStatus_CrossWorkspaceKeyCannotUnsubscribe(t *testing.T) {
+	_, mockAuthService, _, _, service, ctrl := setupTest(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockAuthService.EXPECT().
+		AuthenticateUserForWorkspace(ctx, "workspace-B").
+		Return(ctx, nil, nil, &domain.ErrUnauthorized{Message: "not authorized for this workspace"})
+
+	result, err := service.UpdateContactListStatus(ctx, "workspace-B", "victime@example.com", "list1", domain.ContactListStatusUnsubscribed)
+	require.Error(t, err, "cle d'un autre workspace : refus")
+	require.Nil(t, result)
+	var unauthorized *domain.ErrUnauthorized
+	require.ErrorAs(t, err, &unauthorized, "le refus d'autorisation remonte typé (403 cote handler)")
+}
