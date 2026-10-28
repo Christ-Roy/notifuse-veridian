@@ -32,6 +32,9 @@ import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer
 import SendTemplateModal from '../components/templates/SendTemplateModal'
 import { useLingui } from '@lingui/react/macro'
 import { templatesFamilyFromSearch } from '../layouts/veridian_sidebar_model'
+import { useFolderRows } from '../components/common/veridian_folder_state'
+import { folderTableColumns } from '../components/common/veridian_folder_columns'
+import type { TreeRow } from '../components/common/veridian_folder_rows'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -144,6 +147,10 @@ export function TemplatesPage() {
     if (!all) return all
     return isTransactionalFamily ? all : all.filter((tpl) => tpl.category !== 'transactional')
   }, [data, isTransactionalFamily])
+
+  // Dossiers : convention « Dossier / Nom ». Sans séparateur, `nested` est faux et la liste
+  // rendue est exactement l'ancienne.
+  const { rows: templateRows, toggle: toggleFolder, nested } = useFolderRows(templates)
 
   const hasTemplates = !isLoading && templates && templates.length > 0
 
@@ -402,13 +409,25 @@ export function TemplatesPage() {
       {isLoading ? (
         <Table columns={columns} dataSource={[]} loading={true} rowKey="id" />
       ) : hasTemplates ? (
-        <Table
-          columns={columns}
-          dataSource={templates}
-          rowKey="id"
-          pagination={{ hideOnSinglePage: true }}
-          className="border border-gray-200 rounded-md"
-        />
+        nested ? (
+          // Avec dossiers, la pagination est désactivée : les dossiers structurent déjà la liste
+          // (la pagination est côté client, tous les modèles sont chargés d'un coup).
+          <Table<TreeRow<Template>>
+            columns={folderTableColumns(columns, 'name', toggleFolder)}
+            dataSource={templateRows}
+            rowKey="key"
+            pagination={false}
+            className="border border-gray-200 rounded-md"
+          />
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={templates}
+            rowKey="id"
+            pagination={{ hideOnSinglePage: true }}
+            className="border border-gray-200 rounded-md"
+          />
+        )
       ) : (
         <div className="text-center py-12">
           {selectedCategory === 'all' || isTransactionalFamily ? (

@@ -28,6 +28,7 @@ import {
 import { ContactDetailsDrawer } from '../components/contacts/ContactDetailsDrawer'
 import { DeleteContactModal } from '../components/contacts/DeleteContactModal'
 import { SegmentsFilter } from '../components/contacts/SegmentsFilter'
+import { ContactSegmentsCell } from '../components/contacts/ContactSegmentsCell'
 import { BulkActionsBar } from '../components/contacts/BulkActionsBar'
 import { BulkActionProgressModal } from '../components/contacts/BulkActionProgressModal'
 import {
@@ -616,47 +617,11 @@ export function ContactsPage() {
       title: t`Segments`,
       key: 'segments',
       render: (_: unknown, record: Contact) => (
-        <Space direction="vertical" size={2}>
-          {record.contact_segments?.map(
-            (segment: {
-              segment_id: string
-              version?: number
-              matched_at?: string
-              computed_at?: string
-            }) => {
-              // Find segment data from segmentsData to get the name and color
-              const segmentData = segmentsData?.segments?.find((s) => s.id === segment.segment_id)
-              const segmentName = segmentData?.name || segment.segment_id
-              const segmentColor = segmentData?.color || '#1890ff'
-
-              // Format matched date if available using workspace timezone
-              const matchedDate = segment.matched_at
-                ? dayjs(segment.matched_at).tz(workspaceTimezone).format('LL - HH:mm')
-                : t`Unknown date`
-
-              const tooltipTitle = (
-                <>
-                  <div>
-                    <strong>{segmentName}</strong>
-                  </div>
-                  <div>{t`Matched on:`} {matchedDate}</div>
-                  {segment.version && <div>{t`Version:`} {segment.version}</div>}
-                  <div>
-                    <small>{t`Timezone:`} {workspaceTimezone}</small>
-                  </div>
-                </>
-              )
-
-              return (
-                <Tooltip key={segment.segment_id} title={tooltipTitle}>
-                  <Tag bordered={false} color={segmentColor} style={{ marginBottom: '2px' }}>
-                    {segmentName}
-                  </Tag>
-                </Tooltip>
-              )
-            }
-          ) || []}
-        </Space>
+        <ContactSegmentsCell
+          contactSegments={record.contact_segments}
+          segments={segmentsData?.segments}
+          timezone={workspaceTimezone}
+        />
       ),
       hidden: !visibleColumns.segments
     },

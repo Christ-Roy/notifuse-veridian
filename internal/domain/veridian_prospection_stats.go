@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -73,6 +74,17 @@ type VeridianProspectionStage struct {
 	Waiting int `json:"waiting"`
 	// ExitedAfter : sortis de la séquence après avoir reçu ce mail (n'iront pas plus loin).
 	ExitedAfter int `json:"exited_after"`
+	// TemplateIDs : identifiants des modèles (config.template_id) des nœuds email de
+	// l'étape, dédupliqués et triés. Jamais null.
+	TemplateIDs []string `json:"template_ids"`
+	// RepliesHuman : contacts distincts de la séquence ayant une réponse humaine dans la
+	// fenêtre et qui ont atteint cette étape ou une suivante (cumulatif, comme Sent).
+	RepliesHuman int `json:"replies_human"`
+	// ExitedReplied / ExitedUnsubscribed / ExitedRejected : sorties APRÈS ce mail et
+	// seulement après lui (exact, pas cumulatif), par classe de raison de sortie.
+	ExitedReplied      int `json:"exited_replied"`
+	ExitedUnsubscribed int `json:"exited_unsubscribed"`
+	ExitedRejected     int `json:"exited_rejected"`
 }
 
 // VeridianProspectionExits : sorties de séquence, par raison.
@@ -199,6 +211,15 @@ type VeridianProspectionReplyRow struct {
 	Auto  int
 }
 
+// VeridianProspectionStepReplyRow : réponses humaines distinctes (fenêtre demandée) des
+// contacts d'une séquence dont le dernier mail parti est le nœud NodeID. Un contact sans
+// mail parti n'apparaît pas.
+type VeridianProspectionStepReplyRow struct {
+	Key    string // identifiant de la séquence
+	NodeID string // dernier nœud email parti
+	Human  int
+}
+
 type VeridianProspectionListRow struct {
 	ID             string
 	Name           string
@@ -214,10 +235,12 @@ type VeridianProspectionRaw struct {
 	Progress          []VeridianProspectionProgressRow
 	AutomationReplies []VeridianProspectionReplyRow
 	AutomationSent    []VeridianProspectionKeyCount
-	Lists             []VeridianProspectionListRow
-	ListReplies       []VeridianProspectionReplyRow
-	ListSent          []VeridianProspectionKeyCount
-	RecentReplies     []VeridianRecentReply
+	// AutomationStepReplies : réponses humaines par séquence et dernier nœud email parti.
+	AutomationStepReplies []VeridianProspectionStepReplyRow
+	Lists                 []VeridianProspectionListRow
+	ListReplies           []VeridianProspectionReplyRow
+	ListSent              []VeridianProspectionKeyCount
+	RecentReplies         []VeridianRecentReply
 	// StockDistinct : nombre de PERSONNES actives jamais contactees (distinctes sur toutes
 	// les listes). Un contact present dans deux listes compte une fois. nil = non mesure :
 	// on retombe sur la somme des lignes par liste (ancien comportement, tests existants).
@@ -274,10 +297,13 @@ func veridianSequenceStages(a VeridianProspectionAutomation) veridianNodeStages 
 			out.nodeStage[n.ID] = emails
 			st := stageIdx[emails]
 			if st == nil {
-				st = &VeridianProspectionStage{Stage: emails, Label: veridianStageLabel(delay), NodeIDs: []string{}}
+				st = &VeridianProspectionStage{Stage: emails, Label: veridianStageLabel(delay), NodeIDs: []string{}, TemplateIDs: []string{}}
 				stageIdx[emails] = st
 			}
 			st.NodeIDs = append(st.NodeIDs, n.ID)
+			if tpl, _ := n.Config["template_id"].(string); tpl != "" {
+				st.TemplateIDs = append(st.TemplateIDs, tpl)
+			}
 		case NodeTypeDelay:
 			delay += veridianDelayMinutes(n.Config)
 		}
@@ -287,6 +313,8 @@ func veridianSequenceStages(a VeridianProspectionAutomation) veridianNodeStages 
 	}
 	for _, st := range stageIdx {
 		sort.Strings(st.NodeIDs)
+		sort.Strings(st.TemplateIDs)
+		st.TemplateIDs = slices.Compact(st.TemplateIDs)
 		out.stages = append(out.stages, *st)
 	}
 	sort.Slice(out.stages, func(i, j int) bool { return out.stages[i].Stage < out.stages[j].Stage })
@@ -382,6 +410,11 @@ func VeridianBuildProspectionStats(raw *VeridianProspectionRaw, since, until, no
 		sent[r.Key] = r.Count
 	}
 
+	stepReplies := map[string][]VeridianProspectionStepReplyRow{}
+	for _, r := range raw.AutomationStepReplies {
+		stepReplies[r.Key] = append(stepReplies[r.Key], r)
+	}
+
 	stagesByAutomation := map[string]veridianNodeStages{}
 	seqIndex := map[string]int{}
 	listSequences := map[string][]string{}
@@ -398,6 +431,14 @@ func VeridianBuildProspectionStats(raw *VeridianProspectionRaw, since, until, no
 			RepliesHuman: replies[a.ID].Human, RepliesAuto: replies[a.ID].Auto, SentContacts: sent[a.ID],
 		}
 		seq.ReplyRateHuman = veridianReplyRate(seq.RepliesHuman, seq.SentContacts)
+		// Réponses humaines cumulées : le contact dont le dernier mail parti est à l'étape k
+		// compte pour toutes les étapes s <= k. Nœud inconnu ou vide : jamais compté.
+		for _, sr := range stepReplies[a.ID] {
+			k := ns.nodeStage[sr.NodeID]
+			for s := 1; s <= k && s <= len(seq.Stages); s++ {
+				seq.Stages[s-1].RepliesHuman += sr.Human
+			}
+		}
 		seqIndex[a.ID] = len(out.Sequences)
 		out.Sequences = append(out.Sequences, seq)
 		if a.ListID != "" {
@@ -461,7 +502,16 @@ func VeridianBuildProspectionStats(raw *VeridianProspectionRaw, since, until, no
 				seq.Exits.Other += row.Count
 			}
 			if sentStage >= 1 && sentStage <= len(seq.Stages) {
-				seq.Stages[sentStage-1].ExitedAfter += row.Count
+				stg := &seq.Stages[sentStage-1]
+				stg.ExitedAfter += row.Count
+				switch VeridianClassifyExitReason(row.ExitReason) {
+				case VeridianExitClassReplied:
+					stg.ExitedReplied += row.Count
+				case VeridianExitClassUnsubscribed:
+					stg.ExitedUnsubscribed += row.Count
+				case VeridianExitClassRejected:
+					stg.ExitedRejected += row.Count
+				}
 			} else {
 				seq.Exits.BeforeFirstMail += row.Count
 			}

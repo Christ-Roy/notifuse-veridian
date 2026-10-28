@@ -65,6 +65,23 @@ const veridianProspectionAutomationRepliesSQL = `
 	WHERE r.replied_at >= $1 AND r.replied_at < $2
 	GROUP BY 1`
 
+// Réponses humaines de la fenêtre, par séquence et par DERNIER nœud email terminé du
+// contact dans cette séquence (même LATERAL que veridianProspectionProgressSQL). Le JOIN
+// LATERAL est interne : un contact sans aucun mail n'est jamais compté. Le domaine cumule
+// ensuite sur les étapes atteintes.
+const veridianProspectionStepRepliesSQL = `
+	SELECT ca.automation_id, le.node_id, COUNT(DISTINCT r.contact_email)
+	FROM veridian_contact_reply r
+	JOIN contact_automations ca ON lower(ca.contact_email) = r.contact_email
+	JOIN automations a ON a.id = ca.automation_id AND a.deleted_at IS NULL
+	JOIN LATERAL (
+		SELECT e.node_id FROM automation_node_executions e
+		WHERE e.contact_automation_id = ca.id AND e.node_type = 'email' AND e.action = 'completed'
+		ORDER BY e.entered_at DESC LIMIT 1
+	) le ON TRUE
+	WHERE r.reply_type = 'human' AND r.replied_at >= $1 AND r.replied_at < $2
+	GROUP BY 1, 2`
+
 const veridianProspectionAutomationSentSQL = `
 	SELECT automation_id, COUNT(DISTINCT contact_email)
 	FROM message_history
@@ -183,6 +200,9 @@ func (r *veridianProspectionStatsRepository) GetProspectionRaw(ctx context.Conte
 	if raw.AutomationReplies, err = queryProspectionReplies(ctx, tx, veridianProspectionAutomationRepliesSQL, from, to); err != nil {
 		return nil, err
 	}
+	if raw.AutomationStepReplies, err = queryProspectionStepReplies(ctx, tx, from, to); err != nil {
+		return nil, err
+	}
 	if raw.AutomationSent, err = queryProspectionCounts(ctx, tx, veridianProspectionAutomationSentSQL, from, to); err != nil {
 		return nil, err
 	}
@@ -259,6 +279,26 @@ func queryProspectionReplies(ctx context.Context, tx *sql.Tx, query string, from
 	}
 	if err := veridianCloseRows(rows); err != nil {
 		return nil, fmt.Errorf("iterate prospection replies: %w", err)
+	}
+	return out, nil
+}
+
+func queryProspectionStepReplies(ctx context.Context, tx *sql.Tx, from, to time.Time) ([]domain.VeridianProspectionStepReplyRow, error) {
+	rows, err := tx.QueryContext(ctx, veridianProspectionStepRepliesSQL, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("query prospection step replies: %w", err)
+	}
+	var out []domain.VeridianProspectionStepReplyRow
+	for rows.Next() {
+		var r domain.VeridianProspectionStepReplyRow
+		if err := rows.Scan(&r.Key, &r.NodeID, &r.Human); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("scan prospection step reply: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := veridianCloseRows(rows); err != nil {
+		return nil, fmt.Errorf("iterate prospection step replies: %w", err)
 	}
 	return out, nil
 }

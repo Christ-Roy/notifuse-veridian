@@ -39,6 +39,11 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 	mock.ExpectQuery(`(?s)FROM veridian_contact_reply r\s+JOIN contact_automations ca ON lower\(ca.contact_email\) = r.contact_email.*r.replied_at >= \$1 AND r.replied_at < \$2`).
 		WithArgs(since, until).
 		WillReturnRows(sqlmock.NewRows([]string{"a", "human", "auto"}).AddRow("seq1", 2, 1))
+	// Reponses humaines par etape : jointure au dernier mail email termine du contact dans la
+	// sequence (INNER LATERAL : pas de mail parti, pas de ligne), meme fenetre [since, until[.
+	mock.ExpectQuery(`(?s)FROM veridian_contact_reply r\s+JOIN contact_automations ca ON lower\(ca.contact_email\) = r.contact_email\s+JOIN automations a ON a.id = ca.automation_id AND a.deleted_at IS NULL\s+JOIN LATERAL \(.*e.node_type = 'email' AND e.action = 'completed'.*\) le ON TRUE\s+WHERE r.reply_type = 'human' AND r.replied_at >= \$1 AND r.replied_at < \$2\s+GROUP BY 1, 2`).
+		WithArgs(since, until).
+		WillReturnRows(sqlmock.NewRows([]string{"a", "node", "human"}).AddRow("seq1", "j0", 1).AddRow("seq1", "j4", 1))
 	// Envois de la fenetre : le transactionnel est ecarte.
 	mock.ExpectQuery(`(?s)FROM message_history\s+WHERE automation_id IS NOT NULL AND sent_at >= \$1 AND sent_at < \$2 AND veridian_message_type IS DISTINCT FROM 'transactional' AND transactional_notification_id IS NULL`).
 		WithArgs(since, until).
@@ -70,6 +75,9 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 	require.Len(t, raw.Progress, 2)
 	assert.Equal(t, "j0", raw.Progress[0].LastEmailNodeID)
 	assert.Equal(t, domain.VeridianProspectionReplyRow{Key: "seq1", Human: 2, Auto: 1}, raw.AutomationReplies[0])
+	require.Len(t, raw.AutomationStepReplies, 2)
+	assert.Equal(t, domain.VeridianProspectionStepReplyRow{Key: "seq1", NodeID: "j0", Human: 1}, raw.AutomationStepReplies[0])
+	assert.Equal(t, domain.VeridianProspectionStepReplyRow{Key: "seq1", NodeID: "j4", Human: 1}, raw.AutomationStepReplies[1])
 	assert.Equal(t, 40, raw.AutomationSent[0].Count)
 	assert.Equal(t, 60, raw.Lists[0].NeverContacted)
 	assert.Equal(t, "list1", raw.ListReplies[0].Key)
@@ -83,6 +91,9 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 	require.Len(t, stats.Sequences, 1)
 	assert.Equal(t, 5, stats.Sequences[0].Stages[0].Queued)
 	assert.Equal(t, 2, stats.Sequences[0].Exits.Replied)
+	assert.Equal(t, 2, stats.Sequences[0].Stages[0].RepliesHuman, "cumul : J0 + J+4")
+	assert.Equal(t, 1, stats.Sequences[0].Stages[1].RepliesHuman)
+	assert.Equal(t, 2, stats.Sequences[0].Stages[0].ExitedReplied)
 	require.Len(t, stats.RecentHumanReplies, 1)
 	assert.Equal(t, "ACME SARL", stats.RecentHumanReplies[0].Company)
 }
@@ -118,6 +129,24 @@ func TestVeridianProspectionStatsRepository_Errors(t *testing.T) {
 		mock.ExpectRollback()
 		_, err := NewVeridianProspectionStatsRepository(workspaceRepo).GetProspectionRaw(context.Background(), "ws1", time.Time{}, time.Time{})
 		require.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("la requete des reponses par etape en echec fait echouer l'appel", func(t *testing.T) {
+		db, mock, cleanup := setupMockDB(t)
+		defer cleanup()
+		workspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+		workspaceRepo.EXPECT().GetConnection(gomock.Any(), "ws1").Return(db, nil)
+		mock.ExpectBegin()
+		mock.ExpectQuery(`FROM automations\s+WHERE`).WillReturnRows(sqlmock.NewRows([]string{"id", "name", "status", "list_id", "root", "nodes"}))
+		mock.ExpectQuery(`FROM contact_automations ca`).WillReturnRows(sqlmock.NewRows([]string{"a", "status", "reason", "current", "last", "n"}))
+		mock.ExpectQuery(`FROM veridian_contact_reply r\s+JOIN contact_automations ca ON lower\(ca.contact_email\) = r.contact_email\s+JOIN automations a ON a.id = ca.automation_id AND a.deleted_at IS NULL\s+WHERE`).
+			WillReturnRows(sqlmock.NewRows([]string{"a", "human", "auto"}))
+		mock.ExpectQuery(`JOIN LATERAL`).WillReturnError(errors.New("boom"))
+		mock.ExpectRollback()
+		_, err := NewVeridianProspectionStatsRepository(workspaceRepo).GetProspectionRaw(context.Background(), "ws1", time.Time{}, time.Time{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "step replies")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 

@@ -188,6 +188,122 @@ func TestVeridianBuildProspectionStats_StockCountsPeopleNotSubscriptions(t *test
 	assert.Equal(t, 50, out.Segments[1].NeverContacted)
 }
 
+// Campagnes lisibles : template_ids par étape, dédupliqués, triés, sans chaîne vide.
+func TestVeridianSequenceStages_TemplateIDs(t *testing.T) {
+	nodes := []AutomationNode{
+		{ID: "split", Type: NodeTypeABTest, Config: map[string]interface{}{"variants": []interface{}{
+			map[string]interface{}{"id": "A", "next_node_id": "j0a"},
+			map[string]interface{}{"id": "B", "next_node_id": "j0b"},
+			map[string]interface{}{"id": "C", "next_node_id": "j0c"},
+		}}},
+		{ID: "j0a", Type: NodeTypeEmail, Config: map[string]interface{}{"template_id": "tplB"}, NextNodeID: prospectionNext("wait1")},
+		{ID: "j0b", Type: NodeTypeEmail, Config: map[string]interface{}{"template_id": "tplA"}, NextNodeID: prospectionNext("wait1")},
+		{ID: "j0c", Type: NodeTypeEmail, Config: map[string]interface{}{"template_id": "tplB"}, NextNodeID: prospectionNext("wait1")},
+		{ID: "wait1", Type: NodeTypeDelay, Config: map[string]interface{}{"unit": "days", "duration": float64(4)}, NextNodeID: prospectionNext("j4")},
+		{ID: "j4", Type: NodeTypeEmail, NextNodeID: prospectionNext("wait2")}, // pas de config du tout
+		{ID: "wait2", Type: NodeTypeDelay, Config: map[string]interface{}{"unit": "days", "duration": float64(6)}, NextNodeID: prospectionNext("j10")},
+		{ID: "j10", Type: NodeTypeEmail, Config: map[string]interface{}{"template_id": ""}}, // vide : ignoré
+	}
+	ns := veridianSequenceStages(VeridianProspectionAutomation{ID: "a", RootNodeID: "split", Nodes: nodes})
+	require.Len(t, ns.stages, 3)
+	assert.Equal(t, []string{"tplA", "tplB"}, ns.stages[0].TemplateIDs, "dédupliqué et trié")
+	assert.NotNil(t, ns.stages[1].TemplateIDs, "jamais nil")
+	assert.Empty(t, ns.stages[1].TemplateIDs, "nœud sans template_id : pas de chaîne vide")
+	assert.NotNil(t, ns.stages[2].TemplateIDs)
+	assert.Empty(t, ns.stages[2].TemplateIDs, "template_id vide : pas de chaîne vide")
+
+	// Valeur non textuelle : ignorée, sans panique.
+	odd := []AutomationNode{{ID: "e", Type: NodeTypeEmail, Config: map[string]interface{}{"template_id": float64(12)}}}
+	ns = veridianSequenceStages(VeridianProspectionAutomation{RootNodeID: "e", Nodes: odd})
+	require.Len(t, ns.stages, 1)
+	assert.Empty(t, ns.stages[0].TemplateIDs)
+	assert.NotNil(t, ns.stages[0].TemplateIDs)
+}
+
+// Réponses humaines cumulées par étape et sorties par classe après l'étape exacte.
+func TestVeridianBuildProspectionStats_StageRepliesAndExitClasses(t *testing.T) {
+	nodes := prospectionTestNodes("devenir")
+	raw := &VeridianProspectionRaw{
+		Automations: []VeridianProspectionAutomation{{ID: "devenir", RootNodeID: "split", Nodes: nodes}},
+		Progress: []VeridianProspectionProgressRow{
+			{AutomationID: "devenir", Status: "active", CurrentNodeID: "j4", LastEmailNodeID: "j0a", Count: 50},
+			{AutomationID: "devenir", Status: "active", CurrentNodeID: "j10", LastEmailNodeID: "j4", Count: 20},
+			{AutomationID: "devenir", Status: "completed", LastEmailNodeID: "j10", Count: 10},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "replied", LastEmailNodeID: "j0a", Count: 9},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "replied_manual_20261006", LastEmailNodeID: "j0b", Count: 1},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "replied", LastEmailNodeID: "j4", Count: 2},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "bounced", LastEmailNodeID: "j0b", Count: 3},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "unsubscribed", LastEmailNodeID: "j0b", Count: 4},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "unsubscribed", LastEmailNodeID: "j4", Count: 5},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "bounced", LastEmailNodeID: "j10", Count: 6},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "manual", LastEmailNodeID: "j4", Count: 7},
+			// Sorti sur le nœud de son mail encore en file : aucun mail parti, aucune classe d'étape.
+			{AutomationID: "devenir", Status: "exited", ExitReason: "replied", CurrentNodeID: "j0a", LastEmailNodeID: "j0a", Count: 8},
+		},
+		AutomationStepReplies: []VeridianProspectionStepReplyRow{
+			{Key: "devenir", NodeID: "j0a", Human: 1},
+			{Key: "devenir", NodeID: "j0b", Human: 2},
+			{Key: "devenir", NodeID: "j4", Human: 4},
+			{Key: "devenir", NodeID: "j10", Human: 8},
+			{Key: "devenir", NodeID: "", Human: 100},        // contact sans mail parti : jamais compté
+			{Key: "devenir", NodeID: "fantome", Human: 200}, // nœud inconnu de la séquence : ignoré
+			{Key: "autre", NodeID: "j0a", Human: 400},       // autre séquence : ignorée
+		},
+	}
+	out := VeridianBuildProspectionStats(raw, time.Time{}, time.Time{}, time.Now())
+	require.Len(t, out.Sequences, 1)
+	st := out.Sequences[0].Stages
+	require.Len(t, st, 3)
+
+	// Cumul : l'étape s reçoit les réponses dont le dernier mail parti est à l'étape k >= s.
+	assert.Equal(t, 1+2+4+8, st[0].RepliesHuman)
+	assert.Equal(t, 4+8, st[1].RepliesHuman)
+	assert.Equal(t, 8, st[2].RepliesHuman)
+
+	// Sorties par classe : exactes à l'étape du dernier mail parti, pas cumulées.
+	assert.Equal(t, 9+1, st[0].ExitedReplied)
+	assert.Equal(t, 3, st[0].ExitedRejected)
+	assert.Equal(t, 4, st[0].ExitedUnsubscribed)
+	assert.Equal(t, 9+1+3+4, st[0].ExitedAfter, "exited_after reste le total toutes classes")
+	assert.Equal(t, 2, st[1].ExitedReplied)
+	assert.Equal(t, 0, st[1].ExitedRejected)
+	assert.Equal(t, 5, st[1].ExitedUnsubscribed)
+	assert.Equal(t, 2+5+7, st[1].ExitedAfter, "la sortie « manual » est dans le total mais dans aucune classe")
+	assert.Equal(t, 0, st[2].ExitedReplied)
+	assert.Equal(t, 6, st[2].ExitedRejected)
+	assert.Equal(t, 0, st[2].ExitedUnsubscribed)
+	assert.Equal(t, 6, st[2].ExitedAfter)
+
+	// La sémantique des champs existants ne bouge pas.
+	assert.Equal(t, 50+20+10+9+1+2+3+4+5+6+7, st[0].Sent)
+	assert.Equal(t, 8, out.Sequences[0].Exits.BeforeFirstMail)
+}
+
+// Contrat JSON : les nouveaux champs sont toujours présents, tableaux jamais null.
+func TestVeridianBuildProspectionStats_StageNewFieldsJSON(t *testing.T) {
+	raw := &VeridianProspectionRaw{
+		Automations: []VeridianProspectionAutomation{{ID: "a", RootNodeID: "e1", Nodes: []AutomationNode{{ID: "e1", Type: NodeTypeEmail}}}},
+	}
+	out := VeridianBuildProspectionStats(raw, time.Time{}, time.Time{}, time.Now())
+	body, err := json.Marshal(out)
+	require.NoError(t, err)
+	var decoded struct {
+		Sequences []struct {
+			Stages []map[string]interface{} `json:"stages"`
+		} `json:"sequences"`
+	}
+	require.NoError(t, json.Unmarshal(body, &decoded))
+	require.Len(t, decoded.Sequences, 1)
+	require.Len(t, decoded.Sequences[0].Stages, 1)
+	stage := decoded.Sequences[0].Stages[0]
+	assert.Equal(t, []interface{}{}, stage["template_ids"], "[] et non null")
+	for _, k := range []string{"replies_human", "exited_replied", "exited_unsubscribed", "exited_rejected"} {
+		v, present := stage[k]
+		assert.True(t, present, k)
+		assert.Equal(t, float64(0), v, k)
+	}
+}
+
 func TestVeridianProspectionStatsRequest_JSONShape(t *testing.T) {
 	out, err := json.Marshal(VeridianProspectionStatsRequest{WorkspaceID: "ws", Since: time.Now(), Until: time.Now()})
 	require.NoError(t, err)

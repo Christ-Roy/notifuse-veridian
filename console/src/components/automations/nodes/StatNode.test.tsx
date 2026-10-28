@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import type { NodeProps } from '@xyflow/react'
@@ -50,5 +50,25 @@ describe('StatNode : noeud email (LOT 1)', () => {
     expect(valueOf('Completed')).toBe('3')
     expect(screen.queryByText('Queued')).toBeNull()
     expect(screen.queryByText('Sent')).toBeNull()
+  })
+})
+
+describe('StatNode : nœud email du flux (modèle, objet, réponses)', () => {
+  it('affiche l objet et les réponses de l étape, et ouvre le tiroir du modèle', () => {
+    const onOpen = vi.fn()
+    renderNode({
+      nodeType: 'email',
+      label: 'J+5 · Relance 1',
+      subtitle: 'Votre site en une semaine',
+      repliesHuman: 6,
+      replyRate: 8.1,
+      stats: { node_id: 'j5', node_type: 'email', entered: 80, completed: 74, queued: 0, failed: 2, skipped: 0 },
+      onOpen
+    })
+    expect(screen.getByText('Votre site en une semaine')).toBeInTheDocument()
+    expect(screen.getByText('J+5 · Relance 1')).toBeInTheDocument()
+    expect(screen.getByText('8.1%')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open template' }))
+    expect(onOpen).toHaveBeenCalledTimes(1)
   })
 })

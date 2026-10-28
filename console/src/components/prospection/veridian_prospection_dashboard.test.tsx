@@ -34,6 +34,7 @@ vi.mock('../analytics/veridian_engagement_by_class', () => ({
 }))
 vi.mock('../../services/api/analytics', () => ({ analyticsService: { query: vi.fn() } }))
 vi.mock('../../services/api/veridian_email_profiles', () => ({ emailProfilesOverviewService: { get: vi.fn() } }))
+vi.mock('../../services/api/template', () => ({ templatesApi: { list: vi.fn(async () => ({ templates: [] })) } }))
 vi.mock('../../services/api/veridian_prospection', () => ({ prospectionStatsService: { get: vi.fn() } }))
 vi.mock('../../services/api/veridian_reply_stats', () => ({ replyStatsApi: { get: vi.fn() } }))
 

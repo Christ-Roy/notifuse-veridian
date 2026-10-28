@@ -31,6 +31,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ImportContactsToListButton } from '../components/lists/ImportContactsToListButton'
 import { ListStats } from '../components/lists/ListStats'
 import { useLingui } from '@lingui/react/macro'
+import { FolderToggleButton } from '../components/common/veridian_folder_tree'
+import { FOLDER_INDENT_PX } from '../components/common/veridian_folder_columns'
+import { useFolderRows } from '../components/common/veridian_folder_state'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -143,11 +146,123 @@ export function ListsPage() {
     message.success(t`Lists refreshed`)
   }
 
+  // Dossiers : convention « Dossier / Nom ». Sans séparateur, `nested` est faux et la page
+  // rend exactement les mêmes cartes qu'avant (aucune pagination côté liste : tout est chargé).
+  const { rows: listRows, toggle: toggleFolder, nested } = useFolderRows(data?.lists)
+
   const hasLists = !isLoading && data?.lists && data.lists.length > 0
 
   if (!workspace) {
     return <div>{t`Loading...`}</div>
   }
+
+  const renderListCard = (list: List, label: string, depth = 0) => (
+    <Card
+      title={
+        <div className="flex items-center justify-between">
+          <Text strong title={label !== list.name ? list.name : undefined}>
+            {label}
+          </Text>
+        </div>
+      }
+      extra={
+        <Space>
+          <Tooltip
+            title={
+              !permissions?.lists?.write
+                ? t`You don't have write permission for lists`
+                : t`Delete List`
+            }
+          >
+            <Button
+              type="text"
+              size="small"
+              onClick={() => openDeleteModal(list)}
+              disabled={!permissions?.lists?.write}
+            >
+              <FontAwesomeIcon icon={faTrashCan} style={{ opacity: 0.7 }} />
+            </Button>
+          </Tooltip>
+          <Tooltip
+            title={
+              !permissions?.lists?.write
+                ? t`You don't have write permission for lists`
+                : t`Edit List`
+            }
+          >
+            <div>
+              <CreateListDrawer
+                workspaceId={workspaceId}
+                list={list}
+                buttonProps={{
+                  type: 'text',
+                  size: 'small',
+                  buttonContent: (
+                    <FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />
+                  ),
+                  disabled: !permissions?.lists?.write
+                }}
+              />
+            </div>
+          </Tooltip>
+          <Tooltip
+            title={
+              !permissions?.lists?.write
+                ? t`You don't have write permission for lists`
+                : undefined
+            }
+          >
+            <div>
+              <ImportContactsToListButton
+                list={list}
+                workspaceId={workspaceId}
+                lists={data?.lists ?? []}
+                disabled={!permissions?.lists?.write}
+              />
+            </div>
+          </Tooltip>
+        </Space>
+      }
+      key={list.id}
+      style={depth > 0 ? { marginLeft: depth * FOLDER_INDENT_PX } : undefined}
+    >
+      <ListStats workspaceId={workspaceId} listId={list.id} />
+
+      <Divider />
+
+      <Descriptions size="small" column={2}>
+        <Descriptions.Item label={t`ID`}>{list.id}</Descriptions.Item>
+
+        <Descriptions.Item label={t`Description`}>{list.description}</Descriptions.Item>
+        <Descriptions.Item label={t`Visibility`}>
+          {list.is_public ? (
+            <Tag bordered={false} color="green">
+              {t`Public`}
+            </Tag>
+          ) : (
+            <Tag bordered={false} color="volcano">
+              {t`Private`}
+            </Tag>
+          )}
+        </Descriptions.Item>
+
+        {/* Double Opt-in Template */}
+        <Descriptions.Item label={t`Double Opt-in Template`}>
+          {list.double_optin_template ? (
+            <Space>
+              <Check size={16} className="text-green-500 mt-1" />
+              <TemplatePreviewButton
+                templateRef={list.double_optin_template}
+                workspace={workspace}
+              />
+            </Space>
+          ) : (
+            <X size={16} className="text-slate-500 mt-1" />
+          )}
+        </Descriptions.Item>
+      </Descriptions>
+    </Card>
+  )
 
   return (
     <div className="p-6">
@@ -192,110 +307,17 @@ export function ListsPage() {
         </Row>
       ) : hasLists ? (
         <Space direction="vertical" size="large">
-          {data.lists.map((list: List) => (
-            <Card
-              title={
-                <div className="flex items-center justify-between">
-                  <Text strong>{list.name}</Text>
-                </div>
-              }
-              extra={
-                <Space>
-                  <Tooltip
-                    title={
-                      !permissions?.lists?.write
-                        ? t`You don't have write permission for lists`
-                        : t`Delete List`
-                    }
-                  >
-                    <Button
-                      type="text"
-                      size="small"
-                      onClick={() => openDeleteModal(list)}
-                      disabled={!permissions?.lists?.write}
-                    >
-                      <FontAwesomeIcon icon={faTrashCan} style={{ opacity: 0.7 }} />
-                    </Button>
-                  </Tooltip>
-                  <Tooltip
-                    title={
-                      !permissions?.lists?.write
-                        ? t`You don't have write permission for lists`
-                        : t`Edit List`
-                    }
-                  >
-                    <div>
-                      <CreateListDrawer
-                        workspaceId={workspaceId}
-                        list={list}
-                        buttonProps={{
-                          type: 'text',
-                          size: 'small',
-                          buttonContent: (
-                            <FontAwesomeIcon icon={faPenToSquare} style={{ opacity: 0.7 }} />
-                          ),
-                          disabled: !permissions?.lists?.write
-                        }}
-                      />
-                    </div>
-                  </Tooltip>
-                  <Tooltip
-                    title={
-                      !permissions?.lists?.write
-                        ? t`You don't have write permission for lists`
-                        : undefined
-                    }
-                  >
-                    <div>
-                      <ImportContactsToListButton
-                        list={list}
-                        workspaceId={workspaceId}
-                        lists={data.lists}
-                        disabled={!permissions?.lists?.write}
-                      />
-                    </div>
-                  </Tooltip>
-                </Space>
-              }
-              key={list.id}
-            >
-              <ListStats workspaceId={workspaceId} listId={list.id} />
-
-              <Divider />
-
-              <Descriptions size="small" column={2}>
-                <Descriptions.Item label={t`ID`}>{list.id}</Descriptions.Item>
-
-                <Descriptions.Item label={t`Description`}>{list.description}</Descriptions.Item>
-                <Descriptions.Item label={t`Visibility`}>
-                  {list.is_public ? (
-                    <Tag bordered={false} color="green">
-                      {t`Public`}
-                    </Tag>
-                  ) : (
-                    <Tag bordered={false} color="volcano">
-                      {t`Private`}
-                    </Tag>
-                  )}
-                </Descriptions.Item>
-
-                {/* Double Opt-in Template */}
-                <Descriptions.Item label={t`Double Opt-in Template`}>
-                  {list.double_optin_template ? (
-                    <Space>
-                      <Check size={16} className="text-green-500 mt-1" />
-                      <TemplatePreviewButton
-                        templateRef={list.double_optin_template}
-                        workspace={workspace}
-                      />
-                    </Space>
-                  ) : (
-                    <X size={16} className="text-slate-500 mt-1" />
-                  )}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
-          ))}
+          {nested
+            ? listRows.map((row) =>
+                row.kind === 'folder' ? (
+                  <div key={row.key} style={{ paddingLeft: row.depth * FOLDER_INDENT_PX }}>
+                    <FolderToggleButton row={row} onToggle={toggleFolder} />
+                  </div>
+                ) : (
+                  renderListCard(row.item, row.label, row.depth)
+                )
+              )
+            : data.lists.map((list: List) => renderListCard(list, list.name))}
         </Space>
       ) : (
         <div className="text-center py-12">

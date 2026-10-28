@@ -22,6 +22,8 @@ import { AutomationFlowViewer } from './AutomationFlowViewer'
 import { automationApi } from '../../services/api/automation'
 import type { Automation, AutomationStatus, AutomationNodeStats } from '../../services/api/automation'
 import type { UserPermissions } from '../../services/api/workspace'
+import type { Workspace } from '../../services/api/types'
+import type { Template } from '../../services/api/template'
 import type { List } from '../../services/api/list'
 import type { Segment } from '../../services/api/segment'
 
@@ -33,6 +35,9 @@ interface AutomationCardProps {
   segments?: Segment[]
   permissions: UserPermissions | null
   workspaceId: string
+  // Nommer les nœuds email et ouvrir l'éditeur de modèle depuis le flux
+  workspace?: Workspace
+  templates?: Template[]
   onActivate: (automation: Automation) => void
   onPause: (automation: Automation) => void
   onDelete: (automation: Automation) => void
@@ -45,6 +50,8 @@ export const AutomationCard: React.FC<AutomationCardProps> = ({
   segments = [],
   permissions,
   workspaceId,
+  workspace,
+  templates,
   onActivate,
   onPause,
   onDelete,
@@ -326,6 +333,9 @@ export const AutomationCard: React.FC<AutomationCardProps> = ({
               nodeStats={nodeStats}
               loading={statsLoading}
               onHeightCalculated={setFlowHeight}
+              workspace={workspace}
+              templates={templates}
+              canEditTemplates={!!permissions?.templates?.write}
             />
           </div>
         </div>

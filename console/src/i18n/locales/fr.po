@@ -140,6 +140,11 @@ msgstr "{0} réponses humaines"
 msgid "{0} in {1}"
 msgstr "{0} dans {1}"
 
+#. placeholder {0}: row.count
+#: src/components/common/veridian_folder_tree.tsx
+msgid "{0} items"
+msgstr "{0} éléments"
+
 #. placeholder {0}: totalRows.toLocaleString()
 #. placeholder {1}: successCount.toLocaleString()
 #. placeholder {2}: failureCount.toLocaleString()
@@ -440,6 +445,10 @@ msgstr "0 contacts"
 #: src/pages/BroadcastsPage.tsx
 msgid "0 opens out of 0 recipients"
 msgstr "0 ouvertures sur 0 destinataires"
+
+#: src/components/common/veridian_folder_tree.tsx
+msgid "1 item"
+msgstr "1 élément"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "1 sender (no rotation)"
@@ -1600,6 +1609,10 @@ msgstr "Hook avant création utilisateur"
 msgid "Belonging to at least one of the following segments"
 msgstr "Appartenant à au moins un des segments suivants"
 
+#: src/components/prospection/veridian_prospection_performance.tsx
+msgid "Best"
+msgstr "Meilleur"
+
 #: src/components/email_builder/blocks/MjTitleBlock.tsx
 msgid "Best practices:"
 msgstr "Bonnes pratiques :"
@@ -1752,6 +1765,10 @@ msgstr "Type de rebond"
 msgid "Bounced"
 msgstr "Rejeté"
 
+#: src/components/prospection/veridian_prospection_performance.tsx
+msgid "Bounces"
+msgstr "Rebonds"
+
 #: src/components/automations/AddNodeButton.tsx
 #: src/components/automations/nodes/BranchNode.tsx
 #: src/components/automations/nodes/StatNode.tsx
@@ -1895,6 +1912,10 @@ msgstr "Taille du bouton"
 #: src/pages/SendQueuePage.tsx
 msgid "By reason"
 msgstr "Par raison"
+
+#: src/components/prospection/veridian_prospection_performance.tsx
+msgid "Campaign performance"
+msgstr "Performance des campagnes"
 
 #: src/components/automations/AutomationCard.tsx
 #: src/components/automations/AutomationCard.tsx
@@ -3537,6 +3558,10 @@ msgstr "{deletedCount} élément(s) supprimé(s)"
 msgid "Deleted {deletedCount}, failed {failedCount}"
 msgstr "{deletedCount} supprimé(s), {failedCount} échoué(s)"
 
+#: src/components/prospection/veridian_prospection_performance.tsx
+msgid "Deleted template"
+msgstr "Modèle supprimé"
+
 #. placeholder {0}: stats.count_failed
 #: src/components/analytics/EmailMetricsChart.tsx
 msgid "Deliberate exclusions (invalid address, excluded provider class): breakdown unavailable, total failures: {0}"
@@ -3602,6 +3627,10 @@ msgstr "Détail par automatisation, nœud, raison et profil nominal"
 #: src/components/sending_profiles/veridian_capacity_block.tsx
 msgid "Detail by provider"
 msgstr "Détail par fournisseur"
+
+#: src/components/automations/AutomationFlowViewer.tsx
+msgid "Details"
+msgstr "Détail"
 
 #: src/components/settings/LogoInput.tsx
 msgid "Detect from website URL"
@@ -3748,6 +3777,10 @@ msgstr "Déposez les fichiers ici pour les envoyer"
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
 msgid "Duplicate: a later line has the same email address (that one is imported)"
 msgstr "Doublon : une ligne plus loin porte la même adresse e-mail (c'est celle-là qui est importée)"
+
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "Duration"
+msgstr "Durée"
 
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx
 msgid "e.g. cta_button"
@@ -3928,6 +3961,11 @@ msgstr "Modifier le segment"
 #~ msgid "Edit sending profile"
 #~ msgstr "Modifier le profil d'envoi"
 
+#: src/components/automations/veridian_flow_node_drawer.tsx
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "Edit template"
+msgstr "Modifier le modèle"
+
 #: src/components/templates/CreateTemplateDrawer.tsx
 #: src/pages/TemplatesPage.tsx
 msgid "Edit Template"
@@ -3985,9 +4023,11 @@ msgstr "email"
 
 #: src/components/analytics/NewContactsTable.tsx
 #: src/components/automations/AddNodeButton.tsx
+#: src/components/automations/AutomationFlowViewer.tsx
 #: src/components/automations/config/TriggerConfigForm.tsx
 #: src/components/automations/nodes/EmailNode.tsx
 #: src/components/automations/nodes/StatNode.tsx
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/contacts/BulkUpdateDrawer.tsx
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
@@ -4204,6 +4244,7 @@ msgid "Engagement by provider class"
 msgstr "Engagement par classe de fournisseur"
 
 #: src/components/automations/AutomationCard.tsx
+#: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/prospection/veridian_prospection_sequences.tsx
 msgid "Enrolled"
 msgstr "Inscrit"
@@ -4625,6 +4666,7 @@ msgstr "échoué"
 #: src/components/automations/nodes/StatNode.tsx
 #: src/components/automations/nodes/StatNode.tsx
 #: src/components/automations/nodes/StatNode.tsx
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/broadcasts/BroadcastStats.tsx
 #: src/components/contacts/BulkActionProgressModal.tsx
 #: src/components/contacts/BulkActionProgressModal.tsx
@@ -5793,7 +5835,10 @@ msgid "https://fonts.googleapis.com/css?family=... or {liquidFontUrl}"
 msgstr "https://fonts.googleapis.com/css?family=... ou {liquidFontUrl}"
 
 #: src/components/analytics/veridian_engagement_by_class.tsx
+#: src/components/automations/nodes/StatNode.tsx
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/prospection/veridian_prospection_dashboard.tsx
+#: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 msgid "Human replies"
@@ -6466,6 +6511,10 @@ msgstr "7 derniers jours"
 msgid "Last decision"
 msgstr "Dernière décision"
 
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "Last edited"
+msgstr "Dernière modification"
+
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Last error"
 msgstr "Dernière erreur"
@@ -6563,6 +6612,10 @@ msgstr "a quitté"
 #: src/components/email_builder/ui/PaddingInput.tsx
 msgid "Left"
 msgstr "Gauche"
+
+#: src/components/prospection/veridian_prospection_performance.tsx
+msgid "Left on reply"
+msgstr "Sorties sur réponse"
 
 #: src/components/email_builder/blocks/MjGroupBlock.tsx
 #: src/components/email_builder/blocks/MjSectionBlock.tsx
@@ -6928,7 +6981,7 @@ msgstr "Fournisseur d'email marketing requis"
 msgid "Matched"
 msgstr "Correspondant"
 
-#: src/pages/ContactsPage.tsx
+#: src/components/contacts/ContactSegmentsCell.tsx
 msgid "Matched on:"
 msgstr "Correspondance sur :"
 
@@ -7130,6 +7183,7 @@ msgstr "mode : {0}"
 
 #: src/components/integrations/LLMIntegration.tsx
 #: src/components/integrations/LLMIntegration.tsx
+#: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/settings/Integrations.tsx
 msgid "Model"
 msgstr "Modèle"
@@ -7487,6 +7541,10 @@ msgstr "Aucun aperçu disponible ou le modèle est vide."
 msgid "No preview available..."
 msgstr "Aucun aperçu disponible..."
 
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "No preview yet: open the template to render it."
+msgstr "Pas encore d'aperçu : ouvrez le modèle pour le générer."
+
 #: src/components/send_queue/veridian_queue_groups.tsx
 msgid "No profile"
 msgstr "Aucun profil"
@@ -7741,6 +7799,7 @@ msgstr "Hors rotation"
 msgid "Not measured"
 msgstr "Non mesuré"
 
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/contacts/InlineEditableField.tsx
 #: src/components/settings/GeneralSettings.tsx
 #: src/components/settings/GeneralSettings.tsx
@@ -7944,6 +8003,11 @@ msgstr "Taux d'ouverture"
 #: src/components/settings/Integrations.tsx
 msgid "Open Sending profiles"
 msgstr "Ouvrir les profils d'envoi"
+
+#: src/components/automations/AutomationFlowViewer.tsx
+#: src/components/automations/nodes/StatNode.tsx
+msgid "Open template"
+msgstr "Voir le modèle"
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Open the app passwords page and create a password named “Notifuse”."
@@ -8396,6 +8460,7 @@ msgstr "Choisissez les classes de fournisseurs de messagerie que vous ne voulez 
 msgid "pixel OFF by default"
 msgstr "pixel désactivé par défaut"
 
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/pages/TemplatesPage.tsx
 msgid "Plain text"
 msgstr "Texte brut"
@@ -8695,6 +8760,7 @@ msgstr "Évite que deux emails identiques partent vers le même fournisseur dans
 msgid "preview"
 msgstr "aperçu"
 
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/common/ImageURLInput.tsx
 #: src/components/segment/button_upsert.tsx
 #: src/components/segment/button_upsert.tsx
@@ -8716,6 +8782,11 @@ msgstr "Prévisualiser le message"
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx
 msgid "Preview Mode Required"
 msgstr "Mode aperçu requis"
+
+#. placeholder {0}: template.name
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "Preview of {0}"
+msgstr "Aperçu de {0}"
 
 #: src/components/segment/button_upsert.tsx
 msgid "Preview Results"
@@ -8945,6 +9016,7 @@ msgid "Queue entry"
 msgstr "Entrée de la file"
 
 #: src/components/automations/nodes/StatNode.tsx
+#: src/components/automations/veridian_flow_node_drawer.tsx
 msgid "Queued"
 msgstr "En file"
 
@@ -9018,6 +9090,10 @@ msgstr "Revérifier"
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "Re-run deliverability score"
 msgstr "Relancer le score de délivrabilité"
+
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "Reached at"
+msgstr "Arrivée à l'étape"
 
 #: src/components/settings/EditPermissionsModal.tsx
 #: src/components/settings/WorkspaceMembers.tsx
@@ -9368,10 +9444,17 @@ msgstr "Boîte de réponses et rebonds (IMAP)"
 msgid "Reply Branch"
 msgstr "Branche de réponse"
 
+#: src/components/automations/nodes/StatNode.tsx
+#: src/components/automations/veridian_flow_node_drawer.tsx
+#: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 msgid "Reply rate"
 msgstr "Taux de réponse"
+
+#: src/components/prospection/veridian_prospection_performance.tsx
+msgid "Reply rate = human replies / sent of the step. Best is named only from {MIN_SAMPLE_FOR_RATE} sends per step, within the same sequence."
+msgstr "Taux de réponse = réponses humaines / envois de l'étape. Le meilleur n'est désigné qu'à partir de {MIN_SAMPLE_FOR_RATE} envois par étape, au sein d'une même séquence."
 
 #: src/components/templates/CreateTemplateDrawer.tsx
 #: src/components/templates/TemplatePreviewDrawer.tsx
@@ -10444,10 +10527,12 @@ msgstr "envoyé"
 #: src/components/analytics/veridian_engagement_by_class.tsx
 #: src/components/automations/config/TriggerConfigForm.tsx
 #: src/components/automations/nodes/StatNode.tsx
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/broadcasts/BroadcastStats.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTable.tsx
+#: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/send_queue/veridian_queue_labels.ts
 #: src/components/send_queue/veridian_queue_labels.ts
 #: src/components/sending_profiles/veridian_capacity_block.tsx
@@ -10496,6 +10581,7 @@ msgstr "Envoyés : contacts à qui ce mail est parti. Exclusions : sortis avant 
 msgid "Separate sides"
 msgstr "Séparer les côtés"
 
+#: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/prospection/veridian_prospection_recent_replies.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 #: src/components/prospection/veridian_prospection_sequences.tsx
@@ -10648,6 +10734,15 @@ msgstr "Part de rejets durs sur 7 jours au-delà de laquelle l'envoi depuis ce d
 #: src/components/settings/WebhookCard.tsx
 msgid "Show"
 msgstr "Afficher"
+
+#. placeholder {0}: hidden.length
+#: src/components/contacts/ContactSegmentsCell.tsx
+msgid "Show {0} more segments"
+msgstr "Afficher {0} segments de plus"
+
+#: src/components/contacts/ContactSegmentsCell.tsx
+msgid "Show 1 more segment"
+msgstr "Afficher 1 segment de plus"
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
@@ -11017,6 +11112,10 @@ msgstr "statut modifié"
 msgid "Status unknown"
 msgstr "Statut inconnu"
 
+#: src/components/prospection/veridian_prospection_performance.tsx
+msgid "Step"
+msgstr "Étape"
+
 #: src/components/sending_profiles/veridian_capacity_block.tsx
 #: src/components/sending_profiles/veridian_capacity_block.tsx
 #: src/components/sending_profiles/veridian_capacity_block.tsx
@@ -11053,6 +11152,7 @@ msgstr "Style"
 msgid "Style Attributes"
 msgstr "Attributs de style"
 
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/templates/TemplatePreviewDrawer.tsx
 #: src/components/templates/TemplateTranslationsTab.tsx
 #: src/pages/BroadcastsPage.tsx
@@ -11250,6 +11350,7 @@ msgstr "Télémétrie"
 msgid "template"
 msgstr "modèle"
 
+#: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #: src/components/messages/MessageHistoryTable.tsx
 #: src/components/messages/MessageHistoryTable.tsx
@@ -11957,7 +12058,7 @@ msgstr "Fuseau horaire"
 msgid "Timezone used for dates"
 msgstr "Fuseau horaire utilisé pour les dates"
 
-#: src/pages/ContactsPage.tsx
+#: src/components/contacts/ContactSegmentsCell.tsx
 #: src/pages/ContactsPage.tsx
 msgid "Timezone:"
 msgstr "Fuseau horaire :"
@@ -12067,6 +12168,10 @@ msgstr "Basculez entre les vues mobile et bureau pour voir comment votre email a
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Token copied to clipboard"
 msgstr "Jeton copié dans le presse-papiers"
+
+#: src/components/prospection/veridian_prospection_performance.tsx
+msgid "Too little data"
+msgstr "Trop peu de données"
 
 #: src/components/settings/Integrations.tsx
 msgid "Tools"
@@ -12283,6 +12388,7 @@ msgstr "Impossible de créer l'espace de travail. Contactez votre administrateur
 msgid "Unable to load email metrics"
 msgstr "Impossible de charger les métriques email"
 
+#: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/prospection/veridian_prospection_recent_replies.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 #: src/components/prospection/veridian_prospection_sequences.tsx
@@ -12296,6 +12402,10 @@ msgstr "Impossible de charger les rejets"
 #: src/components/prospection/veridian_prospection_sends.tsx
 msgid "Unable to load the sends"
 msgstr "Impossible de charger les envois"
+
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "Unable to load the template"
+msgstr "Impossible de charger le modèle"
 
 #: src/components/prospection/veridian_prospection_sends.tsx
 msgid "Unassigned (older messages)"
@@ -12343,7 +12453,7 @@ msgid "Unknown company"
 msgstr "Entreprise inconnue"
 
 #: src/components/analytics/NewContactsTable.tsx
-#: src/pages/ContactsPage.tsx
+#: src/components/contacts/ContactSegmentsCell.tsx
 #: src/pages/ContactsPage.tsx
 msgid "Unknown date"
 msgstr "Date inconnue"
@@ -12430,6 +12540,7 @@ msgstr "Désabonner de la liste"
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTable.tsx
+#: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 #: src/pages/ContactsPage.tsx
 msgid "Unsubscribed"
@@ -12772,7 +12883,11 @@ msgstr "Vérifier le code"
 msgid "Verifying invitation..."
 msgstr "Vérification de l'invitation..."
 
-#: src/pages/ContactsPage.tsx
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "Version"
+msgstr "Version"
+
+#: src/components/contacts/ContactSegmentsCell.tsx
 msgid "Version:"
 msgstr "Version :"
 
@@ -12829,6 +12944,10 @@ msgstr "Surveillance du volume et de la réputation"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Volume limit: how many emails total toward this provider in a single day."
 msgstr "Limite de volume : combien d'emails au total vers ce fournisseur en une journée."
+
+#: src/components/automations/veridian_flow_node_drawer.tsx
+msgid "Wait"
+msgstr "Délai"
 
 #: src/components/automations/config/DelayConfigForm.tsx
 msgid "Wait Duration"

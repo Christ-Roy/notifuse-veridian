@@ -19,6 +19,15 @@ export interface ProspectionStage {
   waiting: number
   // Sortis après avoir reçu ce mail
   exited_after: number
+  // Identifiants des modèles (template_id) des nœuds email de cette étape, sans doublon
+  template_ids: string[]
+  // Parmi les contacts qui ont reçu cette étape (ou une suivante), ceux qui ont répondu
+  // (réponses humaines). Dénominateur du taux : `sent`.
+  replies_human: number
+  // Sortis après ce mail (et seulement après lui), par raison
+  exited_replied: number
+  exited_unsubscribed: number
+  exited_rejected: number
 }
 
 export interface ProspectionExits {

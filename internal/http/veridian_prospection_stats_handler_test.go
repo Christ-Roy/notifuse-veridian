@@ -44,6 +44,18 @@ func TestVeridianProspectionStatsHandler(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), `"sequences":[]`)
 	})
 
+	t.Run("les champs additifs des etapes sont servis tels que le contrat les nomme", func(t *testing.T) {
+		svc.EXPECT().GetProspectionStats(gomock.Any(), gomock.Any()).Return(&domain.VeridianProspectionStats{
+			Sequences: []domain.VeridianSequenceStats{{AutomationID: "a", Stages: []domain.VeridianProspectionStage{{Stage: 1, TemplateIDs: []string{"tpl1"}, RepliesHuman: 3, ExitedReplied: 1, ExitedUnsubscribed: 2, ExitedRejected: 4}}}},
+		}, nil)
+		rec := httptest.NewRecorder()
+		h.handle(rec, httptest.NewRequest(nethttp.MethodGet, "/api/veridian/prospection.stats?workspace_id=ws1", nil))
+		require.Equal(t, nethttp.StatusOK, rec.Code)
+		for _, want := range []string{`"template_ids":["tpl1"]`, `"replies_human":3`, `"exited_replied":1`, `"exited_unsubscribed":2`, `"exited_rejected":4`} {
+			assert.Contains(t, rec.Body.String(), want)
+		}
+	})
+
 	t.Run("GET sans fenetre : tout l'historique", func(t *testing.T) {
 		svc.EXPECT().GetProspectionStats(gomock.Any(), &domain.VeridianProspectionStatsRequest{WorkspaceID: "ws1"}).Return(&domain.VeridianProspectionStats{}, nil)
 		rec := httptest.NewRecorder()

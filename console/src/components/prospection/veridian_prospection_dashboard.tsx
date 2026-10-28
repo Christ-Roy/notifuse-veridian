@@ -7,6 +7,7 @@ import type { Workspace } from '../../services/api/types'
 import { analyticsService } from '../../services/api/analytics'
 import { emailProfilesOverviewService } from '../../services/api/veridian_email_profiles'
 import { prospectionStatsService } from '../../services/api/veridian_prospection'
+import { templatesApi } from '../../services/api/template'
 import { replyStatsApi } from '../../services/api/veridian_reply_stats'
 import { EmailMetricsChart } from '../analytics/EmailMetricsChart'
 import { VeridianEngagementByClass } from '../analytics/veridian_engagement_by_class'
@@ -16,6 +17,7 @@ import { VeridianProspectionSends } from './veridian_prospection_sends'
 import { VeridianProspectionReplies } from './veridian_prospection_replies'
 import { VeridianProspectionRecentReplies } from './veridian_prospection_recent_replies'
 import { VeridianProspectionSequences } from './veridian_prospection_sequences'
+import { VeridianProspectionPerformance } from './veridian_prospection_performance'
 import { VeridianProspectionRejections } from './veridian_prospection_rejections'
 import { VeridianProspectionReputation } from './veridian_prospection_reputation'
 import { VeridianTransactionalWatchBanner } from './veridian_transactional_watch'
@@ -59,6 +61,12 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
   const repliesQuery = useQuery({
     queryKey: ['prospection', 'replies', workspace.id, timeRange[0], timeRange[1]],
     queryFn: () => replyStatsApi.get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] }),
+    refetchInterval: 60000
+  })
+  // Mêmes modèles que l'éditeur de flux (même clé de cache) : le tableau nomme chaque étape.
+  const templatesQuery = useQuery({
+    queryKey: ['templates', workspace.id, 'marketing'],
+    queryFn: () => templatesApi.list({ workspace_id: workspace.id, category: 'marketing', channel: 'email' }),
     refetchInterval: 60000
   })
   const sentQuery = useQuery({
@@ -167,6 +175,12 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
 
       <div className="mt-8">
         <VeridianProspectionSequences stats={statsQuery.data} loading={statsQuery.isLoading} error={statsQuery.isError} />
+        <VeridianProspectionPerformance
+          stats={statsQuery.data}
+          templates={templatesQuery.data?.templates ?? []}
+          loading={statsQuery.isLoading || templatesQuery.isLoading}
+          error={statsQuery.isError}
+        />
         <VeridianProspectionReplies
           stats={statsQuery.data}
           loading={statsQuery.isLoading}

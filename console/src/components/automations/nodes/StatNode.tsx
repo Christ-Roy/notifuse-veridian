@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useLingui } from '@lingui/react/macro'
 import { nodeTypeColors } from './constants'
+import { formatPercent } from '../../sending_profiles/veridian_profile_labels'
 import type { NodeType, AutomationNodeStats, ABTestNodeConfig } from '../../../services/api/automation'
 
 // Icons for each node type
@@ -37,13 +38,21 @@ export interface StatNodeData {
   label?: string
   stats?: AutomationNodeStats
   config?: Record<string, unknown>
+  // Ligne sous le titre : objet du modèle (email) ou durée (délai).
+  subtitle?: string
+  // Réponses humaines de l'étape (cumul des étapes suivantes) et taux 0-100, null sans envoi.
+  repliesHuman?: number
+  replyRate?: number | null
+  // Ouvre le tiroir du nœud. Le bouton n'apparaît que si le nœud le fournit.
+  onOpen?: () => void
+  openLabel?: string
 }
 
 type StatNodeProps = NodeProps<StatNodeData>
 
 export const StatNode: React.FC<StatNodeProps> = ({ data }) => {
   const { t } = useLingui()
-  const { nodeType, label, stats } = data
+  const { nodeType, label, stats, subtitle, repliesHuman, replyRate, onOpen, openLabel } = data
   const color = nodeTypeColors[nodeType] || '#6b7280'
   const icon = nodeIcons[nodeType]
 
@@ -99,6 +108,11 @@ export const StatNode: React.FC<StatNodeProps> = ({ data }) => {
           <span style={{ color }}>{icon}</span>
           <span className="text-sm font-medium text-gray-800 truncate">{nodeLabel}</span>
         </div>
+        {subtitle && (
+          <div className="px-3 pt-2 text-xs text-gray-600 truncate" title={subtitle}>
+            {subtitle}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="px-3 py-2 bg-gray-50">
@@ -128,7 +142,36 @@ export const StatNode: React.FC<StatNodeProps> = ({ data }) => {
               />
             )}
           </div>
+          {repliesHuman !== undefined && (
+            <div className="flex items-center justify-between mt-2">
+              <Statistic
+                title={t`Human replies`}
+                value={repliesHuman}
+                valueStyle={{ fontSize: 14, color: '#7c3aed' }}
+              />
+              <Statistic
+                title={t`Reply rate`}
+                value={replyRate === null || replyRate === undefined ? '-' : formatPercent(replyRate / 100)}
+                valueStyle={{ fontSize: 14, color: '#7c3aed' }}
+              />
+            </div>
+          )}
         </div>
+        {onOpen && (
+          <div className="px-3 py-2 border-t" style={{ borderColor: `${color}20` }}>
+            <button
+              type="button"
+              className="nodrag nopan text-xs font-medium underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2"
+              style={{ color }}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpen()
+              }}
+            >
+              {openLabel ?? t`Open template`}
+            </button>
+          </div>
+        )}
       </div>
       <Handle
         type="source"
