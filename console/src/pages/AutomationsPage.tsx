@@ -63,8 +63,8 @@ export function AutomationsPage() {
 
   // Fetch templates for reference
   const { data: templatesData } = useQuery({
-    queryKey: ['templates', workspaceId, 'marketing'],
-    queryFn: () => templatesApi.list({ workspace_id: workspaceId, category: 'marketing', channel: 'email' }),
+    queryKey: ['templates', workspaceId, 'email-all'],
+    queryFn: () => templatesApi.list({ workspace_id: workspaceId, channel: 'email' }),
     enabled: !!workspaceId
   })
 

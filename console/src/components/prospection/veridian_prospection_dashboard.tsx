@@ -63,10 +63,10 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
     queryFn: () => replyStatsApi.get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] }),
     refetchInterval: 60000
   })
-  // Mêmes modèles que l'éditeur de flux (même clé de cache) : le tableau nomme chaque étape.
+  // Tous les modèles email (prospection, marketing...), même clé de cache que l'éditeur de flux : le tableau nomme chaque étape.
   const templatesQuery = useQuery({
-    queryKey: ['templates', workspace.id, 'marketing'],
-    queryFn: () => templatesApi.list({ workspace_id: workspace.id, category: 'marketing', channel: 'email' }),
+    queryKey: ['templates', workspace.id, 'email-all'],
+    queryFn: () => templatesApi.list({ workspace_id: workspace.id, channel: 'email' }),
     refetchInterval: 60000
   })
   const sentQuery = useQuery({

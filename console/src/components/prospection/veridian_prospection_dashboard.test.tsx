@@ -11,6 +11,7 @@ import { emailProfilesOverviewService } from '../../services/api/veridian_email_
 import type { TransactionalWatch } from '../../services/api/veridian_email_profiles'
 import { prospectionStatsService } from '../../services/api/veridian_prospection'
 import { replyStatsApi } from '../../services/api/veridian_reply_stats'
+import { templatesApi } from '../../services/api/template'
 import type { ProspectionStats } from '../../services/api/veridian_prospection'
 import type { Workspace } from '../../services/api/types'
 import { basePlan, overviewOf, planClass, profile } from '../sending_profiles/veridian_profile_test_fixtures'
@@ -178,6 +179,14 @@ describe('VeridianProspectionDashboard', () => {
     vi.mocked(emailProfilesOverviewService.get).mockResolvedValue(baseOverview)
     vi.mocked(prospectionStatsService.get).mockResolvedValue(stats)
     vi.mocked(replyStatsApi.get).mockResolvedValue({ replied: 13, replied_human: 12 })
+  })
+
+  it("modèles : charge toutes les catégories email (pas seulement marketing), sinon les modèles de prospection s'affichent « Deleted template »", async () => {
+    renderDash()
+    await waitFor(() => expect(templatesApi.list).toHaveBeenCalled())
+    const params = vi.mocked(templatesApi.list).mock.calls[0][0] as { category?: string; channel?: string }
+    expect(params.category).toBeUndefined()
+    expect(params.channel).toBe('email')
   })
 
   it('tuiles : envoyés / plafond effectif, réponses humaines et taux, automatiques à part, stock, rotation, réputation', async () => {
