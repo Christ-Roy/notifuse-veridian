@@ -63,9 +63,11 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse segments:list|get|create|delete|contacts|rebuild <ws> ...
   notifuse events:list|get|upsert <ws> ...   (customEvents : champs top-level, external_id requis)
   notifuse members:list|invite|remove|permissions <ws> ...   (Team Settings, owner)
-  notifuse magic-link <ws> [--email e]    génère un lien de connexion (clé éphémère, révoquée aussitôt)
+  notifuse magic-link <ws> [--email e]    génère un lien de connexion (route SSO HMAC, aucune clé créée)
   notifuse profiles:overview [ws] [--json]  VÉRITÉ des profils d'envoi : plafond du jour + porte limitante, reste,
                                           fusible par couple, fenêtre, classes exclues, pause, IMAP lié (lecture, clé scopée OK)
+  notifuse profiles:gaps [ws] [--json]    EFFECTIF vs théorique : par profil et par classe de messagerie, capacité configurée, utile (stock), envoyé,
+                                          habituel (7 j), classes qui MANQUENT par rapport à avant, avec le nombre de contacts à inscrire
   notifuse profiles:link-imap <ws> --id P (--imap I | --none)   lie un profil à sa boîte IMAP de retour (owner)
   notifuse profiles:set-usage <ws> --id P --usage commercial|transactional|unassigned
                                                               usage EXCLUSIF d'un profil : rotation commerciale, profil transactionnel réservé, ou hors service (serveur : exclusivité, rotation jamais vidée, profil vérifié)
@@ -241,7 +243,7 @@ EXISTING_COMMAND_ROUTES = {
     "members:invite": ["/api/workspaces.inviteMember"],
     "members:remove": ["/api/workspaces.removeMember"],
     "members:permissions": ["/api/workspaces.setUserPermissions"],
-    "magic-link": ["/api/workspaces.generateMagicLink"],
+    "magic-link": ["/api/sso/issue-magic-link"],
     "events:list": ["/api/customEvents.list"],
     "events:get": ["/api/customEvents.get"],
     "events:upsert": ["/api/customEvents.upsert"],
@@ -340,7 +342,7 @@ WORKSPACE_COMMANDS = frozenset({
     "veridian:reputation-status",
     # Lot 2 (08/10/2026) : vérité d'un profil, GET /api/veridian/emailProfiles.overview
     # (JWT / clé API du workspace + message_history:read côté service). Lecture seule.
-    "profiles:overview",
+    "profiles:overview", "profiles:gaps",
     # Lot 4 (08/10/2026) : usage et pause d'un profil par l'API dédiée
     # POST /api/veridian/emailProfiles.setUsage|pause|resume (JWT / clé API du
     # workspace + workspace:write côté service). Exclusivité validée par le serveur.
@@ -1401,52 +1403,21 @@ def _sweep_stale_magiclink_keys(env, workspace, owner_token, now=None):
 
 
 def cmd_magic_link(a):
-    """workspaces.generateMagicLink EXIGE un token API KEY (pas owner JWT, pas
-    HMAC) et infère le workspace depuis cette clé ; le body ne porte que
-    user_email. Si NOTIFUSE_API_KEY n'est pas fournie, on mint une clé
-    ÉPHÉMÈRE via createAPIKey (owner), on l'utilise comme Bearer, puis on la
-    RÉVOQUE dans tous les cas (finally) : le lien magique ne laisse plus aucun
-    membre api_key persistant. Bug corrigé le 08/10/2026 : chaque appel laissait
-    un membre "magiclink…" dans le workspace (15 révoqués à la main le 07/10).
-    Les restes d'anciens appels sont balayés au passage."""
+    """Lien de connexion auto-login pour un utilisateur, par la route HMAC SSO
+    du Hub (POST /api/sso/issue-magic-link, body {hub_user_id, email}).
+
+    Changement du 19/10/2026 : workspaces.generateMagicLink n'accepte plus que
+    les clés gérées par le Hub (correctif de sécurité, une clé de workspace
+    pouvait obtenir le lien de connexion de l'owner). L'ancien chemin (clé
+    éphémère mintée puis révoquée) rend désormais 403 « this endpoint requires
+    a Hub-managed API key ». La route SSO ne crée aucune clé : plus rien à
+    révoquer. Le workspace n'entre pas dans la requête (le lien ouvre la
+    session de l'utilisateur, qui voit tous ses workspaces) ; l'argument est
+    gardé pour la compatibilité des appels existants."""
     email = a.email or "robert@veridian.site"
-    api_key = get_key(APIKEY_VAR, required=False)
-    minted_email = None
-    owner = None
-    result = None
-    try:
-        if not api_key:
-            owner = owner_jwt(a.env, a.workspace)
-            try:
-                swept = _sweep_stale_magiclink_keys(a.env, a.workspace, owner)
-                if swept:
-                    print(f"ℹ️  {swept} ancienne(s) clé(s) magiclink* balayée(s).", file=sys.stderr)
-            except Exception as e:  # le balayage ne doit jamais empêcher le lien
-                print(f"⚠️  balayage des anciennes clés magiclink* ignoré : {e}", file=sys.stderr)
-            st, p = call_jwt(a.env, "POST", "/api/workspaces.createAPIKey", owner,
-                             body={"workspace_id": a.workspace,
-                                   "email_prefix": MAGICLINK_PREFIX + hashlib.sha256(
-                                       f"{time.time_ns()}:{os.getpid()}".encode()
-                                   ).hexdigest()[:10]})
-            if st not in (200, 201):
-                die(f"impossible de minter une api_key pour magic-link (HTTP {st}) : {p}")
-            api_key = p.get("token") or p.get("api_key")
-            minted_email = p.get("email")
-            if not api_key:
-                die("createAPIKey n'a pas renvoyé de token api_key.")
-        result = call_jwt(a.env, "POST", "/api/workspaces.generateMagicLink", api_key,
-                          body={"user_email": email})
-    finally:
-        if minted_email:
-            try:
-                ok, detail = _revoke_api_key_by_email(a.env, a.workspace, owner, minted_email)
-            except BaseException as e:  # noqa: BLE001 — jamais masquer l'erreur d'origine
-                ok, detail = False, f"{type(e).__name__}: {e}"
-            if not ok:
-                print(f"⚠️  clé éphémère {minted_email} NON révoquée ({detail}). "
-                      f"À la main : notifuse-admin keys:revoke {a.workspace} --email {minted_email}",
-                      file=sys.stderr)
-    out(*result)
+    hub_id = getattr(a, "hub_user_id", None) or _hub_user_id_for(email)
+    body = {"hub_user_id": hub_id, "email": email}
+    out(*call_hmac(a.env, "POST", "/api/sso/issue-magic-link", body))
 
 
 def _hub_user_id_for(email):
@@ -1952,6 +1923,72 @@ def cmd_profiles_overview(a):
         print(json.dumps(data, indent=2, ensure_ascii=False))
     else:
         print(format_profiles_overview(data))
+
+
+def compute_profile_gaps(data):
+    """Pure : à partir du JSON de profiles:overview, par profil commercial actif et par classe : configurée, utile (stock),
+    envoyée aujourd'hui, habituel (envoyé sur 7 jours / 5 jours ouvrés). Une classe MANQUE quand sa capacité configurée dépasse
+    ce que le stock permet (cause « stock ») ; elle est ABSENTE quand elle envoyait avant (7 j) et n'a plus de stock du tout.
+    Rend une liste de profils avec un résumé et des actions chiffrées (contacts à inscrire par classe)."""
+    res = []
+    for p in (data.get("profiles") or []):
+        pl = p.get("plan") or {}
+        if p.get("usage") != "commercial" or p.get("paused") or not p.get("in_rotation", True):
+            continue
+        rows, manque, absentes = [], 0, []
+        for c in (pl.get("classes") or []):
+            if c.get("excluded"):
+                continue
+            conf = int(c.get("capacity_configured") or 0)
+            util = int(c.get("capacity_useful") or 0)
+            sent = int(c.get("sent_today") or 0)
+            hab = round(int(c.get("sent_7d") or 0) / 5.0, 1)
+            stock = int(c.get("stock") or 0)
+            cause = ("plafond atteint" if c.get("blocked_by") == "class_cap" and stock == 0 and sent >= conf > 0
+                     else "ralentie" if int(c.get("slowdown_factor") or 1) > 1
+                     else "stock insuffisant" if util < conf else "")
+            short = max(0, conf - util)
+            if short:
+                manque += short
+            if hab >= 1 and stock == 0 and sent < conf and util == 0:
+                absentes.append(c["class"])
+            rows.append({"class": c["class"], "configuree": conf, "utile": util, "envoyee": sent, "stock": stock,
+                         "habituel_par_jour": hab, "manque": short, "cause": cause,
+                         "a_inscrire": short * 3 if short else 0})
+        conf_t = sum(r["configuree"] for r in rows)
+        util_t = sum(r["utile"] for r in rows)
+        res.append({"profil": p.get("name"), "plafond_du_jour": pl.get("daily_cap_today"), "envoyes": pl.get("sent_today"),
+                    "configuree_totale": conf_t, "utile_totale": util_t, "manque_total": manque,
+                    "classes_absentes": absentes, "classes": rows})
+    return res
+
+
+def format_profile_gaps(res):
+    lines = []
+    for r in res:
+        pct = round(100 * r["utile_totale"] / r["configuree_totale"]) if r["configuree_totale"] else 0
+        lines.append("● %s : plafond du jour %s, envoyés %s, capacité utile %s/%s (%s %%), manque %s envois faute de stock"
+                     % (r["profil"], r["plafond_du_jour"], r["envoyes"], r["utile_totale"], r["configuree_totale"], pct, r["manque_total"]))
+        if r["classes_absentes"]:
+            lines.append("  classes ABSENTES (envoyaient avant, plus de stock) : " + ", ".join(r["classes_absentes"]))
+        lines.append("  %-20s %6s %6s %6s %6s %8s  %s" % ("classe", "config", "utile", "envoy", "stock", "habituel", "à inscrire (≈3 j)"))
+        for c in sorted(r["classes"], key=lambda c: -c["manque"]):
+            if c["configuree"] or c["envoyee"]:
+                lines.append("  %-20s %6d %6d %6d %6d %8.1f  %s%s" % (c["class"], c["configuree"], c["utile"], c["envoyee"], c["stock"],
+                             c["habituel_par_jour"], c["a_inscrire"] or "", ("  (%s)" % c["cause"]) if c["cause"] else ""))
+    return "\n".join(lines)
+
+
+def cmd_profiles_gaps(a):
+    st, data = _fetch_overview(a)
+    if st != 200 or not isinstance(data, dict):
+        out(st, data)
+        return
+    res = compute_profile_gaps(data)
+    if a.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+    else:
+        print(format_profile_gaps(res))
 
 
 def _patch_email_profile(a, mutate):
@@ -2463,6 +2500,80 @@ def _fold_label(s):
     return " ".join((s or "").split()).strip().lower()
 
 
+
+# ---- GARDE-FOU : aucune phrase de désinscription formatée dans un mail de prospection (Robert, 27/10/2026)
+# Pourquoi : « répondez stop » était dans les 17 modèles d'Arnaud ; Robert : « c'est censé être des mails écrits parfaitement à la
+# main, donc tu me dégages cette phrase à chaque fois ». Une règle écrite dans un skill n'a pas suffi (la session qui génère les
+# modèles l'a remise) : le refus est donc DANS l'outil, à trois endroits : publier un modèle (push/create/update), ACTIVER une
+# séquence et y INSCRIRE des contacts (les modèles sont relus un par un). Lecture impossible = refus (fail-closed).
+# La désinscription n'est pas supprimée : elle est traitée par l'outil (réponse négative, rebond, plainte => contact sorti).
+# Dérogation, cas précis et décidé par Robert seul : NOTIFUSE_AUTORISE_PHRASE_STOP=1 (affichée à chaque usage).
+_RX_PHRASES_INTERDITES = [re.compile(p, re.I) for p in (
+    r"(?:répondez|repondez|écrivez|ecrivez|envoyez|tapez|reply(?:\s+with)?|answer)\s*(?:par|avec|with)?\s*[«\"“'‹]?\s*stop\b",
+    r"[«“\"]\s*stop\s*[»”\"]",
+    r"pour ne plus recevoir",
+    r"ne plus recevoir de message",
+    r"je retire votre adresse",
+    r"retire votre adresse de mes contacts",
+    r"si vous (?:ne souhaitez|préférez que je ne vous écrive)\s+(?:plus|pas d(?:&#x27;|['’])autre|aucun autre)",
+    r"if you (?:do not|don['’]t|would rather not) (?:wish|want) to receive",
+    r"reply\s+[\"“]?stop",
+)]
+
+
+def phrases_interdites(texte):
+    """Extraits interdits trouvés dans un texte de mail (HTML/MJML déséchappé). [] = propre."""
+    t = html.unescape(re.sub(r"<[^>]+>", " ", texte or ""))
+    return [m.group(0).strip()[:90] for rx in _RX_PHRASES_INTERDITES for m in rx.finditer(t)]
+
+
+def garde_phrases_texte(texte, origine):
+    """Refuse (SystemExit, code 4) si le texte contient une phrase de désinscription formatée."""
+    trouvees = phrases_interdites(texte)
+    if not trouvees:
+        return
+    if os.environ.get("NOTIFUSE_AUTORISE_PHRASE_STOP") == "1":
+        print(f"⚠️ DÉROGATION NOTIFUSE_AUTORISE_PHRASE_STOP=1 : {origine} garde {trouvees[:2]} (décision de Robert uniquement)", file=sys.stderr)
+        return
+    die(
+        f"REFUS : {origine} contient une phrase de désinscription formatée : {trouvees[:3]}\n"
+        f"  Règle de Robert (27/10/2026) : les mails de prospection doivent se lire comme écrits à la main.\n"
+        f"  Pas de « répondez stop », « pour ne plus recevoir de message de ma part », « je retire votre adresse ».\n"
+        f"  La désinscription est traitée par l'outil (réponse négative, rebond, plainte => contact sorti), pas par une phrase.\n"
+        f"  Retire la phrase puis relance. Dérogation : seulement sur ordre de Robert, NOTIFUSE_AUTORISE_PHRASE_STOP=1.",
+        code=4)
+
+
+def _texte_modele(t):
+    e = (t or {}).get("email") or {}
+    return " ".join(str(e.get(k) or "") for k in ("mjml_source", "plain_text", "subject", "subject_preview")) + " " + json.dumps(e.get("visual_editor_tree") or {}, ensure_ascii=False)
+
+
+def _ids_modeles(automation):
+    ids = []
+    for n in (automation or {}).get("nodes") or []:
+        cfg = n.get("config") or {}
+        if n.get("type") == "email" and cfg.get("template_id"):
+            ids.append(cfg["template_id"])
+    return ids
+
+
+def garde_sequence(a):
+    """Avant `automations:activate` et `automations:enroll` : relit CHAQUE modèle de la séquence. Illisible => refus."""
+    if getattr(a, "cmd", "") not in ("automations:activate", "automations:enroll"):
+        return
+    st, d = app_call(a.env, "automations.get", a.workspace, params={"workspace_id": a.workspace, "automation_id": a.id}, method="GET")
+    auto = (d or {}).get("automation", d) if isinstance(d, dict) else None
+    if st != 200 or not isinstance(auto, dict) or not auto.get("nodes"):
+        die(f"REFUS (fail-closed) : séquence {a.id} illisible (HTTP {st}) : je ne peux pas relire ses modèles, donc je n'active ni n'inscris.", code=4)
+    for tid in _ids_modeles(auto):
+        st, t = app_call(a.env, "templates.get", a.workspace, params={"workspace_id": a.workspace, "id": tid}, method="GET")
+        tpl = (t or {}).get("template", t) if isinstance(t, dict) else None
+        if st != 200 or not isinstance(tpl, dict):
+            die(f"REFUS (fail-closed) : modèle {tid} de la séquence {a.id} illisible (HTTP {st}).", code=4)
+        garde_phrases_texte(_texte_modele(tpl), f"le modèle {tid} de la séquence {a.id}")
+
+
 def check_preview_not_template_name(mjml_source, name, template_id=None):
     """Refuse un MJML dont le <mj-preview> vaut le nom (ou l'id) du gabarit."""
     m = RX_MJ_PREVIEW.search(mjml_source or "")
@@ -2530,6 +2641,7 @@ def cmd_templates_push(a):
 
     # Garde-fou amont : un préheader ne doit JAMAIS valoir le nom du gabarit.
     check_preview_not_template_name(mjml_source, a.name, a.id)
+    garde_phrases_texte(mjml_source, f"le modèle {a.id or a.name}")
 
     jwt = jwt_for_route(a.env, "templates.create", a.workspace, prefer_owner=False)
 
@@ -2668,6 +2780,7 @@ def cmd_broadcasts_send_test(a):
 # templates
 def cmd_templates_create(a):
     body = _json_arg(a.data) or {}
+    garde_phrases_texte(json.dumps(body, ensure_ascii=False), "le modèle à créer")
     body.setdefault("workspace_id", a.workspace)
     out(*app_call(a.env, "templates.create", a.workspace, body=body, method="POST"))
 
@@ -3039,6 +3152,7 @@ def cmd_automations_enrollments(a):
 # ---- templates.update direct (sans repasser par tout le contenu, cf templates:push)
 def cmd_templates_update(a):
     body = _json_arg(a.data) or {}
+    garde_phrases_texte(json.dumps(body, ensure_ascii=False), f"le modèle {a.id}")
     body.setdefault("workspace_id", a.workspace)
     body.setdefault("id", a.id)
     out(*app_call(a.env, "templates.update", a.workspace, body=body, method="POST"))
@@ -3902,6 +4016,12 @@ def build_parser():
     sp.add_argument("--json", action="store_true", help="sortie JSON brute (contrat de l'API)")
     sp.set_defaults(func=cmd_profiles_overview, _routes=["/api/veridian/emailProfiles.overview"])
 
+    sp = sub.add_parser("profiles:gaps",
+                        help="effectif vs théorique par profil et par classe de messagerie : capacité utile, classes qui manquent, contacts à inscrire")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--json", action="store_true", help="sortie JSON")
+    sp.set_defaults(func=cmd_profiles_gaps, _routes=["/api/veridian/emailProfiles.overview"])
+
     sp = sub.add_parser("profiles:link-imap", help="lie un profil d'envoi à sa boîte IMAP de retour (owner)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--id", required=True, help="id du profil d'envoi")
@@ -4340,9 +4460,11 @@ def build_parser():
     sp.add_argument("--permissions", help="objet UserPermissions JSON brut (ou @file) — override total")
     sp.set_defaults(func=cmd_members_permissions)
 
-    sp = sub.add_parser("magic-link", help="génère un magic link de connexion (owner)")
+    sp = sub.add_parser("magic-link", help="lien de connexion auto-login (route SSO HMAC du Hub)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--email", help="email cible (défaut owner)")
+    sp.add_argument("--hub-user-id", dest="hub_user_id", default=None,
+                    help="identifiant Hub (sinon résolu par `hub tenant <email>`)")
     sp.set_defaults(func=cmd_magic_link)
 
     # customEvents
@@ -4750,6 +4872,7 @@ def main(mode="admin"):
                 f"(pas de fallback implicite en mode admin/super-clé).")
 
     try:
+        garde_sequence(args)
         args.func(args)
     except SystemExit:
         raise
