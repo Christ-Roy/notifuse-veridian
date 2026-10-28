@@ -154,8 +154,15 @@ describe('SendQueuePage', () => {
   it('écriture : Recalculer est borné au groupe (automation + noeud + raison), limite 5000, avec confirmation', async () => {
     renderPage()
     await screen.findByTestId('queue-reasons')
-    const rows = await screen.findAllByRole('row')
-    const reasonRow = rows.find((r) => within(r).queryByText('Sending window closed') && within(r).queryByRole('button', { name: 'Recompute' }))!
+    // findAllByRole('row') rend la main dès la ligne d'en-tête : on attend la ligne de la raison
+    // (sinon course sous charge : reasonRow undefined, « Expected container to be an Element »).
+    const reasonRow = await waitFor(() => {
+      const row = screen
+        .getAllByRole('row')
+        .find((r) => within(r).queryByText('Sending window closed') && within(r).queryByRole('button', { name: 'Recompute' }))
+      if (!row) throw new Error('ligne « Sending window closed » absente')
+      return row
+    })
     await user.click(within(reasonRow).getByRole('button', { name: 'Recompute' }))
     // la confirmation précède l'appel
     expect(queueExplainService.recompute).not.toHaveBeenCalled()
