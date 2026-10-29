@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
@@ -168,19 +167,8 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
-	// === Veridian patch ===
-	// In Veridian-managed mode (HUB_API_SECRET set), workspace creation is
-	// the exclusive responsibility of the Veridian Hub via the HMAC-signed
-	// /api/tenants/provision endpoint. Block all interactive creation —
-	// even by the root user — so accidental UI clicks never bypass the Hub
-	// (which tracks billing, plans, lifetime overrides, etc.).
-	//
-	// Internal callers (VeridianService.Provision) propagate domain.SystemCallKey
-	// in the ctx so they bypass this guard. Only HTTP callers — which never
-	// have SystemCallKey — get refused.
-	if s.config.HubAPISecret != "" && ctx.Value(domain.SystemCallKey) == nil {
-		s.logger.WithField("user_email", user.Email).Warn("Veridian-managed mode: interactive workspace creation refused — use Hub /api/tenants/provision")
-		return nil, &domain.ErrUnauthorized{Message: "workspace creation is managed by Veridian Hub"}
+	if err := s.veridianGuardWorkspaceCreation(ctx, user); err != nil {
+		return nil, err
 	}
 
 	// Only allow root user to create workspaces (upstream behavior — kept for
@@ -369,9 +357,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to get existing workspace")
 		return nil, err
 	}
-	policyChanged := veridianWorkspaceSendingPolicyChanged(existingWorkspace.Settings, settings)
-	poolBefore := append([]string(nil), existingWorkspace.Settings.VeridianMarketingEmailProviderIDs...)
-	transactionalBefore := existingWorkspace.Settings.TransactionalEmailProviderID
+	vaBefore := veridianSnapshotSettings(existingWorkspace.Settings, settings)
 
 	existingWorkspace.Name = name
 	existingWorkspace.Settings.WebsiteURL = settings.WebsiteURL
@@ -388,7 +374,6 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.FileManager = settings.FileManager
 	existingWorkspace.Settings.TransactionalEmailProviderID = settings.TransactionalEmailProviderID
 	existingWorkspace.Settings.MarketingEmailProviderID = settings.MarketingEmailProviderID
-	existingWorkspace.Settings.VeridianMarketingEmailProviderIDs = settings.VeridianMarketingEmailProviderIDs
 	existingWorkspace.Settings.EmailTrackingEnabled = settings.EmailTrackingEnabled
 
 	// Verify DNS ownership if custom endpoint URL is being set or changed
@@ -431,32 +416,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 	existingWorkspace.Settings.DefaultLanguage = settings.DefaultLanguage
 	existingWorkspace.Settings.Languages = settings.Languages
 
-	// Veridian fork — le mapping ci-dessus est une allowlist explicite (les
-	// champs non recopiés sont silencieusement droppés). On propage donc nos
-	// settings cold outreach (débits par classe + politique pixel par classe),
-	// sinon l'UI Settings → Cold outreach sauve sans persister (bug vu en
-	// validation staging 2026-06-11). nil = la config est effacée (comportement
-	// attendu : vider l'UI revient au défaut tunnel).
-	existingWorkspace.Settings.VeridianProviderClassRates = settings.VeridianProviderClassRates
-	existingWorkspace.Settings.VeridianOpenPixelByClass = settings.VeridianOpenPixelByClass
-	existingWorkspace.Settings.VeridianProviderClassDailyCap = settings.VeridianProviderClassDailyCap
-	existingWorkspace.Settings.VeridianPerRecipientDailyCap = settings.VeridianPerRecipientDailyCap
-	existingWorkspace.Settings.VeridianPerSenderDailyCap = settings.VeridianPerSenderDailyCap
-	existingWorkspace.Settings.VeridianSendingWindow = settings.VeridianSendingWindow
-	// Fiche 62 : le niveau du journal des decisions n'est pas dans le formulaire de la
-	// console ; une sauvegarde qui ne le porte pas ne doit pas le remettre a zero.
-	if settings.VeridianDecisionLogLevel != "" {
-		existingWorkspace.Settings.VeridianDecisionLogLevel = domain.VeridianNormalizeDecisionLogLevel(settings.VeridianDecisionLogLevel)
-	}
-	existingWorkspace.Settings.VeridianJitterPct = settings.VeridianJitterPct
-	existingWorkspace.Settings.VeridianAntiHashEnabled = settings.VeridianAntiHashEnabled
-	existingWorkspace.Settings.VeridianAntiHashWindowHours = settings.VeridianAntiHashWindowHours
-	// Relances dans le fil (12/10/2026) : absent de la console, une sauvegarde qui ne le
-	// porte pas ne doit pas le remettre a zero.
-	if settings.VeridianThreadFollowups != nil {
-		existingWorkspace.Settings.VeridianThreadFollowups = settings.VeridianThreadFollowups
-	}
-	existingWorkspace.Settings.VeridianExcludedProviderClasses = settings.VeridianExcludedProviderClasses
+	veridianApplyWorkspaceSettings(&existingWorkspace.Settings, settings)
 
 	// Handle template blocks - preserve existing blocks if not provided in update
 	// Note: Template blocks should be managed via dedicated /api/templateBlocks.* endpoints
@@ -487,14 +447,8 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Error("Failed to validate workspace")
 		return nil, err
 	}
-	// Veridian fork (lot 2) : exclusivite commercial / transactionnel. Verifiee
-	// seulement si cette ecriture change le pool ou le profil transactionnel :
-	// un workspace qui viole deja la regle reste modifiable pour tout le reste.
-	if veridianUsageSettingsChanged(poolBefore, transactionalBefore, existingWorkspace.Settings) {
-		if err := existingWorkspace.ValidateVeridianUsageExclusivity(); err != nil {
-			s.logger.WithField("workspace_id", id).WithField("error", err.Error()).Warn("Refused workspace update: profile usage exclusivity")
-			return nil, err
-		}
+	if err := s.veridianValidateUsageExclusivity(id, existingWorkspace, vaBefore); err != nil {
+		return nil, err
 	}
 
 	if err := s.repo.Update(ctx, existingWorkspace); err != nil {
@@ -502,38 +456,12 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
-	if policyChanged && s.emailIntegrationPolicyRepo != nil {
-		for _, integration := range existingWorkspace.GetIntegrationsByType(domain.IntegrationTypeEmail) {
-			if _, err := s.emailIntegrationPolicyRepo.WakePendingByIntegration(ctx, id, integration.ID); err != nil {
-				s.logger.WithField("workspace_id", id).
-					WithField("integration_id", integration.ID).
-					WithField("error", err.Error()).
-					Warn("Workspace sending policy updated but pending queue wake failed")
-			}
-		}
-	}
+	s.veridianWakeAfterPolicyChange(ctx, id, existingWorkspace, vaBefore)
 
 	// Blog themes are now created by the frontend when enabling the blog
 	// No automatic theme creation in the backend
 
 	return existingWorkspace, nil
-}
-
-// veridianUsageSettingsChanged dit si une ecriture de settings touche le pool
-// commercial ou le profil transactionnel (declenche la validation d'exclusivite).
-func veridianUsageSettingsChanged(poolBefore []string, transactionalBefore string, after domain.WorkspaceSettings) bool {
-	return transactionalBefore != after.TransactionalEmailProviderID ||
-		!reflect.DeepEqual(poolBefore, after.VeridianMarketingEmailProviderIDs)
-}
-
-func veridianWorkspaceSendingPolicyChanged(before, after domain.WorkspaceSettings) bool {
-	return !reflect.DeepEqual(before.VeridianProviderClassRates, after.VeridianProviderClassRates) ||
-		!reflect.DeepEqual(before.VeridianProviderClassDailyCap, after.VeridianProviderClassDailyCap) ||
-		before.VeridianPerRecipientDailyCap != after.VeridianPerRecipientDailyCap ||
-		before.VeridianPerSenderDailyCap != after.VeridianPerSenderDailyCap ||
-		!reflect.DeepEqual(before.VeridianSendingWindow, after.VeridianSendingWindow) ||
-		before.VeridianJitterPct != after.VeridianJitterPct ||
-		!reflect.DeepEqual(before.VeridianExcludedProviderClasses, after.VeridianExcludedProviderClasses)
 }
 
 // DeleteWorkspace deletes a workspace if the user is an owner
@@ -1639,9 +1567,7 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 	switch req.Type {
 	case domain.IntegrationTypeEmail:
 		integration.EmailProvider = req.Provider
-		// Verification is server-issued only after a successful saved-profile test.
-		integration.EmailProvider.VeridianTransportVerifiedAt = nil
-		veridianClearEmailProviderResponseFlags(&integration.EmailProvider)
+		veridianPrepareNewEmailProvider(&integration.EmailProvider)
 	case domain.IntegrationTypeSupabase:
 		if req.SupabaseSettings != nil {
 			req.SupabaseSettings.AuthEmailHook.HasSignatureKey = false
@@ -1664,10 +1590,8 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", integrationID).WithField("error", err.Error()).Error("Failed to validate integration")
 		return "", err
 	}
-	if integration.Type == domain.IntegrationTypeEmail {
-		if err := workspace.ValidateVeridianReturnIMAPLink(&integration.EmailProvider); err != nil {
-			return "", err
-		}
+	if err := veridianValidateEmailIntegration(workspace, &integration); err != nil {
+		return "", err
 	}
 
 	// Add the integration to the workspace
@@ -1777,14 +1701,7 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 	switch existingIntegration.Type {
 	case domain.IntegrationTypeEmail:
 		updatedIntegration.EmailProvider = req.Provider
-		transportChanged := veridianEmailProviderTransportChanged(&updatedIntegration.EmailProvider, &existingIntegration.EmailProvider)
-		veridianPreserveEmailProviderSecrets(&updatedIntegration.EmailProvider, existingIntegration.EmailProvider)
-		veridianClearEmailProviderResponseFlags(&updatedIntegration.EmailProvider)
-		if transportChanged {
-			updatedIntegration.EmailProvider.VeridianTransportVerifiedAt = nil
-		} else {
-			updatedIntegration.EmailProvider.VeridianTransportVerifiedAt = existingIntegration.EmailProvider.VeridianTransportVerifiedAt
-		}
+		veridianPrepareUpdatedEmailProvider(&updatedIntegration.EmailProvider, &existingIntegration.EmailProvider)
 	case domain.IntegrationTypeSupabase:
 		// Preserve existing encrypted keys if new keys are not provided
 		if req.SupabaseSettings != nil {
@@ -1857,22 +1774,7 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 			updatedIntegration.FirecrawlSettings = existingIntegration.FirecrawlSettings
 		}
 	case domain.IntegrationTypeIMAP:
-		// Veridian fork — config IMAP self-service (Lot 8). Préserve le password
-		// chiffré existant si l'admin re-sauve sans retaper le mot de passe (même
-		// pattern que les API keys Supabase/LLM/Firecrawl ci-dessus).
-		if req.IMAPSettings != nil {
-			updatedIntegration.IMAPSettings = req.IMAPSettings
-
-			if req.IMAPSettings.Password == "" &&
-				req.IMAPSettings.EncryptedPassword == "" &&
-				existingIntegration.IMAPSettings != nil {
-				updatedIntegration.IMAPSettings.EncryptedPassword =
-					existingIntegration.IMAPSettings.EncryptedPassword
-			}
-		} else {
-			// If no settings provided, preserve existing
-			updatedIntegration.IMAPSettings = existingIntegration.IMAPSettings
-		}
+		updatedIntegration.IMAPSettings = veridianMergeIMAPSettings(req.IMAPSettings, existingIntegration.IMAPSettings)
 	}
 
 	// Validate the updated integration
@@ -1880,10 +1782,8 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).WithField("error", err.Error()).Error("Failed to validate updated integration")
 		return err
 	}
-	if updatedIntegration.Type == domain.IntegrationTypeEmail {
-		if err := workspace.ValidateVeridianReturnIMAPLink(&updatedIntegration.EmailProvider); err != nil {
-			return err
-		}
+	if err := veridianValidateEmailIntegration(workspace, &updatedIntegration); err != nil {
+		return err
 	}
 
 	// Update the integration in the workspace
@@ -1999,8 +1899,7 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 		if workspace.Settings.TransactionalEmailProviderID == integrationID {
 			workspace.Settings.TransactionalEmailProviderID = ""
 		}
-		veridianRemoveEmailProfileReference(&workspace.Settings, integrationID)
-		workspace.VeridianClearReturnIMAPLinks(integrationID)
+		veridianForgetIntegration(workspace, integrationID)
 
 		// Save the updated workspace
 		if err := s.repo.Update(ctx, workspace); err != nil {
@@ -2025,30 +1924,6 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 		return err
 	}
 	return nil
-}
-
-func veridianRemoveEmailProfileReference(settings *domain.WorkspaceSettings, integrationID string) {
-	if settings == nil {
-		return
-	}
-	removedFromPool := false
-	remaining := make([]string, 0, len(settings.VeridianMarketingEmailProviderIDs))
-	for _, id := range settings.VeridianMarketingEmailProviderIDs {
-		if id == integrationID {
-			removedFromPool = true
-			continue
-		}
-		remaining = append(remaining, id)
-	}
-	settings.VeridianMarketingEmailProviderIDs = remaining
-	if removedFromPool {
-		settings.MarketingEmailProviderID = ""
-		if len(remaining) > 0 {
-			settings.MarketingEmailProviderID = remaining[0]
-		}
-	} else if settings.MarketingEmailProviderID == integrationID {
-		settings.MarketingEmailProviderID = ""
-	}
 }
 
 // deleteSupabaseIntegrationResources deletes all templates and transactional notifications associated with a Supabase integration
