@@ -262,6 +262,8 @@ type VeridianQueueEntryDetail struct {
 	ProfileName     string                `json:"profile_name"`
 	Class           string                `json:"class"`
 	CreatedAt       time.Time             `json:"created_at"`
+	// Priority : priorité de dépilage (1 transactionnel de séquence, 2 à 9 marketing, défaut 5). Plus petit = plus tôt.
+	Priority    int `json:"priority"`
 	Attempts        int                   `json:"attempts"`
 	MaxAttempts     int                   `json:"max_attempts"`
 	NextRetryAt     *time.Time            `json:"next_retry_at"`

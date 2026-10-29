@@ -3945,6 +3945,9 @@ func TestEmailNodeExecutor_Execute_TransactionalTemplateUsesTheReservedProfile(t
 		ContactData: &domain.Contact{Email: "recipient@example.com"},
 		Automation:  &domain.Automation{ID: "auto1", Name: "Commande", ListID: "list1"},
 	}
+	// L3 : même si une priorité marketing est posée sur l'automation, le transactionnel de séquence reste à 1.
+	domain.SetVeridianSendPriorityProvider(veridianAutomationPriority{"ws1/auto1": 9})
+	defer domain.SetVeridianSendPriorityProvider(nil)
 	_, err := executor.Execute(context.Background(), params)
 	require.NoError(t, err)
 	// Meme avec un noeud regle sur le profil commercial, le transactionnel part par le profil reserve.
@@ -3988,9 +3991,11 @@ func TestEmailNodeExecutor_Execute_MarketingTemplateKeepsTheCommercialProfileEve
 		DoAndReturn(func(_ context.Context, _ string, e []*domain.EmailQueueEntry) error {
 			assert.Equal(t, "integration123", e[0].IntegrationID)
 			assert.False(t, e[0].Payload.VeridianTransactional)
-			assert.Equal(t, domain.EmailQueuePriorityMarketing, e[0].Priority)
+			assert.Equal(t, 3, e[0].Priority, "L3 : priorité posée sur l'automation")
 			return nil
 		})
+	domain.SetVeridianSendPriorityProvider(veridianAutomationPriority{"ws1/auto1": 3})
+	defer domain.SetVeridianSendPriorityProvider(nil)
 	_, err := executor.Execute(context.Background(), NodeExecutionParams{
 		WorkspaceID: "ws1",
 		Node:        &domain.AutomationNode{ID: "n", Type: domain.NodeTypeEmail, NextNodeID: strPtr("next"), Config: map[string]interface{}{"template_id": "tpl123"}},
@@ -4042,4 +4047,11 @@ func TestEmailNodeExecutor_Execute_EnqueuedEntryCarriesNodeID(t *testing.T) {
 		Automation:  &domain.Automation{ID: "auto1", Name: "A", ListID: "list1"},
 	})
 	require.NoError(t, err)
+}
+
+// veridianAutomationPriority : priorités par "workspace/automation" (lot L3).
+type veridianAutomationPriority map[string]int
+
+func (p veridianAutomationPriority) SendPriorityFor(ws string, _ domain.EmailQueueSourceType, id string) int {
+	return p[ws+"/"+id]
 }

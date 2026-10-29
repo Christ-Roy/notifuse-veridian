@@ -15,7 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Notifuse/notifuse/internal/database"
+	"github.com/Notifuse/notifuse/internal/domain"
 	veridianmig "github.com/Notifuse/notifuse/internal/migrations/veridian"
+	"github.com/Notifuse/notifuse/internal/repository"
 )
 
 // Test contre un vrai PostgreSQL : VERIDIAN_POLICY_TEST_DSN="postgres://user:pass@host:5432/db?sslmode=disable".
@@ -358,4 +361,98 @@ func TestPG_SuggestionRelancesEtCandidatsDeLaReserve(t *testing.T) {
 	f, err = st.FollowupsDue(ctx, "ws", StockConfig{}, nil, time.Now().Add(5*24*time.Hour))
 	require.NoError(t, err)
 	assert.Empty(t, f, "sans automation ni liste : rien à compter")
+}
+
+// Bout en bout contre le VRAI schéma de workspace et la VRAIE requête de dépilage : une campagne de priorité 2 sort avant une
+// campagne de priorité 5 même si elle est arrivée après ; changer la priorité d'une campagne dont les mails sont déjà en file
+// change l'ordre de sortie ; le transactionnel de séquence (1) passe toujours avant.
+func TestPG_PrioriteBoutEnBoutAvecLaVraieFile(t *testing.T) {
+	dsn := os.Getenv("VERIDIAN_POLICY_TEST_DSN")
+	if dsn == "" {
+		t.Skip("VERIDIAN_POLICY_TEST_DSN non posé")
+	}
+	ctx := context.Background()
+	admin, err := sql.Open("postgres", dsn)
+	require.NoError(t, err)
+	defer func() { _ = admin.Close() }()
+	_, err = admin.ExecContext(ctx, `DROP SCHEMA IF EXISTS l3full CASCADE`)
+	require.NoError(t, err)
+	_, err = admin.ExecContext(ctx, `CREATE SCHEMA l3full`)
+	require.NoError(t, err)
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+	db, err := sql.Open("postgres", dsn+sep+"search_path=l3full")
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	require.NoError(t, database.InitializeWorkspaceDatabase(db), "schéma de workspace réel")
+
+	var stmts []string
+	for _, sp := range veridianmig.Default.List() {
+		if sp.Number == 66 {
+			stmts = sp.Workspace
+		}
+	}
+	for _, s := range stmts {
+		_, err := db.ExecContext(ctx, s)
+		require.NoError(t, err)
+	}
+
+	st := NewStoreWithDB(db)
+	r := NewResolver(st, noopLog{}, time.Minute)
+	domain.SetVeridianSendPriorityProvider(r)
+	defer domain.SetVeridianSendPriorityProvider(nil)
+	queue := repository.NewEmailQueueRepositoryWithDB(db)
+
+	enqueue := func(source, email string, tx bool) {
+		prio := domain.VeridianSendPriority("ws", domain.EmailQueueSourceBroadcast, source)
+		if tx {
+			prio = domain.EmailQueuePriorityTransactional
+		}
+		require.NoError(t, queue.Enqueue(ctx, "ws", []*domain.EmailQueueEntry{{
+			Priority: prio, SourceType: domain.EmailQueueSourceBroadcast, SourceID: source, IntegrationID: "int", ProviderKind: domain.EmailProviderKindSMTP,
+			ContactEmail: email, MessageID: "m-" + email, TemplateID: "tpl", Payload: domain.EmailQueuePayload{FromAddress: "a@b.fr"}}}))
+		time.Sleep(5 * time.Millisecond) // created_at distincts : B (5) arrive AVANT A
+	}
+	sources := func() string {
+		out, err := queue.FetchPending(ctx, "ws", 100)
+		require.NoError(t, err)
+		var s []string
+		for _, e := range out {
+			s = append(s, fmt.Sprintf("%s/%d", e.SourceID, e.Priority))
+		}
+		return strings.Join(s, " ")
+	}
+
+	// B (défaut 5) est en file la première ; A reçoit la priorité 2 AVANT d'enqueue ; un transactionnel arrive en dernier.
+	enqueue("campB", "b1@x.fr", false)
+	enqueue("campB", "b2@x.fr", false)
+	_, err = st.SetPriority(ctx, "ws", "broadcast", "campA", 2, "agent")
+	require.NoError(t, err)
+	r.Invalidate("ws")
+	enqueue("campA", "a1@x.fr", false)
+	enqueue("campA", "a2@x.fr", false)
+	enqueue("campB", "tx@x.fr", true)
+	assert.Equal(t, "campB/1 campA/2 campA/2 campB/5 campB/5", sources(),
+		"transactionnel d'abord, puis la campagne de priorité 2 (arrivée après), puis la campagne à 5")
+
+	// Les mails de B sont DÉJÀ en file : la priorité 2 posée sur B les réécrit, A (2) et B (2) passent à tour de rôle.
+	n, err := st.SetPriority(ctx, "ws", "broadcast", "campB", 2, "agent")
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, n, "les deux mails marketing de B, pas le transactionnel")
+	got := sources()
+	assert.Equal(t, 5, len(strings.Fields(got)), "5 mails")
+	assert.True(t, strings.HasPrefix(got, "campB/1 "), "le transactionnel garde la première place : %s", got)
+	assert.NotContains(t, got, "/5", "plus aucun mail à 5 : %s", got)
+
+	// A descend à 9 : B (2) repasse devant. Même requête de dépilage, même file.
+	_, err = st.SetPriority(ctx, "ws", "broadcast", "campA", 9, "agent")
+	require.NoError(t, err)
+	assert.Equal(t, "campB/1 campB/2 campB/2 campA/9 campA/9", sources())
+
+	// Retrait : A retrouve 5 et passe encore après B (2), avant rien d'autre.
+	_, err = st.ClearPriority(ctx, "ws", "broadcast", "campA")
+	require.NoError(t, err)
+	assert.Equal(t, "campB/1 campB/2 campB/2 campA/5 campA/5", sources())
 }

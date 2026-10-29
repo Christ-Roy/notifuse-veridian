@@ -96,7 +96,7 @@ func buildQueueEntryWhere(s queueEntryScope) (string, []interface{}) {
 const queueEntrySelectCols = `e.id, e.status, e.contact_email, e.source_id, COALESCE(e.node_id, ''),
 	` + "%s" + ` AS reason, COALESCE(e.defer_detail, ''),
 	COALESCE(NULLIF(e.defer_profile, ''), COALESCE(e.integration_id, '')),
-	COALESCE(e.payload->>'veridian_provider_class', ''), e.created_at, e.next_retry_at`
+	COALESCE(e.payload->>'veridian_provider_class', ''), e.created_at, e.next_retry_at, e.priority`
 
 // ListEntries rend une page d'entrées d'une automation (ordre d'arrivée dans la file).
 func (r *veridianQueueEntriesRepository) ListEntries(ctx context.Context, f domain.VeridianQueueEntriesFilter) (*domain.VeridianQueueEntriesPage, error) {
@@ -133,7 +133,7 @@ func (r *veridianQueueEntriesRepository) ListEntries(ctx context.Context, f doma
 		var created time.Time
 		var nextRetry sql.NullTime
 		if err := rows.Scan(&e.ID, &e.Status, &e.ContactEmail, &e.AutomationID, &e.NodeID, &e.Reason,
-			&e.ReasonDetail, &e.ProfileID, &e.Class, &created, &nextRetry); err != nil {
+			&e.ReasonDetail, &e.ProfileID, &e.Class, &created, &nextRetry, &e.Priority); err != nil {
 			return nil, fmt.Errorf("failed to scan queue entry: %w", err)
 		}
 		e.CreatedAt = created.UTC().Format(time.RFC3339Nano)

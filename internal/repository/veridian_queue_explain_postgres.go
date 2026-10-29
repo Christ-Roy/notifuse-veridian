@@ -259,7 +259,7 @@ func (r *veridianQueueExplainRepository) EntryDetail(ctx context.Context, worksp
 		SELECT e.id, e.status, CASE WHEN e.source_type = 'automation' THEN e.source_id ELSE '' END,
 		       COALESCE(a.name, ''), COALESCE(NULLIF(e.node_id, ''), ca.current_node_id, ''),
 		       e.contact_email, e.integration_id,
-		       COALESCE(e.payload->>'veridian_provider_class', ''), e.created_at, e.attempts, e.max_attempts,
+		       COALESCE(e.payload->>'veridian_provider_class', ''), e.created_at, e.priority, e.attempts, e.max_attempts,
 		       e.next_retry_at, `+veridianQueueReasonSQL("e")+`, COALESCE(e.defer_detail, ''),
 		       e.deferred_at, e.defer_count, e.first_examined_at, e.last_examined_at, COALESCE(e.last_error, '')
 		FROM email_queue e
@@ -272,7 +272,7 @@ func (r *veridianQueueExplainRepository) EntryDetail(ctx context.Context, worksp
 		) ca ON true
 		WHERE e.id = $1`, entryID).Scan(
 		&d.ID, &d.Status, &d.AutomationID, &d.AutomationName, &d.NodeID, &d.ContactEmail, &d.IntegrationID,
-		&d.Class, &d.CreatedAt, &d.Attempts, &d.MaxAttempts, &next, &d.Reason, &d.ReasonDetail,
+		&d.Class, &d.CreatedAt, &d.Priority, &d.Attempts, &d.MaxAttempts, &next, &d.Reason, &d.ReasonDetail,
 		&deferredAt, &deferCount, &first, &last, &d.LastError)
 	if err == sql.ErrNoRows {
 		return nil, nil

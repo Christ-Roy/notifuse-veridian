@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent, cleanup } from '@testing-library/react'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import { App } from 'antd'
@@ -11,6 +11,8 @@ import { emailProfilesOverviewService } from '../../services/api/veridian_email_
 import type { TransactionalWatch } from '../../services/api/veridian_email_profiles'
 import { prospectionStatsService } from '../../services/api/veridian_prospection'
 import { replyStatsApi } from '../../services/api/veridian_reply_stats'
+import { stockOverviewService } from '../../services/api/veridian_stock'
+import type { StockOverview } from '../../services/api/veridian_stock'
 import { templatesApi } from '../../services/api/template'
 import type { ProspectionStats } from '../../services/api/veridian_prospection'
 import type { Workspace } from '../../services/api/types'
@@ -38,6 +40,21 @@ vi.mock('../../services/api/veridian_email_profiles', () => ({ emailProfilesOver
 vi.mock('../../services/api/template', () => ({ templatesApi: { list: vi.fn(async () => ({ templates: [] })) } }))
 vi.mock('../../services/api/veridian_prospection', () => ({ prospectionStatsService: { get: vi.fn() } }))
 vi.mock('../../services/api/veridian_reply_stats', () => ({ replyStatsApi: { get: vi.fn() } }))
+vi.mock('../../services/api/veridian_stock', () => ({ stockOverviewService: { get: vi.fn() } }))
+
+// Stock : deux classes, l'une critique (5 contacts pour 10 par jour), l'autre couverte.
+const stockFixture: StockOverview = {
+  workspace_id: 'ws-test',
+  generated_at: '2026-10-29T10:00:00Z',
+  target_days: 3,
+  config_source: 'config',
+  notes: [],
+  classes: [
+    { class: 'google', label: 'Google', enrolled: 100, reserve: 200, prospectable: 300, capacity_today: 10, days_of_coverage: 30, enrolled_unsent: 30, reserve_unsent: 200, unsent: 230, capacity_nominal: 10, days_unsent: 23, status: 'ok', restock_need: 0, reply_rate_smoothed: 0.07 },
+    { class: 'orange', label: 'Orange', enrolled: 5, reserve: 0, prospectable: 5, capacity_today: 10, days_of_coverage: 0.5, enrolled_unsent: 5, reserve_unsent: 0, unsent: 5, capacity_nominal: 10, days_unsent: 0.5, status: 'critique', restock_need: 25, reply_rate_smoothed: 0.02 }
+  ],
+  totals: { enrolled: 105, reserve: 200, prospectable: 305, enrolled_unsent: 35, reserve_unsent: 200, unsent: 235, capacity_today: 20, capacity_nominal: 20, days_of_coverage: 15.3, days_unsent: 11.8, restock_need: 25 }
+}
 
 const workspace = {
   id: 'ws-test',
@@ -179,6 +196,7 @@ describe('VeridianProspectionDashboard', () => {
     vi.mocked(emailProfilesOverviewService.get).mockResolvedValue(baseOverview)
     vi.mocked(prospectionStatsService.get).mockResolvedValue(stats)
     vi.mocked(replyStatsApi.get).mockResolvedValue({ replied: 13, replied_human: 12 })
+    vi.mocked(stockOverviewService.get).mockResolvedValue(stockFixture)
   })
 
   it("modèles : charge toutes les catégories email (pas seulement marketing), sinon les modèles de prospection s'affichent « Deleted template »", async () => {
@@ -196,6 +214,13 @@ describe('VeridianProspectionDashboard', () => {
     expect(within(screen.getByTestId('tile-auto-replies')).getByText('1')).toBeInTheDocument()
     await waitFor(() => expect(within(screen.getByTestId('tile-stock')).getByText('20,000')).toBeInTheDocument())
     expect(within(screen.getByTestId('tile-profiles')).getByText('2')).toBeInTheDocument()
+    await waitFor(() => expect(within(screen.getByTestId('tile-coverage')).getByText('11.8 d')).toBeInTheDocument())
+    const stockCard = await screen.findByTestId('stock-by-provider')
+    const rows = within(stockCard).getAllByRole('row')
+    expect(rows[1]).toHaveTextContent('Orange')
+    expect(rows[1]).toHaveTextContent('Critical')
+    expect(rows[2]).toHaveTextContent('Google')
+    expect(within(stockCard).getByText(/Orange 25/)).toBeInTheDocument()
     // un seul couple ralenti (relais-a / Microsoft), aucun arrêt
     expect(within(screen.getByTestId('tile-reputation')).getByText('1')).toBeInTheDocument()
     expect(screen.getByTestId('email-chart')).toHaveAttribute('data-type', 'commercial')
@@ -295,6 +320,18 @@ describe('VeridianProspectionDashboard', () => {
     renderDash(open)
     await waitFor(() => expect(screen.getByTestId('tile-sent-today')).toHaveTextContent('319 / 600'))
     expect(screen.queryByTestId('transactional-watch-banner')).not.toBeInTheDocument()
+  })
+
+  it('stock illisible ou sans capacité : la tuile de couverture affiche un tiret, le reste du tableau de bord tient', async () => {
+    vi.mocked(stockOverviewService.get).mockResolvedValue({ ...stockFixture, classes: [], totals: { ...stockFixture.totals, days_unsent: null } })
+    renderDash()
+    await waitFor(() => expect(screen.getByTestId('tile-sent-today')).toHaveTextContent('319 / 600'))
+    await waitFor(() => expect(within(screen.getByTestId('tile-coverage')).getByText('-')).toBeInTheDocument())
+    vi.mocked(stockOverviewService.get).mockRejectedValue(new Error('boom'))
+    cleanup()
+    renderDash()
+    await waitFor(() => expect(screen.getByTestId('tile-sent-today')).toHaveTextContent('319 / 600'))
+    expect(await screen.findByText('The stock could not be read.')).toBeInTheDocument()
   })
 
   it('mesure transactionnelle impossible : affichée, jamais présentée comme saine', async () => {

@@ -9,6 +9,7 @@ import { emailProfilesOverviewService } from '../../services/api/veridian_email_
 import { prospectionStatsService } from '../../services/api/veridian_prospection'
 import { templatesApi } from '../../services/api/template'
 import { replyStatsApi } from '../../services/api/veridian_reply_stats'
+import { stockOverviewService } from '../../services/api/veridian_stock'
 import { EmailMetricsChart } from '../analytics/EmailMetricsChart'
 import { VeridianEngagementByClass } from '../analytics/veridian_engagement_by_class'
 import { buildSeriesQuery, EMAIL_SERIES } from '../analytics/email_metrics_series'
@@ -20,6 +21,8 @@ import { VeridianProspectionSequences } from './veridian_prospection_sequences'
 import { VeridianProspectionPerformance } from './veridian_prospection_performance'
 import { VeridianProspectionRejections } from './veridian_prospection_rejections'
 import { VeridianProspectionReputation } from './veridian_prospection_reputation'
+import { VeridianProspectionStock } from './veridian_prospection_stock'
+import { coverageDays } from './veridian_stock_rules'
 import { VeridianTransactionalWatchBanner } from './veridian_transactional_watch'
 import { reputationCouples, sumMeasure } from './veridian_prospection_rules'
 
@@ -61,6 +64,12 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
   const repliesQuery = useQuery({
     queryKey: ['prospection', 'replies', workspace.id, timeRange[0], timeRange[1]],
     queryFn: () => replyStatsApi.get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] }),
+    refetchInterval: 60000
+  })
+  // L3 : stock par fournisseur destinataire et jours de couverture (stock.overview, même définition que stock-par-classe.py).
+  const stockQuery = useQuery({
+    queryKey: ['prospection', 'stock', workspace.id],
+    queryFn: () => stockOverviewService.get(workspace.id),
     refetchInterval: 60000
   })
   // Tous les modèles email (prospection, marketing...), même clé de cache que l'éditeur de flux : le tableau nomme chaque étape.
@@ -140,6 +149,13 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
           t`Active contacts who have not been sent any mail yet, all segments.`
         )}
         {tile(
+          'tile-coverage',
+          t`Days of coverage`,
+          coverageDays(stockQuery.data) === null ? '-' : t`${formatNumber(coverageDays(stockQuery.data) ?? 0)} d`,
+          stockQuery.isLoading,
+          t`Contacts never mailed over what one full sending day can absorb, all providers. Detail by provider below.`
+        )}
+        {tile(
           'tile-profiles',
           t`Profiles in rotation`,
           totals?.active_commercial_profiles ?? 0,
@@ -195,6 +211,7 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
           timeRange={timeRange}
           timezone={tz}
         />
+        <VeridianProspectionStock overview={stockQuery.data} loading={stockQuery.isLoading} error={stockQuery.isError} />
         <VeridianProspectionReputation overview={overview} loading={overviewQuery.isLoading} />
       </div>
 

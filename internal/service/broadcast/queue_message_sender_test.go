@@ -127,6 +127,13 @@ func TestNewQueueMessageSender(t *testing.T) {
 	})
 }
 
+// veridianTestPriorityProvider : priorités par "workspace/source" pour les tests d'enqueue (lot L3).
+type veridianTestPriorityProvider struct{ bySource map[string]int }
+
+func (p veridianTestPriorityProvider) SendPriorityFor(ws string, _ domain.EmailQueueSourceType, id string) int {
+	return p.bySource[ws+"/"+id]
+}
+
 func TestQueueMessageSender_SetVeridianEmailProfileRotator(t *testing.T) {
 	sender := &queueMessageSender{}
 	rotator := newVeridianEmailProfileRotator()
@@ -1364,6 +1371,50 @@ func TestQueueMessageSender_BuildQueueEntry(t *testing.T) {
 		assert.NotEmpty(t, entry.ID)
 		assert.Equal(t, domain.EmailQueueStatusPending, entry.Status)
 		assert.Equal(t, domain.EmailQueuePriorityMarketing, entry.Priority)
+
+		// L3 : la priorité posée sur la campagne (policy.priority.set) arrive dans la file ; une autre campagne garde 5.
+		domain.SetVeridianSendPriorityProvider(veridianTestPriorityProvider{bySource: map[string]int{"workspace-1/broadcast-1": 2}})
+		defer domain.SetVeridianSendPriorityProvider(nil)
+		prioritized, perr := qms.buildQueueEntry(
+			context.Background(),
+			"workspace-1",
+			"integration-1",
+			"https://api.test.com",
+			true,
+			broadcast,
+			"msg-123",
+			"john@example.com",
+			template,
+			data,
+			emailProvider,
+			"",
+			"",
+			nil,
+			newVeridianWorkspacePixelResolver(nil, qms.logger),
+		)
+		require.NoError(t, perr)
+		assert.Equal(t, 2, prioritized.Priority, "priorité de la campagne")
+		broadcast.ID = "broadcast-autre"
+		other, perr := qms.buildQueueEntry(
+			context.Background(),
+			"workspace-1",
+			"integration-1",
+			"https://api.test.com",
+			true,
+			broadcast,
+			"msg-123",
+			"john@example.com",
+			template,
+			data,
+			emailProvider,
+			"",
+			"",
+			nil,
+			newVeridianWorkspacePixelResolver(nil, qms.logger),
+		)
+		require.NoError(t, perr)
+		assert.Equal(t, domain.EmailQueuePriorityMarketing, other.Priority, "une campagne sans priorité posée reste à 5")
+		broadcast.ID = "broadcast-1"
 		assert.Equal(t, domain.EmailQueueSourceBroadcast, entry.SourceType)
 		assert.Equal(t, "broadcast-1", entry.SourceID)
 		assert.Equal(t, "integration-1", entry.IntegrationID)

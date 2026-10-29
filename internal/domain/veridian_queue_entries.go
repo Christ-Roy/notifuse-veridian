@@ -84,6 +84,8 @@ type VeridianQueueEntry struct {
 	Class        string  `json:"class,omitempty"`
 	CreatedAt    string  `json:"created_at"`
 	NextRetryAt  *string `json:"next_retry_at,omitempty"`
+	// Priority : priorité de dépilage (1 transactionnel de séquence, 2 à 9 marketing, défaut 5). Plus petit = plus tôt.
+	Priority int `json:"priority"`
 }
 
 // VeridianQueueEntriesPage : une page d'entrées et le curseur de la suivante.

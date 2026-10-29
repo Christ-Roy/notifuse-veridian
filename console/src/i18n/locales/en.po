@@ -87,6 +87,13 @@ msgstr "{0} contacts"
 msgid "{0} contacts will be skipped"
 msgstr "{0} contacts will be skipped"
 
+#. placeholder {0}: formatNumber(coverageDays(stockQuery.data) ?? 0)
+#. placeholder {0}: formatNumber(value)
+#: src/components/prospection/veridian_prospection_dashboard.tsx
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "{0} d"
+msgstr "{0} d"
+
 #~ msgid "{0} emails / day"
 #~ msgstr "{0} emails / day"
 
@@ -2026,6 +2033,10 @@ msgstr "Cannot upload in read-only mode"
 msgid "Cap /day"
 msgstr "Cap /day"
 
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "Capacity per day"
+msgstr "Capacity per day"
+
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "Capitalize"
 msgstr "Capitalize"
@@ -2624,6 +2635,10 @@ msgstr "Contacts due today: not measured"
 msgid "Contacts matching these conditions will follow the 'Yes' path. Others will follow 'No'."
 msgstr "Contacts matching these conditions will follow the 'Yes' path. Others will follow 'No'."
 
+#: src/components/prospection/veridian_prospection_dashboard.tsx
+msgid "Contacts never mailed over what one full sending day can absorb, all providers. Detail by provider below."
+msgstr "Contacts never mailed over what one full sending day can absorb, all providers. Detail by provider below."
+
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "Contacts of an excluded class are skipped by this profile."
 msgstr "Contacts of an excluded class are skipped by this profile."
@@ -2805,6 +2820,10 @@ msgstr "Country"
 msgid "Cover"
 msgstr "Cover"
 
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "Covered"
+msgstr "Covered"
+
 #: src/components/automations/UpsertAutomationDrawer.tsx
 #: src/components/file_manager/fileManager.tsx
 #: src/components/lists/ListDrawer.tsx
@@ -2960,6 +2979,10 @@ msgstr "Credentials are erased. Refused while messages are still queued."
 
 #~ msgid "Credentials saved"
 #~ msgstr "Credentials saved"
+
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "Critical"
+msgstr "Critical"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Cruise"
@@ -3282,6 +3305,11 @@ msgstr "days"
 #: src/components/automations/config/DelayConfigForm.tsx
 msgid "Days"
 msgstr "Days"
+
+#: src/components/prospection/veridian_prospection_dashboard.tsx
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "Days of coverage"
+msgstr "Days of coverage"
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "Days per step"
@@ -5969,6 +5997,10 @@ msgstr "Identifies what type of link was used (e.g. email, cpc, banner)"
 msgid "Identifies which site sent the traffic (e.g. google, newsletter)"
 msgstr "Identifies which site sent the traffic (e.g. google, newsletter)"
 
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "Idle"
+msgstr "Idle"
+
 #: src/components/email_builder/blocks/MjImageBlock.tsx
 msgid "If \"true\", will be full width on mobile even if width is set"
 msgstr "If \"true\", will be full width on mobile even if width is set"
@@ -6891,6 +6923,10 @@ msgstr "Logs two messages with the same rendered content sent to the same provid
 msgid "Looks good"
 msgstr "Looks good"
 
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "Low"
+msgstr "Low"
+
 #: src/components/prospection/veridian_prospection_replies.tsx
 msgid "low base"
 msgstr "low base"
@@ -7263,6 +7299,10 @@ msgstr "Neutral profile (no recipient class)"
 msgid "Never examined"
 msgstr "Never examined"
 
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "Never mailed"
+msgstr "Never mailed"
+
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 msgid "New app password"
 msgstr "New app password"
@@ -7395,6 +7435,10 @@ msgstr "No candidate profile was evaluated."
 msgid "No cap"
 msgstr "No cap"
 
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "No capacity"
+msgstr "No capacity"
+
 #: src/components/templates/TemplateSelectorInput.tsx
 msgid "No category"
 msgstr "No category"
@@ -7402,6 +7446,10 @@ msgstr "No category"
 #: src/components/automations/nodes/FilterNode.tsx
 msgid "No conditions"
 msgstr "No conditions"
+
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "No contact in stock."
+msgstr "No contact in stock."
 
 #: src/pages/ContactsPage.tsx
 msgid "No contacts found. Add some contacts to get started."
@@ -7504,6 +7552,10 @@ msgstr "No linked inbox"
 #: src/components/automations/AutomationCard.tsx
 msgid "No list"
 msgstr "No list"
+
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "No list of enrolled contacts is defined: set it with the stock:config command."
+msgstr "No list of enrolled contacts is defined: set it with the stock:config command."
 
 #: src/pages/ListsPage.tsx
 msgid "No lists found"
@@ -8964,6 +9016,7 @@ msgid "Proton Mail"
 msgstr "Proton Mail"
 
 #: src/components/prospection/veridian_prospection_reputation.tsx
+#: src/components/prospection/veridian_prospection_stock.tsx
 #: src/components/sending_profiles/veridian_capacity_block.tsx
 #: src/components/webhooks/InboundWebhookEventsTab.tsx
 msgid "Provider"
@@ -9449,6 +9502,7 @@ msgstr "Reply Branch"
 #: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
+#: src/components/prospection/veridian_prospection_stock.tsx
 msgid "Reply rate"
 msgstr "Reply rate"
 
@@ -11090,6 +11144,7 @@ msgstr "STARTTLS required"
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
 #: src/components/prospection/veridian_prospection_reputation.tsx
 #: src/components/prospection/veridian_prospection_sends.tsx
+#: src/components/prospection/veridian_prospection_stock.tsx
 msgid "State"
 msgstr "State"
 
@@ -11121,6 +11176,10 @@ msgstr "Step"
 #: src/components/sending_profiles/veridian_capacity_block.tsx
 msgid "Still to send"
 msgstr "Still to send"
+
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "Stock by recipient provider"
+msgstr "Stock by recipient provider"
 
 #: src/components/prospection/veridian_prospection_reputation.tsx
 msgid "Stopped"
@@ -11768,6 +11827,10 @@ msgstr "The server refused the test message."
 msgid "The status to assign when adding to the list"
 msgstr "The status to assign when adding to the list"
 
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "The stock could not be read."
+msgstr "The stock could not be read."
+
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "The table of this profile replaces the workspace table as a whole. 0 means no cap."
 msgstr "The table of this profile replaces the workspace table as a whole. 0 means no cap."
@@ -12134,6 +12197,15 @@ msgstr "to prevent duplicate sends"
 #: src/pages/BroadcastsPage.tsx
 msgid "To send a broadcast you need a sending profile: the mailbox your emails are sent from. It takes two minutes to create one."
 msgstr "To send a broadcast you need a sending profile: the mailbox your emails are sent from. It takes two minutes to create one."
+
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "To source"
+msgstr "To source"
+
+#. placeholder {0}: overview.target_days
+#: src/components/prospection/veridian_prospection_stock.tsx
+msgid "To source for {0} days, best repliers first:"
+msgstr "To source for {0} days, best repliers first:"
 
 #. placeholder {0}: config.title
 #: src/components/ai-assistant/AIAssistantChat.tsx
