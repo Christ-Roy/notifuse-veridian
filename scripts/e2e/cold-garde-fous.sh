@@ -38,7 +38,7 @@
 # Env requis : NOTIFUSE_HUB_API_SECRET  (HMAC Hub→Notifuse staging)
 # Env optionnel : NOTIFUSE_URL (défaut https://notifuse.staging.veridian.site)
 #                 DEV_SSH (défaut dev-pub) · SINK_HOST (doit rester 127.0.0.1)
-#                 SINK_PORT (défaut 1025) · SINK_TASK (défaut smtp-sink)
+#                 SINK_PORT (défaut 1025) · SINK_TASK (défaut : autodétecté, smtp-sink ou <job>-smtp-sink)
 #                 STAGING_JOB (défaut notifuse-staging) · NOMAD_V
 #
 # Sortie : log PASS/FAIL par gate sur stderr ; tableau récapitulatif final +
@@ -49,7 +49,11 @@ BASE="${NOTIFUSE_URL:-https://notifuse.staging.veridian.site}"
 DEV_SSH="${DEV_SSH:-dev-pub}"
 SINK_HOST="${SINK_HOST:-127.0.0.1}"
 SINK_PORT="${SINK_PORT:-1025}"
-SINK_TASK="${SINK_TASK:-smtp-sink}"
+# Noms des tasks de l'allocation staging : prefixes par le job depuis la version 482 du job (29/10/2026),
+# non prefixes avant. SINK_TASK / DB_TASK / APP_TASK les surchargent ; sinon on prend celui qui existe.
+SINK_TASK="${SINK_TASK:-}"
+DB_TASK="${DB_TASK:-}"
+APP_TASK="${APP_TASK:-}"
 RELAY_CONTAINER="${RELAY_CONTAINER:-mail-relay}"
 STAGING_JOB="${STAGING_JOB:-notifuse-staging}"
 NOMAD_V="${NOMAD_V:-$HOME/bin/nomad-v}"
@@ -114,11 +118,23 @@ staging_alloc() {
   "$NOMAD_V" raw job allocs -json "$STAGING_JOB" 2>/dev/null \
     | python3 -c 'import json,sys; a=json.load(sys.stdin); r=[x for x in a if x.get("ClientStatus")=="running"]; print(r[0]["ID"] if r else "")'
 }
+# resolve_tasks : renseigne SINK_TASK, DB_TASK, APP_TASK d'apres les tasks reellement presentes dans l'allocation.
+resolve_tasks() {
+  local alloc names
+  alloc="$(staging_alloc)"; [ -n "$alloc" ] || return 1
+  names="$("$NOMAD_V" raw alloc status -json "$alloc" 2>/dev/null | python3 -c 'import json,sys; print(" ".join((json.load(sys.stdin).get("TaskStates") or {}).keys()))')"
+  pick() { local want="$1" n; for n in $names; do [ "$n" = "$want" ] || [ "$n" = "$STAGING_JOB-$want" ] && { echo "$n"; return; }; done; }
+  [ -n "$SINK_TASK" ] || SINK_TASK="$(pick smtp-sink)"
+  [ -n "$DB_TASK" ]   || DB_TASK="$(pick db)"
+  [ -n "$APP_TASK" ]  || APP_TASK="$(pick notifuse)"
+  [ -n "$APP_TASK" ]  || APP_TASK="$STAGING_JOB"
+  [ -n "$SINK_TASK" ] && [ -n "$DB_TASK" ]
+}
 psqlq() {
   local alloc
   alloc="$(staging_alloc)"
   [ -n "$alloc" ] || return 1
-  "$NOMAD_V" raw alloc exec -task db "$alloc" \
+  "$NOMAD_V" raw alloc exec -task "$DB_TASK" "$alloc" \
     psql -U postgres -d "$WSDB" -tAc "$1" 2>/dev/null | tr -d '\r'
 }
 # Les adresses de chaque run sont uniques, donc lire la queue tail des logs de
@@ -140,7 +156,7 @@ notifuse_since() {
   local alloc
   alloc="$(staging_alloc)"
   [ -n "$alloc" ] || return 1
-  "$NOMAD_V" raw alloc logs -task notifuse -stdout -tail -c 1048576 "$alloc" 2>&1
+  "$NOMAD_V" raw alloc logs -task "$APP_TASK" -stdout -tail -c 1048576 "$alloc" 2>&1
 }
 relay_since() { ssh "$DEV_SSH" "docker logs $RELAY_CONTAINER --since '$RUN_START_ISO' 2>&1"; }
 
@@ -149,8 +165,9 @@ ensure_sink() {
   [ "$SINK_HOST" = "127.0.0.1" ] || fatal "SINK_HOST=$SINK_HOST interdit : le sink doit rester loopback dans l'allocation"
   alloc="$(staging_alloc)"
   [ -n "$alloc" ] || fatal "allocation $STAGING_JOB introuvable"
+  resolve_tasks || fatal "tasks smtp-sink / db introuvables dans l'allocation $STAGING_JOB"
   state="$($NOMAD_V raw alloc status -json "$alloc" 2>/dev/null \
-    | python3 -c 'import json,sys; print((json.load(sys.stdin).get("TaskStates",{}).get("smtp-sink",{}) or {}).get("State",""))' 2>/dev/null)"
+    | python3 -c 'import json,sys; print((json.load(sys.stdin).get("TaskStates",{}).get(sys.argv[1],{}) or {}).get("State",""))' "$SINK_TASK" 2>/dev/null)"
   [ "$state" = "running" ] || fatal "task Nomad $SINK_TASK non running (state=${state:-absent})"
   sink_since >/dev/null || fatal "logs Nomad $SINK_TASK illisibles"
   log "sink Nomad $SINK_TASK actif sur $SINK_HOST:$SINK_PORT (loopback allocation uniquement)"

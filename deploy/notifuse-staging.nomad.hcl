@@ -175,6 +175,8 @@ EOH
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
         ports = ["http"]
       }
+      # Garde reseau (fiche 64) : le smtp-sink E2E est en loopback dans l'allocation. Exception EXACTE 127.0.0.1:1025,
+      # staging seulement (jamais dans notifuse.nomad.hcl), requise par scripts/e2e/cold-garde-fous.sh.
       template {
         destination = "secrets/app.env"
         perms       = "600"   # I07 : sans ca Nomad ecrit en 644, lisible par tout compte local sur le noeud (mesure du 2026-10-07)
@@ -200,6 +202,7 @@ CHECK_FOR_UPDATES=false
 API_ENDPOINT=https://notifuse.staging.veridian.site
 INTERNAL_API_ENDPOINT=http://localhost:8081
 VERIDIAN_DEFAULT_PLAN=free
+NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025
 
 {{ with nomadVar "nomad/jobs/notifuse-staging" }}
 DB_PASSWORD={{ .POSTGRES_PASSWORD }}

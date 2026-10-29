@@ -89,6 +89,9 @@ type EmailQueueWorker struct {
 	// (cf. veridian_render_at_send.go). nil = comportement upstream.
 	queuedEmailRenderer QueuedEmailRenderer
 
+	// Points d'extension de processEntry (veridian_send_pipeline.go). nil = pipeline Veridian.
+	pipeline SendPipeline
+
 	// Veridian fork (fiche 62) : journal des decisions d'envoi. nil = pas de journal
 	// (la raison de report reste posee sur l'entree de file).
 	decisionLog domain.VeridianSendDecisionRepository
@@ -310,18 +313,22 @@ func (w *EmailQueueWorker) processWorkspace(workspace *domain.Workspace) {
 
 // processEntry processes a single queue entry
 func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *domain.EmailQueueEntry) {
-	// Veridian fork (lot 4, 08/10/2026) : un mail transactionnel de sequence part par
-	// le seul profil transactionnel reserve, sans aucune porte commerciale. Sans
-	// profil reserve, l'entree suit le chemin commercial ci-dessous, comme avant.
-	// Cf. veridian_transactional_entry.go.
-	if w.veridianProcessTransactionalEntry(workspace, entry) {
-		return
+	pipeline := w.sendPipeline()
+	sc := &SendContext{Workspace: workspace, Entry: entry}
+	sc.Claim = func() bool {
+		// Claim the queue row before reserving quota. This serializes duplicate
+		// workers for the same entry; the dedicated refund below returns a
+		// quota-blocked row to pending without consuming a delivery attempt.
+		if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"entry_id": entry.ID,
+				"error":    err.Error(),
+			}).Warn("Failed to mark entry as processing, may be processed by another worker")
+			return false
+		}
+		return true
 	}
-	// Veridian fork (12/10/2026) : une relance ne part pas si le premier mail (J0) de la
-	// meme automation n'a jamais ete livre a ce contact (echec, rebond dur, refus de
-	// politique, aucun J0). Le contact sort de la sequence, la raison est journalisee.
-	// Un rebond mou ne sort personne. Cf. veridian_first_mail_gate.go.
-	if !w.veridianFirstMailGate(workspace, entry) {
+	if !pipeline.Pre(sc) {
 		return
 	}
 	// Get the ASSIGNED integration (resolved at enqueue). It may be replaced
@@ -340,160 +347,15 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		w.handleError(workspace, entry, fmt.Errorf("integration not found: %s", entry.IntegrationID), nil)
 		return
 	}
-	// Resolve once and freeze the final class used by every policy gate and by
-	// message_history. Payload tags remain authoritative; otherwise this is the
-	// cached real-MX classification.
-	// Exception (22/10, fiche 69) : le tag historique freemail_fr est ré-éclaté en FAI.
-	if entry.Payload.VeridianProviderClass == "" || entry.Payload.VeridianProviderClass == domain.ProviderClassFreemailFR {
-		entry.Payload.VeridianProviderClass = w.veridianClassifyRecipient(entry)
-	}
-
-	// Veridian fork (correctif 2026-10-05, incident robertbrunon 05/10) — POOL
-	// FAILOVER AT SEND TIME. The circuit breaker check and every coarse policy
-	// gate below (exclusion, reputation, class throttle, daily cap, per-sender
-	// cap, sending window) used to run ONCE against the integration frozen at
-	// enqueue: a capped/unavailable integration simply rescheduled the entry
-	// to tomorrow, even when a sibling in the workspace's rotation pool
-	// (VeridianMarketingEmailProviderIDs) had room. They now run PER CANDIDATE,
-	// in priority order (sequence continuity for automation relances, then the
-	// assigned integration, then the rest of the pool) via
-	// veridianSelectSendableIntegration — same gates, same thresholds, just
-	// replayed for each pool member until one accepts. No pool configured =
-	// exactly one candidate (the assigned integration): strict non-regression.
-	// Cf. veridian_pool_failover.go.
-	selection := w.veridianSelectSendableIntegration(workspace, entry, integration)
-
-	if selection.Permanent {
-		// Every reachable pool member excludes this recipient's class: same
-		// permanent-failure contract as before (MarkAsProcessing first so
-		// handleError, which assumes the attempt counter has advanced, deletes
-		// the entry instead of leaving it half-processed).
-		if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"entry_id": entry.ID,
-				"error":    err.Error(),
-			}).Warn("Failed to mark entry as processing for excluded-class skip")
-			return
-		}
-		w.logger.WithFields(map[string]interface{}{
-			"entry_id":       entry.ID,
-			"recipient":      entry.ContactEmail,
-			"provider_class": selection.ExcludedClass,
-		}).Info("Excluded provider class on every reachable pool member, skipping SMTP and failing permanently")
-		excludedErr := &emailerror.ClassifiedError{
-			Original:  fmt.Errorf("excluded_provider_class:%s", selection.ExcludedClass),
-			Type:      emailerror.ErrorTypeRecipient,
-			Provider:  string(integration.EmailProvider.Kind),
-			Retryable: false,
-		}
-		w.handleError(workspace, entry, excludedErr, excludedErr)
+	sc.Integration = integration
+	if !pipeline.Select(sc) {
 		return
 	}
+	integration = sc.Integration
 
-	if selection.Candidate == nil {
-		// No pool member currently has room for this entry (every gate, or the
-		// circuit breaker, rejected every reachable candidate). Reschedule
-		// WITHOUT incrementing attempts, same contract as every coarse gate
-		// this fork replaced — the shortest delay observed across candidates
-		// is used so the next re-check happens as soon as the most promising
-		// one might open up.
-		w.logger.WithFields(map[string]interface{}{
-			"entry_id":       entry.ID,
-			"integration_id": entry.IntegrationID,
-			"retry_in":       selection.RetryDelay.String(),
-		}).Debug("No pool member has room for this entry, rescheduling without attempt increment")
-		// Fiche 62 : le report porte desormais sa RAISON (la vraie : toutes les portes
-		// ont ete evaluees) et la decision est journalisee selon le niveau du workspace.
-		w.veridianDeferEntry(workspace, entry, veridianDeferral{
-			Reason:  selection.Reason,
-			Detail:  selection.ReasonDetail,
-			Profile: selection.ReasonProfile,
-			Delay:   selection.RetryDelay,
-		}, &selection, func() error {
-			return w.queueRepo.SetNextRetry(w.ctx, workspace.ID, entry.ID, time.Now().Add(selection.RetryDelay))
-		})
+	if !pipeline.PreRender(sc) {
 		return
 	}
-
-	// A pool member accepted this entry: commit it. Rewriting Payload.FromAddress
-	// also rewrites, downstream, the Message-ID host (veridianMessageIDForSend
-	// derives it from FromAddress) and the DKIM signature applied by THIS
-	// integration's own relay — integration, sender, Message-ID domain and DKIM
-	// domain move together, exactly the fix for the bug this fork closes.
-	chosen := selection.Candidate
-	if chosen.IntegrationID != entry.IntegrationID {
-		w.logger.WithFields(map[string]interface{}{
-			"entry_id":                entry.ID,
-			"assigned_integration_id": entry.IntegrationID,
-			"failover_integration_id": chosen.IntegrationID,
-			"recipient":               entry.ContactEmail,
-		}).Info("Pool failover: rerouting entry to a sibling integration with room")
-	}
-	entry.IntegrationID = chosen.IntegrationID
-	entry.Payload.FromAddress = chosen.FromAddress
-	entry.Payload.FromName = chosen.FromName
-	if resolved := workspace.GetIntegrationByID(chosen.IntegrationID); resolved != nil {
-		integration = resolved
-	}
-	entry.ProviderKind = integration.EmailProvider.Kind
-
-	// Veridian fork (Lot 7): PRE-FILTER gate (cold outbound). Skips addresses we
-	// KNOW are dead (invalid syntax / disposable domain / DNS-undeliverable)
-	// BEFORE hitting SMTP, to protect IP reputation and quota. Unlike the
-	// throttle/cap gates above, an invalid address never becomes valid: we route
-	// it to PERMANENT failure (not a reschedule) via the same path as a
-	// non-retryable `550 user unknown` provider error, so it is never re-tried in
-	// a loop. Best-effort STRICT: any indeterminate verdict lets the send through.
-	// Cf. veridian_prefilter.go.
-	if reason, invalid := w.veridianPrefilterRecipient(entry); invalid {
-		// MarkAsProcessing first (increments attempts) so handleError, which
-		// assumes the attempt counter has already advanced, deletes the entry as
-		// a permanent failure instead of leaving it half-processed.
-		if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"entry_id": entry.ID,
-				"error":    err.Error(),
-			}).Warn("Failed to mark entry as processing for pre-filter skip")
-			return
-		}
-		w.logger.WithFields(map[string]interface{}{
-			"entry_id":  entry.ID,
-			"recipient": entry.ContactEmail,
-			"reason":    string(reason),
-		}).Info("Pre-filtered recipient, skipping SMTP and failing permanently")
-		// Non-retryable recipient error → handleError marks it permanent (delete
-		// + message_history FailedAt). No SMTP connection is ever opened.
-		prefilterErr := &emailerror.ClassifiedError{
-			Original:  fmt.Errorf("pre-filtered recipient: %s", reason),
-			Type:      emailerror.ErrorTypeRecipient,
-			Provider:  string(integration.EmailProvider.Kind),
-			Retryable: false,
-		}
-		w.handleError(workspace, entry, prefilterErr, prefilterErr)
-		return
-	}
-
-	// Veridian fork: RENDU AU DEPILAGE. Le contenu (sujet, texte, html) est
-	// re-rendu depuis le modele COURANT et le contact COURANT juste avant
-	// l'envoi ; un echec de rendu = le message ne part pas (echec lisible).
-	// Cf. veridian_render_at_send.go.
-	if !w.veridianRenderAtSend(workspace, entry) {
-		return
-	}
-
-	// Veridian fork (12/10/2026) : une relance de sequence part DANS LE FIL du premier
-	// mail (In-Reply-To, References, "Re: <objet du premier mail>"), quand le workspace
-	// l'a demande. Apres le rendu (qui fixe l'objet) et le choix du profil (qui fixe
-	// l'expediteur). Cf. veridian_thread_followup.go.
-	w.veridianApplyThreading(workspace, entry)
-
-	// Veridian fork: ANTI-HASH residual net (cold outbound). Best-effort,
-	// LOG-ONLY filet : la variété est garantie à l'enqueue (re-spin) ; ce gate ne
-	// fait que CONSTATER + TRACER une collision résiduelle (template sans spintax)
-	// sans jamais bloquer l'envoi (pas de perte de mail). No-op sans hash sur le
-	// payload. Placé après le pré-filtre, avant MarkAsProcessing.
-	// Cf. veridian_content_hash_gate.go.
-	w.veridianContentHashGate(workspace, &integration.EmailProvider, entry)
 
 	// Wait for rate limiter - always use current integration rate limit (not stale payload value).
 	// Veridian fork — alignement de capacité multi-SMTP : avec N senders actifs, le
@@ -516,39 +378,7 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 		return
 	}
 
-	// Last possible policy check before constructing the provider request and
-	// opening SMTP. This closes the race where the row was enqueued or even
-	// claimed before a reply, unsubscribe or automation pause was persisted.
-	if !w.veridianAutomationSendAllowed(workspace, entry) {
-		return
-	}
-	if !w.veridianBroadcastSendAllowed(workspace, entry) {
-		return
-	}
-
-	// Claim the queue row before reserving quota. This serializes duplicate
-	// workers for the same entry; the dedicated refund below returns a
-	// quota-blocked row to pending without consuming a delivery attempt.
-	if err := w.queueRepo.MarkAsProcessing(w.ctx, workspace.ID, entry.ID); err != nil {
-		w.logger.WithFields(map[string]interface{}{
-			"entry_id": entry.ID,
-			"error":    err.Error(),
-		}).Warn("Failed to mark entry as processing, may be processed by another worker")
-		return
-	}
-
-	// Atomic daily quota authorization is the LAST database gate before SMTP.
-	// Exclusions, prefilter, window and final automation checks never consume it.
-	quotaLeases, delay, capped := w.veridianReserveDailyQuota(workspace, &integration.EmailProvider, entry)
-	if capped {
-		w.veridianDeferEntry(workspace, entry, veridianDeferral{
-			Reason:        domain.VeridianReasonQuotaDenied,
-			Profile:       entry.IntegrationID,
-			Delay:         delay,
-			RefundAttempt: true,
-		}, &selection, func() error {
-			return w.queueRepo.SetNextRetryAndRefundAttempt(w.ctx, workspace.ID, entry.ID, time.Now().Add(delay))
-		})
+	if !pipeline.PreSend(sc) {
 		return
 	}
 
@@ -564,11 +394,7 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	// Send the email
 	err := w.emailService.SendEmail(w.ctx, *request, true) // isMarketing = true
 	if err != nil {
-		// Release only when the transport proves the remote did not accept DATA.
-		// Ambiguous post-DATA timeouts keep capacity consumed to avoid oversending.
-		if emailerror.IsBeforeAcceptance(err) {
-			w.veridianReleaseDailyQuotas(workspace.ID, quotaLeases)
-		}
+		pipeline.Record(sc, SendResult{Err: err})
 		// Classify the error
 		classifiedErr := w.errorClassifier.Classify(err, integration.EmailProvider.Kind)
 
@@ -605,8 +431,7 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 	w.upsertMessageHistory(w.ctx, workspace.ID, workspace.Settings.SecretKey, entry, nil)
 	veridianObserveSent(workspace, entry) // boîte unifiée (L1) : rendu exact du mail parti
 
-	// Fiche 62 : journal des decisions, l'envoi accepte avec les portes qui l'ont laisse passer.
-	w.veridianRecordTerminal(workspace, entry, domain.VeridianOutcomeSent, "", "", entry.IntegrationID, &selection)
+	pipeline.Record(sc, SendResult{})
 
 	w.logger.WithFields(map[string]interface{}{
 		"entry_id":       entry.ID,
