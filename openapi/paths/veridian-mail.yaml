@@ -1,0 +1,405 @@
+# Boîte unifiée Veridian (lot L1) : routes /api/veridian/mail.*. Écrit à la main, référencé par openapi.yaml.
+/api/veridian/mail.mailboxes.list:
+  get:
+    summary: "Boîtes (une par profil d'envoi et par adresse)"
+    description: |
+      Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailboxesList
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mailboxes: { type: array, items: { $ref: '../components/schemas/veridian-mail.yaml#/Mailbox' } }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+/api/veridian/mail.messages.list:
+  get:
+    summary: "Messages envoyés et reçus (filtres, recherche, pagination)"
+    description: |
+      Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailMessagesList
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: mailbox
+        in: query
+        required: false
+        schema: { type: string }
+      - name: contact_email
+        in: query
+        required: false
+        schema: { type: string }
+      - name: thread_id
+        in: query
+        required: false
+        schema: { type: string }
+      - name: kind
+        in: query
+        required: false
+        schema: { type: string }
+      - name: direction
+        in: query
+        required: false
+        schema: { type: string }
+      - name: handled
+        in: query
+        required: false
+        schema: { type: boolean }
+      - name: since
+        in: query
+        required: false
+        schema: { type: string }
+      - name: until
+        in: query
+        required: false
+        schema: { type: string }
+      - name: q
+        in: query
+        required: false
+        schema: { type: string }
+      - name: body
+        in: query
+        required: false
+        schema: { type: boolean }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer }
+      - name: cursor
+        in: query
+        required: false
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messages: { type: array, items: { $ref: '../components/schemas/veridian-mail.yaml#/MailSummary' } }
+                next_cursor: { type: string }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+/api/veridian/mail.messages.get:
+  get:
+    summary: "Un message en entier (en-têtes, texte, HTML assaini, pièces, DSN, lien)"
+    description: |
+      Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailMessagesGet
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: id
+        in: query
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { $ref: '../components/schemas/veridian-mail.yaml#/MailMessage' }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '404': { description: Introuvable }
+/api/veridian/mail.messages.raw:
+  get:
+    summary: "Message brut RFC 822 (un mail envoyé est reconstitué)"
+    description: |
+      Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailMessagesRaw
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: id
+        in: query
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          message/rfc822:
+            schema: { type: string, format: binary }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '404': { description: Introuvable }
+/api/veridian/mail.messages.attachment:
+  get:
+    summary: "Contenu d'une pièce jointe (téléchargement forcé)"
+    description: |
+      Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailMessagesAttachment
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: index
+        in: query
+        required: true
+        schema: { type: integer }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '404': { description: Introuvable }
+/api/veridian/mail.messages.update:
+  post:
+    summary: "Marque traité / à traiter, pose des libellés"
+    description: |
+      Droit requis : `message_history:write`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailMessagesUpdate
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, id]
+            properties:
+              workspace_id: { type: string }
+              id: { type: string }
+              handled: { type: boolean }
+              labels: { type: array, items: { type: string, maxLength: 40 }, maxItems: 20 }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { $ref: '../components/schemas/veridian-mail.yaml#/MailMessage' }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '404': { description: Introuvable }
+/api/veridian/mail.threads.get:
+  get:
+    summary: "Un fil complet, ou tous les fils d'un contact, en ordre chronologique"
+    description: |
+      Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailThreadsGet
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: thread_id
+        in: query
+        required: false
+        schema: { type: string }
+      - name: contact_email
+        in: query
+        required: false
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                thread: { $ref: '../components/schemas/veridian-mail.yaml#/MailThread' }
+                threads: { type: array, items: { $ref: '../components/schemas/veridian-mail.yaml#/MailThread' } }
+                contact_email: { type: string }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '404': { description: Introuvable }
+/api/veridian/mail.threads.list:
+  get:
+    summary: "Résumés des fils d'un contact"
+    description: |
+      Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailThreadsList
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: contact_email
+        in: query
+        required: true
+        schema: { type: string }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                threads: { type: array, items: { $ref: '../components/schemas/veridian-mail.yaml#/MailThread' } }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+/api/veridian/mail.events:
+  get:
+    summary: "Flux serveur (SSE) des nouveaux messages, reprise par Last-Event-ID"
+    description: |
+      Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailEvents
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: since_seq
+        in: query
+        required: false
+        schema: { type: integer }
+      - name: direction
+        in: query
+        required: false
+        schema: { type: string }
+      - name: kind
+        in: query
+        required: false
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          text/event-stream:
+            schema: { type: string }
+            example: |
+              id: 42
+              event: message.received
+              data: {"id":"...","kind":"reply_human","contact_email":"marie@exemple.fr","subject":"Re: ..."}
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '429': { description: "8 flux ouverts au plus par workspace" }
+/api/veridian/mail.messages.send:
+  post:
+    summary: "Envoie un mail par un profil, mêmes plafonds que les séquences"
+    description: |
+      Droit requis : `message_history:write + transactional:write`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailMessagesSend
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/veridian-mail.yaml#/MailSendRequest'
+    responses:
+      '202':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/veridian-mail.yaml#/MailSendResult'
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '409': { description: "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)" }
+      '501': { description: Envoi non disponible }
+/api/veridian/mail.messages.reply:
+  post:
+    summary: "Répond à un mail reçu, dans son fil"
+    description: |
+      Droit requis : `message_history:write + transactional:write`. Voir docs/veridian/BOITE-UNIFIEE.md.
+    operationId: MailMessagesReply
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/veridian-mail.yaml#/MailSendRequest'
+    responses:
+      '202':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/veridian-mail.yaml#/MailSendResult'
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '409': { description: "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)" }
+      '501': { description: Envoi non disponible }
+components:
+  responses:
+    BadRequest:
+      description: Bad request - validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+          example:
+            error: Unauthorized
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/common.yaml#/ErrorResponse'
+          example:
+            error: 'Insufficient permissions: read access to contacts required'

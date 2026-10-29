@@ -1,5 +1,5 @@
 // Package module branche la boîte unifiée sur l'application (capacité « mailbox » de la plateforme
-// Veridian) : lecture des boîtes IMAP par rattrapage d'UID, capture du rendu exact des envois.
+// Veridian) : lecture des boîtes IMAP par rattrapage d'UID, capture du rendu exact des envois, routes /api/veridian/mail.*.
 // Importé à blanc par internal/app/veridian_mod_mailbox.go.
 package module
 
@@ -12,6 +12,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/service/queue"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
+	"github.com/Notifuse/notifuse/internal/veridian/mailbox/mailapi"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 )
 
@@ -72,5 +73,13 @@ func wire(h platform.Host) error {
 	}
 	queue.SetVeridianSentObserver(mailbox.NewSentCapture(ingest, log))
 
+	if h.Mux() == nil || h.AuthService() == nil {
+		return nil // assemblage de test sans routeur ni authentification : pas d'API
+	}
+	svc := &mailapi.Service{Store: store, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService()}, WS: repo}
+	if q := h.EmailQueueRepository(); q != nil {
+		svc.Sender = &mailapi.QueueSender{Queue: q, WS: repo, Store: store}
+	}
+	(&mailapi.Handler{Svc: svc, Log: log, RequireAuth: h.RequireAuth()}).RegisterRoutes(h.Mux())
 	return nil
 }

@@ -42,3 +42,22 @@ lui-même, sinon objet normalisé + contact. À l'arrivée, un mail qui cite un 
 Déclencheur SQL sur `veridian_mail_message` (mails reçus uniquement) : une livraison par souscription active abonnée,
 dans `webhook_deliveries`. La charge utile ne porte JAMAIS le corps : `message_id`, `kind`, `email`, `thread_id`, `subject`,
 `from`, `attachment_count`, `sent_message_id`. Une panne du webhook n'empêche jamais de ranger le mail.
+
+## API (jalon 2)
+
+Routes `/api/veridian/mail.*` (JWT utilisateur ou clé d'API ; spécification : `openapi/paths/veridian-mail.yaml`, CLI : `notifuse mail:*`).
+Lecture : droit `message_history:read` ; `mail.messages.update` : `message_history:write` ; `mail.messages.send` et `reply` : en plus `transactional:write`.
+
+| Route | Rôle |
+|---|---|
+| `mail.mailboxes.list` | une boîte par profil d'envoi et par adresse : compteurs, état de la lecture IMAP |
+| `mail.messages.list` | filtres boîte, contact, fil, nature, sens, traité, dates, recherche (objet, adresses ; `body=true` cherche aussi dans les corps déchiffrés des 1500 derniers) ; pagination par curseur |
+| `mail.messages.get` | message entier : en-têtes, texte, HTML assaini, pièces, DSN, lien. Jamais le message brut |
+| `mail.messages.raw` | RFC 822 (un mail envoyé est reconstitué et l'en-tête `X-Veridian-Reconstructed` le dit) |
+| `mail.messages.attachment` | contenu d'une pièce, téléchargement forcé, `nosniff`, CSP `sandbox` |
+| `mail.messages.update` | traité / à traiter (`handled_by` = `agent:<clé>` ou `humain:<id>`), libellés |
+| `mail.threads.get` / `list` | un fil complet (jalons : Premier mail, Relance n, Réponse, Rebond), ou tous les fils d'un contact |
+| `mail.events` | flux SSE des nouveaux messages. Chaque événement porte son numéro d'ordre (`id:`) : reprise exacte avec `Last-Event-ID` ou `since_seq`, rien n'est perdu entre deux connexions. 8 flux au plus par workspace, reconnexion demandée toutes les 5 min |
+| `mail.messages.send` / `reply` | met le mail dans la file des envois (`source_type = mail`) : le worker lui applique les MÊMES portes que les séquences (fusible de réputation, plafonds profil, classe de destinataire et adresse émettrice, chauffe, fenêtre, cadence). Refus immédiat si profil en pause, contact désinscrit, plainte ou rebond définitif. Une réponse part par le profil qui a reçu, avec `In-Reply-To` et `References`, avant les relances |
+
+Le mail envoyé apparaît dans le fil dès que le relais l'a accepté (capture du worker).

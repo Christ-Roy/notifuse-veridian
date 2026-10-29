@@ -127,6 +127,28 @@ paths:
     $ref: './paths/veridian-reconcile.yaml#/~1api~1veridian~1reconcile.report'
   /api/veridian/reconcile.resolve:
     $ref: './paths/veridian-reconcile.yaml#/~1api~1veridian~1reconcile.resolve'
+  /api/veridian/mail.mailboxes.list:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.mailboxes.list'
+  /api/veridian/mail.messages.list:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.list'
+  /api/veridian/mail.messages.get:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.get'
+  /api/veridian/mail.messages.raw:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.raw'
+  /api/veridian/mail.messages.attachment:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.attachment'
+  /api/veridian/mail.messages.update:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.update'
+  /api/veridian/mail.threads.get:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.threads.get'
+  /api/veridian/mail.threads.list:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.threads.list'
+  /api/veridian/mail.events:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.events'
+  /api/veridian/mail.messages.send:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.send'
+  /api/veridian/mail.messages.reply:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.reply'
   /api/customEvents.import:
     $ref: './paths/custom-events.yaml#/~1api~1customEvents.import'
   /api/webhookSubscriptions.create:
@@ -172,6 +194,26 @@ components:
       $ref: './components/schemas/veridian-reconcile.yaml#/ReconcileResolveResult'
     ErrorResponse:
       $ref: './components/schemas/common.yaml#/ErrorResponse'
+    MailKind:
+      $ref: './components/schemas/veridian-mail.yaml#/MailKind'
+    MailAttachment:
+      $ref: './components/schemas/veridian-mail.yaml#/MailAttachment'
+    MailDSN:
+      $ref: './components/schemas/veridian-mail.yaml#/MailDSN'
+    MailLink:
+      $ref: './components/schemas/veridian-mail.yaml#/MailLink'
+    MailMessage:
+      $ref: './components/schemas/veridian-mail.yaml#/MailMessage'
+    MailSummary:
+      $ref: './components/schemas/veridian-mail.yaml#/MailSummary'
+    MailThread:
+      $ref: './components/schemas/veridian-mail.yaml#/MailThread'
+    Mailbox:
+      $ref: './components/schemas/veridian-mail.yaml#/Mailbox'
+    MailSendRequest:
+      $ref: './components/schemas/veridian-mail.yaml#/MailSendRequest'
+    MailSendResult:
+      $ref: './components/schemas/veridian-mail.yaml#/MailSendResult'
     SendTransactionalRequest:
       $ref: './components/schemas/transactional.yaml#/SendTransactionalRequest'
     TransactionalNotificationSendParams:

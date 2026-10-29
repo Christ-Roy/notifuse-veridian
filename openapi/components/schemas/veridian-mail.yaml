@@ -1,0 +1,166 @@
+MailKind:
+  type: string
+  enum: [sent, reply_human, reply_auto, bounce_hard, bounce_soft, dsn, other]
+  description: |
+    Nature du mail. `sent` : mail sortant accepté par le relais. `reply_human` : un humain a répondu.
+    `reply_auto` : auto-répondeur, absence, défi ou filtre anti-spam. `bounce_hard` / `bounce_soft` : rebond définitif / temporaire.
+    `dsn` : rapport de livraison qui n'est pas un échec (retardé, relayé, délivré). `other` : sans lien avec un de nos envois.
+MailAttachment:
+  type: object
+  properties:
+    index: { type: integer, description: "Rang de la pièce (sert à la relire avec mail.messages.attachment)" }
+    name: { type: string }
+    content_type: { type: string }
+    size: { type: integer, format: int64 }
+    sha256: { type: string }
+    inline: { type: boolean, description: "Ressource incorporée au corps HTML (cid:)" }
+    content_id: { type: string }
+    available: { type: boolean, description: "Le contenu peut être relu" }
+MailDSN:
+  type: object
+  description: Rapport de non-remise décodé, avec sa raison en français.
+  properties:
+    code: { type: string, example: "5.1.1" }
+    severity: { type: string, enum: [hard, soft, unknown] }
+    action: { type: string, example: failed }
+    diagnostic: { type: string, description: "Réponse du serveur distant (tronquée)" }
+    recipient: { type: string }
+    provider: { type: string, example: Gmail }
+    reason_fr: { type: string }
+    advice_fr: { type: string }
+    category: { type: string, example: adresse_inexistante }
+    original_message_id: { type: string }
+MailLink:
+  type: object
+  description: Ce que le mail est côté Notifuse.
+  properties:
+    sent_message_id: { type: string, description: "= message_history.id de l'envoi" }
+    automation_id: { type: string }
+    node_id: { type: string }
+    broadcast_id: { type: string }
+    match_type: { type: string, enum: [message_id, sender, subject] }
+MailMessage:
+  type: object
+  description: Un mail entier. Les corps sont chiffrés au repos et ne sortent que par cette route et par les fils.
+  properties:
+    id: { type: string }
+    seq: { type: integer, format: int64, description: "Numéro d'ordre d'arrivée (reprise du flux d'événements)" }
+    direction: { type: string, enum: [in, out] }
+    kind: { $ref: '#/MailKind' }
+    profile_id: { type: string }
+    mailbox_ref:
+      type: object
+      properties:
+        integration_id: { type: string }
+        folder: { type: string }
+        uid_validity: { type: integer }
+        uid: { type: integer }
+    message_id: { type: string }
+    in_reply_to: { type: string }
+    references: { type: array, items: { type: string } }
+    thread_id: { type: string }
+    contact_email: { type: string }
+    from: { type: string }
+    from_name: { type: string }
+    to: { type: array, items: { type: string } }
+    cc: { type: array, items: { type: string } }
+    subject: { type: string }
+    sent_at: { type: string, format: date-time }
+    received_at: { type: string, format: date-time }
+    occurred_at: { type: string, format: date-time }
+    headers: { type: object, additionalProperties: { type: array, items: { type: string } } }
+    body_text: { type: string }
+    body_html_sanitized: { type: string, description: "HTML assaini (ni script, ni formulaire, ni cadre, ni CSS externe). À afficher dans un iframe sandbox." }
+    body_source: { type: string, enum: [received, captured, rerendered, unavailable] }
+    size_bytes: { type: integer, format: int64 }
+    truncated: { type: boolean }
+    attachments: { type: array, items: { $ref: '#/MailAttachment' } }
+    dsn: { $ref: '#/MailDSN' }
+    link: { $ref: '#/MailLink' }
+    handled_at: { type: string, format: date-time }
+    handled_by: { type: string }
+    labels: { type: array, items: { type: string } }
+MailSummary:
+  type: object
+  description: Ligne de liste (aperçu, sans corps).
+  properties:
+    id: { type: string }
+    seq: { type: integer, format: int64 }
+    direction: { type: string, enum: [in, out] }
+    kind: { $ref: '#/MailKind' }
+    profile_id: { type: string }
+    thread_id: { type: string }
+    contact_email: { type: string }
+    from: { type: string }
+    to: { type: array, items: { type: string } }
+    subject: { type: string }
+    preview: { type: string }
+    occurred_at: { type: string, format: date-time }
+    has_attachments: { type: boolean }
+    attachment_count: { type: integer }
+    dsn_reason_fr: { type: string }
+    handled_at: { type: string, format: date-time }
+    handled_by: { type: string }
+    labels: { type: array, items: { type: string } }
+MailThread:
+  type: object
+  properties:
+    thread_id: { type: string }
+    subject: { type: string }
+    contact_email: { type: string }
+    first_at: { type: string, format: date-time }
+    last_at: { type: string, format: date-time }
+    message_count: { type: integer }
+    last_kind: { $ref: '#/MailKind' }
+    messages: { type: array, items: { $ref: '#/MailMessage' }, description: "Ordre chronologique" }
+    milestones:
+      type: array
+      items:
+        type: object
+        properties:
+          id: { type: string }
+          label: { type: string, example: "Relance 1" }
+          kind: { $ref: '#/MailKind' }
+          at: { type: string, format: date-time }
+Mailbox:
+  type: object
+  properties:
+    id: { type: string }
+    address: { type: string }
+    profile_id: { type: string }
+    profile_name: { type: string }
+    integration_id: { type: string, description: "Boîte IMAP de retour liée" }
+    folder: { type: string }
+    count_in: { type: integer }
+    count_out: { type: integer }
+    count_unhandled: { type: integer, description: "Réponses humaines non traitées" }
+    last_message_at: { type: string, format: date-time }
+    sync:
+      type: object
+      properties:
+        uid_validity: { type: integer }
+        last_uid: { type: integer }
+        last_run_at: { type: string, format: date-time }
+        last_ok_at: { type: string, format: date-time }
+        last_error: { type: string }
+        total_ingested: { type: integer }
+MailSendRequest:
+  type: object
+  required: [workspace_id]
+  properties:
+    workspace_id: { type: string }
+    profile_id: { type: string, description: "Profil d'envoi (mail.mailboxes.list). Requis pour messages.send ; par défaut le profil du message pour messages.reply." }
+    to: { type: string, description: "Destinataire (messages.reply : par défaut le Reply-To ou l'expéditeur du message)" }
+    cc: { type: array, items: { type: string }, maxItems: 5 }
+    subject: { type: string, maxLength: 300, description: "messages.reply : par défaut « Re: <objet> »" }
+    text: { type: string }
+    html: { type: string }
+    in_reply_to_message: { type: string, description: "messages.reply seulement : id d'un message reçu" }
+MailSendResult:
+  type: object
+  properties:
+    message_id: { type: string }
+    queue_entry_id: { type: string }
+    status: { type: string, example: queued }
+    thread_id: { type: string }
+    note: { type: string }

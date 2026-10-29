@@ -23,6 +23,300 @@
     }
   ],
   "paths": {
+    "/api/transactional.create": {
+      "post": {
+        "summary": "Create a transactional notification",
+        "description": "Creates a transactional notification (a reusable template binding that can\nlater be triggered via transactional.send using its `id`). Requires\nauthentication.\n",
+        "operationId": "createTransactionalNotification",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTransactionalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Notification created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notification": {
+                      "$ref": "#/components/schemas/TransactionalNotification"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingIdExample": {
+                    "value": {
+                      "error": "notification.id is required"
+                    }
+                  },
+                  "missingNameExample": {
+                    "value": {
+                      "error": "notification.name is required"
+                    }
+                  },
+                  "missingChannelExample": {
+                    "value": {
+                      "error": "notification must have at least one channel"
+                    }
+                  },
+                  "invalidTemplateExample": {
+                    "value": {
+                      "error": "invalid template"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Failed to create notification"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transactional.update": {
+      "post": {
+        "summary": "Update a transactional notification",
+        "description": "Updates an existing transactional notification. At least one of `name`,\n`description`, `channels` or `metadata` must be provided in `updates`.\nRequires authentication.\n",
+        "operationId": "updateTransactionalNotification",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTransactionalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notification": {
+                      "$ref": "#/components/schemas/TransactionalNotification"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missingIdExample": {
+                    "value": {
+                      "error": "id is required"
+                    }
+                  },
+                  "noFieldExample": {
+                    "value": {
+                      "error": "at least one field must be updated"
+                    }
+                  },
+                  "invalidTemplateExample": {
+                    "value": {
+                      "error": "invalid template"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Notification not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Notification not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Failed to update notification"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transactional.delete": {
+      "post": {
+        "summary": "Delete a transactional notification",
+        "description": "Soft-deletes a transactional notification by ID. Requires authentication.\n",
+        "operationId": "deleteTransactionalNotification",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteTransactionalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "id is required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Notification not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Notification not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Failed to delete notification"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/transactional.send": {
       "post": {
         "summary": "Send a transactional notification",
@@ -3453,10 +3747,10 @@
             "$ref": "#/components/responses/BadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized-2"
+            "$ref": "#/components/responses/responses-Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden-2"
+            "$ref": "#/components/responses/responses-Forbidden"
           }
         }
       },
@@ -3497,7 +3791,771 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized-2"
+            "$ref": "#/components/responses/responses-Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.mailboxes.list": {
+      "get": {
+        "summary": "Boîtes (une par profil d'envoi et par adresse)",
+        "description": "Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailboxesList",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mailboxes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Mailbox"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.messages.list": {
+      "get": {
+        "summary": "Messages envoyés et reçus (filtres, recherche, pagination)",
+        "description": "Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailMessagesList",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contact_email",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "thread_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "handled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "body",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MailSummary"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.messages.get": {
+      "get": {
+        "summary": "Un message en entier (en-têtes, texte, HTML assaini, pièces, DSN, lien)",
+        "description": "Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailMessagesGet",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "$ref": "#/components/schemas/MailMessage"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          },
+          "404": {
+            "description": "Introuvable"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.messages.raw": {
+      "get": {
+        "summary": "Message brut RFC 822 (un mail envoyé est reconstitué)",
+        "description": "Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailMessagesRaw",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "message/rfc822": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          },
+          "404": {
+            "description": "Introuvable"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.messages.attachment": {
+      "get": {
+        "summary": "Contenu d'une pièce jointe (téléchargement forcé)",
+        "description": "Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailMessagesAttachment",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          },
+          "404": {
+            "description": "Introuvable"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.messages.update": {
+      "post": {
+        "summary": "Marque traité / à traiter, pose des libellés",
+        "description": "Droit requis : `message_history:write`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailMessagesUpdate",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "handled": {
+                    "type": "boolean"
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    "maxItems": 20
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "$ref": "#/components/schemas/MailMessage"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          },
+          "404": {
+            "description": "Introuvable"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.threads.get": {
+      "get": {
+        "summary": "Un fil complet, ou tous les fils d'un contact, en ordre chronologique",
+        "description": "Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailThreadsGet",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "thread_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contact_email",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "thread": {
+                      "$ref": "#/components/schemas/MailThread"
+                    },
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MailThread"
+                      }
+                    },
+                    "contact_email": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          },
+          "404": {
+            "description": "Introuvable"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.threads.list": {
+      "get": {
+        "summary": "Résumés des fils d'un contact",
+        "description": "Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailThreadsList",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contact_email",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MailThread"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.events": {
+      "get": {
+        "summary": "Flux serveur (SSE) des nouveaux messages, reprise par Last-Event-ID",
+        "description": "Droit requis : `message_history:read`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailEvents",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since_seq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "id: 42\nevent: message.received\ndata: {\"id\":\"...\",\"kind\":\"reply_human\",\"contact_email\":\"marie@exemple.fr\",\"subject\":\"Re: ...\"}\n"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          },
+          "429": {
+            "description": "8 flux ouverts au plus par workspace"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.messages.send": {
+      "post": {
+        "summary": "Envoie un mail par un profil, mêmes plafonds que les séquences",
+        "description": "Droit requis : `message_history:write + transactional:write`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailMessagesSend",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailSendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailSendResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          },
+          "409": {
+            "description": "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)"
+          },
+          "501": {
+            "description": "Envoi non disponible"
+          }
+        }
+      }
+    },
+    "/api/veridian/mail.messages.reply": {
+      "post": {
+        "summary": "Répond à un mail reçu, dans son fil",
+        "description": "Droit requis : `message_history:write + transactional:write`. Voir docs/veridian/BOITE-UNIFIEE.md.\n",
+        "operationId": "MailMessagesReply",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailSendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailSendResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/responses-Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/responses-Forbidden"
+          },
+          "409": {
+            "description": "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)"
+          },
+          "501": {
+            "description": "Envoi non disponible"
           }
         }
       }
@@ -4962,6 +6020,532 @@
           "error"
         ]
       },
+      "MailKind": {
+        "type": "string",
+        "enum": [
+          "sent",
+          "reply_human",
+          "reply_auto",
+          "bounce_hard",
+          "bounce_soft",
+          "dsn",
+          "other"
+        ],
+        "description": "Nature du mail. `sent` : mail sortant accepté par le relais. `reply_human` : un humain a répondu.\n`reply_auto` : auto-répondeur, absence, défi ou filtre anti-spam. `bounce_hard` / `bounce_soft` : rebond définitif / temporaire.\n`dsn` : rapport de livraison qui n'est pas un échec (retardé, relayé, délivré). `other` : sans lien avec un de nos envois.\n"
+      },
+      "MailAttachment": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "Rang de la pièce (sert à la relire avec mail.messages.attachment)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "inline": {
+            "type": "boolean",
+            "description": "Ressource incorporée au corps HTML (cid:)"
+          },
+          "content_id": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Le contenu peut être relu"
+          }
+        }
+      },
+      "MailDSN": {
+        "type": "object",
+        "description": "Rapport de non-remise décodé, avec sa raison en français.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "5.1.1"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "hard",
+              "soft",
+              "unknown"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "example": "failed"
+          },
+          "diagnostic": {
+            "type": "string",
+            "description": "Réponse du serveur distant (tronquée)"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "example": "Gmail"
+          },
+          "reason_fr": {
+            "type": "string"
+          },
+          "advice_fr": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "example": "adresse_inexistante"
+          },
+          "original_message_id": {
+            "type": "string"
+          }
+        }
+      },
+      "MailLink": {
+        "type": "object",
+        "description": "Ce que le mail est côté Notifuse.",
+        "properties": {
+          "sent_message_id": {
+            "type": "string",
+            "description": "= message_history.id de l'envoi"
+          },
+          "automation_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "broadcast_id": {
+            "type": "string"
+          },
+          "match_type": {
+            "type": "string",
+            "enum": [
+              "message_id",
+              "sender",
+              "subject"
+            ]
+          }
+        }
+      },
+      "MailMessage": {
+        "type": "object",
+        "description": "Un mail entier. Les corps sont chiffrés au repos et ne sortent que par cette route et par les fils.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Numéro d'ordre d'arrivée (reprise du flux d'événements)"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MailKind"
+          },
+          "profile_id": {
+            "type": "string"
+          },
+          "mailbox_ref": {
+            "type": "object",
+            "properties": {
+              "integration_id": {
+                "type": "string"
+              },
+              "folder": {
+                "type": "string"
+              },
+              "uid_validity": {
+                "type": "integer"
+              },
+              "uid": {
+                "type": "integer"
+              }
+            }
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "in_reply_to": {
+            "type": "string"
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thread_id": {
+            "type": "string"
+          },
+          "contact_email": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "from_name": {
+            "type": "string"
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subject": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "body_text": {
+            "type": "string"
+          },
+          "body_html_sanitized": {
+            "type": "string",
+            "description": "HTML assaini (ni script, ni formulaire, ni cadre, ni CSS externe). À afficher dans un iframe sandbox."
+          },
+          "body_source": {
+            "type": "string",
+            "enum": [
+              "received",
+              "captured",
+              "rerendered",
+              "unavailable"
+            ]
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailAttachment"
+            }
+          },
+          "dsn": {
+            "$ref": "#/components/schemas/MailDSN"
+          },
+          "link": {
+            "$ref": "#/components/schemas/MailLink"
+          },
+          "handled_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "handled_by": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "MailSummary": {
+        "type": "object",
+        "description": "Ligne de liste (aperçu, sans corps).",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MailKind"
+          },
+          "profile_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "string"
+          },
+          "contact_email": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subject": {
+            "type": "string"
+          },
+          "preview": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "has_attachments": {
+            "type": "boolean"
+          },
+          "attachment_count": {
+            "type": "integer"
+          },
+          "dsn_reason_fr": {
+            "type": "string"
+          },
+          "handled_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "handled_by": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "MailThread": {
+        "type": "object",
+        "properties": {
+          "thread_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "contact_email": {
+            "type": "string"
+          },
+          "first_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message_count": {
+            "type": "integer"
+          },
+          "last_kind": {
+            "$ref": "#/components/schemas/MailKind"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailMessage"
+            },
+            "description": "Ordre chronologique"
+          },
+          "milestones": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string",
+                  "example": "Relance 1"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/MailKind"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Mailbox": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "integration_id": {
+            "type": "string",
+            "description": "Boîte IMAP de retour liée"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "count_in": {
+            "type": "integer"
+          },
+          "count_out": {
+            "type": "integer"
+          },
+          "count_unhandled": {
+            "type": "integer",
+            "description": "Réponses humaines non traitées"
+          },
+          "last_message_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sync": {
+            "type": "object",
+            "properties": {
+              "uid_validity": {
+                "type": "integer"
+              },
+              "last_uid": {
+                "type": "integer"
+              },
+              "last_run_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "last_ok_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "last_error": {
+                "type": "string"
+              },
+              "total_ingested": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "MailSendRequest": {
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string",
+            "description": "Profil d'envoi (mail.mailboxes.list). Requis pour messages.send ; par défaut le profil du message pour messages.reply."
+          },
+          "to": {
+            "type": "string",
+            "description": "Destinataire (messages.reply : par défaut le Reply-To ou l'expéditeur du message)"
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5
+          },
+          "subject": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "messages.reply : par défaut « Re: <objet> »"
+          },
+          "text": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "in_reply_to_message": {
+            "type": "string",
+            "description": "messages.reply seulement : id d'un message reçu"
+          }
+        }
+      },
+      "MailSendResult": {
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "type": "string"
+          },
+          "queue_entry_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "example": "queued"
+          },
+          "thread_id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
       "SendTransactionalRequest": {
         "type": "object",
         "required": [
@@ -5102,6 +6686,202 @@
                 ]
               }
             }
+          }
+        }
+      },
+      "TransactionalNotification": {
+        "type": "object",
+        "description": "A transactional notification configuration (template binding + tracking).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier, also used as the trigger ID in transactional.send.",
+            "example": "welcome_email"
+          },
+          "name": {
+            "type": "string",
+            "example": "Welcome email"
+          },
+          "description": {
+            "type": "string",
+            "example": "Sent right after signup."
+          },
+          "channels": {
+            "$ref": "#/components/schemas/ChannelTemplates"
+          },
+          "tracking_settings": {
+            "$ref": "#/components/schemas/TrackingSettings"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Arbitrary metadata stored with the notification."
+          },
+          "integration_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set if the notification is managed by an integration (e.g. Supabase)."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "ChannelTemplate": {
+        "type": "object",
+        "description": "Template configuration for a single channel.",
+        "required": [
+          "template_id"
+        ],
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "description": "ID of the template to render for this channel.",
+            "example": "tpl_welcome"
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Optional channel-specific settings."
+          }
+        }
+      },
+      "ChannelTemplates": {
+        "type": "object",
+        "description": "Maps a channel name to its template configuration. The only supported\nchannel today is `email`. At least one channel is required.\n",
+        "minProperties": 1,
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ChannelTemplate"
+        },
+        "example": {
+          "email": {
+            "template_id": "tpl_welcome"
+          }
+        }
+      },
+      "TransactionalNotificationCreateParams": {
+        "type": "object",
+        "description": "Parameters to create a transactional notification.",
+        "required": [
+          "id",
+          "name",
+          "channels"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for API triggering (used as the `id` in transactional.send).",
+            "example": "welcome_email"
+          },
+          "name": {
+            "type": "string",
+            "example": "Welcome email"
+          },
+          "description": {
+            "type": "string",
+            "example": "Sent right after signup."
+          },
+          "channels": {
+            "$ref": "#/components/schemas/ChannelTemplates"
+          },
+          "tracking_settings": {
+            "$ref": "#/components/schemas/TrackingSettings"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "TransactionalNotificationUpdateParams": {
+        "type": "object",
+        "description": "Fields to update on an existing transactional notification. All fields are\noptional but at least one of `name`, `description`, `channels` or `metadata`\nmust be provided.\n",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Welcome email (v2)"
+          },
+          "description": {
+            "type": "string"
+          },
+          "channels": {
+            "$ref": "#/components/schemas/ChannelTemplates"
+          },
+          "tracking_settings": {
+            "$ref": "#/components/schemas/TrackingSettings"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "CreateTransactionalRequest": {
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "notification"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "The ID of the workspace.",
+            "example": "ws_demo"
+          },
+          "notification": {
+            "$ref": "#/components/schemas/TransactionalNotificationCreateParams"
+          }
+        }
+      },
+      "UpdateTransactionalRequest": {
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "id",
+          "updates"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "The ID of the workspace.",
+            "example": "ws_demo"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID of the notification to update.",
+            "example": "welcome_email"
+          },
+          "updates": {
+            "$ref": "#/components/schemas/TransactionalNotificationUpdateParams"
+          }
+        }
+      },
+      "DeleteTransactionalRequest": {
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "id"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "The ID of the workspace.",
+            "example": "ws_demo"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID of the notification to soft-delete.",
+            "example": "welcome_email"
           }
         }
       },
@@ -7547,14 +9327,6 @@
             "type": "boolean",
             "description": "Whether to enable click/open tracking"
           },
-          "tracking_mode": {
-            "type": "string",
-            "enum": [
-              "inherit",
-              "disabled"
-            ],
-            "description": "Per-notification tri-state tracking preference. Absent or \"inherit\"\nfollows the workspace tracking flag (the workspace flag always acts\nas a kill-switch and cannot be overridden). \"disabled\" suppresses all\nrewriting for this notification — no click-tracking redirect, no open\npixel, and no UTM parameters — used for auth emails (e.g. Supabase\nmagic links) whose single-use URLs must never be modified. Update\nsemantics: an ABSENT tracking_mode field keeps the stored value (so\npartial edits cannot wipe an opt-out; an empty string is treated as\nabsent); an explicit \"inherit\" resets the notification to follow the\nworkspace flag; an explicit \"disabled\" opts it out. Note that the\nother tracking_settings fields (utm_*) are replaced wholesale on\nupdate — only tracking_mode has keep-when-absent semantics.\n"
-          },
           "endpoint": {
             "type": "string",
             "description": "API endpoint for tracking redirects"
@@ -9477,7 +11249,7 @@
           }
         }
       },
-      "Unauthorized-2": {
+      "responses-Unauthorized": {
         "description": "Unauthorized",
         "content": {
           "application/json": {
@@ -9490,7 +11262,7 @@
           }
         }
       },
-      "Forbidden-2": {
+      "responses-Forbidden": {
         "description": "Forbidden - insufficient permissions",
         "content": {
           "application/json": {

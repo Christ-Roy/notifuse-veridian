@@ -18,6 +18,9 @@ import (
 // ErrNotFound : message ou fil introuvable.
 var ErrNotFound = errors.New("introuvable")
 
+// ErrInvalidCursor : curseur de pagination illisible.
+var ErrInvalidCursor = errors.New("curseur invalide")
+
 // DBProvider rend la base d'un workspace.
 type DBProvider func(ctx context.Context, workspaceID string) (*sql.DB, error)
 
@@ -515,10 +518,10 @@ func decodeCursor(c string) (cursorT, error) {
 	var out cursorT
 	b, err := base64.RawURLEncoding.DecodeString(c)
 	if err != nil {
-		return out, errors.New("curseur invalide")
+		return out, ErrInvalidCursor
 	}
 	if err := json.Unmarshal(b, &out); err != nil {
-		return out, errors.New("curseur invalide")
+		return out, ErrInvalidCursor
 	}
 	return out, nil
 }
