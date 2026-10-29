@@ -7,6 +7,9 @@
 if ! git diff --quiet "@{upstream}" -- console/src 2>/dev/null || [ -n "$(git diff --name-only HEAD~1 -- console/src 2>/dev/null)" ]; then
   scripts/ci/check-i18n-extracted.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
 fi
+# Fichiers gelés (lot L0, docs/veridian/MODULARITE.md) : aucune logique Veridian de plus que la ligne de branchement.
+# Un echec bloque ; « non abouti » (rc 2 : base introuvable) previent sans bloquer. Derogation : trailer Frozen-Override.
+scripts/veridian/frozen-files-check.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
 G="$(command -v gardes 2>/dev/null || echo "$HOME/nomad-veridian/standards/controles-portables/gardes")"
 if [ ! -x "$G" ]; then
   echo "gardes — NON ABOUTI : introuvable sur cette machine ($G). Push accepté SANS garde." >&2

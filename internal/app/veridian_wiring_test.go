@@ -8,10 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/config"
+	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
 	veridianmig "github.com/Notifuse/notifuse/internal/migrations/veridian"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -104,4 +107,53 @@ func TestVeridianHost_JWTSecretFailsWhenUnset(t *testing.T) {
 	s, err := h.JWTSecret()()
 	require.NoError(t, err)
 	assert.Equal(t, a.config.Security.JWTSecret, s)
+}
+
+// L0 jalon 2 : veridianInitRepositories construit les dépôts Veridian et décore l'historique de messages
+// (le décorateur incrémente le quota du plan ; sans lui le paywall ne bloque jamais, bug du 20/05/2026).
+func TestVeridianInitRepositories_BuildsReposAndDecoratesMessageHistory(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	a := newWiringApp()
+	a.db = db
+	original := domainmocks.NewMockMessageHistoryRepository(ctrl)
+	a.messageHistoryRepo = original
+
+	a.veridianInitRepositories()
+
+	assert.NotNil(t, a.veridianPlanRepo)
+	assert.NotNil(t, a.veridianIdempotencyRepo)
+	assert.NotNil(t, a.veridianAPIKeyGraceRepo)
+	assert.NotNil(t, a.agentInstallTokenRepo)
+	assert.NotNil(t, a.veridianFrozenMemberRepo)
+	assert.NotNil(t, a.veridianIMAPUIDSeenRepo)
+	assert.NotNil(t, a.veridianContactReplyRepo)
+	assert.NotSame(t, original, a.messageHistoryRepo, "l'historique doit être décoré (quota)")
+}
+
+// Une migration enregistrée ne doit pas faire paniquer un assemblage sans base système (tests d'assemblage).
+func TestWireVeridian_RegisteredMigrationWithoutDBDoesNotPanic(t *testing.T) {
+	migs := veridianmig.NewRegistry()
+	require.NoError(t, migs.Register(veridianmig.Spec{Number: 63, Lot: "L1", Name: "t", Workspace: []string{"CREATE TABLE IF NOT EXISTS t (id INT)"}}))
+	a := newWiringApp()
+	a.db = nil
+	require.NoError(t, wireVeridian(a, migs, platform.NewRegistry()))
+}
+
+// WithMockDB : les tests d'assemblage (sqlmock sans attente) ne doivent exécuter aucune requête de migration.
+func TestWireVeridian_MockDBRunsNoMigrationQuery(t *testing.T) {
+	migs := veridianmig.NewRegistry()
+	require.NoError(t, migs.Register(veridianmig.Spec{Number: 63, Lot: "L1", Name: "t", Workspace: []string{"CREATE TABLE IF NOT EXISTS t (id INT)"}}))
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	a := newWiringApp()
+	WithMockDB(db)(a)
+	require.True(t, a.veridianMockDB)
+	require.NoError(t, wireVeridian(a, migs, platform.NewRegistry()))
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

@@ -117,6 +117,27 @@ jobs:
           fi
           echo "BASE_REF=$BASE_REF"
           scripts/ci/check-test-mapping.sh
+      # === Veridian L0 (29/10/2026) — fichiers gelés : aucune logique Veridian de plus que la ligne de branchement ===
+      # Autotest d'abord (le détecteur doit échouer sur un diff provoqué), puis le diff réel du push / de la PR.
+      - name: Fichiers gelés (frozen-files-check.sh)
+        run: |
+          chmod +x scripts/veridian/frozen-files-check.sh
+          scripts/veridian/frozen-files-check.sh --selftest
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export BASE_REF="origin/${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              export BASE_REF="origin/veridian"
+            else
+              export BASE_REF="$BEFORE"
+            fi
+          else
+            echo "Event ${{ github.event_name }} : skip fichiers gelés"
+            exit 0
+          fi
+          echo "BASE_REF=$BASE_REF"
+          scripts/veridian/frozen-files-check.sh
       # === Veridian — couverture rate-limit global (OWASP API4) ===
       # Transverse (pas lié au diff) : tourne sur tous les events. Bloque si le
       # middleware global a été dé-câblé d'app.go ; alerte (non bloquant) sur un

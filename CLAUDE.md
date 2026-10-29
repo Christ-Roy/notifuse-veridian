@@ -18,8 +18,12 @@ ligne dans l'index ci-dessous — jamais un pavé de plus ici.
    l'app. Un blocage (accès, credential) se débloque via le lead, il ne se contourne
    pas. Détail : CLAUDE.md racine `veridian-platform`.
 2. **Ne jamais patcher un fichier upstream Notifuse.** Tout code Veridian vit dans des
-   fichiers `veridian_*.go` au même niveau que l'upstream (flat, jamais de
-   sous-dossier). Un handler à étendre se wrappe, il ne se modifie pas en place. → `02`
+   fichiers `veridian_*.go` au même niveau que l'upstream (code existant). Un handler à
+   étendre se wrappe, il ne se modifie pas en place. → `02`
+   **Depuis le 29/10/2026 (lot L0), le code NEUF vit dans `internal/veridian/<module>/`,
+   se câble par `internal/app/veridian_wiring.go`, migre par `internal/migrations/veridian/`.
+   Fichiers gelés (app.go, worker.go…) : une ligne de branchement max par diff, garde
+   `scripts/veridian/frozen-files-check.sh`. → `docs/veridian/MODULARITE.md`**
    **Exception, décision du 07/10/2026 : la console React (`console/`) est la nôtre.** On
    ne fusionne plus `console/` depuis l'upstream (blog retiré, sidebar regroupée) ; on suit
    l'upstream côté Go seulement. Nouvelles pages dans des `veridian_*.tsx`. → `53`

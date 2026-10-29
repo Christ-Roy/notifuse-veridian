@@ -34,6 +34,7 @@ type Host interface {
 	MessageHistoryRepository() domain.MessageHistoryRepository
 	EmailQueueRepository() domain.EmailQueueRepository
 	EmailService() *service.EmailService
+	TemplateService() domain.TemplateService
 	WebhookEmitter() domain.WebhookEmitter
 
 	IMAPPoller() *queue.VeridianIMAPPollerService

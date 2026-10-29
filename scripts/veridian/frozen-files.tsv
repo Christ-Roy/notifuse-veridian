@@ -1,0 +1,13 @@
+# Fichiers GELES du fork Notifuse Veridian (docs/veridian/MODULARITE.md, regle 2). Deux colonnes, tabulation.
+# chemin	lignes_de_logique_ajoutables_par_diff
+# Une ligne de branchement (un appel vers veridian_wiring.go) est le maximum : 1. Les suppressions, les
+# commentaires, les lignes vides et les lignes qui ne ferment qu'un bloc ne comptent pas.
+# Ajouter un fichier a la liste : une ligne ici, et la raison dans MODULARITE.md. En retirer : l'archiver, jamais l'effacer.
+internal/app/app.go	1
+internal/domain/workspace.go	1
+internal/service/workspace_service.go	1
+internal/domain/email_provider.go	1
+internal/repository/message_history_postgre.go	1
+internal/service/queue/worker.go	1
+console/src/services/api/workspace.ts	1
+internal/migrations/v32.go	1
