@@ -578,7 +578,7 @@ func TestTrackingPixelPlacement(t *testing.T) {
 
 	// Check that the tracking pixel uses encrypted /t/ format and new styling
 	hasPixelPattern := strings.Contains(result, `/t/`) &&
-		strings.Contains(result, `alt="" style="border:0;margin:0;padding:0;">`)
+		strings.Contains(result, `alt="" style="border:0;display:block;outline:none;text-decoration:none;">`)
 	if !hasPixelPattern {
 		t.Errorf("Expected encrypted tracking pixel with /t/ path and new styling. Result: %s", result)
 	}
@@ -618,7 +618,7 @@ func TestTrackingPixelWithoutBodyTag(t *testing.T) {
 
 	// Check that the tracking pixel uses encrypted /t/ format
 	hasPixelPattern := strings.Contains(result, `/t/`) &&
-		strings.Contains(result, `alt="" style="border:0;margin:0;padding:0;">`)
+		strings.Contains(result, `alt="" style="border:0;display:block;outline:none;text-decoration:none;">`)
 	if !hasPixelPattern {
 		t.Error("Expected encrypted tracking pixel with /t/ path and new styling")
 	}

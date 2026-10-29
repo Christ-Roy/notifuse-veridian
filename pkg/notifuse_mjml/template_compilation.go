@@ -183,48 +183,108 @@ func isNonTrackableURL(urlStr string) bool {
 	return false
 }
 
-// applyUTMParameters appends the configured UTM parameters to sourceURL and
-// returns the result. The URL is returned unchanged when it is empty, a Liquid
-// placeholder, a mailto:/tel: link, cannot be parsed, or already carries any
-// utm_* query parameter.
+// splitURLFragment coupe sourceURL au premier '#'. Le fragment garde son '#' : head+fragment redonne
+// toujours la chaîne d'origine. Un paramètre appartient à la requête, jamais après '#'.
+// Port de Notifuse v39.1 (AGPL-3.0), voir docs/claude/75.
+func splitURLFragment(sourceURL string) (head string, fragment string) {
+	if hash := strings.IndexByte(sourceURL, '#'); hash >= 0 {
+		return sourceURL[:hash], sourceURL[hash:]
+	}
+	return sourceURL, ""
+}
+
+// rawQueryHasKey indique si la requête brute porte une paire dont la clé satisfait match.
+// La requête est lue telle qu'écrite, jamais décodée.
+func rawQueryHasKey(query string, match func(key string) bool) bool {
+	if query == "" {
+		return false
+	}
+	for _, pair := range strings.Split(query, "&") {
+		key := pair
+		if eq := strings.IndexByte(pair, '='); eq >= 0 {
+			key = pair[:eq]
+		}
+		if match(key) {
+			return true
+		}
+	}
+	return false
+}
+
+// rawQueryOf rend ce qui est entre le premier '?' et le fragment, et si l'URL porte un '?'.
+func rawQueryOf(sourceURL string) (query string, hasQuery bool) {
+	head, _ := splitURLFragment(sourceURL)
+	mark := strings.IndexByte(head, '?')
+	if mark < 0 {
+		return "", false
+	}
+	return head[mark+1:], true
+}
+
+// appendToRawQuery ajoute addition (déjà échappée) à la fin de la requête par chirurgie sur la chaîne,
+// pour que chaque autre octet du lien survive tel que son auteur l'a écrit. Reconstruire l'URL par
+// url.Values perdait des paires ("sid=1;2", "discount=50%off"), réordonnait les autres (signature
+// dépendante de l'ordre) et réencodait le chemin.
+func appendToRawQuery(sourceURL string, addition string) string {
+	head, fragment := splitURLFragment(sourceURL)
+
+	mark := strings.IndexByte(head, '?')
+	switch {
+	case mark < 0:
+		return head + "?" + addition + fragment
+	case mark == len(head)-1:
+		return head + addition + fragment
+	default:
+		return head + "&" + addition + fragment
+	}
+}
+
+// isUTMKey indique si une clé brute est un paramètre UTM ("utm%5Fsource" == "utm_source").
+func isUTMKey(key string) bool {
+	if decoded, err := url.QueryUnescape(key); err == nil {
+		key = decoded
+	}
+	return strings.HasPrefix(strings.ToLower(key), "utm_")
+}
+
+// applyUTMParameters ajoute les paramètres UTM configurés à sourceURL. L'URL est rendue inchangée si
+// elle est vide, un marqueur Liquid, mailto:/tel:, illisible, porte déjà un paramètre utm_*, ou si
+// aucun champ UTM n'est configuré. Port de Notifuse v39.1 (AGPL-3.0).
 func (t *TrackingSettings) applyUTMParameters(sourceURL string) string {
 	if sourceURL == "" || strings.Contains(sourceURL, "{{") || strings.Contains(sourceURL, "{%") ||
 		strings.HasPrefix(sourceURL, "mailto:") || strings.HasPrefix(sourceURL, "tel:") {
 		return sourceURL
 	}
 
-	parsedURL, err := url.Parse(sourceURL)
-	if err != nil {
+	// url.Parse ne sert qu'à refuser ce qui n'est pas une URL ; la chaîne qu'il reconstruirait n'est jamais utilisée.
+	if _, err := url.Parse(sourceURL); err != nil {
 		return sourceURL
 	}
 
-	queryParams := parsedURL.Query()
+	if query, hasQuery := rawQueryOf(sourceURL); hasQuery && rawQueryHasKey(query, isUTMKey) {
+		return sourceURL
+	}
 
-	// If the URL already has UTM parameters, leave them untouched
-	for key := range queryParams {
-		if strings.HasPrefix(strings.ToLower(key), "utm_") {
-			return sourceURL
+	// Champs configurés seulement, en ordre de clé croissant : c'est l'ordre qu'url.Values.Encode()
+	// émettait avant ce correctif, et l'URL réécrite sert de clé aux statistiques de clic par lien
+	// (jsonb clicked_links) : changer ces octets scinderait l'historique d'un lien en deux.
+	var pairs []string
+	for _, param := range []struct{ key, value string }{
+		{"utm_campaign", t.UTMCampaign},
+		{"utm_content", t.UTMContent},
+		{"utm_medium", t.UTMMedium},
+		{"utm_source", t.UTMSource},
+		{"utm_term", t.UTMTerm},
+	} {
+		if param.value != "" {
+			pairs = append(pairs, param.key+"="+url.QueryEscape(param.value))
 		}
 	}
+	if len(pairs) == 0 {
+		return sourceURL
+	}
 
-	if t.UTMSource != "" {
-		queryParams.Add("utm_source", t.UTMSource)
-	}
-	if t.UTMMedium != "" {
-		queryParams.Add("utm_medium", t.UTMMedium)
-	}
-	if t.UTMCampaign != "" {
-		queryParams.Add("utm_campaign", t.UTMCampaign)
-	}
-	if t.UTMContent != "" {
-		queryParams.Add("utm_content", t.UTMContent)
-	}
-	if t.UTMTerm != "" {
-		queryParams.Add("utm_term", t.UTMTerm)
-	}
-	parsedURL.RawQuery = queryParams.Encode()
-
-	return parsedURL.String()
+	return appendToRawQuery(sourceURL, strings.Join(pairs, "&"))
 }
 
 func (t *TrackingSettings) GetTrackingURL(sourceURL string) string {
@@ -382,6 +442,9 @@ func GenerateEmailRedirectionEndpoint(workspaceID string, messageID string, apiE
 // GenerateHTMLOpenTrackingPixel generates the HTML for the open tracking pixel.
 // Uses encrypted path tokens (/t/{token}) to avoid pixel blocker detection.
 // Falls back to legacy query params (/opens?mid=...) if encryption fails.
+// Veridian fork (L4) : la cellule annule sa hauteur de ligne et l'image quitte la ligne de base, sinon
+// chaque e-mail ouvert réservait une ligne de texte vide sous son contenu (port du correctif v39.1, AGPL).
+// L'effondrement reste en CSS : les attributs width/height sont l'empreinte que les bloqueurs de pixel reconnaissent.
 func GenerateHTMLOpenTrackingPixel(workspaceID string, messageID string, apiEndpoint string, sentTimestamp int64) string {
 	// Try encrypted format: /t/{token}
 	plaintext := fmt.Sprintf("%s\n%s\n%d", messageID, workspaceID, sentTimestamp)
@@ -396,7 +459,7 @@ func GenerateHTMLOpenTrackingPixel(workspaceID string, messageID string, apiEndp
 		pixelURL = fmt.Sprintf("%s/opens?mid=%s&wid=%s&ts=%d",
 			apiEndpoint, encodedMID, encodedWID, sentTimestamp)
 	}
-	return fmt.Sprintf(`<table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%%"><tr><td><img src="%s" alt="" style="border:0;margin:0;padding:0;"></td></tr></table>`, pixelURL)
+	return fmt.Sprintf(`<table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%%"><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><img src="%s" alt="" style="border:0;display:block;outline:none;text-decoration:none;"></td></tr></table>`, pixelURL)
 }
 
 // CompileTemplate compiles a visual editor tree to MJML and HTML

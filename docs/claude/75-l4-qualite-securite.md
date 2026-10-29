@@ -67,9 +67,62 @@ Exécution : binaire statique construit dans `golang:1.26.10-alpine`
 `notifuse` (la base est en 127.0.0.1:5432 dans le groupe bridge), `SECRET_KEY` déjà dans son environnement.
 Décision d'exécuter : Robert.
 
-## Tests portés de l'upstream et noyau Veridian
+## Tests portés de l'upstream (v39.1, dernière version AGPL)
 
-Voir la section « Tests portés » ci-dessous (mise à jour à la livraison 2).
+Source : `upstream/notifuse-upstream.git`, tag v39.1 (jamais v40+, BSL). Méthode : pour les paquets
+communs (broadcasts, file, templates, segments, contacts, listes, webhooks), les fonctions de test absentes
+du fork (1 106 par nom) sont extraites par `port.py` (déclarations absentes du paquet seulement), compilées, et
+celles qui ne compilent pas sont retirées (fonctionnalité absente : ~970 déclarations, surtout v33 à v39 :
+analytique web, permissions, OIDC, SES). Restent **101 tests** (30 fichiers `*_upstream39_test.go`) :
+**38 actifs et verts**, 63 ignorés par `t.Skip` avec la raison en clair.
+
+Défauts du fork révélés (le test passe sur l'upstream, échoue chez nous) :
+
+| Id | Défaut | État |
+|---|---|---|
+| D1 | `lists.update` enregistre `is_double_optin` / `is_public` omis comme `false` | non corrigé : changement de contrat API (refuser l'omission), décision Robert |
+| D2 | `broadcasts.update` écrase les champs absents (segments : l'envoi part sur toute la liste ; test A/B ; planification ; UTM) | non corrigé, **le plus grave** : un `broadcasts:update` partiel de la CLI est dangereux tant que ce n'est pas porté |
+| D3 | la réécriture UTM perdait la requête d'un lien (`;`, `%` nu) et réordonnait les paramètres (signatures) | **corrigé** (port v39.1 : chirurgie sur la requête brute) |
+| D4 | la cellule du pixel d'ouverture réservait une ligne de texte vide sous chaque e-mail | **corrigé** (markup v39.1) |
+| D5 | `email_options.subject_preview` (API) : `&`, `<` en mode code, rendu Liquid doublé | non corrigé (API transactionnelle, pas la prospection) |
+| D6 | curseur de pagination des événements perd les sous-secondes | non corrigé |
+| D7 | `mj-title` / `mj-preview` : une donnée contenant `<` cassait la compilation | **corrigé** (entités numériques, comme l'upstream) |
+
+Non analysés (A1 file de segments, A2 filtres de segment, 18 divers) et fonctionnalités absentes (permissions
+par ressource v39.0 : 12 tests, effacement par e-mail : 3) : `grep -rn 't.Skip("' --include=*upstream39_test.go`.
+Les quatre advisories v42 ne sont pas portées en code (BSL) : les tests de comportement équivalents sont écrits
+pour le fork (Liquid des données, bac à sable), SSRF et `SECRET_KEY` restent à traiter (lot 0).
+
+## Noyau Veridian : mutation plutôt que couverture
+
+Couverture par instruction des fichiers `veridian_*` mesurée avant : **81,9 %** (9 380 / 11 449 instructions,
+205 fichiers, `go test -cover ./internal/... ./pkg/...`, 29/10). Elle est déjà haute et ne dit pas si les tests
+mordent : l'épreuve est donc faite par mutation (`mutbatch.py` : opérateurs de comparaison, logiques, bornes,
+retours booléens ; un mutant est tué si un test échoue). Mutants générés et résultat :
+
+| Fichier | Mutants | Tués avant | Tués après |
+|---|---|---|---|
+| `pkg/veridian_spintax` (2 fichiers) | 32 | 18 | 23 |
+| `pkg/veridian_ndr/parser.go` | 28 | 11 | 27 |
+| `pkg/veridian_deliverability` | 24 | 13 | 23 |
+| `domain/veridian_fair_queue.go` | 14 | 10 | 10 |
+| `domain/veridian_warmup.go` | 11 | 7 | 9 |
+| `domain/veridian_sending_window.go` | 14 | 8 | 14 |
+| `queue/circuit_breaker.go` | 13 | 10 | 10 |
+| `queue/veridian_reputation_gate.go`, `veridian_effective_plan.go`, `veridian_plan_capacity.go` | 34 | 18 | non remesuré |
+| **Total** | **170** | **95 (56 %)** | **134 + queue non remesuré** |
+
+Les survivants restants sont équivalents ou sans effet (tri à égalité, `j >= 0` quand j ne vaut jamais 0,
+journalisation, `score > 10` borné) ; la liste est dans le rapport L4. Tests ajoutés : `parser_characterization_test.go`,
+`veridian_spintax_characterization_test.go`, `veridian_deliverability_characterization_test.go`,
+`internal/domain/veridian_characterization_test.go`, `internal/service/queue/veridian_characterization_test.go`
+(ce dernier écrit sur les survivants, vu vert, mutants de la file à remesurer : `specC2` non exécutée).
+Trouvailles : `extractAllTextInto` lit le corps brut d'une part imbriquée avant de récurser, donc la limite de
+profondeur est inopérante (comportement figé par un test) ; une donnée ou un modèle `mj-liquid` n'est plus un vecteur
+d'injection.
+
+Pas fait (consigne de resserrage du 29/10) : mesure de couverture « après » sur tout le dépôt, remesure des mutants
+de la file, D1/D2/D5/D6, exécution du rétro-remplissage en production.
 
 ## Flakiness vitest (les 6 tests à 30 s du 28/10)
 
