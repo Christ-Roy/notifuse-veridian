@@ -163,8 +163,12 @@ export function displayName(raw: string | undefined, fallbackName?: string): str
   return a.name || fallbackName?.trim() || a.email || ''
 }
 
-/** Expéditeur à afficher dans la liste : le contact pour un mail reçu, « Vous » pour un envoi (laissé à l'appelant). */
-export function counterpart(s: Pick<MailSummary, 'direction' | 'contact_email' | 'from' | 'to'>): string {
+/** Interlocuteur affiché dans la liste : le nom (ou l'adresse) de l'expéditeur d'un mail humain ou automatique, sinon le contact (envoi, rebond, rapport). */
+export function counterpart(s: Pick<MailSummary, 'direction' | 'kind' | 'contact_email' | 'from' | 'to'>): string {
+  if (s.direction === 'in' && (s.kind === 'reply_human' || s.kind === 'reply_auto' || s.kind === 'other')) {
+    const a = parseAddress(s.from)
+    return a.name || a.email || s.contact_email
+  }
   if (s.contact_email) return s.contact_email
   return s.direction === 'in' ? parseAddress(s.from).email : parseAddress(s.to[0]).email
 }

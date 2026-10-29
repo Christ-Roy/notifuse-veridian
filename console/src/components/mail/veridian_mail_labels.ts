@@ -46,7 +46,7 @@ export function useMailLabels() {
       case 'sent':
         return t`Sent`
       case 'reply_human':
-        return t`Reply`
+        return t`Human reply`
       case 'reply_auto':
         return t`Automatic reply`
       case 'bounce_hard':
@@ -71,11 +71,11 @@ export function useMailLabels() {
       case 'rebonds':
         return t`Bounces`
       case 'envoyes':
-        return t`Sent`
+        return t`Sent mails`
       case 'autres':
         return t`Others`
       default:
-        return t`All`
+        return t`All messages`
     }
   }
 
@@ -86,7 +86,7 @@ export function useMailLabels() {
       case 'traites':
         return t`Handled`
       default:
-        return t`All`
+        return t`All messages`
     }
   }
 

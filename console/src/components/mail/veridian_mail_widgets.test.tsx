@@ -72,7 +72,7 @@ describe('tuile du tableau de bord', () => {
     expect(tile).toHaveAttribute('aria-label', 'Replies to handle: 4. Open the inbox.')
     expect(tile.getAttribute('href')).toBe('/console/workspace/ws-1/inbox?nature=reponses&etat=a_traiter')
     expect(within(tile).getByText('4')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByTestId('tile-inbox-last')).toHaveTextContent('jean.martin@clinique-martin.example'))
+    await waitFor(() => expect(screen.getByTestId('tile-inbox-last')).toHaveTextContent('Dr Jean Martin'))
     expect(mailService.list).toHaveBeenCalledWith(expect.objectContaining({ kind: ['reply_human'], handled: false, limit: 1 }))
   })
 

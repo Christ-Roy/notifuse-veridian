@@ -16,6 +16,8 @@ export const VeridianInboxTile: React.FC<{ workspaceId: string }> = ({ workspace
   const last = useLastUnhandledReply(workspaceId, loaded)
   if (!loaded) return null
   const reply = last.data
+  const who = reply ? counterpart(reply) : ''
+  const when = reply ? relativeDate(messageDate(reply)) : ''
 
   return (
     <Col xs={24} md={12} xl={8}>
@@ -25,14 +27,14 @@ export const VeridianInboxTile: React.FC<{ workspaceId: string }> = ({ workspace
         search={{ nature: 'reponses', etat: 'a_traiter' } as never}
         data-testid="tile-inbox"
         aria-label={count === 1 ? t`Replies to handle: 1. Open the inbox.` : t`Replies to handle: ${count}. Open the inbox.`}
-        className="block bg-gray-100 p-4 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7763f1]"
-        style={{ minHeight: 110, color: 'inherit' }}
+        className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7763f1]"
+        style={{ display: 'block', minHeight: 110, padding: 16, borderRadius: 8, background: token.colorFillSecondary, color: 'inherit' }}
       >
         <Statistic title={t`Replies to handle`} value={count} valueStyle={{ fontSize: '22px', fontWeight: 'bold' }} formatter={(v) => String(v)} />
         <div style={{ marginTop: 4, fontSize: 12.5, color: token.colorTextSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} data-testid="tile-inbox-last">
           {reply ? (
             <span title={exactDate(messageDate(reply))}>
-              {t`Latest`}: {counterpart(reply)} · {relativeDate(messageDate(reply))}
+              {t`Latest: ${who} · ${when}`}
             </span>
           ) : (
             t`No reply waiting`

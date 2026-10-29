@@ -105,10 +105,13 @@ describe('adresses', () => {
     expect(displayName('m@x.fr', 'Marie D.')).toBe('Marie D.')
     expect(displayName('m@x.fr')).toBe('m@x.fr')
   })
-  it('interlocuteur de la liste : le contact, sinon l’expéditeur ou le destinataire', () => {
-    expect(counterpart({ direction: 'in', contact_email: 'c@x.fr', from: 'f@x.fr', to: [] })).toBe('c@x.fr')
-    expect(counterpart({ direction: 'in', contact_email: '', from: 'F <f@x.fr>', to: [] })).toBe('f@x.fr')
-    expect(counterpart({ direction: 'out', contact_email: '', from: 'me@x.fr', to: ['T <t@x.fr>'] })).toBe('t@x.fr')
+  it('interlocuteur de la liste : nom de celui qui répond, contact pour un envoi ou un rebond', () => {
+    const base = { contact_email: 'c@x.fr', to: [] as string[] }
+    expect(counterpart({ ...base, direction: 'in', kind: 'reply_human', from: 'Marie Dupont <m@x.fr>' })).toBe('Marie Dupont')
+    expect(counterpart({ ...base, direction: 'in', kind: 'reply_human', from: 'm@x.fr' })).toBe('m@x.fr')
+    expect(counterpart({ ...base, direction: 'in', kind: 'bounce_hard', from: 'Mail Delivery Subsystem <mailer-daemon@g.com>' })).toBe('c@x.fr')
+    expect(counterpart({ contact_email: '', to: ['T <t@x.fr>'], direction: 'out', kind: 'sent', from: 'me@x.fr' })).toBe('t@x.fr')
+    expect(counterpart({ contact_email: '', to: [], direction: 'in', kind: 'dsn', from: 'F <f@x.fr>' })).toBe('f@x.fr')
   })
 })
 

@@ -242,7 +242,7 @@ export function summaryOf(m: MailMessage, preview?: string): MailSummary {
     from: m.from,
     to: m.to,
     subject: m.subject,
-    preview: preview ?? (m.body_text ?? '').replace(/\s+/g, ' ').slice(0, 140),
+    preview: preview ?? (m.body_text ?? '').split('\n').filter((l) => !l.trim().startsWith('>')).join(' ').replace(/\s+/g, ' ').slice(0, 140),
     occurred_at: m.occurred_at,
     has_attachments: (m.attachments ?? []).some((a) => !(a.inline && a.content_id)),
     attachment_count: (m.attachments ?? []).length,

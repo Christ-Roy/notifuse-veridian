@@ -115,7 +115,7 @@ describe('page Boîte de réception', () => {
     renderMail(<InboxPage />)
     const rows = await screen.findAllByTestId('mail-row')
     const first = rows[0]
-    expect(within(first).getByText('jean.martin@clinique-martin.example')).toBeInTheDocument()
+    expect(within(first).getByText('Dr Jean Martin')).toBeInTheDocument()
     expect(within(first).getByText('Re: Compléments articulaires pour votre clinique')).toBeInTheDocument()
     expect(within(first).getByTestId('kind-dot-reply_human')).toBeInTheDocument()
     expect(within(first).getByRole('img', { name: 'Received' })).toBeInTheDocument()

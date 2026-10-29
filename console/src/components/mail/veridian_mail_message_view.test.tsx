@@ -67,7 +67,7 @@ describe('fiche d’un message', () => {
 
   it('nature, objet, corps HTML dans un iframe sandbox, pièces jointes (images incorporées exclues)', () => {
     view()
-    expect(screen.getByTestId('kind-badge-reply_human')).toHaveTextContent('Reply')
+    expect(screen.getByTestId('kind-badge-reply_human')).toHaveTextContent('Human reply')
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Re: Compléments articulaires pour votre clinique')
     expect(screen.getByTestId('mail-body-frame').getAttribute('sandbox')).not.toContain('allow-scripts')
     const atts = screen.getAllByTestId('attachment')
