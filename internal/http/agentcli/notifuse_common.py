@@ -74,6 +74,14 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse profiles:create <ws> --type smtp|gmail-app-password --name N --from-email E (--secret-stdin | --secret-file F) ...
                                                               crée un profil d'envoi (+ boîte IMAP liée), atomique, owner. Le secret se lit sur stdin ou dans un
                                                               fichier, JAMAIS en argument, jamais affiché ni loggé. Gmail : https://myaccount.google.com/apppasswords
+  notifuse policy:show [ws] [--class C] [--explain] [--json]   règles d'envoi PAR DÉFAUT de chaque classe de fournisseur destinataire (plafond/jour, cadence, part de chauffe,
+                                                              seuil de ralentissement, réponses observées) avec leur origine ; chaque règle expliquée en français
+  notifuse policy:set <ws> --class C [--cap N] [--rate R] [--warmup-share S] [--threshold T] [--reason T]   surcharge pour ce workspace ; policy:reset <ws> --class C [--rule R]
+  notifuse stock:overview [ws] [--days N] [--enrolled-list L] [--reserve-list L] [--json]   STOCK par classe : inscrits, réserve, plafond du jour, jours de couverture (le tableau de
+                                                              stock-par-classe.py), jamais contactés, couverture à planifier, statut et contacts à aller chercher. stock:config [ws] [options] : définition du stock
+  notifuse policy:suggest-enrollment [ws] [--days N] [--emails] [--limit N]   combien de contacts de la réserve inscrire par classe pour tenir N jours sans dépasser les plafonds, combien aller
+                                                              chercher ; N'INSCRIT PERSONNE (--emails : les adresses et les commandes à lancer toi-même)
+  notifuse policy:priority [ws] [--broadcast ID | --automation ID] [--set 2..9 | --clear]   priorité d'envoi d'une campagne ou automation (défaut 5, 1 réservé au transactionnel)
   notifuse prospection:stats <ws> [--start AAAA-MM-JJ] [--end AAAA-MM-JJ]   agrégats du tableau de bord de prospection (réponses par séquence et liste,
                                                               avancement J0/J+4/J+10, sorties par raison, stock par liste ; lecture, clé scopée OK)
   notifuse reconcile:run <ws> [--check C]... [--json]   recoupe ce que le logiciel croit (statuts, compteurs, classes, stock) avec la réalité ; code de sortie 0 = tout concorde,
@@ -81,6 +89,17 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse reconcile:report <ws> [--check C] [--all] [--json]   écarts ouverts (--all : aussi les résolus), sans rien exécuter ; mêmes codes de sortie
   notifuse reconcile:resolve <ws> --id F [--dry-run | --dismiss [--note T]] [--yes]   applique la réparation proposée d'un écart (--yes requis), la simule (--dry-run)
                                                               ou l'écarte 7 jours (--dismiss) ; rejoue le contrôle après coup et dit si l'écart a disparu
+  notifuse mail:boxes <ws>                         boîtes (une par profil d'envoi et par adresse) : compteurs, état de la lecture IMAP (L1, V63)
+  notifuse mail:list <ws> [--mailbox B] [--contact E] [--thread T] [--kind K,K] [--direction in|out] [--handled|--unhandled] [--since D] [--until D] [-q TXT [--body]] [--limit N] [--cursor C]
+  notifuse mail:get <ws> --id M [--headers] [--json]   un mail en entier : en-têtes, rapport de non-remise expliqué en français, lien vers l'envoi, pièces jointes, texte
+  notifuse mail:raw <ws> --id M [--out F.eml]      message brut RFC 822 (un mail envoyé est reconstitué depuis son rendu conservé, et le dit)
+  notifuse mail:attachment <ws> --id M --index N [--out F]   contenu d'une pièce jointe
+  notifuse mail:thread <ws> (--thread T | --contact E) [--no-body]   le fil en chronologie : premier mail, relances, réponse, rebond
+  notifuse mail:threads <ws> --contact E           les fils d'un contact (résumés)
+  notifuse mail:update <ws> --id M [--handled|--unhandled] [--label L]... [--clear-labels]   traité / à traiter, libellés
+  notifuse mail:send <ws> --profile P --to E --subject S (--text T|--text-file F|--html-file F) [--cc E]... [--yes]   met un mail en file avec les MÊMES plafonds que les séquences (sans --yes : simulation)
+  notifuse mail:reply <ws> --id M (--text ...) [--profile P] [--subject S] [--yes]   répond dans le fil (In-Reply-To, References), par le profil qui a reçu
+  notifuse mail:events <ws> [--since-seq N] [--direction in|out|any] [--kind K] [--max N] [--timeout S]   flux des nouveaux messages, reprise exacte par numéro d'ordre
   notifuse folders:list <ws> --kind segments|lists|templates [--json]            arbre des dossiers (L2, V65) : dossiers, compteurs, objets
   notifuse folders:create <ws> --kind K (--name N [--parent ID] | --path "A / B") [--position N | --before ID]
   notifuse folders:rename <ws> --id ID --name N      renomme (les noms « A / B / C » des objets suivent)
@@ -362,12 +381,24 @@ WORKSPACE_COMMANDS = frozenset({
     # Lot 5 (08/10/2026) : création d'un profil par l'API dédiée (propriétaire ; secret
     # sur stdin ou fichier) et agrégats du tableau de bord de prospection (lecture).
     "profiles:create", "prospection:stats",
+    # L3 (29/10/2026) : politique d'envoi par classe et priorité des campagnes (clé scopée, permissions vérifiées côté serveur).
+    "policy:show", "policy:set", "policy:reset", "policy:priority",
+    "stock:overview", "stock:config",
+    "policy:suggest-enrollment",
     # Lot 1 (10/10/2026) : pourquoi un mail n'est pas parti. queue:explain et logs:decisions en
     # lecture (automations:read) ; queue:recompute en écriture (automations:write, --yes requis).
     "queue:explain", "logs:decisions", "queue:recompute", "queue:entries", "queue:cancel",
+    # L2 (29/10/2026) : dossiers natifs (V65). Lecture folders:list ; le reste en ecriture (droit « contacts » pour
+    # les segments, « lists », « templates » : verifie cote serveur). Jamais de suppression d'objet.
+    "folders:list", "folders:create", "folders:rename", "folders:move", "folders:delete", "folders:reorder",
+    "segments:move", "lists:move", "templates:move",
     # L1b (29/10/2026) : réconciliateur. run/report en lecture (contacts, message_history et
     # automations :read), resolve exige en plus l'écriture de la ressource réparée.
     "reconcile:run", "reconcile:report", "reconcile:resolve",
+    # L1 (29/10/2026) : boîte unifiée. Lecture message_history:read ; mail:update message_history:write ;
+    # mail:send / mail:reply en plus transactional:write (verifie cote serveur). Module : notifuse_mail.py.
+    "mail:boxes", "mail:list", "mail:get", "mail:raw", "mail:attachment", "mail:thread", "mail:threads",
+    "mail:update", "mail:send", "mail:reply", "mail:events",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -2149,6 +2180,266 @@ def cmd_prospection_stats(a):
                   params={"workspace_id": a.workspace, "start": a.start, "end": a.end}))
 
 
+# ---- L3 (29/10/2026) : politique d'envoi et stock -----------------------------
+# policy:show     = GET  /api/veridian/policy.get            (workspace:read)
+# policy:set      = POST /api/veridian/policy.set            (workspace:write)
+# policy:reset    = POST /api/veridian/policy.reset          (workspace:write)
+# policy:priority = GET|POST /api/veridian/policy.priority.* (campagnes et automations, lecture / écriture)
+# Les règles par défaut sont des DONNÉES du serveur (catalogue de presets) : le CLI n'en recopie aucune.
+_POLICY_RULES = ("daily_cap", "rate_per_min", "warmup_share", "slowdown_threshold")
+
+
+def _fr_num(x, decimals=1):
+    s = ("%.*f" % (decimals, x)).rstrip("0").rstrip(".") if decimals else "%d" % round(x)
+    return s.replace(".", ",")
+
+
+def _fr_pct(x):
+    return _fr_num(x * 100, 1) + " %"
+
+
+def _fr_rate(per_min):
+    if per_min >= 1:
+        return _fr_num(per_min, 1) + " mails/min"
+    return "1 mail/" + _fr_num(1 / per_min, 1) + " min" if per_min > 0 else "non bridée"
+
+
+def format_policy(view, explain=False):
+    """Pure : tableau lisible de policy.get. Une valeur surchargée pour ce workspace porte un « * » ;
+    « masqué » signale qu'un profil pose sa propre valeur (la règle ne s'y applique pas)."""
+    lines = []
+    head = "%-20s %9s %-15s %8s %7s  %-20s" % ("classe", "plafond/j", "cadence", "chauffe", "seuil", "réponses (envois)")
+    lines.append(head)
+    for c in view.get("classes") or []:
+        def mark(v):
+            return "*" if v.get("source") == "workspace_override" else ""
+        cap, rate, wu, th = c["daily_cap"], c["rate_per_min"], c["warmup_share"], c["slowdown_threshold"]
+        obs = c.get("observed") or {}
+        rr = obs.get("reply_rate")
+        resp = ("%s (%d)" % (_fr_pct(rr), obs.get("sent", 0))) if rr is not None else "aucun envoi"
+        if obs.get("basis") == "catalog" and rr is not None:
+            resp += " cat."
+        masked = " masqué: " + ", ".join(cap["shadowed_by"]) if cap.get("shadowed_by") else ""
+        lines.append("%-20s %9s %-15s %8s %7s  %-20s%s" % (
+            c["class"], str(cap["value"]) + mark(cap), _fr_rate(rate["value"]) + mark(rate),
+            _fr_pct(wu["value"]) + mark(wu), _fr_pct(th["value"]) + mark(th), resp, masked))
+        if explain:
+            lines.append("    " + c.get("explanation", ""))
+    lines.append("")
+    lines.append("* = surchargé pour ce workspace (policy:set). Les autres valeurs sont les règles par défaut du catalogue du %s (%d surcharges)."
+                 % (view.get("catalog_as_of", "?"), view.get("overrides", 0)))
+    lines.append("cat. = réponses mesurées dans le catalogue (ce workspace n'a pas encore envoyé vers cette classe).")
+    return "\n".join(lines)
+
+
+def cmd_policy_show(a):
+    jwt = apikey_for(a.env, a.workspace)
+    st, data = call_jwt(a.env, "GET", "/api/veridian/policy.get", jwt,
+                        params={"workspace_id": a.workspace, "class": getattr(a, "klass", None)})
+    if st != 200 or not isinstance(data, dict) or a.json:
+        out(st, data)
+        return
+    print(format_policy(data, explain=a.explain or bool(getattr(a, "klass", None))))
+
+
+def cmd_policy_set(a):
+    body = {"workspace_id": a.workspace, "class": a.klass}
+    for flag, key in (("cap", "daily_cap"), ("rate", "rate_per_min"), ("warmup_share", "warmup_share"), ("threshold", "slowdown_threshold")):
+        v = getattr(a, flag)
+        if v is not None:
+            body[key] = v
+    if len(body) == 2:
+        die("rien à poser : donne au moins --cap, --rate, --warmup-share ou --threshold.")
+    if a.reason:
+        body["reason"] = a.reason
+    jwt = apikey_for(a.env, a.workspace)
+    out(*call_jwt(a.env, "POST", "/api/veridian/policy.set", jwt, body=body))
+
+
+def cmd_policy_reset(a):
+    bad = [r for r in (a.rule or []) if r not in _POLICY_RULES]
+    if bad:
+        die("règle inconnue %s (attendu : %s)." % (", ".join(bad), ", ".join(_POLICY_RULES)))
+    body = {"workspace_id": a.workspace, "class": a.klass}
+    if a.rule:
+        body["rules"] = a.rule
+    jwt = apikey_for(a.env, a.workspace)
+    out(*call_jwt(a.env, "POST", "/api/veridian/policy.reset", jwt, body=body))
+
+
+def format_priorities(data):
+    """Pure : liste des priorités d'envoi. * = posée par policy:priority (sinon le défaut)."""
+    lines = ["%-10s %-38s %-10s %9s %8s  %s" % ("type", "identifiant", "statut", "priorité", "en file", "nom")]
+    for s in data.get("sources") or []:
+        lines.append("%-10s %-38s %-10s %8d%s %8d  %s" % (s["source_type"], s["source_id"], s.get("status", ""), s["priority"],
+                                                          "*" if s.get("explicit") else " ", s.get("pending", 0), s.get("name", "")))
+    lines.append("")
+    lines.append("* = posée (sinon défaut %s). %s" % (data.get("default_priority", 5), data.get("note", "")))
+    return "\n".join(lines)
+
+
+def cmd_policy_priority(a):
+    jwt = apikey_for(a.env, a.workspace)
+    if a.broadcast and a.automation:
+        die("une seule source à la fois : --broadcast OU --automation.")
+    src_type, src_id = ("broadcast", a.broadcast) if a.broadcast else ("automation", a.automation) if a.automation else (None, None)
+    if a.set is not None and a.clear:
+        die("--set et --clear s'excluent.")
+    if (a.set is not None or a.clear) and not src_id:
+        die("--set et --clear visent une source : donne --broadcast ID ou --automation ID.")
+    if a.set is not None:
+        if not 2 <= a.set <= 9:
+            die("priorité hors plage : 2 à 9 (1 est réservé au transactionnel de séquence, 5 est le défaut).")
+        out(*call_jwt(a.env, "POST", "/api/veridian/policy.priority.set", jwt,
+                      body={"workspace_id": a.workspace, "source_type": src_type, "source_id": src_id, "priority": a.set}))
+        return
+    if a.clear:
+        out(*call_jwt(a.env, "POST", "/api/veridian/policy.priority.clear", jwt,
+                      body={"workspace_id": a.workspace, "source_type": src_type, "source_id": src_id}))
+        return
+    st, data = call_jwt(a.env, "GET", "/api/veridian/policy.priority.list", jwt, params={"workspace_id": a.workspace})
+    if st != 200 or not isinstance(data, dict) or a.json:
+        out(st, data)
+        return
+    if src_id:
+        data["sources"] = [s for s in data.get("sources") or [] if s["source_type"] == src_type and s["source_id"] == src_id]
+    print(format_priorities(data))
+
+
+# ---- L3 (29/10/2026) : stock par classe -----------------------------------------
+# stock:overview = GET  /api/veridian/stock.overview    (contacts:read + message_history:read)
+# stock:config   = GET  /api/veridian/stock.config      (workspace:read) ; avec options : POST stock.config.set (workspace:write)
+def format_stock(data):
+    """Pure : le tableau de stock-par-classe.py (inscrits, réserve, total, plafond/j, jours) + la part jamais contactée,
+    la couverture à planifier, le statut et le besoin de réapprovisionnement. Ordre du serveur = celui du script."""
+    def num(v):
+        return "-" if v is None else _fr_num(v, 1)
+    lines = ["%-20s %8s %8s %7s %9s %6s | %9s %7s %-12s %8s" % (
+        "classe", "inscrits", "réserve", "total", "plafond/j", "jours", "non envoy", "j. plan", "statut", "à chercher")]
+    for c in data.get("classes") or []:
+        lines.append("%-20s %8d %8d %7d %9d %6s | %9d %7s %-12s %8d" % (
+            c["class"], c["enrolled"], c["reserve"], c["prospectable"], c["capacity_today"], num(c.get("days_of_coverage")),
+            c["unsent"], num(c.get("days_unsent")), c.get("status", ""), c.get("restock_need", 0)))
+    t = data.get("totals") or {}
+    lines.append("%-20s %8d %8d %7d %9d %6s | %9d %7s %-12s %8d" % (
+        "TOTAL", t.get("enrolled", 0), t.get("reserve", 0), t.get("prospectable", 0), t.get("capacity_today", 0),
+        num(t.get("days_of_coverage")), t.get("unsent", 0), num(t.get("days_unsent")), "", t.get("restock_need", 0)))
+    lines.append("")
+    lines.append("jours = total / plafond du jour (définition de stock-par-classe.py, baisse avec l'heure et s'annule hors fenêtre d'envoi) ;")
+    lines.append("non envoy = jamais contactés ; j. plan = non envoyés / capacité d'une journée entière ; à chercher = contacts manquants pour %s jours."
+                 % data.get("target_days", "?"))
+    lines.append("listes : %s." % {"request": "celles de la commande", "config": "définition enregistrée (stock:config)",
+                                     "automations": "listes des automations actives (aucune définition enregistrée)",
+                                     "none": "AUCUNE (donner --enrolled-list ou enregistrer stock:config)"}.get(data.get("config_source"), "?"))
+    return "\n".join(lines)
+
+
+def _stock_params(a):
+    p = {"workspace_id": a.workspace, "days": getattr(a, "days", None), "enrolled_list": getattr(a, "enrolled_list", None),
+         "reserve_list": getattr(a, "reserve_list", None), "exclude_email_regex": getattr(a, "exclude_email_regex", None),
+         "class_field": getattr(a, "class_field", None)}
+    if getattr(a, "require", None):
+        p["require_non_empty"] = ",".join(a.require)
+    if getattr(a, "exclude_prefix", None):
+        for item in a.exclude_prefix:
+            if ":" not in item:
+                die("--exclude-prefix attend colonne:préfixe (ex. custom_string_1:cart_), reçu « %s »." % item)
+        p["exclude_prefix"] = ",".join(a.exclude_prefix)
+    return p
+
+
+def cmd_stock_overview(a):
+    jwt = apikey_for(a.env, a.workspace)
+    st, data = call_jwt(a.env, "GET", "/api/veridian/stock.overview", jwt, params=_stock_params(a))
+    if st != 200 or not isinstance(data, dict) or a.json:
+        out(st, data)
+        return
+    print(format_stock(data))
+
+
+def cmd_stock_config(a):
+    jwt = apikey_for(a.env, a.workspace)
+    st, cur = call_jwt(a.env, "GET", "/api/veridian/stock.config", jwt, params={"workspace_id": a.workspace})
+    changing = any(getattr(a, k) for k in ("enrolled_list", "reserve_list", "enroll_automation", "exclude_email_regex", "class_field",
+                                          "require", "exclude_prefix", "target_days"))
+    if not changing or st != 200:
+        out(st, cur)
+        return
+    cfg = dict(cur.get("config") or {})
+    for flag, key in (("enrolled_list", "enrolled_list_id"), ("reserve_list", "reserve_list_id"), ("enroll_automation", "enroll_automation_id"),
+                      ("exclude_email_regex", "exclude_email_regex"), ("class_field", "class_field"), ("target_days", "target_days")):
+        v = getattr(a, flag)
+        if v:
+            cfg[key] = v
+    if a.require:
+        cfg["require_non_empty"] = a.require
+    if a.exclude_prefix:
+        pref = {}
+        for item in a.exclude_prefix:
+            col, _, p = item.partition(":")
+            if not col or not p:
+                die("--exclude-prefix attend colonne:préfixe (ex. custom_string_1:cart_), reçu « %s »." % item)
+            pref.setdefault(col, []).append(p)
+        cfg["exclude_prefixes"] = pref
+    body = {"workspace_id": a.workspace}
+    body.update(cfg)
+    out(*call_jwt(a.env, "POST", "/api/veridian/stock.config.set", jwt, body=body))
+
+
+# ---- L3 (29/10/2026) : suggestion d'inscription -----------------------------------
+# policy:suggest-enrollment = GET /api/veridian/policy.suggest-enrollment (contacts:read + message_history:read). N'inscrit PERSONNE.
+def format_suggestion(data, workspace="<ws>", batch=20):
+    """Pure : tableau de la suggestion, et, si les adresses sont là, les commandes d'inscription à lancer À LA MAIN (par lots)."""
+    def pct(v):
+        return _fr_pct(v)
+    lines = ["%-20s %9s %8s %8s %9s %9s %10s %9s %7s" % (
+        "classe", "capacité/j", "horizon", "relances", "inscrits*", "réserve", "à inscrire", "à chasser", "rép.")]
+    for c in data.get("classes") or []:
+        lines.append("%-20s %9d %8d %8d %9d %9d %10d %9d %7s" % (
+            c["class"], c["capacity_per_day"], c["horizon_capacity"], c["followups_due"], c["enrolled_unsent"], c["reserve_unsent"],
+            c["suggest_enroll"], c["shortfall"], pct(c.get("reply_rate_smoothed", 0))))
+    t = data.get("totals") or {}
+    lines.append("%-20s %9d %8s %8d %9s %9s %10d %9d" % ("TOTAL", t.get("capacity_per_day", 0), "", t.get("followups_due", 0), "", "",
+                                                        t.get("suggest_enroll", 0), t.get("shortfall", 0)))
+    lines.append("")
+    lines.append("horizon = capacité/j x %s jours d'envoi ; relances = contacts déjà en séquence dont la prochaine étape échoit dans l'horizon (elles passent avant) ;" % data.get("days"))
+    lines.append("* inscrits non envoyés ; réserve = éligible (jamais contactée, ni désabonnée ni rejetée, pas déjà inscrite) ; rép. = taux de réponse observé (lissé).")
+    rp = data.get("restock_priority") or []
+    if rp:
+        lines.append("")
+        lines.append("À CHASSER, dans cet ordre (les classes qui répondent le plus d'abord) : " +
+                     ", ".join("%s %d" % (r["class"], r["shortfall"]) for r in rp))
+    auto = data.get("enroll_automation_id") or "<ID_AUTOMATION>"
+    cmds = []
+    for c in data.get("classes") or []:
+        emails = c.get("emails") or []
+        for i in range(0, len(emails), batch):
+            cmds.append("# %s (%d à %d sur %d)\nnotifuse automations:enroll %s --id %s --emails %s" % (
+                c["class"], i + 1, min(i + batch, len(emails)), len(emails), workspace, auto, ",".join(emails[i:i + batch])))
+    if cmds:
+        lines.append("")
+        lines.append("RIEN n'a été inscrit. Pour inscrire (à lancer toi-même, lot par lot) :")
+        lines.extend(cmds)
+    else:
+        lines.append("")
+        lines.append("RIEN n'a été inscrit. Ajoute --emails pour obtenir les adresses à inscrire.")
+    return "\n".join(lines)
+
+
+def cmd_policy_suggest(a):
+    jwt = apikey_for(a.env, a.workspace)
+    params = _stock_params(a)
+    if a.emails:
+        params["include_emails"] = "true"
+    if a.limit:
+        params["limit"] = a.limit
+    st, data = call_jwt(a.env, "GET", "/api/veridian/policy.suggest-enrollment", jwt, params=params)
+    if st != 200 or not isinstance(data, dict) or a.json:
+        out(st, data)
+        return
+    print(format_suggestion(data, workspace=a.workspace))
+
+
 # ---- Lot 1 (10/10/2026) : « pourquoi ce mail n'est pas parti » -------------
 # queue:explain  = GET  /api/veridian/queue.explain    (automations:read)
 # logs:decisions = GET  /api/veridian/decisions.list   (automations:read)
@@ -2262,7 +2553,7 @@ def format_queue_entry(e, decision=None):
     L = [f"entrée {e.get('id')} · {e.get('status')} · {e.get('contact_email') or '-'}",
          f"  automation {e.get('automation_name') or e.get('automation_id')} · nœud {e.get('node_id') or '-'} · "
          f"profil {e.get('profile_name') or '-'} · classe {e.get('class') or '-'}",
-         f"  créée {_ts(e.get('created_at'))} · tentatives {e.get('attempts')}/{e.get('max_attempts')} · prochaine {_ts(e.get('next_retry_at'))}",
+         f"  créée {_ts(e.get('created_at'))} · priorité {e.get('priority', '-')} · tentatives {e.get('attempts')}/{e.get('max_attempts')} · prochaine {_ts(e.get('next_retry_at'))}",
          f"  raison {e.get('reason') or '-'}" + (f" ({e['reason_detail']})" if e.get("reason_detail") else "")
          + f" · reportée {_ts(e.get('deferred_at'))} jusqu'à {_ts(e.get('defer_until'))} ({e.get('defer_count') or 0} report(s))",
          f"  examinée la 1re fois {_ts(e.get('first_examined_at'))}, la dernière {_ts(e.get('last_examined_at'))}"]
@@ -4295,6 +4586,85 @@ def build_parser():
     sp.add_argument("--end", help="fin de fenêtre AAAA-MM-JJ, jour inclus")
     sp.set_defaults(func=cmd_prospection_stats, _routes=["/api/veridian/prospection.stats"])
 
+    # ---- L3 (29/10/2026) : politique d'envoi et stock ----
+    sp = sub.add_parser("policy:show",
+                        help="règles d'envoi par classe de fournisseur destinataire (plafond, cadence, chauffe, seuil de ralentissement, réponses observées), avec leur origine ; --explain pour les phrases")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--class", dest="klass", help="une seule classe (ovh, google...) : explication complète")
+    sp.add_argument("--explain", action="store_true", help="une explication en français sous chaque classe")
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute (contrat de l'API)")
+    sp.set_defaults(func=cmd_policy_show, _routes=["/api/veridian/policy.get"])
+
+    sp = sub.add_parser("policy:set",
+                        help="surcharge une règle d'une classe pour ce workspace (les règles par défaut restent pour les autres)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--class", dest="klass", required=True, help="classe du fournisseur destinataire")
+    sp.add_argument("--cap", type=int, help="plafond : mails par jour et par domaine d'envoi")
+    sp.add_argument("--rate", type=float, help="cadence : mails par minute (0.1 = 1 mail toutes les 10 min)")
+    sp.add_argument("--warmup-share", dest="warmup_share", type=float, help="part (0 à 1) du plafond de chauffe du domaine que la classe peut absorber")
+    sp.add_argument("--threshold", type=float, help="taux de rebonds (0.01 à 0.15) qui divise le débit par 2 (par 4 au double)")
+    sp.add_argument("--reason", help="pourquoi (300 caractères max), conservé avec la surcharge")
+    sp.set_defaults(func=cmd_policy_set, _routes=["/api/veridian/policy.set"])
+
+    sp = sub.add_parser("policy:reset",
+                        help="retire les surcharges d'une classe : elle retrouve les règles par défaut")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--class", dest="klass", required=True)
+    sp.add_argument("--rule", action="append", help="une règle seulement (daily_cap, rate_per_min, warmup_share, slowdown_threshold) ; répétable. Sans : toutes")
+    sp.set_defaults(func=cmd_policy_reset, _routes=["/api/veridian/policy.reset"])
+
+    sp = sub.add_parser("policy:priority",
+                        help="priorité d'envoi d'une campagne ou automation (2 à 9, défaut 5, 1 réservé au transactionnel). Sans option : liste. --set N / --clear sur --broadcast ID ou --automation ID")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--broadcast", help="id de la campagne")
+    sp.add_argument("--automation", help="id de l'automation")
+    sp.add_argument("--set", type=int, help="pose la priorité (2 = passe avant 5) ; réécrit celle des mails déjà en file")
+    sp.add_argument("--clear", action="store_true", help="retire la priorité posée (retour à 5)")
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute")
+    sp.set_defaults(func=cmd_policy_priority, _routes=["/api/veridian/policy.priority.list", "/api/veridian/policy.priority.set", "/api/veridian/policy.priority.clear"])
+
+    sp = sub.add_parser("stock:overview",
+                        help="stock par classe de fournisseur destinataire : inscrits, réserve, plafond du jour, jours de couverture (le tableau de stock-par-classe.py), jamais contactés, besoin de réapprovisionnement")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--days", type=int, help="couverture visée en jours (défaut : celle de stock:config, sinon 3)")
+    sp.add_argument("--enrolled-list", dest="enrolled_list", help="liste des inscrits (sinon stock:config, sinon listes des automations actives)")
+    sp.add_argument("--reserve-list", dest="reserve_list", help="liste de réserve (contacts pas encore inscrits)")
+    sp.add_argument("--exclude-email-regex", dest="exclude_email_regex", help="adresses écartées (expression régulière PostgreSQL, insensible à la casse)")
+    sp.add_argument("--class-field", dest="class_field", help="colonne qui porte la classe (défaut custom_string_5)")
+    sp.add_argument("--require", action="append", help="colonne qui doit être renseignée (ex. custom_string_1) ; répétable")
+    sp.add_argument("--exclude-prefix", dest="exclude_prefix", action="append", help="colonne:préfixe qui écarte le contact (ex. custom_string_1:cart_) ; répétable")
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute (contrat de l'API)")
+    sp.set_defaults(func=cmd_stock_overview, _routes=["/api/veridian/stock.overview"])
+
+    sp = sub.add_parser("stock:config",
+                        help="définition du stock (listes d'inscrits et de réserve, filtres, couverture visée) ; avec des options : l'enregistre (les autres valeurs sont conservées)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--enrolled-list", dest="enrolled_list")
+    sp.add_argument("--reserve-list", dest="reserve_list")
+    sp.add_argument("--enroll-automation", dest="enroll_automation", help="automation dans laquelle on inscrit")
+    sp.add_argument("--exclude-email-regex", dest="exclude_email_regex")
+    sp.add_argument("--class-field", dest="class_field")
+    sp.add_argument("--require", action="append")
+    sp.add_argument("--exclude-prefix", dest="exclude_prefix", action="append")
+    sp.add_argument("--target-days", dest="target_days", type=int, help="couverture visée en jours (1 à 60)")
+    sp.set_defaults(func=cmd_stock_config, _routes=["/api/veridian/stock.config", "/api/veridian/stock.config.set"])
+
+    sp = sub.add_parser("policy:suggest-enrollment",
+                        help="combien de contacts de la réserve inscrire, par classe, pour tenir N jours de couverture sans dépasser les plafonds, et combien aller chercher ; n'inscrit personne")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--days", type=int, help="jours d'envoi à couvrir (défaut : stock:config, sinon 3)")
+    sp.add_argument("--emails", action="store_true", help="donne aussi les adresses à inscrire (priorité puis score) et les commandes pour le faire")
+    sp.add_argument("--limit", type=int, help="adresses au plus par classe avec --emails (défaut 200, max 2000)")
+    sp.add_argument("--enrolled-list", dest="enrolled_list")
+    sp.add_argument("--reserve-list", dest="reserve_list")
+    sp.add_argument("--enroll-automation", dest="enroll_automation", help="automation dans laquelle on inscrit")
+    sp.add_argument("--exclude-email-regex", dest="exclude_email_regex")
+    sp.add_argument("--class-field", dest="class_field")
+    sp.add_argument("--require", action="append")
+    sp.add_argument("--exclude-prefix", dest="exclude_prefix", action="append")
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute (contrat de l'API)")
+    sp.set_defaults(func=cmd_policy_suggest, _routes=["/api/veridian/policy.suggest-enrollment"])
+
     sp = sub.add_parser("reconcile:run",
                         help="recoupe statuts, compteurs, classes et stock avec la réalité ; écarts expliqués en français avec réparation proposée (exit 0 concorde, 1 écarts, 2 non abouti)")
     sp.add_argument("workspace", nargs="?", default=None)
@@ -4318,6 +4688,9 @@ def build_parser():
     sp.add_argument("--yes", action="store_true", help="exécute pour de vrai la réparation")
     sp.set_defaults(func=cmd_reconcile_resolve, _routes=["/api/veridian/reconcile.resolve"])
 
+    import notifuse_mail  # L1 : boîte unifiée (module séparé)
+    notifuse_mail.register(sub)
+
     sp = sub.add_parser("queue:explain",
                         help="pourquoi les mails sont en file : groupes par automation, nœud, raison, profil ; --entry ID pour une entrée et sa dernière décision gate par gate")
     sp.add_argument("workspace", nargs="?", default=None)
@@ -4331,6 +4704,64 @@ def build_parser():
     sp.add_argument("--entry", help="détail d'UNE entrée et sa dernière décision, gate par gate")
     sp.add_argument("--json", action="store_true", help="sortie JSON brute")
     sp.set_defaults(func=cmd_queue_explain, _routes=["/api/veridian/queue.explain", "/api/veridian/decisions.list"])
+
+    # ---- L2 : dossiers natifs (V65) ----
+    def _pos_args(sp):
+        sp.add_argument("--position", type=int, help="rang parmi les frères (0 = en tête) ; sans option : en queue")
+        sp.add_argument("--before", help="id d'un frère : se placer juste avant lui")
+
+    sp = sub.add_parser("folders:list", help="arbre des dossiers d'un genre (dossiers, compteurs, objets) ; range d'après leur nom les objets créés à l'ancienne")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--kind", required=True, choices=_FOLDER_KINDS)
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute")
+    sp.set_defaults(func=cmd_folders_list, _routes=["/api/veridian/folders.list"])
+
+    sp = sub.add_parser("folders:create", help="crée un dossier, ou tout un chemin avec --path \"A / B / C\" (idempotent)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--kind", required=True, choices=_FOLDER_KINDS)
+    sp.add_argument("--name", help="nom du dossier (sans « / » entouré d'espaces)")
+    sp.add_argument("--parent", help="id du dossier parent (défaut : racine)")
+    sp.add_argument("--path", help="chemin complet, niveaux manquants créés")
+    _pos_args(sp)
+    sp.set_defaults(func=cmd_folders_create, _routes=["/api/veridian/folders.create"])
+
+    sp = sub.add_parser("folders:rename", help="renomme un dossier ; le nom « chemin complet » de chaque objet dessous suit")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--id", required=True)
+    sp.add_argument("--name", required=True)
+    sp.set_defaults(func=cmd_folders_rename, _routes=["/api/veridian/folders.rename"])
+
+    sp = sub.add_parser("folders:move", help="déplace un dossier et son contenu (--parent root pour la racine)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--id", required=True)
+    sp.add_argument("--parent", help="id du dossier destination, ou root")
+    _pos_args(sp)
+    sp.set_defaults(func=cmd_folders_move, _routes=["/api/veridian/folders.move"])
+
+    sp = sub.add_parser("folders:delete", help="supprime un dossier (refusé s'il n'est pas vide, sauf --to-parent) ; ne supprime jamais un objet")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--id", required=True)
+    sp.add_argument("--to-parent", action="store_true", help="remonte le contenu d'un cran avant de supprimer")
+    sp.set_defaults(func=cmd_folders_delete, _routes=["/api/veridian/folders.delete"])
+
+    sp = sub.add_parser("folders:reorder", help="fixe l'ordre des enfants d'un dossier : ceux listés passent en tête, dans l'ordre donné")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--kind", required=True, choices=_FOLDER_KINDS)
+    sp.add_argument("--parent", help="id du dossier (défaut : racine)")
+    sp.add_argument("--folders", help="ids de sous-dossiers séparés par des virgules")
+    sp.add_argument("--items", help="ids d'objets séparés par des virgules")
+    sp.set_defaults(func=cmd_folders_reorder, _routes=["/api/veridian/folders.reorder"])
+
+    for _kind in _FOLDER_KINDS:
+        sp = sub.add_parser(f"{_kind}:move", help=f"range des {_kind} dans un dossier (le nom « A / B / C » stocké suit)")
+        sp.add_argument("workspace", nargs="?", default=None)
+        sp.add_argument("--id", action="append", help="id de l'objet (répétable)")
+        sp.add_argument("--folder", help="id du dossier destination")
+        sp.add_argument("--path", help="chemin destination « A / B » (créé au besoin)")
+        sp.add_argument("--root", action="store_true", help="sortir de tout dossier")
+        sp.add_argument("--name", help="nouveau libellé court (un seul objet)")
+        _pos_args(sp)
+        sp.set_defaults(func=_cmd_items_move(_kind), _routes=[f"/api/veridian/{_kind}.move"])
 
     sp = sub.add_parser("logs:decisions",
                         help="journal des décisions du worker (envoyé, reporté, échoué, écarté, sorti, recalculé) ; --trace pour les portes")
