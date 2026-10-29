@@ -3796,6 +3796,1067 @@
         }
       }
     },
+    "/api/veridian/policy.get": {
+      "get": {
+        "summary": "Send policy by recipient provider class, explained (Veridian L3)",
+        "description": "Veridian extension. Returns, for each recipient provider class, the rules the worker\napplies to a workspace: daily cap, rate per minute, share of the domain warm-up cap,\nslowdown threshold of the reputation fuse, and the observed reply value. Each value\ncarries its origin (`preset` = catalogue default, `workspace_override` = set with\n`policy.set`) and a plain-French explanation. `shadowed_by` lists sending profiles\nthat set their own value and therefore mask the policy for their own sends.\n\nAuth = JWT or workspace API key. Requires `workspace:read`.\n",
+        "operationId": "veridianPolicyGet",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "class",
+            "in": "query",
+            "description": "Restrict to one class (google, ovh, orange...).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianPolicyView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "summary": "Send policy by recipient provider class (POST form)",
+        "operationId": "veridianPolicyGetPost",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "class": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Effective policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianPolicyView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/veridian/policy.set": {
+      "post": {
+        "summary": "Override send-policy rules of one provider class for a workspace",
+        "description": "Sets the given values and keeps the others. Values left out (or 0) are not touched.\nBounds: `daily_cap` 1 to 1000, `rate_per_min` 0.01 to 10, `warmup_share` 0.01 to 1,\n`slowdown_threshold` 0.01 to 0.15. A value set by hand on a sending profile still wins\nfor that profile (the response warns). The worker sees the change within seconds.\n\nRequires `workspace:write`.\n",
+        "operationId": "veridianPolicySet",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "class"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "class": {
+                    "type": "string",
+                    "example": "ovh"
+                  },
+                  "daily_cap": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "rate_per_min": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 10
+                  },
+                  "warmup_share": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 1
+                  },
+                  "slowdown_threshold": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 0.15
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The class after the change, and warnings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianPolicySetResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/veridian/policy.reset": {
+      "post": {
+        "summary": "Remove overrides of one provider class (back to the catalogue defaults)",
+        "description": "Requires `workspace:write`. `rules` names the rules to reset (all when omitted).",
+        "operationId": "veridianPolicyReset",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "class"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "class": {
+                    "type": "string"
+                  },
+                  "rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "daily_cap",
+                        "rate_per_min",
+                        "warmup_share",
+                        "slowdown_threshold"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The class after the reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianPolicySetResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/veridian/policy.priority.list": {
+      "get": {
+        "summary": "Send priority of every broadcast and automation",
+        "description": "Priority is 2 to 9 (default 5; 1 is reserved for sequence transactional mail). A smaller\nnumber is dequeued first. It only changes the order when the queue is congested between\ncampaigns: when the per-sender or per-provider cap is the limit, it does not send more.\n\nRequires `broadcasts:read` and `automations:read`.\n",
+        "operationId": "veridianPolicyPriorityList",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Priorities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianPriorityList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "summary": "Send priority list (POST form)",
+        "operationId": "veridianPolicyPriorityListPost",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Priorities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianPriorityList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/veridian/policy.priority.set": {
+      "post": {
+        "summary": "Set the send priority of a broadcast or automation",
+        "description": "Rewrites the priority of its mails already waiting in the queue (pending or paused);\nmails already sent do not move, priority-1 transactional mails are never touched.\nRequires `broadcasts:write` (broadcast) or `automations:write` (automation).\n",
+        "operationId": "veridianPolicyPrioritySet",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "source_type",
+                  "source_id",
+                  "priority"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "source_type": {
+                    "type": "string",
+                    "enum": [
+                      "broadcast",
+                      "automation"
+                    ]
+                  },
+                  "source_id": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 9
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new priority and the number of waiting mails rewritten",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianPriorityChange"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Unknown broadcast or automation"
+          }
+        }
+      }
+    },
+    "/api/veridian/policy.priority.clear": {
+      "post": {
+        "summary": "Remove the send priority of a broadcast or automation (back to 5)",
+        "operationId": "veridianPolicyPriorityClear",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "source_type",
+                  "source_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "source_type": {
+                    "type": "string",
+                    "enum": [
+                      "broadcast",
+                      "automation"
+                    ]
+                  },
+                  "source_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Priority back to the default",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianPriorityChange"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown broadcast or automation"
+          }
+        }
+      }
+    },
+    "/api/veridian/policy.suggest-enrollment": {
+      "get": {
+        "summary": "How many reserve contacts to enroll per class to hold N days of coverage (enrols nobody)",
+        "description": "Veridian extension. For each class: capacity per sending day (class cap after slowdown, bounded by the\nwhole-day capacity of the profiles) x `days`, minus the follow-ups of contacts already in sequence that\nfall due in the horizon, minus the enrolled contacts never mailed = the gap. `suggest_enroll` =\nmin(gap, eligible reserve); `shortfall` = what the reserve cannot cover (to source, see\n`restock_priority`). Eligible reserve: never mailed, not unsubscribed or bounced, not already enrolled.\n\n**Nothing is ever enrolled** (`applied` is always false): the caller enrolls the returned addresses\n(`include_emails=true`, ordered by priority `custom_string_2` then score `custom_number_1`) with\n`automations.enroll`, or not.\n\nRequires `contacts:read` and `message_history:read`.\n",
+        "operationId": "veridianPolicySuggestEnrollment",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            }
+          },
+          {
+            "name": "include_emails",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Addresses at most per class (default 200",
+            "max 2000)": null,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "enrolled_list",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reserve_list",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "enroll_automation",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggestion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianSuggestion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "summary": "Enrollment suggestion (POST form, same fields in the JSON body)",
+        "operationId": "veridianPolicySuggestEnrollmentPost",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "days": {
+                    "type": "integer"
+                  },
+                  "include_emails": {
+                    "type": "boolean"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Suggestion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianSuggestion"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/veridian/stock.overview": {
+      "get": {
+        "summary": "Stock by recipient provider class, days of coverage, restock need (Veridian L3)",
+        "description": "Veridian extension. Per recipient provider class: contacts of the enrolled list and of the reserve\nlist (the columns of the `stock-par-classe.py` script: `enrolled`, `reserve`, `prospectable`,\n`capacity_today`, `days_of_coverage` = prospectable / capacity of the day, same rounding and order),\nplus what the script cannot tell: contacts never mailed (`unsent`), coverage on a full sending day\n(`days_unsent`), a `status`, and `restock_need` = contacts to source to hold `target_days` days.\n\n`capacity_today` sums the configured capacity of the active commercial profiles (it shrinks during\nthe day and is 0 outside the sending window); `capacity_nominal` is a full sending day.\nLists, filters and class column come from `stock.config`, any of them can be overridden in the\nrequest (read only: nothing is written).\n\nRequires `contacts:read` and `message_history:read`.\n",
+        "operationId": "veridianStockOverview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Target coverage in sending days (1 to 60)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "enrolled_list",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reserve_list",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude_email_regex",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "class_field",
+            "in": "query",
+            "description": "custom_string_1 to custom_string_5 (default custom_string_5)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "require_non_empty",
+            "in": "query",
+            "description": "Comma separated columns that must be filled",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude_prefix",
+            "in": "query",
+            "description": "Comma separated column:prefix pairs that exclude a contact",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock table",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianStockOverview"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "summary": "Stock by recipient provider class (POST form, same fields in the JSON body)",
+        "operationId": "veridianStockOverviewPost",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "days": {
+                    "type": "integer"
+                  },
+                  "enrolled_list": {
+                    "type": "string"
+                  },
+                  "reserve_list": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stock table",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianStockOverview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/veridian/stock.config": {
+      "get": {
+        "summary": "Definition of the stock (lists, filters, target coverage)",
+        "description": "Requires `workspace:read`. Without a saved definition the lists of the active automations are used.",
+        "operationId": "veridianStockConfig",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianStockConfigView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/veridian/stock.config.set": {
+      "post": {
+        "summary": "Save the definition of the stock (replaces the previous one)",
+        "description": "Requires `workspace:write`. Columns are restricted to custom_string_1 to custom_string_5; unknown fields are refused.",
+        "operationId": "veridianStockConfigSet",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "workspace_id"
+                    ],
+                    "properties": {
+                      "workspace_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/VeridianStockConfig"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianStockConfigView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/veridian/reconcile.run": {
+      "post": {
+        "summary": "Run the reconciliation checks (Veridian)",
+        "description": "Veridian extension (lot L1b). Recoupe ce que le logiciel croit (statuts de contacts,\ncompteurs, classes de messagerie, file et stock) avec ce qui s'est réellement passé, et\nsynchronise la table des écarts (`veridian_reconcile_finding`) : écart nouveau ouvert,\nécart persistant rafraîchi, écart disparu clos automatiquement. Un contrôle qui n'a pas pu\nconclure est `non_abouti` et ne touche pas à ses écarts : trois états, jamais deux.\n\nDroits : `contacts:read`, `message_history:read` et `automations:read`. Un seul passage à\nla fois par workspace (409 sinon). Aucune écriture hors de la table des écarts.\n",
+        "operationId": "veridianReconcileRun",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "description": "Codes ou numéros des contrôles à jouer (tous si absent).",
+                    "items": {
+                      "type": "string",
+                      "example": "classes"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "État des écarts après le passage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide"
+          },
+          "401": {
+            "description": "Non authentifié"
+          },
+          "403": {
+            "description": "Droits insuffisants"
+          },
+          "409": {
+            "description": "Un passage est déjà en cours pour ce workspace"
+          }
+        }
+      }
+    },
+    "/api/veridian/reconcile.report": {
+      "get": {
+        "summary": "Read the open discrepancies without running anything",
+        "operationId": "veridianReconcileReport",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "check",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Un seul contrôle (code ou numéro)."
+          },
+          {
+            "name": "include_resolved",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Inclut les écarts résolus."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Écarts ouverts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide"
+          },
+          "401": {
+            "description": "Non authentifié"
+          },
+          "403": {
+            "description": "Droits insuffisants"
+          }
+        }
+      },
+      "post": {
+        "summary": "Read the open discrepancies (POST form)",
+        "operationId": "veridianReconcileReportPost",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "include_resolved": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Écarts ouverts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/veridian/reconcile.resolve": {
+      "post": {
+        "summary": "Apply, preview or dismiss the proposed repair of a discrepancy",
+        "description": "`apply` exécute la réparation proposée (les cibles sont relues au moment d'appliquer, dans\nune transaction), clôt l'écart, puis rejoue le contrôle : `verified` dit si l'écart a\ndisparu. `dry_run` ne modifie rien. `dismiss` écarte l'écart 7 jours (cas voulu).\n\nDroits : lecture des trois ressources, plus l'écriture des contacts (reclassement) ou des\nautomations (sorties, file, compteurs).\n",
+        "operationId": "veridianReconcileResolve",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "finding_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "finding_id": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "apply",
+                      "dry_run",
+                      "dismiss"
+                    ],
+                    "default": "apply"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Résultat de l'action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileResolveResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide"
+          },
+          "401": {
+            "description": "Non authentifié"
+          },
+          "403": {
+            "description": "Droits insuffisants"
+          },
+          "409": {
+            "description": "Un passage ou une réparation est déjà en cours pour ce workspace"
+          }
+        }
+      }
+    },
     "/api/veridian/mail.mailboxes.list": {
       "get": {
         "summary": "Boîtes (une par profil d'envoi et par adresse)",
@@ -5762,241 +6823,6 @@
           }
         }
       }
-    },
-    "/api/veridian/reconcile.run": {
-      "post": {
-        "summary": "Run the reconciliation checks (Veridian)",
-        "description": "Veridian extension (lot L1b). Recoupe ce que le logiciel croit (statuts de contacts,\ncompteurs, classes de messagerie, file et stock) avec ce qui s'est réellement passé, et\nsynchronise la table des écarts (`veridian_reconcile_finding`) : écart nouveau ouvert,\nécart persistant rafraîchi, écart disparu clos automatiquement. Un contrôle qui n'a pas pu\nconclure est `non_abouti` et ne touche pas à ses écarts : trois états, jamais deux.\n\nDroits : `contacts:read`, `message_history:read` et `automations:read`. Un seul passage à\nla fois par workspace (409 sinon). Aucune écriture hors de la table des écarts.\n",
-        "operationId": "veridianReconcileRun",
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "workspace_id"
-                ],
-                "properties": {
-                  "workspace_id": {
-                    "type": "string"
-                  },
-                  "checks": {
-                    "type": "array",
-                    "description": "Codes ou numéros des contrôles à jouer (tous si absent).",
-                    "items": {
-                      "type": "string",
-                      "example": "classes"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "État des écarts après le passage",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReconcileReport"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Requête invalide"
-          },
-          "401": {
-            "description": "Non authentifié"
-          },
-          "403": {
-            "description": "Droits insuffisants"
-          },
-          "409": {
-            "description": "Un passage est déjà en cours pour ce workspace"
-          }
-        }
-      }
-    },
-    "/api/veridian/reconcile.report": {
-      "get": {
-        "summary": "Read the open discrepancies without running anything",
-        "operationId": "veridianReconcileReport",
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "check",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Un seul contrôle (code ou numéro)."
-          },
-          {
-            "name": "include_resolved",
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            },
-            "description": "Inclut les écarts résolus."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Écarts ouverts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReconcileReport"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Requête invalide"
-          },
-          "401": {
-            "description": "Non authentifié"
-          },
-          "403": {
-            "description": "Droits insuffisants"
-          }
-        }
-      },
-      "post": {
-        "summary": "Read the open discrepancies (POST form)",
-        "operationId": "veridianReconcileReportPost",
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "workspace_id"
-                ],
-                "properties": {
-                  "workspace_id": {
-                    "type": "string"
-                  },
-                  "check": {
-                    "type": "string"
-                  },
-                  "include_resolved": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Écarts ouverts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReconcileReport"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/veridian/reconcile.resolve": {
-      "post": {
-        "summary": "Apply, preview or dismiss the proposed repair of a discrepancy",
-        "description": "`apply` exécute la réparation proposée (les cibles sont relues au moment d'appliquer, dans\nune transaction), clôt l'écart, puis rejoue le contrôle : `verified` dit si l'écart a\ndisparu. `dry_run` ne modifie rien. `dismiss` écarte l'écart 7 jours (cas voulu).\n\nDroits : lecture des trois ressources, plus l'écriture des contacts (reclassement) ou des\nautomations (sorties, file, compteurs).\n",
-        "operationId": "veridianReconcileResolve",
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "workspace_id",
-                  "finding_id"
-                ],
-                "properties": {
-                  "workspace_id": {
-                    "type": "string"
-                  },
-                  "finding_id": {
-                    "type": "string"
-                  },
-                  "action": {
-                    "type": "string",
-                    "enum": [
-                      "apply",
-                      "dry_run",
-                      "dismiss"
-                    ],
-                    "default": "apply"
-                  },
-                  "note": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Résultat de l'action",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReconcileResolveResult"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Requête invalide"
-          },
-          "401": {
-            "description": "Non authentifié"
-          },
-          "403": {
-            "description": "Droits insuffisants"
-          },
-          "409": {
-            "description": "Un passage ou une réparation est déjà en cours pour ce workspace"
-          }
-        }
-      }
     }
   },
   "components": {
@@ -6008,6 +6834,257 @@
       }
     },
     "schemas": {
+      "ReconcileAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "reclassify_contacts",
+              "exit_contacts",
+              "cancel_queue_entries",
+              "recount_automation_stats"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "Texte du bouton",
+            "en français.": null
+          },
+          "impact": {
+            "type": "string",
+            "description": "Ce que la réparation change."
+          },
+          "reversible": {
+            "type": "boolean"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "api": {
+            "type": "object",
+            "description": "L'appel qui applique l'action.",
+            "properties": {
+              "method": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "body": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "ReconcileFinding": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "check": {
+            "type": "string",
+            "example": "classes"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "warning",
+              "info"
+            ]
+          },
+          "subject_ref": {
+            "type": "string",
+            "example": "classe:freemail_fr->orange"
+          },
+          "title": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "string"
+          },
+          "observed": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Cause",
+            "en français.": null
+          },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "proposed_action": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconcileAction"
+              }
+            ]
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resolved_by": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        }
+      },
+      "ReconcileCheck": {
+        "type": "object",
+        "properties": {
+          "check": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "ecarts",
+              "non_abouti"
+            ]
+          },
+          "count": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer"
+          }
+        }
+      },
+      "ReconcileReport": {
+        "type": "object",
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ran": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconcileCheck"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconcileFinding"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "open": {
+                "type": "integer"
+              },
+              "critical": {
+                "type": "integer"
+              },
+              "warning": {
+                "type": "integer"
+              },
+              "info": {
+                "type": "integer"
+              },
+              "not_reached": {
+                "type": "integer"
+              }
+            }
+          },
+          "definitions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "definition": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReconcileResolveResult": {
+        "type": "object",
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "apply",
+              "dry_run",
+              "dismiss"
+            ]
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Le contrôle rejoué ne retrouve plus l'écart."
+          },
+          "remaining": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconcileFinding"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "properties": {
@@ -10960,254 +12037,474 @@
           }
         }
       },
-      "ReconcileAction": {
+      "VeridianPolicyValue": {
         "type": "object",
         "properties": {
-          "kind": {
+          "value": {},
+          "source": {
             "type": "string",
             "enum": [
-              "reclassify_contacts",
-              "exit_contacts",
-              "cancel_queue_entries",
-              "recount_automation_stats"
+              "preset",
+              "workspace_override"
             ]
+          },
+          "preset": {},
+          "shadowed_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VeridianPolicyClass": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string"
           },
           "label": {
-            "type": "string",
-            "description": "Texte du bouton",
-            "en français.": null
-          },
-          "impact": {
-            "type": "string",
-            "description": "Ce que la réparation change."
-          },
-          "reversible": {
-            "type": "boolean"
-          },
-          "params": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "api": {
-            "type": "object",
-            "description": "L'appel qui applique l'action.",
-            "properties": {
-              "method": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              },
-              "body": {
-                "type": "object",
-                "additionalProperties": true
-              }
-            }
-          }
-        }
-      },
-      "ReconcileFinding": {
-        "type": "object",
-        "properties": {
-          "id": {
             "type": "string"
           },
-          "check": {
-            "type": "string",
-            "example": "classes"
+          "daily_cap": {
+            "$ref": "#/components/schemas/VeridianPolicyValue"
           },
-          "severity": {
-            "type": "string",
-            "enum": [
-              "critical",
-              "warning",
-              "info"
-            ]
+          "rate_per_min": {
+            "$ref": "#/components/schemas/VeridianPolicyValue"
           },
-          "subject_ref": {
-            "type": "string",
-            "example": "classe:freemail_fr->orange"
+          "warmup_share": {
+            "$ref": "#/components/schemas/VeridianPolicyValue"
           },
-          "title": {
-            "type": "string"
-          },
-          "expected": {
-            "type": "string"
+          "slowdown_threshold": {
+            "$ref": "#/components/schemas/VeridianPolicyValue"
           },
           "observed": {
-            "type": "string"
-          },
-          "explanation": {
-            "type": "string",
-            "description": "Cause",
-            "en français.": null
-          },
-          "evidence": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "proposed_action": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReconcileAction"
-              }
-            ]
-          },
-          "first_seen_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "last_seen_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "resolved_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "resolved_by": {
-            "type": "string"
-          },
-          "resolution": {
-            "type": "object",
-            "nullable": true,
-            "additionalProperties": true
-          }
-        }
-      },
-      "ReconcileCheck": {
-        "type": "object",
-        "properties": {
-          "check": {
-            "type": "string"
-          },
-          "number": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "ok",
-              "ecarts",
-              "non_abouti"
-            ]
-          },
-          "count": {
-            "type": "integer"
-          },
-          "error": {
-            "type": "string"
-          },
-          "duration_ms": {
-            "type": "integer"
-          }
-        }
-      },
-      "ReconcileReport": {
-        "type": "object",
-        "properties": {
-          "generated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "ran": {
-            "type": "boolean"
-          },
-          "checks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReconcileCheck"
-            }
-          },
-          "findings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReconcileFinding"
-            }
-          },
-          "summary": {
             "type": "object",
             "properties": {
-              "open": {
+              "sent": {
                 "type": "integer"
               },
-              "critical": {
+              "bounced": {
                 "type": "integer"
               },
-              "warning": {
+              "replied_human": {
                 "type": "integer"
               },
-              "info": {
-                "type": "integer"
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "workspace",
+                  "catalog"
+                ]
               },
-              "not_reached": {
-                "type": "integer"
+              "reply_rate": {
+                "type": "number",
+                "nullable": true
+              },
+              "reply_rate_smoothed": {
+                "type": "number"
+              },
+              "bounce_rate": {
+                "type": "number",
+                "nullable": true
               }
             }
           },
-          "definitions": {
+          "why": {
+            "type": "string"
+          },
+          "rules": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "key": {
+                "name": {
                   "type": "string"
                 },
-                "label": {
-                  "type": "string"
-                },
-                "definition": {
-                  "type": "string"
-                },
+                "value": {},
                 "source": {
                   "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "explanation": {
+            "type": "string"
+          }
+        }
+      },
+      "VeridianPolicyView": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "catalog_as_of": {
+            "type": "string"
+          },
+          "catalog_source": {
+            "type": "string"
+          },
+          "overrides": {
+            "type": "integer"
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VeridianPolicyClass"
+            }
+          }
+        }
+      },
+      "VeridianPolicySetResult": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "$ref": "#/components/schemas/VeridianPolicyClass"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VeridianPriorityList": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "default_priority": {
+            "type": "integer"
+          },
+          "min_priority": {
+            "type": "integer"
+          },
+          "max_priority": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source_type": {
+                  "type": "string"
+                },
+                "source_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "integer"
+                },
+                "explicit": {
+                  "type": "boolean"
+                },
+                "pending": {
+                  "type": "integer"
                 }
               }
             }
           }
         }
       },
-      "ReconcileResolveResult": {
+      "VeridianPriorityChange": {
         "type": "object",
         "properties": {
-          "finding_id": {
+          "source_type": {
             "type": "string"
           },
-          "action": {
+          "source_id": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "requeued_pending": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "VeridianSuggestRow": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "capacity_per_day": {
+            "type": "integer"
+          },
+          "horizon_capacity": {
+            "type": "integer"
+          },
+          "followups_due": {
+            "type": "integer"
+          },
+          "room_for_new": {
+            "type": "integer"
+          },
+          "enrolled_unsent": {
+            "type": "integer"
+          },
+          "gap": {
+            "type": "integer"
+          },
+          "reserve_unsent": {
+            "type": "integer"
+          },
+          "suggest_enroll": {
+            "type": "integer"
+          },
+          "shortfall": {
+            "type": "integer"
+          },
+          "reply_rate_smoothed": {
+            "type": "number"
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VeridianSuggestion": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "generated_at": {
             "type": "string",
-            "enum": [
-              "apply",
-              "dry_run",
-              "dismiss"
-            ]
+            "format": "date-time"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "enroll_automation_id": {
+            "type": "string"
           },
           "applied": {
-            "type": "boolean"
-          },
-          "result": {
-            "type": "object",
-            "nullable": true,
-            "additionalProperties": true
-          },
-          "verified": {
             "type": "boolean",
-            "description": "Le contrôle rejoué ne retrouve plus l'écart."
+            "description": "Always false",
+            "nothing is enrolled by this route.": null
           },
-          "remaining": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReconcileFinding"
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VeridianSuggestRow"
+            }
+          },
+          "totals": {
+            "type": "object"
+          },
+          "restock_priority": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "class": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "shortfall": {
+                  "type": "integer"
+                },
+                "reply_rate_smoothed": {
+                  "type": "number"
+                }
               }
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VeridianStockConfig": {
+        "type": "object",
+        "properties": {
+          "enrolled_list_id": {
+            "type": "string"
+          },
+          "reserve_list_id": {
+            "type": "string"
+          },
+          "enroll_automation_id": {
+            "type": "string"
+          },
+          "class_field": {
+            "type": "string",
+            "example": "custom_string_5"
+          },
+          "exclude_email_regex": {
+            "type": "string"
+          },
+          "require_non_empty": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exclude_prefixes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "target_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        }
+      },
+      "VeridianStockRow": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "enrolled": {
+            "type": "integer"
+          },
+          "reserve": {
+            "type": "integer"
+          },
+          "prospectable": {
+            "type": "integer"
+          },
+          "capacity_today": {
+            "type": "integer"
+          },
+          "days_of_coverage": {
+            "type": "number",
+            "nullable": true
+          },
+          "enrolled_unsent": {
+            "type": "integer"
+          },
+          "reserve_unsent": {
+            "type": "integer"
+          },
+          "unsent": {
+            "type": "integer"
+          },
+          "capacity_nominal": {
+            "type": "integer"
+          },
+          "days_unsent": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "bas",
+              "critique",
+              "sans_plafond",
+              "inactive"
             ]
           },
-          "message": {
+          "restock_need": {
+            "type": "integer"
+          },
+          "reply_rate_smoothed": {
+            "type": "number"
+          }
+        }
+      },
+      "VeridianStockOverview": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
             "type": "string"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "target_days": {
+            "type": "integer"
+          },
+          "config": {
+            "$ref": "#/components/schemas/VeridianStockConfig"
+          },
+          "config_source": {
+            "type": "string",
+            "enum": [
+              "request",
+              "config",
+              "automations",
+              "none"
+            ]
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VeridianStockRow"
+            }
+          },
+          "totals": {
+            "type": "object"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VeridianStockConfigView": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "none",
+              "config"
+            ]
+          },
+          "config": {
+            "$ref": "#/components/schemas/VeridianStockConfig"
           }
         }
       }
