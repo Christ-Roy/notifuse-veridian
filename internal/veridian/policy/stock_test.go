@@ -54,6 +54,19 @@ func TestBuildStock_ReproduitLeTableauDuScript(t *testing.T) {
 	assert.Equal(t, 11312, tot.Prospectable, "total du script")
 }
 
+// Relevé réel du 29/10 : 145/4 = 36,25 et 99/12 = 8,25 sont des égalités exactes. Le script (round de Python) donne 36,2 et 8,2.
+func TestRound1_MemeArrondiQuePythonSurLesEgalitesExactes(t *testing.T) {
+	for in, want := range map[float64]float64{36.25: 36.2, 8.25: 8.2, 0.35: 0.3, 0.45: 0.5, 102.5: 102.5, 67.24: 67.2, 67.26: 67.3, 0: 0} {
+		assert.Equal(t, want, round1(in), "round(%v, 1)", in)
+	}
+	r := ratio(145, 4)
+	require.NotNil(t, r)
+	assert.Equal(t, 36.2, *r)
+	r = ratio(99, 12)
+	require.NotNil(t, r)
+	assert.Equal(t, 8.2, *r)
+}
+
 func TestBuildStock_ClasseSansCapaciteEnFinSansJours(t *testing.T) {
 	rows := BuildStock(StockConfig{}, map[string]ListCounts{"ovh": {Total: 10, Unsent: 10}, "google": {Total: 5, Unsent: 5}}, nil,
 		map[string]Capacity{"google": {Today: 10, Nominal: 10}}, nil)

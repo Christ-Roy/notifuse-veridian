@@ -5,6 +5,7 @@ import (
 	"math"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -183,7 +184,12 @@ type StockTotalsOut struct {
 // UnclassifiedKey : classe des contacts sans étiquette (comme le script).
 const UnclassifiedKey = "?"
 
-func round1(x float64) float64 { return math.Round(x*10) / 10 }
+// round1 arrondit au dixième comme le round(x, 1) de Python que le script stock-par-classe.py utilise : sur la valeur exacte du
+// flottant, les égalités exactes (36,25) vers le pair (36,2). math.Round les arrondirait vers le haut (36,3).
+func round1(x float64) float64 {
+	v, _ := strconv.ParseFloat(strconv.FormatFloat(x, 'f', 1, 64), 64)
+	return v
+}
 
 func ratio(n, d int) *float64 {
 	if d <= 0 {
