@@ -7,29 +7,34 @@ interface FolderToggleButtonProps {
   row: FolderRow
   onToggle: (key: string) => void
   controlsId?: string
+  // Menu du dossier (renommer, déplacer, supprimer), posé à côté du bouton.
+  extra?: React.ReactNode
 }
 
 // Bouton natif : Entrée et Espace fonctionnent sans code supplémentaire.
-export function FolderToggleButton({ row, onToggle, controlsId }: FolderToggleButtonProps) {
+export function FolderToggleButton({ row, onToggle, controlsId, extra }: FolderToggleButtonProps) {
   const { t } = useLingui()
   const countLabel = row.count === 1 ? t`1 item` : t`${row.count} items`
   return (
-    <Button
-      type="text"
-      size="small"
-      icon={row.open ? <FolderOpenOutlined /> : <FolderOutlined />}
-      onClick={() => onToggle(row.key)}
-      aria-expanded={row.open}
-      aria-controls={row.open ? controlsId : undefined}
-      style={{ fontWeight: 500, maxWidth: '100%' }}
-    >
-      <span>{row.label}</span>
-      <span style={{ opacity: 0.75, marginLeft: 6, fontWeight: 400 }}>{countLabel}</span>
-      {row.open ? (
-        <DownOutlined style={{ fontSize: 10, marginLeft: 6 }} />
-      ) : (
-        <RightOutlined style={{ fontSize: 10, marginLeft: 6 }} />
-      )}
-    </Button>
+    <span style={{ opacity: row.count === 0 ? 0.55 : 1, whiteSpace: 'nowrap' }}>
+      <Button
+        type="text"
+        size="small"
+        icon={row.open ? <FolderOpenOutlined /> : <FolderOutlined />}
+        onClick={() => onToggle(row.key)}
+        aria-expanded={row.open}
+        aria-controls={row.open ? controlsId : undefined}
+        style={{ fontWeight: 500, maxWidth: '100%' }}
+      >
+        <span>{row.label}</span>
+        <span style={{ opacity: 0.75, marginLeft: 6, fontWeight: 400 }}>{countLabel}</span>
+        {row.open ? (
+          <DownOutlined style={{ fontSize: 10, marginLeft: 6 }} />
+        ) : (
+          <RightOutlined style={{ fontSize: 10, marginLeft: 6 }} />
+        )}
+      </Button>
+      {extra}
+    </span>
   )
 }

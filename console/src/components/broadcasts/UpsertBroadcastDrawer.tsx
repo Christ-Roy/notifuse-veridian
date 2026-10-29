@@ -536,6 +536,7 @@ export function UpsertBroadcastDrawer({
                       <VeridianSegmentPicker
                         multiple
                         segments={segments}
+                        workspaceId={workspace.id}
                         placeholder={t`Select segments (optional)`}
                         formatNumber={formatNumber}
                       />

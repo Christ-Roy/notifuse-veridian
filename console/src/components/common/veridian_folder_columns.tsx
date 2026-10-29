@@ -1,5 +1,5 @@
 import type { TableColumnType } from 'antd'
-import type { NamedItem, TreeRow } from './veridian_folder_rows'
+import type { FolderRow, NamedItem, TreeRow } from './veridian_folder_rows'
 import { FolderToggleButton } from './veridian_folder_tree'
 
 export const FOLDER_INDENT_PX = 20
@@ -25,7 +25,8 @@ function readValue(item: object, dataIndex: DataIndex): unknown {
 export function folderTableColumns<T extends NamedItem>(
   columns: TableColumnType<T>[],
   labelColumnKey: string,
-  onToggle: (key: string) => void
+  onToggle: (key: string) => void,
+  folderExtra?: (row: FolderRow) => React.ReactNode
 ): TableColumnType<TreeRow<T>>[] {
   return columns.map((column, index): TableColumnType<TreeRow<T>> => {
     const { render, onCell, dataIndex, ...passThrough } = column
@@ -48,7 +49,7 @@ export function folderTableColumns<T extends NamedItem>(
         if (row.kind === 'folder') {
           return isFirst ? (
             <div style={{ paddingLeft: row.depth * FOLDER_INDENT_PX }}>
-              <FolderToggleButton row={row} onToggle={onToggle} />
+              <FolderToggleButton row={row} onToggle={onToggle} extra={folderExtra?.(row)} />
             </div>
           ) : null
         }

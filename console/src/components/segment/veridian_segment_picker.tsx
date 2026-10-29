@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { Select, Tag, TreeSelect } from 'antd'
-import { buildSegmentTree, hasFolders, toTreeSelectData } from './veridian_segment_folders'
+import { hasFolders, toTreeSelectData } from './veridian_segment_folders'
+import { buildNativeTree, withoutEmptyFolders } from '../common/veridian_folder_native'
+import { useNativeFolders } from '../common/veridian_folder_hooks'
 
 export interface PickableSegment {
   id: string
@@ -16,6 +18,8 @@ interface VeridianSegmentPickerProps {
   multiple?: boolean
   placeholder?: string
   loading?: boolean
+  // Dossiers natifs (lot L2) : sans workspace, l'arbre se déduit des noms « A / B ».
+  workspaceId?: string
   formatNumber: (n: number) => string
 }
 
@@ -28,9 +32,12 @@ export function VeridianSegmentPicker({
   multiple = false,
   placeholder,
   loading,
+  workspaceId,
   formatNumber
 }: VeridianSegmentPickerProps) {
-  const tree = useMemo(() => buildSegmentTree(segments), [segments])
+  const { native } = useNativeFolders(workspaceId, 'segments', segments)
+  // Un sélecteur n'a que faire des dossiers vides.
+  const tree = useMemo(() => withoutEmptyFolders(buildNativeTree(segments, native)), [segments, native])
   const nested = hasFolders(tree)
 
   const colorTag = (segment: PickableSegment, props?: { closable?: boolean; onClose?: () => void }) => (

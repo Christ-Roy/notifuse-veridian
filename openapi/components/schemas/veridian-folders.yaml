@@ -1,0 +1,62 @@
+VeridianFolder:
+  type: object
+  properties:
+    id: { type: string }
+    parent_id: { type: string, nullable: true, description: "null = root" }
+    name: { type: string, description: "Folder name, never contains ' / '" }
+    position: { type: integer, description: "Rank among sibling folders" }
+    depth: { type: integer, description: "1 = top level" }
+    path: { type: array, items: { type: string } }
+    path_text: { type: string, example: "2 Cibles / Animaleries indépendantes" }
+    count: { type: integer, description: "Objects inside, sub-folders included" }
+    direct_items: { type: integer }
+    subfolders: { type: integer }
+VeridianFolderItem:
+  type: object
+  properties:
+    id: { type: string }
+    name: { type: string, description: "Stored name: the full path 'A / B / C' kept in sync by the server (compatibility)" }
+    label: { type: string, description: "Short name, without the folder path" }
+    folder_id: { type: string, nullable: true }
+    position: { type: integer, nullable: true, description: "Rank among the objects of the folder; null = never ordered" }
+    path_text: { type: string }
+VeridianFolderAdopt:
+  type: object
+  description: "Objects filed from their legacy path-bearing name during this call"
+  properties:
+    adopted: { type: integer }
+    folders_created: { type: integer }
+    pruned: { type: integer }
+    warnings: { type: array, items: { type: string } }
+VeridianFolderTree:
+  type: object
+  properties:
+    kind: { type: string, enum: [segments, lists, templates] }
+    folders: { type: array, items: { $ref: '#/VeridianFolder' }, description: "Display order (depth-first)" }
+    items: { type: array, items: { $ref: '#/VeridianFolderItem' }, description: "Display order, unranked root objects last" }
+    adopt: { $ref: '#/VeridianFolderAdopt' }
+VeridianFolderResult:
+  type: object
+  properties:
+    folder: { $ref: '#/VeridianFolder' }
+    moved:
+      type: array
+      items:
+        type: object
+        properties:
+          id: { type: string }
+          name: { type: string }
+          label: { type: string }
+          folder_id: { type: string, nullable: true }
+          position: { type: integer }
+          path_text: { type: string }
+    renamed:
+      type: array
+      description: "Stored names rewritten in the segments / lists / templates table"
+      items:
+        type: object
+        properties:
+          id: { type: string }
+          name: { type: string }
+    deleted: { type: string }
+    adopt: { $ref: '#/VeridianFolderAdopt' }

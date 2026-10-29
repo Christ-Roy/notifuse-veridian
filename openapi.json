@@ -6823,6 +6823,932 @@
           }
         }
       }
+    },
+    "/api/veridian/folders.list": {
+      "get": {
+        "summary": "Read the folder tree of one kind (folders, objects, counters)",
+        "description": "Returns every folder in display order (depth-first) with its path, depth and counters\n(`count` includes sub-folders), and every live object with its folder and short `label`.\nObjects whose stored name still carries a path (`A / B / C`) but that are not filed are\nfiled here, once (`adopt` reports it): old clients keep working.\nRoot objects without a rank (`position: null`) keep the native order of the object list.\n",
+        "operationId": "veridianFoldersList",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "segments",
+                "lists",
+                "templates"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The tree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderTree"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Read the folder tree (POST form)",
+        "operationId": "veridianFoldersListPost",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "kind"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "segments",
+                      "lists",
+                      "templates"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The tree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderTree"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/veridian/folders.create": {
+      "post": {
+        "summary": "Create a folder (or a whole path)",
+        "description": "Creates a folder under `parent_id` (root when empty). `path` (`A / B / C`) instead of `name` + `parent_id`\n creates every missing level, like mkdir -p, and is idempotent. A name may not contain ` / ` (the old\n path convention): use sub-folders. Same name among siblings (case-insensitive) is a 409.\n",
+        "operationId": "veridianFoldersCreate",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "kind"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "animalsd"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "segments",
+                      "lists",
+                      "templates"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string",
+                    "example": "2 Cibles / Animaleries"
+                  },
+                  "parent_id": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Index among the siblings (0 = first). Omit to append."
+                  },
+                  "before_id": {
+                    "type": "string",
+                    "description": "Insert just before this sibling id (alternative to position)."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder or object not found"
+          },
+          "409": {
+            "description": "Conflict (a sibling folder has the same name, or the folder is not empty)"
+          }
+        }
+      }
+    },
+    "/api/veridian/folders.rename": {
+      "post": {
+        "summary": "Rename a folder",
+        "description": "Renames a folder. The stored names (`A / B / C`) of every object below it are rewritten (`renamed` lists them).\n",
+        "operationId": "veridianFoldersRename",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "id",
+                  "name"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "animalsd"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder or object not found"
+          },
+          "409": {
+            "description": "Conflict (a sibling folder has the same name, or the folder is not empty)"
+          }
+        }
+      }
+    },
+    "/api/veridian/folders.move": {
+      "post": {
+        "summary": "Move a folder (with its content)",
+        "description": "Moves a folder under `parent_id` (root when empty) at `position` / before `before_id`. Refuses a move into itself\n or one of its descendants, a depth over 8, and a name clash at the destination. Stored names below it are rewritten.\n",
+        "operationId": "veridianFoldersMove",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "animalsd"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Index among the siblings (0 = first). Omit to append."
+                  },
+                  "before_id": {
+                    "type": "string",
+                    "description": "Insert just before this sibling id (alternative to position)."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder or object not found"
+          },
+          "409": {
+            "description": "Conflict (a sibling folder has the same name, or the folder is not empty)"
+          }
+        }
+      }
+    },
+    "/api/veridian/folders.delete": {
+      "post": {
+        "summary": "Delete a folder (never its objects)",
+        "description": "Deletes a folder. A non-empty folder is refused (409) unless `contents` is `to_parent`, which lifts its\n sub-folders and objects one level up. Objects are never deleted.\n",
+        "operationId": "veridianFoldersDelete",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "animalsd"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "contents": {
+                    "type": "string",
+                    "enum": [
+                      "refuse",
+                      "to_parent"
+                    ],
+                    "default": "refuse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder or object not found"
+          },
+          "409": {
+            "description": "Conflict (a sibling folder has the same name, or the folder is not empty)"
+          }
+        }
+      }
+    },
+    "/api/veridian/folders.reorder": {
+      "post": {
+        "summary": "Set the explicit order of a folder's children",
+        "description": "Listed ids come first, in this order; the others follow in their current order. `folder_ids` orders\n sub-folders, `item_ids` orders objects (both belong to `parent_id`, root when empty).\n",
+        "operationId": "veridianFoldersReorder",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "kind"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "animalsd"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "segments",
+                      "lists",
+                      "templates"
+                    ]
+                  },
+                  "parent_id": {
+                    "type": "string"
+                  },
+                  "folder_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "item_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder or object not found"
+          },
+          "409": {
+            "description": "Conflict (a sibling folder has the same name, or the folder is not empty)"
+          }
+        }
+      }
+    },
+    "/api/veridian/segments.move": {
+      "post": {
+        "summary": "File segments into a folder",
+        "description": "Files one or several segments (`id` or `ids`) into `folder_id` (empty = root) or `folder_path` (`A / B`, created if\n missing). Position as for folders. `name` renames the short label of a single object. The stored name of each\n moved object becomes `<folder path> / <label>` (root: the label alone), so clients that read the name stay\n correct. The response lists every moved object with its new name.\n",
+        "operationId": "veridianSegmentsMove",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "animalsd"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "folder_id": {
+                    "type": "string"
+                  },
+                  "folder_path": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Index among the siblings (0 = first). Omit to append."
+                  },
+                  "before_id": {
+                    "type": "string",
+                    "description": "Insert just before this sibling id (alternative to position)."
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder or object not found"
+          },
+          "409": {
+            "description": "Conflict (a sibling folder has the same name, or the folder is not empty)"
+          }
+        }
+      }
+    },
+    "/api/veridian/lists.move": {
+      "post": {
+        "summary": "File lists into a folder",
+        "description": "Files one or several lists (`id` or `ids`) into `folder_id` (empty = root) or `folder_path` (`A / B`, created if\n missing). Position as for folders. `name` renames the short label of a single object. The stored name of each\n moved object becomes `<folder path> / <label>` (root: the label alone), so clients that read the name stay\n correct. The response lists every moved object with its new name.\n",
+        "operationId": "veridianListsMove",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "animalsd"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "folder_id": {
+                    "type": "string"
+                  },
+                  "folder_path": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Index among the siblings (0 = first). Omit to append."
+                  },
+                  "before_id": {
+                    "type": "string",
+                    "description": "Insert just before this sibling id (alternative to position)."
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder or object not found"
+          },
+          "409": {
+            "description": "Conflict (a sibling folder has the same name, or the folder is not empty)"
+          }
+        }
+      }
+    },
+    "/api/veridian/templates.move": {
+      "post": {
+        "summary": "File templates into a folder",
+        "description": "Files one or several templates (`id` or `ids`) into `folder_id` (empty = root) or `folder_path` (`A / B`, created if\n missing). Position as for folders. `name` renames the short label of a single object. The stored name of each\n moved object becomes `<folder path> / <label>` (root: the label alone), so clients that read the name stay\n correct. The response lists every moved object with its new name.\n",
+        "operationId": "veridianTemplatesMove",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string",
+                    "example": "animalsd"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "folder_id": {
+                    "type": "string"
+                  },
+                  "folder_path": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Index among the siblings (0 = first). Omit to append."
+                  },
+                  "before_id": {
+                    "type": "string",
+                    "description": "Insert just before this sibling id (alternative to position)."
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VeridianFolderResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder or object not found"
+          },
+          "409": {
+            "description": "Conflict (a sibling folder has the same name, or the folder is not empty)"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12505,6 +13431,186 @@
           },
           "config": {
             "$ref": "#/components/schemas/VeridianStockConfig"
+          }
+        }
+      },
+      "VeridianFolderResult": {
+        "type": "object",
+        "properties": {
+          "folder": {
+            "$ref": "#/components/schemas/VeridianFolder"
+          },
+          "moved": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "folder_id": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "position": {
+                  "type": "integer"
+                },
+                "path_text": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "renamed": {
+            "type": "array",
+            "description": "Stored names rewritten in the segments / lists / templates table",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "deleted": {
+            "type": "string"
+          },
+          "adopt": {
+            "$ref": "#/components/schemas/VeridianFolderAdopt"
+          }
+        }
+      },
+      "VeridianFolder": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "null = root"
+          },
+          "name": {
+            "type": "string",
+            "description": "Folder name, never contains ' / '"
+          },
+          "position": {
+            "type": "integer",
+            "description": "Rank among sibling folders"
+          },
+          "depth": {
+            "type": "integer",
+            "description": "1 = top level"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "path_text": {
+            "type": "string",
+            "example": "2 Cibles / Animaleries indépendantes"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Objects inside, sub-folders included"
+          },
+          "direct_items": {
+            "type": "integer"
+          },
+          "subfolders": {
+            "type": "integer"
+          }
+        }
+      },
+      "VeridianFolderAdopt": {
+        "type": "object",
+        "description": "Objects filed from their legacy path-bearing name during this call",
+        "properties": {
+          "adopted": {
+            "type": "integer"
+          },
+          "folders_created": {
+            "type": "integer"
+          },
+          "pruned": {
+            "type": "integer"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VeridianFolderTree": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "segments",
+              "lists",
+              "templates"
+            ]
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VeridianFolder"
+            },
+            "description": "Display order (depth-first)"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VeridianFolderItem"
+            },
+            "description": "Display order, unranked root objects last"
+          },
+          "adopt": {
+            "$ref": "#/components/schemas/VeridianFolderAdopt"
+          }
+        }
+      },
+      "VeridianFolderItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Stored name: the full path 'A / B / C' kept in sync by the server (compatibility)"
+          },
+          "label": {
+            "type": "string",
+            "description": "Short name, without the folder path"
+          },
+          "folder_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "position": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Rank among the objects of the folder; null = never ordered"
+          },
+          "path_text": {
+            "type": "string"
           }
         }
       }

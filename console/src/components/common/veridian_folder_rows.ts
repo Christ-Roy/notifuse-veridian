@@ -5,6 +5,7 @@
 import {
   buildSegmentTree,
   hasFolders,
+  type SegmentFolderNode,
   type SegmentLike,
   type SegmentTreeNode
 } from '../segment/veridian_segment_folders'
@@ -19,6 +20,9 @@ export interface FolderRow {
   // Éléments contenus, sous-dossiers compris (indépendant de l'état plié).
   count: number
   open: boolean
+  // Dossier natif (lot L2) : identifiant serveur et noeud, pour le menu et les déplacements.
+  folderId?: string
+  node?: SegmentFolderNode<NamedItem>
 }
 
 export interface ItemRow<T extends NamedItem> {
@@ -36,10 +40,21 @@ export function buildFolderRows<T extends NamedItem>(
   items: T[],
   collapsed: ReadonlySet<string>
 ): TreeRow<T>[] {
-  const tree = buildSegmentTree(items)
+  return buildRowsFromTree(buildSegmentTree(items), items, (node) => !collapsed.has(node.key))
+}
+
+// Lignes d'un arbre déjà construit (natif ou déduit des noms). `isOpen` décide du pli.
+export function buildRowsFromTree<T extends NamedItem>(
+  tree: SegmentTreeNode<T>[],
+  items: T[],
+  isOpen: (node: SegmentFolderNode<T>) => boolean
+): TreeRow<T>[] {
   if (!hasFolders(tree)) {
-    // Liste plate : les éléments tels que reçus, dans l'ordre reçu.
-    return items.map((item) => ({ kind: 'item', key: item.id, label: item.name, depth: 0, item }))
+    // Liste plate : les éléments tels que reçus, dans l'ordre reçu (ceux que la recherche a gardés).
+    const kept = new Set(tree.flatMap((n) => (n.kind === 'segment' ? [n.segment.id] : [])))
+    return items
+      .filter((item) => kept.has(item.id))
+      .map((item) => ({ kind: 'item', key: item.id, label: item.name, depth: 0, item }))
   }
   const rows: TreeRow<T>[] = []
   const walk = (nodes: SegmentTreeNode<T>[], depth: number) => {
@@ -48,8 +63,17 @@ export function buildFolderRows<T extends NamedItem>(
         rows.push({ kind: 'item', key: node.key, label: node.label, depth, item: node.segment })
         continue
       }
-      const open = !collapsed.has(node.key)
-      rows.push({ kind: 'folder', key: node.key, label: node.label, depth, count: node.count, open })
+      const open = isOpen(node)
+      rows.push({
+        kind: 'folder',
+        key: node.key,
+        label: node.label,
+        depth,
+        count: node.count,
+        open,
+        folderId: node.folderId,
+        node: node as unknown as SegmentFolderNode<NamedItem>
+      })
       if (open) walk(node.children, depth + 1)
     }
   }

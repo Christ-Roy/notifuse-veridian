@@ -281,6 +281,7 @@ export const TriggerConfigForm: React.FC<TriggerConfigFormProps> = ({ config, on
         >
           <VeridianSegmentPicker
             segments={segmentsData?.segments || []}
+            workspaceId={workspaceId}
             value={config.segment_id}
             onChange={(value) => handleSegmentIdChange(value as string)}
             placeholder={t`Select a segment...`}

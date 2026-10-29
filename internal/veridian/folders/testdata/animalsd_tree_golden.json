@@ -1,0 +1,284 @@
+[
+ {
+  "depth": 0,
+  "kind": "folder",
+  "label": "1 Priorité",
+  "count": 5
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Haut potentiel (P1 + P2)",
+  "id": "a_haut_potentiel"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "P1 · à contacter en premier",
+  "id": "a_priorite_p1"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "P2 · à contacter ensuite",
+  "id": "a_priorite_p2"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "P3 · second rang",
+  "id": "a_priorite_p3"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "P4 · bas de file",
+  "id": "a_priorite_p4"
+ },
+ {
+  "depth": 0,
+  "kind": "folder",
+  "label": "2 Cibles",
+  "count": 12
+ },
+ {
+  "depth": 1,
+  "kind": "folder",
+  "label": "Animaleries indépendantes",
+  "count": 3
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "P1",
+  "id": "animaleriesindepp1"
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "P2",
+  "id": "c_b1_p2"
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "Tous",
+  "id": "animaleriesindep"
+ },
+ {
+  "depth": 1,
+  "kind": "folder",
+  "label": "Armureries et chasse-pêche",
+  "count": 3
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "P1",
+  "id": "armureriesp1"
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "P2",
+  "id": "c_b3_p2"
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "Tous",
+  "id": "armureries"
+ },
+ {
+  "depth": 1,
+  "kind": "folder",
+  "label": "Chasse organisée (ACCA)",
+  "count": 1
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "Tous",
+  "id": "chasseorganisee"
+ },
+ {
+  "depth": 1,
+  "kind": "folder",
+  "label": "Élevage de rente, équin, vétérinaires",
+  "count": 1
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "Tous",
+  "id": "elevagerente"
+ },
+ {
+  "depth": 1,
+  "kind": "folder",
+  "label": "Éleveurs canins, pensions, éducation",
+  "count": 1
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "Tous",
+  "id": "eleveurscanins"
+ },
+ {
+  "depth": 1,
+  "kind": "folder",
+  "label": "Revendeurs agricoles et négoce",
+  "count": 3
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "P1",
+  "id": "revendeursagrip1"
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "P2",
+  "id": "c_b2_p2"
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "Tous",
+  "id": "revendeursagri"
+ },
+ {
+  "depth": 0,
+  "kind": "folder",
+  "label": "3 Zones",
+  "count": 4
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Département inconnu",
+  "id": "d_zone_inconnue"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Isère (38)",
+  "id": "d_zone_isere"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Moyenne (100-200 km)",
+  "id": "d_zone_moyenne"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Proche (≤ 100 km de Faramans)",
+  "id": "d_zone_proche"
+ },
+ {
+  "depth": 0,
+  "kind": "folder",
+  "label": "4 Messagerie",
+  "count": 5
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Autres hébergeurs (IONOS, Hostinger, Gandi…)",
+  "id": "e_mail_hebergeurs"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Freemails FR (Orange, Free, SFR, La Poste…)",
+  "id": "e_mail_freemail"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Google (Gmail, Workspace)",
+  "id": "e_mail_google"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Microsoft (Outlook, 365)",
+  "id": "e_mail_microsoft"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "OVH",
+  "id": "e_mail_ovh"
+ },
+ {
+  "depth": 0,
+  "kind": "folder",
+  "label": "5 Qualité",
+  "count": 3
+ },
+ {
+  "depth": 1,
+  "kind": "folder",
+  "label": "Champs corrompus (cart_",
+  "count": 1
+ },
+ {
+  "depth": 2,
+  "kind": "item",
+  "label": "liens)",
+  "id": "f_champs_corrompus"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Contacts de test (zz-test)",
+  "id": "f_contacts_test"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Sans priorité ni catégorie (à nettoyer)",
+  "id": "f_sans_priorite"
+ },
+ {
+  "depth": 0,
+  "kind": "folder",
+  "label": "6 Boutique",
+  "count": 5
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Abonnés actifs",
+  "id": "abonnes_actifs"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Email perso (B2C)",
+  "id": "email_b2c"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Email professionnel (B2B)",
+  "id": "email_b2b"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Espèce chat",
+  "id": "espece_chat"
+ },
+ {
+  "depth": 1,
+  "kind": "item",
+  "label": "Espèce chien",
+  "id": "espece_chien"
+ }
+]

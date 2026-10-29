@@ -1,5 +1,5 @@
-// Dossiers de segments (fork Veridian). Aucune migration : le NOM du segment
-// porte le chemin, séparateur « espace slash espace » (« 2 Cibles / Animaleries / P1 »).
+// Dossiers de segments (fork Veridian). Repli de l'arbre natif (veridian_folder_native.ts, lot L2) :
+// le NOM du segment porte le chemin, séparateur « espace slash espace » (« 2 Cibles / Animaleries / P1 »).
 // Un nom sans séparateur reste un segment à la racine.
 // Module pur (aucun import React) : testable seul, partagé par la liste et les sélecteurs.
 
@@ -15,6 +15,8 @@ export interface SegmentFolderNode<T extends SegmentLike> {
   // Nombre de segments contenus, sous-dossiers compris.
   count: number
   children: SegmentTreeNode<T>[]
+  // Dossier natif (lot L2) : identifiant serveur. Absent sur l'arbre déduit des noms.
+  folderId?: string
 }
 
 export interface SegmentLeafNode<T extends SegmentLike> {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -21,6 +21,9 @@ vi.mock('../segment/button_upsert', () => ({
 vi.mock('../../services/api/task', () => ({
   taskApi: { findBySegmentId: vi.fn() }
 }))
+
+// Le pli est mémorisé dans le navigateur : chaque test repart d'un navigateur vierge.
+beforeEach(() => window.localStorage.clear())
 
 const seg = (id: string, name: string): Segment =>
   ({ id, name, color: 'blue', status: 'active', users_count: 1 }) as unknown as Segment

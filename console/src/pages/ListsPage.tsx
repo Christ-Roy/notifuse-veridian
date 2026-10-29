@@ -146,9 +146,16 @@ export function ListsPage() {
     message.success(t`Lists refreshed`)
   }
 
-  // Dossiers : convention « Dossier / Nom ». Sans séparateur, `nested` est faux et la page
-  // rend exactement les mêmes cartes qu'avant (aucune pagination côté liste : tout est chargé).
-  const { rows: listRows, toggle: toggleFolder, nested } = useFolderRows(data?.lists)
+  // Dossiers natifs (lot L2). Sans dossier, `nested` est faux et la page rend exactement les mêmes
+  // cartes qu'avant (aucune pagination côté liste : tout est chargé).
+  const {
+    rows: listRows,
+    toggle: toggleFolder,
+    nested,
+    folders,
+    rowProps,
+    folderExtra
+  } = useFolderRows(data?.lists, { workspaceId, kind: 'lists', canWrite: !!permissions?.lists?.write })
 
   const hasLists = !isLoading && data?.lists && data.lists.length > 0
 
@@ -306,19 +313,25 @@ export function ListsPage() {
           ))}
         </Row>
       ) : hasLists ? (
-        <Space direction="vertical" size="large">
-          {nested
-            ? listRows.map((row) =>
-                row.kind === 'folder' ? (
-                  <div key={row.key} style={{ paddingLeft: row.depth * FOLDER_INDENT_PX }}>
-                    <FolderToggleButton row={row} onToggle={toggleFolder} />
-                  </div>
-                ) : (
-                  renderListCard(row.item, row.label, row.depth)
+        <>
+          <div>{folders.toolbar()}</div>
+          <Space direction="vertical" size="large">
+            {nested
+              ? listRows.map((row) =>
+                  row.kind === 'folder' ? (
+                    <div key={row.key} style={{ paddingLeft: row.depth * FOLDER_INDENT_PX }} {...rowProps(row)}>
+                      <FolderToggleButton row={row} onToggle={toggleFolder} extra={folderExtra(row)} />
+                    </div>
+                  ) : (
+                    <div key={row.key} {...rowProps(row)}>
+                      {renderListCard(row.item, row.label, row.depth)}
+                    </div>
+                  )
                 )
-              )
-            : data.lists.map((list: List) => renderListCard(list, list.name))}
-        </Space>
+              : data.lists.map((list: List) => renderListCard(list, list.name))}
+          </Space>
+          {folders.dialogs}
+        </>
       ) : (
         <div className="text-center py-12">
           <Title level={4} type="secondary">

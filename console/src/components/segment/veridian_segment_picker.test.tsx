@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactElement } from 'react'
 
 import { VeridianSegmentPicker, type PickableSegment } from './veridian_segment_picker'
 
 vi.setConfig({ testTimeout: 30000 })
+
+// Le sélecteur lit les dossiers natifs (react-query) : un client par rendu, sans workspace il reste sur les noms.
+const render = (ui: ReactElement) =>
+  rtlRender(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>)
 
 const seg = (id: string, name: string): PickableSegment => ({ id, name, color: 'blue', users_count: 1 })
 

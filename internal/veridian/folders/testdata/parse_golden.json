@@ -1,0 +1,142 @@
+[
+ {
+  "in": "A / B / C",
+  "out": [
+   "A",
+   "B",
+   "C"
+  ]
+ },
+ {
+  "in": "AC/DC",
+  "out": [
+   "AC/DC"
+  ]
+ },
+ {
+  "in": "Taille 1/2",
+  "out": [
+   "Taille 1/2"
+  ]
+ },
+ {
+  "in": "Cibles / / Animaleries",
+  "out": [
+   "Cibles",
+   "Animaleries"
+  ]
+ },
+ {
+  "in": "   Cibles   /    Animaleries   ",
+  "out": [
+   "Cibles",
+   "Animaleries"
+  ]
+ },
+ {
+  "in": "Cibles /",
+  "out": [
+   "Cibles"
+  ]
+ },
+ {
+  "in": "/ Cibles",
+  "out": [
+   "Cibles"
+  ]
+ },
+ {
+  "in": "/",
+  "out": [
+   "/"
+  ]
+ },
+ {
+  "in": "",
+  "out": [
+   ""
+  ]
+ },
+ {
+  "in": "   ",
+  "out": [
+   ""
+  ]
+ },
+ {
+  "in": "a / b",
+  "out": [
+   "a",
+   "b"
+  ]
+ },
+ {
+  "in": "a　/　b",
+  "out": [
+   "a",
+   "b"
+  ]
+ },
+ {
+  "in": "a\t/\tb",
+  "out": [
+   "a",
+   "b"
+  ]
+ },
+ {
+  "in": " / / ",
+  "out": [
+   "/"
+  ]
+ },
+ {
+  "in": "x /  / y / z",
+  "out": [
+   "x",
+   "y",
+   "z"
+  ]
+ },
+ {
+  "in": "é / É",
+  "out": [
+   "é",
+   "É"
+  ]
+ },
+ {
+  "in": "a /b",
+  "out": [
+   "a /b"
+  ]
+ },
+ {
+  "in": "a/ b",
+  "out": [
+   "a/ b"
+  ]
+ },
+ {
+  "in": "a  /  b  /  c",
+  "out": [
+   "a",
+   "b",
+   "c"
+  ]
+ },
+ {
+  "in": "/ / a / b / /",
+  "out": [
+   "a",
+   "b"
+  ]
+ },
+ {
+  "in": "P1 · à contacter / x",
+  "out": [
+   "P1 · à contacter",
+   "x"
+  ]
+ }
+]

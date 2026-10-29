@@ -149,6 +149,24 @@ paths:
     $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.send'
   /api/veridian/mail.messages.reply:
     $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.reply'
+  /api/veridian/folders.list:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1folders.list'
+  /api/veridian/folders.create:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1folders.create'
+  /api/veridian/folders.rename:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1folders.rename'
+  /api/veridian/folders.move:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1folders.move'
+  /api/veridian/folders.delete:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1folders.delete'
+  /api/veridian/folders.reorder:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1folders.reorder'
+  /api/veridian/segments.move:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1segments.move'
+  /api/veridian/lists.move:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1lists.move'
+  /api/veridian/templates.move:
+    $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1templates.move'
   /api/customEvents.import:
     $ref: './paths/custom-events.yaml#/~1api~1customEvents.import'
   /api/webhookSubscriptions.create:
@@ -192,6 +210,16 @@ components:
       $ref: './components/schemas/veridian-reconcile.yaml#/ReconcileReport'
     ReconcileResolveResult:
       $ref: './components/schemas/veridian-reconcile.yaml#/ReconcileResolveResult'
+    VeridianFolder:
+      $ref: './components/schemas/veridian-folders.yaml#/VeridianFolder'
+    VeridianFolderItem:
+      $ref: './components/schemas/veridian-folders.yaml#/VeridianFolderItem'
+    VeridianFolderAdopt:
+      $ref: './components/schemas/veridian-folders.yaml#/VeridianFolderAdopt'
+    VeridianFolderTree:
+      $ref: './components/schemas/veridian-folders.yaml#/VeridianFolderTree'
+    VeridianFolderResult:
+      $ref: './components/schemas/veridian-folders.yaml#/VeridianFolderResult'
     ErrorResponse:
       $ref: './components/schemas/common.yaml#/ErrorResponse'
     MailKind:

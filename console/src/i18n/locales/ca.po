@@ -645,6 +645,10 @@ msgstr ""
 msgid "A contact enrolled in two sequences counts in both: the rows do not add up."
 msgstr ""
 
+#: src/components/common/veridian_folder_ui.tsx
+msgid "A name cannot contain \" / \": create sub-folders instead."
+msgstr ""
+
 #: src/components/sending_profiles/veridian_capacity_block.tsx
 msgid "A normal open day: {fullDay} sends"
 msgstr ""
@@ -2047,6 +2051,8 @@ msgstr ""
 #: src/components/broadcasts/HeadersEditor.tsx
 #: src/components/broadcasts/SendOrScheduleModal.tsx
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
+#: src/components/common/veridian_folder_manager.tsx
+#: src/components/common/veridian_folder_ui.tsx
 #: src/components/contacts/BulkActionProgressModal.tsx
 #: src/components/contacts/BulkUpdateDrawer.tsx
 #: src/components/contacts/ContactDetailsDrawer.tsx
@@ -2419,6 +2425,10 @@ msgstr ""
 #: src/layouts/WorkspaceLayout.tsx
 msgid "Collapse"
 msgstr "Contraure"
+
+#: src/components/common/veridian_folder_ui.tsx
+msgid "Collapse all"
+msgstr ""
 
 #: src/components/email_builder/blocks/MjDividerBlock.tsx
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx
@@ -3024,6 +3034,7 @@ msgid "Covered"
 msgstr ""
 
 #: src/components/automations/UpsertAutomationDrawer.tsx
+#: src/components/common/veridian_folder_manager.tsx
 #: src/components/file_manager/fileManager.tsx
 #: src/components/lists/ListDrawer.tsx
 msgid "Create"
@@ -3701,10 +3712,17 @@ msgstr "Eliminar aresta"
 msgid "Delete file (Read-only mode)"
 msgstr "Eliminar fitxer (Mode de només lectura)"
 
+#: src/components/common/veridian_folder_manager.tsx
+#: src/components/common/veridian_folder_ui.tsx
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
 msgid "Delete folder"
 msgstr "Eliminar carpeta"
+
+#. placeholder {0}: node.label
+#: src/components/common/veridian_folder_manager.tsx
+msgid "Delete folder \"{0}\""
+msgstr ""
 
 #: src/components/file_manager/fileManager.tsx
 msgid "Delete folder (Read-only mode)"
@@ -3855,6 +3873,10 @@ msgstr "Descripció"
 #: src/components/email_builder/panels/Preview.tsx
 msgid "Desktop view (100%)"
 msgstr "Vista d'escriptori (100%)"
+
+#: src/components/common/veridian_folder_ui.tsx
+msgid "Destination folder"
+msgstr ""
 
 #: src/pages/SendQueuePage.tsx
 msgid "Detail by automation, node, reason and nominal profile"
@@ -4914,6 +4936,10 @@ msgstr ""
 msgid "Expand"
 msgstr "Expandir"
 
+#: src/components/common/veridian_folder_ui.tsx
+msgid "Expand all"
+msgstr ""
+
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
 msgid "Expected"
 msgstr ""
@@ -5617,6 +5643,11 @@ msgstr "Estadístiques de flux: {0}"
 msgid "Folder"
 msgstr ""
 
+#. placeholder {0}: node.label
+#: src/components/common/veridian_folder_ui.tsx
+msgid "Folder actions for {0}"
+msgstr ""
+
 #: src/components/file_manager/fileManager.tsx
 msgid "Folder already exists."
 msgstr "La carpeta ja existeix."
@@ -5625,17 +5656,31 @@ msgstr "La carpeta ja existeix."
 msgid "Folder created successfully."
 msgstr "Carpeta creada correctament."
 
+#: src/components/common/veridian_folder_manager.tsx
+msgid "Folder created."
+msgstr ""
+
 #: src/components/file_manager/fileManager.tsx
 msgid "Folder deleted successfully."
 msgstr "Carpeta eliminada correctament."
+
+#: src/components/common/veridian_folder_manager.tsx
+msgid "Folder deleted."
+msgstr ""
 
 #: src/components/file_manager/fileManager.tsx
 msgid "Folder is empty"
 msgstr "La carpeta és buida"
 
+#: src/components/common/veridian_folder_ui.tsx
+#: src/components/common/veridian_folder_ui.tsx
 #: src/components/file_manager/fileManager.tsx
 msgid "Folder name"
 msgstr "Nom de la carpeta"
+
+#: src/components/common/veridian_folder_manager.tsx
+msgid "Folder renamed."
+msgstr ""
 
 #: src/components/file_manager/fileManager.tsx
 msgid "folder with all its content?"
@@ -6809,6 +6854,10 @@ msgstr ""
 msgid "Italic"
 msgstr "Cursiva"
 
+#: src/components/common/veridian_folder_manager.tsx
+msgid "Its content is not deleted: it moves up one level."
+msgstr ""
+
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "Jitter (random spread of the pacing)"
 msgstr ""
@@ -7699,6 +7748,19 @@ msgstr "Monitorar l'estat de lliurament de missatges i esdeveniments de webhook"
 msgid "More actions"
 msgstr ""
 
+#: src/components/common/veridian_folder_ui.tsx
+msgid "Move \"{sourceLabel}\" to…"
+msgstr ""
+
+#: src/components/common/veridian_folder_ui.tsx
+#: src/components/contacts/SegmentsFilter.tsx
+msgid "Move to…"
+msgstr ""
+
+#: src/components/common/veridian_folder_manager.tsx
+msgid "Moved."
+msgstr ""
+
 #: src/components/settings/WebhooksSettings.tsx
 msgid "My Webhook"
 msgstr "El meu webhook"
@@ -7772,6 +7834,9 @@ msgstr ""
 msgid "New conversation"
 msgstr "Nova conversa"
 
+#: src/components/common/veridian_folder_manager.tsx
+#: src/components/common/veridian_folder_ui.tsx
+#: src/components/contacts/SegmentsFilter.tsx
 #: src/components/file_manager/fileManager.tsx
 msgid "New folder"
 msgstr "Nova carpeta"
@@ -7802,6 +7867,10 @@ msgstr ""
 #: src/components/segment/button_upsert.tsx
 msgid "New segment"
 msgstr "Nou segment"
+
+#: src/components/common/veridian_folder_ui.tsx
+msgid "New sub-folder"
+msgstr ""
 
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx
 msgid "New Window"
@@ -10010,6 +10079,15 @@ msgstr "eliminat"
 msgid "Removed"
 msgstr "Eliminat"
 
+#: src/components/common/veridian_folder_manager.tsx
+#: src/components/common/veridian_folder_ui.tsx
+msgid "Rename"
+msgstr ""
+
+#: src/components/common/veridian_folder_manager.tsx
+msgid "Rename folder"
+msgstr ""
+
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Render failed"
 msgstr ""
@@ -10346,6 +10424,11 @@ msgstr "Dreta a esquerra"
 msgid "Role"
 msgstr "Rol"
 
+#: src/components/common/veridian_folder_ui.tsx
+#: src/components/contacts/SegmentsFilter.tsx
+msgid "Root (no folder)"
+msgstr ""
+
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/pages/SetupWizard.tsx
 msgid "Root Email"
@@ -10582,8 +10665,8 @@ msgstr "Extreu una URL i retorna el seu contingut com a markdown"
 msgid "Screen width below which mobile layout is activated. Common values: 480px, 600px, 768px"
 msgstr "Amplada de pantalla per sota de la qual s'activa el disseny mòbil. Valors comuns: 480px, 600px, 768px"
 
-#: src/components/contacts/SegmentsFilter.tsx
-#: src/components/contacts/SegmentsFilter.tsx
+#: src/components/common/veridian_folder_ui.tsx
+#: src/components/common/veridian_folder_ui.tsx
 #: src/components/veridian_a11y.ts
 msgid "Search"
 msgstr ""
@@ -12440,6 +12523,10 @@ msgstr "El cos del correu ha de contenir JSON vàlid que coincideixi amb el form
 
 #: src/components/mail/veridian_mail_message_view.tsx
 msgid "The exact rendering captured when the mail left."
+msgstr ""
+
+#: src/components/common/veridian_folder_manager.tsx
+msgid "The folder is empty."
 msgstr ""
 
 #: src/components/templates/ImportExportButton.tsx

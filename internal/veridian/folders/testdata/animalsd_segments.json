@@ -1,0 +1,172 @@
+[
+ {
+  "id": "d_zone_isere",
+  "name": "3 Zones / Isère (38)",
+  "created_at": "2026-10-27T15:07:29.610989Z"
+ },
+ {
+  "id": "e_mail_hebergeurs",
+  "name": "4 Messagerie / Autres hébergeurs (IONOS, Hostinger, Gandi…)",
+  "created_at": "2026-10-27T10:21:08.144935Z"
+ },
+ {
+  "id": "e_mail_freemail",
+  "name": "4 Messagerie / Freemails FR (Orange, Free, SFR, La Poste…)",
+  "created_at": "2026-10-27T10:21:07.050482Z"
+ },
+ {
+  "id": "d_zone_moyenne",
+  "name": "3 Zones / Moyenne (100-200 km)",
+  "created_at": "2026-10-27T10:21:05.010705Z"
+ },
+ {
+  "id": "d_zone_proche",
+  "name": "3 Zones / Proche (≤ 100 km de Faramans)",
+  "created_at": "2026-10-27T10:21:04.303495Z"
+ },
+ {
+  "id": "a_haut_potentiel",
+  "name": "1 Priorité / Haut potentiel (P1 + P2)",
+  "created_at": "2026-10-27T10:21:03.649797Z"
+ },
+ {
+  "id": "f_champs_corrompus",
+  "name": "5 Qualité / Champs corrompus (cart_ / liens)",
+  "created_at": "2026-10-27T10:20:29.862176Z"
+ },
+ {
+  "id": "f_contacts_test",
+  "name": "5 Qualité / Contacts de test (zz-test)",
+  "created_at": "2026-10-27T10:20:28.464094Z"
+ },
+ {
+  "id": "f_sans_priorite",
+  "name": "5 Qualité / Sans priorité ni catégorie (à nettoyer)",
+  "created_at": "2026-10-27T10:20:26.289109Z"
+ },
+ {
+  "id": "e_mail_ovh",
+  "name": "4 Messagerie / OVH",
+  "created_at": "2026-10-27T10:20:22.563417Z"
+ },
+ {
+  "id": "e_mail_microsoft",
+  "name": "4 Messagerie / Microsoft (Outlook, 365)",
+  "created_at": "2026-10-27T10:20:21.96664Z"
+ },
+ {
+  "id": "e_mail_google",
+  "name": "4 Messagerie / Google (Gmail, Workspace)",
+  "created_at": "2026-10-27T10:20:20.823953Z"
+ },
+ {
+  "id": "d_zone_inconnue",
+  "name": "3 Zones / Département inconnu",
+  "created_at": "2026-10-27T10:20:19.527695Z"
+ },
+ {
+  "id": "c_b3_p2",
+  "name": "2 Cibles / Armureries et chasse-pêche / P2",
+  "created_at": "2026-10-27T10:20:15.980563Z"
+ },
+ {
+  "id": "c_b2_p2",
+  "name": "2 Cibles / Revendeurs agricoles et négoce / P2",
+  "created_at": "2026-10-27T10:20:15.012314Z"
+ },
+ {
+  "id": "c_b1_p2",
+  "name": "2 Cibles / Animaleries indépendantes / P2",
+  "created_at": "2026-10-27T10:20:13.854815Z"
+ },
+ {
+  "id": "a_priorite_p4",
+  "name": "1 Priorité / P4 · bas de file",
+  "created_at": "2026-10-27T10:20:01.518853Z"
+ },
+ {
+  "id": "a_priorite_p3",
+  "name": "1 Priorité / P3 · second rang",
+  "created_at": "2026-10-27T10:20:00.146301Z"
+ },
+ {
+  "id": "a_priorite_p2",
+  "name": "1 Priorité / P2 · à contacter ensuite",
+  "created_at": "2026-10-27T10:19:59.000726Z"
+ },
+ {
+  "id": "a_priorite_p1",
+  "name": "1 Priorité / P1 · à contacter en premier",
+  "created_at": "2026-10-27T10:19:47.354863Z"
+ },
+ {
+  "id": "revendeursagrip1",
+  "name": "2 Cibles / Revendeurs agricoles et négoce / P1",
+  "created_at": "2026-10-19T19:20:25.012969Z"
+ },
+ {
+  "id": "revendeursagri",
+  "name": "2 Cibles / Revendeurs agricoles et négoce / Tous",
+  "created_at": "2026-10-19T19:20:24.630089Z"
+ },
+ {
+  "id": "eleveurscanins",
+  "name": "2 Cibles / Éleveurs canins, pensions, éducation / Tous",
+  "created_at": "2026-10-19T19:20:24.014877Z"
+ },
+ {
+  "id": "elevagerente",
+  "name": "2 Cibles / Élevage de rente, équin, vétérinaires / Tous",
+  "created_at": "2026-10-19T19:20:23.629535Z"
+ },
+ {
+  "id": "chasseorganisee",
+  "name": "2 Cibles / Chasse organisée (ACCA) / Tous",
+  "created_at": "2026-10-19T19:20:23.076526Z"
+ },
+ {
+  "id": "armureriesp1",
+  "name": "2 Cibles / Armureries et chasse-pêche / P1",
+  "created_at": "2026-10-19T19:20:22.293867Z"
+ },
+ {
+  "id": "armureries",
+  "name": "2 Cibles / Armureries et chasse-pêche / Tous",
+  "created_at": "2026-10-19T19:20:21.679984Z"
+ },
+ {
+  "id": "animaleriesindepp1",
+  "name": "2 Cibles / Animaleries indépendantes / P1",
+  "created_at": "2026-10-19T19:20:20.940426Z"
+ },
+ {
+  "id": "animaleriesindep",
+  "name": "2 Cibles / Animaleries indépendantes / Tous",
+  "created_at": "2026-10-19T19:20:20.15578Z"
+ },
+ {
+  "id": "email_b2b",
+  "name": "6 Boutique / Email professionnel (B2B)",
+  "created_at": "2026-06-28T14:02:19.240729Z"
+ },
+ {
+  "id": "email_b2c",
+  "name": "6 Boutique / Email perso (B2C)",
+  "created_at": "2026-06-28T14:02:19.112758Z"
+ },
+ {
+  "id": "abonnes_actifs",
+  "name": "6 Boutique / Abonnés actifs",
+  "created_at": "2026-06-28T14:02:18.991763Z"
+ },
+ {
+  "id": "espece_chat",
+  "name": "6 Boutique / Espèce chat",
+  "created_at": "2026-06-28T14:02:18.870494Z"
+ },
+ {
+  "id": "espece_chien",
+  "name": "6 Boutique / Espèce chien",
+  "created_at": "2026-06-28T14:02:18.750171Z"
+ }
+]

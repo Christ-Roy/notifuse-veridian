@@ -148,9 +148,15 @@ export function TemplatesPage() {
     return isTransactionalFamily ? all : all.filter((tpl) => tpl.category !== 'transactional')
   }, [data, isTransactionalFamily])
 
-  // Dossiers : convention « Dossier / Nom ». Sans séparateur, `nested` est faux et la liste
-  // rendue est exactement l'ancienne.
-  const { rows: templateRows, toggle: toggleFolder, nested } = useFolderRows(templates)
+  // Dossiers natifs (lot L2). Sans dossier, `nested` est faux et la liste rendue est exactement l'ancienne.
+  const {
+    rows: templateRows,
+    toggle: toggleFolder,
+    nested,
+    folders,
+    rowProps,
+    folderExtra
+  } = useFolderRows(templates, { workspaceId, kind: 'templates', canWrite: !!permissions?.templates?.write })
 
   const hasTemplates = !isLoading && templates && templates.length > 0
 
@@ -406,6 +412,9 @@ export function TemplatesPage() {
         </div>
       )}
 
+      {!isLoading && (hasTemplates || nested) && <div>{folders.toolbar()}</div>}
+      {folders.dialogs}
+
       {isLoading ? (
         <Table columns={columns} dataSource={[]} loading={true} rowKey="id" />
       ) : hasTemplates ? (
@@ -413,9 +422,10 @@ export function TemplatesPage() {
           // Avec dossiers, la pagination est désactivée : les dossiers structurent déjà la liste
           // (la pagination est côté client, tous les modèles sont chargés d'un coup).
           <Table<TreeRow<Template>>
-            columns={folderTableColumns(columns, 'name', toggleFolder)}
+            columns={folderTableColumns(columns, 'name', toggleFolder, folderExtra)}
             dataSource={templateRows}
             rowKey="key"
+            onRow={(row) => rowProps(row)}
             pagination={false}
             className="border border-gray-200 rounded-md"
           />
