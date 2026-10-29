@@ -16,6 +16,7 @@ import { LogoutPage } from './pages/LogoutPage'
 import { AcceptInvitationPage } from './pages/AcceptInvitationPage'
 import SetupWizard from './pages/SetupWizard'
 import { createRouter } from '@tanstack/react-router'
+import { normalizeInboxSearch, type InboxSearch } from './components/mail/veridian_mail_rules'
 
 // === Veridian patch — perf-ui-baseline (ticket 2026-05-22) ===
 // Sans lazy-loading, TanStack Router importe TOUTES les pages en
@@ -80,6 +81,7 @@ const SendingProfilesPage = veridianLazyPage(
 )
 const SendQueuePage = veridianLazyPage(() => import('./pages/SendQueuePage'), 'SendQueuePage')
 const ReconcilePage = veridianLazyPage(() => import('./components/reconcile/veridian_reconcile_page'), 'ReconcilePage')
+const InboxPage = veridianLazyPage(() => import('./pages/InboxPage'), 'InboxPage')
 const AutomationsPage = veridianLazyPage(() => import('./pages/AutomationsPage'), 'AutomationsPage')
 const AnalyticsPage = veridianLazyPage(() => import('./pages/AnalyticsPage'), 'AnalyticsPage')
 const TemplatesPage = veridianLazyPage(() => import('./pages/TemplatesPage'), 'TemplatesPage')
@@ -258,6 +260,14 @@ const workspaceReconcileRoute = createRoute({
   component: ReconcilePage as RouteComponent
 })
 
+// Boîte unifiée (lot L1, 29/10/2026) : mails envoyés et reçus, lus en entier dans leur fil.
+export const workspaceInboxRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/inbox',
+  component: InboxPage as RouteComponent,
+  validateSearch: (search: Record<string, unknown>): InboxSearch => normalizeInboxSearch(search)
+})
+
 // `type` choisit le journal : commercial (defaut) ou transactionnel. Les autres parametres
 // (filtres du tableau, onglet) passent tels quels.
 export interface LogsSearch {
@@ -424,6 +434,7 @@ const routeTree = rootRoute.addChildren([
     workspaceSendingProfilesRoute,
     workspaceSendQueueRoute,
     workspaceReconcileRoute,
+    workspaceInboxRoute,
     workspaceFileManagerRoute,
     workspaceSettingsRedirectRoute,
     workspaceSmtpBridgeRedirectRoute,

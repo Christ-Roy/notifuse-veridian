@@ -1,3 +1,4 @@
+import { veridianInboxMenuItem } from '../components/mail/veridian_mail_menu_item'
 import { Layout, Menu, Select, Space, Button, Dropdown, message, Avatar, Grid, Drawer, ConfigProvider } from 'antd'
 import { Outlet, Link, useParams, useMatches, useNavigate } from '@tanstack/react-router'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -355,6 +356,7 @@ export function WorkspaceLayout() {
         </Link>
       )
     },
+    hasAccess('message_history') && veridianInboxMenuItem(workspaceId),
     hasAccess('message_history') && {
       key: 'sending-profiles',
       icon: <MailOutlined />,

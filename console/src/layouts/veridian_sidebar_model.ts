@@ -32,6 +32,7 @@ export function messageTypeFromSearch(search: LogsSearchLike | undefined): Messa
 /** Cles des entrees de chaque groupe, dans l ordre d affichage. */
 export const SIDEBAR_GROUP_KEYS = {
   prospection: [
+    'inbox',
     'contacts',
     'lists',
     'templates',
@@ -63,6 +64,7 @@ export function selectedSidebarKey(pathname: string, search?: SidebarSearch): st
   if (pathname.includes('/sending-profiles')) return 'sending-profiles'
   if (pathname.includes('/send-queue')) return 'send-queue'
   if (pathname.includes('/reconcile')) return 'reconcile'
+  if (pathname.includes('/inbox')) return 'inbox'
   if (pathname.includes('/logs')) {
     return messageTypeFromSearch(search) === 'transactional' ? 'logs-transactional' : 'logs'
   }

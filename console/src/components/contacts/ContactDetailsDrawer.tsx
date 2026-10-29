@@ -1,3 +1,4 @@
+import { VeridianContactMail } from '../mail/veridian_contact_mail'
 import React from 'react'
 import {
   Drawer,
@@ -1066,6 +1067,7 @@ export function ContactDetailsDrawer({
                       </div>
                     )
                   },
+                  { key: 'mail', label: t`Emails`, children: <div className="pt-4"><VeridianContactMail workspaceId={workspace.id} email={contactEmail} /></div> },
                   {
                     key: 'messages',
                     label: t`Messages`,

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { isRedirect } from '@tanstack/react-router'
 import {
   router,
+  workspaceInboxRoute,
   workspaceLogsRoute,
   workspaceSmtpBridgeRedirectRoute,
   workspaceTemplatesRoute,
@@ -28,6 +29,20 @@ describe('route /settings/smtp-bridge', () => {
     expect(opts.to).toBe('/console/workspace/$workspaceId/transactional-notifications')
     expect(opts.params).toEqual({ workspaceId: 'ws-1' })
     expect(opts.search).toEqual({ tab: 'smtp-bridge' })
+  })
+})
+
+describe('route /inbox (boite unifiee)', () => {
+  it('existe et valide ses parametres de recherche (une valeur inconnue disparait)', () => {
+    expect(Object.keys(router.routesByPath)).toContain('/console/workspace/$workspaceId/inbox')
+    const validate = workspaceInboxRoute.options.validateSearch as (s: Record<string, unknown>) => Record<string, unknown>
+    expect(validate({ message: 'm1', boite: 'p1', nature: 'rebonds', etat: 'a_traiter' })).toMatchObject({
+      message: 'm1',
+      boite: 'p1',
+      nature: 'rebonds',
+      etat: 'a_traiter'
+    })
+    expect(validate({ nature: 'zzz', etat: 'zzz' })).toMatchObject({ nature: undefined, etat: undefined })
   })
 })
 

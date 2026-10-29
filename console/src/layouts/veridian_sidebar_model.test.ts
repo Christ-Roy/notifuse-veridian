@@ -17,6 +17,7 @@ describe('groupes de la sidebar (lot 4)', () => {
 
   it("Prospection = tout le commercial, profils d'envoi compris, et plus de groupe Envoi", () => {
     expect([...SIDEBAR_GROUP_KEYS.prospection]).toEqual([
+      'inbox',
       'contacts',
       'lists',
       'templates',
@@ -70,6 +71,7 @@ describe('cle selectionnee : meme route, parametre different', () => {
   it('autres routes', () => {
     expect(selectedSidebarKey(`${base}/transactional-notifications`)).toBe('transactional-notifications')
     expect(selectedSidebarKey(`${base}/sending-profiles`)).toBe('sending-profiles')
+    expect(selectedSidebarKey(`${base}/inbox`, { nature: 'rebonds' } as never)).toBe('inbox')
     expect(selectedSidebarKey(`${base}/contacts`)).toBe('contacts')
     expect(selectedSidebarKey(`${base}/settings/team`)).toBe('settings')
     expect(selectedSidebarKey(`${base}/file-manager`)).toBe('')

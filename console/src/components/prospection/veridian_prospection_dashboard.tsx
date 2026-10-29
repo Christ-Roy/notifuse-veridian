@@ -14,6 +14,7 @@ import { EmailMetricsChart } from '../analytics/EmailMetricsChart'
 import { VeridianEngagementByClass } from '../analytics/veridian_engagement_by_class'
 import { buildSeriesQuery, EMAIL_SERIES } from '../analytics/email_metrics_series'
 import { formatNumber, formatPercent } from '../sending_profiles/veridian_profile_labels'
+import { VeridianInboxTile } from '../mail/veridian_inbox_tile'
 import { VeridianProspectionSends } from './veridian_prospection_sends'
 import { VeridianProspectionReplies } from './veridian_prospection_replies'
 import { VeridianProspectionRecentReplies } from './veridian_prospection_recent_replies'
@@ -148,6 +149,7 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
           statsQuery.isLoading,
           t`Active contacts who have not been sent any mail yet, all segments.`
         )}
+        <VeridianInboxTile workspaceId={workspace.id} />
         {tile(
           'tile-coverage',
           t`Days of coverage`,
