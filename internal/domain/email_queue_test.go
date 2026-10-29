@@ -640,3 +640,12 @@ func TestEmailQueueDeferralRepository_OptionalInterface(t *testing.T) {
 	assert.Equal(t, "e1", fake.id)
 	assert.Equal(t, d, fake.got)
 }
+
+func TestEmailQueueSourceMail(t *testing.T) {
+	// La colonne source_type est un VARCHAR(20) ; le worker ne connaît que broadcast et automation
+	// pour ses gardes de source : la source « mail » les laisse passer et reçoit toutes les autres portes.
+	assert.Equal(t, EmailQueueSourceType("mail"), EmailQueueSourceMail)
+	assert.LessOrEqual(t, len(string(EmailQueueSourceMail)), 20)
+	assert.NotEqual(t, EmailQueueSourceBroadcast, EmailQueueSourceMail)
+	assert.NotEqual(t, EmailQueueSourceAutomation, EmailQueueSourceMail)
+}

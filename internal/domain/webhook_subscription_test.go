@@ -34,6 +34,8 @@ func TestWebhookEventTypes_ContainsExpectedEvents(t *testing.T) {
 		"email.bounced",
 		"email.complained",
 		"email.unsubscribed",
+		// Veridian L1
+		"message.received",
 		// Custom events
 		"custom_event.created",
 		"custom_event.updated",

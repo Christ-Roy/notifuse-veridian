@@ -331,6 +331,93 @@ func TestEmailQueueWorker_ProcessEntry_Success(t *testing.T) {
 	worker.processEntry(workspace, entry)
 }
 
+func TestEmailQueueWorker_ProcessEntry_NotifiesSentObserver(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQueueRepo := mocks.NewMockEmailQueueRepository(ctrl)
+	mockWorkspaceRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	mockEmailService := mocks.NewMockEmailServiceInterface(ctrl)
+	mockMessageHistoryRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+
+	// Setup logger
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	integrationID := "integration-1"
+	entryID := "entry-1"
+	workspaceID := "workspace-1"
+
+	workspace := &domain.Workspace{
+		ID: workspaceID,
+		Integrations: []domain.Integration{
+			{
+				ID: integrationID,
+				EmailProvider: domain.EmailProvider{
+					Kind:               domain.EmailProviderKindSMTP,
+					RateLimitPerMinute: 100,
+				},
+			},
+		},
+	}
+
+	entry := &domain.EmailQueueEntry{
+		ID:            entryID,
+		Status:        domain.EmailQueueStatusPending,
+		SourceType:    domain.EmailQueueSourceBroadcast,
+		SourceID:      "broadcast-1",
+		IntegrationID: integrationID,
+		ContactEmail:  "test@example.com",
+		MessageID:     "msg-1",
+		Payload: domain.EmailQueuePayload{
+			FromAddress:        "sender@example.com",
+			FromName:           "Sender",
+			Subject:            "Test Subject",
+			HTMLContent:        "<p>Hello</p>",
+			RateLimitPerMinute: 100,
+		},
+		Attempts:    0,
+		MaxAttempts: 3,
+	}
+
+	// Correctif 2026-09-29 : le fusible de réputation (veridianReputationGate)
+	// tourne pour toute entrée dont le FROM est résolvable, quel que soit le
+	// test — infra saine ici (aucune plainte, aucun volume sur la fenêtre).
+	mockMessageHistoryRepo.EXPECT().
+		CountComplainedSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+	mockMessageHistoryRepo.EXPECT().
+		CountSentSinceForSenderDomain(gomock.Any(), workspaceID, "example.com", gomock.Any()).
+		Return(0, nil)
+
+	// Expect calls in order
+	mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), workspaceID, entryID).Return(nil)
+	mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Return(nil)
+	mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), workspaceID, gomock.Any(), gomock.Any()).Return(nil)
+	mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), workspaceID, entryID).Return(nil)
+
+	worker := NewEmailQueueWorker(
+		mockQueueRepo,
+		mockWorkspaceRepo,
+		mockEmailService,
+		mockMessageHistoryRepo,
+		DefaultWorkerConfig(),
+		mockLogger,
+	)
+	worker.ctx = context.Background()
+
+	obs := &recordingObserver{}
+	SetVeridianSentObserver(obs)
+	defer SetVeridianSentObserver(nil)
+
+	worker.processEntry(workspace, entry)
+
+	// boîte unifiée (L1) : l'observateur reçoit l'envoi accepté, avec le rendu exact parti
+	require.Equal(t, []string{workspaceID + "/msg-1"}, obs.calls)
+}
+
 func TestEmailQueueWorker_ProcessEntry_AutomationWithoutFinalGuardFailsClosed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

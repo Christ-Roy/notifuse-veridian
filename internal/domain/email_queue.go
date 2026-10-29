@@ -31,6 +31,9 @@ type EmailQueueSourceType string
 const (
 	EmailQueueSourceBroadcast  EmailQueueSourceType = "broadcast"
 	EmailQueueSourceAutomation EmailQueueSourceType = "automation"
+	// EmailQueueSourceMail : mail envoyé par l'API de la boîte unifiée (Veridian L1, messages.send et
+	// messages.reply). Passe par les mêmes portes du worker que les séquences.
+	EmailQueueSourceMail EmailQueueSourceType = "mail"
 )
 
 // Default priority for marketing emails (broadcasts and automations)

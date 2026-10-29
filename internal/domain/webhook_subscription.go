@@ -101,6 +101,8 @@ var WebhookEventTypes = []string{
 	"email.bounced",
 	"email.complained",
 	"email.unsubscribed",
+	// Veridian L1 (boîte unifiée) : un mail est arrivé dans une boîte lue (réponse, rebond, accusé)
+	"message.received",
 	// Custom events (with optional filtering)
 	"custom_event.created",
 	"custom_event.updated",

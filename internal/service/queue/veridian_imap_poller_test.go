@@ -459,3 +459,30 @@ func TestNewVeridianIMAPPollerService_Defaults(t *testing.T) {
 	assert.Equal(t, defaultIMAPLookbackWindow, p.lookbackWindow)
 	assert.NotNil(t, p.dialer)
 }
+
+// La boîte unifiée (L1) est prévenue à chaque passage : l'historique une fois par workspace, puis chaque boîte.
+func TestVeridianIMAPPoller_CallsMailboxSyncer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	log := newTestLogger(ctrl)
+	wsRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	uidRepo := mocks.NewMockVeridianIMAPUIDSeenRepository(ctrl)
+
+	ws := &domain.Workspace{ID: "ws1", Integrations: domain.Integrations{
+		{ID: "box1", Type: domain.IntegrationTypeIMAP, IMAPSettings: validIMAPSettings()},
+		{ID: "smtp1", Type: domain.IntegrationTypeEmail},
+		{ID: "box2", Type: domain.IntegrationTypeIMAP, IMAPSettings: validIMAPSettings()},
+	}}
+	wsRepo.EXPECT().List(gomock.Any()).Return([]*domain.Workspace{ws}, nil)
+	uidRepo.EXPECT().FilterUnseen(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	p := NewVeridianIMAPPollerService(wsRepo, uidRepo, log, 0, 0)
+	p.dialer = &fakeIMAPDialer{client: &fakeIMAPClient{uidValidity: 1, messages: []*domain.VeridianIMAPMessage{{UID: 1}}}}
+	syn := &recordingSyncer{}
+	p.RegisterMailboxSyncer(syn)
+
+	p.runOnce(context.Background())
+
+	assert.Equal(t, []string{"ws1"}, syn.workspace, "l'historique se reprend une seule fois par workspace")
+	assert.Equal(t, []string{"ws1/box1", "ws1/box2"}, syn.boxes, "chaque boîte IMAP, jamais un profil SMTP")
+}

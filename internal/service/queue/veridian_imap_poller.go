@@ -69,6 +69,8 @@ type VeridianIMAPPollerService struct {
 
 	mu        sync.RWMutex
 	consumers []domain.VeridianIMAPConsumer
+	// mailSyncer : boîte unifiée (L1), branché par RegisterMailboxSyncer. nil = rien.
+	mailSyncer MailboxSyncer
 	// lastPolledAt[workspaceID|integrationID] => dernier poll réussi/tenté, pour
 	// respecter l'intervalle propre de chaque boîte.
 	lastPolledAt map[string]time.Time
@@ -184,10 +186,12 @@ func (s *VeridianIMAPPollerService) runOnce(ctx context.Context) {
 	}
 
 	now := time.Now().UTC()
+	syncer := s.currentMailSyncer()
 	for _, ws := range workspaces {
 		if ws == nil {
 			continue
 		}
+		historyDone := false
 		for i := range ws.Integrations {
 			integ := &ws.Integrations[i]
 			if integ.Type != domain.IntegrationTypeIMAP {
@@ -202,6 +206,13 @@ func (s *VeridianIMAPPollerService) runOnce(ctx context.Context) {
 			}
 			s.setLastPolled(ws.ID, integ.ID, now)
 			s.pollBox(ctx, ws.ID, integ.ID, settings)
+			if syncer != nil {
+				if !historyDone {
+					historyDone = true
+					syncer.SyncWorkspace(ctx, ws)
+				}
+				syncer.SyncBox(ctx, ws, integ)
+			}
 
 			if ctx.Err() != nil {
 				return

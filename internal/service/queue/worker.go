@@ -603,6 +603,7 @@ func (w *EmailQueueWorker) processEntry(workspace *domain.Workspace, entry *doma
 
 	// Upsert message history (success - clears any previous failure)
 	w.upsertMessageHistory(w.ctx, workspace.ID, workspace.Settings.SecretKey, entry, nil)
+	veridianObserveSent(workspace, entry) // boîte unifiée (L1) : rendu exact du mail parti
 
 	// Fiche 62 : journal des decisions, l'envoi accepte avec les portes qui l'ont laisse passer.
 	w.veridianRecordTerminal(workspace, entry, domain.VeridianOutcomeSent, "", "", entry.IntegrationID, &selection)
