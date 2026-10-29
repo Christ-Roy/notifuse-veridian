@@ -23,7 +23,7 @@ Liste de référence : `scripts/veridian/frozen-files.tsv` (le détecteur la lit
 | `internal/service/workspace_service.go` | idem, très couplé (inscription) |
 | `internal/domain/email_provider.go` | idem |
 | `internal/repository/message_history_postgre.go` | idem |
-| `internal/service/queue/worker.go` | cascade d'envoi, couplé (priorité) |
+| `internal/service/queue/worker.go` | cascade d'envoi : processEntry n'appelle plus que les cinq points de `SendPipeline` (section 3 bis) |
 | `console/src/services/api/workspace.ts` | client API upstream |
 | `internal/migrations/v32.go` | migration upstream, jamais retouchée |
 
@@ -56,6 +56,20 @@ Exemple : le module `mailbox`.
 4. **Ce que le module voit** : l'interface `platform.Host` (config, logger, base système, mux, authentification, dépôts, services, poller, worker, contexte d'arrêt). Il manque un accesseur : on l'ajoute à `Host` et à `veridianHost` dans `veridian_wiring.go`, pas dans `app.go`.
 5. **Une migration** si le module a un schéma (section 4).
 6. **CLI et OpenAPI** pour chaque route (règle 6).
+
+## 3 bis. Le coeur d'envoi : `SendPipeline`
+
+`processEntry` (worker.go) n'enfile plus vingt portes Veridian : il appelle cinq points d'extension, dans cet ordre, définis dans `internal/service/queue/veridian_send_pipeline.go` (interface `SendPipeline`, implémentation `veridianSendPipeline`, remplaçable par `SetSendPipeline`) :
+
+| Point | Contenu historique | Rend |
+|---|---|---|
+| `Pre` | entrée transactionnelle de séquence, porte du premier mail (J0) | true = on poursuit, false = l'entrée est réglée |
+| `Select` | classe du destinataire (MX réel), choix de l'intégration dans le pool, report ou échec permanent | idem |
+| `PreRender` | pré-filtre d'adresse, rendu au dépilage, fil de conversation, filet anti-hash | idem |
+| `PreSend` | garde automation, garde broadcast, prise de l'entrée (`sc.Claim`), réservation du quota du jour | idem |
+| `Record` | issue du transport : libère le quota si le relais n'a rien accepté, journal de décision si envoyé | rien |
+
+Entre ces points, worker.go garde l'amont : intégration introuvable, attente du rate limiter, requête, `SendEmail`, classification d'erreur, disjoncteur, `MarkAsSent`, historique. L'ordre est figé par `TestProcessEntry_StageOrder_*` (vus échouer par permutation) ; un changement d'ordre grille un domaine d'envoi (CLAUDE.md règle 4). **La priorité entre entrées ne passe pas par ce point** : elle se pose à l'enqueue (`email_queue.priority`, dépilage `priority ASC`). Ce qui reste Veridian dans worker.go : les champs de la struct, `handleError` (journal d'échec) et `upsertMessageHistory` (colonnes `Veridian*`).
 
 ## 4. Migrations Veridian
 
