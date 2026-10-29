@@ -33,7 +33,8 @@ import {
   MenuOutlined,
   MailOutlined,
   GlobalOutlined,
-  InboxOutlined
+  InboxOutlined,
+  AuditOutlined
 } from '@ant-design/icons'
 // === Veridian patch === co-brand léger (header link, footer) + bandeau
 // soft-delete. Composants event-driven / query-driven, dégradent
@@ -385,6 +386,17 @@ export function WorkspaceLayout() {
         </Link>
       )
     },
+    hasAccess('automations') &&
+      hasAccess('contacts') &&
+      hasAccess('message_history') && {
+        key: 'reconcile',
+        icon: <AuditOutlined />,
+        label: (
+          <Link to="/console/workspace/$workspaceId/reconcile" params={{ workspaceId }}>
+            {t`Discrepancies`}
+          </Link>
+        )
+      },
     hasAccess('message_history') && {
       key: 'logs-transactional',
       icon: <FontAwesomeIcon icon={faBarsStaggered} size="sm" style={{ opacity: 0.7 }} />,

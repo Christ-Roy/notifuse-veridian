@@ -39,7 +39,8 @@ export const SIDEBAR_GROUP_KEYS = {
     'automations',
     'sending-profiles',
     'logs',
-    'send-queue'
+    'send-queue',
+    'reconcile'
   ],
   transactional: ['templates-transactional', 'transactional-notifications', 'logs-transactional']
 } as const
@@ -61,6 +62,7 @@ export function selectedSidebarKey(pathname: string, search?: SidebarSearch): st
   if (pathname.includes('/transactional-notifications')) return 'transactional-notifications'
   if (pathname.includes('/sending-profiles')) return 'sending-profiles'
   if (pathname.includes('/send-queue')) return 'send-queue'
+  if (pathname.includes('/reconcile')) return 'reconcile'
   if (pathname.includes('/logs')) {
     return messageTypeFromSearch(search) === 'transactional' ? 'logs-transactional' : 'logs'
   }

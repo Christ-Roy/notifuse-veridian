@@ -32,9 +32,9 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 	// Seuls les contact_automations d'une sequence VIVANTE sont lus ; le dernier mail
 	// mis en file vient des executions terminees.
 	mock.ExpectQuery(`(?s)FROM contact_automations ca\s+JOIN automations a ON a.id = ca.automation_id AND a.deleted_at IS NULL\s+LEFT JOIN LATERAL.*e.node_type = 'email' AND e.action = 'completed'`).
-		WillReturnRows(sqlmock.NewRows([]string{"a", "status", "reason", "current", "last", "n"}).
-			AddRow("seq1", "sending", "", "j0", "j0", 5).
-			AddRow("seq1", "exited", "replied", "", "j0", 2))
+		WillReturnRows(sqlmock.NewRows([]string{"a", "status", "reason", "current", "last", "mail_left", "n"}).
+			AddRow("seq1", "sending", "", "j0", "j0", nil, 5).
+			AddRow("seq1", "exited", "replied", "", "j0", true, 2))
 	// Reponses : fenetre [since, until[, humaines et automatiques separees.
 	mock.ExpectQuery(`(?s)FROM veridian_contact_reply r\s+JOIN contact_automations ca ON lower\(ca.contact_email\) = r.contact_email.*r.replied_at >= \$1 AND r.replied_at < \$2`).
 		WithArgs(since, until).
@@ -74,6 +74,9 @@ func TestVeridianProspectionStatsRepository_GetProspectionRaw(t *testing.T) {
 	assert.Equal(t, domain.NodeTypeEmail, raw.Automations[0].Nodes[0].Type)
 	require.Len(t, raw.Progress, 2)
 	assert.Equal(t, "j0", raw.Progress[0].LastEmailNodeID)
+	assert.Nil(t, raw.Progress[0].MailLeft, "non mesuré pour un contact non sorti")
+	require.NotNil(t, raw.Progress[1].MailLeft)
+	assert.True(t, *raw.Progress[1].MailLeft)
 	assert.Equal(t, domain.VeridianProspectionReplyRow{Key: "seq1", Human: 2, Auto: 1}, raw.AutomationReplies[0])
 	require.Len(t, raw.AutomationStepReplies, 2)
 	assert.Equal(t, domain.VeridianProspectionStepReplyRow{Key: "seq1", NodeID: "j0", Human: 1}, raw.AutomationStepReplies[0])

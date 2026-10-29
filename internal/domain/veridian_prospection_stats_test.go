@@ -33,9 +33,18 @@ func TestVeridianClassifyExitReason(t *testing.T) {
 		"unsubscribed":            VeridianExitClassUnsubscribed,
 		"excluded_provider_class:security_gateway":     VeridianExitClassExcluded,
 		"pre-filtered recipient: undeliverable_domain": VeridianExitClassExcluded,
-		"manual":             VeridianExitClassOther,
-		"automation_deleted": VeridianExitClassOther,
-		"":                   VeridianExitClassOther,
+		// Raisons posées par la porte d'envoi et le premier mail (rapport du 27/10 : 16 contre 17).
+		"contact_replied":           VeridianExitClassReplied,
+		"list_status_unsubscribed":  VeridianExitClassUnsubscribed,
+		"list_status_bounced":       VeridianExitClassRejected,
+		"list_status_complained":    VeridianExitClassRejected,
+		"first_mail_bounced":        VeridianExitClassRejected,
+		"first_mail_policy_refused": VeridianExitClassRejected,
+		"excluded_list":             VeridianExitClassExcluded,
+		"contact_not_on_list":       VeridianExitClassOther,
+		"manual":                    VeridianExitClassOther,
+		"automation_deleted":        VeridianExitClassOther,
+		"":                          VeridianExitClassOther,
 	}
 	for reason, want := range cases {
 		assert.Equal(t, want, VeridianClassifyExitReason(reason), reason)
@@ -308,4 +317,25 @@ func TestVeridianProspectionStatsRequest_JSONShape(t *testing.T) {
 	out, err := json.Marshal(VeridianProspectionStatsRequest{WorkspaceID: "ws", Since: time.Now(), Until: time.Now()})
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"workspace_id":"ws"}`, string(out))
+}
+
+// Cas du 27/10 : « J0 envoyés » 2 947 servi contre 2 891 réellement partis. 56 contacts
+// avaient leur mail J0 « terminé » (mis en file) puis se sont désinscrits avant l'envoi :
+// aucun mail n'est parti, ils ne sont pas « envoyés ».
+func TestVeridianBuildProspectionStats_ExitedBeforeSendIsNotSent(t *testing.T) {
+	no, yes := false, true
+	raw := &VeridianProspectionRaw{
+		Automations: []VeridianProspectionAutomation{{ID: "devenir", Name: "À devenir", Status: "live", ListID: "l", RootNodeID: "split", Nodes: prospectionTestNodes("devenir")}},
+		Progress: []VeridianProspectionProgressRow{
+			{AutomationID: "devenir", Status: "active", CurrentNodeID: "j4", LastEmailNodeID: "j0a", Count: 2800},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "unsubscribed", LastEmailNodeID: "j0a", MailLeft: &no, Count: 33},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "unsubscribed", LastEmailNodeID: "j0b", MailLeft: &no, Count: 23},
+			{AutomationID: "devenir", Status: "exited", ExitReason: "replied", LastEmailNodeID: "j0a", MailLeft: &yes, Count: 91},
+		},
+	}
+	seq := VeridianBuildProspectionStats(raw, time.Time{}, time.Time{}, time.Now()).Sequences[0]
+	assert.Equal(t, 2800+91, seq.Stages[0].Sent, "les 56 désinscrits avant l'envoi ne comptent pas")
+	assert.Equal(t, 91, seq.Stages[0].ExitedAfter)
+	assert.Equal(t, 56, seq.Exits.BeforeFirstMail)
+	assert.Equal(t, 2800+56+91, seq.Enrolled)
 }

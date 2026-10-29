@@ -45,7 +45,14 @@ const veridianProspectionAutomationsSQL = `
 // vu partir ce mail (le domaine le corrige).
 const veridianProspectionProgressSQL = `
 	SELECT ca.automation_id, COALESCE(ca.status, ''), COALESCE(ca.exit_reason, ''),
-	       COALESCE(ca.current_node_id, ''), COALESCE(le.node_id, ''), COUNT(*)
+	       COALESCE(ca.current_node_id, ''), COALESCE(le.node_id, ''),
+	       CASE WHEN ca.status = 'exited' AND le.node_id IS NOT NULL THEN EXISTS (
+	           SELECT 1 FROM message_history mh
+	           WHERE mh.automation_id = ca.automation_id AND mh.contact_email = ca.contact_email
+	             AND mh.sent_at IS NOT NULL AND mh.failed_at IS NULL
+	             AND mh.template_id = (SELECT n->'config'->>'template_id' FROM jsonb_array_elements(COALESCE(a.nodes, '[]'::jsonb)) n
+	                                   WHERE n->>'id' = le.node_id LIMIT 1))
+	       END AS mail_left, COUNT(*)
 	FROM contact_automations ca
 	JOIN automations a ON a.id = ca.automation_id AND a.deleted_at IS NULL
 	LEFT JOIN LATERAL (
@@ -53,7 +60,7 @@ const veridianProspectionProgressSQL = `
 		WHERE e.contact_automation_id = ca.id AND e.node_type = 'email' AND e.action = 'completed'
 		ORDER BY e.entered_at DESC LIMIT 1
 	) le ON TRUE
-	GROUP BY 1, 2, 3, 4, 5`
+	GROUP BY 1, 2, 3, 4, 5, 6`
 
 const veridianProspectionAutomationRepliesSQL = `
 	SELECT ca.automation_id,
@@ -126,7 +133,10 @@ const veridianProspectionStockDistinctSQL = `
 	JOIN lists l ON l.id = cl.list_id AND l.deleted_at IS NULL
 	WHERE cl.deleted_at IS NULL AND cl.status = 'active' AND NOT EXISTS (
 	    SELECT 1 FROM message_history mh
-	    WHERE mh.contact_email = cl.email AND mh.sent_at IS NOT NULL AND mh.veridian_message_type IS DISTINCT FROM 'transactional' AND mh.transactional_notification_id IS NULL)`
+	    WHERE mh.contact_email = cl.email AND mh.sent_at IS NOT NULL AND mh.veridian_message_type IS DISTINCT FROM 'transactional' AND mh.transactional_notification_id IS NULL)
+	  AND NOT EXISTS (
+	    SELECT 1 FROM contact_lists x JOIN lists xl ON xl.id = x.list_id AND xl.deleted_at IS NULL AND xl.name ILIKE '%exclu%'
+	    WHERE x.email = cl.email AND x.deleted_at IS NULL AND x.status = 'active')`
 
 const veridianProspectionListRepliesSQL = `
 	SELECT cl.list_id,
@@ -187,9 +197,14 @@ func (r *veridianProspectionStatsRepository) GetProspectionRaw(ctx context.Conte
 	}
 	for rows.Next() {
 		var p domain.VeridianProspectionProgressRow
-		if err := rows.Scan(&p.AutomationID, &p.Status, &p.ExitReason, &p.CurrentNodeID, &p.LastEmailNodeID, &p.Count); err != nil {
+		var mailLeft sql.NullBool
+		if err := rows.Scan(&p.AutomationID, &p.Status, &p.ExitReason, &p.CurrentNodeID, &p.LastEmailNodeID, &mailLeft, &p.Count); err != nil {
 			_ = rows.Close()
 			return nil, fmt.Errorf("scan prospection progress: %w", err)
+		}
+		if mailLeft.Valid {
+			v := mailLeft.Bool
+			p.MailLeft = &v
 		}
 		raw.Progress = append(raw.Progress, p)
 	}
