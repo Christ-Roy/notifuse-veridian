@@ -182,6 +182,9 @@ func EnsureWorkspaceDatabaseExists(cfg *config.DatabaseConfig, workspaceID strin
 		if err := InitializeWorkspaceDatabase(wsDB); err != nil {
 			return fmt.Errorf("failed to initialize workspace database schema: %w", err)
 		}
+		if err := initVeridianWorkspace(wsDB, workspaceID); err != nil {
+			return err
+		}
 	}
 
 	return nil

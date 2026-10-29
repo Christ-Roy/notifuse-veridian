@@ -1857,7 +1857,7 @@ func (a *App) InitHandlers() error {
 		}).Warn("Veridian hub invitation endpoint disabled (self-hosted or secret missing)")
 	}
 
-	return nil
+	return WireVeridian(a) // point unique de câblage Veridian (veridian_wiring.go)
 }
 
 // Start starts the HTTP server
