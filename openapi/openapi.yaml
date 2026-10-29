@@ -101,6 +101,18 @@ paths:
     $ref: './paths/automations.yaml#/~1api~1automations.nodeExecutions'
   /api/veridian/contacts.providerBreakdown:
     $ref: './paths/veridian-cold.yaml#/~1api~1veridian~1contacts.providerBreakdown'
+  /api/veridian/policy.get:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.get'
+  /api/veridian/policy.set:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.set'
+  /api/veridian/policy.reset:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.reset'
+  /api/veridian/policy.priority.list:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.priority.list'
+  /api/veridian/policy.priority.set:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.priority.set'
+  /api/veridian/policy.priority.clear:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.priority.clear'
   /api/customEvents.import:
     $ref: './paths/custom-events.yaml#/~1api~1customEvents.import'
   /api/webhookSubscriptions.create:

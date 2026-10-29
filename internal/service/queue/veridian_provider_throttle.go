@@ -45,6 +45,10 @@ const veridianMaxProviderClassRetryDelay = 5 * time.Minute
 // override broadcast remplace l'infra). provider peut être nil (cas legacy /
 // intégration sans config Veridian) → on saute simplement ce niveau.
 func veridianResolveProviderClassRates(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) map[string]float64 {
+	return veridianPolicyMergeRates(workspace, veridianResolveProviderClassRatesRaw(workspace, provider, entry)) // L3
+}
+
+func veridianResolveProviderClassRatesRaw(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) map[string]float64 {
 	if rates := entry.Payload.VeridianProviderClassRates; len(rates) > 0 {
 		return rates
 	}

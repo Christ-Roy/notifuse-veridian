@@ -254,7 +254,7 @@ func (w *EmailQueueWorker) veridianReputationGateVerdict(workspace *domain.Works
 		workspaceID = workspace.ID
 	}
 	class := w.veridianClassifyRecipient(entry)
-	threshold := provider.VeridianEffectiveHardBounceFreezeThreshold()
+	threshold := veridianPolicyThreshold(workspaceID, provider, class) // L3 : seuil du profil, sinon de la classe
 	now := time.Now().UTC()
 	since := now.Add(-veridianReputationWindow)
 
@@ -460,7 +460,8 @@ func VeridianComputeReputationStatus(
 			}
 			cs.RecentSent, cs.RecentPolicyRefusals = recentSent, recentPolicy
 		}
-		v := veridianEvaluateCouple(complaints, c, recentSent, recentPolicy, status.Threshold)
+		cs.Threshold = veridianPolicyThreshold(workspaceID, provider, class)
+		v := veridianEvaluateCouple(complaints, c, recentSent, recentPolicy, cs.Threshold)
 		cs.Factor, cs.Reason, cs.Stopped = v.Factor, v.Reason, v.Stopped
 		status.Classes = append(status.Classes, cs)
 		switch {

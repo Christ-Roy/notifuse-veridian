@@ -1,0 +1,341 @@
+/api/veridian/policy.get:
+  get:
+    summary: Send policy by recipient provider class, explained (Veridian L3)
+    description: |
+      Veridian extension. Returns, for each recipient provider class, the rules the worker
+      applies to a workspace: daily cap, rate per minute, share of the domain warm-up cap,
+      slowdown threshold of the reputation fuse, and the observed reply value. Each value
+      carries its origin (`preset` = catalogue default, `workspace_override` = set with
+      `policy.set`) and a plain-French explanation. `shadowed_by` lists sending profiles
+      that set their own value and therefore mask the policy for their own sends.
+
+      Auth = JWT or workspace API key. Requires `workspace:read`.
+    operationId: veridianPolicyGet
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: class
+        in: query
+        description: Restrict to one class (google, ovh, orange...).
+        schema: { type: string }
+    responses:
+      '200':
+        description: Effective policy
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianPolicyView'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+  post:
+    summary: Send policy by recipient provider class (POST form)
+    operationId: veridianPolicyGetPost
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id]
+            properties:
+              workspace_id: { type: string }
+              class: { type: string }
+    responses:
+      '200':
+        description: Effective policy
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianPolicyView'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+
+/api/veridian/policy.set:
+  post:
+    summary: Override send-policy rules of one provider class for a workspace
+    description: |
+      Sets the given values and keeps the others. Values left out (or 0) are not touched.
+      Bounds: `daily_cap` 1 to 1000, `rate_per_min` 0.01 to 10, `warmup_share` 0.01 to 1,
+      `slowdown_threshold` 0.01 to 0.15. A value set by hand on a sending profile still wins
+      for that profile (the response warns). The worker sees the change within seconds.
+
+      Requires `workspace:write`.
+    operationId: veridianPolicySet
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, class]
+            properties:
+              workspace_id: { type: string }
+              class: { type: string, example: ovh }
+              daily_cap: { type: integer, minimum: 1, maximum: 1000 }
+              rate_per_min: { type: number, minimum: 0.01, maximum: 10 }
+              warmup_share: { type: number, minimum: 0.01, maximum: 1 }
+              slowdown_threshold: { type: number, minimum: 0.01, maximum: 0.15 }
+              reason: { type: string, maxLength: 300 }
+    responses:
+      '200':
+        description: The class after the change, and warnings
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianPolicySetResult'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/veridian/policy.reset:
+  post:
+    summary: Remove overrides of one provider class (back to the catalogue defaults)
+    description: Requires `workspace:write`. `rules` names the rules to reset (all when omitted).
+    operationId: veridianPolicyReset
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, class]
+            properties:
+              workspace_id: { type: string }
+              class: { type: string }
+              rules:
+                type: array
+                items:
+                  type: string
+                  enum: [daily_cap, rate_per_min, warmup_share, slowdown_threshold]
+    responses:
+      '200':
+        description: The class after the reset
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianPolicySetResult'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/veridian/policy.priority.list:
+  get:
+    summary: Send priority of every broadcast and automation
+    description: |
+      Priority is 2 to 9 (default 5; 1 is reserved for sequence transactional mail). A smaller
+      number is dequeued first. It only changes the order when the queue is congested between
+      campaigns: when the per-sender or per-provider cap is the limit, it does not send more.
+
+      Requires `broadcasts:read` and `automations:read`.
+    operationId: veridianPolicyPriorityList
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: Priorities
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianPriorityList'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+  post:
+    summary: Send priority list (POST form)
+    operationId: veridianPolicyPriorityListPost
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id]
+            properties:
+              workspace_id: { type: string }
+    responses:
+      '200':
+        description: Priorities
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianPriorityList'
+
+/api/veridian/policy.priority.set:
+  post:
+    summary: Set the send priority of a broadcast or automation
+    description: |
+      Rewrites the priority of its mails already waiting in the queue (pending or paused);
+      mails already sent do not move, priority-1 transactional mails are never touched.
+      Requires `broadcasts:write` (broadcast) or `automations:write` (automation).
+    operationId: veridianPolicyPrioritySet
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, source_type, source_id, priority]
+            properties:
+              workspace_id: { type: string }
+              source_type: { type: string, enum: [broadcast, automation] }
+              source_id: { type: string }
+              priority: { type: integer, minimum: 2, maximum: 9 }
+    responses:
+      '200':
+        description: The new priority and the number of waiting mails rewritten
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianPriorityChange'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+      '404':
+        description: Unknown broadcast or automation
+
+/api/veridian/policy.priority.clear:
+  post:
+    summary: Remove the send priority of a broadcast or automation (back to 5)
+    operationId: veridianPolicyPriorityClear
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, source_type, source_id]
+            properties:
+              workspace_id: { type: string }
+              source_type: { type: string, enum: [broadcast, automation] }
+              source_id: { type: string }
+    responses:
+      '200':
+        description: Priority back to the default
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianPriorityChange'
+      '404':
+        description: Unknown broadcast or automation
+
+components:
+  schemas:
+    VeridianPolicyValue:
+      type: object
+      properties:
+        value: {}
+        source: { type: string, enum: [preset, workspace_override] }
+        preset: {}
+        shadowed_by:
+          type: array
+          items: { type: string }
+    VeridianPolicyClass:
+      type: object
+      properties:
+        class: { type: string }
+        label: { type: string }
+        daily_cap: { $ref: '#/components/schemas/VeridianPolicyValue' }
+        rate_per_min: { $ref: '#/components/schemas/VeridianPolicyValue' }
+        warmup_share: { $ref: '#/components/schemas/VeridianPolicyValue' }
+        slowdown_threshold: { $ref: '#/components/schemas/VeridianPolicyValue' }
+        observed:
+          type: object
+          properties:
+            sent: { type: integer }
+            bounced: { type: integer }
+            replied_human: { type: integer }
+            basis: { type: string, enum: [workspace, catalog] }
+            reply_rate: { type: number, nullable: true }
+            reply_rate_smoothed: { type: number }
+            bounce_rate: { type: number, nullable: true }
+        why: { type: string }
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              value: {}
+              source: { type: string }
+              text: { type: string }
+        explanation: { type: string }
+    VeridianPolicyView:
+      type: object
+      properties:
+        workspace_id: { type: string }
+        catalog_as_of: { type: string }
+        catalog_source: { type: string }
+        overrides: { type: integer }
+        classes:
+          type: array
+          items: { $ref: '#/components/schemas/VeridianPolicyClass' }
+    VeridianPolicySetResult:
+      type: object
+      properties:
+        class: { $ref: '#/components/schemas/VeridianPolicyClass' }
+        warnings:
+          type: array
+          items: { type: string }
+    VeridianPriorityList:
+      type: object
+      properties:
+        workspace_id: { type: string }
+        default_priority: { type: integer }
+        min_priority: { type: integer }
+        max_priority: { type: integer }
+        note: { type: string }
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              source_type: { type: string }
+              source_id: { type: string }
+              name: { type: string }
+              status: { type: string }
+              priority: { type: integer }
+              explicit: { type: boolean }
+              pending: { type: integer }
+    VeridianPriorityChange:
+      type: object
+      properties:
+        source_type: { type: string }
+        source_id: { type: string }
+        priority: { type: integer }
+        requeued_pending: { type: integer, format: int64 }
+        note: { type: string }

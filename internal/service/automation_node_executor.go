@@ -350,7 +350,7 @@ func (e *EmailNodeExecutor) Execute(ctx context.Context, params NodeExecutionPar
 	}
 
 	// 12. Create queue entry
-	queuePriority := domain.EmailQueuePriorityMarketing
+	queuePriority := domain.VeridianSendPriority(params.WorkspaceID, domain.EmailQueueSourceAutomation, params.Automation.ID) // L3 : priorité de l'automation, défaut 5
 	if veridianTransactional {
 		queuePriority = domain.EmailQueuePriorityTransactional
 	}

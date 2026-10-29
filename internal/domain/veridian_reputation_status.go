@@ -49,6 +49,9 @@ type VeridianReputationClassStatus struct {
 	PolicyRefusals7d  int     `json:"policy_refusals_7d"`
 	HardBounceRate    float64 `json:"hard_bounce_rate"`
 	PolicyRefusalRate float64 `json:"policy_refusal_rate"`
+	// Threshold : seuil de ralentissement appliqué à CETTE classe (profil, sinon règle de
+	// la classe, sinon défaut du fusible). Lot L3.
+	Threshold float64 `json:"slowdown_threshold,omitempty"`
 	// Factor : debit de la classe divise par ce facteur (1 = normal, 2, 4).
 	Factor int `json:"slowdown_factor"`
 	// Reason : hard_bounce_rate | policy_refusal_rate | complaint | bulk_policy_refusal.

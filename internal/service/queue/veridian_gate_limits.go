@@ -43,7 +43,8 @@ func veridianResolveCapLimits(
 	now time.Time,
 ) veridianCapLimits {
 	lim := veridianCapLimits{Factor: 1}
-	classCaps, perRecipient := veridianResolveDailyCaps(workspace, provider, entry)
+	rawCaps, perRecipient := veridianResolveDailyCaps(workspace, provider, entry)
+	classCaps := veridianPolicyMergeCaps(workspace, rawCaps) // L3 : surcharge du workspace puis preset
 	lim.PerRecipient = perRecipient
 	lim.Warmup = veridianWarmupCap(workspace, provider, now)
 	lim.Profile = provider.VeridianEffectiveProfileDailyCap()
@@ -60,7 +61,7 @@ func veridianResolveCapLimits(
 		}
 		if configured, ok := veridianCapForClass(classCaps, lim.Class); ok && configured > 0 {
 			lim.ClassBase = configured
-			lim.ClassCap = veridianSlowCap(configured, lim.Factor)
+			lim.ClassCap = veridianSlowCap(veridianPolicyWarmupClamp(workspace, rawCaps, lim.Class, lim.Warmup, configured), lim.Factor)
 		}
 	}
 	return lim

@@ -18,65 +18,13 @@ package domain
 // classe canonique n'a pas de valeur.
 
 // veridianDefaultClassDailyCap : envois max / jour / (domaine émetteur x classe).
-var veridianDefaultClassDailyCap = map[string]int{
-	ProviderClassGoogle:            30,
-	ProviderClassMicrosoft:         30,
-	ProviderClassYahooAol:          10,
-	ProviderClassFreemailFR:        20,
-	ProviderClassCorporate:         30,
-	ProviderClassOVH:               40,
-	ProviderClassIonos:             20,
-	ProviderClassAppleICloud:       10,
-	ProviderClassSecurityGateway:   10,
-	ProviderClassOtherHoster:       30,
-	ProviderClassCorporateSelfhost: 30,
-	ProviderClassInfomaniak:        25,
-	ProviderClassGandi:             25,
-	ProviderClassHostinger:         25,
-	ProviderClassO2switch:          25,
-	ProviderClassLWS:               25,
-	ProviderClassScaleway:          25,
-	ProviderClassWebsiteBuilder:    20,
-	ProviderClassZoho:              20,
-	ProviderClassProton:            10,
-	// FAI français (22/10, fiche 69) : partis de freemail_fr (20/jour). Aucun n'augmente ;
-	// Orange, le plus sévère sur le cold, descend à 10 comme Yahoo.
-	ProviderClassOrange:    10,
-	ProviderClassSFRAltice: 20,
-	ProviderClassFree:      20,
-	ProviderClassLaPoste:   20,
-	ProviderClassBouygues:  20,
-}
+// 29/10 (lot L3) : dérivé du catalogue de presets (veridian_class_presets.json), qui est
+// désormais la seule source des valeurs. Les valeurs de la fiche 69 y sont reprises à
+// l'identique (veridian_class_presets_test.go les fige).
+var veridianDefaultClassDailyCap = veridianPresetDailyCaps()
 
 // veridianDefaultClassRatePerMin : débit max (emails / minute) par (intégration x classe).
-var veridianDefaultClassRatePerMin = map[string]float64{
-	ProviderClassGoogle:            0.3,
-	ProviderClassMicrosoft:         0.3,
-	ProviderClassYahooAol:          0.1,
-	ProviderClassFreemailFR:        0.2,
-	ProviderClassCorporate:         0.3,
-	ProviderClassOVH:               0.4,
-	ProviderClassIonos:             0.2,
-	ProviderClassAppleICloud:       0.1,
-	ProviderClassSecurityGateway:   0.1,
-	ProviderClassOtherHoster:       0.3,
-	ProviderClassCorporateSelfhost: 0.3,
-	ProviderClassInfomaniak:        0.25,
-	ProviderClassGandi:             0.25,
-	ProviderClassHostinger:         0.25,
-	ProviderClassO2switch:          0.25,
-	ProviderClassLWS:               0.25,
-	ProviderClassScaleway:          0.25,
-	ProviderClassWebsiteBuilder:    0.2,
-	ProviderClassZoho:              0.2,
-	ProviderClassProton:            0.1,
-	// FAI français (22/10) : partis de freemail_fr (0,2/min), Orange à 0,1/min.
-	ProviderClassOrange:    0.1,
-	ProviderClassSFRAltice: 0.2,
-	ProviderClassFree:      0.2,
-	ProviderClassLaPoste:   0.2,
-	ProviderClassBouygues:  0.2,
-}
+var veridianDefaultClassRatePerMin = veridianPresetRates()
 
 // VeridianDefaultCapForClass : plafond journalier par défaut (toujours > 0).
 func VeridianDefaultCapForClass(class string) int {

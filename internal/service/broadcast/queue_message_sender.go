@@ -505,7 +505,7 @@ func (s *queueMessageSender) buildQueueEntry(
 	entry := &domain.EmailQueueEntry{
 		ID:            uuid.New().String(),
 		Status:        domain.EmailQueueStatusPending,
-		Priority:      domain.EmailQueuePriorityMarketing,
+		Priority:      domain.VeridianSendPriority(workspaceID, domain.EmailQueueSourceBroadcast, broadcast.ID), // L3 : priorité de la campagne, défaut 5
 		SourceType:    domain.EmailQueueSourceBroadcast,
 		SourceID:      broadcast.ID,
 		IntegrationID: integrationID,

@@ -1,0 +1,362 @@
+{
+ "version": 1,
+ "as_of": "2026-10-29",
+ "source": "plafonds et débits : défauts du 19/10 et 22/10 (fiche 69), repris à l'identique. Réponses, rebonds et envois observés : workspace animalsd, tout l'historique au 29/10/2026 (messages.engagementByClass).",
+ "reply_prior": {
+  "sent": 1107,
+  "replied_human": 36
+ },
+ "reply_smoothing_weight": 30,
+ "classes": [
+  {
+   "class": "google",
+   "label": "Google (Gmail, Google Workspace)",
+   "daily_cap": 30,
+   "rate_per_min": 0.3,
+   "warmup_share": 0.5,
+   "slowdown_threshold": 0.02,
+   "observed": {
+    "sent": 198,
+    "bounced": 0,
+    "replied_human": 14
+   },
+   "why": "Premier fournisseur du stock et réputation partagée avec tous nos envois : volume modéré, ralentissement dès 2 % de rebonds."
+  },
+  {
+   "class": "microsoft",
+   "label": "Microsoft (Outlook, Microsoft 365)",
+   "daily_cap": 30,
+   "rate_per_min": 0.3,
+   "warmup_share": 0.2,
+   "slowdown_threshold": 0.02,
+   "observed": {
+    "sent": 50,
+    "bounced": 1,
+    "replied_human": 0
+   },
+   "why": "Filtrage strict du démarchage à froid et peu de réponses mesurées : peu de volume pendant la chauffe, ralentissement dès 2 %."
+  },
+  {
+   "class": "yahoo_aol",
+   "label": "Yahoo et AOL",
+   "daily_cap": 10,
+   "rate_per_min": 0.1,
+   "warmup_share": 0.15,
+   "slowdown_threshold": 0.02,
+   "observed": {
+    "sent": 39,
+    "bounced": 0,
+    "replied_human": 0
+   },
+   "why": "Règles d'authentification et de plaintes sévères : plafond bas, ralentissement dès 2 %."
+  },
+  {
+   "class": "freemail_fr",
+   "label": "Messageries gratuites FR (reliquat)",
+   "daily_cap": 20,
+   "rate_per_min": 0.2,
+   "warmup_share": 0.2,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 8,
+    "bounced": 0,
+    "replied_human": 0
+   },
+   "why": "Classe historique des FAI français, gardée pour gmx.fr, dartybox.com et les anciens tags. Les cinq FAI ont leur propre règle."
+  },
+  {
+   "class": "corporate",
+   "label": "Entreprise (classe historique)",
+   "daily_cap": 30,
+   "rate_per_min": 0.3,
+   "warmup_share": 0.5,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 0,
+    "bounced": 0,
+    "replied_human": 0
+   },
+   "why": "Classe de rétrocompatibilité : le MX réel la remplace presque toujours."
+  },
+  {
+   "class": "ovh",
+   "label": "OVH",
+   "daily_cap": 40,
+   "rate_per_min": 0.4,
+   "warmup_share": 0.4,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 72,
+    "bounced": 5,
+    "replied_human": 4
+   },
+   "why": "Grosse nébuleuse française, très présente dans le stock, qui refuse parfois par vagues : plafond large, ralentissement automatique sur rebonds."
+  },
+  {
+   "class": "ionos",
+   "label": "IONOS et 1&1",
+   "daily_cap": 20,
+   "rate_per_min": 0.2,
+   "warmup_share": 0.3,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 45,
+    "bounced": 1,
+    "replied_human": 2
+   },
+   "why": "Hébergeur allemand à filtrage actif : volume prudent."
+  },
+  {
+   "class": "apple_icloud",
+   "label": "Apple iCloud",
+   "daily_cap": 10,
+   "rate_per_min": 0.1,
+   "warmup_share": 0.1,
+   "slowdown_threshold": 0.02,
+   "observed": {
+    "sent": 19,
+    "bounced": 0,
+    "replied_human": 0
+   },
+   "why": "Règles strictes et opaques : plafond bas, ralentissement dès 2 %."
+  },
+  {
+   "class": "security_gateway",
+   "label": "Passerelles anti-spam (Mailinblack, Vade, Proofpoint...)",
+   "daily_cap": 10,
+   "rate_per_min": 0.1,
+   "warmup_share": 0.05,
+   "slowdown_threshold": 0.02,
+   "observed": {
+    "sent": 24,
+    "bounced": 4,
+    "replied_human": 1
+   },
+   "why": "Conçues pour bloquer le démarchage à froid : débit minimal, presque rien pendant la chauffe, ralentissement dès 2 %."
+  },
+  {
+   "class": "other_hoster",
+   "label": "Autres hébergeurs",
+   "daily_cap": 30,
+   "rate_per_min": 0.3,
+   "warmup_share": 0.4,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 18,
+    "bounced": 0,
+    "replied_human": 1
+   },
+   "why": "Longue traîne d'hébergeurs : règle moyenne, héritée par les hébergeurs sans règle propre."
+  },
+  {
+   "class": "corporate_selfhost",
+   "label": "Serveur d'entreprise ou MX inconnu",
+   "daily_cap": 30,
+   "rate_per_min": 0.3,
+   "warmup_share": 0.4,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 107,
+    "bounced": 1,
+    "replied_human": 3
+   },
+   "why": "Petits serveurs fragiles, souvent en liste grise : volume modéré."
+  },
+  {
+   "class": "infomaniak",
+   "label": "Infomaniak",
+   "daily_cap": 25,
+   "rate_per_min": 0.25,
+   "warmup_share": 0.35,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 40,
+    "bounced": 2,
+    "replied_human": 0
+   },
+   "why": "Hébergeur suisse, réputation propre."
+  },
+  {
+   "class": "gandi",
+   "label": "Gandi",
+   "daily_cap": 25,
+   "rate_per_min": 0.25,
+   "warmup_share": 0.35,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 32,
+    "bounced": 0,
+    "replied_human": 1
+   },
+   "why": "Hébergeur français, réputation propre."
+  },
+  {
+   "class": "hostinger",
+   "label": "Hostinger et Titan",
+   "daily_cap": 25,
+   "rate_per_min": 0.25,
+   "warmup_share": 0.35,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 34,
+    "bounced": 0,
+    "replied_human": 1
+   },
+   "why": "Hébergeur de messagerie packagée, réputation propre."
+  },
+  {
+   "class": "o2switch",
+   "label": "o2switch",
+   "daily_cap": 25,
+   "rate_per_min": 0.25,
+   "warmup_share": 0.35,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 7,
+    "bounced": 0,
+    "replied_human": 0
+   },
+   "why": "Hébergeur français, peu de volume mesuré."
+  },
+  {
+   "class": "lws",
+   "label": "LWS",
+   "daily_cap": 25,
+   "rate_per_min": 0.25,
+   "warmup_share": 0.35,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 0,
+    "bounced": 0,
+    "replied_human": 0
+   },
+   "why": "Hébergeur français, aucune mesure : règle de la famille."
+  },
+  {
+   "class": "scaleway",
+   "label": "Scaleway et Online",
+   "daily_cap": 25,
+   "rate_per_min": 0.25,
+   "warmup_share": 0.35,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 10,
+    "bounced": 2,
+    "replied_human": 0
+   },
+   "why": "Hébergeur français, premiers rebonds relevés."
+  },
+  {
+   "class": "website_builder",
+   "label": "Messagerie de site (Webador, Jimdo, Wix)",
+   "daily_cap": 20,
+   "rate_per_min": 0.2,
+   "warmup_share": 0.3,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 32,
+    "bounced": 1,
+    "replied_human": 1
+   },
+   "why": "Adresses créées avec un site, parfois abandonnées : volume prudent."
+  },
+  {
+   "class": "zoho",
+   "label": "Zoho Mail",
+   "daily_cap": 20,
+   "rate_per_min": 0.2,
+   "warmup_share": 0.3,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 4,
+    "bounced": 0,
+    "replied_human": 0
+   },
+   "why": "Petit volume mesuré."
+  },
+  {
+   "class": "proton",
+   "label": "Proton Mail",
+   "daily_cap": 10,
+   "rate_per_min": 0.1,
+   "warmup_share": 0.15,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 13,
+    "bounced": 0,
+    "replied_human": 0
+   },
+   "why": "Public sensible à la vie privée et filtrage strict : plafond bas."
+  },
+  {
+   "class": "orange",
+   "label": "Orange et Wanadoo",
+   "daily_cap": 10,
+   "rate_per_min": 0.1,
+   "warmup_share": 0.15,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 44,
+    "bounced": 2,
+    "replied_human": 0
+   },
+   "why": "FAI le plus sévère sur le démarchage à froid, aucune réponse mesurée : plafond bas, comme Yahoo."
+  },
+  {
+   "class": "sfr_altice",
+   "label": "SFR, Altice, Numericable",
+   "daily_cap": 20,
+   "rate_per_min": 0.2,
+   "warmup_share": 0.15,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 37,
+    "bounced": 1,
+    "replied_human": 2
+   },
+   "why": "FAI : volume modéré, politique propre."
+  },
+  {
+   "class": "free",
+   "label": "Free",
+   "daily_cap": 20,
+   "rate_per_min": 0.2,
+   "warmup_share": 0.15,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 39,
+    "bounced": 3,
+    "replied_human": 1
+   },
+   "why": "FAI : volume modéré, politique propre."
+  },
+  {
+   "class": "laposte",
+   "label": "La Poste",
+   "daily_cap": 20,
+   "rate_per_min": 0.2,
+   "warmup_share": 0.15,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 26,
+    "bounced": 2,
+    "replied_human": 1
+   },
+   "why": "FAI : volume modéré, politique propre."
+  },
+  {
+   "class": "bouygues",
+   "label": "Bouygues (Bbox)",
+   "daily_cap": 20,
+   "rate_per_min": 0.2,
+   "warmup_share": 0.15,
+   "slowdown_threshold": 0.03,
+   "observed": {
+    "sent": 16,
+    "bounced": 3,
+    "replied_human": 1
+   },
+   "why": "FAI : volume modéré, politique propre."
+  }
+ ]
+}

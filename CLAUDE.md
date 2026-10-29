@@ -166,6 +166,7 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 - `68` self-service owner : audit UI/API/CLI (tableau), boutons d ajout LLM/Firecrawl/Supabase, invitation avec repli local, limites (S3, lists.create 409)
 - `65` relances dans le fil du premier mail : réglage workspace `veridian_thread_followups`, In-Reply-To / References / `Re: <objet du premier mail>`, ancre d expéditeur tenue 7 jours (le week-end la lâchait), objet consigné dans `message_data.metadata`
 - `66` une relance ne part pas si le premier mail (J0) n a pas été livré : échec, rebond dur, refus de politique 5.7.x ou aucun J0 → le contact sort, raison `first_mail_*` au journal ; le rebond mou ne sort personne
+- `70` politique d'envoi par classe en données (presets JSON, surcharges par workspace, part de chauffe, seuil de ralentissement par classe), priorité d'envoi par campagne ou automation (2 à 9), stock par classe (lot L3, V66, `internal/veridian/policy`)
 
 **Cold outbound — UI console & self-service**
 - `06` UI console — section Settings « Cold outreach »
