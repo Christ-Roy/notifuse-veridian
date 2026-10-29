@@ -106,6 +106,11 @@ describe('buildNativeTree', () => {
     expect(shape(tree)).toEqual([{ Alpha: [{ Sous: ['Deux', 'Un'], count: 2 }], count: 2 }, { Zèbres: ['Z'], count: 1 }, 'Racine'])
   })
 
+  it('une réponse de forme inattendue ({} d\'un proxy) retombe sur les noms au lieu de planter', () => {
+    const odd = buildNativeTree(items, {} as NativeTree)
+    expect(shape(odd)).toEqual([{ Alpha: [{ Sous: ['Deux', 'Un'], count: 2 }], count: 2 }, { Zèbres: ['Z'], count: 1 }, 'Racine'])
+  })
+
   it('les objets à la racine gardent l ordre reçu tant qu aucun rang n est posé', () => {
     const t = buildNativeTree([seg('z', 'Zz'), seg('a', 'Aa')], { kind: 'segments', folders: [], items: [] })
     expect(t.map((n) => n.kind === 'segment' && n.label)).toEqual(['Zz', 'Aa'])

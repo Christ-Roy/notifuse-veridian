@@ -52,8 +52,14 @@ function byPositionThenName(a: NativeFolder, b: NativeFolder) {
   return naturalCollator.compare(a.name, b.name) || (a.id < b.id ? -1 : 1)
 }
 
+export function isNativeTree(native: unknown): native is NativeTree {
+  const n = native as Partial<NativeTree> | null | undefined
+  return !!n && Array.isArray(n.folders) && Array.isArray(n.items)
+}
+
 export function buildNativeTree<T extends SegmentLike>(items: T[], native: NativeTree | undefined): SegmentTreeNode<T>[] {
-  if (!native) return buildSegmentTree(items)
+  // Réponse absente ou de forme inattendue (proxy, ancienne version du serveur) : on se replie sur les noms.
+  if (!isNativeTree(native)) return buildSegmentTree(items)
 
   const byId = new Map(native.folders.map((f) => [f.id, f]))
   const kids = new Map<string | null, NativeFolder[]>()

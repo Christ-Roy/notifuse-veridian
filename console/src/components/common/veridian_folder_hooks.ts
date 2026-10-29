@@ -4,7 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { message } from 'antd'
 import { foldersApi, type FolderKind, type NativeTree } from '../../services/api/veridian_folders'
 import type { SegmentLike, SegmentTreeNode } from '../segment/veridian_segment_folders'
-import { buildNativeTree, itemsSignature } from './veridian_folder_native'
+import { buildNativeTree, isNativeTree, itemsSignature } from './veridian_folder_native'
 import { planDrop, planNudge, type DragSource, type DropTarget, type MovePlan } from './veridian_folder_moves'
 import { pruneOpenState, readOpenState, writeOpenState, type OpenState } from './veridian_folder_store'
 
@@ -17,7 +17,11 @@ export function useNativeFolders(workspaceId: string | undefined, kind: FolderKi
   const signature = useMemo(() => itemsSignature(items), [items])
   const query = useQuery<NativeTree>({
     queryKey: [...foldersQueryKey(workspaceId, kind), signature],
-    queryFn: () => foldersApi.list(workspaceId as string, kind),
+    queryFn: async () => {
+      const tree = await foldersApi.list(workspaceId as string, kind)
+      if (!isNativeTree(tree)) throw new Error('unexpected folders.list response')
+      return tree
+    },
     enabled: !!workspaceId && items !== undefined,
     staleTime: 15_000,
     retry: 1,
