@@ -40,6 +40,14 @@ msgstr "Préréglage « {0} » appliqué ci-dessous : vérifiez les valeurs, pui
 msgid "(Cancelled)"
 msgstr "(Annulé)"
 
+#: src/components/mail/veridian_contact_mail.tsx
+#: src/components/mail/veridian_mail_list.tsx
+#: src/components/mail/veridian_mail_message_view.tsx
+#: src/components/mail/veridian_mail_message_view.tsx
+#: src/components/mail/veridian_mail_timeline.tsx
+msgid "(no subject)"
+msgstr "(sans objet)"
+
 #. placeholder {0}: record.email.reply_to
 #. placeholder {0}: templateSender?.name || defaultSender?.name
 #: src/components/templates/TemplatePreviewDrawer.tsx
@@ -72,6 +80,11 @@ msgstr "{0, plural, one {# contact} other {# contacts}}"
 #~ msgid "{0} accepted, {1} quota slots used today ({2})"
 #~ msgstr "{0} acceptés, {1} places de quota utilisées aujourd'hui ({2})"
 
+#. placeholder {0}: attachments.length
+#: src/components/mail/veridian_mail_attachments.tsx
+msgid "{0} attachments"
+msgstr "{0} pièces jointes"
+
 #. placeholder {0}: r.bounced
 #: src/components/analytics/veridian_engagement_by_class.tsx
 msgid "{0} bounced"
@@ -86,6 +99,11 @@ msgstr "{0} contacts"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "{0} contacts will be skipped"
 msgstr "{0} contacts seront ignorés"
+
+#. placeholder {0}: threads.length
+#: src/components/mail/veridian_contact_mail.tsx
+msgid "{0} conversations"
+msgstr "{0} conversations"
 
 #. placeholder {0}: formatNumber(coverageDays(stockQuery.data) ?? 0)
 #. placeholder {0}: formatNumber(value)
@@ -135,6 +153,12 @@ msgstr "{0} emails/min"
 msgid "{0} excluded"
 msgstr "{0} exclus"
 
+#. placeholder {0}: kindLabel(message.kind)
+#. placeholder {1}: message.from
+#: src/components/mail/veridian_mail_timeline.tsx
+msgid "{0} from {1}"
+msgstr "{0} de {1}"
+
 #. placeholder {0}: r.replied_human
 #: src/components/analytics/veridian_engagement_by_class.tsx
 msgid "{0} human replies"
@@ -159,6 +183,11 @@ msgstr "{0} éléments"
 msgid "{0} lines read: {1} imported, {2} skipped (reason and line number below)"
 msgstr "{0} lignes lues : {1} importées, {2} ignorées (raison et numéro de ligne ci-dessous)"
 
+#. placeholder {0}: th.message_count
+#: src/components/mail/veridian_contact_mail.tsx
+msgid "{0} messages"
+msgstr "{0} messages"
+
 #. placeholder {0}: processed.toLocaleString()
 #. placeholder {1}: enqueuedCount.toLocaleString()
 #: src/components/broadcasts/SendingProgress.tsx
@@ -172,6 +201,11 @@ msgstr "{0} sur {1}"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "{0} senders · round-robin per class"
 msgstr "{0} expéditeurs, en rotation tour à tour par classe"
+
+#. placeholder {0}: o.unhandled
+#: src/components/mail/veridian_mail_filters.tsx
+msgid "{0} to handle"
+msgstr "{0} à traiter"
 
 #. placeholder {0}: stats.total_clicked
 #: src/components/broadcasts/BroadcastStats.tsx
@@ -250,6 +284,10 @@ msgstr "{0}-{1} sur {total} diffusions"
 
 #~ msgid "{activeCount} active profiles"
 #~ msgstr "{activeCount} profils actifs"
+
+#: src/components/mail/veridian_mail_timeline.tsx
+msgid "{attachCount} attachments"
+msgstr "{attachCount} pièces jointes"
 
 #: src/components/analytics/EmailMetricsChart.tsx
 msgid "{autoReplies, plural, one {+# automatic reply} other {+# automatic replies}}"
@@ -404,6 +442,18 @@ msgstr "{sentLabel} envoyés. Hors rotation : aucun plafond ni règle ne s'appli
 msgid "{usefulLabel} usable with the contacts due today"
 msgstr "{usefulLabel} utilisables avec les contacts dus aujourd'hui"
 
+#: src/components/mail/veridian_mail_labels.ts
+msgid "{value} days after"
+msgstr "{value} jours après"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "{value} hours after"
+msgstr "{value} h après"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "{value} minutes after"
+msgstr "{value} min après"
+
 #: src/components/email_builder/panels/Preview.tsx
 msgid "// No test data yet..."
 msgstr "// Pas encore de données de test..."
@@ -453,9 +503,34 @@ msgstr "0 contacts"
 msgid "0 opens out of 0 recipients"
 msgstr "0 ouvertures sur 0 destinataires"
 
+#: src/components/mail/veridian_mail_attachments.tsx
+#: src/components/mail/veridian_mail_timeline.tsx
+msgid "1 attachment"
+msgstr "1 pièce jointe"
+
+#: src/components/mail/veridian_contact_mail.tsx
+msgid "1 conversation"
+msgstr "1 conversation"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "1 day after"
+msgstr "1 jour après"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "1 hour after"
+msgstr "1 h après"
+
 #: src/components/common/veridian_folder_tree.tsx
 msgid "1 item"
 msgstr "1 élément"
+
+#: src/components/mail/veridian_contact_mail.tsx
+msgid "1 message"
+msgstr "1 message"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "1 minute after"
+msgstr "1 min après"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "1 sender (no rotation)"
@@ -625,7 +700,9 @@ msgstr "Test A/B"
 msgid "Accept Invitation"
 msgstr "Accepter l'invitation"
 
+#: src/components/mail/veridian_mail_labels.ts
 #: src/components/reconcile/veridian_reconcile_page.tsx
+#: src/pages/InboxPage.tsx
 #: src/pages/SendQueuePage.tsx
 msgid "Access denied"
 msgstr "Accès refusé"
@@ -723,6 +800,14 @@ msgstr "Ajouter {0}"
 #: src/components/segment/input_dimension_filters.tsx
 msgid "Add a filter"
 msgstr "Ajouter un filtre"
+
+#: src/components/mail/veridian_mail_labels_editor.tsx
+msgid "Add a label"
+msgstr "Ajouter un libellé"
+
+#: src/components/mail/veridian_mail_labels_editor.tsx
+msgid "Add a label, then press Enter"
+msgstr "Ajoutez un libellé, puis Entrée"
 
 #: src/pages/SendingProfilesPage.tsx
 #: src/pages/SendingProfilesPage.tsx
@@ -1061,6 +1146,15 @@ msgstr "Tous les jours"
 msgid "All features are unlimited on every plan. Your subscription is managed by Veridian."
 msgstr "Toutes les fonctionnalités sont illimitées sur tous les plans. Votre abonnement est géré par Veridian."
 
+#: src/components/mail/veridian_mail_filters.tsx
+msgid "All mailboxes"
+msgstr "Toutes les boîtes"
+
+#: src/components/mail/veridian_mail_labels.ts
+#: src/components/mail/veridian_mail_labels.ts
+msgid "All messages"
+msgstr "Tous"
+
 #: src/components/email_builder/ui/BorderInput.tsx
 msgid "All sides"
 msgstr "Tous les côtés"
@@ -1364,6 +1458,10 @@ msgstr "Êtes-vous sûr de vouloir utiliser ce fichier ?"
 msgid "Array index: {segment}"
 msgstr "Index de tableau : {segment}"
 
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "As sent"
+msgstr "Tel qu'envoyé"
+
 #: src/components/segment/form_leaf.tsx
 #: src/components/segment/input.tsx
 msgid "at least"
@@ -1381,6 +1479,7 @@ msgstr "Au moins une adresse expéditrice est requise"
 msgid "at most"
 msgstr "au plus"
 
+#: src/components/mail/veridian_mail_attachments.tsx
 #: src/components/templates/SendTemplateModal.tsx
 msgid "Attachments"
 msgstr "Pièces jointes"
@@ -1442,11 +1541,16 @@ msgstr "Envoyer automatiquement le gagnant"
 msgid "Auto-subscribe to Lists"
 msgstr "Inscription automatique aux listes"
 
+#: src/components/mail/veridian_mail_labels.ts
 #: src/components/prospection/veridian_prospection_dashboard.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 msgid "Automatic replies"
 msgstr "Réponses automatiques"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Automatic reply"
+msgstr "Réponse automatique"
 
 #: src/components/integrations/SupabaseIntegration.tsx
 msgid "Automatically add new users to the selected lists"
@@ -1520,6 +1624,11 @@ msgstr "Éviter les caractères spéciaux qui pourraient ne pas s'afficher corre
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Back"
 msgstr "Retour"
+
+#: src/components/mail/veridian_mail_message_view.tsx
+#: src/pages/InboxPage.tsx
+msgid "Back to the list"
+msgstr "Retour à la liste"
 
 #: src/pages/AnalyticsPage.tsx
 msgid "Back to workspaces"
@@ -1774,6 +1883,7 @@ msgstr "Type de rebond"
 msgid "Bounced"
 msgstr "Rejeté"
 
+#: src/components/mail/veridian_mail_labels.ts
 #: src/components/prospection/veridian_prospection_performance.tsx
 msgid "Bounces"
 msgstr "Rebonds"
@@ -1805,6 +1915,7 @@ msgstr "Domaine du bridge"
 msgid "Bridge Port"
 msgstr "Port du bridge"
 
+#: src/components/mail/veridian_mail_links.tsx
 #: src/components/messages/MessageHistoryTable.tsx
 #: src/components/messages/MessageHistoryTable.tsx
 #: src/components/webhooks/InboundWebhookEventsTab.tsx
@@ -1961,6 +2072,8 @@ msgstr "Performance des campagnes"
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_reply.tsx
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
@@ -2022,6 +2135,10 @@ msgstr "Annuler l'envoi ?"
 msgid "Cancelled"
 msgstr "Annulé"
 
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Cannot reach the server"
+msgstr "Impossible de joindre le serveur"
+
 #: src/components/automations/context/AutomationContext.tsx
 msgid "Cannot remove list while email nodes exist. Delete email nodes first."
 msgstr "Impossible de supprimer la liste tant que des nœuds email existent. Supprimez d'abord les nœuds email."
@@ -2058,6 +2175,10 @@ msgstr "Catégorie :"
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
 msgid "Cause"
 msgstr "Cause"
+
+#: src/components/mail/veridian_mail_header.tsx
+msgid "Cc"
+msgstr "Cc"
 
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "CC"
@@ -2117,6 +2238,14 @@ msgstr "Vérifier"
 msgid "Check for Updates"
 msgstr "Vérifier les mises à jour"
 
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Check your connection, then retry."
+msgstr "Vérifiez votre connexion, puis réessayez."
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Check your filters and try again."
+msgstr "Vérifiez vos filtres et réessayez."
+
 #: src/components/reconcile/veridian_reconcile_page.tsx
 msgid "Checked at"
 msgstr "Vérifié le"
@@ -2124,6 +2253,14 @@ msgstr "Vérifié le"
 #: src/components/reconcile/veridian_reconcile_page.tsx
 msgid "Checks"
 msgstr "Contrôles"
+
+#: src/pages/InboxPage.tsx
+msgid "Choose a message to read it in full."
+msgstr "Choisissez un message pour le lire en entier."
+
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Choose a profile"
+msgstr "Choisir un profil"
 
 #: src/components/email_builder/ui/BlockToolbar.tsx
 msgid "Choose a saved block to update"
@@ -2157,6 +2294,10 @@ msgstr "Tout effacer"
 #: src/components/contacts/InlineEditableField.tsx
 msgid "Clear field"
 msgstr "Effacer le champ"
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "Clear the filters"
+msgstr "Effacer les filtres"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Click \"Generate command\" below. It creates a secret, single-use link valid for 10 minutes — nobody can reuse it after you."
@@ -2235,6 +2376,10 @@ msgstr "Cloner le modèle"
 #: src/components/veridian_a11y.ts
 msgid "Close"
 msgstr "Fermer"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Close another inbox tab and try again."
+msgstr "Fermez un autre onglet de la boîte et réessayez."
 
 #: src/components/automations/UpsertAutomationDrawer.tsx
 msgid "Close without saving"
@@ -2709,6 +2854,15 @@ msgstr "Espacement du conteneur"
 msgid "Content dedup (anti-hash)"
 msgstr "Dédoublonnage de contenu (anti-empreinte)"
 
+#: src/components/mail/veridian_mail_attachments.tsx
+msgid "Content not kept"
+msgstr "Contenu non conservé"
+
+#. placeholder {0}: message.subject
+#: src/components/mail/veridian_mail_body.tsx
+msgid "Content of the mail “{0}”"
+msgstr "Contenu du mail « {0} »"
+
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "Content Structure Tree"
 msgstr "Arborescence de la structure du contenu"
@@ -2720,6 +2874,18 @@ msgstr "Continuer avec Google"
 #: src/components/veridian_oauth_buttons.tsx
 msgid "Continue with Microsoft"
 msgstr "Continuer avec Microsoft"
+
+#: src/pages/InboxPage.tsx
+msgid "Conversation"
+msgstr "Conversation"
+
+#: src/pages/InboxPage.tsx
+msgid "Conversation ({conversationCount})"
+msgstr "Conversation ({conversationCount})"
+
+#: src/components/mail/veridian_mail_timeline.tsx
+msgid "Conversation timeline"
+msgstr "Chronologie de la conversation"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/ApiAgentsSettings.tsx
@@ -2796,6 +2962,10 @@ msgstr "Impossible de copier dans le presse-papiers"
 msgid "Could not create the profile"
 msgstr "Impossible de créer le profil"
 
+#: src/components/mail/veridian_mail_list.tsx
+msgid "Could not load more. Retry"
+msgstr "Impossible de charger la suite. Réessayer"
+
 #: src/components/send_queue/veridian_queue_decisions.tsx
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "Could not load the decisions"
@@ -2817,6 +2987,10 @@ msgstr "Impossible de charger les profils"
 #: src/pages/SendQueuePage.tsx
 msgid "Could not load the send queue"
 msgstr "Impossible de charger la file d'envoi"
+
+#: src/components/mail/veridian_contact_mail.tsx
+msgid "Could not load this conversation"
+msgstr "Impossible de charger cette conversation"
 
 #: src/components/sending_profiles/veridian_inbox_drawer.tsx
 msgid "Could not save the inbox"
@@ -3660,6 +3834,16 @@ msgstr "Livré"
 msgid "Delivery ID:"
 msgstr "ID de livraison :"
 
+#: src/components/mail/veridian_mail_dsn_card.tsx
+msgid "Delivery is delayed"
+msgstr "La remise est retardée"
+
+#: src/components/mail/veridian_mail_dsn_card.tsx
+#: src/components/mail/veridian_mail_dsn_card.tsx
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Delivery report"
+msgstr "Rapport de livraison"
+
 #: src/components/automations/config/FilterConfigForm.tsx
 #: src/components/lists/ListDrawer.tsx
 #: src/components/transactional/UpsertTransactionalNotificationDrawer.tsx
@@ -3832,9 +4016,25 @@ msgstr "Double opt-in"
 msgid "Double Opt-in Template"
 msgstr "Modèle de double opt-in"
 
+#: src/components/mail/veridian_mail_attachments.tsx
+msgid "Download"
+msgstr "Télécharger"
+
+#: src/components/mail/veridian_mail_attachments.tsx
+msgid "Download {name}"
+msgstr "Télécharger {name}"
+
 #: src/components/file_manager/fileManager.tsx
 msgid "Download file"
 msgstr "Télécharger le fichier"
+
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Download the .eml (reconstructed)"
+msgstr "Télécharger le .eml (reconstitué)"
+
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Download the raw message (.eml)"
+msgstr "Télécharger le message brut (.eml)"
 
 #. placeholder {0}: selectedFiles.length
 #: src/components/file_manager/fileManager.tsx
@@ -4241,6 +4441,10 @@ msgstr "Les largeurs d'email supérieures à 650px peuvent ne pas s'afficher cor
 msgid "Email:"
 msgstr "Email :"
 
+#: src/components/contacts/ContactDetailsDrawer.tsx
+msgid "Emails"
+msgstr "Courriels"
+
 #~ msgid "emails / day"
 #~ msgstr "emails / jour"
 
@@ -4305,6 +4509,10 @@ msgstr "Activer le webhook"
 #: src/components/templates/TemplateTranslationsTab.tsx
 msgid "Enabled"
 msgstr "Activé"
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "End of the list"
+msgstr "Fin de la liste"
 
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "End of the log"
@@ -4780,6 +4988,10 @@ msgstr "Échoué"
 #: src/components/analytics/EmailMetricsChart.tsx
 msgid "Failed (excluded + real)"
 msgstr "Échecs (exclus + réels)"
+
+#: src/components/mail/veridian_mail_dsn_card.tsx
+msgid "Failed address"
+msgstr "Adresse en échec"
 
 #: src/pages/AcceptInvitationPage.tsx
 msgid "Failed to accept invitation"
@@ -5501,6 +5713,10 @@ msgstr "Forcé activé"
 msgid "Format"
 msgstr "Format"
 
+#: src/components/mail/veridian_mail_body.tsx
+msgid "Formatted"
+msgstr "Mis en forme"
+
 #. placeholder {0}: parsedData.emails.length
 #: src/components/contacts/BulkUpdateDrawer.tsx
 msgid "Found {0} email addresses"
@@ -5528,10 +5744,16 @@ msgstr "Fréquence"
 msgid "Friday"
 msgstr "vendredi"
 
+#: src/components/mail/veridian_mail_header.tsx
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "From"
 msgstr "De"
+
+#. placeholder {0}: message.from
+#: src/components/mail/veridian_mail_timeline.tsx
+msgid "From {0}"
+msgstr "De {0}"
 
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/pages/SetupWizard.tsx
@@ -5559,6 +5781,11 @@ msgstr "De :"
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Full Access"
 msgstr "Accès complet"
+
+#. placeholder {0}: headers.length
+#: src/components/mail/veridian_mail_header.tsx
+msgid "Full headers ({0})"
+msgstr "En-têtes complets ({0})"
 
 #: src/components/contacts/ContactDetailsDrawer.tsx
 #: src/pages/ContactsPage.tsx
@@ -5747,6 +5974,30 @@ msgstr "Attributs du groupe"
 msgid "h window"
 msgstr "fenêtre en h"
 
+#: src/components/mail/veridian_mail_list.tsx
+msgid "handled"
+msgstr "traité"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Handled"
+msgstr "Traités"
+
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Handled by a person"
+msgstr "Traité par une personne"
+
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Handled by an agent"
+msgstr "Traité par un agent"
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "Handled. Click to put it back to handle."
+msgstr "Traité. Cliquez pour le remettre à traiter."
+
+#: src/components/mail/veridian_mail_filters.tsx
+msgid "Handling state"
+msgstr "État de traitement"
+
 #: src/components/segment/form_leaf.tsx
 #: src/components/segment/input.tsx
 msgid "happened"
@@ -5777,6 +6028,10 @@ msgstr "Limite quotidienne stricte par adresse d'ENVOI (FROM), comptée depuis l
 #: src/components/analytics/EmailMetricsChart.tsx
 msgid "Hard: {0} (dead address) · Soft: {1} (transient)"
 msgstr "Définitifs : {0} (adresse morte) · Temporaires : {1} (transitoire)"
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "Has attachments"
+msgstr "Avec pièces jointes"
 
 #: src/components/messages/MessageHistoryTab.tsx
 msgid "Has Error"
@@ -5843,6 +6098,10 @@ msgstr "Masquer"
 #: src/pages/BroadcastsPage.tsx
 msgid "Hide Details"
 msgstr "Masquer les détails"
+
+#: src/components/mail/veridian_mail_text_body.tsx
+msgid "Hide the quoted text"
+msgstr "Masquer la citation"
 
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "High spam risk"
@@ -5955,6 +6214,10 @@ msgstr "Réponses humaines sur les contacts joints pendant la période."
 #: src/components/prospection/veridian_prospection_dashboard.tsx
 msgid "Human replies over the period, and reply rate over the mails sent during the period."
 msgstr "Réponses humaines de la période, et taux de réponse sur les mails envoyés pendant la période."
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Human reply"
+msgstr "Réponse"
 
 #: src/components/segment/button_upsert.tsx
 msgid "i.e: Big spenders..."
@@ -6258,13 +6521,29 @@ msgstr "dans les derniers"
 msgid "in the payload."
 msgstr "dans le payload."
 
+#: src/pages/InboxPage.tsx
+#: src/pages/InboxPage.tsx
+msgid "In this conversation"
+msgstr "Dans cette conversation"
+
+#: src/components/mail/veridian_mail_menu.tsx
+#: src/components/mail/veridian_mail_menu.tsx
 #: src/components/templates/PhonePreview.tsx
+#: src/pages/InboxPage.tsx
 msgid "Inbox"
 msgstr "Boîte de réception"
 
 #: src/pages/SendingProfilesPage.tsx
 msgid "Inbox deleted"
 msgstr "Boîte supprimée"
+
+#: src/components/mail/veridian_mail_menu.tsx
+msgid "Inbox, {count} replies to handle"
+msgstr "Boîte de réception, {count} réponses à traiter"
+
+#: src/components/mail/veridian_mail_menu.tsx
+msgid "Inbox, 1 reply to handle"
+msgstr "Boîte de réception, 1 réponse à traiter"
 
 #: src/pages/SendingProfilesPage.tsx
 msgid "Inboxes linked to no profile. Replies and bounces are read from every inbox of the workspace."
@@ -6419,6 +6698,10 @@ msgstr "JSON invalide dans le champ {field}"
 msgid "Invalid or expired invitation token"
 msgstr "Jeton d'invitation invalide ou expiré"
 
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Invalid request"
+msgstr "Requête invalide"
+
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "Invalid template structure data."
 msgstr "Données de structure de modèle invalides."
@@ -6508,6 +6791,18 @@ msgstr "est dans"
 msgid "is not in"
 msgstr "n'est pas dans"
 
+#: src/components/mail/veridian_mail_labels.ts
+msgid "It may have been removed. Go back to the list."
+msgstr "Il a peut-être été supprimé. Revenez à la liste."
+
+#: src/components/mail/veridian_mail_body.tsx
+msgid "It was sent before the unified inbox and its template could not be rebuilt. Headers and delivery status remain readable."
+msgstr "Il est parti avant la boîte unifiée et son modèle n'a pas pu être reconstitué. Les en-têtes et l'état de livraison restent lisibles."
+
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "It will appear in the conversation once the relay has accepted it."
+msgstr "Il apparaîtra dans la conversation dès que le relais l'aura accepté."
+
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx
 #: src/components/email_builder/ui/FontStyleInput.tsx
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx
@@ -6578,9 +6873,26 @@ msgstr "Nom de la clé"
 msgid "key or index"
 msgstr "clé ou index"
 
+#: src/pages/InboxPage.tsx
+msgid "Keyboard: j and k move through the list."
+msgstr "Clavier : « j » et « k » parcourent la liste."
+
+#: src/components/mail/veridian_mail_filters.tsx
+msgid "Kind of message"
+msgstr "Nature du message"
+
 #: src/components/settings/CustomFieldsConfiguration.tsx
 msgid "Label must be at most 100 characters"
 msgstr "L'étiquette doit faire au maximum 100 caractères"
+
+#: src/components/mail/veridian_mail_message_view.tsx
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Labels"
+msgstr "Libellés"
+
+#: src/components/mail/veridian_mail_labels_editor.tsx
+msgid "Labels are limited to {MAX_LABEL_LENGTH} characters, {MAX_LABELS} labels at most."
+msgstr "Un libellé fait {MAX_LABEL_LENGTH} caractères au plus, {MAX_LABELS} libellés au maximum."
 
 #: src/components/analytics/NewContactsTable.tsx
 #: src/components/automations/config/TriggerConfigForm.tsx
@@ -6659,6 +6971,10 @@ msgstr "Dernière utilisation"
 #: src/components/prospection/veridian_prospection_recent_replies.tsx
 msgid "Latest human replies"
 msgstr "Dernières réponses humaines"
+
+#: src/components/mail/veridian_inbox_tile.tsx
+msgid "Latest: {who} · {when}"
+msgstr "Dernière : {who} · {when}"
 
 #: src/components/settings/WebhooksSettings.tsx
 msgid "Lead"
@@ -6900,10 +7216,15 @@ msgstr "Listes actualisées"
 msgid "Live"
 msgstr "En direct"
 
+#: src/pages/InboxPage.tsx
+msgid "Live updates paused, reconnecting…"
+msgstr "Mises à jour en direct interrompues, reconnexion…"
+
 #: src/components/settings/Integrations.tsx
 msgid "LLM integration saved successfully"
 msgstr "Intégration LLM enregistrée avec succès"
 
+#: src/components/mail/veridian_mail_list.tsx
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "Load more"
 msgstr "Charger la suite"
@@ -6926,6 +7247,10 @@ msgstr "Charger un modèle enregistré"
 #: src/pages/AutomationsPage.tsx
 msgid "Loading automations..."
 msgstr "Chargement des automations..."
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "Loading messages"
+msgstr "Chargement des messages"
 
 #: src/pages/SetupWizard.tsx
 msgid "Loading setup..."
@@ -6957,6 +7282,7 @@ msgstr "Chargement des événements webhook..."
 #: src/layouts/RootLayout.tsx
 #: src/pages/ContactsPage.tsx
 #: src/pages/ContactsPage.tsx
+#: src/pages/InboxPage.tsx
 #: src/pages/ListsPage.tsx
 #: src/pages/LogsPage.tsx
 #: src/pages/SendingProfilesPage.tsx
@@ -7020,6 +7346,11 @@ msgstr "LWS"
 msgid "Magic code sent to your email"
 msgstr "Code magique envoyé à votre email"
 
+#: src/components/mail/veridian_mail_filters.tsx
+#: src/components/mail/veridian_mail_header.tsx
+msgid "Mailbox"
+msgstr "Boîte"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Mailbox password"
 msgstr "Mot de passe de la boîte"
@@ -7067,6 +7398,27 @@ msgstr "Plan admin manuel"
 msgid "Map your CSV columns to contact fields. The"
 msgstr "Mappez vos colonnes CSV aux champs de contact. Le"
 
+#: src/components/mail/veridian_mail_list.tsx
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Mark as handled"
+msgstr "Marquer comme traité"
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "Mark as handled: {subject}"
+msgstr "Marquer comme traité : {subject}"
+
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Mark as to handle"
+msgstr "Remettre à traiter"
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "Mark as to handle: {subject}"
+msgstr "Remettre à traiter : {subject}"
+
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Marked as handled"
+msgstr "Marqué comme traité"
+
 #: src/components/analytics/NewContactsTable.tsx
 #: src/pages/ContactsPage.tsx
 msgid "Marked as spam"
@@ -7092,6 +7444,18 @@ msgstr "Fournisseur d'email marketing requis"
 #: src/components/contacts/SegmentsFilter.tsx
 msgid "Matched"
 msgstr "Correspondant"
+
+#: src/components/mail/veridian_mail_header.tsx
+msgid "matched by known sender"
+msgstr "rattaché par l'expéditeur connu"
+
+#: src/components/mail/veridian_mail_header.tsx
+msgid "matched by message reference"
+msgstr "rattaché par la référence du message"
+
+#: src/components/mail/veridian_mail_header.tsx
+msgid "matched by subject"
+msgstr "rattaché par l'objet"
 
 #: src/components/contacts/ContactSegmentsCell.tsx
 msgid "Matched on:"
@@ -7142,8 +7506,20 @@ msgid "Member removed successfully"
 msgstr "Membre supprimé avec succès"
 
 #: src/pages/BroadcastsPage.tsx
+#: src/pages/InboxPage.tsx
+#: src/pages/InboxPage.tsx
 msgid "Message"
 msgstr "Message"
+
+#: src/components/mail/veridian_mail_body_frame.tsx
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Message content"
+msgstr "Contenu du message"
+
+#: src/components/mail/veridian_mail_header.tsx
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Message header"
+msgstr "En-tête du message"
 
 #: src/pages/LogsPage.tsx
 msgid "Message History"
@@ -7161,10 +7537,19 @@ msgstr "L'historique des messages et les événements webhook seront anonymisés
 msgid "Message ID"
 msgstr "ID du message"
 
+#: src/pages/InboxPage.tsx
+msgid "Message list"
+msgstr "Liste des messages"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Message not found"
+msgstr "Message introuvable"
+
 #~ msgid "Message Stream"
 #~ msgstr "Flux de messages"
 
 #: src/components/contacts/ContactDetailsDrawer.tsx
+#: src/components/mail/veridian_mail_list.tsx
 msgid "Messages"
 msgstr "Messages"
 
@@ -7645,9 +8030,21 @@ msgstr "Aucune liste d'inscrits n'est définie : la poser avec la commande stock
 msgid "No lists found"
 msgstr "Aucune liste trouvée"
 
+#: src/components/mail/veridian_contact_mail.tsx
+msgid "No mail exchanged with this contact yet."
+msgstr "Aucun courriel échangé avec ce contact pour l'instant."
+
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "No members found"
 msgstr "Aucun membre trouvé"
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "No message matches these filters."
+msgstr "Aucun message ne correspond à ces filtres."
+
+#: src/components/mail/veridian_mail_list.tsx
+msgid "No message yet. Replies, bounces and sent mails will appear here."
+msgstr "Aucun message pour l'instant. Les réponses, rebonds et mails envoyés apparaîtront ici."
 
 #: src/components/messages/MessageHistoryTable.tsx
 msgid "No messages found"
@@ -7676,6 +8073,10 @@ msgstr "Aucun écart ouvert. Lancez la vérification pour recouper à nouveau ma
 #: src/components/settings/Integrations.tsx
 msgid "No other integration is connected."
 msgstr "Aucune autre intégration n'est connectée."
+
+#: src/components/mail/veridian_mail_attachments.tsx
+msgid "No preview"
+msgstr "Pas d'aperçu"
 
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "No preview available or template is empty."
@@ -7736,6 +8137,10 @@ msgstr "Pas de répétition"
 #: src/components/automations/nodes/ReplyBranchNode.tsx
 msgid "No reply"
 msgstr "Pas de réponse"
+
+#: src/components/mail/veridian_inbox_tile.tsx
+msgid "No reply waiting"
+msgstr "Aucune réponse en attente"
 
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
 msgid "No sample values available"
@@ -7844,6 +8249,10 @@ msgstr "Aucun abonnement webhook configuré"
 msgid "No workspaces"
 msgstr "Aucun espace de travail"
 
+#: src/components/mail/veridian_mail_links.tsx
+msgid "node"
+msgstr "nœud"
+
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 #: src/pages/SendQueuePage.tsx
 #: src/pages/SendQueuePage.tsx
@@ -7853,6 +8262,10 @@ msgstr "Nœud"
 #: src/components/send_queue/veridian_queue_groups.tsx
 msgid "Node {node}"
 msgstr "Nœud {node}"
+
+#: src/components/mail/veridian_mail_links.tsx
+msgid "Node identifier"
+msgstr "Identifiant du nœud"
 
 #: src/components/automations/NodePalette.tsx
 msgid "Nodes"
@@ -8133,6 +8546,10 @@ msgstr "Ouvrir les mots de passe d'application Google"
 msgid "Open in a window"
 msgstr "Ouvrir dans une fenêtre"
 
+#: src/components/mail/veridian_contact_mail.tsx
+msgid "Open in the inbox"
+msgstr "Ouvrir dans la boîte"
+
 #: src/layouts/WorkspaceLayout.tsx
 msgid "Open navigation menu"
 msgstr "Ouvrir le menu de navigation"
@@ -8160,6 +8577,10 @@ msgstr "Voir le modèle"
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Open the app passwords page and create a password named “Notifuse”."
 msgstr "Ouvrez la page des mots de passe d'application et créez un mot de passe nommé « Notifuse »."
+
+#: src/components/mail/veridian_mail_timeline.tsx
+msgid "Open this message"
+msgstr "Ouvrir ce message"
 
 #: src/components/veridian_paywall_modal.tsx
 msgid "Open Veridian"
@@ -8250,6 +8671,14 @@ msgstr "ou"
 msgid "Or select a popular Google Font"
 msgstr "Ou sélectionnez une police Google populaire"
 
+#: src/components/mail/veridian_mail_header.tsx
+msgid "Origin"
+msgstr "Origine"
+
+#: src/components/mail/veridian_mail_links.tsx
+msgid "Original send in the sending log"
+msgstr "Envoi d'origine dans le journal d'envoi"
+
 #: src/components/send_queue/veridian_queue_trace.tsx
 msgid "Original sender available"
 msgstr "Expéditeur d'origine disponible"
@@ -8275,6 +8704,14 @@ msgstr "Autres hébergeurs"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Other hosters (Infomaniak, Gandi, Zoho…)"
 msgstr "Autres hébergeurs (Infomaniak, Gandi, Zoho…)"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Other message"
+msgstr "Autre message"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Others"
+msgstr "Autres"
 
 #: src/components/sending_profiles/veridian_profile_card.tsx
 msgid "Out of rotation"
@@ -8559,6 +8996,10 @@ msgstr "En pourcentage. 0 désactive la dispersion. Vide : défaut de 30 %."
 msgid "Periodically check for new Veridian Mail versions and security updates. A popup will list new versions available."
 msgstr "Vérifier régulièrement les nouvelles versions de Veridian Mail et les mises à jour de sécurité. Une fenêtre listera les versions disponibles."
 
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Permanent bounce"
+msgstr "Rebond définitif"
+
 #: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Permission Details"
@@ -8609,6 +9050,7 @@ msgid "pixel OFF by default"
 msgstr "pixel désactivé par défaut"
 
 #: src/components/automations/veridian_flow_node_drawer.tsx
+#: src/components/mail/veridian_mail_body.tsx
 #: src/pages/TemplatesPage.tsx
 msgid "Plain text"
 msgstr "Texte brut"
@@ -8937,6 +9379,10 @@ msgstr "Mode aperçu requis"
 msgid "Preview of {0}"
 msgstr "Aperçu de {0}"
 
+#: src/components/mail/veridian_mail_attachments.tsx
+msgid "Preview of {name}"
+msgstr "Aperçu de {name}"
+
 #: src/components/segment/button_upsert.tsx
 msgid "Preview Results"
 msgstr "Résultats de l'aperçu"
@@ -9028,6 +9474,7 @@ msgstr "Traitement en pause"
 msgid "Processing was stopped before completion."
 msgstr "Le traitement a été arrêté avant la fin."
 
+#: src/components/mail/veridian_mail_reply.tsx
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "Profile"
 msgstr "Profil"
@@ -9058,6 +9505,10 @@ msgstr "Plafond journalier du profil"
 #: src/pages/SendingProfilesPage.tsx
 msgid "Profile deleted"
 msgstr "Profil supprimé"
+
+#: src/components/mail/veridian_mail_header.tsx
+msgid "Profile identifier"
+msgstr "Identifiant du profil"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
@@ -9112,6 +9563,7 @@ msgstr "Prospection"
 msgid "Proton Mail"
 msgstr "Proton Mail"
 
+#: src/components/mail/veridian_mail_dsn_card.tsx
 #: src/components/prospection/veridian_prospection_reputation.tsx
 #: src/components/prospection/veridian_prospection_stock.tsx
 #: src/components/sending_profiles/veridian_capacity_block.tsx
@@ -9176,6 +9628,10 @@ msgstr "En file"
 #: src/pages/BroadcastsPage.tsx
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr "Les e-mails en file ne seront pas envoyés. Les envois en cours se termineront."
+
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Queued: your reply will leave as soon as the sending limits allow it"
+msgstr "En file : votre réponse partira dès que les plafonds d'envoi le permettent"
 
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Quota denied"
@@ -9292,6 +9748,15 @@ msgstr "Reconstruire"
 msgid "Rebuild segment"
 msgstr "Reconstruire le segment"
 
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Rebuilt from the template of the time: it may differ from what actually left."
+msgstr "Reconstitué depuis le modèle d'époque : il peut différer de ce qui est vraiment parti."
+
+#: src/components/mail/veridian_mail_header.tsx
+#: src/components/mail/veridian_mail_list.tsx
+msgid "Received"
+msgstr "Reçu"
+
 #: src/components/analytics/FailedMessagesTable.tsx
 msgid "Recent Failed Messages"
 msgstr "Messages échoués récents"
@@ -9373,6 +9838,10 @@ msgstr "Recalculer ce groupe ?"
 msgid "Recomputed"
 msgstr "Recalculée"
 
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "Reconstructed"
+msgstr "Reconstitué"
+
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx
 #: src/components/veridian_a11y.ts
 msgid "Redo"
@@ -9406,6 +9875,7 @@ msgid "Refresh Broadcast"
 msgstr "Actualiser la diffusion"
 
 #: src/components/file_manager/fileManager.tsx
+#: src/pages/InboxPage.tsx
 msgid "Refresh the list"
 msgstr "Actualiser la liste"
 
@@ -9464,6 +9934,10 @@ msgstr "Couples relais et fournisseur destinataire ralentis ou arrêtés par le 
 msgid "Remaining stock"
 msgstr "Stock restant"
 
+#: src/components/mail/veridian_mail_body.tsx
+msgid "Remote images are blocked (open tracking)."
+msgstr "Les images distantes sont bloquées (suivi d'ouverture)."
+
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 msgid "Remove"
 msgstr "Retirer"
@@ -9508,6 +9982,10 @@ msgstr "Supprimer le secret"
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Remove the contact"
 msgstr "Retirer le contact"
+
+#: src/components/mail/veridian_mail_labels_editor.tsx
+msgid "Remove the label {label}"
+msgstr "Retirer le libellé {label}"
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Remove this contact"
@@ -9559,6 +10037,7 @@ msgid "Replied"
 msgstr "A répondu"
 
 #: src/components/analytics/EmailMetricsChart.tsx
+#: src/components/mail/veridian_mail_labels.ts
 msgid "Replies"
 msgstr "Réponses"
 
@@ -9578,6 +10057,23 @@ msgstr "Réponses par séquence"
 #: src/components/prospection/veridian_prospection_replies.tsx
 msgid "Replies counted in the total that no live sequence carries (contacts of deleted sequences, matching by sender)."
 msgstr "Réponses comptées dans le total qu'aucune séquence vivante ne porte (contacts de séquences supprimées, rattachement par expéditeur)."
+
+#: src/components/mail/veridian_inbox_tile.tsx
+msgid "Replies to handle"
+msgstr "Réponses à traiter"
+
+#: src/components/mail/veridian_inbox_tile.tsx
+msgid "Replies to handle: {count}. Open the inbox."
+msgstr "Réponses à traiter : {count}. Ouvrir la boîte de réception."
+
+#: src/components/mail/veridian_inbox_tile.tsx
+msgid "Replies to handle: 1. Open the inbox."
+msgstr "Réponses à traiter : 1. Ouvrir la boîte de réception."
+
+#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Reply"
+msgstr "Répondre"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
@@ -9788,14 +10284,32 @@ msgid "Resume Upload"
 msgstr "Reprendre le téléversement"
 
 #: src/components/analytics/EmailMetricsChart.tsx
+#: src/components/mail/veridian_contact_mail.tsx
+#: src/components/mail/veridian_contact_mail.tsx
+#: src/components/mail/veridian_mail_list.tsx
+#: src/pages/InboxPage.tsx
+#: src/pages/InboxPage.tsx
 #: src/pages/SendQueuePage.tsx
 msgid "Retry"
 msgstr "Réessayer"
+
+#. placeholder {0}: exactDate(refusal.retry_at)
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Retry possible from {0}"
+msgstr "Nouvel essai possible à partir du {0}"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Retry. If it persists, tell the team."
+msgstr "Réessayez. Si cela persiste, prévenez l'équipe."
 
 #: src/components/sending_profiles/veridian_profile_card.tsx
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 msgid "Return inbox"
 msgstr "Boîte de retour"
+
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Review and send"
+msgstr "Relire et envoyer"
 
 #~ msgid "Review mapping"
 #~ msgstr "Vérifier la correspondance"
@@ -9818,6 +10332,10 @@ msgstr "Crête"
 #: src/components/email_builder/ui/PaddingInput.tsx
 msgid "Right"
 msgstr "Droite"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "right after"
+msgstr "juste après"
 
 #: src/components/email_builder/blocks/MjGroupBlock.tsx
 #: src/components/email_builder/blocks/MjSectionBlock.tsx
@@ -10069,6 +10587,14 @@ msgstr "Largeur d'écran en dessous de laquelle la disposition mobile est activ�
 #: src/components/veridian_a11y.ts
 msgid "Search"
 msgstr "Rechercher"
+
+#: src/components/mail/veridian_mail_filters.tsx
+msgid "Search messages"
+msgstr "Rechercher dans les messages"
+
+#: src/components/mail/veridian_mail_filters.tsx
+msgid "Search subject, sender…"
+msgstr "Objet, expéditeur…"
 
 #: src/components/templates/TemplateSelectorInput.tsx
 msgid "Search templates..."
@@ -10433,6 +10959,10 @@ msgstr "Sélectionné : {0}"
 msgid "Self-hosted corporate"
 msgstr "Entreprise auto-hébergée"
 
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Send"
+msgstr "Envoyer"
+
 #: src/components/sending_profiles/veridian_profile_card.tsx
 msgid "Send a successful test before adding it to the rotation"
 msgstr "Réussissez un test avant de l'ajouter à la rotation"
@@ -10519,6 +11049,10 @@ msgstr "Envoyer un test"
 msgid "Send Test Email"
 msgstr "Envoyer un email de test"
 
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Send this reply?"
+msgstr "Envoyer cette réponse ?"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Send to all (none excluded)"
@@ -10601,6 +11135,11 @@ msgstr "Journal d'envoi"
 msgid "Sending policy presets"
 msgstr "Préréglages de politique d'envoi"
 
+#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Sending profile"
+msgstr "Profil d'envoi"
+
 #: src/pages/BroadcastsPage.tsx
 msgid "Sending profile required"
 msgstr "Profil d'envoi requis"
@@ -10629,6 +11168,15 @@ msgstr "Débit d'envoi"
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "Sending rates of the providers (mostly {name})"
 msgstr "Débits d'envoi des fournisseurs (surtout {name})"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Sending refused"
+msgstr "Envoi refusé"
+
+#. placeholder {0}: refusal.reason
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Sending refused: {0}"
+msgstr "Envoi refusé : {0}"
 
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "Sending stopped for at least one provider"
@@ -10684,6 +11232,9 @@ msgstr "envoyé"
 #: src/components/automations/nodes/StatNode.tsx
 #: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/broadcasts/BroadcastStats.tsx
+#: src/components/mail/veridian_mail_header.tsx
+#: src/components/mail/veridian_mail_labels.ts
+#: src/components/mail/veridian_mail_list.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTable.tsx
@@ -10695,6 +11246,10 @@ msgstr "envoyé"
 #: src/pages/TransactionalNotificationsPage.tsx
 msgid "Sent"
 msgstr "Envoyé"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Sent mails"
+msgstr "Envoyés"
 
 #: src/components/prospection/veridian_prospection_reputation.tsx
 msgid "Sent over 7 days"
@@ -10736,12 +11291,17 @@ msgstr "Envoyés : contacts à qui ce mail est parti. Exclusions : sortis avant 
 msgid "Separate sides"
 msgstr "Séparer les côtés"
 
+#: src/components/mail/veridian_mail_links.tsx
 #: src/components/prospection/veridian_prospection_performance.tsx
 #: src/components/prospection/veridian_prospection_recent_replies.tsx
 #: src/components/prospection/veridian_prospection_replies.tsx
 #: src/components/prospection/veridian_prospection_sequences.tsx
 msgid "Sequence"
 msgstr "Séquence"
+
+#: src/components/mail/veridian_mail_links.tsx
+msgid "Sequence identifier"
+msgstr "Identifiant de la séquence"
 
 #: src/components/prospection/veridian_prospection_sequences.tsx
 msgid "Sequence progress"
@@ -10908,9 +11468,17 @@ msgstr "Afficher toutes les classes de fournisseurs"
 msgid "Show Details"
 msgstr "Afficher les détails"
 
+#: src/components/mail/veridian_mail_body.tsx
+msgid "Show images"
+msgstr "Afficher les images"
+
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "Show the main providers only"
 msgstr "Afficher seulement les principaux fournisseurs"
+
+#: src/components/mail/veridian_mail_text_body.tsx
+msgid "Show the quoted text"
+msgstr "Afficher la citation"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Show the technical command"
@@ -10924,9 +11492,17 @@ msgstr "Affichage des 11 classes de fournisseurs (dont celles résolues par MX)"
 msgid "Showing the 5 main provider classes"
 msgstr "Affichage des 5 principales classes de fournisseurs"
 
+#: src/components/mail/veridian_mail_timeline.tsx
+msgid "Shown"
+msgstr "Affiché"
+
 #: src/pages/SignInPage.tsx
 msgid "Sign In"
 msgstr "Connexion"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Sign in again to read your mail."
+msgstr "Reconnectez-vous pour lire vos mails."
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Sign in with Google, without any password. Not available yet."
@@ -11143,6 +11719,7 @@ msgstr "Certains profils sont à la fois dans la rotation commerciale et transac
 msgid "Some sending integrations have a single sender, so the round-robin across addresses cannot activate for them. Add at least 2 mailboxes per sending integration in Settings → Integrations to spread the volume."
 msgstr "Certaines intégrations d'envoi n'ont qu'un seul expéditeur : le tour à tour entre adresses ne peut pas s'activer pour elles. Ajoutez au moins 2 boîtes par intégration d'envoi dans Réglages, Intégrations pour répartir le volume."
 
+#: src/components/mail/veridian_mail_labels.ts
 #: src/components/templates/SendTemplateModal.tsx
 msgid "Something went wrong"
 msgstr "Une erreur s'est produite"
@@ -11267,6 +11844,10 @@ msgstr "Statut"
 msgid "status changed"
 msgstr "statut modifié"
 
+#: src/components/mail/veridian_mail_dsn_card.tsx
+msgid "Status code"
+msgstr "Code de statut"
+
 #: src/components/analytics/NewContactsTable.tsx
 #: src/pages/ContactsPage.tsx
 msgid "Status unknown"
@@ -11317,6 +11898,9 @@ msgid "Style Attributes"
 msgstr "Attributs de style"
 
 #: src/components/automations/veridian_flow_node_drawer.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_reply.tsx
 #: src/components/templates/TemplatePreviewDrawer.tsx
 #: src/components/templates/TemplateTranslationsTab.tsx
 #: src/pages/BroadcastsPage.tsx
@@ -11505,6 +12089,10 @@ msgstr "Équipe"
 msgid "Technical details"
 msgstr "Détails techniques"
 
+#: src/components/mail/veridian_mail_dsn_card.tsx
+msgid "Technical diagnostic"
+msgstr "Diagnostic technique"
+
 #: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Telemetry"
 msgstr "Télémétrie"
@@ -11618,6 +12206,10 @@ msgstr "Modèles"
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "Templating markup allowed"
 msgstr "Balisage de templating autorisé"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Temporary bounce"
+msgstr "Rebond temporaire"
 
 #: src/components/veridian_paywall_modal.tsx
 msgid "Temporary degraded mode"
@@ -11806,6 +12398,10 @@ msgstr "L'éditeur de code demande un écran plus large. Ici vous pouvez lire la
 msgid "The contact leaves this automation only. Other contacts are not touched."
 msgstr "Le contact quitte uniquement cette automatisation. Les autres contacts ne sont pas touchés."
 
+#: src/components/mail/veridian_mail_body.tsx
+msgid "The content of this mail is not available"
+msgstr "Le contenu de ce mail n'est pas disponible"
+
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 msgid "The credentials of this provider are managed through the API or the CLI. Name, senders, usage and rules are editable here."
 msgstr "Les identifiants de ce fournisseur se gèrent par l'API ou le CLI. Le nom, les expéditeurs, l'usage et les règles se modifient ici."
@@ -11842,6 +12438,10 @@ msgstr "Le corps de l'email doit contenir un payload JSON avec vos données de n
 msgid "The email body must contain valid JSON matching the format above"
 msgstr "Le corps de l'email doit contenir un JSON valide correspondant au format ci-dessus"
 
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "The exact rendering captured when the mail left."
+msgstr "Le rendu exact, capturé au départ du mail."
+
 #: src/components/templates/ImportExportButton.tsx
 msgid "The following validation errors were found in your import:"
 msgstr "Les erreurs de validation suivantes ont été trouvées dans votre import :"
@@ -11852,6 +12452,19 @@ msgstr "Les erreurs de validation suivantes ont été trouvées dans votre impor
 #: src/pages/SetupWizard.tsx
 msgid "The hostname your server identifies itself as when connecting to the SMTP server. Defaults to the SMTP host value if empty."
 msgstr "Le nom d'hôte sous lequel votre serveur s'identifie en se connectant au serveur SMTP. Par défaut, la valeur de l'hôte SMTP si le champ est vide."
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "The inbox is temporarily unavailable"
+msgstr "La boîte de réception est momentanément indisponible"
+
+#: src/components/mail/veridian_mail_dsn_card.tsx
+msgid "The mail could not be delivered for now"
+msgstr "Le mail n'a pas pu être remis pour l'instant"
+
+#: src/components/mail/veridian_mail_dsn_card.tsx
+#: src/components/mail/veridian_mail_dsn_card.tsx
+msgid "The mail was not delivered"
+msgstr "Le mail n'a pas été remis"
 
 #: src/components/prospection/veridian_transactional_watch.tsx
 #: src/components/prospection/veridian_transactional_watch.tsx
@@ -11881,6 +12494,10 @@ msgstr "Le profil affiché ici est celui enregistré sur l'entrée à sa mise en
 msgid "the provider refuses in bulk"
 msgstr "le fournisseur refuse en bloc"
 
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "The raw message was read truncated (size limit): the end of the mail may be missing."
+msgstr "Le message brut a été lu tronqué (limite de taille) : la fin du mail peut manquer."
+
 #: src/pages/AnalyticsPage.tsx
 msgid "The requested workspace could not be found."
 msgstr "L'espace de travail demandé est introuvable."
@@ -11909,6 +12526,10 @@ msgstr "Le fichier sélectionné"
 msgid "The send queue is empty"
 msgstr "La file d'envoi est vide"
 
+#: src/components/mail/veridian_mail_labels.ts
+msgid "The sending rules do not allow this mail right now."
+msgstr "Les règles d'envoi n'autorisent pas ce mail pour le moment."
+
 #: src/lib/serverErrors.ts
 msgid "The sending server cannot be reached. Check the host, the port and the security mode."
 msgstr "Le serveur d'envoi est injoignable. Vérifiez l'hôte, le port et le mode de sécurité."
@@ -11925,6 +12546,10 @@ msgstr "Identifiant ou mot de passe refusé par le serveur d'envoi. Vérifiez l'
 msgid "The sending server rejected the message. Check the sender address and the recipient address."
 msgstr "Le serveur d'envoi a rejeté le message. Vérifiez l'adresse de l'expéditeur et celle du destinataire."
 
+#: src/components/mail/veridian_mail_labels.ts
+msgid "The server is not ready. Retry in a moment."
+msgstr "Le serveur n'est pas prêt. Réessayez dans un instant."
+
 #: src/components/prospection/veridian_prospection_rejections.tsx
 msgid "The server refused the message for policy reasons (5.7.x: spam filter, reputation, authentication). Dated on the send date."
 msgstr "Le serveur a refusé le message pour une raison de politique (5.7.x : filtre anti-spam, réputation, authentification). Daté du jour d'envoi."
@@ -11940,6 +12565,10 @@ msgstr "Le statut à attribuer lors de l'ajout à la liste"
 #: src/components/prospection/veridian_prospection_stock.tsx
 msgid "The stock could not be read."
 msgstr "Le stock n'a pas pu être lu."
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "The subscription of this workspace must be renewed."
+msgstr "L'abonnement de cet espace doit être renouvelé."
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "The table of this profile replaces the workspace table as a whole. 0 means no cap."
@@ -12012,6 +12641,10 @@ msgstr "Ces mails ne sont soumis à aucun plafond : un mail transactionnel part 
 msgid "These parameters are automatically added to the URL of the broadcast. They are used by web analytics tools to analyze the performance of your campaign."
 msgstr "Ces paramètres sont automatiquement ajoutés à l'URL de la diffusion. Ils sont utilisés par les outils d'analyse web pour analyser les performances de votre campagne."
 
+#: src/components/mail/veridian_mail_message_view.tsx
+msgid "This .eml was reconstructed from the stored rendering: it is not the message byte for byte."
+msgstr "Ce .eml a été reconstitué depuis le rendu conservé : ce n'est pas le message octet pour octet."
+
 #: src/components/automations/AutomationCard.tsx
 #: src/components/contacts/DeleteContactModal.tsx
 #: src/components/settings/DeleteWorkspace.tsx
@@ -12061,6 +12694,10 @@ msgstr "Cette commande est valable une seule fois, pendant une courte durée, et
 msgid "This contact is not subscribed to any lists"
 msgstr "Ce contact n'est abonné à aucune liste"
 
+#: src/components/mail/veridian_mail_body.tsx
+msgid "This delivery report carries no readable body: see the explanation above."
+msgstr "Ce rapport de livraison n'a pas de corps lisible : voir l'explication ci-dessus."
+
 #: src/pages/SetupWizard.tsx
 msgid "This email will be used for the root administrator account"
 msgstr "Cet email sera utilisé pour le compte administrateur racine"
@@ -12068,6 +12705,10 @@ msgstr "Cet email sera utilisé pour le compte administrateur racine"
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "This entry no longer exists."
 msgstr "Cette entrée n'existe plus."
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "This feature is suspended"
+msgstr "Cette fonction est suspendue"
 
 #: src/components/broadcasts/RecipientFeedSettings.tsx
 msgid "This feature makes an HTTP request for each recipient before sending their email. This can significantly slow down broadcast processing. If the feed request fails after retries, the broadcast will pause automatically."
@@ -12104,6 +12745,14 @@ msgstr "Ceci est votre arborescence de structure de contenu. Vous pouvez glisser
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "This is your visual email editor. Click on any element in your email to select it. Selected elements will be highlighted with a blue border and show editing options."
 msgstr "Ceci est votre éditeur d'email visuel. Cliquez sur n'importe quel élément de votre email pour le sélectionner. Les éléments sélectionnés seront surlignés avec une bordure bleue et afficheront les options d'édition."
+
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "This mail will leave with the same limits as the sequences."
+msgstr "Ce mail partira avec les mêmes plafonds que les séquences."
+
+#: src/components/mail/veridian_mail_body.tsx
+msgid "This message has no content."
+msgstr "Ce message n'a pas de contenu."
 
 #~ msgid "This method does not use Google Cloud OAuth, so no test-user configuration is required."
 #~ msgstr "Cette méthode n'utilise pas Google Cloud OAuth. Aucune configuration d'utilisateur test n'est donc requise."
@@ -12296,6 +12945,12 @@ msgstr "La clé privée TLS est requise"
 msgid "to"
 msgstr "à"
 
+#: src/components/mail/veridian_mail_header.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "To"
+msgstr "À"
+
 #: src/components/file_manager/fileManager.tsx
 msgid "To add an image to an email, simply paste the address (URL) of an image that is already online: no storage is needed."
 msgstr "Pour ajouter une image à un e-mail, collez simplement l'adresse (URL) d'une image déjà en ligne : aucun stockage n'est nécessaire."
@@ -12304,6 +12959,10 @@ msgstr "Pour ajouter une image à un e-mail, collez simplement l'adresse (URL) d
 #: src/components/reconcile/veridian_reconcile_page.tsx
 msgid "To fix"
 msgstr "À corriger"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "To handle"
+msgstr "À traiter"
 
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "to prevent duplicate sends"
@@ -12359,6 +13018,10 @@ msgstr "Jeton copié dans le presse-papiers"
 #: src/components/prospection/veridian_prospection_performance.tsx
 msgid "Too little data"
 msgstr "Trop peu de données"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Too many open streams"
+msgstr "Trop de flux ouverts"
 
 #: src/components/settings/Integrations.tsx
 msgid "Tools"
@@ -12678,6 +13341,10 @@ msgstr "Statut inconnu"
 msgid "Unlimited"
 msgstr "Illimité"
 
+#: src/components/mail/veridian_mail_attachments.tsx
+msgid "Unnamed attachment"
+msgstr "Pièce jointe sans nom"
+
 #~ msgid "Unrecognized backend classes"
 #~ msgstr "Classes du backend non reconnues"
 
@@ -12893,9 +13560,17 @@ msgstr "Usage"
 msgid "Use"
 msgstr "Utiliser"
 
+#: src/components/mail/veridian_mail_body.tsx
+msgid "Use a dark background"
+msgstr "Utiliser un fond sombre"
+
 #: src/pages/SignInPage.tsx
 msgid "Use a different email"
 msgstr "Utiliser un autre email"
+
+#: src/components/mail/veridian_mail_body.tsx
+msgid "Use a light background"
+msgstr "Utiliser un fond clair"
 
 #: src/components/file_manager/context.tsx
 msgid "Use Anyway"
@@ -13273,6 +13948,10 @@ msgstr "Bienvenue, {0}"
 msgid "What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults."
 msgstr "Ce que chaque infrastructure d'envoi (une intégration email : son IP ou relais SMTP et ses adresses) remplace par rapport aux valeurs par défaut du workspace."
 
+#: src/components/mail/veridian_mail_dsn_card.tsx
+msgid "What it means for your prospecting"
+msgstr "Ce que ça implique pour votre prospection"
+
 #: src/components/reconcile/veridian_reconcile_page.tsx
 msgid "What the software believes, compared with what really happened."
 msgstr "Ce que le logiciel croit, comparé à ce qui s'est vraiment passé."
@@ -13600,6 +14279,11 @@ msgstr "Il faut le droit de lecture sur les automatisations pour voir la file d'
 msgid "You need read access to contacts, sending history and automations."
 msgstr "Il faut un accès en lecture aux contacts, à l'historique d'envoi et aux automatisations."
 
+#: src/components/mail/veridian_mail_labels.ts
+#: src/pages/InboxPage.tsx
+msgid "You need read access to the sending log to open the inbox."
+msgstr "Il faut le droit de lecture du journal d'envoi pour ouvrir la boîte de réception."
+
 #: src/pages/BroadcastsPage.tsx
 #: src/pages/TemplatesPage.tsx
 msgid "You need read template and write contact permissions to send test emails"
@@ -13629,6 +14313,15 @@ msgstr "Vos fichiers peuvent être téléversés vers n'importe quel stockage co
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Your Gmail address and a 16-character app password. SMTP and IMAP are set up together."
 msgstr "Votre adresse Gmail et un mot de passe d'application de 16 caractères. SMTP et IMAP sont configurés ensemble."
+
+#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+msgid "Your reply"
+msgstr "Votre réponse"
+
+#: src/components/mail/veridian_mail_labels.ts
+msgid "Your session has expired"
+msgstr "Votre session a expiré"
 
 #: src/components/veridian_paywall_modal.tsx
 #: src/components/veridian_paywall_modal.tsx
