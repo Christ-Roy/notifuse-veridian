@@ -625,6 +625,7 @@ msgstr "A/Bテスト"
 msgid "Accept Invitation"
 msgstr "招待を承諾"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
 #: src/pages/SendQueuePage.tsx
 msgid "Access denied"
 msgstr ""
@@ -1257,6 +1258,7 @@ msgid "Apple iCloud (MX-resolved)"
 msgstr ""
 
 #: src/components/messages/MessageHistoryTab.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/webhooks/InboundWebhookEventsTab.tsx
@@ -1959,6 +1961,9 @@ msgstr ""
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/segment/button_upsert.tsx
 #: src/components/segment/input_dimension_filters.tsx
 #: src/components/segment/input.tsx
@@ -2050,6 +2055,10 @@ msgstr "カテゴリ"
 msgid "Category:"
 msgstr "カテゴリ:"
 
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Cause"
+msgstr ""
+
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "CC"
 msgstr "CC"
@@ -2107,6 +2116,14 @@ msgstr "チェック"
 #: src/pages/SetupWizard.tsx
 msgid "Check for Updates"
 msgstr "更新を確認"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Checked at"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Checks"
+msgstr ""
 
 #: src/components/email_builder/ui/BlockToolbar.tsx
 msgid "Choose a saved block to update"
@@ -2767,6 +2784,10 @@ msgstr "コスト"
 msgid "Could not apply the choice"
 msgstr ""
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Could not conclude"
+msgstr ""
+
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Could not copy to clipboard"
 msgstr ""
@@ -2778,6 +2799,10 @@ msgstr ""
 #: src/components/send_queue/veridian_queue_decisions.tsx
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "Could not load the decisions"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Could not load the discrepancies"
 msgstr ""
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
@@ -2981,6 +3006,8 @@ msgstr ""
 #~ msgstr ""
 
 #: src/components/prospection/veridian_prospection_stock.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_page.tsx
 msgid "Critical"
 msgstr ""
 
@@ -3689,6 +3716,30 @@ msgstr "無効"
 
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Discarded"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+#: src/layouts/WorkspaceLayout.tsx
+msgid "Discrepancies"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Discrepancies found"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Dismiss"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Dismiss for 7 days"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Dismiss this discrepancy for 7 days?"
 msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
@@ -4582,6 +4633,14 @@ msgstr ""
 msgid "Every time"
 msgstr "毎回"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Everything matches"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Evidence"
+msgstr ""
+
 #: src/components/segment/form_leaf.tsx
 #: src/components/segment/input.tsx
 msgid "exactly"
@@ -4646,6 +4705,10 @@ msgstr ""
 #: src/components/email_builder/ui/CodePreview.tsx
 msgid "Expand"
 msgstr "展開"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Expected"
+msgstr ""
 
 #: src/pages/AcceptInvitationPage.tsx
 msgid "Expires:"
@@ -5327,6 +5390,10 @@ msgstr ""
 msgid "First Name"
 msgstr "名"
 
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "First seen"
+msgstr ""
+
 #. placeholder {0}: automation.name
 #: src/components/automations/AutomationCard.tsx
 msgid "Flow Stats: {0}"
@@ -5400,6 +5467,11 @@ msgstr "フォントスタイリング"
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "for deduplication - notifications with the same external_id won't be sent twice."
 msgstr "重複排除用 - 同じexternal_idを持つ通知は2回送信されません。"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "For information"
+msgstr ""
 
 #: src/components/file_manager/fileManager.tsx
 msgid "For technical users: connect an S3-compatible storage (Amazon S3, Google Cloud Storage, MinIO...) to upload and keep your files here."
@@ -5818,6 +5890,10 @@ msgstr "次のステップに進むまでの待機時間"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "How often Notifuse checks the mailbox. Minimum 30s to avoid being throttled by the IMAP server."
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "How things are counted"
 msgstr ""
 
 #: src/components/email_builder/blocks/MjFontBlock.tsx
@@ -7414,6 +7490,10 @@ msgstr "アクセス権なし"
 msgid "No API keys yet"
 msgstr ""
 
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "No automatic repair for this discrepancy: the cause above says what to do."
+msgstr ""
+
 #: src/pages/AutomationsPage.tsx
 msgid "No automations yet"
 msgstr "オートメーションがまだありません"
@@ -7486,6 +7566,10 @@ msgstr ""
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "No default sender configured"
 msgstr "デフォルトの差出人が設定されていません"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "No discrepancy: everything matches."
+msgstr ""
 
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "no email"
@@ -7580,6 +7664,14 @@ msgstr ""
 #: src/components/automations/AutomationFlowViewer.tsx
 msgid "No nodes in this automation"
 msgstr "このオートメーションにノードがありません"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "No open discrepancy."
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "No open discrepancy. Run the check to compare again now."
+msgstr ""
 
 #: src/components/settings/Integrations.tsx
 msgid "No other integration is connected."
@@ -7935,6 +8027,10 @@ msgstr "オブジェクトキー: {segment}"
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "Oblique"
 msgstr "斜体"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Observed"
+msgstr ""
 
 #~ msgid "Obtain this using the OAuth2 playground or your own OAuth flow"
 #~ msgstr "OAuth2プレイグラウンドまたは独自のOAuthフローで取得してください"
@@ -8814,6 +8910,7 @@ msgstr "プレビュー"
 
 #: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/common/ImageURLInput.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/segment/button_upsert.tsx
 #: src/components/segment/button_upsert.tsx
 msgid "Preview"
@@ -9754,6 +9851,10 @@ msgstr "行"
 
 #: src/components/broadcasts/RecipientFeedSettings.tsx
 msgid "Run Test"
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Run the check"
 msgstr ""
 
 #: src/pages/BroadcastsPage.tsx
@@ -11030,6 +11131,10 @@ msgstr ""
 msgid "Solid"
 msgstr "実線"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Some checks could not conclude: that is not a success."
+msgstr ""
+
 #: src/pages/SendingProfilesPage.tsx
 msgid "Some profiles are both in the commercial rotation and transactional"
 msgstr ""
@@ -11646,6 +11751,7 @@ msgstr "テキスト変換"
 msgid "The"
 msgstr "The"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 #: src/pages/SendingProfilesPage.tsx
@@ -11680,6 +11786,10 @@ msgstr "ブロードキャストは送信を停止し、後で再開できます
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "The cap climbs step by step from the start date. While active it replaces the per provider caps."
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "The check failed"
 msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
@@ -12188,6 +12298,11 @@ msgstr ""
 
 #: src/components/file_manager/fileManager.tsx
 msgid "To add an image to an email, simply paste the address (URL) of an image that is already online: no storage is needed."
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "To fix"
 msgstr ""
 
 #: src/components/transactional/ApiCommandModal.tsx
@@ -12821,6 +12936,10 @@ msgstr "このボタンを使用して保存済みメールテンプレートを
 msgid "Use this curl command to send a transactional notification via API:"
 msgstr "このcurlコマンドを使用してAPI経由でトランザクション通知を送信します:"
 
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Use this when the situation is intended. It comes back after 7 days if it is still observed."
+msgstr ""
+
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/pages/SetupWizard.tsx
 msgid "Use TLS"
@@ -13154,6 +13273,10 @@ msgstr ""
 msgid "What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults."
 msgstr ""
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "What the software believes, compared with what really happened."
+msgstr ""
+
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "When"
 msgstr ""
@@ -13471,6 +13594,10 @@ msgstr "未保存の変更があります。閉じてもよろしいですか？
 
 #: src/pages/SendQueuePage.tsx
 msgid "You need read access to automations to see the send queue."
+msgstr ""
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "You need read access to contacts, sending history and automations."
 msgstr ""
 
 #: src/pages/BroadcastsPage.tsx

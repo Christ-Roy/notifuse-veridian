@@ -625,6 +625,7 @@ msgstr "A/B Test"
 msgid "Accept Invitation"
 msgstr "Accept Invitation"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
 #: src/pages/SendQueuePage.tsx
 msgid "Access denied"
 msgstr "Access denied"
@@ -1257,6 +1258,7 @@ msgid "Apple iCloud (MX-resolved)"
 msgstr "Apple iCloud (MX-resolved)"
 
 #: src/components/messages/MessageHistoryTab.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/webhooks/InboundWebhookEventsTab.tsx
@@ -1959,6 +1961,9 @@ msgstr "Campaign performance"
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/segment/button_upsert.tsx
 #: src/components/segment/input_dimension_filters.tsx
 #: src/components/segment/input.tsx
@@ -2050,6 +2055,10 @@ msgstr "Category"
 msgid "Category:"
 msgstr "Category:"
 
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Cause"
+msgstr "Cause"
+
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "CC"
 msgstr "CC"
@@ -2107,6 +2116,14 @@ msgstr "Check"
 #: src/pages/SetupWizard.tsx
 msgid "Check for Updates"
 msgstr "Check for Updates"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Checked at"
+msgstr "Checked at"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Checks"
+msgstr "Checks"
 
 #: src/components/email_builder/ui/BlockToolbar.tsx
 msgid "Choose a saved block to update"
@@ -2767,6 +2784,10 @@ msgstr "Cost"
 msgid "Could not apply the choice"
 msgstr "Could not apply the choice"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Could not conclude"
+msgstr "Could not conclude"
+
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Could not copy to clipboard"
 msgstr "Could not copy to clipboard"
@@ -2779,6 +2800,10 @@ msgstr "Could not create the profile"
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "Could not load the decisions"
 msgstr "Could not load the decisions"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Could not load the discrepancies"
+msgstr "Could not load the discrepancies"
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Could not load the entry"
@@ -2981,6 +3006,8 @@ msgstr "Credentials are erased. Refused while messages are still queued."
 #~ msgstr "Credentials saved"
 
 #: src/components/prospection/veridian_prospection_stock.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_page.tsx
 msgid "Critical"
 msgstr "Critical"
 
@@ -3690,6 +3717,30 @@ msgstr "Disabled"
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Discarded"
 msgstr "Discarded"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+#: src/layouts/WorkspaceLayout.tsx
+msgid "Discrepancies"
+msgstr "Discrepancies"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Discrepancies found"
+msgstr "Discrepancies found"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Dismiss"
+msgstr "Dismiss"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Dismiss for 7 days"
+msgstr "Dismiss for 7 days"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Dismiss this discrepancy for 7 days?"
+msgstr "Dismiss this discrepancy for 7 days?"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
@@ -4582,6 +4633,14 @@ msgstr "Every sender account, its rules for today, its reputation and its return
 msgid "Every time"
 msgstr "Every time"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Everything matches"
+msgstr "Everything matches"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Evidence"
+msgstr "Evidence"
+
 #: src/components/segment/form_leaf.tsx
 #: src/components/segment/input.tsx
 msgid "exactly"
@@ -4646,6 +4705,10 @@ msgstr "Exits"
 #: src/components/email_builder/ui/CodePreview.tsx
 msgid "Expand"
 msgstr "Expand"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Expected"
+msgstr "Expected"
 
 #: src/pages/AcceptInvitationPage.tsx
 msgid "Expires:"
@@ -5327,6 +5390,10 @@ msgstr "First examined"
 msgid "First Name"
 msgstr "First Name"
 
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "First seen"
+msgstr "First seen"
+
 #. placeholder {0}: automation.name
 #: src/components/automations/AutomationCard.tsx
 msgid "Flow Stats: {0}"
@@ -5400,6 +5467,11 @@ msgstr "Font Styling"
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "for deduplication - notifications with the same external_id won't be sent twice."
 msgstr "for deduplication - notifications with the same external_id won't be sent twice."
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "For information"
+msgstr "For information"
 
 #: src/components/file_manager/fileManager.tsx
 msgid "For technical users: connect an S3-compatible storage (Amazon S3, Google Cloud Storage, MinIO...) to upload and keep your files here."
@@ -5819,6 +5891,10 @@ msgstr "How long to wait before proceeding to the next step"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "How often Notifuse checks the mailbox. Minimum 30s to avoid being throttled by the IMAP server."
 msgstr "How often Notifuse checks the mailbox. Minimum 30s to avoid being throttled by the IMAP server."
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "How things are counted"
+msgstr "How things are counted"
 
 #: src/components/email_builder/blocks/MjFontBlock.tsx
 msgid "How to use:"
@@ -7414,6 +7490,10 @@ msgstr "No Access"
 msgid "No API keys yet"
 msgstr "No API keys yet"
 
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "No automatic repair for this discrepancy: the cause above says what to do."
+msgstr "No automatic repair for this discrepancy: the cause above says what to do."
+
 #: src/pages/AutomationsPage.tsx
 msgid "No automations yet"
 msgstr "No automations yet"
@@ -7486,6 +7566,10 @@ msgstr "No decision recorded for this entry yet."
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "No default sender configured"
 msgstr "No default sender configured"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "No discrepancy: everything matches."
+msgstr "No discrepancy: everything matches."
 
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "no email"
@@ -7580,6 +7664,14 @@ msgstr "No node"
 #: src/components/automations/AutomationFlowViewer.tsx
 msgid "No nodes in this automation"
 msgstr "No nodes in this automation"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "No open discrepancy."
+msgstr "No open discrepancy."
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "No open discrepancy. Run the check to compare again now."
+msgstr "No open discrepancy. Run the check to compare again now."
 
 #: src/components/settings/Integrations.tsx
 msgid "No other integration is connected."
@@ -7935,6 +8027,10 @@ msgstr "Object key: {segment}"
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "Oblique"
 msgstr "Oblique"
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Observed"
+msgstr "Observed"
 
 #~ msgid "Obtain this using the OAuth2 playground or your own OAuth flow"
 #~ msgstr "Obtain this using the OAuth2 playground or your own OAuth flow"
@@ -8814,6 +8910,7 @@ msgstr "preview"
 
 #: src/components/automations/veridian_flow_node_drawer.tsx
 #: src/components/common/ImageURLInput.tsx
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/segment/button_upsert.tsx
 #: src/components/segment/button_upsert.tsx
 msgid "Preview"
@@ -9755,6 +9852,10 @@ msgstr "rows"
 #: src/components/broadcasts/RecipientFeedSettings.tsx
 msgid "Run Test"
 msgstr "Run Test"
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Run the check"
+msgstr "Run the check"
 
 #: src/pages/BroadcastsPage.tsx
 msgid "Running"
@@ -11030,6 +11131,10 @@ msgstr "Soft bounces"
 msgid "Solid"
 msgstr "Solid"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "Some checks could not conclude: that is not a success."
+msgstr "Some checks could not conclude: that is not a success."
+
 #: src/pages/SendingProfilesPage.tsx
 msgid "Some profiles are both in the commercial rotation and transactional"
 msgstr "Some profiles are both in the commercial rotation and transactional"
@@ -11646,6 +11751,7 @@ msgstr "Text Transform"
 msgid "The"
 msgstr "The"
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 #: src/pages/SendingProfilesPage.tsx
@@ -11681,6 +11787,10 @@ msgstr "The broadcast will stop sending and can be resumed later."
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "The cap climbs step by step from the start date. While active it replaces the per provider caps."
 msgstr "The cap climbs step by step from the start date. While active it replaces the per provider caps."
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "The check failed"
+msgstr "The check failed"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
@@ -12189,6 +12299,11 @@ msgstr "to"
 #: src/components/file_manager/fileManager.tsx
 msgid "To add an image to an email, simply paste the address (URL) of an image that is already online: no storage is needed."
 msgstr "To add an image to an email, simply paste the address (URL) of an image that is already online: no storage is needed."
+
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "To fix"
+msgstr "To fix"
 
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "to prevent duplicate sends"
@@ -12821,6 +12936,10 @@ msgstr "Use this button to import saved email templates or export your finished 
 msgid "Use this curl command to send a transactional notification via API:"
 msgstr "Use this curl command to send a transactional notification via API:"
 
+#: src/components/reconcile/veridian_reconcile_finding_card.tsx
+msgid "Use this when the situation is intended. It comes back after 7 days if it is still observed."
+msgstr "Use this when the situation is intended. It comes back after 7 days if it is still observed."
+
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/pages/SetupWizard.tsx
 msgid "Use TLS"
@@ -13154,6 +13273,10 @@ msgstr "Welcome, {0}"
 msgid "What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults."
 msgstr "What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults."
 
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "What the software believes, compared with what really happened."
+msgstr "What the software believes, compared with what really happened."
+
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "When"
 msgstr "When"
@@ -13472,6 +13595,10 @@ msgstr "You have unsaved changes. Are you sure you want to close?"
 #: src/pages/SendQueuePage.tsx
 msgid "You need read access to automations to see the send queue."
 msgstr "You need read access to automations to see the send queue."
+
+#: src/components/reconcile/veridian_reconcile_page.tsx
+msgid "You need read access to contacts, sending history and automations."
+msgstr "You need read access to contacts, sending history and automations."
 
 #: src/pages/BroadcastsPage.tsx
 #: src/pages/TemplatesPage.tsx
