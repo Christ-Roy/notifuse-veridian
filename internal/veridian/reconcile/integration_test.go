@@ -11,6 +11,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/internal/repository"
+	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	"github.com/golang/mock/gomock"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,7 @@ import (
 
 const itSchema = `
 DROP TABLE IF EXISTS veridian_reconcile_finding, veridian_send_decisions, contact_timeline, email_queue, message_history,
-  automation_node_executions, contact_automations, automations, contact_lists, lists, contacts, veridian_contact_reply, broadcasts CASCADE;
+  automation_node_executions, contact_automations, automations, contact_lists, lists, contacts, veridian_contact_reply, broadcasts, veridian_mail_message, veridian_mail_sync_state, webhook_subscriptions, webhook_deliveries CASCADE;
 CREATE TABLE contacts (email VARCHAR(255) PRIMARY KEY, custom_string_1 VARCHAR(255), custom_string_5 VARCHAR(255), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE lists (id VARCHAR(32) PRIMARY KEY, name VARCHAR(255) NOT NULL, deleted_at TIMESTAMPTZ);
 CREATE TABLE contact_lists (email VARCHAR(255) NOT NULL, list_id VARCHAR(32) NOT NULL, status VARCHAR(20) NOT NULL,
@@ -36,7 +37,8 @@ CREATE TABLE contact_automations (id VARCHAR(36) PRIMARY KEY, automation_id VARC
 CREATE TABLE automation_node_executions (id VARCHAR(36) PRIMARY KEY, contact_automation_id VARCHAR(36) NOT NULL, automation_id VARCHAR(36),
   node_id VARCHAR(36) NOT NULL, node_type VARCHAR(50) NOT NULL, action VARCHAR(20) NOT NULL, entered_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE message_history (id VARCHAR(255) PRIMARY KEY, contact_email VARCHAR(255) NOT NULL, automation_id VARCHAR(36), broadcast_id VARCHAR(255),
-  template_id VARCHAR(32) NOT NULL, sent_at TIMESTAMPTZ, failed_at TIMESTAMPTZ, transactional_notification_id VARCHAR(32), veridian_message_type VARCHAR(16));
+  template_id VARCHAR(32) NOT NULL, sent_at TIMESTAMPTZ, failed_at TIMESTAMPTZ, bounced_at TIMESTAMPTZ, bounce_type VARCHAR(100),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), transactional_notification_id VARCHAR(32), veridian_message_type VARCHAR(16));
 CREATE TABLE email_queue (id VARCHAR(36) PRIMARY KEY, status VARCHAR(20) NOT NULL DEFAULT 'pending', source_type VARCHAR(20) NOT NULL, source_id VARCHAR(36) NOT NULL,
   contact_email VARCHAR(255) NOT NULL, template_id VARCHAR(36) NOT NULL, node_id VARCHAR(36), payload JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE veridian_contact_reply (contact_email TEXT PRIMARY KEY, replied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), match_type TEXT NOT NULL DEFAULT 'message_id', reply_type TEXT NOT NULL DEFAULT 'human');
@@ -64,6 +66,10 @@ func itDB(t *testing.T) *sql.DB {
 	_, err = db.Exec(itSchema)
 	require.NoError(t, err)
 	for _, st := range SchemaStatements {
+		_, err = db.Exec(st)
+		require.NoError(t, err, st)
+	}
+	for _, st := range mailbox.SchemaStatements {
 		_, err = db.Exec(st)
 		require.NoError(t, err, st)
 	}
@@ -173,8 +179,9 @@ func TestIntegration_DetectAndRepairEveryInvariant(t *testing.T) {
 	itSeed(t, db)
 	ctx := context.Background()
 	eng := itEngine(t, db)
+	four := []string{"statut_coherent", "compteurs", "classes", "stock"}
 
-	rep, err := eng.Run(ctx, nil)
+	rep, err := eng.Run(ctx, four)
 	require.NoError(t, err)
 	status := map[string]CheckStatus{}
 	for _, c := range rep.Checks {
@@ -252,7 +259,7 @@ func TestIntegration_DetectAndRepairEveryInvariant(t *testing.T) {
 	apply("stats_stockees:seq")
 
 	// Rejeu : plus aucun de ces écarts (le stock reste : la réparation du stock est dans le code de comptage).
-	rep2, err := eng.Run(ctx, nil)
+	rep2, err := eng.Run(ctx, four)
 	require.NoError(t, err)
 	for _, ref := range want {
 		assert.Nil(t, findingByRef(rep2.Findings, ref), "écart disparu après réparation : %s", ref)
@@ -365,4 +372,96 @@ func TestIntegration_StockServedInflatedByExcludedClients(t *testing.T) {
 	assert.EqualValues(t, 5, f.Evidence["served"])
 	assert.EqualValues(t, 3, f.Evidence["excluded_in_stock"], "exc@x.fr, client@x.fr et onlyexcl@x.fr sont dans la liste d'exclusion")
 	assert.Contains(t, f.Explanation, "2 personnes de la différence sont des personnes d'une liste d'exclusion")
+}
+
+func itMail(t *testing.T, db *sql.DB, id, direction, kind, contact, subject string, at time.Time, sentRef string, link string) {
+	var ref, lk any
+	if sentRef != "" {
+		ref = sentRef
+	}
+	if link != "" {
+		lk = link
+	}
+	itExec(t, db, `INSERT INTO veridian_mail_message (id, direction, kind, thread_id, contact_email, subject, occurred_at, received_at, sent_ref, link)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9::jsonb)`, id, direction, kind, "thread-"+id, contact, subject, at, ref, lk)
+}
+
+// Invariants 1 et 2 sur la vraie table de la boîte unifiée (lot L1).
+func TestIntegration_EnvoyeEtReponseRattachee(t *testing.T) {
+	db := itDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mh := func(id, contact string, created time.Time, sent *time.Time, bounced *time.Time) {
+		itExec(t, db, `INSERT INTO message_history (id, contact_email, template_id, created_at, sent_at, bounced_at) VALUES ($1, $2, 't0', $3, $4, $5)`, id, contact, created, sent, bounced)
+	}
+	h3, h5, d3 := now.Add(-3*time.Hour), now.Add(-5*time.Hour), now.Add(-72*time.Hour)
+	// A : parti, copie présente ; une réponse « Re: Votre site » sans lien (orpheline rattachable).
+	mh("mhA", "a@x.fr", h3, &h3, nil)
+	itMail(t, db, "outA", "out", "sent", "a@x.fr", "Votre site", h3, "mhA", "")
+	itMail(t, db, "inA", "in", "reply_human", "a@x.fr", "Re: Votre site", now.Add(-2*time.Hour), "", "")
+	// Réponse reliée : jamais reprochée.
+	mh("mhOK", "ok@x.fr", h3, &h3, nil)
+	itMail(t, db, "outOK", "out", "sent", "ok@x.fr", "Hello", h3, "mhOK", "")
+	itMail(t, db, "inOK", "in", "reply_human", "ok@x.fr", "Re: Hello", now.Add(-2*time.Hour), "", `{"sent_message_id": "mhOK"}`)
+	// Réponse orpheline sans envoi du même objet : non rattachable.
+	itMail(t, db, "inZ", "in", "reply_human", "z@x.fr", "Autre sujet", now.Add(-2*time.Hour), "", "")
+	// Réponse trop récente : dans le délai de grâce.
+	itMail(t, db, "inNew", "in", "reply_human", "new@x.fr", "Re: X", now.Add(-5*time.Minute), "", "")
+	// B : parti sans copie dans la boîte.
+	mh("mhB", "b@x.fr", h3, &h3, nil)
+	// C : créé il y a 72 h, ni envoyé ni échoué ni rebondi.
+	mh("mhC", "c@x.fr", d3, nil, nil)
+	// D : rapport de non-remise définitif reçu, historique sans rebond.
+	mh("mhD", "d@x.fr", h5, &h5, nil)
+	itMail(t, db, "outD", "out", "sent", "d@x.fr", "Offre", h5, "mhD", "")
+	itMail(t, db, "dsnD", "in", "bounce_hard", "d@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhD"}`)
+	// E : rebond correctement appliqué : rien à reprocher.
+	mh("mhE", "e@x.fr", h5, &h5, &h3)
+	itMail(t, db, "outE", "out", "sent", "e@x.fr", "Offre", h5, "mhE", "")
+	itMail(t, db, "dsnE", "in", "bounce_hard", "e@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhE"}`)
+
+	eng := itEngine(t, db)
+	rep, err := eng.Run(ctx, []string{"envoye_livre", "reponse_rattachee"})
+	require.NoError(t, err)
+	for _, c := range rep.Checks {
+		assert.Equal(t, StatusFindings, c.Status, c.Check)
+	}
+	for _, ref := range []string{"envoye:sans_issue", "envoye:rebond_non_applique", "envoye:absent_de_la_boite", "orphelines:reply_human"} {
+		require.NotNil(t, findingByRef(rep.Findings, ref), ref)
+	}
+	assert.EqualValues(t, 1, findingByRef(rep.Findings, "envoye:sans_issue").Evidence["count"], "seul mhC")
+	assert.EqualValues(t, 1, findingByRef(rep.Findings, "envoye:rebond_non_applique").Evidence["count"], "seul mhD : mhE est appliqué")
+	assert.EqualValues(t, 1, findingByRef(rep.Findings, "envoye:absent_de_la_boite").Evidence["count"], "seul mhB")
+	orph := findingByRef(rep.Findings, "orphelines:reply_human")
+	assert.EqualValues(t, 2, orph.Evidence["count"], "inA et inZ ; inOK est relié, inNew est dans le délai de grâce")
+	assert.EqualValues(t, 1, orph.Evidence["fixable"])
+
+	out, err := (&Executor{DB: db}).Apply(ctx, orph)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, out["linked"])
+	var sentID, thread string
+	require.NoError(t, db.QueryRow(`SELECT link->>'sent_message_id', thread_id FROM veridian_mail_message WHERE id = 'inA'`).Scan(&sentID, &thread))
+	assert.Equal(t, "mhA", sentID)
+	assert.Equal(t, "thread-outA", thread, "la réponse rejoint le fil de l'envoi")
+
+	rep2, err := eng.Run(ctx, []string{"reponse_rattachee"})
+	require.NoError(t, err)
+	if f := findingByRef(rep2.Findings, "orphelines:reply_human"); assert.NotNil(t, f, "inZ reste orpheline") {
+		assert.EqualValues(t, 1, f.Evidence["count"])
+		assert.Nil(t, f.ProposedAction, "plus rien de rattachable automatiquement")
+	}
+}
+
+func TestIntegration_MailboxTableAbsentIsNotReachedNeverOk(t *testing.T) {
+	db := itDB(t)
+	itExec(t, db, `DROP TABLE veridian_mail_message CASCADE`)
+	rep, err := itEngine(t, db).Run(context.Background(), []string{"envoye_livre", "reponse_rattachee"})
+	require.NoError(t, err)
+	require.Len(t, rep.Checks, 2)
+	for _, c := range rep.Checks {
+		assert.Equal(t, StatusIncomplet, c.Status, c.Check)
+		assert.Contains(t, c.Error, "boîte unifiée")
+	}
+	assert.EqualValues(t, 2, rep.Summary.NotReached)
+	assert.Empty(t, rep.Findings)
 }
