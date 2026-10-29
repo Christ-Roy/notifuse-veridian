@@ -604,3 +604,24 @@ func TestVeridianEffectivePlan_DefaultCapsParityWithWorker(t *testing.T) {
 		assert.Equal(t, sent < def, google.SendableNow, "plan, envoyés %d", sent)
 	}
 }
+
+// L3 : le plan lit la surcharge de politique du workspace (et dit d'où vient la table) comme la porte du worker.
+func TestVeridianEffectivePlan_LitLaPolitiqueDuWorkspace(t *testing.T) {
+	enableVeridianClassDefaults(t)
+	withPolicy(t, map[string]int{"google": 4}, map[string]float64{"google": 0.07}, nil,
+		map[string]domain.VeridianPolicyOverridden{"google": {DailyCap: true, RatePerMin: true}})
+	env := newVeridianThrottleTestEnv(t)
+	world := planParityWorld{}
+	ws := planParityWorkspace(domain.EmailProvider{}, domain.WorkspaceSettings{})
+	planParityArmRepo(env, world)
+	plan := planParityPlan(env, ws, world)
+	assert.Equal(t, "policy", plan.ClassCapsSource)
+	assert.Equal(t, "policy", plan.ClassRatesSource)
+	google := planClass(plan, "google")
+	require.NotNil(t, google.DailyCap)
+	assert.Equal(t, 4, *google.DailyCap, "le plafond posé par policy.set, pas le preset (30)")
+	assert.InDelta(t, 0.07, google.RatePerMin, 1e-9)
+	ovh := planClass(plan, "ovh")
+	require.NotNil(t, ovh.DailyCap)
+	assert.Equal(t, 40, *ovh.DailyCap, "autre classe : preset")
+}

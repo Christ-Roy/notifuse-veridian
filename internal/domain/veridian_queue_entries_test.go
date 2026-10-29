@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -57,4 +58,13 @@ func TestVeridianQueueCancelRequest_Validate(t *testing.T) {
 	r = base()
 	r.Limit = VeridianQueueCancelMaxLimit + 1
 	assert.Error(t, r.Validate())
+}
+
+// L3 : la priorité de dépilage est exposée par la liste de la file (0 n'est jamais omis : un agent doit pouvoir la lire).
+func TestVeridianQueueEntry_PriorityEstSerialisee(t *testing.T) {
+	b, err := json.Marshal(VeridianQueueEntry{ID: "e1", Priority: 2})
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"priority":2`)
+	b, _ = json.Marshal(VeridianQueueEntry{ID: "e2"})
+	assert.Contains(t, string(b), `"priority":0`, "champ toujours présent")
 }

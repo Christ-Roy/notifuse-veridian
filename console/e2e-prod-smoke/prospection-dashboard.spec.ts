@@ -102,6 +102,18 @@ const workspace = {
   integrations: []
 }
 
+const stockOverview = {
+  workspace_id: WORKSPACE_ID,
+  generated_at: '2026-10-29T10:00:00Z',
+  target_days: 3,
+  config_source: 'config',
+  notes: [],
+  classes: [
+    { class: 'orange', label: 'Orange et Wanadoo', enrolled: 5, reserve: 0, prospectable: 5, capacity_today: 10, days_of_coverage: 0.5, enrolled_unsent: 5, reserve_unsent: 0, unsent: 5, capacity_nominal: 10, days_unsent: 0.5, status: 'critique', restock_need: 25, reply_rate_smoothed: 0.02 }
+  ],
+  totals: { enrolled: 5, reserve: 0, prospectable: 5, enrolled_unsent: 5, reserve_unsent: 0, unsent: 5, capacity_today: 10, capacity_nominal: 10, days_of_coverage: 0.5, days_unsent: 0.5, restock_need: 25 }
+}
+
 async function stubApi(page: Page, locale: 'en' | 'fr') {
   await mockConfigJs(page)
   await page.addInitScript((loc) => {
@@ -124,6 +136,7 @@ async function stubApi(page: Page, locale: 'en' | 'fr') {
     if (url.includes('/api/user.me')) return json({ user: mockUser, workspaces: [workspace] })
     if (url.includes('/api/veridian/emailProfiles.overview')) return json(overview)
     if (url.includes('/api/veridian/prospection.stats')) return json(stats)
+    if (url.includes('/api/veridian/stock.overview')) return json(stockOverview)
     if (url.includes('/api/veridian/messages.replyStats')) return json({ replied: 13, replied_human: 12 })
     if (url.includes('/api/workspaces.members')) return json(mockWorkspaceMembers)
     if (url.includes('/api/workspaces.get')) return json({ workspace })
@@ -152,6 +165,9 @@ test.describe('Production build — tableau de bord de prospection', () => {
 
     await expect(page.getByTestId('tile-sent-today')).toContainText('149 / 300', { timeout: 20000 })
     await expect(page.getByTestId('tile-stock')).toContainText('20,000')
+    await expect(page.getByTestId('tile-coverage')).toContainText('0.5 d')
+    await expect(page.getByTestId('stock-by-provider')).toContainText('Orange et Wanadoo')
+    await expect(page.getByTestId('stock-by-provider')).toContainText('Critical')
     await expect(page.getByText('Sends per relay')).toBeVisible()
     await expect(page.getByTestId('today-nord')).toHaveText('149 / 300')
     await expect(page.getByTestId('stage-1')).toContainText('2,773 in the queue, 0 waiting, 16 left after')
@@ -178,6 +194,8 @@ test.describe('Production build — tableau de bord de prospection', () => {
     await expect(page.getByTestId('stage-1')).toContainText('en file')
     await expect(page.getByTestId('exits-devenir')).toContainText('16 réponses, 0 rejets, 0 désinscriptions, 83 exclusions')
     await expect(page.getByText('Avancement des séquences')).toBeVisible()
+    await expect(page.getByTestId('tile-coverage')).toContainText('0,5 j')
+    await expect(page.getByTestId('stock-by-provider')).toContainText('Critique')
     await expect(page.getByText('Réponses par séquence')).toBeVisible()
     await expect(page.getByText('Ralenti ÷4')).toBeVisible()
     await expect(page.getByTestId('transactional-watch-banner')).toContainText('Volume inhabituel : 900 mails aujourd')

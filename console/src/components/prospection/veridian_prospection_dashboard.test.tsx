@@ -327,6 +327,11 @@ describe('VeridianProspectionDashboard', () => {
     renderDash()
     await waitFor(() => expect(screen.getByTestId('tile-sent-today')).toHaveTextContent('319 / 600'))
     await waitFor(() => expect(within(screen.getByTestId('tile-coverage')).getByText('-')).toBeInTheDocument())
+    // Serveur qui ne connaît pas la route : réponse vide, le tableau de bord ne plante pas.
+    vi.mocked(stockOverviewService.get).mockResolvedValue({} as unknown as StockOverview)
+    cleanup()
+    renderDash()
+    await waitFor(() => expect(screen.getByTestId('tile-stock')).toHaveTextContent('20,000'))
     vi.mocked(stockOverviewService.get).mockRejectedValue(new Error('boom'))
     cleanup()
     renderDash()

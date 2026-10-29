@@ -165,3 +165,14 @@ func TestFAIClasses_DefaultsNeverAboveLegacyFreemail(t *testing.T) {
 	assert.Less(t, VeridianDefaultCapForClass(ProviderClassOrange), legacyCap)
 	assert.Less(t, VeridianDefaultRateForClass(ProviderClassOrange), legacyRate)
 }
+
+// L3 : les défauts par classe sont DÉRIVÉS du catalogue de presets (une seule source) ; une classe future reçoit celle de corporate_selfhost.
+func TestVeridianClassDefaults_VientDuCatalogueDePresets(t *testing.T) {
+	for _, p := range VeridianClassPresets().Classes {
+		assert.Equal(t, p.DailyCap, VeridianDefaultCapForClass(p.Class), "plafond %s", p.Class)
+		assert.InDelta(t, p.RatePerMin, VeridianDefaultRateForClass(p.Class), 1e-9, "débit %s", p.Class)
+	}
+	selfhost, _ := VeridianClassPresetFor(ProviderClassCorporateSelfhost)
+	assert.Equal(t, selfhost.DailyCap, VeridianDefaultCapForClass("classe_future"))
+	assert.InDelta(t, selfhost.RatePerMin, VeridianDefaultRateForClass("classe_future"), 1e-9)
+}

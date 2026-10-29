@@ -35,6 +35,8 @@ describe('stock : règles pures', () => {
     expect(coverageDays(undefined)).toBeNull()
     expect(coverageDays({ totals: { days_unsent: 4.2 } } as unknown as StockOverview)).toBe(4.2)
     expect(coverageDays({ totals: { days_unsent: null } } as unknown as StockOverview)).toBeNull()
+    // Réponse vide d'un serveur qui ne connaît pas encore la route : jamais d'exception.
+    expect(coverageDays({} as unknown as StockOverview)).toBeNull()
   })
 
   it('teinte par statut', () => {

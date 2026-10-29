@@ -596,3 +596,18 @@ func TestVeridianClassify_LegacyFreemailTagIsSplitByFAI(t *testing.T) {
 		assert.Equal(t, tc.want, worker.veridianClassifyRecipient(entry), tc.email)
 	}
 }
+
+// L3 : la porte de débit lit la cadence de la politique du workspace (surcharge puis preset), pas une constante.
+func TestVeridianProviderClassGate_CadenceDeLaPolitiqueDuWorkspace(t *testing.T) {
+	enableVeridianClassDefaults(t)
+	withPolicy(t, nil, map[string]float64{"google": 6}, nil, map[string]domain.VeridianPolicyOverridden{"google": {RatePerMin: true}})
+	env := newVeridianThrottleTestEnv(t)
+	workspace := veridianTestWorkspace(nil, 6000) // aucun débit posé à la main
+	entry := veridianTestEntry("e1", "a@gmail.com", domain.EmailQueuePayload{VeridianProviderClass: "google"})
+
+	_, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
+	assert.False(t, throttled, "premier passage : jeton")
+	delay, throttled := env.worker.veridianProviderClassGate(workspace, nil, entry)
+	assert.True(t, throttled)
+	assert.Less(t, delay, 30*time.Second, "6 mails/min : bien plus vite que le preset (0,3/min = 200 s)")
+}

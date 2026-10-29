@@ -63,6 +63,7 @@ type lot1Queue struct {
 	nextRetry                                        *time.Time
 	examined                                         bool
 	class                                            string
+	priority                                         int // 0 : défaut 5
 }
 
 func (s lot1Seed) queue(t *testing.T, q lot1Queue) {
@@ -78,11 +79,11 @@ func (s lot1Seed) queue(t *testing.T, q lot1Queue) {
 	payload, _ := json.Marshal(map[string]interface{}{"veridian_provider_class": q.class})
 	_, err := s.db.Exec(`
 		INSERT INTO email_queue (id, status, source_type, source_id, integration_id, provider_kind, contact_email, message_id, template_id, payload,
-		                         next_retry_at, node_id, defer_reason, defer_detail, defer_profile, first_examined_at, defer_count)
+		                         next_retry_at, node_id, defer_reason, defer_detail, defer_profile, first_examined_at, defer_count, priority)
 		VALUES ($1,$2,$3,$4,$5,'smtp',$6,$7,'tpl',$8,$9,NULLIF($10,''),NULLIF($11,''),NULLIF($12,''),NULLIF($13,''),
-		        CASE WHEN $14 THEN NOW() END, CASE WHEN $14 THEN 1 ELSE NULL END)`,
+		        CASE WHEN $14 THEN NOW() END, CASE WHEN $14 THEN 1 ELSE NULL END, COALESCE(NULLIF($15,0),5))`,
 		q.id, q.status, q.source, q.sourceID, q.integration, q.email, "msg-"+q.id, payload,
-		q.nextRetry, q.nodeID, q.reason, q.detail, q.profile, q.examined)
+		q.nextRetry, q.nodeID, q.reason, q.detail, q.profile, q.examined, q.priority)
 	require.NoError(t, err)
 }
 
@@ -267,4 +268,21 @@ func TestVeridianQueueReasonSQL_ProcessingIsInFlight(t *testing.T) {
 func TestNewVeridianQueueExplainRepository_UsesWorkspaceConnection(t *testing.T) {
 	repo := NewVeridianQueueExplainRepository(nil)
 	require.NotNil(t, repo)
+}
+
+// L3 : la priorité de dépilage d'une entrée est lisible dans queue.explain --entry (2 = passe avant 5, 1 = transactionnel).
+func TestVeridianQueueExplainRepository_EntryDetailCarriesThePriority(t *testing.T) {
+	db := lot1TestDB(t)
+	s := lot1Seed{db}
+	s.automation(t, "autoP", "Sequence P")
+	s.queue(t, lot1Queue{id: "pr2", sourceID: "autoP", email: "pr2@x.fr", priority: 2})
+	s.queue(t, lot1Queue{id: "pr5", sourceID: "autoP", email: "pr5@x.fr"})
+	s.queue(t, lot1Queue{id: "pr1", sourceID: "autoP", email: "pr1@x.fr", priority: 1})
+	repo := NewVeridianQueueExplainRepositoryWithDB(db)
+	for id, want := range map[string]int{"pr2": 2, "pr5": 5, "pr1": 1} {
+		d, err := repo.EntryDetail(context.Background(), "ws", id)
+		require.NoError(t, err)
+		require.NotNil(t, d)
+		assert.Equal(t, want, d.Priority, id)
+	}
 }

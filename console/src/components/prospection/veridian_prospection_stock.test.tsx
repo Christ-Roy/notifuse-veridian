@@ -55,6 +55,11 @@ describe('VeridianProspectionStock', () => {
     expect(screen.getByText(/No list of enrolled contacts is defined/)).toBeInTheDocument()
   })
 
+  it('réponse vide d’un serveur plus ancien : le tableau reste affiché sans exception', () => {
+    renderIt({ loading: false, error: false, overview: {} as unknown as StockOverview })
+    expect(screen.getByText('No contact in stock.')).toBeInTheDocument()
+  })
+
   it('stock vide : message, aucune ligne de données', () => {
     renderIt({ loading: false, error: false, overview: overview([]) })
     expect(screen.getByText('No contact in stock.')).toBeInTheDocument()

@@ -457,3 +457,18 @@ func TestVeridianReputationGate_WrapperMatchesVerdictOnStop(t *testing.T) {
 	assert.Equal(t, v.Blocked(), stopped)
 	assert.Equal(t, v.Delay, delay)
 }
+
+// L3 : le fusible ralentit un grand fournisseur plus tôt que le défaut (seuil de la classe), sans toucher aux autres.
+func TestVeridianReputationGate_SeuilDeLaClasseGoogleDeuxPourCent(t *testing.T) {
+	enableVeridianClassDefaults(t)
+	env := newVeridianThrottleTestEnv(t)
+	// 2,5 % de rebonds durs sur 80 envois : ÷2 chez google (seuil 2 %), normal chez ovh (seuil 3 %).
+	veridianExpectRepCounts(env, "agence-veridian.fr", 0, 160, map[string]domain.VeridianReputationCounts{
+		"google": {Sent: 80, HardBounces: 2}, "ovh": {Sent: 80, HardBounces: 2},
+	})
+	gws := &domain.Workspace{ID: "ws-1"}
+	_, _ = env.worker.veridianReputationGate(gws, nil, veridianReputationTestEntryClass("a@agence-veridian.fr", "google"))
+	_, _ = env.worker.veridianReputationGate(gws, nil, veridianReputationTestEntryClass("a@agence-veridian.fr", "ovh"))
+	assert.Equal(t, 2, repFactor(env, "agence-veridian.fr", "google"))
+	assert.Equal(t, 1, repFactor(env, "agence-veridian.fr", "ovh"))
+}

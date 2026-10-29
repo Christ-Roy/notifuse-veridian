@@ -47,6 +47,6 @@ export function statusTone(status: StockStatus): StockTone {
 
 // Valeur de la tuile : la couverture sur une journée entière, tous fournisseurs confondus.
 export function coverageDays(overview?: StockOverview): number | null {
-  const d = overview?.totals.days_unsent
+  const d = overview?.totals?.days_unsent
   return d === undefined ? null : d
 }

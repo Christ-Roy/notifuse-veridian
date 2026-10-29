@@ -288,3 +288,10 @@ func TestVeridianValidOutcome_CancelledIsKnown(t *testing.T) {
 		t.Fatal("une issue inconnue doit etre refusee")
 	}
 }
+
+// L3 : queue.explain --entry donne la priorité de dépilage de l'entrée.
+func TestVeridianQueueEntryDetail_PriorityEstSerialisee(t *testing.T) {
+	b, err := json.Marshal(VeridianQueueEntryDetail{ID: "e1", Priority: 9})
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"priority":9`)
+}

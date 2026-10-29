@@ -38,8 +38,10 @@ export const VeridianProspectionStock: React.FC<Props> = ({ overview, loading, e
   }
 
   const days = (value: number | null) => (value === null ? '-' : t`${formatNumber(value)} d`)
-  const rows = sortByUrgency(overview?.classes ?? [])
-  const toSource = restockOrder(overview?.classes ?? [])
+  // Un serveur plus ancien (ou une réponse vide) ne doit jamais casser le tableau de bord : tout est optionnel.
+  const classes = Array.isArray(overview?.classes) ? overview.classes : []
+  const rows = sortByUrgency(classes)
+  const toSource = restockOrder(classes)
 
   return (
     <Card title={t`Stock by recipient provider`} style={{ marginBottom: 24 }} data-testid="stock-by-provider">

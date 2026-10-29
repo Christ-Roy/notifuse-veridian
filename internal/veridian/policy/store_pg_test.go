@@ -30,7 +30,17 @@ func pgDB(t *testing.T) *sql.DB {
 	if dsn == "" {
 		t.Skip("VERIDIAN_POLICY_TEST_DSN non posé")
 	}
-	db, err := sql.Open("postgres", dsn)
+	// Schéma à part : d'autres paquets peuvent utiliser la même base de test en même temps (go test lance les paquets en parallèle).
+	admin, err := sql.Open("postgres", dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = admin.Close() })
+	_, err = admin.Exec(`CREATE SCHEMA IF NOT EXISTS l3policy`)
+	require.NoError(t, err)
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+	db, err := sql.Open("postgres", dsn+sep+"search_path=l3policy")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	require.NoError(t, db.Ping())

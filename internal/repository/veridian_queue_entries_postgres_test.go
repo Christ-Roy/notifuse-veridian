@@ -112,3 +112,20 @@ func TestVeridianQueueEntries_CancelDeletesJournalsAndSkipsProcessingRealSQL(t *
 	assert.Equal(t, 1, res.Matched)
 	assert.Equal(t, 1, res.Cancelled)
 }
+
+// L3 : la liste de la file porte la priorité de chaque entrée.
+func TestVeridianQueueEntries_ListCarriesThePriority(t *testing.T) {
+	db := lot1TestDB(t)
+	s := lot1Seed{db: db}
+	s.automation(t, "autoP", "Sequence P")
+	s.queue(t, lot1Queue{id: "pa", sourceID: "autoP", email: "pa@x.fr", priority: 2})
+	s.queue(t, lot1Queue{id: "pb", sourceID: "autoP", email: "pb@x.fr"})
+	repo := NewVeridianQueueEntriesRepository(nil, db)
+	page, err := repo.ListEntries(context.Background(), domain.VeridianQueueEntriesFilter{WorkspaceID: "ws", AutomationID: "autoP", Limit: 50})
+	require.NoError(t, err)
+	got := map[string]int{}
+	for _, e := range page.Entries {
+		got[e.ID] = e.Priority
+	}
+	assert.Equal(t, map[string]int{"pa": 2, "pb": 5}, got)
+}

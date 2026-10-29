@@ -120,3 +120,20 @@ func TestVeridianRateForClass_DefaultsGatedByFlag(t *testing.T) {
 	assert.True(t, ok)
 	assert.InDelta(t, domain.VeridianDefaultRateForClass("google"), r, 1e-9)
 }
+
+// L3 : sans aucune table posée, le plafond de classe est le preset ; la surcharge du workspace prime ; le profil prime sur les deux.
+func TestVeridianResolveCapLimits_PresetPuisSurchargeDuWorkspacePuisProfil(t *testing.T) {
+	enableVeridianClassDefaults(t)
+	ws := &domain.Workspace{ID: "ws-1"}
+	google := func() string { return "google" }
+	lim := veridianResolveCapLimits(ws, nil, &domain.EmailQueueEntry{}, google, nil, time.Now())
+	assert.Equal(t, 30, lim.ClassBase, "preset google")
+
+	withPolicy(t, map[string]int{"google": 6}, nil, nil, map[string]domain.VeridianPolicyOverridden{"google": {DailyCap: true}})
+	lim = veridianResolveCapLimits(ws, nil, &domain.EmailQueueEntry{}, google, nil, time.Now())
+	assert.Equal(t, 6, lim.ClassBase, "surcharge du workspace")
+
+	provider := &domain.EmailProvider{VeridianProviderClassDailyCap: map[string]int{"google": 3}}
+	lim = veridianResolveCapLimits(ws, provider, &domain.EmailQueueEntry{}, google, nil, time.Now())
+	assert.Equal(t, 3, lim.ClassBase, "le profil qui pose sa valeur n'est jamais écrasé")
+}
