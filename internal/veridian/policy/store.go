@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 )
@@ -30,6 +31,16 @@ type Store interface {
 	SetPriority(ctx context.Context, workspaceID, sourceType, sourceID string, priority int, by string) (int64, error)
 	// ClearPriority retire la ligne et remet les mails en attente à la priorité par défaut.
 	ClearPriority(ctx context.Context, workspaceID, sourceType, sourceID string) (int64, error)
+
+	// CountStock compte les contacts des listes données, par liste puis par classe, avec la part jamais contactée.
+	CountStock(ctx context.Context, workspaceID string, cfg StockConfig, listIDs []string) (map[string]map[string]ListCounts, error)
+	// FollowupsDue compte, par classe, les contacts déjà contactés dont la prochaine étape échoit avant until.
+	FollowupsDue(ctx context.Context, workspaceID string, cfg StockConfig, enrolledListIDs []string, until time.Time) (map[string]int, error)
+	// ReserveCandidates liste, par classe, les contacts de la réserve éligibles à l'inscription (au plus perClass adresses
+	// par classe, dans l'ordre priorité puis score) et leur nombre total. perClass = 0 : comptes seulement.
+	ReserveCandidates(ctx context.Context, workspaceID string, cfg StockConfig, enrolledListIDs []string, perClass int) (map[string]Candidates, error)
+	// ActiveAutomationLists : listes des automations actives (définition par défaut des inscrits).
+	ActiveAutomationLists(ctx context.Context, workspaceID string) ([]string, error)
 
 	// GetSetting / SetSetting : réglages du module (JSON), par clé.
 	GetSetting(ctx context.Context, workspaceID, key string) ([]byte, error)
@@ -324,4 +335,122 @@ func (s *pgStore) SetSetting(ctx context.Context, ws, key string, value []byte, 
 		return fmt.Errorf("écriture du réglage: %w", err)
 	}
 	return nil
+}
+
+func (s *pgStore) CountStock(ctx context.Context, ws string, cfg StockConfig, listIDs []string) (map[string]map[string]ListCounts, error) {
+	out := map[string]map[string]ListCounts{}
+	if len(listIDs) == 0 {
+		return out, nil
+	}
+	db, err := s.conn(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("connexion workspace: %w", err)
+	}
+	q, args := countsSQL(cfg, listIDs)
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("comptage du stock: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var list, class string
+		var c ListCounts
+		if err := rows.Scan(&list, &class, &c.Total, &c.Unsent); err != nil {
+			return nil, err
+		}
+		if out[list] == nil {
+			out[list] = map[string]ListCounts{}
+		}
+		out[list][class] = c
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) ActiveAutomationLists(ctx context.Context, ws string) ([]string, error) {
+	db, err := s.conn(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("connexion workspace: %w", err)
+	}
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT list_id FROM automations WHERE status = 'active' AND deleted_at IS NULL AND COALESCE(list_id,'') <> '' ORDER BY 1`)
+	if err != nil {
+		return nil, fmt.Errorf("lecture des listes d'automations: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// Candidates : contacts éligibles d'une classe.
+type Candidates struct {
+	Total  int
+	Emails []string
+}
+
+func (s *pgStore) FollowupsDue(ctx context.Context, ws string, cfg StockConfig, enrolledListIDs []string, until time.Time) (map[string]int, error) {
+	out := map[string]int{}
+	q, args := followupsSQL(cfg, enrolledListIDs, until)
+	if q == "" {
+		return out, nil
+	}
+	db, err := s.conn(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("connexion workspace: %w", err)
+	}
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("comptage des relances: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var class string
+		var n int
+		if err := rows.Scan(&class, &n); err != nil {
+			return nil, err
+		}
+		out[class] = n
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) ReserveCandidates(ctx context.Context, ws string, cfg StockConfig, enrolledListIDs []string, perClass int) (map[string]Candidates, error) {
+	out := map[string]Candidates{}
+	if cfg.ReserveListID == "" {
+		return out, nil
+	}
+	db, err := s.conn(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("connexion workspace: %w", err)
+	}
+	// perClass = 0 : le rang filtre tout, mais le total par classe est lu sur la première ligne de chaque classe (rn <= 1).
+	limit := perClass
+	if limit < 1 {
+		limit = 1
+	}
+	q, args := candidatesSQL(cfg, cfg.ReserveListID, enrolledListIDs, limit)
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("lecture des candidats: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var class, email string
+		var rn, total int
+		if err := rows.Scan(&class, &email, &rn, &total); err != nil {
+			return nil, err
+		}
+		c := out[class]
+		c.Total = total
+		if perClass > 0 {
+			c.Emails = append(c.Emails, email)
+		}
+		out[class] = c
+	}
+	return out, rows.Err()
 }

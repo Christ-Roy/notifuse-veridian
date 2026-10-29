@@ -5,6 +5,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/repository"
+	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 )
 
@@ -30,6 +31,10 @@ func wire(h platform.Host) error {
 	store := NewStore(ws)
 	resolver := NewResolver(store, log, 0)
 	svc := NewService(auth, ws, store, repository.NewVeridianEngagementByClassRepository(ws), resolver, log)
+
+	// La capacité par classe vient du même service que emailProfiles.overview : aucun second calcul de plafond.
+	svc.SetOverview(service.NewVeridianEmailProfileOverviewService(
+		repository.NewVeridianEmailProfileOverviewRepository(ws), h.MessageHistoryRepository(), ws, auth, log))
 
 	domain.SetVeridianPolicyProvider(resolver)
 	domain.SetVeridianSendPriorityProvider(resolver)

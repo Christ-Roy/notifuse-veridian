@@ -253,6 +253,187 @@
       '404':
         description: Unknown broadcast or automation
 
+/api/veridian/stock.overview:
+  get:
+    summary: Stock by recipient provider class, days of coverage, restock need (Veridian L3)
+    description: |
+      Veridian extension. Per recipient provider class: contacts of the enrolled list and of the reserve
+      list (the columns of the `stock-par-classe.py` script: `enrolled`, `reserve`, `prospectable`,
+      `capacity_today`, `days_of_coverage` = prospectable / capacity of the day, same rounding and order),
+      plus what the script cannot tell: contacts never mailed (`unsent`), coverage on a full sending day
+      (`days_unsent`), a `status`, and `restock_need` = contacts to source to hold `target_days` days.
+
+      `capacity_today` sums the configured capacity of the active commercial profiles (it shrinks during
+      the day and is 0 outside the sending window); `capacity_nominal` is a full sending day.
+      Lists, filters and class column come from `stock.config`, any of them can be overridden in the
+      request (read only: nothing is written).
+
+      Requires `contacts:read` and `message_history:read`.
+    operationId: veridianStockOverview
+    security:
+      - BearerAuth: []
+    parameters:
+      - { name: workspace_id, in: query, required: true, schema: { type: string } }
+      - { name: days, in: query, description: Target coverage in sending days (1 to 60), schema: { type: integer } }
+      - { name: enrolled_list, in: query, schema: { type: string } }
+      - { name: reserve_list, in: query, schema: { type: string } }
+      - { name: exclude_email_regex, in: query, schema: { type: string } }
+      - { name: class_field, in: query, description: custom_string_1 to custom_string_5 (default custom_string_5), schema: { type: string } }
+      - { name: require_non_empty, in: query, description: Comma separated columns that must be filled, schema: { type: string } }
+      - { name: exclude_prefix, in: query, description: Comma separated column:prefix pairs that exclude a contact, schema: { type: string } }
+    responses:
+      '200':
+        description: Stock table
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianStockOverview'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+  post:
+    summary: Stock by recipient provider class (POST form, same fields in the JSON body)
+    operationId: veridianStockOverviewPost
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id]
+            properties:
+              workspace_id: { type: string }
+              days: { type: integer }
+              enrolled_list: { type: string }
+              reserve_list: { type: string }
+    responses:
+      '200':
+        description: Stock table
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianStockOverview'
+
+/api/veridian/stock.config:
+  get:
+    summary: Definition of the stock (lists, filters, target coverage)
+    description: Requires `workspace:read`. Without a saved definition the lists of the active automations are used.
+    operationId: veridianStockConfig
+    security:
+      - BearerAuth: []
+    parameters:
+      - { name: workspace_id, in: query, required: true, schema: { type: string } }
+    responses:
+      '200':
+        description: Effective definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianStockConfigView'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/veridian/stock.config.set:
+  post:
+    summary: Save the definition of the stock (replaces the previous one)
+    description: Requires `workspace:write`. Columns are restricted to custom_string_1 to custom_string_5; unknown fields are refused.
+    operationId: veridianStockConfigSet
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            allOf:
+              - type: object
+                required: [workspace_id]
+                properties:
+                  workspace_id: { type: string }
+              - $ref: '#/components/schemas/VeridianStockConfig'
+    responses:
+      '200':
+        description: Saved definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianStockConfigView'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+/api/veridian/policy.suggest-enrollment:
+  get:
+    summary: How many reserve contacts to enroll per class to hold N days of coverage (enrols nobody)
+    description: |
+      Veridian extension. For each class: capacity per sending day (class cap after slowdown, bounded by the
+      whole-day capacity of the profiles) x `days`, minus the follow-ups of contacts already in sequence that
+      fall due in the horizon, minus the enrolled contacts never mailed = the gap. `suggest_enroll` =
+      min(gap, eligible reserve); `shortfall` = what the reserve cannot cover (to source, see
+      `restock_priority`). Eligible reserve: never mailed, not unsubscribed or bounced, not already enrolled.
+
+      **Nothing is ever enrolled** (`applied` is always false): the caller enrolls the returned addresses
+      (`include_emails=true`, ordered by priority `custom_string_2` then score `custom_number_1`) with
+      `automations.enroll`, or not.
+
+      Requires `contacts:read` and `message_history:read`.
+    operationId: veridianPolicySuggestEnrollment
+    security:
+      - BearerAuth: []
+    parameters:
+      - { name: workspace_id, in: query, required: true, schema: { type: string } }
+      - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 60 } }
+      - { name: include_emails, in: query, schema: { type: boolean } }
+      - { name: limit, in: query, description: Addresses at most per class (default 200, max 2000), schema: { type: integer } }
+      - { name: enrolled_list, in: query, schema: { type: string } }
+      - { name: reserve_list, in: query, schema: { type: string } }
+      - { name: enroll_automation, in: query, schema: { type: string } }
+    responses:
+      '200':
+        description: Suggestion
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianSuggestion'
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+  post:
+    summary: Enrollment suggestion (POST form, same fields in the JSON body)
+    operationId: veridianPolicySuggestEnrollmentPost
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id]
+            properties:
+              workspace_id: { type: string }
+              days: { type: integer }
+              include_emails: { type: boolean }
+              limit: { type: integer }
+    responses:
+      '200':
+        description: Suggestion
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VeridianSuggestion'
+
 components:
   schemas:
     VeridianPolicyValue:
@@ -339,3 +520,89 @@ components:
         priority: { type: integer }
         requeued_pending: { type: integer, format: int64 }
         note: { type: string }
+    VeridianStockConfig:
+      type: object
+      properties:
+        enrolled_list_id: { type: string }
+        reserve_list_id: { type: string }
+        enroll_automation_id: { type: string }
+        class_field: { type: string, example: custom_string_5 }
+        exclude_email_regex: { type: string }
+        require_non_empty: { type: array, items: { type: string } }
+        exclude_prefixes: { type: object, additionalProperties: { type: array, items: { type: string } } }
+        target_days: { type: integer, minimum: 1, maximum: 60 }
+    VeridianStockConfigView:
+      type: object
+      properties:
+        workspace_id: { type: string }
+        source: { type: string, enum: [none, config] }
+        config: { $ref: '#/components/schemas/VeridianStockConfig' }
+    VeridianStockRow:
+      type: object
+      properties:
+        class: { type: string }
+        label: { type: string }
+        enrolled: { type: integer }
+        reserve: { type: integer }
+        prospectable: { type: integer }
+        capacity_today: { type: integer }
+        days_of_coverage: { type: number, nullable: true }
+        enrolled_unsent: { type: integer }
+        reserve_unsent: { type: integer }
+        unsent: { type: integer }
+        capacity_nominal: { type: integer }
+        days_unsent: { type: number, nullable: true }
+        status: { type: string, enum: [ok, bas, critique, sans_plafond, inactive] }
+        restock_need: { type: integer }
+        reply_rate_smoothed: { type: number }
+    VeridianStockOverview:
+      type: object
+      properties:
+        workspace_id: { type: string }
+        generated_at: { type: string, format: date-time }
+        target_days: { type: integer }
+        config: { $ref: '#/components/schemas/VeridianStockConfig' }
+        config_source: { type: string, enum: [request, config, automations, none] }
+        classes:
+          type: array
+          items: { $ref: '#/components/schemas/VeridianStockRow' }
+        totals: { type: object }
+        notes: { type: array, items: { type: string } }
+    VeridianSuggestRow:
+      type: object
+      properties:
+        class: { type: string }
+        label: { type: string }
+        capacity_per_day: { type: integer }
+        horizon_capacity: { type: integer }
+        followups_due: { type: integer }
+        room_for_new: { type: integer }
+        enrolled_unsent: { type: integer }
+        gap: { type: integer }
+        reserve_unsent: { type: integer }
+        suggest_enroll: { type: integer }
+        shortfall: { type: integer }
+        reply_rate_smoothed: { type: number }
+        emails: { type: array, items: { type: string } }
+    VeridianSuggestion:
+      type: object
+      properties:
+        workspace_id: { type: string }
+        generated_at: { type: string, format: date-time }
+        days: { type: integer }
+        enroll_automation_id: { type: string }
+        applied: { type: boolean, description: Always false, nothing is enrolled by this route. }
+        classes:
+          type: array
+          items: { $ref: '#/components/schemas/VeridianSuggestRow' }
+        totals: { type: object }
+        restock_priority:
+          type: array
+          items:
+            type: object
+            properties:
+              class: { type: string }
+              label: { type: string }
+              shortfall: { type: integer }
+              reply_rate_smoothed: { type: number }
+        notes: { type: array, items: { type: string } }

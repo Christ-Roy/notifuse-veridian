@@ -44,11 +44,40 @@ chaque fournisseur destinataire. Module : `internal/veridian/policy`. Migration 
 | `policy.get` | `policy:show [--class C] [--explain]` | workspace:read |
 | `policy.set` / `policy.reset` | `policy:set` / `policy:reset` | workspace:write |
 | `policy.priority.list` / `.set` / `.clear` | `policy:priority [--broadcast ID \| --automation ID] [--set N \| --clear]` | broadcasts + automations |
+| `stock.overview` | `stock:overview [--days N] [--enrolled-list L] [--reserve-list L]` | contacts:read + message_history:read |
+| `stock.config` / `stock.config.set` | `stock:config [options]` | workspace:read / write |
+| `policy.suggest-enrollment` | `policy:suggest-enrollment [--days N] [--emails] [--limit N]` | contacts:read + message_history:read |
 
 Doc OpenAPI : `openapi/paths/veridian-policy.yaml`. Tests CLI : `~/.claude/skills/notifuse-cli/tests/test_policy.py`.
 Le CLI embarqué (`internal/http/agentcli`) est resynchronisé par `scripts/veridian/sync-agent-cli.sh`, pas à la main.
 
-## 4. Valeurs observées
+## 4. Stock par classe (`stock.overview`)
+
+- **Reproduit `~/asd-prospection/stock-par-classe.py`** : mêmes colonnes (inscrits, réserve, total, plafond/jour, jours),
+  même ordre (jours croissants, classes sans plafond en fin), mêmes filtres (adresses internes, `custom_string_1` vide ou
+  `cart_`, étiquette absente = classe `?`, appartenance supprimée, statut de liste quelconque), même arrondi au dixième.
+  `plafond/jour` = somme des `capacity_configured` des profils commerciaux actifs (ni pause, ni hors rotation, classes non
+  exclues) lue dans le service de `emailProfiles.overview` : aucun second calcul de plafond. Elle baisse avec l'heure et
+  s'annule hors fenêtre d'envoi : comparer le script et l'API à la même minute.
+- **En plus** : `unsent` (jamais contactés), `capacity_nominal` (une journée d'envoi entière, stable), `days_unsent`,
+  `status` (ok, bas, critique, sans_plafond, inactive), `restock_need` (contacts à aller chercher pour tenir `target_days`).
+- **Définition du stock** : `stock.config` (table `veridian_policy_settings`, clé `stock`) : liste des inscrits, liste de réserve,
+  automation d'inscription, colonne de classe (`custom_string_1` à `5`, liste blanche), regex d'adresses écartées, colonnes
+  obligatoires, préfixes interdits, couverture visée. Sans définition : les listes des automations actives. Chaque champ se
+  surcharge dans la requête (lecture seule). Valeurs d'animalsd : inscrits `prospectionasd`, réserve `stockodhmasse`,
+  `custom_string_1` obligatoire sans préfixe `cart_`, regex `brunon5robert|veridian\.site|animalsd\.fr|zz-test|animal-services-distribution`.
+
+## 5. Suggestion d'inscription (`policy.suggest-enrollment`)
+
+- Par classe : capacité/jour nominale x N jours d'envoi, moins les **relances** de contacts déjà en séquence qui échoient dans
+  l'horizon (elles passent avant), moins les inscrits jamais contactés = le manque. `suggest_enroll` = min(manque, réserve
+  éligible) ; `shortfall` = ce que la réserve ne couvre pas, classé dans `restock_priority` (taux de réponse lissé d'abord).
+- Réserve éligible = jamais contactée, ni désabonnée, rejetée ou plainte, pas dans la liste des inscrits, pas dans l'automation
+  d'inscription. Adresses (`include_emails`) ordonnées par priorité (`custom_string_2`, P1 d'abord) puis score (`custom_number_1`).
+- **N'inscrit personne** : `applied` vaut toujours false, le module n'a aucun code d'écriture dans les automations. Le CLI
+  affiche les commandes `automations:enroll` par lots, à lancer à la main (Robert alimente à la main).
+
+## 6. Valeurs observées
 
 Catalogue au 29/10/2026, mesuré sur animalsd (tout l'historique, `messages.engagementByClass`) : 1 107 envois,
 36 réponses humaines, 28 rebonds. L'échantillon par classe est petit : le taux de réponse "lissé" ramène chaque

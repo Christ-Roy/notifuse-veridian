@@ -37,6 +37,8 @@ type Service struct {
 	resolver   *Resolver
 	log        logger.Logger
 	now        func() time.Time
+	// overview : capacité par classe des profils d'envoi (stock.overview, policy.suggest-enrollment).
+	overview OverviewReader
 }
 
 // NewService crée le service. engagement peut être nil (mesures du catalogue seules).

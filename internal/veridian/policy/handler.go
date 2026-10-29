@@ -22,6 +22,10 @@ import (
 //	GET|POST /api/veridian/policy.priority.list       (broadcasts:read + automations:read)
 //	POST     /api/veridian/policy.priority.set        (broadcasts|automations:write)
 //	POST     /api/veridian/policy.priority.clear      (broadcasts|automations:write)
+//	GET|POST /api/veridian/policy.suggest-enrollment  (contacts:read + message_history:read ; n'inscrit personne)
+//	GET|POST /api/veridian/stock.overview             (contacts:read + message_history:read)
+//	GET|POST /api/veridian/stock.config               (workspace:read)
+//	POST     /api/veridian/stock.config.set           (workspace:write)
 type Handler struct {
 	svc          *Service
 	getJWTSecret func() ([]byte, error)
@@ -48,6 +52,10 @@ func (h *Handler) RegisterRoutes(mux *nethttp.ServeMux) {
 	both("/api/veridian/policy.priority.list", h.priorityList)
 	post("/api/veridian/policy.priority.set", h.prioritySet)
 	post("/api/veridian/policy.priority.clear", h.priorityClear)
+	both("/api/veridian/policy.suggest-enrollment", h.suggestEnrollment)
+	both("/api/veridian/stock.overview", h.stockOverview)
+	both("/api/veridian/stock.config", h.stockConfig)
+	post("/api/veridian/stock.config.set", h.stockConfigSet)
 }
 
 // Request lit les paramètres d'une route : query string, complétée par le corps JSON d'un POST.
@@ -244,6 +252,145 @@ func (h *Handler) priorityClear(w nethttp.ResponseWriter, r *nethttp.Request) {
 	res, err := h.svc.ClearPriority(r.Context(), q.Str("workspace_id"), q.Str("source_type"), q.Str("source_id"))
 	if err != nil {
 		WriteError(w, h.log, err, "policy.priority.clear")
+		return
+	}
+	WriteJSON(w, res)
+}
+
+// stockConfigFromRequest lit une définition de stock dans la requête : champs du corps JSON, sinon de la query.
+// Un champ inconnu est refusé (une faute de frappe ne doit pas être ignorée en silence).
+func stockConfigFromRequest(q *Request) (StockConfig, error) {
+	var cfg StockConfig
+	allowed := map[string]bool{"workspace_id": true, "days": true, "enrolled_list": true, "reserve_list": true, "enroll_automation": true,
+		"enrolled_list_id": true, "reserve_list_id": true, "enroll_automation_id": true, "class_field": true, "exclude_email_regex": true,
+		"require_non_empty": true, "exclude_prefixes": true, "exclude_prefix": true, "target_days": true,
+		"limit": true, "include_emails": true, "reason": true}
+	for k := range q.body {
+		if !allowed[k] {
+			return cfg, invalid("champ inconnu %q", k)
+		}
+	}
+	first := func(keys ...string) string {
+		for _, k := range keys {
+			if v := q.Str(k); v != "" {
+				return v
+			}
+		}
+		return ""
+	}
+	cfg.EnrolledListID = first("enrolled_list_id", "enrolled_list")
+	cfg.ReserveListID = first("reserve_list_id", "reserve_list")
+	cfg.EnrollAutomationID = first("enroll_automation_id", "enroll_automation")
+	cfg.ClassField = q.Str("class_field")
+	cfg.ExcludeEmailRegex = q.Str("exclude_email_regex")
+	cfg.RequireNonEmpty = q.Strings("require_non_empty")
+	if td, ok, err := q.Int("target_days"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.TargetDays = td
+	}
+	if raw, ok := q.body["exclude_prefixes"]; ok {
+		if err := json.Unmarshal(raw, &cfg.ExcludePrefixes); err != nil {
+			return cfg, invalid("exclude_prefixes doit être un objet {colonne: [préfixes]}")
+		}
+	}
+	// Forme courte : exclude_prefix=custom_string_1:cart_,custom_string_1:test_
+	for _, item := range q.Strings("exclude_prefix") {
+		col, prefix, ok := strings.Cut(item, ":")
+		if !ok || col == "" || prefix == "" {
+			return cfg, invalid("exclude_prefix attend colonne:préfixe (reçu %q)", item)
+		}
+		if cfg.ExcludePrefixes == nil {
+			cfg.ExcludePrefixes = map[string][]string{}
+		}
+		cfg.ExcludePrefixes[col] = append(cfg.ExcludePrefixes[col], prefix)
+	}
+	return cfg, nil
+}
+
+func (h *Handler) stockOverview(w nethttp.ResponseWriter, r *nethttp.Request) {
+	q, ok := ReadRequest(w, r)
+	if !ok {
+		return
+	}
+	cfg, err := stockConfigFromRequest(q)
+	var days int
+	if err == nil {
+		days, _, err = q.Int("days")
+	}
+	if err != nil {
+		WriteError(w, h.log, err, "stock.overview")
+		return
+	}
+	res, err := h.svc.StockOverview(r.Context(), StockRequest{WorkspaceID: q.Str("workspace_id"), Days: days, Override: cfg})
+	if err != nil {
+		WriteError(w, h.log, err, "stock.overview")
+		return
+	}
+	WriteJSON(w, res)
+}
+
+func (h *Handler) stockConfig(w nethttp.ResponseWriter, r *nethttp.Request) {
+	q, ok := ReadRequest(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.svc.GetStockConfig(r.Context(), q.Str("workspace_id"))
+	if err != nil {
+		WriteError(w, h.log, err, "stock.config")
+		return
+	}
+	WriteJSON(w, res)
+}
+
+func (h *Handler) stockConfigSet(w nethttp.ResponseWriter, r *nethttp.Request) {
+	q, ok := ReadRequest(w, r)
+	if !ok {
+		return
+	}
+	cfg, err := stockConfigFromRequest(q)
+	if err != nil {
+		WriteError(w, h.log, err, "stock.config.set")
+		return
+	}
+	res, err := h.svc.SetStockConfig(r.Context(), q.Str("workspace_id"), cfg)
+	if err != nil {
+		WriteError(w, h.log, err, "stock.config.set")
+		return
+	}
+	WriteJSON(w, res)
+}
+
+func (h *Handler) suggestEnrollment(w nethttp.ResponseWriter, r *nethttp.Request) {
+	q, ok := ReadRequest(w, r)
+	if !ok {
+		return
+	}
+	cfg, err := stockConfigFromRequest(q)
+	var days, limit int
+	if err == nil {
+		days, _, err = q.Int("days")
+	}
+	if err == nil {
+		limit, _, err = q.Int("limit")
+	}
+	include := false
+	if err == nil {
+		switch strings.ToLower(strings.TrimSpace(q.Str("include_emails"))) {
+		case "", "false", "0", "no", "non":
+		case "true", "1", "yes", "oui":
+			include = true
+		default:
+			err = invalid("include_emails doit valoir true ou false")
+		}
+	}
+	if err != nil {
+		WriteError(w, h.log, err, "policy.suggest-enrollment")
+		return
+	}
+	res, err := h.svc.SuggestEnrollment(r.Context(), SuggestRequest{WorkspaceID: q.Str("workspace_id"), Days: days, IncludeEmails: include, Limit: limit, Override: cfg})
+	if err != nil {
+		WriteError(w, h.log, err, "policy.suggest-enrollment")
 		return
 	}
 	WriteJSON(w, res)

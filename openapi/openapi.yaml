@@ -113,6 +113,14 @@ paths:
     $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.priority.set'
   /api/veridian/policy.priority.clear:
     $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.priority.clear'
+  /api/veridian/policy.suggest-enrollment:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.suggest-enrollment'
+  /api/veridian/stock.overview:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1stock.overview'
+  /api/veridian/stock.config:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1stock.config'
+  /api/veridian/stock.config.set:
+    $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1stock.config.set'
   /api/customEvents.import:
     $ref: './paths/custom-events.yaml#/~1api~1customEvents.import'
   /api/webhookSubscriptions.create:

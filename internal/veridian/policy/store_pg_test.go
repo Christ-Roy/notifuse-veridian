@@ -3,8 +3,13 @@ package policy
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"math/rand"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
@@ -28,11 +33,15 @@ func pgDB(t *testing.T) *sql.DB {
 	require.NoError(t, db.Ping())
 	ctx := context.Background()
 	for _, s := range []string{
-		`DROP TABLE IF EXISTS veridian_policy_override, veridian_send_priority, veridian_policy_settings, email_queue, broadcasts, automations CASCADE`,
+		`DROP TABLE IF EXISTS veridian_policy_override, veridian_send_priority, veridian_policy_settings, email_queue, broadcasts, automations, contacts, contact_lists, message_history, contact_automations CASCADE`,
+		`CREATE TABLE contacts (email VARCHAR(255) PRIMARY KEY, custom_string_1 VARCHAR(255), custom_string_2 VARCHAR(255), custom_string_3 VARCHAR(255), custom_string_4 VARCHAR(255), custom_string_5 VARCHAR(255), custom_number_1 NUMERIC)`,
+		`CREATE TABLE contact_automations (id VARCHAR(36) PRIMARY KEY, automation_id VARCHAR(36) NOT NULL, contact_email VARCHAR(255) NOT NULL, status VARCHAR(20) DEFAULT 'active', scheduled_at TIMESTAMPTZ)`,
+		`CREATE TABLE contact_lists (email VARCHAR(255) NOT NULL, list_id VARCHAR(32) NOT NULL, status VARCHAR(20) NOT NULL, deleted_at TIMESTAMPTZ, PRIMARY KEY (email, list_id))`,
+		`CREATE TABLE message_history (id VARCHAR(255) PRIMARY KEY, contact_email VARCHAR(255) NOT NULL, sent_at TIMESTAMPTZ, veridian_message_type VARCHAR(16))`,
 		`CREATE TABLE email_queue (id VARCHAR(36) PRIMARY KEY, status VARCHAR(20) NOT NULL DEFAULT 'pending', priority INTEGER NOT NULL DEFAULT 5,
 			source_type VARCHAR(20) NOT NULL, source_id VARCHAR(36) NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
 		`CREATE TABLE broadcasts (id VARCHAR(255) PRIMARY KEY, name VARCHAR(255) NOT NULL, status VARCHAR(20) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
-		`CREATE TABLE automations (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, status VARCHAR(20) DEFAULT 'draft', created_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ)`,
+		`CREATE TABLE automations (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, status VARCHAR(20) DEFAULT 'draft', list_id VARCHAR(36), created_at TIMESTAMPTZ DEFAULT NOW(), deleted_at TIMESTAMPTZ)`,
 	} {
 		_, err := db.ExecContext(ctx, s)
 		require.NoError(t, err, s)
@@ -156,4 +165,197 @@ func TestPG_SurchargesUpsertPartielEtRetrait(t *testing.T) {
 	raw, err := st.GetSetting(ctx, "ws", "stock")
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"a":2}`, string(raw))
+}
+
+// Parité avec le script stock-par-classe.py : on rejoue SES règles sur un jeu de contacts aléatoire (graine fixe)
+// et on exige les mêmes comptes que la requête SQL, filtres compris (adresse interne, custom_string_1 vide, absent ou
+// cart_, étiquette absente = « ? », appartenance supprimée, statut quelconque).
+func TestPG_ComptesDeStockIdentiquesALaRegleDuScript(t *testing.T) {
+	db := pgDB(t)
+	ctx := context.Background()
+	st := NewStoreWithDB(db)
+	rng := rand.New(rand.NewSource(29102026))
+	classes := []string{"google", "ovh", "orange", "free", "", "godaddy", "microsoft"}
+	bad := regexp.MustCompile(`(?i)brunon5robert|veridian\.site|animalsd\.fr|zz-test|animal-services-distribution`)
+	type ref struct{ total, unsent int }
+	want := map[string]map[string]*ref{"prospectionasd": {}, "stockodhmasse": {}}
+	ns := func(s string, null bool) sql.NullString { return sql.NullString{String: s, Valid: !null} }
+	for i := 0; i < 600; i++ {
+		email := fmt.Sprintf("c%d@societe%d.fr", i, i%37)
+		switch rng.Intn(14) {
+		case 0:
+			email = fmt.Sprintf("test%d@brunon5robert.gmail.com", i)
+		case 1:
+			email = fmt.Sprintf("x%d@VERIDIAN.SITE", i)
+		case 2:
+			email = fmt.Sprintf("y%d@zz-test.example", i)
+		}
+		var cs1 sql.NullString
+		switch rng.Intn(6) {
+		case 0:
+			cs1 = ns("", false) // chaîne vide
+		case 1:
+			cs1 = ns("", true) // NULL
+		case 2:
+			cs1 = ns(fmt.Sprintf("cart_%d", i), false)
+		case 3:
+			cs1 = ns(" ", false) // espace : renseigné pour le script (valeur « truthy »)
+		default:
+			cs1 = ns(fmt.Sprintf("SIRET%d", i), false)
+		}
+		cls := classes[rng.Intn(len(classes))]
+		cs5 := ns(cls, cls == "" && rng.Intn(2) == 0) // classe vide : tantôt '' tantôt NULL
+		sent := rng.Intn(3) == 0
+		transactional := sent && rng.Intn(4) == 0
+		_, err := db.ExecContext(ctx, `INSERT INTO contacts (email, custom_string_1, custom_string_5) VALUES ($1, $2, $3)`, email, cs1, cs5)
+		require.NoError(t, err)
+		if sent {
+			mt := sql.NullString{}
+			if transactional {
+				mt = ns("transactional", false)
+			}
+			_, err := db.ExecContext(ctx, `INSERT INTO message_history (id, contact_email, sent_at, veridian_message_type) VALUES ($1, $2, NOW(), $3)`, fmt.Sprintf("m%d", i), email, mt)
+			require.NoError(t, err)
+		}
+		for _, list := range []string{"prospectionasd", "stockodhmasse"} {
+			if rng.Intn(2) == 0 {
+				continue
+			}
+			deleted := rng.Intn(6) == 0
+			status := []string{"active", "unsubscribed", "pending", "bounced"}[rng.Intn(4)]
+			_, err := db.ExecContext(ctx, `INSERT INTO contact_lists (email, list_id, status, deleted_at) VALUES ($1, $2, $3, CASE WHEN $4 THEN NOW() END)`, email, list, status, deleted)
+			require.NoError(t, err)
+			// La règle du script : adresse interne, custom_string_1 faux (vide ou absent) ou « cart_ », appartenance supprimée.
+			if deleted || bad.MatchString(email) || !cs1.Valid || cs1.String == "" || strings.HasPrefix(cs1.String, "cart_") {
+				continue
+			}
+			key := cls
+			if key == "" {
+				key = "?"
+			}
+			r := want[list][key]
+			if r == nil {
+				r = &ref{}
+				want[list][key] = r
+			}
+			r.total++
+			if !sent || transactional {
+				r.unsent++
+			}
+		}
+	}
+
+	cfg := StockConfig{ExcludeEmailRegex: `brunon5robert|veridian\.site|animalsd\.fr|zz-test|animal-services-distribution`,
+		RequireNonEmpty: []string{"custom_string_1"}, ExcludePrefixes: map[string][]string{"custom_string_1": {"cart_"}}}
+	got, err := st.CountStock(ctx, "ws", cfg, []string{"prospectionasd", "stockodhmasse"})
+	require.NoError(t, err)
+	grand := 0
+	for list, classesWant := range want {
+		for class, w := range classesWant {
+			assert.Equal(t, ListCounts{Total: w.total, Unsent: w.unsent}, got[list][class], "%s / %s", list, class)
+			grand += w.total
+		}
+		assert.Len(t, got[list], len(classesWant), "mêmes classes pour %s", list)
+	}
+	assert.Greater(t, grand, 100, "le jeu d'essai n'est pas vide")
+	assert.Contains(t, got["prospectionasd"], "?", "étiquette absente : classe « ? » comme le script")
+
+	// Contrôle négatif : sans les filtres les comptes changent, le test voit la différence.
+	loose, err := st.CountStock(ctx, "ws", StockConfig{}, []string{"prospectionasd"})
+	require.NoError(t, err)
+	sum := func(m map[string]ListCounts) (n int) {
+		for _, c := range m {
+			n += c.Total
+		}
+		return
+	}
+	assert.Greater(t, sum(loose["prospectionasd"]), sum(got["prospectionasd"]), "sans filtre il y a plus de contacts")
+
+	// Listes par défaut : celles des automations actives et seulement elles.
+	_, err = db.ExecContext(ctx, `INSERT INTO automations (id, name, status, list_id) VALUES ('a1','seq','active','prospectionasd'), ('a2','vieille','draft','autre'), ('a3','sans liste','active','')`)
+	require.NoError(t, err)
+	ids, err := st.ActiveAutomationLists(ctx, "ws")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"prospectionasd"}, ids)
+}
+
+func TestPG_SuggestionRelancesEtCandidatsDeLaReserve(t *testing.T) {
+	db := pgDB(t)
+	ctx := context.Background()
+	st := NewStoreWithDB(db)
+	mustExec := func(q string, a ...any) {
+		_, err := db.ExecContext(ctx, q, a...)
+		require.NoError(t, err, q)
+	}
+	mustExec(`INSERT INTO automations (id, name, status, list_id) VALUES ('seq','Prospection','active','insc'), ('autre','Autre','active','ailleurs'), ('vieille','Vieille','draft','insc')`)
+	contact := func(email, cs1, cls, prio string, score any) {
+		mustExec(`INSERT INTO contacts (email, custom_string_1, custom_string_2, custom_string_5, custom_number_1) VALUES ($1,$2,NULLIF($3,''),$4,$5)`, email, cs1, prio, cls, score)
+	}
+	list := func(email, id, status string) {
+		mustExec(`INSERT INTO contact_lists (email, list_id, status) VALUES ($1,$2,$3)`, email, id, status)
+	}
+	sent := func(email string, tx bool) {
+		mt := sql.NullString{String: "transactional", Valid: tx}
+		mustExec(`INSERT INTO message_history (id, contact_email, sent_at, veridian_message_type) VALUES ($1,$2,NOW(),$3)`, "m-"+email, email, mt)
+	}
+
+	// Réserve : 7 contacts google/ovh. Ordre attendu pour google : P1 score 90, P1 score 50, P2 score 99, sans priorité.
+	contact("g-p2-99@x.fr", "S1", "google", "P2", 99)
+	contact("g-p1-50@x.fr", "S2", "google", "P1", 50)
+	contact("g-p1-90@x.fr", "S3", "google", "P1", 90)
+	contact("g-none@x.fr", "S4", "google", "", nil)
+	contact("g-unsub@x.fr", "S5", "google", "P1", 100)    // désabonné : jamais proposé
+	contact("g-contacte@x.fr", "S6", "google", "P1", 100) // déjà contacté : jamais proposé
+	contact("g-insc@x.fr", "S7", "google", "P1", 100)     // déjà dans la liste des inscrits : jamais proposé
+	contact("g-seq@x.fr", "S8", "google", "P1", 100)      // déjà dans l'automation d'inscription : jamais proposé
+	contact("g-cart@x.fr", "cart_9", "google", "P1", 100) // écarté par le filtre
+	contact("o-1@x.fr", "S9", "ovh", "P3", 10)
+	for _, e := range []string{"g-p2-99@x.fr", "g-p1-50@x.fr", "g-p1-90@x.fr", "g-none@x.fr", "g-unsub@x.fr", "g-contacte@x.fr", "g-insc@x.fr", "g-seq@x.fr", "g-cart@x.fr", "o-1@x.fr"} {
+		list(e, "res", "active")
+	}
+	mustExec(`UPDATE contact_lists SET status='unsubscribed' WHERE email='g-unsub@x.fr'`)
+	list("g-insc@x.fr", "insc", "active")
+	sent("g-contacte@x.fr", false)
+	mustExec(`INSERT INTO contact_automations (id, automation_id, contact_email, status, scheduled_at) VALUES ('ca-x','seq','g-seq@x.fr','active',NOW() + interval '1 day')`)
+
+	cfg := StockConfig{ReserveListID: "res", EnrollAutomationID: "seq", RequireNonEmpty: []string{"custom_string_1"}, ExcludePrefixes: map[string][]string{"custom_string_1": {"cart_"}}}
+	got, err := st.ReserveCandidates(ctx, "ws", cfg, []string{"insc"}, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 4, got["google"].Total)
+	assert.Equal(t, []string{"g-p1-90@x.fr", "g-p1-50@x.fr", "g-p2-99@x.fr", "g-none@x.fr"}, got["google"].Emails, "priorité P1 d'abord, puis score décroissant, sans priorité en dernier")
+	assert.Equal(t, 1, got["ovh"].Total)
+	limited, err := st.ReserveCandidates(ctx, "ws", cfg, []string{"insc"}, 2)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"g-p1-90@x.fr", "g-p1-50@x.fr"}, limited["google"].Emails)
+	assert.Equal(t, 4, limited["google"].Total, "le total ne dépend pas de la limite")
+	counts, err := st.ReserveCandidates(ctx, "ws", cfg, []string{"insc"}, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 4, counts["google"].Total)
+	assert.Empty(t, counts["google"].Emails, "perClass 0 : comptes seulement")
+
+	// Relances : contacts déjà contactés dont la prochaine étape échoit avant l'horizon, dans une automation active de la définition.
+	for _, c := range []struct {
+		email, auto, status string
+		in                  string
+		sentOK              bool
+	}{
+		{"r1@x.fr", "seq", "active", "1 day", true},     // compte
+		{"r2@x.fr", "seq", "active", "20 days", true},   // hors horizon
+		{"r3@x.fr", "seq", "paused", "1 day", true},     // pas active
+		{"r4@x.fr", "seq", "active", "1 day", false},    // jamais contacté : c'est un premier contact, pas une relance
+		{"r5@x.fr", "autre", "active", "1 day", true},   // autre automation, autre liste
+		{"r6@x.fr", "vieille", "active", "1 day", true}, // automation en brouillon
+	} {
+		contact(c.email, "S", "ovh", "", nil)
+		mustExec(`INSERT INTO contact_automations (id, automation_id, contact_email, status, scheduled_at) VALUES ($1,$2,$3,$4, NOW() + $5::interval)`, "ca-"+c.email, c.auto, c.email, c.status, c.in)
+		if c.sentOK {
+			sent(c.email, false)
+		}
+	}
+	f, err := st.FollowupsDue(ctx, "ws", cfg, []string{"insc"}, time.Now().Add(5*24*time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, map[string]int{"ovh": 1}, f, "seul r1 est une relance à venir dans l'horizon")
+	f, err = st.FollowupsDue(ctx, "ws", StockConfig{}, nil, time.Now().Add(5*24*time.Hour))
+	require.NoError(t, err)
+	assert.Empty(t, f, "sans automation ni liste : rien à compter")
 }

@@ -32,6 +32,14 @@ type fakeStore struct {
 	pending   map[string]int // "type:id" -> mails en attente (priorité par défaut)
 	failList  error
 	reads     int
+	// stock : comptes par liste puis par classe ; stockCalls : définitions reçues ; autoLists : listes des automations actives.
+	stock      map[string]map[string]ListCounts
+	stockCalls []StockConfig
+	autoLists  []string
+	// followups : relances à venir par classe ; candidates : réserve éligible par classe ; candidateCalls : perClass reçus.
+	followups      map[string]int
+	candidates     map[string]Candidates
+	candidateCalls []int
 }
 
 func newFakeStore() *fakeStore {
@@ -166,6 +174,44 @@ func (f *fakeStore) SetSetting(_ context.Context, _, key string, v []byte, _ str
 	defer f.mu.Unlock()
 	f.settings[key] = v
 	return nil
+}
+
+func (f *fakeStore) CountStock(_ context.Context, _ string, cfg StockConfig, listIDs []string) (map[string]map[string]ListCounts, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stockCalls = append(f.stockCalls, cfg)
+	out := map[string]map[string]ListCounts{}
+	for _, id := range listIDs {
+		if c, ok := f.stock[id]; ok {
+			out[id] = c
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) FollowupsDue(context.Context, string, StockConfig, []string, time.Time) (map[string]int, error) {
+	return f.followups, nil
+}
+
+func (f *fakeStore) ReserveCandidates(_ context.Context, _ string, _ StockConfig, _ []string, perClass int) (map[string]Candidates, error) {
+	f.candidateCalls = append(f.candidateCalls, perClass)
+	out := map[string]Candidates{}
+	for class, c := range f.candidates {
+		cc := Candidates{Total: c.Total}
+		if perClass > 0 {
+			n := perClass
+			if n > len(c.Emails) {
+				n = len(c.Emails)
+			}
+			cc.Emails = c.Emails[:n]
+		}
+		out[class] = cc
+	}
+	return out, nil
+}
+
+func (f *fakeStore) ActiveAutomationLists(context.Context, string) ([]string, error) {
+	return f.autoLists, nil
 }
 
 var errBoom = errors.New("base indisponible")
