@@ -162,11 +162,13 @@ func TestBuildVeridianEmailProfilesOverview(t *testing.T) {
 func TestBuildVeridianEmailProfilesOverview_ReportsExclusivityViolationWithoutBreaking(t *testing.T) {
 	ws := overviewTestWorkspace()
 	ws.Settings.TransactionalEmailProviderID = "nord" // viole la règle : nord est dans le pool
-	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, nil, time.Now())
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, nil, time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC))
 	assert.Equal(t, []string{"nord"}, out.UsageConflicts)
 	assert.Len(t, out.Profiles, 4, "la lecture ne casse pas")
 }
 
+// Horloge fixée : la capacité du jour dépend de l'heure (fenêtre d'envoi). Avec time.Now(), le test donnait 42 au lieu de 50 la nuit
+// (échec CI constaté à 23 h 54 Paris le 29/10/2026).
 func TestBuildVeridianEmailProfilesOverview_CapacitySumsWhenEveryActiveProfileIsCapped(t *testing.T) {
 	ws := overviewTestWorkspace()
 	for i := range ws.Integrations {
@@ -174,7 +176,7 @@ func TestBuildVeridianEmailProfilesOverview_CapacitySumsWhenEveryActiveProfileIs
 			ws.Integrations[i].EmailProvider.VeridianProfileDailyCap = 25
 		}
 	}
-	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, nil, time.Now())
+	out := buildVeridianEmailProfilesOverview(ws, observeAll(nil, nil), nil, nil, time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC))
 	require.NotNil(t, out.Totals.CommercialCapacityToday)
 	assert.Equal(t, 50, *out.Totals.CommercialCapacityToday, "relai en pause ne compte pas")
 }
