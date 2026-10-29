@@ -121,6 +121,12 @@ paths:
     $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1stock.config'
   /api/veridian/stock.config.set:
     $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1stock.config.set'
+  /api/veridian/reconcile.run:
+    $ref: './paths/veridian-reconcile.yaml#/~1api~1veridian~1reconcile.run'
+  /api/veridian/reconcile.report:
+    $ref: './paths/veridian-reconcile.yaml#/~1api~1veridian~1reconcile.report'
+  /api/veridian/reconcile.resolve:
+    $ref: './paths/veridian-reconcile.yaml#/~1api~1veridian~1reconcile.resolve'
   /api/customEvents.import:
     $ref: './paths/custom-events.yaml#/~1api~1customEvents.import'
   /api/webhookSubscriptions.create:
@@ -154,6 +160,16 @@ components:
     BearerAuth:
       $ref: './components/security.yaml#/BearerAuth'
   schemas:
+    ReconcileAction:
+      $ref: './components/schemas/veridian-reconcile.yaml#/ReconcileAction'
+    ReconcileFinding:
+      $ref: './components/schemas/veridian-reconcile.yaml#/ReconcileFinding'
+    ReconcileCheck:
+      $ref: './components/schemas/veridian-reconcile.yaml#/ReconcileCheck'
+    ReconcileReport:
+      $ref: './components/schemas/veridian-reconcile.yaml#/ReconcileReport'
+    ReconcileResolveResult:
+      $ref: './components/schemas/veridian-reconcile.yaml#/ReconcileResolveResult'
     ErrorResponse:
       $ref: './components/schemas/common.yaml#/ErrorResponse'
     SendTransactionalRequest:

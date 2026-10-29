@@ -4704,6 +4704,241 @@
           }
         }
       }
+    },
+    "/api/veridian/reconcile.run": {
+      "post": {
+        "summary": "Run the reconciliation checks (Veridian)",
+        "description": "Veridian extension (lot L1b). Recoupe ce que le logiciel croit (statuts de contacts,\ncompteurs, classes de messagerie, file et stock) avec ce qui s'est réellement passé, et\nsynchronise la table des écarts (`veridian_reconcile_finding`) : écart nouveau ouvert,\nécart persistant rafraîchi, écart disparu clos automatiquement. Un contrôle qui n'a pas pu\nconclure est `non_abouti` et ne touche pas à ses écarts : trois états, jamais deux.\n\nDroits : `contacts:read`, `message_history:read` et `automations:read`. Un seul passage à\nla fois par workspace (409 sinon). Aucune écriture hors de la table des écarts.\n",
+        "operationId": "veridianReconcileRun",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "description": "Codes ou numéros des contrôles à jouer (tous si absent).",
+                    "items": {
+                      "type": "string",
+                      "example": "classes"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "État des écarts après le passage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide"
+          },
+          "401": {
+            "description": "Non authentifié"
+          },
+          "403": {
+            "description": "Droits insuffisants"
+          },
+          "409": {
+            "description": "Un passage est déjà en cours pour ce workspace"
+          }
+        }
+      }
+    },
+    "/api/veridian/reconcile.report": {
+      "get": {
+        "summary": "Read the open discrepancies without running anything",
+        "operationId": "veridianReconcileReport",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "check",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Un seul contrôle (code ou numéro)."
+          },
+          {
+            "name": "include_resolved",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Inclut les écarts résolus."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Écarts ouverts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide"
+          },
+          "401": {
+            "description": "Non authentifié"
+          },
+          "403": {
+            "description": "Droits insuffisants"
+          }
+        }
+      },
+      "post": {
+        "summary": "Read the open discrepancies (POST form)",
+        "operationId": "veridianReconcileReportPost",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "include_resolved": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Écarts ouverts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/veridian/reconcile.resolve": {
+      "post": {
+        "summary": "Apply, preview or dismiss the proposed repair of a discrepancy",
+        "description": "`apply` exécute la réparation proposée (les cibles sont relues au moment d'appliquer, dans\nune transaction), clôt l'écart, puis rejoue le contrôle : `verified` dit si l'écart a\ndisparu. `dry_run` ne modifie rien. `dismiss` écarte l'écart 7 jours (cas voulu).\n\nDroits : lecture des trois ressources, plus l'écriture des contacts (reclassement) ou des\nautomations (sorties, file, compteurs).\n",
+        "operationId": "veridianReconcileResolve",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workspace_id",
+                  "finding_id"
+                ],
+                "properties": {
+                  "workspace_id": {
+                    "type": "string"
+                  },
+                  "finding_id": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "apply",
+                      "dry_run",
+                      "dismiss"
+                    ],
+                    "default": "apply"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Résultat de l'action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileResolveResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide"
+          },
+          "401": {
+            "description": "Non authentifié"
+          },
+          "403": {
+            "description": "Droits insuffisants"
+          },
+          "409": {
+            "description": "Un passage ou une réparation est déjà en cours pour ce workspace"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8950,6 +9185,257 @@
           "total": {
             "type": "integer",
             "example": 500
+          }
+        }
+      },
+      "ReconcileAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "reclassify_contacts",
+              "exit_contacts",
+              "cancel_queue_entries",
+              "recount_automation_stats"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "description": "Texte du bouton",
+            "en français.": null
+          },
+          "impact": {
+            "type": "string",
+            "description": "Ce que la réparation change."
+          },
+          "reversible": {
+            "type": "boolean"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "api": {
+            "type": "object",
+            "description": "L'appel qui applique l'action.",
+            "properties": {
+              "method": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "body": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "ReconcileFinding": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "check": {
+            "type": "string",
+            "example": "classes"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "warning",
+              "info"
+            ]
+          },
+          "subject_ref": {
+            "type": "string",
+            "example": "classe:freemail_fr->orange"
+          },
+          "title": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "string"
+          },
+          "observed": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Cause",
+            "en français.": null
+          },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "proposed_action": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconcileAction"
+              }
+            ]
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resolved_by": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        }
+      },
+      "ReconcileCheck": {
+        "type": "object",
+        "properties": {
+          "check": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "ecarts",
+              "non_abouti"
+            ]
+          },
+          "count": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer"
+          }
+        }
+      },
+      "ReconcileReport": {
+        "type": "object",
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ran": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconcileCheck"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconcileFinding"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "open": {
+                "type": "integer"
+              },
+              "critical": {
+                "type": "integer"
+              },
+              "warning": {
+                "type": "integer"
+              },
+              "info": {
+                "type": "integer"
+              },
+              "not_reached": {
+                "type": "integer"
+              }
+            }
+          },
+          "definitions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "definition": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReconcileResolveResult": {
+        "type": "object",
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "apply",
+              "dry_run",
+              "dismiss"
+            ]
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Le contrôle rejoué ne retrouve plus l'écart."
+          },
+          "remaining": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReconcileFinding"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
           }
         }
       }

@@ -1,0 +1,83 @@
+ReconcileAction:
+  type: object
+  properties:
+    kind: { type: string, enum: [reclassify_contacts, exit_contacts, cancel_queue_entries, recount_automation_stats] }
+    label: { type: string, description: Texte du bouton, en français. }
+    impact: { type: string, description: Ce que la réparation change. }
+    reversible: { type: boolean }
+    params: { type: object, additionalProperties: true }
+    api:
+      type: object
+      description: L'appel qui applique l'action.
+      properties:
+        method: { type: string }
+        path: { type: string }
+        body: { type: object, additionalProperties: true }
+ReconcileFinding:
+  type: object
+  properties:
+    id: { type: string }
+    check: { type: string, example: classes }
+    severity: { type: string, enum: [critical, warning, info] }
+    subject_ref: { type: string, example: 'classe:freemail_fr->orange' }
+    title: { type: string }
+    expected: { type: string }
+    observed: { type: string }
+    explanation: { type: string, description: Cause, en français. }
+    evidence: { type: object, additionalProperties: true }
+    proposed_action:
+      nullable: true
+      allOf:
+        - $ref: '#/ReconcileAction'
+    first_seen_at: { type: string, format: date-time }
+    last_seen_at: { type: string, format: date-time }
+    resolved_at: { type: string, format: date-time, nullable: true }
+    resolved_by: { type: string }
+    resolution: { type: object, nullable: true, additionalProperties: true }
+ReconcileCheck:
+  type: object
+  properties:
+    check: { type: string }
+    number: { type: integer }
+    title: { type: string }
+    status: { type: string, enum: [ok, ecarts, non_abouti] }
+    count: { type: integer }
+    error: { type: string }
+    duration_ms: { type: integer }
+ReconcileReport:
+  type: object
+  properties:
+    generated_at: { type: string, format: date-time }
+    ran: { type: boolean }
+    checks: { type: array, items: { $ref: '#/ReconcileCheck' } }
+    findings: { type: array, items: { $ref: '#/ReconcileFinding' } }
+    summary:
+      type: object
+      properties:
+        open: { type: integer }
+        critical: { type: integer }
+        warning: { type: integer }
+        info: { type: integer }
+        not_reached: { type: integer }
+    definitions:
+      type: array
+      items:
+        type: object
+        properties:
+          key: { type: string }
+          label: { type: string }
+          definition: { type: string }
+          source: { type: string }
+ReconcileResolveResult:
+  type: object
+  properties:
+    finding_id: { type: string }
+    action: { type: string, enum: [apply, dry_run, dismiss] }
+    applied: { type: boolean }
+    result: { type: object, nullable: true, additionalProperties: true }
+    verified: { type: boolean, description: Le contrôle rejoué ne retrouve plus l'écart. }
+    remaining:
+      nullable: true
+      allOf:
+        - $ref: '#/ReconcileFinding'
+    message: { type: string }

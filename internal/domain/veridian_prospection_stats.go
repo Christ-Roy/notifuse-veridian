@@ -45,13 +45,16 @@ const (
 func VeridianClassifyExitReason(reason string) string {
 	r := strings.ToLower(strings.TrimSpace(reason))
 	switch {
-	case strings.HasPrefix(r, "replied"):
+	// « contact_replied » : la porte d'envoi écarte l'entrée d'un contact qui a répondu.
+	case strings.HasPrefix(r, "replied"), r == "contact_replied":
 		return VeridianExitClassReplied
-	case strings.HasPrefix(r, "bounce"):
+	// « list_status_bounced|complained » : la porte d'envoi, statut de liste terminal ;
+	// « first_mail_* » : le premier mail n'a pas été livré (rebond, refus de politique).
+	case strings.HasPrefix(r, "bounce"), r == "list_status_bounced", r == "list_status_complained", strings.HasPrefix(r, "first_mail_"):
 		return VeridianExitClassRejected
-	case strings.HasPrefix(r, "unsubscribe"):
+	case strings.HasPrefix(r, "unsubscribe"), r == "list_status_unsubscribed":
 		return VeridianExitClassUnsubscribed
-	case strings.HasPrefix(r, "excluded_provider_class"), strings.HasPrefix(r, "pre-filtered"):
+	case strings.HasPrefix(r, "excluded_provider_class"), strings.HasPrefix(r, "pre-filtered"), r == "excluded_list":
 		return VeridianExitClassExcluded
 	default:
 		return VeridianExitClassOther
@@ -197,7 +200,12 @@ type VeridianProspectionProgressRow struct {
 	ExitReason      string
 	CurrentNodeID   string
 	LastEmailNodeID string
-	Count           int
+	// MailLeft : pour un contact sorti, le mail du dernier nœud email terminé est-il
+	// réellement parti (ligne message_history envoyée) ? nil = non mesuré (contact
+	// non sorti). Un mail « terminé » est seulement mis en file : le contact qui sort
+	// avant l'envoi (désinscription, réponse) ne l'a jamais reçu.
+	MailLeft *bool
+	Count    int
 }
 
 type VeridianProspectionKeyCount struct {
@@ -469,6 +477,14 @@ func VeridianBuildProspectionStats(raw *VeridianProspectionRaw, since, until, no
 				if sending {
 					queuedStage = cs
 				}
+			}
+		}
+		// Sorti sans que le mail du dernier nœud soit parti : cette étape n'est pas atteinte
+		// (cas 2 947 servi contre 2 891 réels du 27/10 : 56 désinscrits entre la mise en
+		// file et l'envoi).
+		if row.Status == string(ContactAutomationStatusExited) && row.MailLeft != nil && !*row.MailLeft {
+			if ls := ns.nodeStage[row.LastEmailNodeID]; ls > 0 && sentStage >= ls {
+				sentStage = ls - 1
 			}
 		}
 		for s := 1; s <= sentStage && s <= len(seq.Stages); s++ {

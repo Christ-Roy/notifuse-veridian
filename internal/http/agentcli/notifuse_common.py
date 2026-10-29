@@ -76,6 +76,18 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
                                                               fichier, JAMAIS en argument, jamais affiché ni loggé. Gmail : https://myaccount.google.com/apppasswords
   notifuse prospection:stats <ws> [--start AAAA-MM-JJ] [--end AAAA-MM-JJ]   agrégats du tableau de bord de prospection (réponses par séquence et liste,
                                                               avancement J0/J+4/J+10, sorties par raison, stock par liste ; lecture, clé scopée OK)
+  notifuse reconcile:run <ws> [--check C]... [--json]   recoupe ce que le logiciel croit (statuts, compteurs, classes, stock) avec la réalité ; code de sortie 0 = tout concorde,
+                                                              1 = des écarts (cause en français, réparation proposée), 2 = un contrôle n'a pas abouti (jamais « ok »)
+  notifuse reconcile:report <ws> [--check C] [--all] [--json]   écarts ouverts (--all : aussi les résolus), sans rien exécuter ; mêmes codes de sortie
+  notifuse reconcile:resolve <ws> --id F [--dry-run | --dismiss [--note T]] [--yes]   applique la réparation proposée d'un écart (--yes requis), la simule (--dry-run)
+                                                              ou l'écarte 7 jours (--dismiss) ; rejoue le contrôle après coup et dit si l'écart a disparu
+  notifuse folders:list <ws> --kind segments|lists|templates [--json]            arbre des dossiers (L2, V65) : dossiers, compteurs, objets
+  notifuse folders:create <ws> --kind K (--name N [--parent ID] | --path "A / B") [--position N | --before ID]
+  notifuse folders:rename <ws> --id ID --name N      renomme (les noms « A / B / C » des objets suivent)
+  notifuse folders:move <ws> --id ID [--parent ID|root] [--position N | --before ID]
+  notifuse folders:delete <ws> --id ID [--to-parent]     refuse un dossier non vide sauf --to-parent ; ne supprime jamais un objet
+  notifuse folders:reorder <ws> --kind K [--parent ID] [--folders id,id] [--items id,id]
+  notifuse segments:move|lists:move|templates:move <ws> --id ID [--id ID2 ...] (--folder ID | --path "A / B" | --root) [--position N | --before ID] [--name NOUVEAU_LIBELLE]
   notifuse queue:explain <ws> [--group-by node,reason,profile,class,automation] [--automation X] [--node N] [--reason R] [--profile P] [--class C] [--status S] [--entry ID] [--json]
                                                               pourquoi les mails sont en file : tableau groupé (count, jamais examinés, plus ancienne, prochaine tentative) + orphelins ;
                                                               --entry ID = détail de l'entrée et sa dernière décision gate par gate (lecture, clé scopée OK)
@@ -353,6 +365,9 @@ WORKSPACE_COMMANDS = frozenset({
     # Lot 1 (10/10/2026) : pourquoi un mail n'est pas parti. queue:explain et logs:decisions en
     # lecture (automations:read) ; queue:recompute en écriture (automations:write, --yes requis).
     "queue:explain", "logs:decisions", "queue:recompute", "queue:entries", "queue:cancel",
+    # L1b (29/10/2026) : réconciliateur. run/report en lecture (contacts, message_history et
+    # automations :read), resolve exige en plus l'écriture de la ressource réparée.
+    "reconcile:run", "reconcile:report", "reconcile:resolve",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -2366,6 +2381,205 @@ def cmd_queue_recompute(a):
     out(*call_jwt(a.env, "POST", "/api/veridian/queue.recompute", jwt, body=body))
 
 
+# ---- L1b (29/10/2026) : réconciliateur ---------------------------------------
+# reconcile:run     = POST /api/veridian/reconcile.run     (lit, écrit seulement la table des écarts)
+# reconcile:report  = GET  /api/veridian/reconcile.report  (lecture)
+# reconcile:resolve = POST /api/veridian/reconcile.resolve (apply | dry_run | dismiss)
+# Codes de sortie : 0 tout concorde, 1 des écarts ouverts, 2 non abouti (contrôle ou appel).
+_SEV_FR = {"critical": "CRITIQUE", "warning": "à corriger", "info": "info"}
+_CHECK_FR = {"ok": "ok", "ecarts": "ÉCARTS", "non_abouti": "NON ABOUTI"}
+
+
+def format_reconcile(rep):
+    L = []
+    for c in rep.get("checks") or []:
+        extra = f" : {c['error']}" if c.get("error") else (f" ({c['count']})" if c.get("count") else "")
+        L.append(f"  {c.get('number', '?')}. {c.get('title', c.get('check'))} : {_CHECK_FR.get(c.get('status'), c.get('status'))}{extra}")
+    findings = rep.get("findings") or []
+    sm = rep.get("summary") or {}
+    L.append(f"{sm.get('open', len(findings))} écart(s) ouvert(s) : {sm.get('critical', 0)} critique(s), {sm.get('warning', 0)} à corriger, {sm.get('info', 0)} info"
+             + (f" ; {sm['not_reached']} contrôle(s) non abouti(s)" if sm.get("not_reached") else ""))
+    for f in findings:
+        mark = "résolu" if f.get("resolved_at") else _SEV_FR.get(f.get("severity"), f.get("severity"))
+        L.append("")
+        L.append(f"[{mark}] {f.get('title')}   id {f.get('id')}  ({f.get('check')})")
+        L.append(f"    attendu : {f.get('expected')}")
+        L.append(f"    observé : {f.get('observed')}")
+        L.append(f"    cause   : {f.get('explanation')}")
+        act = f.get("proposed_action")
+        if act:
+            L.append(f"    réparer : {act.get('label')} ({act.get('impact')})  -> notifuse reconcile:resolve <ws> --id {f.get('id')} --yes")
+        else:
+            L.append("    réparer : aucune réparation automatique")
+    return L
+
+
+def reconcile_exit_code(rep):
+    sm = rep.get("summary") or {}
+    if sm.get("not_reached"):
+        return 2
+    return 1 if sm.get("open") else 0
+
+
+def cmd_reconcile_run(a):
+    jwt = apikey_for(a.env, a.workspace)
+    body = {"workspace_id": a.workspace}
+    if a.check:
+        body["checks"] = a.check
+    st, rep = call_jwt(a.env, "POST", "/api/veridian/reconcile.run", jwt, body=body)
+    if st != 200 or not isinstance(rep, dict):
+        out(st, rep)
+        sys.exit(2)
+    print(json.dumps(rep, indent=2, ensure_ascii=False) if a.json else "\n".join(format_reconcile(rep)))
+    sys.exit(reconcile_exit_code(rep))
+
+
+def cmd_reconcile_report(a):
+    jwt = apikey_for(a.env, a.workspace)
+    params = {"workspace_id": a.workspace, "check": a.check, "include_resolved": "true" if a.all else None}
+    st, rep = call_jwt(a.env, "GET", "/api/veridian/reconcile.report", jwt, params=params)
+    if st != 200 or not isinstance(rep, dict):
+        out(st, rep)
+        sys.exit(2)
+    print(json.dumps(rep, indent=2, ensure_ascii=False) if a.json else "\n".join(format_reconcile(rep)))
+    sys.exit(reconcile_exit_code(rep))
+
+
+def cmd_reconcile_resolve(a):
+    if a.dry_run and a.dismiss:
+        die("--dry-run et --dismiss s'excluent.")
+    action = "dismiss" if a.dismiss else ("dry_run" if a.dry_run else "apply")
+    body = {"workspace_id": a.workspace, "finding_id": a.finding_id, "action": action}
+    if a.note:
+        body["note"] = a.note
+    if action == "apply" and not a.yes:
+        print("DRY-RUN (rien n'est envoyé) : POST /api/veridian/reconcile.resolve")
+        print(json.dumps(body, indent=2, ensure_ascii=False))
+        print("Ajoute --yes pour appliquer la réparation (--dry-run pour la simuler côté serveur).", file=sys.stderr)
+        return
+    jwt = apikey_for(a.env, a.workspace)
+    st, res = call_jwt(a.env, "POST", "/api/veridian/reconcile.resolve", jwt, body=body)
+    out(st, res)
+    if isinstance(res, dict) and action == "apply" and not res.get("verified"):
+        sys.exit(1)
+
+
+# ---- L2 : dossiers natifs (V65) ----
+# folders:*  = /api/veridian/folders.*  ; segments:move|lists:move|templates:move = /api/veridian/<kind>.move
+_FOLDER_KINDS = ("segments", "lists", "templates")
+
+
+def _folder_position(a):
+    pos = getattr(a, "position", None)
+    before = getattr(a, "before", None)
+    if pos is not None and before:
+        die("--position et --before s'excluent.")
+    if pos is not None and pos < 0:
+        die("--position doit être >= 0.")
+    return pos, before
+
+
+def format_folder_tree(data):
+    """Arbre lisible (fonction pure, testée) : dossiers indentés avec compteur, objets en dessous."""
+    folders = data.get("folders") or []
+    items = data.get("items") or []
+    by_folder = {}
+    for it in items:
+        by_folder.setdefault(it.get("folder_id"), []).append(it)
+    kids = {}
+    for f in folders:
+        kids.setdefault(f.get("parent_id"), []).append(f)
+    L = [f"{data.get('kind')} : {len(items)} objet(s), {len(folders)} dossier(s)"]
+    adopt = data.get("adopt")
+    if adopt and (adopt.get("adopted") or adopt.get("folders_created")):
+        L.append(f"  (rangés d'après leur nom pendant cet appel : {adopt.get('adopted', 0)} objet(s), {adopt.get('folders_created', 0)} dossier(s) créé(s))")
+    for w in (adopt or {}).get("warnings") or []:
+        L.append(f"  ! {w}")
+
+    def walk(parent, depth):
+        pad = "  " * depth
+        for f in kids.get(parent, []):
+            empty = " (vide)" if not f.get("count") else ""
+            L.append(f"{pad}▸ {f['name']}  [{f.get('count', 0)}]{empty}  id={f['id']}")
+            walk(f["id"], depth + 1)
+            for it in by_folder.get(f["id"], []):
+                L.append(f"{pad}  · {it['label']}  id={it['id']}")
+
+    walk(None, 0)
+    for it in by_folder.get(None, []):
+        L.append(f"· {it['label']}  id={it['id']}")
+    return L
+
+
+def cmd_folders_list(a):
+    jwt = apikey_for(a.env, a.workspace)
+    st, data = call_jwt(a.env, "GET", "/api/veridian/folders.list", jwt, params={"workspace_id": a.workspace, "kind": a.kind})
+    if st != 200 or not isinstance(data, dict) or a.json:
+        out(st, data)
+        return
+    print("\n".join(format_folder_tree(data)))
+
+
+def cmd_folders_create(a):
+    if bool(a.path) == bool(a.name):
+        die("folders:create exige --name N (avec --parent) OU --path \"A / B\".")
+    if a.path and a.parent:
+        die("--path exclut --parent.")
+    pos, before = _folder_position(a)
+    body = {"workspace_id": a.workspace, "kind": a.kind, "name": a.name, "path": a.path, "parent_id": a.parent,
+            "position": pos, "before_id": before}
+    out(*call_jwt(a.env, "POST", "/api/veridian/folders.create", apikey_for(a.env, a.workspace),
+                  body={k: v for k, v in body.items() if v is not None}))
+
+
+def cmd_folders_rename(a):
+    body = {"workspace_id": a.workspace, "id": a.id, "name": a.name}
+    out(*call_jwt(a.env, "POST", "/api/veridian/folders.rename", apikey_for(a.env, a.workspace), body=body))
+
+
+def cmd_folders_move(a):
+    pos, before = _folder_position(a)
+    parent = "" if a.parent in (None, "root", "racine") else a.parent
+    body = {"workspace_id": a.workspace, "id": a.id, "parent_id": parent, "position": pos, "before_id": before}
+    out(*call_jwt(a.env, "POST", "/api/veridian/folders.move", apikey_for(a.env, a.workspace),
+                  body={k: v for k, v in body.items() if v is not None}))
+
+
+def cmd_folders_delete(a):
+    body = {"workspace_id": a.workspace, "id": a.id, "contents": "to_parent" if a.to_parent else "refuse"}
+    out(*call_jwt(a.env, "POST", "/api/veridian/folders.delete", apikey_for(a.env, a.workspace), body=body))
+
+
+def _csv(s):
+    return [x.strip() for x in s.split(",") if x.strip()] if s else None
+
+
+def cmd_folders_reorder(a):
+    folders, items = _csv(a.folders), _csv(a.items)
+    if not folders and not items:
+        die("folders:reorder exige --folders id,id et/ou --items id,id.")
+    parent = "" if a.parent in (None, "root", "racine") else a.parent
+    body = {"workspace_id": a.workspace, "kind": a.kind, "parent_id": parent, "folder_ids": folders, "item_ids": items}
+    out(*call_jwt(a.env, "POST", "/api/veridian/folders.reorder", apikey_for(a.env, a.workspace),
+                  body={k: v for k, v in body.items() if v is not None}))
+
+
+def _cmd_items_move(kind):
+    def run(a):
+        ids = a.id or []
+        if not ids:
+            die(f"{kind}:move exige au moins un --id.")
+        dests = [bool(a.folder), bool(a.path), bool(a.root)]
+        if sum(dests) != 1:
+            die("indique exactement une destination : --folder ID, --path \"A / B\" ou --root.")
+        pos, before = _folder_position(a)
+        body = {"workspace_id": a.workspace, "ids": ids, "folder_id": a.folder if a.folder else ("" if a.root else None),
+                "folder_path": a.path, "position": pos, "before_id": before, "name": a.name}
+        out(*call_jwt(a.env, "POST", f"/api/veridian/{kind}.move", apikey_for(a.env, a.workspace),
+                      body={k: v for k, v in body.items() if v is not None}))
+    return run
+
+
 # ---- generic resource CRUD helpers ----
 def _json_arg(s):
     if not s:
@@ -4080,6 +4294,29 @@ def build_parser():
     sp.add_argument("--start", help="début de fenêtre AAAA-MM-JJ (défaut : tout l'historique)")
     sp.add_argument("--end", help="fin de fenêtre AAAA-MM-JJ, jour inclus")
     sp.set_defaults(func=cmd_prospection_stats, _routes=["/api/veridian/prospection.stats"])
+
+    sp = sub.add_parser("reconcile:run",
+                        help="recoupe statuts, compteurs, classes et stock avec la réalité ; écarts expliqués en français avec réparation proposée (exit 0 concorde, 1 écarts, 2 non abouti)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--check", action="append", help="limite à un contrôle (code ou numéro : statut_coherent|3, compteurs|4, classes|6, stock|7) ; répétable")
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute")
+    sp.set_defaults(func=cmd_reconcile_run, _routes=["/api/veridian/reconcile.run"])
+
+    sp = sub.add_parser("reconcile:report", help="écarts ouverts du réconciliateur, sans rien exécuter")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--check", help="un seul contrôle (code ou numéro)")
+    sp.add_argument("--all", action="store_true", help="inclut les écarts résolus")
+    sp.add_argument("--json", action="store_true", help="sortie JSON brute")
+    sp.set_defaults(func=cmd_reconcile_report, _routes=["/api/veridian/reconcile.report"])
+
+    sp = sub.add_parser("reconcile:resolve", help="applique (--yes), simule (--dry-run) ou écarte (--dismiss) la réparation proposée d'un écart")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--id", dest="finding_id", required=True, help="identifiant de l'écart (reconcile:report)")
+    sp.add_argument("--dry-run", action="store_true", help="simulation côté serveur : rien n'est modifié")
+    sp.add_argument("--dismiss", action="store_true", help="écarte l'écart 7 jours (cas voulu)")
+    sp.add_argument("--note", help="note jointe à --dismiss")
+    sp.add_argument("--yes", action="store_true", help="exécute pour de vrai la réparation")
+    sp.set_defaults(func=cmd_reconcile_resolve, _routes=["/api/veridian/reconcile.resolve"])
 
     sp = sub.add_parser("queue:explain",
                         help="pourquoi les mails sont en file : groupes par automation, nœud, raison, profil ; --entry ID pour une entrée et sa dernière décision gate par gate")

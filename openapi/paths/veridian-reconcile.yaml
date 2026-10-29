@@ -1,0 +1,120 @@
+/api/veridian/reconcile.run:
+  post:
+    summary: Run the reconciliation checks (Veridian)
+    description: |
+      Veridian extension (lot L1b). Recoupe ce que le logiciel croit (statuts de contacts,
+      compteurs, classes de messagerie, file et stock) avec ce qui s'est réellement passé, et
+      synchronise la table des écarts (`veridian_reconcile_finding`) : écart nouveau ouvert,
+      écart persistant rafraîchi, écart disparu clos automatiquement. Un contrôle qui n'a pas pu
+      conclure est `non_abouti` et ne touche pas à ses écarts : trois états, jamais deux.
+
+      Droits : `contacts:read`, `message_history:read` et `automations:read`. Un seul passage à
+      la fois par workspace (409 sinon). Aucune écriture hors de la table des écarts.
+    operationId: veridianReconcileRun
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id]
+            properties:
+              workspace_id: { type: string }
+              checks:
+                type: array
+                description: Codes ou numéros des contrôles à jouer (tous si absent).
+                items: { type: string, example: classes }
+    responses:
+      '200':
+        description: État des écarts après le passage
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/veridian-reconcile.yaml#/ReconcileReport'
+      '400': { description: Requête invalide }
+      '401': { description: Non authentifié }
+      '403': { description: Droits insuffisants }
+      '409':
+        description: Un passage est déjà en cours pour ce workspace
+/api/veridian/reconcile.report:
+  get:
+    summary: Read the open discrepancies without running anything
+    operationId: veridianReconcileReport
+    security:
+      - BearerAuth: []
+    parameters:
+      - { name: workspace_id, in: query, required: true, schema: { type: string } }
+      - { name: check, in: query, schema: { type: string }, description: Un seul contrôle (code ou numéro). }
+      - { name: include_resolved, in: query, schema: { type: boolean }, description: Inclut les écarts résolus. }
+    responses:
+      '200':
+        description: Écarts ouverts
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/veridian-reconcile.yaml#/ReconcileReport'
+      '400': { description: Requête invalide }
+      '401': { description: Non authentifié }
+      '403': { description: Droits insuffisants }
+  post:
+    summary: Read the open discrepancies (POST form)
+    operationId: veridianReconcileReportPost
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id]
+            properties:
+              workspace_id: { type: string }
+              check: { type: string }
+              include_resolved: { type: boolean }
+    responses:
+      '200':
+        description: Écarts ouverts
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/veridian-reconcile.yaml#/ReconcileReport'
+/api/veridian/reconcile.resolve:
+  post:
+    summary: Apply, preview or dismiss the proposed repair of a discrepancy
+    description: |
+      `apply` exécute la réparation proposée (les cibles sont relues au moment d'appliquer, dans
+      une transaction), clôt l'écart, puis rejoue le contrôle : `verified` dit si l'écart a
+      disparu. `dry_run` ne modifie rien. `dismiss` écarte l'écart 7 jours (cas voulu).
+
+      Droits : lecture des trois ressources, plus l'écriture des contacts (reclassement) ou des
+      automations (sorties, file, compteurs).
+    operationId: veridianReconcileResolve
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, finding_id]
+            properties:
+              workspace_id: { type: string }
+              finding_id: { type: string }
+              action: { type: string, enum: [apply, dry_run, dismiss], default: apply }
+              note: { type: string }
+    responses:
+      '200':
+        description: Résultat de l'action
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/veridian-reconcile.yaml#/ReconcileResolveResult'
+      '400': { description: Requête invalide }
+      '401': { description: Non authentifié }
+      '403': { description: Droits insuffisants }
+      '409':
+        description: Un passage ou une réparation est déjà en cours pour ce workspace

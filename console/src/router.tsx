@@ -79,6 +79,7 @@ const SendingProfilesPage = veridianLazyPage(
   'SendingProfilesPage'
 )
 const SendQueuePage = veridianLazyPage(() => import('./pages/SendQueuePage'), 'SendQueuePage')
+const ReconcilePage = veridianLazyPage(() => import('./components/reconcile/veridian_reconcile_page'), 'ReconcilePage')
 const AutomationsPage = veridianLazyPage(() => import('./pages/AutomationsPage'), 'AutomationsPage')
 const AnalyticsPage = veridianLazyPage(() => import('./pages/AnalyticsPage'), 'AnalyticsPage')
 const TemplatesPage = veridianLazyPage(() => import('./pages/TemplatesPage'), 'TemplatesPage')
@@ -250,6 +251,13 @@ const workspaceSendQueueRoute = createRoute({
   component: SendQueuePage as RouteComponent
 })
 
+// L1b (29/10/2026) : « Écarts », le réconciliateur (reconcile.run / report / resolve).
+const workspaceReconcileRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: '/reconcile',
+  component: ReconcilePage as RouteComponent
+})
+
 // `type` choisit le journal : commercial (defaut) ou transactionnel. Les autres parametres
 // (filtres du tableau, onglet) passent tels quels.
 export interface LogsSearch {
@@ -415,6 +423,7 @@ const routeTree = rootRoute.addChildren([
     workspaceLogsRoute,
     workspaceSendingProfilesRoute,
     workspaceSendQueueRoute,
+    workspaceReconcileRoute,
     workspaceFileManagerRoute,
     workspaceSettingsRedirectRoute,
     workspaceSmtpBridgeRedirectRoute,
