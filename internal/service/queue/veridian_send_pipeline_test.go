@@ -217,3 +217,13 @@ func TestProcessEntry_PreRunsBeforeIntegrationLookup(t *testing.T) {
 	assert.Equal(t, []string{"Pre>", "Pre<"}, (*trace)[:2])
 	assert.NotContains(t, *trace, "Select>", "integration inconnue : l'entree echoue avant Select")
 }
+
+// Record(echec) ne libere le quota du jour que si le transport prouve que le relais n'a rien accepte :
+// sans bail de quota, aucun appel de liberation ne doit planter ; un echec ambigu ne libere rien.
+func TestVeridianSendPipeline_Record_FailureWithoutLeasesIsHarmless(t *testing.T) {
+	w := &EmailQueueWorker{}
+	p := &veridianSendPipeline{w: w}
+	sc := &SendContext{Workspace: &domain.Workspace{ID: "workspace-1"}, Entry: &domain.EmailQueueEntry{ID: "entry-1"}}
+	assert.NotPanics(t, func() { p.Record(sc, SendResult{Err: errors.New("421 timeout apres DATA")}) })
+	assert.NotPanics(t, func() { p.Record(sc, SendResult{}) }, "succes sans journal de decision : rien a ecrire")
+}

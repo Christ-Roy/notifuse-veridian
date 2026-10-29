@@ -2749,3 +2749,41 @@ func TestEmailQueueWorker_ProcessEntry_LegacyFreemailTagIsPersistedAsFAI(t *test
 	env.worker.processEntry(ws, entry)
 	assert.Equal(t, domain.ProviderClassOrange, entry.Payload.VeridianProviderClass)
 }
+
+// Lot A (29/10/2026) : une etape de SendPipeline qui regle l'entree (false) arrete processEntry avant tout
+// acces au depot de file, au SMTP ou a l'historique : les mocks sans attente echouent sur le moindre appel.
+func TestEmailQueueWorker_ProcessEntry_PipelineStopTouchesNothing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockLogger := pkgmocks.NewMockLogger(ctrl)
+	mockLogger.EXPECT().WithFields(gomock.Any()).Return(mockLogger).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	worker := NewEmailQueueWorker(
+		mocks.NewMockEmailQueueRepository(ctrl),
+		mocks.NewMockWorkspaceRepository(ctrl),
+		mocks.NewMockEmailServiceInterface(ctrl),
+		mocks.NewMockMessageHistoryRepository(ctrl),
+		DefaultWorkerConfig(),
+		mockLogger,
+	)
+	worker.ctx = context.Background()
+	worker.SetSendPipeline(stopPipeline{})
+
+	workspace := &domain.Workspace{ID: "workspace-1", Integrations: []domain.Integration{{ID: "integration-1"}}}
+	entry := &domain.EmailQueueEntry{ID: "entry-1", IntegrationID: "integration-1", ContactEmail: "test@example.com"}
+	worker.processEntry(workspace, entry)
+}
+
+// stopPipeline regle toute entree des l'etape Pre.
+type stopPipeline struct{}
+
+func (stopPipeline) Pre(*SendContext) bool { return false }
+func (stopPipeline) Select(*SendContext) bool {
+	panic("Select ne doit pas etre appele apres un Pre qui regle l'entree")
+}
+func (stopPipeline) PreRender(*SendContext) bool { panic("PreRender ne doit pas etre appele") }
+func (stopPipeline) PreSend(*SendContext) bool   { panic("PreSend ne doit pas etre appele") }
+func (stopPipeline) Record(*SendContext, SendResult) {
+	panic("Record ne doit pas etre appele")
+}
