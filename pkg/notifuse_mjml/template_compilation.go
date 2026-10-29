@@ -406,13 +406,21 @@ func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse,
 	// Render Subject and SubjectPreview through Liquid before any body work, so
 	// the rendered values can be returned even when the body fails to compile.
 	// A malformed Liquid expression in the subject short-circuits the response.
+	// Veridian fork (sécurité) : les données (contact, flux, API) sont du texte, jamais
+	// du modèle. Leurs accolades sont neutralisées pour tout le rendu (Liquid par bloc,
+	// passe sur la chaîne entière, spintax) et remises avant la compilation MJML.
+	// Voir veridian_liquid_data.go.
+	neutralized := !req.PreserveLiquid && req.Channel != "web" && len(req.TemplateData) > 0
+	if neutralized {
+		req.TemplateData = veridianNeutralizeData(req.TemplateData)
+	}
 	renderedSubject, subjectErr := renderSubjectField(req.Subject, req.TemplateData, req.Channel, req.PreserveLiquid, "email_subject")
 	if subjectErr != nil {
 		return &CompileTemplateResponse{Success: false, Error: subjectErr}, nil
 	}
 	renderedSubjectPreview, previewErr := renderSubjectField(req.SubjectPreview, req.TemplateData, req.Channel, req.PreserveLiquid, "email_subject_preview")
 	if previewErr != nil {
-		return &CompileTemplateResponse{Success: false, Subject: renderedSubject, Error: previewErr}, nil
+		return &CompileTemplateResponse{Success: false, Subject: veridianRestorePtr(renderedSubject), Error: previewErr}, nil
 	}
 
 	// Veridian fork (cold outbound) — résolution spintax du sujet et du preview,
@@ -429,6 +437,11 @@ func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse,
 			v := veridianApplySpintax(*renderedSubjectPreview, req.VeridianSpintaxSeed)
 			renderedSubjectPreview = &v
 		}
+	}
+
+	if neutralized {
+		renderedSubject = veridianRestorePtr(renderedSubject)
+		renderedSubjectPreview = veridianRestorePtr(renderedSubjectPreview)
 	}
 
 	// If MjmlSource is provided (code mode), use it directly.
@@ -544,6 +557,9 @@ func CompileTemplate(req CompileTemplateRequest) (resp *CompileTemplateResponse,
 	// d'invocation, zone disjointe du tracking de liens (TrackLinks plus bas).
 	// Seed vide = no-op strict (non-régression). Voir veridian_spintax_apply.go.
 	mjmlString = veridianApplySpintax(mjmlString, req.VeridianSpintaxSeed)
+	if neutralized {
+		mjmlString = veridianRestoreBraces(mjmlString)
+	}
 
 	// Preprocess MJML to fix HTML vs XML incompatibilities
 	// gomjml uses a strict XML parser that doesn't accept HTML void tags (<br>) or HTML entities (&nbsp;)

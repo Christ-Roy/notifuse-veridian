@@ -20,6 +20,7 @@ import PanelLayout from '../panels/PanelLayout'
 import BorderRadiusInput from '../ui/BorderRadiusInput'
 import { TiptapInlineEditor } from '../ui/tiptap'
 import { liquidUrl } from '../../../i18n/liquid'
+import { veridianSanitizeHtml } from '../../../lib/veridian_sanitize_html'
 
 // Local state management for button content to prevent unnecessary re-renders
 const useButtonContentState = (
@@ -654,7 +655,7 @@ const MjButtonBlockWrapper: React.FC<PreviewProps & { block: EmailBlock }> = ({
           ) : (
             <span
               style={{ color: attrs.color }}
-              dangerouslySetInnerHTML={{ __html: localContent }}
+              dangerouslySetInnerHTML={{ __html: veridianSanitizeHtml(localContent) }}
             />
           )}
         </div>

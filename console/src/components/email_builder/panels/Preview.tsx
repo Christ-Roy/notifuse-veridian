@@ -462,6 +462,9 @@ export const Preview = forwardRef<PreviewRef, PreviewProps>(
               >
                 <iframe
                   srcDoc={html}
+                  // Bac à sable total : le HTML rendu contient des données de contact et
+                  // du contenu de modèle, jamais de script exécutable dans l'origine de la console.
+                  sandbox=""
                   style={{
                     width: '100%',
                     height: '100%',

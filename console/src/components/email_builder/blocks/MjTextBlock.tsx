@@ -19,6 +19,7 @@ import FontStyleInput from '../ui/FontStyleInput'
 import HeightInput from '../ui/HeightInput'
 import StringPopoverInput from '../ui/StringPopoverInput'
 import { TiptapRichEditor } from '../ui/tiptap'
+import { veridianSanitizeHtml } from '../../../lib/veridian_sanitize_html'
 
 // Functional component for settings panel with i18n support
 interface MjTextSettingsPanelProps {
@@ -485,7 +486,7 @@ const MjTextBlockWrapper: React.FC<PreviewProps & { block: EmailBlock }> = ({
       ) : (
         <div
           style={textStyle}
-          dangerouslySetInnerHTML={{ __html: localContent }}
+          dangerouslySetInnerHTML={{ __html: veridianSanitizeHtml(localContent) }}
           onClick={(e) => {
             // Check if the clicked element is an anchor tag
             const target = e.target as HTMLElement

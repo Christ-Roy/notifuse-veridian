@@ -304,6 +304,25 @@ jobs:
           fi
           echo "✓ $passed/$total cas passés sur $suites fichiers."
 
+      # Budget de lenteur : un test lourd qui grossit se voit AVANT de flaker. Avertit au-delà de
+      # 20 s par test (le timeout du fichier le plus lourd est de 30 s), échoue au-delà de 240 s
+      # pour un fichier : plus aucun fichier ne doit porter à lui seul la suite (28/10 : un fichier de
+      # 322 à 502 s sur 540 s de mur).
+      - name: Budget de lenteur vitest
+        if: always()
+        run: |
+          set -uo pipefail
+          f=vitest-console.json
+          [ -s "$f" ] || { echo "rapport absent, rien à mesurer"; exit 0; }
+          echo "5 fichiers les plus lents :"
+          jq -r '.testResults | map({n: (.name | sub(".*/console/"; "")), s: ((.endTime - .startTime) / 1000)}) | sort_by(-.s) | .[:5][] | "  \(.s | floor) s  \(.n)"' "$f"
+          jq -r '.testResults[] | .name as $n | .assertionResults[] | select((.duration // 0) > 20000) | "::warning::test lent (\((.duration / 1000) | floor) s) : \($n | sub(".*/console/"; "")) : \(.title)"' "$f"
+          over=$(jq -r '[.testResults[] | select(((.endTime - .startTime) / 1000) > 240) | (.name | sub(".*/console/"; ""))] | join(" ; ")' "$f")
+          if [ -n "$over" ]; then
+            echo "::error::fichier de tests au-delà de 240 s : $over. Le découper par thème (voir veridian_cold_outreach_settings.*.test.tsx)."
+            exit 1
+          fi
+
       - name: Upload rapport vitest
         if: always()
         uses: actions/upload-artifact@v4

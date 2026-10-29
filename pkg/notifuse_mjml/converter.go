@@ -514,8 +514,11 @@ func escapeAttributeValue(value string, attributeName string) string {
 // escapeContent escapes content for safe HTML output
 func escapeContent(content string) string {
 	content = strings.ReplaceAll(content, "&", "&amp;")
-	content = strings.ReplaceAll(content, "<", "&lt;")
-	content = strings.ReplaceAll(content, ">", "&gt;")
+	// Veridian fork (L4) : entités NUMÉRIQUES. Avec « &lt; », preprocessMjmlForXML puis l'analyseur
+	// MJML relisaient « < » et l'analyse XML échouait pour un titre ou un aperçu contenant une
+	// donnée de contact comme « Dupont <SARL> » (envoi bloqué pour ce contact).
+	content = strings.ReplaceAll(content, "<", "&#60;")
+	content = strings.ReplaceAll(content, ">", "&#62;")
 	return content
 }
 
