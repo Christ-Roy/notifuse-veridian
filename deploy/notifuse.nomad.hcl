@@ -455,8 +455,6 @@ CHECK_FOR_UPDATES=false
 API_ENDPOINT=https://notifuse.app.veridian.site
 INTERNAL_API_ENDPOINT=http://localhost:8081
 VERIDIAN_DEFAULT_PLAN=free
-# Co-owner par defaut de chaque espace cree (Robert Brunon, 30/10/2026). Adresse, pas un secret. Vide = desactive.
-VERIDIAN_DEFAULT_CO_OWNER_EMAIL=robert.brunon@veridian.site
 # IP tailnet du bastion (100.108.136.89) et de app-01 (100.81.160.83, relai ASD) autorisees pour les integrations IMAP/SMTP seulement (fiche 67).
 NOTIFUSE_TRUSTED_INTERNAL_HOSTS=100.108.136.89,100.81.160.83
 
