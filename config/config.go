@@ -66,6 +66,11 @@ type Config struct {
 	HubBaseURL                  string
 	HubInvitationSecretNotifuse string
 
+	// VeridianDefaultCoOwnerEmail : email du user (Robert Brunon) rattache en
+	// role=owner a CHAQUE espace cree (Provision) en plus de l'owner client.
+	// Env VERIDIAN_DEFAULT_CO_OWNER_EMAIL ; vide = desactive (defaut).
+	VeridianDefaultCoOwnerEmail string
+
 	// AgentCLIBinaryPath : chemin local (dans l'image) du binaire/script CLI
 	// utilisateur `notifuse` à servir sur GET /agent/notifuse (mission
 	// "API & agents", 2026-10-03). Build séparé (skill notifuse-cli) — vide
@@ -884,6 +889,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		VeridianDefaultPlan:         v.GetString("VERIDIAN_DEFAULT_PLAN"),
 		HubBaseURL:                  v.GetString("HUB_BASE_URL"),
 		HubInvitationSecretNotifuse: v.GetString("HUB_INVITATION_SECRET_NOTIFUSE"),
+		VeridianDefaultCoOwnerEmail: v.GetString("VERIDIAN_DEFAULT_CO_OWNER_EMAIL"),
 		AgentCLIBinaryPath:          v.GetString("AGENT_CLI_BINARY_PATH"),
 
 		EnvValues: envVals, // Store env values for setup service

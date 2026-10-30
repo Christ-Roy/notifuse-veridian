@@ -515,6 +515,11 @@ func (a *App) veridianInitHandlers() error {
 	if cleaner, ok := a.veridianService.(interface{ ConfigureWorkspaceDBCleanup(string) }); ok {
 		cleaner.ConfigureWorkspaceDBCleanup(a.config.Database.Prefix)
 	}
+	// === Veridian patch 2026-10-30 === co-owner par defaut de chaque espace
+	// (VERIDIAN_DEFAULT_CO_OWNER_EMAIL ; vide = desactive).
+	if coOwner, ok := a.veridianService.(interface{ ConfigureDefaultCoOwner(string) }); ok {
+		coOwner.ConfigureDefaultCoOwner(a.config.VeridianDefaultCoOwnerEmail)
+	}
 	if gcRunner, ok := a.veridianService.(httpHandler.VeridianOrphanDBGCRunner); ok {
 		veridianHandler.SetOrphanDBGC(gcRunner, a.config.Environment)
 	}

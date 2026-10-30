@@ -159,6 +159,12 @@ type veridianService struct {
 	// DROP upstream sans FORCE + le cas record-absent/base-restante). Vide =
 	// rattrapage désactivé (non-régression : comportement upstream seul).
 	dbPrefix string
+
+	// === Veridian patch — 2026-10-30 — co-owner par defaut ===
+	// defaultCoOwnerEmail : email du user (Robert) qui doit etre owner de chaque
+	// espace. Injecte via ConfigureDefaultCoOwner (veridian_co_owner.go). Vide =
+	// fonctionnalite desactivee.
+	defaultCoOwnerEmail string
 }
 
 // NewVeridianService construit un VeridianService.
@@ -327,7 +333,13 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		if listErr != nil {
 			return nil, fmt.Errorf("idempotent: list workspace members: %w", listErr)
 		}
+		// === Veridian patch 2026-10-30 === Un espace peut avoir PLUSIEURS owners
+		// humains (co-owner par defaut, cf. veridian_co_owner.go). Le controle
+		// accepte input.OwnerEmail s'il correspond a N'IMPORTE QUEL owner humain ;
+		// ownerUserID est alors celui de l'owner qui correspond. Sans
+		// correspondance mais avec au moins un owner humain → ErrOwnerMismatch.
 		var ownerEmailReal, ownerUserID string
+		ownerMatched := false
 		for _, m := range members {
 			if m == nil || m.Role != "owner" {
 				continue
@@ -338,16 +350,24 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 			if userType != domain.UserTypeUser {
 				continue
 			}
-			ownerEmailReal = m.Email
-			ownerUserID = m.UserID
-			break
+			if ownerEmailReal == "" {
+				// Premier owner humain : sert a savoir qu'il y en a un.
+				ownerEmailReal = m.Email
+				ownerUserID = m.UserID
+			}
+			if strings.EqualFold(strings.TrimSpace(m.Email), strings.TrimSpace(input.OwnerEmail)) {
+				ownerEmailReal = m.Email
+				ownerUserID = m.UserID
+				ownerMatched = true
+				break
+			}
 		}
 		// Si aucun owner humain identifie (cas legacy : 9 tenants prod repares
 		// via attach-owner ou workspaces pre-Provision), on ne peut pas
 		// trancher → on tombe sur le chemin "creation complete" qui
 		// reattachera proprement le user input via Add+Transfer.
 		if ownerEmailReal != "" {
-			if !strings.EqualFold(strings.TrimSpace(ownerEmailReal), strings.TrimSpace(input.OwnerEmail)) {
+			if !ownerMatched {
 				return nil, ErrOwnerMismatch
 			}
 			// Owner match : regenerer magic_link + auto_login_url frais.
@@ -481,6 +501,12 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	// sequence echoue (re-provision idempotent, etc.), on log mais on ne
 	// bloque pas le provisioning car l'API key est deja cree.
 	s.transferOwnershipToTenant(ctx, rootCtx, input.TenantID, owner.ID, rootUserID)
+
+	// 6b. === Veridian patch 2026-10-30 === Co-owner par defaut (Robert) :
+	// rattache en role=owner apres le transfert (sinon TransferOwnership ou la
+	// suppression de root pourraient le gener). Best-effort, jamais bloquant.
+	// No-op si VERIDIAN_DEFAULT_CO_OWNER_EMAIL est vide.
+	s.ensureDefaultCoOwner(ctx, input.TenantID)
 
 	// 7. Inserer / mettre a jour la ligne veridian_plan.
 	// Quota : si input.Quotas.MonthlyEmails est fourni par le Hub, c'est la
@@ -1595,11 +1621,29 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		return nil, fmt.Errorf("list workspace members: %w", listErr)
 	}
 	var currentOwnerID, currentOwnerEmail string
+	// === Veridian patch 2026-10-30 === Co-owner par defaut : on note s'il etait
+	// owner (pour le rester apres le transfert) et on prefere demoter un autre
+	// owner que lui (TransferOwnership demote le currentOwner choisi).
+	coOwnerWasOwner := false
 	for _, m := range members {
-		if m.Role == "owner" && m.UserID != owner.ID {
+		if m != nil && m.Role == "owner" && m.Type == domain.UserTypeUser && s.isDefaultCoOwner(m.Email) {
+			coOwnerWasOwner = true
+		}
+	}
+	for _, m := range members {
+		if m.Role == "owner" && m.UserID != owner.ID && !s.isDefaultCoOwner(m.Email) {
 			currentOwnerID = m.UserID
 			currentOwnerEmail = m.Email
 			break
+		}
+	}
+	if currentOwnerID == "" {
+		for _, m := range members {
+			if m.Role == "owner" && m.UserID != owner.ID {
+				currentOwnerID = m.UserID
+				currentOwnerEmail = m.Email
+				break
+			}
 		}
 	}
 	if currentOwnerID == "" {
@@ -1651,6 +1695,12 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		}
 	} else {
 		transferred = true
+	}
+
+	// Step 6b : === Veridian patch 2026-10-30 === le co-owner par defaut qui etait
+	// owner avant le transfert le reste (jamais demote en silence). Best-effort.
+	if transferred && coOwnerWasOwner {
+		s.ensureDefaultCoOwner(ctx, input.TenantID)
 	}
 
 	// Step 7 : si l'ancien owner était le user root, on le retire pour finir
