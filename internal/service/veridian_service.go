@@ -1812,8 +1812,16 @@ func (s *veridianService) Health(ctx context.Context, tenantID string) (*domain.
 		userType, _ := s.lookupUserType(ctx, m.UserID)
 		if m.Role == "owner" && userType == domain.UserTypeUser {
 			resp.OwnerAttached = true
-			resp.OwnerEmail = m.Email
-			resp.OwnerUserID = m.UserID
+			// === Veridian patch 2026-10-30 === avec un co-owner par defaut,
+			// l'owner rapporte est le proprietaire client : le co-owner n'est
+			// retenu que s'il est le seul owner humain.
+			if s.isDefaultCoOwner(m.Email) && resp.OwnerEmail != "" {
+				continue
+			}
+			if resp.OwnerEmail == "" || !s.isDefaultCoOwner(m.Email) {
+				resp.OwnerEmail = m.Email
+				resp.OwnerUserID = m.UserID
+			}
 		}
 		if userType == domain.UserTypeAPIKey {
 			resp.APIKeyValid = true

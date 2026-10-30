@@ -443,3 +443,36 @@ func TestRunAPIKeyGraceCleanupOnce_ContinuesOnDeleteError(t *testing.T) {
 	assert.Equal(t, 1, revoked)
 	assert.Contains(t, errs["u-bad"], "conn dead")
 }
+
+// Avec un co-owner par defaut liste en premier, l'ancien owner rapporte est
+// le client (celui que AttachOwner demote), pas le co-owner.
+func TestTransferOwner_ReportsClientAsOldOwnerNotCoOwner(t *testing.T) {
+	svc, m := newVeridianService(t)
+	svc.ConfigureDefaultCoOwner(testCoOwnerEmail)
+	ctx := context.Background()
+
+	newOwner := &domain.User{ID: "new-uuid", Email: "new@x.test", Type: domain.UserTypeUser}
+	members := []*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "robert-id", Role: "owner"}, Email: testCoOwnerEmail, Type: domain.UserTypeUser},
+		{UserWorkspace: domain.UserWorkspace{UserID: "old-uuid", Role: "owner"}, Email: "old@x.test", Type: domain.UserTypeUser},
+	}
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(members, nil).Times(2)
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(1)
+	m.user.EXPECT().GetUserByEmail(ctx, "new@x.test").Return(newOwner, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, newOwner.ID, "ws-1").Return(nil, sql.ErrNoRows).Times(1)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", newOwner.ID, "member", gomock.Any()).Return(nil).Times(1)
+	m.workspace.EXPECT().TransferOwnership(gomock.Any(), "ws-1", newOwner.ID, "old-uuid").Return(nil).Times(1)
+	m.userRepo.EXPECT().GetUserByEmail(ctx, "root@veridian.site").Return(nil, errors.New("not root")).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantOwnerChanged, "ws-1", gomock.Any()).Times(1)
+	// Le co-owner etait owner et le reste : aucune ecriture.
+	m.user.EXPECT().GetUserByEmail(ctx, testCoOwnerEmail).
+		Return(&domain.User{ID: "robert-id", Email: testCoOwnerEmail, Type: domain.UserTypeUser}, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "robert-id", "ws-1").
+		Return(&domain.UserWorkspace{UserID: "robert-id", WorkspaceID: "ws-1", Role: "owner"}, nil).Times(1)
+
+	resp, err := svc.TransferOwner(ctx, domain.TransferOwnerInput{TenantID: "ws-1", NewOwnerEmail: "new@x.test", Reason: "test"})
+	require.NoError(t, err)
+	assert.Equal(t, "old@x.test", resp.OldOwner)
+}

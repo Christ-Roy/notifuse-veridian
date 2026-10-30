@@ -239,8 +239,11 @@ func (s *veridianService) TransferOwner(ctx context.Context, input domain.Transf
 	if members, listErr := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, input.TenantID); listErr == nil {
 		for _, m := range members {
 			if m.Role == "owner" && m.Type == domain.UserTypeUser {
-				oldOwnerEmail = m.Email
-				break
+				// === Veridian patch 2026-10-30 === prefere un owner autre que
+				// le co-owner par defaut (AttachOwner demote celui-la).
+				if oldOwnerEmail == "" || (s.isDefaultCoOwner(oldOwnerEmail) && !s.isDefaultCoOwner(m.Email)) {
+					oldOwnerEmail = m.Email
+				}
 			}
 		}
 	}

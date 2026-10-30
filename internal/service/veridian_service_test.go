@@ -2910,3 +2910,51 @@ func TestVeridianService_AttachOwner_DoesNotPromoteCoOwnerWhoWasNotOwner(t *test
 	require.NoError(t, err)
 	assert.True(t, resp.OwnerTransferred)
 }
+
+// Health avec co-owner par defaut : l'owner rapporte est le client, quel que
+// soit l'ordre de la liste (regression E2E hub-contract du 30/10/2026).
+func TestVeridianService_Health_ReportsClientOwnerNotCoOwner(t *testing.T) {
+	for name, order := range map[string][]string{"co-owner en dernier": {"client", "robert"}, "co-owner en premier": {"robert", "client"}} {
+		t.Run(name, func(t *testing.T) {
+			svc, m := newVeridianService(t)
+			svc.ConfigureDefaultCoOwner(testCoOwnerEmail)
+			ctx := context.Background()
+			m.workspaceRepo.EXPECT().GetByID(ctx, "ws-h").Return(&domain.Workspace{ID: "ws-h"}, nil).Times(1)
+			m.planRepo.EXPECT().Get(ctx, "ws-h").Return(&domain.VeridianPlan{WorkspaceID: "ws-h", Plan: "free", Status: domain.PlanStatusActive}, nil).Times(1)
+			rows := map[string]*domain.UserWorkspaceWithEmail{
+				"client": {UserWorkspace: domain.UserWorkspace{UserID: "client-id", WorkspaceID: "ws-h", Role: "owner"}, Email: "client@x.test"},
+				"robert": {UserWorkspace: domain.UserWorkspace{UserID: "robert-id", WorkspaceID: "ws-h", Role: "owner"}, Email: testCoOwnerEmail},
+			}
+			m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-h").Return([]*domain.UserWorkspaceWithEmail{
+				rows[order[0]], rows[order[1]],
+				{UserWorkspace: domain.UserWorkspace{UserID: "key-id", WorkspaceID: "ws-h", Role: "member"}, Email: "key@x.test"},
+			}, nil).Times(1)
+			m.userRepo.EXPECT().GetUserByID(ctx, "client-id").Return(&domain.User{ID: "client-id", Type: domain.UserTypeUser}, nil).Times(1)
+			m.userRepo.EXPECT().GetUserByID(ctx, "robert-id").Return(&domain.User{ID: "robert-id", Type: domain.UserTypeUser}, nil).Times(1)
+			m.userRepo.EXPECT().GetUserByID(ctx, "key-id").Return(&domain.User{ID: "key-id", Type: domain.UserTypeAPIKey}, nil).Times(1)
+
+			resp, err := svc.Health(ctx, "ws-h")
+			require.NoError(t, err)
+			assert.True(t, resp.OwnerAttached)
+			assert.Equal(t, "client@x.test", resp.OwnerEmail)
+			assert.Equal(t, "client-id", resp.OwnerUserID)
+		})
+	}
+}
+
+// Co-owner seul owner humain : il est rapporte (pas de champ vide).
+func TestVeridianService_Health_CoOwnerAloneIsReported(t *testing.T) {
+	svc, m := newVeridianService(t)
+	svc.ConfigureDefaultCoOwner(testCoOwnerEmail)
+	ctx := context.Background()
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-h").Return(&domain.Workspace{ID: "ws-h"}, nil).Times(1)
+	m.planRepo.EXPECT().Get(ctx, "ws-h").Return(&domain.VeridianPlan{WorkspaceID: "ws-h", Plan: "free", Status: domain.PlanStatusActive}, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-h").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "robert-id", WorkspaceID: "ws-h", Role: "owner"}, Email: testCoOwnerEmail},
+	}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByID(ctx, "robert-id").Return(&domain.User{ID: "robert-id", Type: domain.UserTypeUser}, nil).Times(1)
+
+	resp, err := svc.Health(ctx, "ws-h")
+	require.NoError(t, err)
+	assert.Equal(t, testCoOwnerEmail, resp.OwnerEmail)
+}
