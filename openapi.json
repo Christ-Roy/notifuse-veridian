@@ -5008,6 +5008,15 @@
             }
           },
           {
+            "name": "include_duplicates",
+            "in": "query",
+            "required": false,
+            "description": "Rend aussi les copies d'un message déjà présent (copie Sieve, alias). Défaut false. Une copie est liée à son original par `duplicate_of` et n'est jamais supprimée.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -8291,6 +8300,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "duplicate_of": {
+            "type": "string",
+            "description": "Id de l'original dont ce message est une copie (redirection Sieve d'un relais, alias). Absent pour un original. Une copie reste lisible par son id mais n'apparaît ni dans les listes, ni dans les compteurs, ni dans les fils."
           }
         }
       },
@@ -8364,6 +8377,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "duplicate_of": {
+            "type": "string",
+            "description": "Id de l'original dont ce message est une copie (redirection Sieve d'un relais, alias). Absent pour un original. Une copie reste lisible par son id mais n'apparaît ni dans les listes, ni dans les compteurs, ni dans les fils."
           }
         }
       },

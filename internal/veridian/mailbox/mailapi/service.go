@@ -193,6 +193,8 @@ type ListParams struct {
 	Limit      int
 	Cursor     string
 	AfterSeq   int64
+	// IncludeDuplicates : rend aussi les copies d'un message déjà présent (traçabilité).
+	IncludeDuplicates bool
 }
 
 // List : messages.list.
@@ -215,7 +217,7 @@ func (s *Service) List(ctx context.Context, p ListParams) ([]mailbox.Summary, st
 	return s.Store.List(ctx, p.Workspace, mailbox.Filter{
 		MailboxID: p.Mailbox, ContactEmail: p.Contact, ThreadID: p.Thread, Kinds: p.Kinds, Direction: p.Direction,
 		Handled: p.Handled, Since: p.Since, Until: p.Until, Q: p.Q, BodySearch: p.BodySearch, Limit: p.Limit,
-		Cursor: p.Cursor, AfterSeq: p.AfterSeq,
+		Cursor: p.Cursor, AfterSeq: p.AfterSeq, IncludeDuplicates: p.IncludeDuplicates,
 	})
 }
 

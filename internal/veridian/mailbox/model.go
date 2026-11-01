@@ -179,6 +179,10 @@ type Message struct {
 	HandledBy string     `json:"handled_by,omitempty"`
 	Labels    []string   `json:"labels,omitempty"`
 
+	// DuplicateOf : id du message original dont celui-ci est une copie (redirection Sieve, alias).
+	// Vide pour un original. Une copie reste lisible par son id mais n'apparaît plus dans les listes.
+	DuplicateOf string `json:"duplicate_of,omitempty"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -205,6 +209,8 @@ type Summary struct {
 	HandledAt    *time.Time `json:"handled_at,omitempty"`
 	HandledBy    string     `json:"handled_by,omitempty"`
 	Labels       []string   `json:"labels,omitempty"`
+	// DuplicateOf : original dont c'est la copie (seulement avec include_duplicates).
+	DuplicateOf string `json:"duplicate_of,omitempty"`
 }
 
 // Mailbox est une boîte : une par profil d'envoi et par adresse.

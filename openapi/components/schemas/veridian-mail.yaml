@@ -80,6 +80,7 @@ MailMessage:
     handled_at: { type: string, format: date-time }
     handled_by: { type: string }
     labels: { type: array, items: { type: string } }
+    duplicate_of: { type: string, description: "Id de l'original dont ce message est une copie (redirection Sieve d'un relais, alias). Absent pour un original. Une copie reste lisible par son id mais n'apparaît ni dans les listes, ni dans les compteurs, ni dans les fils." }
 MailSummary:
   type: object
   description: Ligne de liste (aperçu, sans corps).
@@ -102,6 +103,7 @@ MailSummary:
     handled_at: { type: string, format: date-time }
     handled_by: { type: string }
     labels: { type: array, items: { type: string } }
+    duplicate_of: { type: string, description: "Id de l'original dont ce message est une copie (redirection Sieve d'un relais, alias). Absent pour un original. Une copie reste lisible par son id mais n'apparaît ni dans les listes, ni dans les compteurs, ni dans les fils." }
 MailThread:
   type: object
   properties:

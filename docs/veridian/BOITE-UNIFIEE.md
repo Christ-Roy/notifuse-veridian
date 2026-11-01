@@ -61,3 +61,26 @@ Lecture : droit `message_history:read` ; `mail.messages.update` : `message_histo
 | `mail.messages.send` / `reply` | met le mail dans la file des envois (`source_type = mail`) : le worker lui applique les MÊMES portes que les séquences (fusible de réputation, plafonds profil, classe de destinataire et adresse émettrice, chauffe, fenêtre, cadence). Refus immédiat si profil en pause, contact désinscrit, plainte ou rebond définitif. Une réponse part par le profil qui a reçu, avec `In-Reply-To` et `References`, avant les relances |
 
 Le mail envoyé apparaît dans le fil dès que le relais l'a accepté (capture du worker).
+
+## Copies et doublons (L1c, V68)
+
+Un relais peut copier chaque vraie réponse vers une autre boîte que Notifuse lit aussi (filtre Sieve `redirect :copy`
+vers la boîte de Hugo ; avant le 29/10/2026, un alias Postfix qui copiait même les rebonds). La copie garde le même
+`Message-ID` : sans traitement, le mail est rangé deux fois et la console l'affiche deux fois.
+
+- **Clé de regroupement** (`dedup_key`, entrants seulement) : `mid:` + Message-ID en minuscules s'il est exploitable
+  (contient `@`, sans espace) ; sinon `fp:` + empreinte (contact, fil, date d'envoi, corps) ; sinon NULL, jamais regroupé.
+- **L'original reste visible, la copie pointe l'original** (`duplicate_of`), n'est jamais supprimée et reste lisible par son
+  id (`mail.messages.get`, `mail.messages.raw`). Le choix ne dépend ni de l'ordre d'arrivée ni des identifiants, il est
+  recalculé sur tout le groupe à chaque arrivée. Classement : sans `X-Sieve-Redirected-From`, puis livré à l'un de ses
+  destinataires (`Delivered-To` dans To/Cc : une copie par alias est livrée à une adresse qui n'est pas destinataire),
+  puis reçu le plus tôt, puis `seq`.
+- **Invisible** dans `mail.messages.list` (sauf `include_duplicates=true`), les compteurs des boîtes, `mail.threads.*`, le flux
+  `mail.events` (qui ignore aussi toute copie Sieve) et le webhook `message.received` (le déclencheur SQL ignore une copie Sieve).
+- **Traité** suit le groupe : `mail.messages.update` sur une copie ou sur l'original agit sur les deux ; une copie traitée avant
+  l'arrivée de l'original donne un original traité.
+- **Rattrapage** : la migration V68 marque les doublons existants (aucune suppression, aucun sortant touché). Le syncer rejoue le
+  marquage (`SettleDuplicates`) au premier passage de chaque workspace après démarrage et après chaque passage qui a rangé du neuf
+  (mails rangés par la version précédente pendant un déploiement glissant, ou résolution échouée).
+- Le SQL du classement vit à un seul endroit : `internal/veridian/mailbox/dedupsql`. Un faux positif de comptage à connaître :
+  deux mails périodiques de même objet et même début (notifications Meet, WeTransfer) sont des messages distincts, pas des doublons.

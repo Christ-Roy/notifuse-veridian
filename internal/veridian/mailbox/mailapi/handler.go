@@ -261,6 +261,12 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lp.BodySearch = bs != nil && *bs
+	inc, err := p.boolPtr("include_duplicates")
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	lp.IncludeDuplicates = inc != nil && *inc
 	if lp.Since, err = p.timePtr("since"); err != nil {
 		h.fail(w, err)
 		return

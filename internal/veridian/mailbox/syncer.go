@@ -38,11 +38,12 @@ type Syncer struct {
 
 	mu      sync.Mutex
 	running map[string]bool
+	settled map[string]bool // workspaces dont les doublons ont été rattrapés depuis le démarrage
 }
 
 // NewSyncer construit le syncer. renderer peut être nil (reprise sans re-rendu).
 func NewSyncer(store *Store, ingest *Ingestor, dialer Dialer, renderer Renderer, log logger.Logger) *Syncer {
-	return &Syncer{store: store, ingest: ingest, dialer: dialer, renderer: renderer, log: log, running: map[string]bool{}}
+	return &Syncer{store: store, ingest: ingest, dialer: dialer, renderer: renderer, log: log, running: map[string]bool{}, settled: map[string]bool{}}
 }
 
 func (s *Syncer) acquire(key string) bool {
@@ -208,6 +209,28 @@ func (s *Syncer) SyncBox(ctx context.Context, ws *domain.Workspace, integ *domai
 	}
 	if total > 0 {
 		log.WithFields(map[string]interface{}{"ingested": total, "last_uid": lastUID}).Info("Mailbox: sync done")
+	}
+	s.settleDuplicates(ctx, ws.ID, total > 0)
+}
+
+// settleDuplicates rattrape les copies non marquées (voir Store.SettleDuplicates) : à chaque
+// passage qui a rangé du neuf, et au premier passage de chaque workspace après un démarrage
+// (mails rangés par la version précédente pendant un déploiement glissant).
+func (s *Syncer) settleDuplicates(ctx context.Context, ws string, ingested bool) {
+	s.mu.Lock()
+	first := !s.settled[ws]
+	s.settled[ws] = true
+	s.mu.Unlock()
+	if !ingested && !first {
+		return
+	}
+	n, err := s.store.SettleDuplicates(context.Background(), ws)
+	if err != nil {
+		s.log.WithFields(map[string]interface{}{"workspace_id": ws, "error": err.Error()}).Warn("Mailbox: settle duplicates failed")
+		return
+	}
+	if n > 0 {
+		s.log.WithFields(map[string]interface{}{"workspace_id": ws, "rows": n}).Info("Mailbox: duplicates settled")
 	}
 }
 

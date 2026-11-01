@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/mailbox/dedupsql"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/google/uuid"
 )
@@ -210,6 +211,13 @@ func (g *Ingestor) IngestRaw(ctx context.Context, ws string, box BoxInfo, ref Ma
 	if !inserted {
 		return m, false, nil
 	}
+	// Copie d'un mail déjà rangé (redirection Sieve, alias) : liée à l'original, jamais supprimée.
+	// Un échec ici ne perd pas le mail : le prochain passage de la lecture rattrape (SettleDuplicates).
+	dupOf, err := g.store.ResolveDuplicates(ctx, ws, m.ID, FallbackDedupKey(m))
+	if err != nil {
+		g.log.WithFields(map[string]interface{}{"workspace_id": ws, "error": err.Error()}).Warn("Mailbox: duplicate resolution failed, will be settled on the next pass")
+	}
+	m.DuplicateOf = dupOf
 	if m.MessageID != "" {
 		if _, err := g.store.Rethread(ctx, ws, m.ThreadID, m.MessageID, ""); err != nil {
 			g.log.WithFields(map[string]interface{}{"workspace_id": ws, "error": err.Error()}).Warn("Mailbox: rethread failed")
@@ -219,10 +227,16 @@ func (g *Ingestor) IngestRaw(ctx context.Context, ws string, box BoxInfo, ref Ma
 		"workspace_id": ws, "integration_id": ref.IntegrationID, "uid": ref.UID, "kind": string(m.Kind),
 		"bytes": m.SizeBytes, "attachments": len(m.Attachments),
 	}).Info("Mailbox: message ingested")
-	if g.notifier != nil {
+	if g.notifier != nil && m.DuplicateOf == "" && !isSieveCopy(m) {
 		g.notifier.MessageReceived(ctx, ws, m)
 	}
 	return m, true, nil
+}
+
+// isSieveCopy : copie posée par la redirection Sieve d'un relais (l'original arrive par la boîte du relais).
+func isSieveCopy(m *Message) bool {
+	_, ok := m.Headers[dedupsql.SieveHeader]
+	return ok
 }
 
 // storedFormsOf donne, pour chaque identifiant cité, les formes sous lesquelles

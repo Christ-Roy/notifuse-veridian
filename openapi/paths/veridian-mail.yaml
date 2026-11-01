@@ -77,6 +77,11 @@
         in: query
         required: false
         schema: { type: boolean }
+      - name: include_duplicates
+        in: query
+        required: false
+        description: Rend aussi les copies d'un message déjà présent (copie Sieve, alias). Défaut false. Une copie est liée à son original par `duplicate_of` et n'est jamais supprimée.
+        schema: { type: boolean }
       - name: limit
         in: query
         required: false

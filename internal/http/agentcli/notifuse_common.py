@@ -90,7 +90,7 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse reconcile:resolve <ws> --id F [--dry-run | --dismiss [--note T]] [--yes]   applique la réparation proposée d'un écart (--yes requis), la simule (--dry-run)
                                                               ou l'écarte 7 jours (--dismiss) ; rejoue le contrôle après coup et dit si l'écart a disparu
   notifuse mail:boxes <ws>                         boîtes (une par profil d'envoi et par adresse) : compteurs, état de la lecture IMAP (L1, V63)
-  notifuse mail:list <ws> [--mailbox B] [--contact E] [--thread T] [--kind K,K] [--direction in|out] [--handled|--unhandled] [--since D] [--until D] [-q TXT [--body]] [--limit N] [--cursor C]
+  notifuse mail:list <ws> [--mailbox B] [--contact E] [--thread T] [--kind K,K] [--direction in|out] [--handled|--unhandled] [--since D] [--until D] [-q TXT [--body]] [--include-duplicates] [--limit N] [--cursor C]
   notifuse mail:get <ws> --id M [--headers] [--json]   un mail en entier : en-têtes, rapport de non-remise expliqué en français, lien vers l'envoi, pièces jointes, texte
   notifuse mail:raw <ws> --id M [--out F.eml]      message brut RFC 822 (un mail envoyé est reconstitué depuis son rendu conservé, et le dit)
   notifuse mail:attachment <ws> --id M --index N [--out F]   contenu d'une pièce jointe

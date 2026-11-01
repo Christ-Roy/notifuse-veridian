@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Notifuse/notifuse/internal/veridian/mailbox/dedupsql"
 	"github.com/Notifuse/notifuse/pkg/crypto"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -40,11 +41,11 @@ const msgColumns = `id, seq, workspace_id, direction, kind, profile_id, mailbox_
 	mailbox_uid_validity, mailbox_uid, message_id, in_reply_to, references_ids, thread_id, contact_email, from_addr,
 	from_name, to_addrs, cc_addrs, subject, sent_at, received_at, occurred_at, headers, body_text, body_html_sanitized,
 	raw_eml, body_source, size_bytes, truncated, attachments, dsn, link, sent_ref, handled_at, handled_by, labels,
-	created_at, updated_at`
+	created_at, updated_at, duplicate_of`
 
 // summaryColumns : sans corps ni message brut (le corps texte sert à l'aperçu, déchiffré à la lecture).
 const summaryColumns = `id, seq, direction, kind, profile_id, thread_id, contact_email, from_addr, to_addrs, subject,
-	body_text, occurred_at, sent_at, received_at, attachments, dsn, handled_at, handled_by, labels`
+	body_text, occurred_at, sent_at, received_at, attachments, dsn, handled_at, handled_by, labels, duplicate_of`
 
 func (s *Store) seal(ws, plain string) (any, error) {
 	if plain == "" {
@@ -410,13 +411,13 @@ func scanFull(row interface{ Scan(...any) error }, s *Store) (*Message, error) {
 		refs, to, cc, labels                 []string
 		sent, recv                           sql.NullTime
 		headers, att, dsn, link              []byte
-		bt, bh, raw                          sql.NullString
+		bt, bh, raw, dupOf                   sql.NullString
 		handled                              sql.NullTime
 	)
 	if err := row.Scan(&m.ID, &m.Seq, &m.WorkspaceID, &dir, &kind, &profile, &mi, &mf, &mv, &mu, &mid, &irt, pq.Array(&refs),
 		&m.ThreadID, &m.ContactEmail, &m.From, &m.FromName, pq.Array(&to), pq.Array(&cc), &m.Subject, &sent, &recv,
 		&m.OccurredAt, &headers, &bt, &bh, &raw, &m.BodySource, &m.SizeBytes, &m.Truncated, &att, &dsn, &link, &sref,
-		&handled, &hby, pq.Array(&labels), &m.CreatedAt, &m.UpdatedAt); err != nil {
+		&handled, &hby, pq.Array(&labels), &m.CreatedAt, &m.UpdatedAt, &dupOf); err != nil {
 		return nil, err
 	}
 	m.Direction, m.Kind = Direction(dir), Kind(kind)
@@ -425,6 +426,7 @@ func scanFull(row interface{ Scan(...any) error }, s *Store) (*Message, error) {
 		m.Mailbox = &MailboxRef{IntegrationID: mi.String, Folder: mf.String, UIDValidity: uint32(mv.Int64), UID: uint32(mu.Int64)}
 	}
 	m.References, m.To, m.Cc, m.Labels = refs, to, cc, labels
+	m.DuplicateOf = dupOf.String
 	if sent.Valid {
 		t := sent.Time
 		m.SentAt = &t
@@ -500,6 +502,8 @@ type Filter struct {
 	BodySearch bool
 	Limit      int
 	Cursor     string
+	// IncludeDuplicates : rend aussi les copies d'un message déjà présent (traçabilité).
+	IncludeDuplicates bool
 	// AfterSeq : événements, messages de seq > AfterSeq dans l'ordre d'arrivée croissant.
 	AfterSeq int64
 }
@@ -585,8 +589,14 @@ func (f Filter) where(args *[]any, withQ bool) string {
 	if withQ && f.Q != "" {
 		add(`(subject ILIKE {1} OR contact_email ILIKE {1} OR from_addr ILIKE {1} OR from_name ILIKE {1} OR array_to_string(to_addrs,' ') ILIKE {1})`, likeEscape(f.Q))
 	}
+	if !f.IncludeDuplicates {
+		w = append(w, "duplicate_of IS NULL")
+	}
 	if f.AfterSeq > 0 {
 		add("seq > {1}", f.AfterSeq)
+		// Flux d'événements : la copie Sieve n'est jamais un événement (l'original arrive par la
+		// boîte du relais), quel que soit l'ordre d'arrivée des deux.
+		w = append(w, "NOT jsonb_exists(headers, '"+dedupsql.SieveHeader+"')")
 	}
 	if len(w) == 0 {
 		return ""
@@ -690,7 +700,7 @@ func (s *Store) scanSummaryRow(ws string, rows *sql.Rows, extra bool) (Summary, 
 	var (
 		sm                  Summary
 		dir, kind           string
-		profile, hby        sql.NullString
+		profile, hby, dupOf sql.NullString
 		to, labels          []string
 		bt                  sql.NullString
 		sent, recv, handled sql.NullTime
@@ -698,7 +708,7 @@ func (s *Store) scanSummaryRow(ws string, rows *sql.Rows, extra bool) (Summary, 
 		dummy               string
 	)
 	dest := []any{&sm.ID, &sm.Seq, &dir, &kind, &profile, &sm.ThreadID, &sm.ContactEmail, &sm.From, pq.Array(&to), &sm.Subject,
-		&bt, &sm.OccurredAt, &sent, &recv, &att, &dsn, &handled, &hby, pq.Array(&labels)}
+		&bt, &sm.OccurredAt, &sent, &recv, &att, &dsn, &handled, &hby, pq.Array(&labels), &dupOf}
 	if extra {
 		dest = append(dest, &dummy)
 	}
@@ -706,6 +716,7 @@ func (s *Store) scanSummaryRow(ws string, rows *sql.Rows, extra bool) (Summary, 
 		return sm, "", err
 	}
 	sm.Direction, sm.Kind, sm.ProfileID, sm.HandledBy, sm.To, sm.Labels = Direction(dir), Kind(kind), profile.String, hby.String, to, labels
+	sm.DuplicateOf = dupOf.String
 	if sent.Valid {
 		t := sent.Time
 		sm.SentAt = &t
@@ -763,7 +774,7 @@ func (s *Store) ThreadMessages(ctx context.Context, ws, threadID string) ([]Mess
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT `+msgColumns+` FROM veridian_mail_message WHERE thread_id=$1 ORDER BY occurred_at ASC, seq ASC LIMIT 500`, threadID)
+	rows, err := db.QueryContext(ctx, `SELECT `+msgColumns+` FROM veridian_mail_message WHERE thread_id=$1 AND duplicate_of IS NULL ORDER BY occurred_at ASC, seq ASC LIMIT 500`, threadID)
 	if err != nil {
 		return nil, err
 	}
@@ -791,7 +802,7 @@ func (s *Store) ThreadsOfContact(ctx context.Context, ws, contact string, limit 
 	}
 	rows, err := db.QueryContext(ctx, `SELECT thread_id, MIN(occurred_at), MAX(occurred_at), COUNT(*),
 		(array_agg(subject ORDER BY occurred_at ASC))[1], (array_agg(kind ORDER BY occurred_at DESC))[1]
-		FROM veridian_mail_message WHERE contact_email=$1 GROUP BY thread_id ORDER BY MAX(occurred_at) DESC LIMIT $2`,
+		FROM veridian_mail_message WHERE contact_email=$1 AND duplicate_of IS NULL GROUP BY thread_id ORDER BY MAX(occurred_at) DESC LIMIT $2`,
 		strings.ToLower(contact), limit)
 	if err != nil {
 		return nil, err
@@ -831,7 +842,11 @@ func (s *Store) Update(ctx context.Context, ws, id string, handled *bool, by str
 		sets = append(sets, fmt.Sprintf("labels=$%d", len(args)))
 	}
 	args = append(args, id)
-	res, err := db.ExecContext(ctx, `UPDATE veridian_mail_message SET `+strings.Join(sets, ", ")+fmt.Sprintf(" WHERE id=$%d", len(args)), args...)
+	// Agir sur un message d'un groupe de copies agit sur tout le groupe : ce qui est traité
+	// côté copie l'est côté original, et inversement.
+	n := len(args)
+	res, err := db.ExecContext(ctx, `UPDATE veridian_mail_message SET `+strings.Join(sets, ", ")+
+		fmt.Sprintf(" WHERE id=$%d OR (dedup_key IS NOT NULL AND dedup_key = (SELECT dedup_key FROM veridian_mail_message WHERE id=$%d))", n, n), args...)
 	if err != nil {
 		return err
 	}
@@ -854,8 +869,9 @@ func (s *Store) Counts(ctx context.Context, ws string) (map[string]MailboxCounts
 		return nil, err
 	}
 	rows, err := db.QueryContext(ctx, `SELECT COALESCE(profile_id,''), COALESCE(mailbox_integration_id,''),
-		COUNT(*) FILTER (WHERE direction='in'), COUNT(*) FILTER (WHERE direction='out'),
-		COUNT(*) FILTER (WHERE kind IN ('reply_human') AND handled_at IS NULL), MAX(occurred_at)
+		COUNT(*) FILTER (WHERE direction='in' AND duplicate_of IS NULL), COUNT(*) FILTER (WHERE direction='out'),
+		COUNT(*) FILTER (WHERE kind IN ('reply_human') AND handled_at IS NULL AND duplicate_of IS NULL),
+		MAX(occurred_at) FILTER (WHERE duplicate_of IS NULL)
 		FROM veridian_mail_message GROUP BY 1, 2`)
 	if err != nil {
 		return nil, err

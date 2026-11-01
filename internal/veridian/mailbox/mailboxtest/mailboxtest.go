@@ -64,7 +64,7 @@ func NewStore(t *testing.T) (*mailbox.Store, *sql.DB) {
 			t.Fatal(err)
 		}
 	}
-	for _, q := range mailbox.SchemaStatements {
+	for _, q := range mailbox.AllSchemaStatements() {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatalf("schéma: %v\n%s", err, q)
 		}

@@ -20,6 +20,12 @@ var schemaSeq int64
 // testStore ouvre un schéma Postgres neuf (L1_TEST_PG_DSN), avec les tables de Notifuse dont on dépend.
 func testStore(t *testing.T) (*Store, *sql.DB) {
 	t.Helper()
+	return testStoreWith(t, AllSchemaStatements())
+}
+
+// testStoreWith : comme testStore, avec le schéma donné (V63 seul pour éprouver le rattrapage de V68).
+func testStoreWith(t *testing.T, schema []string) (*Store, *sql.DB) {
+	t.Helper()
 	dsn := os.Getenv("L1_TEST_PG_DSN")
 	if dsn == "" {
 		t.Skip("L1_TEST_PG_DSN absent : test Postgres non exécuté")
@@ -60,7 +66,7 @@ func testStore(t *testing.T) (*Store, *sql.DB) {
 			t.Fatal(err)
 		}
 	}
-	for _, q := range SchemaStatements {
+	for _, q := range schema {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatalf("schéma: %v\n%s", err, q)
 		}

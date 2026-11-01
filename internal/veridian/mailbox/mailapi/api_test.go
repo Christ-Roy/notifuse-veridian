@@ -601,3 +601,45 @@ func TestEvents_LimitPerWorkspace(t *testing.T) {
 		r.Body.Close()
 	}
 }
+
+// Une copie (même Message-ID rangé depuis une autre boîte) n'apparaît pas dans la liste, sauf
+// include_duplicates=true ; elle reste lisible par son id et pointe l'original.
+func TestMessagesList_DuplicatesHiddenUnlessAsked(t *testing.T) {
+	e, _ := newEnv(t)
+	orig := e.ingest(t, 1, replyEML(1), time.Now().Add(-2*time.Hour))
+	box2 := mailbox.BoxInfo{IntegrationID: "imap2", Address: "communication@animalsd.fr", ProfileID: "prof2", Folder: "INBOX"}
+	copyRaw := append([]byte("X-Sieve-Redirected-From: hugo.bourdat@animalservicedistribution.fr\r\n"), replyEML(1)...)
+	cp, ok, err := e.ing.IngestRaw(context.Background(), ws, box2, mailbox.MailboxRef{IntegrationID: "imap2", Folder: "INBOX", UIDValidity: 9, UID: 1},
+		copyRaw, time.Now().Add(-2*time.Hour+time.Second), false)
+	if err != nil || !ok {
+		t.Fatalf("copie: %v %v", err, ok)
+	}
+
+	_, out, _ := e.do(t, "GET", "/api/veridian/mail.messages.list?workspace_id=ws1&direction=in", nil)
+	rows := out["messages"].([]any)
+	if len(rows) != 1 || rows[0].(map[string]any)["id"] != orig.ID {
+		t.Fatalf("par défaut, seul l'original: %v", rows)
+	}
+	_, out, _ = e.do(t, "GET", "/api/veridian/mail.messages.list?workspace_id=ws1&direction=in&include_duplicates=true", nil)
+	rows = out["messages"].([]any)
+	if len(rows) != 2 {
+		t.Fatalf("avec include_duplicates les deux: %v", rows)
+	}
+	found := false
+	for _, r := range rows {
+		m := r.(map[string]any)
+		if m["id"] == cp.ID {
+			found = m["duplicate_of"] == orig.ID
+		}
+	}
+	if !found {
+		t.Fatalf("la copie pointe l'original: %v", rows)
+	}
+	if code, _, _ := e.do(t, "GET", "/api/veridian/mail.messages.list?workspace_id=ws1&include_duplicates=peut-etre", nil); code != 400 {
+		t.Fatalf("include_duplicates invalide doit être refusé: %d", code)
+	}
+	code, out, _ := e.do(t, "GET", "/api/veridian/mail.messages.get?workspace_id=ws1&id="+cp.ID, nil)
+	if code != 200 || out["message"].(map[string]any)["duplicate_of"] != orig.ID {
+		t.Fatalf("la copie reste lisible: %d %v", code, out)
+	}
+}
