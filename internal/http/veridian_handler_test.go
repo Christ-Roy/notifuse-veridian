@@ -727,6 +727,28 @@ func TestVeridianRegisterRoutes_AllPathsRegistered(t *testing.T) {
 	}
 }
 
+// === Export opérateur SMTP/IMAP (fiche 52) : la route est montée, HMAC seul ===
+// Sans signature Hub, la réponse est 401 (pas 404 : la route existe) et le handler n'est pas atteint.
+func TestVeridianRegisterRoutes_IntegrationExport_HMACOnly(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := NewVeridianHandler(svc, logger.NewLogger())
+	h.SetIntegrationExporter(&stubIntegrationExporter{})
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret")
+
+	const path = "/api/veridian/admin/email-integration.export"
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{"workspace_id":"ws"}`))
+	_, pattern := mux.Handler(req)
+	assert.Equal(t, "POST "+path, pattern)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "sans HMAC : refus avant l'exporteur")
+}
+
 // === Veridian patch 2026-06-18 — GC bases workspace orphelines ===
 // L'endpoint GC DOIT être routé en POST **ET** GET (piège catchall root_handler.go :
 // une méthode non routée tombe sur la SPA console = 200 HTML trompeur). On vérifie

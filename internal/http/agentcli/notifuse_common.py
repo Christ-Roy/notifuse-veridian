@@ -304,6 +304,7 @@ EXISTING_COMMAND_ROUTES = {
     "integrations:create-smtp": ["/api/workspaces.createIntegration"],
     "integrations:delete": ["/api/workspaces.deleteIntegration"],
     "integrations:verify": ["/api/veridian/admin/email-integration.verify"],
+    "integrations:export": ["/api/veridian/admin/email-integration.export"],
     "integrations:update": ["/api/workspaces.updateIntegration"],
     "integrations:list": ["/api/workspaces.get"],
     "settings:set": ["/api/workspaces.update"],
@@ -1726,6 +1727,69 @@ def cmd_integrations_verify(a):
     VeridianTransportVerifiedAt. HMAC admin, jamais le JWT owner."""
     body = {"workspace_id": a.workspace, "integration_id": a.id, "to": a.to}
     out(*call_hmac(a.env, "POST", "/api/veridian/admin/email-integration.verify", body))
+
+
+# ---------------------------------------------------------------- export opérateur
+# Décision Robert 02/11/2026 : SMTP et IMAP seulement, en clair, pour reconstruire
+# les profils d'envoi derrière VPN. Route HMAC Hub (jamais le JWT owner).
+# RÈGLES : le secret ne passe jamais en argument, ne sort jamais sur stdout sans
+# --stdout explicite, et le fichier est créé en 0600 (refus s'il existe déjà).
+def _export_shell_quote(value):
+    return "'" + str("" if value is None else value).replace("'", "'\\''") + "'"
+
+
+def _export_env_text(payload):
+    """Format --format env : NOM_TYPE_CHAMP='valeur', sourçable par le shell (set -a; . fichier)."""
+    lines = []
+    for i in payload.get("exported") or []:
+        slug = re.sub(r"[^A-Z0-9]+", "_", (i.get("name") or i.get("integration_id") or "").upper()).strip("_")
+        prefix = f"{slug or 'INTEGRATION'}_{str(i.get('type', '')).upper()}"
+        if prefix[0].isdigit():
+            prefix = "X_" + prefix
+        fields = [("HOST", i.get("host")), ("PORT", i.get("port")), ("USERNAME", i.get("username")),
+                  ("PASSWORD", i.get("password")), ("USE_TLS", "1" if i.get("use_tls") else "0")]
+        if i.get("type") == "smtp":
+            senders = i.get("senders") or []
+            fields += [("AUTH_TYPE", i.get("auth_type")), ("EHLO_HOSTNAME", i.get("ehlo_hostname")),
+                       ("FROM_EMAIL", senders[0].get("email") if senders else "")]
+            oauth = i.get("oauth2") or {}
+            if oauth:
+                fields += [("OAUTH2_PROVIDER", oauth.get("provider")), ("OAUTH2_TENANT_ID", oauth.get("tenant_id")),
+                           ("OAUTH2_CLIENT_ID", oauth.get("client_id")), ("OAUTH2_CLIENT_SECRET", oauth.get("client_secret")),
+                           ("OAUTH2_REFRESH_TOKEN", oauth.get("refresh_token"))]
+        else:
+            fields += [("FOLDER", i.get("folder")), ("TLS_SERVER_NAME", i.get("tls_server_name"))]
+        lines.append(f"# {i.get('name') or ''} (integration_id={i.get('integration_id')})")
+        lines += [f"{prefix}_{k}={_export_shell_quote(v)}" for k, v in fields]
+    for ne in payload.get("not_exportable") or []:
+        lines.append(f"# NON EXPORTABLE : {ne.get('name') or ''} ({ne.get('type')}) integration_id={ne.get('integration_id')}")
+    return "\n".join(lines) + "\n"
+
+
+def cmd_integrations_export(a):
+    """Export opérateur des identifiants SMTP/IMAP d'un workspace (HMAC admin).
+    Exactement une sortie : --out FICHIER (0600, refus si existant) ou --stdout."""
+    if bool(a.out) == bool(a.stdout):
+        die("précise exactement une sortie : --out FICHIER (écrit en 0600) OU --stdout (explicite, le secret sort en clair).")
+    body = {"workspace_id": a.workspace, "integration_id": a.id or ""}
+    status, payload = call_hmac(a.env, "POST", "/api/veridian/admin/email-integration.export", body)
+    if status != 200:
+        detail = payload.get("message") or payload.get("error") or "réponse inattendue"
+        die(f"export refusé (HTTP {status}) : {detail}")
+    text = _export_env_text(payload) if a.format == "env" else json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    n_exp, n_ne = len(payload.get("exported") or []), len(payload.get("not_exportable") or [])
+    if a.stdout:
+        sys.stdout.write(text)
+        print(f"✓ export stdout : {n_exp} exportée(s), {n_ne} non exportable(s)", file=sys.stderr)
+        return
+    if os.path.exists(a.out):
+        die(f"refus d'écraser un fichier existant : {a.out}")
+    fd = os.open(a.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(a.out, 0o600)  # indépendant de l'umask
+    print(f"✓ export écrit : {a.out} (0600) : {n_exp} exportée(s), {n_ne} non exportable(s). "
+          f"Le fichier contient des secrets : ne le copie pas hors du poste.", file=sys.stderr)
 
 
 def cmd_integrations_update(a):
@@ -4880,6 +4944,15 @@ def build_parser():
     sp.add_argument("workspace"); sp.add_argument("--id", required=True)
     sp.add_argument("--to", required=True, help="destinataire du mail de test (envoi réel !)")
     sp.set_defaults(func=cmd_integrations_verify)
+
+    sp = sub.add_parser("integrations:export",
+                        help="exporte les identifiants SMTP/IMAP d'un workspace (HMAC admin, notifuse-admin seulement)")
+    sp.add_argument("workspace")
+    sp.add_argument("--id", help="une seule intégration (sinon toutes les SMTP/IMAP)")
+    sp.add_argument("--out", help="fichier de sortie, créé en 0600 (refusé s'il existe déjà)")
+    sp.add_argument("--stdout", action="store_true", help="écrit sur stdout : le secret sort en clair (explicite)")
+    sp.add_argument("--format", choices=["json", "env"], default="json", help="json (défaut) ou env (NOM_TYPE_CHAMP='valeur')")
+    sp.set_defaults(func=cmd_integrations_export)
 
     sp = sub.add_parser("integrations:update",
                         help="update générique d'une intégration par type (owner, préserve secrets)")

@@ -54,6 +54,10 @@ type VeridianHandler struct {
 	orphanDBGC *veridianOrphanDBGCDeps
 	// emailVerifier : route admin email-integration.verify (chantier 2026-10-19).
 	emailVerifier VeridianEmailIntegrationVerifier
+	// integrationExporter / integrationExportLimiter : export opérateur SMTP/IMAP
+	// (HMAC seul, rate limit dédié). nil => 503. Cf. veridian_integration_export_handler.go.
+	integrationExporter      VeridianIntegrationExporter
+	integrationExportLimiter *veridianExportRateLimiter
 }
 
 // NewVeridianHandler cree un handler. Le paywallCache est optionnel : s'il
@@ -212,6 +216,9 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	mux.Handle("GET /api/veridian/admin/gc-orphan-workspace-dbs", hmac(http.HandlerFunc(h.handleGCOrphanWorkspaceDBs)))
 	// Verification admin d'un profil d'envoi (transport reel vers `to` libre). HMAC.
 	mux.Handle("POST /api/veridian/admin/email-integration.verify", writeRoute(h.handleEmailIntegrationVerify))
+	// Export OPÉRATEUR des identifiants SMTP/IMAP (décision Robert 02/11/2026, fiche 52).
+	// HMAC SEUL : surtout PAS writeRoute, l'idempotence persisterait la réponse (secrets) 24 h.
+	mux.Handle("POST /api/veridian/admin/email-integration.export", hmac(http.HandlerFunc(h.handleEmailIntegrationExport)))
 	// === Veridian patch V37 === Limites + dimensions feature d'un tenant
 	// (lot 7 ticket pricing-plans-implementation). Source de verite pour la
 	// console UI (widgets quota) et le paywall middleware. Auth HMAC.

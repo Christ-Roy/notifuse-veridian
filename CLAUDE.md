@@ -5,11 +5,9 @@ Fork du projet [Notifuse](https://github.com/Notifuse/notifuse) (Go 1.25 + Postg
 obligatoire) ; sync upstream depuis `main` (`upstream/main`), jamais de commit Veridian
 direct sur `main`. Tech stack upstream : voir `README.md`, pas repris ici.
 
-Ce fichier reste COURT et se charge à chaque session. Le détail de chaque brique (le
-diff exact, les fichiers touchés, l'historique du piège) vit dans `docs/claude/`, un
-fichier par sujet. **Lire la fiche avant de toucher au sujet.** Un nouveau piège ou une
-nouvelle brique s'écrit dans une nouvelle fiche `docs/claude/NN-sujet.md`, avec une
-ligne dans l'index ci-dessous — jamais un pavé de plus ici.
+Court par design (chargé à chaque session). Le détail d'une brique vit dans
+`docs/claude/NN-sujet.md` : **lire la fiche avant de toucher au sujet**, et une nouvelle
+brique = une fiche + une ligne d'index.
 
 ## Les règles qui ne se discutent pas
 
@@ -55,7 +53,8 @@ ligne dans l'index ci-dessous — jamais un pavé de plus ici.
    exige une validation explicite contre `PRICING-VERIDIAN.md` (Hub). → `47`
 9. **Toute réponse API qui embarque un Workspace passe par la redaction exhaustive
    des credentials.** Ne jamais réintroduire un secret (IMAP, SMTP, FileManager,
-   LLM…) en clair dans une réponse HTTP. → `10`
+   LLM…) en clair dans une réponse HTTP. Seule exception : l'export opérateur SMTP/IMAP,
+   HMAC Hub seul, jamais de cache. → `10`, `76`
 10. **Migrations en Expand & Contract strict.** Le tag Docker précédent doit tourner
     sur le schéma actuel ; `DROP COLUMN`/`NOT NULL` sur une table peuplée = deux PR
     sur deux déploiements. → `48`
@@ -108,6 +107,7 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 
 **Sécurité & API**
 - `10` redaction exhaustive des credentials workspace API
+- `76` export opérateur SMTP/IMAP (HMAC seul, audit, 0600)
 - `44` rate-limit global de l'API (OWASP API4:2023)
 - `61` nœud webhook des automations : garde SSRF (`NewTenantOutboundClient`), secret chiffré, signature HMAC
 - `75` lot L4 qualité et sécurité : S2 (aperçu e-mail en bac à sable), Liquid des données de contact, rétro-remplissage `message_data` (procédure de sauvegarde), tests upstream portés, mutants, flakiness vitest

@@ -525,6 +525,8 @@ func (a *App) veridianInitHandlers() error {
 	}
 	// Route admin email-integration.verify (HMAC) : transport reel vers un 'to' libre.
 	veridianHandler.SetEmailIntegrationVerifier(a.emailService)
+	// Export opérateur SMTP/IMAP (HMAC seul, fiche docs/claude/52).
+	veridianHandler.SetIntegrationExporter(a.emailService)
 
 	// === Veridian patch — Lot 1 sprint cold (2026-06-15) — poller IMAP ===
 	// BRIQUE FONDATRICE. Poll les boîtes IMAP configurées (Integration de type
