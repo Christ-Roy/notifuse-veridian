@@ -35,7 +35,11 @@ func (h *parityHistory) CountSentSinceForSenderDomain(context.Context, string, s
 }
 
 func (h *parityHistory) CountSentSinceForClassAndSenderDomain(_ context.Context, _ string, _ string, senderDomain string, since time.Time) (int, error) {
-	if h.capped[senderDomain] && time.Since(since) > 2*time.Hour {
+	// Deux appelants : le plafond journalier compte depuis un instant calendaire (debut de journee,
+	// nanoseconde nulle), le debit « envoye recemment » depuis now-intervalle (nanoseconde jamais
+	// nulle en pratique). Ne jamais distinguer par l'age de since : entre 00:00 et 02:00 UTC le debut
+	// de journee date de moins de 2 h et le test rougissait la nuit (01/11/2026, 00:38 UTC).
+	if h.capped[senderDomain] && since.Nanosecond() == 0 {
 		return 1, nil
 	}
 	return 0, nil
