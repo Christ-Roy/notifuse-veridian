@@ -57,3 +57,24 @@ Phase 1 : tailnet seul, AUTH obligatoire (TLS), aucun port public. Risques à tr
 ## Vérification
 
 Chaque épreuve négative (mauvais mot de passe, From non autorisé, destinataire supprimé en RCPT, deux RCPT dont un supprimé : le premier refusé, le second accepté, message trop gros, trop de RCPT, relais sans TLS) doit être vue échouer avant d'être crue. Le mode JSON existant doit rester vert. Preuves de bout en bout : fiche à compléter après staging.
+
+## Doc d'usage client (paramètres de connexion)
+
+Obtenir les paramètres : `notifuse-admin --env staging relay:info <workspace>` (n'affiche jamais la clé). La clé API se crée à part (`keys:mint`) et se donne UNE fois au client.
+
+| Paramètre | Valeur |
+|---|---|
+| Hôte | `relais-smtp.veridian.site` (staging à ce jour ; tailnet seul, ne pas exposer sans la phase 2) |
+| Port | `587` |
+| Sécurité | STARTTLS obligatoire (AUTH refusé en clair) |
+| Utilisateur | l'email de la clé API (`<prefixe>@api.<workspace>`) |
+| Mot de passe | la clé API |
+| Expéditeur (From) | une adresse du profil transactionnel réservé du workspace |
+
+**Supabase** (Auth > SMTP settings) : Host `relais-smtp.veridian.site`, Port `587`, Username = email de la clé, Password = clé API, Sender email = un expéditeur autorisé, Sender name au choix.
+
+**WordPress** (extension SMTP type WP Mail SMTP / PHPMailer) : SMTP host `relais-smtp.veridian.site`, port `587`, chiffrement STARTTLS, authentification activée, utilisateur = email de la clé, mot de passe = clé API, adresse d'expédition autorisée.
+
+**Test à la main** : `swaks --to <vous>@<domaine> --from <expéditeur autorisé> --server relais-smtp.veridian.site --port 587 -tls --auth PLAIN --auth-user <email> --auth-password '<clé>'` (le bridge n'annonce que AUTH PLAIN : un client qui ne sait que LOGIN ne passera pas).
+
+Codes de retour à connaître : 250 accepté · 550 5.7.1 expéditeur non autorisé, destinataire en suppression, clé sans workspace unique · 552 message trop gros ou trop de destinataires · 554 aucun profil transactionnel réservé · 451 débit dépassé ou profil en erreur (réessayer).
