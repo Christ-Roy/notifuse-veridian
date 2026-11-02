@@ -616,3 +616,34 @@ func TestFallbackDedupKey(t *testing.T) {
 		}
 	}
 }
+
+// recordingNotifier note chaque message annoncé à Notifier.
+type recordingNotifier struct{ ids []string }
+
+func (r *recordingNotifier) MessageReceived(_ context.Context, _ string, m *Message) {
+	r.ids = append(r.ids, m.ID)
+}
+
+// Le notifier (réveil du flux, branché par un futur câblage : nil en production aujourd'hui) n'est
+// prévenu que de l'original, quel que soit l'ordre d'arrivée de la copie Sieve.
+func TestDedup_NotifierOnlyToldAboutTheOriginal(t *testing.T) {
+	for _, copyFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("copie_d_abord=%v", copyFirst), func(t *testing.T) {
+			s, _ := testStore(t)
+			n := &recordingNotifier{}
+			g := NewIngestor(s, testIngestor(s).log, n)
+			now := time.Now()
+			var orig *Message
+			if copyFirst {
+				mustIngest(t, g, box2, ref2(1), siveCopy("notif1@mail.gmail.com").raw(), now)
+				orig = mustIngest(t, g, box1, ref(1), original("notif1@mail.gmail.com").raw(), now.Add(time.Second))
+			} else {
+				orig = mustIngest(t, g, box1, ref(1), original("notif1@mail.gmail.com").raw(), now)
+				mustIngest(t, g, box2, ref2(1), siveCopy("notif1@mail.gmail.com").raw(), now.Add(time.Second))
+			}
+			if len(n.ids) != 1 || n.ids[0] != orig.ID {
+				t.Fatalf("une seule annonce, pour l'original: %v (original %s)", n.ids, orig.ID)
+			}
+		})
+	}
+}
