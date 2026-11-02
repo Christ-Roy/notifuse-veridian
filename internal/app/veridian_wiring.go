@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -17,8 +18,10 @@ import (
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/internal/service/queue"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
+	"github.com/Notifuse/notifuse/internal/veridian/smtprelay"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/smtp_bridge"
 )
 
 // Point UNIQUE de câblage Veridian (lot L0, 29/10/2026). app.go l'appelle d'une seule ligne, en fin
@@ -224,6 +227,7 @@ type veridianState struct {
 	veridianTestTenantsCleanup *service.VeridianTestTenantsCleanupService // cron auto-cleanup orphans staging (2026-05-24)
 	veridianIMAPPoller         *queue.VeridianIMAPPollerService           // Lot 1 cold — poller IMAP self-service (réception bounces/réponses)
 	veridianReplyService       *service.VeridianReplyService              // Lot 3 cold — détection réponse + exit séquence (stop-on-reply)
+	veridianRelay              *smtprelay.Relay                           // relais SMTP de soumission (fiche 71), nil = désactivé
 }
 
 // veridianInitRepositories : dépôts Veridian et décorateur de quota (fin d'InitRepositories).
@@ -276,6 +280,7 @@ func (a *App) veridianInitRepositories() {
 
 // veridianInitServices : services, collaborateurs de worker et d'exécuteur, émetteur webhook (fin d'InitServices).
 func (a *App) veridianInitServices(automationExecutor *service.AutomationExecutor) {
+	a.veridianInitSMTPRelay()
 	// === Veridian patch — mission "API & agents" (2026-10-03) ===
 	a.workspaceService.SetAgentInstallTokenRepository(a.agentInstallTokenRepo)
 
@@ -1017,4 +1022,89 @@ func (a *App) veridianWrapHandler(handler http.Handler) http.Handler {
 		return ids, nil
 	})(handler)
 	return handler
+}
+
+// veridianSMTPHandleMessage est le point d'entrée du bridge SMTP (app.go). Un message non
+// JSON part au relais quand il est actif ; tout le reste suit le chemin legacy inchangé.
+func (a *App) veridianSMTPHandleMessage(userID, from string, to []string, data []byte) error {
+	if a.veridianRelay != nil && smtprelay.IsRelayBody(data) {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		return a.veridianRelay.Submit(ctx, userID, from, to, data)
+	}
+	return a.smtpBridgeHandlerService.HandleMessage(userID, from, to, data)
+}
+
+// veridianInitSMTPRelay active le relais si VERIDIAN_SMTP_RELAY_ENABLED=true, le bridge
+// étant actif. Fail closed : sans TLS, le relais reste désactivé (AUTH en clair refusé).
+func (a *App) veridianInitSMTPRelay() {
+	if !a.config.SMTPBridge.Enabled || a.smtpBridgeHandlerService == nil {
+		return
+	}
+	if strings.TrimSpace(os.Getenv("VERIDIAN_SMTP_RELAY_ENABLED")) != "true" {
+		return
+	}
+	if err := smtprelay.ValidateRelayConfig(true, a.config.SMTPBridge.TLSMode); err != nil {
+		a.logger.WithField("error", err.Error()).Error("SMTP relay desactive (fail closed)")
+		return
+	}
+	srv, ok := a.smtpBridgeServer.(*smtp_bridge.Server)
+	if !ok || srv == nil {
+		a.logger.Error("SMTP relay desactive : serveur bridge introuvable")
+		return
+	}
+	a.veridianRelay = smtprelay.New(smtprelay.Deps{
+		Directory:   veridianRelayDirectory{repo: a.workspaceRepo},
+		Suppression: veridianRelaySuppression{repo: a.contactListRepo},
+		Mailer:      a.emailService,
+		History:     a.messageHistoryRepo,
+		Limiter:     a.rateLimiter,
+		Logger:      a.logger,
+	})
+	a.rateLimiter.SetPolicy(smtprelay.RateNamespace, smtprelay.RatePerMinute, time.Minute)
+	relay := a.veridianRelay
+	srv.Backend().SetRcptChecker(func(userID, to string) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return relay.CheckRecipient(ctx, userID, to)
+	})
+	a.logger.Info("SMTP relay actif (soumission par le profil transactionnel reserve)")
+}
+
+// veridianRelayDirectory adapte les dépôts workspace au port smtprelay.Directory.
+type veridianRelayDirectory struct{ repo domain.WorkspaceRepository }
+
+func (d veridianRelayDirectory) UserWorkspaceIDs(ctx context.Context, userID string) ([]string, error) {
+	uws, err := d.repo.GetUserWorkspaces(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(uws))
+	for _, uw := range uws {
+		if uw != nil {
+			ids = append(ids, uw.WorkspaceID)
+		}
+	}
+	return ids, nil
+}
+
+func (d veridianRelayDirectory) Workspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
+	return d.repo.GetByID(ctx, workspaceID)
+}
+
+// veridianRelaySuppression adapte les listes de contact au port smtprelay.Suppression.
+type veridianRelaySuppression struct{ repo domain.ContactListRepository }
+
+func (s veridianRelaySuppression) ContactListStatuses(ctx context.Context, workspaceID, email string) ([]domain.ContactListStatus, error) {
+	lists, err := s.repo.GetListsByEmail(ctx, workspaceID, email)
+	if err != nil {
+		return nil, err
+	}
+	statuses := make([]domain.ContactListStatus, 0, len(lists))
+	for _, l := range lists {
+		if l != nil {
+			statuses = append(statuses, l.Status)
+		}
+	}
+	return statuses, nil
 }

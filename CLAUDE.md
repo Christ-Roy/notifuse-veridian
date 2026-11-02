@@ -67,23 +67,7 @@ brique = une fiche + une ligne d'index.
 
 ## Relever plutôt que croire
 
-```bash
-# état réel du cluster Nomad + du job notifuse (prod/staging)
-ssh bastion nomad-v state
-ssh bastion 'nomad job status notifuse'
-
-# la dette de tests non couverts (baseline transitoire, cible 0)
-wc -l tests-pending.txt
-
-# le mapping test colocalisé est-il vert sur le HEAD actuel ?
-BASE_REF=origin/veridian scripts/ci/check-test-mapping.sh
-
-# tous les fichiers custom Veridian (convention flat veridian_*.go)
-git ls-files | grep -E 'veridian_|veridian\.go' | wc -l
-
-# la vraie valeur des secrets HMAC/infra (jamais dans les .env locaux)
-ssh bastion 'nomad var get nomad/jobs/notifuse'
-```
+Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 
 ## Index des fiches (`docs/claude/`)
 
@@ -100,6 +84,8 @@ ssh bastion 'nomad var get nomad/jobs/notifuse'
 
 **CI, tests, déploiement**
 - `48` constitution CI — règles non négociables (tiers de promotion prod)
+- `71` relais SMTP de soumission (design phase 1, flag `VERIDIAN_SMTP_RELAY_ENABLED`)
+- `72` commandes de vérité (relever plutôt que croire)
 - `49` commandes tests (Makefile)
 - `41` sync upstream
 - `42` déploiement — GitOps Nomad

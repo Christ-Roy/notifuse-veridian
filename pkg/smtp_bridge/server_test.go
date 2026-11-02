@@ -20,6 +20,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 // generateSelfSignedTLSConfig returns a *tls.Config with a self-signed cert
@@ -336,4 +338,17 @@ func TestServer_Shutdown(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, context.Canceled, err)
 	})
+}
+
+// TestServer_Backend : le serveur rend le backend qu'il sert (le garde RCPT y est posé).
+func TestServer_Backend(t *testing.T) {
+	backend := NewBackend(func(u, p string) (string, error) { return "u", nil },
+		func(string, string, []string, []byte) error { return nil }, logger.NewLogger())
+	srv, err := NewServer(ServerConfig{Host: "127.0.0.1", Port: 0, Mode: ModeOff, Logger: logger.NewLogger()}, backend)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	if srv.Backend() != backend {
+		t.Fatal("Backend() doit rendre le backend du serveur")
+	}
 }

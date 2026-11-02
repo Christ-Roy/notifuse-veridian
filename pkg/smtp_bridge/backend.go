@@ -17,7 +17,19 @@ type MessageHandler func(userID string, from string, to []string, data []byte) e
 type Backend struct {
 	authenticator AuthHandler
 	handler       MessageHandler
+	rcptChecker   RcptChecker
 	logger        logger.Logger
+}
+
+// RcptChecker decides, per recipient, whether a RCPT TO is accepted. It runs
+// after authentication; a returned error is sent to the client as-is (use a
+// *smtp.SMTPError to choose the code). nil means accept.
+type RcptChecker func(userID, to string) error
+
+// SetRcptChecker installs the per-recipient gate. nil (the default) accepts every
+// recipient, which is the legacy behaviour.
+func (b *Backend) SetRcptChecker(c RcptChecker) {
+	b.rcptChecker = c
 }
 
 // NewBackend creates a new SMTP backend
@@ -126,9 +138,14 @@ func (s *Session) Rcpt(to string, opts *smtp.RcptOptions) error {
 	}
 
 	s.logger.WithFields(map[string]interface{}{
-		"to":      to,
 		"user_id": s.userID,
 	}).Debug("SMTP bridge: RCPT TO")
+
+	if s.backend.rcptChecker != nil {
+		if err := s.backend.rcptChecker(s.userID, to); err != nil {
+			return err
+		}
+	}
 
 	s.to = append(s.to, to)
 	return nil

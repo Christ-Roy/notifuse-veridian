@@ -391,3 +391,53 @@ func TestSession_DataWithoutAuth(t *testing.T) {
 		t.Errorf("Expected 'not authenticated' error, got: %v", err)
 	}
 }
+
+// TestBackend_SetRcptChecker : deux RCPT dont un refusé au RCPT TO. Le refusé
+// reçoit l'erreur du garde, l'autre passe ; sans garde, tout passe (legacy).
+func TestBackend_SetRcptChecker(t *testing.T) {
+	log := logger.NewLogger()
+	auth := func(username, password string) (string, error) { return "user123", nil }
+	msg := func(userID string, from string, to []string, data []byte) error { return nil }
+
+	t.Run("refuse le destinataire supprime, accepte l'autre", func(t *testing.T) {
+		backend := NewBackend(auth, msg, log)
+		backend.SetRcptChecker(func(userID, to string) error {
+			if to == "bounced@example.com" {
+				return &smtp.SMTPError{Code: 550, EnhancedCode: smtp.EnhancedCode{5, 7, 1}, Message: "suppressed"}
+			}
+			return nil
+		})
+		session, err := backend.NewSession(nil)
+		if err != nil {
+			t.Fatalf("NewSession: %v", err)
+		}
+		s := session.(*Session)
+		if err := s.AuthPlain("api@example.com", "key"); err != nil {
+			t.Fatalf("AuthPlain: %v", err)
+		}
+		if err := s.Mail("from@example.com", nil); err != nil {
+			t.Fatalf("Mail: %v", err)
+		}
+		if err := s.Rcpt("bounced@example.com", nil); err == nil {
+			t.Fatal("Rcpt(bounced) accepte : le garde n'a pas refusé")
+		} else if smtpErr, ok := err.(*smtp.SMTPError); !ok || smtpErr.Code != 550 {
+			t.Fatalf("Rcpt(bounced) doit rendre un SMTPError 550, got %v", err)
+		}
+		if err := s.Rcpt("ok@example.com", nil); err != nil {
+			t.Fatalf("Rcpt(ok) refusé à tort: %v", err)
+		}
+		if len(s.to) != 1 || s.to[0] != "ok@example.com" {
+			t.Fatalf("seul ok@example.com doit être retenu, got %v", s.to)
+		}
+	})
+
+	t.Run("sans garde, tout destinataire passe", func(t *testing.T) {
+		backend := NewBackend(auth, msg, log)
+		session, _ := backend.NewSession(nil)
+		s := session.(*Session)
+		_ = s.AuthPlain("api@example.com", "key")
+		if err := s.Rcpt("bounced@example.com", nil); err != nil {
+			t.Fatalf("sans garde, Rcpt doit passer: %v", err)
+		}
+	})
+}

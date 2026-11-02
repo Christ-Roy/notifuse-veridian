@@ -110,6 +110,11 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Backend rend le backend servi, pour y poser un garde (SetRcptChecker).
+func (s *Server) Backend() *Backend {
+	return s.backend
+}
+
 // Shutdown gracefully shuts down the SMTP server, draining in-flight
 // SMTP sessions until they complete or the context expires.
 func (s *Server) Shutdown(ctx context.Context) error {
