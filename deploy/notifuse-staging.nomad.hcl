@@ -80,6 +80,12 @@ job "notifuse-staging" {
         to           = 8081
         host_network = "tailscale"
       }
+      # Relais SMTP de soumission (fiche 71) : port 587 STATIQUE, tailnet seul (relais-smtp.veridian.site).
+      port "smtp" {
+        static       = 587
+        to           = 587
+        host_network = "tailscale"
+      }
     }
 
     service {
@@ -173,7 +179,7 @@ EOH
           "site.veridian.app"   = "notifuse"
         }
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
-        ports = ["http"]
+        ports = ["http", "smtp"]
       }
       # Garde reseau (fiche 64) : le smtp-sink E2E est en loopback dans l'allocation. Exception EXACTE 127.0.0.1:1025,
       # staging seulement (jamais dans notifuse.nomad.hcl), requise par scripts/e2e/cold-garde-fous.sh.
@@ -183,6 +189,17 @@ EOH
         env         = true
         data        = <<EOH
 SERVER_PORT=8081
+# Relais SMTP (fiche 71). Coupé tant que le certificat n'est pas posé dans la variable
+# nomad/jobs/notifuse-staging/stack/notifuse-staging (sinon le bridge refuse de démarrer).
+SMTP_BRIDGE_ENABLED=false
+SMTP_BRIDGE_PORT=587
+SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
+SMTP_BRIDGE_TLS=starttls
+VERIDIAN_SMTP_RELAY_ENABLED=false
+{{ with nomadVar "nomad/jobs/notifuse-staging/stack/notifuse-staging" }}
+SMTP_BRIDGE_TLS_CERT_BASE64={{ .smtp_bridge_tls_cert_base64 }}
+SMTP_BRIDGE_TLS_KEY_BASE64={{ .smtp_bridge_tls_key_base64 }}
+{{ end }}
 SERVER_HOST=0.0.0.0
 ENVIRONMENT=staging
 DEPLOY_ENV=staging
