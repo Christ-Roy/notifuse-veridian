@@ -191,10 +191,10 @@ EOH
 SERVER_PORT=8081
 # Relais SMTP (fiche 71). Coupé tant que le certificat n'est pas posé dans la variable
 # nomad/jobs/notifuse-staging/stack/notifuse-staging (sinon le bridge refuse de démarrer).
-SMTP_BRIDGE_ENABLED=false
+SMTP_BRIDGE_ENABLED=true
 SMTP_BRIDGE_PORT=587
 SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
-VERIDIAN_SMTP_RELAY_ENABLED=false
+VERIDIAN_SMTP_RELAY_ENABLED=true
 # starttls seulement si le certificat est RENDU : sinon la config refuse de démarrer (crash-loop).
 {{ with nomadVar "nomad/jobs/notifuse-staging/stack/notifuse-staging" }}{{ if .smtp_bridge_tls_cert_base64 }}SMTP_BRIDGE_TLS=starttls
 SMTP_BRIDGE_TLS_CERT_BASE64={{ .smtp_bridge_tls_cert_base64 }}
