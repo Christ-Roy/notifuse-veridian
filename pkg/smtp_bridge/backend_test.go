@@ -2,11 +2,14 @@ package smtp_bridge
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
 
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
 )
 
@@ -440,4 +443,41 @@ func TestBackend_SetRcptChecker(t *testing.T) {
 			t.Fatalf("sans garde, Rcpt doit passer: %v", err)
 		}
 	})
+}
+
+// TestSession_AuthCredentialsRefusedCode : un mauvais mot de passe doit être refusé en 535 5.7.8
+// (échec PERMANENT : le client ne doit pas réessayer en boucle), une limite de débit en 454 4.7.0
+// (échec TEMPORAIRE, seul cas où un nouvel essai est légitime).
+func TestSession_AuthCredentialsRefusedCode(t *testing.T) {
+	log := logger.NewLogger()
+	msg := func(userID string, from string, to []string, data []byte) error { return nil }
+
+	cases := []struct {
+		name     string
+		authErr  error
+		wantCode int
+	}{
+		{"mauvais identifiants : 535", errors.New("invalid API key"), 535},
+		{"limite de débit : 454", fmt.Errorf("%w: rate limit exceeded", ErrTemporaryAuth), 454},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			auth := func(username, password string) (string, error) { return "", c.authErr }
+			backend := NewBackend(auth, msg, log)
+			session, _ := backend.NewSession(nil)
+			s := session.(*Session)
+			srv, err := s.Auth(sasl.Plain)
+			if err != nil {
+				t.Fatalf("Auth: %v", err)
+			}
+			_, _, err = srv.Next([]byte("\x00api@example.com\x00mauvais"))
+			var se *smtp.SMTPError
+			if !errors.As(err, &se) {
+				t.Fatalf("erreur SMTP attendue (code %d), got %T %v", c.wantCode, err, err)
+			}
+			if se.Code != c.wantCode {
+				t.Fatalf("code %d attendu, got %d", c.wantCode, se.Code)
+			}
+		})
+	}
 }

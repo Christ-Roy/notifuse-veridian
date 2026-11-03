@@ -80,7 +80,7 @@ func (s *Session) Auth(mech string) (sasl.Server, error) {
 				"username": username,
 				"error":    err.Error(),
 			}).Warn("SMTP bridge: Authentication failed")
-			return errors.New("invalid credentials")
+			return authRefusal(err)
 		}
 
 		s.userID = userID
@@ -105,7 +105,7 @@ func (s *Session) AuthPlain(username, password string) error {
 			"username": username,
 			"error":    err.Error(),
 		}).Warn("SMTP bridge: Authentication failed")
-		return errors.New("invalid credentials")
+		return authRefusal(err)
 	}
 
 	s.userID = userID
@@ -200,4 +200,14 @@ func (s *Session) Reset() {
 // Logout is called when the client disconnects
 func (s *Session) Logout() error {
 	return nil
+}
+
+// authRefusal convertit un échec d'authentification en réponse SMTP. Échec temporaire
+// (ErrTemporaryAuth, limite de débit) : 454 4.7.0. Tout autre échec : 535 5.7.8 permanent,
+// pour qu'un client avec un mauvais mot de passe ne réessaie pas en boucle.
+func authRefusal(err error) error {
+	if errors.Is(err, ErrTemporaryAuth) {
+		return &smtp.SMTPError{Code: 454, EnhancedCode: smtp.EnhancedCode{4, 7, 0}, Message: "Temporary authentication failure"}
+	}
+	return &smtp.SMTPError{Code: 535, EnhancedCode: smtp.EnhancedCode{5, 7, 8}, Message: "Authentication credentials invalid"}
 }

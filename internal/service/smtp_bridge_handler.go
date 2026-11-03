@@ -14,6 +14,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
+	"github.com/Notifuse/notifuse/pkg/smtp_bridge"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -56,7 +57,7 @@ func (s *SMTPBridgeHandlerService) Authenticate(username, password string) (stri
 	// Check rate limit
 	if !s.rateLimiter.Allow("smtp", apiEmail) {
 		s.logger.WithField("api_email", apiEmail).Warn("SMTP bridge: Rate limit exceeded")
-		return "", fmt.Errorf("rate limit exceeded")
+		return "", fmt.Errorf("%w: rate limit exceeded", smtp_bridge.ErrTemporaryAuth)
 	}
 
 	// Validate the API key (JWT token)
