@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/mail"
 	"testing"
 	"time"
@@ -11,6 +12,9 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
+	"github.com/Notifuse/notifuse/pkg/smtp_bridge"
+	"github.com/emersion/go-sasl"
+	"github.com/emersion/go-smtp"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -542,4 +546,71 @@ Content-Type: text/plain
 	jsonPayload, err := service.extractJSONPayload(msg)
 	assert.NoError(t, err)
 	assert.Contains(t, string(jsonPayload), `"id": "test"`)
+}
+
+// TestSMTPBridgeHandlerService_Authenticate_RefusalIsTemporaryOnlyWhenRateLimited : un identifiant
+// invalide n'est JAMAIS marqué temporaire ; seule la limite de débit l'est (ErrTemporaryAuth, donc 454).
+func TestSMTPBridgeHandlerService_Authenticate_RefusalIsTemporaryOnlyWhenRateLimited(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	jwtSecret := []byte("test-secret-key-for-jwt-signing-minimum-32-chars")
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	rl := ratelimiter.NewRateLimiter()
+	rl.SetPolicy("smtp", 2, 1*time.Minute)
+	defer rl.Stop()
+	service := NewSMTPBridgeHandlerService(nil, nil, mockRepo, logger.NewLogger(), jwtSecret, rl)
+
+	sawTemporary := false
+	for i := 0; i < 6; i++ {
+		_, err := service.Authenticate("api@example.com", "invalid-token")
+		if err == nil {
+			t.Fatalf("tentative %d : identifiant invalide accepté", i)
+		}
+		if errors.Is(err, smtp_bridge.ErrTemporaryAuth) {
+			sawTemporary = true
+			assert.Contains(t, err.Error(), "rate limit exceeded")
+			break
+		}
+		assert.NotContains(t, err.Error(), "rate limit")
+	}
+	assert.True(t, sawTemporary, "la limite de débit doit finir par rendre un échec temporaire")
+}
+
+// TestSMTPBridgeHandlerService_Authenticate_SMTPRefusalCodes : à travers le bridge réel, un mauvais
+// mot de passe est refusé en 535 5.7.8 (permanent) et la limite de débit en 454 (temporaire).
+func TestSMTPBridgeHandlerService_Authenticate_SMTPRefusalCodes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	jwtSecret := []byte("test-secret-key-for-jwt-signing-minimum-32-chars")
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	rl := ratelimiter.NewRateLimiter()
+	rl.SetPolicy("smtp", 2, 1*time.Minute)
+	defer rl.Stop()
+	service := NewSMTPBridgeHandlerService(nil, nil, mockRepo, logger.NewLogger(), jwtSecret, rl)
+
+	backend := smtp_bridge.NewBackend(service.Authenticate,
+		func(string, string, []string, []byte) error { return nil }, logger.NewLogger())
+	session, err := backend.NewSession(nil)
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	s := session.(*smtp_bridge.Session)
+
+	codes := []int{}
+	for i := 0; i < 6; i++ {
+		srv, err := s.Auth(sasl.Plain)
+		if err != nil {
+			t.Fatalf("Auth: %v", err)
+		}
+		_, _, err = srv.Next([]byte("\x00api@example.com\x00invalid-token"))
+		var se *smtp.SMTPError
+		if !errors.As(err, &se) {
+			t.Fatalf("erreur SMTP attendue, got %T %v", err, err)
+		}
+		codes = append(codes, se.Code)
+	}
+	assert.Equal(t, 535, codes[0], "un mauvais mot de passe doit être refusé en 535 permanent")
+	assert.Equal(t, 454, codes[len(codes)-1], "la limite de débit doit être refusée en 454 temporaire")
 }
