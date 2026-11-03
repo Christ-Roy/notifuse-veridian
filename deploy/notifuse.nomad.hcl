@@ -88,6 +88,12 @@ job "notifuse" {
         to           = 8081
         host_network = "tailscale"
       }
+      # Relais SMTP de soumission (fiche 71) : 587 STATIQUE, tailnet seul (ovh-prod, 100.88.202.29). Pas de port public.
+      port "smtp" {
+        static       = 587
+        to           = 587
+        host_network = "tailscale"
+      }
     }
 
     service {
@@ -415,7 +421,7 @@ EOH
           "site.veridian.app"   = "notifuse"
         }
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
-        ports = ["http"]
+        ports = ["http", "smtp"]
         volumes = [
           "/opt/veridian-lab/notifuse/data:/app/data",
         ]
@@ -438,6 +444,14 @@ EOH
         env         = true
         data        = <<EOH
 SERVER_PORT=8081
+# Relais SMTP (fiche 71). Coupé par défaut ; starttls seulement si le certificat est rendu (sinon crash au démarrage).
+SMTP_BRIDGE_ENABLED=false
+SMTP_BRIDGE_PORT=587
+SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
+VERIDIAN_SMTP_RELAY_ENABLED=false
+{{ with nomadVar "nomad/jobs/notifuse/stack/notifuse" }}{{ if .smtp_bridge_tls_cert_base64 }}SMTP_BRIDGE_TLS=starttls
+SMTP_BRIDGE_TLS_CERT_BASE64={{ .smtp_bridge_tls_cert_base64 }}
+SMTP_BRIDGE_TLS_KEY_BASE64={{ .smtp_bridge_tls_key_base64 }}{{ else }}SMTP_BRIDGE_TLS=off{{ end }}{{ end }}
 SERVER_HOST=0.0.0.0
 ENVIRONMENT=production
 DEPLOY_ENV=prod
