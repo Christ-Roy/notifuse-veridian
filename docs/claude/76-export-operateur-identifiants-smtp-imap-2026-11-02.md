@@ -32,22 +32,57 @@ seulement**. Tout le reste reste masqué, et `workspaces.get` ne change pas.
 
 ## Pièges
 
-- Le secret HMAC du staging (`HUB_API_SECRET`, variable Nomad `notifuse-staging`) n'est
-  pas celui de `NOTIFUSE_HUB_API_SECRET` dans `~/credentials/.all-creds.env` (celui-ci
-  correspond à la prod, mesuré par empreinte). `notifuse-admin --env staging` renvoie
-  donc 401 « Invalid signature ». À corriger côté CLI (un secret par environnement).
+- **Classe de défaut « staging signé avec le secret prod »** (corrigée 02/11/2026). Le CLI
+  signait tout avec `NOTIFUSE_HUB_API_SECRET` de `~/credentials` (= secret prod, mesuré par
+  empreinte). Le staging répondait 401 « Invalid signature », sans message utile. Correction :
+  le secret est choisi PAR ENVIRONNEMENT. `prod` lit `~/credentials` ; `staging` lit
+  `HUB_API_SECRET` de la variable Nomad `nomad/jobs/notifuse-staging` à chaque appel
+  (rien copié sur disque). Introuvable = « non abouti » code 2, jamais de repli prod.
+  Test : `~/.claude/skills/notifuse-cli/tests/test_hub_secret_per_env.py` (3 échecs sur la
+  version d'avant, 4 verts après).
 - `workspaces.get` ne renvoie **pas** en clair les secrets Supabase, Firecrawl et LLM.
   La phrase du SKILL `notifuse-cli` qui disait le contraire était fausse (mesure ci-dessous).
-- `encrypted_webhook_secret` (ciphertext, 184 car.) est renvoyé à l'owner sur chaque
-  intégration email. Ce n'est pas du clair. Le retirer régénérerait le secret à la mise
-  à jour : dette, à traiter avec son chemin de mise à jour.
+- **Dette** : `encrypted_webhook_secret` (ciphertext, 184 car.) est renvoyé à l'owner sur chaque
+  intégration email par `workspaces.get`. Ce n'est pas du clair. Le retirer régénérerait le
+  secret à la mise à jour (`BeforeSave` en recrée un si le clair et le chiffré sont vides) :
+  à traiter avec le chemin de mise à jour, pas à la hâte.
 - Le repo est public, donc les jobs `ubuntu-latest` (deploy-prod, rollback) sont couverts
   par la mention `gitops-ci-allow-hosted`. Hors de ce chantier.
+- **Orphelin prod** : la base `notifuse_ws_expproofprod1103` (workspace de test, vide) reste
+  après le wipe. Le `DROP ... WITH (FORCE)` est réservé au staging (règle 5 du CLAUDE.md) :
+  à décider par Robert. `jetables.py --purge` (simulation) liste en plus 5 orphelines
+  anciennes de prod (clitest*, e2e*), dette préexistante.
 
 ## Preuves
 
-Mesures : voir les sections « Mesure » et « Preuve de fin » ci-dessous (complétées au fil
-des jalons).
+Commit `43c5564a` (feature), poussé sur `veridian` puis porté par `f635f495` (un autre agent
+y a posé le relais SMTP, désactivé). CI : run 41543165443 vert (staging E2E inclus). Prod :
+promotion run 41548660079 (Deploy prod et E2E prod verts). Prod sert `f635f495`.
+
+Mutations (rouge prouvé) : HMAC retiré de la route → `TestVeridianIntegrationExport_RequiresHMAC`
+rouge ; type hors liste blanche (Supabase, LLM exportés) → 5 tests service rouges. Vert après.
+
+### Preuve staging (f635f495, workspace jetable `expproof1102`, wipé)
+
+- Export JSON via la fonction CLI : SMTP et IMAP `password` égaux aux secrets connus ; fichier
+  0600 ; Firecrawl, LLM, Supabase absents du fichier.
+- `--format env` et `--stdout` : secrets présents, sortie unique respectée.
+- Sans auth, JWT owner, HMAC faux : 401. HMAC valide (contrôle positif) : 200, `no-store`.
+- Échec signé (corps invalide) : 400, audit `invalid`.
+- Audit : 5 lignes `veridian_integration_export` (`ok`, `invalid`), zéro secret.
+- `workspaces.get` : aucun des 5 secrets en clair.
+- Wipe : 200. Base orpheline `notifuse_ws_expproof1102` supprimée (FORCE, staging).
+
+### Preuve prod (f635f495, workspace jetable `expproofprod1103`, wipé, rien envoyé)
+
+- Mêmes contrôles que staging : export SMTP et IMAP égaux, 0600, types non exportables sans
+  secret, `--stdout` OK, 401 sans auth et avec JWT owner, 401 HMAC faux, 200 + `no-store`.
+- Audit prod : 4 lignes (`ok`, `invalid`), zéro secret.
+- `workspaces.get` prod : aucun des 5 secrets en clair.
+- Wipe : 200. **Base `notifuse_ws_expproofprod1103` encore présente** (voir Pièges).
+- Relais SMTP (flag absent du conteneur prod, `VERIDIAN_SMTP_RELAY_ENABLED` défaut `false`) :
+  aucun écouteur sur 587 ni 25 dans le namespace réseau du conteneur (`/proc/net/tcp`). Le JSON
+  legacy n'emprunte pas le relais tant que le flag est faux (`veridianInitSMTPRelay` sort tôt).
 
 ### Mesure avant changement (staging, build 73ed457d, 02/11/2026)
 

@@ -300,6 +300,8 @@ EXISTING_COMMAND_ROUTES = {
     # "API & agents"), plus sures (revokeAPIKey refuse un user qui n'est pas
     # une api_key, removeMember etait generique a tout type de membre).
     "keys:list": ["/api/workspaces.listAPIKeys"],
+    # relay:info (fiche 71) : paramètres du relais SMTP de soumission, lecture seule, jamais le secret.
+    "relay:info": ["/api/workspaces.listAPIKeys"],
     "keys:revoke": ["/api/workspaces.revokeAPIKey"],
     "integrations:create-smtp": ["/api/workspaces.createIntegration"],
     "integrations:delete": ["/api/workspaces.deleteIntegration"],
@@ -494,9 +496,41 @@ def hmac_headers(secret, raw_body):
     }
 
 
+# ---------------------------------------------------------------------------
+# SECRET HMAC PAR ENVIRONNEMENT (correction de la classe « staging signé avec le
+# secret prod », 02/11/2026 : NOTIFUSE_HUB_API_SECRET de ~/credentials = prod, le
+# staging répondait 401 muet). prod -> ~/credentials. staging -> variable Nomad
+# de l'environnement, lue à l'appel (token lecture, rien copié sur disque). Si le
+# secret demandé est introuvable : « non abouti » (code 2), JAMAIS de repli prod.
+STAGING_HUB_NOMAD_PATH = "nomad/jobs/notifuse-staging"
+STAGING_HUB_NOMAD_ITEM = "HUB_API_SECRET"
+
+
+def _staging_hub_secret_from_nomad():
+    try:
+        r = subprocess.run(["nomad-v", "raw", "var", "get", "-item", STAGING_HUB_NOMAD_ITEM,
+                            STAGING_HUB_NOMAD_PATH],
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        die(f"secret HMAC staging : lecture Nomad impossible ({type(e).__name__}). "
+            f"NON ABOUTI, pas de repli sur le secret prod.", code=2)
+    value = r.stdout.rstrip("\n")
+    if r.returncode != 0 or not value:
+        die(f"secret HMAC staging introuvable ({STAGING_HUB_NOMAD_PATH} / {STAGING_HUB_NOMAD_ITEM}). "
+            f"NON ABOUTI, pas de repli sur le secret prod.", code=2)
+    return value
+
+
+def hub_secret_for_env(env):
+    """Secret HMAC Hub de l'environnement demandé. Jamais le secret prod pour staging."""
+    if env == "staging":
+        return _staging_hub_secret_from_nomad()
+    return get_key(HMAC_SECRET_VAR)
+
+
 def call_hmac(env, method, route, body=None):
     """Tape une route HMAC Hub (provision/admin/cold-simulate)."""
-    secret = get_key(HMAC_SECRET_VAR)
+    secret = hub_secret_for_env(env)
     raw = json.dumps(body) if body is not None else ""
     url = BASES[env] + route
     headers = {"Content-Type": "application/json"}
@@ -1156,6 +1190,38 @@ def cmd_keys_list(a):
     # "API & agents" au lieu de la laisser sans commande CLI.
     jwt = owner_jwt(a.env, a.workspace)
     out(*call_jwt(a.env, "GET", "/api/workspaces.listAPIKeys", jwt, params={"workspace_id": a.workspace}))
+
+
+# Relais SMTP de soumission (fiche 71). Hôte par environnement : seul staging est posé à ce jour.
+RELAY_HOSTS = {"staging": "relais-smtp.veridian.site"}
+
+
+def cmd_relay_info(a):
+    """relay:info — paramètres de connexion SMTP du relais de soumission pour un workspace.
+    Lecture seule : liste les clés API (listAPIKeys, sans secret). N'affiche JAMAIS la clé :
+    elle s'obtient une seule fois à la création (keys:mint) et ne se relit pas."""
+    host = RELAY_HOSTS.get(a.env)
+    if not host:
+        die(f"relay:info : pas de relais SMTP posé en env '{a.env}' (posé : {', '.join(RELAY_HOSTS)}).")
+    jwt = owner_jwt(a.env, a.workspace)
+    st, data = call_jwt(a.env, "GET", "/api/workspaces.listAPIKeys", jwt, params={"workspace_id": a.workspace})
+    if st != 200 or not isinstance(data, dict):
+        out(st, data)
+        return
+    rows = data.get("api_keys") or data.get("keys") or data.get("data") or []
+    emails = [r.get("email") for r in rows if isinstance(r, dict) and r.get("email")]
+    print(f"Relais SMTP de soumission (workspace {a.workspace}, env {a.env})")
+    print(f"  Hôte        : {host}")
+    print("  Port        : 587")
+    print("  Sécurité    : STARTTLS obligatoire (AUTH refusé en clair)")
+    if emails:
+        for e in emails:
+            print(f"  Utilisateur : {e}")
+    else:
+        print("  Utilisateur : aucune clé API sur ce workspace (créer une clé : notifuse-admin keys:mint)")
+    print("  Mot de passe: la clé API, affichée une seule fois à keys:mint (jamais relue par cette commande)")
+    print("  Expéditeur  : l'adresse From doit être un expéditeur du profil transactionnel réservé du workspace")
+    print("  Destinataires: un destinataire bounced ou complained est refusé (550 5.7.1) ; les autres partent")
 
 
 def cmd_keys_provision(a):
@@ -4526,6 +4592,10 @@ def build_parser():
     sp = sub.add_parser("keys:list", help="membres/api_keys du workspace (owner)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_keys_list)
+
+    sp = sub.add_parser("relay:info", help="paramètres SMTP du relais de soumission d'un workspace (hôte, port, TLS, utilisateur ; jamais la clé)")
+    sp.add_argument("workspace")
+    sp.set_defaults(func=cmd_relay_info)
 
     sp = sub.add_parser("keys:provision", help="émet une api_key (owner)")
     sp.add_argument("workspace", nargs="?", default=None)
