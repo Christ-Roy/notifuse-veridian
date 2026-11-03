@@ -1,0 +1,24 @@
+# ============================================================================
+# IAC — DNS de la zone veridian.site (source de vérité déclarée, fiche 71)
+# ============================================================================
+# Ce fichier est LA déclaration des enregistrements qui portent un service Veridian.
+# La zone vit chez Cloudflare (compte Veridian). Ici, on déclare ; la vérification
+# compare la zone réelle à ce fichier en LECTURE SEULE :
+#
+#   scripts/iac/dns-plan.sh            # diff read-only, exit 0 = conforme, 1 = dérive, 2 = non abouti
+#
+# Aucun script n'écrit dans Cloudflare. Une modification = éditer ce fichier, puis la poser
+# à la main via la skill cloudflare-dns (ou par une passe d'apply à ajouter après revue).
+# Les jetons ne sont jamais dans ce fichier : lus depuis le coffre (CF_API_TOKEN, CF_ZONE_ID).
+
+zone: veridian.site
+
+records:
+  # Relais SMTP de soumission (fiche 71). Tailnet seulement : l'adresse est CGNAT 100.64/10,
+  # donc injoignable hors du tailnet. Cible = ovh-prod (allocation prod notifuse, port 587).
+  - name: relais-smtp
+    type: A
+    content: 100.88.202.29
+    ttl: 300
+    proxied: false
+    comment: relais SMTP Veridian, tailnet ovh-prod (fiche 71)

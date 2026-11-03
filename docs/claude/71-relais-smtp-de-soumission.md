@@ -78,3 +78,28 @@ Obtenir les paramètres : `notifuse-admin --env staging relay:info <workspace>` 
 **Test à la main** : `swaks --to <vous>@<domaine> --from <expéditeur autorisé> --server relais-smtp.veridian.site --port 587 -tls --auth PLAIN --auth-user <email> --auth-password '<clé>'` (le bridge n'annonce que AUTH PLAIN : un client qui ne sait que LOGIN ne passera pas).
 
 Codes de retour à connaître : 250 accepté · 550 5.7.1 expéditeur non autorisé, destinataire en suppression, clé sans workspace unique · 552 message trop gros ou trop de destinataires · 554 aucun profil transactionnel réservé · 451 débit dépassé ou profil en erreur (réessayer).
+
+## État au 03/11/2026 (preuves, corrections, limites restantes)
+
+**Preuves vivantes** (client smtplib, STARTTLS vérifié contre `relais-smtp.veridian.site`, destinataires internes `agences-veridian.fr` seulement) :
+- staging (flag ON, commit `0caae84a`) : 7 épreuves vertes, plus 535 sur mauvais mot de passe ; message livré, DKIM `pass` (dkimproxy-verify), un seul `@domaine` dans le Message-ID, `List-Unsubscribe` du client transmis ; `message_history` : 6 lignes.
+- prod (`0bbdb5e3`, connexion directe à `100.88.202.29:587`) : 7 épreuves vertes ; positif livré, DKIM `pass`, Message-ID à un seul domaine.
+- Workspaces de test wipés (staging et prod), boîte `relais-test@` supprimée sur node02, clés de test retirées du coffre.
+
+**Défauts trouvés pendant la preuve et corrigés :**
+- Message-ID doublé (`uuid@domaine@domaine`) : le relais passait l'identifiant complet à l'envoi, qui rajoute le domaine. Corrigé : partie locale seulement (`wireLocalPart`), test ajouté.
+- Mauvais mot de passe refusé en 454 (temporaire) : un client réessaie en boucle. Corrigé : 535 5.7.8 permanent ; 454 seulement à la limite de débit (`ErrTemporaryAuth`). Test de bout en bout dans `internal/service/smtp_bridge_handler_test.go`.
+- Profil de test d'abord pointé sur l'IP : le certificat est émis pour le nom (`smtp.agences-veridian.fr`). Leçon : un profil SMTP se déclare par le nom du certificat, pas par l'IP.
+
+**Limites restantes (assumées, à traiter avant la phase 2) :**
+- Idempotence en mémoire du processus (24 h) : perdue au redémarrage ; un retry après redémarrage peut dupliquer le message.
+- Cc et Bcc d'en-tête non relayés, en-têtes libres non relayés (le MIME est recomposé, pas renvoyé tel quel).
+- Plus de plafond journalier propre au relais (le profil réservé n'est pas plafonné, lot 4).
+- Échec partiel sur plusieurs destinataires : les premiers peuvent partir, le client réessaie tout (doublons possibles).
+- Le certificat relais est une copie dans une variable Nomad (tâche `notifuse-staging` et `notifuse`), émise hors application. Échéance `relais-smtp.veridian.site` : 1er février 2027. Renouvellement in-app à construire (voir ci-dessous).
+
+**Certificat in-app (non fait) :** la cible est une émission et un renouvellement DNS-01 Cloudflare dans l'application (bibliothèque ACME, jeton lu en environnement), stockage chiffré par `SECRET_KEY` (`pkg/crypto`) dans les réglages système, renouvellement par le planificateur interne (`internal/service/task_scheduler.go`), rechargement à chaud du `tls.Config` du bridge (`GetCertificate`), alerte avant échéance. Un certificat fourni par fichier ou par variable (`SMTP_BRIDGE_TLS_CERT_BASE64`) prime. Ce chantier ajoute une dépendance ACME au `go.mod` et touche la configuration du bridge (`config/config.go`, `internal/app/app.go` gelé) : à valider avant d'être codé.
+
+**DNS déclaré :** `iac/dns/veridian-site.yaml` (source de vérité du dépôt), contrôle lecture seule `scripts/iac/dns-plan.sh` (0 conforme, 1 dérive, 2 non abouti).
+
+**Compose :** `compose.yaml` porte les variables du relais, désactivé par défaut (`SMTP_BRIDGE_TLS=off`, sinon le démarrage échouerait sans certificat), port 587 publié sur `127.0.0.1` par défaut (`SMTP_BRIDGE_BIND` pour l'élargir, phase 2).

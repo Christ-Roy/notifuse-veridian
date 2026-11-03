@@ -9,7 +9,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - '8081:8080'
-      - '587:587'
+      # Relais SMTP de soumission (fiche 71) : publié sur la boucle locale par défaut.
+      # Pour l'ouvrir au réseau, poser SMTP_BRIDGE_BIND=0.0.0.0 (phase 2, anti-abus à traiter avant).
+      - '${SMTP_BRIDGE_BIND:-127.0.0.1}:587:587'
     environment:
       # Server Configuration
       - SERVER_PORT=${SERVER_PORT:-8080}
@@ -40,13 +42,18 @@ services:
       # - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
       # - SMTP_FROM_NAME=${SMTP_FROM_NAME}
 
-      # SMTP Bridge Configuration (Optional - for receiving inbound emails)
-      # - SMTP_BRIDGE_ENABLED=${SMTP_BRIDGE_ENABLED}
-      # - SMTP_BRIDGE_PORT=${SMTP_BRIDGE_PORT}
-      # - SMTP_BRIDGE_DOMAIN=${SMTP_BRIDGE_DOMAIN}
-      # - SMTP_BRIDGE_TLS=${SMTP_BRIDGE_TLS}  # off | starttls | implicit (default: starttls when certs present)
-      # - SMTP_BRIDGE_TLS_CERT_BASE64=${SMTP_BRIDGE_TLS_CERT_BASE64}
-      # - SMTP_BRIDGE_TLS_KEY_BASE64=${SMTP_BRIDGE_TLS_KEY_BASE64}
+      # Relais SMTP de soumission (fiche 71). Désactivé par défaut : le conteneur démarre sans relais.
+      # Pour l'activer : SMTP_BRIDGE_ENABLED=true, VERIDIAN_SMTP_RELAY_ENABLED=true, SMTP_BRIDGE_TLS=starttls
+      # et un certificat PEM en base64 (SMTP_BRIDGE_TLS_CERT_BASE64 = chaîne, SMTP_BRIDGE_TLS_KEY_BASE64 = clé).
+      # starttls exige le certificat : sans lui le démarrage échoue (fail closed, jamais de AUTH en clair).
+      # SMTP_BRIDGE_TLS=off avec le relais actif est refusé au démarrage.
+      - SMTP_BRIDGE_ENABLED=${SMTP_BRIDGE_ENABLED:-false}
+      - VERIDIAN_SMTP_RELAY_ENABLED=${VERIDIAN_SMTP_RELAY_ENABLED:-false}
+      - SMTP_BRIDGE_PORT=${SMTP_BRIDGE_PORT:-587}
+      - SMTP_BRIDGE_DOMAIN=${SMTP_BRIDGE_DOMAIN:-localhost}
+      - SMTP_BRIDGE_TLS=${SMTP_BRIDGE_TLS:-off}
+      - SMTP_BRIDGE_TLS_CERT_BASE64=${SMTP_BRIDGE_TLS_CERT_BASE64:-}
+      - SMTP_BRIDGE_TLS_KEY_BASE64=${SMTP_BRIDGE_TLS_KEY_BASE64:-}
     depends_on:
       - postgres
     volumes:
