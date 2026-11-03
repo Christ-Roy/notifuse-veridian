@@ -133,6 +133,8 @@ func TestAgentHandler_HandleCLIBinary_EmbeddedByDefault(t *testing.T) {
 	}
 	assert.True(t, names["notifuse"], "tarball must contain the notifuse entrypoint")
 	assert.True(t, names["notifuse_common.py"], "tarball must contain notifuse_common.py next to it")
+	// notifuse_common.py importe notifuse_mail : sans lui, toute la CLI distribuée plante (fiche 76).
+	assert.True(t, names["notifuse_mail.py"], "tarball must contain notifuse_mail.py (imported by notifuse_common.py)")
 }
 
 func TestAgentHandler_HandleCLIBinary_ConfiguredButMissingFile503(t *testing.T) {

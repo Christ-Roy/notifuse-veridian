@@ -55,6 +55,8 @@ brique = une fiche + une ligne d'index.
    des credentials.** Ne jamais réintroduire un secret (IMAP, SMTP, FileManager,
    LLM…) en clair dans une réponse HTTP. Seule exception : l'export opérateur SMTP/IMAP,
    HMAC Hub seul, jamais de cache. → `10`, `76`
+11b. **Toute route `/api/*` a une commande CLI, et la CLI embarquée = son MANIFEST.** Le contrôle
+   tourne au pre-push et en CI. → `77`
 10. **Migrations en Expand & Contract strict.** Le tag Docker précédent doit tourner
     sur le schéma actuel ; `DROP COLUMN`/`NOT NULL` sur une table peuplée = deux PR
     sur deux déploiements. → `48`
@@ -94,6 +96,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 **Sécurité & API**
 - `10` redaction exhaustive des credentials workspace API
 - `76` export opérateur SMTP/IMAP (HMAC seul, audit, 0600)
+- `77` couverture CLI embarquée (chaque route `/api/*` a sa commande, MANIFEST) et distribution du CLI
 - `44` rate-limit global de l'API (OWASP API4:2023)
 - `61` nœud webhook des automations : garde SSRF (`NewTenantOutboundClient`), secret chiffré, signature HMAC
 - `75` lot L4 qualité et sécurité : S2 (aperçu e-mail en bac à sable), Liquid des données de contact, rétro-remplissage `message_data` (procédure de sauvegarde), tests upstream portés, mutants, flakiness vitest

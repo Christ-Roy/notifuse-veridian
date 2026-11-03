@@ -146,6 +146,16 @@ jobs:
         run: |
           chmod +x scripts/ci/check-rate-limit-coverage.sh
           scripts/ci/check-rate-limit-coverage.sh
+      # === Veridian — couverture CLI embarquée (fiche 76) ===
+      # Toute route /api/* a sa commande, la CLI embarquée est intègre (MANIFEST) et à jour de sa source.
+      # Autotest d'abord ; rc 2 (non abouti) prévient sans bloquer, rc 1 bloque.
+      - name: CLI embarquée — couverture des routes et MANIFEST
+        run: |
+          chmod +x scripts/veridian/cli-coverage-check.sh
+          scripts/veridian/cli-coverage-check.sh --selftest
+          rc=0; scripts/veridian/cli-coverage-check.sh || rc=$?
+          if [ "$rc" = "2" ]; then echo "::warning::CLI embarquée : non abouti (rc 2), non bloquant"; exit 0; fi
+          exit "$rc"
       - name: Plafonds ressources staging
         run: python3 scripts/ci/check-staging-resources.py
 

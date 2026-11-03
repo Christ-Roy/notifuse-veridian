@@ -1,0 +1,3 @@
+# Routes /api/* SANS commande CLI, volontairement. Format : chemin<TAB>raison. Une exemption
+# périmée (route supprimée du routeur) fait échouer le contrôle : la liste ne pourrit pas.
+/api/workspaces.generateMagicLink	Retiré de la CLI le 19/10/2026 (correctif de sécurité : n'accepte plus que les clés gérées par le Hub ; les clés de workspace reçoivent 403). La CLI passe par POST /api/sso/issue-magic-link (commande magic-link), qui ne crée aucune clé. Cf. notifuse_common.py cmd_magic_link.

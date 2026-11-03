@@ -11,7 +11,7 @@ import (
 
 // === Veridian patch -- mission "CLI distribue" (2026-10-03) ===
 //
-// Le CLI utilisateur (notifuse + son module partage notifuse_common.py,
+// Le CLI utilisateur (notifuse + son module partage notifuse_common.py + notifuse_mail.py,
 // skill notifuse-cli) est embarque dans le binaire de l'app, exactement
 // comme le skill AGENTS.md/SKILL.md (cf agent_assets.go) : servi
 // identiquement en dev/staging/prod, aucune dependance a un chemin
@@ -28,7 +28,7 @@ import (
 // notifuse-admin (super cle Hub) n'est PAS embarque : seul le binaire USER,
 // scope a NOTIFUSE_API_KEY, quitte le serveur.
 //
-//go:embed agentcli/notifuse agentcli/notifuse_common.py
+//go:embed agentcli/notifuse agentcli/notifuse_common.py agentcli/notifuse_mail.py
 var agentCLIFS embed.FS
 
 var (
@@ -55,6 +55,7 @@ func buildAgentCLITarball() ([]byte, error) {
 		}{
 			{"agentcli/notifuse", "notifuse", 0755},
 			{"agentcli/notifuse_common.py", "notifuse_common.py", 0644},
+			{"agentcli/notifuse_mail.py", "notifuse_mail.py", 0644},
 		}
 
 		for _, f := range files {
