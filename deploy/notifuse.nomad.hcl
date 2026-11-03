@@ -444,14 +444,17 @@ EOH
         env         = true
         data        = <<EOH
 SERVER_PORT=8081
-# Relais SMTP (fiche 71). Coupé par défaut ; starttls seulement si le certificat est rendu (sinon crash au démarrage).
-SMTP_BRIDGE_ENABLED=false
+# Relais SMTP (fiche 71). ON seulement si le certificat est rendu : sans lui, le bridge reste COUPÉ
+# (jamais de AUTH en clair, même sur le tailnet). Port 587 tailnet seul.
 SMTP_BRIDGE_PORT=587
 SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
-VERIDIAN_SMTP_RELAY_ENABLED=false
-{{ with nomadVar "nomad/jobs/notifuse/stack/notifuse" }}{{ if .smtp_bridge_tls_cert_base64 }}SMTP_BRIDGE_TLS=starttls
+{{ with nomadVar "nomad/jobs/notifuse/stack/notifuse" }}{{ if .smtp_bridge_tls_cert_base64 }}SMTP_BRIDGE_ENABLED=true
+VERIDIAN_SMTP_RELAY_ENABLED=true
+SMTP_BRIDGE_TLS=starttls
 SMTP_BRIDGE_TLS_CERT_BASE64={{ .smtp_bridge_tls_cert_base64 }}
-SMTP_BRIDGE_TLS_KEY_BASE64={{ .smtp_bridge_tls_key_base64 }}{{ else }}SMTP_BRIDGE_TLS=off{{ end }}{{ end }}
+SMTP_BRIDGE_TLS_KEY_BASE64={{ .smtp_bridge_tls_key_base64 }}{{ else }}SMTP_BRIDGE_ENABLED=false
+VERIDIAN_SMTP_RELAY_ENABLED=false
+SMTP_BRIDGE_TLS=off{{ end }}{{ end }}
 SERVER_HOST=0.0.0.0
 ENVIRONMENT=production
 DEPLOY_ENV=prod
