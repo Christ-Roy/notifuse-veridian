@@ -103,3 +103,36 @@ Codes de retour à connaître : 250 accepté · 550 5.7.1 expéditeur non autori
 **DNS déclaré :** `iac/dns/veridian-site.yaml` (source de vérité du dépôt), contrôle lecture seule `scripts/iac/dns-plan.sh` (0 conforme, 1 dérive, 2 non abouti).
 
 **Compose :** `compose.yaml` porte les variables du relais, désactivé par défaut (`SMTP_BRIDGE_TLS=off`, sinon le démarrage échouerait sans certificat), port 587 publié sur `127.0.0.1` par défaut (`SMTP_BRIDGE_BIND` pour l'élargir, phase 2).
+
+## Design des réglages (cap du 04/11/2026 : pas d'env en source de vérité)
+
+**Principe.** La configuration du relais et du certificat vit dans les réglages système (table des réglages, chiffrée par `SECRET_KEY` pour les secrets). Les variables d'environnement ne sont qu'une surcharge d'amorçage, affichée comme telle (`isOverridden`, comme `root_email` ou `api_endpoint` dans `SystemSettingsDrawer.tsx`). L'environnement d'un job Nomad ne porte plus que ce qui est propre à l'infra (tailnet, ingress, sauvegardes, volumes).
+
+**Clés déjà présentes en amont (réutilisées) :** `smtp_bridge_enabled`, `smtp_bridge_domain`, `smtp_bridge_port`, `smtp_bridge_tls_mode`, `encrypted_smtp_bridge_tls_cert_base64`, `encrypted_smtp_bridge_tls_key_base64` (certificat fixe, qui prime sur le géré).
+
+**Nouvelles clés :**
+| Clé | Type | Rôle | Surcharge env |
+|---|---|---|---|
+| `veridian_smtp_relay_enabled` | bool, défaut faux | active le relais de soumission | `VERIDIAN_SMTP_RELAY_ENABLED` |
+| `veridian_relay_cert_managed` | bool, défaut faux | le certificat du bridge est géré par l'app | `VERIDIAN_RELAY_CERT_MANAGED` |
+| `veridian_relay_acme_email` | texte | contact du compte ACME | `VERIDIAN_RELAY_ACME_EMAIL` |
+| `veridian_relay_acme_directory` | `production` ou `test` | annuaire Let's Encrypt | `VERIDIAN_RELAY_ACME_DIRECTORY` |
+| `encrypted_veridian_relay_cf_token` | secret, **écriture seule** | jeton DNS Cloudflare (DNS-01) | `CLOUDFLARE_DNS_API_TOKEN` (premier démarrage compose) |
+
+**Lecture seule, posée par le gestionnaire :** `veridian_relay_cert_not_after`, `veridian_relay_cert_serial`, `veridian_relay_cert_last_renewed`, `veridian_relay_cert_last_error`. L'API ne les accepte jamais en écriture.
+
+**Doctrine de rédaction (fiche 10) :** l'API ne renvoie JAMAIS le jeton : elle renvoie `has_veridian_relay_cf_token: true|false`. Une écriture avec champ vide conserve le secret stocké. Le message d'erreur ne contient jamais le jeton.
+
+**Effet immédiat ou au redémarrage :** `veridian_smtp_relay_enabled` est lu à chaque message (cache court), donc effet immédiat. `smtp_bridge_enabled` et le mode TLS restent lus au démarrage, comme aujourd'hui en amont : changement effectif au redémarrage du job. Le certificat géré est relu à chaque renouvellement et à chaque handshake (`GetCertificate`), donc sans redémarrage.
+
+**API et CLI :** les champs passent par les routes de réglages système existantes (`settings.get` / `settings.update`), donc déjà couverts par `system:settings-get` et `system:settings-update` de la CLI. Le contrôle de couverture doit vérifier que les nouveaux champs sont acceptés par la CLI. Aucune route nouvelle.
+
+**Console :** un switch « Relais SMTP de soumission » et un bloc « Certificat géré (Let's Encrypt, DNS Cloudflare) » dans `SystemSettingsDrawer.tsx`, à côté des réglages du bridge, en fr et en en (`lingui extract`), avec le hint « surchargé par l'environnement » quand la variable est posée.
+
+**Migration prod et staging :** (1) poser les réglages par l'API (`notifuse-admin --env <env> system:settings-update`), (2) vérifier par `system:settings-get` et par une épreuve SMTP, (3) retirer des jobs Nomad les variables relais redondantes. Le certificat fixe actuel, copié dans des variables Nomad, est reversé dans les réglages chiffrés, puis la copie Nomad est retirée.
+
+**Compose :** `compose.yaml` est la référence pour relever Notifuse complet (application, base, port du bridge) avec tout désactivé par défaut. La configuration réelle vit dans les réglages, pas dans le compose.
+
+**Postfix :** hors dépôt. Le dépôt ne lit que des NDR (ce qui est normal pour Notifuse). Seul `scripts/e2e/cold-garde-fous.sh` inspecte un conteneur de relais (outil de test) : à signaler à main, non supprimé ici. Le runbook opérateur est dans `~/nomad-veridian/runbooks/relais-smtp-operateur.md` (hors dépôt).
+
+**Limite connue, à traiter :** la dépendance lego v4 fait remonter des versions indirectes (cloud.google.com/go/auth, gax-go, go-isatty, spf13/cast, objx). Avec ces versions, la compilation du paquet `internal/http` tombe en OOM à 6 Go sur node02 ; avec le `go.mod` d'origine elle passe (rc 0). Mesure à retenir avant toute décision sur la dépendance.
