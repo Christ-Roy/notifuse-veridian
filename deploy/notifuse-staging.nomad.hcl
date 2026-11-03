@@ -194,12 +194,11 @@ SERVER_PORT=8081
 SMTP_BRIDGE_ENABLED=false
 SMTP_BRIDGE_PORT=587
 SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
-SMTP_BRIDGE_TLS=starttls
 VERIDIAN_SMTP_RELAY_ENABLED=false
-{{ with nomadVar "nomad/jobs/notifuse-staging/stack/notifuse-staging" }}
+# starttls seulement si le certificat est RENDU : sinon la config refuse de démarrer (crash-loop).
+{{ with nomadVar "nomad/jobs/notifuse-staging/stack/notifuse-staging" }}{{ if .smtp_bridge_tls_cert_base64 }}SMTP_BRIDGE_TLS=starttls
 SMTP_BRIDGE_TLS_CERT_BASE64={{ .smtp_bridge_tls_cert_base64 }}
-SMTP_BRIDGE_TLS_KEY_BASE64={{ .smtp_bridge_tls_key_base64 }}
-{{ end }}
+SMTP_BRIDGE_TLS_KEY_BASE64={{ .smtp_bridge_tls_key_base64 }}{{ else }}SMTP_BRIDGE_TLS=off{{ end }}{{ end }}
 SERVER_HOST=0.0.0.0
 ENVIRONMENT=staging
 DEPLOY_ENV=staging
