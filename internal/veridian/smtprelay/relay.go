@@ -10,6 +10,7 @@ package smtprelay
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -150,7 +151,7 @@ func (r *Relay) Submit(ctx context.Context, userID, envelopeFrom string, to []st
 	for i, rcpt := range to {
 		wireID := uuid.New().String()
 		if i == 0 && sub.MessageID != "" {
-			wireID = sub.MessageID
+			wireID = wireLocalPart(sub.MessageID)
 		}
 		req := buildRequest(workspaceID, profileID, provider, sub, rcpt, wireID)
 		if err := r.deps.Mailer.SendEmail(ctx, req, false); err != nil {
@@ -198,6 +199,16 @@ func (r *Relay) CheckRecipient(ctx context.Context, userID, to string) error {
 		return smtpError(550, 5, 7, 1, "destinataire refuse : adresse en suppression")
 	}
 	return nil
+}
+
+// wireLocalPart rend la partie locale d'un Message-ID client : le domaine du
+// Message-ID est remplacé par celui de l'expéditeur à l'envoi (VeridianRFCMessageID).
+// Garder « uuid@domaine-client » doublerait le domaine (uuid@domaine@domaine).
+func wireLocalPart(id string) string {
+	if at := strings.IndexByte(id, '@'); at > 0 {
+		return id[:at]
+	}
+	return id
 }
 
 // IsSuppressed dit si un contact doit etre refuse par le relais : bounced ou

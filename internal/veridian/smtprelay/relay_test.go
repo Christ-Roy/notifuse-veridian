@@ -136,8 +136,8 @@ func TestRelay_Submit_Accepts(t *testing.T) {
 	if req.IntegrationID != "p1" || req.WorkspaceID != "ws1" || req.Provider == nil {
 		t.Fatalf("mauvais profil ou workspace: %+v", req)
 	}
-	if req.MessageID != "m1@client.example" {
-		t.Fatalf("le premier destinataire doit garder le Message-ID du client, got %q", req.MessageID)
+	if req.MessageID != "m1" {
+		t.Fatalf("le premier destinataire doit garder la partie locale du Message-ID client (le domaine vient de l'expéditeur), got %q", req.MessageID)
 	}
 	if req.Subject != "Bonjour" || req.To != "bob@example.org" || req.FromAddress != "noreply@client.example" {
 		t.Fatalf("champs d'envoi faux: %+v", req)
@@ -358,5 +358,19 @@ func TestIsSuppressed(t *testing.T) {
 				t.Fatalf("IsSuppressed = %v, attendu %v", got, c.want)
 			}
 		})
+	}
+}
+
+// TestWireLocalPart : la partie locale est gardée, le domaine client est retiré.
+func TestWireLocalPart(t *testing.T) {
+	cases := map[string]string{
+		"3fdf-uuid@agences-veridian.fr": "3fdf-uuid",
+		"plain-id":                      "plain-id",
+		"@seul":                         "@seul",
+	}
+	for in, want := range cases {
+		if got := wireLocalPart(in); got != want {
+			t.Fatalf("wireLocalPart(%q) = %q, attendu %q", in, got, want)
+		}
 	}
 }
