@@ -3114,84 +3114,6 @@ def cmd_settings_update(a):
     out(*_save_settings(a.env, a.workspace, jwt, w, settings))
 
 
-# ---- system:settings-get / system:settings-update (réglages SYSTÈME, root) ----
-# Fiche 71 : relais SMTP de soumission et certificat géré (Let's Encrypt, DNS Cloudflare).
-# Route root-only (/api/settings.*) : JWT du tenant de référence (--workspace).
-# Le jeton DNS n'entre JAMAIS en argument de commande : --cf-token-stdin ou --cf-token-file.
-# Absent = inchangé : la mise à jour part des VALEURS COURANTES (GET puis POST intégral),
-# sinon les réglages non passés seraient vidés côté serveur. Le serveur redémarre après
-# un enregistrement : vérifier ensuite par system:settings-get.
-
-SYSTEM_SETTINGS_READ_ONLY = (
-    "has_veridian_relay_cf_token", "veridian_relay_cert_not_after",
-    "veridian_relay_cert_serial", "veridian_relay_cert_last_renewed",
-    "veridian_relay_cert_last_error",
-)
-SYSTEM_SETTINGS_NEVER_IN_DATA = ("veridian_relay_cf_token",)
-
-
-def _read_cf_token(a):
-    """Jeton Cloudflare : stdin ou fichier, jamais un argument. None = pas demandé."""
-    if a.cf_token_stdin and a.cf_token_file:
-        die("--cf-token-stdin et --cf-token-file : un seul des deux.")
-    if a.cf_token_stdin:
-        token = sys.stdin.read()
-    elif a.cf_token_file:
-        token = Path(a.cf_token_file).read_text()
-    else:
-        return None
-    token = token.strip()
-    if not token:
-        die("jeton Cloudflare vide.")
-    return token
-
-
-def cmd_system_settings_get(a):
-    """system:settings-get --workspace WS [--key K] : réglages système (jamais le jeton, has_* seulement)."""
-    jwt = owner_jwt(a.env, a.workspace)
-    status, payload = call_jwt(a.env, "GET", "/api/settings.get", jwt)
-    if a.key and isinstance(payload, dict) and isinstance(payload.get("settings"), dict):
-        payload = {"settings": {a.key: payload["settings"].get(a.key)}}
-    out(status, payload)
-
-
-def cmd_system_settings_update(a):
-    """system:settings-update --workspace WS [--relay true|false] [--cert-managed true|false]
-    [--acme-email E] [--acme-directory production|test] [--cf-token-stdin|--cf-token-file F]
-    [--data '{...}'] : fusion sur les valeurs courantes, puis enregistrement (redémarrage serveur)."""
-    patch = {}
-    if a.data:
-        data = _json_arg(a.data)
-        if not isinstance(data, dict):
-            die("--data doit être un objet JSON de réglages.")
-        for key in SYSTEM_SETTINGS_NEVER_IN_DATA:
-            if key in data:
-                die(f"{key} ne passe jamais par --data (argument visible) : --cf-token-stdin ou --cf-token-file.")
-        patch.update(data)
-    if a.relay is not None:
-        patch["veridian_smtp_relay_enabled"] = a.relay == "true"
-    if a.cert_managed is not None:
-        patch["veridian_relay_cert_managed"] = a.cert_managed == "true"
-    if a.acme_email is not None:
-        patch["veridian_relay_acme_email"] = a.acme_email
-    if a.acme_directory is not None:
-        patch["veridian_relay_acme_directory"] = a.acme_directory
-    token = _read_cf_token(a)
-    if token is not None:
-        patch["veridian_relay_cf_token"] = token
-    if not patch:
-        die("rien à enregistrer : --relay, --cert-managed, --acme-email, --acme-directory, "
-            "--cf-token-stdin/--cf-token-file ou --data.")
-    jwt = owner_jwt(a.env, a.workspace)
-    status, current = call_jwt(a.env, "GET", "/api/settings.get", jwt)
-    if status not in (200, 201) or not isinstance(current, dict) or not isinstance(current.get("settings"), dict):
-        out(status, current)
-    body = {k: v for k, v in current["settings"].items() if k not in SYSTEM_SETTINGS_READ_ONLY}
-    body.update(patch)
-    status, res = call_jwt(a.env, "POST", "/api/settings.update", jwt, body=body)
-    out(status, res)
-
-
 # ---- templates:push (contenu réel depuis fichier, code-mode MJML/HTML) ----
 # === Garde-fou « préheader = nom du gabarit » (incidents 2026-08-07 / 2026-08-24) ===
 #
@@ -4113,11 +4035,9 @@ RAW_ROUTES = [
     ("session:update-language", "POST", "/api/user.updateLanguage", "owner", []),
     ("session:signin", "POST", "/api/user.signin", "none", []),
     ("session:verify", "POST", "/api/user.verify", "none", []),
-    ("session:root-signin", "POST", "/api/user.rootSignin", "none", []),
     ("system:setup-status", "GET", "/api/setup.status", "none", []),
     ("system:setup-initialize", "POST", "/api/setup.initialize", "none", []),
     ("system:setup-test-smtp", "POST", "/api/setup.testSmtp", "none", []),
-    ("system:settings-test-smtp", "POST", "/api/settings.testSmtp", "owner", []),
     ("cron:run", "POST", "/api/cron", "none", []),
     ("cron:status", "GET", "/api/cron.status", "none", []),
     ("tasks:execute", "POST", "/api/tasks.execute", "none", ["id"]),
@@ -4603,7 +4523,7 @@ def cmd_env(a):
 
 
 # ================================================================ argparse
-def build_parser():
+def build_parser(extra=None):
     p = argparse.ArgumentParser(
         prog=os.path.basename(sys.argv[0]),
         description="CLI unifié Notifuse Veridian (provision + cold + tout par API).",
@@ -5133,28 +5053,6 @@ def build_parser():
     sp.add_argument("--force", action="store_true",
                     help="ignore l'avertissement sur les clés non persistées")
     sp.set_defaults(func=cmd_settings_update)
-
-    # system (réglages système root, fiche 71 : relais SMTP et certificat géré)
-    sp = sub.add_parser("system:settings-get",
-                        help="réglages système (root) ; --key K pour une clé ; jamais le jeton")
-    sp.add_argument("--workspace", required=True, help="tenant de référence (JWT root/owner)")
-    sp.add_argument("--key", help="ne sortir qu'une clé")
-    sp.set_defaults(func=cmd_system_settings_get, _routes=["/api/settings.get"])
-
-    sp = sub.add_parser("system:settings-update",
-                        help="réglages système (root) : relais, certificat géré, jeton Cloudflare par stdin/fichier")
-    sp.add_argument("--workspace", required=True, help="tenant de référence (JWT root/owner)")
-    sp.add_argument("--relay", choices=["true", "false"], help="relais SMTP de soumission (veridian_smtp_relay_enabled)")
-    sp.add_argument("--cert-managed", dest="cert_managed", choices=["true", "false"],
-                    help="certificat géré par l'application (veridian_relay_cert_managed)")
-    sp.add_argument("--acme-email", dest="acme_email", help="contact du compte ACME (veridian_relay_acme_email)")
-    sp.add_argument("--acme-directory", dest="acme_directory", choices=["production", "test"],
-                    help="annuaire Let's Encrypt (veridian_relay_acme_directory)")
-    sp.add_argument("--cf-token-stdin", dest="cf_token_stdin", action="store_true",
-                    help="jeton Cloudflare lu sur stdin (jamais en argument)")
-    sp.add_argument("--cf-token-file", dest="cf_token_file", help="jeton Cloudflare lu dans ce fichier")
-    sp.add_argument("--data", help="JSON inline de réglages (patch partiel, sans le jeton)")
-    sp.set_defaults(func=cmd_system_settings_update, _routes=["/api/settings.update"])
 
     # broadcasts
     sp = sub.add_parser("broadcasts:list", help="liste les broadcasts")
@@ -5723,6 +5621,8 @@ def build_parser():
                     help="forcer l'auth (défaut auto)")
     sp.set_defaults(func=cmd_api)
 
+    if extra is not None:
+        extra(sub)  # commandes réservées à notifuse-admin (notifuse_root.py, non distribué)
     return p
 
 
@@ -5760,10 +5660,10 @@ def _setup_scoped_mode(args):
                 "NOTIFUSE_WORKSPACE (ecrit automatiquement par install.sh).")
 
 
-def main(mode="admin"):
+def main(mode="admin", extra=None):
     """mode='admin' -> notifuse-admin (superset historique, super clé).
     mode='user'    -> notifuse (scopé à un seul workspace, sa propre api_key)."""
-    args = build_parser().parse_args()
+    args = build_parser(extra).parse_args()
 
     if mode == "user":
         if args.cmd not in WORKSPACE_COMMANDS:
