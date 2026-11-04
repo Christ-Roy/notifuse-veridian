@@ -86,7 +86,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 
 **CI, tests, déploiement**
 - `48` constitution CI — règles non négociables (tiers de promotion prod)
-- `71` relais SMTP de soumission (design phase 1, flag `VERIDIAN_SMTP_RELAY_ENABLED`)
+- `71` relais SMTP de soumission et certificat géré : configuration dans les réglages système (env = surcharge)
 - `72` commandes de vérité (relever plutôt que croire)
 - `49` commandes tests (Makefile)
 - `41` sync upstream

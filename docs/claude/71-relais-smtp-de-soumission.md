@@ -151,3 +151,24 @@ Codes de retour à connaître : 250 accepté · 550 5.7.1 expéditeur non autori
 - Le noyau de node02 n'a journalisé aucune tuerie mémoire de nos conteneurs (les kills memcg du journal concernent `netdata` et `python3`, dernières entrées du 2 novembre). Le signal 137 frappe aussi l'arbre d'origine : sa cause n'est pas attribuée à lego, et je ne peux pas l'identifier avec les journaux disponibles. Les anciennes attributions « bruit d'hôte » ne reposaient pas sur une mesure et sont retirées.
 
 **Paquets et tests :** `go vet` et `go test` vert sur `internal/veridian/relaycert` et `pkg/smtp_bridge` ; `internal/http` et `internal/app` compilent (rc 0) avec le go.mod final.
+
+## Réglages système : état d'implémentation (04/11/2026)
+
+**Lecture (paquet `internal/veridian/relaysettings`, source unique des clés).**
+- Interrupteur `veridian_smtp_relay_enabled` : lu à CHAQUE message (`ReadEnabled`) et à chaque RCPT. Une variable `VERIDIAN_SMTP_RELAY_ENABLED` non vide prime ; sinon le réglage. Effet immédiat.
+- Certificat géré : `veridian_relay_cert_managed` (variable `VERIDIAN_RELAY_CERT_MANAGED` prioritaire), lu au démarrage pour la configuration TLS du bridge (`config.RelayCertManaged`), puis à chaque décision du gestionnaire. Contact ACME, annuaire (`production`|`test`, aucune URL libre) et jeton chiffré (`encrypted_veridian_relay_cf_token`, déchiffré avec `SECRET_KEY`) sont relus à chaque décision. Quand le réglage est vide, la variable (`VERIDIAN_RELAY_ACME_EMAIL`, `VERIDIAN_RELAY_ACME_DIRECTORY`, `CLOUDFLARE_DNS_API_TOKEN`) sert de repli d'amorçage uniquement.
+- Précédence : certificat fourni (`SMTP_BRIDGE_TLS_CERT_BASE64`/`KEY_BASE64`) > certificat géré (`pkg/smtp_bridge.SetupTLS`).
+
+**Décisions du gestionnaire (`relaycert`).** Première décision 1 min après le démarrage (pas d'émission en rafale au démarrage). Renouvellement à moins de 30 j, ou si l'annuaire courant diffère de celui de l'émission (un certificat de test n'est jamais servi comme certificat de production ; le compte ACME n'est pas réutilisé d'un annuaire à l'autre). Backoff exponentiel plafonné à 6 h après échec. Sans contact, sans jeton ou désactivé : aucun appel réseau.
+
+**État publié (lecture seule côté API).** `veridian_relay_cert_not_after`, `_serial`, `_last_renewed`, `_last_error` sont écrits après chaque décision et exposés par `settings.get`. `last_error` est tronqué à 300 caractères et ne contient ni le jeton ni le chiffré.
+
+**Console et CLI.** `SystemSettingsDrawer` : section « Relais SMTP de soumission », section « Certificat géré » (contact, annuaire, jeton en écriture seule, état). Le formulaire envoie les valeurs courantes ; le jeton n'est envoyé que s'il est saisi. CLI : `system:settings-get --workspace WS [--key K]` et `system:settings-update --workspace WS [--relay true|false] [--cert-managed true|false] [--acme-email E] [--acme-directory production|test] (--cf-token-stdin | --cf-token-file F) [--data JSON]`. Le jeton n'entre jamais en argument ; `--data` le refuse. La mise à jour part des valeurs courantes (GET puis POST intégral), sinon les réglages non passés seraient vidés. Le serveur redémarre après chaque enregistrement.
+
+**Staging (ce push).** Le job `deploy/notifuse-staging.nomad.hcl` ne copie plus le certificat fixe. Il pose `SMTP_BRIDGE_TLS=starttls` et `VERIDIAN_RELAY_CERT_MANAGED=true` (amorçage : le bridge démarre sans certificat, aucun AUTH annoncé sans TLS), et ne pose plus `VERIDIAN_SMTP_RELAY_ENABLED` (le réglage s'applique). La variable Nomad `nomad/jobs/notifuse-staging/stack/notifuse-staging` reste en place comme retour arrière, retirée par l'opérateur à la fin.
+
+**Retour arrière (staging comme prod).** Remettre dans le job le bloc `nomadVar "…/stack/…"` qui pose `SMTP_BRIDGE_TLS=starttls` et les deux variables de certificat, et `VERIDIAN_SMTP_RELAY_ENABLED=true` ; le réglage `veridian_relay_cert_managed` à `false` coupe le gestionnaire. Le relais revient au certificat copié.
+
+**Compose.** `compose.yaml` ne pose jamais `VERIDIAN_SMTP_RELAY_ENABLED=false` par défaut : une valeur par défaut prime sur le réglage à chaque démarrage. Les variables relais y sont des passe-plat vides (vide = non posée).
+
+**Pas encore vérifié à cette date** (à compléter dans la section trace après la bascule) : émission réelle sur l'annuaire de test, rechargement à chaud sur le port 587, alerte d'échec vue, épreuve SMTP positive et négatives, bascule prod.

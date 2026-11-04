@@ -47,8 +47,15 @@ services:
       # et un certificat PEM en base64 (SMTP_BRIDGE_TLS_CERT_BASE64 = chaîne, SMTP_BRIDGE_TLS_KEY_BASE64 = clé).
       # starttls exige le certificat : sans lui le démarrage échoue (fail closed, jamais de AUTH en clair).
       # SMTP_BRIDGE_TLS=off avec le relais actif est refusé au démarrage.
+      # La configuration vit dans les réglages système (console, API, notifuse-admin system:settings-update).
+      # Les variables VERIDIAN_* ci-dessous sont des surcharges : VIDE = non posée = le réglage s'applique.
+      # Ne jamais mettre une valeur par défaut « false » ici : elle prime sur le réglage à chaque démarrage.
       - SMTP_BRIDGE_ENABLED=${SMTP_BRIDGE_ENABLED:-false}
-      - VERIDIAN_SMTP_RELAY_ENABLED=${VERIDIAN_SMTP_RELAY_ENABLED:-false}
+      - VERIDIAN_SMTP_RELAY_ENABLED=${VERIDIAN_SMTP_RELAY_ENABLED:-}
+      - VERIDIAN_RELAY_CERT_MANAGED=${VERIDIAN_RELAY_CERT_MANAGED:-}
+      - VERIDIAN_RELAY_ACME_EMAIL=${VERIDIAN_RELAY_ACME_EMAIL:-}
+      - VERIDIAN_RELAY_ACME_DIRECTORY=${VERIDIAN_RELAY_ACME_DIRECTORY:-}
+      - CLOUDFLARE_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN:-}
       - SMTP_BRIDGE_PORT=${SMTP_BRIDGE_PORT:-587}
       - SMTP_BRIDGE_DOMAIN=${SMTP_BRIDGE_DOMAIN:-localhost}
       - SMTP_BRIDGE_TLS=${SMTP_BRIDGE_TLS:-off}
