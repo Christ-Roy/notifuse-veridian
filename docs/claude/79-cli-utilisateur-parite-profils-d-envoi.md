@@ -88,6 +88,335 @@ workspace) ; export des secrets (HMAC Hub seul, fiche 76) ; plan, facturation, q
   `/` ou `.`) et `ADMIN_MODE_ONLY_ROUTES` déclare les deux routes HMAC qu'une commande utilisateur n'emploie qu'en admin.
 - CLI embarquée resynchronisée (`scripts/veridian/sync-agent-cli.sh`), MANIFEST recalculé, `cli-coverage-check.sh` vert.
 
+
+## Preuve on-premise staging (tier rouge : droits d'accès)
+
+Méthode : deux tenants jetables sur le vrai staging (`ucliaa`, `ucliab`, vraie base, vrai serveur déployé au tag
+`v62.0-veridian.32fd5a57`), trois clés réelles mintées par `notifuse-admin keys:mint` (membre de A, lecture seule de A,
+membre de B), un profil SMTP de test par tenant (hôte `.invalid`, aucun mail réel), script rejouable `ucli_proof.sh`
+(clés masquées dans la sortie, mot de passe de test aléatoire jamais affiché). Wipe des deux tenants à la fin
+(`notifuse-admin --env staging wipe --ids ucliaa,ucliab` : `wiped: [ucliaa, ucliab]`, `admin:tenants --prefix ucli` : 0).
+
+Lecture des résultats :
+- Succès avec la clé du workspace : `integrations:list`, `integrations:cold --reply-forward-to ...` (la commande qui
+  déclenchait la décision), `--reply-forward-off`, `profiles:overview` (ligne « réponses : copie vers ... »), `status`, `keys:list`.
+- Isolation : la clé de A sur B échoue partout (`profiles:overview`, `create-smtp`, `verify`, `tasks:list` : 403
+  « not authorized for this workspace » ; `integrations:list|cold` : HTTP 500 hérité de `workspaces.get`, dit par le CLI).
+  Le profil de B est resté intact (lu par l'admin après coup : redirection vide).
+- Lecture seule : la clé readonly lit (`integrations:list`, `profiles:overview`) et échoue sur `cold`, `create-smtp`,
+  `verify` avec « write access to the workspace is required ... ». Rien n'a changé en base.
+- Secrets : le mot de passe de test n'apparaît ni dans `integrations:get`, ni `integrations:list`, ni `workspaces.get`.
+- Re-liaison : hôte changé sans mot de passe = 400, avec mot de passe = 200.
+- Réservé : `deleteIntegration`, `createIntegration` LLM, `createAPIKey`, `inviteMember` = 403 pour la clé ; commandes
+  réservées refusées côté client avant tout réseau.
+- Vérification du transport : la clé autorisée atteint le transport (502 « integration NOT verified », hôte inexistant),
+  la clé readonly est refusée en 403. **Non exercé sur staging : le cas « verified: true »** (aucun relais SMTP joignable
+  et autorisé par la garde réseau n'existe sur staging, `NOTIFUSE_TRUSTED_INTERNAL_HOSTS` n'y est pas posé) ; ce chemin
+  est celui de la route admin existante (`VeridianAdminVerifyEmailIntegration`, inchangé, déjà testé).
+- `tasks.list` de A sur B : HTTP 403 (mesuré 200 avant le correctif).
+
+Ce que la preuve a trouvé et fait corriger : (1) la première passe affichait `integrations: []` avec un code 0 pour la
+clé de A sur B (le CLI avalait le refus de `workspaces.get`) : un refus est désormais dit, code 2, test Python dédié ;
+(2) le message de refus d'une clé en lecture seule disait « not an owner » : il dit maintenant ce qui manque
+(`workspace:write`). Incident d'épreuve : le job « E2E headful (staging) » du commit `32fd5a57` a échoué une fois sur 6
+tests `prod-safe`/`paywall` qui recevaient la page de démarrage de Sablier (HTML 200 au lieu de 401/JSON) pendant que
+le staging redémarrait ; rejoué sans changement : vert (273 passés). Les 6 échecs étaient du HTML, pas une régression.
+
+Sortie complète du script (clés et JWT masqués) :
+
+```text
+
+### 0. Version servie par staging
+{"build_date":"2026-11-05T00:07:34+01:00","git_sha":"32fd5a57d0b21692c7286269033bd7fa63c21194","tag":"v62.0-veridian.32fd5a57"}
+
+
+### 1. Fixtures (admin) : un profil SMTP dans ucliaa et un dans ucliab
+profil A=e24e5792-b958-41ab-bbb4-84b4038990aa  profil B=4dba2e7a-ab7b-476e-88bb-0d7f2832bba6
+
+### 2. SUCCES avec la clé du workspace (A sur A)
+
+$ [KA] NOTIFUSE_API_KEY=<KA> notifuse --env staging integrations:list ucliaa
+{
+  "workspace": "ucliaa",
+  "integrations": [
+    {
+      "id": "b4d7c1d3-42ae-48e0-bc6d-ff36628d8618",
+      "name": "fixture-a",
+      "type": "email",
+      "kind": "smtp",
+      "senders": [
+        "fixture-a@ucli.test"
+      ],
+      "rate_limit_per_minute": 60,
+      "veridian_provider_class_rates": null,
+      "veridian_provider_class_daily_cap": null,
+→ rc=0
+
+$ [KA] NOTIFUSE_API_KEY=<KA> notifuse --env staging integrations:cold ucliaa --id e24e5792-b958-41ab-bbb4-84b4038990aa --reply-forward-to client@example.org,autre@example.org
+{
+  "message": "Integration updated successfully",
+  "status": "success"
+}
+→ rc=0
+
+$ [KA] NOTIFUSE_API_KEY=<KA> notifuse --env staging integrations:list ucliaa
+{
+  "workspace": "ucliaa",
+  "integrations": [
+    {
+      "id": "b4d7c1d3-42ae-48e0-bc6d-ff36628d8618",
+      "name": "fixture-a",
+      "type": "email",
+      "kind": "smtp",
+      "senders": [
+        "fixture-a@ucli.test"
+      ],
+      "rate_limit_per_minute": 60,
+      "veridian_provider_class_rates": null,
+      "veridian_provider_class_daily_cap": null,
+      "veridian_per_recipient_daily_cap": null,
+      "veridian_tracking_domain": null,
+      "veridian_excluded_provider_classes": null,
+      "veridian_reply_forward_to": []
+    },
+    {
+      "id": "e24e5792-b958-41ab-bbb4-84b4038990aa",
+      "name": "fixture-a",
+      "type": "email",
+      "kind": "smtp",
+      "senders": [
+        "fixture-a@ucli.test"
+      ],
+      "rate_limit_per_minute": 60,
+      "veridian_provider_class_rates": null,
+      "veridian_provider_class_daily_cap": null,
+      "veridian_per_recipient_daily_cap": null,
+      "veridian_tracking_domain": null,
+      "veridian_excluded_provider_classes": null,
+      "veridian_reply_forward_to": [
+        "client@example.org",
+        "autre@example.org"
+      ]
+    }
+  ]
+}
+→ rc=0
+
+$ [KA] NOTIFUSE_API_KEY=<KA> notifuse --env staging profiles:overview ucliaa
+Profils d'envoi, jour 2026-11-04 (UTC), fuseau UTC
+  commercial : 0 envoyés (capacité totale inconnue : un profil actif n'a aucun plafond), 0 profil(s) actif(s), 0 en pause · transactionnel : 0 envoyés
+
+● fixture-a  [non assigné · smtp · NON vérifié]  id b4d7c1d3-42ae-48e0-bc6d-ff36628d8618
+    expéditeurs : fixture-a@ucli.test (défaut)
+    réponses    : aucune redirection
+    IMAP lié    : aucun (retours détectés par les boîtes globales du workspace)
+    envoyés aujourd'hui : 0
+
+● fixture-a  [non assigné · smtp · NON vérifié]  id e24e5792-b958-41ab-bbb4-84b4038990aa
+    expéditeurs : fixture-a@ucli.test (défaut)
+    réponses    : copie vers client@example.org, autre@example.org
+    IMAP lié    : aucun (retours détectés par les boîtes globales du workspace)
+    envoyés aujourd'hui : 0
+→ rc=0
+
+$ [KA] NOTIFUSE_API_KEY=<KA> notifuse --env staging integrations:cold ucliaa --id e24e5792-b958-41ab-bbb4-84b4038990aa --reply-forward-off
+{
+  "message": "Integration updated successfully",
+  "status": "success"
+}
+→ rc=0
+
+$ [KA] NOTIFUSE_API_KEY=<KA> notifuse --env staging status ucliaa
+{
+  "workspace": {
+    "id": "ucliaa",
+    "name": "ucli ucliaa",
+    "settings": {
+      "timezone": "UTC",
+      "file_manager": {
+        "endpoint": "",
+        "bucket": "",
+        "access_key": "",
+        "force_path_style": false
+      },
+      "email_tracking_enabled": true,
+      "blog_enabled": false,
+→ rc=0
+
+$ [KA] NOTIFUSE_API_KEY=<KA> notifuse --env staging keys:list ucliaa
+{
+  "keys": [
+    {
+      "user_id": "c261d4f0-ce22-4538-82ef-bbc72d78ec2c",
+      "name": "ucli-ka",
+      "masked_email": "ucl***@notifuse.staging.veridian.site",
+      "created_at": "2026-11-04T21:36:54.520686Z",
+      "veridian_owned": false
+    },
+    {
+      "user_id": "4c8e8a60-2b92-4c18-a626-aa74f563b4fe",
+      "name": "ucli-kro",
+      "masked_email": "ucl***@notifuse.staging.veridian.site",
+      "created_at": "2026-11-04T21:36:55.56997Z",
+→ rc=0
+
+### 3. ISOLATION : la clé de A sur le workspace B (tout doit être refusé)
+
+$ [KA->B] NOTIFUSE_API_KEY=<KA->B> notifuse --env staging integrations:list ucliab
+✗ workspaces.get ucliab refusé ou en échec (HTTP 500) : Failed to get workspace
+→ rc=2
+
+$ [KA->B] NOTIFUSE_API_KEY=<KA->B> notifuse --env staging integrations:cold ucliab --id 4dba2e7a-ab7b-476e-88bb-0d7f2832bba6 --reply-forward-to client@example.org
+✗ workspaces.get ucliab refusé ou en échec (HTTP 500) : Failed to get workspace
+→ rc=2
+
+$ [KA->B] NOTIFUSE_API_KEY=<KA->B> notifuse --env staging profiles:overview ucliab
+{
+  "error": "not authorized for this workspace"
+}
+→ rc=2
+
+$ [KA->B] NOTIFUSE_API_KEY=<KA->B> notifuse --env staging integrations:create-smtp ucliab --name x --host smtp.fiche79-test.invalid --port 587 --user u --password p --from-email x@ucli.test
+{
+  "error": "not authorized for this workspace"
+}
+→ rc=2
+
+$ [KA->B] NOTIFUSE_API_KEY=<KA->B> notifuse --env staging integrations:verify ucliab --id 4dba2e7a-ab7b-476e-88bb-0d7f2832bba6 --to nobody@ucli.test
+{
+  "error": "not authorized for this workspace"
+}
+→ rc=2
+
+$ [KA->B] NOTIFUSE_API_KEY=<KA->B> notifuse --env staging tasks:list ucliab
+{
+  "error": "not authorized for this workspace"
+}
+→ rc=2
+# sens inverse
+
+$ [KB->A] NOTIFUSE_API_KEY=<KB->A> notifuse --env staging integrations:cold ucliaa --id e24e5792-b958-41ab-bbb4-84b4038990aa --reply-forward-to client@example.org
+✗ workspaces.get ucliaa refusé ou en échec (HTTP 500) : Failed to get workspace
+→ rc=2
+
+$ [KB->A] NOTIFUSE_API_KEY=<KB->A> notifuse --env staging tasks:list ucliaa
+{
+  "error": "not authorized for this workspace"
+}
+→ rc=2
+# le profil B est resté intact (lu par l'admin)
+[('fixture-b', []), ('fixture-b', [])]
+
+### 4. LECTURE SEULE : la clé readonly de A lit mais ne modifie rien
+
+$ [KRO] NOTIFUSE_API_KEY=<KRO> notifuse --env staging integrations:list ucliaa
+{
+  "workspace": "ucliaa",
+  "integrations": [
+    {
+      "id": "b4d7c1d3-42ae-48e0-bc6d-ff36628d8618",
+      "name": "fixture-a",
+      "type": "email",
+      "kind": "smtp",
+      "senders": [
+        "fixture-a@ucli.test"
+      ],
+      "rate_limit_per_minute": 60,
+      "veridian_provider_class_rates": null,
+      "veridian_provider_class_daily_cap": null,
+→ rc=0
+
+$ [KRO] NOTIFUSE_API_KEY=<KRO> notifuse --env staging profiles:overview ucliaa
+Profils d'envoi, jour 2026-11-04 (UTC), fuseau UTC
+  commercial : 0 envoyés (capacité totale inconnue : un profil actif n'a aucun plafond), 0 profil(s) actif(s), 0 en pause · transactionnel : 0 envoyés
+
+● fixture-a  [non assigné · smtp · NON vérifié]  id b4d7c1d3-42ae-48e0-bc6d-ff36628d8618
+    expéditeurs : fixture-a@ucli.test (défaut)
+    réponses    : aucune redirection
+    IMAP lié    : aucun (retours détectés par les boîtes globales du workspace)
+    envoyés aujourd'hui : 0
+
+● fixture-a  [non assigné · smtp · NON vérifié]  id e24e5792-b958-41ab-bbb4-84b4038990aa
+    expéditeurs : fixture-a@ucli.test (défaut)
+    réponses    : aucune redirection
+    IMAP lié    : aucun (retours détectés par les boîtes globales du workspace)
+    envoyés aujourd'hui : 0
+→ rc=0
+
+$ [KRO] NOTIFUSE_API_KEY=<KRO> notifuse --env staging integrations:cold ucliaa --id e24e5792-b958-41ab-bbb4-84b4038990aa --reply-forward-to client@example.org
+{
+  "error": "write access to the workspace is required to manage sending profiles (workspace owner, or a key with workspace:write)"
+}
+→ rc=2
+
+$ [KRO] NOTIFUSE_API_KEY=<KRO> notifuse --env staging integrations:create-smtp ucliaa --name x --host smtp.fiche79-test.invalid --port 587 --user u --password p --from-email x@ucli.test
+{
+  "error": "write access to the workspace is required to manage sending profiles (workspace owner, or a key with workspace:write)"
+}
+→ rc=2
+
+$ [KRO] NOTIFUSE_API_KEY=<KRO> notifuse --env staging integrations:verify ucliaa --id e24e5792-b958-41ab-bbb4-84b4038990aa --to nobody@ucli.test
+{
+  "error": "write access to the workspace is required to manage sending profiles (workspace owner, or a key with workspace:write)"
+}
+→ rc=2
+# etat après les refus : redirection toujours absente
+[('fixture-a', []), ('fixture-a', [])]
+
+### 5. SECRETS : le mot de passe n'apparait dans aucune sortie
+mot de passe absent de integrations:get, integrations:list et workspaces.get
+      1 "has_password":
+      2 "has_password":true
+
+### 6. RE-LIAISON de secret : changer l'hote sans ressaisir le mot de passe est refuse a la cle, accepte avec
+# cle, hote change, sans mot de passe
+→ HTTP 400 {"error":"re-enter the password when the host, port or username changes (stored credentials are never forwarded to a new destination)"}
+# cle, hote change, AVEC mot de passe
+→ HTTP 200 {"message":"Integration updated successfully","status":"success"}
+
+### 7. RESERVE au proprietaire : suppression, LLM, equipe, cles restent refuses a la cle
+→ HTTP 403 {"error":"user is not an owner of the workspace"}
+→ HTTP 403 {"error":"only the workspace owner can manage llm integrations"}
+→ HTTP 403 {"error":"Only workspace owners can create API keys"}
+→ HTTP 403 {"error":"only the workspace owner can invite members"}
+# le profil existe toujours :
+['fixture-a', 'fixture-a']
+
+### 8. VERIFICATION du transport (route JWT) : la clé autorisée atteint le transport (502 attendu, hote inexistant), les autres 403
+
+$ [KA] NOTIFUSE_API_KEY=<KA> notifuse --env staging integrations:verify ucliaa --id e24e5792-b958-41ab-bbb4-84b4038990aa --to nobody@ucli.test
+{
+  "error": "transport test failed: integration NOT verified"
+}
+→ rc=2
+
+$ [KRO] NOTIFUSE_API_KEY=<KRO> notifuse --env staging integrations:verify ucliaa --id e24e5792-b958-41ab-bbb4-84b4038990aa --to nobody@ucli.test
+{
+  "error": "write access to the workspace is required to manage sending profiles (workspace owner, or a key with workspace:write)"
+}
+→ rc=2
+
+### 9. FAILLE tasks.* fermee : la clé de A ne voit plus les taches de B
+# (avant le correctif, mesuré : HTTP 200 avec les taches de ucliab)
+KA tasks.list ucliab -> HTTP 403
+KA tasks.list ucliaa -> HTTP 200
+
+### 10. Le CLI utilisateur garde la frontière : commandes réservées refusées côté client
+$ notifuse integrations:delete ucliaa --id e24e5792-b958-41ab-bbb4-84b4038990aa
+✗ commande 'integrations:delete' refusée par `notifuse` (CLI utilisateur scopé) : admin, HMAC ou cross-workspace. Utilise `notifuse-admin integrations:delete`.
+$ notifuse integrations:create-llm ucliaa --name n --provider openai --api-key k
+✗ commande 'integrations:create-llm' refusée par `notifuse` (CLI utilisateur scopé) : admin, HMAC ou cross-workspace. Utilise `notifuse-admin integrations:create-llm`.
+$ notifuse integrations:export ucliaa --stdout
+✗ commande 'integrations:export' refusée par `notifuse` (CLI utilisateur scopé) : admin, HMAC ou cross-workspace. Utilise `notifuse-admin integrations:export`.
+$ notifuse keys:mint ucliaa
+✗ commande 'keys:mint' refusée par `notifuse` (CLI utilisateur scopé) : admin, HMAC ou cross-workspace. Utilise `notifuse-admin keys:mint`.
+$ notifuse settings:set ucliaa name x
+✗ commande 'settings:set' refusée par `notifuse` (CLI utilisateur scopé) : admin, HMAC ou cross-workspace. Utilise `notifuse-admin settings:set`.
+
+FIN (FA=e24e5792-b958-41ab-bbb4-84b4038990aa FB=4dba2e7a-ab7b-476e-88bb-0d7f2832bba6)
+```
+
+
 ## Tableau d'audit : toutes les commandes du CLI (généré depuis le CLI, avant / après)
 
 Décisions : **a** utilisable avec la clé du workspace (déjà ouverte, ou serveur déjà ouvert et simplement non listée) ·
