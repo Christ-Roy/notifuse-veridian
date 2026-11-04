@@ -45,6 +45,31 @@ type VeridianReplyService struct {
 	// Veridian: emitter Hub pour pousser email.replied (scoring prospect +20).
 	// DI optionnelle (SetVeridianWebhookEmitter, app.go), nil = no-op strict.
 	veridianWebhookEmitter domain.WebhookEmitter
+
+	// Veridian (fiche 78) : redirection des reponses humaines vers les adresses du profil.
+	// DI optionnelle (SetReplyForwarder), nil = aucun changement de comportement.
+	replyForwarder veridianReplyForwardDispatcher
+}
+
+// veridianReplyForwardDispatcher : Dispatch ne bloque pas et ne remonte aucune erreur.
+type veridianReplyForwardDispatcher interface {
+	Dispatch(workspaceID string, msg *domain.VeridianIMAPMessage, det domain.VeridianReplyDetection)
+}
+
+// SetReplyForwarder injecte (post-construction) le forwarder de copies de reponses.
+func (s *VeridianReplyService) SetReplyForwarder(f veridianReplyForwardDispatcher) {
+	s.replyForwarder = f
+}
+
+// dispatchReplyForward confie la reponse HUMAINE au forwarder, hors chemin critique.
+func (s *VeridianReplyService) dispatchReplyForward(msg *domain.VeridianIMAPMessage, det domain.VeridianReplyDetection) {
+	if s.replyForwarder == nil {
+		return
+	}
+	if det.ReplyType != "" && det.ReplyType != domain.VeridianReplyTypeHuman {
+		return
+	}
+	s.replyForwarder.Dispatch(msg.WorkspaceID, msg, det)
 }
 
 // SetVeridianWebhookEmitter injecte (post-construction) l'emitter Hub pour pousser
@@ -203,6 +228,9 @@ func (s *VeridianReplyService) ProcessInboundMessage(ctx context.Context, msg *d
 		}).Warn("VeridianReply: HasReplied pre-check failed, proceeding")
 	}
 	if already {
+		// Deja sorti de sequence, mais CETTE reponse-ci peut etre nouvelle : la copie est
+		// dedoublonnee par message (cle du journal), pas par contact.
+		s.dispatchReplyForward(msg, detection)
 		return nil
 	}
 
@@ -256,6 +284,10 @@ func (s *VeridianReplyService) ProcessInboundMessage(ctx context.Context, msg *d
 
 	// 4. Exit actif des automations en cours.
 	s.exitActiveAutomations(ctx, msg.WorkspaceID, detection.ContactEmail)
+
+	// 5. Copie vers les adresses configurees sur le profil (fiche 78). Apres tout le reste,
+	//    asynchrone et sans effet sur le resultat : un echec ne bloque rien.
+	s.dispatchReplyForward(msg, detection)
 
 	return nil
 }

@@ -99,7 +99,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `77` couverture CLI embarquée (chaque route `/api/*` a sa commande, MANIFEST) et distribution du CLI
 - `44` rate-limit global de l'API (OWASP API4:2023)
 - `61` nœud webhook des automations : garde SSRF (`NewTenantOutboundClient`), secret chiffré, signature HMAC
-- `75` lot L4 qualité et sécurité : S2 (aperçu e-mail en bac à sable), Liquid des données de contact, rétro-remplissage `message_data` (procédure de sauvegarde), tests upstream portés, mutants, flakiness vitest
+- `75` lot L4 qualité et sécurité : aperçu e-mail en bac à sable, Liquid des contacts, rétro-remplissage `message_data`, tests upstream portés, mutants, flakiness vitest
 
 **Base de données workspace**
 - `39` DROP DATABASE WITH (FORCE) — wipe orphelin + GC
@@ -133,6 +133,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `16` intégration IMAP self-service
 - `17` bounce-loop NDR IMAP → suppression contact
 - `18` stop-on-reply — réponse prospect → exit séquence
+- `78` redirection des réponses de prospects par profil (V69)
 - `13` E2E lifecycle cold
 
 **Cold outbound — pré-filtrage & preuve anti-cramage**

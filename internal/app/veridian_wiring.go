@@ -352,6 +352,16 @@ func (a *App) veridianInitServices(automationExecutor *service.AutomationExecuto
 	if a.veridianReplyService != nil {
 		a.veridianReplyService.SetVeridianWebhookEmitter(a.veridianWebhookEmitter)
 	}
+	// Veridian (fiche 78) : redirection des reponses humaines vers les adresses du profil.
+	// Envoi par le transport du profil (EmailService), journal dans la base du workspace.
+	if a.veridianReplyService != nil {
+		a.veridianReplyService.SetReplyForwarder(service.NewVeridianReplyForwarder(
+			repository.NewVeridianReplyForwardRepository(a.workspaceRepo),
+			a.workspaceRepo,
+			a.emailService,
+			a.logger,
+		))
+	}
 	// V38 : injecter le webhook emitter dans le plan repo pour que
 	// IncrementEmailsSent puisse émettre tenant.activity_threshold_reached
 	// quand le seuil 5 mails est franchi. Le repo est créé en ligne 435

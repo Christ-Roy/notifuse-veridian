@@ -219,6 +219,12 @@ type EmailProvider struct {
 	// attend si le pool n'a plus de membre actif). Les entrees en file sont
 	// conservees. omitempty, sans migration. Cf. veridian_pool_failover.go.
 	VeridianPaused bool `json:"veridian_paused,omitempty"`
+
+	// Veridian fork (04/11/2026) : REDIRECTION DES REPONSES de prospects. Quand une reponse
+	// HUMAINE est rattachee a un envoi de ce profil, une copie part vers ces adresses (au plus
+	// 5) par le SMTP du profil, Reply-To = le prospect. Vide (defaut) = aucun changement.
+	// omitempty, sans migration du blob. Cf. veridian_reply_forward.go (domain + service).
+	VeridianReplyForwardTo []string `json:"veridian_reply_forward_to,omitempty"`
 }
 
 // Validate validates the email provider settings

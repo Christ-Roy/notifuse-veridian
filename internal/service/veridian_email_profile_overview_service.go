@@ -282,7 +282,11 @@ func buildVeridianEmailProfilesOverview(
 			VerifiedAt:            provider.VeridianTransportVerifiedAt,
 			CredentialsConfigured: veridianCredentialsConfigured(provider),
 			Senders:               []domain.VeridianOverviewSender{},
+			ReplyForwardTo:        []string{},
 			Plan:                  plan,
+		}
+		if rf := provider.VeridianEffectiveReplyForwardTo(); len(rf) > 0 {
+			profile.ReplyForwardTo = rf
 		}
 		for _, sender := range provider.Senders {
 			profile.Senders = append(profile.Senders, domain.VeridianOverviewSender{Email: sender.Email, Name: sender.Name, IsDefault: sender.IsDefault})
