@@ -1,6 +1,7 @@
 package http
 
 import (
+	"strings"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -555,4 +556,35 @@ func TestSettingsHandler_RegisterRoutes(t *testing.T) {
 			assert.NotEqual(t, http.StatusNotFound, w.Code)
 		})
 	}
+}
+
+// TestSettingsHandler_Update_AbsentRelayKeysKeepValues : un update SANS les clés relais ne coupe pas le
+// relais ; un update avec false explicite le coupe. Passe par la route de mise à jour réelle.
+func TestSettingsHandler_Update_AbsentRelayKeysKeepValues(t *testing.T) {
+	handler, settingRepo, _, _ := setupSettingsHandler(t)
+	ctx := context.Background()
+	_ = settingRepo.Set(ctx, "is_installed", "true")
+	_ = settingRepo.Set(ctx, "root_email", testRootEmail)
+	_ = settingRepo.Set(ctx, "veridian_smtp_relay_enabled", "true")
+
+	call := func(body string) int {
+		req := httptest.NewRequest(http.MethodPost, "/api/settings.update", strings.NewReader(body))
+		req = reqWithUserContext(req, "root-user-id")
+		w := httptest.NewRecorder()
+		handler.handleUpdate(w, req)
+		return w.Code
+	}
+	relayValue := func() string {
+		st, err := settingRepo.Get(ctx, "veridian_smtp_relay_enabled")
+		require.NoError(t, err)
+		return st.Value
+	}
+
+	// Champs relais absents : la valeur courante est conservée.
+	require.Equal(t, http.StatusOK, call(`{"root_email":"`+testRootEmail+`"}`))
+	assert.Equal(t, "true", relayValue(), "update partiel ne doit pas couper le relais")
+
+	// false explicite : le relais est coupé.
+	require.Equal(t, http.StatusOK, call(`{"root_email":"`+testRootEmail+`","veridian_smtp_relay_enabled":false}`))
+	assert.Equal(t, "false", relayValue(), "false explicite doit couper le relais")
 }

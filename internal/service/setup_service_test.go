@@ -343,3 +343,23 @@ func TestSetupService_GetEnvOverrides(t *testing.T) {
 		})
 	}
 }
+
+// TestSetupService_GetEnvOverrides_RelayKeys : une variable relais posée signale le réglage correspondant
+// comme surchargé (isOverridden côté console).
+func TestSetupService_GetEnvOverrides_RelayKeys(t *testing.T) {
+	t.Setenv("VERIDIAN_SMTP_RELAY_ENABLED", "true")
+	t.Setenv("VERIDIAN_RELAY_CERT_MODE", "managed")
+	setupService := service.NewSetupService(
+		&service.SettingService{},
+		&service.UserService{},
+		nil,
+		&mockLogger{},
+		"test-secret-key",
+		nil,
+		&service.EnvironmentConfig{},
+	)
+	got := setupService.GetEnvOverrides()
+	if !got["veridian_smtp_relay_enabled"] || !got["veridian_relay_cert_managed"] {
+		t.Fatalf("variables relais posées : réglages surchargés attendus, got %v", got)
+	}
+}
