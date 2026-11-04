@@ -62,3 +62,22 @@ func TestVeridianEmailProfileVerifyHandler_Statuses(t *testing.T) {
 	assert.Equal(t, nethttp.StatusBadGateway, rec.Code)
 	require.NotContains(t, rec.Body.String(), "secret-user", "l'erreur SMTP brute ne sort jamais")
 }
+
+// La route est montee derriere l'authentification : sans jeton le service n'est jamais appele.
+func TestVeridianEmailProfileVerifyHandler_RegisterRoutes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	log := pkgmocks.NewMockLogger(ctrl)
+	stub := &verifyServiceStub{}
+	mux := nethttp.NewServeMux()
+	NewVeridianEmailProfileVerifyHandler(stub, func() ([]byte, error) { return []byte("secret"), nil }, log).RegisterRoutes(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(nethttp.MethodPost, "/api/veridian/emailProfiles.verify", strings.NewReader(`{"workspace_id":"ws","integration_id":"p1","to":"me@client.fr"}`)))
+	assert.Equal(t, nethttp.StatusUnauthorized, rec.Code, "sans jeton : 401")
+	assert.Equal(t, [3]string{}, stub.got, "le service n'est pas appele sans jeton")
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(nethttp.MethodGet, "/api/veridian/emailProfiles.verify", nil))
+	assert.Equal(t, nethttp.StatusMethodNotAllowed, rec.Code, "POST seulement")
+}

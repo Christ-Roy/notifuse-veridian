@@ -89,3 +89,10 @@ func TestVeridianEmailProfileVerifyService_VerifyEmailProfile(t *testing.T) {
 		assert.Len(t, spy.calls, veridianVerifyMaxPerMinute+2)
 	})
 }
+
+func TestNewVeridianEmailProfileVerifyService(t *testing.T) {
+	svc, _, _ := newVerifyServiceForTest(t)
+	require.NotNil(t, svc)
+	assert.NotNil(t, svc.recent, "compteur par workspace initialise")
+	assert.True(t, svc.allow("ws"), "le premier essai passe")
+}
