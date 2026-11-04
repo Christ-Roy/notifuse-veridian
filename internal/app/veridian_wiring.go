@@ -811,6 +811,13 @@ func (a *App) veridianInitHandlers() error {
 		getJWTSecret, a.logger,
 	).RegisterRoutes(a.mux)
 
+	// Fiche 79 (04/11/2026) : POST /api/veridian/emailProfiles.verify, la verification du transport d'un
+	// profil par l'utilisateur du workspace (JWT, cle API en ecriture sur le workspace).
+	httpHandler.NewVeridianEmailProfileVerifyHandler(
+		service.NewVeridianEmailProfileVerifyService(a.authService, a.emailService),
+		getJWTSecret, a.logger,
+	).RegisterRoutes(a.mux)
+
 	// Lot 4 « separation transactionnel / commercial » (08/10/2026) : POST
 	// /api/veridian/emailProfiles.setUsage|pause|resume. L'usage d'un profil
 	// (commercial en rotation, transactionnel, hors service) et sa pause, valides

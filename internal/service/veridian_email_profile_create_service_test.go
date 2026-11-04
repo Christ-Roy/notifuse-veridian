@@ -163,3 +163,37 @@ func TestVeridianCreateEmailProfileService(t *testing.T) {
 		require.ErrorAs(t, err, &validation)
 	})
 }
+
+// Fiche 79 : l'utilisateur d'un workspace cree ses profils avec sa propre cle.
+func TestVeridianCreateEmailProfileService_ByAPIKey(t *testing.T) {
+	keyAuth := func(auth *mocks.MockAuthService, repo *mocks.MockWorkspaceRepository, perms domain.UserPermissions) {
+		auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").Return(context.Background(), &domain.User{ID: "key1", Type: domain.UserTypeAPIKey}, &domain.UserWorkspace{}, nil)
+		repo.EXPECT().GetUserWorkspace(gomock.Any(), "key1", "ws1").Return(&domain.UserWorkspace{UserID: "key1", WorkspaceID: "ws1", Role: "member", Permissions: perms}, nil)
+	}
+
+	t.Run("cle avec l'ecriture sur le workspace : profil cree", func(t *testing.T) {
+		svc, repo, auth := newCreateServiceForTest(t)
+		keyAuth(auth, repo, domain.FullPermissions)
+		repo.EXPECT().GetByID(gomock.Any(), "ws1").Return(&domain.Workspace{ID: "ws1"}, nil)
+		repo.EXPECT().Update(gomock.Any(), gomock.Any()).Times(1).Return(nil)
+		result, err := svc.CreateEmailProfile(context.Background(), gmailRequest())
+		require.NoError(t, err)
+		assert.NotEmpty(t, result.IntegrationID)
+	})
+
+	t.Run("cle en lecture seule : refusee, rien n'est lu ni ecrit", func(t *testing.T) {
+		svc, repo, auth := newCreateServiceForTest(t)
+		keyAuth(auth, repo, domain.UserPermissions{domain.PermissionResourceWorkspace: {Read: true}})
+		_, err := svc.CreateEmailProfile(context.Background(), gmailRequest())
+		var denied *domain.ErrUnauthorized
+		require.ErrorAs(t, err, &denied)
+	})
+
+	t.Run("cle d'un autre workspace : refusee par l'authentification", func(t *testing.T) {
+		svc, _, auth := newCreateServiceForTest(t)
+		auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").Return(context.Background(), nil, nil, &domain.ErrUnauthorized{Message: "not authorized for this workspace"})
+		_, err := svc.CreateEmailProfile(context.Background(), gmailRequest())
+		var denied *domain.ErrUnauthorized
+		require.ErrorAs(t, err, &denied)
+	})
+}

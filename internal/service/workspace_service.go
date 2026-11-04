@@ -1612,9 +1612,9 @@ func (s *WorkspaceService) CreateIntegration(ctx context.Context, req domain.Cre
 		return "", err
 	}
 
-	if userWorkspace.Role != "owner" {
-		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
-		return "", &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	if err := veridianAuthorizeIntegrationCreate(userWorkspace, &req); err != nil { // fiche 79
+		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("Integration creation refused")
+		return "", err
 	}
 
 	// Get the workspace
@@ -1745,9 +1745,9 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 		return err
 	}
 
-	if userWorkspace.Role != "owner" {
-		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
-		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	if err := veridianIntegrationWriteAllowed(userWorkspace, ""); err != nil { // fiche 79 : le type est controle plus bas
+		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("Integration update refused")
+		return err
 	}
 
 	// Get the workspace
@@ -1762,6 +1762,10 @@ func (s *WorkspaceService) UpdateIntegration(ctx context.Context, req domain.Upd
 	if existingIntegration == nil {
 		s.logger.WithField("workspace_id", req.WorkspaceID).WithField("integration_id", req.IntegrationID).Error("Integration not found")
 		return fmt.Errorf("integration not found")
+	}
+
+	if err := veridianAuthorizeIntegrationUpdate(userWorkspace, existingIntegration, &req, s.secretKey); err != nil { // fiche 79
+		return err
 	}
 
 	// Update the integration

@@ -16,7 +16,7 @@ import (
 // emailProfiles.create : un profil SMTP et, si demandée, sa boîte IMAP liée,
 // écrits dans UN SEUL workspaceRepo.Update. Tout est validé (et les secrets
 // chiffrés) en mémoire avant l'écriture : une erreur ne laisse rien derrière
-// elle. Réservé au propriétaire du workspace, comme createIntegration.
+// elle. Propriétaire, ou membre avec l'écriture sur le workspace (fiche 79).
 // Le profil naît hors rotation, non vérifié ; le secret n'est jamais renvoyé.
 
 type veridianEmailProfileCreateService struct {
@@ -47,8 +47,10 @@ func (s *veridianEmailProfileCreateService) CreateEmailProfile(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	if userWorkspace.Role != "owner" {
-		return nil, &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
+	// Fiche 79 : proprietaire, ou membre (cle API comprise) avec l'ecriture sur le workspace.
+	// Le profil cree est un transport SMTP + une boite IMAP, les deux types ouverts.
+	if err := veridianIntegrationWriteAllowed(userWorkspace, domain.IntegrationTypeEmail); err != nil {
+		return nil, err
 	}
 	workspace, err := s.repo.GetByID(ctx, req.WorkspaceID)
 	if err != nil {

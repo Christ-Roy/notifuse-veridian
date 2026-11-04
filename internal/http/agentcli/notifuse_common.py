@@ -305,7 +305,7 @@ EXISTING_COMMAND_ROUTES = {
     "keys:revoke": ["/api/workspaces.revokeAPIKey"],
     "integrations:create-smtp": ["/api/workspaces.createIntegration"],
     "integrations:delete": ["/api/workspaces.deleteIntegration"],
-    "integrations:verify": ["/api/veridian/admin/email-integration.verify"],
+    "integrations:verify": ["/api/veridian/admin/email-integration.verify", "/api/veridian/emailProfiles.verify"],
     "integrations:export": ["/api/veridian/admin/email-integration.export"],
     "integrations:update": ["/api/workspaces.updateIntegration"],
     "integrations:list": ["/api/workspaces.get"],
@@ -402,6 +402,26 @@ WORKSPACE_COMMANDS = frozenset({
     # mail:send / mail:reply en plus transactional:write (verifie cote serveur). Module : notifuse_mail.py.
     "mail:boxes", "mail:list", "mail:get", "mail:raw", "mail:attachment", "mail:thread", "mail:threads",
     "mail:update", "mail:send", "mail:reply", "mail:events",
+    # Fiche 79 (04/11/2026) : l'utilisateur d'un workspace pilote SES profils d'envoi et SES reglages avec
+    # SA cle, comme l'admin. Serveur : proprietaire OU cle avec l'ecriture sur "workspace" (cle en lecture
+    # seule refusee), isolation par AuthenticateUserForWorkspace (cle du workspace A sur B = 403), types
+    # email SMTP et imap seulement ; supabase/llm/firecrawl, suppression, export des secrets, plan et
+    # facturation, cles et equipe restent a l'admin ou au proprietaire. docs/claude/79-*.md.
+    "integrations:list", "integrations:get", "integrations:cold", "integrations:update",
+    "integrations:create-smtp", "integrations:create-imap", "integrations:verify", "profiles:link-imap",
+    "breakdown", "status", "campaign:audit", "settings:get", "relay:info",
+    "keys:list", "members:list", "members:get-permissions",
+    "veridian:email-profile-usage", "veridian:engagement-by-class", "veridian:deliverability-score",
+    "timeline:list", "inbound-events:list", "tasks:list", "tasks:get",
+    "events:list", "events:get", "events:upsert", "events:import",
+    "contactLists:getByIDs", "contactLists:getContactsByList", "contactLists:getListsByContact",
+    "contactLists:removeContact",
+    "template-blocks:list", "template-blocks:get", "template-blocks:create", "template-blocks:update",
+    "template-blocks:delete",
+    "blog:categories-list", "blog:categories-get", "blog:categories-create", "blog:categories-update",
+    "blog:categories-delete", "blog:posts-list", "blog:posts-get", "blog:posts-create", "blog:posts-update",
+    "blog:posts-delete", "blog:posts-publish", "blog:posts-unpublish", "blog:themes-list", "blog:themes-get",
+    "blog:themes-get-published", "blog:themes-create", "blog:themes-update", "blog:themes-publish",
     # pixel / scripting (versions sans HMAC/admin, cf cmd_config/_SCOPED_MODE)
     "config", "env",
 })
@@ -412,13 +432,22 @@ WORKSPACE_COMMANDS = frozenset({
 # jamais atteignable par une commande de WORKSPACE_COMMANDS.
 ADMIN_ONLY_ROUTE_MARKERS = (
     "/api/tenants/", "/api/veridian/admin/", "/api/sso/", "/api/users/by-email",
-    "/api/workspaces.createIntegration", "/api/workspaces.updateIntegration",
-    "/api/workspaces.deleteIntegration", "/api/workspaces.update",
+    "/api/workspaces.deleteIntegration",  # createIntegration/updateIntegration : ouverts (fiche 79)
+    "/api/workspaces.update",
     "/api/workspaces.createAPIKey", "/api/workspaces.create", "/api/workspaces.delete",
     "/api/workspaces.inviteMember", "/api/workspaces.removeMember",
     "/api/workspaces.setUserPermissions", "/api/workspaces.generateMagicLink",
     "/api/settings.", "/api/setup.",
 )
+
+# Routes qu'une commande de WORKSPACE_COMMANDS n'emploie QU'en mode admin ou opérateur (HMAC), jamais avec
+# une clé de workspace : le CLI utilisateur passe par la route JWT (integrations:verify) ou ne les demande
+# pas (status : plan et facturation). Dump `__admin-mode-only-routes` : coverage_test.sh les exclut du
+# contrôle de fuite, sans les retirer de la couverture totale (`__routes`). Fiche 79.
+ADMIN_MODE_ONLY_ROUTES = {
+    "integrations:verify": ("/api/veridian/admin/email-integration.verify",),
+    "status": ("/api/tenants/{id}/status",),
+}
 
 
 def die(msg, code=1):
@@ -1146,9 +1175,13 @@ def cmd_status(a):
     ws = a.workspace
     consolidated = {"workspace": ws, "env": a.env}
 
-    # plan/quota via tenant status (HMAC, ne pollue pas)
-    st, p = call_hmac(a.env, "GET", f"/api/tenants/{urllib.parse.quote(ws)}/status", None)
-    consolidated["tenant_status"] = {"http": st, "data": p}
+    # plan/quota via tenant status (HMAC, ne pollue pas). Plan et facturation : admin plateforme seulement,
+    # donc absent avec une clé de workspace (fiche 79) ; présent en admin et en mode opérateur.
+    if _SCOPED_MODE and os.environ.get("NOTIFUSE_OPERATOR") != "1":
+        consolidated["tenant_status"] = "réservé à l'admin plateforme (plan et facturation) : non demandé avec une clé de workspace"
+    else:
+        st, p = call_hmac(a.env, "GET", f"/api/tenants/{urllib.parse.quote(ws)}/status", None)
+        consolidated["tenant_status"] = {"http": st, "data": p}
 
     # owner JWT pour les reads riches
     try:
@@ -1828,8 +1861,12 @@ def cmd_integrations_delete(a):
 
 def cmd_integrations_verify(a):
     """Vérifie un profil d'envoi (transport réel vers --to) puis pose
-    VeridianTransportVerifiedAt. HMAC admin, jamais le JWT owner."""
+    VeridianTransportVerifiedAt. Admin : HMAC. Utilisateur : sa clé (écriture sur le workspace)."""
     body = {"workspace_id": a.workspace, "integration_id": a.id, "to": a.to}
+    if _SCOPED_MODE:
+        # CLI utilisateur (fiche 79) : route JWT du workspace, droit "ecriture sur workspace", 5 par minute.
+        out(*call_jwt(a.env, "POST", "/api/veridian/emailProfiles.verify", owner_jwt(a.env, a.workspace), body=body))
+        return
     out(*call_hmac(a.env, "POST", "/api/veridian/admin/email-integration.verify", body))
 
 
@@ -4667,7 +4704,7 @@ def build_parser(extra=None):
     sp.add_argument("--yes", action="store_true")
     sp.set_defaults(func=cmd_integrations_apply)
 
-    sp = sub.add_parser("integrations:cold", help="pose rates/caps/exclusion/tracking/pixel sur une infra (owner)")
+    sp = sub.add_parser("integrations:cold", help="pose rates/caps/exclusion/tracking/pixel/redirection des réponses sur une infra (clé en écriture sur le workspace)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--id", required=True, help="integration id")
     sp.add_argument("--rates", help='JSON map classe→emails/min, ex \'{"google":0.5}\'')
@@ -4975,7 +5012,7 @@ def build_parser(extra=None):
     sp.add_argument("--id", required=True, help="id du profil d'envoi")
     sp.set_defaults(func=cmd_profiles_resume, _routes=["/api/veridian/emailProfiles.resume"])
 
-    sp = sub.add_parser("integrations:create-smtp", help="crée une intégration SMTP d'envoi (owner)")
+    sp = sub.add_parser("integrations:create-smtp", help="crée une intégration SMTP d'envoi (clé en écriture sur le workspace)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--name", required=True)
     sp.add_argument("--host", required=True)
@@ -4991,7 +5028,7 @@ def build_parser(extra=None):
     sp.add_argument("--no-tls", dest="no_tls", action="store_true")
     sp.set_defaults(func=cmd_integrations_create_smtp)
 
-    sp = sub.add_parser("integrations:create-imap", help="crée une boîte IMAP de retour (owner)")
+    sp = sub.add_parser("integrations:create-imap", help="crée une boîte IMAP de retour (clé en écriture sur le workspace)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.add_argument("--name", required=True)
     sp.add_argument("--host", required=True)
@@ -5635,6 +5672,10 @@ def build_parser(extra=None):
     sp = sub.add_parser("__admin-only-route-markers",
         help="(interne) dump JSON de ADMIN_ONLY_ROUTE_MARKERS")
     sp.set_defaults(func=lambda a: print(json.dumps(list(ADMIN_ONLY_ROUTE_MARKERS))))
+
+    sp = sub.add_parser("__admin-mode-only-routes",
+        help="(interne) dump JSON {commande: [routes]} employées seulement en mode admin/opérateur")
+    sp.set_defaults(func=lambda a: print(json.dumps({k: list(v) for k, v in ADMIN_MODE_ONLY_ROUTES.items()})))
 
     sp = sub.add_parser("__command-routes",
         help="(interne) dump JSON {commande: [routes]} (COMMAND_ROUTES complet)")

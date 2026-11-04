@@ -112,6 +112,24 @@ func TestVeridianWorkspaceAuthz(t *testing.T) {
 		rec, _ = runAuthz(t, &fakeAuthz{err: errors.New("db down")}, "GET", "/api/segments.list?workspace_id=ws", "")
 		assert.Equal(t, 500, rec.Code)
 	})
+	t.Run("taches (fiche 79) : la cle du workspace A ne touche pas aux taches de B", func(t *testing.T) {
+		for _, c := range [][3]string{
+			{"GET", "/api/tasks.list?workspace_id=victim", ""},
+			{"GET", "/api/tasks.get?workspace_id=victim&id=t", ""},
+			{"POST", "/api/tasks.create", `{"workspace_id":"victim","type":"x"}`},
+			{"POST", "/api/tasks.delete", `{"workspace_id":"victim","id":"t"}`},
+			{"POST", "/api/tasks.reset", `{"workspace_id":"victim","id":"t"}`},
+			{"POST", "/api/tasks.trigger", `{"workspace_id":"victim","id":"t"}`},
+		} {
+			f := &fakeAuthz{err: foreign.err}
+			rec, reached := runAuthz(t, f, c[0], c[1], c[2])
+			assert.Equal(t, http.StatusForbidden, rec.Code, c[1])
+			assert.False(t, *reached, c[1])
+			rec, reached = runAuthz(t, member, c[0], c[1], c[2])
+			assert.Equal(t, 200, rec.Code, "le membre du workspace reste servi : "+c[1])
+			assert.True(t, *reached, c[1])
+		}
+	})
 	t.Run("routes hors table inchangees", func(t *testing.T) {
 		rec, reached := runAuthz(t, foreign, "GET", "/api/contacts.list?workspace_id=ws", "")
 		assert.Equal(t, 200, rec.Code)
@@ -127,6 +145,7 @@ func TestVeridianWorkspaceAuthzRoutesAreMounted(t *testing.T) {
 	NewWebhookSubscriptionHandler(nil, nil, secret, nil).RegisterRoutes(mux)
 	NewSegmentHandler(nil, secret, nil).RegisterRoutes(mux)
 	NewContactTimelineHandler(nil, nil, secret, nil).RegisterRoutes(mux)
+	NewTaskHandler(nil, secret, nil, "").RegisterRoutes(mux)
 	for route := range VeridianWorkspaceAuthzRoutes {
 		_, pattern := mux.Handler(httptest.NewRequest("POST", route, nil))
 		assert.Equal(t, route, pattern)

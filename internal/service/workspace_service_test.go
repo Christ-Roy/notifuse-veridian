@@ -4757,3 +4757,60 @@ func TestWorkspaceService_UpdateWorkspace_VeridianDecisionLogLevel(t *testing.T)
 		})
 	}
 }
+
+// Parcours complet par le service : cle du workspace, cle d'un autre workspace, lecture seule.
+func TestWorkspaceService_IntegrationsByAPIKey(t *testing.T) {
+	ctx := context.Background()
+	keyUser := &domain.User{ID: "key-a", Type: domain.UserTypeAPIKey}
+	newProvider := func() domain.EmailProvider { return lot2SMTPIntegration("p").EmailProvider }
+	var denied *domain.ErrUnauthorized
+
+	t.Run("cle du workspace en ecriture : cree un profil SMTP", func(t *testing.T) {
+		svc, repo, auth := newLot2WorkspaceService(t)
+		auth.EXPECT().AuthenticateUserForWorkspace(ctx, "ws").Return(ctx, keyUser, nil, nil)
+		repo.EXPECT().GetUserWorkspace(ctx, "key-a", "ws").Return(&domain.UserWorkspace{UserID: "key-a", WorkspaceID: "ws", Role: "member", Permissions: domain.FullPermissions}, nil)
+		repo.EXPECT().GetByID(ctx, "ws").Return(&domain.Workspace{ID: "ws"}, nil)
+		repo.EXPECT().Update(ctx, gomock.Any()).Return(nil)
+		id, err := svc.CreateIntegration(ctx, domain.CreateIntegrationRequest{WorkspaceID: "ws", Name: "n", Type: domain.IntegrationTypeEmail, Provider: newProvider()})
+		require.NoError(t, err)
+		assert.NotEmpty(t, id)
+	})
+
+	t.Run("cle d'un AUTRE workspace : refusee par l'authentification, rien n'est lu ni ecrit", func(t *testing.T) {
+		svc, _, auth := newLot2WorkspaceService(t)
+		auth.EXPECT().AuthenticateUserForWorkspace(ctx, "ws-b").Return(ctx, nil, nil, &domain.ErrUnauthorized{Message: "user is not authorized for this workspace"}).Times(2)
+		_, err := svc.CreateIntegration(ctx, domain.CreateIntegrationRequest{WorkspaceID: "ws-b", Name: "n", Type: domain.IntegrationTypeEmail, Provider: newProvider()})
+		require.ErrorAs(t, err, &denied)
+		err = svc.UpdateIntegration(ctx, domain.UpdateIntegrationRequest{WorkspaceID: "ws-b", IntegrationID: "p", Name: "n", Provider: newProvider()})
+		require.ErrorAs(t, err, &denied)
+	})
+
+	t.Run("cle en lecture seule : refusee en creation et en modification", func(t *testing.T) {
+		svc, repo, auth := newLot2WorkspaceService(t)
+		auth.EXPECT().AuthenticateUserForWorkspace(ctx, "ws").Return(ctx, keyUser, nil, nil).Times(2)
+		repo.EXPECT().GetUserWorkspace(ctx, "key-a", "ws").Return(authzKeyWith(false, true), nil).Times(2)
+		_, err := svc.CreateIntegration(ctx, domain.CreateIntegrationRequest{WorkspaceID: "ws", Name: "n", Type: domain.IntegrationTypeEmail, Provider: newProvider()})
+		require.ErrorAs(t, err, &denied)
+		err = svc.UpdateIntegration(ctx, domain.UpdateIntegrationRequest{WorkspaceID: "ws", IntegrationID: "p", Name: "n", Provider: newProvider()})
+		require.ErrorAs(t, err, &denied)
+	})
+
+	t.Run("cle en ecriture : pas d'integration LLM, et jamais de suppression", func(t *testing.T) {
+		svc, repo, auth := newLot2WorkspaceService(t)
+		llm := domain.Integration{ID: "l", Name: "l", Type: domain.IntegrationTypeLLM}
+		auth.EXPECT().AuthenticateUserForWorkspace(ctx, "ws").Return(ctx, keyUser, nil, nil).Times(2)
+		repo.EXPECT().GetUserWorkspace(ctx, "key-a", "ws").Return(authzKeyWith(true, true), nil).Times(2)
+		repo.EXPECT().GetByID(ctx, "ws").Return(&domain.Workspace{ID: "ws", Integrations: []domain.Integration{llm}}, nil)
+		err := svc.UpdateIntegration(ctx, domain.UpdateIntegrationRequest{WorkspaceID: "ws", IntegrationID: "l", Name: "x"})
+		require.ErrorAs(t, err, &denied)
+		err = svc.DeleteIntegration(ctx, "ws", "p")
+		require.ErrorAs(t, err, &denied)
+	})
+
+	t.Run("erreur d'authentification quelconque : propagee", func(t *testing.T) {
+		svc, _, auth := newLot2WorkspaceService(t)
+		auth.EXPECT().AuthenticateUserForWorkspace(ctx, "ws").Return(ctx, nil, nil, errors.New("boom"))
+		_, err := svc.CreateIntegration(ctx, domain.CreateIntegrationRequest{WorkspaceID: "ws", Type: domain.IntegrationTypeEmail})
+		require.Error(t, err)
+	})
+}

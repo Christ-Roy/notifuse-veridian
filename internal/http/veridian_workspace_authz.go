@@ -49,6 +49,14 @@ var VeridianWorkspaceAuthzRoutes = map[string]veridianAuthzLevel{
 	"/api/segments.preview":                      veridianAuthzMember,
 	"/api/segments.contacts":                     veridianAuthzMember,
 	"/api/timeline.list":                         veridianAuthzMember,
+	// Fiche 79 (04/11/2026) : TaskService n a aucun controle d appartenance (0 appel a
+	// AuthenticateUserForWorkspace). Mesure staging : la cle du workspace A listait les taches de B.
+	"/api/tasks.list":    veridianAuthzMember,
+	"/api/tasks.get":     veridianAuthzMember,
+	"/api/tasks.create":  veridianAuthzMember,
+	"/api/tasks.delete":  veridianAuthzMember,
+	"/api/tasks.reset":   veridianAuthzMember,
+	"/api/tasks.trigger": veridianAuthzMember,
 }
 
 // VeridianWorkspaceAuthzDeps : le minimum de l'AuthService.
