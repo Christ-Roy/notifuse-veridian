@@ -36,8 +36,11 @@ func veridianIntegrationWriteAllowed(uw *domain.UserWorkspace, integrationType d
 	if uw.Role == "owner" {
 		return nil
 	}
-	if uw.Role != "member" || !uw.HasPermission(domain.PermissionResourceWorkspace, domain.PermissionTypeWrite) {
+	if uw.Role != "member" {
 		return &domain.ErrUnauthorized{Message: veridianIntegrationOwnerMessage}
+	}
+	if !uw.HasPermission(domain.PermissionResourceWorkspace, domain.PermissionTypeWrite) {
+		return &domain.ErrUnauthorized{Message: "write access to the workspace is required to manage sending profiles (workspace owner, or a key with workspace:write)"}
 	}
 	switch integrationType {
 	case "", domain.IntegrationTypeEmail, domain.IntegrationTypeIMAP:

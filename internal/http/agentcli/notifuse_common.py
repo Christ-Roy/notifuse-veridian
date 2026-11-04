@@ -718,6 +718,16 @@ def _apikey_for_impl(env, tenant_id):
     return owner_jwt(env, tenant_id)
 
 
+def _workspace_get(env, ws, jwt):
+    """GET /api/workspaces.get. Un refus (clé d'un autre workspace) ou une erreur serveur est DIT, jamais lu
+    comme « workspace sans intégration » : une liste vide issue d'un 403 est un faux résultat (fiche 79)."""
+    code, wsd = call_jwt(env, "GET", "/api/workspaces.get", jwt, params={"id": ws})
+    if code != 200 or not isinstance(wsd, dict):
+        detail = wsd.get("error") if isinstance(wsd, dict) else wsd
+        die(f"workspaces.get {ws} refusé ou en échec (HTTP {code}) : {detail}", code=2)
+    return wsd
+
+
 def jwt_for_route(env, resource_verb, workspace, prefer_owner=False):
     """Choisit le bon JWT pour une route applicative selon OWNER_ONLY."""
     if prefer_owner or resource_verb in OWNER_ONLY:
@@ -881,7 +891,7 @@ def cmd_campaign_audit(a):
     # liste ferait conclure "aucun expediteur" sur un workspace bien configure,
     # et un faux NO-GO ferait ignorer l'outil aussi surement qu'un faux GO.
     jwt = owner_jwt(a.env, ws)
-    _, wsd = call_jwt(a.env, "GET", "/api/workspaces.get", jwt, params={"id": ws})
+    wsd = _workspace_get(a.env, ws, jwt)
     wobj = (wsd or {}).get("workspace", wsd) or {}
     configured_integrations = _smtp_integrations(wobj)
     integrations = _active_campaign_integrations(wobj)
@@ -1192,7 +1202,7 @@ def cmd_status(a):
         sys.exit(2)
 
     # workspace.get (GET ?id=)
-    _, wsd = call_jwt(a.env, "GET", "/api/workspaces.get", jwt, params={"id": ws})
+    wsd = _workspace_get(a.env, ws, jwt)
     consolidated["workspace"] = wsd.get("workspace", wsd)
 
     # contacts count
@@ -1616,7 +1626,7 @@ def cmd_messages_list(a):
 # ---- integrations ----
 def cmd_integrations_list(a):
     jwt = owner_jwt(a.env, a.workspace)
-    _, wsd = call_jwt(a.env, "GET", "/api/workspaces.get", jwt, params={"id": a.workspace})
+    wsd = _workspace_get(a.env, a.workspace, jwt)
     w = wsd.get("workspace", wsd)
     integs = (w.get("integrations") or [])
     # surface la config cold par infra
@@ -1671,7 +1681,7 @@ def cmd_integrations_cold(a):
     on lit l'intégration, on patche les champs cold, on renvoie le tout. OWNER-ONLY.
     """
     jwt = owner_jwt(a.env, a.workspace)
-    _, wsd = call_jwt(a.env, "GET", "/api/workspaces.get", jwt, params={"id": a.workspace})
+    wsd = _workspace_get(a.env, a.workspace, jwt)
     w = wsd.get("workspace", wsd)
     integ = next((i for i in (w.get("integrations") or []) if i.get("id") == a.id), None)
     if not integ:
@@ -1840,7 +1850,7 @@ def cmd_integrations_create_llm(a):
 
 def _find_integration(env, workspace, integration_id, jwt=None):
     jwt = jwt or owner_jwt(env, workspace)
-    _, wsd = call_jwt(env, "GET", "/api/workspaces.get", jwt, params={"id": workspace})
+    wsd = _workspace_get(env, workspace, jwt)
     w = wsd.get("workspace", wsd)
     integ = next((i for i in (w.get("integrations") or []) if i.get("id") == integration_id), None)
     return integ, jwt
@@ -2248,7 +2258,7 @@ def _patch_email_profile(a, mutate):
     """Lit l'intégration email, applique mutate(provider), renvoie le provider COMPLET
     (updateIntegration remplace tout, comme integrations:cold). OWNER-ONLY."""
     jwt = owner_jwt(a.env, a.workspace)
-    _, wsd = call_jwt(a.env, "GET", "/api/workspaces.get", jwt, params={"id": a.workspace})
+    wsd = _workspace_get(a.env, a.workspace, jwt)
     w = wsd.get("workspace", wsd)
     integ = next((i for i in (w.get("integrations") or []) if i.get("id") == a.id), None)
     if not integ:
@@ -3136,7 +3146,7 @@ def _coerce_setting(key, value):
 
 def _fetch_workspace(env, ws, jwt=None):
     jwt = jwt or owner_jwt(env, ws)
-    _, wsd = call_jwt(env, "GET", "/api/workspaces.get", jwt, params={"id": ws})
+    wsd = _workspace_get(env, ws, jwt)
     return wsd.get("workspace", wsd), jwt
 
 

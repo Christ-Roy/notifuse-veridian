@@ -112,3 +112,9 @@ func TestVeridianAuthorizeIntegrationUpdate_SecretsNeverRebound(t *testing.T) {
 		assert.Error(t, veridianAuthorizeIntegrationUpdate(key, &llm, &domain.UpdateIntegrationRequest{}, "k"))
 	})
 }
+
+func TestVeridianIntegrationWriteAllowed_ReadOnlyMessageSaysWhatIsMissing(t *testing.T) {
+	err := veridianIntegrationWriteAllowed(authzKeyWith(false, true), domain.IntegrationTypeEmail)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "workspace:write", "la clé en lecture seule apprend ce qui lui manque")
+}

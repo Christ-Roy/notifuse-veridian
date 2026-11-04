@@ -204,3 +204,13 @@ Un débit bas a presque toujours une cause visible dans `notifuse config` :
 un plafond trop bas resté de la phase de chauffe, une fenêtre d'envoi trop
 étroite, une exclusion de classe de fournisseur oubliée, ou une intégration
 dont le cap par-sender masque le cap par-classe qu'on croyait actif.
+
+## 7. Gérer soi-même ses profils d'envoi
+
+Avec la clé API du workspace (écriture sur le workspace), le CLI pilote les profils SMTP et les boîtes IMAP :
+`notifuse integrations:list`, `integrations:cold --id <profil> --reply-forward-to client@client.fr` (redirection des
+réponses), `integrations:create-smtp`, `integrations:create-imap`, `integrations:verify --id <profil> --to moi@client.fr`
+(5 par minute), `profiles:overview`. Une clé en lecture seule lit mais ne modifie rien. Changer l'hôte, le port ou
+l'identifiant d'un profil impose de ressaisir son mot de passe. La suppression d'un profil, les intégrations LLM,
+Firecrawl et Supabase, l'équipe, les clés et les webhooks sortants restent au propriétaire du workspace.
+
