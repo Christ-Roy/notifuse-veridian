@@ -11,8 +11,9 @@ profil d'envoi, vide par défaut : **aucun changement de comportement** pour les
 Champ du fournisseur de l'intégration (JSON du blob, sans migration du blob) :
 `veridian_reply_forward_to` = liste d'adresses email, 5 au maximum.
 
-- Validation à l'écriture (`EmailProvider.Validate`, donc `workspaces.createIntegration` et
-  `updateIntegration`) : adresses nues seulement (pas de « Nom <a@b.fr> », pas de virgule, pas de
+- Validation à l'écriture (crochet Veridian `Workspace.ValidateVeridianReturnIMAPLink`, appelé par
+  `workspaces.createIntegration`, `updateIntegration` et `Workspace.Validate` ; `email_provider.go` est
+  gelé, il ne reçoit que le champ ; erreur de validation 400) : adresses nues seulement (pas de « Nom <a@b.fr> », pas de virgule, pas de
   saut de ligne), normalisées en minuscules, doublons retirés, **refus** de l'adresse d'envoi du
   profil (expéditeurs et identifiant SMTP) et de plus de 5 adresses. Code :
   `internal/domain/veridian_reply_forward.go`.
@@ -98,7 +99,7 @@ Le dépôt expose aussi `Stats` (`domain.VeridianReplyForwardRepository`) pour u
 `internal/domain/veridian_reply_forward_test.go` (validation), `internal/repository/
 veridian_reply_forward_postgres_test.go` (SQL), `internal/service/veridian_reply_forward_test.go`
 (copie, garde-fous, idempotence, plafond, échec non bloquant, branchement dans le service),
-`internal/service/smtp_service_test.go` (en-tête `X-Veridian-*` liste blanche),
+`internal/service/smtp_service_test.go` (en-tête `X-Veridian-*` en liste blanche, porté par le contexte `domain.WithVeridianExtraHeaders`),
 `internal/migrations/veridian/v69_reply_forward_test.go`. Preuve de détection : mutations
 volontaires du code (garde auto/DSN, garde `X-Veridian-Forwarded`, idempotence, plafond, gestion
 de l'échec) chacune rattrapée par un test rouge.
