@@ -10,9 +10,17 @@ import (
 
 // TLSConfig holds configuration for TLS certificate management
 type TLSConfig struct {
-	CertBase64 string // Base64 encoded certificate
+	CertBase64 string // Base64 encoded certificate (fixe : prime sur Source)
 	KeyBase64  string // Base64 encoded key
 	Logger     logger.Logger
+	// Source fournit le certificat géré par l'application (renouvelé à chaud). Utilisée seulement
+	// sans certificat fixe : la précédence reste au certificat fourni par fichier ou variable.
+	Source CertificateSource
+}
+
+// CertificateSource rend le certificat courant à chaque handshake (relaycert.Holder).
+type CertificateSource interface {
+	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
 }
 
 // SetupTLS configures TLS from base64-encoded certificates
@@ -20,6 +28,10 @@ type TLSConfig struct {
 func SetupTLS(cfg TLSConfig) (*tls.Config, error) {
 	// Check if certificates are provided
 	if cfg.CertBase64 == "" || cfg.KeyBase64 == "" {
+		if cfg.Source != nil {
+			cfg.Logger.Info("SMTP bridge: TLS géré par l'application (certificat renouvelé à chaud)")
+			return &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: cfg.Source.GetCertificate}, nil
+		}
 		cfg.Logger.Warn("SMTP bridge: No TLS configuration provided - server will run without TLS (NOT recommended for production)")
 		return nil, nil
 	}

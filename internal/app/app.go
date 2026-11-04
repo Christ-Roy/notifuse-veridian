@@ -1020,6 +1020,7 @@ func (a *App) InitServices() error {
 				CertBase64: a.config.SMTPBridge.TLSCertBase64,
 				KeyBase64:  a.config.SMTPBridge.TLSKeyBase64,
 				Logger:     a.logger,
+				Source:     a.veridianRelayCertSource(),
 			})
 			if err != nil {
 				a.logger.WithField("error", err.Error()).Error("Failed to setup TLS for SMTP bridge")

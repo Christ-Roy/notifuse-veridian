@@ -919,7 +919,8 @@ func resolveSMTPBridgeTLSMode(cfg SMTPBridgeConfig, environment string) (string,
 			return "", fmt.Errorf("SMTP_BRIDGE_TLS: %w", err)
 		}
 		if cfg.TLSMode == smtp_bridge.ModeSTARTTLS || cfg.TLSMode == smtp_bridge.ModeImplicit {
-			if cfg.TLSCertBase64 == "" || cfg.TLSKeyBase64 == "" {
+			// Sans certificat fixe, starttls n'est accepté que si l'application gère le certificat (fiche 71).
+			if (cfg.TLSCertBase64 == "" || cfg.TLSKeyBase64 == "") && os.Getenv("VERIDIAN_RELAY_CERT_MODE") != "managed" {
 				return "", fmt.Errorf(
 					"SMTP_BRIDGE_TLS=%s requires both SMTP_BRIDGE_TLS_CERT_BASE64 and SMTP_BRIDGE_TLS_KEY_BASE64 to be set",
 					cfg.TLSMode,

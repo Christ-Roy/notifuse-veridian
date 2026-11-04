@@ -18,6 +18,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/internal/service/queue"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
+	"github.com/Notifuse/notifuse/internal/veridian/relaycert"
 	"github.com/Notifuse/notifuse/internal/veridian/smtprelay"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -228,6 +229,8 @@ type veridianState struct {
 	veridianIMAPPoller         *queue.VeridianIMAPPollerService           // Lot 1 cold — poller IMAP self-service (réception bounces/réponses)
 	veridianReplyService       *service.VeridianReplyService              // Lot 3 cold — détection réponse + exit séquence (stop-on-reply)
 	veridianRelay              *smtprelay.Relay                           // relais SMTP de soumission (fiche 71), nil = désactivé
+	veridianRelayHolder        *relaycert.Holder                          // certificat du bridge géré par l'app (fiche 71), créé à la demande
+	veridianRelayCertManager   *relaycert.Manager                         // renouvellement du certificat géré par l'app, nil = non géré
 }
 
 // veridianInitRepositories : dépôts Veridian et décorateur de quota (fin d'InitRepositories).
@@ -281,6 +284,7 @@ func (a *App) veridianInitRepositories() {
 // veridianInitServices : services, collaborateurs de worker et d'exécuteur, émetteur webhook (fin d'InitServices).
 func (a *App) veridianInitServices(automationExecutor *service.AutomationExecutor) {
 	a.veridianInitSMTPRelay()
+	a.veridianInitRelayCert()
 	// === Veridian patch — mission "API & agents" (2026-10-03) ===
 	a.workspaceService.SetAgentInstallTokenRepository(a.agentInstallTokenRepo)
 
@@ -1107,4 +1111,60 @@ func (s veridianRelaySuppression) ContactListStatuses(ctx context.Context, works
 		}
 	}
 	return statuses, nil
+}
+
+// veridianRelayCertManaged : le certificat du bridge est géré par l'application (VERIDIAN_RELAY_CERT_MODE=managed).
+func (a *App) veridianRelayCertManaged() bool {
+	return os.Getenv("VERIDIAN_RELAY_CERT_MODE") == "managed"
+}
+
+// veridianRelayCertSource rend la source de certificat à chaud du bridge, ou nil (certificat fixe ou bridge coupé).
+// Le holder est créé à la demande : le bridge le lit à sa création, avant que le gestionnaire ne démarre.
+func (a *App) veridianRelayCertSource() smtp_bridge.CertificateSource {
+	if !a.veridianRelayCertManaged() || !a.config.SMTPBridge.Enabled {
+		return nil
+	}
+	if a.veridianRelayHolder == nil {
+		a.veridianRelayHolder = &relaycert.Holder{}
+	}
+	return a.veridianRelayHolder
+}
+
+// veridianInitRelayCert démarre le renouvellement du certificat géré par l'app, avec la vie de l'application.
+// Fail closed : sans adresse de contact ACME, rien n'est émis et l'erreur est journalisée.
+func (a *App) veridianInitRelayCert() {
+	if !a.veridianRelayCertManaged() || !a.config.SMTPBridge.Enabled {
+		return
+	}
+	email := strings.TrimSpace(os.Getenv("VERIDIAN_RELAY_ACME_EMAIL"))
+	if email == "" {
+		a.logger.Error("relaycert : VERIDIAN_RELAY_ACME_EMAIL absent, aucun certificat géré émis")
+		return
+	}
+	directory := strings.TrimSpace(os.Getenv("VERIDIAN_RELAY_ACME_DIRECTORY"))
+	if directory == "" {
+		directory = relaycert.DefaultDirectory
+	}
+	if a.veridianRelayHolder == nil {
+		a.veridianRelayHolder = &relaycert.Holder{}
+	}
+	store, err := relaycert.NewSettingsStore(a.settingRepo, a.config.Security.SecretKey)
+	if err != nil {
+		a.logger.WithField("error", err.Error()).Error("relaycert : stockage indisponible")
+		return
+	}
+	mgr, err := relaycert.NewManager(
+		relaycert.Config{Domain: a.config.SMTPBridge.Domain, Email: email},
+		store,
+		relaycert.LegoIssuer{DirectoryURL: directory},
+		a.veridianRelayHolder,
+		a.logger,
+	)
+	if err != nil {
+		a.logger.WithField("error", err.Error()).Error("relaycert : configuration refusée")
+		return
+	}
+	a.veridianRelayCertManager = mgr
+	mgr.Start(a.GetShutdownContext())
+	a.logger.WithField("domain", a.config.SMTPBridge.Domain).Info("relaycert : certificat du relais géré par l'application")
 }

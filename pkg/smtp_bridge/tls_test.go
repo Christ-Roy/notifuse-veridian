@@ -1,6 +1,7 @@
 package smtp_bridge
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"testing"
 
@@ -113,5 +114,27 @@ func TestSetupTLS_ValidBase64ButInvalidCert(t *testing.T) {
 	if err != nil && err.Error() != "failed to load TLS certificate from base64: tls: failed to find any PEM data in certificate input" {
 		// Error message may vary, just check we got an error
 		t.Logf("Got expected error: %v", err)
+	}
+}
+
+// fakeCertSource simule le détenteur à chaud (relaycert.Holder) : il sert un certificat qu'on remplace.
+type fakeCertSource struct{ served int }
+
+func (f *fakeCertSource) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	f.served++
+	return &tls.Certificate{}, nil
+}
+
+// TestSetupTLS_ManagedSource : sans certificat fixe, SetupTLS rend un tls.Config qui interroge la source à
+// chaque handshake (rechargement à chaud). Un certificat fixe fourni prime sur la source.
+func TestSetupTLS_ManagedSource(t *testing.T) {
+	log := logger.NewLogger()
+	src := &fakeCertSource{}
+	cfg, err := SetupTLS(TLSConfig{Logger: log, Source: src})
+	if err != nil || cfg == nil || cfg.GetCertificate == nil {
+		t.Fatalf("source sans certificat fixe : tls.Config avec GetCertificate attendu, err=%v cfg=%v", err, cfg)
+	}
+	if _, err := cfg.GetCertificate(nil); err != nil || src.served != 1 {
+		t.Fatalf("GetCertificate doit interroger la source (served=%d)", src.served)
 	}
 }
