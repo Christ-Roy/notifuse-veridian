@@ -2,8 +2,8 @@ package http
 
 import "testing"
 
-func boolPtr(b bool) *bool       { return &b }
-func strPtr(s string) *string    { return &s }
+func boolPtr(b bool) *bool    { return &b }
+func strPtr(s string) *string { return &s }
 
 // Un update SANS les champs relais ne change ni le relais ni le certificat géré.
 func TestApplyRelayPatch_AbsentKeepsValues(t *testing.T) {

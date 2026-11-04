@@ -53,7 +53,7 @@ func (l LegoIssuer) Obtain(_ context.Context, domain, email string, accountKeyPE
 	user := &legoUser{email: email, key: key}
 	cfg := lego.NewConfig(user)
 	cfg.CADirURL = l.DirectoryURL
-	cfg.Certificate.KeyType = certcrypto.EC256
+	cfg.Certificate.KeyType = ecdsaP256Type()
 
 	client, err := lego.NewClient(cfg)
 	if err != nil {
@@ -88,6 +88,9 @@ func (l LegoIssuer) Obtain(_ context.Context, domain, email string, accountKeyPE
 	}
 	return &Bundle{CertPEM: res.Certificate, KeyPEM: res.PrivateKey, AccountKeyPEM: accountPEM}, nil
 }
+
+// ecdsaP256Type : type de clé du certificat émis (ECDSA P-256, constante lego).
+func ecdsaP256Type() certcrypto.KeyType { return certcrypto.EC256 }
 
 // accountKey relit la clé de compte ECDSA P-256 fournie, ou en génère une nouvelle.
 func accountKey(pemBytes []byte) (crypto.PrivateKey, []byte, error) {

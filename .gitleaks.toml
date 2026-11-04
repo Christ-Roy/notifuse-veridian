@@ -56,4 +56,6 @@ paths = [
   '''console/src/pages/TransactionalNotificationsPage\.tsx''',
   '''\.github/workflows/.*''',
   '''Makefile\.integration''',
+  # Fichier d'exceptions gitleaks lui-même (empreintes de commits, pas de secrets) : fiche 71.
+  '''^\.gitleaksignore$''',
 ]

@@ -1,0 +1,2 @@
+# Exception à une empreinte, faux positif (constante lego EC256), revue 2027-02-01 : voir docs/claude/71-relais-smtp-de-soumission.md
+5a62bf4095af84c620a4e5afcafc2ed4e1026123:internal/veridian/relaycert/issuer_lego.go:generic-api-key:56
