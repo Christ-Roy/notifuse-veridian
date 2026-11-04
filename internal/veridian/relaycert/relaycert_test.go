@@ -408,3 +408,26 @@ func (f *fakeSettings) GetLastCronRun(context.Context) (*time.Time, error) {
 func pemEncode(typ string, der []byte) []byte {
 	return pemBlock(typ, der)
 }
+
+// La précédence « certificat fixe > géré » ne gouverne que ce qui est SERVI : le gestionnaire émet et
+// stocke quand même, même si le holder sert déjà un autre certificat (fixe). Sinon le relais prod ne
+// disposerait jamais du certificat géré avant de retirer le fixe (trou TLS).
+func TestManager_Tick_IssuesAndStoresWhenHolderAlreadyServesFixedCertificate(t *testing.T) {
+	now := time.Now()
+	store := &memStore{}
+	issuer := &fakeIssuer{next: makeBundle(t, now.Add(90*24*time.Hour))}
+	m, h := newTestManager(t, store, issuer, now)
+	fixed := makeBundle(t, now.Add(200*24*time.Hour))
+	pair, err := tls.X509KeyPair(fixed.CertPEM, fixed.KeyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Set(pair) // un certificat fixe est déjà servi
+	renewed, err := m.Tick(context.Background())
+	if err != nil || !renewed {
+		t.Fatalf("émission attendue malgré un certificat fixe servi : renewed=%v err=%v", renewed, err)
+	}
+	if issuer.calls != 1 || store.saved != 1 {
+		t.Fatalf("émission et stockage attendus une fois (appels=%d, sauvegardes=%d)", issuer.calls, store.saved)
+	}
+}
