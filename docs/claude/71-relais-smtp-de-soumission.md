@@ -136,3 +136,18 @@ Codes de retour à connaître : 250 accepté · 550 5.7.1 expéditeur non autori
 **Postfix :** hors dépôt. Le dépôt ne lit que des NDR (ce qui est normal pour Notifuse). Seul `scripts/e2e/cold-garde-fous.sh` inspecte un conteneur de relais (outil de test) : à signaler à main, non supprimé ici. Le runbook opérateur est dans `~/nomad-veridian/runbooks/relais-smtp-operateur.md` (hors dépôt).
 
 **Limite connue, à traiter :** la dépendance lego v4 fait remonter des versions indirectes (cloud.google.com/go/auth, gax-go, go-isatty, spf13/cast, objx). Avec ces versions, la compilation du paquet `internal/http` tombe en OOM à 6 Go sur node02 ; avec le `go.mod` d'origine elle passe (rc 0). Mesure à retenir avant toute décision sur la dépendance.
+
+## Dépendance ACME : choix de version et mesures (04/11/2026)
+
+**Version retenue : lego v4.25.2** (MIT, `github.com/go-acme/lego`). Cœur seul importé (`lego`, `certcrypto`, `challenge`, `challenge/dns01`, `certificate`, `registration`), pas de provider officiel : le client DNS-01 Cloudflare est écrit en bibliothèque standard (`cloudflare_dns.go`), ce qui retire `cloudflare-go` du graphe.
+
+**Pourquoi pas une version plus récente :** le bisect sur les versions de lego v4 (contrôle `go mod tidy` contre le `go.mod` d'origine) montre que v4.34.0 et v4.35.2 remontent 9 versions existantes (cloud.google.com/go/auth, gax-go, go-isatty, spf13/cast, objx, otelgrpc, x/exp, google.golang.org/api, genproto). v4.28 à v4.32 remontent spf13/cast seul. v4.25.x ne remonte aucune version existante ; elle ajoute seulement des indirectes nouvelles (cenkalti/backoff, go-jose, miekg/dns, x/mod, x/tools).
+
+**Sécurité : govulncheck.** Sur v4.25.0, `govulncheck ./internal/veridian/relaycert/ ./pkg/smtp_bridge/` signale **GO-2025-3847** (`acme/api` n'impose pas HTTPS, corrigé en v4.25.2), atteint par `lego.NewClient`. Sur v4.25.2 : « No vulnerabilities found » pour le code appelé ; 4 vulnérabilités dans des modules requis, non appelées par notre code (informatif).
+
+**Mémoire de compilation d'`internal/app`** (mesure côté hôte, cgroup du conteneur, sans limite, échantillonnage du `memory.current` du scope docker, 1 s) :
+- go.mod d'origine : pic 1305 Mio (build rc 0) ; un second passage a été tué (exit 137, OOMKilled=false, pic échantillonné 679 Mio).
+- lego v4.25.2 : pic 1915 Mio (build rc 0). Écart d'environ 600 Mio.
+- Le noyau de node02 n'a journalisé aucune tuerie mémoire de nos conteneurs (les kills memcg du journal concernent `netdata` et `python3`, dernières entrées du 2 novembre). Le signal 137 frappe aussi l'arbre d'origine : sa cause n'est pas attribuée à lego, et je ne peux pas l'identifier avec les journaux disponibles. Les anciennes attributions « bruit d'hôte » ne reposaient pas sur une mesure et sont retirées.
+
+**Paquets et tests :** `go vet` et `go test` vert sur `internal/veridian/relaycert` et `pkg/smtp_bridge` ; `internal/http` et `internal/app` compilent (rc 0) avec le go.mod final.
