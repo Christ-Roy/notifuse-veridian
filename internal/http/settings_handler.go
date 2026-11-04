@@ -1,6 +1,7 @@
 package http
 
 import (
+	"io"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -193,8 +194,18 @@ func (h *SettingsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	var patch relayPatch
+	if err := json.Unmarshal(raw, &patch); err != nil {
+		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 	var reqData SystemSettingsData
-	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+	if err := json.Unmarshal(raw, &reqData); err != nil {
 		WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -206,6 +217,13 @@ func (h *SettingsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		WriteAuthAwareError(w, err, "Failed to load current settings", http.StatusInternalServerError)
 		return
 	}
+
+	relay := applyRelayPatch(relayValues{
+		SMTPRelayEnabled: currentConfig.VeridianSMTPRelayEnabled,
+		CertManaged:      currentConfig.VeridianRelayCertManaged,
+		ACMEEmail:        currentConfig.VeridianRelayACMEEmail,
+		ACMEDirectory:    currentConfig.VeridianRelayACMEDirectory,
+	}, patch)
 
 	// Handle masked password: if sentinel value, retain existing
 	smtpPassword := reqData.SMTPPassword
@@ -244,10 +262,10 @@ func (h *SettingsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		SMTPBridgePort:          reqData.SMTPBridgePort,
 		SMTPBridgeTLSCertBase64: tlsCert,
 		SMTPBridgeTLSKeyBase64:  tlsKey,
-		VeridianSMTPRelayEnabled:   reqData.VeridianSMTPRelayEnabled,
-		VeridianRelayCertManaged:   reqData.VeridianRelayCertManaged,
-		VeridianRelayACMEEmail:     reqData.VeridianRelayACMEEmail,
-		VeridianRelayACMEDirectory: reqData.VeridianRelayACMEDirectory,
+		VeridianSMTPRelayEnabled:   relay.SMTPRelayEnabled,
+		VeridianRelayCertManaged:   relay.CertManaged,
+		VeridianRelayACMEEmail:     relay.ACMEEmail,
+		VeridianRelayACMEDirectory: relay.ACMEDirectory,
 		VeridianRelayCFToken:       reqData.VeridianRelayCFToken,
 	}
 
