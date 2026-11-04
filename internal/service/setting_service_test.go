@@ -449,3 +449,20 @@ func TestSettingService_SetSetting(t *testing.T) {
 		assert.Equal(t, "new_value", repo.settings["test_key"])
 	})
 }
+
+// TestNormalizeACMEDirectory : seuls « production » (défaut) et « test » sont acceptés ; une URL libre
+// dans un réglage est refusée.
+func TestNormalizeACMEDirectory(t *testing.T) {
+	cases := map[string]string{"": "production", "production": "production", " test ": "test"}
+	for in, want := range cases {
+		got, err := NormalizeACMEDirectory(in)
+		if err != nil || got != want {
+			t.Fatalf("NormalizeACMEDirectory(%q) = %q, %v ; attendu %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"https://evil.example/directory", "staging", "PRODUCTION!"} {
+		if _, err := NormalizeACMEDirectory(bad); err == nil {
+			t.Fatalf("NormalizeACMEDirectory(%q) doit être refusé", bad)
+		}
+	}
+}

@@ -37,6 +37,15 @@ type SystemSettingsData struct {
 	SMTPBridgePort          int    `json:"smtp_bridge_port"`
 	SMTPBridgeTLSCertBase64 string `json:"smtp_bridge_tls_cert_base64"`
 	SMTPBridgeTLSKeyBase64  string `json:"smtp_bridge_tls_key_base64"`
+
+	// Relais SMTP de soumission et certificat géré (fiche 71). Le jeton DNS est ÉCRIT SEUL :
+	// il n'est jamais renvoyé (omitempty + jamais rempli à la lecture) ; la lecture donne has_….
+	VeridianSMTPRelayEnabled   bool   `json:"veridian_smtp_relay_enabled"`
+	VeridianRelayCertManaged   bool   `json:"veridian_relay_cert_managed"`
+	VeridianRelayACMEEmail     string `json:"veridian_relay_acme_email"`
+	VeridianRelayACMEDirectory string `json:"veridian_relay_acme_directory"`
+	VeridianRelayCFToken       string `json:"veridian_relay_cf_token,omitempty"`
+	HasVeridianRelayCFToken    bool   `json:"has_veridian_relay_cf_token"`
 }
 
 // SystemSettingsResponse wraps settings with env override info
@@ -143,6 +152,12 @@ func (h *SettingsHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		SMTPBridgePort:    sysConfig.SMTPBridgePort,
 	}
 
+	settings.VeridianSMTPRelayEnabled = sysConfig.VeridianSMTPRelayEnabled
+	settings.VeridianRelayCertManaged = sysConfig.VeridianRelayCertManaged
+	settings.VeridianRelayACMEEmail = sysConfig.VeridianRelayACMEEmail
+	settings.VeridianRelayACMEDirectory = sysConfig.VeridianRelayACMEDirectory
+	settings.HasVeridianRelayCFToken = sysConfig.VeridianRelayCFTokenSet
+
 	// Mask sensitive fields
 	if sysConfig.SMTPPassword != "" {
 		settings.SMTPPassword = passwordMask
@@ -229,6 +244,11 @@ func (h *SettingsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		SMTPBridgePort:          reqData.SMTPBridgePort,
 		SMTPBridgeTLSCertBase64: tlsCert,
 		SMTPBridgeTLSKeyBase64:  tlsKey,
+		VeridianSMTPRelayEnabled:   reqData.VeridianSMTPRelayEnabled,
+		VeridianRelayCertManaged:   reqData.VeridianRelayCertManaged,
+		VeridianRelayACMEEmail:     reqData.VeridianRelayACMEEmail,
+		VeridianRelayACMEDirectory: reqData.VeridianRelayACMEDirectory,
+		VeridianRelayCFToken:       reqData.VeridianRelayCFToken,
 	}
 
 	if err := h.settingService.SetSystemConfig(ctx, newConfig, h.secretKey); err != nil {

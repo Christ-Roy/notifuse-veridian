@@ -1,6 +1,7 @@
 package service
 
 import (
+	"os"
 	"context"
 	"errors"
 	"fmt"
@@ -149,6 +150,13 @@ func (s *SetupService) GetEnvOverrides() map[string]bool {
 
 	if s.envConfig.RootEmail != "" {
 		result["root_email"] = true
+	}
+	// Relais SMTP et certificat géré (fiche 71) : une variable posée surcharge le réglage (isOverridden).
+	if _, ok := os.LookupEnv("VERIDIAN_SMTP_RELAY_ENABLED"); ok {
+		result["veridian_smtp_relay_enabled"] = true
+	}
+	if _, ok := os.LookupEnv("VERIDIAN_RELAY_CERT_MODE"); ok {
+		result["veridian_relay_cert_managed"] = true
 	}
 	if s.envConfig.APIEndpoint != "" {
 		result["api_endpoint"] = true

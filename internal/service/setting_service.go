@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"context"
 	"fmt"
 	"strconv"
@@ -29,6 +30,14 @@ type SystemConfig struct {
 	SMTPBridgePort          int
 	SMTPBridgeTLSCertBase64 string
 	SMTPBridgeTLSKeyBase64  string
+
+	// Relais SMTP de soumission et certificat géré (fiche 71). Défauts : désactivés.
+	VeridianSMTPRelayEnabled    bool
+	VeridianRelayCertManaged    bool
+	VeridianRelayACMEEmail      string
+	VeridianRelayACMEDirectory  string // "production" ou "test"
+	VeridianRelayCFToken        string // écriture seule côté API ; jamais renvoyé
+	VeridianRelayCFTokenSet     bool   // lecture : un jeton est stocké
 }
 
 // SettingService provides methods for managing system settings
@@ -164,6 +173,23 @@ func (s *SettingService) GetSystemConfig(ctx context.Context, secretKey string) 
 			return nil, fmt.Errorf("failed to decrypt SMTP bridge TLS key: %w", err)
 		}
 		config.SMTPBridgeTLSKeyBase64 = decrypted
+	}
+
+	// Relais SMTP de soumission et certificat géré (fiche 71)
+	if setting, err := s.repo.Get(ctx, "veridian_smtp_relay_enabled"); err == nil {
+		config.VeridianSMTPRelayEnabled = setting.Value == "true"
+	}
+	if setting, err := s.repo.Get(ctx, "veridian_relay_cert_managed"); err == nil {
+		config.VeridianRelayCertManaged = setting.Value == "true"
+	}
+	if setting, err := s.repo.Get(ctx, "veridian_relay_acme_email"); err == nil {
+		config.VeridianRelayACMEEmail = setting.Value
+	}
+	if setting, err := s.repo.Get(ctx, "veridian_relay_acme_directory"); err == nil && setting.Value != "" {
+		config.VeridianRelayACMEDirectory = setting.Value
+	}
+	if setting, err := s.repo.Get(ctx, "encrypted_veridian_relay_cf_token"); err == nil && setting.Value != "" {
+		config.VeridianRelayCFTokenSet = true
 	}
 
 	return config, nil
@@ -331,7 +357,56 @@ func (s *SettingService) SetSystemConfig(ctx context.Context, config *SystemConf
 		}
 	}
 
+	// Relais SMTP de soumission et certificat géré (fiche 71)
+	if err := s.repo.Set(ctx, "veridian_smtp_relay_enabled", boolSetting(config.VeridianSMTPRelayEnabled)); err != nil {
+		return fmt.Errorf("failed to set veridian_smtp_relay_enabled: %w", err)
+	}
+	if err := s.repo.Set(ctx, "veridian_relay_cert_managed", boolSetting(config.VeridianRelayCertManaged)); err != nil {
+		return fmt.Errorf("failed to set veridian_relay_cert_managed: %w", err)
+	}
+	if err := s.repo.Set(ctx, "veridian_relay_acme_email", config.VeridianRelayACMEEmail); err != nil {
+		return fmt.Errorf("failed to set veridian_relay_acme_email: %w", err)
+	}
+	directory, err := NormalizeACMEDirectory(config.VeridianRelayACMEDirectory)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.Set(ctx, "veridian_relay_acme_directory", directory); err != nil {
+		return fmt.Errorf("failed to set veridian_relay_acme_directory: %w", err)
+	}
+	// Le jeton DNS n'est réécrit que s'il est fourni : une écriture à vide conserve le secret stocké.
+	if config.VeridianRelayCFToken != "" {
+		encrypted, err := crypto.EncryptString(config.VeridianRelayCFToken, secretKey)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt veridian relay token: %w", err)
+		}
+		if err := s.repo.Set(ctx, "encrypted_veridian_relay_cf_token", encrypted); err != nil {
+			return fmt.Errorf("failed to set encrypted_veridian_relay_cf_token: %w", err)
+		}
+	}
+
 	return nil
+}
+
+// boolSetting écrit un booléen de réglage ("true" / "false").
+func boolSetting(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
+}
+
+// NormalizeACMEDirectory accepte "production" (défaut) ou "test" et rend l'annuaire ACME correspondant.
+// Toute autre valeur est refusée : pas d'URL libre dans un réglage.
+func NormalizeACMEDirectory(v string) (string, error) {
+	switch strings.TrimSpace(v) {
+	case "", "production":
+		return "production", nil
+	case "test":
+		return "test", nil
+	default:
+		return "", fmt.Errorf("veridian_relay_acme_directory : valeur refusée (production ou test)")
+	}
 }
 
 // IsInstalled checks if the system has been installed
