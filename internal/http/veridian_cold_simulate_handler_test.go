@@ -700,3 +700,35 @@ func TestHandleColdSimulate_StartOfDayIsMidnightUTC(t *testing.T) {
 	assert.Equal(t, time.UTC, got.Location())
 	assert.Equal(t, 0, got.Hour())
 }
+
+// === mode inbound_reply + champs optionnels (fiche 78) : profil, Message-ID rejouable, corps brut ===
+
+func TestHandleColdSimulate_InboundReply_ProfileMessageIDAndRawBody(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	msgRepo := mocks.NewMockMessageHistoryRepository(ctrl)
+	wsRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	proc := &stubColdReplyProcessor{hasReplied: true}
+
+	wsRepo.EXPECT().GetByID(gomock.Any(), "ws1").
+		Return(&domain.Workspace{ID: "ws1", Settings: domain.WorkspaceSettings{SecretKey: "sk"}}, nil)
+	msgRepo.EXPECT().Create(gomock.Any(), "ws1", "sk", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			assert.Equal(t, "prof-1", m.VeridianProfileID, "le profil est pose sur l envoi seede")
+			assert.Equal(t, "bot@agences.fr", m.VeridianSenderEmail)
+			return nil
+		})
+
+	h := newColdSimulateHandler()
+	h.SetColdSimulate(proc, msgRepo, wsRepo, "staging")
+
+	rec := postColdSimulate(t, h, veridianColdSimulateRequest{
+		Mode: "inbound_reply", WorkspaceID: "ws1", From: "p@corp.com",
+		ProfileID: "prof-1", SenderEmail: "Bot@Agences.fr",
+		IncomingMessageID: "<fixed-1@prospect.example.com>", RawBody: "Auto-Submitted: auto-replied\r\n\r\nabsent",
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NotNil(t, proc.processedMsg)
+	assert.Equal(t, "<fixed-1@prospect.example.com>", proc.processedMsg.MessageID, "Message-ID rejouable")
+	assert.Contains(t, string(proc.processedMsg.RawBody), "Auto-Submitted")
+}

@@ -141,6 +141,14 @@ type veridianColdSimulateRequest struct {
 	From      string `json:"from,omitempty"`        // expéditeur (= contact qui répond)
 	InReplyTo string `json:"in_reply_to,omitempty"` // header In-Reply-To : <message_history.id@...>
 	Subject   string `json:"subject,omitempty"`
+
+	// --- mode inbound_reply, champs optionnels (fiche 78, preuve on-premise de la redirection) ---
+	// ProfileID : profil d'envoi (integration) pose sur l'envoi initial seede, pour que la reponse s'y rattache.
+	// IncomingMessageID : Message-ID du mail entrant (rejouer le meme = relecture IMAP du meme message).
+	// RawBody : message brut RFC822 du mail entrant (en-tetes Auto-Submitted, Reply-To, corps...).
+	ProfileID         string `json:"profile_id,omitempty"`
+	IncomingMessageID string `json:"incoming_message_id,omitempty"`
+	RawBody           string `json:"raw_body,omitempty"`
 }
 
 // veridianColdSimulateResponse couvre tous les modes (champs omitempty).
@@ -262,7 +270,7 @@ func (h *VeridianHandler) coldSimulateInboundReply(
 
 	// 1. Seed l'envoi initial (notre mail) avec un id stable → le match fort le citera.
 	msgID := uuid.NewString()
-	if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, "", "", msgID, time.Now().UTC()); err != nil {
+	if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, domain.VeridianNormalizeEmail(req.SenderEmail), "", msgID, time.Now().UTC(), req.ProfileID); err != nil {
 		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "seed initial send failed: "+err.Error(), http.StatusInternalServerError, nil)
 		return
 	}
@@ -280,6 +288,10 @@ func (h *VeridianHandler) coldSimulateInboundReply(
 		From:        contact,
 		Subject:     req.Subject,
 		Date:        time.Now().UTC(),
+		RawBody:     []byte(req.RawBody),
+	}
+	if req.IncomingMessageID != "" {
+		msg.MessageID = req.IncomingMessageID
 	}
 	if err := deps.replyProcessor.ProcessInboundMessage(ctx, msg); err != nil {
 		// Best-effort côté service mais on remonte l'erreur ici (test = veut savoir).
@@ -334,7 +346,7 @@ func (h *VeridianHandler) coldSimulateSeedSent(
 	providerClass := strings.ToLower(strings.TrimSpace(req.ProviderClass))
 	now := time.Now().UTC()
 	for i := 0; i < req.Count; i++ {
-		if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, sender, providerClass, uuid.NewString(), now); err != nil {
+		if err := h.coldSimulateSeedOne(ctx, deps, secretKey, req.WorkspaceID, contact, sender, providerClass, uuid.NewString(), now, ""); err != nil {
 			WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "seed failed: "+err.Error(), http.StatusInternalServerError, nil)
 			return
 		}
@@ -418,7 +430,7 @@ func veridianColdSimulateStartOfDay(now time.Time) time.Time {
 // NULL (comme un envoi sans rotation). `providerClass` vide = veridian_provider_class
 // NULL (comme un envoi antérieur à V55, ou hors chemin cold).
 func (h *VeridianHandler) coldSimulateSeedOne(
-	ctx context.Context, deps *veridianColdSimulateDeps, secretKey, workspaceID, contact, sender, providerClass, msgID string, sentAt time.Time,
+	ctx context.Context, deps *veridianColdSimulateDeps, secretKey, workspaceID, contact, sender, providerClass, msgID string, sentAt time.Time, profileID string,
 ) error {
 	msg := &domain.MessageHistory{
 		ID:                    msgID,
@@ -431,6 +443,7 @@ func (h *VeridianHandler) coldSimulateSeedOne(
 		UpdatedAt:             sentAt,
 		VeridianSenderEmail:   sender,
 		VeridianProviderClass: providerClass,
+		VeridianProfileID:     profileID,
 	}
 	return deps.messageHistoryRepo.Create(ctx, workspaceID, secretKey, msg)
 }
