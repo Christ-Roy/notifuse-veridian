@@ -22,6 +22,7 @@ var Reserved = map[int]string{
 	66: "L3",
 	67: "L4",
 	68: "L1c",
+	69: "L1d",
 }
 
 // Spec décrit une migration Veridian. Les listes d'instructions sont jouées dans l'ordre, dans une

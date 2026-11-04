@@ -69,6 +69,9 @@ type VeridianEmailProfileOverview struct {
 	VerifiedAt            *time.Time               `json:"verified_at"`
 	CredentialsConfigured bool                     `json:"credentials_configured"`
 	Senders               []VeridianOverviewSender `json:"senders"`
+	// ReplyForwardTo : adresses qui recoivent une copie des reponses humaines des prospects
+	// (fiche 78). Vide = aucune redirection.
+	ReplyForwardTo []string `json:"reply_forward_to"`
 	// ReturnInbox : boîte IMAP liée au profil (nil = aucun lien).
 	ReturnInbox *VeridianOverviewInbox `json:"return_inbox"`
 	Plan        VeridianEffectivePlan  `json:"plan"`

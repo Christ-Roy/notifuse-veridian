@@ -219,6 +219,12 @@ type EmailProvider struct {
 	// attend si le pool n'a plus de membre actif). Les entrees en file sont
 	// conservees. omitempty, sans migration. Cf. veridian_pool_failover.go.
 	VeridianPaused bool `json:"veridian_paused,omitempty"`
+
+	// Veridian fork (04/11/2026) : REDIRECTION DES REPONSES de prospects. Quand une reponse
+	// HUMAINE est rattachee a un envoi de ce profil, une copie part vers ces adresses (au plus
+	// 5) par le SMTP du profil, Reply-To = le prospect. Vide (defaut) = aucun changement.
+	// omitempty, sans migration du blob. Cf. veridian_reply_forward.go (domain + service).
+	VeridianReplyForwardTo []string `json:"veridian_reply_forward_to,omitempty"`
 }
 
 // Validate validates the email provider settings
@@ -232,6 +238,9 @@ func (e *EmailProvider) Validate(passphrase string) error {
 		return fmt.Errorf("profile daily cap must be greater than or equal to 0")
 	}
 	if err := e.ValidateVeridianHardBounceFreezeThreshold(); err != nil {
+		return err
+	}
+	if err := e.ValidateVeridianReplyForwardTo(); err != nil {
 		return err
 	}
 	if e.VeridianIsGmailProfile() {
@@ -601,6 +610,10 @@ type SendEmailProviderRequest struct {
 	PlainTextOnly bool
 	Provider      *EmailProvider `validate:"required"`
 	EmailOptions  EmailOptions
+
+	// Veridian fork (04/11/2026) : en-tetes additionnels pour le transport SMTP. Reserve aux
+	// en-tetes X-Veridian-* (le transport ignore tout autre nom et toute valeur multi-ligne).
+	VeridianExtraHeaders map[string]string
 }
 
 // Validate ensures all required fields are present and valid

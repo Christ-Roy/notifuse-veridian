@@ -1600,6 +1600,8 @@ def cmd_integrations_list(a):
             "veridian_per_recipient_daily_cap": prov.get("veridian_per_recipient_daily_cap"),
             "veridian_tracking_domain": prov.get("veridian_tracking_domain"),
             "veridian_excluded_provider_classes": prov.get("veridian_excluded_provider_classes"),
+            # Redirection des réponses de prospects (fiche 78) : [] = aucune, comportement inchangé.
+            "veridian_reply_forward_to": prov.get("veridian_reply_forward_to") or [],
         })
     print(json.dumps({"workspace": a.workspace, "integrations": view}, indent=2, ensure_ascii=False))
 
@@ -1675,9 +1677,45 @@ def cmd_integrations_cold(a):
         prov["veridian_warmup_schedule"] = sched
         prov["veridian_warmup_step_days"] = a.warmup_step_days or 1
         prov["veridian_warmup_started_at"] = a.warmup_start or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Redirection des réponses de prospects (fiche 78) : une copie de chaque réponse HUMAINE part vers ces
+    # adresses (au plus 5) par le SMTP du profil, Reply-To = le prospect. --reply-forward-off la retire.
+    if getattr(a, "reply_forward_off", False) and getattr(a, "reply_forward_to", None):
+        die("--reply-forward-to et --reply-forward-off s'excluent.")
+    if getattr(a, "reply_forward_off", False):
+        prov.pop("veridian_reply_forward_to", None)
+    elif getattr(a, "reply_forward_to", None):
+        prov["veridian_reply_forward_to"] = parse_reply_forward_to(a.reply_forward_to, prov)
     body = {"workspace_id": a.workspace, "integration_id": a.id,
             "name": integ.get("name"), "provider": prov}
     out(*call_jwt(a.env, "POST", "/api/workspaces.updateIntegration", jwt, body=body))
+
+
+REPLY_FORWARD_MAX = 5
+REPLY_FORWARD_RE = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
+
+
+def parse_reply_forward_to(raw, prov=None):
+    """Valide la liste --reply-forward-to (a@b.fr,c@d.fr) : 5 adresses nues au plus, jamais l'adresse d'envoi
+    du profil. Le serveur revalide (c'est lui qui fait foi) ; ici on refuse tôt, sans appel réseau."""
+    addrs = []
+    for x in raw.split(","):
+        x = x.strip().lower()
+        if not x:
+            continue
+        if len(x) > 254 or not REPLY_FORWARD_RE.match(x):
+            die(f"--reply-forward-to : adresse invalide {x!r} (adresses nues séparées par des virgules, ex a@b.fr,c@d.fr).")
+        if x not in addrs:
+            addrs.append(x)
+    if not addrs:
+        die("--reply-forward-to : aucune adresse. Pour retirer la redirection : --reply-forward-off.")
+    if len(addrs) > REPLY_FORWARD_MAX:
+        die(f"--reply-forward-to : {REPLY_FORWARD_MAX} adresses au plus (reçu {len(addrs)}).")
+    own = {(sd.get("email") or "").strip().lower() for sd in ((prov or {}).get("senders") or [])}
+    own.add((((prov or {}).get("smtp") or {}).get("username") or "").strip().lower())
+    for x in addrs:
+        if x in own:
+            die(f"--reply-forward-to : {x} est une adresse d'envoi de ce profil (boucle).")
+    return addrs
 
 
 def cmd_integrations_create_smtp(a):
@@ -2032,6 +2070,8 @@ def format_profiles_overview(d):
         L.append(f"● {p.get('name')}  [{' · '.join(str(x) for x in flags)}]  id {p.get('integration_id')}")
         senders = ", ".join(x["email"] + (" (défaut)" if x.get("is_default") else "") for x in p.get("senders") or [])
         L.append(f"    expéditeurs : {senders or 'aucun'}")
+        rf = p.get("reply_forward_to") or []
+        L.append("    réponses    : " + (f"copie vers {', '.join(rf)}" if rf else "aucune redirection"))
         ib = p.get("return_inbox")
         L.append("    IMAP lié    : " + (f"{ib['name']} ({ib['address']}, id {ib['integration_id']})"
                                           + (f", partagé avec {len(ib['linked_profiles']) - 1} autre(s) profil(s)" if len(ib.get('linked_profiles') or []) > 1 else "")
@@ -4642,6 +4682,10 @@ def build_parser(extra=None):
     sp.add_argument("--warmup-step-days", dest="warmup_step_days", type=int, help="jours par palier (defaut 1, jours CIVILS : le week-end avance l'index)")
     sp.add_argument("--warmup-start", dest="warmup_start", help="debut de la chauffe, ISO UTC (defaut : maintenant)")
     sp.add_argument("--warmup-off", dest="warmup_off", action="store_true", help="retire la chauffe de l'infra")
+    sp.add_argument("--reply-forward-to", dest="reply_forward_to",
+                    help="redirige une COPIE des réponses humaines des prospects vers ces adresses (virgules, 5 max), par le SMTP du profil, Reply-To = le prospect. Ex a@b.fr,c@d.fr")
+    sp.add_argument("--reply-forward-off", dest="reply_forward_off", action="store_true",
+                    help="retire la redirection des réponses (retour au comportement par défaut : rien n'est transféré)")
     sp.set_defaults(func=cmd_integrations_cold)
 
     # profils d'envoi : vérité, lien IMAP, pause (lot 2, 08/10/2026)

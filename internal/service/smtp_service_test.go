@@ -2426,3 +2426,33 @@ func TestSMTPService_SendEmail_VeridianThreadHeaders(t *testing.T) {
 	assert.NotContains(t, last, "In-Reply-To:")
 	assert.NotContains(t, last, "References:")
 }
+
+// Veridian (fiche 78) : les en-tetes X-Veridian-* demandes par l'appelant sortent sur le fil
+// (X-Veridian-Forwarded des copies de reponses) ; tout autre nom ou valeur multi-ligne est ignore.
+func TestSMTPService_SendEmail_VeridianExtraHeadersWhitelist(t *testing.T) {
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+
+	service := NewSMTPService(&noopLogger{})
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID: "workspace-123", IntegrationID: "integration-123", MessageID: "11111111-2222-3333-4444-555555555555",
+		FromAddress: "pro@send.example", FromName: "Pro", To: "client@client.fr", Subject: "Reponse de Jean : Devis",
+		Content: "<p>Hello</p>", TextContent: "Hello", PlainTextOnly: true,
+		Provider:     &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false}},
+		EmailOptions: domain.EmailOptions{ReplyTo: "jean@acme.fr"},
+		VeridianExtraHeaders: map[string]string{
+			"X-Veridian-Forwarded": "1",
+			"X-Evil":               "nope",
+			"X-Veridian-Inject":    "a\r\nBcc: x@evil.example",
+		},
+	}
+	require.NoError(t, service.SendEmail(context.Background(), request))
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	data := string(messages[0].data)
+	assert.Contains(t, data, "X-Veridian-Forwarded: 1")
+	assert.Contains(t, data, "Reply-To: <jean@acme.fr>")
+	assert.NotContains(t, data, "X-Evil")
+	assert.NotContains(t, data, "X-Veridian-Inject")
+	assert.NotContains(t, data, "Bcc:")
+}

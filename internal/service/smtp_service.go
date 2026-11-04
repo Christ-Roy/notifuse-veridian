@@ -456,6 +456,14 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 		}
 	}
 
+	// === Veridian (04/11/2026) === en-tetes X-Veridian-* (ex. X-Veridian-Forwarded des
+	// copies de reponses). Liste blanche stricte : prefixe X-Veridian-, valeur sur une ligne.
+	for k, v := range request.VeridianExtraHeaders {
+		if strings.HasPrefix(k, "X-Veridian-") && !strings.ContainsAny(k, " :\r\n") && !strings.ContainsAny(v, "\r\n") {
+			msg.SetGenHeader(mail.Header(k), v)
+		}
+	}
+
 	// === Veridian (12/10/2026) === FIL DE CONVERSATION des relances de sequence.
 	// In-Reply-To = Message-ID du mail precedent envoye a ce contact, References = la
 	// chaine complete. Sans eux, le client du prospect (Gmail, Outlook, Apple Mail)
