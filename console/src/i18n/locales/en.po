@@ -726,6 +726,10 @@ msgstr "Account suspended"
 msgid "Account type"
 msgstr "Account type"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "ACME contact email"
+msgstr "ACME contact email"
+
 #: src/components/contacts/BulkUpdateDrawer.tsx
 #: src/components/veridian_a11y.ts
 msgid "Action"
@@ -1354,6 +1358,10 @@ msgstr "Apple iCloud"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Apple iCloud (MX-resolved)"
 msgstr "Apple iCloud (MX-resolved)"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Applications send mail through this server with SMTP STARTTLS (port 587), using the transactional profile of the workspace. Requires the bridge and TLS."
+msgstr "Applications send mail through this server with SMTP STARTTLS (port 587), using the transactional profile of the workspace. Requires the bridge and TLS."
 
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
@@ -2214,6 +2222,10 @@ msgstr "Center Left"
 msgid "Center Right"
 msgstr "Center Right"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Certificate expires"
+msgstr "Certificate expires"
+
 #: src/components/file_manager/buttonSettings.tsx
 msgid "Change provider"
 msgstr "Change provider"
@@ -2399,6 +2411,10 @@ msgstr "Close, then edit or retry the test from the card"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Closing time"
 msgstr "Closing time"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Cloudflare API token (DNS, write-only)"
+msgstr "Cloudflare API token (DNS, write-only)"
 
 #: src/components/email_builder/MjmlCodeEditor.tsx
 #: src/pages/TemplatesPage.tsx
@@ -4527,6 +4543,7 @@ msgstr "Enable webhook"
 
 #: src/components/settings/GeneralSettings.tsx
 #: src/components/settings/Integrations.tsx
+#: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/templates/TemplateTranslationsTab.tsx
 msgid "Enabled"
@@ -6706,6 +6723,7 @@ msgstr "Internal Veridian account"
 
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
+#: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Invalid email"
 msgstr "Invalid email"
 
@@ -6985,6 +7003,7 @@ msgid "Last edited"
 msgstr "Last edited"
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
+#: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Last error"
 msgstr "Last error"
 
@@ -7009,6 +7028,10 @@ msgstr "Last modified"
 #: src/pages/ContactsPage.tsx
 msgid "Last Name"
 msgstr "Last Name"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Last renewal"
+msgstr "Last renewal"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Last used"
@@ -7094,6 +7117,10 @@ msgstr "Left on reply"
 #: src/components/email_builder/blocks/MjSectionBlock.tsx
 msgid "Left to Right"
 msgstr "Left to Right"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Let's Encrypt directory"
+msgstr "Let's Encrypt directory"
 
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "Let's take a quick tour to help you get started with building beautiful emails using MJML."
@@ -7433,11 +7460,19 @@ msgstr "Manage subscription"
 msgid "Manage your workspace members"
 msgstr "Manage your workspace members"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Managed"
+msgstr "Managed"
+
 #. placeholder {0}: integration.name
 #. placeholder {1}: integration.type
 #: src/pages/TransactionalNotificationsPage.tsx
 msgid "Managed by {0} ({1} integration)"
 msgstr "Managed by {0} ({1} integration)"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Managed certificate (Let's Encrypt, Cloudflare DNS)"
+msgstr "Managed certificate (Let's Encrypt, Cloudflare DNS)"
 
 #: src/components/settings/veridian_plan_source_badge.tsx
 msgid "Manual admin plan"
@@ -8282,6 +8317,10 @@ msgstr "No throttle"
 msgid "No timeline events found for this contact"
 msgstr "No timeline events found for this contact"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "No token stored"
+msgstr "No token stored"
+
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "No trace was recorded for this decision."
 msgstr "No trace was recorded for this decision."
@@ -8377,6 +8416,10 @@ msgstr "None"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "None excluded"
 msgstr "None excluded"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "None issued"
+msgstr "None issued"
 
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx
@@ -9543,6 +9586,10 @@ msgstr "Processing paused"
 msgid "Processing was stopped before completion."
 msgstr "Processing was stopped before completion."
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Production (real certificate)"
+msgstr "Production (real certificate)"
+
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "Profile"
@@ -10232,6 +10279,7 @@ msgstr "reputation signal"
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
+#: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
@@ -11390,6 +11438,10 @@ msgstr "Sequence identifier"
 msgid "Sequence progress"
 msgstr "Sequence progress"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Serial"
+msgstr "Serial"
+
 #: src/pages/SetupWizard.tsx
 msgid "Server is restarting with new configuration..."
 msgstr "Server is restarting with new configuration..."
@@ -11752,6 +11804,10 @@ msgstr "SMTP relay"
 
 #~ msgid "SMTP server smtp.gmail.com, port 587, TLS enabled. The credential is encrypted before it is stored."
 #~ msgstr "SMTP server smtp.gmail.com, port 587, TLS enabled. The credential is encrypted before it is stored."
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "SMTP submission relay"
+msgstr "SMTP submission relay"
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "SMTP technical brake (messages/minute)"
@@ -12304,6 +12360,10 @@ msgstr "Temporary degraded mode"
 #: src/pages/TransactionalNotificationsPage.tsx
 msgid "Test"
 msgstr "Test"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Test (untrusted, for trials)"
+msgstr "Test (untrusted, for trials)"
 
 #~ msgid "Test {0}"
 #~ msgstr "Test {0}"
@@ -13102,6 +13162,10 @@ msgstr "Toggle between mobile and desktop views to see how your email appears on
 msgid "Token copied to clipboard"
 msgstr "Token copied to clipboard"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Token stored (leave empty to keep it)"
+msgstr "Token stored (leave empty to keep it)"
+
 #: src/components/prospection/veridian_prospection_performance.tsx
 msgid "Too little data"
 msgstr "Too little data"
@@ -13713,6 +13777,10 @@ msgstr "Use workspace default"
 
 #~ msgid "Used for"
 #~ msgstr "Used for"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Used only to publish the DNS challenge (TXT _acme-challenge) of the relay domain. Never shown again. Leave empty to keep the stored token."
+msgstr "Used only to publish the DNS challenge (TXT _acme-challenge) of the relay domain. Never shown again. Leave empty to keep the stored token."
 
 #: src/components/timeline/ContactTimeline.tsx
 #: src/components/webhooks/InboundWebhookEventsTab.tsx

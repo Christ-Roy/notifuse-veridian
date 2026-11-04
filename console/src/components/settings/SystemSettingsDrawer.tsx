@@ -14,7 +14,9 @@ import {
   Modal,
   Tooltip,
   Space,
-  Spin
+  Spin,
+  Select,
+  Descriptions
 } from 'antd'
 import {
   SettingOutlined,
@@ -24,6 +26,7 @@ import {
 import { useLingui } from '@lingui/react/macro'
 import { settingsApi } from '../../services/api/settings'
 import type { SystemSettingsData } from '../../types/settings'
+import { relayCertNeedsEmail, toSettingsUpdate } from './systemSettingsRelay'
 
 const { Text, Title } = Typography
 
@@ -64,6 +67,7 @@ export function SystemSettingsDrawer() {
   }, [open, fetchSettings])
 
   const bridgeEnabled = Form.useWatch('smtp_bridge_enabled', form)
+  const relayCertManaged = Form.useWatch('veridian_relay_cert_managed', form)
 
   const isOverridden = (field: string) => envOverrides[field] === true
 
@@ -149,7 +153,7 @@ export function SystemSettingsDrawer() {
         onOk: async () => {
           setSaving(true)
           try {
-            await settingsApi.update(values)
+            await settingsApi.update(toSettingsUpdate(values as SystemSettingsData))
 
             const hideMsg = message.loading({
               content: t`Server is restarting...`,
@@ -499,6 +503,108 @@ export function SystemSettingsDrawer() {
                 </Form.Item>
               </Col>
             </Row>
+
+            <Divider />
+
+            {/* Relais SMTP de soumission (fiche 71) */}
+            <Title level={5}>{t`SMTP submission relay`}</Title>
+            <Row gutter={16}>
+              <Col span={6}>
+                <Form.Item
+                  label={t`Enabled`}
+                  name="veridian_smtp_relay_enabled"
+                  valuePropName="checked"
+                  help={renderEnvHint('veridian_smtp_relay_enabled')}
+                >
+                  <Switch disabled={isOverridden('veridian_smtp_relay_enabled')} />
+                </Form.Item>
+              </Col>
+              <Col span={18}>
+                <Text type="secondary" style={{ display: 'block', marginTop: 30 }}>
+                  {t`Applications send mail through this server with SMTP STARTTLS (port 587), using the transactional profile of the workspace. Requires the bridge and TLS.`}
+                </Text>
+              </Col>
+            </Row>
+
+            <Divider />
+
+            {/* Certificat géré par l'application (fiche 71) */}
+            <Title level={5}>{t`Managed certificate (Let's Encrypt, Cloudflare DNS)`}</Title>
+            <Row gutter={16}>
+              <Col span={6}>
+                <Form.Item
+                  label={t`Managed`}
+                  name="veridian_relay_cert_managed"
+                  valuePropName="checked"
+                  help={renderEnvHint('veridian_relay_cert_managed')}
+                >
+                  <Switch disabled={isOverridden('veridian_relay_cert_managed')} />
+                </Form.Item>
+              </Col>
+              <Col span={10}>
+                <Form.Item
+                  label={t`ACME contact email`}
+                  name="veridian_relay_acme_email"
+                  rules={[
+                    { required: relayCertNeedsEmail(relayCertManaged), message: t`Required` },
+                    { type: 'email', message: t`Invalid email` }
+                  ]}
+                >
+                  <Input placeholder="ops@example.com" allowClear />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item
+                  label={t`Let's Encrypt directory`}
+                  name="veridian_relay_acme_directory"
+                  help={renderEnvHint('veridian_relay_acme_directory')}
+                >
+                  <Select
+                    options={[
+                      { value: 'production', label: t`Production (real certificate)` },
+                      { value: 'test', label: t`Test (untrusted, for trials)` }
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item
+                  label={t`Cloudflare API token (DNS, write-only)`}
+                  name="veridian_relay_cf_token"
+                  extra={
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {t`Used only to publish the DNS challenge (TXT _acme-challenge) of the relay domain. Never shown again. Leave empty to keep the stored token.`}
+                    </Text>
+                  }
+                >
+                  <Input.Password
+                    autoComplete="new-password"
+                    placeholder={
+                      form.getFieldValue('has_veridian_relay_cf_token')
+                        ? t`Token stored (leave empty to keep it)`
+                        : t`No token stored`
+                    }
+                    allowClear
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Descriptions size="small" column={2} bordered>
+              <Descriptions.Item label={t`Certificate expires`}>
+                {form.getFieldValue('veridian_relay_cert_not_after') || t`None issued`}
+              </Descriptions.Item>
+              <Descriptions.Item label={t`Serial`}>
+                {form.getFieldValue('veridian_relay_cert_serial') || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t`Last renewal`}>
+                {form.getFieldValue('veridian_relay_cert_last_renewed') || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t`Last error`}>
+                {form.getFieldValue('veridian_relay_cert_last_error') || '-'}
+              </Descriptions.Item>
+            </Descriptions>
 
             <Divider />
 

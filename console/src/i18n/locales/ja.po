@@ -726,6 +726,10 @@ msgstr ""
 msgid "Account type"
 msgstr ""
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "ACME contact email"
+msgstr ""
+
 #: src/components/contacts/BulkUpdateDrawer.tsx
 #: src/components/veridian_a11y.ts
 msgid "Action"
@@ -1353,6 +1357,10 @@ msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Apple iCloud (MX-resolved)"
+msgstr ""
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Applications send mail through this server with SMTP STARTTLS (port 587), using the transactional profile of the workspace. Requires the bridge and TLS."
 msgstr ""
 
 #: src/components/messages/MessageHistoryTab.tsx
@@ -2214,6 +2222,10 @@ msgstr "左中央"
 msgid "Center Right"
 msgstr "右中央"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Certificate expires"
+msgstr ""
+
 #: src/components/file_manager/buttonSettings.tsx
 msgid "Change provider"
 msgstr "プロバイダーを変更"
@@ -2398,6 +2410,10 @@ msgstr ""
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Closing time"
+msgstr ""
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Cloudflare API token (DNS, write-only)"
 msgstr ""
 
 #: src/components/email_builder/MjmlCodeEditor.tsx
@@ -4527,6 +4543,7 @@ msgstr "Webhookを有効化"
 
 #: src/components/settings/GeneralSettings.tsx
 #: src/components/settings/Integrations.tsx
+#: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/templates/TemplateTranslationsTab.tsx
 msgid "Enabled"
@@ -6706,6 +6723,7 @@ msgstr ""
 
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
+#: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Invalid email"
 msgstr ""
 
@@ -6985,6 +7003,7 @@ msgid "Last edited"
 msgstr ""
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
+#: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Last error"
 msgstr ""
 
@@ -7009,6 +7028,10 @@ msgstr "最終更新"
 #: src/pages/ContactsPage.tsx
 msgid "Last Name"
 msgstr "姓"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Last renewal"
+msgstr ""
 
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Last used"
@@ -7094,6 +7117,10 @@ msgstr ""
 #: src/components/email_builder/blocks/MjSectionBlock.tsx
 msgid "Left to Right"
 msgstr "左から右"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Let's Encrypt directory"
+msgstr ""
 
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "Let's take a quick tour to help you get started with building beautiful emails using MJML."
@@ -7433,11 +7460,19 @@ msgstr ""
 msgid "Manage your workspace members"
 msgstr "ワークスペースメンバーを管理"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Managed"
+msgstr ""
+
 #. placeholder {0}: integration.name
 #. placeholder {1}: integration.type
 #: src/pages/TransactionalNotificationsPage.tsx
 msgid "Managed by {0} ({1} integration)"
 msgstr "{0}（{1}連携）によって管理"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Managed certificate (Let's Encrypt, Cloudflare DNS)"
+msgstr ""
 
 #: src/components/settings/veridian_plan_source_badge.tsx
 msgid "Manual admin plan"
@@ -8282,6 +8317,10 @@ msgstr ""
 msgid "No timeline events found for this contact"
 msgstr "このコンタクトのタイムラインイベントが見つかりません"
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "No token stored"
+msgstr ""
+
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "No trace was recorded for this decision."
 msgstr ""
@@ -8376,6 +8415,10 @@ msgstr "なし"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "None excluded"
+msgstr ""
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "None issued"
 msgstr ""
 
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx
@@ -9543,6 +9586,10 @@ msgstr "処理を一時停止中"
 msgid "Processing was stopped before completion."
 msgstr ""
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Production (real certificate)"
+msgstr ""
+
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "Profile"
@@ -10232,6 +10279,7 @@ msgstr ""
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
+#: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
@@ -11390,6 +11438,10 @@ msgstr ""
 msgid "Sequence progress"
 msgstr ""
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Serial"
+msgstr ""
+
 #: src/pages/SetupWizard.tsx
 msgid "Server is restarting with new configuration..."
 msgstr "新しい設定でサーバーを再起動中..."
@@ -11752,6 +11804,10 @@ msgstr ""
 
 #~ msgid "SMTP server smtp.gmail.com, port 587, TLS enabled. The credential is encrypted before it is stored."
 #~ msgstr ""
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "SMTP submission relay"
+msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "SMTP technical brake (messages/minute)"
@@ -12304,6 +12360,10 @@ msgstr ""
 #: src/pages/TransactionalNotificationsPage.tsx
 msgid "Test"
 msgstr "テスト"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Test (untrusted, for trials)"
+msgstr ""
 
 #~ msgid "Test {0}"
 #~ msgstr ""
@@ -13102,6 +13162,10 @@ msgstr "モバイルとデスクトップビューを切り替えて、異なる
 msgid "Token copied to clipboard"
 msgstr ""
 
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Token stored (leave empty to keep it)"
+msgstr ""
+
 #: src/components/prospection/veridian_prospection_performance.tsx
 msgid "Too little data"
 msgstr ""
@@ -13713,6 +13777,10 @@ msgstr ""
 
 #~ msgid "Used for"
 #~ msgstr "用途"
+
+#: src/components/settings/SystemSettingsDrawer.tsx
+msgid "Used only to publish the DNS challenge (TXT _acme-challenge) of the relay domain. Never shown again. Leave empty to keep the stored token."
+msgstr ""
 
 #: src/components/timeline/ContactTimeline.tsx
 #: src/components/webhooks/InboundWebhookEventsTab.tsx
