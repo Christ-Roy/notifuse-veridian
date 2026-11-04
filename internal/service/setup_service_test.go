@@ -348,7 +348,7 @@ func TestSetupService_GetEnvOverrides(t *testing.T) {
 // comme surchargé (isOverridden côté console).
 func TestSetupService_GetEnvOverrides_RelayKeys(t *testing.T) {
 	t.Setenv("VERIDIAN_SMTP_RELAY_ENABLED", "true")
-	t.Setenv("VERIDIAN_RELAY_CERT_MODE", "managed")
+	t.Setenv("VERIDIAN_RELAY_CERT_MANAGED", "managed")
 	setupService := service.NewSetupService(
 		&service.SettingService{},
 		&service.UserService{},

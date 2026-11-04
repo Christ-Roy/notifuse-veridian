@@ -42,15 +42,17 @@ func makeBundle(t *testing.T, notAfter time.Time) *Bundle {
 		t.Fatal(err)
 	}
 	return &Bundle{
-		CertPEM:  pemEncode("CERTIFICATE", der),
-		KeyPEM:   pemEncode("EC PRIVATE KEY", keyDER),
-		NotAfter: notAfter,
+		CertPEM:   pemEncode("CERTIFICATE", der),
+		KeyPEM:    pemEncode("EC PRIVATE KEY", keyDER),
+		NotAfter:  notAfter,
+		Directory: "test",
 	}
 }
 
 type memStore struct {
-	b     *Bundle
-	saved int
+	b      *Bundle
+	saved  int
+	states []State
 }
 
 func (m *memStore) Load(context.Context) (*Bundle, error) { return m.b, nil }
@@ -59,11 +61,16 @@ func (m *memStore) Save(_ context.Context, b *Bundle) error {
 	m.saved++
 	return nil
 }
+func (m *memStore) SaveState(_ context.Context, st State) error {
+	m.states = append(m.states, st)
+	return nil
+}
 
 type fakeIssuer struct {
 	calls int
 	fail  bool
 	next  *Bundle
+	last  Params
 }
 
 func (f *fakeIssuer) Obtain(context.Context, string, string, []byte) (*Bundle, error) {
@@ -74,10 +81,28 @@ func (f *fakeIssuer) Obtain(context.Context, string, string, []byte) (*Bundle, e
 	return f.next, nil
 }
 
+// testParams : configuration complète (géré, annuaire de test) ; les tests la modifient au besoin.
+func testParams() Params {
+	return Params{Managed: true, Email: "ops@example.test", Directory: "test", DirectoryURL: "https://acme.example.test/dir", CFToken: "jeton-de-test"}
+}
+
 func newTestManager(t *testing.T, store Store, issuer Issuer, now time.Time) (*Manager, *Holder) {
 	t.Helper()
+	return newTestManagerWith(t, store, issuer, now, testParams())
+}
+
+func newTestManagerWith(t *testing.T, store Store, issuer Issuer, now time.Time, p Params) (*Manager, *Holder) {
+	t.Helper()
 	h := &Holder{}
-	m, err := NewManager(Config{Domain: testDomain, Email: "ops@example.test"}, store, issuer, h, logger.NewLogger())
+	fi, _ := issuer.(*fakeIssuer)
+	params := func(context.Context) (Params, error) { return p, nil }
+	factory := func(pp Params) Issuer {
+		if fi != nil {
+			fi.last = pp
+		}
+		return issuer
+	}
+	m, err := NewManager(Config{Domain: testDomain}, store, params, factory, h, logger.NewLogger())
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
@@ -104,12 +129,92 @@ func TestHolder_GetCertificate(t *testing.T) {
 }
 
 func TestNewManager(t *testing.T) {
-	if _, err := NewManager(Config{Email: "a@b.c"}, &memStore{}, &fakeIssuer{}, &Holder{}, logger.NewLogger()); err == nil {
+	params := func(context.Context) (Params, error) { return testParams(), nil }
+	factory := func(Params) Issuer { return &fakeIssuer{} }
+	if _, err := NewManager(Config{}, &memStore{}, params, factory, &Holder{}, logger.NewLogger()); err == nil {
 		t.Fatal("domaine absent doit être refusé")
 	}
-	m, err := NewManager(Config{Domain: testDomain, Email: "a@b.c"}, &memStore{}, &fakeIssuer{}, &Holder{}, logger.NewLogger())
-	if err != nil || m.cfg.RenewBefore != DefaultRenewBefore || m.cfg.CheckEvery != DefaultCheckEvery {
-		t.Fatalf("défauts attendus (30 j, 1 h) : %v %+v", err, m.cfg)
+	if _, err := NewManager(Config{Domain: testDomain}, &memStore{}, nil, factory, &Holder{}, logger.NewLogger()); err == nil {
+		t.Fatal("réglages absents doivent être refusés")
+	}
+	m, err := NewManager(Config{Domain: testDomain}, &memStore{}, params, factory, &Holder{}, logger.NewLogger())
+	if err != nil || m.cfg.RenewBefore != DefaultRenewBefore || m.cfg.CheckEvery != DefaultCheckEvery || m.cfg.StartupWait != DefaultStartupWait {
+		t.Fatalf("défauts attendus (30 j, 1 h, 1 min) : %v %+v", err, m.cfg)
+	}
+}
+
+// Fail closed : sans contact, sans jeton ou désactivé, aucun appel réseau.
+func TestManager_Tick_NoIssuanceWithoutConfig(t *testing.T) {
+	now := time.Now()
+	cases := map[string]func(p *Params){
+		"désactivé":       func(p *Params) { p.Managed = false },
+		"email absent":    func(p *Params) { p.Email = "" },
+		"jeton absent":    func(p *Params) { p.CFToken = "" },
+		"annuaire absent": func(p *Params) { p.DirectoryURL = "" },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			p := testParams()
+			mutate(&p)
+			issuer := &fakeIssuer{next: makeBundle(t, now.Add(90*24*time.Hour))}
+			m, _ := newTestManagerWith(t, &memStore{}, issuer, now, p)
+			renewed, _ := m.Tick(context.Background())
+			if renewed || issuer.calls != 0 {
+				t.Fatalf("%s : aucune émission attendue (renewed=%v, appels=%d)", name, renewed, issuer.calls)
+			}
+		})
+	}
+}
+
+// Changer d'annuaire (test vers production) force une émission : le certificat de test n'est jamais servi
+// comme certificat de production, et le compte ACME n'est pas réutilisé d'un annuaire à l'autre.
+func TestManager_Tick_DirectoryChangeForcesIssuance(t *testing.T) {
+	now := time.Now()
+	issuer := &fakeIssuer{next: makeBundle(t, now.Add(90*24*time.Hour))}
+	p := testParams()
+	p.Directory = "production"
+	stored := makeBundle(t, now.Add(90*24*time.Hour)) // émis sous test
+	m, _ := newTestManagerWith(t, &memStore{b: stored}, issuer, now, p)
+	_ = m.Load(context.Background())
+	if renewed, err := m.Tick(context.Background()); !renewed || err != nil || issuer.calls != 1 {
+		t.Fatalf("annuaire changé : émission attendue (renewed=%v err=%v calls=%d)", renewed, err, issuer.calls)
+	}
+}
+
+// Le verdict est publié dans les réglages après chaque décision : série et dernière erreur (jamais de jeton).
+func TestManager_Tick_PublishesState(t *testing.T) {
+	now := time.Now()
+	store := &memStore{}
+	issuer := &fakeIssuer{fail: true}
+	m, _ := newTestManager(t, store, issuer, now)
+	_, _ = m.Tick(context.Background())
+	if len(store.states) != 1 || store.states[0].LastError == "" {
+		t.Fatalf("échec publié attendu : %+v", store.states)
+	}
+	issuer.fail = false
+	issuer.next = makeBundle(t, now.Add(90*24*time.Hour))
+	m.now = func() time.Time { return now.Add(maxBackoff + time.Minute) }
+	if _, err := m.Tick(context.Background()); err != nil {
+		t.Fatalf("succès attendu : %v", err)
+	}
+	last := store.states[len(store.states)-1]
+	if last.LastError != "" || last.Serial == "" || last.NotAfter.IsZero() || last.LastRenewed.IsZero() {
+		t.Fatalf("succès publié attendu avec série et échéance : %+v", last)
+	}
+}
+
+// Au démarrage, aucune décision (donc aucune émission) avant le délai : un redémarrage en boucle n émet pas en rafale.
+func TestManager_Start_WaitsStartupBeforeFirstDecision(t *testing.T) {
+	issuer := &fakeIssuer{next: makeBundle(t, time.Now().Add(90*24*time.Hour))}
+	m, _ := newTestManager(t, &memStore{}, issuer, time.Now())
+	m.cfg.StartupWait = time.Hour
+	m.cfg.CheckEvery = time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	m.Start(ctx)
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+	if issuer.calls != 0 {
+		t.Fatalf("aucune décision avant le délai de démarrage attendue, appels=%d", issuer.calls)
 	}
 }
 
@@ -219,6 +324,7 @@ func TestManager_Alert(t *testing.T) {
 func TestManager_Start_StopsOnCancel(t *testing.T) {
 	m, _ := newTestManager(t, &memStore{}, &fakeIssuer{}, time.Now())
 	m.cfg.CheckEvery = 5 * time.Millisecond
+	m.cfg.StartupWait = time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	m.Start(ctx)
 	time.Sleep(20 * time.Millisecond)
@@ -251,8 +357,30 @@ func TestNewSettingsStore_RequiresPassphrase(t *testing.T) {
 }
 
 func TestLegoIssuer_Obtain_RequiresDirectory(t *testing.T) {
-	if _, err := (LegoIssuer{}).Obtain(context.Background(), testDomain, "a@b.c", nil); err == nil {
+	if _, err := (LegoIssuer{CFToken: "x"}).Obtain(context.Background(), testDomain, "a@b.c", nil); err == nil {
 		t.Fatal("autorité ACME absente doit être refusée sans appel réseau")
+	}
+}
+
+func TestLegoIssuer_Obtain_RequiresToken(t *testing.T) {
+	if _, err := (LegoIssuer{DirectoryURL: "https://acme.example.test/dir"}).Obtain(context.Background(), testDomain, "a@b.c", nil); err == nil {
+		t.Fatal("jeton Cloudflare absent doit être refusé avant tout appel")
+	}
+}
+
+func TestSettingsStore_SaveStatePublishesReadOnlyKeys(t *testing.T) {
+	repo := &fakeSettings{values: map[string]string{}}
+	s, err := NewSettingsStore(repo, "secret-key-for-tests-0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
+	if err := s.SaveState(context.Background(), State{NotAfter: now, Serial: "ABC", LastRenewed: now, LastError: "boom"}); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
+	if repo.values["veridian_relay_cert_serial"] != "ABC" || repo.values["veridian_relay_cert_not_after"] != "2026-11-04T10:00:00Z" ||
+		repo.values["veridian_relay_cert_last_error"] != "boom" {
+		t.Fatalf("état publié inattendu : %v", repo.values)
 	}
 }
 

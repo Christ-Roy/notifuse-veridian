@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
@@ -20,11 +19,12 @@ import (
 )
 
 // LegoIssuer émet via la bibliothèque lego v4 (MIT, github.com/go-acme/lego), DNS-01 Cloudflare.
-// Le jeton DNS est lu par le provider depuis CLOUDFLARE_DNS_API_TOKEN (environnement uniquement).
-// Jamais écrit en base, jamais journalisé.
+// Le jeton DNS vient des réglages (déchiffré à chaque décision) ; il n'est jamais journalisé.
 type LegoIssuer struct {
 	// DirectoryURL : autorité ACME (production Let's Encrypt, ou l'autorité de test pour les épreuves).
 	DirectoryURL string
+	// CFToken : jeton Cloudflare (DNS-01, zone du domaine).
+	CFToken string
 	// Nameservers : résolveurs publics pour vérifier la propagation du TXT (le résolveur local peut être en retard).
 	Nameservers []string
 	// OnCleanupError reçoit une erreur de nettoyage du TXT (sans jeton). Nil = ignorée.
@@ -59,7 +59,7 @@ func (l LegoIssuer) Obtain(_ context.Context, domain, email string, accountKeyPE
 	if err != nil {
 		return nil, fmt.Errorf("relaycert: client ACME: %w", err)
 	}
-	provider, err := NewCloudflareDNS(os.Getenv("CLOUDFLARE_DNS_API_TOKEN"))
+	provider, err := NewCloudflareDNS(l.CFToken)
 	if err != nil {
 		return nil, err
 	}

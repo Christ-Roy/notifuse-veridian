@@ -19,6 +19,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/service/queue"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/relaycert"
+	"github.com/Notifuse/notifuse/internal/veridian/relaysettings"
 	"github.com/Notifuse/notifuse/internal/veridian/smtprelay"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -1034,27 +1035,28 @@ func (a *App) veridianSMTPHandleMessage(userID, from string, to []string, data [
 	if a.veridianRelay != nil && smtprelay.IsRelayBody(data) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		return a.veridianRelay.Submit(ctx, userID, from, to, data)
+		// Interrupteur lu à chaque message (réglage veridian_smtp_relay_enabled, surcharge env prioritaire).
+		if relaysettings.ReadEnabled(ctx, a.settingRepo, os.LookupEnv) {
+			return a.veridianRelay.Submit(ctx, userID, from, to, data)
+		}
 	}
 	return a.smtpBridgeHandlerService.HandleMessage(userID, from, to, data)
 }
 
-// veridianInitSMTPRelay active le relais si VERIDIAN_SMTP_RELAY_ENABLED=true, le bridge
-// étant actif. Fail closed : sans TLS, le relais reste désactivé (AUTH en clair refusé).
+// veridianInitSMTPRelay prépare le relais dès que le bridge a du TLS. L'activation ne se décide plus au
+// démarrage : elle se lit dans les réglages à chaque message (veridian_smtp_relay_enabled). Sans TLS,
+// le relais n'est pas construit (fail closed : AUTH en clair refusé).
 func (a *App) veridianInitSMTPRelay() {
 	if !a.config.SMTPBridge.Enabled || a.smtpBridgeHandlerService == nil {
 		return
 	}
-	if strings.TrimSpace(os.Getenv("VERIDIAN_SMTP_RELAY_ENABLED")) != "true" {
-		return
-	}
 	if err := smtprelay.ValidateRelayConfig(true, a.config.SMTPBridge.TLSMode); err != nil {
-		a.logger.WithField("error", err.Error()).Error("SMTP relay desactive (fail closed)")
+		a.logger.WithField("error", err.Error()).Info("SMTP relay indisponible (fail closed)")
 		return
 	}
 	srv, ok := a.smtpBridgeServer.(*smtp_bridge.Server)
 	if !ok || srv == nil {
-		a.logger.Error("SMTP relay desactive : serveur bridge introuvable")
+		a.logger.Error("SMTP relay indisponible : serveur bridge introuvable")
 		return
 	}
 	a.veridianRelay = smtprelay.New(smtprelay.Deps{
@@ -1070,9 +1072,12 @@ func (a *App) veridianInitSMTPRelay() {
 	srv.Backend().SetRcptChecker(func(userID, to string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+		if !relaysettings.ReadEnabled(ctx, a.settingRepo, os.LookupEnv) {
+			return nil // relais coupé : le RCPT suit le chemin legacy inchangé
+		}
 		return relay.CheckRecipient(ctx, userID, to)
 	})
-	a.logger.Info("SMTP relay actif (soumission par le profil transactionnel reserve)")
+	a.logger.Info("SMTP relay prêt (activé par le réglage veridian_smtp_relay_enabled)")
 }
 
 // veridianRelayDirectory adapte les dépôts workspace au port smtprelay.Directory.
@@ -1113,9 +1118,10 @@ func (s veridianRelaySuppression) ContactListStatuses(ctx context.Context, works
 	return statuses, nil
 }
 
-// veridianRelayCertManaged : le certificat du bridge est géré par l'application (VERIDIAN_RELAY_CERT_MODE=managed).
+// veridianRelayCertManaged : le certificat du bridge est géré par l'application (réglage, lu au démarrage
+// pour la configuration TLS du bridge ; le renouvellement, lui, relit ses réglages à chaque décision).
 func (a *App) veridianRelayCertManaged() bool {
-	return os.Getenv("VERIDIAN_RELAY_CERT_MODE") == "managed"
+	return a.config.SMTPBridge.RelayCertManaged
 }
 
 // veridianRelayCertSource rend la source de certificat à chaud du bridge, ou nil (certificat fixe ou bridge coupé).
@@ -1130,20 +1136,12 @@ func (a *App) veridianRelayCertSource() smtp_bridge.CertificateSource {
 	return a.veridianRelayHolder
 }
 
-// veridianInitRelayCert démarre le renouvellement du certificat géré par l'app, avec la vie de l'application.
-// Fail closed : sans adresse de contact ACME, rien n'est émis et l'erreur est journalisée.
+// veridianInitRelayCert démarre le gestionnaire du certificat du relais avec la vie de l'application, quand le
+// bridge est actif. Il lit ses réglages (contact ACME, annuaire, jeton chiffré, interrupteur) à chaque décision :
+// tant que le certificat n'est pas géré, il ne fait rien. Stockage refusé (SECRET_KEY absent) : rien n'est émis.
 func (a *App) veridianInitRelayCert() {
-	if !a.veridianRelayCertManaged() || !a.config.SMTPBridge.Enabled {
+	if !a.config.SMTPBridge.Enabled {
 		return
-	}
-	email := strings.TrimSpace(os.Getenv("VERIDIAN_RELAY_ACME_EMAIL"))
-	if email == "" {
-		a.logger.Error("relaycert : VERIDIAN_RELAY_ACME_EMAIL absent, aucun certificat géré émis")
-		return
-	}
-	directory := strings.TrimSpace(os.Getenv("VERIDIAN_RELAY_ACME_DIRECTORY"))
-	if directory == "" {
-		directory = relaycert.DefaultDirectory
 	}
 	if a.veridianRelayHolder == nil {
 		a.veridianRelayHolder = &relaycert.Holder{}
@@ -1154,9 +1152,12 @@ func (a *App) veridianInitRelayCert() {
 		return
 	}
 	mgr, err := relaycert.NewManager(
-		relaycert.Config{Domain: a.config.SMTPBridge.Domain, Email: email},
+		relaycert.Config{Domain: a.config.SMTPBridge.Domain},
 		store,
-		relaycert.LegoIssuer{DirectoryURL: directory},
+		relaycert.SettingsParams(a.settingRepo, a.config.Security.SecretKey, os.LookupEnv),
+		relaycert.LegoIssuerFactory(func(cerr error) {
+			a.logger.WithField("error", cerr.Error()).Warn("relaycert : nettoyage du TXT _acme-challenge incomplet")
+		}),
 		a.veridianRelayHolder,
 		a.logger,
 	)
@@ -1166,5 +1167,5 @@ func (a *App) veridianInitRelayCert() {
 	}
 	a.veridianRelayCertManager = mgr
 	mgr.Start(a.GetShutdownContext())
-	a.logger.WithField("domain", a.config.SMTPBridge.Domain).Info("relaycert : certificat du relais géré par l'application")
+	a.logger.WithField("domain", a.config.SMTPBridge.Domain).Info("relaycert : gestionnaire du certificat du relais démarré")
 }

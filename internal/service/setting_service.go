@@ -1,30 +1,30 @@
 package service
 
 import (
-	"strings"
 	"context"
 	"fmt"
 	"strconv"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/relaysettings"
 	"github.com/Notifuse/notifuse/pkg/crypto"
 )
 
 // SystemConfig holds all system-level configuration
 type SystemConfig struct {
-	IsInstalled            bool
-	RootEmail              string
-	APIEndpoint            string
-	SMTPHost               string
-	SMTPPort               int
-	SMTPUsername           string
-	SMTPPassword           string
-	SMTPFromEmail          string
-	SMTPFromName           string
-	SMTPUseTLS             bool
-	SMTPEHLOHostname       string
-	TelemetryEnabled       bool
-	CheckForUpdates        bool
+	IsInstalled             bool
+	RootEmail               string
+	APIEndpoint             string
+	SMTPHost                string
+	SMTPPort                int
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFromEmail           string
+	SMTPFromName            string
+	SMTPUseTLS              bool
+	SMTPEHLOHostname        string
+	TelemetryEnabled        bool
+	CheckForUpdates         bool
 	SMTPBridgeEnabled       bool
 	SMTPBridgeDomain        string
 	SMTPBridgePort          int
@@ -32,12 +32,17 @@ type SystemConfig struct {
 	SMTPBridgeTLSKeyBase64  string
 
 	// Relais SMTP de soumission et certificat géré (fiche 71). Défauts : désactivés.
-	VeridianSMTPRelayEnabled    bool
-	VeridianRelayCertManaged    bool
-	VeridianRelayACMEEmail      string
-	VeridianRelayACMEDirectory  string // "production" ou "test"
-	VeridianRelayCFToken        string // écriture seule côté API ; jamais renvoyé
-	VeridianRelayCFTokenSet     bool   // lecture : un jeton est stocké
+	VeridianSMTPRelayEnabled   bool
+	VeridianRelayCertManaged   bool
+	VeridianRelayACMEEmail     string
+	VeridianRelayACMEDirectory string // "production" ou "test"
+	VeridianRelayCFToken       string // écriture seule côté API ; jamais renvoyé
+	VeridianRelayCFTokenSet    bool   // lecture : un jeton est stocké
+	// État du certificat géré, écrit par le gestionnaire (lecture seule côté API).
+	VeridianRelayCertNotAfter    string
+	VeridianRelayCertSerial      string
+	VeridianRelayCertLastRenewed string
+	VeridianRelayCertLastError   string
 }
 
 // SettingService provides methods for managing system settings
@@ -191,6 +196,10 @@ func (s *SettingService) GetSystemConfig(ctx context.Context, secretKey string) 
 	if setting, err := s.repo.Get(ctx, "encrypted_veridian_relay_cf_token"); err == nil && setting.Value != "" {
 		config.VeridianRelayCFTokenSet = true
 	}
+	config.VeridianRelayCertNotAfter = s.settingValue(ctx, "veridian_relay_cert_not_after")
+	config.VeridianRelayCertSerial = s.settingValue(ctx, "veridian_relay_cert_serial")
+	config.VeridianRelayCertLastRenewed = s.settingValue(ctx, "veridian_relay_cert_last_renewed")
+	config.VeridianRelayCertLastError = s.settingValue(ctx, "veridian_relay_cert_last_error")
 
 	return config, nil
 }
@@ -367,7 +376,7 @@ func (s *SettingService) SetSystemConfig(ctx context.Context, config *SystemConf
 	if err := s.repo.Set(ctx, "veridian_relay_acme_email", config.VeridianRelayACMEEmail); err != nil {
 		return fmt.Errorf("failed to set veridian_relay_acme_email: %w", err)
 	}
-	directory, err := NormalizeACMEDirectory(config.VeridianRelayACMEDirectory)
+	directory, err := relaysettings.NormalizeDirectory(config.VeridianRelayACMEDirectory)
 	if err != nil {
 		return err
 	}
@@ -396,17 +405,18 @@ func boolSetting(v bool) string {
 	return "false"
 }
 
-// NormalizeACMEDirectory accepte "production" (défaut) ou "test" et rend l'annuaire ACME correspondant.
-// Toute autre valeur est refusée : pas d'URL libre dans un réglage.
+// NormalizeACMEDirectory accepte "production" (défaut) ou "test" (voir relaysettings).
 func NormalizeACMEDirectory(v string) (string, error) {
-	switch strings.TrimSpace(v) {
-	case "", "production":
-		return "production", nil
-	case "test":
-		return "test", nil
-	default:
-		return "", fmt.Errorf("veridian_relay_acme_directory : valeur refusée (production ou test)")
+	return relaysettings.NormalizeDirectory(v)
+}
+
+// settingValue rend la valeur d'un réglage (vide si absent).
+func (s *SettingService) settingValue(ctx context.Context, key string) string {
+	setting, err := s.repo.Get(ctx, key)
+	if err != nil || setting == nil {
+		return ""
 	}
+	return setting.Value
 }
 
 // IsInstalled checks if the system has been installed

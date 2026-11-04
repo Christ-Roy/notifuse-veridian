@@ -1,14 +1,15 @@
 package service
 
 import (
-	"os"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/relaysettings"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/wneessen/go-mail"
@@ -16,18 +17,18 @@ import (
 
 // SetupConfig represents the setup initialization configuration
 type SetupConfig struct {
-	RootEmail              string
-	APIEndpoint            string
-	SMTPHost               string
-	SMTPPort               int
-	SMTPUsername           string
-	SMTPPassword           string
-	SMTPFromEmail          string
-	SMTPFromName           string
-	SMTPUseTLS             bool
-	SMTPEHLOHostname       string
-	TelemetryEnabled       bool
-	CheckForUpdates        bool
+	RootEmail               string
+	APIEndpoint             string
+	SMTPHost                string
+	SMTPPort                int
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFromEmail           string
+	SMTPFromName            string
+	SMTPUseTLS              bool
+	SMTPEHLOHostname        string
+	TelemetryEnabled        bool
+	CheckForUpdates         bool
 	SMTPBridgeEnabled       bool
 	SMTPBridgeDomain        string
 	SMTPBridgePort          int
@@ -50,7 +51,7 @@ type ConfigurationStatus struct {
 	SMTPConfigured        bool
 	APIEndpointConfigured bool
 	RootEmailConfigured   bool
-	SMTPBridgeConfigured   bool
+	SMTPBridgeConfigured  bool
 }
 
 // SetupService handles setup wizard operations
@@ -66,16 +67,16 @@ type SetupService struct {
 
 // EnvironmentConfig holds configuration from environment variables
 type EnvironmentConfig struct {
-	RootEmail              string
-	APIEndpoint            string
-	SMTPHost               string
-	SMTPPort               int
-	SMTPUsername           string
-	SMTPPassword           string
-	SMTPFromEmail          string
-	SMTPFromName           string
-	SMTPUseTLS             string // "true", "false", or "" (empty = not set, defaults to true)
-	SMTPEHLOHostname       string
+	RootEmail               string
+	APIEndpoint             string
+	SMTPHost                string
+	SMTPPort                int
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFromEmail           string
+	SMTPFromName            string
+	SMTPUseTLS              string // "true", "false", or "" (empty = not set, defaults to true)
+	SMTPEHLOHostname        string
 	SMTPBridgeEnabled       string // "true", "false", or "" (empty = not set, allows setup wizard to configure)
 	SMTPBridgeDomain        string
 	SMTPBridgePort          int
@@ -112,7 +113,7 @@ func (s *SetupService) GetConfigurationStatus() *ConfigurationStatus {
 			SMTPConfigured:        false,
 			APIEndpointConfigured: false,
 			RootEmailConfigured:   false,
-			SMTPBridgeConfigured:   false,
+			SMTPBridgeConfigured:  false,
 		}
 	}
 
@@ -135,7 +136,7 @@ func (s *SetupService) GetConfigurationStatus() *ConfigurationStatus {
 		SMTPConfigured:        smtpConfigured,
 		APIEndpointConfigured: s.envConfig.APIEndpoint != "",
 		RootEmailConfigured:   s.envConfig.RootEmail != "",
-		SMTPBridgeConfigured:   smtpBridgeConfigured,
+		SMTPBridgeConfigured:  smtpBridgeConfigured,
 	}
 }
 
@@ -152,11 +153,11 @@ func (s *SetupService) GetEnvOverrides() map[string]bool {
 		result["root_email"] = true
 	}
 	// Relais SMTP et certificat géré (fiche 71) : une variable posée surcharge le réglage (isOverridden).
-	if _, ok := os.LookupEnv("VERIDIAN_SMTP_RELAY_ENABLED"); ok {
-		result["veridian_smtp_relay_enabled"] = true
+	if strings.TrimSpace(os.Getenv(relaysettings.EnvRelayEnabled)) != "" {
+		result[relaysettings.KeyRelayEnabled] = true
 	}
-	if _, ok := os.LookupEnv("VERIDIAN_RELAY_CERT_MODE"); ok {
-		result["veridian_relay_cert_managed"] = true
+	if strings.TrimSpace(os.Getenv(relaysettings.EnvCertManaged)) != "" {
+		result[relaysettings.KeyCertManaged] = true
 	}
 	if s.envConfig.APIEndpoint != "" {
 		result["api_endpoint"] = true
@@ -311,19 +312,19 @@ func (s *SetupService) Initialize(ctx context.Context, config *SetupConfig) erro
 
 	// Store system settings
 	systemConfig := &SystemConfig{
-		IsInstalled:            true,
-		RootEmail:              finalConfig.RootEmail,
-		APIEndpoint:            finalConfig.APIEndpoint,
-		SMTPHost:               smtpHost,
-		SMTPPort:               smtpPort,
-		SMTPUsername:           smtpUsername,
-		SMTPPassword:           smtpPassword,
-		SMTPFromEmail:          smtpFromEmail,
-		SMTPFromName:           smtpFromName,
-		SMTPUseTLS:             smtpUseTLS,
-		SMTPEHLOHostname:       smtpEHLOHostname,
-		TelemetryEnabled:       config.TelemetryEnabled,
-		CheckForUpdates:        config.CheckForUpdates,
+		IsInstalled:             true,
+		RootEmail:               finalConfig.RootEmail,
+		APIEndpoint:             finalConfig.APIEndpoint,
+		SMTPHost:                smtpHost,
+		SMTPPort:                smtpPort,
+		SMTPUsername:            smtpUsername,
+		SMTPPassword:            smtpPassword,
+		SMTPFromEmail:           smtpFromEmail,
+		SMTPFromName:            smtpFromName,
+		SMTPUseTLS:              smtpUseTLS,
+		SMTPEHLOHostname:        smtpEHLOHostname,
+		TelemetryEnabled:        config.TelemetryEnabled,
+		CheckForUpdates:         config.CheckForUpdates,
 		SMTPBridgeEnabled:       smtpBridgeEnabled,
 		SMTPBridgeDomain:        smtpBridgeDomain,
 		SMTPBridgePort:          smtpBridgePort,

@@ -197,6 +197,9 @@ type SMTPBridgeConfig struct {
 	TLSCertBase64 string // Base64 encoded TLS certificate
 	TLSKeyBase64  string // Base64 encoded TLS private key
 	TLSMode       string // "off", "starttls", or "implicit" — resolved at Load time
+	// RelayCertManaged : le certificat est géré par l'application (réglage veridian_relay_cert_managed,
+	// surchargé par VERIDIAN_RELAY_CERT_MANAGED). Lu au démarrage pour la configuration TLS du bridge.
+	RelayCertManaged bool
 }
 
 type BroadcastConfig struct {
@@ -241,6 +244,8 @@ type SystemSettings struct {
 	SMTPBridgeTLSCertBase64 string
 	SMTPBridgeTLSKeyBase64  string
 	SMTPBridgeTLSMode       string
+	// VeridianRelayCertManaged : certificat du bridge géré par l'application (fiche 71), réglage en base.
+	VeridianRelayCertManaged bool
 }
 
 // getSystemDSN constructs the database connection string for the system database
@@ -382,6 +387,7 @@ func loadSystemSettings(db *sql.DB, secretKey string) (*SystemSettings, error) {
 		}
 
 		settings.SMTPBridgeTLSMode = settingsMap["smtp_bridge_tls_mode"]
+		settings.VeridianRelayCertManaged = settingsMap["veridian_relay_cert_managed"] == "true"
 	}
 
 	return settings, nil
@@ -766,6 +772,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	// This replaces the runtime "TLS required in production" check that used to
 	// live in pkg/smtp_bridge/server.go, moved up so startup fails early with
 	// a clear message.
+	smtpBridgeConfig.RelayCertManaged = resolveRelayCertManaged(v, systemSettings, isInstalled)
 	if smtpBridgeConfig.Enabled {
 		resolved, err := resolveSMTPBridgeTLSMode(smtpBridgeConfig, v.GetString("ENVIRONMENT"))
 		if err != nil {
@@ -902,6 +909,18 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	return config, nil
 }
 
+// resolveRelayCertManaged : la variable VERIDIAN_RELAY_CERT_MANAGED prime sur le réglage en base
+// (surcharge d'amorçage, comme les autres réglages surchargeables). Sans installation, seule la variable compte.
+func resolveRelayCertManaged(v *viper.Viper, sys *SystemSettings, installed bool) bool {
+	if v.IsSet("VERIDIAN_RELAY_CERT_MANAGED") {
+		return v.GetBool("VERIDIAN_RELAY_CERT_MANAGED")
+	}
+	if installed && sys != nil {
+		return sys.VeridianRelayCertManaged
+	}
+	return false
+}
+
 // resolveSMTPBridgeTLSMode returns the final TLS mode for the SMTP bridge or
 // an error if the explicit/implicit configuration is invalid.
 //
@@ -920,7 +939,7 @@ func resolveSMTPBridgeTLSMode(cfg SMTPBridgeConfig, environment string) (string,
 		}
 		if cfg.TLSMode == smtp_bridge.ModeSTARTTLS || cfg.TLSMode == smtp_bridge.ModeImplicit {
 			// Sans certificat fixe, starttls n'est accepté que si l'application gère le certificat (fiche 71).
-			if (cfg.TLSCertBase64 == "" || cfg.TLSKeyBase64 == "") && os.Getenv("VERIDIAN_RELAY_CERT_MODE") != "managed" {
+			if (cfg.TLSCertBase64 == "" || cfg.TLSKeyBase64 == "") && !cfg.RelayCertManaged {
 				return "", fmt.Errorf(
 					"SMTP_BRIDGE_TLS=%s requires both SMTP_BRIDGE_TLS_CERT_BASE64 and SMTP_BRIDGE_TLS_KEY_BASE64 to be set",
 					cfg.TLSMode,

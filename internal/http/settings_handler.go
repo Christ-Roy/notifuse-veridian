@@ -1,10 +1,10 @@
 package http
 
 import (
-	"io"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -15,16 +15,16 @@ import (
 )
 
 const (
-	passwordMask    = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" // ••••••••
-	configuredMask  = "[configured]"
+	passwordMask   = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" // ••••••••
+	configuredMask = "[configured]"
 )
 
 // SystemSettingsData represents the editable system settings
 type SystemSettingsData struct {
-	RootEmail              string `json:"root_email"`
-	APIEndpoint            string `json:"api_endpoint"`
-	SMTPHost               string `json:"smtp_host"`
-	SMTPPort               int    `json:"smtp_port"`
+	RootEmail               string `json:"root_email"`
+	APIEndpoint             string `json:"api_endpoint"`
+	SMTPHost                string `json:"smtp_host"`
+	SMTPPort                int    `json:"smtp_port"`
 	SMTPUsername            string `json:"smtp_username"`
 	SMTPPassword            string `json:"smtp_password"`
 	SMTPFromEmail           string `json:"smtp_from_email"`
@@ -47,12 +47,18 @@ type SystemSettingsData struct {
 	VeridianRelayACMEDirectory string `json:"veridian_relay_acme_directory"`
 	VeridianRelayCFToken       string `json:"veridian_relay_cf_token,omitempty"`
 	HasVeridianRelayCFToken    bool   `json:"has_veridian_relay_cf_token"`
+
+	// État du certificat géré, écrit par le gestionnaire (lecture seule : ignoré à l'écriture).
+	VeridianRelayCertNotAfter    string `json:"veridian_relay_cert_not_after"`
+	VeridianRelayCertSerial      string `json:"veridian_relay_cert_serial"`
+	VeridianRelayCertLastRenewed string `json:"veridian_relay_cert_last_renewed"`
+	VeridianRelayCertLastError   string `json:"veridian_relay_cert_last_error"`
 }
 
 // SystemSettingsResponse wraps settings with env override info
 type SystemSettingsResponse struct {
 	Settings     SystemSettingsData `json:"settings"`
-	EnvOverrides map[string]bool   `json:"env_overrides"`
+	EnvOverrides map[string]bool    `json:"env_overrides"`
 }
 
 // SettingsHandler handles system settings endpoints (root user only)
@@ -158,6 +164,10 @@ func (h *SettingsHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	settings.VeridianRelayACMEEmail = sysConfig.VeridianRelayACMEEmail
 	settings.VeridianRelayACMEDirectory = sysConfig.VeridianRelayACMEDirectory
 	settings.HasVeridianRelayCFToken = sysConfig.VeridianRelayCFTokenSet
+	settings.VeridianRelayCertNotAfter = sysConfig.VeridianRelayCertNotAfter
+	settings.VeridianRelayCertSerial = sysConfig.VeridianRelayCertSerial
+	settings.VeridianRelayCertLastRenewed = sysConfig.VeridianRelayCertLastRenewed
+	settings.VeridianRelayCertLastError = sysConfig.VeridianRelayCertLastError
 
 	// Mask sensitive fields
 	if sysConfig.SMTPPassword != "" {
@@ -244,24 +254,24 @@ func (h *SettingsHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 	// Build SystemConfig for persistence
 	newConfig := &service.SystemConfig{
-		IsInstalled:             true,
-		RootEmail:               reqData.RootEmail,
-		APIEndpoint:             reqData.APIEndpoint,
-		SMTPHost:                reqData.SMTPHost,
-		SMTPPort:                reqData.SMTPPort,
-		SMTPUsername:            reqData.SMTPUsername,
-		SMTPPassword:            smtpPassword,
-		SMTPFromEmail:           reqData.SMTPFromEmail,
-		SMTPFromName:            reqData.SMTPFromName,
-		SMTPUseTLS:              reqData.SMTPUseTLS,
-		SMTPEHLOHostname:        reqData.SMTPEHLOHostname,
-		TelemetryEnabled:        reqData.TelemetryEnabled,
-		CheckForUpdates:         reqData.CheckForUpdates,
-		SMTPBridgeEnabled:       reqData.SMTPBridgeEnabled,
-		SMTPBridgeDomain:        reqData.SMTPBridgeDomain,
-		SMTPBridgePort:          reqData.SMTPBridgePort,
-		SMTPBridgeTLSCertBase64: tlsCert,
-		SMTPBridgeTLSKeyBase64:  tlsKey,
+		IsInstalled:                true,
+		RootEmail:                  reqData.RootEmail,
+		APIEndpoint:                reqData.APIEndpoint,
+		SMTPHost:                   reqData.SMTPHost,
+		SMTPPort:                   reqData.SMTPPort,
+		SMTPUsername:               reqData.SMTPUsername,
+		SMTPPassword:               smtpPassword,
+		SMTPFromEmail:              reqData.SMTPFromEmail,
+		SMTPFromName:               reqData.SMTPFromName,
+		SMTPUseTLS:                 reqData.SMTPUseTLS,
+		SMTPEHLOHostname:           reqData.SMTPEHLOHostname,
+		TelemetryEnabled:           reqData.TelemetryEnabled,
+		CheckForUpdates:            reqData.CheckForUpdates,
+		SMTPBridgeEnabled:          reqData.SMTPBridgeEnabled,
+		SMTPBridgeDomain:           reqData.SMTPBridgeDomain,
+		SMTPBridgePort:             reqData.SMTPBridgePort,
+		SMTPBridgeTLSCertBase64:    tlsCert,
+		SMTPBridgeTLSKeyBase64:     tlsKey,
 		VeridianSMTPRelayEnabled:   relay.SMTPRelayEnabled,
 		VeridianRelayCertManaged:   relay.CertManaged,
 		VeridianRelayACMEEmail:     relay.ACMEEmail,

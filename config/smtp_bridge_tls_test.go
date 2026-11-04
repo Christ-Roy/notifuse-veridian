@@ -196,3 +196,23 @@ func TestLoad_SMTPBridgeTLS_Disabled_SkipsValidation(t *testing.T) {
 	_, err := LoadWithOptions(LoadOptions{})
 	require.NoError(t, err)
 }
+
+// Certificat géré par l'application (fiche 71) : starttls sans certificat fixe est accepté seulement
+// quand le réglage (ou sa variable VERIDIAN_RELAY_CERT_MANAGED) le déclare.
+func TestResolveSMTPBridgeTLSMode_STARTTLS_ManagedCert_Accepted(t *testing.T) {
+	got, err := resolveSMTPBridgeTLSMode(SMTPBridgeConfig{TLSMode: "starttls", RelayCertManaged: true}, "production")
+	require.NoError(t, err)
+	assert.Equal(t, "starttls", got)
+}
+
+func TestLoad_SMTPBridgeTLS_ManagedEnv_StartTLSWithoutFixedCert(t *testing.T) {
+	setSMTPBridgeTestEnv(t)
+	t.Setenv("SMTP_BRIDGE_ENABLED", "true")
+	t.Setenv("SMTP_BRIDGE_TLS", "starttls")
+	t.Setenv("VERIDIAN_RELAY_CERT_MANAGED", "true")
+
+	cfg, err := LoadWithOptions(LoadOptions{})
+	require.NoError(t, err)
+	assert.True(t, cfg.SMTPBridge.RelayCertManaged)
+	assert.Equal(t, "starttls", cfg.SMTPBridge.TLSMode)
+}

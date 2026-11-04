@@ -1,9 +1,10 @@
 // Package relaycert gère le certificat TLS du relais SMTP de soumission (fiche 71) DANS l'application :
 // émission DNS-01 (Cloudflare) par ACME, stockage chiffré par SECRET_KEY, renouvellement avant échéance,
-// rechargement à chaud (GetCertificate) sans redémarrage, et verdict d'alerte.
+// rechargement à chaud (GetCertificate) sans redémarrage, et état écrit dans les réglages.
 //
 // Précédence (décidée par main) : un certificat fourni par fichier ou variable (SMTP_BRIDGE_TLS_CERT_BASE64)
-// prime sur celui géré ici. Ce paquet n'est actif que si VERIDIAN_RELAY_CERT_MODE=managed.
+// prime sur celui géré ici. La configuration (interrupteur, contact ACME, annuaire, jeton) est lue dans les
+// réglages à chaque décision (relaysettings) : pas de redémarrage pour la changer.
 package relaycert
 
 import (
@@ -13,6 +14,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,22 +29,23 @@ const (
 	AlertWarnBefore    = 30 * 24 * time.Hour
 	AlertErrorBefore   = 7 * 24 * time.Hour
 	DefaultCheckEvery  = time.Hour
+	DefaultStartupWait = time.Minute
 	maxBackoff         = 6 * time.Hour
 	baseBackoff        = 5 * time.Minute
+	maxErrorLen        = 300
 )
-
-// DefaultDirectory : annuaire ACME de production Let's Encrypt (surchargé par les réglages pour les tests).
-const DefaultDirectory = "https://acme-v02.api.letsencrypt.org/directory"
 
 // ErrNoCertificate : aucun certificat chargé (handshake refusé proprement, pas de panic).
 var ErrNoCertificate = errors.New("relaycert: aucun certificat chargé")
 
 // Bundle est le matériel émis : chaîne PEM, clé PEM, clé de compte ACME (pour réutiliser le compte).
+// Directory note l'annuaire d'émission : un changement d'annuaire force une nouvelle émission.
 type Bundle struct {
 	CertPEM       []byte    `json:"cert_pem"`
 	KeyPEM        []byte    `json:"key_pem"`
 	AccountKeyPEM []byte    `json:"account_key_pem"`
 	NotAfter      time.Time `json:"not_after"`
+	Directory     string    `json:"directory"`
 }
 
 // Holder porte le certificat courant. Lecture sans verrou (atomic), écriture à chaque renouvellement.
@@ -62,10 +65,19 @@ func (h *Holder) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) 
 	return c, nil
 }
 
-// Store persiste le bundle chiffré (SECRET_KEY) ; Load le relit. Absence = (nil, nil).
+// State est l'état publié dans les réglages (lecture seule côté API) après chaque décision.
+type State struct {
+	NotAfter    time.Time
+	Serial      string
+	LastRenewed time.Time
+	LastError   string
+}
+
+// Store persiste le bundle chiffré et l'état lisible ; Load relit le bundle. Absence = (nil, nil).
 type Store interface {
 	Load(ctx context.Context) (*Bundle, error)
 	Save(ctx context.Context, b *Bundle) error
+	SaveState(ctx context.Context, st State) error
 }
 
 // Issuer émet un certificat pour un nom (DNS-01). accountKeyPEM vide = nouveau compte.
@@ -73,21 +85,37 @@ type Issuer interface {
 	Obtain(ctx context.Context, domain, email string, accountKeyPEM []byte) (*Bundle, error)
 }
 
+// Params est la configuration effective lue à chaque décision.
+type Params struct {
+	Managed      bool
+	Email        string
+	Directory    string
+	DirectoryURL string
+	CFToken      string
+}
+
+// ParamsFunc lit la configuration courante (réglages, repli sur l'environnement).
+type ParamsFunc func(ctx context.Context) (Params, error)
+
+// IssuerFunc construit l'émetteur pour une configuration donnée.
+type IssuerFunc func(p Params) Issuer
+
 // Logger est le logger de l'application (pkg/logger).
 type Logger = logger.Logger
 
 // Config du gestionnaire.
 type Config struct {
 	Domain      string
-	Email       string
 	RenewBefore time.Duration // 0 = DefaultRenewBefore
 	CheckEvery  time.Duration // 0 = DefaultCheckEvery
+	StartupWait time.Duration // 0 = DefaultStartupWait : délai avant la première décision (pas d'émission au démarrage)
 }
 
 // Status est le verdict lisible (santé, logs). Alert vide quand tout va bien.
 type Status struct {
 	Domain      string    `json:"domain"`
 	NotAfter    time.Time `json:"not_after,omitempty"`
+	Serial      string    `json:"serial,omitempty"`
 	LastRenewed time.Time `json:"last_renewed,omitempty"`
 	LastError   string    `json:"last_error,omitempty"`
 	Failures    int       `json:"failures"`
@@ -98,7 +126,8 @@ type Status struct {
 type Manager struct {
 	cfg    Config
 	store  Store
-	issuer Issuer
+	params ParamsFunc
+	issuer IssuerFunc
 	holder *Holder
 	logger Logger
 	now    func() time.Time
@@ -111,9 +140,12 @@ type Manager struct {
 }
 
 // NewManager construit le gestionnaire. holder reçoit chaque certificat chargé ou émis.
-func NewManager(cfg Config, store Store, issuer Issuer, holder *Holder, logger Logger) (*Manager, error) {
-	if cfg.Domain == "" || cfg.Email == "" {
-		return nil, errors.New("relaycert: domaine et email requis")
+func NewManager(cfg Config, store Store, params ParamsFunc, issuer IssuerFunc, holder *Holder, logger Logger) (*Manager, error) {
+	if cfg.Domain == "" {
+		return nil, errors.New("relaycert: domaine requis")
+	}
+	if store == nil || params == nil || issuer == nil || holder == nil {
+		return nil, errors.New("relaycert: stockage, réglages, émetteur et holder requis")
 	}
 	if cfg.RenewBefore <= 0 {
 		cfg.RenewBefore = DefaultRenewBefore
@@ -121,7 +153,10 @@ func NewManager(cfg Config, store Store, issuer Issuer, holder *Holder, logger L
 	if cfg.CheckEvery <= 0 {
 		cfg.CheckEvery = DefaultCheckEvery
 	}
-	return &Manager{cfg: cfg, store: store, issuer: issuer, holder: holder, logger: logger,
+	if cfg.StartupWait <= 0 {
+		cfg.StartupWait = DefaultStartupWait
+	}
+	return &Manager{cfg: cfg, store: store, params: params, issuer: issuer, holder: holder, logger: logger,
 		now: time.Now, status: Status{Domain: cfg.Domain}}, nil
 }
 
@@ -141,13 +176,10 @@ func (m *Manager) Load(ctx context.Context) error {
 	if b == nil {
 		return nil
 	}
-	if err := m.install(b); err != nil {
-		return err
-	}
-	return nil
+	return m.install(b)
 }
 
-// install vérifie le bundle (paire cert/clé valide) puis le pose dans le holder.
+// install vérifie le bundle (paire cert/clé valide, nom couvert) puis le pose dans le holder.
 func (m *Manager) install(b *Bundle) error {
 	pair, err := tls.X509KeyPair(b.CertPEM, b.KeyPEM)
 	if err != nil {
@@ -165,61 +197,60 @@ func (m *Manager) install(b *Bundle) error {
 	m.mu.Lock()
 	m.bundle = b
 	m.status.NotAfter = leaf.NotAfter
+	m.status.Serial = serialHex(leaf.SerialNumber)
 	m.mu.Unlock()
 	return nil
 }
 
-// Tick décide et agit : renouvelle si absent ou à moins de RenewBefore de l'échéance, sous backoff.
-// Rend (true) si un nouveau certificat a été émis et posé.
+// Tick décide et agit : renouvelle si absent, à moins de RenewBefore de l'échéance, ou émis sous un autre
+// annuaire ; sous backoff après échec. Rend (true) si un nouveau certificat a été émis et posé.
 func (m *Manager) Tick(ctx context.Context) (bool, error) {
 	now := m.now()
+	p, err := m.params(ctx)
+	if err != nil {
+		return false, m.fail(ctx, now, fmt.Errorf("relaycert: lecture de la configuration: %w", err))
+	}
+	if !p.Managed {
+		m.checkAlert(now)
+		return false, nil
+	}
+
 	m.mu.Lock()
-	need := m.bundle == nil || m.bundle.NotAfter.Sub(now) < m.cfg.RenewBefore
+	cur := m.bundle
+	need := cur == nil || cur.NotAfter.Sub(now) < m.cfg.RenewBefore || cur.Directory != p.Directory
 	wait := now.Before(m.nextAttempt)
-	m.mu.Unlock()
-
-	if !need {
-		m.checkAlert(now)
-		return false, nil
-	}
-	if wait {
-		m.checkAlert(now)
-		return false, nil
-	}
-
 	var acctKey []byte
-	m.mu.Lock()
-	if m.bundle != nil {
-		acctKey = m.bundle.AccountKeyPEM
+	if cur != nil && cur.Directory == p.Directory {
+		acctKey = cur.AccountKeyPEM // un compte ACME n'existe que chez son annuaire
 	}
 	m.mu.Unlock()
 
-	b, err := m.issuer.Obtain(ctx, m.cfg.Domain, m.cfg.Email, acctKey)
+	if !need || wait {
+		m.checkAlert(now)
+		return false, nil
+	}
+	switch {
+	case p.Email == "":
+		return false, m.fail(ctx, now, errors.New("relaycert: adresse de contact ACME absente (réglage veridian_relay_acme_email)"))
+	case p.CFToken == "":
+		return false, m.fail(ctx, now, errors.New("relaycert: jeton DNS Cloudflare absent (réglage encrypted_veridian_relay_cf_token)"))
+	case p.DirectoryURL == "":
+		return false, m.fail(ctx, now, errors.New("relaycert: annuaire ACME absent"))
+	}
+
+	b, err := m.issuer(p).Obtain(ctx, m.cfg.Domain, p.Email, acctKey)
 	if err == nil && b == nil {
 		err = errors.New("relaycert: l'émetteur n'a rendu aucun certificat")
 	}
 	if err == nil {
+		b.Directory = p.Directory
 		err = m.install(b)
 	}
 	if err == nil {
 		err = m.store.Save(ctx, b)
 	}
 	if err != nil {
-		m.mu.Lock()
-		m.failures++
-		m.status.Failures = m.failures
-		m.status.LastError = err.Error()
-		backoff := baseBackoff << min(m.failures-1, 10)
-		if backoff > maxBackoff {
-			backoff = maxBackoff
-		}
-		m.nextAttempt = now.Add(backoff)
-		m.mu.Unlock()
-		m.logger.WithFields(map[string]interface{}{
-			"domain": m.cfg.Domain, "failures": m.failures, "next_attempt_in": backoff.String(), "error": err.Error(),
-		}).Error("relaycert: échec du renouvellement du certificat du relais")
-		m.checkAlert(now)
-		return false, err
+		return false, m.fail(ctx, now, err)
 	}
 
 	m.mu.Lock()
@@ -228,11 +259,46 @@ func (m *Manager) Tick(ctx context.Context) (bool, error) {
 	m.status.LastError = ""
 	m.status.LastRenewed = now
 	m.nextAttempt = time.Time{}
+	st := State{NotAfter: m.status.NotAfter, Serial: m.status.Serial, LastRenewed: now}
 	m.mu.Unlock()
+	m.saveState(ctx, st)
 	m.logger.WithFields(map[string]interface{}{
-		"domain": m.cfg.Domain, "not_after": b.NotAfter.UTC().Format(time.RFC3339),
+		"domain": m.cfg.Domain, "directory": p.Directory, "not_after": b.NotAfter.UTC().Format(time.RFC3339),
 	}).Info("relaycert: certificat du relais émis et posé à chaud")
 	return true, nil
+}
+
+// fail enregistre un échec : compteur, backoff exponentiel plafonné, état publié, journal, alerte.
+func (m *Manager) fail(ctx context.Context, now time.Time, err error) error {
+	msg := err.Error()
+	if len(msg) > maxErrorLen {
+		msg = msg[:maxErrorLen]
+	}
+	m.mu.Lock()
+	m.failures++
+	m.status.Failures = m.failures
+	m.status.LastError = msg
+	backoff := baseBackoff << min(m.failures-1, 10)
+	if backoff > maxBackoff {
+		backoff = maxBackoff
+	}
+	m.nextAttempt = now.Add(backoff)
+	st := State{NotAfter: m.status.NotAfter, Serial: m.status.Serial, LastRenewed: m.status.LastRenewed, LastError: msg}
+	failures := m.failures
+	m.mu.Unlock()
+	m.logger.WithFields(map[string]interface{}{
+		"domain": m.cfg.Domain, "failures": failures, "next_attempt_in": backoff.String(), "error": msg,
+	}).Error("relaycert: échec du renouvellement du certificat du relais")
+	m.saveState(ctx, st)
+	m.checkAlert(now)
+	return err
+}
+
+// saveState publie l'état dans les réglages. Un échec d'écriture est journalisé, sans effet sur le relais.
+func (m *Manager) saveState(ctx context.Context, st State) {
+	if err := m.store.SaveState(ctx, st); err != nil {
+		m.logger.WithField("error", err.Error()).Warn("relaycert: état non publié dans les réglages")
+	}
 }
 
 // checkAlert pose le verdict d'échéance et le journalise (WARN sous 30 j, ERROR sous 7 j). Silencieux sinon.
@@ -265,13 +331,21 @@ func (m *Manager) checkAlert(now time.Time) {
 	}
 }
 
-// Start charge le bundle puis vérifie à intervalle jusqu'à l'annulation de ctx. Pas d'émission au
-// démarrage hors absence de certificat : la décision passe par Tick, donc par le backoff.
+// Start charge le bundle puis décide à intervalle jusqu'à l'annulation de ctx. La première décision a lieu
+// après StartupWait : un redémarrage en boucle n'émet donc jamais en rafale.
 func (m *Manager) Start(ctx context.Context) {
 	if err := m.Load(ctx); err != nil {
 		m.logger.WithField("error", err.Error()).Error("relaycert: chargement du certificat du relais")
 	}
 	go func() {
+		first := time.NewTimer(m.cfg.StartupWait)
+		defer first.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-first.C:
+			_, _ = m.Tick(ctx)
+		}
 		t := time.NewTicker(m.cfg.CheckEvery)
 		defer t.Stop()
 		for {
@@ -283,6 +357,14 @@ func (m *Manager) Start(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// serialHex rend le numéro de série en hexadécimal majuscules (forme usuelle des autorités).
+func serialHex(n *big.Int) string {
+	if n == nil {
+		return ""
+	}
+	return fmt.Sprintf("%X", n)
 }
 
 // pemBlock encode un bloc PEM (certificat, clé).
