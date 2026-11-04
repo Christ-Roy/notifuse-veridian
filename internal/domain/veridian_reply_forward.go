@@ -35,6 +35,21 @@ const (
 	VeridianReplyForwardStatusFailed  = "failed"
 )
 
+type veridianExtraHeadersKey struct{}
+
+// WithVeridianExtraHeaders porte des en-tetes X-Veridian-* jusqu au transport SMTP (par le contexte :
+// SendEmailProviderRequest vit dans email_provider.go, fichier gele). Le transport ne pose que les
+// noms prefixes X-Veridian- et les valeurs sur une seule ligne.
+func WithVeridianExtraHeaders(ctx context.Context, h map[string]string) context.Context {
+	return context.WithValue(ctx, veridianExtraHeadersKey{}, h)
+}
+
+// VeridianExtraHeadersFromContext lit les en-tetes poses par WithVeridianExtraHeaders (nil si aucun).
+func VeridianExtraHeadersFromContext(ctx context.Context) map[string]string {
+	h, _ := ctx.Value(veridianExtraHeadersKey{}).(map[string]string)
+	return h
+}
+
 // VeridianNormalizeReplyForwardList normalise une liste d adresses : trim, minuscules,
 // doublons retires (ordre conserve). Rend une erreur sur la premiere adresse invalide :
 // seule une adresse nue (pas de nom affiche, pas de chevrons, pas de saut de ligne) est
@@ -81,6 +96,13 @@ func (e *EmailProvider) ValidateVeridianReplyForwardTo() error {
 	if len(e.VeridianReplyForwardTo) == 0 {
 		return nil
 	}
+	if err := e.validateVeridianReplyForwardTo(); err != nil {
+		return NewValidationError(err.Error())
+	}
+	return nil
+}
+
+func (e *EmailProvider) validateVeridianReplyForwardTo() error {
 	// Plafond sur la liste BRUTE (avant dedoublonnage) : un refus net vaut mieux
 	// qu une troncature silencieuse.
 	if len(e.VeridianReplyForwardTo) > VeridianReplyForwardMaxRecipients {

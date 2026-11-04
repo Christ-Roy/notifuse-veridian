@@ -240,9 +240,6 @@ func (e *EmailProvider) Validate(passphrase string) error {
 	if err := e.ValidateVeridianHardBounceFreezeThreshold(); err != nil {
 		return err
 	}
-	if err := e.ValidateVeridianReplyForwardTo(); err != nil {
-		return err
-	}
 	if e.VeridianIsGmailProfile() {
 		if e.VeridianProfileDailyCap == 0 {
 			e.VeridianProfileDailyCap = VeridianGmailDefaultDailyCap
@@ -610,10 +607,6 @@ type SendEmailProviderRequest struct {
 	PlainTextOnly bool
 	Provider      *EmailProvider `validate:"required"`
 	EmailOptions  EmailOptions
-
-	// Veridian fork (04/11/2026) : en-tetes additionnels pour le transport SMTP. Reserve aux
-	// en-tetes X-Veridian-* (le transport ignore tout autre nom et toute valeur multi-ligne).
-	VeridianExtraHeaders map[string]string
 }
 
 // Validate ensures all required fields are present and valid

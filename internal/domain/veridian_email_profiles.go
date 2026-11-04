@@ -145,6 +145,12 @@ func (w *Workspace) ValidateVeridianReturnIMAPLink(provider *EmailProvider) erro
 	if provider == nil {
 		return nil
 	}
+	// email_provider.go est gele (une ligne de logique par diff) : la validation de la liste de
+	// redirection des reponses (fiche 78) s'accroche ici, au crochet Veridian deja appele a la
+	// creation, a la mise a jour et dans Workspace.Validate. Normalise la liste en place.
+	if err := provider.ValidateVeridianReplyForwardTo(); err != nil {
+		return err
+	}
 	id := strings.TrimSpace(provider.VeridianReturnIMAPIntegrationID)
 	if id == "" {
 		return nil

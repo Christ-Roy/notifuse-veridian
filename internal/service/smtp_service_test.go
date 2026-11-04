@@ -2440,13 +2440,13 @@ func TestSMTPService_SendEmail_VeridianExtraHeadersWhitelist(t *testing.T) {
 		Content: "<p>Hello</p>", TextContent: "Hello", PlainTextOnly: true,
 		Provider:     &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false}},
 		EmailOptions: domain.EmailOptions{ReplyTo: "jean@acme.fr"},
-		VeridianExtraHeaders: map[string]string{
-			"X-Veridian-Forwarded": "1",
-			"X-Evil":               "nope",
-			"X-Veridian-Inject":    "a\r\nBcc: x@evil.example",
-		},
 	}
-	require.NoError(t, service.SendEmail(context.Background(), request))
+	ctx := domain.WithVeridianExtraHeaders(context.Background(), map[string]string{
+		"X-Veridian-Forwarded": "1",
+		"X-Evil":               "nope",
+		"X-Veridian-Inject":    "a\r\nBcc: x@evil.example",
+	})
+	require.NoError(t, service.SendEmail(ctx, request))
 	messages := server.GetMessages()
 	require.Len(t, messages, 1)
 	data := string(messages[0].data)

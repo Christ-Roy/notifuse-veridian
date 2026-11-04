@@ -458,7 +458,7 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 
 	// === Veridian (04/11/2026) === en-tetes X-Veridian-* (ex. X-Veridian-Forwarded des
 	// copies de reponses). Liste blanche stricte : prefixe X-Veridian-, valeur sur une ligne.
-	for k, v := range request.VeridianExtraHeaders {
+	for k, v := range domain.VeridianExtraHeadersFromContext(ctx) {
 		if strings.HasPrefix(k, "X-Veridian-") && !strings.ContainsAny(k, " :\r\n") && !strings.ContainsAny(v, "\r\n") {
 			msg.SetGenHeader(mail.Header(k), v)
 		}

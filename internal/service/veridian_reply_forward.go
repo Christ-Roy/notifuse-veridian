@@ -279,8 +279,8 @@ func (f *VeridianReplyForwarder) forward(ctx context.Context, workspaceID string
 			ReplyTo: replyTo,
 			CC:      finalRecipients[1:],
 		},
-		VeridianExtraHeaders: map[string]string{domain.VeridianReplyForwardHeader: "1"},
 	}
+	ctx = domain.WithVeridianExtraHeaders(ctx, map[string]string{domain.VeridianReplyForwardHeader: "1"})
 	var sendErr error
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt > 0 {

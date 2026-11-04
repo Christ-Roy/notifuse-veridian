@@ -93,11 +93,12 @@ func (w *fakeForwardWorkspaces) GetByID(context.Context, string) (*domain.Worksp
 type fakeForwardMailer struct {
 	mu       sync.Mutex
 	sent     []domain.SendEmailProviderRequest
+	headers  []map[string]string
 	failures int // nombre d'appels a faire echouer avant de reussir (-1 = toujours)
 	calls    int
 }
 
-func (m *fakeForwardMailer) SendEmail(_ context.Context, req domain.SendEmailProviderRequest, _ bool) error {
+func (m *fakeForwardMailer) SendEmail(ctx context.Context, req domain.SendEmailProviderRequest, _ bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls++
@@ -105,6 +106,7 @@ func (m *fakeForwardMailer) SendEmail(_ context.Context, req domain.SendEmailPro
 		return errors.New("535 auth failed for secret-user@leak.example")
 	}
 	m.sent = append(m.sent, req)
+	m.headers = append(m.headers, domain.VeridianExtraHeadersFromContext(ctx))
 	return nil
 }
 
@@ -190,7 +192,7 @@ func TestReplyForward_HumanReply_SendsOneCopy(t *testing.T) {
 	assert.Equal(t, "Réponse de Jean Dupont : Votre proposition de site", req.Subject)
 	assert.Equal(t, "prof1", req.IntegrationID)
 	assert.True(t, req.PlainTextOnly)
-	assert.Equal(t, map[string]string{"X-Veridian-Forwarded": "1"}, req.VeridianExtraHeaders)
+	assert.Equal(t, map[string]string{"X-Veridian-Forwarded": "1"}, mailer.headers[0])
 	// corps = la reponse, citation conservee
 	assert.Contains(t, req.TextContent, "Oui, je suis intéressé, appelez-moi.")
 	assert.Contains(t, req.TextContent, "> Bonjour, je vous propose un site.")

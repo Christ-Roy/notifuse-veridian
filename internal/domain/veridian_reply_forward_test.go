@@ -57,11 +57,23 @@ func TestVeridianReplyForward_RejectsOwnSenderAddress(t *testing.T) {
 	assert.Error(t, e.ValidateVeridianReplyForwardTo())
 }
 
-func TestVeridianReplyForward_ValidateIsWiredInProviderValidate(t *testing.T) {
-	e := &EmailProvider{Kind: EmailProviderKindSMTP, VeridianReplyForwardTo: []string{"pas-une-adresse"}}
-	err := e.Validate("pass")
+func TestVeridianReplyForward_ValidateIsWiredInWorkspaceHook(t *testing.T) {
+	// Le crochet Veridian deja appele par createIntegration, updateIntegration et Workspace.Validate.
+	w := &Workspace{ID: "ws"}
+	bad := &EmailProvider{Kind: EmailProviderKindSMTP, VeridianReplyForwardTo: []string{"pas-une-adresse"}}
+	err := w.ValidateVeridianReturnIMAPLink(bad)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "veridian_reply_forward_to")
+	var verr ValidationError
+	assert.ErrorAs(t, err, &verr, "doit etre une erreur de validation (400), pas une erreur interne")
+
+	ok := &EmailProvider{Kind: EmailProviderKindSMTP, VeridianReplyForwardTo: []string{" Client@Client.FR "}}
+	require.NoError(t, w.ValidateVeridianReturnIMAPLink(ok))
+	assert.Equal(t, []string{"client@client.fr"}, ok.VeridianReplyForwardTo, "normalise en place")
+
+	none := &EmailProvider{Kind: EmailProviderKindSMTP}
+	assert.NoError(t, w.ValidateVeridianReturnIMAPLink(none))
+	assert.NoError(t, w.ValidateVeridianReturnIMAPLink(nil))
 }
 
 func TestVeridianReplyForward_EffectiveDropsBadAndOwnAndCaps(t *testing.T) {
