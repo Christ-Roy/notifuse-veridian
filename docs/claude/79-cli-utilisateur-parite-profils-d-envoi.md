@@ -690,3 +690,12 @@ ce lot · **c** réservée à l'admin plateforme · **d** reste propriétaire pa
 | `workspaces:delete-invitation` | `/api/workspaces.deleteInvitation` | JWT (membre/cle) | non | non | d reste proprietaire | equipe : proprietaire seulement |
 | `workspaces:list` | `/api/workspaces.list` | JWT (membre/cle) | non | non | c reste admin | liste de TOUS les workspaces d'un utilisateur : cross-workspace |
 | `workspaces:verify-invitation` | `/api/workspaces.verifyInvitationToken` | JWT (membre/cle) | non | non | c reste admin | flux d'invitation (jeton) |
+
+## Promotion prod (05/11/2026)
+
+- Tag prod avant : `v62.0-veridian.099d2a0a`. Après : `v62.0-veridian.5fef8e97` (run `workflow_dispatch deploy_prod=true` 41939490014 :
+  Go tests, mapping §1, migrations §12, build, staging, e2e headful staging, deploy prod, e2e headful prod : tous verts ; rollback non déclenché).
+- Les pushes du lot (1afc4c35, 086cfd9f, 32fd5a57) étaient sans `[risk:low]` et avec `[skip-prod]` ; promotion seulement après la preuve staging.
+- Mesure `NOTIFUSE_OPERATOR=1 notifuse profiles:overview` avant/après sur greenbeamcraft et robertbrunon : profils, expéditeurs, redirections,
+  boîtes IMAP liées, plafonds et états de pause identiques (aucune perturbation des envois).
+- Retour arrière : retag `v62.0-veridian.099d2a0a` (le schéma n'a pas changé, aucune migration dans ce lot).
