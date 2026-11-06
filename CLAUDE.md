@@ -18,13 +18,12 @@ brique = une fiche + une ligne d'index.
 2. **Ne jamais patcher un fichier upstream Notifuse.** Tout code Veridian vit dans des
    fichiers `veridian_*.go` au même niveau que l'upstream (code existant). Un handler à
    étendre se wrappe, il ne se modifie pas en place. → `02`
-   **Depuis le 29/10/2026 (lot L0), le code NEUF vit dans `internal/veridian/<module>/`,
-   se câble par `internal/app/veridian_wiring.go`, migre par `internal/migrations/veridian/`.
-   Fichiers gelés (app.go, worker.go…) : une ligne de branchement max par diff, garde
+   **Depuis le 29/10/2026 (L0), le code NEUF vit dans `internal/veridian/<module>/`, se câble
+   par `internal/app/veridian_wiring.go`, migre par `internal/migrations/veridian/`. Fichiers
+   gelés (app.go, worker.go…) : une ligne de branchement max, garde
    `scripts/veridian/frozen-files-check.sh`. → `docs/veridian/MODULARITE.md`**
-   **Exception, décision du 07/10/2026 : la console React (`console/`) est la nôtre.** On
-   ne fusionne plus `console/` depuis l'upstream (blog retiré, sidebar regroupée) ; on suit
-   l'upstream côté Go seulement. Nouvelles pages dans des `veridian_*.tsx`. → `53`
+   **Exception (07/10/2026) : la console React (`console/`) est la nôtre**, plus fusionnée
+   depuis l'upstream (Go seulement). Nouvelles pages dans des `veridian_*.tsx`. → `53`
 3. **Zéro mail cold réel en test.** Les preuves passent par l'endpoint
    `cold-simulate` (staging-only, 503 hors staging) ou un sink SMTP local
    (`smtp-sink`) — jamais un vrai envoi sans le flag `--real-send` et le GO explicite
@@ -65,7 +64,8 @@ brique = une fiche + une ligne d'index.
     → `44`
 12. **Tout cross-app (identité, membership, billing) passe par le Hub, jamais
     app→app direct.** Un `hub_user_id` n'est jamais réécrit sur un user existant sans
-    audit + migration explicite. → `45`
+    audit + migration explicite ; un lien différent est refusé (400), un lien ne s'écrit que
+    si le Hub atteste l'adresse. → `45`, `80`
 
 ## Relever plutôt que croire
 
@@ -100,6 +100,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `44` rate-limit global de l'API (OWASP API4:2023)
 - `61` nœud webhook des automations : garde SSRF (`NewTenantOutboundClient`), secret chiffré, signature HMAC
 - `75` lot L4 qualité et sécurité : aperçu e-mail en bac à sable, Liquid des contacts, tests upstream portés, mutants
+- `80` identité : le Hub est la source des utilisateurs, `hub_user_id`, refus si lien différent, lien auto-login à usage unique
 - `79` CLI utilisateur à parité : profils d'envoi avec sa propre clé, qui peut quoi, faille `tasks.*`, tableau d'audit
 
 **Base de données workspace**
@@ -147,9 +148,9 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause, lien IMAP, exclusivité
 - `55` page Profils d'envoi (lot 3) : carte, assistant, `emailProfiles.create`
 - `56` séparation transactionnel / commercial (lot 4) : `setUsage|pause|resume`, profil réservé, isolation worker, compteurs par type (V61), fusible par profil, jour de compte au fuseau de la fenêtre
-- `57` tableau de bord de prospection (lot 5) : `prospection.stats` (avancement des séquences, réponses par séquence et liste, stock), dimension analytics `veridian_profile_id`, surveillance du profil transactionnel (`transactional_watch`, jamais bloquante), chauffe par jour de compte, `notifuse profiles:create`
+- `57` tableau de bord de prospection (lot 5) : `prospection.stats`, dimension analytics `veridian_profile_id`, `transactional_watch` (jamais bloquante), chauffe par jour de compte, `notifuse profiles:create`
 - `58` dépilage équitable de `email_queue` (famine du 10/10) : relances avant J0, tourniquet entre automations, entrée repoussée par un gate cède la tête (`domain.VeridianSelectFairBatch`, `FetchPending`), aucune reprise manuelle
-- `59` automations observables (conception) : rails de politique, graphe vivant, explorateur de file, parcours contact, journal des décisions d envoi, plan en 7 lots (document seul, rien d implémenté)
+- `59` automations observables (conception seule, plan en 7 lots, rien d implémenté)
 - `60` capacité d'un profil (lot 6) : somme des capacités par classe destinataire bornée par chauffe et stock, barre empilée console, CLI agent
 - `62` « pourquoi ça n'envoie pas » (lot 1 de 59, V62) : raison de report persistée sur `email_queue`, verdicts de gates (valeur, limite), journal des décisions borné, `queue.explain` / `decisions.list` / `queue.recompute`, CLI `queue:explain` `logs:decisions`, page File d'envoi, « completed » honnête, orphelins `sending`
 - `69` plafonds et débits PAR DÉFAUT pour les 25 classes, table MX -> classe source unique (export pour ODH), échec DNS transitoire non figé, scission de freemail_fr en FAI (orange, sfr_altice, free, laposte, bouygues)
