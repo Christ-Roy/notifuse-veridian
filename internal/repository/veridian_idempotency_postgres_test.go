@@ -280,6 +280,10 @@ func TestVeridianIdempotencyRepository_DeleteExpired(t *testing.T) {
 	})
 }
 
+// Un meme $n sur key (VARCHAR) et request_hash (CHAR) : Postgres deduit deux types et
+// refuse la requete ("inconsistent types deduced for parameter"), ce que sqlmock ne voit
+// pas. Vu en CI staging le 06/11 : le lien rendait "Sign-in temporarily unavailable".
+// Chaque colonne a donc son propre parametre.
 func TestVeridianIdempotencyRepository_ConsumeOnce(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -288,13 +292,13 @@ func TestVeridianIdempotencyRepository_ConsumeOnce(t *testing.T) {
 	exp := time.Now().Add(time.Minute)
 
 	mock.ExpectExec(`INSERT INTO veridian_idempotency_keys[\s\S]*ON CONFLICT \(key\) DO NOTHING`).
-		WithArgs("k1", "/veridian/auto-login", exp).WillReturnResult(sqlmock.NewResult(0, 1))
+		WithArgs("k1", "/veridian/auto-login", "k1", exp).WillReturnResult(sqlmock.NewResult(0, 1))
 	first, err := repo.ConsumeOnce(context.Background(), "k1", "/veridian/auto-login", exp)
 	require.NoError(t, err)
 	assert.True(t, first)
 
 	mock.ExpectExec(`INSERT INTO veridian_idempotency_keys`).
-		WithArgs("k1", "/veridian/auto-login", exp).WillReturnResult(sqlmock.NewResult(0, 0))
+		WithArgs("k1", "/veridian/auto-login", "k1", exp).WillReturnResult(sqlmock.NewResult(0, 0))
 	again, err := repo.ConsumeOnce(context.Background(), "k1", "/veridian/auto-login", exp)
 	require.NoError(t, err)
 	assert.False(t, again)

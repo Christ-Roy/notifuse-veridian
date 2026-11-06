@@ -103,10 +103,10 @@ func (r *veridianIdempotencyRepository) ConsumeOnce(ctx context.Context, key, en
 	const q = `
 		INSERT INTO veridian_idempotency_keys (
 			key, endpoint, request_hash, response_status, response_body, created_at, expires_at
-		) VALUES ($1, $2, $1, 200, '{}'::jsonb, NOW(), $3)
+		) VALUES ($1, $2, $3, 200, '{}'::jsonb, NOW(), $4)
 		ON CONFLICT (key) DO NOTHING
 	`
-	res, err := r.systemDB.ExecContext(ctx, q, key, endpoint, expiresAt)
+	res, err := r.systemDB.ExecContext(ctx, q, key, endpoint, key, expiresAt)
 	if err != nil {
 		return false, err
 	}
