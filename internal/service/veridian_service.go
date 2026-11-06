@@ -370,6 +370,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 			if !ownerMatched {
 				return nil, ErrOwnerMismatch
 			}
+			s.bindHubUserID(ctx, ownerUserID, hubUserIDFromProvision(input), "provision_idempotent")
 			// Owner match : regenerer magic_link + auto_login_url frais.
 			magicLink, _, mlErr := s.buildMagicLink(ctx, input.TenantID, input.OwnerEmail)
 			if mlErr != nil && s.logger != nil {
@@ -531,6 +532,8 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	if err := s.planRepo.Upsert(ctx, planRow); err != nil {
 		return nil, fmt.Errorf("upsert veridian_plan: %w", err)
 	}
+
+	s.bindHubUserID(ctx, owner.ID, hubUserIDFromProvision(input), "provision")
 
 	// 8. Generer un magic link signin (fallback : saisie code) + auto-login
 	// URL self-contained (preferred : bouton "Open Notifuse" Hub sans saisie).
@@ -2003,6 +2006,14 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 		member = nil
 	}
 	if member == nil {
+		// Regle 1 §3.7 : l'humain a pu changer d'email cote Hub. Son hub_user_id
+		// (unique, V70) designe alors son user existant, on n'en cree pas un second.
+		bound, boundErr := s.userRepo.GetUserByHubUserID(ctx, input.HubUserID)
+		if boundErr == nil && bound != nil {
+			member = bound
+		}
+	}
+	if member == nil {
 		hubID := input.HubUserID // capture pour pointer (struct field *string)
 		member = &domain.User{
 			ID:        uuid.New().String(),
@@ -2284,6 +2295,34 @@ func (s *veridianService) LookupByEmail(ctx context.Context, email string) (*dom
 	return resp, nil
 }
 
+// hubUserIDFromProvision lit metadata.hub_user_id (CONTRAT-HUB §5.1).
+func hubUserIDFromProvision(input domain.ProvisionInput) string {
+	if input.Metadata == nil {
+		return ""
+	}
+	return strings.TrimSpace(input.Metadata.HubUserID)
+}
+
+// bindHubUserID pose le lien Hub d'un user au premier contact (§3.7). Best-effort :
+// un conflit se journalise et ne bloque jamais la connexion, l'email reste la cle
+// canonique. Le champ source permet de dire quel chemin a vu le conflit.
+func (s *veridianService) bindHubUserID(ctx context.Context, userID, hubUserID, source string) {
+	if userID == "" || hubUserID == "" {
+		return
+	}
+	err := s.userRepo.BackfillHubUserID(ctx, userID, hubUserID)
+	if err == nil || s.logger == nil {
+		return
+	}
+	s.logger.WithFields(map[string]interface{}{
+		"user_id":     userID,
+		"hub_user_id": hubUserID,
+		"source":      source,
+		"mismatch":    errors.Is(err, domain.ErrHubUserIDMismatch),
+		"error":       err.Error(),
+	}).Warn("veridian: backfill hub_user_id failed (non-blocking §3.7)")
+}
+
 // === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
 //
 // IssueMagicLinkForHub genere une URL self-contained auto-login pour un user
@@ -2303,8 +2342,8 @@ func (s *veridianService) LookupByEmail(ctx context.Context, email string) (*dom
 // Pas d'auto-creation de workspace (anti-pattern §6bis.2). Le Hub gere la
 // redirection signup-app cote Hub via /dashboard?app=...&hint=signup.
 //
-// hubUserID n'est pas resolveur d'identite (Notifuse users.id est UUID strict,
-// hub_user_id peut etre "user_abc"). Conserve pour log/audit uniquement.
+// Resolution §3.7 : hub_user_id lie d'abord (l'humain a pu changer d'email cote
+// Hub), email ensuite, avec backfill du lien au passage.
 func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain.IssueMagicLinkInput) (*domain.IssueMagicLinkResponse, error) {
 	if input.Email == "" {
 		return nil, errors.New("email required")
@@ -2313,25 +2352,37 @@ func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain
 		return nil, errors.New("hub_user_id required")
 	}
 
-	// Step 1 : lookup user par email.
-	user, err := s.userRepo.GetUserByEmail(ctx, input.Email)
+	// Step 1 : hub_user_id lie, sinon email (regle de jointure 1, §3.7).
+	user, err := s.userRepo.GetUserByHubUserID(ctx, input.HubUserID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrUserNotInApp
+		var notFound *domain.ErrUserNotFound
+		if !errors.As(err, &notFound) {
+			return nil, fmt.Errorf("lookup user by hub_user_id: %w", err)
 		}
-		errMsg := err.Error()
-		if errMsg != "" && (strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "no rows")) {
-			return nil, ErrUserNotInApp
-		}
-		return nil, fmt.Errorf("lookup user by email: %w", err)
+		user = nil
 	}
 	if user == nil {
-		return nil, ErrUserNotInApp
+		user, err = s.userRepo.GetUserByEmail(ctx, input.Email)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrUserNotInApp
+			}
+			errMsg := err.Error()
+			if errMsg != "" && (strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "no rows")) {
+				return nil, ErrUserNotInApp
+			}
+			return nil, fmt.Errorf("lookup user by email: %w", err)
+		}
+		if user == nil {
+			return nil, ErrUserNotInApp
+		}
 	}
 	// Exclure les users non-humains (type=api_key) — coherent avec LookupByEmail.
 	if user.Type != domain.UserTypeUser {
 		return nil, ErrUserNotInApp
 	}
+
+	s.bindHubUserID(ctx, user.ID, input.HubUserID, "issue_magic_link")
 
 	// Step 2 : lister workspaces.
 	userWorkspaces, err := s.workspaceRepo.GetUserWorkspaces(ctx, user.ID)
@@ -2353,7 +2404,9 @@ func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain
 
 	// Step 4 : BuildAutoLoginURL (token HMAC self-contained, TTL 60s).
 	// Le Hub valide host *.veridian.site + https (cf. bounce-apps.ts).
-	autoLoginURL, _, err := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, latest.WorkspaceID, input.Email)
+	// Email LOCAL : la session se retrouve par users.email, qui peut differer de
+	// input.Email quand le user a ete resolu par hub_user_id.
+	autoLoginURL, _, err := domain.BuildAutoLoginURL(s.apiEndpoint, s.hubSecret, latest.WorkspaceID, user.Email)
 	if err != nil {
 		// HUB_API_SECRET non configure → 500 cote handler.
 		return nil, fmt.Errorf("build auto-login url: %w", err)

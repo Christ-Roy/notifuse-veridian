@@ -100,6 +100,15 @@ export async function provisionTenant(
 }
 
 /**
+ * Lien auto-login neuf pour un tenant deja provisionne : provision est idempotent
+ * et le lien est a usage unique, une suite qui se connecte plusieurs fois en
+ * redemande un a chaque connexion.
+ */
+export async function freshAutoLoginUrl(tenantId: string, ownerEmail: string): Promise<string> {
+  return (await provisionTenant(tenantId, ownerEmail)).auto_login_url
+}
+
+/**
  * Wipe un (ou plusieurs) tenants via l'endpoint admin HMAC.
  * `safety_client_prefixes` reste sur les prefixes connus pour ne JAMAIS
  * toucher accidentellement un client réel ou un canary witness.

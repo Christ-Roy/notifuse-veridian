@@ -5,6 +5,7 @@ package http
 // GET /veridian/auto-login?token=<HMAC>.
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +29,16 @@ func makeAutologinTokenForTest(t *testing.T, hubSecret, ws, email string) string
 }
 
 func newAutologinHandler(svc domain.UserServiceInterface, hubSecret string) *VeridianAutoLoginHandler {
-	return NewVeridianAutoLoginHandler(svc, hubSecret, "https://api.example.com", logger.NewLogger())
+	h := NewVeridianAutoLoginHandler(svc, hubSecret, "https://api.example.com", logger.NewLogger())
+	seen := map[string]bool{}
+	h.SetTokenConsumer(func(_ context.Context, key string, _ time.Time) (bool, error) {
+		if seen[key] {
+			return false, nil
+		}
+		seen[key] = true
+		return true, nil
+	})
+	return h
 }
 
 func TestVeridianAutoLogin_OK_ReturnsHTMLWithToken(t *testing.T) {
@@ -51,7 +61,7 @@ func TestVeridianAutoLogin_OK_ReturnsHTMLWithToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	body := rec.Body.String()
 	assert.Contains(t, body, "fake-jwt-token-1234567890")
-	assert.Contains(t, body, "/console")
+	assert.Contains(t, body, `"/console/workspace/ws-1"`, "arrivee dans le workspace du lien, pas sur Select workspace")
 	assert.Contains(t, body, "localStorage.setItem")
 	// Anti-XSS : le redirect URL doit etre encode (ici /console → safe)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
@@ -186,4 +196,72 @@ func TestVeridianAutoLogin_VerifyAutoLoginToken_DelegatesToDomain(t *testing.T) 
 	require.NoError(t, errDom)
 	assert.Equal(t, pPkg, pDom)
 	assert.Equal(t, "ws-1", pPkg.WorkspaceID)
+}
+
+func TestVeridianAutoLogin_ReplayRefused(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockUserServiceInterface(ctrl)
+	// Times(1) : le rejeu ne doit jamais ouvrir de seconde session.
+	svc.EXPECT().CreateAutoLoginSession(gomock.Any(), "u@x.test").Times(1).Return(&domain.AuthResponse{Token: "jwt", ExpiresAt: time.Now().Add(time.Hour)}, nil)
+
+	h := newAutologinHandler(svc, "secret-1")
+	token := makeAutologinTokenForTest(t, "secret-1", "ws-1", "u@x.test")
+
+	first := httptest.NewRecorder()
+	h.handleAutoLogin(first, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token, nil))
+	require.Equal(t, http.StatusOK, first.Code)
+
+	second := httptest.NewRecorder()
+	h.handleAutoLogin(second, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token, nil))
+	assert.Equal(t, http.StatusUnauthorized, second.Code)
+	assert.Contains(t, second.Body.String(), "already been used")
+
+	// Meme lien, signature hex en majuscules : memes octets, donc toujours un rejeu.
+	encoded, sig, _ := strings.Cut(token, ".")
+	upper := httptest.NewRecorder()
+	h.handleAutoLogin(upper, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+encoded+"."+strings.ToUpper(sig), nil))
+	assert.Equal(t, http.StatusUnauthorized, upper.Code)
+}
+
+func TestVeridianAutoLogin_NoConsumer_FailsClosed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockUserServiceInterface(ctrl)
+	h := NewVeridianAutoLoginHandler(svc, "secret-1", "https://api.example.com", logger.NewLogger())
+	token := makeAutologinTokenForTest(t, "secret-1", "ws-1", "u@x.test")
+
+	rec := httptest.NewRecorder()
+	h.handleAutoLogin(rec, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token, nil))
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestVeridianAutoLogin_ConsumerError_FailsClosed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockUserServiceInterface(ctrl)
+	h := newAutologinHandler(svc, "secret-1")
+	h.SetTokenConsumer(func(context.Context, string, time.Time) (bool, error) { return false, errors.New("db down") })
+	token := makeAutologinTokenForTest(t, "secret-1", "ws-1", "u@x.test")
+
+	rec := httptest.NewRecorder()
+	h.handleAutoLogin(rec, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token, nil))
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestVeridianAutoLogin_Head_DoesNotBurnToken(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockUserServiceInterface(ctrl)
+	svc.EXPECT().CreateAutoLoginSession(gomock.Any(), "u@x.test").Times(1).Return(&domain.AuthResponse{Token: "jwt", ExpiresAt: time.Now().Add(time.Hour)}, nil)
+	h := newAutologinHandler(svc, "secret-1")
+	token := makeAutologinTokenForTest(t, "secret-1", "ws-1", "u@x.test")
+
+	head := httptest.NewRecorder()
+	h.handleAutoLogin(head, httptest.NewRequest(http.MethodHead, "/veridian/auto-login?token="+token, nil))
+	assert.Equal(t, http.StatusMethodNotAllowed, head.Code)
+
+	get := httptest.NewRecorder()
+	h.handleAutoLogin(get, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token, nil))
+	assert.Equal(t, http.StatusOK, get.Code, "le lien reste valable apres une sonde HEAD")
 }

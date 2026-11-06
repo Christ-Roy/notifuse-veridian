@@ -1126,3 +1126,15 @@ func TestBehavioralEventPayload_HubReadableShape(t *testing.T) {
 	assert.Equal(t, "lead@acme.fr", data["contact_email"])
 	assert.Equal(t, "msg-1", data["message_id"])
 }
+
+// CONTRAT-HUB §5.1 : le Hub envoie l'identite de l'owner dans metadata.hub_user_id.
+func TestProvisionInput_DecodesMetadataHubUserID(t *testing.T) {
+	var in ProvisionInput
+	require.NoError(t, json.Unmarshal([]byte(`{"tenant_id":"t","owner_email":"a@x.test","metadata":{"hub_user_id":"h-1","stripe_customer_id":"c"}}`), &in))
+	require.NotNil(t, in.Metadata)
+	assert.Equal(t, "h-1", in.Metadata.HubUserID)
+
+	var sans ProvisionInput
+	require.NoError(t, json.Unmarshal([]byte(`{"tenant_id":"t","owner_email":"a@x.test"}`), &sans))
+	assert.Nil(t, sans.Metadata, "le Hub actuel n'envoie pas metadata : provision doit rester valide")
+}

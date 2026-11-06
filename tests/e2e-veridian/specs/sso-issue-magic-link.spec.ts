@@ -155,7 +155,7 @@ test.describe('@regression sso-issue-magic-link — POST /api/sso/issue-magic-li
     await page.goto(magic_link_url);
 
     // Le frontend Notifuse SPA route vers /console (root) apres echange token
-    await page.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page.waitForURL(/\/console\/workspace\/[^/]+/, { timeout: 30_000 });
     await page.waitForTimeout(2000); // hydrate
 
     // auth_token en localStorage = preuve auth reussie
@@ -497,7 +497,7 @@ test.describe('@regression sso-issue-magic-link — POST /api/sso/issue-magic-li
 
     // Step 4-5 (Hub redirect → user navigate) : vrai navigateur
     await page.goto(magic_link_url);
-    await page.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page.waitForURL(/\/console\/workspace\/[^/]+/, { timeout: 30_000 });
     await page.waitForTimeout(1500);
 
     // Verification finale : user authentifie cote Notifuse console

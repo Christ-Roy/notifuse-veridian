@@ -19,6 +19,7 @@ import {
   provisionTenant,
   wipeTenants,
   loginViaAutoLogin,
+  freshAutoLoginUrl,
   trackConsoleErrors,
   waitForAppMount,
   findVisibleLinguiHashes,
@@ -52,7 +53,7 @@ const PAGES_TO_CHECK = [
 ]
 
 async function authenticate(page: Page): Promise<void> {
-  await loginViaAutoLogin(page, provisioning.auto_login_url)
+  await loginViaAutoLogin(page, await freshAutoLoginUrl(tenantId, ownerEmail))
   await waitForAppMount(page)
   await page.waitForTimeout(3000)
 }

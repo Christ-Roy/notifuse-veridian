@@ -122,6 +122,43 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 	return &user, nil
 }
 
+// === Veridian patch === GetUserByHubUserID : regle de jointure 1 du CONTRAT-HUB
+// §3.7 (hub_user_id d'abord, email ensuite). Un id non UUID (colonne UUID stricte,
+// V46) ne peut par construction rien lier : not found, pas d'erreur SQL.
+func (r *userRepository) GetUserByHubUserID(ctx context.Context, hubUserID string) (*domain.User, error) {
+	if _, parseErr := uuid.Parse(hubUserID); parseErr != nil {
+		return nil, &domain.ErrUserNotFound{Message: "user not found"}
+	}
+	var user domain.User
+	var bound sql.NullString
+	err := r.systemDB.QueryRowContext(ctx, `
+		SELECT id, email, name, type, language, created_at, updated_at, veridian_managed, hub_user_id
+		FROM users
+		WHERE hub_user_id = $1
+	`, hubUserID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Name,
+		&user.Type,
+		&user.Language,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.VeridianManaged,
+		&bound,
+	)
+	if err == sql.ErrNoRows {
+		return nil, &domain.ErrUserNotFound{Message: "user not found"}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by hub_user_id: %w", err)
+	}
+	if bound.Valid {
+		v := bound.String
+		user.HubUserID = &v
+	}
+	return &user, nil
+}
+
 func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
 	ctx, span := tracing.StartServiceSpan(ctx, "UserRepository", "GetUserByID")
 	defer span.End()

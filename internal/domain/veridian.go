@@ -469,6 +469,13 @@ type ProvisionInput struct {
 	Plan          string      `json:"plan,omitempty"`           // optionnel, defaut = VERIDIAN_DEFAULT_PLAN
 	PlanSource    PlanSource  `json:"plan_source,omitempty"`    // optionnel, defaut = "stripe"
 	Quotas        *PlanQuotasInput `json:"quotas,omitempty"`    // optionnel, defaut = QuotaForPlan(plan)
+	// Metadata : CONTRAT-HUB §5.1, porte le hub_user_id de l'owner (backfill §3.7).
+	Metadata *ProvisionMetadata `json:"metadata,omitempty"`
+}
+
+// ProvisionMetadata est le bloc `metadata` de POST /api/tenants/provision.
+type ProvisionMetadata struct {
+	HubUserID string `json:"hub_user_id,omitempty"`
 }
 
 // ProvisionResponse est la reponse de POST /api/tenants/provision.

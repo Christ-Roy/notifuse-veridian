@@ -279,3 +279,24 @@ func TestVeridianIdempotencyRepository_DeleteExpired(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestVeridianIdempotencyRepository_ConsumeOnce(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	repo := NewVeridianIdempotencyRepository(db)
+	exp := time.Now().Add(time.Minute)
+
+	mock.ExpectExec(`INSERT INTO veridian_idempotency_keys[\s\S]*ON CONFLICT \(key\) DO NOTHING`).
+		WithArgs("k1", "/veridian/auto-login", exp).WillReturnResult(sqlmock.NewResult(0, 1))
+	first, err := repo.ConsumeOnce(context.Background(), "k1", "/veridian/auto-login", exp)
+	require.NoError(t, err)
+	assert.True(t, first)
+
+	mock.ExpectExec(`INSERT INTO veridian_idempotency_keys`).
+		WithArgs("k1", "/veridian/auto-login", exp).WillReturnResult(sqlmock.NewResult(0, 0))
+	again, err := repo.ConsumeOnce(context.Background(), "k1", "/veridian/auto-login", exp)
+	require.NoError(t, err)
+	assert.False(t, again)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

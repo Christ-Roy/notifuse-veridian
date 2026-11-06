@@ -168,7 +168,7 @@ test.describe('Veridian-managed mode — UI guards', () => {
 
     // Auto-login via le lien Hub.
     await page.goto(provisionResp.auto_login_url);
-    await page.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page.waitForURL(/\/console\/workspace\/[^/]+/, { timeout: 30_000 });
     await page.waitForTimeout(3000); // hydrate SPA
 
     // Vérifie que le user n'est PAS root (sinon le test ne prouve rien).
@@ -210,7 +210,7 @@ test.describe('Veridian-managed mode — UI guards', () => {
     const provisionResp = await r.json();
 
     await page.goto(provisionResp.auto_login_url);
-    await page.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page.waitForURL(/\/console\/workspace\/[^/]+/, { timeout: 30_000 });
     await page.waitForTimeout(2000);
 
     // Force le POST côté API en bypassant l'UI (simule un user qui hack devtools).
@@ -261,7 +261,7 @@ test.describe('Veridian-managed mode — flow nominal préservé', () => {
     const provisionResp = await r.json();
 
     await page.goto(provisionResp.auto_login_url);
-    await page.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page.waitForURL(/\/console\/workspace\/[^/]+/, { timeout: 30_000 });
     await page.waitForTimeout(2000);
 
     // Token persisté = preuve auth.

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"reflect"
 	"errors"
 	"fmt"
 	"testing"
@@ -136,6 +137,13 @@ func TestUser_HubUserIDDefault(t *testing.T) {
 	}
 	require.NotNil(t, bound.HubUserID)
 	assert.Equal(t, "hub-user-uuid-abc", *bound.HubUserID)
+}
+
+// === Veridian patch === La regle de jointure 1 du CONTRAT-HUB §3.7 (hub_user_id
+// d'abord) repose sur cette methode du repository.
+func TestUserRepository_DeclaresGetUserByHubUserID(t *testing.T) {
+	_, ok := reflect.TypeOf((*UserRepository)(nil)).Elem().MethodByName("GetUserByHubUserID")
+	assert.True(t, ok)
 }
 
 // === Veridian patch === ErrHubUserIDMismatch est une sentinel `errors.Is`

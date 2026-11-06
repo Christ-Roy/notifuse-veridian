@@ -23,8 +23,10 @@ package http
 // token EST l'auth (signature dans l'URL, pas dans les headers).
 
 import (
+	"context"
 	"html/template"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -66,6 +68,14 @@ type VeridianAutoLoginHandler struct {
 	hubSecret   string
 	apiEndpoint string
 	logger      logger.Logger
+	// tokenConsumer marque un lien comme utilise. Absent, le handler refuse
+	// (fail closed) : sans lui un lien fuite ouvrirait autant de sessions qu'on veut.
+	tokenConsumer func(ctx context.Context, key string, expiresAt time.Time) (bool, error)
+}
+
+// SetTokenConsumer branche le stockage d'usage unique des liens.
+func (h *VeridianAutoLoginHandler) SetTokenConsumer(fn func(ctx context.Context, key string, expiresAt time.Time) (bool, error)) {
+	h.tokenConsumer = fn
 }
 
 // NewVeridianAutoLoginHandler construit un handler. hubSecret = HUB_API_SECRET.
@@ -133,6 +143,13 @@ var autoLoginPageTemplate = template.Must(template.New("autologin").Parse(`<!DOC
 
 // handleAutoLogin est le endpoint GET /veridian/auto-login?token=...
 func (h *VeridianAutoLoginHandler) handleAutoLogin(w http.ResponseWriter, r *http.Request) {
+	// Le motif "GET" du mux couvre aussi HEAD : une sonde ne doit ni brûler le
+	// lien ni ouvrir de session.
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		h.respondError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		h.respondError(w, "Missing token", http.StatusBadRequest)
@@ -153,6 +170,25 @@ func (h *VeridianAutoLoginHandler) handleAutoLogin(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Usage unique, consommé AVANT de créer la session. Si la session échoue
+	// ensuite, le Hub émet un nouveau lien au clic suivant.
+	if h.tokenConsumer == nil {
+		h.logger.Error("VeridianAutoLogin: token consumer not configured")
+		h.respondError(w, "Service misconfigured", http.StatusServiceUnavailable)
+		return
+	}
+	first, err := h.tokenConsumer(r.Context(), domain.AutoLoginTokenKey(token), time.UnixMilli(payload.ExpiresAt))
+	if err != nil {
+		h.logger.WithField("error", err.Error()).Error("VeridianAutoLogin: failed to consume token")
+		h.respondError(w, "Sign-in temporarily unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if !first {
+		h.logger.WithField("workspace_id", payload.WorkspaceID).Warn("VeridianAutoLogin: replayed token refused")
+		h.respondError(w, "This sign-in link has already been used", http.StatusUnauthorized)
+		return
+	}
+
 	// Crée la session + JWT pour le user (doit déjà exister, créé au Provision)
 	authResp, err := h.userService.CreateAutoLoginSession(r.Context(), payload.Email)
 	if err != nil {
@@ -165,12 +201,9 @@ func (h *VeridianAutoLoginHandler) handleAutoLogin(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Page HTML qui stocke le token et redirect.
-	// Notifuse frontend route uniquement /console (single page app), pas
-	// /console/{workspace_id}. On redirect direct vers /console et le
-	// frontend pickera le workspace courant via API GET /api/user.me
-	// (qui retourne la liste des workspaces du user).
-	redirectURL := "/console"
+	// Page HTML qui stocke le token et redirect, directement dans le workspace
+	// du lien : /console seul afficherait l'écran « Select workspace ».
+	redirectURL := "/console/workspace/" + url.PathEscape(payload.WorkspaceID)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

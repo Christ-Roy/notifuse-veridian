@@ -2009,6 +2009,21 @@ func TestVeridianHandleIssueMagicLink_RouteRegisteredInMainHandler(t *testing.T)
 	assert.Contains(t, pattern, "issue-magic-link")
 }
 
+// Fiche 46, piege catchall : sans route GET, le catchall sert la SPA en 200 et un
+// appelant lit un corps vide sans la moindre erreur.
+func TestVeridianHandleIssueMagicLink_GetAnswers405(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	h := newHandlerWithService(mocks.NewMockVeridianService(ctrl))
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "test-secret-hub-secret-32chars-min-ok-padding")
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/sso/issue-magic-link", nil))
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
 // === Veridian patch — sync v1.5 CONTRAT-HUB §5.22.2 (2026-05-23) ===
 // Test que la route alias workspace-level prescrite par le contrat v1.4
 // (`POST /api/veridian/workspaces/{tenantId}/attach-member`) est bien

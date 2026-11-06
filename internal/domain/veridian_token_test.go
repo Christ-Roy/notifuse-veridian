@@ -287,3 +287,9 @@ func TestVeridianTokenBuildVerifyConcurrent(t *testing.T) {
 		<-done
 	}
 }
+
+func TestAutoLoginTokenKey_IgnoresSignatureEncoding(t *testing.T) {
+	assert.Equal(t, AutoLoginTokenKey("payload.abcdef"), AutoLoginTokenKey("payload.ABCDEF"))
+	assert.NotEqual(t, AutoLoginTokenKey("payload.abcdef"), AutoLoginTokenKey("other.abcdef"))
+	assert.Len(t, AutoLoginTokenKey("payload.abcdef"), 64, "tient dans veridian_idempotency_keys.key VARCHAR(64)")
+}

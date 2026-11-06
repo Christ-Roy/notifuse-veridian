@@ -61,6 +61,10 @@ func (f *fakeIdempotencyRepo) Get(_ context.Context, _ string, tenantID string) 
 func (f *fakeIdempotencyRepo) Save(_ context.Context, _ *VeridianIdempotencyEntry) error { return nil }
 func (f *fakeIdempotencyRepo) DeleteExpired(_ context.Context) (int64, error)            { return 0, nil }
 
+func (f *fakeIdempotencyRepo) ConsumeOnce(_ context.Context, _, _ string, _ time.Time) (bool, error) {
+	return true, nil
+}
+
 func TestVeridianIdempotencyRepository_InterfaceShape(t *testing.T) {
 	var repo VeridianIdempotencyRepository = &fakeIdempotencyRepo{}
 	_, _ = repo.Get(context.Background(), "k", "tenant-x")

@@ -61,6 +61,7 @@ func ownerMemberWithEmail(ownerID, ownerEmail string) *domain.UserWorkspaceWithE
 
 func TestAttachMember_NewUser_CreatedAndAttached(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	// Step 1 : workspace existe
@@ -119,6 +120,7 @@ func TestAttachMember_NewUser_CreatedAndAttached(t *testing.T) {
 
 func TestAttachMember_ExistingUser_AttachedByEmail(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	// Workspace existe
@@ -167,6 +169,7 @@ func TestAttachMember_ExistingUser_AttachedByEmail(t *testing.T) {
 
 func TestAttachMember_Idempotent_SameRole_Returns200AlreadyMember(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
@@ -217,6 +220,7 @@ func TestAttachMember_Idempotent_SameRole_Returns200AlreadyMember(t *testing.T) 
 // retroactive ecraserait silencieusement le role local souverain.
 func TestAttachMember_RoleConflict_KeepsLocalRole(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
@@ -268,6 +272,7 @@ func TestAttachMember_RoleConflict_KeepsLocalRole(t *testing.T) {
 // Aucune erreur 500 ne doit etre propagee a l'appelant Hub.
 func TestAttachMember_HubUserIDMismatch_NonBlocking(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-mismatch").
@@ -321,6 +326,7 @@ func TestAttachMember_HubUserIDMismatch_NonBlocking(t *testing.T) {
 
 func TestAttachMember_TenantSuspended_ReturnsErr(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-suspended").Return(&domain.Workspace{ID: "ws-suspended"}, nil)
@@ -346,6 +352,7 @@ func TestAttachMember_TenantSuspended_ReturnsErr(t *testing.T) {
 
 func TestAttachMember_TenantSoftDeleted_ReturnsErr(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-deleted").Return(&domain.Workspace{ID: "ws-deleted"}, nil)
@@ -372,6 +379,7 @@ func TestAttachMember_TenantSoftDeleted_ReturnsErr(t *testing.T) {
 
 func TestAttachMember_WorkspaceNotFound_Returns404(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-unknown").Return(nil, sql.ErrNoRows)
@@ -442,6 +450,7 @@ func TestAttachMember_InvalidRole_ValidationErr(t *testing.T) {
 func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 	// Tenant créé avant Veridian-managed → pas de plan row → l'attach doit quand même marcher
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-prehub").Return(&domain.Workspace{ID: "ws-prehub"}, nil)
@@ -486,6 +495,7 @@ func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 // HubUserID est bien set, pour attraper la regression au niveau service.
 func TestAttachMember_NewUser_PassesHubUserIDToCreateUser(t *testing.T) {
 	svc, m := newVeridianService(t)
+	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	hubID := "11111111-2222-3333-4444-555555555555"
@@ -528,4 +538,23 @@ func TestAttachMember_NewUser_PassesHubUserIDToCreateUser(t *testing.T) {
 		"V46 §3.7 — HubUserID DOIT etre set sur le user passe a CreateUser, sinon le binding Hub est perdu en DB (bug 2026-05-23)")
 	assert.Equal(t, hubID, *captured.HubUserID,
 		"HubUserID doit refleter exactement input.HubUserID du Hub")
+}
+
+func TestAttachMember_EmailChanged_ReusesUserBoundByHubUserID(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	hubID := "11111111-2222-3333-4444-555555555555"
+	bound := &domain.User{ID: "u-bound", Email: "ancien@x.test", Type: domain.UserTypeUser, HubUserID: &hubID}
+
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(nil, sql.ErrNoRows)
+	m.user.EXPECT().GetUserByEmail(ctx, "nouveau@x.test").Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(bound, nil)
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u-bound", hubID).Return(nil)
+	// Pas de CreateUser : un second user violerait l'index unique V70.
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "u-bound", "ws-1").Return(&domain.UserWorkspace{UserID: "u-bound", WorkspaceID: "ws-1", Role: "member"}, nil)
+
+	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{TenantID: "ws-1", HubUserID: hubID, HubUserEmail: "nouveau@x.test", Role: "member"})
+	require.NoError(t, err)
+	assert.True(t, resp.AlreadyMember)
 }

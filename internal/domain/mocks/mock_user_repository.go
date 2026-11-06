@@ -35,6 +35,21 @@ func (m *MockUserRepository) EXPECT() *MockUserRepositoryMockRecorder {
 	return m.recorder
 }
 
+// GetUserByHubUserID mocks base method.
+func (m *MockUserRepository) GetUserByHubUserID(arg0 context.Context, arg1 string) (*domain.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserByHubUserID", arg0, arg1)
+	ret0, _ := ret[0].(*domain.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserByHubUserID indicates an expected call of GetUserByHubUserID.
+func (mr *MockUserRepositoryMockRecorder) GetUserByHubUserID(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByHubUserID", reflect.TypeOf((*MockUserRepository)(nil).GetUserByHubUserID), arg0, arg1)
+}
+
 // BackfillHubUserID mocks base method.
 func (m *MockUserRepository) BackfillHubUserID(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()

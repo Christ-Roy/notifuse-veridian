@@ -806,3 +806,43 @@ func TestUserRepository_BackfillHubUserID_DBError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "backfill hub_user_id")
 }
+
+func TestUserRepository_GetUserByHubUserID_Found(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+	hubID := "11111111-2222-3333-4444-555555555555"
+	now := time.Now()
+	mock.ExpectQuery(`FROM users\s+WHERE hub_user_id = \$1`).WithArgs(hubID).WillReturnRows(
+		sqlmock.NewRows([]string{"id", "email", "name", "type", "language", "created_at", "updated_at", "veridian_managed", "hub_user_id"}).
+			AddRow("user-1", "a@x.test", "A", "user", "fr", now, now, false, hubID))
+
+	u, err := repo.GetUserByHubUserID(context.Background(), hubID)
+	require.NoError(t, err)
+	assert.Equal(t, "user-1", u.ID)
+	require.NotNil(t, u.HubUserID)
+	assert.Equal(t, hubID, *u.HubUserID)
+}
+
+func TestUserRepository_GetUserByHubUserID_NoRow_NotFound(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+	hubID := "11111111-2222-3333-4444-555555555555"
+	mock.ExpectQuery(`FROM users\s+WHERE hub_user_id = \$1`).WithArgs(hubID).WillReturnError(sql.ErrNoRows)
+
+	_, err := repo.GetUserByHubUserID(context.Background(), hubID)
+	var notFound *domain.ErrUserNotFound
+	assert.ErrorAs(t, err, &notFound)
+}
+
+func TestUserRepository_GetUserByHubUserID_NonUUID_NotFoundWithoutQuery(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	repo := NewUserRepository(db)
+
+	_, err := repo.GetUserByHubUserID(context.Background(), "cmvez1ybi000y07pdud62f3jy")
+	var notFound *domain.ErrUserNotFound
+	assert.ErrorAs(t, err, &notFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

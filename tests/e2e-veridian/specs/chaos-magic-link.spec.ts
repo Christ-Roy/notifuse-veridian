@@ -71,7 +71,7 @@ test.describe('Magic link — flow nominal headful', () => {
     await page.goto(provision.auto_login_url);
 
     // Le frontend Notifuse est une SPA qui ne route que /console (root)
-    await page.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page.waitForURL(/\/console\/workspace\/[^/]+/, { timeout: 30_000 });
     await page.waitForTimeout(2000); // hydrate
 
     // Token bien stocké en localStorage = preuve auth
@@ -98,7 +98,7 @@ test.describe('Magic link — flow nominal headful', () => {
 });
 
 test.describe('Magic link — adversaires', () => {
-  test('auto_login_url reutilise apres TTL 60s → erreur', async ({ browser }) => {
+  test('auto_login_url rejoue dans son TTL → refuse (usage unique)', async ({ browser }) => {
     const tid = newTid();
     provisioned.push(tid);
 
@@ -112,23 +112,21 @@ test.describe('Magic link — adversaires', () => {
     expect(data.auto_login_url).toBeTruthy();
     const auto_login_url = data.auto_login_url as string;
 
-    // Click 1 : doit logger dans /console
+    // Click 1 : doit logger dans le workspace
     const ctx1 = await browser.newContext();
     const page1 = await ctx1.newPage();
     await page1.goto(auto_login_url);
-    await page1.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page1.waitForURL(/\/console\/workspace\/[^/]+/, { timeout: 30_000 });
     await ctx1.close();
 
-    // Click 2 (different context, meme URL) immediatement : token TTL 60s
-    // pas encore expire → l'URL est encore valide. C'est documente :
-    // le token Veridian ne consomme pas usage (anti-replay = TTL only).
-    // Donc on test seulement la securite du lien expire (cf test suivant).
+    // Click 2 (autre navigateur, meme URL) dans le TTL : le lien est a usage unique
+    // (06/11/2026, cf. fiche identite). Refus, et aucune session ouverte.
     const ctx2 = await browser.newContext();
     const page2 = await ctx2.newPage();
-    await page2.goto(auto_login_url);
-    // Doit aussi logger : token est valide pendant son TTL 60s, pas single-use.
-    // C'est le comportement attendu (sécurité = TTL court, pas usage tracking).
-    await page2.waitForURL(/\/console$/, { timeout: 30_000 });
+    const replay = await page2.goto(auto_login_url);
+    expect(replay?.status()).toBe(401);
+    await expect(page2.locator('body')).toContainText('already been used');
+    expect(await page2.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
     await ctx2.close();
   });
 

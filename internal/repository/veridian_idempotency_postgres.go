@@ -97,6 +97,26 @@ func (r *veridianIdempotencyRepository) Save(ctx context.Context, e *domain.Veri
 	return err
 }
 
+// ConsumeOnce pose une cle a usage unique. L'unicite de la PK fait l'atomicite :
+// deux navigateurs qui presentent le meme lien en meme temps, un seul gagne.
+func (r *veridianIdempotencyRepository) ConsumeOnce(ctx context.Context, key, endpoint string, expiresAt time.Time) (bool, error) {
+	const q = `
+		INSERT INTO veridian_idempotency_keys (
+			key, endpoint, request_hash, response_status, response_body, created_at, expires_at
+		) VALUES ($1, $2, $1, 200, '{}'::jsonb, NOW(), $3)
+		ON CONFLICT (key) DO NOTHING
+	`
+	res, err := r.systemDB.ExecContext(ctx, q, key, endpoint, expiresAt)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
 // DeleteExpired supprime toutes les entrees dont expires_at < NOW.
 // Retourne le nombre de lignes supprimees (pour logs cron).
 func (r *veridianIdempotencyRepository) DeleteExpired(ctx context.Context) (int64, error) {

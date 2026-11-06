@@ -179,6 +179,11 @@ type UserRepository interface {
 	//     canonical join key per §3.7).
 	// ErrUserNotFound when the user id does not exist locally.
 	BackfillHubUserID(ctx context.Context, userID, hubUserID string) error
+
+	// === Veridian patch === GetUserByHubUserID resolves a local user from its
+	// Hub identity (CONTRAT-HUB §3.7, join rule 1 : hub_user_id first, then
+	// email). ErrUserNotFound when nothing is bound or hubUserID is not a UUID.
+	GetUserByHubUserID(ctx context.Context, hubUserID string) (*User, error)
 }
 
 // ErrUserNotFound is returned when a user is not found

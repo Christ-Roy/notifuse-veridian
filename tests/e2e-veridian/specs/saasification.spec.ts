@@ -109,7 +109,7 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
 
     // Page intermédiaire HTML stocke auth_token dans localStorage puis redirect /console
     // (single-page-app — pas /console/{id}, le frontend pick le workspace lui-meme)
-    await page.waitForURL(/\/console$/, { timeout: 30_000 });
+    await page.waitForURL(/\/console\/workspace\/[^/]+/, { timeout: 30_000 });
 
     // Vérifier que le token est dans localStorage (le user est authentifié)
     const authToken = await page.evaluate(() => localStorage.getItem('auth_token'));

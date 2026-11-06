@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	domain "github.com/Notifuse/notifuse/internal/domain"
 	gomock "github.com/golang/mock/gomock"
@@ -33,6 +34,21 @@ func NewMockVeridianIdempotencyRepository(ctrl *gomock.Controller) *MockVeridian
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockVeridianIdempotencyRepository) EXPECT() *MockVeridianIdempotencyRepositoryMockRecorder {
 	return m.recorder
+}
+
+// ConsumeOnce mocks base method.
+func (m *MockVeridianIdempotencyRepository) ConsumeOnce(arg0 context.Context, arg1, arg2 string, arg3 time.Time) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConsumeOnce", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ConsumeOnce indicates an expected call of ConsumeOnce.
+func (mr *MockVeridianIdempotencyRepositoryMockRecorder) ConsumeOnce(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConsumeOnce", reflect.TypeOf((*MockVeridianIdempotencyRepository)(nil).ConsumeOnce), arg0, arg1, arg2, arg3)
 }
 
 // DeleteExpired mocks base method.

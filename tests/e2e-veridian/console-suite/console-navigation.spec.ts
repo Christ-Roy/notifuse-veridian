@@ -21,6 +21,7 @@ import {
   provisionTenant,
   wipeTenants,
   loginViaAutoLogin,
+  freshAutoLoginUrl,
   trackConsoleErrors,
   waitForAppMount,
   findVisibleLinguiHashes,
@@ -73,7 +74,7 @@ const WORKSPACE_PAGES: Array<{ slug: string; label: string; contentMarker: RegEx
 ]
 
 async function authenticate(page: Page): Promise<void> {
-  await loginViaAutoLogin(page, provisioning.auto_login_url)
+  await loginViaAutoLogin(page, await freshAutoLoginUrl(tenantId, ownerEmail))
   await waitForAppMount(page)
   // Attend que workspaces.list ait répondu et que le frontend ait routé
   // vers /console/workspace/{id} ou affiché un sélecteur.

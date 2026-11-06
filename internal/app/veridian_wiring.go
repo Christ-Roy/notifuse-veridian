@@ -621,6 +621,9 @@ func (a *App) veridianInitHandlers() error {
 		a.config.APIEndpoint,
 		a.logger,
 	)
+	veridianAutoLoginHandler.SetTokenConsumer(func(ctx context.Context, key string, expiresAt time.Time) (bool, error) {
+		return a.veridianIdempotencyRepo.ConsumeOnce(ctx, key, "/veridian/auto-login", expiresAt)
+	})
 	veridianAutoLoginHandler.RegisterRoutes(a.mux)
 
 	// === Veridian patch lot 2026-05-23 — Hub Discovery client ===

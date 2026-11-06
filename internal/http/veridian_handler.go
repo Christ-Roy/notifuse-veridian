@@ -246,6 +246,11 @@ func (h *VeridianHandler) RegisterRoutes(mux *http.ServeMux, hubSecret string) {
 	// nature (chaque call genere un token TTL 60s), pas besoin d Idempotency-Key.
 	// Auth : HMAC seul.
 	mux.Handle("POST /api/sso/issue-magic-link", hmac(http.HandlerFunc(h.handleIssueMagicLink)))
+	// Fiche 46 : sans route GET, le catchall sert la SPA en 200 et un appelant
+	// lit un corps vide sans aucune erreur.
+	mux.HandleFunc("GET /api/sso/issue-magic-link", func(w http.ResponseWriter, _ *http.Request) {
+		WriteJSONErrorCode(w, ErrCodeMethodNotAllowed, "Method not allowed", http.StatusMethodNotAllowed, nil)
+	})
 
 	// === Veridian patch === Endpoint public (no HMAC) qui renvoie le tag
 	// et le SHA git du binaire qui tourne. Permet à la CI de valider qu'un

@@ -61,6 +61,15 @@ func BuildAutoLoginURL(apiEndpoint, hubSecret, workspaceID, email string) (strin
 	return url, expiresAt, nil
 }
 
+// AutoLoginTokenKey est l'empreinte d'usage unique d'un token : sha256 de la
+// partie signee seulement. La signature hex s'ecrit en plusieurs casses pour les
+// memes octets, la hacher laisserait rejouer un lien en changeant une majuscule.
+func AutoLoginTokenKey(token string) string {
+	encoded, _, _ := strings.Cut(token, ".")
+	sum := sha256.Sum256([]byte(encoded))
+	return hex.EncodeToString(sum[:])
+}
+
 // VerifyAutoLoginToken parse + verifie le token. Retourne le payload si valide.
 func VerifyAutoLoginToken(token, hubSecret string) (*AutoLoginPayload, error) {
 	if token == "" {

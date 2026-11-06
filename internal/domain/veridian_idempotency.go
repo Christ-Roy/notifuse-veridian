@@ -51,4 +51,8 @@ type VeridianIdempotencyRepository interface {
 	Get(ctx context.Context, key string, tenantID string) (*VeridianIdempotencyEntry, error)
 	Save(ctx context.Context, entry *VeridianIdempotencyEntry) error
 	DeleteExpired(ctx context.Context) (int64, error)
+	// ConsumeOnce enregistre atomiquement une cle a usage unique (lien
+	// auto-login). true au premier appel, false si deja consommee. La purge
+	// quotidienne DeleteExpired s'applique aussi a ces lignes.
+	ConsumeOnce(ctx context.Context, key, endpoint string, expiresAt time.Time) (bool, error)
 }

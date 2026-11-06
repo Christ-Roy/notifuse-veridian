@@ -157,6 +157,10 @@ func (m *mockUserRepository) BackfillHubUserID(ctx context.Context, userID, hubU
 	return nil
 }
 
+func (m *mockUserRepository) GetUserByHubUserID(ctx context.Context, hubUserID string) (*domain.User, error) {
+	return nil, &domain.ErrUserNotFound{Message: "user not found"}
+}
+
 func TestSetupHandler_Status(t *testing.T) {
 	tests := []struct {
 		name           string
