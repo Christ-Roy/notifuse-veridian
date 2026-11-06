@@ -1138,3 +1138,19 @@ func TestProvisionInput_DecodesMetadataHubUserID(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"tenant_id":"t","owner_email":"a@x.test"}`), &sans))
 	assert.Nil(t, sans.Metadata, "le Hub actuel n'envoie pas metadata : provision doit rester valide")
 }
+
+// L'attestation d'adresse du Hub (CONTRAT-HUB 3.8) se lit sous le nom exact `email_proven` ;
+// absente, elle vaut false (non attesté).
+func TestEmailProvenJSONContract(t *testing.T) {
+	var p ProvisionInput
+	require.NoError(t, json.Unmarshal([]byte(`{"tenant_id":"t","owner_email":"a@x.test","email_proven":true}`), &p))
+	assert.True(t, p.EmailProven)
+	require.NoError(t, json.Unmarshal([]byte(`{"tenant_id":"t","owner_email":"a@x.test"}`), &p))
+	assert.False(t, p.EmailProven)
+
+	var m IssueMagicLinkInput
+	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"h","email":"a@x.test","email_proven":true}`), &m))
+	assert.True(t, m.EmailProven)
+	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"h","email":"a@x.test"}`), &m))
+	assert.False(t, m.EmailProven)
+}
