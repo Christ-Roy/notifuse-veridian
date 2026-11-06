@@ -471,6 +471,9 @@ type ProvisionInput struct {
 	Quotas        *PlanQuotasInput `json:"quotas,omitempty"`    // optionnel, defaut = QuotaForPlan(plan)
 	// Metadata : CONTRAT-HUB §5.1, porte le hub_user_id de l'owner (backfill §3.7).
 	Metadata *ProvisionMetadata `json:"metadata,omitempty"`
+	// EmailProven : attestation du Hub (CONTRAT-HUB 3.8) que l'adresse du owner est prouvee.
+	// Sans elle, un compte local EXISTANT trouve par email n'est pas relie (rien n'est refuse).
+	EmailProven bool `json:"email_proven,omitempty"`
 }
 
 // ProvisionMetadata est le bloc `metadata` de POST /api/tenants/provision.

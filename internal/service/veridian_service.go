@@ -374,7 +374,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 			if !ownerMatched {
 				return nil, ErrOwnerMismatch
 			}
-			s.bindHubUserID(ctx, ownerUserID, hubUserIDFromProvision(input), "provision_idempotent")
+			s.bindProvisionOwner(ctx, ownerUserID, false, input, "provision_idempotent")
 			// Owner match : regenerer magic_link + auto_login_url frais.
 			magicLink, _, mlErr := s.buildMagicLink(ctx, input.TenantID, input.OwnerEmail)
 			if mlErr != nil && s.logger != nil {
@@ -417,7 +417,9 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		}
 		owner = nil
 	}
+	ownerCreated := false
 	if owner == nil {
+		ownerCreated = true
 		owner = &domain.User{
 			ID:        uuid.New().String(),
 			Email:     input.OwnerEmail,
@@ -537,7 +539,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		return nil, fmt.Errorf("upsert veridian_plan: %w", err)
 	}
 
-	s.bindHubUserID(ctx, owner.ID, hubUserIDFromProvision(input), "provision")
+	s.bindProvisionOwner(ctx, owner.ID, ownerCreated, input, "provision")
 
 	// 8. Generer un magic link signin (fallback : saisie code) + auto-login
 	// URL self-contained (preferred : bouton "Open Notifuse" Hub sans saisie).
@@ -2305,6 +2307,16 @@ func hubUserIDFromProvision(input domain.ProvisionInput) string {
 		return ""
 	}
 	return strings.TrimSpace(input.Metadata.HubUserID)
+}
+
+// bindProvisionOwner lie l'owner de provision a son hub_user_id. Un owner cree par cet appel
+// est lie d'office (personne a detourner) ; un compte existant trouve par email n'est lie
+// que si le Hub atteste l'adresse. Sans attestation l'appel reussit, sans lien.
+func (s *veridianService) bindProvisionOwner(ctx context.Context, ownerID string, ownerCreated bool, input domain.ProvisionInput, source string) {
+	if !ownerCreated && !input.EmailProven {
+		return
+	}
+	s.bindHubUserID(ctx, ownerID, hubUserIDFromProvision(input), source)
 }
 
 // bindHubUserID pose le lien Hub d'un user au premier contact (§3.7). Best-effort :

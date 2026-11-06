@@ -3082,3 +3082,31 @@ func TestHubUserIDFromProvision(t *testing.T) {
 	assert.Equal(t, "", hubUserIDFromProvision(domain.ProvisionInput{}))
 	assert.Equal(t, "abc", hubUserIDFromProvision(domain.ProvisionInput{Metadata: &domain.ProvisionMetadata{HubUserID: " abc "}}))
 }
+
+func provisionBindInput(proven bool) domain.ProvisionInput {
+	return domain.ProvisionInput{
+		TenantID: "t1", OwnerEmail: "a@x.test", EmailProven: proven,
+		Metadata: &domain.ProvisionMetadata{HubUserID: "11111111-2222-3333-4444-555555555555"},
+	}
+}
+
+// Compte existant trouve par email, Hub sans attestation : aucun lien (gomock echoue sur un appel).
+func TestBindProvisionOwner_ExistingUnproven_NoLink(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	svc.bindProvisionOwner(context.Background(), "u1", false, provisionBindInput(false), "provision")
+}
+
+func TestBindProvisionOwner_ExistingProven_Links(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u1", "11111111-2222-3333-4444-555555555555").Return(nil)
+	svc.bindProvisionOwner(ctx, "u1", false, provisionBindInput(true), "provision")
+}
+
+// Owner cree par provision : rien a detourner, lien pose meme sans attestation.
+func TestBindProvisionOwner_CreatedUnproven_Links(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u1", "11111111-2222-3333-4444-555555555555").Return(nil)
+	svc.bindProvisionOwner(ctx, "u1", true, provisionBindInput(false), "provision")
+}

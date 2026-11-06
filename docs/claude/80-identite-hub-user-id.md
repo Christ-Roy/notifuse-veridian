@@ -10,10 +10,10 @@ jamais `users.id`). Contrat : `veridian-hub/docs/CONTRAT-HUB.md` §3.7 et §6bis
 2. Compte trouvé par email déjà lié à un AUTRE `hub_user_id` : 400 `hub_user_id_mismatch`, aucun
    lien (`ErrHubUserIDConflict`). Le Hub lit ce 400 comme un échec, pas comme `user_not_in_app`.
 3. Compte sans lien : le repli par email connecte, mais `hub_user_id` n'est écrit que si le body
-   porte `email_proven: true`. Le Hub ne l'envoie pas encore (`lib/auth/bounce-apps.ts` n'envoie que
-   `hub_user_id` et `email`; il garde l'accès par `denyUnlessEmailProven` avant d'appeler). Tant
-   qu'il ne l'envoie pas, ce chemin ne lie personne : le lien vient de `provision`
-   (`metadata.hub_user_id`), d'`attach-member` et du backfill.
+   porte `email_proven: true`. Le Hub l'envoie depuis `hub:v0.5.45` (06/11, 22:30 UTC).
+3bis. `email_proven` est envoyé par le Hub (v0.5.45, CONTRAT-HUB §3.8) sur issue-magic-link ET provision.
+   `provision` : owner créé par l'appel = lié d'office ; compte existant trouvé par email = lié seulement
+   si `email_proven`. Sans le champ l'appel réussit quand même (auto_login_url compris), sans lien.
 4. La session se retrouve par l'email LOCAL du compte, pas celui du body.
 
 ## Lien auto-login (`/veridian/auto-login`)
