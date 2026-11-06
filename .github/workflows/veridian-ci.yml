@@ -875,7 +875,7 @@ jobs:
     # tapent le staging PRIVÉ (100.x, tailnet) → besoin du tailnet, donc pas
     # de runner hébergé GitHub ici. Un runner par job, détruit à la fin : aucun
     # nettoyage disque à faire.
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, veridian-jit]
     permissions:
       contents: read
       packages: read
@@ -995,22 +995,15 @@ jobs:
           sleep 30
           curl -sf https://notifuse.staging.veridian.site/api/setup.status > /dev/null && echo "Pool DB OK" || (echo "Pool DB still under pressure" && exit 1)
 
-      # TEMPORAIRE (etape 1 de la bascule) : ce job tourne encore sur le runner
-      # permanent tant que le depot n'est pas enrole au courtier JIT.
-      - name: Cleanup runner (always)
-        if: always()
-        run: sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null || true
-
   e2e-staging:
     name: E2E headful Playwright (staging, BLOQUANT)
     needs: deploy-staging
     if: |
       github.event.inputs.skip_e2e != 'true'
       && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, veridian-jit]
     env:
       NOTIFUSE_URL: https://notifuse.staging.veridian.site
-      PLAYWRIGHT_CHROME_EXECUTABLE_PATH: /usr/bin/google-chrome
       # La vidéo requiert le FFmpeg privé de Playwright. Les traces et captures d'échec restent actives et suffisent au diagnostic.
       PLAYWRIGHT_DISABLE_VIDEO: '1'
       # HUB_URL retiré 2026-06-13 : plus aucune spec e2e-veridian ne tape le Hub
@@ -1070,8 +1063,9 @@ jobs:
         run: |
           cd tests/e2e-veridian
           npm ci
-          test -x "$PLAYWRIGHT_CHROME_EXECUTABLE_PATH"
-          "$PLAYWRIGHT_CHROME_EXECUTABLE_PATH" --version
+          # Runner JIT : pas de Chrome système. Chromium Playwright (le sudo sans
+          # mot de passe du runner pose les libs ; le binaire va dans le cache du dépôt).
+          npx playwright install --with-deps chromium
       - name: Run e2e
         run: |
           cd tests/e2e-veridian
@@ -1088,12 +1082,6 @@ jobs:
             tests/e2e-veridian/playwright-results.json
             tests/e2e-veridian/test-results/
           retention-days: 14
-
-      # TEMPORAIRE (etape 1 de la bascule) : ce job tourne encore sur le runner
-      # permanent tant que le depot n'est pas enrole au courtier JIT.
-      - name: Cleanup runner (always)
-        if: always()
-        run: sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null || true
 
   # === Gate §20 — staging vert SANS [risk:low] : reco/promotion attendue ===
   # Symétrique du gate sur deploy-prod : quand staging + e2e-staging passent

@@ -52,7 +52,7 @@ jobs:
     name: Console E2E sur staging réel (informative)
     # Garde fork : runner JIT sur le tailnet, aucune PR de fork n'y arrive.
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, veridian-jit]
     timeout-minutes: 30
     # `continue-on-error` au niveau du job entier serait préférable mais
     # GitHub Actions ne le permet pas pour les single-job workflows. La
@@ -66,7 +66,6 @@ jobs:
     env:
       NOTIFUSE_URL: https://notifuse.staging.veridian.site
       TARGET_SHA: ${{ github.sha }}
-      PLAYWRIGHT_CHROME_EXECUTABLE_PATH: /usr/bin/google-chrome
       PLAYWRIGHT_DISABLE_VIDEO: '1'
       # Le secret partagé entre veridian-ci.yml jobs et ce workflow.
       HUB_API_SECRET: ${{ secrets.NOTIFUSE_HUB_API_SECRET_STAGING }}
@@ -125,10 +124,10 @@ jobs:
           cd tests/e2e-veridian
           npm ci --no-audit --no-fund
 
-      - name: Verify system Chrome
+      - name: Install Playwright Chromium
         run: |
-          test -x "$PLAYWRIGHT_CHROME_EXECUTABLE_PATH"
-          "$PLAYWRIGHT_CHROME_EXECUTABLE_PATH" --version
+          cd tests/e2e-veridian
+          npx playwright install --with-deps chromium
 
       - name: Run console-suite Playwright tests
         id: console-tests
@@ -166,9 +165,3 @@ jobs:
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=⚠️ Notifuse console E2E (informative) FAIL sur ${GITHUB_SHA::8}. Voir https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             >/dev/null || echo "::warning::Notification Telegram échouée (non bloquant)"
-
-      # TEMPORAIRE (etape 1 de la bascule) : ce job tourne encore sur le runner
-      # permanent tant que le depot n'est pas enrole au courtier JIT.
-      - name: Cleanup runner (always)
-        if: always()
-        run: sudo rm -rf /tmp/runner-${{ github.run_id }}-* 2>/dev/null || true
