@@ -35,6 +35,9 @@ export default defineConfig({
     : 'list',
   use: {
     baseURL: process.env.NOTIFUSE_URL || 'http://localhost:8080',
+    // Fuseau fixe : le runner jetable n'en declare pas, la console l'envoie a analytics.query
+    // ("invalid timezone", CI du 06/11).
+    timezoneId: 'Europe/Paris',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: disableVideo ? 'off' : 'retain-on-failure',
