@@ -1145,12 +1145,14 @@ func TestEmailProvenJSONContract(t *testing.T) {
 	var p ProvisionInput
 	require.NoError(t, json.Unmarshal([]byte(`{"tenant_id":"t","owner_email":"a@x.test","email_proven":true}`), &p))
 	assert.True(t, p.EmailProven)
-	require.NoError(t, json.Unmarshal([]byte(`{"tenant_id":"t","owner_email":"a@x.test"}`), &p))
-	assert.False(t, p.EmailProven)
+	var p2 ProvisionInput
+	require.NoError(t, json.Unmarshal([]byte(`{"tenant_id":"t","owner_email":"a@x.test"}`), &p2))
+	assert.False(t, p2.EmailProven)
 
 	var m IssueMagicLinkInput
 	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"h","email":"a@x.test","email_proven":true}`), &m))
 	assert.True(t, m.EmailProven)
-	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"h","email":"a@x.test"}`), &m))
-	assert.False(t, m.EmailProven)
+	var m2 IssueMagicLinkInput
+	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"h","email":"a@x.test"}`), &m2))
+	assert.False(t, m2.EmailProven)
 }
