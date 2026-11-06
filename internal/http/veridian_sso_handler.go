@@ -54,8 +54,9 @@ import (
 // "user_not_in_app".
 func (h *VeridianHandler) handleIssueMagicLink(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		HubUserID string `json:"hub_user_id"`
-		Email     string `json:"email"`
+		HubUserID   string `json:"hub_user_id"`
+		Email       string `json:"email"`
+		EmailProven bool   `json:"email_proven"` // attestation Hub, absente tant qu'il ne l'envoie pas
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
@@ -82,10 +83,23 @@ func (h *VeridianHandler) handleIssueMagicLink(w http.ResponseWriter, r *http.Re
 	}
 
 	resp, err := h.service.IssueMagicLinkForHub(r.Context(), domain.IssueMagicLinkInput{
-		HubUserID: hubUserID,
-		Email:     email,
+		HubUserID:   hubUserID,
+		Email:       email,
+		EmailProven: body.EmailProven,
 	})
 	if err != nil {
+		// 400 hub_user_id_mismatch : le compte local est lie a un autre humain Hub.
+		// Le Hub ne reconnait pas ce code comme user_not_in_app : aucune session.
+		if errors.Is(err, service.ErrHubUserIDConflict) {
+			h.logError("issue_magic_link.hub_user_id_mismatch", err, map[string]interface{}{
+				"hub_user_id": hubUserID,
+				"email_len":   len(email),
+			})
+			WriteJSONErrorCode(w, ErrCodeHubUserIDMismatch, "hub_user_id_mismatch", http.StatusBadRequest, map[string]interface{}{
+				"hint": "local account is bound to a different hub_user_id",
+			})
+			return
+		}
 		// 400 user_not_in_app : sentinel ErrUserNotInApp → reponse contractuelle
 		// avec champ `error` litteral "user_not_in_app" + hint dans details.
 		if errors.Is(err, service.ErrUserNotInApp) {

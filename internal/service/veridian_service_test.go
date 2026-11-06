@@ -2988,8 +2988,59 @@ func TestIssueMagicLinkForHub_BackfillsHubUserIDOnFirstContact(t *testing.T) {
 	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u1", hubID).Return(nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, "u1").Return([]*domain.UserWorkspace{{UserID: "u1", WorkspaceID: "ws", UpdatedAt: time.Now()}}, nil)
 
+	_, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test", EmailProven: true})
+	require.NoError(t, err)
+}
+
+// Sans attestation du Hub, le repli par email connecte mais n'ecrit aucun lien :
+// gomock echoue si BackfillHubUserID est appele.
+func TestIssueMagicLinkForHub_UnprovenEmail_LogsInWithoutBinding(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	hubID := "11111111-2222-3333-4444-555555555555"
+	user := &domain.User{ID: "u1", Email: "a@x.test", Type: domain.UserTypeUser}
+
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+	m.userRepo.EXPECT().GetUserByEmail(ctx, "a@x.test").Return(user, nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, "u1").Return([]*domain.UserWorkspace{{UserID: "u1", WorkspaceID: "ws", UpdatedAt: time.Now()}}, nil)
+
 	_, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test"})
 	require.NoError(t, err)
+}
+
+// Compte local deja lie a un AUTRE hub_user_id : refus, aucun lien emis.
+func TestIssueMagicLinkForHub_EmailBoundToOtherHubID_Refused(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	hubID := "11111111-2222-3333-4444-555555555555"
+	other := "99999999-2222-3333-4444-555555555555"
+	user := &domain.User{ID: "u1", Email: "a@x.test", Type: domain.UserTypeUser, HubUserID: &other}
+
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).Times(2)
+	m.userRepo.EXPECT().GetUserByEmail(ctx, "a@x.test").Return(user, nil).Times(2)
+	// Ni workspaces ni backfill : gomock echoue si on va plus loin.
+
+	for _, proven := range []bool{false, true} {
+		resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test", EmailProven: proven})
+		require.ErrorIs(t, err, ErrHubUserIDConflict)
+		assert.Nil(t, resp)
+	}
+}
+
+// Course : le lien est pose entre la lecture et l'ecriture, le repo refuse.
+func TestIssueMagicLinkForHub_BackfillMismatch_Refused(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	hubID := "11111111-2222-3333-4444-555555555555"
+	user := &domain.User{ID: "u1", Email: "a@x.test", Type: domain.UserTypeUser}
+
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+	m.userRepo.EXPECT().GetUserByEmail(ctx, "a@x.test").Return(user, nil)
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u1", hubID).Return(domain.ErrHubUserIDMismatch)
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test", EmailProven: true})
+	require.ErrorIs(t, err, ErrHubUserIDConflict)
+	assert.Nil(t, resp)
 }
 
 func TestIssueMagicLinkForHub_ResolvesByHubUserIDWhenEmailChanged(t *testing.T) {
@@ -3000,7 +3051,6 @@ func TestIssueMagicLinkForHub_ResolvesByHubUserIDWhenEmailChanged(t *testing.T) 
 
 	// Aucun appel a GetUserByEmail : gomock echoue si le code retombe sur l'email.
 	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(bound, nil)
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u1", hubID).Return(nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, "u1").Return([]*domain.UserWorkspace{{UserID: "u1", WorkspaceID: "ws", UpdatedAt: time.Now()}}, nil)
 
 	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "nouveau@x.test"})
@@ -3008,21 +3058,6 @@ func TestIssueMagicLinkForHub_ResolvesByHubUserIDWhenEmailChanged(t *testing.T) 
 	payload, perr := decodeAutoLoginPayload(t, resp.MagicLinkURL)
 	require.NoError(t, perr)
 	assert.Equal(t, "ancien@x.test", payload.Email, "la session se retrouve par l'email LOCAL")
-}
-
-func TestIssueMagicLinkForHub_BackfillMismatch_DoesNotBlockLogin(t *testing.T) {
-	svc, m := newVeridianService(t)
-	ctx := context.Background()
-	hubID := "11111111-2222-3333-4444-555555555555"
-	user := &domain.User{ID: "u1", Email: "a@x.test", Type: domain.UserTypeUser}
-
-	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(nil, &domain.ErrUserNotFound{Message: "not found"})
-	m.userRepo.EXPECT().GetUserByEmail(ctx, "a@x.test").Return(user, nil)
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u1", hubID).Return(domain.ErrHubUserIDMismatch)
-	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, "u1").Return([]*domain.UserWorkspace{{UserID: "u1", WorkspaceID: "ws", UpdatedAt: time.Now()}}, nil)
-
-	_, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test"})
-	assert.NoError(t, err)
 }
 
 func TestIssueMagicLinkForHub_HubLookupError_Propagated(t *testing.T) {

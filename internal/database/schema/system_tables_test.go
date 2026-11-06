@@ -193,6 +193,14 @@ func TestFreshInstallSchemaIncludesCurrentVeridianSystemMigrations(t *testing.T)
 	}
 }
 
+// V70 : une installation neuve ne rejoue pas les migrations, l'index unique du lien Hub
+// doit donc etre dans le schema de base (CONTRAT-HUB 3.7).
+func TestFreshInstallSchemaHasHubUserIDUniqueIndex(t *testing.T) {
+	all := strings.Join(MigrationStatements, "\n")
+	assert.Contains(t, all, "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_hub_user_id_unique")
+	assert.Contains(t, all, "WHERE hub_user_id IS NOT NULL")
+}
+
 func TestSchemaConsistency(t *testing.T) {
 	t.Run("Migration statements reference some TableNames", func(t *testing.T) {
 		allStatements := strings.Join(MigrationStatements, " ")

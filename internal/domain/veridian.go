@@ -922,6 +922,10 @@ type IssueMagicLinkInput struct {
 	HubUserID string `json:"hub_user_id"`
 	// Email : email du user authentifie par le Hub. Source de verite identite.
 	Email string `json:"email"`
+	// EmailProven : attestation du Hub que l'adresse est prouvee (CONTRAT-HUB
+	// 3.7 / 6bis.8). Sans elle, le repli par email connecte mais n'ecrit AUCUN
+	// lien hub_user_id. Le Hub ne l'envoie pas encore (bounce-apps.ts).
+	EmailProven bool `json:"email_proven,omitempty"`
 }
 
 // IssueMagicLinkResponse est la reponse 200 de POST /api/sso/issue-magic-link.

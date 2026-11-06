@@ -52,6 +52,7 @@ const (
 	// redirige alors vers /dashboard?app=notifuse&hint=signup (flow §6bis.8.2).
 	// Pas d'auto-création de workspace cote app (anti-pattern §6bis.2).
 	ErrCodeUserNotInApp           = "user_not_in_app"
+	ErrCodeHubUserIDMismatch      = "hub_user_id_mismatch"
 	// === Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
 	// ErrCodeCannotFreezeOwner : refus de freeze l'owner du workspace
 	// (la chaine d'admin du tenant serait cassee). Le caller doit

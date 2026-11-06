@@ -161,6 +161,8 @@ var MigrationStatements = []string{
 	`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS integration_id VARCHAR(36)`,
 	`CREATE INDEX IF NOT EXISTS idx_tasks_integration_id ON tasks (integration_id) WHERE integration_id IS NOT NULL`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_workspace_integration_active ON tasks (workspace_id, integration_id) WHERE integration_id IS NOT NULL AND status NOT IN ('completed', 'failed')`,
+	// V70 : un hub_user_id ne lie qu'un seul user local (CONTRAT-HUB 3.7).
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_hub_user_id_unique ON users (hub_user_id) WHERE hub_user_id IS NOT NULL`,
 }
 
 // GetMigrationStatements returns migration statements for database schema setup

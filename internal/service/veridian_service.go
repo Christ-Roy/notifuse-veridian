@@ -117,6 +117,10 @@ var ErrPurgeNotEligible = errors.New("tenant not yet eligible for purge")
 // d'auto-creation cote app (anti-pattern §6bis.2).
 var ErrUserNotInApp = errors.New("user has no workspace in this app")
 
+// ErrHubUserIDConflict : le compte local trouve par email est deja lie a un autre
+// hub_user_id. Refus 400, aucun lien emis (CONTRAT-HUB 3.7, jamais reecrire un lien).
+var ErrHubUserIDConflict = errors.New("local account is bound to a different hub_user_id")
+
 // veridianService est l'implementation par defaut de domain.VeridianService.
 type veridianService struct {
 	workspaceService domain.WorkspaceServiceInterface
@@ -2306,21 +2310,24 @@ func hubUserIDFromProvision(input domain.ProvisionInput) string {
 // bindHubUserID pose le lien Hub d'un user au premier contact (§3.7). Best-effort :
 // un conflit se journalise et ne bloque jamais la connexion, l'email reste la cle
 // canonique. Le champ source permet de dire quel chemin a vu le conflit.
-func (s *veridianService) bindHubUserID(ctx context.Context, userID, hubUserID, source string) {
+func (s *veridianService) bindHubUserID(ctx context.Context, userID, hubUserID, source string) error {
 	if userID == "" || hubUserID == "" {
-		return
+		return nil
 	}
 	err := s.userRepo.BackfillHubUserID(ctx, userID, hubUserID)
-	if err == nil || s.logger == nil {
-		return
+	if err == nil {
+		return nil
 	}
-	s.logger.WithFields(map[string]interface{}{
-		"user_id":     userID,
-		"hub_user_id": hubUserID,
-		"source":      source,
-		"mismatch":    errors.Is(err, domain.ErrHubUserIDMismatch),
-		"error":       err.Error(),
-	}).Warn("veridian: backfill hub_user_id failed (non-blocking §3.7)")
+	if s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"user_id":     userID,
+			"hub_user_id": hubUserID,
+			"source":      source,
+			"mismatch":    errors.Is(err, domain.ErrHubUserIDMismatch),
+			"error":       err.Error(),
+		}).Warn("veridian: backfill hub_user_id failed (non-blocking §3.7)")
+	}
+	return err
 }
 
 // === Veridian patch — Couche 4 Bounce OAuth Hub (CONTRAT-HUB §6bis.8.3) ===
@@ -2382,7 +2389,20 @@ func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain
 		return nil, ErrUserNotInApp
 	}
 
-	s.bindHubUserID(ctx, user.ID, input.HubUserID, "issue_magic_link")
+	// Compte lie a un autre humain Hub : refus, aucun lien emis (3.7).
+	if user.HubUserID != nil && *user.HubUserID != "" && *user.HubUserID != input.HubUserID {
+		return nil, ErrHubUserIDConflict
+	}
+	// Le lien ne s'ecrit que si le Hub atteste l'adresse prouvee ; sinon le repli
+	// par email connecte sans rien lier.
+	if input.EmailProven && (user.HubUserID == nil || *user.HubUserID == "") {
+		if err := s.bindHubUserID(ctx, user.ID, input.HubUserID, "issue_magic_link"); err != nil {
+			if errors.Is(err, domain.ErrHubUserIDMismatch) {
+				return nil, ErrHubUserIDConflict
+			}
+			// Autre erreur d'ecriture : la connexion continue, le lien sera repose.
+		}
+	}
 
 	// Step 2 : lister workspaces.
 	userWorkspaces, err := s.workspaceRepo.GetUserWorkspaces(ctx, user.ID)

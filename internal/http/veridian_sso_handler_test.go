@@ -124,6 +124,39 @@ func TestIssueMagicLink_UserNotInApp_Returns400WithLiteralError(t *testing.T) {
 	assert.Equal(t, "user_not_in_app", resp.Code)
 }
 
+// === Compte lie a un autre hub_user_id → 400 hub_user_id_mismatch, aucun lien ===
+
+func TestIssueMagicLink_HubUserIDConflict_Returns400(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().IssueMagicLinkForHub(gomock.Any(), gomock.Any()).Return(nil, service.ErrHubUserIDConflict)
+
+	rec := invokeSSO(t, svc, buildSSOHMACRequest(t, `{"hub_user_id":"h1","email":"a@example.com"}`, 0))
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	var resp VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "hub_user_id_mismatch", resp.Error)
+	assert.NotContains(t, rec.Body.String(), "magic_link_url")
+}
+
+// === L'attestation du Hub est transmise au service ===
+
+func TestIssueMagicLink_EmailProvenForwarded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().IssueMagicLinkForHub(gomock.Any(), domain.IssueMagicLinkInput{
+		HubUserID: "h1", Email: "a@example.com", EmailProven: true,
+	}).Return(&domain.IssueMagicLinkResponse{MagicLinkURL: "https://x/y"}, nil)
+
+	rec := invokeSSO(t, svc, buildSSOHMACRequest(t, `{"hub_user_id":"h1","email":"a@example.com","email_proven":true}`, 0))
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
 // === Test 3 : HMAC invalide → 401 (test contractuel §6bis.8.5 #1) ===
 
 func TestIssueMagicLink_HMACInvalid_Returns401(t *testing.T) {
