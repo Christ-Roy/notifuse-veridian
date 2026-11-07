@@ -3160,3 +3160,30 @@ func TestIssueMagicLinkForHub_NextOnlyOnAppOrigin(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, resp.MagicLinkURL, "next=", "une autre origine ne suit jamais le lien")
 }
+
+// Un CreateWorkspace qui echoue (ex. "too many clients" entre la base et son schema) declenche le
+// nettoyage de la base laissee sans record (07/11/2026: 5 bases sans table). Sans ce nettoyage,
+// GetByID n'est jamais interroge et la base reste orpheline.
+func TestVeridianService_Provision_CreateWorkspaceFails_CleansLeftoverDB(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+
+	m.workspace.EXPECT().GetWorkspace(gomock.Any(), "ws-fail").Return(nil, errors.New("not found")).AnyTimes()
+	m.planRepo.EXPECT().Get(ctx, "ws-fail").Return(nil, sql.ErrNoRows).AnyTimes()
+	m.user.EXPECT().GetUserByEmail(ctx, "owner@example.com").Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
+	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.workspace.EXPECT().CreateWorkspace(gomock.Any(), "ws-fail", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		"UTC", gomock.Any(), "en", gomock.Any()).Return(nil, errors.New("failed to create workspace database: too many clients")).Times(1)
+
+	// Le nettoyage verifie qu'aucun record n'existe avant de toucher a la base.
+	m.workspaceRepo.EXPECT().GetByID(gomock.Any(), "ws-fail").Return(nil, &domain.ErrWorkspaceNotFound{WorkspaceID: "ws-fail"}).Times(1)
+
+	resp, err := svc.Provision(ctx, domain.ProvisionInput{TenantID: "ws-fail", OwnerEmail: "owner@example.com", Plan: "free"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "create workspace")
+	assert.Nil(t, resp)
+}
