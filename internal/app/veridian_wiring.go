@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -539,6 +540,19 @@ func (a *App) veridianInitHandlers() error {
 	// (VERIDIAN_DEFAULT_CO_OWNER_EMAIL ; vide = desactive).
 	if coOwner, ok := a.veridianService.(interface{ ConfigureDefaultCoOwner(string) }); ok {
 		coOwner.ConfigureDefaultCoOwner(a.config.VeridianDefaultCoOwnerEmail)
+	}
+	// Compte supprime cote Hub (POST /api/hub/users/sync deleted:true) : plus de lien de connexion.
+	if gated, ok := a.veridianService.(interface {
+		ConfigureAccountGate(func(context.Context, string) (bool, error))
+	}); ok && a.db != nil {
+		gated.ConfigureAccountGate(func(ctx context.Context, userID string) (bool, error) {
+			var deleted bool
+			err := a.db.QueryRowContext(ctx, `SELECT hub_deleted_at IS NOT NULL FROM users WHERE id = $1`, userID).Scan(&deleted)
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, nil
+			}
+			return deleted, err
+		})
 	}
 	if gcRunner, ok := a.veridianService.(httpHandler.VeridianOrphanDBGCRunner); ok {
 		veridianHandler.SetOrphanDBGC(gcRunner, a.config.Environment)

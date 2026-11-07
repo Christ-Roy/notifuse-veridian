@@ -169,6 +169,8 @@ type veridianService struct {
 	// espace. Injecte via ConfigureDefaultCoOwner (veridian_co_owner.go). Vide =
 	// fonctionnalite desactivee.
 	defaultCoOwnerEmail string
+	// accountGate : vrai si le Hub a supprime ce compte (users.hub_deleted_at, V71). Nil = pas de garde.
+	accountGate func(ctx context.Context, userID string) (deleted bool, err error)
 }
 
 // NewVeridianService construit un VeridianService.
@@ -2309,6 +2311,11 @@ func hubUserIDFromProvision(input domain.ProvisionInput) string {
 	return strings.TrimSpace(input.Metadata.HubUserID)
 }
 
+// ConfigureAccountGate branche la garde "compte supprime cote Hub" (CONTRAT-HUB 3.8). Cablage : veridian_wiring.go.
+func (s *veridianService) ConfigureAccountGate(gate func(ctx context.Context, userID string) (bool, error)) {
+	s.accountGate = gate
+}
+
 // bindProvisionOwner lie l'owner de provision a son hub_user_id. Un owner cree par cet appel
 // est lie d'office (personne a detourner) ; un compte existant trouve par email n'est lie
 // que si le Hub atteste l'adresse. Sans attestation l'appel reussit, sans lien.
@@ -2401,6 +2408,16 @@ func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain
 		return nil, ErrUserNotInApp
 	}
 
+	// Compte supprime cote Hub : aucun lien, comme un compte absent.
+	if s.accountGate != nil {
+		deleted, gerr := s.accountGate(ctx, user.ID)
+		if gerr != nil {
+			return nil, fmt.Errorf("account gate: %w", gerr)
+		}
+		if deleted {
+			return nil, ErrUserNotInApp
+		}
+	}
 	// Compte lie a un autre humain Hub : refus, aucun lien emis (3.7).
 	if user.HubUserID != nil && *user.HubUserID != "" && *user.HubUserID != input.HubUserID {
 		return nil, ErrHubUserIDConflict

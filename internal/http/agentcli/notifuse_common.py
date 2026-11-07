@@ -4108,6 +4108,8 @@ RAW_ROUTES = [
     ("admin:pricing-cache", "GET", "/api/veridian/admin/pricing-cache", "hmac", []),
     ("sso:issue-magic-link", "POST", "/api/sso/issue-magic-link", "hmac", []),
     ("users:by-email", "GET", "/api/users/by-email", "hmac", []),
+    ("hub:users", "GET", "/api/hub/users", "hmac", []),
+    ("hub:users-sync", "POST", "/api/hub/users/sync", "hmac", []),
     ("veridian:mode", "GET", "/api/veridian/mode", "none", []),
     ("veridian:hub-discovery-me", "GET", "/api/veridian/hub-discovery/me", "hmac", []),
     ("version", "GET", "/api/version", "none", []),

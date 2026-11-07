@@ -17,7 +17,9 @@ var TableDefinitions = []string{
 		veridian_managed BOOLEAN NOT NULL DEFAULT FALSE,
 		-- Fresh installs start at the current schema version and therefore do
 		-- not replay V46. Keep the identity binding in the base schema too.
-		hub_user_id UUID NULL
+		hub_user_id UUID NULL,
+		-- V71 : compte supprime cote Hub (sessions coupees, aucun lien emis)
+		hub_deleted_at TIMESTAMPTZ NULL
 	)`,
 	`CREATE TABLE IF NOT EXISTS user_sessions (
 		id UUID PRIMARY KEY,

@@ -182,6 +182,7 @@ func TestFreshInstallSchemaIncludesCurrentVeridianSystemMigrations(t *testing.T)
 
 	tests := map[string]string{
 		"V46 hub identity binding": "hub_user_id UUID NULL",
+		"V71 hub deleted marker":   "hub_deleted_at TIMESTAMPTZ NULL",
 		"V47 frozen members":       "CREATE TABLE IF NOT EXISTS veridian_frozen_members",
 		"V50 IMAP idempotency":      "CREATE TABLE IF NOT EXISTS veridian_imap_uid_seen",
 	}

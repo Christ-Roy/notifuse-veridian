@@ -27,3 +27,16 @@ Arrivée directe dans `/console/workspace/<id>`, jamais sur « Select workspace 
 
 Index unique partiel `idx_users_hub_user_id_unique` (V70), aussi dans
 `internal/database/schema/system_tables.go` pour les installations neuves.
+
+## Routes d'identité du Hub (CONTRAT-HUB §3.8, 07/11/2026)
+
+Module `internal/veridian/hubusers/`, sous HMAC Hub (sans signature valide : 401), câblé par
+`internal/app/veridian_mod_hubusers.go`. CLI : `hub:users`, `hub:users-sync`.
+- `GET /api/hub/users` : `{users:[{hub_user_id,email,name}]}`, humains seulement (`type='user'`),
+  `hub_user_id` null pour un compte non relié, `users.id` jamais exposé. Alimente `hub reconcile`.
+- `POST /api/hub/users/sync` `{hub_user_id,name?,email?,deleted?}` : compte retrouvé par `hub_user_id`
+  SEUL (jamais par email), seuls les champs présents sont appliqués. 404 `user_not_in_app`, 409
+  `email_taken`, 400 si uuid ou email invalide.
+- `deleted:true` : sessions coupées (`user_sessions`) et `users.hub_deleted_at` posé (V71) ; aucune
+  donnée supprimée. `issue-magic-link` ne délivre plus de lien à ce compte (`user_not_in_app`).
+  Limite connue : l'écran natif de connexion par code email reste ouvert, §3.8 interdit les écrans natifs.

@@ -1,0 +1,217 @@
+// Package hubusers expose au Hub les deux routes d'identité du CONTRAT-HUB §3.8 :
+//
+//	GET  /api/hub/users        {users:[{hub_user_id,email,name}]}  humains seulement
+//	POST /api/hub/users/sync   {hub_user_id,name?,email?,deleted?} 200 | 404 user_not_in_app
+//
+// HMAC Hub obligatoire (une route sans signature valide ne répond pas). Le compte visé est retrouvé
+// par hub_user_id uniquement, jamais par email ; seuls les champs présents sont appliqués. Fiche 80.
+package hubusers
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/mail"
+	"strings"
+
+	"github.com/google/uuid"
+)
+
+var (
+	// ErrNotFound : aucun compte local ne porte ce hub_user_id.
+	ErrNotFound = errors.New("hubusers: user not in app")
+	// ErrEmailTaken : l'adresse appartient déjà à un autre compte local.
+	ErrEmailTaken = errors.New("hubusers: email already used by another account")
+)
+
+// Account : un humain local, vu par le Hub.
+type Account struct {
+	ID        string // users.id, interne, jamais exposé
+	HubUserID string
+	Email     string
+	Name      string
+}
+
+// Store : accès aux comptes locaux (base système).
+type Store interface {
+	ListHumans(ctx context.Context) ([]Account, error)
+	FindByHubUserID(ctx context.Context, hubUserID string) (*Account, error)
+	// UpdateIdentity n'applique que les champs non nil. ErrEmailTaken si l'adresse est prise.
+	UpdateIdentity(ctx context.Context, userID string, name, email *string) error
+	// Revoke coupe toutes les sessions du compte et le marque supprimé côté Hub. Aucune donnée supprimée.
+	Revoke(ctx context.Context, userID string) error
+}
+
+// SQLStore : Store sur la base système.
+type SQLStore struct{ DB *sql.DB }
+
+func (s *SQLStore) ListHumans(ctx context.Context) ([]Account, error) {
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT hub_user_id, email, COALESCE(name, '')
+		FROM users WHERE type = 'user' ORDER BY email`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Account{}
+	for rows.Next() {
+		var hub sql.NullString
+		var a Account
+		if err := rows.Scan(&hub, &a.Email, &a.Name); err != nil {
+			return nil, err
+		}
+		a.HubUserID = hub.String
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLStore) FindByHubUserID(ctx context.Context, hubUserID string) (*Account, error) {
+	var a Account
+	err := s.DB.QueryRowContext(ctx, `
+		SELECT id, email, COALESCE(name, '') FROM users
+		WHERE hub_user_id = $1 AND type = 'user'`, hubUserID).Scan(&a.ID, &a.Email, &a.Name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	a.HubUserID = hubUserID
+	return &a, nil
+}
+
+func (s *SQLStore) UpdateIdentity(ctx context.Context, userID string, name, email *string) error {
+	_, err := s.DB.ExecContext(ctx, `
+		UPDATE users SET
+			name = COALESCE($2, name),
+			email = COALESCE($3, email),
+			updated_at = NOW()
+		WHERE id = $1`, userID, name, email)
+	if err != nil && strings.Contains(err.Error(), "users_email_key") {
+		return ErrEmailTaken
+	}
+	return err
+}
+
+func (s *SQLStore) Revoke(ctx context.Context, userID string) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = $1`, userID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET hub_deleted_at = NOW(), updated_at = NOW() WHERE id = $1`, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// Handler : les deux routes. Le middleware HMAC est posé par l'appelant (wire.go).
+type Handler struct{ Store Store }
+
+type listResponse struct {
+	Users []userJSON `json:"users"`
+}
+
+type userJSON struct {
+	HubUserID *string `json:"hub_user_id"`
+	Email     string  `json:"email"`
+	Name      string  `json:"name"`
+}
+
+// List : GET /api/hub/users.
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	accounts, err := h.Store.ListHumans(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
+		return
+	}
+	resp := listResponse{Users: make([]userJSON, 0, len(accounts))}
+	for _, a := range accounts {
+		u := userJSON{Email: a.Email, Name: a.Name}
+		if a.HubUserID != "" {
+			id := a.HubUserID
+			u.HubUserID = &id
+		}
+		resp.Users = append(resp.Users, u)
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+type syncRequest struct {
+	HubUserID string  `json:"hub_user_id"`
+	Name      *string `json:"name"`
+	Email     *string `json:"email"`
+	Deleted   bool    `json:"deleted"`
+}
+
+// Sync : POST /api/hub/users/sync.
+func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
+	var req syncRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_payload"})
+		return
+	}
+	req.HubUserID = strings.TrimSpace(req.HubUserID)
+	if _, err := uuid.Parse(req.HubUserID); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_payload", "hint": "hub_user_id must be a uuid"})
+		return
+	}
+	var email *string
+	if req.Email != nil {
+		e := strings.ToLower(strings.TrimSpace(*req.Email))
+		if _, err := mail.ParseAddress(e); err != nil || len(e) > 255 || !strings.Contains(e, "@") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_payload", "hint": "email is invalid"})
+			return
+		}
+		email = &e
+	}
+	var name *string
+	if req.Name != nil {
+		n := strings.TrimSpace(*req.Name)
+		if len(n) > 255 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_payload", "hint": "name too long"})
+			return
+		}
+		name = &n
+	}
+
+	acct, err := h.Store.FindByHubUserID(r.Context(), req.HubUserID)
+	if errors.Is(err, ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user_not_in_app"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
+		return
+	}
+
+	if name != nil || email != nil {
+		if err := h.Store.UpdateIdentity(r.Context(), acct.ID, name, email); err != nil {
+			if errors.Is(err, ErrEmailTaken) {
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "email_taken"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
+			return
+		}
+	}
+	if req.Deleted {
+		if err := h.Store.Revoke(r.Context(), acct.ID); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}

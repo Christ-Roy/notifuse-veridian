@@ -3110,3 +3110,33 @@ func TestBindProvisionOwner_CreatedUnproven_Links(t *testing.T) {
 	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u1", "11111111-2222-3333-4444-555555555555").Return(nil)
 	svc.bindProvisionOwner(ctx, "u1", true, provisionBindInput(false), "provision")
 }
+
+// Compte supprime cote Hub (users.hub_deleted_at) : aucun lien de connexion, comme un compte absent.
+func TestIssueMagicLinkForHub_AccountDeletedAtHub_NoLink(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	hubID := "11111111-2222-3333-4444-555555555555"
+	bound := &domain.User{ID: "u1", Email: "a@x.test", Type: domain.UserTypeUser, HubUserID: &hubID}
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(bound, nil)
+	// Ni GetUserWorkspaces ni lien : gomock echoue sinon.
+	svc.ConfigureAccountGate(func(_ context.Context, userID string) (bool, error) {
+		assert.Equal(t, "u1", userID)
+		return true, nil
+	})
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test"})
+	assert.ErrorIs(t, err, ErrUserNotInApp)
+	assert.Nil(t, resp)
+}
+
+func TestIssueMagicLinkForHub_AccountGateError_FailsClosed(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	hubID := "11111111-2222-3333-4444-555555555555"
+	bound := &domain.User{ID: "u1", Email: "a@x.test", Type: domain.UserTypeUser, HubUserID: &hubID}
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(bound, nil)
+	svc.ConfigureAccountGate(func(context.Context, string) (bool, error) { return false, errors.New("db down") })
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test"})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrUserNotInApp)
+	assert.Nil(t, resp)
+}
