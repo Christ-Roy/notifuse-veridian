@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { RootLayout } from '../layouts/RootLayout'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, useMatch } from '@tanstack/react-router'
@@ -7,6 +7,11 @@ import { useNavigate, useMatch } from '@tanstack/react-router'
 // Mock the auth context
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn()
+}))
+
+// Veridian : le rebond vers le Hub interroge le mode ; ici instance autonome, donc page de connexion.
+vi.mock('../services/api/veridian', () => ({
+  veridianApi: { getMode: vi.fn().mockResolvedValue({ mode: 'self-hosted', signin_url: '/console/signin' }) }
 }))
 
 // Mock the react router
@@ -61,7 +66,7 @@ describe('RootLayout', () => {
     expect(container.querySelector('.ant-spin')).toBeInTheDocument()
   })
 
-  it('redirects to signin when not authenticated and not on public route', () => {
+  it('redirects to signin when not authenticated and not on public route', async () => {
     // @ts-expect-error - we're mocking the return value
     useAuth.mockReturnValue({
       isAuthenticated: false,
@@ -74,14 +79,16 @@ describe('RootLayout', () => {
     useMatch.mockImplementation(() => false)
 
     render(<RootLayout />)
-    expect(mockNavigate).toHaveBeenCalledWith({
-      to: '/console/signin',
-      search: undefined,
-      replace: true
-    })
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/console/signin',
+        search: undefined,
+        replace: true
+      })
+    )
   })
 
-  it('preserves email parameter when redirecting to signin', () => {
+  it('preserves email parameter when redirecting to signin', async () => {
     // @ts-expect-error - we're mocking the return value
     useAuth.mockReturnValue({
       isAuthenticated: false,
@@ -102,11 +109,13 @@ describe('RootLayout', () => {
     } as Location
 
     render(<RootLayout />)
-    expect(mockNavigate).toHaveBeenCalledWith({
-      to: '/console/signin',
-      search: { email: 'demo@notifuse.com' },
-      replace: true
-    })
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/console/signin',
+        search: { email: 'demo@notifuse.com' },
+        replace: true
+      })
+    )
   })
 
   it('does not navigate when already on signin route with email parameter', () => {
