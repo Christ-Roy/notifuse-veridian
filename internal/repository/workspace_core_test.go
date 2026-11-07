@@ -615,7 +615,7 @@ func TestWorkspaceRepository_List_Postgres(t *testing.T) {
 		AddRow("w2", "Workspace 2", s1, nil, newer, newer).
 		AddRow("w1", "Workspace 1", s2, nil, older, older)
 
-	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+ORDER BY created_at DESC`).
+	mock.ExpectQuery(listActiveWorkspacesQuery).
 		WillReturnRows(rows)
 
 	list, err := repo.List(context.Background())
@@ -628,7 +628,7 @@ func TestWorkspaceRepository_List_Postgres(t *testing.T) {
 
 	// empty result
 	emptyRows := sqlmock.NewRows([]string{"id", "name", "settings", "integrations", "created_at", "updated_at"})
-	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+ORDER BY created_at DESC`).
+	mock.ExpectQuery(listActiveWorkspacesQuery).
 		WillReturnRows(emptyRows)
 
 	list, err = repo.List(context.Background())
@@ -636,7 +636,7 @@ func TestWorkspaceRepository_List_Postgres(t *testing.T) {
 	assert.Empty(t, list)
 
 	// db error
-	mock.ExpectQuery(`SELECT id, name, settings, integrations, created_at, updated_at\s+FROM workspaces\s+ORDER BY created_at DESC`).
+	mock.ExpectQuery(listActiveWorkspacesQuery).
 		WillReturnError(fmt.Errorf("db err"))
 
 	_, err = repo.List(context.Background())
@@ -1075,3 +1075,12 @@ func TestWorkspaceRepository_GetSystemConnection(t *testing.T) {
 		assert.Equal(t, db, systemDB)
 	})
 }
+
+
+// Un tenant soft-supprime (veridian_plan.status = 'deleted') n'est plus enumere : le planificateur, la file
+// d'envoi, les webhooks et le poller IMAP parcourent List, et chaque workspace enumere garde une connexion
+// PostgreSQL chaude (07/11/2026 : 50 tenants deleted sur 93 workspaces, max_connections atteint).
+// Un workspace sans ligne veridian_plan (installation hors Hub) reste liste.
+const listActiveWorkspacesQuery = `SELECT w\.id, w\.name, w\.settings, w\.integrations, w\.created_at, w\.updated_at\s+` +
+	`FROM workspaces w\s+LEFT JOIN veridian_plan p ON p\.workspace_id = w\.id\s+` +
+	`WHERE p\.status IS DISTINCT FROM 'deleted'\s+ORDER BY w\.created_at DESC`

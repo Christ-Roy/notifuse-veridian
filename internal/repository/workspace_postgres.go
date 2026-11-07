@@ -173,10 +173,15 @@ func (r *workspaceRepository) GetWorkspaceByCustomDomain(ctx context.Context, ho
 }
 
 func (r *workspaceRepository) List(ctx context.Context) ([]*domain.Workspace, error) {
+	// === Veridian patch (07/11/2026, fiche 81) === Les tenants soft-supprimes (veridian_plan.status = 'deleted')
+	// ne sont plus enumeres : chaque workspace parcouru garde une connexion PostgreSQL chaude. Sans ligne
+	// veridian_plan (installation hors Hub) le workspace reste liste.
 	query := `
-		SELECT id, name, settings, integrations, created_at, updated_at
-		FROM workspaces
-		ORDER BY created_at DESC
+		SELECT w.id, w.name, w.settings, w.integrations, w.created_at, w.updated_at
+		FROM workspaces w
+		LEFT JOIN veridian_plan p ON p.workspace_id = w.id
+		WHERE p.status IS DISTINCT FROM 'deleted'
+		ORDER BY w.created_at DESC
 	`
 	rows, err := r.systemDB.QueryContext(ctx, query)
 	if err != nil {

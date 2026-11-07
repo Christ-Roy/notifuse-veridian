@@ -22,5 +22,8 @@ workspaces CLIENTS (segments, envois, webhooks), et `POST /api/tenants/provision
 inactives étaient donc normales : 1 par workspace interrogé. Mais le planificateur (tâches toutes les 20 s,
 file d'envoi, webhooks, poller IMAP, automations) parcourt TOUS les workspaces, soft-supprimés compris :
 50 des 93 workspaces étaient des tenants de test `deleted` qui gardaient chacun une connexion chaude.
-Levier simple et propre : purger ces tenants (décision de Robert). Levier de code, non fait : exclure les
-tenants `deleted` dans `workspaceRepository.List` (fichier upstream, 7 appelants) ; à décider avec la règle 2.
+Correctifs (07/11/2026) : (1) les 56 workspaces de test ont été purgés par `wipe-test-tenants` (sauvegarde
+logique hors dépôt, `brunon5robert` = workspace personnel de Robert, jamais touché) : 105 -> 52 sessions ;
+(2) `workspaceRepository.List` n'énumère plus les tenants `deleted` (patch minimal décidé par Robert, consigné
+dans la fiche 41) : plus aucun parcours ne les touche, leur connexion chaude se ferme à 5 min d'inactivité ;
+(3) test `workspace_core_test.go` (`listActiveWorkspacesQuery`), vu échouer avant le patch.
