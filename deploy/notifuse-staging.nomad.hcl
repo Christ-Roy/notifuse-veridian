@@ -128,7 +128,6 @@ job "notifuse-staging" {
       }
       template {
         destination = "secrets/pg.env"
-        perms       = "600"   # I07 : sans ca Nomad ecrit en 644, lisible par tout compte local sur le noeud (mesure du 2026-10-07)
         env         = true
         data        = <<EOH
 TZ=UTC
@@ -177,7 +176,6 @@ EOH
       }
       template {
         destination = "secrets/app.env"
-        perms       = "600"   # I07 : sans ca Nomad ecrit en 644, lisible par tout compte local sur le noeud (mesure du 2026-10-07)
         env         = true
         data        = <<EOH
 SERVER_PORT=8081
