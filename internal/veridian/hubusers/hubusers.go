@@ -203,6 +203,12 @@ func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Un compte supprimé ne reprend pas vie : nom ou email poussés après coup = compte absent.
+	if acct.Deleted && (setName || email != nil) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user_not_in_app"})
+		return
+	}
+
 	// Idempotent : "updated" dit si quelque chose a réellement changé.
 	updated := false
 	nameChanges := setName && ((name == nil && acct.Name != "") || (name != nil && *name != acct.Name))

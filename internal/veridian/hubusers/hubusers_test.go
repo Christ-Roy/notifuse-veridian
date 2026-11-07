@@ -263,3 +263,31 @@ func TestSQLStore_UpdateIdentity_EmailPrisDevientErrEmailTaken(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// Un compte supprimé ne reprend pas vie : un sync de nom ou d'email rend 404, rien n'est écrit.
+func TestSync_CompteSupprime_NeReprendPasVie(t *testing.T) {
+	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID, Name: "Alice", Email: "a@x.test", Deleted: true}}
+	m := mux(f)
+	for _, body := range []string{
+		`{"hub_user_id":"` + hubID + `","name":"Autre"}`,
+		`{"hub_user_id":"` + hubID + `","email":"autre@x.test"}`,
+	} {
+		rec := do(m, signed("POST", "/api/hub/users/sync", body, ""))
+		assert.Equal(t, http.StatusNotFound, rec.Code, body)
+		assert.JSONEq(t, `{"error":"user_not_in_app"}`, rec.Body.String())
+	}
+	assert.Empty(t, f.updated)
+}
+
+// Premier deleted:true => updated true ; rejeu => updated false ; le compte reste (soft delete).
+func TestSync_Deleted_PremierAppelTruePuisRejeuFalse(t *testing.T) {
+	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID}}
+	m := mux(f)
+	rec := do(m, signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","deleted":true}`, ""))
+	assert.JSONEq(t, `{"updated":true}`, rec.Body.String())
+	f.found.Deleted = true // l'état que le store relirait
+	rec = do(m, signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","deleted":true}`, ""))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"updated":false}`, rec.Body.String())
+	assert.Equal(t, []string{"u1"}, f.revoked, "une seule coupure")
+}
