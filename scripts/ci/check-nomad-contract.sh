@@ -65,6 +65,13 @@ for file in $files; do
       if [ ! -f "deploy/${job_id}-staging.nomad.hcl" ]; then error "$file: declared staging gate has no deploy/${job_id}-staging.nomad.hcl"; fi
       ;;
   esac
+  # Le plafond de connexions de l'appli doit tenir dans max_connections de PostgreSQL (incident 07/11/2026 :
+  # 100 et 100, ~100 workspaces, "too many clients already" sur des workspaces clients).
+  pg_max="$(grep -Eo '"max_connections=[0-9]+"' "$file" | head -1 | tr -dc '0-9')"
+  app_max="$(sed -n 's/^DB_MAX_CONNECTIONS=\([0-9][0-9]*\)$/\1/p' "$file" | head -1)"
+  if [ -z "$pg_max" ]; then error "$file: PostgreSQL max_connections non declare (defaut 100)"
+  elif [ -z "$app_max" ]; then error "$file: DB_MAX_CONNECTIONS non declare (defaut 100)"
+  elif [ "$app_max" -gt $((pg_max - 30)) ]; then error "$file: DB_MAX_CONNECTIONS=$app_max depasse max_connections=$pg_max moins 30 de reserve"; fi
   if grep -Eq '^[[:space:]]*default[[:space:]]*=[[:space:]]*"[^"]*latest' "$file"; then error "$file: floating image_tag default is forbidden"; fi
   if grep -Eq '^[[:space:]]*image[[:space:]]*=[[:space:]]*"[^"]*:latest"' "$file"; then error "$file: literal :latest image is forbidden"; fi
 done

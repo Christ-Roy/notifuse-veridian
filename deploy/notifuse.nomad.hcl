@@ -153,6 +153,10 @@ job "notifuse" {
         command = "postgres"
         args = [
           "-c", "max_wal_size=1GB", "-c", "checkpoint_timeout=10min",
+          # Une connexion par base de workspace (le pool de l'appli) : a 100, PostgreSQL refusait des
+          # workspaces clients ("too many clients already", 07/11/2026, ~100 workspaces). Le plafond de
+          # l'appli (DB_MAX_CONNECTIONS) doit rester sous celui-ci, le controle de contrat le verifie.
+          "-c", "max_connections=300",
           # --- Archivage continu des WAL vers le depot pgBackRest ---
           # C'est CE reglage, et non la sauvegarde nocturne, qui borne la perte
           # de donnees : chaque segment de journal part vers R2 des qu'il est
@@ -462,6 +466,8 @@ DB_USER=postgres
 DB_PREFIX=notifuse
 DB_NAME=notifuse_system
 DB_SSLMODE=disable
+DB_MAX_CONNECTIONS=250
+DB_MAX_CONNECTIONS_PER_DB=3
 TASK_SCHEDULER_ENABLED=true
 TASK_SCHEDULER_INTERVAL=20s
 TASK_SCHEDULER_MAX_TASKS=100

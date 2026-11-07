@@ -128,6 +128,8 @@ job "notifuse-staging" {
           "site.veridian.app"   = "notifuse"
         }
         image = "postgres:17-alpine"
+        # Le plafond de l'appli (DB_MAX_CONNECTIONS) doit tenir dans celui de PostgreSQL (defaut 100 sinon).
+        args  = ["-c", "max_connections=300"]
         volumes = [
           "/opt/veridian-staging/notifuse/db:/var/lib/postgresql/data",
         ]
@@ -207,7 +209,7 @@ DB_USER=postgres
 DB_PREFIX=notifuse
 DB_NAME=notifuse_system
 DB_SSLMODE=disable
-DB_MAX_CONNECTIONS=600
+DB_MAX_CONNECTIONS=250
 DB_MAX_CONNECTIONS_PER_DB=3
 TASK_SCHEDULER_ENABLED=true
 TASK_SCHEDULER_INTERVAL=20s
