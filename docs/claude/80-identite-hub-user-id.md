@@ -55,3 +55,14 @@ de la page de connexion rappelle le rebond sans `auto`.
   (chemin `/console...` seul, jamais `/console/signin|logout|setup`) avant de rediriger, sinon workspace du lien.
 - `POST /api/hub/users/sync` `revoke_sessions:true` : coupe les sessions du compte sans le toucher
   (`updated:true` s'il y en avait).
+
+## Tests qui tiennent §6bis.8.0 en CI (vus échouer par mutation)
+| Point du contrat | Test |
+|---|---|
+| Visite sans session -> `prepare?next=<page encodée>&auto=1`, un seul essai | `console/src/layouts/RootLayout.veridian_bounce.test.tsx`, `console/src/lib/veridian_auto_bounce.test.ts` |
+| Route d'API sans session -> 401, jamais de rebond | `internal/http/middleware/auth_test.go` (401 sans jeton / jeton invalide) |
+| Après `/console/logout` : connexion, jamais de retour vers le Hub | `console/src/pages/LogoutPage.veridian_bounce.test.tsx` + cas « déconnexion explicite » du RootLayout |
+| Cookie d'essai présent au retour : connexion, pas de second départ | `RootLayout.veridian_bounce.test.tsx` (« au retour du Hub sans session ») |
+| Iframe : jamais de rebond (POST : le rebond n'existe que dans la SPA en navigation GET, le Hub répond 204 hors navigation) | `RootLayout.veridian_bounce.test.tsx` (« dans une iframe »), `veridian_auto_bounce.test.ts` |
+| `issue-magic-link` avec `next` d'une autre origine : ignoré | `internal/domain/veridian_test.go` `TestConsoleNextPath`, `internal/service` `TestIssueMagicLinkForHub_NextOnlyOnAppOrigin`, `internal/http` `TestVeridianAutoLogin_Next` |
+| `revoke_sessions` : jeton déjà en `localStorage` -> 401 | `internal/veridian/hubusers` `TestSync_RevokeSessions_CoupeSansToucherAuCompte` + `TestSQLStore_RevokeSessions_NeTouchePasLeCompte` (suppression des `user_sessions`) et `internal/service/auth_service_test.go` (session absente -> `ErrSessionExpired`, donc 401 à la requête suivante) |

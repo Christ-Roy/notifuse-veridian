@@ -79,6 +79,18 @@ describe('RootLayout — rebond automatique vers le Hub', () => {
     expect(replace).not.toHaveBeenCalled()
   })
 
+  it('dans une iframe : jamais de rebond, page de connexion', async () => {
+    const originalTop = Object.getOwnPropertyDescriptor(window, 'top')
+    Object.defineProperty(window, 'top', { value: {}, configurable: true })
+    try {
+      mount()
+      await waitFor(() => expect(navigate).toHaveBeenCalled())
+      expect(replace).not.toHaveBeenCalled()
+    } finally {
+      if (originalTop) Object.defineProperty(window, 'top', originalTop)
+    }
+  })
+
   it('instance autonome : page de connexion habituelle', async () => {
     vi.mocked(veridianApi.getMode).mockResolvedValue({ mode: 'self-hosted', signin_url: '/console/signin' })
     mount()
