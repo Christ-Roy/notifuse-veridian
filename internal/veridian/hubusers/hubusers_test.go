@@ -28,6 +28,7 @@ type fakeStore struct {
 	found      *Account
 	findCalls  []string
 	updated    []string
+	gotSetName bool
 	gotName    *string
 	gotEmail   *string
 	updateErr  error
@@ -43,9 +44,9 @@ func (f *fakeStore) FindByHubUserID(_ context.Context, id string) (*Account, err
 	}
 	return f.found, nil
 }
-func (f *fakeStore) UpdateIdentity(_ context.Context, userID string, name, email *string) error {
+func (f *fakeStore) UpdateIdentity(_ context.Context, userID string, setName bool, name, email *string) error {
 	f.updated = append(f.updated, userID)
-	f.gotName, f.gotEmail = name, email
+	f.gotSetName, f.gotName, f.gotEmail = setName, name, email
 	return f.updateErr
 }
 func (f *fakeStore) Revoke(_ context.Context, userID string) error {
@@ -89,6 +90,7 @@ func TestRoutes_RefuseSansSignatureValide(t *testing.T) {
 		// aucune signature
 		rec := do(m, httptest.NewRequest(tc.method, tc.path, bytes.NewBufferString(tc.body)))
 		assert.Equal(t, http.StatusUnauthorized, rec.Code, tc.path)
+		assert.Contains(t, rec.Header().Get("Content-Type"), "application/json", "401 en JSON")
 		// mauvaise signature
 		rec = do(m, signed(tc.method, tc.path, tc.body, "deadbeef"))
 		assert.Equal(t, http.StatusUnauthorized, rec.Code, tc.path)
@@ -118,6 +120,14 @@ func TestList_HumainsSeulement_SansIdLocal(t *testing.T) {
 	require.NotNil(t, out.Users[0].HubUserID)
 	assert.Equal(t, hubID, *out.Users[0].HubUserID)
 	assert.Nil(t, out.Users[1].HubUserID, "un compte non relié sort avec hub_user_id null")
+	assert.Contains(t, rec.Body.String(), `"name":null`, "un nom vide sort null")
+}
+
+func TestList_Vide_RendDuJSONPasUnCorpsVide(t *testing.T) {
+	rec := do(mux(&fakeStore{}), signed("GET", "/api/hub/users", "", ""))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"users":[]}`, rec.Body.String())
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 }
 
 func TestSync_CompteInconnu_404UserNotInApp(t *testing.T) {
@@ -141,11 +151,13 @@ func TestSync_RetrouveParHubUserIDSeulement_JamaisParEmail(t *testing.T) {
 }
 
 func TestSync_NAppliqueQueLesChampsPresents(t *testing.T) {
-	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID}}
+	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID, Name: "Ancien", Email: "a@x.test"}}
 	m := mux(f)
 
 	rec := do(m, signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","name":"  Alice Martin "}`, ""))
 	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"updated":true}`, rec.Body.String())
+	assert.True(t, f.gotSetName)
 	require.NotNil(t, f.gotName)
 	assert.Equal(t, "Alice Martin", *f.gotName)
 	assert.Nil(t, f.gotEmail, "email absent = email intact")
@@ -154,16 +166,37 @@ func TestSync_NAppliqueQueLesChampsPresents(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, f.gotEmail)
 	assert.Equal(t, "nouveau@x.test", *f.gotEmail)
-	assert.Nil(t, f.gotName, "name absent = name intact")
+	assert.False(t, f.gotSetName, "name absent = name intact")
 	assert.Empty(t, f.revoked, "sans deleted, aucune coupure")
 }
 
+func TestSync_NameNull_EffaceLeNom(t *testing.T) {
+	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID, Name: "Alice"}}
+	rec := do(mux(f), signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","name":null}`, ""))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, f.gotSetName)
+	assert.Nil(t, f.gotName)
+}
+
+func TestSync_Idempotent_UpdatedFalseSiRienNeChange(t *testing.T) {
+	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID, Name: "Alice", Email: "a@x.test"}}
+	rec := do(mux(f), signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","name":"Alice","email":"A@x.test"}`, ""))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"updated":false}`, rec.Body.String())
+	assert.Empty(t, f.updated, "rien d'écrit quand rien ne change")
+
+	f.found.Deleted = true
+	rec = do(mux(f), signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","deleted":true}`, ""))
+	assert.JSONEq(t, `{"updated":false}`, rec.Body.String())
+	assert.Empty(t, f.revoked, "un compte déjà supprimé n'est pas recoupé")
+}
+
 func TestSync_EmailDejaPris_409_EtEmailInvalide_400(t *testing.T) {
-	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID}, updateErr: ErrEmailTaken}
+	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID, Email: "a@x.test"}, updateErr: ErrEmailTaken}
 	m := mux(f)
 	rec := do(m, signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","email":"pris@x.test"}`, ""))
 	assert.Equal(t, http.StatusConflict, rec.Code)
-	assert.JSONEq(t, `{"error":"email_taken"}`, rec.Body.String())
+	assert.JSONEq(t, `{"error":"email_conflict"}`, rec.Body.String())
 
 	f.updated = nil
 	rec = do(m, signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","email":"pas-un-email"}`, ""))
@@ -190,7 +223,7 @@ func TestSQLStore_ListHumans_FiltreLesHumains(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
-	mock.ExpectQuery(`FROM users WHERE type = 'user'`).
+	mock.ExpectQuery(`FROM users WHERE type = 'user' AND hub_deleted_at IS NULL`).
 		WillReturnRows(sqlmock.NewRows([]string{"hub_user_id", "email", "name"}).
 			AddRow(hubID, "a@x.test", "A").AddRow(nil, "b@x.test", ""))
 	got, err := (&SQLStore{DB: db}).ListHumans(context.Background())
@@ -218,12 +251,12 @@ func TestSQLStore_UpdateIdentity_EmailPrisDevientErrEmailTaken(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 	mock.ExpectExec(`UPDATE users SET`).WillReturnError(assert.AnError)
-	err = (&SQLStore{DB: db}).UpdateIdentity(context.Background(), "u1", nil, nil)
+	err = (&SQLStore{DB: db}).UpdateIdentity(context.Background(), "u1", false, nil, nil)
 	assert.ErrorIs(t, err, assert.AnError)
 
 	mock.ExpectExec(`UPDATE users SET`).WillReturnError(errString(`pq: duplicate key value violates unique constraint "users_email_key"`))
 	e := "a@x.test"
-	err = (&SQLStore{DB: db}).UpdateIdentity(context.Background(), "u1", nil, &e)
+	err = (&SQLStore{DB: db}).UpdateIdentity(context.Background(), "u1", false, nil, &e)
 	assert.ErrorIs(t, err, ErrEmailTaken)
 }
 

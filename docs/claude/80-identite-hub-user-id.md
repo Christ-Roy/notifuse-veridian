@@ -36,7 +36,7 @@ Module `internal/veridian/hubusers/`, sous HMAC Hub (sans signature valide : 401
   `hub_user_id` null pour un compte non relié, `users.id` jamais exposé. Alimente `hub reconcile`.
 - `POST /api/hub/users/sync` `{hub_user_id,name?,email?,deleted?}` : compte retrouvé par `hub_user_id`
   SEUL (jamais par email), seuls les champs présents sont appliqués. 404 `user_not_in_app`, 409
-  `email_taken`, 400 si uuid ou email invalide.
+  `email_conflict`, 400 si uuid ou email invalide.
 - `deleted:true` : sessions coupées (`user_sessions`) et `users.hub_deleted_at` posé (V71) ; aucune
   donnée supprimée. `issue-magic-link` ne délivre plus de lien à ce compte (`user_not_in_app`).
   Limite connue : l'écran natif de connexion par code email reste ouvert, §3.8 interdit les écrans natifs.

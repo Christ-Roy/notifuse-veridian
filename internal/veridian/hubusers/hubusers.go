@@ -32,14 +32,16 @@ type Account struct {
 	HubUserID string
 	Email     string
 	Name      string
+	Deleted   bool // users.hub_deleted_at posé
 }
 
 // Store : accès aux comptes locaux (base système).
 type Store interface {
 	ListHumans(ctx context.Context) ([]Account, error)
 	FindByHubUserID(ctx context.Context, hubUserID string) (*Account, error)
-	// UpdateIdentity n'applique que les champs non nil. ErrEmailTaken si l'adresse est prise.
-	UpdateIdentity(ctx context.Context, userID string, name, email *string) error
+	// UpdateIdentity n'applique que ce qui est demandé : setName avec name nil efface le nom, email nil
+	// laisse l'adresse. ErrEmailTaken si l'adresse est prise.
+	UpdateIdentity(ctx context.Context, userID string, setName bool, name *string, email *string) error
 	// Revoke coupe toutes les sessions du compte et le marque supprimé côté Hub. Aucune donnée supprimée.
 	Revoke(ctx context.Context, userID string) error
 }
@@ -50,7 +52,7 @@ type SQLStore struct{ DB *sql.DB }
 func (s *SQLStore) ListHumans(ctx context.Context) ([]Account, error) {
 	rows, err := s.DB.QueryContext(ctx, `
 		SELECT hub_user_id, email, COALESCE(name, '')
-		FROM users WHERE type = 'user' ORDER BY email`)
+		FROM users WHERE type = 'user' AND hub_deleted_at IS NULL ORDER BY email`)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +73,8 @@ func (s *SQLStore) ListHumans(ctx context.Context) ([]Account, error) {
 func (s *SQLStore) FindByHubUserID(ctx context.Context, hubUserID string) (*Account, error) {
 	var a Account
 	err := s.DB.QueryRowContext(ctx, `
-		SELECT id, email, COALESCE(name, '') FROM users
-		WHERE hub_user_id = $1 AND type = 'user'`, hubUserID).Scan(&a.ID, &a.Email, &a.Name)
+		SELECT id, email, COALESCE(name, ''), hub_deleted_at IS NOT NULL FROM users
+		WHERE hub_user_id = $1 AND type = 'user'`, hubUserID).Scan(&a.ID, &a.Email, &a.Name, &a.Deleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -83,13 +85,13 @@ func (s *SQLStore) FindByHubUserID(ctx context.Context, hubUserID string) (*Acco
 	return &a, nil
 }
 
-func (s *SQLStore) UpdateIdentity(ctx context.Context, userID string, name, email *string) error {
+func (s *SQLStore) UpdateIdentity(ctx context.Context, userID string, setName bool, name *string, email *string) error {
 	_, err := s.DB.ExecContext(ctx, `
 		UPDATE users SET
-			name = COALESCE($2, name),
-			email = COALESCE($3, email),
+			name = CASE WHEN $2::boolean THEN $3 ELSE name END,
+			email = COALESCE($4, email),
 			updated_at = NOW()
-		WHERE id = $1`, userID, name, email)
+		WHERE id = $1`, userID, setName, name, email)
 	if err != nil && strings.Contains(err.Error(), "users_email_key") {
 		return ErrEmailTaken
 	}
@@ -121,7 +123,7 @@ type listResponse struct {
 type userJSON struct {
 	HubUserID *string `json:"hub_user_id"`
 	Email     string  `json:"email"`
-	Name      string  `json:"name"`
+	Name      *string `json:"name"`
 }
 
 // List : GET /api/hub/users.
@@ -133,7 +135,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := listResponse{Users: make([]userJSON, 0, len(accounts))}
 	for _, a := range accounts {
-		u := userJSON{Email: a.Email, Name: a.Name}
+		u := userJSON{Email: a.Email}
+		if a.Name != "" {
+			n := a.Name
+			u.Name = &n
+		}
 		if a.HubUserID != "" {
 			id := a.HubUserID
 			u.HubUserID = &id
@@ -144,10 +150,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 type syncRequest struct {
-	HubUserID string  `json:"hub_user_id"`
-	Name      *string `json:"name"`
-	Email     *string `json:"email"`
-	Deleted   bool    `json:"deleted"`
+	HubUserID string          `json:"hub_user_id"`
+	Name      json.RawMessage `json:"name"` // absent = intact, null = effacé
+	Email     *string         `json:"email"`
+	Deleted   bool            `json:"deleted"`
 }
 
 // Sync : POST /api/hub/users/sync.
@@ -171,9 +177,15 @@ func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 		}
 		email = &e
 	}
+	setName := len(req.Name) > 0
 	var name *string
-	if req.Name != nil {
-		n := strings.TrimSpace(*req.Name)
+	if setName && string(req.Name) != "null" {
+		var n string
+		if err := json.Unmarshal(req.Name, &n); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_payload", "hint": "name must be a string or null"})
+			return
+		}
+		n = strings.TrimSpace(n)
 		if len(n) > 255 {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_payload", "hint": "name too long"})
 			return
@@ -191,23 +203,33 @@ func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if name != nil || email != nil {
-		if err := h.Store.UpdateIdentity(r.Context(), acct.ID, name, email); err != nil {
+	// Idempotent : "updated" dit si quelque chose a réellement changé.
+	updated := false
+	nameChanges := setName && ((name == nil && acct.Name != "") || (name != nil && *name != acct.Name))
+	emailChanges := email != nil && *email != strings.ToLower(acct.Email)
+	if nameChanges || emailChanges {
+		var emailArg *string
+		if emailChanges {
+			emailArg = email
+		}
+		if err := h.Store.UpdateIdentity(r.Context(), acct.ID, nameChanges, name, emailArg); err != nil {
 			if errors.Is(err, ErrEmailTaken) {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "email_taken"})
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "email_conflict"})
 				return
 			}
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
 			return
 		}
+		updated = true
 	}
-	if req.Deleted {
+	if req.Deleted && !acct.Deleted {
 		if err := h.Store.Revoke(r.Context(), acct.ID); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
 			return
 		}
+		updated = true
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]bool{"updated": updated})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
