@@ -38,3 +38,10 @@ ont été sauvegardées puis supprimées (53 -> 36 bases pour 36 workspaces). De
   existe (tests vus échouer par mutation). Aucune tâche planifiée ajoutée.
 Contrôle : `select count(*) from pg_database where datname like 'notifuse_ws_%' and substr(datname,13) not in
 (select id from workspaces)` doit rendre 0.
+
+## Comptes locaux : le wipe retire aussi le propriétaire de test
+`wipe-test-tenants` supprimait le workspace et sa base mais laissait le compte local du propriétaire :
+79 comptes humains sans aucun workspace le 07/11/2026 (restes des batteries). `wipeOneTenant` appelle désormais
+`pruneOrphanedOwners` : un humain du workspace wipé qui n'a plus AUCUN workspace est supprimé (compte et sessions).
+Jamais le root, le co-owner par défaut, un compte machine ni un compte rattaché ailleurs ; une erreur de lecture
+ne supprime rien. Tests: `TestPruneOrphanedOwners`, `TestVeridianService_WipeTestTenants_PrunesOrphanedOwner`.

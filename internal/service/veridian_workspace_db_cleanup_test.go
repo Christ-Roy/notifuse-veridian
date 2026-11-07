@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -261,4 +262,37 @@ type repoOnlyGetByID struct{ domain.WorkspaceRepository }
 
 func (repoOnlyGetByID) GetByID(ctx context.Context, id string) (*domain.Workspace, error) {
 	return nil, &domain.ErrWorkspaceNotFound{WorkspaceID: id}
+}
+
+func TestPruneOrphanedOwners(t *testing.T) {
+	ctx := context.Background()
+	member := func(id, email string, typ domain.UserType) *domain.UserWorkspaceWithEmail {
+		return &domain.UserWorkspaceWithEmail{UserWorkspace: domain.UserWorkspace{UserID: id, WorkspaceID: "ws-gone"}, Email: email, Type: typ}
+	}
+
+	t.Run("owner sans autre workspace: compte et sessions supprimes; les autres restent", func(t *testing.T) {
+		svc, m := newVeridianService(t)
+		svc.defaultCoOwnerEmail = "robert@veridian.site"
+		// proprietaire de test sans autre workspace
+		m.workspaceRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "u-owner").Return(nil, nil).Times(1)
+		m.userRepo.EXPECT().DeleteAllSessionsByUserID(gomock.Any(), "u-owner").Return(nil).Times(1)
+		m.userRepo.EXPECT().Delete(gomock.Any(), "u-owner").Return(nil).Times(1)
+		// membre qui appartient encore a un autre workspace: intact (aucun appel Delete)
+		m.workspaceRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "u-shared").
+			Return([]*domain.UserWorkspace{{UserID: "u-shared", WorkspaceID: "other"}}, nil).Times(1)
+
+		svc.pruneOrphanedOwners(ctx, "ws-gone", []*domain.UserWorkspaceWithEmail{
+			member("u-owner", "e2e-sso-x-a@veridian.site", domain.UserTypeUser),
+			member("u-shared", "shared@example.com", domain.UserTypeUser),
+			member("u-root", "root@veridian.site", domain.UserTypeUser),       // root: jamais
+			member("u-co", "robert@veridian.site", domain.UserTypeUser),        // co-owner par defaut: jamais
+			member("u-key", "veridian-api-x@notifuse", domain.UserTypeAPIKey), // compte machine: jamais
+		})
+	})
+
+	t.Run("une erreur de lecture des workspaces ne supprime rien", func(t *testing.T) {
+		svc, m := newVeridianService(t)
+		m.workspaceRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "u1").Return(nil, errors.New("db down")).Times(1)
+		svc.pruneOrphanedOwners(ctx, "ws-gone", []*domain.UserWorkspaceWithEmail{member("u1", "a@x.test", domain.UserTypeUser)})
+	})
 }

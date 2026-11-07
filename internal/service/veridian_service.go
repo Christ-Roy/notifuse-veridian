@@ -1307,8 +1307,10 @@ func (s *veridianService) wipeOneTenant(ctx, rootCtx context.Context, tid string
 	// retire par Provision via TransferOwnership). DeleteWorkspace exige que
 	// le caller soit owner — on doit donc utiliser un ctx du tenant user.
 	deleteCtx := rootCtx
+	var wipedMembers []*domain.UserWorkspaceWithEmail
 	if s.workspaceRepo != nil {
 		members, _ := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, tid)
+		wipedMembers = members
 		var ownerUserID string
 		for _, m := range members {
 			if m != nil && m.Role == "owner" {
@@ -1412,6 +1414,9 @@ func (s *veridianService) wipeOneTenant(ctx, rootCtx context.Context, tid string
 	if err := s.planRepo.HardDelete(ctx, tid); err != nil {
 		return fmt.Errorf("hard delete plan: %w", err)
 	}
+
+	// 3bis. Les proprietaires humains sans autre workspace partent avec lui (fiche 81).
+	s.pruneOrphanedOwners(ctx, tid, wipedMembers)
 
 	// 4. Notifier le Hub (best effort).
 	if s.emitter != nil {

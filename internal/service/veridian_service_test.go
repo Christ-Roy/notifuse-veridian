@@ -3187,3 +3187,35 @@ func TestVeridianService_Provision_CreateWorkspaceFails_CleansLeftoverDB(t *test
 	assert.Contains(t, err.Error(), "create workspace")
 	assert.Nil(t, resp)
 }
+
+// Un wipe retire aussi le compte local du proprietaire de test quand il n'a plus aucun workspace
+// (07/11/2026: 79 comptes locaux sans workspace laisses par les batteries). Le co-owner par defaut et le
+// membre encore rattache a un autre workspace restent.
+func TestVeridianService_WipeTestTenants_PrunesOrphanedOwner(t *testing.T) {
+	svc, m := newVeridianService(t)
+	svc.defaultCoOwnerEmail = "robert@veridian.site"
+	ctx := context.Background()
+
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().GetUserByID(gomock.Any(), gomock.Any()).Return(&domain.User{ID: "x", Type: domain.UserTypeUser}, nil).AnyTimes()
+
+	owner := &domain.UserWorkspaceWithEmail{UserWorkspace: domain.UserWorkspace{UserID: "u-owner", WorkspaceID: "tstprune", Role: "owner"}, Email: "e2e-sso-z-a@veridian.site", Type: domain.UserTypeUser}
+	coOwner := &domain.UserWorkspaceWithEmail{UserWorkspace: domain.UserWorkspace{UserID: "u-co", WorkspaceID: "tstprune", Role: "member"}, Email: "robert@veridian.site", Type: domain.UserTypeUser}
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "tstprune").
+		Return([]*domain.UserWorkspaceWithEmail{owner, coOwner}, nil).Times(1)
+	m.workspace.EXPECT().DeleteWorkspace(gomock.Any(), "tstprune").Return(nil).Times(1)
+	m.planRepo.EXPECT().HardDelete(ctx, "tstprune").Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantDeleted, "tstprune", gomock.Any()).AnyTimes()
+
+	// Le proprietaire n'a plus aucun workspace: compte et sessions partent. Le co-owner: jamais lu ni supprime.
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "u-owner").Return(nil, nil).Times(1)
+	m.userRepo.EXPECT().DeleteAllSessionsByUserID(gomock.Any(), "u-owner").Return(nil).Times(1)
+	m.userRepo.EXPECT().Delete(gomock.Any(), "u-owner").Return(nil).Times(1)
+
+	resp, err := svc.WipeTestTenants(ctx, domain.WipeTestTenantsInput{TenantIDs: []string{"tstprune"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"tstprune"}, resp.Wiped)
+}

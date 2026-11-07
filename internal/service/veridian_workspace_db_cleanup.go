@@ -21,7 +21,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
@@ -180,4 +182,37 @@ func (s *veridianService) cleanupFailedProvisionDB(ctx context.Context, workspac
 		return // le record existe: ce n'est pas une base orpheline
 	}
 	s.forceDropWorkspaceDBBestEffort(ctx, workspaceID)
+}
+
+// pruneOrphanedOwners supprime, apres un wipe, les comptes humains du workspace qui n'ont plus AUCUN
+// workspace (07/11/2026 : 79 comptes locaux sans workspace, restes des batteries, wipe ne les retirait pas).
+// Jamais le root ni le co-owner par defaut, jamais un compte machine (api_key), jamais un compte qui
+// appartient encore a un autre workspace. Best-effort : un echec est journalise sans faire echouer le wipe.
+func (s *veridianService) pruneOrphanedOwners(ctx context.Context, tenantID string, members []*domain.UserWorkspaceWithEmail) {
+	for _, m := range members {
+		if m == nil || m.Type != domain.UserTypeUser {
+			continue
+		}
+		if strings.EqualFold(m.Email, s.rootEmail) || (s.defaultCoOwnerEmail != "" && strings.EqualFold(m.Email, s.defaultCoOwnerEmail)) {
+			continue
+		}
+		remaining, err := s.workspaceRepo.GetUserWorkspaces(ctx, m.UserID)
+		if err != nil || len(remaining) > 0 {
+			continue // incertain ou encore rattache ailleurs: on ne supprime rien
+		}
+		if err := s.userRepo.DeleteAllSessionsByUserID(ctx, m.UserID); err != nil {
+			s.warnPrune(tenantID, m.UserID, err)
+			continue
+		}
+		if err := s.userRepo.Delete(ctx, m.UserID); err != nil {
+			s.warnPrune(tenantID, m.UserID, err)
+		}
+	}
+}
+
+func (s *veridianService) warnPrune(tenantID, userID string, err error) {
+	if s.logger != nil {
+		s.logger.WithFields(map[string]interface{}{"tenant_id": tenantID, "user_id": userID, "error": err.Error()}).
+			Warn("veridian: wipe could not prune orphaned owner account (best-effort)")
+	}
 }
