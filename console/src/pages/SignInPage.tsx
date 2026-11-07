@@ -8,6 +8,7 @@ import { MainLayout } from '../layouts/MainLayout'
 import { useLingui } from '@lingui/react/macro'
 import { VeridianLogo } from '../components/veridian_logo'
 import { VeridianOAuthButtons } from '../components/veridian_oauth_buttons'
+import { clearBounceMarks } from '../lib/veridian_auto_bounce'
 
 export function SignInPage() {
   const { t } = useLingui()
@@ -36,6 +37,7 @@ export function SignInPage() {
         // Use the existing signin function for now
         // This might need to be updated in AuthContext
         await signin(token)
+        clearBounceMarks()
         message.success(t`Successfully signed in`)
 
         // Add a small delay to ensure auth state is updated before navigation

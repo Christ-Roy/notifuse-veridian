@@ -101,6 +101,20 @@ describe('VeridianOAuthButtons', () => {
     })
   })
 
+  it('offers « Continue » pointing at the Hub bounce without auto', async () => {
+    vi.mocked(veridianApi.getMode).mockResolvedValue({
+      mode: 'veridian-managed',
+      signin_url: '/console/signin',
+      hub_url: 'https://app.veridian.site'
+    })
+    renderButtons()
+    const cont = await screen.findByTestId('veridian-continue')
+    const href = cont.getAttribute('href') || ''
+    expect(href.startsWith('https://app.veridian.site/api/auth/bounce/prepare?next=')).toBe(true)
+    expect(href).not.toContain('auto=1')
+    expect(href).toContain(encodeURIComponent('https://notifuse.app.veridian.site/console'))
+  })
+
   it('redirects to Hub /login with encoded next param when Google clicked', async () => {
     vi.mocked(veridianApi.getMode).mockResolvedValue({
       mode: 'veridian-managed',

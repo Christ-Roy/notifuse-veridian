@@ -56,7 +56,8 @@ func (h *VeridianHandler) handleIssueMagicLink(w http.ResponseWriter, r *http.Re
 	var body struct {
 		HubUserID   string `json:"hub_user_id"`
 		Email       string `json:"email"`
-		EmailProven bool   `json:"email_proven"` // attestation Hub, absente tant qu'il ne l'envoie pas
+		EmailProven bool   `json:"email_proven"` // attestation Hub
+		Next        string `json:"next"`         // page demandée avant le rebond, validée par le service
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
@@ -86,6 +87,7 @@ func (h *VeridianHandler) handleIssueMagicLink(w http.ResponseWriter, r *http.Re
 		HubUserID:   hubUserID,
 		Email:       email,
 		EmailProven: body.EmailProven,
+		Next:        body.Next,
 	})
 	if err != nil {
 		// 400 hub_user_id_mismatch : le compte local est lie a un autre humain Hub.

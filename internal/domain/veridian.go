@@ -3,6 +3,9 @@ package domain
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"path"
+	"strings"
 	"time"
 )
 
@@ -929,6 +932,52 @@ type IssueMagicLinkInput struct {
 	// 3.7 / 6bis.8). Sans elle, le repli par email connecte mais n'ecrit AUCUN
 	// lien hub_user_id. Le Hub ne l'envoie pas encore (bounce-apps.ts).
 	EmailProven bool `json:"email_proven,omitempty"`
+	// Next : page demandee par l'utilisateur avant le rebond (CONTRAT-HUB 6bis.8.0 point 5). Renvoye
+	// apres connexion si et seulement si elle est sur l'origine de l'app (ConsoleNextPath).
+	Next string `json:"next,omitempty"`
+}
+
+// ConsoleNextPath rend le chemin (avec requete) de `next` quand il designe une page de la console sur
+// l'origine de l'app, "" sinon (l'appelant retombe sur l'accueil du workspace). Accepte une URL absolue
+// de la meme origine que apiEndpoint, ou un chemin /console...; refuse toute autre origine, les chemins
+// scheme-relatifs, les anti-slash, les caracteres de controle et les pages de connexion (boucle).
+func ConsoleNextPath(apiEndpoint, next string) string {
+	next = strings.TrimSpace(next)
+	if next == "" || strings.ContainsAny(next, "\\\r\n\t") || strings.HasPrefix(next, "//") {
+		return ""
+	}
+	for _, r := range next {
+		if r < 0x20 || r == 0x7f {
+			return ""
+		}
+	}
+	u, err := url.Parse(next)
+	if err != nil {
+		return ""
+	}
+	if u.Scheme != "" || u.Host != "" {
+		base, berr := url.Parse(apiEndpoint)
+		if berr != nil || apiEndpoint == "" || !strings.EqualFold(u.Scheme, base.Scheme) || !strings.EqualFold(u.Host, base.Host) || u.User != nil {
+			return ""
+		}
+	}
+	p := path.Clean(u.Path)
+	if p != "/console" && !strings.HasPrefix(p, "/console/") {
+		return ""
+	}
+	if u.Path != p && strings.TrimSuffix(u.Path, "/") != p {
+		return "" // "..", "." ou "//" dans le chemin : on ne devine pas
+	}
+	for _, blocked := range []string{"/console/signin", "/console/logout", "/console/setup"} {
+		if p == blocked || strings.HasPrefix(p, blocked+"/") {
+			return ""
+		}
+	}
+	out := p
+	if u.RawQuery != "" {
+		out += "?" + u.RawQuery
+	}
+	return out
 }
 
 // IssueMagicLinkResponse est la reponse 200 de POST /api/sso/issue-magic-link.

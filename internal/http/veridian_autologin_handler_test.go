@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -264,4 +265,40 @@ func TestVeridianAutoLogin_Head_DoesNotBurnToken(t *testing.T) {
 	get := httptest.NewRecorder()
 	h.handleAutoLogin(get, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token, nil))
 	assert.Equal(t, http.StatusOK, get.Code, "le lien reste valable apres une sonde HEAD")
+}
+
+// next valide => arrivee sur la page demandee ; next hors console ou piege => workspace du lien.
+func TestVeridianAutoLogin_Next(t *testing.T) {
+	for _, tc := range []struct{ next, want string }{
+		{"/console/workspace/ws-1/contacts", `"/console/workspace/ws-1/contacts"`},
+		{"https://evil.example/x", `"/console/workspace/ws-1"`},
+		{"//evil.example", `"/console/workspace/ws-1"`},
+		{"/console/signin", `"/console/workspace/ws-1"`},
+	} {
+		ctrl := gomock.NewController(t)
+		svc := mocks.NewMockUserServiceInterface(ctrl)
+		svc.EXPECT().CreateAutoLoginSession(gomock.Any(), "u@x.test").Return(&domain.AuthResponse{Token: "jwt"}, nil)
+		h := newAutologinHandler(svc, "secret-1")
+		token := makeAutologinTokenForTest(t, "secret-1", "ws-1", "u@x.test")
+		req := httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token+"&next="+url.QueryEscape(tc.next), nil)
+		rec := httptest.NewRecorder()
+		h.handleAutoLogin(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, tc.next)
+		assert.Contains(t, rec.Body.String(), tc.want, tc.next)
+		ctrl.Finish()
+	}
+}
+
+// Une connexion reussie leve les repères de rebond (deconnexion explicite, essai automatique).
+func TestVeridianAutoLogin_ClearsBounceMarks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockUserServiceInterface(ctrl)
+	svc.EXPECT().CreateAutoLoginSession(gomock.Any(), "u@x.test").Return(&domain.AuthResponse{Token: "jwt"}, nil)
+	h := newAutologinHandler(svc, "secret-1")
+	token := makeAutologinTokenForTest(t, "secret-1", "ws-1", "u@x.test")
+	rec := httptest.NewRecorder()
+	h.handleAutoLogin(rec, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token, nil))
+	assert.Contains(t, rec.Body.String(), "veridian-logout=; Max-Age=0")
+	assert.Contains(t, rec.Body.String(), "veridian-auto-bounce=; Max-Age=0")
 }

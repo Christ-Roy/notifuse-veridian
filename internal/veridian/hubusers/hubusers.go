@@ -42,6 +42,8 @@ type Store interface {
 	// UpdateIdentity n'applique que ce qui est demandé : setName avec name nil efface le nom, email nil
 	// laisse l'adresse. ErrEmailTaken si l'adresse est prise.
 	UpdateIdentity(ctx context.Context, userID string, setName bool, name *string, email *string) error
+	// RevokeSessions coupe les sessions du compte sans le toucher. Rend le nombre de sessions coupees.
+	RevokeSessions(ctx context.Context, userID string) (int64, error)
 	// Revoke coupe toutes les sessions du compte et le marque supprimé côté Hub. Aucune donnée supprimée.
 	Revoke(ctx context.Context, userID string) error
 }
@@ -96,6 +98,14 @@ func (s *SQLStore) UpdateIdentity(ctx context.Context, userID string, setName bo
 		return ErrEmailTaken
 	}
 	return err
+}
+
+func (s *SQLStore) RevokeSessions(ctx context.Context, userID string) (int64, error) {
+	res, err := s.DB.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = $1`, userID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (s *SQLStore) Revoke(ctx context.Context, userID string) error {
@@ -154,6 +164,9 @@ type syncRequest struct {
 	Name      json.RawMessage `json:"name"` // absent = intact, null = effacé
 	Email     *string         `json:"email"`
 	Deleted   bool            `json:"deleted"`
+	// RevokeSessions : coupe les sessions sans toucher au compte (« se déconnecter partout »,
+	// changement de mot de passe, CONTRAT-HUB §3.8).
+	RevokeSessions bool `json:"revoke_sessions"`
 }
 
 // Sync : POST /api/hub/users/sync.
@@ -234,6 +247,16 @@ func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		updated = true
+	}
+	if req.RevokeSessions && !req.Deleted {
+		n, err := h.Store.RevokeSessions(r.Context(), acct.ID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
+			return
+		}
+		if n > 0 {
+			updated = true
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"updated": updated})
 }

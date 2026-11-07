@@ -34,6 +34,8 @@ type fakeStore struct {
 	updateErr  error
 	revoked    []string
 	revokedErr error
+	sessionsCut []string
+	sessionsN   int64
 }
 
 func (f *fakeStore) ListHumans(context.Context) ([]Account, error) { return f.humans, nil }
@@ -48,6 +50,10 @@ func (f *fakeStore) UpdateIdentity(_ context.Context, userID string, setName boo
 	f.updated = append(f.updated, userID)
 	f.gotSetName, f.gotName, f.gotEmail = setName, name, email
 	return f.updateErr
+}
+func (f *fakeStore) RevokeSessions(_ context.Context, userID string) (int64, error) {
+	f.sessionsCut = append(f.sessionsCut, userID)
+	return f.sessionsN, nil
 }
 func (f *fakeStore) Revoke(_ context.Context, userID string) error {
 	f.revoked = append(f.revoked, userID)
@@ -290,4 +296,36 @@ func TestSync_Deleted_PremierAppelTruePuisRejeuFalse(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"updated":false}`, rec.Body.String())
 	assert.Equal(t, []string{"u1"}, f.revoked, "une seule coupure")
+}
+
+// revoke_sessions coupe les sessions sans toucher au compte : ni nom, ni email, ni marqueur de suppression.
+func TestSync_RevokeSessions_CoupeSansToucherAuCompte(t *testing.T) {
+	f := &fakeStore{found: &Account{ID: "u1", HubUserID: hubID}, sessionsN: 3}
+	m := mux(f)
+	rec := do(m, signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","revoke_sessions":true}`, ""))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"updated":true}`, rec.Body.String())
+	assert.Equal(t, []string{"u1"}, f.sessionsCut)
+	assert.Empty(t, f.updated)
+	assert.Empty(t, f.revoked, "le compte n'est pas marqué supprimé")
+
+	f.sessionsN = 0
+	rec = do(m, signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","revoke_sessions":true}`, ""))
+	assert.JSONEq(t, `{"updated":false}`, rec.Body.String(), "aucune session à couper = rien de changé")
+
+	// Absent ou false : jamais de coupure.
+	f.sessionsCut = nil
+	do(m, signed("POST", "/api/hub/users/sync", `{"hub_user_id":"`+hubID+`","revoke_sessions":false}`, ""))
+	assert.Empty(t, f.sessionsCut)
+}
+
+func TestSQLStore_RevokeSessions_NeTouchePasLeCompte(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	mock.ExpectExec(`DELETE FROM user_sessions WHERE user_id = \$1`).WithArgs("u1").WillReturnResult(sqlmock.NewResult(0, 2))
+	n, err := (&SQLStore{DB: db}).RevokeSessions(context.Background(), "u1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), n)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

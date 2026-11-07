@@ -3140,3 +3140,23 @@ func TestIssueMagicLinkForHub_AccountGateError_FailsClosed(t *testing.T) {
 	assert.NotErrorIs(t, err, ErrUserNotInApp)
 	assert.Nil(t, resp)
 }
+
+// next (page demandee avant le rebond) suit le lien de connexion, mais seulement s'il est sur l'origine de l'app.
+func TestIssueMagicLinkForHub_NextOnlyOnAppOrigin(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	hubID := "11111111-2222-3333-4444-555555555555"
+	bound := &domain.User{ID: "u1", Email: "a@x.test", Type: domain.UserTypeUser, HubUserID: &hubID}
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(bound, nil).Times(2)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, "u1").Return([]*domain.UserWorkspace{{UserID: "u1", WorkspaceID: "ws", UpdatedAt: time.Now()}}, nil).Times(2)
+
+	resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test",
+		Next: "https://notifuse.app.veridian.site/console/workspace/ws/contacts?a=1"})
+	require.NoError(t, err)
+	assert.Contains(t, resp.MagicLinkURL, "&next=%2Fconsole%2Fworkspace%2Fws%2Fcontacts%3Fa%3D1")
+
+	resp, err = svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test",
+		Next: "https://evil.example/console/workspace/ws"})
+	require.NoError(t, err)
+	assert.NotContains(t, resp.MagicLinkURL, "next=", "une autre origine ne suit jamais le lien")
+}

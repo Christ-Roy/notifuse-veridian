@@ -3,6 +3,8 @@ import { Spin } from 'antd'
 import { useLingui } from '@lingui/react/macro'
 import { useAuth } from '../contexts/AuthContext'
 import { useEffect } from 'react'
+import { veridianApi } from '../services/api/veridian'
+import { autoBounceTarget, markAutoBounceAttempt } from '../lib/veridian_auto_bounce'
 
 export function RootLayout() {
   const { t } = useLingui()
@@ -53,22 +55,49 @@ export function RootLayout() {
         return
       }
 
-      // Preserve search parameters when redirecting to signin
-      const currentSearch = window.location.search
-      const searchParams = new URLSearchParams(currentSearch)
-      const search: { email?: string } = {}
-      
-      // Preserve email parameter if present
-      if (searchParams.has('email')) {
-        search.email = searchParams.get('email') || undefined
+      const redirectToSignin = () => {
+        // Preserve search parameters when redirecting to signin
+        const currentSearch = window.location.search
+        const searchParams = new URLSearchParams(currentSearch)
+        const search: { email?: string } = {}
+
+        // Preserve email parameter if present
+        if (searchParams.has('email')) {
+          search.email = searchParams.get('email') || undefined
+        }
+
+        navigate({
+          to: '/console/signin',
+          search: Object.keys(search).length > 0 ? search : undefined,
+          replace: true
+        })
       }
 
-      navigate({ 
-        to: '/console/signin',
-        search: Object.keys(search).length > 0 ? search : undefined,
-        replace: true
-      })
-      return
+      // Veridian (CONTRAT-HUB 6bis.8.0) : une visite sans session repart vers le Hub, une seule fois,
+      // jamais après une déconnexion explicite ni dans une iframe. Sinon : page de connexion.
+      let cancelled = false
+      void (async () => {
+        const mode = await veridianApi.getMode().catch(() => null)
+        if (cancelled) return
+        const target = autoBounceTarget({
+          mode: mode?.mode,
+          hubUrl: mode?.hub_url,
+          pathname: window.location.pathname,
+          href: window.location.href,
+          cookie: document.cookie,
+          isTopWindow: window.self === window.top,
+          hasToken: !!localStorage.getItem('auth_token')
+        })
+        if (target) {
+          markAutoBounceAttempt()
+          window.location.replace(target)
+          return
+        }
+        redirectToSignin()
+      })()
+      return () => {
+        cancelled = true
+      }
     }
 
     if (shouldRedirectToCreateWorkspace) {

@@ -135,6 +135,9 @@ var autoLoginPageTemplate = template.Must(template.New("autologin").Parse(`<!DOC
         document.querySelector('.box p').textContent = 'localStorage unavailable. Cannot sign in.';
         return;
       }
+      // Connexion réussie : lève les repères de rebond (déconnexion explicite, essai automatique).
+      document.cookie = 'veridian-logout=; Max-Age=0; path=/; SameSite=Lax';
+      document.cookie = 'veridian-auto-bounce=; Max-Age=0; path=/; SameSite=Lax';
       window.location.replace({{ .RedirectURL }});
     })();
   </script>
@@ -204,6 +207,11 @@ func (h *VeridianAutoLoginHandler) handleAutoLogin(w http.ResponseWriter, r *htt
 	// Page HTML qui stocke le token et redirect, directement dans le workspace
 	// du lien : /console seul afficherait l'écran « Select workspace ».
 	redirectURL := "/console/workspace/" + url.PathEscape(payload.WorkspaceID)
+	// Page demandée avant le rebond (CONTRAT-HUB 6bis.8.0) : chemin de la console seulement, jamais une
+	// autre origine (le paramètre n'est pas signé, on le revalide ici).
+	if nextPath := domain.ConsoleNextPath("", r.URL.Query().Get("next")); nextPath != "" {
+		redirectURL = nextPath
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

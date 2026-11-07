@@ -40,3 +40,18 @@ Module `internal/veridian/hubusers/`, sous HMAC Hub (sans signature valide : 401
 - `deleted:true` : sessions coupées (`user_sessions`) et `users.hub_deleted_at` posé (V71) ; aucune
   donnée supprimée. `issue-magic-link` ne délivre plus de lien à ce compte (`user_not_in_app`).
   Limite connue : l'écran natif de connexion par code email reste ouvert, §3.8 interdit les écrans natifs.
+
+## Connexion automatique par rebond (CONTRAT-HUB §6bis.8.0, 07/11/2026)
+
+Console (`console/src/lib/veridian_auto_bounce.ts`, branché dans `RootLayout`) : une visite SANS session
+sur une page protégée, en navigation complète et hors iframe, repart vers
+`<hub>/api/auth/bounce/prepare?next=<page demandée>&auto=1`. Deux repères locaux (cookies de l'hôte de
+l'app, jamais sur `.veridian.site`) : `veridian-auto-bounce` (5 min, un seul essai, au retour on montre la
+connexion) et `veridian-logout` (posé par la page de déconnexion, plus aucun rebond silencieux). Les deux
+sont levés par `/veridian/auto-login` (connexion réussie). Le bouton « Continuer avec mon compte Veridian »
+de la page de connexion rappelle le rebond sans `auto`.
+- `issue-magic-link` accepte `next` : suivi seulement s'il est sur l'origine de l'app
+  (`domain.ConsoleNextPath`), ajouté au lien en `&next=<chemin>`. `/veridian/auto-login` le revalide
+  (chemin `/console...` seul, jamais `/console/signin|logout|setup`) avant de rediriger, sinon workspace du lien.
+- `POST /api/hub/users/sync` `revoke_sessions:true` : coupe les sessions du compte sans le toucher
+  (`updated:true` s'il y en avait).

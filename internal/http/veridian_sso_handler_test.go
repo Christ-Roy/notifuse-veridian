@@ -285,3 +285,18 @@ func TestIssueMagicLink_EmailTrimmed(t *testing.T) {
 	rec := invokeSSO(t, svc, buildSSOHMACRequest(t, body, 0))
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
+
+// next (page demandée avant le rebond) est transmis au service, qui le valide seul.
+func TestIssueMagicLink_NextForwarded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().IssueMagicLinkForHub(gomock.Any(), domain.IssueMagicLinkInput{
+		HubUserID: "h1", Email: "a@example.com", Next: "https://notifuse.app.veridian.site/console/workspace/ws1",
+	}).Return(&domain.IssueMagicLinkResponse{MagicLinkURL: "https://x/y"}, nil)
+
+	rec := invokeSSO(t, svc, buildSSOHMACRequest(t,
+		`{"hub_user_id":"h1","email":"a@example.com","next":"https://notifuse.app.veridian.site/console/workspace/ws1"}`, 0))
+	require.Equal(t, http.StatusOK, rec.Code)
+}

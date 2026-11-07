@@ -1156,3 +1156,35 @@ func TestEmailProvenJSONContract(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"h","email":"a@x.test"}`), &m2))
 	assert.False(t, m2.EmailProven)
 }
+
+func TestConsoleNextPath(t *testing.T) {
+	const app = "https://notifuse.app.veridian.site"
+	ok := map[string]string{
+		app + "/console/workspace/ws1/contacts?x=1": "/console/workspace/ws1/contacts?x=1",
+		"/console/workspace/ws1":                     "/console/workspace/ws1",
+		"/console":                                   "/console",
+	}
+	for in, want := range ok {
+		assert.Equal(t, want, ConsoleNextPath(app, in), in)
+	}
+	for _, in := range []string{
+		"",
+		"https://evil.example/console/workspace/ws1",         // autre origine
+		"https://notifuse.app.veridian.site.evil.example/console/x",
+		"//evil.example/console/x",                           // scheme-relatif
+		"/\\evil.example",                                    // anti-slash
+		"/console/../admin",                                  // hors console apres nettoyage
+		"/console\r\nSet-Cookie: a=b",                        // controle
+		"javascript:alert(1)",
+		"/api/user.me",                                       // pas la console
+		"/console/signin",                                    // boucle
+		"/console/logout",
+		"/console/setup",
+		"/veridian/auto-login?token=x",
+	} {
+		assert.Equal(t, "", ConsoleNextPath(app, in), in)
+	}
+	// Sans origine connue, seule une page relative est acceptee.
+	assert.Equal(t, "", ConsoleNextPath("", app+"/console/workspace/ws1"))
+	assert.Equal(t, "/console/workspace/ws1", ConsoleNextPath("", "/console/workspace/ws1"))
+}

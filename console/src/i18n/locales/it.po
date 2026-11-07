@@ -2901,6 +2901,10 @@ msgstr ""
 msgid "Continue with Microsoft"
 msgstr ""
 
+#: src/components/veridian_oauth_buttons.tsx
+msgid "Continue with my Veridian account"
+msgstr ""
+
 #: src/pages/InboxPage.tsx
 msgid "Conversation"
 msgstr ""

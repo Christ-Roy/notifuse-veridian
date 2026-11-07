@@ -2460,6 +2460,10 @@ func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain
 		// HUB_API_SECRET non configure → 500 cote handler.
 		return nil, fmt.Errorf("build auto-login url: %w", err)
 	}
+	// Page demandee avant le rebond : suivie seulement si elle est sur l'origine de l'app.
+	if nextPath := domain.ConsoleNextPath(s.apiEndpoint, input.Next); nextPath != "" {
+		autoLoginURL += "&next=" + url.QueryEscape(nextPath)
+	}
 
 	return &domain.IssueMagicLinkResponse{
 		MagicLinkURL: autoLoginURL,

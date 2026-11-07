@@ -29,6 +29,7 @@ import { GoogleOutlined, WindowsOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useLingui } from '@lingui/react/macro'
 import { veridianApi, type VeridianModeResponse } from '../services/api/veridian'
+import { bounceUrl } from '../lib/veridian_auto_bounce'
 
 const HUB_LOGIN_URL = 'https://app.veridian.site/login'
 
@@ -81,6 +82,7 @@ export function VeridianOAuthButtons() {
   if (isStagingEnv()) return null
 
   const hubLoginUrl = buildHubLoginUrl(data.hub_url || HUB_LOGIN_URL)
+  const continueUrl = bounceUrl(data.hub_url || HUB_LOGIN_URL, window.location.href.replace('/console/signin', '/console'), false)
 
   const handleClick = () => {
     window.location.href = hubLoginUrl
@@ -88,6 +90,19 @@ export function VeridianOAuthButtons() {
 
   return (
     <div data-testid="veridian-oauth-buttons">
+      {continueUrl && (
+        // « Continuer » : le rebond sans `auto`, pour qui revient d'une déconnexion explicite ou d'un essai raté.
+        <Button
+          block
+          type="primary"
+          size="large"
+          href={continueUrl}
+          data-testid="veridian-continue"
+          style={{ marginBottom: 8 }}
+        >
+          {t`Continue with my Veridian account`}
+        </Button>
+      )}
       <Button
         block
         size="large"
