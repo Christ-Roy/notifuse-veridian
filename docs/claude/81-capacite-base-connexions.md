@@ -45,3 +45,9 @@ Contrôle : `select count(*) from pg_database where datname like 'notifuse_ws_%'
 `pruneOrphanedOwners` : un humain du workspace wipé qui n'a plus AUCUN workspace est supprimé (compte et sessions).
 Jamais le root, le co-owner par défaut, un compte machine ni un compte rattaché ailleurs ; une erreur de lecture
 ne supprime rien. Tests: `TestPruneOrphanedOwners`, `TestVeridianService_WipeTestTenants_PrunesOrphanedOwner`.
+
+## Cause réelle des orphelines : le gestionnaire de connexions recréait la base
+Mesure du 07/11 après le déploiement du FORCE : 9 nouvelles bases complètes (38 tables) sans ligne `workspaces`,
+alors que les logs du wipe disaient « database dropped ». `connectionManager.createWorkspacePool` (upstream) appelle
+`EnsureWorkspaceDatabaseExists` : toute tâche ou tout webhook en vol qui demande une connexion pour un workspace
+supprimé RECRÉE sa base. Correctif (patch listé en fiche 41) : pas de ligne `workspaces`, pas de base.

@@ -765,3 +765,28 @@ func TestConnectionManager_PingUsesIsolatedContext(t *testing.T) {
 
 	require.NoError(t, poolMock.ExpectationsWereMet())
 }
+
+// Un workspace sans ligne `workspaces` n'a plus le droit de faire recreer sa base : une tache ou un
+// webhook en vol qui demande une connexion apres un wipe recreait la base avec son schema complet
+// (9 bases orphelines de 38 tables le 07/11/2026, logs « database dropped » puis base de nouveau la).
+func TestConnectionManager_GetWorkspaceConnection_RefusesWorkspaceWithoutRecord(t *testing.T) {
+	defer ResetConnectionManager()
+
+	cfg := createTestConfig()
+	systemDB, systemMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = systemDB.Close() }()
+
+	require.NoError(t, InitializeConnectionManager(cfg, systemDB))
+	cm := instance
+
+	systemMock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM workspaces WHERE id = \$1\)`).
+		WithArgs("wiped_ws").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	pool, err := cm.GetWorkspaceConnection(context.Background(), "wiped_ws")
+	require.Error(t, err)
+	assert.Nil(t, pool)
+	assert.ErrorIs(t, err, ErrWorkspaceRecordMissing)
+	assert.NoError(t, systemMock.ExpectationsWereMet(), "le record est verifie avant toute creation de base")
+}

@@ -20,3 +20,7 @@ Règle 2 de CLAUDE.md : le code Veridian vit dans ses propres fichiers. Exceptio
 - `internal/repository/workspace_postgres.go` `DeleteDatabase` (07/11/2026, parente) : `DROP DATABASE … WITH (FORCE)`
   au lieu du DROP simple, que la réouverture de connexions par le planificateur faisait échouer ("being
   accessed") en laissant une base orpheline. Test : `TestWorkspaceRepository_DeleteDatabase_DropsWithForce`.
+- `pkg/database/connection_manager.go` `createWorkspacePool` (07/11/2026, parente) : refuse de créer la base d'un
+  workspace sans ligne `workspaces` (`ErrWorkspaceRecordMissing`). Avant, une tâche ou un webhook en vol qui demandait
+  une connexion après un wipe RECRÉAIT la base avec ses 38 tables (9 orphelines mesurées, alors que les logs
+  disaient « database dropped »). Test : `TestConnectionManager_GetWorkspaceConnection_RefusesWorkspaceWithoutRecord`.

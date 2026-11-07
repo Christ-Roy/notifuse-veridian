@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"context"
 	"database/sql"
 	"fmt"
@@ -254,6 +255,25 @@ func (cm *connectionManager) GetWorkspaceConnection(ctx context.Context, workspa
 	return pool, nil
 }
 
+// ErrWorkspaceRecordMissing : la ligne `workspaces` n'existe plus (workspace supprime ou jamais cree).
+var ErrWorkspaceRecordMissing = errors.New("workspace record does not exist")
+
+// requireWorkspaceRecord refuse de creer (ou recreer) la base d'un workspace qui n'a pas de ligne dans la
+// table systeme `workspaces`. Sans base systeme injectee (tests), la verification est ignoree.
+func (cm *connectionManager) requireWorkspaceRecord(ctx context.Context, workspaceID string) error {
+	if cm.systemDB == nil {
+		return nil
+	}
+	var exists bool
+	if err := cm.systemDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = $1)`, workspaceID).Scan(&exists); err != nil {
+		return fmt.Errorf("check workspace record %s: %w", workspaceID, err)
+	}
+	if !exists {
+		return fmt.Errorf("%w: %s", ErrWorkspaceRecordMissing, workspaceID)
+	}
+	return nil
+}
+
 // createWorkspacePool creates a new connection pool for a workspace database
 func (cm *connectionManager) createWorkspacePool(ctx context.Context, workspaceID string) (*sql.DB, error) {
 	// Build workspace DSN
@@ -268,6 +288,12 @@ func (cm *connectionManager) createWorkspacePool(ctx context.Context, workspaceI
 		dbName,
 		cm.config.Database.SSLMode,
 	)
+
+	// === Veridian patch (07/11/2026, fiche 81) === Pas de ligne `workspaces`, pas de base : une tache ou
+	// un webhook en vol qui demande une connexion apres un wipe recreait la base avec son schema complet.
+	if err := cm.requireWorkspaceRecord(ctx, workspaceID); err != nil {
+		return nil, err
+	}
 
 	// Ensure database exists
 	if err := database.EnsureWorkspaceDatabaseExists(&cm.config.Database, workspaceID); err != nil {
