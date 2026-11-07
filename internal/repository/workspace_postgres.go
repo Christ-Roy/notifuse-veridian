@@ -372,7 +372,9 @@ func (r *workspaceRepository) DeleteDatabase(ctx context.Context, workspaceID st
 	time.Sleep(100 * time.Millisecond)
 
 	// Finally, drop the database
-	dropQuery := fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)
+	// === Veridian patch (07/11/2026, fiche 81) === WITH (FORCE) : le planificateur rouvre des connexions
+	// entre le terminate et le DROP, qui echouait alors ("being accessed") et laissait une base orpheline.
+	dropQuery := fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE)", dbName)
 	if _, err := r.systemDB.ExecContext(ctx, dropQuery); err != nil {
 		return err
 	}

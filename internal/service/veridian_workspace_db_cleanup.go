@@ -166,3 +166,18 @@ func (s *veridianService) forceDropWorkspaceDBBestEffort(ctx context.Context, wo
 		}
 	}
 }
+
+// cleanupFailedProvisionDB retire la base laissee a moitie creee par un CreateWorkspace qui a echoue
+// (07/11/2026 : cinq bases sans aucune table apres des echecs de provision, "too many clients" :
+// EnsureWorkspaceDatabaseExists cree la base puis son schema, un echec entre les deux laisse une
+// base sans record). Garde-fous: jamais si la base existait AVANT la tentative (donnees possibles),
+// jamais si le record workspace existe. Best-effort, comme le rattrapage du wipe.
+func (s *veridianService) cleanupFailedProvisionDB(ctx context.Context, workspaceID string, existedBefore bool) {
+	if existedBefore || s.workspaceRepo == nil {
+		return
+	}
+	if ws, err := s.workspaceRepo.GetByID(ctx, workspaceID); err == nil && ws != nil {
+		return // le record existe: ce n'est pas une base orpheline
+	}
+	s.forceDropWorkspaceDBBestEffort(ctx, workspaceID)
+}

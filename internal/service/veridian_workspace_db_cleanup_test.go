@@ -209,3 +209,56 @@ func TestForceDropWorkspaceDBBestEffort_RepoWithoutCapability_NoOp(t *testing.T)
 		s.forceDropWorkspaceDBBestEffort(context.Background(), "tst123")
 	})
 }
+
+// fakeProvisionCleanupRepo : GetByID dit si le record existe, VeridianForceDropDatabase compte les DROP.
+type fakeProvisionCleanupRepo struct {
+	domain.WorkspaceRepository
+	recordExists bool
+	drops        []string
+}
+
+func (f *fakeProvisionCleanupRepo) GetByID(ctx context.Context, id string) (*domain.Workspace, error) {
+	if f.recordExists {
+		return &domain.Workspace{ID: id}, nil
+	}
+	return nil, &domain.ErrWorkspaceNotFound{WorkspaceID: id}
+}
+
+func (f *fakeProvisionCleanupRepo) VeridianForceDropDatabase(ctx context.Context, workspaceID string, log logger.Logger) error {
+	f.drops = append(f.drops, workspaceID)
+	return nil
+}
+
+func TestCleanupFailedProvisionDB(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("base laissee par un provision rate, sans record: supprimee", func(t *testing.T) {
+		repo := &fakeProvisionCleanupRepo{}
+		s := &veridianService{workspaceRepo: repo, dbPrefix: "notifuse"}
+		s.cleanupFailedProvisionDB(ctx, "tst1", false)
+		assert.Equal(t, []string{"tst1"}, repo.drops)
+	})
+	t.Run("base qui existait avant la tentative: jamais touchee (donnees possibles)", func(t *testing.T) {
+		repo := &fakeProvisionCleanupRepo{}
+		s := &veridianService{workspaceRepo: repo, dbPrefix: "notifuse"}
+		s.cleanupFailedProvisionDB(ctx, "tst1", true)
+		assert.Empty(t, repo.drops)
+	})
+	t.Run("record workspace present: jamais touchee", func(t *testing.T) {
+		repo := &fakeProvisionCleanupRepo{recordExists: true}
+		s := &veridianService{workspaceRepo: repo, dbPrefix: "notifuse"}
+		s.cleanupFailedProvisionDB(ctx, "tst1", false)
+		assert.Empty(t, repo.drops)
+	})
+	t.Run("repo sans la capacite: ne plante pas", func(t *testing.T) {
+		s := &veridianService{workspaceRepo: &repoOnlyGetByID{}, dbPrefix: "notifuse"}
+		assert.NotPanics(t, func() { s.cleanupFailedProvisionDB(ctx, "tst1", false) })
+	})
+}
+
+// repoOnlyGetByID : un repo sans record ni capacite de DROP (mock/alternatif).
+type repoOnlyGetByID struct{ domain.WorkspaceRepository }
+
+func (repoOnlyGetByID) GetByID(ctx context.Context, id string) (*domain.Workspace, error) {
+	return nil, &domain.ErrWorkspaceNotFound{WorkspaceID: id}
+}

@@ -447,6 +447,8 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 		workspaceName = input.TenantID
 	}
 	if existingWorkspace == nil {
+		// Une base qui existait deja (orpheline, donnees possibles) n'est jamais nettoyee par erreur.
+		dbExistedBefore := s.workspaceDBStillExists(ctx, input.TenantID)
 		_, err := s.workspaceService.CreateWorkspace(
 			rootCtx,
 			input.TenantID,
@@ -460,6 +462,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 			[]string{"en"},
 		)
 		if err != nil {
+			s.cleanupFailedProvisionDB(ctx, input.TenantID, dbExistedBefore)
 			return nil, fmt.Errorf("create workspace: %w", err)
 		}
 	}

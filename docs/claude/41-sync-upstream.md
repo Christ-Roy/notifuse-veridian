@@ -17,3 +17,6 @@ Règle 2 de CLAUDE.md : le code Veridian vit dans ses propres fichiers. Exceptio
   `veridian_plan.status = 'deleted'` pour que ni le planificateur, ni la file d'envoi, ni les webhooks, ni le
   poller IMAP ne gardent une connexion PostgreSQL par tenant supprimé. Test : `workspace_core_test.go`
   (`listActiveWorkspacesQuery`). Voir fiche 81.
+- `internal/repository/workspace_postgres.go` `DeleteDatabase` (07/11/2026, parente) : `DROP DATABASE … WITH (FORCE)`
+  au lieu du DROP simple, que la réouverture de connexions par le planificateur faisait échouer ("being
+  accessed") en laissant une base orpheline. Test : `TestWorkspaceRepository_DeleteDatabase_DropsWithForce`.

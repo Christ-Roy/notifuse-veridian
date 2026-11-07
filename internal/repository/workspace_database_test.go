@@ -291,3 +291,20 @@ func (r *mockEnsureDBRepository) CreateDatabase(ctx context.Context, workspaceID
 	}
 	return nil
 }
+
+// La suppression upstream DROP la base avec FORCE : le planificateur rouvre des connexions entre le
+// terminate et le DROP, qui echouait sinon ("being accessed by other users") et laissait une base
+// orpheline (17 le 07/11/2026). Le test refuse un DROP sans FORCE.
+func TestWorkspaceRepository_DeleteDatabase_DropsWithForce(t *testing.T) {
+	db, mock, cleanup := testutil.SetupMockDB(t)
+	defer cleanup()
+	dbConfig := &config.DatabaseConfig{User: "postgres", Prefix: "notifuse"}
+	repo := NewWorkspaceRepository(db, dbConfig, "secret-key", newMockConnectionManager(db))
+
+	mock.ExpectExec(`REVOKE ALL PRIVILEGES ON DATABASE`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`pg_terminate_backend`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`^DROP DATABASE IF EXISTS notifuse_ws_ws1 WITH \(FORCE\)$`).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	require.NoError(t, repo.(*workspaceRepository).DeleteDatabase(context.Background(), "ws1"))
+	require.NoError(t, mock.ExpectationsWereMet())
+}

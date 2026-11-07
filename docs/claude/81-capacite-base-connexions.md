@@ -27,3 +27,14 @@ logique hors dépôt, `brunon5robert` = workspace personnel de Robert, jamais to
 (2) `workspaceRepository.List` n'énumère plus les tenants `deleted` (patch minimal décidé par Robert, consigné
 dans la fiche 41) : plus aucun parcours ne les touche, leur connexion chaude se ferme à 5 min d'inactivité ;
 (3) test `workspace_core_test.go` (`listActiveWorkspacesQuery`), vu échouer avant le patch.
+
+## Bases orphelines : la classe supprimée (07/11/2026)
+17 bases `notifuse_ws_*` sans ligne `workspaces` (toutes vides: 0 contact, 0 message; 5 sans aucune table)
+ont été sauvegardées puis supprimées (53 -> 36 bases pour 36 workspaces). Deux causes, deux correctifs :
+- une suppression de workspace (`DeleteDatabase` upstream) faisait un DROP simple qui échouait quand le
+  planificateur rouvrait une connexion : désormais `WITH (FORCE)` (patch listé en fiche 41, test vu échouer) ;
+- un `provision` qui échouait entre la création de la base et celle de son schéma laissait une base sans
+  record : `cleanupFailedProvisionDB` la retire, sauf si elle existait avant la tentative ou si le record
+  existe (tests vus échouer par mutation). Aucune tâche planifiée ajoutée.
+Contrôle : `select count(*) from pg_database where datname like 'notifuse_ws_%' and substr(datname,13) not in
+(select id from workspaces)` doit rendre 0.
