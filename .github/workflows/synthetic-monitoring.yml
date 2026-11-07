@@ -44,7 +44,7 @@ permissions:
 jobs:
   smoke:
     name: Smoke @prod-safe contre notifuse.app.veridian.site
-    runs-on: ubuntu-latest  # gitops-ci-allow-hosted: depot PUBLIC (aucun cout, aucun code de PR n'atteint notre parc), pas besoin du tailnet
+    runs-on: ubuntu-24.04  # gitops-ci-allow-hosted: depot PUBLIC (aucun cout, aucun code de PR n'atteint notre parc), pas besoin du tailnet  # 07/11 : ubuntu-latest = 26.04, Playwright refuse d y installer chromium
     timeout-minutes: 5
     env:
       NOTIFUSE_URL: ${{ inputs.force_target_url != '' && inputs.force_target_url || 'https://notifuse.app.veridian.site' }}

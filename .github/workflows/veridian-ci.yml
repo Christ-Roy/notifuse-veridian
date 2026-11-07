@@ -311,7 +311,7 @@ jobs:
   # Bloquant : si rouge, `build` (deploy staging) ne se déclenche pas.
   e2e-console-prod-smoke:
     name: E2E console — production-build smoke
-    runs-on: ubuntu-latest  # gitops-ci-allow-hosted: depot PUBLIC (aucun cout, aucun code de PR n'atteint notre parc), pas besoin du tailnet
+    runs-on: ubuntu-24.04  # gitops-ci-allow-hosted: depot PUBLIC (aucun cout, aucun code de PR n'atteint notre parc), pas besoin du tailnet  # 07/11 : ubuntu-latest = 26.04, Playwright refuse d y installer chromium
     needs: console-build
     timeout-minutes: 15
     steps:
