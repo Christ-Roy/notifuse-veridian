@@ -1,9 +1,8 @@
 # notifuse-veridian — fork Veridian de Notifuse
 
-Fork du projet [Notifuse](https://github.com/Notifuse/notifuse) (Go 1.25 + Postgres 17
-+ React 18 + Vite + Ant Design). Branche de travail : `veridian` (push direct OK, CI
-obligatoire) ; sync upstream depuis `main` (`upstream/main`), jamais de commit Veridian
-direct sur `main`. Tech stack upstream : voir `README.md`, pas repris ici.
+Fork dur du projet [Notifuse](https://github.com/Notifuse/notifuse) (Go 1.26 + Postgres 17
++ React 18 + Vite + Ant Design). Branche de travail : `veridian` (push direct, la CI déploie) ;
+jamais de commit Veridian sur `main`. Stack : `README.md`.
 
 Court par design (chargé à chaque session). Le détail d'une brique vit dans
 `docs/claude/NN-sujet.md` : **lire la fiche avant de toucher au sujet**, et une nouvelle
@@ -43,10 +42,10 @@ brique = une fiche + une ligne d'index.
    des deux parties** (Notifuse ET Hub). Le canonical string diverge selon le sens du
    flux pour le même secret — une doc qui contredit le code a déjà coûté une session
    P0 (2026-05-25). → `46`
-7. **Promotion prod : c'est l'agent propriétaire de Notifuse qui tranche, pas
-   Robert**, selon le niveau de preuve atteint (🟢 CI verte / 🟡 smoke staging / 🔴
-   E2E on-premise réel / 💀 destructif-irréversible = SEUL tier où on demande
-   go/stop à Robert). → `48`
+7. **Promotion prod : l'agent propriétaire de Notifuse tranche, pas Robert** (🟢 CI
+   verte / 🟡 smoke staging / 🔴 E2E on-premise / 💀 irréversible = SEUL tier qui demande
+   go/stop à Robert). Auto-promotion : `[risk:low]` en 1re ligne du commit, ou
+   `workflow_dispatch deploy_prod=true`. Un job rouge d'infra se relance (`gh run rerun --failed`). → `48`
 8. **Pricing : générosité maximale gravée par Robert — zéro mur béton, zéro compteur
    visible, zéro limite enforced, y compris sur Free.** Tout enforcement de dimension
    exige une validation explicite contre `PRICING-VERIDIAN.md` (Hub). → `47`
@@ -54,8 +53,6 @@ brique = une fiche + une ligne d'index.
    des credentials.** Ne jamais réintroduire un secret (IMAP, SMTP, FileManager,
    LLM…) en clair dans une réponse HTTP. Seule exception : l'export opérateur SMTP/IMAP,
    HMAC Hub seul, jamais de cache. → `10`, `76`
-11b. **Toute route `/api/*` a une commande CLI, et la CLI embarquée = son MANIFEST.** Le contrôle
-   tourne au pre-push et en CI. → `77`
 10. **Migrations en Expand & Contract strict.** Le tag Docker précédent doit tourner
     sur le schéma actuel ; `DROP COLUMN`/`NOT NULL` sur une table peuplée = deux PR
     sur deux déploiements. → `48`
@@ -65,7 +62,12 @@ brique = une fiche + une ligne d'index.
 12. **Tout cross-app (identité, membership, billing) passe par le Hub, jamais
     app→app direct.** Un `hub_user_id` n'est jamais réécrit sur un user existant sans
     audit + migration explicite ; un lien différent est refusé (400), un lien ne s'écrit que
-    si le Hub atteste l'adresse. → `45`, `80`
+    si le Hub atteste l'adresse. Un utilisateur ne se crée, modifie, supprime qu'au Hub. → `45`, `80`
+13. **Toute route `/api/*` a une commande CLI, et la CLI embarquée = son MANIFEST.** Le contrôle
+   tourne au pre-push et en CI. → `77`
+14. **Le plafond de connexions de l'appli (`DB_MAX_CONNECTIONS`) tient dans le
+    `max_connections` de PostgreSQL** : une connexion par workspace, 100 et 100 ont refusé
+    des workspaces clients (07/11/2026). `check-nomad-contract.sh` le vérifie. → `81`
 
 ## Relever plutôt que croire
 
@@ -100,7 +102,8 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `44` rate-limit global de l'API (OWASP API4:2023)
 - `61` nœud webhook des automations : garde SSRF (`NewTenantOutboundClient`), secret chiffré, signature HMAC
 - `75` lot L4 qualité et sécurité : aperçu e-mail en bac à sable, Liquid des contacts, tests upstream portés, mutants
-- `80` identité : le Hub est la source des utilisateurs, `hub_user_id`, refus si lien différent, lien auto-login à usage unique
+- `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`, rebond automatique
+- `81` capacité base : connexions par workspace, `max_connections`, incident du 07/11
 - `79` CLI utilisateur à parité : profils d'envoi avec sa propre clé, qui peut quoi, faille `tasks.*`, tableau d'audit
 
 **Base de données workspace**
@@ -147,19 +150,19 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `53` console assumée : inventaire, spécification de la page Profils d'envoi, plan en 5 lots
 - `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause, lien IMAP, exclusivité
 - `55` page Profils d'envoi (lot 3) : carte, assistant, `emailProfiles.create`
-- `56` séparation transactionnel / commercial (lot 4) : `setUsage|pause|resume`, profil réservé, isolation worker, compteurs par type (V61), fusible par profil, jour de compte au fuseau de la fenêtre
-- `57` tableau de bord de prospection (lot 5) : `prospection.stats`, dimension analytics `veridian_profile_id`, `transactional_watch` (jamais bloquante), chauffe par jour de compte, `notifuse profiles:create`
-- `58` dépilage équitable de `email_queue` (famine du 10/10) : relances avant J0, tourniquet entre automations, entrée repoussée par un gate cède la tête (`domain.VeridianSelectFairBatch`, `FetchPending`), aucune reprise manuelle
+- `56` séparation transactionnel / commercial (lot 4) : `setUsage|pause|resume`, profil réservé, isolation worker, compteurs par type (V61), fusible par profil
+- `57` tableau de bord de prospection (lot 5) : `prospection.stats`, dimension analytics `veridian_profile_id`, `transactional_watch`, chauffe par jour de compte
+- `58` dépilage équitable de `email_queue` (famine du 10/10) : relances avant J0, tourniquet entre automations, aucune reprise manuelle
 - `59` automations observables (conception seule, plan en 7 lots, rien d implémenté)
 - `60` capacité d'un profil (lot 6) : somme des capacités par classe destinataire bornée par chauffe et stock, barre empilée console, CLI agent
-- `62` « pourquoi ça n'envoie pas » (lot 1 de 59, V62) : raison de report persistée sur `email_queue`, verdicts de gates (valeur, limite), journal des décisions borné, `queue.explain` / `decisions.list` / `queue.recompute`, CLI `queue:explain` `logs:decisions`, page File d'envoi, « completed » honnête, orphelins `sending`
-- `69` plafonds et débits PAR DÉFAUT pour les 25 classes, table MX -> classe source unique (export pour ODH), échec DNS transitoire non figé, scission de freemail_fr en FAI (orange, sfr_altice, free, laposte, bouygues)
-- `64` garde réseau partagée (`pkg/netguard`) pour SMTP, IMAP, endpoint SparkPost ; liste d'exceptions explicite (relais IMAP 993 en Tailscale) ; `InsecureSkipVerify` des tâches retiré ; garde `prod-residue` de l'E2E prod
+- `62` « pourquoi ça n'envoie pas » (V62) : raison de report persistée sur `email_queue`, verdicts de gates, journal des décisions, `queue.explain` / `decisions.list`, page File d'envoi
+- `69` plafonds et débits PAR DÉFAUT pour les 25 classes, table MX -> classe source unique, échec DNS transitoire non figé, scission de freemail_fr en FAI
+- `64` garde réseau partagée (`pkg/netguard`) pour SMTP, IMAP, SparkPost ; exceptions explicites ; garde `prod-residue` de l'E2E prod
 - `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only inviteMember/deleteInvitation, route admin `email-integration.verify`
 - `68` self-service owner : audit UI/API/CLI (tableau), boutons d ajout LLM/Firecrawl/Supabase, invitation avec repli local, limites (S3, lists.create 409)
-- `65` relances dans le fil du premier mail : réglage workspace `veridian_thread_followups`, In-Reply-To / References / `Re: <objet du premier mail>`, ancre d expéditeur tenue 7 jours (le week-end la lâchait), objet consigné dans `message_data.metadata`
-- `66` une relance ne part pas si le premier mail (J0) n a pas été livré : échec, rebond dur, refus de politique 5.7.x ou aucun J0 → le contact sort, raison `first_mail_*` au journal ; le rebond mou ne sort personne
-- `70` politique d'envoi par classe en données (presets JSON, surcharges par workspace, part de chauffe, seuil de ralentissement par classe), priorité d'envoi par campagne ou automation (2 à 9), stock par classe (lot L3, V66, `internal/veridian/policy`)
+- `65` relances dans le fil du premier mail : réglage `veridian_thread_followups`, In-Reply-To / References, ancre d'expéditeur tenue 7 jours
+- `66` une relance ne part pas si le premier mail (J0) n'a pas été livré : échec, rebond dur, refus 5.7.x ou aucun J0 → le contact sort (`first_mail_*`)
+- `70` politique d'envoi par classe en données (presets JSON, surcharges par workspace), priorité d'envoi par campagne ou automation, stock par classe (V66, `internal/veridian/policy`)
 
 **Cold outbound — UI console & self-service**
 - `06` UI console — section Settings « Cold outreach »
