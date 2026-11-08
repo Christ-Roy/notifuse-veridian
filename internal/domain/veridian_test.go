@@ -1189,13 +1189,16 @@ func TestConsoleNextPath(t *testing.T) {
 	assert.Equal(t, "/console/workspace/ws1", ConsoleNextPath("", "/console/workspace/ws1"))
 }
 
-func TestTrialStatusHelpers(t *testing.T) {
+func TestIsValidTrialStatus(t *testing.T) {
 	for _, ok := range []string{"", "none", "trial_active", "expired", "paid"} {
 		assert.True(t, IsValidTrialStatus(ok), ok)
 	}
 	for _, bad := range []string{"gratuit", "TRIAL_ACTIVE", "trial", " paid"} {
 		assert.False(t, IsValidTrialStatus(bad), bad)
 	}
+}
+
+func TestParseTrialEndsAt(t *testing.T) {
 	iso := "2026-11-20T12:00:00+02:00"
 	got, err := ParseTrialEndsAt(&iso)
 	require.NoError(t, err)
