@@ -29,7 +29,8 @@ variable "image_tag" {
   # vivant = v60.0-veridian.9449a2e7, juste avant ce commit (nomad job
   # inspect notifuse). Le defaut precedent (v57.0) aurait retrograde l'image
   # si deploye hors CI avec ce commit.
-  default     = "v60.0-veridian.9449a2e7"
+  # Recale le 2026-11-08 : la prod sert v62.0-veridian.9a516835 (nomad job inspect), le defaut v60 l'aurait retrogradee.
+  default     = "v62.0-veridian.9a516835"
   description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
 }
 
