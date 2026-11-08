@@ -68,6 +68,8 @@ for file in $files; do
   # Le plafond de connexions de l'appli doit tenir dans max_connections de PostgreSQL (incident 07/11/2026 :
   # 100 et 100, ~100 workspaces, "too many clients already" sur des workspaces clients).
   pg_max="$(grep -Eo '"max_connections=[0-9]+"' "$file" | head -1 | tr -dc '0-9')"
+  # Base sortie du job le 08/11/2026 (job notifuse-db de nomad-veridian) : son max_connections y est declare en marqueur.
+  [ -n "$pg_max" ] || pg_max="$(sed -n 's/^# veridian\.db_max_connections=\([0-9][0-9]*\).*/\1/p' "$file" | head -1)"
   app_max="$(sed -n 's/^DB_MAX_CONNECTIONS=\([0-9][0-9]*\)$/\1/p' "$file" | head -1)"
   if [ -z "$pg_max" ]; then error "$file: PostgreSQL max_connections non declare (defaut 100)"
   elif [ -z "$app_max" ]; then error "$file: DB_MAX_CONNECTIONS non declare (defaut 100)"

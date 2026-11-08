@@ -15,10 +15,10 @@ expect() { # expect <ok|ko> <label> <file>
 mkdir -p "$tmp/deploy"; cp deploy/*.nomad.hcl "$tmp/deploy/"; cd "$tmp"
 prod=deploy/notifuse.nomad.hcl
 expect ok "jobspec prod du depot" "$prod"
-sed -i 's/"max_connections=[0-9]*"/"max_connections=100"/' "$prod"
+sed -i 's/"max_connections=[0-9]*"/"max_connections=100"/' "$prod"; sed -i 's/^# veridian.db_max_connections=[0-9]*/# veridian.db_max_connections=100/' "$prod"
 expect ko "appli (250) au-dessus de PostgreSQL (100)" "$prod"
 cp "$root/deploy/notifuse.nomad.hcl" "$prod"; sed -i '/^DB_MAX_CONNECTIONS=/d' "$prod"
 expect ko "DB_MAX_CONNECTIONS non declare (defaut 100)" "$prod"
-cp "$root/deploy/notifuse.nomad.hcl" "$prod"; sed -i 's/"-c", "max_connections=[0-9]*",//' "$prod"
+cp "$root/deploy/notifuse.nomad.hcl" "$prod"; sed -i 's/"-c", "max_connections=[0-9]*",//' "$prod"; sed -i '/^# veridian.db_max_connections=/d' "$prod"
 expect ko "max_connections de PostgreSQL non declare (defaut 100)" "$prod"
 exit "$fail"

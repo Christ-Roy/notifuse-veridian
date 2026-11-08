@@ -65,6 +65,11 @@ job "notifuse" {
       value     = "ovh-prod"
     }
 
+# veridian.db_max_connections=300 (job notifuse-db de nomad-veridian : a changer des deux cotes ensemble)
+    # Pas de canari : le relais SMTP tient le port 587 STATIQUE (tailnet), deux instances ne peuvent pas le prendre sur le
+    # meme noeud (plan du 08/11 : « reserved port collision smtp=587 »). La base vit dans le job notifuse-db depuis le
+    # 08/11 : un deploiement coupe l'app quelques secondes, plus la base. Pour un bleu-vert, rendre ce port dynamique et
+    # faire trouver le relais par ses clients au catalogue.
     update {
       max_parallel     = 1
       min_healthy_time = "15s"
@@ -122,267 +127,12 @@ job "notifuse" {
       }
     }
 
-    # ---- notifuse-db (postgres:17, frais, interne) ----
-    task "notifuse-db" {
-      driver = "docker"
-      config {
-        # Durcissement Unix : empeche un processus non privilegie d'elever ses
-        # droits via un binaire setuid. C'est le maillon entre « shell dans le
-        # conteneur » et « root sur l'hote ». N'affecte PAS un processus qui
-        # ABANDONNE ses droits au demarrage, seulement celui qui en gagne.
-        security_opt = ["no-new-privileges:true"]
-
-        # Identification lisible du conteneur (2026-09-07). Nomad ne pose que
-        # `com.hashicorp.nomad.alloc_id` : rien ne disait a quelle application
-        # appartenait un conteneur. Les quatre premieres valeurs sont
-        # interpolees par Nomad a l'execution, les deux dernieres sont des
-        # proprietes du fichier (dossier jobs/<tier>/ et table du script
-        # scripts/poser-labels-conteneurs.py).
-        labels = {
-          "site.veridian.job"   = "${NOMAD_JOB_NAME}"
-          "site.veridian.group" = "${NOMAD_GROUP_NAME}"
-          "site.veridian.task"  = "${NOMAD_TASK_NAME}"
-          "site.veridian.node"  = "${node.unique.name}"
-          "site.veridian.tier"  = "saas-prod"
-          "site.veridian.app"   = "notifuse"
-        }
-        # Image officielle postgres:17-alpine + pgBackRest epingle. La BASE est
-        # identique au bit pres : changer d'image de base changerait la
-        # collation (musl/glibc) et fausserait silencieusement les index.
-        image   = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine-gosu-20261002@sha256:5ec0bfd128c0b50720227a0caee1d2e2891509f67183cbad9795c35fb1ebb7f1"
-        command = "postgres"
-        args = [
-          "-c", "max_wal_size=1GB", "-c", "checkpoint_timeout=10min",
-          # Une connexion par base de workspace (le pool de l'appli) : a 100, PostgreSQL refusait des
-          # workspaces clients ("too many clients already", 07/11/2026, ~100 workspaces). Le plafond de
-          # l'appli (DB_MAX_CONNECTIONS) doit rester sous celui-ci, le controle de contrat le verifie.
-          "-c", "max_connections=300",
-          # --- Archivage continu des WAL vers le depot pgBackRest ---
-          # C'est CE reglage, et non la sauvegarde nocturne, qui borne la perte
-          # de donnees : chaque segment de journal part vers R2 des qu'il est
-          # clos. archive_timeout force cette cloture toutes les 5 minutes quand
-          # il y a eu de l'ecriture, donc RPO = 5 min.
-          # Modifier archive_mode exige un REDEMARRAGE de PostgreSQL (ce n'est
-          # pas rechargeable a chaud) : c'est la seule interruption qu'impose la
-          # mise en place.
-          # pgBackRest ne joint le cluster QUE par socket Unix ; il n'a aucune
-          # option de connexion TCP pour un cluster local. La tache annexe vit
-          # dans un autre espace de montage et ne voit donc pas
-          # /var/run/postgresql. On publie une seconde socket dans /alloc, le
-          # repertoire que Nomad partage entre les taches d'un meme groupe.
-          # L'ancienne reste en place : `docker exec ... psql` continue de marcher.
-          "-c", "unix_socket_directories=/var/run/postgresql,/alloc",
-          "-c", "archive_mode=on",
-          "-c", "archive_command=pgbackrest --stanza=notifuse archive-push %p",
-          "-c", "archive_timeout=300",
-          "-c", "wal_level=replica",
-        ]
-        volumes = [
-          "/opt/veridian-lab/notifuse/db:/var/lib/postgresql/data",
-        ]
-      }
-      template {
-        destination = "secrets/pgbackrest-repo.key"
-        perms       = "600"
-        uid         = 70
-        gid         = 70
-        data        = <<EOH
-{{ with nomadVar "nomad/jobs/notifuse" }}{{ .SFTP_REPO_KEY }}{{ end }}
-EOH
-      }
-
-      template {
-        destination = "secrets/pgbackrest-repo.key.pub"
-        perms       = "644"
-        uid         = 70
-        gid         = 70
-        data        = <<EOH
-{{ with nomadVar "nomad/jobs/notifuse" }}{{ .SFTP_REPO_KEY_PUB }}{{ end }}
-EOH
-      }
-
-      template {
-        destination = "secrets/pg.env"
-        perms       = "600"   # secret: lisible du seul proprietaire
-        env         = true
-        data        = <<EOH
-TZ=UTC
-POSTGRES_USER=postgres
-POSTGRES_DB=notifuse_system
-{{ with nomadVar "nomad/jobs/notifuse" }}
-POSTGRES_PASSWORD={{ .POSTGRES_PASSWORD }}
-{{ end }}
-# --- pgBackRest : configuration par variables d'environnement ---
-# Aucun fichier de configuration : les identifiants R2 et la phrase de
-# chiffrement ne sont jamais ecrits sur le disque de l'allocation. pgBackRest
-# lit toute option sous la forme PGBACKREST_<OPTION>.
-# Depot sur NOS machines (2026-10-10, plus de R2) : SFTP chroot, compte `pgbackrest`,
-# jamais sur le noeud qui porte la base ; cle dans la Variable Nomad du job.
-PGBACKREST_REPO1_TYPE=sftp
-{{ with nomadVar "nomad/jobs/notifuse" }}PGBACKREST_REPO1_SFTP_HOST={{ .SFTP_REPO_HOST }}{{ end }}
-PGBACKREST_REPO1_SFTP_HOST_USER=pgbackrest
-PGBACKREST_REPO1_SFTP_PRIVATE_KEY_FILE=/secrets/pgbackrest-repo.key
-PGBACKREST_REPO1_SFTP_PUBLIC_KEY_FILE=/secrets/pgbackrest-repo.key.pub
-PGBACKREST_REPO1_SFTP_HOST_KEY_CHECK_TYPE=fingerprint
-PGBACKREST_REPO1_SFTP_HOST_KEY_HASH_TYPE=sha1
-{{ with nomadVar "nomad/jobs/notifuse" }}PGBACKREST_REPO1_SFTP_HOST_FINGERPRINT={{ .SFTP_REPO_FP }}{{ end }}
-PGBACKREST_REPO1_PATH=/data/notifuse
-# path : R2 accepte les deux styles, celui-ci ne depend pas d'un DNS par bucket.
-PGBACKREST_REPO1_CIPHER_TYPE=aes-256-cbc
-PGBACKREST_COMPRESS_TYPE=zst
-PGBACKREST_COMPRESS_LEVEL=6
-PGBACKREST_REPO1_BUNDLE=y
-PGBACKREST_REPO1_BLOCK=y
-PGBACKREST_LOG_LEVEL_CONSOLE=info
-PGBACKREST_LOG_LEVEL_FILE=off
-PGBACKREST_PG1_PATH=/var/lib/postgresql/data
-PGBACKREST_PG1_PORT=5432
-PGBACKREST_PG1_USER=postgres
-PGBACKREST_PG1_DATABASE=notifuse_system
-{{ with nomadVar "nomad/jobs/notifuse" }}
-# ATTENTION : PERDRE CETTE PHRASE = PERDRE TOUTES LES SAUVEGARDES. Copie de
-# secours dans ~/credentials/.all-creds.env (PGBACKREST_CIPHER_NOTIFUSE).
-PGBACKREST_REPO1_CIPHER_PASS={{ .PGBACKREST_CIPHER_PASS }}
-{{ end }}
-EOH
-      }
-      resources {
-        cpu        = 300
-        # 384 -> 480 Mio (2026-10-02) : working set mesure sur 7 j = 363 Mio max (cAdvisor,
-        # sans page cache) x 1,3. memory_max inchange (fusible).
-        memory     = 480
-        memory_max = 7000
-      }
-    }
-
-    # ---- pgBackRest : sauvegarde continue vers R2 ----
-    # Tache annexe du MEME groupe, donc : meme espace reseau (elle joint
-    # PostgreSQL par la socket publiee dans /alloc, authentification `trust`
-    # locale, aucun mot de passe a promener) et meme bind mount de PGDATA (elle
-    # lit les pages directement). Elle SUIT l'allocation : si Nomad replace le
-    # groupe, la sauvegarde repart sans qu'on touche a un script.
-    task "pgbackrest" {
-      driver = "docker"
-      config {
-        # Durcissement Unix : empeche un processus non privilegie d'elever ses
-        # droits via un binaire setuid. C'est le maillon entre « shell dans le
-        # conteneur » et « root sur l'hote ». N'affecte PAS un processus qui
-        # ABANDONNE ses droits au demarrage, seulement celui qui en gagne.
-        security_opt = ["no-new-privileges:true"]
-
-        # Identification lisible du conteneur (2026-09-07). Nomad ne pose que
-        # `com.hashicorp.nomad.alloc_id` : rien ne disait a quelle application
-        # appartenait un conteneur. Les quatre premieres valeurs sont
-        # interpolees par Nomad a l'execution, les deux dernieres sont des
-        # proprietes du fichier (dossier jobs/<tier>/ et table du script
-        # scripts/poser-labels-conteneurs.py).
-        labels = {
-          "site.veridian.job"   = "${NOMAD_JOB_NAME}"
-          "site.veridian.group" = "${NOMAD_GROUP_NAME}"
-          "site.veridian.task"  = "${NOMAD_TASK_NAME}"
-          "site.veridian.node"  = "${node.unique.name}"
-          "site.veridian.tier"  = "saas-prod"
-          "site.veridian.app"   = "notifuse"
-        }
-        image      = "ghcr.io/christ-roy/veridian-postgres-pgbackrest:17-alpine-gosu-20261002@sha256:5ec0bfd128c0b50720227a0caee1d2e2891509f67183cbad9795c35fb1ebb7f1"
-        entrypoint = ["/usr/local/bin/pgbackrest-scheduler"]
-        command    = ""
-        volumes = [
-          "/opt/veridian-lab/notifuse/db:/var/lib/postgresql/data",
-        ]
-      }
-      user = "postgres"
-
-      template {
-        destination = "secrets/pgbackrest-repo.key"
-        perms       = "600"
-        uid         = 70
-        gid         = 70
-        data        = <<EOH
-{{ with nomadVar "nomad/jobs/notifuse" }}{{ .SFTP_REPO_KEY }}{{ end }}
-EOH
-      }
-
-      template {
-        destination = "secrets/pgbackrest-repo.key.pub"
-        perms       = "644"
-        uid         = 70
-        gid         = 70
-        data        = <<EOH
-{{ with nomadVar "nomad/jobs/notifuse" }}{{ .SFTP_REPO_KEY_PUB }}{{ end }}
-EOH
-      }
-
-      template {
-        destination = "secrets/pgbackrest.env"
-        perms       = "600"   # secret: lisible du seul proprietaire
-        env         = true
-        data        = <<EOH
-TZ=UTC
-PGBR_STANZA=notifuse
-# Socket partagee avec la tache postgres via le repertoire d'allocation.
-PGBACKREST_PG1_SOCKET_PATH=/alloc
-# Complete le dimanche, differentielle les autres jours, incrementale toutes les
-# 6 h. 30 : creneau propre a cette stanza pour ne pas taper R2 en meme
-# temps que les autres bases du parc.
-PGBR_FULL_DOW=0
-PGBR_DAILY_HOUR=3
-PGBR_DAILY_MINUTE=30
-PGBR_INCR_EVERY_H=6
-# Base de PRODUCTION cliente : 8 semaines de completes conservees. Les WAL
-# retenus couvrent la meme profondeur, donc on peut viser n'importe quelle
-# seconde des deux derniers mois.
-PGBACKREST_REPO1_RETENTION_FULL=8
-PGBACKREST_REPO1_RETENTION_DIFF=7
-PGBACKREST_PROCESS_MAX=2
-PGBACKREST_START_FAST=y
-# --- pgBackRest : configuration par variables d'environnement ---
-# Aucun fichier de configuration : les identifiants R2 et la phrase de
-# chiffrement ne sont jamais ecrits sur le disque de l'allocation. pgBackRest
-# lit toute option sous la forme PGBACKREST_<OPTION>.
-# Depot sur NOS machines (2026-10-10, plus de R2) : SFTP chroot, compte `pgbackrest`,
-# jamais sur le noeud qui porte la base ; cle dans la Variable Nomad du job.
-PGBACKREST_REPO1_TYPE=sftp
-{{ with nomadVar "nomad/jobs/notifuse" }}PGBACKREST_REPO1_SFTP_HOST={{ .SFTP_REPO_HOST }}{{ end }}
-PGBACKREST_REPO1_SFTP_HOST_USER=pgbackrest
-PGBACKREST_REPO1_SFTP_PRIVATE_KEY_FILE=/secrets/pgbackrest-repo.key
-PGBACKREST_REPO1_SFTP_PUBLIC_KEY_FILE=/secrets/pgbackrest-repo.key.pub
-PGBACKREST_REPO1_SFTP_HOST_KEY_CHECK_TYPE=fingerprint
-PGBACKREST_REPO1_SFTP_HOST_KEY_HASH_TYPE=sha1
-{{ with nomadVar "nomad/jobs/notifuse" }}PGBACKREST_REPO1_SFTP_HOST_FINGERPRINT={{ .SFTP_REPO_FP }}{{ end }}
-PGBACKREST_REPO1_PATH=/data/notifuse
-# path : R2 accepte les deux styles, celui-ci ne depend pas d'un DNS par bucket.
-PGBACKREST_REPO1_CIPHER_TYPE=aes-256-cbc
-PGBACKREST_COMPRESS_TYPE=zst
-PGBACKREST_COMPRESS_LEVEL=6
-PGBACKREST_REPO1_BUNDLE=y
-PGBACKREST_REPO1_BLOCK=y
-PGBACKREST_LOG_LEVEL_CONSOLE=info
-PGBACKREST_LOG_LEVEL_FILE=off
-PGBACKREST_PG1_PATH=/var/lib/postgresql/data
-PGBACKREST_PG1_PORT=5432
-PGBACKREST_PG1_USER=postgres
-PGBACKREST_PG1_DATABASE=notifuse_system
-{{ with nomadVar "nomad/jobs/notifuse" }}
-# ATTENTION : PERDRE CETTE PHRASE = PERDRE TOUTES LES SAUVEGARDES. Copie de
-# secours dans ~/credentials/.all-creds.env (PGBACKREST_CIPHER_NOTIFUSE).
-PGBACKREST_REPO1_CIPHER_PASS={{ .PGBACKREST_CIPHER_PASS }}
-{{ end }}
-EOH
-      }
-
-      resources {
-        cpu        = 100
-        memory     = 64
-        memory_max = 512
-      }
-    }
-
     # ---- notifuse (Go, port 8081) ----
     task "notifuse" {
       driver         = "docker"
       user           = "nobody"
-      shutdown_delay = "10s"
+      # Traefik relit le catalogue toutes les 15 s : l'allocation sortante sert encore pendant qu'il l'oublie.
+      shutdown_delay = "30s"
       kill_timeout   = "30s"
       service {
         name     = "notifuse-selfheal"
@@ -460,9 +210,9 @@ VERIDIAN_RELAY_CERT_MANAGED=true
 SERVER_HOST=0.0.0.0
 ENVIRONMENT=production
 DEPLOY_ENV=prod
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_USER=postgres
+{{ range nomadService "notifuse-postgres" }}DB_HOST={{ .Address }}
+DB_PORT={{ .Port }}
+{{ end }}DB_USER=postgres
 DB_PREFIX=notifuse
 DB_NAME=notifuse_system
 DB_SSLMODE=disable
@@ -500,8 +250,10 @@ EOH
         # Pic 30j (obs-nomad pic, 2026-10-07) : 58 Mo pour une reservation de
         # 128 Mo (ratio 45%, >2x le pic). Rapproche a 100 Mo (ratio ~1.7x,
         # toujours sain) pour liberer de la marge SCHED sur ovh-prod (I07).
-        memory     = 100
-        memory_max = 7000
+        # 08/11 : reserve = memoire non reprenable mesuree (54 Mio) + marge, plafond = pointe (101 Mio) x 7, de quoi tenir une
+        # campagne. Avant : 7000 Mio, une fuite de Notifuse pouvait avaler ovh-prod et toutes les apps qui y tournent.
+        memory     = 128
+        memory_max = 768
       }
     }
   }
