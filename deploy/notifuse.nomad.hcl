@@ -66,12 +66,15 @@ job "notifuse" {
     }
 
 # veridian.db_max_connections=300 (job notifuse-db de nomad-veridian : a changer des deux cotes ensemble)
-    # Pas de canari : le relais SMTP tient le port 587 STATIQUE (tailnet), deux instances ne peuvent pas le prendre sur le
-    # meme noeud (plan du 08/11 : « reserved port collision smtp=587 »). La base vit dans le job notifuse-db depuis le
-    # 08/11 : un deploiement coupe l'app quelques secondes, plus la base. Pour un bleu-vert, rendre ce port dynamique et
-    # faire trouver le relais par ses clients au catalogue.
+    # Bleu-vert (08/11) : le canari demarre a cote de l'ancienne, Traefik et l'entree SMTP les servent toutes deux, la
+    # promotion arrete l'ancienne apres son shutdown_delay. Possible depuis que le relais SMTP a un port dynamique : le
+    # 587 fixe est tenu par le job notifuse-smtp-entree (nomad-veridian), qui suit le service `notifuse-smtp` au
+    # catalogue. Deux instances en meme temps sont sures : les files (emails, taches, automatisations) se prennent en
+    # FOR UPDATE SKIP LOCKED. La base vit dans le job notifuse-db : un deploiement ne la touche pas.
     update {
       max_parallel     = 1
+      canary           = 1
+      auto_promote     = true
       min_healthy_time = "15s"
       healthy_deadline = "5m"
       auto_revert      = true
@@ -93,9 +96,9 @@ job "notifuse" {
         to           = 8081
         host_network = "tailscale"
       }
-      # Relais SMTP de soumission (fiche 71) : 587 STATIQUE, tailnet seul (ovh-prod, 100.88.202.29). Pas de port public.
+      # Relais SMTP de soumission (fiche 71) : port DYNAMIQUE, tailnet seul. Les clients gardent
+      # relais-smtp.veridian.site:587, tenu par le job notifuse-smtp-entree qui transmet ici. Pas de port public.
       port "smtp" {
-        static       = 587
         to           = 587
         host_network = "tailscale"
       }
@@ -118,12 +121,29 @@ job "notifuse" {
         "traefik.http.routers.notifuseprod.entrypoints=websecure",
         "traefik.http.routers.notifuseprod.tls=true",
         "traefik.http.routers.notifuseprod.tls.certresolver=letsencrypt",
+        # Controle actif de Traefik : une instance qui ne repond plus sort du lot en 2 s, sans attendre le catalogue.
+        "traefik.http.services.notifuse.loadbalancer.healthcheck.path=/healthz",
+        "traefik.http.services.notifuse.loadbalancer.healthcheck.interval=2s",
+        "traefik.http.services.notifuse.loadbalancer.healthcheck.timeout=1s",
       ]
       check {
         type     = "http"
         path     = "/healthz"
         interval = "15s"
         timeout  = "5s"
+      }
+    }
+
+    # Le relais SMTP au catalogue : notifuse-smtp-entree le lit pour savoir ou transmettre le 587.
+    service {
+      name     = "notifuse-smtp"
+      provider = "nomad"
+      port     = "smtp"
+      tags     = ["traefik.enable=false"]
+      check {
+        type     = "tcp"
+        interval = "10s"
+        timeout  = "3s"
       }
     }
 
@@ -201,7 +221,7 @@ SERVER_PORT=8081
 # Relais SMTP (fiche 71). Certificat GÉRÉ par l'application (Let's Encrypt, DNS Cloudflare) : aucun certificat
 # copié ici. VERIDIAN_RELAY_CERT_MANAGED=true est l'amorçage : le bridge démarre en starttls, le certificat
 # géré est relu depuis le stockage au démarrage ; sans certificat rendu, aucun AUTH n'est annoncé (fail closed).
-# Port 587 tailnet seul.
+# Port 587 dans le conteneur ; dehors, port dynamique tailnet derriere notifuse-smtp-entree.
 SMTP_BRIDGE_ENABLED=true
 SMTP_BRIDGE_PORT=587
 SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
