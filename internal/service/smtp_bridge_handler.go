@@ -102,6 +102,26 @@ func (s *SMTPBridgeHandlerService) Authenticate(username, password string) (stri
 		return "", fmt.Errorf("email does not match token")
 	}
 
+	// Cle revoquee (08/11/2026) : la signature du JWT reste valide apres removeMember, mais la cle n'a plus
+	// aucun workspace. Elle est refusee ICI (535 5.7.8) et non plus a l'envoi (550 5.7.1). Une panne de
+	// lecture n'est pas une revocation : refus temporaire (454), le client reessaiera.
+	workspaces, wsErr := s.workspaceRepo.GetUserWorkspaces(context.Background(), claims.UserID)
+	if wsErr != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"api_email": apiEmail,
+			"user_id":   claims.UserID,
+			"error":     wsErr.Error(),
+		}).Error("SMTP bridge: workspace lookup failed during authentication")
+		return "", fmt.Errorf("%w: workspace lookup failed", smtp_bridge.ErrTemporaryAuth)
+	}
+	if len(workspaces) == 0 {
+		s.logger.WithFields(map[string]interface{}{
+			"api_email": apiEmail,
+			"user_id":   claims.UserID,
+		}).Warn("SMTP bridge: API key has no workspace (revoked)")
+		return "", fmt.Errorf("api key revoked or without workspace")
+	}
+
 	s.logger.WithFields(map[string]interface{}{
 		"api_email": apiEmail,
 		"user_id":   claims.UserID,

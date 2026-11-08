@@ -52,6 +52,10 @@ func TestSMTPBridgeHandlerService_Authenticate_Success(t *testing.T) {
 	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	service := NewSMTPBridgeHandlerService(nil, nil, mockRepo, log, jwtSecret, rl)
 
+	// Une cle valide a au moins un workspace : c'est ce que l'AUTH verifie (cle non revoquee).
+	mockRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-123").
+		Return([]*domain.UserWorkspace{{UserID: "api-user-123", WorkspaceID: "ws1"}}, nil).Times(1)
+
 	userID, err := service.Authenticate(apiEmail, apiKey)
 
 	assert.NoError(t, err)
@@ -138,10 +142,71 @@ func TestSMTPBridgeHandlerService_Authenticate_NoWorkspaceAccess(t *testing.T) {
 	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
 	service := NewSMTPBridgeHandlerService(nil, nil, mockRepo, log, jwtSecret, rl)
 
+	// Cle REVOQUEE (08/11/2026) : sa signature est toujours valide, mais elle n'a plus aucun workspace
+	// (removeMember). L'AUTH la refuse (535 5.7.8) au lieu de la laisser passer jusqu'a l'envoi (550).
+	mockRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-123").Return(nil, nil).Times(1)
+
 	userID, err := service.Authenticate(apiEmail, apiKey)
 
-	assert.NoError(t, err)
-	assert.Equal(t, "api-user-123", userID)
+	assert.Error(t, err)
+	assert.Empty(t, userID)
+	assert.False(t, errors.Is(err, smtp_bridge.ErrTemporaryAuth), "une cle revoquee est un refus permanent")
+}
+
+// A travers le bridge reel : cle revoquee => 535 5.7.8 des l'AUTH ; panne de lecture => 454 temporaire.
+func TestSMTPBridgeHandlerService_Authenticate_RevokedKeyRefusedAt535(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	jwtSecret := []byte("test-secret-key-for-jwt-signing-minimum-32-chars")
+	apiEmail := "api@example.com"
+	claims := UserClaims{
+		UserID: "api-user-revoked", Email: apiEmail, Type: string(domain.UserTypeAPIKey),
+		RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), IssuedAt: jwt.NewNumericDate(time.Now())},
+	}
+	apiKey, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
+
+	mockRepo := mocks.NewMockWorkspaceRepository(ctrl)
+	rl := ratelimiter.NewRateLimiter()
+	rl.SetPolicy("smtp", 50, 1*time.Minute)
+	defer rl.Stop()
+	service := NewSMTPBridgeHandlerService(nil, nil, mockRepo, logger.NewLogger(), jwtSecret, rl)
+	backend := smtp_bridge.NewBackend(service.Authenticate,
+		func(string, string, []string, []byte) error { return nil }, logger.NewLogger())
+	session, err := backend.NewSession(nil)
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	s := session.(*smtp_bridge.Session)
+
+	auth := func() *smtp.SMTPError {
+		srv, aerr := s.Auth(sasl.Plain)
+		if aerr != nil {
+			t.Fatalf("Auth: %v", aerr)
+		}
+		_, _, nerr := srv.Next([]byte("\x00" + apiEmail + "\x00" + apiKey))
+		if nerr == nil {
+			return nil
+		}
+		var se *smtp.SMTPError
+		if !errors.As(nerr, &se) {
+			t.Fatalf("erreur SMTP attendue, got %T %v", nerr, nerr)
+		}
+		return se
+	}
+
+	mockRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-revoked").Return(nil, nil).Times(1)
+	se := auth()
+	if assert.NotNil(t, se, "une cle revoquee ne doit pas passer l'AUTH") {
+		assert.Equal(t, 535, se.Code)
+		assert.Equal(t, smtp.EnhancedCode{5, 7, 8}, se.EnhancedCode)
+	}
+
+	mockRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-revoked").Return(nil, errors.New("db down")).Times(1)
+	se = auth()
+	if assert.NotNil(t, se) {
+		assert.Equal(t, 454, se.Code, "une panne de lecture est un refus temporaire, pas une revocation")
+	}
 }
 
 func TestSMTPBridgeHandlerService_HandleMessage_Success(t *testing.T) {

@@ -238,3 +238,9 @@ Aucune action prod avant le feu vert explicite de main, par temps. Chaque temps 
 - **Variable d'environnement du relais retirée** des jobs : `VERIDIAN_SMTP_RELAY_ENABLED=true` a été retiré du job prod (le job staging ne la portait plus depuis 11cdc736). Avant le retrait, `veridian_smtp_relay_enabled` valait `True` sur prod et sur staging (lu par `system:settings-get`). Désormais, le réglage gouverne seul. Restent en amorçage (infra) : `SMTP_BRIDGE_ENABLED=true`, `SMTP_BRIDGE_TLS=starttls`, `SMTP_BRIDGE_PORT`, `SMTP_BRIDGE_DOMAIN`, `VERIDIAN_RELAY_CERT_MANAGED=true`.
 - **Variables Nomad du certificat copié purgées** (main, 04/11) : les jobs notifuse et notifuse-staging ne référencent plus ces chemins.
 - **Commandes de réglage du relais absentes de la CLI distribuée** : `system:settings-get` et `system:settings-update` ne sont plus dans la copie embarquée (`internal/http/agentcli`) : elles ne vivent que dans `notifuse-admin` (module `notifuse_root.py`, non distribué). La couverture des routes `/api/settings.*` est donc tenue par deux exemptions motivées dans `scripts/veridian/cli-route-exemptions.txt`. Le root-signin ne signe qu'en staging et en prod sous garde explicite (`NOTIFUSE_PROD_ROOT=1`), secrets lus à l'appel dans Nomad, en mémoire seule.
+
+## AUTH : une clé API révoquée est refusée dès l'AUTH (08/11/2026)
+Le JWT d'une clé API reste valide après `removeMember` (signature et expiration). `SMTPBridgeHandlerService.Authenticate`
+vérifie désormais que la clé a encore au moins un workspace : sinon 535 5.7.8 (permanent) dès l'AUTH, au lieu du 550 5.7.1
+à l'envoi. Une panne de lecture des workspaces est un refus temporaire (454 4.7.0), jamais une révocation.
+Tests : `TestSMTPBridgeHandlerService_Authenticate_*` (dont `RevokedKeyRefusedAt535`, à travers le bridge réel).
