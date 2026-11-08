@@ -165,6 +165,9 @@ var MigrationStatements = []string{
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_workspace_integration_active ON tasks (workspace_id, integration_id) WHERE integration_id IS NOT NULL AND status NOT IN ('completed', 'failed')`,
 	// V70 : un hub_user_id ne lie qu'un seul user local (CONTRAT-HUB 3.7).
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_hub_user_id_unique ON users (hub_user_id) WHERE hub_user_id IS NOT NULL`,
+	// V72 : statut d'essai envoye par le Hub (stocke, jamais applique).
+	`ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS trial_status VARCHAR(16) NULL`,
+	`ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ NULL`,
 }
 
 // GetMigrationStatements returns migration statements for database schema setup

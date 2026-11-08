@@ -2371,3 +2371,27 @@ func TestVeridianHandler_RegisterRoutes_MountsEmailIntegrationVerify(t *testing.
 	_, pattern := mux.Handler(req)
 	assert.Equal(t, "POST /api/veridian/admin/email-integration.verify", pattern)
 }
+
+// Statut d'essai du Hub (CONTRAT-BILLING v2 §3): transmis au service s'il est valide, refuse en 400 sinon.
+func TestVeridianHandleUpdatePlan_StatutDEssai(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	ends := "2026-11-20T10:00:00Z"
+	svc.EXPECT().UpdatePlan(gomock.Any(), domain.UpdatePlanInput{
+		TenantID: "ws-1", Plan: "pro", TrialStatus: "trial_active", TrialEndsAt: &ends,
+	}).Return(&domain.UpdatePlanResponse{TenantID: "ws-1", Plan: "pro", AppliedAt: time.Now().UTC()}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ws-1","plan":"pro","trial_status":"trial_active","trial_ends_at":"2026-11-20T10:00:00Z"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	for _, body := range []string{
+		`{"tenant_id":"ws-1","plan":"pro","trial_status":"gratuit"}`,
+		`{"tenant_id":"ws-1","plan":"pro","trial_status":"trial_active","trial_ends_at":"demain"}`,
+	} {
+		rec = postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan", body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, "body=%s", body)
+	}
+}

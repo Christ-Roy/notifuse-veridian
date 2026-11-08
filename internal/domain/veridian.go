@@ -540,6 +540,51 @@ type UpdatePlanInput struct {
 	// Quotas : override du quota mensuel hardcoded. Si nil, fallback
 	// QuotaForPlan(plan). En contexte 2026-05-21 (tout illimité), reste à -1.
 	Quotas *PlanQuotasInput `json:"quotas,omitempty"`
+	// TrialStatus / TrialEndsAt : statut d'essai du Hub (CONTRAT-BILLING v2 §3). STOCKES et rendus dans la
+	// decouverte, jamais appliques (aucune lecture seule tant que VERIDIAN_TRIAL_READONLY_ENFORCED est coupe).
+	TrialStatus string  `json:"trial_status,omitempty"`
+	TrialEndsAt *string `json:"trial_ends_at,omitempty"` // ISO 8601 ou null
+}
+
+// AllowedTrialStatuses : enum ferme du statut d'essai, un seul par tenant toutes apps confondues.
+var AllowedTrialStatuses = []string{"none", "trial_active", "expired", "paid"}
+
+// IsValidTrialStatus : vide = pas de statut envoye (back-compat), sinon un des quatre.
+func IsValidTrialStatus(s string) bool {
+	if s == "" {
+		return true
+	}
+	for _, a := range AllowedTrialStatuses {
+		if s == a {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseTrialEndsAt lit trial_ends_at (ISO 8601). nil ou vide = pas de date.
+func ParseTrialEndsAt(v *string) (*time.Time, error) {
+	if v == nil || *v == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, *v)
+	if err != nil {
+		return nil, err
+	}
+	t = t.UTC()
+	return &t, nil
+}
+
+// TenantTrial : statut d'essai stocke pour un workspace (veridian_plan.trial_status / trial_ends_at).
+type TenantTrial struct {
+	Status string
+	EndsAt *time.Time
+}
+
+// TrialStore stocke et relit le statut d'essai. Implementation: internal/veridian/trial.
+type TrialStore interface {
+	SetTrial(ctx context.Context, workspaceID, status string, endsAt *time.Time) error
+	GetTrials(ctx context.Context, workspaceIDs []string) (map[string]TenantTrial, error)
 }
 
 // UpdatePlanResponse est la reponse de POST /api/tenants/update-plan
@@ -999,6 +1044,10 @@ type DiscoveryWorkspace struct {
 	Plan             string `json:"plan"`
 	MagicLinkCapable bool   `json:"magic_link_capable"`
 	FallbackURL      string `json:"fallback_url"`
+	// TrialStatus / TrialEndsAt : statut d'essai tel que le Hub l'a envoye (null si jamais recu). La cle est
+	// TOUJOURS presente : le Hub la lit pour savoir que l'app rend le statut (reconcile notWired).
+	TrialStatus *string `json:"trial_status"`
+	TrialEndsAt *string `json:"trial_ends_at"`
 }
 
 // DiscoveryResponse est la reponse de POST /api/users/by-email.

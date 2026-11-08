@@ -3219,3 +3219,100 @@ func TestVeridianService_WipeTestTenants_PrunesOrphanedOwner(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tstprune"}, resp.Wiped)
 }
+
+// fakeTrialStore : stocke en memoire, pour prouver ce que UpdatePlan ecrit et ce que la decouverte rend.
+type fakeTrialStore struct {
+	set     map[string]domain.TenantTrial
+	setErr  error
+	getErr  error
+	setCall int
+}
+
+func (f *fakeTrialStore) SetTrial(_ context.Context, ws, status string, endsAt *time.Time) error {
+	f.setCall++
+	if f.setErr != nil {
+		return f.setErr
+	}
+	if f.set == nil {
+		f.set = map[string]domain.TenantTrial{}
+	}
+	f.set[ws] = domain.TenantTrial{Status: status, EndsAt: endsAt}
+	return nil
+}
+
+func (f *fakeTrialStore) GetTrials(_ context.Context, ids []string) (map[string]domain.TenantTrial, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	out := map[string]domain.TenantTrial{}
+	for _, id := range ids {
+		if t, ok := f.set[id]; ok {
+			out[id] = t
+		}
+	}
+	return out, nil
+}
+
+func expectUpdatePlanOK(m *veridianServiceMocks, ws string, source domain.PlanSource) {
+	m.planRepo.EXPECT().Get(gomock.Any(), ws).Return(&domain.VeridianPlan{WorkspaceID: ws, Plan: "free", PlanSource: source}, nil).Times(1)
+	m.planRepo.EXPECT().UpdatePlan(gomock.Any(), ws, "pro", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantPlanChanged, ws, gomock.Any()).AnyTimes()
+}
+
+// Le statut d'essai du Hub est STOCKE avec le plan (CONTRAT-BILLING v2 §3).
+func TestUpdatePlan_StockeLeStatutDEssai(t *testing.T) {
+	svc, m := newVeridianService(t)
+	store := &fakeTrialStore{}
+	svc.ConfigureTrialStore(store)
+	expectUpdatePlanOK(m, "ws-trial", "")
+
+	ends := "2026-11-20T10:00:00Z"
+	_, err := svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{
+		TenantID: "ws-trial", Plan: "pro", TrialStatus: "trial_active", TrialEndsAt: &ends,
+	})
+	require.NoError(t, err)
+	got := store.set["ws-trial"]
+	assert.Equal(t, "trial_active", got.Status)
+	require.NotNil(t, got.EndsAt)
+	assert.Equal(t, "2026-11-20T10:00:00Z", got.EndsAt.Format(time.RFC3339))
+}
+
+// Un plan sans statut d'essai (Hub ancien) n'ecrit rien : le statut deja stocke reste.
+func TestUpdatePlan_SansStatutDEssai_NEcritRien(t *testing.T) {
+	svc, m := newVeridianService(t)
+	store := &fakeTrialStore{}
+	svc.ConfigureTrialStore(store)
+	expectUpdatePlanOK(m, "ws-old", "")
+	_, err := svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{TenantID: "ws-old", Plan: "pro"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, store.setCall)
+}
+
+// Un statut hors enum ou une date illisible est refuse, rien n'est ecrit.
+func TestUpdatePlan_StatutOuDateInvalide_Refuse(t *testing.T) {
+	svc, m := newVeridianService(t)
+	store := &fakeTrialStore{}
+	svc.ConfigureTrialStore(store)
+	m.planRepo.EXPECT().Get(gomock.Any(), gomock.Any()).Return(&domain.VeridianPlan{}, nil).AnyTimes()
+
+	_, err := svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{TenantID: "w", Plan: "pro", TrialStatus: "gratuit"})
+	require.Error(t, err)
+	bad := "demain"
+	_, err = svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{TenantID: "w", Plan: "pro", TrialStatus: "trial_active", TrialEndsAt: &bad})
+	require.Error(t, err)
+	assert.Equal(t, 0, store.setCall)
+}
+
+// Plan offert (immune): le plan reste protege (409), mais le statut d'essai, lui, est enregistre.
+func TestUpdatePlan_PlanImmune_StockeQuandMemeLeStatut(t *testing.T) {
+	svc, m := newVeridianService(t)
+	store := &fakeTrialStore{}
+	svc.ConfigureTrialStore(store)
+	m.planRepo.EXPECT().Get(gomock.Any(), "ws-gift").Return(&domain.VeridianPlan{WorkspaceID: "ws-gift", Plan: "pro", PlanSource: domain.PlanSourceLifetimePartner}, nil).Times(1)
+
+	_, err := svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{
+		TenantID: "ws-gift", Plan: "free", PlanSource: domain.PlanSourceDowngradeAuto, TrialStatus: "expired",
+	})
+	assert.ErrorIs(t, err, ErrPlanImmune)
+	assert.Equal(t, "expired", store.set["ws-gift"].Status)
+}

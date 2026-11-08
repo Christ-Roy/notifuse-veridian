@@ -50,6 +50,9 @@ type Config struct {
 	// HUB_API_SECRET vide => endpoints /api/tenants/* renvoient 503 (mode self-hosted, pas de Hub).
 	// HUB_WEBHOOK_URL vide => webhook emitter en noop.
 	// VERIDIAN_DEFAULT_PLAN: plan par defaut sur provision si non precise (defaut "free").
+	// VERIDIAN_TRIAL_READONLY_ENFORCED : lecture seule a l'expiration d'essai (CONTRAT-BILLING v2 §3).
+	// COUPE par defaut ; seul Robert le leve. Notifuse stocke trial_status/trial_ends_at du Hub dans tous
+	// les cas ; aucun code n'applique la lecture seule tant que ce drapeau reste faux (fiche 82).
 	// HUB_BASE_URL : URL racine du Hub Veridian (default "https://app.veridian.site").
 	//   Host public Veridian = `app.veridian.site` (PAS `hub.veridian.site` qui
 	//   n'existe pas en DNS public — bug corrigé 2026-06-13).
@@ -70,6 +73,8 @@ type Config struct {
 	// role=owner a CHAQUE espace cree (Provision) en plus de l'owner client.
 	// Env VERIDIAN_DEFAULT_CO_OWNER_EMAIL ; vide = desactive (defaut).
 	VeridianDefaultCoOwnerEmail string
+	// VeridianTrialReadonlyEnforced : voir VERIDIAN_TRIAL_READONLY_ENFORCED. Faux par defaut.
+	VeridianTrialReadonlyEnforced bool
 
 	// AgentCLIBinaryPath : chemin local (dans l'image) du binaire/script CLI
 	// utilisateur `notifuse` à servir sur GET /agent/notifuse (mission
@@ -423,6 +428,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 
 	// === Veridian patches ===
 	v.SetDefault("VERIDIAN_DEFAULT_PLAN", "free")
+	v.SetDefault("VERIDIAN_TRIAL_READONLY_ENFORCED", false)
 
 	// SMTP defaults
 	v.SetDefault("SMTP_FROM_NAME", "Notifuse")
@@ -894,6 +900,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		HubWebhookURL:               v.GetString("HUB_WEBHOOK_URL"),
 		HubWebhookSecret:            v.GetString("HUB_WEBHOOK_SECRET"),
 		VeridianDefaultPlan:         v.GetString("VERIDIAN_DEFAULT_PLAN"),
+		VeridianTrialReadonlyEnforced: v.GetBool("VERIDIAN_TRIAL_READONLY_ENFORCED"),
 		HubBaseURL:                  v.GetString("HUB_BASE_URL"),
 		HubInvitationSecretNotifuse: v.GetString("HUB_INVITATION_SECRET_NOTIFUSE"),
 		VeridianDefaultCoOwnerEmail: v.GetString("VERIDIAN_DEFAULT_CO_OWNER_EMAIL"),

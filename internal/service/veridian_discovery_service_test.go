@@ -16,8 +16,10 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/golang/mock/gomock"
@@ -187,4 +189,53 @@ func TestLookupByEmail_EmptyAPIEndpoint_FallbackURL(t *testing.T) {
 	assert.True(t, resp.Found)
 	assert.Equal(t, "https://notifuse.app.veridian.site/console/signin", resp.Workspaces[0].FallbackURL,
 		"fallback_url doit etre hardcode quand apiEndpoint est vide")
+}
+
+// Statut d'essai du Hub dans la decouverte: rendu tel que stocke, null si jamais recu, cle TOUJOURS presente
+// (le Hub s'en sert pour savoir que l'app le rend, reconcile notWired).
+func TestLookupByEmail_RendLeStatutDEssai(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ends := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	svc.ConfigureTrialStore(&fakeTrialStore{set: map[string]domain.TenantTrial{
+		"ws-trial": {Status: "trial_active", EndsAt: &ends},
+	}})
+
+	user := &domain.User{ID: "u1", Email: "a@example.com", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "a@example.com").Return(user, nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "u1").Return([]*domain.UserWorkspace{
+		{UserID: "u1", WorkspaceID: "ws-trial", Role: "owner"},
+		{UserID: "u1", WorkspaceID: "ws-jamais", Role: "member"},
+	}, nil)
+	m.workspaceRepo.EXPECT().GetByID(gomock.Any(), gomock.Any()).Return(&domain.Workspace{Name: "X"}, nil).Times(2)
+	m.planRepo.EXPECT().Get(gomock.Any(), gomock.Any()).Return(&domain.VeridianPlan{Plan: "free"}, nil).Times(2)
+
+	resp, err := svc.LookupByEmail(context.Background(), "a@example.com")
+	require.NoError(t, err)
+	require.Len(t, resp.Workspaces, 2)
+	require.NotNil(t, resp.Workspaces[0].TrialStatus)
+	assert.Equal(t, "trial_active", *resp.Workspaces[0].TrialStatus)
+	require.NotNil(t, resp.Workspaces[0].TrialEndsAt)
+	assert.Equal(t, "2026-11-20T10:00:00Z", *resp.Workspaces[0].TrialEndsAt)
+	assert.Nil(t, resp.Workspaces[1].TrialStatus, "jamais recu: null")
+
+	raw, err := json.Marshal(resp)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"trial_status":null`, "la cle est presente meme sans valeur")
+	assert.Contains(t, string(raw), `"trial_ends_at":null`)
+}
+
+// Une panne de lecture du statut d'essai ne casse pas la decouverte: rendu null.
+func TestLookupByEmail_PanneDeLectureDuStatut_RendNull(t *testing.T) {
+	svc, m := newVeridianService(t)
+	svc.ConfigureTrialStore(&fakeTrialStore{getErr: errors.New("db down")})
+	user := &domain.User{ID: "u1", Email: "a@example.com", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "a@example.com").Return(user, nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "u1").Return([]*domain.UserWorkspace{{UserID: "u1", WorkspaceID: "ws1", Role: "owner"}}, nil)
+	m.workspaceRepo.EXPECT().GetByID(gomock.Any(), gomock.Any()).Return(&domain.Workspace{Name: "X"}, nil)
+	m.planRepo.EXPECT().Get(gomock.Any(), gomock.Any()).Return(&domain.VeridianPlan{Plan: "free"}, nil)
+
+	resp, err := svc.LookupByEmail(context.Background(), "a@example.com")
+	require.NoError(t, err)
+	require.Len(t, resp.Workspaces, 1)
+	assert.Nil(t, resp.Workspaces[0].TrialStatus)
 }

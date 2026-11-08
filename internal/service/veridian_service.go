@@ -169,6 +169,8 @@ type veridianService struct {
 	// espace. Injecte via ConfigureDefaultCoOwner (veridian_co_owner.go). Vide =
 	// fonctionnalite desactivee.
 	defaultCoOwnerEmail string
+	// trialStore : statut d'essai du Hub (V72), stocke et rendu, jamais applique. Nil = non cable.
+	trialStore domain.TrialStore
 	// accountGate : vrai si le Hub a supprime ce compte (users.hub_deleted_at, V71). Nil = pas de garde.
 	accountGate func(ctx context.Context, userID string) (deleted bool, err error)
 }
@@ -695,6 +697,26 @@ func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePla
 	existing, err := s.planRepo.Get(ctx, input.TenantID)
 	if err != nil {
 		return nil, err // sql.ErrNoRows propage tel quel (handler mappe → 404)
+	}
+
+	// === CONTRAT-BILLING v2 §3 — statut d'essai du Hub (08/11/2026) ===
+	// STOCKE tel quel et rendu dans la decouverte ; aucune lecture seule n'est appliquee. Ecrit AVANT la garde
+	// d'immunite : un plan offert reste protege (409), mais le statut d'essai, une information, est enregistre.
+	if input.TrialStatus != "" {
+		if !domain.IsValidTrialStatus(input.TrialStatus) {
+			return nil, fmt.Errorf("invalid trial_status %q", input.TrialStatus)
+		}
+		endsAt, perr := domain.ParseTrialEndsAt(input.TrialEndsAt)
+		if perr != nil {
+			return nil, fmt.Errorf("invalid trial_ends_at: %w", perr)
+		}
+		if s.trialStore != nil {
+			if err := s.trialStore.SetTrial(ctx, input.TenantID, input.TrialStatus, endsAt); err != nil {
+				return nil, fmt.Errorf("store trial status: %w", err)
+			}
+		} else if s.logger != nil {
+			s.logger.WithField("tenant_id", input.TenantID).Warn("veridian: trial_status recu mais le stockage d'essai n'est pas cable")
+		}
 	}
 
 	// === CONTRAT-BILLING v2 §3.4.4 — immunité plan offert ===
@@ -2308,6 +2330,30 @@ func (s *veridianService) LookupByEmail(ctx context.Context, email string) (*dom
 		})
 	}
 
+	// Statut d'essai du Hub (V72) : rendu tel que stocke, null si jamais recu. La cle est toujours presente.
+	if s.trialStore != nil && len(resp.Workspaces) > 0 {
+		ids := make([]string, 0, len(resp.Workspaces))
+		for _, w := range resp.Workspaces {
+			ids = append(ids, w.WorkspaceID)
+		}
+		if trials, terr := s.trialStore.GetTrials(ctx, ids); terr != nil {
+			if s.logger != nil {
+				s.logger.WithField("error", terr.Error()).Warn("veridian: lecture du statut d'essai impossible, rendu null")
+			}
+		} else {
+			for i := range resp.Workspaces {
+				if t, ok := trials[resp.Workspaces[i].WorkspaceID]; ok {
+					status := t.Status
+					resp.Workspaces[i].TrialStatus = &status
+					if t.EndsAt != nil {
+						e := t.EndsAt.UTC().Format(time.RFC3339)
+						resp.Workspaces[i].TrialEndsAt = &e
+					}
+				}
+			}
+		}
+	}
+
 	return resp, nil
 }
 
@@ -2317,6 +2363,11 @@ func hubUserIDFromProvision(input domain.ProvisionInput) string {
 		return ""
 	}
 	return strings.TrimSpace(input.Metadata.HubUserID)
+}
+
+// ConfigureTrialStore branche le stockage du statut d'essai envoye par le Hub (fiche 82). Cablage : veridian_wiring.go.
+func (s *veridianService) ConfigureTrialStore(store domain.TrialStore) {
+	s.trialStore = store
 }
 
 // ConfigureAccountGate branche la garde "compte supprime cote Hub" (CONTRAT-HUB 3.8). Cablage : veridian_wiring.go.

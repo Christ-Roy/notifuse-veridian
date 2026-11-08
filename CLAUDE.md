@@ -103,6 +103,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `61` nœud webhook des automations : garde SSRF (`NewTenantOutboundClient`), secret chiffré, signature HMAC
 - `75` lot L4 qualité et sécurité : aperçu e-mail en bac à sable, Liquid des contacts, tests upstream portés, mutants
 - `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`, rebond automatique
+- `82` statut d'essai du Hub (stocké, rendu, jamais appliqué) et signal d'activité vers le Hub
 - `81` capacité base : connexions par workspace, `max_connections`, incident du 07/11
 - `79` CLI utilisateur à parité : profils d'envoi avec sa propre clé, qui peut quoi, faille `tasks.*`, tableau d'audit
 

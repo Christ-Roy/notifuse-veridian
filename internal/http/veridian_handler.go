@@ -345,6 +345,19 @@ func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// === CONTRAT-BILLING v2 §3 — statut d'essai (stocke, jamais applique) ===
+	if !domain.IsValidTrialStatus(input.TrialStatus) {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid trial_status", http.StatusBadRequest, map[string]interface{}{
+			"trial_status":          input.TrialStatus,
+			"allowed_trial_statuses": domain.AllowedTrialStatuses,
+		})
+		return
+	}
+	if _, perr := domain.ParseTrialEndsAt(input.TrialEndsAt); perr != nil {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid trial_ends_at (ISO 8601 expected)", http.StatusBadRequest, nil)
+		return
+	}
+
 	resp, err := h.service.UpdatePlan(r.Context(), input)
 	if err != nil {
 		h.logError("update_plan", err, map[string]interface{}{"tenant_id": input.TenantID})

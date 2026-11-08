@@ -272,3 +272,25 @@ func TestAPIEndpointTrailingSlashStripped(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "http://localhost:8081", cfg.APIEndpoint)
 }
+
+// La lecture seule a l'expiration d'essai est un drapeau COUPE par defaut : Notifuse stocke le statut d'essai
+// du Hub mais n'applique rien tant que Robert n'a pas leve ce drapeau (07/11/2026, CONTRAT-BILLING v2 §3).
+func TestVeridianTrialReadonlyEnforced_CoupeParDefaut(t *testing.T) {
+	_ = os.Setenv("SECRET_KEY", "test-secret-key-1234567890123456")
+	_ = os.Setenv("ROOT_EMAIL", "test@example.com")
+	_ = os.Unsetenv("VERIDIAN_TRIAL_READONLY_ENFORCED")
+	defer func() {
+		_ = os.Unsetenv("SECRET_KEY")
+		_ = os.Unsetenv("ROOT_EMAIL")
+		_ = os.Unsetenv("VERIDIAN_TRIAL_READONLY_ENFORCED")
+	}()
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.False(t, cfg.VeridianTrialReadonlyEnforced, "coupe par defaut")
+
+	_ = os.Setenv("VERIDIAN_TRIAL_READONLY_ENFORCED", "true")
+	cfg, err = Load()
+	require.NoError(t, err)
+	assert.True(t, cfg.VeridianTrialReadonlyEnforced, "seule la variable explicite le leve")
+}

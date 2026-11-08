@@ -21,6 +21,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/relaycert"
 	"github.com/Notifuse/notifuse/internal/veridian/relaysettings"
+	veridiantrial "github.com/Notifuse/notifuse/internal/veridian/trial"
 	"github.com/Notifuse/notifuse/internal/veridian/smtprelay"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -540,6 +541,10 @@ func (a *App) veridianInitHandlers() error {
 	// (VERIDIAN_DEFAULT_CO_OWNER_EMAIL ; vide = desactive).
 	if coOwner, ok := a.veridianService.(interface{ ConfigureDefaultCoOwner(string) }); ok {
 		coOwner.ConfigureDefaultCoOwner(a.config.VeridianDefaultCoOwnerEmail)
+	}
+	// Statut d'essai du Hub (CONTRAT-BILLING v2 §3, V72) : stocke et rendu dans la decouverte, jamais applique.
+	if trialed, ok := a.veridianService.(interface{ ConfigureTrialStore(domain.TrialStore) }); ok && a.db != nil {
+		trialed.ConfigureTrialStore(&veridiantrial.Store{DB: a.db})
 	}
 	// Compte supprime cote Hub (POST /api/hub/users/sync deleted:true) : plus de lien de connexion.
 	if gated, ok := a.veridianService.(interface {

@@ -202,6 +202,13 @@ func TestFreshInstallSchemaHasHubUserIDUniqueIndex(t *testing.T) {
 	assert.Contains(t, all, "WHERE hub_user_id IS NOT NULL")
 }
 
+// V72 : une installation neuve ne rejoue pas les migrations, les colonnes d'essai sont dans le schema de base.
+func TestFreshInstallSchemaHasTrialColumns(t *testing.T) {
+	all := strings.Join(MigrationStatements, "\n")
+	assert.Contains(t, all, "ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS trial_status VARCHAR(16) NULL")
+	assert.Contains(t, all, "ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ NULL")
+}
+
 func TestSchemaConsistency(t *testing.T) {
 	t.Run("Migration statements reference some TableNames", func(t *testing.T) {
 		allStatements := strings.Join(MigrationStatements, " ")
