@@ -51,3 +51,7 @@ Mesure du 07/11 après le déploiement du FORCE : 9 nouvelles bases complètes (
 alors que les logs du wipe disaient « database dropped ». `connectionManager.createWorkspacePool` (upstream) appelle
 `EnsureWorkspaceDatabaseExists` : toute tâche ou tout webhook en vol qui demande une connexion pour un workspace
 supprimé RECRÉE sa base. Correctif (patch listé en fiche 41) : pas de ligne `workspaces`, pas de base.
+
+## Reprovisionnement après wipe (09/11/2026)
+
+Le wipe retirait les propriétaires humains orphelins mais laissait le compte machine `veridian-api-<tenant>@...` : reprovisionner le même slug répondait 500 (« create api key: this user already exists »). `pruneOrphanedOwners` supprime maintenant aussi le compte machine de CE tenant (préfixe exact, aucun autre workspace), jamais celui d un autre tenant.

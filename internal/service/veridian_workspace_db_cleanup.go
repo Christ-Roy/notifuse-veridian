@@ -186,11 +186,12 @@ func (s *veridianService) cleanupFailedProvisionDB(ctx context.Context, workspac
 
 // pruneOrphanedOwners supprime, apres un wipe, les comptes humains du workspace qui n'ont plus AUCUN
 // workspace (07/11/2026 : 79 comptes locaux sans workspace, restes des batteries, wipe ne les retirait pas).
-// Jamais le root ni le co-owner par defaut, jamais un compte machine (api_key), jamais un compte qui
-// appartient encore a un autre workspace. Best-effort : un echec est journalise sans faire echouer le wipe.
+// Jamais le root ni le co-owner par defaut, jamais un compte qui appartient encore a un autre workspace.
+// Un compte machine (api_key) ne part que s'il est celui du tenant (veridian-api-<tenant>@...) : sinon
+// il restait et le reprovisionnement du meme slug repondait 500 "user already exists" (09/11/2026). Best-effort : un echec est journalise sans faire echouer le wipe.
 func (s *veridianService) pruneOrphanedOwners(ctx context.Context, tenantID string, members []*domain.UserWorkspaceWithEmail) {
 	for _, m := range members {
-		if m == nil || m.Type != domain.UserTypeUser {
+		if m == nil || !(m.Type == domain.UserTypeUser || isTenantAPIKeyUser(m, tenantID)) {
 			continue
 		}
 		if strings.EqualFold(m.Email, s.rootEmail) || (s.defaultCoOwnerEmail != "" && strings.EqualFold(m.Email, s.defaultCoOwnerEmail)) {
@@ -208,6 +209,12 @@ func (s *veridianService) pruneOrphanedOwners(ctx context.Context, tenantID stri
 			s.warnPrune(tenantID, m.UserID, err)
 		}
 	}
+}
+
+// isTenantAPIKeyUser : vrai pour le compte machine cree au provisionnement de CE tenant.
+func isTenantAPIKeyUser(m *domain.UserWorkspaceWithEmail, tenantID string) bool {
+	return m.Type == domain.UserTypeAPIKey && tenantID != "" &&
+		strings.HasPrefix(strings.ToLower(m.Email), "veridian-api-"+strings.ToLower(tenantID)+"@")
 }
 
 func (s *veridianService) warnPrune(tenantID, userID string, err error) {

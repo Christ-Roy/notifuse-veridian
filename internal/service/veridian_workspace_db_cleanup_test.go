@@ -278,6 +278,10 @@ func TestPruneOrphanedOwners(t *testing.T) {
 		m.userRepo.EXPECT().DeleteAllSessionsByUserID(gomock.Any(), "u-owner").Return(nil).Times(1)
 		m.userRepo.EXPECT().Delete(gomock.Any(), "u-owner").Return(nil).Times(1)
 		// membre qui appartient encore a un autre workspace: intact (aucun appel Delete)
+		// compte machine de CE tenant sans autre workspace: supprime (sinon reprovisionnement 500)
+		m.workspaceRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "u-key").Return(nil, nil).Times(1)
+		m.userRepo.EXPECT().DeleteAllSessionsByUserID(gomock.Any(), "u-key").Return(nil).Times(1)
+		m.userRepo.EXPECT().Delete(gomock.Any(), "u-key").Return(nil).Times(1)
 		m.workspaceRepo.EXPECT().GetUserWorkspaces(gomock.Any(), "u-shared").
 			Return([]*domain.UserWorkspace{{UserID: "u-shared", WorkspaceID: "other"}}, nil).Times(1)
 
@@ -286,7 +290,8 @@ func TestPruneOrphanedOwners(t *testing.T) {
 			member("u-shared", "shared@example.com", domain.UserTypeUser),
 			member("u-root", "root@veridian.site", domain.UserTypeUser),       // root: jamais
 			member("u-co", "robert@veridian.site", domain.UserTypeUser),        // co-owner par defaut: jamais
-			member("u-key", "veridian-api-x@notifuse", domain.UserTypeAPIKey), // compte machine: jamais
+			member("u-key", "veridian-api-ws-gone@notifuse.app.veridian.site", domain.UserTypeAPIKey),
+			member("u-other-key", "veridian-api-autre@notifuse.app.veridian.site", domain.UserTypeAPIKey), // machine d'un autre tenant: jamais
 		})
 	})
 
