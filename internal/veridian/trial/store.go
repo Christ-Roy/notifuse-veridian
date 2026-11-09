@@ -17,6 +17,21 @@ import (
 type Store struct{ DB *sql.DB }
 
 var _ domain.TrialStore = (*Store)(nil)
+var _ domain.HubTenantStore = (*Store)(nil)
+
+// SetHubTenant écrit l'id de tenant du Hub (V73). sql.ErrNoRows si le workspace n'a pas de plan.
+func (s *Store) SetHubTenant(ctx context.Context, workspaceID, hubTenantID string) error {
+	res, err := s.DB.ExecContext(ctx, `UPDATE veridian_plan SET hub_tenant_id = $2, updated_at = NOW() WHERE workspace_id = $1`, workspaceID, hubTenantID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
 
 // SetTrial écrit le statut d'essai d'un workspace. sql.ErrNoRows si le workspace n'a pas de plan.
 func (s *Store) SetTrial(ctx context.Context, workspaceID, status string, endsAt *time.Time) error {

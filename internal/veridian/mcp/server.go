@@ -31,7 +31,8 @@ type Member struct {
 // Store : retrouve l'utilisateur par hub_user_id (jamais de creation) et choisit son espace.
 type Store interface {
 	// Resolve rend ErrUnknownUser si aucun humain actif ne porte ce hub_user_id, ErrNoWorkspace s'il n'a aucun espace,
-	// ErrNotMember si tenantID (non vide) n'est pas un espace actif de l'utilisateur.
+	// ErrNotMember si tenantID (non vide) est un espace Notifuse mais pas un espace actif de l'utilisateur,
+	// ErrUnknownTenant si aucun espace ne porte cet id (slug ou id de tenant du Hub appris par update-plan).
 	Resolve(ctx context.Context, hubUserID, tenantID string) (*Member, error)
 }
 
@@ -39,6 +40,8 @@ var (
 	ErrUnknownUser = errors.New("mcp: hub user unknown in this app")
 	ErrNoWorkspace = errors.New("mcp: user has no workspace")
 	ErrNotMember   = errors.New("mcp: user is not a member of the requested tenant")
+	// ErrUnknownTenant : aucun espace Notifuse ne porte cet id (ni slug, ni id de tenant du Hub appris).
+	ErrUnknownTenant = errors.New("mcp: tenant_id is not linked to any Notifuse workspace")
 )
 
 // Dispatcher rejoue une requete sur le routeur de l'app, au nom de l'utilisateur.
@@ -107,6 +110,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, ErrUnknownUser):
 		// Le Hub reconnait cette chaine : il cree le compte par son chemin habituel puis reessaie une fois.
 		h.unauthorized(w, "hub_user_unknown : utilisateur inconnu de Notifuse, le Hub le cree, pas l'app")
+		return
+	case errors.Is(err, ErrUnknownTenant):
+		writeJSON(w, http.StatusNotFound, rpcError(nil, -32003, "tenant_id inconnu de Notifuse : cet espace n'est pas relie a ce tenant du Hub (le Hub pousse le lien par update-plan)"))
 		return
 	case errors.Is(err, ErrNotMember):
 		writeJSON(w, http.StatusForbidden, rpcError(nil, -32002, "tu n'es pas membre de cet espace"))

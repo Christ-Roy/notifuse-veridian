@@ -112,6 +112,11 @@ func TestHandler_TenantIdDuJetonChoisitLEspaceEtNonMembre403(t *testing.T) {
 
 	r.store.m, r.store.err = nil, ErrNotMember
 	assert.Equal(t, http.StatusForbidden, r.post(t, tok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`).Code)
+
+	r.store.err = ErrUnknownTenant
+	w := r.post(t, tok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "pas relie", "message clair, pas « pas membre »")
 }
 
 func TestHandler_SansEspace_403(t *testing.T) {

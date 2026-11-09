@@ -207,6 +207,7 @@ func TestFreshInstallSchemaHasTrialColumns(t *testing.T) {
 	all := strings.Join(MigrationStatements, "\n")
 	assert.Contains(t, all, "ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS trial_status VARCHAR(16) NULL")
 	assert.Contains(t, all, "ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ NULL")
+	assert.Contains(t, all, "ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS hub_tenant_id VARCHAR(64) NULL")
 }
 
 func TestSchemaConsistency(t *testing.T) {

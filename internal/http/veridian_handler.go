@@ -358,6 +358,11 @@ func (h *VeridianHandler) handleUpdatePlan(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if input.HubTenantID != "" && !domain.IsValidHubTenantID(input.HubTenantID) {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid hub_tenant_id", http.StatusBadRequest, nil)
+		return
+	}
+
 	resp, err := h.service.UpdatePlan(r.Context(), input)
 	if err != nil {
 		h.logError("update_plan", err, map[string]interface{}{"tenant_id": input.TenantID})

@@ -3316,3 +3316,34 @@ func TestUpdatePlan_PlanImmune_StockeQuandMemeLeStatut(t *testing.T) {
 	assert.ErrorIs(t, err, ErrPlanImmune)
 	assert.Equal(t, "expired", store.set["ws-gift"].Status)
 }
+
+type fakeHubTenantStore struct {
+	got map[string]string
+	err error
+}
+
+func (f *fakeHubTenantStore) SetHubTenant(_ context.Context, ws, hub string) error {
+	if f.err != nil {
+		return f.err
+	}
+	if f.got == nil {
+		f.got = map[string]string{}
+	}
+	f.got[ws] = hub
+	return nil
+}
+
+// L'id de tenant du Hub (V73) est appris par update-plan, pour que le MCP relie son claim tenant_id au workspace.
+func TestUpdatePlan_ApprendLIdDeTenantDuHub(t *testing.T) {
+	svc, m := newVeridianService(t)
+	store := &fakeHubTenantStore{}
+	svc.ConfigureHubTenantStore(store)
+	expectUpdatePlanOK(m, "ws-hub", "")
+	_, err := svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{TenantID: "ws-hub", Plan: "pro", HubTenantID: "359b76d5-aaaa"})
+	require.NoError(t, err)
+	assert.Equal(t, "359b76d5-aaaa", store.got["ws-hub"])
+
+	expectUpdatePlanOK(m, "ws-hub", "")
+	_, err = svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{TenantID: "ws-hub", Plan: "pro", HubTenantID: "x;drop"})
+	assert.Error(t, err, "id invalide refuse")
+}

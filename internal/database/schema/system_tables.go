@@ -168,6 +168,7 @@ var MigrationStatements = []string{
 	// V72 : statut d'essai envoye par le Hub (stocke, jamais applique).
 	`ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS trial_status VARCHAR(16) NULL`,
 	`ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ NULL`,
+	`ALTER TABLE veridian_plan ADD COLUMN IF NOT EXISTS hub_tenant_id VARCHAR(64) NULL`,
 }
 
 // GetMigrationStatements returns migration statements for database schema setup

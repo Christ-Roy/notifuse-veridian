@@ -546,6 +546,10 @@ func (a *App) veridianInitHandlers() error {
 	if trialed, ok := a.veridianService.(interface{ ConfigureTrialStore(domain.TrialStore) }); ok && a.db != nil {
 		trialed.ConfigureTrialStore(&veridiantrial.Store{DB: a.db})
 	}
+	// Id de tenant du Hub (V73) appris par update-plan : le MCP relie son claim tenant_id au workspace.
+	if hubbed, ok := a.veridianService.(interface{ ConfigureHubTenantStore(domain.HubTenantStore) }); ok && a.db != nil {
+		hubbed.ConfigureHubTenantStore(&veridiantrial.Store{DB: a.db})
+	}
 	// Compte supprime cote Hub (POST /api/hub/users/sync deleted:true) : plus de lien de connexion.
 	if gated, ok := a.veridianService.(interface {
 		ConfigureAccountGate(func(context.Context, string) (bool, error))

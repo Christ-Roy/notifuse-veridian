@@ -59,3 +59,14 @@ func TestGetTrials_ListeVide_AucuneRequete(t *testing.T) {
 	assert.Empty(t, got)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestSetHubTenant_EcritEtErrNoRowsSansPlan(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	mock.ExpectExec(`UPDATE veridian_plan SET hub_tenant_id = \$2`).WithArgs("ws1", "359b76d5-0000").WillReturnResult(sqlmock.NewResult(0, 1))
+	require.NoError(t, (&Store{DB: db}).SetHubTenant(context.Background(), "ws1", "359b76d5-0000"))
+	mock.ExpectExec(`UPDATE veridian_plan`).WillReturnResult(sqlmock.NewResult(0, 0))
+	assert.ErrorIs(t, (&Store{DB: db}).SetHubTenant(context.Background(), "ws-sans-plan", "x"), sql.ErrNoRows)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

@@ -171,6 +171,8 @@ type veridianService struct {
 	defaultCoOwnerEmail string
 	// trialStore : statut d'essai du Hub (V72), stocke et rendu, jamais applique. Nil = non cable.
 	trialStore domain.TrialStore
+	// hubTenantStore : id de tenant du Hub (V73), pour le MCP. Nil = non cable.
+	hubTenantStore domain.HubTenantStore
 	// accountGate : vrai si le Hub a supprime ce compte (users.hub_deleted_at, V71). Nil = pas de garde.
 	accountGate func(ctx context.Context, userID string) (deleted bool, err error)
 }
@@ -716,6 +718,18 @@ func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePla
 			}
 		} else if s.logger != nil {
 			s.logger.WithField("tenant_id", input.TenantID).Warn("veridian: trial_status recu mais le stockage d'essai n'est pas cable")
+		}
+	}
+
+	// hub_tenant_id (V73) : une information, ecrite comme le statut d'essai, avant la garde d'immunite.
+	if input.HubTenantID != "" {
+		if !domain.IsValidHubTenantID(input.HubTenantID) {
+			return nil, fmt.Errorf("invalid hub_tenant_id")
+		}
+		if s.hubTenantStore != nil {
+			if err := s.hubTenantStore.SetHubTenant(ctx, input.TenantID, input.HubTenantID); err != nil {
+				return nil, fmt.Errorf("store hub tenant id: %w", err)
+			}
 		}
 	}
 
@@ -2363,6 +2377,11 @@ func hubUserIDFromProvision(input domain.ProvisionInput) string {
 		return ""
 	}
 	return strings.TrimSpace(input.Metadata.HubUserID)
+}
+
+// ConfigureHubTenantStore branche le stockage de l'id de tenant du Hub (V73, MCP). Cablage : veridian_wiring.go.
+func (s *veridianService) ConfigureHubTenantStore(store domain.HubTenantStore) {
+	s.hubTenantStore = store
 }
 
 // ConfigureTrialStore branche le stockage du statut d'essai envoye par le Hub (fiche 82). Cablage : veridian_wiring.go.

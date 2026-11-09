@@ -66,8 +66,8 @@ func Mount(mux *http.ServeMux, h *Handler) {
 // SQLStore : utilisateurs et espaces dans la base systeme.
 type SQLStore struct{ DB *sql.DB }
 
-// Resolve : l'humain actif porteur de hub_user_id, puis son espace : tenantID s'il est fourni (membre actif
-// obligatoire, sinon ErrNotMember), sinon le proprietaire d'abord, le plus ancien ensuite ; jamais un espace supprime.
+// Resolve : l'humain actif porteur de hub_user_id, puis son espace : tenantID s'il est fourni (slug ou id de tenant du Hub ; membre actif
+// obligatoire, sinon ErrNotMember, ErrUnknownTenant si aucun espace ne le porte), sinon le proprietaire d'abord, le plus ancien ensuite ; jamais un espace supprime.
 func (s *SQLStore) Resolve(ctx context.Context, hubUserID, tenantID string) (*Member, error) {
 	m := &Member{}
 	err := s.DB.QueryRowContext(ctx,
@@ -86,11 +86,18 @@ func (s *SQLStore) Resolve(ctx context.Context, hubUserID, tenantID string) (*Me
 		FROM user_workspaces uw
 		JOIN workspaces w ON w.id = uw.workspace_id
 		LEFT JOIN veridian_plan p ON p.workspace_id = uw.workspace_id
-		WHERE uw.user_id = $1 AND p.deleted_at IS NULL AND ($2 = '' OR uw.workspace_id = $2)
+		WHERE uw.user_id = $1 AND p.deleted_at IS NULL AND ($2 = '' OR uw.workspace_id = $2 OR p.hub_tenant_id = $2)
 		ORDER BY (uw.role = 'owner') DESC, uw.created_at ASC, uw.workspace_id ASC LIMIT 1`, m.UserID, tenantID).
 		Scan(&uw.WorkspaceID, &uw.Role, &perms)
 	if errors.Is(err, sql.ErrNoRows) {
 		if tenantID != "" {
+			var known bool
+			if err := s.DB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM veridian_plan WHERE workspace_id = $1 OR hub_tenant_id = $1)`, tenantID).Scan(&known); err != nil {
+				return nil, err
+			}
+			if !known {
+				return nil, ErrUnknownTenant
+			}
 			return nil, ErrNotMember
 		}
 		return nil, ErrNoWorkspace

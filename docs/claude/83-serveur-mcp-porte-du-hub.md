@@ -21,7 +21,7 @@ Contrat : `veridian-hub/docs/CONTRAT-MCP.md` (09/11/2026). Code : `internal/veri
   `contacts_delete`). Aucun envoi pendant les tests.
 - Ajouter un outil = une ligne dans `catalog` (`tools.go`) + son test ; le Hub relit `tools/list` (cache 5 min), aucun
   déploiement du Hub.
-- Un `sub` inconnu : 401 dont le corps contient `hub_user_unknown` (le Hub crée alors le compte et réessaie une fois). Claim facultatif `tenant_id` (vérifié côté Hub) : il choisit l espace, appartenance revérifiée ici (sinon 403).
+- Un `sub` inconnu : 401 dont le corps contient `hub_user_unknown` (le Hub crée alors le compte et réessaie une fois). Claim facultatif `tenant_id` (id de tenant du Hub, vérifié côté Hub) : il choisit l espace, par slug ou par `veridian_plan.hub_tenant_id` (V73, appris par `update-plan` avec le champ `hub_tenant_id`) ; appartenance revérifiée ici (403 si non membre, 404 avec message clair si aucun espace n'est relié à cet id).
 - Config (env, défauts publics, aucun secret) : `VERIDIAN_HUB_JWKS_URL`, `VERIDIAN_HUB_ISSUER`, `VERIDIAN_MCP_AUDIENCE`
   (défaut `https://notifuse.app.veridian.site/api/mcp`).
 - Pas de commande CLI : la route est exemptée (`scripts/veridian/cli-route-exemptions.txt`), un JWT du Hub ne s'émet pas

@@ -63,8 +63,17 @@ func TestSQLStore_Resolve(t *testing.T) {
 	mock.ExpectQuery(`FROM users WHERE hub_user_id`).WithArgs("hub3").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow("u3", "w@x.test"))
 	mock.ExpectQuery(`FROM user_workspaces uw`).WithArgs("u3", "autre-espace").WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM veridian_plan WHERE workspace_id = \$1 OR hub_tenant_id = \$1\)`).WithArgs("autre-espace").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 	_, err = s.Resolve(context.Background(), "hub3", "autre-espace")
-	assert.ErrorIs(t, err, ErrNotMember, "tenant_id demande mais pas membre")
+	assert.ErrorIs(t, err, ErrNotMember, "l'espace existe mais l'utilisateur n'en est pas membre")
+
+	mock.ExpectQuery(`FROM users WHERE hub_user_id`).WithArgs("hub4").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow("u4", "x@x.test"))
+	mock.ExpectQuery(`FROM user_workspaces uw.*p\.hub_tenant_id = \$2`).WithArgs("u4", "359b76d5-uuid-du-hub").WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT EXISTS`).WithArgs("359b76d5-uuid-du-hub").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	_, err = s.Resolve(context.Background(), "hub4", "359b76d5-uuid-du-hub")
+	assert.ErrorIs(t, err, ErrUnknownTenant, "aucun espace relie a cet id de tenant du Hub")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

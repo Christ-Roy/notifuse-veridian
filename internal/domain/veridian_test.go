@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -1214,4 +1215,12 @@ func TestParseTrialEndsAt(t *testing.T) {
 	bad := "demain"
 	_, err = ParseTrialEndsAt(&bad)
 	assert.Error(t, err)
+}
+
+func TestIsValidHubTenantID(t *testing.T) {
+	assert.True(t, IsValidHubTenantID("359b76d5-1b2c-4d3e-8f90-123456789abc"))
+	assert.True(t, IsValidHubTenantID("tenant_1"))
+	for _, bad := range []string{"", "a b", "x;drop", strings.Repeat("a", 65), "é"} {
+		assert.False(t, IsValidHubTenantID(bad), bad)
+	}
 }

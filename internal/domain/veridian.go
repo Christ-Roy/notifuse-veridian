@@ -544,6 +544,8 @@ type UpdatePlanInput struct {
 	// decouverte, jamais appliques (aucune lecture seule tant que VERIDIAN_TRIAL_READONLY_ENFORCED est coupe).
 	TrialStatus string  `json:"trial_status,omitempty"`
 	TrialEndsAt *string `json:"trial_ends_at,omitempty"` // ISO 8601 ou null
+	// HubTenantID : id du tenant au Hub (UUID), appris ici pour que le MCP relie le claim `tenant_id` au workspace.
+	HubTenantID string `json:"hub_tenant_id,omitempty"`
 }
 
 // AllowedTrialStatuses : enum ferme du statut d'essai, un seul par tenant toutes apps confondues.
@@ -585,6 +587,24 @@ type TenantTrial struct {
 type TrialStore interface {
 	SetTrial(ctx context.Context, workspaceID, status string, endsAt *time.Time) error
 	GetTrials(ctx context.Context, workspaceIDs []string) (map[string]TenantTrial, error)
+}
+
+// HubTenantStore relie l'id de tenant du Hub (V73) a un workspace.
+type HubTenantStore interface {
+	SetHubTenant(ctx context.Context, workspaceID, hubTenantID string) error
+}
+
+// IsValidHubTenantID : 1 a 64 caracteres [A-Za-z0-9_-] (un UUID du Hub y tient).
+func IsValidHubTenantID(v string) bool {
+	if v == "" || len(v) > 64 {
+		return false
+	}
+	for _, r := range v {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 // UpdatePlanResponse est la reponse de POST /api/tenants/update-plan
