@@ -68,6 +68,7 @@ brique = une fiche + une ligne d'index.
 14. **Le plafond de connexions de l'appli (`DB_MAX_CONNECTIONS`) tient dans le
     `max_connections` de PostgreSQL** : une connexion par workspace, 100 et 100 ont refusé
     des workspaces clients (07/11/2026). `check-nomad-contract.sh` le vérifie. → `81`
+15. **Base : pg-saas depuis le 09/11/2026** (`172.26.64.1:15432`, rôle `notifuse`, `PG_SAAS_PASSWORD`). Plus de `notifuse-db` (job purgé, dumps froids sur contabo). → plan nomad-veridian §20.
 
 ## Relever plutôt que croire
 

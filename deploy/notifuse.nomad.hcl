@@ -66,12 +66,12 @@ job "notifuse" {
       value     = "ovh-prod"
     }
 
-# veridian.db_max_connections=300 (job notifuse-db de nomad-veridian : a changer des deux cotes ensemble)
+# veridian.db_max_connections=300 (base sur pg-saas depuis le 09/11 : a changer des deux cotes ensemble)
     # Bleu-vert (08/11) : le canari demarre a cote de l'ancienne, Traefik et l'entree SMTP les servent toutes deux, la
     # promotion arrete l'ancienne apres son shutdown_delay. Possible depuis que le relais SMTP a un port dynamique : le
     # 587 fixe est tenu par le job notifuse-smtp-entree (nomad-veridian), qui suit le service `notifuse-smtp` au
     # catalogue. Deux instances en meme temps sont sures : les files (emails, taches, automatisations) se prennent en
-    # FOR UPDATE SKIP LOCKED. La base vit dans le job notifuse-db : un deploiement ne la touche pas.
+    # FOR UPDATE SKIP LOCKED. La base vit sur pg-saas : un deploiement ne la touche pas.
     update {
       max_parallel     = 1
       canary           = 1
