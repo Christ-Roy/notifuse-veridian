@@ -308,7 +308,7 @@ func (a *App) InitDB() error {
 	}
 
 	// Connect to system database
-	db, err := sql.Open(driverName, database.GetSystemDSN(&a.config.Database))
+	db, err := database.OpenPostgres(driverName, database.GetSystemDSN(&a.config.Database)) // Veridian : transport durci (fiche 81)
 	if err != nil {
 		return fmt.Errorf("failed to connect to system database: %w", err)
 	}

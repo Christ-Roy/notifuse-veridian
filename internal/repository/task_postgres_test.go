@@ -2022,3 +2022,23 @@ func TestTaskRepository_ReleaseTask(t *testing.T) {
 		assert.ErrorIs(t, err, domain.ErrTaskNotRunning)
 	})
 }
+
+// Un tenant supprime en douceur ne fournit plus de taches au scheduler (boucle de 402 du 09/11/2026).
+func TestTaskRepository_GetNextBatch_IgnoreLesTenantsSupprimesEnDouceur(t *testing.T) {
+	db, mock, repo := setupTaskMock(t)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery(`FROM tasks WHERE .*NOT EXISTS \(SELECT 1 FROM veridian_plan vp WHERE vp\.workspace_id = tasks\.workspace_id AND vp\.deleted_at IS NOT NULL\)`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "workspace_id", "type", "status", "progress", "state",
+			"error_message", "created_at", "updated_at", "last_run_at",
+			"completed_at", "next_run_after", "timeout_after",
+			"max_runtime", "max_retries", "retry_count", "retry_interval",
+			"broadcast_id", "recurring_interval", "integration_id",
+		}))
+
+	tasks, err := repo.GetNextBatch(context.Background(), 10)
+	assert.NoError(t, err)
+	assert.Empty(t, tasks)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

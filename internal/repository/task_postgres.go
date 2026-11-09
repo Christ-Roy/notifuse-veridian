@@ -577,6 +577,10 @@ func (r *TaskRepository) GetNextBatch(ctx context.Context, limit int) ([]*domain
 				sq.LtOrEq{"timeout_after": now},
 			},
 		}).
+		// === Veridian patch (09/11/2026) === un tenant supprime en douceur (veridian_plan.deleted_at) n'est plus
+		// traite : sans cela ses taches bouclaient en 402 a chaque tick et occupaient le lot de 100.
+		// Elles restent en base et reprennent a la restauration du tenant.
+		Where(sq.Expr("NOT EXISTS (SELECT 1 FROM veridian_plan vp WHERE vp.workspace_id = tasks.workspace_id AND vp.deleted_at IS NOT NULL)")).
 		OrderBy("next_run_after NULLS FIRST, created_at").
 		Limit(uint64(limit)).
 		Suffix("FOR UPDATE SKIP LOCKED")

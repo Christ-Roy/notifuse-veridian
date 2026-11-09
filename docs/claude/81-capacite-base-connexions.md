@@ -55,3 +55,7 @@ supprimé RECRÉE sa base. Correctif (patch listé en fiche 41) : pas de ligne `
 ## Reprovisionnement après wipe (09/11/2026)
 
 Le wipe retirait les propriétaires humains orphelins mais laissait le compte machine `veridian-api-<tenant>@...` : reprovisionner le même slug répondait 500 (« create api key: this user already exists »). `pruneOrphanedOwners` supprime maintenant aussi le compte machine de CE tenant (préfixe exact, aucun autre workspace), jamais celui d un autre tenant.
+
+## Haute disponibilité : transport durci et tenants supprimés (09/11/2026)
+
+Incident : après le redémarrage du primaire `pg-saas` (14:31 UTC), des tâches de l app restaient bloquées 80 s par salves et la boîte de réception chargeait en boucle jusqu au redémarrage de l allocation. `pkg/pgdial` ouvre le pool système et les pools de workspace avec un `TCP_USER_TIMEOUT` de 20 s et un keepalive (15 s, 5 s, 3 sondes) : une connexion morte sans RST est coupée au lieu d attendre ~15 min. À prouver par une bascule volontaire (`ss -o` montre le keepalive). Le scheduler ignore aussi les tâches d un tenant supprimé en douceur (`veridian_plan.deleted_at`), qui bouclaient en 402 et remplissaient le lot de 100 ; elles reprennent à la restauration.

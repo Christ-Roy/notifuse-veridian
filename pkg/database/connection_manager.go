@@ -12,6 +12,7 @@ import (
 
 	"github.com/Notifuse/notifuse/config"
 	"github.com/Notifuse/notifuse/internal/database"
+	"github.com/Notifuse/notifuse/pkg/pgdial"
 )
 
 // pingHealthCheckTimeout caps the GetWorkspaceConnection pool health check.
@@ -301,7 +302,9 @@ func (cm *connectionManager) createWorkspacePool(ctx context.Context, workspaceI
 	}
 
 	// Open connection pool
-	db, err := sql.Open("postgres", dsn)
+	// === Veridian patch (09/11/2026, fiche 81) === transport durci (TCP_USER_TIMEOUT + keepalive) :
+	// une connexion morte apres une bascule de la grappe ne bloque plus une requete 15 min.
+	db, err := pgdial.Open("postgres", dsn)
 	if err != nil {
 		// Don't include dsn in error (contains password)
 		return nil, fmt.Errorf("failed to open connection to workspace %s: %w", workspaceID, err)
