@@ -5,3 +5,4 @@
 /api/settings.update	Réglages système, root uniquement. Commande system:settings-update dans notifuse-admin seulement (notifuse_root.py, NON distribué). Fiche 71.
 /api/user.rootSignin	Signature root (HMAC serveur) : aucune commande dans la CLI distribuée. Le root-signin vit dans notifuse-admin seul (notifuse_root.py, non distribué). Fiche 71.
 /api/settings.testSmtp	Réglages système, root uniquement. Aucune commande dans la CLI distribuée (la commande générique a été retirée de la table embarquée). Fiche 71.
+/api/mcp	Serveur MCP derriere la porte du Hub : authentifie par un JWT ES256 signe par le Hub (JWKS), qu une CLI ne peut pas emettre. Se teste par le Hub (chercher_outils, executer_outil). Fiche 83.
