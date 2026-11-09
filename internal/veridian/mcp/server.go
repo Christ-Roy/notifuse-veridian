@@ -78,6 +78,13 @@ func rpcError(id json.RawMessage, code int, msg string) map[string]any {
 	return map[string]any{"jsonrpc": "2.0", "id": rid, "error": map[string]any{"code": code, "message": msg}}
 }
 
+// rpcErrorCode : erreur JSON-RPC dont le code metier (tenant_not_linked, tenant_forbidden) est aussi dans error.data.error.
+func rpcErrorCode(code int, name, msg string) map[string]any {
+	e := rpcError(nil, code, msg)
+	e["error"].(map[string]any)["data"] = map[string]any{"error": name}
+	return e
+}
+
 func rpcResult(id json.RawMessage, result any) map[string]any {
 	return map[string]any{"jsonrpc": "2.0", "id": id, "result": result}
 }
@@ -112,10 +119,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.unauthorized(w, "hub_user_unknown : utilisateur inconnu de Notifuse, le Hub le cree, pas l'app")
 		return
 	case errors.Is(err, ErrUnknownTenant):
-		writeJSON(w, http.StatusNotFound, rpcError(nil, -32003, "tenant_id inconnu de Notifuse : cet espace n'est pas relie a ce tenant du Hub (le Hub pousse le lien par update-plan)"))
+		writeJSON(w, http.StatusForbidden, rpcErrorCode(-32003, "tenant_not_linked", "tenant_not_linked : ce tenant du Hub n'est relie a aucun espace Notifuse (le Hub pousse le lien par update-plan)"))
 		return
 	case errors.Is(err, ErrNotMember):
-		writeJSON(w, http.StatusForbidden, rpcError(nil, -32002, "tu n'es pas membre de cet espace"))
+		writeJSON(w, http.StatusForbidden, rpcErrorCode(-32002, "tenant_forbidden", "tenant_forbidden : tu n'es pas membre de cet espace"))
 		return
 	case errors.Is(err, ErrNoWorkspace):
 		writeJSON(w, http.StatusForbidden, rpcError(nil, -32002, "aucun espace Notifuse pour cet utilisateur"))

@@ -111,12 +111,16 @@ func TestHandler_TenantIdDuJetonChoisitLEspaceEtNonMembre403(t *testing.T) {
 	assert.Equal(t, "ws-choisi", r.store.gotTen)
 
 	r.store.m, r.store.err = nil, ErrNotMember
-	assert.Equal(t, http.StatusForbidden, r.post(t, tok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`).Code)
+	w := r.post(t, tok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "tenant_forbidden")
+	assert.Contains(t, w.Body.String(), `"error":"tenant_forbidden"`, "aussi dans error.data.error")
 
 	r.store.err = ErrUnknownTenant
-	w := r.post(t, tok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Contains(t, w.Body.String(), "pas relie", "message clair, pas « pas membre »")
+	w = r.post(t, tok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`)
+	assert.Equal(t, http.StatusForbidden, w.Code, "jamais de 404 ni de 401 ni de repli silencieux")
+	assert.Contains(t, w.Body.String(), "tenant_not_linked")
+	assert.Contains(t, w.Body.String(), `"error":"tenant_not_linked"`)
 }
 
 func TestHandler_SansEspace_403(t *testing.T) {
