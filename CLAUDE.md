@@ -65,10 +65,14 @@ brique = une fiche + une ligne d'index.
     si le Hub atteste l'adresse. Un utilisateur ne se crée, modifie, supprime qu'au Hub. → `45`, `80`
 13. **Toute route `/api/*` a une commande CLI, et la CLI embarquée = son MANIFEST.** Le contrôle
    tourne au pre-push et en CI. → `77`
-14. **Le plafond de connexions de l'appli (`DB_MAX_CONNECTIONS`) tient dans le
-    `max_connections` de PostgreSQL** : une connexion par workspace, 100 et 100 ont refusé
-    des workspaces clients (07/11/2026). `check-nomad-contract.sh` le vérifie. → `81`
-15. **Base : pg-saas depuis le 09/11/2026** (`172.26.64.1:15432`, rôle `notifuse`, `PG_SAAS_PASSWORD`). Plus de `notifuse-db` (job purgé, dumps froids sur contabo). → plan nomad-veridian §20.
+14. **Connexions PostgreSQL : `DB_MAX_CONNECTIONS=80` pour `max_connections=200` de pg-saas** (5 apps, budget
+    Notifuse 80). Une connexion par workspace en permanence (le worker d'envoi les parcourt toutes chaque
+    seconde) : ~25 aujourd'hui, marge ~70 workspaces ; au-delà, polling adaptatif. Pool durci (`pkg/pgdial` :
+    keepalive, refus des replicas), sonde de fond `/healthz` (vert 45 s après le dernier succès), démarrage
+    qui réessaie : bascule du primaire prouvée le 09/11 (0 redémarrage). → `81`
+15. **Base : pg-saas depuis le 09/11/2026** (`172.26.64.1:15432`, rôle `notifuse`). Plus de `notifuse-db`. Chaque base
+    workspace est **fermée à PUBLIC dès sa création** (`REVOKE … FROM PUBLIC`, `GRANT CONNECT` à `notifuse` et
+    `pgsaas_mon`), testé : les autres apps du cluster ne la lisent pas. → plan nomad-veridian §20, `81`
 
 ## Relever plutôt que croire
 
@@ -153,19 +157,19 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `53` console assumée : inventaire, spécification de la page Profils d'envoi, plan en 5 lots
 - `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause, lien IMAP, exclusivité
 - `55` page Profils d'envoi (lot 3) : carte, assistant, `emailProfiles.create`
-- `56` séparation transactionnel / commercial (lot 4) : `setUsage|pause|resume`, profil réservé, isolation worker, compteurs par type (V61), fusible par profil
-- `57` tableau de bord de prospection (lot 5) : `prospection.stats`, dimension analytics `veridian_profile_id`, `transactional_watch`, chauffe par jour de compte
-- `58` dépilage équitable de `email_queue` (famine du 10/10) : relances avant J0, tourniquet entre automations, aucune reprise manuelle
+- `56` séparation transactionnel / commercial (lot 4) : usage de profil, isolation worker, compteurs par type (V61), fusible
+- `57` tableau de bord de prospection (lot 5) : `prospection.stats`, dimension analytics, chauffe par jour de compte
+- `58` dépilage équitable de `email_queue` (famine du 10/10) : relances avant J0, tourniquet entre automations
 - `59` automations observables (conception seule, plan en 7 lots, rien d implémenté)
-- `60` capacité d'un profil (lot 6) : somme des capacités par classe destinataire bornée par chauffe et stock, barre empilée console, CLI agent
-- `62` « pourquoi ça n'envoie pas » (V62) : raison de report persistée sur `email_queue`, verdicts de gates, journal des décisions, `queue.explain` / `decisions.list`, page File d'envoi
-- `69` plafonds et débits PAR DÉFAUT pour les 25 classes, table MX -> classe source unique, échec DNS transitoire non figé, scission de freemail_fr en FAI
-- `64` garde réseau partagée (`pkg/netguard`) pour SMTP, IMAP, SparkPost ; exceptions explicites ; garde `prod-residue` de l'E2E prod
-- `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only inviteMember/deleteInvitation, route admin `email-integration.verify`
-- `68` self-service owner : audit UI/API/CLI (tableau), boutons d ajout LLM/Firecrawl/Supabase, invitation avec repli local, limites (S3, lists.create 409)
-- `65` relances dans le fil du premier mail : réglage `veridian_thread_followups`, In-Reply-To / References, ancre d'expéditeur tenue 7 jours
-- `66` une relance ne part pas si le premier mail (J0) n'a pas été livré : échec, rebond dur, refus 5.7.x ou aucun J0 → le contact sort (`first_mail_*`)
-- `70` politique d'envoi par classe en données (presets JSON, surcharges par workspace), priorité d'envoi par campagne ou automation, stock par classe (V66, `internal/veridian/policy`)
+- `60` capacité d'un profil (lot 6) : somme des capacités par classe, barre empilée console, CLI agent
+- `62` « pourquoi ça n'envoie pas » (V62) : raison de report sur `email_queue`, journal des décisions, `queue.explain`
+- `69` plafonds et débits PAR DÉFAUT des 25 classes, table MX -> classe, échec DNS transitoire non figé
+- `64` garde réseau partagée (`pkg/netguard`) SMTP/IMAP/SparkPost ; exceptions explicites ; garde `prod-residue`
+- `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only invitations, `email-integration.verify`
+- `68` self-service owner : audit UI/API/CLI, boutons LLM/Firecrawl/Supabase, invitation avec repli local, limites
+- `65` relances dans le fil du premier mail : `veridian_thread_followups`, In-Reply-To / References, ancre 7 jours
+- `66` une relance ne part pas si le premier mail (J0) n'a pas été livré : le contact sort (`first_mail_*`)
+- `70` politique d'envoi par classe en données (presets JSON, surcharges), priorité par campagne, stock par classe (V66)
 
 **Cold outbound — UI console & self-service**
 - `06` UI console — section Settings « Cold outreach »
