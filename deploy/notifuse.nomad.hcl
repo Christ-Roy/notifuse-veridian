@@ -30,7 +30,7 @@ variable "image_tag" {
   # inspect notifuse). Le defaut precedent (v57.0) aurait retrograde l'image
   # si deploye hors CI avec ce commit.
   # Recale le 2026-11-08 : la prod sert v62.0-veridian.9a516835 (nomad job inspect), le defaut v60 l'aurait retrogradee.
-  default     = "v62.0-veridian.9a516835"
+  default     = "v62.0-veridian.fc61df4a"
   description = "Tag GHCR de l'image notifuse à déployer (passé par la CI via -var)."
 }
 
@@ -231,9 +231,9 @@ VERIDIAN_RELAY_CERT_MANAGED=true
 SERVER_HOST=0.0.0.0
 ENVIRONMENT=production
 DEPLOY_ENV=prod
-{{ range nomadService "notifuse-postgres" }}DB_HOST={{ .Address }}
-DB_PORT={{ .Port }}
-{{ end }}DB_USER=postgres
+DB_HOST=172.26.64.1
+DB_PORT=15432
+DB_USER=notifuse
 DB_PREFIX=notifuse
 DB_NAME=notifuse_system
 DB_SSLMODE=disable
@@ -251,7 +251,7 @@ VERIDIAN_DEFAULT_PLAN=free
 NOTIFUSE_TRUSTED_INTERNAL_HOSTS=100.108.136.89,100.81.160.83
 
 {{ with nomadVar "nomad/jobs/notifuse" }}
-DB_PASSWORD={{ .POSTGRES_PASSWORD }}
+DB_PASSWORD={{ .PG_SAAS_PASSWORD }}
 SECRET_KEY={{ .NOTIFUSE_SECRET_KEY }}
 ROOT_EMAIL={{ .NOTIFUSE_ROOT_EMAIL }}
 HUB_API_SECRET={{ .NOTIFUSE_HUB_API_SECRET }}
