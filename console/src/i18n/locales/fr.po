@@ -1031,11 +1031,11 @@ msgstr "L'email administrateur est requis"
 
 #: src/components/veridian_connect_ai.tsx
 msgid "Adresse copiée"
-msgstr ""
+msgstr "Adresse copiée"
 
 #: src/components/veridian_connect_ai.tsx
 msgid "Adresse MCP"
-msgstr ""
+msgstr "Adresse MCP"
 
 #: src/components/settings/SettingsSidebar.tsx
 msgid "Advanced"
@@ -1923,7 +1923,7 @@ msgstr "Logique de branche"
 #: src/components/veridian_connect_ai.tsx
 #: src/components/veridian_connect_ai.tsx
 msgid "Brancher mon IA"
-msgstr ""
+msgstr "Brancher mon IA"
 
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx
 msgid "Breakpoint Attributes"
@@ -2309,7 +2309,7 @@ msgstr "Classes à ne jamais contacter"
 
 #: src/components/veridian_connect_ai.tsx
 msgid "Claude Code"
-msgstr ""
+msgstr "Claude Code"
 
 #: src/components/contacts/BulkActionsBar.tsx
 #: src/components/contacts/InlineEditableField.tsx
@@ -2497,7 +2497,7 @@ msgstr "Commande copiée dans le presse-papiers"
 
 #: src/components/veridian_connect_ai.tsx
 msgid "Commande copiée"
-msgstr ""
+msgstr "Commande copiée"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 #: src/pages/AnalyticsPage.tsx
@@ -5938,7 +5938,7 @@ msgstr "SQL généré :"
 
 #: src/components/veridian_connect_ai.tsx
 msgid "Gérer ou révoquer les accès IA"
-msgstr ""
+msgstr "Gérer ou révoquer les accès IA"
 
 #: src/components/broadcasts/GlobalFeedSettings.tsx
 msgid "Global Data Feed"
@@ -7150,7 +7150,7 @@ msgstr "De gauche à droite"
 
 #: src/components/veridian_connect_ai.tsx
 msgid "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
-msgstr ""
+msgstr "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
 
 #: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Let's Encrypt directory"
@@ -13475,7 +13475,7 @@ msgstr "Annuler (Ctrl+Z)"
 
 #: src/components/veridian_connect_ai.tsx
 msgid "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
-msgstr ""
+msgstr "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
 
 #: src/components/contacts/SegmentsFilter.tsx
 #: src/components/timeline/ContactTimeline.tsx
