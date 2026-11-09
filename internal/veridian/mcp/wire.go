@@ -66,9 +66,9 @@ func Mount(mux *http.ServeMux, h *Handler) {
 // SQLStore : utilisateurs et espaces dans la base systeme.
 type SQLStore struct{ DB *sql.DB }
 
-// Resolve : l'humain actif porteur de hub_user_id, puis son espace (proprietaire d'abord, le plus ancien
-// ensuite ; jamais un espace supprime).
-func (s *SQLStore) Resolve(ctx context.Context, hubUserID string) (*Member, error) {
+// Resolve : l'humain actif porteur de hub_user_id, puis son espace : tenantID s'il est fourni (membre actif
+// obligatoire, sinon ErrNotMember), sinon le proprietaire d'abord, le plus ancien ensuite ; jamais un espace supprime.
+func (s *SQLStore) Resolve(ctx context.Context, hubUserID, tenantID string) (*Member, error) {
 	m := &Member{}
 	err := s.DB.QueryRowContext(ctx,
 		`SELECT id, email FROM users WHERE hub_user_id = $1 AND type = 'user' AND hub_deleted_at IS NULL`, hubUserID).
@@ -86,10 +86,13 @@ func (s *SQLStore) Resolve(ctx context.Context, hubUserID string) (*Member, erro
 		FROM user_workspaces uw
 		JOIN workspaces w ON w.id = uw.workspace_id
 		LEFT JOIN veridian_plan p ON p.workspace_id = uw.workspace_id
-		WHERE uw.user_id = $1 AND p.deleted_at IS NULL
-		ORDER BY (uw.role = 'owner') DESC, uw.created_at ASC, uw.workspace_id ASC LIMIT 1`, m.UserID).
+		WHERE uw.user_id = $1 AND p.deleted_at IS NULL AND ($2 = '' OR uw.workspace_id = $2)
+		ORDER BY (uw.role = 'owner') DESC, uw.created_at ASC, uw.workspace_id ASC LIMIT 1`, m.UserID, tenantID).
 		Scan(&uw.WorkspaceID, &uw.Role, &perms)
 	if errors.Is(err, sql.ErrNoRows) {
+		if tenantID != "" {
+			return nil, ErrNotMember
+		}
 		return nil, ErrNoWorkspace
 	}
 	if err != nil {

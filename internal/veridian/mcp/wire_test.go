@@ -41,24 +41,30 @@ func TestSQLStore_Resolve(t *testing.T) {
 
 	mock.ExpectQuery(`FROM users WHERE hub_user_id`).WithArgs("hub1").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow("u1", "u@x.test"))
-	mock.ExpectQuery(`FROM user_workspaces uw`).WithArgs("u1").
+	mock.ExpectQuery(`FROM user_workspaces uw`).WithArgs("u1", "").
 		WillReturnRows(sqlmock.NewRows([]string{"workspace_id", "role", "permissions"}).
 			AddRow("ws1", "member", []byte(`{"contacts":{"read":true,"write":false}}`)))
-	m, err := s.Resolve(context.Background(), "hub1")
+	m, err := s.Resolve(context.Background(), "hub1", "")
 	require.NoError(t, err)
 	assert.Equal(t, "ws1", m.Workspace.WorkspaceID)
 	assert.True(t, m.Workspace.HasPermission(domain.PermissionResourceContacts, domain.PermissionTypeRead))
 	assert.False(t, m.Workspace.HasPermission(domain.PermissionResourceContacts, domain.PermissionTypeWrite))
 
 	mock.ExpectQuery(`FROM users WHERE hub_user_id`).WithArgs("inconnu").WillReturnError(sql.ErrNoRows)
-	_, err = s.Resolve(context.Background(), "inconnu")
+	_, err = s.Resolve(context.Background(), "inconnu", "")
 	assert.ErrorIs(t, err, ErrUnknownUser)
 
 	mock.ExpectQuery(`FROM users WHERE hub_user_id`).WithArgs("hub2").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow("u2", "v@x.test"))
-	mock.ExpectQuery(`FROM user_workspaces uw`).WithArgs("u2").WillReturnError(sql.ErrNoRows)
-	_, err = s.Resolve(context.Background(), "hub2")
+	mock.ExpectQuery(`FROM user_workspaces uw`).WithArgs("u2", "").WillReturnError(sql.ErrNoRows)
+	_, err = s.Resolve(context.Background(), "hub2", "")
 	assert.ErrorIs(t, err, ErrNoWorkspace)
+
+	mock.ExpectQuery(`FROM users WHERE hub_user_id`).WithArgs("hub3").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow("u3", "w@x.test"))
+	mock.ExpectQuery(`FROM user_workspaces uw`).WithArgs("u3", "autre-espace").WillReturnError(sql.ErrNoRows)
+	_, err = s.Resolve(context.Background(), "hub3", "autre-espace")
+	assert.ErrorIs(t, err, ErrNotMember, "tenant_id demande mais pas membre")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

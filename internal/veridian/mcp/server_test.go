@@ -16,13 +16,14 @@ import (
 )
 
 type fakeStore struct {
-	m   *Member
-	err error
-	got string
+	m      *Member
+	err    error
+	got    string
+	gotTen string
 }
 
-func (f *fakeStore) Resolve(_ context.Context, hubUserID string) (*Member, error) {
-	f.got = hubUserID
+func (f *fakeStore) Resolve(_ context.Context, hubUserID, tenantID string) (*Member, error) {
+	f.got, f.gotTen = hubUserID, tenantID
 	return f.m, f.err
 }
 
@@ -99,7 +100,18 @@ func TestHandler_UtilisateurInconnu_401EtJamaisDeCreation(t *testing.T) {
 	r.store.m, r.store.err = nil, ErrUnknownUser
 	w := r.post(t, r.key.sign(t, nil), `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "hub_user_unknown", "le Hub cree alors le compte puis reessaie")
 	assert.Equal(t, "hub-user-1", r.store.got, "retrouve par hub_user_id (sub), pas par email")
+}
+
+func TestHandler_TenantIdDuJetonChoisitLEspaceEtNonMembre403(t *testing.T) {
+	r := newRig(t, member("owner", nil))
+	tok := r.key.sign(t, func(c *Claims) { c.TenantID = "ws-choisi" })
+	assert.Equal(t, http.StatusOK, r.post(t, tok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`).Code)
+	assert.Equal(t, "ws-choisi", r.store.gotTen)
+
+	r.store.m, r.store.err = nil, ErrNotMember
+	assert.Equal(t, http.StatusForbidden, r.post(t, tok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`).Code)
 }
 
 func TestHandler_SansEspace_403(t *testing.T) {

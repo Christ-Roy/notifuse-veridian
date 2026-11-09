@@ -28,6 +28,8 @@ type Claims struct {
 	EmailVerified bool   `json:"email_verified"`
 	Scope         string `json:"scope"`
 	ClientID      string `json:"client_id"`
+	// TenantID : facultatif, verifie cote Hub. Present, il choisit l'espace (appartenance revérifiee ici).
+	TenantID string `json:"tenant_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
