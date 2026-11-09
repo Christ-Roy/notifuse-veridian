@@ -2395,3 +2395,21 @@ func TestVeridianHandleUpdatePlan_StatutDEssai(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code, "body=%s", body)
 	}
 }
+
+// L'id de tenant du Hub (V73) est transmis au service ; un id invalide est refuse en 400 avant tout appel.
+func TestVeridianHandleUpdatePlan_HubTenantID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UpdatePlan(gomock.Any(), domain.UpdatePlanInput{
+		TenantID: "ws-1", Plan: "pro", HubTenantID: "359b76d5-1b2c-4d3e-8f90-123456789abc",
+	}).Return(&domain.UpdatePlanResponse{TenantID: "ws-1", Plan: "pro", AppliedAt: time.Now().UTC()}, nil)
+	h := newHandlerWithService(svc)
+
+	rec := postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan",
+		`{"tenant_id":"ws-1","plan":"pro","hub_tenant_id":"359b76d5-1b2c-4d3e-8f90-123456789abc"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	rec = postJSON(t, h.handleUpdatePlan, "/api/tenants/update-plan", `{"tenant_id":"ws-1","plan":"pro","hub_tenant_id":"x;drop table"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
