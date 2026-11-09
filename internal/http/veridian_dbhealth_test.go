@@ -167,3 +167,52 @@ func TestSetHealthDSN_CableUneSondeDediee(t *testing.T) {
 	assert.Nil(t, healthProbe)
 	assert.False(t, HealthProbeConfigured())
 }
+
+// resetState remet la sonde de fond a zero pour un test.
+func resetState(t *testing.T) {
+	t.Helper()
+	dbHealth.mu.Lock()
+	dbHealth.running, dbHealth.degraded, dbHealth.lastOK = false, false, time.Time{}
+	dbHealth.mu.Unlock()
+	t.Cleanup(func() {
+		dbHealth.mu.Lock()
+		dbHealth.running, dbHealth.degraded, dbHealth.lastOK = false, false, time.Time{}
+		dbHealth.mu.Unlock()
+	})
+}
+
+// Une bascule de moins de 45 s ne rend pas /healthz rouge ; au-dela, il l'est (le redemarrage reste le filet).
+func TestDBHealthState_ToleranceDeBasculeEtRetourAuVert(t *testing.T) {
+	resetState(t)
+	known, _ := dbHealth.healthy()
+	assert.False(t, known, "sonde de fond absente : l'appelant retombe sur un ping direct")
+
+	dbHealth.mu.Lock()
+	dbHealth.running, dbHealth.lastOK = true, time.Now()
+	dbHealth.mu.Unlock()
+	dbHealth.record(errors.New("base injoignable"))
+	known, ok := dbHealth.healthy()
+	assert.True(t, known)
+	assert.True(t, ok, "20 s de panne : encore vert")
+
+	dbHealth.mu.Lock()
+	dbHealth.lastOK = time.Now().Add(-healthGrace - time.Second)
+	dbHealth.mu.Unlock()
+	_, ok = dbHealth.healthy()
+	assert.False(t, ok, "panne longue : rouge")
+
+	dbHealth.record(nil)
+	_, ok = dbHealth.healthy()
+	assert.True(t, ok, "base revenue : vert")
+}
+
+func TestStartDBHealth_LanceLaSondeUneSeuleFoisEtSArrete(t *testing.T) {
+	resetState(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	StartDBHealth(ctx, nil)
+	StartDBHealth(ctx, nil) // idempotent
+	known, ok := dbHealth.healthy()
+	assert.True(t, known)
+	assert.True(t, ok, "demarrage : vert pendant la fenetre de tolerance")
+	cancel()
+}

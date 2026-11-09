@@ -750,3 +750,43 @@ func TestNotificationCenterHandler_handleHealthz_ConnexionMorteRepriseSurUneNeuv
 	handler.handleHealthz(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
+
+// Avec la sonde de fond, /healthz lit son verdict : vert pendant la tolerance meme si la base est coupee,
+// rouge une fois la tolerance depassee.
+func TestNotificationCenterHandler_handleHealthz_LitLeVerdictDeLaSondeDeFond(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	handler := NewNotificationCenterHandler(mocks.NewMockNotificationCenterService(ctrl), mocks.NewMockListService(ctrl), &mockLogger{}, nil)
+
+	pkgDatabase.ResetConnectionManager()
+	defer pkgDatabase.ResetConnectionManager()
+	resetState(t)
+	down, _ := newPool(t, 1, 2, 3, 4)
+	require.NoError(t, pkgDatabase.InitializeConnectionManager(&config.Config{
+		Database: config.DatabaseConfig{MaxConnections: 100, MaxConnectionsPerDB: 10},
+	}, down))
+
+	dbHealth.mu.Lock()
+	dbHealth.running, dbHealth.lastOK = true, time.Now()
+	dbHealth.mu.Unlock()
+	w := httptest.NewRecorder()
+	handler.handleHealthz(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	assert.Equal(t, http.StatusOK, w.Code, "base coupee mais dans la tolerance : vert, sans appeler la base")
+
+	dbHealth.mu.Lock()
+	dbHealth.lastOK = time.Now().Add(-2 * healthGrace)
+	dbHealth.mu.Unlock()
+	w = httptest.NewRecorder()
+	handler.handleHealthz(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+// Garde de methode de la detection de favicon (route /api/detect-favicon, couverte avec le fichier modifie).
+func TestNotificationCenterHandler_HandleDetectFavicon_MethodeRefusee(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	handler := NewNotificationCenterHandler(mocks.NewMockNotificationCenterService(ctrl), mocks.NewMockListService(ctrl), &mockLogger{}, nil)
+	w := httptest.NewRecorder()
+	handler.HandleDetectFavicon(w, httptest.NewRequest(http.MethodGet, "/api/detect-favicon", nil))
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}

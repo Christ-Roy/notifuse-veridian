@@ -304,6 +304,16 @@ func (h *NotificationCenterHandler) handleHealthz(w http.ResponseWriter, r *http
 
 	// === Veridian patch (09/11/2026, fiche 81) === un echec ne condamne pas l'app : connexions mortes
 	// jetees puis un second ping sur une connexion neuve (voir pingWithRecovery).
+	if known, ok := dbHealth.healthy(); known {
+		// Sonde de fond active (voir StartDBHealth) : on lit son verdict, sans toucher la base.
+		if !ok {
+			h.logger.Error("Database health stale: no successful ping within grace window")
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
 	if err := pingWithRecovery(systemDB); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Database ping failed")
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{

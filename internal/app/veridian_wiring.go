@@ -947,6 +947,10 @@ func (a *App) veridianInitHandlers() error {
 
 // veridianStartBackground : tâches de fond Veridian historiques (démarrées dans Start() avant le jalon 2).
 func (a *App) veridianStartBackground() {
+	// Sonde de sante de fond (fiche 81) : /healthz lit son verdict, tolere une bascule de 45 s sans ecarter l'instance.
+	if a.db != nil && !a.veridianMockDB {
+		httpHandler.StartDBHealth(a.shutdownCtx, a.logger)
+	}
 	// === Veridian patch 2026-05-20 — cron cleanup idempotency keys ===
 	// Purge quotidienne des entrées expirées de veridian_idempotency_keys
 	// (CONTRAT-HUB §5.11). DeleteExpired existait mais aucun cron upstream

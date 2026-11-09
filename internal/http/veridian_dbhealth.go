@@ -3,9 +3,12 @@ package http
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Notifuse/notifuse/pkg/logger"
+	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
 	"github.com/Notifuse/notifuse/pkg/pgdial"
 )
 
@@ -24,7 +27,91 @@ var (
 
 	killMu   sync.Mutex
 	lastKill time.Time
+
+	healthLog logger.Logger // pose par StartDBHealth ; nil en test
 )
+
+// healthGrace : tant que la base a repondu il y a moins de ce delai, /healthz reste vert. Une bascule de la
+// grappe dure 30 a 45 s : Traefik (1 s de delai) ne doit pas ecarter l'instance et Nomad ne doit pas la
+// redemarrer pour cela ; le redemarrage reste le dernier filet (check_restart, 90 s) si la base ne revient pas.
+const (
+	healthGrace    = 45 * time.Second
+	healthInterval = 2 * time.Second
+)
+
+type dbHealthState struct {
+	mu       sync.Mutex
+	running  bool
+	lastOK   time.Time
+	degraded bool
+}
+
+var dbHealth = &dbHealthState{}
+
+// Healthy : la sonde de fond tourne ; la base a-t-elle repondu il y a moins de healthGrace ? Faux, faux si
+// elle ne tourne pas (l'appelant retombe alors sur un ping direct).
+func (s *dbHealthState) healthy() (known, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.running {
+		return false, false
+	}
+	return true, time.Since(s.lastOK) < healthGrace
+}
+
+// record enregistre un resultat de sonde et journalise les changements d'etat (pas chaque seconde).
+func (s *dbHealthState) record(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err == nil {
+		if s.degraded && healthLog != nil {
+			healthLog.WithField("down_for", time.Since(s.lastOK).Round(time.Second).String()).Info("db health: base de nouveau joignable")
+		}
+		s.lastOK, s.degraded = time.Now(), false
+		return
+	}
+	if !s.degraded && healthLog != nil {
+		healthLog.WithField("error", err.Error()).Warn("db health: base injoignable")
+	}
+	s.degraded = true
+}
+
+// StartDBHealth lance la sonde de fond : toutes les 2 s elle juge la base (pool, sonde dediee, fermeture
+// forcee) et /healthz ne fait plus que lire son verdict, sans attendre la base ni la charger a chaque requete.
+func StartDBHealth(ctx context.Context, log logger.Logger) {
+	dbHealth.mu.Lock()
+	if dbHealth.running {
+		dbHealth.mu.Unlock()
+		return
+	}
+	dbHealth.running, dbHealth.lastOK = true, time.Now()
+	healthLog = log
+	dbHealth.mu.Unlock()
+	go func() {
+		t := time.NewTicker(healthInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				dbHealth.record(checkSystemDB())
+			}
+		}
+	}()
+}
+
+func checkSystemDB() error {
+	cm, err := pkgDatabase.GetConnectionManager()
+	if err != nil {
+		return err
+	}
+	db := cm.GetSystemConnection()
+	if db == nil {
+		return fmt.Errorf("connexion systeme absente")
+	}
+	return pingWithRecovery(db)
+}
 
 // SetHealthDSN fournit le DSN de la base systeme pour la sonde dediee. Appele au cablage (veridian_wiring.go).
 func SetHealthDSN(dsn string) {
@@ -61,25 +148,32 @@ func pingWithRecovery(db *sql.DB) error {
 		perr := healthProbe(pctx)
 		pcancel()
 		if perr != nil {
-			return perr // la base ne repond meme pas a une connexion neuve
+			return fmt.Errorf("sonde dediee (connexion neuve) en echec: %w", perr) // la base ne repond meme pas a une connexion neuve
 		}
 	}
-	killStuckConns(db)
+	killed := killStuckConns(db)
 	ctx, cancel = context.WithTimeout(context.Background(), healthPingRetryTimeout)
 	defer cancel()
-	return db.PingContext(ctx)
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("pool toujours en echec apres fermeture forcee (%d connexions fermees, la sonde dediee repond): %w", killed, err)
+	}
+	return nil
 }
 
 // killStuckConns ferme de force les connexions, au plus une fois toutes les 10 s (Traefik sonde toutes les 2 s).
-func killStuckConns(db *sql.DB) {
+func killStuckConns(db *sql.DB) int {
 	killMu.Lock()
 	defer killMu.Unlock()
 	if time.Since(lastKill) < healthMinKillInterval {
-		return
+		return 0
 	}
 	lastKill = time.Now()
-	healthKill()
+	n := healthKill()
 	flushIdleConns(db)
+	if healthLog != nil {
+		healthLog.WithField("closed", n).Warn("db health: pool coince, connexions fermees de force")
+	}
+	return n
 }
 
 // flushIdleConns ferme les connexions inactives (database/sql ne fait pas autrement) puis rend la capacite.
