@@ -720,3 +720,33 @@ func TestNotificationCenterHandler_handleHealthz(t *testing.T) {
 		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 	})
 }
+
+// Apres une bascule de la grappe, une connexion morte du pool ne fait plus rendre 503 a /healthz : le ping est
+// repris sur une connexion neuve (sinon quatre echecs de suite faisaient redemarrer la tache, 09/11/2026).
+func TestNotificationCenterHandler_handleHealthz_ConnexionMorteRepriseSurUneNeuve(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	handler := NewNotificationCenterHandler(mocks.NewMockNotificationCenterService(ctrl), mocks.NewMockListService(ctrl), &mockLogger{}, nil)
+
+	pkgDatabase.ResetConnectionManager()
+	defer pkgDatabase.ResetConnectionManager()
+	db, fc := newPool(t, 1)
+	require.NoError(t, pkgDatabase.InitializeConnectionManager(&config.Config{
+		Database: config.DatabaseConfig{MaxConnections: 100, MaxConnectionsPerDB: 10},
+	}, db))
+
+	w := httptest.NewRecorder()
+	handler.handleHealthz(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 2, fc.opened, "la connexion morte a ete jetee")
+
+	// Base reellement injoignable : 503.
+	pkgDatabase.ResetConnectionManager()
+	down, _ := newPool(t, 1, 2, 3)
+	require.NoError(t, pkgDatabase.InitializeConnectionManager(&config.Config{
+		Database: config.DatabaseConfig{MaxConnections: 100, MaxConnectionsPerDB: 10},
+	}, down))
+	w = httptest.NewRecorder()
+	handler.handleHealthz(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
