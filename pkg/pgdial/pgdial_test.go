@@ -2,7 +2,11 @@ package pgdial
 
 import (
 	"context"
+	"database/sql/driver"
+	"errors"
+	"io"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -82,4 +86,81 @@ func TestCloseAll_DebloqueUneLectureEnCours(t *testing.T) {
 		t.Fatal("la lecture est restee bloquee apres CloseAll")
 	}
 	assert.Equal(t, 0, CloseAll(), "plus rien a fermer, la connexion s'est retiree du registre")
+}
+
+// fakeServer : n premieres connexions sur un replica (read-only), puis le primaire.
+type fakeServer struct {
+	mu       sync.Mutex
+	opened   int
+	replicas int
+	closed   int
+}
+
+func (f *fakeServer) Connect(context.Context) (driver.Conn, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.opened++
+	return &fakeSrvConn{s: f, ro: f.opened <= f.replicas}, nil
+}
+func (f *fakeServer) Driver() driver.Driver { return nil }
+
+type fakeSrvConn struct {
+	s  *fakeServer
+	ro bool
+}
+
+func (c *fakeSrvConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("non utilise") }
+func (c *fakeSrvConn) Close() error                         { c.s.mu.Lock(); c.s.closed++; c.s.mu.Unlock(); return nil }
+func (c *fakeSrvConn) Begin() (driver.Tx, error)            { return nil, errors.New("non utilise") }
+func (c *fakeSrvConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
+	v := "off"
+	if c.ro {
+		v = "on"
+	}
+	return &oneRow{v: v}, nil
+}
+
+type oneRow struct {
+	v    string
+	done bool
+}
+
+func (r *oneRow) Columns() []string { return []string{"transaction_read_only"} }
+func (r *oneRow) Close() error      { return nil }
+func (r *oneRow) Next(dest []driver.Value) error {
+	if r.done {
+		return io.EOF
+	}
+	r.done = true
+	dest[0] = r.v
+	return nil
+}
+
+// Une connexion tombee sur un replica est jetee et on reessaie : le pool ne garde jamais de replica.
+func TestRwConnector_RefuseUnReplicaEtReessaie(t *testing.T) {
+	srv := &fakeServer{replicas: 2}
+	rc := &rwConnector{inner: srv, attempts: 5, delay: time.Millisecond}
+	conn, err := rc.Connect(context.Background())
+	require.NoError(t, err)
+	assert.NotNil(t, conn)
+	assert.Equal(t, 3, srv.opened, "deux replicas refuses, le troisieme est le primaire")
+	assert.Equal(t, 2, srv.closed, "les replicas ont ete fermes")
+}
+
+func TestRwConnector_AbandonneSiAucunPrimaire(t *testing.T) {
+	srv := &fakeServer{replicas: 100}
+	rc := &rwConnector{inner: srv, attempts: 3, delay: time.Millisecond}
+	_, err := rc.Connect(context.Background())
+	assert.ErrorIs(t, err, errReadOnlyServer)
+	assert.Equal(t, 3, srv.opened)
+	assert.Equal(t, 3, srv.closed)
+}
+
+func TestRwConnector_ContexteAnnuleInterrompt(t *testing.T) {
+	srv := &fakeServer{replicas: 100}
+	rc := &rwConnector{inner: srv, attempts: 50, delay: time.Hour}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	_, err := rc.Connect(ctx)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }

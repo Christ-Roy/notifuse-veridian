@@ -75,3 +75,5 @@ Sur `pg-saas` (cluster partagé par 5 apps), une base créée par `CREATE DATABA
 ### Troisième bascule (09/11, 20:08 UTC)
 
 Le pool ne tombait plus seul mais `/healthz` restait rouge 80 s (Traefik le sonde avec 1 s de délai, Nomad redémarre après 90 s) et le démarrage suivant tombait sur l ancien primaire devenu replica (`cannot execute CREATE TABLE in a read-only transaction`, sortie 1). Maintenant : une sonde de fond (`StartDBHealth`, toutes les 2 s : pool, sonde dédiée, fermeture forcée) ; `/healthz` lit son verdict et reste vert 45 s après le dernier succès (une bascule dure 30 à 45 s), puis rouge, `check_restart` reste le dernier filet. Les changements d état et les fermetures forcées sont journalisés (`db health: …`). `InitializeDatabaseResilient` réessaie 90 s tant que l erreur est transitoire (replica, arrêt, EOF) au lieu de sortir en 1.
+
+Le pool ne garde jamais une connexion sur un replica : `rwConnector` (pgdial) vérifie `SHOW transaction_read_only` à chaque ouverture et réessaie ~2,4 s (6 × 400 ms), le temps que HAProxy écarte l ancien leader (fenêtre de ~2 s au retour de bascule, `fall 2 rise 2`).

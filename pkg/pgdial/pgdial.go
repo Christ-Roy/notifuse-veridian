@@ -9,6 +9,8 @@ package pgdial
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"net"
 	"sync"
 	"time"
@@ -99,5 +101,74 @@ func Open(driverName, dsn string) (*sql.DB, error) {
 		return nil, err
 	}
 	c.Dialer(New())
-	return sql.OpenDB(c), nil
+	return sql.OpenDB(&rwConnector{inner: c, attempts: rwAttempts, delay: rwDelay}), nil
+}
+
+const (
+	rwAttempts = 6
+	rwDelay    = 400 * time.Millisecond
+)
+
+// rwConnector refuse les connexions tombees sur un replica. Pendant une bascule (09/11/2026), HAProxy garde
+// environ 2 s l'ancien leader devenu replica marque sain : une connexion ouverte a ce moment est en lecture
+// seule, restait dans le pool et faisait echouer chaque ecriture (« cannot execute CREATE TABLE in a read-only
+// transaction »). On verifie a l'ouverture (SHOW transaction_read_only) et on reessaie ~2 s, le temps que
+// HAProxy ecarte l'ancien leader. L'application n'ecrit que sur le primaire : jamais de replica dans le pool.
+type rwConnector struct {
+	inner    driver.Connector
+	attempts int
+	delay    time.Duration
+}
+
+func (r *rwConnector) Driver() driver.Driver { return r.inner.Driver() }
+
+func (r *rwConnector) Connect(ctx context.Context) (driver.Conn, error) {
+	var lastErr error = driver.ErrBadConn
+	for i := 0; i < r.attempts; i++ {
+		conn, err := r.inner.Connect(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ro, err := readOnly(ctx, conn)
+		if err == nil && !ro {
+			return conn, nil
+		}
+		_ = conn.Close()
+		if err != nil {
+			return nil, err
+		}
+		lastErr = errReadOnlyServer
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(r.delay):
+		}
+	}
+	return nil, lastErr
+}
+
+var errReadOnlyServer = errors.New("pgdial: server is read-only (replica), no primary reachable yet")
+
+// readOnly interroge le serveur ; une connexion qui ne sait pas repondre est consideree comme en erreur.
+func readOnly(ctx context.Context, conn driver.Conn) (bool, error) {
+	q, ok := conn.(driver.QueryerContext)
+	if !ok {
+		return false, nil // pilote sans requete directe : on ne peut pas verifier, on garde la connexion
+	}
+	rows, err := q.QueryContext(ctx, "SHOW transaction_read_only", nil)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	dest := make([]driver.Value, 1)
+	if err := rows.Next(dest); err != nil {
+		return false, err
+	}
+	switch v := dest[0].(type) {
+	case string:
+		return v == "on", nil
+	case []byte:
+		return string(v) == "on", nil
+	}
+	return false, nil
 }
