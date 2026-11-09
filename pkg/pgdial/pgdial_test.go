@@ -1,6 +1,7 @@
 package pgdial
 
 import (
+	"context"
 	"net"
 	"testing"
 
@@ -41,4 +42,14 @@ func TestNew_DialerAvecKeepaliveEtDelaiDeConnexion(t *testing.T) {
 	conn2, err := New().Dial("tcp", ln.Addr().String())
 	require.NoError(t, err)
 	conn2.Close()
+}
+
+func TestDialer_DialContextRespecteLeContexte(t *testing.T) {
+	d := New().(interface {
+		DialContext(ctx context.Context, network, address string) (net.Conn, error)
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := d.DialContext(ctx, "tcp", "127.0.0.1:1")
+	assert.Error(t, err, "contexte deja annule : pas de connexion")
 }

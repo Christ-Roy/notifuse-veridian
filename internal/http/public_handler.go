@@ -1,14 +1,12 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/pkg/botdetection"
@@ -304,11 +302,9 @@ func (h *NotificationCenterHandler) handleHealthz(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Ping the database with a 2-second timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	if err := systemDB.PingContext(ctx); err != nil {
+	// === Veridian patch (09/11/2026, fiche 81) === un echec ne condamne pas l'app : connexions mortes
+	// jetees puis un second ping sur une connexion neuve (voir pingWithRecovery).
+	if err := pingWithRecovery(systemDB); err != nil {
 		h.logger.WithField("error", err.Error()).Error("Database ping failed")
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"status": "unavailable",

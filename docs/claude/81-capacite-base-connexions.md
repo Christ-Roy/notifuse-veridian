@@ -59,3 +59,7 @@ Le wipe retirait les propriétaires humains orphelins mais laissait le compte ma
 ## Haute disponibilité : transport durci et tenants supprimés (09/11/2026)
 
 Incident : après le redémarrage du primaire `pg-saas` (14:31 UTC), des tâches de l app restaient bloquées 80 s par salves et la boîte de réception chargeait en boucle jusqu au redémarrage de l allocation. `pkg/pgdial` ouvre le pool système et les pools de workspace avec un `TCP_USER_TIMEOUT` de 20 s et un keepalive (15 s, 5 s, 3 sondes) : une connexion morte sans RST est coupée au lieu d attendre ~15 min. À prouver par une bascule volontaire (`ss -o` montre le keepalive). Le scheduler ignore aussi les tâches d un tenant supprimé en douceur (`veridian_plan.deleted_at`), qui bouclaient en 402 et remplissaient le lot de 100 ; elles reprennent à la restauration.
+
+### Bascule du 09/11 (18:05 UTC) et reprise seule
+
+Le pool système gardait des connexions inactives mortes : chaque vérification `/healthz` en consommait une et échouait, quatre échecs faisaient redémarrer la tâche (2 min 30 de coupure). `pingWithRecovery` jette les connexions inactives au premier échec et réessaie sur une connexion neuve (1,5 s puis 3 s, sous les 5 s du check). Le dialer respecte le contexte (`DialContext`), keepalive 10 s / 3 s / 3 sondes et `TCP_USER_TIMEOUT` 10 s. `check_restart` du job passe de 4 à 6 échecs (90 s) : le redémarrage reste le dernier filet. Preuve attendue : une bascule sous sonde, zéro redémarrage et moins de 30 s de coupure.

@@ -7,6 +7,7 @@
 package pgdial
 
 import (
+	"context"
 	"database/sql"
 	"net"
 	"time"
@@ -16,12 +17,12 @@ import (
 
 const (
 	// UserTimeout : delai maximal sans accuse de reception de donnees emises avant que le noyau coupe la connexion.
-	UserTimeout = 20 * time.Second
+	UserTimeout = 10 * time.Second
 	// DialTimeout : delai de connexion quand le DSN n'en fixe pas.
 	DialTimeout = 10 * time.Second
 
-	keepAliveIdle     = 15 * time.Second
-	keepAliveInterval = 5 * time.Second
+	keepAliveIdle     = 10 * time.Second
+	keepAliveInterval = 3 * time.Second
 	keepAliveCount    = 3
 )
 
@@ -29,13 +30,18 @@ type dialer struct{ d net.Dialer }
 
 func (x dialer) Dial(network, address string) (net.Conn, error) { return x.d.Dial(network, address) }
 
+// DialContext : la connexion respecte le delai du contexte (sans cela pq l'ignore et attend le delai du dialer).
+func (x dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return x.d.DialContext(ctx, network, address)
+}
+
 func (x dialer) DialTimeout(network, address string, timeout time.Duration) (net.Conn, error) {
 	d := x.d
 	d.Timeout = timeout
 	return d.Dial(network, address)
 }
 
-// New : le dialer durci (keepalive 15 s / 5 s / 3 sondes, TCP_USER_TIMEOUT sous Linux).
+// New : le dialer durci (keepalive 10 s / 3 s / 3 sondes, TCP_USER_TIMEOUT 10 s sous Linux).
 func New() pq.Dialer {
 	return dialer{d: net.Dialer{
 		Timeout:         DialTimeout,

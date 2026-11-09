@@ -166,7 +166,7 @@ job "notifuse" {
           interval = "15s"
           timeout  = "5s"
           check_restart {
-            limit           = 4
+            limit           = 6 # 90 s : une bascule de la grappe (30 a 45 s) ne redemarre plus la tache, le redemarrage reste le dernier filet
             grace           = "90s"
             ignore_warnings = false
           }
