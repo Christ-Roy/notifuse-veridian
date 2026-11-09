@@ -163,6 +163,10 @@ func EnsureWorkspaceDatabaseExists(cfg *config.DatabaseConfig, workspaceID strin
 		if err != nil {
 			return fmt.Errorf("failed to create workspace database: %w", err)
 		}
+		// === Veridian patch (09/11/2026, fiche 81) === base fermee a PUBLIC des sa creation.
+		if err := restrictWorkspaceDatabase(db, dbName, cfg.User); err != nil {
+			return err
+		}
 
 		// Connect to the new database to initialize schema
 		wsDB, err := sql.Open("postgres", GetWorkspaceDSN(cfg, workspaceID))

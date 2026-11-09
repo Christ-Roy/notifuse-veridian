@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetConnectionPoolSettings(t *testing.T) {
@@ -399,4 +401,16 @@ func TestConnectionPoolSettings_Coverage(t *testing.T) {
 			})
 		}
 	})
+}
+
+// Les identifiants sont cites : un id de workspace tordu ne sort pas de l'instruction REVOKE/GRANT.
+func TestEnsureWorkspaceDatabaseExists_BaseFermeeAPublic_IdentifiantsCites(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	mock.ExpectExec(`REVOKE ALL ON DATABASE "notifuse_ws_a""b; drop" FROM PUBLIC`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`GRANT CONNECT`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`pg_roles`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	require.NoError(t, restrictWorkspaceDatabase(db, `notifuse_ws_a"b; drop`, "notifuse"))
+	require.NoError(t, mock.ExpectationsWereMet())
 }

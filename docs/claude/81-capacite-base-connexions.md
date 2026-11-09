@@ -67,3 +67,7 @@ Le pool système gardait des connexions inactives mortes : chaque vérification 
 ### Seconde bascule (09/11, 19:01 UTC) : pool coincé
 
 Après 3e2b53a3, la sonde a encore vu `Database ping failed: context deadline exceeded` pendant 2 min alors que le nouveau primaire répondait (tâche redémarrée par Nomad). Le pool était plein de connexions bloquées (sessions mortes côté HAProxy : le TCP reste vivant, ni keepalive ni TCP_USER_TIMEOUT ne les voient) et le ping attendait un emplacement. `/healthz` : (1) ping sur le pool ; (2) sinon ping sur une connexion DÉDIÉE hors pool (`SetHealthDSN`) : échec = base injoignable (503) ; (3) sinon `pgdial.CloseAll()` ferme de force toutes les connexions de l app (les requêtes bloquées échouent, les pools se reconnectent), au plus une fois toutes les 10 s, puis nouveau ping. Preuve attendue : une bascule sous sonde, zéro redémarrage, coupure < 30 s. Piste côté infra : fermer les sessions HAProxy quand le leader change.
+
+### Bases workspace fermées à PUBLIC (09/11/2026)
+
+Sur `pg-saas` (cluster partagé par 5 apps), une base créée par `CREATE DATABASE` naît ouverte à tout rôle. `EnsureWorkspaceDatabaseExists` exécute donc, juste après la création, `REVOKE ALL ON DATABASE … FROM PUBLIC` puis `GRANT CONNECT` au propriétaire (rôle de l appli) et à `pgsaas_mon` s il existe (`restrictWorkspaceDatabase`, tests vus échouer sans le REVOKE). Un échec du REVOKE fait échouer la création. Contrôle : `select has_database_privilege('hub', 'notifuse_ws_<id>', 'CONNECT')` doit rendre false.
