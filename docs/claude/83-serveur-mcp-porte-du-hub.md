@@ -26,3 +26,7 @@ Contrat : `veridian-hub/docs/CONTRAT-MCP.md` (09/11/2026). Code : `internal/veri
   (défaut `https://notifuse.app.veridian.site/api/mcp`).
 - Pas de commande CLI : la route est exemptée (`scripts/veridian/cli-route-exemptions.txt`), un JWT du Hub ne s'émet pas
   depuis une CLI. Registre : `hub mcp-app add notifuse <url> --acces tous`.
+
+## « Brancher mon IA » dans la console (10/11/2026)
+
+Bouton visible dans l en-tête (`VeridianConnectAI`, mode `veridian-managed` seulement) qui ouvre un modal avec les boutons Claude, ChatGPT, Cursor et VS Code. Les liens sont lus au Hub (`GET https://app.veridian.site/api/mcp/liens-installation?app=notifuse`, publique, CORS ouvert, cache 5 min) par `lib/veridian_connect_ai.ts` : rien n est recopié. Réponse validée (schémas https:, cursor:, vscode: seulement, entrées incomplètes écartées). Si le Hub ne répond pas (4 s) ou répond autre chose : message et adresse MCP à copier, aucun bouton mort. Tests vitest (liens, schéma dangereux, délai, repli).
