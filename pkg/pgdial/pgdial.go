@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -28,17 +29,54 @@ const (
 
 type dialer struct{ d net.Dialer }
 
-func (x dialer) Dial(network, address string) (net.Conn, error) { return x.d.Dial(network, address) }
+// live : toutes les connexions ouvertes par ce dialer. Une connexion qui ne repond plus (session morte cote
+// HAProxy apres une bascule : TCP reste « vivant », keepalive et TCP_USER_TIMEOUT ne la voient pas) occupe un
+// emplacement du pool tant qu'elle n'est pas fermee ; CloseAll la ferme de force, la requete en vol echoue et
+// le pool se reconnecte.
+var live sync.Map // *trackedConn -> struct{}
+
+type trackedConn struct {
+	net.Conn
+	once sync.Once
+}
+
+func track(c net.Conn, err error) (net.Conn, error) {
+	if err != nil {
+		return nil, err
+	}
+	t := &trackedConn{Conn: c}
+	live.Store(t, struct{}{})
+	return t, nil
+}
+
+func (t *trackedConn) Close() error {
+	t.once.Do(func() { live.Delete(t) })
+	return t.Conn.Close()
+}
+
+// CloseAll ferme de force toutes les connexions PostgreSQL ouvertes par l'application et rend leur nombre.
+// Reserve au cas « la base repond sur une connexion neuve mais le pool ne rend plus la main ».
+func CloseAll() int {
+	n := 0
+	live.Range(func(k, _ any) bool {
+		_ = k.(*trackedConn).Close()
+		n++
+		return true
+	})
+	return n
+}
+
+func (x dialer) Dial(network, address string) (net.Conn, error) { return track(x.d.Dial(network, address)) }
 
 // DialContext : la connexion respecte le delai du contexte (sans cela pq l'ignore et attend le delai du dialer).
 func (x dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return x.d.DialContext(ctx, network, address)
+	return track(x.d.DialContext(ctx, network, address))
 }
 
 func (x dialer) DialTimeout(network, address string, timeout time.Duration) (net.Conn, error) {
 	d := x.d
 	d.Timeout = timeout
-	return d.Dial(network, address)
+	return track(d.Dial(network, address))
 }
 
 // New : le dialer durci (keepalive 10 s / 3 s / 3 sondes, TCP_USER_TIMEOUT 10 s sous Linux).

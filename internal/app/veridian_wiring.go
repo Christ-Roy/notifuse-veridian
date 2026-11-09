@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/database"
 	"github.com/Notifuse/notifuse/internal/domain"
 	httpHandler "github.com/Notifuse/notifuse/internal/http"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
@@ -414,7 +415,17 @@ func (a *App) veridianInitServices(automationExecutor *service.AutomationExecuto
 }
 
 // veridianInitHandlers : handlers et routes Veridian (fin d'InitHandlers).
+// veridianWireHealth cable la sonde dediee de /healthz (pas en assemblage de test : pas de vraie base).
+func (a *App) veridianWireHealth() {
+	if a.db != nil && !a.veridianMockDB {
+		httpHandler.SetHealthDSN(database.GetSystemDSN(&a.config.Database))
+	}
+}
+
 func (a *App) veridianInitHandlers() error {
+	// Sonde de sante sur une connexion dediee, hors du pool (fiche 81) : /healthz distingue « base injoignable »
+	// de « pool coince » et ne fait plus redemarrer la tache apres une bascule de la grappe.
+	a.veridianWireHealth()
 	getJWTSecret := func() ([]byte, error) {
 		if len(a.config.Security.JWTSecret) == 0 {
 			return nil, fmt.Errorf("JWT secret not configured")

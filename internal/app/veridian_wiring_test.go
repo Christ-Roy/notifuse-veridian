@@ -10,6 +10,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/config"
+	httpHandler "github.com/Notifuse/notifuse/internal/http"
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
 	veridianmig "github.com/Notifuse/notifuse/internal/migrations/veridian"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
@@ -156,4 +157,21 @@ func TestWireVeridian_MockDBRunsNoMigrationQuery(t *testing.T) {
 	require.True(t, a.veridianMockDB)
 	require.NoError(t, wireVeridian(a, migs, platform.NewRegistry()))
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// La sonde dediee de /healthz n'est cablee que sur une vraie base, pas dans l'assemblage de test.
+func TestVeridianWireHealth_PasEnAssemblageDeTest(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	a := newWiringApp()
+	a.db, a.veridianMockDB = db, true
+	a.veridianWireHealth()
+	assert.False(t, httpHandler.HealthProbeConfigured(), "WithMockDB : aucune sonde")
+
+	a.veridianMockDB = false
+	a.config.Database = config.DatabaseConfig{Host: "127.0.0.1", Port: 1, User: "u", Password: "p", DBName: "x", SSLMode: "disable"}
+	a.veridianWireHealth()
+	assert.True(t, httpHandler.HealthProbeConfigured(), "vraie base : sonde dediee cablee")
 }
