@@ -13,3 +13,7 @@
 - Lecture seule : drapeau `VERIDIAN_TRIAL_READONLY_ENFORCED`, FAUX par défaut, décision de Robert. Aucun code ne
   l'applique : lever le drapeau ne fait rien tant que l'application n'est pas écrite.
 - Code : `internal/veridian/trial` (stockage), `veridianService.UpdatePlan` et `LookupByEmail`.
+
+## Preuve en prod (09/11/2026)
+
+Workspace jetable provisionné par le Hub (e2essoessai), 5 mails réels transactionnels (relais Gmail : la garde réseau refuse le relais interne pour un workspace client) : `emails_sent_lifetime`=5, `tenant.activity_threshold_reached` livré 200, entrée eligible au Hub, essai démarré, plan pro posé par update-plan. Nettoyé ensuite. Aucun rejeu pour les 4 workspaces déjà au-delà du seuil. La ligne « signal réel » du reconcile attend un vrai premier tenant.
