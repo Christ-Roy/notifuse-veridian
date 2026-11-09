@@ -1029,6 +1029,14 @@ msgstr ""
 msgid "Admin email is required"
 msgstr "管理者メールアドレスは必須です"
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Adresse copiée"
+msgstr ""
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Adresse MCP"
+msgstr ""
+
 #: src/components/settings/SettingsSidebar.tsx
 msgid "Advanced"
 msgstr ""
@@ -1911,6 +1919,12 @@ msgstr "分岐"
 msgid "Branch Logic"
 msgstr "分岐ロジック"
 
+#: src/components/veridian_connect_ai.tsx
+#: src/components/veridian_connect_ai.tsx
+#: src/components/veridian_connect_ai.tsx
+msgid "Brancher mon IA"
+msgstr ""
+
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx
 msgid "Breakpoint Attributes"
 msgstr "ブレークポイント属性"
@@ -2293,6 +2307,10 @@ msgstr ""
 msgid "Classes to never contact"
 msgstr ""
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Claude Code"
+msgstr ""
+
 #: src/components/contacts/BulkActionsBar.tsx
 #: src/components/contacts/InlineEditableField.tsx
 #: src/components/email_builder/ui/ImportFontInput.tsx
@@ -2475,6 +2493,10 @@ msgstr ""
 
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Command copied to clipboard"
+msgstr ""
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Commande copiée"
 msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
@@ -5914,6 +5936,10 @@ msgstr ""
 msgid "Generated SQL:"
 msgstr "生成されたSQL:"
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Gérer ou révoquer les accès IA"
+msgstr ""
+
 #: src/components/broadcasts/GlobalFeedSettings.tsx
 msgid "Global Data Feed"
 msgstr ""
@@ -7121,6 +7147,10 @@ msgstr ""
 #: src/components/email_builder/blocks/MjSectionBlock.tsx
 msgid "Left to Right"
 msgstr "左から右"
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
+msgstr ""
 
 #: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Let's Encrypt directory"
@@ -13442,6 +13472,10 @@ msgstr "元に戻す"
 #: src/components/automations/UpsertAutomationDrawer.tsx
 msgid "Undo (Ctrl+Z)"
 msgstr "元に戻す（Ctrl+Z）"
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
+msgstr ""
 
 #: src/components/contacts/SegmentsFilter.tsx
 #: src/components/timeline/ContactTimeline.tsx

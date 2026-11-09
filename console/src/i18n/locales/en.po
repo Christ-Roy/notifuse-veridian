@@ -1029,6 +1029,14 @@ msgstr "Admin email & public URL"
 msgid "Admin email is required"
 msgstr "Admin email is required"
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Adresse copiée"
+msgstr "Adresse copiée"
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Adresse MCP"
+msgstr "Adresse MCP"
+
 #: src/components/settings/SettingsSidebar.tsx
 msgid "Advanced"
 msgstr "Advanced"
@@ -1911,6 +1919,12 @@ msgstr "Branch"
 msgid "Branch Logic"
 msgstr "Branch Logic"
 
+#: src/components/veridian_connect_ai.tsx
+#: src/components/veridian_connect_ai.tsx
+#: src/components/veridian_connect_ai.tsx
+msgid "Brancher mon IA"
+msgstr "Brancher mon IA"
+
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx
 msgid "Breakpoint Attributes"
 msgstr "Breakpoint Attributes"
@@ -2293,6 +2307,10 @@ msgstr "Circuit open"
 msgid "Classes to never contact"
 msgstr "Classes to never contact"
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Claude Code"
+msgstr "Claude Code"
+
 #: src/components/contacts/BulkActionsBar.tsx
 #: src/components/contacts/InlineEditableField.tsx
 #: src/components/email_builder/ui/ImportFontInput.tsx
@@ -2476,6 +2494,10 @@ msgstr "Columns"
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Command copied to clipboard"
 msgstr "Command copied to clipboard"
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Commande copiée"
+msgstr "Commande copiée"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 #: src/pages/AnalyticsPage.tsx
@@ -5914,6 +5936,10 @@ msgstr "Generated HTML"
 msgid "Generated SQL:"
 msgstr "Generated SQL:"
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Gérer ou révoquer les accès IA"
+msgstr "Gérer ou révoquer les accès IA"
+
 #: src/components/broadcasts/GlobalFeedSettings.tsx
 msgid "Global Data Feed"
 msgstr "Global Data Feed"
@@ -7121,6 +7147,10 @@ msgstr "Left on reply"
 #: src/components/email_builder/blocks/MjSectionBlock.tsx
 msgid "Left to Right"
 msgstr "Left to Right"
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
+msgstr "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
 
 #: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Let's Encrypt directory"
@@ -13442,6 +13472,10 @@ msgstr "Undo"
 #: src/components/automations/UpsertAutomationDrawer.tsx
 msgid "Undo (Ctrl+Z)"
 msgstr "Undo (Ctrl+Z)"
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
+msgstr "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
 
 #: src/components/contacts/SegmentsFilter.tsx
 #: src/components/timeline/ContactTimeline.tsx
