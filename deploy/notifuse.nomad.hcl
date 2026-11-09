@@ -237,10 +237,10 @@ DB_USER=notifuse
 DB_PREFIX=notifuse
 DB_NAME=notifuse_system
 DB_SSLMODE=disable
-# Plafond TOTAL de l'appli (systeme + tous les workspaces) : pg-saas sert 5 apps avec max_connections=100 ;
+# Plafond TOTAL de l appli (systeme + tous les workspaces) : pg-saas sert 5 apps, max_connections=200 depuis le 09/11 (budget : Notifuse 80, Twenty 24-40, Hub 10, Prospection 8, CMS 5, plateforme ~15) ;
 # Notifuse en tenait 25 au repos et PostgreSQL refusait des connexions (53300, 09/11). Connexions inactives
 # fermees apres 15 s (le planificateur repasse toutes les 20 s : une connexion chaude par workspace n'a pas de sens).
-DB_MAX_CONNECTIONS=30
+DB_MAX_CONNECTIONS=80
 DB_MAX_CONNECTIONS_PER_DB=2
 DB_CONNECTION_MAX_IDLE_TIME=15s
 DB_CONNECTION_MAX_LIFETIME=5m
