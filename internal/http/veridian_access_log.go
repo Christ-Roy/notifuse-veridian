@@ -121,7 +121,34 @@ func VeridianAccessLogMiddleware(log logger.Logger, lookup VeridianTokenWorkspac
 			if idType == "api_key" {
 				fields["token_workspace"] = tokenWorkspace(r.Context(), tokenUser)
 			}
+			if idType == "hmac" {
+				// Appelant serveur a serveur (Hub, scripts) : on nomme la source pour retrouver son proprietaire
+				// (10/11/2026 : des rafales de provisionnement toutes les ~26 min sans appelant identifiable).
+				// Jamais pour un humain (jwt_user) : pas d'adresse ni de navigateur journalises.
+				fields["remote_addr"] = remoteHost(r.RemoteAddr)
+				if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+					fields["forwarded_for"] = truncate(xff, 120)
+				}
+				if ua := r.Header.Get("User-Agent"); ua != "" {
+					fields["user_agent"] = truncate(ua, 100)
+				}
+			}
 			log.WithFields(fields).Info(veridianAccessLogMsg)
 		})
 	}
+}
+
+func truncate(v string, n int) string {
+	if len(v) > n {
+		return v[:n]
+	}
+	return v
+}
+
+// remoteHost : l'adresse sans le port.
+func remoteHost(addr string) string {
+	if i := strings.LastIndex(addr, ":"); i > 0 {
+		return strings.Trim(addr[:i], "[]")
+	}
+	return addr
 }
