@@ -141,11 +141,9 @@ job "notifuse" {
       provider = "nomad"
       port     = "smtp"
       tags     = ["traefik.enable=false"]
-      check {
-        type     = "tcp"
-        interval = "10s"
-        timeout  = "3s"
-      }
+      # Pas de check Nomad ici (10/11/2026) : sa connexion TCP fermee sans QUIT journalisait « smtp handler error:
+      # connection reset by peer » toutes les 10 s. HAProxy (notifuse-smtp-entree) controle deja chaque instance
+      # par banniere 220 puis QUIT 221 et retire celle qui ne repond pas.
     }
 
     # ---- notifuse (Go, port 8081) ----
