@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"context"
 	"io"
 	"net/http"
@@ -85,6 +86,34 @@ func TestVeridianAccessLog(t *testing.T) {
 			s, _ := v.(string)
 			assert.NotContains(t, s, "hunter2", k)
 		}
+	})
+
+	t.Run("espace renseigne sur les routes /api/tenants/* : jamais vide (preuve « au plus un provision par espace »)", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		log := pkgmocks.NewMockLogger(ctrl)
+		var got map[string]interface{}
+		log.EXPECT().WithFields(gomock.Any()).DoAndReturn(func(f map[string]interface{}) *pkgmocks.MockLogger { got = f; return log }).AnyTimes()
+		log.EXPECT().Info(gomock.Any()).AnyTimes()
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+		do := func(method, path, body string) map[string]interface{} {
+			got = nil
+			req := httptest.NewRequest(method, path, strings.NewReader(body))
+			req.Header.Set("X-Veridian-Hub-Signature", "abc")
+			if body != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			VeridianAccessLogMiddleware(log, nil)(next).ServeHTTP(httptest.NewRecorder(), req)
+			return got
+		}
+		f := do("POST", "/api/tenants/provision", `{"tenant_id":"arnaudcapitaine07","owner_email":"o@x.test"}`)
+		assert.Equal(t, "arnaudcapitaine07", f["workspace_req"], "provision : tenant_id du corps")
+		assert.NotContains(t, fmt.Sprint(f), "o@x.test", "jamais l'adresse du proprietaire")
+		f = do("GET", "/api/tenants/animalsd/usage-summary", "")
+		assert.Equal(t, "animalsd", f["workspace_req"], "usage-summary : espace du chemin")
+		f = do("POST", "/api/tenants/update-plan", `{"tenant_id":"ws9","plan":"pro"}`)
+		assert.Equal(t, "ws9", f["workspace_req"])
+		f = do("POST", "/api/tenants/provision", `{"workspace_id":"ws-prioritaire","tenant_id":"autre"}`)
+		assert.Equal(t, "ws-prioritaire", f["workspace_req"], "workspace_id reste prioritaire")
 	})
 
 	t.Run("hmac, sans jeton ; hors /api et health ignores", func(t *testing.T) {

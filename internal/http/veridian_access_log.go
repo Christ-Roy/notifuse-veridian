@@ -86,9 +86,21 @@ func VeridianAccessLogMiddleware(log logger.Logger, lookup VeridianTokenWorkspac
 				if err == nil {
 					var probe struct {
 						WorkspaceID string `json:"workspace_id"`
+						TenantID    string `json:"tenant_id"` // routes /api/tenants/* (HMAC) : provision, update-plan, suspend...
 					}
 					_ = json.Unmarshal(body, &probe)
 					reqWS = probe.WorkspaceID
+					if reqWS == "" {
+						reqWS = probe.TenantID
+					}
+				}
+			}
+			if reqWS == "" {
+				// /api/tenants/<id>/<action> : l'espace est dans le chemin (usage-summary, limits, status...).
+				if rest, ok := strings.CutPrefix(p, "/api/tenants/"); ok {
+					if id, _, _ := strings.Cut(rest, "/"); id != "" && id != "provision" {
+						reqWS = id
+					}
 				}
 			}
 			idType, tokenUser := "none", ""
