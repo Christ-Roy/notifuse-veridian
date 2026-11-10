@@ -467,6 +467,9 @@ func (s *UserService) Logout(ctx context.Context, userID string) error {
 // ever changes the duration.
 const veridianMagicCodeTTL = 15 * time.Minute
 
+// VeridianMagicRateNamespace : quota des codes generes pour le Hub (HMAC), distinct de « signin » (humain).
+const VeridianMagicRateNamespace = "veridian-magic"
+
 // GenerateMagicCodeForVeridian implements UserServiceInterface. Mirrors
 // SignIn's session/code creation path but always returns the plaintext
 // code (never via email) so the Hub can build a self-contained magic link.
@@ -489,7 +492,10 @@ func (s *UserService) GenerateMagicCodeForVeridian(ctx context.Context, email, w
 		return "", time.Time{}, err
 	}
 
-	if s.rateLimiter != nil && !s.rateLimiter.Allow("signin", email) {
+	// === Veridian patch (10/11/2026) === namespace PROPRE aux liens du Hub : sinon les appels de provisionnement
+	// idempotent (une vingtaine en quelques secondes a chaque ouverture) epuisaient le quota « signin » (5 / 5 min)
+	// de l'utilisateur et bloquaient SA connexion et la verification de son code (« too many magic-code requests »).
+	if s.rateLimiter != nil && !s.rateLimiter.Allow(VeridianMagicRateNamespace, email) {
 		s.logger.WithField("email", email).Warn("veridian magic code rate limit exceeded")
 		s.tracer.AddAttribute(ctx, "error", "rate_limit_exceeded")
 		err := fmt.Errorf("too many magic-code requests, please try again in a few minutes")

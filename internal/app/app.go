@@ -487,6 +487,7 @@ func (a *App) InitServices() error {
 	// Configure policies for different use cases
 	a.rateLimiter.SetPolicy("signin", 5, 5*time.Minute)             // Strict auth
 	a.rateLimiter.SetPolicy("verify", 5, 5*time.Minute)             // Strict auth
+	a.rateLimiter.SetPolicy(service.VeridianMagicRateNamespace, 60, 5*time.Minute) // Veridian : liens du Hub, hors quota humain
 	a.rateLimiter.SetPolicy("smtp", 5, 1*time.Minute)               // SMTP bridge
 	a.rateLimiter.SetPolicy("subscribe:email", 10, 1*time.Minute)   // Public subscribe by email
 	a.rateLimiter.SetPolicy("subscribe:ip", 50, 1*time.Minute)      // Public subscribe by IP

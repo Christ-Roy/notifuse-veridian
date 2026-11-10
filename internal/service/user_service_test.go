@@ -82,6 +82,7 @@ func setupUserTest(t *testing.T) (
 	rl := ratelimiter.NewRateLimiter()
 	rl.SetPolicy("signin", 5, 5*time.Minute)
 	rl.SetPolicy("verify", 5, 5*time.Minute)
+	rl.SetPolicy(VeridianMagicRateNamespace, 60, 5*time.Minute)
 
 	service, err := NewUserService(UserServiceConfig{
 		Repository:    mockRepo,
@@ -643,4 +644,22 @@ func TestUserService_Logout(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to logout")
 	})
+}
+
+// 10/11/2026 : le provisionnement idempotent du Hub genere ~20 codes en quelques secondes ; ils ne doivent plus
+// epuiser le quota « signin » de l'humain (sinon sa connexion et la verification de son code sont refusees).
+func TestGenerateMagicCodeForVeridian_NeConsommePasLeQuotaDeConnexionHumaine(t *testing.T) {
+	mockRepo, _, service, _ := setupUserTest(t)
+	mockRepo.EXPECT().GetUserByEmail(gomock.Any(), "arnaud@example.com").
+		Return(nil, &domain.ErrUserNotFound{Message: "none"}).Times(25)
+
+	for i := 0; i < 25; i++ {
+		_, _, err := service.GenerateMagicCodeForVeridian(context.Background(), "arnaud@example.com", "ws1")
+		var nf *domain.ErrUserNotFound
+		require.ErrorAs(t, err, &nf, "appel %d : ni limite atteinte ni autre erreur", i+1)
+	}
+	for i := 0; i < 5; i++ {
+		require.True(t, service.rateLimiter.Allow("signin", "arnaud@example.com"), "le quota humain reste intact (tentative %d)", i+1)
+	}
+	require.False(t, service.rateLimiter.Allow("signin", "arnaud@example.com"), "la limite humaine existe toujours")
 }
