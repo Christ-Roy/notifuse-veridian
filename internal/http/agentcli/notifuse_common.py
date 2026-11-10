@@ -575,7 +575,18 @@ def call_jwt(env, method, route, jwt, body=None, params=None):
         url = f"{url}?{qs}"
     headers = {"Authorization": f"Bearer {jwt}", "Content-Type": "application/json"}
     raw = json.dumps(body) if body is not None else None
-    return _request(url, method, headers, raw)
+    status, payload = _request(url, method, headers, raw)
+    origin = _JWT_FROM_DISK.get(jwt)
+    if status == 401 and origin:
+        # Jeton servi par le cache disque et refuse : expire ou revoque. On l'oublie, on en derive UN neuf, une fois.
+        env_, tenant_, email_ = origin
+        _jwt_cache_drop(env_, tenant_, email_)
+        _OWNER_CACHE.pop((env_, tenant_), None)
+        _JWT_FROM_DISK.pop(jwt, None)
+        fresh = _owner_jwt_impl(env_, tenant_, email_)
+        headers["Authorization"] = f"Bearer {fresh}"
+        return _request(url, method, headers, raw)
+    return status, payload
 
 
 def call_anon(env, method, route, body=None, params=None):
@@ -647,6 +658,86 @@ def _scoped_jwt_or_fallback(env, tenant_id, want_owner):
     return _apikey_for_impl(env, tenant_id)
 
 
+# ---------------------------------------------------------------- cache disque du JWT propriétaire
+# 10/11/2026 : chaque process CLI refaisait provision_idempotent -> auto_login -> JWT (cache en MÉMOIRE seulement) :
+# un rapport enchainant ~26 commandes sur un espace = ~26 provisions HMAC, autant de codes de connexion generes
+# pour le proprietaire (quota magic-code epuise, connexion du client bloquee). Un fichier 0600 par (env, espace,
+# proprietaire) sous un dossier 0700 HORS depot garde le JWT jusqu'a son expiration moins une marge (et 30 min au
+# plus : le jeton d'un client ne reste pas des heures sur disque). Invalide sur 401, avec UNE relance.
+_JWT_CACHE_MARGIN_S = 300
+_JWT_CACHE_MAX_S = 1800
+_JWT_FROM_DISK = {}  # token -> (env, tenant_id, email) : jetons servis par le cache, pour l'invalider sur 401
+
+
+def _jwt_cache_dir():
+    base = os.environ.get("NOTIFUSE_CLI_CACHE_DIR") or os.path.join(os.path.expanduser("~"), ".cache", "notifuse-cli")
+    os.makedirs(base, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(base, 0o700)
+    except OSError:
+        pass
+    return base
+
+
+def _jwt_cache_path(env, tenant_id, email):
+    import hashlib
+    h = hashlib.sha256(f"{env}|{tenant_id}|{(email or '').lower()}".encode()).hexdigest()[:24]
+    return os.path.join(_jwt_cache_dir(), f"owner-{env}-{h}.json")
+
+
+def _jwt_exp(jwt):
+    """Claim exp (secondes epoch) d'un JWT, sans verification de signature ; None si illisible."""
+    try:
+        import base64
+        payload = jwt.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return int(json.loads(base64.urlsafe_b64decode(payload)).get("exp"))
+    except Exception:
+        return None
+
+
+def _jwt_cache_get(env, tenant_id, email):
+    if os.environ.get("NOTIFUSE_NO_JWT_CACHE") == "1":
+        return None
+    try:
+        with open(_jwt_cache_path(env, tenant_id, email)) as f:
+            d = json.load(f)
+        tok, valid_until = d.get("jwt"), float(d.get("valid_until", 0))
+    except Exception:
+        return None
+    if not tok or time.time() >= valid_until:
+        return None
+    _JWT_FROM_DISK[tok] = (env, tenant_id, email)
+    return tok
+
+
+def _jwt_cache_put(env, tenant_id, email, jwt):
+    if os.environ.get("NOTIFUSE_NO_JWT_CACHE") == "1":
+        return
+    exp = _jwt_exp(jwt)
+    if exp is None:
+        return  # sans date d'expiration lisible : on ne cache pas
+    valid_until = min(exp - _JWT_CACHE_MARGIN_S, time.time() + _JWT_CACHE_MAX_S)
+    if valid_until <= time.time():
+        return
+    path = _jwt_cache_path(env, tenant_id, email)
+    tmp = path + ".tmp"
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"jwt": jwt, "valid_until": valid_until}, f)
+        os.replace(tmp, path)
+    except OSError:
+        pass  # le cache est un confort : jamais une cause d'echec
+
+
+def _jwt_cache_drop(env, tenant_id, email):
+    try:
+        os.unlink(_jwt_cache_path(env, tenant_id, email))
+    except OSError:
+        pass
+
+
 def provision_idempotent(env, tenant_id, email=DEFAULT_OWNER_EMAIL, name=None):
     """Provision HMAC idempotente. Renvoie la réponse (ws, api_key, auto_login_url)."""
     body = {"tenant_id": tenant_id, "owner_email": email}
@@ -668,7 +759,7 @@ def owner_jwt(env, tenant_id, email=DEFAULT_OWNER_EMAIL):
     return _owner_jwt_impl(env, tenant_id, email)
 
 
-def _owner_jwt_impl(env, tenant_id, email=DEFAULT_OWNER_EMAIL):
+def _owner_jwt_impl(env, tenant_id, email=DEFAULT_OWNER_EMAIL, prov=None):
     """JWT owner via provision idempotente → auto_login_url → auth_token du HTML.
 
     Pattern validé (scripts/iac/notifuse-iac.sh, memory reference_jwt_owner_via_autologin).
@@ -677,7 +768,12 @@ def _owner_jwt_impl(env, tenant_id, email=DEFAULT_OWNER_EMAIL):
     cache_key = (env, tenant_id)
     if cache_key in _OWNER_CACHE:
         return _OWNER_CACHE[cache_key]
-    prov = provision_idempotent(env, tenant_id, email)
+    cached = _jwt_cache_get(env, tenant_id, email)
+    if cached:
+        _OWNER_CACHE[cache_key] = cached
+        return cached
+    if prov is None:
+        prov = provision_idempotent(env, tenant_id, email)
     auto_url = prov.get("auto_login_url")
     if not auto_url:
         die(f"auto_login_url absent de la provision({tenant_id}).")
@@ -691,6 +787,7 @@ def _owner_jwt_impl(env, tenant_id, email=DEFAULT_OWNER_EMAIL):
         die("extraction JWT owner échouée (auth_token absent du HTML auto-login).")
     jwt = m.group(1)
     _OWNER_CACHE[cache_key] = jwt
+    _jwt_cache_put(env, tenant_id, email, jwt)
     return jwt
 
 
@@ -711,11 +808,16 @@ def _apikey_for_impl(env, tenant_id):
     k = get_key(APIKEY_VAR, required=False)
     if k:
         return k
+    cached = _jwt_cache_get(env, tenant_id, DEFAULT_OWNER_EMAIL)
+    if cached:
+        return cached  # owner JWT deja obtenu pour cet espace : pas de nouvelle provision
     prov = provision_idempotent(env, tenant_id)
     ak = prov.get("api_key")
     if ak:
         return ak
-    return owner_jwt(env, tenant_id)
+    # Espace existant : la provision qu'on vient de faire porte deja l'auto_login_url, on la reutilise
+    # (avant : owner_jwt() en refaisait une seconde = 2 provisions par espace au demarrage a froid).
+    return _owner_jwt_impl(env, tenant_id, DEFAULT_OWNER_EMAIL, prov=prov)
 
 
 def _workspace_get(env, ws, jwt):
