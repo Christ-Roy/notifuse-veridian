@@ -1063,9 +1063,9 @@ jobs:
         run: |
           cd tests/e2e-veridian
           npm ci
-          # Runner JIT : pas de Chrome système. Chromium Playwright (le sudo sans
-          # mot de passe du runner pose les libs ; le binaire va dans le cache du dépôt).
-          npx playwright install --with-deps chromium
+          # Runner JIT : pas de Chrome système. Chromium Playwright ; les bibliothèques système sont dans l'image
+          # du runner (Playwright 1.59.1, 10/11/2026) : pas de --with-deps (apt-get inutile). Le binaire va dans le cache.
+          npx playwright install chromium
       - name: Run e2e
         run: |
           cd tests/e2e-veridian

@@ -127,7 +127,8 @@ jobs:
       - name: Install Playwright Chromium
         run: |
           cd tests/e2e-veridian
-          npx playwright install --with-deps chromium
+          # Bibliothèques système dans l'image du runner JIT (10/11/2026) : pas de --with-deps.
+          npx playwright install chromium
 
       - name: Run console-suite Playwright tests
         id: console-tests
