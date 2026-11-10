@@ -73,6 +73,8 @@ brique = une fiche + une ligne d'index.
 15. **Base : pg-saas depuis le 09/11/2026** (`172.26.64.1:15432`, rôle `notifuse`). Plus de `notifuse-db`. Chaque base
     workspace est **fermée à PUBLIC dès sa création** (`REVOKE … FROM PUBLIC`, `GRANT CONNECT` à `notifuse` et
     `pgsaas_mon`), testé : les autres apps du cluster ne la lisent pas. → plan nomad-veridian §20, `81`
+16. **Toute chaîne neuve de la console** : `lingui extract` (catalogues `.po` à jour) ET un `msgstr` français non
+    vide, sinon la CI refuse (`Console build`, puis 3 tests de complétude). Lancer par `lourd`, jamais sur app-01. → `83`
 
 ## Relever plutôt que croire
 
@@ -105,13 +107,13 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `76` export opérateur SMTP/IMAP (HMAC seul, audit, 0600)
 - `77` couverture CLI embarquée (chaque route `/api/*` a sa commande, MANIFEST) et distribution du CLI
 - `44` rate-limit global de l'API (OWASP API4:2023)
-- `61` nœud webhook des automations : garde SSRF (`NewTenantOutboundClient`), secret chiffré, signature HMAC
-- `75` lot L4 qualité et sécurité : aperçu e-mail en bac à sable, Liquid des contacts, tests upstream portés, mutants
+- `61` nœud webhook des automations : garde SSRF, secret chiffré, signature HMAC
+- `75` lot L4 : aperçu e-mail en bac à sable, Liquid des contacts, tests upstream portés, mutants
 - `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`, rebond automatique
 - `82` statut d'essai du Hub (stocké, rendu, jamais appliqué) et signal d'activité vers le Hub
-- `83` serveur MCP de Notifuse derrière la porte du Hub : JWT ES256, espace déduit, outils filtrés par droits
+- `83` MCP de Notifuse derrière la porte du Hub (JWT ES256, espace déduit, outils filtrés) et bouton « Brancher mon IA »
 - `81` capacité base : connexions par workspace, `max_connections`, incident du 07/11
-- `79` CLI utilisateur à parité : profils d'envoi avec sa propre clé, qui peut quoi, faille `tasks.*`, tableau d'audit
+- `79` CLI utilisateur à parité : profils d'envoi avec sa propre clé, qui peut quoi, tableau d'audit
 
 **Base de données workspace**
 - `39` DROP DATABASE WITH (FORCE) — wipe orphelin + GC
@@ -155,19 +157,19 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 
 **Console assumée, vérité d'un profil**
 - `53` console assumée : inventaire, spécification de la page Profils d'envoi, plan en 5 lots
-- `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause, lien IMAP, exclusivité
+- `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause, lien IMAP
 - `55` page Profils d'envoi (lot 3) : carte, assistant, `emailProfiles.create`
-- `56` séparation transactionnel / commercial (lot 4) : usage de profil, isolation worker, compteurs par type (V61), fusible
-- `57` tableau de bord de prospection (lot 5) : `prospection.stats`, dimension analytics, chauffe par jour de compte
-- `58` dépilage équitable de `email_queue` (famine du 10/10) : relances avant J0, tourniquet entre automations
-- `59` automations observables (conception seule, plan en 7 lots, rien d implémenté)
+- `56` séparation transactionnel / commercial (lot 4) : usage de profil, isolation worker, compteurs (V61)
+- `57` tableau de bord de prospection (lot 5) : `prospection.stats`, chauffe par jour de compte
+- `58` dépilage équitable de `email_queue` (famine du 10/10) : relances avant J0, tourniquet
+- `59` automations observables (conception seule, rien d'implémenté)
 - `60` capacité d'un profil (lot 6) : somme des capacités par classe, barre empilée console, CLI agent
-- `62` « pourquoi ça n'envoie pas » (V62) : raison de report sur `email_queue`, journal des décisions, `queue.explain`
+- `62` « pourquoi ça n'envoie pas » (V62) : raison de report, journal des décisions, `queue.explain`
 - `69` plafonds et débits PAR DÉFAUT des 25 classes, table MX -> classe, échec DNS transitoire non figé
-- `64` garde réseau partagée (`pkg/netguard`) SMTP/IMAP/SparkPost ; exceptions explicites ; garde `prod-residue`
-- `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only invitations, `email-integration.verify`
-- `68` self-service owner : audit UI/API/CLI, boutons LLM/Firecrawl/Supabase, invitation avec repli local, limites
-- `65` relances dans le fil du premier mail : `veridian_thread_followups`, In-Reply-To / References, ancre 7 jours
+- `64` garde réseau partagée (`pkg/netguard`) SMTP/IMAP/SparkPost ; exceptions explicites
+- `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only invitations
+- `68` self-service owner : audit UI/API/CLI, boutons LLM/Firecrawl/Supabase, limites
+- `65` relances dans le fil du premier mail : `veridian_thread_followups`, In-Reply-To / References
 - `66` une relance ne part pas si le premier mail (J0) n'a pas été livré : le contact sort (`first_mail_*`)
 - `70` politique d'envoi par classe en données (presets JSON, surcharges), priorité par campagne, stock par classe (V66)
 
@@ -182,4 +184,4 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `35` KPI dashboard cold
 - `36` FIX P0 — dashboard 500 `bounce_type` absent
 - `37` wrapper veridian analytics — error-shape standardisé
-- `52` rendu au dépilage des emails d automation (le modèle courant fait foi)
+- `52` rendu au dépilage des emails d'automation (le modèle courant fait foi)
