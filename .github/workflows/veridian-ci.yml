@@ -335,13 +335,10 @@ jobs:
           fi
           echo "Contenu du dist/ :"
           ls console/dist/
-      - name: Miroir apt (azure.archive.ubuntu.com ne resout plus, 11/11/2026)
-        run: |
-          sudo sed -i -e "s#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g" -e "s#security\.ubuntu\.com#archive.ubuntu.com#g" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
-          echo "http://archive.ubuntu.com/ubuntu/ priority:1" | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
-          sudo apt-get update -o Acquire::Retries=3 || true
       - name: Install Playwright Chromium
-        run: cd console && npx playwright install --with-deps chromium
+        # Sans --with-deps (11/11/2026) : apt ne resout plus ses miroirs (azure.archive.ubuntu.com puis archive.ubuntu.com),
+        # les bibliotheques systeme de chromium sont deja dans l image ubuntu-24.04.
+        run: cd console && npx playwright install chromium
       - name: Run prod-smoke E2E (skip build, réutilise dist/)
         run: cd console && npm run test:prod-smoke:skip-build
         env:
