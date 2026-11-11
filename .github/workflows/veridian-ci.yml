@@ -335,6 +335,9 @@ jobs:
           fi
           echo "Contenu du dist/ :"
           ls console/dist/
+      - name: Miroir apt (azure.archive.ubuntu.com ne resout plus, 11/11/2026)
+        run: |
+          sudo sed -i -e "s#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g" -e "s#security\.ubuntu\.com#archive.ubuntu.com#g" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
       - name: Install Playwright Chromium
         run: cd console && npx playwright install --with-deps chromium
       - name: Run prod-smoke E2E (skip build, réutilise dist/)
