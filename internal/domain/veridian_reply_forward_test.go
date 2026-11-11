@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -96,4 +97,65 @@ func TestVeridianReplyForward_JSONRoundTrip(t *testing.T) {
 	var out EmailProvider
 	require.NoError(t, json.Unmarshal(b, &out))
 	assert.Equal(t, in.VeridianReplyForwardTo, out.VeridianReplyForwardTo)
+}
+
+func TestVeridianReplyForward_DailyCapValidationAndDefault(t *testing.T) {
+	assert.Equal(t, 500, (&EmailProvider{}).VeridianEffectiveReplyForwardDailyCap(), "defaut 500")
+	assert.Equal(t, 120, (&EmailProvider{VeridianReplyForwardDailyCap: 120}).VeridianEffectiveReplyForwardDailyCap())
+	assert.Equal(t, 5000, (&EmailProvider{VeridianReplyForwardDailyCap: 5000}).VeridianEffectiveReplyForwardDailyCap())
+	assert.Equal(t, 500, (&EmailProvider{VeridianReplyForwardDailyCap: 9999}).VeridianEffectiveReplyForwardDailyCap(), "hors borne a l'execution : defaut")
+	var nilProvider *EmailProvider
+	assert.Equal(t, 500, nilProvider.VeridianEffectiveReplyForwardDailyCap())
+
+	for _, ok := range []int{0, 1, 500, 5000} {
+		assert.NoError(t, (&EmailProvider{VeridianReplyForwardDailyCap: ok}).ValidateVeridianReplyForwardTo(), "%d", ok)
+	}
+	for _, bad := range []int{-1, 5001, 100000} {
+		err := (&EmailProvider{VeridianReplyForwardDailyCap: bad}).ValidateVeridianReplyForwardTo()
+		assert.Error(t, err, "%d doit etre refuse a l'ecriture", bad)
+	}
+	// valide meme sans redirection configuree
+	assert.Error(t, (&EmailProvider{VeridianReplyForwardDailyCap: 6000, VeridianReplyForwardTo: nil}).ValidateVeridianReplyForwardTo())
+
+	b, err := json.Marshal(EmailProvider{Kind: EmailProviderKindSMTP})
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), "veridian_reply_forward_daily_cap", "omitempty : le blob des profils existants ne change pas")
+}
+
+func TestVeridianBuildReplyForwardOverview(t *testing.T) {
+	now := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
+	oldest := now.Add(-3 * time.Hour)
+	on := &EmailProvider{VeridianReplyForwardTo: []string{"client@client.fr"}, VeridianReplyForwardDailyCap: 50}
+	off := &EmailProvider{}
+
+	assert.Nil(t, VeridianBuildReplyForwardOverview(off, nil, true, now), "ni redirection ni historique : rien a afficher")
+	assert.Nil(t, VeridianBuildReplyForwardOverview(off, nil, false, now))
+
+	o := VeridianBuildReplyForwardOverview(on, &VeridianReplyForwardProfileStats{Sent24h: 20, Pending: 1, Retry: 2, Deferred: 3, Failed7d: 4, DominantErrorClass: "smtp_4xx", OldestUnsentAt: &oldest}, true, now)
+	require.NotNil(t, o)
+	assert.True(t, o.Enabled)
+	assert.Equal(t, 50, o.DailyCap)
+	assert.True(t, o.StatsKnown)
+	assert.Equal(t, 20, o.Sent24h)
+	assert.Equal(t, 6, o.Waiting)
+	assert.Equal(t, 4, o.Failed7d)
+	assert.Equal(t, "smtp_4xx", o.DominantErrorClass)
+	assert.Equal(t, int64(3*3600), o.OldestUnsentAgeSeconds)
+
+	known := VeridianBuildReplyForwardOverview(on, nil, true, now)
+	require.NotNil(t, known)
+	assert.True(t, known.StatsKnown, "journal lu, aucune ligne : de vrais zeros")
+	unknown := VeridianBuildReplyForwardOverview(on, nil, false, now)
+	require.NotNil(t, unknown)
+	assert.False(t, unknown.StatsKnown, "lecture impossible : jamais presente comme des zeros mesures")
+
+	// redirection retiree mais des copies attendent encore : on les montre
+	left := VeridianBuildReplyForwardOverview(off, &VeridianReplyForwardProfileStats{Deferred: 2, OldestUnsentAt: &oldest}, true, now)
+	require.NotNil(t, left)
+	assert.False(t, left.Enabled)
+	assert.Equal(t, 2, left.Waiting)
+}
+
+func TestVeridianReplyForward_RetryScheduleIsTheDocumentedOne(t *testing.T) {
+	assert.Equal(t, []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute, 2 * time.Hour, 6 * time.Hour, 12 * time.Hour}, VeridianReplyForwardRetryDelays)
 }

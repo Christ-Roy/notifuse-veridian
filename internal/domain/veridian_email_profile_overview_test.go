@@ -129,3 +129,15 @@ func TestVeridianStockByClass_LegacyFreemailTagSplitByFAI(t *testing.T) {
 	}, got)
 }
 
+// Fiche 78 (11/11/2026) : le contrat JSON de l'overview porte le suivi de la redirection des reponses.
+func TestVeridianEmailProfileOverview_ReplyForwardJSONContract(t *testing.T) {
+	none, err := json.Marshal(VeridianEmailProfileOverview{IntegrationID: "p1"})
+	require.NoError(t, err)
+	assert.Contains(t, string(none), `"reply_forward":null`, "sans redirection ni historique : null, jamais un bloc de zeros")
+
+	with, err := json.Marshal(VeridianEmailProfileOverview{IntegrationID: "p1", ReplyForward: &VeridianReplyForwardOverview{Enabled: true, DailyCap: 500, StatsKnown: true, Sent24h: 3, Waiting: 2, Failed7d: 1}})
+	require.NoError(t, err)
+	for _, key := range []string{`"enabled":true`, `"daily_cap":500`, `"stats_known":true`, `"sent_24h":3`, `"waiting":2`, `"failed_7d":1`, `"oldest_unsent_at":null`, `"oldest_unsent_age_seconds":0`} {
+		assert.Contains(t, string(with), key)
+	}
+}

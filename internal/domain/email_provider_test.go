@@ -2224,3 +2224,21 @@ func TestEmailOptions_IsEmpty_ThreadHeaders(t *testing.T) {
 	assert.False(t, EmailOptions{InReplyTo: "a@b.fr"}.IsEmpty())
 	assert.False(t, EmailOptions{References: []string{"a@b.fr"}}.IsEmpty())
 }
+
+// Fiche 78 (11/11/2026) : plafond de copies de reponses par profil, porte par le blob du fournisseur.
+func TestEmailProvider_VeridianReplyForwardDailyCap_JSONRoundTripAndWorkspaceHook(t *testing.T) {
+	var p EmailProvider
+	require.NoError(t, json.Unmarshal([]byte(`{"kind":"smtp","veridian_reply_forward_to":["client@client.fr"],"veridian_reply_forward_daily_cap":1200}`), &p))
+	assert.Equal(t, 1200, p.VeridianReplyForwardDailyCap)
+	assert.Equal(t, 1200, p.VeridianEffectiveReplyForwardDailyCap())
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"veridian_reply_forward_daily_cap":1200`)
+
+	// Le crochet Veridian appele par createIntegration/updateIntegration refuse un plafond hors borne.
+	ws := &Workspace{}
+	bad := EmailProvider{Kind: EmailProviderKindSMTP, VeridianReplyForwardTo: []string{"client@client.fr"}, VeridianReplyForwardDailyCap: 5001}
+	assert.Error(t, ws.ValidateVeridianReturnIMAPLink(&bad))
+	ok := EmailProvider{Kind: EmailProviderKindSMTP, VeridianReplyForwardTo: []string{"client@client.fr"}, VeridianReplyForwardDailyCap: 5000}
+	assert.NoError(t, ws.ValidateVeridianReturnIMAPLink(&ok))
+}

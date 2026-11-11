@@ -152,7 +152,7 @@ import time
 import urllib.parse
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 try:
     from zoneinfo import ZoneInfo
@@ -974,6 +974,109 @@ def _dkim_publie(domaine):
     return cles
 
 
+def audit_exit_code(blocking, incomplete):
+    """Contrat 0 / 1 / 2 : 0 = GO (avec ou sans réserve), 1 = NO-GO (bloquant), 2 = NON ABOUTI (un contrôle n'a pas pu tourner)."""
+    return 1 if blocking else (2 if incomplete else 0)
+
+
+AUDIT_NO_REPLY_MIN_SENT = 100  # envois d'avant aujourd'hui (7 j) à partir desquels « zéro réponse » devient suspect
+
+
+def _audit_window_fix(ws, pid):
+    return ("notifuse integrations:update %s --id %s --settings "
+            "'{\"veridian_sending_window\":{\"days\":[1,2,3,4,5],\"start_hour\":9,\"end_hour\":18,\"timezone\":\"Europe/Paris\"}}'" % (ws, pid))
+
+
+def audit_rotation_checks(ws, wobj, overview, reply_stats):
+    """Contrôles des profils en rotation (fonction pure, testée). Rend (blocking, warnings, notes, incomplete).
+
+    Chaque ligne dit quoi corriger et avec quelle commande. Leçon du 03/11/2026 : un profil en rotation SANS fenêtre
+    d'envoi, sans jitter ni anti-hash a envoyé 150 mails par nuit pendant 2 jours, et l'audit rendait GO. Trou du
+    05/11/2026 : 700 envois, 0 réponse détectée, aucune boîte ne lisait les réponses.
+    overview = JSON de emailProfiles.overview (None = illisible), reply_stats = JSON de messages.replyStats (None = illisible).
+    """
+    blocking, warnings, notes, incomplete = [], [], [], []
+    if not isinstance(overview, dict):
+        incomplete.append("profils en rotation NON CONTRÔLÉS : emailProfiles.overview illisible (fenêtre, jitter, anti-hash, IMAP et "
+                          "copies de réponses non vérifiés). Relance l'audit, ou lance `notifuse profiles:overview %s`" % ws)
+        return blocking, warnings, notes, incomplete
+    settings = (wobj or {}).get("settings") or {}
+    blobs = {i.get("id"): (i.get("email_provider") or i.get("provider") or {}) for i in ((wobj or {}).get("integrations") or [])}
+    rotation = [p for p in (overview.get("profiles") or [])
+                if p.get("usage") == "commercial" and p.get("in_rotation") and not p.get("paused")]
+    inboxes_global = overview.get("global_inboxes") or []
+    any_inbox = bool(inboxes_global) or any(p.get("return_inbox") for p in (overview.get("profiles") or []))
+    if not rotation:
+        notes.append("aucun profil commercial en rotation : rien n'envoie, les contrôles de cadence ne s'appliquent pas")
+    sent_before_today = 0
+    for p in rotation:
+        pid, name = p.get("integration_id"), p.get("name") or p.get("integration_id")
+        prov = blobs.get(pid, {})
+        pl = p.get("plan") or {}
+        # 1. fenêtre d'envoi : BLOQUANT
+        win = pl.get("window")
+        configured = bool(win.get("configured")) if isinstance(win, dict) else bool(prov.get("veridian_sending_window") or settings.get("veridian_sending_window"))
+        if not configured:
+            blocking.append(f"profil {name} en rotation SANS fenêtre d'envoi : il enverra 24 h sur 24, nuits et week-ends compris "
+                            f"(c'est ce qui a envoyé 150 mails par nuit le 03/11). Corriger : {_audit_window_fix(ws, pid)}")
+        # 2. jitter : ATTENTION
+        jit = prov.get("veridian_jitter_pct")
+        if jit is None:
+            jit = settings.get("veridian_jitter_pct")
+        has_rates = bool(prov.get("veridian_provider_class_rates") or settings.get("veridian_provider_class_rates"))
+        if jit is not None and float(jit) <= 0:
+            warnings.append(f"profil {name} : jitter désactivé (0) : cadence métronomique, signature de machine. "
+                            f"Corriger : notifuse integrations:update {ws} --id {pid} --settings '{{\"veridian_jitter_pct\":0.3}}'")
+        elif jit is None and not has_rates:
+            warnings.append(f"profil {name} : aucun jitter posé et aucun débit par classe (le défaut 0,30 ne s'applique que derrière la porte de débit) : "
+                            f"cadence métronomique. Corriger : notifuse integrations:update {ws} --id {pid} --settings '{{\"veridian_jitter_pct\":0.3}}'")
+        elif jit is None:
+            notes.append(f"profil {name} : jitter non posé, défaut 0,30 appliqué par la porte de débit")
+        # 3. anti-hash : ATTENTION
+        ah = prov.get("veridian_anti_hash_enabled")
+        if ah is None:
+            ah = settings.get("veridian_anti_hash_enabled")
+        if ah is False:
+            warnings.append(f"profil {name} : anti-hash désactivé : deux mails au rendu identique peuvent partir vers un même fournisseur. "
+                            f"Corriger : notifuse integrations:update {ws} --id {pid} --settings '{{\"veridian_anti_hash_enabled\":true}}'")
+        # 4. IMAP de retour : ATTENTION si plus rien ne lit les réponses
+        if not p.get("return_inbox"):
+            if not inboxes_global:
+                warnings.append(f"profil {name} : aucune boîte IMAP de retour liée (et aucune boîte globale) : les réponses des prospects ne sont lues par personne. "
+                                f"Corriger : notifuse profiles:link-imap {ws} --id {pid} --imap <id de l'intégration IMAP> (liste : notifuse integrations:list {ws})")
+            else:
+                notes.append(f"profil {name} : pas de boîte IMAP liée, les retours passent par la boîte globale du workspace")
+        # 5. copies de réponses redirigées en souffrance
+        rf = p.get("reply_forward")
+        if p.get("reply_forward_to") and not rf:
+            notes.append(f"profil {name} : redirection configurée mais suivi absent de l'overview (serveur plus ancien ?)")
+        if rf and rf.get("stats_known"):
+            age = int(rf.get("oldest_unsent_age_seconds") or 0)
+            if int(rf.get("waiting") or 0) > 0 and age >= REPLY_FORWARD_STALE_SECONDS:
+                warnings.append(f"profil {name} : {rf.get('waiting')} copie(s) de réponse non envoyée(s) depuis {_fmt_age(age)} "
+                                f"(classe dominante {rf.get('dominant_error_class') or 'aucune : reportées par le plafond'}). "
+                                f"Corriger : notifuse profiles:overview {ws} pour le détail ; auth = mot de passe SMTP à refaire (integrations:create-smtp), "
+                                f"reportées = relever le plafond (integrations:cold {ws} --id {pid} --reply-forward-daily-cap N)")
+            if int(rf.get("failed_7d") or 0) > 0:
+                warnings.append(f"profil {name} : {rf.get('failed_7d')} copie(s) de réponse ABANDONNÉE(S) sur 7 j (classe {rf.get('dominant_error_class') or 'inconnue'}) : "
+                                f"le client n'a pas reçu ces réponses, à lui transmettre à la main. Détail : notifuse profiles:overview {ws}")
+        elif rf and not rf.get("stats_known"):
+            incomplete.append(f"profil {name} : suivi des copies de réponses illisible (journal non lu) : non contrôlé")
+        for c in pl.get("classes") or []:
+            sent_before_today += max(0, int(c.get("sent_7d") or 0) - int(c.get("sent_today") or 0))
+    # 6. le trou du 05/11 : on envoie, personne ne lit les réponses, zéro réponse humaine détectée
+    if rotation:
+        if not isinstance(reply_stats, dict):
+            incomplete.append("zéro réponse : contrôle NON ABOUTI (messages.replyStats illisible)")
+        elif sent_before_today >= AUDIT_NO_REPLY_MIN_SENT and int(reply_stats.get("replied_human") or 0) == 0 and not any_inbox:
+            warnings.append(f"la campagne envoie depuis plus d'un jour ({sent_before_today} envois sur 7 j avant aujourd'hui) avec 0 réponse humaine détectée "
+                            f"ET aucune boîte de réponses liée au workspace : les réponses partent dans le vide (trou du 05/11). "
+                            f"Corriger : notifuse integrations:create-imap {ws} puis notifuse profiles:link-imap {ws} --id <profil> --imap <id>")
+        elif sent_before_today >= AUDIT_NO_REPLY_MIN_SENT and int(reply_stats.get("replied_human") or 0) == 0:
+            notes.append(f"0 réponse humaine sur 7 j pour {sent_before_today} envois : une boîte est liée, mais vérifie qu'elle reçoit bien (notifuse mail:boxes)")
+    return blocking, warnings, notes, incomplete
+
+
 def cmd_campaign_audit(a):
     """Verdict AVANT envoi : est-ce qu'on peut lancer sans se cramer ?
 
@@ -1104,6 +1207,39 @@ def cmd_campaign_audit(a):
     if total_day == 0:
         warnings.append("aucun plafond journalier : rien ne freine un envoi qui derape")
 
+    # ---- 4b. Profils en rotation : fenêtre, jitter, anti-hash, IMAP, copies de réponses ----
+    P("\n── Profils en rotation ──")
+    incomplete = []
+    ov_code, overview = (0, None)
+    rs = None
+    try:
+        akey = apikey_for(a.env, ws)
+        ov_code, overview = call_jwt(a.env, "GET", "/api/veridian/emailProfiles.overview", akey, params={"workspace_id": ws})
+        now_utc = datetime.now(timezone.utc)
+        rs_code, rs = call_jwt(a.env, "GET", "/api/veridian/messages.replyStats", akey, params={
+            "workspace_id": ws, "start": (now_utc - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")})
+        if rs_code != 200:
+            rs = None
+    except SystemExit:
+        raise
+    except Exception as e:  # réseau, JSON : un contrôle qui n'a pas pu tourner est DIT, jamais lu comme « tout va bien »
+        P(f"  contrôle impossible : {e}")
+    if ov_code != 200:
+        overview = None
+    rb, rw, rn, ri = audit_rotation_checks(ws, wobj, overview, rs)
+    blocking += rb
+    warnings += rw
+    notes += rn
+    incomplete += ri
+    if isinstance(overview, dict):
+        for p in overview.get("profiles") or []:
+            if p.get("usage") == "commercial" and p.get("in_rotation") and not p.get("paused"):
+                w = (p.get("plan") or {}).get("window") or {}
+                P(f"  {p.get('name')} : fenêtre {'posée' if w.get('configured') else 'ABSENTE'} · IMAP {'lié' if p.get('return_inbox') else 'non lié'}"
+                  + (f" · copies {((p.get('reply_forward') or {}).get('sent_24h', 0))} envoyées/24 h, {((p.get('reply_forward') or {}).get('waiting', 0))} en attente"
+                     if p.get('reply_forward') else ""))
+
     # ---- 5. Recouvrement de contenu entre templates ----
     P("\n── Recouvrement de contenu (empreintes collaboratives) ──")
     st, payload = app_call(a.env, "templates.list", ws, method="GET")
@@ -1153,18 +1289,21 @@ def cmd_campaign_audit(a):
         P(f"  🛑 BLOQUANT   {b}")
     for w in warnings:
         P(f"  ⚠️  ATTENTION  {w}")
+    for i_ in incomplete:
+        P(f"  ❓ NON ABOUTI  {i_}")
     for n in notes:
         P(f"  ·  {n}")
-    verdict = "NO-GO" if blocking else ("GO SOUS RESERVE" if warnings else "GO")
+    verdict = "NO-GO" if blocking else ("NON ABOUTI" if incomplete else ("GO SOUS RESERVE" if warnings else "GO"))
     P(f"\n  VERDICT : {verdict}")
     print(json.dumps({"workspace": ws, "verdict": verdict, "blocking": blocking,
-                      "warnings": warnings, "senders": len(senders), "domains": domains,
+                      "warnings": warnings, "incomplete": incomplete, "senders": len(senders), "domains": domains,
                       "active_provider_id": active_provider_id,
                       "active_integrations": len(integrations),
                       "configured_smtp_integrations": len(configured_integrations),
                       "contacts": contacts, "daily_cap": int(total_day)},
                      indent=2, ensure_ascii=False))
-    sys.exit(2 if blocking else 0)
+    # Code de sortie du contrat 0 / 1 / 2 : 0 = GO (avec ou sans réserve), 1 = NO-GO (bloquant), 2 = NON ABOUTI.
+    sys.exit(audit_exit_code(blocking, incomplete))
 
 
 def cmd_doctor(a):
@@ -1747,6 +1886,8 @@ def cmd_integrations_list(a):
             "veridian_excluded_provider_classes": prov.get("veridian_excluded_provider_classes"),
             # Redirection des réponses de prospects (fiche 78) : [] = aucune, comportement inchangé.
             "veridian_reply_forward_to": prov.get("veridian_reply_forward_to") or [],
+            # Plafond de copies par 24 h glissantes (0/absent = défaut 500, maximum 5000).
+            "veridian_reply_forward_daily_cap": prov.get("veridian_reply_forward_daily_cap") or 0,
         })
     print(json.dumps({"workspace": a.workspace, "integrations": view}, indent=2, ensure_ascii=False))
 
@@ -1830,12 +1971,33 @@ def cmd_integrations_cold(a):
         prov.pop("veridian_reply_forward_to", None)
     elif getattr(a, "reply_forward_to", None):
         prov["veridian_reply_forward_to"] = parse_reply_forward_to(a.reply_forward_to, prov)
+    # Plafond de copies par 24 h glissantes : fusible anti-boucle, JAMAIS une perte (au-delà, les copies sont
+    # gardées « reportées » et partent dans l'ordre dès qu'une place se libère). 0 = retour au défaut (500).
+    if getattr(a, "reply_forward_daily_cap", None) is not None:
+        cap = parse_reply_forward_daily_cap(a.reply_forward_daily_cap)
+        if cap == 0:
+            prov.pop("veridian_reply_forward_daily_cap", None)
+        else:
+            prov["veridian_reply_forward_daily_cap"] = cap
     body = {"workspace_id": a.workspace, "integration_id": a.id,
             "name": integ.get("name"), "provider": prov}
     out(*call_jwt(a.env, "POST", "/api/workspaces.updateIntegration", jwt, body=body))
 
 
 REPLY_FORWARD_MAX = 5
+REPLY_FORWARD_DEFAULT_CAP = 500
+REPLY_FORWARD_MAX_CAP = 5000
+
+
+def parse_reply_forward_daily_cap(n):
+    """Valide --reply-forward-daily-cap : entier de 1 à 5000 (0 = défaut 500). Même règle que le serveur."""
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        die("--reply-forward-daily-cap : un entier est attendu (1 à %d, 0 = défaut %d)." % (REPLY_FORWARD_MAX_CAP, REPLY_FORWARD_DEFAULT_CAP))
+    if n < 0 or n > REPLY_FORWARD_MAX_CAP:
+        die("--reply-forward-daily-cap : entre 1 et %d (0 = défaut %d), reçu %d." % (REPLY_FORWARD_MAX_CAP, REPLY_FORWARD_DEFAULT_CAP, n))
+    return n
 REPLY_FORWARD_RE = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 
 
@@ -2193,6 +2355,48 @@ def _fmt_capacity(pl):
     return out
 
 
+def _fmt_age(seconds):
+    """Âge lisible : 45 s, 12 min, 2 h 30, 3 j."""
+    s = int(seconds or 0)
+    if s < 60:
+        return f"{s} s"
+    if s < 3600:
+        return f"{s // 60} min"
+    if s < 86400:
+        h, m = divmod(s // 60, 60)
+        return f"{h} h {m:02d}" if m else f"{h} h"
+    return f"{s // 86400} j"
+
+
+REPLY_FORWARD_STALE_SECONDS = 2 * 3600
+
+
+def format_reply_forward_lines(rf):
+    """Lignes de suivi de la redirection des réponses d'un profil (fonction pure, testée). rf = bloc
+    `reply_forward` de l'overview, ou None. Un compteur illisible est dit tel quel, jamais présenté comme zéro."""
+    if not rf:
+        return []
+    if not rf.get("stats_known"):
+        return ["    copies      : compteurs ILLISIBLES (le journal n'a pas pu être lu) : ne pas lire comme « zéro »"]
+    waiting, failed, deferred = int(rf.get("waiting") or 0), int(rf.get("failed_7d") or 0), int(rf.get("deferred") or 0)
+    line = (f"    copies      : {rf.get('sent_24h', 0)} envoyées (24 h) · {waiting} en attente "
+            f"({rf.get('pending', 0)} en cours, {rf.get('retry', 0)} à rejouer, {deferred} reportées par le plafond) · "
+            f"{failed} en échec (7 j" + (f", classe dominante {rf['dominant_error_class']}" if rf.get("dominant_error_class") else "") + ")")
+    out = [line]
+    age = int(rf.get("oldest_unsent_age_seconds") or 0)
+    if waiting:
+        out.append(f"                  plus ancienne non envoyée : il y a {_fmt_age(age)}")
+    if age >= REPLY_FORWARD_STALE_SECONDS and waiting:
+        out.append("    ⚠️  copies BLOQUÉES depuis plus de 2 h : regarde la classe d'erreur (auth = mot de passe SMTP, smtp_4xx/network = serveur), "
+                   "ou relève --reply-forward-daily-cap si elles sont reportées par le plafond")
+    if failed:
+        out.append(f"    ⚠️  {failed} copie(s) ABANDONNÉE(S) sur 7 j : la réponse du prospect n'a PAS atteint le client, à lui transmettre à la main")
+    if deferred:
+        out.append(f"    ℹ️  {deferred} copie(s) reportée(s) : plafond {rf.get('daily_cap')} par 24 h atteint, elles partent dès qu'une place se libère "
+                   "(pour libérer plus vite : integrations:cold --id <profil> --reply-forward-daily-cap N)")
+    return out
+
+
 def format_profiles_overview(d):
     """Rendu lisible de /api/veridian/emailProfiles.overview (fonction pure, testée)."""
     L = []
@@ -2220,7 +2424,9 @@ def format_profiles_overview(d):
         senders = ", ".join(x["email"] + (" (défaut)" if x.get("is_default") else "") for x in p.get("senders") or [])
         L.append(f"    expéditeurs : {senders or 'aucun'}")
         rf = p.get("reply_forward_to") or []
-        L.append("    réponses    : " + (f"copie vers {', '.join(rf)}" if rf else "aucune redirection"))
+        rfo = p.get("reply_forward")
+        L.append("    réponses    : " + (f"copie vers {', '.join(rf)}" + (f" (plafond {rfo['daily_cap']} par 24 h)" if rfo else "") if rf else "aucune redirection"))
+        L.extend(format_reply_forward_lines(rfo))
         ib = p.get("return_inbox")
         L.append("    IMAP lié    : " + (f"{ib['name']} ({ib['address']}, id {ib['integration_id']})"
                                           + (f", partagé avec {len(ib['linked_profiles']) - 1} autre(s) profil(s)" if len(ib.get('linked_profiles') or []) > 1 else "")
@@ -4837,6 +5043,8 @@ def build_parser(extra=None):
                     help="redirige une COPIE des réponses humaines des prospects vers ces adresses (virgules, 5 max), par le SMTP du profil, Reply-To = le prospect. Ex a@b.fr,c@d.fr")
     sp.add_argument("--reply-forward-off", dest="reply_forward_off", action="store_true",
                     help="retire la redirection des réponses (retour au comportement par défaut : rien n'est transféré)")
+    sp.add_argument("--reply-forward-daily-cap", dest="reply_forward_daily_cap", type=int,
+                    help="plafond de copies de réponses par 24 h glissantes et par profil (1 à 5000, défaut 500, 0 = défaut). Fusible anti-boucle : au-delà, les copies sont GARDÉES (reportées) et partent dès qu'une place se libère, jamais perdues")
     sp.set_defaults(func=cmd_integrations_cold)
 
     # profils d'envoi : vérité, lien IMAP, pause (lot 2, 08/10/2026)

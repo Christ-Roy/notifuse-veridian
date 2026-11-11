@@ -21,19 +21,33 @@ import (
 const (
 	// VeridianReplyForwardMaxRecipients borne la liste (un profil, pas une liste de diffusion).
 	VeridianReplyForwardMaxRecipients = 5
-	// VeridianReplyForwardDailyCap : plafond de copies par profil et par jour (anti-boucle
-	// d envoi). Compte toutes les tentatives du jour glissant de 24 h, echecs compris.
-	VeridianReplyForwardDailyCap = 50
+	// VeridianReplyForwardDefaultDailyCap : plafond par defaut de copies par profil et par jour glissant
+	// de 24 h (fusible anti-boucle d envoi), reglable par profil (veridian_reply_forward_daily_cap).
+	// Au-dela, la copie n est PAS perdue : elle passe en `deferred` et part des qu une place se libere.
+	VeridianReplyForwardDefaultDailyCap = 500
+	// VeridianReplyForwardMaxDailyCap : maximum accepte a l ecriture.
+	VeridianReplyForwardMaxDailyCap = 5000
+	// VeridianReplyForwardLease : duree pendant laquelle une copie prise a bail est a l envoi ; passe ce delai
+	// sans issue (processus mort), elle est reprise.
+	VeridianReplyForwardLease = 5 * time.Minute
 	// VeridianReplyForwardHeader trace une copie (et sert de garde anti-boucle en entree).
 	VeridianReplyForwardHeader = "X-Veridian-Forwarded"
 )
 
 // Statuts du journal veridian_reply_forward.
 const (
-	VeridianReplyForwardStatusPending = "pending"
-	VeridianReplyForwardStatusSent    = "sent"
-	VeridianReplyForwardStatusFailed  = "failed"
+	VeridianReplyForwardStatusPending  = "pending"  // a l envoi maintenant (bail)
+	VeridianReplyForwardStatusRetry    = "retry"    // echec transitoire, rejeu a echeance
+	VeridianReplyForwardStatusDeferred = "deferred" // plafond atteint, en attente d une place
+	VeridianReplyForwardStatusSent     = "sent"
+	VeridianReplyForwardStatusFailed   = "failed" // echec definitif ou tentatives epuisees
 )
+
+// VeridianReplyForwardRetryDelays : attente avant chaque rejeu d un echec transitoire (1 min, 5 min,
+// 30 min, 2 h, 6 h, 12 h) : une premiere tentative + 6 rejeux au plus, puis `failed`.
+var VeridianReplyForwardRetryDelays = []time.Duration{
+	time.Minute, 5 * time.Minute, 30 * time.Minute, 2 * time.Hour, 6 * time.Hour, 12 * time.Hour,
+}
 
 type veridianExtraHeadersKey struct{}
 
@@ -93,6 +107,10 @@ func truncateForError(s string) string {
 // ValidateVeridianReplyForwardTo valide (et normalise en place) la liste : au plus 5
 // adresses valides, jamais l adresse d envoi du profil (boucle).
 func (e *EmailProvider) ValidateVeridianReplyForwardTo() error {
+	if e.VeridianReplyForwardDailyCap < 0 || e.VeridianReplyForwardDailyCap > VeridianReplyForwardMaxDailyCap {
+		return NewValidationError(fmt.Sprintf("veridian_reply_forward_daily_cap: must be between 1 and %d (0 = default %d), got %d",
+			VeridianReplyForwardMaxDailyCap, VeridianReplyForwardDefaultDailyCap, e.VeridianReplyForwardDailyCap))
+	}
 	if len(e.VeridianReplyForwardTo) == 0 {
 		return nil
 	}
@@ -124,6 +142,15 @@ func (e *EmailProvider) validateVeridianReplyForwardTo() error {
 	}
 	e.VeridianReplyForwardTo = list
 	return nil
+}
+
+// VeridianEffectiveReplyForwardDailyCap rend le plafond de copies par jour glissant du profil : sa valeur
+// si elle est dans [1, maximum], sinon le defaut (500). Nil-safe.
+func (e *EmailProvider) VeridianEffectiveReplyForwardDailyCap() int {
+	if e == nil || e.VeridianReplyForwardDailyCap <= 0 || e.VeridianReplyForwardDailyCap > VeridianReplyForwardMaxDailyCap {
+		return VeridianReplyForwardDefaultDailyCap
+	}
+	return e.VeridianReplyForwardDailyCap
 }
 
 // VeridianIsOwnSenderAddress dit si addr est une adresse d envoi du profil (SMTP
@@ -171,20 +198,36 @@ func (e *EmailProvider) VeridianEffectiveReplyForwardTo() []string {
 	return out
 }
 
-// VeridianReplyForwardRecord est une ligne du journal veridian_reply_forward : aucune
-// adresse, aucun contenu, seulement de quoi dedoublonner, plafonner et compter.
+// VeridianReplyForwardRecord est une ligne du journal veridian_reply_forward. Les adresses et le
+// corps ne sont conserves (Payload) que le temps que la copie n'est pas partie : le rejeu en a
+// besoin. Des que la ligne est `sent` ou `failed`, le contenu est efface.
 type VeridianReplyForwardRecord struct {
 	ReplyKey   string // PK : empreinte de la reponse (idempotence)
 	ProfileID  string
 	Recipients int
 	Status     string
 	ErrorClass string
+	Payload    string // JSON de la copie a envoyer (efface une fois sent/failed)
 }
 
-// VeridianSentMessageRef est ce que l on retient de l envoi auquel une reponse se rattache.
-type VeridianSentMessageRef struct {
-	ProfileID   string
-	SenderEmail string
+// VeridianReplyForwardClaim est le resultat de la reservation d'une copie.
+type VeridianReplyForwardClaim struct {
+	// Duplicate : la reponse a deja ete traitee (le poller l'a relue), rien a faire.
+	Duplicate bool
+	// Leased : la copie a une place sous le plafond et est confiee a l'appelant (1re tentative).
+	Leased bool
+	// Deferred : plafond du profil atteint ; la copie est gardee (statut deferred) et partira
+	// dans l'ordre des que le plafond le permet. Jamais perdue.
+	Deferred bool
+	Attempts int
+}
+
+// VeridianReplyForwardJob est une copie a envoyer (ou a rejouer), prise a bail.
+type VeridianReplyForwardJob struct {
+	ReplyKey  string
+	ProfileID string
+	Payload   string
+	Attempts  int // numero de la tentative en cours (1 = premiere)
 }
 
 // VeridianReplyForwardStat est le compteur par profil et statut (controle).
@@ -194,20 +237,91 @@ type VeridianReplyForwardStat struct {
 	Count     int
 }
 
+// VeridianReplyForwardProfileStats : ce que l'overview dit d'un profil (aucune adresse).
+type VeridianReplyForwardProfileStats struct {
+	ProfileID          string
+	Sent24h            int
+	Pending            int
+	Retry              int
+	Deferred           int
+	Failed7d           int
+	DominantErrorClass string
+	OldestUnsentAt     *time.Time
+}
+
+// VeridianReplyForwardOverview est la visibilite exposee par emailProfiles.overview : combien
+// de copies sont parties, attendent ou ont echoue, et depuis quand la plus ancienne attend.
+type VeridianReplyForwardOverview struct {
+	Enabled  bool `json:"enabled"`
+	DailyCap int  `json:"daily_cap"`
+	// StatsKnown=false : la lecture du journal a echoue, les compteurs ne sont PAS des zeros.
+	StatsKnown             bool       `json:"stats_known"`
+	Sent24h                int        `json:"sent_24h"`
+	Pending                int        `json:"pending"`
+	Retry                  int        `json:"retry"`
+	Deferred               int        `json:"deferred"`
+	Waiting                int        `json:"waiting"` // pending + retry + deferred
+	Failed7d               int        `json:"failed_7d"`
+	DominantErrorClass     string     `json:"dominant_error_class,omitempty"`
+	OldestUnsentAt         *time.Time `json:"oldest_unsent_at"`
+	OldestUnsentAgeSeconds int64      `json:"oldest_unsent_age_seconds"`
+}
+
+// VeridianBuildReplyForwardOverview assemble la vue d'un profil. stats nil avec known=true : aucune
+// ligne dans le journal (zeros reels) ; known=false : mesure impossible.
+func VeridianBuildReplyForwardOverview(provider *EmailProvider, stats *VeridianReplyForwardProfileStats, known bool, now time.Time) *VeridianReplyForwardOverview {
+	enabled := len(provider.VeridianEffectiveReplyForwardTo()) > 0
+	if !enabled && (stats == nil || !known) {
+		return nil
+	}
+	o := &VeridianReplyForwardOverview{Enabled: enabled, DailyCap: provider.VeridianEffectiveReplyForwardDailyCap(), StatsKnown: known}
+	if !known || stats == nil {
+		return o
+	}
+	o.Sent24h, o.Pending, o.Retry, o.Deferred, o.Failed7d = stats.Sent24h, stats.Pending, stats.Retry, stats.Deferred, stats.Failed7d
+	o.Waiting = stats.Pending + stats.Retry + stats.Deferred
+	o.DominantErrorClass = stats.DominantErrorClass
+	if stats.OldestUnsentAt != nil {
+		t := *stats.OldestUnsentAt
+		o.OldestUnsentAt = &t
+		if age := now.Sub(t); age > 0 {
+			o.OldestUnsentAgeSeconds = int64(age.Seconds())
+		}
+	}
+	if !enabled && o.Waiting == 0 && o.Failed7d == 0 && o.Sent24h == 0 {
+		return nil
+	}
+	return o
+}
+
 //go:generate mockgen -destination mocks/mock_veridian_reply_forward_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain VeridianReplyForwardRepository
 
-// VeridianReplyForwardRepository : persistance du journal (table WORKSPACE, V63).
+// VeridianReplyForwardRepository : persistance du journal (table WORKSPACE, V69 + V74).
 type VeridianReplyForwardRepository interface {
 	// ResolveSentMessage rattache la reponse a un de NOS envois : par id de message cite
 	// (matchedMessageID, forme nue ou prefixee) sinon, en repli, le dernier envoi accepte
 	// vers contactEmail. found=false si rien (jamais une erreur).
 	ResolveSentMessage(ctx context.Context, workspaceID, matchedMessageID, contactEmail string) (ref VeridianSentMessageRef, found bool, err error)
-	// Claim reserve atomiquement la copie : inserted=true si la ligne vient d etre posee ;
-	// duplicate=true si la reponse a deja ete traitee ; capped=true si le profil a atteint
-	// dailyCap tentatives sur les 24 dernieres heures (rien n est insere).
-	Claim(ctx context.Context, workspaceID string, rec VeridianReplyForwardRecord, dailyCap int, now time.Time) (inserted, duplicate, capped bool, err error)
-	// Finish pose le resultat (sent / failed) de la reservation.
+	// Claim pose la copie dans le journal (idempotent sur reply_key) puis lui donne une place
+	// sous le plafond du profil dans l'ordre d'arrivee. Au-dela du plafond la copie reste
+	// `deferred` : rien n'est jamais perdu.
+	Claim(ctx context.Context, workspaceID string, rec VeridianReplyForwardRecord, dailyCap int, now time.Time) (VeridianReplyForwardClaim, error)
+	// LeaseDue promeut les copies deferred qui ont maintenant une place (caps par profil, defaut
+	// defaultCap), abandonne les lignes sans contenu a rejouer, puis prend a bail (compare-and-set)
+	// jusqu'a limit copies dues : retry arrive a echeance, ou bail expire (processus mort).
+	LeaseDue(ctx context.Context, workspaceID string, caps map[string]int, defaultCap int, now time.Time, limit int) ([]VeridianReplyForwardJob, error)
+	// Finish pose l'issue definitive (sent / failed) et efface le contenu.
 	Finish(ctx context.Context, workspaceID, replyKey, status, errorClass string, now time.Time) error
+	// Reschedule remet la copie en `retry` a l'echeance next, avec la classe de la derniere erreur.
+	Reschedule(ctx context.Context, workspaceID, replyKey, errorClass string, next time.Time) error
 	// Stats compte les copies par profil et statut depuis since (controle).
 	Stats(ctx context.Context, workspaceID string, since time.Time) ([]VeridianReplyForwardStat, error)
+	// ProfileStats rend les compteurs d'overview par profil (envoyees sur 24 h, en attente, echecs 7 j).
+	ProfileStats(ctx context.Context, workspaceID string, now time.Time) (map[string]VeridianReplyForwardProfileStats, error)
+}
+
+// VeridianSentMessageRef est ce que l on retient de l envoi auquel une reponse se rattache.
+type VeridianSentMessageRef struct {
+	ProfileID   string
+	SenderEmail string
 }

@@ -194,6 +194,7 @@ func getTaskTypes() []string {
 		"process_contact_segment_queue",
 		"check_segment_recompute",
 		"sync_integration",
+		VeridianReplyForwardTaskType, // fork Veridian (fiche 78) : rejeu des copies de reponses
 	}
 }
 

@@ -225,6 +225,10 @@ type EmailProvider struct {
 	// 5) par le SMTP du profil, Reply-To = le prospect. Vide (defaut) = aucun changement.
 	// omitempty, sans migration du blob. Cf. veridian_reply_forward.go (domain + service).
 	VeridianReplyForwardTo []string `json:"veridian_reply_forward_to,omitempty"`
+
+	// Plafond de copies de reponses par jour glissant de 24 h pour ce profil (fusible anti-boucle).
+	// 0 = defaut (500), maximum 5000. Au-dela, les copies sont gardees (deferred), jamais perdues.
+	VeridianReplyForwardDailyCap int `json:"veridian_reply_forward_daily_cap,omitempty"`
 }
 
 // Validate validates the email provider settings

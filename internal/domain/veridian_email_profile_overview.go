@@ -72,6 +72,8 @@ type VeridianEmailProfileOverview struct {
 	// ReplyForwardTo : adresses qui recoivent une copie des reponses humaines des prospects
 	// (fiche 78). Vide = aucune redirection.
 	ReplyForwardTo []string `json:"reply_forward_to"`
+	// ReplyForward : copies envoyees, en attente et en echec (fiche 78). Nil = pas de redirection ni d historique.
+	ReplyForward *VeridianReplyForwardOverview `json:"reply_forward"`
 	// ReturnInbox : boîte IMAP liée au profil (nil = aucun lien).
 	ReturnInbox *VeridianOverviewInbox `json:"return_inbox"`
 	Plan        VeridianEffectivePlan  `json:"plan"`

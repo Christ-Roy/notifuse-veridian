@@ -26,6 +26,16 @@ type veridianEmailProfileOverviewService struct {
 	workspaceRepo      domain.WorkspaceRepository
 	authService        domain.AuthService
 	logger             logger.Logger
+	replyForward       domain.VeridianReplyForwardRepository // copies de reponses redirigees (fiche 78), optionnel
+}
+
+// WithVeridianReplyForwardStats branche le journal des copies de reponses sur le service d'overview : chaque
+// profil expose alors reply_forward (envoyees sur 24 h, en attente, en echec, age de la plus ancienne).
+func WithVeridianReplyForwardStats(svc domain.VeridianEmailProfileOverviewService, repo domain.VeridianReplyForwardRepository) domain.VeridianEmailProfileOverviewService {
+	if s, ok := svc.(*veridianEmailProfileOverviewService); ok {
+		s.replyForward = repo
+	}
+	return svc
 }
 
 func NewVeridianEmailProfileOverviewService(
@@ -141,7 +151,39 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 		return o.rows, o.counters
 	}, reputation, stock, now)
 	overview.TransactionalWatch = s.transactionalWatch(ctx, workspace, overview, now)
+	s.attachReplyForward(ctx, workspace, overview, now)
 	return overview, nil
+}
+
+// attachReplyForward ajoute a chaque profil le suivi de la redirection des reponses. Une lecture du
+// journal qui echoue donne stats_known=false (jamais des zeros) et ne fait pas echouer l'overview.
+func (s *veridianEmailProfileOverviewService) attachReplyForward(ctx context.Context, workspace *domain.Workspace, overview *domain.VeridianEmailProfilesOverview, now time.Time) {
+	var stats map[string]domain.VeridianReplyForwardProfileStats
+	known := false
+	if s.replyForward != nil {
+		var err error
+		if stats, err = s.replyForward.ProfileStats(ctx, workspace.ID, now); err != nil {
+			s.logger.WithFields(map[string]interface{}{"workspace_id": workspace.ID, "error": err.Error()}).Warn("Failed to read reply forward stats for overview")
+		} else {
+			known = true
+		}
+	}
+	for i := range overview.Profiles {
+		integration := workspace.GetIntegrationByID(overview.Profiles[i].IntegrationID)
+		if integration == nil {
+			continue
+		}
+		var st *domain.VeridianReplyForwardProfileStats
+		if v, ok := stats[integration.ID]; ok {
+			st = &v
+		}
+		if s.replyForward == nil {
+			// Sans journal branche : on ne sait rien, on le dit seulement si une redirection est configuree.
+			overview.Profiles[i].ReplyForward = domain.VeridianBuildReplyForwardOverview(&integration.EmailProvider, nil, false, now)
+			continue
+		}
+		overview.Profiles[i].ReplyForward = domain.VeridianBuildReplyForwardOverview(&integration.EmailProvider, st, known, now)
+	}
 }
 
 // transactionalWatch mesure le volume et la réputation du profil transactionnel

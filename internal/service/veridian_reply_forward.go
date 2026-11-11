@@ -4,10 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
 	"net/mail"
+	"net/textproto"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -33,11 +37,15 @@ import (
 //     n'en dependent.
 //   - IDEMPOTENT : une reponse = une ligne du journal (cle primaire = empreinte de la reponse),
 //     reservee AVANT l'envoi. Un poller qui relit le meme message ne declenche aucune 2e copie.
-//     Contrepartie assumee : au plus une fois (un envoi qui echoue est journalise "failed",
-//     pas rejoue tout seul).
+//   - ROBUSTE (11/11/2026) : la copie composee est gardee dans le journal tant qu'elle n'est pas
+//     partie. Un echec transitoire (SMTP indisponible, 4xx, timeout, reseau) est rejoue par la
+//     tache native "veridian_reply_forward_retry" (1 min, 5 min, 30 min, 2 h, 6 h, 12 h) ; un echec
+//     definitif (5xx, refus local) reste "failed" avec sa classe. Le plafond n'en perd JAMAIS une :
+//     au-dela, la copie est "deferred" et part dans l'ordre des qu'une place se libere. Un processus
+//     qui meurt en plein envoi : le bail de 5 min expire et la copie est reprise (au pire un doublon).
 //   - ANTI-BOUCLE : jamais pour un rebond/DSN, un auto-repondeur ou un defi ; jamais vers
 //     l'adresse d'envoi du profil ni vers le prospect ; jamais si le message entrant porte deja
-//     X-Veridian-Forwarded ; plafond de VeridianReplyForwardDailyCap copies par profil et par jour.
+//     X-Veridian-Forwarded ; plafond par profil (veridian_reply_forward_daily_cap, 500 par defaut) qui REPORTE au lieu de perdre.
 //   - AUCUNE donnee personnelle dans les journaux applicatifs (ni adresse, ni objet, ni corps).
 
 const (
@@ -45,7 +53,10 @@ const (
 	replyForwardMaxBody     = 64 << 10
 	replyForwardMaxSubject  = 200
 	replyForwardMaxInFlight = 8
-	replyForwardRetryDelay  = 5 * time.Second
+	// replyForwardQueueWait : attente d'une place d'envoi avant de confier la copie a la tache de rejeu.
+	replyForwardQueueWait = 20 * time.Second
+	// replyForwardBatch : copies traitees par passage de la tache.
+	replyForwardBatch = 25
 )
 
 // veridianReplyForwardMailer : l'envoi par le transport du profil (EmailService.SendEmail).
@@ -69,7 +80,9 @@ const (
 	ReplyForwardSkipNoConfig   VeridianReplyForwardOutcome = "skip_no_config"
 	ReplyForwardSkipNoProfile  VeridianReplyForwardOutcome = "skip_no_profile"
 	ReplyForwardSkipDuplicate  VeridianReplyForwardOutcome = "skip_duplicate"
-	ReplyForwardSkipCapped     VeridianReplyForwardOutcome = "skip_capped"
+	ReplyForwardDeferred       VeridianReplyForwardOutcome = "deferred"
+	ReplyForwardRetrying       VeridianReplyForwardOutcome = "retrying"
+	ReplyForwardQueued         VeridianReplyForwardOutcome = "queued"
 	ReplyForwardSkipNoRecipent VeridianReplyForwardOutcome = "skip_no_recipient"
 	ReplyForwardError          VeridianReplyForwardOutcome = "error"
 )
@@ -81,13 +94,21 @@ type VeridianReplyForwarder struct {
 	mailer     veridianReplyForwardMailer
 	logger     logger.Logger
 
-	dailyCap   int
-	retryDelay time.Duration
-	now        func() time.Time
+	tasks     veridianReplyForwardTaskEnsurer
+	queueWait time.Duration
+	now       func() time.Time
 	// run lance le travail ; par defaut une goroutine (les tests l'executent en ligne).
 	run func(func())
 	sem chan struct{}
 }
+
+// veridianReplyForwardTaskEnsurer garantit l'existence de la tache native de rejeu du workspace.
+type veridianReplyForwardTaskEnsurer interface {
+	EnsureReplyForwardTask(ctx context.Context, workspaceID string) error
+}
+
+// SetTaskEnsurer branche la creation de la tache de rejeu (nil-safe : sans elle, pas de rejeu automatique).
+func (f *VeridianReplyForwarder) SetTaskEnsurer(e veridianReplyForwardTaskEnsurer) { f.tasks = e }
 
 // NewVeridianReplyForwarder construit le forwarder.
 func NewVeridianReplyForwarder(repo domain.VeridianReplyForwardRepository, workspaces veridianReplyForwardWorkspaces, mailer veridianReplyForwardMailer, log logger.Logger) *VeridianReplyForwarder {
@@ -96,8 +117,7 @@ func NewVeridianReplyForwarder(repo domain.VeridianReplyForwardRepository, works
 		workspaces: workspaces,
 		mailer:     mailer,
 		logger:     log,
-		dailyCap:   domain.VeridianReplyForwardDailyCap,
-		retryDelay: replyForwardRetryDelay,
+		queueWait:  replyForwardQueueWait,
 		now:        func() time.Time { return time.Now().UTC() },
 		run:        func(fn func()) { go fn() },
 		sem:        make(chan struct{}, replyForwardMaxInFlight),
@@ -110,14 +130,7 @@ func (f *VeridianReplyForwarder) Dispatch(workspaceID string, msg *domain.Veridi
 	if f == nil || msg == nil {
 		return
 	}
-	select {
-	case f.sem <- struct{}{}:
-	default:
-		f.logger.WithFields(map[string]interface{}{"workspace_id": workspaceID}).Warn("VeridianReplyForward: too many copies in flight, skipped")
-		return
-	}
 	f.run(func() {
-		defer func() { <-f.sem }()
 		defer func() {
 			if r := recover(); r != nil {
 				f.logger.WithFields(map[string]interface{}{"workspace_id": workspaceID}).Error("VeridianReplyForward: panic recovered")
@@ -125,13 +138,28 @@ func (f *VeridianReplyForwarder) Dispatch(workspaceID string, msg *domain.Veridi
 		}()
 		ctx, cancel := context.WithTimeout(context.Background(), replyForwardTimeout)
 		defer cancel()
-		f.Forward(ctx, workspaceID, msg, det)
+		// Pas de place d'envoi : la copie n'est PAS abandonnee, elle est reservee dans le journal et la
+		// tache de rejeu l'envoie (jamais de perte silencieuse sous rafale).
+		sendNow := false
+		select {
+		case f.sem <- struct{}{}:
+			sendNow = true
+			defer func() { <-f.sem }()
+		case <-time.After(f.queueWait):
+			f.logger.WithFields(map[string]interface{}{"workspace_id": workspaceID}).Warn("VeridianReplyForward: no send slot, copy handed to the retry task")
+		}
+		f.run2(ctx, workspaceID, msg, det, sendNow)
 	})
 }
 
 // Forward fait le travail, de facon synchrone (testable). Rend l'issue ; n'echoue jamais.
 func (f *VeridianReplyForwarder) Forward(ctx context.Context, workspaceID string, msg *domain.VeridianIMAPMessage, det domain.VeridianReplyDetection) VeridianReplyForwardOutcome {
-	out, profileID := f.forward(ctx, workspaceID, msg, det)
+	return f.run2(ctx, workspaceID, msg, det, true)
+}
+
+// run2 : Forward avec le choix d'envoyer tout de suite (sendNow) ou de confier l'envoi a la tache de rejeu.
+func (f *VeridianReplyForwarder) run2(ctx context.Context, workspaceID string, msg *domain.VeridianIMAPMessage, det domain.VeridianReplyDetection, sendNow bool) VeridianReplyForwardOutcome {
+	out, profileID := f.forward(ctx, workspaceID, msg, det, sendNow)
 	fields := map[string]interface{}{"workspace_id": workspaceID, "outcome": string(out)}
 	if profileID != "" {
 		fields["profile_id"] = profileID
@@ -139,7 +167,7 @@ func (f *VeridianReplyForwarder) Forward(ctx context.Context, workspaceID string
 	switch out {
 	case ReplyForwardSent:
 		f.logger.WithFields(fields).Info("VeridianReplyForward: copy sent")
-	case ReplyForwardFailed, ReplyForwardError, ReplyForwardSkipCapped, ReplyForwardSkipLoop:
+	case ReplyForwardFailed, ReplyForwardError, ReplyForwardSkipLoop, ReplyForwardDeferred, ReplyForwardRetrying:
 		f.logger.WithFields(fields).Warn("VeridianReplyForward: no copy sent")
 	default:
 		f.logger.WithFields(fields).Debug("VeridianReplyForward: skipped")
@@ -147,7 +175,7 @@ func (f *VeridianReplyForwarder) Forward(ctx context.Context, workspaceID string
 	return out
 }
 
-func (f *VeridianReplyForwarder) forward(ctx context.Context, workspaceID string, msg *domain.VeridianIMAPMessage, det domain.VeridianReplyDetection) (VeridianReplyForwardOutcome, string) {
+func (f *VeridianReplyForwarder) forward(ctx context.Context, workspaceID string, msg *domain.VeridianIMAPMessage, det domain.VeridianReplyDetection, sendNow bool) (VeridianReplyForwardOutcome, string) {
 	if msg == nil || !det.IsReply {
 		return ReplyForwardSkipNotHuman, ""
 	}
@@ -227,81 +255,174 @@ func (f *VeridianReplyForwarder) forward(ctx context.Context, workspaceID string
 		return ReplyForwardSkipNoRecipent, ref.ProfileID
 	}
 
-	// 4. Reservation idempotente + plafond.
-	key := replyForwardKey(workspaceID, ref.ProfileID, msg)
-	now := f.now()
-	inserted, duplicate, capped, err := f.repo.Claim(ctx, workspaceID, domain.VeridianReplyForwardRecord{
-		ReplyKey: key, ProfileID: ref.ProfileID, Recipients: len(finalRecipients), Status: domain.VeridianReplyForwardStatusPending,
-	}, f.dailyCap, now)
+	// 4. Composition (pure) de la copie : c'est elle qui est gardee dans le journal pour le rejeu.
+	sender := pickReplyForwardSender(provider, ref.SenderEmail)
+	payload := replyForwardPayload{IntegrationID: integ.ID, MessageID: uuid.NewString(), To: finalRecipients[0], CC: finalRecipients[1:], ReplyTo: replyTo}
+	if sender != nil {
+		prospectName := replyFwdCleanText(parsed.FromName, 80)
+		if prospectName == "" {
+			prospectName = fromAddr
+		}
+		origSubject := replyFwdCleanText(mailbox.StripReplyPrefix(replyFwdFirstNonEmpty(parsed.Subject, msg.Subject)), replyForwardMaxSubject)
+		if origSubject == "" {
+			origSubject = "(sans objet)"
+		}
+		payload.Subject = replyFwdTruncate(fmt.Sprintf("Réponse de %s : %s", prospectName, origSubject), replyForwardMaxSubject)
+		payload.Text = composeReplyForwardBody(prospectName, fromAddr, origSubject, sender.Email, replyForwardBodyText(parsed, msg))
+		payload.FromAddress = sender.Email
+		payload.FromName = replyFwdCleanText(sender.Name, 80)
+		if payload.FromName == "" {
+			payload.FromName = sender.Email
+		}
+	}
+	raw, err := json.Marshal(payload)
 	if err != nil {
 		return ReplyForwardError, ref.ProfileID
 	}
-	if duplicate {
+
+	// 5. Reservation idempotente + plafond (le plafond reporte, il ne perd jamais).
+	key := replyForwardKey(workspaceID, ref.ProfileID, msg)
+	claim, err := f.repo.Claim(ctx, workspaceID, domain.VeridianReplyForwardRecord{
+		ReplyKey: key, ProfileID: ref.ProfileID, Recipients: len(finalRecipients),
+		Status: domain.VeridianReplyForwardStatusDeferred, Payload: string(raw),
+	}, provider.VeridianEffectiveReplyForwardDailyCap(), f.now())
+	if err != nil {
+		return ReplyForwardError, ref.ProfileID
+	}
+	if claim.Duplicate {
 		return ReplyForwardSkipDuplicate, ref.ProfileID
 	}
-	if capped || !inserted {
-		return ReplyForwardSkipCapped, ref.ProfileID
+	f.ensureTask(workspaceID)
+	if claim.Deferred {
+		return ReplyForwardDeferred, ref.ProfileID
 	}
+	if !claim.Leased {
+		return ReplyForwardError, ref.ProfileID
+	}
+	if !sendNow {
+		if err := f.reschedule(workspaceID, key, "", f.now()); err != nil {
+			return ReplyForwardError, ref.ProfileID
+		}
+		return ReplyForwardQueued, ref.ProfileID
+	}
+	return f.deliver(ctx, workspaceID, provider, domain.VeridianReplyForwardJob{ReplyKey: key, ProfileID: ref.ProfileID, Payload: string(raw), Attempts: claim.Attempts}), ref.ProfileID
+}
 
-	// 5. Composition et envoi (une relance apres une courte pause, puis on abandonne).
-	sender := pickReplyForwardSender(provider, ref.SenderEmail)
-	if sender == nil {
-		f.finish(ctx, workspaceID, key, domain.VeridianReplyForwardStatusFailed, "no_sender")
-		return ReplyForwardFailed, ref.ProfileID
+// replyForwardPayload : la copie composee, gardee dans le journal le temps qu'elle n'est pas partie.
+// MessageID est fixe : un rejeu emet le meme Message-ID (le destinataire dedoublonne).
+type replyForwardPayload struct {
+	IntegrationID string   `json:"i"`
+	MessageID     string   `json:"m"`
+	FromAddress   string   `json:"fa"`
+	FromName      string   `json:"fn"`
+	To            string   `json:"to"`
+	CC            []string `json:"cc,omitempty"`
+	ReplyTo       string   `json:"rt"`
+	Subject       string   `json:"s"`
+	Text          string   `json:"t"`
+}
+
+// deliver fait UNE tentative d'envoi d'une copie prise a bail et en consigne l'issue : sent, failed
+// (definitif ou tentatives epuisees) ou retry (echec transitoire, rejeu a echeance).
+func (f *VeridianReplyForwarder) deliver(ctx context.Context, workspaceID string, provider domain.EmailProvider, job domain.VeridianReplyForwardJob) VeridianReplyForwardOutcome {
+	var p replyForwardPayload
+	if err := json.Unmarshal([]byte(job.Payload), &p); err != nil {
+		f.finish(ctx, workspaceID, job.ReplyKey, domain.VeridianReplyForwardStatusFailed, "bad_payload")
+		return ReplyForwardFailed
 	}
-	prospectName := replyFwdCleanText(parsed.FromName, 80)
-	if prospectName == "" {
-		prospectName = fromAddr
-	}
-	origSubject := replyFwdCleanText(mailbox.StripReplyPrefix(replyFwdFirstNonEmpty(parsed.Subject, msg.Subject)), replyForwardMaxSubject)
-	if origSubject == "" {
-		origSubject = "(sans objet)"
-	}
-	subject := replyFwdTruncate(fmt.Sprintf("Réponse de %s : %s", prospectName, origSubject), replyForwardMaxSubject)
-	text := composeReplyForwardBody(prospectName, fromAddr, origSubject, sender.Email, replyForwardBodyText(parsed, msg))
-	fromName := replyFwdCleanText(sender.Name, 80)
-	if fromName == "" {
-		fromName = sender.Email
+	if p.FromAddress == "" {
+		f.finish(ctx, workspaceID, job.ReplyKey, domain.VeridianReplyForwardStatusFailed, "no_sender")
+		return ReplyForwardFailed
 	}
 	req := domain.SendEmailProviderRequest{
 		WorkspaceID:   workspaceID,
-		IntegrationID: integ.ID,
-		MessageID:     uuid.NewString(),
-		FromAddress:   sender.Email,
-		FromName:      fromName,
-		To:            finalRecipients[0],
-		Subject:       subject,
-		Content:       "<pre>" + html.EscapeString(text) + "</pre>",
-		TextContent:   text,
+		IntegrationID: p.IntegrationID,
+		MessageID:     p.MessageID,
+		FromAddress:   p.FromAddress,
+		FromName:      p.FromName,
+		To:            p.To,
+		Subject:       p.Subject,
+		Content:       "<pre>" + html.EscapeString(p.Text) + "</pre>",
+		TextContent:   p.Text,
 		PlainTextOnly: true,
 		Provider:      &provider,
 		EmailOptions: domain.EmailOptions{
-			ReplyTo: replyTo,
-			CC:      finalRecipients[1:],
+			ReplyTo: p.ReplyTo,
+			CC:      p.CC,
 		},
 	}
-	ctx = domain.WithVeridianExtraHeaders(ctx, map[string]string{domain.VeridianReplyForwardHeader: "1"})
-	var sendErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-			case <-time.After(f.retryDelay):
-			}
-		}
-		if sendErr = f.mailer.SendEmail(ctx, req, false); sendErr == nil {
-			break
-		}
-		if ctx.Err() != nil {
-			break
+	sendCtx := domain.WithVeridianExtraHeaders(ctx, map[string]string{domain.VeridianReplyForwardHeader: "1"})
+	sendErr := f.mailer.SendEmail(sendCtx, req, false)
+	if sendErr == nil {
+		f.finish(ctx, workspaceID, job.ReplyKey, domain.VeridianReplyForwardStatusSent, "")
+		return ReplyForwardSent
+	}
+	class, permanent := classifyReplyForwardError(sendErr)
+	delays := domain.VeridianReplyForwardRetryDelays
+	if permanent || job.Attempts < 1 || job.Attempts > len(delays) {
+		f.finish(ctx, workspaceID, job.ReplyKey, domain.VeridianReplyForwardStatusFailed, class)
+		return ReplyForwardFailed
+	}
+	if err := f.reschedule(workspaceID, job.ReplyKey, class, f.now().Add(delays[job.Attempts-1])); err != nil {
+		f.logger.WithFields(map[string]interface{}{"workspace_id": workspaceID}).Warn("VeridianReplyForward: retry could not be scheduled, lease will expire")
+	}
+	f.ensureTask(workspaceID)
+	return ReplyForwardRetrying
+}
+
+// ProcessDue est le travail de la tache native veridian_reply_forward_retry : place les copies reportees,
+// prend a bail celles qui sont dues (rejeu ou bail expire) et tente l'envoi. Rend le nombre traite.
+func (f *VeridianReplyForwarder) ProcessDue(ctx context.Context, workspaceID string, deadline time.Time) (int, error) {
+	ws, err := f.workspaces.GetByID(ctx, workspaceID)
+	if err != nil || ws == nil {
+		return 0, fmt.Errorf("reply forward: workspace unavailable: %v", err)
+	}
+	caps := map[string]int{}
+	for i := range ws.Integrations {
+		if ws.Integrations[i].Type == domain.IntegrationTypeEmail {
+			caps[ws.Integrations[i].ID] = ws.Integrations[i].EmailProvider.VeridianEffectiveReplyForwardDailyCap()
 		}
 	}
-	if sendErr != nil {
-		f.finish(ctx, workspaceID, key, domain.VeridianReplyForwardStatusFailed, classifyReplyForwardError(sendErr))
-		return ReplyForwardFailed, ref.ProfileID
+	jobs, err := f.repo.LeaseDue(ctx, workspaceID, caps, domain.VeridianReplyForwardDefaultDailyCap, f.now(), replyForwardBatch)
+	if err != nil {
+		return 0, err
 	}
-	f.finish(ctx, workspaceID, key, domain.VeridianReplyForwardStatusSent, "")
-	return ReplyForwardSent, ref.ProfileID
+	done := 0
+	for _, job := range jobs {
+		if ctx.Err() != nil || (!deadline.IsZero() && time.Now().After(deadline)) {
+			break // le bail des copies restantes expire seul : elles reviennent au prochain passage
+		}
+		integ := ws.GetIntegrationByID(job.ProfileID)
+		if integ == nil || integ.Type != domain.IntegrationTypeEmail || len(integ.EmailProvider.VeridianEffectiveReplyForwardTo()) == 0 || integ.EmailProvider.Kind != domain.EmailProviderKindSMTP {
+			// Redirection retiree depuis : on n'envoie plus rien, et ca se voit (failed/disabled).
+			f.finish(ctx, workspaceID, job.ReplyKey, domain.VeridianReplyForwardStatusFailed, "disabled")
+			done++
+			continue
+		}
+		sendCtx, cancel := context.WithTimeout(ctx, replyForwardTimeout)
+		out := f.deliver(sendCtx, workspaceID, integ.EmailProvider, job)
+		cancel()
+		f.logger.WithFields(map[string]interface{}{"workspace_id": workspaceID, "profile_id": job.ProfileID, "outcome": string(out), "attempt": job.Attempts}).Info("VeridianReplyForward: replay done")
+		done++
+	}
+	return done, nil
+}
+
+func (f *VeridianReplyForwarder) ensureTask(workspaceID string) {
+	if f.tasks == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := f.tasks.EnsureReplyForwardTask(ctx, workspaceID); err != nil {
+		f.logger.WithFields(map[string]interface{}{"workspace_id": workspaceID}).Warn("VeridianReplyForward: retry task could not be ensured")
+	}
+}
+
+func (f *VeridianReplyForwarder) reschedule(workspaceID, key, class string, next time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return f.repo.Reschedule(ctx, workspaceID, key, class, next)
 }
 
 // finish pose le resultat ; le contexte d'envoi peut etre expire, d'ou un contexte frais.
@@ -422,23 +543,43 @@ func replyFwdFirstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// classifyReplyForwardError : classe grossiere, sans donnee personnelle (une erreur SMTP
-// brute peut contenir une adresse).
-func classifyReplyForwardError(err error) string {
+var replyForwardSMTPCode = regexp.MustCompile(`(?:code:?\s*|^)([45]\d\d)\b`)
+
+// classifyReplyForwardError : classe grossiere, sans donnee personnelle (une erreur SMTP brute peut
+// contenir une adresse), et verdict transitoire / definitif. Transitoires (rejoues) : timeout, reseau,
+// 4xx, authentification (une config que l'utilisateur peut corriger entre deux essais) et tout ce qu'on
+// ne sait pas classer. Definitifs : 5xx hors authentification, refus local.
+func classifyReplyForwardError(err error) (class string, permanent bool) {
 	if err == nil {
-		return ""
+		return "", false
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return "timeout"
+		return "timeout", false
 	}
 	m := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(m, "auth") || strings.Contains(m, "535") || strings.Contains(m, "534"):
-		return "auth"
-	case strings.Contains(m, "timeout") || strings.Contains(m, "deadline"):
-		return "timeout"
-	case strings.Contains(m, "invalid request") || strings.Contains(m, "veridian guard"):
-		return "refused_local"
+	if strings.Contains(m, "invalid request") || strings.Contains(m, "veridian guard") ||
+		strings.Contains(m, "invalid sender") || strings.Contains(m, "invalid recipient") || strings.Contains(m, "invalid cc") {
+		return "refused_local", true
 	}
-	return "send_error"
+	code := 0
+	var tpe *textproto.Error
+	if errors.As(err, &tpe) {
+		code = tpe.Code
+	} else if sub := replyForwardSMTPCode.FindStringSubmatch(m); sub != nil {
+		code, _ = strconv.Atoi(sub[1])
+	}
+	switch {
+	case code == 530 || code == 534 || code == 535 || strings.Contains(m, "auth"):
+		return "auth", false
+	case code >= 400 && code < 500:
+		return "smtp_4xx", false
+	case code >= 500 && code < 600:
+		return "smtp_5xx", true
+	case strings.Contains(m, "timeout") || strings.Contains(m, "deadline"):
+		return "timeout", false
+	case strings.Contains(m, "connect") || strings.Contains(m, "refused") || strings.Contains(m, "no such host") ||
+		strings.Contains(m, "reset") || strings.Contains(m, "eof") || strings.Contains(m, "broken pipe") || strings.Contains(m, "tls"):
+		return "network", false
+	}
+	return "send_error", false
 }

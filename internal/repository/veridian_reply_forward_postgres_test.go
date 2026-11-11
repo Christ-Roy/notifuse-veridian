@@ -20,51 +20,144 @@ func newReplyForwardRepoMock(t *testing.T) (domain.VeridianReplyForwardRepositor
 	return NewVeridianReplyForwardRepositoryWithDB(db), mock
 }
 
-func TestVeridianReplyForwardRepo_Claim_Inserted(t *testing.T) {
+func expectClaimPrelude(mock sqlmock.Sqlmock, inserted int64) {
+	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`INSERT INTO veridian_reply_forward[\s\S]*'deferred'[\s\S]*ON CONFLICT \(reply_key\) DO NOTHING`).
+		WillReturnResult(sqlmock.NewResult(0, inserted))
+}
+
+func TestVeridianReplyForwardRepo_Claim_Leased(t *testing.T) {
 	repo, mock := newReplyForwardRepoMock(t)
-	mock.ExpectExec(`INSERT INTO veridian_reply_forward[\s\S]*ON CONFLICT \(reply_key\) DO NOTHING`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	ins, dup, capped, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k", ProfileID: "p", Recipients: 1}, 50, time.Now())
+	expectClaimPrelude(mock, 1)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM veridian_reply_forward WHERE profile_id = \$1 AND status <> 'deferred'`).
+		WillReturnRows(sqlmock.NewRows([]string{"n"}).AddRow(3))
+	mock.ExpectQuery(`UPDATE veridian_reply_forward SET status = 'retry'[\s\S]*ORDER BY created_at, reply_key LIMIT \$3 FOR UPDATE[\s\S]*RETURNING reply_key`).
+		WithArgs("p", sqlmock.AnyArg(), 497).
+		WillReturnRows(sqlmock.NewRows([]string{"reply_key"}).AddRow("k"))
+	mock.ExpectQuery(`UPDATE veridian_reply_forward SET status = 'pending'[\s\S]*RETURNING attempts`).
+		WillReturnRows(sqlmock.NewRows([]string{"attempts"}).AddRow(1))
+	mock.ExpectCommit()
+	claim, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k", ProfileID: "p", Recipients: 1, Payload: "{}"}, 500, time.Now())
 	require.NoError(t, err)
-	assert.True(t, ins)
-	assert.False(t, dup)
-	assert.False(t, capped)
+	assert.True(t, claim.Leased)
+	assert.False(t, claim.Deferred)
+	assert.False(t, claim.Duplicate)
+	assert.Equal(t, 1, claim.Attempts)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVeridianReplyForwardRepo_Claim_OverCapIsDeferredNotDropped(t *testing.T) {
+	repo, mock := newReplyForwardRepoMock(t)
+	expectClaimPrelude(mock, 1)
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM veridian_reply_forward`).WillReturnRows(sqlmock.NewRows([]string{"n"}).AddRow(50))
+	// plafond atteint : aucune promotion, la ligne INSEREE reste deferred, et la transaction est validee
+	mock.ExpectCommit()
+	claim, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k", ProfileID: "p"}, 50, time.Now())
+	require.NoError(t, err)
+	assert.True(t, claim.Deferred)
+	assert.False(t, claim.Leased)
+	assert.False(t, claim.Duplicate)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVeridianReplyForwardRepo_Claim_OlderDeferredCopiesGoFirst(t *testing.T) {
+	repo, mock := newReplyForwardRepoMock(t)
+	expectClaimPrelude(mock, 1)
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).WillReturnRows(sqlmock.NewRows([]string{"n"}).AddRow(9))
+	// une seule place : elle va a la plus ancienne ("old"), pas a la nouvelle ("k")
+	mock.ExpectQuery(`UPDATE veridian_reply_forward SET status = 'retry'`).WithArgs("p", sqlmock.AnyArg(), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"reply_key"}).AddRow("old"))
+	mock.ExpectCommit()
+	claim, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k", ProfileID: "p"}, 10, time.Now())
+	require.NoError(t, err)
+	assert.True(t, claim.Deferred)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestVeridianReplyForwardRepo_Claim_Duplicate(t *testing.T) {
 	repo, mock := newReplyForwardRepoMock(t)
-	mock.ExpectExec(`INSERT INTO veridian_reply_forward`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectQuery(`SELECT 1 FROM veridian_reply_forward WHERE reply_key`).WithArgs("k").
-		WillReturnRows(sqlmock.NewRows([]string{"?column?"}).AddRow(1))
-	ins, dup, capped, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k", ProfileID: "p"}, 50, time.Now())
+	expectClaimPrelude(mock, 0)
+	mock.ExpectCommit()
+	claim, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k", ProfileID: "p"}, 50, time.Now())
 	require.NoError(t, err)
-	assert.False(t, ins)
-	assert.True(t, dup)
-	assert.False(t, capped)
-}
-
-func TestVeridianReplyForwardRepo_Claim_Capped(t *testing.T) {
-	repo, mock := newReplyForwardRepoMock(t)
-	mock.ExpectExec(`INSERT INTO veridian_reply_forward`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectQuery(`SELECT 1 FROM veridian_reply_forward WHERE reply_key`).WithArgs("k").WillReturnError(sql.ErrNoRows)
-	ins, dup, capped, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k", ProfileID: "p"}, 50, time.Now())
-	require.NoError(t, err)
-	assert.False(t, ins)
-	assert.False(t, dup)
-	assert.True(t, capped)
+	assert.True(t, claim.Duplicate)
+	assert.False(t, claim.Leased)
+	assert.False(t, claim.Deferred)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestVeridianReplyForwardRepo_Claim_DBError(t *testing.T) {
 	repo, mock := newReplyForwardRepoMock(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`INSERT INTO veridian_reply_forward`).WillReturnError(errors.New("boom"))
-	_, _, _, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k"}, 50, time.Now())
+	mock.ExpectRollback()
+	_, err := repo.Claim(context.Background(), "ws", domain.VeridianReplyForwardRecord{ReplyKey: "k"}, 50, time.Now())
 	assert.Error(t, err)
+}
+
+func TestVeridianReplyForwardRepo_LeaseDue_PromotesThenLeasesDueCopies(t *testing.T) {
+	repo, mock := newReplyForwardRepoMock(t)
+	now := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
+	mock.ExpectExec(`UPDATE veridian_reply_forward SET status = 'failed', error_class = 'no_payload'[\s\S]*payload IS NULL`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT DISTINCT profile_id FROM veridian_reply_forward WHERE status = 'deferred'`).
+		WillReturnRows(sqlmock.NewRows([]string{"profile_id"}).AddRow("p1").AddRow("p2"))
+	for _, expectedFree := range []int{4, 499} { // p1 a un plafond propre (5), p2 le defaut (500)
+		mock.ExpectBegin()
+		mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectQuery(`SELECT COUNT\(\*\)`).WillReturnRows(sqlmock.NewRows([]string{"n"}).AddRow(1))
+		mock.ExpectQuery(`UPDATE veridian_reply_forward SET status = 'retry'`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), expectedFree).
+			WillReturnRows(sqlmock.NewRows([]string{"reply_key"}))
+		mock.ExpectCommit()
+	}
+	mock.ExpectQuery(`UPDATE veridian_reply_forward SET status = 'pending'[\s\S]*status IN \('pending', 'retry'\) AND payload IS NOT NULL AND next_attempt_at <= \$1[\s\S]*FOR UPDATE SKIP LOCKED[\s\S]*RETURNING reply_key, profile_id, payload, attempts`).
+		WithArgs(now, now.Add(domain.VeridianReplyForwardLease), 25).
+		WillReturnRows(sqlmock.NewRows([]string{"reply_key", "profile_id", "payload", "attempts"}).AddRow("k1", "p1", "{}", 2))
+	jobs, err := repo.LeaseDue(context.Background(), "ws", map[string]int{"p1": 5}, 500, now, 25)
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	assert.Equal(t, "k1", jobs[0].ReplyKey)
+	assert.Equal(t, 2, jobs[0].Attempts)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVeridianReplyForwardRepo_Reschedule(t *testing.T) {
+	repo, mock := newReplyForwardRepoMock(t)
+	next := time.Now().Add(time.Minute)
+	mock.ExpectExec(`UPDATE veridian_reply_forward SET status = 'retry'`).WithArgs("k", "timeout", next).WillReturnResult(sqlmock.NewResult(0, 1))
+	require.NoError(t, repo.Reschedule(context.Background(), "ws", "k", "timeout", next))
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVeridianReplyForwardRepo_ProfileStats(t *testing.T) {
+	repo, mock := newReplyForwardRepoMock(t)
+	oldest := time.Date(2026, 11, 11, 8, 0, 0, 0, time.UTC)
+	mock.ExpectQuery(`COUNT\(\*\) FILTER \(WHERE status = 'sent' AND sent_at >= \$1\)[\s\S]*GROUP BY profile_id`).
+		WillReturnRows(sqlmock.NewRows([]string{"p", "sent", "pending", "retry", "deferred", "failed", "oldest"}).
+			AddRow("prof1", 20, 1, 2, 3, 4, oldest).AddRow("prof2", 5, 0, 0, 0, 0, nil))
+	mock.ExpectQuery(`SELECT profile_id, error_class, COUNT\(\*\) FROM veridian_reply_forward`).
+		WillReturnRows(sqlmock.NewRows([]string{"p", "c", "n"}).AddRow("prof1", "smtp_4xx", 5).AddRow("prof1", "auth", 1))
+	stats, err := repo.ProfileStats(context.Background(), "ws", time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.Len(t, stats, 2)
+	p1 := stats["prof1"]
+	assert.Equal(t, 20, p1.Sent24h)
+	assert.Equal(t, 1, p1.Pending)
+	assert.Equal(t, 2, p1.Retry)
+	assert.Equal(t, 3, p1.Deferred)
+	assert.Equal(t, 4, p1.Failed7d)
+	assert.Equal(t, "smtp_4xx", p1.DominantErrorClass, "la classe la plus frequente d'abord")
+	require.NotNil(t, p1.OldestUnsentAt)
+	assert.Equal(t, oldest, *p1.OldestUnsentAt)
+	assert.Nil(t, stats["prof2"].OldestUnsentAt)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestVeridianReplyForwardRepo_Finish(t *testing.T) {
 	repo, mock := newReplyForwardRepoMock(t)
-	mock.ExpectExec(`UPDATE veridian_reply_forward SET status`).WithArgs("k", "failed", "timeout", nil).
+	mock.ExpectExec(`UPDATE veridian_reply_forward SET status = \$2, error_class = NULLIF\(\$3, ''\), sent_at = \$4, payload = NULL`).WithArgs("k", "failed", "timeout", nil).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	require.NoError(t, repo.Finish(context.Background(), "ws", "k", domain.VeridianReplyForwardStatusFailed, "timeout", time.Now()))
 	assert.NoError(t, mock.ExpectationsWereMet())

@@ -392,3 +392,76 @@ func planClassOf(plan domain.VeridianEffectivePlan, class string) domain.Veridia
 	}
 	return domain.VeridianPlanClass{}
 }
+
+// --- redirection des reponses (fiche 78) : visibilite par profil -----------------------
+
+type replyForwardStatsStub struct {
+	domain.VeridianReplyForwardRepository
+	stats map[string]domain.VeridianReplyForwardProfileStats
+	err   error
+}
+
+func (s replyForwardStatsStub) ProfileStats(context.Context, string, time.Time) (map[string]domain.VeridianReplyForwardProfileStats, error) {
+	return s.stats, s.err
+}
+
+func TestVeridianEmailProfileOverview_ReplyForwardCountersPerProfile(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	now := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
+	oldest := now.Add(-150 * time.Minute)
+	ws := overviewTestWorkspace()
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardTo = []string{"client@client.fr"}
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardDailyCap = 40
+	first := ws.Integrations[0].ID
+	overview := &domain.VeridianEmailProfilesOverview{}
+	for _, in := range ws.Integrations {
+		overview.Profiles = append(overview.Profiles, domain.VeridianEmailProfileOverview{IntegrationID: in.ID})
+	}
+
+	svc := &veridianEmailProfileOverviewService{logger: setupMockLogger(ctrl), replyForward: replyForwardStatsStub{stats: map[string]domain.VeridianReplyForwardProfileStats{
+		first: {ProfileID: first, Sent24h: 18, Pending: 1, Retry: 2, Deferred: 4, Failed7d: 3, DominantErrorClass: "smtp_4xx", OldestUnsentAt: &oldest},
+	}}}
+	svc.attachReplyForward(context.Background(), ws, overview, now)
+
+	rf := overview.Profiles[0].ReplyForward
+	require.NotNil(t, rf)
+	assert.True(t, rf.Enabled)
+	assert.Equal(t, 40, rf.DailyCap)
+	assert.True(t, rf.StatsKnown)
+	assert.Equal(t, 18, rf.Sent24h)
+	assert.Equal(t, 7, rf.Waiting)
+	assert.Equal(t, 3, rf.Failed7d)
+	assert.Equal(t, "smtp_4xx", rf.DominantErrorClass)
+	assert.Equal(t, int64(150*60), rf.OldestUnsentAgeSeconds)
+	for _, p := range overview.Profiles[1:] {
+		assert.Nil(t, p.ReplyForward, "un profil sans redirection ni historique n'a pas de bloc")
+	}
+
+	// Le contrat JSON expose les compteurs (meme route que le reste de l'overview).
+	b, err := json.Marshal(overview.Profiles[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"reply_forward":{"enabled":true,"daily_cap":40,"stats_known":true,"sent_24h":18`)
+}
+
+func TestVeridianEmailProfileOverview_ReplyForwardUnreadableJournalIsUnknownNotZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ws := overviewTestWorkspace()
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardTo = []string{"client@client.fr"}
+	overview := &domain.VeridianEmailProfilesOverview{Profiles: []domain.VeridianEmailProfileOverview{{IntegrationID: ws.Integrations[0].ID}}}
+	svc := &veridianEmailProfileOverviewService{logger: setupMockLogger(ctrl), replyForward: replyForwardStatsStub{err: errors.New("db down")}}
+	svc.attachReplyForward(context.Background(), ws, overview, time.Now())
+	rf := overview.Profiles[0].ReplyForward
+	require.NotNil(t, rf)
+	assert.False(t, rf.StatsKnown, "lecture impossible : pas des zeros")
+}
+
+func TestWithVeridianReplyForwardStatsWiresTheJournal(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	base := NewVeridianEmailProfileOverviewService(&overviewRepoStub{}, nil, nil, nil, setupMockLogger(ctrl))
+	repo := replyForwardStatsStub{}
+	svc := WithVeridianReplyForwardStats(base, repo)
+	assert.NotNil(t, svc.(*veridianEmailProfileOverviewService).replyForward)
+}

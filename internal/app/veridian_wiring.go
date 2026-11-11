@@ -358,12 +358,17 @@ func (a *App) veridianInitServices(automationExecutor *service.AutomationExecuto
 	// Veridian (fiche 78) : redirection des reponses humaines vers les adresses du profil.
 	// Envoi par le transport du profil (EmailService), journal dans la base du workspace.
 	if a.veridianReplyService != nil {
-		a.veridianReplyService.SetReplyForwarder(service.NewVeridianReplyForwarder(
+		replyForwarder := service.NewVeridianReplyForwarder(
 			repository.NewVeridianReplyForwardRepository(a.workspaceRepo),
 			a.workspaceRepo,
 			a.emailService,
 			a.logger,
-		))
+		)
+		// Rejeu natif (11/11/2026) : tache recurrente par workspace dans la file de taches du fork, creee a la
+		// demande ; elle survit aux redemarrages (table tasks) et reprend les copies pending/retry/deferred.
+		replyForwarder.SetTaskEnsurer(service.NewVeridianReplyForwardTaskEnsurer(a.taskRepo))
+		a.taskService.RegisterProcessor(service.NewVeridianReplyForwardTaskProcessor(replyForwarder, a.logger))
+		a.veridianReplyService.SetReplyForwarder(replyForwarder)
 	}
 	// V38 : injecter le webhook emitter dans le plan repo pour que
 	// IncrementEmailsSent puisse émettre tenant.activity_threshold_reached
@@ -834,9 +839,9 @@ func (a *App) veridianInitHandlers() error {
 	// /api/veridian/emailProfiles.overview. Tous les profils email (commerciaux et
 	// transactionnels) avec EffectivePlan, la fonction partagee avec le worker.
 	veridianEmailProfileOverviewRepo := repository.NewVeridianEmailProfileOverviewRepository(a.workspaceRepo)
-	veridianEmailProfileOverviewService := service.NewVeridianEmailProfileOverviewService(
+	veridianEmailProfileOverviewService := service.WithVeridianReplyForwardStats(service.NewVeridianEmailProfileOverviewService(
 		veridianEmailProfileOverviewRepo, a.messageHistoryRepo, a.workspaceRepo, a.authService, a.logger,
-	)
+	), repository.NewVeridianReplyForwardRepository(a.workspaceRepo))
 	httpHandler.NewVeridianEmailProfileOverviewHandler(
 		veridianEmailProfileOverviewService, getJWTSecret, a.logger,
 	).RegisterRoutes(a.mux)

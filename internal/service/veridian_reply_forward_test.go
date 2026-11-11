@@ -2,11 +2,15 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/quotedprintable"
 	"net/mail"
+	"net/textproto"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -21,14 +25,24 @@ import (
 
 // --- doubles ---------------------------------------------------------------
 
+// fakeForwardRepo reproduit en memoire la semantique du journal (reservation idempotente, plafond qui
+// reporte, bail, rejeu a echeance) : les mutations du service sont attrapees par les tests ci-dessous.
+type fakeForwardRow struct {
+	rec      domain.VeridianReplyForwardRecord
+	order    int
+	attempts int
+	next     time.Time
+	slotted  bool
+}
+
 type fakeForwardRepo struct {
 	mu       sync.Mutex
 	ref      domain.VeridianSentMessageRef
 	found    bool
 	resolveE error
 	claimE   error
-	rows     map[string]domain.VeridianReplyForwardRecord
-	dailyCap int
+	rows     map[string]*fakeForwardRow
+	seq      int
 	finished []string // "status:errclass"
 }
 
@@ -36,7 +50,7 @@ func newFakeForwardRepo() *fakeForwardRepo {
 	return &fakeForwardRepo{
 		ref:   domain.VeridianSentMessageRef{ProfileID: "prof1", SenderEmail: "pro@send.example"},
 		found: true,
-		rows:  map[string]domain.VeridianReplyForwardRecord{},
+		rows:  map[string]*fakeForwardRow{},
 	}
 }
 
@@ -44,41 +58,144 @@ func (r *fakeForwardRepo) ResolveSentMessage(_ context.Context, _, _, _ string) 
 	return r.ref, r.found, r.resolveE
 }
 
-func (r *fakeForwardRepo) Claim(_ context.Context, _ string, rec domain.VeridianReplyForwardRecord, dailyCap int, _ time.Time) (bool, bool, bool, error) {
+// promote : copies deferred du profil, dans l'ordre d'arrivee, tant qu'il reste de la place sous le plafond.
+func (r *fakeForwardRepo) promote(profile string, dailyCap int, now time.Time) []string {
+	used := 0
+	var deferred []*fakeForwardRow
+	for _, x := range r.rows {
+		if x.rec.ProfileID != profile {
+			continue
+		}
+		if x.rec.Status == domain.VeridianReplyForwardStatusDeferred {
+			deferred = append(deferred, x)
+		} else {
+			used++
+		}
+	}
+	sort.Slice(deferred, func(i, j int) bool { return deferred[i].order < deferred[j].order })
+	var keys []string
+	for _, x := range deferred {
+		if used >= dailyCap {
+			break
+		}
+		x.rec.Status, x.next, x.slotted = domain.VeridianReplyForwardStatusRetry, now, true
+		keys = append(keys, x.rec.ReplyKey)
+		used++
+	}
+	return keys
+}
+
+func (r *fakeForwardRepo) Claim(_ context.Context, _ string, rec domain.VeridianReplyForwardRecord, dailyCap int, now time.Time) (domain.VeridianReplyForwardClaim, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.claimE != nil {
-		return false, false, false, r.claimE
+		return domain.VeridianReplyForwardClaim{}, r.claimE
 	}
 	if _, ok := r.rows[rec.ReplyKey]; ok {
-		return false, true, false, nil
+		return domain.VeridianReplyForwardClaim{Duplicate: true}, nil
 	}
-	n := 0
-	for _, x := range r.rows {
-		if x.ProfileID == rec.ProfileID {
-			n++
+	r.seq++
+	rec.Status = domain.VeridianReplyForwardStatusDeferred
+	r.rows[rec.ReplyKey] = &fakeForwardRow{rec: rec, order: r.seq}
+	for _, k := range r.promote(rec.ProfileID, dailyCap, now) {
+		if k == rec.ReplyKey {
+			row := r.rows[k]
+			row.rec.Status, row.next, row.attempts = domain.VeridianReplyForwardStatusPending, now.Add(domain.VeridianReplyForwardLease), 1
+			return domain.VeridianReplyForwardClaim{Leased: true, Attempts: 1}, nil
 		}
 	}
-	if n >= dailyCap {
-		return false, false, true, nil
+	return domain.VeridianReplyForwardClaim{Deferred: true}, nil
+}
+
+func (r *fakeForwardRepo) LeaseDue(_ context.Context, _ string, caps map[string]int, defaultCap int, now time.Time, limit int) ([]domain.VeridianReplyForwardJob, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	profiles := map[string]bool{}
+	for _, x := range r.rows {
+		if x.rec.Status == domain.VeridianReplyForwardStatusDeferred {
+			profiles[x.rec.ProfileID] = true
+		}
 	}
-	r.rows[rec.ReplyKey] = rec
-	return true, false, false, nil
+	for p := range profiles {
+		c := defaultCap
+		if v, ok := caps[p]; ok && v > 0 {
+			c = v
+		}
+		r.promote(p, c, now)
+	}
+	var due []*fakeForwardRow
+	for _, x := range r.rows {
+		st := x.rec.Status
+		if (st == domain.VeridianReplyForwardStatusPending || st == domain.VeridianReplyForwardStatusRetry) && x.rec.Payload != "" && !x.next.After(now) {
+			due = append(due, x)
+		}
+	}
+	sort.Slice(due, func(i, j int) bool { return due[i].order < due[j].order })
+	var jobs []domain.VeridianReplyForwardJob
+	for _, x := range due {
+		if len(jobs) >= limit {
+			break
+		}
+		x.attempts++
+		x.rec.Status, x.next = domain.VeridianReplyForwardStatusPending, now.Add(domain.VeridianReplyForwardLease)
+		jobs = append(jobs, domain.VeridianReplyForwardJob{ReplyKey: x.rec.ReplyKey, ProfileID: x.rec.ProfileID, Payload: x.rec.Payload, Attempts: x.attempts})
+	}
+	return jobs, nil
 }
 
 func (r *fakeForwardRepo) Finish(_ context.Context, _, key, status, errClass string, _ time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	rec := r.rows[key]
-	rec.Status = status
-	rec.ErrorClass = errClass
-	r.rows[key] = rec
+	row := r.rows[key]
+	row.rec.Status, row.rec.ErrorClass, row.rec.Payload = status, errClass, ""
 	r.finished = append(r.finished, status+":"+errClass)
+	return nil
+}
+
+func (r *fakeForwardRepo) Reschedule(_ context.Context, _, key, errClass string, next time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	row := r.rows[key]
+	row.rec.Status, row.rec.ErrorClass, row.next = domain.VeridianReplyForwardStatusRetry, errClass, next
 	return nil
 }
 
 func (r *fakeForwardRepo) Stats(context.Context, string, time.Time) ([]domain.VeridianReplyForwardStat, error) {
 	return nil, nil
+}
+
+func (r *fakeForwardRepo) ProfileStats(context.Context, string, time.Time) (map[string]domain.VeridianReplyForwardProfileStats, error) {
+	return nil, nil
+}
+
+func (r *fakeForwardRepo) status(key string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rows[key].rec.Status
+}
+
+func (r *fakeForwardRepo) count(status string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for _, x := range r.rows {
+		if x.rec.Status == status {
+			n++
+		}
+	}
+	return n
+}
+
+// only rend l'unique ligne du journal (le test en cree une seule).
+func (r *fakeForwardRepo) only(t *testing.T) *fakeForwardRow {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	require.Len(t, r.rows, 1)
+	for _, x := range r.rows {
+		return x
+	}
+	return nil
 }
 
 type fakeForwardWorkspaces struct {
@@ -95,6 +212,8 @@ type fakeForwardMailer struct {
 	sent     []domain.SendEmailProviderRequest
 	headers  []map[string]string
 	failures int // nombre d'appels a faire echouer avant de reussir (-1 = toujours)
+	failWith error
+	onSend   func(domain.SendEmailProviderRequest)
 	calls    int
 }
 
@@ -102,7 +221,13 @@ func (m *fakeForwardMailer) SendEmail(ctx context.Context, req domain.SendEmailP
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls++
+	if m.onSend != nil {
+		m.onSend(req)
+	}
 	if m.failures < 0 || m.calls <= m.failures {
+		if m.failWith != nil {
+			return m.failWith
+		}
 		return errors.New("535 auth failed for secret-user@leak.example")
 	}
 	m.sent = append(m.sent, req)
@@ -133,7 +258,6 @@ func newForwarderForTest(t *testing.T, ws *domain.Workspace) (*VeridianReplyForw
 	mailer := &fakeForwardMailer{}
 	f := NewVeridianReplyForwarder(repo, &fakeForwardWorkspaces{ws: ws}, mailer, setupMockLogger(ctrl))
 	f.run = func(fn func()) { fn() }
-	f.retryDelay = time.Millisecond
 	f.now = func() time.Time { return time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC) }
 	return f, repo, mailer
 }
@@ -205,8 +329,8 @@ func TestReplyForward_HumanReply_SendsOneCopy(t *testing.T) {
 	require.Len(t, repo.rows, 1)
 	assert.Equal(t, []string{"sent:"}, repo.finished)
 	for _, rec := range repo.rows {
-		assert.Equal(t, "prof1", rec.ProfileID)
-		assert.Equal(t, 1, rec.Recipients)
+		assert.Equal(t, "prof1", rec.rec.ProfileID)
+		assert.Equal(t, 1, rec.rec.Recipients)
 	}
 }
 
@@ -408,44 +532,266 @@ func TestReplyForward_KeyFallsBackToIMAPCoordinatesWithoutMessageID(t *testing.T
 	assert.Len(t, mailer.sent, 2)
 }
 
-func TestReplyForward_DailyCapPerProfile(t *testing.T) {
-	f, repo, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
-	f.dailyCap = 3
+func humanMsgN(n int) (*domain.VeridianIMAPMessage, domain.VeridianReplyDetection) {
+	msg, det := humanMsg(humanRaw)
+	msg.MessageID = fmt.Sprintf("<reply-%d@acme.fr>", n)
+	return msg, det
+}
+
+// --- plafond : reporte, ne perd JAMAIS --------------------------------------------
+
+func TestReplyForward_DailyCapDefersInsteadOfDropping(t *testing.T) {
+	ws := forwardWorkspace("client@client.fr")
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardDailyCap = 3
+	f, repo, mailer := newForwarderForTest(t, ws)
 	for i := 0; i < 5; i++ {
-		msg, det := humanMsg(humanRaw)
-		msg.MessageID = "<reply-" + string(rune('a'+i)) + "@acme.fr>"
+		msg, det := humanMsgN(i)
 		out := f.Forward(context.Background(), "ws1", msg, det)
 		if i < 3 {
 			assert.Equal(t, ReplyForwardSent, out, "i=%d", i)
 		} else {
-			assert.Equal(t, ReplyForwardSkipCapped, out, "i=%d", i)
+			assert.Equal(t, ReplyForwardDeferred, out, "i=%d : au-dela du plafond la copie est reportee, pas perdue", i)
 		}
 	}
-	assert.Len(t, mailer.sent, 3, "boucle d'envoi bornee par le plafond")
-	assert.Len(t, repo.rows, 3)
+	assert.Len(t, mailer.sent, 3, "le plafond borne l'envoi")
+	assert.Equal(t, 2, repo.count(domain.VeridianReplyForwardStatusDeferred), "les 2 copies en trop sont GARDEES")
+	assert.Len(t, repo.rows, 5, "rien n'est perdu")
+
+	// Le plafond est releve : les copies reportees partent, DANS L'ORDRE d'arrivee.
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardDailyCap = 5
+	n, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 2, n)
+	require.Len(t, mailer.sent, 5)
+	assert.Equal(t, 0, repo.count(domain.VeridianReplyForwardStatusDeferred))
+	assert.Equal(t, 5, repo.count(domain.VeridianReplyForwardStatusSent))
 }
 
-// --- echec d'envoi : journalise, jamais bloquant ------------------------------
-
-func TestReplyForward_SendFailure_RetriedOnceThenRecordedWithoutPersonalData(t *testing.T) {
-	f, repo, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
-	mailer.failures = -1
-	msg, det := humanMsg(humanRaw)
-	out := f.Forward(context.Background(), "ws1", msg, det)
-	assert.Equal(t, ReplyForwardFailed, out)
-	assert.Equal(t, 2, mailer.calls, "un essai + une relance")
-	assert.Equal(t, []string{"failed:auth"}, repo.finished, "classe grossiere, jamais le texte brut de l'erreur SMTP")
-	for _, rec := range repo.rows {
-		assert.NotContains(t, rec.ErrorClass, "@")
+func TestReplyForward_DeferredKeepsArrivalOrderAndNewReplyDoesNotJumpTheQueue(t *testing.T) {
+	ws := forwardWorkspace("client@client.fr")
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardDailyCap = 1
+	f, repo, mailer := newForwarderForTest(t, ws)
+	for i := 0; i < 3; i++ {
+		msg, det := humanMsgN(i)
+		msg.Subject = fmt.Sprintf("Re: sujet %d", i)
+		msg.RawBody = []byte(strings.Replace(humanRaw, "Re: Votre proposition de site", fmt.Sprintf("Re: sujet %d", i), 1))
+		f.Forward(context.Background(), "ws1", msg, det)
 	}
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardDailyCap = 3
+	_, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	require.Len(t, mailer.sent, 3)
+	for i, req := range mailer.sent {
+		assert.Contains(t, req.Subject, fmt.Sprintf("sujet %d", i), "ordre d'arrivee")
+	}
+	assert.Equal(t, 3, repo.count(domain.VeridianReplyForwardStatusSent))
 }
 
-func TestReplyForward_SendFailureThenSuccessOnRetry(t *testing.T) {
-	f, _, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
+func TestReplyForward_CapOfOneProfileDoesNotBlockAnother(t *testing.T) {
+	f, repo, _ := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
+	repo.mu.Lock()
+	for i := 0; i < 600; i++ {
+		repo.rows[fmt.Sprintf("other%d", i)] = &fakeForwardRow{rec: domain.VeridianReplyForwardRecord{ReplyKey: fmt.Sprintf("other%d", i), ProfileID: "autre", Status: domain.VeridianReplyForwardStatusSent}}
+	}
+	repo.mu.Unlock()
+	msg, det := humanMsgN(1)
+	assert.Equal(t, ReplyForwardSent, f.Forward(context.Background(), "ws1", msg, det))
+}
+
+func TestReplyForward_DefaultCapIs500(t *testing.T) {
+	assert.Equal(t, 500, domain.VeridianReplyForwardDefaultDailyCap)
+	var p domain.EmailProvider
+	assert.Equal(t, 500, p.VeridianEffectiveReplyForwardDailyCap())
+}
+
+// --- echec d'envoi : rejoue, jamais perdu ------------------------------------------
+
+func TestReplyForward_TransientFailure_RetriedWithBackoffThenFailedWithClass(t *testing.T) {
+	f, repo, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
+	mailer.failures = -1 // 535 : transitoire (config corrigible entre deux essais)
+	msg, det := humanMsg(humanRaw)
+	assert.Equal(t, ReplyForwardRetrying, f.Forward(context.Background(), "ws1", msg, det))
+	row := repo.only(t)
+	assert.Equal(t, domain.VeridianReplyForwardStatusRetry, row.rec.Status)
+	assert.NotEmpty(t, row.rec.Payload, "le contenu est garde pour le rejeu")
+	assert.Equal(t, 1, mailer.calls)
+
+	base := f.now()
+	for i, delay := range domain.VeridianReplyForwardRetryDelays {
+		// Avant l'echeance : aucune tentative.
+		f.now = func() time.Time { return base.Add(delay - time.Second) }
+		_, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+		require.NoError(t, err)
+		assert.Equal(t, i+1, mailer.calls, "pas de rejeu avant l'echeance (%v)", delay)
+		// A l'echeance : un rejeu.
+		f.now = func() time.Time { return base.Add(delay) }
+		_, err = f.ProcessDue(context.Background(), "ws1", time.Time{})
+		require.NoError(t, err)
+		assert.Equal(t, i+2, mailer.calls)
+		base = base.Add(delay)
+		if i < len(domain.VeridianReplyForwardRetryDelays)-1 {
+			assert.Equal(t, domain.VeridianReplyForwardStatusRetry, row.rec.Status)
+		}
+	}
+	assert.Equal(t, 1+len(domain.VeridianReplyForwardRetryDelays), mailer.calls, "une tentative + 6 rejeux")
+	assert.Equal(t, domain.VeridianReplyForwardStatusFailed, row.rec.Status)
+	assert.Equal(t, "auth", row.rec.ErrorClass, "classe grossiere, jamais le texte brut de l'erreur SMTP")
+	assert.Empty(t, row.rec.Payload, "le contenu est efface une fois la copie abandonnee")
+	assert.NotContains(t, row.rec.ErrorClass, "@")
+}
+
+func TestReplyForward_SendFailureThenSuccessOnReplay_SameMessageID_NoDuplicate(t *testing.T) {
+	f, repo, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
 	mailer.failures = 1
 	msg, det := humanMsg(humanRaw)
-	assert.Equal(t, ReplyForwardSent, f.Forward(context.Background(), "ws1", msg, det))
-	assert.Len(t, mailer.sent, 1)
+	assert.Equal(t, ReplyForwardRetrying, f.Forward(context.Background(), "ws1", msg, det))
+	assert.Empty(t, mailer.sent)
+
+	f.now = func() time.Time { return time.Date(2026, 11, 4, 10, 1, 0, 0, time.UTC) }
+	n, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+	require.Len(t, mailer.sent, 1)
+	row := repo.only(t)
+	assert.Equal(t, domain.VeridianReplyForwardStatusSent, row.rec.Status)
+	assert.Empty(t, row.rec.Payload)
+
+	// Idempotence : le poller relit la reponse, ou la tache repasse : toujours UNE copie.
+	assert.Equal(t, ReplyForwardSkipDuplicate, f.Forward(context.Background(), "ws1", msg, det))
+	f.now = func() time.Time { return time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC) }
+	_, err = f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	assert.Len(t, mailer.sent, 1, "une reponse = une copie, meme apres rejeu")
+}
+
+func TestReplyForward_ReplayKeepsTheSameMessageID(t *testing.T) {
+	f, _, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
+	mailer.failures = 1
+	var ids []string
+	mailer.onSend = func(req domain.SendEmailProviderRequest) { ids = append(ids, req.MessageID) }
+	msg, det := humanMsg(humanRaw)
+	f.Forward(context.Background(), "ws1", msg, det)
+	f.now = func() time.Time { return time.Date(2026, 11, 4, 10, 1, 0, 0, time.UTC) }
+	_, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	require.Len(t, ids, 2)
+	assert.Equal(t, ids[0], ids[1], "le destinataire dedoublonne un rejeu")
+}
+
+func TestReplyForward_PermanentFailure_NotRetried(t *testing.T) {
+	f, repo, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
+	mailer.failWith = errors.New("RCPT TO rejected for client@client.fr with code: 550")
+	mailer.failures = -1
+	msg, det := humanMsg(humanRaw)
+	assert.Equal(t, ReplyForwardFailed, f.Forward(context.Background(), "ws1", msg, det))
+	row := repo.only(t)
+	assert.Equal(t, domain.VeridianReplyForwardStatusFailed, row.rec.Status)
+	assert.Equal(t, "smtp_5xx", row.rec.ErrorClass)
+	f.now = func() time.Time { return time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC) }
+	_, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, mailer.calls, "un echec definitif n'est jamais rejoue")
+}
+
+func TestReplyForward_ProcessDeadWhileSending_LeaseExpiresAndCopyIsResumed(t *testing.T) {
+	f, repo, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
+	// Simule un processus mort apres la reservation : ligne pending, bail pose, jamais d'issue.
+	claim, err := repo.Claim(context.Background(), "ws1", domain.VeridianReplyForwardRecord{
+		ReplyKey: "k1", ProfileID: "prof1", Recipients: 1, Payload: replyForwardTestPayload(),
+	}, 500, f.now())
+	require.NoError(t, err)
+	require.True(t, claim.Leased)
+
+	f.now = func() time.Time { return time.Date(2026, 11, 4, 10, 2, 0, 0, time.UTC) }
+	_, err = f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	assert.Empty(t, mailer.sent, "le bail court encore : une copie en cours d'envoi n'est pas doublee")
+
+	f.now = func() time.Time { return time.Date(2026, 11, 4, 10, 6, 0, 0, time.UTC) }
+	_, err = f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	assert.Len(t, mailer.sent, 1, "bail expire : la copie est reprise apres un redemarrage")
+	assert.Equal(t, domain.VeridianReplyForwardStatusSent, repo.status("k1"))
+}
+
+func replyForwardTestPayload() string {
+	b, _ := json.Marshal(replyForwardPayload{IntegrationID: "prof1", MessageID: "m1", FromAddress: "pro@send.example", FromName: "Pro", To: "client@client.fr", ReplyTo: "jean@acme.fr", Subject: "Reponse", Text: "reply body"})
+	return string(b)
+}
+
+func TestReplyForward_RedirectionRemovedMeanwhile_PendingCopiesAreNotSent(t *testing.T) {
+	ws := forwardWorkspace("client@client.fr")
+	f, repo, mailer := newForwarderForTest(t, ws)
+	mailer.failures = 1
+	msg, det := humanMsg(humanRaw)
+	f.Forward(context.Background(), "ws1", msg, det)
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardTo = nil
+	f.now = func() time.Time { return time.Date(2026, 11, 4, 10, 5, 0, 0, time.UTC) }
+	_, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, mailer.calls)
+	row := repo.only(t)
+	assert.Equal(t, domain.VeridianReplyForwardStatusFailed, row.rec.Status)
+	assert.Equal(t, "disabled", row.rec.ErrorClass, "visible, jamais silencieux")
+}
+
+func TestReplyForward_NoSendSlot_CopyIsQueuedNotDropped(t *testing.T) {
+	f, repo, mailer := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
+	f.queueWait = 5 * time.Millisecond
+	for i := 0; i < cap(f.sem); i++ {
+		f.sem <- struct{}{} // toutes les places d'envoi sont prises
+	}
+	msg, det := humanMsg(humanRaw)
+	f.Dispatch("ws1", msg, det)
+	assert.Empty(t, mailer.sent)
+	row := repo.only(t)
+	assert.Equal(t, domain.VeridianReplyForwardStatusRetry, row.rec.Status, "reservee dans le journal, pas perdue")
+	_, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	assert.Len(t, mailer.sent, 1, "la tache de rejeu l'envoie")
+}
+
+func TestReplyForward_EnsuresTheNativeRetryTask(t *testing.T) {
+	f, _, _ := newForwarderForTest(t, forwardWorkspace("client@client.fr"))
+	ens := &fakeTaskEnsurer{}
+	f.SetTaskEnsurer(ens)
+	msg, det := humanMsg(humanRaw)
+	f.Forward(context.Background(), "ws1", msg, det)
+	assert.Equal(t, []string{"ws1"}, ens.calls)
+	f.Forward(context.Background(), "ws1", msg, det) // doublon : rien a creer
+	assert.Len(t, ens.calls, 1)
+}
+
+type fakeTaskEnsurer struct{ calls []string }
+
+func (e *fakeTaskEnsurer) EnsureReplyForwardTask(_ context.Context, ws string) error {
+	e.calls = append(e.calls, ws)
+	return nil
+}
+
+func TestClassifyReplyForwardError(t *testing.T) {
+	cases := []struct {
+		err       error
+		class     string
+		permanent bool
+	}{
+		{nil, "", false},
+		{context.DeadlineExceeded, "timeout", false},
+		{errors.New("failed to connect: dial tcp 10.0.0.1:25: connect: connection refused"), "network", false},
+		{errors.New("535 auth failed"), "auth", false},
+		{errors.New("authentication failed with code: 535"), "auth", false},
+		{errors.New("message rejected with code: 451"), "smtp_4xx", false},
+		{errors.New("RCPT TO rejected for x@y.fr with code: 550"), "smtp_5xx", true},
+		{&textproto.Error{Code: 554, Msg: "refused"}, "smtp_5xx", true},
+		{&textproto.Error{Code: 421, Msg: "busy"}, "smtp_4xx", false},
+		{errors.New("invalid request: plain text content is required"), "refused_local", true},
+		{errors.New("something odd"), "send_error", false},
+	}
+	for _, c := range cases {
+		class, permanent := classifyReplyForwardError(c.err)
+		assert.Equal(t, c.class, class, "%v", c.err)
+		assert.Equal(t, c.permanent, permanent, "%v", c.err)
+	}
 }
 
 func TestReplyForward_InfrastructureErrorsNeverPanicNorPropagate(t *testing.T) {
