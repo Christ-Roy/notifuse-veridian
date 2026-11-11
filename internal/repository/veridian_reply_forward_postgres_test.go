@@ -114,11 +114,14 @@ func TestVeridianReplyForwardRepo_LeaseDue_PromotesThenLeasesDueCopies(t *testin
 	}
 	mock.ExpectQuery(`UPDATE veridian_reply_forward SET status = 'pending'[\s\S]*status IN \('pending', 'retry'\) AND payload IS NOT NULL AND next_attempt_at <= \$1[\s\S]*FOR UPDATE SKIP LOCKED[\s\S]*RETURNING reply_key, profile_id, payload, attempts`).
 		WithArgs(now, now.Add(domain.VeridianReplyForwardLease), 25).
-		WillReturnRows(sqlmock.NewRows([]string{"reply_key", "profile_id", "payload", "attempts"}).AddRow("k1", "p1", "{}", 2))
+		WillReturnRows(sqlmock.NewRows([]string{"reply_key", "profile_id", "payload", "attempts", "created_at"}).
+			AddRow("k-late", "p1", "{}", 1, now.Add(-1*time.Minute)).
+			AddRow("k1", "p1", "{}", 2, now.Add(-30*time.Minute)).
+			AddRow("k-mid", "p1", "{}", 1, now.Add(-10*time.Minute)))
 	jobs, err := repo.LeaseDue(context.Background(), "ws", map[string]int{"p1": 5}, 500, now, 25)
 	require.NoError(t, err)
-	require.Len(t, jobs, 1)
-	assert.Equal(t, "k1", jobs[0].ReplyKey)
+	require.Len(t, jobs, 3)
+	assert.Equal(t, []string{"k1", "k-mid", "k-late"}, []string{jobs[0].ReplyKey, jobs[1].ReplyKey, jobs[2].ReplyKey}, "ordre d'arrivee des reponses, pas l'ordre de RETURNING")
 	assert.Equal(t, 2, jobs[0].Attempts)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

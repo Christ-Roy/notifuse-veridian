@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -233,21 +234,36 @@ func (r *veridianReplyForwardRepository) LeaseDue(ctx context.Context, workspace
 			SELECT reply_key FROM veridian_reply_forward
 			WHERE status IN ('pending', 'retry') AND payload IS NOT NULL AND next_attempt_at <= $1
 			ORDER BY next_attempt_at, reply_key LIMIT $3 FOR UPDATE SKIP LOCKED)
-		RETURNING reply_key, profile_id, payload, attempts`,
+		RETURNING reply_key, profile_id, payload, attempts, created_at`,
 		now, now.Add(domain.VeridianReplyForwardLease), limit)
 	if err != nil {
 		return nil, fmt.Errorf("lease due reply forward: %w", err)
 	}
 	defer rows.Close()
 	var jobs []domain.VeridianReplyForwardJob
+	created := map[string]time.Time{}
 	for rows.Next() {
 		var j domain.VeridianReplyForwardJob
-		if err := rows.Scan(&j.ReplyKey, &j.ProfileID, &j.Payload, &j.Attempts); err != nil {
+		var at time.Time
+		if err := rows.Scan(&j.ReplyKey, &j.ProfileID, &j.Payload, &j.Attempts, &at); err != nil {
 			return nil, err
 		}
+		created[j.ReplyKey] = at
 		jobs = append(jobs, j)
 	}
-	return jobs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// RETURNING ne garantit aucun ordre, et les copies promues ensemble ont la meme echeance : on envoie
+	// dans l'ordre d'arrivee des reponses (created_at), a egalite par cle.
+	sort.SliceStable(jobs, func(a, b int) bool {
+		ta, tb := created[jobs[a].ReplyKey], created[jobs[b].ReplyKey]
+		if !ta.Equal(tb) {
+			return ta.Before(tb)
+		}
+		return jobs[a].ReplyKey < jobs[b].ReplyKey
+	})
+	return jobs, nil
 }
 
 func (r *veridianReplyForwardRepository) promoteProfile(ctx context.Context, db *sql.DB, profileID string, dailyCap int, now time.Time) error {
