@@ -68,11 +68,62 @@ func CloseAll() int {
 	return n
 }
 
-func (x dialer) Dial(network, address string) (net.Conn, error) { return track(x.d.Dial(network, address)) }
+func (x dialer) Dial(network, address string) (net.Conn, error) {
+	return track(x.d.Dial(network, address))
+}
 
 // DialContext : la connexion respecte le delai du contexte (sans cela pq l'ignore et attend le delai du dialer).
 func (x dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return track(x.d.DialContext(ctx, network, address))
+	c, err := track(x.d.DialContext(ctx, network, address))
+	if err == nil {
+		if g, ok := ctx.Value(handshakeKey{}).(*handshakeGuard); ok {
+			g.attach(ctx, c)
+		}
+	}
+	return c, err
+}
+
+// handshakeGuard borne la poignee de main par le delai du contexte. lib/pq (v1.10.9) n'applique le contexte
+// qu'au dial TCP : la negociation SSL et le startup lisent sans delai. Le 14/11/2026 (bascule pg-saas,
+// 13:57 UTC), une connexion neuve est restee bloquee dans ce startup : la sonde de sante de fond n'a plus
+// jamais rendu la main, /healthz est reste rouge alors que la base repondait, et Nomad a redemarre
+// Notifuse 2 min 40 plus tard. Si le contexte expire avant la fin de la poignee de main, la connexion est
+// fermee : la lecture bloquee echoue et Connect rend la main. Fiche 81.
+type handshakeKey struct{}
+
+type handshakeGuard struct {
+	mu      sync.Mutex
+	done    bool
+	aborted bool
+	stops   []func() bool
+}
+
+func (g *handshakeGuard) attach(ctx context.Context, c net.Conn) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.done {
+		return
+	}
+	g.stops = append(g.stops, context.AfterFunc(ctx, func() {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		if !g.done {
+			g.aborted = true
+			_ = c.Close()
+		}
+	}))
+}
+
+// finish : la poignee de main est terminee, la connexion appartient desormais au pool (plus jamais fermee
+// par l'expiration du contexte de l'appelant). Rend vrai si elle a ete interrompue.
+func (g *handshakeGuard) finish() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.done = true
+	for _, stop := range g.stops {
+		stop()
+	}
+	return g.aborted
 }
 
 func (x dialer) DialTimeout(network, address string, timeout time.Duration) (net.Conn, error) {
@@ -125,11 +176,20 @@ func (r *rwConnector) Driver() driver.Driver { return r.inner.Driver() }
 func (r *rwConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	var lastErr error = driver.ErrBadConn
 	for i := 0; i < r.attempts; i++ {
-		conn, err := r.inner.Connect(ctx)
+		g := &handshakeGuard{}
+		gctx := context.WithValue(ctx, handshakeKey{}, g)
+		conn, err := r.inner.Connect(gctx)
 		if err != nil {
+			g.finish()
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, err
 		}
-		ro, err := readOnly(ctx, conn)
+		ro, err := readOnly(gctx, conn)
+		if aborted := g.finish(); aborted && err == nil {
+			err = ctx.Err() // fermee par le garde pendant la verification : la connexion est inutilisable
+		}
 		if err == nil && !ro {
 			return conn, nil
 		}

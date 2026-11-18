@@ -69,7 +69,7 @@ brique = une fiche + une ligne d'index.
     Notifuse 80). Une connexion par workspace en permanence (le worker d'envoi les parcourt toutes chaque
     seconde) : ~25 aujourd'hui, marge ~70 workspaces ; au-delà, polling adaptatif. Pool durci (`pkg/pgdial` :
     keepalive, refus des replicas), sonde de fond `/healthz` (vert 45 s après le dernier succès), démarrage
-    qui réessaie : bascule du primaire prouvée le 09/11 (0 redémarrage). → `81`
+    qui réessaie, poignée de main bornée par le contexte (lib/pq ne le fait pas : redémarrage du 14/11). → `81`
 15. **Base : pg-saas depuis le 09/11/2026** (`172.26.64.1:15432`, rôle `notifuse`). Plus de `notifuse-db`. Chaque base
     workspace est **fermée à PUBLIC dès sa création** (`REVOKE … FROM PUBLIC`, `GRANT CONNECT` à `notifuse` et
     `pgsaas_mon`), testé : les autres apps du cluster ne la lisent pas. → plan nomad-veridian §20, `81`

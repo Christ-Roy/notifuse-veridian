@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Notifuse/notifuse/pkg/logger"
 	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
+	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/pgdial"
 )
 
@@ -37,6 +37,10 @@ var (
 const (
 	healthGrace    = 45 * time.Second
 	healthInterval = 2 * time.Second
+	// healthRemind : tant que la base reste jugee injoignable, l'erreur courante est rejournalisee a ce rythme.
+	// Le 14/11/2026 la sonde est restee en echec 2 min 40 sans une ligne apres la premiere : on ne savait pas
+	// pourquoi /healthz restait rouge alors que la base repondait (fiche 81).
+	healthRemind = 30 * time.Second
 )
 
 type dbHealthState struct {
@@ -44,6 +48,7 @@ type dbHealthState struct {
 	running  bool
 	lastOK   time.Time
 	degraded bool
+	lastWarn time.Time
 }
 
 var dbHealth = &dbHealthState{}
@@ -70,8 +75,17 @@ func (s *dbHealthState) record(err error) {
 		s.lastOK, s.degraded = time.Now(), false
 		return
 	}
-	if !s.degraded && healthLog != nil {
-		healthLog.WithField("error", err.Error()).Warn("db health: base injoignable")
+	if healthLog != nil {
+		if !s.degraded {
+			healthLog.WithField("error", err.Error()).Warn("db health: base injoignable")
+			s.lastWarn = time.Now()
+		} else if time.Since(s.lastWarn) >= healthRemind {
+			healthLog.WithFields(map[string]interface{}{
+				"error":    err.Error(),
+				"down_for": time.Since(s.lastOK).Round(time.Second).String(),
+			}).Warn("db health: base toujours injoignable")
+			s.lastWarn = time.Now()
+		}
 	}
 	s.degraded = true
 }
@@ -134,8 +148,8 @@ func HealthProbeConfigured() bool { return healthProbe != nil }
 // mortes cote HAProxy : le TCP reste vivant, donc ni keepalive ni TCP_USER_TIMEOUT ne les voient) et le ping
 // attendait un emplacement qui ne se liberait jamais. Un redemarrage ne devrait pas etre le premier remede :
 //  1. ping sur le pool ; 2. si echec, ping sur une connexion DEDIEE : si elle echoue, la base est vraiment
-//  injoignable (503) ; 3. sinon la base repond et c'est le pool qui est coince : on ferme de force les connexions
-//  (les requetes bloquees echouent, le pool se reconnecte) puis on reping le pool.
+//     injoignable (503) ; 3. sinon la base repond et c'est le pool qui est coince : on ferme de force les connexions
+//     (les requetes bloquees echouent, le pool se reconnecte) puis on reping le pool.
 func pingWithRecovery(db *sql.DB) error {
 	ctx, cancel := context.WithTimeout(context.Background(), healthPingFirstTimeout)
 	err := db.PingContext(ctx)

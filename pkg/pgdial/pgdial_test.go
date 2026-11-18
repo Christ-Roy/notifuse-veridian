@@ -110,8 +110,8 @@ type fakeSrvConn struct {
 }
 
 func (c *fakeSrvConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("non utilise") }
-func (c *fakeSrvConn) Close() error                         { c.s.mu.Lock(); c.s.closed++; c.s.mu.Unlock(); return nil }
-func (c *fakeSrvConn) Begin() (driver.Tx, error)            { return nil, errors.New("non utilise") }
+func (c *fakeSrvConn) Close() error                        { c.s.mu.Lock(); c.s.closed++; c.s.mu.Unlock(); return nil }
+func (c *fakeSrvConn) Begin() (driver.Tx, error)           { return nil, errors.New("non utilise") }
 func (c *fakeSrvConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
 	v := "off"
 	if c.ro {
@@ -163,4 +163,81 @@ func TestRwConnector_ContexteAnnuleInterrompt(t *testing.T) {
 	defer cancel()
 	_, err := rc.Connect(ctx)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+// Serveur muet : accepte la connexion TCP puis ne repond jamais (comme une entree HAProxy dont le backend ne
+// repond plus pendant une bascule). Avant le garde, PingContext restait bloque dans le startup de lib/pq
+// malgre un contexte de 300 ms (incident du 14/11/2026, fiche 81).
+func TestOpen_PoigneeDeMainBorneeParLeContexte(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+	var held []net.Conn
+	var mu sync.Mutex
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			held = append(held, c)
+			mu.Unlock()
+		}
+	}()
+	defer func() {
+		mu.Lock()
+		for _, c := range held {
+			_ = c.Close()
+		}
+		mu.Unlock()
+	}()
+
+	addr := ln.Addr().(*net.TCPAddr)
+	db, err := Open("postgres", "host=127.0.0.1 port="+itoa(addr.Port)+" user=u dbname=d sslmode=disable")
+	require.NoError(t, err)
+	defer db.Close()
+
+	done := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		defer cancel()
+		done <- db.PingContext(ctx)
+	}()
+	select {
+	case err := <-done:
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+	case <-time.After(3 * time.Second):
+		t.Fatal("PingContext bloque dans la poignee de main malgre le delai du contexte")
+	}
+}
+
+func TestHandshakeGuard_NeFermePlusApresFinish(t *testing.T) {
+	a, b := net.Pipe()
+	defer b.Close()
+	g := &handshakeGuard{}
+	ctx, cancel := context.WithCancel(context.Background())
+	g.attach(ctx, a)
+	assert.False(t, g.finish())
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+	go func() { _, _ = b.Write([]byte("x")) }()
+	buf := make([]byte, 1)
+	_ = a.SetReadDeadline(time.Now().Add(time.Second))
+	_, err := a.Read(buf)
+	assert.NoError(t, err, "la connexion rendue au pool ne doit pas etre fermee par l'expiration du contexte de l'appelant")
+	_ = a.Close()
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	s := ""
+	for n > 0 {
+		s = string(rune('0'+n%10)) + s
+		n /= 10
+	}
+	return s
 }

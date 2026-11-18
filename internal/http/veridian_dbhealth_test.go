@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,8 +37,8 @@ func (f *fakeConnector) Connect(context.Context) (driver.Conn, error) {
 func (f *fakeConnector) Driver() driver.Driver { return nil }
 
 func (c *fakeConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("non utilise") }
-func (c *fakeConn) Close() error                         { return nil }
-func (c *fakeConn) Begin() (driver.Tx, error)            { return nil, errors.New("non utilise") }
+func (c *fakeConn) Close() error                        { return nil }
+func (c *fakeConn) Begin() (driver.Tx, error)           { return nil, errors.New("non utilise") }
 func (c *fakeConn) Ping(ctx context.Context) error {
 	c.c.mu.Lock()
 	stuck := c.c.stuck
@@ -215,4 +216,41 @@ func TestStartDBHealth_LanceLaSondeUneSeuleFoisEtSArrete(t *testing.T) {
 	assert.True(t, known)
 	assert.True(t, ok, "demarrage : vert pendant la fenetre de tolerance")
 	cancel()
+}
+
+// countLogger compte les avertissements (seul niveau utile ici).
+type countLogger struct {
+	mu    sync.Mutex
+	warns []string
+}
+
+func (l *countLogger) Debug(string) {}
+func (l *countLogger) Info(string)  {}
+func (l *countLogger) Warn(m string) {
+	l.mu.Lock()
+	l.warns = append(l.warns, m)
+	l.mu.Unlock()
+}
+func (l *countLogger) Error(string)                                    {}
+func (l *countLogger) Fatal(string)                                    {}
+func (l *countLogger) WithField(string, interface{}) logger.Logger     { return l }
+func (l *countLogger) WithFields(map[string]interface{}) logger.Logger { return l }
+
+// 14/11/2026 : une seule ligne puis 2 min 40 de silence. Une panne qui dure se rejournalise toutes les 30 s,
+// pas toutes les 2 s (la sonde tourne toutes les 2 s).
+func TestDBHealthState_PanneQuiDureSeRejournalise(t *testing.T) {
+	resetState(t)
+	cl := &countLogger{}
+	healthLog = cl
+	t.Cleanup(func() { healthLog = nil })
+
+	dbHealth.record(errors.New("e1"))
+	dbHealth.record(errors.New("e2"))
+	assert.Equal(t, []string{"db health: base injoignable"}, cl.warns, "pas de rafale toutes les 2 s")
+
+	dbHealth.mu.Lock()
+	dbHealth.lastWarn = time.Now().Add(-healthRemind - time.Second)
+	dbHealth.mu.Unlock()
+	dbHealth.record(errors.New("e3"))
+	assert.Equal(t, []string{"db health: base injoignable", "db health: base toujours injoignable"}, cl.warns)
 }
