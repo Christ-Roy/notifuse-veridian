@@ -88,3 +88,48 @@ func TestIngest_PorteeReplies(t *testing.T) {
 		t.Fatalf("attendu 3 messages entrants rangés, obtenu %d", n)
 	}
 }
+
+// Boîte rangée AVANT la pose de la portée : la purge retire le courrier courant et ce qui n'est lié que par l'expéditeur,
+// garde la réponse à notre envoi, le message déjà traité, et reste sans effet sur une autre boîte.
+func TestPurgeOutOfScope(t *testing.T) {
+	s, db := testStore(t)
+	g := testIngestor(s)
+	ctx := context.Background()
+	addSent(t, db, j0uuid, "marie@exemple-animaux.fr")
+
+	reply := replyHuman("<"+j0uuid+"@animalservicedistribution.fr>", "<"+j0uuid+"@animalservicedistribution.fr>")
+	if _, ins, err := g.IngestRaw(ctx, "ws1", box1, ref(1), reply, time.Now(), false); err != nil || !ins {
+		t.Fatalf("réponse: %v %v", err, ins)
+	}
+	autre := func(n, uid uint32) []byte {
+		return []byte(strings.Replace(string(replyHuman("<zzz@x.fr>", "<zzz@x.fr>")), "rep1@", "rep"+string(rune('a'+n))+"@", 1))
+	}
+	for i, uid := range []uint32{2, 3} {
+		if _, ins, err := g.IngestRaw(ctx, "ws1", box1, ref(uid), autre(uint32(i), uid), time.Now(), false); err != nil || !ins {
+			t.Fatalf("autre %d: %v %v", uid, err, ins)
+		}
+	}
+	// une autre boîte (imap2) garde son courrier
+	box2 := box1
+	box2.IntegrationID = "imap2"
+	if _, ins, err := g.IngestRaw(ctx, "ws1", box2, MailboxRef{IntegrationID: "imap2", Folder: "INBOX", UIDValidity: 7, UID: 1}, autre(9, 1), time.Now(), false); err != nil || !ins {
+		t.Fatalf("autre boîte: %v %v", err, ins)
+	}
+	// un courrier déjà traité par un humain reste
+	db.Exec(`UPDATE veridian_mail_message SET handled_at = NOW(), handled_by = 'hugo' WHERE mailbox_uid = 3 AND mailbox_integration_id = 'imap1'`)
+
+	n, err := s.PurgeOutOfScope(ctx, "ws1", "imap1")
+	if err != nil || n != 1 {
+		t.Fatalf("attendu 1 message retiré (le courrier courant non traité), obtenu %d (%v)", n, err)
+	}
+	n2, err := s.PurgeOutOfScope(ctx, "ws1", "imap1")
+	if err != nil || n2 != 0 {
+		t.Fatalf("la purge doit être idempotente: %d %v", n2, err)
+	}
+	var restant, autreBoite int
+	db.QueryRowContext(ctx, `SELECT COUNT(*) FROM veridian_mail_message WHERE mailbox_integration_id = 'imap1' AND direction = 'in'`).Scan(&restant)
+	db.QueryRowContext(ctx, `SELECT COUNT(*) FROM veridian_mail_message WHERE mailbox_integration_id = 'imap2'`).Scan(&autreBoite)
+	if restant != 2 || autreBoite != 1 { // réponse + traité ; imap2 intacte
+		t.Fatalf("attendu imap1=2 (réponse + traité) et imap2=1, obtenu %d et %d", restant, autreBoite)
+	}
+}

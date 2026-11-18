@@ -39,11 +39,12 @@ type Syncer struct {
 	mu      sync.Mutex
 	running map[string]bool
 	settled map[string]bool // workspaces dont les doublons ont été rattrapés depuis le démarrage
+	purged  map[string]bool // boîtes à portée « replies » dont le hors-portée a été retiré depuis le démarrage
 }
 
 // NewSyncer construit le syncer. renderer peut être nil (reprise sans re-rendu).
 func NewSyncer(store *Store, ingest *Ingestor, dialer Dialer, renderer Renderer, log logger.Logger) *Syncer {
-	return &Syncer{store: store, ingest: ingest, dialer: dialer, renderer: renderer, log: log, running: map[string]bool{}, settled: map[string]bool{}}
+	return &Syncer{store: store, ingest: ingest, dialer: dialer, renderer: renderer, log: log, running: map[string]bool{}, settled: map[string]bool{}, purged: map[string]bool{}}
 }
 
 func (s *Syncer) acquire(key string) bool {
@@ -110,6 +111,7 @@ func (s *Syncer) SyncBox(ctx context.Context, ws *domain.Workspace, integ *domai
 	box := BoxFor(ws, integ)
 	folder := integ.IMAPSettings.GetFolder()
 	log := s.log.WithFields(map[string]interface{}{"workspace_id": ws.ID, "integration_id": integ.ID})
+	s.purgeOutOfScope(ctx, ws.ID, integ.ID, box.Scope)
 
 	state, err := s.store.GetSync(ctx, ws.ID, integ.ID, folder)
 	if err != nil {
@@ -212,6 +214,32 @@ func (s *Syncer) SyncBox(ctx context.Context, ws *domain.Workspace, integ *domai
 		log.WithFields(map[string]interface{}{"ingested": total, "last_uid": lastUID}).Info("Mailbox: sync done")
 	}
 	s.settleDuplicates(ctx, ws.ID, total > 0)
+}
+
+// purgeOutOfScope retire de la boîte unifiée, une fois par démarrage, ce qu'une boîte à portée « replies » n'aurait pas rangé
+// (courrier courant rangé avant la pose de la portée). Sans portée : rien. Une erreur est consignée et réessayée au passage suivant.
+func (s *Syncer) purgeOutOfScope(ctx context.Context, ws, integrationID, scope string) {
+	if scope != domain.VeridianReturnIMAPScopeReplies {
+		return
+	}
+	key := ws + "|" + integrationID
+	s.mu.Lock()
+	done := s.purged[key]
+	s.mu.Unlock()
+	if done {
+		return
+	}
+	n, err := s.store.PurgeOutOfScope(ctx, ws, integrationID)
+	if err != nil {
+		s.log.WithFields(map[string]interface{}{"workspace_id": ws, "integration_id": integrationID, "error": err.Error()}).Warn("Mailbox: out-of-scope purge failed, will retry")
+		return
+	}
+	s.mu.Lock()
+	s.purged[key] = true
+	s.mu.Unlock()
+	if n > 0 {
+		s.log.WithFields(map[string]interface{}{"workspace_id": ws, "integration_id": integrationID, "rows": n}).Info("Mailbox: out-of-scope messages purged")
+	}
 }
 
 // settleDuplicates rattrape les copies non marquées (voir Store.SettleDuplicates) : à chaque
