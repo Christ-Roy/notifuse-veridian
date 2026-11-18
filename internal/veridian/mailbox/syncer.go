@@ -75,6 +75,7 @@ func BoxFor(ws *domain.Workspace, integ *domain.Integration) BoxInfo {
 			continue
 		}
 		b.ProfileID, b.ProfileName = p.ID, p.Name
+		b.Scope = p.EmailProvider.VeridianReturnIMAPScope
 		for _, snd := range p.EmailProvider.Senders {
 			if snd.IsDefault || b.Address == "" {
 				if snd.Email != "" {

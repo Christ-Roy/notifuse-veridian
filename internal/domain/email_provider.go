@@ -214,6 +214,13 @@ type EmailProvider struct {
 	// migration. Cf. veridian_email_profiles.go (validation).
 	VeridianReturnIMAPIntegrationID string `json:"veridian_return_imap_integration_id,omitempty"`
 
+	// Veridian fork — portee de la boite de retour (18/11/2026) : "" (toute la boite) ou
+	// "replies" (seulement les reponses et rejets de NOS envois, relies par Message-ID).
+	// Pour une boite humaine (commerciale@, communication@...) qui recoit aussi le courrier
+	// courant : ce courrier n'est ni stocke ni affiche. omitempty, sans migration.
+	// Cf. internal/veridian/mailbox/scope.go (regle) et veridian_email_profiles.go (validation).
+	VeridianReturnIMAPScope string `json:"veridian_return_imap_scope,omitempty"`
+
 	// Veridian fork — PAUSE du profil : tant que true, le worker n'envoie rien
 	// par ce profil (il bascule sur les autres membres du pool, ou l'entree
 	// attend si le pool n'a plus de membre actif). Les entrees en file sont

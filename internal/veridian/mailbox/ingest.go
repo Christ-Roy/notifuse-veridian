@@ -24,6 +24,8 @@ type BoxInfo struct {
 	ProfileID     string
 	ProfileName   string
 	Folder        string
+	// Scope : "replies" = ne garder que les reponses et rejets de nos envois (voir scope.go).
+	Scope string
 }
 
 // Ingestor range les mails dans la boîte unifiée.
@@ -129,6 +131,15 @@ func (g *Ingestor) IngestRaw(ctx context.Context, ws string, box BoxInfo, ref Ma
 	if verdict.DSN != nil && verdict.Recipient != "" && link == nil {
 		// Rebond dont l'envoi d'origine n'est pas retrouvé : le contact est l'adresse en échec.
 		contact = verdict.Recipient
+	}
+
+	// Boite a portee « replies » : le courrier sans lien avec un de NOS envois n'est ni stocke ni affiche.
+	// Il reste dans la boite IMAP (jamais supprime) ; le repere avance, il ne sera pas relu.
+	if !InScope(box.Scope, verdict.Kind, link) {
+		g.log.WithFields(map[string]interface{}{
+			"workspace_id": ws, "integration_id": ref.IntegrationID, "uid": ref.UID, "kind": string(verdict.Kind),
+		}).Debug("Mailbox: message outside the mailbox scope, skipped")
+		return nil, false, nil
 	}
 
 	received := internalDate

@@ -68,7 +68,7 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
                                           fusible par couple, fenêtre, classes exclues, pause, IMAP lié (lecture, clé scopée OK)
   notifuse profiles:gaps [ws] [--json]    EFFECTIF vs théorique : par profil et par classe de messagerie, capacité configurée, utile (stock), envoyé,
                                           habituel (7 j), classes qui MANQUENT par rapport à avant, avec le nombre de contacts à inscrire
-  notifuse profiles:link-imap <ws> --id P (--imap I | --none)   lie un profil à sa boîte IMAP de retour (owner)
+  notifuse profiles:link-imap <ws> --id P (--imap I | --none | --scope all|replies)   lie un profil à sa boîte IMAP de retour (owner)
   notifuse profiles:set-usage <ws> --id P --usage commercial|transactional|unassigned
                                                               usage EXCLUSIF d'un profil : rotation commerciale, profil transactionnel réservé, ou hors service (serveur : exclusivité, rotation jamais vidée, profil vérifié)
   notifuse profiles:create <ws> --type smtp|gmail-app-password --name N --from-email E (--secret-stdin | --secret-file F) ...
@@ -2580,17 +2580,26 @@ def _patch_email_profile(a, mutate):
 
 
 def cmd_profiles_link_imap(a):
-    if bool(a.imap) == bool(a.none):
-        die("donne --imap <id de l'intégration IMAP> OU --none pour retirer le lien.")
+    scope = getattr(a, "scope", None)
+    if bool(a.imap) and bool(a.none):
+        die("--imap et --none s'excluent.")
+    if not a.imap and not a.none and not scope:
+        die("donne --imap <id de l'intégration IMAP>, OU --none pour retirer le lien, OU --scope pour changer la portée de la boîte liée.")
 
     def mutate(prov, w):
         if a.none:
             prov.pop("veridian_return_imap_integration_id", None)
+            prov.pop("veridian_return_imap_scope", None)
             return
-        target = next((i for i in (w.get("integrations") or []) if i.get("id") == a.imap), None)
-        if not target or target.get("type") != "imap":
-            die(f"{a.imap} n'est pas une intégration IMAP de {a.workspace} (le serveur refuserait en 400).")
-        prov["veridian_return_imap_integration_id"] = a.imap
+        if a.imap:
+            target = next((i for i in (w.get("integrations") or []) if i.get("id") == a.imap), None)
+            if not target or target.get("type") != "imap":
+                die(f"{a.imap} n'est pas une intégration IMAP de {a.workspace} (le serveur refuserait en 400).")
+            prov["veridian_return_imap_integration_id"] = a.imap
+        if scope == "replies":
+            prov["veridian_return_imap_scope"] = "replies"
+        elif scope == "all":
+            prov.pop("veridian_return_imap_scope", None)
     _patch_email_profile(a, mutate)
 
 
@@ -5065,6 +5074,9 @@ def build_parser(extra=None):
     sp.add_argument("--id", required=True, help="id du profil d'envoi")
     sp.add_argument("--imap", help="id de l'intégration IMAP à lier")
     sp.add_argument("--none", action="store_true", help="retire le lien")
+    sp.add_argument("--scope", choices=["all", "replies"],
+                    help="portée de la boîte : all (tout le courrier, défaut) | replies (seulement les réponses et rejets de NOS envois, reliés par Message-ID ; "
+                         "pour une boîte humaine qui reçoit aussi le courrier courant : celui-ci n'est ni stocké ni affiché)")
     sp.set_defaults(func=cmd_profiles_link_imap, _routes=["/api/workspaces.updateIntegration"])
 
     sp = sub.add_parser("profiles:set-usage",

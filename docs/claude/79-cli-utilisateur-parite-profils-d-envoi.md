@@ -570,7 +570,7 @@ ce lot · **c** réservée à l'admin plateforme · **d** reste propriétaire pa
 | `policy:suggest-enrollment` | `/api/veridian/policy.suggest-enrollment` | JWT (membre/cle) | oui | oui | a deja ouverte | route JWT du workspace, droit par ressource, isolation par membre |
 | `profiles:create` | `/api/veridian/emailProfiles.create` | JWT (membre/cle) | oui | oui | b ouverte (serveur modifie) | profil SMTP + IMAP lies en une ecriture (etait listee mais 403 avec une cle : proprietaire exige) |
 | `profiles:gaps` | `/api/veridian/emailProfiles.overview` | JWT (membre/cle) | oui | oui | a deja ouverte | route JWT du workspace, droit par ressource, isolation par membre |
-| `profiles:link-imap` | `/api/workspaces.updateIntegration` | JWT (membre/cle) | non | oui | b ouverte (serveur modifie) | relie un profil a une boite IMAP du workspace (updateIntegration) |
+| `profiles:link-imap` | `/api/workspaces.updateIntegration` | JWT (membre/cle) | non | oui | b ouverte (serveur modifie) | relie un profil a une boite IMAP du workspace (updateIntegration) ; `--scope replies` : la boite humaine ne garde que les reponses et rejets de NOS envois (Message-ID), le courrier courant n est ni stocke ni affiche |
 | `profiles:overview` | `/api/veridian/emailProfiles.overview` | JWT (membre/cle) | oui | oui | a deja ouverte | route JWT du workspace, droit par ressource, isolation par membre |
 | `profiles:pause` | `/api/veridian/emailProfiles.pause` | JWT (membre/cle) | oui | oui | a deja ouverte | route JWT du workspace, droit par ressource, isolation par membre |
 | `profiles:resume` | `/api/veridian/emailProfiles.resume` | JWT (membre/cle) | oui | oui | a deja ouverte | route JWT du workspace, droit par ressource, isolation par membre |
