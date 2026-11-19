@@ -498,8 +498,8 @@ func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, invalid("since_seq invalide"))
 		return
 	}
-	fl, ok := w.(http.Flusher)
-	if !ok {
+	fl := flusherOf(w)
+	if fl == nil {
 		h.fail(w, errors.New("flux non pris en charge"))
 		return
 	}
@@ -609,3 +609,18 @@ type RefusedError struct {
 
 func (e *RefusedError) Error() string { return e.Reason }
 
+// flusherOf trouve le vidage de la reponse, au besoin a travers les enveloppes des intermediaires (journal
+// d'acces, traces) qui exposent Unwrap. Une enveloppe sans Flush ne doit plus casser le flux (19/11/2026).
+func flusherOf(w http.ResponseWriter) http.Flusher {
+	for i := 0; w != nil && i < 16; i++ {
+		if f, ok := w.(http.Flusher); ok {
+			return f
+		}
+		u, ok := w.(interface{ Unwrap() http.ResponseWriter })
+		if !ok {
+			return nil
+		}
+		w = u.Unwrap()
+	}
+	return nil
+}

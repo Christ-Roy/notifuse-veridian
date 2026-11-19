@@ -1,8 +1,8 @@
 package http
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -141,4 +141,30 @@ func TestVeridianAccessLog_StatusIsTheWrittenOne(t *testing.T) {
 		require.NotNil(t, f)
 		assert.Equal(t, code, f["status"])
 	}
+}
+
+// 19/11/2026 : derriere le journal d'acces, le flux SSE de la boite unifiee repondait 500 « flux non pris en
+// charge » (l'enveloppe ne relayait pas Flush). Une reponse en flux doit traverser le journal intacte.
+func TestVeridianAccessLog_LaisseVider(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	log := pkgmocks.NewMockLogger(ctrl)
+	log.EXPECT().WithFields(gomock.Any()).Return(log).AnyTimes()
+	log.EXPECT().WithField(gomock.Any(), gomock.Any()).Return(log).AnyTimes()
+	log.EXPECT().Info(gomock.Any()).AnyTimes()
+
+	var flushed, unwrapped bool
+	h := VeridianAccessLogMiddleware(log, nil)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		f, ok := w.(http.Flusher)
+		require.True(t, ok, "l'enveloppe du journal doit exposer http.Flusher")
+		_, _ = io.WriteString(w, "data: x\n\n")
+		f.Flush()
+		u, ok := w.(interface{ Unwrap() http.ResponseWriter })
+		unwrapped = ok && u.Unwrap() != nil
+		flushed = true
+	}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/api/veridian/mail.events?workspace_id=w", nil))
+	assert.True(t, flushed)
+	assert.True(t, unwrapped)
+	assert.True(t, rec.Flushed, "le vidage atteint la reponse d'origine")
 }

@@ -41,6 +41,17 @@ func (w *accessLogWS) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// Flush relaie le vidage : sans lui, toute reponse en flux (SSE de la boite unifiee, /api/veridian/mail.events)
+// repondait 500 « flux non pris en charge » derriere ce journal, du 19/10 au 19/11/2026.
+func (w *accessLogWS) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap laisse http.ResponseController atteindre la reponse d'origine (delais, hijack, vidage).
+func (w *accessLogWS) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 type tokenWSCacheEntry struct {
 	ws      string
 	expires time.Time
