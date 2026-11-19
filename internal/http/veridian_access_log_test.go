@@ -168,3 +168,12 @@ func TestVeridianAccessLog_LaisseVider(t *testing.T) {
 	assert.True(t, unwrapped)
 	assert.True(t, rec.Flushed, "le vidage atteint la reponse d'origine")
 }
+
+// Unwrap rend la reponse d'origine : http.ResponseController (delais, vidage) traverse ainsi le journal.
+func TestAccessLogWS_Unwrap(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &accessLogWS{ResponseWriter: rec}
+	assert.Same(t, http.ResponseWriter(rec), w.Unwrap())
+	require.NoError(t, http.NewResponseController(w).Flush())
+	assert.True(t, rec.Flushed)
+}
