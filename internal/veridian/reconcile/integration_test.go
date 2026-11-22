@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/Notifuse/notifuse/internal/veridian/testpg"
+	"strings"
 	"testing"
 	"time"
 
@@ -434,23 +435,26 @@ func TestIntegration_EnvoyeEtReponseRattachee(t *testing.T) {
 	itExec(t, db, `INSERT INTO message_history (id, contact_email, template_id, created_at, veridian_message_type) VALUES ('mhT2', 't@x.fr', 't0', $1, 'transactional')`, d3)
 	// Créé il y a 3 h, encore sans issue : dans le délai de 48 h, rien à reprocher.
 	mh("mhPending", "p@x.fr", h3, nil, nil)
-	// D : rapport de non-remise définitif reçu, historique sans rebond.
-	mh("mhD", "d@x.fr", h5, &h5, nil)
-	itMail(t, db, "outD", "out", "sent", "d@x.fr", "Offre", h5, "mhD", "")
-	itMail(t, db, "dsnD", "in", "bounce_hard", "d@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhD"}`)
-	itExec(t, db, `UPDATE veridian_mail_message SET dsn = '{"category": "boite_pleine"}' WHERE id = 'dsnD'`)
-	// D2 : adresse inexistante, non appliquée non plus ; D3 : rapport sans catégorie.
-	mh("mhD2", "d2@x.fr", h5, &h5, nil)
-	itMail(t, db, "outD2", "out", "sent", "d2@x.fr", "Offre", h5, "mhD2", "")
-	itMail(t, db, "dsnD2", "in", "bounce_hard", "d2@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhD2"}`)
-	itExec(t, db, `UPDATE veridian_mail_message SET dsn = '{"category": "adresse_inexistante"}' WHERE id = 'dsnD2'`)
-	mh("mhD3", "d3@x.fr", h5, &h5, nil)
-	itMail(t, db, "outD3", "out", "sent", "d3@x.fr", "Offre", h5, "mhD3", "")
-	itMail(t, db, "dsnD3", "in", "bounce_hard", "d3@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhD3"}`)
-	// E : rebond correctement appliqué : rien à reprocher.
-	mh("mhE", "e@x.fr", h5, &h5, &h3)
-	itMail(t, db, "outE", "out", "sent", "e@x.fr", "Offre", h5, "mhE", "")
-	itMail(t, db, "dsnE", "in", "bounce_hard", "e@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhE"}`)
+	// Rapports définitifs reliés à un envoi, jugés par la règle de la chaîne (domain.ClassifyBounce).
+	dsn := func(id, contact, code, cat string, bounced *time.Time, bounceType string) {
+		mh("mh"+id, contact, h5, &h5, bounced)
+		if bounceType != "" {
+			itExec(t, db, `UPDATE message_history SET bounce_type = $1 WHERE id = $2`, bounceType, "mh"+id)
+		}
+		itMail(t, db, "out"+id, "out", "sent", contact, "Offre", h5, "mh"+id, "")
+		itMail(t, db, "dsn"+id, "in", "bounce_hard", contact, "Undelivered", h3, "", `{"sent_message_id": "mh`+id+`"}`)
+		itExec(t, db, `UPDATE veridian_mail_message SET dsn = $1::jsonb, profile_id = 'smtp-1' WHERE id = $2`,
+			`{"code": "`+code+`", "category": "`+cat+`", "recipient": "`+contact+`", "diagnostic": "`+code+` refus", "severity": "hard"}`, "dsn"+id)
+	}
+	dsn("D", "d@x.fr", "5.1.1", "adresse_inexistante", nil, "") // dur, jamais appliqué : reproché
+	// Second rapport pour le même envoi (relais qui renvoie) : un envoi compte une fois, se rejoue une fois.
+	itMail(t, db, "dsnDbis", "in", "bounce_hard", "d@x.fr", "Undelivered", h3.Add(time.Minute), "", `{"sent_message_id": "mhD"}`)
+	itExec(t, db, `UPDATE veridian_mail_message SET dsn = '{"code": "5.1.1", "category": "adresse_inexistante"}' WHERE id = 'dsnDbis'`)
+	dsn("P", "p2@x.fr", "5.7.1", "refus_politique", nil, "")              // refus de politique sans bounce_type : reproché
+	dsn("P2", "p3@x.fr", "5.7.1", "refus_politique", nil, "PolicyBounce") // refus inscrit (bounced_at NULL voulu, décision du 06/10) : appliqué
+	dsn("S", "s@x.fr", "5.2.2", "boite_pleine", nil, "")                  // boîte pleine = temporaire pour la chaîne : rien d'exigé
+	dsn("N", "n@x.fr", "", "inconnu", nil, "")                            // sans code : non classable, non jugé
+	dsn("E", "e@x.fr", "5.1.1", "adresse_inexistante", &h3, "HardBounce") // dur appliqué : rien à reprocher
 
 	eng := itEngine(t, db)
 	rep, err := eng.Run(ctx, []string{"envoye_livre", "reponse_rattachee"})
@@ -463,9 +467,24 @@ func TestIntegration_EnvoyeEtReponseRattachee(t *testing.T) {
 	}
 	assert.EqualValues(t, 1, findingByRef(rep.Findings, "envoye:sans_issue").Evidence["count"], "seul mhC : mhOld, aussi vieux, est parti ; mhPending est dans le délai")
 	lost := findingByRef(rep.Findings, "envoye:rebond_non_applique")
-	assert.EqualValues(t, 3, lost.Evidence["count"], "mhD, mhD2, mhD3 : mhE est appliqué")
-	assert.Equal(t, map[string]any{"boite_pleine": float64(1), "adresse_inexistante": float64(1), "inconnu": float64(1)}, lost.Evidence["by_category"])
-	assert.Contains(t, lost.Observed, "(1 adresse inexistante, 1 boîte pleine, 1 non classé)")
+	assert.EqualValues(t, 2, lost.Evidence["count"], "mhD (dur) et mhP (politique) ; P2 et E appliqués, S temporaire, N sans code")
+	assert.Equal(t, map[string]any{"refus_politique": float64(1), "adresse_inexistante": float64(1)}, lost.Evidence["by_category"])
+	assert.Contains(t, lost.Observed, "(1 adresse inexistante, 1 refus de politique)")
+	require.NotNil(t, lost.ProposedAction)
+	assert.Equal(t, ActionReplayBounces, lost.ProposedAction.Kind)
+
+	// Réparation : chaque rapport non appliqué repasse par la chaîne (ici une chaîne factice qui en
+	// pose l'effet comme la vraie), puis le contrôle rejoué ne le reproche plus.
+	chain := &fakeBounceChain{db: db}
+	_, err = (&Executor{DB: db}).Apply(ctx, lost)
+	assert.Error(t, err, "sans chaîne branchée, la réparation refuse au lieu de prétendre")
+	outB, err := (&Executor{DB: db, WorkspaceID: "ws", Bounces: chain}).Apply(ctx, lost)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, outB["replayed"])
+	assert.ElementsMatch(t, []string{"mhD/5.1.1/d@x.fr/smtp-1", "mhP/5.7.1/p2@x.fr/smtp-1"}, chain.seen)
+	repB, err := eng.Run(ctx, []string{"envoye_livre"})
+	require.NoError(t, err)
+	assert.Nil(t, findingByRef(repB.Findings, "envoye:rebond_non_applique"), "rejoués, plus aucun rapport sans effet")
 	assert.EqualValues(t, 1, findingByRef(rep.Findings, "envoye:absent_de_la_boite").Evidence["count"], "seul mhB : mhJust est dans le délai")
 	orph := findingByRef(rep.Findings, "orphelines:reply_human")
 	assert.EqualValues(t, 4, orph.Evidence["count"], "inA, inR, inW et inZ ; inOK est relié, inNew est dans le délai de grâce, inZcopy est une copie")
@@ -504,4 +523,20 @@ func TestIntegration_MailboxTableAbsentIsNotReachedNeverOk(t *testing.T) {
 	}
 	assert.EqualValues(t, 2, rep.Summary.NotReached)
 	assert.Empty(t, rep.Findings)
+}
+
+// fakeBounceChain pose l'effet de la vraie chaîne (bounced_at pour un dur, bounce_type pour un refus).
+type fakeBounceChain struct {
+	db   *sql.DB
+	seen []string
+}
+
+func (f *fakeBounceChain) BounceReceived(_ context.Context, _ string, b mailbox.Bounce) error {
+	f.seen = append(f.seen, b.SentMessageID+"/"+b.Code+"/"+b.Recipient+"/"+b.ProfileID)
+	q := `UPDATE message_history SET bounced_at = NOW(), bounce_type = 'HardBounce' WHERE id = $1`
+	if strings.HasPrefix(b.Code, "5.7.") {
+		q = `UPDATE message_history SET bounce_type = 'PolicyBounce' WHERE id = $1`
+	}
+	_, err := f.db.Exec(q, b.SentMessageID)
+	return err
 }

@@ -206,6 +206,12 @@ func (h *veridianHost) IMAPPoller() *queue.VeridianIMAPPollerService      { retu
 func (h *veridianHost) EmailQueueWorker() *queue.EmailQueueWorker         { return h.a.emailQueueWorker }
 func (h *veridianHost) ShutdownContext() context.Context                  { return h.a.GetShutdownContext() }
 
+// InboundWebhookEventService et AutomationRepository : la chaîne des rebonds (internal/veridian/bounces).
+func (h *veridianHost) InboundWebhookEventService() *service.InboundWebhookEventService {
+	return h.a.inboundWebhookEventService
+}
+func (h *veridianHost) AutomationRepository() domain.AutomationRepository { return h.a.automationRepo }
+
 // ============================================================================================
 // Câblage historique déplacé de app.go (lot L0 jalon 2, 29/10/2026). Contenu identique, aux
 // mêmes étapes d'initialisation : veridianInitRepositories en fin d'InitRepositories,
@@ -611,16 +617,12 @@ func (a *App) veridianInitHandlers() error {
 		0, // 0 = default lookback 7j
 	)
 
-	// Lot 2 cold — bounce-loop : détecte les NDR Postfix rapatriés par le poller
-	// IMAP et déclenche la suppression du contact via la chaîne webhook SMTP
-	// existante (ProcessWebhook → ClassifyBounce → MarkEmailsAsBounced). Son
-	// enregistrement ACTIVE le poller (no-op sans consumer).
-	veridianBounceConsumer := service.NewVeridianBounceConsumer(
-		a.inboundWebhookEventService,
-		a.workspaceRepo,
-		a.logger,
-	)
-	a.veridianIMAPPoller.RegisterConsumer(veridianBounceConsumer)
+	// Lot 2 cold — bounce-loop : DÉBRANCHÉ le 22/11/2026 (VER-220). La chaîne des rebonds est
+	// nourrie par la boîte unifiée (internal/veridian/bounces, branché par le module mailbox) :
+	// ce second lecteur IMAP n'avait vu en 30 jours qu'un message de la boîte des rapports d'un
+	// relais et aucun de l'autre (126 rebonds jamais appliqués en prod) ; le garder en plus
+	// compterait deux fois chaque rebond temporaire. Le consommateur stop-on-reply ci-dessous
+	// garde le poller actif (et avec lui la lecture de la boîte unifiée).
 
 	// Lot 3 cold — stop-on-reply : détecte qu'un prospect a répondu (match fort par
 	// Message-ID, fallback expéditeur, NDR exclus via pkg/veridian_ndr) et stoppe sa

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"github.com/Notifuse/notifuse/internal/repository"
+	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/internal/veridian/bounces"
 	"net/http"
 	"sync"
 	"testing"
@@ -179,4 +181,18 @@ func TestVeridianWireHealth_PasEnAssemblageDeTest(t *testing.T) {
 	a.config.Database = config.DatabaseConfig{Host: "127.0.0.1", Port: 1, User: "u", Password: "p", DBName: "x", SSLMode: "disable"}
 	a.veridianWireHealth()
 	assert.True(t, httpHandler.HealthProbeConfigured(), "vraie base : sonde dediee cablee")
+}
+
+// VER-220 : l'hôte de l'application fournit la chaîne des rebonds à la boîte unifiée. Une méthode
+// renommée ferait taire la chaîne sans erreur (FromHost rendrait nil) : ce test l'interdit.
+func TestVeridianHost_ProvidesTheBounceChain(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	a := newWiringApp()
+	a.workspaceRepo = domainmocks.NewMockWorkspaceRepository(ctrl)
+	a.automationRepo = domainmocks.NewMockAutomationRepository(ctrl)
+	a.inboundWebhookEventService = &service.InboundWebhookEventService{}
+	ap := bounces.FromHost(&veridianHost{a: a})
+	require.NotNil(t, ap, "la boîte unifiée doit recevoir la chaîne des rebonds")
+	assert.Same(t, a.inboundWebhookEventService, ap.Webhooks)
 }

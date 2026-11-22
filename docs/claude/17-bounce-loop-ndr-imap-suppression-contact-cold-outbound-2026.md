@@ -58,3 +58,28 @@ réinventé**. Spec : ticket `todo/2026-06-14-bounce-loop-postfix-suppression-co
 Fichiers veridian dédiés : `pkg/veridian_ndr/{parser.go,parser_test.go}`,
 `internal/service/veridian_bounce_consumer{,_test}.go`.
 
+
+## Depuis le 22/11/2026 (VER-220) : la boîte unifiée est la seule source
+
+Constat en prod (robertbrunon, 30 jours) : le consommateur « bounce-loop » du poller historique
+n'avait lu qu'un message de la boîte des rapports du relais agences et aucun de celle du relais
+nord, et n'avait journalisé aucun « bounce processed », pendant que la boîte unifiée (L1) rangeait
+101 rapports définitifs. Résultat : 126 envois rebondis restés « partis », relances continuées (la
+porte de la fiche 66 lit l'effet du rebond sur le J0, qui n'était jamais posé).
+
+- **Source unique** : `internal/veridian/mailbox` remet chaque rapport rangé (pas les copies, pas
+  les relectures, pas les rebonds hors portée d'une boîte « replies ») à `mailbox.BounceSink`.
+- **Applicateur** : `internal/veridian/bounces` (`Applier`), branché par le module mailbox via
+  `bounces.FromHost`. Il passe le rebond par la chaîne EXISTANTE (`ProcessWebhook`, interne :
+  classement `ClassifyBounce`, `bounced_at`/`bounce_type`, listes en « bounced » pour un dur), puis
+  **sort le contact de ses inscriptions `active` et `sending`** sur un rebond dur (`bounce_hard`) ou
+  un refus de politique (`bounce_policy`), étape et date gardées. Temporaire (5.2.2, 4.x) : compté
+  par la chaîne, aucune sortie. Un refus de politique ne supprime toujours pas le contact de ses
+  listes (décision du 06/10).
+- **Ancien consommateur débranché** (`veridian_wiring.go`) : le garder compterait deux fois chaque
+  rebond temporaire. Le consommateur stop-on-reply garde le poller actif.
+- **Garde finale du worker** (`veridian_automation_send_guard.go`) : relit l'inscription
+  (`SetVeridianEnrollmentReader`, branché par le module mailbox) ; une inscription terminée
+  (sortie, terminée, en échec) retire la ligne avant le relais. Lecture en échec : laisse passer.
+- **Rattrapage** : le réconciliateur (invariant 1, « rebond non appliqué ») juge chaque rapport par
+  la même règle et propose `replay_bounces`, qui rejoue les rapports sans effet dans la chaîne.

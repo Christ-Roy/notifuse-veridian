@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	"regexp"
 	"time"
 
@@ -16,17 +17,21 @@ import (
 // que le contrôle) : elle ne se fie jamais à la liste vue à la détection, et elle ne
 // touche que ce que le contrôle juge encore en écart. Tout se fait dans UNE transaction.
 const (
-	ActionReclassify   = "reclassify_contacts"
-	ActionExitContacts = "exit_contacts"
-	ActionCancelQueue  = "cancel_queue_entries"
-	ActionRecountStats = "recount_automation_stats"
-	ActionLinkReplies  = "link_orphan_replies"
+	ActionReclassify    = "reclassify_contacts"
+	ActionExitContacts  = "exit_contacts"
+	ActionCancelQueue   = "cancel_queue_entries"
+	ActionRecountStats  = "recount_automation_stats"
+	ActionLinkReplies   = "link_orphan_replies"
+	ActionReplayBounces = "replay_bounces"
 )
 
 // Executor applique les actions proposées.
 type Executor struct {
 	DB   BeginnerDB
 	Time func() time.Time
+	// WorkspaceID et Bounces : la chaîne des rebonds, pour rejouer un rapport non appliqué.
+	WorkspaceID string
+	Bounces     mailbox.BounceSink
 }
 
 func (x *Executor) now() time.Time {
@@ -60,6 +65,8 @@ func (x *Executor) Apply(ctx context.Context, f *Finding) (map[string]any, error
 		return x.recountStats(ctx, a.Params)
 	case ActionLinkReplies:
 		return x.linkReplies(ctx)
+	case ActionReplayBounces:
+		return x.replayBounces(ctx)
 	}
 	return nil, fmt.Errorf("action inconnue: %s", a.Kind)
 }
@@ -331,4 +338,41 @@ func (x *Executor) linkReplies(ctx context.Context) (map[string]any, error) {
 	}
 	n, _ := res.RowsAffected()
 	return map[string]any{"linked": n}, nil
+}
+
+// replayBounces remet chaque rapport définitif non appliqué à la chaîne des rebonds (la même que
+// la boîte unifiée en direct). Les cibles sont relues ici. Hors transaction : la chaîne écrit par
+// ses propres dépôts ; un rapport en échec est compté et reste signalé au passage suivant.
+func (x *Executor) replayBounces(ctx context.Context) (map[string]any, error) {
+	if x.Bounces == nil || x.WorkspaceID == "" {
+		return nil, fmt.Errorf("chaîne des rebonds non branchée sur cet hôte")
+	}
+	lost, err := lostBounces(ctx, x.DB, x.now().Add(-MirrorGrace))
+	if err != nil {
+		return nil, err
+	}
+	replayed, failed := 0, 0
+	var firstErr string
+	for _, b := range lost {
+		err := x.Bounces.BounceReceived(ctx, x.WorkspaceID, mailbox.Bounce{
+			ProfileID: b.ProfileID, SentMessageID: b.SentID, Recipient: b.Recipient,
+			Code: b.Code, Diagnostic: b.Diagnostic, Severity: b.Severity,
+		})
+		if err != nil {
+			failed++
+			if firstErr == "" {
+				firstErr = err.Error()
+			}
+			continue
+		}
+		replayed++
+	}
+	out := map[string]any{"replayed": replayed, "failed": failed}
+	if firstErr != "" {
+		out["first_error"] = firstErr
+	}
+	if replayed == 0 && failed > 0 {
+		return nil, fmt.Errorf("aucun rapport rejoué (%d en échec) : %s", failed, firstErr)
+	}
+	return out, nil
 }

@@ -2,6 +2,7 @@ package reconcile
 
 import (
 	"github.com/Notifuse/notifuse/internal/repository"
+	"github.com/Notifuse/notifuse/internal/veridian/bounces"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 )
 
@@ -23,6 +24,9 @@ func init() {
 				Stats: repository.NewVeridianProspectionStatsRepository(h.WorkspaceRepository()),
 				Log:   h.Logger(),
 				Pause: confirmPause,
+			}
+			if ap := bounces.FromHost(h); ap != nil { // jamais un pointeur nil dans l'interface
+				svc.Bounces = ap
 			}
 			(&Handler{Svc: svc, RequireAuth: h.RequireAuth(), Log: h.Logger()}).RegisterRoutes(h.Mux())
 			return nil

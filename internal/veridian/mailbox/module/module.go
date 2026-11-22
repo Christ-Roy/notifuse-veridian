@@ -11,6 +11,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/service/queue"
+	"github.com/Notifuse/notifuse/internal/veridian/bounces"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox/mailapi"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
@@ -63,6 +64,17 @@ func wire(h platform.Host) error {
 		sc.get,
 	)
 	ingest := mailbox.NewIngestor(store, log, nil)
+	// VER-220 : chaque rapport de non-remise rangé ici nourrit la chaîne des rebonds (seule source).
+	if ap := bounces.FromHost(h); ap != nil {
+		ingest.SetBounceSink(ap)
+		// Le worker relit l'inscription avant d'envoyer : un contact sorti (rebond, réponse) après
+		// la mise en file ne reçoit pas le mail déjà en attente.
+		if ap.Automations != nil {
+			queue.SetVeridianEnrollmentReader(ap.Automations)
+		}
+	} else {
+		log.Warn("Mailbox: bounce chain not available on this host, bounces are stored but not applied")
+	}
 
 	var renderer mailbox.Renderer
 	if th, ok := h.(templateHost); ok && th.TemplateService() != nil {

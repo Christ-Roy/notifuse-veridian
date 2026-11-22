@@ -1,9 +1,11 @@
 package queue
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -50,6 +52,13 @@ func (w *EmailQueueWorker) veridianAutomationSendAllowed(workspace *domain.Works
 	}
 	if replied {
 		w.discardAutomationEntry(workspace.ID, entry, "contact_replied")
+		return false
+	}
+	// VER-220 : un contact sorti de la séquence (rebond, réponse, sortie manuelle) après la mise en
+	// file ne reçoit pas le mail déjà en attente. Seul un état terminal ÉTABLI bloque : une lecture
+	// en échec laisse passer comme avant (jamais de ligne bloquée à vie sur une panne de lecture).
+	if st, ended := veridianEnrollmentEnded(w.ctx, workspace.ID, entry.SourceID, entry.ContactEmail); ended {
+		w.discardAutomationEntry(workspace.ID, entry, "contact_"+string(st))
 		return false
 	}
 
@@ -134,4 +143,36 @@ func (w *EmailQueueWorker) retryAutomationGuard(workspaceID string, entry *domai
 		"entry_id": entry.ID,
 		"error":    guardErr.Error(),
 	}).Warn("Automation final guard failed closed; SMTP blocked and row scheduled for retry")
+}
+
+// EnrollmentReader lit l'inscription d'un contact à une séquence (le dépôt des automations).
+type EnrollmentReader interface {
+	GetContactAutomationByEmail(ctx context.Context, workspaceID, automationID, email string) (*domain.ContactAutomation, error)
+}
+
+type enrollmentReaderHolder struct{ r EnrollmentReader }
+
+var enrollmentReader atomic.Pointer[enrollmentReaderHolder]
+
+// SetVeridianEnrollmentReader branche (ou retire, avec nil) la lecture de l'inscription avant envoi.
+func SetVeridianEnrollmentReader(r EnrollmentReader) {
+	enrollmentReader.Store(&enrollmentReaderHolder{r: r})
+}
+
+// veridianEnrollmentEnded dit si l'inscription la plus récente du contact est terminée (sortie,
+// terminée, en échec). Sans lecteur branché, ou si la lecture échoue : false.
+func veridianEnrollmentEnded(ctx context.Context, workspaceID, automationID, email string) (domain.ContactAutomationStatus, bool) {
+	h := enrollmentReader.Load()
+	if h == nil || h.r == nil {
+		return "", false
+	}
+	ca, err := h.r.GetContactAutomationByEmail(ctx, workspaceID, automationID, email)
+	if err != nil || ca == nil {
+		return "", false
+	}
+	switch ca.Status {
+	case domain.ContactAutomationStatusExited, domain.ContactAutomationStatusCompleted, domain.ContactAutomationStatusFailed:
+		return ca.Status, true
+	}
+	return "", false
 }

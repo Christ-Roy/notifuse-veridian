@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	"sync"
 	"time"
 
@@ -37,6 +38,8 @@ type Service struct {
 	Now   func() time.Time
 	// Pause entre deux lectures de confirmation des compteurs.
 	Pause time.Duration
+	// Bounces : la chaîne des rebonds (réparation « rejouer les rapports non appliqués »), nil = non branchée.
+	Bounces mailbox.BounceSink
 
 	mu      sync.Mutex
 	running map[string]bool
@@ -161,7 +164,7 @@ func (s *Service) release(ws string) {
 
 // writeResource : la permission d'écriture qu'exige une action.
 func writeResource(kind string) domain.PermissionResource {
-	if kind == ActionReclassify {
+	if kind == ActionReclassify || kind == ActionReplayBounces { // un rebond rejoué supprime des contacts de leurs listes
 		return domain.PermissionResourceContacts
 	}
 	return domain.PermissionResourceAutomations
@@ -235,7 +238,7 @@ func (s *Service) Resolve(ctx context.Context, req ResolveRequest) (*ResolveResu
 	}
 	defer s.release(req.WorkspaceID)
 
-	ex := &Executor{DB: eng.DB, Time: s.Now}
+	ex := &Executor{DB: eng.DB, Time: s.Now, WorkspaceID: req.WorkspaceID, Bounces: s.Bounces}
 	out, err := ex.Apply(ctx, f)
 	if err != nil {
 		return nil, fmt.Errorf("la réparation a échoué (rien n'a été modifié): %w", err)

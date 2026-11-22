@@ -33,6 +33,7 @@ type Ingestor struct {
 	store    *Store
 	log      logger.Logger
 	notifier Notifier
+	bounces  BounceSink
 	now      func() time.Time
 }
 
@@ -135,6 +136,9 @@ func (g *Ingestor) IngestRaw(ctx context.Context, ws string, box BoxInfo, ref Ma
 
 	// Boite a portee « replies » : le courrier sans lien avec un de NOS envois n'est ni stocke ni affiche.
 	// Il reste dans la boite IMAP (jamais supprime) ; le repere avance, il ne sera pas relu.
+	// Un rebond hors portée (boîte « replies », envoi d'origine qui n'est pas le nôtre : courrier
+	// d'un salarié) n'est ni rangé ni appliqué : ce n'est pas un rebond de nos envois.
+	bounce := bounceOf(verdict, link, profile)
 	if !InScope(box.Scope, verdict.Kind, link) {
 		g.log.WithFields(map[string]interface{}{
 			"workspace_id": ws, "integration_id": ref.IntegrationID, "uid": ref.UID, "kind": string(verdict.Kind),
@@ -229,6 +233,9 @@ func (g *Ingestor) IngestRaw(ctx context.Context, ws string, box BoxInfo, ref Ma
 		g.log.WithFields(map[string]interface{}{"workspace_id": ws, "error": err.Error()}).Warn("Mailbox: duplicate resolution failed, will be settled on the next pass")
 	}
 	m.DuplicateOf = dupOf
+	if dupOf == "" { // une copie (Sieve, alias) d'un rapport déjà rangé ne s'applique pas deux fois
+		g.applyBounce(ctx, ws, bounce)
+	}
 	if m.MessageID != "" {
 		if _, err := g.store.Rethread(ctx, ws, m.ThreadID, m.MessageID, ""); err != nil {
 			g.log.WithFields(map[string]interface{}{"workspace_id": ws, "error": err.Error()}).Warn("Mailbox: rethread failed")
