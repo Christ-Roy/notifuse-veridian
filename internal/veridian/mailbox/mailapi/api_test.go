@@ -492,10 +492,14 @@ func TestMailboxesList(t *testing.T) {
 	}
 }
 
-// lit les événements SSE jusqu'à n événements ou délai
+// lit les événements SSE jusqu'à n événements ou délai. Au délai, la lecture continue en fond :
+// out est gardé par mu et l'appelant reçoit une copie (course vue par -race en CI le 22/11/2026).
 func readEvents(t *testing.T, resp *http.Response, n int, wait time.Duration) []map[string]string {
 	t.Helper()
-	var out []map[string]string
+	var (
+		mu  sync.Mutex
+		out []map[string]string
+	)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -505,8 +509,11 @@ func readEvents(t *testing.T, resp *http.Response, n int, wait time.Duration) []
 			line := sc.Text()
 			if line == "" {
 				if len(cur) > 0 && cur["event"] != "" {
+					mu.Lock()
 					out = append(out, cur)
-					if len(out) >= n {
+					full := len(out) >= n
+					mu.Unlock()
+					if full {
 						return
 					}
 				}
@@ -522,7 +529,9 @@ func readEvents(t *testing.T, resp *http.Response, n int, wait time.Duration) []
 	case <-done:
 	case <-time.After(wait):
 	}
-	return out
+	mu.Lock()
+	defer mu.Unlock()
+	return append([]map[string]string(nil), out...)
 }
 
 func TestEvents_StreamAndResume(t *testing.T) {
