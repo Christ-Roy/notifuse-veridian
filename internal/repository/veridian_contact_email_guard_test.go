@@ -14,6 +14,12 @@ type recordingContactRepo struct {
 	domain.ContactRepository
 	upserted []string
 	bulk     [][]string
+	read     []string
+}
+
+func (r *recordingContactRepo) GetContactByEmail(_ context.Context, _ string, email string) (*domain.Contact, error) {
+	r.read = append(r.read, email)
+	return &domain.Contact{Email: email}, nil
 }
 
 func (r *recordingContactRepo) UpsertContact(_ context.Context, _ string, c *domain.Contact) (bool, error) {
@@ -57,4 +63,15 @@ func TestVeridianContactEmailGuard_BulkIsAllOrNothing(t *testing.T) {
 	_, err = g.BulkUpsertContacts(context.Background(), "ws", []*domain.Contact{{Email: "ok@example.fr"}, {Email: "un@x.fr\r\ndeux@x.fr"}})
 	assert.Error(t, err)
 	assert.Len(t, inner.bulk, 1, "un lot avec une adresse abîmée n'est pas écrit à moitié")
+}
+
+// Les lectures passent telles quelles : une adresse abîmée déjà en base reste joignable par sa
+// clé stockée, le temps de la corriger ou de la mettre en quarantaine.
+func TestNewVeridianContactEmailGuard_ReadsPassThroughUntouched(t *testing.T) {
+	inner := &recordingContactRepo{}
+	g := NewVeridianContactEmailGuard(inner)
+	c, err := g.GetContactByEmail(context.Background(), "ws", "%20legi@legiavocats.eu")
+	require.NoError(t, err)
+	assert.Equal(t, "%20legi@legiavocats.eu", c.Email)
+	assert.Equal(t, []string{"%20legi@legiavocats.eu"}, inner.read)
 }

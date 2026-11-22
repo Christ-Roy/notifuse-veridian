@@ -2901,3 +2901,13 @@ func TestTrimUnicodeSpace(t *testing.T) {
 		})
 	}
 }
+
+// VER-220 (22/11/2026). // La porte : Contact.Validate (API, import CSV, synchro Prospection) normalise ou refuse.
+func TestContactValidate_UsesCanonicalEmail(t *testing.T) {
+	c := &Contact{Email: "06%0d%0aemail%3ahotel.des.lacs@netcourrier.com"}
+	require.NoError(t, c.Validate())
+	assert.Equal(t, "hotel.des.lacs@netcourrier.com", c.Email, "l'adresse rangée est l'adresse réelle")
+
+	bad := &Contact{Email: "a%20b@example.fr"}
+	assert.Error(t, bad.Validate(), "une adresse ambiguë n'entre pas")
+}
