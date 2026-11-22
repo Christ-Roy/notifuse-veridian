@@ -339,6 +339,13 @@ func TestClassifyBounce(t *testing.T) {
 			expected: BounceClassificationSoftCount,
 		},
 		{
+			// VER-220 (23/11/2026) : le serveur du destinataire n'héberge pas le domaine.
+			name: "SMTP NDR 5.7.1 Relay access denied (adresse morte) is Hard",
+			in: BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.7.1",
+				Diagnostic: "smtp; 554 5.7.1 <pax@merlintour.com>: Relay access denied"},
+			expected: BounceClassificationHard,
+		},
+		{
 			name: "SMTP NDR 5.1.10 RecipientNotFound is Hard",
 			in: BounceInput{Provider: EmailProviderKindSMTP, Type: "Bounce", Subtype: "5.1.10",
 				Diagnostic: "smtp;550 5.1.10 RESOLVER.ADR.RecipientNotFound; Recipient user@example.test not found by SMTP address lookup"},

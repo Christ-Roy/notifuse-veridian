@@ -350,6 +350,7 @@ func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, 
 		s.logger.WithField("email", contact.Email).Error(fmt.Sprintf("Invalid contact: %v", err))
 		return operation
 	}
+	operation.Email = contact.Email // Veridian (VER-220) : la réponse rend l'adresse rangée, normalisée par Validate
 
 	// CreatedAt and UpdatedAt are optional - if not provided, DB will use CURRENT_TIMESTAMP
 	// If provided, the values will be used (allows historical imports)
@@ -362,6 +363,7 @@ func (s *ContactService) UpsertContact(ctx context.Context, workspaceID string, 
 		return operation
 	}
 
+	operation.Email = contact.Email // le garde du dépôt peut l'avoir corrigée aussi
 	if !isNew {
 		operation.Action = domain.UpsertContactOperationUpdate
 	}

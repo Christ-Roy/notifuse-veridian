@@ -392,6 +392,17 @@ func TestContactService_UpsertContact(t *testing.T) {
 		assert.Empty(t, result.Error)
 	})
 
+	// VER-220 : la réponse rend l'adresse RANGÉE (corrigée à l'entrée), pas celle qui a été saisie.
+	t.Run("response carries the stored address", func(t *testing.T) {
+		raw := &domain.Contact{Email: "06%0d%0aemail%3aHotel.Des.Lacs@netcourrier.com"}
+		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, &domain.User{}, userWorkspace, nil)
+		mockRepo.EXPECT().UpsertContact(ctx, workspaceID, raw).Return(true, nil)
+
+		result := service.UpsertContact(ctx, workspaceID, raw)
+		assert.Equal(t, domain.UpsertContactOperationCreate, result.Action)
+		assert.Equal(t, "hotel.des.lacs@netcourrier.com", result.Email)
+	})
+
 	t.Run("authentication error", func(t *testing.T) {
 		mockAuthService.EXPECT().AuthenticateUserForWorkspace(ctx, workspaceID).Return(ctx, nil, nil, errors.New("auth error"))
 		mockLogger.EXPECT().WithField("email", contact.Email).Return(mockLogger)

@@ -268,6 +268,9 @@ func ClassifyBounce(in BounceInput) BounceClassification {
 		if isRecipientRejected541(subtype, in.Diagnostic) {
 			return BounceClassificationHard
 		}
+		if veridianIsRelayAccessDenied(subtype, in.Diagnostic) { // VER-220 : serveur qui n'héberge pas le domaine
+			return BounceClassificationHard
+		}
 		if c := classifyDSNCode(subtype); c != nil {
 			return *c
 		}
