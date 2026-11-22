@@ -83,3 +83,7 @@ porte de la fiche 66 lit l'effet du rebond sur le J0, qui n'était jamais posé)
   (sortie, terminée, en échec) retire la ligne avant le relais. Lecture en échec : laisse passer.
 - **Rattrapage** : le réconciliateur (invariant 1, « rebond non appliqué ») juge chaque rapport par
   la même règle et propose `replay_bounces`, qui rejoue les rapports sans effet dans la chaîne.
+- **« Relay access denied » = adresse morte** (décision du 23/11/2026) : un refus 5.7.x « Relay access
+  denied » est classé Hard (`domain.veridianIsRelayAccessDenied`) : le serveur du destinataire
+  n'héberge pas le domaine. Le 5.4.1 garde la règle d'octobre, un 4.x reste temporaire. Rapports
+  passés rejoués le 23/11 (35 contacts, sauvegarde `~/sauvegardes-manuelles/notifuse-ver220-rebonds-*/relay-access-denied/`).
