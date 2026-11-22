@@ -5,6 +5,7 @@ package foldertest
 import (
 	"database/sql"
 	"fmt"
+	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	"net/url"
 	"os"
 	"sync/atomic"
@@ -18,10 +19,7 @@ var counter atomic.Int64
 // NewDB saute le test si aucune base jetable n'est fournie.
 func NewDB(t *testing.T) *sql.DB {
 	t.Helper()
-	dsn := os.Getenv("VERIDIAN_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("VERIDIAN_TEST_POSTGRES_DSN absent : test SQL des dossiers non joue")
-	}
+	dsn := testpg.DSN(t)
 	admin, err := sql.Open("postgres", dsn)
 	if err != nil {
 		t.Fatal(err)

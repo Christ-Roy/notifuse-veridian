@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
+	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	"testing"
 	"time"
 
@@ -56,10 +56,7 @@ const itNodes = `[
  {"id":"j4","type":"email","config":{"template_id":"t4"}}]`
 
 func itDB(t *testing.T) *sql.DB {
-	dsn := os.Getenv("VERIDIAN_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("VERIDIAN_TEST_POSTGRES_DSN absente : base jetable requise")
-	}
+	dsn := testpg.DSN(t)
 	db, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })

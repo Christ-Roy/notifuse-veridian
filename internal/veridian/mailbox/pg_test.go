@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
+	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -26,10 +26,7 @@ func testStore(t *testing.T) (*Store, *sql.DB) {
 // testStoreWith : comme testStore, avec le schéma donné (V63 seul pour éprouver le rattrapage de V68).
 func testStoreWith(t *testing.T, schema []string) (*Store, *sql.DB) {
 	t.Helper()
-	dsn := os.Getenv("L1_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("L1_TEST_PG_DSN absent : test Postgres non exécuté")
-	}
+	dsn := testpg.DSN(t, "L1_TEST_PG_DSN")
 	admin, err := sql.Open("postgres", dsn)
 	if err != nil {
 		t.Fatal(err)

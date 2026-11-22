@@ -531,9 +531,13 @@ jobs:
       # 22/11/2026 (VER-100) : les modules internal/veridian/ (réconciliateur, boîte unifiée, dossiers,
       # politique, MCP...) ne tournaient dans AUCUN job. Leurs tests PostgreSQL jouent les vraies requêtes
       # sur la base du service ; -p 1 car ils recréent leurs tables dans la même base.
+      # VERIDIAN_TEST_REQUIRE_PG=1 (paquet internal/veridian/testpg) : une base absente fait ÉCHOUER
+      # les tests au lieu de les ignorer ; la boîte unifiée et la politique lisaient d'autres variables
+      # et étaient ignorées en silence, elles retombent désormais sur la variable commune.
       - name: Veridian modules (internal/veridian, vrai PostgreSQL)
         env:
           VERIDIAN_TEST_POSTGRES_DSN: postgres://postgres:test@localhost:5432/notifuse_test?sslmode=disable
+          VERIDIAN_TEST_REQUIRE_PG: "1"
         run: |
           go test -race -count=1 -p 1 -timeout 900s ./internal/veridian/...
 

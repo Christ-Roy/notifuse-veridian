@@ -6,7 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
+	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,10 +23,7 @@ const SecretKey = "cle-de-test"
 // NewStore rend un store sur un schéma neuf, avec les tables de Notifuse dont il dépend.
 func NewStore(t *testing.T) (*mailbox.Store, *sql.DB) {
 	t.Helper()
-	dsn := os.Getenv("L1_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("L1_TEST_PG_DSN absent : test Postgres non exécuté")
-	}
+	dsn := testpg.DSN(t, "L1_TEST_PG_DSN")
 	admin, err := sql.Open("postgres", dsn)
 	if err != nil {
 		t.Fatal(err)

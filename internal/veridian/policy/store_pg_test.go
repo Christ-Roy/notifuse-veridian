@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	"math/rand"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -26,10 +26,7 @@ import (
 // requêtes du dépôt, dont la réécriture des mails en file à un changement de priorité.
 func pgDB(t *testing.T) *sql.DB {
 	t.Helper()
-	dsn := os.Getenv("VERIDIAN_POLICY_TEST_DSN")
-	if dsn == "" {
-		t.Skip("VERIDIAN_POLICY_TEST_DSN non posé")
-	}
+	dsn := testpg.DSN(t, "VERIDIAN_POLICY_TEST_DSN")
 	// Schéma à part : d'autres paquets peuvent utiliser la même base de test en même temps (go test lance les paquets en parallèle).
 	admin, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)
@@ -377,10 +374,7 @@ func TestPG_SuggestionRelancesEtCandidatsDeLaReserve(t *testing.T) {
 // campagne de priorité 5 même si elle est arrivée après ; changer la priorité d'une campagne dont les mails sont déjà en file
 // change l'ordre de sortie ; le transactionnel de séquence (1) passe toujours avant.
 func TestPG_PrioriteBoutEnBoutAvecLaVraieFile(t *testing.T) {
-	dsn := os.Getenv("VERIDIAN_POLICY_TEST_DSN")
-	if dsn == "" {
-		t.Skip("VERIDIAN_POLICY_TEST_DSN non posé")
-	}
+	dsn := testpg.DSN(t, "VERIDIAN_POLICY_TEST_DSN")
 	ctx := context.Background()
 	admin, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)
