@@ -100,7 +100,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `48` constitution CI — règles non négociables (tiers de promotion prod)
 - `71` relais SMTP de soumission et certificat géré (réglages système, env = surcharge)
 - `72` commandes de vérité (relever plutôt que croire)
-- `49` commandes tests (Makefile)
+- `49` commandes tests (Makefile, PostgreSQL `testpg`)
 - `41` sync upstream
 - `42` déploiement — GitOps Nomad
 - `43` tests E2E Veridian
