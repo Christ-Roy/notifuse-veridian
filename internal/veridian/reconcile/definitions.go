@@ -48,6 +48,18 @@ var definitions = []Definition{
 		Definition: "automations.stats (inscrits, terminés, sortis, échoués) doit égaler le décompte des lignes de contact_automations par statut.",
 		Source:     "automations.stats et contact_automations",
 	},
+	{
+		Key:        "envoyes",
+		Label:      "Mails commerciaux envoyés",
+		Definition: "Lignes de message_history hors transactionnel (ni transactional_notification_id ni type « transactional »). Chacune doit avoir, sous 48 h, une issue : acceptée par le relais (sent_at), refusée (failed_at) ou rebondie (bounced_at) ; un rapport de non-remise définitif relié doit être reporté en rebond ; un envoi parti a sa copie dans la boîte unifiée (sent_ref) sous 1 h.",
+		Source:     "message_history et veridian_mail_message",
+	},
+	{
+		Key:        "reponses_orphelines",
+		Label:      "Réponses humaines orphelines",
+		Definition: "Mails entrants de type « réponse humaine », hors copies dédoublonnées, reçus depuis plus d'1 h, dont le lien ne nomme aucun envoi (link.sent_message_id vide). Rattachable : un envoi antérieur au même contact porte le même objet, préfixes Re/TR/Fwd retirés.",
+		Source:     "veridian_mail_message",
+	},
 }
 
 // Definitions rend une copie du registre.

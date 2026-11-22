@@ -528,6 +528,15 @@ jobs:
             ./internal/http/... \
             -run "Veridian" -timeout 120s
 
+      # 22/11/2026 (VER-100) : les modules internal/veridian/ (réconciliateur, boîte unifiée, dossiers,
+      # politique, MCP...) ne tournaient dans AUCUN job. Leurs tests PostgreSQL jouent les vraies requêtes
+      # sur la base du service ; -p 1 car ils recréent leurs tables dans la même base.
+      - name: Veridian modules (internal/veridian, vrai PostgreSQL)
+        env:
+          VERIDIAN_TEST_POSTGRES_DSN: postgres://postgres:test@localhost:5432/notifuse_test?sslmode=disable
+        run: |
+          go test -race -count=1 -p 1 -timeout 900s ./internal/veridian/...
+
       - name: Upstream tests must still pass
         run: |
           go test -race -timeout 300s ./internal/domain/... ./internal/repository/... ./internal/service/... ./internal/http/...

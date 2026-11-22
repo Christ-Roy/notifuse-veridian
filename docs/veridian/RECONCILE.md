@@ -22,12 +22,16 @@ Droits : lecture de `contacts`, `message_history`, `automations` pour tout ; `re
 
 | N° | Code | Fichier | Ce qu'il vérifie | Réparation |
 |---|---|---|---|---|
+| 1 | `envoye_livre` | `inv_envoye.go` | chaque mail commercial a une issue sous 48 h (accepté par le relais, refusé, rebondi) ; un rapport de non-remise définitif relié est reporté en rebond ; chaque envoi parti a sa copie dans la boîte unifiée sous 1 h (`sent_ref` à la capture, `link.sent_message_id` à la reprise d'historique) | aucune (cause à instruire) |
+| 2 | `reponse_rattachee` | `inv_reponse.go` | chaque réponse humaine (hors copies dédoublonnées, reçue depuis plus d'1 h) nomme son envoi (`link.sent_message_id`) | rattacher à l'envoi antérieur du même contact au même objet (Re/TR/Fwd retirés) : lien `match_type=subject`, `linked_by=reconcile`, fil de l'envoi |
 | 3 | `statut_coherent` | `inv_statut.go` | un contact qui a répondu / rebondi / s'est désinscrit / est dans une liste « exclu » n'est plus inscrit ni en file ; aucun mail après réponse ou désinscription | sortir les contacts, retirer les envois en file (journalisé) |
 | 4 | `compteurs` | `inv_compteurs.go` | compteurs stockés = inscriptions ; « envoyés à l'étape » servi = mails partis ; sorties pour réponse = réponses humaines ; partition de J0 ; raisons de sortie rangées | recalculer `automations.stats` |
 | 6 | `classes` | `inv_classes.go` | `custom_string_5` = classe du domaine quand elle est certaine | reclasser (`freemail_fr` vers orange, free...) |
 | 7 | `stock` | `inv_stock.go` | aucun envoi en file pour un mail déjà parti ; stock annoncé = recompte indépendant | retirer le doublon de la file |
 
-Les contrôles 1, 2 et 5 (envoyé = livré, réponse rattachée, copies aux humains) lisent `veridian_mail_message` (lot L1).
+Les contrôles 1 et 2 lisent `veridian_mail_message` (lot L1) ; table absente = non abouti, jamais « ok ». Le contrôle 5 (copies aux humains) reste à écrire.
+
+Tests : `go test ./internal/veridian/reconcile/` avec `VERIDIAN_TEST_POSTGRES_DSN` (base jetable) joue les vraies requêtes ; la CI (`test-go`) les joue sur sa base de service depuis le 22/11/2026.
 
 Chaque grandeur comptée a UNE définition écrite (`definitions.go`, rendue dans le rapport). Les chiffres servis sont reconstruits avec le même code que `prospection.stats`, puis recoupés avec une requête indépendante.
 

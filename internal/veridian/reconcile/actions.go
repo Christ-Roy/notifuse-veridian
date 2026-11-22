@@ -20,6 +20,7 @@ const (
 	ActionExitContacts = "exit_contacts"
 	ActionCancelQueue  = "cancel_queue_entries"
 	ActionRecountStats = "recount_automation_stats"
+	ActionLinkReplies  = "link_orphan_replies"
 )
 
 // Executor applique les actions proposées.
@@ -57,6 +58,8 @@ func (x *Executor) Apply(ctx context.Context, f *Finding) (map[string]any, error
 		return x.cancelQueue(ctx, a.Params)
 	case ActionRecountStats:
 		return x.recountStats(ctx, a.Params)
+	case ActionLinkReplies:
+		return x.linkReplies(ctx)
 	}
 	return nil, fmt.Errorf("action inconnue: %s", a.Kind)
 }
@@ -309,4 +312,23 @@ func (x *Executor) recountStats(ctx context.Context, p map[string]any) (map[stri
 	}
 	n, _ := res.RowsAffected()
 	return map[string]any{"automations": n}, nil
+}
+
+// linkReplies rattache chaque réponse humaine orpheline à l'envoi probable (même contact, même
+// objet, envoi antérieur) : lien posé et fil de l'envoi repris. Les cibles sont relues ici.
+// match_type « subject » (vocabulaire de mailbox.Link) et linked_by « reconcile » disent d'où vient le lien.
+func (x *Executor) linkReplies(ctx context.Context) (map[string]any, error) {
+	res, err := x.DB.ExecContext(ctx, `
+		WITH t AS (`+orphanSelect+`)
+		UPDATE veridian_mail_message m
+		SET link = COALESCE(m.link, '{}'::jsonb) || jsonb_build_object('sent_message_id', `+sentRefExpr("s")+`, 'match_type', 'subject', 'linked_by', 'reconcile'),
+		    thread_id = s.thread_id, updated_at = $2
+		FROM t JOIN veridian_mail_message s ON s.id = t.candidate
+		WHERE m.id = t.id AND t.candidate IS NOT NULL AND `+sentRefExpr("s")+` IS NOT NULL`,
+		x.now().Add(-ReplyLinkGrace), x.now())
+	if err != nil {
+		return nil, fmt.Errorf("rattachement des réponses: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return map[string]any{"linked": n}, nil
 }
