@@ -102,10 +102,15 @@ func judgeOrphans(rows []orphanRow) []Finding {
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].At.After(rows[j].At) })
 	fixable := 0
-	var sampleOut []any
+	var sampleOut, fixableOut []any
 	for _, r := range rows {
 		if r.Candidate != "" {
 			fixable++
+			// fixable_sample : ce que la réparation rattacherait, pour en juger avant d'appliquer.
+			if len(fixableOut) < 20 {
+				fixableOut = append(fixableOut, map[string]any{"message": r.ID, "contact": r.Contact, "subject": r.Subject,
+					"received_at": r.At.UTC().Format(time.RFC3339), "probable_sent": r.Candidate})
+			}
 		}
 		if len(sampleOut) < 8 {
 			e := map[string]any{"message": r.ID, "contact": r.Contact, "subject": r.Subject, "received_at": r.At.UTC().Format(time.RFC3339)}
@@ -130,6 +135,9 @@ func judgeOrphans(rows []orphanRow) []Finding {
 		Observed:    fmt.Sprintf("%s orpheline%s dont %s rattachable%s", frInt(n), pluralS(n), frInt(fixable), pluralS(fixable)),
 		Explanation: why,
 		Evidence:    map[string]any{"count": n, "fixable": fixable, "sample": sampleOut, "definition": "reponses_orphelines"},
+	}
+	if len(fixableOut) > 0 {
+		f.Evidence["fixable_sample"] = fixableOut
 	}
 	if fixable > 0 {
 		f.ProposedAction = &Action{

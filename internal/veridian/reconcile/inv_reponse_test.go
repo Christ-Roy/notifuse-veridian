@@ -24,12 +24,18 @@ func TestJudgeOrphans_RepairableAndNot(t *testing.T) {
 	require.NotNil(t, f.ProposedAction)
 	assert.Equal(t, ActionLinkReplies, f.ProposedAction.Kind)
 	assert.Equal(t, "Rattacher 1 réponse à l'envoi probable", f.ProposedAction.Label)
+	fx, ok := f.Evidence["fixable_sample"].([]any)
+	require.True(t, ok, "les réponses rattachables sont nommées dans la preuve")
+	require.Len(t, fx, 1)
+	assert.Equal(t, "out1", fx[0].(map[string]any)["probable_sent"])
+	assert.Equal(t, "m1", fx[0].(map[string]any)["message"])
 }
 
 func TestJudgeOrphans_NoCandidateMeansNoAction(t *testing.T) {
 	fs := judgeOrphans([]orphanRow{{ID: "m2", Contact: "b@x.fr", Subject: "Bonjour", At: t0}})
 	require.Len(t, fs, 1)
 	assert.Nil(t, fs[0].ProposedAction)
+	assert.NotContains(t, fs[0].Evidence, "fixable_sample")
 	assert.Contains(t, fs[0].Explanation, "1 réponse humaine n'est reliée à aucun envoi")
 	assert.Contains(t, fs[0].Explanation, "Elle n'apparaît dans aucun fil")
 	assert.Empty(t, judgeOrphans(nil))
