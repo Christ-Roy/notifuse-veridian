@@ -3,6 +3,8 @@ package reconcile
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -51,6 +53,24 @@ const bounceNotAppliedQuery = `
 	JOIN message_history mh ON mh.id = m.link->>'sent_message_id'
 	WHERE m.direction = 'in' AND m.kind = 'bounce_hard' AND mh.bounced_at IS NULL AND m.occurred_at < $1` + commercialMH
 
+// bounceByCategoryQuery : les mêmes rebonds non appliqués, par catégorie du rapport (dsn.category,
+// valeurs stables de mailbox.Cat*). Une boîte pleine et une adresse inexistante ne se traitent pas pareil.
+const bounceByCategoryQuery = `
+	SELECT COALESCE(NULLIF(m.dsn->>'category', ''), 'inconnu'), COUNT(DISTINCT mh.id)
+	FROM veridian_mail_message m
+	JOIN message_history mh ON mh.id = m.link->>'sent_message_id'
+	WHERE m.direction = 'in' AND m.kind = 'bounce_hard' AND mh.bounced_at IS NULL AND m.occurred_at < $1` + commercialMH + `
+	GROUP BY 1`
+
+// bounceCategoryFR : libellé français des catégories de rebond (mailbox.Cat*).
+var bounceCategoryFR = map[string]string{
+	"adresse_inexistante": "adresse inexistante", "domaine_inexistant": "domaine inexistant",
+	"boite_inactive": "boîte inactive", "boite_pleine": "boîte pleine", "message_trop_gros": "message trop gros",
+	"refus_politique": "refus de politique", "reputation": "réputation", "authentification": "authentification",
+	"greylisting": "mise en attente", "limite_debit": "limite de débit", "serveur_injoignable": "serveur injoignable",
+	"relais_refuse": "relais refusé", "retard": "retard", "inconnu": "non classé",
+}
+
 const notMirroredQuery = `
 	SELECT COUNT(*), (array_agg(mh.id ORDER BY mh.sent_at DESC))[1:5], MIN(mh.sent_at)
 	FROM message_history mh
@@ -63,6 +83,8 @@ type envoyeRow struct {
 	Count  int
 	Sample []string
 	Oldest *time.Time
+	// ByCategory : pour les rebonds non appliqués, nombre d'envois par catégorie du rapport.
+	ByCategory map[string]int
 }
 
 const (
@@ -101,9 +123,55 @@ func (envoyeInvariant) Check(ctx context.Context, env Env) ([]Finding, error) {
 		if err := rs.Close(); err != nil {
 			return nil, err
 		}
+		if q.cause == causeBounceLost && r.Count > 0 {
+			if r.ByCategory, err = bounceCategories(ctx, env, q.cutoff); err != nil {
+				return nil, err
+			}
+		}
 		rows = append(rows, r)
 	}
 	return judgeEnvoye(rows), nil
+}
+
+func bounceCategories(ctx context.Context, env Env, cutoff time.Time) (map[string]int, error) {
+	rs, err := env.DB.QueryContext(ctx, bounceByCategoryQuery, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("rebonds par catégorie: %w", err)
+	}
+	defer rs.Close()
+	out := map[string]int{}
+	for rs.Next() {
+		var c string
+		var n int
+		if err := rs.Scan(&c, &n); err != nil {
+			return nil, err
+		}
+		out[c] = n
+	}
+	return out, rs.Err()
+}
+
+// categoriesFR : « 60 boîte pleine, 40 adresse inexistante » (plus grand d'abord, puis par nom).
+func categoriesFR(by map[string]int) string {
+	keys := make([]string, 0, len(by))
+	for k := range by {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if by[keys[i]] != by[keys[j]] {
+			return by[keys[i]] > by[keys[j]]
+		}
+		return keys[i] < keys[j]
+	})
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		l := bounceCategoryFR[k]
+		if l == "" {
+			l = k
+		}
+		parts = append(parts, frInt(by[k])+" "+l)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func judgeEnvoye(rows []envoyeRow) []Finding {
@@ -132,6 +200,14 @@ func judgeEnvoye(rows []envoyeRow) []Finding {
 			f.Title = fmt.Sprintf("%s %s de non-remise définitif reçu%s sans effet sur l'historique", frInt(n), plural(n, "rapport", "rapports"), pluralS(n))
 			f.Expected = "chaque rapport de non-remise définitif marque l'envoi comme rebondi et arrête le contact"
 			f.Observed = fmt.Sprintf("%s rapport%s définitif%s reçu%s, historique sans rebond", frInt(n), pluralS(n), pluralS(n), pluralS(n))
+			if len(r.ByCategory) > 0 {
+				f.Observed += " (" + categoriesFR(r.ByCategory) + ")"
+				byc := map[string]any{}
+				for k, v := range r.ByCategory {
+					byc[k] = v
+				}
+				f.Evidence["by_category"] = byc
+			}
 			f.Explanation = "Le relais a renvoyé un rapport de non-remise définitif (adresse inexistante ou refusée) dans sa boîte, relié à l'envoi, mais l'historique n'enregistre aucun rebond : le contact reste joignable et sera relancé. La chaîne « rapport de non-remise vers suppression du contact » n'a pas joué pour ces envois."
 		case causeNotMirrored:
 			f.Severity = SeverityWarning

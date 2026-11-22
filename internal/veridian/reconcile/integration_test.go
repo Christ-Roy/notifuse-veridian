@@ -441,6 +441,15 @@ func TestIntegration_EnvoyeEtReponseRattachee(t *testing.T) {
 	mh("mhD", "d@x.fr", h5, &h5, nil)
 	itMail(t, db, "outD", "out", "sent", "d@x.fr", "Offre", h5, "mhD", "")
 	itMail(t, db, "dsnD", "in", "bounce_hard", "d@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhD"}`)
+	itExec(t, db, `UPDATE veridian_mail_message SET dsn = '{"category": "boite_pleine"}' WHERE id = 'dsnD'`)
+	// D2 : adresse inexistante, non appliquée non plus ; D3 : rapport sans catégorie.
+	mh("mhD2", "d2@x.fr", h5, &h5, nil)
+	itMail(t, db, "outD2", "out", "sent", "d2@x.fr", "Offre", h5, "mhD2", "")
+	itMail(t, db, "dsnD2", "in", "bounce_hard", "d2@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhD2"}`)
+	itExec(t, db, `UPDATE veridian_mail_message SET dsn = '{"category": "adresse_inexistante"}' WHERE id = 'dsnD2'`)
+	mh("mhD3", "d3@x.fr", h5, &h5, nil)
+	itMail(t, db, "outD3", "out", "sent", "d3@x.fr", "Offre", h5, "mhD3", "")
+	itMail(t, db, "dsnD3", "in", "bounce_hard", "d3@x.fr", "Undelivered", h3, "", `{"sent_message_id": "mhD3"}`)
 	// E : rebond correctement appliqué : rien à reprocher.
 	mh("mhE", "e@x.fr", h5, &h5, &h3)
 	itMail(t, db, "outE", "out", "sent", "e@x.fr", "Offre", h5, "mhE", "")
@@ -456,7 +465,10 @@ func TestIntegration_EnvoyeEtReponseRattachee(t *testing.T) {
 		require.NotNil(t, findingByRef(rep.Findings, ref), ref)
 	}
 	assert.EqualValues(t, 1, findingByRef(rep.Findings, "envoye:sans_issue").Evidence["count"], "seul mhC : mhOld, aussi vieux, est parti ; mhPending est dans le délai")
-	assert.EqualValues(t, 1, findingByRef(rep.Findings, "envoye:rebond_non_applique").Evidence["count"], "seul mhD : mhE est appliqué")
+	lost := findingByRef(rep.Findings, "envoye:rebond_non_applique")
+	assert.EqualValues(t, 3, lost.Evidence["count"], "mhD, mhD2, mhD3 : mhE est appliqué")
+	assert.Equal(t, map[string]any{"boite_pleine": float64(1), "adresse_inexistante": float64(1), "inconnu": float64(1)}, lost.Evidence["by_category"])
+	assert.Contains(t, lost.Observed, "(1 adresse inexistante, 1 boîte pleine, 1 non classé)")
 	assert.EqualValues(t, 1, findingByRef(rep.Findings, "envoye:absent_de_la_boite").Evidence["count"], "seul mhB : mhJust est dans le délai")
 	orph := findingByRef(rep.Findings, "orphelines:reply_human")
 	assert.EqualValues(t, 4, orph.Evidence["count"], "inA, inR, inW et inZ ; inOK est relié, inNew est dans le délai de grâce, inZcopy est une copie")
