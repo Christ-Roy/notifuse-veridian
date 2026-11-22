@@ -249,6 +249,10 @@ func (a *App) veridianInitRepositories() {
 	a.veridianPlanRepo = repository.NewVeridianPlanRepository(a.db)
 	a.messageHistoryRepo = repository.NewVeridianMessageHistoryDecorator(a.messageHistoryRepo, a.veridianPlanRepo, a.logger)
 
+	// VER-220 : aucune adresse de contact abîmée n'entre en base, quelle que soit la voie
+	// (inscription publique, événements, préférences écrivent sans passer par Contact.Validate).
+	a.contactRepo = repository.NewVeridianContactEmailGuard(a.contactRepo)
+
 	// === Veridian patches ===
 	// veridianPlanRepo est deja initialise plus haut (avant le decorator
 	// messageHistoryRepo). On garde juste l'init du repo idempotency ici.

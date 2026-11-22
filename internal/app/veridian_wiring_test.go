@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/Notifuse/notifuse/internal/repository"
 	"net/http"
 	"sync"
 	"testing"
@@ -10,8 +11,8 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/config"
-	httpHandler "github.com/Notifuse/notifuse/internal/http"
 	domainmocks "github.com/Notifuse/notifuse/internal/domain/mocks"
+	httpHandler "github.com/Notifuse/notifuse/internal/http"
 	veridianmig "github.com/Notifuse/notifuse/internal/migrations/veridian"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -123,6 +124,8 @@ func TestVeridianInitRepositories_BuildsReposAndDecoratesMessageHistory(t *testi
 	a.db = db
 	original := domainmocks.NewMockMessageHistoryRepository(ctrl)
 	a.messageHistoryRepo = original
+	contacts := domainmocks.NewMockContactRepository(ctrl)
+	a.contactRepo = contacts
 
 	a.veridianInitRepositories()
 
@@ -134,6 +137,8 @@ func TestVeridianInitRepositories_BuildsReposAndDecoratesMessageHistory(t *testi
 	assert.NotNil(t, a.veridianIMAPUIDSeenRepo)
 	assert.NotNil(t, a.veridianContactReplyRepo)
 	assert.NotSame(t, original, a.messageHistoryRepo, "l'historique doit être décoré (quota)")
+	_, guarded := a.contactRepo.(*repository.VeridianContactEmailGuard)
+	assert.True(t, guarded, "VER-220 : toute écriture de contact passe par le garde d'adresse")
 }
 
 // Une migration enregistrée ne doit pas faire paniquer un assemblage sans base système (tests d'assemblage).

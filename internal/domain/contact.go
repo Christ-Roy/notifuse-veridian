@@ -92,12 +92,12 @@ func (c *Contact) Validate() error {
 	if c.Email == "" {
 		return fmt.Errorf("email is required")
 	}
-	// Normalize email to lowercase
-	c.Email = NormalizeEmail(c.Email)
-	// Email must be valid
-	if !govalidator.IsEmail(c.Email) {
-		return fmt.Errorf("invalid email format")
+	// Veridian (VER-220) : normalise et refuse les adresses abîmées, veridian_contact_email.go
+	email, err := VeridianCanonicalContactEmail(c.Email)
+	if err != nil {
+		return err
 	}
+	c.Email = email
 
 	return nil
 }

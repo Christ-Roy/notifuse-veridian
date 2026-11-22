@@ -49,3 +49,25 @@ réputation IP et gaspille du quota. Spec : ticket
 |---|---|
 | `internal/service/queue/worker.go` | +gate `veridianPrefilterRecipient` dans `processEntry` (APRÈS le daily cap, AVANT `MarkAsProcessing`) → route vers `handleError` permanent (skip SMTP, jamais re-tenté). Importe `fmt`/`emailerror` déjà présents. |
 
+
+## Adresse normalisée à l'ENTRÉE (VER-220, 22/11/2026)
+
+Le pré-filtre d'envoi arrive trop tard : une adresse abîmée entrée en base part quand même en
+séquence. Relevé en prod (80 121 contacts lus) : 51 adresses `06%0d%0aemail%3ahotel…@…` dans
+greenbeamcraft (export Prospection du 30/10 : fin de téléphone, saut de ligne, « email: ») et 2
+`%20legi@…` dans robertbrunon (import CSV du 06/10). `govalidator.IsEmail` accepte « % ».
+
+- Règle unique : `domain.VeridianCanonicalContactEmail` (`internal/domain/veridian_contact_email.go`).
+  Corrige ce qui est sans ambiguïté (encodage d'URL décodé une fois, la seule ligne qui porte un `@`,
+  invisibles et espaces aux bords, étiquette `mailto:`/`email:`/`courriel:`, casse) ; refuse le reste
+  (`invalid email format: <raison>`).
+- Deux portes : `Contact.Validate` (API `contacts.upsert`/`contacts.import`, import CSV, synchro
+  Prospection : erreur par contact) et `repository.VeridianContactEmailGuard` autour du dépôt des
+  contacts (inscription publique, événements, préférences, qui écrivent sans `Validate`), câblé dans
+  `veridianInitRepositories` et vérifié par `TestVeridianInitRepositories_*`.
+- `NormalizeEmail` (lectures) n'est PAS modifié : une adresse abîmée déjà en base reste joignable
+  par sa clé le temps de la nettoyer.
+
+| Fichier upstream | Diff Veridian |
+|---|---|
+| `internal/domain/contact.go` | `Contact.Validate` appelle `VeridianCanonicalContactEmail` au lieu de `NormalizeEmail` + `IsEmail`. |
