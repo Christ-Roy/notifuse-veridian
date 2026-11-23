@@ -110,3 +110,6 @@ func (l *proxyListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 }
+
+// ProxyListener lit l'en-tête PROXY v2 de chaque connexion (partagé avec le récepteur de courrier).
+func ProxyListener(ln net.Listener) net.Listener { return newProxyListener(ln) }

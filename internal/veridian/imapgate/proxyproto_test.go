@@ -18,7 +18,7 @@ func TestProxyListener_RealClientAddressOrNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ln := newProxyListener(raw)
+	ln := ProxyListener(raw)
 	got := make(chan net.Conn, 8)
 	go func() {
 		for {
