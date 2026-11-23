@@ -50,5 +50,8 @@ campagnes), sur tout profil SMTP :
   `VeridianRelayGuard: relay IP listed on Spamhaus ZEN, sending profile suspended`), une fois ;
 - **non aboutie** : rien ne part (`relay_unverified`), nouvel essai dans 5 min ;
 - **propre** : verdict gardé 1 h, donc une mesure à chaque ouverture de fenêtre puis une par heure.
+- Serveurs : NS de la zone, sinon `a`-`e.gns.spamhaus.org`, puis 6 IPv4 épinglées. Le résolveur
+  du conteneur prod (OVH, 213.186.33.99) refuse les noms de Spamhaus : sans l'épinglage, toute la
+  prospection restait en `relay_unverified` (vu en prod le 23/11 à 00h41, corrigé dans la foulée).
 - Épreuve réelle : `VERIDIAN_TEST_NETWORK=1 go test -run Live ./internal/veridian/relayguard/`
   (l'adresse d'épreuve 127.0.0.2 doit sortir listée).

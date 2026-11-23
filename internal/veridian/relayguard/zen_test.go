@@ -108,4 +108,36 @@ func TestZEN_LiveAgainstSpamhaus(t *testing.T) {
 	if c.State == queue.RelayUnverified {
 		t.Fatalf("mesure non aboutie depuis ce poste : %s", c.Detail)
 	}
+	// Même mesure avec un résolveur qui refuse les noms de Spamhaus (cas du conteneur prod) :
+	// seules les adresses épinglées servent, et la méthode aboutit quand même.
+	z.ResolveServers = func(ctx context.Context) ([]string, error) {
+		return serverList(ctx, func(context.Context) ([]string, error) { return nil, errors.New("no such host") },
+			func(context.Context, string) ([]string, error) { return nil, errors.New("no such host") })
+	}
+	if c := z.CheckRelay(context.Background(), "127.0.0.2"); c.State != queue.RelayListed {
+		t.Fatalf("adresses épinglées : l'adresse d'épreuve doit sortir listée : %v %s", c.State, c.Detail)
+	}
+}
+
+// Prod, 23/11 : le résolveur du conteneur refuse les noms de Spamhaus. La liste des serveurs ne
+// dépend pas de lui : noms connus, puis adresses épinglées (que les témoins valideront).
+func TestServerList_SurvivesARefusingResolver(t *testing.T) {
+	refused := func(context.Context) ([]string, error) {
+		return nil, &net.DNSError{Err: "no such host", IsNotFound: true}
+	}
+	noResolve := func(context.Context, string) ([]string, error) { return nil, errors.New("no such host") }
+	got, err := serverList(context.Background(), refused, noResolve)
+	if err != nil || len(got) != len(pinnedServers) || got[0] != pinnedServers[0] {
+		t.Fatalf("résolveur qui refuse tout : on doit retomber sur les adresses épinglées, %v %v", got, err)
+	}
+	resolveSome := func(_ context.Context, h string) ([]string, error) {
+		if h == "a.gns.spamhaus.org" {
+			return []string{"9.9.9.9"}, nil
+		}
+		return nil, errors.New("no such host")
+	}
+	got, _ = serverList(context.Background(), refused, resolveSome)
+	if got[0] != "9.9.9.9" || len(got) != len(pinnedServers)+1 {
+		t.Fatalf("un nom résolu passe d'abord, les épinglées suivent sans doublon : %v", got)
+	}
 }

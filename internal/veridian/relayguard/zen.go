@@ -38,7 +38,7 @@ var _ queue.RelayChecker = (*ZEN)(nil)
 // NewZEN : le vérificateur réel (résolution système pour l'hôte et les serveurs, requête directe
 // en UDP IPv4 sur le port 53 du serveur faisant autorité, 4 s par question).
 func NewZEN() *ZEN {
-	return &ZEN{ResolveHost: resolveIPv4, ResolveServers: authoritativeServers, Query: directQuery(4 * time.Second), MaxServers: 3}
+	return &ZEN{ResolveHost: resolveIPv4, ResolveServers: authoritativeServers, Query: directQuery(3 * time.Second), MaxServers: 4}
 }
 
 // CheckRelay mesure toutes les IPv4 de l'hôte du relais.
@@ -160,17 +160,50 @@ func resolveIPv4(ctx context.Context, host string) ([]string, error) {
 	return out, nil
 }
 
+// gnsHosts : les serveurs faisant autorité de zen.spamhaus.org (NS relevés le 23/11/2026).
+var gnsHosts = []string{"a.gns.spamhaus.org", "b.gns.spamhaus.org", "c.gns.spamhaus.org", "d.gns.spamhaus.org", "e.gns.spamhaus.org"}
+
+// pinnedServers : IPv4 de ces serveurs relevées le 23/11/2026, en dernier recours. Prod : le
+// résolveur du conteneur (OVH, 213.186.33.99) refuse les noms de Spamhaus (« no such host »), comme
+// tout gros résolveur public. Une adresse périmée n'est jamais crue : les témoins l'écartent.
+var pinnedServers = []string{"185.82.216.38", "147.102.226.131", "88.198.122.239", "45.90.57.113", "208.85.20.147", "85.94.194.12"}
+
+// authoritativeServers : NS de la zone, sinon les noms connus, puis les adresses épinglées ; sans
+// doublon, dans cet ordre. Ne rend une erreur que si la liste est vide (jamais en pratique).
 func authoritativeServers(ctx context.Context) ([]string, error) {
-	nss, err := net.DefaultResolver.LookupNS(ctx, zone)
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, ns := range nss {
-		ips, err := resolveIPv4(ctx, strings.TrimSuffix(ns.Host, "."))
-		if err == nil && len(ips) > 0 {
-			out = append(out, ips[0])
+	return serverList(ctx, func(ctx context.Context) ([]string, error) {
+		nss, err := net.DefaultResolver.LookupNS(ctx, zone)
+		if err != nil {
+			return nil, err
 		}
+		var hosts []string
+		for _, ns := range nss {
+			hosts = append(hosts, strings.TrimSuffix(ns.Host, "."))
+		}
+		return hosts, nil
+	}, resolveIPv4)
+}
+
+func serverList(ctx context.Context, lookupNS func(context.Context) ([]string, error), resolve func(context.Context, string) ([]string, error)) ([]string, error) {
+	seen := map[string]bool{}
+	var out []string
+	add := func(ip string) {
+		if ip != "" && !seen[ip] {
+			seen[ip] = true
+			out = append(out, ip)
+		}
+	}
+	hosts, _ := lookupNS(ctx)
+	if len(hosts) == 0 {
+		hosts = gnsHosts
+	}
+	for _, h := range hosts {
+		if ips, err := resolve(ctx, h); err == nil && len(ips) > 0 {
+			add(ips[0])
+		}
+	}
+	for _, ip := range pinnedServers {
+		add(ip)
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("aucune IPv4 pour les serveurs de %s", zone)
