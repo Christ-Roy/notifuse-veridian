@@ -322,3 +322,12 @@ func TestVeridianSendingWindowVerdict_DescribesWindowAndReopening(t *testing.T) 
 func providerError() *emailerror.ClassifiedError {
 	return &emailerror.ClassifiedError{Type: emailerror.ErrorTypeProvider}
 }
+
+// VER-225 : la porte du relais ZEN est tracée, après la fenêtre (elle n'est évaluée qu'une fois
+// la fenêtre ouverte).
+func TestVeridianCanonicalGateOrder_RelayAfterWindow(t *testing.T) {
+	n := len(veridianCanonicalGateOrder)
+	if n < 2 || veridianCanonicalGateOrder[n-1] != domain.VeridianGateRelay || veridianCanonicalGateOrder[n-2] != domain.VeridianGateWindow {
+		t.Fatalf("ordre canonique : %v", veridianCanonicalGateOrder)
+	}
+}
