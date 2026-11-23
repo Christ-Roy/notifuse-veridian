@@ -74,3 +74,15 @@ func TestCapabilityIsRegistered(t *testing.T) {
 	}
 	t.Fatal("la capacité relayguard n'est pas enregistrée")
 }
+
+// Les règles d'alerte du parc filtrent sur ces textes EXACTS (nomad-veridian dea3d59a, 23/11/2026) :
+// vrd-notifuse-relais-liste (réveil de Robert, impact client) et vrd-notifuse-relais-non-verifie.
+// Changer un de ces messages éteint l'alerte en silence : ce test l'interdit.
+func TestAlertMessages_PinnedForParkAlertRules(t *testing.T) {
+	if AlertMessage != "VeridianRelayGuard: relay IP listed on Spamhaus ZEN, sending profile suspended" {
+		t.Fatalf("vrd-notifuse-relais-liste filtre sur ce texte : %q", AlertMessage)
+	}
+	if queue.RelayUnverifiedMessage != "VeridianRelayGuard: relay blocklist check not completed, commercial sending held" {
+		t.Fatalf("vrd-notifuse-relais-non-verifie filtre sur ce texte : %q", queue.RelayUnverifiedMessage)
+	}
+}

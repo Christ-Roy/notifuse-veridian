@@ -50,7 +50,10 @@ campagnes), sur tout profil SMTP :
   avertissement, l'envoi continue ; IPv4 imposé (en IPv6, Spamhaus voit un résolveur ouvert et
   seul le témoin 127.0.0.1 le révèle) ;
 - alertes : champs `service=notifuse-zen`, `gravite` (`critique`/`impact=client` relais listé,
-  `erreur` mesure non aboutie, `avertissement` PBL) pour une règle Loki `flux=alerte` (infra) ;
+  `erreur` mesure non aboutie, `avertissement` PBL). Règles du parc (nomad-veridian dea3d59a) :
+  `vrd-notifuse-relais-liste` (réveil de Robert, impact client) et `vrd-notifuse-relais-non-verifie`
+  (plus de 2 en 30 min, avertissement). Elles filtrent sur le TEXTE exact des messages, épinglé par
+  `TestAlertMessages_PinnedForParkAlertRules` : ne pas le reformuler sans prévenir l'infra ;
 - **listée** : l'entrée attend (`relay_blocklisted`), le profil est suspendu (`veridian_paused`,
   reprise humaine `profiles:resume` après radiation) et l'alerte part (log erreur
   `VeridianRelayGuard: relay IP listed on Spamhaus ZEN, sending profile suspended`), une fois ;
