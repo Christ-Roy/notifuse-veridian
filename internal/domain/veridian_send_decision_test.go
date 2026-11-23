@@ -90,7 +90,7 @@ func TestVeridianQueueReasons_UniqueAndComplete(t *testing.T) {
 	} {
 		assert.True(t, seen[r], "manque %s", r)
 	}
-	assert.Len(t, VeridianQueueReasons, 17)
+	assert.Len(t, VeridianQueueReasons, 19)
 }
 
 func TestVeridianQueueGroupBy_Dimensions(t *testing.T) {

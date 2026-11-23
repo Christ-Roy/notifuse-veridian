@@ -32,6 +32,10 @@ const (
 	VeridianReasonDeferredLegacy   = "deferred_legacy"    // report ancien, raison non enregistrée
 	VeridianReasonInFlight         = "in_flight"          // en cours de traitement
 	VeridianReasonOrphanParked     = "orphan_parked"      // contact parqué en envoi sans entrée en file
+	// VER-225 : IP du relais du profil en liste noire Spamhaus ZEN (profil suspendu), ou vérification
+	// impossible (rien ne part tant que la mesure n'a pas abouti).
+	VeridianReasonRelayBlocklisted = "relay_blocklisted"
+	VeridianReasonRelayUnverified  = "relay_unverified"
 )
 
 // Raisons de SORTIE d'une relance dont le premier mail (J0) n'a pas été livré
@@ -54,6 +58,7 @@ var VeridianQueueReasons = []string{
 	VeridianReasonAnchorWait, VeridianReasonQuotaDenied, VeridianReasonRenderFailed,
 	VeridianReasonGuardRetry, VeridianReasonAutomationPaused, VeridianReasonSendError,
 	VeridianReasonDeferredLegacy, VeridianReasonInFlight,
+	VeridianReasonRelayBlocklisted, VeridianReasonRelayUnverified,
 }
 
 // Issues d'une décision.
@@ -103,6 +108,7 @@ const (
 	VeridianGateDailyCap   = "daily_cap"
 	VeridianGateSenderCap  = "sender_cap"
 	VeridianGateWindow     = "window"
+	VeridianGateRelay      = "relay_blocklist" // VER-225 : IP du relais hors liste noire
 )
 
 // Verdicts d'une porte.
@@ -252,18 +258,18 @@ type VeridianQueueOrphans struct {
 
 // VeridianQueueEntryDetail est le détail d'une entrée de file.
 type VeridianQueueEntryDetail struct {
-	ID              string                `json:"id"`
-	Status          string                `json:"status"`
-	AutomationID    string                `json:"automation_id"`
-	AutomationName  string                `json:"automation_name"`
-	NodeID          string                `json:"node_id"`
-	ContactEmail    string                `json:"contact_email"`
-	IntegrationID   string                `json:"integration_id"`
-	ProfileName     string                `json:"profile_name"`
-	Class           string                `json:"class"`
-	CreatedAt       time.Time             `json:"created_at"`
+	ID             string    `json:"id"`
+	Status         string    `json:"status"`
+	AutomationID   string    `json:"automation_id"`
+	AutomationName string    `json:"automation_name"`
+	NodeID         string    `json:"node_id"`
+	ContactEmail   string    `json:"contact_email"`
+	IntegrationID  string    `json:"integration_id"`
+	ProfileName    string    `json:"profile_name"`
+	Class          string    `json:"class"`
+	CreatedAt      time.Time `json:"created_at"`
 	// Priority : priorité de dépilage (1 transactionnel de séquence, 2 à 9 marketing, défaut 5). Plus petit = plus tôt.
-	Priority    int `json:"priority"`
+	Priority        int                   `json:"priority"`
 	Attempts        int                   `json:"attempts"`
 	MaxAttempts     int                   `json:"max_attempts"`
 	NextRetryAt     *time.Time            `json:"next_retry_at"`

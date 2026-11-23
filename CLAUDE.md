@@ -29,7 +29,7 @@ brique = une fiche + une ligne d'index.
    du lead. → `05`, `13`, `14`
 4. **La cascade de protection réputation est un empilement de gates dans le worker**
    (pause profil → circuit breaker → exclusion → throttle minute → daily cap → per-sender cap →
-   sending window → pré-filtre → anti-hash), résolue `broadcast → infra → workspace →
+   sending window → relais ZEN → pré-filtre → anti-hash), résolue `broadcast → infra → workspace →
    défaut`. Retirer ou réordonner un gate sans relire toute la cascade grille un
    domaine d'envoi. Les plafonds se résolvent UNE fois (`veridianResolveCapLimits`),
    partagée avec `VeridianEffectivePlan` (API `emailProfiles.overview`) : ne pas les

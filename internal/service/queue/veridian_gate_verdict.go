@@ -63,6 +63,7 @@ var veridianCanonicalGateOrder = []string{
 	domain.VeridianGateDailyCap,
 	domain.VeridianGateSenderCap,
 	domain.VeridianGateWindow,
+	domain.VeridianGateRelay,
 }
 
 // veridianSortedKeys rend les clés d'un ensemble en ordre stable (trace lisible).

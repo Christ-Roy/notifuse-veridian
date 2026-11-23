@@ -382,7 +382,7 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 	if excl.Blocked() {
 		ev.Outcome = "excluded"
 		ev.ExcludedClass = excl.Class
-		for _, g := range []string{domain.VeridianGateReputation, domain.VeridianGateClassRate, domain.VeridianGateDailyCap, domain.VeridianGateSenderCap, domain.VeridianGateWindow} {
+		for _, g := range []string{domain.VeridianGateReputation, domain.VeridianGateClassRate, domain.VeridianGateDailyCap, domain.VeridianGateSenderCap, domain.VeridianGateWindow, domain.VeridianGateRelay} {
 			ev.Gates = append(ev.Gates, veridianSkippedVerdict(g, "class excluded on this profile"))
 		}
 		return ev
@@ -392,9 +392,14 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 	daily := w.veridianDailyCapVerdict(workspace, cand.Provider, entry)
 	sender := w.veridianPerSenderCapVerdict(workspace, cand.Provider, entry)
 	window := w.veridianSendingWindowVerdict(workspace, cand.Provider, entry)
-	othersOpen := !rep.Blocked() && !daily.Blocked() && !sender.Blocked() && !window.Blocked()
+	// VER-225 : le relais n'est vérifié qu'une fois la fenêtre ouverte (pas de requête la nuit).
+	relay := veridianSkippedVerdict(domain.VeridianGateRelay, "window closed")
+	if !window.Blocked() {
+		relay = w.veridianRelayBlocklistVerdict(workspace, cand, entry)
+	}
+	othersOpen := !rep.Blocked() && !daily.Blocked() && !sender.Blocked() && !window.Blocked() && !relay.Blocked()
 	class := w.veridianProviderClassGateVerdict(workspace, cand.Provider, entry, othersOpen)
-	ev.Gates = append(ev.Gates, rep, class, daily, sender, window)
+	ev.Gates = append(ev.Gates, rep, class, daily, sender, window, relay)
 
 	if dominant, longest := veridianDominantBlock(ev.Gates); dominant != nil {
 		ev.Outcome = "blocked"
