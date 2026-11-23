@@ -11,7 +11,7 @@ par Cloudflare Email Routing puis un libellé Gmail ; 25 réponses invisibles pe
 Un client ne parle qu'à Notifuse. Aucun tiers (Cloudflare Email Routing, filtre ou libellé Gmail, alias Postfix, Sieve) ne
 fait partie du chemin d'un mail. Ce qui est derrière (Postfix interne, Google, Infomaniak) est un détail interchangeable.
 
-    prospect --> relais (port 25, MX) --> boîte Dovecot --(tailnet)--> NOTIFUSE <-- IMAP / SMTP / API / webhook / écran -- client
+    prospect --> MX (décision 1) --> boîte Dovecot --(tailnet)--> NOTIFUSE <-- IMAP / SMTP / API / webhook / écran -- client
     client  --> NOTIFUSE (SMTP 587) --(tailnet)--> relais du profil --> prospect
 
 | Surface | Rôle | Accès | État au 23/11/2026 |
@@ -28,8 +28,10 @@ de **Notifuse vers le relais** (chiffrés dans l'intégration, jamais montrés a
 
 ## Décisions
 
-1. **Le MX reste sur le relais (port 25), pas sur Notifuse.** Un redéploiement de Notifuse ne doit pas refuser du courrier ;
-   Postfix met en attente, Notifuse reprend à l'UID suivant. C'est le seul port du relais qui a besoin d'être public.
+1. **Qui reçoit le courrier entrant (MX, port 25) : À TRANCHER PAR ROBERT.** Ses mots : Notifuse exposé, Postfix derrière le
+   VPN. (a) Notifuse reçoit et remet à Postfix par le tailnet : fidèle à ses mots ; un arrêt de Notifuse diffère le courrier
+   (les serveurs d'envoi réessaient), donc la réception doit rester séparée des déploiements de l'app. (b) Postfix reçoit,
+   seul son port 25 est public (cas d'animalsd). **Aucune bascule de MX ni ouverture publique sans son oui explicite.**
 2. **L'IMAP est servi par Notifuse depuis la boîte unifiée** (`veridian_mail_message`), pas par un proxy vers Dovecot : le même
    accès marche quel que soit le fournisseur derrière, et le client voit exactement ce que voit l'API. Serveur :
    `emersion/go-imap/v2/imapserver` (même bibliothèque que le client déjà en service).
@@ -45,11 +47,11 @@ de **Notifuse vers le relais** (chiffrés dans l'intégration, jamais montrés a
 
 | Lot | Contenu | Vu en prod quand |
 |---|---|---|
-| S0 | greenbeamcraft : MX vers le relais nord, transferts par profil, retrait de l'intégration Gmail | une réponse externe arrive dans `/inbox` et en copie, sans Cloudflare ni Gmail |
+| S0 (suspendu, attend Robert) | greenbeamcraft : MX selon la décision 1, transferts par profil, retrait de l'intégration Gmail | une réponse externe arrive dans `/inbox` et en copie, sans Cloudflare ni Gmail |
 | S1 | Accès de boîte (créer, lister, révoquer) : API, CLI, écran ; écran des transferts | un accès créé puis révoqué est refusé |
 | S2 | Serveur IMAP, tailnet d'abord, puis public sur 993 | Thunderbird lit et marque lu ; mauvais mot de passe banni |
 | S3 | SMTP de boîte, public 587 | une réponse écrite dans Thunderbird arrive chez le prospect, DKIM pass, visible dans `/inbox` |
-| S4 | `agence-veridian.fr` et `agences-veridian.fr` sortis de Cloudflare, puis fermeture des 587, 465 et 993 publics des relais | scan externe : seul le 25 répond |
+| S4 | `agence-veridian.fr` et `agences-veridian.fr` sortis de Cloudflare, puis fermeture des 587, 465 et 993 publics des relais | scan externe : seuls les ports de la décision 1 répondent |
 
 S0 ne dépend pas des autres. S4 ferme des ports dont se servent Gmail « Envoyer en tant que » et le Dolibarr d'ASD : recenser les
 usagers avant.
