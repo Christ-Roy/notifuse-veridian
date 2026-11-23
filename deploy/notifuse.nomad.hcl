@@ -108,6 +108,11 @@ job "notifuse" {
         to           = 1993
         host_network = "tailscale"
       }
+      # Récepteur de courrier des boîtes louées (fiche 84) : port DYNAMIQUE, tailnet seul. Rien de public.
+      port "mx" {
+        to           = 2525
+        host_network = "tailscale"
+      }
     }
 
     # L'IMAP des boîtes louées au catalogue : l'entrée publique le suivra quand le conteneur bouge (fiche 84).
@@ -115,6 +120,13 @@ job "notifuse" {
       name     = "notifuse-imap"
       provider = "nomad"
       port     = "imap"
+      tags     = ["traefik.enable=false"]
+    }
+
+    service {
+      name     = "notifuse-mx"
+      provider = "nomad"
+      port     = "mx"
       tags     = ["traefik.enable=false"]
     }
 
@@ -207,7 +219,7 @@ job "notifuse" {
           "site.veridian.app"   = "notifuse"
         }
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
-        ports = ["http", "smtp", "imap"]
+        ports = ["http", "smtp", "imap", "mx"]
         volumes = [
           "/opt/veridian-lab/notifuse/data:/app/data",
         ]
@@ -240,6 +252,9 @@ SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
 # Boîtes louées (fiche 84) : IMAP en TLS avec le certificat du relais, tailnet seul.
 VERIDIAN_IMAP_ENABLED=true
 VERIDIAN_IMAP_PORT=1993
+# Récepteur : adresses de profil de ces domaines seulement. Aucun MX ne pointe ici sans l'oui de Robert.
+VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr
+VERIDIAN_MX_HOST=mx.veridian.site
 SMTP_BRIDGE_TLS=starttls
 VERIDIAN_RELAY_CERT_MANAGED=true
 SERVER_HOST=0.0.0.0

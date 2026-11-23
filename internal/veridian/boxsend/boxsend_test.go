@@ -97,7 +97,7 @@ func code(err error) int {
 
 func TestSubmit_SendsOnceThroughTheBoxProfile(t *testing.T) {
 	f, s := bench()
-	data := msg("jc@boite.fr", "To: p@client.fr, p2@client.fr\r\n", "Cc: c@client.fr\r\n")
+	data := msg("jc@boite.fr", "To: p@client.fr, p2@client.fr\r\n", "Cc: c@client.fr\r\n", "Bcc: cache@client.fr,\r\n autre@client.fr\r\n")
 	rcpts := []string{"P@client.fr", "p2@client.fr", "c@client.fr", "cache@client.fr", "p@client.fr"}
 	if err := s.Submit(context.Background(), "box:a1", "jc@boite.fr", rcpts, data); err != nil {
 		t.Fatal(err)
@@ -115,6 +115,9 @@ func TestSubmit_SendsOnceThroughTheBoxProfile(t *testing.T) {
 	in := f.recorded[0]
 	if in.ProfileID != "p" || in.MessageHistoryID != "abc" || fmt.Sprint(in.To) != "[p@client.fr p2@client.fr]" || fmt.Sprint(in.Cc) != "[c@client.fr]" || strings.Contains(fmt.Sprint(in), "cache@") {
 		t.Fatalf("rangement : %+v", in)
+	}
+	if raw := string(in.Raw); !strings.Contains(raw, "Bonjour") || !strings.Contains(raw, "Cc: c@client.fr") || strings.Contains(raw, "Bcc") || strings.Contains(raw, "autre@client.fr") {
+		t.Fatalf("copie gardée : %q", raw)
 	}
 	// Reprise du même message par le client : 250 sans second envoi.
 	if err := s.Submit(context.Background(), "box:a1", "jc@boite.fr", rcpts, data); err != nil || len(f.sent) != 1 {
@@ -208,5 +211,17 @@ func TestSplit_AllBlindGoesToFirst(t *testing.T) {
 	to, cc, bcc := split([]byte("Subject: x\r\n\r\n"), []string{"a@x.fr", "b@x.fr"})
 	if fmt.Sprint(to, cc, bcc) != "[a@x.fr] [] [b@x.fr]" {
 		t.Fatal(to, cc, bcc)
+	}
+}
+
+func TestWithoutBcc_LeavesTheRestUntouched(t *testing.T) {
+	for in, want := range map[string]string{
+		"A: b\r\nBcc: x@y\r\n\tz@y\r\nC: d\r\n\r\nbcc: corps": "A: b\r\nC: d\r\n\r\nbcc: corps",
+		"A: b\nBCC: x@y\n\ncorps":                             "A: b\n\ncorps",
+		"sans corps":                                          "sans corps",
+	} {
+		if got := string(withoutBcc([]byte(in))); got != want {
+			t.Errorf("%q -> %q", in, got)
+		}
 	}
 }

@@ -306,6 +306,8 @@ type SentInput struct {
 	SentAt           time.Time
 	AttachmentNames  []Attachment
 	BodySource       string
+	// Raw : le message tel que le client l'a soumis (SMTP de boîte), gardé entier : pièces jointes relisibles dans « Envoyés ».
+	Raw []byte
 	// ThreadBySubject : reprise de l'historique, sans en-têtes de fil connus : on rattache au fil
 	// existant du même contact et du même objet normalisé.
 	ThreadBySubject bool
@@ -384,6 +386,9 @@ func (g *Ingestor) RecordSent(ctx context.Context, in SentInput) (bool, error) {
 		m.BodyHTMLSanitized = SanitizeHTML(in.HTML, nil)
 	}
 	m.SizeBytes = int64(len(in.HTML) + len(in.Text))
+	if len(in.Raw) > 0 && len(in.Raw) <= MaxRawBytes {
+		m.RawEML, m.SizeBytes = in.Raw, int64(len(in.Raw))
+	}
 	inserted, err := g.store.UpsertSent(ctx, m)
 	if err != nil {
 		return false, err

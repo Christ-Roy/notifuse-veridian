@@ -91,6 +91,11 @@ job "notifuse-staging" {
         to           = 1993
         host_network = "tailscale"
       }
+      # Récepteur de courrier des boîtes louées (fiche 84) : port DYNAMIQUE, tailnet seul. Rien de public.
+      port "mx" {
+        to           = 2525
+        host_network = "tailscale"
+      }
     }
 
     # L'IMAP des boîtes louées au catalogue : l'entrée publique le suivra quand le conteneur bouge (fiche 84).
@@ -98,6 +103,13 @@ job "notifuse-staging" {
       name     = "notifuse-staging-imap"
       provider = "nomad"
       port     = "imap"
+      tags     = ["traefik.enable=false"]
+    }
+
+    service {
+      name     = "notifuse-staging-mx"
+      provider = "nomad"
+      port     = "mx"
       tags     = ["traefik.enable=false"]
     }
 
@@ -194,7 +206,7 @@ EOH
           "site.veridian.app"   = "notifuse"
         }
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
-        ports = ["http", "smtp", "imap"]
+        ports = ["http", "smtp", "imap", "mx"]
       }
       # Garde reseau (fiche 64) : le smtp-sink E2E est en loopback dans l'allocation. Exception EXACTE 127.0.0.1:1025,
       # staging seulement (jamais dans notifuse.nomad.hcl), requise par scripts/e2e/cold-garde-fous.sh.
@@ -214,6 +226,9 @@ SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
 # Boîtes louées (fiche 84) : IMAP en TLS avec le certificat du relais, tailnet seul.
 VERIDIAN_IMAP_ENABLED=true
 VERIDIAN_IMAP_PORT=1993
+# Récepteur : adresses de profil de ces domaines seulement. Aucun MX ne pointe ici sans l'oui de Robert.
+VERIDIAN_MX_DOMAINS=boites-test.veridian.site
+VERIDIAN_MX_HOST=mx-staging.veridian.site
 SMTP_BRIDGE_TLS=starttls
 VERIDIAN_RELAY_CERT_MANAGED=true
 SERVER_HOST=0.0.0.0

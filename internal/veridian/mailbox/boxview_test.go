@@ -114,6 +114,17 @@ func TestBoxSentKnown(t *testing.T) {
 	if _, err := ing.RecordSent(ctx, SentInput{WorkspaceID: "ws", MessageHistoryID: "abc", ContactEmail: "p@client.fr", FromAddress: "a@boite.fr", Subject: "S", Text: "t", ProfileID: "pA", SentAt: time.Now(), BodySource: BodyCaptured}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := ing.RecordSent(ctx, SentInput{WorkspaceID: "ws", MessageHistoryID: "brut", ContactEmail: "p@client.fr", FromAddress: "a@boite.fr", Subject: "S2", Text: "t", ProfileID: "pA", SentAt: time.Now(), BodySource: BodyCaptured, Raw: []byte("Subject: S2\r\n\r\navec pièce\r\n")}); err != nil {
+		t.Fatal(err)
+	}
+	var rawID string
+	db, _ := st.db(ctx, "ws")
+	if err := db.QueryRow(`SELECT id FROM veridian_mail_message WHERE sent_ref = 'brut'`).Scan(&rawID); err != nil {
+		t.Fatal(err)
+	}
+	if m, err := st.BoxMessages(ctx, "ws", "pA", []string{rawID}); err != nil || string(BoxRaw(m[rawID])) != "Subject: S2\r\n\r\navec pièce\r\n" {
+		t.Fatalf("l'envoi d'un client mail se relit tel quel : %v", err)
+	}
 	if ok, err := st.BoxSentKnown(ctx, "ws", "pA", []string{"<abc@boite.fr>"}); err != nil || !ok {
 		t.Fatalf("%v %v", ok, err)
 	}

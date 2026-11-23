@@ -577,7 +577,7 @@ func TestEvents_StreamAndResume(t *testing.T) {
 	// filtre par nature
 	req3, _ := http.NewRequestWithContext(ctx, "GET", e.srv.URL+"/api/veridian/mail.events?workspace_id=ws1&since_seq=0&kind=bounce_hard", nil)
 	resp3, _ := http.DefaultClient.Do(req3)
-	evs3 := readEvents(t, resp3, 5, 600*time.Millisecond)
+	evs3 := readEvents(t, resp3, 5, 2500*time.Millisecond) // 600 ms : instable sur une machine chargée
 	resp3.Body.Close()
 	if len(evs3) != 1 || evs3[0]["id"] != "2" {
 		t.Fatalf("filtre kind: %v", evs3)

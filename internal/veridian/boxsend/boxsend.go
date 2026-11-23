@@ -215,13 +215,13 @@ func (s *Sender) Submit(ctx context.Context, userID, envelopeFrom string, rcpts 
 	if key != "" {
 		s.dedupe.Remember(key, now)
 	}
-	s.record(ctx, a, ws, sub, to, cc, wire, now, log)
+	s.record(ctx, a, ws, sub, to, cc, wire, withoutBcc(data), now, log)
 	log.WithFields(map[string]interface{}{"recipients": len(rcpts), "bytes": len(data)}).Info("Box SMTP: message accepted")
 	return nil
 }
 
 // record écrit l'historique et range l'envoi. Le mail est parti : un échec se journalise, il ne change pas la réponse.
-func (s *Sender) record(ctx context.Context, a *boxaccess.Access, ws *domain.Workspace, sub *smtprelay.Submission, to, cc []string, wire string, now time.Time, log logger.Logger) {
+func (s *Sender) record(ctx context.Context, a *boxaccess.Access, ws *domain.Workspace, sub *smtprelay.Submission, to, cc []string, wire string, raw []byte, now time.Time, log logger.Logger) {
 	at := now.UTC()
 	h := &domain.MessageHistory{ID: wire, ContactEmail: to[0], TemplateID: smtprelay.RelayTemplateID, Channel: "email",
 		MessageData: domain.MessageData{Data: map[string]interface{}{}}, SentAt: &at, CreatedAt: at, UpdatedAt: at, VeridianMessageType: "transactional"}
@@ -239,13 +239,36 @@ func (s *Sender) record(ctx context.Context, a *boxaccess.Access, ws *domain.Wor
 	}
 	in := mailbox.SentInput{WorkspaceID: a.WorkspaceID, MessageHistoryID: wire, ContactEmail: to[0], FromAddress: a.Address, FromName: sub.FromName,
 		To: to, Cc: cc, Subject: sub.Subject, HTML: sub.HTML, Text: sub.Text, InReplyTo: sub.InReplyTo, References: sub.References,
-		ProfileID: a.ProfileID, SentAt: at, BodySource: mailbox.BodyCaptured}
+		ProfileID: a.ProfileID, SentAt: at, BodySource: mailbox.BodyCaptured, Raw: raw}
 	for i, at := range sub.Attachments {
 		in.AttachmentNames = append(in.AttachmentNames, mailbox.Attachment{Index: i, Name: at.Filename, ContentType: at.ContentType})
 	}
 	if _, err := r.RecordSent(ctx, in); err != nil {
 		log.WithField("error", err.Error()).Warn("Box SMTP: sent mail not stored in the unified mailbox")
 	}
+}
+
+// withoutBcc retire l'en-tête Bcc de la copie gardée : une copie cachée ne se lit ni dans l'API ni dans un client mail.
+func withoutBcc(data []byte) []byte {
+	head, body, ok := bytes.Cut(data, []byte("\r\n\r\n"))
+	sep := "\r\n"
+	if !ok {
+		if head, body, ok = bytes.Cut(data, []byte("\n\n")); !ok {
+			return data
+		}
+		sep = "\n"
+	}
+	var out []string
+	skip := false
+	for _, l := range strings.Split(string(head), sep) {
+		if !strings.HasPrefix(l, " ") && !strings.HasPrefix(l, "\t") {
+			skip = strings.HasPrefix(strings.ToLower(l), "bcc:") || strings.HasPrefix(strings.ToLower(l), "resent-bcc:")
+		}
+		if !skip {
+			out = append(out, l)
+		}
+	}
+	return append([]byte(strings.Join(out, sep)+sep+sep), body...)
 }
 
 func uniq(l []string) []string {
