@@ -98,7 +98,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 
 **CI, tests, déploiement**
 - `48` constitution CI — règles non négociables (tiers de promotion prod)
-- `71` relais SMTP de soumission et certificat géré (réglages système, env = surcharge)
+- `71` relais SMTP de soumission, certificat géré
 - `72` commandes de vérité (relever plutôt que croire)
 - `49` commandes tests (Makefile, PostgreSQL `testpg`)
 - `41` sync upstream
@@ -107,7 +107,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 
 **Sécurité & API**
 - `10` redaction exhaustive des credentials workspace API
-- `76` export opérateur SMTP/IMAP (HMAC seul, audit, 0600)
+- `76` export opérateur SMTP/IMAP
 - `77` couverture CLI embarquée (chaque route `/api/*` a sa commande, MANIFEST) et distribution du CLI
 - `44` rate-limit global de l'API (OWASP API4:2023)
 - `61` nœud webhook des automations : garde SSRF, secret chiffré, HMAC
@@ -115,8 +115,9 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`
 - `82` statut d'essai du Hub (stocké, rendu, jamais appliqué) et signal d'activité vers le Hub
 - `83` MCP derrière la porte du Hub (JWT ES256, espace déduit, outils filtrés), bouton « Brancher mon IA »
+- `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
 - `81` capacité base : connexions par workspace, `max_connections`, incident du 07/11
-- `79` CLI utilisateur à parité : profils d'envoi avec sa propre clé, qui peut quoi, tableau d'audit
+- `79` CLI utilisateur à parité : qui peut quoi, tableau d'audit
 
 **Base de données workspace**
 - `39` DROP DATABASE WITH (FORCE) — wipe orphelin + GC
