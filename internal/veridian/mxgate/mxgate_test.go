@@ -146,7 +146,7 @@ func TestReceive_Refusals(t *testing.T) {
 			tc.prep(f, l)
 		}
 		err := send(start(t, f, l), tc.to)
-		if err == nil || !strings.HasPrefix(err.Error(), tc.code) || len(f.got) != 0 {
+		if err == nil || !strings.HasPrefix(err.Error(), tc.code) || len(f.got) != 0 || strings.ContainsAny(err.Error(), "éèàêô") {
 			t.Errorf("%s : %v (attendu %s), rangés %v", name, err, tc.code, f.got)
 		}
 	}

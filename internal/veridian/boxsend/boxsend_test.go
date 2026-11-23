@@ -90,6 +90,11 @@ func msg(from string, headers ...string) []byte {
 func code(err error) int {
 	var e *smtp.SMTPError
 	if errors.As(err, &e) {
+		for _, r := range e.Message {
+			if r > 126 { // une réponse SMTP est en ASCII
+				return -1
+			}
+		}
 		return e.Code
 	}
 	return 0

@@ -113,13 +113,13 @@ func refuse(code, c1, c2, c3 int, msg string) error {
 	return &smtp.SMTPError{Code: code, EnhancedCode: smtp.EnhancedCode{c1, c2, c3}, Message: msg}
 }
 
-var errBusy = refuse(451, 4, 3, 0, "service indisponible, réessayez")
+var errBusy = refuse(451, 4, 3, 0, "service indisponible, reessayez")
 
 // box relit l'accès et son profil : révocation, adresse retirée, profil en pause.
 func (s *Sender) box(ctx context.Context, userID string) (*boxaccess.Access, *domain.Workspace, *domain.Integration, error) {
 	a, err := s.d.Accesses.Alive(ctx, strings.TrimPrefix(userID, Prefix))
 	if errors.Is(err, boxaccess.ErrAuth) {
-		return nil, nil, nil, refuse(535, 5, 7, 8, "accès révoqué")
+		return nil, nil, nil, refuse(535, 5, 7, 8, "acces revoque")
 	}
 	if err != nil {
 		s.d.Logger.WithField("error", err.Error()).Error("Box SMTP: access read failed")
@@ -133,9 +133,9 @@ func (s *Sender) box(ctx context.Context, userID string) (*boxaccess.Access, *do
 	p := boxaccess.ProfileOf(ws, a.ProfileID, a.Address)
 	switch {
 	case p == nil:
-		return nil, nil, nil, refuse(535, 5, 7, 8, "boîte retirée")
+		return nil, nil, nil, refuse(535, 5, 7, 8, "boite retiree")
 	case !a.CanSend:
-		return nil, nil, nil, refuse(550, 5, 7, 1, "cet accès est en lecture seule")
+		return nil, nil, nil, refuse(550, 5, 7, 1, "cet acces est en lecture seule")
 	case p.EmailProvider.VeridianPaused:
 		return nil, nil, nil, refuse(550, 5, 7, 1, "profil d'envoi en pause")
 	}
@@ -154,7 +154,7 @@ func (s *Sender) CheckRecipient(ctx context.Context, userID, to string) error {
 		return errBusy
 	}
 	if smtprelay.IsSuppressed(st) {
-		return refuse(550, 5, 7, 1, "destinataire refusé : adresse en suppression")
+		return refuse(550, 5, 7, 1, "destinataire refuse : adresse en suppression")
 	}
 	return nil
 }
@@ -194,7 +194,7 @@ func (s *Sender) Submit(ctx context.Context, userID, envelopeFrom string, rcpts 
 	}
 	if err := s.d.Accesses.ReserveSend(ctx, a.ID, len(rcpts)); err != nil {
 		if errors.Is(err, boxaccess.ErrCap) {
-			return refuse(452, 4, 7, 1, "plafond d'envoi du jour atteint pour cet accès")
+			return refuse(452, 4, 7, 1, "plafond d'envoi du jour atteint pour cet acces")
 		}
 		log.WithField("error", err.Error()).Error("Box SMTP: daily cap failed")
 		return errBusy
@@ -210,7 +210,7 @@ func (s *Sender) Submit(ctx context.Context, userID, envelopeFrom string, rcpts 
 	req.EmailOptions.BCC = bcc
 	if err := s.d.Mailer.SendEmail(ctx, req, false); err != nil {
 		log.WithField("error", err.Error()).Error("Box SMTP: profile refused the message")
-		return refuse(451, 4, 4, 1, "envoi temporairement impossible, réessayez")
+		return refuse(451, 4, 4, 1, "envoi temporairement impossible, reessayez")
 	}
 	if key != "" {
 		s.dedupe.Remember(key, now)

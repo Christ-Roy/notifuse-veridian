@@ -156,7 +156,7 @@ func (c *session) Logout() error { return nil }
 
 func (c *session) Mail(from string, _ *smtp.MailOptions) error {
 	if !c.s.cfg.Limiter.Allow(LimitIP, c.ip) {
-		return refuse(451, 4, 7, 1, "trop de messages, réessayez plus tard")
+		return refuse(451, 4, 7, 1, "trop de messages, reessayez plus tard")
 	}
 	if c.s.cfg.Blocklist != nil && !c.checked {
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -181,7 +181,7 @@ func (c *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 		return refuse(550, 5, 1, 1, "adresse inconnue")
 	case err != nil:
 		c.s.cfg.Logger.WithField("error", err.Error()).Error("MX gate: recipient lookup failed")
-		return refuse(451, 4, 3, 0, "service indisponible, réessayez")
+		return refuse(451, 4, 3, 0, "service indisponible, reessayez")
 	}
 	c.to = append(c.to, t)
 	return nil
@@ -203,7 +203,7 @@ func (c *session) Data(r io.Reader) error {
 	for _, t := range c.to {
 		if err := c.deliver(ctx, t, full, at); err != nil {
 			c.s.cfg.Logger.WithFields(map[string]interface{}{"workspace_id": t.WorkspaceID, "profile_id": t.ProfileID, "error": err.Error()}).Error("MX gate: delivery failed, sender will retry")
-			return refuse(451, 4, 3, 0, "service indisponible, réessayez")
+			return refuse(451, 4, 3, 0, "service indisponible, reessayez")
 		}
 	}
 	return nil
