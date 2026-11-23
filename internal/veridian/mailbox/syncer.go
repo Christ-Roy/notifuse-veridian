@@ -38,13 +38,14 @@ type Syncer struct {
 
 	mu      sync.Mutex
 	running map[string]bool
+	owned   map[string]bool // workspaces dont le courrier déjà rangé a été remis au profil de son adresse depuis le démarrage
 	settled map[string]bool // workspaces dont les doublons ont été rattrapés depuis le démarrage
 	purged  map[string]bool // boîtes à portée « replies » dont le hors-portée a été retiré depuis le démarrage
 }
 
 // NewSyncer construit le syncer. renderer peut être nil (reprise sans re-rendu).
 func NewSyncer(store *Store, ingest *Ingestor, dialer Dialer, renderer Renderer, log logger.Logger) *Syncer {
-	return &Syncer{store: store, ingest: ingest, dialer: dialer, renderer: renderer, log: log, running: map[string]bool{}, settled: map[string]bool{}, purged: map[string]bool{}}
+	return &Syncer{store: store, ingest: ingest, dialer: dialer, renderer: renderer, log: log, running: map[string]bool{}, owned: map[string]bool{}, settled: map[string]bool{}, purged: map[string]bool{}}
 }
 
 func (s *Syncer) acquire(key string) bool {
@@ -65,7 +66,7 @@ func (s *Syncer) release(key string) {
 
 // BoxFor retrouve le profil lié à une boîte IMAP d'un workspace.
 func BoxFor(ws *domain.Workspace, integ *domain.Integration) BoxInfo {
-	b := BoxInfo{IntegrationID: integ.ID}
+	b := BoxInfo{IntegrationID: integ.ID, Owners: OwnersOf(ws)}
 	if integ.IMAPSettings != nil {
 		b.Address = strings.ToLower(integ.IMAPSettings.Username)
 		b.Folder = integ.IMAPSettings.GetFolder()
@@ -112,6 +113,7 @@ func (s *Syncer) SyncBox(ctx context.Context, ws *domain.Workspace, integ *domai
 	folder := integ.IMAPSettings.GetFolder()
 	log := s.log.WithFields(map[string]interface{}{"workspace_id": ws.ID, "integration_id": integ.ID})
 	s.purgeOutOfScope(ctx, ws.ID, integ.ID, box.Scope)
+	s.reassignOwners(ctx, ws.ID, box.Owners)
 
 	state, err := s.store.GetSync(ctx, ws.ID, integ.ID, folder)
 	if err != nil {
@@ -239,6 +241,28 @@ func (s *Syncer) purgeOutOfScope(ctx context.Context, ws, integrationID, scope s
 	s.mu.Unlock()
 	if n > 0 {
 		s.log.WithFields(map[string]interface{}{"workspace_id": ws, "integration_id": integrationID, "rows": n}).Info("Mailbox: out-of-scope messages purged")
+	}
+}
+
+// reassignOwners remet, une fois par démarrage, le courrier déjà rangé au profil dont l'adresse l'a reçu (owner.go).
+// Une erreur est consignée et réessayée au passage suivant.
+func (s *Syncer) reassignOwners(ctx context.Context, ws string, o Owners) {
+	s.mu.Lock()
+	done := s.owned[ws]
+	s.mu.Unlock()
+	if done || len(o) == 0 {
+		return
+	}
+	n, err := s.store.ReassignOwners(ctx, ws, o)
+	if err != nil {
+		s.log.WithFields(map[string]interface{}{"workspace_id": ws, "error": err.Error()}).Warn("Mailbox: owner reassignment failed, will retry")
+		return
+	}
+	s.mu.Lock()
+	s.owned[ws] = true
+	s.mu.Unlock()
+	if n > 0 {
+		s.log.WithFields(map[string]interface{}{"workspace_id": ws, "rows": n}).Info("Mailbox: messages reassigned to the profile owning the recipient address")
 	}
 }
 

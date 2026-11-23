@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/internal/service/queue"
+	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
+	"github.com/Notifuse/notifuse/internal/veridian/boxsend"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/relaycert"
 	"github.com/Notifuse/notifuse/internal/veridian/relaysettings"
@@ -26,6 +29,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/smtprelay"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/ratelimiter"
 	"github.com/Notifuse/notifuse/pkg/smtp_bridge"
 )
 
@@ -212,6 +216,20 @@ func (h *veridianHost) InboundWebhookEventService() *service.InboundWebhookEvent
 }
 func (h *veridianHost) AutomationRepository() domain.AutomationRepository { return h.a.automationRepo }
 
+// RateLimiter et RelayTLSConfig : le serveur IMAP des boîtes louées (fiche 84). Même certificat que le relais SMTP.
+func (h *veridianHost) RateLimiter() *ratelimiter.RateLimiter { return h.a.rateLimiter }
+func (h *veridianHost) RelayTLSConfig() (*tls.Config, error) {
+	if !h.a.config.SMTPBridge.Enabled || h.a.config.SMTPBridge.TLSMode == smtp_bridge.ModeOff {
+		return nil, fmt.Errorf("certificat du relais absent (bridge SMTP sans TLS)")
+	}
+	return smtp_bridge.SetupTLS(smtp_bridge.TLSConfig{
+		CertBase64: h.a.config.SMTPBridge.TLSCertBase64,
+		KeyBase64:  h.a.config.SMTPBridge.TLSKeyBase64,
+		Logger:     h.a.logger,
+		Source:     h.a.veridianRelayCertSource(),
+	})
+}
+
 // ============================================================================================
 // Câblage historique déplacé de app.go (lot L0 jalon 2, 29/10/2026). Contenu identique, aux
 // mêmes étapes d'initialisation : veridianInitRepositories en fin d'InitRepositories,
@@ -238,6 +256,7 @@ type veridianState struct {
 	veridianTestTenantsCleanup *service.VeridianTestTenantsCleanupService // cron auto-cleanup orphans staging (2026-05-24)
 	veridianIMAPPoller         *queue.VeridianIMAPPollerService           // Lot 1 cold — poller IMAP self-service (réception bounces/réponses)
 	veridianReplyService       *service.VeridianReplyService              // Lot 3 cold — détection réponse + exit séquence (stop-on-reply)
+	veridianBoxSend            *boxsend.Sender                            // SMTP des boîtes louées (fiche 84), nil = désactivé
 	veridianRelay              *smtprelay.Relay                           // relais SMTP de soumission (fiche 71), nil = désactivé
 	veridianRelayHolder        *relaycert.Holder                          // certificat du bridge géré par l'app (fiche 71), créé à la demande
 	veridianRelayCertManager   *relaycert.Manager                         // renouvellement du certificat géré par l'app, nil = non géré
@@ -1101,6 +1120,14 @@ func (a *App) veridianWrapHandler(handler http.Handler) http.Handler {
 // veridianSMTPHandleMessage est le point d'entrée du bridge SMTP (app.go). Un message non
 // JSON part au relais quand il est actif ; tout le reste suit le chemin legacy inchangé.
 func (a *App) veridianSMTPHandleMessage(userID, from string, to []string, data []byte) error {
+	if boxsend.IsBox(userID) {
+		if a.veridianBoxSend == nil {
+			return fmt.Errorf("SMTP de boîte désactivé")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		return a.veridianBoxSend.Submit(ctx, userID, from, to, data)
+	}
 	if a.veridianRelay != nil && smtprelay.IsRelayBody(data) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
@@ -1110,6 +1137,16 @@ func (a *App) veridianSMTPHandleMessage(userID, from string, to []string, data [
 		}
 	}
 	return a.smtpBridgeHandlerService.HandleMessage(userID, from, to, data)
+}
+
+// veridianSMTPAuthenticate : un accès de boîte (adresse + mot de passe de boîte) ou une clé d'API (jeton), jamais les deux.
+func (a *App) veridianSMTPAuthenticate(username, password string) (string, error) {
+	if a.veridianBoxSend == nil || boxsend.LooksLikeAPIKey(password) {
+		return a.smtpBridgeHandlerService.Authenticate(username, password)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return a.veridianBoxSend.Login(ctx, username, password)
 }
 
 // veridianInitSMTPRelay prépare le relais dès que le bridge a du TLS. L'activation ne se décide plus au
@@ -1137,10 +1174,23 @@ func (a *App) veridianInitSMTPRelay() {
 		Logger:      a.logger,
 	})
 	a.rateLimiter.SetPolicy(smtprelay.RateNamespace, smtprelay.RatePerMinute, time.Minute)
+	a.rateLimiter.SetPolicy(boxsend.LimitLogin, boxsend.LimitLoginPerMinute, time.Minute)
+	a.veridianBoxSend = boxsend.New(boxsend.Deps{
+		Accesses:    &boxaccess.Guard{Store: boxaccess.NewStore(a.db), WS: a.workspaceRepo},
+		WS:          a.workspaceRepo,
+		Suppression: veridianRelaySuppression{repo: a.contactListRepo},
+		Mailer:      a.emailService,
+		History:     a.messageHistoryRepo,
+		Limiter:     a.rateLimiter,
+		Logger:      a.logger,
+	})
 	relay := a.veridianRelay
 	srv.Backend().SetRcptChecker(func(userID, to string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+		if boxsend.IsBox(userID) {
+			return a.veridianBoxSend.CheckRecipient(ctx, userID, to)
+		}
 		if !relaysettings.ReadEnabled(ctx, a.settingRepo, os.LookupEnv) {
 			return nil // relais coupé : le RCPT suit le chemin legacy inchangé
 		}

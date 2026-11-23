@@ -149,6 +149,12 @@ paths:
     $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.send'
   /api/veridian/mail.messages.reply:
     $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.messages.reply'
+  /api/veridian/mail.access.list:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.access.list'
+  /api/veridian/mail.access.create:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.access.create'
+  /api/veridian/mail.access.revoke:
+    $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.access.revoke'
   /api/veridian/folders.list:
     $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1folders.list'
   /api/veridian/folders.create:

@@ -384,6 +384,76 @@
       '403': { $ref: '#/components/responses/Forbidden' }
       '409': { description: "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)" }
       '501': { description: Envoi non disponible }
+/api/veridian/mail.access.list:
+  get:
+    summary: "Accès des boîtes louées (IMAP et SMTP) et réglages de connexion"
+    description: |
+      Droit requis : `workspace:read`. Jamais de mot de passe. Voir docs/claude/84-standard-boites-louees.md.
+    operationId: MailAccessList
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+    responses:
+      '200': { description: OK }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+/api/veridian/mail.access.create:
+  post:
+    summary: "Crée un accès de boîte ; le mot de passe n'est rendu qu'une fois"
+    description: |
+      Droit requis : `workspace:write`. L'adresse doit être une adresse du profil d'envoi.
+    operationId: MailAccessCreate
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, profile_id]
+            properties:
+              workspace_id: { type: string }
+              profile_id: { type: string }
+              address: { type: string, description: "Défaut : l'expéditeur par défaut du profil" }
+              label: { type: string, maxLength: 120 }
+              can_send: { type: boolean, default: true }
+              daily_cap: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+    responses:
+      '201': { description: "Créé, mot de passe compris" }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '409': { description: "Nombre maximal d'accès atteint" }
+/api/veridian/mail.access.revoke:
+  post:
+    summary: "Révoque un accès de boîte"
+    description: |
+      Droit requis : `workspace:write`. Les sessions IMAP ouvertes sont coupées sous 30 s.
+    operationId: MailAccessRevoke
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, id]
+            properties:
+              workspace_id: { type: string }
+              id: { type: string }
+    responses:
+      '200': { description: OK }
+      '400': { $ref: '#/components/responses/BadRequest' }
+      '401': { $ref: '#/components/responses/Unauthorized' }
+      '403': { $ref: '#/components/responses/Forbidden' }
+      '404': { description: Accès introuvable }
 components:
   responses:
     BadRequest:

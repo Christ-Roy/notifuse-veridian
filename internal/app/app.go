@@ -1032,7 +1032,7 @@ func (a *App) InitServices() error {
 
 		// Create SMTP backend with authentication and message handlers
 		backend := smtp_bridge.NewBackend(
-			a.smtpBridgeHandlerService.Authenticate,
+			a.veridianSMTPAuthenticate,
 			a.veridianSMTPHandleMessage,
 			a.logger,
 		)

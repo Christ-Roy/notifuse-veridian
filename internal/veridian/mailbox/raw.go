@@ -2,6 +2,8 @@ package mailbox
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 
 	"github.com/emersion/go-message"
@@ -52,7 +54,9 @@ func Reconstruct(m *Message) []byte {
 		_ = w.Close()
 		return buf.Bytes()
 	}
-	hdr.Set("Content-Type", "multipart/alternative")
+	// Séparateur fixé par le message : deux lectures rendent les mêmes octets (taille et parties IMAP cohérentes).
+	sum := sha256.Sum256([]byte(m.ID + m.MessageID))
+	hdr.Set("Content-Type", `multipart/alternative; boundary="vrd-`+hex.EncodeToString(sum[:16])+`"`)
 	w, err := message.CreateWriter(&buf, hdr.Header)
 	if err != nil {
 		return nil

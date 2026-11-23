@@ -86,6 +86,19 @@ job "notifuse-staging" {
         to           = 587
         host_network = "tailscale"
       }
+      # IMAP des boîtes louées (fiche 84) : port DYNAMIQUE, tailnet seul. Aucun port public.
+      port "imap" {
+        to           = 1993
+        host_network = "tailscale"
+      }
+    }
+
+    # L'IMAP des boîtes louées au catalogue : l'entrée publique le suivra quand le conteneur bouge (fiche 84).
+    service {
+      name     = "notifuse-staging-imap"
+      provider = "nomad"
+      port     = "imap"
+      tags     = ["traefik.enable=false"]
     }
 
     service {
@@ -181,7 +194,7 @@ EOH
           "site.veridian.app"   = "notifuse"
         }
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
-        ports = ["http", "smtp"]
+        ports = ["http", "smtp", "imap"]
       }
       # Garde reseau (fiche 64) : le smtp-sink E2E est en loopback dans l'allocation. Exception EXACTE 127.0.0.1:1025,
       # staging seulement (jamais dans notifuse.nomad.hcl), requise par scripts/e2e/cold-garde-fous.sh.
@@ -198,6 +211,9 @@ SERVER_PORT=8081
 SMTP_BRIDGE_ENABLED=true
 SMTP_BRIDGE_PORT=587
 SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
+# Boîtes louées (fiche 84) : IMAP en TLS avec le certificat du relais, tailnet seul.
+VERIDIAN_IMAP_ENABLED=true
+VERIDIAN_IMAP_PORT=1993
 SMTP_BRIDGE_TLS=starttls
 VERIDIAN_RELAY_CERT_MANAGED=true
 SERVER_HOST=0.0.0.0

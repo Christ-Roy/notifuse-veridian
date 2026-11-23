@@ -12,6 +12,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/service/queue"
 	"github.com/Notifuse/notifuse/internal/veridian/bounces"
+	"github.com/Notifuse/notifuse/internal/veridian/boxsend"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox/mailapi"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
@@ -48,6 +49,12 @@ func (c *secretCache) get(ctx context.Context, ws string) (string, error) {
 	return w.Settings.SecretKey, nil
 }
 
+// NewStore rend un dépôt de la boîte unifiée pour les autres modules (même clé de chiffrement par workspace).
+func NewStore(repo domain.WorkspaceRepository) *mailbox.Store {
+	sc := &secretCache{repo: repo, keys: map[string]string{}}
+	return mailbox.NewStore(func(ctx context.Context, ws string) (*sql.DB, error) { return repo.GetConnection(ctx, ws) }, sc.get)
+}
+
 type templateHost interface {
 	TemplateService() domain.TemplateService
 }
@@ -58,12 +65,10 @@ func wire(h platform.Host) error {
 		return nil // assemblage de test sans dépôt : rien à câbler
 	}
 	log := h.Logger()
-	sc := &secretCache{repo: repo, keys: map[string]string{}}
-	store := mailbox.NewStore(
-		func(ctx context.Context, ws string) (*sql.DB, error) { return repo.GetConnection(ctx, ws) },
-		sc.get,
-	)
+	store := NewStore(repo)
 	ingest := mailbox.NewIngestor(store, log, nil)
+	// Boîtes louées (fiche 84) : un envoi par le SMTP d'une boîte est rangé ici.
+	boxsend.SetRecorder(ingest)
 	// VER-220 : chaque rapport de non-remise rangé ici nourrit la chaîne des rebonds (seule source).
 	if ap := bounces.FromHost(h); ap != nil {
 		ingest.SetBounceSink(ap)

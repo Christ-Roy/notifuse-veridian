@@ -193,6 +193,57 @@ def cmd_boxes(a):
     _show(a, data, format_boxes)
 
 
+def format_access(data):
+    """Accès de boîte (fiche 84) : jamais de mot de passe ici, il n'est rendu qu'à la création."""
+    rows = []
+    for x in data.get("accesses") or []:
+        etat = "révoqué" if x.get("revoked_at") else ("lecture et envoi" if x.get("can_send") else "lecture seule")
+        rows.append([x.get("address") or "-", x.get("label") or "-", etat, str(x.get("daily_cap") or "-"),
+                     (x.get("last_used_at") or "jamais")[:16].replace("T", " "), x.get("profile_id") or "-", x.get("id") or "-"])
+    out = list(nc._table(rows, ("adresse", "libellé", "droits", "envois/j", "dernier usage", "profil", "id"))) if rows else ["aucun accès de boîte"]
+    return out + format_connection(data.get("connection") or {})
+
+
+def format_connection(c):
+    out = []
+    for nom, cle in (("IMAP (lire)", "imap"), ("SMTP (envoyer)", "smtp")):
+        e = c.get(cle)
+        out.append(f"{nom} : {e.get('host')}:{e.get('port')}, sécurité {e.get('security')}" if e else f"{nom} : non servi sur cette instance")
+    return out
+
+
+def cmd_access(a):
+    st, data = _get(a, "/api/veridian/mail.access.list", {})
+    _fail(st, data)
+    _show(a, data, format_access)
+
+
+def cmd_access_create(a):
+    body = {"profile_id": a.profile, "label": a.label or ""}
+    if a.address:
+        body["address"] = a.address
+    if a.read_only:
+        body["can_send"] = False
+    if a.daily_cap:
+        body["daily_cap"] = a.daily_cap
+    st, data = _post(a, "/api/veridian/mail.access.create", body)
+    _fail(st, data)
+    if a.secret_file:
+        # Le mot de passe part dans un fichier 0600, jamais à l'écran (historique de terminal, transcription d'agent).
+        fd = os.open(a.secret_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(f"{data.get('username')}\n{data.get('password')}\n")
+        data["password"] = f"(écrit dans {a.secret_file})"
+    _show(a, data, lambda d: [f"accès {d['access']['id']} créé pour {d.get('username')}",
+                             f"mot de passe, montré une seule fois : {d.get('password')}"] + format_connection(d.get("connection") or {}))
+
+
+def cmd_access_revoke(a):
+    st, data = _post(a, "/api/veridian/mail.access.revoke", {"id": a.id})
+    _fail(st, data)
+    _show(a, data, lambda d: [f"accès {d['access']['id']} révoqué"])
+
+
 def cmd_list(a):
     kinds = [k for k in (a.kind or "").split(",") if k]
     bad = [k for k in kinds if k not in KINDS]
@@ -421,7 +472,7 @@ def cmd_events(a):
 # --------------------------------------------------------------------------- enregistrement
 
 COMMANDS = ("mail:boxes", "mail:list", "mail:get", "mail:raw", "mail:attachment", "mail:thread", "mail:threads",
-            "mail:update", "mail:send", "mail:reply", "mail:events")
+            "mail:update", "mail:send", "mail:reply", "mail:events", "mail:access", "mail:access-create", "mail:access-revoke")
 
 
 def register(sub):
@@ -518,4 +569,20 @@ def register(sub):
     sp.add_argument("--kind")
     sp.add_argument("--max", type=int, default=1000)
     sp.add_argument("--timeout", type=int, default=300)
+    jsonflag(sp)
+
+    sp = add("mail:access", "accès des boîtes louées (IMAP et SMTP) : liste et réglages de connexion", cmd_access, ["/api/veridian/mail.access.list"])
+    jsonflag(sp)
+
+    sp = add("mail:access-create", "crée un accès de boîte ; le mot de passe n'est rendu qu'une fois", cmd_access_create, ["/api/veridian/mail.access.create"])
+    sp.add_argument("--profile", required=True, help="id du profil d'envoi (mail:boxes)")
+    sp.add_argument("--address", help="adresse du profil (défaut : son expéditeur par défaut)")
+    sp.add_argument("--label", help="à quoi sert cet accès (téléphone, CRM...)")
+    sp.add_argument("--read-only", action="store_true", dest="read_only", help="lire sans envoyer")
+    sp.add_argument("--daily-cap", type=int, dest="daily_cap", help="envois par jour (défaut 200, maximum 1000)")
+    sp.add_argument("--secret-file", dest="secret_file", help="écrit l'adresse et le mot de passe dans ce fichier neuf (0600) au lieu de l'écran")
+    jsonflag(sp)
+
+    sp = add("mail:access-revoke", "révoque un accès de boîte (les sessions ouvertes sont coupées sous 30 s)", cmd_access_revoke, ["/api/veridian/mail.access.revoke"])
+    sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")
     jsonflag(sp)

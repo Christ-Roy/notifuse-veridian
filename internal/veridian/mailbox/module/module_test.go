@@ -53,3 +53,11 @@ func TestSecretCacheRefusesWorkspaceWithoutKey(t *testing.T) {
 		t.Fatal("un workspace sans clé ne doit jamais stocker de corps en clair")
 	}
 }
+
+func TestNewStore(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	if NewStore(mocks.NewMockWorkspaceRepository(ctrl)) == nil {
+		t.Fatal("dépôt attendu")
+	}
+}

@@ -26,6 +26,8 @@ type BoxInfo struct {
 	Folder        string
 	// Scope : "replies" = ne garder que les reponses et rejets de nos envois (voir scope.go).
 	Scope string
+	// Owners : adresses des profils du workspace, pour ranger par adresse de réception (owner.go).
+	Owners Owners
 }
 
 // Ingestor range les mails dans la boîte unifiée.
@@ -75,7 +77,7 @@ func (g *Ingestor) IngestRaw(ctx context.Context, ws string, box BoxInfo, ref Ma
 
 	link := &Link{}
 	contact := ""
-	profile := box.ProfileID
+	profile, cited := box.ProfileID, ""
 	linked := false
 	switch {
 	case len(hits) > 0 && hits[0].Direction == DirectionOut:
@@ -90,17 +92,13 @@ func (g *Ingestor) IngestRaw(ctx context.Context, ws string, box BoxInfo, ref Ma
 			link.AutomationID, link.BroadcastID, link.NodeID = h.Link.AutomationID, h.Link.BroadcastID, h.Link.NodeID
 		}
 		contact = h.ContactEmail
-		if profile == "" {
-			profile = h.ProfileID
-		}
+		cited = h.ProfileID
 	case len(sent) > 0:
 		s := sent[0]
 		linked = true
 		link = &Link{SentMessageID: s.ID, AutomationID: s.AutomationID, BroadcastID: s.BroadcastID, MatchType: "message_id"}
 		contact = domain.VeridianNormalizeEmail(s.ContactEmail)
-		if profile == "" {
-			profile = s.ProfileID
-		}
+		cited = s.ProfileID
 	case len(hits) > 0:
 		// Cite un fil connu (un message reçu plus tôt) sans que l'envoi d'origine soit retrouvé.
 		linked = true
@@ -111,6 +109,13 @@ func (g *Ingestor) IngestRaw(ctx context.Context, ws string, box BoxInfo, ref Ma
 			link = &l
 		}
 		contact = hits[0].ContactEmail
+	}
+	// Le profil est celui dont l'adresse a reçu le mail ; à défaut la boîte lue, à défaut l'envoi cité.
+	if profile == "" {
+		profile = cited
+	}
+	if own := box.Owners.Resolve(recipientAddrs(p), box.ProfileID, cited); own != "" {
+		profile = own
 	}
 	if contact == "" {
 		contact = domain.VeridianNormalizeEmail(p.From)
