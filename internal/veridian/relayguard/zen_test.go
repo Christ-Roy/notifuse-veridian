@@ -44,36 +44,40 @@ func newZ(dns fakeDNS, servers ...string) *ZEN {
 }
 
 func TestZEN_ListedCleanAndControls(t *testing.T) {
+	ip := "44.7.210.51.zen.spamhaus.org."
+	listedSBL := healthy(map[string][]string{ip: {"127.0.0.2"}})
+	refused := healthy(map[string][]string{ip: {"127.255.255.254"}})
 	for _, tc := range []struct {
 		name string
 		dns  fakeDNS
 		srv  []string
 		want queue.RelayState
+		warn bool
 	}{
-		{"listée", fakeDNS{"a": healthy(map[string][]string{"44.7.210.51.zen.spamhaus.org.": {"127.0.0.2"}})}, []string{"a"}, queue.RelayListed},
-		{"PBL listée aussi", fakeDNS{"a": healthy(map[string][]string{"44.7.210.51.zen.spamhaus.org.": {"127.0.0.11"}})}, []string{"a"}, queue.RelayListed},
-		{"propre", fakeDNS{"a": healthy(nil)}, []string{"a"}, queue.RelayClean},
-		{"refus résolveur public, jamais lu comme propre", fakeDNS{"a": healthy(map[string][]string{"44.7.210.51.zen.spamhaus.org.": {"127.255.255.254"}})}, []string{"a"}, queue.RelayUnverified},
-		{"témoin positif faux", fakeDNS{"a": {}}, []string{"a"}, queue.RelayUnverified},
-		{"témoin négatif répond", fakeDNS{"a": healthy(map[string][]string{"1.0.0.127.zen.spamhaus.org.": {"127.0.0.2"}})}, []string{"a"}, queue.RelayUnverified},
-		{"serveur muet", fakeDNS{}, []string{"a"}, queue.RelayUnverified},
-		{"premier serveur muet, second répond", fakeDNS{"b": healthy(map[string][]string{"44.7.210.51.zen.spamhaus.org.": {"127.0.0.3"}})}, []string{"a", "b"}, queue.RelayListed},
-		{"premier serveur refuse, second propre", fakeDNS{
-			"a": healthy(map[string][]string{"44.7.210.51.zen.spamhaus.org.": {"127.255.255.254"}}),
-			"b": healthy(nil)}, []string{"a", "b"}, queue.RelayClean},
-		{"réponse inconnue", fakeDNS{"a": healthy(map[string][]string{"44.7.210.51.zen.spamhaus.org.": {"10.0.0.1"}})}, []string{"a"}, queue.RelayUnverified},
+		{"listée (SBL), dès le premier serveur", fakeDNS{"a": listedSBL}, []string{"a", "b"}, queue.RelayListed, false},
+		{"listée XBL", fakeDNS{"a": healthy(map[string][]string{ip: {"127.0.0.4"}})}, []string{"a"}, queue.RelayListed, false},
+		{"propre sur deux serveurs", fakeDNS{"a": healthy(nil), "b": healthy(nil)}, []string{"a", "b"}, queue.RelayClean, false},
+		{"propre sur un seul serveur valide : non abouti", fakeDNS{"a": healthy(nil)}, []string{"a", "b"}, queue.RelayUnverified, false},
+		{"désaccord : le plus sévère l'emporte", fakeDNS{"a": healthy(nil), "b": listedSBL}, []string{"a", "b"}, queue.RelayListed, false},
+		{"PBL seulement : avertissement, l'envoi continue", fakeDNS{"a": healthy(map[string][]string{ip: {"127.0.0.11"}}), "b": healthy(map[string][]string{ip: {"127.0.0.10"}})}, []string{"a", "b"}, queue.RelayClean, true},
+		{"refus (résolveur ouvert), jamais lu comme propre", fakeDNS{"a": refused, "b": refused}, []string{"a", "b"}, queue.RelayUnverified, false},
+		{"refus sur l'un, deux autres propres", fakeDNS{"a": refused, "b": healthy(nil), "c": healthy(nil)}, []string{"a", "b", "c"}, queue.RelayClean, false},
+		{"témoin positif faux", fakeDNS{"a": {}, "b": {}}, []string{"a", "b"}, queue.RelayUnverified, false},
+		{"témoin négatif répond (résolveur ouvert en IPv6)", fakeDNS{"a": healthy(map[string][]string{"1.0.0.127.zen.spamhaus.org.": {"127.255.255.254"}}), "b": healthy(nil)}, []string{"a", "b"}, queue.RelayUnverified, false},
+		{"serveurs muets", fakeDNS{}, []string{"a", "b"}, queue.RelayUnverified, false},
+		{"réponse inconnue", fakeDNS{"a": healthy(map[string][]string{ip: {"10.0.0.1"}}), "b": healthy(nil)}, []string{"a", "b"}, queue.RelayUnverified, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := newZ(tc.dns, tc.srv...).CheckRelay(context.Background(), "smtp.messagerie-nord-776.fr")
-			if got.State != tc.want {
-				t.Fatalf("état %v, attendu %v (%s)", got.State, tc.want, got.Detail)
+			if got.State != tc.want || (got.Warning != "") != tc.warn {
+				t.Fatalf("état %v avertissement %q, attendu %v/%v (%s)", got.State, got.Warning, tc.want, tc.warn, got.Detail)
 			}
 		})
 	}
 }
 
 func TestZEN_UnresolvableHostOrServersIsUnverified(t *testing.T) {
-	z := newZ(fakeDNS{"a": healthy(nil)}, "a")
+	z := newZ(fakeDNS{"a": healthy(nil), "b": healthy(nil)}, "a", "b")
 	z.ResolveHost = func(context.Context, string) ([]string, error) { return nil, errors.New("no such host") }
 	if c := z.CheckRelay(context.Background(), "x"); c.State != queue.RelayUnverified {
 		t.Fatalf("hôte introuvable : %v", c.State)
@@ -88,7 +92,8 @@ func TestReverseAndClassify(t *testing.T) {
 	if reverse("51.210.7.44") != "44.7.210.51" {
 		t.Fatal(reverse("51.210.7.44"))
 	}
-	if classify([]string{"127.0.0.4"}) != "listed" || classify([]string{"127.255.255.252"}) != "refused" || classify([]string{"127.0.0.1"}) != "unknown" {
+	if classify([]string{"127.0.0.4"}) != "listed" || classify([]string{"127.0.0.10", "127.0.0.11"}) != "pbl" ||
+		classify([]string{"127.0.0.2", "127.0.0.10"}) != "listed" || classify([]string{"127.255.255.252"}) != "refused" || classify([]string{"127.0.0.1"}) != "unknown" {
 		t.Fatal("classement des réponses ZEN")
 	}
 }

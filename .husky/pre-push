@@ -13,6 +13,10 @@ scripts/veridian/frozen-files-check.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
 # Couverture CLI embarquée (fiche 76) : chaque route /api/* du routeur a sa commande, la CLI embarquée
 # est intègre (MANIFEST) et à jour de sa source. Un echec bloque ; « non abouti » (rc 2) previent sans bloquer.
 scripts/veridian/cli-coverage-check.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
+# Mapping source↔test (Constitution CI §1) : la CI le refuse sinon, 20 à 30 min plus tard (deux fois le
+# 23/11). Choix de ce dépôt (gardes ne joue pas son palier rapide au push, décision du 03/10). ~1 s.
+BASE_REF="$(git rev-parse '@{upstream}' 2>/dev/null || echo origin/veridian)" scripts/ci/check-test-mapping.sh >/tmp/notifuse-mapping-prepush.log 2>&1 || {
+  cat /tmp/notifuse-mapping-prepush.log >&2; exit 1; }
 G="$(command -v gardes 2>/dev/null || echo "$HOME/nomad-veridian/standards/controles-portables/gardes")"
 if [ ! -x "$G" ]; then
   echo "gardes — NON ABOUTI : introuvable sur cette machine ($G). Push accepté SANS garde." >&2

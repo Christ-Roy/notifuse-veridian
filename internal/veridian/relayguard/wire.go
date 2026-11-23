@@ -39,7 +39,9 @@ func (s Suspender) OnListed(workspaceID, integrationID, host string, c queue.Rel
 	if s.Log == nil {
 		return
 	}
+	// Champs stables pour la règle d'alerte (flux=alerte côté parc) : critique, impact client.
 	f := map[string]interface{}{
+		"service": "notifuse-zen", "gravite": "critique", "impact": "client",
 		"workspace_id": workspaceID, "integration_id": integrationID, "relay_host": host,
 		"relay_ips": strings.Join(c.IPs, ","), "detail": c.Detail, "suspended": err == nil,
 	}

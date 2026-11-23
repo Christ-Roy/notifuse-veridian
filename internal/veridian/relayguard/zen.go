@@ -55,15 +55,31 @@ func (z *ZEN) CheckRelay(ctx context.Context, host string) queue.RelayCheck {
 	if max <= 0 || max > len(servers) {
 		max = len(servers)
 	}
+	// Méthode de l'infra (23/11) : le plus sévère des serveurs l'emporte. On recueille DEUX verdicts
+	// valides (témoins justes) : listé si l'un dit listé ; propre seulement si deux le disent ; moins
+	// de deux serveurs valides = non abouti. Un serveur qui rate un témoin ou se tait est écarté.
 	var why []string
+	var valid []queue.RelayCheck
 	for _, srv := range servers[:max] {
 		c, reason := z.checkOn(ctx, srv, ips)
-		if reason == "" {
+		if reason != "" {
+			why = append(why, srv+": "+reason)
+			continue
+		}
+		if c.State == queue.RelayListed {
 			return c
 		}
-		why = append(why, srv+": "+reason)
+		valid = append(valid, c)
+		if len(valid) == 2 {
+			out := valid[0]
+			if out.Warning == "" {
+				out.Warning = valid[1].Warning
+			}
+			out.Detail += " ; confirmé par un second serveur"
+			return out
+		}
 	}
-	return queue.RelayCheck{State: queue.RelayUnverified, IPs: ips, Detail: "aucun serveur n'a abouti (" + strings.Join(why, " ; ") + ")"}
+	return queue.RelayCheck{State: queue.RelayUnverified, IPs: ips, Detail: fmt.Sprintf("%d serveur(s) valide(s) sur 2 requis (%s)", len(valid), strings.Join(why, " ; "))}
 }
 
 // checkOn : verdict sur un serveur, ou la raison pour laquelle ce serveur ne compte pas.
@@ -76,7 +92,7 @@ func (z *ZEN) checkOn(ctx context.Context, srv string, ips []string) (queue.Rela
 	if !(isNotFound(err) || (err == nil && len(neg) == 0)) {
 		return queue.RelayCheck{}, fmt.Sprintf("témoin 127.0.0.1 répond (%v %v)", neg, err)
 	}
-	var listed []string
+	var listed, pbl []string
 	for _, ip := range ips {
 		ans, err := z.Query(ctx, srv, reverse(ip)+"."+zone+".")
 		if isNotFound(err) || (err == nil && len(ans) == 0) {
@@ -92,18 +108,27 @@ func (z *ZEN) checkOn(ctx context.Context, srv string, ips []string) (queue.Rela
 		if state == "unknown" {
 			return queue.RelayCheck{}, fmt.Sprintf("%s: réponse inconnue %v", ip, ans)
 		}
+		if state == "pbl" {
+			pbl = append(pbl, ip+"="+strings.Join(ans, "+"))
+			continue
+		}
 		listed = append(listed, ip+"="+strings.Join(ans, "+"))
 	}
 	if len(listed) > 0 {
 		return queue.RelayCheck{State: queue.RelayListed, IPs: ips, Detail: "listée ZEN via " + srv + ": " + strings.Join(listed, ", ")}, ""
 	}
-	return queue.RelayCheck{State: queue.RelayClean, IPs: ips, Detail: "non listée ZEN via " + srv}, ""
+	c := queue.RelayCheck{State: queue.RelayClean, IPs: ips, Detail: "non listée ZEN via " + srv}
+	if len(pbl) > 0 {
+		c.Warning = "PBL seulement : " + strings.Join(pbl, ", ")
+	}
+	return c, ""
 }
 
-// classify : 127.0.0.2 à 127.0.0.11 = listé (SBL, CSS, XBL, PBL) ; 127.255.255.x = refus de
-// Spamhaus (résolveur public, erreur de nom, trop de requêtes) ; le reste est inconnu.
+// classify : 127.0.0.2 à 127.0.0.9 = listé (SBL 2-3, CSS 3, XBL 4-7) ; 127.0.0.10 et .11 seuls =
+// PBL (plages « grand public », ne vise pas un relais légitime : avertissement, l'envoi continue) ;
+// 127.255.255.x = refus de Spamhaus (erreur de requête, résolveur ouvert, limite) ; le reste est inconnu.
 func classify(ans []string) string {
-	listed := false
+	listed, pbl := false, false
 	for _, a := range ans {
 		ip := net.ParseIP(a).To4()
 		switch {
@@ -111,14 +136,19 @@ func classify(ans []string) string {
 			return "unknown"
 		case ip[0] == 127 && ip[1] == 255 && ip[2] == 255:
 			return "refused"
-		case ip[0] == 127 && ip[1] == 0 && ip[2] == 0 && ip[3] >= 2 && ip[3] <= 11:
+		case ip[0] == 127 && ip[1] == 0 && ip[2] == 0 && ip[3] >= 2 && ip[3] <= 9:
 			listed = true
+		case ip[0] == 127 && ip[1] == 0 && ip[2] == 0 && (ip[3] == 10 || ip[3] == 11):
+			pbl = true
 		default:
 			return "unknown"
 		}
 	}
-	if listed {
+	switch {
+	case listed:
 		return "listed"
+	case pbl:
+		return "pbl"
 	}
 	return "unknown"
 }

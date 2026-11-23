@@ -45,6 +45,12 @@ campagnes), sur tout profil SMTP :
   profil, requête DIRECTE aux serveurs faisant autorité de zen.spamhaus.org (UDP IPv4), témoins
   127.0.0.2 (doit être listé) et 127.0.0.1 (doit être absent) sur chaque serveur ; 127.255.255.x
   (refus, résolveur public) ou silence = serveur écarté, on passe au suivant ;
+- méthode alignée sur l'infra (23/11) : DEUX serveurs valides requis, le plus sévère l'emporte
+  (listé si l'un dit listé) ; SBL/CSS/XBL (127.0.0.2-9) = listé ; PBL seul (127.0.0.10-11) =
+  avertissement, l'envoi continue ; IPv4 imposé (en IPv6, Spamhaus voit un résolveur ouvert et
+  seul le témoin 127.0.0.1 le révèle) ;
+- alertes : champs `service=notifuse-zen`, `gravite` (`critique`/`impact=client` relais listé,
+  `erreur` mesure non aboutie, `avertissement` PBL) pour une règle Loki `flux=alerte` (infra) ;
 - **listée** : l'entrée attend (`relay_blocklisted`), le profil est suspendu (`veridian_paused`,
   reprise humaine `profiles:resume` après radiation) et l'alerte part (log erreur
   `VeridianRelayGuard: relay IP listed on Spamhaus ZEN, sending profile suspended`), une fois ;

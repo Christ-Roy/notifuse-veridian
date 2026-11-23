@@ -46,6 +46,9 @@ type RelayCheck struct {
 	State  RelayState
 	IPs    []string
 	Detail string
+	// Warning : propre pour l'envoi, mais à signaler (IP en PBL seulement : liste des plages
+	// « grand public », qui ne vise pas un relais légitime ; méthode de l'infra, 23/11).
+	Warning string
 }
 
 // RelayChecker vérifie l'hôte SMTP d'un relais (résolution de ses IP et requête ZEN).
@@ -106,7 +109,10 @@ func (w *EmailQueueWorker) veridianRelayBlocklistVerdict(workspace *domain.Works
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	c := h.lookup(ctx, host)
+	c, fresh := h.lookup(ctx, host)
+	if fresh {
+		w.veridianLogRelayCheck(workspace, cand.IntegrationID, host, c)
+	}
 	limit := "zen.spamhaus.org"
 	switch c.State {
 	case RelayClean:
@@ -128,12 +134,12 @@ func (w *EmailQueueWorker) veridianRelayBlocklistVerdict(workspace *domain.Works
 }
 
 // lookup rend le verdict en cache s'il vaut encore, sinon vérifie (une vérification à la fois).
-func (h *relayGuardHolder) lookup(ctx context.Context, host string) RelayCheck {
+func (h *relayGuardHolder) lookup(ctx context.Context, host string) (RelayCheck, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	now := h.now()
 	if e, ok := h.cache[host]; ok && now.Before(e.until) {
-		return e.check
+		return e.check, false
 	}
 	c := h.checker.CheckRelay(ctx, host)
 	ttl := relayUnverifiedRetry
@@ -141,7 +147,7 @@ func (h *relayGuardHolder) lookup(ctx context.Context, host string) RelayCheck {
 		ttl = relayCleanTTL
 	}
 	h.cache[host] = relayCacheEntry{check: c, until: now.Add(ttl)}
-	return c
+	return c, true
 }
 
 // signalListed suspend et alerte une seule fois par profil (la pause réveille la suite).
@@ -162,3 +168,32 @@ func veridianTrim(s string, n int) string {
 	}
 	return s[:n]
 }
+
+// veridianLogRelayCheck journalise une mesure fraîche qui mérite d'être vue (champs stables pour
+// une règle d'alerte Loki : service notifuse-zen, gravite, impact). Le relais listé est signalé à
+// part, au niveau critique, par le suspendeur (internal/veridian/relayguard).
+func (w *EmailQueueWorker) veridianLogRelayCheck(workspace *domain.Workspace, integrationID, host string, c RelayCheck) {
+	if w.logger == nil {
+		return
+	}
+	wsID := ""
+	if workspace != nil {
+		wsID = workspace.ID
+	}
+	f := map[string]interface{}{"service": "notifuse-zen", "workspace_id": wsID, "integration_id": integrationID,
+		"relay_host": host, "relay_ips": strings.Join(c.IPs, ","), "detail": c.Detail}
+	switch {
+	case c.State == RelayUnverified:
+		f["gravite"], f["impact"] = "erreur", "interne"
+		w.logger.WithFields(f).Error(RelayUnverifiedMessage)
+	case c.State == RelayClean && c.Warning != "":
+		f["gravite"], f["impact"], f["warning"] = "avertissement", "interne", c.Warning
+		w.logger.WithFields(f).Warn(RelayWarningMessage)
+	}
+}
+
+// Messages stables (règles d'alerte).
+const (
+	RelayUnverifiedMessage = "VeridianRelayGuard: relay blocklist check not completed, commercial sending held"
+	RelayWarningMessage    = "VeridianRelayGuard: relay IP listed on Spamhaus PBL only (warning, sending continues)"
+)

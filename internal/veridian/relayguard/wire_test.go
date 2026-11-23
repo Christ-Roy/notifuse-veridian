@@ -51,7 +51,8 @@ func TestSuspender_PausesProfileAndAlerts(t *testing.T) {
 	if repo.updated == nil || !repo.updated.GetIntegrationByID("nord").EmailProvider.VeridianPaused {
 		t.Fatal("le profil doit être suspendu et enregistré")
 	}
-	if log.errMsg != AlertMessage || log.fields["suspended"] != true || log.fields["relay_ips"] != "51.210.7.44" {
+	if log.errMsg != AlertMessage || log.fields["suspended"] != true || log.fields["relay_ips"] != "51.210.7.44" ||
+		log.fields["gravite"] != "critique" || log.fields["impact"] != "client" || log.fields["service"] != "notifuse-zen" {
 		t.Fatalf("alerte manquante ou incomplète: %q %v", log.errMsg, log.fields)
 	}
 }

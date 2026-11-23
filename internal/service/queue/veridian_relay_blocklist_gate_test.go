@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	pkglogger "github.com/Notifuse/notifuse/pkg/logger"
 )
 
 type fakeRelayChecker struct {
@@ -119,4 +120,42 @@ func TestRelayGate_NotWiredPasses(t *testing.T) {
 	if v := w.veridianRelayBlocklistVerdict(&domain.Workspace{ID: "ws"}, relayCand(), relayEntry(domain.EmailQueueSourceAutomation)); v.Blocked() {
 		t.Fatalf("%+v", v)
 	}
+}
+
+type relayRecLog struct {
+	pkglogger.Logger
+	fields      map[string]interface{}
+	errs, warns []string
+}
+
+func (r *relayRecLog) WithFields(f map[string]interface{}) pkglogger.Logger { r.fields = f; return r }
+func (r *relayRecLog) Error(m string)                                       { r.errs = append(r.errs, m) }
+func (r *relayRecLog) Warn(m string)                                        { r.warns = append(r.warns, m) }
+
+// Une mesure non aboutie se dit (gravite erreur, rien ne part) ; un PBL seul se dit en
+// avertissement ; une mesure propre sans avertissement ne dit rien.
+func TestRelayGate_LogsUnverifiedAndPBL(t *testing.T) {
+	for _, tc := range []struct {
+		check RelayCheck
+		errs  int
+		warns int
+		grav  string
+	}{
+		{RelayCheck{State: RelayUnverified, Detail: "0 serveur valide"}, 1, 0, "erreur"},
+		{RelayCheck{State: RelayClean, Warning: "PBL seulement"}, 0, 1, "avertissement"},
+		{RelayCheck{State: RelayClean}, 0, 0, ""},
+	} {
+		log := &relayRecLog{}
+		SetVeridianRelayChecker(&fakeRelayChecker{check: tc.check}, nil)
+		w := &EmailQueueWorker{ctx: context.Background(), logger: log}
+		w.veridianRelayBlocklistVerdict(&domain.Workspace{ID: "gbc"}, relayCand(), relayEntry(domain.EmailQueueSourceAutomation))
+		w.veridianRelayBlocklistVerdict(&domain.Workspace{ID: "gbc"}, relayCand(), relayEntry(domain.EmailQueueSourceAutomation))
+		if len(log.errs) != tc.errs || len(log.warns) != tc.warns {
+			t.Fatalf("%v : %d erreurs %d avertissements (une seule ligne par mesure)", tc.check.State, len(log.errs), len(log.warns))
+		}
+		if tc.grav != "" && (log.fields["gravite"] != tc.grav || log.fields["service"] != "notifuse-zen") {
+			t.Fatalf("champs de la règle d'alerte : %v", log.fields)
+		}
+	}
+	SetVeridianRelayChecker(nil, nil)
 }
