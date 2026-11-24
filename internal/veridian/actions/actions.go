@@ -68,22 +68,21 @@ type call struct {
 }
 
 type action struct {
-	scopes []string
-	apps   []string
-	build  func(ws, app string, raw []byte) (*call, error)
+	scope string
+	apps  []string
+	build func(ws, app string, raw []byte) (*call, error)
 }
 
-// Portée du registre du Hub (lib/delegation/paires.ts), et le nom qu'il a porté le 24/11 (les deux désignent la même chose, seul le Hub
-// les délivre).
-var scopeContacts = []string{"notifuse:contacts.ecrire", "notifuse:contacts.importer"}
+// Portée du registre du Hub (lib/delegation/paires.ts) : le Hub refuse toute autre portée.
+const scopeContacts = "notifuse:contacts.ecrire"
 
 var mailApps = []string{"app:prospection", "app:crm"}
 
 // Catalogue fermé : une action = une portée, des apps autorisées, des requêtes fixes.
 var catalogue = map[string]action{
-	"contacts.importer": {scopes: scopeContacts, apps: mailApps, build: buildImport},
-	"listes.lister":     {scopes: scopeContacts, apps: mailApps, build: buildLists},
-	"listes.creer":      {scopes: scopeContacts, apps: mailApps, build: buildCreateList},
+	"contacts.importer": {scope: scopeContacts, apps: mailApps, build: buildImport},
+	"listes.lister":     {scope: scopeContacts, apps: mailApps, build: buildLists},
+	"listes.creer":      {scope: scopeContacts, apps: mailApps, build: buildCreateList},
 }
 
 // Handler : POST /api/veridian/actions/{action}.
@@ -141,15 +140,6 @@ func has(list []string, v string) bool {
 	return false
 }
 
-func hasAny(list, wanted []string) bool {
-	for _, w := range wanted {
-		if has(list, w) {
-			return true
-		}
-	}
-	return false
-}
-
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
@@ -187,8 +177,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		refuse(w, http.StatusForbidden, "app_non_autorisee", app+" ne peut pas demander "+name)
 		return
 	}
-	if !hasAny(strings.Fields(claims.Scope), act.scopes) {
-		refuse(w, http.StatusForbidden, "portee_insuffisante", "portée requise : "+act.scopes[0])
+	if !has(strings.Fields(claims.Scope), act.scope) {
+		refuse(w, http.StatusForbidden, "portee_insuffisante", "portée requise : "+act.scope)
 		return
 	}
 	member, err := h.Store.Resolve(ctx, claims.Subject, claims.TenantID)

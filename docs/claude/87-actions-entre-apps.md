@@ -1,7 +1,7 @@
 # 87 — Actions demandées par une autre app (24/11/2026, INTEGRATIONS-NATIVES §2.2 et 2.3, F2)
 
 `POST /api/veridian/actions/{action}` (`internal/veridian/actions/`, migration V78). Une app (Prospection, CRM) demande une action au nom
-d'un utilisateur ; le Hub signe un jeton d'action de 120 s. Le Hub ne l'émet pas encore : éprouvé avec une clé ES256 locale.
+d'un utilisateur ; le Hub signe un jeton d'action de 120 s. Premier vrai jeton du Hub joué en staging le 24/11/2026 (cas 25 du Hub, écritures relues ici).
 
 ## Le jeton (401 `jeton_refuse` sinon)
 ES256, `kid` au JWKS du Hub, `iss`, `aud` = `https://notifuse.app.veridian.site/api/veridian/actions` (`VERIDIAN_ACTIONS_AUDIENCE`) ou l'adresse MCP (`VERIDIAN_MCP_AUDIENCE`, ce que le Hub signe aujourd'hui), `email_verified`,
@@ -17,7 +17,7 @@ ES256, `kid` au JWKS du Hub, `iss`, `aud` = `https://notifuse.app.veridian.site/
 Autre demande sous la même clé = 422 `cle_reutilisee` ; en cours = 409 `en_cours` ; refus ou panne = clé rendue ; geste mort repris après 2 min.
 Origine (`app`, `jti`, `hub_user_id`) gardée dans `veridian_action_done` et au journal.
 
-## Les trois actions (portée `notifuse:contacts.ecrire`, ou `notifuse:contacts.importer` ; apps `app:prospection`, `app:crm`)
+## Les trois actions (portée `notifuse:contacts.ecrire`, celle du registre du Hub ; apps `app:prospection`, `app:crm`)
 Réponse : `{action, rejoue, simulation, resultat}`. Aucun champ inconnu n'est accepté, l'espace vient du jeton, **aucun envoi possible**.
 - `contacts.importer` `{list_ids, contacts (1 à 1000), dry_run}` : passe par `contacts.intake` (fiche 85) avec `allow_triggers=false` et
   `existing=attach` : fiche existante intacte, désinscrits, rebonds et plaintes exclus, `custom_json_1.veridian_source` = l'app du jeton. Tout

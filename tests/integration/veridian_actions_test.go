@@ -176,6 +176,13 @@ func TestVeridianActions_EnvoyerVersMail(t *testing.T) {
 	assert.Equal(t, 403, st)
 	assert.Equal(t, "non_membre", m["error"])
 
+	// Sur l'application entière : une route inconnue ou la mauvaise méthode est un 404, jamais un 200 vide.
+	st, m = post("/api/lists.zzz", token(nil), "", map[string]any{})
+	assert.Equal(t, 404, st)
+	assert.Equal(t, "route_not_found", m["code"])
+	st, _ = post("/api/veridian/membres", token(nil), "", map[string]any{})
+	assert.Equal(t, 404, st, "GET seulement")
+
 	// Aucun envoi.
 	assert.Equal(t, 0, count(`SELECT COUNT(*) FROM email_queue`))
 	assert.Equal(t, 0, count(`SELECT COUNT(*) FROM message_history`))

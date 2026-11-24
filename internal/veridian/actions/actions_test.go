@@ -318,14 +318,13 @@ func TestImport_AucunEnvoi_SourcePosee(t *testing.T) {
 	assert.Len(t, e.d.paths, 1)
 }
 
-func TestPortee_LesDeuxNomsDuHub(t *testing.T) {
+func TestPortee_UnSeulNom(t *testing.T) {
 	e := newEnv(t)
-	for i, scope := range []string{"notifuse:contacts.ecrire", "notifuse:contacts.importer"} {
-		st, out := e.post(imp, e.hub.token(t, func(c *mcp.Claims) { c.Scope = scope }), fmt.Sprintf("cle-%06d", i), body)
-		assert.Equal(t, 200, st, out)
+	for _, scope := range []string{"notifuse:contacts.importer", "veridian", "notifuse:*", ""} {
+		st, _ := e.post(imp, e.hub.token(t, func(c *mcp.Claims) { c.Scope = scope }), "cle-000009", body)
+		assert.Equal(t, 403, st, scope)
 	}
-	st, _ := e.post(imp, e.hub.token(t, func(c *mcp.Claims) { c.Scope = "veridian" }), "cle-000009", body)
-	assert.Equal(t, 403, st, "une portée large n'ouvre rien ici")
+	assert.Empty(t, e.d.paths)
 }
 
 func TestIdempotence(t *testing.T) {
@@ -378,7 +377,7 @@ func TestCatalogue_AucuneActionNEnvoie(t *testing.T) {
 	names := make([]string, 0, len(catalogue))
 	for n, a := range catalogue {
 		names = append(names, n)
-		assert.Equal(t, []string{"notifuse:contacts.ecrire", "notifuse:contacts.importer"}, a.scopes, "portées délivrées par le Hub")
+		assert.Equal(t, "notifuse:contacts.ecrire", a.scope, "portée du registre du Hub")
 		assert.Equal(t, []string{"app:prospection", "app:crm"}, a.apps)
 	}
 	assert.ElementsMatch(t, []string{"contacts.importer", "listes.lister", "listes.creer"}, names, "une action neuve se relit ici")

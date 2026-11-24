@@ -141,4 +141,5 @@ ouvert `../veridian-hub/todo/2026-05-25-secrets-hmac-cross-app-doc-CLAUDE.md`
 pour la créer en miroir.
 
 ---
-
+- **Corrigé le 24/11/2026** : une route `/api/*` inconnue, ou appelée avec la mauvaise méthode, répond 404 JSON `route_not_found`
+  (`internal/veridian/apinotfound`), plus jamais 200 avec un corps vide. `/api/` et `/api/health` gardent leur 200.
