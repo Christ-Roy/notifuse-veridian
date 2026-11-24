@@ -24,10 +24,28 @@ type tool struct {
 	Props       map[string]any // schema JSON des arguments
 	Required    []string
 	Paginated   bool
+	// Also : droits exigés en plus par la route (l'outil n'est proposé qu'à qui peut vraiment s'en servir).
+	Also []also
+	// Compact : réduit la réponse de l'API à ce qu'une IA lit (nil : réponse telle quelle).
+	Compact func([]byte) []byte
+}
+
+type also struct {
+	res  domain.PermissionResource
+	kind domain.PermissionType
 }
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 func num(desc string) map[string]any { return map[string]any{"type": "integer", "description": desc} }
+func boolean(desc string) map[string]any {
+	return map[string]any{"type": "boolean", "description": desc}
+}
+func strs(desc string) map[string]any {
+	return map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": desc}
+}
+func objs(desc string, max int) map[string]any {
+	return map[string]any{"type": "array", "items": map[string]any{"type": "object"}, "maxItems": max, "description": desc}
+}
 func obj(desc string) map[string]any { return map[string]any{"type": "object", "description": desc} }
 
 var pageProps = map[string]any{
@@ -61,7 +79,7 @@ var catalog = []tool{
 	{Name: "lists_list", Description: "Liste les listes de diffusion.", Resource: domain.PermissionResourceLists,
 		Method: http.MethodGet, Path: "/api/lists.list", Props: map[string]any{}},
 	{Name: "segments_list", Description: "Liste les segments de contacts.", Resource: domain.PermissionResourceContacts,
-		Method: http.MethodGet, Path: "/api/segments.list", Props: map[string]any{}},
+		Method: http.MethodGet, Path: "/api/segments.list", Props: map[string]any{}, Compact: compactSegments},
 	{Name: "templates_list", Description: "Liste les modeles d'e-mail.", Resource: domain.PermissionResourceTemplates,
 		Method: http.MethodGet, Path: "/api/templates.list", Props: map[string]any{}},
 	{Name: "templates_get", Description: "Lit un modele d'e-mail par son id.", Resource: domain.PermissionResourceTemplates,
@@ -79,6 +97,8 @@ var catalog = []tool{
 	{Name: "messages_list", Description: "Journal des messages envoyes (statut, ouverture, rebond).", Resource: domain.PermissionResourceMessageHistory,
 		Method: http.MethodGet, Path: "/api/messages.list", Paginated: true, Props: withPage(map[string]any{"contact_email": str("filtre par destinataire"), "channel": str("email")})},
 }
+
+func init() { catalog = append(catalog, reservoirTools...) }
 
 const (
 	defaultLimit = 25
@@ -100,7 +120,15 @@ func (t *tool) allowed(uw *domain.UserWorkspace) bool {
 	if t.Write {
 		need = domain.PermissionTypeWrite
 	}
-	return uw.HasPermission(t.Resource, need)
+	if !uw.HasPermission(t.Resource, need) {
+		return false
+	}
+	for _, a := range t.Also {
+		if !uw.HasPermission(a.res, a.kind) {
+			return false
+		}
+	}
+	return true
 }
 
 func (t *tool) descriptor() map[string]any {

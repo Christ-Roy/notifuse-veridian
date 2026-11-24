@@ -79,6 +79,9 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse policy:set <ws> --class C [--cap N] [--rate R] [--warmup-share S] [--threshold T] [--reason T]   surcharge pour ce workspace ; policy:reset <ws> --class C [--rule R]
   notifuse stock:overview [ws] [--days N] [--enrolled-list L] [--reserve-list L] [--json]   STOCK par classe : inscrits, réserve, plafond du jour, jours de couverture (le tableau de
                                                               stock-par-classe.py), jamais contactés, couverture à planifier, statut et contacts à aller chercher. stock:config [ws] [options] : définition du stock
+  notifuse contacts:intake [ws] --file f.csv|f.json [--lists l] [--dedupe email,siren,domain] [--existing attach|update|skip] [--dry-run]   import en masse dédoublonné, sans désinscrits, rebonds ni plaintes (lots de 1000)
+  notifuse reservoir:status [ws] [--lists l] [--automation ID]   par liste : activables, et pourquoi pas les autres
+  notifuse reservoir:activate [ws] --automation ID --list L|--segment S|--emails a,b [--limit N] [--dry-run]   fait entrer un lot dans une séquence active (les plafonds d'envoi ne bougent pas)
   notifuse policy:suggest-enrollment [ws] [--days N] [--emails] [--limit N]   combien de contacts de la réserve inscrire par classe pour tenir N jours sans dépasser les plafonds, combien aller
                                                               chercher ; N'INSCRIT PERSONNE (--emails : les adresses et les commandes à lancer toi-même)
   notifuse policy:priority [ws] [--broadcast ID | --automation ID] [--set 2..9 | --clear]   priorité d'envoi d'une campagne ou automation (défaut 5, 1 réservé au transactionnel)
@@ -388,6 +391,8 @@ WORKSPACE_COMMANDS = frozenset({
     "policy:show", "policy:set", "policy:reset", "policy:priority",
     "stock:overview", "stock:config",
     "policy:suggest-enrollment",
+    # Fiche 85 (24/11/2026) : import en masse dédoublonné, réservoirs, activation par lots.
+    "contacts:intake", "reservoir:status", "reservoir:activate",
     # Lot 1 (10/10/2026) : pourquoi un mail n'est pas parti. queue:explain et logs:decisions en
     # lecture (automations:read) ; queue:recompute en écriture (automations:write, --yes requis).
     "queue:explain", "logs:decisions", "queue:recompute", "queue:entries", "queue:cancel",
@@ -2984,6 +2989,87 @@ def cmd_policy_suggest(a):
     print(format_suggestion(data, workspace=a.workspace))
 
 
+# ---- Fiche 85 (24/11/2026) : import en masse, réservoirs, activation ---------------
+# contacts:intake = POST /api/veridian/contacts.intake (contacts:write, lists:write avec --lists)
+# reservoir:status = GET /api/veridian/reservoir.summary ; reservoir:activate = POST /api/veridian/reservoir.activate
+_INTAKE_BATCH = 1000
+
+
+def split_batches(items, size=_INTAKE_BATCH):
+    """Pure : découpe en lots."""
+    return [items[i:i + size] for i in range(0, len(items), size)]
+
+
+def merge_intake(total, part):
+    """Pure : additionne le résultat d'un lot dans le total."""
+    for k in ("received", "created", "updated", "existing", "subscribed"):
+        total[k] = total.get(k, 0) + (part.get(k) or 0)
+    sk = total.setdefault("skipped", {})
+    for k, v in (part.get("skipped") or {}).items():
+        sk[k] = sk.get(k, 0) + v
+    total["details"] = (total.get("details") or []) + (part.get("details") or [])
+    total["details"] = total["details"][:50]
+    if part.get("triggers"):
+        total["triggers"] = part["triggers"]
+    return total
+
+
+def _csv_list(v):
+    return [x.strip() for x in v.split(",") if x.strip()] if v else []
+
+
+def cmd_contacts_intake(a):
+    if a.file.endswith(".csv"):
+        contacts = _read_contacts_csv(a.file)
+    else:
+        with open(a.file, encoding="utf-8") as fh:
+            contacts = json.load(fh)
+    if not isinstance(contacts, list) or not contacts:
+        die(f"{a.file} : aucun contact (CSV avec colonne email, ou tableau JSON).")
+    jwt = apikey_for(a.env, a.workspace)
+    total = {"dry_run": a.dry_run}
+    batches = split_batches(contacts)
+    for n, chunk in enumerate(batches, 1):
+        body = {"workspace_id": a.workspace, "contacts": chunk, "dry_run": a.dry_run, "allow_triggers": a.allow_triggers}
+        if a.lists:
+            body["list_ids"] = _csv_list(a.lists)
+        if a.dedupe:
+            body["dedupe"] = _csv_list(a.dedupe)
+        if a.existing:
+            body["existing"] = a.existing
+        st, data = call_jwt(a.env, "POST", "/api/veridian/contacts.intake", jwt, body=body)
+        if st != 200:
+            print(f"lot {n}/{len(batches)} refusé, les lots précédents sont écrits (rejouable sans doublon)", file=sys.stderr)
+            out(st, data)
+            return
+        merge_intake(total, data)
+    out(200, total)
+
+
+def cmd_reservoir_status(a):
+    params = {"workspace_id": a.workspace}
+    if a.lists:
+        params["list_ids"] = a.lists
+    if a.automation:
+        params["automation_id"] = a.automation
+    st, data = call_jwt(a.env, "GET", "/api/veridian/reservoir.summary", apikey_for(a.env, a.workspace), params=params)
+    out(st, data)
+
+
+def cmd_reservoir_activate(a):
+    body = {"workspace_id": a.workspace, "automation_id": a.automation, "dry_run": a.dry_run, "include_contacted": a.include_contacted}
+    if a.list:
+        body["list_id"] = a.list
+    if a.segment:
+        body["segment_id"] = a.segment
+    if a.emails:
+        body["emails"] = _csv_list(a.emails)
+    if a.limit:
+        body["limit"] = a.limit
+    st, data = call_jwt(a.env, "POST", "/api/veridian/reservoir.activate", apikey_for(a.env, a.workspace), body=body)
+    out(st, data)
+
+
 # ---- Lot 1 (10/10/2026) : « pourquoi ce mail n'est pas parti » -------------
 # queue:explain  = GET  /api/veridian/queue.explain    (automations:read)
 # logs:decisions = GET  /api/veridian/decisions.list   (automations:read)
@@ -5205,6 +5291,31 @@ def build_parser(extra=None):
     sp.add_argument("--exclude-prefix", dest="exclude_prefix", action="append")
     sp.add_argument("--target-days", dest="target_days", type=int, help="couverture visée en jours (1 à 60)")
     sp.set_defaults(func=cmd_stock_config, _routes=["/api/veridian/stock.config", "/api/veridian/stock.config.set"])
+
+    sp = sub.add_parser("contacts:intake", help="import en masse dédoublonné (email, SIREN, domaine), sans désinscrits, rebonds ni plaintes")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--file", required=True, help="CSV avec en-tête 'email', ou tableau JSON ; lots de 1000")
+    sp.add_argument("--lists", help="listes, séparées par des virgules")
+    sp.add_argument("--dedupe", help="email, siren, domain (défaut : les trois)")
+    sp.add_argument("--existing", choices=["attach", "update", "skip"], help="adresse déjà présente (défaut attach : fiche intacte, ajoutée aux listes)")
+    sp.add_argument("--dry-run", dest="dry_run", action="store_true", help="simulation, rien n'est écrit")
+    sp.add_argument("--allow-triggers", dest="allow_triggers", action="store_true", help="accepter qu'une séquence active démarre (ENVOIE)")
+    sp.set_defaults(func=cmd_contacts_intake, _routes=["/api/veridian/contacts.intake"])
+
+    sp = sub.add_parser("reservoir:status", help="état des listes : activables, et pourquoi pas les autres")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--lists", help="listes, séparées par des virgules (défaut : toutes)")
+    sp.add_argument("--automation", help="séquence visée")
+    sp.set_defaults(func=cmd_reservoir_status, _routes=["/api/veridian/reservoir.summary"])
+
+    sp = sub.add_parser("reservoir:activate", help="fait entrer un lot de contacts dans une séquence active (ENVOIE, dans les plafonds)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--automation", required=True)
+    sp.add_argument("--list"); sp.add_argument("--segment"); sp.add_argument("--emails", help="adresses séparées par des virgules")
+    sp.add_argument("--limit", type=int, help="taille du lot (défaut 100, max 1000)")
+    sp.add_argument("--include-contacted", dest="include_contacted", action="store_true")
+    sp.add_argument("--dry-run", dest="dry_run", action="store_true")
+    sp.set_defaults(func=cmd_reservoir_activate, _routes=["/api/veridian/reservoir.activate"])
 
     sp = sub.add_parser("policy:suggest-enrollment",
                         help="combien de contacts de la réserve inscrire, par classe, pour tenir N jours de couverture sans dépasser les plafonds, et combien aller chercher ; n'inscrit personne")

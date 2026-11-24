@@ -14,9 +14,14 @@ import (
 )
 
 const (
-	maxRequestBytes = 256 << 10
-	maxResultChars  = 30000 // le Hub plafonne a ~16 000 de son cote ; on borne avant
-	serverVersion   = "1.0"
+	maxRequestBytes = 2 << 20 // un import groupé de 1000 contacts enrichis
+	maxResultChars  = 30000   // le Hub plafonne a ~16 000 de son cote ; on borne avant
+	// En-tête posé par le Hub quand l'appel vient d'un programme (code mode) : le résultat est lu par du code, pas par le
+	// modèle. Couper rendrait un JSON illisible. Il n'ouvre aucun droit, il ne change que la taille rendue.
+	programHeader    = "X-Veridian-MCP-Appel"
+	programValue     = "programme"
+	maxProgramResult = 1 << 20
+	serverVersion    = "1.0"
 )
 
 var supportedProtocols = []string{"2025-06-18", "2025-03-26", "2024-11-05"}
@@ -146,10 +151,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.dispatch(r.Context(), member, claims, &req))
+	writeJSON(w, http.StatusOK, h.dispatch(r.Context(), member, claims, &req, r.Header.Get(programHeader) == programValue))
 }
 
-func (h *Handler) dispatch(ctx context.Context, m *Member, claims *Claims, req *rpcRequest) map[string]any {
+func (h *Handler) dispatch(ctx context.Context, m *Member, claims *Claims, req *rpcRequest, program bool) map[string]any {
 	switch req.Method {
 	case "initialize":
 		var p struct {
@@ -179,7 +184,7 @@ func (h *Handler) dispatch(ctx context.Context, m *Member, claims *Claims, req *
 		}
 		return rpcResult(req.ID, map[string]any{"tools": tools})
 	case "tools/call":
-		return h.call(ctx, m, claims, req)
+		return h.call(ctx, m, claims, req, program)
 	}
 	return rpcError(req.ID, -32601, "methode inconnue")
 }
@@ -191,7 +196,7 @@ func toolResult(id json.RawMessage, text string, isErr bool) map[string]any {
 	return rpcResult(id, map[string]any{"content": []map[string]any{{"type": "text", "text": text}}, "isError": isErr})
 }
 
-func (h *Handler) call(ctx context.Context, m *Member, claims *Claims, req *rpcRequest) map[string]any {
+func (h *Handler) call(ctx context.Context, m *Member, claims *Claims, req *rpcRequest, program bool) map[string]any {
 	var p struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
@@ -229,6 +234,24 @@ func (h *Handler) call(ctx context.Context, m *Member, claims *Claims, req *rpcR
 		outcome = "http_" + http.StatusText(status)
 		return toolResult(req.ID, strings.TrimSpace(string(resp)), true)
 	}
+	if t.Compact != nil {
+		resp = t.Compact(resp)
+	}
+	if program {
+		return programResult(req.ID, resp)
+	}
 	return toolResult(req.ID, strings.TrimSpace(string(resp)), false)
 }
 
+// programResult : le JSON entier, en objet (structuredContent). Trop gros : une erreur franche, jamais un JSON coupé.
+func programResult(id json.RawMessage, resp []byte) map[string]any {
+	if len(resp) > maxProgramResult {
+		return toolResult(id, "reponse de plus de 1 Mo : pagine (limit, cursor, offset)", true)
+	}
+	out := map[string]any{"content": []map[string]any{{"type": "text", "text": strings.TrimSpace(string(resp))}}, "isError": false}
+	var o map[string]any
+	if json.Unmarshal(resp, &o) == nil && o != nil {
+		out["structuredContent"] = json.RawMessage(resp)
+	}
+	return rpcResult(id, out)
+}

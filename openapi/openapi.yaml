@@ -113,6 +113,12 @@ paths:
     $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.priority.set'
   /api/veridian/policy.priority.clear:
     $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.priority.clear'
+  /api/veridian/contacts.intake:
+    $ref: './paths/veridian-reservoir.yaml#/~1api~1veridian~1contacts.intake'
+  /api/veridian/reservoir.summary:
+    $ref: './paths/veridian-reservoir.yaml#/~1api~1veridian~1reservoir.summary'
+  /api/veridian/reservoir.activate:
+    $ref: './paths/veridian-reservoir.yaml#/~1api~1veridian~1reservoir.activate'
   /api/veridian/policy.suggest-enrollment:
     $ref: './paths/veridian-policy.yaml#/~1api~1veridian~1policy.suggest-enrollment'
   /api/veridian/stock.overview:

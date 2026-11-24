@@ -111,12 +111,13 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `77` couverture CLI embarquée (chaque route `/api/*` a sa commande, MANIFEST) et distribution du CLI
 - `44` rate-limit global de l'API (OWASP API4:2023)
 - `61` nœud webhook des automations : garde SSRF, secret chiffré, HMAC
-- `75` lot L4 : aperçu e-mail en bac à sable, Liquid des contacts, tests upstream portés, mutants
+- `75` lot L4 : aperçu e-mail en bac à sable, Liquid des contacts, mutants
 - `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`
 - `82` statut d'essai du Hub (stocké, rendu, jamais appliqué) et signal d'activité vers le Hub
-- `83` MCP derrière la porte du Hub (JWT ES256, espace déduit, outils filtrés), bouton « Brancher mon IA »
+- `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
-- `81` capacité base : connexions par workspace, `max_connections`, incident du 07/11
+- `81` capacité base : connexions, `max_connections`, incident du 07/11
+- `85` réservoirs : import massif dédoublonné, activation par lots, outils MCP, code mode
 - `79` CLI utilisateur à parité : qui peut quoi, tableau d'audit
 
 **Base de données workspace**

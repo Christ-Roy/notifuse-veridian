@@ -17,6 +17,7 @@ Contrat : `veridian-hub/docs/CONTRAT-MCP.md` (09/11/2026). Code : `internal/veri
    défaut, 100 max, `limit`/`offset`/`cursor`). L'app journalise l'issue (outil, client, durée), jamais les arguments.
 
 ## Règles
+- Outils de prospection en volume : fiche `85`.
 - **Tout envoi de mail ou suppression est `destructiveHint`** : un test balaie le catalogue (`transactional_send`,
   `contacts_delete`). Aucun envoi pendant les tests.
 - Ajouter un outil = une ligne dans `catalog` (`tools.go`) + son test ; le Hub relit `tools/list` (cache 5 min), aucun

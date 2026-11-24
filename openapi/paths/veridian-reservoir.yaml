@@ -1,0 +1,114 @@
+/api/veridian/contacts.intake:
+  post:
+    summary: Bulk contact intake, deduplicated (Veridian, fiche 85)
+    description: |
+      Imports up to 1000 contacts. The address always deduplicates; SIREN and company domain do by default (`dedupe`),
+      shared mailboxes such as gmail.com never count as a company domain. Unsubscribed, hard-bounced and complained
+      addresses are skipped for the whole workspace. Unknown fields are kept in `custom_json_1`.
+      Refuses (409 `would_trigger`, nothing written) to start a live automation unless `allow_triggers` is true.
+
+      Auth = JWT or workspace API key. Requires `contacts:write`, plus `lists:write` with `list_ids`.
+    operationId: veridianContactsIntake
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, contacts]
+            properties:
+              workspace_id: { type: string }
+              contacts: { type: array, maxItems: 1000, items: { type: object } }
+              list_ids: { type: array, maxItems: 20, items: { type: string } }
+              dedupe: { type: array, items: { type: string, enum: [email, siren, domain] } }
+              existing: { type: string, enum: [attach, update, skip], default: attach }
+              dry_run: { type: boolean, default: false }
+              allow_triggers: { type: boolean, default: false }
+    responses:
+      '200':
+        description: What was written (or would be, with dry_run)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dry_run: { type: boolean }
+                received: { type: integer }
+                created: { type: integer }
+                updated: { type: integer }
+                existing: { type: integer }
+                subscribed: { type: integer }
+                skipped: { type: object, additionalProperties: { type: integer } }
+                details: { type: array, items: { type: object } }
+                triggers: { type: array, items: { type: object } }
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+      '409':
+        description: The import would start a live automation; nothing was written
+/api/veridian/reservoir.summary:
+  get:
+    summary: State of contact lists seen as reservoirs (Veridian, fiche 85)
+    description: |
+      Per list, how many contacts can be activated and why the others cannot. Requires `contacts:read`, `lists:read`,
+      `automations:read` and `message_history:read`.
+    operationId: veridianReservoirSummary
+    security:
+      - BearerAuth: []
+    parameters:
+      - { name: workspace_id, in: query, required: true, schema: { type: string } }
+      - { name: list_ids, in: query, description: Comma separated, schema: { type: string } }
+      - { name: automation_id, in: query, schema: { type: string } }
+    responses:
+      '200':
+        description: Reservoirs
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reservoirs: { type: array, items: { type: object } }
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
+/api/veridian/reservoir.activate:
+  post:
+    summary: Enroll a batch of reservoir contacts into a live automation (Veridian, fiche 85)
+    description: |
+      Picks up to `limit` contacts from ONE source, skips blocked, already contacted, already replied and already enrolled
+      ones, then enrolls them. Sending caps are unchanged. Requires `automations:write`, `lists:write`, `contacts:read`
+      and `message_history:read`.
+    operationId: veridianReservoirActivate
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, automation_id]
+            properties:
+              workspace_id: { type: string }
+              automation_id: { type: string }
+              list_id: { type: string }
+              segment_id: { type: string }
+              emails: { type: array, maxItems: 1000, items: { type: string } }
+              limit: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+              include_contacted: { type: boolean, default: false }
+              dry_run: { type: boolean, default: false }
+    responses:
+      '200':
+        description: Enrolled contacts and state of the source
+      '400':
+        $ref: '#/components/responses/BadRequest'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
