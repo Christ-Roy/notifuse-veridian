@@ -20,9 +20,14 @@
 //  4. numéro d'ordre le plus petit.
 package dedupsql
 
+import "strings"
+
 // MidKeyExpr : clé « mid: » en SQL, NULL si le Message-ID n'est pas exploitable.
 // Seule définition de cette clé : le code Go ne la recalcule jamais.
 const MidKeyExpr = `CASE WHEN message_id LIKE '%@%' AND message_id NOT LIKE '% %' THEN 'mid:' || lower(btrim(message_id)) END`
+
+// midKeyNew : la même clé, sur la ligne d'un déclencheur.
+var midKeyNew = strings.ReplaceAll(MidKeyExpr, "message_id", "NEW.message_id")
 
 // SieveHeader : en-tête posé par la redirection Sieve du relais sur la copie.
 const SieveHeader = "X-Sieve-Redirected-From"
@@ -75,21 +80,33 @@ const UnsettledFilter = `dedup_key IN (SELECT dedup_key FROM veridian_mail_messa
 		WHERE direction = 'in' AND dedup_key IS NOT NULL GROUP BY dedup_key
 		HAVING COUNT(*) FILTER (WHERE duplicate_of IS NULL) > 1)`
 
-// WebhookTriggerFunction : le webhook message.received ne signale pas une copie Sieve (l'original
-// arrive toujours par la boîte du relais). Remplace la fonction de V63, sinon identique.
-const WebhookTriggerFunction = `CREATE OR REPLACE FUNCTION webhook_mail_message_trigger()
+// WebhookTriggerFunction : le webhook message.received (V77). UN événement par mail : une copie Sieve n'en fait aucun (l'original arrive
+// toujours par la boîte du relais), ni un mail déjà signalé par une autre boîte (même Message-ID, hors copie Sieve). Deux boîtes qui
+// rangent le même mail à la même seconde peuvent encore en faire deux : le consommateur dédoublonne par rfc_message_id.
+// match_type dit ce qui rattache le mail à nos envois : message_id, subject (une vraie réponse), sender (un contact connu qui écrit).
+var WebhookTriggerFunction = `CREATE OR REPLACE FUNCTION webhook_mail_message_trigger()
 	RETURNS TRIGGER AS $$
 	DECLARE
 		sub RECORD;
 		payload JSONB;
+		mid TEXT;
 	BEGIN
 		IF NEW.direction <> 'in' OR jsonb_exists(NEW.headers, '` + SieveHeader + `') THEN
 			RETURN NEW;
 		END IF;
 		BEGIN
+			mid := ` + midKeyNew + `;
+			IF mid IS NOT NULL AND EXISTS (
+				SELECT 1 FROM veridian_mail_message o
+				WHERE o.dedup_key = mid AND o.direction = 'in' AND o.id <> NEW.id AND NOT jsonb_exists(o.headers, '` + SieveHeader + `')
+			) THEN
+				RETURN NEW;
+			END IF;
 			payload := jsonb_build_object(
 				'message_id', NEW.id,
+				'rfc_message_id', btrim(substr(mid, 5), '<>'),
 				'kind', NEW.kind,
+				'match_type', NEW.link->>'match_type',
 				'direction', NEW.direction,
 				'profile_id', NEW.profile_id,
 				'email', NEW.contact_email,

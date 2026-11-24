@@ -442,6 +442,9 @@ func TestWebhookTrigger_MessageReceived(t *testing.T) {
 		if sub != "s1" || ev != "message.received" || mid != m.ID || kind != "reply_human" || email != "marie@exemple-animaux.fr" || sent != "ws1_"+j0uuid {
 			t.Fatalf("livraison: %s %s %s %s %s %s", sub, ev, mid, kind, email, sent)
 		}
+		if !strings.Contains(full, `"match_type": "message_id"`) || !strings.Contains(full, `"rfc_message_id": "`) {
+			t.Fatalf("rattachement et Message-ID dans l'événement: %s", full)
+		}
 		if strings.Contains(full, "intéresse") || strings.Contains(full, "appeler") {
 			t.Fatalf("le webhook ne porte jamais le corps du mail: %s", full)
 		}
@@ -455,6 +458,25 @@ func TestWebhookTrigger_MessageReceived(t *testing.T) {
 	db.QueryRow(`SELECT COUNT(*) FROM webhook_deliveries`).Scan(&total)
 	if total != 1 {
 		t.Fatalf("mail sortant: %d livraisons", total)
+	}
+}
+
+// Un contact connu qui écrit sans répondre à un envoi est classé humain : match_type « sender » le sépare d'une vraie réponse.
+func TestWebhookTrigger_MatchTypeSender(t *testing.T) {
+	s, db := testStore(t)
+	g := testIngestor(s)
+	if _, err := db.Exec(`INSERT INTO contacts (email) VALUES ('marie@exemple-animaux.fr') ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	db.Exec(`INSERT INTO webhook_subscriptions (id, enabled, settings) VALUES ('s1', true, '{"event_types":["message.received"]}')`)
+	m, _, err := g.IngestRaw(context.Background(), "ws1", box1, ref(1), replyHuman("", ""), time.Now(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kind, match, sent sql.NullString
+	db.QueryRow(`SELECT payload->>'kind', payload->>'match_type', payload->>'sent_message_id' FROM webhook_deliveries WHERE payload->>'message_id' = $1`, m.ID).Scan(&kind, &match, &sent)
+	if kind.String != "reply_human" || match.String != "sender" || sent.Valid {
+		t.Fatalf("kind=%v match=%v sent=%v link=%+v", kind, match, sent, m.Link)
 	}
 }
 

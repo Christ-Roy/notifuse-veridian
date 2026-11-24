@@ -385,6 +385,24 @@ func TestDedup_WebhookAndEventsIgnoreSieveCopy(t *testing.T) {
 	}
 }
 
+// V77 : le même mail rangé par deux boîtes (alias, Bcc, boîte partagée) ne part qu'une fois, et un autre mail part toujours.
+func TestDedup_WebhookOnceForTwoBoxes(t *testing.T) {
+	s, db := testStore(t)
+	g := testIngestor(s)
+	now := time.Now()
+	db.Exec(`INSERT INTO webhook_subscriptions (id, enabled, settings) VALUES ('s1', true, '{"event_types":["message.received"]}')`)
+	first := mustIngest(t, g, box1, ref(1), original("evt-deux@mail.gmail.com").raw(), now)
+	mustIngest(t, g, box2, ref2(1), original("EVT-deux@mail.gmail.com").raw(), now.Add(time.Second))
+	mustIngest(t, g, box1, ref(2), original("evt-autre@mail.gmail.com").raw(), now.Add(2*time.Second))
+	var n int
+	var mid, rfc string
+	db.QueryRow(`SELECT COUNT(*) FROM webhook_deliveries`).Scan(&n)
+	db.QueryRow(`SELECT payload->>'message_id', payload->>'rfc_message_id' FROM webhook_deliveries WHERE payload->>'rfc_message_id' = 'evt-deux@mail.gmail.com'`).Scan(&mid, &rfc)
+	if n != 2 || mid != first.ID || rfc != "evt-deux@mail.gmail.com" {
+		t.Fatalf("un événement par mail: n=%d mid=%q rfc=%q", n, mid, rfc)
+	}
+}
+
 // Une copie Sieve dont l'original n'est pas (encore) rangé reste visible dans la liste (rien n'est
 // perdu) mais n'est jamais un événement : l'original arrive par la boîte du relais.
 func TestDedup_SieveCopyAloneVisibleButNotAnEvent(t *testing.T) {

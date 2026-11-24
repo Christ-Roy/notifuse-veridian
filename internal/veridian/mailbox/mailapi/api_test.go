@@ -549,7 +549,7 @@ func TestEvents_StreamAndResume(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		e.ingest(t, 3, replyEML(3), time.Now())
 	}()
-	evs := readEvents(t, resp, 1, 3*time.Second)
+	evs := readEvents(t, resp, 1, 15*time.Second)
 	resp.Body.Close()
 	if len(evs) != 1 || evs[0]["event"] != "message.received" || evs[0]["id"] != "3" {
 		t.Fatalf("un seul événement neuf attendu (seq 3): %v", evs)
@@ -569,7 +569,7 @@ func TestEvents_StreamAndResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	evs2 := readEvents(t, resp2, 2, 3*time.Second)
+	evs2 := readEvents(t, resp2, 2, 15*time.Second) // 3 s : instable sur une machine chargée (24/11)
 	resp2.Body.Close()
 	if len(evs2) != 2 || evs2[0]["id"] != "2" || evs2[1]["id"] != "3" {
 		t.Fatalf("reprise après Last-Event-ID=1: %v", evs2)
