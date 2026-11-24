@@ -4,11 +4,12 @@ Demande d'Arnaud Capitaine relayée par Robert : alimenter la prospection depuis
 sans toucher à la limite de 50 mails par jour. Code : `internal/veridian/reservoir/`, câblé par `internal/app/veridian_mod_reservoir.go`.
 Migration V76 (lots nommés). Outils MCP : `internal/veridian/mcp/tools_reservoir.go`.
 
-## Les trois routes
+## Les routes
 | Route | CLI | MCP | Fait |
 |---|---|---|---|
 | `POST /api/veridian/contacts.intake` | `contacts:intake` | `contacts_import` | 1000 contacts par appel, dédoublonnés, exclusions, listes, `dry_run` |
 | `GET /api/veridian/reservoir.summary` | `reservoir:status` | `reservoirs_status` | par liste : activables, et pourquoi pas les autres |
+| `GET /api/veridian/reservoir.lists` | `reservoir:lists` | (non) | listes où verser un lot, et celles qui démarrent une séquence |
 | `POST /api/veridian/reservoir.activate` | `reservoir:activate` | `reservoir_activate` | un lot entre dans une séquence active |
 
 ## Règles
@@ -17,7 +18,7 @@ Migration V76 (lots nommés). Outils MCP : `internal/veridian/mcp/tools_reservoi
 - **Exclusions valables dans tout l'espace** : désinscrit, plainte, rebond dur (`contact_lists` ou `message_history`). Un rebond
   temporaire ou de politique ne bloque pas. Une exclusion s'applique même sans dédoublonnage.
 - **Fiche existante intacte par défaut** (`existing=attach`) ; `update` complète `custom_json_1` sans l'écraser et garde `created_at`.
-- **Un import ne démarre jamais une séquence sans accord** : liste qui déclenche une séquence active, ou séquence « contact créé » :
+- **Un import ne démarre jamais une séquence sans accord** : liste qui déclenche une séquence active, séquence « contact créé », « contact mis à jour » (en mode update) ou toute séquence de segment (24/11 au soir : un segment se recalcule après coup) :
   409 `would_trigger`, rien n'est écrit, sauf `allow_triggers`. Le déclencheur de gbc (`list.subscribed`) rend ce cas ordinaire.
 - **Activation** : écarte bloqués, ayant répondu, déjà contactés, déjà en séquence. Pose d'abord la liste de la séquence (la garde
   d'envoi jette `contact_not_on_list`), puis n'inscrit directement que ceux que le déclencheur n'a pas déjà inscrits. Refuse si la

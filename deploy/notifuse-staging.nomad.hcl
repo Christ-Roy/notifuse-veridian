@@ -256,6 +256,11 @@ NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025
 
 # Invitation d'un membre par le Hub (fiches 46 et 86) : secret perdu à la bascule vers Nomad, reposé le 24/11/2026. Variable absente = route 503.
 HUB_BASE_URL=https://hub.staging.veridian.site
+# Jetons du Hub de staging (MCP fiche 83, actions fiche 87) : jamais ceux de prod.
+VERIDIAN_HUB_JWKS_URL=https://hub.staging.veridian.site/.well-known/jwks.json
+VERIDIAN_HUB_ISSUER=https://hub.staging.veridian.site
+VERIDIAN_MCP_AUDIENCE=https://notifuse.staging.veridian.site/api/mcp
+VERIDIAN_ACTIONS_AUDIENCE=https://notifuse.staging.veridian.site/api/veridian/actions
 {{ if nomadVarExists "nomad/jobs/notifuse-staging/stack" }}{{ with nomadVar "nomad/jobs/notifuse-staging/stack" }}HUB_INVITATION_SECRET_NOTIFUSE={{ .HUB_INVITATION_SECRET_NOTIFUSE }}{{ end }}{{ end }}
 {{ with nomadVar "nomad/jobs/notifuse-staging" }}
 DB_PASSWORD={{ .POSTGRES_PASSWORD }}

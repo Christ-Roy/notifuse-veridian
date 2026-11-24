@@ -25,6 +25,7 @@ type Handler struct {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/veridian/contacts.intake", h.RequireAuth(http.HandlerFunc(h.intake)))
 	mux.Handle("GET /api/veridian/reservoir.summary", h.RequireAuth(http.HandlerFunc(h.summary)))
+	mux.Handle("GET /api/veridian/reservoir.lists", h.RequireAuth(http.HandlerFunc(h.lists)))
 	mux.Handle("POST /api/veridian/reservoir.activate", h.RequireAuth(http.HandlerFunc(h.activate)))
 }
 
@@ -81,6 +82,15 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"reservoirs": res})
+}
+
+func (h *Handler) lists(w http.ResponseWriter, r *http.Request) {
+	res, err := h.Svc.ListChoices(r.Context(), r.URL.Query().Get("workspace_id"))
+	if err != nil {
+		h.fail(w, err, "listes")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"lists": res})
 }
 
 func (h *Handler) activate(w http.ResponseWriter, r *http.Request) {

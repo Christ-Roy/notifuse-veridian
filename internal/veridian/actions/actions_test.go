@@ -58,7 +58,7 @@ func (h *testHub) token(t *testing.T, mutate func(*mcp.Claims)) string {
 	t.Helper()
 	seq++
 	now := time.Now()
-	c := &mcp.Claims{Email: "u@x.test", EmailVerified: true, Scope: "crm:tache.ecrire notifuse:contacts.importer", TenantID: tenant,
+	c := &mcp.Claims{Email: "u@x.test", EmailVerified: true, Scope: "crm:tache.ecrire notifuse:contacts.ecrire", TenantID: tenant,
 		Act: &mcp.Actor{Subject: "app:prospection"},
 		RegisteredClaims: jwt.RegisteredClaims{Issuer: testIss, Audience: jwt.ClaimStrings{testAud}, Subject: hubUser, ID: fmt.Sprintf("jeton-%06d", seq),
 			IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(119 * time.Second))}}
@@ -119,11 +119,25 @@ type fakeDispatch struct {
 	err    error
 	bodies []string
 	paths  []string
+
+	queries []map[string][]string
+	replies []reply // si posées, une réponse par requête
 }
 
-func (f *fakeDispatch) Do(_ context.Context, _ *mcp.Member, method, path string, _ map[string][]string, b []byte) (int, []byte, error) {
+type reply struct {
+	status int
+	out    string
+}
+
+func (f *fakeDispatch) Do(_ context.Context, _ *mcp.Member, method, path string, q map[string][]string, b []byte) (int, []byte, error) {
+	f.queries = append(f.queries, q)
 	f.paths = append(f.paths, method+" "+path)
 	f.bodies = append(f.bodies, string(b))
+	if len(f.replies) > 0 {
+		r := f.replies[0]
+		f.replies = f.replies[1:]
+		return r.status, []byte(r.out), nil
+	}
 	return f.status, []byte(f.out), f.err
 }
 
@@ -202,7 +216,7 @@ func TestJeton_Refuses(t *testing.T) {
 		"email non prouvé": {func(e *env) string { return e.hub.token(t, func(c *mcp.Claims) { c.EmailVerified = false }) }, 401, "jeton_refuse"},
 		"portée absente":   {func(e *env) string { return e.hub.token(t, func(c *mcp.Claims) { c.Scope = "crm:tache.ecrire" }) }, 403, "portee_insuffisante"},
 		"portée en préfixe": {func(e *env) string {
-			return e.hub.token(t, func(c *mcp.Claims) { c.Scope = "notifuse:contacts.importer.tout" })
+			return e.hub.token(t, func(c *mcp.Claims) { c.Scope = "notifuse:contacts.ecrire.tout" })
 		}, 403, "portee_insuffisante"},
 		"app inconnue": {func(e *env) string { return e.hub.token(t, func(c *mcp.Claims) { c.Act.Subject = "app:rybbit" }) }, 403, "app_non_autorisee"},
 	} {
@@ -351,8 +365,91 @@ func TestIdempotence(t *testing.T) {
 }
 
 func TestCatalogue_AucuneActionNEnvoie(t *testing.T) {
-	assert.Len(t, catalogue, 1, "une action neuve se relit ici")
-	c, err := catalogue[imp].build("ws1", "app:crm", []byte(body))
-	require.NoError(t, err)
-	assert.Equal(t, "/api/veridian/contacts.intake", c.path)
+	names := make([]string, 0, len(catalogue))
+	for n, a := range catalogue {
+		names = append(names, n)
+		assert.Equal(t, "notifuse:contacts.ecrire", a.scope, "portée du registre du Hub")
+		assert.Equal(t, []string{"app:prospection", "app:crm"}, a.apps)
+	}
+	assert.ElementsMatch(t, []string{"contacts.importer", "listes.lister", "listes.creer"}, names, "une action neuve se relit ici")
+	e := newEnv(t)
+	for n, b := range map[string]string{"contacts.importer": body, "listes.lister": "", "listes.creer": `{"id":"l9","name":"Lot"}`} {
+		e.post(n, e.hub.token(t, nil), "cle-"+n, b)
+	}
+	for _, p := range e.d.paths {
+		assert.Contains(t, []string{"POST /api/veridian/contacts.intake", "GET /api/veridian/reservoir.lists", "GET /api/lists.get", "POST /api/lists.create"}, p)
+	}
+}
+
+func TestListes_Lister(t *testing.T) {
+	e := newEnv(t)
+	e.d.out = `{"lists":[{"id":"l1","name":"Réserve","starts_sequence":false}]}`
+	for _, b := range []string{"", "{}"} {
+		st, out := e.post("listes.lister", e.hub.token(t, nil), "", b)
+		require.Equal(t, 200, st, out)
+		assert.Len(t, out["resultat"].(map[string]any)["lists"], 1)
+	}
+	assert.Equal(t, []string{"GET /api/veridian/reservoir.lists", "GET /api/veridian/reservoir.lists"}, e.d.paths)
+	assert.Equal(t, []string{"ws1"}, e.d.queries[0]["workspace_id"], "l'espace du jeton")
+	assert.Empty(t, e.st.origins, "une lecture ne réserve aucune clé")
+	st, _ := e.post("listes.lister", e.hub.token(t, nil), "", `{"workspace_id":"autre"}`)
+	assert.Equal(t, 400, st)
+}
+
+func TestListes_Creer(t *testing.T) {
+	e := newEnv(t)
+	step := func(key string, replies ...reply) (int, map[string]any) {
+		e.d.replies, e.d.paths, e.d.bodies = replies, nil, nil
+		return e.post("listes.creer", e.hub.token(t, nil), key, `{"id":"lotnovembre","name":" Lot de novembre "}`)
+	}
+	st, out := step("cle-000001", reply{404, `{"error":"List not found"}`}, reply{201, `{"list":{"id":"lotnovembre"}}`})
+	require.Equal(t, 200, st, out)
+	assert.Equal(t, map[string]any{"id": "lotnovembre", "name": "Lot de novembre", "existait": false}, out["resultat"])
+	assert.Equal(t, []string{"GET /api/lists.get", "POST /api/lists.create"}, e.d.paths)
+	assert.JSONEq(t, `{"workspace_id":"ws1","id":"lotnovembre","name":"Lot de novembre","is_public":false,"is_double_optin":false}`, e.d.bodies[1])
+
+	st, out = step("cle-000001")
+	assert.Equal(t, 200, st)
+	assert.Equal(t, true, out["rejoue"])
+	assert.Empty(t, e.d.paths)
+	// Clé neuve, même liste : rendue, pas recréée. Même id, autre nom : refusé.
+	st, out = step("cle-000002", reply{200, `{"list":{"id":"lotnovembre","name":"Lot de novembre"}}`})
+	assert.Equal(t, 200, st)
+	assert.Equal(t, true, out["resultat"].(map[string]any)["existait"])
+	assert.Len(t, e.d.paths, 1)
+	st, out = step("cle-000003", reply{200, `{"list":{"id":"lotnovembre","name":"Clients"}}`})
+	assert.Equal(t, 409, st)
+	assert.Contains(t, out["reason"], "déjà pris")
+	// Lecture en échec : rien n'est créé.
+	for _, r := range []reply{{403, `{"error":"droit"}`}, {500, `{}`}, {200, `{}`}} {
+		st, _ = step("cle-000004", r)
+		assert.Contains(t, []int{403, 503}, st)
+		assert.Len(t, e.d.paths, 1)
+	}
+	st, _ = step("cle-000005", reply{404, `{}`}, reply{403, `{"error":"lists:write"}`})
+	assert.Equal(t, 403, st)
+	e.d.replies = nil
+	for _, bad := range []string{``, `{}`, `{"id":"a b","name":"x"}`, `{"id":"é","name":"x"}`, `{"id":"a","name":" "}`, `{"id":"a","name":"x","is_double_optin":true}`, `{"id":"` + strings.Repeat("a", 33) + `","name":"x"}`} {
+		st, _ := e.post("listes.creer", e.hub.token(t, nil), "cle-000006", bad)
+		assert.Equal(t, 400, st, bad)
+	}
+	st, _ = e.post("listes.creer", e.hub.token(t, nil), "", `{"id":"a","name":"x"}`)
+	assert.Equal(t, 400, st, "clé requise")
+}
+
+// Le Hub signe aujourd'hui l'adresse MCP de la cible : acceptée ici (act exigé), jamais une autre.
+func TestJeton_AudienceMCP_AccepteeSiConfiguree(t *testing.T) {
+	e := newEnv(t)
+	mcpAud := "https://notifuse.test/api/mcp"
+	e.mux = http.NewServeMux()
+	Mount(e.mux, &Handler{Verifier: &mcp.Verifier{JWKSURL: e.hub.url, Issuer: testIss, Audience: testAud, AlsoAudience: mcpAud}, Store: e.st, Dispatcher: e.d, Log: logger.NewLogger()})
+	aud := func(a string) func(*mcp.Claims) { return func(c *mcp.Claims) { c.Audience = jwt.ClaimStrings{a} } }
+	st, _ := e.post(imp, e.hub.token(t, aud(mcpAud)), "cle-000001", body)
+	assert.Equal(t, 200, st)
+	st, _ = e.post(imp, e.hub.token(t, aud(testAud)), "cle-000002", body)
+	assert.Equal(t, 200, st)
+	st, _ = e.post(imp, e.hub.token(t, aud("https://crm.test/mcp")), "cle-000003", body)
+	assert.Equal(t, 401, st)
+	st, _ = e.post(imp, e.hub.token(t, func(c *mcp.Claims) { c.Audience = jwt.ClaimStrings{mcpAud}; c.Act = nil }), "cle-000004", body)
+	assert.Equal(t, 401, st, "un vrai jeton MCP n'a pas de act")
 }

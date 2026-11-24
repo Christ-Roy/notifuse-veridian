@@ -1,6 +1,6 @@
 // Package actions reçoit les actions qu'une autre app Veridian demande au nom d'un utilisateur (nomad-veridian plan/INTEGRATIONS-NATIVES.md,
-// §2.2 et 2.3). POST /api/veridian/actions/{action}, jeton d'action du Hub (ES256, 120 s, claim act), une seule action aujourd'hui :
-// contacts.importer (« Envoyer vers Mail »), qui n'envoie jamais de mail. Les droits restent ceux de l'utilisateur : l'action est rejouée
+// §2.2 et 2.3). POST /api/veridian/actions/{action}, jeton d'action du Hub (ES256, 120 s, claim act). « Envoyer vers Mail » :
+// contacts.importer, listes.lister, listes.creer. Aucune n'envoie de mail. Les droits restent ceux de l'utilisateur : l'action est rejouée
 // sur le routeur de l'app avec une session courte, comme le MCP. Fiche 87.
 package actions
 
@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -57,11 +58,13 @@ type Store interface {
 	Release(ctx context.Context, ws, app, key string) error
 }
 
-// call : ce qu'une action rejoue sur le routeur.
+// request : une requête rejouée sur le routeur de l'app.
+type request func(method, path string, query map[string][]string, body []byte) (int, []byte, error)
+
+// call : ce qu'une action fait. readOnly : simulation ou lecture, sans clé d'idempotence.
 type call struct {
-	method, path string
-	body         []byte
-	dryRun       bool
+	readOnly bool
+	run      func(do request) (int, []byte, error)
 }
 
 type action struct {
@@ -70,9 +73,16 @@ type action struct {
 	build func(ws, app string, raw []byte) (*call, error)
 }
 
-// Catalogue fermé : une action = une portée, des apps autorisées, une requête.
+// Portée du registre du Hub (lib/delegation/paires.ts) : le Hub refuse toute autre portée.
+const scopeContacts = "notifuse:contacts.ecrire"
+
+var mailApps = []string{"app:prospection", "app:crm"}
+
+// Catalogue fermé : une action = une portée, des apps autorisées, des requêtes fixes.
 var catalogue = map[string]action{
-	"contacts.importer": {scope: "notifuse:contacts.importer", apps: []string{"app:prospection", "app:crm"}, build: buildImport},
+	"contacts.importer": {scope: scopeContacts, apps: mailApps, build: buildImport},
+	"listes.lister":     {scope: scopeContacts, apps: mailApps, build: buildLists},
+	"listes.creer":      {scope: scopeContacts, apps: mailApps, build: buildCreateList},
 }
 
 // Handler : POST /api/veridian/actions/{action}.
@@ -196,7 +206,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	origin := Origin{App: app, JTI: claims.ID, HubUserID: claims.Subject}
 	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if !c.dryRun {
+	if !c.readOnly {
 		if len(key) < 8 || len(key) > 128 {
 			refuse(w, http.StatusBadRequest, "cle_requise", "Idempotency-Key requise (8 à 128 caractères), stable pour le même geste")
 			return
@@ -219,19 +229,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	status, out, err := h.Dispatcher.Do(ctx, member, c.method, c.path, nil, c.body)
+	status, out, err := c.run(func(method, path string, query map[string][]string, body []byte) (int, []byte, error) {
+		return h.Dispatcher.Do(ctx, member, method, path, query, body)
+	})
 	if err == nil && status == http.StatusOK && json.Valid(out) && len(bytes.TrimSpace(out)) > 0 {
-		if !c.dryRun {
+		if !c.readOnly {
 			if ferr := h.Store.Finish(context.WithoutCancel(ctx), ws, app, key, out); ferr != nil {
 				// Le geste est fait mais son résultat n'est pas gardé : l'import dédoublonne, un rejeu ne crée rien.
 				h.Log.WithField("error", ferr.Error()).Error("actions: résultat non gardé")
 			}
 		}
 		h.log(origin, name, ws, "fait")
-		writeJSON(w, http.StatusOK, map[string]any{"action": name, "rejoue": false, "simulation": c.dryRun, "resultat": json.RawMessage(out)})
+		writeJSON(w, http.StatusOK, map[string]any{"action": name, "rejoue": false, "simulation": c.readOnly, "resultat": json.RawMessage(out)})
 		return
 	}
-	if !c.dryRun {
+	if !c.readOnly {
 		_ = h.Store.Release(context.WithoutCancel(ctx), ws, app, key)
 	}
 	if err != nil || status >= 500 || status < 400 {
@@ -274,6 +286,8 @@ func (h *Handler) log(o Origin, action, ws, issue string) {
 		"workspace_id": ws, "issue": issue}).Info("actions: demande d'une app")
 }
 
+var listID = regexp.MustCompile(`^[A-Za-z0-9]{1,32}$`)
+
 type importRequest struct {
 	ListIDs  []string                     `json:"list_ids"`
 	Contacts []map[string]json.RawMessage `json:"contacts"`
@@ -284,13 +298,8 @@ type importRequest struct {
 // contact étiqueté de l'app d'où il vient.
 func buildImport(ws, app string, raw []byte) (*call, error) {
 	var req importRequest
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		return nil, fmt.Errorf("corps illisible : %v", err)
-	}
-	if dec.More() {
-		return nil, errors.New("corps illisible : plusieurs objets")
+	if err := strict(raw, &req); err != nil {
+		return nil, err
 	}
 	if len(req.Contacts) == 0 || len(req.Contacts) > maxContacts {
 		return nil, fmt.Errorf("1 à %d contacts par appel", maxContacts)
@@ -310,5 +319,85 @@ func buildImport(ws, app string, raw []byte) (*call, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &call{method: http.MethodPost, path: "/api/veridian/contacts.intake", body: body, dryRun: req.DryRun}, nil
+	return &call{readOnly: req.DryRun, run: func(do request) (int, []byte, error) {
+		return do(http.MethodPost, "/api/veridian/contacts.intake", nil, body)
+	}}, nil
+}
+
+// strict : un seul objet, aucun champ inconnu.
+func strict(raw []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("corps illisible : %v", err)
+	}
+	if dec.More() {
+		return errors.New("corps illisible : plusieurs objets")
+	}
+	return nil
+}
+
+// buildLists : les listes où verser un lot, et celles qui démarrent une séquence active (à griser). Corps {} ou vide.
+func buildLists(ws, _ string, raw []byte) (*call, error) {
+	if len(bytes.TrimSpace(raw)) > 0 {
+		if err := strict(raw, &struct{}{}); err != nil {
+			return nil, err
+		}
+	}
+	return &call{readOnly: true, run: func(do request) (int, []byte, error) {
+		return do(http.MethodGet, "/api/veridian/reservoir.lists", map[string][]string{"workspace_id": {ws}}, nil)
+	}}, nil
+}
+
+// buildCreateList : une liste privée, sans double opt-in (donc sans mail de confirmation). Rejouable : la même liste (id et nom) déjà
+// là est rendue ; le même id sous un autre nom est refusé.
+func buildCreateList(ws, _ string, raw []byte) (*call, error) {
+	var req struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := strict(raw, &req); err != nil {
+		return nil, err
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if !listID.MatchString(req.ID) || req.Name == "" || len(req.Name) > 255 {
+		return nil, errors.New("id : 1 à 32 lettres ou chiffres ; name : 1 à 255 caractères")
+	}
+	body, err := json.Marshal(map[string]any{"workspace_id": ws, "id": req.ID, "name": req.Name, "is_public": false, "is_double_optin": false})
+	if err != nil {
+		return nil, err
+	}
+	answer := func(existed bool) []byte {
+		b, _ := json.Marshal(map[string]any{"id": req.ID, "name": req.Name, "existait": existed})
+		return b
+	}
+	return &call{run: func(do request) (int, []byte, error) {
+		status, out, err := do(http.MethodGet, "/api/lists.get", map[string][]string{"workspace_id": {ws}, "id": {req.ID}}, nil)
+		if err != nil {
+			return 0, nil, err
+		}
+		if status == http.StatusOK {
+			var got struct {
+				List struct {
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"list"`
+			}
+			if json.Unmarshal(out, &got) != nil || got.List.ID != req.ID {
+				return 0, nil, errors.New("lists.get : réponse illisible")
+			}
+			if got.List.Name != req.Name {
+				return http.StatusConflict, []byte(`{"error":"cet identifiant de liste est déjà pris par une autre liste"}`), nil
+			}
+			return http.StatusOK, answer(true), nil
+		}
+		if status != http.StatusNotFound {
+			return status, out, nil
+		}
+		status, out, err = do(http.MethodPost, "/api/lists.create", nil, body)
+		if err != nil || status >= 300 {
+			return status, out, err
+		}
+		return http.StatusOK, answer(false), nil
+	}}, nil
 }

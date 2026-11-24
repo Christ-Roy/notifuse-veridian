@@ -200,12 +200,13 @@ func (s *Service) Intake(ctx context.Context, req IntakeRequest) (*IntakeResult,
 	plan := Build(rows, bad, known, dd)
 	res := &IntakeResult{DryRun: req.DryRun, Received: len(req.Contacts), Skipped: plan.Skipped, Details: plan.Details}
 	touchesLists := len(lists) > 0 && (len(plan.New) > 0 || (mode != ExistingSkip && len(plan.Existing) > 0))
-	if len(plan.New) > 0 || touchesLists {
+	updates := mode == ExistingUpdate && len(plan.Existing) > 0
+	if len(plan.New) > 0 || touchesLists || updates {
 		target := lists
 		if !touchesLists {
 			target = nil
 		}
-		if res.Triggers, err = s.Store.LiveTriggers(ctx, req.WorkspaceID, target, len(plan.New) > 0); err != nil {
+		if res.Triggers, err = s.Store.LiveTriggers(ctx, req.WorkspaceID, target, len(plan.New) > 0, updates); err != nil {
 			return nil, err
 		}
 	}
@@ -288,6 +289,46 @@ func (s *Service) Intake(ctx context.Context, req IntakeRequest) (*IntakeResult,
 	s.Log.WithFields(map[string]interface{}{"workspace_id": req.WorkspaceID, "received": res.Received, "created": res.Created, "updated": res.Updated,
 		"existing": res.Existing, "subscribed": res.Subscribed, "lists": len(lists)}).Info("reservoir: import")
 	return res, nil
+}
+
+// ListChoice : une liste où verser un lot, et si y inscrire quelqu'un démarre une séquence active.
+type ListChoice struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	StartsSequence bool   `json:"starts_sequence"`
+}
+
+// ListChoices rend les listes où verser un lot. Droit lists:read ; le nom des séquences n'est pas rendu.
+func (s *Service) ListChoices(ctx context.Context, ws string) ([]ListChoice, error) {
+	ctx, err := s.authorize(ctx, ws, listsRead)
+	if err != nil {
+		return nil, err
+	}
+	all, err := s.Store.Lists(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(all))
+	for i, l := range all {
+		ids[i] = l.ID
+	}
+	live, err := s.Store.LiveTriggers(ctx, ws, ids, true, false)
+	if err != nil {
+		return nil, err
+	}
+	everywhere, byList := false, map[string]bool{}
+	for _, a := range live {
+		if a.Event == "list.subscribed" {
+			byList[a.ListID] = true
+		} else {
+			everywhere = true // tout import la démarrerait, quelle que soit la liste
+		}
+	}
+	out := make([]ListChoice, len(all))
+	for i, l := range all {
+		out[i] = ListChoice{ID: l.ID, Name: l.Name, StartsSequence: everywhere || byList[l.ID]}
+	}
+	return out, nil
 }
 
 // ListState : une liste vue comme réservoir.
@@ -411,12 +452,12 @@ func (s *Service) Activate(ctx context.Context, req ActivateRequest) (*ActivateR
 	}
 	if a.list != "" {
 		// L'inscription à la liste de la séquence ne doit pas en démarrer une AUTRE.
-		others, err := s.Store.LiveTriggers(ctx, req.WorkspaceID, []string{a.list}, false)
+		others, err := s.Store.LiveTriggers(ctx, req.WorkspaceID, []string{a.list}, false, false)
 		if err != nil {
 			return nil, err
 		}
 		for _, o := range others {
-			if o.ID != a.ID {
+			if o.ID != a.ID && o.Event == "list.subscribed" {
 				return nil, invalid("rien n'a été inscrit : la liste %s de cette séquence démarre aussi « %s » (%s)", a.list, o.Name, o.ID)
 			}
 		}

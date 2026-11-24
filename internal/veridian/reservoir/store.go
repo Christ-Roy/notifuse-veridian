@@ -186,16 +186,18 @@ func (a *Automation) dests() []any {
 	return []any{&a.ID, &a.Name, &a.Event, &a.ListID, &a.status, &a.root, &a.list, &a.freq}
 }
 
-// LiveTriggers : séquences actives qu'un import peut démarrer tout seul (création de contact, inscription aux listes visées).
-func (s *Store) LiveTriggers(ctx context.Context, ws string, listIDs []string, creates bool) ([]Automation, error) {
+// LiveTriggers : séquences actives qu'un import peut démarrer tout seul : inscription aux listes visées, création de contact, fiche
+// complétée, et tout segment (une fiche ou une liste neuve peut faire entrer un contact dans un segment, recalculé après coup).
+func (s *Store) LiveTriggers(ctx context.Context, ws string, listIDs []string, creates, updates bool) ([]Automation, error) {
 	db, err := s.WS.GetConnection(ctx, ws)
 	if err != nil {
 		return nil, err
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+automationCols+` FROM automations
 		WHERE status = 'live' AND deleted_at IS NULL
-		  AND ((trigger_config->>'event_kind' = 'list.subscribed' AND trigger_config->>'list_id' = ANY($1)) OR ($2 AND trigger_config->>'event_kind' = 'contact.created'))
-		ORDER BY name`, pq.Array(listIDs), creates)
+		  AND ((trigger_config->>'event_kind' = 'list.subscribed' AND trigger_config->>'list_id' = ANY($1)) OR ($2 AND trigger_config->>'event_kind' = 'contact.created')
+		    OR ($3 AND trigger_config->>'event_kind' = 'contact.updated') OR trigger_config->>'event_kind' = 'segment.joined')
+		ORDER BY name`, pq.Array(listIDs), creates, updates)
 	if err != nil {
 		return nil, err
 	}

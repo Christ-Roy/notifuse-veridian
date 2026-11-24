@@ -9,7 +9,10 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 )
 
-const defaultAudience = "https://notifuse.app.veridian.site/api/veridian/actions"
+const (
+	defaultAudience    = "https://notifuse.app.veridian.site/api/veridian/actions"
+	defaultMCPAudience = "https://notifuse.app.veridian.site/api/mcp"
+)
 
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -34,6 +37,8 @@ func init() {
 					JWKSURL:  envOr("VERIDIAN_HUB_JWKS_URL", "https://app.veridian.site/.well-known/jwks.json"),
 					Issuer:   envOr("VERIDIAN_HUB_ISSUER", "https://app.veridian.site"),
 					Audience: envOr("VERIDIAN_ACTIONS_AUDIENCE", defaultAudience),
+					// Le Hub signe l'adresse MCP de la cible (CONTRAT-HUB §5.19.5). Sans danger : ici act est exigé, sur /api/mcp il est refusé.
+					AlsoAudience: envOr("VERIDIAN_MCP_AUDIENCE", defaultMCPAudience),
 				},
 				Store:      &SQLStore{DB: h.DB()},
 				Dispatcher: &mcp.MuxDispatcher{Mux: h.Mux(), Auth: h.AuthService(), DB: h.DB()},

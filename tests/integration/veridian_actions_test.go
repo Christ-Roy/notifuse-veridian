@@ -75,7 +75,7 @@ func TestVeridianActions_EnvoyerVersMail(t *testing.T) {
 
 	token := func(mutate func(*mcp.Claims)) string {
 		now := time.Now()
-		c := &mcp.Claims{Email: user.Email, EmailVerified: true, Scope: "notifuse:contacts.importer", TenantID: "tenant-a", Act: &mcp.Actor{Subject: "app:prospection"},
+		c := &mcp.Claims{Email: user.Email, EmailVerified: true, Scope: "notifuse:contacts.ecrire", TenantID: "tenant-a", Act: &mcp.Actor{Subject: "app:prospection"},
 			RegisteredClaims: jwt.RegisteredClaims{Issuer: iss, Audience: jwt.ClaimStrings{aud}, Subject: hubID, ID: uuid.NewString(), IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(2 * time.Minute))}}
 		if mutate != nil {
 			mutate(c)
@@ -147,6 +147,27 @@ func TestVeridianActions_EnvoyerVersMail(t *testing.T) {
 	assert.Equal(t, 200, st)
 	assert.EqualValues(t, 0, m["resultat"].(map[string]any)["created"], m)
 	assert.Equal(t, 25, count(tagged))
+
+	// Choisir et créer une liste : la liste neuve apparaît, privée, sans double opt-in ; la recréer la rend.
+	st, m = post("/api/veridian/actions/listes.creer", token(nil), "geste-l001", map[string]any{"id": "lotnovembre", "name": "Lot de novembre"})
+	require.Equal(t, 200, st, m)
+	st, m = post("/api/veridian/actions/listes.creer", token(nil), "geste-l002", map[string]any{"id": "lotnovembre", "name": "Lot de novembre"})
+	require.Equal(t, 200, st, m)
+	assert.Equal(t, true, m["resultat"].(map[string]any)["existait"])
+	assert.Equal(t, 1, count(`SELECT COUNT(*) FROM lists WHERE id='lotnovembre' AND NOT is_public AND NOT is_double_optin`))
+	_, err = wsDB.Exec(`INSERT INTO automations (id, workspace_id, name, status, trigger_config) VALUES ('seq',$1,'seq','live',$2)`, ws.ID, `{"event_kind":"list.subscribed","list_id":"lotnovembre"}`)
+	require.NoError(t, err)
+	st, m = post("/api/veridian/actions/listes.lister", token(nil), "", map[string]any{})
+	require.Equal(t, 200, st, m)
+	starts := map[string]any{}
+	for _, l := range m["resultat"].(map[string]any)["lists"].([]any) {
+		starts[l.(map[string]any)["id"].(string)] = l.(map[string]any)["starts_sequence"]
+	}
+	assert.Equal(t, true, starts["lotnovembre"])
+	assert.Equal(t, false, starts[list.ID])
+	st, m = post(path, token(nil), "geste-0005", map[string]any{"list_ids": []string{"lotnovembre"}, "contacts": contacts})
+	assert.Equal(t, 409, st, m)
+	assert.Equal(t, "would_trigger", m["detail"].(map[string]any)["code"])
 
 	// Retiré de l'espace : refus à la demande suivante.
 	_, err = sys.Exec(`DELETE FROM user_workspaces WHERE user_id=$1 AND workspace_id=$2`, user.ID, ws.ID)

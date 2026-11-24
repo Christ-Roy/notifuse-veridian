@@ -392,7 +392,7 @@ WORKSPACE_COMMANDS = frozenset({
     "stock:overview", "stock:config",
     "policy:suggest-enrollment",
     # Fiche 85 (24/11/2026) : import en masse dédoublonné, réservoirs, activation par lots.
-    "contacts:intake", "reservoir:status", "reservoir:activate",
+    "contacts:intake", "reservoir:status", "reservoir:lists", "reservoir:activate",
     # Lot 1 (10/10/2026) : pourquoi un mail n'est pas parti. queue:explain et logs:decisions en
     # lecture (automations:read) ; queue:recompute en écriture (automations:write, --yes requis).
     "queue:explain", "logs:decisions", "queue:recompute", "queue:entries", "queue:cancel",
@@ -3078,6 +3078,10 @@ def cmd_reservoir_status(a):
     out(st, data)
 
 
+def cmd_reservoir_lists(a):
+    out(*call_jwt(a.env, "GET", "/api/veridian/reservoir.lists", apikey_for(a.env, a.workspace), params={"workspace_id": a.workspace}))
+
+
 def cmd_reservoir_activate(a):
     body = {"workspace_id": a.workspace, "automation_id": a.automation, "dry_run": a.dry_run, "include_contacted": a.include_contacted}
     if a.list:
@@ -5331,6 +5335,10 @@ def build_parser(extra=None):
     sp.add_argument("--lists", help="listes, séparées par des virgules (défaut : toutes)")
     sp.add_argument("--automation", help="séquence visée")
     sp.set_defaults(func=cmd_reservoir_status, _routes=["/api/veridian/reservoir.summary"])
+
+    sp = sub.add_parser("reservoir:lists", help="listes où verser un lot, et celles qui démarrent une séquence active (lists:read)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.set_defaults(func=cmd_reservoir_lists, _routes=["/api/veridian/reservoir.lists"])
 
     sp = sub.add_parser("reservoir:activate", help="fait entrer un lot de contacts dans une séquence active (ENVOIE, dans les plafonds)")
     sp.add_argument("workspace", nargs="?", default=None)

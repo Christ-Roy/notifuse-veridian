@@ -236,6 +236,55 @@ func TestIntake_RefuseDeDemarrerUneSequence(t *testing.T) {
 	require.Equal(t, 200, b.call("POST", "/api/veridian/contacts.intake", body, &res), "une liste de réserve n'est pas bloquée")
 }
 
+// Un segment se recalcule après coup : un contact ou une liste neuve peut y faire entrer quelqu'un, donc démarrer sa séquence. Une fiche
+// complétée démarre « contact mis à jour ». Sans accord, rien n'est écrit (24/11/2026 : seules la liste et la création étaient vues).
+func TestIntake_RefuseAussiSegmentEtMiseAJour(t *testing.T) {
+	b := newBench(t)
+	seq := func(id, kind string) {
+		b.exec(`INSERT INTO automations (id, workspace_id, name, status, trigger_config, root_node_id) VALUES ($1,'ws',$1,'live',$2,'n1')`, id, `{"event_kind":"`+kind+`","segment_id":"s"}`)
+	}
+	post := func(mode, email string) int {
+		return b.call("POST", "/api/veridian/contacts.intake", map[string]any{"workspace_id": "ws", "existing": mode, "list_ids": []string{"reserve"}, "contacts": []json.RawMessage{raw(`{"email":"` + email + `"}`)}}, nil)
+	}
+	b.exec(`INSERT INTO contacts (email, created_at, updated_at) VALUES ('deja@y.fr',NOW(),NOW())`)
+	seq("maj", "contact.updated")
+	require.Equal(t, 200, post("", "neuf@societe-a.fr"), "ni création ni rattachement ne mettent une fiche à jour")
+	b.exec(`INSERT INTO contacts (email, created_at, updated_at) VALUES ('present@societe-c.fr',NOW(),NOW())`)
+	require.Equal(t, 200, post("", "present@societe-c.fr"), "rattacher ne met pas à jour")
+	require.Equal(t, 409, post("update", "deja@y.fr"))
+	b.exec(`DELETE FROM automations`)
+	seq("segment", "segment.joined")
+	assert.Equal(t, 409, post("", "autre@societe-b.fr"), "création")
+	assert.Equal(t, 409, post("", "deja@y.fr"), "rattachement à une liste")
+	assert.Equal(t, 0, b.count(`SELECT count(*) FROM contacts WHERE email='autre@societe-b.fr'`))
+	assert.Equal(t, 0, b.count(`SELECT count(*) FROM contact_lists WHERE email='deja@y.fr'`))
+	b.exec(`UPDATE automations SET status='paused'`)
+	assert.Equal(t, 200, post("", "autre@societe-b.fr"))
+}
+
+func TestListChoices(t *testing.T) {
+	b := newBench(t)
+	get := func() map[string]bool {
+		var r struct {
+			Lists []ListChoice `json:"lists"`
+		}
+		require.Equal(t, 200, b.call("GET", "/api/veridian/reservoir.lists?workspace_id=ws", "", &r))
+		out := map[string]bool{}
+		for _, l := range r.Lists {
+			assert.NotEmpty(t, l.Name)
+			out[l.ID] = l.StartsSequence
+		}
+		return out
+	}
+	b.automation("seq", "sequence", onList("sequence"))
+	b.exec(`UPDATE lists SET deleted_at=NOW() WHERE id='autre'`)
+	assert.Equal(t, map[string]bool{"reserve": false, "sequence": true}, get())
+	b.exec(`INSERT INTO automations (id, workspace_id, name, status, trigger_config) VALUES ('cree','ws','cree','live','{"event_kind":"contact.created"}')`)
+	assert.Equal(t, map[string]bool{"reserve": true, "sequence": true}, get(), "toute création la démarrerait")
+	b.auth.role, b.auth.perms = "member", domain.UserPermissions{domain.PermissionResourceContacts: {Read: true, Write: true}}
+	assert.Equal(t, 403, b.call("GET", "/api/veridian/reservoir.lists?workspace_id=ws", "", nil), "lists:read requis")
+}
+
 func TestIntake_Refus(t *testing.T) {
 	b := newBench(t)
 	one := []json.RawMessage{raw(`{"email":"x@y.fr"}`)}

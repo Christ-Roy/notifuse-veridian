@@ -56,6 +56,8 @@ type Verifier struct {
 	JWKSURL  string
 	Issuer   string
 	Audience string
+	// AlsoAudience : seconde adresse acceptee (actions : le Hub signe aussi l'adresse MCP, CONTRAT-HUB 5.19.5). Vide = aucune.
+	AlsoAudience string
 	HTTP     *http.Client
 	Now      func() time.Time
 
@@ -74,6 +76,10 @@ func (v *Verifier) now() time.Time {
 // Verify rend les claims d'un jeton valide (ES256, iss, aud, exp, email verifie, sub present).
 func (v *Verifier) Verify(ctx context.Context, token string) (*Claims, error) {
 	c := &Claims{}
+	audiences := []string{v.Audience}
+	if v.AlsoAudience != "" {
+		audiences = append(audiences, v.AlsoAudience)
+	}
 	parsed, err := jwt.ParseWithClaims(token, c, func(t *jwt.Token) (interface{}, error) {
 		kid, _ := t.Header["kid"].(string)
 		if kid == "" {
@@ -83,7 +89,7 @@ func (v *Verifier) Verify(ctx context.Context, token string) (*Claims, error) {
 	},
 		jwt.WithValidMethods([]string{"ES256"}),
 		jwt.WithIssuer(v.Issuer),
-		jwt.WithAudience(v.Audience),
+		jwt.WithAudience(audiences...),
 		jwt.WithExpirationRequired(),
 		jwt.WithTimeFunc(v.now),
 		jwt.WithLeeway(10*time.Second),

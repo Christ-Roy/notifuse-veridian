@@ -77,6 +77,35 @@
         $ref: '#/components/responses/Unauthorized'
       '403':
         $ref: '#/components/responses/Forbidden'
+/api/veridian/reservoir.lists:
+  get:
+    summary: Lists a batch can be added to, and whether that starts a live automation (Veridian, fiche 85)
+    description: Requires `lists:read`. Automation names are not returned.
+    operationId: veridianReservoirLists
+    security:
+      - BearerAuth: []
+    parameters:
+      - { name: workspace_id, in: query, required: true, schema: { type: string } }
+    responses:
+      '200':
+        description: Lists
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lists:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      starts_sequence: { type: boolean }
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+      '403':
+        $ref: '#/components/responses/Forbidden'
 /api/veridian/reservoir.activate:
   post:
     summary: Enroll a batch of reservoir contacts into a live automation (Veridian, fiche 85)
