@@ -19,7 +19,7 @@ func wire(h platform.Host) error {
 		}
 		return fmt.Errorf("reservoir: dépôt ou service d'authentification absent")
 	}
-	svc := &Service{Auth: auth, Store: &Store{WS: ws}, Contacts: contacts, Log: h.Logger()}
+	svc := &Service{Auth: auth, Store: &Store{WS: ws}, Contacts: contacts, Workspaces: ws, Log: h.Logger()}
 	(&Handler{Svc: svc, RequireAuth: h.RequireAuth(), Log: h.Logger()}).RegisterRoutes(h.Mux())
 	return nil
 }

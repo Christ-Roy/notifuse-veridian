@@ -50,7 +50,8 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
   // Un profil « non affecté » (créé, ni en rotation ni transactionnel) est un profil commercial hors
   // rotation : aucune porte commerciale ne s'applique tant qu'il n'y est pas (plan.applicable = false).
   const commercial = profile.usage !== 'transactional'
-  const gated = commercial && plan.applicable
+  // Un profil mixte (marketing et transactionnel) est « transactionnel » par l'usage mais plafonné : c'est le plan qui fait foi.
+  const gated = plan.applicable
   const blockers = profileBlockers(profile, now)
   const reputation = reputationIssues(plan)
   const excluded = excludedClassesOf(plan)

@@ -101,19 +101,23 @@ def joue(ws, cap, usage):
 
 
 def attendre(ws, cap):
-    vu, stable = -1, 0
-    for _ in range(90):  # 15 min au plus, stable 3 minutes
+    """Attend que le plafond retienne vraiment la file (raison daily_cap ou profile), puis 3 min sans un envoi de plus."""
+    vu, stable, raisons = -1, 0, []
+    fin = time.time() + 3600
+    while time.time() < fin:
         n = envoyes(ws)
-        stable = stable + 1 if n == vu and n > 0 else 0
+        q = api(ws, "GET", "/api/veridian/queue.explain", group_by="reason")
+        raisons = sorted({g["reason"] for g in q.get("groups", []) if g.get("count")})
+        retenu = any("cap" in r or "quota" in r for r in raisons)
+        stable = stable + 1 if n == vu and retenu else 0
         vu = n
-        if stable >= 18:
+        if stable >= 6 or n > cap:
             break
-        time.sleep(10)
-    q = api(ws, "GET", "/api/veridian/queue.explain", group_by="reason")
-    verdict(f"{ws} mails partis", vu == cap, f"{vu} (plafond {cap})")
+        time.sleep(30)
+    verdict(f"{ws} mails partis", vu == cap and stable >= 6, f"{vu} (plafond {cap}), file retenue par {raisons}")
     o = api(ws, "GET", "/api/veridian/emailProfiles.overview")["profiles"][0]["plan"]
-    verdict(f"{ws} profil", o["sent_today"] == cap, {k: o.get(k) for k in ("sent_today", "remaining_today", "daily_cap_today", "limiting_gate")})
-    print("      file :", json.dumps(q)[:700], flush=True)
+    verdict(f"{ws} l'API montre le plafond", o["sent_today"] == cap and o.get("daily_cap_today") == cap and o.get("remaining_today") == 0,
+            {k: o.get(k) for k in ("applicable", "sent_today", "remaining_today", "daily_cap_today", "limiting_gate")})
 
 
 # Le troisième : profil qui sert aussi aux mails transactionnels (usage non déclaré) ; le plafond doit tenir quand même.

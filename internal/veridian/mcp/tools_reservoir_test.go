@@ -98,3 +98,15 @@ func TestTool_DroitsEnPlus(t *testing.T) {
 	assert.True(t, act.allowed(member("member", p)))
 	assert.True(t, act.allowed(member("owner", nil)))
 }
+
+// Un programme coupé puis relancé ne doit pas faire entrer le lot suivant : par MCP, un lot a toujours un nom (contrat VER-243).
+func TestReservoirActivate_LotToujoursNomme(t *testing.T) {
+	r := newRig(t, member("owner", nil))
+	out := r.rpc(t, "tools/call", `{"name":"reservoir_activate","arguments":{"automation_id":"a","list_id":"l"}}`)["result"].(map[string]any)
+	assert.Equal(t, true, out["isError"])
+	assert.Contains(t, out["content"].([]any)[0].(map[string]any)["text"], "batch_id")
+	assert.Empty(t, r.disp.path, "la route n'est pas appelée")
+	out = r.rpc(t, "tools/call", `{"name":"reservoir_activate","arguments":{"automation_id":"a","list_id":"l","batch_id":"lot-1"}}`)["result"].(map[string]any)
+	assert.Equal(t, false, out["isError"])
+	assert.Equal(t, "/api/veridian/reservoir.activate", r.disp.path)
+}

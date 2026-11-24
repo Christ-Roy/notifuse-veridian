@@ -140,3 +140,14 @@ func TestSetUsageRequestValidate(t *testing.T) {
 	assert.Error(t, (&VeridianSetUsageRequest{IntegrationID: "i", Usage: "commercial"}).Validate())
 	assert.Error(t, (&VeridianPauseRequest{WorkspaceID: "w"}).Validate())
 }
+
+func TestVeridianProfileCarriesCommercial(t *testing.T) {
+	assert.True(t, usageTestWorkspace([]string{" a "}, "", "", "a").VeridianProfileCarriesCommercial("a"), "pool")
+	assert.True(t, usageTestWorkspace(nil, "a", "", "a").VeridianProfileCarriesCommercial("a"), "marketing sans pool")
+	assert.True(t, usageTestWorkspace(nil, "a", "a", "a").VeridianProfileCarriesCommercial("a"), "profil mixte")
+	assert.False(t, usageTestWorkspace(nil, "", "a", "a").VeridianProfileCarriesCommercial("a"), "réservé au transactionnel")
+	assert.False(t, usageTestWorkspace([]string{"b"}, "a", "", "a", "b").VeridianProfileCarriesCommercial("a"), "un pool explicite prime")
+	assert.False(t, usageTestWorkspace(nil, "a", "", "a").VeridianProfileCarriesCommercial(""))
+	var nilWS *Workspace
+	assert.False(t, nilWS.VeridianProfileCarriesCommercial("a"))
+}

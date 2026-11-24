@@ -228,6 +228,21 @@ func (s *Store) Automation(ctx context.Context, ws, id string) (*Automation, err
 	return &a, nil
 }
 
+// TransactionalTemplates : modèles de catégorie « transactionnel » parmi les nœuds e-mail d'une séquence (dernière version).
+func (s *Store) TransactionalTemplates(ctx context.Context, ws, automationID string) ([]string, error) {
+	db, err := s.WS.GetConnection(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	err = scan(ctx, db, func(v []string) { out = append(out, v[0]) }, 1, `
+		SELECT DISTINCT t.id FROM automations a
+		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(a.nodes) = 'array' THEN a.nodes ELSE '[]'::jsonb END) n
+		JOIN LATERAL (SELECT id, category FROM templates WHERE id = n->'config'->>'template_id' AND deleted_at IS NULL ORDER BY version DESC LIMIT 1) t ON true
+		WHERE a.id = $1 AND n->>'type' = 'email' AND t.category = 'transactional'`, automationID)
+	return out, err
+}
+
 // subscribeSQL : jamais de réinscription d'un désinscrit, d'un rebond ou d'une plainte, et rien n'est touché si la ligne est
 // déjà active (pas de second événement « inscription »).
 const subscribeSQL = `

@@ -99,7 +99,7 @@ func VeridianEffectivePlan(in VeridianPlanInput) domain.VeridianEffectivePlan {
 	plan.SentToday = in.Observed.ProfileAccepted
 	plan.ReservedToday = in.Observed.ProfileReserved
 
-	if plan.Mode != domain.VeridianProfileUsageCommercial {
+	if !ws.VeridianProfileCarriesCommercial(in.IntegrationID) {
 		// Transactionnel (ou non assigné) : le worker ne passe aucune porte
 		// commerciale pour ce profil. On ne montre que son volume du jour.
 		if senderSentTotal > plan.SentToday {

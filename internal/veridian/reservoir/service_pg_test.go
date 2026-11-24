@@ -62,9 +62,11 @@ func workspaceDB(t *testing.T) *sql.DB {
 type wsRepo struct {
 	domain.WorkspaceRepository
 	db *sql.DB
+	w  *domain.Workspace
 }
 
-func (w wsRepo) GetConnection(context.Context, string) (*sql.DB, error) { return w.db, nil }
+func (w wsRepo) GetByID(context.Context, string) (*domain.Workspace, error) { return w.w, nil }
+func (w wsRepo) GetConnection(context.Context, string) (*sql.DB, error)     { return w.db, nil }
 
 type fakeAuth struct {
 	role  string
@@ -82,6 +84,7 @@ func (f *fakeAuth) AuthenticateUserForWorkspace(ctx context.Context, ws string) 
 type bench struct {
 	t    *testing.T
 	db   *sql.DB
+	ws   *domain.Workspace
 	svc  *Service
 	auth *fakeAuth
 	mux  *http.ServeMux
@@ -90,8 +93,9 @@ type bench struct {
 func newBench(t *testing.T) *bench {
 	db := workspaceDB(t)
 	auth := &fakeAuth{role: "owner"}
-	repo := wsRepo{db: db}
-	b := &bench{t: t, db: db, auth: auth, mux: http.NewServeMux(), svc: &Service{Auth: auth, Store: &Store{WS: repo}, Contacts: repository.NewContactRepository(repo), Log: logger.NewLoggerWithLevel("disabled")}}
+	ws := &domain.Workspace{ID: "ws"}
+	repo := wsRepo{db: db, w: ws}
+	b := &bench{t: t, db: db, ws: ws, auth: auth, mux: http.NewServeMux(), svc: &Service{Auth: auth, Store: &Store{WS: repo}, Contacts: repository.NewContactRepository(repo), Workspaces: repo, Log: logger.NewLoggerWithLevel("disabled")}}
 	(&Handler{Svc: b.svc, RequireAuth: func(h http.Handler) http.Handler { return h }, Log: b.svc.Log}).RegisterRoutes(b.mux)
 	for _, l := range []string{"reserve", "sequence", "autre"} {
 		b.exec(`INSERT INTO lists (id, name, is_double_optin, is_public, created_at, updated_at) VALUES ($1, $1, false, false, NOW(), NOW())`, l)
@@ -419,4 +423,25 @@ func TestIntake_RejeuNInscritPasDeuxFois(t *testing.T) {
 	assert.Equal(t, 1, res.Skipped[ReasonUnsubscribed])
 	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contact_lists WHERE email='a@un.fr' AND status='unsubscribed'`))
 	assert.Equal(t, 2, b.count(`SELECT count(*) FROM contact_automations`))
+}
+
+// Un modèle transactionnel part par le profil réservé sans aucune porte : une séquence qui en contient ne s'alimente pas en masse.
+func TestActivate_RefuseUneSequenceHorsPlafond(t *testing.T) {
+	b := newBench(t)
+	b.reserve("un@a.fr")
+	b.automation("seq", "sequence", onList("sequence"))
+	b.exec(`INSERT INTO templates (id, name, version, channel, category, created_at, updated_at) VALUES ('t1','t1',1,'email','marketing',NOW(),NOW()), ('t1','t1',2,'email','transactional',NOW(),NOW())`)
+	b.exec(`UPDATE automations SET nodes = '[{"id":"n1","type":"trigger","config":{}},{"id":"e","type":"email","config":{"template_id":"t1"}}]' WHERE id='seq'`)
+	act := map[string]any{"workspace_id": "ws", "automation_id": "seq", "list_id": "reserve", "dry_run": true}
+	imp := map[string]any{"workspace_id": "ws", "list_ids": []string{"sequence"}, "allow_triggers": true, "contacts": []json.RawMessage{raw(`{"email":"x@y.fr"}`)}}
+	require.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", act, nil), "sans profil réservé, le mail suit le chemin commercial")
+
+	b.ws.Integrations = domain.Integrations{{ID: "tx", Type: domain.IntegrationTypeEmail, EmailProvider: domain.EmailProvider{Kind: domain.EmailProviderKindSMTP}}}
+	b.ws.Settings.TransactionalEmailProviderID = "tx"
+	assert.Equal(t, 400, b.call("POST", "/api/veridian/reservoir.activate", act, nil))
+	assert.Equal(t, 400, b.call("POST", "/api/veridian/contacts.intake", imp, nil))
+	assert.Equal(t, 0, b.count(`SELECT count(*) FROM contacts WHERE email='x@y.fr'`))
+
+	b.exec(`INSERT INTO templates (id, name, version, channel, category, created_at, updated_at) VALUES ('t1','t1',3,'email','marketing',NOW(),NOW())`)
+	assert.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", act, nil), "repassé en marketing")
 }

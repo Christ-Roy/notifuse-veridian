@@ -440,6 +440,21 @@ func TestVeridianEffectivePlan_TransactionalProfileHasNoCommercialGates(t *testi
 	assert.Empty(t, plan.Gates)
 }
 
+// Profil mixte (marketing ET transactionnel, sans pool) : aucun profil n'est réservé, ses séquences passent les portes, le plan
+// doit donc montrer le plafond (24/11/2026 : un profil plafonné à 50 s'affichait sans plafond).
+func TestVeridianEffectivePlan_MixedProfileShowsItsCap(t *testing.T) {
+	ws := planParityWorkspace(domain.EmailProvider{VeridianProfileDailyCap: 5}, domain.WorkspaceSettings{})
+	ws.Settings.VeridianMarketingEmailProviderIDs = nil
+	ws.Settings.MarketingEmailProviderID = "prof"
+	ws.Settings.TransactionalEmailProviderID = "prof"
+	require.Empty(t, ws.VeridianReservedTransactionalProfileID(), "rien de réservé : le chemin est commercial")
+	plan := VeridianEffectivePlan(VeridianPlanInput{Workspace: ws, IntegrationID: "prof", Now: time.Now()})
+	assert.True(t, plan.Applicable)
+	require.NotNil(t, plan.DailyCapToday)
+	assert.Equal(t, 5, *plan.DailyCapToday)
+	assert.NotEmpty(t, plan.Gates)
+}
+
 func TestVeridianEffectivePlan_UnknownProfileIsNotApplicable(t *testing.T) {
 	ws := planParityWorkspace(domain.EmailProvider{}, domain.WorkspaceSettings{})
 	plan := VeridianEffectivePlan(VeridianPlanInput{Workspace: ws, IntegrationID: "absent", Now: time.Now()})

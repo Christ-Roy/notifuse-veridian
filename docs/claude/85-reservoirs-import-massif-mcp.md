@@ -23,8 +23,12 @@ Migration V76 (lots nommés). Outils MCP : `internal/veridian/mcp/tools_reservoi
   d'envoi jette `contact_not_on_list`), puis n'inscrit directement que ceux que le déclencheur n'a pas déjà inscrits. Refuse si la
   liste démarre aussi une AUTRE séquence. Meilleur score d'abord (`custom_number_1`).
 - **Rejouable** (le Hub coupe un programme à 45 s) : un import rejoué ne crée, ne modifie ni n'inscrit rien de plus ; une activation
-  par liste ou segment exige un `batch_id` pour l'être (sinon le rejeu ferait entrer le lot SUIVANT). Choix et inscription sous un
+  par liste ou segment exige un `batch_id` pour l'être (sinon le rejeu ferait entrer le lot SUIVANT) ; par MCP il est obligatoire. Choix et inscription sous un
   même verrou : lots simultanés sans doublon.
+- **Séquence hors plafond refusée** : un modèle de catégorie « transactionnel » part par le profil réservé sans aucune porte, plafond
+  compris. Import avec `allow_triggers` et activation refusent une séquence qui en contient. Sans profil réservé (profil mixte), ces
+  mails suivent le chemin commercial ; le plan affiche alors son plafond (`VeridianProfileCarriesCommercial`).
+- **Épreuve** : `scripts/e2e/reservoir-plafond.py` (staging, puits local, témoin à deux fois le plafond, profil mixte).
 - **Aucun outil MCP ne relève un plafond** ni ne touche profils, intégrations, réglages : test `TestCatalog_AucunOutilNeToucheAuxPlafonds`.
 - Tout outil qui peut faire partir un mail est `destructiveHint` (`contacts_import`, `contacts_upsert` et `segment_rebuild` compris : ils peuvent démarrer une séquence).
 

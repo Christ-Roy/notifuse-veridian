@@ -317,3 +317,19 @@ func (w *Workspace) VeridianApplyPause(integrationID string, paused bool) (*Veri
 	w.setVeridianPaused(integrationID, paused)
 	return &VeridianPauseResult{IntegrationID: integrationID, Paused: paused}, nil
 }
+
+// VeridianProfileCarriesCommercial : le profil envoie-t-il vraiment des mails commerciaux (pool explicite, ou fournisseur
+// marketing sans pool) ? Vrai aussi pour un profil MIXTE, à la fois marketing et transactionnel sans pool : son usage affiché
+// est « transactionnel », mais aucun profil n'est alors réservé et ses séquences passent toutes les portes du commercial.
+func (w *Workspace) VeridianProfileCarriesCommercial(integrationID string) bool {
+	if w == nil || integrationID == "" {
+		return false
+	}
+	pool := w.Settings.VeridianMarketingEmailProviderIDs
+	for _, id := range pool {
+		if strings.TrimSpace(id) == integrationID {
+			return true
+		}
+	}
+	return len(pool) == 0 && strings.TrimSpace(w.Settings.MarketingEmailProviderID) == integrationID
+}

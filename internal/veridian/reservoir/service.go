@@ -21,9 +21,36 @@ type Service struct {
 	Auth     Authenticator
 	Store    *Store
 	Contacts Contacts
-	Log      logger.Logger
+	// Workspaces : lit le profil transactionnel réservé de l'espace.
+	Workspaces WorkspaceReader
+	Log        logger.Logger
 
 	locks sync.Map // un import à la fois par espace : deux lots simultanés ne doivent pas se croire chacun le premier
+}
+
+// WorkspaceReader lit un espace.
+type WorkspaceReader interface {
+	GetByID(ctx context.Context, id string) (*domain.Workspace, error)
+}
+
+// refuseUncapped : un modèle « transactionnel » part par le profil réservé SANS aucune porte (plafond compris). Une séquence qui
+// en contient n'est jamais un réservoir de prospection : l'alimenter en masse contournerait la limite quotidienne.
+func (s *Service) refuseUncapped(ctx context.Context, wsID string, a Automation) error {
+	w, err := s.Workspaces.GetByID(ctx, wsID)
+	if err != nil {
+		return err
+	}
+	if w.VeridianReservedTransactionalProfileID() == "" {
+		return nil // sans profil réservé, ces mails suivent le chemin commercial et ses plafonds
+	}
+	tpl, err := s.Store.TransactionalTemplates(ctx, wsID, a.ID)
+	if err != nil {
+		return err
+	}
+	if len(tpl) > 0 {
+		return invalid("rien n'a été écrit : la séquence « %s » envoie des modèles transactionnels (%s), qui partent hors plafond ; passe-les en catégorie marketing", a.Name, strings.Join(tpl, ", "))
+	}
+	return nil
 }
 
 type need struct {
@@ -192,6 +219,11 @@ func (s *Service) Intake(ctx context.Context, req IntakeRequest) (*IntakeResult,
 	}
 	if len(res.Triggers) > 0 && !req.AllowTriggers {
 		return nil, &TriggerError{Triggers: res.Triggers}
+	}
+	for _, t := range res.Triggers {
+		if err := s.refuseUncapped(ctx, req.WorkspaceID, t); err != nil {
+			return nil, err
+		}
 	}
 
 	var write []*domain.Contact
@@ -373,6 +405,9 @@ func (s *Service) Activate(ctx context.Context, req ActivateRequest) (*ActivateR
 		return nil, invalid("la séquence « %s » n'est pas active (%s) : rien n'a été inscrit", a.Name, a.status)
 	case a.root == "":
 		return nil, invalid("la séquence « %s » n'a pas de premier nœud", a.Name)
+	}
+	if err := s.refuseUncapped(ctx, req.WorkspaceID, *a); err != nil {
+		return nil, err
 	}
 	if a.list != "" {
 		// L'inscription à la liste de la séquence ne doit pas en démarrer une AUTRE.
