@@ -31,3 +31,5 @@ encore possibles sans le Hub : `setUserPermissions`, `removeMember` (aussi la r�
 `python3 scripts/e2e/membres-au-hub.py` (staging, 0/1/2) : refus natifs, invitation, acceptation, membre relié. Vert le 24/11 au soir.
 Hub : inviteur résolu par `hub_user_id` (uuid) puis `users.id` ; 20 invitations par espace et par jour (429 `quota_exceeded`) ; un retrait
 au Hub fait expirer les invitations en attente, seule une invitation émise après fait revenir ; le Hub n'appelle jamais `sync-member`.
+Refus motivés à la création, montrés tels quels (`code` = `hub_<motif>`) : 409 `espace_non_relie`, 403 `inviteur_non_habilite`, 503 `echec`, 429
+`quota_exceeded`. Un espace sans tenant au Hub ne peut donc inviter personne tant qu'il n'est pas relié (le script staging rend alors 409, voulu).

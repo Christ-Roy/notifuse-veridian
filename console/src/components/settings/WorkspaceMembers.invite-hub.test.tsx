@@ -65,6 +65,18 @@ describe('WorkspaceMembers: in managed mode, members are invited by the Hub only
     expect(screen.queryByText('Invitation sent to nouveau@example.com')).not.toBeInTheDocument()
   })
 
+  it.each([
+    [409, 'hub_espace_non_relie'],
+    [403, 'hub_inviteur_non_habilite'],
+    [503, 'hub_echec'],
+    [429, 'hub_quota_exceeded']
+  ])('shows the reason of the Hub as is (%i %s)', async (status, code) => {
+    inviteViaHub.mockRejectedValue(new ApiError('Motif écrit par le Hub.', status, { code }))
+    await openAndSend('refus@example.com')
+    expect(await screen.findByText('Motif écrit par le Hub.')).toBeInTheDocument()
+    expect(inviteLocal).not.toHaveBeenCalled()
+  })
+
   it('sends the invitation through the Hub', async () => {
     inviteViaHub.mockResolvedValue({ status: 'success' })
     await openAndSend('autre@example.com')

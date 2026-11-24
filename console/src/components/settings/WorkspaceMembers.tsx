@@ -323,6 +323,12 @@ export function WorkspaceMembers({
         message.error(
           t`Your account is not yet linked to the Veridian Hub. Sign in once via the Hub to enable team invitations.`
         )
+      } else if (
+        error instanceof ApiError &&
+        (error.data as { code?: string } | null | undefined)?.code?.startsWith('hub_')
+      ) {
+        // Refus motivé du Hub (espace non relié, droits, quota) : son texte, tel quel.
+        message.error(error.message)
       } else if (error instanceof ApiError && (error.status === 502 || error.status === 503)) {
         // Hub down, ou invitation non configurée entre Notifuse et le Hub — wording neutre.
         message.error(

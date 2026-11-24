@@ -69,12 +69,12 @@ func (r *sqlHubUserIDResolver) GetHubUserID(ctx context.Context, userID string) 
 
 // VeridianInviteMemberHandler regroupe les dependances du handler.
 type VeridianInviteMemberHandler struct {
-	hubClient        service.HubInvitationClient
-	authService      domain.AuthService
-	userService      domain.UserServiceInterface
-	hubUserResolver  HubUserIDResolver
-	getJWTSecret     func() ([]byte, error)
-	logger           logger.Logger
+	hubClient       service.HubInvitationClient
+	authService     domain.AuthService
+	userService     domain.UserServiceInterface
+	hubUserResolver HubUserIDResolver
+	getJWTSecret    func() ([]byte, error)
+	logger          logger.Logger
 	// managedMode true => endpoint actif. False => 503 (mode self-hosted, pas de Hub).
 	managedMode bool
 }
@@ -299,6 +299,13 @@ func (h *VeridianInviteMemberHandler) mapHubErrorToHTTP(w http.ResponseWriter, e
 		WriteJSONError(w, "hub authentication failed (server config issue)", http.StatusBadGateway)
 	case "rate_limited":
 		WriteJSONError(w, "too many invitations sent, please retry in a moment", http.StatusTooManyRequests)
+	case "espace_non_relie", "inviteur_non_habilite", "echec", "quota_exceeded":
+		// Refus motivés du Hub (24/11/2026) : son texte est écrit pour l'humain, il se montre tel quel, avec son code.
+		if hubErr.HubStatus < 400 || hubErr.HubStatus > 599 || hubErr.Message == "" {
+			WriteJSONError(w, "hub error: "+hubErr.Code, http.StatusBadGateway)
+			return
+		}
+		writeJSON(w, hubErr.HubStatus, map[string]string{"error": hubErr.Message, "code": "hub_" + hubErr.Code})
 	case "app_mismatch":
 		WriteJSONError(w, "hub configuration mismatch", http.StatusBadGateway)
 	default:

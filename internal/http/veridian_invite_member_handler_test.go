@@ -516,3 +516,22 @@ func TestVeridianInviteMember_MemberRoleForbidden_403(t *testing.T) {
 		})
 	}
 }
+
+// Les refus motivés du Hub arrivent à l'écran tels quels, avec leur statut et leur code.
+func TestVeridianInviteMember_RefusMotiveDuHub_TelQuel(t *testing.T) {
+	for code, status := range map[string]int{"espace_non_relie": 409, "inviteur_non_habilite": 403, "echec": 503, "quota_exceeded": 429} {
+		t.Run(code, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			authSvc := mocks.NewMockAuthService(ctrl)
+			authSvc.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws-1").
+				Return(context.Background(), &domain.User{ID: "u", Type: domain.UserTypeUser, Email: "o@x.com"}, &domain.UserWorkspace{Role: "owner"}, nil)
+			h := newInviteHandler(t, &stubHubClient{err: &service.HubInvitationError{HubStatus: status, Code: code, Message: "Motif du Hub."}},
+				authSvc, &stubHubUserIDResolver{hubUserID: "hub-x"}, true)
+			rec := httptest.NewRecorder()
+			h.handleInvite(rec, buildInviteReq(t, `{"workspace_id":"ws-1","email":"e@e.com"}`))
+			assert.Equal(t, status, rec.Code)
+			assert.JSONEq(t, `{"error":"Motif du Hub.","code":"hub_`+code+`"}`, rec.Body.String())
+		})
+	}
+}
