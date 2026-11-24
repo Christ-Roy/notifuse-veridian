@@ -25,8 +25,8 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/relaycert"
 	"github.com/Notifuse/notifuse/internal/veridian/relaysettings"
-	veridiantrial "github.com/Notifuse/notifuse/internal/veridian/trial"
 	"github.com/Notifuse/notifuse/internal/veridian/smtprelay"
+	veridiantrial "github.com/Notifuse/notifuse/internal/veridian/trial"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
@@ -218,6 +218,7 @@ func (h *veridianHost) AutomationRepository() domain.AutomationRepository { retu
 
 // RateLimiter et RelayTLSConfig : le serveur IMAP des boîtes louées (fiche 84). Même certificat que le relais SMTP.
 func (h *veridianHost) RateLimiter() *ratelimiter.RateLimiter { return h.a.rateLimiter }
+func (h *veridianHost) BoxSender() *boxsend.Sender            { return h.a.veridianBoxSend }
 func (h *veridianHost) RelayTLSConfig() (*tls.Config, error) {
 	if !h.a.config.SMTPBridge.Enabled || h.a.config.SMTPBridge.TLSMode == smtp_bridge.ModeOff {
 		return nil, fmt.Errorf("certificat du relais absent (bridge SMTP sans TLS)")

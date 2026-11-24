@@ -108,6 +108,11 @@ job "notifuse" {
         to           = 1993
         host_network = "tailscale"
       }
+      # SMTP des boîtes derrière l'entrée TLS publique (Traefik, 443 par nom). Dynamique, tailnet seul.
+      port "boxsmtp" {
+        to           = 5465
+        host_network = "tailscale"
+      }
       # Récepteur de courrier des boîtes louées (fiche 84) : port DYNAMIQUE, tailnet seul. Rien de public.
       port "mx" {
         to           = 2525
@@ -120,7 +125,30 @@ job "notifuse" {
       name     = "notifuse-imap"
       provider = "nomad"
       port     = "imap"
-      tags     = ["traefik.enable=false"]
+      # Public par le 443 existant, aiguillé par nom TLS (oui de Robert, 24/11/2026). PROXY v2 : la vraie IP du client.
+      tags = [
+        "traefik.enable=true",
+        "traefik.tcp.routers.notifuse-imap.rule=HostSNI(`imap.veridian.site`)",
+        "traefik.tcp.routers.notifuse-imap.entrypoints=websecure",
+        "traefik.tcp.routers.notifuse-imap.tls=true",
+        "traefik.tcp.routers.notifuse-imap.tls.certresolver=letsencrypt",
+        "traefik.tcp.routers.notifuse-imap.service=notifuse-imap",
+        "traefik.tcp.services.notifuse-imap.loadbalancer.proxyprotocol.version=2",
+      ]
+    }
+
+    service {
+      name     = "notifuse-boxsmtp"
+      provider = "nomad"
+      port     = "boxsmtp"
+      tags = [
+        "traefik.enable=true",
+        "traefik.tcp.routers.notifuse-boxsmtp.rule=HostSNI(`smtp.veridian.site`)",
+        "traefik.tcp.routers.notifuse-boxsmtp.entrypoints=websecure",
+        "traefik.tcp.routers.notifuse-boxsmtp.tls=true",
+        "traefik.tcp.routers.notifuse-boxsmtp.tls.certresolver=letsencrypt",
+        "traefik.tcp.routers.notifuse-boxsmtp.service=notifuse-boxsmtp",
+      ]
     }
 
     service {
@@ -219,7 +247,7 @@ job "notifuse" {
           "site.veridian.app"   = "notifuse"
         }
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
-        ports = ["http", "smtp", "imap", "mx"]
+        ports = ["http", "smtp", "imap", "mx", "boxsmtp"]
         volumes = [
           "/opt/veridian-lab/notifuse/data:/app/data",
         ]
@@ -249,10 +277,18 @@ SERVER_PORT=8081
 SMTP_BRIDGE_ENABLED=true
 SMTP_BRIDGE_PORT=587
 SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
-# Boîtes louées (fiche 84) : IMAP en TLS avec le certificat du relais, tailnet seul.
+# Boîtes louées (fiche 84) : TLS terminé par Traefik (443 par nom), PROXY v2 exigé (la vraie IP du client).
 VERIDIAN_IMAP_ENABLED=true
 VERIDIAN_IMAP_PORT=1993
-# Récepteur : adresses de profil de ces domaines seulement. Aucun MX ne pointe ici sans l'oui de Robert.
+VERIDIAN_IMAP_BEHIND_TLS_PROXY=true
+VERIDIAN_IMAP_PROXY_PROTOCOL=true
+VERIDIAN_BOX_HOST=imap.veridian.site
+VERIDIAN_IMAP_PUBLIC_PORT=443
+VERIDIAN_BOX_SMTP_PORT=5465
+VERIDIAN_BOX_SMTP_HOST=smtp.veridian.site
+VERIDIAN_BOX_SMTP_PUBLIC_PORT=443
+# Récepteur : adresses de profil de ces domaines seulement. Entrée publique 25 = job de l'infra, PROXY v2 exigé.
+VERIDIAN_MX_PROXY_PROTOCOL=true
 VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr
 VERIDIAN_MX_HOST=mx.veridian.site
 SMTP_BRIDGE_TLS=starttls
