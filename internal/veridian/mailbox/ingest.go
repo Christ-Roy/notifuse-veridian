@@ -26,6 +26,9 @@ type BoxInfo struct {
 	Folder        string
 	// Scope : "replies" = ne garder que les reponses et rejets de nos envois (voir scope.go).
 	Scope string
+	// SetScope : la portee reglee sur le profil. Seule une portee REGLEE retire le courrier deja range ; celle qu'une boite
+	// personnelle prend par defaut ne vaut que pour le courrier a venir.
+	SetScope string
 	// Owners : adresses des profils du workspace, pour ranger par adresse de réception (owner.go).
 	Owners Owners
 }

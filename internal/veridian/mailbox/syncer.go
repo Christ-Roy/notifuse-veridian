@@ -77,7 +77,7 @@ func BoxFor(ws *domain.Workspace, integ *domain.Integration) BoxInfo {
 			continue
 		}
 		b.ProfileID, b.ProfileName = p.ID, p.Name
-		b.Scope = p.EmailProvider.VeridianReturnIMAPScope
+		b.SetScope = p.EmailProvider.VeridianReturnIMAPScope
 		for _, snd := range p.EmailProvider.Senders {
 			if snd.IsDefault || b.Address == "" {
 				if snd.Email != "" {
@@ -87,6 +87,7 @@ func BoxFor(ws *domain.Workspace, integ *domain.Integration) BoxInfo {
 		}
 		break
 	}
+	b.Scope = EffectiveScope(b.SetScope, integ.IMAPSettings)
 	return b
 }
 
@@ -112,7 +113,7 @@ func (s *Syncer) SyncBox(ctx context.Context, ws *domain.Workspace, integ *domai
 	box := BoxFor(ws, integ)
 	folder := integ.IMAPSettings.GetFolder()
 	log := s.log.WithFields(map[string]interface{}{"workspace_id": ws.ID, "integration_id": integ.ID})
-	s.purgeOutOfScope(ctx, ws.ID, integ.ID, box.Scope)
+	s.purgeOutOfScope(ctx, ws.ID, integ.ID, box.SetScope)
 	s.reassignOwners(ctx, ws.ID, box.Owners)
 
 	state, err := s.store.GetSync(ctx, ws.ID, integ.ID, folder)

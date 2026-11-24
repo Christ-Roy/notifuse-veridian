@@ -181,11 +181,14 @@ func (w *Workspace) VeridianClearReturnIMAPLinks(imapIntegrationID string) {
 // VeridianReturnIMAPScopeReplies : la boite de retour ne garde que les reponses et rejets de nos envois.
 const VeridianReturnIMAPScopeReplies = "replies"
 
-// ValidateVeridianReturnIMAPScope : "" (toute la boite) ou "replies".
+// VeridianReturnIMAPScopeAll : la boite de retour garde tout, dit EXPLICITEMENT (une boite personnelle garde sinon les seules reponses).
+const VeridianReturnIMAPScopeAll = "all"
+
+// ValidateVeridianReturnIMAPScope : "" (defaut de la boite), "replies" ou "all".
 func ValidateVeridianReturnIMAPScope(scope string) error {
 	switch scope {
-	case "", VeridianReturnIMAPScopeReplies:
+	case "", VeridianReturnIMAPScopeReplies, VeridianReturnIMAPScopeAll:
 		return nil
 	}
-	return NewValidationError(fmt.Sprintf("return inbox scope must be empty or %q: %s", VeridianReturnIMAPScopeReplies, scope))
+	return NewValidationError(fmt.Sprintf("return inbox scope must be empty, %q or %q: %s", VeridianReturnIMAPScopeReplies, VeridianReturnIMAPScopeAll, scope))
 }

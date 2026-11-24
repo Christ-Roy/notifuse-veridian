@@ -2,6 +2,7 @@ package mailbox
 
 import (
 	"context"
+	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 )
@@ -27,6 +28,39 @@ func InScope(scope string, kind Kind, link *Link) bool {
 		return false
 	}
 	return link != nil && link.MatchType == "message_id"
+}
+
+// personalHosts : messageries grand public ou de bureau, ou une boite est d'abord celle d'une PERSONNE.
+var personalHosts = []string{"imap.gmail.com", "imap.googlemail.com", "outlook.office365.com", "imap-mail.outlook.com", "imap.mail.yahoo.com",
+	"imap.mail.me.com", "imap.orange.fr", "imap.free.fr", "imap.laposte.net", "imap.sfr.fr", "imap4.bouygtel.fr", "imap.bbox.fr", "imap.aol.com", "imap.gmx.com", "imap.gmx.net"}
+
+// IsPersonalBox dit si la boite lue est celle d'une personne, courrier prive compris : messagerie grand public, dossier de
+// reception entier. Un libelle dedie (« GBC/Reponses ») est un tri deja fait : il se garde en entier.
+func IsPersonalBox(s *domain.IMAPSettings) bool {
+	if s == nil {
+		return false
+	}
+	folder := strings.ToLower(s.GetFolder())
+	if folder != "inbox" && !strings.HasPrefix(folder, "[gmail]") && !strings.HasPrefix(folder, "[google mail]") {
+		return false
+	}
+	host := strings.ToLower(strings.TrimSpace(s.Host))
+	for _, h := range personalHosts {
+		if host == h {
+			return true
+		}
+	}
+	return false
+}
+
+// EffectiveScope : le reglage du profil, sinon « replies » pour une boite personnelle (Robert, 24/11/2026 : « lire l'IMAP de Gmail
+// mais que avec les reponses aux prospects pour ne pas melanger les mails perso »). Mesure : 499 mails sans lien ranges en 7 jours
+// pour un client dont la boite Gmail entiere etait lue. « all » garde tout, dit explicitement.
+func EffectiveScope(setting string, s *domain.IMAPSettings) string {
+	if setting == "" && IsPersonalBox(s) {
+		return domain.VeridianReturnIMAPScopeReplies
+	}
+	return setting
 }
 
 // PurgeOutOfScopeSQL supprime, pour UNE boite de retour, les messages entrants que la portee « replies » n'aurait pas

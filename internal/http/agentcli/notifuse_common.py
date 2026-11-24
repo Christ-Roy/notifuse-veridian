@@ -2596,10 +2596,9 @@ def cmd_profiles_link_imap(a):
             if not target or target.get("type") != "imap":
                 die(f"{a.imap} n'est pas une intégration IMAP de {a.workspace} (le serveur refuserait en 400).")
             prov["veridian_return_imap_integration_id"] = a.imap
-        if scope == "replies":
-            prov["veridian_return_imap_scope"] = "replies"
-        elif scope == "all":
-            prov.pop("veridian_return_imap_scope", None)
+        if scope in ("replies", "all"):
+            # « all » se dit explicitement : une boîte personnelle (Gmail entière...) ne garde sinon que les réponses (24/11/2026).
+            prov["veridian_return_imap_scope"] = scope
     _patch_email_profile(a, mutate)
 
 

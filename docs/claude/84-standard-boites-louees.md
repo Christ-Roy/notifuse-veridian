@@ -70,6 +70,11 @@ de **Notifuse vers le relais** (chiffrés dans l'intégration, jamais montrés a
   deux espaces : 451, jamais devinée. IP sur ZEN (PBL comprise) : refusée ; ZEN injoignable : on reçoit. `postmaster@` et `abuse@` servis.
 - Limites connues : AUTH LOGIN absent (Outlook ancien), pas de `Drafts`, Gmail « Envoyer en tant que » veut 465 ou 587.
 
+- **Boîte personnelle (Gmail, Outlook, Orange... lue en entier) : réponses seulement, par défaut** (Robert, 24/11/2026). Seuls restent
+  les réponses et rejets reliés à un de NOS envois par Message-ID ; le courrier privé n'est ni rangé ni affiché (`EffectiveScope`,
+  `internal/veridian/mailbox/scope.go`). Un libellé dédié et les relais gardent tout ; `profiles:link-imap --scope all` le dit
+  explicitement. Ce défaut ne retire rien de ce qui est déjà rangé (seule une portée réglée le fait). L'arrêt sur réponse n'en dépend pas.
+
 ## Avant d'ouvrir au public (S2, S3, S0)
 
 1. Entrée TCP (Traefik 443 par nom TLS pour IMAP et SMTP, 25 pour le récepteur) avec PROXY v2, et les variables correspondantes.

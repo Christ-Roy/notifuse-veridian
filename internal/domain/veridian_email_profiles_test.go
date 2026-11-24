@@ -150,3 +150,14 @@ func TestWorkspaceVeridianClearReturnIMAPLinks(t *testing.T) {
 	var nilWorkspace *Workspace
 	nilWorkspace.VeridianClearReturnIMAPLinks("imap-a")
 }
+
+func TestValidateVeridianReturnIMAPScope_KnownValuesOnly(t *testing.T) {
+	for _, ok := range []string{"", VeridianReturnIMAPScopeReplies, VeridianReturnIMAPScopeAll} {
+		if err := ValidateVeridianReturnIMAPScope(ok); err != nil {
+			t.Errorf("%q refuse : %v", ok, err)
+		}
+	}
+	if ValidateVeridianReturnIMAPScope("tout") == nil {
+		t.Error("valeur inconnue acceptee")
+	}
+}

@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
 func TestInScope_Regle(t *testing.T) {
@@ -131,5 +134,66 @@ func TestPurgeOutOfScope(t *testing.T) {
 	db.QueryRowContext(ctx, `SELECT COUNT(*) FROM veridian_mail_message WHERE mailbox_integration_id = 'imap2'`).Scan(&autreBoite)
 	if restant != 2 || autreBoite != 1 { // réponse + traité ; imap2 intacte
 		t.Fatalf("attendu imap1=2 (réponse + traité) et imap2=1, obtenu %d et %d", restant, autreBoite)
+	}
+}
+
+func TestIsPersonalBoxAndEffectiveScope(t *testing.T) {
+	for name, tc := range map[string]struct {
+		s       *domain.IMAPSettings
+		setting string
+		want    string
+	}{
+		"Gmail, boite entiere":            {&domain.IMAPSettings{Host: "IMAP.gmail.com", Folder: "INBOX"}, "", "replies"},
+		"Gmail, dossier par defaut":       {&domain.IMAPSettings{Host: "imap.gmail.com"}, "", "replies"},
+		"Gmail, tous les messages":        {&domain.IMAPSettings{Host: "imap.gmail.com", Folder: "[Gmail]/Tous les messages"}, "", "replies"},
+		"Gmail, libelle dedie":            {&domain.IMAPSettings{Host: "imap.gmail.com", Folder: "GBC/Reponses"}, "", ""},
+		"Gmail, tout garde explicitement": {&domain.IMAPSettings{Host: "imap.gmail.com", Folder: "INBOX"}, "all", "all"},
+		"relais interne":                  {&domain.IMAPSettings{Host: "100.88.202.29", Folder: "INBOX"}, "", ""},
+		"relais interne, portee reglee":   {&domain.IMAPSettings{Host: "100.88.202.29", Folder: "INBOX"}, "replies", "replies"},
+		"sans reglage IMAP":               {nil, "", ""},
+	} {
+		if got := EffectiveScope(tc.setting, tc.s); got != tc.want {
+			t.Errorf("%s : %q, attendu %q", name, got, tc.want)
+		}
+	}
+	if IsPersonalBox(&domain.IMAPSettings{Host: "mail.infomaniak.com", Folder: "INBOX"}) {
+		t.Error("un hebergeur professionnel n'est pas une messagerie grand public")
+	}
+}
+
+// La portee prise par defaut ecarte le courrier prive a venir, et ne retire JAMAIS ce qui est deja range.
+func TestBoxFor_DefaultScopeFiltersWithoutPurging(t *testing.T) {
+	ws := &domain.Workspace{ID: "ws", Integrations: domain.Integrations{{ID: "g", Type: domain.IntegrationTypeIMAP, IMAPSettings: &domain.IMAPSettings{Host: "imap.gmail.com", Folder: "INBOX", Username: "client@gmail.com"}}}}
+	b := BoxFor(ws, &ws.Integrations[0])
+	if b.Scope != domain.VeridianReturnIMAPScopeReplies || b.SetScope != "" {
+		t.Fatalf("%+v", b)
+	}
+	st, db := testStore(t)
+	ctx := context.Background()
+	if _, err := db.Exec(`INSERT INTO veridian_mail_message (id, workspace_id, direction, kind, mailbox_integration_id, thread_id, occurred_at) VALUES ('deja','ws','in','other','g','t',NOW())`); err != nil {
+		t.Fatal(err)
+	}
+	ing := NewIngestor(st, logger.NewLogger(), nil)
+	put := func(uid uint32, hdr string) bool {
+		_, ok, err := ing.IngestRaw(ctx, "ws", b, MailboxRef{IntegrationID: "g", Folder: "INBOX", UIDValidity: 1, UID: uid}, []byte("From: x@y.fr\r\nTo: client@gmail.com\r\nMessage-Id: <p"+string(rune('a'+uid))+"@y.fr>\r\n"+hdr+"Subject: S\r\n\r\nBonjour\r\n"), time.Now(), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	if put(1, "") {
+		t.Fatal("un mail prive ne doit pas etre range")
+	}
+	if _, err := ing.RecordSent(ctx, SentInput{WorkspaceID: "ws", MessageHistoryID: "envoi", ContactEmail: "x@y.fr", FromAddress: "client@gmail.com", Subject: "S", Text: "t", SentAt: time.Now(), BodySource: BodyCaptured}); err != nil {
+		t.Fatal(err)
+	}
+	if !put(2, "In-Reply-To: <envoi@gmail.com>\r\n") {
+		t.Fatal("la reponse a un de nos envois doit etre rangee")
+	}
+	s := NewSyncer(st, ing, nil, nil, logger.NewLogger())
+	s.purgeOutOfScope(ctx, "ws", "g", b.SetScope)
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM veridian_mail_message WHERE id = 'deja'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("courrier deja range retire sans reglage : %d %v", n, err)
 	}
 }
