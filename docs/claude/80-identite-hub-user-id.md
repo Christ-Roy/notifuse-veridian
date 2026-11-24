@@ -41,6 +41,16 @@ Module `internal/veridian/hubusers/`, sous HMAC Hub (sans signature valide : 401
   donnée supprimée. `issue-magic-link` ne délivre plus de lien à ce compte (`user_not_in_app`).
   Limite connue : l'écran natif de connexion par code email reste ouvert, §3.8 interdit les écrans natifs.
 
+## Appartenance : `GET /api/veridian/membres` (24/11/2026, INTEGRATIONS-NATIVES §2.7)
+
+Lecture signée par le Hub pour `hub reconcile --appartenance` (`hubusers/members.go`, CLI `hub:membres` et `members:list`) :
+`{members:[{workspace_id,hub_tenant_id,hub_user_id,email,role}]}`, rien d'autre. Humains seulement (les clés API sont exclues),
+espaces vivants seulement (`veridian_plan.deleted_at` nul). `hub_tenant_id` null = espace que le Hub n'a pas relié ; `hub_user_id`
+null = compte non relié. Un compte supprimé au Hub mais encore membre SORT : c'est un écart à voir. Un membre gelé (V47) est
+encore membre. `?workspace_id=` inconnu ou supprimé = 404 `workspace_not_found`, jamais une liste vide.
+CLI opérateur : `members:list` lit par cette route (avant, il provisionnait et 18 espaces sur 24 étaient illisibles) ; obtenir un
+jeton owner vérifie d'abord que l'espace existe (`/api/tenants/{id}/status`), car la provision le créait.
+
 ## Connexion automatique par rebond (CONTRAT-HUB §6bis.8.0, 07/11/2026)
 
 Console (`console/src/lib/veridian_auto_bounce.ts`, branché dans `RootLayout`) : une visite SANS session

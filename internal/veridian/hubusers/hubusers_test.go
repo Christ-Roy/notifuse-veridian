@@ -24,18 +24,33 @@ const (
 )
 
 type fakeStore struct {
-	humans     []Account
-	found      *Account
-	findCalls  []string
-	updated    []string
-	gotSetName bool
-	gotName    *string
-	gotEmail   *string
-	updateErr  error
-	revoked    []string
-	revokedErr error
+	humans      []Account
+	found       *Account
+	findCalls   []string
+	updated     []string
+	gotSetName  bool
+	gotName     *string
+	gotEmail    *string
+	updateErr   error
+	revoked     []string
+	revokedErr  error
 	sessionsCut []string
 	sessionsN   int64
+	members     []Member
+	membersErr  error
+	liveWS      map[string]bool
+	membersFor  []string
+}
+
+func (f *fakeStore) ListMembers(_ context.Context, ws string) ([]Member, error) {
+	f.membersFor = append(f.membersFor, ws)
+	if f.members == nil {
+		return []Member{}, f.membersErr
+	}
+	return f.members, f.membersErr
+}
+func (f *fakeStore) WorkspaceLive(_ context.Context, ws string) (bool, error) {
+	return f.liveWS[ws], nil
 }
 
 func (f *fakeStore) ListHumans(context.Context) ([]Account, error) { return f.humans, nil }
@@ -91,6 +106,7 @@ func TestRoutes_RefuseSansSignatureValide(t *testing.T) {
 
 	for _, tc := range []struct{ method, path, body string }{
 		{"GET", "/api/hub/users", ""},
+		{"GET", "/api/veridian/membres", ""},
 		{"POST", "/api/hub/users/sync", `{"hub_user_id":"` + hubID + `","deleted":true}`},
 	} {
 		// aucune signature
@@ -102,6 +118,7 @@ func TestRoutes_RefuseSansSignatureValide(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rec.Code, tc.path)
 	}
 	assert.Empty(t, f.findCalls, "rien n'est lu sans signature")
+	assert.Empty(t, f.membersFor, "aucune appartenance lue sans signature")
 	assert.Empty(t, f.revoked, "aucune coupure sans signature")
 }
 

@@ -743,8 +743,19 @@ def _jwt_cache_drop(env, tenant_id, email):
         pass
 
 
+def require_existing_workspace(env, tenant_id):
+    """Refuse un espace inconnu AVANT la provision qui sert à obtenir un jeton : cette provision le CRÉERAIT (24/11/2026 : une
+    simple lecture sur un nom mal tapé ouvrait un espace). Créer reste un geste explicite : `provision`."""
+    st, p = call_hmac(env, "GET", f"/api/tenants/{urllib.parse.quote(tenant_id, safe='')}/status")
+    if st == 404:
+        die(f"espace '{tenant_id}' inconnu sur {env} : rien n'a été créé. Pour le créer : notifuse-admin provision.", code=2)
+    if st != 200:
+        die(f"existence de l'espace '{tenant_id}' non vérifiée (HTTP {st}) : {p}. Rien n'a été tenté.", code=2)
+
+
 def provision_idempotent(env, tenant_id, email=DEFAULT_OWNER_EMAIL, name=None):
-    """Provision HMAC idempotente. Renvoie la réponse (ws, api_key, auto_login_url)."""
+    """Provision HMAC idempotente d'un espace EXISTANT (jeton owner). Renvoie la réponse (ws, api_key, auto_login_url)."""
+    require_existing_workspace(env, tenant_id)
     body = {"tenant_id": tenant_id, "owner_email": email}
     if name:
         body["workspace_name"] = name
@@ -1675,6 +1686,15 @@ def cmd_segments_rebuild(a):
 
 # ---- members / team ----
 def cmd_members_list(a):
+    if not _SCOPED_MODE:
+        # 24/11/2026 : la voie opérateur lit par la route signée. Avant, elle provisionnait l'espace pour obtenir un jeton owner et
+        # 18 espaces sur 24 répondaient « workspace exists with different owner ».
+        q = urllib.parse.urlencode({"workspace_id": a.workspace}) if a.workspace else ""
+        st, p = call_hmac(a.env, "GET", "/api/veridian/membres" + ("?" + q if q else ""))
+        if st == 200 and not (isinstance(p, dict) and isinstance(p.get("members"), list)):
+            die("réponse sans liste de membres (route absente de cette version ?) : appartenance NON LUE.", code=2)
+        out(st, p)
+        return
     jwt = owner_jwt(a.env, a.workspace)
     out(*call_jwt(a.env, "GET", "/api/workspaces.members", jwt, params={"id": a.workspace}))
 
@@ -4524,6 +4544,7 @@ RAW_ROUTES = [
     ("sso:issue-magic-link", "POST", "/api/sso/issue-magic-link", "hmac", []),
     ("users:by-email", "GET", "/api/users/by-email", "hmac", []),
     ("hub:users", "GET", "/api/hub/users", "hmac", []),
+    ("hub:membres", "GET", "/api/veridian/membres", "hmac", []),
     ("hub:users-sync", "POST", "/api/hub/users/sync", "hmac", []),
     ("veridian:mode", "GET", "/api/veridian/mode", "none", []),
     ("veridian:hub-discovery-me", "GET", "/api/veridian/hub-discovery/me", "hmac", []),
@@ -5772,7 +5793,7 @@ def build_parser(extra=None):
     sp.set_defaults(func=cmd_segments_rebuild)
 
     # members / team
-    sp = sub.add_parser("members:list", help="membres du workspace + leurs permissions (owner)")
+    sp = sub.add_parser("members:list", help="humains membres (hub_user_id, adresse, rôle, espace) ; permissions : members:get-permissions")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_members_list)
 

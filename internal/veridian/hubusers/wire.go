@@ -26,9 +26,10 @@ func init() {
 	})
 }
 
-// Mount pose les deux routes sous HMAC Hub. Sans secret configuré le middleware répond 503.
+// Mount pose les trois routes sous HMAC Hub. Sans secret configuré le middleware répond 503.
 func Mount(mux *http.ServeMux, h *Handler, hubSecret string) {
 	hmac := middleware.VeridianHMACMiddleware(hubSecret)
 	mux.Handle("GET /api/hub/users", hmac(http.HandlerFunc(h.List)))
 	mux.Handle("POST /api/hub/users/sync", hmac(http.HandlerFunc(h.Sync)))
+	mux.Handle("GET /api/veridian/membres", hmac(http.HandlerFunc(h.Members)))
 }

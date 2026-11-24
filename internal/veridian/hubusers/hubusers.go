@@ -1,7 +1,8 @@
-// Package hubusers expose au Hub les deux routes d'identité du CONTRAT-HUB §3.8 :
+// Package hubusers expose au Hub les routes d'identité du CONTRAT-HUB §3.8 et l'appartenance (INTEGRATIONS-NATIVES §2.7) :
 //
 //	GET  /api/hub/users        {users:[{hub_user_id,email,name}]}  humains seulement
 //	POST /api/hub/users/sync   {hub_user_id,name?,email?,deleted?} 200 | 404 user_not_in_app
+//	GET  /api/veridian/membres {members:[{workspace_id,hub_tenant_id,hub_user_id,email,role}]}  (members.go)
 //
 // HMAC Hub obligatoire (une route sans signature valide ne répond pas). Le compte visé est retrouvé
 // par hub_user_id uniquement, jamais par email ; seuls les champs présents sont appliqués. Fiche 80.
@@ -46,6 +47,10 @@ type Store interface {
 	RevokeSessions(ctx context.Context, userID string) (int64, error)
 	// Revoke coupe toutes les sessions du compte et le marque supprimé côté Hub. Aucune donnée supprimée.
 	Revoke(ctx context.Context, userID string) error
+	// ListMembers : les humains membres des espaces vivants, d'un seul si workspaceID est donné.
+	ListMembers(ctx context.Context, workspaceID string) ([]Member, error)
+	// WorkspaceLive : l'espace existe et n'est pas supprimé.
+	WorkspaceLive(ctx context.Context, workspaceID string) (bool, error)
 }
 
 // SQLStore : Store sur la base système.
@@ -123,7 +128,7 @@ func (s *SQLStore) Revoke(ctx context.Context, userID string) error {
 	return tx.Commit()
 }
 
-// Handler : les deux routes. Le middleware HMAC est posé par l'appelant (wire.go).
+// Handler : les trois routes. Le middleware HMAC est posé par l'appelant (wire.go).
 type Handler struct{ Store Store }
 
 type listResponse struct {
