@@ -238,6 +238,41 @@ def cmd_access_create(a):
                              f"mot de passe, montré une seule fois : {d.get('password')}"] + format_connection(d.get("connection") or {}))
 
 
+def format_guide(access, connection):
+    """Procédure de connexion d'un client à SA boîte, prête à envoyer. Jamais de mot de passe ici."""
+    imap, smtp = connection.get("imap"), connection.get("smtp")
+    if not imap:
+        raise ValueError("l'IMAP n'est pas servi sur cette instance")
+    L = [f"Votre boîte : {access['address']}", "",
+         "Dans votre application de mail (Spark, Thunderbird, Outlook, Apple Mail), ajoutez un compte et choisissez la",
+         "configuration manuelle (souvent « Autre » ou « IMAP »), puis recopiez :", "",
+         "Recevoir (IMAP)", f"  Serveur       : {imap['host']}", f"  Port          : {imap['port']}", "  Sécurité      : SSL/TLS",
+         f"  Identifiant   : {access['address']}", "  Mot de passe  : celui que je vous envoie à part", ""]
+    if access.get("can_send") and smtp:
+        L += ["Envoyer (SMTP)", f"  Serveur       : {smtp['host']}", f"  Port          : {smtp['port']}", "  Sécurité      : SSL/TLS",
+              f"  Identifiant   : {access['address']}", "  Mot de passe  : le même", "",
+              f"Vous écrivez toujours depuis {access['address']}, {access.get('daily_cap') or 200} envois par jour au plus.", ""]
+    else:
+        L += ["Cet accès permet de lire, pas d'envoyer.", ""]
+    L += ["Vos dossiers", "  Boîte de réception : les réponses", "  Rejets             : les adresses mortes et les refus des serveurs",
+          "  Sent               : tout ce qui est parti", "  Trash              : ce que vous retirez (rien n'est effacé pour de bon)", "",
+          "Si l'application propose un port différent (993, 465 ou 587), remplacez-le par celui ci-dessus.",
+          "Un problème ou un téléphone perdu : dites-le, l'accès se coupe en 30 secondes et un autre se crée."]
+    return L
+
+
+def cmd_access_guide(a):
+    st, data = _get(a, "/api/veridian/mail.access.list", {})
+    _fail(st, data)
+    acc = next((x for x in data.get("accesses") or [] if x.get("id") == a.id and not x.get("revoked_at")), None)
+    if not acc:
+        nc.die(f"accès {a.id} introuvable ou révoqué (mail:access {a.workspace}).")
+    try:
+        print("\n".join(format_guide(acc, data.get("connection") or {})))
+    except ValueError as e:
+        nc.die(str(e))
+
+
 def cmd_access_revoke(a):
     st, data = _post(a, "/api/veridian/mail.access.revoke", {"id": a.id})
     _fail(st, data)
@@ -472,7 +507,7 @@ def cmd_events(a):
 # --------------------------------------------------------------------------- enregistrement
 
 COMMANDS = ("mail:boxes", "mail:list", "mail:get", "mail:raw", "mail:attachment", "mail:thread", "mail:threads",
-            "mail:update", "mail:send", "mail:reply", "mail:events", "mail:access", "mail:access-create", "mail:access-revoke")
+            "mail:update", "mail:send", "mail:reply", "mail:events", "mail:access", "mail:access-create", "mail:access-revoke", "mail:access-guide")
 
 
 def register(sub):
@@ -586,3 +621,6 @@ def register(sub):
     sp = add("mail:access-revoke", "révoque un accès de boîte (les sessions ouvertes sont coupées sous 30 s)", cmd_access_revoke, ["/api/veridian/mail.access.revoke"])
     sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")
     jsonflag(sp)
+
+    sp = add("mail:access-guide", "procédure de connexion à envoyer au client (sans mot de passe)", cmd_access_guide, ["/api/veridian/mail.access.list"])
+    sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")

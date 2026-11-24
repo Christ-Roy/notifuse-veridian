@@ -32,7 +32,7 @@ func TestReadSettings(t *testing.T) {
 	}
 }
 
-// Toute limite de la porte publique a une politique posée : sans elle, le limiteur laisse passer (essais par boîte, par adresse).
+// Deux limites distinctes (par boîte, par adresse), chacune avec sa politique : sans politique, le limiteur refuse tout.
 func TestGateLimits_AreDistinct(t *testing.T) {
 	if boxsend.LimitGateIP == boxsend.LimitGateBox || boxsend.GateTriesBox >= boxsend.GateTriesIP {
 		t.Fatal("les deux limites doivent se distinguer")
