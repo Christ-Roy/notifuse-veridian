@@ -1,6 +1,7 @@
 // Package organisation reçoit l'organisation du Hub (VER-252, Robert le 24/11 : « une seule configuration sur le Hub »). Fiche 88.
 //
 //	POST /api/hub/organisations/sync          HMAC Hub, version monotone : nom, logo, couleurs, membres additifs
+//	GET  /api/hub/organisations/sync          HMAC Hub : la version tenue (relecture)
 //	GET  /api/veridian/organisation           membre de l'espace : la marque, pour la console
 //	POST /api/hub/evenements/abonnement       HMAC Hub : allume ou éteint l'abonnement message.received du Hub (F3, VER-247)
 //
@@ -63,8 +64,8 @@ type Organisation struct {
 
 // Applied : ce que la poussée a fait.
 type Applied struct {
-	Done        bool   `json:"applique"`
-	Reason      string `json:"raison,omitempty"` // version_ancienne
+	Done        bool   `json:"applied"`
+	Reason      string `json:"reason,omitempty"` // unchanged (même version), stale (plus ancienne) : les mots du Hub
 	WorkspaceID string `json:"workspace_id"`
 	Version     int64  `json:"version"` // celle que l'app tient maintenant
 	Members     int    `json:"membres_ajoutes"`
@@ -267,9 +268,12 @@ func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 	}
 	res := Applied{Done: done, WorkspaceID: ws, Version: version}
 	if !done && o.Version < version {
-		res.Reason = "version_ancienne"
+		res.Reason = "stale"
 		writeJSON(w, http.StatusOK, res)
 		return
+	}
+	if !done {
+		res.Reason = "unchanged"
 	}
 	for _, m := range o.Members {
 		in, err := h.Store.IsMember(r.Context(), ws, m.Email)
@@ -288,6 +292,30 @@ func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Log.WithFields(map[string]interface{}{"workspace_id": ws, "version": version, "applique": done, "membres": res.Members}).Info("organisation: poussée du Hub")
 	writeJSON(w, http.StatusOK, res)
+}
+
+// Version : GET /api/hub/organisations/sync?hub_tenant_id=. La version tenue, que le Hub relit avant de dire « appliqué ». 0 = rien reçu.
+func (h *Handler) Version(w http.ResponseWriter, r *http.Request) {
+	tenant := r.URL.Query().Get("hub_tenant_id")
+	if tenant == "" || len(tenant) > 64 {
+		refuse(w, http.StatusBadRequest, "invalid_payload", "hub_tenant_id requis")
+		return
+	}
+	ws, err := h.Store.WorkspaceOf(r.Context(), tenant)
+	if err != nil {
+		h.fail(w, err, "relecture")
+		return
+	}
+	o, err := h.Store.Brand(r.Context(), ws)
+	if err != nil {
+		h.fail(w, err, "relecture")
+		return
+	}
+	out := map[string]any{"workspace_id": ws, "version": int64(0)}
+	if o != nil && o.HubTenantID == tenant { // une version venue d'un autre tenant ne compte pas
+		out["version"], out["name"] = o.Version, o.displayName()
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // Get : GET /api/veridian/organisation?workspace_id=. La marque, pour un membre de l'espace. Vide si le Hub n'a rien poussé.

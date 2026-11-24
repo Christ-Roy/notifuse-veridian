@@ -155,7 +155,7 @@ func TestSync_AppliqueDansLOrdre_SansRienVider(t *testing.T) {
 	e := newEnv(t)
 	st, out := e.call("POST", sync, push(5, full), true)
 	require.Equal(t, 200, st, out)
-	assert.Equal(t, true, out["applique"])
+	assert.Equal(t, true, out["applied"])
 	assert.Equal(t, "alpha", out["workspace_id"])
 	name, logo, settings := e.space(t)
 	assert.Equal(t, "Marque A", name, "le nom affiché l'emporte")
@@ -167,12 +167,13 @@ func TestSync_AppliqueDansLOrdre_SansRienVider(t *testing.T) {
 
 	st, out = e.call("POST", sync, push(4, `,"nom":"Vieux"`), true)
 	assert.Equal(t, 200, st)
-	assert.Equal(t, false, out["applique"])
-	assert.Equal(t, "version_ancienne", out["raison"])
+	assert.Equal(t, false, out["applied"])
+	assert.Equal(t, "stale", out["reason"])
 	assert.EqualValues(t, 5, out["version"])
 	st, out = e.call("POST", sync, push(5, full), true)
 	assert.Equal(t, 200, st)
-	assert.Equal(t, false, out["applique"], "même version : déjà là")
+	assert.Equal(t, false, out["applied"], "même version : déjà là")
+	assert.Equal(t, "unchanged", out["reason"], "le mot que le Hub lit")
 	name, _, _ = e.space(t)
 	assert.Equal(t, "Marque A", name)
 
@@ -185,6 +186,30 @@ func TestSync_AppliqueDansLOrdre_SansRienVider(t *testing.T) {
 	assert.Equal(t, 200, st)
 	name, _, _ = e.space(t)
 	assert.Equal(t, "Société A", name)
+}
+
+// Le Hub ne dit « appliqué » qu'après avoir relu la version que l'app sert.
+func TestVersion_RelueParLeHub(t *testing.T) {
+	e := newEnv(t)
+	u := func(tn string) string { return sync + "?hub_tenant_id=" + tn }
+	st, out := e.call("GET", u("t-alpha"), "", true)
+	assert.Equal(t, 200, st, out)
+	assert.EqualValues(t, 0, out["version"], "rien reçu")
+	_, _ = e.call("POST", sync, push(1782259200000, full), true)
+	st, out = e.call("GET", u("t-alpha"), "", true)
+	assert.Equal(t, 200, st)
+	assert.EqualValues(t, 1782259200000, out["version"])
+	assert.Equal(t, "Marque A", out["name"])
+	st, _ = e.call("GET", u("t-alpha"), "", false)
+	assert.Equal(t, 401, st, "sans signature")
+	st, _ = e.call("GET", u("inconnu"), "", true)
+	assert.Equal(t, 404, st)
+	st, _ = e.call("GET", sync, "", true)
+	assert.Equal(t, 400, st)
+	_, err := e.db.Exec(`UPDATE veridian_organisation SET corps = jsonb_set(corps, '{hub_tenant_id}', '"autre"')`)
+	require.NoError(t, err)
+	_, out = e.call("GET", u("t-alpha"), "", true)
+	assert.EqualValues(t, 0, out["version"], "poussée d'un autre tenant")
 }
 
 func TestSync_Refus(t *testing.T) {

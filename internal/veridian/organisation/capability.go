@@ -47,6 +47,7 @@ func init() {
 func Mount(mux *http.ServeMux, h *Handler, hubSecret string, requireAuth func(http.Handler) http.Handler) {
 	signed := middleware.VeridianHMACMiddleware(hubSecret)
 	mux.Handle("POST /api/hub/organisations/sync", signed(http.HandlerFunc(h.Sync)))
+	mux.Handle("GET /api/hub/organisations/sync", signed(http.HandlerFunc(h.Version)))
 	mux.Handle("POST /api/hub/evenements/abonnement", signed(http.HandlerFunc(h.Subscription)))
 	mux.Handle("GET /api/veridian/organisation", requireAuth(http.HandlerFunc(h.Get)))
 }

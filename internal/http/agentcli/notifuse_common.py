@@ -4551,6 +4551,7 @@ RAW_ROUTES = [
     ("users:by-email", "GET", "/api/users/by-email", "hmac", []),
     ("hub:users", "GET", "/api/hub/users", "hmac", []),
     ("hub:organisation-sync", "POST", "/api/hub/organisations/sync", "hmac", []),
+    ("hub:organisation-version", "GET", "/api/hub/organisations/sync", "hmac", []),
     ("hub:abonnement", "POST", "/api/hub/evenements/abonnement", "hmac", []),
     ("organisation:get", "GET", "/api/veridian/organisation", "owner", []),
     ("hub:membres", "GET", "/api/veridian/membres", "hmac", []),
