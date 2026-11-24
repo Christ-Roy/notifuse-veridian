@@ -30,14 +30,22 @@ type Claims struct {
 	ClientID      string `json:"client_id"`
 	// TenantID : facultatif, verifie cote Hub. Present, il choisit l'espace (appartenance revérifiee ici).
 	TenantID string `json:"tenant_id,omitempty"`
+	// Act : l'app qui agit pour l'utilisateur (jeton d'action, RFC 8693). Jamais accepte sur /api/mcp.
+	Act *Actor `json:"act,omitempty"`
 	jwt.RegisteredClaims
+}
+
+// Actor : claim act (RFC 8693). Act imbrique = delegation en chaine, refusee par les actions.
+type Actor struct {
+	Subject string `json:"sub"`
+	Act     *Actor `json:"act,omitempty"`
 }
 
 // ErrUnauthorized : jeton absent, mal signe, expire, mauvais emetteur ou mauvaise audience.
 var ErrUnauthorized = errors.New("mcp: unauthorized")
 
 const (
-	jwksTTL        = time.Hour       // cache maximal des cles (contrat)
+	jwksTTL        = time.Hour        // cache maximal des cles (contrat)
 	jwksMinRefetch = 30 * time.Second // un kid inconnu ne declenche pas un rechargement a chaque requete
 	maxTokenLife   = 10 * time.Minute // le Hub emet 5 min : un jeton plus long est refuse
 	maxJWKSBytes   = 64 << 10

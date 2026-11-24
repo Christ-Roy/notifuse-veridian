@@ -90,6 +90,9 @@ func TestHandler_SansJetonOuJetonRefuse_401(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	assert.Contains(t, w.Header().Get("WWW-Authenticate"), "Bearer")
 
+	// Un jeton d'action (claim act), même adressé par erreur au MCP, n'ouvre rien.
+	act := r.key.sign(t, func(c *Claims) { c.Act = &Actor{Subject: "app:prospection"} })
+	assert.Equal(t, http.StatusUnauthorized, r.post(t, act, `{"jsonrpc":"2.0","id":1,"method":"ping"}`).Code)
 	bad := r.key.sign(t, func(c *Claims) { c.Audience = []string{"https://autre/api/mcp"} })
 	assert.Equal(t, http.StatusUnauthorized, r.post(t, bad, `{"jsonrpc":"2.0","id":1,"method":"ping"}`).Code)
 	assert.Equal(t, 0, r.disp.calls)

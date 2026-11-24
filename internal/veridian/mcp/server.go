@@ -113,7 +113,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	claims, err := h.Verifier.Verify(r.Context(), token)
-	if err != nil {
+	if err != nil || claims.Act != nil { // un jeton d'action n'ouvre jamais le MCP, meme si son audience etait mal posee
 		h.unauthorized(w, "jeton refuse")
 		return
 	}
