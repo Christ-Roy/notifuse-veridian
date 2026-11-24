@@ -243,6 +243,9 @@ func TestLogin_WrongPasswordAndRateLimit(t *testing.T) {
 		}
 		_ = c.Close()
 	}
+	if strings.ContainsAny(last.Error(), "éèàê") {
+		t.Fatalf("une reponse IMAP est en ASCII : %v", last)
+	}
 	if !strings.Contains(last.Error(), "trop d'essais") {
 		t.Fatalf("essais répétés non bornés: %v", last)
 	}
@@ -457,7 +460,7 @@ func TestPoll_NewMailFlagsAndRevocation(t *testing.T) {
 	b.auth.revoked["a1"] = true
 	b.auth.mu.Unlock()
 	s.checked = time.Now().Add(-time.Hour)
-	if err := s.Poll(nil, true); err == nil || !strings.Contains(err.Error(), "révoqué") {
+	if err := s.Poll(nil, true); err == nil || !strings.Contains(err.Error(), "revoque") {
 		t.Fatalf("une session révoquée doit être coupée: %v", err)
 	}
 	_ = s.Close()

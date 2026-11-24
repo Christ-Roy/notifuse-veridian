@@ -49,10 +49,10 @@ func no(code imap.ResponseCode, text string) error {
 
 var (
 	errNoFolder  = no(imap.ResponseCodeNonExistent, "dossier inconnu")
-	errReadOnly  = no(imap.ResponseCodeCannot, "opération non disponible sur cette boîte")
-	errUnavail   = no(imap.ResponseCodeUnavailable, "service momentanément indisponible")
-	errLimited   = no(imap.ResponseCodeUnavailable, "trop d'essais, réessayez plus tard")
-	errTooMany   = no(imap.ResponseCodeLimit, "trop de connexions sur cet accès")
+	errReadOnly  = no(imap.ResponseCodeCannot, "operation non disponible sur cette boite")
+	errUnavail   = no(imap.ResponseCodeUnavailable, "service momentanement indisponible")
+	errLimited   = no(imap.ResponseCodeUnavailable, "trop d'essais, reessayez plus tard")
+	errTooMany   = no(imap.ResponseCodeLimit, "trop de connexions sur cet acces")
 	errNotOpened = no(imap.ResponseCodeClientBug, "aucun dossier ouvert")
 )
 
@@ -159,7 +159,7 @@ func (s *session) alive() error {
 	defer cancel()
 	if _, err := s.srv.cfg.Auth.Alive(ctx, s.acc.ID); err != nil {
 		if errors.Is(err, boxaccess.ErrAuth) {
-			return &imap.Error{Type: imap.StatusResponseTypeBye, Code: imap.ResponseCodeUnavailable, Text: "accès révoqué"}
+			return &imap.Error{Type: imap.StatusResponseTypeBye, Code: imap.ResponseCodeUnavailable, Text: "acces revoque"}
 		}
 		return s.fail("alive", err)
 	}
@@ -363,7 +363,7 @@ func (s *session) Append(name string, r imap.LiteralReader, _ *imap.AppendOption
 		return nil, s.fail("append", err)
 	}
 	if !known {
-		return nil, no(imap.ResponseCodeCannot, "message non envoyé par le SMTP de Notifuse : copie refusée")
+		return nil, no(imap.ResponseCodeCannot, "message non envoye par le SMTP de Notifuse : copie refusee")
 	}
 	return nil, nil
 }
