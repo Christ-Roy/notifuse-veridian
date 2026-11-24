@@ -6,9 +6,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess/boxapi"
@@ -17,28 +17,27 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox/mailapi"
 	mailboxmodule "github.com/Notifuse/notifuse/internal/veridian/mailbox/module"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
-	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
-	"github.com/Notifuse/notifuse/pkg/smtp_bridge"
 )
 
 // Settings : réglages du serveur IMAP, par variables d'environnement.
 type Settings struct {
-	Enabled  bool
-	Port     int
-	Host     string // nom donné au client mail
-	ShowPort int    // port donné au client mail (celui de l'entrée publique)
-	PROXYv2  bool   // l'entrée publique annonce l'adresse du client
-	SMTPPort int    // porte SMTP des boîtes derrière l'entrée TLS publique, 0 = éteinte
-	SMTPHost string // nom et port donnés au client mail
-	SMTPShow int
-	Proxy    bool // TLS terminé par l'entrée publique, réseau privé jusqu'ici
+	Enabled     bool
+	Port        int
+	Host        string // nom donné au client mail
+	ShowPort    int    // port donné au client mail (celui de l'entrée publique)
+	PROXYv2     bool   // l'entrée publique annonce l'adresse du client
+	SMTPPort    int    // porte SMTP des boîtes derrière l'entrée TLS publique, 0 = éteinte
+	SMTPHost    string // nom et port donnés au client mail
+	SMTPShow    int
+	SMTPPROXYv2 bool
+	Proxy       bool // TLS terminé par l'entrée publique, réseau privé jusqu'ici
 }
 
 // ReadSettings lit les réglages. VERIDIAN_IMAP_ENABLED absent : rien n'écoute.
 func ReadSettings(get func(string) string, defaultHost string) (Settings, error) {
 	s := Settings{Enabled: get("VERIDIAN_IMAP_ENABLED") == "true", Port: 1993, Host: defaultHost, Proxy: get("VERIDIAN_IMAP_BEHIND_TLS_PROXY") == "true", PROXYv2: get("VERIDIAN_IMAP_PROXY_PROTOCOL") == "true"}
-	s.SMTPHost = get("VERIDIAN_BOX_SMTP_HOST")
+	s.SMTPHost, s.SMTPPROXYv2 = get("VERIDIAN_BOX_SMTP_HOST"), get("VERIDIAN_BOX_SMTP_PROXY_PROTOCOL") == "true"
 	for name, dst := range map[string]*int{"VERIDIAN_IMAP_PORT": &s.Port, "VERIDIAN_IMAP_PUBLIC_PORT": &s.ShowPort,
 		"VERIDIAN_BOX_SMTP_PORT": &s.SMTPPort, "VERIDIAN_BOX_SMTP_PUBLIC_PORT": &s.SMTPShow} {
 		v := get(name)
@@ -69,36 +68,10 @@ type gateHost interface {
 
 var (
 	server *imapgate.Server
-	// smtpServer : SMTP des boîtes derrière l'entrée TLS publique. Seuls les accès de boîte y entrent, jamais une clé d'API.
-	smtpServer *smtp_bridge.Server
+	// smtpServer : SMTP public des boîtes, derrière l'entrée TLS (boxsend.Gate).
+	smtpServer *boxsend.Gate
+	settings   Settings
 )
-
-// boxAuth n'accepte que les accès de boîte.
-func boxAuth(snd *boxsend.Sender) smtp_bridge.AuthHandler {
-	return func(username, password string) (string, error) {
-		if boxsend.LooksLikeAPIKey(password) {
-			return "", boxaccess.ErrAuth
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		return snd.Login(ctx, username, password)
-	}
-}
-
-// newSMTP construit la porte SMTP. Elle n'a pas de TLS : elle n'est jointe que par l'entrée publique qui le termine, sur le tailnet.
-func newSMTP(set Settings, snd *boxsend.Sender, log logger.Logger) (*smtp_bridge.Server, error) {
-	b := smtp_bridge.NewBackend(boxAuth(snd), func(userID, from string, to []string, data []byte) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		return snd.Submit(ctx, userID, from, to, data)
-	}, log)
-	b.SetRcptChecker(func(userID, to string) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return snd.CheckRecipient(ctx, userID, to)
-	})
-	return smtp_bridge.NewServer(smtp_bridge.ServerConfig{Host: "0.0.0.0", Port: set.SMTPPort, Domain: set.SMTPHost, Mode: smtp_bridge.ModeOff, Logger: log}, b)
-}
 
 func init() {
 	platform.Register(platform.Capability{Name: "boites", Wire: wire, Start: start, Stop: stop})
@@ -114,6 +87,7 @@ func wire(h platform.Host) error {
 	if err != nil {
 		return err
 	}
+	settings = set
 	store := boxaccess.NewStore(h.DB())
 	conn := boxapi.Connection{}
 	if set.Enabled {
@@ -130,7 +104,11 @@ func wire(h platform.Host) error {
 		if set.SMTPHost == "" {
 			return fmt.Errorf("VERIDIAN_BOX_SMTP_HOST requis avec VERIDIAN_BOX_SMTP_PORT")
 		}
-		if smtpServer, err = newSMTP(set, gh.BoxSender(), h.Logger()); err != nil {
+		if gh.RateLimiter() == nil {
+			return fmt.Errorf("SMTP de boîte demandé sans limiteur")
+		}
+		gh.RateLimiter().SetPolicy(boxsend.LimitGateIP, boxsend.GateTriesIP, boxsend.GateWindow)
+		if smtpServer, err = boxsend.NewGate(gh.BoxSender(), gh.RateLimiter(), set.SMTPHost); err != nil {
 			return err
 		}
 		show := set.SMTPShow
@@ -167,7 +145,14 @@ func wire(h platform.Host) error {
 func start(ctx context.Context, h platform.Host) error {
 	if smtpServer != nil {
 		go func() {
-			if err := smtpServer.Start(); err != nil && ctx.Err() == nil {
+			ln, err := net.Listen("tcp", fmt.Sprintf(":%d", settings.SMTPPort))
+			if err == nil {
+				if settings.SMTPPROXYv2 {
+					ln = imapgate.ProxyListener(ln)
+				}
+				err = smtpServer.Serve(ln)
+			}
+			if err != nil && ctx.Err() == nil {
 				h.Logger().WithField("error", err.Error()).Error("Box SMTP: server stopped")
 			}
 		}()

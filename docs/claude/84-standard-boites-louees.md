@@ -68,7 +68,8 @@ de **Notifuse vers le relais** (chiffrés dans l'intégration, jamais montrés a
   un client), globale en SMTP. Derrière une entrée TCP, `_PROXY_PROTOCOL=true` est OBLIGATOIRE, sinon toutes les IP se confondent.
 - Récepteur : 250 après rangement en base ; base ou app arrêtée = 451 ou refus de connexion, l'expéditeur réessaie. Adresse portée par
   deux espaces : 451, jamais devinée. IP sur ZEN (PBL comprise) : refusée ; ZEN injoignable : on reçoit. `postmaster@` et `abuse@` servis.
-- Limites connues : AUTH LOGIN absent (Outlook ancien), pas de `Drafts`, Gmail « Envoyer en tant que » veut 465 ou 587.
+- Porte SMTP publique : `boxsend/gate.go` (PLAIN et LOGIN, essais par vraie adresse, 3 par connexion), PROXY v2 exigé.
+- Limites connues : pas de `Drafts`, Gmail « Envoyer en tant que » veut 465 ou 587.
 
 - **Boîte personnelle (Gmail, Outlook, Orange... lue en entier) : réponses seulement, par défaut** (Robert, 24/11/2026). Seuls restent
   les réponses et rejets reliés à un de NOS envois par Message-ID ; le courrier privé n'est ni rangé ni affiché (`EffectiveScope`,

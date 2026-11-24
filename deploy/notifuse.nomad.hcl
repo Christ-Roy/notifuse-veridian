@@ -273,6 +273,7 @@ VERIDIAN_IMAP_PUBLIC_PORT=443
 VERIDIAN_BOX_SMTP_PORT=5465
 VERIDIAN_BOX_SMTP_HOST=smtp.veridian.site
 VERIDIAN_BOX_SMTP_PUBLIC_PORT=443
+VERIDIAN_BOX_SMTP_PROXY_PROTOCOL=true
 # Récepteur : adresses de profil de ces domaines seulement. Entrée publique 25 = job de l'infra, PROXY v2 exigé.
 VERIDIAN_MX_PROXY_PROTOCOL=true
 VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr
