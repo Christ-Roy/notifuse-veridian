@@ -160,3 +160,16 @@ func TestMembership_Types_FieldAuditRegression(t *testing.T) {
 	restOut := RestoreMemberResponse{RestoredAt: time.Now()}
 	assert.False(t, restOut.RestoredAt.IsZero())
 }
+
+// Le Hub lit « absent » comme « non compté » : zéro clé doit sortir 0, un comptage en échec ne doit rien sortir.
+func TestRemoveMemberResponse_ClesActives_AbsentNEstPasZero(t *testing.T) {
+	zero := 0
+	counted, err := json.Marshal(RemoveMemberResponse{TenantID: "ws", ActiveAPIKeys: &zero, APIKeysURL: "https://x.test/console"})
+	require.NoError(t, err)
+	assert.Contains(t, string(counted), `"active_api_keys":0`)
+	assert.Contains(t, string(counted), `"api_keys_url":"https://x.test/console"`)
+	unknown, err := json.Marshal(RemoveMemberResponse{TenantID: "ws"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(unknown), "active_api_keys")
+	assert.NotContains(t, string(unknown), "api_keys_url")
+}

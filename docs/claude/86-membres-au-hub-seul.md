@@ -33,3 +33,7 @@ Hub : inviteur résolu par `hub_user_id` (uuid) puis `users.id` ; 20 invitations
 au Hub fait expirer les invitations en attente, seule une invitation émise après fait revenir ; le Hub n'appelle jamais `sync-member`.
 Refus motivés à la création, montrés tels quels (`code` = `hub_<motif>`) : 409 `espace_non_relie`, 403 `inviteur_non_habilite`, 503 `echec`, 429
 `quota_exceeded`. Un espace sans tenant au Hub ne peut donc inviter personne tant qu'il n'est pas relié (le script staging rend alors 409, voulu).
+
+## Retrait : ce qui reste actif
+`remove-member` retire l'humain seul. Une clé API est un compte machine de l'espace, sans auteur noté : **aucune n'est coupée**. La réponse
+rend `active_api_keys` (hors clé du Hub ; absent = non compté) et `api_keys_url` (page Équipe). Les accès de boîte (fiche 84) restent aussi.

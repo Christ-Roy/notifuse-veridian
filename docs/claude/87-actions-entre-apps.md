@@ -17,7 +17,7 @@ ES256, `kid` au JWKS du Hub, `iss`, `aud` = `https://notifuse.app.veridian.site/
 Autre demande sous la même clé = 422 `cle_reutilisee` ; en cours = 409 `en_cours` ; refus ou panne = clé rendue ; geste mort repris après 2 min.
 Origine (`app`, `jti`, `hub_user_id`) gardée dans `veridian_action_done` et au journal.
 
-## Les trois actions (portée `notifuse:contacts.ecrire`, celle du registre du Hub ; apps `app:prospection`, `app:crm`)
+## Les trois actions (portée `notifuse:contacts.ecrire`, ou `notifuse:contacts.importer` ; apps `app:prospection`, `app:crm`)
 Réponse : `{action, rejoue, simulation, resultat}`. Aucun champ inconnu n'est accepté, l'espace vient du jeton, **aucun envoi possible**.
 - `contacts.importer` `{list_ids, contacts (1 à 1000), dry_run}` : passe par `contacts.intake` (fiche 85) avec `allow_triggers=false` et
   `existing=attach` : fiche existante intacte, désinscrits, rebonds et plaintes exclus, `custom_json_1.veridian_source` = l'app du jeton. Tout

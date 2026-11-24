@@ -213,6 +213,11 @@ func TestRemoveMember_Success_HardDeletes(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").
 		Return(membershipEntry("member-uuid-1", "ws-1", "member"), nil)
 	m.workspaceRepo.EXPECT().RemoveUserFromWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil)
+	key := func(kind domain.UserType, managed bool) *domain.UserWorkspaceWithEmail {
+		return &domain.UserWorkspaceWithEmail{Type: kind, VeridianManaged: managed}
+	}
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return([]*domain.UserWorkspaceWithEmail{
+		key(domain.UserTypeUser, false), key(domain.UserTypeAPIKey, false), key(domain.UserTypeAPIKey, false), key(domain.UserTypeAPIKey, true)}, nil)
 
 	// Webhook tenant.member_removed emit sur hard delete reussi (§7.1).
 	// Asserter sur le payload : reason + actor + user_email obligatoires.
@@ -232,6 +237,9 @@ func TestRemoveMember_Success_HardDeletes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ws-1", resp.TenantID)
 	assert.False(t, resp.RemovedAt.IsZero())
+	require.NotNil(t, resp.ActiveAPIKeys)
+	assert.Equal(t, 2, *resp.ActiveAPIKeys, "ni l'humain, ni la clé du Hub")
+	assert.Regexp(t, `^https://[^/]+/console/workspace/ws-1/settings/team$`, resp.APIKeysURL)
 }
 
 func TestRemoveMember_Owner_ReturnsErrCannotRemoveOwner(t *testing.T) {
@@ -260,13 +268,16 @@ func TestRemoveMember_Idempotent_UnknownUser(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
 	m.user.EXPECT().GetUserByEmail(ctx, "ghost@x.test").
 		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(nil, errors.New("base coupée"))
 	// Pas de GetUserWorkspace, pas de RemoveUserFromWorkspace — idempotent return.
 
 	resp, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "ghost@x.test",
 	})
-	require.NoError(t, err)
+	require.NoError(t, err, "un comptage en échec ne défait pas le retrait")
+	assert.Nil(t, resp.ActiveAPIKeys, "non compté, jamais un faux zéro")
+	assert.Empty(t, resp.APIKeysURL)
 	assert.False(t, resp.RemovedAt.IsZero())
 }
 
@@ -277,6 +288,7 @@ func TestRemoveMember_Idempotent_NotMember(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
 	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(membershipMemberUser(), nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(nil, nil)
 
 	resp, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{
 		TenantID:  "ws-1",

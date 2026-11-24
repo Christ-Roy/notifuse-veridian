@@ -35,6 +35,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -49,14 +50,14 @@ var ErrCannotRemoveOwner = errors.New("cannot remove workspace owner — use tra
 // SyncMember propage un membre Hub → Notifuse. CONTRAT-HUB §5.18.3.
 //
 // Algorithme :
-//   1. Verifier workspace existe (404 si non — sql.ErrNoRows).
-//   2. Lookup user Notifuse par EMAIL (source de verite identite, §3.7).
-//   3. Si absent → CreateUser (type=user, UUID natif Notifuse, password vide).
-//   4. Lookup user_workspaces (user_id, workspace_id) :
-//      - Si present + role owner → garder owner (additif, jamais downgrade).
-//      - Si present + role member → idempotent, retourner synced=true.
-//      - Si absent → AddUserToWorkspace(role=member) via ctx caller owner.
-//   5. Touch hub_sync (best-effort).
+//  1. Verifier workspace existe (404 si non — sql.ErrNoRows).
+//  2. Lookup user Notifuse par EMAIL (source de verite identite, §3.7).
+//  3. Si absent → CreateUser (type=user, UUID natif Notifuse, password vide).
+//  4. Lookup user_workspaces (user_id, workspace_id) :
+//     - Si present + role owner → garder owner (additif, jamais downgrade).
+//     - Si present + role member → idempotent, retourner synced=true.
+//     - Si absent → AddUserToWorkspace(role=member) via ctx caller owner.
+//  5. Touch hub_sync (best-effort).
 //
 // Idempotence stricte : 2e call sans changement = 200 synced=true.
 func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMemberInput) (*domain.SyncMemberResponse, error) {
@@ -206,12 +207,12 @@ func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMembe
 // RemoveMember retire un membre du workspace. CONTRAT-HUB §5.19.2.
 //
 // Algorithme :
-//   1. Verifier workspace existe (404 si non).
-//   2. Lookup user par email. Si absent → 200 idempotent (rien a retirer).
-//   3. Lookup user_workspaces. Si absent → 200 idempotent.
-//   4. Si role=owner → ErrCannotRemoveOwner (handler 409).
-//   5. workspaceRepo.RemoveUserFromWorkspace (raw DB, bypass auth via HMAC).
-//   6. Touch hub_sync (best-effort).
+//  1. Verifier workspace existe (404 si non).
+//  2. Lookup user par email. Si absent → 200 idempotent (rien a retirer).
+//  3. Lookup user_workspaces. Si absent → 200 idempotent.
+//  4. Si role=owner → ErrCannotRemoveOwner (handler 409).
+//  5. workspaceRepo.RemoveUserFromWorkspace (raw DB, bypass auth via HMAC).
+//  6. Touch hub_sync (best-effort).
 //
 // Hard delete user_workspaces row : le user lui-meme reste en DB pour audit
 // + restauration (restore-member re-cree la row si besoin). Sa data creee
@@ -223,6 +224,36 @@ func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMembe
 // sans imposer une migration DB destructive. Une colonne deleted_at peut etre
 // ajoutee ulterieurement si on a besoin de tracer l'historique des retraits.
 func (s *veridianService) RemoveMember(ctx context.Context, input domain.RemoveMemberInput) (*domain.RemoveMemberResponse, error) {
+	resp, err := s.removeMember(ctx, input)
+	if err != nil || resp == nil {
+		return resp, err
+	}
+	s.countActiveAPIKeys(ctx, resp)
+	return resp, nil
+}
+
+// countActiveAPIKeys dit au Hub ce que le retrait ne coupe pas (CONTRAT-HUB §5.19.3). Un comptage en échec ne défait jamais le retrait.
+func (s *veridianService) countActiveAPIKeys(ctx context.Context, resp *domain.RemoveMemberResponse) {
+	members, err := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, resp.TenantID)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.WithFields(map[string]interface{}{"tenant_id": resp.TenantID, "error": err.Error()}).Warn("veridian RemoveMember: api keys not counted")
+		}
+		return
+	}
+	n := 0
+	for _, m := range members {
+		if m.Type == domain.UserTypeAPIKey && !m.VeridianManaged {
+			n++
+		}
+	}
+	resp.ActiveAPIKeys = &n
+	if base := strings.TrimRight(s.apiEndpoint, "/"); base != "" {
+		resp.APIKeysURL = base + "/console/workspace/" + url.PathEscape(resp.TenantID) + "/settings/team"
+	}
+}
+
+func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveMemberInput) (*domain.RemoveMemberResponse, error) {
 	if input.TenantID == "" {
 		return nil, errors.New("tenant_id required")
 	}
@@ -338,11 +369,11 @@ func (s *veridianService) RemoveMember(ctx context.Context, input domain.RemoveM
 // RestoreMember annule un remove-member precedent. CONTRAT-HUB §5.20.
 //
 // Algorithme :
-//   1. Verifier workspace existe (404 si non).
-//   2. Lookup/create user par email (si user supprime entre-temps).
-//   3. Lookup user_workspaces : si deja membre → idempotent 200.
-//   4. Sinon → AddUserToWorkspace(role=member) via ctx caller owner.
-//   5. Touch hub_sync (best-effort).
+//  1. Verifier workspace existe (404 si non).
+//  2. Lookup/create user par email (si user supprime entre-temps).
+//  3. Lookup user_workspaces : si deja membre → idempotent 200.
+//  4. Sinon → AddUserToWorkspace(role=member) via ctx caller owner.
+//  5. Touch hub_sync (best-effort).
 //
 // Note : le role original avant remove n'est pas trace (pas de colonne
 // deleted_at sur user_workspaces). On restaure toujours en role=member,

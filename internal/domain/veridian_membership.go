@@ -30,11 +30,11 @@ import "time"
 // nouveau membre a l'app downstream.
 //
 // Comportement obligatoire (cf §5.18.3) :
-//   1. Create user app local s'il n'existe pas (type=user, sans password).
-//   2. Ajoute le user au workspace tenant (role member par defaut, additif).
-//   3. Idempotent : si user deja membre, retourne 200 sans rien changer.
-//   4. JAMAIS retirer un user existant (additif uniquement). Pour retrait,
-//      utiliser §5.19 remove-member.
+//  1. Create user app local s'il n'existe pas (type=user, sans password).
+//  2. Ajoute le user au workspace tenant (role member par defaut, additif).
+//  3. Idempotent : si user deja membre, retourne 200 sans rien changer.
+//  4. JAMAIS retirer un user existant (additif uniquement). Pour retrait,
+//     utiliser §5.19 remove-member.
 type SyncMemberInput struct {
 	// UserEmail : source de verite identite cross-app (CONTRAT-HUB §3.7).
 	UserEmail string `json:"user_email"`
@@ -109,6 +109,10 @@ type RemoveMemberResponse struct {
 	TenantID  string    `json:"tenant_id"`
 	UserEmail string    `json:"user_email"`
 	RemovedAt time.Time `json:"removed_at"`
+	// Clés API de l'espace encore actives après le retrait (hors clé du Hub) et page où les renouveler : une clé appartient à l'espace,
+	// aucune n'a d'auteur noté, le retrait n'en coupe aucune. Absent = non compté, jamais un faux zéro.
+	ActiveAPIKeys *int   `json:"active_api_keys,omitempty"`
+	APIKeysURL    string `json:"api_keys_url,omitempty"`
 }
 
 // === restore-member (§5.20) =================================================
