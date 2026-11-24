@@ -108,6 +108,7 @@ func wire(h platform.Host) error {
 			return fmt.Errorf("SMTP de boîte demandé sans limiteur")
 		}
 		gh.RateLimiter().SetPolicy(boxsend.LimitGateIP, boxsend.GateTriesIP, boxsend.GateWindow)
+		gh.RateLimiter().SetPolicy(boxsend.LimitGateBox, boxsend.GateTriesBox, boxsend.GateWindow)
 		if smtpServer, err = boxsend.NewGate(gh.BoxSender(), gh.RateLimiter(), set.SMTPHost); err != nil {
 			return err
 		}

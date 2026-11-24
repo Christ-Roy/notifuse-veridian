@@ -19,10 +19,13 @@ import (
 // la vraie adresse du client (PROXY v2) : les essais se comptent par adresse, un tiers ne ferme pas la porte aux autres. AUTH LOGIN
 // en plus de PLAIN : les vieux Outlook ne connaissent que lui.
 
-// Essais de connexion par adresse (seuls les échecs restent comptés) et par connexion.
+// Essais de connexion par adresse IP, par couple boîte + adresse IP (seuls les échecs restent comptés) et par connexion. Le couple, pas
+// la boîte seule : un tiers qui se trompe exprès n'enferme jamais le titulaire dehors.
 const (
 	LimitGateIP   = "box_smtp_gate_ip"
+	LimitGateBox  = "box_smtp_gate_box"
 	GateTriesIP   = 40
+	GateTriesBox  = 15
 	GateWindow    = 10 * time.Minute
 	triesPerConn  = 3
 	gateOpTimeout = 60 * time.Second
@@ -104,7 +107,10 @@ func (s *gateSession) Auth(mech string) (sasl.Server, error) {
 
 func (s *gateSession) login(user, pass string) error {
 	s.tries++
-	if s.tries > triesPerConn || !s.g.lim.Allow(LimitGateIP, s.ip) {
+	box := boxaccess.Fingerprint(user)
+	log := s.g.snd.d.Logger.WithFields(map[string]interface{}{"remote_ip": s.ip, "box": box})
+	if s.tries > triesPerConn || !s.g.lim.Allow(LimitGateIP, s.ip) || !s.g.lim.Allow(LimitGateBox, box+"|"+s.ip) {
+		log.Warn("Box SMTP: too many login attempts")
 		return refuse(454, 4, 7, 0, "trop d'essais, reessayez plus tard")
 	}
 	if LooksLikeAPIKey(pass) {
@@ -115,12 +121,13 @@ func (s *gateSession) login(user, pass string) error {
 	id, err := s.g.snd.Login(ctx, user, pass)
 	switch {
 	case errors.Is(err, boxaccess.ErrAuth):
-		s.g.snd.d.Logger.WithField("remote_ip", s.ip).Warn("Box SMTP: login refused")
+		log.Warn("Box SMTP: login refused")
 		return refuse(535, 5, 7, 8, "identifiants refuses")
 	case errors.Is(err, smtp_bridge.ErrTemporaryAuth) || err != nil:
 		return refuse(454, 4, 7, 0, "service indisponible, reessayez")
 	}
 	s.g.lim.Reset(LimitGateIP, s.ip)
+	s.g.lim.Reset(LimitGateBox, box+"|"+s.ip)
 	s.user = id
 	return nil
 }

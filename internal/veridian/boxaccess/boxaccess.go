@@ -79,6 +79,13 @@ func hashSecret(s string) string {
 // NormalizeAddress met l'adresse sous sa forme de comparaison.
 func NormalizeAddress(a string) string { return strings.ToLower(strings.TrimSpace(a)) }
 
+// Fingerprint désigne une boîte dans les journaux sans y écrire l'adresse : 12 caractères d'empreinte, stables, pour relier des
+// refus entre eux. Jamais le mot de passe.
+func Fingerprint(address string) string {
+	h := sha256.Sum256([]byte("veridian-box-addr:" + NormalizeAddress(address)))
+	return hex.EncodeToString(h[:6])
+}
+
 const columns = `id, workspace_id, profile_id, address, label, can_send, daily_cap, created_by, created_at, last_used_at, revoked_at`
 
 func scan(row interface{ Scan(...any) error }, extra ...any) (*Access, error) {

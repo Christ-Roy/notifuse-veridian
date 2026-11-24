@@ -51,6 +51,13 @@ func TestNewSecret(t *testing.T) {
 	}
 }
 
+func TestFingerprint(t *testing.T) {
+	a := Fingerprint("JC@Boite.fr ")
+	if len(a) != 12 || a != Fingerprint("jc@boite.fr") || a == Fingerprint("autre@boite.fr") || strings.Contains(a, "boite") {
+		t.Fatal(a)
+	}
+}
+
 func TestAccess_CreateVerifyRevoke(t *testing.T) {
 	db := testDB(t)
 	s, ctx := NewStore(db), context.Background()

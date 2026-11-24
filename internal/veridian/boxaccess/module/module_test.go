@@ -3,6 +3,7 @@ package module
 import (
 	"testing"
 
+	"github.com/Notifuse/notifuse/internal/veridian/boxsend"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 )
 
@@ -28,6 +29,13 @@ func TestReadSettings(t *testing.T) {
 	}
 	if _, err := ReadSettings(env(map[string]string{"VERIDIAN_IMAP_PORT": "99999"}), "x"); err == nil {
 		t.Fatal("port invalide accepté")
+	}
+}
+
+// Toute limite de la porte publique a une politique posée : sans elle, le limiteur laisse passer (essais par boîte, par adresse).
+func TestGateLimits_AreDistinct(t *testing.T) {
+	if boxsend.LimitGateIP == boxsend.LimitGateBox || boxsend.GateTriesBox >= boxsend.GateTriesIP {
+		t.Fatal("les deux limites doivent se distinguer")
 	}
 }
 

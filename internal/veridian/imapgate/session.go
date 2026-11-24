@@ -124,14 +124,14 @@ func (s *session) Login(username, password string) error {
 	addr := boxaccess.NormalizeAddress(username)
 	lim, key := s.srv.cfg.Limiter, addr+"|"+s.ip
 	if !lim.Allow(LimitIP, s.ip) || !lim.Allow(LimitAddress, key) {
-		s.srv.cfg.Logger.WithField("remote_ip", s.ip).Warn("IMAP gate: too many login attempts")
+		s.srv.cfg.Logger.WithFields(map[string]interface{}{"remote_ip": s.ip, "box": boxaccess.Fingerprint(addr)}).Warn("IMAP gate: too many login attempts")
 		return errLimited
 	}
 	ctx, cancel := opCtx()
 	defer cancel()
 	acc, err := s.srv.cfg.Auth.Verify(ctx, addr, password)
 	if errors.Is(err, boxaccess.ErrAuth) {
-		s.srv.cfg.Logger.WithField("remote_ip", s.ip).Warn("IMAP gate: login refused")
+		s.srv.cfg.Logger.WithFields(map[string]interface{}{"remote_ip": s.ip, "box": boxaccess.Fingerprint(addr)}).Warn("IMAP gate: login refused")
 		return imapserver.ErrAuthFailed
 	}
 	if err != nil {

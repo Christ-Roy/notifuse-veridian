@@ -18,6 +18,7 @@ func startGate(t *testing.T, s *Sender) string {
 	t.Helper()
 	rl := ratelimiter.NewRateLimiter()
 	rl.SetPolicy(LimitGateIP, GateTriesIP, GateWindow)
+	rl.SetPolicy(LimitGateBox, GateTriesBox, GateWindow)
 	t.Cleanup(rl.Stop)
 	g, err := NewGate(s, rl, "smtp.test")
 	if err != nil {
@@ -73,7 +74,7 @@ func TestGate_RefusesAPIKeyAndBoundsTries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := c.Auth(smtp.PlainAuth("", "jc@boite.fr", "faux", "127.0.0.1")); err != nil {
+		if err := c.Auth(smtp.PlainAuth("", fmt.Sprintf("boite%d@boite.fr", i), "faux", "127.0.0.1")); err != nil {
 			codes[err.Error()[:3]]++
 		}
 		c.Close()
@@ -137,5 +138,35 @@ func TestGate_AuthLoginAndTriesPerConnection(t *testing.T) {
 func TestNewGate_Dependencies(t *testing.T) {
 	if _, err := NewGate(nil, nil, ""); err == nil {
 		t.Fatal("dépendances manquantes")
+	}
+}
+
+// Une boîte visée depuis une adresse se ferme pour CETTE adresse (même avec le bon mot de passe), pas pour les autres boîtes.
+func TestGate_BoundsTriesPerBoxAndAddress(t *testing.T) {
+	f, s := bench()
+	addr := startGate(t, s)
+	auth := func(box string) string {
+		c, err := smtp.Dial(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		if err := c.Auth(smtp.PlainAuth("", box, "x", "127.0.0.1")); err != nil {
+			return err.Error()[:3]
+		}
+		return "235"
+	}
+	f.verify = boxaccess.ErrAuth
+	for i := 0; i < GateTriesBox; i++ {
+		if got := auth("jc@boite.fr"); got != "535" {
+			t.Fatalf("essai %d : %s", i, got)
+		}
+	}
+	f.verify = nil
+	if got := auth("JC@boite.fr"); got != "454" {
+		t.Fatalf("boîte visée, casse différente : %s", got)
+	}
+	if got := auth("autre@boite.fr"); got != "235" {
+		t.Fatalf("autre boîte depuis la même adresse : %s", got)
 	}
 }
