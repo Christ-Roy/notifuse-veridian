@@ -82,7 +82,17 @@ ssh "${SSH_OPTS[@]}" "$BASTION" "put-job ${ENV_TARGET}" < "$HCL"
 # ── deploy : pré-pull + validate + plan + run -check-index + suivi, côté bastion ─
 # -n : ce ssh ne doit pas consommer le stdin du step.
 echo "== deploy ${ENV_TARGET} ${IMAGE_TAG} =="
-ssh -n "${SSH_OPTS[@]}" "$BASTION" "deploy ${ENV_TARGET} ${IMAGE_TAG}"
+DEPLOY_LOG="$(mktemp)"
+trap 'rm -f "$KEY_FILE" "$DEPLOY_LOG"' EXIT
+ssh -n "${SSH_OPTS[@]}" "$BASTION" "deploy ${ENV_TARGET} ${IMAGE_TAG}" | tee "$DEPLOY_LOG"
+
+# Le verbe du bastion a rendu 0 sur un déploiement « failed, rolling back » (24/11/2026, staging) : le job passait au vert
+# avec l'ANCIENNE version servie. L'état final annoncé par Nomad fait foi, pas le code de retour.
+if grep -qiE 'rolling back|Failed due to (progress deadline|unhealthy allocations)' "$DEPLOY_LOG"; then
+  echo "✗ deploy $ENV_TARGET : Nomad a échoué et rétabli la version précédente" >&2
+  ssh -n "${SSH_OPTS[@]}" "$BASTION" "cleanup ${ENV_TARGET}" || true
+  exit 1
+fi
 
 # ── cleanup du matériel temporaire déposé sur le bastion ───────────────────────
 ssh -n "${SSH_OPTS[@]}" "$BASTION" "cleanup ${ENV_TARGET}" || true

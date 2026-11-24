@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -573,6 +574,16 @@ func TestEmailQueuePayloadVeridianTransactionalMarker(t *testing.T) {
 	var back EmailQueuePayload
 	require.NoError(t, json.Unmarshal(raw, &back))
 	assert.True(t, back.VeridianTransactional)
+}
+
+// Decision prise a l'envoi, jamais en base : une ligne relue repasse par la decision.
+func TestEmailQueuePayloadVeridianViaReservedIsNeverPersisted(t *testing.T) {
+	raw, err := json.Marshal(EmailQueuePayload{VeridianViaReserved: true})
+	require.NoError(t, err)
+	assert.NotContains(t, strings.ToLower(string(raw)), "reserved")
+	var back EmailQueuePayload
+	require.NoError(t, json.Unmarshal([]byte(`{"VeridianViaReserved":true,"veridian_via_reserved":true}`), &back))
+	assert.False(t, back.VeridianViaReserved)
 }
 
 func TestEmailQueueEntry_VeridianDeferralFieldsJSON(t *testing.T) {

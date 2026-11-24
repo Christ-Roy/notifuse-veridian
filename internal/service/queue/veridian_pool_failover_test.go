@@ -928,3 +928,25 @@ func TestVeridianSequenceAnchorUnavailableAfter_SurvivesAWeekendAndLongHolidays(
 	assert.True(t, env.worker.veridianAnchorAvailable("ws-1", "nord-propre.example", time.Now()))
 	assert.WithinDuration(t, time.Now().Add(-7*24*time.Hour), since, time.Minute)
 }
+
+// Espace sans profil commercial : le profil reserve n'est candidat que pour un mail de masse qui passe les portes commerciales.
+func TestVeridianBuildFailoverCandidates_ReservedOnlyForBulkWithoutCommercialProfile(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	tx := veridianTestPoolIntegration("tx", "no-reply@tx.example")
+	ws := &domain.Workspace{ID: "ws-1", Integrations: []domain.Integration{tx}, Settings: domain.WorkspaceSettings{TransactionalEmailProviderID: "tx"}}
+	entry := veridianTestEntry("c1", "lead@example.com", domain.EmailQueuePayload{FromAddress: "no-reply@tx.example"})
+	entry.IntegrationID = "tx"
+	assert.Empty(t, env.worker.veridianBuildFailoverCandidates(ws, entry, &ws.Integrations[0]))
+	entry.Payload.VeridianViaReserved = true
+	cands := env.worker.veridianBuildFailoverCandidates(ws, entry, &ws.Integrations[0])
+	require.Len(t, cands, 1)
+	assert.Equal(t, "tx", cands[0].IntegrationID)
+
+	// Avec un profil commercial, jamais, meme marque.
+	nord := veridianTestPoolIntegration("nord", "hello@nord.example")
+	ws.Integrations = append(ws.Integrations, nord)
+	ws.Settings.VeridianMarketingEmailProviderIDs = []string{"nord"}
+	for _, c := range env.worker.veridianBuildFailoverCandidates(ws, entry, &ws.Integrations[0]) {
+		assert.NotEqual(t, "tx", c.IntegrationID)
+	}
+}
