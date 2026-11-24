@@ -275,11 +275,11 @@ type Source struct {
 	Emails    []string
 }
 
-// poolSQL : contacts d'une source, avec leur état. Les conditions d'écart sont calculées ici et décomptées, jamais muettes.
+// poolSQL : contacts d'une source (liste : toute la liste hors inscription à confirmer, les bloqués y sont décomptés), avec leur état. Les conditions d'écart sont calculées ici et décomptées, jamais muettes.
 func poolSQL(src Source) (string, any) {
 	switch {
 	case src.ListID != "":
-		return `SELECT cl.email FROM contact_lists cl WHERE cl.list_id = $1 AND cl.status = 'active' AND cl.deleted_at IS NULL`, src.ListID
+		return `SELECT cl.email FROM contact_lists cl WHERE cl.list_id = $1 AND cl.status <> 'pending' AND cl.deleted_at IS NULL`, src.ListID
 	case src.SegmentID != "":
 		return `SELECT cs.email FROM contact_segments cs JOIN segments sg ON sg.id = cs.segment_id AND sg.version = cs.version WHERE cs.segment_id = $1`, src.SegmentID
 	}

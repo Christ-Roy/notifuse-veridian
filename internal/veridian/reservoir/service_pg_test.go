@@ -275,6 +275,10 @@ func TestActivate_ParLotsSansLesBloques(t *testing.T) {
 	b.automation("seq", "sequence", onList("sequence"))
 	b.exec(`INSERT INTO automations (id, workspace_id, name, status, trigger_config) VALUES ('vieille','ws','vieille','live','{"event_kind":"email.opened"}')`)
 	b.exec(`INSERT INTO contact_lists (email, list_id, status) VALUES ('stop@d.fr','autre','unsubscribed')`)
+	for e, st := range map[string]string{"mort@j.fr": "bounced", "attente@k.fr": "pending"} { // rebond DE CETTE liste : décompté ; à confirmer : hors réservoir
+		b.exec(`INSERT INTO contacts (email, created_at, updated_at) VALUES ($1, NOW(), NOW())`, e)
+		b.exec(`INSERT INTO contact_lists (email, list_id, status) VALUES ($1, 'reserve', $2)`, e, st)
+	}
 	b.exec(`INSERT INTO veridian_contact_reply (contact_email, match_type) VALUES ('reponse@e.fr','message_id')`)
 	b.exec(`INSERT INTO message_history (id, contact_email, template_id, template_version, channel, message_data, sent_at) VALUES ('m1','vu@f.fr','t',1,'email','{}',NOW())`)
 	b.exec(`INSERT INTO contact_automations (id, automation_id, contact_email, status) VALUES ('c1','vieille','ailleurs@g.fr','active'), ('c2','seq','dedans@h.fr','exited')`)
@@ -282,7 +286,7 @@ func TestActivate_ParLotsSansLesBloques(t *testing.T) {
 	var sum struct{ Reservoirs []ListState }
 	require.Equal(t, 200, b.call("GET", "/api/veridian/reservoir.summary?workspace_id=ws&list_ids=reserve&automation_id=seq", "", &sum))
 	require.Len(t, sum.Reservoirs, 1)
-	want := Pool{Total: 9, Available: 4, Unsubscribed: 1, Replied: 1, Contacted: 1, InSequence: 1, Already: 1}
+	want := Pool{Total: 10, Available: 4, Unsubscribed: 1, Bounced: 1, Replied: 1, Contacted: 1, InSequence: 1, Already: 1}
 	assert.Equal(t, want, sum.Reservoirs[0].Pool)
 
 	body := map[string]any{"workspace_id": "ws", "automation_id": "seq", "list_id": "reserve", "limit": 2, "dry_run": true}
