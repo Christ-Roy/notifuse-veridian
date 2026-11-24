@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -224,6 +225,20 @@ func (h *Handler) call(ctx context.Context, m *Member, claims *Claims, req *rpcR
 	if err != nil {
 		outcome = "bad_args"
 		return toolResult(req.ID, err.Error(), true)
+	}
+	if t.Check != nil {
+		get := func(path string, q url.Values) ([]byte, error) {
+			q.Set("workspace_id", m.Workspace.WorkspaceID)
+			st, raw, err := h.Dispatcher.Do(ctx, m, http.MethodGet, path, q, nil)
+			if err != nil || st >= 400 {
+				return nil, errors.New("verification impossible, rien n'a ete fait : " + strings.TrimSpace(string(raw)))
+			}
+			return raw, nil
+		}
+		if err := t.Check(get, p.Arguments); err != nil {
+			outcome = "refused"
+			return toolResult(req.ID, err.Error(), true)
+		}
 	}
 	status, resp, err := h.Dispatcher.Do(ctx, m, t.Method, t.Path, query, body)
 	if err != nil {

@@ -28,6 +28,10 @@ type tool struct {
 	Also []also
 	// Compact : réduit la réponse de l'API à ce qu'une IA lit (nil : réponse telle quelle).
 	Compact func([]byte) []byte
+	// Guard vérifie ou fixe les arguments retenus, avant tout appel.
+	Guard func(args map[string]any) error
+	// Check lit l'état réel avec les droits de l'appelant et refuse s'il ne convient pas.
+	Check func(get getter, args map[string]any) error
 }
 
 type also struct {
@@ -164,6 +168,11 @@ func (t *tool) request(args map[string]any, workspaceID string) (query url.Value
 	}
 	if t.Paginated {
 		picked["limit"] = clampLimit(picked["limit"])
+	}
+	if t.Guard != nil {
+		if err := t.Guard(picked); err != nil {
+			return nil, nil, err
+		}
 	}
 	if t.Method == http.MethodPost {
 		picked["workspace_id"] = workspaceID

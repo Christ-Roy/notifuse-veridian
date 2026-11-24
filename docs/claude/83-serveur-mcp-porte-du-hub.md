@@ -28,6 +28,17 @@ Contrat : `veridian-hub/docs/CONTRAT-MCP.md` (09/11/2026). Code : `internal/veri
 - Pas de commande CLI : la route est exemptée (`scripts/veridian/cli-route-exemptions.txt`), un JWT du Hub ne s'émet pas
   depuis une CLI. Registre : `hub mcp-app add notifuse <url> --acces tous`.
 
+## Code mode : 41 outils de plus (VER-253, 25/11/2026)
+
+`tools_code.go` : lire (boîtes, réponses et fils, analytique, chronologie, événements, décisions d'envoi), écrire (brouillons), supprimer à part.
+- **Lire les réponses en masse** : `mail_list` avec `kind=reply_human`, `with_text=true` (texte sans citations, 4000 car., aussi dans l'API et la CLI).
+- **Dehors, tenu par test** (`TestCatalog_CeQuiResteDehors`) : clés, membres, réglages, intégrations, webhooks, accès de boîte, espaces, plafonds, envoi ou
+  réponse de mail, programmation d'une campagne.
+- **Brouillon seulement** : une séquence créée ou modifiée part en `draft` (liste blanche de clés exactes : `encoding/json` accepte toute casse), sans nœud
+  webhook ; une campagne ou une séquence qui n'est plus un brouillon est refusée (`Check` lit l'état avec les droits de l'appelant ; illisible = refus).
+- **Jamais un modèle transactionnel** (il partirait sans plafond) ; `contact_unsubscribe` ne sait que désinscrire ; `list_remove_contact` refuse un désinscrit.
+- **Supprimer** modèle, segment ou liste : refusé tant qu'une séquence active le cite. `templates_update` et `segments_update` sont destructifs (effet sur l'envoi en cours).
+
 ## « Brancher mon IA » dans la console (10/11/2026)
 
 Bouton visible dans l en-tête (`VeridianConnectAI`, mode `veridian-managed` seulement) qui ouvre un modal avec les boutons Claude, ChatGPT, Cursor et VS Code. Les liens sont lus au Hub (`GET https://app.veridian.site/api/mcp/liens-installation?app=notifuse`, publique, CORS ouvert, cache 5 min) par `lib/veridian_connect_ai.ts` : rien n est recopié. Réponse validée (schémas https:, cursor:, vscode: seulement, entrées incomplètes écartées). Si le Hub ne répond pas (4 s) ou répond autre chose : message et adresse MCP à copier, aucun bouton mort. Tests vitest (liens, schéma dangereux, délai, repli).

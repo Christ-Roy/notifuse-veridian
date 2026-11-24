@@ -287,7 +287,7 @@ def cmd_list(a):
     handled = "true" if a.handled else ("false" if a.unhandled else None)
     params = {"mailbox": a.mailbox, "contact_email": a.contact, "thread_id": a.thread, "kind": ",".join(kinds) or None,
               "direction": a.direction, "handled": handled, "since": a.since, "until": a.until, "q": a.q,
-              "body": "true" if a.body else None, "include_duplicates": "true" if getattr(a, "include_duplicates", False) else None,
+              "body": "true" if a.body else None, "with_text": "true" if getattr(a, "with_text", False) else None, "include_duplicates": "true" if getattr(a, "include_duplicates", False) else None,
               "limit": a.limit, "cursor": a.cursor}
     st, data = _get(a, "/api/veridian/mail.messages.list", {k: v for k, v in params.items() if v is not None})
     _fail(st, data)
@@ -536,6 +536,7 @@ def register(sub):
     sp.add_argument("--until", help="AAAA-MM-JJ ou RFC 3339")
     sp.add_argument("-q", help="recherche dans l'objet, les adresses (et les corps avec --body)")
     sp.add_argument("--body", action="store_true", help="cherche aussi dans les corps (les 1500 derniers messages du filtre)")
+    sp.add_argument("--with-text", action="store_true", dest="with_text", help="texte de chaque message, sans citations, 4000 caractères au plus (avec --json)")
     sp.add_argument("--include-duplicates", action="store_true", dest="include_duplicates",
                     help="rend aussi les copies d'un message déjà présent (copie Sieve, alias), liées à l'original par duplicate_of")
     sp.add_argument("--limit", type=int, help="1 à 200 (défaut 50)")

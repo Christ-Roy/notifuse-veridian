@@ -326,6 +326,19 @@ func TestMessagesList_FiltersAndValidation(t *testing.T) {
 	if len(out["messages"].([]any)) != 1 {
 		t.Fatalf("recherche dans les corps: %v", out)
 	}
+	if _, has := out["messages"].([]any)[0].(map[string]any)["text"]; has {
+		t.Fatal("sans with_text, une liste ne porte pas les corps")
+	}
+	for _, q := range []string{"kind=reply_human", "q=intéresse&body=true"} {
+		_, out, _ = e.do(t, "GET", "/api/veridian/mail.messages.list?workspace_id=ws1&with_text=true&"+q, nil)
+		text, _ := out["messages"].([]any)[0].(map[string]any)["text"].(string)
+		if !strings.Contains(text, "intéresse") || strings.Contains(text, "\n>") {
+			t.Fatalf("%s : texte de la réponse sans citation attendu, obtenu %q", q, text)
+		}
+	}
+	if code, _, _ := e.do(t, "GET", "/api/veridian/mail.messages.list?workspace_id=ws1&with_text=peut-etre", nil); code != 400 {
+		t.Fatalf("with_text illisible : %d", code)
+	}
 }
 
 func TestMessagesRaw(t *testing.T) {
@@ -403,9 +416,9 @@ func TestUpdate_HandledAndLabels(t *testing.T) {
 		t.Fatalf("handled=false rouvre sans toucher aux libellés: %v", m)
 	}
 	for name, body := range map[string]map[string]any{
-		"rien":            {"workspace_id": ws, "id": reply.ID},
-		"libellé vide":    {"workspace_id": ws, "id": reply.ID, "labels": []string{" "}},
-		"libellé énorme":  {"workspace_id": ws, "id": reply.ID, "labels": []string{strings.Repeat("x", 41)}},
+		"rien":             {"workspace_id": ws, "id": reply.ID},
+		"libellé vide":     {"workspace_id": ws, "id": reply.ID, "labels": []string{" "}},
+		"libellé énorme":   {"workspace_id": ws, "id": reply.ID, "labels": []string{strings.Repeat("x", 41)}},
 		"trop de libellés": {"workspace_id": ws, "id": reply.ID, "labels": make([]string, 21)},
 		"handled invalide": {"workspace_id": ws, "id": reply.ID, "handled": "peut-etre"},
 	} {

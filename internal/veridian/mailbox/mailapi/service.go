@@ -190,6 +190,7 @@ type ListParams struct {
 	Until      *time.Time
 	Q          string
 	BodySearch bool
+	WithText   bool
 	Limit      int
 	Cursor     string
 	AfterSeq   int64
@@ -216,7 +217,7 @@ func (s *Service) List(ctx context.Context, p ListParams) ([]mailbox.Summary, st
 	}
 	return s.Store.List(ctx, p.Workspace, mailbox.Filter{
 		MailboxID: p.Mailbox, ContactEmail: p.Contact, ThreadID: p.Thread, Kinds: p.Kinds, Direction: p.Direction,
-		Handled: p.Handled, Since: p.Since, Until: p.Until, Q: p.Q, BodySearch: p.BodySearch, Limit: p.Limit,
+		Handled: p.Handled, Since: p.Since, Until: p.Until, Q: p.Q, BodySearch: p.BodySearch, WithText: p.WithText, Limit: p.Limit,
 		Cursor: p.Cursor, AfterSeq: p.AfterSeq, IncludeDuplicates: p.IncludeDuplicates,
 	})
 }

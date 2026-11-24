@@ -500,8 +500,10 @@ type Filter struct {
 	Q            string
 	// BodySearch : cherche aussi dans les corps (déchiffrés en mémoire, 1500 derniers messages du filtre).
 	BodySearch bool
-	Limit      int
-	Cursor     string
+	// WithText : rend aussi le texte de chaque message, citations retirées, borné.
+	WithText bool
+	Limit    int
+	Cursor   string
 	// IncludeDuplicates : rend aussi les copies d'un message déjà présent (traçabilité).
 	IncludeDuplicates bool
 	// AfterSeq : événements, messages de seq > AfterSeq dans l'ordre d'arrivée croissant.
@@ -641,7 +643,7 @@ func (s *Store) List(ctx context.Context, ws string, f Filter) ([]Summary, strin
 		return nil, "", err
 	}
 	defer rows.Close()
-	out, err := s.scanSummaries(ws, rows)
+	out, err := s.scanSummaries(ws, rows, f.WithText)
 	if err != nil {
 		return nil, "", err
 	}
@@ -675,6 +677,9 @@ func (s *Store) listBodySearch(ctx context.Context, ws string, db *sql.DB, f Fil
 		}
 		hay := strings.ToLower(sm.Subject + "\n" + sm.ContactEmail + "\n" + sm.From + "\n" + body)
 		if strings.Contains(hay, needle) {
+			if f.WithText {
+				sm.Text = ReplyText(body, maxListText)
+			}
 			out = append(out, sm)
 			if len(out) >= f.Limit {
 				break
@@ -684,12 +689,15 @@ func (s *Store) listBodySearch(ctx context.Context, ws string, db *sql.DB, f Fil
 	return out, "", rows.Err()
 }
 
-func (s *Store) scanSummaries(ws string, rows *sql.Rows) ([]Summary, error) {
+func (s *Store) scanSummaries(ws string, rows *sql.Rows, withText bool) ([]Summary, error) {
 	var out []Summary
 	for rows.Next() {
-		sm, _, err := s.scanSummaryRow(ws, rows, false)
+		sm, body, err := s.scanSummaryRow(ws, rows, false)
 		if err != nil {
 			return nil, err
+		}
+		if withText {
+			sm.Text = ReplyText(body, maxListText)
 		}
 		out = append(out, sm)
 	}
@@ -750,6 +758,22 @@ func (s *Store) scanSummaryRow(ws string, rows *sql.Rows, extra bool) (Summary, 
 	}
 	sm.Preview = Preview(body, 180)
 	return sm, body, nil
+}
+
+// maxListText : caractères de texte par message d'une liste. Le message entier se lit par messages.get.
+const maxListText = 4000
+
+// ReplyText rend le texte écrit par l'expéditeur : lignes citées (>) retirées, lignes vides regroupées, borné.
+func ReplyText(body string, n int) string {
+	var keep []string
+	for _, l := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
+		t := strings.TrimRight(l, " \t")
+		if strings.HasPrefix(strings.TrimSpace(t), ">") || (t == "" && (len(keep) == 0 || keep[len(keep)-1] == "")) {
+			continue
+		}
+		keep = append(keep, t)
+	}
+	return truncate(strings.TrimSpace(strings.Join(keep, "\n")), n)
 }
 
 // Preview donne un aperçu d'une ligne (citations et espaces retirés).

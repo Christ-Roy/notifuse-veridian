@@ -172,7 +172,8 @@ func TestHandler_ToolsListFiltreeParLesDroits(t *testing.T) {
 
 	ro := newRig(t, member("member", domain.UserPermissions{domain.PermissionResourceContacts: {Read: true}}))
 	names := namesOf(t, ro.rpc(t, "tools/list", ""))
-	assert.ElementsMatch(t, []string{"contacts_list", "contacts_get_by_email", "segments_list", "contacts_count", "contacts_by_provider", "segment_contacts"}, names)
+	assert.ElementsMatch(t, []string{"contacts_list", "contacts_get_by_email", "segments_list", "contacts_count", "contacts_by_provider", "segment_contacts",
+		"contact_get_by_external_id", "contact_events", "segment_get", "segment_preview"}, names)
 	assert.NotContains(t, names, "transactional_send")
 
 	none := newRig(t, member("member", nil))

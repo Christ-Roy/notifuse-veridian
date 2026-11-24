@@ -261,6 +261,12 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lp.BodySearch = bs != nil && *bs
+	wt, err := p.boolPtr("with_text")
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	lp.WithText = wt != nil && *wt
 	inc, err := p.boolPtr("include_duplicates")
 	if err != nil {
 		h.fail(w, err)

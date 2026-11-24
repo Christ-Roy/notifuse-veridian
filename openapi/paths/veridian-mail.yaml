@@ -77,6 +77,11 @@
         in: query
         required: false
         schema: { type: boolean }
+      - name: with_text
+        in: query
+        required: false
+        description: Texte de chaque message, citations retirées, 4000 caractères au plus.
+        schema: { type: boolean }
       - name: include_duplicates
         in: query
         required: false

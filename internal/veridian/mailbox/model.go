@@ -189,26 +189,28 @@ type Message struct {
 
 // Summary est la ligne de liste (sans corps entier, avec un aperçu).
 type Summary struct {
-	ID           string     `json:"id"`
-	Seq          int64      `json:"seq"`
-	Direction    Direction  `json:"direction"`
-	Kind         Kind       `json:"kind"`
-	ProfileID    string     `json:"profile_id,omitempty"`
-	ThreadID     string     `json:"thread_id"`
-	ContactEmail string     `json:"contact_email"`
-	From         string     `json:"from"`
-	To           []string   `json:"to"`
-	Subject      string     `json:"subject"`
-	Preview      string     `json:"preview,omitempty"`
-	OccurredAt   time.Time  `json:"occurred_at"`
-	SentAt       *time.Time `json:"sent_at,omitempty"`
-	ReceivedAt   *time.Time `json:"received_at,omitempty"`
-	HasAttach    bool       `json:"has_attachments"`
-	AttachCount  int        `json:"attachment_count"`
-	DSNReasonFR  string     `json:"dsn_reason_fr,omitempty"`
-	HandledAt    *time.Time `json:"handled_at,omitempty"`
-	HandledBy    string     `json:"handled_by,omitempty"`
-	Labels       []string   `json:"labels,omitempty"`
+	ID           string    `json:"id"`
+	Seq          int64     `json:"seq"`
+	Direction    Direction `json:"direction"`
+	Kind         Kind      `json:"kind"`
+	ProfileID    string    `json:"profile_id,omitempty"`
+	ThreadID     string    `json:"thread_id"`
+	ContactEmail string    `json:"contact_email"`
+	From         string    `json:"from"`
+	To           []string  `json:"to"`
+	Subject      string    `json:"subject"`
+	Preview      string    `json:"preview,omitempty"`
+	// Text : le texte sans les citations (with_text), pour lire des réponses en masse.
+	Text        string     `json:"text,omitempty"`
+	OccurredAt  time.Time  `json:"occurred_at"`
+	SentAt      *time.Time `json:"sent_at,omitempty"`
+	ReceivedAt  *time.Time `json:"received_at,omitempty"`
+	HasAttach   bool       `json:"has_attachments"`
+	AttachCount int        `json:"attachment_count"`
+	DSNReasonFR string     `json:"dsn_reason_fr,omitempty"`
+	HandledAt   *time.Time `json:"handled_at,omitempty"`
+	HandledBy   string     `json:"handled_by,omitempty"`
+	Labels      []string   `json:"labels,omitempty"`
 	// DuplicateOf : original dont c'est la copie (seulement avec include_duplicates).
 	DuplicateOf string `json:"duplicate_of,omitempty"`
 }
