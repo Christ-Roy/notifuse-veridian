@@ -84,3 +84,22 @@ func TestDefaultRegistry_OnlyReservedNumbers(t *testing.T) {
 		}
 	}
 }
+
+// La marque d'application porte le lot dans un VARCHAR(8) : un nom plus long passait tous les tests et empêchait l'application
+// de démarrer. Refusé à l'enregistrement, et aucun numéro réservé ne dépasse.
+func TestRegister_LotTropLong(t *testing.T) {
+	Reserved[9999] = "BeaucoupTropLong"
+	defer delete(Reserved, 9999)
+	err := NewRegistry().Register(Spec{Number: 9999, Lot: "BeaucoupTropLong", Name: "n", Workspace: []string{"CREATE TABLE IF NOT EXISTS t (id INT)"}})
+	if err == nil || !strings.Contains(err.Error(), "trop long") {
+		t.Fatalf("erreur %v", err)
+	}
+	if !strings.Contains(trackingTable, "lot VARCHAR(8)") {
+		t.Fatal("la largeur de la colonne a changé : aligner maxLotLen")
+	}
+	for n, lot := range Reserved {
+		if n != 9999 && len(lot) > maxLotLen {
+			t.Errorf("V%d : lot réservé %q trop long", n, lot)
+		}
+	}
+}

@@ -48,13 +48,11 @@ func workspaceDB(t *testing.T) *sql.DB {
 		_ = admin.Close()
 	})
 	require.NoError(t, database.InitializeWorkspaceDatabase(db))
-	for _, sp := range veridianmig.Default.List() {
-		if sp.Number == 76 { // la migration EXACTEMENT telle qu'enregistrée, deux fois
-			for _, q := range append(append([]string{}, sp.Workspace...), sp.Workspace...) {
-				_, err := db.Exec(q)
-				require.NoError(t, err)
-			}
-		}
+	// Toutes les migrations Veridian par le VRAI moteur (marque d'application comprise), deux fois : le 24/11/2026, V76 passait les
+	// tests instruction par instruction et empêchait l'application de démarrer.
+	for i := 0; i < 2; i++ {
+		_, err := veridianmig.Default.ApplyWorkspace(context.Background(), db, "ws")
+		require.NoError(t, err)
 	}
 	return db
 }

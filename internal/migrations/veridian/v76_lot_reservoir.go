@@ -4,7 +4,7 @@ package veridian
 // le résultat d'origine au lieu de faire entrer le lot suivant dans la séquence. Table neuve, additive.
 func init() {
 	Register(Spec{
-		Number: 76, Lot: "Reservoirs", Name: "lot_reservoir",
+		Number: 76, Lot: "Reserve", Name: "lot_reservoir",
 		Workspace: []string{
 			`CREATE TABLE IF NOT EXISTS veridian_reservoir_batch (
 				automation_id VARCHAR(36) NOT NULL,

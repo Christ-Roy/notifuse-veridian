@@ -16,7 +16,7 @@ func TestV76_LotReservoir_RegistreeEtAdditive(t *testing.T) {
 		}
 	}
 	require.NotNil(t, found, "V76 doit etre enregistree")
-	assert.Equal(t, "Reservoirs", found.Lot)
+	assert.Equal(t, "Reserve", found.Lot)
 	assert.False(t, found.Contract)
 	require.Len(t, found.Workspace, 1)
 	assert.NoError(t, CheckExpandOnly(found.Workspace[0]))

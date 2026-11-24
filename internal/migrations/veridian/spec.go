@@ -29,7 +29,7 @@ var Reserved = map[int]string{
 	73: "Identite",
 	74: "L1d",
 	75: "Boites",
-	76: "Reservoirs",
+	76: "Reserve",
 }
 
 // Spec décrit une migration Veridian. Les listes d'instructions sont jouées dans l'ordre, dans une
@@ -72,6 +72,9 @@ func Register(s Spec) {
 	}
 }
 
+// maxLotLen : largeur de veridian_migrations.lot (runner.go).
+const maxLotLen = 8
+
 // Register valide et enregistre une migration.
 func (r *Registry) Register(s Spec) error {
 	owner, ok := Reserved[s.Number]
@@ -80,6 +83,10 @@ func (r *Registry) Register(s Spec) error {
 	}
 	if s.Lot != owner {
 		return fmt.Errorf("V%d appartient au lot %s, pas à %q", s.Number, owner, s.Lot)
+	}
+	if len(s.Lot) > maxLotLen {
+		// Colonne veridian_migrations.lot : au-delà, l'application refuse de démarrer (staging, 24/11/2026, V76).
+		return fmt.Errorf("V%d : lot %q trop long (%d caractères au plus)", s.Number, s.Lot, maxLotLen)
 	}
 	if s.Name == "" {
 		return fmt.Errorf("V%d : nom vide", s.Number)
