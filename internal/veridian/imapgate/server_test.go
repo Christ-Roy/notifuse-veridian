@@ -168,6 +168,18 @@ type bench struct {
 	srv   *Server
 }
 
+// startedListener annonce le premier Accept : Serve a fini son démarrage.
+type startedListener struct {
+	net.Listener
+	once  sync.Once
+	ready chan struct{}
+}
+
+func (l *startedListener) Accept() (net.Conn, error) {
+	l.once.Do(func() { close(l.ready) })
+	return l.Listener.Accept()
+}
+
 func newBench(t *testing.T) *bench {
 	t.Helper()
 	auth := &fakeAuth{accs: map[string]*boxaccess.Access{
@@ -187,7 +199,9 @@ func newBench(t *testing.T) *bench {
 	if err != nil {
 		t.Fatal(err)
 	}
-	go func() { _ = srv.Serve(ln) }()
+	started := &startedListener{Listener: ln, ready: make(chan struct{})}
+	go func() { _ = srv.Serve(started) }()
+	<-started.ready // Serve a pris la main : fermer avant serait une course
 	t.Cleanup(func() { _ = srv.Close() })
 	return &bench{addr: ln.Addr().String(), auth: auth, boxes: boxes, srv: srv}
 }
@@ -226,8 +240,11 @@ func TestListenAndServe_AddressTaken(t *testing.T) {
 	}
 	defer ln.Close()
 	b := newBench(t)
-	b.srv.cfg.Addr = ln.Addr().String()
-	if err := b.srv.ListenAndServe(); err == nil || !strings.Contains(err.Error(), "écoute") {
+	srv, err := New(Config{Addr: ln.Addr().String(), TLSConfig: selfSigned(t), Auth: b.auth, Boxes: b.boxes, Limiter: b.srv.cfg.Limiter, Logger: logger.NewLogger()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.ListenAndServe(); err == nil || !strings.Contains(err.Error(), "écoute") {
 		t.Fatalf("port pris : %v", err)
 	}
 }
