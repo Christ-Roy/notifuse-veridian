@@ -62,7 +62,7 @@ check("tenant inconnu : 404", st == 404, st)
 st, p = nc.call_anon(ENV, "POST", SYNC, body={})
 check("sans signature : 401", st == 401, st)
 st, p = nc.call_jwt(ENV, "GET", "/api/veridian/organisation", jwt, params={"workspace_id": WS})
-check("marque lue par un membre", st == 200 and p.get("managed") and (p.get("brand") or {}).get("couleur_primaire") == COLOR, f"{st} {p}")
+check("marque lue par un membre", st == 200 and p.get("managed") is (not a.prod) and (p.get("brand") or {}).get("couleur_primaire") == COLOR, f"{st} {p}")
 
 try:
     from playwright.sync_api import sync_playwright
@@ -74,7 +74,10 @@ try:
 
         def console():
             page.goto(f"{BASE}/console/workspace/{WS}/settings/general", wait_until="networkidle", timeout=90000)
-            page.wait_for_selector("[data-testid=organisation-notice]", timeout=40000)
+            page.wait_for_selector(".ant-form-item", timeout=40000)
+            page.wait_for_timeout(2000)  # une absence se lit après que la chose a eu le temps d'arriver
+            locked = page.locator("[data-testid=organisation-notice]").count() > 0
+            check("console : nom et logo verrouillés si le Hub donne un nom, sinon libres", locked is (not a.prod), locked)
             return page.evaluate("""() => {
               const m = document.querySelector('.ant-menu-item-selected, .ant-tabs-tab-active .ant-tabs-tab-btn');
               const all = [...document.querySelectorAll('*')].flatMap(e => { const s = getComputedStyle(e); return [s.color, s.backgroundColor, s.borderColor] });

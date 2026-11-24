@@ -334,7 +334,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err, "lecture")
 		return
 	}
-	out := map[string]any{"managed": o != nil}
+	// Tenu par le Hub seulement s'il a donné un nom : sinon verrouiller nom et logo dans les réglages les rendrait inchangeables partout.
+	out := map[string]any{"managed": o != nil && o.displayName() != ""}
 	if o != nil {
 		out["name"], out["type"], out["brand"] = o.displayName(), o.Type, o.Brand
 	}

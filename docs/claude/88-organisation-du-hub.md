@@ -8,7 +8,8 @@ Robert, 24/11 : « une seule configuration sur le Hub […] pareil pour Notifuse
 - **Version monotone par espace** : plus ancienne = ignorée (`stale`, rien n'est fait) ; même version = `unchanged`, rien de réécrit, les membres manquants
   sont rattrapés. 404 `espace_non_relie` ; 400 `invalid_payload`.
 - Appliqué : nom de l'espace (`nom_affiche`, sinon `nom`) et `settings.logo_url`, par une écriture ciblée. **Une valeur absente ne vide rien.**
-- Marque entière gardée dans `veridian_organisation`, lue par la console (`GET /api/veridian/organisation`, membres) : couleur, favicon.
+- Marque entière gardée dans `veridian_organisation`, lue par la console (`GET /api/veridian/organisation`, membres) : couleur, favicon. Nom et logo verrouillés
+  dans les réglages (`managed`) seulement si le Hub a poussé un nom.
 - Adresses en https sans identifiants, couleurs `#rrggbb` : ces valeurs finissent dans des pages.
 - Membres : additif, par `sync-member` (un seul chemin d'ajout) ; jamais un retrait, un changement de rôle ni un propriétaire.
 - `type`, `modules`, `reglages` : gardés, non appliqués. **Jamais un réglage d'envoi par cette voie.**
