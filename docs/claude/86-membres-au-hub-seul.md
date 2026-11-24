@@ -26,3 +26,8 @@ en base, 0 appel sur 14 jours de journaux (témoin : `createAPIKey` vu).
 d'une synchronisation amont. Restent : routes signées par le Hub, `setup.initialize` (refusée une fois installé), copropriétaire configuré
 (`VERIDIAN_DEFAULT_CO_OWNER_EMAIL`), `createAPIKey` (machine). `signin`, `verify` et `rootSignin` ne créent personne. Modifications locales
 encore possibles sans le Hub : `setUserPermissions`, `removeMember` (aussi la révocation d'une clé API), l'outil opérateur qui a le secret.
+
+## Parcours réel et contrat du Hub
+`python3 scripts/e2e/membres-au-hub.py` (staging, 0/1/2) : refus natifs, invitation, acceptation, membre relié. Vert le 24/11 au soir.
+Hub : inviteur résolu par `hub_user_id` (uuid) puis `users.id` ; 20 invitations par espace et par jour (429 `quota_exceeded`) ; un retrait
+au Hub fait expirer les invitations en attente, seule une invitation émise après fait revenir ; le Hub n'appelle jamais `sync-member`.

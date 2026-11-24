@@ -53,6 +53,7 @@ func Mount(mux *http.ServeMux, managed bool, hubURL string, log logger.Logger) {
 	if hubURL = strings.TrimRight(strings.TrimSpace(hubURL), "/"); hubURL == "" {
 		hubURL = defaultHubURL
 	}
+	hubURL += "/dashboard" // l'accueil du Hub : sa page « membres » est l'ancien modèle et n'ouvre aucun accès à une app
 	body := refusal{
 		Error:  "Les membres d'un espace se gèrent au Hub Veridian (" + hubURL + "). Le propriétaire invite depuis l'écran Membres, qui passe par le Hub ; une ancienne invitation n'est plus valable, demandez-en une nouvelle.",
 		Code:   Code,

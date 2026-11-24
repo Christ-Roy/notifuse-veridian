@@ -43,8 +43,8 @@ func TestMount_FermeLesDeuxRoutes_RefusLisible(t *testing.T) {
 		var out map[string]string
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
 		assert.Equal(t, Code, out["code"])
-		assert.Equal(t, "https://hub.exemple.test", out["hub_url"])
-		assert.Contains(t, out["error"], "https://hub.exemple.test")
+		assert.Equal(t, "https://hub.exemple.test/dashboard", out["hub_url"])
+		assert.Contains(t, out["error"], "https://hub.exemple.test/dashboard")
 	}
 	assert.Empty(t, reached, "l'amont n'est jamais atteint")
 	assert.Equal(t, []string{"/api/workspaces.inviteMember", "/api/workspaces.acceptInvitation"}, ClosedRoutes)
@@ -61,7 +61,7 @@ func TestMount_LesAutresRoutesRestent(t *testing.T) {
 	// Une autre méthode va à l'amont, qui la refuse lui-même (405, testé dans internal/http).
 	call(mux, "GET", "/api/workspaces.inviteMember")
 	assert.Equal(t, "GET /api/workspaces.inviteMember", reached[4])
-	assert.Contains(t, call(mux, "POST", ClosedRoutes[0]).Body.String(), defaultHubURL)
+	assert.Contains(t, call(mux, "POST", ClosedRoutes[0]).Body.String(), defaultHubURL+"/dashboard")
 }
 
 func TestMount_SansHub_ComportementAmontIntact(t *testing.T) {
