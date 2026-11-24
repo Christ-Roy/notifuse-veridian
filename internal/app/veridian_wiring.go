@@ -1286,7 +1286,7 @@ func (a *App) veridianInitRelayCert() {
 		return
 	}
 	mgr, err := relaycert.NewManager(
-		relaycert.Config{Domain: a.config.SMTPBridge.Domain},
+		relaycert.Config{Domain: a.config.SMTPBridge.Domain, Names: []string{os.Getenv("VERIDIAN_MX_HOST")}}, // le 25 sert le même certificat
 		store,
 		relaycert.SettingsParams(a.settingRepo, a.config.Security.SecretKey, os.LookupEnv),
 		relaycert.LegoIssuerFactory(func(cerr error) {

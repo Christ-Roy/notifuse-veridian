@@ -102,6 +102,7 @@
               emails: { type: array, maxItems: 1000, items: { type: string } }
               limit: { type: integer, minimum: 1, maximum: 1000, default: 100 }
               include_contacted: { type: boolean, default: false }
+              batch_id: { type: string, maxLength: 100, description: Replaying the same batch returns the original result and enrolls nobody else }
               dry_run: { type: boolean, default: false }
     responses:
       '200':

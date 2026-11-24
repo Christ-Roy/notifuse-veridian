@@ -3066,6 +3066,8 @@ def cmd_reservoir_activate(a):
         body["emails"] = _csv_list(a.emails)
     if a.limit:
         body["limit"] = a.limit
+    if a.batch_id:
+        body["batch_id"] = a.batch_id
     st, data = call_jwt(a.env, "POST", "/api/veridian/reservoir.activate", apikey_for(a.env, a.workspace), body=body)
     out(st, data)
 
@@ -5314,6 +5316,7 @@ def build_parser(extra=None):
     sp.add_argument("--list"); sp.add_argument("--segment"); sp.add_argument("--emails", help="adresses séparées par des virgules")
     sp.add_argument("--limit", type=int, help="taille du lot (défaut 100, max 1000)")
     sp.add_argument("--include-contacted", dest="include_contacted", action="store_true")
+    sp.add_argument("--batch-id", dest="batch_id", help="nom du lot : le rejouer ne fait entrer personne de plus")
     sp.add_argument("--dry-run", dest="dry_run", action="store_true")
     sp.set_defaults(func=cmd_reservoir_activate, _routes=["/api/veridian/reservoir.activate"])
 

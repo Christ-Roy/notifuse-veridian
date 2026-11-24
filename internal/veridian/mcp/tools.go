@@ -72,7 +72,7 @@ var catalog = []tool{
 		Props: withPage(map[string]any{"email": str("filtre par adresse"), "list_id": str("filtre par liste")})},
 	{Name: "contacts_get_by_email", Description: "Lit un contact par son adresse.", Resource: domain.PermissionResourceContacts,
 		Method: http.MethodGet, Path: "/api/contacts.getByEmail", Props: map[string]any{"email": str("adresse du contact")}, Required: []string{"email"}},
-	{Name: "contacts_upsert", Description: "Cree ou met a jour un contact (email obligatoire).", Resource: domain.PermissionResourceContacts, Write: true,
+	{Name: "contacts_upsert", Description: "Cree ou met a jour un contact (email obligatoire). Une sequence qui se declenche a la creation peut demarrer.", Resource: domain.PermissionResourceContacts, Write: true, Destructive: true,
 		Method: http.MethodPost, Path: "/api/contacts.upsert", Props: map[string]any{"contact": obj("contact : email, first_name, last_name, champs libres")}, Required: []string{"contact"}},
 	{Name: "contacts_delete", Description: "Supprime definitivement un contact par son adresse.", Resource: domain.PermissionResourceContacts, Write: true, Destructive: true,
 		Method: http.MethodPost, Path: "/api/contacts.delete", Props: map[string]any{"email": str("adresse du contact")}, Required: []string{"email"}},

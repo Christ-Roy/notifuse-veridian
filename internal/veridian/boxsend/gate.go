@@ -107,9 +107,9 @@ func (s *gateSession) Auth(mech string) (sasl.Server, error) {
 
 func (s *gateSession) login(user, pass string) error {
 	s.tries++
-	box := boxaccess.Fingerprint(user)
+	box, from := boxaccess.Fingerprint(user), boxaccess.LimitKey(s.ip)
 	log := s.g.snd.d.Logger.WithFields(map[string]interface{}{"remote_ip": s.ip, "box": box})
-	if s.tries > triesPerConn || !s.g.lim.Allow(LimitGateIP, s.ip) || !s.g.lim.Allow(LimitGateBox, box+"|"+s.ip) {
+	if s.tries > triesPerConn || !s.g.lim.Allow(LimitGateIP, from) || !s.g.lim.Allow(LimitGateBox, box+"|"+from) {
 		log.Warn("Box SMTP: too many login attempts")
 		return refuse(454, 4, 7, 0, "trop d'essais, reessayez plus tard")
 	}
@@ -126,8 +126,9 @@ func (s *gateSession) login(user, pass string) error {
 	case errors.Is(err, smtp_bridge.ErrTemporaryAuth) || err != nil:
 		return refuse(454, 4, 7, 0, "service indisponible, reessayez")
 	}
-	s.g.lim.Reset(LimitGateIP, s.ip)
-	s.g.lim.Reset(LimitGateBox, box+"|"+s.ip)
+	s.g.lim.Reset(LimitGateIP, from)
+	s.g.lim.Reset(LimitGateBox, box+"|"+from)
+	log.Info("Box SMTP: gate login") // adresse réelle du client : la ligne « Box SMTP: login » du service ne la connaît pas
 	s.user = id
 	return nil
 }

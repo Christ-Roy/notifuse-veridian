@@ -307,11 +307,15 @@ type ActivateRequest struct {
 	// IncludeContacted : reprendre aussi des contacts qui ont déjà reçu un mail commercial.
 	IncludeContacted bool `json:"include_contacted"`
 	DryRun           bool `json:"dry_run"`
+	// BatchID : nom du lot, choisi par l'appelant. Rejouer le même rend le résultat d'origine : sans lui, rejouer une
+	// activation par liste ou segment ferait entrer le lot SUIVANT.
+	BatchID string `json:"batch_id"`
 }
 
 // ActivateResult : qui est entré dans la séquence, et l'état de la source avant.
 type ActivateResult struct {
 	DryRun       bool     `json:"dry_run"`
+	Replayed     bool     `json:"replayed,omitempty"` // lot déjà passé : rien de neuf
 	AutomationID string   `json:"automation_id"`
 	Selected     int      `json:"selected"`
 	Enrolled     int      `json:"enrolled"`
@@ -346,6 +350,8 @@ func (s *Service) Activate(ctx context.Context, req ActivateRequest) (*ActivateR
 		return nil, invalid("donne une seule source : list_id, segment_id ou emails")
 	case len(src.Emails) > MaxBatch:
 		return nil, invalid("%d adresses au plus par appel", MaxBatch)
+	case len(req.BatchID) > 100:
+		return nil, invalid("batch_id : 100 caractères au plus")
 	case req.Limit < 0 || req.Limit > MaxBatch:
 		return nil, invalid("limit est compris entre 1 et %d", MaxBatch)
 	}
@@ -384,24 +390,30 @@ func (s *Service) Activate(ctx context.Context, req ActivateRequest) (*ActivateR
 	if res.Source, err = s.Store.Inspect(ctx, req.WorkspaceID, src, a.ID); err != nil {
 		return nil, err
 	}
-	emails, err := s.Store.Pick(ctx, req.WorkspaceID, src, a.ID, limit, req.IncludeContacted)
-	if err != nil {
-		return nil, err
+	pickBatch := func(q querier) ([]string, error) {
+		return pickFrom(ctx, q, src, a.ID, limit, req.IncludeContacted)
 	}
-	res.Selected = len(emails)
 	open := res.Source.Available
 	if req.IncludeContacted {
 		open += res.Source.Contacted
 	}
-	if !req.DryRun && len(emails) > 0 {
-		done, err := s.Store.Activate(ctx, req.WorkspaceID, a, emails)
-		if err != nil {
+	var emails []string
+	if req.DryRun {
+		if emails, err = s.Store.Pick(ctx, req.WorkspaceID, src, a.ID, limit, req.IncludeContacted); err != nil {
 			return nil, err
 		}
-		emails, res.Enrolled = done, len(done)
-		s.Log.WithFields(map[string]interface{}{"workspace_id": req.WorkspaceID, "automation_id": a.ID, "selected": res.Selected, "enrolled": res.Enrolled}).Info("reservoir: activation")
+		res.Selected = len(emails)
+	} else {
+		if emails, res.Selected, res.Replayed, err = s.Store.Activate(ctx, req.WorkspaceID, a, req.BatchID, pickBatch); err != nil {
+			return nil, err
+		}
+		res.Enrolled = len(emails)
+		s.Log.WithFields(map[string]interface{}{"workspace_id": req.WorkspaceID, "automation_id": a.ID, "selected": res.Selected, "enrolled": res.Enrolled, "replayed": res.Replayed}).Info("reservoir: activation")
+		if !res.Replayed {
+			open -= res.Enrolled
+		}
 	}
-	res.Remaining = open - res.Enrolled
+	res.Remaining = open
 	if len(emails) > maxDetails {
 		emails = emails[:maxDetails]
 	}

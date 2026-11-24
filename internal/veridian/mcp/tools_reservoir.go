@@ -37,7 +37,7 @@ var reservoirTools = []tool{
 			"is_public": boolean("visible des contacts"), "is_double_optin": boolean("confirmation par mail avant inscription")}, Required: []string{"id", "name"}},
 	{Name: "segment_contacts", Description: "Contacts d'un segment, pagines. Un segment se recalcule seul d'apres ses regles : on n'y ajoute personne a la main.", Resource: domain.PermissionResourceContacts,
 		Method: http.MethodGet, Path: "/api/segments.contacts", Paginated: true, Props: withPage(map[string]any{"segment_id": str("id du segment (segments_list)")}), Required: []string{"segment_id"}},
-	{Name: "segment_rebuild", Description: "Recalcule un segment maintenant.", Resource: domain.PermissionResourceContacts, Write: true,
+	{Name: "segment_rebuild", Description: "Recalcule un segment maintenant (une sequence qui se declenche sur ce segment peut demarrer).", Resource: domain.PermissionResourceContacts, Write: true, Destructive: true,
 		Method: http.MethodPost, Path: "/api/segments.rebuild", Props: map[string]any{"segment_id": str("id du segment")}, Required: []string{"segment_id"}},
 
 	{Name: "reservoirs_status", Description: "Etat des reservoirs (listes) : total, activables, et pourquoi pas les autres (desinscrits, rebonds, plaintes, deja repondu, deja contactes, deja en sequence).", Resource: domain.PermissionResourceContacts,
@@ -49,6 +49,7 @@ var reservoirTools = []tool{
 			"list_id":       str("source : une liste de reserve"), "segment_id": str("source : un segment"), "emails": strs("source : des adresses (1000 au plus)"),
 			"limit":             num("taille du lot (defaut 100, max 1000)"),
 			"include_contacted": boolean("reprendre aussi ceux qui ont deja recu un mail commercial"),
+			"batch_id":          str("nom du lot, a fournir TOUJOURS depuis un programme : rejouer le meme nom ne fait entrer personne de plus"),
 			"dry_run":           boolean("simulation : choisit sans inscrire"),
 		}, Required: []string{"automation_id"}},
 	{Name: "stock_overview", Description: "Reserve et inscrits par fournisseur : jours de prospection restants, classes a reapprovisionner.", Resource: domain.PermissionResourceContacts,

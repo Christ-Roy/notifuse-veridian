@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -513,5 +514,20 @@ func TestAcquire_BoundsConnectionsPerAccess(t *testing.T) {
 	b.srv.release("a1")
 	if !b.srv.acquire("a1") {
 		t.Fatal("une place libérée doit resservir")
+	}
+}
+
+// En IPv6 un client dispose d'un /64 entier : changer d'adresse dedans ne rend pas un compteur neuf.
+func TestLogin_IPv6LimitedByPrefix(t *testing.T) {
+	b := newBench(t)
+	var last error
+	for i := 0; i <= TriesPerAddr; i++ {
+		last = b.srv.newSession(fmt.Sprintf("2a02:c207:1:2::%x", i+1)).Login("jc@boite.fr", "faux")
+	}
+	if !errors.Is(last, errLimited) {
+		t.Fatalf("même /64 : %v", last)
+	}
+	if err := b.srv.newSession("2a02:c207:1:3::1").Login("jc@boite.fr", "faux"); errors.Is(err, errLimited) {
+		t.Fatal("autre /64 : compteur à part")
 	}
 }

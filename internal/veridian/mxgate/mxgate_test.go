@@ -173,3 +173,22 @@ func TestTrace_NoHeaderInjection(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// keyLimiter note les clés demandées.
+type keyLimiter struct{ keys []string }
+
+func (k *keyLimiter) Allow(_, key string) bool { k.keys = append(k.keys, key); return true }
+
+func TestMail_IPv6LimitedByPrefix(t *testing.T) {
+	k := &keyLimiter{}
+	s, err := New(Config{Hostname: "mx.test", Directory: NewProfiles(&lister{}, []string{"boite.fr"}), Ingest: &fake{}, Limiter: k, Logger: logger.NewLogger()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ip := range []string{"2a02:c207:1:2::1", "2a02:c207:1:2::ffff", "203.0.113.7"} {
+		_ = (&session{s: s, ip: ip}).Mail("p@client.fr", nil)
+	}
+	if want := []string{"2a02:c207:1:2::/64", "2a02:c207:1:2::/64", "203.0.113.7"}; strings.Join(k.keys, " ") != strings.Join(want, " ") {
+		t.Fatalf("clés %v", k.keys)
+	}
+}

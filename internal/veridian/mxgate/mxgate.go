@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/emersion/go-smtp"
@@ -155,7 +156,7 @@ func (c *session) Reset()        { c.from, c.started, c.to = "", false, nil }
 func (c *session) Logout() error { return nil }
 
 func (c *session) Mail(from string, _ *smtp.MailOptions) error {
-	if !c.s.cfg.Limiter.Allow(LimitIP, c.ip) {
+	if !c.s.cfg.Limiter.Allow(LimitIP, boxaccess.LimitKey(c.ip)) {
 		return refuse(451, 4, 7, 1, "trop de messages, reessayez plus tard")
 	}
 	if c.s.cfg.Blocklist != nil && !c.checked {

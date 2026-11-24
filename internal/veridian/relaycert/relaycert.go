@@ -15,6 +15,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,9 +82,9 @@ type Store interface {
 	SaveState(ctx context.Context, st State) error
 }
 
-// Issuer émet un certificat pour un nom (DNS-01). accountKeyPEM vide = nouveau compte.
+// Issuer émet un certificat pour une liste de noms, le premier en nom principal (DNS-01). accountKeyPEM vide = nouveau compte.
 type Issuer interface {
-	Obtain(ctx context.Context, domain, email string, accountKeyPEM []byte) (*Bundle, error)
+	Obtain(ctx context.Context, names []string, email string, accountKeyPEM []byte) (*Bundle, error)
 }
 
 // Params est la configuration effective lue à chaque décision.
@@ -105,7 +107,10 @@ type Logger = logger.Logger
 
 // Config du gestionnaire.
 type Config struct {
-	Domain      string
+	Domain string // nom principal : un certificat qui ne le couvre pas est refusé
+	// Names : autres noms servis par le même certificat (hôte du 25, VERIDIAN_MX_HOST). Un certificat en place qui ne les
+	// couvre pas reste servi, et une réémission est demandée : jamais de STARTTLS coupé en attendant.
+	Names       []string
 	RenewBefore time.Duration // 0 = DefaultRenewBefore
 	CheckEvery  time.Duration // 0 = DefaultCheckEvery
 	StartupWait time.Duration // 0 = DefaultStartupWait : délai avant la première décision (pas d'émission au démarrage)
@@ -135,6 +140,7 @@ type Manager struct {
 	mu          sync.Mutex
 	status      Status
 	bundle      *Bundle
+	partial     bool // le certificat servi ne couvre pas tous les noms
 	failures    int
 	nextAttempt time.Time
 }
@@ -176,11 +182,23 @@ func (m *Manager) Load(ctx context.Context) error {
 	if b == nil {
 		return nil
 	}
-	return m.install(b)
+	return m.install(b, false)
 }
 
-// install vérifie le bundle (paire cert/clé valide, nom couvert) puis le pose dans le holder.
-func (m *Manager) install(b *Bundle) error {
+// names : le nom principal puis les autres, sans doublon.
+func (m *Manager) names() []string {
+	out := []string{m.cfg.Domain}
+	for _, n := range m.cfg.Names {
+		if n = strings.ToLower(strings.TrimSpace(n)); n != "" && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// install vérifie le bundle (paire cert/clé valide, nom couvert) puis le pose dans le holder. strict (à l'émission) :
+// tous les noms sont exigés ; au chargement, seul le nom principal l'est.
+func (m *Manager) install(b *Bundle, strict bool) error {
 	pair, err := tls.X509KeyPair(b.CertPEM, b.KeyPEM)
 	if err != nil {
 		return fmt.Errorf("relaycert: paire cert/clé invalide: %w", err)
@@ -192,10 +210,20 @@ func (m *Manager) install(b *Bundle) error {
 	if err := leaf.VerifyHostname(m.cfg.Domain); err != nil {
 		return fmt.Errorf("relaycert: le certificat ne couvre pas %s: %w", m.cfg.Domain, err)
 	}
+	partial := false
+	for _, n := range m.names()[1:] {
+		if err := leaf.VerifyHostname(n); err != nil {
+			if strict {
+				return fmt.Errorf("relaycert: le certificat ne couvre pas %s: %w", n, err)
+			}
+			partial = true
+		}
+	}
 	b.NotAfter = leaf.NotAfter
 	m.holder.Set(pair)
 	m.mu.Lock()
 	m.bundle = b
+	m.partial = partial
 	m.status.NotAfter = leaf.NotAfter
 	m.status.Serial = serialHex(leaf.SerialNumber)
 	m.mu.Unlock()
@@ -217,7 +245,7 @@ func (m *Manager) Tick(ctx context.Context) (bool, error) {
 
 	m.mu.Lock()
 	cur := m.bundle
-	need := cur == nil || cur.NotAfter.Sub(now) < m.cfg.RenewBefore || cur.Directory != p.Directory
+	need := cur == nil || cur.NotAfter.Sub(now) < m.cfg.RenewBefore || cur.Directory != p.Directory || m.partial
 	wait := now.Before(m.nextAttempt)
 	var acctKey []byte
 	if cur != nil && cur.Directory == p.Directory {
@@ -238,13 +266,13 @@ func (m *Manager) Tick(ctx context.Context) (bool, error) {
 		return false, m.fail(ctx, now, errors.New("relaycert: annuaire ACME absent"))
 	}
 
-	b, err := m.issuer(p).Obtain(ctx, m.cfg.Domain, p.Email, acctKey)
+	b, err := m.issuer(p).Obtain(ctx, m.names(), p.Email, acctKey)
 	if err == nil && b == nil {
 		err = errors.New("relaycert: l'émetteur n'a rendu aucun certificat")
 	}
 	if err == nil {
 		b.Directory = p.Directory
-		err = m.install(b)
+		err = m.install(b, true)
 	}
 	if err == nil {
 		err = m.store.Save(ctx, b)

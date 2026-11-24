@@ -94,7 +94,12 @@ func (s *Store) Known(ctx context.Context, ws string, rows []Row, d Dedupe) (Kno
 	return k, nil
 }
 
-func scan(ctx context.Context, db *sql.DB, each func([]string), cols int, q string, args ...any) error {
+// querier : base ou transaction.
+type querier interface {
+	QueryContext(ctx context.Context, q string, args ...any) (*sql.Rows, error)
+}
+
+func scan(ctx context.Context, db querier, each func([]string), cols int, q string, args ...any) error {
 	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return err
@@ -333,9 +338,13 @@ func (s *Store) Pick(ctx context.Context, ws string, src Source, automationID st
 	if err != nil {
 		return nil, err
 	}
+	return pickFrom(ctx, db, src, automationID, limit, includeContacted)
+}
+
+func pickFrom(ctx context.Context, db querier, src Source, automationID string, limit int, includeContacted bool) ([]string, error) {
 	q, arg := poolSQL(src)
 	out := []string{}
-	err = scan(ctx, db, func(v []string) { out = append(out, v[0]) }, 1,
+	err := scan(ctx, db, func(v []string) { out = append(out, v[0]) }, 1,
 		fmt.Sprintf(stateCTE, q)+`
 		SELECT email FROM st WHERE state = 'ok' OR ($4 AND state = 'contacted') ORDER BY custom_number_1 DESC NULLS LAST, created_at, email LIMIT $3`,
 		arg, automationID, limit, includeContacted)
@@ -344,23 +353,38 @@ func (s *Store) Pick(ctx context.Context, ws string, src Source, automationID st
 
 // Activate inscrit les contacts dans la séquence, en une transaction : liste de la séquence d'abord (la garde d'envoi l'exige,
 // et son déclencheur inscrit souvent lui-même), puis inscription directe de ceux qui n'y sont pas. Rend les adresses inscrites.
-func (s *Store) Activate(ctx context.Context, ws string, a *Automation, emails []string) ([]string, error) {
+// batchID non vide : le lot est consigné dans la même transaction, un rejeu rend le résultat d'origine (replayed) sans rien inscrire.
+func (s *Store) Activate(ctx context.Context, ws string, a *Automation, batchID string, pick func(querier) ([]string, error)) (done []string, selected int, replayed bool, err error) {
 	db, err := s.WS.GetConnection(ctx, ws)
 	if err != nil {
-		return nil, err
+		return nil, 0, false, err
 	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	// Deux activations simultanées ne doivent pas inscrire deux fois le même contact.
+	// Deux activations simultanées ne doivent pas inscrire deux fois le même contact, ni rejouer deux fois le même lot.
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('veridian_reservoir:' || $1))`, a.ID); err != nil {
-		return nil, err
+		return nil, 0, false, err
+	}
+	if batchID != "" {
+		err := tx.QueryRowContext(ctx, `SELECT emails, selected FROM veridian_reservoir_batch WHERE automation_id = $1 AND batch_id = $2`, a.ID, batchID).Scan(pq.Array(&done), &selected)
+		if err == nil {
+			return done, selected, true, nil
+		}
+		if err != sql.ErrNoRows {
+			return nil, 0, false, err
+		}
+	}
+	// Choix DANS la transaction, sous le verrou : deux lots simultanés ne choisissent pas les mêmes contacts.
+	emails, err := pick(tx)
+	if err != nil {
+		return nil, 0, false, err
 	}
 	if a.list != "" {
 		if _, err := tx.ExecContext(ctx, subscribeSQL, pq.Array(emails), pq.Array([]string{a.list})); err != nil {
-			return nil, err
+			return nil, 0, false, err
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -368,26 +392,18 @@ func (s *Store) Activate(ctx context.Context, ws string, a *Automation, emails [
 		WHERE NOT EXISTS (SELECT 1 FROM contact_automations ca WHERE ca.automation_id = $1 AND ca.contact_email = e)
 		  AND ($5 = '' OR EXISTS (SELECT 1 FROM contact_lists cl WHERE cl.email = e AND cl.list_id = $5 AND cl.status = 'active' AND cl.deleted_at IS NULL))`,
 		a.ID, a.root, a.freq, pq.Array(emails), a.list); err != nil {
-		return nil, err
+		return nil, 0, false, err
 	}
-	done := []string{}
-	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT contact_email FROM contact_automations WHERE automation_id = $1 AND contact_email = ANY($2) AND status = 'active'`, a.ID, pq.Array(emails))
-	if err != nil {
-		return nil, err
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(array_agg(DISTINCT contact_email::text), '{}') FROM contact_automations WHERE automation_id = $1 AND contact_email = ANY($2) AND status = 'active'`,
+		a.ID, pq.Array(emails)).Scan(pq.Array(&done)); err != nil {
+		return nil, 0, false, err
 	}
-	for rows.Next() {
-		var e string
-		if err := rows.Scan(&e); err != nil {
-			_ = rows.Close()
-			return nil, err
+	if batchID != "" {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO veridian_reservoir_batch (automation_id, batch_id, emails, selected) VALUES ($1, $2, $3, $4)`, a.ID, batchID, pq.Array(done), len(emails)); err != nil {
+			return nil, 0, false, err
 		}
-		done = append(done, e)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	_ = rows.Close()
-	return done, tx.Commit()
+	return done, len(emails), false, tx.Commit()
 }
 
 // ListRef : une liste de l'espace.

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/database"
 	"github.com/Notifuse/notifuse/internal/domain"
+	veridianmig "github.com/Notifuse/notifuse/internal/migrations/veridian"
 	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/internal/veridian/testpg"
@@ -46,6 +48,14 @@ func workspaceDB(t *testing.T) *sql.DB {
 		_ = admin.Close()
 	})
 	require.NoError(t, database.InitializeWorkspaceDatabase(db))
+	for _, sp := range veridianmig.Default.List() {
+		if sp.Number == 76 { // la migration EXACTEMENT telle qu'enregistrée, deux fois
+			for _, q := range append(append([]string{}, sp.Workspace...), sp.Workspace...) {
+				_, err := db.Exec(q)
+				require.NoError(t, err)
+			}
+		}
+	}
 	return db
 }
 
@@ -343,4 +353,70 @@ func TestActivate_DeclencheurAChaqueFoisNInscritPasDeuxFois(t *testing.T) {
 	require.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", map[string]any{"workspace_id": "ws", "automation_id": "seq", "list_id": "reserve"}, &res))
 	assert.Equal(t, 1, res.Enrolled)
 	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contact_automations`), "la liste démarre la séquence : pas de seconde inscription directe")
+}
+
+// Le Hub coupe un programme à 45 s : il doit pouvoir rejouer le même lot sans faire entrer le suivant.
+func TestActivate_LotNommeRejouable(t *testing.T) {
+	b := newBench(t)
+	b.reserve("un@a.fr", "deux@b.fr", "trois@c.fr")
+	b.automation("seq", "sequence", onList("sequence"))
+	body := map[string]any{"workspace_id": "ws", "automation_id": "seq", "list_id": "reserve", "limit": 2, "batch_id": "lot-1"}
+	var first, again, next ActivateResult
+	require.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", body, &first))
+	assert.Equal(t, [3]any{2, 2, false}, [3]any{first.Selected, first.Enrolled, first.Replayed})
+	require.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", body, &again))
+	assert.Equal(t, [3]any{2, 2, true}, [3]any{again.Selected, again.Enrolled, again.Replayed})
+	assert.ElementsMatch(t, first.Emails, again.Emails)
+	assert.Equal(t, 1, again.Remaining)
+	assert.Equal(t, 2, b.count(`SELECT count(*) FROM contact_automations`), "rejouer le lot n'inscrit personne de plus")
+	body["batch_id"] = "lot-2"
+	require.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", body, &next))
+	assert.Equal(t, []string{"trois@c.fr"}, next.Emails)
+	body["batch_id"] = strings.Repeat("x", 101)
+	assert.Equal(t, 400, b.call("POST", "/api/veridian/reservoir.activate", body, nil))
+}
+
+// Vingt activations simultanées du même lot puis de lots différents : personne n'entre deux fois.
+func TestActivate_SimultanesSansDoublon(t *testing.T) {
+	b := newBench(t)
+	var emails []string
+	for i := 0; i < 30; i++ {
+		emails = append(emails, fmt.Sprintf("c%d@s%d.fr", i, i))
+	}
+	b.reserve(emails...)
+	b.automation("seq", "sequence", onList("sequence"))
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		for _, id := range []string{"meme", fmt.Sprintf("lot-%d", i)} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := b.svc.Activate(context.Background(), ActivateRequest{WorkspaceID: "ws", AutomationID: "seq", ListID: "reserve", Limit: 2, BatchID: id})
+				assert.NoError(t, err)
+			}()
+		}
+	}
+	wg.Wait()
+	assert.Equal(t, 22, b.count(`SELECT count(*) FROM contact_automations`), "un lot « meme » et dix lots de deux")
+	assert.Equal(t, 22, b.count(`SELECT count(DISTINCT contact_email) FROM contact_automations`))
+}
+
+// Rejeu d'un import, y compris sur une liste qui démarre une séquence « à chaque fois » : personne n'entre deux fois, un
+// désinscrit de CETTE liste reste désinscrit.
+func TestIntake_RejeuNInscritPasDeuxFois(t *testing.T) {
+	b := newBench(t)
+	trig := onList("sequence")
+	trig.Frequency = domain.TriggerFrequencyEveryTime
+	b.automation("seq", "sequence", trig)
+	body := map[string]any{"workspace_id": "ws", "list_ids": []string{"sequence"}, "allow_triggers": true, "existing": "update", "contacts": []json.RawMessage{raw(`{"email":"a@un.fr"}`), raw(`{"email":"b@deux.fr"}`)}}
+	for i := 0; i < 3; i++ {
+		require.Equal(t, 200, b.call("POST", "/api/veridian/contacts.intake", body, nil))
+	}
+	assert.Equal(t, 2, b.count(`SELECT count(*) FROM contact_automations`))
+	b.exec(`UPDATE contact_lists SET status='unsubscribed' WHERE email='a@un.fr'`)
+	var res IntakeResult
+	require.Equal(t, 200, b.call("POST", "/api/veridian/contacts.intake", body, &res))
+	assert.Equal(t, 1, res.Skipped[ReasonUnsubscribed])
+	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contact_lists WHERE email='a@un.fr' AND status='unsubscribed'`))
+	assert.Equal(t, 2, b.count(`SELECT count(*) FROM contact_automations`))
 }

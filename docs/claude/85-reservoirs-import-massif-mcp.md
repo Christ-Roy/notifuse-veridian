@@ -2,7 +2,7 @@
 
 Demande d'Arnaud Capitaine relayée par Robert : alimenter la prospection depuis ChatGPT (3 795 prospects), sans geste manuel et
 sans toucher à la limite de 50 mails par jour. Code : `internal/veridian/reservoir/`, câblé par `internal/app/veridian_mod_reservoir.go`.
-Aucune migration. Outils MCP : `internal/veridian/mcp/tools_reservoir.go`.
+Migration V76 (lots nommés). Outils MCP : `internal/veridian/mcp/tools_reservoir.go`.
 
 ## Les trois routes
 | Route | CLI | MCP | Fait |
@@ -22,8 +22,11 @@ Aucune migration. Outils MCP : `internal/veridian/mcp/tools_reservoir.go`.
 - **Activation** : écarte bloqués, ayant répondu, déjà contactés, déjà en séquence. Pose d'abord la liste de la séquence (la garde
   d'envoi jette `contact_not_on_list`), puis n'inscrit directement que ceux que le déclencheur n'a pas déjà inscrits. Refuse si la
   liste démarre aussi une AUTRE séquence. Meilleur score d'abord (`custom_number_1`).
+- **Rejouable** (le Hub coupe un programme à 45 s) : un import rejoué ne crée, ne modifie ni n'inscrit rien de plus ; une activation
+  par liste ou segment exige un `batch_id` pour l'être (sinon le rejeu ferait entrer le lot SUIVANT). Choix et inscription sous un
+  même verrou : lots simultanés sans doublon.
 - **Aucun outil MCP ne relève un plafond** ni ne touche profils, intégrations, réglages : test `TestCatalog_AucunOutilNeToucheAuxPlafonds`.
-- Tout outil qui peut faire partir un mail est `destructiveHint` (`contacts_import` compris, à cause de `allow_triggers`).
+- Tout outil qui peut faire partir un mail est `destructiveHint` (`contacts_import`, `contacts_upsert` et `segment_rebuild` compris : ils peuvent démarrer une séquence).
 
 ## Appel depuis un programme (code mode du Hub)
 En-tête `X-Veridian-MCP-Appel: programme` : réponse entière jusqu'à 1 Mo et `structuredContent` (au-delà, erreur franche, jamais un

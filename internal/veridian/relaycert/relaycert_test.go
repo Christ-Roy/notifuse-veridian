@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"errors"
 	"math/big"
+	"slices"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 const testDomain = "relais-smtp.example.test"
 
 // makeBundle fabrique un certificat auto-signé valide pour testDomain, échéance notAfter.
-func makeBundle(t *testing.T, notAfter time.Time) *Bundle {
+func makeBundle(t *testing.T, notAfter time.Time, more ...string) *Bundle {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -29,7 +30,7 @@ func makeBundle(t *testing.T, notAfter time.Time) *Bundle {
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(time.Now().UnixNano()),
 		Subject:      pkix.Name{CommonName: testDomain},
-		DNSNames:     []string{testDomain},
+		DNSNames:     append([]string{testDomain}, more...),
 		NotBefore:    notAfter.Add(-90 * 24 * time.Hour),
 		NotAfter:     notAfter,
 	}
@@ -71,10 +72,12 @@ type fakeIssuer struct {
 	fail  bool
 	next  *Bundle
 	last  Params
+	names []string
 }
 
-func (f *fakeIssuer) Obtain(context.Context, string, string, []byte) (*Bundle, error) {
+func (f *fakeIssuer) Obtain(_ context.Context, names []string, _ string, _ []byte) (*Bundle, error) {
 	f.calls++
+	f.names = names
 	if f.fail {
 		return nil, errors.New("acme: échec simulé")
 	}
@@ -357,13 +360,13 @@ func TestNewSettingsStore_RequiresPassphrase(t *testing.T) {
 }
 
 func TestLegoIssuer_Obtain_RequiresDirectory(t *testing.T) {
-	if _, err := (LegoIssuer{CFToken: "x"}).Obtain(context.Background(), testDomain, "a@b.c", nil); err == nil {
+	if _, err := (LegoIssuer{CFToken: "x"}).Obtain(context.Background(), []string{testDomain}, "a@b.c", nil); err == nil {
 		t.Fatal("autorité ACME absente doit être refusée sans appel réseau")
 	}
 }
 
 func TestLegoIssuer_Obtain_RequiresToken(t *testing.T) {
-	if _, err := (LegoIssuer{DirectoryURL: "https://acme.example.test/dir"}).Obtain(context.Background(), testDomain, "a@b.c", nil); err == nil {
+	if _, err := (LegoIssuer{DirectoryURL: "https://acme.example.test/dir"}).Obtain(context.Background(), []string{testDomain}, "a@b.c", nil); err == nil {
 		t.Fatal("jeton Cloudflare absent doit être refusé avant tout appel")
 	}
 }
@@ -429,5 +432,50 @@ func TestManager_Tick_IssuesAndStoresWhenHolderAlreadyServesFixedCertificate(t *
 	}
 	if issuer.calls != 1 || store.saved != 1 {
 		t.Fatalf("émission et stockage attendus une fois (appels=%d, sauvegardes=%d)", issuer.calls, store.saved)
+	}
+}
+
+// Le 25 et le relais partagent le certificat : deux noms. Un certificat en place qui n'en couvre qu'un reste servi jusqu'à la
+// réémission, et un certificat neuf incomplet est refusé sans toucher à l'ancien.
+func TestManager_DeuxNoms(t *testing.T) {
+	now := time.Now()
+	old := makeBundle(t, now.Add(70*24*time.Hour))
+	st := &memStore{b: old}
+	is := &fakeIssuer{fail: true}
+	m, h := newTestManager(t, st, is, now)
+	m.cfg.Names = []string{" MX.example.test ", "", testDomain}
+	if err := m.Load(context.Background()); err != nil {
+		t.Fatalf("un certificat partiel doit être gardé au chargement : %v", err)
+	}
+	if _, err := h.GetCertificate(nil); err != nil {
+		t.Fatal("le STARTTLS ne doit pas tomber en attendant")
+	}
+	serves := func() []string {
+		c, err := h.GetCertificate(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaf, _ := x509.ParseCertificate(c.Certificate[0])
+		return leaf.DNSNames
+	}
+	if ok, err := m.Tick(context.Background()); ok || err == nil || len(serves()) != 1 {
+		t.Fatalf("émission en échec : l'ancien reste servi (%v, %v)", ok, err)
+	}
+	if want := []string{testDomain, "mx.example.test"}; !slices.Equal(is.names, want) {
+		t.Fatalf("noms demandés %v, attendu %v", is.names, want)
+	}
+	is.fail, is.next = false, makeBundle(t, now.Add(90*24*time.Hour)) // incomplet
+	m.nextAttempt = time.Time{}
+	if ok, err := m.Tick(context.Background()); ok || err == nil || st.saved != 0 {
+		t.Fatalf("certificat neuf incomplet : refusé (%v, %v)", ok, err)
+	}
+	is.next = makeBundle(t, now.Add(90*24*time.Hour), "mx.example.test")
+	m.nextAttempt = time.Time{}
+	if ok, err := m.Tick(context.Background()); !ok || err != nil || len(serves()) != 2 {
+		t.Fatalf("certificat complet posé (%v, %v)", ok, err)
+	}
+	calls := is.calls
+	if ok, _ := m.Tick(context.Background()); ok || is.calls != calls {
+		t.Fatal("complet et loin de l'échéance : plus rien à émettre")
 	}
 }

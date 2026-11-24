@@ -25,7 +25,7 @@ func TestCatalog_AucunOutilNeToucheAuxPlafonds(t *testing.T) {
 
 // Un outil qui peut démarrer une séquence est un envoi.
 func TestCatalog_ActivationEstDestructive(t *testing.T) {
-	for _, n := range []string{"contacts_import", "reservoir_activate", "automations_activate"} {
+	for _, n := range []string{"contacts_import", "contacts_upsert", "segment_rebuild", "reservoir_activate", "automations_activate"} {
 		tl, ok := findTool(n)
 		require.True(t, ok, n)
 		assert.True(t, tl.Destructive, n)

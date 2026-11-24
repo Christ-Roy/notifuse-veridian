@@ -34,7 +34,9 @@ func invalid(format string, a ...any) error {
 const (
 	ReasonBadEmail     = "email_invalide"
 	ReasonBadContact   = "contact_invalide"
-	ReasonInBatch      = "doublon_dans_le_lot"
+	ReasonBatchEmail   = "doublon_email_dans_le_lot"
+	ReasonBatchSiren   = "doublon_siren_dans_le_lot"
+	ReasonBatchDomain  = "doublon_domaine_dans_le_lot"
 	ReasonSiren        = "siren_deja_present"
 	ReasonDomain       = "domaine_deja_present"
 	ReasonUnsubscribed = "desinscrit"
@@ -316,7 +318,7 @@ func Build(rows []Row, bad []Detail, k Known, d Dedupe) *Plan {
 next:
 	for _, r := range rows {
 		if emails[r.Email] {
-			p.skip(r, ReasonInBatch, r.Email)
+			p.skip(r, ReasonBatchEmail, r.Email)
 			continue
 		}
 		emails[r.Email] = true
@@ -330,7 +332,7 @@ next:
 		}
 		if d.Siren && r.Siren != "" {
 			if of, ok := sirens[r.Siren]; ok {
-				p.skip(r, ReasonInBatch, of)
+				p.skip(r, ReasonBatchSiren, of)
 				continue
 			}
 			if of, ok := k.Sirens[r.Siren]; ok {
@@ -341,7 +343,7 @@ next:
 		if d.Domain {
 			for _, dom := range r.Domains {
 				if of, ok := domains[dom]; ok {
-					p.skip(r, ReasonInBatch, of)
+					p.skip(r, ReasonBatchDomain, of)
 					continue next
 				}
 				if of, ok := k.Domains[dom]; ok {

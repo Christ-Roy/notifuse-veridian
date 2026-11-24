@@ -83,7 +83,7 @@ func TestBuild_DoublonsEtExclusions(t *testing.T) {
 	}
 	assert.Equal(t, []string{"a@un.fr", "d@gmail.com", "e@gmail.com"}, got)
 	require.Len(t, p.Existing, 1)
-	assert.Equal(t, map[string]int{ReasonInBatch: 3, ReasonSiren: 1, ReasonDomain: 1, ReasonUnsubscribed: 1, ReasonBadEmail: 1}, p.Skipped)
+	assert.Equal(t, map[string]int{ReasonBatchEmail: 1, ReasonBatchSiren: 1, ReasonBatchDomain: 1, ReasonSiren: 1, ReasonDomain: 1, ReasonUnsubscribed: 1, ReasonBadEmail: 1}, p.Skipped)
 
 	p = Build(in, nil, k, Dedupe{})
 	assert.Len(t, p.New, 7, "sans SIREN ni domaine : seules l'adresse et les exclusions comptent")

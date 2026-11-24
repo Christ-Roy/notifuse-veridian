@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
@@ -42,7 +43,7 @@ func (u *legoUser) GetRegistration() *registration.Resource { return u.reg }
 func (u *legoUser) GetPrivateKey() crypto.PrivateKey        { return u.key }
 
 // Obtain émet un certificat pour domain. accountKeyPEM réutilise le compte ACME s'il existe.
-func (l LegoIssuer) Obtain(_ context.Context, domain, email string, accountKeyPEM []byte) (*Bundle, error) {
+func (l LegoIssuer) Obtain(_ context.Context, names []string, email string, accountKeyPEM []byte) (*Bundle, error) {
 	if l.DirectoryURL == "" {
 		return nil, errors.New("relaycert: autorité ACME absente")
 	}
@@ -82,9 +83,9 @@ func (l LegoIssuer) Obtain(_ context.Context, domain, email string, accountKeyPE
 	}
 	user.reg = reg
 
-	res, err := client.Certificate.Obtain(certificate.ObtainRequest{Domains: []string{domain}, Bundle: true})
+	res, err := client.Certificate.Obtain(certificate.ObtainRequest{Domains: names, Bundle: true})
 	if err != nil {
-		return nil, fmt.Errorf("relaycert: émission DNS-01 pour %s: %w", domain, err)
+		return nil, fmt.Errorf("relaycert: émission DNS-01 pour %s: %w", strings.Join(names, ", "), err)
 	}
 	return &Bundle{CertPEM: res.Certificate, KeyPEM: res.PrivateKey, AccountKeyPEM: accountPEM}, nil
 }

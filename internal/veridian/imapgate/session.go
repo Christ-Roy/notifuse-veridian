@@ -122,8 +122,9 @@ func (s *session) Close() error {
 
 func (s *session) Login(username, password string) error {
 	addr := boxaccess.NormalizeAddress(username)
-	lim, key := s.srv.cfg.Limiter, addr+"|"+s.ip
-	if !lim.Allow(LimitIP, s.ip) || !lim.Allow(LimitAddress, key) {
+	lim, from := s.srv.cfg.Limiter, boxaccess.LimitKey(s.ip)
+	key := addr + "|" + from
+	if !lim.Allow(LimitIP, from) || !lim.Allow(LimitAddress, key) {
 		s.srv.cfg.Logger.WithFields(map[string]interface{}{"remote_ip": s.ip, "box": boxaccess.Fingerprint(addr)}).Warn("IMAP gate: too many login attempts")
 		return errLimited
 	}
@@ -140,7 +141,7 @@ func (s *session) Login(username, password string) error {
 	if !s.srv.acquire(acc.ID) {
 		return errTooMany
 	}
-	lim.Reset(LimitIP, s.ip)
+	lim.Reset(LimitIP, from)
 	lim.Reset(LimitAddress, key)
 	s.acc, s.checked = acc, time.Now()
 	if err := s.srv.cfg.Auth.Touch(ctx, acc.ID); err != nil {

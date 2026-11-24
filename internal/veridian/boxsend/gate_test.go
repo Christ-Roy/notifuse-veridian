@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
 	"strings"
 	"testing"
+
+	gosmtp "github.com/emersion/go-smtp"
 
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
@@ -168,5 +171,36 @@ func TestGate_BoundsTriesPerBoxAndAddress(t *testing.T) {
 	}
 	if got := auth("autre@boite.fr"); got != "235" {
 		t.Fatalf("autre boîte depuis la même adresse : %s", got)
+	}
+}
+
+// En IPv6 un client dispose d'un /64 entier : changer d'adresse dedans ne rend pas un compteur neuf.
+func TestGate_IPv6LimitedByPrefix(t *testing.T) {
+	f, s := bench()
+	f.verify = boxaccess.ErrAuth
+	rl := ratelimiter.NewRateLimiter()
+	rl.SetPolicy(LimitGateIP, GateTriesIP, GateWindow)
+	rl.SetPolicy(LimitGateBox, GateTriesBox, GateWindow)
+	t.Cleanup(rl.Stop)
+	g, err := NewGate(s, rl, "smtp.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := func(ip string) int {
+		var se *gosmtp.SMTPError
+		if !errors.As((&gateSession{g: g, ip: ip}).login("jc@boite.fr", "faux"), &se) {
+			t.Fatal("un mauvais mot de passe est refusé")
+		}
+		return se.Code
+	}
+	last := 0
+	for i := 0; i <= GateTriesBox; i++ {
+		last = code(fmt.Sprintf("2a02:c207:1:2::%x", i+1))
+	}
+	if last != 454 {
+		t.Fatalf("même /64 : %d, attendu 454", last)
+	}
+	if c := code("2a02:c207:1:3::1"); c != 535 {
+		t.Fatalf("autre /64 : %d, attendu 535", c)
 	}
 }
