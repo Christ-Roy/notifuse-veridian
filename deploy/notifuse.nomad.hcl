@@ -125,30 +125,16 @@ job "notifuse" {
       name     = "notifuse-imap"
       provider = "nomad"
       port     = "imap"
-      # Public par le 443 existant, aiguillé par nom TLS (oui de Robert, 24/11/2026). PROXY v2 : la vraie IP du client.
-      tags = [
-        "traefik.enable=true",
-        "traefik.tcp.routers.notifuse-imap.rule=HostSNI(`imap.veridian.site`)",
-        "traefik.tcp.routers.notifuse-imap.entrypoints=websecure",
-        "traefik.tcp.routers.notifuse-imap.tls=true",
-        "traefik.tcp.routers.notifuse-imap.tls.certresolver=letsencrypt",
-        "traefik.tcp.routers.notifuse-imap.service=notifuse-imap",
-        "traefik.tcp.services.notifuse-imap.loadbalancer.proxyprotocol.version=2",
-      ]
+      # Public par le 443 (oui de Robert, 24/11/2026) : Traefik -> entrée HAProxy de l'infra -> ici. Les étiquettes Traefik vivent sur
+      # l'entrée, jamais sur ce groupe à canari (fusible garde-tags-canari). PROXY v2 exigé : la vraie IP du client.
+      tags     = ["traefik.enable=false"]
     }
 
     service {
       name     = "notifuse-boxsmtp"
       provider = "nomad"
       port     = "boxsmtp"
-      tags = [
-        "traefik.enable=true",
-        "traefik.tcp.routers.notifuse-boxsmtp.rule=HostSNI(`smtp.veridian.site`)",
-        "traefik.tcp.routers.notifuse-boxsmtp.entrypoints=websecure",
-        "traefik.tcp.routers.notifuse-boxsmtp.tls=true",
-        "traefik.tcp.routers.notifuse-boxsmtp.tls.certresolver=letsencrypt",
-        "traefik.tcp.routers.notifuse-boxsmtp.service=notifuse-boxsmtp",
-      ]
+      tags     = ["traefik.enable=false"]
     }
 
     service {
