@@ -1138,7 +1138,10 @@ def cmd_campaign_audit(a):
         # et le rejet cite le domaine trouve DANS le message. Mesure du 0807 :
         # agences-veridian.fr a ete liste alors que les trois IP restaient propres.
         dbl = _dns_one(f"{d}.dbl.spamhaus.org", "A")
-        if dbl:
+        if dbl and dbl[0].startswith("127.255."):
+            # 127.255.255.x = Spamhaus REFUSE de repondre (resolveur public), ce n'est ni « liste » ni « propre » (24/11/2026).
+            P(f"  {d:<34} DBL non mesuree (refus Spamhaus {dbl[0]}) : interroger un serveur faisant autorite")
+        elif dbl:
             blocking.append(f"{d} liste sur la DBL Spamhaus ({dbl[0]}) — tout envoi "
                             "portant ce domaine sera rejete, delistage a demander")
         spf = [t for t in _dns_txt(d) if t.startswith("v=spf1")]
