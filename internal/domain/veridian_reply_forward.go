@@ -30,6 +30,11 @@ const (
 	// VeridianReplyForwardLease : duree pendant laquelle une copie prise a bail est a l envoi ; passe ce delai
 	// sans issue (processus mort), elle est reprise.
 	VeridianReplyForwardLease = 5 * time.Minute
+	// VeridianReplyForwardTransportSystem : les copies partent par l'adresse de service de Notifuse. Une copie est du courrier de
+	// service : par une adresse de prospection, Google la range en spam meme avec SPF, DKIM et DMARC valides (24/11/2026).
+	VeridianReplyForwardTransportSystem = "system"
+	// VeridianReplyForwardSystemDailyCap : plafond par profil et par 24 h par ce transport, partage par toute la plateforme.
+	VeridianReplyForwardSystemDailyCap = 60
 	// VeridianReplyForwardHeader trace une copie (et sert de garde anti-boucle en entree).
 	VeridianReplyForwardHeader = "X-Veridian-Forwarded"
 )
@@ -107,6 +112,9 @@ func truncateForError(s string) string {
 // ValidateVeridianReplyForwardTo valide (et normalise en place) la liste : au plus 5
 // adresses valides, jamais l adresse d envoi du profil (boucle).
 func (e *EmailProvider) ValidateVeridianReplyForwardTo() error {
+	if t := e.VeridianReplyForwardTransport; t != "" && t != VeridianReplyForwardTransportSystem {
+		return fmt.Errorf("veridian_reply_forward_transport: must be empty or %q", VeridianReplyForwardTransportSystem)
+	}
 	if e.VeridianReplyForwardDailyCap < 0 || e.VeridianReplyForwardDailyCap > VeridianReplyForwardMaxDailyCap {
 		return NewValidationError(fmt.Sprintf("veridian_reply_forward_daily_cap: must be between 1 and %d (0 = default %d), got %d",
 			VeridianReplyForwardMaxDailyCap, VeridianReplyForwardDefaultDailyCap, e.VeridianReplyForwardDailyCap))
@@ -146,11 +154,20 @@ func (e *EmailProvider) validateVeridianReplyForwardTo() error {
 
 // VeridianEffectiveReplyForwardDailyCap rend le plafond de copies par jour glissant du profil : sa valeur
 // si elle est dans [1, maximum], sinon le defaut (500). Nil-safe.
-func (e *EmailProvider) VeridianEffectiveReplyForwardDailyCap() int {
+func (e *EmailProvider) veridianReplyForwardDailyCapSetting() int {
 	if e == nil || e.VeridianReplyForwardDailyCap <= 0 || e.VeridianReplyForwardDailyCap > VeridianReplyForwardMaxDailyCap {
 		return VeridianReplyForwardDefaultDailyCap
 	}
 	return e.VeridianReplyForwardDailyCap
+}
+
+// VeridianEffectiveReplyForwardDailyCap : le plafond du profil, borne par celui du transport de service quand il est choisi.
+func (e *EmailProvider) VeridianEffectiveReplyForwardDailyCap() int {
+	c := e.veridianReplyForwardDailyCapSetting()
+	if e != nil && e.VeridianReplyForwardTransport == VeridianReplyForwardTransportSystem && c > VeridianReplyForwardSystemDailyCap {
+		return VeridianReplyForwardSystemDailyCap
+	}
+	return c
 }
 
 // VeridianIsOwnSenderAddress dit si addr est une adresse d envoi du profil (SMTP

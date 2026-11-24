@@ -973,3 +973,62 @@ func TestReplyForward_EndToEnd_RealSMTPTransportToLocalSink(t *testing.T) {
 	assert.Contains(t, string(body), "> Bonjour, je vous propose un site.")
 	assert.Equal(t, 1, strings.Count(string(messages[0].data), "X-Veridian-Forwarded"))
 }
+
+// --- transport de service (24/11/2026) -------------------------------------
+
+func systemProviderForTest() *domain.EmailProvider {
+	return &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{Host: "smtp.service.example", Port: 587},
+		Senders: []domain.EmailSender{{Email: "notifications@service.example", Name: "Notifuse"}}}
+}
+
+func systemForwardWorkspace(recipients ...string) *domain.Workspace {
+	ws := forwardWorkspace(recipients...)
+	ws.Name = "Green Beam Craft"
+	ws.Integrations[0].EmailProvider.VeridianReplyForwardTransport = domain.VeridianReplyForwardTransportSystem
+	return ws
+}
+
+func TestReplyForward_SystemTransport_NeverLeavesByTheProspectingAddress(t *testing.T) {
+	f, repo, mailer := newForwarderForTest(t, systemForwardWorkspace("a@client.fr", "b@client.fr"))
+	f.SetSystemTransport(systemProviderForTest)
+	msg, det := humanMsg(humanRaw)
+	require.Equal(t, ReplyForwardSent, f.Forward(context.Background(), "ws1", msg, det))
+	require.Len(t, mailer.sent, 1)
+	req := mailer.sent[0]
+	assert.Equal(t, "notifications@service.example", req.FromAddress)
+	assert.Equal(t, "Jean Dupont via Green Beam Craft", req.FromName)
+	assert.Equal(t, "smtp.service.example", req.Provider.SMTP.Host)
+	assert.Equal(t, "jean@acme.fr", req.EmailOptions.ReplyTo, "repondre ecrit toujours au prospect")
+	assert.Equal(t, []string{"b@client.fr"}, req.EmailOptions.CC)
+	assert.Equal(t, map[string]string{"X-Veridian-Forwarded": "1"}, mailer.headers[0], "la garde anti-boucle reste")
+	assert.Equal(t, []string{"sent:"}, repo.finished)
+}
+
+func TestReplyForward_SystemTransport_MissingIsRetriedNeverFallsBack(t *testing.T) {
+	f, repo, mailer := newForwarderForTest(t, systemForwardWorkspace("a@client.fr"))
+	msg, det := humanMsg(humanRaw)
+	require.Equal(t, ReplyForwardRetrying, f.Forward(context.Background(), "ws1", msg, det))
+	require.Empty(t, mailer.sent, "aucun repli par l'adresse de prospection")
+	f.SetSystemTransport(systemProviderForTest)
+	f.now = func() time.Time { return time.Date(2026, 11, 4, 11, 0, 0, 0, time.UTC) }
+	n, err := f.ProcessDue(context.Background(), "ws1", time.Time{})
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Len(t, mailer.sent, 1, "la copie gardee part des que le transport revient")
+	assert.Equal(t, "notifications@service.example", mailer.sent[0].FromAddress)
+	assert.Equal(t, []string{"sent:"}, repo.finished)
+}
+
+func TestReplyForward_SystemTransport_LoopAndDefault(t *testing.T) {
+	f, _, mailer := newForwarderForTest(t, systemForwardWorkspace("notifications@service.example"))
+	f.SetSystemTransport(systemProviderForTest)
+	msg, det := humanMsg(humanRaw)
+	require.Equal(t, ReplyForwardSkipLoop, f.Forward(context.Background(), "ws1", msg, det))
+	require.Empty(t, mailer.sent)
+	// Sans reglage : le profil, comme avant, meme si un transport de service existe.
+	f, _, mailer = newForwarderForTest(t, forwardWorkspace("a@client.fr"))
+	f.SetSystemTransport(systemProviderForTest)
+	require.Equal(t, ReplyForwardSent, f.Forward(context.Background(), "ws1", msg, det))
+	assert.Equal(t, "pro@send.example", mailer.sent[0].FromAddress)
+	assert.Nil(t, (&VeridianReplyForwarder{system: func() *domain.EmailProvider { return &domain.EmailProvider{} }}).systemProvider())
+}

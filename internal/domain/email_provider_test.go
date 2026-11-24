@@ -2242,3 +2242,15 @@ func TestEmailProvider_VeridianReplyForwardDailyCap_JSONRoundTripAndWorkspaceHoo
 	ok := EmailProvider{Kind: EmailProviderKindSMTP, VeridianReplyForwardTo: []string{"client@client.fr"}, VeridianReplyForwardDailyCap: 5000}
 	assert.NoError(t, ws.ValidateVeridianReturnIMAPLink(&ok))
 }
+
+// Le transport des copies de reponses vit dans le blob : absent par defaut (aucun profil existant ne change), conserve sinon.
+func TestEmailProvider_VeridianReplyForwardTransport_JSON(t *testing.T) {
+	b, err := json.Marshal(EmailProvider{})
+	if err != nil || strings.Contains(string(b), "veridian_reply_forward_transport") {
+		t.Fatalf("%s %v", b, err)
+	}
+	var e EmailProvider
+	if err := json.Unmarshal([]byte(`{"veridian_reply_forward_transport":"system"}`), &e); err != nil || e.VeridianReplyForwardTransport != VeridianReplyForwardTransportSystem {
+		t.Fatalf("%+v %v", e.VeridianReplyForwardTransport, err)
+	}
+}

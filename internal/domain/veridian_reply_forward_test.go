@@ -159,3 +159,20 @@ func TestVeridianBuildReplyForwardOverview(t *testing.T) {
 func TestVeridianReplyForward_RetryScheduleIsTheDocumentedOne(t *testing.T) {
 	assert.Equal(t, []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute, 2 * time.Hour, 6 * time.Hour, 12 * time.Hour}, VeridianReplyForwardRetryDelays)
 }
+
+func TestReplyForwardTransport_ValidationAndCap(t *testing.T) {
+	e := &EmailProvider{VeridianReplyForwardTransport: VeridianReplyForwardTransportSystem}
+	if err := e.ValidateVeridianReplyForwardTo(); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.VeridianEffectiveReplyForwardDailyCap(); got != VeridianReplyForwardSystemDailyCap {
+		t.Fatalf("plafond du transport de service : %d", got)
+	}
+	e.VeridianReplyForwardDailyCap = 10
+	if got := e.VeridianEffectiveReplyForwardDailyCap(); got != 10 {
+		t.Fatalf("un plafond plus bas tient : %d", got)
+	}
+	if err := (&EmailProvider{VeridianReplyForwardTransport: "autre"}).ValidateVeridianReplyForwardTo(); err == nil {
+		t.Fatal("transport inconnu accepte")
+	}
+}

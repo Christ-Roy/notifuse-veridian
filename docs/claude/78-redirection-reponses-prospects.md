@@ -96,6 +96,14 @@ fois » (un échec restait `failed` sans rejeu), aucune visibilité. Maintenant 
 - Statuts : `pending` (à l'envoi, bail), `retry` (rejeu à échéance), `deferred` (plafond), `sent`, `failed`.
   Les lignes `pending`/`retry` sans contenu (créées avant V74) sont closes `failed/no_payload` après 10 min.
 
+## Par quoi part la copie (24/11/2026)
+
+Une copie est du courrier de service : par l'identité de prospection du profil, Google la range en spam même avec SPF, DKIM et DMARC
+valides (mesuré pour messagerie-nord-776.fr). `veridian_reply_forward_transport = system` (`integrations:cold --reply-forward-transport
+system`) : elle part par le SMTP de service de Notifuse, « <prospect> via <espace> », Reply-To inchangé, en-tête anti-boucle inchangé, 60
+copies par 24 h et par profil au plus (au-delà : reportées, jamais perdues). Transport de service absent : rejeu, jamais de repli par
+l'adresse de prospection. Vide = le profil, comme avant ; une copie déjà composée garde son transport.
+
 ## Visibilité
 
 `profiles:overview` (API `emailProfiles.overview`, champ `reply_forward` de chaque profil, même contrat que le reste) :

@@ -94,7 +94,9 @@ type VeridianReplyForwarder struct {
 	mailer     veridianReplyForwardMailer
 	logger     logger.Logger
 
-	tasks     veridianReplyForwardTaskEnsurer
+	tasks veridianReplyForwardTaskEnsurer
+	// system rend le transport de service de Notifuse (nil : non configure).
+	system    func() *domain.EmailProvider
 	queueWait time.Duration
 	now       func() time.Time
 	// run lance le travail ; par defaut une goroutine (les tests l'executent en ligne).
@@ -109,6 +111,21 @@ type veridianReplyForwardTaskEnsurer interface {
 
 // SetTaskEnsurer branche la creation de la tache de rejeu (nil-safe : sans elle, pas de rejeu automatique).
 func (f *VeridianReplyForwarder) SetTaskEnsurer(e veridianReplyForwardTaskEnsurer) { f.tasks = e }
+
+// SetSystemTransport branche le transport de service de Notifuse (copies par "system").
+func (f *VeridianReplyForwarder) SetSystemTransport(p func() *domain.EmailProvider) { f.system = p }
+
+// systemProvider rend le transport de service, nil s'il n'est pas utilisable.
+func (f *VeridianReplyForwarder) systemProvider() *domain.EmailProvider {
+	if f.system == nil {
+		return nil
+	}
+	p := f.system()
+	if p == nil || p.Kind != domain.EmailProviderKindSMTP || p.SMTP == nil || p.SMTP.Host == "" || len(p.Senders) == 0 || p.Senders[0].Email == "" {
+		return nil
+	}
+	return p
+}
 
 // NewVeridianReplyForwarder construit le forwarder.
 func NewVeridianReplyForwarder(repo domain.VeridianReplyForwardRepository, workspaces veridianReplyForwardWorkspaces, mailer veridianReplyForwardMailer, log logger.Logger) *VeridianReplyForwarder {
@@ -274,6 +291,14 @@ func (f *VeridianReplyForwarder) forward(ctx context.Context, workspaceID string
 		if payload.FromName == "" {
 			payload.FromName = sender.Email
 		}
+		if provider.VeridianReplyForwardTransport == domain.VeridianReplyForwardTransportSystem {
+			if sys := f.systemProvider(); sys != nil && (replyFwdContains(finalRecipients, strings.ToLower(sys.Senders[0].Email)) || strings.EqualFold(fromAddr, sys.Senders[0].Email)) {
+				return ReplyForwardSkipLoop, ref.ProfileID
+			}
+			// L'adresse d'envoi est celle du transport de service AU MOMENT de l'envoi (deliver).
+			payload.Transport = domain.VeridianReplyForwardTransportSystem
+			payload.FromName = replyFwdTruncate(prospectName+" via "+replyFwdCleanText(replyFwdFirstNonEmpty(ws.Name, sender.Name, "Notifuse"), 60), 140)
+		}
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -320,6 +345,8 @@ type replyForwardPayload struct {
 	ReplyTo       string   `json:"rt"`
 	Subject       string   `json:"s"`
 	Text          string   `json:"t"`
+	// Transport : "system" = transport de service. Absent : le profil (copies gardees avant le 24/11/2026 comprises).
+	Transport string `json:"tr,omitempty"`
 }
 
 // deliver fait UNE tentative d'envoi d'une copie prise a bail et en consigne l'issue : sent, failed
@@ -333,6 +360,15 @@ func (f *VeridianReplyForwarder) deliver(ctx context.Context, workspaceID string
 	if p.FromAddress == "" {
 		f.finish(ctx, workspaceID, job.ReplyKey, domain.VeridianReplyForwardStatusFailed, "no_sender")
 		return ReplyForwardFailed
+	}
+	if p.Transport == domain.VeridianReplyForwardTransportSystem {
+		sys := f.systemProvider()
+		if sys == nil {
+			// Jamais par l'adresse de prospection a sa place : la copie est gardee et rejouee, l'echec se voit.
+			return f.failOrRetry(ctx, workspaceID, job, "no_system_transport", false)
+		}
+		p.FromAddress = sys.Senders[0].Email
+		provider = *sys
 	}
 	req := domain.SendEmailProviderRequest{
 		WorkspaceID:   workspaceID,
@@ -358,6 +394,11 @@ func (f *VeridianReplyForwarder) deliver(ctx context.Context, workspaceID string
 		return ReplyForwardSent
 	}
 	class, permanent := classifyReplyForwardError(sendErr)
+	return f.failOrRetry(ctx, workspaceID, job, class, permanent)
+}
+
+// failOrRetry consigne un echec : definitif (ou tentatives epuisees), sinon rejeu a echeance.
+func (f *VeridianReplyForwarder) failOrRetry(ctx context.Context, workspaceID string, job domain.VeridianReplyForwardJob, class string, permanent bool) VeridianReplyForwardOutcome {
 	delays := domain.VeridianReplyForwardRetryDelays
 	if permanent || job.Attempts < 1 || job.Attempts > len(delays) {
 		f.finish(ctx, workspaceID, job.ReplyKey, domain.VeridianReplyForwardStatusFailed, class)

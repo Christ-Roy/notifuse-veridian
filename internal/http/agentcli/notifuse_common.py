@@ -1888,6 +1888,7 @@ def cmd_integrations_list(a):
             "veridian_reply_forward_to": prov.get("veridian_reply_forward_to") or [],
             # Plafond de copies par 24 h glissantes (0/absent = défaut 500, maximum 5000).
             "veridian_reply_forward_daily_cap": prov.get("veridian_reply_forward_daily_cap") or 0,
+            "veridian_reply_forward_transport": prov.get("veridian_reply_forward_transport") or "profile",
         })
     print(json.dumps({"workspace": a.workspace, "integrations": view}, indent=2, ensure_ascii=False))
 
@@ -1973,6 +1974,13 @@ def cmd_integrations_cold(a):
         prov["veridian_reply_forward_to"] = parse_reply_forward_to(a.reply_forward_to, prov)
     # Plafond de copies par 24 h glissantes : fusible anti-boucle, JAMAIS une perte (au-delà, les copies sont
     # gardées « reportées » et partent dans l'ordre dès qu'une place se libère). 0 = retour au défaut (500).
+    # Par quoi partent les copies (24/11/2026) : "system" = l'adresse de service de Notifuse (une copie par une adresse de
+    # prospection finit en spam chez Google), "profile" = le SMTP du profil.
+    if getattr(a, "reply_forward_transport", None):
+        if a.reply_forward_transport == "system":
+            prov["veridian_reply_forward_transport"] = "system"
+        else:
+            prov.pop("veridian_reply_forward_transport", None)
     if getattr(a, "reply_forward_daily_cap", None) is not None:
         cap = parse_reply_forward_daily_cap(a.reply_forward_daily_cap)
         if cap == 0:
@@ -5053,6 +5061,8 @@ def build_parser(extra=None):
                     help="retire la redirection des réponses (retour au comportement par défaut : rien n'est transféré)")
     sp.add_argument("--reply-forward-daily-cap", dest="reply_forward_daily_cap", type=int,
                     help="plafond de copies de réponses par 24 h glissantes et par profil (1 à 5000, défaut 500, 0 = défaut). Fusible anti-boucle : au-delà, les copies sont GARDÉES (reportées) et partent dès qu'une place se libère, jamais perdues")
+    sp.add_argument("--reply-forward-transport", dest="reply_forward_transport", choices=["profile", "system"],
+                    help="par quoi partent les copies de réponses : system = l'adresse de service de Notifuse (hors spam, 60 copies/24 h au plus), profile = le SMTP du profil (défaut)")
     sp.set_defaults(func=cmd_integrations_cold)
 
     # profils d'envoi : vérité, lien IMAP, pause (lot 2, 08/10/2026)

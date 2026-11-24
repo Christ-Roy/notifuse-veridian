@@ -236,6 +236,9 @@ type EmailProvider struct {
 	// Plafond de copies de reponses par jour glissant de 24 h pour ce profil (fusible anti-boucle).
 	// 0 = defaut (500), maximum 5000. Au-dela, les copies sont gardees (deferred), jamais perdues.
 	VeridianReplyForwardDailyCap int `json:"veridian_reply_forward_daily_cap,omitempty"`
+
+	// Par quoi partent les copies : "" = le SMTP du profil (defaut), "system" = l'adresse de service de Notifuse (24/11/2026).
+	VeridianReplyForwardTransport string `json:"veridian_reply_forward_transport,omitempty"`
 }
 
 // Validate validates the email provider settings

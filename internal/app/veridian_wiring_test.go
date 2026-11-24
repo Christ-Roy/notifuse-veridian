@@ -196,3 +196,13 @@ func TestVeridianHost_ProvidesTheBounceChain(t *testing.T) {
 	require.NotNil(t, ap, "la boîte unifiée doit recevoir la chaîne des rebonds")
 	assert.Same(t, a.inboundWebhookEventService, ap.Webhooks)
 }
+
+func TestVeridianSystemTransport(t *testing.T) {
+	if veridianSystemTransport(config.SMTPConfig{Host: "smtp.service.example"}) != nil || veridianSystemTransport(config.SMTPConfig{FromEmail: "a@b.fr"}) != nil {
+		t.Fatal("transport incomplet rendu")
+	}
+	p := veridianSystemTransport(config.SMTPConfig{Host: "smtp.service.example", Port: 587, Username: "u", Password: "p", FromEmail: "notifications@service.example", UseTLS: true})
+	if p == nil || p.SMTP.Host != "smtp.service.example" || p.SMTP.Username != "u" || !p.SMTP.UseTLS || p.Senders[0].Email != "notifications@service.example" {
+		t.Fatalf("%+v", p)
+	}
+}

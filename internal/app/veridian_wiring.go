@@ -394,6 +394,8 @@ func (a *App) veridianInitServices(automationExecutor *service.AutomationExecuto
 			a.emailService,
 			a.logger,
 		)
+		// Transport de service (24/11/2026) : le SMTP systeme de Notifuse, celui des codes de connexion.
+		replyForwarder.SetSystemTransport(func() *domain.EmailProvider { return veridianSystemTransport(a.config.SMTP) })
 		// Rejeu natif (11/11/2026) : tache recurrente par workspace dans la file de taches du fork, creee a la
 		// demande ; elle survit aux redemarrages (table tasks) et reprend les copies pending/retry/deferred.
 		replyForwarder.SetTaskEnsurer(service.NewVeridianReplyForwardTaskEnsurer(a.taskRepo))
@@ -1116,6 +1118,18 @@ func (a *App) veridianWrapHandler(handler http.Handler) http.Handler {
 		return ids, nil
 	})(handler)
 	return handler
+}
+
+// veridianSystemTransport rend le SMTP systeme sous la forme d'un profil (nil s'il n'est pas configure).
+func veridianSystemTransport(c config.SMTPConfig) *domain.EmailProvider {
+	if c.Host == "" || c.FromEmail == "" {
+		return nil
+	}
+	return &domain.EmailProvider{
+		Kind:    domain.EmailProviderKindSMTP,
+		SMTP:    &domain.SMTPSettings{Host: c.Host, Port: c.Port, Username: c.Username, Password: c.Password, UseTLS: c.UseTLS, EHLOHostname: c.EHLOHostname},
+		Senders: []domain.EmailSender{{ID: "system", Email: c.FromEmail, Name: c.FromName, IsDefault: true}},
+	}
 }
 
 // veridianSMTPHandleMessage est le point d'entrée du bridge SMTP (app.go). Un message non
