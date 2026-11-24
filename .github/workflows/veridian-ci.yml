@@ -71,12 +71,9 @@ concurrency:
         && contains(github.event.head_commit.message, '[risk:low]')
         && !contains(github.event.head_commit.message, '[skip-prod]')
         && !contains(github.event.head_commit.message, '[wip]')))) && format('veridian-ci-prod-{0}', github.ref) || format('veridian-ci-{0}', github.ref) }}
-  cancel-in-progress: ${{ !(github.ref == 'refs/heads/veridian'
-    && ((github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
-      || (github.event_name == 'push'
-        && contains(github.event.head_commit.message, '[risk:low]')
-        && !contains(github.event.head_commit.message, '[skip-prod]')
-        && !contains(github.event.head_commit.message, '[wip]')))) }}
+  # 24/11/2026 : un push ordinaire attend aussi (il annulait le run précédent : 6 runs perdus ce jour-là). Seule une PR
+  # annule son propre run dépassé.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
@@ -636,7 +633,9 @@ jobs:
 
   build:
     name: Build & push image (GitHub-hosted)
-    needs: [test-go, cve-scan, trivy-fs, gitleaks, console-build, console-unit, e2e-console-prod-smoke]
+    # 24/11/2026 : en parallèle des tests (5 min gagnées). Ce job ne publie que l'étiquette immuable du commit, après le gate
+    # Trivy image. `:latest`, `:rollback`, une release, et tout déploiement exigent TOUS les tests (job `etiquettes`).
+    needs: [cve-scan, trivy-fs, gitleaks]
     # Runner GitHub hébergé (dépôt PUBLIC : gratuit) : il a Docker, le JIT du parc
     # n'en a pas. Context ., cache type=gha, push GHCR par token, aucune dépendance
     # au parc. Seuls deploy-staging, e2e-staging et la suite console (qui joignent
@@ -686,34 +685,18 @@ jobs:
           echo "is_saas_release=${IS_SAAS_RELEASE}" >> $GITHUB_OUTPUT
           echo "Image tag: ${TAG} (saas_release=${IS_SAAS_RELEASE})"
 
-      # Skip pour les releases saas-v* : on ne touche pas à :latest ni à :rollback,
-      # on ne fait qu'ajouter un tag SemVer immuable.
-      - name: Retag previous :latest as :rollback
-        if: steps.meta.outputs.is_saas_release != 'true'
-        continue-on-error: true
-        run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || exit 0
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rollback
-
-      # Tag :latest n'est PAS mis à jour pour les releases saas-v* :
-      # un tag SemVer release peut pointer sur n'importe quel commit
-      # (rollback inclus) et ne doit pas écraser le :latest qui sert
-      # le staging auto-deploy.
+      # Un tag de release n'est publié sous son nom qu'après les tests : ici, un nom de candidat.
       - name: Compute image tags
         id: image_tags
         run: |
           BASE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          if [[ "${{ steps.meta.outputs.is_saas_release }}" == "true" ]]; then
-            echo "tags<<EOF" >> $GITHUB_OUTPUT
-            echo "${BASE}:${{ steps.meta.outputs.tag }}" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "${BASE}:candidat-${{ github.run_id }}" >> $GITHUB_OUTPUT
           else
-            echo "tags<<EOF" >> $GITHUB_OUTPUT
             echo "${BASE}:${{ steps.meta.outputs.tag }}" >> $GITHUB_OUTPUT
-            echo "${BASE}:latest" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
           fi
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Build image (chargée en local, PAS publiée)
         id: build
@@ -875,9 +858,43 @@ jobs:
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "digest publié : $DIGEST"
 
+  # Tests verts : les étiquettes mobiles (:rollback = l'ancien :latest, :latest = cette image), ou le nom de la release.
+  # Une release saas-v* ne touche ni :latest ni :rollback (un tag peut viser n'importe quel commit).
+  etiquettes:
+    name: Étiquettes de l'image (après tous les tests)
+    needs: [build, test-go, console-build, console-unit, e2e-console-prod-smoke]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest  # gitops-ci-allow-hosted: depot PUBLIC (aucun cout, aucun code de PR n'atteint notre parc), pas besoin du tailnet
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Poser les étiquettes
+        env:
+          BASE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/saas-v* ]]; then
+            docker buildx imagetools create -t "$BASE:$TAG" "$BASE:candidat-${{ github.run_id }}"
+          else
+            SOURCE="$BASE:$TAG"
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              SOURCE="$BASE:candidat-${{ github.run_id }}"
+              docker buildx imagetools create -t "$BASE:$TAG" "$SOURCE"
+            fi
+            docker buildx imagetools create -t "$BASE:rollback" "$BASE:latest" || echo "::warning::pas de :latest précédent"
+            docker buildx imagetools create -t "$BASE:latest" "$SOURCE"
+          fi
+
   deploy-staging:
     name: Deploy staging (GitOps Nomad SSH-bastion)
-    needs: build
+    needs: [build, test-go, console-build, console-unit, e2e-console-prod-smoke]
     # Staging deploy auto sur push veridian uniquement.
     # Tags saas-v* sont des releases prod : pas d'auto-deploy.
     # Garde fork : un job JIT porte un secret réservé au parc (clé SSH du bastion)
@@ -1138,6 +1155,26 @@ jobs:
 
   # Suite console plus large, séquencée après le gate staging afin que le
   # runner Tailscale ne bloque jamais le déploiement qu'il doit tester.
+  # La suite informative tient le groupe 7 min : elle cède la place quand un run plus récent attend.
+  file-attente:
+    name: Un run plus récent attend-il ?
+    needs: [e2e-staging, e2e-prod]
+    if: ${{ !cancelled() && needs.e2e-staging.result == 'success' }}
+    runs-on: ubuntu-latest  # gitops-ci-allow-hosted: depot PUBLIC (aucun cout, aucun code de PR n'atteint notre parc), pas besoin du tailnet
+    permissions:
+      actions: read
+    outputs:
+      attend: ${{ steps.lire.outputs.attend }}
+    steps:
+      - id: lire
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=$(gh api "repos/${{ github.repository }}/actions/workflows/veridian-ci.yml/runs?branch=${{ github.ref_name }}&per_page=15" \
+            -q "[.workflow_runs[] | select(.run_number > ${{ github.run_number }} and .status != \"completed\")] | length") || N=0
+          echo "runs plus récents non finis : $N"
+          echo "attend=$([ "$N" -gt 0 ] && echo oui || echo non)" >> "$GITHUB_OUTPUT"
+
   console-e2e-informative:
     name: Console E2E on-prem après staging
     # === Veridian fix 2026-10-10 === ~13 min sur un runner JIT : la suite
@@ -1146,8 +1183,8 @@ jobs:
     # quand un déploiement prod a lieu. Sans prod (e2e-prod skipped) elle part comme
     # avant ; si e2e-prod échoue (rollback) elle ne part pas. `!cancelled()` est
     # nécessaire car un `needs` skipped saute sinon le job.
-    needs: [e2e-staging, e2e-prod]
-    if: ${{ !cancelled() && needs.e2e-staging.result == 'success' && (needs.e2e-prod.result == 'success' || needs.e2e-prod.result == 'skipped') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    needs: [e2e-staging, e2e-prod, file-attente]
+    if: ${{ !cancelled() && needs.file-attente.outputs.attend != 'oui' && needs.e2e-staging.result == 'success' && (needs.e2e-prod.result == 'success' || needs.e2e-prod.result == 'skipped') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     uses: ./.github/workflows/notifuse-console-e2e.yml
     with:
       wait_for_staging_deploy: true
