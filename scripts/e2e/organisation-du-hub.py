@@ -2,7 +2,7 @@
 """L'organisation vient du Hub (fiche 88) : poussée signée, relecture, puis la console LUE dans Chromium. Sort 0 (prouvé), 1 (défaut), 2 (non abouti).
 
 Défaut : staging, espace jetable, retiré à la fin. --prod --ws <espace> --tenant <hub_tenant_id> : pousse la couleur seule, sous le nom
-actuel (ni nom ni logo touchés), en version 1 et 2 (le Hub pousse des millisecondes : il reste devant), puis la retire. Dépend de notifuse-admin et playwright."""
+actuel (ni nom ni logo touchés), au-dessus de la version tenue (le Hub pousse des millisecondes : il reste devant ; s'il tient déjà l'espace, refus), puis la retire. Dépend de notifuse-admin et playwright."""
 import argparse, os, subprocess, sys, time, uuid
 
 sys.path.insert(0, os.path.expanduser("~/.claude/skills/notifuse-cli/bin"))
@@ -46,17 +46,21 @@ def relu():
     return nc.call_hmac(ENV, "GET", f"{SYNC}?hub_tenant_id={TENANT}")
 
 
+st, p = relu()
+BASEV = (p.get("version") or 0) if st == 200 else 0  # rejouable : on part de la version tenue
+if BASEV > 10**12:
+    print("NON ABOUTI : le Hub tient déjà cet espace (version en millisecondes), l'épreuve l'écraserait"); sys.exit(2)
 brand = {"couleur_primaire": COLOR, "couleur_accent": None, "logo_url": None, "favicon_url": None}
 name = ""
 if not a.prod:
     name = "Marque E2E"
     brand.update(nom_affiche=name, logo_url=LOGO, favicon_url=LOGO)
-st, p = push(1, brand, name)
+st, p = push(BASEV + 1, brand, name)
 check("poussée appliquée", st == 200 and p.get("applied") is True and p.get("workspace_id") == WS, f"{st} {p}")
-st, p = push(1, brand, name)
+st, p = push(BASEV + 1, brand, name)
 check("rejeu : unchanged", st == 200 and p.get("applied") is False and p.get("reason") == "unchanged", p)
 st, p = relu()
-check("version relue", st == 200 and p.get("version") == 1, f"{st} {p}")
+check("version relue", st == 200 and p.get("version") == BASEV + 1, f"{st} {p}")
 st, p = nc.call_hmac(ENV, "GET", f"{SYNC}?hub_tenant_id=inconnu-{int(time.time())}")
 check("tenant inconnu : 404", st == 404, st)
 st, p = nc.call_anon(ENV, "POST", SYNC, body={})
@@ -94,17 +98,17 @@ try:
             check("console : le favicon du Hub", v["favicon"] == LOGO, v["favicon"])
         if a.capture:
             page.screenshot(path=a.capture)
-        st, p = push(2, {**brand, "couleur_primaire": OTHER}, name)
+        st, p = push(BASEV + 2, {**brand, "couleur_primaire": OTHER}, name)
         check("version 2 appliquée", st == 200 and p.get("applied") is True, f"{st} {p}")
         v = console()
         check("console : la couleur suit, l'ancienne a disparu", rgb(OTHER) in v["colors"] and rgb(COLOR) not in v["colors"], v["selected"])
-        st, p = push(1, brand, name)
-        check("version ancienne : stale", st == 200 and p.get("applied") is False and p.get("reason") == "stale" and p.get("version") == 2, p)
+        st, p = push(BASEV + 1, brand, name)
+        check("version ancienne : stale", st == 200 and p.get("applied") is False and p.get("reason") == "stale" and p.get("version") == BASEV + 2, p)
         b.close()
 except Exception as e:  # noqa: BLE001 : une console illisible est un défaut ou une mesure non aboutie, jamais un vert
     check("console lue", False, str(e)[:300])
 if a.prod:
-    st, p = push(3, {"couleur_primaire": None}, "")
+    st, p = push(BASEV + 3, {"couleur_primaire": None}, "")
     check("couleur retirée", st == 200 and p.get("applied") is True, f"{st} {p}")
 elif not a.keep:
     subprocess.run(["notifuse-admin", "--env", ENV, "wipe", "--ids", WS], capture_output=True, timeout=120)
