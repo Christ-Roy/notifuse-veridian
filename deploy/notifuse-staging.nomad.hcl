@@ -254,6 +254,9 @@ VERIDIAN_DEFAULT_PLAN=free
 VERIDIAN_DEFAULT_CO_OWNER_EMAIL=robert.brunon@veridian.site
 NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025
 
+# Invitation d'un membre par le Hub (fiches 46 et 86) : secret perdu à la bascule vers Nomad, reposé le 24/11/2026. Variable absente = route 503.
+HUB_BASE_URL=https://hub.staging.veridian.site
+{{ if nomadVarExists "nomad/jobs/notifuse-staging/stack" }}{{ with nomadVar "nomad/jobs/notifuse-staging/stack" }}HUB_INVITATION_SECRET_NOTIFUSE={{ .HUB_INVITATION_SECRET_NOTIFUSE }}{{ end }}{{ end }}
 {{ with nomadVar "nomad/jobs/notifuse-staging" }}
 DB_PASSWORD={{ .POSTGRES_PASSWORD }}
 SECRET_KEY={{ .NOTIFUSE_SECRET_KEY }}

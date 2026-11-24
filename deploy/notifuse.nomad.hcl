@@ -307,6 +307,8 @@ VERIDIAN_DEFAULT_PLAN=free
 # IP tailnet du bastion (100.108.136.89) et de app-01 (100.81.160.83, relai ASD) autorisees pour les integrations IMAP/SMTP seulement (fiche 67).
 NOTIFUSE_TRUSTED_INTERNAL_HOSTS=100.108.136.89,100.81.160.83
 
+# Invitation d'un membre par le Hub (fiches 46 et 86) : secret perdu à la bascule vers Nomad, reposé le 24/11/2026. Variable absente = route 503.
+{{ if nomadVarExists "nomad/jobs/notifuse/stack" }}{{ with nomadVar "nomad/jobs/notifuse/stack" }}HUB_INVITATION_SECRET_NOTIFUSE={{ .HUB_INVITATION_SECRET_NOTIFUSE }}{{ end }}{{ end }}
 {{ with nomadVar "nomad/jobs/notifuse" }}
 DB_PASSWORD={{ .PG_SAAS_PASSWORD }}
 SECRET_KEY={{ .NOTIFUSE_SECRET_KEY }}

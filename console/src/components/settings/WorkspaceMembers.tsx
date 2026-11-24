@@ -289,7 +289,7 @@ export function WorkspaceMembers({
       // unifie + magic link auto-loggue). En self-hosted, comportement
       // upstream (invitation locale notifuse_invitations + email Notifuse).
       if (isManagedMode) {
-        await inviteViaHubOrLocal(inviteEmail, invitePermissions)
+        await inviteViaHub(inviteEmail)
         message.success(t`Invitation sent to ${inviteEmail}`)
       } else {
         // Call the API to invite the user with permissions
@@ -323,8 +323,8 @@ export function WorkspaceMembers({
         message.error(
           t`Your account is not yet linked to the Veridian Hub. Sign in once via the Hub to enable team invitations.`
         )
-      } else if (error instanceof ApiError && error.status === 502) {
-        // Hub down ou config en panne — wording neutre.
+      } else if (error instanceof ApiError && (error.status === 502 || error.status === 503)) {
+        // Hub down, ou invitation non configurée entre Notifuse et le Hub — wording neutre.
         message.error(
           t`The Veridian Hub is temporarily unavailable. Please try again in a moment.`
         )
@@ -419,24 +419,10 @@ export function WorkspaceMembers({
     }
   }
 
-  // Fiche 67 : en mode managed, l'invitation passe par le Hub ; si le Hub n'est pas
-  // configure cote Notifuse (503 hub invitation flow disabled), le owner ne doit pas
-  // rester bloque : repli sur l'invitation locale (email Notifuse, owner seulement).
-  const inviteViaHubOrLocal = async (email: string, permissions: UserPermissions) => {
-    try {
-      await workspaceService.inviteMemberViaHub({
-        workspace_id: workspaceId,
-        email,
-        role: 'member'
-      })
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 503) {
-        await workspaceService.inviteMember({ workspace_id: workspaceId, email, permissions })
-        return
-      }
-      throw error
-    }
-  }
+  // Fiche 86 : en mode managed, l'invitation passe par le Hub et par lui seul (un membre ne s'ajoute qu'au Hub).
+  // Aucun repli local : la route amont est fermée côté serveur.
+  const inviteViaHub = (email: string) =>
+    workspaceService.inviteMemberViaHub({ workspace_id: workspaceId, email, role: 'member' })
 
   const handleResendInvitation = async (email: string) => {
     if (!email) return
@@ -447,7 +433,7 @@ export function WorkspaceMembers({
       // (reused=true reemmet le mail d'invitation). En self-hosted, l'API
       // upstream upsert via inviteMember.
       if (isManagedMode) {
-        await inviteViaHubOrLocal(email, RESEND_DEFAULT_PERMISSIONS)
+        await inviteViaHub(email)
       } else {
         // Reuse the inviteMember API which will update the existing invitation due to UPSERT logic
         // Use default permissions for resending
@@ -642,15 +628,22 @@ export function WorkspaceMembers({
             />
           </Form.Item>
 
-          <Form.Item label={t`Permissions`}>
-            <Table
-              dataSource={createInvitePermissionsTableData(invitePermissions)}
-              columns={invitePermissionsColumns}
-              pagination={false}
-              size="small"
-              className="border border-gray-200 rounded-md"
-            />
-          </Form.Item>
+          {/* En mode managed, le Hub attache le membre avec tous les droits : un tableau ici n'aurait aucun effet. */}
+          {isManagedMode ? (
+            <p className="text-sm text-gray-500">
+              {t`The new member joins with full permissions. You can restrict them once the invitation is accepted.`}
+            </p>
+          ) : (
+            <Form.Item label={t`Permissions`}>
+              <Table
+                dataSource={createInvitePermissionsTableData(invitePermissions)}
+                columns={invitePermissionsColumns}
+                pagination={false}
+                size="small"
+                className="border border-gray-200 rounded-md"
+              />
+            </Form.Item>
+          )}
         </Form>
       </Modal>
 

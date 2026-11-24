@@ -82,6 +82,7 @@
   un seul est utilisé aujourd'hui — l'autre cause un crash silencieux le
   jour où un nouveau caller arrive). Smoke test obligatoire : `curl -X
   <METHOD>` chaque méthode déclarée dans la matrice ci-dessus.
+- **`HUB_INVITATION_SECRET_NOTIFUSE` : reperdu à la bascule vers Nomad, reposé le 24/11/2026** (`nomad/jobs/notifuse/stack`, fiche 86). Avant :
 - **`HUB_INVITATION_SECRET_NOTIFUSE` absent des composes Dokploy prod**
   jusqu'au 2026-05-23 (corrigé en session). Toujours vérifier les ENV
   des **DEUX** composes (Notifuse `WN0jglLj5bDIrXUFZHNmw` ET Hub

@@ -117,6 +117,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
 - `81` capacité base : connexions, `max_connections`, incident du 07/11
+- `86` un membre ne s'ajoute qu'au Hub : routes amont fermées (403), test des portes
 - `85` réservoirs : import massif dédoublonné, activation par lots, outils MCP, code mode
 - `79` CLI utilisateur à parité : qui peut quoi, tableau d'audit
 

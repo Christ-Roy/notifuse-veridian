@@ -201,7 +201,7 @@ GET_VERBS = {
     "contactLists.getContactsByList", "contactLists.getListsByContact",
     "contacts.getByExternalID", "blogThemes.getPublished", "blogThemes.get",
     "templateBlocks.list", "templateBlocks.get", "tasks.list", "tasks.get",
-    "workspaces.list", "workspaces.acceptInvitation", "workspaces.verifyInvitationToken",
+    "workspaces.list", "workspaces.verifyInvitationToken",
     "user.updateLanguage", "setup.status", "webhooks.status",
     "veridian/emailProfiles.usage", "veridian/emailProfiles.overview",
     "veridian/hub-discovery/me", "veridian/mode",
@@ -274,7 +274,7 @@ EXISTING_COMMAND_ROUTES = {
     "segments:contacts": ["/api/segments.contacts"],
     "segments:rebuild": ["/api/segments.rebuild"],
     "members:list": ["/api/workspaces.members"],
-    "members:invite": ["/api/workspaces.inviteMember"],
+    "members:invite": ["/api/veridian/workspaces.inviteMember"],
     "members:remove": ["/api/workspaces.removeMember"],
     "members:permissions": ["/api/workspaces.setUserPermissions"],
     "magic-link": ["/api/sso/issue-magic-link"],
@@ -595,7 +595,7 @@ def call_jwt(env, method, route, jwt, body=None, params=None):
 
 
 def call_anon(env, method, route, body=None, params=None):
-    """Tape une route SANS auth (ex workspaces.acceptInvitation, détection favicon)."""
+    """Tape une route SANS auth (ex workspaces.verifyInvitationToken, détection favicon)."""
     url = BASES[env] + route
     if params:
         qs = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
@@ -1733,10 +1733,12 @@ def _resolve_permissions(a):
 
 
 def cmd_members_invite(a):
-    jwt = owner_jwt(a.env, a.workspace)
-    perms = _resolve_permissions(a)
-    body = {"workspace_id": a.workspace, "email": a.email, "permissions": perms}
-    out(*call_jwt(a.env, "POST", "/api/workspaces.inviteMember", jwt, body=body))
+    # 24/11/2026 : un membre ne s'ajoute qu'au Hub (fiche 86). La route native est fermée ; l'invitation part par le Hub, qui
+    # attache le membre avec tous les droits.
+    if a.permissions or a.read_only or a.resources:
+        die("le Hub attache un membre avec tous les droits : invite sans restriction, puis members:permissions après acceptation.", code=2)
+    body = {"workspace_id": a.workspace, "email": a.email, "role": "member"}
+    out(*call_jwt(a.env, "POST", "/api/veridian/workspaces.inviteMember", owner_jwt(a.env, a.workspace), body=body))
 
 
 def cmd_members_remove(a):
@@ -4397,7 +4399,7 @@ def cmd_transactional_test_template(a):
 # ================================================================ long tail
 # générique : tout le reste des routes resource.verb sans commande dédiée
 # (blog*, templateBlocks*, tasks*, workspaces.{list,create,delete,
-# acceptInvitation,deleteInvitation,verifyInvitationToken}, demo.reset,
+# deleteInvitation,verifyInvitationToken}, demo.reset,
 # llm.chat, webhooks.register/status (inbound provider, DISTINCT de
 # webhookSubscriptions), inboundWebhookEvents.list, timeline.list,
 # veridian/{workspaces.inviteMember,messages.*,templates.deliverabilityScore,
@@ -4551,7 +4553,6 @@ RAW_ROUTES = [
     ("version", "GET", "/api/version", "none", []),
     ("utils:detect-favicon", "GET", "/api/detect-favicon", "none", []),
     ("workspaces:verify-invitation", "GET", "/api/workspaces.verifyInvitationToken", "none", []),
-    ("workspaces:accept-invitation", "POST", "/api/workspaces.acceptInvitation", "none", []),
     ("demo:reset", "POST", "/api/demo.reset", "none", []),
     ("provider-webhooks:register", "POST", "/api/webhooks.register", "owner", []),
     ("provider-webhooks:status", "GET", "/api/webhooks.status", "owner", []),
@@ -5808,12 +5809,12 @@ def build_parser(extra=None):
     # read+write). --read-only ou --resources pour restreindre. Sans ça, la route
     # serveur crée un membre SANS permission → dashboard cassé ("insufficient perms").
     sp = sub.add_parser("members:invite",
-                        help="invite un membre — PLEINS DROITS par défaut (owner)")
+                        help="invite un membre PAR LE HUB (owner) ; pleins droits, à restreindre ensuite par members:permissions")
     sp.add_argument("workspace", nargs="?", default=None); sp.add_argument("--email", required=True)
     sp.add_argument("--read-only", dest="read_only", action="store_true",
-                    help="droits en lecture seule sur les 10 ressources")
-    sp.add_argument("--resources", help="restreint aux ressources CSV (ex: contacts,lists,broadcasts)")
-    sp.add_argument("--permissions", help="objet UserPermissions JSON brut (ou @file) — override total")
+                    help="refusé : restreindre après acceptation (members:permissions)")
+    sp.add_argument("--resources", help="refusé : restreindre après acceptation (members:permissions)")
+    sp.add_argument("--permissions", help="refusé : restreindre après acceptation (members:permissions)")
     sp.set_defaults(func=cmd_members_invite)
 
     sp = sub.add_parser("members:remove", help="retire un membre (owner)")

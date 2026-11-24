@@ -12652,6 +12652,10 @@ msgstr "Le mail n'a pas été remis"
 msgid "The measure could not be made. Nothing is blocked."
 msgstr "La mesure n'a pas pu être faite. Rien n'est bloqué."
 
+#: src/components/settings/WorkspaceMembers.tsx
+msgid "The new member joins with full permissions. You can restrict them once the invitation is accepted."
+msgstr "Le nouveau membre rejoint l'espace avec tous les droits. Vous pourrez les restreindre une fois l'invitation acceptée."
+
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "The next attempt and the recorded reason are cleared. Nothing is deleted and no attempt is consumed."
 msgstr "La prochaine tentative et la raison enregistrée sont effacées. Rien n'est supprimé et aucune tentative n'est consommée."
