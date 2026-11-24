@@ -126,6 +126,10 @@ type EmailQueuePayload struct {
 	// sans aucune porte commerciale. Cf. queue/veridian_transactional_entry.go.
 	VeridianTransactional bool `json:"veridian_transactional,omitempty"`
 
+	// VeridianViaReserved (jamais persiste) : mail de masse d'un espace SANS profil commercial. Il part par le profil
+	// transactionnel reserve, mais avec toutes les portes du commercial.
+	VeridianViaReserved bool `json:"-"`
+
 	// Veridian fork — plafonds JOURNALIERS (cold outbound). Distincts du débit
 	// par minute ci-dessus : ce sont des volumes maximaux par jour calendaire
 	// (source de vérité = COUNT message_history depuis minuit, cf.

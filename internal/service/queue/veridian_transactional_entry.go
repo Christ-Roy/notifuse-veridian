@@ -55,6 +55,13 @@ func (w *EmailQueueWorker) veridianProcessTransactionalEntry(workspace *domain.W
 		entry.Payload.VeridianTransactional = false
 		return false
 	}
+	if w.veridianBulkTriggeredSequence(workspace, entry) {
+		// Le marqueur tombe : l'entree suit le chemin commercial (portes, plafonds, desinscription), par la rotation. Le profil
+		// reserve n'y est jamais candidat, sauf dans un espace qui n'a que lui : memes portes, plafonds par defaut de la politique.
+		entry.Payload.VeridianTransactional = false
+		entry.Payload.VeridianViaReserved = len(workspace.VeridianMarketingEmailProfiles()) == 0
+		return false
+	}
 	integration := workspace.GetIntegrationByID(reserved)
 	if integration == nil {
 		entry.Payload.VeridianTransactional = false
@@ -138,6 +145,32 @@ func (w *EmailQueueWorker) veridianProcessTransactionalEntry(workspace *domain.W
 		w.onEmailSent(workspace.ID, entry.SourceType, entry.SourceID, entry.ContactEmail, entry.MessageID)
 	}
 	return true
+}
+
+// veridianBulkTriggers : les declencheurs qu'un import ou un recalcul de segment pose en masse. Une confirmation, un
+// desabonnement ou un evenement d'e-mail concerne UN contact : ils restent transactionnels.
+var veridianBulkTriggers = map[string]bool{"contact.created": true, "contact.updated": true, "list.subscribed": true, "list.resubscribed": true, "segment.joined": true, "segment.left": true}
+
+// veridianBulkTriggeredSequence (24/11/2026) : une sequence qui demarre en MASSE (inscription a une liste, entree dans un segment,
+// creation ou mise a jour d'un contact) est commerciale quelle que soit la categorie de son modele : sinon un import suivi d'un
+// modele « transactionnel » envoyait sans plafond ni desinscription. Un evenement propre au contact (commande, paiement : custom
+// event, e-mail) reste transactionnel, comme tout envoi de l'API transactionnelle, qui ne passe pas par ici. Lecture en echec : la derniere garde
+// (veridianTransactionalAutomationAllowed) reporte l'entree.
+func (w *EmailQueueWorker) veridianBulkTriggeredSequence(workspace *domain.Workspace, entry *domain.EmailQueueEntry) bool {
+	if entry.SourceType != domain.EmailQueueSourceAutomation || w.automationRepo == nil {
+		return false
+	}
+	automation, err := w.automationRepo.GetByID(w.ctx, workspace.ID, entry.SourceID)
+	if err != nil || automation == nil || automation.Trigger == nil {
+		return false
+	}
+	kind := automation.Trigger.EventKind
+	if veridianBulkTriggers[kind] {
+		w.logger.WithFields(map[string]interface{}{"entry_id": entry.ID, "automation_id": entry.SourceID, "trigger": kind}).
+			Info("Transactional template in a bulk-triggered sequence: sent through the commercial gates")
+		return true
+	}
+	return false
 }
 
 // veridianFailTransactional marque une entree transactionnelle en echec lisible.

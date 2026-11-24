@@ -254,8 +254,11 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidatesWithAnchor(
 	if len(profiles) == 0 {
 		// Lot 4 : si l'integration assignee est le profil transactionnel reserve, la
 		// liste est vide (l'entree attend un profil commercial, elle ne part pas par lui).
-		return veridianDropReservedFromCandidates(workspace,
-			[]veridianFailoverCandidate{veridianCandidateFromIntegration(assigned, assignedFrom, assignedName)}), veridianAnchorInfo{}
+		only := []veridianFailoverCandidate{veridianCandidateFromIntegration(assigned, assignedFrom, assignedName)}
+		if entry.Payload.VeridianViaReserved {
+			return only, veridianAnchorInfo{}
+		}
+		return veridianDropReservedFromCandidates(workspace, only), veridianAnchorInfo{}
 	}
 
 	byID := make(map[string]domain.VeridianEmailProfile, len(profiles))

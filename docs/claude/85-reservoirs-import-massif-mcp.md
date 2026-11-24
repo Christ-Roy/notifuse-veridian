@@ -28,6 +28,9 @@ Migration V76 (lots nommés). Outils MCP : `internal/veridian/mcp/tools_reservoi
 - **Séquence hors plafond refusée** : un modèle de catégorie « transactionnel » part par le profil réservé sans aucune porte, plafond
   compris. Import avec `allow_triggers` et activation refusent une séquence qui en contient. Sans profil réservé (profil mixte), ces
   mails suivent le chemin commercial ; le plan affiche alors son plafond (`VeridianProfileCarriesCommercial`).
+- **À l'envoi aussi** : une séquence à déclencheur de masse (`list.subscribed`, `list.resubscribed`, `segment.*`, `contact.created/updated`)
+  est commerciale quelle que soit la catégorie du modèle (`veridianBulkTriggeredSequence`) ; sans profil commercial elle part par le
+  profil réservé AVEC les portes et plafonds par défaut. Événement du contact et API transactionnelle : inchangés.
 - **Épreuve** : `scripts/e2e/reservoir-plafond.py` (staging, puits local, témoin à deux fois le plafond, profil mixte).
 - **Aucun outil MCP ne relève un plafond** ni ne touche profils, intégrations, réglages : test `TestCatalog_AucunOutilNeToucheAuxPlafonds`.
 - Tout outil qui peut faire partir un mail est `destructiveHint` (`contacts_import`, `contacts_upsert` et `segment_rebuild` compris : ils peuvent démarrer une séquence).

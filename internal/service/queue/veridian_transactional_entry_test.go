@@ -222,7 +222,7 @@ func TestTransactionalEntry_ContactReplyDoesNotStopIt_ButADeadSequenceDoes(t *te
 		t.Cleanup(ctrl.Finish)
 		automations := mocks.NewMockAutomationRepository(ctrl)
 		automations.EXPECT().GetByID(gomock.Any(), "ws-1", "auto-1").
-			Return(&domain.Automation{ID: "auto-1", Status: domain.AutomationStatusPaused}, nil)
+			Return(&domain.Automation{ID: "auto-1", Status: domain.AutomationStatusPaused}, nil).MinTimes(1)
 		env.worker.SetAutomationSendGuard(automations, nil, nil)
 		entry := transactionalTestEntry("tx")
 		// Fiche 62 : une sequence en pause garde sa ligne (reportee), elle n'est pas supprimee.
@@ -245,4 +245,93 @@ func TestVeridianReservedTransactionalProfileDoesNotApplyToTheNativeSingleton(t 
 	cands := env.worker.veridianBuildFailoverCandidates(ws, entry, &ws.Integrations[0])
 	require.Len(t, cands, 1)
 	assert.Equal(t, "one", cands[0].IntegrationID, "le singleton partage reste un candidat commercial")
+}
+
+// Une sequence qui demarre en masse (import, segment) est commerciale quelle que soit la categorie de son modele : avant le
+// 24/11/2026, un modele transactionnel y partait sans plafond, sans fenetre et sans respecter la desinscription.
+func TestTransactionalEntry_BulkTriggeredSequencePassesTheCommercialGates(t *testing.T) {
+	run := func(t *testing.T, kind string, commercialProfile bool, classSent int, window *domain.VeridianSendingWindow) (sent bool, entry *domain.EmailQueueEntry) {
+		env := newVeridianThrottleTestEnv(t)
+		ws := transactionalTestWorkspace(true) // profil commercial « nord » : fenetre fermee, plafond 1
+		if !commercialProfile {
+			ws.Settings.VeridianMarketingEmailProviderIDs, ws.Settings.MarketingEmailProviderID = nil, ""
+		}
+		ws.Integrations[1].EmailProvider.VeridianSendingWindow = window
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+		automations := mocks.NewMockAutomationRepository(ctrl)
+		automations.EXPECT().GetByID(gomock.Any(), "ws-1", "auto-1").
+			Return(&domain.Automation{ID: "auto-1", Status: domain.AutomationStatusLive, Trigger: &domain.TimelineTriggerConfig{EventKind: kind}}, nil).AnyTimes()
+		replies := mocks.NewMockVeridianContactReplyRepository(ctrl)
+		replies.EXPECT().HasReplied(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).AnyTimes()
+		env.worker.SetAutomationSendGuard(automations, mocks.NewMockContactListRepository(ctrl), replies)
+		veridianExpectHealthyReputation(env, "ws-1", "nord.example")
+		veridianExpectHealthyReputation(env, "ws-1", "tx.example")
+		h := env.mockMessageHistoryRepo.EXPECT()
+		h.GetByContact(gomock.Any(), "ws-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, 0, nil).AnyTimes()
+		h.CountSentSinceForContact(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		h.CountSentSinceForClassAndSenderDomain(gomock.Any(), "ws-1", gomock.Any(), gomock.Any(), gomock.Any()).Return(classSent, nil).AnyTimes()
+		h.CountSentSinceForSenderDomain(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		h.CountSentSinceForSender(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		h.Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		q := env.mockQueueRepo.EXPECT()
+		q.SetNextRetry(gomock.Any(), "ws-1", "t1", gomock.Any()).Return(nil).AnyTimes()
+		q.MarkAsProcessing(gomock.Any(), "ws-1", "t1").Return(nil).AnyTimes()
+		q.MarkAsSent(gomock.Any(), "ws-1", "t1").Return(nil).AnyTimes()
+		env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, domain.SendEmailProviderRequest, bool) error { sent = true; return nil }).AnyTimes()
+		entry = transactionalTestEntry("tx")
+		env.worker.processEntry(ws, entry)
+		return sent, entry
+	}
+	for _, kind := range []string{"list.subscribed", "list.resubscribed", "segment.joined", "contact.created", "contact.updated"} {
+		sent, entry := run(t, kind, true, 0, nil)
+		assert.False(t, sent, "%s : la fenetre fermee du profil commercial retient le mail", kind)
+		assert.False(t, entry.Payload.VeridianTransactional, kind)
+	}
+	for _, kind := range []string{"custom_event", "list.confirmed", "list.unsubscribed", "email.opened"} {
+		sent, _ := run(t, kind, true, 0, nil)
+		assert.True(t, sent, "%s : un vrai transactionnel part sans porte", kind)
+	}
+	// Espace SANS profil commercial : le profil reserve, mais avec les memes portes.
+	sent, entry := run(t, "list.subscribed", false, 0, veridianClosedWindow())
+	assert.False(t, sent, "fenetre fermee : retenu")
+	assert.True(t, entry.Payload.VeridianViaReserved)
+	sent, _ = run(t, "list.subscribed", false, 1, nil)
+	assert.False(t, sent, "plafond de classe (1 par jour) atteint : retenu")
+	sent, _ = run(t, "custom_event", false, 1, veridianClosedWindow())
+	assert.True(t, sent, "un vrai transactionnel n'est jamais retenu")
+}
+
+// Portes ouvertes, plafonds par defaut : le mail de masse d'un espace sans profil commercial part bien, type commercial.
+func TestTransactionalEntry_BulkWithoutCommercialProfileStillLeaves(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := transactionalTestWorkspace(true)
+	ws.Settings.VeridianMarketingEmailProviderIDs, ws.Settings.MarketingEmailProviderID = nil, ""
+	ws.Settings.VeridianProviderClassDailyCap, ws.Settings.VeridianPerRecipientDailyCap = nil, 0
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	automations := mocks.NewMockAutomationRepository(ctrl)
+	automations.EXPECT().GetByID(gomock.Any(), "ws-1", "auto-1").
+		Return(&domain.Automation{ID: "auto-1", Status: domain.AutomationStatusLive, Trigger: &domain.TimelineTriggerConfig{EventKind: "list.subscribed"}}, nil).AnyTimes()
+	replies := mocks.NewMockVeridianContactReplyRepository(ctrl)
+	replies.EXPECT().HasReplied(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil).AnyTimes()
+	env.worker.SetAutomationSendGuard(automations, mocks.NewMockContactListRepository(ctrl), replies)
+	veridianExpectHealthyReputation(env, "ws-1", "tx.example")
+	env.mockMessageHistoryRepo.EXPECT().GetByContact(gomock.Any(), "ws-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, 0, nil).AnyTimes()
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			assert.NotEqual(t, domain.VeridianMessageTypeTransactional, m.VeridianMessageType, "compte dans les compteurs commerciaux")
+			return nil
+		})
+	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", "t1").Return(nil)
+	env.mockQueueRepo.EXPECT().MarkAsSent(gomock.Any(), "ws-1", "t1").Return(nil)
+	sent := false
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).
+		DoAndReturn(func(_ context.Context, r domain.SendEmailProviderRequest, _ bool) error {
+			sent = r.IntegrationID == "tx"
+			return nil
+		})
+	env.worker.processEntry(ws, transactionalTestEntry("tx"))
+	assert.True(t, sent)
 }
