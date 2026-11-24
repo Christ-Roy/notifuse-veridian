@@ -14,7 +14,9 @@ Migration V76 (lots nommés). Outils MCP : `internal/veridian/mcp/tools_reservoi
 
 ## Règles
 - **Dédoublonnage** : adresse toujours ; SIREN (`custom_json_N.siren` ou `external_id`) et domaine par défaut. Une messagerie ou une
-  plateforme partagée (classes d'envoi connues + `sharedExtra`) n'est jamais une clé. Dans un lot, le premier gagne.
+  plateforme partagée (classes d'envoi connues + `sharedExtra`) n'est jamais une clé ; sur une plateforme à sous-domaines (`platforms.go`, mesuré dans ODH : site-solocal, eatbu, e-monsite…) la clé est
+  le sous-domaine du client. Dans un lot, le premier gagne ; une fiche déjà là tient ses clés pour tout le lot (rejeu : personne de plus). La base est
+  lue avec la même réduction que le lot (hôte puis suffixes, sur tous les champs de site).
 - **Exclusions valables dans tout l'espace** : désinscrit, plainte, rebond dur (`contact_lists` ou `message_history`). Un rebond
   temporaire ou de politique ne bloque pas. Une exclusion s'applique même sans dédoublonnage.
 - **Fiche existante intacte par défaut** (`existing=attach`) ; `update` complète `custom_json_1` sans l'écraser et garde `created_at`.

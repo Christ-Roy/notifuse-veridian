@@ -185,6 +185,29 @@ func TestIntake_ImportDeMilleRejouableEtDedoublonne(t *testing.T) {
 	assert.Equal(t, "contact@societe7.fr", res.Details[0].DuplicateOf)
 }
 
+// Rejouer le même lot, entier ou en partie, ne crée personne : le constat d'Atlas en prod (25/11/2026), « 1 créé » au second envoi.
+func TestIntake_RejeuSansDoublonDeDomaine(t *testing.T) {
+	b := newBench(t)
+	lot := []json.RawMessage{raw(`{"email":"accueil@orange.fr","domaine":"www.hotel-exemple.fr"}`), raw(`{"email":"resa@gmail.com","domaine":"resa.hotel-exemple.fr"}`),
+		raw(`{"email":"a@orange.fr","domaine":"hotel-a.site-solocal.com"}`), raw(`{"email":"b@orange.fr","domaine":"hotel-b.site-solocal.com"}`),
+		raw(`{"email":"c@orange.fr","domaine":"c.fr","website":"https://second.fr/accueil"}`), raw(`{"email":"d@mail.sous.fr"}`)}
+	post := func(l []json.RawMessage) IntakeResult {
+		var r IntakeResult
+		require.Equal(t, 200, b.call("POST", "/api/veridian/contacts.intake", map[string]any{"workspace_id": "ws", "list_ids": []string{"reserve"}, "contacts": l}, &r))
+		return r
+	}
+	r := post(lot)
+	assert.Equal(t, 5, r.Created)
+	assert.Equal(t, map[string]int{ReasonBatchDomain: 1}, r.Skipped)
+	for _, l := range [][]json.RawMessage{lot, {lot[1], lot[0]}, {lot[1]}, {raw(`{"email":"z@gmail.com","site":"second.fr"}`)}, {raw(`{"email":"z@gmail.com","site":"https://www.sous.fr"}`)},
+		{raw(`{"email":"z@gmail.com","url":"hotel-b.site-solocal.com/menu"}`)}} {
+		r = post(l)
+		assert.Equal(t, 0, r.Created, "%s", l)
+		assert.Equal(t, 1, r.Skipped[ReasonDomain], "%s", l)
+	}
+	assert.Equal(t, 5, b.count(`SELECT count(*) FROM contacts`))
+}
+
 func TestIntake_ExclutDesinscritsRebondsPlaintes(t *testing.T) {
 	b := newBench(t)
 	for _, e := range []string{"stop@a.fr", "mort@b.fr", "spam@c.fr", "histo@d.fr", "doux@e.fr"} {

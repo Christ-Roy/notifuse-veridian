@@ -24,6 +24,38 @@ func TestNormalizeSirenEtDomaine(t *testing.T) {
 	assert.False(t, SharedDomain("exemple.fr"))
 }
 
+// Deux hôtels sur la même plateforme ne sont pas un doublon (constat d'Atlas, 25/11/2026) ; le même sous-domaine, si.
+func TestNormalizeDomain_Plateformes(t *testing.T) {
+	for in, want := range map[string]string{"aubergelebonaccueil.site-solocal.com": "aubergelebonaccueil.site-solocal.com", "https://www.hotel.site-solocal.com/x": "hotel.site-solocal.com",
+		"site-solocal.com": "site-solocal.com", "www.eatbu.com": "eatbu.com", "a.b.eatbu.com": "b.eatbu.com", "asso.free.fr": "asso.free.fr", "boutique.exemple.fr": "exemple.fr",
+		"https://fr-fr.facebook.com/hotel": "facebook.com"} {
+		assert.Equal(t, want, NormalizeDomain(in), in)
+	}
+	for _, d := range []string{"site-solocal.com", "eatbu.com", "facebook.com", "doctolib.fr", "free.fr", "business.site"} {
+		assert.True(t, SharedDomain(d), d)
+	}
+	assert.False(t, SharedDomain("hotel.site-solocal.com"))
+	assert.False(t, SharedDomain("asso.free.fr"))
+	p := Build(rows(t, `{"email":"a@orange.fr","domaine":"hotel-a.site-solocal.com"}`, `{"email":"b@orange.fr","domaine":"hotel-b.site-solocal.com"}`,
+		`{"email":"c@orange.fr","domaine":"https://www.hotel-a.site-solocal.com/"}`, `{"email":"d@orange.fr","website":"https://facebook.com/d"}`, `{"email":"e@orange.fr","website":"https://facebook.com/e"}`),
+		nil, Known{}, Dedupe{Siren: true, Domain: true})
+	assert.Len(t, p.New, 4)
+	assert.Equal(t, map[string]int{ReasonBatchDomain: 1}, p.Skipped)
+}
+
+// Une fiche déjà là tient son SIREN et ses domaines pour le lot, même reçue après, même si la base ne porte pas la clé.
+func TestBuild_UneFichePresenteTientSesCles(t *testing.T) {
+	in := rows(t, `{"email":"neuf@gmail.com","website":"https://un.fr"}`, `{"email":"autre@gmail.com","siren":"111111111"}`,
+		`{"email":"connu@gmail.com","website":"https://www.un.fr/","siren":"111111111"}`)
+	p := Build(in, nil, Known{Emails: map[string]bool{"connu@gmail.com": true}}, Dedupe{Siren: true, Domain: true})
+	assert.Empty(t, p.New)
+	assert.Len(t, p.Existing, 1)
+	assert.Equal(t, map[string]int{ReasonDomain: 1, ReasonSiren: 1}, p.Skipped)
+	assert.Equal(t, "connu@gmail.com", p.Details[0].DuplicateOf)
+	p = Build(in, nil, Known{Emails: map[string]bool{"connu@gmail.com": true}}, Dedupe{})
+	assert.Len(t, p.New, 2, "sans dédoublonnage, rien n'est tenu")
+}
+
 func TestParseRow(t *testing.T) {
 	r, reason := ParseRow(3, raw(`{"email":" Contact@Exemple.FR ","first_name":"Léa","siret":"35252230400012","website":"https://www.autre.fr","ville":"Lyon","custom_json_1":{"code_naf":"70.10Z","ville":"Paris"},"created_at":"2001-01-01T00:00:00Z"}`))
 	require.Empty(t, reason)

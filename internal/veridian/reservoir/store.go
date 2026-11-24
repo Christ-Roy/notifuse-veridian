@@ -84,10 +84,13 @@ func (s *Store) Known(ctx context.Context, ws string, rows []Row, d Dedupe) (Kno
 		}
 	}
 	if len(domains) > 0 {
+		// Mêmes clés et même réduction que NormalizeDomain : l'hôte, puis ses suffixes. La liste ne porte que des clés déjà réduites.
 		if err := scan(ctx, db, func(v []string) { k.Domains[v[0]] = v[1] }, 2, `
-			SELECT d, email FROM (
-				SELECT c.email, unnest(ARRAY[split_part(c.email, '@', 2), c.custom_json_1->>'domaine', c.custom_json_1->>'domain', lower(c.external_id)]) AS d
-				FROM contacts c) x WHERE d = ANY($1)`, pq.Array(domains)); err != nil {
+			WITH v AS (SELECT c.email, t.v FROM contacts c CROSS JOIN LATERAL (VALUES (split_part(c.email, '@', 2)), (c.custom_json_1->>'domaine'), (c.custom_json_1->>'domain'),
+					(c.custom_json_1->>'website'), (c.custom_json_1->>'site'), (c.custom_json_1->>'site_web'), (c.custom_json_1->>'url'), (c.external_id)) t(v) WHERE t.v LIKE '%.%'),
+				h AS (SELECT email, regexp_replace(regexp_replace(lower(btrim(v)), '^[a-z]+://', ''), '[/:?#].*$', '') AS h FROM v)
+			SELECT s.d, h.email FROM h CROSS JOIN LATERAL (VALUES (h.h), (regexp_replace(h.h, '^[^.]+\.', '')), (regexp_replace(h.h, '^[^.]+\.[^.]+\.', ''))) s(d)
+			WHERE s.d = ANY($1)`, pq.Array(domains)); err != nil {
 			return k, err
 		}
 	}

@@ -138,7 +138,7 @@ func NormalizeSiren(s string) string {
 	return d[:9]
 }
 
-// NormalizeDomain : domaine enregistrable (exemple.fr) d'un domaine ou d'une URL. Vide si illisible.
+// NormalizeDomain : domaine enregistrable (exemple.fr) d'un domaine ou d'une URL, ou sous-domaine du client sur une plateforme. Vide si illisible.
 func NormalizeDomain(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if s == "" || strings.ContainsAny(s, "@ ") {
@@ -151,23 +151,23 @@ func NormalizeDomain(s string) string {
 	if err != nil || u.Hostname() == "" {
 		return ""
 	}
-	d, err := publicsuffix.EffectiveTLDPlusOne(strings.TrimSuffix(u.Hostname(), "."))
+	host := strings.TrimSuffix(u.Hostname(), ".")
+	d, err := publicsuffix.EffectiveTLDPlusOne(host)
 	if err != nil {
 		return ""
 	}
-	return d
+	return platformKey(host, d)
 }
 
 // sharedExtra : messageries grand public hors des classes d'envoi connues. Deux entreprises y cohabitent.
 var sharedExtra = map[string]bool{"icloud.com": true, "me.com": true, "mac.com": true, "proton.me": true, "protonmail.com": true, "pm.me": true,
 	"gmx.com": true, "gmx.net": true, "gmx.de": true, "mail.com": true, "yandex.com": true, "yandex.ru": true, "mail.ru": true, "zoho.com": true,
 	"tutanota.com": true, "ik.me": true, "netcourrier.com": true, "mailo.com": true, "libertysurf.fr": true, "tele2.fr": true, "voila.fr": true,
-	"caramail.com": true, "nordnet.fr": true, "facebook.com": true, "instagram.com": true, "linkedin.com": true, "wixsite.com": true,
-	"business.site": true, "google.com": true, "pagesjaunes.fr": true, "wordpress.com": true, "jimdosite.com": true, "linktr.ee": true}
+	"caramail.com": true, "nordnet.fr": true}
 
 // SharedDomain : messagerie ou plateforme partagée, jamais une clé de dédoublonnage.
 func SharedDomain(d string) bool {
-	return sharedExtra[d] || domain.ClassifyProviderClass("x@"+d) != domain.ProviderClassCorporate
+	return sharedExtra[d] || hostPlatforms[d] || pathPlatforms[d] || domain.ClassifyProviderClass("x@"+d) != domain.ProviderClassCorporate
 }
 
 func addDomain(list []string, d string) []string {
@@ -315,6 +315,25 @@ func Build(rows []Row, bad []Detail, k Known, d Dedupe) *Plan {
 		p.skip(Row{Index: b.Index, Email: b.Email}, b.Reason, "")
 	}
 	emails, sirens, domains := map[string]bool{}, map[string]string{}, map[string]string{}
+	// Une fiche déjà là tient son SIREN et ses domaines pour tout le lot, quel que soit l'ordre : rejouer un lot n'ajoute personne.
+	heldSiren, heldDomain := map[string]string{}, map[string]string{}
+	for _, r := range rows {
+		if !k.Emails[r.Email] {
+			continue
+		}
+		if r.Siren != "" {
+			heldSiren[r.Siren] = r.Email
+		}
+		for _, dom := range r.Domains {
+			heldDomain[dom] = r.Email
+		}
+	}
+	for s, of := range k.Sirens {
+		heldSiren[s] = of
+	}
+	for dom, of := range k.Domains {
+		heldDomain[dom] = of
+	}
 next:
 	for _, r := range rows {
 		if emails[r.Email] {
@@ -335,7 +354,7 @@ next:
 				p.skip(r, ReasonBatchSiren, of)
 				continue
 			}
-			if of, ok := k.Sirens[r.Siren]; ok {
+			if of, ok := heldSiren[r.Siren]; ok {
 				p.skip(r, ReasonSiren, of)
 				continue
 			}
@@ -346,7 +365,7 @@ next:
 					p.skip(r, ReasonBatchDomain, of)
 					continue next
 				}
-				if of, ok := k.Domains[dom]; ok {
+				if of, ok := heldDomain[dom]; ok {
 					p.skip(r, ReasonDomain, of)
 					continue next
 				}
