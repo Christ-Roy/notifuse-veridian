@@ -40,6 +40,7 @@ import {
 // === Veridian patch === co-brand léger (header link, footer) + bandeau
 // soft-delete. Composants event-driven / query-driven, dégradent
 // silencieusement en mode self-hosted.
+import { VeridianBrandProvider } from '../components/veridian_organisation'
 import { VeridianBrandHeaderLink } from '../components/veridian_brand_header_link'
 import { VeridianConnectAI } from '../components/veridian_connect_ai'
 import { VeridianBrandFooter } from '../components/veridian_brand_footer'
@@ -476,6 +477,7 @@ export function WorkspaceLayout() {
   const headerLeft = isMobile ? 0 : undefined
 
   return (
+    <VeridianBrandProvider workspaceId={workspaceId}>
     <ContactsCsvUploadProvider>
       <Layout style={{ minHeight: '100vh', backgroundColor: '#F9F9F9' }}>
         <Layout>
@@ -812,5 +814,6 @@ export function WorkspaceLayout() {
         </Layout>
       </Layout>
     </ContactsCsvUploadProvider>
+    </VeridianBrandProvider>
   )
 }

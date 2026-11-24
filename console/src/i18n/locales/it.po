@@ -7416,6 +7416,7 @@ msgstr "Logo"
 msgid "Logo Preview"
 msgstr "Anteprima Logo"
 
+#: src/components/settings/GeneralSettings.tsx
 #: src/components/settings/LogoInput.tsx
 msgid "Logo URL"
 msgstr "URL Logo"
@@ -12650,6 +12651,10 @@ msgstr ""
 #: src/components/prospection/veridian_transactional_watch.tsx
 #: src/components/prospection/veridian_transactional_watch.tsx
 msgid "The measure could not be made. Nothing is blocked."
+msgstr ""
+
+#: src/components/veridian_organisation.tsx
+msgid "The name and logo come from your Veridian organization and are changed there."
 msgstr ""
 
 #: src/components/settings/WorkspaceMembers.tsx

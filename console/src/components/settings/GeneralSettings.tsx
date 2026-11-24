@@ -7,6 +7,7 @@ import { workspaceService } from '../../services/api/workspace'
 import { TIMEZONE_OPTIONS } from '../../lib/timezones'
 import { LANGUAGE_OPTIONS } from '../../lib/languages'
 import { LogoInput } from './LogoInput'
+import { VeridianOrganisationNotice, useVeridianOrganisation } from '../veridian_organisation'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
 
 interface GeneralSettingsProps {
@@ -21,6 +22,9 @@ export function GeneralSettings({ workspace, onWorkspaceUpdate, isOwner }: Gener
   const [formTouched, setFormTouched] = useState(false)
   const [form] = Form.useForm()
   const { message } = App.useApp()
+  // Fiche 88 : nom et logo viennent du Hub quand l'organisation est poussée.
+  const organisation = useVeridianOrganisation(workspace?.id)
+  const logoFromHub = !!organisation?.managed && !!organisation.brand?.logo_url
 
   useEffect(() => {
     // Only set form values if user is owner (form will be rendered)
@@ -171,8 +175,9 @@ export function GeneralSettings({ workspace, onWorkspaceUpdate, isOwner }: Gener
           label={t`Workspace Name`}
           rules={[{ required: true, message: t`Please enter workspace name` }]}
         >
-          <Input placeholder={t`Enter workspace name`} />
+          <Input placeholder={t`Enter workspace name`} disabled={!!organisation?.managed} />
         </Form.Item>
+        {organisation?.managed && <VeridianOrganisationNotice />}
 
         <Form.Item
           name="website_url"
@@ -182,7 +187,13 @@ export function GeneralSettings({ workspace, onWorkspaceUpdate, isOwner }: Gener
           <Input placeholder="https://example.com" />
         </Form.Item>
 
-        <LogoInput />
+        {logoFromHub ? (
+          <Form.Item name="logo_url" label={t`Logo URL`}>
+            <Input disabled />
+          </Form.Item>
+        ) : (
+          <LogoInput />
+        )}
 
         <Form.Item
           name="timezone"
