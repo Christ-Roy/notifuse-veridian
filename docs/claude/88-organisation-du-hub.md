@@ -21,4 +21,5 @@ Robert, 24/11 : « une seule configuration sur le Hub […] pareil pour Notifuse
 s'il a été modifié à l'écran. Éteint : retiré. L'adresse vient de la configuration, jamais de l'appelant. Les abonnements du client ne sont pas touchés.
 Contrat de l'événement : `docs/veridian/BOITE-UNIFIEE.md`. Lien d'une conversation : `/console/workspace/<ws>/inbox?message=<data.message_id>&onglet=conversation&nature=toutes`.
 
+Épreuve : `scripts/e2e/organisation-du-hub.py` (staging par défaut, console lue dans Chromium ; `--prod` : couleur seule).
 CLI opérateur : `hub:organisation-sync`, `hub:organisation-version`, `hub:abonnement`, `organisation:get`.
