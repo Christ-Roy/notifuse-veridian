@@ -276,7 +276,14 @@ export async function waitForAppMount(page: Page, timeout = 30_000): Promise<voi
  *
  * Pattern éprouvé dans `saasification.spec.ts` test 3.
  */
+// Une connexion ouvre le Dashboard (34 appels d'API), puis la page testée : sans pause, la suite dépasse seule la limite de 300 par minute et par IP
+// (fiche 44) et lit des 429 qu'aucune personne ne verrait. La limite reste : c'est le rythme du test qui s'y plie.
+const LOGIN_EVERY_MS = 16_000
+let lastLogin = Date.now() - LOGIN_EVERY_MS / 2
+
 export async function loginViaAutoLogin(page: Page, autoLoginUrl: string): Promise<void> {
+  await page.waitForTimeout(Math.max(0, lastLogin + LOGIN_EVERY_MS - Date.now()))
+  lastLogin = Date.now()
   await page.goto(autoLoginUrl)
   // Page intermédiaire HTML stocke auth_token puis redirect /console (root).
   // Le frontend pick ensuite le workspace tout seul.
