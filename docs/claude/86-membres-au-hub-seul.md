@@ -24,7 +24,7 @@ en base, 0 appel sur 14 jours de journaux (témoin : `createAPIKey` vu).
 
 `TestPortes_ToutAjoutDHumainEstConnu` lit le code et refuse une porte neuve (création d'utilisateur, ajout à un espace), la nôtre ou celle
 d'une synchronisation amont. Restent : routes signées par le Hub, `setup.initialize` (refusée une fois installé), copropriétaire configuré
-(`VERIDIAN_DEFAULT_CO_OWNER_EMAIL`), `createAPIKey` (machine). `signin`, `verify` et `rootSignin` ne créent personne. Modifications locales
+(`VERIDIAN_DEFAULT_CO_OWNER_EMAIL`, éteint partout depuis le 25/11/2026 : il change les rôles d'un client à chaque provision rejouée), `createAPIKey` (machine). `signin`, `verify` et `rootSignin` ne créent personne. Modifications locales
 encore possibles sans le Hub : `setUserPermissions`, `removeMember` (aussi la révocation d'une clé API), l'outil opérateur qui a le secret.
 
 ## Parcours réel et contrat du Hub
@@ -37,3 +37,7 @@ Refus motivés à la création, montrés tels quels (`code` = `hub_<motif>`) : 4
 ## Retrait : ce qui reste actif
 `remove-member` retire l'humain seul. Une clé API est un compte machine de l'espace, sans auteur noté : **aucune n'est coupée**. La réponse
 rend `active_api_keys` (hors clé du Hub ; absent = non compté) et `api_keys_url` (page Équipe). Les accès de boîte (fiche 84) restent aussi.
+
+## Qui peut retirer qui (mesuré dans le code, 25/11/2026)
+En amont, tout propriétaire retire n'importe quel autre membre, propriétaire compris (`WorkspaceService.RemoveMember`) ; seul soi-même est refusé.
+La symétrie vaut dans les deux sens. `TransferOwnership` rétrograde l'ancien propriétaire en membre : `admin/attach-owner` l'appelle.

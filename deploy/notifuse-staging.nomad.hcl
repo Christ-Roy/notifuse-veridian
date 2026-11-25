@@ -252,8 +252,6 @@ CHECK_FOR_UPDATES=false
 API_ENDPOINT=https://notifuse.staging.veridian.site
 INTERNAL_API_ENDPOINT=http://localhost:8081
 VERIDIAN_DEFAULT_PLAN=free
-# Co-owner par defaut de chaque espace cree (Robert Brunon, 30/10/2026). Adresse, pas un secret. Vide = desactive.
-VERIDIAN_DEFAULT_CO_OWNER_EMAIL=robert.brunon@veridian.site
 # 1025 : puits SMTP. 1026 : port fermé, pour prouver le disjoncteur (cold-garde-fous.py, G1).
 NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025,127.0.0.1:1026
 

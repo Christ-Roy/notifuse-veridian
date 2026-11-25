@@ -771,7 +771,9 @@ def owner_login_url(env, tenant_id):
     owners.sort(key=lambda m: not (m.get("email") or "").lower().endswith(ours))
     for m in owners:
         st, r = call_hmac(env, "POST", "/api/sso/issue-magic-link",
-                          {"hub_user_id": m["hub_user_id"], "email": m.get("email") or "", "email_proven": False})
+                          {"hub_user_id": m["hub_user_id"], "email": m.get("email") or "", "email_proven": False,
+                           # L'espace DEMANDÉ : sans lui, une personne de plusieurs espaces atterrit ailleurs (chez un client, 25/11/2026).
+                           "next": "/console/workspace/" + urllib.parse.quote(tenant_id, safe="")})
         url = r.get("magic_link_url") if isinstance(r, dict) else None
         if st == 200 and url:
             if not (m.get("email") or "").lower().endswith(ours) and env == "prod":
