@@ -383,7 +383,7 @@ func TestIdempotence(t *testing.T) {
 
 func TestCatalogue_AucuneActionNEnvoie(t *testing.T) {
 	want := map[string]string{"contacts.importer": "notifuse:contacts.ecrire", "listes.lister": "notifuse:contacts.ecrire", "listes.creer": "notifuse:contacts.ecrire",
-		"sequences.lister": "notifuse:contacts.ecrire", "sequences.inscrire": "notifuse:sequences.inscrire"}
+		"contacts.lire": "notifuse:contacts.lire", "sequences.lister": "notifuse:contacts.ecrire", "sequences.inscrire": "notifuse:sequences.inscrire"}
 	got := map[string]string{}
 	for n, a := range catalogue {
 		got[n] = a.scope
@@ -395,12 +395,13 @@ func TestCatalogue_AucuneActionNEnvoie(t *testing.T) {
 		"contacts.importer":  {"POST /api/veridian/contacts.intake"},
 		"listes.lister":      {"GET /api/veridian/reservoir.lists"},
 		"listes.creer":       {"GET /api/lists.get", "POST /api/lists.create"},
+		"contacts.lire":      {"POST /api/veridian/contacts.state"},
 		"sequences.lister":   {"GET /api/automations.list"},
 		"sequences.inscrire": {"POST /api/veridian/contacts.intake", "POST /api/veridian/reservoir.activate"},
 	}
-	for n, b := range map[string]string{"contacts.importer": body, "listes.lister": "", "listes.creer": `{"id":"l9","name":"Lot"}`, "sequences.lister": "", "sequences.inscrire": enrollBody} {
+	for n, b := range map[string]string{"contacts.importer": body, "listes.lister": "", "listes.creer": `{"id":"l9","name":"Lot"}`, "contacts.lire": `{"emails":["a@x.test"]}`, "sequences.lister": "", "sequences.inscrire": enrollBody} {
 		e := newEnv(t)
-		e.post(n, e.hub.token(t, func(c *mcp.Claims) { c.Scope += " notifuse:sequences.inscrire" }), "cle-"+n, b)
+		e.post(n, e.hub.token(t, func(c *mcp.Claims) { c.Scope += " notifuse:sequences.inscrire notifuse:contacts.lire" }), "cle-"+n, b)
 		require.NotEmpty(t, e.d.paths, n)
 		for _, p := range e.d.paths {
 			assert.Contains(t, allowed[n], p, n)

@@ -17,6 +17,7 @@ import { useMailEvents } from '../components/mail/veridian_mail_hooks'
 import { VeridianMailFilters } from '../components/mail/veridian_mail_filters'
 import { MAIL_TIMEZONE, useMailLabels } from '../components/mail/veridian_mail_labels'
 import { VeridianMailList } from '../components/mail/veridian_mail_list'
+import { VeridianMailCompose } from '../components/mail/veridian_mail_compose'
 import { VeridianMailMessageView } from '../components/mail/veridian_mail_message_view'
 import { mailKeys, useMailboxes } from '../components/mail/veridian_mail_queries'
 import { VeridianMailTimeline } from '../components/mail/veridian_mail_timeline'
@@ -320,6 +321,13 @@ export function InboxPage() {
         overflow: 'hidden'
       }}
     >
+      <VeridianMailCompose
+        workspaceId={workspaceId}
+        to={search.ecrire}
+        mailboxes={mailboxes}
+        onClose={() => setSearch({ ecrire: undefined }, true)}
+        onSent={() => void queryClient.invalidateQueries({ queryKey: mailKeys.all(workspaceId) })}
+      />
       {showList && (
         <aside
           aria-label={t`Message list`}

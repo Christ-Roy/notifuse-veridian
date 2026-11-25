@@ -240,3 +240,53 @@ func buildSequences(ws, _ string, raw []byte) (*call, error) {
 		return http.StatusOK, b, err
 	}}, nil
 }
+
+// buildRead : l'état de contacts, dans les mots du contrat. Lecture.
+func buildRead(ws, _ string, raw []byte) (*call, error) {
+	var req struct {
+		Emails []string `json:"emails"`
+	}
+	if err := strict(raw, &req); err != nil {
+		return nil, err
+	}
+	if len(req.Emails) == 0 || len(req.Emails) > maxEnrollPerCall {
+		return nil, fmt.Errorf("1 à %d adresses par appel", maxEnrollPerCall)
+	}
+	return &call{readOnly: true, run: func(do request, _ gesture) (int, []byte, error) {
+		b, err := json.Marshal(map[string]any{"workspace_id": ws, "emails": req.Emails})
+		if err != nil {
+			return 0, nil, err
+		}
+		status, out, err := do(http.MethodPost, "/api/veridian/contacts.state", nil, b)
+		if err != nil || status != http.StatusOK {
+			return status, out, err
+		}
+		var l struct {
+			Contacts []struct {
+				Email     string            `json:"email"`
+				Exists    bool              `json:"exists"`
+				Lists     []json.RawMessage `json:"lists"`
+				Blocked   string            `json:"blocked"`
+				Replied   bool              `json:"replied"`
+				Sequences []json.RawMessage `json:"sequences"`
+				LastSent  string            `json:"last_sent"`
+			} `json:"contacts"`
+		}
+		if json.Unmarshal(out, &l) != nil {
+			return 0, nil, errors.New("contacts.state : réponse illisible")
+		}
+		orNil := func(s string) any {
+			if s == "" {
+				return nil
+			}
+			return s
+		}
+		res := []map[string]any{}
+		for _, c := range l.Contacts {
+			res = append(res, map[string]any{"email": c.Email, "existe": c.Exists, "listes": c.Lists, "bloque": orNil(c.Blocked), "a_repondu": c.Replied,
+				"sequences_en_cours": c.Sequences, "dernier_envoi": orNil(c.LastSent)})
+		}
+		b, err = json.Marshal(map[string]any{"contacts": res})
+		return http.StatusOK, b, err
+	}}, nil
+}

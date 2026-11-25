@@ -83,6 +83,9 @@ type action struct {
 // Portée du registre du Hub (lib/delegation/paires.ts) : le Hub refuse toute autre portée.
 const scopeContacts = "notifuse:contacts.ecrire"
 
+// scopeRead : lire l'état d'un contact (listes, désinscription), pour l'afficher ailleurs.
+const scopeRead = "notifuse:contacts.lire"
+
 // scopeSequences : inscrire une personne à une séquence. Séparée : elle fait partir du courrier, au rythme des portes d'envoi.
 const scopeSequences = "notifuse:sequences.inscrire"
 
@@ -93,6 +96,7 @@ var catalogue = map[string]action{
 	"contacts.importer":  {scope: scopeContacts, apps: mailApps, build: buildImport},
 	"listes.lister":      {scope: scopeContacts, apps: mailApps, build: buildLists},
 	"listes.creer":       {scope: scopeContacts, apps: mailApps, build: buildCreateList},
+	"contacts.lire":      {scope: scopeRead, apps: mailApps, build: buildRead},
 	"sequences.lister":   {scope: scopeContacts, apps: mailApps, build: buildSequences},
 	"sequences.inscrire": {scope: scopeSequences, apps: mailApps, build: buildEnroll},
 }

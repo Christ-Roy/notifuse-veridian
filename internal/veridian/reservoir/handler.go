@@ -24,6 +24,7 @@ type Handler struct {
 // RegisterRoutes branche les routes.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/veridian/contacts.intake", h.RequireAuth(http.HandlerFunc(h.intake)))
+	mux.Handle("POST /api/veridian/contacts.state", h.RequireAuth(http.HandlerFunc(h.states)))
 	mux.Handle("GET /api/veridian/reservoir.summary", h.RequireAuth(http.HandlerFunc(h.summary)))
 	mux.Handle("GET /api/veridian/reservoir.lists", h.RequireAuth(http.HandlerFunc(h.lists)))
 	mux.Handle("POST /api/veridian/reservoir.activate", h.RequireAuth(http.HandlerFunc(h.activate)))
@@ -72,6 +73,22 @@ func (h *Handler) intake(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) states(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		WorkspaceID string   `json:"workspace_id"`
+		Emails      []string `json:"emails"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	res, err := h.Svc.ContactStates(r.Context(), req.WorkspaceID, req.Emails)
+	if err != nil {
+		h.fail(w, err, "état de contacts")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"contacts": res})
 }
 
 func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {

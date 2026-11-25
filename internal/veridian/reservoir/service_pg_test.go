@@ -543,3 +543,33 @@ func TestActivate_RefuseUneSequenceHorsPlafond(t *testing.T) {
 	b.exec(`INSERT INTO templates (id, name, version, channel, category, created_at, updated_at) VALUES ('t1','t1',3,'email','marketing',NOW(),NOW())`)
 	assert.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", act, nil), "repassé en marketing")
 }
+
+func TestContactStates(t *testing.T) {
+	b := newBench(t)
+	b.reserve("un@a.fr", "stop@d.fr", "vu@f.fr")
+	b.automation("seq", "sequence", onList("sequence"))
+	b.exec(`UPDATE contact_lists SET status='unsubscribed' WHERE email='stop@d.fr'`)
+	b.exec(`INSERT INTO message_history (id, contact_email, template_id, template_version, channel, message_data, sent_at) VALUES ('m1','vu@f.fr','t',1,'email','{}','2026-11-24T10:00:00Z')`)
+	b.exec(`INSERT INTO veridian_contact_reply (contact_email, match_type) VALUES ('vu@f.fr','message_id')`)
+	b.exec(`INSERT INTO contact_automations (id, automation_id, contact_email, status) VALUES ('c1','seq','un@a.fr','active'), ('c2','seq','vu@f.fr','exited')`)
+	var out struct{ Contacts []ContactState }
+	require.Equal(t, 200, b.call("POST", "/api/veridian/contacts.state", map[string]any{"workspace_id": "ws", "emails": []string{"Absent@z.fr", "un@a.fr", " UN@a.fr ", "stop@d.fr", "vu@f.fr"}}, &out))
+	sent := time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC)
+	in := func(st string) []ListIn { return []ListIn{{"reserve", "reserve", st}} }
+	assert.Equal(t, []ContactState{
+		{Email: "absent@z.fr", Lists: []ListIn{}, Sequences: []Named{}},
+		{Email: "un@a.fr", Exists: true, Lists: in("active"), Sequences: []Named{{"seq", "seq"}}},
+		{Email: "stop@d.fr", Exists: true, Lists: in("unsubscribed"), Blocked: "desinscrit", Sequences: []Named{}},
+		{Email: "vu@f.fr", Exists: true, Lists: in("active"), Replied: true, Sequences: []Named{}, LastSent: &sent},
+	}, out.Contacts)
+	assert.Equal(t, 400, b.call("POST", "/api/veridian/contacts.state", map[string]any{"workspace_id": "ws", "emails": []string{}}, nil))
+	b.auth.role, b.auth.perms = "member", domain.UserPermissions{domain.PermissionResourceContacts: {Read: true}}
+	assert.Equal(t, 403, b.call("POST", "/api/veridian/contacts.state", map[string]any{"workspace_id": "ws", "emails": []string{"un@a.fr"}}, nil), "les listes et l'historique demandent leurs droits")
+}
+
+func TestStore_ContactStates(t *testing.T) {
+	b := newBench(t)
+	got, err := b.svc.Store.ContactStates(context.Background(), "ws", []string{"absent@z.fr"})
+	require.NoError(t, err)
+	assert.Equal(t, []ContactState{{Email: "absent@z.fr", Lists: []ListIn{}, Sequences: []Named{}}}, got)
+}

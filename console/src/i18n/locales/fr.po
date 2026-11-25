@@ -2170,6 +2170,8 @@ msgstr "Performance des campagnes"
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
 #: src/components/file_manager/fileManager.tsx
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
@@ -2394,6 +2396,7 @@ msgstr "Choisissez {wanted} comme sécurité."
 msgid "Choose a message to read it in full."
 msgstr "Choisissez un message pour le lire en entier."
 
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "Choose a profile"
 msgstr "Choisir un profil"
@@ -2522,6 +2525,7 @@ msgstr "Cloner le modèle"
 #: src/components/broadcasts/GlobalFeedSettings.tsx
 #: src/components/contacts/BulkActionProgressModal.tsx
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/WebhookCard.tsx
@@ -7136,6 +7140,7 @@ msgstr "Il cesse de fonctionner immédiatement et ne peut pas être rouvert. Les
 msgid "It was sent before the unified inbox and its template could not be rebuilt. Headers and delivery status remain readable."
 msgstr "Il est parti avant la boîte unifiée et son modèle n'a pas pu être reconstitué. Les en-têtes et l'état de livraison restent lisibles."
 
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "It will appear in the conversation once the relay has accepted it."
 msgstr "Il apparaîtra dans la conversation dès que le relais l'aura accepté."
@@ -8199,6 +8204,10 @@ msgstr "Nouveau code magique envoyé à votre email"
 
 #~ msgid "New marketing emails can be distributed to this profile."
 #~ msgstr "Les nouveaux emails commerciaux peuvent être répartis sur ce profil."
+
+#: src/components/mail/veridian_mail_compose.tsx
+msgid "New message"
+msgstr "Nouveau message"
 
 #: src/components/segment/form_leaf.tsx
 #: src/components/segment/input.tsx
@@ -9968,6 +9977,7 @@ msgstr "Le traitement a été arrêté avant la fin."
 msgid "Production (real certificate)"
 msgstr "Production (certificat réel)"
 
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/send_queue/veridian_queue_decisions.tsx
 msgid "Profile"
@@ -10126,6 +10136,10 @@ msgstr "En file"
 #: src/pages/BroadcastsPage.tsx
 msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr "Les e-mails en file ne seront pas envoyés. Les envois en cours se termineront."
+
+#: src/components/mail/veridian_mail_compose.tsx
+msgid "Queued: your message will leave as soon as the sending limits allow it"
+msgstr "En file : votre message partira dès que les plafonds d'envoi le permettent"
 
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "Queued: your reply will leave as soon as the sending limits allow it"
@@ -10862,6 +10876,7 @@ msgid "Retry"
 msgstr "Réessayer"
 
 #. placeholder {0}: exactDate(refusal.retry_at)
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "Retry possible from {0}"
 msgstr "Nouvel essai possible à partir du {0}"
@@ -10875,6 +10890,7 @@ msgstr "Réessayez. Si cela persiste, prévenez l'équipe."
 msgid "Return inbox"
 msgstr "Boîte de retour"
 
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "Review and send"
 msgstr "Relire et envoyer"
@@ -11565,6 +11581,7 @@ msgstr "Sélectionné : {0}"
 msgid "Self-hosted corporate"
 msgstr "Entreprise auto-hébergée"
 
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "Send"
 msgstr "Envoyer"
@@ -11654,6 +11671,10 @@ msgstr "Envoyer un test"
 #: src/pages/TemplatesPage.tsx
 msgid "Send Test Email"
 msgstr "Envoyer un email de test"
+
+#: src/components/mail/veridian_mail_compose.tsx
+msgid "Send this message?"
+msgstr "Envoyer ce message ?"
 
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "Send this reply?"
@@ -11755,6 +11776,8 @@ msgstr "Journal d'envoi"
 msgid "Sending policy presets"
 msgstr "Préréglages de politique d'envoi"
 
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/settings/veridian_mailbox_create.tsx
@@ -11795,6 +11818,7 @@ msgid "Sending refused"
 msgstr "Envoi refusé"
 
 #. placeholder {0}: refusal.reason
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "Sending refused: {0}"
 msgstr "Envoi refusé : {0}"
@@ -12579,6 +12603,9 @@ msgid "Style Attributes"
 msgstr "Attributs de style"
 
 #: src/components/automations/veridian_flow_node_drawer.tsx
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/mail/veridian_mail_reply.tsx
@@ -13540,6 +13567,7 @@ msgstr "Ceci est votre arborescence de structure de contenu. Vous pouvez glisser
 msgid "This is your visual email editor. Click on any element in your email to select it. Selected elements will be highlighted with a blue border and show editing options."
 msgstr "Ceci est votre éditeur d'email visuel. Cliquez sur n'importe quel élément de votre email pour le sélectionner. Les éléments sélectionnés seront surlignés avec une bordure bleue et afficheront les options d'édition."
 
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 msgid "This mail will leave with the same limits as the sequences."
 msgstr "Ce mail partira avec les mêmes plafonds que les séquences."
@@ -13751,6 +13779,9 @@ msgstr "La clé privée TLS est requise"
 msgid "to"
 msgstr "à"
 
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_header.tsx
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/mail/veridian_mail_reply.tsx
@@ -15182,6 +15213,11 @@ msgstr "Vos fichiers peuvent être téléversés vers n'importe quel stockage co
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Your Gmail address and a 16-character app password. SMTP and IMAP are set up together."
 msgstr "Votre adresse Gmail et un mot de passe d'application de 16 caractères. SMTP et IMAP sont configurés ensemble."
+
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_compose.tsx
+msgid "Your message"
+msgstr "Votre message"
 
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/mail/veridian_mail_reply.tsx

@@ -26,6 +26,9 @@ Réponse : `{action, rejoue, simulation, resultat}`. Aucun champ inconnu n'est a
 - `listes.lister` `{}` : `resultat.lists [{id, name, starts_sequence}]` (200 au plus). Lecture, sans `Idempotency-Key`.
 - `listes.creer` `{id (1 à 32 lettres ou chiffres), name}` : privée, sans double opt-in. `resultat {id, name, existait}` ; même id et même nom = rendue ;
   même id, autre nom = 409.
+- `contacts.lire` (portée `notifuse:contacts.lire`) `{emails (1 à 50)}` : `resultat.contacts [{email, existe, listes [{id, name, status}], bloque
+  (desinscrit, rebond, plainte ou null), a_repondu, sequences_en_cours [{id, name}], dernier_envoi}]`, dans l'ordre demandé. Lecture ; droits contacts,
+  listes, séquences et historique de l'utilisateur. Route `POST /api/veridian/contacts.state`, CLI `contacts:state`.
 - `sequences.lister` `{}` : `resultat.sequences [{id, name, status, list_id, inscriptible, raison (brouillon, en_pause, inactive)}]`. Lecture.
 - `sequences.inscrire` (portée à elle : **`notifuse:sequences.inscrire`**, car elle fait partir du courrier) `{sequence_id, contacts (1 à 50)
   [{email, first_name, last_name, phone, job_title, ne_plus_contacter}], inclure_deja_contactes, dry_run}`. Fiche d'abord (`contacts.intake`, `attach`,
@@ -36,6 +39,10 @@ Réponse : `{action, rejoue, simulation, resultat}`. Aucun champ inconnu n'est a
   **Plafond : 200 personnes par jour, par utilisateur et par espace**, toutes apps (429 `plafond_du_jour`, clé rendue ; un geste en cours compte
   pour 50, sinon des appels parallèles passeraient dessous). Séquence inconnue, en pause, hors plafond ou qui en démarrerait une autre : `refus_de_l_app`.
   Rien ne part tout de suite : fenêtre, plafonds, chauffe, exclusions et relais propre décident à l'envoi, comme pour tout autre contact.
+
+## Écrire depuis une autre app
+Aucune action n'envoie. Le lien `/console/workspace/<espace>/inbox?ecrire=<adresse>` (par le rebond du Hub) ouvre « Nouveau message » avec ce
+destinataire : la personne choisit le profil, écrit, confirme. Une seule adresse, sans rien d'autre, sinon le paramètre est ignoré.
 
 ## Épreuves
 Refus et idempotence : `internal/veridian/actions/*_test.go`. Application entière (25 contacts, rejeu 0, désinscrit exclu, file vide, membre

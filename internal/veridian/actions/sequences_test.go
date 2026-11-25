@@ -228,3 +228,27 @@ func TestSequencesLister(t *testing.T) {
 	st, _ = e.post("sequences.lister", e.hub.token(t, nil), "", "{}")
 	assert.Equal(t, 503, st)
 }
+
+func TestContactsLire(t *testing.T) {
+	e := newEnv(t)
+	read := func(c *mcp.Claims) { c.Scope = "notifuse:contacts.lire" }
+	e.d.out = `{"contacts":[{"email":"a@x.test","exists":true,"lists":[{"id":"l1","name":"L","status":"active"}],"blocked":"rebond","replied":true,"sequences":[{"id":"s1","name":"S"}],"last_sent":"2026-11-25T10:00:00Z"},{"email":"z@x.test","exists":false,"lists":[],"replied":false,"sequences":[]}]}`
+	st, out := e.post("contacts.lire", e.hub.token(t, read), "", `{"emails":["a@x.test","z@x.test"]}`)
+	require.Equal(t, 200, st, out)
+	got, _ := json.Marshal(out["resultat"])
+	assert.JSONEq(t, `{"contacts":[{"email":"a@x.test","existe":true,"listes":[{"id":"l1","name":"L","status":"active"}],"bloque":"rebond","a_repondu":true,"sequences_en_cours":[{"id":"s1","name":"S"}],"dernier_envoi":"2026-11-25T10:00:00Z"},
+		{"email":"z@x.test","existe":false,"listes":[],"bloque":null,"a_repondu":false,"sequences_en_cours":[],"dernier_envoi":null}]}`, string(got))
+	assert.Contains(t, e.d.bodies[0], `"workspace_id":"ws1"`, "l'espace vient du jeton")
+	assert.Empty(t, e.st.done)
+
+	many := make([]string, 51)
+	for i := range many {
+		many[i] = fmt.Sprintf(`"c%d@x.test"`, i)
+	}
+	for _, bad := range []string{`{}`, `{"emails":[]}`, `{"emails":[` + strings.Join(many, ",") + `]}`, `{"emails":["a@x.test"],"workspace_id":"autre"}`} {
+		st, _ = e.post("contacts.lire", e.hub.token(t, read), "", bad)
+		assert.Equal(t, 400, st, bad)
+	}
+	st, _ = e.post("contacts.lire", e.hub.token(t, nil), "", `{"emails":["a@x.test"]}`)
+	assert.Equal(t, 403, st, "écrire ne donne pas le droit de lire")
+}

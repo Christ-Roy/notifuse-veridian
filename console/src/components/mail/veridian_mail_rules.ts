@@ -33,6 +33,14 @@ export interface InboxSearch {
   etat?: StateFilter
   q?: string
   onglet?: 'message' | 'conversation'
+  /** Écrire à cette adresse (lien depuis le CRM). */
+  ecrire?: string
+}
+
+/** Une seule adresse, sans rien d'autre : ni espace, ni virgule, ni retour à la ligne. */
+export function isRecipient(v: string): boolean {
+  const s = v.trim()
+  return s.length <= 320 && /^[^\s@,;:<>()[\]"\\]+@[^\s@,;:<>()[\]"\\]+\.[^\s@,;:<>()[\]"\\.]{2,}$/.test(s)
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined)
@@ -43,12 +51,14 @@ export function normalizeInboxSearch(raw: Record<string, unknown>): InboxSearch 
   const etat = str(raw.etat)
   const onglet = str(raw.onglet)
   const q = str(raw.q)
+  const ecrire = str(raw.ecrire)
   return {
     message: str(raw.message),
     boite: str(raw.boite),
     nature: nature && (NATURE_FILTERS as readonly string[]).includes(nature) ? (nature as NatureFilter) : undefined,
     etat: etat && (STATE_FILTERS as readonly string[]).includes(etat) ? (etat as StateFilter) : undefined,
     q: q ? q.slice(0, 200) : undefined,
+    ecrire: ecrire && isRecipient(ecrire) ? ecrire : undefined,
     onglet: onglet === 'conversation' ? 'conversation' : onglet === 'message' ? 'message' : undefined
   }
 }
