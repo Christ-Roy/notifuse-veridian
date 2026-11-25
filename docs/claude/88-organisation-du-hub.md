@@ -20,6 +20,7 @@ Robert, 24/11 : « une seule configuration sur le Hub […] pareil pour Notifuse
 `{hub_tenant_id, actif}`. Allumé : l'abonnement `message.received` vers `<HUB_BASE_URL>/api/evenements/notifuse` existe et est actif ; rend
 `{workspace_id, subscription_id, url, events, secret}` (Standard Webhooks, `no-store`, seule sortie du secret vers le Hub). Rejouable, remis d'équerre
 s'il a été modifié à l'écran. Éteint : retiré. L'adresse vient de la configuration, jamais de l'appelant. Les abonnements du client ne sont pas touchés.
+Épreuve d'émission (staging) : `scripts/e2e/reponse-recue-staging.py <espace> --email <contact>`. Éteindre puis rallumer crée un NOUVEAU secret ; rejouer allumé rend le même.
 Contrat de l'événement : `docs/veridian/BOITE-UNIFIEE.md`. Lien d'une conversation : `/console/workspace/<ws>/inbox?message=<data.message_id>&onglet=conversation&nature=toutes`.
 
 Épreuve : `scripts/e2e/organisation-du-hub.py` (staging par défaut, console lue dans Chromium ; `--prod` : couleur seule).
