@@ -28,7 +28,7 @@ import { VeridianMailboxAccess } from './veridian_mailbox_access'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 
-const PASSWORD = 'S3cret-Passw0rd-xyz'
+const PASSWORD = 'mot-de-passe-de-test'
 
 const access = (over: Partial<MailboxAccess> = {}): MailboxAccess => ({
   id: 'a1',
