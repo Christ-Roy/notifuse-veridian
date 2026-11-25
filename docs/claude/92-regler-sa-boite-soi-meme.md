@@ -13,7 +13,12 @@ journal ne le disait. Robert, le même jour, à propos des boîtes louées : tou
 | Export | `GET mail.export` (mbox) | un à la fois par espace ; droit relu à chaque lot, perte de droit = connexion coupée, jamais un fichier tronqué |
 
 - `closed_reason` : `holder_gone`, `address_removed`, `workspace_closed` (`Guard.Reason`, seule vérité).
-- Le lien de profil est signé avec la clé de l'instance ; révoqué ou expiré = 404.
+- Le lien de profil est signé avec la clé de l'instance ; révoqué ou expiré = 404. Il tient sous 190 octets, tenu par test : au-delà de 213 l'écran n'a
+  plus de QR (vu vide en staging le 25/11, lien de 220 octets).
+- `connection` dit la sécurité comme un client mail (« SSL/TLS ») ; l'écran la lit par `securityCode`, jamais par `=== 'ssl'`.
+- Écran : `console/src/components/settings/veridian_mailbox_*.tsx`. « Aucun essai reçu » n'est un diagnostic que 10 min après la création d'un accès.
+  Porte muette = notre faute, dite comme telle. Captures relues le 25/11 (bureau, 390 px).
+- Ports : `also` liste les autres réglages justes (fiche 93).
 - `mail.access.test` répond par codes (`host`, `port`, `security`, `username`, `password_empty`, `door`, `credentials`, `access_open`, `can_send`,
   `not_suspended`, `profile_active`) ; la console les traduit.
 
