@@ -17,7 +17,7 @@ import { VeridianMailboxAttempts } from './veridian_mailbox_attempts'
 import { VeridianMailboxCreate } from './veridian_mailbox_create'
 import { VeridianMailboxExport } from './veridian_mailbox_export'
 import { useMailboxLabels } from './veridian_mailbox_labels'
-import { hasOpenAccess, splitAccesses } from './veridian_mailbox_rules'
+import { expectsAttempts, splitAccesses } from './veridian_mailbox_rules'
 import { VeridianMailboxSetup } from './veridian_mailbox_setup'
 
 const { Paragraph, Text } = Typography
@@ -101,9 +101,11 @@ export function VeridianMailboxAccess({ workspaceId, workspace, isOwner }: Props
         />
       ) : (
         <>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-            {t`Create an access`}
-          </Button>
+          {accesses.length > 0 && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+              {t`Create an access`}
+            </Button>
+          )}
 
           <div style={{ marginTop: 16 }}>
             {query.isLoading ? (
@@ -124,7 +126,7 @@ export function VeridianMailboxAccess({ workspaceId, workspace, isOwner }: Props
               />
             ) : accesses.length === 0 ? (
               <Empty description={t`No access yet. Create one to read and send your mail from your phone or another app.`}>
-                <Button type="primary" onClick={() => setCreateOpen(true)}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
                   {t`Create an access`}
                 </Button>
               </Empty>
@@ -181,7 +183,7 @@ export function VeridianMailboxAccess({ workspaceId, workspace, isOwner }: Props
               attempts={data.attempts ?? []}
               since={data.attempts_since}
               connection={data.connection ?? {}}
-              expectAttempts={hasOpenAccess(accesses)}
+              expectAttempts={expectsAttempts(accesses, Date.now())}
               refreshing={query.isFetching}
               onRefresh={() => query.refetch()}
             />

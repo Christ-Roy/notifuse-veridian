@@ -48,8 +48,8 @@ const access = (over: Partial<MailboxAccess> = {}): MailboxAccess => ({
 const list = (over: Partial<MailboxAccessList> = {}): MailboxAccessList => ({
   accesses: [access()],
   connection: {
-    imap: { host: 'mail.example.com', port: 993, security: 'ssl' },
-    smtp: { host: 'mail.example.com', port: 465, security: 'ssl' }
+    imap: { host: 'mail.example.com', port: 993, security: 'SSL/TLS' },
+    smtp: { host: 'mail.example.com', port: 465, security: 'SSL/TLS' }
   },
   attempts: [
     { at: '2026-11-25T09:00:00Z', via: 'imap', address: 'ben@example.com', ok: false, reason: 'bad_credentials' },
@@ -156,7 +156,7 @@ describe('liste des accès', () => {
     mockApi(list({ accesses: [], attempts: [] }))
     renderScreen()
     expect(await screen.findByText(/No access yet/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Create an access' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /Create an access/ })).toHaveLength(1)
   })
 
   it('chargement puis erreur avec réessayer', async () => {
@@ -173,7 +173,7 @@ describe('liste des accès', () => {
     mockApi(new ApiError('no', 403, { error: 'no', code: 'forbidden', message: 'no' }))
     renderScreen()
     expect(await screen.findByText('You cannot manage mailbox access')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Create an access' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Create an access/ })).toBeNull()
   })
 
   it('désactiver appelle setDisabled puis relit la liste', async () => {
@@ -214,7 +214,7 @@ describe('création', () => {
   async function openCreate(isOwner = true) {
     mockApi(list({ accesses: [] }), (url) => (url.endsWith('mail.access.create') ? created() : undefined))
     renderScreen(isOwner)
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Create an access' }))[0])
+    fireEvent.click((await screen.findAllByRole('button', { name: /Create an access/ }))[0])
     return screen.findByRole('dialog')
   }
 
@@ -306,7 +306,7 @@ describe('création', () => {
   it('sans profil d’envoi : explique quoi faire', async () => {
     mockApi(list({ accesses: [] }))
     renderScreen(true, { ...workspace, integrations: [] })
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Create an access' }))[0])
+    fireEvent.click((await screen.findAllByRole('button', { name: /Create an access/ }))[0])
     expect(await screen.findByText(/No sending profile yet/)).toBeInTheDocument()
   })
 })
@@ -434,6 +434,13 @@ describe('essais récents', () => {
     expect(screen.queryByText(/No attempt reached us/)).toBeNull()
   })
 
+  it('accès créé à l’instant : aucun diagnostic avant que la personne ait pu régler son application', async () => {
+    mockApi(list({ accesses: [access({ created_at: new Date(Date.now() - 60_000).toISOString() })], attempts: [] }))
+    renderScreen()
+    expect(await screen.findByText(/No attempt since/)).toBeInTheDocument()
+    expect(screen.queryByText(/No attempt reached us/)).toBeNull()
+  })
+
   it('aucun essai depuis attempts_since : dit STARTTLS ou autre port, avec le port SSL/TLS', async () => {
     mockApi(list({ attempts: [] }))
     renderScreen()
@@ -483,5 +490,30 @@ describe('export', () => {
     renderScreen()
     fireEvent.click(await screen.findByRole('button', { name: 'Download Sent (Main profile)' }))
     expect(await screen.findByText(/do not have the right/)).toBeInTheDocument()
+  })
+})
+
+describe('consigne de sécurité', () => {
+  const open = async (security: string) => {
+    mockApi(
+      list({
+        connection: {
+          imap: { host: 'imap.example.com', port: 443, security: 'SSL/TLS' },
+          smtp: { host: 'smtp.example.com', port: 443, security }
+        }
+      })
+    )
+    renderScreen()
+    fireEvent.click(await screen.findByRole('button', { name: /Set up my app for Phone/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Outlook' }))
+  }
+  it('le serveur écrit « SSL/TLS » : dit de ne pas choisir STARTTLS', async () => {
+    await open('SSL/TLS')
+    expect(await screen.findByText(/Choose SSL\/TLS, not STARTTLS/)).toBeInTheDocument()
+  })
+  it('un côté en STARTTLS : renvoie aux valeurs', async () => {
+    await open('starttls')
+    expect(await screen.findByText(/Choose the security setting shown below/)).toBeInTheDocument()
+    expect(screen.queryByText(/not STARTTLS/)).toBeNull()
   })
 })

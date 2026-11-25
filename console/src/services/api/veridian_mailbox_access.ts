@@ -35,7 +35,8 @@ export interface MailboxAccess {
 export interface MailboxEndpoint {
   host: string
   port: number
-  security: MailboxSecurity
+  /** Tel que le serveur l'écrit (« SSL/TLS », « starttls »...) : le lire par `securityCode`. */
+  security: string
 }
 
 export interface MailboxConnection {
@@ -117,6 +118,14 @@ export interface MailboxTestResult {
 }
 
 // ---------------------------------------------------------------- règles pures
+
+/** Le mode annoncé par le serveur (« SSL/TLS », « ssl », « starttls », « off »), dans les codes de l'écran. */
+export function securityCode(security: string | undefined): MailboxSecurity {
+  const s = (security ?? '').trim().toLowerCase()
+  if (s === 'starttls') return 'starttls'
+  if (s === 'none' || s === 'off') return 'none'
+  return 'ssl'
+}
 
 export type MailboxAccessState = 'active' | 'closed' | 'disabled' | 'revoked'
 

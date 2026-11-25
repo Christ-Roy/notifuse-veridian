@@ -17,7 +17,7 @@ vi.mock('./client', () => {
 })
 
 import { ApiError, api } from './client'
-import { accessState, mailboxAccessService, mailboxErrorKind } from './veridian_mailbox_access'
+import { accessState, mailboxAccessService, mailboxErrorKind, securityCode } from './veridian_mailbox_access'
 
 describe('accessState', () => {
   it('révoqué prime sur fermé, fermé sur désactivé, sinon actif', () => {
@@ -28,7 +28,20 @@ describe('accessState', () => {
   })
 })
 
+describe('securityCode', () => {
+  it('lit ce que le serveur écrit', () => {
+    expect(securityCode('SSL/TLS')).toBe('ssl')
+    expect(securityCode('implicit')).toBe('ssl')
+    expect(securityCode(' STARTTLS ')).toBe('starttls')
+    expect(securityCode('off')).toBe('none')
+  })
+})
+
 describe('mailboxErrorKind', () => {
+  it('409 unavailable n’est pas « trop d’accès »', () => {
+    expect(mailboxErrorKind(new ApiError('x', 409, { code: 'unavailable' }))).toBe('unavailable')
+    expect(mailboxErrorKind(new ApiError('x', 409))).toBe('unknown')
+  })
   it('le code du contrat prime sur l’état HTTP', () => {
     expect(mailboxErrorKind(new ApiError('x', 403, { code: 'owner_required' }))).toBe('owner_required')
     expect(mailboxErrorKind(new ApiError('x', 403, { code: 'forbidden' }))).toBe('forbidden')

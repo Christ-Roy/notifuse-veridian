@@ -5,13 +5,16 @@ import { useLingui } from '@lingui/react/macro'
 import dayjs from '../../lib/dayjs'
 import {
   mailboxAccessService,
+  securityCode,
   type MailboxAccess,
   type MailboxConnection,
   type MailboxProfileLink
 } from '../../services/api/veridian_mailbox_access'
 import { VeridianMailboxCheck } from './veridian_mailbox_check'
 import { APPLE_APPS, MAILBOX_APPS, useMailboxLabels, type MailboxApp } from './veridian_mailbox_labels'
+import { qrFits } from './veridian_mailbox_qr'
 import { QrCode, ValueRow } from './veridian_mailbox_parts'
+import { allSSL } from './veridian_mailbox_rules'
 
 const { Text, Paragraph, Title } = Typography
 
@@ -97,12 +100,11 @@ function SetupSteps({
         <div style={{ marginTop: 16 }}>
           <Alert
             type="info"
-            showIcon
             message={t`Three things to get right`}
             description={
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, listStyle: 'disc' }}>
                 <li>
-                  {connection.imap?.security === 'ssl' || !connection.imap
+                  {allSSL(connection)
                     ? t`Choose SSL/TLS, not STARTTLS, for receiving AND for sending.`
                     : t`Choose the security setting shown below, for receiving AND for sending.`}
                 </li>
@@ -203,12 +205,14 @@ function AppleProfile({
               {t`Get a new link`}
             </Button>
           </div>
-          <div style={{ flex: '0 1 auto', textAlign: 'center' }}>
-            <QrCode value={link.url} label={t`QR code to open the configuration profile on your phone`} />
-            <div>
-              <Text type="secondary">{t`Or scan this code with your phone camera.`}</Text>
+          {qrFits(link.url) && (
+            <div style={{ flex: '0 1 auto', textAlign: 'center' }}>
+              <QrCode value={link.url} label={t`QR code to open the configuration profile on your phone`} />
+              <div>
+                <Text type="secondary">{t`Or scan this code with your phone camera.`}</Text>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>
@@ -231,7 +235,7 @@ function ManualSteps({
   const { imap, smtp } = connection
   return (
     <div style={{ marginTop: 12 }}>
-      <ol style={{ paddingLeft: 20, margin: '0 0 12px' }}>
+      <ol style={{ paddingLeft: 20, margin: '0 0 12px', listStyle: 'decimal' }}>
         <li>{labels.appStart(app)}</li>
         <li>{t`Fill in the values below, one by one (the copy buttons help).`}</li>
       </ol>
@@ -241,7 +245,7 @@ function ManualSteps({
         <>
           <ValueRow label={t`Server`} value={imap.host} />
           <ValueRow label={t`Port`} value={String(imap.port)} />
-          <ValueRow label={t`Security`} value={labels.security(imap.security)} />
+          <ValueRow label={t`Security`} value={labels.security(securityCode(imap.security))} />
         </>
       ) : (
         <Text type="secondary">{t`Receiving is not available for this workspace yet.`}</Text>
@@ -256,7 +260,7 @@ function ManualSteps({
             <>
               <ValueRow label={t`Server`} value={smtp.host} />
               <ValueRow label={t`Port`} value={String(smtp.port)} />
-              <ValueRow label={t`Security`} value={labels.security(smtp.security)} />
+              <ValueRow label={t`Security`} value={labels.security(securityCode(smtp.security))} />
             </>
           ) : (
             <Text type="secondary">{t`Sending is not available for this workspace yet.`}</Text>

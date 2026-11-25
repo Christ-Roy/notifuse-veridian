@@ -5,7 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/binary"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -27,41 +27,48 @@ const linkLife = 15 * time.Minute
 
 var errLink = errors.New("lien de profil refusé ou expiré")
 
-type linkClaims struct {
-	ID  string `json:"i"`
-	WS  string `json:"w"`
-	Exp int64  `json:"e"`
+// linkPayload : échéance (4 octets), identifiant (16), espace. Compact : le lien entier tient dans un QR lisible (213 octets, version 10).
+func linkPayload(ws string, id uuid.UUID, exp time.Time) []byte {
+	b := binary.BigEndian.AppendUint32(nil, uint32(exp.Unix())) //nolint:gosec // valable jusqu'en 2106
+	return append(append(b, id[:]...), ws...)
 }
 
+// linkMAC : 128 bits, assez pour un lien de 15 minutes qui ne donne que des réglages.
 func linkMAC(key, payload []byte) []byte {
 	m := hmac.New(sha256.New, key)
 	m.Write([]byte("veridian-box-profile:"))
 	m.Write(payload)
-	return m.Sum(nil)
+	return m.Sum(nil)[:16]
 }
 
 // SignLink rend le jeton d'un lien de profil.
-func SignLink(key []byte, ws, id string, exp time.Time) string {
-	p, _ := json.Marshal(linkClaims{ID: id, WS: ws, Exp: exp.Unix()})
-	return base64.RawURLEncoding.EncodeToString(p) + "." + base64.RawURLEncoding.EncodeToString(linkMAC(key, p))
+func SignLink(key []byte, ws, id string, exp time.Time) (string, error) {
+	u, err := uuid.Parse(id)
+	if err != nil || ws == "" || len(key) == 0 {
+		return "", errLink
+	}
+	p := linkPayload(ws, u, exp)
+	return base64.RawURLEncoding.EncodeToString(append(p, linkMAC(key, p)...)), nil
 }
 
 // ReadLink vérifie un jeton.
 func ReadLink(key []byte, token string, now time.Time) (ws, id string, err error) {
-	body, sig, ok := strings.Cut(token, ".")
-	if !ok || len(key) == 0 || len(token) > 1024 {
+	if len(key) == 0 || len(token) > 512 {
 		return "", "", errLink
 	}
-	p, err1 := base64.RawURLEncoding.DecodeString(body)
-	s, err2 := base64.RawURLEncoding.DecodeString(sig)
-	if err1 != nil || err2 != nil || !hmac.Equal(s, linkMAC(key, p)) {
+	b, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(b) < 4+16+1+16 {
 		return "", "", errLink
 	}
-	var c linkClaims
-	if json.Unmarshal(p, &c) != nil || now.Unix() >= c.Exp {
+	p, mac := b[:len(b)-16], b[len(b)-16:]
+	if !hmac.Equal(mac, linkMAC(key, p)) || now.Unix() >= int64(binary.BigEndian.Uint32(p)) {
 		return "", "", errLink
 	}
-	return c.WS, c.ID, nil
+	u, err := uuid.FromBytes(p[4:20])
+	if err != nil {
+		return "", "", errLink
+	}
+	return string(p[20:]), u.String(), nil
 }
 
 // MobileConfig rend le profil d'un accès. Identifiants stables : réinstaller remplace, sans doublon.

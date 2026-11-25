@@ -29,6 +29,11 @@ export function qrByteCapacity(ver: number): number {
   return Math.floor((dataCodewords(ver) * 8 - 4 - countBits) / 8)
 }
 
+/** La valeur tient dans le plus grand code que nous dessinons ; au-delà, l'écran n'en promet pas. */
+export function qrFits(value: string): boolean {
+  return new TextEncoder().encode(value).length <= qrByteCapacity(QR_MAX_VERSION)
+}
+
 function gfMul(x: number, y: number): number {
   let z = 0
   for (let i = 7; i >= 0; i--) {

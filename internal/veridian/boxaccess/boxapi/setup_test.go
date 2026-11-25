@@ -2,6 +2,7 @@ package boxapi
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -38,17 +39,33 @@ func setupFull(t *testing.T) (*http.ServeMux, *Handler, *memStore) {
 func TestReadLink_SignLink(t *testing.T) {
 	now := time.Now()
 	key := []byte("k")
-	tok := SignLink(key, "ws", "id", now.Add(time.Minute))
-	if ws, id, err := ReadLink(key, tok, now); err != nil || ws != "ws" || id != "id" {
+	tok, err := SignLink(key, "ws", accID, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws, id, err := ReadLink(key, tok, now); err != nil || ws != "ws" || id != accID {
 		t.Fatal(ws, id, err)
 	}
+	for _, bad := range [][3]string{{"k", "ws", "pas-un-uuid"}, {"k", "", accID}, {"", "ws", accID}} {
+		if tok, err := SignLink([]byte(bad[0]), bad[1], bad[2], now); err == nil {
+			t.Errorf("%v signé : %s", bad, tok)
+		}
+	}
+	// Le lien d'un espace au nom le plus long (32) tient dans le QR de l'écran (213 octets) : au-delà, aucun code ne s'affichait (25/11).
+	long, _ := SignLink(key, strings.Repeat("w", 32), accID, now)
+	if n := len("https://notifuse.app.staging.veridian.site/api/veridian/mail.access.profile?t=" + long); n > 190 {
+		t.Errorf("lien de %d octets", n)
+	}
+	raw, _ := base64.RawURLEncoding.DecodeString(tok)
+	raw[len(raw)-17] ^= 1 // dernière lettre de l'espace
+	other := base64.RawURLEncoding.EncodeToString(raw)
 	for name, c := range map[string]struct {
 		key []byte
 		tok string
 		at  time.Time
 	}{
 		"expiré": {key, tok, now.Add(2 * time.Minute)}, "autre clé": {[]byte("z"), tok, now}, "sans clé": {nil, tok, now}, "vide": {key, "", now},
-		"altéré": {key, "A" + tok, now}, "sans signature": {key, strings.Split(tok, ".")[0] + ".", now}, "énorme": {key, strings.Repeat("a", 2000) + ".b", now},
+		"altéré": {key, "A" + tok, now}, "espace changé": {key, other, now}, "sans signature": {key, tok[:len(tok)-22], now}, "énorme": {key, strings.Repeat("a", 2000), now},
 	} {
 		if _, _, err := ReadLink(c.key, c.tok, c.at); err == nil {
 			t.Errorf("%s : accepté", name)
@@ -111,7 +128,8 @@ func TestProfile_LinkThenDownload(t *testing.T) {
 	if w = call(mux, "GET", path+"x", ""); w.Code != 404 {
 		t.Fatalf("lien altéré : %d", w.Code)
 	}
-	if w = call(mux, "GET", "/api/veridian/mail.access.profile?t="+url.QueryEscape(SignLink(h.LinkKey, "ws", accID, time.Now().Add(-time.Second))), ""); w.Code != 404 {
+	old, _ := SignLink(h.LinkKey, "ws", accID, time.Now().Add(-time.Second))
+	if w = call(mux, "GET", "/api/veridian/mail.access.profile?t="+old, ""); w.Code != 404 {
 		t.Fatalf("lien expiré : %d", w.Code)
 	}
 	now := time.Now()

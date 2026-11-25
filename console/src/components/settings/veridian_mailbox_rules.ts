@@ -1,6 +1,7 @@
 import type { Integration } from '../../services/api/workspace'
 import {
   accessState,
+  securityCode,
   type MailboxAccess,
   type MailboxConnection
 } from '../../services/api/veridian_mailbox_access'
@@ -39,12 +40,21 @@ export function splitAccesses(list: MailboxAccess[]): { live: MailboxAccess[]; r
   }
 }
 
-/** Il y a au moins un accès qui devrait pouvoir se connecter (sinon « aucun essai » est normal). */
-export function hasOpenAccess(list: MailboxAccess[]): boolean {
-  return list.some((a) => accessState(a) === 'active')
+/** Laissé à la personne pour régler son application avant de lui dire que rien n'arrive. */
+export const SETUP_GRACE_MS = 10 * 60 * 1000
+
+/** Un accès ouvert depuis assez longtemps devrait avoir essayé (sinon « aucun essai » est normal). */
+export function expectsAttempts(list: MailboxAccess[], now: number): boolean {
+  return list.some((a) => accessState(a) === 'active' && now - Date.parse(a.created_at) > SETUP_GRACE_MS)
 }
 
-/** Ports à dire quand aucun essai n'est arrivé : « 993 », ou « 993 / 465 » selon ce que le serveur annonce. */
+/** Réception et envoi sont en SSL/TLS : c'est alors la seule chose à dire. */
+export function allSSL(c: MailboxConnection): boolean {
+  return [c.imap, c.smtp].every((e) => !e || securityCode(e.security) === 'ssl')
+}
+
+/** Ports SSL/TLS à dire quand aucun essai n'est arrivé (un côté en STARTTLS n'est pas dit ici). */
 export function portsOf(c: MailboxConnection): { imap?: number; smtp?: number } {
-  return { imap: c.imap?.port, smtp: c.smtp?.port }
+  const ssl = (e: MailboxConnection['imap']) => (e && securityCode(e.security) === 'ssl' ? e.port : undefined)
+  return { imap: ssl(c.imap), smtp: ssl(c.smtp) }
 }

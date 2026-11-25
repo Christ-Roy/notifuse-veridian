@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { qrByteCapacity, qrMatrix } from './veridian_mailbox_qr'
+import { qrByteCapacity, qrFits, qrMatrix } from './veridian_mailbox_qr'
 
 // Le décodage de bout en bout (jsQR 1.4.0, versions 1 à 10, 5 à 213 octets) a été vu réussir hors dépôt ;
 // ici : géométrie, motifs fixes, information de format valide et empreinte figée (garde de régression).
@@ -66,3 +66,11 @@ describe('qrMatrix', () => {
 })
 
 const GOLDEN = [33, -596930532]
+
+describe('qrFits', () => {
+  it('213 octets au plus, accents comptés en octets', () => {
+    expect(qrFits('a'.repeat(213))).toBe(true)
+    expect(qrFits('a'.repeat(214))).toBe(false)
+    expect(qrFits('é'.repeat(107))).toBe(false)
+  })
+})

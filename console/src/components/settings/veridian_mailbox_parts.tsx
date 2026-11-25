@@ -68,7 +68,7 @@ export function SecretValue({ value, label }: { value: string; label: string }) 
         data-testid="secret-value"
         style={{ flex: '2 1 160px', overflowWrap: 'anywhere', color: token.colorText }}
       >
-        {shown ? value : '•'.repeat(Math.min(Math.max(value.length, 8), 24))}
+        {shown ? value : '•'.repeat(12)}
       </code>
       <Button
         size="small"

@@ -9178,8 +9178,8 @@ msgid "Our server answers."
 msgstr "Unser Server antwortet."
 
 #: src/components/settings/veridian_mailbox_labels.ts
-msgid "Our server did not answer: check the server name and the port."
-msgstr "Unser Server hat nicht geantwortet: Prüfen Sie Servername und Port."
+msgid "Our server did not answer: the problem is on our side, try again in a few minutes."
+msgstr "Unser Server hat nicht geantwortet: Das Problem liegt bei uns, versuchen Sie es in einigen Minuten erneut."
 
 #: src/components/sending_profiles/veridian_profile_card.tsx
 msgid "Out of rotation"

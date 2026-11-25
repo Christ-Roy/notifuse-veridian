@@ -169,7 +169,7 @@ export function useMailboxLabels() {
         return t`Fill in the password: the one shown once when the access was created.`
       case 'door':
         if (c.ok) return t`Our server answers.`
-        return t`Our server did not answer: check the server name and the port.`
+        return t`Our server did not answer: the problem is on our side, try again in a few minutes.`
       case 'credentials':
         if (c.ok) return t`The address and password are accepted.`
         return t`The password is not accepted: paste it again exactly, or create a new access if it is lost.`

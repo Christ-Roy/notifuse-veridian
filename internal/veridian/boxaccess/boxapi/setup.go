@@ -8,7 +8,6 @@ import (
 	"mime"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -86,7 +85,12 @@ func (h *Handler) profileLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	exp := time.Now().Add(linkLife).UTC()
-	u := strings.TrimRight(h.BaseURL, "/") + "/api/veridian/mail.access.profile?t=" + url.QueryEscape(SignLink(h.LinkKey, a.WorkspaceID, a.ID, exp))
+	tok, err := SignLink(h.LinkKey, a.WorkspaceID, a.ID, exp)
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	u := strings.TrimRight(h.BaseURL, "/") + "/api/veridian/mail.access.profile?t=" + tok
 	writeJSON(w, http.StatusOK, map[string]any{"url": u, "expires_at": exp.Format(time.RFC3339)})
 }
 

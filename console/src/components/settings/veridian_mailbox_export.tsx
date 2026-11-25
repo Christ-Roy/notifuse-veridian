@@ -101,9 +101,10 @@ function FolderButton({
       loading={loading}
       disabled={disabled}
       aria-label={t`Download ${folderLabel} (${profileName})`}
+      title={t`Download ${folderLabel}`}
       onClick={onClick}
     >
-      {t`Download ${folderLabel}`}
+      {folderLabel}
     </Button>
   )
 }
