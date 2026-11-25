@@ -117,7 +117,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
 - `81` capacité base : connexions, incident du 07/11
-- `90` Réglages > Plan : le vrai plan, jamais « Free » par défaut
+- `90` Réglages > Plan : le vrai plan de l'espace
 - `89` **une personne du Hub = son `hub_user_id`, jamais son adresse** (résolveur unique)
 - `88` organisation poussée par le Hub, abonnement du Hub aux réponses
 - `87` actions demandées par une autre app (jeton `act`), « Envoyer vers Mail »
