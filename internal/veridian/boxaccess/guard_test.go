@@ -77,14 +77,15 @@ func TestGuard_AddressRemovedFromProfileCutsAccess(t *testing.T) {
 	}
 }
 
-func TestGuard_FollowsItsCreator(t *testing.T) {
+func TestGuard_FollowsItsHolder(t *testing.T) {
 	s, ctx := NewStore(testDB(t)), context.Background()
 	const u = "0a000000-0000-4000-8000-000000000001"
-	human, hs, err := s.Create(ctx, Access{WorkspaceID: "ws", ProfileID: "p", Address: "jc@boite.fr", CanSend: true, CreatedBy: "humain:" + u})
+	human, hs, err := s.Create(ctx, Access{WorkspaceID: "ws", ProfileID: "p", Address: "jc@boite.fr", CanSend: true, CreatedBy: "humain:" + u, Holder: u})
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, ks, err := s.Create(ctx, Access{WorkspaceID: "ws", ProfileID: "p", Address: "jc@boite.fr", CanSend: true, CreatedBy: "agent:" + u})
+	// Accès d'espace créé par la MÊME personne (tous ceux d'avant V80) : jamais rattaché à elle.
+	key, ks, err := s.Create(ctx, Access{WorkspaceID: "ws", ProfileID: "p", Address: "jc@boite.fr", CanSend: true, CreatedBy: "humain:" + u})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func TestGuard_FollowsItsCreator(t *testing.T) {
 		for who, a := range map[string]struct {
 			id, secret string
 			ok         bool
-		}{"humain": {human.ID, hs, c.human}, "agent": {key.ID, ks, c.agent}} {
+		}{"humain": {human.ID, hs, c.human}, "espace": {key.ID, ks, c.agent}} {
 			v, verr := g.Verify(ctx, "jc@boite.fr", a.secret)
 			l, lerr := g.Alive(ctx, a.id)
 			if who == "humain" && asked != u {
@@ -128,5 +129,86 @@ func TestGuard_FollowsItsCreator(t *testing.T) {
 		if _, err := g.Verify(ctx, "jc@boite.fr", hs); err == nil || errors.Is(err, ErrAuth) {
 			t.Errorf("%s : %v", name, err)
 		}
+	}
+}
+
+func TestGuard_ListCountAndCut(t *testing.T) {
+	s, ctx := NewStore(testDB(t)), context.Background()
+	const u1, u2 = "0a000000-0000-4000-8000-000000000001", "0a000000-0000-4000-8000-000000000002"
+	mk := func(holder, addr string) *Access {
+		a, _, err := s.Create(ctx, Access{WorkspaceID: "ws", ProfileID: "p", Address: addr, CanSend: true, Holder: holder})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	left, space, gone, revoked := mk(u1, "jc@boite.fr"), mk("", "jc@boite.fr"), mk(u2, "partie@boite.fr"), mk(u1, "jc@boite.fr")
+	if _, err := s.Revoke(ctx, "ws", revoked.ID); err != nil {
+		t.Fatal(err)
+	}
+	present := map[string]standing.State{u1: {Workspace: true, Member: true}, u2: {Workspace: true, Member: true}, "": {Workspace: true}}
+	g := &Guard{Store: s, WS: wsGetter{boxWS("jc@boite.fr")}, Standing: byPerson(present)}
+	state := func() map[string]bool {
+		l, err := g.List(ctx, "ws")
+		if err != nil || len(l) != 4 {
+			t.Fatalf("%v %v", l, err)
+		}
+		out := map[string]bool{}
+		for _, a := range l {
+			out[a.ID] = a.Closed
+		}
+		return out
+	}
+	if n, err := g.CountOpen(ctx, "ws"); err != nil || n != 2 {
+		t.Fatalf("le titulaire et l'espace : %d %v", n, err)
+	}
+	if st := state(); st[left.ID] || st[space.ID] || !st[gone.ID] || st[revoked.ID] {
+		t.Fatalf("%v", st)
+	}
+	// Retrait : l'accès se ferme, ses connexions sont coupées, rien n'est révoqué ; l'accès d'espace reste compté.
+	var cut []string
+	SetCloser(func(ids []string) { cut = append(cut, ids...) })
+	t.Cleanup(func() { SetCloser(nil) })
+	present[u1] = standing.State{Workspace: true}
+	if n, err := g.CutPerson(ctx, "ws", u1); err != nil || n != 1 || len(cut) != 1 || cut[0] != left.ID {
+		t.Fatalf("%d %v %v", n, err, cut)
+	}
+	if n, err := g.CountOpen(ctx, "ws"); err != nil || n != 1 {
+		t.Fatalf("%d %v", n, err)
+	}
+	if st := state(); !st[left.ID] || st[space.ID] {
+		t.Fatalf("%v", st)
+	}
+	// Retour : le même accès rouvre.
+	present[u1] = standing.State{Workspace: true, Member: true}
+	if a, err := g.Alive(ctx, left.ID); err != nil || a.RevokedAt != nil {
+		t.Fatalf("%v %v", a, err)
+	}
+	if _, err := g.CutPerson(ctx, "ws", ""); err == nil {
+		t.Fatal("personne requise")
+	}
+	g.Standing = situation{err: errors.New("base")}
+	if _, err := g.CountOpen(ctx, "ws"); err == nil {
+		t.Fatal("une panne n'est pas un compte")
+	}
+	if _, err := g.List(ctx, "ws"); err == nil {
+		t.Fatal("une panne n'est pas une liste")
+	}
+}
+
+type byPerson map[string]standing.State
+
+func (b byPerson) Of(_ context.Context, _, user string) (standing.State, error) { return b[user], nil }
+
+func TestCloseSessions_WithoutServer(t *testing.T) {
+	SetCloser(nil)
+	CloseSessions("a1") // aucun serveur IMAP sur cette instance : rien à fermer, aucune panne
+	n := 0
+	SetCloser(func(ids []string) { n += len(ids) })
+	t.Cleanup(func() { SetCloser(nil) })
+	CloseSessions()
+	CloseSessions("a1", "a2")
+	if n != 2 {
+		t.Fatal(n)
 	}
 }

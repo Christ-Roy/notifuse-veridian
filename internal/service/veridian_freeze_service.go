@@ -140,6 +140,12 @@ func (s *veridianService) FreezeMember(ctx context.Context, input domain.FreezeM
 	if freezeErr != nil {
 		return nil, false, fmt.Errorf("freeze member: %w", freezeErr)
 	}
+	// Ses connexions de boite deja ouvertes tombent avec le gel ; la porte relit le gel a chaque passage (fiche 91).
+	if s.mailAccess != nil {
+		if _, cutErr := s.mailAccess.CutPerson(ctx, input.TenantID, member.ID); cutErr != nil && s.logger != nil {
+			s.logger.WithFields(map[string]interface{}{"tenant_id": input.TenantID, "error": cutErr.Error()}).Warn("veridian FreezeMember: mail connections not cut")
+		}
+	}
 
 	if s.logger != nil {
 		s.logger.WithFields(map[string]interface{}{

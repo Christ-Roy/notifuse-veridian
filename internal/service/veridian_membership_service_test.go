@@ -324,17 +324,17 @@ func TestRemoveMember_Success_HardDeletes(t *testing.T) {
 }
 
 type mailAccessDouble struct {
-	calls   []string
-	revoked int
-	left    int
-	err     error
+	calls  []string
+	closed int
+	left   int
+	err    error
 }
 
-func (d *mailAccessDouble) RevokeByCreator(_ context.Context, ws, user string) (int, error) {
+func (d *mailAccessDouble) CutPerson(_ context.Context, ws, user string) (int, error) {
 	d.calls = append(d.calls, ws+"/"+user)
-	return d.revoked, d.err
+	return d.closed, d.err
 }
-func (d *mailAccessDouble) CountActive(context.Context, string) (int, error) { return d.left, d.err }
+func (d *mailAccessDouble) CountOpen(context.Context, string) (int, error) { return d.left, d.err }
 
 // VER (25/11) : l'accès IMAP et SMTP créé par un membre ouvrait encore la boîte après son retrait.
 func TestRemoveMember_CutsMailAccessesOfThePerson(t *testing.T) {
@@ -344,7 +344,7 @@ func TestRemoveMember_CutsMailAccessesOfThePerson(t *testing.T) {
 	}{"retiré": {true, false}, "déjà plus membre : rejoué": {false, false}, "coupure en panne": {true, true}} {
 		t.Run(name, func(t *testing.T) {
 			svc, m := newVeridianService(t)
-			d := &mailAccessDouble{revoked: 2, left: 1}
+			d := &mailAccessDouble{closed: 2, left: 1}
 			if c.failing {
 				d.err = errors.New("base")
 			}
@@ -364,13 +364,13 @@ func TestRemoveMember_CutsMailAccessesOfThePerson(t *testing.T) {
 			assert.Equal(t, c.member, resp.Removed)
 			assert.Equal(t, []string{"ws-1/member-uuid-1"}, d.calls)
 			if c.failing {
-				assert.Nil(t, resp.RevokedMailAccesses, "jamais un faux zéro")
+				assert.Nil(t, resp.ClosedMailAccesses, "jamais un faux zéro")
 				assert.Nil(t, resp.ActiveMailAccesses)
 				return
 			}
-			require.NotNil(t, resp.RevokedMailAccesses)
+			require.NotNil(t, resp.ClosedMailAccesses)
 			require.NotNil(t, resp.ActiveMailAccesses)
-			assert.Equal(t, 2, *resp.RevokedMailAccesses)
+			assert.Equal(t, 2, *resp.ClosedMailAccesses)
 			assert.Equal(t, 1, *resp.ActiveMailAccesses)
 		})
 	}

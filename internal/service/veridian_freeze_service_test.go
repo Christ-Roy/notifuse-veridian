@@ -364,3 +364,24 @@ func TestConfigureFrozenMemberSupport_RefusesUnknownImpl(t *testing.T) {
 	err := ConfigureFrozenMemberSupport(fake, repo)
 	require.Error(t, err)
 }
+
+// Geler ferme tout de suite les connexions de boite deja ouvertes ; une panne de coupure ne defait pas le gel (la porte relit le gel).
+func TestFreezeMember_CutsOpenMailConnections(t *testing.T) {
+	ctx := context.Background()
+	for _, failing := range []bool{false, true} {
+		svc, m, frozenRepo := newVeridianServiceWithFrozenRepo(t)
+		d := &mailAccessDouble{closed: 1}
+		if failing {
+			d.err = errors.New("base")
+		}
+		svc.ConfigureMailAccess(d)
+		m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+		m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(&domain.User{ID: "bob-uuid", Email: "bob@example.com", Type: domain.UserTypeUser}, nil)
+		m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "bob-uuid", "ws-1").Return(&domain.UserWorkspace{UserID: "bob-uuid", WorkspaceID: "ws-1", Role: "member"}, nil)
+		frozenRepo.EXPECT().Freeze(ctx, "ws-1", "bob-uuid", domain.FreezeReasonManual).Return(&domain.VeridianFrozenMember{WorkspaceID: "ws-1", UserID: "bob-uuid"}, false, nil)
+		m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberFrozen, "ws-1", gomock.Any())
+		_, _, err := svc.FreezeMember(ctx, domain.FreezeMemberInput{TenantID: "ws-1", HubUserID: testHubUID})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"ws-1/bob-uuid"}, d.calls)
+	}
+}

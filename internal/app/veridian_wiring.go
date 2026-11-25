@@ -277,9 +277,12 @@ func (a *App) veridianInitRepositories() {
 	a.veridianPlanRepo = repository.NewVeridianPlanRepository(a.db)
 	a.messageHistoryRepo = repository.NewVeridianMessageHistoryDecorator(a.messageHistoryRepo, a.veridianPlanRepo, a.logger)
 
-	// Compte supprimé côté Hub : aucune session ne s'ouvre, aucune ne vaut (fiche 91).
-	a.authRepo = &accountgate.Auth{AuthRepository: a.authRepo, DB: a.db}
-	a.userRepo = &accountgate.Users{UserRepository: a.userRepo, DB: a.db}
+	// Compte supprimé côté Hub : aucune session ne s'ouvre, aucune ne vaut (fiche 91). Éteinte en prod par VERIDIAN_ACCOUNT_GATE=off le temps
+	// d'une décision de la parente (elle couperait un vrai compte) ; retirer la variable l'allume.
+	if os.Getenv("VERIDIAN_ACCOUNT_GATE") != "off" {
+		a.authRepo = &accountgate.Auth{AuthRepository: a.authRepo, DB: a.db}
+		a.userRepo = &accountgate.Users{UserRepository: a.userRepo, DB: a.db}
+	}
 
 	// VER-220 : aucune adresse de contact abîmée n'entre en base, quelle que soit la voie
 	// (inscription publique, événements, préférences écrivent sans passer par Contact.Validate).
@@ -617,11 +620,11 @@ func (a *App) veridianInitHandlers() error {
 			return deleted, err
 		})
 	}
-	// Accès de boîte (IMAP, SMTP) d'un membre retiré : révoqués par remove-member (fiche 91).
+	// Accès de boîte (IMAP, SMTP) d'un membre retiré ou gelé : fermés, connexions ouvertes comprises (fiche 91).
 	if cut, ok := a.veridianService.(interface {
-		ConfigureMailAccess(service.MailAccessRevoker)
+		ConfigureMailAccess(service.MailAccessCutter)
 	}); ok && a.db != nil {
-		cut.ConfigureMailAccess(boxaccess.NewStore(a.db))
+		cut.ConfigureMailAccess(&boxaccess.Guard{Store: boxaccess.NewStore(a.db), WS: a.workspaceRepo, Standing: &standing.Store{DB: a.db}})
 	}
 	if gcRunner, ok := a.veridianService.(httpHandler.VeridianOrphanDBGCRunner); ok {
 		veridianHandler.SetOrphanDBGC(gcRunner, a.config.Environment)

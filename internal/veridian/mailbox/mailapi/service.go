@@ -27,6 +27,8 @@ func invalid(format string, a ...any) error { return &ErrInvalid{Msg: fmt.Sprint
 type Actor struct {
 	ID   string
 	Kind string // "agent" (clé d'API) ou "humain"
+	// Owner : propriétaire de l'espace.
+	Owner bool
 }
 
 // Label rend l'identité écrite dans handled_by.
@@ -63,7 +65,7 @@ func (d DomainAuthorizer) Authorize(ctx context.Context, ws string, res domain.P
 	if uw == nil || !uw.HasPermission(res, perm) {
 		return ctx, Actor{}, domain.NewPermissionError(res, perm, fmt.Sprintf("droit %s:%s requis", res, perm))
 	}
-	a := Actor{Kind: "humain"}
+	a := Actor{Kind: "humain", Owner: uw.Role == "owner"}
 	if user != nil {
 		a.ID = user.ID
 		if user.Type == domain.UserTypeAPIKey {

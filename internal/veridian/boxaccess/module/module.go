@@ -89,7 +89,7 @@ func wire(h platform.Host) error {
 		return err
 	}
 	settings = set
-	store := boxaccess.NewStore(h.DB())
+	guard := &boxaccess.Guard{Store: boxaccess.NewStore(h.DB()), WS: h.WorkspaceRepository(), Standing: &standing.Store{DB: h.DB()}}
 	conn := boxapi.Connection{}
 	if set.Enabled {
 		conn.IMAP = &boxapi.Endpoint{Host: set.Host, Port: set.ShowPort, Security: "SSL/TLS"}
@@ -119,7 +119,7 @@ func wire(h platform.Host) error {
 		}
 		conn.SMTP = &boxapi.Endpoint{Host: set.SMTPHost, Port: show, Security: "SSL/TLS"}
 	}
-	(&boxapi.Handler{Store: store, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService(), Standing: &standing.Store{DB: h.DB()}}, WS: h.WorkspaceRepository(),
+	(&boxapi.Handler{Store: guard, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService(), Standing: &standing.Store{DB: h.DB()}}, WS: h.WorkspaceRepository(),
 		Connection: conn, Log: h.Logger(), RequireAuth: h.RequireAuth()}).RegisterRoutes(h.Mux())
 
 	if !set.Enabled {
@@ -140,8 +140,13 @@ func wire(h platform.Host) error {
 	gh.RateLimiter().SetPolicy(imapgate.LimitIP, imapgate.TriesPerIP, imapgate.LimitWindow)
 	gh.RateLimiter().SetPolicy(imapgate.LimitAddress, imapgate.TriesPerAddr, imapgate.LimitWindow)
 	server, err = imapgate.New(imapgate.Config{Addr: fmt.Sprintf(":%d", set.Port), TLSConfig: tc, BehindTLSProxy: set.Proxy, ProxyProtocol: set.PROXYv2,
-		Auth: &boxaccess.Guard{Store: store, WS: h.WorkspaceRepository(), Standing: &standing.Store{DB: h.DB()}}, Boxes: mailboxmodule.NewStore(h.WorkspaceRepository()), Limiter: gh.RateLimiter(), Logger: h.Logger()})
-	return err
+		Auth: guard, Boxes: mailboxmodule.NewStore(h.WorkspaceRepository()), Limiter: gh.RateLimiter(), Logger: h.Logger()})
+	if err != nil {
+		return err
+	}
+	srv := server
+	boxaccess.SetCloser(func(ids []string) { srv.CloseAccesses(ids...) })
+	return nil
 }
 
 func start(ctx context.Context, h platform.Host) error {

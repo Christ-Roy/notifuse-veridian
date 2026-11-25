@@ -32,12 +32,15 @@ type fakeAuth struct {
 	mu      sync.Mutex
 	accs    map[string]*boxaccess.Access // "adresse|secret"
 	revoked map[string]bool
+	// revokeAfterVerify : le retrait tombe entre la lecture du mot de passe et l'inscription de la connexion.
+	revokeAfterVerify bool
 }
 
 func (f *fakeAuth) Verify(_ context.Context, a, s string) (*boxaccess.Access, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if x := f.accs[a+"|"+s]; x != nil && !f.revoked[x.ID] {
+		f.revoked[x.ID] = f.revokeAfterVerify
 		return x, nil
 	}
 	return nil, boxaccess.ErrAuth
@@ -62,8 +65,16 @@ type fakeMsg struct {
 
 // fakeBoxes reproduit le contrat du dépôt, cloisonnement par profil compris.
 type fakeBoxes struct {
-	mu   sync.Mutex
-	msgs map[string]*fakeMsg
+	mu    sync.Mutex
+	msgs  map[string]*fakeMsg
+	calls int // lectures et écritures de la boîte
+}
+
+func (b *fakeBoxes) reset() { b.mu.Lock(); defer b.mu.Unlock(); b.calls = 0 }
+func (b *fakeBoxes) touched() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.calls
 }
 
 func (b *fakeBoxes) add(seq int64, profile string, folder mailbox.BoxFolder, subject, body string, raw bool) string {
@@ -85,6 +96,7 @@ func (b *fakeBoxes) add(seq int64, profile string, folder mailbox.BoxFolder, sub
 func (b *fakeBoxes) BoxIndex(_ context.Context, _, profile string, folder mailbox.BoxFolder) ([]mailbox.BoxEntry, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.calls++
 	var out []mailbox.BoxEntry
 	for _, x := range b.msgs {
 		in := x.folder == folder && !x.hidden
@@ -103,6 +115,7 @@ func (b *fakeBoxes) BoxIndex(_ context.Context, _, profile string, folder mailbo
 func (b *fakeBoxes) BoxMessages(_ context.Context, _, profile string, ids []string) (map[string]*mailbox.Message, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.calls++
 	out := map[string]*mailbox.Message{}
 	for _, id := range ids {
 		if x := b.msgs[id]; x != nil && x.m.ProfileID == profile {
@@ -115,6 +128,7 @@ func (b *fakeBoxes) BoxMessages(_ context.Context, _, profile string, ids []stri
 func (b *fakeBoxes) BoxSetFlags(_ context.Context, _, profile, id string, flags []string, hidden *bool) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.calls++
 	if x := b.msgs[id]; x != nil && x.m.ProfileID == profile {
 		x.flags = append([]string{}, flags...)
 		if hidden != nil {
@@ -127,6 +141,7 @@ func (b *fakeBoxes) BoxSetFlags(_ context.Context, _, profile, id string, flags 
 func (b *fakeBoxes) BoxPurge(_ context.Context, _, profile, id string, flags []string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.calls++
 	if x := b.msgs[id]; x != nil && x.m.ProfileID == profile {
 		x.purged, x.hidden = true, true
 	}
@@ -136,6 +151,7 @@ func (b *fakeBoxes) BoxPurge(_ context.Context, _, profile, id string, flags []s
 func (b *fakeBoxes) BoxSentKnown(_ context.Context, _, profile string, ids []string) (bool, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.calls++
 	for _, x := range b.msgs {
 		for _, id := range ids {
 			if x.m.ProfileID == profile && x.folder == mailbox.BoxSent && x.m.MessageID == id {
@@ -467,7 +483,7 @@ func TestAppend_OnlyWhatNotifuseSent(t *testing.T) {
 func TestPoll_NewMailFlagsAndRevocation(t *testing.T) {
 	b := newBench(t)
 	b.boxes.add(10, "pJC", mailbox.BoxInbox, "Un", "a", true)
-	s := b.srv.newSession("203.0.113.9")
+	s := b.srv.newSession("203.0.113.9", nil)
 	if err := s.Login("jc@boite.fr", "bon"); err != nil {
 		t.Fatal(err)
 	}
@@ -503,16 +519,19 @@ func TestPoll_NewMailFlagsAndRevocation(t *testing.T) {
 
 func TestAcquire_BoundsConnectionsPerAccess(t *testing.T) {
 	b := newBench(t)
+	var held []*session
 	for i := 0; i < MaxConnsPerAccess; i++ {
-		if !b.srv.acquire("a1") {
+		x := b.srv.newSession("203.0.113.9", nil)
+		if !b.srv.acquire("a1", x) {
 			t.Fatal("refus trop tôt")
 		}
+		held = append(held, x)
 	}
-	if b.srv.acquire("a1") {
+	if b.srv.acquire("a1", b.srv.newSession("203.0.113.9", nil)) {
 		t.Fatal("le nombre de connexions par accès doit être borné")
 	}
-	b.srv.release("a1")
-	if !b.srv.acquire("a1") {
+	b.srv.release("a1", held[0])
+	if !b.srv.acquire("a1", held[0]) {
 		t.Fatal("une place libérée doit resservir")
 	}
 }
@@ -522,12 +541,12 @@ func TestLogin_IPv6LimitedByPrefix(t *testing.T) {
 	b := newBench(t)
 	var last error
 	for i := 0; i <= TriesPerAddr; i++ {
-		last = b.srv.newSession(fmt.Sprintf("2a02:c207:1:2::%x", i+1)).Login("jc@boite.fr", "faux")
+		last = b.srv.newSession(fmt.Sprintf("2a02:c207:1:2::%x", i+1), nil).Login("jc@boite.fr", "faux")
 	}
 	if !errors.Is(last, errLimited) {
 		t.Fatalf("même /64 : %v", last)
 	}
-	if err := b.srv.newSession("2a02:c207:1:3::1").Login("jc@boite.fr", "faux"); errors.Is(err, errLimited) {
+	if err := b.srv.newSession("2a02:c207:1:3::1", nil).Login("jc@boite.fr", "faux"); errors.Is(err, errLimited) {
 		t.Fatal("autre /64 : compteur à part")
 	}
 }
@@ -544,14 +563,146 @@ func TestSession_AlreadyOpenIsCutQuickly(t *testing.T) {
 	b.auth.mu.Lock()
 	b.auth.revoked["a1"] = true
 	b.auth.mu.Unlock()
-	end := time.Now().Add(8 * time.Second)
+	end := time.Now().Add(3 * time.Second)
 	for mine.Noop().Wait() == nil {
 		if time.Now().After(end) {
-			t.Fatal("session encore ouverte 8 s après la révocation")
+			t.Fatal("session encore ouverte 3 s après la révocation")
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 	if err := other.Noop().Wait(); err != nil {
 		t.Fatalf("session d'un autre coupée à tort : %v", err)
+	}
+}
+
+// Sans attendre la relecture : les connexions en veille (IDLE) d'un accès sont coupées tout de suite, celles des autres non.
+func TestCloseAccesses_CutsIdleConnectionsNow(t *testing.T) {
+	b := newBench(t)
+	mine, mine2, other := b.login(t, "jc@boite.fr"), b.login(t, "jc@boite.fr"), b.login(t, "autre@boite.fr")
+	for _, c := range []*imapclient.Client{mine, mine2, other} {
+		if _, err := c.Select("INBOX", nil).Wait(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	idle, err := mine.Idle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan error, 1)
+	go func() { ended <- idle.Wait() }()
+	if n := b.srv.CloseAccesses("inconnu"); n != 0 {
+		t.Fatal(n)
+	}
+	if n := b.srv.CloseAccesses("a1"); n != 2 {
+		t.Fatalf("deux connexions attendues, %d coupées", n)
+	}
+	select {
+	case <-ended:
+	case <-time.After(2 * time.Second):
+		t.Fatal("IDLE encore ouvert")
+	}
+	if mine2.Noop().Wait() == nil {
+		t.Fatal("seconde connexion encore ouverte")
+	}
+	if err := other.Noop().Wait(); err != nil {
+		t.Fatalf("connexion d'un autre coupée à tort : %v", err)
+	}
+	// Les places de l'accès sont rendues : il peut se reconnecter autant qu'avant (son titulaire est revenu).
+	end := time.Now().Add(3 * time.Second)
+	for {
+		b.srv.mu.Lock()
+		n, o := b.srv.perAcc["a1"], len(b.srv.open["a1"])
+		b.srv.mu.Unlock()
+		if n == 0 && o == 0 {
+			break
+		}
+		if time.Now().After(end) {
+			t.Fatalf("places non rendues : %d %d", n, o)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	b.login(t, "jc@boite.fr")
+}
+
+// Toute commande qui lit ou écrit relit l'accès : une connexion que la coupure n'aurait pas atteinte n'obtient plus rien.
+func TestSession_EveryCommandChecksTheAccess(t *testing.T) {
+	one := imap.SeqSetNum(1)
+	given := func(err error) int { // 1 : la commande a abouti
+		if err == nil {
+			return 1
+		}
+		return 0
+	}
+	cmds := map[string]func(c *imapclient.Client) int{
+		"SELECT": func(c *imapclient.Client) int { _, err := c.Select("Sent", nil).Wait(); return given(err) },
+		"STATUS": func(c *imapclient.Client) int {
+			_, err := c.Status("INBOX", &imap.StatusOptions{NumMessages: true}).Wait()
+			return given(err)
+		},
+		"FETCH": func(c *imapclient.Client) int {
+			l, _ := c.Fetch(one, &imap.FetchOptions{Flags: true, UID: true}).Collect()
+			return len(l)
+		},
+		"FETCH corps": func(c *imapclient.Client) int {
+			l, _ := c.Fetch(one, &imap.FetchOptions{Envelope: true}).Collect()
+			return len(l)
+		},
+		"SEARCH": func(c *imapclient.Client) int {
+			_, err := c.Search(&imap.SearchCriteria{Body: []string{"corps"}}, nil).Wait()
+			return given(err)
+		},
+		"STORE": func(c *imapclient.Client) int {
+			return given(c.Store(one, &imap.StoreFlags{Op: imap.StoreFlagsAdd, Flags: []imap.Flag{imap.FlagSeen}}, nil).Close())
+		},
+		"EXPUNGE": func(c *imapclient.Client) int { return given(c.Expunge().Close()) },
+		"MOVE":    func(c *imapclient.Client) int { _, err := c.Move(one, "Trash").Wait(); return given(err) },
+	}
+	for name, do := range cmds {
+		t.Run(name, func(t *testing.T) {
+			b := newBench(t)
+			id := b.boxes.add(1, "pJC", mailbox.BoxInbox, "sujet", "corps", true)
+			b.boxes.mu.Lock()
+			b.boxes.msgs[id].flags = []string{`\Deleted`} // EXPUNGE a quelque chose à retirer
+			b.boxes.mu.Unlock()
+			open := func() *imapclient.Client {
+				c := b.login(t, "jc@boite.fr")
+				if _, err := c.Select("INBOX", nil).Wait(); err != nil {
+					t.Fatal(err)
+				}
+				return c
+			}
+			cut := open()
+			b.auth.mu.Lock()
+			b.auth.revoked["a1"] = true
+			b.auth.mu.Unlock()
+			time.Sleep(aliveEvery + 50*time.Millisecond)
+			b.boxes.reset()
+			if n := do(cut); n != 0 || b.boxes.touched() != 0 {
+				t.Fatalf("après la coupure : %d rendu, boîte touchée %d fois", n, b.boxes.touched())
+			}
+			b.auth.mu.Lock()
+			b.auth.revoked["a1"] = false
+			b.auth.mu.Unlock()
+			if do(open()) != 1 { // présence à côté : la commande aboutit quand l'accès vaut
+				t.Fatal("la commande doit aboutir sur un accès vivant")
+			}
+		})
+	}
+}
+
+// Retrait pendant la connexion : l'accès vu vivant à la lecture du mot de passe est relu une fois la connexion inscrite.
+func TestLogin_RevokedDuringLogin(t *testing.T) {
+	b := newBench(t)
+	b.auth.mu.Lock()
+	b.auth.revokeAfterVerify = true
+	b.auth.mu.Unlock()
+	c := b.dial(t)
+	if err := c.Login("jc@boite.fr", "bon").Wait(); err == nil {
+		t.Fatal("connexion ouverte sur un accès coupé")
+	}
+	b.srv.mu.Lock()
+	defer b.srv.mu.Unlock()
+	if len(b.srv.open) != 0 || len(b.srv.perAcc) != 0 {
+		t.Fatal("place non rendue")
 	}
 }

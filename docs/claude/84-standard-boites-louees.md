@@ -39,7 +39,7 @@ de **Notifuse vers le relais** (chiffrés dans l'intégration, jamais montrés a
    **Aucun port nouveau pour lire et envoyer** : Traefik (443, déjà public) aiguille par nom TLS (`HostSNI`) vers le service Nomad
    de Notifuse, port dynamique, donc le conteneur peut bouger. Éprouvé le 23/11 en local avec le Traefik de la prod (3.7.17) :
    IMAP et site web sur le même port, mauvais mot de passe refusé, nom inconnu muet, backend déplacé repris en moins de 12 s.
-   Option ALPN `imap` acceptée. Limite : Gmail « Envoyer en tant que » n'accepte que 25, 465 et 587.
+   ALPN `imap` ou `smtp` annoncé : refusé (mesuré le 25/11, alerte 120), option TLS à poser à l'entrée. STARTTLS sur 443 : impossible. Limite : Gmail « Envoyer en tant que » n'accepte que 25, 465 et 587.
    **Un seul port public neuf est inévitable : le 25 pour recevoir** (les serveurs de mail ne savent livrer que là), tenu par
    Traefik vers Notifuse, pas par le conteneur.
 3. **Dossiers** : `INBOX` (reçus), `Sent`. UID = numéro d'ordre durable, UIDVALIDITY fixe par boîte. `\Seen` par accès, « traité »

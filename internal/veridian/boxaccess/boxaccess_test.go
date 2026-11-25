@@ -29,7 +29,7 @@ func testDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { db.Exec("DROP SCHEMA " + name + " CASCADE"); db.Close() })
 	for _, sp := range veridianmig.Default.List() {
-		if sp.Number == 75 {
+		if sp.Number == 75 || sp.Number == 80 {
 			for _, q := range sp.System {
 				if _, err := db.Exec(q); err != nil {
 					t.Fatal(err)
@@ -148,53 +148,29 @@ func TestAccess_MaxPerWorkspace(t *testing.T) {
 	}
 }
 
-func TestAccess_HumanCreator(t *testing.T) {
-	for by, want := range map[string]string{"humain:u1": "u1", "agent:u1": "", "humain": "", "": ""} {
-		id, ok := (&Access{CreatedBy: by}).HumanCreator()
-		if ok != (want != "") || (ok && id != want) {
-			t.Errorf("%q : %q %v", by, id, ok)
-		}
-	}
-}
-
-func TestStore_RevokeByCreator_And_CountActive(t *testing.T) {
+func TestStore_Held(t *testing.T) {
 	s, ctx := NewStore(testDB(t)), context.Background()
-	mk := func(ws, by string) (*Access, string) {
-		a, secret, err := s.Create(ctx, Access{WorkspaceID: ws, ProfileID: "p", Address: "jc@boite.fr", CanSend: true, CreatedBy: by})
-		if err != nil {
-			t.Fatal(err)
+	const u1, u2 = "0a000000-0000-4000-8000-000000000001", "0a000000-0000-4000-8000-000000000002"
+	mk := func(ws, holder string) string {
+		a, _, err := s.Create(ctx, Access{WorkspaceID: ws, ProfileID: "p", Address: "jc@boite.fr", CanSend: true, CreatedBy: "humain:" + u1, Holder: holder})
+		if err != nil || a.Holder != holder {
+			t.Fatalf("%+v %v", a, err)
 		}
-		return a, secret
+		return a.ID
 	}
-	_, mine := mk("ws", "humain:u1")
-	_, mine2 := mk("ws", "humain:u1")
-	_, colleague := mk("ws", "humain:u12")
-	_, key := mk("ws", "agent:u1")
-	_, elsewhere := mk("ws2", "humain:u1")
-	if n, err := s.CountActive(ctx, "ws"); err != nil || n != 4 {
-		t.Fatalf("%d %v", n, err)
+	mine, gone := mk("ws", u1), mk("ws", u1)
+	mk("ws", u2)
+	mk("ws", "") // accès d'espace, même auteur : jamais rattaché à la personne
+	mk("ws2", u1)
+	if _, err := s.Revoke(ctx, "ws", gone); err != nil {
+		t.Fatal(err)
 	}
-	if n, err := s.RevokeByCreator(ctx, "ws", "u1"); err != nil || n != 2 {
-		t.Fatalf("%d %v", n, err)
+	l, err := s.Held(ctx, "ws", u1)
+	if err != nil || len(l) != 1 || l[0].ID != mine {
+		t.Fatalf("%+v %v", l, err)
 	}
-	for name, sec := range map[string]string{"un": mine, "deux": mine2} {
-		if _, err := s.Verify(ctx, "jc@boite.fr", sec); !errors.Is(err, ErrAuth) {
-			t.Errorf("accès %s du retiré encore ouvert : %v", name, err)
-		}
-	}
-	for name, sec := range map[string]string{"collègue": colleague, "clé d'API": key, "autre espace": elsewhere} {
-		if _, err := s.Verify(ctx, "jc@boite.fr", sec); err != nil {
-			t.Errorf("%s coupé à tort : %v", name, err)
-		}
-	}
-	if n, err := s.RevokeByCreator(ctx, "ws", "u1"); err != nil || n != 0 {
-		t.Fatalf("rejeu : %d %v", n, err)
-	}
-	if n, err := s.CountActive(ctx, "ws"); err != nil || n != 2 {
-		t.Fatalf("%d %v", n, err)
-	}
-	for _, q := range [][2]string{{"", "u1"}, {"ws", ""}} {
-		if _, err := s.RevokeByCreator(ctx, q[0], q[1]); err == nil {
+	for _, q := range [][2]string{{"", u1}, {"ws", ""}, {"ws", "pas-un-uuid"}} {
+		if _, err := s.Held(ctx, q[0], q[1]); err == nil {
 			t.Error("espace et personne requis")
 		}
 	}

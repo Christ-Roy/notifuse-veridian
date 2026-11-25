@@ -212,16 +212,16 @@ func (s *veridianService) RemoveMember(ctx context.Context, input domain.RemoveM
 	return resp, nil
 }
 
-// MailAccessRevoker coupe et compte les acces de boite d'un espace (boxaccess.Store).
-type MailAccessRevoker interface {
-	RevokeByCreator(ctx context.Context, workspaceID, userID string) (int, error)
-	CountActive(ctx context.Context, workspaceID string) (int, error)
+// MailAccessCutter ferme les acces de boite d'une personne et compte ceux qui restent ouverts dans l'espace (boxaccess.Guard).
+type MailAccessCutter interface {
+	CutPerson(ctx context.Context, workspaceID, userID string) (int, error)
+	CountOpen(ctx context.Context, workspaceID string) (int, error)
 }
 
-// cutMailAccesses revoque les acces de boite (IMAP, SMTP) crees par la personne retiree : c'est son telephone, pas une automatisation, et
-// un retour dans l'espace ne les rouvre pas. Rejoue aussi quand elle n'etait deja plus membre. Les acces des autres restent et sont comptes.
-// Un echec ne defait jamais le retrait : la porte IMAP et SMTP relit l'appartenance a chaque passage (boxaccess.Guard) ; le nombre manque,
-// jamais un faux zero.
+// cutMailAccesses ferme les acces de boite (IMAP, SMTP) dont la personne retiree est titulaire, connexions ouvertes comprises, AVANT la
+// reponse. Rien n'est efface : la porte relit son appartenance, son retour les rouvre. Rejoue aussi quand elle n'etait deja plus membre. Les
+// acces d'espace (sans titulaire) et ceux des autres restent et sont comptes. Un echec ne defait jamais le retrait, et la porte reste
+// fermee ; le nombre manque, jamais un faux zero.
 func (s *veridianService) cutMailAccesses(ctx context.Context, resp *domain.RemoveMemberResponse) {
 	if s.mailAccess == nil {
 		return
@@ -232,14 +232,14 @@ func (s *veridianService) cutMailAccesses(ctx context.Context, resp *domain.Remo
 		}
 	}
 	if resp.AppUserID != "" {
-		n, err := s.mailAccess.RevokeByCreator(ctx, resp.TenantID, resp.AppUserID)
+		n, err := s.mailAccess.CutPerson(ctx, resp.TenantID, resp.AppUserID)
 		if err != nil {
 			warn(err)
 		} else {
-			resp.RevokedMailAccesses = &n
+			resp.ClosedMailAccesses = &n
 		}
 	}
-	left, err := s.mailAccess.CountActive(ctx, resp.TenantID)
+	left, err := s.mailAccess.CountOpen(ctx, resp.TenantID)
 	if err != nil {
 		warn(err)
 		return

@@ -19,10 +19,14 @@ type authz struct {
 	res  domain.PermissionResource
 	perm domain.PermissionType
 	err  error
+	who  *mailapi.Actor
 }
 
 func (a *authz) Authorize(ctx context.Context, _ string, r domain.PermissionResource, p domain.PermissionType) (context.Context, mailapi.Actor, error) {
 	a.res, a.perm = r, p
+	if a.who != nil {
+		return ctx, *a.who, a.err
+	}
 	return ctx, mailapi.Actor{ID: "u1", Kind: "humain"}, a.err
 }
 
@@ -128,5 +132,46 @@ func TestCreate_Refusals(t *testing.T) {
 		if w.Code != tc.code || strings.Contains(w.Body.String(), "base") {
 			t.Errorf("%s : %d %s", name, w.Code, w.Body)
 		}
+	}
+}
+
+// Titulaire : une personne crée SON accès ; un accès partagé se crée par le propriétaire ou par une clé d'API (fiche 91).
+func TestCreate_Holder(t *testing.T) {
+	for name, c := range map[string]struct {
+		who    mailapi.Actor
+		shared string
+		code   int
+		holder string
+	}{
+		"membre":                {mailapi.Actor{ID: "u1", Kind: "humain"}, "false", 201, "u1"},
+		"propriétaire":          {mailapi.Actor{ID: "u1", Kind: "humain", Owner: true}, "false", 201, "u1"},
+		"propriétaire, partagé": {mailapi.Actor{ID: "u1", Kind: "humain", Owner: true}, "true", 201, ""},
+		"membre, partagé":       {mailapi.Actor{ID: "u1", Kind: "humain"}, "true", 403, ""},
+		"clé d'API":             {mailapi.Actor{ID: "k1", Kind: "agent"}, "false", 201, ""},
+	} {
+		mux, a, s := setup()
+		a.who = &c.who
+		w := call(mux, "POST", "/api/veridian/mail.access.create", `{"workspace_id":"ws","profile_id":"p","shared":`+c.shared+`}`)
+		if w.Code != c.code || (c.code == 201) != (len(s.created) == 1) {
+			t.Fatalf("%s : %d %s", name, w.Code, w.Body)
+		}
+		if c.code == 201 && s.created[0].Holder != c.holder {
+			t.Errorf("%s : titulaire %q", name, s.created[0].Holder)
+		}
+	}
+}
+
+func TestRevoke_CutsOpenConnections(t *testing.T) {
+	var cut []string
+	boxaccess.SetCloser(func(ids []string) { cut = append(cut, ids...) })
+	t.Cleanup(func() { boxaccess.SetCloser(nil) })
+	mux, _, _ := setup()
+	call(mux, "POST", "/api/veridian/mail.access.revoke", `{"workspace_id":"ws","id":"autre"}`)
+	if len(cut) != 0 {
+		t.Fatal("un accès inconnu ne coupe rien")
+	}
+	call(mux, "POST", "/api/veridian/mail.access.revoke", `{"workspace_id":"ws","id":"acc1"}`)
+	if len(cut) != 1 || cut[0] != "acc1" {
+		t.Fatal(cut)
 	}
 }

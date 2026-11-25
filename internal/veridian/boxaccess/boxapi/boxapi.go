@@ -128,6 +128,8 @@ type createRequest struct {
 	Label       string `json:"label"`
 	CanSend     *bool  `json:"can_send"`
 	DailyCap    int    `json:"daily_cap"`
+	// Shared : accès d'espace (boîte partagée, outil du client), qui reste quand les gens partent. Propriétaire ou clé d'API seulement.
+	Shared bool `json:"shared"`
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +144,15 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	q.Label = strings.TrimSpace(q.Label)
 	if q.ProfileID == "" || len(q.Label) > 120 || q.DailyCap < 0 || q.DailyCap > boxaccess.MaxDailyCap {
 		writeErr(w, http.StatusBadRequest, "invalid", "profile_id requis, libellé de 120 caractères au plus, plafond entre 1 et 1000")
+		return
+	}
+	// Une personne crée SON accès : il se ferme avec sa place dans l'espace. Une clé d'API crée un accès d'espace, comme elle.
+	holder := ""
+	if actor.Kind == "humain" && !q.Shared {
+		holder = actor.ID
+	}
+	if actor.Kind == "humain" && q.Shared && !actor.Owner {
+		writeErr(w, http.StatusForbidden, "owner_required", "un accès partagé se crée par le propriétaire de l'espace")
 		return
 	}
 	ws, err := h.WS.GetByID(ctx, q.WorkspaceID)
@@ -159,7 +170,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	send := q.CanSend == nil || *q.CanSend
 	a, secret, err := h.Store.Create(ctx, boxaccess.Access{WorkspaceID: q.WorkspaceID, ProfileID: q.ProfileID, Address: addr,
-		Label: q.Label, CanSend: send, DailyCap: q.DailyCap, CreatedBy: actor.Label()})
+		Label: q.Label, CanSend: send, DailyCap: q.DailyCap, CreatedBy: actor.Label(), Holder: holder})
 	if err != nil {
 		h.fail(w, err)
 		return
@@ -202,6 +213,7 @@ func (h *Handler) revoke(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err)
 		return
 	}
+	boxaccess.CloseSessions(a.ID)
 	h.Log.WithFields(map[string]interface{}{"workspace_id": a.WorkspaceID, "access_id": a.ID, "by": actor.Label()}).Info("Box access revoked")
 	writeJSON(w, http.StatusOK, map[string]any{"access": a})
 }

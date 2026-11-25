@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ce qui dure après le retrait d'un membre (fiche 91), sur STAGING : accès de boîte (vrais IMAP et SMTP), flux de la boîte unifiée, gel, suspension, compte
-supprimé au Hub. Un témoin (propriétaire) garde tout. Sort 0 (prouvé), 1 (défaut), 2 (non abouti). Aucun mail ne part (profil vers un hôte inexistant)."""
-import email.utils, imaplib, json, os, re, smtplib, ssl, subprocess, sys, threading, time, urllib.parse, urllib.request, uuid
+"""Ce qui dure après le retrait d'un membre (fiche 91), sur STAGING : accès de boîte (vrais IMAP et SMTP, connexion en veille ouverte avant), flux de la boîte
+unifiée, gel, suspension, compte supprimé au Hub. Deux témoins : le propriétaire, un accès d'espace (clé d'API). Sort 0 (prouvé), 1 (défaut), 2 (non abouti). Aucun mail ne part (profil vers un hôte inexistant)."""
+import imaplib, json, os, re, smtplib, ssl, socket, subprocess, sys, threading, time, urllib.parse, urllib.request, uuid
 
 sys.path.insert(0, os.path.expanduser("~/.claude/skills/notifuse-cli/bin"))
 import notifuse_common as nc  # noqa: E402
@@ -100,6 +100,39 @@ def smtp(user, pw):
         s.close()
 
 
+class Veille(threading.Thread):
+    """Une connexion IMAP en veille (IDLE), comme un téléphone. fin = heure de coupure par le serveur."""
+
+    def __init__(self, user, pw):
+        super().__init__(daemon=True)
+        self.fin = None
+        self.s = CTX.wrap_socket(socket.create_connection((HOST, PORT), timeout=90))
+        self.lire()
+        for i, c in enumerate((f'LOGIN "{user}" "{pw}"', "SELECT INBOX")):
+            self.s.sendall(f"a{i} {c}\r\n".encode())
+            while True:
+                l = self.lire()
+                if f"a{i} OK" in l:
+                    break
+                if not l or f"a{i} " in l:
+                    non_abouti("veille IMAP non ouverte")
+        self.s.sendall(b"a9 IDLE\r\n")
+        if "+" not in self.lire():
+            non_abouti("IDLE refusé")
+        self.start()
+
+    def lire(self):
+        return self.s.recv(65536).decode(errors="replace")
+
+    def run(self):
+        try:
+            while self.s.recv(4096):
+                pass
+        except OSError:
+            pass
+        self.fin = time.time()
+
+
 class Flux(threading.Thread):
     def __init__(self, jeton):
         super().__init__(daemon=True)
@@ -117,8 +150,9 @@ class Flux(threading.Thread):
 
 
 st, r = hub("POST", "/api/tenants/provision", {"tenant_id": WS, "owner_email": MAILS[OWNER], "owner_hub_user_id": OWNER})
-if st != 200:
-    non_abouti("espace", st, r)
+if st != 200 or not r.get("api_key"):
+    non_abouti("espace", st, r.get("error"))
+KEY = r["api_key"]
 try:
     st, r = geste("sync-member", {"hub_user_id": M, "email": MAILS[M], "user_email": MAILS[M], "email_proven": True, "role": "member"})
     if st != 200:
@@ -139,12 +173,17 @@ try:
             non_abouti("accès de boîte", st, r.get("code"))
         return r["username"], r["password"]
 
-    ao, am = acces(jo), acces(jm)
-    check("départ : IMAP ouvert aux deux", imap(*ao) and imap(*am))
+    ao, am, ae = acces(jo), acces(jm), acces(KEY)
+    st, r = nc.call_jwt(ENV, "POST", "/api/veridian/mail.access.create", jm, body={"workspace_id": WS, "profile_id": prof, "shared": True})
+    check("un membre ne crée pas d'accès d'espace", st == 403 and r.get("code") == "owner_required", st)
+    check("départ : IMAP ouvert aux trois", imap(*ao) and imap(*am) and imap(*ae))
     check("départ : SMTP ouvert aux deux", smtp(*ao) == (True, 250) and smtp(*am) == (True, 250), f"{smtp(*ao)} {smtp(*am)}")
 
     # Gel : réversible. La lecture de la console est floutée, la boîte ne peut pas l'être : elle se ferme, puis se rouvre.
+    veille = Veille(*am)
     geste("freeze-member", {"hub_user_id": M})
+    time.sleep(1)
+    check("gelé : veille IMAP coupée", veille.fin is not None)
     check("gelé : IMAP refusé", imap(*am) is False)
     check("gelé : SMTP refusé", smtp(*am)[0] is False)
     st, r = nc.call_jwt(ENV, "GET", "/api/veridian/mail.messages.list", jm, params={"workspace_id": WS})
@@ -161,40 +200,44 @@ try:
     hub("POST", "/api/tenants/resume", {"tenant_id": WS})
     check("repris : SMTP renvoie", smtp(*ao) == (True, 250), smtp(*ao))
 
-    # Retrait, flux et session IMAP ouverts.
+    # Retrait, flux et connexions IMAP en veille ouverts avant.
     fm, fo = Flux(jm), Flux(jo)
-    ouverte = imaplib.IMAP4_SSL(HOST, PORT, ssl_context=CTX, timeout=15); ouverte.login(*am); ouverte.select("INBOX")
+    vm, vo, ve = Veille(*am), Veille(*ao), Veille(*ae)
     time.sleep(3)
-    check("flux ouverts avant", fm.fin is None and fo.fin is None)
+    check("avant : flux et veilles ouverts", all(x.fin is None for x in (fm, fo, vm, vo, ve)))
     emis = lien(M)  # émis avant le retrait, consommé après
     st, r = geste("remove-member", {"hub_user_id": M, "reason": "e2e"})
     t0 = time.time()
     check("remove-member : retiré", st == 200 and r.get("removed") is True, st)
-    check("remove-member dit : 1 accès révoqué, 1 reste", r.get("revoked_mail_accesses") == 1 and r.get("active_mail_accesses") == 1, {k: v for k, v in r.items() if "mail" in k})
-    check("retiré : IMAP refusé au premier essai", imap(*am) is False)
-    check("retiré : SMTP refusé au premier essai", smtp(*am)[0] is False)
-    while fm.fin is None and time.time() - t0 < 15:
-        time.sleep(0.2)
+    check("remove-member dit : 1 accès fermé, 2 restent (propriétaire, espace)", r.get("closed_mail_accesses") == 1 and r.get("active_mail_accesses") == 2, {k: v for k, v in r.items() if "mail_acc" in k})
+    time.sleep(0.5)
+    check("retiré : veille IMAP coupée avant la réponse", vm.fin is not None and vm.fin <= t0 + 0.5, vm.fin and vm.fin - t0)
+    print(f"    veille coupée {((vm.fin or 0) - t0):+.2f} s par rapport à la réponse")
+    vu = {"imap": [], "smtp": [], "temoin": []}
+    while True:
+        t = time.time() - t0
+        vu["imap"].append(imap(*am)); vu["smtp"].append(smtp(*am)[0])
+        vu["temoin"].append(imap(*ao) and imap(*ae) and smtp(*ae) == (True, 250))
+        if t >= 60:
+            break
+        time.sleep(4)
+    n = len(vu["imap"])
+    check(f"retiré : IMAP refusé {n} fois sur {n}, 60 s", not any(vu["imap"]), vu["imap"])
+    check(f"retiré : SMTP refusé {n} fois sur {n}, 60 s", not any(vu["smtp"]), vu["smtp"])
+    check(f"témoins : IMAP et SMTP ouverts {n} fois sur {n}", all(vu["temoin"]), vu["temoin"])
+    check("témoins : veilles et flux du propriétaire intacts", vo.fin is None and ve.fin is None and fo.fin is None)
     check("retiré : son flux fermé", fm.fin is not None and any("access_revoked" in l for l in fm.lignes), fm.lignes[-3:])
     print(f"    flux fermé {((fm.fin or 0) - t0):.1f} s après la réponse")
-    coupe = None
-    while time.time() - t0 < 20 and coupe is None:
-        try:
-            if ouverte.noop()[0] != "OK":
-                coupe = time.time()
-        except (imaplib.IMAP4.error, OSError):
-            coupe = time.time()
-        time.sleep(0.5)
-    check("retiré : session IMAP déjà ouverte coupée", coupe is not None)
-    print(f"    session IMAP coupée {((coupe or 0) - t0):.1f} s après la réponse")
-    j = entrer(emis)
+    j = entrer(emis) if emis else non_abouti("lien d'avant le retrait")
     st, _r = nc.call_jwt(ENV, "GET", "/api/veridian/mail.messages.list", j or jm, params={"workspace_id": WS})
     check("retiré : un lien déjà émis n'ouvre pas l'espace", st in (401, 403), st)
+    st, r = nc.call_jwt(ENV, "GET", "/api/veridian/mail.access.list", jo, params={"workspace_id": WS})
+    etat = sorted((bool(x.get("holder_user_id")), bool(x.get("closed")), bool(x.get("revoked_at"))) for x in r.get("accesses", []))
+    check("le propriétaire voit l'accès fermé, rien de révoqué", etat == [(False, False, False), (True, False, False), (True, True, False)], etat)
     st, r = geste("remove-member", {"hub_user_id": M})
-    check("rejeu : 0 révoqué, 1 reste", r.get("revoked_mail_accesses") == 0 and r.get("active_mail_accesses") == 1, r)
-    check("témoin : IMAP, SMTP et flux intacts", imap(*ao) and smtp(*ao) == (True, 250) and fo.fin is None)
+    check("rejeu : même compte", r.get("removed") is False and r.get("closed_mail_accesses") == 1 and r.get("active_mail_accesses") == 2, r)
     geste("restore-member", {"hub_user_id": M})
-    check("rétabli : l'ancien accès reste révoqué", imap(*am) is False)
+    check("rétabli : son accès rouvre, même mot de passe", imap(*am) and smtp(*am) == (True, 250))
 
     # Compte supprimé au Hub : ni code par e-mail, ni lien déjà émis, ni session neuve.
     avant = lien(M)

@@ -49,15 +49,13 @@ type Access struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	// Holder : compte de la personne à qui l'accès appartient (V80). Vide : accès d'espace (boîte partagée, outil), qui reste au départ des gens.
+	Holder string `json:"holder_user_id,omitempty"`
+	// Closed : accès non révoqué qui n'ouvre pourtant plus rien (titulaire parti ou gelé, espace fermé, adresse retirée). Posé par Guard.List.
+	Closed bool `json:"closed,omitempty"`
 	// ReadOnly : espace suspendu, l'accès lit encore et n'envoie plus. Posé par Guard.
 	ReadOnly bool `json:"-"`
 }
-
-// humanPrefix : auteur humain, « humain:<id du compte> » (mailapi.Actor). Une clé d'API s'écrit « agent:<id> ».
-const humanPrefix = "humain:"
-
-// HumanCreator rend le compte de la personne qui a créé l'accès ; faux pour une clé d'API ou un auteur inconnu.
-func (a *Access) HumanCreator() (string, bool) { return strings.CutPrefix(a.CreatedBy, humanPrefix) }
 
 // Store lit et écrit les accès (base système).
 type Store struct {
@@ -94,12 +92,13 @@ func Fingerprint(address string) string {
 	return hex.EncodeToString(h[:6])
 }
 
-const columns = `id, workspace_id, profile_id, address, label, can_send, daily_cap, created_by, created_at, last_used_at, revoked_at`
+const columns = `id, workspace_id, profile_id, address, label, can_send, daily_cap, created_by, created_at, last_used_at, revoked_at, holder_user_id`
 
 func scan(row interface{ Scan(...any) error }, extra ...any) (*Access, error) {
 	var a Access
 	var used, revoked sql.NullTime
-	if err := row.Scan(append([]any{&a.ID, &a.WorkspaceID, &a.ProfileID, &a.Address, &a.Label, &a.CanSend, &a.DailyCap, &a.CreatedBy, &a.CreatedAt, &used, &revoked}, extra...)...); err != nil {
+	var holder sql.NullString
+	if err := row.Scan(append([]any{&a.ID, &a.WorkspaceID, &a.ProfileID, &a.Address, &a.Label, &a.CanSend, &a.DailyCap, &a.CreatedBy, &a.CreatedAt, &used, &revoked, &holder}, extra...)...); err != nil {
 		return nil, err
 	}
 	if used.Valid {
@@ -108,6 +107,7 @@ func scan(row interface{ Scan(...any) error }, extra ...any) (*Access, error) {
 	if revoked.Valid {
 		a.RevokedAt = &revoked.Time
 	}
+	a.Holder = holder.String
 	return &a, nil
 }
 
@@ -128,9 +128,9 @@ func (s *Store) Create(ctx context.Context, a Access) (*Access, string, error) {
 	if a.DailyCap <= 0 {
 		a.DailyCap = DefaultDailyCap
 	}
-	row := s.db.QueryRowContext(ctx, `INSERT INTO veridian_box_access (id, workspace_id, profile_id, address, label, secret_hash, can_send, daily_cap, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING `+columns,
-		a.ID, a.WorkspaceID, a.ProfileID, a.Address, a.Label, hashSecret(secret), a.CanSend, a.DailyCap, a.CreatedBy)
+	row := s.db.QueryRowContext(ctx, `INSERT INTO veridian_box_access (id, workspace_id, profile_id, address, label, secret_hash, can_send, daily_cap, created_by, holder_user_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULLIF($10,'')::uuid) RETURNING `+columns,
+		a.ID, a.WorkspaceID, a.ProfileID, a.Address, a.Label, hashSecret(secret), a.CanSend, a.DailyCap, a.CreatedBy, a.Holder)
 	out, err := scan(row)
 	if err != nil {
 		return nil, "", err
@@ -140,20 +140,7 @@ func (s *Store) Create(ctx context.Context, a Access) (*Access, string, error) {
 
 // List rend les accès d'un workspace, les révoqués compris, du plus récent au plus ancien.
 func (s *Store) List(ctx context.Context, ws string) ([]Access, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+` FROM veridian_box_access WHERE workspace_id = $1 ORDER BY created_at DESC, id LIMIT 500`, ws)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Access{}
-	for rows.Next() {
-		a, err := scan(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *a)
-	}
-	return out, rows.Err()
+	return s.query(ctx, `WHERE workspace_id = $1 ORDER BY created_at DESC, id LIMIT 500`, ws)
 }
 
 // Revoke coupe un accès. Idempotent ; un accès d'un autre workspace est introuvable.
@@ -167,25 +154,29 @@ func (s *Store) Revoke(ctx context.Context, ws, id string) (*Access, error) {
 	return a, err
 }
 
-// RevokeByCreator coupe les accès qu'une personne a créés dans un espace (retrait d'un membre). Idempotent ; jamais ceux d'un autre.
-func (s *Store) RevokeByCreator(ctx context.Context, ws, userID string) (int, error) {
-	if ws == "" || userID == "" {
-		return 0, errors.New("espace et personne requis")
+// Held rend les accès non révoqués dont cette personne est titulaire dans un espace.
+func (s *Store) Held(ctx context.Context, ws, userID string) ([]Access, error) {
+	if _, err := uuid.Parse(userID); err != nil || ws == "" {
+		return nil, errors.New("espace et personne requis")
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE veridian_box_access SET revoked_at = NOW()
-		WHERE workspace_id = $1 AND created_by = $2 AND revoked_at IS NULL`, ws, humanPrefix+userID)
-	if err != nil {
-		return 0, err
-	}
-	n, err := res.RowsAffected()
-	return int(n), err
+	return s.query(ctx, `WHERE workspace_id = $1 AND holder_user_id = $2::uuid AND revoked_at IS NULL`, ws, userID)
 }
 
-// CountActive compte les accès vivants d'un espace.
-func (s *Store) CountActive(ctx context.Context, ws string) (int, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM veridian_box_access WHERE workspace_id = $1 AND revoked_at IS NULL`, ws).Scan(&n)
-	return n, err
+func (s *Store) query(ctx context.Context, where string, args ...any) ([]Access, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+` FROM veridian_box_access `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Access{}
+	for rows.Next() {
+		a, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
 }
 
 // Verify retrouve l'accès vivant qui correspond à l'adresse et au mot de passe. Plusieurs accès par adresse (un par

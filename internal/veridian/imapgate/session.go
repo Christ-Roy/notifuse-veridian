@@ -7,6 +7,7 @@ import (
 	"errors"
 	"hash/crc32"
 	"io"
+	"net"
 	"sort"
 	"strings"
 	"time"
@@ -79,8 +80,9 @@ func (e *entry) imapFlags() []imap.Flag {
 }
 
 type session struct {
-	srv *Server
-	ip  string
+	srv  *Server
+	ip   string
+	conn net.Conn
 
 	acc     *boxaccess.Access
 	checked time.Time
@@ -96,7 +98,7 @@ var (
 	_ imapserver.SessionNamespace = (*session)(nil)
 )
 
-func (s *Server) newSession(ip string) *session { return &session{srv: s, ip: ip} }
+func (s *Server) newSession(ip string, c net.Conn) *session { return &session{srv: s, ip: ip, conn: c} }
 
 func opCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), opTimeout)
@@ -114,7 +116,7 @@ func (s *session) fail(op string, err error) error {
 
 func (s *session) Close() error {
 	if s.acc != nil {
-		s.srv.release(s.acc.ID)
+		s.srv.release(s.acc.ID, s)
 		s.acc = nil
 	}
 	return nil
@@ -138,8 +140,16 @@ func (s *session) Login(username, password string) error {
 	if err != nil {
 		return s.fail("login", err)
 	}
-	if !s.srv.acquire(acc.ID) {
+	if !s.srv.acquire(acc.ID, s) {
 		return errTooMany
+	}
+	// L'accès a pu se fermer entre sa lecture et l'inscription de cette connexion (retrait en cours) : on relit.
+	if _, err := s.srv.cfg.Auth.Alive(ctx, acc.ID); err != nil {
+		s.srv.release(acc.ID, s)
+		if errors.Is(err, boxaccess.ErrAuth) {
+			return imapserver.ErrAuthFailed
+		}
+		return s.fail("login", err)
 	}
 	lim.Reset(LimitIP, from)
 	lim.Reset(LimitAddress, key)
@@ -151,7 +161,7 @@ func (s *session) Login(username, password string) error {
 	return nil
 }
 
-// alive coupe une session dont l'accès a été révoqué (révoqué, ou son auteur retiré de l'espace ; relu au plus toutes les 5 s).
+// alive coupe une session dont l'accès a été révoqué (révoqué, ou son auteur retiré de l'espace ; relu au plus chaque seconde, à chaque commande qui lit ou écrit).
 func (s *session) alive() error {
 	if s.acc == nil || time.Since(s.checked) < aliveEvery {
 		return nil
@@ -244,6 +254,9 @@ func (s *session) Status(name string, o *imap.StatusOptions) (*imap.StatusData, 
 	f, ok := folderOf(name)
 	if !ok {
 		return nil, errNoFolder
+	}
+	if err := s.alive(); err != nil {
+		return nil, err
 	}
 	l, err := s.index(f)
 	if err != nil {
@@ -356,6 +369,9 @@ func (s *session) Append(name string, r imap.LiteralReader, _ *imap.AppendOption
 	}
 	if rfc := domain.VeridianRFCMessageID(local, s.acc.Address); rfc != "" {
 		ids = append(ids, "<"+rfc+">")
+	}
+	if err := s.alive(); err != nil {
+		return nil, err
 	}
 	ctx, cancel := opCtx()
 	defer cancel()

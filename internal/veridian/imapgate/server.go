@@ -33,7 +33,7 @@ const (
 	// refreshEvery : âge maximal de la vue d'un dossier avant relecture ; idleEvery : période de veille.
 	refreshEvery = 3 * time.Second
 	idleEvery    = 5 * time.Second
-	aliveEvery   = 5 * time.Second
+	aliveEvery   = time.Second
 	opTimeout    = 30 * time.Second
 )
 
@@ -80,6 +80,7 @@ type Server struct {
 	mu     sync.Mutex
 	conns  int
 	perAcc map[string]int
+	open   map[string]map[*session]net.Conn // connexions ouvertes par accès
 
 	sizeMu sync.Mutex
 	sizes  map[string]int64
@@ -93,10 +94,10 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Auth == nil || cfg.Boxes == nil || cfg.Limiter == nil || cfg.Logger == nil {
 		return nil, errors.New("serveur IMAP : dépendance manquante")
 	}
-	s := &Server{cfg: cfg, perAcc: map[string]int{}, sizes: map[string]int64{}}
+	s := &Server{cfg: cfg, perAcc: map[string]int{}, open: map[string]map[*session]net.Conn{}, sizes: map[string]int64{}}
 	s.imap = imapserver.New(&imapserver.Options{
 		NewSession: func(c *imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			return s.newSession(remoteIP(c.NetConn())), nil, nil
+			return s.newSession(remoteIP(c.NetConn()), c.NetConn()), nil, nil
 		},
 		Caps:         imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapUIDPlus: {}, imap.CapMove: {}, imap.CapNamespace: {}, imap.CapESearch: {}},
 		InsecureAuth: cfg.BehindTLSProxy, // TLS déjà terminé par l'entrée publique ; sinon la session est elle-même en TLS
@@ -166,19 +167,44 @@ func (l *limitListener) Accept() (net.Conn, error) {
 	}
 }
 
-func (s *Server) acquire(accessID string) bool {
+func (s *Server) acquire(accessID string, sess *session) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.perAcc[accessID] >= MaxConnsPerAccess {
 		return false
 	}
 	s.perAcc[accessID]++
+	if s.open[accessID] == nil {
+		s.open[accessID] = map[*session]net.Conn{}
+	}
+	s.open[accessID][sess] = sess.conn
 	return true
 }
 
-func (s *Server) release(accessID string) {
+// CloseAccesses coupe les connexions ouvertes par ces accès (titulaire retiré, accès révoqué). Rend le nombre de connexions coupées.
+func (s *Server) CloseAccesses(ids ...string) int {
+	var conns []net.Conn
+	s.mu.Lock()
+	for _, id := range ids {
+		for _, c := range s.open[id] {
+			if c != nil {
+				conns = append(conns, c)
+			}
+		}
+	}
+	s.mu.Unlock()
+	for _, c := range conns {
+		_ = c.Close() // hors verrou : fermer rappelle release
+	}
+	return len(conns)
+}
+
+func (s *Server) release(accessID string, sess *session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if delete(s.open[accessID], sess); len(s.open[accessID]) == 0 {
+		delete(s.open, accessID)
+	}
 	if s.perAcc[accessID]--; s.perAcc[accessID] <= 0 {
 		delete(s.perAcc, accessID)
 	}

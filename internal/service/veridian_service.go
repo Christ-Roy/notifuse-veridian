@@ -176,7 +176,7 @@ type veridianService struct {
 	// accountGate : vrai si le Hub a supprime ce compte (users.hub_deleted_at, V71). Nil = pas de garde.
 	accountGate func(ctx context.Context, userID string) (deleted bool, err error)
 	// mailAccess : acces de boite (IMAP, SMTP), coupes au retrait de leur auteur (fiche 91). Nil = non cable.
-	mailAccess MailAccessRevoker
+	mailAccess MailAccessCutter
 }
 
 // NewVeridianService construit un VeridianService.
@@ -2337,7 +2337,7 @@ func (s *veridianService) ConfigureTrialStore(store domain.TrialStore) {
 }
 
 // ConfigureMailAccess branche la coupure des acces de boite au retrait d'un membre (fiche 91). Cablage : veridian_wiring.go.
-func (s *veridianService) ConfigureMailAccess(m MailAccessRevoker) {
+func (s *veridianService) ConfigureMailAccess(m MailAccessCutter) {
 	s.mailAccess = m
 }
 

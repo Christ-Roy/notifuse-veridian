@@ -10,6 +10,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
@@ -3354,14 +3355,23 @@ func TestUpdatePlan_ApprendLIdDeTenantDuHub(t *testing.T) {
 func TestConfigureMailAccess_WiringShapeAndAbsence(t *testing.T) {
 	svc, _ := newVeridianService(t)
 	var asWired domain.VeridianService = svc
-	cut, ok := asWired.(interface{ ConfigureMailAccess(MailAccessRevoker) })
+	cut, ok := asWired.(interface{ ConfigureMailAccess(MailAccessCutter) })
 	require.True(t, ok)
 	resp := &domain.RemoveMemberResponse{TenantID: "ws", AppUserID: "u"}
 	svc.cutMailAccesses(context.Background(), resp)
-	assert.Nil(t, resp.RevokedMailAccesses)
+	assert.Nil(t, resp.ClosedMailAccesses)
 	assert.Nil(t, resp.ActiveMailAccesses)
-	cut.ConfigureMailAccess(&mailAccessDouble{revoked: 1})
+	cut.ConfigureMailAccess(&mailAccessDouble{closed: 1})
 	svc.cutMailAccesses(context.Background(), resp)
-	require.NotNil(t, resp.RevokedMailAccesses)
-	assert.Equal(t, 1, *resp.RevokedMailAccesses)
+	require.NotNil(t, resp.ClosedMailAccesses)
+	assert.Equal(t, 1, *resp.ClosedMailAccesses)
+}
+
+// Ce que le cablage branche vraiment : la garde des acces de boite remplit le contrat (une signature qui change casse la compilation ici, pas
+// en silence dans l'assertion de type de veridian_wiring.go).
+func TestConfigureMailAccess_GuardIsTheCutter(t *testing.T) {
+	var cutter MailAccessCutter = &boxaccess.Guard{}
+	svc, _ := newVeridianService(t)
+	svc.ConfigureMailAccess(cutter)
+	assert.Same(t, cutter, svc.mailAccess)
 }

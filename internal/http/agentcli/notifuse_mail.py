@@ -197,10 +197,10 @@ def format_access(data):
     """Accès de boîte (fiche 84) : jamais de mot de passe ici, il n'est rendu qu'à la création."""
     rows = []
     for x in data.get("accesses") or []:
-        etat = "révoqué" if x.get("revoked_at") else ("lecture et envoi" if x.get("can_send") else "lecture seule")
-        rows.append([x.get("address") or "-", x.get("label") or "-", etat, str(x.get("daily_cap") or "-"),
+        etat = "révoqué" if x.get("revoked_at") else "fermé" if x.get("closed") else ("lecture et envoi" if x.get("can_send") else "lecture seule")
+        rows.append([x.get("address") or "-", x.get("label") or "-", etat, "une personne" if x.get("holder_user_id") else "l'espace", str(x.get("daily_cap") or "-"),
                      (x.get("last_used_at") or "jamais")[:16].replace("T", " "), x.get("profile_id") or "-", x.get("id") or "-"])
-    out = list(nc._table(rows, ("adresse", "libellé", "droits", "envois/j", "dernier usage", "profil", "id"))) if rows else ["aucun accès de boîte"]
+    out = list(nc._table(rows, ("adresse", "libellé", "droits", "appartient à", "envois/j", "dernier usage", "profil", "id"))) if rows else ["aucun accès de boîte"]
     return out + format_connection(data.get("connection") or {})
 
 
@@ -224,6 +224,8 @@ def cmd_access_create(a):
         body["address"] = a.address
     if a.read_only:
         body["can_send"] = False
+    if getattr(a, "shared", False):
+        body["shared"] = True
     if a.daily_cap:
         body["daily_cap"] = a.daily_cap
     st, data = _post(a, "/api/veridian/mail.access.create", body)
@@ -615,11 +617,13 @@ def register(sub):
     sp.add_argument("--address", help="adresse du profil (défaut : son expéditeur par défaut)")
     sp.add_argument("--label", help="à quoi sert cet accès (téléphone, CRM...)")
     sp.add_argument("--read-only", action="store_true", dest="read_only", help="lire sans envoyer")
+    sp.add_argument("--shared", action="store_true", help="accès d'espace (boîte partagée, outil du client) : reste ouvert quand les gens partent. "
+                    "Sans lui, l'accès créé par une personne se ferme avec sa place dans l'espace et se rouvre si elle revient")
     sp.add_argument("--daily-cap", type=int, dest="daily_cap", help="envois par jour (défaut 200, maximum 1000)")
     sp.add_argument("--secret-file", dest="secret_file", help="écrit l'adresse et le mot de passe dans ce fichier neuf (0600) au lieu de l'écran")
     jsonflag(sp)
 
-    sp = add("mail:access-revoke", "révoque un accès de boîte (les sessions ouvertes sont coupées sous 30 s)", cmd_access_revoke, ["/api/veridian/mail.access.revoke"])
+    sp = add("mail:access-revoke", "révoque un accès de boîte (les connexions ouvertes sont coupées aussitôt)", cmd_access_revoke, ["/api/veridian/mail.access.revoke"])
     sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")
     jsonflag(sp)
 

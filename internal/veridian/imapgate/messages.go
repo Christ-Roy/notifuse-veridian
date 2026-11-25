@@ -79,6 +79,9 @@ func inUID(set imap.UIDSet, n, max imap.UID) bool {
 
 // messages lit les messages entiers des rangs donnés.
 func (s *session) messages(idx []int) (map[string]*mailbox.Message, error) {
+	if err := s.alive(); err != nil {
+		return nil, err
+	}
 	ids := make([]string, 0, len(idx))
 	for _, i := range idx {
 		ids = append(ids, s.list[i].ID)
@@ -110,6 +113,9 @@ func (s *session) load(idx []int) (map[string][]byte, error) {
 func (s *session) Fetch(w *imapserver.FetchWriter, set imap.NumSet, o *imap.FetchOptions) error {
 	if s.sel == nil {
 		return errNotOpened
+	}
+	if err := s.alive(); err != nil {
+		return err
 	}
 	seen := false
 	for _, b := range o.BodySection {
@@ -270,6 +276,9 @@ func (s *session) Store(w *imapserver.FetchWriter, set imap.NumSet, f *imap.Stor
 	if s.sel == nil {
 		return errNotOpened
 	}
+	if err := s.alive(); err != nil {
+		return err
+	}
 	if s.readOnly {
 		return errReadOnly
 	}
@@ -314,6 +323,9 @@ func (s *session) remove(e *entry) error {
 func (s *session) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) error {
 	if s.sel == nil {
 		return errNotOpened
+	}
+	if err := s.alive(); err != nil {
+		return err
 	}
 	if s.readOnly {
 		return errReadOnly
@@ -364,6 +376,9 @@ func (s *session) copyData(idx []int, dest folderDef) *imap.CopyData {
 func (s *session) Move(w *imapserver.MoveWriter, set imap.NumSet, dest string) error {
 	if s.sel == nil {
 		return errNotOpened
+	}
+	if err := s.alive(); err != nil {
+		return err
 	}
 	f, ok := folderOf(dest)
 	if !ok {
