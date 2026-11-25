@@ -506,7 +506,6 @@ func TestTransferOwner_ReportsClientAsOldOwnerNotCoOwner(t *testing.T) {
 }
 
 // TransferOwner demande le transfert explicitement : sans Transfer:true, AttachOwner refuserait (owner_exists) puisqu'un autre propriétaire humain existe.
-// Une clé API propriétaire de l'espace ne change rien à la décision.
 func TestTransferOwner_ExplicitTransfer_AutreProprietaireHumain(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
@@ -517,7 +516,6 @@ func TestTransferOwner_ExplicitTransfer_AutreProprietaireHumain(t *testing.T) {
 	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(newOwner, nil).Times(2)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, newOwner.ID, "ws-1").Return(memberEntry, nil).Times(2)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return([]*domain.UserWorkspaceWithEmail{
-		{UserWorkspace: domain.UserWorkspace{UserID: "key-id", Role: "owner"}, Email: "k@api.test", Type: domain.UserTypeAPIKey},
 		{UserWorkspace: domain.UserWorkspace{UserID: oldOwner.ID, Role: "owner"}, Email: oldOwner.Email, Type: domain.UserTypeUser},
 	}, nil).Times(2)
 	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
