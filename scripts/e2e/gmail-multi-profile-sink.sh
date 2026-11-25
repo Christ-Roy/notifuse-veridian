@@ -89,11 +89,8 @@ api_get() {
   curl -fsS "$BASE$1" -H "Authorization: Bearer $OWNER_TOKEN"
 }
 
-# VER-250 : lire la base de staging par alloc exec exige un jeton d'intervention, court et jamais affiché (45 min : la batterie entière).
-if [ -z "${NOMAD_EXEC_TOKEN:-}" ]; then
-  NOMAD_EXEC_TOKEN="$("$NOMAD_V" acl mint exec 45m)" && [ -n "$NOMAD_EXEC_TOKEN" ] || { echo "NON ABOUTI : jeton d'intervention Nomad refusé (nomad-v acl mint exec)" >&2; exit 2; }
-  export NOMAD_EXEC_TOKEN
-fi
+# VER-250 : lire la base par alloc exec exige un jeton d'intervention, fourni par la PERSONNE qui intervient. Jamais émis par le script.
+[ -n "${NOMAD_EXEC_TOKEN:-}" ] || { echo "NON ABOUTI : NOMAD_EXEC_TOKEN absent, rien n'a été mesuré (VER-250)" >&2; exit 2; }
 staging_alloc() {
   "$NOMAD_V" raw job allocs -json "$STAGING_JOB" 2>/dev/null \
     | python3 -c 'import json,sys; a=json.load(sys.stdin); r=[x for x in a if x.get("ClientStatus")=="running" and x.get("DesiredStatus")=="run"]; print(r[0]["ID"] if len(r)==1 else "")'
