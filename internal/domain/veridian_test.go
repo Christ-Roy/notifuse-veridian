@@ -1249,3 +1249,13 @@ func TestHubPersonFields_JSONNames(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"transfer":true}`), &own))
 	assert.True(t, own.Transfer)
 }
+
+// Le chemin « choisir son espace » doit être suivi tel quel par l'auto-login, et ne désigner aucun espace.
+func TestConsoleChooseSpacePath_SuiviEtSansEspace(t *testing.T) {
+	if got := ConsoleNextPath("", ConsoleChooseSpacePath); got != ConsoleChooseSpacePath {
+		t.Fatalf("non suivi : %q", got)
+	}
+	if strings.Contains(ConsoleChooseSpacePath, "/workspace/") {
+		t.Fatal("ce chemin ne designe aucun espace")
+	}
+}
