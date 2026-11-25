@@ -8,7 +8,7 @@
 //   4. health → magic_link_capable=true, owner_attached=true
 //   5. suspend → health → status=suspended, magic_link_capable=false
 //   6. resume → health → status=active, magic_link_capable=true
-//   7. attach-owner additif → already_attached=false (nouveau owner)
+//   7. attach-owner : 409 owner_exists, puis transfer:true → already_attached=false (nouveau owner)
 //   8. attach-owner idempotent → already_attached=true (même owner)
 //   9. provision idempotent → created=false, même api_key
 //
@@ -195,9 +195,17 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     expect(healthResumed.magic_link_capable).toBe(true);
 
     // ─── Step 7 : attach-owner (nouveau bob) ──────────────────────────
+    // Sans transfert demandé, un autre propriétaire humain n'est jamais rétrogradé (fiche 95).
+    const refused = await hmacFetch('/api/veridian/admin/attach-owner', 'POST', {
+      tenant_id: tenantID,
+      owner_email: bobEmail,
+    });
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).code).toBe('owner_exists');
     const attachBob = await hmacFetch('/api/veridian/admin/attach-owner', 'POST', {
       tenant_id: tenantID,
       owner_email: bobEmail,
+      transfer: true,
     });
     expect(attachBob.status).toBe(200);
     const bobAttach = await attachBob.json();
