@@ -1488,23 +1488,20 @@ func (s *veridianService) GetStatus(ctx context.Context, tenantID string) (*doma
 // GenerateMagicLink construit une URL signin signed-in pour un user d'un
 // workspace. Pre-condition : le user doit deja exister et etre membre du
 // workspace, sinon ErrUserNotFound. Le code est valide 15 min.
-func (s *veridianService) GenerateMagicLink(ctx context.Context, workspaceID, userEmail string) (*domain.MagicLinkResponse, error) {
+func (s *veridianService) GenerateMagicLink(ctx context.Context, workspaceID, hubUserID, userEmail string) (*domain.MagicLinkResponse, error) {
 	if workspaceID == "" {
 		return nil, errors.New("workspace_id required")
 	}
-	if userEmail == "" {
-		return nil, errors.New("user_email required")
+	if hubUserID == "" && userEmail == "" {
+		return nil, errors.New("hub_user_id required")
 	}
 
-	// Verifier l'existence du user (sinon SignIn renvoie une erreur
-	// generique qu'on remappe en 404 cote handler).
-	user, err := s.userService.GetUserByEmail(ctx, userEmail)
+	// La personne par son hub_user_id ; le lien ouvre son adresse d'ici, et seulement pour un membre de cet espace (fiche 89).
+	user, err := s.magicLinkMember(ctx, workspaceID, hubUserID, userEmail)
 	if err != nil {
 		return nil, err
 	}
-	if user == nil {
-		return nil, &domain.ErrUserNotFound{Message: "user not found"}
-	}
+	userEmail = user.Email
 
 	link, expiresAt, err := s.buildMagicLink(ctx, workspaceID, userEmail)
 	if err != nil {

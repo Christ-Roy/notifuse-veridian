@@ -248,3 +248,21 @@ func TestHubOwner_AddressOfAnotherBoundAccountIsRefused(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, owner)
 }
+
+func TestMagicLinkMember(t *testing.T) {
+	ctx := context.Background()
+	svc, m, w := newHubWorld(t)
+	u, err := svc.magicLinkMember(ctx, "ws-1", idBob, newMail)
+	require.NoError(t, err)
+	assert.Equal(t, "u-bob", u.ID, "l'identifiant, pas l'adresse d'Alice")
+	// Une clé API est un compte machine : aucun lien de connexion, même membre.
+	w.users["u-key"] = &domain.User{ID: "u-key", Email: "cle@example.test", Type: domain.UserTypeAPIKey}
+	w.members["u-key"] = "member"
+	var notFound *domain.ErrUserNotFound
+	_, err = svc.magicLinkMember(ctx, "ws-1", "", "cle@example.test")
+	assert.ErrorAs(t, err, &notFound)
+	// Une panne de lecture n'est pas « pas membre ».
+	m.workspaceRepo.EXPECT().GetUserWorkspace(gomock.Any(), "u-bob", "ws-2").Return(nil, assert.AnError)
+	_, err = svc.magicLinkMember(ctx, "ws-2", idBob, "")
+	require.ErrorIs(t, err, assert.AnError)
+}

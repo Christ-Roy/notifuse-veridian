@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -125,4 +126,34 @@ func (s *veridianService) LookupMember(ctx context.Context, hubUserID string) (*
 
 func normalizedEqual(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
+}
+
+// magicLinkMember : qui un lien de connexion d'espace ouvre. ErrUserNotFound si la personne est inconnue ou n'est pas membre : une clé d'espace
+// n'ouvre jamais la session de quelqu'un d'un autre espace.
+func (s *veridianService) magicLinkMember(ctx context.Context, workspaceID, hubUserID, email string) (*domain.User, error) {
+	var user *domain.User
+	var err error
+	if hubUserID != "" {
+		user, err = s.hubMember(ctx, hubUserID)
+	} else {
+		user, err = s.userService.GetUserByEmail(ctx, email)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if user == nil || user.Type == domain.UserTypeAPIKey {
+		return nil, &domain.ErrUserNotFound{Message: "user not found"}
+	}
+	uw, err := s.workspaceRepo.GetUserWorkspace(ctx, user.ID, workspaceID)
+	if err != nil {
+		msg := strings.ToLower(err.Error())
+		if errors.Is(err, sql.ErrNoRows) || strings.Contains(msg, "not found") || strings.Contains(msg, "is not a member") || strings.Contains(msg, "no rows") {
+			return nil, &domain.ErrUserNotFound{Message: "user is not a member of this workspace"}
+		}
+		return nil, fmt.Errorf("lookup user workspace: %w", err)
+	}
+	if uw == nil {
+		return nil, &domain.ErrUserNotFound{Message: "user is not a member of this workspace"}
+	}
+	return user, nil
 }

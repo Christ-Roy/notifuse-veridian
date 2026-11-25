@@ -17,6 +17,7 @@ l'accès, ou le geste touchait celui qui avait repris l'adresse. Le Hub avait do
 | `transfer-owner` (`owner_hub_user_id`) | 404 ; pas membre : 409 `not_a_member` | ignorée |
 | `provision` (`owner_hub_user_id`, sinon `metadata.hub_user_id`) | propriétaire créé et relié | relié ailleurs : 409 ; rejeu : même personne = 200 quelle que soit l'adresse, autre personne = 409 `owner_mismatch` |
 | `by-email?hub_user_id=` | `found:false` | l'adresse n'est lue que sans `hub_user_id` |
+| `workspaces.generateMagicLink` (clé d'espace gérée par le Hub) | 404 ; pas membre de CET espace : 404 | ignorée ; l'adresse seule (Hub d'avant) reste admise, pour un membre |
 
 `attach-owner` et `provision` sans `hub_user_id` (scripts d'opérateur) désignent encore par l'adresse ; le Hub le donne toujours.
 

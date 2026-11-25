@@ -6,8 +6,8 @@ package http
 //
 // Cas d'usage : le Hub Veridian (cote serveur) appelle cet endpoint avec
 // l'API key qu'il a recue lors du provisioning, pour obtenir un magic
-// link cross-app pour un user du workspace. Le user_email doit deja
-// exister et etre membre du workspace.
+// link cross-app pour un user du workspace, designe par hub_user_id (a defaut
+// user_email). Il doit deja exister et etre membre du workspace (fiche 89).
 //
 // Le workspace_id est INFERE de l'API key (l'API key Notifuse est
 // rattachee a un user de type api_key membre d'un seul workspace).
@@ -134,14 +134,17 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
-	if input.UserEmail == "" {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email is required", http.StatusBadRequest, map[string]interface{}{
-			"missing": []string{"user_email"},
+	if input.HubUserID == "" && input.UserEmail == "" {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "hub_user_id is required", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"hub_user_id"},
 		})
 		return
 	}
+	if input.HubUserID != "" && !requireHubUserID(w, "hub_user_id", input.HubUserID) {
+		return
+	}
 
-	resp, err := h.service.GenerateMagicLink(r.Context(), workspaceID, input.UserEmail)
+	resp, err := h.service.GenerateMagicLink(r.Context(), workspaceID, input.HubUserID, input.UserEmail)
 	if err != nil {
 		var notFound *domain.ErrUserNotFound
 		if errors.As(err, &notFound) {

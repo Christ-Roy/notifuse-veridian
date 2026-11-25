@@ -1237,6 +1237,10 @@ func TestHubPersonFields_JSONNames(t *testing.T) {
 	assert.Equal(t, "id-1", att.HubUserID)
 	assert.True(t, att.EmailProven)
 
+	var link MagicLinkInput
+	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"id-1"}`), &link))
+	assert.Equal(t, "id-1", link.HubUserID)
+
 	var own AttachOwnerInput
 	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"id-1"}`), &own))
 	assert.Equal(t, "id-1", own.HubUserID)

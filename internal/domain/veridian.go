@@ -709,6 +709,8 @@ type StatusResponse struct {
 
 // MagicLinkInput est le body de POST /api/workspaces.generateMagicLink.
 type MagicLinkInput struct {
+	// HubUserID : la personne (fiche 89). Vide (le Hub d'avant) : l'adresse, d'un membre de l'espace seulement.
+	HubUserID string `json:"hub_user_id,omitempty"`
 	UserEmail string `json:"user_email"`
 }
 
@@ -859,7 +861,7 @@ type VeridianService interface {
 	// contacts, derniere activite). CONTRAT-HUB sec. 5.8.
 	UsageSummary(ctx context.Context, tenantID string) (*UsageSummaryResponse, error)
 	GetStatus(ctx context.Context, tenantID string) (*StatusResponse, error)
-	GenerateMagicLink(ctx context.Context, workspaceID, userEmail string) (*MagicLinkResponse, error)
+	GenerateMagicLink(ctx context.Context, workspaceID, hubUserID, userEmail string) (*MagicLinkResponse, error)
 
 	// === Veridian patch === Hard wipe pour cleanup CI / tests.
 	// Detruit completement les tenants matchant un prefix (workspace + DB

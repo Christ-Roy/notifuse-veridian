@@ -49,6 +49,24 @@ func reqWithAuthCtx(t *testing.T, body, userType, userID string) *http.Request {
 	return r.WithContext(ctx)
 }
 
+// La personne par son hub_user_id ; mal formé : 400, jamais un repli sur l'adresse (fiche 89).
+func TestVeridianMagicLink_HubUserID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	const id = "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"
+	svc := mocks.NewMockVeridianService(ctrl)
+	repo := mocks.NewMockWorkspaceRepository(ctrl)
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{{UserID: "api-user-1", WorkspaceID: "ws-1"}}, nil).Times(2)
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), "ws-1", id, "old@x.test").Return(&domain.MagicLinkResponse{MagicLink: "https://x/ok"}, nil)
+	h := newMagicHandler(svc, repo)
+	rec := httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, reqWithAuthCtx(t, `{"hub_user_id":"`+id+`","user_email":"old@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1"))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	rec = httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, reqWithAuthCtx(t, `{"hub_user_id":"x","user_email":"old@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1"))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestVeridianMagicLink_OK(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -59,7 +77,7 @@ func TestVeridianMagicLink_OK(t *testing.T) {
 	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
 		{UserID: "api-user-1", WorkspaceID: "ws-1"},
 	}, nil)
-	svc.EXPECT().GenerateMagicLink(gomock.Any(), "ws-1", "u@x.test").Return(&domain.MagicLinkResponse{
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), "ws-1", "", "u@x.test").Return(&domain.MagicLinkResponse{
 		MagicLink:    "https://example.com/console/signin?code=123&email=u%40x.test",
 		AutoLoginURL: "https://example.com/veridian/auto-login?token=abc",
 		ExpiresAt:    time.Now().Add(time.Hour),
@@ -234,7 +252,7 @@ func TestVeridianMagicLink_MissingUserEmail_400(t *testing.T) {
 	h.handleGenerateMagicLink(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "user_email is required")
+	assert.Contains(t, rec.Body.String(), "hub_user_id is required")
 }
 
 func TestVeridianMagicLink_ServiceErrUserNotFound_404(t *testing.T) {
@@ -245,7 +263,7 @@ func TestVeridianMagicLink_ServiceErrUserNotFound_404(t *testing.T) {
 	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
 		{UserID: "api-user-1", WorkspaceID: "ws-1"},
 	}, nil)
-	svc.EXPECT().GenerateMagicLink(gomock.Any(), "ws-1", "ghost@x.test").Return(nil, &domain.ErrUserNotFound{Message: "ghost@x.test"})
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), "ws-1", "", "ghost@x.test").Return(nil, &domain.ErrUserNotFound{Message: "ghost@x.test"})
 
 	h := newMagicHandler(svc, repo)
 	req := reqWithAuthCtx(t, `{"user_email":"ghost@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
@@ -264,7 +282,7 @@ func TestVeridianMagicLink_ServiceGenericError_500(t *testing.T) {
 	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
 		{UserID: "api-user-1", WorkspaceID: "ws-1"},
 	}, nil)
-	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("pq: internal upstream connection refused"))
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("pq: internal upstream connection refused"))
 
 	h := newMagicHandler(svc, repo)
 	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
@@ -402,7 +420,7 @@ func TestVeridianMagicErrorCode_UserNotFound(t *testing.T) {
 	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
 		{UserID: "api-user-1", WorkspaceID: "ws-1"},
 	}, nil)
-	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{})
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{})
 	h := newMagicHandler(svc, repo)
 	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
 	rec := httptest.NewRecorder()
@@ -419,7 +437,7 @@ func TestVeridianMagicErrorCode_ServiceError_InternalError(t *testing.T) {
 	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{
 		{UserID: "api-user-1", WorkspaceID: "ws-1"},
 	}, nil)
-	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("upstream boom"))
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("upstream boom"))
 	h := newMagicHandler(svc, repo)
 	req := reqWithAuthCtx(t, `{"user_email":"u@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1")
 	rec := httptest.NewRecorder()

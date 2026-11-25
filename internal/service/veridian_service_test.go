@@ -947,12 +947,13 @@ func TestVeridianService_GenerateMagicLink(t *testing.T) {
 
 	m.user.EXPECT().GetUserByEmail(ctx, "user@example.com").
 		Return(&domain.User{ID: "u-1", Email: "user@example.com"}, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "u-1", "ws-1").Return(&domain.UserWorkspace{UserID: "u-1", WorkspaceID: "ws-1", Role: "owner"}, nil)
 	// === Veridian patch === code en clair retourne en prod ET dev (privilegied path).
 	expiresAt := time.Now().Add(15 * time.Minute)
 	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, "user@example.com", "ws-1").
 		Return("code-xyz", expiresAt, nil).Times(1)
 
-	resp, err := svc.GenerateMagicLink(ctx, "ws-1", "user@example.com")
+	resp, err := svc.GenerateMagicLink(ctx, "ws-1", "", "user@example.com")
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Contains(t, resp.MagicLink, "https://notifuse.app.veridian.site/console/signin")
@@ -961,13 +962,34 @@ func TestVeridianService_GenerateMagicLink(t *testing.T) {
 	assert.False(t, resp.ExpiresAt.IsZero())
 }
 
+func TestVeridianService_GenerateMagicLink_OpensThePersonAndOnlyAMember(t *testing.T) {
+	ctx := context.Background()
+	svc, m, w := newHubWorld(t)
+	m.user.EXPECT().GenerateMagicCodeForVeridian(gomock.Any(), newMail, "ws-1").Return("123456", time.Now(), nil).Times(1)
+	out, err := svc.GenerateMagicLink(ctx, "ws-1", idAlice, oldMail)
+	require.NoError(t, err)
+	assert.Contains(t, out.MagicLink, "new%40")
+	assert.NotContains(t, out.MagicLink, "old%40")
+
+	var notFound *domain.ErrUserNotFound
+	_, err = svc.GenerateMagicLink(ctx, "ws-1", idNobody, oldMail)
+	assert.ErrorAs(t, err, &notFound, "identifiant inconnu : jamais un repli sur l'adresse")
+	delete(w.members, "u-alice")
+	_, err = svc.GenerateMagicLink(ctx, "ws-1", idAlice, newMail)
+	assert.ErrorAs(t, err, &notFound, "retirée : plus aucun lien de cet espace")
+	_, err = svc.GenerateMagicLink(ctx, "ws-1", "", newMail)
+	assert.ErrorAs(t, err, &notFound, "par l'adresse non plus")
+	_, err = svc.GenerateMagicLink(ctx, "ws-1", "", "avant@example.test")
+	assert.ErrorAs(t, err, &notFound, "une clé d'espace n'ouvre pas quelqu'un d'un autre espace")
+}
+
 func TestVeridianService_GenerateMagicLink_RejectsEmpty(t *testing.T) {
 	svc, _ := newVeridianService(t)
-	_, err := svc.GenerateMagicLink(context.Background(), "", "x@y.z")
+	_, err := svc.GenerateMagicLink(context.Background(), "", "", "x@y.z")
 	assert.ErrorContains(t, err, "workspace_id required")
 
-	_, err = svc.GenerateMagicLink(context.Background(), "ws-1", "")
-	assert.ErrorContains(t, err, "user_email required")
+	_, err = svc.GenerateMagicLink(context.Background(), "ws-1", "", "")
+	assert.ErrorContains(t, err, "hub_user_id required")
 }
 
 func TestVeridianService_Suspend_PropagatesRepoError(t *testing.T) {

@@ -127,7 +127,7 @@ func (stubVeridianServiceWithoutCleanup) UsageSummary(context.Context, string) (
 func (stubVeridianServiceWithoutCleanup) GetStatus(context.Context, string) (*domain.StatusResponse, error) {
 	return nil, nil
 }
-func (stubVeridianServiceWithoutCleanup) GenerateMagicLink(context.Context, string, string) (*domain.MagicLinkResponse, error) {
+func (stubVeridianServiceWithoutCleanup) GenerateMagicLink(context.Context, string, string, string) (*domain.MagicLinkResponse, error) {
 	return nil, nil
 }
 func (stubVeridianServiceWithoutCleanup) WipeTestTenants(context.Context, domain.WipeTestTenantsInput) (*domain.WipeTestTenantsResponse, error) {
