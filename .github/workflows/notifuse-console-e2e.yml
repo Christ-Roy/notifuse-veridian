@@ -166,3 +166,10 @@ jobs:
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=⚠️ Notifuse console E2E (informative) FAIL sur ${GITHUB_SHA::8}. Voir https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             >/dev/null || echo "::warning::Notification Telegram échouée (non bloquant)"
+
+      # Le job finissait vert avec 7 tests en échec (mesuré le 25/11/2026) : il dit maintenant la vérité. La promotion prod n'en dépend pas.
+      - name: Verdict de la suite console
+        if: always() && steps.console-tests.outcome != 'success'
+        run: |
+          echo "::error::Suite console : ${{ steps.console-tests.outcome }}"
+          exit 1

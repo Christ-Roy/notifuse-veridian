@@ -132,7 +132,8 @@ export async function wipeTenants(tenantIds: string[]): Promise<void> {
  * fait défaut). 6 chars suffisants vu qu'un seul tenant par run.
  */
 export function newTenantId(): string {
-  return `cnsl${Date.now().toString(36).slice(-6)}`
+  // Deux appels dans la même milliseconde rendaient le MÊME espace (test Plan : le Pro lisait « Enterprise »).
+  return `cnsl${Date.now().toString(36).slice(-6)}${crypto.randomBytes(2).toString('hex')}`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,6 +180,11 @@ const BENIGN_CONSOLE_ERROR_PATTERNS = [
  * 'createContext')` de l'incident #1. Retourne le tableau qui se remplit
  * en temps réel — l'appelant assert qu'il est vide en fin de test.
  */
+// Une visite sans session rebondit vers le Hub (fiche 80) : ses erreurs à lui ne sont pas celles de la console.
+function fromElsewhere(url: string): boolean {
+  return /^https?:/.test(url) && new URL(url).host !== new URL(NOTIFUSE_URL).host
+}
+
 export function trackConsoleErrors(page: Page): string[] {
   const errors: string[] = []
 
@@ -186,10 +192,12 @@ export function trackConsoleErrors(page: Page): string[] {
     if (msg.type() !== 'error') return
     const text = msg.text()
     if (BENIGN_CONSOLE_ERROR_PATTERNS.some((rx) => rx.test(text))) return
+    if (fromElsewhere(msg.location().url || page.url())) return
     errors.push(`[console.error] ${text}`)
   })
 
   page.on('pageerror', (err: Error) => {
+    if (fromElsewhere(page.url())) return
     errors.push(`[pageerror] ${err.message}\n${err.stack ?? ''}`)
   })
 

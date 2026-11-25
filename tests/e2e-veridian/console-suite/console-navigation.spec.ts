@@ -68,7 +68,6 @@ const WORKSPACE_PAGES: Array<{ slug: string; label: string; contentMarker: RegEx
   { slug: 'broadcasts', label: 'Broadcasts', contentMarker: /broadcast/i },
   { slug: 'automations', label: 'Automations', contentMarker: /automation|workflow/i },
   { slug: 'transactional-notifications', label: 'Transactional', contentMarker: /transactional|notification/i },
-  { slug: 'blog', label: 'Blog', contentMarker: /blog|post|article/i },
   { slug: 'file-manager', label: 'File Manager', contentMarker: /file|folder|upload|storage/i },
   { slug: 'logs', label: 'Logs', contentMarker: /log|message|sent|delivered/i },
   { slug: 'settings', label: 'Settings', contentMarker: /setting|team|member|workspace/i }
