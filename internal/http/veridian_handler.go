@@ -275,7 +275,12 @@ func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if input.OwnerHubUserID != "" && !requireHubUserID(w, "owner_hub_user_id", input.OwnerHubUserID) {
+	// Une personne du Hub, jamais une adresse seule (fiche 89, accord du Hub du 25/11/2026) : metadata.hub_user_id reste admis.
+	ownerHubUserID := strings.TrimSpace(input.OwnerHubUserID)
+	if ownerHubUserID == "" && input.Metadata != nil {
+		ownerHubUserID = strings.TrimSpace(input.Metadata.HubUserID)
+	}
+	if !requireHubUserID(w, "owner_hub_user_id", ownerHubUserID) {
 		return
 	}
 	resp, err := h.service.Provision(r.Context(), input)

@@ -144,6 +144,30 @@ func TestVeridianHandleInvalidateCache_NoCacheReturns503(t *testing.T) {
 
 // === handleProvision ===
 
+// Une provision désigne une personne du Hub : le service n'est jamais appelé sans elle (tout appel non attendu fait échouer).
+func TestVeridianHandleProvision_PersonneDuHubObligatoire(t *testing.T) {
+	const id = "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"
+	for name, extra := range map[string]string{"absente": "", "vide": `,"owner_hub_user_id":"  "`, "metadata vide": `,"metadata":{"hub_user_id":""}`,
+		"pas un uuid": `,"owner_hub_user_id":"o@x.test"`, "metadata pas un uuid": `,"metadata":{"hub_user_id":"x"}`} {
+		t.Run(name, func(t *testing.T) {
+			h := newHandlerWithService(mocks.NewMockVeridianService(gomock.NewController(t)))
+			rec := postJSON(t, h.handleProvision, "/api/tenants/provision", `{"tenant_id":"ws-1","owner_email":"o@x.test"`+extra+`}`)
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Contains(t, rec.Body.String(), "invalid_payload")
+			assert.Contains(t, rec.Body.String(), "owner_hub_user_id")
+		})
+	}
+	for name, extra := range map[string]string{"owner_hub_user_id": `,"owner_hub_user_id":"` + id + `"`, "metadata": `,"metadata":{"hub_user_id":"` + id + `"}`} {
+		t.Run(name, func(t *testing.T) {
+			svc := mocks.NewMockVeridianService(gomock.NewController(t))
+			h := newHandlerWithService(svc)
+			svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(&domain.ProvisionResponse{WorkspaceID: "ws-1"}, nil)
+			rec := postJSON(t, h.handleProvision, "/api/tenants/provision", `{"tenant_id":"ws-1","owner_email":"o@x.test"`+extra+`}`)
+			assert.Equal(t, http.StatusOK, rec.Code)
+		})
+	}
+}
+
 func TestVeridianHandleProvision_OK(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -158,7 +182,7 @@ func TestVeridianHandleProvision_OK(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
-		`{"tenant_id":"ws-1","owner_email":"o@x.test","plan":"free"}`)
+		`{"tenant_id":"ws-1","owner_email":"o@x.test","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","plan":"free"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.ProvisionResponse
@@ -197,7 +221,7 @@ func TestVeridianHandleProvision_MissingOwnerEmail(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
-		`{"tenant_id":"ws-1","plan":"free"}`)
+		`{"tenant_id":"ws-1","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","plan":"free"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -211,7 +235,7 @@ func TestVeridianHandleProvision_SoftDeletedReturns409(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
-		`{"tenant_id":"ws-1","owner_email":"o@x.test","plan":"free"}`)
+		`{"tenant_id":"ws-1","owner_email":"o@x.test","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","plan":"free"}`)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), "soft-deleted")
@@ -230,7 +254,7 @@ func TestVeridianHandleProvision_OwnerMismatchReturns409(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
-		`{"tenant_id":"ws-shared","owner_email":"mallory@x.test","plan":"free"}`)
+		`{"tenant_id":"ws-shared","owner_email":"mallory@x.test","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","plan":"free"}`)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), "different owner")
@@ -245,7 +269,7 @@ func TestVeridianHandleProvision_GenericServiceError(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
-		`{"tenant_id":"ws-1","owner_email":"o@x.test","plan":"free"}`)
+		`{"tenant_id":"ws-1","owner_email":"o@x.test","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","plan":"free"}`)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	// Le 500 ne doit pas leak l'erreur interne brute au client (axe 2).
@@ -1215,7 +1239,7 @@ func TestVeridianErrorCode_handleProvision_OwnerMismatch(t *testing.T) {
 	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(nil, service.ErrOwnerMismatch)
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
-		`{"tenant_id":"ws-1","owner_email":"intruder@x.test","plan":"free"}`)
+		`{"tenant_id":"ws-1","owner_email":"intruder@x.test","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","plan":"free"}`)
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Equal(t, ErrCodeOwnerMismatch, decodeErrCode(t, rec.Body.Bytes()))
 }
@@ -1227,7 +1251,7 @@ func TestVeridianErrorCode_handleProvision_SoftDeleted(t *testing.T) {
 	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(nil, service.ErrTenantSoftDeleted)
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
-		`{"tenant_id":"ws-1","owner_email":"o@x.test","plan":"free"}`)
+		`{"tenant_id":"ws-1","owner_email":"o@x.test","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","plan":"free"}`)
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Equal(t, ErrCodeTenantSoftDeleted, decodeErrCode(t, rec.Body.Bytes()))
 }
@@ -1239,7 +1263,7 @@ func TestVeridianErrorCode_handleProvision_InternalError(t *testing.T) {
 	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(nil, errors.New("boom"))
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleProvision, "/api/tenants/provision",
-		`{"tenant_id":"ws-1","owner_email":"o@x.test","plan":"free"}`)
+		`{"tenant_id":"ws-1","owner_email":"o@x.test","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","plan":"free"}`)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Equal(t, ErrCodeInternalError, decodeErrCode(t, rec.Body.Bytes()))
 }
