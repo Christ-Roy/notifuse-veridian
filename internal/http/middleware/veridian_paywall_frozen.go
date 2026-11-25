@@ -18,7 +18,7 @@ package middleware
 //   - lookup repo.IsFrozen avec cache 60s partage avec le paywall
 //
 // Exempts (paths inutiles a checker) :
-//   - /api/veridian/*, /api/tenants/*  : routes admin Hub (HMAC, pas un user)
+//   - /api/tenants/*  : routes admin Hub (HMAC, pas un user)
 //   - /api/health, /api/version, /api/auth/*  : routes systeme
 //
 // Le freeze N'EST PAS irreversible cote app : seul un POST unfreeze-member
@@ -41,8 +41,9 @@ import (
 
 // veridianFrozenExemptPrefixes : paths qui n'ont aucun sens a checker pour
 // freeze (admin Hub, health, auth, etc.). Aligne sur veridianSoftDeletedExemptPrefixes.
+// `/api/veridian/` n'y est plus (25/11/2026) : la console y a ses propres routes (boîte unifiée, réservoirs, profils), un membre gelé y lisait
+// et y écrivait. Les routes du Hub du même préfixe portent une signature HMAC, jamais un jeton d'utilisateur : elles passent sans regard.
 var veridianFrozenExemptPrefixes = []string{
-	"/api/veridian/",
 	"/api/tenants/",
 	"/api/health",
 	"/api/version",

@@ -230,3 +230,18 @@ func TestWithoutBcc_LeavesTheRestUntouched(t *testing.T) {
 		}
 	}
 }
+
+func TestSubmit_SuspendedWorkspaceDoesNotSend(t *testing.T) {
+	f, s := bench()
+	f.acc.ReadOnly = true
+	var se *smtp.SMTPError
+	if err := s.CheckRecipient(context.Background(), Prefix+"a1", "x@y.fr"); !errors.As(err, &se) || se.Code != 550 {
+		t.Fatalf("RCPT : %v", err)
+	}
+	if err := s.Submit(context.Background(), Prefix+"a1", "jc@boite.fr", []string{"x@y.fr"}, []byte("From: jc@boite.fr\r\nTo: x@y.fr\r\nSubject: a\r\n\r\nb")); !errors.As(err, &se) || se.Code != 550 {
+		t.Fatalf("DATA : %v", err)
+	}
+	if len(f.sent) != 0 || f.reserved != 0 {
+		t.Fatal("rien ne part d'un espace suspendu")
+	}
+}

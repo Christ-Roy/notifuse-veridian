@@ -134,6 +134,8 @@ func (s *Sender) box(ctx context.Context, userID string) (*boxaccess.Access, *do
 	switch {
 	case p == nil:
 		return nil, nil, nil, refuse(535, 5, 7, 8, "boite retiree")
+	case a.ReadOnly:
+		return nil, nil, nil, refuse(550, 5, 7, 1, "espace suspendu : envoi ferme")
 	case !a.CanSend:
 		return nil, nil, nil, refuse(550, 5, 7, 1, "cet acces est en lecture seule")
 	case p.EmailProvider.VeridianPaused:

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/Notifuse/notifuse/internal/service"
+	"github.com/Notifuse/notifuse/internal/veridian/accountgate"
 	"github.com/Notifuse/notifuse/internal/veridian/bounces"
 	"net/http"
 	"sync"
@@ -205,4 +206,18 @@ func TestVeridianSystemTransport(t *testing.T) {
 	if p == nil || p.SMTP.Host != "smtp.service.example" || p.SMTP.Username != "u" || !p.SMTP.UseTLS || p.Senders[0].Email != "notifications@service.example" {
 		t.Fatalf("%+v", p)
 	}
+}
+
+// Fiche 91 : sans ces deux enveloppes, un compte supprimé au Hub rouvrait une session.
+func TestVeridianInitRepositories_DeletedAccountsAreGated(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	a := newWiringApp()
+	a.db = db
+	a.userRepo = repository.NewUserRepository(db)
+	a.authRepo = repository.NewSQLAuthRepository(db)
+	a.veridianInitRepositories()
+	assert.IsType(t, &accountgate.Users{}, a.userRepo)
+	assert.IsType(t, &accountgate.Auth{}, a.authRepo)
 }

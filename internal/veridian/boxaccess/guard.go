@@ -2,8 +2,10 @@ package boxaccess
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/standing"
 )
 
 // WorkspaceGetter lit un workspace.
@@ -11,11 +13,19 @@ type WorkspaceGetter interface {
 	GetByID(ctx context.Context, id string) (*domain.Workspace, error)
 }
 
-// Guard vérifie qu'un accès désigne encore une boîte vivante : le profil existe et porte toujours l'adresse. Retirer un
-// profil ou son adresse coupe ses accès, sans action de plus.
+// Standing relit la situation d'une personne dans un espace (standing.Store).
+type Standing interface {
+	Of(ctx context.Context, workspaceID, userID string) (standing.State, error)
+}
+
+// Guard vérifie qu'un accès désigne encore une boîte vivante : le profil existe et porte toujours l'adresse, l'espace est ouvert, et la
+// personne qui a créé l'accès y a encore sa place (ni retirée, ni gelée, ni supprimée au Hub). Retirer un profil, son adresse ou cette
+// personne coupe ses accès, sans action de plus. Un accès créé par une clé d'API appartient à l'espace, comme la clé. Standing nil : rien
+// n'est relu, donc rien ne s'ouvre.
 type Guard struct {
 	*Store
-	WS WorkspaceGetter
+	WS       WorkspaceGetter
+	Standing Standing
 }
 
 // Verify : Store.Verify, puis la boîte existe encore.
@@ -43,6 +53,18 @@ func (g *Guard) Alive(ctx context.Context, id string) (*Access, error) {
 }
 
 func (g *Guard) check(ctx context.Context, a *Access) error {
+	if g.Standing == nil {
+		return errors.New("accès de boîte : situation non câblée")
+	}
+	uid, human := a.HumanCreator()
+	st, err := g.Standing.Of(ctx, a.WorkspaceID, uid)
+	if err != nil {
+		return err
+	}
+	if !st.Space() || (human && !st.Person()) {
+		return ErrAuth
+	}
+	a.ReadOnly = st.Suspended
 	ws, err := g.WS.GetByID(ctx, a.WorkspaceID)
 	if err != nil {
 		return err

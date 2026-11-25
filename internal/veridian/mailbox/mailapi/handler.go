@@ -171,6 +171,11 @@ func readParams(r *http.Request, limit int64) (params, error) {
 	return p, nil
 }
 
+// denied : le droit est refusé (et non : la lecture du droit a échoué).
+func denied(err error) bool {
+	return errors.As(err, new(*domain.ErrAuthenticationFailed)) || errors.As(err, new(*domain.ErrUnauthorized)) || errors.As(err, new(*domain.PermissionError))
+}
+
 func (h *Handler) fail(w http.ResponseWriter, err error) {
 	var inv *ErrInvalid
 	var authErr *domain.ErrAuthenticationFailed
@@ -544,6 +549,17 @@ func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, ": battement\n\n")
 			fl.Flush()
 		case <-poll.C:
+			// Le droit est relu à chaque passage : un membre retiré, gelé, déconnecté ou supprimé ne reçoit plus rien (fiche 91).
+			// Refus : le flux se ferme. Panne de lecture : rien n'est envoyé, on réessaie au passage suivant.
+			if _, err := h.Svc.AuthorizeStream(r.Context(), ws); err != nil {
+				if denied(err) {
+					fmt.Fprint(w, "event: closed\ndata: {\"code\":\"access_revoked\"}\n\n")
+					fl.Flush()
+					return
+				}
+				h.Log.WithField("error", err.Error()).Warn("Mail API: stream right not read")
+				continue
+			}
 			evs, err := h.Svc.Events(ctx, ws, last, dir, kinds, 100)
 			if err != nil {
 				h.Log.WithField("error", err.Error()).Warn("Mail API: events poll failed")

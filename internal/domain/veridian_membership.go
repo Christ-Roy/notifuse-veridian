@@ -119,6 +119,12 @@ type RemoveMemberResponse struct {
 	// aucune n'a d'auteur noté, le retrait n'en coupe aucune. Absent = non compté, jamais un faux zéro.
 	ActiveAPIKeys *int   `json:"active_api_keys,omitempty"`
 	APIKeysURL    string `json:"api_keys_url,omitempty"`
+	// Accès de boîte (IMAP, SMTP) : ceux créés par la personne sont révoqués, ceux des autres (et des clés API) restent et sont comptés.
+	// Absent = non compté, jamais un faux zéro.
+	RevokedMailAccesses *int `json:"revoked_mail_accesses,omitempty"`
+	ActiveMailAccesses  *int `json:"active_mail_accesses,omitempty"`
+	// AppUserID : compte local de la personne, interne.
+	AppUserID string `json:"-"`
 }
 
 // === restore-member (§5.20) =================================================

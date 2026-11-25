@@ -181,3 +181,16 @@ func TestRemoveMemberResponse_ClesActives_AbsentNEstPasZero(t *testing.T) {
 	assert.NotContains(t, string(unknown), "active_api_keys")
 	assert.NotContains(t, string(unknown), "api_keys_url")
 }
+
+// Même contrat pour les accès de boîte (fiche 91) ; le compte local ne sort jamais.
+func TestRemoveMemberResponse_AccesDeBoite_AbsentNEstPasZero(t *testing.T) {
+	zero, two := 0, 2
+	counted, err := json.Marshal(RemoveMemberResponse{TenantID: "ws", RevokedMailAccesses: &two, ActiveMailAccesses: &zero, AppUserID: "interne"})
+	require.NoError(t, err)
+	assert.Contains(t, string(counted), `"revoked_mail_accesses":2`)
+	assert.Contains(t, string(counted), `"active_mail_accesses":0`)
+	assert.NotContains(t, string(counted), "interne")
+	unknown, err := json.Marshal(RemoveMemberResponse{TenantID: "ws"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(unknown), "mail_accesses")
+}

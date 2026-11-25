@@ -147,3 +147,55 @@ func TestAccess_MaxPerWorkspace(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+func TestAccess_HumanCreator(t *testing.T) {
+	for by, want := range map[string]string{"humain:u1": "u1", "agent:u1": "", "humain": "", "": ""} {
+		id, ok := (&Access{CreatedBy: by}).HumanCreator()
+		if ok != (want != "") || (ok && id != want) {
+			t.Errorf("%q : %q %v", by, id, ok)
+		}
+	}
+}
+
+func TestStore_RevokeByCreator_And_CountActive(t *testing.T) {
+	s, ctx := NewStore(testDB(t)), context.Background()
+	mk := func(ws, by string) (*Access, string) {
+		a, secret, err := s.Create(ctx, Access{WorkspaceID: ws, ProfileID: "p", Address: "jc@boite.fr", CanSend: true, CreatedBy: by})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a, secret
+	}
+	_, mine := mk("ws", "humain:u1")
+	_, mine2 := mk("ws", "humain:u1")
+	_, colleague := mk("ws", "humain:u12")
+	_, key := mk("ws", "agent:u1")
+	_, elsewhere := mk("ws2", "humain:u1")
+	if n, err := s.CountActive(ctx, "ws"); err != nil || n != 4 {
+		t.Fatalf("%d %v", n, err)
+	}
+	if n, err := s.RevokeByCreator(ctx, "ws", "u1"); err != nil || n != 2 {
+		t.Fatalf("%d %v", n, err)
+	}
+	for name, sec := range map[string]string{"un": mine, "deux": mine2} {
+		if _, err := s.Verify(ctx, "jc@boite.fr", sec); !errors.Is(err, ErrAuth) {
+			t.Errorf("accès %s du retiré encore ouvert : %v", name, err)
+		}
+	}
+	for name, sec := range map[string]string{"collègue": colleague, "clé d'API": key, "autre espace": elsewhere} {
+		if _, err := s.Verify(ctx, "jc@boite.fr", sec); err != nil {
+			t.Errorf("%s coupé à tort : %v", name, err)
+		}
+	}
+	if n, err := s.RevokeByCreator(ctx, "ws", "u1"); err != nil || n != 0 {
+		t.Fatalf("rejeu : %d %v", n, err)
+	}
+	if n, err := s.CountActive(ctx, "ws"); err != nil || n != 2 {
+		t.Fatalf("%d %v", n, err)
+	}
+	for _, q := range [][2]string{{"", "u1"}, {"ws", ""}} {
+		if _, err := s.RevokeByCreator(ctx, q[0], q[1]); err == nil {
+			t.Error("espace et personne requis")
+		}
+	}
+}

@@ -49,7 +49,15 @@ type Access struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	// ReadOnly : espace suspendu, l'accès lit encore et n'envoie plus. Posé par Guard.
+	ReadOnly bool `json:"-"`
 }
+
+// humanPrefix : auteur humain, « humain:<id du compte> » (mailapi.Actor). Une clé d'API s'écrit « agent:<id> ».
+const humanPrefix = "humain:"
+
+// HumanCreator rend le compte de la personne qui a créé l'accès ; faux pour une clé d'API ou un auteur inconnu.
+func (a *Access) HumanCreator() (string, bool) { return strings.CutPrefix(a.CreatedBy, humanPrefix) }
 
 // Store lit et écrit les accès (base système).
 type Store struct {
@@ -157,6 +165,27 @@ func (s *Store) Revoke(ctx context.Context, ws, id string) (*Access, error) {
 		return nil, ErrNotFound
 	}
 	return a, err
+}
+
+// RevokeByCreator coupe les accès qu'une personne a créés dans un espace (retrait d'un membre). Idempotent ; jamais ceux d'un autre.
+func (s *Store) RevokeByCreator(ctx context.Context, ws, userID string) (int, error) {
+	if ws == "" || userID == "" {
+		return 0, errors.New("espace et personne requis")
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE veridian_box_access SET revoked_at = NOW()
+		WHERE workspace_id = $1 AND created_by = $2 AND revoked_at IS NULL`, ws, humanPrefix+userID)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
+}
+
+// CountActive compte les accès vivants d'un espace.
+func (s *Store) CountActive(ctx context.Context, ws string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM veridian_box_access WHERE workspace_id = $1 AND revoked_at IS NULL`, ws).Scan(&n)
+	return n, err
 }
 
 // Verify retrouve l'accès vivant qui correspond à l'adresse et au mot de passe. Plusieurs accès par adresse (un par

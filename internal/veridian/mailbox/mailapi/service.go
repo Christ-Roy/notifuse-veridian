@@ -13,6 +13,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
+	"github.com/Notifuse/notifuse/internal/veridian/standing"
 )
 
 // ErrInvalid : requête invalide (400).
@@ -42,7 +43,16 @@ type Authorizer interface {
 }
 
 // DomainAuthorizer adapte domain.AuthService.
-type DomainAuthorizer struct{ Auth domain.AuthService }
+type DomainAuthorizer struct {
+	Auth domain.AuthService
+	// Standing relit la situation (fiche 91) : membre gelé et espace supprimé refusés, espace suspendu en lecture seule. Nil : rien ne s'ouvre.
+	Standing Standing
+}
+
+// Standing relit la situation d'une personne dans un espace (standing.Store).
+type Standing interface {
+	Of(ctx context.Context, workspaceID, userID string) (standing.State, error)
+}
 
 // Authorize implémente Authorizer.
 func (d DomainAuthorizer) Authorize(ctx context.Context, ws string, res domain.PermissionResource, perm domain.PermissionType) (context.Context, Actor, error) {
@@ -59,6 +69,20 @@ func (d DomainAuthorizer) Authorize(ctx context.Context, ws string, res domain.P
 		if user.Type == domain.UserTypeAPIKey {
 			a.Kind = "agent"
 		}
+	}
+	if d.Standing == nil {
+		return ctx, Actor{}, errors.New("situation dans l'espace non câblée")
+	}
+	st, err := d.Standing.Of(ctx, ws, a.ID)
+	switch {
+	case err != nil:
+		return ctx, Actor{}, fmt.Errorf("situation dans l'espace: %w", err)
+	case !st.Space():
+		return ctx, Actor{}, domain.NewPermissionError(res, perm, "espace fermé")
+	case a.Kind == "humain" && !st.Person():
+		return ctx, Actor{}, domain.NewPermissionError(res, perm, "accès suspendu pour cette personne")
+	case st.Suspended && perm == domain.PermissionTypeWrite && res == domain.PermissionResourceMessageHistory:
+		return ctx, Actor{}, domain.NewPermissionError(res, perm, "espace suspendu : lecture seule")
 	}
 	return ctx, a, nil
 }
@@ -386,7 +410,7 @@ func (s *Service) Events(ctx context.Context, ws string, afterSeq int64, directi
 	return out, err
 }
 
-// AuthorizeStream vérifie le droit de lecture une fois, à l'ouverture d'un flux.
+// AuthorizeStream vérifie le droit de lecture : à l'ouverture d'un flux, puis à chaque passage (la situation change pendant qu'il vit).
 func (s *Service) AuthorizeStream(ctx context.Context, ws string) (context.Context, error) {
 	ctx, _, err := s.read(ctx, ws)
 	return ctx, err

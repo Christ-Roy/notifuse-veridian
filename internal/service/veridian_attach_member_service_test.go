@@ -86,7 +86,7 @@ func TestAttachMember_NewUser_CreatedAndAttached(t *testing.T) {
 		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
 
 	// ctxAsUser(owner)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 
 	// AddUserToWorkspace
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", gomock.Any(), "member", gomock.Any()).
@@ -148,7 +148,7 @@ func TestAttachMember_ExistingUser_FoundByHubUserID(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
 		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
 
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "user-hub-1", "member", gomock.Any()).
 		Return(nil)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
@@ -298,7 +298,7 @@ func TestAttachMember_UnlinkedAccount_ProvenAddress_LinkedAndAdded(t *testing.T)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-link").Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-link").
 		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-link", "user-hub-1", "member", gomock.Any()).Return(nil)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-link", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
@@ -499,7 +499,7 @@ func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-prehub").
 		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
 
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 	// Le role Hub 'admin' est mappé vers 'member' côté Notifuse : upstream
 	// n'a QUE owner|member en role workspace (workspace_service refuse tout
 	// autre). CONTRAT-HUB §3.5 — le Hub n'est pas autoritatif sur les rôles
@@ -553,7 +553,7 @@ func TestAttachMember_NewUser_PassesHubUserIDToCreateUser(t *testing.T) {
 		Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
 		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", gomock.Any(), "member", gomock.Any()).
 		Return(nil)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)

@@ -531,3 +531,27 @@ func TestLogin_IPv6LimitedByPrefix(t *testing.T) {
 		t.Fatal("autre /64 : compteur à part")
 	}
 }
+
+// Une session DÉJÀ ouverte se coupe en quelques secondes quand l'accès ne vaut plus (révoqué, auteur retiré de l'espace) ; celle d'un autre vit.
+func TestSession_AlreadyOpenIsCutQuickly(t *testing.T) {
+	b := newBench(t)
+	mine, other := b.login(t, "jc@boite.fr"), b.login(t, "autre@boite.fr")
+	for _, c := range []*imapclient.Client{mine, other} {
+		if _, err := c.Select("INBOX", nil).Wait(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b.auth.mu.Lock()
+	b.auth.revoked["a1"] = true
+	b.auth.mu.Unlock()
+	end := time.Now().Add(8 * time.Second)
+	for mine.Noop().Wait() == nil {
+		if time.Now().After(end) {
+			t.Fatal("session encore ouverte 8 s après la révocation")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if err := other.Noop().Wait(); err != nil {
+		t.Fatalf("session d'un autre coupée à tort : %v", err)
+	}
+}

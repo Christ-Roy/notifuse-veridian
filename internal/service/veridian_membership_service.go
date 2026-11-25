@@ -208,7 +208,43 @@ func (s *veridianService) RemoveMember(ctx context.Context, input domain.RemoveM
 		return resp, err
 	}
 	s.countActiveAPIKeys(ctx, resp)
+	s.cutMailAccesses(ctx, resp)
 	return resp, nil
+}
+
+// MailAccessRevoker coupe et compte les acces de boite d'un espace (boxaccess.Store).
+type MailAccessRevoker interface {
+	RevokeByCreator(ctx context.Context, workspaceID, userID string) (int, error)
+	CountActive(ctx context.Context, workspaceID string) (int, error)
+}
+
+// cutMailAccesses revoque les acces de boite (IMAP, SMTP) crees par la personne retiree : c'est son telephone, pas une automatisation, et
+// un retour dans l'espace ne les rouvre pas. Rejoue aussi quand elle n'etait deja plus membre. Les acces des autres restent et sont comptes.
+// Un echec ne defait jamais le retrait : la porte IMAP et SMTP relit l'appartenance a chaque passage (boxaccess.Guard) ; le nombre manque,
+// jamais un faux zero.
+func (s *veridianService) cutMailAccesses(ctx context.Context, resp *domain.RemoveMemberResponse) {
+	if s.mailAccess == nil {
+		return
+	}
+	warn := func(err error) {
+		if s.logger != nil {
+			s.logger.WithFields(map[string]interface{}{"tenant_id": resp.TenantID, "error": err.Error()}).Warn("veridian RemoveMember: mail accesses not settled")
+		}
+	}
+	if resp.AppUserID != "" {
+		n, err := s.mailAccess.RevokeByCreator(ctx, resp.TenantID, resp.AppUserID)
+		if err != nil {
+			warn(err)
+		} else {
+			resp.RevokedMailAccesses = &n
+		}
+	}
+	left, err := s.mailAccess.CountActive(ctx, resp.TenantID)
+	if err != nil {
+		warn(err)
+		return
+	}
+	resp.ActiveMailAccesses = &left
 }
 
 // countActiveAPIKeys dit au Hub ce que le retrait ne coupe pas (CONTRAT-HUB §5.19.3). Un comptage en échec ne défait jamais le retrait.
@@ -283,6 +319,7 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 				TenantID:  input.TenantID,
 				HubUserID: input.HubUserID,
 				UserEmail: input.UserEmail,
+				AppUserID: member.ID,
 				RemovedAt: time.Now().UTC(),
 			}, nil
 		}
@@ -294,6 +331,7 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 			TenantID:  input.TenantID,
 			HubUserID: input.HubUserID,
 			UserEmail: input.UserEmail,
+			AppUserID: member.ID,
 			RemovedAt: time.Now().UTC(),
 		}, nil
 	}
@@ -337,6 +375,7 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 		TenantID:  input.TenantID,
 		HubUserID: input.HubUserID,
 		UserEmail: input.UserEmail,
+		AppUserID: member.ID,
 		Removed:   true,
 		RemovedAt: removedAt,
 	}, nil

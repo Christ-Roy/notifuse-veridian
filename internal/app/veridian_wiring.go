@@ -20,12 +20,14 @@ import (
 	"github.com/Notifuse/notifuse/internal/repository"
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/internal/service/queue"
+	"github.com/Notifuse/notifuse/internal/veridian/accountgate"
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	"github.com/Notifuse/notifuse/internal/veridian/boxsend"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/relaycert"
 	"github.com/Notifuse/notifuse/internal/veridian/relaysettings"
 	"github.com/Notifuse/notifuse/internal/veridian/smtprelay"
+	"github.com/Notifuse/notifuse/internal/veridian/standing"
 	veridiantrial "github.com/Notifuse/notifuse/internal/veridian/trial"
 	"github.com/Notifuse/notifuse/pkg/hub_discovery"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -274,6 +276,10 @@ func (a *App) veridianInitRepositories() {
 	// le crée maintenant en avance pour pouvoir wrapper.
 	a.veridianPlanRepo = repository.NewVeridianPlanRepository(a.db)
 	a.messageHistoryRepo = repository.NewVeridianMessageHistoryDecorator(a.messageHistoryRepo, a.veridianPlanRepo, a.logger)
+
+	// Compte supprimé côté Hub : aucune session ne s'ouvre, aucune ne vaut (fiche 91).
+	a.authRepo = &accountgate.Auth{AuthRepository: a.authRepo, DB: a.db}
+	a.userRepo = &accountgate.Users{UserRepository: a.userRepo, DB: a.db}
 
 	// VER-220 : aucune adresse de contact abîmée n'entre en base, quelle que soit la voie
 	// (inscription publique, événements, préférences écrivent sans passer par Contact.Validate).
@@ -610,6 +616,12 @@ func (a *App) veridianInitHandlers() error {
 			}
 			return deleted, err
 		})
+	}
+	// Accès de boîte (IMAP, SMTP) d'un membre retiré : révoqués par remove-member (fiche 91).
+	if cut, ok := a.veridianService.(interface {
+		ConfigureMailAccess(service.MailAccessRevoker)
+	}); ok && a.db != nil {
+		cut.ConfigureMailAccess(boxaccess.NewStore(a.db))
 	}
 	if gcRunner, ok := a.veridianService.(httpHandler.VeridianOrphanDBGCRunner); ok {
 		veridianHandler.SetOrphanDBGC(gcRunner, a.config.Environment)
@@ -1071,7 +1083,7 @@ func (a *App) veridianWrapHandler(handler http.Handler) http.Handler {
 	// Wrappe le handler GLOBAL : si user frozen sur le workspace courant,
 	//   - GET/HEAD/OPTIONS : reads obfusques (header X-User-Frozen=true)
 	//   - POST/PUT/PATCH/DELETE : 402 user_frozen body + unfreeze_url
-	// Exempts : /api/veridian/*, /api/tenants/*, /api/health, /api/version,
+	// Exempts : /api/tenants/*, /api/health, /api/version,
 	// /api/auth/* (HMAC + systeme — pas concernes par freeze user-side).
 	//
 	// Place APRES soft-deleted dans la chaine d'application (donc EXECUTE
@@ -1191,7 +1203,7 @@ func (a *App) veridianInitSMTPRelay() {
 	a.rateLimiter.SetPolicy(smtprelay.RateNamespace, smtprelay.RatePerMinute, time.Minute)
 	a.rateLimiter.SetPolicy(boxsend.LimitLogin, boxsend.LimitLoginPerMinute, time.Minute)
 	a.veridianBoxSend = boxsend.New(boxsend.Deps{
-		Accesses:    &boxaccess.Guard{Store: boxaccess.NewStore(a.db), WS: a.workspaceRepo},
+		Accesses:    &boxaccess.Guard{Store: boxaccess.NewStore(a.db), WS: a.workspaceRepo, Standing: &standing.Store{DB: a.db}},
 		WS:          a.workspaceRepo,
 		Suppression: veridianRelaySuppression{repo: a.contactListRepo},
 		Mailer:      a.emailService,

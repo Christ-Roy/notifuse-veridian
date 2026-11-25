@@ -162,6 +162,7 @@ func (r *workspaceRepository) VeridianDeleteWorkspaceSystemRecord(ctx context.Co
 		"veridian_api_key_grace",
 		"veridian_frozen_members",
 		"veridian_imap_uid_seen",
+		"veridian_box_access", // acces de boite (V75) : morts avec l'espace, jamais laisses vivants en base
 	}
 	for _, table := range veridianAnnexSystemTables {
 		// #nosec G202 — `table` provient EXCLUSIVEMENT de la liste littérale

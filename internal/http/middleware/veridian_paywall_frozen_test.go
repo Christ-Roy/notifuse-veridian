@@ -6,7 +6,7 @@ package middleware
 // Couvre :
 //   - passthrough quand frozenRepo nil (mode self-hosted)
 //   - passthrough quand getJWTSecret nil
-//   - passthrough sur paths exempts (/api/veridian/, /api/tenants/, /api/health, /api/version, /api/auth/)
+//   - passthrough sur paths exempts (/api/tenants/, /api/health, /api/version, /api/auth/)
 //   - passthrough quand pas de JWT (route publique ou anonyme)
 //   - passthrough quand JWT valide mais workspace_id introuvable
 //   - passthrough quand user pas frozen
@@ -106,7 +106,6 @@ func TestVeridianFrozenMiddleware_ExemptedPath_Passthrough(t *testing.T) {
 	mw := NewVeridianFrozenMemberMiddleware(repo, getJWTSecretFn(), nil)(frozenTestHandler(called))
 
 	for _, path := range []string{
-		"/api/veridian/admin/cache/invalidate",
 		"/api/tenants/provision",
 		"/api/health",
 		"/api/version",
@@ -418,4 +417,29 @@ func TestVeridianFrozenMemberFilterWithCache_Wraps(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mw.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// 25/11/2026 : le préfixe /api/veridian/ était exempté en bloc, un membre gelé lisait et écrivait dans la boîte unifiée, les réservoirs, les profils.
+func TestVeridianFrozenMiddleware_ConsoleRoutesOfVeridianAreFrozenToo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockVeridianFrozenMemberRepository(ctrl)
+	repo.EXPECT().IsFrozen(gomock.Any(), "ws-1", "user-1").Return(true, domain.FreezeReasonManual, nil).AnyTimes()
+	called := &atomic.Bool{}
+	mw := NewVeridianFrozenMemberMiddleware(repo, getJWTSecretFn(), nil)(frozenTestHandler(called))
+	for _, path := range []string{"/api/veridian/mail.messages.send", "/api/veridian/mail.access.create", "/api/veridian/reservoir.activate"} {
+		called.Store(false)
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"workspace_id":"ws-1"}`))
+		req.Header.Set("Authorization", "Bearer "+signTestJWT(t, "user-1"))
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusPaymentRequired, rec.Code, path)
+		assert.False(t, called.Load(), path)
+	}
+	// Le Hub, signé HMAC (aucun jeton d'utilisateur), passe toujours sur le même préfixe.
+	called.Store(false)
+	req := httptest.NewRequest(http.MethodPost, "/api/veridian/admin/cache/invalidate", strings.NewReader(`{"workspace_id":"ws-1"}`))
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+	assert.True(t, called.Load())
 }

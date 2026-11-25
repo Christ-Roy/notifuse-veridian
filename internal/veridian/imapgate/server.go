@@ -33,7 +33,7 @@ const (
 	// refreshEvery : âge maximal de la vue d'un dossier avant relecture ; idleEvery : période de veille.
 	refreshEvery = 3 * time.Second
 	idleEvery    = 5 * time.Second
-	aliveEvery   = 30 * time.Second
+	aliveEvery   = 5 * time.Second
 	opTimeout    = 30 * time.Second
 )
 

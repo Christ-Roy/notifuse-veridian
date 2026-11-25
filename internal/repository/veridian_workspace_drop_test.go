@@ -166,6 +166,8 @@ func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_Success(t *test
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_imap_uid_seen WHERE workspace_id = $1`)).
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 42))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_box_access WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "tst123")
 	require.NoError(t, err)
@@ -194,6 +196,8 @@ func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_Idempotent(t *t
 		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_imap_uid_seen WHERE workspace_id = $1`)).
 		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_box_access WHERE workspace_id = $1`)).
+		WithArgs("gone").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "gone")
 	require.NoError(t, err, "record already absent (0 rows) must be a no-op success")
@@ -227,6 +231,8 @@ func TestWorkspaceRepository_VeridianDeleteWorkspaceSystemRecord_AnnexTablesBest
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_imap_uid_seen WHERE workspace_id = $1`)).
 		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 7))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM veridian_box_access WHERE workspace_id = $1`)).
+		WithArgs("tst123").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err = repo.VeridianDeleteWorkspaceSystemRecord(context.Background(), "tst123")
 	require.NoError(t, err, "une erreur sur une table annexe ne doit pas faire échouer le wipe")

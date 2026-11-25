@@ -93,7 +93,7 @@ func TestSyncMember_NewUser_CreatedAndAttached(t *testing.T) {
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
 
 	// ctxAsUser session.
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 
 	// AddUserToWorkspace.
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", gomock.Any(), "member", gomock.Any()).Return(nil)
@@ -125,7 +125,7 @@ func TestSyncMember_ExistingUser_FoundByHubUserID(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "member-uuid-1", "member", gomock.Any()).Return(nil)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
@@ -153,7 +153,7 @@ func TestSyncMember_AddressHeldByUnlinkedAccount_Proven_LinkedAndAdded(t *testin
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "member-uuid-1", "member", gomock.Any()).Return(nil)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
@@ -323,6 +323,80 @@ func TestRemoveMember_Success_HardDeletes(t *testing.T) {
 	assert.Regexp(t, `^https://[^/]+/console/workspace/ws-1/settings/team$`, resp.APIKeysURL)
 }
 
+type mailAccessDouble struct {
+	calls   []string
+	revoked int
+	left    int
+	err     error
+}
+
+func (d *mailAccessDouble) RevokeByCreator(_ context.Context, ws, user string) (int, error) {
+	d.calls = append(d.calls, ws+"/"+user)
+	return d.revoked, d.err
+}
+func (d *mailAccessDouble) CountActive(context.Context, string) (int, error) { return d.left, d.err }
+
+// VER (25/11) : l'accès IMAP et SMTP créé par un membre ouvrait encore la boîte après son retrait.
+func TestRemoveMember_CutsMailAccessesOfThePerson(t *testing.T) {
+	ctx := context.Background()
+	for name, c := range map[string]struct {
+		member, failing bool
+	}{"retiré": {true, false}, "déjà plus membre : rejoué": {false, false}, "coupure en panne": {true, true}} {
+		t.Run(name, func(t *testing.T) {
+			svc, m := newVeridianService(t)
+			d := &mailAccessDouble{revoked: 2, left: 1}
+			if c.failing {
+				d.err = errors.New("base")
+			}
+			svc.ConfigureMailAccess(d)
+			m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+			m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
+			m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(nil, nil)
+			if c.member {
+				m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(membershipEntry("member-uuid-1", "ws-1", "member"), nil)
+				m.workspaceRepo.EXPECT().RemoveUserFromWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil)
+				m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberRemoved, "ws-1", gomock.Any())
+			} else {
+				m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
+			}
+			resp, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{TenantID: "ws-1", HubUserID: testHubUID})
+			require.NoError(t, err)
+			assert.Equal(t, c.member, resp.Removed)
+			assert.Equal(t, []string{"ws-1/member-uuid-1"}, d.calls)
+			if c.failing {
+				assert.Nil(t, resp.RevokedMailAccesses, "jamais un faux zéro")
+				assert.Nil(t, resp.ActiveMailAccesses)
+				return
+			}
+			require.NotNil(t, resp.RevokedMailAccesses)
+			require.NotNil(t, resp.ActiveMailAccesses)
+			assert.Equal(t, 2, *resp.RevokedMailAccesses)
+			assert.Equal(t, 1, *resp.ActiveMailAccesses)
+		})
+	}
+}
+
+func TestRemoveMember_Refused_KeepsMailAccesses(t *testing.T) {
+	ctx := context.Background()
+	// Propriétaire refusé, personne inconnue : aucun accès n'est coupé.
+	for _, owner := range []bool{true, false} {
+		svc, m := newVeridianService(t)
+		d := &mailAccessDouble{}
+		svc.ConfigureMailAccess(d)
+		m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+		if owner {
+			m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
+			m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(membershipEntry("member-uuid-1", "ws-1", "owner"), nil)
+		} else {
+			m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, &domain.ErrUserNotFound{Message: "x"})
+			m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(nil, nil)
+		}
+		_, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{TenantID: "ws-1", HubUserID: testHubUID})
+		assert.Equal(t, owner, errors.Is(err, ErrCannotRemoveOwner))
+		assert.Empty(t, d.calls)
+	}
+}
+
 func TestRemoveMember_Owner_ReturnsErrCannotRemoveOwner(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
@@ -442,7 +516,7 @@ func TestRestoreMember_Success_ExistingUser(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "member-uuid-1", "member", gomock.Any()).Return(nil)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
@@ -548,3 +622,17 @@ func TestResolveWorkspaceCaller_NoOwnerNoRoot_Error(t *testing.T) {
 // === Helpers placeholder ===
 
 var _ = time.Now // garde l'import time si non utilise par les tests
+
+// systemCall : la session interne d'un geste du Hub est marquee AVANT sa creation, sinon la garde des comptes supprimes (accountgate) la refuse.
+type systemCall struct{}
+
+func (systemCall) Matches(x interface{}) bool {
+	ctx, ok := x.(context.Context)
+	if !ok {
+		return false
+	}
+	sys, _ := ctx.Value(domain.SystemCallKey).(bool)
+	return sys
+}
+
+func (systemCall) String() string { return "contexte marque SystemCallKey" }

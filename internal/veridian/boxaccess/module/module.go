@@ -17,6 +17,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox/mailapi"
 	mailboxmodule "github.com/Notifuse/notifuse/internal/veridian/mailbox/module"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
+	"github.com/Notifuse/notifuse/internal/veridian/standing"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
 )
 
@@ -118,7 +119,7 @@ func wire(h platform.Host) error {
 		}
 		conn.SMTP = &boxapi.Endpoint{Host: set.SMTPHost, Port: show, Security: "SSL/TLS"}
 	}
-	(&boxapi.Handler{Store: store, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService()}, WS: h.WorkspaceRepository(),
+	(&boxapi.Handler{Store: store, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService(), Standing: &standing.Store{DB: h.DB()}}, WS: h.WorkspaceRepository(),
 		Connection: conn, Log: h.Logger(), RequireAuth: h.RequireAuth()}).RegisterRoutes(h.Mux())
 
 	if !set.Enabled {
@@ -139,7 +140,7 @@ func wire(h platform.Host) error {
 	gh.RateLimiter().SetPolicy(imapgate.LimitIP, imapgate.TriesPerIP, imapgate.LimitWindow)
 	gh.RateLimiter().SetPolicy(imapgate.LimitAddress, imapgate.TriesPerAddr, imapgate.LimitWindow)
 	server, err = imapgate.New(imapgate.Config{Addr: fmt.Sprintf(":%d", set.Port), TLSConfig: tc, BehindTLSProxy: set.Proxy, ProxyProtocol: set.PROXYv2,
-		Auth: &boxaccess.Guard{Store: store, WS: h.WorkspaceRepository()}, Boxes: mailboxmodule.NewStore(h.WorkspaceRepository()), Limiter: gh.RateLimiter(), Logger: h.Logger()})
+		Auth: &boxaccess.Guard{Store: store, WS: h.WorkspaceRepository(), Standing: &standing.Store{DB: h.DB()}}, Boxes: mailboxmodule.NewStore(h.WorkspaceRepository()), Limiter: gh.RateLimiter(), Logger: h.Logger()})
 	return err
 }
 

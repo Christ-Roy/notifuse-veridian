@@ -2080,7 +2080,7 @@ func TestAttachMember_GeneratesUUIDNotHubUserID(t *testing.T) {
 		Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-uuid").
 		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-x", "owner@ws.test")}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-uuid", gomock.Any(), "member", gomock.Any()).
 		Return(nil)
 	// Webhook tenant.member_added emit sur new attach (§7.1).
@@ -2125,7 +2125,7 @@ func TestAttachMember_RoleAdminMappedToMember(t *testing.T) {
 		Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-rolemap").
 		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-rm", "owner@ws.test")}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
 
 	// Le cœur du test : AddUserToWorkspace DOIT recevoir "member", pas "admin".
 	m.workspace.EXPECT().
@@ -3347,4 +3347,21 @@ func TestUpdatePlan_ApprendLIdDeTenantDuHub(t *testing.T) {
 	expectUpdatePlanOK(m, "ws-hub", "")
 	_, err = svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{TenantID: "ws-hub", Plan: "pro", HubTenantID: "x;drop"})
 	assert.Error(t, err, "id invalide refuse")
+}
+
+// Le cablage (veridian_wiring.go) passe par cette interface : si la methode changeait de forme, la coupure des acces de boite (fiche 91)
+// disparaitrait sans bruit. Non cablee, remove-member ne compte rien et ne dit jamais zero.
+func TestConfigureMailAccess_WiringShapeAndAbsence(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	var asWired domain.VeridianService = svc
+	cut, ok := asWired.(interface{ ConfigureMailAccess(MailAccessRevoker) })
+	require.True(t, ok)
+	resp := &domain.RemoveMemberResponse{TenantID: "ws", AppUserID: "u"}
+	svc.cutMailAccesses(context.Background(), resp)
+	assert.Nil(t, resp.RevokedMailAccesses)
+	assert.Nil(t, resp.ActiveMailAccesses)
+	cut.ConfigureMailAccess(&mailAccessDouble{revoked: 1})
+	svc.cutMailAccesses(context.Background(), resp)
+	require.NotNil(t, resp.RevokedMailAccesses)
+	assert.Equal(t, 1, *resp.RevokedMailAccesses)
 }

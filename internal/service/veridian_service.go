@@ -175,6 +175,8 @@ type veridianService struct {
 	hubTenantStore domain.HubTenantStore
 	// accountGate : vrai si le Hub a supprime ce compte (users.hub_deleted_at, V71). Nil = pas de garde.
 	accountGate func(ctx context.Context, userID string) (deleted bool, err error)
+	// mailAccess : acces de boite (IMAP, SMTP), coupes au retrait de leur auteur (fiche 91). Nil = non cable.
+	mailAccess MailAccessRevoker
 }
 
 // NewVeridianService construit un VeridianService.
@@ -248,7 +250,8 @@ func (s *veridianService) ctxAsUser(ctx context.Context, userID string) (context
 		ExpiresAt: time.Now().UTC().Add(rootSessionTTL),
 		CreatedAt: time.Now().UTC(),
 	}
-	if err := s.userRepo.CreateSession(ctx, session); err != nil {
+	// Session interne : marquee avant sa creation, la garde des comptes supprimes (accountgate) la laisse passer.
+	if err := s.userRepo.CreateSession(context.WithValue(ctx, domain.SystemCallKey, true), session); err != nil {
 		return ctx, "", fmt.Errorf("veridian: create user session for %s: %w", userID, err)
 	}
 
@@ -2331,6 +2334,11 @@ func (s *veridianService) ConfigureHubTenantStore(store domain.HubTenantStore) {
 // ConfigureTrialStore branche le stockage du statut d'essai envoye par le Hub (fiche 82). Cablage : veridian_wiring.go.
 func (s *veridianService) ConfigureTrialStore(store domain.TrialStore) {
 	s.trialStore = store
+}
+
+// ConfigureMailAccess branche la coupure des acces de boite au retrait d'un membre (fiche 91). Cablage : veridian_wiring.go.
+func (s *veridianService) ConfigureMailAccess(m MailAccessRevoker) {
+	s.mailAccess = m
 }
 
 // ConfigureAccountGate branche la garde "compte supprime cote Hub" (CONTRAT-HUB 3.8). Cablage : veridian_wiring.go.

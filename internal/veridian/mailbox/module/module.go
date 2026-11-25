@@ -16,6 +16,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox/mailapi"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
+	"github.com/Notifuse/notifuse/internal/veridian/standing"
 )
 
 func init() {
@@ -93,7 +94,7 @@ func wire(h platform.Host) error {
 	if h.Mux() == nil || h.AuthService() == nil {
 		return nil // assemblage de test sans routeur ni authentification : pas d'API
 	}
-	svc := &mailapi.Service{Store: store, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService()}, WS: repo}
+	svc := &mailapi.Service{Store: store, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService(), Standing: &standing.Store{DB: h.DB()}}, WS: repo}
 	if q := h.EmailQueueRepository(); q != nil {
 		svc.Sender = &mailapi.QueueSender{Queue: q, WS: repo, Store: store}
 	}

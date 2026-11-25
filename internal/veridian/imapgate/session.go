@@ -151,7 +151,7 @@ func (s *session) Login(username, password string) error {
 	return nil
 }
 
-// alive coupe une session dont l'accès a été révoqué (vérifié au plus toutes les 30 s).
+// alive coupe une session dont l'accès a été révoqué (révoqué, ou son auteur retiré de l'espace ; relu au plus toutes les 5 s).
 func (s *session) alive() error {
 	if s.acc == nil || time.Since(s.checked) < aliveEvery {
 		return nil
