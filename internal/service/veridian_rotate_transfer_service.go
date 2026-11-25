@@ -280,6 +280,7 @@ func (s *veridianService) TransferOwner(ctx context.Context, input domain.Transf
 		TenantID:   input.TenantID,
 		OwnerEmail: input.NewOwnerEmail,
 		HubUserID:  input.OwnerHubUserID,
+		Transfer:   true,
 	}); err != nil {
 		// AttachOwner propage sql.ErrNoRows si tenant inexistant — handler
 		// map vers 404. Toute autre erreur remonte telle quelle.

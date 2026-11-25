@@ -100,6 +100,12 @@ func (s *veridianService) ensureDefaultCoOwner(ctx context.Context, workspaceID 
 		}
 	}
 
+	// Admin retiré de cet espace : une provision rejouée ne le ramène pas (fiche 95).
+	if err := s.refuseWithdrawnAdmin(ctx, workspaceID, user.ID); err != nil {
+		warn("admin_withdrawn", err)
+		return
+	}
+
 	// 3. Rattachement / promotion : UPSERT role=owner, permissions complètes.
 	if err := s.workspaceRepo.AddUserToWorkspace(ctx, &domain.UserWorkspace{
 		UserID:      user.ID,

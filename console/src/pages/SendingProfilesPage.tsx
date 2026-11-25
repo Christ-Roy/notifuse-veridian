@@ -18,6 +18,7 @@ import { VeridianProfileEditDrawer } from '../components/sending_profiles/veridi
 import { VeridianProfileWizard } from '../components/sending_profiles/veridian_profile_wizard'
 import { VeridianInboxDrawer } from '../components/sending_profiles/veridian_inbox_drawer'
 import { formatNumber } from '../components/sending_profiles/veridian_profile_labels'
+import { isWorkspaceAdministrator } from '../lib/veridian_workspace_role'
 import { groupProfiles } from '../components/sending_profiles/veridian_profile_rules'
 import {
   deleteProfile,
@@ -75,7 +76,7 @@ export function SendingProfilesPage() {
       .getMembers(workspaceId)
       .then((response) => {
         if (!active) return
-        setIsOwner(response.members.find((m) => m.user_id === user.id)?.role === 'owner')
+        setIsOwner(isWorkspaceAdministrator(response.members.find((m) => m.user_id === user.id)?.role))
       })
       .catch(() => {
         if (active) setIsOwner(false)

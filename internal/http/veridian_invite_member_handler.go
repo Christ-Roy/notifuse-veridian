@@ -178,7 +178,7 @@ func (h *VeridianInviteMemberHandler) handleInvite(w http.ResponseWriter, r *htt
 
 	// Seul le owner invite (fiche 67) : un membre, meme avec toutes les
 	// permissions, recoit 403 explicite.
-	if userWorkspace == nil || userWorkspace.Role != "owner" {
+	if !userWorkspace.VeridianAdministers() {
 		WriteJSONError(w, "Forbidden: only the workspace owner can invite members", http.StatusForbidden)
 		return
 	}

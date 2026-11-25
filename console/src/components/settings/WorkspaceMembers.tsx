@@ -27,6 +27,7 @@ import { workspaceService } from '../../services/api/workspace'
 import { ApiError } from '../../services/api/client'
 import { veridianApi, type VeridianModeResponse } from '../../services/api/veridian'
 import { EditPermissionsModal } from './EditPermissionsModal'
+import { isWorkspaceAdministrator, isWorkspaceOwner } from '../../lib/veridian_workspace_role'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
 
 const { Text } = Typography
@@ -37,6 +38,8 @@ interface WorkspaceMembersProps {
   loading: boolean
   onMembersChange: () => void
   isOwner: boolean
+  /** Utilisateur connecte : on ne peut pas se retirer soi-meme. */
+  currentUserId?: string
 }
 
 const RESEND_DEFAULT_PERMISSIONS: UserPermissions = {
@@ -57,7 +60,8 @@ export function WorkspaceMembers({
   members,
   loading,
   onMembersChange,
-  isOwner
+  isOwner,
+  currentUserId
 }: WorkspaceMembersProps) {
   const { t } = useLingui()
   const [inviteModalVisible, setInviteModalVisible] = useState(false)
@@ -131,10 +135,12 @@ export function WorkspaceMembers({
         }
         const roleDisplay = record.invitation_expires_at
           ? t`Invitation sent`
-          : role.charAt(0).toUpperCase() + role.slice(1)
+          : role === 'admin'
+            ? t`Veridian Admin`
+            : role.charAt(0).toUpperCase() + role.slice(1)
 
         return (
-          <Tag bordered={false} color={role === 'owner' ? 'gold' : 'blue'}>
+          <Tag bordered={false} color={isWorkspaceOwner(role) ? 'gold' : role === 'admin' ? 'geekblue' : 'blue'}>
             {roleDisplay}
           </Tag>
         )
@@ -149,6 +155,10 @@ export function WorkspaceMembers({
         }
         if (record.invitation_expires_at) {
           return <Tag color="orange">{t`Pending`}</Tag>
+        }
+        // Proprietaire et admin : toutes les permissions, rien a editer
+        if (isWorkspaceAdministrator(record.role)) {
+          return <Tag color="green">{t`Full Access`}</Tag>
         }
 
         // Count permissions
@@ -202,18 +212,21 @@ export function WorkspaceMembers({
             width: 100,
             render: (_: unknown, record: WorkspaceMember) => {
               // Don't show remove button for the owner or for the current user
-              if (record.role === 'owner') {
+              if (isWorkspaceOwner(record.role) || (currentUserId && record.user_id === currentUserId)) {
                 return null
               }
+              // Un admin a toutes les permissions, comme un proprietaire : rien a editer
+              const hasFullRole = record.role === 'admin'
 
               const isInvitation = record.invitation_expires_at
 
               return (
                 <Space size="small">
-                  {!isInvitation && record.type !== 'api_key' && record.role !== 'owner' && (
+                  {!isInvitation && record.type !== 'api_key' && !hasFullRole && (
                     <Tooltip title={t`Edit permissions`} placement="left">
                       <Button
                         icon={<FontAwesomeIcon icon={faUserCog} />}
+                        aria-label={t`Edit permissions`}
                         size="small"
                         type="text"
                         onClick={() => handleEditPermissions(record)}
@@ -235,6 +248,7 @@ export function WorkspaceMembers({
                           size="small"
                           type="text"
                           loading={removingMember}
+                          aria-label={t`Remove member`}
                         />
                       </Tooltip>
                     </Popconfirm>

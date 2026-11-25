@@ -16,6 +16,10 @@ const (
 	ErrCodeHubUserConflict = "hub_user_conflict"
 	// ErrCodeNotAMember : transfer-owner vers une personne qui n'est pas membre.
 	ErrCodeNotAMember = "not_a_member"
+	// ErrCodeAdminWithdrawn : admin retiré de l espace, rien d automatique ne le ramène (fiche 95).
+	ErrCodeAdminWithdrawn = "admin_withdrawn"
+	// ErrCodeOwnerExists : attach-owner sans transfert explicite alors qu un autre propriétaire humain existe.
+	ErrCodeOwnerExists = "owner_exists"
 )
 
 // hubPerson est le bloc commun des corps signés du Hub. `email` est le nom du contrat ; les deux autres sont les anciens noms, encore acceptés.
@@ -59,6 +63,10 @@ func writeHubPersonError(w http.ResponseWriter, err error, tenantID, hubUserID s
 		WriteJSONErrorCode(w, ErrCodeHubUserConflict, "this address belongs to another account here", http.StatusConflict, details)
 	case errors.Is(err, service.ErrOwnerNotMember):
 		WriteJSONErrorCode(w, ErrCodeNotAMember, "the new owner must already be a member", http.StatusConflict, details)
+	case errors.Is(err, service.ErrAdminWithdrawn):
+		WriteJSONErrorCode(w, ErrCodeAdminWithdrawn, "admin_withdrawn", http.StatusConflict, details)
+	case errors.Is(err, service.ErrOwnerExists):
+		WriteJSONErrorCode(w, ErrCodeOwnerExists, "another human owner holds this workspace; send transfer:true to take ownership from them", http.StatusConflict, details)
 	default:
 		return false
 	}

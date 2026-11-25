@@ -29,6 +29,8 @@ interface SettingsSidebarProps {
   activeSection: SettingsSection
   onSectionChange: (section: SettingsSection) => void
   isOwner: boolean
+  /** Zone de danger (suppression de l'espace) : le proprietaire seul, jamais un admin. */
+  canDeleteWorkspace?: boolean
 }
 
 // Reglages d'ingenieur : replies sous « Avancé » (rien n'est retire, un clic suffit).
@@ -40,7 +42,7 @@ export const ADVANCED_SETTINGS_SECTIONS: SettingsSection[] = [
   'api-agents'
 ]
 
-export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: SettingsSidebarProps) {
+export function SettingsSidebar({ activeSection, onSectionChange, canDeleteWorkspace = false }: SettingsSidebarProps) {
   const { t } = useLingui()
   // La section avancee est ouverte d'office quand la page affichee en fait partie
   const [advancedOpen, setAdvancedOpen] = useState(ADVANCED_SETTINGS_SECTIONS.includes(activeSection))
@@ -141,8 +143,8 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
       label: t`Advanced`,
       children: allItems.filter((i) => ADVANCED_SETTINGS_SECTIONS.includes(i.key as SettingsSection))
     },
-    // Danger zone only for owners
-    ...(isOwner
+    // Danger zone : le proprietaire seul (un admin Veridian n'y a pas acces)
+    ...(canDeleteWorkspace
       ? [
           {
             key: 'danger-zone',

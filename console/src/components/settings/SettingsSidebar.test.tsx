@@ -14,7 +14,7 @@ describe('SettingsSidebar : section Avance repliee', () => {
   ]
 
   it('ne montre que Equipe, Integrations, General, Plan ; les reglages d ingenieur sont replies', () => {
-    render(<SettingsSidebar activeSection="team" onSectionChange={() => {}} isOwner />)
+    render(<SettingsSidebar activeSection="team" onSectionChange={() => {}} isOwner canDeleteWorkspace />)
     for (const label of ['Team', 'Integrations', 'General', 'Plan', 'Advanced', 'Danger Zone']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
@@ -51,5 +51,11 @@ describe('SettingsSidebar : section Avance repliee', () => {
     expect(labels.indexOf('Mailbox access')).toBe(labels.indexOf('Integrations') + 1)
     fireEvent.click(screen.getByText('Mailbox access'))
     expect(picked).toEqual(['mailboxes'])
+  })
+
+  it('admin (administre sans etre proprietaire) : pas de zone de danger', () => {
+    render(<SettingsSidebar activeSection="team" onSectionChange={() => {}} isOwner canDeleteWorkspace={false} />)
+    expect(screen.getByText('Integrations')).toBeInTheDocument()
+    expect(screen.queryByText('Danger Zone')).not.toBeInTheDocument()
   })
 })

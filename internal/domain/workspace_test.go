@@ -5061,6 +5061,14 @@ func TestUserWorkspace_HasPermission(t *testing.T) {
 	}
 }
 
+// Fiche 95 : un admin a tous les droits sans droits stockés ; un membre seulement ceux qui sont écrits.
+func TestUserWorkspace_HasPermission_Admin(t *testing.T) {
+	for role, want := range map[string]bool{"owner": true, "admin": true, "member": false, "Admin": false, "": false} {
+		uw := &UserWorkspace{UserID: "u", WorkspaceID: "w", Role: role}
+		assert.Equal(t, want, uw.HasPermission(PermissionResourceWorkspace, PermissionTypeWrite), role)
+	}
+}
+
 func TestUserWorkspace_SetPermissions(t *testing.T) {
 	tests := []struct {
 		name          string

@@ -91,3 +91,17 @@ func TestWorkspaceService_CreateAgentInstallToken_MemberWithWriteForbidden(t *te
 	var unauth *domain.ErrUnauthorized
 	require.True(t, errors.As(err, &unauth), "%v", err)
 }
+
+// Une clé API (type api_key, rôle member, toutes permissions) n'est jamais un administrateur, même si une ligne dit « admin ».
+func TestVeridianRequireOwner_AdminHumain_CleApiRefusee(t *testing.T) {
+	human := &domain.User{ID: "u", Type: domain.UserTypeUser}
+	key := &domain.User{ID: "k", Type: domain.UserTypeAPIKey}
+	assert.NoError(t, veridianRequireOwner(human, &domain.UserWorkspace{Role: "admin"}, "x"))
+	assert.NoError(t, veridianRequireOwner(human, &domain.UserWorkspace{Role: "owner"}, "x"))
+	for name, uw := range map[string]*domain.UserWorkspace{"admin": {Role: "admin"}, "owner": {Role: "owner"}, "member": {Role: "member", Permissions: domain.FullPermissions}} {
+		err := veridianRequireOwner(key, uw, "invite members")
+		var unauth *domain.ErrUnauthorized
+		assert.True(t, errors.As(err, &unauth), "clé API "+name)
+	}
+	assert.Error(t, veridianRequireOwner(human, &domain.UserWorkspace{Role: "member", Permissions: domain.FullPermissions}, "x"))
+}

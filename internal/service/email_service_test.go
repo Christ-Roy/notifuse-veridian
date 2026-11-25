@@ -1867,3 +1867,27 @@ func TestSparkPost_CustomEndpointCannotReachInternal(t *testing.T) {
 	}
 	assert.EqualValues(t, 0, atomic.LoadInt32(&hits))
 }
+
+// Rôle admin (fiche 95) : un admin vérifie une intégration d'envoi comme un propriétaire ; l'appel dépasse le contrôle de rôle.
+func TestEmailService_TestEmailProviderByIntegrationID_AdminPasseLeControle(t *testing.T) {
+	errStop := errors.New("stop")
+	for role, allowed := range map[string]bool{"owner": true, "admin": true, "member": false} {
+		ctrl := gomock.NewController(t)
+		auth := mocks.NewMockAuthService(ctrl)
+		repo := mocks.NewMockWorkspaceRepository(ctrl)
+		auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").
+			Return(context.Background(), &domain.User{ID: "u", Email: "u@example.com"}, &domain.UserWorkspace{Role: role, Permissions: domain.FullPermissions}, nil)
+		if allowed {
+			repo.EXPECT().GetByID(gomock.Any(), "ws1").Return(nil, errStop).Times(1)
+		}
+		svc := &EmailService{authService: auth, workspaceRepo: repo}
+		err := svc.TestEmailProviderByIntegrationID(context.Background(), "ws1", "p1", "u@example.com")
+		require.Error(t, err, role)
+		if allowed {
+			assert.ErrorIs(t, err, errStop, role)
+		} else {
+			assert.ErrorContains(t, err, "only workspace owners", role)
+		}
+		ctrl.Finish()
+	}
+}

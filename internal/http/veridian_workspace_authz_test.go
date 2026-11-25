@@ -78,6 +78,26 @@ func TestVeridianWorkspaceAuthz(t *testing.T) {
 			assert.True(t, *reached, p)
 		}
 	})
+	t.Run("gestion webhooks : un admin d'espace passe, un compte machine jamais (fiche 95)", func(t *testing.T) {
+		admin := &fakeAuthz{user: &domain.User{ID: "a", Type: domain.UserTypeUser}, uw: &domain.UserWorkspace{Role: "admin"}}
+		machine := &fakeAuthz{user: &domain.User{ID: "k", Type: domain.UserTypeAPIKey}, uw: &domain.UserWorkspace{Role: "admin"}}
+		n := 0
+		for route, level := range VeridianWorkspaceAuthzRoutes {
+			rec, reached := runAuthz(t, admin, "POST", route, `{"workspace_id":"ws"}`)
+			assert.Equal(t, 200, rec.Code, route)
+			assert.True(t, *reached, route)
+			if level == veridianAuthzOwner {
+				n++
+				rec, reached = runAuthz(t, machine, "POST", route, `{"workspace_id":"ws"}`)
+				assert.Equal(t, http.StatusForbidden, rec.Code, route)
+				assert.False(t, *reached, route)
+			}
+		}
+		assert.Equal(t, 6, n)
+		rec, reached := runAuthz(t, &fakeAuthz{user: &domain.User{ID: "x"}}, "POST", "/api/webhookSubscriptions.create", `{"workspace_id":"ws"}`)
+		assert.Equal(t, http.StatusForbidden, rec.Code, "appartenance absente")
+		assert.False(t, *reached)
+	})
 	t.Run("lectures et segments : une cle scopee member reste servie", func(t *testing.T) {
 		for _, c := range [][3]string{
 			{"GET", "/api/webhookSubscriptions.list?workspace_id=ws", ""},

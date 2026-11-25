@@ -753,6 +753,9 @@ type AttachOwnerInput struct {
 	OwnerEmail string `json:"owner_email"`
 	// HubUserID : la personne (fiche 89). Vide (scripts d'operateur) : l'adresse.
 	HubUserID string `json:"hub_user_id,omitempty"`
+	// Transfer : retirer la propriété à un autre propriétaire humain. Sans lui, attach-owner refuse (409 owner_exists) : le 25/11/2026 un
+	// rattachement a rétrogradé un client sans le dire.
+	Transfer bool `json:"transfer,omitempty"`
 }
 
 // === Veridian patch — hub-attach-member (2026-05-21) ===

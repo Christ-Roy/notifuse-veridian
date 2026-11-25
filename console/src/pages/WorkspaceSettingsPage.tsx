@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { DeleteWorkspaceSection } from '../components/settings/DeleteWorkspace'
 import { SettingsSidebar, SettingsSection } from '../components/settings/SettingsSidebar'
 // === Veridian patch === section Plan ajoutée au sidebar settings.
+import { isWorkspaceAdministrator, isWorkspaceOwner } from '../lib/veridian_workspace_role'
 import { VeridianPlanSettings } from '../components/settings/veridian_plan_settings'
 import { VeridianMailboxAccess } from '../components/settings/veridian_mailbox_access'
 import { VeridianColdOutreachSettings } from '../components/settings/veridian_cold_outreach_settings'
@@ -30,6 +31,9 @@ export function WorkspaceSettingsPage() {
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
+  // Veridian : « administre » = owner ou admin (isOwner garde son nom en prop) ; la suppression
+  // de l'espace reste au proprietaire seul (isWorkspaceOwner).
+  const [isStrictOwner, setIsStrictOwner] = useState(false)
   // === Veridian patch — mission "API & agents" (2026-10-03) === "admin" au
   // sens de ce fork : owner, ou member avec write sur la ressource
   // "workspace" (il n'existe pas de rôle "admin" littéral côté backend).
@@ -90,8 +94,9 @@ export function WorkspaceSettingsPage() {
       // Check if current user is an owner
       if (user) {
         const currentUserMember = response.members.find((member) => member.user_id === user.id)
-        const owner = currentUserMember?.role === 'owner'
+        const owner = isWorkspaceAdministrator(currentUserMember?.role)
         setIsOwner(owner)
+        setIsStrictOwner(isWorkspaceOwner(currentUserMember?.role))
         setCanManageApiKeys(owner || currentUserMember?.permissions?.workspace?.write === true)
       }
     } catch (error) {
@@ -130,6 +135,7 @@ export function WorkspaceSettingsPage() {
             loading={loadingMembers}
             onMembersChange={fetchMembers}
             isOwner={isOwner}
+            currentUserId={user?.id}
           />
         )
       case 'integrations':
@@ -177,7 +183,7 @@ export function WorkspaceSettingsPage() {
       case 'api-agents':
         return <ApiAgentsSettings workspaceId={workspaceId} canManageKeys={canManageApiKeys} />
       case 'danger-zone':
-        return workspace && isOwner ? (
+        return workspace && isStrictOwner ? (
           <DeleteWorkspaceSection workspace={workspace} onDeleteSuccess={handleWorkspaceDelete} />
         ) : null
       default:
@@ -186,7 +192,10 @@ export function WorkspaceSettingsPage() {
   }
 
   const sidebar = (
-    <SettingsSidebar activeSection={activeSection} onSectionChange={handleSectionChange} isOwner={isOwner} />
+    <SettingsSidebar activeSection={activeSection} onSectionChange={handleSectionChange}
+      isOwner={isOwner}
+      canDeleteWorkspace={isStrictOwner}
+    />
   )
 
   if (isMobile) {

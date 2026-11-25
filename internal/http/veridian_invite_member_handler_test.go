@@ -88,6 +88,23 @@ func buildInviteReq(t *testing.T, body string) *http.Request {
 
 // ─── Tests principaux ────────────────────────────────────────────────────────
 
+// Fiche 95 : propriétaire et admin invitent, un membre à tous droits non.
+func TestVeridianInviteMember_ParRole(t *testing.T) {
+	for role, want := range map[string]int{"owner": http.StatusOK, "admin": http.StatusOK, "member": http.StatusForbidden, "": http.StatusForbidden} {
+		ctrl := gomock.NewController(t)
+		authSvc := mocks.NewMockAuthService(ctrl)
+		authSvc.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws-42").Return(context.Background(),
+			&domain.User{ID: "u1", Type: domain.UserTypeUser, Email: "moi@example.com"},
+			&domain.UserWorkspace{WorkspaceID: "ws-42", Role: role, Permissions: domain.FullPermissions}, nil)
+		hubStub := &stubHubClient{result: &service.HubInvitationResult{InvitationID: "i", MagicLinkURL: "https://hub/invite/x", TargetRole: "member"}}
+		h := newInviteHandler(t, hubStub, authSvc, &stubHubUserIDResolver{hubUserID: "hub-1"}, true)
+		rec := httptest.NewRecorder()
+		h.handleInvite(rec, buildInviteReq(t, `{"workspace_id":"ws-42","email":"guest@example.com","role":"member"}`))
+		assert.Equal(t, want, rec.Code, role)
+		assert.Equal(t, want == http.StatusOK, hubStub.called == 1, role)
+	}
+}
+
 func TestVeridianInviteMember_OK_201Reused(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

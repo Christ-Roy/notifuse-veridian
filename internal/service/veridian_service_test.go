@@ -1042,6 +1042,11 @@ func TestVeridianService_AttachOwner_AlreadyOwner(t *testing.T) {
 		Role:        "owner",
 	}, nil).Times(1)
 
+	// Lecture des propriétaires avant tout (garde owner_exists) : lui seul est propriétaire, rien à refuser.
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "human-id", WorkspaceID: "ws-1", Role: "owner"}, Email: "owner@x.test", Type: domain.UserTypeUser},
+	}, nil).Times(1)
+
 	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "owner@x.test"})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -1095,7 +1100,7 @@ func TestVeridianService_AttachOwner_NotAttached_TransferFromRoot(t *testing.T) 
 	// Step 8 : tenant.owner_changed event émis sur transfer réussi.
 	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-orphan", gomock.Any()).Times(1)
 
-	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-orphan", OwnerEmail: "alice@x.test"})
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-orphan", OwnerEmail: "alice@x.test", Transfer: true})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.True(t, resp.Attached)
@@ -1145,7 +1150,7 @@ func TestVeridianService_AttachOwner_CreatesUserIfMissing(t *testing.T) {
 
 	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-x", gomock.Any()).Times(1)
 
-	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-x", OwnerEmail: "newhuman@x.test"})
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-x", OwnerEmail: "newhuman@x.test", Transfer: true})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.True(t, resp.Attached)
@@ -1197,7 +1202,7 @@ func TestVeridianService_AttachOwner_AttachedButNotOwner_TransferOnly(t *testing
 
 	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-1", gomock.Any()).Times(1)
 
-	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test"})
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test", Transfer: true})
 	require.NoError(t, err)
 	assert.True(t, resp.AlreadyAttached, "human was already a member")
 	assert.True(t, resp.OwnerTransferred)
@@ -1404,7 +1409,7 @@ func TestVeridianService_AttachOwner_NotAttached_UpstreamMembershipError(t *test
 	m.workspace.EXPECT().RemoveUserFromWorkspace(gomock.Any(), "ws-real", "root-id").Return(nil).Times(1)
 	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantOwnerChanged, "ws-real", gomock.Any()).Times(1)
 
-	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-real", OwnerEmail: "carol@x.test"})
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-real", OwnerEmail: "carol@x.test", Transfer: true})
 	require.NoError(t, err, "upstream 'is not a member' must be parsed as not-attached, not as a DB error")
 	assert.False(t, resp.AlreadyAttached)
 	assert.True(t, resp.OwnerTransferred)
@@ -1462,7 +1467,7 @@ func TestVeridianService_AttachOwner_AdditiveOnlyWhenHumanOwnerExists(t *testing
 	// ⚠️ CRITICAL : pas de RemoveUserFromWorkspace appelé sur alice (additive only).
 	_ = existingHumanOwner
 
-	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-multi", OwnerEmail: "bob@x.test"})
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-multi", OwnerEmail: "bob@x.test", Transfer: true})
 	require.NoError(t, err)
 	assert.False(t, resp.AlreadyAttached)
 	assert.True(t, resp.OwnerTransferred)
@@ -2864,7 +2869,7 @@ func TestVeridianService_AttachOwner_KeepsDefaultCoOwner_DemotesOtherOwner(t *te
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "robert-id", "ws-1").
 		Return(&domain.UserWorkspace{UserID: "robert-id", WorkspaceID: "ws-1", Role: "owner"}, nil).Times(1)
 
-	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test"})
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test", Transfer: true})
 	require.NoError(t, err)
 	assert.True(t, resp.OwnerTransferred)
 }
@@ -2896,7 +2901,7 @@ func TestVeridianService_AttachOwner_KeepsDefaultCoOwner_RepromotesIfDemoted(t *
 			return nil
 		}).Times(1)
 
-	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test"})
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test", Transfer: true})
 	require.NoError(t, err)
 	assert.True(t, resp.OwnerTransferred)
 }
@@ -2919,7 +2924,7 @@ func TestVeridianService_AttachOwner_DoesNotPromoteCoOwnerWhoWasNotOwner(t *test
 	m.workspace.EXPECT().TransferOwnership(gomock.Any(), "ws-1", "bob-id", "client-id").Return(nil).Times(1)
 	// Aucun appel co-owner attendu (GetUserByEmail(co-owner), AddUserToWorkspace…).
 
-	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test"})
+	resp, err := svc.AttachOwner(ctx, domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "bob@x.test", Transfer: true})
 	require.NoError(t, err)
 	assert.True(t, resp.OwnerTransferred)
 }

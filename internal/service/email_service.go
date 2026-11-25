@@ -132,7 +132,7 @@ func (s *EmailService) TestEmailProviderByIntegrationID(ctx context.Context, wor
 	if err != nil {
 		return err
 	}
-	if membership == nil || membership.Role != "owner" {
+	if !membership.VeridianAdministers() {
 		return &domain.ErrUnauthorized{Message: "only workspace owners can verify an email integration"}
 	}
 	if user == nil || !strings.EqualFold(strings.TrimSpace(to), strings.TrimSpace(user.Email)) {

@@ -4476,6 +4476,7 @@ msgid "Edit Notification"
 msgstr "通知を編集"
 
 #: src/components/settings/WorkspaceMembers.tsx
+#: src/components/settings/WorkspaceMembers.tsx
 msgid "Edit permissions"
 msgstr "権限を編集"
 
@@ -6079,6 +6080,7 @@ msgstr "差出人名（上書き）"
 msgid "From:"
 msgstr "差出人:"
 
+#: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Full Access"
@@ -8960,10 +8962,6 @@ msgstr "小文字の英数字、アンダースコア、ハイフンのみ使用
 msgid "Only one breakpoint per email template is allowed"
 msgstr "メールテンプレートごとに1つのブレークポイントのみ許可されています"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx
-msgid "Only the workspace owner can change profiles"
-msgstr ""
-
 #: src/components/settings/veridian_mailbox_create.tsx
 msgid "Only the workspace owner can create a shared access: it would outlive you."
 msgstr "共有アクセスを作成できるのはワークスペースのオーナーだけです。あなたが退出した後も残るためです。"
@@ -8972,12 +8970,16 @@ msgstr "共有アクセスを作成できるのはワークスペースのオー
 msgid "Only the workspace owner can create a shared access."
 msgstr "共有アクセスを作成できるのは、ワークスペースのオーナーだけです。"
 
+#: src/components/sending_profiles/veridian_profile_card.tsx
+msgid "Only the workspace owner or an admin can change profiles"
+msgstr ""
+
 #: src/components/integrations/FirecrawlIntegration.tsx
 #: src/components/integrations/LLMIntegration.tsx
 #: src/components/integrations/SupabaseIntegration.tsx
 #: src/components/settings/Integrations.tsx
-msgid "Only workspace owners can modify integrations"
-msgstr "ワークスペースオーナーのみが連携を変更できます"
+msgid "Only the workspace owner or an admin can modify integrations"
+msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Open 2-step verification"
@@ -10543,6 +10545,7 @@ msgstr ""
 msgid "Remove Link"
 msgstr "リンクを削除"
 
+#: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Remove member"
@@ -14605,6 +14608,10 @@ msgstr ""
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #~ msgid "Veridian — Cold outreach"
 #~ msgstr ""
+
+#: src/components/settings/WorkspaceMembers.tsx
+msgid "Veridian Admin"
+msgstr ""
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx
 msgid "Veridian cold outreach — per-provider settings for this campaign"

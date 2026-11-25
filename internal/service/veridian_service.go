@@ -1608,6 +1608,10 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 	if err != nil {
 		return nil, err
 	}
+	// Avant toute création : un refus ne laisse rien derrière lui.
+	if err := s.refuseSilentTransfer(ctx, input, owner); err != nil {
+		return nil, err
+	}
 	if owner != nil {
 		input.OwnerEmail = owner.Email
 	} else {
@@ -2101,6 +2105,13 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 			errors.Is(lookupErr, sql.ErrNoRows)
 		if !notAttached {
 			return nil, fmt.Errorf("lookup user workspace: %w", lookupErr)
+		}
+	}
+
+	// Retiré alors qu'il était admin : seule une invitation acceptée (geste de l'espace) le ramène, comme membre (fiche 95).
+	if input.InvitationID == "" {
+		if err := s.refuseWithdrawnAdmin(ctx, input.TenantID, member.ID); err != nil {
+			return nil, err
 		}
 	}
 

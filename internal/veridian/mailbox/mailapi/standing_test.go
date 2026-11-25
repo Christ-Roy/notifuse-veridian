@@ -15,13 +15,18 @@ type authDouble struct {
 	domain.AuthService
 	kind domain.UserType
 	err  error
+	role string // vide : member
 }
 
 func (a authDouble) AuthenticateUserForWorkspace(ctx context.Context, _ string) (context.Context, *domain.User, *domain.UserWorkspace, error) {
 	if a.err != nil {
 		return ctx, nil, nil, a.err
 	}
-	return ctx, &domain.User{ID: "u1", Type: a.kind}, &domain.UserWorkspace{Role: "member", Permissions: domain.FullPermissions}, nil
+	role := a.role
+	if role == "" {
+		role = "member"
+	}
+	return ctx, &domain.User{ID: "u1", Type: a.kind}, &domain.UserWorkspace{Role: role, Permissions: domain.FullPermissions}, nil
 }
 
 type situation struct {
@@ -30,6 +35,17 @@ type situation struct {
 }
 
 func (f situation) Of(context.Context, string, string) (standing.State, error) { return f.st, f.err }
+
+// Fiche 95 : propriétaire et admin gèrent les boîtes de l'espace, un membre à tous droits non.
+func TestDomainAuthorizer_OwnerOuAdmin(t *testing.T) {
+	for role, want := range map[string]bool{"owner": true, "admin": true, "member": false} {
+		d := DomainAuthorizer{Auth: authDouble{kind: domain.UserTypeUser, role: role}, Standing: situation{st: standing.State{Workspace: true, Member: true}}}
+		_, a, err := d.Authorize(context.Background(), "ws", domain.PermissionResourceWorkspace, domain.PermissionTypeWrite)
+		if err != nil || a.Owner != want {
+			t.Errorf("%s : Owner=%v err=%v", role, a.Owner, err)
+		}
+	}
+}
 
 func TestDomainAuthorizer_FollowsStanding(t *testing.T) {
 	const msg, space = domain.PermissionResourceMessageHistory, domain.PermissionResourceWorkspace

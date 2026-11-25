@@ -76,7 +76,7 @@ export const LLMIntegration: React.FC<LLMIntegrationProps> = ({
 
   const handleSave = async (values: Record<string, unknown>) => {
     if (!isOwner) {
-      message.error(t`Only workspace owners can modify integrations`)
+      message.error(t`Only the workspace owner or an admin can modify integrations`)
       return
     }
 

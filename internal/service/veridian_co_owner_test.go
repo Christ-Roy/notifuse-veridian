@@ -170,3 +170,28 @@ func TestVeridianService_EnsureDefaultCoOwner_NonHumanUserRefused(t *testing.T) 
 
 	svc.ensureDefaultCoOwner(ctx, "ws-x")
 }
+
+// Provision rejouée : le copropriétaire configuré, retiré après avoir été admin, n'est pas ramené.
+func TestEnsureDefaultCoOwner_AdminRetire_PasRemonte(t *testing.T) {
+	svc, m := newVeridianService(t)
+	svc.ConfigureDefaultCoOwner(testCoOwnerEmail)
+	ctx := context.Background()
+	led := withLedger(svc, m)
+	led.withdrawn = true
+	robert := &domain.User{ID: "robert-id", Email: testCoOwnerEmail, Type: domain.UserTypeUser}
+	m.user.EXPECT().GetUserByEmail(ctx, testCoOwnerEmail).Return(robert, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "robert-id", "ws-x").Return(nil, sql.ErrNoRows).Times(1)
+	// pas d'AddUserToWorkspace sur le dépôt : gomock échoue s'il est appelé
+
+	svc.ensureDefaultCoOwner(ctx, "ws-x")
+	assert.Equal(t, 1, led.withdrawnCalls)
+
+	// contrôle positif : sans retrait, la même provision rattache
+	svc2, m2 := newVeridianService(t)
+	svc2.ConfigureDefaultCoOwner(testCoOwnerEmail)
+	withLedger(svc2, m2)
+	m2.user.EXPECT().GetUserByEmail(ctx, testCoOwnerEmail).Return(robert, nil).Times(1)
+	m2.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "robert-id", "ws-x").Return(nil, sql.ErrNoRows).Times(1)
+	m2.workspaceRepo.EXPECT().AddUserToWorkspace(ctx, gomock.Any()).Return(nil).Times(1)
+	svc2.ensureDefaultCoOwner(ctx, "ws-x")
+}

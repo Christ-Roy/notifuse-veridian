@@ -39,5 +39,6 @@ Refus motivés à la création, montrés tels quels (`code` = `hub_<motif>`) : 4
 rend `active_api_keys` (hors clé du Hub ; absent = non compté) et `api_keys_url` (page Équipe). Les accès de boîte (fiche 84) restent aussi.
 
 ## Qui peut retirer qui (mesuré dans le code, 25/11/2026)
-En amont, tout propriétaire retire n'importe quel autre membre, propriétaire compris (`WorkspaceService.RemoveMember`) ; seul soi-même est refusé.
-La symétrie vaut dans les deux sens. `TransferOwnership` rétrograde l'ancien propriétaire en membre : `admin/attach-owner` l'appelle.
+Tout propriétaire retire n'importe quel autre membre, propriétaire compris (`WorkspaceService.RemoveMember`) ; seul soi-même est refusé. Un admin
+(fiche 95) retire tout le monde sauf un propriétaire. `TransferOwnership` rétrograde l'ancien propriétaire en membre, en admin s'il est désigné ;
+`admin/attach-owner` ne l'appelle plus sans `transfer: true`.

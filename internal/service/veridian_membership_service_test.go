@@ -636,3 +636,58 @@ func (systemCall) Matches(x interface{}) bool {
 }
 
 func (systemCall) String() string { return "contexte marque SystemCallKey" }
+
+func syncInput() domain.SyncMemberInput {
+	return domain.SyncMemberInput{TenantID: "ws-1", UserEmail: "alice@example.com", HubUserID: testHubUID, Role: domain.SyncMemberRoleMember}
+}
+
+func arrangeSyncUntilLedger(m *veridianServiceMocks, ctx context.Context) {
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
+}
+
+func TestSyncMember_AdminRetire_Refuse_AucunAjout(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	led := withLedger(svc, m)
+	led.withdrawn = true
+	arrangeSyncUntilLedger(m, ctx)
+	// aucun AddUserToWorkspace, aucune session, aucun événement : gomock échoue sur tout appel de plus
+
+	resp, err := svc.SyncMember(ctx, syncInput())
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, ErrAdminWithdrawn)
+	assert.Equal(t, 1, led.withdrawnCalls)
+}
+
+func TestSyncMember_RegistreEnErreur_PasDAjout(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	led := withLedger(svc, m)
+	led.err = errors.New("db down")
+	arrangeSyncUntilLedger(m, ctx)
+
+	_, err := svc.SyncMember(ctx, syncInput())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read admin ledger")
+	assert.NotErrorIs(t, err, ErrAdminWithdrawn)
+}
+
+func TestSyncMember_JamaisAdmin_AjouteCommeAvant(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	led := withLedger(svc, m)
+	arrangeSyncUntilLedger(m, ctx)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
+		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
+	m.userRepo.EXPECT().CreateSession(systemCall{}, gomock.Any()).Return(nil)
+	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "member-uuid-1", "member", gomock.Any()).Return(nil).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
+	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+
+	resp, err := svc.SyncMember(ctx, syncInput())
+	require.NoError(t, err)
+	assert.True(t, resp.Synced)
+	assert.Equal(t, 1, led.withdrawnCalls)
+}

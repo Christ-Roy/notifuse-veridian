@@ -1245,4 +1245,7 @@ func TestHubPersonFields_JSONNames(t *testing.T) {
 	var own AttachOwnerInput
 	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"id-1"}`), &own))
 	assert.Equal(t, "id-1", own.HubUserID)
+	assert.False(t, own.Transfer, "jamais un transfert par défaut (fiche 95)")
+	require.NoError(t, json.Unmarshal([]byte(`{"transfer":true}`), &own))
+	assert.True(t, own.Transfer)
 }

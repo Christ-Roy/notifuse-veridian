@@ -14,7 +14,7 @@ describe('IntegrationOwnerNotice', () => {
       </I18nProvider>
     )
 
-    expect(screen.getByText('Only workspace owners can modify integrations')).toBeInTheDocument()
+    expect(screen.getByText('Only the workspace owner or an admin can modify integrations')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toBeInTheDocument()
   })
 })

@@ -504,3 +504,29 @@ func TestTransferOwner_ReportsClientAsOldOwnerNotCoOwner(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "old@x.test", resp.OldOwner)
 }
+
+// TransferOwner demande le transfert explicitement : sans Transfer:true, AttachOwner refuserait (owner_exists) puisqu'un autre propriétaire humain existe.
+// Une clé API propriétaire de l'espace ne change rien à la décision.
+func TestTransferOwner_ExplicitTransfer_AutreProprietaireHumain(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	oldOwner := &domain.User{ID: "old-uuid", Email: "old@x.test", Type: domain.UserTypeUser}
+	newOwner := &domain.User{ID: "new-uuid", Email: "new@x.test", Type: domain.UserTypeUser}
+	memberEntry := &domain.UserWorkspace{UserID: newOwner.ID, WorkspaceID: "ws-1", Role: "member"}
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(2)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(newOwner, nil).Times(2)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, newOwner.ID, "ws-1").Return(memberEntry, nil).Times(2)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return([]*domain.UserWorkspaceWithEmail{
+		{UserWorkspace: domain.UserWorkspace{UserID: "key-id", Role: "owner"}, Email: "k@api.test", Type: domain.UserTypeAPIKey},
+		{UserWorkspace: domain.UserWorkspace{UserID: oldOwner.ID, Role: "owner"}, Email: oldOwner.Email, Type: domain.UserTypeUser},
+	}, nil).Times(2)
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	m.workspace.EXPECT().TransferOwnership(gomock.Any(), "ws-1", newOwner.ID, oldOwner.ID).Return(nil).Times(1)
+	m.userRepo.EXPECT().GetUserByEmail(ctx, "root@veridian.site").Return(nil, errors.New("not root")).Times(1)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantOwnerChanged, "ws-1", gomock.Any()).Times(1)
+
+	resp, err := svc.TransferOwner(ctx, domain.TransferOwnerInput{TenantID: "ws-1", OwnerHubUserID: testHubUID, Reason: "test"})
+	require.NoError(t, err)
+	assert.Equal(t, "old@x.test", resp.OldOwner)
+}

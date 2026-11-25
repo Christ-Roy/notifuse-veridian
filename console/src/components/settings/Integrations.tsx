@@ -829,6 +829,6 @@ export function Integrations({ workspace, onSave, isOwner }: IntegrationsProps) 
 export function IntegrationOwnerNotice() {
   const { t } = useLingui()
   return (
-    <Alert type="warning" showIcon message={t`Only workspace owners can modify integrations`} />
+    <Alert type="warning" showIcon message={t`Only the workspace owner or an admin can modify integrations`} />
   )
 }

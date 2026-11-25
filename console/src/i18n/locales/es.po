@@ -4476,6 +4476,7 @@ msgid "Edit Notification"
 msgstr "Editar notificación"
 
 #: src/components/settings/WorkspaceMembers.tsx
+#: src/components/settings/WorkspaceMembers.tsx
 msgid "Edit permissions"
 msgstr "Editar permisos"
 
@@ -6079,6 +6080,7 @@ msgstr "Nombre del remitente (anular)"
 msgid "From:"
 msgstr "De:"
 
+#: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Full Access"
@@ -8960,10 +8962,6 @@ msgstr "Solo se permiten caracteres alfanuméricos en minúsculas, guión bajo y
 msgid "Only one breakpoint per email template is allowed"
 msgstr "Solo se permite un punto de quiebre por plantilla de correo"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx
-msgid "Only the workspace owner can change profiles"
-msgstr ""
-
 #: src/components/settings/veridian_mailbox_create.tsx
 msgid "Only the workspace owner can create a shared access: it would outlive you."
 msgstr "Solo el propietario del espacio de trabajo puede crear un acceso compartido: le sobreviviría."
@@ -8972,12 +8970,16 @@ msgstr "Solo el propietario del espacio de trabajo puede crear un acceso compart
 msgid "Only the workspace owner can create a shared access."
 msgstr "Solo el propietario del espacio de trabajo puede crear un acceso compartido."
 
+#: src/components/sending_profiles/veridian_profile_card.tsx
+msgid "Only the workspace owner or an admin can change profiles"
+msgstr ""
+
 #: src/components/integrations/FirecrawlIntegration.tsx
 #: src/components/integrations/LLMIntegration.tsx
 #: src/components/integrations/SupabaseIntegration.tsx
 #: src/components/settings/Integrations.tsx
-msgid "Only workspace owners can modify integrations"
-msgstr "Solo los propietarios del espacio de trabajo pueden modificar integraciones"
+msgid "Only the workspace owner or an admin can modify integrations"
+msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Open 2-step verification"
@@ -10543,6 +10545,7 @@ msgstr ""
 msgid "Remove Link"
 msgstr "Eliminar enlace"
 
+#: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Remove member"
@@ -14605,6 +14608,10 @@ msgstr ""
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #~ msgid "Veridian — Cold outreach"
 #~ msgstr ""
+
+#: src/components/settings/WorkspaceMembers.tsx
+msgid "Veridian Admin"
+msgstr ""
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx
 msgid "Veridian cold outreach — per-provider settings for this campaign"

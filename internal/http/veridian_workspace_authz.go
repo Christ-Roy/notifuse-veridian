@@ -26,7 +26,7 @@ type veridianAuthzLevel int
 
 const (
 	veridianAuthzMember veridianAuthzLevel = iota + 1 // membre du workspace (cle API scopee comprise)
-	veridianAuthzOwner                                // owner humain seulement
+	veridianAuthzOwner                                // propriétaire ou admin, humain seulement
 )
 
 // VeridianWorkspaceAuthzRoutes : route -> niveau exige.
@@ -95,7 +95,7 @@ func VeridianWorkspaceAuthzMiddleware(auth VeridianWorkspaceAuthzDeps, getJWTSec
 				WriteAuthAwareError(w, err, "Failed to authorize workspace access", http.StatusInternalServerError)
 				return
 			}
-			if level == veridianAuthzOwner && (uw == nil || uw.Role != "owner" || user == nil || user.Type == domain.UserTypeAPIKey) {
+			if level == veridianAuthzOwner && (!uw.VeridianAdministers() || user == nil || user.Type == domain.UserTypeAPIKey) {
 				WriteJSONError(w, "Forbidden: only the workspace owner can do this", http.StatusForbidden)
 				return
 			}

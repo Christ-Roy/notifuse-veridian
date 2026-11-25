@@ -125,6 +125,11 @@ func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMembe
 		}
 	}
 
+	// Un retrait n'est jamais défait par une synchronisation ou une poussée d'organisation (fiche 95).
+	if err := s.refuseWithdrawnAdmin(ctx, input.TenantID, member.ID); err != nil {
+		return nil, err
+	}
+
 	// Pas membre → resolveur ctx caller owner pour AddUserToWorkspace upstream.
 	callerOwnerID, err := s.resolveWorkspaceCaller(ctx, input.TenantID)
 	if err != nil {
@@ -446,6 +451,11 @@ func (s *veridianService) RestoreMember(ctx context.Context, input domain.Restor
 		if !notAttached {
 			return nil, fmt.Errorf("lookup user workspace: %w", lookupErr)
 		}
+	}
+
+	// Un admin retiré ne revient que par une invitation acceptée ou un geste explicite (fiche 95).
+	if err := s.refuseWithdrawnAdmin(ctx, input.TenantID, member.ID); err != nil {
+		return nil, err
 	}
 
 	// Step 4 : AddUserToWorkspace via owner caller ctx.

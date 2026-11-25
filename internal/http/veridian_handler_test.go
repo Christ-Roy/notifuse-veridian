@@ -994,6 +994,22 @@ func TestVeridianHandleAttachOwner_HubUserID(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "hub_user_conflict")
 }
 
+// Fiche 95 : sans transfert demandé, un autre propriétaire humain n'est jamais rétrogradé ; le drapeau arrive tel quel au service.
+func TestVeridianHandleAttachOwner_Transfer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "a@b.c"}).Return(nil, service.ErrOwnerExists)
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "owner_exists")
+
+	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "a@b.c", Transfer: true}).Return(&domain.AttachOwnerResponse{OwnerTransferred: true}, nil)
+	rec = postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c","transfer":true}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
 func TestVeridianHandleProvision_OwnerHubUserID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

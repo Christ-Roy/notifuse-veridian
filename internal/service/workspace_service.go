@@ -358,7 +358,7 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, id string, name 
 		return nil, err
 	}
 
-	if userWorkspace.Role != "owner" {
+	if !userWorkspace.VeridianAdministers() {
 		s.logger.WithField("workspace_id", id).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
 		return nil, &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
 	}
@@ -710,7 +710,7 @@ func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID st
 		return err
 	}
 
-	if newOwnerWorkspace.Role != "member" {
+	if newOwnerWorkspace.VeridianOwns() {
 		s.logger.WithField("workspace_id", workspaceID).WithField("new_owner_id", newOwnerID).WithField("role", newOwnerWorkspace.Role).Error("New owner must be a current member of the workspace")
 		return fmt.Errorf("new owner must be a current member of the workspace")
 	}
@@ -726,7 +726,7 @@ func (s *WorkspaceService) TransferOwnership(ctx context.Context, workspaceID st
 	}
 
 	// Update current owner's role to member
-	currentOwnerWorkspace.Role = "member"
+	currentOwnerWorkspace.Role = s.veridianRoleAfterTransfer(ctx, currentOwnerWorkspace)
 	currentOwnerWorkspace.UpdatedAt = time.Now().UTC()
 	if err := s.repo.AddUserToWorkspace(ctx, currentOwnerWorkspace); err != nil {
 		s.logger.WithField("workspace_id", workspaceID).WithField("current_owner_id", currentOwnerID).WithField("error", err.Error()).Error("Failed to update current owner's role")
@@ -893,7 +893,7 @@ func (s *WorkspaceService) SetUserPermissions(ctx context.Context, workspaceID, 
 		return fmt.Errorf("failed to verify workspace membership: %w", err)
 	}
 
-	if userWorkspace.Role != "owner" {
+	if !userWorkspace.VeridianAdministers() {
 		return fmt.Errorf("only workspace owners can manage user permissions")
 	}
 
@@ -905,7 +905,7 @@ func (s *WorkspaceService) SetUserPermissions(ctx context.Context, workspaceID, 
 	}
 
 	// Prevent owners from modifying their own permissions or other owners' permissions
-	if targetUserWorkspace.Role == "owner" {
+	if targetUserWorkspace.VeridianAdministers() {
 		return fmt.Errorf("cannot modify permissions for workspace owners")
 	}
 
@@ -982,7 +982,7 @@ func (s *WorkspaceService) GetWorkspaceMembersWithEmail(ctx context.Context, id 
 
 	// force all permissions to owners
 	for _, member := range members {
-		if member.Role == "owner" {
+		if member.VeridianAdministers() {
 			member.Permissions = domain.FullPermissions
 		}
 	}
@@ -1040,7 +1040,7 @@ func (s *WorkspaceService) CreateAPIKey(ctx context.Context, workspaceID string,
 		return "", "", err
 	}
 
-	if userWorkspace.Role != "owner" {
+	if !userWorkspace.VeridianAdministers() {
 		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
 		return "", "", &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
 	}
@@ -1550,7 +1550,7 @@ func (s *WorkspaceService) RemoveMember(ctx context.Context, workspaceID string,
 		return err
 	}
 
-	if requesterWorkspace.Role != "owner" {
+	if !s.veridianMayRemoveMember(ctx, requesterWorkspace, userIDToRemove) {
 		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", userIDToRemove).WithField("requester_id", requester.ID).WithField("role", requesterWorkspace.Role).Error("Requester is not an owner of the workspace")
 		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
 	}
@@ -1930,7 +1930,7 @@ func (s *WorkspaceService) DeleteIntegration(ctx context.Context, workspaceID, i
 		return err
 	}
 
-	if userWorkspace.Role != "owner" {
+	if !userWorkspace.VeridianAdministers() {
 		s.logger.WithField("workspace_id", workspaceID).WithField("user_id", user.ID).WithField("role", userWorkspace.Role).Error("User is not an owner of the workspace")
 		return &domain.ErrUnauthorized{Message: "user is not an owner of the workspace"}
 	}

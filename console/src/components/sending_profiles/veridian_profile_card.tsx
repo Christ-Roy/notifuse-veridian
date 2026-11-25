@@ -263,7 +263,7 @@ export function VeridianProfileCard({ profile, all, isOwner, busy, onAction, now
           </Popconfirm>
         </Space>
       )}
-      {!isOwner && <Alert type="info" showIcon message={t`Only the workspace owner can change profiles`} />}
+      {!isOwner && <Alert type="info" showIcon message={t`Only the workspace owner or an admin can change profiles`} />}
     </Card>
   )
 }

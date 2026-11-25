@@ -4814,3 +4814,16 @@ func TestWorkspaceService_IntegrationsByAPIKey(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+// Rôle admin (fiche 95) : UpdateWorkspace passe le contrôle pour un admin, jamais pour un membre à tous droits.
+func TestWorkspaceService_UpdateWorkspace_AdminRole(t *testing.T) {
+	for role, allowed := range map[string]bool{"owner": true, "admin": true, "member": false} {
+		h := newRoleHarness(t, role, true)
+		if allowed {
+			h.repo.EXPECT().GetByID(gomock.Any(), "ws").Return(nil, errStop).Times(1)
+		}
+		_, err := h.s.UpdateWorkspace(context.Background(), "ws", "n", domain.WorkspaceSettings{})
+		require.Error(t, err, role)
+		assert.Equal(t, allowed, errors.Is(err, errStop), role)
+	}
+}

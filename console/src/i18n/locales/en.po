@@ -4476,6 +4476,7 @@ msgid "Edit Notification"
 msgstr "Edit Notification"
 
 #: src/components/settings/WorkspaceMembers.tsx
+#: src/components/settings/WorkspaceMembers.tsx
 msgid "Edit permissions"
 msgstr "Edit permissions"
 
@@ -6079,6 +6080,7 @@ msgstr "From Name (override)"
 msgid "From:"
 msgstr "From:"
 
+#: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Full Access"
@@ -8960,10 +8962,6 @@ msgstr "Only lowercase alphanumeric characters, underscore, and dash are allowed
 msgid "Only one breakpoint per email template is allowed"
 msgstr "Only one breakpoint per email template is allowed"
 
-#: src/components/sending_profiles/veridian_profile_card.tsx
-msgid "Only the workspace owner can change profiles"
-msgstr "Only the workspace owner can change profiles"
-
 #: src/components/settings/veridian_mailbox_create.tsx
 msgid "Only the workspace owner can create a shared access: it would outlive you."
 msgstr "Only the workspace owner can create a shared access: it would outlive you."
@@ -8972,12 +8970,16 @@ msgstr "Only the workspace owner can create a shared access: it would outlive yo
 msgid "Only the workspace owner can create a shared access."
 msgstr "Only the workspace owner can create a shared access."
 
+#: src/components/sending_profiles/veridian_profile_card.tsx
+msgid "Only the workspace owner or an admin can change profiles"
+msgstr "Only the workspace owner or an admin can change profiles"
+
 #: src/components/integrations/FirecrawlIntegration.tsx
 #: src/components/integrations/LLMIntegration.tsx
 #: src/components/integrations/SupabaseIntegration.tsx
 #: src/components/settings/Integrations.tsx
-msgid "Only workspace owners can modify integrations"
-msgstr "Only workspace owners can modify integrations"
+msgid "Only the workspace owner or an admin can modify integrations"
+msgstr "Only the workspace owner or an admin can modify integrations"
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Open 2-step verification"
@@ -10543,6 +10545,7 @@ msgstr "Remove from rotation"
 msgid "Remove Link"
 msgstr "Remove Link"
 
+#: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Remove member"
@@ -14605,6 +14608,10 @@ msgstr "Verdict"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #~ msgid "Veridian — Cold outreach"
 #~ msgstr "Veridian — Cold outreach"
+
+#: src/components/settings/WorkspaceMembers.tsx
+msgid "Veridian Admin"
+msgstr "Veridian Admin"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx
 msgid "Veridian cold outreach — per-provider settings for this campaign"

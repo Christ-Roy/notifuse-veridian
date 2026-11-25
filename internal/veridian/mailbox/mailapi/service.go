@@ -65,7 +65,7 @@ func (d DomainAuthorizer) Authorize(ctx context.Context, ws string, res domain.P
 	if uw == nil || !uw.HasPermission(res, perm) {
 		return ctx, Actor{}, domain.NewPermissionError(res, perm, fmt.Sprintf("droit %s:%s requis", res, perm))
 	}
-	a := Actor{Kind: "humain", Owner: uw.Role == "owner"}
+	a := Actor{Kind: "humain", Owner: uw.VeridianAdministers()}
 	if user != nil {
 		a.ID = user.ID
 	}

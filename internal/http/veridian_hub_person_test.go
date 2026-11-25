@@ -40,6 +40,8 @@ func TestWriteHubPersonError(t *testing.T) {
 		service.ErrUserNotInApp:      {404, "user_not_in_app"},
 		service.ErrHubUserIDConflict: {409, "hub_user_conflict"},
 		service.ErrOwnerNotMember:    {409, "not_a_member"},
+		service.ErrAdminWithdrawn:    {409, "admin_withdrawn"},
+		service.ErrOwnerExists:       {409, "owner_exists"},
 	} {
 		w := httptest.NewRecorder()
 		assert.True(t, writeHubPersonError(w, err, "ws-1", "id"))

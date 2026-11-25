@@ -118,3 +118,22 @@ func TestVeridianIntegrationWriteAllowed_ReadOnlyMessageSaysWhatIsMissing(t *tes
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workspace:write", "la clé en lecture seule apprend ce qui lui manque")
 }
+
+// Rôle admin (fiche 95) : mêmes droits d'intégration qu'un propriétaire, y compris les types réservés ; un membre à tous droits n'y gagne rien.
+func TestVeridianIntegrationAuthz_AdminCommeProprietaire(t *testing.T) {
+	admin := &domain.UserWorkspace{Role: "admin"}
+	member := &domain.UserWorkspace{Role: "member", Permissions: domain.FullPermissions}
+	for _, typ := range []domain.IntegrationType{domain.IntegrationTypeLLM, domain.IntegrationTypeSupabase, domain.IntegrationTypeFirecrawl, domain.IntegrationTypeEmail, domain.IntegrationTypeIMAP} {
+		require.NoError(t, veridianIntegrationWriteAllowed(admin, typ), string(typ))
+	}
+	for _, typ := range []domain.IntegrationType{domain.IntegrationTypeLLM, domain.IntegrationTypeSupabase, domain.IntegrationTypeFirecrawl} {
+		assert.Error(t, veridianIntegrationWriteAllowed(member, typ), string(typ))
+	}
+	ses := &domain.CreateIntegrationRequest{Type: domain.IntegrationTypeEmail, Provider: domain.EmailProvider{Kind: domain.EmailProviderKindSES}}
+	require.NoError(t, veridianAuthorizeIntegrationCreate(admin, ses))
+	assert.Error(t, veridianAuthorizeIntegrationCreate(member, ses))
+
+	existing := &domain.Integration{ID: "i", Type: domain.IntegrationTypeLLM}
+	require.NoError(t, veridianAuthorizeIntegrationUpdate(admin, existing, &domain.UpdateIntegrationRequest{}, "k"))
+	assert.Error(t, veridianAuthorizeIntegrationUpdate(member, existing, &domain.UpdateIntegrationRequest{}, "k"))
+}

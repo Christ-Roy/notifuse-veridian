@@ -8,7 +8,7 @@ import "github.com/Notifuse/notifuse/internal/domain"
 // permissions, tranche. Renvoie *domain.ErrUnauthorized (HTTP 403 via
 // classifyAuthError).
 func veridianRequireOwner(user *domain.User, uw *domain.UserWorkspace, action string) error {
-	if user == nil || uw == nil || uw.Role != "owner" || user.Type == domain.UserTypeAPIKey {
+	if user == nil || !uw.VeridianAdministers() || user.Type == domain.UserTypeAPIKey {
 		return &domain.ErrUnauthorized{Message: "only the workspace owner can " + action}
 	}
 	return nil

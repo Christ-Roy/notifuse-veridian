@@ -288,6 +288,6 @@ describe('carte de profil: exclusivité et actions', () => {
   it('un membre sans droit de propriétaire ne voit aucune action', () => {
     renderCard(profile('a'), [profile('a')], { isOwner: false })
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
-    expect(screen.getByText('Only the workspace owner can change profiles')).toBeInTheDocument()
+    expect(screen.getByText('Only the workspace owner or an admin can change profiles')).toBeInTheDocument()
   })
 })

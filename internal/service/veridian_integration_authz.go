@@ -33,7 +33,7 @@ func veridianIntegrationWriteAllowed(uw *domain.UserWorkspace, integrationType d
 	if uw == nil {
 		return &domain.ErrUnauthorized{Message: veridianIntegrationOwnerMessage}
 	}
-	if uw.Role == "owner" {
+	if uw.VeridianAdministers() {
 		return nil
 	}
 	if uw.Role != "member" {
@@ -55,7 +55,7 @@ func veridianAuthorizeIntegrationCreate(uw *domain.UserWorkspace, req *domain.Cr
 	if err := veridianIntegrationWriteAllowed(uw, req.Type); err != nil {
 		return err
 	}
-	if uw.Role != "owner" && req.Type == domain.IntegrationTypeEmail && req.Provider.Kind != domain.EmailProviderKindSMTP {
+	if !uw.VeridianAdministers() && req.Type == domain.IntegrationTypeEmail && req.Provider.Kind != domain.EmailProviderKindSMTP {
 		return &domain.ErrUnauthorized{Message: "only the workspace owner can manage non-SMTP email providers"}
 	}
 	return nil
@@ -71,7 +71,7 @@ func veridianAuthorizeIntegrationUpdate(uw *domain.UserWorkspace, existing *doma
 	if err := veridianIntegrationWriteAllowed(uw, existing.Type); err != nil {
 		return err
 	}
-	if uw.Role == "owner" {
+	if uw.VeridianAdministers() {
 		return nil
 	}
 	switch existing.Type {

@@ -1104,7 +1104,7 @@ func (uw *UserWorkspace) Validate() error {
 
 // HasPermission checks if the user has a specific permission for a resource
 func (uw *UserWorkspace) HasPermission(resource PermissionResource, permissionType PermissionType) bool {
-	if uw.Role == "owner" {
+	if uw.VeridianAdministers() {
 		return true // Owners have all permissions
 	}
 
