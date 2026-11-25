@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -435,4 +436,14 @@ func TestGet_RelitLesRoles(t *testing.T) {
 	assert.Equal(t, 404, func() int { c, _ := f.list(t, "wsparti"); return c }())
 	assert.Equal(t, 404, func() int { c, _ := f.list(t, "nulpart"); return c }())
 	assert.Equal(t, 400, func() int { c, _ := f.list(t, ""); return c }())
+}
+
+// Hub B (26/11) : l'auteur est une personne du Hub, ou l'outil du Hub nommé par sa clé. Jamais une adresse.
+func TestValidActor(t *testing.T) {
+	for a, ok := range map[string]bool{
+		"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01": true, "cle:ADMIN_SECRET": true, "cle:": false, "cle:admin": false,
+		"robert@veridian.site": false, "": false, "cle:A B": false, "cle:" + strings.Repeat("A", 65): false,
+	} {
+		assert.Equal(t, ok, validActor(a) == nil, a)
+	}
 }

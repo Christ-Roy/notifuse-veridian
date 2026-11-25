@@ -11,7 +11,7 @@ Restent au propriétaire seul : `DeleteWorkspace`, `TransferOwnership`, les mét
 réécrit le rôle : ouvert à l'admin, il rétrograderait un propriétaire). Les alertes système vont au propriétaire seul. Une clé API n'est jamais admin.
 
 ## Qui le pose
-`POST /api/hub/workspace-admins` (HMAC Hub, `internal/veridian/wsadmin`) `{workspace_id, hub_user_id, action: grant|revoke, actor_hub_user_id, reason,
+`POST /api/hub/workspace-admins` (HMAC Hub, `internal/veridian/wsadmin`) `{workspace_id, hub_user_id, action: grant|revoke, actor_hub_user_id (uuid, ou `cle:NOM` pour un outil du Hub), reason,
 reinstate}`. Jamais d'adresse (champ inconnu = 400), rien n'est créé : la personne doit être membre. `UserWorkspace.Validate` refuse toujours `admin`, donc
 aucun ajout local n'en crée un. `GET ?workspace_id=` relit les rôles. 404 `user_not_in_app`, `not_a_member`, `tenant_not_found` ; 409 `admin_withdrawn`,
 `is_owner`. Désigner un propriétaire ne change pas son rôle : la désignation est notée et, s'il cède la propriété, il devient admin dans la même écriture.

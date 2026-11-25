@@ -242,6 +242,17 @@ func (s *Store) List(ctx context.Context, workspaceID string) ([]Member, error) 
 	return out, rows.Err()
 }
 
+// validActor : une personne du Hub (uuid) ou un outil du Hub nommé par sa clé (« cle:ADMIN_SECRET »), jamais une adresse.
+func validActor(a string) error {
+	if _, err := uuid.Parse(a); err == nil {
+		return nil
+	}
+	if name, ok := strings.CutPrefix(a, "cle:"); ok && len(name) > 0 && len(name) <= 64 && strings.Trim(name, "ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789") == "" {
+		return nil
+	}
+	return errors.New("actor_hub_user_id must be a uuid or cle:<NAME>")
+}
+
 // Handler : les deux routes. Le middleware HMAC est posé par Mount.
 type Handler struct {
 	Store *Store
@@ -259,13 +270,13 @@ func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {
 	}
 	q.Reason = strings.TrimSpace(q.Reason)
 	_, badUser := uuid.Parse(q.HubUserID)
-	_, badActor := uuid.Parse(q.ActorHubUserID)
+	badActor := validActor(q.ActorHubUserID)
 	switch {
 	case q.WorkspaceID == "" || q.Reason == "" || len(q.Reason) > maxReason:
 		writeError(w, http.StatusBadRequest, "invalid_payload", "workspace_id and reason (500 max) are required")
 		return
 	case badUser != nil || badActor != nil:
-		writeError(w, http.StatusBadRequest, "invalid_payload", "hub_user_id and actor_hub_user_id must be uuids")
+		writeError(w, http.StatusBadRequest, "invalid_payload", "hub_user_id must be a uuid, actor_hub_user_id a uuid or cle:<NAME>")
 		return
 	case q.Action != actionGrant && q.Action != actionRevoke:
 		writeError(w, http.StatusBadRequest, "invalid_payload", "action must be grant or revoke")
