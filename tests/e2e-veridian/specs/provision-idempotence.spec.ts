@@ -10,6 +10,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -68,6 +69,7 @@ test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
     const res1 = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan: 'free',
     });
     expect(res1.status).toBe(200);
@@ -82,6 +84,7 @@ test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
     const res2 = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan: 'free',
     });
     expect(res2.status).toBe(200);
@@ -108,6 +111,7 @@ test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
     const res1 = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: aliceEmail,
+      owner_hub_user_id: hubId(aliceEmail),
       plan: 'free',
     });
     expect(res1.status).toBe(200);
@@ -116,6 +120,7 @@ test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
     const res2 = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: malloryEmail,
+      owner_hub_user_id: hubId(malloryEmail),
       plan: 'free',
     });
     expect(res2.status).toBe(409);
@@ -129,6 +134,7 @@ test.describe('Provision idempotence (ticket Hub 2026-05-18)', () => {
     const res = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: `${tenantId}@idempot.test`,
+      owner_hub_user_id: hubId(`${tenantId}@idempot.test`),
       plan: 'free',
     });
     expect(res.status).toBe(200);

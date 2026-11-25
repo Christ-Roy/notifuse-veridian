@@ -14,6 +14,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -60,6 +61,7 @@ async function provisionTenant(tenantId: string, plan = 'free') {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: `${tenantId}@paywall-obf.test`,
+      owner_hub_user_id: hubId(`${tenantId}@paywall-obf.test`),
       plan,
     });
     if (r.status === 200) return r.json();

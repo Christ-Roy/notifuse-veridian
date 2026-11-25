@@ -163,11 +163,13 @@ log "cible: $ENV_NAME ($BASE) — workspace '$WID' — manifeste $MANIFEST"
 # idempotent qui nous régénère une auto_login_url fraîche pour la session.
 ensure_owner_session() {
   log "owner session : provision idempotente + auto-login"
-  local prov auto_url
+  local prov auto_url owner_hub_id
+  # Personne du Hub : manifeste `workspace.owner_hub_user_id`, sinon uuid5 déterministe de l'adresse
+  owner_hub_id="$(python3 -c 'import yaml,sys,uuid;w=yaml.safe_load(open(sys.argv[1]))["workspace"];print(w.get("owner_hub_user_id") or uuid.uuid5(uuid.NAMESPACE_URL,w["owner_email"]))' "$MANIFEST")"
   # retry : provision idempotente (created:false si workspace existe) → safe à
   # rejouer ; un 5xx/timeout transitoire ne doit pas tuer l'apply (vécu staging).
   prov=$(retry hmac_post /api/tenants/provision \
-    "{\"tenant_id\":\"$WID\",\"owner_email\":\"$OWNER_EMAIL\",\"workspace_name\":\"$WS_NAME\",\"plan\":\"$WS_PLAN\"}") \
+    "{\"tenant_id\":\"$WID\",\"owner_email\":\"$OWNER_EMAIL\",\"owner_hub_user_id\":\"$owner_hub_id\",\"workspace_name\":\"$WS_NAME\",\"plan\":\"$WS_PLAN\"}") \
     || fail "provision (HMAC) — vérifier NOTIFUSE_HUB_API_SECRET pour $ENV_NAME"
   auto_url=$(printf '%s' "$prov" | python3 -c 'import json,sys;print(json.load(sys.stdin)["auto_login_url"])') \
     || fail "auto_login_url absent de la réponse provision"

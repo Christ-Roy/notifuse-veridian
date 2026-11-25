@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
@@ -31,8 +32,11 @@ func (a *authz) Authorize(ctx context.Context, _ string, r domain.PermissionReso
 }
 
 type memStore struct {
-	created []boxaccess.Access
-	err     error
+	created   []boxaccess.Access
+	err       error
+	one       *boxaccess.Access
+	reason    string
+	suspended bool
 }
 
 func (m *memStore) Create(_ context.Context, a boxaccess.Access) (*boxaccess.Access, string, error) {
@@ -49,6 +53,39 @@ func (m *memStore) Revoke(_ context.Context, ws, id string) (*boxaccess.Access, 
 		return nil, boxaccess.ErrNotFound
 	}
 	return &boxaccess.Access{ID: id, WorkspaceID: ws}, nil
+}
+
+func (m *memStore) SetDisabled(_ context.Context, ws, id string, disabled bool) (*boxaccess.Access, error) {
+	if id != "acc1" {
+		return nil, boxaccess.ErrNotFound
+	}
+	a := &boxaccess.Access{ID: id, WorkspaceID: ws}
+	if disabled {
+		now := time.Now()
+		a.DisabledAt = &now
+	}
+	return a, nil
+}
+func (m *memStore) Get(_ context.Context, ws, id string) (*boxaccess.Access, error) {
+	if m.one == nil || m.one.ID != id || ws != "ws" {
+		return nil, boxaccess.ErrNotFound
+	}
+	a := *m.one
+	return &a, nil
+}
+func (m *memStore) Match(_ context.Context, _, address, secret string) (*boxaccess.Access, error) {
+	if m.one == nil || secret != "le-bon" || address != m.one.Address {
+		return nil, nil
+	}
+	a := *m.one
+	return &a, nil
+}
+func (m *memStore) Reason(_ context.Context, a *boxaccess.Access) (string, error) {
+	a.ReadOnly = m.suspended
+	return m.reason, nil
+}
+func (m *memStore) HolderEmails(context.Context, string) (map[string]string, error) {
+	return map[string]string{"u1": "titulaire@t.fr"}, nil
 }
 
 type wsGet struct{}

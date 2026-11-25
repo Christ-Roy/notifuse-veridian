@@ -17,6 +17,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -97,6 +98,7 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     const provisionResp = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantID,
       owner_email: aliceEmail,
+      owner_hub_user_id: hubId(aliceEmail),
       workspace_name: `e2e ${tenantID}`,
       plan: 'free',
     });
@@ -222,6 +224,7 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     const provisionAliceAgain = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantID,
       owner_email: aliceEmail,
+      owner_hub_user_id: hubId(aliceEmail),
       plan: 'free',
     });
     expect(provisionAliceAgain.status).toBe(409);
@@ -231,6 +234,7 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     const provisionBobAgain = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantID,
       owner_email: bobEmail,
+      owner_hub_user_id: hubId(bobEmail),
       plan: 'free',
     });
     expect(provisionBobAgain.status).toBe(200);
@@ -259,6 +263,7 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     const provisionResp = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantID,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan: 'free',
     });
     expect(provisionResp.status).toBe(200);

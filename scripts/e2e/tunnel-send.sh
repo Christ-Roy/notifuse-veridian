@@ -106,8 +106,10 @@ api_get() { # $1=path+query
 }
 
 log "1/7 provision idempotente workspace '$WID' sur $BASE"
+OWNER_EMAIL="robert.brunon@veridian.site"
+OWNER_HUB_ID=$(python3 -c 'import uuid,sys; print(uuid.uuid5(uuid.NAMESPACE_URL, sys.argv[1]))' "$OWNER_EMAIL")
 PROV=$(hmac_post /api/tenants/provision \
-  "{\"tenant_id\":\"$WID\",\"owner_email\":\"robert.brunon@veridian.site\",\"workspace_name\":\"Cold test tunnel\",\"plan\":\"free\"}") \
+  "{\"tenant_id\":\"$WID\",\"owner_email\":\"$OWNER_EMAIL\",\"owner_hub_user_id\":\"$OWNER_HUB_ID\",\"workspace_name\":\"Cold test tunnel\",\"plan\":\"free\"}") \
   || fail "provision"
 AUTO_URL=$(echo "$PROV" | python3 -c 'import json,sys;print(json.load(sys.stdin)["auto_login_url"])')
 

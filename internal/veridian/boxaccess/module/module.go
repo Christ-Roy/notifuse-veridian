@@ -119,8 +119,14 @@ func wire(h platform.Host) error {
 		}
 		conn.SMTP = &boxapi.Endpoint{Host: set.SMTPHost, Port: show, Security: "SSL/TLS"}
 	}
-	(&boxapi.Handler{Store: guard, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService(), Standing: &standing.Store{DB: h.DB()}}, WS: h.WorkspaceRepository(),
-		Connection: conn, Log: h.Logger(), RequireAuth: h.RequireAuth()}).RegisterRoutes(h.Mux())
+	api := &boxapi.Handler{BaseURL: cfg.APIEndpoint, LinkKey: []byte(cfg.Security.SecretKey)}
+	if gh, ok := h.(gateHost); ok && gh.RateLimiter() != nil {
+		gh.RateLimiter().SetPolicy(boxapi.LimitTest, boxapi.TestTries, boxapi.TestWindow)
+		api.Limiter = gh.RateLimiter()
+	}
+	api.Store, api.WS, api.Connection, api.Log, api.RequireAuth = guard, h.WorkspaceRepository(), conn, h.Logger(), h.RequireAuth()
+	api.Auth = mailapi.DomainAuthorizer{Auth: h.AuthService(), Standing: &standing.Store{DB: h.DB()}}
+	api.RegisterRoutes(h.Mux())
 
 	if !set.Enabled {
 		return nil

@@ -3,6 +3,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -67,6 +68,7 @@ test.describe('Chaos provisioning — concurrence', () => {
       hmacFetch('/api/tenants/provision', 'POST', {
         tenant_id: tenantId,
         owner_email: `${tenantId}@chaos.test`,
+        owner_hub_user_id: hubId(`${tenantId}@chaos.test`),
         plan: 'free',
       }),
     );
@@ -103,6 +105,7 @@ test.describe('Chaos provisioning — concurrence', () => {
       return hmacFetch('/api/tenants/provision', 'POST', {
         tenant_id: tid,
         owner_email: `${tid}@chaos.test`,
+        owner_hub_user_id: hubId(`${tid}@chaos.test`),
         plan: 'free',
       });
     });
@@ -257,6 +260,7 @@ test.describe('Chaos HMAC — replay et tampering', () => {
     const res = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: 'noemail',
       owner_email: '',
+      owner_hub_user_id: hubId('noemail@chaos.test'),
     });
     expect(res.status).toBe(400);
   });
@@ -264,6 +268,7 @@ test.describe('Chaos HMAC — replay et tampering', () => {
   test('tenant_id manquant → 400', async () => {
     const res = await hmacFetch('/api/tenants/provision', 'POST', {
       owner_email: 'nofix@chaos.test',
+      owner_hub_user_id: hubId('nofix@chaos.test'),
     });
     expect(res.status).toBe(400);
   });
@@ -282,6 +287,7 @@ test.describe('Chaos delete → re-provision', () => {
     let r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@chaos.test`,
+      owner_hub_user_id: hubId(`${tid}@chaos.test`),
       plan: 'free',
     });
     expect(r.status).toBe(200);
@@ -294,6 +300,7 @@ test.describe('Chaos delete → re-provision', () => {
     r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@chaos.test`,
+      owner_hub_user_id: hubId(`${tid}@chaos.test`),
       plan: 'free',
     });
     expect(r.status).toBe(409);

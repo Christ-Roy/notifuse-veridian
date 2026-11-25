@@ -39,7 +39,9 @@ fatal() { printf '\033[1;31m[onboard FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 START_TS=$(date +%s)
 
 log "1/6 provision du workspace $WID ($CLIENT_NAME, owner=$OWNER_EMAIL)"
-$CLI $ENV_FLAG provision "$WID" --email "$OWNER_EMAIL" --name "$CLIENT_NAME" >/tmp/onboard-provision.json 2>&1 \
+# Personne du Hub du propriétaire : NOTIFUSE_OWNER_HUB_USER_ID (obligatoire en prod ; staging : uuid5 de l'adresse à défaut)
+HUB_FLAG=""; [ -n "${NOTIFUSE_OWNER_HUB_USER_ID:-}" ] && HUB_FLAG="--owner-hub-user-id $NOTIFUSE_OWNER_HUB_USER_ID"
+$CLI $ENV_FLAG provision "$WID" --email "$OWNER_EMAIL" $HUB_FLAG --name "$CLIENT_NAME" >/tmp/onboard-provision.json 2>&1 \
   || fatal "provision impossible: $(cat /tmp/onboard-provision.json)"
 ok "workspace pret"
 

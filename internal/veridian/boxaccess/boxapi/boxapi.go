@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
@@ -20,6 +21,11 @@ type Store interface {
 	Create(ctx context.Context, a boxaccess.Access) (*boxaccess.Access, string, error)
 	List(ctx context.Context, ws string) ([]boxaccess.Access, error)
 	Revoke(ctx context.Context, ws, id string) (*boxaccess.Access, error)
+	SetDisabled(ctx context.Context, ws, id string, disabled bool) (*boxaccess.Access, error)
+	Get(ctx context.Context, ws, id string) (*boxaccess.Access, error)
+	Match(ctx context.Context, ws, address, secret string) (*boxaccess.Access, error)
+	Reason(ctx context.Context, a *boxaccess.Access) (string, error)
+	HolderEmails(ctx context.Context, ws string) (map[string]string, error)
 }
 
 // Endpoint : réglage de connexion à donner au client mail. Port 0 : non servi sur cette instance.
@@ -43,6 +49,12 @@ type Handler struct {
 	Connection  Connection
 	Log         logger.Logger
 	RequireAuth func(http.Handler) http.Handler
+
+	// Réglage par la personne (setup.go) : adresse publique de l'instance, clé des liens de profil, limite du test, porte jointe (nil : la vraie).
+	BaseURL string
+	LinkKey []byte
+	Limiter Limiter
+	Door    func(ctx context.Context, via string, e *Endpoint) error
 }
 
 // RegisterRoutes branche les routes.
@@ -50,6 +62,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/veridian/mail.access.list", h.RequireAuth(http.HandlerFunc(h.list)))
 	mux.Handle("POST /api/veridian/mail.access.create", h.RequireAuth(http.HandlerFunc(h.create)))
 	mux.Handle("POST /api/veridian/mail.access.revoke", h.RequireAuth(http.HandlerFunc(h.revoke)))
+	h.registerSetup(mux)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -118,7 +131,18 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"accesses": l, "connection": h.Connection})
+	emails, err := h.Store.HolderEmails(ctx, ws)
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	addrs := []string{}
+	for i := range l {
+		l[i].HolderEmail = emails[l[i].Holder]
+		addrs = append(addrs, l[i].Address)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"accesses": l, "connection": h.Connection,
+		"attempts": boxaccess.Journal.Of(addrs, 20), "attempts_since": boxaccess.Journal.Since().Format(time.RFC3339)})
 }
 
 type createRequest struct {

@@ -19,6 +19,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -74,6 +75,7 @@ test.describe('Veridian-managed mode — workspace.create blocked', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@anti-regression.test`,
+      owner_hub_user_id: hubId(`${tid}@anti-regression.test`),
       plan: 'free',
     });
     expect(r.status).toBe(200);
@@ -122,6 +124,7 @@ test.describe('Veridian-managed mode — workspace.create blocked', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@anti-regression.test`,
+      owner_hub_user_id: hubId(`${tid}@anti-regression.test`),
       plan: 'free',
     });
     expect(r.status).toBe(200);
@@ -161,6 +164,7 @@ test.describe('Veridian-managed mode — UI guards', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: email,
+      owner_hub_user_id: hubId(email),
       plan: 'free',
     });
     expect(r.status).toBe(200);
@@ -204,6 +208,7 @@ test.describe('Veridian-managed mode — UI guards', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@anti-regression.test`,
+      owner_hub_user_id: hubId(`${tid}@anti-regression.test`),
       plan: 'free',
     });
     expect(r.status).toBe(200);
@@ -255,6 +260,7 @@ test.describe('Veridian-managed mode — flow nominal préservé', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: email,
+      owner_hub_user_id: hubId(email),
       plan: 'pro',
     });
     expect(r.status).toBe(200);
@@ -292,6 +298,7 @@ test.describe('Veridian-managed mode — flow nominal préservé', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@anti-regression.test`,
+      owner_hub_user_id: hubId(`${tid}@anti-regression.test`),
       plan: 'business',
     });
     expect(r.status).toBe(200);

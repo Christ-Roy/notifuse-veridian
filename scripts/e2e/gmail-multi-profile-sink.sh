@@ -260,7 +260,8 @@ wait_for_sql() {
 ensure_sink
 log "provision du workspace jetable $WID"
 OWNER_EMAIL="${WID}@e2e.veridian.site"
-PROVISION="$(hmac /api/tenants/provision POST "{\"tenant_id\":\"$WID\",\"owner_email\":\"$OWNER_EMAIL\",\"plan\":\"free\"}")"
+OWNER_HUB_ID="$(python3 -c 'import uuid,sys; print(uuid.uuid5(uuid.NAMESPACE_URL, sys.argv[1]))' "$OWNER_EMAIL")"
+PROVISION="$(hmac /api/tenants/provision POST "{\"tenant_id\":\"$WID\",\"owner_email\":\"$OWNER_EMAIL\",\"owner_hub_user_id\":\"$OWNER_HUB_ID\",\"plan\":\"free\"}")"
 AUTO_URL="$(printf '%s' "$PROVISION" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("auto_login_url",""))')"
 [ -n "$AUTO_URL" ] || fatal "provision impossible: ${PROVISION:0:200}"
 OWNER_TOKEN="$(curl -fsS "$AUTO_URL" | grep -oP "setItem\('auth_token', \"\K[^\"]+" || true)"

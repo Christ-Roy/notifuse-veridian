@@ -106,8 +106,11 @@ trap cleanup EXIT
 # SETUP : workspace jetable
 # ============================================================================
 log "=== SETUP workspace JETABLE $WID sur $BASE ==="
+OWNER_EMAIL="gf-${STAMP}@e2e.veridian.site"
+# Personne du Hub = UUID (uuid5 déterministe de l'adresse : un rejeu désigne la même personne)
+OWNER_HUB_ID=$(python3 -c 'import uuid,sys; print(uuid.uuid5(uuid.NAMESPACE_URL, sys.argv[1]))' "$OWNER_EMAIL")
 PROV=$(hmac /api/tenants/provision POST \
-  "{\"tenant_id\":\"$WID\",\"owner_email\":\"gf-${STAMP}@e2e.veridian.site\",\"plan\":\"free\"}")
+  "{\"tenant_id\":\"$WID\",\"owner_email\":\"$OWNER_EMAIL\",\"owner_hub_user_id\":\"$OWNER_HUB_ID\",\"plan\":\"free\"}")
 AUTO_URL=$(echo "$PROV" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("auto_login_url",""))' 2>/dev/null)
 [ -n "$AUTO_URL" ] || fatal "provision KO: ${PROV:0:200}"
 log "workspace provisionné"

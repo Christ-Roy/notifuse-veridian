@@ -37,6 +37,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -87,6 +88,7 @@ async function provisionTenant(tenantId: string, ownerEmail: string, plan = 'fre
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan,
     });
     if (r.status === 200) return r.json();

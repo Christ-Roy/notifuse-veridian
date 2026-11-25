@@ -111,6 +111,7 @@ func (s *gateSession) login(user, pass string) error {
 	log := s.g.snd.d.Logger.WithFields(map[string]interface{}{"remote_ip": s.ip, "box": box})
 	if s.tries > triesPerConn || !s.g.lim.Allow(LimitGateIP, from) || !s.g.lim.Allow(LimitGateBox, box+"|"+from) {
 		log.Warn("Box SMTP: too many login attempts")
+		boxaccess.Journal.Add("smtp", user, false, "rate_limited")
 		return refuse(454, 4, 7, 0, "trop d'essais, reessayez plus tard")
 	}
 	if LooksLikeAPIKey(pass) {

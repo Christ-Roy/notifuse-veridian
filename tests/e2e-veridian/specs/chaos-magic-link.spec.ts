@@ -3,6 +3,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -61,6 +62,7 @@ test.describe('Magic link — flow nominal headful', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: email,
+      owner_hub_user_id: hubId(email),
       plan: 'pro',
     });
     expect(r.status).toBe(200);
@@ -105,6 +107,7 @@ test.describe('Magic link — adversaires', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@magic.test`,
+      owner_hub_user_id: hubId(`${tid}@magic.test`),
       plan: 'free',
     });
     expect(r.status).toBe(200);
@@ -136,6 +139,7 @@ test.describe('Magic link — adversaires', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: `${tid}@magic.test`,
+      owner_hub_user_id: hubId(`${tid}@magic.test`),
       plan: 'free',
     });
     expect(r.status).toBe(200);
@@ -167,6 +171,7 @@ test.describe('Generate magic link via API key (tenant-scoped)', () => {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: email,
+      owner_hub_user_id: hubId(email),
       plan: 'pro',
     });
     const { api_key } = await r.json();

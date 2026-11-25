@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 // Scenario complet de saasification Notifuse :
 // 1. Hub (HMAC) → POST /api/tenants/provision → workspace + owner reel + API key + magic link
@@ -75,6 +76,7 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     const res = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan: 'pro',
     });
     const body = await res.text();
@@ -91,6 +93,7 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
     const res = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan: 'pro',
     });
     const body = await res.text();

@@ -29,7 +29,7 @@ func testDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { db.Exec("DROP SCHEMA " + name + " CASCADE"); db.Close() })
 	for _, sp := range veridianmig.Default.List() {
-		if sp.Number == 75 || sp.Number == 80 {
+		if sp.Number == 75 || sp.Number == 80 || sp.Number == 81 {
 			for _, q := range sp.System {
 				if _, err := db.Exec(q); err != nil {
 					t.Fatal(err)
@@ -173,5 +173,75 @@ func TestStore_Held(t *testing.T) {
 		if _, err := s.Held(ctx, q[0], q[1]); err == nil {
 			t.Error("espace et personne requis")
 		}
+	}
+}
+
+func TestStore_SetDisabled_Get_Match(t *testing.T) {
+	s, ctx := NewStore(testDB(t)), context.Background()
+	a, secret, err := s.Create(ctx, Access{WorkspaceID: "ws", ProfileID: "p", Address: "jc@boite.fr", CanSend: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x, err := s.SetDisabled(ctx, "ws", a.ID, true); err != nil || x.DisabledAt == nil {
+		t.Fatalf("%+v %v", x, err)
+	}
+	if _, err := s.Verify(ctx, "jc@boite.fr", secret); !errors.Is(err, ErrAuth) {
+		t.Fatalf("désactivé, connexion : %v", err)
+	}
+	if _, err := s.Alive(ctx, a.ID); !errors.Is(err, ErrAuth) {
+		t.Fatalf("désactivé, session ouverte : %v", err)
+	}
+	if err := s.ReserveSend(ctx, a.ID, 1); !errors.Is(err, ErrCap) {
+		t.Fatalf("désactivé, envoi : %v", err)
+	}
+	// Match retrouve l'accès quel que soit son état, pour dire pourquoi ; jamais avec un mot de passe faux, ni depuis un autre espace.
+	if m, err := s.Match(ctx, "ws", "JC@boite.fr", " "+secret); err != nil || m == nil || m.DisabledAt == nil {
+		t.Fatalf("%+v %v", m, err)
+	}
+	for name, q := range map[string][3]string{"faux": {"ws", "jc@boite.fr", "faux"}, "autre espace": {"ws2", "jc@boite.fr", secret}, "autre adresse": {"ws", "x@boite.fr", secret}} {
+		if m, err := s.Match(ctx, q[0], q[1], q[2]); err != nil || m != nil {
+			t.Errorf("%s : %+v %v", name, m, err)
+		}
+	}
+	if x, err := s.SetDisabled(ctx, "ws", a.ID, false); err != nil || x.DisabledAt != nil {
+		t.Fatalf("%+v %v", x, err)
+	}
+	if _, err := s.Verify(ctx, "jc@boite.fr", secret); err != nil {
+		t.Fatalf("réactivé, même mot de passe : %v", err)
+	}
+	if _, err := s.Get(ctx, "ws2", a.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("un autre espace ne lit pas cet accès : %v", err)
+	}
+	if x, err := s.Get(ctx, "ws", a.ID); err != nil || x.ID != a.ID {
+		t.Fatal(x, err)
+	}
+	if _, err := s.SetDisabled(ctx, "ws2", a.ID, true); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("%v", err)
+	}
+	if _, err := s.Revoke(ctx, "ws", a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetDisabled(ctx, "ws", a.ID, false); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("une révocation est définitive : %v", err)
+	}
+}
+
+func TestStore_HolderEmails(t *testing.T) {
+	db := testDB(t)
+	s, ctx := NewStore(db), context.Background()
+	if _, err := db.Exec(`CREATE TABLE users (id UUID PRIMARY KEY, email TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	const u = "0a000000-0000-4000-8000-000000000001"
+	if _, err := db.Exec(`INSERT INTO users VALUES ($1, 't@t.fr'), ('0a000000-0000-4000-8000-000000000002', 'autre@t.fr')`, u); err != nil {
+		t.Fatal(err)
+	}
+	for ws, holder := range map[string]string{"ws": u, "ws2": "0a000000-0000-4000-8000-000000000002"} {
+		if _, _, err := s.Create(ctx, Access{WorkspaceID: ws, ProfileID: "p", Address: "a@b.fr", Holder: holder}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if m, err := s.HolderEmails(ctx, "ws"); err != nil || len(m) != 1 || m[u] != "t@t.fr" {
+		t.Fatalf("%v %v", m, err)
 	}
 }

@@ -51,6 +51,7 @@ async function provisionTenant(tenantId: string, plan = 'free') {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: `${tenantId}@attach-member.test`,
+      owner_hub_user_id: hubId(`${tenantId}@attach-member.test`),
       plan,
     });
     if (r.status === 200) return r.json();

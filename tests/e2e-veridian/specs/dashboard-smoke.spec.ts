@@ -23,6 +23,7 @@
 
 import { test, expect, chromium } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -109,6 +110,7 @@ smokeDescribe('@cold Dashboard smoke — charge sans 500 sur workspace neuf (sta
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tid,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan: 'free',
     });
     const body = await readBody(r);

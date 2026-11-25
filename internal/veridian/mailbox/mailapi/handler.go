@@ -29,6 +29,7 @@ type Handler struct {
 
 	streamMu sync.Mutex
 	streams  map[string]int
+	exports  map[string]bool
 }
 
 const (
@@ -56,6 +57,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	both("/api/veridian/mail.threads.get", h.threadGet)
 	both("/api/veridian/mail.threads.list", h.threadList)
 	mux.Handle("GET /api/veridian/mail.events", h.RequireAuth(http.HandlerFunc(h.events)))
+	mux.Handle("GET /api/veridian/mail.export", h.RequireAuth(http.HandlerFunc(h.export)))
 	mux.Handle("POST /api/veridian/mail.messages.update", h.RequireAuth(http.HandlerFunc(h.update)))
 	mux.Handle("POST /api/veridian/mail.messages.send", h.RequireAuth(http.HandlerFunc(h.send)))
 	mux.Handle("POST /api/veridian/mail.messages.reply", h.RequireAuth(http.HandlerFunc(h.reply)))

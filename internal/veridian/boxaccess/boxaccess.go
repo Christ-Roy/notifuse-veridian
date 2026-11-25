@@ -49,10 +49,15 @@ type Access struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	// DisabledAt : désactivé (V81), se réactive avec le même mot de passe. La révocation, elle, est définitive.
+	DisabledAt *time.Time `json:"disabled_at,omitempty"`
 	// Holder : compte de la personne à qui l'accès appartient (V80). Vide : accès d'espace (boîte partagée, outil), qui reste au départ des gens.
 	Holder string `json:"holder_user_id,omitempty"`
 	// Closed : accès non révoqué qui n'ouvre pourtant plus rien (titulaire parti ou gelé, espace fermé, adresse retirée). Posé par Guard.List.
-	Closed bool `json:"closed,omitempty"`
+	Closed       bool   `json:"closed,omitempty"`
+	ClosedReason string `json:"closed_reason,omitempty"` // holder_gone, address_removed, workspace_closed
+	// HolderEmail : adresse du titulaire, pour l'écran.
+	HolderEmail string `json:"holder_email,omitempty"`
 	// ReadOnly : espace suspendu, l'accès lit encore et n'envoie plus. Posé par Guard.
 	ReadOnly bool `json:"-"`
 }
@@ -92,13 +97,13 @@ func Fingerprint(address string) string {
 	return hex.EncodeToString(h[:6])
 }
 
-const columns = `id, workspace_id, profile_id, address, label, can_send, daily_cap, created_by, created_at, last_used_at, revoked_at, holder_user_id`
+const columns = `id, workspace_id, profile_id, address, label, can_send, daily_cap, created_by, created_at, last_used_at, revoked_at, holder_user_id, disabled_at`
 
 func scan(row interface{ Scan(...any) error }, extra ...any) (*Access, error) {
 	var a Access
-	var used, revoked sql.NullTime
+	var used, revoked, disabled sql.NullTime
 	var holder sql.NullString
-	if err := row.Scan(append([]any{&a.ID, &a.WorkspaceID, &a.ProfileID, &a.Address, &a.Label, &a.CanSend, &a.DailyCap, &a.CreatedBy, &a.CreatedAt, &used, &revoked, &holder}, extra...)...); err != nil {
+	if err := row.Scan(append([]any{&a.ID, &a.WorkspaceID, &a.ProfileID, &a.Address, &a.Label, &a.CanSend, &a.DailyCap, &a.CreatedBy, &a.CreatedAt, &used, &revoked, &holder, &disabled}, extra...)...); err != nil {
 		return nil, err
 	}
 	if used.Valid {
@@ -106,6 +111,9 @@ func scan(row interface{ Scan(...any) error }, extra ...any) (*Access, error) {
 	}
 	if revoked.Valid {
 		a.RevokedAt = &revoked.Time
+	}
+	if disabled.Valid {
+		a.DisabledAt = &disabled.Time
 	}
 	a.Holder = holder.String
 	return &a, nil
@@ -154,6 +162,55 @@ func (s *Store) Revoke(ctx context.Context, ws, id string) (*Access, error) {
 	return a, err
 }
 
+// SetDisabled désactive ou réactive un accès non révoqué. Idempotent.
+func (s *Store) SetDisabled(ctx context.Context, ws, id string, disabled bool) (*Access, error) {
+	row := s.db.QueryRowContext(ctx, `UPDATE veridian_box_access SET disabled_at = CASE WHEN $3 THEN COALESCE(disabled_at, NOW()) END
+		WHERE workspace_id = $1 AND id = $2 AND revoked_at IS NULL RETURNING `+columns, ws, id, disabled)
+	a, err := scan(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return a, err
+}
+
+// Get rend un accès d'un espace, quel que soit son état.
+func (s *Store) Get(ctx context.Context, ws, id string) (*Access, error) {
+	a, err := scan(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM veridian_box_access WHERE workspace_id = $1 AND id = $2`, ws, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return a, err
+}
+
+// Match rend l'accès de CET espace dont le mot de passe est celui donné, révoqué ou désactivé compris : l'écran dit alors pourquoi il n'ouvre plus.
+// nil : mot de passe inconnu. Un mot de passe faux n'apprend rien.
+func (s *Store) Match(ctx context.Context, ws, address, secret string) (*Access, error) {
+	a, err := scan(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM veridian_box_access WHERE workspace_id = $1 AND address = $2 AND secret_hash = $3`,
+		ws, NormalizeAddress(address), hashSecret(strings.TrimSpace(secret))))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return a, err
+}
+
+// HolderEmails rend l'adresse des titulaires d'un espace, par compte.
+func (s *Store) HolderEmails(ctx context.Context, ws string) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT u.id::text, u.email FROM veridian_box_access b JOIN users u ON u.id = b.holder_user_id WHERE b.workspace_id = $1`, ws)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var id, email string
+		if err := rows.Scan(&id, &email); err != nil {
+			return nil, err
+		}
+		out[id] = email
+	}
+	return out, rows.Err()
+}
+
 // Held rend les accès non révoqués dont cette personne est titulaire dans un espace.
 func (s *Store) Held(ctx context.Context, ws, userID string) ([]Access, error) {
 	if _, err := uuid.Parse(userID); err != nil || ws == "" {
@@ -186,7 +243,7 @@ func (s *Store) Verify(ctx context.Context, address, secret string) (*Access, er
 	if address == "" || secret == "" || len(secret) > 200 || len(address) > 255 {
 		return nil, ErrAuth
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+`, secret_hash FROM veridian_box_access WHERE address = $1 AND revoked_at IS NULL LIMIT 1000`, address)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+`, secret_hash FROM veridian_box_access WHERE address = $1 AND revoked_at IS NULL AND disabled_at IS NULL LIMIT 1000`, address)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +271,7 @@ func (s *Store) Verify(ctx context.Context, address, secret string) (*Access, er
 
 // Alive relit un accès : révoqué ou supprimé = ErrAuth (coupe une session IMAP déjà ouverte).
 func (s *Store) Alive(ctx context.Context, id string) (*Access, error) {
-	a, err := scan(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM veridian_box_access WHERE id = $1 AND revoked_at IS NULL`, id))
+	a, err := scan(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM veridian_box_access WHERE id = $1 AND revoked_at IS NULL AND disabled_at IS NULL`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrAuth
 	}
@@ -233,7 +290,7 @@ func (s *Store) ReserveSend(ctx context.Context, id string, n int) error {
 	day := s.now().UTC().Format("2006-01-02")
 	res, err := s.db.ExecContext(ctx, `UPDATE veridian_box_access
 		SET sent_count = CASE WHEN sent_day = $2::date THEN sent_count ELSE 0 END + $3, sent_day = $2::date
-		WHERE id = $1 AND revoked_at IS NULL AND can_send
+		WHERE id = $1 AND revoked_at IS NULL AND disabled_at IS NULL AND can_send
 		  AND CASE WHEN sent_day = $2::date THEN sent_count ELSE 0 END + $3 <= daily_cap`, id, day, n)
 	if err != nil {
 		return err

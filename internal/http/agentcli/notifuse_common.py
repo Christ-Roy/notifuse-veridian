@@ -14,10 +14,10 @@ Notifuse a TROIS mécaniques d'auth (le CLI les choisit tout seul selon la route
      Secret : NOTIFUSE_HUB_API_SECRET.
   2. JWT owner — routes OWNER-ONLY (workspaces.createIntegration/updateIntegration,
      workspaces.update settings cold). Obtenu programmatiquement :
-     provision idempotente HMAC → auto_login_url → auth_token embarqué dans le HTML.
+     propriétaire lu par /api/veridian/membres (HMAC) → issue-magic-link (hub_user_id) → auth_token embarqué dans le HTML.
   3. JWT api_key — toutes les autres routes applicatives (broadcasts, templates,
      contacts, automations, transactional, webhooks…). NOTIFUSE_API_KEY si fournie,
-     sinon dérivée à la volée d'une provision (api_key du workspace).
+     sinon le JWT owner (jamais de provision).
 
 ZÉRO mail réel : `verify`/`dry-run` tapent les PRÉDICATS EXACTS des gates cold via
 `/api/veridian/admin/cold-simulate` (staging-only) — aucun SMTP ouvert. L'envoi réel
@@ -31,7 +31,7 @@ Défaut = PROD. `--env staging` bascule sur staging.
 USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
 ============================================================
   notifuse doctor [--env]                self-test : health 200 + HMAC round-trip + (staging) cold-simulate
-  notifuse provision <tid> --email <e>    provisionne un tenant (HMAC). Renvoie ws+api_key+auto_login_url
+  notifuse provision <tid> --email <e> [--owner-hub-user-id <uuid>]   provisionne un tenant (HMAC). Renvoie ws+api_key+auto_login_url
   notifuse wipe --prefix P | --ids a,b    wipe tenant(s) de test (HMAC, staging)
   notifuse verify <ws> [--cap N ...]      DRY-RUN cold : les gates bloqueraient-ils ? ZÉRO mail (cold-simulate)
   notifuse dry-run <ws>                   alias de verify (batterie complète de prédicats)
@@ -753,17 +753,31 @@ def require_existing_workspace(env, tenant_id):
         die(f"existence de l'espace '{tenant_id}' non vérifiée (HTTP {st}) : {p}. Rien n'a été tenté.", code=2)
 
 
-def provision_idempotent(env, tenant_id, email=DEFAULT_OWNER_EMAIL, name=None):
-    """Provision HMAC idempotente d'un espace EXISTANT (jeton owner). Renvoie la réponse (ws, api_key, auto_login_url)."""
+def owner_login_url(env, tenant_id):
+    """Lien de connexion du PROPRIÉTAIRE d'un espace EXISTANT, sans jamais provisionner (25/11/2026 : `provision` exige
+    `owner_hub_user_id`, une personne du Hub ; rejouer une provision pour obtenir un jeton créait ou refusait selon l'adresse).
+    Lit le propriétaire par la route signée `GET /api/veridian/membres`, prend un membre `owner` relié au Hub, demande son lien à
+    `POST /api/sso/issue-magic-link` par `hub_user_id`. Aucun propriétaire relié : message clair, sortie 2, jamais de repli."""
     require_existing_workspace(env, tenant_id)
-    body = {"tenant_id": tenant_id, "owner_email": email}
-    if name:
-        body["workspace_name"] = name
-    st, p = call_hmac(env, "POST", "/api/tenants/provision", body)
-    if st not in (200, 201):
-        die(f"provision({tenant_id}) HMAC échouée (HTTP {st}) : {p}. "
-            f"Vérifier {HMAC_SECRET_VAR} pour --env {env}.")
-    return p
+    st, p = call_hmac(env, "GET", "/api/veridian/membres?" + urllib.parse.urlencode({"workspace_id": tenant_id}))
+    if st != 200 or not (isinstance(p, dict) and isinstance(p.get("members"), list)):
+        die(f"propriétaire de '{tenant_id}' non lu (HTTP {st}) : {p}. Rien n'a été tenté.", code=2)
+    owners = [m for m in p["members"] if isinstance(m, dict) and m.get("role") == "owner" and m.get("hub_user_id")]
+    if not owners:
+        die(f"espace '{tenant_id}' sur {env} : aucun propriétaire relié à une personne du Hub (hub_user_id). "
+            f"Relier le compte au Hub (sync-member / attach-member), puis relancer. Rien n'a été créé.", code=2)
+    # Le propriétaire de chez nous d'abord ; celui d'un client en dernier recours, et on le dit. Un compte supprimé au Hub est refusé : on passe au suivant.
+    ours = (DEFAULT_OWNER_EMAIL.lower(), "@veridian.site")
+    owners.sort(key=lambda m: not (m.get("email") or "").lower().endswith(ours))
+    for m in owners:
+        st, r = call_hmac(env, "POST", "/api/sso/issue-magic-link",
+                          {"hub_user_id": m["hub_user_id"], "email": m.get("email") or "", "email_proven": False})
+        url = r.get("magic_link_url") if isinstance(r, dict) else None
+        if st == 200 and url:
+            if not (m.get("email") or "").lower().endswith(ours) and env == "prod":
+                print(f"note : '{tenant_id}' n'a pas de propriétaire Veridian, jeton d'un propriétaire de l'espace.", file=sys.stderr)
+            return url
+    die(f"lien de connexion d'un propriétaire de '{tenant_id}' refusé (HTTP {st}) : {r if not isinstance(r, dict) else r.get('error')}.", code=2)
 
 
 def owner_jwt(env, tenant_id, email=DEFAULT_OWNER_EMAIL):
@@ -775,11 +789,10 @@ def owner_jwt(env, tenant_id, email=DEFAULT_OWNER_EMAIL):
     return _owner_jwt_impl(env, tenant_id, email)
 
 
-def _owner_jwt_impl(env, tenant_id, email=DEFAULT_OWNER_EMAIL, prov=None):
-    """JWT owner via provision idempotente → auto_login_url → auth_token du HTML.
-
-    Pattern validé (scripts/iac/notifuse-iac.sh, memory reference_jwt_owner_via_autologin).
-    L'auto_login_url a un TTL court (~60s) ; on l'échange immédiatement.
+def _owner_jwt_impl(env, tenant_id, email=DEFAULT_OWNER_EMAIL):
+    """JWT owner d'un espace EXISTANT : propriétaire lu par `/api/veridian/membres`, lien par `issue-magic-link`, auth_token du HTML
+    (`owner_login_url`). Jamais de provision. `email` ne sert plus que de clé au cache disque (mêmes règles qu'avant).
+    Le lien a un TTL court (~60s) ; on l'échange immédiatement.
     """
     cache_key = (env, tenant_id)
     if cache_key in _OWNER_CACHE:
@@ -788,19 +801,15 @@ def _owner_jwt_impl(env, tenant_id, email=DEFAULT_OWNER_EMAIL, prov=None):
     if cached:
         _OWNER_CACHE[cache_key] = cached
         return cached
-    if prov is None:
-        prov = provision_idempotent(env, tenant_id, email)
-    auto_url = prov.get("auto_login_url")
-    if not auto_url:
-        die(f"auto_login_url absent de la provision({tenant_id}).")
+    auto_url = owner_login_url(env, tenant_id)
     try:
         with urllib.request.urlopen(auto_url, timeout=20) as r:
             html = r.read().decode()
     except Exception as e:
-        die(f"auto-login injoignable : {e}")
+        die(f"auto-login injoignable : {e}", code=2)
     m = re.search(r"setItem\('auth_token',\s*\"([^\"]+)\"", html)
     if not m:
-        die("extraction JWT owner échouée (auth_token absent du HTML auto-login).")
+        die("extraction JWT owner échouée (auth_token absent du HTML auto-login).", code=2)
     jwt = m.group(1)
     _OWNER_CACHE[cache_key] = jwt
     _jwt_cache_put(env, tenant_id, email, jwt)
@@ -816,24 +825,12 @@ def apikey_for(env, tenant_id):
 
 
 def _apikey_for_impl(env, tenant_id):
-    """Priorité : NOTIFUSE_API_KEY (machine, fournie) → api_key d'une provision FRAÎCHE
-    (created:true) → sinon owner JWT (toujours obtenable via auto_login_url ; l'owner
-    a tous les droits). La provision idempotente d'un tenant EXISTANT ne re-renvoie
-    PAS l'api_key (created:false), donc on retombe proprement sur l'owner JWT.
-    """
+    """Priorité : NOTIFUSE_API_KEY (machine, fournie) → JWT owner (cache disque, sinon dérivé du propriétaire du Hub ;
+    l'owner a tous les droits). Plus de provision : l'api_key d'un espace existant n'a jamais été rendue de toute façon."""
     k = get_key(APIKEY_VAR, required=False)
     if k:
         return k
-    cached = _jwt_cache_get(env, tenant_id, DEFAULT_OWNER_EMAIL)
-    if cached:
-        return cached  # owner JWT deja obtenu pour cet espace : pas de nouvelle provision
-    prov = provision_idempotent(env, tenant_id)
-    ak = prov.get("api_key")
-    if ak:
-        return ak
-    # Espace existant : la provision qu'on vient de faire porte deja l'auto_login_url, on la reutilise
-    # (avant : owner_jwt() en refaisait une seconde = 2 provisions par espace au demarrage a froid).
-    return _owner_jwt_impl(env, tenant_id, DEFAULT_OWNER_EMAIL, prov=prov)
+    return _owner_jwt_impl(env, tenant_id, DEFAULT_OWNER_EMAIL)
 
 
 def _workspace_get(env, ws, jwt):
@@ -1363,8 +1360,25 @@ def cmd_doctor(a):
     sys.exit(0 if verdict == "ok" else 2)
 
 
+def hub_user_id_for_provision(env, email, given):
+    """Personne du Hub du propriétaire (`owner_hub_user_id`). Prod : obligatoire (l'identifiant vient du Hub, jamais deviné).
+    Staging : à défaut, uuid5(NAMESPACE_URL, adresse), stable d'un rejeu à l'autre."""
+    import uuid
+    if given:
+        try:
+            if str(uuid.UUID(given)) != given.lower():
+                raise ValueError
+        except ValueError:
+            die(f"--owner-hub-user-id '{given}' n'est pas un UUID (36 caractères).", code=2)
+        return given.lower()
+    if env == "staging":
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, email))
+    die(f"--owner-hub-user-id obligatoire sur --env {env} : l'UUID de la personne du Hub (jamais dérivé de l'adresse hors staging).", code=2)
+
+
 def cmd_provision(a):
-    body = {"tenant_id": a.tenant_id, "owner_email": a.email}
+    body = {"tenant_id": a.tenant_id, "owner_email": a.email,
+            "owner_hub_user_id": hub_user_id_for_provision(a.env, a.email, getattr(a, "owner_hub_user_id", None))}
     if a.name:
         body["workspace_name"] = a.name
     if a.plan:
@@ -5091,6 +5105,8 @@ def build_parser(extra=None):
     sp = sub.add_parser("provision", help="provisionne un tenant (HMAC)")
     sp.add_argument("tenant_id")
     sp.add_argument("--email", required=True, help="owner email")
+    sp.add_argument("--owner-hub-user-id", dest="owner_hub_user_id",
+                    help="UUID de la personne du Hub (obligatoire en prod ; staging : uuid5 de l'adresse à défaut)")
     sp.add_argument("--name", help="workspace name (défaut = tenant_id)")
     sp.add_argument("--plan", help="plan initial (défaut free)")
     sp.set_defaults(func=cmd_provision)

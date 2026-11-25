@@ -52,26 +52,44 @@ func (g *Guard) Alive(ctx context.Context, id string) (*Access, error) {
 	return a, nil
 }
 
+// Raisons d'un accès qui n'ouvre plus rien sans être révoqué ni désactivé.
+const (
+	ClosedHolder    = "holder_gone"
+	ClosedAddress   = "address_removed"
+	ClosedWorkspace = "workspace_closed"
+)
+
 func (g *Guard) check(ctx context.Context, a *Access) error {
+	reason, err := g.Reason(ctx, a)
+	if err == nil && reason != "" {
+		return ErrAuth
+	}
+	return err
+}
+
+// Reason dit pourquoi un accès n'ouvre plus rien ; vide : il ouvre.
+func (g *Guard) Reason(ctx context.Context, a *Access) (string, error) {
 	if g.Standing == nil {
-		return errors.New("accès de boîte : situation non câblée")
+		return "", errors.New("accès de boîte : situation non câblée")
 	}
 	st, err := g.Standing.Of(ctx, a.WorkspaceID, a.Holder)
-	if err != nil {
-		return err
-	}
-	if !st.Space() || (a.Holder != "" && !st.Person()) {
-		return ErrAuth
+	switch {
+	case err != nil:
+		return "", err
+	case !st.Space():
+		return ClosedWorkspace, nil
+	case a.Holder != "" && !st.Person():
+		return ClosedHolder, nil
 	}
 	a.ReadOnly = st.Suspended
 	ws, err := g.WS.GetByID(ctx, a.WorkspaceID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if ProfileOf(ws, a.ProfileID, a.Address) == nil {
-		return ErrAuth
+		return ClosedAddress, nil
 	}
-	return nil
+	return "", nil
 }
 
 // List : Store.List, chaque accès non révoqué dit s'il n'ouvre plus rien.
@@ -84,18 +102,17 @@ func (g *Guard) List(ctx context.Context, ws string) ([]Access, error) {
 		if l[i].RevokedAt != nil {
 			continue
 		}
-		if err := g.check(ctx, &l[i]); errors.Is(err, ErrAuth) {
-			l[i].Closed = true
-		} else if err != nil {
+		if l[i].ClosedReason, err = g.Reason(ctx, &l[i]); err != nil {
 			return nil, err
 		}
+		l[i].Closed = l[i].ClosedReason != ""
 	}
 	return l, nil
 }
 
 // CountOpen compte les accès d'un espace qui ouvrent encore quelque chose.
 func (g *Guard) CountOpen(ctx context.Context, ws string) (int, error) {
-	l, err := g.query(ctx, `WHERE workspace_id = $1 AND revoked_at IS NULL`, ws)
+	l, err := g.query(ctx, `WHERE workspace_id = $1 AND revoked_at IS NULL AND disabled_at IS NULL`, ws)
 	if err != nil {
 		return 0, err
 	}

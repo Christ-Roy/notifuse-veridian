@@ -98,6 +98,7 @@ func (s *Sender) Login(ctx context.Context, username, password string) (string, 
 	}
 	a, err := s.d.Accesses.Verify(ctx, username, password)
 	if errors.Is(err, boxaccess.ErrAuth) {
+		boxaccess.Journal.Add("smtp", username, false, "bad_credentials")
 		return "", err
 	}
 	if err != nil {
@@ -105,6 +106,7 @@ func (s *Sender) Login(ctx context.Context, username, password string) (string, 
 		return "", smtp_bridge.ErrTemporaryAuth
 	}
 	_ = s.d.Accesses.Touch(ctx, a.ID)
+	boxaccess.Journal.Add("smtp", username, true, "")
 	s.d.Logger.WithFields(map[string]interface{}{"workspace_id": a.WorkspaceID, "access_id": a.ID}).Info("Box SMTP: login")
 	return Prefix + a.ID, nil
 }

@@ -212,3 +212,30 @@ func TestCloseSessions_WithoutServer(t *testing.T) {
 		t.Fatal(n)
 	}
 }
+
+func TestGuard_Reason(t *testing.T) {
+	ctx := context.Background()
+	const u = "0a000000-0000-4000-8000-000000000001"
+	a := func(holder string) *Access {
+		return &Access{WorkspaceID: "ws", ProfileID: "p", Address: "jc@boite.fr", Holder: holder}
+	}
+	for name, c := range map[string]struct {
+		st    standing.State
+		email string
+		acc   *Access
+		want  string
+	}{
+		"ouvert":          {standing.State{Workspace: true, Member: true}, "jc@boite.fr", a(u), ""},
+		"espace fermé":    {standing.State{Workspace: true, Closed: true}, "jc@boite.fr", a(""), ClosedWorkspace},
+		"titulaire parti": {standing.State{Workspace: true}, "jc@boite.fr", a(u), ClosedHolder},
+		"adresse retirée": {standing.State{Workspace: true, Member: true}, "autre@boite.fr", a(u), ClosedAddress},
+	} {
+		g := &Guard{WS: wsGetter{boxWS(c.email)}, Standing: situation{st: c.st}}
+		if got, err := g.Reason(ctx, c.acc); err != nil || got != c.want {
+			t.Errorf("%s : %q %v", name, got, err)
+		}
+	}
+	if _, err := (&Guard{WS: wsGetter{}, Standing: open}).Reason(ctx, a(u)); err == nil {
+		t.Fatal("une panne n'est pas une raison")
+	}
+}

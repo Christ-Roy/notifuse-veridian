@@ -36,6 +36,9 @@ type fakeAuth struct {
 	calls []grant
 	deny  map[grant]error // refus par (ressource, permission)
 	err   error           // refus global
+	// failAfter : au-delà de N demandes, err2 (droit perdu en cours de route). 0 : jamais.
+	failAfter int
+	err2      error
 }
 
 func (f *fakeAuth) Authorize(ctx context.Context, _ string, res domain.PermissionResource, perm domain.PermissionType) (context.Context, Actor, error) {
@@ -45,6 +48,9 @@ func (f *fakeAuth) Authorize(ctx context.Context, _ string, res domain.Permissio
 	f.calls = append(f.calls, g)
 	if f.err != nil {
 		return ctx, Actor{}, f.err
+	}
+	if f.failAfter > 0 && len(f.calls) > f.failAfter {
+		return ctx, Actor{}, f.err2
 	}
 	if e, ok := f.deny[g]; ok {
 		return ctx, Actor{}, e

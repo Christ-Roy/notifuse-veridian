@@ -197,10 +197,14 @@ def format_access(data):
     """Accès de boîte (fiche 84) : jamais de mot de passe ici, il n'est rendu qu'à la création."""
     rows = []
     for x in data.get("accesses") or []:
-        etat = "révoqué" if x.get("revoked_at") else "fermé" if x.get("closed") else ("lecture et envoi" if x.get("can_send") else "lecture seule")
-        rows.append([x.get("address") or "-", x.get("label") or "-", etat, "une personne" if x.get("holder_user_id") else "l'espace", str(x.get("daily_cap") or "-"),
+        etat = "révoqué" if x.get("revoked_at") else "désactivé" if x.get("disabled_at") else "fermé" if x.get("closed") else ("lecture et envoi" if x.get("can_send") else "lecture seule")
+        rows.append([x.get("address") or "-", x.get("label") or "-", etat, (x.get("holder_email") or "une personne") if x.get("holder_user_id") else "l'espace", str(x.get("daily_cap") or "-"),
                      (x.get("last_used_at") or "jamais")[:16].replace("T", " "), x.get("profile_id") or "-", x.get("id") or "-"])
     out = list(nc._table(rows, ("adresse", "libellé", "droits", "appartient à", "envois/j", "dernier usage", "profil", "id"))) if rows else ["aucun accès de boîte"]
+    essais = data.get("attempts") or []
+    out.append("derniers essais reçus (depuis %s) :" % (data.get("attempts_since") or "?")[:16].replace("T", " ") if essais else
+               "aucun essai reçu depuis %s" % (data.get("attempts_since") or "?")[:16].replace("T", " "))
+    out += [f"  {e.get('at', '')[:16].replace('T', ' ')} {e.get('via')} {e.get('address')} : " + ("ouvert" if e.get("ok") else f"refusé ({e.get('reason')})") for e in essais[:10]]
     return out + format_connection(data.get("connection") or {})
 
 
@@ -279,6 +283,51 @@ def cmd_access_revoke(a):
     st, data = _post(a, "/api/veridian/mail.access.revoke", {"id": a.id})
     _fail(st, data)
     _show(a, data, lambda d: [f"accès {d['access']['id']} révoqué"])
+
+
+def cmd_access_switch(a):
+    st, data = _post(a, "/api/veridian/mail.access.setDisabled", {"id": a.id, "disabled": a.cmd_disabled})
+    _fail(st, data)
+    _show(a, data, lambda d: [f"accès {d['access']['id']} " + ("désactivé" if d["access"].get("disabled_at") else "réactivé")])
+
+
+def cmd_access_profile(a):
+    """Profil Apple (.mobileconfig), sans mot de passe : le lien court, ou le fichier avec --out."""
+    st, data = _post(a, "/api/veridian/mail.access.profileLink", {"id": a.id})
+    _fail(st, data)
+    if not a.out:
+        _show(a, data, lambda d: [d["url"], f"valable jusqu'à {d['expires_at']}"])
+        return
+    token = data["url"].split("?t=", 1)[-1]
+    import urllib.parse
+    st, body, _h = _download(a, "/api/veridian/mail.access.profile", {"t": urllib.parse.unquote(token)})
+    if st != 200:
+        nc.die(f"profil non rendu (HTTP {st})")
+    with open(a.out, "xb") as f:
+        f.write(body)
+    print(f"profil écrit dans {a.out}")
+
+
+def cmd_access_test(a):
+    """Dit ce qui ne va pas dans un réglage. Le mot de passe se lit dans un fichier, jamais en argument."""
+    password = ""
+    if a.password_file:
+        with open(a.password_file) as f:
+            lines = f.read().splitlines()
+        password = lines[1] if len(lines) > 1 else (lines[0] if lines else "")
+    st, data = _post(a, "/api/veridian/mail.access.test", {"address": a.address, "via": a.via, "host": a.host, "port": a.port, "security": a.security,
+                                                           "username": a.username or a.address, "password": password})
+    _fail(st, data)
+    _show(a, data, lambda d: [("ok " if c["ok"] else "KO ") + c["code"] + (f" : mettre {c['expected']}" if c.get("expected") else "") for c in d["checks"]])
+
+
+def cmd_export(a):
+    st, body, _h = _download(a, "/api/veridian/mail.export", {"profile_id": a.profile, "folder": a.folder})
+    if st != 200:
+        nc.die(f"export refusé (HTTP {st})")
+    with open(a.out, "xb") as f:
+        f.write(body)
+    print(f"{a.folder} écrit dans {a.out} ({len(body)} octets)")
 
 
 def cmd_list(a):
@@ -509,7 +558,8 @@ def cmd_events(a):
 # --------------------------------------------------------------------------- enregistrement
 
 COMMANDS = ("mail:boxes", "mail:list", "mail:get", "mail:raw", "mail:attachment", "mail:thread", "mail:threads",
-            "mail:update", "mail:send", "mail:reply", "mail:events", "mail:access", "mail:access-create", "mail:access-revoke", "mail:access-guide")
+            "mail:update", "mail:send", "mail:reply", "mail:events", "mail:access", "mail:access-create", "mail:access-revoke", "mail:access-guide", "mail:access-disable", "mail:access-enable",
+            "mail:access-profile", "mail:access-test", "mail:export")
 
 
 def register(sub):
@@ -626,6 +676,33 @@ def register(sub):
     sp = add("mail:access-revoke", "révoque un accès de boîte (les connexions ouvertes sont coupées aussitôt)", cmd_access_revoke, ["/api/veridian/mail.access.revoke"])
     sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")
     jsonflag(sp)
+
+    for nom, off in (("mail:access-disable", True), ("mail:access-enable", False)):
+        sp = add(nom, ("désactive un accès de boîte (se réactive, même mot de passe)" if off else "réactive un accès de boîte désactivé"), cmd_access_switch, ["/api/veridian/mail.access.setDisabled"])
+        sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")
+        sp.set_defaults(cmd_disabled=off)
+        jsonflag(sp)
+
+    sp = add("mail:access-profile", "profil de configuration Apple d'un accès, sans mot de passe (lien de 15 min, ou fichier)", cmd_access_profile,
+             ["/api/veridian/mail.access.profileLink", "/api/veridian/mail.access.profile"])
+    sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")
+    sp.add_argument("--out", help="écrit le .mobileconfig dans ce fichier neuf")
+    jsonflag(sp)
+
+    sp = add("mail:access-test", "dit ce qu'il faut changer dans un réglage de client mail", cmd_access_test, ["/api/veridian/mail.access.test"])
+    sp.add_argument("--address", required=True)
+    sp.add_argument("--via", choices=["imap", "smtp"], required=True)
+    sp.add_argument("--host", required=True)
+    sp.add_argument("--port", type=int, required=True)
+    sp.add_argument("--security", choices=["ssl", "starttls", "none"], required=True)
+    sp.add_argument("--username", help="défaut : l'adresse")
+    sp.add_argument("--password-file", dest="password_file", help="fichier de mail:access-create --secret-file, ou une ligne")
+    jsonflag(sp)
+
+    sp = add("mail:export", "exporte un dossier d'une boîte en .mbox", cmd_export, ["/api/veridian/mail.export"])
+    sp.add_argument("--profile", required=True, help="id du profil d'envoi (mail:boxes)")
+    sp.add_argument("--folder", choices=["inbox", "sent", "rejects", "trash"], required=True)
+    sp.add_argument("--out", required=True, help="fichier neuf")
 
     sp = add("mail:access-guide", "procédure de connexion à envoyer au client (sans mot de passe)", cmd_access_guide, ["/api/veridian/mail.access.list"])
     sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")

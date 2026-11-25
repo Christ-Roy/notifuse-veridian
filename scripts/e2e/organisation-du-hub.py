@@ -29,7 +29,7 @@ def check(name, ok, seen=""):
 if a.prod and not (a.ws and a.tenant):
     sys.exit("NON ABOUTI : --prod exige --ws et --tenant")
 if not a.prod:
-    st, p = nc.call_hmac(ENV, "POST", "/api/tenants/provision", {"tenant_id": WS, "owner_email": OWNER, "workspace_name": "Avant"})
+    st, p = nc.call_hmac(ENV, "POST", "/api/tenants/provision", {"tenant_id": WS, "owner_email": OWNER, "owner_hub_user_id": str(uuid.uuid5(uuid.NAMESPACE_URL, OWNER)), "workspace_name": "Avant"})
     if st in (200, 201):
         st, p = nc.call_hmac(ENV, "POST", "/api/tenants/update-plan", {"tenant_id": WS, "plan": "free", "hub_tenant_id": TENANT})
     if st not in (200, 201):

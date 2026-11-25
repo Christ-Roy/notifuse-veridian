@@ -117,7 +117,8 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
 - `81` capacité base : connexions, incident du 07/11
-- `91` **ce qui dure après un retrait** : accès de boîte, flux, gel, compte supprimé (`standing`)
+- `92` régler sa boîte soi-même : profil Apple, test, essais, export
+- `91` **ce qui dure après un retrait** : accès de boîte, flux, gel (`standing`)
 - `90` Réglages > Plan
 - `89` **une personne du Hub = son `hub_user_id`, jamais son adresse** (résolveur unique)
 - `88` organisation poussée par le Hub, abonnement du Hub aux réponses
@@ -173,11 +174,11 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `56` séparation transactionnel / commercial (lot 4) : usage de profil, compteurs (V61)
 - `57` tableau de bord de prospection (lot 5) : `prospection.stats`
 - `58` dépilage équitable de `email_queue` : relances avant J0, tourniquet
-- `59` automations observables (conception seule, rien d'implémenté)
+- `59` automations observables (conception seule)
 - `60` capacité d'un profil (lot 6), CLI agent
 - `62` « pourquoi ça n'envoie pas » (V62) : raison de report, `queue.explain`
-- `69` plafonds et débits PAR DÉFAUT des 25 classes, table MX -> classe
-- `64` garde réseau partagée (`pkg/netguard`) SMTP/IMAP/SparkPost
+- `69` plafonds et débits par défaut des 25 classes
+- `64` garde réseau partagée (`pkg/netguard`)
 - `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only invitations
 - `68` self-service owner : audit UI/API/CLI, boutons LLM/Firecrawl/Supabase
 - `65` relances dans le fil du premier mail : `veridian_thread_followups`

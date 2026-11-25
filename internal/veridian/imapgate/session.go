@@ -128,6 +128,7 @@ func (s *session) Login(username, password string) error {
 	key := addr + "|" + from
 	if !lim.Allow(LimitIP, from) || !lim.Allow(LimitAddress, key) {
 		s.srv.cfg.Logger.WithFields(map[string]interface{}{"remote_ip": s.ip, "box": boxaccess.Fingerprint(addr)}).Warn("IMAP gate: too many login attempts")
+		boxaccess.Journal.Add("imap", addr, false, "rate_limited")
 		return errLimited
 	}
 	ctx, cancel := opCtx()
@@ -135,6 +136,7 @@ func (s *session) Login(username, password string) error {
 	acc, err := s.srv.cfg.Auth.Verify(ctx, addr, password)
 	if errors.Is(err, boxaccess.ErrAuth) {
 		s.srv.cfg.Logger.WithFields(map[string]interface{}{"remote_ip": s.ip, "box": boxaccess.Fingerprint(addr)}).Warn("IMAP gate: login refused")
+		boxaccess.Journal.Add("imap", addr, false, "bad_credentials")
 		return imapserver.ErrAuthFailed
 	}
 	if err != nil {
@@ -154,6 +156,7 @@ func (s *session) Login(username, password string) error {
 	lim.Reset(LimitIP, from)
 	lim.Reset(LimitAddress, key)
 	s.acc, s.checked = acc, time.Now()
+	boxaccess.Journal.Add("imap", addr, true, "")
 	if err := s.srv.cfg.Auth.Touch(ctx, acc.ID); err != nil {
 		s.srv.cfg.Logger.WithField("error", err.Error()).Debug("IMAP gate: touch failed")
 	}

@@ -20,6 +20,7 @@
 
 import { expect, type Page, type ConsoleMessage } from '@playwright/test'
 import * as crypto from 'crypto'
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!
 const HUB_API_SECRET = process.env.HUB_API_SECRET!
@@ -90,6 +91,7 @@ export async function provisionTenant(
   const res = await hmacFetch('/api/tenants/provision', 'POST', {
     tenant_id: tenantId,
     owner_email: ownerEmail,
+    owner_hub_user_id: hubId(ownerEmail),
     plan
   })
   const txt = await res.text()

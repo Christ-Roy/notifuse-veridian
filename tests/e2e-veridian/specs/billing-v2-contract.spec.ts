@@ -30,6 +30,7 @@
 // wipe afterEach include_orphans:false (cf reference_admin_tenants_listing_api).
 
 import { test, expect } from '@playwright/test';
+import { hubId } from '../hub-id';
 import * as crypto from 'crypto';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -66,6 +67,7 @@ async function provisionTenant(tid: string, opts: { plan?: string; plan_source?:
   const body: Record<string, unknown> = {
     tenant_id: tid,
     owner_email: `${tid}@billing.test`,
+    owner_hub_user_id: hubId(`${tid}@billing.test`),
     plan,
   };
   if (plan_source) body.plan_source = plan_source;

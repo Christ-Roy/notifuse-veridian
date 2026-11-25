@@ -31,6 +31,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -82,6 +83,7 @@ async function provisionTenant(tenantId: string) {
   const res = await hmacFetch('/api/tenants/provision', 'POST', {
     tenant_id: tenantId,
     owner_email: `${tenantId}@e2e.veridian.test`,
+    owner_hub_user_id: hubId(`${tenantId}@e2e.veridian.test`),
     plan: 'pro',
   });
   const text = await res.text();
