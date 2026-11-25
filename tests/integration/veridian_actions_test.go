@@ -233,3 +233,47 @@ func TestVeridianActions_EnvoyerVersMail(t *testing.T) {
 	assert.Equal(t, 0, count(`SELECT COUNT(*) FROM email_queue`))
 	assert.Equal(t, 0, count(`SELECT COUNT(*) FROM message_history`))
 }
+
+// Import groupé (fiche 94) : le compte rendu vient de l'espace, sur l'application entière. Cas d'origine : 806 refus lus comme des réussites.
+func TestVeridianContactImport_CompteRenduRelu(t *testing.T) {
+	testutil.SkipIfShort(t)
+	testutil.SetupTestEnvironment()
+	defer testutil.CleanupTestEnvironment()
+	suite := testutil.NewIntegrationTestSuite(t, func(cfg *config.Config) testutil.AppInterface { return app.NewApp(cfg) })
+	defer func() { suite.Cleanup() }()
+	f, client := suite.DataFactory, suite.APIClient
+	user, err := f.CreateUser()
+	require.NoError(t, err)
+	ws, err := f.CreateWorkspace()
+	require.NoError(t, err)
+	require.NoError(t, f.AddUserToWorkspace(user.ID, ws.ID, "owner"))
+	list, err := f.CreateList(ws.ID)
+	require.NoError(t, err)
+	require.NoError(t, client.Login(user.Email, "password"))
+	client.SetWorkspaceID(ws.ID)
+	imp := func(contacts []map[string]any, lists ...string) (map[string]any, []any) {
+		t.Helper()
+		resp, err := client.Post("/api/contacts.import", map[string]any{"workspace_id": ws.ID, "contacts": contacts, "subscribe_to_lists": lists})
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, 200, resp.StatusCode)
+		var m map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&m))
+		return m["report"].(map[string]any), m["operations"].([]any)
+	}
+	r, ops := imp([]map[string]any{{"email": "a@import.test", "custom_number_1": "88"}, {"email": "b@import.test", "custom_number_1": "89"}}, list.ID)
+	assert.Equal(t, "echec", r["state"])
+	assert.EqualValues(t, 0, r["verified"])
+	assert.Equal(t, "a@import.test", ops[0].(map[string]any)["email"])
+	assert.Contains(t, ops[0].(map[string]any)["error"], "custom_number_1")
+
+	r, _ = imp([]map[string]any{{"email": "A@import.test", "custom_number_1": 88}, {"email": "b@import.test"}}, list.ID)
+	assert.Equal(t, "complet", r["state"], r)
+	assert.EqualValues(t, 2, r["verified"])
+	assert.EqualValues(t, 2, r["lists"].(map[string]any)[list.ID].(map[string]any)["subscribed"])
+
+	r, _ = imp([]map[string]any{{"email": "a@import.test"}}, "listeabsente")
+	assert.Equal(t, "partiel", r["state"], "une liste qui n'existe pas : l'amont le tait, la relecture le dit")
+	r, _ = imp([]map[string]any{{"email": "a@import.test"}, {"email": "c@import.test", "custom_number_1": "x"}})
+	assert.Equal(t, "partiel", r["state"])
+}

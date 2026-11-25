@@ -123,7 +123,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `88` organisation poussée par le Hub, abonnement du Hub aux réponses
 - `87` actions d'une autre app (jeton `act`), « Envoyer vers Mail »
 - `86` un membre ne s'ajoute qu'au Hub : routes fermées (403)
-- `85` réservoirs : import massif dédoublonné, activation par lots, code mode
+- `85` réservoirs, activation par lots, code mode ; `94` import relu dans l'espace
 - `79` CLI utilisateur à parité : qui peut quoi
 
 **Base de données workspace**

@@ -4013,6 +4013,67 @@ def cmd_contacts_upsert(a):
 _CONTACTS_IMPORT_BATCH_SIZE = 500
 
 
+def _csv_number(v, where):
+    """Pure : le nombre écrit dans une cellule (virgule ou point décimal)."""
+    t = str(v).strip().replace("\u202f", "").replace("\u00a0", "").replace(" ", "").replace(",", ".")
+    try:
+        n = float(t)
+    except ValueError:
+        die(f"{where} n'est pas un nombre : {v!r}")
+    if n != n or n in (float("inf"), float("-inf")):
+        die(f"{where} n'est pas un nombre fini : {v!r}")
+    return int(n) if n.is_integer() else n
+
+
+def import_tally(total, status, body, sent):
+    """Pure : ajoute le résultat d'UN appel contacts.import au total. Rien n'est réputé importé : seul compte ce que le serveur dit avoir relu dans
+    l'espace (`report`, fiche 94). Sans relecture, l'appel est « non vérifié ». Autrefois l'absence d'un champ valait succès (25/11, 806 faux)."""
+    total["total_rows"] = total.get("total_rows", 0) + sent
+    total["batches"] = total.get("batches", 0) + 1
+    for k in ("created", "updated", "failed", "duplicates", "verified"):
+        total.setdefault(k, 0)
+    states = total.setdefault("_states", [])
+    ops = body.get("operations") if isinstance(body, dict) else None
+    if status not in (200, 201) or not isinstance(ops, list):
+        total["failed"] += sent
+        states.append("echec")
+        total.setdefault("errors", []).append({"http": status, "error": (body or {}).get("error") if isinstance(body, dict) else str(body)[:200]})
+        return total
+    for o in ops:
+        if o.get("action") in ("create", "update"):
+            total["created" if o["action"] == "create" else "updated"] += 1
+        else:
+            total["failed"] += 1
+            if len(total.setdefault("errors", [])) < 20:
+                total["errors"].append({"email": o.get("email") or "", "error": o.get("error") or "refusé"})
+    rep = body.get("report")
+    if not isinstance(rep, dict) or rep.get("verified") is None:
+        states.append("non_verifie")
+        return total
+    total["duplicates"] += rep.get("duplicates") or 0
+    total["verified"] += rep["verified"]
+    for lid, l in (rep.get("lists") or {}).items():
+        cur = total.setdefault("lists", {}).setdefault(lid, {"subscribed": 0, "other": 0, "absent": 0})
+        for k in ("subscribed", "other", "absent"):
+            cur[k] += l.get(k) or 0
+        if l.get("unknown"):
+            cur["unknown"] = True  # la liste n'existe pas dans l'espace
+    states.append(rep.get("state") or "non_verifie")
+    return total
+
+
+def import_state(total):
+    """Pure : l'état d'ensemble et son code de sortie (0 complet, 1 incomplet, 2 non abouti)."""
+    states = set(total.pop("_states", []))
+    if states == {"complet"}:
+        return "complet", 0
+    if states == {"echec"}:
+        return "echec", 1
+    if not states or "non_verifie" in states:
+        return "non_verifie", 2
+    return "partiel", 1
+
+
 def _read_contacts_csv(path):
     """Lit un CSV (premiere ligne = en-tetes) et retourne une liste de dicts.
     Colonne 'email' obligatoire (au moins une ligne non vide). Toutes les
@@ -4026,11 +4087,12 @@ def _read_contacts_csv(path):
         reader = csv.DictReader(f)
         if not reader.fieldnames or "email" not in reader.fieldnames:
             die(f"{path} : en-tete 'email' manquant (colonnes trouvees : {reader.fieldnames}).")
-        rows = []
+        rows, sans_email = [], 0
         for i, row in enumerate(reader, start=2):  # 1 = en-tete
             email = (row.get("email") or "").strip()
             if not email:
-                continue  # ligne vide / sans email : ignoree silencieusement
+                sans_email += 1
+                continue
             contact = {k: v for k, v in row.items() if v not in (None, "")}
             contact["email"] = email
             # custom_json_1..5 : un CSV ne porte que du texte ; l'API attend un OBJET. Sans ce parse, le segment
@@ -4041,7 +4103,12 @@ def _read_contacts_csv(path):
                         contact[k] = json.loads(contact[k])
                     except (TypeError, ValueError) as e:
                         die(f"{path} ligne {i} : {k} n'est pas du JSON valide ({e}) : {contact[k]!r}")
+                elif k.startswith("custom_number_"):
+                    # Un CSV ne porte que du texte ; l'API attend un nombre et refuse tout le contact (25/11 : 806 lignes perdues).
+                    contact[k] = _csv_number(contact[k], f"{path} ligne {i} : {k}")
             rows.append(contact)
+        if sans_email:
+            print(f"{path} : {sans_email} ligne(s) sans email, non envoyée(s)", file=sys.stderr)
         return rows
 
 
@@ -4055,34 +4122,29 @@ def cmd_contacts_import(a):
     lists = getattr(a, "lists", None)
     subscribe_to_lists = [l.strip() for l in lists.split(",") if l.strip()] if lists else None
 
-    if csv_path:
-        all_contacts = _read_contacts_csv(csv_path)
-        if not all_contacts:
-            die(f"{csv_path} : aucune ligne avec un email non vide.")
-        total_imported, total_failed, batches = 0, 0, 0
-        last_status, last_body = 200, {}
-        for i in range(0, len(all_contacts), _CONTACTS_IMPORT_BATCH_SIZE):
-            chunk = all_contacts[i:i + _CONTACTS_IMPORT_BATCH_SIZE]
-            body = {"workspace_id": a.workspace, "contacts": chunk}
-            if subscribe_to_lists:
-                body["subscribe_to_lists"] = subscribe_to_lists
-            last_status, last_body = app_call(a.env, "contacts.import", a.workspace, body=body, method="POST")
-            batches += 1
-            if isinstance(last_body, dict):
-                total_imported += last_body.get("imported", len(chunk))
-                total_failed += len(last_body.get("errors", []) or [])
-        out(last_status, {"batches": batches, "total_rows": len(all_contacts),
-                           "imported": total_imported, "failed": total_failed,
-                           "last_batch_response": last_body})
-        return
-
-    contacts = _json_arg(a.data)
+    contacts = _read_contacts_csv(csv_path) if csv_path else _json_arg(a.data)
     if not isinstance(contacts, list):
         die("--data doit être un tableau JSON de contacts (ou @file.json).")
-    body = {"workspace_id": a.workspace, "contacts": contacts}
-    if subscribe_to_lists:
-        body["subscribe_to_lists"] = subscribe_to_lists
-    out(*app_call(a.env, "contacts.import", a.workspace, body=body, method="POST"))
+    if not contacts:
+        die(f"{csv_path or '--data'} : aucun contact avec un email non vide.")
+    total, ops = {}, []
+    for chunk in split_batches(contacts, _CONTACTS_IMPORT_BATCH_SIZE):
+        body = {"workspace_id": a.workspace, "contacts": chunk}
+        if subscribe_to_lists:
+            body["subscribe_to_lists"] = subscribe_to_lists
+        status, resp = app_call(a.env, "contacts.import", a.workspace, body=body, method="POST")
+        import_tally(total, status, resp, len(chunk))
+        if not csv_path and isinstance(resp, dict):
+            ops += resp.get("operations") or []
+    state, code = import_state(total)
+    res = {"state": state, **total}
+    if not csv_path:
+        res["operations"] = ops
+    out(200, res)
+    if code:
+        print({"echec": "ÉCHEC : rien n'est entré dans l'espace.", "partiel": "PARTIEL : lire failed, verified, lists et errors.",
+               "non_verifie": "NON ABOUTI : le résultat n'a pas pu être relu dans l'espace."}[state], file=sys.stderr)
+        sys.exit(code)
 
 
 def cmd_contacts_delete(a):
