@@ -20,6 +20,7 @@ WS = a.ws or f"pers{T}"[:20]
 ALICE, BOB, NOBODY = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
 OLD, NEW = f"e2e-pers-{T}-ancienne@example.com", f"e2e-pers-{T}-nouvelle@example.com"
 bad = []
+KEY = None
 
 
 def check(name, ok, seen=""):
@@ -55,12 +56,17 @@ if not a.prod:
     st, r = hub("POST", "/api/tenants/provision", {"tenant_id": WS, "owner_email": f"e2e-pers-{T}-owner@example.com", "owner_hub_user_id": str(uuid.uuid4())})
     if st != 200:
         print("NON ABOUTI : espace", st, r); sys.exit(2)
+    KEY = r.get("api_key")
+    if not KEY:
+        print("NON ABOUTI : clé d'espace non rendue"); sys.exit(2)
 _, AVANT = membres()
 try:
     st, r = geste("sync-member", {"hub_user_id": ALICE, "email": OLD, "user_email": OLD, "email_proven": True, "role": "member"})
     if st != 200:
         print("NON ABOUTI : préparation", st, r); sys.exit(2)
     alice_local = r.get("app_user_id")
+    if KEY:
+        hub("POST", "/api/tenants/provision", {"tenant_id": f"x{WS}"[:20], "owner_email": f"e2e-pers-{T}-ailleurs@example.com", "owner_hub_user_id": str(uuid.uuid4())})
     # Le Hub change l'adresse principale d'Alice, puis Bob, compte neuf, reprend l'ancienne.
     st, r = hub("POST", "/api/hub/users/sync", {"hub_user_id": ALICE, "email": NEW})
     check("adresse d'Alice changée", st == 200 and r.get("updated") is True, f"{st} {r}")
@@ -95,6 +101,21 @@ try:
     st, r = geste("attach-member", {"hub_user_id": ALICE, "hub_user_email": OLD, "role": "member"})
     check("attach : déjà membre, aucun double", st == 200 and r.get("already_member") is True, f"{st} {r}")
 
+    if KEY:  # le lien de connexion d'un espace (la clé n'est rendue qu'à sa création : staging seulement). Jamais le lien à l'écran.
+        def lien(body):
+            return nc.call_jwt(ENV, "POST", "/api/workspaces.generateMagicLink", KEY, body=body)
+        st, r = lien({"hub_user_id": ALICE, "user_email": OLD})
+        vu = urllib.parse.unquote(r.get("magic_link", "")) if isinstance(r, dict) else ""
+        check("lien : ouvre Alice sous sa nouvelle adresse, pas Bob", st == 200 and NEW in vu and OLD not in vu, st)
+        st, r = lien({"hub_user_id": NOBODY, "user_email": OLD})
+        check("lien : identifiant inconnu, 404, jamais l'adresse", st == 404, st)
+        st, r = lien({"user_email": f"e2e-pers-{T}-ailleurs@example.com"})
+        check("lien : quelqu'un d'un autre espace, 404", st == 404, st)
+        geste("remove-member", {"hub_user_id": ALICE, "reason": "e2e"})
+        st, r = lien({"hub_user_id": ALICE})
+        check("lien : retirée, 404", st == 404, st)
+        geste("restore-member", {"hub_user_id": ALICE})
+
     # Refus dits, jamais une fusion.
     st, r = hub("POST", "/api/hub/users/sync", {"hub_user_id": ALICE, "email": OLD})
     check("adresse déjà prise : 409 email_conflict", st == 409 and "email_conflict" in str(r), f"{st} {r}")
@@ -118,7 +139,7 @@ finally:
             geste("remove-member", {"hub_user_id": who, "reason": "e2e"})
             hub("POST", "/api/hub/users/sync", {"hub_user_id": who, "deleted": True})
         if not a.prod:
-            hub("POST", "/api/veridian/admin/wipe-test-tenants", {"tenant_ids": [WS]})
+            hub("POST", "/api/veridian/admin/wipe-test-tenants", {"tenant_ids": [WS, f"x{WS}"[:20]]})
         else:
             _, n = membres()
             check("remise en état : le nombre de membres d'avant", n == AVANT, f"{n} / {AVANT}")
