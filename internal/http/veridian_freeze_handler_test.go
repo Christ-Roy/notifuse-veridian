@@ -9,8 +9,8 @@ package http
 //   - 409 member_already_frozen (idempotent freeze)
 //   - 404 tenant_not_found (sql.ErrNoRows)
 //   - 404 user_not_member (ErrMemberNotInWorkspace)
-//   - 400 validation (missing email, hub_user_id, malformed JSON)
-//   - 422 invalid email format (sans @)
+//   - 400 validation (hub_user_id manquant, malformed JSON)
+//   - 400 hub_user_id mal forme (pas un UUID)
 //   - 400 invalid reason
 //   - 503 ErrFrozenMemberRepoNotConfigured
 
@@ -51,13 +51,13 @@ func TestHandleFreezeMember_Success_Returns200(t *testing.T) {
 	svc.EXPECT().FreezeMember(gomock.Any(), gomock.Any()).Return(&domain.FreezeMemberResponse{
 		TenantID:  "ws-1",
 		UserEmail: "bob@example.com",
-		HubUserID: "hub-u-bob",
+		HubUserID: "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
 		Reason:    domain.FreezeReasonQuotaSeatExceeded,
 	}, false, nil)
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"user_email":"bob@example.com","hub_user_id":"hub-u-bob","reason":"quota_seat_exceeded"}`)
+		`{"user_email":"bob@example.com","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","reason":"quota_seat_exceeded"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.FreezeMemberResponse
@@ -79,7 +79,7 @@ func TestHandleFreezeMember_AlreadyFrozen_Returns409(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"user_email":"bob@example.com","hub_user_id":"hub-u-bob"}`)
+		`{"user_email":"bob@example.com","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	var body map[string]interface{}
@@ -96,7 +96,7 @@ func TestHandleFreezeMember_Owner_Returns409CannotFreezeOwner(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"user_email":"owner@x.test","hub_user_id":"hub-u-owner"}`)
+		`{"user_email":"owner@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	var body map[string]interface{}
@@ -113,7 +113,7 @@ func TestHandleFreezeMember_UserNotMember_Returns404(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"user_email":"ghost@x.test","hub_user_id":"hub-u-ghost"}`)
+		`{"user_email":"ghost@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	var body map[string]interface{}
@@ -130,7 +130,7 @@ func TestHandleFreezeMember_TenantNotFound_Returns404(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-unknown", "/api/tenants/ws-unknown/freeze-member",
-		`{"user_email":"bob@x.test","hub_user_id":"u-1"}`)
+		`{"user_email":"bob@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	var body map[string]interface{}
@@ -151,7 +151,7 @@ func TestHandleFreezeMember_GenericServiceError_Returns500NoLeak(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"user_email":"bob@x.test","hub_user_id":"u-1"}`)
+		`{"user_email":"bob@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "pq:", "le 500 ne doit pas leak l'erreur interne brute")
@@ -161,17 +161,40 @@ func TestHandleFreezeMember_GenericServiceError_Returns500NoLeak(t *testing.T) {
 	assert.Equal(t, ErrCodeInternalError, body["code"], "le code machine internal_error doit rester exposé")
 }
 
-func TestHandleFreezeMember_MissingUserEmail_Returns400(t *testing.T) {
+// L'adresse n'est plus obligatoire (CONTRAT-HUB 5.19.7) : hub_user_id seul suffit, le service est appele.
+func TestHandleFreezeMember_AddressNotRequired_HubUserIDAlone(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
-	// Pas d'EXPECT().FreezeMember : validation precoce avant service.
+	svc.EXPECT().FreezeMember(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ interface{}, in domain.FreezeMemberInput) (*domain.FreezeMemberResponse, bool, error) {
+			assert.Equal(t, "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01", in.HubUserID)
+			assert.Empty(t, in.UserEmail)
+			return &domain.FreezeMemberResponse{TenantID: "ws-1", HubUserID: in.HubUserID, Reason: domain.FreezeReasonManual}, false, nil
+		})
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"hub_user_id":"u-1"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// Personne inconnue de l'app : 404 user_not_in_app, jamais une creation.
+func TestHandleFreezeMember_UserNotInApp_Returns404(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().FreezeMember(gomock.Any(), gomock.Any()).Return(nil, false, service.ErrUserNotInApp)
+
+	h := newHandlerWithService(svc)
+	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeUserNotInApp, body["code"])
 }
 
 func TestHandleFreezeMember_MissingHubUserID_Returns400(t *testing.T) {
@@ -196,15 +219,16 @@ func TestHandleFreezeMember_InvalidJSON_Returns400(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestHandleFreezeMember_MalformedEmail_Returns422(t *testing.T) {
+func TestHandleFreezeMember_MalformedHubUserID_Returns400(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"user_email":"not-an-email","hub_user_id":"u-1"}`)
+		`{"user_email":"bob@x.test","hub_user_id":"u-1"}`)
 
-	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCodeInvalidPayload)
 }
 
 func TestHandleFreezeMember_InvalidReason_Returns400(t *testing.T) {
@@ -213,7 +237,7 @@ func TestHandleFreezeMember_InvalidReason_Returns400(t *testing.T) {
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"user_email":"bob@x.test","hub_user_id":"u-1","reason":"super_invalid_reason"}`)
+		`{"user_email":"bob@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","reason":"super_invalid_reason"}`)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
@@ -227,7 +251,7 @@ func TestHandleFreezeMember_RepoNotConfigured_Returns503(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleFreezeMember, "ws-1", "/api/tenants/ws-1/freeze-member",
-		`{"user_email":"bob@x.test","hub_user_id":"u-1"}`)
+		`{"user_email":"bob@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 }
@@ -239,7 +263,7 @@ func TestHandleFreezeMember_MissingTenantID_Returns400(t *testing.T) {
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/tenants//freeze-member", bytes.NewReader([]byte(`{"user_email":"a@x.test","hub_user_id":"u"}`)))
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants//freeze-member", bytes.NewReader([]byte(`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)))
 	rec := httptest.NewRecorder()
 	h.handleFreezeMember(rec, req)
 
@@ -256,12 +280,12 @@ func TestHandleUnfreezeMember_Success_Returns200(t *testing.T) {
 	svc.EXPECT().UnfreezeMember(gomock.Any(), gomock.Any()).Return(&domain.UnfreezeMemberResponse{
 		TenantID:  "ws-1",
 		UserEmail: "bob@example.com",
-		HubUserID: "hub-u-bob",
+		HubUserID: "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
 	}, true, nil)
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleUnfreezeMember, "ws-1", "/api/tenants/ws-1/unfreeze-member",
-		`{"user_email":"bob@example.com","hub_user_id":"hub-u-bob"}`)
+		`{"user_email":"bob@example.com","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.UnfreezeMemberResponse
@@ -283,7 +307,7 @@ func TestHandleUnfreezeMember_NotFrozen_Still200Idempotent(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleUnfreezeMember, "ws-1", "/api/tenants/ws-1/unfreeze-member",
-		`{"user_email":"bob@example.com","hub_user_id":"u-1"}`)
+		`{"user_email":"bob@example.com","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
@@ -297,12 +321,29 @@ func TestHandleUnfreezeMember_UserNotMember_Returns404(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleUnfreezeMember, "ws-1", "/api/tenants/ws-1/unfreeze-member",
-		`{"user_email":"ghost@x.test","hub_user_id":"u-1"}`)
+		`{"user_email":"ghost@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	var body map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, ErrCodeUserNotMember, body["code"])
+}
+
+func TestHandleUnfreezeMember_UserNotInApp_Returns404(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().UnfreezeMember(gomock.Any(), gomock.Any()).Return(nil, false, service.ErrUserNotInApp)
+
+	h := newHandlerWithService(svc)
+	rec := postFreezeRequest(t, h.handleUnfreezeMember, "ws-1", "/api/tenants/ws-1/unfreeze-member",
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeUserNotInApp, body["code"])
 }
 
 func TestHandleUnfreezeMember_TenantNotFound_Returns404(t *testing.T) {
@@ -314,7 +355,7 @@ func TestHandleUnfreezeMember_TenantNotFound_Returns404(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleUnfreezeMember, "ws-unknown", "/api/tenants/ws-unknown/unfreeze-member",
-		`{"user_email":"bob@x.test","hub_user_id":"u-1"}`)
+		`{"user_email":"bob@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
@@ -349,7 +390,7 @@ func TestHandleUnfreezeMember_RepoNotConfigured_Returns503(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postFreezeRequest(t, h.handleUnfreezeMember, "ws-1", "/api/tenants/ws-1/unfreeze-member",
-		`{"user_email":"a@x.test","hub_user_id":"u-1"}`)
+		`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 
 	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 }
@@ -360,7 +401,7 @@ func TestHandleUnfreezeMember_MissingTenantID_Returns400(t *testing.T) {
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/tenants//unfreeze-member", bytes.NewReader([]byte(`{"user_email":"a@x.test","hub_user_id":"u"}`)))
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants//unfreeze-member", bytes.NewReader([]byte(`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)))
 	rec := httptest.NewRecorder()
 	h.handleUnfreezeMember(rec, req)
 

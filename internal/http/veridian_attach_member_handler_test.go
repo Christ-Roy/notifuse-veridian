@@ -87,7 +87,7 @@ func TestHandleAttachMember_FirstAttach_Returns201(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postAttachMember(t, h.handleAttachMember, "ws-1",
-		`{"hub_user_id":"u-hub-1","hub_user_email":"alice@example.com","role":"member","invitation_id":"inv-1"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"alice@example.com","role":"member","invitation_id":"inv-1"}`)
 
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	var resp domain.AttachMemberResponse
@@ -114,7 +114,7 @@ func TestHandleAttachMember_AlreadyMember_Returns200(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postAttachMember(t, h.handleAttachMember, "ws-1",
-		`{"hub_user_id":"u-hub-1","hub_user_email":"alice@example.com","role":"member"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"alice@example.com","role":"member"}`)
 
 	// Idempotent re-call → 200 (pas 201)
 	assert.Equal(t, http.StatusOK, rec.Code)
@@ -145,8 +145,8 @@ func TestHandleAttachMember_MissingFields_Returns400(t *testing.T) {
 		missing string
 	}{
 		{`{"hub_user_email":"a@x.test","role":"member"}`, "hub_user_id"},
-		{`{"hub_user_id":"u-1","role":"member"}`, "hub_user_email"},
-		{`{"hub_user_id":"u-1","hub_user_email":"a@x.test"}`, "role"},
+		{`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"member"}`, "hub_user_email"},
+		{`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test"}`, "role"},
 		{`{}`, "hub_user_id"},
 	}
 
@@ -157,6 +157,31 @@ func TestHandleAttachMember_MissingFields_Returns400(t *testing.T) {
 	}
 }
 
+func TestHandleAttachMember_MalformedHubUserID_Returns400(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl) // service jamais appele
+	h := newHandlerWithService(svc)
+
+	rec := postAttachMember(t, h.handleAttachMember, "ws-1",
+		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCodeInvalidPayload)
+}
+
+func TestHandleAttachMember_HubUserIDConflict_Returns409(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().AttachMember(gomock.Any(), gomock.Any()).Return(nil, service.ErrHubUserIDConflict)
+	h := newHandlerWithService(svc)
+
+	rec := postAttachMember(t, h.handleAttachMember, "ws-1",
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"member"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCodeHubUserConflict)
+}
+
 func TestHandleAttachMember_InvalidRole_Returns400(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -164,7 +189,7 @@ func TestHandleAttachMember_InvalidRole_Returns400(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postAttachMember(t, h.handleAttachMember, "ws-1",
-		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"superuser"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"superuser"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeInvalidRole)
 }
@@ -178,7 +203,7 @@ func TestHandleAttachMember_TenantNotFound_Returns404(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postAttachMember(t, h.handleAttachMember, "ws-unknown",
-		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"member"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeTenantNotFound)
@@ -193,7 +218,7 @@ func TestHandleAttachMember_TenantNotFound_ErrorString_Returns404(t *testing.T) 
 
 	h := newHandlerWithService(svc)
 	rec := postAttachMember(t, h.handleAttachMember, "ws-x",
-		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"member"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
@@ -207,7 +232,7 @@ func TestHandleAttachMember_TenantSuspended_Returns423(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postAttachMember(t, h.handleAttachMember, "ws-suspended",
-		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"member"}`)
 
 	assert.Equal(t, http.StatusLocked, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeTenantSuspended)
@@ -223,7 +248,7 @@ func TestHandleAttachMember_TenantSuspendedWrapped_Returns423(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postAttachMember(t, h.handleAttachMember, "ws-suspended",
-		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"member"}`)
 
 	assert.Equal(t, http.StatusLocked, rec.Code)
 }
@@ -237,7 +262,7 @@ func TestHandleAttachMember_UserRoleConflict_Returns409(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postAttachMember(t, h.handleAttachMember, "ws-1",
-		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"member"}`)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeUserRoleConflict)
@@ -252,7 +277,7 @@ func TestHandleAttachMember_ServiceError_Returns500(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postAttachMember(t, h.handleAttachMember, "ws-1",
-		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"member"}`)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	// Le 500 ne doit PAS leak l'erreur interne brute au client (axe 2) : message
@@ -269,7 +294,7 @@ func TestHandleAttachMember_EmptyTenantID_Returns400(t *testing.T) {
 
 	// path value vide → handler doit retourner 400 avant d'appeler le service
 	rec := postAttachMemberNoPath(t, h.handleAttachMember,
-		`{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"member"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"member"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -288,7 +313,7 @@ func TestHandleAttachMember_AllValidRoles_Accept(t *testing.T) {
 			}, nil)
 
 			h := newHandlerWithService(svc)
-			body := `{"hub_user_id":"u-1","hub_user_email":"a@x.test","role":"` + role + `"}`
+			body := `{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","hub_user_email":"a@x.test","role":"` + role + `"}`
 			rec := postAttachMember(t, h.handleAttachMember, "ws-1", body)
 			assert.Equal(t, http.StatusCreated, rec.Code, "role=%s", role)
 		})

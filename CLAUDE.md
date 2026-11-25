@@ -61,8 +61,8 @@ brique = une fiche + une ligne d'index.
     → `44`
 12. **Tout cross-app (identité, membership, billing) passe par le Hub, jamais
     app→app direct.** Un `hub_user_id` n'est jamais réécrit sur un user existant sans
-    audit + migration explicite ; un lien différent est refusé (400), un lien ne s'écrit que
-    si le Hub atteste l'adresse. Un utilisateur ne se crée, modifie, supprime qu'au Hub. → `45`, `80`
+    audit ni migration ; un lien différent est refusé, un lien ne s'écrit que si le Hub atteste
+    l'adresse. Un utilisateur ne se crée, modifie, supprime qu'au Hub. → `45`, `80`, `89`
 13. **Toute route `/api/*` a une commande CLI, et la CLI embarquée = son MANIFEST.** Le contrôle
    tourne au pre-push et en CI. → `77`
 14. **Connexions PostgreSQL : `DB_MAX_CONNECTIONS=80` pour `max_connections=200` de pg-saas** (5 apps, budget
@@ -116,12 +116,13 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `82` statut d'essai du Hub (stocké, rendu, jamais appliqué) et signal d'activité vers le Hub
 - `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
-- `81` capacité base : connexions, `max_connections`, incident du 07/11
-- `88` organisation poussée par le Hub (nom, logo, couleurs), abonnement du Hub aux réponses
+- `81` capacité base : connexions, incident du 07/11
+- `89` **une personne du Hub = son `hub_user_id`, jamais son adresse** (résolveur unique)
+- `88` organisation poussée par le Hub, abonnement du Hub aux réponses
 - `87` actions demandées par une autre app (jeton `act`), « Envoyer vers Mail »
 - `86` un membre ne s'ajoute qu'au Hub : routes amont fermées (403), test des portes
 - `85` réservoirs : import massif dédoublonné, activation par lots, outils MCP, code mode
-- `79` CLI utilisateur à parité : qui peut quoi, tableau d'audit
+- `79` CLI utilisateur à parité : qui peut quoi
 
 **Base de données workspace**
 - `39` DROP DATABASE WITH (FORCE) — wipe orphelin + GC

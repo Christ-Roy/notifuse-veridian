@@ -26,6 +26,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 import * as http from 'http';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -67,6 +68,7 @@ async function provisionTenant(tenantId: string, plan = 'free') {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan,
     });
     if (r.status === 200) {
@@ -120,7 +122,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
     const inviteeEmail = `${tid}-sync-new@membership.test`;
     const r = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: inviteeEmail,
-      hub_user_id: `hub-sync-${tid}`,
+      hub_user_id: hubId(`hub-sync-${tid}`),
       role: 'member',
     });
     const raw = await r.text();
@@ -145,7 +147,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
     const inviteeEmail = `${tid}-sync-idem@membership.test`;
     const reqBody = {
       user_email: inviteeEmail,
-      hub_user_id: `hub-sync-idem-${tid}`,
+      hub_user_id: hubId(`hub-sync-idem-${tid}`),
       role: 'member' as const,
     };
 
@@ -184,7 +186,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
 
     const r = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: prov.owner_email,
-      hub_user_id: `hub-owner-${tid}`,
+      hub_user_id: hubId(prov.owner_email),
       role: 'member',
     });
     const raw = await r.text();
@@ -206,7 +208,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
     const inviteeEmail = `${tid}-admin@membership.test`;
     const r = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: inviteeEmail,
-      hub_user_id: `hub-admin-${tid}`,
+      hub_user_id: hubId(`hub-admin-${tid}`),
       role: 'admin',
     });
     const raw = await r.text();
@@ -223,7 +225,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
 
     const r = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: 'x@membership.test',
-      hub_user_id: 'hub-x',
+      hub_user_id: hubId('hub-x'),
       role: 'superuser',
     });
     expect(r.status).toBe(400);
@@ -237,7 +239,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
 
     const r = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: 'x@membership.test',
-      hub_user_id: 'hub-x',
+      hub_user_id: hubId('hub-x'),
       role: 'owner',
     });
     expect(r.status).toBe(400);
@@ -251,7 +253,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
 
     // user_email absent
     const r1 = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
-      hub_user_id: 'h-1',
+      hub_user_id: hubId('h-1'),
       role: 'member',
     });
     expect(r1.status).toBe(400);
@@ -266,7 +268,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
     // role absent
     const r3 = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: 'x@membership.test',
-      hub_user_id: 'h-1',
+      hub_user_id: hubId('h-1'),
     });
     expect(r3.status).toBe(400);
   });
@@ -278,7 +280,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
 
     const r = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: 'not-an-email',
-      hub_user_id: 'h-1',
+      hub_user_id: hubId('h-1'),
       role: 'member',
     });
     expect(r.status).toBe(422);
@@ -290,7 +292,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
 
     const r = await hmacFetch(`/api/tenants/${ghostTid}/sync-member`, 'POST', {
       user_email: 'x@membership.test',
-      hub_user_id: 'h-1',
+      hub_user_id: hubId('h-1'),
       role: 'member',
     });
     expect(r.status).toBe(404);
@@ -304,7 +306,7 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
 
     const raw = JSON.stringify({
       user_email: 'x@membership.test',
-      hub_user_id: 'h-1',
+      hub_user_id: hubId('h-1'),
       role: 'member',
     });
     const ts = Date.now().toString();
@@ -334,7 +336,7 @@ test.describe('@regression remove-member — POST /api/tenants/{id}/remove-membe
     const inviteeEmail = `${tid}-remove@membership.test`;
     const syncResp = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: inviteeEmail,
-      hub_user_id: `hub-rm-${tid}`,
+      hub_user_id: hubId(`hub-rm-${tid}`),
       role: 'member',
     });
     expect(syncResp.status, await syncResp.text()).toBe(200);
@@ -345,6 +347,7 @@ test.describe('@regression remove-member — POST /api/tenants/{id}/remove-membe
     // Remove le membre.
     const r = await hmacFetch(`/api/tenants/${tid}/remove-member`, 'POST', {
       user_email: inviteeEmail,
+      hub_user_id: hubId(`hub-rm-${tid}`),
       reason: 'admin_action',
     });
     const raw = await r.text();
@@ -366,7 +369,7 @@ test.describe('@regression remove-member — POST /api/tenants/{id}/remove-membe
     const prov = await provisionTenant(tid, 'free');
 
     const r = await hmacFetch(`/api/tenants/${tid}/remove-member`, 'POST', {
-      user_email: prov.owner_email,
+      hub_user_id: hubId(prov.owner_email),
       reason: 'admin_action',
     });
     expect(r.status).toBe(409);
@@ -384,16 +387,18 @@ test.describe('@regression remove-member — POST /api/tenants/{id}/remove-membe
     await provisionTenant(tid, 'free');
 
     const r = await hmacFetch(`/api/tenants/${tid}/remove-member`, 'POST', {
-      user_email: `ghost-${tid}@membership.test`,
+      hub_user_id: hubId(`ghost-${tid}`),
+      email: `${tid}@membership.test`, // celle du propriétaire : une adresse ne désigne personne (5.19.7)
     });
     const raw = await r.text();
     expect(r.status, raw).toBe(200);
     const body = JSON.parse(raw);
     expect(body.tenant_id).toBe(tid);
+    expect(body.removed).toBe(false);
     expect(body.removed_at).toBeTruthy();
   });
 
-  test('user_email manquant → 400 invalid_payload', async () => {
+  test('hub_user_id manquant → 400 invalid_payload', async () => {
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
@@ -407,7 +412,7 @@ test.describe('@regression remove-member — POST /api/tenants/{id}/remove-membe
   test('tenant inconnu → 404 tenant_not_found', async () => {
     const ghostTid = `tstghost${Date.now().toString(36).slice(-4)}`;
     const r = await hmacFetch(`/api/tenants/${ghostTid}/remove-member`, 'POST', {
-      user_email: 'x@membership.test',
+      hub_user_id: hubId('x'),
     });
     expect(r.status).toBe(404);
     expect(await r.text()).toMatch(/tenant_not_found/);
@@ -446,7 +451,7 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
     const inviteeEmail = `${tid}-restore@membership.test`;
     const sync = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: inviteeEmail,
-      hub_user_id: `hub-restore-${tid}`,
+      hub_user_id: hubId(`hub-restore-${tid}`),
       role: 'member',
     });
     expect(sync.status, await sync.text()).toBe(200);
@@ -457,6 +462,7 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
     // 2. Remove
     const rm = await hmacFetch(`/api/tenants/${tid}/remove-member`, 'POST', {
       user_email: inviteeEmail,
+      hub_user_id: hubId(`hub-restore-${tid}`),
     });
     expect(rm.status, await rm.text()).toBe(200);
 
@@ -466,6 +472,7 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
     // 3. Restore
     const r = await hmacFetch(`/api/tenants/${tid}/restore-member`, 'POST', {
       user_email: inviteeEmail,
+      hub_user_id: hubId(`hub-restore-${tid}`),
     });
     const raw = await r.text();
     expect(r.status, raw).toBe(200);
@@ -488,7 +495,7 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
     const inviteeEmail = `${tid}-restore-idem@membership.test`;
     const sync = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: inviteeEmail,
-      hub_user_id: `hub-restore-idem-${tid}`,
+      hub_user_id: hubId(`hub-restore-idem-${tid}`),
       role: 'member',
     });
     expect(sync.status, await sync.text()).toBe(200);
@@ -499,6 +506,7 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
     // Restore sans remove prealable → idempotent.
     const r = await hmacFetch(`/api/tenants/${tid}/restore-member`, 'POST', {
       user_email: inviteeEmail,
+      hub_user_id: hubId(`hub-restore-idem-${tid}`),
     });
     expect(r.status, await r.text()).toBe(200);
 
@@ -506,9 +514,7 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
     expect(afterHealth.members_count).toBe(beforeCount);
   });
 
-  test('restore sur user inconnu → 200 (defensive create) + attache role=member', async () => {
-    // CONTRAT-HUB §5.20 : restore-member recree le user defensif s'il a ete
-    // physiquement supprime entre-temps. Pas d'erreur si user inconnu.
+  test('restore sur personne inconnue → 404 user_not_in_app, jamais de creation (5.19.7)', async () => {
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
@@ -518,16 +524,18 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
 
     const fakeEmail = `${tid}-never-existed@membership.test`;
     const r = await hmacFetch(`/api/tenants/${tid}/restore-member`, 'POST', {
-      user_email: fakeEmail,
+      hub_user_id: hubId(fakeEmail),
+      email: fakeEmail,
     });
-    expect(r.status, await r.text()).toBe(200);
+    const raw = await r.text();
+    expect(r.status, raw).toBe(404);
+    expect(raw).toMatch(/user_not_in_app/);
 
-    // User cree defensivement + attache → count +1.
     const afterHealth = await getTenantHealth(tid);
-    expect(afterHealth.members_count).toBe(baseCount + 1);
+    expect(afterHealth.members_count).toBe(baseCount);
   });
 
-  test('user_email manquant → 400 invalid_payload', async () => {
+  test('hub_user_id manquant → 400 invalid_payload', async () => {
     const tid = `tst${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
@@ -539,7 +547,7 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
   test('tenant inconnu → 404 tenant_not_found', async () => {
     const ghostTid = `tstghost${Date.now().toString(36).slice(-4)}`;
     const r = await hmacFetch(`/api/tenants/${ghostTid}/restore-member`, 'POST', {
-      user_email: 'x@membership.test',
+      hub_user_id: hubId('x'),
     });
     expect(r.status).toBe(404);
     expect(await r.text()).toMatch(/tenant_not_found/);
@@ -583,7 +591,7 @@ test.describe('@regression attach-member alias workspace-level — POST /api/ver
 
     const inviteeEmail = `${tid}-ws-alias@membership.test`;
     const body = {
-      hub_user_id: `hub-alias-${tid}`,
+      hub_user_id: hubId(`hub-alias-${tid}`),
       hub_user_email: inviteeEmail,
       role: 'member',
       invitation_id: `inv-alias-${tid}`,
@@ -633,7 +641,7 @@ test.describe('@regression attach-member alias workspace-level — POST /api/ver
     // Tenant A : route tenant-level
     const rA = await hmacFetch(`/api/tenants/${tidA}/attach-member`, 'POST', {
       ...baseBody,
-      hub_user_id: `hub-a-${tidA}`,
+      hub_user_id: hubId(`hub-a-${tidA}`),
       hub_user_email: `${tidA}-A@membership.test`,
       invitation_id: `inv-a-${tidA}`,
     });
@@ -644,7 +652,7 @@ test.describe('@regression attach-member alias workspace-level — POST /api/ver
     // Tenant B : route workspace-level alias
     const rB = await hmacFetch(`/api/veridian/workspaces/${tidB}/attach-member`, 'POST', {
       ...baseBody,
-      hub_user_id: `hub-b-${tidB}`,
+      hub_user_id: hubId(`hub-b-${tidB}`),
       hub_user_email: `${tidB}-B@membership.test`,
       invitation_id: `inv-b-${tidB}`,
     });
@@ -666,7 +674,7 @@ test.describe('@regression attach-member alias workspace-level — POST /api/ver
   test('alias : tenant inconnu → 404 tenant_not_found', async () => {
     const ghostTid = `tstghost${Date.now().toString(36).slice(-4)}`;
     const r = await hmacFetch(`/api/veridian/workspaces/${ghostTid}/attach-member`, 'POST', {
-      hub_user_id: 'ghost',
+      hub_user_id: hubId('ghost'),
       hub_user_email: 'ghost@membership.test',
       role: 'member',
       invitation_id: 'inv-ghost',
@@ -681,7 +689,7 @@ test.describe('@regression attach-member alias workspace-level — POST /api/ver
     await provisionTenant(tid, 'free');
 
     const raw = JSON.stringify({
-      hub_user_id: 'x',
+      hub_user_id: hubId('x'),
       hub_user_email: 'x@membership.test',
       role: 'member',
     });
@@ -817,7 +825,7 @@ test.describe('@regression membership webhooks — events tenant.member_* emis v
     const inviteeEmail = `${tid}-wh-add@membership.test`;
     const sync = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: inviteeEmail,
-      hub_user_id: `hub-wh-${tid}`,
+      hub_user_id: hubId(`hub-wh-${tid}`),
       role: 'member',
     });
     expect(sync.status, await sync.text()).toBe(200);
@@ -826,7 +834,7 @@ test.describe('@regression membership webhooks — events tenant.member_* emis v
     expect(hook.signatureValid).toBe(true);
     expect(hook.payload.user_email).toBe(inviteeEmail);
     expect(hook.payload.role).toBe('member');
-    expect(hook.payload.hub_user_id).toBe(`hub-wh-${tid}`);
+    expect(hook.payload.hub_user_id).toBe(hubId(`hub-wh-${tid}`));
     expect(hook.payload.app_user_id).toBeTruthy();
     expect(hook.payload.actor).toBe('hub');
   });
@@ -840,7 +848,7 @@ test.describe('@regression membership webhooks — events tenant.member_* emis v
     // Sync d'abord
     const sync = await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: inviteeEmail,
-      hub_user_id: `hub-wh-rm-${tid}`,
+      hub_user_id: hubId(`hub-wh-rm-${tid}`),
       role: 'member',
     });
     expect(sync.status, await sync.text()).toBe(200);
@@ -849,6 +857,7 @@ test.describe('@regression membership webhooks — events tenant.member_* emis v
     // Remove
     const rm = await hmacFetch(`/api/tenants/${tid}/remove-member`, 'POST', {
       user_email: inviteeEmail,
+      hub_user_id: hubId(`hub-wh-rm-${tid}`),
       reason: 'admin_action',
     });
     expect(rm.status, await rm.text()).toBe(200);
@@ -870,12 +879,13 @@ test.describe('@regression membership webhooks — events tenant.member_* emis v
     // Sync puis remove pour avoir un soft-soft scenario
     await hmacFetch(`/api/tenants/${tid}/sync-member`, 'POST', {
       user_email: inviteeEmail,
-      hub_user_id: `hub-wh-restore-${tid}`,
+      hub_user_id: hubId(`hub-wh-restore-${tid}`),
       role: 'member',
     });
     await waitForEvent('tenant.member_added', tid);
     await hmacFetch(`/api/tenants/${tid}/remove-member`, 'POST', {
       user_email: inviteeEmail,
+      hub_user_id: hubId(`hub-wh-restore-${tid}`),
     });
     await waitForEvent('tenant.member_removed', tid);
     receivedWebhooks.length = 0; // reset pour ne capter QUE le restore event
@@ -883,6 +893,7 @@ test.describe('@regression membership webhooks — events tenant.member_* emis v
     // Restore
     const r = await hmacFetch(`/api/tenants/${tid}/restore-member`, 'POST', {
       user_email: inviteeEmail,
+      hub_user_id: hubId(`hub-wh-restore-${tid}`),
     });
     expect(r.status, await r.text()).toBe(200);
 

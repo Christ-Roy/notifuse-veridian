@@ -225,12 +225,37 @@ func (s *veridianService) TransferOwner(ctx context.Context, input domain.Transf
 	if input.TenantID == "" {
 		return nil, errors.New("tenant_id required")
 	}
-	if input.NewOwnerEmail == "" {
-		return nil, errors.New("new_owner_email required")
+	if input.OwnerHubUserID == "" {
+		return nil, errors.New("owner_hub_user_id required")
 	}
 	if input.Reason == "" {
 		return nil, errors.New("reason required")
 	}
+
+	// Le futur owner : la personne par son hub_user_id SEUL, deja membre (§5.19.7, fiche 89).
+	if _, wsErr := s.workspaceRepo.GetByID(ctx, input.TenantID); wsErr != nil {
+		if msg := strings.ToLower(wsErr.Error()); errors.Is(wsErr, sql.ErrNoRows) || strings.Contains(msg, "not found") || strings.Contains(msg, "no rows") {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("lookup workspace: %w", wsErr)
+	}
+	next, err := s.hubMember(ctx, input.OwnerHubUserID)
+	if err != nil {
+		return nil, err
+	}
+	if next == nil {
+		return nil, ErrUserNotInApp
+	}
+	if uw, uwErr := s.workspaceRepo.GetUserWorkspace(ctx, next.ID, input.TenantID); uwErr != nil {
+		msg := strings.ToLower(uwErr.Error())
+		if errors.Is(uwErr, sql.ErrNoRows) || strings.Contains(msg, "not found") || strings.Contains(msg, "is not a member") || strings.Contains(msg, "no rows") {
+			return nil, ErrOwnerNotMember
+		}
+		return nil, fmt.Errorf("lookup user workspace: %w", uwErr)
+	} else if uw == nil {
+		return nil, ErrOwnerNotMember
+	}
+	input.NewOwnerEmail = next.Email
 
 	// Resolver l'ancien owner AVANT le transfer pour le response payload.
 	// On ne fail PAS si non resolvable (workspace orphelin) — on met "" et
@@ -254,6 +279,7 @@ func (s *veridianService) TransferOwner(ctx context.Context, input domain.Transf
 	if _, err := s.AttachOwner(ctx, domain.AttachOwnerInput{
 		TenantID:   input.TenantID,
 		OwnerEmail: input.NewOwnerEmail,
+		HubUserID:  input.OwnerHubUserID,
 	}); err != nil {
 		// AttachOwner propage sql.ErrNoRows si tenant inexistant — handler
 		// map vers 404. Toute autre erreur remonte telle quelle.

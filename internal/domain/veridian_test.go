@@ -1224,3 +1224,20 @@ func TestIsValidHubTenantID(t *testing.T) {
 		assert.False(t, IsValidHubTenantID(bad), bad)
 	}
 }
+
+// Formes du CONTRAT-HUB 5.19.7 : la personne par son identifiant, l'attestation d'adresse à part. Un nom changé ici casse le Hub.
+func TestHubPersonFields_JSONNames(t *testing.T) {
+	var prov ProvisionInput
+	require.NoError(t, json.Unmarshal([]byte(`{"owner_hub_user_id":"id-1","email_proven":true}`), &prov))
+	assert.Equal(t, "id-1", prov.OwnerHubUserID)
+	assert.True(t, prov.EmailProven)
+
+	var att AttachMemberInput
+	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"id-1","email_proven":true}`), &att))
+	assert.Equal(t, "id-1", att.HubUserID)
+	assert.True(t, att.EmailProven)
+
+	var own AttachOwnerInput
+	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"id-1"}`), &own))
+	assert.Equal(t, "id-1", own.HubUserID)
+}

@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/service"
@@ -62,31 +61,15 @@ func (h *VeridianHandler) handleFreezeMember(w http.ResponseWriter, r *http.Requ
 	}
 
 	var body struct {
-		UserEmail string              `json:"user_email"`
-		HubUserID string              `json:"hub_user_id"`
-		Reason    domain.FreezeReason `json:"reason,omitempty"`
+		hubPerson
+		Reason domain.FreezeReason `json:"reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 
-	missing := missingFields(
-		body.UserEmail == "", "user_email",
-		body.HubUserID == "", "hub_user_id",
-	)
-	if len(missing) > 0 {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email and hub_user_id are required", http.StatusBadRequest, map[string]interface{}{
-			"missing": missing,
-		})
-		return
-	}
-
-	// Email format validation legere (anti-typo Hub). Coherent avec sync-member.
-	if !strings.Contains(body.UserEmail, "@") {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email is malformed (missing @)", http.StatusUnprocessableEntity, map[string]interface{}{
-			"hint": "user_email must contain @",
-		})
+	if !requireHubUserID(w, "hub_user_id", body.HubUserID) {
 		return
 	}
 
@@ -101,7 +84,7 @@ func (h *VeridianHandler) handleFreezeMember(w http.ResponseWriter, r *http.Requ
 
 	resp, alreadyFrozen, err := h.service.FreezeMember(r.Context(), domain.FreezeMemberInput{
 		TenantID:  tenantID,
-		UserEmail: body.UserEmail,
+		UserEmail: body.address(),
 		HubUserID: body.HubUserID,
 		Reason:    body.Reason,
 	})
@@ -121,16 +104,19 @@ func (h *VeridianHandler) handleFreezeMember(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		if errors.Is(err, service.ErrCannotFreezeOwner) {
 			WriteJSONErrorCode(w, ErrCodeCannotFreezeOwner, err.Error(), http.StatusConflict, map[string]interface{}{
-				"tenant_id":  tenantID,
-				"user_email": body.UserEmail,
-				"hint":       "use POST /api/tenants/{id}/transfer-owner first if you really need to freeze this user",
+				"tenant_id":   tenantID,
+				"hub_user_id": body.HubUserID,
+				"hint":        "use POST /api/tenants/{id}/transfer-owner first if you really need to freeze this user",
 			})
+			return
+		}
+		if writeHubPersonError(w, err, tenantID, body.HubUserID) {
 			return
 		}
 		if errors.Is(err, service.ErrMemberNotInWorkspace) {
 			WriteJSONErrorCode(w, ErrCodeUserNotMember, "user is not a member of this workspace", http.StatusNotFound, map[string]interface{}{
-				"tenant_id":  tenantID,
-				"user_email": body.UserEmail,
+				"tenant_id":   tenantID,
+				"hub_user_id": body.HubUserID,
 			})
 			return
 		}
@@ -148,7 +134,6 @@ func (h *VeridianHandler) handleFreezeMember(w http.ResponseWriter, r *http.Requ
 		}
 		h.logError("freeze_member", err, map[string]interface{}{
 			"tenant_id":   tenantID,
-			"user_email":  body.UserEmail,
 			"hub_user_id": body.HubUserID,
 		})
 		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
@@ -211,28 +196,20 @@ func (h *VeridianHandler) handleUnfreezeMember(w http.ResponseWriter, r *http.Re
 	}
 
 	var body struct {
-		UserEmail string `json:"user_email"`
-		HubUserID string `json:"hub_user_id"`
+		hubPerson
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
 
-	missing := missingFields(
-		body.UserEmail == "", "user_email",
-		body.HubUserID == "", "hub_user_id",
-	)
-	if len(missing) > 0 {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email and hub_user_id are required", http.StatusBadRequest, map[string]interface{}{
-			"missing": missing,
-		})
+	if !requireHubUserID(w, "hub_user_id", body.HubUserID) {
 		return
 	}
 
 	resp, _, err := h.service.UnfreezeMember(r.Context(), domain.UnfreezeMemberInput{
 		TenantID:  tenantID,
-		UserEmail: body.UserEmail,
+		UserEmail: body.address(),
 		HubUserID: body.HubUserID,
 	})
 	// Invalidation immediate du cache freeze sur mutation reussie : meme
@@ -243,10 +220,13 @@ func (h *VeridianHandler) handleUnfreezeMember(w http.ResponseWriter, r *http.Re
 		h.frozenCache.Clear()
 	}
 	if err != nil {
+		if writeHubPersonError(w, err, tenantID, body.HubUserID) {
+			return
+		}
 		if errors.Is(err, service.ErrMemberNotInWorkspace) {
 			WriteJSONErrorCode(w, ErrCodeUserNotMember, "user is not a member of this workspace", http.StatusNotFound, map[string]interface{}{
-				"tenant_id":  tenantID,
-				"user_email": body.UserEmail,
+				"tenant_id":   tenantID,
+				"hub_user_id": body.HubUserID,
 			})
 			return
 		}
@@ -262,7 +242,6 @@ func (h *VeridianHandler) handleUnfreezeMember(w http.ResponseWriter, r *http.Re
 		}
 		h.logError("unfreeze_member", err, map[string]interface{}{
 			"tenant_id":   tenantID,
-			"user_email":  body.UserEmail,
 			"hub_user_id": body.HubUserID,
 		})
 		WriteJSONErrorCode(w, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)

@@ -6,10 +6,12 @@ package service
 //
 // Couvre :
 //   - FreezeMember : success (new freeze), idempotent (already frozen),
-//                    owner refused, user not member, tenant not found,
+//                    owner refused, user not member, unknown person
+//                    (ErrUserNotInApp), tenant not found,
 //                    validation inputs, repo not configured
 //   - UnfreezeMember : success (was frozen), idempotent (not frozen),
-//                      user not member, tenant not found, repo not configured
+//                      unknown person (ErrUserNotInApp), tenant not found,
+//                      repo not configured
 //   - ConfigureFrozenMemberSupport : success + error sur impl invalide
 
 import (
@@ -44,7 +46,7 @@ func TestFreezeMember_Success_NewFreeze(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "bob@example.com").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "bob-uuid", Email: "bob@example.com", Type: domain.UserTypeUser}, nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "bob-uuid", "ws-1").
 		Return(&domain.UserWorkspace{UserID: "bob-uuid", WorkspaceID: "ws-1", Role: "member"}, nil)
@@ -62,7 +64,7 @@ func TestFreezeMember_Success_NewFreeze(t *testing.T) {
 	resp, alreadyFrozen, err := svc.FreezeMember(ctx, domain.FreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "bob@example.com",
-		HubUserID: "hub-u-bob",
+		HubUserID: testHubUID,
 		Reason:    domain.FreezeReasonQuotaSeatExceeded,
 	})
 	require.NoError(t, err)
@@ -77,7 +79,7 @@ func TestFreezeMember_Idempotent_AlreadyFrozen(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "bob@example.com").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "bob-uuid", Email: "bob@example.com", Type: domain.UserTypeUser}, nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "bob-uuid", "ws-1").
 		Return(&domain.UserWorkspace{UserID: "bob-uuid", WorkspaceID: "ws-1", Role: "member"}, nil)
@@ -93,7 +95,7 @@ func TestFreezeMember_Idempotent_AlreadyFrozen(t *testing.T) {
 	resp, alreadyFrozen, err := svc.FreezeMember(ctx, domain.FreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "bob@example.com",
-		HubUserID: "hub-u-bob",
+		HubUserID: testHubUID,
 		Reason:    domain.FreezeReasonManual,
 	})
 	require.NoError(t, err)
@@ -106,7 +108,7 @@ func TestFreezeMember_OwnerRefused(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "owner@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "owner-uuid", Email: "owner@x.test", Type: domain.UserTypeUser}, nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "owner-uuid", "ws-1").
 		Return(&domain.UserWorkspace{UserID: "owner-uuid", WorkspaceID: "ws-1", Role: "owner"}, nil)
@@ -115,7 +117,7 @@ func TestFreezeMember_OwnerRefused(t *testing.T) {
 	_, _, err := svc.FreezeMember(ctx, domain.FreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "owner@x.test",
-		HubUserID: "hub-u-owner",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrCannotFreezeOwner))
@@ -126,7 +128,7 @@ func TestFreezeMember_UserNotMember(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "ghost@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "ghost-uuid", Email: "ghost@x.test", Type: domain.UserTypeUser}, nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "ghost-uuid", "ws-1").
 		Return(nil, sql.ErrNoRows)
@@ -134,27 +136,27 @@ func TestFreezeMember_UserNotMember(t *testing.T) {
 	_, _, err := svc.FreezeMember(ctx, domain.FreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "ghost@x.test",
-		HubUserID: "hub-u-ghost",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrMemberNotInWorkspace))
 }
 
-func TestFreezeMember_UserUnknown_Treated_AsNotMember(t *testing.T) {
+func TestFreezeMember_UserUnknown_ErrUserNotInApp(t *testing.T) {
 	svc, m, _ := newVeridianServiceWithFrozenRepo(t)
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "unknown@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
 
 	_, _, err := svc.FreezeMember(ctx, domain.FreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "unknown@x.test",
-		HubUserID: "hub-u-?",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrMemberNotInWorkspace))
+	assert.True(t, errors.Is(err, ErrUserNotInApp))
 }
 
 func TestFreezeMember_TenantNotFound(t *testing.T) {
@@ -166,7 +168,7 @@ func TestFreezeMember_TenantNotFound(t *testing.T) {
 	_, _, err := svc.FreezeMember(ctx, domain.FreezeMemberInput{
 		TenantID:  "ws-unknown",
 		UserEmail: "bob@x.test",
-		HubUserID: "u-1",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, sql.ErrNoRows))
@@ -180,8 +182,8 @@ func TestFreezeMember_ValidationErrors(t *testing.T) {
 		name  string
 		input domain.FreezeMemberInput
 	}{
-		{"missing tenant", domain.FreezeMemberInput{UserEmail: "a@x"}},
-		{"missing email", domain.FreezeMemberInput{TenantID: "ws-1"}},
+		{"missing tenant", domain.FreezeMemberInput{HubUserID: testHubUID}},
+		{"missing hub_user_id", domain.FreezeMemberInput{TenantID: "ws-1", UserEmail: "a@x"}},
 	}
 	for _, tc := range cases {
 		_, _, err := svc.FreezeMember(ctx, tc.input)
@@ -196,7 +198,7 @@ func TestFreezeMember_RepoNotConfigured(t *testing.T) {
 	_, _, err := svc.FreezeMember(context.Background(), domain.FreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "a@x.test",
-		HubUserID: "u-1",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrFrozenMemberRepoNotConfigured))
@@ -207,7 +209,7 @@ func TestFreezeMember_DefaultReason_ManualWhenEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "bob@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "bob-uuid", Email: "bob@x.test", Type: domain.UserTypeUser}, nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "bob-uuid", "ws-1").
 		Return(&domain.UserWorkspace{UserID: "bob-uuid", WorkspaceID: "ws-1", Role: "member"}, nil)
@@ -223,7 +225,7 @@ func TestFreezeMember_DefaultReason_ManualWhenEmpty(t *testing.T) {
 	_, _, err := svc.FreezeMember(ctx, domain.FreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "bob@x.test",
-		HubUserID: "u-1",
+		HubUserID: testHubUID,
 		// Reason vide intentionnellement
 	})
 	require.NoError(t, err)
@@ -236,7 +238,7 @@ func TestUnfreezeMember_Success_WasFrozen(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "bob@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "bob-uuid", Email: "bob@x.test", Type: domain.UserTypeUser}, nil)
 	frozenRepo.EXPECT().Unfreeze(ctx, "ws-1", "bob-uuid").Return(true, nil)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberUnfrozen, "ws-1", gomock.Any()).Times(1)
@@ -244,7 +246,7 @@ func TestUnfreezeMember_Success_WasFrozen(t *testing.T) {
 	resp, wasFrozen, err := svc.UnfreezeMember(ctx, domain.UnfreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "bob@x.test",
-		HubUserID: "u-1",
+		HubUserID: testHubUID,
 	})
 	require.NoError(t, err)
 	assert.True(t, wasFrozen)
@@ -257,7 +259,7 @@ func TestUnfreezeMember_Idempotent_NotFrozen_NoWebhook(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "bob@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "bob-uuid", Email: "bob@x.test", Type: domain.UserTypeUser}, nil)
 	frozenRepo.EXPECT().Unfreeze(ctx, "ws-1", "bob-uuid").Return(false, nil)
 	// PAS de webhook sur replay idempotent (evite spam Hub).
@@ -265,28 +267,28 @@ func TestUnfreezeMember_Idempotent_NotFrozen_NoWebhook(t *testing.T) {
 	resp, wasFrozen, err := svc.UnfreezeMember(ctx, domain.UnfreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "bob@x.test",
-		HubUserID: "u-1",
+		HubUserID: testHubUID,
 	})
 	require.NoError(t, err)
 	assert.False(t, wasFrozen, "replay should signal wasFrozen=false")
 	assert.NotNil(t, resp)
 }
 
-func TestUnfreezeMember_UserUnknown_TreatedAsNotMember(t *testing.T) {
+func TestUnfreezeMember_UserUnknown_ErrUserNotInApp(t *testing.T) {
 	svc, m, _ := newVeridianServiceWithFrozenRepo(t)
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "ghost@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
 
 	_, _, err := svc.UnfreezeMember(ctx, domain.UnfreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "ghost@x.test",
-		HubUserID: "u-1",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrMemberNotInWorkspace))
+	assert.True(t, errors.Is(err, ErrUserNotInApp))
 }
 
 func TestUnfreezeMember_TenantNotFound(t *testing.T) {
@@ -298,7 +300,7 @@ func TestUnfreezeMember_TenantNotFound(t *testing.T) {
 	_, _, err := svc.UnfreezeMember(ctx, domain.UnfreezeMemberInput{
 		TenantID:  "ws-unknown",
 		UserEmail: "bob@x.test",
-		HubUserID: "u-1",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, sql.ErrNoRows))
@@ -310,7 +312,7 @@ func TestUnfreezeMember_RepoNotConfigured(t *testing.T) {
 	_, _, err := svc.UnfreezeMember(context.Background(), domain.UnfreezeMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "a@x.test",
-		HubUserID: "u-1",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrFrozenMemberRepoNotConfigured))
@@ -324,8 +326,8 @@ func TestUnfreezeMember_ValidationErrors(t *testing.T) {
 		name  string
 		input domain.UnfreezeMemberInput
 	}{
-		{"missing tenant", domain.UnfreezeMemberInput{UserEmail: "a@x"}},
-		{"missing email", domain.UnfreezeMemberInput{TenantID: "ws-1"}},
+		{"missing tenant", domain.UnfreezeMemberInput{HubUserID: testHubUID}},
+		{"missing hub_user_id", domain.UnfreezeMemberInput{TenantID: "ws-1", UserEmail: "a@x"}},
 	}
 	for _, tc := range cases {
 		_, _, err := svc.UnfreezeMember(ctx, tc.input)

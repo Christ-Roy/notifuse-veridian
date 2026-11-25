@@ -356,8 +356,8 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 			}
 			// Filtrer api_key (Type via lookupUserType : api_key user a aussi
 			// role=owner sur certains workspaces pre-feature owner-natif).
-			userType, _ := s.lookupUserType(ctx, m.UserID)
-			if userType != domain.UserTypeUser {
+			ownerUser, _ := s.userRepo.GetUserByID(ctx, m.UserID)
+			if ownerUser == nil || ownerUser.Type != domain.UserTypeUser {
 				continue
 			}
 			if ownerEmailReal == "" {
@@ -365,7 +365,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 				ownerEmailReal = m.Email
 				ownerUserID = m.UserID
 			}
-			if strings.EqualFold(strings.TrimSpace(m.Email), strings.TrimSpace(input.OwnerEmail)) {
+			if hubOwnerMatches(&domain.User{Email: m.Email, HubUserID: ownerUser.HubUserID}, hubUserIDFromProvision(input), input.OwnerEmail) {
 				ownerEmailReal = m.Email
 				ownerUserID = m.UserID
 				ownerMatched = true
@@ -381,6 +381,7 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 				return nil, ErrOwnerMismatch
 			}
 			s.bindProvisionOwner(ctx, ownerUserID, false, input, "provision_idempotent")
+			input.OwnerEmail = ownerEmailReal // son adresse d'ici : celle du Hub a pu changer
 			// Owner match : regenerer magic_link + auto_login_url frais.
 			magicLink, _, mlErr := s.buildMagicLink(ctx, input.TenantID, input.OwnerEmail)
 			if mlErr != nil && s.logger != nil {
@@ -415,13 +416,12 @@ func (s *veridianService) Provision(ctx context.Context, input domain.ProvisionI
 	}
 
 	// 1. S'assurer que l'owner user existe.
-	owner, err := s.userService.GetUserByEmail(ctx, input.OwnerEmail)
+	owner, err := s.hubOwner(ctx, hubUserIDFromProvision(input), input.OwnerEmail)
 	if err != nil {
-		var notFound *domain.ErrUserNotFound
-		if !errors.As(err, &notFound) {
-			return nil, fmt.Errorf("get owner by email: %w", err)
-		}
-		owner = nil
+		return nil, err
+	}
+	if owner != nil {
+		input.OwnerEmail = owner.Email
 	}
 	ownerCreated := false
 	if owner == nil {
@@ -1604,21 +1604,22 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 	}
 
 	// Step 1 : trouver/créer le user humain.
-	owner, err := s.userService.GetUserByEmail(ctx, input.OwnerEmail)
+	owner, err := s.hubOwner(ctx, input.HubUserID, input.OwnerEmail)
 	if err != nil {
-		var notFound *domain.ErrUserNotFound
-		if !errors.As(err, &notFound) {
-			return nil, fmt.Errorf("get owner by email: %w", err)
-		}
-		owner = nil
+		return nil, err
 	}
-	if owner == nil {
+	if owner != nil {
+		input.OwnerEmail = owner.Email
+	} else {
 		owner = &domain.User{
 			ID:        uuid.New().String(),
 			Email:     input.OwnerEmail,
 			Type:      domain.UserTypeUser,
 			CreatedAt: time.Now().UTC(),
 			UpdatedAt: time.Now().UTC(),
+		}
+		if input.HubUserID != "" {
+			owner.HubUserID = &input.HubUserID
 		}
 		if err := s.userRepo.CreateUser(ctx, owner); err != nil {
 			return nil, fmt.Errorf("create owner user: %w", err)
@@ -2039,66 +2040,12 @@ func (s *veridianService) AttachMember(ctx context.Context, input domain.AttachM
 		}
 	}
 
-	// Step 3 : trouver/créer le user Notifuse, identifié par son EMAIL.
-	// On lookup d'abord par email (source de vérité d'identité cross-app,
-	// cf. CONTRAT-HUB §3.7 — l'email canonique est la clé, pas le hub_user_id).
-	//
-	// ⚠️ La colonne users.id Notifuse est de type UUID strict en DB. Le
-	// hub_user_id reçu du Hub (ex: "user_abc123") n'est PAS forcément un UUID
-	// → on génère un UUID Notifuse natif, exactement comme Provision (cf. la
-	// création de l'owner plus haut dans ce fichier). Le lien avec le Hub se
-	// fait par l'email, pas par un id partagé. invitation_id reste tracé en
-	// audit log uniquement.
-	member, err := s.userService.GetUserByEmail(ctx, input.HubUserEmail)
+	// Step 3 : la personne par son hub_user_id, creee si absente (fiche 89). users.id Notifuse reste un UUID natif.
+	member, err := s.hubMemberOrCreate(ctx, input.HubUserID, input.HubUserEmail, input.EmailProven, "attach_member")
 	if err != nil {
-		var notFound *domain.ErrUserNotFound
-		if !errors.As(err, &notFound) {
-			return nil, fmt.Errorf("get user by email: %w", err)
-		}
-		member = nil
+		return nil, err
 	}
-	if member == nil {
-		// Regle 1 §3.7 : l'humain a pu changer d'email cote Hub. Son hub_user_id
-		// (unique, V70) designe alors son user existant, on n'en cree pas un second.
-		bound, boundErr := s.userRepo.GetUserByHubUserID(ctx, input.HubUserID)
-		if boundErr == nil && bound != nil {
-			member = bound
-		}
-	}
-	if member == nil {
-		hubID := input.HubUserID // capture pour pointer (struct field *string)
-		member = &domain.User{
-			ID:        uuid.New().String(),
-			Email:     input.HubUserEmail,
-			Type:      domain.UserTypeUser,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-			HubUserID: &hubID,
-		}
-		if err := s.userRepo.CreateUser(ctx, member); err != nil {
-			return nil, fmt.Errorf("create member user: %w", err)
-		}
-	} else {
-		// User existant : backfill best-effort du binding Hub (V46 §3.7).
-		// Non bloquant : si le binding existe deja avec une valeur differente
-		// (ErrHubUserIDMismatch), on log warn et on continue — l'email reste
-		// la cle canonique cross-app, le binding hub_user_id est informationnel.
-		if bfErr := s.userRepo.BackfillHubUserID(ctx, member.ID, input.HubUserID); bfErr != nil {
-			if s.logger != nil {
-				level := "warn"
-				if errors.Is(bfErr, domain.ErrHubUserIDMismatch) {
-					level = "warn_mismatch"
-				}
-				s.logger.WithFields(map[string]interface{}{
-					"user_id":     member.ID,
-					"hub_user_id": input.HubUserID,
-					"tenant_id":   input.TenantID,
-					"error":       bfErr.Error(),
-					"level":       level,
-				}).Warn("veridian AttachMember: backfill hub_user_id failed (non-blocking, email remains canonical join key §3.7)")
-			}
-		}
-	}
+	input.HubUserEmail = member.Email // son adresse d'ici : c'est elle que le lien de connexion ouvre
 
 	// Mapper le role Hub → role interne workspace Notifuse.
 	// Notifuse upstream n'a QUE 2 roles workspace : 'owner' et 'member'
@@ -2373,8 +2320,8 @@ func (s *veridianService) LookupByEmail(ctx context.Context, email string) (*dom
 
 // hubUserIDFromProvision lit metadata.hub_user_id (CONTRAT-HUB §5.1).
 func hubUserIDFromProvision(input domain.ProvisionInput) string {
-	if input.Metadata == nil {
-		return ""
+	if id := strings.TrimSpace(input.OwnerHubUserID); id != "" || input.Metadata == nil {
+		return id
 	}
 	return strings.TrimSpace(input.Metadata.HubUserID)
 }

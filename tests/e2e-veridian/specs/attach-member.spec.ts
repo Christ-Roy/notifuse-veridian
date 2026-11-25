@@ -15,6 +15,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -99,7 +100,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
     const baselineMembers = health.members_count;
 
     // Attach un nouveau membre via Hub
-    const inviteeID = `hub-user-${tid}`;
+    const inviteeID = hubId(`hub-user-${tid}`);
     const inviteeEmail = `${tid}-invitee@attach-member.test`;
     const attachResp = await hmacFetch(`/api/tenants/${tid}/attach-member`, 'POST', {
       hub_user_id: inviteeID,
@@ -127,7 +128,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
-    const inviteeID = `hub-user-idem-${tid}`;
+    const inviteeID = hubId(`hub-user-idem-${tid}`);
     const inviteeEmail = `${tid}-idem@attach-member.test`;
     const body = {
       hub_user_id: inviteeID,
@@ -164,7 +165,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
     provisioned.push(tid);
     await provisionTenant(tid, 'free');
 
-    const inviteeID = `hub-user-role-${tid}`;
+    const inviteeID = hubId(`hub-user-role-${tid}`);
     const inviteeEmail = `${tid}-role@attach-member.test`;
 
     // 1er attach role=member → 201, mappé member
@@ -198,7 +199,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
     // PAS de provisioned.push → ce tenant n'existe pas, rien a wiper.
 
     const r = await hmacFetch(`/api/tenants/${ghostTid}/attach-member`, 'POST', {
-      hub_user_id: 'ghost-user',
+      hub_user_id: hubId('ghost-user'),
       hub_user_email: 'ghost@attach-member.test',
       role: 'member',
       invitation_id: 'inv-ghost',
@@ -216,7 +217,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
 
     // Forge une signature wrong (HMAC avec secret bidon)
     const raw = JSON.stringify({
-      hub_user_id: 'x',
+      hub_user_id: hubId('x'),
       hub_user_email: 'x@attach-member.test',
       role: 'member',
     });
@@ -244,7 +245,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
     // Timestamp 10 minutes dans le passe (MaxClockDrift = 5 min cote middleware)
     const stale = (Date.now() - 10 * 60 * 1000).toString();
     const raw = JSON.stringify({
-      hub_user_id: 'drift-user',
+      hub_user_id: hubId('drift-user'),
       hub_user_email: 'drift@attach-member.test',
       role: 'member',
     });
@@ -269,7 +270,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
 
     // Cas 1 : role absent
     const r1 = await hmacFetch(`/api/tenants/${tid}/attach-member`, 'POST', {
-      hub_user_id: 'x',
+      hub_user_id: hubId('x'),
       hub_user_email: 'x@attach-member.test',
       // role: manquant
     });
@@ -277,7 +278,7 @@ test.describe('@regression attach-member — endpoint POST /api/tenants/{tenantI
 
     // Cas 2 : role invalide (hors enum owner|admin|member)
     const r2 = await hmacFetch(`/api/tenants/${tid}/attach-member`, 'POST', {
-      hub_user_id: 'x',
+      hub_user_id: hubId('x'),
       hub_user_email: 'x@attach-member.test',
       role: 'superuser', // pas dans l'enum
     });

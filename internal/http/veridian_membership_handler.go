@@ -67,8 +67,7 @@ func (h *VeridianHandler) handleSyncMember(w http.ResponseWriter, r *http.Reques
 	}
 
 	var body struct {
-		UserEmail string                `json:"user_email"`
-		HubUserID string                `json:"hub_user_id"`
+		hubPerson
 		Role      domain.SyncMemberRole `json:"role"`
 		InvitedAt string                `json:"invited_at,omitempty"`
 		JoinedAt  string                `json:"joined_at,omitempty"`
@@ -79,21 +78,25 @@ func (h *VeridianHandler) handleSyncMember(w http.ResponseWriter, r *http.Reques
 	}
 
 	missing := missingFields(
-		body.UserEmail == "", "user_email",
+		body.address() == "", "email",
 		body.HubUserID == "", "hub_user_id",
 		string(body.Role) == "", "role",
 	)
 	if len(missing) > 0 {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email, hub_user_id and role are required", http.StatusBadRequest, map[string]interface{}{
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "email, hub_user_id and role are required", http.StatusBadRequest, map[string]interface{}{
 			"missing": missing,
 		})
 		return
 	}
 
+	if !requireHubUserID(w, "hub_user_id", body.HubUserID) {
+		return
+	}
+
 	// Email format validation legere (anti-typo Hub). Coherent avec discovery.
-	if !strings.Contains(body.UserEmail, "@") {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email is malformed (missing @)", http.StatusUnprocessableEntity, map[string]interface{}{
-			"hint": "user_email must contain @",
+	if !strings.Contains(body.address(), "@") {
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "email is malformed (missing @)", http.StatusUnprocessableEntity, map[string]interface{}{
+			"hint": "email must contain @",
 		})
 		return
 	}
@@ -107,12 +110,16 @@ func (h *VeridianHandler) handleSyncMember(w http.ResponseWriter, r *http.Reques
 	}
 
 	resp, err := h.service.SyncMember(r.Context(), domain.SyncMemberInput{
-		TenantID:  tenantID,
-		UserEmail: body.UserEmail,
-		HubUserID: body.HubUserID,
-		Role:      body.Role,
+		TenantID:    tenantID,
+		UserEmail:   body.address(),
+		HubUserID:   body.HubUserID,
+		EmailProven: body.EmailProven,
+		Role:        body.Role,
 	})
 	if err != nil {
+		if writeHubPersonError(w, err, tenantID, body.HubUserID) {
+			return
+		}
 		if isNotFoundErr(err) {
 			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
 				"tenant_id": tenantID,
@@ -138,7 +145,8 @@ func (h *VeridianHandler) handleSyncMember(w http.ResponseWriter, r *http.Reques
 // Body :
 //
 //	{
-//	  "user_email": "alice@example.com",
+//	  "hub_user_id": "<uuid>",                   // la personne, seule clef (5.19.7)
+//	  "email": "alice@example.com",              // informatif
 //	  "reason": "user_request" | "admin_action"  // optionnel, audit
 //	}
 //
@@ -152,7 +160,7 @@ func (h *VeridianHandler) handleSyncMember(w http.ResponseWriter, r *http.Reques
 //
 // Erreurs :
 //
-//	400 invalid_payload     : user_email manquant
+//	400 invalid_payload     : hub_user_id manquant ou mal forme
 //	404 tenant_not_found    : workspace inexistant
 //	409 cannot_remove_owner : target est l'owner (utiliser transfer-owner)
 //	500 internal_error      : echec service
@@ -166,31 +174,29 @@ func (h *VeridianHandler) handleRemoveMember(w http.ResponseWriter, r *http.Requ
 	}
 
 	var body struct {
-		UserEmail string `json:"user_email"`
-		Reason    string `json:"reason,omitempty"`
+		hubPerson
+		Reason string `json:"reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
-	if body.UserEmail == "" {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email is required", http.StatusBadRequest, map[string]interface{}{
-			"missing": []string{"user_email"},
-		})
+	if !requireHubUserID(w, "hub_user_id", body.HubUserID) {
 		return
 	}
 
 	resp, err := h.service.RemoveMember(r.Context(), domain.RemoveMemberInput{
 		TenantID:  tenantID,
-		UserEmail: body.UserEmail,
+		HubUserID: body.HubUserID,
+		UserEmail: body.address(),
 		Reason:    body.Reason,
 	})
 	if err != nil {
 		if errors.Is(err, service.ErrCannotRemoveOwner) {
 			WriteJSONErrorCode(w, ErrCodeCannotRemoveOwner, err.Error(), http.StatusConflict, map[string]interface{}{
-				"tenant_id":  tenantID,
-				"user_email": body.UserEmail,
-				"hint":       "use POST /api/tenants/{id}/transfer-owner to change owner first",
+				"tenant_id":   tenantID,
+				"hub_user_id": body.HubUserID,
+				"hint":        "use POST /api/tenants/{id}/transfer-owner to change owner first",
 			})
 			return
 		}
@@ -201,8 +207,8 @@ func (h *VeridianHandler) handleRemoveMember(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		h.logError("remove_member", err, map[string]interface{}{
-			"tenant_id":  tenantID,
-			"user_email": body.UserEmail,
+			"tenant_id":   tenantID,
+			"hub_user_id": body.HubUserID,
 		})
 		// Message générique : l'erreur brute est déjà loggée, le code reste exposé.
 		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "failed to remove member", http.StatusInternalServerError, nil)
@@ -216,7 +222,7 @@ func (h *VeridianHandler) handleRemoveMember(w http.ResponseWriter, r *http.Requ
 //
 // Body :
 //
-//	{"user_email": "alice@example.com"}
+//	{"hub_user_id": "<uuid>", "email": "alice@example.com"}  // email informatif
 //
 // Reponse 200 :
 //
@@ -228,7 +234,8 @@ func (h *VeridianHandler) handleRemoveMember(w http.ResponseWriter, r *http.Requ
 //
 // Erreurs :
 //
-//	400 invalid_payload  : user_email manquant
+//	400 invalid_payload  : hub_user_id manquant ou mal forme
+//	404 user_not_in_app  : personne inconnue ici, jamais creee
 //	404 tenant_not_found : workspace inexistant
 //	500 internal_error   : echec service
 func (h *VeridianHandler) handleRestoreMember(w http.ResponseWriter, r *http.Request) {
@@ -241,24 +248,25 @@ func (h *VeridianHandler) handleRestoreMember(w http.ResponseWriter, r *http.Req
 	}
 
 	var body struct {
-		UserEmail string `json:"user_email"`
+		hubPerson
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
-	if body.UserEmail == "" {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "user_email is required", http.StatusBadRequest, map[string]interface{}{
-			"missing": []string{"user_email"},
-		})
+	if !requireHubUserID(w, "hub_user_id", body.HubUserID) {
 		return
 	}
 
 	resp, err := h.service.RestoreMember(r.Context(), domain.RestoreMemberInput{
 		TenantID:  tenantID,
-		UserEmail: body.UserEmail,
+		HubUserID: body.HubUserID,
+		UserEmail: body.address(),
 	})
 	if err != nil {
+		if writeHubPersonError(w, err, tenantID, body.HubUserID) {
+			return
+		}
 		if isNotFoundErr(err) {
 			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
 				"tenant_id": tenantID,
@@ -266,8 +274,8 @@ func (h *VeridianHandler) handleRestoreMember(w http.ResponseWriter, r *http.Req
 			return
 		}
 		h.logError("restore_member", err, map[string]interface{}{
-			"tenant_id":  tenantID,
-			"user_email": body.UserEmail,
+			"tenant_id":   tenantID,
+			"hub_user_id": body.HubUserID,
 		})
 		// Message générique : l'erreur brute est déjà loggée, le code reste exposé.
 		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, "failed to restore member", http.StatusInternalServerError, nil)

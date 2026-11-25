@@ -36,11 +36,12 @@ import "time"
 //  4. JAMAIS retirer un user existant (additif uniquement). Pour retrait,
 //     utiliser §5.19 remove-member.
 type SyncMemberInput struct {
-	// UserEmail : source de verite identite cross-app (CONTRAT-HUB §3.7).
+	// UserEmail : ne sert qu'a creer une copie absente (CONTRAT-HUB §5.19.7).
 	UserEmail string `json:"user_email"`
-	// HubUserID : id stable cote hub_app.users. Conserve pour audit uniquement —
-	// Notifuse resout l'identite par EMAIL, pas par id Hub.
+	// HubUserID : la personne (fiche 89).
 	HubUserID string `json:"hub_user_id"`
+	// EmailProven : le Hub atteste l'adresse ; sans elle un compte sans lien n'est jamais relie.
+	EmailProven bool `json:"email_proven,omitempty"`
 	// Role : default role envoye par le Hub (member|admin). L'app peut le
 	// surcharger en interne — le Hub n'est PAS autoritatif sur les roles app.
 	Role SyncMemberRole `json:"role"`
@@ -98,6 +99,8 @@ type SyncMemberResponse struct {
 // Pour transferer l'ownership, utiliser §5.16 (transfer-owner).
 type RemoveMemberInput struct {
 	UserEmail string `json:"user_email"`
+	// HubUserID : la personne (fiche 89). L'adresse n'est qu'une information.
+	HubUserID string `json:"hub_user_id,omitempty"`
 	// Reason : "user_request" | "admin_action" (audit GDPR).
 	Reason string `json:"reason,omitempty"`
 	// TenantID : injecte par le handler depuis le path param {id}.
@@ -106,8 +109,11 @@ type RemoveMemberInput struct {
 
 // RemoveMemberResponse est la reponse 200 de POST /api/tenants/{id}/remove-member.
 type RemoveMemberResponse struct {
-	TenantID  string    `json:"tenant_id"`
-	UserEmail string    `json:"user_email"`
+	TenantID  string `json:"tenant_id"`
+	HubUserID string `json:"hub_user_id"`
+	UserEmail string `json:"user_email"`
+	// Removed : faux quand la personne est inconnue ici ou n'etait pas membre.
+	Removed   bool      `json:"removed"`
 	RemovedAt time.Time `json:"removed_at"`
 	// Clés API de l'espace encore actives après le retrait (hors clé du Hub) et page où les renouveler : une clé appartient à l'espace,
 	// aucune n'a d'auteur noté, le retrait n'en coupe aucune. Absent = non compté, jamais un faux zéro.
@@ -122,6 +128,8 @@ type RemoveMemberResponse struct {
 // user est deja membre actif.
 type RestoreMemberInput struct {
 	UserEmail string `json:"user_email"`
+	// HubUserID : la personne (fiche 89). L'adresse n'est qu'une information.
+	HubUserID string `json:"hub_user_id,omitempty"`
 	// TenantID : injecte par le handler depuis le path param {id}.
 	TenantID string `json:"-"`
 }
@@ -129,6 +137,8 @@ type RestoreMemberInput struct {
 // RestoreMemberResponse est la reponse 200 de POST /api/tenants/{id}/restore-member.
 type RestoreMemberResponse struct {
 	TenantID   string    `json:"tenant_id"`
+	HubUserID  string    `json:"hub_user_id"`
 	UserEmail  string    `json:"user_email"`
+	Restored   bool      `json:"restored"`
 	RestoredAt time.Time `json:"restored_at"`
 }

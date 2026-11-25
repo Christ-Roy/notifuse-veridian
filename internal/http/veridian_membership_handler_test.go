@@ -60,7 +60,7 @@ func TestHandleSyncMember_FirstSync_Returns200(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleSyncMember, "ws-1", "/api/tenants/ws-1/sync-member",
-		`{"user_email":"alice@example.com","hub_user_id":"hub-u-1","role":"member"}`)
+		`{"user_email":"alice@example.com","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"member"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.SyncMemberResponse
@@ -86,7 +86,7 @@ func TestHandleSyncMember_OwnerKept_NoDowngrade(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleSyncMember, "ws-1", "/api/tenants/ws-1/sync-member",
-		`{"user_email":"owner@example.com","hub_user_id":"hub-owner","role":"member"}`)
+		`{"user_email":"owner@example.com","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"member"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.SyncMemberResponse
@@ -115,9 +115,9 @@ func TestHandleSyncMember_MissingFields_Returns400(t *testing.T) {
 		body    string
 		missing string
 	}{
-		{`{"hub_user_id":"u-1","role":"member"}`, "user_email"},
+		{`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"member"}`, "user_email"},
 		{`{"user_email":"a@x.test","role":"member"}`, "hub_user_id"},
-		{`{"user_email":"a@x.test","hub_user_id":"u-1"}`, "role"},
+		{`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`, "role"},
 		{`{}`, "user_email"},
 	}
 	for _, tc := range cases {
@@ -134,7 +134,7 @@ func TestHandleSyncMember_MalformedEmail_Returns422(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postWithTenantID(t, h.handleSyncMember, "ws-1", "/api/tenants/ws-1/sync-member",
-		`{"user_email":"not-an-email","hub_user_id":"u-1","role":"member"}`)
+		`{"user_email":"not-an-email","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"member"}`)
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
 
@@ -145,7 +145,7 @@ func TestHandleSyncMember_InvalidRole_Returns400(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postWithTenantID(t, h.handleSyncMember, "ws-1", "/api/tenants/ws-1/sync-member",
-		`{"user_email":"a@x.test","hub_user_id":"u-1","role":"superuser"}`)
+		`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"superuser"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeInvalidRole)
 }
@@ -158,7 +158,7 @@ func TestHandleSyncMember_OwnerRoleRefused(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postWithTenantID(t, h.handleSyncMember, "ws-1", "/api/tenants/ws-1/sync-member",
-		`{"user_email":"a@x.test","hub_user_id":"u-1","role":"owner"}`)
+		`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"owner"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeInvalidRole)
 }
@@ -172,7 +172,7 @@ func TestHandleSyncMember_TenantNotFound_Returns404(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleSyncMember, "ws-unknown", "/api/tenants/ws-unknown/sync-member",
-		`{"user_email":"a@x.test","hub_user_id":"u-1","role":"member"}`)
+		`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"member"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeTenantNotFound)
@@ -186,7 +186,7 @@ func TestHandleSyncMember_EmptyTenantID_Returns400(t *testing.T) {
 
 	// path value vide → 400 sans appeler le service.
 	req := httptest.NewRequest(http.MethodPost, "/api/tenants//sync-member",
-		bytes.NewReader([]byte(`{"user_email":"a@x.test","hub_user_id":"u-1","role":"member"}`)))
+		bytes.NewReader([]byte(`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"member"}`)))
 	req.SetPathValue("id", "")
 	rec := httptest.NewRecorder()
 	h.handleSyncMember(rec, req)
@@ -202,7 +202,7 @@ func TestHandleSyncMember_ServiceError_Returns500(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleSyncMember, "ws-1", "/api/tenants/ws-1/sync-member",
-		`{"user_email":"a@x.test","hub_user_id":"u-1","role":"member"}`)
+		`{"user_email":"a@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","role":"member"}`)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	// Le 500 ne doit JAMAIS leak l'erreur interne brute (DB/SQL) au client :
@@ -221,18 +221,21 @@ func TestHandleRemoveMember_Success_Returns200(t *testing.T) {
 	svc := mocks.NewMockVeridianService(ctrl)
 	svc.EXPECT().RemoveMember(gomock.Any(), gomock.Any()).Return(&domain.RemoveMemberResponse{
 		TenantID:  "ws-1",
+		HubUserID: "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
 		UserEmail: "alice@example.com",
+		Removed:   true,
 		RemovedAt: now,
 	}, nil)
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleRemoveMember, "ws-1", "/api/tenants/ws-1/remove-member",
-		`{"user_email":"alice@example.com","reason":"admin_action"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"alice@example.com","reason":"admin_action"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.RemoveMemberResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "alice@example.com", resp.UserEmail)
+	assert.True(t, resp.Removed)
 }
 
 func TestHandleRemoveMember_Owner_Returns409(t *testing.T) {
@@ -244,7 +247,7 @@ func TestHandleRemoveMember_Owner_Returns409(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleRemoveMember, "ws-1", "/api/tenants/ws-1/remove-member",
-		`{"user_email":"owner@example.com"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"owner@example.com"}`)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeCannotRemoveOwner)
@@ -260,21 +263,21 @@ func TestHandleRemoveMember_TenantNotFound_Returns404(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleRemoveMember, "ws-unknown", "/api/tenants/ws-unknown/remove-member",
-		`{"user_email":"alice@example.com"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"alice@example.com"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeTenantNotFound)
 }
 
-func TestHandleRemoveMember_MissingEmail_Returns400(t *testing.T) {
+func TestHandleRemoveMember_MissingHubUserID_Returns400(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
 
-	rec := postWithTenantID(t, h.handleRemoveMember, "ws-1", "/api/tenants/ws-1/remove-member", `{}`)
+	rec := postWithTenantID(t, h.handleRemoveMember, "ws-1", "/api/tenants/ws-1/remove-member", `{"user_email":"alice@example.com"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "user_email")
+	assert.Contains(t, rec.Body.String(), "hub_user_id")
 }
 
 func TestHandleRemoveMember_InvalidJSON_Returns400(t *testing.T) {
@@ -294,7 +297,7 @@ func TestHandleRemoveMember_EmptyTenantID_Returns400(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tenants//remove-member",
-		bytes.NewReader([]byte(`{"user_email":"a@x.test"}`)))
+		bytes.NewReader([]byte(`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"a@x.test"}`)))
 	req.SetPathValue("id", "")
 	rec := httptest.NewRecorder()
 	h.handleRemoveMember(rec, req)
@@ -310,7 +313,7 @@ func TestHandleRemoveMember_ServiceError_Returns500(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleRemoveMember, "ws-1", "/api/tenants/ws-1/remove-member",
-		`{"user_email":"a@x.test"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"a@x.test"}`)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "pq:", "le 500 ne doit pas leak l'erreur DB brute")
@@ -333,12 +336,39 @@ func TestHandleRestoreMember_Success_Returns200(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleRestoreMember, "ws-1", "/api/tenants/ws-1/restore-member",
-		`{"user_email":"alice@example.com"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"alice@example.com"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.RestoreMemberResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "alice@example.com", resp.UserEmail)
+}
+
+// Personne inconnue ici : 404 user_not_in_app, jamais de creation au restore.
+func TestHandleRestoreMember_UserNotInApp_Returns404(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().RestoreMember(gomock.Any(), gomock.Any()).Return(nil, service.ErrUserNotInApp)
+
+	h := newHandlerWithService(svc)
+	rec := postWithTenantID(t, h.handleRestoreMember, "ws-1", "/api/tenants/ws-1/restore-member",
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCodeUserNotInApp)
+}
+
+func TestHandleRestoreMember_MalformedHubUserID_Returns400(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	rec := postWithTenantID(t, h.handleRestoreMember, "ws-1", "/api/tenants/ws-1/restore-member", `{"hub_user_id":"u-1"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCodeInvalidPayload)
 }
 
 func TestHandleRestoreMember_TenantNotFound_Returns404(t *testing.T) {
@@ -350,21 +380,21 @@ func TestHandleRestoreMember_TenantNotFound_Returns404(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleRestoreMember, "ws-unknown", "/api/tenants/ws-unknown/restore-member",
-		`{"user_email":"alice@example.com"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"alice@example.com"}`)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Contains(t, rec.Body.String(), ErrCodeTenantNotFound)
 }
 
-func TestHandleRestoreMember_MissingEmail_Returns400(t *testing.T) {
+func TestHandleRestoreMember_MissingHubUserID_Returns400(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
 
-	rec := postWithTenantID(t, h.handleRestoreMember, "ws-1", "/api/tenants/ws-1/restore-member", `{}`)
+	rec := postWithTenantID(t, h.handleRestoreMember, "ws-1", "/api/tenants/ws-1/restore-member", `{"user_email":"alice@example.com"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "user_email")
+	assert.Contains(t, rec.Body.String(), "hub_user_id")
 }
 
 func TestHandleRestoreMember_InvalidJSON_Returns400(t *testing.T) {
@@ -384,7 +414,7 @@ func TestHandleRestoreMember_EmptyTenantID_Returns400(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tenants//restore-member",
-		bytes.NewReader([]byte(`{"user_email":"a@x.test"}`)))
+		bytes.NewReader([]byte(`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"a@x.test"}`)))
 	req.SetPathValue("id", "")
 	rec := httptest.NewRecorder()
 	h.handleRestoreMember(rec, req)
@@ -400,7 +430,7 @@ func TestHandleRestoreMember_ServiceError_Returns500(t *testing.T) {
 
 	h := newHandlerWithService(svc)
 	rec := postWithTenantID(t, h.handleRestoreMember, "ws-1", "/api/tenants/ws-1/restore-member",
-		`{"user_email":"a@x.test"}`)
+		`{"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","user_email":"a@x.test"}`)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "pq:", "le 500 ne doit pas leak l'erreur DB brute")

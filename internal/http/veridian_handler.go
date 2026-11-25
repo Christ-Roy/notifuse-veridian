@@ -275,6 +275,9 @@ func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if input.OwnerHubUserID != "" && !requireHubUserID(w, "owner_hub_user_id", input.OwnerHubUserID) {
+		return
+	}
 	resp, err := h.service.Provision(r.Context(), input)
 	if err != nil {
 		h.logError("provision", err, map[string]interface{}{
@@ -290,6 +293,9 @@ func (h *VeridianHandler) handleProvision(w http.ResponseWriter, r *http.Request
 		// === Veridian patch === Sentinel ErrOwnerMismatch → 409 Conflict
 		// (re-provision avec owner_email different refusee — protection contre
 		// prise de controle d'un tenant existant). Contrat §5.1.
+		if writeHubPersonError(w, err, input.TenantID, input.OwnerHubUserID) {
+			return
+		}
 		if errors.Is(err, service.ErrOwnerMismatch) {
 			WriteJSONErrorCode(w, ErrCodeOwnerMismatch, err.Error(), http.StatusConflict, nil)
 			return
@@ -978,8 +984,14 @@ func (h *VeridianHandler) handleAttachOwner(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if input.HubUserID != "" && !requireHubUserID(w, "hub_user_id", input.HubUserID) {
+		return
+	}
 	resp, err := h.service.AttachOwner(r.Context(), input)
 	if err != nil {
+		if writeHubPersonError(w, err, input.TenantID, input.HubUserID) {
+			return
+		}
 		h.logError("attach_owner", err, map[string]interface{}{
 			"tenant_id":   input.TenantID,
 			"owner_email": input.OwnerEmail,
@@ -1126,8 +1138,7 @@ func (h *VeridianHandler) handleAttachMember(w http.ResponseWriter, r *http.Requ
 	}
 
 	var body struct {
-		HubUserID    string                  `json:"hub_user_id"`
-		HubUserEmail string                  `json:"hub_user_email"`
+		hubPerson
 		Role         domain.AttachMemberRole `json:"role"`
 		InvitationID string                  `json:"invitation_id,omitempty"`
 	}
@@ -1139,13 +1150,17 @@ func (h *VeridianHandler) handleAttachMember(w http.ResponseWriter, r *http.Requ
 	// Validation champs obligatoires (avant d'appeler le service).
 	missing := missingFields(
 		body.HubUserID == "", "hub_user_id",
-		body.HubUserEmail == "", "hub_user_email",
+		body.address() == "", "hub_user_email",
 		string(body.Role) == "", "role",
 	)
 	if len(missing) > 0 {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "hub_user_id, hub_user_email and role are required", http.StatusBadRequest, map[string]interface{}{
 			"missing": missing,
 		})
+		return
+	}
+
+	if !requireHubUserID(w, "hub_user_id", body.HubUserID) {
 		return
 	}
 
@@ -1161,13 +1176,17 @@ func (h *VeridianHandler) handleAttachMember(w http.ResponseWriter, r *http.Requ
 	input := domain.AttachMemberInput{
 		TenantID:     tenantID,
 		HubUserID:    body.HubUserID,
-		HubUserEmail: body.HubUserEmail,
+		HubUserEmail: body.address(),
+		EmailProven:  body.EmailProven,
 		Role:         body.Role,
 		InvitationID: body.InvitationID,
 	}
 
 	resp, err := h.service.AttachMember(r.Context(), input)
 	if err != nil {
+		if writeHubPersonError(w, err, tenantID, body.HubUserID) {
+			return
+		}
 		// 404 APRES HMAC (voir note sécurité en en-tête).
 		if isNotFoundErr(err) {
 			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{

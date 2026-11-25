@@ -95,7 +95,7 @@ func TestPortes_ToutAjoutDHumainEstConnu(t *testing.T) {
 		"internal/service/setup_service.go CreateUser":                          "premier démarrage, refusé une fois l'application installée",
 		"internal/service/veridian_co_owner.go CreateUser":                      "copropriétaire configuré (Robert)",
 		"internal/service/veridian_co_owner.go AddUserToWorkspace":              "copropriétaire configuré (Robert)",
-		"internal/service/veridian_membership_service.go CreateUser":            "route signée par le Hub",
+		"internal/service/veridian_hub_member.go CreateUser":                    "routes signées par le Hub (fiche 89)",
 		"internal/service/veridian_membership_service.go AddUserToWorkspace":    "route signée par le Hub",
 		"internal/service/veridian_service.go CreateUser":                       "route signée par le Hub",
 		"internal/service/veridian_service.go AddUserToWorkspace":               "route signée par le Hub",

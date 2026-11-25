@@ -185,6 +185,21 @@ func (mr *MockVeridianServiceMockRecorder) LookupByEmail(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupByEmail", reflect.TypeOf((*MockVeridianService)(nil).LookupByEmail), arg0, arg1)
 }
 
+// LookupMember mocks base method.
+func (m *MockVeridianService) LookupMember(arg0 context.Context, arg1 string) (*domain.DiscoveryResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LookupMember", arg0, arg1)
+	ret0, _ := ret[0].(*domain.DiscoveryResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LookupMember indicates an expected call of LookupMember.
+func (mr *MockVeridianServiceMockRecorder) LookupMember(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupMember", reflect.TypeOf((*MockVeridianService)(nil).LookupMember), arg0, arg1)
+}
+
 // Provision mocks base method.
 func (m *MockVeridianService) Provision(arg0 context.Context, arg1 domain.ProvisionInput) (*domain.ProvisionResponse, error) {
 	m.ctrl.T.Helper()

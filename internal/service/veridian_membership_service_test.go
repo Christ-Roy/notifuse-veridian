@@ -6,10 +6,10 @@ package service
 // Couvre :
 //   - SyncMember : new user, existing user, idempotent same role, owner kept
 //                  no-downgrade, tenant not found, validation inputs
-//   - RemoveMember : success, owner refused, idempotent missing user,
+//   - RemoveMember : success, owner refused, idempotent unknown person (removed=false),
 //                    idempotent not member, tenant not found
-//   - RestoreMember : success new user, success existing user, idempotent
-//                     already member, tenant not found
+//   - RestoreMember : unknown person (ErrUserNotInApp, never created), success
+//                     existing user, idempotent already member, tenant not found
 
 import (
 	"context"
@@ -46,14 +46,25 @@ func membershipEntry(userID, workspaceID, role string) *domain.UserWorkspace {
 	}
 }
 
-// fixture : user member type=user.
+// testHubUID : un hub_user_id valide (UUID) pour les fixtures de la personne du Hub (fiche 89).
+const testHubUID = "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"
+
+// testOtherHubUID : une autre personne du Hub.
+const testOtherHubUID = "0a8d9e72-5b34-4f6a-8c21-7e3b9d4a6f02"
+
+// fixture : user member type=user, relie a testHubUID.
 func membershipMemberUser() *domain.User {
+	id := testHubUID
 	return &domain.User{
-		ID:    "member-uuid-1",
-		Email: "alice@example.com",
-		Type:  domain.UserTypeUser,
+		ID:        "member-uuid-1",
+		Email:     "alice@example.com",
+		Type:      domain.UserTypeUser,
+		HubUserID: &id,
 	}
 }
+
+// fixture : le Hub ne connait pas cette personne ici.
+func hubUnknown() *domain.ErrUserNotFound { return &domain.ErrUserNotFound{Message: "not found"} }
 
 // === SyncMember ============================================================
 
@@ -63,10 +74,15 @@ func TestSyncMember_NewUser_CreatedAndAttached(t *testing.T) {
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
 
-	// User inconnu → CreateUser.
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").
-		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
-	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil)
+	// Personne inconnue (hub_user_id), adresse libre → CreateUser relie au hub_user_id.
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, hubUnknown())
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(nil, hubUnknown())
+	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, u *domain.User) error {
+		require.NotNil(t, u.HubUserID)
+		assert.Equal(t, testHubUID, *u.HubUserID)
+		assert.Equal(t, "alice@example.com", u.Email)
+		return nil
+	})
 
 	// Pas dans user_workspaces.
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, gomock.Any(), "ws-1").
@@ -91,7 +107,7 @@ func TestSyncMember_NewUser_CreatedAndAttached(t *testing.T) {
 	resp, err := svc.SyncMember(ctx, domain.SyncMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "alice@example.com",
-		HubUserID: "hub-u-1",
+		HubUserID: testHubUID,
 		Role:      domain.SyncMemberRoleMember,
 	})
 	require.NoError(t, err)
@@ -100,12 +116,12 @@ func TestSyncMember_NewUser_CreatedAndAttached(t *testing.T) {
 	assert.NotEmpty(t, resp.AppUserID)
 }
 
-func TestSyncMember_ExistingUser_AttachedByEmail(t *testing.T) {
+func TestSyncMember_ExistingUser_FoundByHubUserID(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(membershipMemberUser(), nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
@@ -117,11 +133,75 @@ func TestSyncMember_ExistingUser_AttachedByEmail(t *testing.T) {
 	resp, err := svc.SyncMember(ctx, domain.SyncMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "alice@example.com",
-		HubUserID: "hub-u-1",
+		HubUserID: testHubUID,
 		Role:      domain.SyncMemberRoleAdmin, // Hub envoie admin, on mappe en member cote Notifuse
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "member", resp.AppRole, "Hub admin → Notifuse member (workspace upstream sans admin)")
+}
+
+// Adresse deja portee ici par un compte SANS lien et attestee par le Hub : reliee puis ajoutee.
+func TestSyncMember_AddressHeldByUnlinkedAccount_Proven_LinkedAndAdded(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	holder := &domain.User{ID: "member-uuid-1", Email: "alice@example.com", Type: domain.UserTypeUser}
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, hubUnknown())
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(holder, nil)
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "member-uuid-1", testHubUID).Return(nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
+		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
+	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
+	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", "member-uuid-1", "member", gomock.Any()).Return(nil)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
+	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+
+	resp, err := svc.SyncMember(ctx, domain.SyncMemberInput{
+		TenantID: "ws-1", UserEmail: "alice@example.com", HubUserID: testHubUID, EmailProven: true,
+		Role: domain.SyncMemberRoleMember,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "member-uuid-1", resp.AppUserID)
+}
+
+// Compte sans lien mais adresse NON attestee : jamais relie, jamais ajoute.
+func TestSyncMember_AddressHeldByUnlinkedAccount_NotProven_Conflict(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	holder := &domain.User{ID: "member-uuid-1", Email: "alice@example.com", Type: domain.UserTypeUser}
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, hubUnknown())
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(holder, nil)
+	// Aucun BackfillHubUserID, aucun GetUserWorkspace, aucun AddUserToWorkspace attendus.
+
+	_, err := svc.SyncMember(ctx, domain.SyncMemberInput{
+		TenantID: "ws-1", UserEmail: "alice@example.com", HubUserID: testHubUID, EmailProven: false,
+		Role: domain.SyncMemberRoleMember,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrHubUserIDConflict))
+}
+
+// Adresse portee par un compte deja lie a UNE AUTRE personne du Hub : conflit, rien n'est ajoute a l'espace.
+func TestSyncMember_AddressHeldByOtherHubUserID_Conflict_NoAdd(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	other := testOtherHubUID
+	holder := &domain.User{ID: "member-uuid-1", Email: "alice@example.com", Type: domain.UserTypeUser, HubUserID: &other}
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, hubUnknown())
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(holder, nil)
+
+	_, err := svc.SyncMember(ctx, domain.SyncMemberInput{
+		TenantID: "ws-1", UserEmail: "alice@example.com", HubUserID: testHubUID, EmailProven: true,
+		Role: domain.SyncMemberRoleMember,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrHubUserIDConflict))
 }
 
 func TestSyncMember_Idempotent_AlreadyMember(t *testing.T) {
@@ -129,7 +209,7 @@ func TestSyncMember_Idempotent_AlreadyMember(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(membershipMemberUser(), nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").
 		Return(membershipEntry("member-uuid-1", "ws-1", "member"), nil)
 	// Pas d'AddUserToWorkspace, pas de session — idempotent path.
@@ -137,7 +217,7 @@ func TestSyncMember_Idempotent_AlreadyMember(t *testing.T) {
 	resp, err := svc.SyncMember(ctx, domain.SyncMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "alice@example.com",
-		HubUserID: "hub-u-1",
+		HubUserID: testHubUID,
 		Role:      domain.SyncMemberRoleMember,
 	})
 	require.NoError(t, err)
@@ -150,7 +230,7 @@ func TestSyncMember_AlreadyOwner_NoDowngrade(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "owner@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "owner-uuid", Email: "owner@x.test", Type: domain.UserTypeUser}, nil)
 	// Le user est DEJA owner → service garde owner (additif, jamais downgrade).
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "owner-uuid", "ws-1").
@@ -159,7 +239,7 @@ func TestSyncMember_AlreadyOwner_NoDowngrade(t *testing.T) {
 	resp, err := svc.SyncMember(ctx, domain.SyncMemberInput{
 		TenantID:  "ws-1",
 		UserEmail: "owner@x.test",
-		HubUserID: "hub-u-1",
+		HubUserID: testHubUID,
 		Role:      domain.SyncMemberRoleMember,
 	})
 	require.NoError(t, err)
@@ -175,7 +255,7 @@ func TestSyncMember_WorkspaceNotFound_ReturnsErrNoRows(t *testing.T) {
 	_, err := svc.SyncMember(ctx, domain.SyncMemberInput{
 		TenantID:  "ws-unknown",
 		UserEmail: "a@x.test",
-		HubUserID: "hub-u-1",
+		HubUserID: testHubUID,
 		Role:      domain.SyncMemberRoleMember,
 	})
 	require.Error(t, err)
@@ -190,11 +270,10 @@ func TestSyncMember_ValidationErrors(t *testing.T) {
 		name  string
 		input domain.SyncMemberInput
 	}{
-		{"missing tenant", domain.SyncMemberInput{UserEmail: "a@x", HubUserID: "u", Role: domain.SyncMemberRoleMember}},
-		{"missing email", domain.SyncMemberInput{TenantID: "ws-1", HubUserID: "u", Role: domain.SyncMemberRoleMember}},
+		{"missing tenant", domain.SyncMemberInput{UserEmail: "a@x", HubUserID: testHubUID, Role: domain.SyncMemberRoleMember}},
 		{"missing hub_user_id", domain.SyncMemberInput{TenantID: "ws-1", UserEmail: "a@x", Role: domain.SyncMemberRoleMember}},
-		{"invalid role", domain.SyncMemberInput{TenantID: "ws-1", UserEmail: "a@x", HubUserID: "u", Role: "superuser"}},
-		{"owner role refused", domain.SyncMemberInput{TenantID: "ws-1", UserEmail: "a@x", HubUserID: "u", Role: "owner"}},
+		{"invalid role", domain.SyncMemberInput{TenantID: "ws-1", UserEmail: "a@x", HubUserID: testHubUID, Role: "superuser"}},
+		{"owner role refused", domain.SyncMemberInput{TenantID: "ws-1", UserEmail: "a@x", HubUserID: testHubUID, Role: "owner"}},
 	}
 	for _, tc := range cases {
 		_, err := svc.SyncMember(ctx, tc.input)
@@ -209,7 +288,7 @@ func TestRemoveMember_Success_HardDeletes(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(membershipMemberUser(), nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").
 		Return(membershipEntry("member-uuid-1", "ws-1", "member"), nil)
 	m.workspaceRepo.EXPECT().RemoveUserFromWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil)
@@ -231,11 +310,13 @@ func TestRemoveMember_Success_HardDeletes(t *testing.T) {
 
 	resp, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{
 		TenantID:  "ws-1",
-		UserEmail: "alice@example.com",
+		HubUserID: testHubUID,
 		Reason:    "admin_action",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "ws-1", resp.TenantID)
+	assert.True(t, resp.Removed)
+	assert.Equal(t, testHubUID, resp.HubUserID)
 	assert.False(t, resp.RemovedAt.IsZero())
 	require.NotNil(t, resp.ActiveAPIKeys)
 	assert.Equal(t, 2, *resp.ActiveAPIKeys, "ni l'humain, ni la clé du Hub")
@@ -247,7 +328,7 @@ func TestRemoveMember_Owner_ReturnsErrCannotRemoveOwner(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "owner@x.test").
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).
 		Return(&domain.User{ID: "owner-uuid", Email: "owner@x.test", Type: domain.UserTypeUser}, nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "owner-uuid", "ws-1").
 		Return(membershipEntry("owner-uuid", "ws-1", "owner"), nil)
@@ -255,7 +336,7 @@ func TestRemoveMember_Owner_ReturnsErrCannotRemoveOwner(t *testing.T) {
 
 	_, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{
 		TenantID:  "ws-1",
-		UserEmail: "owner@x.test",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrCannotRemoveOwner))
@@ -266,16 +347,18 @@ func TestRemoveMember_Idempotent_UnknownUser(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "ghost@x.test").
-		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, hubUnknown())
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(nil, errors.New("base coupée"))
-	// Pas de GetUserWorkspace, pas de RemoveUserFromWorkspace — idempotent return.
+	// Pas de GetUserByEmail (l'adresse ne designe personne), pas de GetUserWorkspace,
+	// pas de RemoveUserFromWorkspace — idempotent return, 200 removed=false.
 
 	resp, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{
 		TenantID:  "ws-1",
+		HubUserID: testHubUID,
 		UserEmail: "ghost@x.test",
 	})
 	require.NoError(t, err, "un comptage en échec ne défait pas le retrait")
+	assert.False(t, resp.Removed, "personne inconnue : rien retiré")
 	assert.Nil(t, resp.ActiveAPIKeys, "non compté, jamais un faux zéro")
 	assert.Empty(t, resp.APIKeysURL)
 	assert.False(t, resp.RemovedAt.IsZero())
@@ -286,15 +369,16 @@ func TestRemoveMember_Idempotent_NotMember(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(membershipMemberUser(), nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(nil, nil)
 
 	resp, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{
 		TenantID:  "ws-1",
-		UserEmail: "alice@example.com",
+		HubUserID: testHubUID,
 	})
 	require.NoError(t, err)
+	assert.False(t, resp.Removed, "pas membre : rien retiré")
 	assert.False(t, resp.RemovedAt.IsZero())
 }
 
@@ -306,7 +390,7 @@ func TestRemoveMember_WorkspaceNotFound_ReturnsErrNoRows(t *testing.T) {
 
 	_, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{
 		TenantID:  "ws-unknown",
-		UserEmail: "a@x.test",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, sql.ErrNoRows))
@@ -320,8 +404,8 @@ func TestRemoveMember_ValidationErrors(t *testing.T) {
 		name  string
 		input domain.RemoveMemberInput
 	}{
-		{"missing tenant", domain.RemoveMemberInput{UserEmail: "a@x"}},
-		{"missing email", domain.RemoveMemberInput{TenantID: "ws-1"}},
+		{"missing tenant", domain.RemoveMemberInput{HubUserID: testHubUID}},
+		{"missing hub_user_id", domain.RemoveMemberInput{TenantID: "ws-1", UserEmail: "a@x"}},
 	}
 	for _, tc := range cases {
 		_, err := svc.RemoveMember(ctx, tc.input)
@@ -331,35 +415,22 @@ func TestRemoveMember_ValidationErrors(t *testing.T) {
 
 // === RestoreMember =========================================================
 
-func TestRestoreMember_Success_NewUser(t *testing.T) {
-	// User supprime entre-temps → CreateUser puis AddUserToWorkspace.
+func TestRestoreMember_UnknownPerson_ErrUserNotInApp_NoCreate(t *testing.T) {
+	// Personne inconnue ici : jamais de creation au restore (fiche 89). Ni recherche par adresse, ni CreateUser
+	// (gomock echoue sur tout appel non attendu).
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").
-		Return(nil, &domain.ErrUserNotFound{Message: "not found"})
-	m.userRepo.EXPECT().CreateUser(ctx, gomock.Any()).Return(nil)
-	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, gomock.Any(), "ws-1").Return(nil, sql.ErrNoRows)
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
-		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
-	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", gomock.Any(), "member", gomock.Any()).Return(nil)
-	// Webhook tenant.member_added emit sur restore reussi (§7.1).
-	// Le payload doit contenir restored:true pour distinguer d'un add neuf.
-	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).
-		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
-			assert.Equal(t, true, data["restored"], "restored:true distingue restore d'un add neuf")
-		}).Times(1)
-	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, hubUnknown())
 
-	resp, err := svc.RestoreMember(ctx, domain.RestoreMemberInput{
+	_, err := svc.RestoreMember(ctx, domain.RestoreMemberInput{
 		TenantID:  "ws-1",
+		HubUserID: testHubUID,
 		UserEmail: "alice@example.com",
 	})
-	require.NoError(t, err)
-	assert.Equal(t, "ws-1", resp.TenantID)
-	assert.False(t, resp.RestoredAt.IsZero())
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrUserNotInApp))
 }
 
 func TestRestoreMember_Success_ExistingUser(t *testing.T) {
@@ -367,7 +438,7 @@ func TestRestoreMember_Success_ExistingUser(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(membershipMemberUser(), nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").
 		Return([]*domain.UserWorkspaceWithEmail{membershipOwnerWithEmail("owner-1", "owner@x.test")}, nil)
@@ -376,11 +447,12 @@ func TestRestoreMember_Success_ExistingUser(t *testing.T) {
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-1", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
-	_, err := svc.RestoreMember(ctx, domain.RestoreMemberInput{
+	resp, err := svc.RestoreMember(ctx, domain.RestoreMemberInput{
 		TenantID:  "ws-1",
-		UserEmail: "alice@example.com",
+		HubUserID: testHubUID,
 	})
 	require.NoError(t, err)
+	assert.True(t, resp.Restored)
 }
 
 func TestRestoreMember_Idempotent_AlreadyMember(t *testing.T) {
@@ -388,14 +460,14 @@ func TestRestoreMember_Idempotent_AlreadyMember(t *testing.T) {
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(membershipMemberUser(), nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").
 		Return(membershipEntry("member-uuid-1", "ws-1", "member"), nil)
 	// Pas d'AddUserToWorkspace.
 
 	resp, err := svc.RestoreMember(ctx, domain.RestoreMemberInput{
 		TenantID:  "ws-1",
-		UserEmail: "alice@example.com",
+		HubUserID: testHubUID,
 	})
 	require.NoError(t, err)
 	assert.False(t, resp.RestoredAt.IsZero())
@@ -409,7 +481,7 @@ func TestRestoreMember_WorkspaceNotFound_ReturnsErrNoRows(t *testing.T) {
 
 	_, err := svc.RestoreMember(ctx, domain.RestoreMemberInput{
 		TenantID:  "ws-unknown",
-		UserEmail: "a@x.test",
+		HubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, sql.ErrNoRows))
@@ -423,8 +495,8 @@ func TestRestoreMember_ValidationErrors(t *testing.T) {
 		name  string
 		input domain.RestoreMemberInput
 	}{
-		{"missing tenant", domain.RestoreMemberInput{UserEmail: "a@x"}},
-		{"missing email", domain.RestoreMemberInput{TenantID: "ws-1"}},
+		{"missing tenant", domain.RestoreMemberInput{HubUserID: testHubUID}},
+		{"missing hub_user_id", domain.RestoreMemberInput{TenantID: "ws-1", UserEmail: "a@x"}},
 	}
 	for _, tc := range cases {
 		_, err := svc.RestoreMember(ctx, tc.input)

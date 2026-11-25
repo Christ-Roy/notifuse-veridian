@@ -40,7 +40,6 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
-	"github.com/google/uuid"
 )
 
 // ErrCannotRemoveOwner est retourne par RemoveMember quand le target est
@@ -51,8 +50,8 @@ var ErrCannotRemoveOwner = errors.New("cannot remove workspace owner — use tra
 //
 // Algorithme :
 //  1. Verifier workspace existe (404 si non — sql.ErrNoRows).
-//  2. Lookup user Notifuse par EMAIL (source de verite identite, §3.7).
-//  3. Si absent → CreateUser (type=user, UUID natif Notifuse, password vide).
+//  2. La personne par son hub_user_id (§5.19.7, fiche 89).
+//  3. Si absente → CreateUser reliee (type=user, UUID natif, password vide).
 //  4. Lookup user_workspaces (user_id, workspace_id) :
 //     - Si present + role owner → garder owner (additif, jamais downgrade).
 //     - Si present + role member → idempotent, retourner synced=true.
@@ -63,9 +62,6 @@ var ErrCannotRemoveOwner = errors.New("cannot remove workspace owner — use tra
 func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMemberInput) (*domain.SyncMemberResponse, error) {
 	if input.TenantID == "" {
 		return nil, errors.New("tenant_id required")
-	}
-	if input.UserEmail == "" {
-		return nil, errors.New("user_email required")
 	}
 	if input.HubUserID == "" {
 		return nil, errors.New("hub_user_id required")
@@ -86,29 +82,12 @@ func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMembe
 		return nil, fmt.Errorf("lookup workspace: %w", wsErr)
 	}
 
-	// Step 2 : lookup user par EMAIL.
-	member, err := s.userService.GetUserByEmail(ctx, input.UserEmail)
+	// Steps 2 et 3 : la personne par son hub_user_id, creee si absente (fiche 89).
+	member, err := s.hubMemberOrCreate(ctx, input.HubUserID, input.UserEmail, input.EmailProven, "sync_member")
 	if err != nil {
-		var notFound *domain.ErrUserNotFound
-		if !errors.As(err, &notFound) {
-			return nil, fmt.Errorf("get user by email: %w", err)
-		}
-		member = nil
+		return nil, err
 	}
-
-	// Step 3 : creer si absent.
-	if member == nil {
-		member = &domain.User{
-			ID:        uuid.New().String(),
-			Email:     input.UserEmail,
-			Type:      domain.UserTypeUser,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		}
-		if err := s.userRepo.CreateUser(ctx, member); err != nil {
-			return nil, fmt.Errorf("create member user: %w", err)
-		}
-	}
+	input.UserEmail = member.Email
 
 	// Step 4 : lookup user_workspaces.
 	// Notifuse n'a que owner/member en role workspace upstream. Tous les
@@ -208,7 +187,7 @@ func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMembe
 //
 // Algorithme :
 //  1. Verifier workspace existe (404 si non).
-//  2. Lookup user par email. Si absent → 200 idempotent (rien a retirer).
+//  2. La personne par son hub_user_id SEUL. Absente → 200 removed=false.
 //  3. Lookup user_workspaces. Si absent → 200 idempotent.
 //  4. Si role=owner → ErrCannotRemoveOwner (handler 409).
 //  5. workspaceRepo.RemoveUserFromWorkspace (raw DB, bypass auth via HMAC).
@@ -257,8 +236,8 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 	if input.TenantID == "" {
 		return nil, errors.New("tenant_id required")
 	}
-	if input.UserEmail == "" {
-		return nil, errors.New("user_email required")
+	if input.HubUserID == "" {
+		return nil, errors.New("hub_user_id required")
 	}
 
 	// Step 1 : workspace existe ?
@@ -273,29 +252,21 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 		return nil, fmt.Errorf("lookup workspace: %w", wsErr)
 	}
 
-	// Step 2 : lookup user par email.
-	member, err := s.userService.GetUserByEmail(ctx, input.UserEmail)
+	// Step 2 : la personne par son hub_user_id SEUL (fiche 89). Inconnue : rien a retirer, rien d'autre n'est touche.
+	member, err := s.hubMember(ctx, input.HubUserID)
 	if err != nil {
-		var notFound *domain.ErrUserNotFound
-		if errors.As(err, &notFound) {
-			// User inconnu = idempotent, rien a retirer.
-			s.touchHubSync(ctx, input.TenantID)
-			return &domain.RemoveMemberResponse{
-				TenantID:  input.TenantID,
-				UserEmail: input.UserEmail,
-				RemovedAt: time.Now().UTC(),
-			}, nil
-		}
-		return nil, fmt.Errorf("get user by email: %w", err)
+		return nil, err
 	}
 	if member == nil {
 		s.touchHubSync(ctx, input.TenantID)
 		return &domain.RemoveMemberResponse{
 			TenantID:  input.TenantID,
+			HubUserID: input.HubUserID,
 			UserEmail: input.UserEmail,
 			RemovedAt: time.Now().UTC(),
 		}, nil
 	}
+	input.UserEmail = member.Email
 
 	// Step 3 : lookup user_workspaces.
 	existing, lookupErr := s.workspaceRepo.GetUserWorkspace(ctx, member.ID, input.TenantID)
@@ -310,6 +281,7 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 			s.touchHubSync(ctx, input.TenantID)
 			return &domain.RemoveMemberResponse{
 				TenantID:  input.TenantID,
+				HubUserID: input.HubUserID,
 				UserEmail: input.UserEmail,
 				RemovedAt: time.Now().UTC(),
 			}, nil
@@ -320,6 +292,7 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 		s.touchHubSync(ctx, input.TenantID)
 		return &domain.RemoveMemberResponse{
 			TenantID:  input.TenantID,
+			HubUserID: input.HubUserID,
 			UserEmail: input.UserEmail,
 			RemovedAt: time.Now().UTC(),
 		}, nil
@@ -351,6 +324,7 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 	if s.emitter != nil {
 		s.emitter.Emit(ctx, domain.EventTenantMemberRemoved, input.TenantID, map[string]interface{}{
 			"user_email":  input.UserEmail,
+			"hub_user_id": input.HubUserID,
 			"reason":      input.Reason,
 			"app_user_id": member.ID,
 			"actor":       "hub", // §5.19.2 : appele par script admin Hub
@@ -361,7 +335,9 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 
 	return &domain.RemoveMemberResponse{
 		TenantID:  input.TenantID,
+		HubUserID: input.HubUserID,
 		UserEmail: input.UserEmail,
+		Removed:   true,
 		RemovedAt: removedAt,
 	}, nil
 }
@@ -370,7 +346,7 @@ func (s *veridianService) removeMember(ctx context.Context, input domain.RemoveM
 //
 // Algorithme :
 //  1. Verifier workspace existe (404 si non).
-//  2. Lookup/create user par email (si user supprime entre-temps).
+//  2. La personne par son hub_user_id SEUL. Absente → ErrUserNotInApp (404).
 //  3. Lookup user_workspaces : si deja membre → idempotent 200.
 //  4. Sinon → AddUserToWorkspace(role=member) via ctx caller owner.
 //  5. Touch hub_sync (best-effort).
@@ -383,8 +359,8 @@ func (s *veridianService) RestoreMember(ctx context.Context, input domain.Restor
 	if input.TenantID == "" {
 		return nil, errors.New("tenant_id required")
 	}
-	if input.UserEmail == "" {
-		return nil, errors.New("user_email required")
+	if input.HubUserID == "" {
+		return nil, errors.New("hub_user_id required")
 	}
 
 	// Step 1 : workspace existe ?
@@ -399,27 +375,15 @@ func (s *veridianService) RestoreMember(ctx context.Context, input domain.Restor
 		return nil, fmt.Errorf("lookup workspace: %w", wsErr)
 	}
 
-	// Step 2 : lookup/create user.
-	member, err := s.userService.GetUserByEmail(ctx, input.UserEmail)
+	// Step 2 : la personne par son hub_user_id SEUL, jamais creee (fiche 89).
+	member, err := s.hubMember(ctx, input.HubUserID)
 	if err != nil {
-		var notFound *domain.ErrUserNotFound
-		if !errors.As(err, &notFound) {
-			return nil, fmt.Errorf("get user by email: %w", err)
-		}
-		member = nil
+		return nil, err
 	}
 	if member == nil {
-		member = &domain.User{
-			ID:        uuid.New().String(),
-			Email:     input.UserEmail,
-			Type:      domain.UserTypeUser,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		}
-		if err := s.userRepo.CreateUser(ctx, member); err != nil {
-			return nil, fmt.Errorf("create member user: %w", err)
-		}
+		return nil, ErrUserNotInApp
 	}
+	input.UserEmail = member.Email
 
 	// Step 3 : lookup user_workspaces.
 	existing, lookupErr := s.workspaceRepo.GetUserWorkspace(ctx, member.ID, input.TenantID)
@@ -428,7 +392,9 @@ func (s *veridianService) RestoreMember(ctx context.Context, input domain.Restor
 		s.touchHubSync(ctx, input.TenantID)
 		return &domain.RestoreMemberResponse{
 			TenantID:   input.TenantID,
+			HubUserID:  input.HubUserID,
 			UserEmail:  input.UserEmail,
+			Restored:   true,
 			RestoredAt: time.Now().UTC(),
 		}, nil
 	}
@@ -482,6 +448,7 @@ func (s *veridianService) RestoreMember(ctx context.Context, input domain.Restor
 	if s.emitter != nil {
 		s.emitter.Emit(ctx, domain.EventTenantMemberAdded, input.TenantID, map[string]interface{}{
 			"user_email":  input.UserEmail,
+			"hub_user_id": input.HubUserID,
 			"role":        "member",
 			"app_user_id": member.ID,
 			"actor":       "hub", // §5.20 : appele par script admin Hub
@@ -493,7 +460,9 @@ func (s *veridianService) RestoreMember(ctx context.Context, input domain.Restor
 
 	return &domain.RestoreMemberResponse{
 		TenantID:   input.TenantID,
+		HubUserID:  input.HubUserID,
 		UserEmail:  input.UserEmail,
+		Restored:   true,
 		RestoredAt: restoredAt,
 	}, nil
 }

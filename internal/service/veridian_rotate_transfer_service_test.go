@@ -284,25 +284,25 @@ func TestRotateAPIKey_GraceInsertError(t *testing.T) {
 func TestTransferOwner_MissingTenantID(t *testing.T) {
 	svc, _ := newVeridianService(t)
 	_, err := svc.TransferOwner(context.Background(), domain.TransferOwnerInput{
-		NewOwnerEmail: "n@x.t", Reason: "r",
+		OwnerHubUserID: testHubUID, Reason: "r",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "tenant_id required")
 }
 
-func TestTransferOwner_MissingNewOwnerEmail(t *testing.T) {
+func TestTransferOwner_MissingOwnerHubUserID(t *testing.T) {
 	svc, _ := newVeridianService(t)
 	_, err := svc.TransferOwner(context.Background(), domain.TransferOwnerInput{
 		TenantID: "ws-1", Reason: "r",
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "new_owner_email required")
+	assert.Contains(t, err.Error(), "owner_hub_user_id required")
 }
 
 func TestTransferOwner_MissingReason(t *testing.T) {
 	svc, _ := newVeridianService(t)
 	_, err := svc.TransferOwner(context.Background(), domain.TransferOwnerInput{
-		TenantID: "ws-1", NewOwnerEmail: "n@x.t",
+		TenantID: "ws-1", OwnerHubUserID: testHubUID,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reason required")
@@ -312,18 +312,50 @@ func TestTransferOwner_TenantNotFound(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
-	// GetWorkspaceUsersWithEmail pour resolver l'old owner — peut echouer
-	// silencieusement (best-effort).
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-x").Return(nil, errors.New("ignored")).Times(1)
-	// AttachOwner appele ensuite et plante sur GetByID.
+	// L'espace est lu en premier : inconnu → sql.ErrNoRows, rien d'autre n'est lu.
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-x").Return(nil, sql.ErrNoRows).Times(1)
 
 	_, err := svc.TransferOwner(ctx, domain.TransferOwnerInput{
-		TenantID:      "ws-x",
-		NewOwnerEmail: "new@x.test",
-		Reason:        "test",
+		TenantID:       "ws-x",
+		OwnerHubUserID: testHubUID,
+		Reason:         "test",
 	})
 	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+// Le futur owner est designe par son hub_user_id SEUL : inconnu ici → ErrUserNotInApp, jamais une creation.
+func TestTransferOwner_UnknownPerson_ErrUserNotInApp(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).Times(1)
+
+	_, err := svc.TransferOwner(ctx, domain.TransferOwnerInput{
+		TenantID:       "ws-1",
+		OwnerHubUserID: testHubUID,
+		NewOwnerEmail:  "new@x.test", // informatif : jamais cherche
+		Reason:         "test",
+	})
+	require.ErrorIs(t, err, ErrUserNotInApp)
+}
+
+// Connu ici mais pas membre de cet espace → ErrOwnerNotMember, aucun transfert.
+func TestTransferOwner_NotMember_ErrOwnerNotMember(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+
+	newOwner := &domain.User{ID: "new-uuid", Email: "new@x.test", Type: domain.UserTypeUser}
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(1)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(newOwner, nil).Times(1)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, newOwner.ID, "ws-1").Return(nil, sql.ErrNoRows).Times(1)
+
+	_, err := svc.TransferOwner(ctx, domain.TransferOwnerInput{
+		TenantID:       "ws-1",
+		OwnerHubUserID: testHubUID,
+		Reason:         "test",
+	})
+	require.ErrorIs(t, err, ErrOwnerNotMember)
 }
 
 func TestTransferOwner_OK_ResolvesOldOwner(t *testing.T) {
@@ -332,28 +364,24 @@ func TestTransferOwner_OK_ResolvesOldOwner(t *testing.T) {
 
 	oldOwner := &domain.User{ID: "old-uuid", Email: "old@x.test", Type: domain.UserTypeUser}
 	newOwner := &domain.User{ID: "new-uuid", Email: "new@x.test", Type: domain.UserTypeUser}
+	memberEntry := &domain.UserWorkspace{UserID: newOwner.ID, WorkspaceID: "ws-1", Role: "member"}
 
-	// 1ere call: resolve old owner (pre-AttachOwner).
+	// TransferOwner (pre-controle) puis AttachOwner : l'espace, la personne par son hub_user_id et son
+	// appartenance sont lus deux fois. Le futur owner est deja membre : AttachOwner ne l'ajoute pas.
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(2)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(newOwner, nil).Times(2)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, newOwner.ID, "ws-1").Return(memberEntry, nil).Times(2)
+
+	// resolve old owner (pre-AttachOwner) puis owner courant dans AttachOwner.
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return([]*domain.UserWorkspaceWithEmail{
 		{UserWorkspace: domain.UserWorkspace{UserID: oldOwner.ID, Role: "owner"}, Email: oldOwner.Email, Type: domain.UserTypeUser},
-	}, nil).Times(1)
-
-	// AttachOwner path : GetByID OK, GetUserByEmail OK (new owner), GetUserWorkspace
-	// returns ErrNoRows (pas attache), GetWorkspaceUsersWithEmail (2eme appel
-	// pour resolver current owner) → old owner.
-	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(1)
-	m.user.EXPECT().GetUserByEmail(ctx, "new@x.test").Return(newOwner, nil).Times(1)
-	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, newOwner.ID, "ws-1").Return(nil, sql.ErrNoRows).Times(1)
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return([]*domain.UserWorkspaceWithEmail{
-		{UserWorkspace: domain.UserWorkspace{UserID: oldOwner.ID, Role: "owner"}, Email: oldOwner.Email, Type: domain.UserTypeUser},
-	}, nil).Times(1)
+	}, nil).Times(2)
 
 	// ctxAsUser oldOwner (current owner).
 	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
-	// AddUserToWorkspace (new owner devient member) + TransferOwnership.
-	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", newOwner.ID, "member", gomock.Any()).Return(nil).Times(1)
+	// TransferOwnership (aucun AddUserToWorkspace : deja membre).
 	m.workspace.EXPECT().TransferOwnership(gomock.Any(), "ws-1", newOwner.ID, oldOwner.ID).Return(nil).Times(1)
 
 	// Root retire (parite Provision) — best-effort. root pas resolu ici, on skip.
@@ -363,9 +391,9 @@ func TestTransferOwner_OK_ResolvesOldOwner(t *testing.T) {
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantOwnerChanged, "ws-1", gomock.Any()).Times(1)
 
 	resp, err := svc.TransferOwner(ctx, domain.TransferOwnerInput{
-		TenantID:      "ws-1",
-		NewOwnerEmail: "new@x.test",
-		Reason:        "test",
+		TenantID:       "ws-1",
+		OwnerHubUserID: testHubUID,
+		Reason:         "test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "ws-1", resp.TenantID)
@@ -457,12 +485,12 @@ func TestTransferOwner_ReportsClientAsOldOwnerNotCoOwner(t *testing.T) {
 		{UserWorkspace: domain.UserWorkspace{UserID: "old-uuid", Role: "owner"}, Email: "old@x.test", Type: domain.UserTypeUser},
 	}
 	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(members, nil).Times(2)
-	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(1)
-	m.user.EXPECT().GetUserByEmail(ctx, "new@x.test").Return(newOwner, nil).Times(1)
-	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, newOwner.ID, "ws-1").Return(nil, sql.ErrNoRows).Times(1)
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil).Times(2)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(newOwner, nil).Times(2)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, newOwner.ID, "ws-1").
+		Return(&domain.UserWorkspace{UserID: newOwner.ID, WorkspaceID: "ws-1", Role: "member"}, nil).Times(2)
 	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-1", newOwner.ID, "member", gomock.Any()).Return(nil).Times(1)
 	m.workspace.EXPECT().TransferOwnership(gomock.Any(), "ws-1", newOwner.ID, "old-uuid").Return(nil).Times(1)
 	m.userRepo.EXPECT().GetUserByEmail(ctx, "root@veridian.site").Return(nil, errors.New("not root")).Times(1)
 	m.emitter.EXPECT().Emit(ctx, domain.EventTenantOwnerChanged, "ws-1", gomock.Any()).Times(1)
@@ -472,7 +500,7 @@ func TestTransferOwner_ReportsClientAsOldOwnerNotCoOwner(t *testing.T) {
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "robert-id", "ws-1").
 		Return(&domain.UserWorkspace{UserID: "robert-id", WorkspaceID: "ws-1", Role: "owner"}, nil).Times(1)
 
-	resp, err := svc.TransferOwner(ctx, domain.TransferOwnerInput{TenantID: "ws-1", NewOwnerEmail: "new@x.test", Reason: "test"})
+	resp, err := svc.TransferOwner(ctx, domain.TransferOwnerInput{TenantID: "ws-1", OwnerHubUserID: testHubUID, Reason: "test"})
 	require.NoError(t, err)
 	assert.Equal(t, "old@x.test", resp.OldOwner)
 }

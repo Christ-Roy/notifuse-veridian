@@ -372,7 +372,8 @@ func TestVeridianService_Provision_Idempotent_OwnerEmailCaseInsensitive(t *testi
 			},
 		}, nil).Times(1)
 	m.userRepo.EXPECT().GetUserByID(ctx, "user-1").Return(humanOwner, nil).Times(1)
-	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, "owner@example.com", "ws-case").
+	// Le lien est celui de l'adresse DE L'ESPACE (celle du Hub a pu changer), pas de celle de l'appel.
+	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, "Owner@Example.COM", "ws-case").
 		Return("code-ci", time.Now().Add(15*time.Minute), nil).Times(1)
 
 	resp, err := svc.Provision(ctx, domain.ProvisionInput{
@@ -2473,10 +2474,8 @@ func TestAttachMember_NoDowngradeOnRoleConflict(t *testing.T) {
 		Email: "promoted@example.com",
 		Type:  domain.UserTypeUser,
 	}
-	m.user.EXPECT().GetUserByEmail(ctx, "promoted@example.com").
-		Return(existingUser, nil)
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-local-x", "hub-uuid-promoted").
-		Return(nil)
+	// La personne est son hub_user_id (fiche 89) : ni recherche par adresse, ni lien a poser.
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(existingUser, nil)
 
 	// Deja "admin" local souverain (promu via UI Team Settings).
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-local-x", "ws-nodown").
@@ -2492,7 +2491,7 @@ func TestAttachMember_NoDowngradeOnRoleConflict(t *testing.T) {
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-nodown",
-		HubUserID:    "hub-uuid-promoted",
+		HubUserID:    testHubUID,
 		HubUserEmail: "promoted@example.com",
 		Role:         domain.AttachMemberRoleMember,
 	})
@@ -2503,13 +2502,12 @@ func TestAttachMember_NoDowngradeOnRoleConflict(t *testing.T) {
 	assert.Equal(t, "admin", resp.Role, "role LOCAL souverain conserve, JAMAIS ecrase par Hub (§5.22.4)")
 }
 
-// TestAttachMember_BackfillMismatchDoesNotAbort — garde-fou colocalise du
-// nouveau comportement §3.7 : si BackfillHubUserID retourne
-// ErrHubUserIDMismatch (le user local est deja lie a un hub_user_id
-// DIFFERENT — cas rare de re-signup Hub avec meme email), le service
-// log warn et CONTINUE le flow normal. Pas d'erreur 500 propagee.
-// L'email reste la cle de jointure canonique cross-app (§3.7).
-func TestAttachMember_BackfillMismatchDoesNotAbort(t *testing.T) {
+// TestAttachMember_BackfillMismatch_ConflictNoAdd — garde-fou colocalise (fiche 89, CONTRAT-HUB 5.19.7) : l'adresse est
+// portee par un compte sans lien et attestee, mais BackfillHubUserID refuse le lien (ErrHubUserIDMismatch : un autre lien
+// a ete pose entre-temps). Le service refuse en ErrHubUserIDConflict et n'ajoute RIEN a l'espace (gomock echoue sur
+// GetUserWorkspace, AddUserToWorkspace, CreateSession non attendus). L'ancien comportement (log et continue) est supprime :
+// un compte qu'on ne sait pas relier ne devient pas membre.
+func TestAttachMember_BackfillMismatch_ConflictNoAdd(t *testing.T) {
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 
@@ -2522,40 +2520,20 @@ func TestAttachMember_BackfillMismatchDoesNotAbort(t *testing.T) {
 		Email: "bf@example.com",
 		Type:  domain.UserTypeUser,
 	}
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, &domain.ErrUserNotFound{Message: "not found"})
 	m.user.EXPECT().GetUserByEmail(ctx, "bf@example.com").Return(existingUser, nil)
-
-	// Backfill retourne mismatch (binding existant different) — non bloquant.
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-local-bf", "hub-uuid-NEW").
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-local-bf", testHubUID).
 		Return(domain.ErrHubUserIDMismatch)
 
-	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-local-bf", "ws-bf-mis").
-		Return(nil, sql.ErrNoRows)
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-bf-mis").
-		Return([]*domain.UserWorkspaceWithEmail{
-			{
-				UserWorkspace: domain.UserWorkspace{
-					UserID: "owner-bf", WorkspaceID: "ws-bf-mis", Role: "owner",
-				},
-				Email: "owner@ws.test",
-			},
-		}, nil)
-	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
-	m.workspace.EXPECT().
-		AddUserToWorkspace(gomock.Any(), "ws-bf-mis", "user-local-bf", "member", gomock.Any()).
-		Return(nil)
-	// Webhook member_added emis sur attach neuf (post lot M §7.1).
-	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-bf-mis", gomock.Any()).Times(1)
-	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
-
-	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-bf-mis",
-		HubUserID:    "hub-uuid-NEW",
+		HubUserID:    testHubUID,
 		HubUserEmail: "bf@example.com",
+		EmailProven:  true,
 		Role:         domain.AttachMemberRoleMember,
 	})
-	require.NoError(t, err, "ErrHubUserIDMismatch doit etre log+continue, jamais propage 500 (§3.7)")
-	require.NotNil(t, resp)
-	assert.True(t, resp.Attached)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrHubUserIDConflict), "attendu ErrHubUserIDConflict, recu: %v", err)
 }
 
 // TestVeridianService_Provision_SeedReceivesOwnerID couvre le bug runtime
@@ -2800,7 +2778,8 @@ func TestVeridianService_Provision_Idempotent_TwoOwners_MatchesSecondOwner(t *te
 	svc, m := newVeridianService(t)
 	ctx := context.Background()
 	twoOwnersFixture(t, m, ctx, "ws-two", map[string]int{"client-id": 1, "robert-id": 1})
-	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, "Robert@Veridian.TEST", "ws-two").
+	// Le lien est celui de l'adresse DE L'ESPACE pour cet owner (testCoOwnerEmail), pas de la casse de l'appel.
+	m.user.EXPECT().GenerateMagicCodeForVeridian(ctx, testCoOwnerEmail, "ws-two").
 		Return("code-robert", time.Now().Add(15*time.Minute), nil).Times(1)
 
 	resp, err := svc.Provision(ctx, domain.ProvisionInput{TenantID: "ws-two", OwnerEmail: "Robert@Veridian.TEST", Plan: "pro"})

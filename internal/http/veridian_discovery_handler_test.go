@@ -409,3 +409,22 @@ func TestDiscoveryGET_URLEncodedEmail(t *testing.T) {
 	rec := invokeDiscovery(t, svc, buildDiscoveryHMACGetRequest(t, "alice%2Btest@example.com", 0))
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
+
+// CONTRAT-HUB 5.19.7 : hub_user_id d'abord, l'adresse n'est pas lue (gomock refuse tout appel à LookupByEmail).
+func TestDiscovery_HubUserIDFirst_AddressIgnored(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	const id = "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"
+	svc := mocks.NewMockVeridianService(ctrl)
+	svc.EXPECT().LookupMember(gomock.Any(), id).Return(&domain.DiscoveryResponse{Found: true, UserEmail: "new@example.com"}, nil)
+	rec := invokeDiscovery(t, svc, buildDiscoveryHMACRequest(t, `{"email":"old@example.com","hub_user_id":"`+id+`"}`, 0))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "new@example.com")
+
+	rec = invokeDiscovery(t, svc, buildDiscoveryHMACRequest(t, `{"email":"old@example.com","hub_user_id":"pas-un-uuid"}`, 0))
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "identifiant mal formé : jamais un repli sur l'adresse")
+
+	svc.EXPECT().LookupMember(gomock.Any(), id).Return(nil, errors.New("boom"))
+	rec = invokeDiscovery(t, svc, buildDiscoveryHMACRequest(t, `{"hub_user_id":"`+id+`"}`, 0))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}

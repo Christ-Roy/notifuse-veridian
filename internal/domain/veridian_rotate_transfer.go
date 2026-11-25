@@ -61,7 +61,9 @@ const EventTenantAPIKeyRotated VeridianEvent = "tenant.api_key_rotated"
 type TransferOwnerInput struct {
 	// TenantID est injecte depuis le path param par le handler.
 	TenantID string `json:"-"`
-	// NewOwnerEmail : email du futur owner du tenant.
+	// OwnerHubUserID : le futur owner, par son hub_user_id (CONTRAT-HUB §5.19.7).
+	OwnerHubUserID string `json:"owner_hub_user_id"`
+	// NewOwnerEmail : informatif, jamais cherche.
 	NewOwnerEmail string `json:"new_owner_email"`
 	// Reason : motif du transfer (ex: "client account migration", "support
 	// request"). Audite via emitter webhook payload.

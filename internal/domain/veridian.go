@@ -472,6 +472,8 @@ type ProvisionInput struct {
 	Plan          string      `json:"plan,omitempty"`           // optionnel, defaut = VERIDIAN_DEFAULT_PLAN
 	PlanSource    PlanSource  `json:"plan_source,omitempty"`    // optionnel, defaut = "stripe"
 	Quotas        *PlanQuotasInput `json:"quotas,omitempty"`    // optionnel, defaut = QuotaForPlan(plan)
+	// OwnerHubUserID : la personne proprietaire (CONTRAT-HUB §5.19.7) ; a defaut metadata.hub_user_id.
+	OwnerHubUserID string `json:"owner_hub_user_id,omitempty"`
 	// Metadata : CONTRAT-HUB §5.1, porte le hub_user_id de l'owner (backfill §3.7).
 	Metadata *ProvisionMetadata `json:"metadata,omitempty"`
 	// EmailProven : attestation du Hub (CONTRAT-HUB 3.8) que l'adresse du owner est prouvee.
@@ -747,6 +749,8 @@ type TenantHealthResponse struct {
 type AttachOwnerInput struct {
 	TenantID   string `json:"tenant_id"`
 	OwnerEmail string `json:"owner_email"`
+	// HubUserID : la personne (fiche 89). Vide (scripts d'operateur) : l'adresse.
+	HubUserID string `json:"hub_user_id,omitempty"`
 }
 
 // === Veridian patch — hub-attach-member (2026-05-21) ===
@@ -778,6 +782,8 @@ type AttachMemberInput struct {
 	HubUserID    string           `json:"hub_user_id"`
 	// HubUserEmail : email pour creation user Notifuse si absent.
 	HubUserEmail string           `json:"hub_user_email"`
+	// EmailProven : le Hub atteste l'adresse ; sans elle un compte sans lien n'est jamais relie.
+	EmailProven bool `json:"email_proven,omitempty"`
 	// Role : owner | admin | member.
 	Role         AttachMemberRole `json:"role"`
 	// InvitationID : traçabilité audit — "attached via Hub invitation X".
@@ -914,6 +920,8 @@ type VeridianService interface {
 	// Semantique : retourne toujours un DiscoveryResponse (jamais d erreur not found).
 	// found=false + workspaces=[] si l email est inconnu. Jamais de 404.
 	LookupByEmail(ctx context.Context, email string) (*DiscoveryResponse, error)
+	// LookupMember : la meme reponse, la personne trouvee par son hub_user_id (§5.19.7).
+	LookupMember(ctx context.Context, hubUserID string) (*DiscoveryResponse, error)
 
 	// === Veridian patch — Lot K (2026-05-21) ===
 	// RotateAPIKey genere une nouvelle api_key pour un tenant et marque

@@ -23,6 +23,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -70,6 +71,7 @@ async function provisionTenant(tenantId: string) {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan: 'free',
     });
     const body = await readBody(r);
@@ -88,7 +90,7 @@ async function provisionTenant(tenantId: string) {
 async function attachMember(tenantId: string, memberEmail: string) {
   const r = await hmacFetch(`/api/tenants/${tenantId}/sync-member`, 'POST', {
     user_email: memberEmail,
-    hub_user_id: `hub-u-${memberEmail.split('@')[0]}`,
+    hub_user_id: hubId(`hub-u-${memberEmail.split('@')[0]}`),
     role: 'member',
   });
   const body = await readBody(r);
@@ -127,7 +129,7 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
     // (1) Freeze nouveau → 200, alreadyFrozen=false implicite (200 vs 409).
     const r1 = await hmacFetch(`/api/tenants/${tid}/freeze-member`, 'POST', {
       user_email: memberEmail,
-      hub_user_id: `hub-u-${tid}-bob`,
+      hub_user_id: hubId(`hub-u-${tid}-bob`),
       reason: 'quota_seat_exceeded',
     });
     const b1 = await readBody(r1);
@@ -141,7 +143,7 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
     // (2) Replay (memes args) → 409 member_already_frozen idempotent.
     const r2 = await hmacFetch(`/api/tenants/${tid}/freeze-member`, 'POST', {
       user_email: memberEmail,
-      hub_user_id: `hub-u-${tid}-bob`,
+      hub_user_id: hubId(`hub-u-${tid}-bob`),
       reason: 'quota_seat_exceeded',
     });
     const b2 = await readBody(r2);
@@ -151,7 +153,7 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
     // (3) Unfreeze → 200, restoration flow nominal.
     const r3 = await hmacFetch(`/api/tenants/${tid}/unfreeze-member`, 'POST', {
       user_email: memberEmail,
-      hub_user_id: `hub-u-${tid}-bob`,
+      hub_user_id: hubId(`hub-u-${tid}-bob`),
     });
     const b3 = await readBody(r3);
     expect(r3.status, b3.raw).toBe(200);
@@ -162,7 +164,7 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
     // (4) Apres unfreeze, re-freeze doit a nouveau passer en 200 (etat reset).
     const r4 = await hmacFetch(`/api/tenants/${tid}/freeze-member`, 'POST', {
       user_email: memberEmail,
-      hub_user_id: `hub-u-${tid}-bob`,
+      hub_user_id: hubId(`hub-u-${tid}-bob`),
       reason: 'manual',
     });
     const b4 = await readBody(r4);
@@ -176,7 +178,7 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
 
     const r = await hmacFetch(`/api/tenants/${tid}/freeze-member`, 'POST', {
       user_email: owner_email,
-      hub_user_id: `hub-u-owner-${tid}`,
+      hub_user_id: hubId(owner_email),
       reason: 'manual',
     });
     const body = await readBody(r);
@@ -184,19 +186,19 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
     expect(body.json().code).toBe('cannot_freeze_owner');
   });
 
-  test('user pas membre du workspace → 404 user_not_member', async () => {
+  test('personne inconnue ici → 404 user_not_in_app', async () => {
     const tid = `tstnm${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid);
 
     const r = await hmacFetch(`/api/tenants/${tid}/freeze-member`, 'POST', {
       user_email: `ghost-${tid}@freeze.test`,
-      hub_user_id: 'hub-u-ghost',
+      hub_user_id: hubId('hub-u-ghost'),
       reason: 'manual',
     });
     const body = await readBody(r);
     expect(r.status, body.raw).toBe(404);
-    expect(body.json().code).toBe('user_not_member');
+    expect(body.json().code).toBe('user_not_in_app');
   });
 
   test('tenant inexistant → 404 tenant_not_found', async () => {
@@ -212,7 +214,7 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
 
     const r = await hmacFetch(`/api/tenants/${ghostTid}/freeze-member`, 'POST', {
       user_email: owner_email,
-      hub_user_id: 'hub-u-anyone',
+      hub_user_id: hubId('hub-u-anyone'),
       reason: 'manual',
     });
     const body = await readBody(r);
@@ -228,7 +230,7 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
     // Signature avec mauvais secret → middleware HMAC rejette.
     const body = JSON.stringify({
       user_email: 'whatever@x.test',
-      hub_user_id: 'u-1',
+      hub_user_id: hubId('u-1'),
       reason: 'manual',
     });
     const ts = Date.now().toString();
@@ -246,13 +248,13 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
     expect(r.status).toBe(401);
   });
 
-  test('validation : missing user_email → 400', async () => {
+  test('validation : hub_user_id manquant → 400', async () => {
     const tid = `tstval${Date.now().toString(36).slice(-6)}`;
     provisioned.push(tid);
     await provisionTenant(tid);
 
     const r = await hmacFetch(`/api/tenants/${tid}/freeze-member`, 'POST', {
-      hub_user_id: 'u-1',
+      user_email: 'whatever@x.test',
       reason: 'manual',
     });
     const body = await readBody(r);
@@ -267,7 +269,7 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
 
     const r = await hmacFetch(`/api/tenants/${tid}/freeze-member`, 'POST', {
       user_email: owner_email,
-      hub_user_id: 'u-1',
+      hub_user_id: hubId('u-1'),
       reason: 'invalid_reason_zzz',
     });
     const body = await readBody(r);
@@ -291,7 +293,7 @@ test.describe('@regression unfreeze-member — POST /api/tenants/{tenantId}/unfr
     // cote handler — pas de 404 surprise).
     const r = await hmacFetch(`/api/tenants/${tid}/unfreeze-member`, 'POST', {
       user_email: memberEmail,
-      hub_user_id: `hub-u-${tid}-carol`,
+      hub_user_id: hubId(`hub-u-${tid}-carol`),
     });
     const body = await readBody(r);
     expect(r.status, body.raw).toBe(200);
@@ -304,7 +306,7 @@ test.describe('@regression unfreeze-member — POST /api/tenants/{tenantId}/unfr
 
     const body = JSON.stringify({
       user_email: 'whatever@x.test',
-      hub_user_id: 'u-1',
+      hub_user_id: hubId('u-1'),
     });
     const ts = Date.now().toString();
     const badSig = crypto.createHmac('sha256', 'still-wrong-secret-padding').update(`${ts}.${body}`).digest('hex');

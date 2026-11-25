@@ -482,18 +482,14 @@ test.describe('@regression identity-cross-app — C. users.hub_user_id (V46)', (
     expect(me.user.hub_user_id).toBe(hubUUID);
   });
 
-  test('C15. BackfillHubUserID non-bloquant sur mismatch (CONTRAT-HUB §3.7)', async () => {
-    // CONTRAT-HUB §3.7 + commit 86137e5f : si AttachMember est rappele
-    // sur le MEME user (meme email) mais avec un hub_user_id DIFFERENT,
-    // le backfill renvoie ErrHubUserIDMismatch — l'attach NE doit PAS
-    // echouer (warn log + continue, l'email reste cle canonique cross-app).
+  test('C15. une adresse deja portee par une autre personne : 409 hub_user_conflict (CONTRAT-HUB 5.19.7)', async () => {
+    // Meme adresse, hub_user_id DIFFERENT : c'est une autre personne. Refus, jamais une fusion.
     //
     // Strategie :
     //   1. Provision tenant -> owner X.
     //   2. AttachMember member email Y + hub_user_id Z1 -> 201, backfill Z1.
     //   3. Tenter AttachMember meme member email Y + hub_user_id Z2 (different).
-    //      Doit retourner 200 already_member=true (§5.22.4) sans erreur.
-    //      Backfill rejette Z2 (mismatch) mais NE bloque PAS.
+    //      Doit retourner 409 hub_user_conflict.
     //   4. /api/user.me du member -> user.hub_user_id === Z1 (intact).
     const tid = newTid();
     provisioned.push(tid);
@@ -515,19 +511,17 @@ test.describe('@regression identity-cross-app — C. users.hub_user_id (V46)', (
     const raw1 = await r1.text();
     expect(r1.status, raw1).toBe(201);
 
-    // 2e attach avec huid2 different -> 200 already_member, pas d'erreur.
+    // 2e attach avec huid2 different -> 409.
     const r2 = await hmacFetch(
       `/api/veridian/workspaces/${tid}/attach-member`,
       'POST',
       { hub_user_id: huid2, hub_user_email: memberEmail, role: 'member', invitation_id: `inv-${tid}-2` },
     );
     const raw2 = await r2.text();
-    expect(r2.status, raw2).toBe(200);
-    const body2 = JSON.parse(raw2);
-    expect(body2.already_member).toBe(true);
+    expect(r2.status, raw2).toBe(409);
+    expect(raw2).toMatch(/hub_user_conflict/);
 
-    // /api/user.me du member doit retourner le huid initial (huid1) intact :
-    // BackfillHubUserID a refuse d'ecraser (ErrHubUserIDMismatch warn log + continue).
+    // /api/user.me du member doit retourner le huid initial (huid1) intact.
     const memberJWT = await exchangeMagicLinkForUserJWT(apiKey, memberEmail);
     const meResp = await bearerFetch('/api/user.me', 'GET', memberJWT);
     const meRaw = await meResp.text();

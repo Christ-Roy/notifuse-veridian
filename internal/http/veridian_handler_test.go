@@ -978,6 +978,36 @@ func TestVeridianHandleAttachOwner_OK(t *testing.T) {
 	assert.Equal(t, "0cb49456-12cc-43f2-9a4e-423d16fcfb44", resp.UserID)
 }
 
+func TestVeridianHandleAttachOwner_HubUserID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	const id = "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c","hub_user_id":"x"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "mal formé : jamais un repli sur l'adresse")
+
+	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "a@b.c", HubUserID: id}).Return(nil, service.ErrHubUserIDConflict)
+	rec = postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c","hub_user_id":"`+id+`"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "hub_user_conflict")
+}
+
+func TestVeridianHandleProvision_OwnerHubUserID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision", `{"tenant_id":"ws-1","owner_email":"a@b.c","owner_hub_user_id":"x"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(nil, service.ErrHubUserIDConflict)
+	rec = postJSON(t, h.handleProvision, "/api/tenants/provision", `{"tenant_id":"ws-1","owner_email":"a@b.c","owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "hub_user_conflict")
+}
+
 func TestVeridianHandleAttachOwner_MissingFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

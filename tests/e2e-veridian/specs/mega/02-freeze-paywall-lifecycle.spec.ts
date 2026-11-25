@@ -20,6 +20,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubId } from '../../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -62,6 +63,7 @@ async function provisionTenant(tenantId: string, ownerEmail: string) {
     const r = await hmacFetch('/api/tenants/provision', 'POST', {
       tenant_id: tenantId,
       owner_email: ownerEmail,
+      owner_hub_user_id: hubId(ownerEmail),
       plan: 'pro',
     });
     const body = await readBody(r);
@@ -112,9 +114,9 @@ test.describe.serial('@mega @regression MEGA-02 — freeze/unfreeze lifecycle co
   const ownerEmail = `e2e-mega-02-owner-${RUN_STAMP}@e2e.veridian.site`;
   const aliceEmail = `e2e-mega-02-alice-${RUN_STAMP}@e2e.veridian.site`;
   const bobEmail = `e2e-mega-02-bob-${RUN_STAMP}@e2e.veridian.site`;
-  const aliceHubId = `hub-u-m02-alice-${RUN_STAMP}`;
-  const bobHubId = `hub-u-m02-bob-${RUN_STAMP}`;
-  const ownerHubId = `hub-u-m02-owner-${RUN_STAMP}`;
+  const aliceHubId = hubId(`hub-u-m02-alice-${RUN_STAMP}`);
+  const bobHubId = hubId(`hub-u-m02-bob-${RUN_STAMP}`);
+  const ownerHubId = hubId(ownerEmail);
 
   test('01. Provision + attach 2 members (alice + bob) → all 200', async () => {
     provisioned.push(tid);

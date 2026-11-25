@@ -59,13 +59,14 @@ import (
 //	{"found": false, "user_email": "ghost@example.com", "workspaces": []}
 func (h *VeridianHandler) handleDiscovery(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email string `json:"email"`
+		Email     string `json:"email"`
+		HubUserID string `json:"hub_user_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "invalid JSON body", http.StatusBadRequest, nil)
 		return
 	}
-	h.runDiscovery(w, r, req.Email)
+	h.runDiscovery(w, r, req.Email, req.HubUserID)
 }
 
 // handleDiscoveryGET : GET /api/users/by-email?email=...
@@ -73,11 +74,25 @@ func (h *VeridianHandler) handleDiscovery(w http.ResponseWriter, r *http.Request
 // est calculee sur `${ts}.` (body vide) — le middleware HMAC accepte cela
 // nativement (lit r.Body, qui est vide pour un GET).
 func (h *VeridianHandler) handleDiscoveryGET(w http.ResponseWriter, r *http.Request) {
-	h.runDiscovery(w, r, r.URL.Query().Get("email"))
+	h.runDiscovery(w, r, r.URL.Query().Get("email"), r.URL.Query().Get("hub_user_id"))
 }
 
 // runDiscovery : logique partagee POST + GET.
-func (h *VeridianHandler) runDiscovery(w http.ResponseWriter, r *http.Request, rawEmail string) {
+func (h *VeridianHandler) runDiscovery(w http.ResponseWriter, r *http.Request, rawEmail, hubUserID string) {
+	// La personne d'abord (CONTRAT-HUB 5.19.7) : l'adresse n'est lue que si le Hub n'a pas donne son hub_user_id.
+	if hubUserID != "" {
+		if !requireHubUserID(w, "hub_user_id", hubUserID) {
+			return
+		}
+		resp, err := h.service.LookupMember(r.Context(), hubUserID)
+		if err != nil {
+			h.logError("discovery_by_hub_user_id", err, map[string]interface{}{"hub_user_id": hubUserID})
+			WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
 	email := strings.TrimSpace(rawEmail)
 	if email == "" {
 		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "email is required", http.StatusBadRequest, map[string]interface{}{

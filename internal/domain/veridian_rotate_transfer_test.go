@@ -106,3 +106,14 @@ func TestAPIKeyGraceEntry_ReasonOmittedWhenEmpty(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(b), `"reason"`)
 }
+
+// CONTRAT-HUB 5.19.7 : le futur propriétaire est désigné par owner_hub_user_id.
+func TestTransferOwnerInput_OwnerHubUserID(t *testing.T) {
+	var in TransferOwnerInput
+	if err := json.Unmarshal([]byte(`{"owner_hub_user_id":"id-1","reason":"r"}`), &in); err != nil {
+		t.Fatal(err)
+	}
+	if in.OwnerHubUserID != "id-1" {
+		t.Fatalf("owner_hub_user_id non lu : %+v", in)
+	}
+}

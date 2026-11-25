@@ -131,12 +131,12 @@ func (h *VeridianHandler) handleTransferOwner(w http.ResponseWriter, r *http.Req
 	}
 
 	var body struct {
-		NewOwnerEmail string `json:"new_owner_email"`
-		Reason        string `json:"reason"`
+		OwnerHubUserID string `json:"owner_hub_user_id"`
+		Reason         string `json:"reason"`
 	}
 	if r.Body == nil || r.ContentLength == 0 {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "body required with new_owner_email and reason fields", http.StatusBadRequest, map[string]interface{}{
-			"missing": []string{"new_owner_email", "reason"},
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "body required with owner_hub_user_id and reason fields", http.StatusBadRequest, map[string]interface{}{
+			"missing": []string{"owner_hub_user_id", "reason"},
 		})
 		return
 	}
@@ -145,22 +145,29 @@ func (h *VeridianHandler) handleTransferOwner(w http.ResponseWriter, r *http.Req
 		return
 	}
 	missing := missingFields(
-		body.NewOwnerEmail == "", "new_owner_email",
+		body.OwnerHubUserID == "", "owner_hub_user_id",
 		body.Reason == "", "reason",
 	)
 	if len(missing) > 0 {
-		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "new_owner_email and reason are required (audit GDPR)", http.StatusBadRequest, map[string]interface{}{
+		WriteJSONErrorCode(w, ErrCodeInvalidPayload, "owner_hub_user_id and reason are required (audit GDPR)", http.StatusBadRequest, map[string]interface{}{
 			"missing": missing,
 		})
 		return
 	}
 
+	if !requireHubUserID(w, "owner_hub_user_id", body.OwnerHubUserID) {
+		return
+	}
+
 	resp, err := h.service.TransferOwner(r.Context(), domain.TransferOwnerInput{
-		TenantID:      tenantID,
-		NewOwnerEmail: body.NewOwnerEmail,
-		Reason:        body.Reason,
+		TenantID:       tenantID,
+		OwnerHubUserID: body.OwnerHubUserID,
+		Reason:         body.Reason,
 	})
 	if err != nil {
+		if writeHubPersonError(w, err, tenantID, body.OwnerHubUserID) {
+			return
+		}
 		if isNotFoundErr(err) {
 			WriteJSONErrorCode(w, ErrCodeTenantNotFound, "tenant not found", http.StatusNotFound, map[string]interface{}{
 				"tenant_id": tenantID,
@@ -168,8 +175,8 @@ func (h *VeridianHandler) handleTransferOwner(w http.ResponseWriter, r *http.Req
 			return
 		}
 		h.logError("transfer_owner", err, map[string]interface{}{
-			"tenant_id":       tenantID,
-			"new_owner_email": body.NewOwnerEmail,
+			"tenant_id":         tenantID,
+			"owner_hub_user_id": body.OwnerHubUserID,
 		})
 		WriteAuthAwareErrorCode(w, err, ErrCodeInternalError, veridianGenericInternalError, http.StatusInternalServerError, nil)
 		return

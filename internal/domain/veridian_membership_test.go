@@ -94,14 +94,18 @@ func TestRemoveMemberResponse_JSONShape(t *testing.T) {
 	now := time.Date(2026, 5, 19, 12, 0, 0, 0, time.UTC)
 	out := RemoveMemberResponse{
 		TenantID:  "ws-1",
+		HubUserID: "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
 		UserEmail: "alice@example.com",
+		Removed:   true,
 		RemovedAt: now,
 	}
 	raw, err := json.Marshal(out)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{
 		"tenant_id":"ws-1",
+		"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
 		"user_email":"alice@example.com",
+		"removed":true,
 		"removed_at":"2026-05-19T12:00:00Z"
 	}`, string(raw))
 }
@@ -122,14 +126,18 @@ func TestRestoreMemberResponse_JSONShape(t *testing.T) {
 	now := time.Date(2026, 5, 19, 12, 0, 0, 0, time.UTC)
 	out := RestoreMemberResponse{
 		TenantID:   "ws-1",
+		HubUserID:  "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
 		UserEmail:  "alice@example.com",
+		Restored:   true,
 		RestoredAt: now,
 	}
 	raw, err := json.Marshal(out)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{
 		"tenant_id":"ws-1",
+		"hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
 		"user_email":"alice@example.com",
+		"restored":true,
 		"restored_at":"2026-05-19T12:00:00Z"
 	}`, string(raw))
 }

@@ -151,6 +151,9 @@ func (stubVeridianServiceWithoutCleanup) GetLimits(context.Context, string) (*do
 func (stubVeridianServiceWithoutCleanup) AttachMember(context.Context, domain.AttachMemberInput) (*domain.AttachMemberResponse, error) {
 	return nil, nil
 }
+func (stubVeridianServiceWithoutCleanup) LookupMember(context.Context, string) (*domain.DiscoveryResponse, error) {
+	return nil, nil
+}
 func (stubVeridianServiceWithoutCleanup) LookupByEmail(context.Context, string) (*domain.DiscoveryResponse, error) {
 	return nil, nil
 }

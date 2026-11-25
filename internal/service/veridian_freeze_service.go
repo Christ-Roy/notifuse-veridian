@@ -66,8 +66,7 @@ func ConfigureFrozenMemberSupport(svc domain.VeridianService, repo domain.Veridi
 // Algorithme :
 //
 //  1. Verifier workspace existe (sql.ErrNoRows si non).
-//  2. Lookup user par email. Si absent → ErrMemberNotInWorkspace (le user
-//     doit avoir un compte Notifuse pour etre frozen).
+//  2. La personne par son hub_user_id SEUL (fiche 89). Absente → ErrUserNotInApp.
 //  3. Lookup user_workspaces. Si pas membre → ErrMemberNotInWorkspace.
 //  4. Si role = owner → ErrCannotFreezeOwner (garde-fou §5.21).
 //  5. Repo.Freeze (UPSERT idempotent). Retourne (row, alreadyFrozen).
@@ -80,8 +79,8 @@ func (s *veridianService) FreezeMember(ctx context.Context, input domain.FreezeM
 	if input.TenantID == "" {
 		return nil, false, errors.New("tenant_id required")
 	}
-	if input.UserEmail == "" {
-		return nil, false, errors.New("user_email required")
+	if input.HubUserID == "" {
+		return nil, false, errors.New("hub_user_id required")
 	}
 	if s.frozenMemberRepo == nil {
 		return nil, false, ErrFrozenMemberRepoNotConfigured
@@ -104,18 +103,15 @@ func (s *veridianService) FreezeMember(ctx context.Context, input domain.FreezeM
 		return nil, false, fmt.Errorf("lookup workspace: %w", wsErr)
 	}
 
-	// Step 2 : lookup user par email.
-	member, err := s.userService.GetUserByEmail(ctx, input.UserEmail)
+	// Step 2 : la personne par son hub_user_id (fiche 89).
+	member, err := s.hubMember(ctx, input.HubUserID)
 	if err != nil {
-		var notFound *domain.ErrUserNotFound
-		if errors.As(err, &notFound) {
-			return nil, false, ErrMemberNotInWorkspace
-		}
-		return nil, false, fmt.Errorf("get user by email: %w", err)
+		return nil, false, err
 	}
 	if member == nil {
-		return nil, false, ErrMemberNotInWorkspace
+		return nil, false, ErrUserNotInApp
 	}
+	input.UserEmail = member.Email
 
 	// Step 3 : lookup user_workspaces.
 	existing, lookupErr := s.workspaceRepo.GetUserWorkspace(ctx, member.ID, input.TenantID)
@@ -184,7 +180,7 @@ func (s *veridianService) FreezeMember(ctx context.Context, input domain.FreezeM
 // Algorithme :
 //
 //  1. Verifier workspace existe (sql.ErrNoRows si non).
-//  2. Lookup user par email. Si absent → ErrMemberNotInWorkspace.
+//  2. La personne par son hub_user_id SEUL (fiche 89). Absente → ErrUserNotInApp.
 //  3. Repo.Unfreeze (DELETE idempotent). Retourne wasFrozen.
 //  4. Si wasFrozen=true → emit tenant.member_unfrozen best-effort.
 //  5. Touch hub_sync best-effort.
@@ -201,8 +197,8 @@ func (s *veridianService) UnfreezeMember(ctx context.Context, input domain.Unfre
 	if input.TenantID == "" {
 		return nil, false, errors.New("tenant_id required")
 	}
-	if input.UserEmail == "" {
-		return nil, false, errors.New("user_email required")
+	if input.HubUserID == "" {
+		return nil, false, errors.New("hub_user_id required")
 	}
 	if s.frozenMemberRepo == nil {
 		return nil, false, ErrFrozenMemberRepoNotConfigured
@@ -220,18 +216,15 @@ func (s *veridianService) UnfreezeMember(ctx context.Context, input domain.Unfre
 		return nil, false, fmt.Errorf("lookup workspace: %w", wsErr)
 	}
 
-	// Step 2 : lookup user par email.
-	member, err := s.userService.GetUserByEmail(ctx, input.UserEmail)
+	// Step 2 : la personne par son hub_user_id (fiche 89).
+	member, err := s.hubMember(ctx, input.HubUserID)
 	if err != nil {
-		var notFound *domain.ErrUserNotFound
-		if errors.As(err, &notFound) {
-			return nil, false, ErrMemberNotInWorkspace
-		}
-		return nil, false, fmt.Errorf("get user by email: %w", err)
+		return nil, false, err
 	}
 	if member == nil {
-		return nil, false, ErrMemberNotInWorkspace
+		return nil, false, ErrUserNotInApp
 	}
+	input.UserEmail = member.Email
 
 	// Step 3 : repo Unfreeze.
 	wasFrozen, unfreezeErr := s.frozenMemberRepo.Unfreeze(ctx, input.TenantID, member.ID)

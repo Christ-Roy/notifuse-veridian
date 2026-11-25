@@ -4,7 +4,9 @@ package service
 // Tests unitaires de veridianService.AttachMember.
 // Couvre :
 //   - User Notifuse inexistant → créé puis attaché
-//   - User Notifuse existant (lookup par email)
+//   - User Notifuse existant (lookup par hub_user_id SEUL, fiche 89)
+//   - Adresse deja portee : reliee si compte sans lien ET adresse attestee,
+//     sinon ErrHubUserIDConflict (rien n'est ajoute a l'espace)
 //   - Idempotent re-call avec même role → already_member=true
 //   - Role différent → UPDATE (remove + re-add)
 //   - Tenant suspendu → ErrTenantSuspended
@@ -96,7 +98,7 @@ func TestAttachMember_NewUser_CreatedAndAttached(t *testing.T) {
 		Do(func(_ context.Context, _ domain.VeridianEvent, _ string, data map[string]interface{}) {
 			assert.Equal(t, "alice@example.com", data["user_email"])
 			assert.Equal(t, "member", data["role"])
-			assert.Equal(t, "user-hub-1", data["hub_user_id"])
+			assert.Equal(t, testHubUID, data["hub_user_id"])
 			assert.Equal(t, "inv-xyz", data["invitation_id"])
 			assert.Equal(t, "hub", data["actor"])
 		}).Times(1)
@@ -106,7 +108,7 @@ func TestAttachMember_NewUser_CreatedAndAttached(t *testing.T) {
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-1",
-		HubUserID:    "user-hub-1",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
 		Role:         domain.AttachMemberRoleMember,
 		InvitationID: "inv-xyz",
@@ -118,9 +120,8 @@ func TestAttachMember_NewUser_CreatedAndAttached(t *testing.T) {
 	assert.Equal(t, "member", resp.Role)
 }
 
-func TestAttachMember_ExistingUser_AttachedByEmail(t *testing.T) {
+func TestAttachMember_ExistingUser_FoundByHubUserID(t *testing.T) {
 	svc, m := newVeridianService(t)
-	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	// Workspace existe
@@ -136,11 +137,8 @@ func TestAttachMember_ExistingUser_AttachedByEmail(t *testing.T) {
 		UpdatedAt:   now,
 	}, nil)
 
-	// User trouvé par email
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(hubMemberUser(), nil)
-
-	// V46 §3.7 : backfill best-effort du hub_user_id sur user existant.
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").Return(nil)
+	// Personne trouvée par son hub_user_id (l'adresse ne désigne plus personne)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(hubMemberUser(), nil)
 
 	// Pas encore dans user_workspaces
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-1").
@@ -158,7 +156,7 @@ func TestAttachMember_ExistingUser_AttachedByEmail(t *testing.T) {
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-1",
-		HubUserID:    "user-hub-1",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
 		Role:         domain.AttachMemberRoleMember,
 	})
@@ -169,7 +167,6 @@ func TestAttachMember_ExistingUser_AttachedByEmail(t *testing.T) {
 
 func TestAttachMember_Idempotent_SameRole_Returns200AlreadyMember(t *testing.T) {
 	svc, m := newVeridianService(t)
-	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
@@ -183,10 +180,7 @@ func TestAttachMember_Idempotent_SameRole_Returns200AlreadyMember(t *testing.T) 
 		UpdatedAt:   now,
 	}, nil)
 
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(hubMemberUser(), nil)
-
-	// V46 §3.7 : backfill best-effort du hub_user_id.
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").Return(nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(hubMemberUser(), nil)
 
 	// Déjà dans user_workspaces avec le même role
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-1").
@@ -197,7 +191,7 @@ func TestAttachMember_Idempotent_SameRole_Returns200AlreadyMember(t *testing.T) 
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-1",
-		HubUserID:    "user-hub-1",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
 		Role:         domain.AttachMemberRoleMember,
 	})
@@ -220,7 +214,6 @@ func TestAttachMember_Idempotent_SameRole_Returns200AlreadyMember(t *testing.T) 
 // retroactive ecraserait silencieusement le role local souverain.
 func TestAttachMember_RoleConflict_KeepsLocalRole(t *testing.T) {
 	svc, m := newVeridianService(t)
-	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
@@ -234,10 +227,7 @@ func TestAttachMember_RoleConflict_KeepsLocalRole(t *testing.T) {
 		UpdatedAt:   now,
 	}, nil)
 
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(hubMemberUser(), nil)
-
-	// V46 §3.7 : backfill best-effort du hub_user_id.
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").Return(nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(hubMemberUser(), nil)
 
 	// Deja dans user_workspaces avec un role LOCAL DIFFERENT (admin local
 	// souverain — promu via UI Team Settings) que celui demande par Hub.
@@ -253,7 +243,7 @@ func TestAttachMember_RoleConflict_KeepsLocalRole(t *testing.T) {
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-1",
-		HubUserID:    "user-hub-1",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
 		Role:         domain.AttachMemberRoleMember, // Hub demande "member"
 	})
@@ -263,65 +253,112 @@ func TestAttachMember_RoleConflict_KeepsLocalRole(t *testing.T) {
 	assert.Equal(t, "admin", resp.Role, "role LOCAL conserve, pas ecrase par le Hub (§5.22.4)")
 }
 
-// TestAttachMember_HubUserIDMismatch_NonBlocking — CONTRAT-HUB §3.7 :
-// BackfillHubUserID peut retourner ErrHubUserIDMismatch si le user local
-// est deja lie a un hub_user_id DIFFERENT (cas rare : email canonique
-// partage entre 2 identites Hub-side, par exemple si quelqu'un a re-signe
-// up cote Hub avec le meme email apres delete). Dans ce cas, le service
-// doit LOGGER + CONTINUER (l'email reste la cle de jointure canonique).
-// Aucune erreur 500 ne doit etre propagee a l'appelant Hub.
-func TestAttachMember_HubUserIDMismatch_NonBlocking(t *testing.T) {
+// attachMemberUnknownPerson prepare le debut commun : espace existant, sans plan, hub_user_id inconnu ici.
+func attachMemberUnknownPerson(t *testing.T, m *veridianServiceMocks, ctx context.Context, ws string) {
+	t.Helper()
+	m.workspaceRepo.EXPECT().GetByID(ctx, ws).Return(&domain.Workspace{ID: ws}, nil)
+	m.planRepo.EXPECT().Get(ctx, ws).Return(nil, sql.ErrNoRows)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(nil, &domain.ErrUserNotFound{Message: "not found"})
+}
+
+// TestAttachMember_AddressLinkedToOtherHubUserID_Conflict_NoAdd — CONTRAT-HUB 5.19.7 : l'adresse demandee est portee ici
+// par un compte DEJA relie a une autre personne du Hub. Refus ErrHubUserIDConflict, rien n'est ajoute a l'espace
+// (ni GetUserWorkspace, ni AddUserToWorkspace, ni session : gomock echoue sur tout appel non attendu).
+func TestAttachMember_AddressLinkedToOtherHubUserID_Conflict_NoAdd(t *testing.T) {
 	svc, m := newVeridianService(t)
-	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
+	attachMemberUnknownPerson(t, m, ctx, "ws-conflict")
 
-	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-mismatch").
-		Return(&domain.Workspace{ID: "ws-mismatch"}, nil)
-	m.planRepo.EXPECT().Get(ctx, "ws-mismatch").Return(nil, sql.ErrNoRows)
+	other := testOtherHubUID
+	holder := hubMemberUser()
+	holder.HubUserID = &other
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(holder, nil)
 
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").
-		Return(hubMemberUser(), nil)
+	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-conflict",
+		HubUserID:    testHubUID,
+		HubUserEmail: "alice@example.com",
+		EmailProven:  true,
+		Role:         domain.AttachMemberRoleMember,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrHubUserIDConflict), "attendu ErrHubUserIDConflict, recu: %v", err)
+}
 
-	// V46 §3.7 : Backfill retourne ErrHubUserIDMismatch (binding existant
-	// different) → le service log warn et continue, surtout PAS d'erreur
-	// retournee. La suite du flow doit s'executer normalement.
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").
-		Return(domain.ErrHubUserIDMismatch)
+// Compte sans lien ET adresse attestee par le Hub : relie, puis ajoute a l'espace.
+func TestAttachMember_UnlinkedAccount_ProvenAddress_LinkedAndAdded(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	attachMemberUnknownPerson(t, m, ctx, "ws-link")
 
-	// Le flow attach continue comme un user nouveau a brancher.
-	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-mismatch").
-		Return(nil, sql.ErrNoRows)
-	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-mismatch").
-		Return([]*domain.UserWorkspaceWithEmail{
-			{
-				UserWorkspace: domain.UserWorkspace{
-					UserID:      "owner-mismatch",
-					WorkspaceID: "ws-mismatch",
-					Role:        "owner",
-				},
-				Email: "owner@ws.test",
-			},
-		}, nil)
+	holder := hubMemberUser()
+	holder.HubUserID = nil
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(holder, nil)
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", testHubUID).Return(nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-link").Return(nil, sql.ErrNoRows)
+	m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-link").
+		Return([]*domain.UserWorkspaceWithEmail{ownerMemberWithEmail("owner-1", "owner@ws.test")}, nil)
 	m.userRepo.EXPECT().CreateSession(ctx, gomock.Any()).Return(nil)
-	m.workspace.EXPECT().
-		AddUserToWorkspace(gomock.Any(), "ws-mismatch", "user-hub-1", "member", gomock.Any()).
-		Return(nil)
-	// Webhook member_added emis sur attach neuf (post lot M §7.1) — present
-	// meme apres ErrHubUserIDMismatch puisque le flow continue normalement.
-	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-mismatch", gomock.Any()).Times(1)
+	m.workspace.EXPECT().AddUserToWorkspace(gomock.Any(), "ws-link", "user-hub-1", "member", gomock.Any()).Return(nil)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberAdded, "ws-link", gomock.Any()).Times(1)
 	m.userRepo.EXPECT().DeleteSession(ctx, gomock.Any()).Return(nil)
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
-		TenantID:     "ws-mismatch",
-		HubUserID:    "user-hub-1",
+		TenantID:     "ws-link",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
+		EmailProven:  true,
 		Role:         domain.AttachMemberRoleMember,
 	})
-	require.NoError(t, err, "ErrHubUserIDMismatch doit etre non-bloquant (cross-app sync best-effort §3.7)")
+	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.True(t, resp.Attached)
 	assert.False(t, resp.AlreadyMember)
-	assert.Equal(t, "member", resp.Role)
+}
+
+// Compte sans lien mais adresse NON attestee : jamais relie, jamais ajoute.
+func TestAttachMember_UnlinkedAccount_UnprovenAddress_Conflict(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	attachMemberUnknownPerson(t, m, ctx, "ws-unproven")
+
+	holder := hubMemberUser()
+	holder.HubUserID = nil
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(holder, nil)
+	// Aucun BackfillHubUserID attendu.
+
+	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-unproven",
+		HubUserID:    testHubUID,
+		HubUserEmail: "alice@example.com",
+		EmailProven:  false,
+		Role:         domain.AttachMemberRoleMember,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrHubUserIDConflict), "attendu ErrHubUserIDConflict, recu: %v", err)
+}
+
+// Le lien est refuse par la base (BackfillHubUserID -> ErrHubUserIDMismatch, course avec un autre lien) :
+// ErrHubUserIDConflict, rien n'est ajoute a l'espace. Ancien comportement (non bloquant) supprime.
+func TestAttachMember_BackfillRefused_Conflict_NoAdd(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	attachMemberUnknownPerson(t, m, ctx, "ws-mismatch")
+
+	holder := hubMemberUser()
+	holder.HubUserID = nil
+	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(holder, nil)
+	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", testHubUID).Return(domain.ErrHubUserIDMismatch)
+
+	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
+		TenantID:     "ws-mismatch",
+		HubUserID:    testHubUID,
+		HubUserEmail: "alice@example.com",
+		EmailProven:  true,
+		Role:         domain.AttachMemberRoleMember,
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrHubUserIDConflict), "attendu ErrHubUserIDConflict, recu: %v", err)
 }
 
 func TestAttachMember_TenantSuspended_ReturnsErr(t *testing.T) {
@@ -342,7 +379,7 @@ func TestAttachMember_TenantSuspended_ReturnsErr(t *testing.T) {
 
 	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-suspended",
-		HubUserID:    "user-hub-1",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
 		Role:         domain.AttachMemberRoleMember,
 	})
@@ -369,7 +406,7 @@ func TestAttachMember_TenantSoftDeleted_ReturnsErr(t *testing.T) {
 
 	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-deleted",
-		HubUserID:    "user-hub-1",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
 		Role:         domain.AttachMemberRoleMember,
 	})
@@ -386,7 +423,7 @@ func TestAttachMember_WorkspaceNotFound_Returns404(t *testing.T) {
 
 	_, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-unknown",
-		HubUserID:    "user-hub-1",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
 		Role:         domain.AttachMemberRoleMember,
 	})
@@ -450,15 +487,12 @@ func TestAttachMember_InvalidRole_ValidationErr(t *testing.T) {
 func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 	// Tenant créé avant Veridian-managed → pas de plan row → l'attach doit quand même marcher
 	svc, m := newVeridianService(t)
-	m.userRepo.EXPECT().GetUserByHubUserID(gomock.Any(), gomock.Any()).Return(nil, &domain.ErrUserNotFound{Message: "not found"}).AnyTimes()
 	ctx := context.Background()
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-prehub").Return(&domain.Workspace{ID: "ws-prehub"}, nil)
 	m.planRepo.EXPECT().Get(ctx, "ws-prehub").Return(nil, sql.ErrNoRows) // pas de plan row
 
-	m.user.EXPECT().GetUserByEmail(ctx, "alice@example.com").Return(hubMemberUser(), nil)
-	// V46 §3.7 : backfill best-effort sur user existant.
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "user-hub-1", "user-hub-1").Return(nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(hubMemberUser(), nil)
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "user-hub-1", "ws-prehub").
 		Return(nil, sql.ErrNoRows)
 
@@ -478,7 +512,7 @@ func TestAttachMember_PreHubTenant_NoPlanRow_Allowed(t *testing.T) {
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{
 		TenantID:     "ws-prehub",
-		HubUserID:    "user-hub-1",
+		HubUserID:    testHubUID,
 		HubUserEmail: "alice@example.com",
 		Role:         domain.AttachMemberRoleAdmin,
 	})
@@ -548,10 +582,8 @@ func TestAttachMember_EmailChanged_ReusesUserBoundByHubUserID(t *testing.T) {
 
 	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
 	m.planRepo.EXPECT().Get(ctx, "ws-1").Return(nil, sql.ErrNoRows)
-	m.user.EXPECT().GetUserByEmail(ctx, "nouveau@x.test").Return(nil, &domain.ErrUserNotFound{Message: "not found"})
 	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(bound, nil)
-	m.userRepo.EXPECT().BackfillHubUserID(ctx, "u-bound", hubID).Return(nil)
-	// Pas de CreateUser : un second user violerait l'index unique V70.
+	// Pas de GetUserByEmail ni de CreateUser : la personne est son hub_user_id, un second user violerait l'index unique V70.
 	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "u-bound", "ws-1").Return(&domain.UserWorkspace{UserID: "u-bound", WorkspaceID: "ws-1", Role: "member"}, nil)
 
 	resp, err := svc.AttachMember(ctx, domain.AttachMemberInput{TenantID: "ws-1", HubUserID: hubID, HubUserEmail: "nouveau@x.test", Role: "member"})

@@ -151,9 +151,9 @@ func TestVeridianHandleTransferOwner_OK(t *testing.T) {
 	transferredAt := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
 	svc := mocks.NewMockVeridianService(ctrl)
 	svc.EXPECT().TransferOwner(gomock.Any(), domain.TransferOwnerInput{
-		TenantID:      "ws-1",
-		NewOwnerEmail: "new@x.test",
-		Reason:        "client account migration",
+		TenantID:       "ws-1",
+		OwnerHubUserID: "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
+		Reason:         "client account migration",
 	}).Return(&domain.TransferOwnerResponse{
 		TenantID:      "ws-1",
 		OldOwner:      "old@x.test",
@@ -164,7 +164,7 @@ func TestVeridianHandleTransferOwner_OK(t *testing.T) {
 	h := newHandlerWithService(svc)
 	rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
 		"/api/tenants/ws-1/transfer-owner", "ws-1",
-		`{"new_owner_email":"new@x.test","reason":"client account migration"}`)
+		`{"owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","new_owner_email":"new@x.test","reason":"client account migration"}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp domain.TransferOwnerResponse
@@ -181,7 +181,7 @@ func TestVeridianHandleTransferOwner_MissingPathID(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
-		"/api/tenants//transfer-owner", "", `{"new_owner_email":"n@x.t","reason":"r"}`)
+		"/api/tenants//transfer-owner", "", `{"owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","reason":"r"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "tenant id is required")
 }
@@ -195,10 +195,10 @@ func TestVeridianHandleTransferOwner_MissingBody(t *testing.T) {
 	rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
 		"/api/tenants/ws-1/transfer-owner", "ws-1", "")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "new_owner_email")
+	assert.Contains(t, rec.Body.String(), "owner_hub_user_id")
 }
 
-func TestVeridianHandleTransferOwner_MissingNewOwnerEmail(t *testing.T) {
+func TestVeridianHandleTransferOwner_MissingOwnerHubUserID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
@@ -207,7 +207,44 @@ func TestVeridianHandleTransferOwner_MissingNewOwnerEmail(t *testing.T) {
 	rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
 		"/api/tenants/ws-1/transfer-owner", "ws-1", `{"reason":"r"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "new_owner_email")
+	assert.Contains(t, rec.Body.String(), "owner_hub_user_id")
+}
+
+func TestVeridianHandleTransferOwner_MalformedOwnerHubUserID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl)
+	h := newHandlerWithService(svc)
+
+	rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
+		"/api/tenants/ws-1/transfer-owner", "ws-1", `{"owner_hub_user_id":"u-1","reason":"r"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCodeInvalidPayload)
+}
+
+func TestVeridianHandleTransferOwner_UnknownOrNotMember(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		code int
+		body string
+	}{
+		{"unknown", service.ErrUserNotInApp, http.StatusNotFound, ErrCodeUserNotInApp},
+		{"not_member", service.ErrOwnerNotMember, http.StatusConflict, ErrCodeNotAMember},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			svc := mocks.NewMockVeridianService(ctrl)
+			svc.EXPECT().TransferOwner(gomock.Any(), gomock.Any()).Return(nil, tc.err)
+			h := newHandlerWithService(svc)
+			rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
+				"/api/tenants/ws-1/transfer-owner", "ws-1", `{"owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","reason":"r"}`)
+			assert.Equal(t, tc.code, rec.Code)
+			assert.Contains(t, rec.Body.String(), tc.body)
+		})
+	}
 }
 
 func TestVeridianHandleTransferOwner_MissingReason(t *testing.T) {
@@ -217,7 +254,7 @@ func TestVeridianHandleTransferOwner_MissingReason(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
-		"/api/tenants/ws-1/transfer-owner", "ws-1", `{"new_owner_email":"n@x.t"}`)
+		"/api/tenants/ws-1/transfer-owner", "ws-1", `{"owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "reason")
 }
@@ -243,7 +280,7 @@ func TestVeridianHandleTransferOwner_NotFound(t *testing.T) {
 	h := newHandlerWithService(svc)
 	rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
 		"/api/tenants/ws-x/transfer-owner", "ws-x",
-		`{"new_owner_email":"n@x.t","reason":"r"}`)
+		`{"owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","reason":"r"}`)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Contains(t, rec.Body.String(), "tenant not found")
 }
@@ -258,7 +295,7 @@ func TestVeridianHandleTransferOwner_GenericServiceError(t *testing.T) {
 	h := newHandlerWithService(svc)
 	rec := postWithPathValue(t, h.handleTransferOwner, http.MethodPost,
 		"/api/tenants/ws-1/transfer-owner", "ws-1",
-		`{"new_owner_email":"n@x.t","reason":"r"}`)
+		`{"owner_hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","reason":"r"}`)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	// Le 500 ne doit pas leak l'erreur interne brute au client (axe 2).
 	assert.NotContains(t, rec.Body.String(), "upstream barf", "le 500 ne doit pas leak l'erreur interne")
