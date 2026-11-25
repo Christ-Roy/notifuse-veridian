@@ -13,7 +13,7 @@ export const VeridianInboxTile: React.FC<{ workspaceId: string }> = ({ workspace
   const { t } = useLingui()
   const { token } = theme.useToken()
   const { count, loaded } = useUnhandledReplies(workspaceId)
-  const last = useLastUnhandledReply(workspaceId, loaded)
+  const last = useLastUnhandledReply(workspaceId, count, loaded)
   if (!loaded) return null
   const reply = last.data
   const who = reply ? counterpart(reply) : ''

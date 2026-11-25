@@ -76,6 +76,11 @@ Les envois ont continué après le déploiement : dernier envoi de chaque profil
 | dont identiques | 21 | 0 |
 | Dernier appel revenu | 4,6 s | 1,8 à 2,1 s |
 | Indicateur de chargement éteint | non mesuré | 1,8 à 2,7 s |
-| Rafraîchissement de 60 s | trois blocs repartaient à vue | 13 appels, aucun indicateur à l'écran |
+| Rafraîchissement de 60 s | trois blocs repartaient à vue | 13 appels, aucun indicateur à l'écran, puis 2 (voir ci-dessous) |
 
 Cause : `timeRange` recréé à chaque rendu. Une dépendance d'effet est une date, jamais un tableau construit au rendu.
+
+Au repos (`veridian_prospection_pulse.ts`) : seuls les profils (envoyés du jour) et les boîtes (réponses à traiter) battent la minute. Les totaux de la
+période ne sont relus que si l'un des deux bouge, sinon toutes les dix minutes ; la dernière réponse, quand le nombre à traiter change ; onglet caché,
+rien ne part. La page Listes relisait une statistique par liste et par minute : toutes les cinq minutes désormais. Les treize autres pages n'ont qu'un
+appel par minute (le badge de la boîte), mesuré en prod le 25/11.

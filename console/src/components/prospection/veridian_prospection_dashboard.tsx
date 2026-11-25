@@ -26,6 +26,7 @@ import { VeridianProspectionStock } from './veridian_prospection_stock'
 import { coverageDays } from './veridian_stock_rules'
 import { VeridianTransactionalWatchBanner } from './veridian_transactional_watch'
 import { reputationCouples, sumMeasure } from './veridian_prospection_rules'
+import { PROSPECTION_SLOW_MS, useProspectionPulse } from './veridian_prospection_pulse'
 
 interface Props {
   workspace: Workspace
@@ -59,26 +60,26 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
   const statsQuery = useQuery({
     queryKey: ['prospection', 'stats', workspace.id, timeRange[0], timeRange[1]],
     queryFn: () => prospectionStatsService.get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] }),
-    refetchInterval: 60000
+    refetchInterval: PROSPECTION_SLOW_MS
   })
   // Taux de réponse global : réponses humaines de la période / envois de la période (même
   // définition que la carte « Replies » du graphique de métriques).
   const repliesQuery = useQuery({
     queryKey: ['prospection', 'replies', workspace.id, timeRange[0], timeRange[1]],
     queryFn: () => replyStatsApi.get({ workspace_id: workspace.id, start: timeRange[0], end: timeRange[1] }),
-    refetchInterval: 60000
+    refetchInterval: PROSPECTION_SLOW_MS
   })
   // L3 : stock par fournisseur destinataire et jours de couverture (stock.overview, même définition que stock-par-classe.py).
   const stockQuery = useQuery({
     queryKey: ['prospection', 'stock', workspace.id],
     queryFn: () => stockOverviewService.get(workspace.id),
-    refetchInterval: 60000
+    refetchInterval: PROSPECTION_SLOW_MS
   })
   // Tous les modèles email (prospection, marketing...), même clé de cache que l'éditeur de flux : le tableau nomme chaque étape.
   const templatesQuery = useQuery({
     queryKey: ['templates', workspace.id, 'email-all'],
     queryFn: () => templatesApi.list({ workspace_id: workspace.id, channel: 'email' }),
-    refetchInterval: 60000
+    staleTime: PROSPECTION_SLOW_MS
   })
   const sentQuery = useQuery({
     queryKey: ['prospection', 'sent-total', workspace.id, timeRange[0], timeRange[1], tz],
@@ -89,11 +90,12 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
       )
       return sumMeasure(response.data, 'count_sent')
     },
-    refetchInterval: 60000
+    refetchInterval: PROSPECTION_SLOW_MS
   })
 
   const overview = overviewQuery.data
   const totals = overview?.totals
+  useProspectionPulse(workspace.id, totals?.commercial_sent_today)
   const capacity = totals?.commercial_capacity_today
   const sentToday = formatNumber(totals?.commercial_sent_today ?? 0)
   const sentVersusCapacity = capacity === null || capacity === undefined ? sentToday : `${sentToday} / ${formatNumber(capacity)}`

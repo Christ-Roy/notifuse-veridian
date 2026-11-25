@@ -27,8 +27,8 @@ export function ListStats({ workspaceId, listId }: ListStatsProps) {
         list_id: listId
       })
     },
-    // Refetch every minute to keep stats up to date
-    refetchInterval: 60000
+    // Toutes les cinq minutes, onglet visible
+    refetchInterval: 300000 // une requête par liste : à la minute, sept listes faisaient sept appels pour rien
   })
 
   const stats = data?.stats || {

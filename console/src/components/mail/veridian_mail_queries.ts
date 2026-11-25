@@ -1,7 +1,7 @@
 // Boîte unifiée : clés et requêtes React Query partagées (page, menu, tuile du tableau de bord, fiche contact).
 // Une seule définition de chaque lecture : le badge du menu et la page lisent le même cache.
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 import { mailService, type MailSummary } from '../../services/api/veridian_mail'
 import { unhandledTotal } from './veridian_mail_rules'
@@ -37,10 +37,10 @@ export function useUnhandledReplies(workspaceId: string | undefined, enabled = t
   return { count: unhandledTotal(q.data), loaded: q.isSuccess, error: q.isError }
 }
 
-/** Dernière réponse humaine non traitée (tuile du tableau de bord). */
-export function useLastUnhandledReply(workspaceId: string | undefined, enabled = true) {
+/** Dernière réponse humaine non traitée (tuile du tableau de bord). Relue quand le nombre de réponses à traiter change, jamais à l'horloge. */
+export function useLastUnhandledReply(workspaceId: string | undefined, count: number, enabled = true) {
   return useQuery({
-    queryKey: mailKeys.lastReply(workspaceId ?? ''),
+    queryKey: [...mailKeys.lastReply(workspaceId ?? ''), count],
     queryFn: async (): Promise<MailSummary | null> => {
       const res = await mailService.list({ workspace_id: workspaceId as string, kind: ['reply_human'], handled: false, limit: 1 })
       return res.messages[0] ?? null
@@ -48,6 +48,6 @@ export function useLastUnhandledReply(workspaceId: string | undefined, enabled =
     enabled: !!workspaceId && enabled,
     staleTime: 30_000,
     retry: false,
-    refetchInterval: everyMinute
+    placeholderData: keepPreviousData
   })
 }

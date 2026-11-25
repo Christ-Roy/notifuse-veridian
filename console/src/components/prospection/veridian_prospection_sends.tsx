@@ -22,6 +22,7 @@ import {
   type SendBucket,
   type SendsSeries
 } from './veridian_prospection_rules'
+import { PROSPECTION_SLOW_MS } from './veridian_prospection_pulse'
 
 echarts.use([BarChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
@@ -101,7 +102,7 @@ export const VeridianProspectionSends: React.FC<Props> = ({
         },
         workspace.id
       ),
-    refetchInterval: 60000
+    refetchInterval: PROSPECTION_SLOW_MS
   })
 
   const profiles = overview?.profiles ?? []

@@ -8,6 +8,7 @@ import type { Workspace } from '../../services/api/types'
 import { buildSeriesQuery } from '../analytics/email_metrics_series'
 import { formatNumber } from '../sending_profiles/veridian_profile_labels'
 import { REJECTION_SERIES, rejectionTotals } from './veridian_prospection_rules'
+import { PROSPECTION_SLOW_MS } from './veridian_prospection_pulse'
 
 interface Props {
   workspace: Workspace
@@ -29,7 +30,7 @@ export const VeridianProspectionRejections: React.FC<Props> = ({ workspace, time
       )
       return rejectionTotals(responses.map((r) => r.data))
     },
-    refetchInterval: 60000
+    refetchInterval: PROSPECTION_SLOW_MS
   })
 
   const tile = (testId: string, title: string, hint: string, value: number | undefined) => (
