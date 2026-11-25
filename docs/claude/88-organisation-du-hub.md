@@ -7,7 +7,11 @@ Robert, 24/11 : « une seule configuration sur le Hub […] pareil pour Notifuse
 [{hub_user_id, email, role}], reglages}`. Champs inconnus ignorés. 200 `{applied, reason?, workspace_id, version, membres_ajoutes, membres_refuses}`.
 - **Version monotone par espace** : plus ancienne = ignorée (`stale`, rien n'est fait) ; même version = `unchanged`, rien de réécrit, les membres manquants
   sont rattrapés. 404 `espace_non_relie` ; 400 `invalid_payload`.
-- Appliqué : nom de l'espace (`nom_affiche`, sinon `nom`) et `settings.logo_url`, par une écriture ciblée. **Une valeur absente ne vide rien.**
+- Appliqué : nom de l'espace (`nom_affiche` seul, et jamais le nom fabriqué « … 's Workspace » ; `nom` = nom du compte au Hub, ignoré) et
+  `settings.logo_url`, par une écriture ciblée. **Une valeur absente ne vide rien.** Intacts, tenu par test : identifiant, profils, adresses d'envoi, membres.
+- **Ce qu'un client voit changer** : le nom dans la console (sélecteur, réglages, suppression) et, en lecture seule, nom et logo des réglages ; le logo du centre
+  de préférences PUBLIC (et son favicon) ; couleur et favicon de la console ; « X via <nom> » sur les réponses retransmises par le transport de service ; alerte du
+  fusible de campagne ; titre du blog s'il n'en a pas (0 blog actif). **Ne change pas** : adresses et noms d'expéditeur, contenu des mails, URL, API, SMTP, listes.
 - Marque entière gardée dans `veridian_organisation`, lue par la console (`GET /api/veridian/organisation`, membres) : couleur, favicon. Nom et logo verrouillés
   dans les réglages (`managed`) seulement si le Hub a poussé un nom.
 - Adresses en https sans identifiants, couleurs `#rrggbb` : ces valeurs finissent dans des pages.

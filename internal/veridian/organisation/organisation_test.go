@@ -185,7 +185,33 @@ func TestSync_AppliqueDansLOrdre_SansRienVider(t *testing.T) {
 	st, _ = e.call("POST", sync, push(7, `,"nom":"Société A"`), true)
 	assert.Equal(t, 200, st)
 	name, _, _ = e.space(t)
-	assert.Equal(t, "Société A", name)
+	assert.Equal(t, "Marque A", name, "le nom du compte au Hub (nom) ne renomme jamais l'espace")
+}
+
+// Un nom que personne n'a choisi ne renomme pas l'espace ; un nom choisi, si ; rien d'autre ne bouge (identifiant, profils, adresses d'envoi, membres).
+func TestSync_RenommageSeulementSiChoisi(t *testing.T) {
+	e := newEnv(t)
+	const integ = `[{"id": "p1", "name": "Profil", "type": "email", "email_provider": {"kind": "smtp", "senders": [{"id": "s", "name": "Léa", "email": "lea@envoi.test"}]}}]`
+	_, err := e.db.Exec(`UPDATE workspaces SET integrations=$1, settings = settings || '{"marketing_email_provider_id":"p1","custom_endpoint_url":"https://mail.envoi.test"}' WHERE id='alpha'`, integ)
+	require.NoError(t, err)
+	snap := func() string {
+		var v string
+		require.NoError(t, e.db.QueryRow(`SELECT id || integrations::text || (settings - 'logo_url')::text || created_at::text || (SELECT count(*) FROM user_workspaces)::text FROM workspaces WHERE id='alpha'`).Scan(&v))
+		return v
+	}
+	before := snap()
+	for i, auto := range []string{"robert.brunon's Workspace", "robert.brunon’s Workspace"} {
+		_, out := e.call("POST", sync, push(i+1, fmt.Sprintf(`,"nom":%q,"marque":{"nom_affiche":%q}`, auto, auto)), true)
+		assert.Equal(t, true, out["applied"])
+		name, _, _ := e.space(t)
+		assert.Equal(t, "Local", name, auto)
+		_, out = e.call("GET", "/api/veridian/organisation?workspace_id=alpha", "", false)
+		assert.Equal(t, false, out["managed"], "rien n'est verrouillé sans nom choisi")
+	}
+	_, _ = e.call("POST", sync, push(3, `,"nom":"compte","marque":{"nom_affiche":"Green Beam Craft"}`), true)
+	name, _, _ := e.space(t)
+	assert.Equal(t, "Green Beam Craft", name)
+	assert.Equal(t, before, snap(), "identifiant, profils, adresses d'envoi, réglages et membres intacts")
 }
 
 // Le Hub ne dit « appliqué » qu'après avoir relu la version que l'app sert.

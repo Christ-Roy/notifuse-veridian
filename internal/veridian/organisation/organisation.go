@@ -108,12 +108,16 @@ func (o *Organisation) Validate() error {
 	return nil
 }
 
-// displayName : le nom montré dans l'app.
+// hubAutoName : nom que le Hub fabrique pour un compte (« robert.brunon's Workspace »). Personne ne l'a choisi.
+const hubAutoName = "'s Workspace"
+
+// displayName : le nom montré dans l'app, seulement s'il a été CHOISI (nom_affiche). `nom` est le nom du compte au Hub : cocher Mail ne doit pas
+// remplacer « Green Beam Craft » par « arnaud's Workspace ».
 func (o *Organisation) displayName() string {
-	if o.Brand.DisplayName != "" {
-		return o.Brand.DisplayName
+	if strings.HasSuffix(strings.ReplaceAll(o.Brand.DisplayName, "\u2019", "'"), hubAutoName) {
+		return ""
 	}
-	return o.Name
+	return o.Brand.DisplayName
 }
 
 // Store : espaces et organisations (base système).
