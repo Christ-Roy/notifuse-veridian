@@ -395,8 +395,13 @@ type ActivateResult struct {
 	Remaining    int      `json:"remaining"`
 	Source       Pool     `json:"source"`
 	Emails       []string `json:"emails,omitempty"` // les premiers
-	Note         string   `json:"note"`
+	// States : état de chaque adresse AVANT l'activation, quand la source est une courte liste d'adresses (StatesMax au plus).
+	States map[string]string `json:"states,omitempty"`
+	Note   string            `json:"note"`
 }
+
+// StatesMax : taille d'une liste d'adresses dont l'état est rendu une par une.
+const StatesMax = 50
 
 const activateNote = "les plafonds d'envoi restent ceux des profils : activer un lot ne fait pas partir plus de mails par jour, le surplus attend en file"
 
@@ -465,6 +470,11 @@ func (s *Service) Activate(ctx context.Context, req ActivateRequest) (*ActivateR
 	res := &ActivateResult{DryRun: req.DryRun, AutomationID: a.ID, Note: activateNote}
 	if res.Source, err = s.Store.Inspect(ctx, req.WorkspaceID, src, a.ID); err != nil {
 		return nil, err
+	}
+	if len(src.Emails) > 0 && len(src.Emails) <= StatesMax {
+		if res.States, err = s.Store.States(ctx, req.WorkspaceID, src.Emails, a.ID); err != nil {
+			return nil, err
+		}
 	}
 	pickBatch := func(q querier) ([]string, error) {
 		return pickFrom(ctx, q, src, a.ID, limit, req.IncludeContacted)

@@ -17,8 +17,8 @@ ES256, `kid` au JWKS du Hub, `iss`, `aud` = `https://notifuse.app.veridian.site/
 Autre demande sous la même clé = 422 `cle_reutilisee` ; en cours = 409 `en_cours` ; refus ou panne = clé rendue ; geste mort repris après 2 min.
 Origine (`app`, `jti`, `hub_user_id`) gardée dans `veridian_action_done` et au journal.
 
-## Les trois actions (portée `notifuse:contacts.ecrire`, celle du registre du Hub ; apps `app:prospection`, `app:crm`)
-Réponse : `{action, rejoue, simulation, resultat}`. Aucun champ inconnu n'est accepté, l'espace vient du jeton, **aucun envoi possible**.
+## Les actions (apps `app:prospection`, `app:crm` ; portée `notifuse:contacts.ecrire` du registre du Hub, sauf mention)
+Réponse : `{action, rejoue, simulation, resultat}`. Aucun champ inconnu n'est accepté, l'espace vient du jeton, **aucune action n'envoie**.
 - `contacts.importer` `{list_ids, contacts (1 à 1000), dry_run}` : passe par `contacts.intake` (fiche 85) avec `allow_triggers=false` et
   `existing=attach` : fiche existante intacte, désinscrits, rebonds et plaintes exclus, `custom_json_1.veridian_source` = l'app du jeton. Tout
   champ inconnu d'un contact va dans `custom_json_1`. `resultat` : `dry_run, received, created, updated, existing, subscribed, skipped {motif: n}, details,
@@ -26,8 +26,18 @@ Réponse : `{action, rejoue, simulation, resultat}`. Aucun champ inconnu n'est a
 - `listes.lister` `{}` : `resultat.lists [{id, name, starts_sequence}]` (200 au plus). Lecture, sans `Idempotency-Key`.
 - `listes.creer` `{id (1 à 32 lettres ou chiffres), name}` : privée, sans double opt-in. `resultat {id, name, existait}` ; même id et même nom = rendue ;
   même id, autre nom = 409.
+- `sequences.lister` `{}` : `resultat.sequences [{id, name, status, list_id, inscriptible, raison (brouillon, en_pause, inactive)}]`. Lecture.
+- `sequences.inscrire` (portée à elle : **`notifuse:sequences.inscrire`**, car elle fait partir du courrier) `{sequence_id, contacts (1 à 50)
+  [{email, first_name, last_name, phone, job_title, ne_plus_contacter}], inclure_deja_contactes, dry_run}`. Fiche d'abord (`contacts.intake`, `attach`,
+  sans liste ni déclencheur), puis `reservoir.activate` sous le lot dérivé de (app, clé). `resultat` : `{dry_run, received, inscrits,
+  skipped {motif: n}, details [{email, motif}], note}`, un motif par personne : `desinscrit`, `rebond`, `plainte`, `a_deja_repondu`,
+  `deja_dans_la_sequence`, `dans_une_autre_sequence`, `deja_contacte`, `ne_plus_contacter` (dit par l'app, la personne ne quitte pas la porte),
+  `adresse_invalide`, `fiche_refusee`, `non_inscrit`. Les six premiers sont ceux de la fiche 85 : aucune règle n'est recopiée.
+  **Plafond : 200 personnes par jour, par utilisateur et par espace**, toutes apps (429 `plafond_du_jour`, clé rendue ; un geste en cours compte
+  pour 50, sinon des appels parallèles passeraient dessous). Séquence inconnue, en pause, hors plafond ou qui en démarrerait une autre : `refus_de_l_app`.
+  Rien ne part tout de suite : fenêtre, plafonds, chauffe, exclusions et relais propre décident à l'envoi, comme pour tout autre contact.
 
 ## Épreuves
 Refus et idempotence : `internal/veridian/actions/*_test.go`. Application entière (25 contacts, rejeu 0, désinscrit exclu, file vide, membre
-retiré refusé) : `INTEGRATION_TESTS=true TEST_DB_HOST=… TEST_DB_PORT=… go test -run TestVeridianActions ./tests/integration`.
+retiré refusé, deux inscrits sur quatre à une séquence, rejeu et désinscrit compris) : `INTEGRATION_TESTS=true TEST_DB_HOST=… TEST_DB_PORT=… go test -run TestVeridianActions ./tests/integration`.
 Une action neuve = une entrée du catalogue, une portée, et `TestCatalogue_AucuneActionNEnvoie` relu.

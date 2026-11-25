@@ -56,15 +56,22 @@ type Store interface {
 	Finish(ctx context.Context, ws, app, key string, result json.RawMessage) error
 	// Release rend la clé : le geste n'a rien fait, il peut être retenté.
 	Release(ctx context.Context, ws, app, key string) error
+	// EnrolledToday : personnes inscrites par cet utilisateur depuis 24 h dans cet espace, ce geste-ci excepté.
+	EnrolledToday(ctx context.Context, ws, app, key, hubUserID string) (int, error)
 }
 
 // request : une requête rejouée sur le routeur de l'app.
 type request func(method, path string, query map[string][]string, body []byte) (int, []byte, error)
 
-// call : ce qu'une action fait. readOnly : simulation ou lecture, sans clé d'idempotence.
+// gesture : le geste en cours. key : clé d'idempotence, vide en simulation.
+type gesture struct{ app, key string }
+
+// call : ce qu'une action fait. readOnly : simulation ou lecture, sans clé d'idempotence. people : personnes que le geste ferait entrer dans une
+// séquence, décomptées du plafond du jour.
 type call struct {
 	readOnly bool
-	run      func(do request) (int, []byte, error)
+	people   int
+	run      func(do request, g gesture) (int, []byte, error)
 }
 
 type action struct {
@@ -76,13 +83,18 @@ type action struct {
 // Portée du registre du Hub (lib/delegation/paires.ts) : le Hub refuse toute autre portée.
 const scopeContacts = "notifuse:contacts.ecrire"
 
+// scopeSequences : inscrire une personne à une séquence. Séparée : elle fait partir du courrier, au rythme des portes d'envoi.
+const scopeSequences = "notifuse:sequences.inscrire"
+
 var mailApps = []string{"app:prospection", "app:crm"}
 
 // Catalogue fermé : une action = une portée, des apps autorisées, des requêtes fixes.
 var catalogue = map[string]action{
-	"contacts.importer": {scope: scopeContacts, apps: mailApps, build: buildImport},
-	"listes.lister":     {scope: scopeContacts, apps: mailApps, build: buildLists},
-	"listes.creer":      {scope: scopeContacts, apps: mailApps, build: buildCreateList},
+	"contacts.importer":  {scope: scopeContacts, apps: mailApps, build: buildImport},
+	"listes.lister":      {scope: scopeContacts, apps: mailApps, build: buildLists},
+	"listes.creer":       {scope: scopeContacts, apps: mailApps, build: buildCreateList},
+	"sequences.lister":   {scope: scopeContacts, apps: mailApps, build: buildSequences},
+	"sequences.inscrire": {scope: scopeSequences, apps: mailApps, build: buildEnroll},
 }
 
 // Handler : POST /api/veridian/actions/{action}.
@@ -229,9 +241,23 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if !c.readOnly && c.people > 0 {
+		// Après Begin : un rejeu rend son premier résultat, et deux gestes parallèles se voient l'un l'autre.
+		n, err := h.Store.EnrolledToday(ctx, ws, app, key, claims.Subject)
+		if err != nil || n+c.people > maxEnrollPerDay {
+			_ = h.Store.Release(context.WithoutCancel(ctx), ws, app, key)
+			if err != nil {
+				h.fail(w, err, "plafond du jour")
+				return
+			}
+			h.log(origin, name, ws, "plafond")
+			refuse(w, http.StatusTooManyRequests, "plafond_du_jour", fmt.Sprintf("%d personnes par jour et par utilisateur, %d déjà inscrites ou en cours", maxEnrollPerDay, n))
+			return
+		}
+	}
 	status, out, err := c.run(func(method, path string, query map[string][]string, body []byte) (int, []byte, error) {
 		return h.Dispatcher.Do(ctx, member, method, path, query, body)
-	})
+	}, gesture{app: app, key: key})
 	if err == nil && status == http.StatusOK && json.Valid(out) && len(bytes.TrimSpace(out)) > 0 {
 		if !c.readOnly {
 			if ferr := h.Store.Finish(context.WithoutCancel(ctx), ws, app, key, out); ferr != nil {
@@ -319,7 +345,7 @@ func buildImport(ws, app string, raw []byte) (*call, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &call{readOnly: req.DryRun, run: func(do request) (int, []byte, error) {
+	return &call{readOnly: req.DryRun, run: func(do request, _ gesture) (int, []byte, error) {
 		return do(http.MethodPost, "/api/veridian/contacts.intake", nil, body)
 	}}, nil
 }
@@ -344,7 +370,7 @@ func buildLists(ws, _ string, raw []byte) (*call, error) {
 			return nil, err
 		}
 	}
-	return &call{readOnly: true, run: func(do request) (int, []byte, error) {
+	return &call{readOnly: true, run: func(do request, _ gesture) (int, []byte, error) {
 		return do(http.MethodGet, "/api/veridian/reservoir.lists", map[string][]string{"workspace_id": {ws}}, nil)
 	}}, nil
 }
@@ -371,7 +397,7 @@ func buildCreateList(ws, _ string, raw []byte) (*call, error) {
 		b, _ := json.Marshal(map[string]any{"id": req.ID, "name": req.Name, "existait": existed})
 		return b
 	}
-	return &call{run: func(do request) (int, []byte, error) {
+	return &call{run: func(do request, _ gesture) (int, []byte, error) {
 		status, out, err := do(http.MethodGet, "/api/lists.get", map[string][]string{"workspace_id": {ws}, "id": {req.ID}}, nil)
 		if err != nil {
 			return 0, nil, err

@@ -180,7 +180,7 @@ test.describe('Generate magic link via API key (tenant-scoped)', () => {
     const linkRes = await fetch(`${NOTIFUSE_URL}/api/workspaces.generateMagicLink`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
-      body: JSON.stringify({ user_email: email }),
+      body: JSON.stringify({ user_email: email, hub_user_id: hubId(email) }),
     });
     expect(linkRes.status).toBe(200);
     const { magic_link, expires_at } = await linkRes.json();

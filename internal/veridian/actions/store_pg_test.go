@@ -183,3 +183,42 @@ func TestSQLStore_Idempotence(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, prev)
 }
+
+func TestSQLStore_EnrolledToday(t *testing.T) {
+	db := systemDB(t)
+	s := &SQLStore{DB: db}
+	ctx := context.Background()
+	add := func(ws, app, key, action, user, result, age string) {
+		t.Helper()
+		_, err := s.Begin(ctx, ws, key, action, "h", Origin{App: app, JTI: "jeton-" + key, HubUserID: user})
+		require.NoError(t, err)
+		if result != "" {
+			require.NoError(t, s.Finish(ctx, ws, app, key, json.RawMessage(result)))
+		}
+		_, err = db.Exec(`UPDATE veridian_action_done SET created_at = NOW() - $1::interval WHERE idem_key = $2`, age, key)
+		require.NoError(t, err)
+	}
+	count := func(want int, why string) {
+		t.Helper()
+		n, err := s.EnrolledToday(ctx, "ws1", "app:crm", "moi", hubUser)
+		require.NoError(t, err)
+		assert.Equal(t, want, n, why)
+	}
+	const act = "sequences.inscrire"
+	count(0, "rien")
+	add("ws1", "app:crm", "k1", act, hubUser, `{"inscrits":7}`, "1 hour")
+	add("ws1", "app:prospection", "k2", act, hubUser, `{"inscrits":3}`, "23 hours")
+	count(10, "toutes apps confondues")
+	add("ws1", "app:crm", "k3", act, hubUser, `{"inscrits":40}`, "25 hours")
+	add("ws2", "app:crm", "k4", act, hubUser, `{"inscrits":40}`, "1 hour")
+	add("ws1", "app:crm", "k5", act, "un-autre", `{"inscrits":40}`, "1 hour")
+	add("ws1", "app:crm", "k6", "contacts.importer", hubUser, `{"created":40}`, "1 hour")
+	add("ws1", "app:crm", "k9", "contacts.importer", hubUser, "", "10 seconds")
+	count(10, "hier, un autre espace, une autre personne et une autre action ne comptent pas")
+	add("ws1", "app:crm", "moi", act, hubUser, "", "0 seconds")
+	count(10, "ce geste-ci ne se compte pas")
+	add("ws1", "app:crm", "k7", act, hubUser, "", "10 seconds")
+	count(10+maxEnrollPerCall, "un geste en cours prend la place d'un appel entier")
+	add("ws1", "app:crm", "k8", act, hubUser, "", "3 minutes")
+	count(10+maxEnrollPerCall, "un geste mort ne compte plus")
+}

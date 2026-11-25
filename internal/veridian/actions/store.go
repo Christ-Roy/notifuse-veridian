@@ -113,3 +113,15 @@ func (s *SQLStore) Release(ctx context.Context, ws, app, key string) error {
 		WHERE workspace_id = $1 AND app = $2 AND idem_key = $3 AND result IS NULL`, ws, app, key)
 	return err
 }
+
+// EnrolledToday compte les personnes que cet utilisateur a fait entrer dans des séquences depuis 24 h, toutes apps confondues, le geste (app, key)
+// excepté. Un geste en cours compte pour le maximum d'un appel : sans ça, des gestes parallèles passeraient tous sous le plafond. Passé 2 minutes
+// sans résultat, il est mort et ne compte plus.
+func (s *SQLStore) EnrolledToday(ctx context.Context, ws, app, key, hubUserID string) (int, error) {
+	var n int
+	err := s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE WHEN result IS NOT NULL THEN (result->>'inscrits')::int
+			WHEN created_at > NOW() - INTERVAL '2 minutes' THEN $5 ELSE 0 END), 0)
+		FROM veridian_action_done WHERE workspace_id = $1 AND hub_user_id = $2 AND action = 'sequences.inscrire'
+		AND created_at > NOW() - INTERVAL '24 hours' AND NOT (app = $3 AND idem_key = $4)`, ws, hubUserID, app, key, maxEnrollPerCall).Scan(&n)
+	return n, err
+}

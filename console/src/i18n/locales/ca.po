@@ -312,6 +312,10 @@ msgstr ""
 #~ msgid "{humanReplies} contacts replied by a human (reply rate = human replies / sent, the #1 cold outreach KPI). Automatic replies (out of office, acknowledgements) are not counted in the rate. All campaigns combined: the reply signal is not tied to a specific send, so this card ignores the All/Broadcasts/Transactional filter."
 #~ msgstr ""
 
+#: src/components/settings/veridian_mailbox_attempts.tsx
+msgid "{imap} to receive, {smtp} to send"
+msgstr "{imap} per rebre, {smtp} per enviar"
+
 #: src/components/settings/WebhookCard.tsx
 msgid "{label} copied to clipboard"
 msgstr "{label} copiat al porta-retalls"
@@ -641,6 +645,18 @@ msgstr "Una breu descripció del propòsit d'aquesta notificació"
 msgid "A bulk action is already running"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "A check failed: contact support."
+msgstr "Una comprovació ha fallat: poseu-vos en contacte amb el suport."
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "A configuration profile sets everything up for you. Open it on your iPhone or iPad, then go to Settings > Profile Downloaded > Install. The device will ask for the password."
+msgstr "Un perfil de configuració ho ajusta tot per vosaltres. Obriu-lo a l'iPhone o l'iPad i aneu a Configuració > Perfil baixat > Instal·la. El dispositiu us demanarà la contrasenya."
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "A configuration profile sets everything up for you. Open it on your Mac, then go to System Settings > Privacy & Security > Profiles > Install. The Mac will ask for the password."
+msgstr "Un perfil de configuració ho ajusta tot per vosaltres. Obriu-lo al Mac i aneu a Configuració del sistema > Privadesa i seguretat > Perfils > Instal·la. El Mac us demanarà la contrasenya."
+
 #: src/components/prospection/veridian_prospection_replies.tsx
 msgid "A contact enrolled in two sequences counts in both: the rows do not add up."
 msgstr ""
@@ -652,6 +668,10 @@ msgstr ""
 #: src/components/sending_profiles/veridian_capacity_block.tsx
 msgid "A normal open day: {fullDay} sends"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "A password is filled in."
+msgstr "Hi ha una contrasenya introduïda."
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "A preset is a named, coherent set of cold-sending values (rates, daily caps, sending window, jitter, content dedup and provider exclusions). Applying one fills the fields below as a starting point — review and adjust them, then click \"Save changes\" (and the Save button on the Sending window / Excluded classes / Anti-detection cards). Nothing is saved until you do."
@@ -680,6 +700,10 @@ msgstr ""
 msgid "A segment with ID \"{id}\" already exists"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "A shared access stays open when people leave."
+msgstr "Un accés compartit continua obert quan algú se'n va."
+
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "A test message was sent to {ownerEmail}. Where should this profile be used?"
 msgstr ""
@@ -691,6 +715,10 @@ msgstr "Es requereix un arbre"
 #: src/components/segment/input.tsx
 msgid "A value is required..."
 msgstr "Es requereix un valor..."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "A workspace member"
+msgstr "Un membre de l'espai de treball"
 
 #: src/components/automations/AddNodeButton.tsx
 #: src/components/automations/nodes/ABTestNode.tsx
@@ -704,6 +732,10 @@ msgstr "Prova A/B"
 msgid "Accept Invitation"
 msgstr "Acceptar invitació"
 
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Access created"
+msgstr "Accés creat"
+
 #: src/components/mail/veridian_mail_labels.ts
 #: src/components/reconcile/veridian_reconcile_page.tsx
 #: src/pages/InboxPage.tsx
@@ -711,12 +743,28 @@ msgstr "Acceptar invitació"
 msgid "Access denied"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Access disabled"
+msgstr "Accés desactivat"
+
 #~ msgid "Access Key"
 #~ msgstr "Clau d'accés"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Access re-enabled"
+msgstr "Accés reactivat"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Access revoked"
+msgstr "Accés revocat"
 
 #: src/pages/SetupWizard.tsx
 msgid "Account"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Account Settings > Account Actions > Add Mail Account, then Configure manually."
+msgstr "Configuració del compte > Accions del compte > Afegeix un compte de correu, i després Configura manualment."
 
 #: src/components/veridian_paywall_modal.tsx
 msgid "Account suspended"
@@ -757,6 +805,7 @@ msgstr "Activar automatització?"
 #: src/components/contacts/SegmentsFilter.tsx
 #: src/components/lists/ListStats.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
+#: src/components/settings/veridian_mailbox_labels.ts
 #: src/components/settings/veridian_plan_settings.tsx
 #: src/pages/ContactsPage.tsx
 msgid "Active"
@@ -817,6 +866,10 @@ msgstr ""
 msgid "Add a label, then press Enter"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Add a new account and choose IMAP (or Other). Do not pick Gmail, Outlook.com or Exchange."
+msgstr "Afegiu un compte nou i trieu IMAP (o Altres). No trieu Gmail, Outlook.com ni Exchange."
+
 #: src/pages/SendingProfilesPage.tsx
 #: src/pages/SendingProfilesPage.tsx
 msgid "Add a profile"
@@ -833,6 +886,14 @@ msgstr ""
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Add a sending profile"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Add account > Advanced options > Let me set up my account manually > IMAP."
+msgstr "Afegeix un compte > Opcions avançades > Vull configurar el meu compte manualment > IMAP."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Add Account > Other (IMAP). Do not pick Gmail, Outlook or iCloud."
+msgstr "Afegeix un compte > Altres (IMAP). No trieu Gmail, Outlook ni iCloud."
 
 #: src/pages/SendingProfilesPage.tsx
 msgid "Add an inbox"
@@ -1004,6 +1065,7 @@ msgstr "Afegir webhook"
 
 #: src/components/automations/config/TriggerConfigForm.tsx
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
 #: src/pages/ContactsPage.tsx
 #: src/pages/ContactsPage.tsx
 msgid "Address"
@@ -1234,6 +1296,10 @@ msgstr "I"
 #: src/components/segment/input.tsx
 msgid "AND | OR"
 msgstr "I | O"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Another app"
+msgstr "Una altra aplicació"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Anti-detection (jitter & content dedup)"
@@ -1747,6 +1813,10 @@ msgstr "Ganxo abans de crear usuari"
 msgid "Belonging to at least one of the following segments"
 msgstr "Pertany com a mínim a un dels segments següents"
 
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Belongs to"
+msgstr "Pertany a"
+
 #: src/components/prospection/veridian_prospection_performance.tsx
 msgid "Best"
 msgstr ""
@@ -2123,6 +2193,8 @@ msgstr ""
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
+#: src/components/settings/veridian_mailbox_access.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
 #: src/components/settings/WebhookCard.tsx
 #: src/components/settings/WebhooksSettings.tsx
 #: src/components/settings/WorkspaceMembers.tsx
@@ -2253,6 +2325,26 @@ msgstr "Canviar estat"
 msgid "Change Status for {0}"
 msgstr "Canviar estat per a {0}"
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Change the port to {expected}."
+msgstr "Canvieu el port per {expected}."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Change the port: use the one shown in the steps."
+msgstr "Canvieu el port: utilitzeu el que s'indica als passos."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Change the security setting."
+msgstr "Canvieu l'ajust de seguretat."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Change the server name: use the one shown in the steps."
+msgstr "Canvieu el nom del servidor: utilitzeu el que s'indica als passos."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Change the server to {expected}."
+msgstr "Canvieu el servidor per {expected}."
+
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 msgid "Changing the transport clears the verification: send a new test afterwards."
 msgstr ""
@@ -2270,6 +2362,14 @@ msgstr "Comprovar"
 msgid "Check for Updates"
 msgstr "Comprovar actualitzacions"
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Check my settings"
+msgstr "Comprovar els meus ajustos"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Check passed."
+msgstr "Comprovació correcta."
+
 #: src/components/mail/veridian_mail_labels.ts
 msgid "Check your connection, then retry."
 msgstr ""
@@ -2286,6 +2386,10 @@ msgstr ""
 msgid "Checks"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Choose {wanted} as the security setting."
+msgstr "Trieu {wanted} com a seguretat."
+
 #: src/pages/InboxPage.tsx
 msgid "Choose a message to read it in full."
 msgstr ""
@@ -2297,6 +2401,22 @@ msgstr ""
 #: src/components/email_builder/ui/BlockToolbar.tsx
 msgid "Choose a saved block to update"
 msgstr "Trieu un bloc desat per actualitzar"
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Choose a sending profile and an address."
+msgstr "Trieu un perfil d'enviament i una adreça."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Choose SSL/TLS instead of STARTTLS or None."
+msgstr "Trieu SSL/TLS en lloc de STARTTLS o Cap."
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Choose SSL/TLS, not STARTTLS, for receiving AND for sending."
+msgstr "Trieu SSL/TLS (no STARTTLS) per a la recepció I per a l'enviament."
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Choose the security setting shown below, for receiving AND for sending."
+msgstr "Trieu la seguretat indicada a sota, per a la recepció I per a l'enviament."
 
 #: src/components/send_queue/veridian_queue_labels.ts
 #: src/components/send_queue/veridian_queue_labels.ts
@@ -2424,6 +2544,26 @@ msgstr "Tancar sense desar"
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Close, then edit or retry the test from the card"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Closed"
+msgstr "Tancat"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Closed because the person it belongs to left the workspace. It reopens if they come back."
+msgstr "Tancat perquè la persona a qui pertany ha deixat l'espai de treball. Es reobre si torna."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Closed because the workspace is closed."
+msgstr "Tancat perquè l'espai de treball està tancat."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Closed because this address is no longer a sender of the sending profile."
+msgstr "Tancat perquè aquesta adreça ja no és un remitent del perfil d'enviament."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Closed by the workspace. It reopens when the cause goes away."
+msgstr "Tancat per l'espai de treball. Es reobre quan desapareix la causa."
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
@@ -2711,6 +2851,10 @@ msgstr ""
 #~ msgid "Connect with Google"
 #~ msgstr ""
 
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Connect your phone, Thunderbird or a tool to your mailboxes. Each access has its own password and you can switch it off at any time."
+msgstr "Connecteu el telèfon, Thunderbird o una eina a les vostres bústies. Cada accés té la seva pròpia contrasenya i el podeu desactivar en qualsevol moment."
+
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "Connection Details"
 msgstr "Detalls de connexió"
@@ -2939,10 +3083,15 @@ msgstr ""
 msgid "Conversation timeline"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_parts.tsx
+msgid "Copied"
+msgstr "Copiat"
+
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/Integrations.tsx
+#: src/components/settings/veridian_mailbox_parts.tsx
 #: src/components/settings/WebhookCard.tsx
 #: src/components/veridian_a11y.ts
 msgid "Copy"
@@ -2952,6 +3101,18 @@ msgstr "Copiar"
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "Copy {0} Code"
 msgstr "Copiar codi {0}"
+
+#: src/components/settings/veridian_mailbox_parts.tsx
+msgid "Copy {what}"
+msgstr "Copia {what}"
+
+#: src/components/settings/veridian_mailbox_parts.tsx
+msgid "Copy did not work: select the text and copy it by hand."
+msgstr "La còpia no ha funcionat: seleccioneu el text i copieu-lo a mà."
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Copy it now and keep it in your password manager. It cannot be shown again: if you lose it, create a new access."
+msgstr "Copieu-la ara i deseu-la al gestor de contrasenyes. No es podrà tornar a mostrar: si la perdeu, creeu un accés nou."
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Copy the 16 characters and paste them below. Your usual Gmail password does not work."
@@ -3079,6 +3240,7 @@ msgstr ""
 #: src/components/common/veridian_folder_manager.tsx
 #: src/components/file_manager/fileManager.tsx
 #: src/components/lists/ListDrawer.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
 msgid "Create"
 msgstr "Crear"
 
@@ -3101,6 +3263,12 @@ msgstr ""
 #: src/pages/BroadcastsPage.tsx
 msgid "Create a sending profile first: it is the mailbox your emails are sent from."
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_access.tsx
+#: src/components/settings/veridian_mailbox_access.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Create an access"
+msgstr "Crear un accés"
 
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "Create an email template"
@@ -3947,6 +4115,14 @@ msgstr "Diagnòstic:"
 msgid "Did the contact reply?"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Disable"
+msgstr "Desactiva"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Disable access {name}"
+msgstr "Desactivar l'accés {name}"
+
 #: src/components/settings/WebhookCard.tsx
 msgid "Disable this webhook?"
 msgstr "Desactivar aquest webhook?"
@@ -3958,6 +4134,7 @@ msgstr "Desactivar webhook"
 #: src/components/settings/GeneralSettings.tsx
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
+#: src/components/settings/veridian_mailbox_labels.ts
 #: src/components/templates/TemplateTranslationsTab.tsx
 msgid "Disabled"
 msgstr "Desactivat"
@@ -4057,10 +4234,11 @@ msgstr "Domini"
 msgid "Domain for the SMTP bridge server (e.g., smtp.yourcompany.com)"
 msgstr "Domini per al servidor de retransmissió SMTP (p. ex., smtp.yourcompany.com)"
 
+#: src/components/settings/veridian_mailbox_create.tsx
 #: src/components/templates/TemplateTranslationsTab.tsx
 #: src/pages/SetupWizard.tsx
 msgid "Done"
-msgstr ""
+msgstr "Fet"
 
 #: src/components/email_builder/blocks/MjDividerBlock.tsx
 #: src/components/email_builder/ui/BorderInput.tsx
@@ -4083,6 +4261,14 @@ msgstr "Plantilla de doble opt-in"
 #: src/components/mail/veridian_mail_attachments.tsx
 msgid "Download"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_export.tsx
+msgid "Download {folderLabel}"
+msgstr "Baixar {folderLabel}"
+
+#: src/components/settings/veridian_mailbox_export.tsx
+msgid "Download {folderLabel} ({profileName})"
+msgstr "Baixar {folderLabel} ({profileName})"
 
 #: src/components/mail/veridian_mail_attachments.tsx
 msgid "Download {name}"
@@ -4755,6 +4941,10 @@ msgstr "Introdueix el codi de 6 dígits enviat a {email}"
 msgid "Enter the name of the custom event (e.g., 'purchase', 'signup')"
 msgstr "Introduïu el nom de l'esdeveniment personalitzat (p. ex., 'compra', 'registre')"
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Enter the values by hand instead"
+msgstr "Introduir els valors a mà"
+
 #: src/components/email_builder/ui/StringPopoverInput.tsx
 msgid "Enter value"
 msgstr "Introduïu valor"
@@ -4906,6 +5096,10 @@ msgstr ""
 msgid "Every time"
 msgstr "Cada vegada"
 
+#: src/components/settings/veridian_mailbox_check.tsx
+msgid "Everything is right: your app should work."
+msgstr "Tot és correcte: l'aplicació hauria de funcionar."
+
 #: src/components/reconcile/veridian_reconcile_page.tsx
 msgid "Everything matches"
 msgstr ""
@@ -5009,6 +5203,10 @@ msgstr ""
 #: src/components/email_builder/MjmlCodeEditor.tsx
 msgid "Export MJML"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_export.tsx
+msgid "Export your mail"
+msgstr "Exportar el vostre correu"
 
 #: src/components/contacts/ExportContactsModal.tsx
 msgid "Exporting all contacts"
@@ -5612,6 +5810,18 @@ msgstr ""
 msgid "File storage settings"
 msgstr "Configuració d'emmagatzematge de fitxers"
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Fill in the password: the one shown once when the access was created."
+msgstr "Introduïu la contrasenya: la que es va mostrar una sola vegada en crear l'accés."
+
+#: src/components/settings/veridian_mailbox_check.tsx
+msgid "Fill in the server, the port and the security setting for each side."
+msgstr "Indiqueu el servidor, el port i la seguretat de cada costat."
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Fill in the values below, one by one (the copy buttons help)."
+msgstr "Introduïu els valors de sota, un per un (els botons de copiar ajuden)."
+
 #: src/components/automations/AddNodeButton.tsx
 #: src/components/automations/nodes/FilterNode.tsx
 #: src/components/automations/nodes/StatNode.tsx
@@ -5940,6 +6150,18 @@ msgstr "SQL generat:"
 msgid "Gérer ou révoquer les accès IA"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Get a new link"
+msgstr "Obtenir un enllaç nou"
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Get my configuration profile"
+msgstr "Obtenir el meu perfil de configuració"
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Give this access a name, for example Phone or CRM."
+msgstr "Poseu un nom a aquest accés, per exemple Telèfon o CRM."
+
 #: src/components/broadcasts/GlobalFeedSettings.tsx
 msgid "Global Data Feed"
 msgstr ""
@@ -5974,6 +6196,10 @@ msgstr ""
 
 #~ msgid "Gmail OAuth (coming soon)"
 #~ msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Gmail on Android"
+msgstr "Gmail a Android"
 
 #~ msgid "Gmail personal safety limit"
 #~ msgstr ""
@@ -6182,10 +6408,15 @@ msgstr "Ajuda i suport"
 msgid "Help us improve Veridian Mail by sending anonymous usage statistics. No personal data or message content is collected."
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_parts.tsx
 #: src/components/settings/WebhookCard.tsx
 #: src/components/veridian_a11y.ts
 msgid "Hide"
 msgstr "Amagar"
+
+#: src/components/settings/veridian_mailbox_parts.tsx
+msgid "Hide {label}"
+msgstr "Amaga {label}"
 
 #: src/pages/BroadcastsPage.tsx
 msgid "Hide Details"
@@ -6537,6 +6768,10 @@ msgstr "Importeu fonts des de fitxers CSS allotjats (com Google Fonts) per utili
 msgid "Import from CSV"
 msgstr "Importar des de CSV"
 
+#: src/components/settings/veridian_mailbox_export.tsx
+msgid "Import it in Thunderbird, Apple Mail or another provider."
+msgstr "Importeu-lo a Thunderbird, Apple Mail o a un altre proveïdor."
+
 #: src/components/email_builder/MjmlCodeEditor.tsx
 msgid "Import MJML"
 msgstr ""
@@ -6620,6 +6855,7 @@ msgstr ""
 
 #: src/components/mail/veridian_mail_menu.tsx
 #: src/components/mail/veridian_mail_menu.tsx
+#: src/components/settings/veridian_mailbox_labels.ts
 #: src/components/templates/PhonePreview.tsx
 #: src/pages/InboxPage.tsx
 msgid "Inbox"
@@ -6868,6 +7104,10 @@ msgstr ""
 msgid "IONOS / 1&1 (MX-resolved)"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "iPhone or iPad"
+msgstr "iPhone o iPad"
+
 #: src/components/file_manager/context.tsx
 #: src/components/segment/form_leaf.tsx
 #: src/components/segment/input.tsx
@@ -6887,6 +7127,10 @@ msgstr "no està a"
 #: src/components/mail/veridian_mail_labels.ts
 msgid "It may have been removed. Go back to the list."
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "It stops working at once and cannot be reopened. Apps that use it will lose their connection."
+msgstr "Deixa de funcionar a l'instant i no es pot reobrir. Les aplicacions que l'utilitzen perdran la connexió."
 
 #: src/components/mail/veridian_mail_body.tsx
 msgid "It was sent before the unified inbox and its template could not be rebuilt. Headers and delivery status remain readable."
@@ -7064,8 +7308,9 @@ msgid "Last renewal"
 msgstr ""
 
 #: src/components/settings/ApiAgentsSettings.tsx
+#: src/components/settings/veridian_mailbox_access.tsx
 msgid "Last used"
-msgstr ""
+msgstr "Últim ús"
 
 #~ msgid "Last verified {0}"
 #~ msgstr ""
@@ -7354,6 +7599,10 @@ msgstr "Carregar més esdeveniments"
 msgid "Load saved template"
 msgstr "Carregar plantilla desada"
 
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Loading"
+msgstr "S'està carregant"
+
 #: src/pages/AutomationsPage.tsx
 msgid "Loading automations..."
 msgstr "Carregant automatitzacions..."
@@ -7408,6 +7657,10 @@ msgstr "Carregant..."
 msgid "Login"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Login (receiving and sending)"
+msgstr "Inici de sessió (recepció i enviament)"
+
 #: src/components/settings/GeneralSettings.tsx
 msgid "Logo"
 msgstr "Logotip"
@@ -7453,14 +7706,27 @@ msgstr "Minúscules"
 msgid "LWS"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Mac Mail"
+msgstr "Mail al Mac"
+
 #: src/pages/SignInPage.tsx
 msgid "Magic code sent to your email"
 msgstr "Codi màgic enviat al teu correu"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Mail > Add Account > Other Mail Account."
+msgstr "Mail > Afegeix un compte > Un altre compte de Mail."
 
 #: src/components/mail/veridian_mail_filters.tsx
 #: src/components/mail/veridian_mail_header.tsx
 msgid "Mailbox"
 msgstr ""
+
+#: src/components/settings/SettingsSidebar.tsx
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Mailbox access"
+msgstr "Accés a les bústies"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Mailbox password"
@@ -7619,6 +7885,10 @@ msgstr ""
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Maximum emails per MINUTE toward this provider (SPEED). Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class rate."
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Me (closes when I leave the workspace)"
+msgstr "Jo (es tanca quan deixo l'espai de treball)"
 
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Member removed successfully"
@@ -7860,6 +8130,7 @@ msgstr "N/D"
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/Integrations.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
 #: src/components/settings/WebhooksSettings.tsx
 msgid "Name"
 msgstr "Nom"
@@ -7886,6 +8157,10 @@ msgstr ""
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "Neutral profile (no recipient class)"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Never"
+msgstr "Mai"
 
 #: src/components/send_queue/veridian_queue_groups.tsx
 #: src/components/send_queue/veridian_queue_reasons.tsx
@@ -8010,9 +8285,21 @@ msgstr "No hi ha contingut {0} per previsualitzar"
 msgid "No Access"
 msgstr "Sense accés"
 
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "No access yet. Create one to read and send your mail from your phone or another app."
+msgstr "Encara no hi ha cap accés. Creeu-ne un per llegir i enviar el correu des del telèfon o una altra aplicació."
+
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "No API keys yet"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_attempts.tsx
+msgid "No attempt reached us since {sinceText}: your app is probably set to STARTTLS or to another port. Use SSL/TLS, port {ports}."
+msgstr "Cap intent ens ha arribat des del {sinceText}: l'aplicació probablement està configurada amb STARTTLS o amb un altre port. Utilitzeu SSL/TLS, port {ports}."
+
+#: src/components/settings/veridian_mailbox_attempts.tsx
+msgid "No attempt since {sinceText}."
+msgstr "Cap intent des del {sinceText}."
 
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
 msgid "No automatic repair for this discrepancy: the cause above says what to do."
@@ -8305,6 +8592,10 @@ msgstr ""
 msgid "No sending profile yet"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "No sending profile yet. Add one in Sending profiles first, then come back here."
+msgstr "Encara no hi ha cap perfil d'enviament. Afegiu-ne un a Perfils d'enviament i torneu aquí."
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "No sending window — emails go out 24/7."
 msgstr ""
@@ -8445,6 +8736,7 @@ msgstr ""
 #: src/components/email_builder/ui/ColorPickerWithPresets.tsx
 #: src/components/email_builder/ui/FontStyleInput.tsx
 #: src/components/email_builder/ui/FontStyleInput.tsx
+#: src/components/settings/veridian_mailbox_labels.ts
 msgid "None"
 msgstr "Cap"
 
@@ -8619,6 +8911,7 @@ msgstr ""
 msgid "Off (plaintext)"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_check.tsx
 #: src/components/templates/ImportExportButton.tsx
 msgid "OK"
 msgstr "D'acord"
@@ -8661,6 +8954,14 @@ msgstr "Només es permet un punt de ruptura per plantilla de correu"
 msgid "Only the workspace owner can change profiles"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Only the workspace owner can create a shared access: it would outlive you."
+msgstr "Només el propietari de l'espai de treball pot crear un accés compartit: us sobreviuria."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Only the workspace owner can create a shared access."
+msgstr "Només el propietari de l'espai de treball pot crear un accés compartit."
+
 #: src/components/integrations/FirecrawlIntegration.tsx
 #: src/components/integrations/LLMIntegration.tsx
 #: src/components/integrations/SupabaseIntegration.tsx
@@ -8685,6 +8986,10 @@ msgstr "Correu obert"
 msgid "Open email editor"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Open Gmail > your picture > Add another account > Other. Do not pick Google."
+msgstr "Obriu Gmail > la vostra foto > Afegeix un altre compte > Altres. No trieu Google."
+
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Open Google app passwords"
 msgstr ""
@@ -8700,6 +9005,10 @@ msgstr ""
 #: src/layouts/WorkspaceLayout.tsx
 msgid "Open navigation menu"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Open on this device"
+msgstr "Obrir en aquest dispositiu"
 
 #: src/components/broadcasts/veridian_broadcast_rates_info.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
@@ -8814,6 +9123,10 @@ msgstr "Opcionalment filtreu contactes per segments dins de les llistes seleccio
 msgid "or"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Or scan this code with your phone camera."
+msgstr "O escanegeu aquest codi amb la càmera del telèfon."
+
 #: src/components/email_builder/ui/ImportFontInput.tsx
 msgid "Or select a popular Google Font"
 msgstr "O seleccioneu una font de Google popular"
@@ -8860,6 +9173,14 @@ msgstr ""
 msgid "Others"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Our server answers."
+msgstr "El nostre servidor respon."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Our server did not answer: check the server name and the port."
+msgstr "El nostre servidor no ha respost: comproveu el nom del servidor i el port."
+
 #: src/components/sending_profiles/veridian_profile_card.tsx
 msgid "Out of rotation"
 msgstr ""
@@ -8884,6 +9205,10 @@ msgstr ""
 #: src/pages/LogsPage.tsx
 msgid "Outgoing Webhooks"
 msgstr "Webhooks sortints"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Outlook"
+msgstr "Outlook"
 
 #: src/components/ai-assistant/AIAssistantChat.tsx
 msgid "Output"
@@ -8953,12 +9278,19 @@ msgstr ""
 #: src/components/sending_profiles/veridian_inbox_drawer.tsx
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
+#: src/components/settings/veridian_mailbox_check.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "Password"
 msgstr "Contrasenya"
 
 #~ msgid "Password (optional)"
 #~ msgstr ""
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Password: the one shown when this access was created. It cannot be shown again. If you lost it, create a new access."
+msgstr "Contrasenya: la que es va mostrar en crear aquest accés. No es pot tornar a mostrar. Si l'heu perduda, creeu un accés nou."
 
 #~ msgid "Paste the 16-character password generated by Google. Spaces are removed automatically."
 #~ msgstr ""
@@ -9179,6 +9511,10 @@ msgstr "Telèfon"
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx
 msgid "Phone Number"
 msgstr "Número de telèfon"
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Phone, CRM..."
+msgstr "Telèfon, CRM..."
 
 #: src/layouts/MainLayout.tsx
 msgid "Photo by Zetong Li"
@@ -9457,6 +9793,9 @@ msgstr ""
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
+#: src/components/settings/veridian_mailbox_check.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
 #: src/components/transactional/ApiCommandModal.tsx
 #: src/pages/SetupWizard.tsx
 msgid "Port"
@@ -9764,6 +10103,10 @@ msgstr "Compra"
 msgid "Push"
 msgstr "Enviar"
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "QR code to open the configuration profile on your phone"
+msgstr "Codi QR per obrir el perfil de configuració al telèfon"
+
 #: src/pages/SendQueuePage.tsx
 msgid "Queue"
 msgstr ""
@@ -9845,6 +10188,14 @@ msgstr ""
 msgid "Re-check"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Re-enable"
+msgstr "Reactiva"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Re-enable access {name}"
+msgstr "Reactivar l'accés {name}"
+
 #~ msgid "Re-register"
 #~ msgstr "Tornar a registrar"
 
@@ -9861,6 +10212,20 @@ msgstr ""
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Read"
 msgstr "Llegit"
+
+#: src/components/settings/veridian_mailbox_create.tsx
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Read and send"
+msgstr "Lectura i enviament"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Read and send, up to {cap} per day"
+msgstr "Lectura i enviament, fins a {cap} al dia"
+
+#: src/components/settings/veridian_mailbox_create.tsx
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Read only"
+msgstr "Només lectura"
 
 #~ msgid "Ready"
 #~ msgstr ""
@@ -9911,6 +10276,23 @@ msgstr ""
 #: src/components/mail/veridian_mail_list.tsx
 msgid "Received"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Receiving"
+msgstr "Recepció"
+
+#: src/components/settings/veridian_mailbox_check.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Receiving (IMAP)"
+msgstr "Recepció (IMAP)"
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Receiving is not available for this workspace yet."
+msgstr "La recepció encara no està disponible per a aquest espai de treball."
+
+#: src/components/settings/veridian_mailbox_attempts.tsx
+msgid "Recent attempts"
+msgstr "Últims intents"
 
 #: src/components/analytics/FailedMessagesTable.tsx
 msgid "Recent Failed Messages"
@@ -10013,6 +10395,7 @@ msgstr ""
 #: src/components/contacts/ContactDetailsDrawer.tsx
 #: src/components/messages/MessageHistoryTable.tsx
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
+#: src/components/settings/veridian_mailbox_attempts.tsx
 #: src/components/veridian_a11y.ts
 #: src/components/veridian_a11y.ts
 #: src/components/veridian_a11y.ts
@@ -10037,6 +10420,22 @@ msgstr "Actualitzar la llista"
 #: src/components/contacts/ContactDetailsDrawer.tsx
 msgid "Refreshing contact data..."
 msgstr "Actualitzant dades del contacte..."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Refused"
+msgstr "Rebutjat"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Refused: this access is closed or switched off"
+msgstr "Rebutjat: aquest accés està tancat o desactivat"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Refused: too many attempts, wait a few minutes"
+msgstr "Rebutjat: massa intents, espereu uns minuts"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Refused: wrong address or password"
+msgstr "Rebutjat: adreça o contrasenya incorrecta"
 
 #: src/components/settings/WebhookCard.tsx
 msgid "Regenerate"
@@ -10070,6 +10469,10 @@ msgstr ""
 #: src/components/prospection/veridian_prospection_rejections.tsx
 msgid "Rejections, unsubscribes and complaints"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Rejects"
+msgstr "Rebutjats"
 
 #: src/components/email_builder/blocks/MjSocialElementBlock.tsx
 msgid "Rel"
@@ -10481,12 +10884,37 @@ msgstr ""
 
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/ApiAgentsSettings.tsx
+#: src/components/settings/veridian_mailbox_access.tsx
 msgid "Revoke"
-msgstr ""
+msgstr "Revoca"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Revoke access {name}"
+msgstr "Revocar l'accés {name}"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Revoke for good"
+msgstr "Revocar definitivament"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Revoke this access?"
+msgstr "Revocar aquest accés?"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Revoke this key"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Revoked"
+msgstr "Revocat"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Revoked accesses ({revokedCount})"
+msgstr "Accessos revocats ({revokedCount})"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Revoked for good. It cannot be reopened: create a new access if needed."
+msgstr "Revocat definitivament. No es pot reobrir: creeu un accés nou si cal."
 
 #: src/components/email_builder/ui/BorderInput.tsx
 msgid "Ridge"
@@ -10506,6 +10934,10 @@ msgstr ""
 #: src/components/email_builder/blocks/MjSectionBlock.tsx
 msgid "Right to Left"
 msgstr "Dreta a esquerra"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Rights"
+msgstr "Permisos"
 
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Role"
@@ -10805,6 +11237,10 @@ msgstr "Atributs de secció"
 #~ msgid "Secure preset applied"
 #~ msgstr ""
 
+#: src/components/settings/veridian_mailbox_check.tsx
+#: src/components/settings/veridian_mailbox_check.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "Security"
 msgstr "Seguretat"
@@ -11265,8 +11701,14 @@ msgstr "Remitents"
 msgid "SendGrid"
 msgstr ""
 
-#~ msgid "Sending"
-#~ msgstr ""
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Sending"
+msgstr "Enviament"
+
+#: src/components/settings/veridian_mailbox_check.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Sending (SMTP)"
+msgstr "Enviament (SMTP)"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Sending 24/7"
@@ -11289,6 +11731,14 @@ msgstr "Enviant correus..."
 msgid "Sending infrastructures"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Sending is not available for this workspace yet."
+msgstr "L'enviament encara no està disponible per a aquest espai de treball."
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Sending limit per day"
+msgstr "Límit d'enviament per dia"
+
 #: src/components/settings/SettingsSidebar.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
@@ -11307,8 +11757,9 @@ msgstr ""
 
 #: src/components/mail/veridian_mail_reply.tsx
 #: src/components/mail/veridian_mail_reply.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
 msgid "Sending profile"
-msgstr ""
+msgstr "Perfil d'enviament"
 
 #: src/pages/BroadcastsPage.tsx
 msgid "Sending profile required"
@@ -11413,6 +11864,7 @@ msgstr "Enviat"
 #: src/components/send_queue/veridian_queue_labels.ts
 #: src/components/sending_profiles/veridian_capacity_block.tsx
 #: src/components/sending_profiles/veridian_capacity_block.tsx
+#: src/components/settings/veridian_mailbox_labels.ts
 #: src/pages/TransactionalNotificationsPage.tsx
 msgid "Sent"
 msgstr "Enviat"
@@ -11481,6 +11933,12 @@ msgstr ""
 msgid "Serial"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_check.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Server"
+msgstr "Servidor"
+
 #: src/pages/SetupWizard.tsx
 msgid "Server is restarting with new configuration..."
 msgstr "El servidor s'està reiniciant amb la nova configuració..."
@@ -11504,6 +11962,10 @@ msgstr "Servidor reiniciat correctament! Ara podeu iniciar sessió."
 
 #~ msgid "Server Token"
 #~ msgstr "Token del servidor"
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Set a daily sending limit of at least 1."
+msgstr "Fixeu un límit d'enviament diari d'almenys 1."
 
 #~ msgid "Set as default marketing email provider"
 #~ msgstr "Establir com a proveïdor de correu de màrqueting predeterminat"
@@ -11564,6 +12026,20 @@ msgstr ""
 msgid "Set padding"
 msgstr "Establir farciment"
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Set up"
+msgstr "Configuració"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Set up my app"
+msgstr "Configurar la meva aplicació"
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Set up my app for {name}"
+msgstr "Configurar l'aplicació per a {name}"
+
 #: src/components/email_builder/ui/StringPopoverInput.tsx
 #: src/components/email_builder/ui/StringPopoverInput.tsx
 msgid "Set value"
@@ -11597,8 +12073,13 @@ msgstr "Configurant..."
 #: src/components/veridian_a11y.ts
 #: src/components/veridian_a11y.ts
 #: src/layouts/WorkspaceLayout.tsx
+#: src/pages/WorkspaceSettingsPage.tsx
 msgid "Settings"
 msgstr "Configuració"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Settings > Mail > Accounts > Add Account > Other > Add Mail Account."
+msgstr "Configuració > Mail > Comptes > Afegeix un compte > Altres > Afegeix un compte de correu."
 
 #: src/pages/SetupWizard.tsx
 msgid "Setup"
@@ -11620,6 +12101,7 @@ msgstr ""
 msgid "Share of hard bounces over 7 days above which sending from this domain is frozen. Between 1% and 15%, default 3%."
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_parts.tsx
 #: src/components/settings/WebhookCard.tsx
 msgid "Show"
 msgstr "Mostrar"
@@ -11628,6 +12110,10 @@ msgstr "Mostrar"
 #: src/components/contacts/ContactSegmentsCell.tsx
 msgid "Show {0} more segments"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_parts.tsx
+msgid "Show {label}"
+msgstr "Mostra {label}"
 
 #: src/components/contacts/ContactSegmentsCell.tsx
 msgid "Show 1 more segment"
@@ -11889,6 +12375,10 @@ msgstr "Sòlid"
 msgid "Some checks could not conclude: that is not a success."
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Some information is not valid. Check the form."
+msgstr "Alguna informació no és vàlida. Reviseu el formulari."
+
 #: src/pages/SendingProfilesPage.tsx
 msgid "Some profiles are both in the commercial rotation and transactional"
 msgstr ""
@@ -11901,6 +12391,10 @@ msgstr ""
 #: src/components/templates/SendTemplateModal.tsx
 msgid "Something went wrong"
 msgstr "Alguna cosa ha anat malament"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Something went wrong. Try again."
+msgstr "Alguna cosa ha anat malament. Torneu-ho a provar."
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "Soon"
@@ -11931,6 +12425,10 @@ msgstr ""
 msgid "Spam complaints: {rate} over 7 days"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Spark"
+msgstr "Spark"
+
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "SparkPost"
 msgstr ""
@@ -11945,6 +12443,10 @@ msgstr ""
 #: src/components/segment/button_upsert.tsx
 msgid "SQL Arguments:"
 msgstr "Arguments SQL:"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "SSL/TLS"
+msgstr "SSL/TLS"
 
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx
 msgid "Standard value is 480px for most email clients"
@@ -11992,8 +12494,9 @@ msgid "Started"
 msgstr "Iniciat"
 
 #: src/components/settings/SMTPBridgeSettings.tsx
+#: src/components/settings/veridian_mailbox_labels.ts
 msgid "STARTTLS"
-msgstr ""
+msgstr "STARTTLS"
 
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "STARTTLS required"
@@ -12172,6 +12675,10 @@ msgstr "Estat de subscripció"
 msgid "Subscription status updated successfully"
 msgstr "Estat de subscripció actualitzat correctament"
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Succeeded"
+msgstr "Correcte"
+
 #: src/components/contacts/BulkActionProgressModal.tsx
 #: src/components/contacts/BulkUpdateDrawer.tsx
 msgid "Success"
@@ -12221,6 +12728,10 @@ msgstr "Canvieu al mode de vista prèvia per veure com es veurà el vostre corre
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx
 msgid "Switch to Preview mode to see the breakpoint effects. The edit mode shows the raw structure, but only preview mode compiles the MJML template and renders the responsive behavior properly."
 msgstr "Canvieu al mode de vista prèvia per veure els efectes del punt de ruptura. El mode d'edició mostra l'estructura en brut, però només el mode de vista prèvia compila la plantilla MJML i renderitza correctament el comportament responsiu."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Switched off. Nothing can connect with it until you re-enable it."
+msgstr "Desactivat. Res no s'hi pot connectar fins que el reactiveu."
 
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "System Fonts"
@@ -12396,6 +12907,7 @@ msgstr ""
 #: src/components/broadcasts/GlobalFeedSettings.tsx
 #: src/components/broadcasts/RecipientFeedSettings.tsx
 #: src/components/sending_profiles/veridian_profile_card.tsx
+#: src/components/settings/veridian_mailbox_check.tsx
 #: src/pages/TransactionalNotificationsPage.tsx
 msgid "Test"
 msgstr "Provar"
@@ -12534,6 +13046,10 @@ msgstr "El/La"
 msgid "The action failed"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The address and password are accepted."
+msgstr "L'adreça i la contrasenya són acceptades."
+
 #: src/components/settings/SystemSettingsDrawer.tsx
 msgid "The API endpoint has changed. After restart, the console will be available at:"
 msgstr ""
@@ -12643,6 +13159,10 @@ msgstr ""
 msgid "The inbox is temporarily unavailable"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "The link works until {until}."
+msgstr "L'enllaç funciona fins a les {until}."
+
 #: src/components/mail/veridian_mail_dsn_card.tsx
 msgid "The mail could not be delivered for now"
 msgstr ""
@@ -12651,6 +13171,10 @@ msgstr ""
 #: src/components/mail/veridian_mail_dsn_card.tsx
 msgid "The mail was not delivered"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The mailbox service is not answering. Try again in a moment."
+msgstr "El servei de bústies no respon. Torneu-ho a provar d'aquí a un moment."
 
 #: src/components/prospection/veridian_transactional_watch.tsx
 #: src/components/prospection/veridian_transactional_watch.tsx
@@ -12668,6 +13192,18 @@ msgstr ""
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "The next attempt and the recorded reason are cleared. Nothing is deleted and no attempt is consumed."
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The password is not accepted: paste it again exactly, or create a new access if it is lost."
+msgstr "La contrasenya no és acceptada: enganxeu-la de nou exactament, o creeu un accés nou si l'heu perduda."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The port is right."
+msgstr "El port és correcte."
+
+#: src/components/settings/veridian_mailbox_attempts.tsx
+msgid "the port shown in the setup steps"
+msgstr "el port indicat als passos de configuració"
 
 #: src/components/settings/GeneralSettings.tsx
 msgid "The primary language for template content. Translations are stored for other languages."
@@ -12704,6 +13240,10 @@ msgstr ""
 msgid "The rotation switches to the other profiles. Queued messages are kept."
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The security setting is right."
+msgstr "L'ajust de seguretat és correcte."
+
 #: src/components/segment/button_upsert.tsx
 msgid "The segment has been created!"
 msgstr "El segment s'ha creat!"
@@ -12719,6 +13259,14 @@ msgstr "El fitxer seleccionat"
 #: src/pages/SendQueuePage.tsx
 msgid "The send queue is empty"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The sending profile is active."
+msgstr "El perfil d'enviament està actiu."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The sending profile is paused or removed: resume it in Sending profiles."
+msgstr "El perfil d'enviament està en pausa o eliminat: represeu-lo a Perfils d'enviament."
 
 #: src/components/mail/veridian_mail_labels.ts
 msgid "The sending rules do not allow this mail right now."
@@ -12743,6 +13291,10 @@ msgstr ""
 #: src/components/mail/veridian_mail_labels.ts
 msgid "The server is not ready. Retry in a moment."
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The server name is right."
+msgstr "El nom del servidor és correcte."
 
 #: src/components/prospection/veridian_prospection_rejections.tsx
 msgid "The server refused the message for policy reasons (5.7.x: spam filter, reputation, authentication). Dated on the send date."
@@ -12796,6 +13348,14 @@ msgstr "L'URL on enviar la sol·licitud POST"
 msgid "The user_metadata field in Supabase will be saved to this custom JSON field"
 msgstr "El camp user_metadata de Supabase es desarà en aquest camp JSON personalitzat"
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The username is right."
+msgstr "El nom d'usuari és correcte."
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "The username is your whole address."
+msgstr "El nom d'usuari és la vostra adreça sencera."
+
 #~ msgid "The value must be at least 1"
 #~ msgstr ""
 
@@ -12806,6 +13366,14 @@ msgstr ""
 #: src/components/settings/WebhookCard.tsx
 msgid "The webhook will stop receiving events."
 msgstr "El webhook deixarà de rebre esdeveniments."
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "The workspace (shared mailbox or tool)"
+msgstr "L'espai de treball (bústia compartida o eina)"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "The workspace (shared)"
+msgstr "L'espai de treball (compartit)"
 
 #: src/components/file_manager/buttonSettings.tsx
 msgid "The workspace settings have been updated!"
@@ -12839,6 +13407,34 @@ msgstr "Aquests paràmetres s'afegeixen automàticament a l'URL de la difusió. 
 msgid "This .eml was reconstructed from the stored rendering: it is not the message byte for byte."
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "This access can send."
+msgstr "Aquest accés pot enviar."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "This access is closed or switched off: re-enable it, or create a new one."
+msgstr "Aquest accés està tancat o desactivat: reactiveu-lo o creeu-ne un de nou."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "This access is open."
+msgstr "Aquest accés està obert."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "This access is read only: create an access that can send to send from your app."
+msgstr "Aquest accés és només de lectura: creeu un accés que pugui enviar per enviar des de l'aplicació."
+
+#: src/components/settings/veridian_mailbox_check.tsx
+msgid "This access is read only: only receiving is checked."
+msgstr "Aquest accés és només de lectura: només es comprova la recepció."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "This access no longer exists. Refresh the page."
+msgstr "Aquest accés ja no existeix. Actualitzeu la pàgina."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "This access works: apps can connect with it."
+msgstr "Aquest accés funciona: les aplicacions s'hi poden connectar."
+
 #: src/components/automations/AutomationCard.tsx
 #: src/components/contacts/DeleteContactModal.tsx
 #: src/components/settings/DeleteWorkspace.tsx
@@ -12866,6 +13462,10 @@ msgstr "Aquesta acció eliminarà permanentment {0} contacte(s)"
 #: src/components/contacts/BulkUpdateDrawer.tsx
 msgid "This action will unsubscribe {0} contact(s)"
 msgstr "Aquesta acció cancel·larà la subscripció de {0} contacte(s)"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "This address already has the maximum number of accesses. Revoke one you no longer use."
+msgstr "Aquesta adreça ja té el nombre màxim d'accessos. Reviqueu-ne un que ja no utilitzeu."
 
 #: src/components/email_builder/blocks/MjTitleBlock.tsx
 msgid "This appears in browser tabs when viewing the email in a web browser and in some email clients. It's typically the same as or related to your email subject line."
@@ -12963,6 +13563,10 @@ msgstr "Aquesta notificació està gestionada per una integració i la plantilla
 msgid "This overwrites your current cold outreach values with the preset values. Nothing is saved until you click Save."
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "This password is shown only once."
+msgstr "Aquesta contrasenya només es mostra una vegada."
+
 #: src/components/email_builder/blocks/MjSectionBlock.tsx
 msgid "This section is empty. Add columns or groups to display content."
 msgstr "Aquesta secció està buida. Afegiu columnes o grups per mostrar contingut."
@@ -13022,6 +13626,14 @@ msgstr "Això establirà el valor a NULL. N'esteu segur?"
 #: src/components/email_builder/blocks/MjWrapperBlock.tsx
 msgid "This wrapper has no sections. Add a section to display content."
 msgstr "Aquest contenidor no té seccions. Afegiu una secció per mostrar contingut."
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Three things to get right"
+msgstr "Tres coses que cal respectar"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Thunderbird"
+msgstr "Thunderbird"
 
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "Thursday"
@@ -13149,6 +13761,10 @@ msgstr ""
 msgid "To add an image to an email, simply paste the address (URL) of an image that is already online: no storage is needed."
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_check.tsx
+msgid "To change"
+msgstr "Per canviar"
+
 #: src/components/reconcile/veridian_reconcile_finding_card.tsx
 #: src/components/reconcile/veridian_reconcile_page.tsx
 msgid "To fix"
@@ -13220,6 +13836,10 @@ msgstr ""
 #: src/components/mail/veridian_mail_labels.ts
 msgid "Too many open streams"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Too many tries in a short time. Wait a minute, then try again."
+msgstr "Massa intents en poc temps. Espereu un minut i torneu-ho a provar."
 
 #: src/components/settings/Integrations.tsx
 msgid "Tools"
@@ -13349,6 +13969,10 @@ msgstr "Transparent"
 msgid "Transport verified"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Trash"
+msgstr "Paperera"
+
 #: src/components/settings/WebhooksSettings.tsx
 msgid "Trial"
 msgstr "Prova"
@@ -13376,6 +14000,10 @@ msgstr ""
 #: src/components/prospection/veridian_prospection_reputation.tsx
 msgid "Triggering rate"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "Try again"
+msgstr "Torna-ho a provar"
 
 #: src/pages/TemplatesPage.tsx
 msgid "Try selecting a different category or"
@@ -13418,6 +14046,14 @@ msgstr "el tipus {rendererType} no està implementat"
 #: src/components/contacts/BulkActionsBar.tsx
 msgid "Type {selectedCount} to confirm:"
 msgstr ""
+
+#: src/components/settings/veridian_mailbox_check.tsx
+msgid "Type here what you entered in your app. We compare it with what is expected and tell you what to change."
+msgstr "Escriviu aquí el que heu introduït a l'aplicació. El comparem amb el que s'espera i us diem què cal canviar."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Type your whole address ({address}) as the username."
+msgstr "Escriviu la vostra adreça sencera ({address}) com a nom d'usuari."
 
 #: src/components/settings/GeneralSettings.tsx
 #: src/components/timeline/ContactTimeline.tsx
@@ -13797,6 +14433,10 @@ msgstr "Utilitzeu el nom de la font en elements de text:"
 msgid "Use the inherited value"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Use the same password for receiving and for sending."
+msgstr "Utilitzeu la mateixa contrasenya per a rebre i per a enviar."
+
 #: src/components/email_builder/ui/AddBlockPopover.tsx
 msgid "Use the save button in the block toolbar to save blocks"
 msgstr "Utilitzeu el botó de desar a la barra d'eines del bloc per desar blocs"
@@ -13856,6 +14496,9 @@ msgstr "Camp de metadades d'usuari"
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
+#: src/components/settings/veridian_mailbox_check.tsx
+#: src/components/settings/veridian_mailbox_create.tsx
+#: src/components/settings/veridian_mailbox_setup.tsx
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "Username"
 msgstr "Nom d'usuari"
@@ -14149,6 +14792,10 @@ msgstr "Benvingut a l'Editor de correu!"
 msgid "Welcome, {0}"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "What can it do?"
+msgstr "Què pot fer?"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "What each sending infrastructure (an email integration: its IP / SMTP relay + addresses) overrides on top of the workspace defaults."
@@ -14189,6 +14836,14 @@ msgstr "Quan està habilitat, la creació d'usuari es rebutjarà si es detecta u
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "When you select a block, its settings appear here. Modify colors, text, spacing, alignment, and other properties to customize your email design."
 msgstr "Quan seleccioneu un bloc, la seva configuració apareix aquí. Modifiqueu colors, text, espaiat, alineació i altres propietats per personalitzar el disseny del vostre correu."
+
+#: src/components/settings/veridian_mailbox_setup.tsx
+msgid "Which app do you use?"
+msgstr "Quina aplicació utilitzeu?"
+
+#: src/components/settings/veridian_mailbox_create.tsx
+msgid "Who is it for?"
+msgstr "Per a qui és?"
 
 #: src/pages/SendQueuePage.tsx
 msgid "Why mails are waiting, and what the last decision was for each."
@@ -14419,6 +15074,14 @@ msgstr ""
 msgid "You can only upload CSV files!"
 msgstr "Només podeu pujar fitxers CSV!"
 
+#: src/components/settings/veridian_mailbox_access.tsx
+msgid "You cannot manage mailbox access"
+msgstr "No podeu gestionar els accessos a les bústies"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "You do not have the right to manage mailbox access. Ask the workspace owner."
+msgstr "No teniu permís per gestionar els accessos a les bústies. Demaneu-ho al propietari de l'espai de treball."
+
 #: src/components/broadcasts/SendOrScheduleModal.tsx
 msgid "You don't have a marketing email provider configured. Please set up an email provider in your workspace settings to send broadcasts."
 msgstr "No teniu cap proveïdor de correu de màrqueting configurat. Si us plau, configureu un proveïdor de correu a la configuració de l'espai de treball per enviar difusions."
@@ -14529,6 +15192,10 @@ msgstr ""
 msgid "Your session has expired"
 msgstr ""
 
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Your session has expired. Sign in again."
+msgstr "La vostra sessió ha caducat. Torneu a iniciar la sessió."
+
 #: src/components/veridian_paywall_modal.tsx
 #: src/components/veridian_paywall_modal.tsx
 msgid "Your subscription is no longer active. Manage your billing at Veridian to restore access."
@@ -14553,6 +15220,14 @@ msgstr "El correu de l'API del vostre espai de treball (el correu associat a la 
 #: src/components/transactional/ApiCommandModal.tsx
 msgid "Your workspace API key"
 msgstr "La clau API del vostre espai de treball"
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Your workspace is not suspended."
+msgstr "El vostre espai de treball no està suspès."
+
+#: src/components/settings/veridian_mailbox_labels.ts
+msgid "Your workspace is suspended, so sending is stopped: check your plan."
+msgstr "El vostre espai de treball està suspès, per tant l'enviament està aturat: reviseu el vostre pla."
 
 #. placeholder {0}: deletedAtStr || t`(unknown date)`
 #: src/components/veridian_soft_delete_banner.tsx

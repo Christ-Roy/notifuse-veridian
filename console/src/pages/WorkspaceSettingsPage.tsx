@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from '@tanstack/react-router'
-import { Layout } from 'antd'
+import { Button, Drawer, Grid, Layout } from 'antd'
+import { MenuOutlined } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 import { workspaceService } from '../services/api/workspace'
 import { Workspace, WorkspaceMember } from '../services/api/types'
@@ -15,6 +16,7 @@ import { DeleteWorkspaceSection } from '../components/settings/DeleteWorkspace'
 import { SettingsSidebar, SettingsSection } from '../components/settings/SettingsSidebar'
 // === Veridian patch === section Plan ajoutée au sidebar settings.
 import { VeridianPlanSettings } from '../components/settings/veridian_plan_settings'
+import { VeridianMailboxAccess } from '../components/settings/veridian_mailbox_access'
 import { VeridianColdOutreachSettings } from '../components/settings/veridian_cold_outreach_settings'
 
 const { Sider, Content } = Layout
@@ -34,11 +36,16 @@ export function WorkspaceSettingsPage() {
   const [canManageApiKeys, setCanManageApiKeys] = useState(false)
   const { refreshWorkspaces, user, workspaces } = useAuth()
   const navigate = useNavigate()
+  // Téléphone : le menu des réglages passe dans un tiroir, la page prend toute la largeur (marges de 16 px).
+  const screens = Grid.useBreakpoint()
+  const isMobile = screens.md === false
+  const [menuOpen, setMenuOpen] = useState(false)
 
   // Valid settings sections
   const validSections: SettingsSection[] = [
     'team',
     'integrations',
+    'mailboxes',
     'webhooks',
     'custom-fields',
     'general',
@@ -106,6 +113,7 @@ export function WorkspaceSettingsPage() {
   }
 
   const handleSectionChange = (newSection: SettingsSection) => {
+    setMenuOpen(false)
     navigate({
       to: '/console/workspace/$workspaceId/settings/$section',
       params: { workspaceId, section: newSection }
@@ -133,6 +141,9 @@ export function WorkspaceSettingsPage() {
             isOwner={isOwner}
           />
         )
+      case 'mailboxes':
+        // === Veridian patch === accès de boîte (IMAP, SMTP) : fiche 84.
+        return <VeridianMailboxAccess workspaceId={workspaceId} workspace={workspace} isOwner={isOwner} />
       case 'webhooks':
         return workspace ? <WebhooksSettings workspaceId={workspace.id} /> : null
       case 'custom-fields':
@@ -174,6 +185,35 @@ export function WorkspaceSettingsPage() {
     }
   }
 
+  const sidebar = (
+    <SettingsSidebar activeSection={activeSection} onSectionChange={handleSectionChange} isOwner={isOwner} />
+  )
+
+  if (isMobile) {
+    return (
+      <Layout style={{ minHeight: 'calc(100vh - 48px)' }}>
+        <Content>
+          <div style={{ padding: '12px 16px 0' }}>
+            <Button icon={<MenuOutlined />} onClick={() => setMenuOpen(true)}>
+              {t`Settings`}
+            </Button>
+          </div>
+          <Drawer
+            open={menuOpen}
+            onClose={() => setMenuOpen(false)}
+            placement="left"
+            width="min(280px, 85vw)"
+            styles={{ body: { padding: 0 } }}
+            closable={false}
+          >
+            {sidebar}
+          </Drawer>
+          <div style={{ padding: 16, maxWidth: '100%', overflowWrap: 'anywhere' }}>{renderSection()}</div>
+        </Content>
+      </Layout>
+    )
+  }
+
   return (
     <Layout style={{ minHeight: 'calc(100vh - 48px)' }}>
       <Sider
@@ -183,11 +223,7 @@ export function WorkspaceSettingsPage() {
           overflow: 'auto'
         }}
       >
-        <SettingsSidebar
-          activeSection={activeSection}
-          onSectionChange={handleSectionChange}
-          isOwner={isOwner}
-        />
+        {sidebar}
       </Sider>
       <Layout>
         <Content>

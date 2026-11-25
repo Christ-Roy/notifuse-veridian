@@ -104,12 +104,12 @@ async function provisionTenant(tenantId: string, ownerEmail: string, plan = 'fre
 // Genere un magic link pour un user d'un workspace via api_key tenant,
 // puis suit le auto-login URL pour extraire le JWT du user humain
 // (depuis le HTML autoLoginPageTemplate qui set localStorage.auth_token).
-async function exchangeMagicLinkForUserJWT(apiKey: string, userEmail: string, hubUserId?: string): Promise<string> {
+async function exchangeMagicLinkForUserJWT(apiKey: string, userEmail: string, hubUserId = hubId(userEmail)): Promise<string> {
   const magicResp = await bearerFetch(
     '/api/workspaces.generateMagicLink',
     'POST',
     apiKey,
-    { user_email: userEmail, ...(hubUserId ? { hub_user_id: hubUserId } : {}) },
+    { user_email: userEmail, hub_user_id: hubUserId },
   );
   // Lire body une seule fois (.text() puis JSON.parse).
   const magicRaw = await magicResp.text();

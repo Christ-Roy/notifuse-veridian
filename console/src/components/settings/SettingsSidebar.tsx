@@ -8,6 +8,7 @@ import {
   CreditCardOutlined,
   SendOutlined,
   RobotOutlined,
+  MailOutlined,
   ToolOutlined
 } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
@@ -15,6 +16,7 @@ import { useLingui } from '@lingui/react/macro'
 export type SettingsSection =
   | 'team'
   | 'integrations'
+  | 'mailboxes'
   | 'webhooks'
   | 'custom-fields'
   | 'general'
@@ -69,6 +71,13 @@ export function SettingsSidebar({ activeSection, onSectionChange, isOwner }: Set
         </svg>
       ),
       label: t`Integrations`
+    },
+    {
+      // === Veridian patch === accès de boîte (IMAP, SMTP) : visible de tous, jamais sous « Avancé ».
+      // Cf. veridian_mailbox_access.tsx (fiche 84).
+      key: 'mailboxes',
+      icon: <MailOutlined />,
+      label: t`Mailbox access`
     },
     {
       key: 'webhooks',

@@ -386,6 +386,30 @@ func TestActivate_ParLotsSansLesBloques(t *testing.T) {
 	res = ActivateResult{}
 	require.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", map[string]any{"workspace_id": "ws", "automation_id": "seq", "emails": []string{"VU@f.fr", "stop@d.fr", "inconnu@z.fr"}, "include_contacted": true}, &res))
 	assert.Equal(t, []string{"vu@f.fr"}, res.Emails)
+	assert.Equal(t, map[string]string{"vu@f.fr": "contacted", "stop@d.fr": "desinscrit"}, res.States, "l'état d'AVANT, adresse par adresse ; une adresse sans fiche n'y est pas")
+
+	// Les états de chaque règle, en simulation ; au-delà de StatesMax adresses, ou par liste, ils ne sont pas rendus.
+	ask := map[string]any{"workspace_id": "ws", "automation_id": "seq", "dry_run": true, "emails": []string{"un@a.fr", "reponse@e.fr", "ailleurs@g.fr", "dedans@h.fr", "mort@j.fr", "attente@k.fr"}}
+	res = ActivateResult{}
+	require.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", ask, &res))
+	assert.Equal(t, map[string]string{"un@a.fr": "already", "reponse@e.fr": "replied", "ailleurs@g.fr": "in_sequence", "dedans@h.fr": "already", "mort@j.fr": "rebond", "attente@k.fr": "ok"}, res.States)
+	many := []string{"un@a.fr"}
+	for i := 0; i < StatesMax; i++ {
+		many = append(many, fmt.Sprintf("x%d@z.fr", i))
+	}
+	ask["emails"] = many
+	res = ActivateResult{}
+	require.Equal(t, 200, b.call("POST", "/api/veridian/reservoir.activate", ask, &res))
+	assert.Nil(t, res.States)
+}
+
+func TestStore_States(t *testing.T) {
+	b := newBench(t)
+	b.reserve("un@a.fr")
+	b.automation("seq", "sequence", onList("sequence"))
+	got, err := b.svc.Store.States(context.Background(), "ws", []string{"un@a.fr", "absent@z.fr"}, "seq")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"un@a.fr": "ok"}, got)
 }
 
 func TestActivate_SequenceSansListeEtParSegment(t *testing.T) {

@@ -352,6 +352,18 @@ func (s *Store) Inspect(ctx context.Context, ws string, src Source, automationID
 	return p, rows.Err()
 }
 
+// States rend l'état de chaque adresse pour une séquence (mêmes règles qu'Inspect). Une adresse sans fiche n'y figure pas.
+func (s *Store) States(ctx context.Context, ws string, emails []string, automationID string) (map[string]string, error) {
+	db, err := s.WS.GetConnection(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	q, arg := poolSQL(Source{Emails: emails})
+	out := map[string]string{}
+	err = scan(ctx, db, func(v []string) { out[v[0]] = v[1] }, 2, fmt.Sprintf(stateCTE, q)+` SELECT email, state FROM st`, arg, automationID)
+	return out, err
+}
+
 // Pick choisit les contacts à activer : le meilleur score d'abord (custom_number_1), puis le plus ancien.
 func (s *Store) Pick(ctx context.Context, ws string, src Source, automationID string, limit int, includeContacted bool) ([]string, error) {
 	db, err := s.WS.GetConnection(ctx, ws)

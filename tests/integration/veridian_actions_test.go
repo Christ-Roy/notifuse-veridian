@@ -169,6 +169,52 @@ func TestVeridianActions_EnvoyerVersMail(t *testing.T) {
 	assert.Equal(t, 409, st, m)
 	assert.Equal(t, "would_trigger", m["detail"].(map[string]any)["code"])
 
+	// Inscrire à une séquence depuis le CRM (sa propre portée) : neuf et existant entrent, désinscrit et « ne plus contacter » jamais.
+	crm := func(c *mcp.Claims) { c.Scope = "notifuse:sequences.inscrire notifuse:contacts.ecrire"; c.Act.Subject = "app:crm" }
+	_, err = wsDB.Exec(`DELETE FROM automations WHERE id='seq'`)
+	require.NoError(t, err)
+	_, err = wsDB.Exec(`INSERT INTO automations (id, workspace_id, name, status, list_id, trigger_config, root_node_id, nodes) VALUES
+		('relance',$1,'Relance','live',$2,'{"event_kind":"email.opened","frequency":"once"}','n1','[{"id":"n1","type":"delay","config":{"duration":5,"unit":"days"},"position":{"x":0,"y":0}}]'),
+		('brouillon',$1,'Brouillon','draft','','{"event_kind":"email.opened","frequency":"once"}','n1','[]')`, ws.ID, list.ID)
+	require.NoError(t, err)
+	st, m = post("/api/veridian/actions/sequences.lister", token(crm), "", map[string]any{})
+	require.Equal(t, 200, st, m)
+	can := map[string]any{}
+	for _, x := range m["resultat"].(map[string]any)["sequences"].([]any) {
+		can[x.(map[string]any)["id"].(string)] = x.(map[string]any)["inscriptible"]
+	}
+	assert.Equal(t, map[string]any{"relance": true, "brouillon": false}, can)
+
+	const enrollPath = "/api/veridian/actions/sequences.inscrire"
+	people := []map[string]any{{"email": "neuf@fiche-crm.test", "first_name": "Ana"}, {"email": "contact@entreprise-01.test"}, {"email": out.Email}, {"email": "stop@fiche-crm.test", "ne_plus_contacter": true}}
+	enroll := map[string]any{"sequence_id": "relance", "contacts": people}
+	in := `SELECT COUNT(*) FROM contact_automations WHERE automation_id='relance'`
+	st, _ = post(enrollPath, token(nil), "geste-s000", enroll)
+	assert.Equal(t, 403, st, "verser un contact ne donne pas le droit d'inscrire")
+	st, m = post(enrollPath, token(crm), "", map[string]any{"sequence_id": "relance", "contacts": people, "dry_run": true})
+	require.Equal(t, 200, st, m)
+	assert.EqualValues(t, 2, m["resultat"].(map[string]any)["inscrits"], m)
+	assert.Equal(t, 0, count(in))
+	assert.Equal(t, 0, count(`SELECT COUNT(*) FROM contacts WHERE email='neuf@fiche-crm.test'`), "simulation : aucune fiche")
+	for i := 0; i < 2; i++ {
+		st, m = post(enrollPath, token(crm), "geste-s001", enroll)
+		require.Equal(t, 200, st, m)
+		r := m["resultat"].(map[string]any)
+		assert.EqualValues(t, 2, r["inscrits"], m)
+		assert.Equal(t, map[string]any{"desinscrit": float64(1), "ne_plus_contacter": float64(1)}, r["skipped"])
+		assert.Equal(t, i == 1, m["rejoue"])
+		assert.Equal(t, 2, count(in))
+	}
+	st, m = post(enrollPath, token(crm), "geste-s002", enroll)
+	require.Equal(t, 200, st, m)
+	assert.EqualValues(t, 2, m["resultat"].(map[string]any)["skipped"].(map[string]any)["deja_dans_la_sequence"], m)
+	assert.Equal(t, 2, count(in), "clé neuve, mêmes personnes : personne n'entre deux fois")
+	assert.Equal(t, 0, count(`SELECT COUNT(*) FROM contacts WHERE email='stop@fiche-crm.test'`))
+	assert.Equal(t, 1, count(`SELECT COUNT(*) FROM contact_lists WHERE email='desinscrit@exemple-a.test' AND status='unsubscribed'`), "le désinscrit le reste")
+	st, m = post(enrollPath, token(crm), "geste-s003", map[string]any{"sequence_id": "brouillon", "contacts": people[:1]})
+	assert.Equal(t, 400, st, m)
+	assert.Equal(t, "refus_de_l_app", m["error"])
+
 	// Retiré de l'espace : refus à la demande suivante.
 	_, err = sys.Exec(`DELETE FROM user_workspaces WHERE user_id=$1 AND workspace_id=$2`, user.ID, ws.ID)
 	require.NoError(t, err)

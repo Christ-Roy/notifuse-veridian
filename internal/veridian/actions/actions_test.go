@@ -81,6 +81,10 @@ type fakeStore struct {
 	resolved   []string
 	origins    []Origin
 	released   int
+
+	enrolled    int
+	enrolledErr error
+	counted     []string
 }
 
 func (f *fakeStore) ConsumeJTI(_ context.Context, jti string) (bool, error) {
@@ -110,6 +114,10 @@ func (f *fakeStore) Begin(_ context.Context, ws, key, _, _ string, o Origin) (js
 func (f *fakeStore) Finish(_ context.Context, ws, app, key string, r json.RawMessage) error {
 	f.done[ws+app+key] = r
 	return nil
+}
+func (f *fakeStore) EnrolledToday(_ context.Context, ws, app, key, u string) (int, error) {
+	f.counted = append(f.counted, ws+"|"+app+"|"+key+"|"+u)
+	return f.enrolled, f.enrolledErr
 }
 func (f *fakeStore) Release(context.Context, string, string, string) error { f.released++; return nil }
 
@@ -374,19 +382,29 @@ func TestIdempotence(t *testing.T) {
 }
 
 func TestCatalogue_AucuneActionNEnvoie(t *testing.T) {
-	names := make([]string, 0, len(catalogue))
+	want := map[string]string{"contacts.importer": "notifuse:contacts.ecrire", "listes.lister": "notifuse:contacts.ecrire", "listes.creer": "notifuse:contacts.ecrire",
+		"sequences.lister": "notifuse:contacts.ecrire", "sequences.inscrire": "notifuse:sequences.inscrire"}
+	got := map[string]string{}
 	for n, a := range catalogue {
-		names = append(names, n)
-		assert.Equal(t, "notifuse:contacts.ecrire", a.scope, "portée du registre du Hub")
+		got[n] = a.scope
 		assert.Equal(t, []string{"app:prospection", "app:crm"}, a.apps)
 	}
-	assert.ElementsMatch(t, []string{"contacts.importer", "listes.lister", "listes.creer"}, names, "une action neuve se relit ici")
-	e := newEnv(t)
-	for n, b := range map[string]string{"contacts.importer": body, "listes.lister": "", "listes.creer": `{"id":"l9","name":"Lot"}`} {
-		e.post(n, e.hub.token(t, nil), "cle-"+n, b)
+	assert.Equal(t, want, got, "une action neuve se relit ici, avec sa portée du registre du Hub")
+	// Aucune action n'envoie : la seule qui fasse partir du courrier passe par reservoir.activate, dont les portes d'envoi décident ensuite.
+	allowed := map[string][]string{
+		"contacts.importer":  {"POST /api/veridian/contacts.intake"},
+		"listes.lister":      {"GET /api/veridian/reservoir.lists"},
+		"listes.creer":       {"GET /api/lists.get", "POST /api/lists.create"},
+		"sequences.lister":   {"GET /api/automations.list"},
+		"sequences.inscrire": {"POST /api/veridian/contacts.intake", "POST /api/veridian/reservoir.activate"},
 	}
-	for _, p := range e.d.paths {
-		assert.Contains(t, []string{"POST /api/veridian/contacts.intake", "GET /api/veridian/reservoir.lists", "GET /api/lists.get", "POST /api/lists.create"}, p)
+	for n, b := range map[string]string{"contacts.importer": body, "listes.lister": "", "listes.creer": `{"id":"l9","name":"Lot"}`, "sequences.lister": "", "sequences.inscrire": enrollBody} {
+		e := newEnv(t)
+		e.post(n, e.hub.token(t, func(c *mcp.Claims) { c.Scope += " notifuse:sequences.inscrire" }), "cle-"+n, b)
+		require.NotEmpty(t, e.d.paths, n)
+		for _, p := range e.d.paths {
+			assert.Contains(t, allowed[n], p, n)
+		}
 	}
 }
 

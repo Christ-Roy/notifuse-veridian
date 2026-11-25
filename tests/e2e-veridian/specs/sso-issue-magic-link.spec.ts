@@ -111,7 +111,7 @@ test.describe('@regression sso-issue-magic-link — POST /api/sso/issue-magic-li
     const tid = newTid();
     provisioned.push(tid);
     const email = `${tid}@sso.test`;
-    const hubUserID = `hub-user-${tid}`;
+    const hubUserID = hubId(email);
 
     // Provision un tenant frais (user owner cree implicitement)
     await provisionTenant(tid, email, 'free');
@@ -141,7 +141,7 @@ test.describe('@regression sso-issue-magic-link — POST /api/sso/issue-magic-li
     const tid = newTid();
     provisioned.push(tid);
     const email = `${tid}@sso.test`;
-    const hubUserID = `hub-user-${tid}`;
+    const hubUserID = hubId(email);
 
     await provisionTenant(tid, email, 'pro');
 
@@ -403,7 +403,7 @@ test.describe('@regression sso-issue-magic-link — POST /api/sso/issue-magic-li
     await provisionTenant(tid2, email, 'pro');
 
     const r = await hmacFetch('/api/sso/issue-magic-link', 'POST', {
-      hub_user_id: `hub-user-multi-${email}`,
+      hub_user_id: hubId(email),
       email,
     });
     const raw = await r.text();
@@ -436,7 +436,7 @@ test.describe('@regression sso-issue-magic-link — POST /api/sso/issue-magic-li
     const tid = newTid();
     provisioned.push(tid);
     const email = `${tid}@sso.test`;
-    const hubUserID = `hub-user-${tid}`;
+    const hubUserID = hubId(email);
 
     await provisionTenant(tid, email, 'pro');
 
@@ -483,7 +483,7 @@ test.describe('@regression sso-issue-magic-link — POST /api/sso/issue-magic-li
     const tid = newTid();
     provisioned.push(tid);
     const email = `${tid}@oauth-bounce.test`;
-    const hubUserID = `hub-uuid-${tid}`;
+    const hubUserID = hubId(email);
 
     // Step 0 (setup) : user existe deja dans Notifuse (provision = owner workspace)
     await provisionTenant(tid, email, 'pro');

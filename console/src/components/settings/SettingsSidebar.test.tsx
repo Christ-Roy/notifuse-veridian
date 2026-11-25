@@ -41,4 +41,15 @@ describe('SettingsSidebar : section Avance repliee', () => {
     render(<SettingsSidebar activeSection="webhooks" onSectionChange={() => {}} isOwner />)
     expect(screen.getByText('Event notifications (webhooks)')).toBeInTheDocument()
   })
+
+  it('Mailbox access est visible de tous, juste après Integrations, jamais sous Advanced', () => {
+    const picked: string[] = []
+    const { container } = render(
+      <SettingsSidebar activeSection="team" onSectionChange={(s) => picked.push(s)} isOwner={false} />
+    )
+    const labels = Array.from(container.querySelectorAll('.ant-menu-title-content')).map((n) => n.textContent)
+    expect(labels.indexOf('Mailbox access')).toBe(labels.indexOf('Integrations') + 1)
+    fireEvent.click(screen.getByText('Mailbox access'))
+    expect(picked).toEqual(['mailboxes'])
+  })
 })

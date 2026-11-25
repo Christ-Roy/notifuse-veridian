@@ -10,6 +10,7 @@
 //
 // Crée 1 tenant éphémère (cleanup afterAll). NON `@prod-safe` (side-effect).
 
+import { hubId } from '../hub-id'
 import { test, expect } from '@playwright/test'
 import {
   NOTIFUSE_URL,
@@ -64,7 +65,7 @@ test.describe.serial('Console — parcours authentification', () => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${provisioning.api_key}`
       },
-      body: JSON.stringify({ user_email: ownerEmail })
+      body: JSON.stringify({ user_email: ownerEmail, hub_user_id: hubId(ownerEmail) })
     })
     expect(res.status).toBe(200)
     const data = await res.json()

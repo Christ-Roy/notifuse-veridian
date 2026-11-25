@@ -134,7 +134,7 @@ test.describe.serial('Notifuse saasification end-to-end', () => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${provisioningResponse.api_key}`,
       },
-      body: JSON.stringify({ user_email: ownerEmail }),
+      body: JSON.stringify({ user_email: ownerEmail, hub_user_id: hubId(ownerEmail) }),
     });
     expect(res.status).toBe(200);
     const data = await res.json();

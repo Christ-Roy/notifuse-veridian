@@ -115,7 +115,7 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
       '/api/workspaces.generateMagicLink',
       'POST',
       apiKey,
-      { user_email: aliceEmail },
+      { user_email: aliceEmail, hub_user_id: hubId(aliceEmail) },
     );
     expect(magicResp.status).toBe(200);
     const magic = await magicResp.json();
