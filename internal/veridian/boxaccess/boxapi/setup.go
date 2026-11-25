@@ -143,6 +143,16 @@ func securityOf(e *Endpoint) string {
 	return "ssl"
 }
 
+// wayFor : le réglage servi sur ce port, sinon le réglage conseillé.
+func wayFor(e *Endpoint, port int) Way {
+	for _, w := range e.Also {
+		if w.Port == port && port != e.Port {
+			return w
+		}
+	}
+	return Way{Port: e.Port, Security: securityOf(e)}
+}
+
 // test compare ce que la personne a saisi dans son application à ce qui marche, puis vérifie la porte et le mot de passe. Seule NOTRE porte est
 // jointe (celle de Connection), jamais l'adresse saisie.
 func (h *Handler) test(w http.ResponseWriter, r *http.Request) {
@@ -187,8 +197,9 @@ func (h *Handler) test(w http.ResponseWriter, r *http.Request) {
 		out = append(out, Check{Code: code, OK: ok, Expected: expected})
 	}
 	add("host", strings.EqualFold(strings.TrimSpace(q.Host), e.Host), e.Host)
-	add("port", q.Port == e.Port, strconv.Itoa(e.Port))
-	add("security", q.Security == securityOf(e), securityOf(e))
+	want := wayFor(e, q.Port)
+	add("port", q.Port == want.Port, strconv.Itoa(want.Port))
+	add("security", q.Security == want.Security, want.Security)
 	add("username", boxaccess.NormalizeAddress(q.Username) == addr, addr)
 	if derr := h.door(ctx, q.Via, e); derr != nil {
 		h.Log.WithFields(map[string]interface{}{"via": q.Via, "error": derr.Error()}).Warn("Box access test: door not reached")

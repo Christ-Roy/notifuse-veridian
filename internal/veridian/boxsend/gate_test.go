@@ -3,18 +3,24 @@ package boxsend
 import (
 	"bufio"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"net/smtp"
 	"strings"
 	"testing"
-
-	gosmtp "github.com/emersion/go-smtp"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
+	gosmtp "github.com/emersion/go-smtp"
 )
 
 func startGate(t *testing.T, s *Sender) string {
@@ -204,3 +210,95 @@ func TestGate_IPv6LimitedByPrefix(t *testing.T) {
 		t.Fatalf("autre /64 : %d, attendu 535", c)
 	}
 }
+
+func selfSigned(t *testing.T, name string) tls.Certificate {
+	t.Helper()
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl := &x509.Certificate{SerialNumber: big.NewInt(1), DNSNames: []string{name}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &k.PublicKey, k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: k}
+}
+
+// Soumission 587 : ni AUTH ni envoi avant STARTTLS, les mêmes règles après.
+func TestGate_ServeStartTLS(t *testing.T) {
+	f, s := bench()
+	rl := ratelimiter.NewRateLimiter()
+	rl.SetPolicy(LimitGateIP, GateTriesIP, GateWindow)
+	rl.SetPolicy(LimitGateBox, GateTriesBox, GateWindow)
+	t.Cleanup(rl.Stop)
+	g, err := NewGate(s, rl, "smtp.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.ServeStartTLS(ln); err == nil {
+		t.Fatal("587 servi sans avoir été préparé")
+	}
+	for _, tc := range []*tls.Config{nil, {}} {
+		if err := g.EnableStartTLS(tc); err == nil {
+			t.Fatal("587 sans certificat")
+		}
+	}
+	if err := g.EnableStartTLS(&tls.Config{Certificates: []tls.Certificate{selfSigned(t, "smtp.test")}, MinVersion: tls.VersionTLS12}); err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = g.ServeStartTLS(ln) }()
+	t.Cleanup(func() { _ = g.Shutdown(context.Background()) })
+	dial := func() *smtp.Client {
+		c, err := smtp.Dial(ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	c := dial()
+	if ok, _ := c.Extension("AUTH"); ok {
+		t.Fatal("AUTH annoncé avant TLS : le mot de passe passerait en clair")
+	}
+	if ok, _ := c.Extension("STARTTLS"); !ok {
+		t.Fatal("STARTTLS non annoncé")
+	}
+	if err := c.Auth(clearAuth{}); err == nil {
+		t.Fatal("AUTH accepté en clair")
+	}
+	if err := c.Mail("jc@boite.fr"); err == nil {
+		t.Fatal("envoi sans authentification")
+	}
+	c.Close()
+	c = dial()
+	defer c.Close()
+	if err := c.StartTLS(&tls.Config{ServerName: "smtp.test", InsecureSkipVerify: true}); err != nil { //nolint:gosec // certificat de test
+		t.Fatal(err)
+	}
+	if err := c.Auth(smtp.PlainAuth("", "jc@boite.fr", "bon", "127.0.0.1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Mail("jc@boite.fr"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Rcpt("p@client.fr"); err != nil {
+		t.Fatal(err)
+	}
+	w, _ := c.Data()
+	_, _ = w.Write(msg("jc@boite.fr", "To: p@client.fr\r\n"))
+	if err := w.Close(); err != nil || len(f.sent) != 1 {
+		t.Fatalf("%v %+v", err, f.sent)
+	}
+}
+
+// clearAuth : un client qui insiste sans TLS.
+type clearAuth struct{}
+
+func (clearAuth) Start(*smtp.ServerInfo) (string, []byte, error) {
+	return "PLAIN", []byte("\x00jc@boite.fr\x00bon"), nil
+}
+func (clearAuth) Next([]byte, bool) ([]byte, error) { return nil, nil }

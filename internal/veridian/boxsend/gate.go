@@ -2,6 +2,7 @@ package boxsend
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -42,6 +43,7 @@ type Gate struct {
 	snd  *Sender
 	lim  GateLimiter
 	smtp *smtp.Server
+	tls  *smtp.Server // soumission 587 : STARTTLS, nil tant qu'elle n'est pas demandée
 }
 
 // NewGate construit la porte.
@@ -50,14 +52,37 @@ func NewGate(snd *Sender, lim GateLimiter, hostname string) (*Gate, error) {
 		return nil, errors.New("porte SMTP des boîtes : dépendance manquante")
 	}
 	g := &Gate{snd: snd, lim: lim}
+	g.smtp = g.server(hostname)
+	g.smtp.AllowInsecureAuth = true // TLS déjà terminé par l'entrée publique
+	return g, nil
+}
+
+// EnableStartTLS prépare la soumission 587 : l'entrée publique laisse passer le TCP, c'est ici que le TLS se négocie. Sans STARTTLS, ni AUTH ni
+// envoi : le mot de passe ne passe jamais en clair.
+func (g *Gate) EnableStartTLS(tc *tls.Config) error {
+	if tc == nil || (len(tc.Certificates) == 0 && tc.GetCertificate == nil) {
+		return errors.New("porte SMTP des boîtes : STARTTLS sans certificat")
+	}
+	g.tls = g.server(g.smtp.Domain)
+	g.tls.TLSConfig = tc
+	return nil
+}
+
+// ServeStartTLS sert la soumission 587 sur l'écoute donnée.
+func (g *Gate) ServeStartTLS(ln net.Listener) error {
+	if g.tls == nil {
+		return errors.New("porte SMTP des boîtes : STARTTLS non préparé")
+	}
+	return g.tls.Serve(ln)
+}
+
+func (g *Gate) server(hostname string) *smtp.Server {
 	srv := smtp.NewServer(g)
 	srv.Domain = hostname
 	srv.ReadTimeout, srv.WriteTimeout = 2*time.Minute, 2*time.Minute
 	srv.MaxMessageBytes, srv.MaxRecipients = smtprelay.MaxMessageBytes, smtprelay.MaxRecipients
-	srv.AllowInsecureAuth = true // TLS déjà terminé par l'entrée publique
 	srv.ErrorLog = gateQuiet{}
-	g.smtp = srv
-	return g, nil
+	return srv
 }
 
 type gateQuiet struct{}
@@ -69,7 +94,13 @@ func (gateQuiet) Println(...interface{})        {}
 func (g *Gate) Serve(ln net.Listener) error { return g.smtp.Serve(ln) }
 
 // Shutdown laisse finir les sessions en cours.
-func (g *Gate) Shutdown(ctx context.Context) error { return g.smtp.Shutdown(ctx) }
+func (g *Gate) Shutdown(ctx context.Context) error {
+	err := g.smtp.Shutdown(ctx)
+	if g.tls != nil {
+		err = errors.Join(err, g.tls.Shutdown(ctx))
+	}
+	return err
+}
 
 // NewSession implémente smtp.Backend.
 func (g *Gate) NewSession(c *smtp.Conn) (smtp.Session, error) {

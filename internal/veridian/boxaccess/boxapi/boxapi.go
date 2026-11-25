@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +35,31 @@ type Endpoint struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	Security string `json:"security"`
+	// Also : autres réglages servis par la même porte (anciens ports gardés, STARTTLS) ; le test de connexion les admet.
+	Also []Way `json:"also,omitempty"`
+}
+
+// Way : un port et son mode (ssl ou starttls).
+type Way struct {
+	Port     int    `json:"port"`
+	Security string `json:"security"`
+}
+
+// ParseWays lit « 443/ssl,587/starttls ».
+func ParseWays(v string) ([]Way, error) {
+	var out []Way
+	for _, part := range strings.Split(v, ",") {
+		if part = strings.TrimSpace(part); part == "" {
+			continue
+		}
+		p, sec, _ := strings.Cut(part, "/")
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 1 || n > 65535 || (sec != "ssl" && sec != "starttls") {
+			return nil, fmt.Errorf("réglage %q invalide (port/ssl ou port/starttls)", part)
+		}
+		out = append(out, Way{Port: n, Security: sec})
+	}
+	return out, nil
 }
 
 // Connection : ce qu'un client mail doit saisir.

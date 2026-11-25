@@ -172,9 +172,24 @@ func TestTest_SaysWhatToChange(t *testing.T) {
 		change func(q *testRequest, s *memStore, h *Handler)
 		bad    map[string]string // code -> valeur attendue
 	}{
-		"tout bon":           {func(*testRequest, *memStore, *Handler) {}, nil},
-		"Ben":                {func(q *testRequest, _ *memStore, _ *Handler) { q.Security, q.Password = "starttls", " " }, map[string]string{"security": "ssl", "password_empty": ""}},
-		"mauvais port":       {func(q *testRequest, _ *memStore, _ *Handler) { q.Port = 993 }, map[string]string{"port": "443"}},
+		"tout bon":     {func(*testRequest, *memStore, *Handler) {}, nil},
+		"Ben":          {func(q *testRequest, _ *memStore, _ *Handler) { q.Security, q.Password = "starttls", " " }, map[string]string{"security": "ssl", "password_empty": ""}},
+		"mauvais port": {func(q *testRequest, _ *memStore, _ *Handler) { q.Port = 993 }, map[string]string{"port": "443"}},
+		"autre port servi": {func(q *testRequest, _ *memStore, h *Handler) {
+			h.Connection.IMAP = &Endpoint{Host: "imap.test", Port: 993, Security: "SSL/TLS", Also: []Way{{443, "ssl"}}}
+		}, nil},
+		"port conseillé quand plusieurs": {func(q *testRequest, _ *memStore, h *Handler) {
+			h.Connection.IMAP = &Endpoint{Host: "imap.test", Port: 993, Security: "SSL/TLS", Also: []Way{{443, "ssl"}}}
+			q.Port = 143
+		}, map[string]string{"port": "993"}},
+		"587 en STARTTLS": {func(q *testRequest, _ *memStore, h *Handler) {
+			h.Connection.SMTP = &Endpoint{Host: "smtp.test", Port: 465, Security: "SSL/TLS", Also: []Way{{587, "starttls"}}}
+			q.Via, q.Host, q.Port, q.Security = "smtp", "smtp.test", 587, "starttls"
+		}, nil},
+		"587 en SSL": {func(q *testRequest, _ *memStore, h *Handler) {
+			h.Connection.SMTP = &Endpoint{Host: "smtp.test", Port: 465, Security: "SSL/TLS", Also: []Way{{587, "starttls"}}}
+			q.Via, q.Host, q.Port, q.Security = "smtp", "smtp.test", 587, "ssl"
+		}, map[string]string{"security": "starttls"}},
 		"mauvais serveur":    {func(q *testRequest, _ *memStore, _ *Handler) { q.Host = "mail.boite.fr" }, map[string]string{"host": "imap.test"}},
 		"identifiant sans @": {func(q *testRequest, _ *memStore, _ *Handler) { q.Username = "jc" }, map[string]string{"username": "jc@boite.fr"}},
 		"mot de passe faux":  {func(q *testRequest, _ *memStore, _ *Handler) { q.Password = "faux" }, map[string]string{"credentials": ""}},
@@ -281,5 +296,20 @@ func TestDialDoor(t *testing.T) {
 	tlsWanted.Security = "SSL/TLS"
 	if err := dialDoor(ctx, "imap", tlsWanted); err == nil {
 		t.Fatal("une porte en clair n'est pas une porte TLS")
+	}
+}
+
+func TestParseWays(t *testing.T) {
+	w, err := ParseWays(" 443/ssl, 587/starttls ,")
+	if err != nil || len(w) != 2 || w[0] != (Way{443, "ssl"}) || w[1] != (Way{587, "starttls"}) {
+		t.Fatalf("%v %v", w, err)
+	}
+	if w, err := ParseWays(""); err != nil || w != nil {
+		t.Fatalf("%v %v", w, err)
+	}
+	for _, bad := range []string{"443", "443/none", "0/ssl", "70000/ssl", "x/ssl", "443/ssl;587/starttls"} {
+		if _, err := ParseWays(bad); err == nil {
+			t.Errorf("%q accepté", bad)
+		}
 	}
 }

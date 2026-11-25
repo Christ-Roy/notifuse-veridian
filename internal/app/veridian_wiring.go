@@ -22,6 +22,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/service/queue"
 	"github.com/Notifuse/notifuse/internal/veridian/accountgate"
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
+	boxaccessmod "github.com/Notifuse/notifuse/internal/veridian/boxaccess/module"
 	"github.com/Notifuse/notifuse/internal/veridian/boxsend"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/relaycert"
@@ -1299,7 +1300,7 @@ func (a *App) veridianInitRelayCert() {
 		return
 	}
 	mgr, err := relaycert.NewManager(
-		relaycert.Config{Domain: a.config.SMTPBridge.Domain, Names: []string{os.Getenv("VERIDIAN_MX_HOST")}}, // le 25 sert le même certificat
+		relaycert.Config{Domain: a.config.SMTPBridge.Domain, Names: boxaccessmod.CertNames(os.Getenv)}, // le 25 et la soumission 587 servent le même certificat
 		store,
 		relaycert.SettingsParams(a.settingRepo, a.config.Security.SecretKey, os.LookupEnv),
 		relaycert.LegoIssuerFactory(func(cerr error) {

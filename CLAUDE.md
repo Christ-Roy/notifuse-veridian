@@ -113,13 +113,12 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `61` nœud webhook des automations : garde SSRF, secret chiffré, HMAC
 - `75` lot L4 : aperçu e-mail en bac à sable, Liquid des contacts, mutants
 - `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`
-- `82` statut d'essai du Hub (jamais appliqué) et signal d'activité vers le Hub
+- `82` essai du Hub (jamais appliqué), signal d'activité ; `90` Réglages > Plan
 - `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
 - `81` capacité base : connexions, incident du 07/11
-- `92` régler sa boîte soi-même : profil Apple, test, essais, export
+- `92` régler sa boîte soi-même : profil Apple, test, export ; `93` ports standard (prêts, fermés)
 - `91` **ce qui dure après un retrait** : accès de boîte, flux, gel (`standing`)
-- `90` Réglages > Plan
 - `89` **une personne du Hub = son `hub_user_id`, jamais son adresse** (résolveur unique)
 - `88` organisation poussée par le Hub, abonnement du Hub aux réponses
 - `87` actions d'une autre app (jeton `act`), « Envoyer vers Mail »
