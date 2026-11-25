@@ -30,8 +30,8 @@ chaque message) ; `open_pixel` = le HTML émis porte le pixel. Le contenu lui-m�
 
 ## Vue échouer (25/11)
 
-Exclusion retirée, adresse jetable remplacée, graines de plafond absentes, jour ouvert : G2, G7, G4, G5 et G6 rouges. Staging redéployé au milieu :
-« non abouti », sortie 2.
+Les dix portes, une par une : exclusion retirée, adresse jetable remplacée, graines de plafond absentes, jour ouvert, port ouvert au lieu de fermé, débit
+non bridé, texte sans variante, pixel forcé, un seul expéditeur. Staging redéployé au milieu : « non abouti », sortie 2.
 
 ## Pièges
 
