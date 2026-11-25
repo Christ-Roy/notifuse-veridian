@@ -146,6 +146,7 @@ func TestVeridianHandleInvalidateCache_NoCacheReturns503(t *testing.T) {
 
 // Une provision désigne une personne du Hub : le service n'est jamais appelé sans elle (tout appel non attendu fait échouer).
 func TestVeridianHandleProvision_PersonneDuHubObligatoire(t *testing.T) {
+	t.Setenv("VERIDIAN_PROVISION_REQUIRE_HUB_PERSON", "1")
 	const id = "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"
 	for name, extra := range map[string]string{"absente": "", "vide": `,"owner_hub_user_id":"  "`, "metadata vide": `,"metadata":{"hub_user_id":""}`,
 		"pas un uuid": `,"owner_hub_user_id":"o@x.test"`, "metadata pas un uuid": `,"metadata":{"hub_user_id":"x"}`} {
@@ -166,6 +167,20 @@ func TestVeridianHandleProvision_PersonneDuHubObligatoire(t *testing.T) {
 			assert.Equal(t, http.StatusOK, rec.Code)
 		})
 	}
+}
+
+// Interrupteur éteint (la prod tant que le Hub n'a pas donné son accord) : une provision sans personne passe au service, comme avant.
+func TestVeridianHandleProvision_SansPersonne_InterrupteurEteint(t *testing.T) {
+	t.Setenv("VERIDIAN_PROVISION_REQUIRE_HUB_PERSON", "")
+	svc := mocks.NewMockVeridianService(gomock.NewController(t))
+	h := newHandlerWithService(svc)
+	svc.EXPECT().Provision(gomock.Any(), gomock.Any()).Return(&domain.ProvisionResponse{WorkspaceID: "ws-1"}, nil).Times(2)
+	for _, body := range []string{`{"tenant_id":"ws-1","owner_email":"o@x.test"}`, `{"tenant_id":"ws-1","owner_email":"o@x.test","metadata":{"hub_user_id":"x"}}`} {
+		rec := postJSON(t, h.handleProvision, "/api/tenants/provision", body)
+		assert.Equal(t, http.StatusOK, rec.Code, body)
+	}
+	rec := postJSON(t, h.handleProvision, "/api/tenants/provision", `{"tenant_id":"ws-1","owner_email":"o@x.test","owner_hub_user_id":"x"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "un identifiant fourni et mal formé reste refusé, comme avant")
 }
 
 func TestVeridianHandleProvision_OK(t *testing.T) {

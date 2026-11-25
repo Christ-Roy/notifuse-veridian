@@ -252,6 +252,8 @@ CHECK_FOR_UPDATES=false
 API_ENDPOINT=https://notifuse.staging.veridian.site
 INTERNAL_API_ENDPOINT=http://localhost:8081
 VERIDIAN_DEFAULT_PLAN=free
+# Provision sans personne du Hub refusée (400), staging seulement tant que le Hub n'a pas donné son accord pour la prod (fiche 89).
+VERIDIAN_PROVISION_REQUIRE_HUB_PERSON=1
 # 1025 : puits SMTP. 1026 : port fermé, pour prouver le disjoncteur (cold-garde-fous.py, G1).
 NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025,127.0.0.1:1026
 
