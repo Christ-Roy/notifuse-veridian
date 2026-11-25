@@ -25,7 +25,7 @@ import (
 // workspaces. Il n'écrit rien, n'envoie rien, ne touche à aucune base.
 //
 // Usage :
-//   scripts/veridian/audit-template-text-leak.sh          (dump prod + audit)
+//   scripts/veridian/audit-template-text-leak.sh          (dump fourni, aucun accès à la base)
 //   VERIDIAN_TEMPLATE_DUMP=/chemin/all_templates.ndjson \
 //     go test ./internal/service/ -run TestVeridianAuditTemplateTextLeak -v
 //
@@ -181,6 +181,9 @@ func TestVeridianAuditTemplateTextLeak(t *testing.T) {
 	}
 	if err := sc.Err(); err != nil {
 		t.Fatalf("lecture du dump : %v", err)
+	}
+	if total == 0 {
+		t.Fatalf("audit NON ABOUTI : aucun gabarit dans %s, ce n'est pas « aucun refus »", path)
 	}
 
 	t.Logf("\n=== AUDIT GABARITS — garde-fou veridianTemplateLabelLeak ===\n%s\n"+

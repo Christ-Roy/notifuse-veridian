@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# VER-250 (25/11/2026) : lit la base de STAGING par ssh + docker exec, la même porte que l'exec Nomad. Chemin toléré, sans nouvel usage, à réécrire sur l'API.
 # ============================================================================
 # E2E ON-PREMISE — warmup = cap TOTAL par INFRA (toutes classes, MX compris)
 # ============================================================================

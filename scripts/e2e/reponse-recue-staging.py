@@ -3,6 +3,8 @@
 HTTP). Seule la lecture IMAP n'est pas jouée : la ligne est posée dans la table de la boîte, comme l'ingestion le fait. Aucun mail ne part.
 
     reponse-recue-staging.py <espace> --email contact@exemple.test [--attendre 120]
+VER-250 : écrit dans la base de STAGING par ssh + docker exec, la même porte que l'exec Nomad. Chemin toléré tant que le Hub s'en sert (cas 27),
+sans nouvel usage, à réécrire sur cold-simulate (HMAC, staging).
 Sort 0 (livrée en 2xx), 1 (refusée ou en échec), 2 (non abouti : pas d'abonnement, pas de livraison créée, base injoignable)."""
 import argparse, json, re, subprocess, sys, time, uuid
 

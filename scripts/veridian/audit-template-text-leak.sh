@@ -16,60 +16,28 @@
 # Il ne modifie rien : lecture des bases workspace, puis exécution des VRAIES
 # fonctions de production sur chaque gabarit (compilation MJML incluse).
 #
-# Usage :
-#   scripts/veridian/audit-template-text-leak.sh                 # dump prod + audit
-#   scripts/veridian/audit-template-text-leak.sh --dump-only     # dump seul
-#   VERIDIAN_TEMPLATE_DUMP=/chemin/dump.ndjson \
-#     scripts/veridian/audit-template-text-leak.sh --no-dump     # audit d'un dump existant
+# Usage : VERIDIAN_TEMPLATE_DUMP=/chemin/dump.ndjson scripts/veridian/audit-template-text-leak.sh
 #
-# Sortie : une ligne par gabarit (OK / REFUSÉ, workspace, id, origine du HTML,
-# première ligne du corps texte, présence de mj-preview/mj-title).
-# Code retour : 0 si aucun gabarit ne serait refusé, 1 sinon.
+# Le dump (NDJSON, une ligne par gabarit : ws, id, name, version, plain_text_only, text, subject, html, mjml) est FOURNI. Ce script n'ouvre plus aucun
+# accès à la base (VER-250, 25/11/2026) : il visait un conteneur `notifuse-db-*` de prod disparu depuis pg-saas (09/11), par ssh + docker exec, et une
+# lecture en échec donnait un dump vide, donc « aucun refus ». Pour revivre en prod : l'API ou un contrôle en lecture, jamais un exec.
+#
+# Sortie : une ligne par gabarit (OK / REFUSÉ, workspace, id, origine du HTML, première ligne du corps texte, présence de mj-preview/mj-title).
+# Code retour : 0 aucun gabarit refusé (et au moins un audité), 1 au moins un refusé, 2 NON ABOUTI (pas de dump, dump vide ou illisible).
 set -euo pipefail
 
-SSH_HOST="${VERIDIAN_NOTIFUSE_SSH:-prod}"
-DUMP="${VERIDIAN_TEMPLATE_DUMP:-/tmp/notifuse-templates-$(date +%Y%m%d-%H%M%S).ndjson}"
+DUMP="${VERIDIAN_TEMPLATE_DUMP:-}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DO_DUMP=1; DO_AUDIT=1
-for a in "$@"; do
-  case "$a" in
-    --dump-only) DO_AUDIT=0 ;;
-    --no-dump)   DO_DUMP=0 ;;
-    *) echo "option inconnue : $a" >&2; exit 2 ;;
-  esac
-done
-
-if [[ "$DO_DUMP" == 1 ]]; then
-  echo "▸ dump des gabarits depuis $SSH_HOST (lecture seule)…" >&2
-  # Le conteneur Postgres porte l'ID d'allocation Nomad : on le découvre, jamais
-  # de nom codé en dur (une liste en dur devient fausse au premier redéploiement).
-  ssh "$SSH_HOST" 'bash -s' > "$DUMP" <<'REMOTE'
-set -euo pipefail
-C=$(docker ps --format '{{.Names}}' | grep '^notifuse-db-' | head -1)
-[ -n "$C" ] || { echo "conteneur notifuse-db introuvable" >&2; exit 1; }
-for db in $(docker exec "$C" psql -U postgres -tAc \
-      "SELECT datname FROM pg_database WHERE datname LIKE 'notifuse_ws_%' ORDER BY 1;"); do
-  ws=${db#notifuse_ws_}
-  docker exec "$C" psql -U postgres -d "$db" -tAc "
-    SELECT json_build_object(
-      'ws','$ws','id',t.id,'name',t.name,'version',t.version,
-      'plain_text_only', COALESCE((t.email->>'plain_text_only')::boolean,false),
-      'text', COALESCE(t.email->>'text',''),
-      'subject', COALESCE(t.email->>'subject',''),
-      'html', COALESCE(t.email->>'compiled_preview',''),
-      'mjml', COALESCE(t.email->>'mjml_source','')
-    )::text
-    FROM templates t
-    JOIN (SELECT id, max(version) v FROM templates WHERE deleted_at IS NULL GROUP BY id) m
-      ON m.id=t.id AND m.v=t.version
-    WHERE t.deleted_at IS NULL AND t.channel='email';" 2>/dev/null || true
-done
-REMOTE
-  echo "▸ $(wc -l < "$DUMP") gabarits → $DUMP" >&2
-fi
-
-if [[ "$DO_AUDIT" == 1 ]]; then
-  cd "$REPO_ROOT"
-  VERIDIAN_TEMPLATE_DUMP="$DUMP" \
-    go test ./internal/service/ -run TestVeridianAuditTemplateTextLeak -v -count=1
-fi
+abandon() { echo "NON ABOUTI : $1, rien n'a été audité" >&2; exit 2; }
+[ $# -eq 0 ] || abandon "option inconnue « $1 »"
+[ -n "$DUMP" ] || abandon "VERIDIAN_TEMPLATE_DUMP absent (le dump est fourni, ce script ne lit aucune base)"
+[ -r "$DUMP" ] || abandon "dump illisible : $DUMP"
+DUMP="$(realpath "$DUMP")"
+N="$(grep -c '[^[:space:]]' "$DUMP" || true)"
+[ "${N:-0}" -gt 0 ] || abandon "dump vide : $DUMP"
+python3 -c 'import json,sys
+for l in open(sys.argv[1]):
+    if l.strip() and not (json.loads(l).get("ws") and json.loads(l).get("id")): raise SystemExit(1)' "$DUMP" 2>/dev/null || abandon "dump mal formé (NDJSON ws, id attendus)"
+cd "$REPO_ROOT"
+echo "▸ $N gabarits à auditer" >&2
+VERIDIAN_TEMPLATE_DUMP="$DUMP" go test ./internal/service/ -run TestVeridianAuditTemplateTextLeak -v -count=1 || exit 1
