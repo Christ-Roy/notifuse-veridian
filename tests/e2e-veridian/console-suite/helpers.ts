@@ -18,7 +18,7 @@
 // autonome : la suite console-suite a sa propre config Playwright et ne
 // dépend pas de console/node_modules.
 
-import type { Page, ConsoleMessage } from '@playwright/test'
+import { expect, type Page, type ConsoleMessage } from '@playwright/test'
 import * as crypto from 'crypto'
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!
@@ -235,6 +235,13 @@ export async function findVisibleLinguiHashes(page: Page): Promise<string[]> {
     }
     return suspects
   })
+}
+
+/** Lit le texte une fois l'attendu affiché (la page polle : networkidle n'arrive pas). Jamais d'échec ici : l'appelant juge le texte lu. */
+export async function settledText(page: Page, marker: RegExp, selector = 'body', timeout = 45_000): Promise<string> {
+  const read = async () => page.locator(selector).last().innerText().catch(() => '')
+  await expect.poll(async () => marker.test(await read()), { timeout }).toBe(true).catch(() => {})
+  return read()
 }
 
 /**

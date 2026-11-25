@@ -9219,6 +9219,10 @@ msgstr ""
 msgid "Plan"
 msgstr ""
 
+#: src/components/settings/veridian_plan_settings.tsx
+msgid "Plan unavailable right now"
+msgstr ""
+
 #~ msgid "Please add at least one sender before saving"
 #~ msgstr "Si us plau, afegiu com a mínim un remitent abans de desar"
 

@@ -23,6 +23,7 @@ import {
   loginViaAutoLogin,
   trackConsoleErrors,
   waitForAppMount,
+  settledText,
   findVisibleLinguiHashes,
   type ProvisioningResponse
 } from './helpers'
@@ -69,7 +70,7 @@ test.describe('Console — Settings > Plan section', () => {
 
     // Le composant VeridianPlanSettings affiche le label "Pro" pour plan='pro'.
     // On cherche dans le body — sélecteur stable cross-i18n.
-    const body = await page.locator('body').innerText()
+    const body = await settledText(page, /\bPro\b/)
     expect(
       body,
       `Page Plan ne contient pas "Pro" — section absente ou pas chargée. Body extrait :\n${body.slice(0, 500)}`
@@ -103,7 +104,7 @@ test.describe('Console — Settings > Plan section', () => {
     await waitForAppMount(page)
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
 
-    const body = await page.locator('body').innerText()
+    const body = await settledText(page, /\bEnterprise\b/)
 
     // Plan = enterprise après grant-unlimited.
     expect(

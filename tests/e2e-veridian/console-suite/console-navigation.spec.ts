@@ -24,6 +24,7 @@ import {
   freshAutoLoginUrl,
   trackConsoleErrors,
   waitForAppMount,
+  settledText,
   findVisibleLinguiHashes,
   type ProvisioningResponse
 } from './helpers'
@@ -107,7 +108,7 @@ test.describe.serial('Console — navigation workspace sidebar', () => {
       // Body non vide = la page a rendu quelque chose (Spinner, Empty, ou
       // contenu). Un body vide = lazy chunk a planté ou Suspense fallback
       // jamais résolu.
-      const bodyText = await page.locator('body').innerText()
+      const bodyText = await settledText(page, /[\s\S]{51}/)
       expect(
         bodyText.length,
         `Body vide sur ${target.label} — chunk lazy planté ou Suspense bloqué ?`
@@ -120,7 +121,7 @@ test.describe.serial('Console — navigation workspace sidebar', () => {
       // l'Outlet (= dans .ant-layout-content) tout en gardant la sidebar — donc
       // c'est bien cette zone qu'il faut inspecter pour attraper le bug P0
       // Dashboard→Not Found audité par Robert le 2026-06-14.
-      const mainText = await page.locator('.ant-layout-content').last().innerText()
+      const mainText = await settledText(page, target.contentMarker, '.ant-layout-content')
 
       // Garde-fou anti faux-négatif : la zone de contenu ne doit JAMAIS dire
       // "Not Found".
@@ -188,7 +189,7 @@ test.describe.serial('Console — clic sidebar "Dashboard" (geste réel utilisat
     // Après clic : on doit être sur l'index workspace et voir le Dashboard.
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
     // Zone de contenu (Outlet), pas le body : c'est là que "Not Found" se rend.
-    const mainText = await page.locator('.ant-layout-content').last().innerText()
+    const mainText = await settledText(page, /Total Contacts|Email Metrics|Transactional Provider/i, '.ant-layout-content')
 
     expect(
       mainText,

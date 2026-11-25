@@ -9219,6 +9219,10 @@ msgstr "Texte brut : le meilleur choix pour un e-mail de prospection. Il ressemb
 msgid "Plan"
 msgstr "Plan"
 
+#: src/components/settings/veridian_plan_settings.tsx
+msgid "Plan unavailable right now"
+msgstr "Plan indisponible pour le moment"
+
 #~ msgid "Please add at least one sender before saving"
 #~ msgstr "Veuillez ajouter au moins un expéditeur avant d enregistrer"
 

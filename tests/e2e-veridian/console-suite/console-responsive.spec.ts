@@ -22,6 +22,7 @@ import {
   freshAutoLoginUrl,
   trackConsoleErrors,
   waitForAppMount,
+  settledText,
   findVisibleLinguiHashes,
   type ProvisioningResponse
 } from './helpers'
@@ -87,6 +88,7 @@ for (const vp of VIEWPORTS) {
         await page.goto(url)
         await waitForAppMount(page)
         await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+        await settledText(page, /[\s\S]{51}/)
         // Laisse le temps aux composants antd de finir leur layout (Table,
         // Sider collapse, etc.).
         await page.waitForTimeout(1500)

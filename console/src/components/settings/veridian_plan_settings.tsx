@@ -39,8 +39,8 @@ const VERIDIAN_HUB_URL = 'https://app.veridian.site/dashboard'
 // catalogue → `t` renvoie VIDE en runtime (libellé de plan vide dans
 // Settings → Plan). Les noms de plan sont des noms propres Veridian (Pro =
 // Pro partout) qui ne se traduisent pas ; littéral = zéro risque de vide.
-function planLabel(plan: string | undefined, freeLabel: string): string {
-  if (!plan || plan === 'free') return freeLabel
+function planLabel(plan: string, freeLabel: string): string {
+  if (plan === 'free') return freeLabel
   if (plan === 'pro') return 'Pro'
   if (plan === 'business') return 'Business'
   if (plan === 'enterprise') return 'Enterprise'
@@ -65,13 +65,20 @@ export function VeridianPlanSettings({ workspaceId }: Props) {
             <Descriptions column={1} colon={false}>
               <Descriptions.Item label={t`Current plan`}>
                 <Space size="small">
-                  <Text strong>{planLabel(data?.plan, t`Free — unlimited access during your 15-day trial`)}</Text>
+                  {data ? (
+                    <Text strong>{planLabel(data.plan, t`Free — unlimited access during your 15-day trial`)}</Text>
+                  ) : (
+                    // Plan non lu (panne, droit) : jamais « Free » par défaut, un espace payant le lirait.
+                    <Text type="secondary">{t`Plan unavailable right now`}</Text>
+                  )}
                   <VeridianPlanSourceBadge planSource={data?.plan_source} />
                 </Space>
               </Descriptions.Item>
-              <Descriptions.Item label={t`Status`}>
-                <Text>{data?.status || t`Active`}</Text>
-              </Descriptions.Item>
+              {data && (
+                <Descriptions.Item label={t`Status`}>
+                  <Text>{data.status === 'active' ? t`Active` : data.status}</Text>
+                </Descriptions.Item>
+              )}
             </Descriptions>
             <div style={{ marginTop: 16 }}>
               <Text type="secondary" style={{ fontSize: 12 }}>

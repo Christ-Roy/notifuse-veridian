@@ -9219,6 +9219,10 @@ msgstr "Plain text: the best choice for a prospecting email. It looks like a mes
 msgid "Plan"
 msgstr "Plan"
 
+#: src/components/settings/veridian_plan_settings.tsx
+msgid "Plan unavailable right now"
+msgstr "Plan unavailable right now"
+
 #~ msgid "Please add at least one sender before saving"
 #~ msgstr "Please add at least one sender before saving"
 

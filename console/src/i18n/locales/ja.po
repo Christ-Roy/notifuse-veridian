@@ -9219,6 +9219,10 @@ msgstr ""
 msgid "Plan"
 msgstr ""
 
+#: src/components/settings/veridian_plan_settings.tsx
+msgid "Plan unavailable right now"
+msgstr ""
+
 #~ msgid "Please add at least one sender before saving"
 #~ msgstr "保存する前に送信者を1人以上追加してください"
 

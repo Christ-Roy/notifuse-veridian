@@ -262,11 +262,12 @@ func TestSync_Refus(t *testing.T) {
 
 func TestSync_MembresAdditifs(t *testing.T) {
 	e := newEnv(t)
-	_, err := e.db.Exec(`INSERT INTO users (id,type,email,created_at,updated_at) VALUES ('00000000-0000-0000-0000-000000000001','user','Deja@x.test',NOW(),NOW())`)
+	_, err := e.db.Exec(`INSERT INTO users (id,type,email,hub_user_id,created_at,updated_at) VALUES ('00000000-0000-0000-0000-000000000001','user','ancienne@x.test','6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01',NOW(),NOW())`)
 	require.NoError(t, err)
 	_, err = e.db.Exec(`INSERT INTO user_workspaces (user_id,workspace_id,role,created_at,updated_at) VALUES ('00000000-0000-0000-0000-000000000001','alpha','owner',NOW(),NOW())`)
 	require.NoError(t, err)
-	members := `,"membres":[{"hub_user_id":"h1","email":"deja@x.test","role":"member"},{"hub_user_id":"h2","email":"neuf@x.test","role":"admin"}]`
+	// h1 a changé d'adresse au Hub : toujours membre. La personne neuve a repris son ancienne adresse : elle est ajoutée quand même (fiche 89).
+	members := `,"membres":[{"hub_user_id":"6B3C1F4E-2a51-4c1e-9a77-0d9f2c5b1a01","email":"neuve-adresse@x.test","role":"member"},{"hub_user_id":"0f9d2c11-77aa-4b8e-8f10-5f2d6a1c9b02","email":"ancienne@x.test","role":"admin"}]`
 	e.addKO = true
 	_, out := e.call("POST", sync, push(1, members), true)
 	assert.EqualValues(t, 1, out["membres_refuses"])
@@ -274,7 +275,7 @@ func TestSync_MembresAdditifs(t *testing.T) {
 	_, out = e.call("POST", sync, push(1, members), true)
 	assert.EqualValues(t, 1, out["membres_ajoutes"], "rattrapé au rejeu de la même version")
 	require.Len(t, e.added, 1, "un membre déjà là n'est pas touché, son rôle non plus")
-	assert.Equal(t, "neuf@x.test", e.added[0].Email)
+	assert.Equal(t, "0f9d2c11-77aa-4b8e-8f10-5f2d6a1c9b02", e.added[0].HubUserID)
 	_, _ = e.call("POST", sync, push(3, ""), true)
 	e.added = nil
 	_, _ = e.call("POST", sync, push(2, members), true)

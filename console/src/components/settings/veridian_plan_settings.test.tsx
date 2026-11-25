@@ -33,13 +33,31 @@ describe('VeridianPlanSettings', () => {
     vi.clearAllMocks()
   })
 
-  it('renders the Free plan label when API returns null (endpoint unavailable)', async () => {
+  it('never claims a plan when the plan could not be read', async () => {
     vi.mocked(veridianPlanApi.getWorkspacePlan).mockResolvedValue(null)
+    renderSettings('ws-1')
+
+    await waitFor(() => {
+      expect(screen.getByText('Plan unavailable right now')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/Free/)).toBeNull()
+    expect(screen.queryByText('Active')).toBeNull()
+  })
+
+  it('renders the Free plan label when API returns free', async () => {
+    vi.mocked(veridianPlanApi.getWorkspacePlan).mockResolvedValue({
+      tenant_id: 'ws-1',
+      plan: 'free',
+      plan_source: 'stripe',
+      status: 'active',
+      generated_at: ''
+    })
     renderSettings('ws-1')
 
     await waitFor(() => {
       expect(screen.getByText(/Free — unlimited access during your 15-day trial/i)).toBeInTheDocument()
     })
+    expect(screen.getByText('Active')).toBeInTheDocument()
   })
 
   it('renders the Pro plan label when API returns pro', async () => {
@@ -48,7 +66,6 @@ describe('VeridianPlanSettings', () => {
       plan: 'pro',
       plan_source: 'stripe',
       status: 'active',
-      limits: {} as never,
       generated_at: ''
     })
     renderSettings('ws-1')
@@ -64,7 +81,6 @@ describe('VeridianPlanSettings', () => {
       plan: 'enterprise',
       plan_source: 'lifetime_partner',
       status: 'active',
-      limits: {} as never,
       generated_at: ''
     })
     renderSettings('ws-1')

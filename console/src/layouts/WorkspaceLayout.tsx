@@ -67,7 +67,8 @@ export function WorkspaceLayout() {
   const { workspaceId } = useParams({ from: '/console/workspace/$workspaceId' })
   const { signout, workspaces, user, refreshWorkspaces } = useAuth()
   const navigate = useNavigate()
-  const [collapsed, setCollapsed] = useState(false)
+  // Tablette (768 a 991 px) : menu replie au depart, sinon il ne reste que 518 px au contenu.
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth < 992)
   const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null)
   const [loadingPermissions, setLoadingPermissions] = useState(true)
   // === Veridian patch — responsive layout (Lot 1 mobile, 2026-05-25) ===

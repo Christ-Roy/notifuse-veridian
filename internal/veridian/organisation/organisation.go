@@ -127,7 +127,7 @@ type Store interface {
 	Apply(ctx context.Context, o *Organisation) (workspaceID string, version int64, done bool, err error)
 	Brand(ctx context.Context, workspaceID string) (*Organisation, error)
 	WorkspaceOf(ctx context.Context, hubTenantID string) (string, error)
-	IsMember(ctx context.Context, workspaceID, email string) (bool, error)
+	IsMember(ctx context.Context, workspaceID, hubUserID string) (bool, error)
 }
 
 // SQLStore : Store sur la base système.
@@ -198,10 +198,11 @@ func (s *SQLStore) Brand(ctx context.Context, workspaceID string) (*Organisation
 	return o, json.Unmarshal(body, o)
 }
 
-func (s *SQLStore) IsMember(ctx context.Context, workspaceID, email string) (bool, error) {
+// IsMember : la personne par son hub_user_id SEUL (fiche 89). L'adresse d'un autre membre ne la dispense pas d'être ajoutée.
+func (s *SQLStore) IsMember(ctx context.Context, workspaceID, hubUserID string) (bool, error) {
 	var ok bool
 	err := s.DB.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM user_workspaces uw JOIN users u ON u.id = uw.user_id
-		WHERE uw.workspace_id = $1 AND lower(u.email) = lower($2))`, workspaceID, email).Scan(&ok)
+		WHERE uw.workspace_id = $1 AND u.hub_user_id::text = $2)`, workspaceID, strings.ToLower(hubUserID)).Scan(&ok)
 	return ok, err
 }
 
@@ -280,7 +281,7 @@ func (h *Handler) Sync(w http.ResponseWriter, r *http.Request) {
 		res.Reason = "unchanged"
 	}
 	for _, m := range o.Members {
-		in, err := h.Store.IsMember(r.Context(), ws, m.Email)
+		in, err := h.Store.IsMember(r.Context(), ws, m.HubUserID)
 		if err == nil && in {
 			continue
 		}

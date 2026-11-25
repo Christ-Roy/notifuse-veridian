@@ -117,6 +117,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
 - `81` capacité base : connexions, incident du 07/11
+- `90` Réglages > Plan : le vrai plan, jamais « Free » par défaut
 - `89` **une personne du Hub = son `hub_user_id`, jamais son adresse** (résolveur unique)
 - `88` organisation poussée par le Hub, abonnement du Hub aux réponses
 - `87` actions demandées par une autre app (jeton `act`), « Envoyer vers Mail »
@@ -172,7 +173,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `57` tableau de bord de prospection (lot 5) : `prospection.stats`
 - `58` dépilage équitable de `email_queue` : relances avant J0, tourniquet
 - `59` automations observables (conception seule, rien d'implémenté)
-- `60` capacité d'un profil (lot 6) : capacités par classe, barre empilée, CLI agent
+- `60` capacité d'un profil (lot 6), CLI agent
 - `62` « pourquoi ça n'envoie pas » (V62) : raison de report, `queue.explain`
 - `69` plafonds et débits PAR DÉFAUT des 25 classes, table MX -> classe
 - `64` garde réseau partagée (`pkg/netguard`) SMTP/IMAP/SparkPost
