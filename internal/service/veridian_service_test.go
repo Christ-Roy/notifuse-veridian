@@ -977,8 +977,8 @@ func TestVeridianService_GenerateMagicLink_OpensThePersonAndOnlyAMember(t *testi
 	delete(w.members, "u-alice")
 	_, err = svc.GenerateMagicLink(ctx, "ws-1", idAlice, newMail)
 	assert.ErrorAs(t, err, &notFound, "retirée : plus aucun lien de cet espace")
-	_, err = svc.GenerateMagicLink(ctx, "ws-1", "", newMail)
-	assert.ErrorAs(t, err, &notFound, "par l'adresse non plus")
+	_, err = svc.GenerateMagicLink(ctx, "ws-1", "", oldMail)
+	assert.ErrorIs(t, err, ErrHubUserIDRequired, "l'adresse seule ne désigne plus une personne du Hub")
 	_, err = svc.GenerateMagicLink(ctx, "ws-1", "", "avant@example.test")
 	assert.ErrorAs(t, err, &notFound, "une clé d'espace n'ouvre pas quelqu'un d'un autre espace")
 }

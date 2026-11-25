@@ -261,6 +261,13 @@ func TestMagicLinkMember(t *testing.T) {
 	var notFound *domain.ErrUserNotFound
 	_, err = svc.magicLinkMember(ctx, "ws-1", "", "cle@example.test")
 	assert.ErrorAs(t, err, &notFound)
+	// Membre relié, par son adresse seule : refusé. Sans lien (canari, opérateur) : admis.
+	_, err = svc.magicLinkMember(ctx, "ws-1", "", newMail)
+	assert.ErrorIs(t, err, ErrHubUserIDRequired)
+	w.members["u-avant"] = "member"
+	u, err = svc.magicLinkMember(ctx, "ws-1", "", "avant@example.test")
+	require.NoError(t, err)
+	assert.Equal(t, "u-avant", u.ID)
 	// Une panne de lecture n'est pas « pas membre ».
 	m.workspaceRepo.EXPECT().GetUserWorkspace(gomock.Any(), "u-bob", "ws-2").Return(nil, assert.AnError)
 	_, err = svc.magicLinkMember(ctx, "ws-2", idBob, "")

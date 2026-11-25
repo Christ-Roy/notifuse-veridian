@@ -23,6 +23,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -65,6 +66,13 @@ func TestVeridianMagicLink_HubUserID(t *testing.T) {
 	rec = httptest.NewRecorder()
 	h.handleGenerateMagicLink(rec, reqWithAuthCtx(t, `{"hub_user_id":"x","user_email":"old@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1"))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	repo.EXPECT().GetUserWorkspaces(gomock.Any(), "api-user-1").Return([]*domain.UserWorkspace{{UserID: "api-user-1", WorkspaceID: "ws-1"}}, nil)
+	svc.EXPECT().GenerateMagicLink(gomock.Any(), "ws-1", "", "old@x.test").Return(nil, service.ErrHubUserIDRequired)
+	rec = httptest.NewRecorder()
+	h.handleGenerateMagicLink(rec, reqWithAuthCtx(t, `{"user_email":"old@x.test"}`, string(domain.UserTypeAPIKey), "api-user-1"))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "hub_user_id is required")
 }
 
 func TestVeridianMagicLink_OK(t *testing.T) {

@@ -709,7 +709,7 @@ type StatusResponse struct {
 
 // MagicLinkInput est le body de POST /api/workspaces.generateMagicLink.
 type MagicLinkInput struct {
-	// HubUserID : la personne (fiche 89). Vide (le Hub d'avant) : l'adresse, d'un membre de l'espace seulement.
+	// HubUserID : la personne (fiche 89). Vide : l'adresse, pour un membre SANS lien au Hub (canari, operateur) seulement.
 	HubUserID string `json:"hub_user_id,omitempty"`
 	UserEmail string `json:"user_email"`
 }

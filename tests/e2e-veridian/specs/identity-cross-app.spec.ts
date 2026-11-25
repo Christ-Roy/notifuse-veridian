@@ -102,12 +102,12 @@ async function provisionTenant(tenantId: string, ownerEmail: string, plan = 'fre
 // Genere un magic link pour un user d'un workspace via api_key tenant,
 // puis suit le auto-login URL pour extraire le JWT du user humain
 // (depuis le HTML autoLoginPageTemplate qui set localStorage.auth_token).
-async function exchangeMagicLinkForUserJWT(apiKey: string, userEmail: string): Promise<string> {
+async function exchangeMagicLinkForUserJWT(apiKey: string, userEmail: string, hubUserId?: string): Promise<string> {
   const magicResp = await bearerFetch(
     '/api/workspaces.generateMagicLink',
     'POST',
     apiKey,
-    { user_email: userEmail },
+    { user_email: userEmail, ...(hubUserId ? { hub_user_id: hubUserId } : {}) },
   );
   // Lire body une seule fois (.text() puis JSON.parse).
   const magicRaw = await magicResp.text();
@@ -470,7 +470,7 @@ test.describe('@regression identity-cross-app — C. users.hub_user_id (V46)', (
     expect(attachResp.status, attachRaw).toBe(201);
 
     // Exchange magic link pour le nouveau member -> JWT user.
-    const memberJWT = await exchangeMagicLinkForUserJWT(apiKey, newMemberEmail);
+    const memberJWT = await exchangeMagicLinkForUserJWT(apiKey, newMemberEmail, hubUUID);
 
     const meResp = await bearerFetch('/api/user.me', 'GET', memberJWT);
     const meRaw = await meResp.text();
@@ -522,7 +522,7 @@ test.describe('@regression identity-cross-app — C. users.hub_user_id (V46)', (
     expect(raw2).toMatch(/hub_user_conflict/);
 
     // /api/user.me du member doit retourner le huid initial (huid1) intact.
-    const memberJWT = await exchangeMagicLinkForUserJWT(apiKey, memberEmail);
+    const memberJWT = await exchangeMagicLinkForUserJWT(apiKey, memberEmail, huid1);
     const meResp = await bearerFetch('/api/user.me', 'GET', memberJWT);
     const meRaw = await meResp.text();
     expect(meResp.status, meRaw).toBe(200);

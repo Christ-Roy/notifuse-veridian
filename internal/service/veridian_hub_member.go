@@ -16,6 +16,9 @@ import (
 // Une personne du Hub est son `hub_user_id` (CONTRAT-HUB 5.19.7, fiche 89, 25/11/2026). Le Hub sait changer l'adresse principale de quelqu'un, et une
 // adresse se recycle : la chercher par l'adresse laisserait l'accès à un retiré, ou toucherait quelqu'un d'autre. L'adresse ne sert qu'à créer une copie.
 
+// ErrHubUserIDRequired : l'adresse seule désigne un compte relié au Hub, il faut son hub_user_id.
+var ErrHubUserIDRequired = errors.New("hub_user_id is required: this account is bound to the Hub")
+
 // ErrOwnerNotMember : le futur propriétaire doit déjà être membre de l'espace (CONTRAT-HUB 5.19.7).
 var ErrOwnerNotMember = errors.New("user is not a member of this workspace")
 
@@ -143,6 +146,9 @@ func (s *veridianService) magicLinkMember(ctx context.Context, workspaceID, hubU
 	}
 	if user == nil || user.Type == domain.UserTypeAPIKey {
 		return nil, &domain.ErrUserNotFound{Message: "user not found"}
+	}
+	if hubUserID == "" && hubUserIDOf(user) != "" {
+		return nil, ErrHubUserIDRequired // une personne du Hub ne se désigne plus par son adresse ; reste un compte sans lien (canari, opérateur)
 	}
 	uw, err := s.workspaceRepo.GetUserWorkspace(ctx, user.ID, workspaceID)
 	if err != nil {

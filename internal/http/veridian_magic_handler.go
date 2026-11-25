@@ -21,6 +21,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/http/middleware"
+	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
@@ -146,6 +147,10 @@ func (h *VeridianMagicHandler) handleGenerateMagicLink(w http.ResponseWriter, r 
 
 	resp, err := h.service.GenerateMagicLink(r.Context(), workspaceID, input.HubUserID, input.UserEmail)
 	if err != nil {
+		if errors.Is(err, service.ErrHubUserIDRequired) {
+			WriteJSONErrorCode(w, ErrCodeInvalidPayload, "hub_user_id is required", http.StatusBadRequest, map[string]interface{}{"missing": []string{"hub_user_id"}})
+			return
+		}
 		var notFound *domain.ErrUserNotFound
 		if errors.As(err, &notFound) {
 			WriteJSONErrorCode(w, ErrCodeUserNotFound, "user not found", http.StatusNotFound, map[string]interface{}{
