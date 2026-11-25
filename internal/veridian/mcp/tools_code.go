@@ -36,7 +36,7 @@ var readTools = []tool{
 		Props: map[string]any{"contact_email": str("adresse du contact"), "limit": num("nombre de fils")}, Required: []string{"contact_email"}},
 
 	{Name: "analytics_schemas", Description: "Ce qu'analytics_query sait mesurer : schemas, mesures, dimensions.", Resource: domain.PermissionResourceMessageHistory, Also: []also{readContacts},
-		Method: http.MethodPost, Path: "/api/analytics.schemas", Props: map[string]any{}},
+		Method: http.MethodPost, Path: "/api/analytics.schemas", Props: map[string]any{}, Compact: compactSchemas},
 	{Name: "analytics_query", Description: "Mesure en masse : envois, ouvertures, clics, rebonds, contacts, par jour ou par dimension.", Resource: domain.PermissionResourceMessageHistory, Also: []also{readContacts},
 		Method: http.MethodPost, Path: "/api/analytics.query", Props: map[string]any{"query": obj("schema, measures[], dimensions[], timeDimensions[{dimension, granularity: day|week|month, dateRange:[debut, fin]}], filters[{member, operator, values[]}], order, limit")}, Required: []string{"query"}},
 	{Name: "engagement_by_provider", Description: "Ouvertures, clics, rebonds et plaintes par fournisseur destinataire.", Resource: domain.PermissionResourceMessageHistory,
@@ -47,7 +47,7 @@ var readTools = []tool{
 		Props: map[string]any{"limit": num("nombre de lignes (max 100)"), "cursor": str("next_cursor"), "email": str("destinataire"), "automation_id": str("sequence"), "node_id": str("etape"), "entry_id": str("entree de file"), "reason": str("raison"),
 			"outcome": str("sent, deferred, failed, discarded, exited, recomputed"), "since": str("depuis : 24h, 7d ou date RFC 3339")}},
 	{Name: "queue_entries", Description: "Mails en file, un par un : destinataire, etape, raison de l'attente.", Resource: domain.PermissionResourceAutomations, Also: []also{readContacts}, Method: http.MethodGet, Path: "/api/veridian/queue.entries", Paginated: true,
-		Props: map[string]any{"limit": num("nombre de lignes (max 100)"), "cursor": str("next_cursor"), "automation_id": str("sequence"), "node_id": str("etape"), "profile_id": str("profil"), "class": str("fournisseur"), "status": str("statut")}},
+		Props: map[string]any{"limit": num("nombre de lignes (max 100)"), "cursor": str("next_cursor"), "automation_id": str("sequence"), "node_id": str("etape"), "profile_id": str("profil"), "class": str("fournisseur"), "status": str("statut")}, Required: []string{"automation_id"}},
 	{Name: "broadcast_stats", Description: "Resultats d'une campagne : envoyes, livres, ouverts, cliques, rebonds, desinscrits.", Resource: domain.PermissionResourceBroadcasts, Also: []also{readHistory},
 		Method: http.MethodGet, Path: "/api/messages.broadcastStats", Props: map[string]any{"broadcast_id": str("id de la campagne")}, Required: []string{"broadcast_id"}},
 	{Name: "broadcast_test_results", Description: "Resultats du test A/B d'une campagne.", Resource: domain.PermissionResourceBroadcasts, Also: []also{readHistory},
@@ -122,7 +122,7 @@ var writeTools = []tool{
 	{Name: "lists_update", Description: "Renomme ou decrit une liste.", Resource: domain.PermissionResourceLists, Write: true, Method: http.MethodPost, Path: "/api/lists.update",
 		Props: map[string]any{"id": str("liste"), "name": str("nom"), "description": str("a quoi sert la liste"), "is_public": boolean("visible des contacts"), "is_double_optin": boolean("confirmation par mail")}, Required: []string{"id", "name"}},
 	{Name: "mail_mark", Description: "Marque un message traite ou a traiter, ou pose ses libelles. N'envoie rien.", Resource: domain.PermissionResourceMessageHistory, Write: true, Method: http.MethodPost, Path: "/api/veridian/mail.messages.update",
-		Props: map[string]any{"id": str("id du message"), "handled": boolean("traite"), "labels": strs("libelles (remplacent les anciens)")}, Required: []string{"id"}},
+		Props: map[string]any{"id": str("id du message"), "handled": boolean("traite"), "labels": strs("libelles (remplacent les anciens)")}, Required: []string{"id"}, Compact: compactMessage},
 }
 
 // Supprimer, à part. Refusé tant qu'une séquence active s'en sert.
@@ -135,8 +135,8 @@ var deleteTools = []tool{
 		Props: map[string]any{"id": str("campagne")}, Required: []string{"id"}},
 	{Name: "automations_delete", Description: "Supprime une sequence en brouillon ou en pause.", Resource: domain.PermissionResourceAutomations, Write: true, Destructive: true, Method: http.MethodPost, Path: "/api/automations.delete",
 		Props: map[string]any{"automation_id": str("sequence")}, Required: []string{"automation_id"}, Check: stoppedAutomation},
-	{Name: "lists_delete", Description: "Supprime une liste (les desinscriptions restent connues).", Resource: domain.PermissionResourceLists, Write: true, Destructive: true, Also: []also{readAutomations}, Method: http.MethodPost, Path: "/api/lists.delete",
-		Props: map[string]any{"id": str("liste")}, Required: []string{"id"}, Check: notUsedLive("list_id", "list_ids")},
+	{Name: "lists_delete", Description: "Supprime une liste (refuse si elle porte des desinscrits, des rebonds ou des plaintes).", Resource: domain.PermissionResourceLists, Write: true, Destructive: true, Also: []also{readAutomations}, Method: http.MethodPost, Path: "/api/lists.delete",
+		Props: map[string]any{"id": str("liste")}, Required: []string{"id"}, Check: deletableList},
 	{Name: "list_remove_contact", Description: "Retire un contact actif d'une liste (un desinscrit y reste : sa volonte ne s'efface pas).", Resource: domain.PermissionResourceLists, Write: true, Destructive: true, Also: []also{readContacts},
 		Method: http.MethodPost, Path: "/api/contactLists.removeContact", Props: map[string]any{"email": str("adresse du contact"), "list_id": str("liste")}, Required: []string{"email", "list_id"}, Check: activeInList},
 }
@@ -182,6 +182,10 @@ func draftAutomationOnly(args map[string]any) error {
 	nodes, _ := clean["nodes"].([]any)
 	for _, n := range nodes {
 		m, _ := n.(map[string]any)
+		if m == nil {
+			return errors.New("nodes : liste d'objets attendue")
+		}
+		m["automation_id"] = clean["id"] // exigé par l'API, et jamais celui d'une autre séquence
 		for k, v := range m {
 			if t, _ := v.(string); strings.EqualFold(k, "type") && strings.EqualFold(strings.TrimSpace(t), "webhook") {
 				return errors.New("un noeud webhook se pose dans la console, pas depuis une IA")
@@ -289,6 +293,31 @@ func notUsedLive(keys ...string) func(getter, map[string]any) error {
 	}
 }
 
+// deletableList : aucune séquence active, et personne dont la volonté (désinscrit, plainte) ou le rebond vit dans cette liste.
+func deletableList(get getter, args map[string]any) error {
+	if err := notUsedLive("list_id", "list_ids")(get, args); err != nil {
+		return err
+	}
+	raw, err := get("/api/lists.stats", url.Values{"list_id": {argStr(args, "id")}})
+	if err != nil {
+		return err
+	}
+	var o struct {
+		Stats *struct {
+			Unsubscribed int `json:"total_unsubscribed"`
+			Bounced      int `json:"total_bounced"`
+			Complained   int `json:"total_complained"`
+		} `json:"stats"`
+	}
+	if json.Unmarshal(raw, &o) != nil || o.Stats == nil {
+		return errors.New("etat illisible : rien n'a ete fait")
+	}
+	if n := o.Stats.Unsubscribed + o.Stats.Bounced + o.Stats.Complained; n > 0 {
+		return fmt.Errorf("%d desinscrits, rebonds ou plaintes dans cette liste : elle se supprime dans la console, pas depuis une IA", n)
+	}
+	return nil
+}
+
 func cites(v any, id string, keys []string) bool {
 	switch x := v.(type) {
 	case map[string]any:
@@ -364,3 +393,43 @@ func compactMessage(raw []byte) []byte {
 }
 
 func compactDeliveryEvents(raw []byte) []byte { return dropKeys(raw, "raw_payload") }
+
+// compactTemplates : la liste sert à choisir, templates_get rend le contenu.
+func compactTemplates(raw []byte) []byte {
+	return compactList(raw, "templates", func(m map[string]any) map[string]any {
+		out := pick(m, "id", "name", "version", "channel", "category", "updated_at")
+		if e, ok := m["email"].(map[string]any); ok && e["subject"] != nil {
+			out["subject"] = e["subject"]
+		}
+		return out
+	})
+}
+
+// compactSchemas : pour chaque schéma, les mesures (avec ce qu'elles disent) et les dimensions (avec leur type).
+func compactSchemas(raw []byte) []byte {
+	var o struct {
+		Schemas map[string]struct {
+			Measures   map[string]struct{ Description string } `json:"measures"`
+			Dimensions map[string]struct{ Type string }        `json:"dimensions"`
+		} `json:"schemas"`
+	}
+	if json.Unmarshal(raw, &o) != nil || len(o.Schemas) == 0 {
+		return raw
+	}
+	out := map[string]any{}
+	for name, sc := range o.Schemas {
+		m, d := map[string]string{}, map[string]string{}
+		for k, v := range sc.Measures {
+			m[k] = v.Description
+		}
+		for k, v := range sc.Dimensions {
+			d[k] = v.Type
+		}
+		out[name] = map[string]any{"measures": m, "dimensions": d}
+	}
+	b, err := json.Marshal(map[string]any{"schemas": out})
+	if err != nil {
+		return raw
+	}
+	return b
+}

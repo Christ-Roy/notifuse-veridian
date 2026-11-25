@@ -85,7 +85,7 @@ var catalog = []tool{
 	{Name: "segments_list", Description: "Liste les segments de contacts.", Resource: domain.PermissionResourceContacts,
 		Method: http.MethodGet, Path: "/api/segments.list", Props: map[string]any{}, Compact: compactSegments},
 	{Name: "templates_list", Description: "Liste les modeles d'e-mail.", Resource: domain.PermissionResourceTemplates,
-		Method: http.MethodGet, Path: "/api/templates.list", Props: map[string]any{}},
+		Method: http.MethodGet, Path: "/api/templates.list", Props: map[string]any{}, Compact: compactTemplates},
 	{Name: "templates_get", Description: "Lit un modele d'e-mail par son id.", Resource: domain.PermissionResourceTemplates,
 		Method: http.MethodGet, Path: "/api/templates.get", Props: map[string]any{"id": str("id du modele")}, Required: []string{"id"}},
 	{Name: "broadcasts_list", Description: "Liste les campagnes (broadcasts).", Resource: domain.PermissionResourceBroadcasts,

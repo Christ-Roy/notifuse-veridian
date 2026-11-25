@@ -44,14 +44,16 @@ func TestCatalog_AnnotationsVraies(t *testing.T) {
 		assert.True(t, tl.Destructive, n)
 	}
 	assert.GreaterOrEqual(t, len(catalog), 70)
+	q, _ := findTool("queue_entries")
+	assert.Contains(t, q.Required, "automation_id")
 }
 
 func TestAutomations_ToujoursEnBrouillonEtSansWebhook(t *testing.T) {
 	for _, name := range []string{"automations_create", "automations_update"} {
 		tl, _ := findTool(name)
-		_, body, err := tl.request(map[string]any{"automation": map[string]any{"id": "a1", "name": "A", "status": "live", "Status": "live", "trigger_sql": "X", "Trigger_SQL": "DROP", "workspace_id": "AUTRE", "nodes": []any{map[string]any{"id": "n", "type": "email"}}}}, "ws1")
+		_, body, err := tl.request(map[string]any{"automation": map[string]any{"id": "a1", "name": "A", "status": "live", "Status": "live", "trigger_sql": "X", "Trigger_SQL": "DROP", "workspace_id": "AUTRE", "nodes": []any{map[string]any{"id": "n", "type": "email", "automation_id": "AUTRE"}}}}, "ws1")
 		require.NoError(t, err)
-		assert.JSONEq(t, `{"workspace_id":"ws1","automation":{"id":"a1","name":"A","status":"draft","nodes":[{"id":"n","type":"email"}]}}`, string(body))
+		assert.JSONEq(t, `{"workspace_id":"ws1","automation":{"id":"a1","name":"A","status":"draft","nodes":[{"id":"n","type":"email","automation_id":"a1"}]}}`, string(body))
 		var got domain.CreateAutomationRequest
 		require.NoError(t, json.Unmarshal(body, &got))
 		assert.Equal(t, domain.AutomationStatusDraft, got.Automation.Status)
@@ -59,6 +61,8 @@ func TestAutomations_ToujoursEnBrouillonEtSansWebhook(t *testing.T) {
 			_, _, err = tl.request(map[string]any{"automation": map[string]any{"id": "a1", "nodes": []any{typ}}}, "ws1")
 			assert.ErrorContains(t, err, "webhook")
 		}
+		_, _, err = tl.request(map[string]any{"automation": map[string]any{"id": "a1", "nodes": []any{"webhook"}}}, "ws1")
+		assert.Error(t, err)
 		_, _, err = tl.request(map[string]any{"automation": "texte"}, "ws1")
 		assert.Error(t, err)
 	}
@@ -143,6 +147,33 @@ func TestCodeTools_Droits(t *testing.T) {
 		require.True(t, ok, name)
 		assert.Equal(t, want, tl.allowed(reader), name)
 	}
+}
+
+// Une liste qui garde la volonté de quelqu'un ne se supprime pas depuis une IA (« Suppression globale » en prod).
+func TestDeletableList(t *testing.T) {
+	get := func(stats string) getter {
+		return func(path string, _ url.Values) ([]byte, error) {
+			if path == "/api/automations.list" {
+				return []byte(`{"automations":[]}`), nil
+			}
+			return []byte(stats), nil
+		}
+	}
+	args := map[string]any{"id": "l"}
+	assert.NoError(t, deletableList(get(`{"stats":{"total_active":9,"total_unsubscribed":0,"total_bounced":0,"total_complained":0}}`), args))
+	for _, s := range []string{`{"stats":{"total_unsubscribed":1}}`, `{"stats":{"total_bounced":1}}`, `{"stats":{"total_complained":1}}`, `{}`, `x`} {
+		assert.Error(t, deletableList(get(s), args), s)
+	}
+	assert.Error(t, deletableList(func(string, url.Values) ([]byte, error) {
+		return []byte(`{"automations":[{"id":"s","list_id":"l"}]}`), nil
+	}, args))
+}
+
+func TestCompactSchemasEtModeles(t *testing.T) {
+	assert.JSONEq(t, `{"schemas":{"m":{"measures":{"count":"Total"},"dimensions":{"jour":"time"}}}}`,
+		string(compactSchemas([]byte(`{"schemas":{"m":{"measures":{"count":{"sql":"*","description":"Total","filters":[{"sql":"x"}]}},"dimensions":{"jour":{"type":"time","sql":"y"}}}}}`))))
+	assert.Equal(t, `{"x":1}`, string(compactSchemas([]byte(`{"x":1}`))))
+	assert.JSONEq(t, `{"templates":[{"id":"a","category":"marketing","subject":"S"}]}`, string(compactTemplates([]byte(`{"templates":[{"id":"a","category":"marketing","email":{"subject":"S","mjml_source":"gros"}}]}`))))
 }
 
 func TestDropKeys(t *testing.T) {

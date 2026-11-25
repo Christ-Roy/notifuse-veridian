@@ -37,7 +37,7 @@ Contrat : `veridian-hub/docs/CONTRAT-MCP.md` (09/11/2026). Code : `internal/veri
 - **Brouillon seulement** : une séquence créée ou modifiée part en `draft` (liste blanche de clés exactes : `encoding/json` accepte toute casse), sans nœud
   webhook ; une campagne ou une séquence qui n'est plus un brouillon est refusée (`Check` lit l'état avec les droits de l'appelant ; illisible = refus).
 - **Jamais un modèle transactionnel** (il partirait sans plafond) ; `contact_unsubscribe` ne sait que désinscrire ; `list_remove_contact` refuse un désinscrit.
-- **Supprimer** modèle, segment ou liste : refusé tant qu'une séquence active le cite. `templates_update` et `segments_update` sont destructifs (effet sur l'envoi en cours).
+- **Supprimer** modèle, segment ou liste : refusé tant qu'une séquence active le cite ; une liste, aussi si elle porte désinscrits, rebonds ou plaintes. `templates_update` et `segments_update` sont destructifs (effet sur l'envoi en cours).
 
 ## « Brancher mon IA » dans la console (10/11/2026)
 
