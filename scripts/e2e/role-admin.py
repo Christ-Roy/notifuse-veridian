@@ -162,7 +162,8 @@ try:
             st, r = appel(q)
             if st == 429 or st >= 502:
                 non_abouti(nom_r, q, st)
-            check(f"{nom_r} / {q} : {'passe' if attendu else 'refusé'}", passe(st, r) is attendu, f"{st} {r}")
+            # Refusé = aucun succès (l'amont rend certains refus en 500 générique, membre compris, avant ce lot) ; l'effet absent est relu après.
+            check(f"{nom_r} / {q} : {'passe' if attendu else 'refusé'}", passe(st, r) if attendu else not (200 <= st < 300), f"{st} {r}")
             if q == "admin" and "profil" in nom_r or nom_r in ("réglages de l'espace", "clé API", "intégration IA", "droits d'un membre"):
                 if attendu:
                     check(f"{nom_r} / {q} : vraiment fait (2xx)", 200 <= st < 300, f"{st} {r}")
@@ -173,6 +174,8 @@ try:
     J["membre"] = jeton("membre") or J["membre"]  # setUserPermissions coupe ses sessions, voulu
     rl = roles()
     check("propriétaire intact après la matrice", rl.get(P["proprio"], {}).get("role") == "owner", rl)
+    st, r = api("proprio", "GET", "/api/workspaces.get", params={"id": WS})
+    check("l'espace existe toujours (suppression refusée)", st == 200 and r.get("workspace", r).get("id") == WS, st)
     st, r = api("admin", "GET", "/api/workspaces.get", params={"id": WS})
     integ = r.get("workspace", r).get("integrations") or []
     check("profil Gmail posé par l'admin, relu", any(i.get("name") == "e2e gmail admin" for i in integ), [i.get("name") for i in integ])
@@ -207,7 +210,7 @@ try:
     st, r = api("proprio", "POST", "/api/workspaces.removeMember", {"workspace_id": WS, "user_id": uid["admin"]})
     check("le propriétaire retire l'admin", 200 <= st < 300, f"{st} {r}")
     st, r = api("admin", "GET", "/api/workspaces.get", params={"id": WS})
-    check("l'admin retiré n'entre plus", st in (401, 403, 404), st)
+    check("l'admin retiré n'entre plus", not (200 <= st < 300) and not r.get("workspace"), st)
     st, r = geste("sync-member", {"hub_user_id": P["admin"], "email": MAIL["admin"], "email_proven": True, "role": "admin"})
     check("synchronisation rejouée : 409 admin_withdrawn", st == 409 and r.get("code") == "admin_withdrawn", f"{st} {r}")
     st, r = geste("restore-member", {"hub_user_id": P["admin"], "email": MAIL["admin"]})
