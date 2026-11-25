@@ -48,6 +48,8 @@ type Member struct {
 	HubUserID string `json:"hub_user_id"`
 	Email     string `json:"email"`
 	Role      string `json:"role"`
+	// EmailProven : attestation du Hub, transmise telle quelle (fiche 89) ; absente, un compte d'avant sans lien n'est pas relié.
+	EmailProven bool `json:"email_proven"`
 }
 
 // Organisation : le corps du Hub. Les champs inconnus sont ignorés (le contrat peut grandir).

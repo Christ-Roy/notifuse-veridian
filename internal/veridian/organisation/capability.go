@@ -62,7 +62,7 @@ func syncMember(mux http.Handler, secret string) func(context.Context, string, M
 		if m.Role == "admin" {
 			role = "admin"
 		}
-		body, err := json.Marshal(map[string]string{"user_email": m.Email, "hub_user_id": m.HubUserID, "role": role})
+		body, err := json.Marshal(map[string]any{"email": m.Email, "hub_user_id": m.HubUserID, "email_proven": m.EmailProven, "role": role})
 		if err != nil {
 			return err
 		}

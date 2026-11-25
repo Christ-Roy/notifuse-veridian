@@ -19,6 +19,9 @@ l'accès, ou le geste touchait celui qui avait repris l'adresse. Le Hub avait do
 | `by-email?hub_user_id=` | `found:false` | l'adresse n'est lue que sans `hub_user_id` |
 | `workspaces.generateMagicLink` (clé d'espace gérée par le Hub) | 404 ; pas membre de CET espace : 404 | ignorée ; l'adresse seule : 400 pour un compte relié, admise pour un membre SANS lien (canari, opérateur) |
 
+`organisations/sync` : adhésion testée par `hub_user_id`, `email_proven` de chaque membre transmis tel quel à `sync-member` ; `membres_refuses` (nombre)
+est lu et montré par le Hub : garder ce nom.
+
 `attach-owner` et `provision` sans `hub_user_id` (scripts d'opérateur) désignent encore par l'adresse ; le Hub le donne toujours.
 
 ## Comptes d'avant, sans lien

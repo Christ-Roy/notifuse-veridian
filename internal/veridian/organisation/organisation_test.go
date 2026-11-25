@@ -353,7 +353,7 @@ func TestAbonnement(t *testing.T) {
 }
 
 func TestSyncMember_RejoueLaRouteSignee(t *testing.T) {
-	var got map[string]string
+	var got map[string]any
 	var sig string
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/tenants/{id}/sync-member", func(w http.ResponseWriter, r *http.Request) {
@@ -370,7 +370,13 @@ func TestSyncMember_RejoueLaRouteSignee(t *testing.T) {
 	})
 	add := syncMember(mux, secret)
 	require.NoError(t, add(context.Background(), "alpha", Member{HubUserID: "h", Email: "a@x.test", Role: "owner"}))
-	assert.Equal(t, map[string]string{"user_email": "a@x.test", "hub_user_id": "h", "role": "member"}, got, "jamais un propriétaire par cette voie")
+	assert.Equal(t, map[string]any{"email": "a@x.test", "hub_user_id": "h", "email_proven": false, "role": "member"}, got, "jamais un propriétaire par cette voie, jamais une attestation supposée")
+	// Lue dans le corps du Hub et transmise telle quelle.
+	var m Member
+	require.NoError(t, json.Unmarshal([]byte(`{"hub_user_id":"h","email":"a@x.test","email_proven":true,"role":"admin"}`), &m))
+	require.NoError(t, add(context.Background(), "alpha", m))
+	assert.Equal(t, true, got["email_proven"])
+	assert.Equal(t, "admin", got["role"])
 	require.Error(t, add(context.Background(), "beta", Member{HubUserID: "h", Email: "a@x.test"}))
 	require.Error(t, add(context.Background(), "alpha", Member{Email: "a@x.test"}))
 }
