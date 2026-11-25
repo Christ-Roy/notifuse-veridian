@@ -69,6 +69,7 @@ print(json.dumps([
 
   local recips; recips=$(sink_recipients)
   log "RCPT TO vus au sink : $(echo "$recips" | tr '\n' ' ')"
+  SINK_SEEN=$(echo "$recips" | grep -cix -e "$GOOGLE" -e "$CORP" || true)  # le témoin : sans lui, une absence ne prouve rien
 
   # --- G2 exclusion : microsoft NE doit PAS atteindre le sink, google/free/corp OUI.
   local msft_in=0 g_in=0 f_in=0 c_in=0
@@ -317,7 +318,7 @@ run_circuit_breaker_gate() {
   # Crée une 2e intégration pointant le sink sur un port NON écouté → connexion
   # refusée → erreur provider (retryable). use_tls=false. Host privé interne =
   # OK pour Validate. AUCUN mail ne sort (la connexion échoue avant DATA).
-  local FAILPORT=2          # port quasi sûr d'être fermé sur le conteneur sink
+  local FAILPORT=1026       # fermé sur le conteneur sink, admis par NOTIFUSE_OUTBOUND_INTERNAL_ALLOW du staging (fiche 64)
   local FAIL_INTEG
   FAIL_INTEG=$(api /api/workspaces.createIntegration "{\"workspace_id\":\"$WID\",\"name\":\"cbfail\",\"type\":\"email\",\"provider\":{\"kind\":\"smtp\",\"smtp\":{\"host\":\"$SINK_HOST\",\"port\":$FAILPORT,\"use_tls\":false},\"senders\":[{\"id\":\"scb\",\"email\":\"gf-cb-${STAMP}@${SENDER_DOM}\",\"name\":\"CB\",\"is_default\":true}],\"rate_limit_per_minute\":600}}" \
     | python3 -c 'import json,sys;print(json.load(sys.stdin).get("integration_id",""))' 2>/dev/null)

@@ -252,7 +252,8 @@ INTERNAL_API_ENDPOINT=http://localhost:8081
 VERIDIAN_DEFAULT_PLAN=free
 # Co-owner par defaut de chaque espace cree (Robert Brunon, 30/10/2026). Adresse, pas un secret. Vide = desactive.
 VERIDIAN_DEFAULT_CO_OWNER_EMAIL=robert.brunon@veridian.site
-NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025
+# 1025 : puits SMTP. 1026 : port fermé, pour prouver le disjoncteur (cold-garde-fous.sh, G1).
+NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025,127.0.0.1:1026
 
 # Invitation d'un membre par le Hub (fiches 46 et 86) : secret perdu à la bascule vers Nomad, reposé le 24/11/2026. Variable absente = route 503.
 HUB_BASE_URL=https://hub.staging.veridian.site

@@ -185,10 +185,16 @@ cleanup() {
   hmac /api/veridian/admin/wipe-test-tenants POST \
     "{\"tenant_ids\":[\"$WID\"],\"safety_client_prefixes\":[\"canary\"]}" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT
+trap '[ -n "${AWAKE_PID:-}" ] && kill "$AWAKE_PID" 2>/dev/null; cleanup' EXIT
+
+# Le staging s'endort sans trafic HTTP : le 25/11/2026 il s'est rendormi pendant la mesure, et dix gardes sont sorties « FAIL » sur des valeurs vides.
+( while kill -0 $$ 2>/dev/null; do curl -s -m 60 -o /dev/null "$BASE/api/health"; sleep 40; done ) &
+AWAKE_PID=$!
+for _ in $(seq 1 20); do curl -s -m 60 "$BASE/api/version" | grep -q git_sha && break; sleep 6; done
 
 RUN_START_ISO="$(date -u +%Y-%m-%dT%H:%M:%S)"
 ensure_sink
+ALLOC_START="$(staging_alloc)"
 
 # ============================================================================
 # SETUP
@@ -205,7 +211,7 @@ log "owner session ok"
 # Intégration SMTP → SINK. 2 senders pour le round-robin. use_tls=false (sink en
 # clair) → pas besoin de skip_tls_verify.
 log "create intégration SMTP → SINK (2 senders)"
-INTEG=$(api /api/workspaces.createIntegration "{\"workspace_id\":\"$WID\",\"name\":\"sink\",\"type\":\"email\",\"provider\":{\"kind\":\"smtp\",\"smtp\":{\"host\":\"$SINK_HOST\",\"port\":$SINK_PORT,\"use_tls\":false},\"senders\":[{\"id\":\"sa\",\"email\":\"$SENDER_A\",\"name\":\"Bot A\",\"is_default\":true},{\"id\":\"sb\",\"email\":\"$SENDER_B\",\"name\":\"Bot B\"}],\"rate_limit_per_minute\":600}}")
+INTEG=$(api /api/workspaces.createIntegration "{\"workspace_id\":\"$WID\",\"name\":\"sink\",\"type\":\"email\",\"provider\":{\"kind\":\"smtp\",\"smtp\":{\"host\":\"$SINK_HOST\",\"port\":$SINK_PORT,\"use_tls\":false},\"senders\":[{\"id\":\"sa\",\"email\":\"$SENDER_A\",\"name\":\"Bot A\",\"is_default\":true},{\"id\":\"sb\",\"email\":\"$SENDER_B\",\"name\":\"Bot B\"}],\"rate_limit_per_minute\":600,\"veridian_sending_window\":{\"start_hour\":0,\"end_hour\":24,\"timezone\":\"UTC\"}}}")
 INTEG_ID=$(echo "$INTEG" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("integration_id",""))' 2>/dev/null)
 [ -n "$INTEG_ID" ] || fatal "createIntegration KO: ${INTEG:0:200}"
 
@@ -292,6 +298,13 @@ for g in G1_circuit_breaker G2_exclusion G3_throttle G4_daily_cap G5_per_sender 
   [ "$st" = "FAIL" ] && FAILS=$((FAILS+1))
 done
 echo "" >&2
+# Une mesure impossible n'est ni un vert ni un rouge.
+if [ "$(staging_alloc)" != "$ALLOC_START" ]; then
+  printf 'NON ABOUTI : le staging a redémarré pendant la mesure (%s), rejouer\n' "${ALLOC_START:0:8}" >&2; exit 2
+fi
+if [ "${SINK_SEEN:-0}" -eq 0 ]; then
+  printf 'NON ABOUTI : aucun mail du témoin (google, corporate) au puits, la campagne n a rien mesuré\n' >&2; exit 2
+fi
 if [ "$FAILS" -eq 0 ]; then
   printf '\033[1;32m✓ TOUS LES GARDE-FOUS TIENNENT — feu vert envoi prod (sous réserve copy/contenu)\033[0m\n' >&2
   exit 0
