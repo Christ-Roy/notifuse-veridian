@@ -92,3 +92,12 @@ La redirection vers l'interne n'est PAS prouvée en prod (aucun redirecteur publ
 ## Piège CLI
 
 `notifuse-admin` re-provisionne avec `NOTIFUSE_OWNER_EMAIL` (défaut `robert.brunon@veridian.site`) : sur un workspace jetable créé avec un autre owner, toute commande sort en `owner_mismatch` (409).
+
+## Livraison des webhooks : la garde à la connexion n'avait jamais servi en prod (25/11/2026)
+
+`NewWebhookDeliveryWorker` ne construit un client gardé que si on lui passe `nil` ; `app.go` lui passait un client ordinaire de 10 s. Preuve : 118 livraisons
+abouties vers `bridge.staging.veridian.site` (100.81.x). Seule la vérification à la création jouait (contournable par redirection ou changement de DNS).
+Corrigé : `app.go` passe `nil`, le client vit dans `veridian_webhook_trusted.go` (30 s), et `TestAppWebhookDeliveryWorkerIsGuarded` éprouve le livreur ASSEMBLÉ.
+- **Exception d'opérateur** : `NOTIFUSE_WEBHOOK_TRUSTED_HOSTS` (noms exacts ; une entrée illisible vide la liste), port 443 seulement, jamais par redirection,
+  jamais boucle locale ni lien local, et jamais à la création d'un abonnement. Prod : `bridge.staging.veridian.site` ; staging : le Hub de staging.
+- Réessais : 30 s, 1, 2, 5, 15, 30 min, 1 h, 2 h, 6 h (10 essais), même `webhook-id` ; `Retry-After` non lu ; livraisons séquentielles.

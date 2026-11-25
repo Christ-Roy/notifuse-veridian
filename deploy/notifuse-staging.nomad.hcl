@@ -256,6 +256,8 @@ NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025
 
 # Invitation d'un membre par le Hub (fiches 46 et 86) : secret perdu à la bascule vers Nomad, reposé le 24/11/2026. Variable absente = route 503.
 HUB_BASE_URL=https://hub.staging.veridian.site
+# Hôte interne admis pour LIVRER un webhook (fiche 61) : le Hub de staging est sur le tailnet (F3).
+NOTIFUSE_WEBHOOK_TRUSTED_HOSTS=hub.staging.veridian.site
 # Jetons du Hub de staging (MCP fiche 83, actions fiche 87) : jamais ceux de prod.
 VERIDIAN_HUB_JWKS_URL=https://hub.staging.veridian.site/.well-known/jwks.json
 VERIDIAN_HUB_ISSUER=https://hub.staging.veridian.site

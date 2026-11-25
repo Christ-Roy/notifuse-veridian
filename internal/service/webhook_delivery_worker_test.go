@@ -1194,3 +1194,13 @@ func TestWebhookDeliveryWorker_cleanupOldDeliveries(t *testing.T) {
 		worker.cleanupOldDeliveries(ctx)
 	})
 }
+
+// Le livreur construit sans client refuse une adresse interne, redirection comprise.
+func TestWebhookDeliveryWorker_ClientGarde(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) }))
+	defer srv.Close()
+	w := NewWebhookDeliveryWorker(nil, nil, nil, nil, nil)
+	require.Equal(t, webhookDeliveryTimeout, w.httpClient.Timeout)
+	_, err := w.httpClient.Get(srv.URL) //nolint:bodyclose // refusé avant toute réponse
+	assert.ErrorContains(t, err, "refusing to connect")
+}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Notifuse/notifuse/config"
+	"github.com/Notifuse/notifuse/internal/domain"
 	pkgDatabase "github.com/Notifuse/notifuse/pkg/database"
 	"github.com/Notifuse/notifuse/pkg/mailer"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
@@ -532,6 +533,29 @@ func TestAppInitServices(t *testing.T) {
 	assert.NotNil(t, appImpl.transactionalNotificationService, "TransactionalNotification service should be initialized")
 	assert.NotNil(t, appImpl.eventBus, "Event bus should be initialized")
 	assert.NotNil(t, appImpl.supabaseService, "Supabase service should be initialized")
+}
+
+// Le livreur de webhooks ASSEMBLÉ par l'app refuse une adresse interne : le 25/11/2026 son constructeur était gardé et testé, mais app.go lui passait un
+// client ordinaire.
+func TestAppWebhookDeliveryWorkerIsGuarded(t *testing.T) {
+	mockDB, _, err := setupTestDBMock()
+	require.NoError(t, err)
+	defer func() { _ = mockDB.Close() }()
+	cfg := createTestConfig()
+	app := NewApp(cfg, WithMockDB(mockDB))
+	require.NoError(t, pkgDatabase.InitializeConnectionManager(cfg, mockDB))
+	defer pkgDatabase.ResetConnectionManager()
+	require.NoError(t, app.InitRepositories())
+	require.NoError(t, app.InitServices())
+
+	reached := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { reached = true }))
+	defer srv.Close()
+	_, _, err = app.(*App).webhookDeliveryWorker.SendTestWebhook(context.Background(), "ws",
+		&domain.WebhookSubscription{URL: srv.URL, Secret: "whsec_c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0"}, "test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "refusing to connect")
+	assert.False(t, reached, "aucune connexion interne n'a abouti")
 }
 
 // TestAppInitSupabaseService tests that the Supabase service is properly initialized and linked

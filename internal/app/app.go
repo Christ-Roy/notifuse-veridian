@@ -940,7 +940,7 @@ func (a *App) InitServices() error {
 		a.webhookDeliveryRepo,
 		a.workspaceRepo,
 		a.logger,
-		httpClient,
+		nil, // Veridian : client gardé (SSRF), construit par le livreur ; jamais le client ordinaire d'ici
 	)
 
 	// Initialize email queue worker for processing marketing emails (broadcasts & automations)

@@ -63,7 +63,7 @@ func NewWebhookDeliveryWorker(
 		// loopback/RFC1918/CGNAT/lien-local/DNS-rebinding. Un appelant qui a
 		// une vraie raison de bypasser (tests) passe explicitement son propre
 		// *http.Client.
-		httpClient = newSSRFSafeHTTPClient(30 * time.Second)
+		httpClient = newWebhookDeliveryClient()
 	}
 
 	return &WebhookDeliveryWorker{
