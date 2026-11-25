@@ -5,4 +5,4 @@
 **Pourquoi** : la console appelait cette route depuis le 21/05/2026, elle n'avait jamais été écrite ; le repli de l'écran affichait « Free, essai de 15
 jours » à tout le monde, les espaces payants compris. Règle : un plan non lu se dit (« Plan indisponible pour le moment »), jamais « Free » par défaut.
 **Ce qui l'avait caché** : la suite console (E2E sur staging) le voyait à chaque run, mais son étape est en `continue-on-error` : le job finissait vert.
-Tablette (768 à 991 px) : menu replié au départ, tables et en-têtes ne débordent plus (`console/src/index.css`).
+Tablette (768 à 991 px) : tables et en-têtes ne débordent plus (`console/src/index.css`).
