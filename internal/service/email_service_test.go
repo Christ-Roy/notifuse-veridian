@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"context"
+	"errors"
 	"testing"
 	"time"
 
