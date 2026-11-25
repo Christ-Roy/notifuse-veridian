@@ -33,3 +33,10 @@ ou `provision` avec `email_proven`. `users/sync` ne relie pas (il cherche par l'
 `veridian_hub_member_test.go` : adresse changée puis reprise par un compte neuf, chaque geste ; vu échouer avec la recherche par adresse (remove,
 restore, freeze, unfreeze), avec la fusion admise, avec le lien de connexion sur l'adresse reçue, avec le rejeu de provision par l'adresse.
 `python3 scripts/e2e/personne-du-hub.py` (staging ; `--prod --ws <espace à nous>`) : 0 prouvé, 1 défaut, 2 non abouti.
+
+## Provision (26/11/2026)
+`POST /api/tenants/provision` sans `owner_hub_user_id` ni `metadata.hub_user_id` (uuid) : 400 `invalid_payload`, rien n'est créé. Accord du Hub (56784ad).
+
+## Rebond sans espace demandé (25/11/2026)
+Une personne de plusieurs espaces arrive sur `/console?rebond=1` : le dernier espace ouvert dans ce navigateur s'il est encore à elle, sinon le choix.
+Avant, le lien ouvrait l'espace dont le RÔLE avait changé en dernier : ajoutée chez un client, elle y atterrissait. Mesures : `scripts/e2e/console_espace.py`.
