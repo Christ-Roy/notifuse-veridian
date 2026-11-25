@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"net/url"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
@@ -2219,6 +2220,33 @@ func TestIssueMagicLinkForHub_PicksLatestWorkspace(t *testing.T) {
 	payload, perr := decodeAutoLoginPayload(t, resp.MagicLinkURL)
 	require.NoError(t, perr)
 	assert.Equal(t, "ws-recent", payload.WorkspaceID, "doit picker le workspace avec UpdatedAt le plus recent")
+	u, err := url.Parse(resp.MagicLinkURL)
+	require.NoError(t, err)
+	assert.Equal(t, "/console?rebond=1", u.Query().Get("next"), "plusieurs espaces, aucun demande : on demande, on ne choisit pas a sa place")
+	assert.Equal(t, domain.ConsoleChooseSpacePath, domain.ConsoleNextPath("", u.Query().Get("next")), "l'auto-login doit suivre ce chemin")
+}
+
+// Plusieurs espaces et un espace demande : il est suivi, meme si un role vient de changer ailleurs. Un seul espace : on y va droit.
+func TestIssueMagicLinkForHub_AskedSpaceWins_SingleSpaceDirect(t *testing.T) {
+	svc, m := newVeridianService(t)
+	ctx := context.Background()
+	hubID := "11111111-2222-3333-4444-555555555555"
+	bound := &domain.User{ID: "u1", Email: "a@x.test", Type: domain.UserTypeUser, HubUserID: &hubID}
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, hubID).Return(bound, nil).AnyTimes()
+	next := func(spaces []*domain.UserWorkspace, asked string) string {
+		m.workspaceRepo.EXPECT().GetUserWorkspaces(ctx, "u1").Return(spaces, nil)
+		resp, err := svc.IssueMagicLinkForHub(ctx, domain.IssueMagicLinkInput{HubUserID: hubID, Email: "a@x.test", Next: asked})
+		require.NoError(t, err)
+		u, err := url.Parse(resp.MagicLinkURL)
+		require.NoError(t, err)
+		return u.Query().Get("next")
+	}
+	mine := &domain.UserWorkspace{UserID: "u1", WorkspaceID: "a-moi", UpdatedAt: time.Now().Add(-time.Hour)}
+	client := &domain.UserWorkspace{UserID: "u1", WorkspaceID: "client", UpdatedAt: time.Now()}
+	assert.Equal(t, "/console/workspace/a-moi", next([]*domain.UserWorkspace{mine, client}, "/console/workspace/a-moi"))
+	assert.Equal(t, domain.ConsoleChooseSpacePath, next([]*domain.UserWorkspace{mine, client}, ""))
+	assert.Equal(t, domain.ConsoleChooseSpacePath, next([]*domain.UserWorkspace{mine, client}, "https://evil.example/console/workspace/client"))
+	assert.Equal(t, "", next([]*domain.UserWorkspace{mine}, ""))
 }
 
 func TestIssueMagicLinkForHub_UserNotFound_ErrNoRows(t *testing.T) {
@@ -2396,7 +2424,7 @@ func decodeAutoLoginPayload(t *testing.T, urlStr string) (*domain.AutoLoginPaylo
 	if idx < 0 {
 		return nil, errors.New("no token= in url")
 	}
-	token := urlStr[idx+len("token="):]
+	token, _, _ := strings.Cut(urlStr[idx+len("token="):], "&")
 	return domain.VerifyAutoLoginToken(token, "test-hub-secret-32chars-min-len-ok-padding")
 }
 

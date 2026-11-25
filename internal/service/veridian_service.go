@@ -2501,8 +2501,15 @@ func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain
 		// HUB_API_SECRET non configure → 500 cote handler.
 		return nil, fmt.Errorf("build auto-login url: %w", err)
 	}
-	// Page demandee avant le rebond : suivie seulement si elle est sur l'origine de l'app.
-	if nextPath := domain.ConsoleNextPath(s.apiEndpoint, input.Next); nextPath != "" {
+	// Page demandee avant le rebond : suivie seulement si elle est sur l'origine de l'app. Sans elle, une personne de
+	// plusieurs espaces n'est envoyee dans aucun : la console rouvre le dernier qu'elle a choisi ou le demande. `latest`
+	// suit le dernier changement de ROLE, pas le dernier espace ouvert : une personne ajoutee chez un client y
+	// atterrissait au rebond suivant (25/11/2026).
+	nextPath := domain.ConsoleNextPath(s.apiEndpoint, input.Next)
+	if nextPath == "" && len(userWorkspaces) > 1 {
+		nextPath = domain.ConsoleChooseSpacePath
+	}
+	if nextPath != "" {
 		autoLoginURL += "&next=" + url.QueryEscape(nextPath)
 	}
 

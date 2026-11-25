@@ -52,6 +52,7 @@ import {
   selectedSidebarKey,
   type SidebarSearch
 } from './veridian_sidebar_model'
+import { rememberSpace } from '../utils/veridian_last_space'
 
 const { Content, Sider, Header } = Layout
 
@@ -96,6 +97,10 @@ export function WorkspaceLayout() {
   const isSettingsPage = currentPath.includes('/settings')
   useVeridianDocumentTitle(currentPath)
   useVeridianAccessibleNames()
+
+  useEffect(() => {
+    if (workspaces.some((w) => w.id === workspaceId)) rememberSpace(user?.id, workspaceId)
+  }, [user?.id, workspaceId, workspaces])
 
   // Fetch user permissions for the current workspace
   useEffect(() => {

@@ -1015,6 +1015,9 @@ type IssueMagicLinkInput struct {
 	Next string `json:"next,omitempty"`
 }
 
+// ConsoleChooseSpacePath : la console rouvre le dernier espace choisi par cette personne dans ce navigateur, sinon le demande.
+const ConsoleChooseSpacePath = "/console?rebond=1"
+
 // ConsoleNextPath rend le chemin (avec requete) de `next` quand il designe une page de la console sur
 // l'origine de l'app, "" sinon (l'appelant retombe sur l'accueil du workspace). Accepte une URL absolue
 // de la meme origine que apiEndpoint, ou un chemin /console...; refuse toute autre origine, les chemins
