@@ -260,7 +260,9 @@ func TestVeridianWorkspaceRole_MethodesReservees(t *testing.T) {
 				reach(h)
 				return errStop
 			}).MaxTimes(1)
-		}, func(h *roleHarness) error { return h.s.AddUserToWorkspace(ctx, "ws", "u2", "member", domain.FullPermissions) }},
+		}, func(h *roleHarness) error {
+			return h.s.AddUserToWorkspace(ctx, "ws", "u2", "member", domain.FullPermissions)
+		}},
 		{"RemoveUserFromWorkspace (interne)", ownerOnly, true, func(h *roleHarness) {
 			h.repo.EXPECT().RemoveUserFromWorkspace(gomock.Any(), "u2", "ws").DoAndReturn(func(context.Context, string, string) error {
 				reach(h)
@@ -290,7 +292,6 @@ func TestVeridianWorkspaceRole_MethodesReservees(t *testing.T) {
 		}
 	}
 }
-
 
 // Admin : retirer un propriétaire refusé, cible illisible refusée (rien ne s'exécute), s'enlever soi-même refusé.
 func TestWorkspaceService_RemoveMember_AdminCibleIllisibleEtSoiMeme(t *testing.T) {
@@ -422,11 +423,6 @@ func withLedger(svc *veridianService, m *veridianServiceMocks) *roleLedgerRepo {
 	return led
 }
 
-
-
-
-
-
 func attachInput(invitation string) domain.AttachMemberInput {
 	return domain.AttachMemberInput{TenantID: "ws-1", HubUserID: testHubUID, HubUserEmail: "alice@example.com", Role: domain.AttachMemberRoleMember, InvitationID: invitation}
 }
@@ -484,7 +480,6 @@ func TestAttachMember_AdminRetire_AvecInvitation_Passe(t *testing.T) {
 	assert.Equal(t, 0, led.withdrawnCalls)
 }
 
-
 // === attach-owner : jamais de transfert silencieux ==========================
 
 func ownerRow(userID, email string, kind domain.UserType) *domain.UserWorkspaceWithEmail {
@@ -498,7 +493,7 @@ func TestAttachOwner_AutreProprietaireHumain_OwnerExists_AucuneEcriture(t *testi
 	for name, tc := range map[string]struct {
 		existingNewOwner bool
 	}{
-		"nouveau propriétaire déjà compte ici":  {true},
+		"nouveau propriétaire déjà compte ici": {true},
 		"nouveau propriétaire sans compte ici": {false},
 	} {
 		svc, m := newVeridianService(t)
@@ -535,16 +530,16 @@ func TestRefuseSilentTransfer(t *testing.T) {
 		want     error
 		listed   bool
 	}{
-		"transfer explicite : aucune lecture": {true, nil, bob, nil, nil, false},
-		"autre propriétaire humain":           {false, []*domain.UserWorkspaceWithEmail{ownerRow("a", "alice@x.test", domain.UserTypeUser)}, bob, nil, ErrOwnerExists, true},
-		"déjà propriétaire : rien à transférer": {false, []*domain.UserWorkspaceWithEmail{ownerRow("bob-id", "bob@x.test", domain.UserTypeUser), ownerRow("a", "alice@x.test", domain.UserTypeUser)}, bob, nil, nil, true},
-		"compte racine ne compte pas":         {false, []*domain.UserWorkspaceWithEmail{ownerRow("r", "root@veridian.site", domain.UserTypeUser)}, bob, nil, nil, true},
+		"transfer explicite : aucune lecture":    {true, nil, bob, nil, nil, false},
+		"autre propriétaire humain":              {false, []*domain.UserWorkspaceWithEmail{ownerRow("a", "alice@x.test", domain.UserTypeUser)}, bob, nil, ErrOwnerExists, true},
+		"déjà propriétaire : rien à transférer":  {false, []*domain.UserWorkspaceWithEmail{ownerRow("bob-id", "bob@x.test", domain.UserTypeUser), ownerRow("a", "alice@x.test", domain.UserTypeUser)}, bob, nil, nil, true},
+		"compte racine ne compte pas":            {false, []*domain.UserWorkspaceWithEmail{ownerRow("r", "root@veridian.site", domain.UserTypeUser)}, bob, nil, nil, true},
 		"copropriétaire configuré ne compte pas": {false, []*domain.UserWorkspaceWithEmail{ownerRow("c", "robert@veridian.site", domain.UserTypeUser)}, bob, nil, nil, true},
-		"clé API ne compte pas":               {false, []*domain.UserWorkspaceWithEmail{ownerRow("k", "k@api.test", domain.UserTypeAPIKey)}, bob, nil, nil, true},
-		"un membre ne compte pas":             {false, []*domain.UserWorkspaceWithEmail{{UserWorkspace: domain.UserWorkspace{UserID: "m", Role: "member"}, Email: "m@x.test", Type: domain.UserTypeUser}}, bob, nil, nil, true},
-		"cible sans compte, autre propriétaire": {false, []*domain.UserWorkspaceWithEmail{ownerRow("a", "alice@x.test", domain.UserTypeUser)}, nil, nil, ErrOwnerExists, true},
-		"espace sans propriétaire":            {false, nil, bob, nil, nil, true},
-		"liste illisible : refus, pas silence": {false, nil, bob, errors.New("db down"), errors.New("list workspace members"), true},
+		"clé API ne compte pas":                  {false, []*domain.UserWorkspaceWithEmail{ownerRow("k", "k@api.test", domain.UserTypeAPIKey)}, bob, nil, nil, true},
+		"un membre ne compte pas":                {false, []*domain.UserWorkspaceWithEmail{{UserWorkspace: domain.UserWorkspace{UserID: "m", Role: "member"}, Email: "m@x.test", Type: domain.UserTypeUser}}, bob, nil, nil, true},
+		"cible sans compte, autre propriétaire":  {false, []*domain.UserWorkspaceWithEmail{ownerRow("a", "alice@x.test", domain.UserTypeUser)}, nil, nil, ErrOwnerExists, true},
+		"espace sans propriétaire":               {false, nil, bob, nil, nil, true},
+		"liste illisible : refus, pas silence":   {false, nil, bob, errors.New("db down"), errors.New("list workspace members"), true},
 	} {
 		svc, m := newVeridianService(t)
 		svc.ConfigureDefaultCoOwner("robert@veridian.site")

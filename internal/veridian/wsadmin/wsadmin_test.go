@@ -190,12 +190,12 @@ func TestGrant_SurProprietaire_ResteOwner_ChangedUneFois(t *testing.T) {
 func TestGrant_Refus404(t *testing.T) {
 	f := newFixture(t)
 	for name, c := range map[string]struct{ w, hub, code string }{
-		"non membre":         {ws, hubOther, "not_a_member"},
-		"compte inconnu":     {ws, hubUnknown, "user_not_in_app"},
-		"clé API jamais":     {ws, hubKey, "user_not_in_app"},
-		"supprimé au Hub":    {ws, hubGone, "user_not_in_app"},
-		"espace supprimé":    {"wsparti", hubMember, "tenant_not_found"},
-		"espace inexistant":  {"nulpart", hubMember, "tenant_not_found"},
+		"non membre":          {ws, hubOther, "not_a_member"},
+		"compte inconnu":      {ws, hubUnknown, "user_not_in_app"},
+		"clé API jamais":      {ws, hubKey, "user_not_in_app"},
+		"supprimé au Hub":     {ws, hubGone, "user_not_in_app"},
+		"espace supprimé":     {"wsparti", hubMember, "tenant_not_found"},
+		"espace inexistant":   {"nulpart", hubMember, "tenant_not_found"},
 		"non membre ailleurs": {"wsparti", hubOther, "tenant_not_found"},
 	} {
 		code, _, got := f.post(c.w, c.hub, "grant", false)
@@ -285,14 +285,14 @@ func TestRevoke_Proprietaire409_EtJamaisDesigneSansTombe(t *testing.T) {
 
 func TestJournal_UneLignePourChaqueDecisionEtChaqueRefus(t *testing.T) {
 	f := newFixture(t)
-	f.post(ws, hubMember, "grant", false)    // ok
-	f.post(ws, hubMember, "grant", false)    // unchanged
-	f.post(ws, hubOwner, "revoke", false)    // is_owner
-	f.post(ws, hubOther, "grant", false)     // not_a_member
-	f.post(ws, hubUnknown, "grant", false)   // user_not_in_app
+	f.post(ws, hubMember, "grant", false)        // ok
+	f.post(ws, hubMember, "grant", false)        // unchanged
+	f.post(ws, hubOwner, "revoke", false)        // is_owner
+	f.post(ws, hubOther, "grant", false)         // not_a_member
+	f.post(ws, hubUnknown, "grant", false)       // user_not_in_app
 	f.post("nulpart", hubMember, "grant", false) // tenant_not_found
-	f.post(ws, hubMember, "revoke", false)   // ok
-	f.post(ws, hubMember, "grant", false)    // admin_withdrawn
+	f.post(ws, hubMember, "revoke", false)       // ok
+	f.post(ws, hubMember, "grant", false)        // admin_withdrawn
 	assert.Equal(t, []string{
 		"grant:ok:member>admin",
 		"grant:unchanged:admin>admin",
@@ -315,15 +315,15 @@ func TestJournal_UneLignePourChaqueDecisionEtChaqueRefus(t *testing.T) {
 func TestPost_CorpsInvalides_400_SansEcritureNiJournal(t *testing.T) {
 	f := newFixture(t)
 	cases := map[string]string{
-		"champ email":          `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"r","email":"u2@x.test"}`,
-		"champ inconnu":        `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"r","reinstat":true}`,
-		"json cassé":           `{`,
-		"adresse en hub id":    `{"workspace_id":"` + ws + `","hub_user_id":"u2@x.test","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"r"}`,
-		"acteur absent":        `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","reason":"r"}`,
-		"raison vide":          `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"  "}`,
-		"raison trop longue":   `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"` + string(bytes.Repeat([]byte("x"), 501)) + `"}`,
-		"action inconnue":      `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"promote","actor_hub_user_id":"` + hubActor + `","reason":"r"}`,
-		"espace vide":          `{"workspace_id":"","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"r"}`,
+		"champ email":        `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"r","email":"u2@x.test"}`,
+		"champ inconnu":      `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"r","reinstat":true}`,
+		"json cassé":         `{`,
+		"adresse en hub id":  `{"workspace_id":"` + ws + `","hub_user_id":"u2@x.test","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"r"}`,
+		"acteur absent":      `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","reason":"r"}`,
+		"raison vide":        `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"  "}`,
+		"raison trop longue": `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"` + string(bytes.Repeat([]byte("x"), 501)) + `"}`,
+		"action inconnue":    `{"workspace_id":"` + ws + `","hub_user_id":"` + hubMember + `","action":"promote","actor_hub_user_id":"` + hubActor + `","reason":"r"}`,
+		"espace vide":        `{"workspace_id":"","hub_user_id":"` + hubMember + `","action":"grant","actor_hub_user_id":"` + hubActor + `","reason":"r"}`,
 	}
 	for name, b := range cases {
 		rec := f.do("POST", "/api/hub/workspace-admins", b)

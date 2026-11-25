@@ -8,8 +8,8 @@ import (
 
 func TestVeridianWorkspaceRole_Predicats(t *testing.T) {
 	for _, c := range []struct {
-		name                  string
-		uw                    *UserWorkspace
+		name              string
+		uw                *UserWorkspace
 		administers, owns bool
 	}{
 		{"owner", &UserWorkspace{Role: VeridianRoleOwner}, true, true},
