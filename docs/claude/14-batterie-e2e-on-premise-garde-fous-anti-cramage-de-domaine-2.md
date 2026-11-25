@@ -1,55 +1,47 @@
-# Batterie E2E on-premise — garde-fous anti-cramage de domaine (2026-06-17)
+# Batterie E2E : garde-fous anti-cramage de domaine
 
-Harness rejouable qui PROUVE en conditions réelles (vrai worker staging, vraie DB
-staging, vrai SMTP → sink local `smtp-sink`) que les **10 gates de protection du
-domaine** tiennent, AVANT tout envoi cold prod. Spec : ticket
-`todo/2026-06-17-batterie-e2e-onpremise-garde-fous-domaine.md` (P0). 🔴 ZÉRO mail
-externe : SMTP cible = `smtp-sink:1025` (aiosmtpd `-n -d`, cul-de-sac sur dev-pub,
-réseau `notifuse-staging_notifuse-internal`) ; double-check du host AVANT tout
-envoi + vérif finale que le relai sortant `mail-relay` n'a vu AUCUN mail.
+`scripts/e2e/cold-garde-fous.py` (25/11/2026) prouve sur le **vrai worker de staging** que les dix portes tiennent, **par l'API seule** :
+ni base, ni journal de conteneur, ni ssh, ni jeton d'exec (VER-250). Elle remplace les deux `.sh` du 17/06, qui lisaient `psql` et
+`docker logs`. À rejouer avant chaque campagne, ~8 minutes :
 
-- **Harness** (réutilisable, à rejouer avant chaque campagne) :
-  `scripts/e2e/cold-garde-fous.sh` (orchestrateur : provision workspace jetable
-  `gfcheck<stamp>` + intégration SMTP→sink 2 senders + double-check host + wipe) +
-  `scripts/e2e/cold-garde-fous-gates.sh` (les 10 gates). Pour chaque gate : cas
-  NON-RÉGRESSION (config absente = no-op) ET cas ENFORCED (config active = bloque/
-  étale). Lit le sink (`docker logs smtp-sink`, QP-normalisé), `message_history` et
-  la queue. Verdict PASS/FAIL par gate + récap. Env : `NOTIFUSE_HUB_API_SECRET`.
-  6 gates prouvés par CAMPAGNE RÉELLE → sink (exclusion, throttle, pré-filtre,
-  anti-hash+spintax, pixel par classe, round-robin) ; 4 gates état/temps via
-  `cold-simulate` (prédicat exact) + enforcement worker (circuit breaker, daily cap,
-  per-sender cap, sending window).
+```
+python3 scripts/e2e/cold-garde-fous.py            # tout
+python3 scripts/e2e/cold-garde-fous.py --only G2,G7 [--keep]
+```
 
-- **Extension `cold-simulate` (3 modes neufs)** : pour prouver les gates état/temps
-  sans envoi réel ni mock, frappant le PRÉDICAT EXACT du gate worker :
-  - `class_cap_decision` : `CountSentSinceForDomains(classe) >= class_cap`
-    (cap-CLASSE de `veridian_daily_cap.go`). ⚠️ Isolation : le COUNT est réel et
-    partagé par classe → un test doit lire le baseline ou utiliser une classe non
-    polluée par la campagne (sinon faux "FAIL" : la classe a déjà des envois du jour).
-    **Étendu 2026-06-18** : param optionnel `sender_domain` (domaine nu OU adresse
-    dont on extrait le domaine, normalisé comme `veridianEmailDomain`). Fourni → le
-    COUNT passe par `CountSentSinceForDomainsAndSenderDomain` = le prédicat EXACT de
-    `veridianCountClassForInfra` (compteur par INFRA ÉMETTRICE). Absent → COUNT
-    workspace-global `CountSentSinceForDomains` inchangé (non-régression). La réponse
-    expose `sender_domain` (normalisé) + `per_infra` (bool, true = chemin par infra).
-  - `per_sender_cap_decision` : `CountSentSinceForSender >= per_sender_cap` (warmup
-    IP, `veridian_per_sender_cap.go`). `seed_sent` accepte désormais `sender_email`
-    (pose `veridian_sender_email`).
-  - `sending_window_decision` : `IsWithinWindow(now)` pur (`veridian_sending_window_gate.go`),
-    renvoie `within`/`would_be_skipped`/`next_opening_unix`.
-  - Fichier : `internal/http/veridian_cold_simulate_handler.go` (+ tests colocalisés).
+Sortie : `0` toutes tiennent · `1` une porte en défaut · `2` non abouti (témoin pas parti, staging redéployé pendant la mesure, version trop
+ancienne) : jamais un vert par défaut.
 
-- **Pièges vécus (gravés)** :
-  - **Circuit breaker — race provider-switch** : pour exercer le circuit, on bascule
-    le provider du workspace sur une intégration SMTP KO (port fermé). Les envois
-    échoués sont RESCHEDULÉS (backoff) ; si on RESTAURE le provider sain avant la fin
-    de l'observation, le worker re-tente avec le sink sain → les mails partent au sink
-    (faux négatif). FIX : workspace jetable, on NE restaure PAS — le provider KO reste
-    actif, les entrées restent en échec, 0 sink. Preuve = `failed_at`≥1 + 0 sink +
-    logs `connection refused`.
-  - **Dead-DNS du pré-filtre** : un domaine corporate « valide » de test doit être
-    RÉSOLVABLE (A/MX) sinon le pré-filtre le coupe lui aussi → on utilise `example.com`
-    (A records), pas `.example`/`.invalid` (NXDOMAIN, réservés au cas dead-DNS).
-  - **QP wrapping au sink** : aiosmtpd imprime le HTML en quoted-printable (soft-break
-    `=\n`, `=3D`) → dé-wrapper avant de grep `/t/`, `/r/`, spintax.
+**Aucun mail réel** : profil vers `127.0.0.1:1025` (puits sans relais de l'allocation de staging), relu avant tout envoi ; autre hôte = arrêt.
+`1026` est un port fermé, pour G1. Espace jetable `gfcheck…`, effacé à la fin, avec reprise si le staging redémarre.
 
+| Porte | Preuve |
+|---|---|
+| G1 disjoncteur | profil vers un port fermé : des essais refusés, le reste retenu (`queue.explain` = `circuit_open`), rien de parti |
+| G2 classe exclue, G7 pré-filtre | `messages.list` : échec et sa raison, avec témoins google et corporate partis |
+| G3 étalement | écarts de `sent_at` (google à 1 par minute), corporate parti avant le deuxième google |
+| G4, G5, G6 | `cold-simulate` : prédicat exact, ouvert, fermé, rouvert |
+| G8 contenu varié | `decisions.list?trace=true` : `trace.content.hash` distincts sur la même classe |
+| G9 pixel par classe | `trace.content.open_pixel` : non vers google, oui vers corporate |
+| G10 rotation | `trace.candidates[selected].from` : les deux expéditeurs |
+
+`trace.content` (envois seulement) : `hash` = empreinte du sujet et du corps émis, adresses de liens et pixel mis à part (leurs jetons changent à
+chaque message) ; `open_pixel` = le HTML émis porte le pixel. Le contenu lui-même n'est jamais rendu.
+
+## Vue échouer (25/11)
+
+Exclusion retirée, adresse jetable remplacée, graines de plafond absentes, jour ouvert : G2, G7, G4, G5 et G6 rouges. Staging redéployé au milieu :
+« non abouti », sortie 2.
+
+## Pièges
+
+- **Le débit par défaut (0,3 par minute et par classe) décide de tout** si la campagne ne pose pas `veridian_provider_class_rates` : le témoin
+  n'est pas parti à temps, donc « non abouti ».
+- **`seed_sent` doit porter `provider_class`** : depuis le correctif du 28/09 le plafond de classe compte la classe PERSISTÉE. L'ancienne batterie ne
+  la posait pas et aurait été rouge à tort depuis.
+- **G1 : ne pas restaurer le profil sain** pendant la mesure, les envois reportés partiraient au puits.
+- **Domaine « valide » de test** : il doit se résoudre (`example.com`), sinon le pré-filtre le coupe aussi.
+- `messages.list` ne rend ni l'expéditeur ni l'empreinte : ils se lisent dans le journal des décisions.
+
+`cold-simulate` (staging seul, HMAC) : modes `seed_sent`, `daily_cap_decision`, `class_cap_decision` (`sender_domain` = compteur par infra),
+`per_sender_cap_decision`, `sending_window_decision`, `warmup_cap_decision`, `inbound_reply` ; `internal/http/veridian_cold_simulate_handler.go`.

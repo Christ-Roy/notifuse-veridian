@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -162,6 +163,28 @@ type VeridianSendTrace struct {
 	Anchor     *VeridianTraceAnchor     `json:"anchor,omitempty"`
 	Candidates []VeridianCandidateTrace `json:"candidates"`
 	Decision   VeridianTraceDecision    `json:"decision"`
+	// Content : ce qui est parti (envois seulement). Deux envois au même hash portent le même message.
+	Content *VeridianTraceContent `json:"content,omitempty"`
+}
+
+// VeridianTraceContent dit ce que l'envoi portait, sans le contenu lui-même.
+type VeridianTraceContent struct {
+	Hash      string `json:"hash"`       // VeridianContentHash du sujet et du corps émis, adresses de liens et pixel mis à part
+	OpenPixel bool   `json:"open_pixel"` // le HTML émis porte un pixel d'ouverture
+}
+
+// veridianOpenPixelRe reconnaît le pixel posé par pkg/notifuse_mjml (GenerateHTMLOpenTrackingPixel) : jeton chiffré, ou ancien lien /opens.
+var veridianOpenPixelRe = regexp.MustCompile(`<img src="[^"]*/(?:t/[^"/?]+|opens\?mid=[^"]*)"[^>]*>`)
+
+var veridianAddressRe = regexp.MustCompile(`(href|src)="[^"]*"`)
+
+// VeridianDescribeContent : pixel et adresses de liens sortent de l'empreinte, leurs jetons changent à chaque message et rendraient
+// tout contenu unique, même un texte identique.
+func VeridianDescribeContent(subject, html string) *VeridianTraceContent {
+	return &VeridianTraceContent{
+		Hash:      VeridianContentHash(subject, veridianAddressRe.ReplaceAllString(veridianOpenPixelRe.ReplaceAllString(html, ""), "")),
+		OpenPixel: veridianOpenPixelRe.MatchString(html),
+	}
 }
 
 // VeridianSendDecision est une ligne du journal des décisions d'envoi.

@@ -8206,6 +8206,7 @@ msgstr "Nouveau code magique envoyé à votre email"
 #~ msgstr "Les nouveaux emails commerciaux peuvent être répartis sur ce profil."
 
 #: src/components/mail/veridian_mail_compose.tsx
+#: src/pages/InboxPage.tsx
 msgid "New message"
 msgstr "Nouveau message"
 

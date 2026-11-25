@@ -239,6 +239,9 @@ func (w *EmailQueueWorker) veridianBuildTrace(
 	if reduced {
 		trace.Level = "reduced"
 	}
+	if decision.Outcome == domain.VeridianOutcomeSent {
+		trace.Content = domain.VeridianDescribeContent(entry.Payload.Subject, entry.Payload.HTMLContent)
+	}
 	if sel == nil {
 		trace.Class = entry.Payload.VeridianProviderClass
 		return trace

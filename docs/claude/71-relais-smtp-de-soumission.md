@@ -133,7 +133,7 @@ Codes de retour à connaître : 250 accepté · 550 5.7.1 expéditeur non autori
 
 **Compose :** `compose.yaml` est la référence pour relever Notifuse complet (application, base, port du bridge) avec tout désactivé par défaut. La configuration réelle vit dans les réglages, pas dans le compose.
 
-**Postfix :** hors dépôt. Le dépôt ne lit que des NDR (ce qui est normal pour Notifuse). Seul `scripts/e2e/cold-garde-fous.sh` inspecte un conteneur de relais (outil de test) : à signaler à main, non supprimé ici. Le runbook opérateur est dans `~/nomad-veridian/runbooks/relais-smtp-operateur.md` (hors dépôt).
+**Postfix :** hors dépôt. Le dépôt ne lit que des NDR (ce qui est normal pour Notifuse). Plus aucun script du dépôt n'inspecte un conteneur de relais (fiche 14). Le runbook opérateur est dans `~/nomad-veridian/runbooks/relais-smtp-operateur.md` (hors dépôt).
 
 **Limite connue, à traiter :** la dépendance lego v4 fait remonter des versions indirectes (cloud.google.com/go/auth, gax-go, go-isatty, spf13/cast, objx). Avec ces versions, la compilation du paquet `internal/http` tombe en OOM à 6 Go sur node02 ; avec le `go.mod` d'origine elle passe (rc 0). Mesure à retenir avant toute décision sur la dépendance.
 

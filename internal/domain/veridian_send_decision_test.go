@@ -295,3 +295,28 @@ func TestVeridianQueueEntryDetail_PriorityEstSerialisee(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"priority":9`)
 }
+
+func TestVeridianDescribeContent_TextePixelEtJetons(t *testing.T) {
+	link := func(tok string) string { return `<p>Bonjour</p><a href="https://t.example/c/` + tok + `">lire</a>` }
+	pixel := func(tok string) string { return `<img src="https://api.example/t/` + tok + `" alt="" style="border:0;">` }
+	bare := VeridianDescribeContent("Objet", link("aaa"))
+	if bare.OpenPixel || bare.Hash == "" {
+		t.Fatalf("sans pixel : %+v", bare)
+	}
+	a, b := VeridianDescribeContent("Objet", link("aaa")+pixel("xyz")), VeridianDescribeContent("Objet", link("bbb")+pixel("uvw"))
+	if !a.OpenPixel || !b.OpenPixel {
+		t.Fatal("pixel non vu")
+	}
+	if a.Hash != b.Hash || a.Hash != bare.Hash {
+		t.Fatal("même texte, jetons différents : une seule empreinte attendue")
+	}
+	if VeridianDescribeContent("Autre", link("aaa")).Hash == bare.Hash || VeridianDescribeContent("Objet", "<p>Salut</p>").Hash == bare.Hash {
+		t.Fatal("sujet ou texte différent : empreinte différente attendue")
+	}
+	if VeridianDescribeContent("o", `<img src="https://cdn.example/logo.png">`).OpenPixel {
+		t.Fatal("une image ordinaire n'est pas un pixel")
+	}
+	if !VeridianDescribeContent("o", `<img src="https://api.example/opens?mid=1&wid=2&ts=3">`).OpenPixel {
+		t.Fatal("ancien pixel non vu")
+	}
+}

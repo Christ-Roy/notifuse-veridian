@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/pkg/notifuse_mjml"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -194,10 +195,16 @@ func TestVeridianRecordTerminal_SentCarriesTheGatesThatLetItThrough(t *testing.T
 	env.worker.SetDecisionLog(log)
 	sel := env.worker.veridianSelectSendableIntegration(ws, entry, ws.GetIntegrationByID("nord"))
 	require.NotNil(t, sel.Candidate)
+	entry.Payload.HTMLContent = "<p>Bonjour</p>" + notifuse_mjml.GenerateHTMLOpenTrackingPixel("ws", "m", "https://api.example.com", 1)
 
 	env.worker.veridianRecordTerminal(ws, entry, domain.VeridianOutcomeSent, "", "", "nord", &sel)
+	env.worker.veridianRecordTerminal(ws, entry, domain.VeridianOutcomeFailed, "", "", "nord", &sel)
 
-	require.Len(t, log.rows, 1)
+	require.Len(t, log.rows, 2)
+	require.NotNil(t, log.rows[0].Trace.Content)
+	assert.True(t, log.rows[0].Trace.Content.OpenPixel, "le pixel réellement posé par le rendu est vu")
+	assert.Len(t, log.rows[0].Trace.Content.Hash, 32)
+	assert.Nil(t, log.rows[1].Trace.Content, "rien n'est parti, rien à décrire")
 	row := log.rows[0]
 	assert.Equal(t, domain.VeridianOutcomeSent, row.Outcome)
 	assert.Equal(t, "nord", row.ProfileID)

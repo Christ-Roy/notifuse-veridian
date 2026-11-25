@@ -67,3 +67,15 @@ Les envois ont continué après le déploiement : dernier envoi de chaque profil
 - **Dernières réponses humaines** remplace les listes natives « derniers contacts importés » et « échecs récents » (les échecs se lisent dans Journaux). Nouveau champ `recent_human_replies` de `prospection.stats` (10 au plus, plus récente d'abord : entreprise SIRENE `custom_string_1`, e-mail, séquence la plus récente, date). Lecture seule, une requête bornée par `LIMIT 10` dans la même transaction.
 - **Non rattachées** : ligne du tableau des réponses par séquence (total global moins la somme des séquences vivantes). **Base faible** : taux grisé sous 30 contacts joints.
 - **Fiche 62** : la colonne « Profil » de la File d'envoi est le profil NOMINAL de l'entrée ; la rotation choisit à l'envoi. Libellés « Profil nominal (la rotation choisit à l'envoi) » et bandeau explicatif.
+
+## Coût d'une ouverture (mesuré en prod, 25/11/2026, espace robertbrunon)
+
+| | Avant | Après (965588ee) |
+|---|---|---|
+| Appels `/api/` à l'ouverture | 42 | 21 |
+| dont identiques | 21 | 0 |
+| Dernier appel revenu | 4,6 s | 1,8 à 2,1 s |
+| Indicateur de chargement éteint | non mesuré | 1,8 à 2,7 s |
+| Rafraîchissement de 60 s | trois blocs repartaient à vue | 13 appels, aucun indicateur à l'écran |
+
+Cause : `timeRange` recréé à chaque rendu. Une dépendance d'effet est une date, jamais un tableau construit au rendu.

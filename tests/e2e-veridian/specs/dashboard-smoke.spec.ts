@@ -130,6 +130,17 @@ smokeDescribe('@cold Dashboard smoke — charge sans 500 sur workspace neuf (sta
       const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
       const page = await ctx.newPage();
 
+      let lastApi = Date.now();
+      let inFlight = 0;
+      page.on('request', (r) => {
+        if (r.url().includes('/api/')) inFlight++, (lastApi = Date.now());
+      });
+      for (const ev of ['requestfinished', 'requestfailed'] as const) {
+        page.on(ev, (r) => {
+          if (r.url().includes('/api/')) inFlight--, (lastApi = Date.now());
+        });
+      }
+
       // Capture tout 5xx sur les endpoints analytics du dashboard.
       page.on('response', (resp) => {
         const url = resp.url();
@@ -152,21 +163,22 @@ smokeDescribe('@cold Dashboard smoke — charge sans 500 sur workspace neuf (sta
         consoleErrors.push(`pageerror: ${err.message}`);
       });
 
-      // 1) Auto-login : pose la session. ⚠️ Atterrit sur /console = écran
-      // "Select workspace" (PAS le dashboard) → aucun appel analytics déclenché
-      // ici. (Bug smoke initial : on restait sur cet écran → body quasi vide +
-      // assertions analytics faussement vertes car jamais appelées.)
-      await page.goto(autoLoginUrl, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
+      // 1) Auto-login : pose la session, et avec un seul espace arrive DIRECTEMENT sur son tableau de bord. On attend que ses appels soient
+      // revenus avant de repartir : sur un runner lent, `networkidle` se déclenche avant même que le JavaScript soit lu, et repartir coupait
+      // les appels en vol (« Failed to fetch », rouge trois fois de suite le 25/11, vert à la relance : une course, pas l'application).
+      const quiet = async () => {
+        await page.waitForResponse((r) => r.url().includes('/api/analytics.query'), { timeout: 30_000 });
+        await expect.poll(() => (inFlight > 0 ? 0 : Date.now() - lastApi), { timeout: 30_000 }).toBeGreaterThan(2_000);
+      };
+      const landed = quiet();
+      await page.goto(autoLoginUrl);
+      await landed;
       // 2) Navigue EXPLICITEMENT vers le dashboard du workspace → c'est CE mount
       // qui déclenche AnalyticsPage → analytics.query/replyStats/engagementByClass
       // (le vrai chemin du bug P0). Sans ça, le smoke ne teste rien.
-      await page.goto(`${NOTIFUSE_URL}/console/workspace/${tid}`, {
-        waitUntil: 'networkidle',
-      });
-      // Laisse les requêtes analytics (useEffect au mount) partir et revenir.
-      await page.waitForTimeout(3000);
-      await page.waitForLoadState('networkidle').catch(() => {});
+      const dashboard = quiet();
+      await page.goto(`${NOTIFUSE_URL}/console/workspace/${tid}`);
+      await dashboard;
 
       // 1) AUCUN 5xx sur les endpoints analytics (le bug P0 exact).
       expect(serverErrors, `5xx analytics: ${serverErrors.join(' | ')}`).toEqual([]);

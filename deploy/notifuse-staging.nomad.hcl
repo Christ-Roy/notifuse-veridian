@@ -209,7 +209,7 @@ EOH
         ports = ["http", "smtp", "imap", "mx"]
       }
       # Garde reseau (fiche 64) : le smtp-sink E2E est en loopback dans l'allocation. Exception EXACTE 127.0.0.1:1025,
-      # staging seulement (jamais dans notifuse.nomad.hcl), requise par scripts/e2e/cold-garde-fous.sh.
+      # staging seulement (jamais dans notifuse.nomad.hcl), requise par scripts/e2e/cold-garde-fous.py.
       template {
         destination = "secrets/app.env"
         perms       = "600"   # I07 : sans ca Nomad ecrit en 644, lisible par tout compte local sur le noeud (mesure du 2026-10-07)
@@ -254,7 +254,7 @@ INTERNAL_API_ENDPOINT=http://localhost:8081
 VERIDIAN_DEFAULT_PLAN=free
 # Co-owner par defaut de chaque espace cree (Robert Brunon, 30/10/2026). Adresse, pas un secret. Vide = desactive.
 VERIDIAN_DEFAULT_CO_OWNER_EMAIL=robert.brunon@veridian.site
-# 1025 : puits SMTP. 1026 : port fermé, pour prouver le disjoncteur (cold-garde-fous.sh, G1).
+# 1025 : puits SMTP. 1026 : port fermé, pour prouver le disjoncteur (cold-garde-fous.py, G1).
 NOTIFUSE_OUTBOUND_INTERNAL_ALLOW=127.0.0.1:1025,127.0.0.1:1026
 
 # Invitation d'un membre par le Hub (fiches 46 et 86) : secret perdu à la bascule vers Nomad, reposé le 24/11/2026. Variable absente = route 503.

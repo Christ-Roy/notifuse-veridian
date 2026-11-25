@@ -111,6 +111,19 @@ describe('page Boîte de réception', () => {
     expect(screen.getByRole('tab', { name: /Conversation \(3\)/ })).toBeInTheDocument()
   })
 
+  it('« New message » ouvre une page blanche et se referme ; sans boîte qui envoie, pas de bouton', async () => {
+    const { unmount } = renderMail(<InboxPage />)
+    await userEvent.click(await screen.findByRole('button', { name: /New message/ }))
+    expect(await screen.findByTestId('compose-to')).toHaveValue('')
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByTestId('compose-to')).toBeNull())
+    unmount()
+    vi.mocked(mailService.mailboxes).mockResolvedValue(MAILBOXES.map((m) => ({ ...m, profile_id: undefined })))
+    renderMail(<InboxPage />)
+    await screen.findAllByTestId('mail-row')
+    expect(screen.queryByRole('button', { name: /New message/ })).toBeNull()
+  })
+
   it('une ligne : pastille de nature, contact, objet, aperçu, date relative, coche traité', async () => {
     renderMail(<InboxPage />)
     const rows = await screen.findAllByTestId('mail-row')

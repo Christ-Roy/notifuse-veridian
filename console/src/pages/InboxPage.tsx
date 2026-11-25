@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Empty, Grid, Result, Skeleton, Tabs, theme, Typography } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { EditOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 
 import { useAuth, useWorkspacePermissions } from '../contexts/AuthContext'
@@ -50,6 +50,7 @@ export function InboxPage() {
   const { workspaces } = useAuth()
   const { permissions, loading: loadingPermissions } = useWorkspacePermissions(workspaceId ?? '')
   const { errorText } = useMailLabels()
+  const [writing, setWriting] = useState(false)
   const canRead = !!(permissions?.message_history?.read || permissions?.message_history?.write)
   const timezone = workspaces?.find((w) => w.id === workspaceId)?.settings?.timezone || MAIL_TIMEZONE
 
@@ -323,9 +324,12 @@ export function InboxPage() {
     >
       <VeridianMailCompose
         workspaceId={workspaceId}
-        to={search.ecrire}
+        to={search.ecrire ?? (writing ? '' : undefined)}
         mailboxes={mailboxes}
-        onClose={() => setSearch({ ecrire: undefined }, true)}
+        onClose={() => {
+          setWriting(false)
+          if (search.ecrire) setSearch({ ecrire: undefined }, true)
+        }}
         onSent={() => void queryClient.invalidateQueries({ queryKey: mailKeys.all(workspaceId) })}
       />
       {showList && (
@@ -349,6 +353,11 @@ export function InboxPage() {
                   <Text type="secondary" style={{ fontSize: 12 }} data-testid="stream-retry">
                     {t`Live updates paused, reconnecting…`}
                   </Text>
+                )}
+                {mailboxes.some((m) => m.profile_id) && (
+                  <Button type="primary" size="small" icon={<EditOutlined aria-hidden />} onClick={() => setWriting(true)}>
+                    {t`New message`}
+                  </Button>
                 )}
                 <Button
                   type="text"
