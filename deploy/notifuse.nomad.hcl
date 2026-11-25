@@ -265,8 +265,9 @@ SMTP_BRIDGE_PORT=587
 SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
 # Boîtes louées (fiche 84) : TLS terminé par Traefik (443 par nom), PROXY v2 exigé (la vraie IP du client).
 VERIDIAN_IMAP_ENABLED=true
-# Garde « compte supprimé au Hub » éteinte le temps d'une décision (fiche 91) : retirer cette ligne l'allume.
-VERIDIAN_ACCOUNT_GATE=off
+# Un compte supprimé au Hub à partir de cette date n'ouvre plus rien (fiche 91). Reculer la date ferme ceux d'avant (décision de Robert). Absente ou
+# illisible : l'application refuse de démarrer.
+VERIDIAN_ACCOUNT_GATE_SINCE=2026-11-25T00:00:00Z
 VERIDIAN_IMAP_PORT=1993
 VERIDIAN_IMAP_BEHIND_TLS_PROXY=true
 VERIDIAN_IMAP_PROXY_PROTOCOL=true

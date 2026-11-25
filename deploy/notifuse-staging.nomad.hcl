@@ -225,6 +225,8 @@ SMTP_BRIDGE_PORT=587
 SMTP_BRIDGE_DOMAIN=relais-smtp.veridian.site
 # Boîtes louées (fiche 84) : IMAP en TLS avec le certificat du relais, tailnet seul.
 VERIDIAN_IMAP_ENABLED=true
+# Même garde qu'en prod (fiche 91) ; date plus tardive, pour éprouver les deux sens sur des comptes de test.
+VERIDIAN_ACCOUNT_GATE_SINCE=2026-11-25T16:15:00Z
 VERIDIAN_IMAP_PORT=1993
 # Récepteur : adresses de profil de ces domaines seulement. Aucun MX ne pointe ici sans l'oui de Robert.
 VERIDIAN_MX_DOMAINS=boites-test.veridian.site

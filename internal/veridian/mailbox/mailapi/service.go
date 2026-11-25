@@ -68,9 +68,10 @@ func (d DomainAuthorizer) Authorize(ctx context.Context, ws string, res domain.P
 	a := Actor{Kind: "humain", Owner: uw.Role == "owner"}
 	if user != nil {
 		a.ID = user.ID
-		if user.Type == domain.UserTypeAPIKey {
-			a.Kind = "agent"
-		}
+	}
+	// Le type vient du jeton : le dépôt d'authentification ne relit pas celui du compte (une clé d'API passait pour un humain, 25/11/2026).
+	if t, _ := ctx.Value(domain.UserTypeKey).(string); t == string(domain.UserTypeAPIKey) || (user != nil && user.Type == domain.UserTypeAPIKey) {
+		a.Kind = "agent"
 	}
 	if d.Standing == nil {
 		return ctx, Actor{}, errors.New("situation dans l'espace non câblée")

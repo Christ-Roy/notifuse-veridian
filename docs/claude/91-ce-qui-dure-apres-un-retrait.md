@@ -18,7 +18,7 @@ Tout ce qui dure plus qu'une requête relit la situation **à chaque passage** (
 |---|---|---|---|
 | retirée de l'espace | refusés, connexions coupées avant le 200 de `remove-member` | flux fermé (`event: closed`), API 403 | l'accès rouvre, même mot de passe |
 | gelée (§5.21) | refusés, connexions coupées (une boîte ne se floute pas) | 403, et 402 en écriture | idem |
-| compte supprimé au Hub | refusés | 401 (garde allumée) | sans objet |
+| compte supprimé au Hub | refusés (à partir de la date) | 401 | sans objet |
 | espace supprimé ou disparu | refusés, accès d'espace compris | 403 | idem |
 | espace suspendu (§5.4, lecture seule) | IMAP lit, SMTP refuse (550) | lecture oui, envoi 403 | l'envoi rouvre |
 
@@ -31,7 +31,10 @@ Tout ce qui dure plus qu'une requête relit la situation **à chaque passage** (
   session, pas l'espace (403).
 - Le filtre du gel n'exempte plus `/api/veridian/` : la console y a ses routes. Les routes du Hub portent une signature, pas un jeton d'utilisateur.
 - **Compte supprimé** (`users.hub_deleted_at`) : `internal/veridian/accountgate` enveloppe les dépôts : aucune session ne s'ouvre (`user.signin`,
-  `user.verify`, lien déjà émis) ni ne vaut. Exception : `SystemCallKey` (geste du Hub). **Éteinte en prod** (`VERIDIAN_ACCOUNT_GATE=off`) jusqu'à décision.
+  `user.verify`, lien déjà émis) ni ne vaut. Exception : `SystemCallKey` (geste du Hub, transférer l'espace d'un supprimé reste possible).
+  **Datée** (parente, 25/11) : seules les suppressions à partir de `VERIDIAN_ACCOUNT_GATE_SINCE` (RFC 3339, posée dans le job) coupent. Les 2 comptes
+  d'avant (08/11) restent ouverts jusqu'à la décision de Robert, comptés dans `GET /api/hub/users` (`deleted_gate_since`, `deleted_still_open`) et dits au
+  démarrage. Reculer la date les ferme. Absente en prod reliée au Hub, ou illisible : l'application refuse de démarrer, la version d'avant reste servie.
 - Un espace effacé emporte ses accès. Retour arrière : l'image précédente ignore `holder_user_id`, rien à défaire.
 
 ## Épreuves

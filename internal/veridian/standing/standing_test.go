@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/database"
 	veridianmig "github.com/Notifuse/notifuse/internal/migrations/veridian"
+	"github.com/Notifuse/notifuse/internal/veridian/accountgate"
 	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	_ "github.com/lib/pq"
 )
@@ -80,6 +82,12 @@ func TestStore_Of(t *testing.T) {
 	exec(t, db, `UPDATE users SET hub_deleted_at = NOW() WHERE id = $1`, uid)
 	want("compte supprimé", "ws", uid, State{Workspace: true, Member: true, Deleted: true})
 	want("l'autre vit", "ws", other, in)
+	// Supprimé AVANT la date de la garde : rien ne change pour lui (accountgate).
+	accountgate.SetSince(time.Now().Add(time.Hour))
+	t.Cleanup(func() { accountgate.SetSince(time.Time{}) })
+	want("compte supprimé avant la date", "ws", uid, in)
+	accountgate.SetSince(time.Now().Add(-time.Hour))
+	want("compte supprimé depuis la date", "ws", uid, State{Workspace: true, Member: true, Deleted: true})
 	exec(t, db, `UPDATE users SET hub_deleted_at = NULL`)
 
 	exec(t, db, `UPDATE veridian_plan SET status = 'suspended', suspended_at = NOW()`)

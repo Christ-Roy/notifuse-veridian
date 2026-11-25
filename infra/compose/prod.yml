@@ -51,6 +51,7 @@ services:
       SERVER_PORT: "8081"
       SERVER_HOST: 0.0.0.0
       ENVIRONMENT: production
+      VERIDIAN_ACCOUNT_GATE_SINCE: "2026-11-25T00:00:00Z" # fiche 91
       DEPLOY_ENV: ${DEPLOY_ENV:-prod}
       DB_HOST: notifuse-prod-db
       DB_PORT: "5432"

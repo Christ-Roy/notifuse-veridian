@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/Notifuse/notifuse/internal/veridian/accountgate"
 	"github.com/google/uuid"
 )
 
@@ -18,7 +19,7 @@ type State struct {
 	Suspended bool // espace suspendu : lecture seule (CONTRAT-HUB §5.4)
 	Member    bool
 	Frozen    bool // membre gelé (§5.21)
-	Deleted   bool // compte supprimé côté Hub (V71)
+	Deleted   bool // compte supprimé côté Hub (V71), à partir de accountgate.Since
 }
 
 // Space : l'espace est ouvert en lecture, sans regarder la personne.
@@ -41,8 +42,8 @@ func (s *Store) Of(ctx context.Context, workspaceID, userID string) (State, erro
 		SELECT COALESCE(p.deleted_at IS NOT NULL OR p.status = 'deleted', FALSE), COALESCE(p.status = 'suspended', FALSE),
 			EXISTS (SELECT 1 FROM user_workspaces uw WHERE uw.workspace_id = w.id AND uw.user_id = $2::uuid),
 			EXISTS (SELECT 1 FROM veridian_frozen_members f WHERE f.workspace_id = w.id AND f.user_id = $2::text),
-			EXISTS (SELECT 1 FROM users u WHERE u.id = $2::uuid AND u.hub_deleted_at IS NOT NULL)
-		FROM workspaces w LEFT JOIN veridian_plan p ON p.workspace_id = w.id WHERE w.id = $1`, workspaceID, uid.String()).
+			EXISTS (SELECT 1 FROM users u WHERE u.id = $2::uuid AND u.hub_deleted_at >= $3)
+		FROM workspaces w LEFT JOIN veridian_plan p ON p.workspace_id = w.id WHERE w.id = $1`, workspaceID, uid.String(), accountgate.Since()).
 		Scan(&st.Closed, &st.Suspended, &st.Member, &st.Frozen, &st.Deleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return State{}, nil

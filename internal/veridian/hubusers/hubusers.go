@@ -16,7 +16,9 @@ import (
 	"net/http"
 	"net/mail"
 	"strings"
+	"time"
 
+	"github.com/Notifuse/notifuse/internal/veridian/accountgate"
 	"github.com/google/uuid"
 )
 
@@ -39,6 +41,8 @@ type Account struct {
 // Store : accès aux comptes locaux (base système).
 type Store interface {
 	ListHumans(ctx context.Context) ([]Account, error)
+	// CountDeletedStillOpen : comptes supprimés au Hub avant la date de la garde, encore ouverts (accountgate).
+	CountDeletedStillOpen(ctx context.Context) (int, error)
 	FindByHubUserID(ctx context.Context, hubUserID string) (*Account, error)
 	// UpdateIdentity n'applique que ce qui est demandé : setName avec name nil efface le nom, email nil
 	// laisse l'adresse. ErrEmailTaken si l'adresse est prise.
@@ -55,6 +59,10 @@ type Store interface {
 
 // SQLStore : Store sur la base système.
 type SQLStore struct{ DB *sql.DB }
+
+func (s *SQLStore) CountDeletedStillOpen(ctx context.Context) (int, error) {
+	return accountgate.CountOpen(ctx, s.DB)
+}
 
 func (s *SQLStore) ListHumans(ctx context.Context) ([]Account, error) {
 	rows, err := s.DB.QueryContext(ctx, `
@@ -133,6 +141,10 @@ type Handler struct{ Store Store }
 
 type listResponse struct {
 	Users []userJSON `json:"users"`
+	// Garde des comptes supprimés au Hub (fiche 91) : la date, et combien de comptes supprimés AVANT gardent une place ou une session ici.
+	// Jamais nommés, jamais tus ; absent = non compté.
+	GateSince        string `json:"deleted_gate_since"`
+	DeletedStillOpen *int   `json:"deleted_still_open,omitempty"`
 }
 
 type userJSON struct {
@@ -148,7 +160,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
 		return
 	}
-	resp := listResponse{Users: make([]userJSON, 0, len(accounts))}
+	resp := listResponse{Users: make([]userJSON, 0, len(accounts)), GateSince: accountgate.Since().Format(time.RFC3339)}
+	if n, err := h.Store.CountDeletedStillOpen(r.Context()); err == nil {
+		resp.DeletedStillOpen = &n
+	}
 	for _, a := range accounts {
 		u := userJSON{Email: a.Email}
 		if a.Name != "" {

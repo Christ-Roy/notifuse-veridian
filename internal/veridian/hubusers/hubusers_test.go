@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"github.com/Notifuse/notifuse/internal/veridian/accountgate"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -38,6 +40,8 @@ type fakeStore struct {
 	sessionsN   int64
 	members     []Member
 	membersErr  error
+	stillOpen   int
+	countErr    error
 	liveWS      map[string]bool
 	membersFor  []string
 }
@@ -53,6 +57,9 @@ func (f *fakeStore) WorkspaceLive(_ context.Context, ws string) (bool, error) {
 	return f.liveWS[ws], nil
 }
 
+func (f *fakeStore) CountDeletedStillOpen(context.Context) (int, error) {
+	return f.stillOpen, f.countErr
+}
 func (f *fakeStore) ListHumans(context.Context) ([]Account, error) { return f.humans, nil }
 func (f *fakeStore) FindByHubUserID(_ context.Context, id string) (*Account, error) {
 	f.findCalls = append(f.findCalls, id)
@@ -149,7 +156,7 @@ func TestList_HumainsSeulement_SansIdLocal(t *testing.T) {
 func TestList_Vide_RendDuJSONPasUnCorpsVide(t *testing.T) {
 	rec := do(mux(&fakeStore{}), signed("GET", "/api/hub/users", "", ""))
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `{"users":[]}`, rec.Body.String())
+	assert.JSONEq(t, `{"users":[],"deleted_gate_since":"1970-01-01T00:00:00Z","deleted_still_open":0}`, rec.Body.String())
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 }
 
@@ -345,4 +352,39 @@ func TestSQLStore_RevokeSessions_NeTouchePasLeCompte(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), n)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// Fiche 91 : les comptes supprimés avant la date de la garde sont comptés dans la réponse que le Hub lit, jamais tus ; une panne n'est pas un zéro.
+func TestList_SaysDeletedAccountsStillOpen(t *testing.T) {
+	accountgate.SetSince(time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC))
+	t.Cleanup(func() { accountgate.SetSince(time.Time{}) })
+	for name, c := range map[string]struct {
+		f    *fakeStore
+		want string
+	}{
+		"deux":  {&fakeStore{stillOpen: 2}, `"deleted_still_open":2`},
+		"aucun": {&fakeStore{}, `"deleted_still_open":0`},
+		"panne": {&fakeStore{countErr: errors.New("base")}, ""},
+	} {
+		body := do(mux(c.f), signed("GET", "/api/hub/users", "", "")).Body.String()
+		assert.Contains(t, body, `"deleted_gate_since":"2026-11-25T00:00:00Z"`, name)
+		if c.want == "" {
+			assert.NotContains(t, body, "deleted_still_open", name)
+		} else {
+			assert.Contains(t, body, c.want, name)
+		}
+	}
+}
+
+func TestSQLStore_CountDeletedStillOpen(t *testing.T) {
+	db := systemDB(t)
+	_, err := db.Exec(`INSERT INTO users (id,type,email,hub_deleted_at,created_at,updated_at) VALUES ('0a000000-0000-4000-8000-000000000001','user','a@t.fr','2026-11-08',NOW(),NOW())`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO user_workspaces (user_id,workspace_id,role,created_at,updated_at) VALUES ('0a000000-0000-4000-8000-000000000001','ws','owner',NOW(),NOW())`)
+	require.NoError(t, err)
+	accountgate.SetSince(time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC))
+	t.Cleanup(func() { accountgate.SetSince(time.Time{}) })
+	n, err := (&SQLStore{DB: db}).CountDeletedStillOpen(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
 }

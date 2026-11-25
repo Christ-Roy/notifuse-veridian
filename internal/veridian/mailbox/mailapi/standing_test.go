@@ -126,3 +126,16 @@ func openStream(t *testing.T, url string) *http.Response {
 	}
 	return resp
 }
+
+// Le vrai dépôt d'authentification ne rend pas le type du compte : c'est le jeton qui dit « clé d'API ». Sans cela une clé créait un accès personnel,
+// et le suivi « traité par » la nommait humain.
+func TestDomainAuthorizer_APIKeyIsToldByTheToken(t *testing.T) {
+	d := DomainAuthorizer{Auth: authDouble{}, Standing: situation{st: standing.State{Workspace: true, Member: true}}} // type du compte vide
+	for typ, want := range map[domain.UserType]string{domain.UserTypeAPIKey: "agent:u1", domain.UserTypeUser: "humain:u1"} {
+		ctx := context.WithValue(context.Background(), domain.UserTypeKey, string(typ))
+		_, a, err := d.Authorize(ctx, "ws", domain.PermissionResourceMessageHistory, domain.PermissionTypeRead)
+		if err != nil || a.Label() != want {
+			t.Errorf("%s : %q %v", typ, a.Label(), err)
+		}
+	}
+}

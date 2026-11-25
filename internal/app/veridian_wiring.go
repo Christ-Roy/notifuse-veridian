@@ -277,12 +277,10 @@ func (a *App) veridianInitRepositories() {
 	a.veridianPlanRepo = repository.NewVeridianPlanRepository(a.db)
 	a.messageHistoryRepo = repository.NewVeridianMessageHistoryDecorator(a.messageHistoryRepo, a.veridianPlanRepo, a.logger)
 
-	// Compte supprimé côté Hub : aucune session ne s'ouvre, aucune ne vaut (fiche 91). Éteinte en prod par VERIDIAN_ACCOUNT_GATE=off le temps
-	// d'une décision de la parente (elle couperait un vrai compte) ; retirer la variable l'allume.
-	if os.Getenv("VERIDIAN_ACCOUNT_GATE") != "off" {
-		a.authRepo = &accountgate.Auth{AuthRepository: a.authRepo, DB: a.db}
-		a.userRepo = &accountgate.Users{UserRepository: a.userRepo, DB: a.db}
-	}
+	// Compte supprimé côté Hub à partir d'une date : aucune session ne s'ouvre, aucune ne vaut (fiche 91). Une date absente en production ou
+	// illisible empêche le démarrage (capacité « accountgate ») ; la garde n'est jamais éteinte.
+	a.authRepo = &accountgate.Auth{AuthRepository: a.authRepo, DB: a.db}
+	a.userRepo = &accountgate.Users{UserRepository: a.userRepo, DB: a.db}
 
 	// VER-220 : aucune adresse de contact abîmée n'entre en base, quelle que soit la voie
 	// (inscription publique, événements, préférences écrivent sans passer par Contact.Validate).

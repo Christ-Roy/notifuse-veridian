@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,11 +45,113 @@ func (b bench) session() *domain.Session {
 	return &domain.Session{ID: uuid.NewString(), UserID: b.uid, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()}
 }
 
-func (b bench) remove(t *testing.T) {
+func (b bench) remove(t *testing.T) { b.removeAt(t, time.Now()) }
+
+func (b bench) removeAt(t *testing.T, at time.Time) {
 	t.Helper()
-	if _, err := b.db.Exec(`UPDATE users SET hub_deleted_at = NOW() WHERE id = $1`, b.uid); err != nil {
+	if _, err := b.db.Exec(`UPDATE users SET hub_deleted_at = $2 WHERE id = $1`, b.uid, at); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func setSince(t *testing.T, at time.Time) {
+	t.Helper()
+	SetSince(at)
+	t.Cleanup(func() { SetSince(time.Time{}) })
+}
+
+func TestReadSince_NeverSilentlyOff(t *testing.T) {
+	at := time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)
+	for name, c := range map[string]struct {
+		value string
+		prod  bool
+		want  time.Time
+		fails bool
+	}{
+		"posée":                 {"2026-11-25T00:00:00Z", true, at, false},
+		"posée, autre fuseau":   {" 2026-11-25T01:00:00+01:00 ", true, at, false},
+		"absente en production": {"", true, time.Time{}, true},
+		"blanche en production": {"  ", true, time.Time{}, true},
+		"absente ailleurs":      {"", false, time.Time{}, false},
+		"illisible":             {"25/11/2026", true, time.Time{}, true},
+		"illisible ailleurs":    {"off", false, time.Time{}, true},
+		"sans heure":            {"2026-11-25", true, time.Time{}, true},
+	} {
+		got, err := ReadSince(c.value, c.prod)
+		if (err != nil) != c.fails || !got.Equal(c.want) {
+			t.Errorf("%s : %v %v", name, got, err)
+		}
+		if err != nil && !strings.Contains(err.Error(), SinceVar) {
+			t.Errorf("%s : le refus doit nommer la variable : %v", name, err)
+		}
+	}
+}
+
+func TestSince_ZeroGatesEveryone(t *testing.T) {
+	if !Since().Equal(time.Unix(0, 0)) {
+		t.Fatal("avant SetSince, tout compte supprimé est coupé")
+	}
+	at := time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)
+	setSince(t, at)
+	if !Since().Equal(at) {
+		t.Fatal(Since())
+	}
+	SetSince(time.Time{})
+	if !Since().Equal(time.Unix(0, 0)) {
+		t.Fatal("une date nulle coupe tout compte supprimé")
+	}
+}
+
+// Les deux sens : supprimé APRÈS la date, coupé ; supprimé AVANT, comme aujourd'hui, et compté.
+func TestGate_OnlyAccountsDeletedSinceTheDate(t *testing.T) {
+	b, ctx := newBench(t), context.Background()
+	date := time.Now().Add(-time.Hour)
+	setSince(t, date)
+	s := b.session()
+	if err := b.users.CreateSession(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	opens := func() (created, users, auth bool) {
+		n := b.session()
+		created = b.users.CreateSession(ctx, n) == nil
+		_, uerr := b.users.GetSessionByID(ctx, s.ID)
+		_, aerr := b.auth.GetSessionByID(ctx, s.ID, b.uid)
+		return created, uerr == nil, aerr == nil
+	}
+	count := func(want int) {
+		t.Helper()
+		if n, err := CountOpen(ctx, b.db); err != nil || n != want {
+			t.Fatalf("comptés : %d %v, attendu %d", n, err, want)
+		}
+	}
+	count(0) // un compte vivant n'est pas compté
+	b.removeAt(t, date.Add(-time.Minute))
+	if c, u, a := opens(); !c || !u || !a {
+		t.Fatalf("supprimé avant la date : rien ne change (%v %v %v)", c, u, a)
+	}
+	count(1)
+	b.removeAt(t, date) // la date elle-même est dedans
+	if c, u, a := opens(); c || u || a {
+		t.Fatalf("supprimé à la date : coupé (%v %v %v)", c, u, a)
+	}
+	count(0)
+	b.removeAt(t, date.Add(-time.Minute))
+	SetSince(date.Add(-time.Hour)) // la date recule : le compte tombe, rien d'autre à coder
+	if c, u, a := opens(); c || u || a {
+		t.Fatalf("date reculée : coupé (%v %v %v)", c, u, a)
+	}
+	count(0)
+	// Sans place ni session, il n'y a plus rien d'ouvert à compter.
+	SetSince(date)
+	count(1)
+	if _, err := b.db.Exec(`DELETE FROM user_sessions`); err != nil {
+		t.Fatal(err)
+	}
+	count(0)
+	if _, err := b.db.Exec(`INSERT INTO user_workspaces (user_id,workspace_id,role,created_at,updated_at) VALUES ($1,'ws','member',NOW(),NOW())`, b.uid); err != nil {
+		t.Fatal(err)
+	}
+	count(1)
 }
 
 func TestUsers_CreateSession_DeletedAccountOpensNothing(t *testing.T) {

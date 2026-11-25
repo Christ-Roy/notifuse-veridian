@@ -213,16 +213,11 @@ func TestVeridianInitRepositories_DeletedAccountsAreGated(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	for value, gated := range map[string]bool{"": true, "on": true, "off": false} {
-		t.Setenv("VERIDIAN_ACCOUNT_GATE", value)
-		a := newWiringApp()
-		a.db = db
-		a.userRepo = repository.NewUserRepository(db)
-		a.authRepo = repository.NewSQLAuthRepository(db)
-		a.veridianInitRepositories()
-		_, users := a.userRepo.(*accountgate.Users)
-		_, auth := a.authRepo.(*accountgate.Auth)
-		assert.Equal(t, gated, users, value)
-		assert.Equal(t, gated, auth, value)
-	}
+	a := newWiringApp()
+	a.db = db
+	a.userRepo = repository.NewUserRepository(db)
+	a.authRepo = repository.NewSQLAuthRepository(db)
+	a.veridianInitRepositories()
+	assert.IsType(t, &accountgate.Users{}, a.userRepo)
+	assert.IsType(t, &accountgate.Auth{}, a.authRepo)
 }
