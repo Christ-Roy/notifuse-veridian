@@ -53,6 +53,7 @@ export const VeridianProspectionDashboard: React.FC<Props> = ({
   const overviewQuery = useQuery({
     queryKey: ['analytics', 'profiles-overview', workspace.id],
     queryFn: () => emailProfilesOverviewService.get(workspace.id),
+    staleTime: 30000,
     refetchInterval: 60000
   })
   const statsQuery = useQuery({

@@ -1,4 +1,5 @@
 import { api } from './client'
+import { shareInFlight } from './veridian_share'
 
 // Analytics types
 export interface AnalyticsQuery {
@@ -153,6 +154,11 @@ class AnalyticsService {
       return Promise.resolve(cachedResponse)
     }
 
+    // Déjà demandée et pas encore revenue : la même réponse sert (le cache ne connaît que les réponses arrivées).
+    return shareInFlight(`analytics.query ${cacheKey}`, () => this.enqueue(queryRequest, cacheKey))
+  }
+
+  private enqueue(queryRequest: AnalyticsQueryRequest, cacheKey: string): Promise<AnalyticsResponse> {
     return new Promise<AnalyticsResponse>((resolve, reject) => {
       // Store both query and workspaceId for the queue item
       this.queue.push({

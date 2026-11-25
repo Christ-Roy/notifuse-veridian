@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearch } from '@tanstack/react-router'
 import { Segmented, Select, Space, Result, Button, Spin } from 'antd'
 import { useQuery } from '@tanstack/react-query'
@@ -33,6 +33,7 @@ export function AnalyticsPage() {
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ['analytics', 'profiles-overview', workspaceId],
     queryFn: () => emailProfilesOverviewService.get(workspaceId),
+    staleTime: 30000,
     enabled: !!workspace,
     refetchInterval: 60000
   })
@@ -68,7 +69,9 @@ export function AnalyticsPage() {
     return [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')]
   }
 
-  const timeRange = getTimeRangeFromPeriod(selectedPeriod)
+  // Un tableau stable tant que les dates ne changent pas (les blocs s'y abonnent).
+  const [start, end] = getTimeRangeFromPeriod(selectedPeriod)
+  const timeRange = useMemo<[string, string]>(() => [start, end], [start, end])
 
   const handlePeriodChange = (value: TimePeriod) => {
     setSelectedPeriod(value)

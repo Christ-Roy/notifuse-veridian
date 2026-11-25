@@ -78,7 +78,8 @@ export const VeridianEngagementByClass: React.FC<VeridianEngagementByClassProps>
     return () => {
       cancelled = true
     }
-  }, [workspace.id, timeRange, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.id, timeRange[0], timeRange[1]])
 
   const classLabel = (c: string): string => {
     switch (c) {

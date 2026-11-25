@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Notifuse/notifuse/internal/database"
+	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -181,4 +182,45 @@ func TestCapability(t *testing.T) {
 		}
 	}
 	t.Fatal("capacité non enregistrée")
+}
+
+type spaces struct {
+	conn
+	bad string
+}
+
+func (s spaces) List(context.Context) ([]*domain.Workspace, error) {
+	return []*domain.Workspace{{ID: "a"}, {ID: "panne"}}, s.err
+}
+func (s spaces) GetConnection(_ context.Context, id string) (*sql.DB, error) {
+	if id == s.bad {
+		return nil, errors.New("base injoignable")
+	}
+	return s.db, nil
+}
+
+func TestCountGhosts(t *testing.T) {
+	db := workspaceDB(t)
+	for _, q := range []string{`INSERT INTO lists (id, name, is_double_optin, is_public, created_at, updated_at, deleted_at) VALUES ('vive','v',false,false,NOW(),NOW(),NULL),('morte','m',false,false,NOW(),NOW(),NOW())`,
+		`INSERT INTO contact_lists (email, list_id, status) VALUES ('a@x.fr','vive','active'),('a@x.fr','morte','active')`} {
+		_, err := db.Exec(q)
+		require.NoError(t, err)
+	}
+	hit, read, unread, err := CountGhosts(context.Background(), spaces{conn: conn{db: db}, bad: "panne"})
+	require.NoError(t, err)
+	assert.Empty(t, hit, "une liste supprimée n'est pas fantôme")
+	assert.Equal(t, 1, read)
+	assert.Equal(t, []string{"panne"}, unread, "un espace illisible est dit, jamais compté propre")
+	_, err = db.Exec(`INSERT INTO contact_lists (email, list_id, status) VALUES ('a@x.fr','nulle','active'),('b@x.fr','nulle','active')`)
+	require.NoError(t, err)
+	hit, _, _, err = CountGhosts(context.Background(), spaces{conn: conn{db: db}, bad: "panne"})
+	require.NoError(t, err)
+	assert.Equal(t, []Ghosts{{"a", 1, 2}}, hit)
+
+	mux := http.NewServeMux()
+	MountGhosts(mux, spaces{conn: conn{db: db}}, "secret")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/veridian/admin/ghost-lists", nil))
+	assert.Equal(t, 401, rec.Code, "signature du Hub exigée")
+	assert.NotContains(t, rec.Body.String(), "workspace_id")
 }

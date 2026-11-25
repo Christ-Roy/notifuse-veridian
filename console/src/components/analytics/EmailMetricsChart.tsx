@@ -150,8 +150,9 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
 
   useEffect(() => {
     fetchData(messageTypeFilter)
+    // Les DATES, pas le tableau : il est recréé à chaque rendu de la page, et tout repartait à chaque relecture de 60 s.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.id, messageTypeFilter, timeRange, timezone])
+  }, [workspace.id, messageTypeFilter, timeRange[0], timeRange[1], timezone])
 
   // Define the stats type
   interface EmailStats {

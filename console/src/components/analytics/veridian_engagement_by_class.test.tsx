@@ -80,3 +80,21 @@ describe('VeridianEngagementByClass', () => {
     expect(formatRate(30, 100)).toBe('30%')
   })
 })
+
+describe('rendus de la page', () => {
+  it('un tableau de dates recréé ne relance pas la lecture', async () => {
+    vi.mocked(engagementByClassApi.get).mockClear()
+    vi.mocked(engagementByClassApi.get).mockResolvedValue({ by_class: {}, total: { sent: 0, bounced: 0, replied_human: 0 } } as never)
+    const ui = () => (
+      <I18nProvider i18n={i18n}>
+        <App>
+          <VeridianEngagementByClass workspace={workspace} timeRange={['2026-11-01', '2026-11-15']} />
+        </App>
+      </I18nProvider>
+    )
+    const { rerender } = render(ui())
+    await waitFor(() => expect(engagementByClassApi.get).toHaveBeenCalledTimes(1))
+    for (let i = 0; i < 5; i++) rerender(ui())
+    expect(engagementByClassApi.get).toHaveBeenCalledTimes(1)
+  })
+})

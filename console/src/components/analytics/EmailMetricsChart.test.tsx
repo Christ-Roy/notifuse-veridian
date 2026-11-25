@@ -286,3 +286,25 @@ describe('EmailMetricsChart', () => {
     await waitFor(() => expect(screen.getByTestId('auto-replies').textContent).toBe('+4 automatic replies'))
   })
 })
+
+describe('rendus de la page', () => {
+  it('un tableau de dates recréé à chaque rendu ne relance rien ; des dates différentes, si', async () => {
+    vi.mocked(analyticsService.query).mockImplementation(totals({ count_sent: 1 }) as never)
+    vi.mocked(replyStatsApi.get).mockResolvedValue({ replied: 0 } as never)
+    const ui = (range: [string, string]) => (
+      <I18nProvider i18n={i18n}>
+        <App>
+          <EmailMetricsChart workspace={workspace} timeRange={range} timezone="UTC" />
+        </App>
+      </I18nProvider>
+    )
+    vi.mocked(analyticsService.query).mockClear()
+    const { rerender } = render(ui(['2026-11-01', '2026-11-15']))
+    await waitFor(() => expect(analyticsService.query).toHaveBeenCalled())
+    const once = vi.mocked(analyticsService.query).mock.calls.length
+    for (let i = 0; i < 5; i++) rerender(ui(['2026-11-01', '2026-11-15']))
+    expect(analyticsService.query).toHaveBeenCalledTimes(once)
+    rerender(ui(['2026-11-02', '2026-11-16']))
+    await waitFor(() => expect(analyticsService.query).toHaveBeenCalledTimes(2 * once))
+  })
+})

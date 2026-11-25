@@ -4630,6 +4630,7 @@ RAW_ROUTES = [
     ("sso:issue-magic-link", "POST", "/api/sso/issue-magic-link", "hmac", []),
     ("users:by-email", "GET", "/api/users/by-email", "hmac", []),
     ("hub:users", "GET", "/api/hub/users", "hmac", []),
+    ("admin:ghost-lists", "GET", "/api/veridian/admin/ghost-lists", "hmac", []),
     ("hub:organisation-sync", "POST", "/api/hub/organisations/sync", "hmac", []),
     ("hub:organisation-version", "GET", "/api/hub/organisations/sync", "hmac", []),
     ("hub:abonnement", "POST", "/api/hub/evenements/abonnement", "hmac", []),

@@ -19,5 +19,6 @@ export const getAnalyticsStatus = () => {
 
 // Default configuration - can be called during app initialization
 export const initializeAnalytics = () => {
-  configureAnalytics(1) // Default to 1 concurrent request
+  // Deux à la fois : chaque espace a deux connexions à sa base (DB_MAX_CONNECTIONS_PER_DB), l'envoi ne doit pas attendre un tableau de bord.
+  configureAnalytics(2)
 }

@@ -1,3 +1,4 @@
+import { shareInFlight } from './veridian_share'
 import { api } from './client'
 
 // Veridian fork — client du KPI reply rate (taux de réponse cold outbound).
@@ -40,8 +41,7 @@ export const replyStatsApi = {
     searchParams.append('workspace_id', params.workspace_id)
     if (params.start) searchParams.append('start', params.start)
     if (params.end) searchParams.append('end', params.end)
-    return api.get<VeridianReplyStatsResponse>(
-      `/api/veridian/messages.replyStats?${searchParams.toString()}`
-    )
+    const path = `/api/veridian/messages.replyStats?${searchParams.toString()}`
+    return shareInFlight(path, () => api.get<VeridianReplyStatsResponse>(path))
   }
 }

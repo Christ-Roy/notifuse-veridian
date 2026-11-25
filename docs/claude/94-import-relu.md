@@ -12,5 +12,6 @@ contact, remplace la vraie raison par « email is required », tait l'échec d'i
 - Un contact illisible garde son adresse et sa vraie raison (`custom_number_1 …`).
 - CLI : `state` en tête, sortie 0 complet, 1 incomplet, **2 non abouti** ; sans `report`, jamais « complet ». Colonnes `custom_number_*` d'un CSV
   converties (virgule, espace fine) ou refusées avant l'envoi, avec la ligne ; lignes sans email comptées.
+- Relevé des inscriptions à une liste qui n'existe pas, espace par espace, des nombres seulement : `notifuse-admin admin:ghost-lists` (HMAC). Rien n'est modifié.
 
 Épreuves : `contactimport_test.go` (base réelle), `TestVeridianContactImport` (application entière), `test_workspace_default_and_csv_import.py`.

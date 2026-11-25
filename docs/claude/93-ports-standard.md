@@ -6,16 +6,20 @@ Portée : toutes les boîtes. Porte de sortie : le 443 reste servi, aucun client
 
 ## Mesures du 25/11/2026
 
-| Port public de 51.210.7.44 (imap., smtp.veridian.site) | Tenu par | Usage relevé, 7 jours (journaux du relais, `obs logs mail-relay-nord`) |
+| Port public de 51.210.7.44 (imap., smtp.veridian.site) | Tenu par | Usage relevé (journaux Loki des 19, 20, 23, 24, 25/11 ; infra : depuis le 22/11 22:27 UTC) |
 |---|---|---|
 | 993 | personne (fermé en public ; le relais l'a sur le tailnet seul) | sans objet |
-| 465 | Postfix `mail-relay-nord` | **0 session authentifiée** |
+| 465 | Postfix `mail-relay-nord` | **0 session authentifiée** ; 335 connexions (310 de notre sonde I27, le reste des robots) |
 | 587 | Postfix `mail-relay-nord` | 1 289 : 1 287 depuis le nœud (Notifuse lui-même), 2 depuis le bastion le 24/11 |
 
-Conséquence : 993 est libre, 465 se libère sans gêner personne, **587 ne se libère pas seul** : Notifuse joint le relais par
+Rien ne prouve l'absence d'un client au-delà de ces jours. Conséquence : 993 est libre, 465 se libère sans gêner personne de connu, **587 ne se libère pas seul** : Notifuse joint le relais par
 `smtp.messagerie-nord-776.fr:587`, qui pointe sur cette même adresse (nom de HELO, à ne pas déplacer).
 
 ## Étapes, chacune avec son repli (exécutant : infra)
+
+**Le plan exécutable fait foi : `nomad-veridian/plan/VER-235/`** (patch éteint, ordre, coupures, épreuve `tests/boites-ports-standard.sh`). Il corrige ce qui suit sur
+deux points : ouvrir AUSSI le pare-feu INPUT (`VERIDIAN_GUARD_INPUT_PORTS=443,465,993`, `public_ports` ne règle que FORWARD), et des routeurs SÉPARÉS
+(`notifuse-imap-std`, `notifuse-boxsmtp-std`) : les deux autres Traefik ne connaissent pas ces points d'entrée.
 
 1. **993.** `ingress-ovh` : point d'entrée `imaps` sur `51.210.7.44:993` (adresse explicite : le 993 du tailnet est au relais), port déclaré
    dans `public_ports`. `notifuse-mx-entree` : `entrypoints=websecure,imaps` sur le routeur `notifuse-imap`. Repli : retirer les deux lignes.

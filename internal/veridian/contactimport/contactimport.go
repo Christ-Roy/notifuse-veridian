@@ -54,6 +54,9 @@ func init() {
 				return nil
 			}
 			Mount(h.Mux(), h.WorkspaceRepository(), h.Logger())
+			if h.Config() != nil {
+				MountGhosts(h.Mux(), h.WorkspaceRepository(), h.Config().HubAPISecret)
+			}
 			return nil
 		},
 	})
