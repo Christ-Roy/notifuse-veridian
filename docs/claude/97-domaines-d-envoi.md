@@ -39,6 +39,20 @@ commentée, sur-signature retirée, statut ignoré à la signature, garde d'espa
 comparer la clé, SPF non évalué, panne DNS qui dé-vérifie, cache sans espace, droit d'écriture abaissé, clé publique exposée.
 Console : deux mutations rouges (verdict non affiché, mauvais id vérifié).
 
-## Épreuve en prod
+## Épreuve en prod (26/11/2026, commit `5b717261`)
 
-Voir la section du même nom ci-dessous, ajoutée après l'envoi réel.
+Outil rejouable : `scripts/e2e/domaine-envoi-prod.py --workspace <espace jetable du Hub> --real-send` (puis `--nettoyer`).
+Domaine d'épreuve `essai-envoi.veridian.site` (zone Cloudflare à nous, aucun achat), espace jetable `e2esso17ywnhkbjafb7g`.
+
+- Route `sendingDomains.verify` : DKIM `pass` (clé conforme), SPF `pass` (nos deux relais passent `check_host`), DMARC `pass` (p=none).
+- Envoi réel par le relais agence, From `essai-718263@essai-envoi.veridian.site`, vers une boîte de profil neuve de
+  `messagerie-nord-776.fr` du même espace. Parti le 26/11 à 18:53:02 UTC, `Message-ID: <6b5d215d-91da-4a4c-a363-aa127948065f@essai-envoi.veridian.site>`.
+- Reçu par notre MX (`Received: from [37.187.199.185] by mx.veridian.site`) :
+  `Authentication-Results: mx.veridian.site; spf=pass smtp.helo=smtp.agence-veridian.fr smtp.mailfrom=essai-718263@essai-envoi.veridian.site; dkim=pass header.d=essai-envoi.veridian.site header.i=@essai-envoi.veridian.site; dmarc=pass header.from=essai-envoi.veridian.site`
+- Le relais agence, qui vérifie en route, dit pareil (`dkim=pass (2048-bit key) header.d=essai-envoi.veridian.site header.s=vd2026117025e6`)
+  et n'ajoute pas sa propre signature pour un domaine étranger : une seule signature, la nôtre.
+- Capture console (fr, ordinateur et téléphone, aucun débordement) : `tests/e2e-veridian/domaines-capture.mjs` par `lourd --navigateur`.
+- Nettoyé : domaine, profils d'épreuve et TXT de `essai-envoi.veridian.site` retirés. `_spf-envoi.veridian.site` reste (service).
+
+Le relais agence accepte un MAIL FROM d'un domaine étranger avec ses accès SASL (sondé sans envoi, RSET après RCPT) : c'est ce qui
+permet l'alignement SPF ; s'il venait à durcir (anti-usurpation), DKIM seul garde DMARC `pass`.
