@@ -526,12 +526,18 @@ def _request(url, method, headers, body):
         die(f"Erreur réseau ({url}) : {e}")
 
 
-def hmac_headers(secret, raw_body):
+def hmac_headers(secret, raw_body, method="POST", route="/"):
+    """Signature Hub v2 (26/11/2026, fiche 46 du dépôt notifuse-veridian) : liée à la méthode, au chemin, à la query et au
+    corps, à usage unique côté serveur. La v1 (« ts.corps ») se rejouait sur une autre route ou un autre tenant."""
     ts = str(int(time.time() * 1000))
-    mac = hmaclib.new(secret.encode(), f"{ts}.{raw_body}".encode(), hashlib.sha256).hexdigest()
+    path, _, query = route.partition("?")
+    digest = hashlib.sha256(raw_body.encode()).hexdigest()
+    msg = "\n".join([ts, method.upper(), path, query, digest])
+    mac = hmaclib.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
     return {
         "x-veridian-app": "notifuse",
         "x-veridian-timestamp": ts,
+        "X-Veridian-Sig-Version": "2",
         "X-Veridian-Hub-Signature": mac,
     }
 
@@ -574,7 +580,7 @@ def call_hmac(env, method, route, body=None):
     raw = json.dumps(body) if body is not None else ""
     url = BASES[env] + route
     headers = {"Content-Type": "application/json"}
-    headers.update(hmac_headers(secret, raw))
+    headers.update(hmac_headers(secret, raw, method, route))
     return _request(url, method, headers, raw if body is not None else None)
 
 
