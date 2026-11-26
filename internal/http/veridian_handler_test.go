@@ -996,6 +996,7 @@ func TestVeridianHandleAttachOwner_OK(t *testing.T) {
 	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{
 		TenantID:   "robertbrunon",
 		OwnerEmail: "robert.brunon@veridian.site",
+		HubUserID:  "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01",
 	}).Return(&domain.AttachOwnerResponse{
 		TenantID:         "robertbrunon",
 		OwnerEmail:       "robert.brunon@veridian.site",
@@ -1007,7 +1008,7 @@ func TestVeridianHandleAttachOwner_OK(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner",
-		`{"tenant_id":"robertbrunon","owner_email":"robert.brunon@veridian.site"}`)
+		`{"tenant_id":"robertbrunon","owner_email":"robert.brunon@veridian.site","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var resp domain.AttachOwnerResponse
@@ -1039,13 +1040,13 @@ func TestVeridianHandleAttachOwner_Transfer(t *testing.T) {
 	defer ctrl.Finish()
 	svc := mocks.NewMockVeridianService(ctrl)
 	h := newHandlerWithService(svc)
-	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "a@b.c"}).Return(nil, service.ErrOwnerExists)
-	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c"}`)
+	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "a@b.c", HubUserID: "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}).Return(nil, service.ErrOwnerExists)
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), "owner_exists")
 
-	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "a@b.c", Transfer: true}).Return(&domain.AttachOwnerResponse{OwnerTransferred: true}, nil)
-	rec = postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c","transfer":true}`)
+	svc.EXPECT().AttachOwner(gomock.Any(), domain.AttachOwnerInput{TenantID: "ws-1", OwnerEmail: "a@b.c", HubUserID: "6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01", Transfer: true}).Return(&domain.AttachOwnerResponse{OwnerTransferred: true}, nil)
+	rec = postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01","transfer":true}`)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
@@ -1081,6 +1082,17 @@ func TestVeridianHandleAttachOwner_MissingFields(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+// VER-255 (26/11) : sans hub_user_id, refusé avant le service ; jamais une désignation par l'adresse seule.
+func TestVeridianHandleAttachOwner_HubUserIDObligatoire(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svc := mocks.NewMockVeridianService(ctrl) // aucun appel attendu
+	h := newHandlerWithService(svc)
+	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner", `{"tenant_id":"ws-1","owner_email":"a@b.c"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "hub_user_id is required")
+}
+
 func TestVeridianHandleAttachOwner_InvalidJSON(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1101,7 +1113,7 @@ func TestVeridianHandleAttachOwner_ServiceError(t *testing.T) {
 	h := newHandlerWithService(svc)
 
 	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner",
-		`{"tenant_id":"ghost","owner_email":"alice@x"}`)
+		`{"tenant_id":"ghost","owner_email":"alice@x","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 	// "not found" dans message → 404 via isNotFoundErr
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
@@ -1378,7 +1390,7 @@ func TestVeridianErrorCode_handleAttachOwner_OwnerMismatch(t *testing.T) {
 	svc.EXPECT().AttachOwner(gomock.Any(), gomock.Any()).Return(nil, sql.ErrNoRows)
 	h := newHandlerWithService(svc)
 	rec := postJSON(t, h.handleAttachOwner, "/api/veridian/admin/attach-owner",
-		`{"tenant_id":"ghost","owner_email":"alice@x.test"}`)
+		`{"tenant_id":"ghost","owner_email":"alice@x.test","hub_user_id":"6b3c1f4e-2a51-4c1e-9a77-0d9f2c5b1a01"}`)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Equal(t, ErrCodeTenantNotFound, decodeErrCode(t, rec.Body.Bytes()))
 }

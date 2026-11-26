@@ -1000,7 +1000,9 @@ func (h *VeridianHandler) handleAttachOwner(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if input.HubUserID != "" && !requireHubUserID(w, "hub_user_id", input.HubUserID) {
+	// VER-255 (26/11) : obligatoire, comme pour provision. Le Hub l'envoie depuis sa version 3840079 ; sans lui, le
+	// propriétaire était désigné par son adresse, qui se recycle (fiche 89).
+	if !requireHubUserID(w, "hub_user_id", input.HubUserID) {
 		return
 	}
 	resp, err := h.service.AttachOwner(r.Context(), input)

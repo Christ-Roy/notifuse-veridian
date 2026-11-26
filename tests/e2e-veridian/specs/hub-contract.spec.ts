@@ -199,12 +199,14 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     const refused = await hmacFetch('/api/veridian/admin/attach-owner', 'POST', {
       tenant_id: tenantID,
       owner_email: bobEmail,
+      hub_user_id: hubId(bobEmail), // VER-255 : obligatoire (26/11)
     });
     expect(refused.status).toBe(409);
     expect((await refused.json()).code).toBe('owner_exists');
     const attachBob = await hmacFetch('/api/veridian/admin/attach-owner', 'POST', {
       tenant_id: tenantID,
       owner_email: bobEmail,
+      hub_user_id: hubId(bobEmail),
       transfer: true,
     });
     expect(attachBob.status).toBe(200);
@@ -217,6 +219,7 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     const attachBobAgain = await hmacFetch('/api/veridian/admin/attach-owner', 'POST', {
       tenant_id: tenantID,
       owner_email: bobEmail,
+      hub_user_id: hubId(bobEmail),
     });
     expect(attachBobAgain.status).toBe(200);
     const bobAgain = await attachBobAgain.json();

@@ -22,7 +22,7 @@ l'accès, ou le geste touchait celui qui avait repris l'adresse. Le Hub avait do
 `organisations/sync` : adhésion testée par `hub_user_id`, `email_proven` de chaque membre transmis tel quel à `sync-member` ; `membres_refuses` (nombre)
 est lu et montré par le Hub : garder ce nom.
 
-`attach-owner` et `provision` sans `hub_user_id` (scripts d'opérateur) désignent encore par l'adresse ; le Hub le donne toujours.
+`attach-owner` exige `hub_user_id` depuis le 26/11 (VER-255 ; le Hub l'envoie depuis sa version 3840079) : sans lui, 400 `invalid_payload`. Plus aucun geste du Hub ne désigne une personne par son adresse seule.
 
 ## Comptes d'avant, sans lien
 Un compte sans `hub_user_id` n'est plus atteint par un geste du Hub tant qu'il n'est pas relié : par `issue-magic-link`, `sync-member`, `attach-member`
