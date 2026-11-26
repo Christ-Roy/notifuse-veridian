@@ -971,6 +971,10 @@ msgstr "Add custom header"
 msgid "Add Custom Header"
 msgstr "Add Custom Header"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Add domain"
+msgstr "Add domain"
+
 #: src/components/settings/Integrations.tsx
 msgid "Add Firecrawl"
 msgstr "Add Firecrawl"
@@ -2197,6 +2201,7 @@ msgstr "Campaign performance"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_mailbox_access.tsx
 #: src/components/settings/veridian_mailbox_create.tsx
+#: src/components/settings/veridian_sending_domains.tsx
 #: src/components/settings/WebhookCard.tsx
 #: src/components/settings/WebhooksSettings.tsx
 #: src/components/settings/WorkspaceMembers.tsx
@@ -4119,6 +4124,10 @@ msgstr "Diagnostic:"
 msgid "Did the contact reply?"
 msgstr "Did the contact reply?"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Different from the expected value"
+msgstr "Different from the expected value"
+
 #: src/components/settings/veridian_mailbox_access.tsx
 msgid "Disable"
 msgstr "Disable"
@@ -4193,9 +4202,25 @@ msgstr "Divider Attributes"
 msgid "Divider Width"
 msgstr "Divider Width"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "DKIM signature"
+msgstr "DKIM signature"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "DKIM, SPF and DMARC in place"
+msgstr "DKIM, SPF and DMARC in place"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "DMARC policy"
+msgstr "DMARC policy"
+
 #: src/components/settings/GeneralSettings.tsx
 msgid "DNS Record Required:"
 msgstr "DNS Record Required:"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "DNS unreachable, try again"
+msgstr "DNS unreachable, try again"
 
 #: src/components/settings/GeneralSettings.tsx
 msgid "DNS verification prevents domain squatting"
@@ -4234,9 +4259,21 @@ msgstr "Documentation"
 msgid "Domain"
 msgstr "Domain"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Domain added. Publish the records below, then click Verify."
+msgstr "Domain added. Publish the records below, then click Verify."
+
 #: src/pages/SetupWizard.tsx
 msgid "Domain for the SMTP bridge server (e.g., smtp.yourcompany.com)"
 msgstr "Domain for the SMTP bridge server (e.g., smtp.yourcompany.com)"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Domain name"
+msgstr "Domain name"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Domain removed."
+msgstr "Domain removed."
 
 #: src/components/settings/veridian_mailbox_create.tsx
 #: src/components/templates/TemplateTranslationsTab.tsx
@@ -6835,6 +6872,10 @@ msgstr "In cold mode, if an infra has several sending addresses, Notifuse altern
 msgid "in date range"
 msgstr "in date range"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "In place"
+msgstr "In place"
+
 #: src/pages/BroadcastsPage.tsx
 msgid "in recipients timezone"
 msgstr "in recipients timezone"
@@ -6925,6 +6966,10 @@ msgstr "Inherit workspace"
 
 #~ msgid "Inherited"
 #~ msgstr "Inherited"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Inherited from the parent domain"
+msgstr "Inherited from the parent domain"
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "Inherited from the workspace"
@@ -7157,6 +7202,10 @@ msgstr "Italic"
 msgid "Its content is not deleted: it moves up one level."
 msgstr "Its content is not deleted: it moves up one level."
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Its key is deleted: emails from this domain will no longer be signed by us."
+msgstr "Its key is deleted: emails from this domain will no longer be signed by us."
+
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "Jitter (random spread of the pacing)"
 msgstr "Jitter (random spread of the pacing)"
@@ -7274,6 +7323,11 @@ msgstr "Last 24 hours"
 #: src/components/settings/WebhookCard.tsx
 msgid "Last 7 days"
 msgstr "Last 7 days"
+
+#. placeholder {0}: dayjs(domain.last_checked_at).fromNow()
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Last checked {0}."
+msgstr "Last checked {0}."
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Last decision"
@@ -7607,6 +7661,7 @@ msgid "Load saved template"
 msgstr "Load saved template"
 
 #: src/components/settings/veridian_mailbox_access.tsx
+#: src/components/settings/veridian_sending_domains.tsx
 msgid "Loading"
 msgstr "Loading"
 
@@ -8138,6 +8193,7 @@ msgstr "N/A"
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/veridian_mailbox_create.tsx
+#: src/components/settings/veridian_sending_domains.tsx
 #: src/components/settings/WebhooksSettings.tsx
 msgid "Name"
 msgstr "Name"
@@ -8595,6 +8651,10 @@ msgstr "No sender domain"
 #~ msgid "No senders configured"
 #~ msgstr "No senders configured"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "No sending domain yet."
+msgstr "No sending domain yet."
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "No sending integration configured yet. Add an email provider in Settings → Integrations first."
@@ -8774,6 +8834,14 @@ msgstr "Normal"
 msgid "Not available"
 msgstr "Not available"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Not checked"
+msgstr "Not checked"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Not checked yet: publish the records, then click Verify (DNS changes can take a few minutes)."
+msgstr "Not checked yet: publish the records, then click Verify (DNS changes can take a few minutes)."
+
 #: src/components/analytics/AnalyticsDashboard.tsx
 #: src/components/settings/Integrations.tsx
 #: src/components/settings/Integrations.tsx
@@ -8792,6 +8860,10 @@ msgstr "Not enough contacts due for {name}"
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Not examined yet"
 msgstr "Not examined yet"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Not found"
+msgstr "Not found"
 
 #: src/components/automations/config/ListStatusBranchConfigForm.tsx
 #: src/components/automations/nodes/ListStatusBranchNode.tsx
@@ -10362,6 +10434,7 @@ msgid "Recipients are grouped by their mailbox provider. Two independent limits 
 msgstr "Recipients are grouped by their mailbox provider. Two independent limits protect your reputation: the per-minute rate caps the SPEED of sending toward each group, while the daily cap limits the TOTAL VOLUME sent to that group in a single day (e.g. \"1 email/day toward Google\" — impossible to express as a per-minute rate). Both apply together, and the stricter one wins. The per-recipient daily cap (top of this section) limits how many emails a single address can receive per day to avoid harassing the same contact. The open-tracking pixel is kept OFF on Google/Microsoft by default because it can hurt your sender reputation there; it stays ON for smaller providers. Link click tracking is never affected — it stays ON everywhere."
 
 #: src/components/email_builder/ui/tiptap/components/TiptapToolbar.tsx
+#: src/components/settings/veridian_sending_domains.tsx
 #: src/pages/BroadcastsPage.tsx
 msgid "Recommended"
 msgstr "Recommended"
@@ -10514,6 +10587,8 @@ msgid "Remote images are blocked (open tracking)."
 msgstr "Remote images are blocked (open tracking)."
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
+#: src/components/settings/veridian_sending_domains.tsx
+#: src/components/settings/veridian_sending_domains.tsx
 msgid "Remove"
 msgstr "Remove"
 
@@ -10570,6 +10645,10 @@ msgstr "Remove this contact"
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Remove this contact from the automation?"
 msgstr "Remove this contact from the automation?"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Remove this domain?"
+msgstr "Remove this domain?"
 
 #~ msgid "Remove this profile from marketing rotation?"
 #~ msgstr "Remove this profile from marketing rotation?"
@@ -10745,6 +10824,7 @@ msgstr "reputation signal"
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
 #: src/components/settings/SystemSettingsDrawer.tsx
+#: src/components/settings/veridian_sending_domains.tsx
 msgid "Required"
 msgstr "Required"
 
@@ -11638,6 +11718,10 @@ msgstr "Send a transactional notification using TypeScript/JavaScript:"
 msgid "Send error"
 msgstr "Send error"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Send from your own domain. Add it here, publish the DNS records at your DNS host, then verify: every email whose sender is on this domain will be signed in your name (DKIM), which is what Gmail and Outlook check first."
+msgstr "Send from your own domain. Add it here, publish the DNS records at your DNS host, then verify: every email whose sender is on this domain will be signed in your name (DKIM), which is what Gmail and Outlook check first."
+
 #: src/components/settings/WorkspaceMembers.tsx
 msgid "Send Invitation"
 msgstr "Send Invitation"
@@ -11746,6 +11830,11 @@ msgstr "Sending API"
 #: src/layouts/WorkspaceLayout.tsx
 msgid "Sending API / SMTP Bridge"
 msgstr "Sending API / SMTP Bridge"
+
+#: src/components/settings/SettingsSidebar.tsx
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Sending domains"
+msgstr "Sending domains"
 
 #: src/components/broadcasts/SendingProgress.tsx
 msgid "Sending emails..."
@@ -12117,6 +12206,10 @@ msgstr "Setup"
 msgid "Setup Complete!"
 msgstr "Setup Complete!"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Several SPF records (invalid)"
+msgstr "Several SPF records (invalid)"
+
 #: src/components/send_queue/veridian_queue_reasons.tsx
 msgid "Share"
 msgstr "Share"
@@ -12420,6 +12513,10 @@ msgstr "Some sending integrations have a single sender, so the round-robin acros
 msgid "Something went wrong"
 msgstr "Something went wrong"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Something went wrong. Try again in a moment."
+msgstr "Something went wrong. Try again in a moment."
+
 #: src/components/settings/veridian_mailbox_labels.ts
 msgid "Something went wrong. Try again."
 msgstr "Something went wrong. Try again."
@@ -12467,6 +12564,10 @@ msgstr "SparkPost"
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Speed limit: how fast emails go out toward this provider."
 msgstr "Speed limit: how fast emails go out toward this provider."
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "SPF (authorized senders)"
+msgstr "SPF (authorized senders)"
 
 #: src/components/segment/button_upsert.tsx
 msgid "SQL Arguments:"
@@ -13523,6 +13624,10 @@ msgstr "This contact is not subscribed to any lists"
 msgid "This delivery report carries no readable body: see the explanation above."
 msgstr "This delivery report carries no readable body: see the explanation above."
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "This domain is already declared in this workspace."
+msgstr "This domain is already declared in this workspace."
+
 #: src/pages/SetupWizard.tsx
 msgid "This email will be used for the root administrator account"
 msgstr "This email will be used for the root administrator account"
@@ -13558,6 +13663,10 @@ msgstr "This instance does not track per-key usage yet"
 #: src/pages/AcceptInvitationPage.tsx
 msgid "This invitation link is invalid or has expired."
 msgstr "This invitation link is invalid or has expired."
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "This is not a valid domain name (example: yourcompany.com)."
+msgstr "This is not a valid domain name (example: yourcompany.com)."
 
 #: src/components/templates/CreateTemplateDrawer.tsx
 msgid "This is the ID that will be used as the utm_content parameter in the links URL to track the template"
@@ -14037,6 +14146,7 @@ msgid "Triggering rate"
 msgstr "Triggering rate"
 
 #: src/components/settings/veridian_mailbox_access.tsx
+#: src/components/settings/veridian_sending_domains.tsx
 msgid "Try again"
 msgstr "Try again"
 
@@ -14063,6 +14173,7 @@ msgstr "Two cold-sending anti-detection levers. Timing jitter spreads the thrott
 msgid "type"
 msgstr "type"
 
+#: src/components/settings/veridian_sending_domains.tsx
 #: src/components/webhooks/InboundWebhookEventsTab.tsx
 msgid "Type"
 msgstr "Type"
@@ -14580,6 +14691,7 @@ msgstr "Validation Error"
 #: src/components/broadcasts/HeadersEditor.tsx
 #: src/components/segment/form_leaf.tsx
 #: src/components/send_queue/veridian_queue_trace.tsx
+#: src/components/settings/veridian_sending_domains.tsx
 msgid "Value"
 msgstr "Value"
 
@@ -14628,6 +14740,14 @@ msgstr "Veridian Hub is unreachable. The app is in read-only mode — please try
 #: src/components/sending_profiles/veridian_profile_card.tsx
 msgid "Verified {verifiedAt}"
 msgstr "Verified {verifiedAt}"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Verified: emails are signed"
+msgstr "Verified: emails are signed"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Verify"
+msgstr "Verify"
 
 #: src/pages/SignInPage.tsx
 msgid "Verify Code"
@@ -14706,6 +14826,10 @@ msgstr "Wait"
 #: src/components/automations/config/DelayConfigForm.tsx
 msgid "Wait Duration"
 msgstr "Wait Duration"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Waiting for DNS"
+msgstr "Waiting for DNS"
 
 #: src/pages/SetupWizard.tsx
 msgid "Waiting for server restart..."
@@ -15197,6 +15321,10 @@ msgstr "You need read access to the sending log to open the inbox."
 msgid "You need read template and write contact permissions to send test emails"
 msgstr "You need read template and write contact permissions to send test emails"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "You need the right to edit this workspace's settings."
+msgstr "You need the right to edit this workspace's settings."
+
 #. placeholder {0}: currentRow + 1
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
 msgid "You're continuing a previous upload session of \"{fileName}\". The upload will resume from row {0} of {totalRows}."
@@ -15282,6 +15410,10 @@ msgstr "Your workspace was deleted on {0} — restoration possible until {purgeA
 #: src/components/veridian_soft_delete_banner.tsx
 msgid "Your workspace was deleted on {0}."
 msgstr "Your workspace was deleted on {0}."
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "yourcompany.com"
+msgstr "yourcompany.com"
 
 #: src/components/file_manager/fileManager.tsx
 msgid "Zip"

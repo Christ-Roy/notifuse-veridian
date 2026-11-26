@@ -18,6 +18,7 @@ import { SettingsSidebar, SettingsSection } from '../components/settings/Setting
 import { isWorkspaceAdministrator, isWorkspaceOwner } from '../lib/veridian_workspace_role'
 import { VeridianPlanSettings } from '../components/settings/veridian_plan_settings'
 import { VeridianMailboxAccess } from '../components/settings/veridian_mailbox_access'
+import { VeridianSendingDomains } from '../components/settings/veridian_sending_domains'
 import { VeridianColdOutreachSettings } from '../components/settings/veridian_cold_outreach_settings'
 
 const { Sider, Content } = Layout
@@ -50,6 +51,7 @@ export function WorkspaceSettingsPage() {
     'team',
     'integrations',
     'mailboxes',
+    'domains',
     'webhooks',
     'custom-fields',
     'general',
@@ -150,6 +152,9 @@ export function WorkspaceSettingsPage() {
       case 'mailboxes':
         // === Veridian patch === accès de boîte (IMAP, SMTP) : fiche 84.
         return <VeridianMailboxAccess workspaceId={workspaceId} workspace={workspace} isOwner={isOwner} />
+      case 'domains':
+        // === Veridian patch === domaines d'envoi authentifiés : fiche 97.
+        return <VeridianSendingDomains workspaceId={workspaceId} />
       case 'webhooks':
         return workspace ? <WebhooksSettings workspaceId={workspace.id} /> : null
       case 'custom-fields':

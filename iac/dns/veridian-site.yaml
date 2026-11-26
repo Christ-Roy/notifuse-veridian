@@ -22,3 +22,12 @@ records:
     ttl: 300
     proxied: false
     comment: relais SMTP Veridian, tailnet ovh-prod (fiche 71)
+
+  # SPF maintenu par nous (VER-166, fiche 97) : les adresses de nos relais d'envoi (agence 37.187.199.185, nord 51.210.7.44).
+  # Un client autorise nos relais par « include:_spf-envoi.veridian.site » ; un relais neuf = une IP ajoutée ICI, pour tous.
+  - name: _spf-envoi
+    type: TXT
+    content: "v=spf1 ip4:37.187.199.185 ip4:51.210.7.44 ~all"
+    ttl: 300
+    proxied: false
+    comment: SPF des relais Veridian, inclus par les domaines d'envoi des clients (fiche 97)

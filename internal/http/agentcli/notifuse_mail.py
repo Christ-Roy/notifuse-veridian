@@ -555,6 +555,68 @@ def cmd_events(a):
         print("(aucun nouveau message pendant l'attente)", file=sys.stderr)
 
 
+# --------------------------------------------------------------------------- domaines d'envoi (VER-166, fiche 97)
+
+VERDICT_FR = {"pass": "conforme", "inherited": "hérité du domaine parent", "missing": "absent", "mismatch": "différent de l'attendu",
+              "multiple": "plusieurs SPF (invalide)", "temperror": "DNS injoignable, réessayer"}
+STATUS_FR = {"verified": "vérifié, les mails partent signés", "pending": "en attente du DNS"}
+
+
+def format_domains(data, records=True):
+    """Domaines d'envoi : statut, verdict par enregistrement, enregistrements exacts à publier. Jamais de clé privée (le serveur n'en rend pas)."""
+    doms = data.get("domains")
+    if doms is None and data.get("domain"):
+        doms = [data["domain"]]
+    if not doms:
+        return ["(aucun domaine d'envoi)"]
+    L = []
+    for d in doms:
+        L.append(f"{d.get('domain')} · {STATUS_FR.get(d.get('status'), d.get('status'))}" + (" · complet" if d.get("complete") else "") + f" · id {d.get('id')}")
+        if d.get("last_checked_at"):
+            L.append(f"  dernier contrôle : {nc._ts(d['last_checked_at'])} UTC")
+        verdicts = {c.get("kind"): c for c in d.get("checks") or []}
+        for r in d.get("records") or []:
+            c = verdicts.get(r.get("kind"))
+            etat = (VERDICT_FR.get(c.get("verdict"), c.get("verdict")) + (" ✓" if c.get("ok") else "")) if c else "pas encore vérifié"
+            L.append(f"  {r.get('kind', '').upper():5} {'obligatoire' if r.get('required') else 'recommandé'} · {etat}")
+            if c and not c.get("ok") and c.get("detail"):
+                L.append(f"        {c['detail']}")
+            if records:
+                L.append(f"        {r.get('type')} {r.get('name')}")
+                L.append(f"        {r.get('value')}")
+        L.append("")
+    return L[:-1]
+
+
+def cmd_domains(a):
+    st, data = _get(a, "/api/veridian/sendingDomains.list", {})
+    _fail(st, data)
+    _show(a, data, format_domains)
+
+
+def cmd_domains_add(a):
+    st, data = _post(a, "/api/veridian/sendingDomains.create", {"domain": a.domain})
+    _fail(st, data)
+    _show(a, data, lambda d: ["Domaine déclaré. Publiez ces enregistrements chez votre hébergeur DNS, puis : domains:verify --id " + d["domain"]["id"], ""] + format_domains(d))
+
+
+def cmd_domains_verify(a):
+    st, data = _post(a, "/api/veridian/sendingDomains.verify", {"id": a.id})
+    _fail(st, data)
+    _show(a, data, lambda d: format_domains(d, records=not d["domain"].get("complete")))
+
+
+def cmd_domains_delete(a):
+    if not a.yes:
+        nc.die("suppression de la clé DKIM : les mails ne seront plus signés pour ce domaine. Relancer avec --yes.")
+    st, data = _post(a, "/api/veridian/sendingDomains.delete", {"id": a.id})
+    _fail(st, data)
+    _show(a, data, lambda d: [f"domaine {d.get('domain')} retiré, ses mails ne sont plus signés par nous"])
+
+
+DOMAIN_COMMANDS = ("domains", "domains:add", "domains:verify", "domains:delete")
+
+
 # --------------------------------------------------------------------------- enregistrement
 
 COMMANDS = ("mail:boxes", "mail:list", "mail:get", "mail:raw", "mail:attachment", "mail:thread", "mail:threads",
@@ -703,6 +765,19 @@ def register(sub):
     sp.add_argument("--profile", required=True, help="id du profil d'envoi (mail:boxes)")
     sp.add_argument("--folder", choices=["inbox", "sent", "rejects", "trash"], required=True)
     sp.add_argument("--out", required=True, help="fichier neuf")
+
+    sp = add("domains", "domaines d'envoi : statut, verdict DKIM/SPF/DMARC et enregistrements DNS à publier", cmd_domains, ["/api/veridian/sendingDomains.list"])
+    jsonflag(sp)
+    sp = add("domains:add", "déclare un domaine d'envoi : génère sa clé DKIM et rend les enregistrements à publier", cmd_domains_add, ["/api/veridian/sendingDomains.create"])
+    sp.add_argument("--domain", required=True, help="ex. client.fr ; les mails From: …@client.fr partiront signés d=client.fr une fois vérifié")
+    jsonflag(sp)
+    sp = add("domains:verify", "relit le DNS du domaine (DKIM, SPF, DMARC) ; DKIM conforme = vérifié, signature active", cmd_domains_verify, ["/api/veridian/sendingDomains.verify"])
+    sp.add_argument("--id", required=True, help="id du domaine (domains)")
+    jsonflag(sp)
+    sp = add("domains:delete", "retire un domaine d'envoi et sa clé (plus de signature)", cmd_domains_delete, ["/api/veridian/sendingDomains.delete"])
+    sp.add_argument("--id", required=True)
+    sp.add_argument("--yes", action="store_true", help="confirme la suppression")
+    jsonflag(sp)
 
     sp = add("mail:access-guide", "procédure de connexion à envoyer au client (sans mot de passe)", cmd_access_guide, ["/api/veridian/mail.access.list"])
     sp.add_argument("--id", required=True, help="id de l'accès (mail:access)")

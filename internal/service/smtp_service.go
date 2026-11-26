@@ -610,6 +610,7 @@ func (s *SMTPService) SendEmail(ctx context.Context, request domain.SendEmailPro
 	if _, err := msg.WriteTo(&buf); err != nil {
 		return fmt.Errorf("failed to write message: %w", err)
 	}
+	veridianSignOutgoing(ctx, request, &buf) // Veridian VER-166 : DKIM du domaine vérifié de l'espace (fiche 97)
 
 	// Google requires the broad mail.google.com scope for SMTP XOAUTH2 and asks
 	// send-only applications to use the Gmail API with gmail.send instead. Keep

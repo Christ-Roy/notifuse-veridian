@@ -413,6 +413,9 @@ WORKSPACE_COMMANDS = frozenset({
     # mail:send / mail:reply en plus transactional:write (verifie cote serveur). Module : notifuse_mail.py.
     "mail:boxes", "mail:list", "mail:get", "mail:raw", "mail:attachment", "mail:thread", "mail:threads",
     "mail:update", "mail:send", "mail:reply", "mail:events",
+    # VER-166 (26/11/2026, fiche 97) : domaines d'envoi authentifiés (DKIM, SPF, DMARC). Lecture workspace:read, le reste
+    # workspace:write (vérifié côté serveur). Jamais la clé privée. Module : notifuse_mail.py.
+    "domains", "domains:add", "domains:verify", "domains:delete",
     # Fiche 79 (04/11/2026) : l'utilisateur d'un workspace pilote SES profils d'envoi et SES reglages avec
     # SA cle, comme l'admin. Serveur : proprietaire OU cle avec l'ecriture sur "workspace" (cle en lecture
     # seule refusee), isolation par AuthenticateUserForWorkspace (cle du workspace A sur B = 403), types

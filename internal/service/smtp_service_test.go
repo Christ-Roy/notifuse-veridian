@@ -2456,3 +2456,30 @@ func TestSMTPService_SendEmail_VeridianExtraHeadersWhitelist(t *testing.T) {
 	assert.NotContains(t, data, "X-Veridian-Inject")
 	assert.NotContains(t, data, "Bcc:")
 }
+
+// Veridian VER-166 (fiche 97) : le point de branchement de la signature DKIM. Le signataire reçoit l'espace, le From et le message
+// COMPOSÉ, et c'est sa sortie qui part sur le fil (pas l'original). La vérification cryptographique vit dans veridian_outgoing_dkim_test.go.
+func TestSMTPService_SendEmail_VeridianOutgoingSignerBranchPoint(t *testing.T) {
+	var gotWS, gotFrom, gotRaw string
+	SetVeridianOutgoingSigner(func(_ context.Context, ws, from string, raw []byte) ([]byte, bool) {
+		gotWS, gotFrom, gotRaw = ws, from, string(raw)
+		return append([]byte("X-Veridian-Signe: oui\r\n"), raw...), true
+	})
+	t.Cleanup(func() { SetVeridianOutgoingSigner(nil) })
+
+	server := newMockSMTPServer(t, true)
+	defer server.Close()
+	request := domain.SendEmailProviderRequest{
+		WorkspaceID: "workspace-123", IntegrationID: "integration-123", MessageID: "11111111-2222-3333-4444-555555555555",
+		FromAddress: "bonjour@client.fr", FromName: "Client", To: "prospect@acme.fr", Subject: "Bonjour", Content: "<p>Hello</p>",
+		Provider: &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{Host: "127.0.0.1", Port: server.Port(), UseTLS: false}},
+	}
+	require.NoError(t, NewSMTPService(&noopLogger{}).SendEmail(context.Background(), request))
+
+	assert.Equal(t, "workspace-123", gotWS)
+	assert.Equal(t, "bonjour@client.fr", gotFrom)
+	assert.Contains(t, gotRaw, "Subject: Bonjour", "le signataire voit le message composé, en-têtes compris")
+	messages := server.GetMessages()
+	require.Len(t, messages, 1)
+	assert.True(t, strings.HasPrefix(string(messages[0].data), "X-Veridian-Signe: oui\r\n"), "la sortie du signataire part sur le fil")
+}

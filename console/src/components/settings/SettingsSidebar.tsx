@@ -9,7 +9,8 @@ import {
   SendOutlined,
   RobotOutlined,
   MailOutlined,
-  ToolOutlined
+  ToolOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 
@@ -17,6 +18,7 @@ export type SettingsSection =
   | 'team'
   | 'integrations'
   | 'mailboxes'
+  | 'domains'
   | 'webhooks'
   | 'custom-fields'
   | 'general'
@@ -80,6 +82,12 @@ export function SettingsSidebar({ activeSection, onSectionChange, canDeleteWorks
       key: 'mailboxes',
       icon: <MailOutlined />,
       label: t`Mailbox access`
+    },
+    {
+      // === Veridian patch === domaines d'envoi (DKIM, SPF, DMARC) : visible de tous. Cf. veridian_sending_domains.tsx (fiche 97).
+      key: 'domains',
+      icon: <SafetyCertificateOutlined />,
+      label: t`Sending domains`
     },
     {
       key: 'webhooks',

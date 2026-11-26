@@ -117,6 +117,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `82` essai du Hub (jamais appliqué), signal d'activité ; `90` Réglages > Plan
 - `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
+- `97` **domaines d'envoi** : signature DKIM d=<domaine du client> à l'envoi, SPF `_spf-envoi.veridian.site`, `sendingDomains.*`
 - `81` capacité base : connexions, incident du 07/11
 - `92` régler sa boîte soi-même : profil Apple, test, export ; `93` ports standard (prêts, fermés)
 - `91` **ce qui dure après un retrait** : accès de boîte, flux, gel (`standing`)
