@@ -6,6 +6,11 @@ neuve de messagerie-nord-776.fr portée par le même espace (MX = Notifuse). Lit
 dmarc=pass, spf. Aucun tiers : expéditeur et destinataire sont à nous et jetables.
 
 Usage : domaine-envoi-prod.py --workspace <id> --real-send [--reprendre etat.json] [--nettoyer]
+        domaine-envoi-prod.py --workspace <id> --real-send --reprendre etat.json --perte    (après un premier passage vert)
+        domaine-envoi-prod.py --workspace <id> --reprendre etat.json --retour
+--perte : revérification à l'usage. Le dernier contrôle du domaine d'épreuve est reculé de 25 h (vieillir-domaine-envoi.sh), son TXT
+DKIM retiré, puis UN envoi : le domaine doit passer non vérifié (lost_at, lost_reason=missing) ; un second envoi part sans notre signature.
+--retour : TXT republié, vérification par la route, le constat est effacé.
 Sortie 0 = prouvé, 1 = écart, 2 = non abouti. Les accès SMTP et le jeton DNS sont lus dans le coffre, jamais affichés."""
 import argparse, json, os, re, subprocess, sys, tempfile, time, urllib.parse, urllib.request
 
@@ -17,6 +22,8 @@ ap.add_argument("--workspace", required=True)
 ap.add_argument("--real-send", action="store_true")
 ap.add_argument("--reprendre")
 ap.add_argument("--nettoyer", action="store_true", help="retire profils, domaine et enregistrements DNS de l'épreuve")
+ap.add_argument("--perte", action="store_true", help="épreuve de la revérification à l'usage (clé retirée)")
+ap.add_argument("--retour", action="store_true", help="republie la clé et revérifie")
 a = ap.parse_args()
 WS = a.workspace
 etat_path = a.reprendre or os.path.join(tempfile.gettempdir(), f"domaine_envoi_{int(time.time())}.json")
@@ -117,6 +124,99 @@ def nettoyer():
             print("profil", k, api("POST", "/api/workspaces.deleteIntegration", {"workspace_id": WS, "integration_id": E[k]}, check=False).get("_rc", "retiré"))
     txt_del_all()
 
+
+def domaine():
+    return next((d for d in api("GET", "/api/veridian/sendingDomains.list", workspace_id=WS)["domains"] if d["id"] == E["domain_id"]), None)
+
+
+def etat(d):
+    return {k: d.get(k) for k in ("status", "last_checked_at", "verified_at", "lost_at", "lost_reason")} | {
+        "dkim": next(((c["verdict"]) for c in d.get("checks") or [] if c["kind"] == "dkim"), None), "lu_a": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+
+def dkim_rec():
+    return next(r for r in E["records"] if r["kind"] == "dkim")
+
+
+def recu(subject, minutes=20):
+    t0 = time.time()
+    while time.time() - t0 < minutes * 60:
+        time.sleep(20)
+        l = api("GET", "/api/veridian/mail.messages.list", check=False, workspace_id=WS, direction="in", limit=20)
+        m = next((m for m in (l.get("messages") if isinstance(l, dict) else l) or [] if subject in (m.get("subject") or "")), None)
+        if m:
+            raw = subprocess.run(["notifuse-admin", "--env", "prod", "mail:raw", WS, "--id", str(m["id"])], capture_output=True, text=True, timeout=120).stdout
+            head = re.split(r"\r?\n\r?\n", raw, 1)[0]
+            return {"id": m["id"], "ar": [" ".join(x.split()) for x in re.findall(r"(?im)^Authentication-Results: mx\.veridian\.site.*(?:\r?\n[ \t].*)*", head)],
+                    "dkim_d": [x.lower() for x in re.findall(r"(?ims)^DKIM-Signature:.*?\bd=([^;\s]+)", head)],
+                    "message_id": (re.search(r"(?im)^Message-ID:\s*(\S+)", head) or [None, None])[1]}
+        print(f"  +{int(time.time() - t0)} s : {subject} pas encore reçu")
+    return None
+
+
+def envoyer(subject):
+    r = api("POST", "/api/veridian/mail.messages.send", {"workspace_id": WS, "profile_id": E["integ_envoi"], "to": BOX, "subject": subject,
+                                                          "text": f"Bonjour,\n\népreuve {S} de VER-166 : {subject}.\n"}, check=False)
+    if not r.get("message_id"):
+        print("NON ABOUTI envoi :", r); save(); sys.exit(2)
+    return {"message_id": r["message_id"], "subject": subject, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+
+if a.perte:
+    if not a.real_send:
+        print("NON ABOUTI : --perte envoie de vrais mails, il exige --real-send"); sys.exit(2)
+    P = E.setdefault("perte", {})
+    if not P.get("avant"):
+        d = domaine()
+        if not d or d["status"] != "verified":
+            print("NON ABOUTI : le domaine d'épreuve doit être vérifié avant --perte"); sys.exit(2)
+        P["avant"] = etat(d); save()
+        out = subprocess.run([os.path.join(os.path.dirname(os.path.abspath(__file__)), "vieillir-domaine-envoi.sh"), E["domain_id"], WS],
+                             capture_output=True, text=True, timeout=600).stdout.strip()
+        P["vieilli"] = out[-200:]; save()
+        preuve("dernier contrôle reculé de 25 h (base prod, ligne d'épreuve)", E["domain_id"] in out, out[-200:])
+    if not P.get("txt_retire"):
+        q = urllib.parse.urlencode({"name": dkim_rec()["name"], "type": "TXT"})
+        for r in cf("GET", "/dns_records?" + q)["result"]:
+            cf("DELETE", f"/dns_records/{r['id']}")
+        P["txt_retire"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()); save()
+        print("TXT DKIM retiré, attente de l'expiration des caches (TTL 60 s)")
+        time.sleep(150)
+    if not P.get("envoi_declencheur"):
+        P["envoi_declencheur"] = envoyer(f"Perte {S} : envoi qui déclenche le contrôle"); save()
+    if not P.get("apres"):
+        t0, d = time.time(), None
+        while time.time() - t0 < 900:
+            d = domaine()
+            if d["status"] != "verified":
+                break
+            print(f"  +{int(time.time() - t0)} s : encore vérifié (l'envoi attend peut-être sa place dans la file)")
+            time.sleep(20)
+        P["apres"] = etat(d); save()
+        preuve("non vérifié au premier envoi suivant (lost_at, lost_reason=missing)",
+               d["status"] == "pending" and bool(d.get("lost_at")) and d.get("lost_reason") == "missing", json.dumps(P["apres"]))
+    if not P.get("envoi_suivant"):
+        P["envoi_suivant"] = envoyer(f"Perte {S} : envoi suivant, sans signature"); save()
+    if not P.get("recu_suivant"):
+        r = recu(P["envoi_suivant"]["subject"])
+        P["recu_suivant"] = r; save()
+        preuve("l'envoi suivant part sans notre signature", bool(r) and DOMAIN not in (r or {}).get("dkim_d", []), json.dumps(r, ensure_ascii=False)[:400])
+    print("\nRÉSULTAT :", "VERT" if not ecarts else "ROUGE " + ", ".join(ecarts), "| état", etat_path)
+    sys.exit(1 if ecarts else 0)
+
+if a.retour:
+    P = E.setdefault("perte", {})
+    rec = dkim_rec()
+    print("DNS", rec["name"], ":", txt_put(rec["name"], rec["value"]))
+    t0 = time.time()
+    while time.time() - t0 < 600:
+        d = api("POST", "/api/veridian/sendingDomains.verify", {"workspace_id": WS, "id": E["domain_id"]})["domain"]
+        if d["status"] == "verified":
+            break
+        time.sleep(30)
+    P["retour"] = etat(d); save()
+    preuve("clé republiée, vérifiée par la route, constat effacé", d["status"] == "verified" and not d.get("lost_at"), json.dumps(P["retour"]))
+    sys.exit(1 if ecarts else 0)
 
 if a.nettoyer:
     nettoyer(); save(); sys.exit(0)

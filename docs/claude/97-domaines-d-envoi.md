@@ -64,3 +64,21 @@ Domaine d'épreuve `essai-envoi.veridian.site` (zone Cloudflare à nous, aucun a
 
 Le relais agence accepte un MAIL FROM d'un domaine étranger avec ses accès SASL (sondé sans envoi, RSET après RCPT) : c'est ce qui
 permet l'alignement SPF ; s'il venait à durcir (anti-usurpation), DKIM seul garde DMARC `pass`.
+
+## Épreuve en prod de la revérification à l'usage (26/11/2026, commit `64d7645d`)
+
+`domaine-envoi-prod.py --perte` puis `--retour` (espace jetable `e2esso3gp89e0404app4`). Le passage de 24 h est simulé en reculant le
+dernier contrôle de la seule ligne d'épreuve (`scripts/e2e/vieillir-domaine-envoi.sh`, refuse tout autre domaine ou espace).
+
+| Heure (UTC) | Fait | État lu par `sendingDomains.list` |
+|---|---|---|
+| 20:12:11 | avant | `verified`, dkim `pass`, `lost_at` vide |
+| 20:12:14 | TXT DKIM retiré (Cloudflare), attente des caches | |
+| 20:14:44 | un envoi (le déclencheur, signé avec l'état connu) | |
+| 20:15:07 | | `pending`, dkim `missing`, `lost_at` 20:14:45, `lost_reason` `missing` |
+| 20:15:08 | envoi suivant | reçu : `dkim=none`, aucune `DKIM-Signature`, `dmarc=pass` par SPF aligné |
+| 20:17:50 | TXT republié, bouton Vérifier (route) | `verified`, `lost_at` effacé |
+
+Captures EN et FR de l'état « Signature coupée » prises par `domaines-capture.mjs` (`LANGUE=en|fr`), sans un mot de l'autre langue.
+Vu en route : juste après la publication d'un domaine, un résolveur peut garder une réponse négative (SPF lu « absent » 30 min) ; seul
+DKIM décide du statut, et une clé déjà publiée n'est pas concernée.
