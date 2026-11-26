@@ -38,10 +38,14 @@ entrée (capture de l'envoyé, hôte du clic). Lots de 200 événements ET 1 Mo 
 
 | Réponse | Effet |
 |---|---|
-| 2xx | lignes closes `accepte` ; acceptés, doublons et ignorés comptés |
+| 2xx | lignes closes `accepte` ; `acceptes`, `doublons` (lot rejoué) et `ignores` du Hub comptés |
 | 400, 409, 413 | lot abandonné (`refuse`), journal `error`, jamais rejoué |
 | 401, 403 | lignes gardées, journal `error`, pause 30 s à 15 min ; un nouveau secret (abonnement resynchronisé) relance aussitôt |
 | 429, 5xx, 404, réseau | lignes gardées, attente 30 s, 1, 2, 4… 30 min, `Retry-After` respecté ; au-delà d'une heure sans succès, `error` toutes les 10 min |
+
+**Deux instances** (déploiement à canari) : chacune a son worker, le même événement peut partir dans deux lots différents. Un lot
+rejoué (même `lot_id`) est dédoublonné par le Hub (`doublons`) ; deux lots distincts portant le même `(rfc_message_id, event)` sont
+absorbés par le CRM et reviennent en `crm.ignorees`, pas en `doublons`. Sans effet sur la fiche : pas de réservation des lignes (Hub, 26/11).
 
 **Bornes** (toutes les 10 min par espace) : un événement de plus de 7 jours est clos `perime` (le Hub l'ignorerait) ; au-delà de
 100 000 en attente, les plus vieux sont clos `debordement` (journal `error`) ; les lignes closes partent après 2 jours, 50 000 gardées au plus.
@@ -52,6 +56,7 @@ entrée (capture de l'envoyé, hôte du clic). Lots de 200 événements ET 1 Mo 
 |---|---|
 | `VERIDIAN_ACTIVITE_ENABLED` | `true` = envoi. Éteint : la file se remplit et se borne, rien ne part. **Éteint en prod et staging tant que le Hub ne sert pas `/lot`.** |
 | `VERIDIAN_ACTIVITE_METRICS_PORT` | écouteur des métriques (9464, port Nomad `activite`, tailnet seul, service `notifuse-activite`) |
+| `VERIDIAN_ACTIVITE_WORKSPACES` | espaces autorisés à envoyer, séparés par des virgules ; vide = tous. Ouvre l'envoi à une org d'épreuve d'abord (le Hub ouvre `/lot` aux orgs de test d'abord) |
 | `VERIDIAN_ACTIVITE_ALERT_AFTER` | retard qui déclenche l'alerte (défaut 15 min) |
 
 ## Métriques et alerte
@@ -64,7 +69,8 @@ vues HTTP par route (séries sans fin, palier gratuit de Grafana Cloud). Neuf s�
 (`workspace_id`), jamais une adresse ni un secret.
 Dans l'app, sans Prometheus : `error` « retard de la file vers le Hub » toutes les 10 min tant que l'envoi est allumé et que le plus vieil
 événement attend plus que le seuil, puis « retard résorbé ».
-Le scrape et la règle d'alerte vivent dans `nomad-veridian/jobs/infra/mon-prometheus.nomad.hcl` (session infra).
+Le scrape (service Nomad `notifuse-activite`, port dynamique : groupe à canari) et les alertes (retard, Hub en échec 1 h, lots refusés,
+worker muet, métriques absentes) vivent dans `nomad-veridian/jobs/infra/mon-prometheus.nomad.hcl` (session infra, transmis le 26/11).
 
 ## Coût mesuré (26/11/2026, PostgreSQL 17, `TestMesureCoutDeclencheurs`, `VERIDIAN_ACTIVITE_MESURE=1`)
 

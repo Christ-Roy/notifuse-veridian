@@ -29,6 +29,9 @@ type Worker struct {
 	// EventsURL : l'adresse attendue de l'abonnement (<HUB_BASE_URL>/api/evenements/notifuse) ; le lot part à EventsURL + "/lot".
 	// Un abonnement à une autre adresse n'est jamais suivi : l'adresse vient de la configuration.
 	EventsURL string
+	// Only : si non vide, seuls ces espaces envoient (VERIDIAN_ACTIVITE_WORKSPACES) ; les autres remplissent et bornent leur file.
+	// Sert à ouvrir l'envoi à une org d'épreuve avant tout le monde, comme le Hub ouvre /lot aux seules orgs de test.
+	Only map[string]bool
 
 	Tick       time.Duration // 10 s
 	Settle     time.Duration // 10 s : la capture de l'envoyé et l'hôte du clic ont le temps d'arriver
@@ -201,7 +204,7 @@ func (w *Worker) workspace(ctx context.Context, ws string, now time.Time, agg *p
 	if st.failures > 0 {
 		agg.failing++
 	}
-	if !w.Enabled || stats.Ready == 0 {
+	if !w.Enabled || stats.Ready == 0 || (len(w.Only) > 0 && !w.Only[ws]) {
 		return
 	}
 	sub, found, err := ReadSubscription(ctx, db)

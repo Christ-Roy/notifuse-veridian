@@ -414,3 +414,24 @@ func TestWorker_HoteDuClic(t *testing.T) {
 		t.Fatalf("jamais l'URL : %s", b)
 	}
 }
+
+// Liste d'espaces : seul un espace nommé envoie, les autres gardent leur file.
+func TestWorker_SeulsLesEspacesNommes(t *testing.T) {
+	db := testDB(t)
+	hub := &fakeHub{t: t, secret: testSecret}
+	srv := httptest.NewServer(hub)
+	defer srv.Close()
+	subscribe(t, db, srv.URL+"/api/evenements/notifuse", testSecret)
+	fill(t, db, 1)
+	w := newWorker(db, srv.URL, &clock{time.Now()})
+	w.Only = map[string]bool{"autre": true}
+	w.Pass(context.Background())
+	if hub.calls.Load() != 0 || count(t, db, `done_at IS NULL`) != 1 {
+		t.Fatal("espace hors liste : rien n'est envoyé")
+	}
+	w.Only = map[string]bool{"ws1": true}
+	w.Pass(context.Background())
+	if hub.calls.Load() != 1 {
+		t.Fatal("espace nommé : envoyé")
+	}
+}

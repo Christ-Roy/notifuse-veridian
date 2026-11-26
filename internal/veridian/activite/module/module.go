@@ -27,6 +27,8 @@ type Settings struct {
 	MetricsPort int
 	// AlertAfter : VERIDIAN_ACTIVITE_ALERT_AFTER (durée Go), défaut 15 min.
 	AlertAfter time.Duration
+	// Only : VERIDIAN_ACTIVITE_WORKSPACES, espaces séparés par des virgules ; vide = tous.
+	Only map[string]bool
 }
 
 // Load lit les réglages.
@@ -37,6 +39,14 @@ func Load(get func(string) string) Settings {
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(get("VERIDIAN_ACTIVITE_ALERT_AFTER"))); err == nil && d > 0 {
 		s.AlertAfter = d
+	}
+	for _, w := range strings.Split(get("VERIDIAN_ACTIVITE_WORKSPACES"), ",") {
+		if w = strings.TrimSpace(w); w != "" {
+			if s.Only == nil {
+				s.Only = map[string]bool{}
+			}
+			s.Only[w] = true
+		}
 	}
 	return s
 }
@@ -77,7 +87,7 @@ func wire(h platform.Host) error {
 	s := Load(os.Getenv)
 	ws := workspaces{repo: h.WorkspaceRepository()}
 	worker = &activite.Worker{WS: ws, Sender: &activite.Sender{Client: activite.NewClient()}, Log: h.Logger(), Metrics: activite.NewMetrics(),
-		Enabled: s.Enabled, EventsURL: organisation.HubEventsURL(h.Config().HubBaseURL), AlertAfter: s.AlertAfter}
+		Enabled: s.Enabled, EventsURL: organisation.HubEventsURL(h.Config().HubBaseURL), AlertAfter: s.AlertAfter, Only: s.Only}
 	worker.Metrics.SetEnabled(s.Enabled)
 	log := h.Logger()
 	activite.SetClickRecorder(func(ctx context.Context, wsID, mid, host string) {
@@ -94,7 +104,7 @@ func wire(h platform.Host) error {
 		mux.Handle("/metrics", worker.Metrics.Handler())
 		metrics = &http.Server{Addr: ":" + strconv.Itoa(s.MetricsPort), Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
 	}
-	log.WithFields(map[string]interface{}{"enabled": s.Enabled, "metrics_port": s.MetricsPort, "lot_url": worker.EventsURL + "/lot"}).Info("Activité Mail : capacité câblée")
+	log.WithFields(map[string]interface{}{"enabled": s.Enabled, "only": len(s.Only), "metrics_port": s.MetricsPort, "lot_url": worker.EventsURL + "/lot"}).Info("Activité Mail : capacité câblée")
 	return nil
 }
 

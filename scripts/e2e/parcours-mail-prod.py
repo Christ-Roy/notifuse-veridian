@@ -7,7 +7,7 @@ arrêt de la séquence sur réponse, désinscription en un clic, puis retrait de
 
 Aucun mail ne sort vers un tiers : expéditeur ET destinataire sont deux adresses neuves de messagerie-nord-776.fr, portées
 par cet espace seul. Envoi réel seulement avec --real-send (règle 3 du dépôt ; GO de la parente, brief du 26/11).
-Usage : parcours_mail_prod.py --real-send [--reprendre etat.json]
+Usage : parcours_mail_prod.py --real-send [--ws <espace> --hub-tenant <tenant>] [--stamp lot2611] [--reprendre etat.json]
 Sortie 0 = parcours prouvé, 1 = écart, 2 = non abouti."""
 import argparse, json, os, re, subprocess, sys, time, urllib.request, urllib.error
 
@@ -20,10 +20,16 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--real-send", action="store_true")
 ap.add_argument("--reprendre")
 ap.add_argument("--nettoyer-seulement", action="store_true")
+ap.add_argument("--ws", help="espace de l'org jetable (sinon WS ci-dessus)")
+ap.add_argument("--hub-tenant", help="tenant de l'org jetable (sinon HUB_TENANT ci-dessus)")
+ap.add_argument("--stamp", help="suffixe imposé des adresses d'épreuve (ex. lot2611, quand le Hub a déjà posé la personne au CRM)")
 a = ap.parse_args()
+WS, HUB_TENANT = a.ws or WS, a.hub_tenant or HUB_TENANT
+if not re.fullmatch(r"[a-z0-9]{1,40}", WS) or (a.stamp and not re.fullmatch(r"[a-z0-9]{1,20}", a.stamp)):
+    sys.exit("argument refusé")
 
 etat_path = a.reprendre or os.path.join(HERE, f"parcours_{int(time.time())}.json")
-E = json.load(open(etat_path)) if a.reprendre else {"stamp": str(int(time.time()))[-6:], "preuves": []}
+E = json.load(open(etat_path)) if a.reprendre else {"stamp": a.stamp or str(int(time.time()))[-6:], "preuves": []}
 S = E["stamp"]
 # Envoi par le relais AGENCE (le relais nord se croit destinataire de messagerie-nord-776.fr et livre en local, mesuré le 26/11) :
 # l'expéditeur est sur agence-veridian.fr (DKIM aligné), la boîte et l'adresse de retour sur le domaine servi par le MX Notifuse.
