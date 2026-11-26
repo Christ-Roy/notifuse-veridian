@@ -1,0 +1,3 @@
+# États et mails reçus des épreuves rejouables (parcours-mail-prod.py) : traces d’exécution, jamais du code.
+parcours_*.json
+parcours_*_recu.eml
